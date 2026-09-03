@@ -53,7 +53,7 @@ def _resume_payload(attempt_id: str = "alpha-attempt-1") -> dict[str, Any]:
 
 def _readiness_payload() -> dict[str, Any]:
     return {
-        "schema": "quwoquan_data.release_readiness.v1",
+        "schema": stackctl._DATA_READINESS_SCHEMA,
         "releaseId": "alpha-slice-003",
         "verifyRunId": "verify-20260830T1600Z",
         "manifestDigest": _DIGEST,
@@ -492,7 +492,7 @@ class ManagedPreparationStateMachineTest(unittest.TestCase):
                 },
             )
             self.assertEqual(
-                receipt["schema"], "quwoquan_ops.app_managed_preparation.v1"
+                receipt["schema"], stackctl.MANAGED_PREPARATION_SCHEMA
             )
             self.assertEqual(receipt["target"], "alpha-local")
             self.assertEqual(receipt["environment"], "alpha")
@@ -531,7 +531,7 @@ class ManagedPreparationStateMachineTest(unittest.TestCase):
             content_envelope = json.loads(content_ref.read_text(encoding="utf-8"))
             self.assertEqual(
                 content_envelope["schema"],
-                "quwoquan_ops.app_content_preflight_exact.v1",
+                stackctl.MANAGED_CONTENT_PREFLIGHT_SCHEMA,
             )
             self.assertEqual(content_envelope["releaseProbe"]["exitCode"], 0)
             self.assertGreater(

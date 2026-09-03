@@ -1244,7 +1244,7 @@ expected_fields = {
 if not isinstance(receipt, dict) or set(receipt) != expected_fields:
     raise SystemExit("managed preparation receipt field set drifted")
 for field, expected in (
-    ("schema", "quwoquan_ops.app_managed_preparation.v1"),
+    ("schema", "quwoquan_ops.app_managed_preparation"),
     ("target", target),
     ("environment", environment),
     ("deviceId", device_id),
@@ -1466,7 +1466,7 @@ media_checks = release_probe.get("mediaChecks")
 media_checks = media_checks if isinstance(media_checks, dict) else {}
 if (
     content_envelope.get("schema")
-    != "quwoquan_ops.app_content_preflight_exact.v1"
+    != "quwoquan_ops.app_content_preflight_exact"
     or content_envelope.get("target") != target
     or content_envelope.get("status") != "passed"
     or content_envelope.get("releaseId") != binding["releaseId"]

@@ -242,7 +242,7 @@ class TestLiveContentBindingContract(unittest.TestCase):
                         "specs/feature-tree/runtime/runtime-config/"
                         "environment-topology-and-packaging/spec.md#req-006"
                     ),
-                    "runnerClass": f"qwq.content_consumer.{entry}.{carrier}.v1",
+                    "runnerClass": f"qwq.content_consumer.{entry}.{carrier}",
                 }
                 for entry in (
                     "feed",

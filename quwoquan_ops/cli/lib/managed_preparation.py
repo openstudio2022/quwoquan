@@ -30,6 +30,7 @@ from quwoquan_ops.cli.lib.managed_preparation_support import (  # noqa: F401
     _MANAGED_DIGEST_RE,
     _RECEIPT_FIELDS,
     MANAGED_CONTENT_BINDING_UNAVAILABLE,
+    MANAGED_CONTENT_PREFLIGHT_SCHEMA,
     MANAGED_PREPARATION_SCHEMA,
     MANAGED_PREPARATION_TARGETS,
     MANAGED_RECEIPT_INVALID,
@@ -926,7 +927,7 @@ def run_managed_preparation(
         ).absolute()
         exact_content_payload = strict_payloads["contentPayload"]
         content_envelope = {
-            "schema": "quwoquan_ops.app_content_preflight_exact.v1",
+            "schema": MANAGED_CONTENT_PREFLIGHT_SCHEMA,
             "target": target,
             "status": "passed",
             "releaseId": receipt["contentBinding"]["releaseId"],

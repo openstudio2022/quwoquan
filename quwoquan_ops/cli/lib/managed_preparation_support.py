@@ -15,7 +15,8 @@ import subprocess
 from pathlib import Path
 from typing import Any, Mapping
 
-MANAGED_PREPARATION_SCHEMA = "quwoquan_ops.app_managed_preparation.v1"
+MANAGED_PREPARATION_SCHEMA = "quwoquan_ops.app_managed_preparation"
+MANAGED_CONTENT_PREFLIGHT_SCHEMA = "quwoquan_ops.app_content_preflight_exact"
 
 # 四个码已在 canonical metadata 注册；代码内按注册字面量使用。
 MANAGED_RUNTIME_UNAVAILABLE = "APP.PREPARATION.runtime_unavailable"

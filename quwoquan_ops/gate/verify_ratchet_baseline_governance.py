@@ -175,13 +175,18 @@ def debt_entries(document: object) -> dict[str, int]:
             fingerprint = finding.get("fingerprint")
             count = finding.get("count")
             if (
-                isinstance(path, str)
-                and "/" in path
-                and isinstance(fingerprint, str)
-                and isinstance(count, int)
-                and not isinstance(count, bool)
+                not isinstance(path, str)
+                or "/" not in path
+                or not isinstance(fingerprint, str)
+                or not isinstance(count, int)
+                or isinstance(count, bool)
             ):
-                entries[f"{path}::{fingerprint}"] = count
+                continue
+            identity = f"{path}::{fingerprint}"
+            # Duplicate list entries must not overwrite one another and hide
+            # debt growth. The baseline parser rejects them too; governance
+            # independently preserves their aggregate count for HEAD comparison.
+            entries[identity] = entries.get(identity, 0) + count
         return entries
     for key, value in document.items():
         if key == "_governance" or not isinstance(key, str) or "/" not in key:

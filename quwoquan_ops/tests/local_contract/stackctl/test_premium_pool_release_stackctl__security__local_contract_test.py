@@ -178,7 +178,7 @@ def _write_candidate_release_fixture(
                     "specs/feature-tree/runtime/runtime-config/"
                     "environment-topology-and-packaging/spec.md#req-006"
                 ),
-                "runnerClass": f"qwq.content_consumer.{entry}.{carrier}.v1",
+                "runnerClass": f"qwq.content_consumer.{entry}.{carrier}",
             }
             for entry in ("feed", "search", "recommendation", "direct_or_object_route")
             for carrier in carriers
@@ -400,7 +400,12 @@ class PremiumPoolReleaseStackctlSecurityLocalContractTest(unittest.TestCase):
                         "entityRefs": ["homepage-1"],
                         "postIds": ["article-1", "image-1", "video-1"],
                         "feedQueries": [
-                            {"name": "typed_video", "matchedPostIds": ["video-1"]}
+                            {
+                                "name": "homepage_recommend",
+                                "query": "sort=recommend&channelId=recommend&limit=20",
+                                "matchedPostIds": ["video-1"],
+                            },
+                            {"name": "typed_video", "matchedPostIds": ["video-1"]},
                         ],
                         "passed": True,
                     }

@@ -73,7 +73,7 @@ def _authorities(root: Path) -> dict[str, str]:
                 "carrier": carrier,
                 "applicability": "required",
                 "specRef": SPEC_REF,
-                "runnerClass": f"qwq.content_consumer.{entry}.{carrier}.v1",
+                "runnerClass": f"qwq.content_consumer.{entry}.{carrier}",
             }
             for entry in subject.ENTRY_SURFACES
             for carrier in subject.CARRIERS

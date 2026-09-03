@@ -70,7 +70,7 @@ def _plan() -> dict[str, object]:
                 "carrier": carrier,
                 "applicability": "required",
                 "specRef": SPEC_REF,
-                "runnerClass": f"qwq.content_consumer.{entry}.{carrier}.v1",
+                "runnerClass": f"qwq.content_consumer.{entry}.{carrier}",
             }
             for entry in ENTRIES
             for carrier in CARRIERS
@@ -192,7 +192,7 @@ def _execution(
         "objectId": sample["objectId"],
         "caseId": f"app_uat_{sample['sampleId'].replace('-', '_')}_{entry}{suffix.replace('-', '_')}",
         "specRef": SPEC_REF,
-        "runnerIdentity": f"qwq.content_consumer.{entry}.{carrier}.v1",
+        "runnerIdentity": f"qwq.content_consumer.{entry}.{carrier}",
         "releaseId": "release-a",
         "releaseDigest": _digest("1"),
         "sourceIdentitySetDigest": _digest("3"),

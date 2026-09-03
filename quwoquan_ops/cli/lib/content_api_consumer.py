@@ -50,12 +50,15 @@ SPEC_REF = (
     "specs/feature-tree/discovery-content/object-homepage-coverage-scaling/"
     "multi-carrier-release/spec.md#gwt-034"
 )
+CONTENT_API_CONSUMER_HEALTH_SCHEMA = "qwq.content_api_consumer.health_binding"
+CONTENT_API_CONSUMER_OBSERVATION_SCHEMA = "qwq.content_api_consumer.observation"
+CONTENT_API_CONSUMER_REPORT_SCHEMA = "qwq.content_api_consumer.report"
 _DIGEST_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
 _IDENTITY_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,255}$")
 _RUNNER_RE = re.compile(
     r"^qwq\.content_consumer\."
     r"(feed|search|recommendation|direct_or_object_route)\."
-    r"(homepage|article|image|video)\.v1$"
+    r"(homepage|article|image|video)$"
 )
 _REQUIRED_HEALTH_LAYERS = (
     "build_ready",
@@ -311,7 +314,7 @@ def _validate_sample_plan(
             or not str(row.get("specRef") or "").startswith("specs/feature-tree/")
             or ".md#" not in str(row.get("specRef") or "")
             or _RUNNER_RE.fullmatch(runner) is None
-            or runner != f"qwq.content_consumer.{entry}.{carrier}.v1"
+            or runner != f"qwq.content_consumer.{entry}.{carrier}"
             or "reasonCode" in row
         ):
             raise ContentApiConsumerError(
@@ -1328,7 +1331,7 @@ def run_content_api_consumer(
     # Evidence begins only after all owner refs/digests and runtime identity pass.
     report_dir.mkdir()
     consumer_health_binding = {
-        "schema": "qwq.content_api_consumer.health_binding.v1",
+        "schema": CONTENT_API_CONSUMER_HEALTH_SCHEMA,
         "status": "passed",
         "environment": "alpha",
         "deploymentTarget": target,
@@ -1433,7 +1436,7 @@ def run_content_api_consumer(
                 }
             cell_completed_at = observation.completed_at if observation else _utc_now()
             observation_payload: dict[str, Any] = {
-                "schema": "qwq.content_api_consumer.observation.v1",
+                "schema": CONTENT_API_CONSUMER_OBSERVATION_SCHEMA,
                 "sampleId": sample.sample_id,
                 "entrySurface": entry,
                 "carrier": carrier,
@@ -1563,7 +1566,7 @@ def run_content_api_consumer(
         required_raw_results=raw_results,
     )
     report = {
-        "schema": "qwq.content_api_consumer.report.v1",
+        "schema": CONTENT_API_CONSUMER_REPORT_SCHEMA,
         "command": "content-api-consumer",
         "target": target,
         "environment": "alpha",

@@ -39,14 +39,17 @@ class SimulatedCrash(RuntimeError):
 
 def authority_claims(action: str) -> dict[str, Any]:
     return {
-        "receipt_id": "authority-1", "actor_id": "actor-1",
+        "receipt_id": "authority-1", "decision_id": "authority-1",
+        "decision_unit_id": "unit-1", "actor_id": "actor-1",
         "actor_authenticated": True, "role": "engineering_delivery_owner",
         "scope": {"objective": "objective-1"},
         "expires_at": "2026-08-30T00:00:00Z",
         "evidence_fingerprint": "sha256:evidence",
         "decision_kind": "delivery_authorization", "actions": [action],
-        "provider_version": "test", "provider_commit": "sha256:" + "0" * 64,
+        "provider_kind": "test", "provider_version": "test",
+        "provider_commit": "sha256:" + "0" * 64,
         "contract_version": "test", "issuer": "test", "receipt_state": "consumed",
+        "receipt_previous_generation": 1,
         "receipt_generation": 2, "receipt_etag": '"test-consumed"',
         "chain_commit": "sha256:" + "1" * 64,
         "winner_idempotency_key": "create-1",
@@ -66,6 +69,7 @@ def envelope(*, action: str, target_state: str, effect_id: str, key: str, source
         "authority_claims_digest": payload_digest(authority_claims(action)),
         "authority_winner_idempotency_key": authority_claims(action)["winner_idempotency_key"],
         "authority_winner_command_digest": authority_claims(action)["winner_command_digest"],
+        "authority_winner_previous_generation": authority_claims(action)["receipt_previous_generation"],
         "authority_winner_generation": authority_claims(action)["receipt_generation"],
         "authority_chain_commit": authority_claims(action)["chain_commit"],
     }
@@ -149,7 +153,7 @@ def test_contract_freezes_v2_schema_graph_and_recovery_terminals() -> None:
             validate_contract(broken)
 
 
-def test_legacy_v1_contract_envelope_and_event_hard_fail_without_dual_read(tmp_path: Path) -> None:
+def test_retired_contract_envelope_and_event_are_rejected(tmp_path: Path) -> None:
     for field, legacy_value in (("schema_id", "objective-execution-contract-v1"), ("schema_version", 1)):
         legacy_contract = deepcopy(load_contract())
         legacy_contract[field] = legacy_value
