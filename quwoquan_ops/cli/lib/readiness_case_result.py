@@ -185,6 +185,20 @@ def _fallback_validate(
             raise ReadinessCaseResultError(
                 f"ReadinessResultBundle schema violation at {location}: forbidden shape"
             )
+    alternatives = schema.get("anyOf")
+    if isinstance(alternatives, list):
+        for alternative in alternatives:
+            if not isinstance(alternative, Mapping):
+                continue
+            try:
+                _fallback_validate(instance, alternative, root=root, location=location)
+            except ReadinessCaseResultError:
+                continue
+            break
+        else:
+            raise ReadinessCaseResultError(
+                f"ReadinessResultBundle schema violation at {location}: anyOf matched 0"
+            )
     alternatives = schema.get("oneOf")
     if isinstance(alternatives, list):
         matches = 0
@@ -248,6 +262,15 @@ def build_readiness_result_bundle(
         "results": [dict(result) for result in results],
     }
     return validate_readiness_result_bundle(bundle)
+
+
+def write_readiness_case_result(
+    path: Path, value: Mapping[str, Any], *, generated_at: str
+) -> Path:
+    """Validate and create one canonical raw readiness result exactly once."""
+
+    validated = validate_readiness_case_result(value, generated_at=generated_at)
+    return write_create_once_json(path, validated)
 
 
 def _read_existing_regular(path: Path) -> bytes:
@@ -378,4 +401,5 @@ __all__ = [
     "validate_readiness_case_result",
     "validate_readiness_result_bundle",
     "write_create_once_json",
+    "write_readiness_case_result",
 ]

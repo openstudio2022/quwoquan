@@ -7,4 +7,4 @@
 - **输出**：`0.plan/request.json`（冻结目标、数量和阶段）与 execution manifest。
 - **receipt actor**：`host` + `sessionId` + 非 auto `modelFamily` + `invocation{provider,model,runId}`。
 - **禁止**：把省份、日期、实体或输出路径写回 recipe；创建平行任务身份；
-  跳过或手写 `task init` 产物；调用 `task execute`、pool-dispatch/campaign 或仓内 semantic preflight。
+  跳过或手写 `task init` 产物；调用 `task execute`、pool-dispatch/campaign 或任何仓内业务 preflight/编排入口。

@@ -10,7 +10,6 @@ from core.baike_source_contract import (
     TOUTIAO_BAIKE_CANONICAL_RESOLUTION,
     source_url_matches_contract,
 )
-from core.runtime_policy import active_runtime_policy
 from content.source.research import network_io
 from content.source.research.text_match import (
     _dedupe_terms,
@@ -135,7 +134,7 @@ def resolve_toutiao_baike_page(
         ],
         limit=policy.candidate_limit,
     )
-    timeout = active_runtime_policy().provider_timeouts.encyclopedia_seconds
+    timeout = 20
     for candidate in candidates:
         response = network_io.fetch_http(
             f"{policy.base_url}{urllib.parse.quote(candidate)}",

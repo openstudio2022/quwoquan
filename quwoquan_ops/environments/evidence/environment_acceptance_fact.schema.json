@@ -16,17 +16,8 @@
     "verifyRunId",
     "samplePlanRef",
     "samplePlanDigest",
-    "targetBindingRefs",
     "requiredRawResults",
     "dataReadiness",
-    "activeCas",
-    "lifecycleExit",
-    "providerReadiness",
-    "observabilityReadiness",
-    "rollbackReadiness",
-    "predecessorAcceptance",
-    "resourceFinalization",
-    "prodReleaseFacts",
     "createdAt",
     "sourceFingerprint"
   ],
@@ -58,6 +49,9 @@
       "$ref": "#/$defs/identity"
     },
     "releaseDigest": {
+      "$ref": "#/$defs/digest"
+    },
+    "manifestDigest": {
       "$ref": "#/$defs/digest"
     },
     "importRunId": {
@@ -136,6 +130,9 @@
       }
     },
     "dataReadiness": {
+      "$ref": "#/$defs/exactRef"
+    },
+    "consumerHealth": {
       "$ref": "#/$defs/exactRef"
     },
     "activeCas": {
@@ -455,6 +452,31 @@
           "targetBindingRefs": {
             "minItems": 1
           }
+        },
+        "required": [
+          "targetBindingRefs",
+          "activeCas",
+          "lifecycleExit",
+          "providerReadiness",
+          "observabilityReadiness",
+          "rollbackReadiness",
+          "predecessorAcceptance",
+          "resourceFinalization",
+          "prodReleaseFacts"
+        ],
+        "not": {
+          "anyOf": [
+            {
+              "required": [
+                "consumerHealth"
+              ]
+            },
+            {
+              "required": [
+                "manifestDigest"
+              ]
+            }
+          ]
         }
       }
     },
@@ -477,9 +499,6 @@
           "target": {
             "const": "alpha-local"
           },
-          "targetBindingRefs": {
-            "maxItems": 0
-          },
           "requiredRawResults": {
             "minItems": 16,
             "maxItems": 16
@@ -490,6 +509,59 @@
           "prodReleaseFacts": {
             "type": "null"
           }
+        },
+        "required": [
+          "consumerHealth",
+          "manifestDigest"
+        ],
+        "not": {
+          "anyOf": [
+            {
+              "required": [
+                "targetBindingRefs"
+              ]
+            },
+            {
+              "required": [
+                "activeCas"
+              ]
+            },
+            {
+              "required": [
+                "lifecycleExit"
+              ]
+            },
+            {
+              "required": [
+                "providerReadiness"
+              ]
+            },
+            {
+              "required": [
+                "observabilityReadiness"
+              ]
+            },
+            {
+              "required": [
+                "rollbackReadiness"
+              ]
+            },
+            {
+              "required": [
+                "predecessorAcceptance"
+              ]
+            },
+            {
+              "required": [
+                "resourceFinalization"
+              ]
+            },
+            {
+              "required": [
+                "prodReleaseFacts"
+              ]
+            }
+          ]
         }
       }
     },

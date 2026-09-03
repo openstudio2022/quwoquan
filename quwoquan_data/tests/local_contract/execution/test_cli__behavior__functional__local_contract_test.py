@@ -31,14 +31,16 @@ def test_task_help():
         text=True,
     )
     assert result.returncode == 0
-    assert "init" in result.stdout
-    assert "stage-record" not in result.stdout
-    assert "stage-open" in result.stdout
-    assert "stage-gate" in result.stdout
-    assert "stage-close" in result.stdout
-    assert "semantic-prepare" in result.stdout
-    assert "semantic-record" in result.stdout
-    assert "execute" not in result.stdout
+    current = (
+        "init", "stage-open", "stage-close", "acquire-images",
+        "acquire-videos",
+    )
+    retired = (
+        "stage-record", "stage-gate", "semantic-prepare", "semantic-record",
+        "lane-claim", "fleet-status", "execute",
+    )
+    assert all(command in result.stdout for command in current)
+    assert all(command not in result.stdout for command in retired)
 
 
 def test_ship_help_does_not_import_content_production_toolchain(tmp_path: Path):
@@ -81,6 +83,12 @@ sys.meta_path.insert(0, _BlockCanonicalRelease())
         "preflight",
         "compile-intent",
         "project-init-inputs",
+        "materialize-sources",
+        "stage-gate",
+        "semantic-prepare",
+        "semantic-record",
+        "lane-claim",
+        "fleet-status",
         "calibrate-capacity",
         "reconcile-stale",
         "runtime-evidence",
@@ -96,27 +104,6 @@ def test_retired_task_commands_are_rejected(retired_command: str):
     )
     assert result.returncode == 2
     assert "invalid choice" in result.stderr
-
-@pytest.mark.parametrize(
-    "retired_command",
-    [
-        "campaign-aggregate",
-        "pool-dispatch",
-        "campaign-scale-evidence",
-        "pool-append",
-        "pool-backfill",
-    ],
-)
-def test_retired_release_commands_are_rejected(retired_command: str):
-    result = subprocess.run(
-        [sys.executable, "-B", str(CLI_PATH), "release", retired_command, "--help"],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    assert result.returncode == 2
-    assert "invalid choice" in result.stderr
-
 
 def test_host_only_task_parser_import_has_side_effect_free_cold_start():
     result = subprocess.run(

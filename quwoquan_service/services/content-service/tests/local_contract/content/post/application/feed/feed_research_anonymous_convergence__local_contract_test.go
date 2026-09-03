@@ -1,5 +1,4 @@
 // spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/design.md#dec-032
-// spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-020
 //
 // DEC-032 匿名内容面收敛：active release 为 research 时，release 承载内容
 // 的读面只对 research principal 在场；匿名与非 research 认证请求在内容

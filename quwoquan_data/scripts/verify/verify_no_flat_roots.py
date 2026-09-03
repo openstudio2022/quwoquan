@@ -42,7 +42,6 @@ ALLOWED_TRACKED_ROOT_FILES = {
     "AGENTS.md",
     "README.md",
     "requirements.txt",
-    "requirements-cursor.txt",
 }
 
 

@@ -24,8 +24,8 @@ article 的差异判据。产物清单真相源是
   （evidencePoints / 底稿）。
 - `5.review`：`attestation.json` 需 `decision=approved` 且
   `deterministicGate/independentReviewer/mediaRefReview` 全 `passed`；
-  judge 与 `4.draft` 生成模型异族（`verify rubric --generation-family` 兜底）。
-- `publish`：`release publish-execution` 物化 `article.md` + `manifest.json`
+  reviewer 使用独立宿主 session/actor/runId 并留下真实 invocation；禁止作者自评，但同一实际 model family 不阻断准出。
+- `publish`：AI 为 approved article 准备 `article.md` + `manifest.json`，再逐对象调用 canonical 单对象事务
   （schema `quwoquan_data/schema/content/post_manifest.schema.json`）；
   text_only 对象不要求 rights-bound asset。
 

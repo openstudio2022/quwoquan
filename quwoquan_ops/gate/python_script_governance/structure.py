@@ -349,11 +349,12 @@ def data_architecture_issues(root: Path) -> list[Issue]:
                 sys.path.remove(scripts_root)
             except ValueError:
                 pass
+    # 硬切后 Data 侧唯一入口名为 architecture_issues；不保留旧名双轨。
     return [
         Issue(
             code="DATA.SCRIPT_ARCHITECTURE",
             path="quwoquan_data/scripts",
             message=str(message),
         )
-        for message in module.script_architecture_issues()
+        for message in module.architecture_issues()
     ]

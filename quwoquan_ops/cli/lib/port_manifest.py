@@ -19,7 +19,6 @@ REQUIRED_PLANES = ("edge", "media", "service", "dataDebug")
 PROFILE_CANONICAL_CONTAINER_PORT = "profileCanonical"
 HOST_PORT_VARIABLES_KEY = "composeHostPortVariables"
 UNOWNED_COMPOSE_SOURCES_KEY = "unownedComposeSources"
-RETIRED_COMPOSE_SOURCES_KEY = "retiredComposeSources"
 _ENVIRONMENT_VARIABLE_NAME = re.compile(r"[A-Z_][A-Z0-9_]*")
 
 
@@ -70,7 +69,7 @@ def _host_port_variable_issues(
 
     走 `${VAR:?msg}` 必填形态的发布口在字面上判定不出主机端口，注入值由各启动面提供。
     没有这个声明位时，门禁只能对这些声明「不判定」，等于整片逃出 canonical 断言；而注入面
-    本身分散在 profile 导出、fleet compose 环境、content-backing 等多处，不能作单一真相源。
+    本身分散在 profile 导出、content-backing 与 provider substitute 等多处，不能作单一真相源。
     """
     declared = manifest.get(HOST_PORT_VARIABLES_KEY)
     if declared is None:
@@ -119,13 +118,6 @@ def _unowned_compose_source_issues(manifest: dict[str, Any]) -> list[str]:
     )
 
 
-def _retired_compose_source_issues(manifest: dict[str, Any]) -> list[str]:
-    """已从现役拓扑断开的 Compose 源必须单独声明，禁止混入永久豁免。"""
-    return _compose_source_adjudication_issues(
-        manifest,
-        key=RETIRED_COMPOSE_SOURCES_KEY,
-    )
-
 
 def validate_port_manifest(manifest: dict[str, Any]) -> list[str]:
     issues: list[str] = []
@@ -146,17 +138,6 @@ def validate_port_manifest(manifest: dict[str, Any]) -> list[str]:
         return issues
     issues.extend(_host_port_variable_issues(manifest, roles))
     issues.extend(_unowned_compose_source_issues(manifest))
-    issues.extend(_retired_compose_source_issues(manifest))
-    unowned_sources = manifest.get(UNOWNED_COMPOSE_SOURCES_KEY)
-    retired_sources = manifest.get(RETIRED_COMPOSE_SOURCES_KEY)
-    if isinstance(unowned_sources, dict) and isinstance(retired_sources, dict):
-        overlap = sorted(set(unowned_sources) & set(retired_sources))
-        if overlap:
-            issues.append(
-                "Compose sources cannot be both unowned and retired: "
-                + ", ".join(overlap)
-            )
-
     for plane_name in REQUIRED_PLANES:
         plane = planes.get(plane_name)
         if not isinstance(plane, dict):

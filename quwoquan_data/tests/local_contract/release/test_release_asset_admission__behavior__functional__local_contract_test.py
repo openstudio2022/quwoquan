@@ -131,6 +131,25 @@ def _publishable_video_receipt() -> dict[str, object]:
         "rightsStatus": "unverified",
         "authorizationRequired": True,
         "distributionDecision": "research_allowed",
+        # 硬切后视频快照必须带 exact poster CAS，且 poster 权利字段逐项继承视频自身权利。
+        "poster": {
+            "contentSha256": _digest("asset-v-poster"),
+            "casRef": "data/local/workspace/source-acquisition/video/cas/video.poster.png",
+            "bytes": 4096,
+            "mimeType": "image/png",
+            "rights": {
+                "derivation": "frame_from_licensed_video",
+                "sourceAssetId": "asset-v",
+                "sourceUrl": "https://video.example/work/asset-v",
+                "license": "unknown",
+                "termsUrl": "https://video.example/terms",
+                "authorizationProof": "",
+                "rightsStatus": "unverified",
+                "authorizationRequired": True,
+                "distributionDecision": "research_allowed",
+                "rightsIssues": ["commercial authorization missing"],
+            },
+        },
         "mediaProbe": {
             "width": 1920,
             "height": 1080,
@@ -186,8 +205,8 @@ def _publishable_video_receipt() -> dict[str, object]:
     reviewer = {
         **author,
         "executionId": "video-reviewer",
-        "runId": "video-reviewer-run",
         "modelFamily": "gpt",
+        "runId": "video-reviewer-run",
         "resultHash": _digest("video-review-result"),
         "evidenceRef": "evidence/reviewer.json",
         "evidenceSha256": _digest("video-reviewer-evidence"),
@@ -330,10 +349,8 @@ def _release_objects(root: Path) -> dict[str, list[str]]:
         root / "posts/video/manifest.json",
         {
             "contentType": "video",
-            "sourceDigest": {
-                "algorithm": "sha256",
-                "digest": _SOURCE_DIGEST,
-                "inputs": ["quwoquan_data/control_plane"],
+            "sourceIdentity": {
+                "sourceDigest": _SOURCE_DIGEST,
             },
             "assets": [
                 {
@@ -508,7 +525,7 @@ def test_article_release_rejects_two_cover_assets_despite_two_bindings(
     manifest["imageBindings"] = [{"assetId": "asset-a"}, {"assetId": "asset-b"}]
     _write(manifest_path, manifest)
 
-    with pytest.raises(ObjectTransactionError, match="non-cover body asset"):
+    with pytest.raises(ObjectTransactionError, match="one cover and body assets"):
         _build_test_release_asset_admission(
             release_id="two-cover-release",
             objects_root=tmp_path,

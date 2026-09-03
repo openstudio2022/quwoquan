@@ -26,7 +26,7 @@ from governance.coverage.entity_diversity import (
     admit_diverse_entities,
     load_content_diversity_policy,
 )
-from governance.coverage.entity_extract import entity_ref, require_domain_etype
+from governance.coverage.entity_type_taxonomy import entity_ref, require_domain_etype
 
 ENTITY_OBJECT_CARRIER = "homepage"
 

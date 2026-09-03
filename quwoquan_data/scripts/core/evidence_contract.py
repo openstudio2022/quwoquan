@@ -71,20 +71,16 @@ STAGE_EVIDENCE_CONTRACT = {
         "output": "posts/{contentType}/{angle}/{title}/{seq}/2.quality/quality_analysis.json.payload.evidenceBundle",
     },
     "agent_draft": {
-        "input": "posts/{contentType}/{angle}/{title}/{seq}/3.compose/{writing_pack.json,prompt.md}",
-        "output": "article/homepage: 4.draft/{draft.article.md,draft_meta.json}; image: 4.draft/draft_meta.json only",
+        "input": "3.compose/{entity_page_input.json|writing_pack.json}",
+        "output": "4.draft/{page.md|draft.article.md|image_work.json|video_script.json,draft_meta.json,author_self_check.json,agent_result_envelope.json}",
     },
     "review": {
-        "input": "article/homepage: agent draft.article.md + sourcePaths; image: sourceCollection/assets/caption evidence pack",
-        "output": "posts/{contentType}/{angle}/{title}/{seq}/5.review/{review.json,review_ledger.json,provenance.json}",
+        "input": "4.draft outputs + exact source/quality/compose/media identity",
+        "output": "5.review/{rubric_review.json,reviewer_result.json,media_ref_review.json,attestation.json}",
     },
     "materialize": {
-        "input": "article/homepage: approved review + agent draft.article.md; image: approved image evidence pack",
-        "output": (
-            "article/homepage: {1.download/source_refs.json,article.md,manifest.json,assets/,_object.json,"
-            "5.review/{provenance.json,finalization_report.json}}; "
-            "image: {1.download/source_refs.json,manifest.json,assets/,_object.json,5.review/provenance.json}"
-        ),
+        "input": "approved four-file review closure + AI-prepared final artifacts",
+        "output": "homepage: {_entity.json,page.md,manifest.json}; article: {article.md,manifest.json}; image/video: {manifest.json}",
     },
 }
 

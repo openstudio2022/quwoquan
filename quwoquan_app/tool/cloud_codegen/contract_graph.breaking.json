@@ -1,51 +1,9 @@
 {
   "baselineEstablished": false,
-  "breakingChanges": [
-    {
-      "after": [
-        "CONTENT.USER.unauthorized",
-        "CONTENT.USER.research_identity_invalid",
-        "CONTENT.SYSTEM.research_release_state_unavailable",
-        "CONTENT.SYSTEM.required_dependency_unavailable",
-        "CONTENT.SYSTEM.internal_error"
-      ],
-      "before": [
-        "CONTENT.USER.unauthorized",
-        "CONTENT.USER.research_identity_invalid",
-        "CONTENT.SYSTEM.required_dependency_unavailable",
-        "CONTENT.SYSTEM.internal_error"
-      ],
-      "canonicalOperationId": "content.post.GetResearchReleaseReadback",
-      "field": "errorCodes",
-      "kind": "changed"
-    }
-  ],
-  "changes": [
-    {
-      "after": [
-        "CONTENT.USER.unauthorized",
-        "CONTENT.USER.research_identity_invalid",
-        "CONTENT.SYSTEM.research_release_state_unavailable",
-        "CONTENT.SYSTEM.required_dependency_unavailable",
-        "CONTENT.SYSTEM.internal_error"
-      ],
-      "before": [
-        "CONTENT.USER.unauthorized",
-        "CONTENT.USER.research_identity_invalid",
-        "CONTENT.SYSTEM.required_dependency_unavailable",
-        "CONTENT.SYSTEM.internal_error"
-      ],
-      "canonicalOperationId": "content.post.GetResearchReleaseReadback",
-      "field": "errorCodes",
-      "kind": "changed"
-    }
-  ],
+  "breakingChanges": [],
+  "changes": [],
   "decision": "approved",
   "generator": "app-cloud-handoff",
-  "graphSha256": "0cc2789e805667e2728b001e7a199ec0c4bf9ff6e553b0bbf0098808429cea88",
-  "previousGraphSha256": "cf8ee7c1582b8c9e2135f4599d8f446c231e24743149d31ec4dcb8f4fad2cc4f",
-  "reviewedBreakingReport": {
-    "path": ".qwq_output/env/repo/runs/content-research-readback-final-handoff-preview.json",
-    "sha256": "5a2f636c840ae69fd8c80702f15e60f8815d861af7af326a848220364e31487d"
-  }
+  "graphSha256": "216475b7580978f5946c482640af45d09b2377ec753e34244c4db530a81cf051",
+  "previousGraphSha256": "0cc2789e805667e2728b001e7a199ec0c4bf9ff6e553b0bbf0098808429cea88"
 }

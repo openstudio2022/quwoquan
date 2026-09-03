@@ -122,7 +122,7 @@
 - canonical：`quwoquan_service/services/content-service/contracts/content/post/fields.yaml`
 - canonical：`quwoquan_app/lib/service/content_service/content/post/application/create_editor_provider.dart`
 - canonical：`quwoquan_data/schema/content/post_manifest.schema.json`
-- canonical：`quwoquan_data/scripts/content/release/canonical/gate.py`
+- canonical：`quwoquan_data/scripts/content/release/canonical/release_admission.py`
 - canonical：`quwoquan_service/services/content-service/cmd/import/main.go`
 - canonical：`quwoquan_service/services/integration-service/contracts/external_integration/location/operations.yaml`
 - canonical：`quwoquan_service/services/integration-service/contracts/external_integration/location/errors.yaml`

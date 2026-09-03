@@ -433,8 +433,5 @@
   "unownedComposeSources": {
     "docker-compose.yaml": "quwoquan_service/Makefile 的 dev 便利栈：直接用上游默认端口起一组独立容器，不由 stackctl 管理，也不属任何 target runtime 的端口所有权模型",
     "docker-compose.local-redis.yml": "quwoquan_service/Makefile 的 dev-redis 便利栈，同上"
-  },
-  "retiredComposeSources": {
-    "docker-compose.data-execution-fleet.yaml": "R13 pre-delete 独占旧拓扑文件；现役 stackctl、runtime、health 与 gamma verify 已断开，仅等待最终 physical-delete precheck 后统一删除，不参与 target runtime 端口所有权"
   }
 }

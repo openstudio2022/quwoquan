@@ -21,11 +21,6 @@ from content.release.canonical.object_transaction_audit import (
 from content.release.canonical.post_transaction import (
     ObjectTransactionError,
 )
-from core.source_digest import (
-    current_execution_bundle_identity,
-    current_source_definition_snapshot,
-)
-
 from support.post_object_transaction_fixture import (
     CREATOR_REF,
     EXECUTION_ID,
@@ -77,14 +72,8 @@ def test_post_transaction_resolves_independently_admitted_creator(
     assert published_manifest["sourceTaskId"] == EXECUTION_ID
     assert published_manifest["payloadDigest"].startswith("sha256:")
     assert published_manifest["sourceIdentity"]["executionId"] == EXECUTION_ID
-    assert (
-        published_manifest["sourceDigest"]
-        == current_source_definition_snapshot().to_document()
-    )
-    assert (
-        published_manifest["executionBundle"]
-        == current_execution_bundle_identity().to_document()
-    )
+    assert "sourceDigest" not in published_manifest
+    assert "executionBundle" not in published_manifest
     assert validate_publish_invariants(publish)["status"] == "passed"
 
 
@@ -331,38 +320,4 @@ def test_text_only_package_rejects_missing_rights_media_mode(tmp_path: Path) -> 
             package,
             canonical_root=publish,
             require_target_absent=False,
-        )
-
-
-@pytest.mark.parametrize(
-    "mutate",
-    (
-        lambda manifest: manifest.pop("executionBundle"),
-        lambda manifest: manifest["executionBundle"].update(
-            inputs=["quwoquan_data/scripts/other"]
-        ),
-        lambda manifest: manifest["sourceDigest"].update(
-            inputs=["quwoquan_data/control_plane/other"]
-        ),
-    ),
-)
-def test_post_transaction_v2_source_identity_requires_exact_snapshot_and_bundle_inputs(
-    tmp_path: Path,
-    mutate,
-) -> None:
-    execution, package, _publish, transaction_id = _fixture(tmp_path)
-    manifest_path = execution / "execution_manifest.json"
-    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    mutate(manifest)
-    _write_json(manifest_path, manifest)
-
-    with pytest.raises(
-        ObjectTransactionError,
-        match="valid frozen sourceDigest",
-    ):
-        build_post_object_transaction_package(
-            execution_root=execution,
-            object_ref=POST_REF,
-            transaction_id=transaction_id,
-            package_root=package,
         )

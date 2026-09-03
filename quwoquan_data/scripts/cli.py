@@ -30,11 +30,6 @@ _COMMANDS = {
         "register_parser",
         "内容执行与任务控制面",
     ),
-    "source-pool": _CommandDefinition(
-        "content.source.research.handler_cli",
-        "register_parser",
-        "研究内容源池",
-    ),
     "filter-catalog": _CommandDefinition(
         "content.filter_catalog.handler",
         "register_parser",

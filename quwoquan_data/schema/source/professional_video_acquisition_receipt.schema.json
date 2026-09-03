@@ -4,7 +4,7 @@
   "type": "object",
   "required": [
     "schema", "manifestId", "manifestDigest", "sourceRevision", "sourceDigest",
-    "entityCatalogDigest", "plannedAssetCount", "discoveredAssetCount",
+    "entityCatalogDigest", "posterPolicy", "plannedAssetCount", "discoveredAssetCount",
     "downloadedAssetCount", "acceptedAssetCount", "rejectedAssetCount",
     "providerAssetCounts", "assets", "receiptDigest"
   ],
@@ -16,6 +16,16 @@
     "sourceRevision": {"type": "string", "minLength": 1},
     "sourceDigest": {"$ref": "#/$defs/sha256"},
     "entityCatalogDigest": {"$ref": "#/$defs/sha256"},
+    "posterPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["required", "format", "rightsInheritance"],
+      "properties": {
+        "required": {"const": true},
+        "format": {"const": "image/png"},
+        "rightsInheritance": {"const": "licensed_video_derivative"}
+      }
+    },
     "plannedAssetCount": {"type": "integer", "minimum": 1},
     "discoveredAssetCount": {"type": "integer", "minimum": 1},
     "downloadedAssetCount": {"type": "integer", "minimum": 0},
@@ -161,6 +171,27 @@
         "premiumPlayableEligible": {"type": "boolean"}
       }
     },
+    "posterRights": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "derivation", "sourceAssetId", "sourceUrl", "license", "termsUrl",
+        "authorizationProof", "rightsStatus", "authorizationRequired",
+        "distributionDecision", "rightsIssues"
+      ],
+      "properties": {
+        "derivation": {"const": "frame_from_licensed_video"},
+        "sourceAssetId": {"type": "string", "minLength": 1},
+        "sourceUrl": {"type": "string", "pattern": "^https://"},
+        "license": {"type": "string", "minLength": 1},
+        "termsUrl": {"type": "string"},
+        "authorizationProof": {"type": "string"},
+        "rightsStatus": {"enum": ["verified", "unverified", "restricted", "unknown"]},
+        "authorizationRequired": {"type": "boolean"},
+        "distributionDecision": {"enum": ["research_allowed", "commercial_allowed", "blocked"]},
+        "rightsIssues": {"type": "array", "items": {"type": "string", "minLength": 1}}
+      }
+    },
     "providerCounts": {
       "type": "object",
       "required": [
@@ -251,43 +282,45 @@
     },
     "asset": {
       "type": "object",
-      "dependentRequired": {
-        "popularCandidateId": [
-          "popularCatalogRef", "popularCatalogDigest", "popularCatalogFileSha256"
-        ],
-        "popularCatalogRef": [
-          "popularCandidateId", "popularCatalogDigest", "popularCatalogFileSha256"
-        ],
-        "popularCatalogDigest": [
-          "popularCandidateId", "popularCatalogRef", "popularCatalogFileSha256"
-        ],
-        "popularCatalogFileSha256": [
-          "popularCandidateId", "popularCatalogRef", "popularCatalogDigest"
-        ]
-      },
       "required": [
         "assetId", "entityId", "observedEntityId", "provider", "platform",
         "displayName", "sourceKind", "acquisitionPath", "sourceUrl", "assetUrl",
         "manualFile", "apiEvidence", "accessEvidence", "title", "relevance",
         "creator", "capturedAt", "acquisitionStatus", "rightsStatus",
         "authorizationRequired", "distributionDecision", "contentSha256", "assetRef",
-        "bytes", "license", "termsUrl", "authorizationProof", "rightsIssues",
+        "bytes", "mimeType", "posterAssetRef", "posterContentSha256",
+        "posterBytes", "posterMimeType", "posterRights",
+        "license", "termsUrl", "authorizationProof", "rightsIssues",
         "modelReleaseStatus", "propertyReleaseStatus", "safetyReview", "mediaProbe",
         "duplicateOf", "failureCode", "failure", "popularitySignals", "planVideoSpec"
       ],
       "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "required": ["acquisitionStatus"],
+            "properties": {"acquisitionStatus": {"const": "acquired"}}
+          },
+          "then": {
+            "properties": {
+              "assetRef": {"$ref": "#/$defs/emptyOrSafeRef", "not": {"const": ""}},
+              "contentSha256": {"$ref": "#/$defs/sha256"},
+              "bytes": {"type": "integer", "minimum": 1},
+              "mimeType": {"enum": ["video/mp4", "video/webm", "video/ogg", "video/quicktime"]},
+              "posterAssetRef": {"$ref": "#/$defs/emptyOrSafeRef", "not": {"const": ""}},
+              "posterContentSha256": {"$ref": "#/$defs/sha256"},
+              "posterBytes": {"type": "integer", "minimum": 1},
+              "posterMimeType": {"const": "image/png"},
+              "posterRights": {"$ref": "#/$defs/posterRights"}
+            }
+          }
+        }
+      ],
       "properties": {
         "assetId": {"type": "string", "minLength": 1},
         "entityId": {"type": "string", "minLength": 1},
         "observedEntityId": {"type": "string", "minLength": 1},
         "provider": {"type": "string", "minLength": 1},
-        "popularCandidateId": {
-          "type": "string",
-          "pattern": "^(?:|popular-video:[a-z0-9_-]+:[0-9a-f]{16})$"
-        },
-        "popularCatalogRef": {"$ref": "#/$defs/emptyOrSafeRef"},
-        "popularCatalogDigest": {"$ref": "#/$defs/emptyOrSha256"},
-        "popularCatalogFileSha256": {"$ref": "#/$defs/emptyOrSha256"},
         "platform": {"type": "string", "minLength": 1},
         "displayName": {"type": "string", "minLength": 1},
         "sourceKind": {"type": "string", "minLength": 1},
@@ -306,8 +339,19 @@
         "authorizationRequired": {"type": "boolean"},
         "distributionDecision": {"enum": ["research_allowed", "commercial_allowed", "blocked"]},
         "contentSha256": {"$ref": "#/$defs/emptyOrSha256"},
-        "assetRef": {"type": "string"},
+        "assetRef": {"$ref": "#/$defs/emptyOrSafeRef"},
         "bytes": {"type": "integer", "minimum": 0},
+        "mimeType": {"enum": ["", "video/mp4", "video/webm", "video/ogg", "video/quicktime"]},
+        "posterAssetRef": {"$ref": "#/$defs/emptyOrSafeRef"},
+        "posterContentSha256": {"$ref": "#/$defs/emptyOrSha256"},
+        "posterBytes": {"type": "integer", "minimum": 0},
+        "posterMimeType": {"enum": ["", "image/png"]},
+        "posterRights": {
+          "anyOf": [
+            {"$ref": "#/$defs/posterRights"},
+            {"type": "null"}
+          ]
+        },
         "license": {"type": "string", "minLength": 1},
         "termsUrl": {"type": "string"},
         "authorizationProof": {"type": "string"},

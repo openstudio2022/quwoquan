@@ -1,3 +1,4 @@
+# spec_ref: specs/feature-tree/runtime/system-architecture-and-engineering-guide/local-worktree-lifecycle-governance/spec.md#gwt-004.t4
 from __future__ import annotations
 
 from quwoquan_ops.gate.commit_gate_select import (

@@ -629,7 +629,7 @@
 <a id="scn-035"></a>
 #### SCN-035 按需请求经来源发现与四载体生产入池
 
-- 场景目标：内容运营者确认按需请求后，系统依次完成来源发现、SourcePool 固化、WorkRequest 派生编译、所选载体生产与独立审核，把合格对象经唯一 reviewed delivery 路径原子入池，运营者只读 typed 终态即可复核数量与恢复方式。
+- 场景目标：内容运营者确认按需请求后，系统依次完成来源发现、SourcePool 固化、candidate-backed 任务初始化、所选载体生产与独立审核，把合格对象经唯一 reviewed delivery 路径原子入池，运营者只读 typed 终态即可复核数量与恢复方式。
 - 领域交接：discovery-content
 - 对应验收：`UAT-013`
 
@@ -795,7 +795,7 @@
 ### UAT-013 内容运营者按需生成内容并入池
 
 - GIVEN 内容运营者持有可确认的按需请求：范围为 `vertical | region | topic | region_topic` 之一、canonical 主题引用、`homepage|article|image|video` 的非空载体组合与逐载体正整数数量，以及已声明的来源策略。
-- WHEN 运营者确认请求，系统依次执行来源发现、SourcePool 固化、WorkRequest 派生编译、载体生产、独立审核与 canonical 池准入。
+- WHEN 运营者确认请求，系统依次执行来源发现、SourcePool 固化、candidate-backed 任务初始化、载体生产、独立审核与 canonical 池准入。
 - THEN 每个 active 载体的合格对象经唯一 reviewed delivery 路径以单对象事务幂等入池，池 record 可沿同一 execution 身份回溯到 confirmed 请求，来源、权利、review、实体与标签引用全部闭合。
 - THEN 同一已冻结请求 exact replay 时池增量为零、既有 record 字节不变；漂移返回 typed conflict 且零写入。
 - THEN 任一非成功终态（needs_input、blocked、partial、pending）携带结构化 nextAction 与绑定原请求摘要的 reentry 引用，运营者只读终态即可决定补输入、修来源、恢复交付或换载体，已入池对象不被撤销。
@@ -934,7 +934,7 @@
 - 准出影响：`block`
 - 影响或价值：当前从未有一份按需请求经来源发现、四载体任选生产与审核后可复证地进入 canonical 内容池；意图入口、来源发现、数量守恒、恢复面与入池单轨的契约阻断由 `discovery-content` 下 `object-homepage-coverage-scaling` 的各 Story OPEN 分别承接。
 - 完成判定：`UAT-013` 全部结果子句由真实 Data operator 旅程 user_acceptance 直接 `spec_ref`：先以 typed 单载体 M1 首次真实入池与 exact replay 零增量，再以同一 confirmed 请求完成四载体 M1 各一入池；证据不得使用 fixture、seed 或旧 receipt 冒充。
-- 依赖：[`work-request-compilation`](./discovery-content/object-homepage-coverage-scaling/work-request-compilation/spec.md)、[`on-demand-content-pool-admission`](./discovery-content/object-homepage-coverage-scaling/on-demand-content-pool-admission/spec.md)、[`canonical-content-identity-recovery`](./discovery-content/object-homepage-coverage-scaling/canonical-content-identity-recovery/spec.md) 与收窄后 [`multi-carrier-release`](./discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md) 的最低节点 OPEN。
+- 依赖：[`on-demand-content-pool-admission`](./discovery-content/object-homepage-coverage-scaling/on-demand-content-pool-admission/spec.md)、[`canonical-content-identity-recovery`](./discovery-content/object-homepage-coverage-scaling/canonical-content-identity-recovery/spec.md) 与收窄后 [`multi-carrier-release`](./discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md) 的最低节点 OPEN。
 
 <a id="open-013"></a>
 ### OPEN-013 双端真实账号商业登录与安全恢复证据

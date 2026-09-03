@@ -150,7 +150,7 @@ def _sample_plan() -> dict[str, object]:
                 "carrier": carrier,
                 "applicability": "required",
                 "specRef": "specs/feature-tree/runtime/runtime-config/environment-topology-and-packaging/spec.md#req-006",
-                "runnerClass": f"qwq_app.content_uat.{entry}.{carrier}.v1",
+                "runnerClass": f"qwq.content_consumer.{entry}.{carrier}.v1",
             }
             for entry in ENTRIES
             for carrier in CARRIERS

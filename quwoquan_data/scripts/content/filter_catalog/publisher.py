@@ -16,7 +16,9 @@ from content.filter_catalog.environment_import import (
 )
 from content.filter_catalog.codec import canonical_json_bytes
 from content.filter_catalog.contract import CatalogContractError
-from core.runtime_policy import active_runtime_policy
+
+
+_REQUEST_TIMEOUT_SECONDS = 30
 
 
 class FilterCatalogPublishAction(StrEnum):
@@ -57,7 +59,6 @@ class UrllibFilterCatalogHttpTransport:
         headers: dict[str, str],
         body: bytes | None,
     ) -> FilterCatalogHttpResponse:
-        request_timeout_seconds = active_runtime_policy().api_request_timeout_seconds
         context = ssl.create_default_context()
         try:
             response_request = request.Request(
@@ -69,7 +70,7 @@ class UrllibFilterCatalogHttpTransport:
             try:
                 response = request.urlopen(
                     response_request,
-                    timeout=request_timeout_seconds,
+                    timeout=_REQUEST_TIMEOUT_SECONDS,
                     context=context,
                 )
                 with response:

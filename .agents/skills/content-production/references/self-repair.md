@@ -1,30 +1,13 @@
-# 自修循环（跨阶段通用）
+# AI 自检与修正
 
-任一阶段完成判据失败时的唯一处置循环，取代「盲试后放弃」与「一票 manual_required」。
-
-## 循环
+在 CLOSE 前，宿主 AI 可根据当前阶段显式 verifier facts 修正本阶段尚未关闭的业务产物：
 
 ```text
-跑完成判据命令 → 读结构化 issue（stderr/报告文件） → 定位被点名的产物文件
-→ 修产物（只改本阶段输出目录内的文件） → 复跑判据命令
+运行一条 verifier -> 读取真实 issue -> 定位本阶段结果 -> AI 修正 -> 重跑该 verifier
 ```
 
-- 每阶段自修 ≤3 轮；轮数记入 receipt `evidence.repairRounds`。
-- 每轮必须针对具体 issue 修改具体文件；不允许无差别重跑同一命令期待不同结果。
-- 修复根因属于前序阶段产物时：停止本阶段自修，receipt `verdict=blocked`、
-  `typedIssues[].recoveryStage` 冻结恢复目标，由下一轮以新 execution retry 处理。
-
-## MUST NOT
-
-- [MUST NOT] 修改 `quwoquan_data/scripts/verify/**`、`quwoquan_data/schema/**`
-  或任何门禁参数、阈值、allowlist 来让判据通过。
-- [MUST NOT] 删除、改写或补写 receipt、execution_state、来源/权利/评审证据。
-- [MUST NOT] 用 fixture、历史数据或估算结果顶替真实产物。
-
-## 超限动作
-
-3 轮后判据仍失败：
-
-1. 在 `task stage-close` 的结构化 context 中提交全部 `typedIssues`，由 authority 派生 `verdict=blocked` receipt。
-2. 向用户返回带 `executionId`、阶段名与 issue 原文的 `GATE_BLOCK`。
-3. 不再重试；恢复入口统一走 [recovery.md](recovery.md)。
+- 每次修正必须对应具体 issue，且不得改变 OPEN 冻结输入。
+- verifier 失败指向前序输入缺口时，本阶段提交 `blocked` 与 typed issue，不跨阶段改写。
+- 不得改 schema、verifier、阈值、allowlist、receipt、来源原始字节、权利证明或 review 事实来换取通过。
+- CLOSE create-once 后不得再修；任何新尝试使用新 execution。
+- 修正轮次由 AI 在结果中如实记录，仅供审计，不触发代码自动重试或恢复。

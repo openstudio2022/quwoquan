@@ -15,7 +15,6 @@ from governance.coverage.governance import verify_vertical_script_governance
 from governance.coverage.maturity import evaluate_maturity, render_maturity
 from governance.coverage.quality import verify_vertical_quality
 from governance.coverage.source_registry import verify_travel_source_registry
-from core.runtime_policy import active_runtime_policy
 
 
 def handle_coverage_inventory(args: argparse.Namespace) -> None:
@@ -85,8 +84,7 @@ def handle_coverage_discover(args: argparse.Namespace) -> None:
         if s.strip()
     ]
     cities = [c.strip() for c in str(getattr(args, "cities", "") or "").split(",") if c.strip()]
-    guardrails = CoverageMatrixGuardrails.from_runtime_policy(
-        active_runtime_policy(),
+    guardrails = CoverageMatrixGuardrails.defaults(
         safe_pool_minimum=int(args.limit),
         until_saturated=bool(args.until_saturated),
     )

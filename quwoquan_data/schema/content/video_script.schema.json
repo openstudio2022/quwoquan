@@ -2,8 +2,11 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
   "additionalProperties": false,
-  "required": ["title", "caption", "scriptLines"],
+  "required": ["schema", "executionId", "objectRef", "title", "caption", "scriptLines"],
   "properties": {
+    "schema": {"const": "quwoquan_data.video_script"},
+    "executionId": {"type": "string", "minLength": 1},
+    "objectRef": {"type": "string", "minLength": 1},
     "title": {"type": "string", "minLength": 1, "maxLength": 80},
     "caption": {"type": "string", "minLength": 1, "maxLength": 300},
     "scriptLines": {

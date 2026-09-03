@@ -110892,7 +110892,7 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/content/feed_delivery_page/feed_load_patrol_evidence__local_contract_test.py",
-            "sha256": "9b890a8a98de96e8808b3f1d8a8379222b81fb9775fc0169d6d75261ce304b90"
+            "sha256": "07a2b3baecf85576a029a570d7e07c8e9aca4fb727fe06027052c49d2ba28938"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/content/feed_delivery_page/feed_object_cards_mock_contract__local_contract_test.dart",
@@ -110915,7 +110915,7 @@
           },
           {
             "path": "quwoquan_app/test/user_acceptance/service/content_service/content/feed_delivery_page/feed_load__user_acceptance_test.dart",
-            "sha256": "f5b46d2e17f86b008cb68902ea68fccf0c8a9b57c4b7cbe342a52a989b47b29d"
+            "sha256": "3b53bdaeca97f0251dbae44d2fd099c86d512b46f8d8180fc2843b5a550ae48d"
           }
         ],
         "pageParticipant": false,
@@ -113129,14 +113129,6 @@
             "sha256": "697bb3d6520f37d4c5e5ef3442956c75e6809efc29d77a92e80aa2c30b4e0dc7"
           },
           {
-            "path": "quwoquan_service/services/content-service/internal/content/post/application/importer/data_fleet.go",
-            "sha256": "f0677360c48ad4bc52a40610a58843e4944958c6314e8dba9276a35200a09983"
-          },
-          {
-            "path": "quwoquan_service/services/content-service/internal/content/post/application/importer/data_fleet_runner.go",
-            "sha256": "350e7899c609f31437f6fdcbdcebba8c1b20783bbfeb1e07992fb40ebff910a0"
-          },
-          {
             "path": "quwoquan_service/services/content-service/internal/content/post/application/media_visibility_reader.go",
             "sha256": "2cd830a685227d58e6d74d3e03c56f1158b3413beacf5814e308d72fa7146be1"
           },
@@ -113322,7 +113314,7 @@
           },
           {
             "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/adapters/inbound/http/feed_research_principal_wiring__security__local_contract_test.go",
-            "sha256": "2f6406f87a532b2d5daac83ca202bc2d48d2872f207c0031cbe65daf4a961f58"
+            "sha256": "6537c417080b133b10d252504008e2abb4e1233b74e326b8899ff76180304ad2"
           },
           {
             "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/adapters/inbound/http/get_post_source_attribution_projection__contract__local_contract_test.go",
@@ -113406,7 +113398,7 @@
           },
           {
             "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/application/feed/feed_research_anonymous_convergence__local_contract_test.go",
-            "sha256": "dfb16714534ce4f2a7378ded9fb15dd58e1911a82c4363651c391efc257ba91d"
+            "sha256": "73be4bcb0e4982b8227fec8ae874228a412c954aa94f79266cc5c03531d32730"
           },
           {
             "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/application/feed/feed_service_read_path__local_contract_test.go",
@@ -113427,10 +113419,6 @@
           {
             "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/application/identity/ranked_feed_window_subject__local_contract_test.go",
             "sha256": "7e2c7c9ad93dc4f12f0e1b81b21cbf97b4f7c2df61f17c5dbbdcc95fd31f63c0"
-          },
-          {
-            "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/application/importer/data_worker_environment__local_contract_test.go",
-            "sha256": "f217f4c821e7d27f3e93d1f049855023c232781c88582bb7584349780dbdf31f"
           },
           {
             "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/application/media/processing/artifact_cleanup__local_contract_test.go",
@@ -113527,10 +113515,6 @@
           {
             "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/content_sit6_object_model__architecture__local_contract_test.go",
             "sha256": "1da29bedef7306b322f5d891d2d28bb72cdcf3ba1ea46889d37d5ab4504595a2"
-          },
-          {
-            "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/data_fleet__local_contract_test.go",
-            "sha256": "153f2477731c189cbb3c2af45b5afcffdc3e285a8c646090267b01646f0c8441"
           },
           {
             "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/data_release_staged_activation__contract__local_contract_test.go",
@@ -113718,7 +113702,7 @@
           },
           {
             "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/infrastructure/releaseimport/runtime_projection__local_contract_test.go",
-            "sha256": "41455ca6b97698bd130adbf5bc11832870ee53feb3af2d724b12eea83e38dda6"
+            "sha256": "e8c5a31c9b3a30335e21d7aaf0d85f89c80e87392775363c93560bd701b83716"
           },
           {
             "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/infrastructure/searchindex/backfill__local_contract_test.go",
@@ -129523,7 +129507,7 @@
     },
     {
       "path": "_schemas/readiness_result_bundle.schema.json",
-      "sha256": "8fe6dcf50e37181e5fd09462453e81b5c414822182b490b3a875ced0918b2e83"
+      "sha256": "74c7360e61ec70b459bf8090befcb5a93d111179d40456cbbe759b3f960898be"
     },
     {
       "path": "_schemas/storage.schema.json",
@@ -132359,7 +132343,7 @@
     },
     {
       "path": "platform/config.yaml",
-      "sha256": "09e4ec242eb3b3b3f6569611cc09b64bc91e3e0f8fac4b1df715a577b2322a1d"
+      "sha256": "e77e49930eb900ec13ef519d9bd8412804f759b359b9d8f433eb292937e34e7a"
     },
     {
       "path": "realtime/openapi.yaml",
@@ -356121,7 +356105,7 @@
     },
     {
       "path": "platform/config.yaml",
-      "sha256": "09e4ec242eb3b3b3f6569611cc09b64bc91e3e0f8fac4b1df715a577b2322a1d",
+      "sha256": "e77e49930eb900ec13ef519d9bd8412804f759b359b9d8f433eb292937e34e7a",
       "mediaType": "application/yaml",
       "content": {
         "configs": [
@@ -358571,17 +358555,6 @@
           {
             "default": 120,
             "key": "sys.content.mongo.max_pool_size",
-            "owner": "platform-ops",
-            "reload": "restart",
-            "risk_level": "medium",
-            "rollout": "progressive",
-            "scope": "service",
-            "type": "int",
-            "ui_editable": false
-          },
-          {
-            "default": 16,
-            "key": "sys.content.worker.concurrency",
             "owner": "platform-ops",
             "reload": "restart",
             "risk_level": "medium",

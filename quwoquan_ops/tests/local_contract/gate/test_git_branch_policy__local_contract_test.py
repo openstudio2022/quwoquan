@@ -39,7 +39,7 @@ from quwoquan_ops.gate.verify_git_branch_policy import (
 LANE_BRANCHES = (
     "lane/product-mainline",
     "lane/data-engineering",
-    "lane/agent-engineering",
+    "lane/engineering",
     "lane/ops",
     "lane/small-fix",
     "lane/refactor",

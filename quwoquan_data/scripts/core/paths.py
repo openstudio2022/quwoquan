@@ -50,18 +50,9 @@ DATA_EXECUTIONS_ROOT = DATA_OUTPUT_ROOT / "tasks"
 DATA_LOCAL_ROOT = DATA_OUTPUT_ROOT / "local"
 DATA_CACHE_ROOT = DATA_LOCAL_ROOT / "cache"
 DATA_WORKSPACE_ROOT = DATA_LOCAL_ROOT / "workspace"
-CONTENT_CAMPAIGN_WORKSPACES_ROOT = DATA_CACHE_ROOT / "content-campaign-workspaces"
-CONTENT_CAMPAIGN_CAPSULES_ROOT = (
-    CONTENT_CAMPAIGN_WORKSPACES_ROOT / "content-addressed-capsules"
-)
+RUNTIME_ROOT = DATA_WORKSPACE_ROOT
 CANONICAL_PUBLISH_SIDECAR_ROOT = DATA_CACHE_ROOT / "canonical-publish"
-RESEARCH_SCALE_WORKSPACE_ROOT = DATA_WORKSPACE_ROOT / "research-scale"
-CAMPAIGN_SCALE_EVIDENCE_ROOT = (
-    RESEARCH_SCALE_WORKSPACE_ROOT / "campaign-evidence"
-)
-RESEARCH_SCALE_PROMOTIONS_ROOT = RESEARCH_SCALE_WORKSPACE_ROOT / "promotions"
 SOURCE_ACQUISITION_ROOT = DATA_WORKSPACE_ROOT / "source-acquisition"
-DATA_RUNTIME_WORKSPACE_ROOT = DATA_WORKSPACE_ROOT / "runtime"
 RELEASE_IDENTITY_INCIDENTS_ROOT = DATA_WORKSPACE_ROOT / "release-identity-incidents"
 RELEASE_IDENTITY_INCIDENT_MIGRATIONS_ROOT = (
     DATA_WORKSPACE_ROOT / "release-identity-incident-migrations"
@@ -111,37 +102,6 @@ def carried_media_root() -> Path:
 # canonical publish 根的逻辑身份。物理位置是环境事实（QWQ_PUBLISH_ROOT / DATA_ROOT），
 # 只由本模块解析；receipt 文档记录这个与位置无关的身份，不再内嵌仓库相对路径。
 CANONICAL_PUBLISH_ROOT_REF = "canonical-publish"
-
-CAMPAIGN_SCALE_EVIDENCE_OUTPUT_REF = CAMPAIGN_SCALE_EVIDENCE_ROOT.relative_to(
-    OUTPUT_ROOT
-).as_posix()
-RESEARCH_SCALE_PROMOTIONS_OUTPUT_REF = RESEARCH_SCALE_PROMOTIONS_ROOT.relative_to(
-    OUTPUT_ROOT
-).as_posix()
-CANONICAL_PUBLISH_SIDECAR_OUTPUT_REF = CANONICAL_PUBLISH_SIDECAR_ROOT.relative_to(
-    OUTPUT_ROOT
-).as_posix()
-
-
-def campaign_scale_evidence_root(*, output_root: Path = OUTPUT_ROOT) -> Path:
-    """Return the canonical disposable workspace for campaign scale evidence."""
-
-    return Path(output_root) / CAMPAIGN_SCALE_EVIDENCE_OUTPUT_REF
-
-
-def research_scale_promotions_root(*, output_root: Path = OUTPUT_ROOT) -> Path:
-    """Return the canonical disposable workspace for research promotions."""
-
-    return Path(output_root) / RESEARCH_SCALE_PROMOTIONS_OUTPUT_REF
-
-# Internal implementation alias.  It deliberately resolves to the single
-# execution work-package root; callers must not create a separate runtime tree.
-RUNTIME_ROOT = DATA_EXECUTIONS_ROOT
-
-
-def current_runtime_root() -> Path:
-    return DATA_EXECUTIONS_ROOT
-
 
 # publish 是唯一发布主线生成输出：物理不出仓（默认 quwoquan_data/publish，不随
 # OUTPUT_ROOT 漂移），且只保存已审核的消费者对象。taxonomy/profile/template 等
@@ -219,110 +179,16 @@ EXECUTION_ROOT_ALLOWED_ENTRIES = frozenset(
 
 # Discovery and deduplication facts remain execution evidence.  They are not
 # provider accounting and must stay distinct from any billing concern.
-EXECUTION_SHARED_DISCOVERY_FILENAMES = (
-    "catalog.ndjson",
-    "dedup_ledger.json",
-    "entities.ndjson",
-    "tags.ndjson",
-)
-
-# ─── execution 证据面：_shared 只保留不可重算决定。 ────────────────
-# execution/_shared 最小证据面：explore/baseline 阶段的不可重算决策包。
 EXECUTION_SHARED_ALLOWED_ENTRIES = frozenset({
-    *EXECUTION_SHARED_DISCOVERY_FILENAMES,
-    "baseline_freeze_packet.json",
-    "baseline_report.json",
-    "explore_packet.json",
-    "discovery_adopt",
-})
-
-# execution/_shared 权威证据（不可重算真相源）：readiness / monitoring / ship /
-# release 消费方只认这些 canonical 条目；新增证据必须先登记再写入。
-EXECUTION_SHARED_AUTHORITATIVE_ENTRIES = frozenset({
-    *EXECUTION_SHARED_DISCOVERY_FILENAMES,
-    "execution_progress.json",
-    "target_selection.json",
-    "runtime_state.json",
-    # 执行权威证据清单（目录规范冻结的十项）
-    "content_plan_packet.json",
-    "content_object_index.json",
-    "env_ready_report.json",
-    "execution_state.json",
-    "execution_state_events",
-    "execution_state_head.json",
-    "managed_execution_audit.json",
-    "scale_readiness.json",
-    "ship_report.json",
-    "failure_ledger.jsonl",
-    # create-once stale/supersession receipts protect historical execution
-    # bytes and are the only authority that permits global gates to ignore a
-    # non-resumable work package.
-    "reconciliation",
-    # DEC-005 阶段交接回执链（stage_receipt.schema.json）：跨会话交接与恢复的
-    # 唯一状态源，由 `task stage-close` 基于 open/gate authority create-once 原子写入，不可重算。
-    "receipts",
-    # stage open/gate 与 semantic prepare/result create-once authority。
-    "stage-authority",
-    "stage-semantics",
-    # 执行级真相源（人工决策记录 / 放弃归因 / 账本，均不可重算）
-    "source_catalog.json",
     "asset_id_registry.json",
-    "audit_summary.json",
-    "audit_summary.md",
-    "run_journal.md",
-    "base_draft_ledger.json",
-    "execution_reducer_gate.json",
-    "post_review_closure.json",
-    "content_plan_source_diagnostics.json",
-    "source_unavailable_targets.json",
-    "reasoned_rejects.json",
-    "inactive_entity_artifacts.json",
-    "abandoned_homepage_artifacts.json",
-    "quality_target_report.json",
-    "download_repair.json",
-    "import_report.json",
-    "staging_import_report.json",
-    "gamma_import_report.json",
-    "trial_review.json",
-    "review",
+    "receipts",
+    "stage-open",
 })
-
-# execution/_shared 可清理调试/过程层：跑完即可删、重跑可重建；不得被
-# readiness/审计当作真相源引用（摘要须先沉淀进上面的权威条目）。
-EXECUTION_SHARED_RECLAIMABLE_ENTRIES = frozenset({
-    "workspace",
-    "assistant_tasks",
-    "command_packets",
-    "object_queue",
-    "image_safety_cache",
-    "download_source_screen",
-    "download_events.jsonl",
-    "download_progress.json",
-    "auto_research_plan.json",
-    "auto_research_progress.json",
-    "source_research_guidance.json",
-    "agent_result_envelopes",
-    "envelopes",
-    "controller_lease.json",
-    "controller_lease.lock",
-    "execution_state.lock",
-    # single-writer lane claim（orchestration.md）：心跳过 TTL 即死 lane，
-    # 删除后按 receipt 链重新 claim 即可重建。
-    "claims",
-})
-
+EXECUTION_SHARED_AUTHORITATIVE_ENTRIES = EXECUTION_SHARED_ALLOWED_ENTRIES
+EXECUTION_SHARED_RECLAIMABLE_ENTRIES = frozenset({"workspace"})
 
 def execution_shared_entry_role(name: str) -> str:
-    """execution/_shared 条目角色：authoritative / reclaimable / unknown。
-
-    `tmp_` 前缀一律视作可清理过程层；unknown 条目由目录证据链门 BLOCK。
-    """
     if name in EXECUTION_SHARED_AUTHORITATIVE_ENTRIES:
-        return "authoritative"
-    # ship 按环境回写导入审计副本：{env}_import_report.json 与
-    # homepage-{env}_import_report.json（WP4 homepage importer 通道），
-    # 环境名开放集合，用后缀规则而非逐环境枚举。
-    if name.endswith("_import_report.json"):
         return "authoritative"
     if name in EXECUTION_SHARED_RECLAIMABLE_ENTRIES or name.startswith("tmp_"):
         return "reclaimable"
@@ -333,7 +199,6 @@ WORKSPACE_ROOT_BY_COMMAND = {
     "homepage": "homepage",
     "post": "post",
     "release": "release",
-    "execution": "execution",
 }
 
 
@@ -388,8 +253,7 @@ def canonical_publish_sidecar_root(publish_root: Path | None = None) -> Path:
     The process fence and the inventory index are derived state: both are
     rebuilt from the canonical tree whenever they are absent. They still cannot
     live inside canonical ``publish/`` (that tree is audited and version
-    controlled) nor inside one execution work package (lanes of the same
-    campaign are separate executions publishing to one tree), so they belong in
+    controlled) nor inside one execution work package, so they belong in
     the disposable cache under the governed output root. Anywhere outside
     ``.qwq_output`` — the system temporary directory in particular — they are
     exempt from the output budget, invisible to ``release gc``, outside the
@@ -400,7 +264,7 @@ def canonical_publish_sidecar_root(publish_root: Path | None = None) -> Path:
 
     resolved_root = (publish_root or PUBLISH_ROOT).resolve()
     digest = hashlib.sha256(str(resolved_root).encode("utf-8")).hexdigest()
-    return OUTPUT_ROOT / CANONICAL_PUBLISH_SIDECAR_OUTPUT_REF / digest[:20]
+    return CANONICAL_PUBLISH_SIDECAR_ROOT / digest[:20]
 
 
 def publish_lock_path(publish_root: Path | None = None) -> Path:
@@ -421,27 +285,6 @@ def publish_meta_path() -> Path:
 # ─── release 输出（供服务端 bulk import 消费）─────────────────────
 
 
-
-
-
-
-
-
-
-
-# ─── execution 产物快捷路径（assemble 消费）───────────────────────
-
-
-
-
-# ─── execution 内部阶段路径 ───────────────────────────────────────
-# contentType 与 supplyMode 是运行状态字段，不形成第二套目录身份。
-EXECUTION_PHASES = ("e2e", "operations")
-EXECUTION_CONTENT_TYPES = ("homepage", "article", "image", "video")
-EXECUTION_SUPPLY_MODES = ("site_primary", "search_supplement")
-DEFAULT_EXECUTION_PHASE = "e2e"
-DEFAULT_EXECUTION_CONTENT_TYPE = "article"
-DEFAULT_EXECUTION_SUPPLY_MODE = "site_primary"
 
 
 
@@ -538,52 +381,30 @@ OBJECT_STAGES = tuple(stage.value for stage in OBJECT_STAGE_SEQUENCE)
 
 # ─── layout helpers ───────────────────────────────────────────────
 from core.execution_paths import (  # noqa: F401
-    dedup_ledger,
     ensure_execution_command_layout,
     ensure_execution_layout,
     ensure_object_stages,
     env_data_release_evidence_ref,
     env_data_release_run_root,
     execution_assistant_task,
-    execution_assistant_tasks_dir,
-    execution_audit_markdown_path,
-    execution_audit_summary_path,
-    execution_baseline_freeze_packet_path,
-    execution_catalog,
-    execution_command_packet_path,
-    execution_command_packets_dir,
     execution_command_root,
-    execution_content_plan_packet_path,
-    execution_content_type,
     execution_data,
-    execution_entities,
     execution_entity_object_dir,
     execution_entity_page_input_path,
     execution_entity_stage_dir,
-    execution_explore_packet_path,
     execution_id_from_dir,
     execution_inputs_dir,
     execution_manifest_path,
-    execution_phase,
     execution_post_object_dir,
     execution_post_roots,
     execution_post_stage_dir,
     execution_posts_root,
     execution_results_dir,
     execution_root_entry,
-    execution_run_journal_path,
-    execution_runtime_state_path,
-    execution_sequence_lock_path,
-    execution_sequence_path,
     execution_shared_dir,
-    execution_source_catalog_path,
     execution_source_unit_dir,
     execution_sources_dir,
     execution_sources_root,
-    execution_spec_path,
-    execution_state_path,
-    execution_supply_mode,
-    execution_tags,
     executions_root,
     iter_all_execution_dirs,
     iter_execution_ids,
@@ -594,7 +415,5 @@ from core.execution_paths import (  # noqa: F401
     release_manifest,
     release_ref,
     release_root,
-    resolve_existing_execution_shared_path,
-    runtime_shared_dir,
     sanitize_intent_label,
 )

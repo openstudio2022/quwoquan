@@ -145,6 +145,11 @@ def _frozen_history(
         "sourceRevision": _REVISION,
         "sourceDigest": _DIGEST_A,
         "entityCatalogDigest": _DIGEST_B,
+        "posterPolicy": {
+            "required": True,
+            "format": "image/png",
+            "rightsInheritance": "licensed_video_derivative",
+        },
         "items": items,
     }
     manifest_digest = document_digest(manifest_body)
@@ -204,6 +209,11 @@ def _rebound_manifest(history: dict[str, Any], items: list[dict[str, Any]]) -> d
         "sourceRevision": "sha256:" + "d" * 64,
         "sourceDigest": "sha256:" + "e" * 64,
         "entityCatalogDigest": _DIGEST_B,
+        "posterPolicy": {
+            "required": True,
+            "format": "image/png",
+            "rightsInheritance": "licensed_video_derivative",
+        },
         "frozenPhysicalInput": {
             "sourceRevision": _REVISION,
             "sourceDigest": _DIGEST_A,
@@ -260,6 +270,12 @@ def _acquire_from_frozen(
         network_fetcher=network_fetcher,
         media_probe=lambda _path: dict(_PLAYABLE_PROBE),
         frozen_asset=frozen_asset,
+        poster_extractor=lambda _video, poster: poster.write_bytes(
+            bytes.fromhex(
+                "89504e470d0a1a0a0000000d4948445200000001000000010802000000907753de"
+                "0000000c4944415408d763f8cfc000000301010018dd8db10000000049454e44ae426082"
+            )
+        ),
     )
     return row, transport
 
@@ -321,9 +337,11 @@ def test_reuse_never_touches_a_transport_or_writes_a_second_cas_copy(
     assert row["assetRef"] == frozen["assetRef"]
     assert row["contentSha256"] == frozen["contentSha256"]
     assert row["bytes"] == frozen["bytes"]
-    assert sorted(
-        path.name for path in (root / "cas").rglob("*") if path.is_file()
-    ) == cas_before
+    cas_after = sorted(path.name for path in (root / "cas").rglob("*") if path.is_file())
+    assert set(cas_before) <= set(cas_after)
+    assert len(cas_after) == len(cas_before) + 1
+    assert row["posterAssetRef"].endswith(".png")
+    assert row["posterContentSha256"].startswith("sha256:")
 
 
 def test_reuse_leaves_no_temporary_download_behind(

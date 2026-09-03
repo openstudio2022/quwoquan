@@ -32,7 +32,7 @@
 <a id="req-001"></a>
 ### REQ-001 每日合并发布策略
 
-- **分支角色**：本地与远端只允许 `dev1.0`、`main` 与六条长期 lane 分支（`lane/product-mainline`、`lane/data-engineering`、`lane/agent-engineering`、`lane/ops`、`lane/small-fix`、`lane/refactor`）；`dev1.0` 是唯一集成真相源，`main` 是唯一发布真相源，lane 分支是唯一日常开发面。白名单之外的任何临时分支或额外长期分支均非法。
+- **分支角色**：本地与远端只允许 `dev1.0`、`main` 与六条长期 lane 分支（`lane/product-mainline`、`lane/data-engineering`、`lane/engineering`、`lane/ops`、`lane/small-fix`、`lane/refactor`）；`dev1.0` 是唯一集成真相源，`main` 是唯一发布真相源，lane 分支是唯一日常开发面。白名单之外的任何临时分支或额外长期分支均非法。
 - **lane 生命周期**：六条固定 lane 由用户裁决立即开放，每条 lane 长期存在且同一时刻至多一个 writer，从 `dev1.0` 派生并只经声明 PR 边回到 `dev1.0`；每轮 integration 或 abort 后 worktree 均 retained，lane 必须 mandatory fast-forward resync 到新的 `dev1.0`，不得 cleanup/delete、force、自动 merge或改写历史。一个 Increment 只有一个 lead lane 与一个原子 PR，跨域协作不拆成多个并行 writer；启用后观察不阻断六车道准入。
 - **工程归属**：本 Story 拥有集成、晋级、回同步与发布来源的可观察行为；`platform-ops-governance` 拥有 `quwoquan_ops/policies/branch_policy.yaml` 及其 gate/hook 的机器实现，机器实现不得改写本 Story 的行为语义。
 

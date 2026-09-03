@@ -76,8 +76,6 @@
         "configurationDigest",
         "candidateManifestSha256",
         "environment",
-        "platform",
-        "deviceClass",
         "provider",
         "startedAt",
         "completedAt",
@@ -160,6 +158,12 @@
           "$ref": "#/$defs/digest"
         },
         "releaseId": {
+          "$ref": "#/$defs/nonSecretIdentity"
+        },
+        "importRunId": {
+          "$ref": "#/$defs/nonSecretIdentity"
+        },
+        "verifyRunId": {
           "$ref": "#/$defs/nonSecretIdentity"
         },
         "targetUatBindingDigest": {
@@ -294,6 +298,46 @@
               "artifactClass",
               "physicalDevice"
             ]
+          }
+        },
+        {
+          "if": {
+            "required": ["producer", "layer"],
+            "properties": {
+              "producer": {"const": "app"},
+              "layer": {"const": "user_acceptance"}
+            }
+          },
+          "then": {
+            "required": ["platform", "deviceClass"]
+          }
+        },
+        {
+          "if": {
+            "required": ["producer", "layer"],
+            "properties": {
+              "producer": {"const": "service"},
+              "layer": {"const": "api_integration"}
+            }
+          },
+          "then": {
+            "required": [
+              "releaseId", "releaseDigest", "importRunId", "verifyRunId",
+              "objectRef", "objectDigest"
+            ],
+            "not": {
+              "anyOf": [
+                {"required": ["platform"]},
+                {"required": ["deviceClass"]},
+                {"required": ["deviceRegistered"]},
+                {"required": ["deviceIdentity"]},
+                {"required": ["targetUatBindingDigest"]},
+                {"required": ["uatProfile"]},
+                {"required": ["nonPromotable"]},
+                {"required": ["artifactClass"]},
+                {"required": ["physicalDevice"]}
+              ]
+            }
           }
         },
         {

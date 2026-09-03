@@ -159,7 +159,6 @@
               "quwoquan_data/verticals/travel",
               "quwoquan_data/reference",
               "quwoquan_data/requirements.txt",
-              "quwoquan_data/requirements-cursor.txt",
               "quwoquan_service/services/content-service/contracts/media/media_asset",
               "quwoquan_service/services/content-service/contracts/content/post/ui_config.yaml",
               "quwoquan_service/services/recommendation-service/contracts/recommendation/recommendation_feature_profile_view/projections/intersection_reason.yaml"
@@ -171,8 +170,7 @@
     "selectionScope": {
       "enum": [
         "target_environment",
-        "all_publishable",
-        "milestone"
+        "explicit_cohort"
       ]
     },
     "targetEnvironment": {
@@ -182,41 +180,6 @@
         "gamma",
         "prod"
       ]
-    },
-    "milestone": {
-      "enum": [
-        "M100",
-        "M1000",
-        "M10000"
-      ]
-    },
-    "milestoneTargets": {
-      "type": "object",
-      "required": [
-        "homepage",
-        "article",
-        "image",
-        "video"
-      ],
-      "additionalProperties": false,
-      "properties": {
-        "homepage": {
-          "type": "integer",
-          "minimum": 1
-        },
-        "article": {
-          "type": "integer",
-          "minimum": 1
-        },
-        "image": {
-          "type": "integer",
-          "minimum": 1
-        },
-        "video": {
-          "type": "integer",
-          "minimum": 1
-        }
-      }
     },
     "releaseMode": {
       "enum": [
@@ -261,8 +224,12 @@
       "uniqueItems": true,
       "items": {
         "oneOf": [
-          {"$ref": "#/$defs/handoffContent"},
-          {"$ref": "#/$defs/legacyAuditContent"}
+          {
+            "$ref": "#/$defs/handoffContent"
+          },
+          {
+            "$ref": "#/$defs/legacyAuditContent"
+          }
         ]
       }
     },
@@ -332,9 +299,6 @@
         }
       }
     },
-    "reviewedClosureAdoption": {
-      "$ref": "../execution/reviewed_closure_adoption_campaign_binding.schema.json"
-    },
     "samplePlanRef": {
       "const": "uat/sample_plan.json"
     },
@@ -347,31 +311,72 @@
     "handoffContent": {
       "type": "object",
       "required": [
-        "contentId", "version", "postRef", "selectionIdentityDigest",
-        "canonicalObjectDigest", "contentLibraryBindingDigest"
+        "contentId",
+        "version",
+        "postRef",
+        "selectionIdentityDigest",
+        "canonicalObjectDigest",
+        "contentLibraryBindingDigest"
       ],
       "additionalProperties": false,
       "properties": {
-        "contentId": {"type": "string", "minLength": 1},
-        "version": {"type": "integer", "minimum": 1},
-        "postRef": {"type": "string", "minLength": 1},
-        "selectionIdentityDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
-        "canonicalObjectDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
-        "contentLibraryBindingDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+        "contentId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "postRef": {
+          "type": "string",
+          "minLength": 1
+        },
+        "selectionIdentityDigest": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "canonicalObjectDigest": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "contentLibraryBindingDigest": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
       }
     },
     "legacyAuditContent": {
       "type": "object",
       "required": [
-        "contentId", "version", "postRef", "executionId", "sourceIdentityDigest"
+        "contentId",
+        "version",
+        "postRef",
+        "executionId",
+        "sourceIdentityDigest"
       ],
       "additionalProperties": false,
       "properties": {
-        "contentId": {"type": "string", "minLength": 1},
-        "version": {"type": "integer", "minimum": 1},
-        "postRef": {"type": "string", "minLength": 1},
-        "executionId": {"type": "string", "minLength": 1},
-        "sourceIdentityDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+        "contentId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "postRef": {
+          "type": "string",
+          "minLength": 1
+        },
+        "executionId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sourceIdentityDigest": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
       }
     },
     "sourceIdentity": {
@@ -490,95 +495,6 @@
     },
     {
       "if": {
-        "required": [
-          "targetEnvironment"
-        ]
-      },
-      "then": {
-        "required": [
-          "selectionScope",
-          "releaseMode",
-          "poolDigest",
-          "counts",
-          "contents",
-          "authors",
-          "buildResult"
-        ],
-        "not": {
-          "required": [
-            "milestone"
-          ]
-        },
-        "properties": {
-          "selectionScope": {
-            "const": "target_environment"
-          }
-        }
-      }
-    },
-    {
-      "if": {
-        "required": [
-          "milestone"
-        ]
-      },
-      "then": {
-        "required": [
-          "selectionScope",
-          "milestoneTargets",
-          "releaseMode",
-          "poolDigest",
-          "counts",
-          "contents",
-          "authors",
-          "buildResult",
-          "sourceIdentities",
-          "sourceIdentitySetDigest",
-          "samplePlanRef",
-          "samplePlanDigest"
-        ],
-        "not": {
-          "anyOf": [
-            {
-              "required": [
-                "targetEnvironment"
-              ]
-            },
-            {
-              "required": [
-                "sourceRevision"
-              ]
-            },
-            {
-              "required": [
-                "sourceDigest"
-              ]
-            },
-            {
-              "required": [
-                "entityCatalogDigest"
-              ]
-            }
-          ]
-        },
-        "properties": {
-          "selectionScope": {
-            "const": "milestone"
-          },
-          "releaseClass": {
-            "const": "research"
-          },
-          "productLifecycleState": {
-            "const": "research"
-          },
-          "releaseMode": {
-            "const": "research"
-          }
-        }
-      }
-    },
-    {
-      "if": {
         "properties": {
           "releaseKind": {
             "const": "content"
@@ -634,198 +550,6 @@
             }
           }
         ]
-      }
-    },
-    {
-      "if": {
-        "properties": {
-          "milestone": {
-            "const": "M100"
-          }
-        },
-        "required": [
-          "milestone"
-        ]
-      },
-      "then": {
-        "properties": {
-          "milestoneTargets": {
-            "properties": {
-              "homepage": {
-                "const": 100
-              },
-              "article": {
-                "const": 100
-              },
-              "image": {
-                "const": 100
-              },
-              "video": {
-                "const": 10
-              }
-            }
-          }
-        }
-      }
-    },
-    {
-      "if": {
-        "properties": {
-          "milestone": {
-            "const": "M1000"
-          }
-        },
-        "required": [
-          "milestone"
-        ]
-      },
-      "then": {
-        "properties": {
-          "milestoneTargets": {
-            "properties": {
-              "homepage": {
-                "const": 1000
-              },
-              "article": {
-                "const": 1000
-              },
-              "image": {
-                "const": 1000
-              },
-              "video": {
-                "const": 100
-              }
-            }
-          }
-        }
-      }
-    },
-    {
-      "if": {
-        "properties": {
-          "milestone": {
-            "const": "M10000"
-          }
-        },
-        "required": [
-          "milestone"
-        ]
-      },
-      "then": {
-        "properties": {
-          "milestoneTargets": {
-            "properties": {
-              "homepage": {
-                "const": 10000
-              },
-              "article": {
-                "const": 10000
-              },
-              "image": {
-                "const": 10000
-              },
-              "video": {
-                "const": 1000
-              }
-            }
-          }
-        }
-      }
-    },
-    {
-      "if": {
-        "not": {
-          "required": [
-            "selectionScope"
-          ]
-        }
-      },
-      "then": {
-        "not": {
-          "anyOf": [
-            {
-              "required": [
-                "releaseMode"
-              ]
-            },
-            {
-              "required": [
-                "poolDigest"
-              ]
-            },
-            {
-              "required": [
-                "counts"
-              ]
-            },
-            {
-              "required": [
-                "contents"
-              ]
-            },
-            {
-              "required": [
-                "authors"
-              ]
-            },
-            {
-              "required": [
-                "buildResult"
-              ]
-            },
-            {
-              "required": [
-                "milestoneTargets"
-              ]
-            },
-            {
-              "required": [
-                "samplePlanRef"
-              ]
-            },
-            {
-              "required": [
-                "samplePlanDigest"
-              ]
-            }
-          ]
-        }
-      }
-    },
-    {
-      "if": {
-        "properties": {
-          "selectionScope": {
-            "const": "all_publishable"
-          }
-        },
-        "required": [
-          "selectionScope"
-        ]
-      },
-      "then": {
-        "required": [
-          "releaseMode",
-          "poolDigest",
-          "counts",
-          "contents",
-          "authors",
-          "buildResult"
-        ],
-        "not": {
-          "anyOf": [
-            {
-              "required": [
-                "targetEnvironment"
-              ]
-            },
-            {
-              "required": [
-                "milestone"
-              ]
-            }
-          ]
-        }
       }
     }
   ]

@@ -27,28 +27,6 @@ def expected_content_generator(content_type: ContentType) -> ContentGenerator:
     return ContentGenerator.AGENT
 
 
-class ExecutionSpecStatus(StrEnum):
-    DRAFT = "draft"
-    ACTIVE = "active"
-
-
-class ModalityContract(StrEnum):
-    SEPARATED_RESEARCH = "separated_research"
-
-
-class ImageAssetStrategy(StrEnum):
-    OPEN_LICENSE_PUBLISH = "open_license_publish"
-    LICENSED_PROVIDER_PUBLISH = "licensed_provider_publish"
-    AI_GENERATED_ORIGINAL = "ai_generated_original"
-    REFERENCE_ONLY_NO_IMAGE_RELEASE = "reference_only_no_image_release"
-    ATTRIBUTION_AUDITED_PUBLISH = "attribution_audited_publish"
-
-
-class ImageCountPolicy(StrEnum):
-    SCORE_BONUS = "score_bonus"
-    HARD_QUOTA = "hard_quota"
-
-
 class ExecutionPhase(StrEnum):
     """Generic runtime scale marker; product campaigns are never static types."""
 
@@ -103,62 +81,6 @@ class AppUatDataSource(StrEnum):
     REMOTE = "remote"
 
 
-class QueueBackend(StrEnum):
-    LOCAL_FILE = "local_file"
-    RELIABLE_TASK = "reliabletask"
-
-
-class QueueJobState(StrEnum):
-    QUEUED = "queued"
-    LEASED = "leased"
-    SUCCEEDED = "succeeded"
-    FAILED = "failed"
-    BLOCKED = "blocked"
-    DEAD = "dead"
-    SPILLED = "spilled"
-
-
-class QueueJobStage(StrEnum):
-    """Closed work kinds accepted by the object execution queue."""
-
-    DOWNLOAD = "download"
-    AUTHOR = "author"
-    PUBLISH = "publish"
-
-
-class ReliableTaskDispatchStatus(StrEnum):
-    """Terminal result of one controller dispatch to the service-owned fleet."""
-
-    COMPLETED = "completed"
-    WAITING = "waiting"
-    BLOCKED = "blocked"
-
-
-class QueueFailureKind(StrEnum):
-    """Machine-readable reason class for a queue transition to failure."""
-
-    EXECUTION = "execution"
-    GOVERNANCE = "governance"
-    STARTUP = "startup"
-    RESULT_ENVELOPE = "result_envelope"
-    BUDGET = "budget"
-    TIMEOUT = "timeout"
-
-
-class QueueTimelineEvent(StrEnum):
-    """Auditable queue lifecycle events; free-form text belongs in attrs only."""
-
-    BLOCKED = "blocked"
-    LEASED = "leased"
-    SUCCEEDED = "succeeded"
-    ENVELOPE_ACCEPTED = "envelope_accepted"
-    RECONCILED = "reconciled"
-    FAILED = "failed"
-    REQUEUED = "requeued"
-    REVIVED = "revived"
-    RECLAIMED = "reclaimed"
-
-
 class ReviewItemKind(StrEnum):
     ARTICLE = "article"
     FACT = "fact"
@@ -189,125 +111,10 @@ class ImageSafetyReviewStatus(StrEnum):
     UNSAFE = "unsafe"
 
 
-class SelectionPolicy(StrEnum):
-    FROZEN = "frozen"
-
-
-class TargetSelector(StrEnum):
-    """Explicit ordering policy for one frozen execution target set."""
-
-    ALL = "all"
-    PRIORITY = "priority"
-    SOURCE_READY_PRIORITY = "source-ready-priority"
-
-
-class ReplacementPolicy(StrEnum):
-    FORBIDDEN = "forbidden"
-
-
 class SourcePolicyRevision(StrEnum):
     ENCYCLOPEDIA_PRIMARY = "encyclopedia-primary"
     RIGHTS_CLEARED_CONTENT = "rights-cleared-content"
     GOVERNANCE_PROJECTION = "governance-projection"
-
-
-class RuntimeEnvironment(StrEnum):
-    LOCAL = "local"
-    CLOUD = "cloud"
-
-
-class AgentProvider(StrEnum):
-    CURSOR_SDK = "cursor_sdk"
-    CODEX_SDK = "codex_sdk"
-
-
-class AgentRunStatus(StrEnum):
-    """Terminal status returned by the only managed-agent boundary."""
-
-    FINISHED = "finished"
-    ERROR = "error"
-
-
-class ManagedAgentCheckpointStatus(StrEnum):
-    """Lifecycle state of the persisted checkpoint record.
-
-    ``PARTIAL`` and ``BLOCKED`` name a run that reached its own end with a
-    shortfall: the checkpoint is complete as a record, so downstream stages read
-    the excluded refs from it instead of inferring exclusion from absence.
-    """
-
-    COMPLETED = "completed"
-    INTERRUPTED = "interrupted"
-    PARTIAL = "partial"
-    BLOCKED = "blocked"
-
-
-class AgentFailureKind(StrEnum):
-    """Closed failure classes for managed semantic-agent adapters."""
-
-    SDK_UNAVAILABLE = "sdk_unavailable"
-    CREDENTIAL_INVALID = "credential_invalid"
-    PROVIDER_REJECTED = "provider_rejected"
-    BUDGET_EXCEEDED = "budget_exceeded"
-    BRIDGE_UNAVAILABLE = "bridge_unavailable"
-    SDK_EXECUTION_FAILED = "sdk_execution_failed"
-    NO_RESULT = "no_result"
-    SUBPROCESS_TIMEOUT = "subprocess_timeout"
-    SUBPROCESS_OUTPUT_INVALID = "subprocess_output_invalid"
-    SUBPROCESS_EXITED = "subprocess_exited"
-    FUTURE_TIMEOUT = "future_timeout"
-    CHECKPOINT_GATE = "checkpoint_gate"
-    AUTHENTICATION_REJECTED = "authentication_rejected"
-    CAPACITY_UNPROVEN = "capacity_unproven"
-
-
-class ReadinessMode(StrEnum):
-    COMMERCIAL = "commercial"
-    CALIBRATION = "calibration"
-
-
-class ExecutionStage(StrEnum):
-    DOWNLOAD_PLAN = "download_plan"
-    DOWNLOAD_FETCH = "download_fetch"
-    BUILD_PREPARE = "build_prepare"
-    BUILD_HOMEPAGE = "build_homepage"
-    BUILD_VALIDATE = "build_validate"
-    CONTENT_PLAN = "content_plan"
-    POST_PLAN = "post_plan"
-    POST_COMPOSE = "post_compose"
-    POST_AUTHOR = "post_author"
-    POST_ANNOTATE = "post_annotate"
-    POST_REVIEW = "post_review"
-    PUBLISH = "publish"
-
-
-class StageKind(StrEnum):
-    AUTO = "auto"
-    CHECKPOINT = "checkpoint"
-
-
-class StageStatus(StrEnum):
-    DONE = "done"
-    WAITING = "waiting"
-    FAILED = "failed"
-    SKIPPED = "skipped"
-
-
-class ExecutionStateStatus(StrEnum):
-    QUEUED = "queued"
-    RUNNING = "running"
-    STOPPED_AT_UNTIL = "stopped_at_until"
-    WAITING_AGENT = "waiting_agent"
-    REPAIRING = "repairing"
-    MANUAL_REQUIRED = "manual_required"
-    INTERRUPTED = "interrupted"
-    SUCCEEDED = "succeeded"
-
-
-class PostStage(StrEnum):
-    COMPOSE_BRIEF = "compose-brief"
-    ANNOTATE_ENTITIES = "annotate-entities"
-    REVIEW = "review"
 
 
 class ReceiptStage(StrEnum):
@@ -352,27 +159,6 @@ OBJECT_STAGE_SEQUENCE: tuple[ReceiptStage, ...] = (
     ReceiptStage.DRAFT,
     ReceiptStage.REVIEW,
 )
-
-
-class RecoveryNextAction(StrEnum):
-    """按需入池链路上非成功终态的恢复动作闭集。
-
-    编译截面与 drain 截面共用同一闭集：运营者读到的恢复动作词元不随截面变化，
-    否则同一个「补输入」在两处会有两个名字，读者得先知道自己在读哪个截面。
-    schema 侧真相源是 `schema/execution/recovery_next_action.schema.json`。
-    """
-
-    SUPPLY_INPUT = "supply_input"
-    RECOMPILE_INTENT = "recompile_intent"
-    RETRY_SOURCE_DISCOVERY = "retry_source_discovery"
-    EXPAND_SCOPE = "expand_scope"
-    CHANGE_SOURCE_STRATEGY = "change_source_strategy"
-    ACQUIRE_OR_RETRY = "acquire_or_retry"
-    REPAIR_EVIDENCE = "repair_evidence"
-    REPAIR_IDENTITY = "repair_identity"
-    SELECT_NEW_IDENTITY = "select_new_identity"
-    RESUME_DELIVERY = "resume_delivery"
-    NONE = "none"
 
 
 class MediaHoldingState(StrEnum):
@@ -443,48 +229,13 @@ class PoolObjectRetirementReason(StrEnum):
 
 
 __all__ = [
-    "AgentFailureKind",
-    "AgentProvider",
-    "AgentRunStatus",
-    "ManagedAgentCheckpointStatus",
-    "AppUatDataSource",
-    "AppUatStatus",
-    "ContentImportStatus",
-    "ContentType",
-    "DeploymentEnvironment",
-    "ExecutionStage",
-    "ExecutionStateStatus",
-    "ImageSafetyReviewStatus",
-    "MediaClosureVerdict",
-    "MediaDurabilityState",
-    "MediaHoldingRecoveryAction",
-    "MediaHoldingState",
-    "PoolObjectRetirementReason",
-    "PostStage",
-    "OBJECT_STAGE_SEQUENCE",
-    "RECEIPT_STAGE_SEQUENCE",
-    "ReadinessMode",
-    "ReceiptStage",
-    "RecoveryNextAction",
-    "QueueBackend",
-    "QueueFailureKind",
-    "QueueJobStage",
-    "QueueJobState",
-    "ReliableTaskDispatchStatus",
-    "QueueTimelineEvent",
-    "ReleaseDeletePolicy",
-    "ReleaseRunKind",
-    "ReleaseRunStatus",
-    "ReleaseSourceOwner",
-    "ReleaseSyncMode",
-    "ReviewItemKind",
-    "ReviewJudgment",
-    "ReviewOverride",
-    "ReviewPublishState",
-    "ReplacementPolicy",
-    "RuntimeEnvironment",
-    "SelectionPolicy",
-    "SourcePolicyRevision",
-    "StageKind",
-    "StageStatus",
+    "AppUatDataSource", "AppUatStatus", "ContentGenerator", "ContentImportStatus",
+    "ContentType", "DeploymentEnvironment", "ExecutionPhase", "ImageSafetyReviewStatus", "MediaClosureVerdict",
+    "MediaDurabilityState", "MediaHoldingRecoveryAction", "MediaHoldingState",
+    "OBJECT_STAGE_SEQUENCE", "PoolObjectRetirementReason",
+    "PostStage", "RECEIPT_STAGE_SEQUENCE", "ReceiptStage", "ReleaseDeletePolicy",
+    "ReleaseRunKind", "ReleaseRunStatus", "ReleaseSourceOwner", "ReleaseSyncMode",
+    "ReviewItemKind", "ReviewJudgment", "ReviewOverride",
+    "ReviewPublishState", "SourcePolicyRevision",
+    "expected_content_generator",
 ]

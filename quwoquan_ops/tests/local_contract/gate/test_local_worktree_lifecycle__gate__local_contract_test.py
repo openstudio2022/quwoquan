@@ -51,7 +51,7 @@ AUTHZ_SCRIPT = ROOT / "quwoquan_ops/hooks/worktree_authz_guard.py"
 INSTALL_SCRIPT = ROOT / "quwoquan_ops/hooks/run_install_hooks.sh"
 GATE_SCRIPT = ROOT / "quwoquan_ops/gate/verify_local_worktree_lifecycle.py"
 REMINDER_GATE = ROOT / "quwoquan_ops/hooks/worktree_session_reminder_gate.sh"
-ALLOWED = frozenset({"dev1.0", "main", "lane/product-mainline", "lane/data-engineering", "lane/agent-engineering", "lane/ops", "lane/small-fix", "lane/refactor"})
+ALLOWED = frozenset({"dev1.0", "main", "lane/product-mainline", "lane/data-engineering", "lane/engineering", "lane/ops", "lane/small-fix", "lane/refactor"})
 
 
 @pytest.fixture(scope="module")

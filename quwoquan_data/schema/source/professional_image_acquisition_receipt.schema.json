@@ -4,7 +4,7 @@
   "type": "object",
   "required": [
     "schema", "manifestId", "manifestDigest", "sourceRevision", "sourceDigest",
-    "entityCatalogDigest", "discoveryPlanRef", "discoveryPlanDigest",
+    "entityCatalogDigest",
     "plannedAssetCount", "discoveredAssetCount", "downloadedAssetCount",
     "acceptedAssetCount", "rejectedAssetCount", "providerAssetCounts", "assets",
     "receiptDigest"
@@ -18,8 +18,6 @@
     "sourceRevision": {"type": "string", "minLength": 1},
     "sourceDigest": {"$ref": "#/$defs/sha256"},
     "entityCatalogDigest": {"$ref": "#/$defs/sha256"},
-    "discoveryPlanRef": {"type": "string", "minLength": 1},
-    "discoveryPlanDigest": {"$ref": "#/$defs/sha256"},
     "plannedAssetCount": {"type": "integer", "minimum": 1},
     "discoveredAssetCount": {"type": "integer", "minimum": 1},
     "downloadedAssetCount": {"type": "integer", "minimum": 0},
@@ -115,7 +113,7 @@
       "type": "object",
       "required": [
         "url", "sourceUrl", "collectionPageUrl", "originalAssetUrl", "platform", "sourceId",
-        "discoveryCandidateId", "discoveryUrl", "creator", "credit", "capturedAt",
+        "creator", "credit", "capturedAt",
         "contentSha256", "acquisitionStatus", "rightsStatus",
         "authorizationRequired", "distributionDecision", "rightsAuditStatus",
         "rightsIssues", "license", "licenseSnapshot", "usageScope",
@@ -130,8 +128,6 @@
         "originalAssetUrl": {"type": "string", "pattern": "^https://"},
         "platform": {"type": "string", "minLength": 1},
         "sourceId": {"type": "string", "minLength": 1},
-        "discoveryCandidateId": {"type": "string", "minLength": 1},
-        "discoveryUrl": {"type": "string", "pattern": "^https://"},
         "creator": {"type": "string", "minLength": 1},
         "credit": {"type": "string", "minLength": 1},
         "capturedAt": {"type": "string", "minLength": 1},
@@ -162,7 +158,7 @@
       "type": "object",
       "required": [
         "assetId", "entityId", "observedEntityId", "entityAliases", "displayName",
-        "discoveryCandidateId", "discoveryUrl", "provider", "platform",
+        "provider", "platform",
         "acquisitionPath", "assetUrl", "manualFile", "apiEvidence", "accessEvidence",
         "acquisitionStatus", "rightsStatus", "authorizationRequired",
         "distributionDecision", "sourceUrl", "creator", "capturedAt", "contentSha256",
@@ -184,8 +180,6 @@
           "items": {"type": "string", "minLength": 1}
         },
         "displayName": {"type": "string", "minLength": 1},
-        "discoveryCandidateId": {"type": "string", "minLength": 1},
-        "discoveryUrl": {"type": "string", "pattern": "^https://"},
         "provider": {"type": "string", "minLength": 1},
         "platform": {"type": "string", "minLength": 1},
         "acquisitionPath": {"enum": ["public_direct", "supported_api", "manual_file"]},

@@ -41,13 +41,13 @@ from content.release.model import DeploymentEnvironment
 from core.control_types import ContentType
 from core.io import write_json
 from core.paths import OUTPUT_ROOT, REPO_ROOT
-from core.runtime_policy import active_runtime_policy
 from core.schema import assert_valid
 from verify.release_publishability import readiness_phase_issue
 
 POST_DETAIL_PAGE_ID = "content.post.get"
 USER_PROFILE_PAGE_ID = "user.profile"
 ORIGINAL_ACCESS_PAGE_ID = "content.media.original_access"
+_RESEARCH_CREDENTIAL_ISSUANCE_TIMEOUT_SECONDS = 180
 
 
 def _research_consumer_credential(
@@ -75,7 +75,7 @@ def _research_consumer_credential(
             command,
             capture_output=True,
             text=True,
-            timeout=active_runtime_policy().research_credential_issuance_timeout_seconds,
+            timeout=_RESEARCH_CREDENTIAL_ISSUANCE_TIMEOUT_SECONDS,
             check=False,
             cwd=str(REPO_ROOT),
         )

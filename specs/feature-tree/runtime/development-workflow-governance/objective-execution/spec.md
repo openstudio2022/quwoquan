@@ -121,3 +121,14 @@
 - 影响或价值：canonical contract 与 branch policy 已按用户裁决立即准入六条持久 lane，并返回 `admitted`、`write_concurrency=6`、`persistent_lane_allowed=true`；尚缺六个不同 lane writer 同时执行的真实集成证据，以及同 subject 竞争恰好一个 winner、integration/abort 后 retained worktree mandatory fast-forward resync 的联合 readback。同 lane 内并行会话不再由 hook/claim 互斥，冲突在 lane→`dev1.0` 准出时暴露。启用后观察用于补齐证据，不阻断已裁决的六车道准入，也不得把未实现的准出 gate 报告为已完成。
 - 完成判定：`GWT-003.t1`、`GWT-003.t2`、`GWT-003.t3`、`GWT-003.t4`、`GWT-003.t5` 由六条 lane 的真实并发 execution/PR/readback 证明并发上限、准出时冲突暴露、竞争恢复和 integration/abort 后 fast-forward resync，且 worktree 全程 retained。
 - 依赖：六条 lane 的授权 worktree、真实六并发执行窗口、lane PR ready / exact merge candidate 准出 gate 与 integration/abort resync 执行 gate。
+
+<a id="open-003"></a>
+### OPEN-003 Journal 信任边界末两条子句尚未形成当前通过证据
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：当前缺少 [`GWT-001.t10`](#gwt-001) 受信节点/identity 漂移与 [`GWT-001.t11`](#gwt-001) I/O/unsupported primitive 独立失败终态的可通过测试证据；[`GWT-001.t1`](#gwt-001) 至 [`GWT-001.t9`](#gwt-001) 的既有索引不能代替这两条，因此整个复合验收保持 pending。
+- 尚缺验收证据：修复当前 Objective command envelope 与测试输入的 contract drift 后，由现有 journal security/authority local_contract 直接证明受信节点篡改为 `OEX.JOURNAL_TAMPERED`、存储 I/O/不支持原语为 `OEX.JOURNAL_FAILED`，且两者都不解释为 `absent` 或可信状态。
+- 完成判定：[`GWT-001.t10`](#gwt-001) 与 [`GWT-001.t11`](#gwt-001) 分别由职责匹配且在当前 revision 实际通过的 local_contract 绑定；届时复跑全部 [`GWT-001`](#gwt-001) journal 测试无失败后再关闭本 OPEN。
+- 依赖：Objective execution command-envelope contract 与 journal test fixture 对齐；不得仅添加 `spec_ref` 掩盖当前测试失败。

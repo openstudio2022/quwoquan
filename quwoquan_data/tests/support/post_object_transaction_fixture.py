@@ -5,6 +5,7 @@
 ``_isolate_creator_avatar_cas`` 是模块级 autouse fixture，场景测试文件
 必须显式 import 它以保持 autouse 语义。
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -14,25 +15,16 @@ from dataclasses import replace
 from pathlib import Path
 
 import pytest
-import yaml
-from content.release.canonical.content_pool_record import stable_content_id
 from content.release.canonical.post_transaction import (
     build_post_object_transaction_package as _build_post_object_transaction_package,
 )
-from core.source_digest import (
-    current_execution_bundle_identity,
-    current_source_definition_snapshot,
-)
-from core.tree_integrity import tree_integrity_stats
 from governance.coverage import distribution
-from governance.creators.assignment import creator_assignment_from_profile
-from content.templates.registry import TemplateRegistry
 from PIL import Image
+
 from support.media_fixture import seed_system_creator_avatar_holding
 
-
 EXECUTION_ID = "20260718--travel-image-cold-start--test-region-a--scale-901"
-POST_REF = "image/西湖/光影"
+POST_REF = "image/西湖/光影/1"
 CREATOR_REF = "qwq_creator_landscape_photographer_001"
 # 原测试文件位于 tests/local_contract/release/（parents[4]）；本 support 模块
 # 位于 tests/support/，仓库根对应 parents[3]。
@@ -92,17 +84,15 @@ def make_text_only_article(execution_root: Path) -> None:
 
 def _write_json(path: Path, payload: object) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+    path.write_text(
+        json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+        + "\n",
+        encoding="utf-8",
+    )
 
 
-def _sha(value: object) -> str:
-    encoded = json.dumps(
-        value,
-        ensure_ascii=False,
-        sort_keys=True,
-        separators=(",", ":"),
-    ).encode("utf-8")
-    return "sha256:" + hashlib.sha256(encoded).hexdigest()
+def _file_digest(path: Path) -> str:
+    return "sha256:" + hashlib.sha256(path.read_bytes()).hexdigest()
 
 
 def _source_attribution() -> dict[str, object]:
@@ -133,45 +123,11 @@ def build_post_object_transaction_package(
     transaction_id: str,
     package_root: Path,
 ) -> dict[str, object]:
-    """Low-level transaction fixtures pass an explicit frozen intent binding."""
-
-    canonical_ref = object_ref.removeprefix("posts/")
-    object_root = execution_root / "posts" / canonical_ref
-    manifest = json.loads((object_root / "manifest.json").read_text(encoding="utf-8"))
-    content_id = stable_content_id(manifest, canonical_ref)
-    review = object_root / "5.review/attestation.json"
-    digest = "sha256:" + "a" * 64
-    creator_binding = creator_assignment_from_profile(
-        TemplateRegistry.load().creators[str(manifest["creatorProfileId"])]
-    )
-    stable = {
-        "schema": "quwoquan_data.pool_delivery_intent",
-        "executionId": execution_root.name,
-        "carrier": str(manifest["contentType"]),
-        "objectRef": canonical_ref,
-        "contentObjectDir": f"posts/{canonical_ref}",
-        "objectId": content_id,
-        "contentId": content_id,
-        "version": 1,
-        "poolIdentityReservationId": digest,
-        "reviewEvidenceRef": review.relative_to(execution_root).as_posix(),
-        "reviewEvidenceSha256": "sha256:" + hashlib.sha256(review.read_bytes()).hexdigest(),
-        "creatorBindingMode": "manifest_exact",
-        "creatorBinding": creator_binding,
-        "creatorBindingDigest": _sha(creator_binding),
-        "entityTagBindingDigest": digest,
-        "sourceAttributionDigest": digest,
-        "mediaClosureDigest": digest,
-        "transactionId": transaction_id,
-        "transactionInputDigest": str(tree_integrity_stats(object_root)["merkleRoot"]),
-    }
-    intent = {"intentId": _sha(stable), **stable}
     return _build_post_object_transaction_package(
         execution_root=execution_root,
         object_ref=object_ref,
         transaction_id=transaction_id,
         package_root=package_root,
-        pool_delivery_intent=intent,
     )
 
 
@@ -199,8 +155,28 @@ def _admit_packaged_creator(package_root: Path, publish_root: Path) -> None:
         shutil.copytree(source, target)
 
 
-def _fixture(tmp_path: Path) -> tuple[Path, Path, Path, str]:
-    execution = tmp_path / "tasks" / EXECUTION_ID
+def _fixture(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch | None = None,
+) -> tuple[Path, Path, Path, str]:
+    execution = tmp_path / "output/data/tasks" / EXECUTION_ID
+    if monkeypatch is not None:
+        from content.release.canonical import post_transaction
+        from core import paths as core_paths
+
+        monkeypatch.setattr(core_paths, "OUTPUT_ROOT", tmp_path / "output")
+        monkeypatch.setattr(
+            post_transaction,
+            "canonical_asset_manifest_row",
+            lambda raw, **kwargs: {
+                **dict(raw),
+                "objectKey": kwargs["object_key"],
+                "sha256": _file_digest(kwargs["asset_source"]),
+                "bytes": kwargs["asset_source"].stat().st_size,
+                "mimeType": kwargs["mime_type"],
+                "perceptualHash": "0" * 16,
+            },
+        )
     post = execution / "posts" / POST_REF
     source_asset = post / "assets/cover.jpg"
     source_asset.parent.mkdir(parents=True, exist_ok=True)
@@ -210,28 +186,105 @@ def _fixture(tmp_path: Path) -> tuple[Path, Path, Path, str]:
         f"{EXECUTION_ID}--post-"
         f"{hashlib.sha256(POST_REF.encode('utf-8')).hexdigest()[:12]}"
     )
-    target_set = {
+    output_root = tmp_path / "output"
+    demand_path = output_root / "inputs/demand.json"
+    bindings_path = output_root / "inputs/bindings.json"
+    demand = {
+        "schema": "quwoquan_data.carrier_demand",
+        "status": "confirmed",
         "executionId": EXECUTION_ID,
-        "entityCatalogDigest": "sha256:" + "4" * 64,
+        "carrier": "image",
+        "familyRef": "content/travel/image/image",
+        "quota": 1,
+        "retryOf": None,
     }
-    target_set_digest = hashlib.sha256(
-        json.dumps(
-            target_set,
-            ensure_ascii=False,
-            sort_keys=True,
-            separators=(",", ":"),
-        ).encode("utf-8")
-    ).hexdigest()
-    _write_json(execution / "0.plan/target_set.json", target_set)
+    bindings = {
+        "schema": "quwoquan_data.immutable_candidate_bindings",
+        "executionId": EXECUTION_ID,
+        "carrier": "image",
+        "entityCatalogDigest": "sha256:" + "4" * 64,
+        "candidateCount": 1,
+        "targets": [
+            {
+                "name": "西湖",
+                "entityType": "地点/景区",
+                "publishAngle": "西湖",
+                "publishTitle": "光影",
+                "publishSeq": 1,
+            }
+        ],
+    }
+    _write_json(demand_path, demand)
+    _write_json(bindings_path, bindings)
+    demand_binding = {
+        "scope": "output",
+        "ref": "inputs/demand.json",
+        "digest": _file_digest(demand_path),
+    }
+    candidate_binding = {
+        "scope": "output",
+        "ref": "inputs/bindings.json",
+        "digest": _file_digest(bindings_path),
+    }
+    submitted_inputs = {
+        "carrierDemand": demand,
+        "immutableCandidateBindings": bindings,
+    }
+    request = {
+        "schema": "quwoquan_data.task_init_request",
+        "executionId": EXECUTION_ID,
+        "carrier": "image",
+        "familyRef": "content/travel/image/image",
+        "quota": 1,
+        "candidateCount": 1,
+        "carrierDemand": demand_binding,
+        "immutableCandidateBindings": candidate_binding,
+        "submittedInputs": submitted_inputs,
+        "retryOf": None,
+    }
+    target_set = {
+        "schema": "quwoquan_data.target_set",
+        "executionId": EXECUTION_ID,
+        "carrier": "image",
+        "selectionPolicy": "frozen",
+        "entityCatalogDigest": "sha256:" + "4" * 64,
+        "candidateBinding": {**candidate_binding, "candidateCount": 1},
+        "targetCount": 1,
+        "targetRefs": [f"posts/{POST_REF}"],
+        "targets": bindings["targets"],
+    }
+    request_path = execution / "0.plan/request.json"
+    target_path = execution / "0.plan/target_set.json"
+    _write_json(request_path, request)
+    _write_json(target_path, target_set)
+    family_path = (
+        REPO_ROOT
+        / "quwoquan_data/control_plane/families/content/travel/image/image.recipe.yaml"
+    )
     _write_json(
         execution / "execution_manifest.json",
         {
+            "schema": "quwoquan_data.content_execution_manifest",
             "executionId": EXECUTION_ID,
-            "createdAt": "2026-07-18T04:00:00Z",
-            "sourceDigest": current_source_definition_snapshot().to_document(),
-            "executionBundle": current_execution_bundle_identity().to_document(),
-            "targetSetRef": "0.plan/target_set.json",
-            "targetSetDigest": target_set_digest,
+            "carrier": "image",
+            "familyRef": {
+                "ref": "content/travel/image/image",
+                "digest": _file_digest(family_path),
+            },
+            "initInputs": {
+                "carrierDemand": demand_binding,
+                "immutableCandidateBindings": candidate_binding,
+            },
+            "submittedInputs": submitted_inputs,
+            "request": {
+                "ref": "0.plan/request.json",
+                "digest": _file_digest(request_path),
+            },
+            "targetSet": {
+                "ref": "0.plan/target_set.json",
+                "digest": _file_digest(target_path),
+            },
+            "retryOf": None,
         },
     )
     _write_json(
@@ -322,6 +375,12 @@ def _fixture(tmp_path: Path) -> tuple[Path, Path, Path, str]:
             "mediaRefReview": {"status": "passed"},
         },
     )
+    for review_name in (
+        "rubric_review.json",
+        "reviewer_result.json",
+        "media_ref_review.json",
+    ):
+        _write_json(post / "5.review" / review_name, {})
     _write_json(post / "5.review/evidence_index.json", {"evidence": []})
     publish = tmp_path / "publish"
     for relative in ("creators", "entities", "posts", "tags"):

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from pathlib import Path
 
 from content.release.canonical.aggregate_release_closure import (
@@ -14,39 +14,37 @@ from content.release.canonical.aggregate_release_closure import (
 from content.release.canonical.aggregate_release_pool_closure import (
     candidate_closure,
     entity_candidate_closure,
-    media_identity,
     pool_execution_ids,
     release_authors,
 )
-from content.release.canonical.content_pool_record import (
-    is_pool_record_admitted,
-)
 from content.release.canonical.content_pool_handoff import (
     project_content_pool_handoff,
+)
+from content.release.canonical.content_pool_record import (
+    is_pool_record_admitted,
 )
 from content.release.canonical.effective_admission import (
     effective_admission_record as _effective_record,
 )
 from content.release.canonical.environment_release_selection import (
-    MILESTONE_TARGETS,
     EnvironmentReleaseSelection,
     PoolExclusion,
     discover_pool_candidates,
     pool_candidate_digest,
-    select_all_publishable_release_posts,
-    select_environment_release_posts,
-    select_milestone_release_posts,
 )
 from content.release.canonical.environment_release_support import (
     pool_gate_for_code,
 )
-from content.release.canonical.object_source_identity import source_identity_set
+from content.release.canonical.object_source_identity import (
+    source_identity_set,
+    validate_object_source_identity,
+)
 from content.release.canonical.object_transaction_contract import (
     ObjectTransactionError,
     _read_json,
 )
 from core.paths import CONTROL_PLANE_TAXONOMY_ROOT
-from core.source_digest import SourceDefinitionSnapshot, SourceDigestError
+from core.source_digest import SourceDefinitionSnapshot
 
 
 @dataclass(frozen=True)
@@ -60,15 +58,6 @@ class PoolReleasePreparation:
     source_identity_set_digest: str
     desired: dict[str, list[str]]
     excluded: tuple[dict[str, str], ...]
-
-
-def _source_definition_snapshot(document: object) -> SourceDefinitionSnapshot:
-    try:
-        return SourceDefinitionSnapshot.from_document(document)
-    except SourceDigestError as exc:
-        raise ObjectTransactionError(
-            "DATA.POOL.SOURCE_IDENTITY_INVALID"
-        ) from exc
 
 
 def pool_post_refs(publish_root: Path) -> list[str]:
@@ -110,21 +99,22 @@ def _pool_source_identity_closure(
             record = _effective_record(
                 root,
                 manifest,
-                object_type=(
-                    "homepage" if kind == "entities" else "content"
-                ),
+                object_type=("homepage" if kind == "entities" else "content"),
             )
             identity = (
-                record.get("sourceIdentity")
-                if isinstance(record, dict)
-                else None
+                record.get("sourceIdentity") if isinstance(record, dict) else None
             )
             if not isinstance(identity, dict):
                 raise ObjectTransactionError(
                     f"DATA.POOL.SOURCE_IDENTITY_INVALID: {kind}/{ref}"
                 )
-            source_digest = _source_definition_snapshot(
-                manifest.get("sourceDigest")
+            manifest_identity = validate_object_source_identity(manifest)
+            if identity != manifest_identity:
+                raise ObjectTransactionError(
+                    f"DATA.POOL.SOURCE_IDENTITY_DRIFT: {kind}/{ref}"
+                )
+            source_digest = SourceDefinitionSnapshot(
+                digest=manifest_identity["sourceDigest"]
             )
             source_digests[source_digest.digest] = source_digest
             identities.append(identity)
@@ -186,9 +176,7 @@ def release_contents(
             "postRef": candidate.post_ref,
             "selectionIdentityDigest": candidate.selection_identity_digest,
             "canonicalObjectDigest": candidate.canonical_object_digest,
-            "contentLibraryBindingDigest": (
-                candidate.content_library_binding_digest
-            ),
+            "contentLibraryBindingDigest": (candidate.content_library_binding_digest),
         }
         for candidate in selection.candidates
     ]
@@ -218,7 +206,11 @@ def admitted_pool_author_refs(publish_root: Path) -> list[str]:
 def _exclusion(post_ref: str, exc: Exception) -> dict[str, str]:
     message = str(exc).strip() or exc.__class__.__name__
     prefix, separator, _detail = message.partition(":")
-    code = prefix if separator and prefix.startswith("DATA.") else "DATA.POOL.OBJECT_INVALID"
+    code = (
+        prefix
+        if separator and prefix.startswith("DATA.")
+        else "DATA.POOL.OBJECT_INVALID"
+    )
     return {
         "postRef": post_ref,
         "category": pool_gate_for_code(code),
@@ -259,307 +251,102 @@ def _pool_snapshot_digest(
 def prepare_pool_release(
     *,
     publish_root: Path,
-    target_environment: str | None = None,
-    all_publishable: bool = False,
-    milestone: str | None = None,
+    cohort: dict[str, object],
     release_class: str,
 ) -> PoolReleasePreparation:
-    if sum(
-        (
-            target_environment is not None,
-            all_publishable,
-            milestone is not None,
-        )
-    ) != 1:
-        raise ObjectTransactionError(
-            "DATA.RELEASE.SELECTION_INVALID: choose targetEnvironment, "
-            "allPublishable, or milestone"
-        )
+    """Validate one exact caller-declared cohort without scanning for candidates."""
     normalized_release_class = str(release_class or "").strip()
     if normalized_release_class not in {"research", "commercial"}:
-        raise ObjectTransactionError(
-            "DATA.RELEASE.CLASS_INVALID: pool-build requires explicit "
-            "research or commercial"
-        )
-    if milestone is not None:
-        if milestone not in MILESTONE_TARGETS:
-            raise ObjectTransactionError(
-                f"DATA.POOL.MILESTONE_INVALID: {milestone!r}"
-            )
-        if normalized_release_class != "research":
-            raise ObjectTransactionError(
-                "DATA.RELEASE.CLASS_INVALID: milestone pool-build requires research"
-            )
-    selection_environment = target_environment or "gamma"
-    discovered_candidates, discovery_exclusions = discover_pool_candidates(
+        raise ObjectTransactionError("DATA.RELEASE.CLASS_INVALID")
+    if cohort.get("releaseClass") != normalized_release_class:
+        raise ObjectTransactionError("DATA.RELEASE.COHORT_CLASS_DRIFT")
+    object_refs = cohort.get("objectRefs")
+    expected_counts = cohort.get("expectedCarrierCounts")
+    if (
+        not isinstance(object_refs, list)
+        or not object_refs
+        or not isinstance(expected_counts, dict)
+    ):
+        raise ObjectTransactionError("DATA.RELEASE.COHORT_INVALID")
+    entity_refs: set[str] = set()
+    post_refs: set[str] = set()
+    for raw_ref in object_refs:
+        ref = str(raw_ref).strip().strip("/")
+        if ref.startswith("entities/"):
+            entity_refs.add(ref.removeprefix("entities/"))
+        elif ref.startswith("posts/"):
+            post_refs.add(ref.removeprefix("posts/"))
+        else:
+            raise ObjectTransactionError(f"DATA.RELEASE.COHORT_REF_INVALID: {raw_ref}")
+    if len(entity_refs) + len(post_refs) != len(object_refs):
+        raise ObjectTransactionError("DATA.RELEASE.COHORT_REF_DUPLICATE")
+    candidates, exclusions = discover_pool_candidates(
         publish_root=publish_root,
-        post_refs=pool_post_refs(publish_root),
+        post_refs=sorted(post_refs),
         strict_admission=True,
     )
-    candidate_refs: list[str] = []
-    neutral_candidates = []
-    excluded: list[dict[str, str]] = [
-        _selection_exclusion(item) for item in discovery_exclusions
-    ]
-    content_versions: dict[tuple[str, int], str] = {}
-    for candidate in discovered_candidates:
-        post_ref = candidate.post_ref
-        identity = (candidate.content_id, candidate.version)
-        existing_ref = content_versions.get(identity)
-        if existing_ref is not None:
-            excluded.append(
-                {
-                    "postRef": post_ref,
-                    "category": "delivery",
-                    "code": "DATA.POOL.VERSION_CONFLICT",
-                    "message": (
-                        "DATA.POOL.VERSION_CONFLICT: "
-                        f"contentId={candidate.content_id} "
-                        f"version={candidate.version} kept={existing_ref}"
-                    ),
-                }
-            )
-            continue
-        content_versions[identity] = post_ref
-        candidate_refs.append(post_ref)
-        neutral_candidates.append(candidate)
-
-    neutral_post_pool_digest = pool_candidate_digest(neutral_candidates)
-
+    if exclusions or {row.post_ref for row in candidates} != post_refs:
+        raise ObjectTransactionError("DATA.RELEASE.COHORT_POST_NOT_PUBLISHABLE")
     closure_cache: dict[
-        str,
-        tuple[set[str], list[str], list[str], list[dict[str, object]]],
+        str, tuple[set[str], list[str], list[str], list[dict[str, object]]]
     ] = {}
-    while True:
-        if target_environment is not None:
-            environment_selection = select_environment_release_posts(
-                publish_root=publish_root,
-                post_refs=candidate_refs,
-                environment=target_environment,
-                release_class=normalized_release_class,
-                strict_admission=True,
-            )
-        elif all_publishable:
-            environment_selection = select_all_publishable_release_posts(
-                publish_root=publish_root,
-                post_refs=candidate_refs,
-                release_class=normalized_release_class,
-                strict_admission=True,
-            )
-        else:
-            environment_selection = select_milestone_release_posts(
-                publish_root=publish_root,
-                post_refs=candidate_refs,
-                milestone=milestone,
-                strict_admission=True,
-            )
-        rejected: set[str] = set()
-        media_identities: dict[str, tuple[object, ...]] = {}
-        public_slices: dict[str, str] = {}
-        for post_ref in environment_selection.post_refs:
-            try:
-                closure = candidate_closure(
-                    publish_root,
-                    post_ref=post_ref,
-                    release_mode=environment_selection.release_mode,
-                )
-                for asset in closure[3]:
-                    asset_id = str(asset.get("assetId") or "").strip()
-                    public_slice = str(asset.get("publicSliceKey") or "").strip()
-                    identity = media_identity(asset)
-                    old_identity = media_identities.get(asset_id)
-                    if old_identity is not None and old_identity != identity:
-                        raise ObjectTransactionError(
-                            "DATA.POOL.MEDIA_IDENTITY_CONFLICT: "
-                            f"postRef={post_ref} assetId={asset_id}"
-                        )
-                    # Derived public slices are exclusive; research CAS keys are
-                    # content-addressed and may be shared (DEC-031).
-                    if public_slice:
-                        old_asset = public_slices.get(public_slice)
-                        if old_asset is not None and old_asset != asset_id:
-                            raise ObjectTransactionError(
-                                "DATA.POOL.MEDIA_SLICE_CONFLICT: "
-                                f"postRef={post_ref} publicSliceKey={public_slice}"
-                            )
-                closure_cache[post_ref] = closure
-                for asset in closure[3]:
-                    asset_id = str(asset.get("assetId") or "").strip()
-                    public_slice = str(asset.get("publicSliceKey") or "").strip()
-                    media_identities[asset_id] = media_identity(asset)
-                    if public_slice:
-                        public_slices[public_slice] = asset_id
-            except (OSError, TypeError, ValueError, ObjectTransactionError) as exc:
-                rejected.add(post_ref)
-                excluded.append(_exclusion(post_ref, exc))
-        if not rejected:
-            break
-        candidate_refs = [ref for ref in candidate_refs if ref not in rejected]
-
-    excluded.extend(
-        _selection_exclusion(item) for item in environment_selection.excluded
-    )
-
-    post_refs = set(environment_selection.post_refs)
-    entity_closure_cache: dict[str, tuple[list[str], list[str]]] = {}
-    standalone_entity_refs: set[str] = set()
-    pool_entity_snapshot_rows: list[dict[str, object]] = []
-    for entity_ref in pool_entity_refs(publish_root):
-        root = object_root(publish_root, "entities", entity_ref)
-        try:
-            handoff = project_content_pool_handoff(
-                publish_root=publish_root,
-                object_type="homepage",
-                object_ref=entity_ref,
-            )
-            if handoff is None:
-                continue
-            pool_entity_snapshot_rows.append(
-                {
-                    "objectRef": handoff.object_ref,
-                    "objectId": handoff.object_id,
-                    "contentVersion": handoff.content_version,
-                    "usageScope": handoff.usage_scope,
-                    "selectionIdentityDigest": (
-                        handoff.selection_identity_digest
-                    ),
-                    "canonicalObjectDigest": (
-                        handoff.canonical_object_digest
-                    ),
-                    "contentLibraryBindingDigest": (
-                        handoff.content_library_binding_digest
-                    ),
-                }
-            )
-            if (
-                environment_selection.release_mode == "commercial"
-                and handoff.usage_scope != "commercial"
-            ):
-                excluded.append(
-                    {
-                        "postRef": f"entities/{entity_ref}",
-                        "category": "eligibility",
-                        "code": "DATA.POOL.COMMERCIAL_RIGHTS_REQUIRED",
-                        "message": (
-                            "DATA.POOL.COMMERCIAL_RIGHTS_REQUIRED: "
-                            f"entities/{entity_ref}"
-                        ),
-                    }
-                )
-                continue
-            closure = entity_candidate_closure(
-                publish_root,
-                entity_ref=entity_ref,
-                release_mode=environment_selection.release_mode,
-            )
-            entity_closure_cache[entity_ref] = closure
-            standalone_entity_refs.add(entity_ref)
-        except (OSError, TypeError, ValueError, ObjectTransactionError) as exc:
-            excluded.append(_exclusion(f"entities/{entity_ref}", exc))
-    environment_selection = replace(
-        environment_selection,
-        pool_digest=_pool_snapshot_digest(
-            post_pool_digest=neutral_post_pool_digest,
-            entity_rows=pool_entity_snapshot_rows,
-        ),
-    )
-    if not post_refs and not standalone_entity_refs:
-        raise ObjectTransactionError(
-            "DATA.RELEASE.NO_ELIGIBLE_CONTENT: "
-            f"selection={target_environment or milestone or 'all_publishable'} "
-            f"excluded={len(excluded)}"
+    for post_ref in sorted(post_refs):
+        closure_cache[post_ref] = candidate_closure(
+            publish_root, post_ref=post_ref, release_mode=normalized_release_class
         )
-    post_entity_refs = {
-        ref
-        for post_ref in post_refs
-        for ref in closure_cache[post_ref][0]
-    }
-    if milestone is None:
-        entity_refs = post_entity_refs | standalone_entity_refs
-    else:
-        homepage_target = MILESTONE_TARGETS[milestone]["homepage"]
-        if not post_entity_refs.issubset(standalone_entity_refs):
-            missing = sorted(post_entity_refs - standalone_entity_refs)
+    entity_closure_cache: dict[str, tuple[list[str], list[str]]] = {}
+    for entity_ref in sorted(entity_refs):
+        root = object_root(publish_root, "entities", entity_ref)
+        if not (root / "manifest.json").is_file():
             raise ObjectTransactionError(
-                "DATA.POOL.MILESTONE_HOMEPAGE_SHORTFALL: "
-                f"milestone={milestone} missing={missing[:5]}"
+                f"DATA.RELEASE.COHORT_ENTITY_MISSING: {entity_ref}"
             )
-        remaining = [
-            ref
-            for ref in sorted(standalone_entity_refs)
-            if ref not in post_entity_refs
-        ]
-        if len(post_entity_refs) > homepage_target or (
-            len(post_entity_refs) + len(remaining) < homepage_target
+        handoff = project_content_pool_handoff(
+            publish_root=publish_root, object_type="homepage", object_ref=entity_ref
+        )
+        if handoff is None or (
+            normalized_release_class == "commercial"
+            and handoff.usage_scope != "commercial"
         ):
             raise ObjectTransactionError(
-                "DATA.POOL.MILESTONE_HOMEPAGE_SHORTFALL: "
-                f"milestone={milestone} target={homepage_target} "
-                f"requiredByPosts={len(post_entity_refs)} "
-                f"eligible={len(standalone_entity_refs)}"
+                f"DATA.RELEASE.COHORT_ENTITY_NOT_PUBLISHABLE: {entity_ref}"
             )
-        entity_refs = post_entity_refs | set(
-            remaining[: homepage_target - len(post_entity_refs)]
+        entity_closure_cache[entity_ref] = entity_candidate_closure(
+            publish_root, entity_ref=entity_ref, release_mode=normalized_release_class
         )
-        standalone_entity_refs = set(entity_refs)
-    environment_selection = replace(
-        environment_selection,
-        eligible_counts={
-            **environment_selection.eligible_counts,
-            "homepage": (
-                len(standalone_entity_refs)
-                if milestone is not None
-                else len(entity_refs)
-            ),
-        },
+    required_entities = {
+        ref for post_ref in post_refs for ref in closure_cache[post_ref][0]
+    }
+    if not required_entities.issubset(entity_refs):
+        raise ObjectTransactionError("DATA.RELEASE.COHORT_REFERENCE_MISSING")
+    counts = {
+        "homepage": len(entity_refs),
+        "article": sum(row.content_type == "article" for row in candidates),
+        "image": sum(row.content_type == "image" for row in candidates),
+        "video": sum(row.content_type == "video" for row in candidates),
+    }
+    if counts != {key: int(expected_counts.get(key, -1)) for key in counts}:
+        raise ObjectTransactionError(
+            f"DATA.RELEASE.COHORT_COUNT_DRIFT: expected={expected_counts} actual={counts}"
+        )
+    execution_ids, source_digests, source_identities, source_identity_set_digest = (
+        pool_audit_provenance(
+            publish_root, entity_refs=entity_refs, post_refs=post_refs
+        )
     )
-    (
-        execution_ids,
-        source_digests,
-        source_identities,
-        source_identity_set_digest,
-    ) = pool_audit_provenance(
-        publish_root,
-        entity_refs=entity_refs,
-        post_refs=post_refs,
-    )
-    # Pool-wide releases preserve the exact per-object source identity closure.
-    # A scalar source identity remains reserved for execution-scoped aggregate
-    # releases and must never be synthesized from a heterogeneous pool.
-    source_revision = None
-    entity_catalog_digest = None
-    referenced_creator_refs = (
-        {
-            ref
-            for post_ref in post_refs
-            for ref in closure_cache[post_ref][1]
-        }
+    creator_refs = sorted(
+        {ref for post_ref in post_refs for ref in closure_cache[post_ref][1]}
         | {
             ref
-            for entity_ref in standalone_entity_refs
+            for entity_ref in entity_refs
             for ref in entity_closure_cache[entity_ref][0]
         }
     )
-    # Research may surface every admitted author in the shared pool. A
-    # Commercial release carries only creators referenced by its eligible
-    # entity/post subset, so unrelated profiles and avatars are not bundled.
-    creator_refs = sorted(
-        referenced_creator_refs
-        | (
-            set(admitted_pool_author_refs(publish_root))
-            if environment_selection.release_mode == "research"
-            else set()
-        )
-    )
     tag_refs = sorted(
-        {
-            ref
-            for post_ref in post_refs
-            for ref in closure_cache[post_ref][2]
-        }
+        {ref for post_ref in post_refs for ref in closure_cache[post_ref][2]}
         | {
             ref
-            for entity_ref in standalone_entity_refs
+            for entity_ref in entity_refs
             for ref in entity_closure_cache[entity_ref][1]
         }
         | set(
@@ -570,12 +357,30 @@ def prepare_pool_release(
             )
         )
     )
+    selected_candidates = tuple(sorted(candidates, key=lambda row: row.post_ref))
+    selection = EnvironmentReleaseSelection(
+        environment=None,
+        release_mode=normalized_release_class,
+        post_refs=tuple(row.post_ref for row in selected_candidates),
+        candidates=selected_candidates,
+        pool_digest=pool_candidate_digest(selected_candidates),
+        eligible_count=len(selected_candidates),
+        eligible_counts={key: counts[key] for key in ("article", "image", "video")},
+        counts={
+            **{key: counts[key] for key in ("article", "image", "video")},
+            "total": len(selected_candidates),
+        },
+        excluded=(),
+        selection_scope="explicit_cohort",
+        milestone=None,
+        milestone_targets=None,
+    )
     return PoolReleasePreparation(
-        environment_selection=environment_selection,
+        environment_selection=selection,
         execution_ids=execution_ids,
         source_digests=source_digests,
-        entity_catalog_digest=entity_catalog_digest,
-        source_revision=source_revision,
+        entity_catalog_digest=None,
+        source_revision=None,
         source_identities=source_identities,
         source_identity_set_digest=source_identity_set_digest,
         desired={
@@ -584,9 +389,7 @@ def prepare_pool_release(
             "posts": sorted(post_refs),
             "tags": tag_refs,
         },
-        excluded=tuple(
-            sorted(excluded, key=lambda item: (item["postRef"], item["code"]))
-        ),
+        excluded=(),
     )
 
 

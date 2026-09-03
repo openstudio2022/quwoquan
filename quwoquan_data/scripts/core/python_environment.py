@@ -11,14 +11,11 @@ import venv
 from collections.abc import Iterable
 from pathlib import Path
 
-from core.control_types import AgentProvider
-from core.runtime_policy import active_runtime_policy
 
 SCRIPTS_ROOT = Path(__file__).resolve().parents[1]
 DATA_ROOT = SCRIPTS_ROOT.parent
 REPO_ROOT = DATA_ROOT.parent
 REQUIREMENTS_PATH = DATA_ROOT / "requirements.txt"
-CURSOR_REQUIREMENTS_PATH = DATA_ROOT / "requirements-cursor.txt"
 DEFAULT_PYTHON_CACHE_ROOT = (
     Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache")
     / "quwoquan"
@@ -57,61 +54,9 @@ AGENT_RUNTIME_BINARIES = ("tesseract",)
 BOOTSTRAP_ENV = "QWQ_DATA_CLI_BOOTSTRAPPED"
 NETWORK_SKIP_ENV = "QWQ_ENV_SKIP_NETWORK_CHECK"
 DEFAULT_NETWORK_ENDPOINTS = (
-    "https://api2.cursor.sh/",
     "https://www.wikipedia.org/",
     "https://commons.wikimedia.org/",
 )
-_RUNTIME_POLICY = active_runtime_policy()
-DEFAULT_SEMANTIC_AGENT_MODEL = _RUNTIME_POLICY.semantic_agent_model_selection
-DEFAULT_SEMANTIC_AGENT_RUNTIME = _RUNTIME_POLICY.semantic_agent_runtime.value
-DEFAULT_SEMANTIC_AGENT_STARTUP_TIMEOUT_SECONDS = float(
-    _RUNTIME_POLICY.startup_timeout_seconds
-)
-
-
-def agent_runtime_modules(
-    provider: AgentProvider | str | None = None,
-) -> tuple[str, ...]:
-    resolved = (
-        provider
-        if isinstance(provider, AgentProvider)
-        else AgentProvider(str(provider))
-        if provider is not None
-        else active_runtime_policy().semantic_agent_provider
-    )
-    if resolved is AgentProvider.CURSOR_SDK:
-        return ("cursor_sdk", *BASE_AGENT_RUNTIME_MODULES)
-    return ("openai_codex", *BASE_AGENT_RUNTIME_MODULES)
-
-
-def agent_requirements_path(
-    provider: AgentProvider | str | None = None,
-) -> Path:
-    resolved = (
-        provider
-        if isinstance(provider, AgentProvider)
-        else AgentProvider(str(provider))
-        if provider is not None
-        else active_runtime_policy().semantic_agent_provider
-    )
-    return CURSOR_REQUIREMENTS_PATH if resolved is AgentProvider.CURSOR_SDK else REQUIREMENTS_PATH
-
-
-def resolve_semantic_agent_startup_timeout_seconds(
-    value: object | None = None,
-) -> float:
-    raw = value
-    try:
-        seconds = (
-            float(raw)
-            if raw not in (None, "")
-            else float(active_runtime_policy().startup_timeout_seconds)
-        )
-    except (TypeError, ValueError):
-        raise ValueError("semantic-agent startup timeout must be numeric") from None
-    return max(1.0, seconds)
-
-
 def _redact_secret_text(
     value: str,
     *,
@@ -213,7 +158,7 @@ def resolve_python_for_modules(
     include_current: bool = True,
 ) -> Path | None:
     """Resolve the first interpreter that can import all requested modules."""
-    required_modules = tuple(modules or agent_runtime_modules())
+    required_modules = tuple(modules or BASE_AGENT_RUNTIME_MODULES)
     for python in candidate_pythons(include_current=include_current):
         ok, _missing = python_has_modules(python, required_modules)
         if ok:
@@ -223,7 +168,7 @@ def resolve_python_for_modules(
 
 def resolve_data_agent_python(*, include_current: bool = True) -> Path | None:
     return resolve_python_for_modules(
-        agent_runtime_modules(),
+        BASE_AGENT_RUNTIME_MODULES,
         include_current=include_current,
     )
 
@@ -231,8 +176,6 @@ def resolve_data_agent_python(*, include_current: bool = True) -> Path | None:
 def agent_command_needs_bootstrap(argv: list[str]) -> bool:
     """Detect CLI commands that must run inside the data agent interpreter."""
     args = list(argv[1:])
-    if len(args) >= 2 and args[:2] == ["task", "execute"]:
-        return True
     if len(args) >= 2 and args[:2] == ["task", "acquire-videos"]:
         return True
     if len(args) >= 2 and args[:2] == ["verify", "homepage-draft"]:
@@ -246,7 +189,7 @@ def maybe_reexec_for_agent_command(argv: list[str]) -> None:
         return
     if not agent_command_needs_bootstrap(argv):
         return
-    required_modules = agent_runtime_modules()
+    required_modules = BASE_AGENT_RUNTIME_MODULES
     ok, _missing = python_has_modules(Path(sys.executable), required_modules)
     if ok:
         return
@@ -255,7 +198,8 @@ def maybe_reexec_for_agent_command(argv: list[str]) -> None:
         missing = ", ".join(required_modules)
         print(
             f"[qwq-data env] current Python lacks agent dependencies ({missing}); "
-            "run `python3 quwoquan_data/scripts/cli.py task preflight` first.",
+            f"install them from `{REQUIREMENTS_PATH}` or set "
+            "QWQ_DATA_PYTHON to an interpreter that provides them.",
             file=sys.stderr,
         )
         raise SystemExit(2)
@@ -274,7 +218,7 @@ def prepare_data_runtime_cache(
     """Rebuild an optional tool cache solely from repository-owned requirements."""
     target_cache_dir = cache_dir or DATA_VENV_CACHE_DIR
     venv_python = python or _venv_python(target_cache_dir)
-    requirements_path = requirements or agent_requirements_path()
+    requirements_path = requirements or REQUIREMENTS_PATH
     if not requirements_path.is_file():
         raise RuntimeError(f"requirements file missing: {requirements_path}")
     if not venv_python.is_file():
@@ -285,7 +229,7 @@ def prepare_data_runtime_cache(
         text=True,
         check=False,
     )
-    ok, missing = python_has_modules(venv_python, agent_runtime_modules())
+    ok, missing = python_has_modules(venv_python, BASE_AGENT_RUNTIME_MODULES)
     missing_binaries = [name for name in AGENT_RUNTIME_BINARIES if shutil.which(name) is None]
     return {
         "python": str(venv_python),
@@ -305,8 +249,8 @@ def runtime_report() -> dict:
     current = Path(sys.executable)
     rows = []
     missing_binaries = [name for name in AGENT_RUNTIME_BINARIES if shutil.which(name) is None]
-    required_modules = agent_runtime_modules()
-    requirements_path = agent_requirements_path()
+    required_modules = BASE_AGENT_RUNTIME_MODULES
+    requirements_path = REQUIREMENTS_PATH
     for python in candidate_pythons(include_current=True):
         ok, missing = python_has_modules(python, required_modules)
         full_missing = missing + [f"{name}: binary not found on PATH" for name in missing_binaries]

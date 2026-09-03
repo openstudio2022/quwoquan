@@ -220,13 +220,13 @@ class CanonicalServiceTestDirectoryContractTest(unittest.TestCase):
     def test_runtime_canonical_api_integration_test_is_reachable(self) -> None:
         failures = self._verify_runtime(
             "tests/api_integration/reliabletask/"
-            "data_content_fleet__reliability__api_integration_test.go"
+            "external_interaction__reliability__api_integration_test.go"
         )
         self.assertEqual(failures, [])
 
     def test_runtime_api_integration_test_outside_canonical_root_is_rejected(self) -> None:
         failures = self._verify_runtime(
-            "reliabletask/data_content_fleet__reliability__api_integration_test.go"
+            "reliabletask/external_interaction__reliability__api_integration_test.go"
         )
         self.assertTrue(
             any(

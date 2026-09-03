@@ -14,7 +14,6 @@ import urllib.parse
 from pathlib import Path
 from typing import Any, Mapping
 
-from core.runtime_policy import active_runtime_policy
 from governance.coverage.source_registry import resolve_travel_source_runtime
 from content.source.html_text import (
     _html_meta_plain_text,
@@ -25,12 +24,12 @@ from content.source.html_text import (
 
 # Wikimedia/多数公共源要求 User-Agent 含 contact，否则触发严格限流(429)。
 _USER_AGENT = (
-    "quwoquan-data/1.0 (+https://github.com/quwoquan; contact: data-ops@quwoquan.example)"
+    "quwoquan-data/1.0 (+https://github.com/quwoquan; contact: data-ops@example.org)"
 )
-_RUNTIME_POLICY = active_runtime_policy()
-DOWNLOAD_TEXT_TIMEOUT_SECONDS = _RUNTIME_POLICY.download_text_timeout_seconds
-DOWNLOAD_BYTES_TIMEOUT_SECONDS = _RUNTIME_POLICY.download_bytes_timeout_seconds
-DOWNLOAD_CURL_RETRIES = _RUNTIME_POLICY.curl_retries
+DOWNLOAD_TEXT_TIMEOUT_SECONDS = 20
+DOWNLOAD_BYTES_TIMEOUT_SECONDS = 8
+DOWNLOAD_CURL_RETRIES = 1
+_CURL_RETRY_DELAY_SECONDS = 1
 SUPPORTED_TEXT_EXTRACTORS: frozenset[str] = frozenset(
     {
         "wikipedia_api",
@@ -49,7 +48,7 @@ def _curl_get_text(url: str, *, timeout: int = DOWNLOAD_TEXT_TIMEOUT_SECONDS) ->
         [
             "curl", "-sS", "-L", "-A", _USER_AGENT,
             "--retry", str(DOWNLOAD_CURL_RETRIES),
-            "--retry-delay", str(_RUNTIME_POLICY.curl_retry_delay_seconds),
+            "--retry-delay", str(_CURL_RETRY_DELAY_SECONDS),
             "--retry-all-errors",
             "--max-time", str(timeout),
             url,

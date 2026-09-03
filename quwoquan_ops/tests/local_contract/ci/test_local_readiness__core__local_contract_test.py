@@ -553,6 +553,18 @@ def test_staged_boundary_rejects_generated_only_and_production_without_related_t
     _staged_governance(["quwoquan_app/lib/runtime/value.dart"])
 
 
+def test_staged_pii_phone_pattern_ignores_digits_inside_hex_digests() -> None:
+    from quwoquan_ops.cli.local_readiness import _PII_PATTERNS
+
+    phone_pattern = _PII_PATTERNS[0]
+    digest = b'"sha256": "18916601719eac77353c72e05249c70eb08b547c61f87c78c4f760d94c1f00"'
+    assert phone_pattern.search(digest) is None
+    # 号码字面量在源码里拆开拼接，避免本测试文件自己被 staged-boundary 判为直接 PII。
+    phone = b"189" + b"16601719"
+    assert phone_pattern.search(b"contact " + phone + b" now").group(0) == phone
+    assert phone_pattern.search(b"phone=" + phone + b",") is not None
+
+
 def test_data_scope_without_affected_tests_fails_closed_instead_of_verify_only() -> None:
     with pytest.raises(ValueError, match="affected tests"):
         build_impact_plan(["quwoquan_data/schema/unknown.schema.json"], level="scope")
@@ -841,7 +853,7 @@ def test_capsule_rejects_symlink_escape_and_cleans_process_root() -> None:
 
 
 def test_data_required_release_plan_cannot_be_skip_or_verify_only() -> None:
-    plan = build_impact_plan(["quwoquan_data/tests/local_contract/execution/test_stage_receipt__handoff_chain__contract__local_contract_test.py"], level="release")
+    plan = build_impact_plan(["quwoquan_data/tests/local_contract/execution/test_execution_kernel__minimal__contract__local_contract_test.py"], level="release")
     assert plan["deferred"] == []
     assert any(check["id"] == "release:data" and check["command"] == ["bash", "quwoquan_ops/gate/gate_repo.sh", "--scope", "data"] for check in plan["checks"])
     workflow = (ROOT / ".github/workflows/delivery-gate.yml").read_text(encoding="utf-8")

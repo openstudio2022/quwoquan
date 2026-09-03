@@ -247,9 +247,10 @@ def build_post_metadata_adoption_package(
     )
     author_run_id = str((source_provenance.get("final") or {}).get("agentRunId") or "")
     attestation = _read_json(source_object / "attestation.json")
-    reviewer_run_id = str(
-        (attestation.get("independentReviewer") or {}).get("runId") or ""
-    )
+    independent_reviewer = attestation.get("independentReviewer") or {}
+    reviewer_actor = independent_reviewer.get("actor") or {}
+    reviewer_invocation = reviewer_actor.get("invocation") or {}
+    reviewer_run_id = str(reviewer_invocation.get("runId") or "")
     if not author_run_id or not reviewer_run_id:
         raise PostMetadataAdoptionError(
             "DATA.POOL.METADATA_ADOPTION_RUN_ID_MISSING"

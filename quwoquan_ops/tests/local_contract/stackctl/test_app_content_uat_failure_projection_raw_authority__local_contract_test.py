@@ -47,7 +47,7 @@ def _raw_authority_result(*, status: str) -> dict[str, object]:
         "provider": "first-party-https",
         "startedAt": "2026-08-29T07:00:00Z",
         "completedAt": "2026-08-29T07:01:00Z",
-        "runnerIdentity": "qwq_app.content_uat.feed.article.v1",
+        "runnerIdentity": "qwq.content_consumer.feed.article.v1",
         "artifactSha256": "4" * 64,
         "artifactPath": "case/article-feed.json",
         "deviceIdentity": "emulator-5554",

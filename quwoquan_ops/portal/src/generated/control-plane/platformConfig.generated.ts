@@ -3363,18 +3363,6 @@ export const platformConfig = {
       "sensitive": false
     },
     {
-      "key": "sys.content.worker.concurrency",
-      "type": "int",
-      "owner": "platform-ops",
-      "default": 16,
-      "scope": "service",
-      "reload": "restart",
-      "rollout": "progressive",
-      "risk_level": "medium",
-      "ui_editable": false,
-      "sensitive": false
-    },
-    {
       "key": "sys.entity-service.content_service.base_url",
       "type": "string",
       "owner": "",

@@ -194,7 +194,7 @@ def provenance_issues(post_dir: Path, manifest: Mapping[str, Any]) -> list[str]:
         issues.append(f"{post_dir}: provenance.final.agentRunId missing")
     agent_run = str(final.get("agentRunId") or "").strip()
     if agent_run.startswith("build-homepage:"):
-        issues.append(f"{post_dir}: provenance.final.agentRunId is synthetic (Cursor SDK run required)")
+        issues.append(f"{post_dir}: provenance.final.agentRunId is synthetic (real host agent run required)")
     if not data.get("agentInput"):
         issues.append(f"{post_dir}: provenance.agentInput missing (agent 输入摘要必须记录)")
     agent_input = data.get("agentInput") or {}

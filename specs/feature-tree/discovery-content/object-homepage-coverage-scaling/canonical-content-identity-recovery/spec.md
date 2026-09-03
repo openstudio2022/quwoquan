@@ -1,4 +1,4 @@
-# L3 Story：canonical 内容身份的修复与调度解饥饿 (`canonical-content-identity-recovery`)
+# L3 Story：canonical 内容身份的显式治理修复 (`canonical-content-identity-recovery`)
 
 > 所属能力：[对象主页覆盖扩展](../spec.md)
 >
@@ -8,19 +8,19 @@
 
 ## 1. 用户价值
 
-作为内容运营者，我希望池中 invalid canonical identity（如 payload digest 漂移）被呈现为互斥、可裁决的状态并给出唯一恢复 command，从而按需生产不再被「已存在但不可修复也不可跳过」的对象永久饥饿，精确命名目标命中问题身份时得到 repair/select 动作而不是静默换对象。
+作为内容运营者，我希望 invalid canonical identity（如 payload digest 漂移）被呈现为互斥、可裁决的对象治理状态，并通过显式人工命令修复或退役；该治理不得成为内容十阶段的自动 recovery 或 scheduler。
 
 ## 2. 范围与非目标
 
 ### In Scope
 
 - invalid canonical identity 的互斥状态、最深层错误保留与唯一恢复 command。
-- source-ready 调度对 invalid 状态的解饥饿裁决。
+- release/publish AI 对 invalid 状态的只读判定与显式治理交接。
 
 ### Out of Scope
 
 - 正常合格对象的入池路径（归 [`on-demand-content-pool-admission`](../on-demand-content-pool-admission/spec.md)）。
-- repair process manager 的完整实现规模：在 `OPEN-001` 关闭之前，只要求深层错误呈现与 `repair_identity|select_new_identity` 路由可用。
+- 自动 repair process manager、调度解饥饿、nextAction/reentry 状态机。
 - immutable release 与环境消费（归 [`multi-carrier-release`](../multi-carrier-release/spec.md)）。
 
 ## 3. 行为要求
@@ -34,12 +34,12 @@
   - record repair：fresh evidence 证明当前 canonical bytes 仍是同一逻辑版本时执行，保持 `contentVersion`、只追加 `recordSequence + 1`。
   - payload rebuild：fresh immutable author/review/rights evidence 证明是新 payload 时执行，原子写入 `contentVersion + 1` 与 `recordSequence + 1`。
   - terminal：两类证据均不成立时追加 terminal record，保持 `contentVersion`、推进 `recordSequence` 并冻结 terminal reason/next action。
-- 调度不得出现永久饥饿不变量破坏：`gap > 0` 且 `sourceReadyBacklog = 0` 且无恢复动作是立即阻断的状态；三个 invalid 状态必须返回 recovery action，`terminated` 以可读终态退出 backlog，后续供给必须选择新 stable identity。
+- invalid 状态不得触发自动 recovery。publish/release AI 遇到它时提交 blocked typed issue；治理者可在独立对象治理操作中显式 repair/rebuild/terminal。新内容尝试使用新 execution。
 
 ## 4. 契约引用
 
-- lane receipt：`quwoquan_data/schema/execution/content_campaign_lane_receipt.schema.json`
-- drain result：`quwoquan_data/schema/execution/pool_delivery_drain_result.schema.json`
+- canonical pool record：`quwoquan_data/schema/release/pool_object_record.schema.json`
+- canonical object transaction：对象级 package/apply schema
 
 ## 5. 验收场景
 
@@ -47,17 +47,17 @@
 ### GWT-001 invalid canonical identity 不得被误判为已消费或无动作空缺
 
 - GIVEN 一个 Homepage stable objectRef 已存在 canonical manifest，但 latest pool record 的 payload digest 与当前 payload 不一致，source-ready pool 含同 objectRef 的候选，且治理输入明确处于以下互斥情形之一：fresh evidence 证明当前 bytes 仍是同一逻辑版本、fresh immutable author/review/rights evidence 证明当前 bytes 是新 payload、两类证据均不成立。
-- WHEN 运营者执行 pool inspection、backfill planning 与 source-ready scheduling。
+- WHEN 运营者执行 pool inspection、backfill planning 与 release/publish readback。
 - THEN 三个读取面均保留最深层 `DATA.POOL.PAYLOAD_DIGEST_DRIFT`，不折叠为 generic `DATA.POOL.OBJECT_NOT_ADMITTED`，也不只因 manifest 存在就把候选静默过滤为已消费。
-- THEN 结果按上述谓词只给出一个受治理 command：record repair、payload rebuild 或 terminal；未裁决前不得创建新对象、覆盖旧 payload 或继续 semantic dispatch。
+- THEN 结果按上述谓词只给出一个受治理 command：record repair、payload rebuild 或 terminal；未裁决前不得覆盖旧 payload或让该对象进入新 release。
 - THEN record repair 保持原 `contentVersion`，只追加 `recordSequence + 1` 并绑定 current payload/fresh evidence；payload rebuild 原子写入 `contentVersion + 1` 与 `recordSequence + 1`，旧 record/payload evidence 保持可读。摘要、evidence 或写入冲突时原状态不变。
-- THEN terminal command 不创建新内容版本，保持 `contentVersion`、推进 `recordSequence` 并冻结 terminal reason 与“选择新 identity 或关闭本意图”的 next action；三个分支都禁止出现 `gap > 0`、`sourceReadyBacklog = 0` 且没有恢复动作的永久饥饿状态。
+- THEN terminal command 不创建新内容版本，保持 `contentVersion`、推进 `recordSequence` 并冻结 terminal reason；对象治理结果不派生 execution next 或自动重试。
 
 ## 6. 依赖
 
 - 前置要求：canonical pool 的 create-once record 与对象事务单写者语义。
 - 上游事实：payload/record digest 事实与治理侧 fresh evidence。
-- 下游结果：可裁决的 invalid 状态与恢复动作，供 [`on-demand-content-pool-admission`](../on-demand-content-pool-admission/spec.md) 的调度与 [`multi-carrier-release`](../multi-carrier-release/spec.md) 的 release 选择消费。
+- 下游结果：可裁决的 invalid 状态与恢复动作，供 publish AI 与 [`multi-carrier-release`](../multi-carrier-release/spec.md) 的显式 release cohort 选择消费。
 - 父级设计：`DEC-023`
 
 ## 7. 开放事项

@@ -31,7 +31,7 @@ FIXED_PERSISTENT_LANE_BRANCHES = frozenset(
     {
         "lane/product-mainline",
         "lane/data-engineering",
-        "lane/agent-engineering",
+        "lane/engineering",
         "lane/ops",
         "lane/small-fix",
         "lane/refactor",

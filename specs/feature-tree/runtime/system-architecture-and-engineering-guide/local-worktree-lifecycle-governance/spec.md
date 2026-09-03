@@ -119,7 +119,7 @@
 - GIVEN 实时 worktree authority 与六条 fixed lane policy。
 - WHEN 准出门禁 `verify_local_worktree_lifecycle.py` 验证已发现 linked worktree，或以全量模式要求六条 lane 全部存在。
 - THEN inventory authority 失败、detached/非 lane/重复身份、probe error、全量 lane 缺失/dirty/HEAD 漂移均返回 typed blocker；默认模式不要求六条 lane 已全部创建。
-- AND 该判定只在显式运行门禁（本地 `make verify-local-worktree-lifecycle`、lane→`dev1.0` PR 的 CI）时生效，不挂在任何执行面 hook 或普通 commit gate 的无条件 static checks 上；改动 worktree 治理实现/策略时，commit gate 只选择 lifecycle focused local_contract。门禁 recovery 要求长期 lane fast-forward resync 并保留 worktree，clone 或额外废弃副本才由人工决定是否删除。
+- AND 该判定只在显式运行门禁（本地 `make verify-local-worktree-lifecycle`、lane→`dev1.0` PR 的 CI）时生效，不挂在任何执行面 hook 或普通 commit gate 的无条件 static checks 上；改动 worktree 治理实现/策略时，commit gate 只选择 lifecycle focused local_contract；门禁 recovery 要求长期 lane fast-forward resync 并保留 worktree，clone 或额外废弃副本才由人工决定是否删除。
 
 ## 6. 依赖
 
@@ -130,4 +130,12 @@
 
 ## 7. 开放事项
 
-无。
+<a id="open-001"></a>
+### OPEN-001 lane recovery 处置尚无直接行为测试
+
+- 类型：`capability_gap`
+- 优先级：`P2`
+- 准出影响：`track`
+- 影响或价值：[`GWT-004.t1`](#gwt-004) 至 [`GWT-004.t3`](#gwt-004) 已由 lifecycle gate local_contract 绑定，[`GWT-004.t4`](#gwt-004) 由 commit-gate focused test selection 绑定；但当前只有 recovery 文案与策略声明，没有测试直接执行并验证长期 lane fast-forward resync 后 worktree retained，以及 clone/额外副本只由人工决定删除。
+- 完成判定：[`GWT-004.t5`](#gwt-004) 由职责匹配的 local_contract 直接绑定并实际通过，证明 resync 后同一路径 worktree 仍在场且未自动删除 clone/额外副本。
+- 依赖：worktree lifecycle gate 与 branch policy owner；不得把提示文案存在当成处置已执行。

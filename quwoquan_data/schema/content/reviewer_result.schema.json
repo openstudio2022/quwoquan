@@ -6,10 +6,7 @@
     "stage",
     "executionId",
     "objectRef",
-    "provider",
-    "model",
-    "modelFamily",
-    "runId",
+    "actor",
     "verdict",
     "issues",
     "resultHash"
@@ -33,23 +30,64 @@
       "type": "string",
       "minLength": 1
     },
-    "provider": {
-      "type": "string",
-      "minLength": 1
-    },
-    "model": {
-      "type": "string",
-      "minLength": 1
-    },
-    "modelFamily": {
-      "type": "string",
-      "minLength": 1
-    },
-    "runId": {
-      "type": "string",
-      "minLength": 1,
-      "not": {
-        "pattern": "^contract-output:"
+    "actor": {
+      "type": "object",
+      "description": "独立宿主 reviewer 的真实身份与调用记录；modelFamily 只作审计，不要求与作者异族。",
+      "required": [
+        "host",
+        "sessionId",
+        "modelFamily",
+        "invocation"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "host": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sessionId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "modelFamily": {
+          "type": "string",
+          "minLength": 1,
+          "not": {
+            "const": "auto"
+          }
+        },
+        "invocation": {
+          "type": "object",
+          "required": [
+            "provider",
+            "model",
+            "runId"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "provider": {
+              "type": "string",
+              "minLength": 1,
+              "not": {
+                "const": "auto"
+              }
+            },
+            "model": {
+              "type": "string",
+              "minLength": 1,
+              "not": {
+                "const": "auto"
+              }
+            },
+            "runId": {
+              "type": "string",
+              "minLength": 1,
+              "not": {
+                "pattern": "^contract-output:"
+              }
+            }
+          }
+        }
       }
     },
     "verdict": {

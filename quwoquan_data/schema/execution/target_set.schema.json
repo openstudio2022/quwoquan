@@ -1,40 +1,55 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "quwoquan_data/schema/execution/target_set.schema.json",
-  "description": "One immutable target set bound to a content execution manifest.",
   "type": "object",
+  "additionalProperties": false,
   "required": [
+    "schema",
     "executionId",
+    "carrier",
     "selectionPolicy",
-    "sourceRef",
-    "candidateBinding",
     "entityCatalogDigest",
+    "candidateBinding",
     "targetCount",
     "targetRefs",
     "targets"
   ],
-  "additionalProperties": false,
   "properties": {
+    "schema": {
+      "const": "quwoquan_data.target_set"
+    },
     "executionId": {
       "type": "string",
       "pattern": "^20[0-9]{6}--[a-z][a-z0-9-]*-(homepage|article|image|video)-[a-z][a-z0-9-]*--[a-z0-9][a-z0-9-]*--(pilot|scale|full)-[0-9]{3,}$"
     },
+    "carrier": {
+      "enum": [
+        "homepage",
+        "article",
+        "image",
+        "video"
+      ]
+    },
     "selectionPolicy": {
       "const": "frozen"
     },
-    "sourceRef": {
+    "entityCatalogDigest": {
       "type": "string",
-      "minLength": 1
+      "pattern": "^sha256:[a-f0-9]{64}$"
     },
     "candidateBinding": {
       "type": "object",
       "additionalProperties": false,
       "required": [
+        "scope",
         "ref",
         "digest",
         "candidateCount"
       ],
       "properties": {
+        "scope": {
+          "const": "output"
+        },
         "ref": {
           "type": "string",
           "minLength": 1,
@@ -50,10 +65,6 @@
         }
       }
     },
-    "entityCatalogDigest": {
-      "type": "string",
-      "pattern": "^sha256:[a-f0-9]{64}$"
-    },
     "targetCount": {
       "type": "integer",
       "minimum": 1
@@ -64,7 +75,7 @@
       "uniqueItems": true,
       "items": {
         "type": "string",
-        "minLength": 1
+        "pattern": "^(?:entities/[^/]+/[^/]+/[^/]+|posts/(?:article|image|video)/[^/]+/[^/]+/[1-9][0-9]*)$"
       }
     },
     "targets": {
@@ -86,7 +97,8 @@
       "properties": {
         "name": {
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "pattern": "^[^/]+$"
         },
         "entityType": {
           "type": "string",

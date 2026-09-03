@@ -1,8 +1,6 @@
 """Canonical homepage entity publish transaction."""
 from __future__ import annotations
 
-from collections.abc import Mapping
-
 from content.release.canonical.object_transaction_lock import (
     canonical_publish_serialized,
 )
@@ -11,8 +9,6 @@ from content.release.canonical.object_transaction_lock import (
 def publish_homepage_object(
     execution_id: str,
     object_ref: str,
-    *,
-    pool_delivery_intent: Mapping[str, object] | None = None,
 ) -> dict[str, str]:
     """Apply one reviewed homepage through the canonical object transaction."""
     import hashlib
@@ -41,20 +37,6 @@ def publish_homepage_object(
         f"{hashlib.sha256(canonical_ref.encode('utf-8')).hexdigest()[:12]}"
     )
     execution_dir = execution_root(execution_id)
-    if pool_delivery_intent is None:
-        from content.execution.closure.pool_delivery import (
-            pool_delivery_intent_path,
-        )
-
-        intent_path = pool_delivery_intent_path(
-            execution_id,
-            carrier="homepage",
-            object_ref=object_ref,
-        )
-        loaded_intent = read_json(intent_path)
-        if not isinstance(loaded_intent, dict):
-            raise ValueError("pool delivery homepage intent must be an object")
-        pool_delivery_intent = loaded_intent
     package_root = execution_dir / "evidence/object-transactions" / transaction_id
     apply_report = (
         OUTPUT_ROOT
@@ -68,7 +50,6 @@ def publish_homepage_object(
         object_ref=f"/entity/{canonical_ref}",
         transaction_id=transaction_id,
         package_root=package_root,
-        pool_delivery_intent=pool_delivery_intent,
     )
     admission_result = "replayed"
     if apply_report.is_file() and (canonical_object / "manifest.json").is_file():

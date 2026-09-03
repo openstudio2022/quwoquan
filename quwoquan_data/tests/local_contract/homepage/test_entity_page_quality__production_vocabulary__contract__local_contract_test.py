@@ -62,18 +62,12 @@ def test_every_production_phrase_is_rejected(tmp_path: Path, phrase: str) -> Non
     assert entity_page_quality_issues(_write(tmp_path, body)) != []
 
 
-@pytest.mark.parametrize(
-    "prompt_name",
-    ("entity_homepage.system.md", "checkpoint_build_homepage.system.md"),
-)
-def test_authoring_prompt_forbids_what_the_gate_rejects(prompt_name: str) -> None:
-    """门禁拦什么，创作方就必须在动笔前被告知什么——只拦不告知同样让通过率归零。
-
-    首轮创作与修复轮各有入口，任一入口漏掉禁令都会让该轮成稿必然撞门。
-    """
+def test_authoring_prompt_forbids_what_the_gate_rejects() -> None:
+    """现役 homepage 创作入口必须在动笔前下发与门禁一致的禁令。"""
 
     from core.prompt_render import PROMPTS_ROOT
 
+    prompt_name = "entity_homepage.system.md"
     prompt = (PROMPTS_ROOT / "homepage" / prompt_name).read_text(encoding="utf-8")
     never_block = prompt.split("<never>", 1)[1].split("</never>", 1)[0]
 

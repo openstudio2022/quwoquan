@@ -91,8 +91,6 @@ def build_image_plan_spec(
         "originalAssetUrl": str(item.get("assetUrl") or item["sourceUrl"]),
         "platform": platform,
         "sourceId": source_id,
-        "discoveryCandidateId": str(item["discoveryCandidateId"]),
-        "discoveryUrl": str(item["discoveryUrl"]),
         "creator": str(item["creator"]),
         "credit": str(item["creator"]),
         "capturedAt": str(item["capturedAt"]),
