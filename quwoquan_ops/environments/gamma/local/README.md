@@ -25,7 +25,7 @@ python3 quwoquan_ops/cli/stackctl.py up --target gamma-local --skip-app
 
 - Ops Compose 只定义数据库、对象存储、external workload 与统一 `gamma-proxy`；第一方 workload 分别由 `services/<service>/deploy/compose.yaml` 自治拥有，启动器扫描这些片段完成装配，不维护服务名册。
 - `mongo-init` 与 `object-storage-init` 是一次性 init 容器；`object-storage` 是固定版本的本地 S3-compatible 服务。本地 JWT、设备票据、对象存储密钥和 TLS 物料只在仓外 `QWQ_DEPLOY_WORK_ROOT/gamma-local/`，不会写入 `.qwq_output` 或仓库。
-- 对外入口以 `gamma-proxy` 为主：`19000` 提供 API edge，`19100` 提供 media edge；`19010` 直连 `product-ops-service`。
+- 对外入口以 `gamma-proxy` 为主：`19000` 提供 API edge，`19100` 提供 media edge；`19010` 提供 Product Ops TLS/Portal edge，业务与探针请求继续经 `api-edge` 分派到 canonical owner。
 
 ## DNS
 
