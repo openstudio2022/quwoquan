@@ -426,7 +426,36 @@ def test_delivery_runs_service_core_and_packaging_as_parallel_siblings() -> None
     assert "GATE_SERVICE_PHASE: packaging" in packaging
     assert "设置 Go" not in packaging
     assert "设置 Dart" not in packaging
-    assert "run_bounded_apt_install.sh tesseract-ocr" in packaging
+    assert "run_bounded_apt_install.sh" not in packaging
+    prepare_index = packaging.index("id: strict_inputs")
+    gate_index = packaging.index("Gate (quwoquan_service packaging)")
+    assert prepare_index < gate_index
+    assert "actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9" in packaging
+    assert "quwoquan_app/.flutter-version" in packaging
+    assert "python3 quwoquan_ops/ci/setup_flutter_sdk.py resolve" in packaging
+    assert "python3 quwoquan_ops/ci/setup_flutter_sdk.py install" in packaging
+    assert "subosito/flutter-action@" not in packaging
+    assert "prepare_app_pipeline_inputs.py" in packaging
+    assert "--build-product-id android-nonprod-apk" in packaging
+    assert '--environment "${{ matrix.packaging_env }}"' in packaging
+    assert '--target "${{ matrix.packaging_env }}-local"' in packaging
+    assert '--expected-source-git-sha "$EXPECTED_SOURCE"' in packaging
+    assert (
+        '--work-root "$RUNNER_TEMP/delivery-packaging-inputs-'
+        '${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.packaging_env }}"'
+        in packaging
+    )
+    assert (
+        "QWQ_OUTPUT_ROOT: ${{ steps.strict_inputs.outputs.qwq_output_root }}"
+        in packaging
+    )
+    assert (
+        "QWQ_COCOAPODS_EXECUTABLE: "
+        "${{ steps.strict_inputs.outputs.cocoapods_executable }}"
+        in packaging
+    )
+    assert "app-dependency-sync/cache" not in packaging
+    assert "ln -s" not in packaging
     assert "needs: topology_regression" in coverage
     assert "GATE_SERVICE_PHASE: coverage" in coverage
     coverage_fn = GATE_REPO_PATH.read_text(encoding="utf-8")
@@ -937,6 +966,8 @@ def test_delivery_gate_keeps_cross_platform_jobs_on_linux_and_visual_phases_on_c
         job_end = delivery.index(f"\n  {next_job_name}:\n", job_start)
         job_body = delivery[job_start:job_end]
         assert "runs-on: [self-hosted, macOS, ARM64]" in job_body
+    packaging = _job_body(delivery, "quwoquan_service_packaging")
+    assert "runs-on: [self-hosted, macOS, ARM64]" in packaging
     assert "runs-on: macos-latest" not in delivery
 
 

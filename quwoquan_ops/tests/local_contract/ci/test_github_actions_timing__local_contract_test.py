@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import unittest
+from pathlib import Path
 from datetime import datetime, timedelta, timezone
 
 from quwoquan_ops.ci.github_actions_timing import (
@@ -86,6 +87,64 @@ class GithubActionsTimingTest(unittest.TestCase):
 
         self.assertEqual(values["machine_critical_path_seconds"], 1268)
         self.assertEqual(values["calendar_lead_time_seconds"], 1273)
+
+    def test_exact_data_job_does_not_capture_prefix_selected_shards(self) -> None:
+        run = {"created_at": "2026-09-03T00:00:00Z"}
+        jobs = [
+            job(
+                "Delivery Gate — Data",
+                "2026-09-03T00:00:00Z",
+                "2026-09-03T00:00:01Z",
+                "2026-09-03T00:00:11Z",
+            ),
+            *[
+                job(
+                    f"Delivery Gate — Data Tests Shard {index}",
+                    "2026-09-03T00:00:00Z",
+                    "2026-09-03T00:00:01Z",
+                    f"2026-09-03T00:00:{20 + index:02d}Z",
+                )
+                for index in range(4)
+            ],
+        ]
+
+        values = calculate(
+            run,
+            jobs,
+            phases={
+                "data": "Delivery Gate — Data",
+                "data_tests": "Delivery Gate — Data Tests Shard ",
+            },
+            required_counts={"data": 1, "data_tests": 4},
+            candidate_job="",
+            prod_job="",
+            critical_start="run",
+            dag_layers=[("data", "data_tests")],
+            phase_match_modes={"data": "exact", "data_tests": "prefix"},
+        )
+
+        self.assertEqual(values["phase_data"], 10)
+        self.assertEqual(values["phase_data_tests"], 22)
+        self.assertEqual(values["machine_critical_path_seconds"], 22)
+
+    def test_delivery_workflow_declares_exact_main_and_prefix_matrix_selectors(
+        self,
+    ) -> None:
+        workflow = (
+            Path(__file__).resolve().parents[4]
+            / ".github/workflows/delivery-gate.yml"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn(
+            '--phase-exact "data=Delivery Gate — Data"', workflow
+        )
+        for selector in (
+            "service_packaging=Delivery Gate — Service Packaging",
+            "data_tests=Delivery Gate — Data Tests Shard ",
+            "app_tests=Delivery Gate — App Tests Shard ",
+        ):
+            self.assertIn(f'--phase-prefix "{selector}"', workflow)
+        self.assertNotIn('--phase "data=Delivery Gate — Data"', workflow)
 
     def test_official_job_and_step_timestamps_drive_longest_matrix(self) -> None:
         run = {"created_at": "2026-07-28T00:00:00Z"}
