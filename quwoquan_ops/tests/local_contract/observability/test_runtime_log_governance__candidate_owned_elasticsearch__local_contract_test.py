@@ -153,6 +153,93 @@ export QWQ_COMPOSE_ELASTICSEARCH_IMAGE="mutable"
         self.assertEqual(issues, [])
 
 
+class ProductOpsServicekitRuntimeLogWiringTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.main_source = GATE.PRODUCT_OPS_MAIN.read_text(encoding="utf-8")
+        cls.product_bootstrap_source = GATE.PRODUCT_OPS_BOOTSTRAP.read_text(
+            encoding="utf-8"
+        )
+        cls.servicekit_bootstrap_source = GATE.SERVICEKIT_BOOTSTRAP.read_text(
+            encoding="utf-8"
+        )
+        cls.observability_source = GATE.SERVICEKIT_OBSERVABILITY.read_text(
+            encoding="utf-8"
+        )
+
+    def verify(self, **overrides: str) -> list[str]:
+        sources = {
+            "main_text": self.main_source,
+            "product_bootstrap_text": self.product_bootstrap_source,
+            "servicekit_bootstrap_text": self.servicekit_bootstrap_source,
+            "observability_text": self.observability_source,
+        }
+        sources.update(overrides)
+        issues: list[str] = []
+        GATE._verify_product_ops_servicekit_runtime_log_wiring(issues, **sources)
+        return issues
+
+    def test_current_product_ops_entrypoint_uses_shared_observability_stack(
+        self,
+    ) -> None:
+        self.assertNotIn("NewRuntimeLogExportWriter", self.main_source)
+        self.assertNotIn("NewProcessTraceLogger", self.main_source)
+
+        self.assertEqual(self.verify(), [])
+
+    def test_direct_manual_runtime_log_bootstrap_does_not_replace_servicekit_path(
+        self,
+    ) -> None:
+        manual_main = """func main() {
+    robs.NewRuntimeLogExportWriter()
+    robs.NewProcessTraceLogger()
+}
+"""
+
+        issues = self.verify(main_text=manual_main)
+
+        self.assertEqual(len(issues), 1)
+        self.assertIn("servicekit.RunStandalone/newModule", issues[0])
+
+    def test_shared_stack_requires_each_runtime_log_constructor(self) -> None:
+        for fragment in (
+            "robs.NewRuntimeLogExportWriter",
+            "robs.NewProcessTraceLogger",
+        ):
+            with self.subTest(fragment=fragment):
+                issues = self.verify(
+                    observability_text=self.observability_source.replace(
+                        fragment,
+                        "robs.RemovedRuntimeLogConstructor",
+                    )
+                )
+
+                self.assertEqual(len(issues), 1)
+                self.assertIn(fragment, issues[0])
+
+    def test_servicekit_bootstrap_must_apply_observability_http_wrapper(self) -> None:
+        issues = self.verify(
+            servicekit_bootstrap_text=self.servicekit_bootstrap_source.replace(
+                "observability.WrapHTTPHandler",
+                "observability.BypassHTTPHandler",
+            )
+        )
+
+        self.assertEqual(len(issues), 1)
+        self.assertIn("route HTTP through", issues[0])
+
+    def test_observability_wrapper_must_connect_process_logger(self) -> None:
+        issues = self.verify(
+            observability_text=self.observability_source.replace(
+                "stack.ProcessLogger, stack.ExceptionLogger",
+                "stack.ExceptionLogger",
+            )
+        )
+
+        self.assertEqual(len(issues), 1)
+        self.assertIn("WrapHTTPHandler", issues[0])
+
+
 class RuntimeLogHTTPRouteOwnershipTest(unittest.TestCase):
     @staticmethod
     def _product_routes() -> str:
