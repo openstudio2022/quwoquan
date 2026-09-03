@@ -64,6 +64,8 @@ from .constants import (
     SCAN_ROOTS,
     SCHEMA_VALUE_V_SUFFIX,
     SHA256_LITERAL,
+    SINGLE_TRACK_BASELINE_PATH,
+    SINGLE_TRACK_BASELINE_SCHEMA,
     SKIP_DIR_NAMES,
     SKIP_EMPTY_ALIASES,
     SOURCE_KEYS_ALIAS_LINE,
@@ -116,7 +118,13 @@ class Inventory:
 
 def should_skip(path: Path) -> bool:
     parts = set(path.parts)
-    return bool(parts & SKIP_DIR_NAMES)
+    if parts & SKIP_DIR_NAMES:
+        return True
+    try:
+        relative = path.relative_to(ROOT).as_posix()
+    except ValueError:
+        return False
+    return relative == SINGLE_TRACK_BASELINE_PATH
 
 
 def iter_files() -> list[Path]:
@@ -203,6 +211,21 @@ def scan_file(path: Path, inv: Inventory) -> None:
     suffix = path.suffix
     if _is_governance_scanner(rel) or _is_governance_test(rel):
         return
+    # This gate's own exact debt ledger quotes the forbidden semantic values it
+    # tracks. Its fixed schema/location is parsed fail-closed by baseline.py and
+    # governed separately; treating quoted evidence as a runtime contract would
+    # recursively manufacture findings from the baseline itself.
+    if rel == SINGLE_TRACK_BASELINE_PATH and suffix == ".json":
+        try:
+            baseline_document = json.loads(text)
+        except json.JSONDecodeError:
+            baseline_document = None
+        if (
+            isinstance(baseline_document, dict)
+            and baseline_document.get("schema") == SINGLE_TRACK_BASELINE_SCHEMA
+            and isinstance(baseline_document.get("findings"), list)
+        ):
+            return
     lines = text.splitlines()
     in_custom_control = is_custom_control_document(path)
 
