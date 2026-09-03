@@ -27,7 +27,8 @@ from content.release.environment.research_isolation_verification import (  # noq
     write_research_isolation_verification,
 )
 from content.release.environment.topology import (  # noqa: E402
-    resolve_environment_release_target,
+    EnvironmentReleaseMode,
+    EnvironmentReleaseTarget,
 )
 from content.release.model import DeploymentEnvironment, ReleaseKind  # noqa: E402
 from core.io import read_json, write_json  # noqa: E402
@@ -158,11 +159,19 @@ def _dependencies(
         write_json(path, result)
         observed["result"] = result
 
-    target = replace(
-        resolve_environment_release_target("gamma"),
-        api_base_url="https://gamma.test/api",
+    target = EnvironmentReleaseTarget(
+        environment=DeploymentEnvironment.GAMMA,
+        target_name="gamma-test",
+        mode=EnvironmentReleaseMode.LOCAL_IMPORT,
+        mongo_uri="mongodb://gamma.test",
+        user_postgres_dsn="postgres://gamma.test/quwoquan",
+        media_sync_root=root / "environment-media",
         media_delivery_base_url="https://gamma.test/media",
+        api_base_url="https://gamma.test/api",
         missing_requirements=(),
+        ssl_cafile="/test/gamma-local/root.crt",
+        redis_addr="gamma.test:6379",
+        redis_database=1,
     )
 
     def _create_run(
