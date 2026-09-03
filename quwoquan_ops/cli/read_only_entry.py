@@ -84,6 +84,7 @@ _BINDINGS: dict[str, tuple[str, str]] = {
     "load_port_manifest": ("quwoquan_ops.cli.lib.port_manifest", "load_port_manifest"),
     "profile_ports": ("quwoquan_ops.cli.lib.port_manifest", "profile_ports"),
     "local_runtime_capacity_evidence": ("quwoquan_ops.cli.lib.local_runtime_capacity", "local_runtime_capacity_evidence"),
+    "local_runtime_lock_holders": ("quwoquan_ops.cli.lib.local_runtime_reservation", "local_runtime_lock_holders"),
     "target_for_hostname": ("quwoquan_ops.cli.lib.local_target_handoff", "target_for_hostname"),
     "root_certificate_path": ("quwoquan_ops.cli.lib.public_domain_tls", "root_certificate_path"),
     "verify_certificate": ("quwoquan_ops.cli.lib.public_domain_tls", "verify_certificate"),
