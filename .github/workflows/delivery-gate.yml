@@ -822,8 +822,10 @@ jobs:
         if: ${{ github.event_name == 'pull_request' }}
         env:
           GITHUB_TOKEN: ${{ github.token }}
+          # head.ref 是不可信输入，经 env 传入而不内联进 shell（actionlint）。
+          PR_HEAD_BRANCH: ${{ github.event.pull_request.head.ref }}
         run: |
-          make verify-delivery-app-evidence ARGS="--repository ${{ github.repository }} --head-sha ${{ github.event.pull_request.head.sha }} --head-branch ${{ github.event.pull_request.head.ref }} --current-run-id ${{ github.run_id }} --github-output $GITHUB_OUTPUT"
+          make verify-delivery-app-evidence ARGS="--repository ${{ github.repository }} --head-sha ${{ github.event.pull_request.head.sha }} --head-branch $PR_HEAD_BRANCH --current-run-id ${{ github.run_id }} --github-output $GITHUB_OUTPUT"
       - id: combine
         name: Require every local App phase
         if: ${{ github.event_name != 'pull_request' }}
