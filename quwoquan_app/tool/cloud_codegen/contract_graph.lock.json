@@ -29870,7 +29870,7 @@
   ],
   "breakingReport": {
     "path": "quwoquan_app/tool/cloud_codegen/contract_graph.breaking.json",
-    "sha256": "179b2e1ac500bf72e5b67f7c772c75a3b49f9b0bfcfc5856e338f56db7e1bc73"
+    "sha256": "b55c02afd101b6b4b724a58bc915971a4d894874e901489a0560adbce5f0d2e5"
   },
   "contractGraph": {
     "compilerHash": "sha256:ed5e58456d0358f3bc0edfa28dcfbcba3b3f883ccc039bfb771e6b7ef1e6757c",
