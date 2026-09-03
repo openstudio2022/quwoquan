@@ -78,6 +78,7 @@ from .execution import (
     apply_patrol_test_execution_summary,
     run_command,
 )
+from .entry_completion import finalize_main_report
 from .external_aut_entry import (
     decode_external_aut_request,
     external_aut_case_result,
@@ -978,26 +979,19 @@ def main() -> int:
         )
         failed = failed or result["exitCode"] != 0
 
-    report["status"] = (
-        "gate_block"
-        if gate_blocked
-        else ("failed" if failed else ("dry_run" if args.dry_run else "passed"))
+    page_evidence_resolver = (
+        app_uat_per_marker_capture.page_evidence
+        if "app_uat_per_marker_capture" in locals()
+        and app_uat_per_marker_capture.required
+        else None
     )
-    if failed:
-        report["failureReason"] = (
-            "local TLS preflight blocked one or more Patrol runs"
-            if gate_blocked
-            else "one or more Patrol runs failed"
-        )
-    report["endedAt"] = utc_now()
-    write_report(
+    return finalize_main_report(
         report_path,
         report,
-        app_uat_page_evidence_resolver=(
-            app_uat_per_marker_capture.page_evidence
-            if "app_uat_per_marker_capture" in locals()
-            and app_uat_per_marker_capture.required
-            else None
-        ),
+        failed=failed,
+        gate_blocked=gate_blocked,
+        dry_run=args.dry_run,
+        page_evidence_resolver=page_evidence_resolver,
+        now=utc_now,
+        report_writer=write_report,
     )
-    return 2 if report["status"] == "gate_block" else (1 if failed else 0)
