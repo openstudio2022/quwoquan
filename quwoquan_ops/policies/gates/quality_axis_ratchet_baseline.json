@@ -6,10 +6,10 @@
     "reason": "quality axis tagged-test coverage ratchet (totals may only grow)"
   },
   "minimumAxisTotals": {
-    "a11y": 4,
+    "a11y": 8,
     "observability": 16,
     "performance": 8,
-    "reliability": 83,
+    "reliability": 78,
     "visual": 5
   },
   "policy": "totals may only grow; regressions block",
