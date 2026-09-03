@@ -164,6 +164,25 @@ def debt_entries(document: object) -> dict[str, int]:
     if not isinstance(document, dict):
         return {}
     entries: dict[str, int] = {}
+    if document.get("schema") == "single-track-exact-fingerprint-baseline":
+        findings = document.get("findings")
+        if not isinstance(findings, list):
+            return entries
+        for finding in findings:
+            if not isinstance(finding, dict):
+                continue
+            path = finding.get("path")
+            fingerprint = finding.get("fingerprint")
+            count = finding.get("count")
+            if (
+                isinstance(path, str)
+                and "/" in path
+                and isinstance(fingerprint, str)
+                and isinstance(count, int)
+                and not isinstance(count, bool)
+            ):
+                entries[f"{path}::{fingerprint}"] = count
+        return entries
     for key, value in document.items():
         if key == "_governance" or not isinstance(key, str) or "/" not in key:
             continue
