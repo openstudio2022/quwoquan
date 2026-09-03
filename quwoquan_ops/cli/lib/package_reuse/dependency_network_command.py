@@ -173,6 +173,11 @@ def _stop_process_group(process: subprocess.Popen[bytes]) -> None:
             ) from error
 
 
+def _read_output(stream: object) -> str:
+    stream.seek(0)
+    return stream.read().decode("utf-8", errors="replace")
+
+
 def run_managed_subprocess(
     command: Sequence[str],
     *,
@@ -186,15 +191,22 @@ def run_managed_subprocess(
 ) -> subprocess.CompletedProcess[str]:
     """Run one command in its own process group and reap the entire tree on timeout."""
 
-    if not text or stdout != subprocess.PIPE or stderr != subprocess.STDOUT:
-        raise ValueError("managed dependency subprocess requires combined text capture")
-    with tempfile.TemporaryFile() as output_file:
+    if (
+        not text
+        or stdout != subprocess.PIPE
+        or stderr not in {subprocess.PIPE, subprocess.STDOUT}
+    ):
+        raise ValueError("managed dependency subprocess requires captured text output")
+    with (
+        tempfile.TemporaryFile() as stdout_file,
+        tempfile.TemporaryFile() as stderr_file,
+    ):
         process = subprocess.Popen(
             list(command),
             cwd=str(cwd),
             env=dict(env),
-            stdout=output_file,
-            stderr=subprocess.STDOUT,
+            stdout=stdout_file,
+            stderr=(stderr_file if stderr == subprocess.PIPE else subprocess.STDOUT),
             start_new_session=True,
         )
         try:
@@ -204,12 +216,29 @@ def run_managed_subprocess(
             raise
         except subprocess.TimeoutExpired as error:
             _stop_process_group(process)
-            output_file.seek(0)
-            captured = output_file.read().decode("utf-8", errors="replace")
-            raise subprocess.TimeoutExpired(command, timeout, output=captured) from error
-        output_file.seek(0)
-        captured = output_file.read().decode("utf-8", errors="replace")
-    completed = subprocess.CompletedProcess(command, returncode, stdout=captured)
+            captured_stdout = _read_output(stdout_file)
+            captured_stderr = (
+                _read_output(stderr_file) if stderr == subprocess.PIPE else None
+            )
+            raise subprocess.TimeoutExpired(
+                command,
+                timeout,
+                output=captured_stdout,
+                stderr=captured_stderr,
+            ) from error
+        captured_stdout = _read_output(stdout_file)
+        captured_stderr = _read_output(stderr_file) if stderr == subprocess.PIPE else None
+    completed = subprocess.CompletedProcess(
+        command,
+        returncode,
+        stdout=captured_stdout,
+        stderr=captured_stderr,
+    )
     if check and returncode != 0:
-        raise subprocess.CalledProcessError(returncode, command, output=captured)
+        raise subprocess.CalledProcessError(
+            returncode,
+            command,
+            output=captured_stdout,
+            stderr=captured_stderr,
+        )
     return completed

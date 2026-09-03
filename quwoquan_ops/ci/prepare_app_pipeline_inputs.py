@@ -45,6 +45,9 @@ from quwoquan_ops.cli.lib.app_runtime_config_signing import (
 from quwoquan_ops.cli.lib.local_app_runtime_config_keys import (
     prepare_local_app_runtime_config_signing,
 )
+from quwoquan_ops.cli.lib.package_reuse.dependency_network_command import (
+    run_managed_subprocess,
+)
 from quwoquan_ops.cli.lib.package_reuse.dependency_bundle import (
     load_active_dependency_bundle,
 )
@@ -55,6 +58,7 @@ PROD_TRUSTED_PUBLIC_KEYS_JSON_ENV = (
 _GIT_SHA = re.compile(r"^[0-9a-f]{40}$")
 _TREE_DIGEST = re.compile(r"^sha1:[0-9a-f]{40}$")
 _ATTEMPT_ID = re.compile(r"^[0-9a-f]{32}$")
+_DEPENDENCY_SYNC_TIMEOUT_SECONDS = 20 * 60
 
 
 class PipelinePreparationError(RuntimeError):
@@ -159,7 +163,7 @@ def _resolve_pod() -> str:
 
 
 def _write_private(path: Path, encoded: bytes) -> None:
-    path.parent.mkdir(parents=True, mode=0o700)
+    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     descriptor = os.open(
         path,
         os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0),
@@ -214,24 +218,67 @@ def _materialize_profile_trust(build_profile: str, output: Path) -> None:
     )
 
 
+def _captured_text(value: str | bytes | None) -> str:
+    if isinstance(value, bytes):
+        return value.decode("utf-8", errors="replace")
+    return value or ""
+
+
+def _dependency_sync_stderr_path(result_path: Path) -> Path:
+    return result_path.with_suffix(".stderr.log")
+
+
+def _persist_dependency_sync_diagnostics(
+    *, result_path: Path, stdout: str, stderr: str
+) -> None:
+    _write_private(result_path, stdout.encode("utf-8"))
+    if stderr:
+        _write_private(
+            _dependency_sync_stderr_path(result_path),
+            stderr.encode("utf-8"),
+        )
+
+
 def _run_dependency_sync(
     *, environment: dict[str, str], result_path: Path
 ) -> dict[str, object]:
-    result = subprocess.run(
-        [
-            sys.executable,
-            str(REPO_ROOT / "quwoquan_ops/cli/stackctl.py"),
-            "--output-format",
-            "json",
-            "app-dependency-sync",
-        ],
-        cwd=REPO_ROOT,
-        env=environment,
-        check=False,
-        capture_output=True,
-        text=True,
+    command = [
+        sys.executable,
+        str(REPO_ROOT / "quwoquan_ops/cli/stackctl.py"),
+        "--output-format",
+        "json",
+        "app-dependency-sync",
+    ]
+    try:
+        result = run_managed_subprocess(
+            command,
+            cwd=REPO_ROOT,
+            env=environment,
+            check=False,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            timeout=_DEPENDENCY_SYNC_TIMEOUT_SECONDS,
+        )
+    except subprocess.TimeoutExpired as error:
+        stdout = _captured_text(error.stdout)
+        stderr = _captured_text(error.stderr)
+        _persist_dependency_sync_diagnostics(
+            result_path=result_path,
+            stdout=stdout,
+            stderr=stderr,
+        )
+        detail = (stderr or stdout).strip().splitlines()
+        first = detail[0] if detail else "stackctl returned no diagnostic output"
+        raise PipelinePreparationError(
+            "APP.PIPELINE.dependency_sync_timeout: "
+            f"timeoutSeconds={_DEPENDENCY_SYNC_TIMEOUT_SECONDS}; diagnostic={first}"
+        ) from error
+    _persist_dependency_sync_diagnostics(
+        result_path=result_path,
+        stdout=result.stdout,
+        stderr=result.stderr or "",
     )
-    result_path.write_text(result.stdout, encoding="utf-8")
     try:
         payload = json.loads(result.stdout)
     except json.JSONDecodeError as error:

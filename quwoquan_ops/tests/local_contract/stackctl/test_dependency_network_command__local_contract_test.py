@@ -38,6 +38,25 @@ def test_managed_subprocess_uses_only_the_explicit_environment(
     assert completed.stdout.strip() == "None present"
 
 
+def test_managed_subprocess_can_preserve_separate_stderr(tmp_path: Path) -> None:
+    completed = network.run_managed_subprocess(
+        [
+            sys.executable,
+            "-c",
+            "import sys; print('payload'); print('warning', file=sys.stderr)",
+        ],
+        cwd=tmp_path,
+        env={"PYTHONDONTWRITEBYTECODE": "1"},
+        check=True,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        timeout=2,
+    )
+    assert completed.stdout == "payload\n"
+    assert completed.stderr == "warning\n"
+
+
 def test_nonconvergent_process_group_returns_typed_cleanup_blocker(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

@@ -102,12 +102,36 @@ class DeliveryAppEvidenceTest(unittest.TestCase):
         })
         self.assertEqual(result["phaseSeconds"]["quwoquan_app_tests"], 60)
 
-    def test_zero_or_multiple_run_ids_fail_closed(self) -> None:
+    def test_zero_runs_or_missing_run_id_fail_closed(self) -> None:
         with self.assertRaisesRegex(EvidenceError, "RUN_NOT_FOUND"):
             self.verify(runs=[])
-        duplicate = run_payload(id=202)
-        with self.assertRaisesRegex(EvidenceError, "RUN_AMBIGUOUS"):
-            self.verify(runs=[run_payload(), duplicate])
+        with self.assertRaisesRegex(EvidenceError, "RUN_IDENTITY_MISMATCH"):
+            self.verify(runs=[run_payload(id=None)])
+
+    def test_cancelled_run_with_matrix_template_is_not_reusable_evidence(self) -> None:
+        matrix_template_job = {
+            **jobs_payload()[1],
+            "name": "Delivery Gate — App Tests Shard ${{ matrix.shard_index }}",
+            "conclusion": "cancelled",
+        }
+        with self.assertRaisesRegex(
+            EvidenceError, "RUN_EVIDENCE_UNAVAILABLE"
+        ) as raised:
+            self.verify(
+                runs=[run_payload(status="completed", conclusion="cancelled")],
+                jobs=[matrix_template_job],
+            )
+        self.assertNotIn("JOB_CLOSURE_MISMATCH", str(raised.exception))
+
+    def test_highest_completed_success_is_selected_among_terminal_attempts(self) -> None:
+        lower_success = run_payload(id=100, run_attempt=1)
+        cancelled = run_payload(id=202, run_attempt=3, conclusion="cancelled")
+        failed = run_payload(id=203, run_attempt=4, conclusion="failure")
+        result = self.verify(
+            runs=[failed, lower_success, cancelled, run_payload()]
+        )
+        self.assertEqual(result["runId"], 101)
+        self.assertEqual(result["runAttempt"], 2)
 
     def test_run_identity_mismatch_fails_closed(self) -> None:
         cases = (
@@ -130,17 +154,32 @@ class DeliveryAppEvidenceTest(unittest.TestCase):
         with self.assertRaisesRegex(EvidenceError, "JOB_ATTEMPT_MISMATCH"):
             self.verify(runs=[lower, run_payload()], jobs=mixed)
 
-    def test_incomplete_run_states_fail_closed(self) -> None:
+    def test_incomplete_run_states_return_stable_pending_blocker(self) -> None:
         for status in ("queued", "in_progress"):
             with self.subTest(status=status):
-                with self.assertRaisesRegex(EvidenceError, "RUN_NOT_COMPLETED"):
+                with self.assertRaisesRegex(EvidenceError, "RUN_EVIDENCE_PENDING"):
                     self.verify(runs=[run_payload(status=status, conclusion=None)])
 
-    def test_completed_run_may_have_domain_red_while_app_closure_is_green(self) -> None:
-        for conclusion in ("success", "failure", "cancelled", "timed_out"):
+    def test_completed_non_successful_runs_are_not_reusable(self) -> None:
+        for conclusion in ("failure", "cancelled", "timed_out"):
             with self.subTest(conclusion=conclusion):
-                result = self.verify(runs=[run_payload(conclusion=conclusion)])
-                self.assertEqual(result["status"], "verified")
+                with self.assertRaisesRegex(EvidenceError, "RUN_EVIDENCE_UNAVAILABLE"):
+                    self.verify(runs=[run_payload(conclusion=conclusion)])
+
+    def test_successful_run_still_requires_strict_expanded_job_closure(self) -> None:
+        templated = [
+            job
+            for job in jobs_payload()
+            if "Tests Shard" not in str(job["name"])
+        ]
+        templated.append(
+            {
+                **jobs_payload()[1],
+                "name": "Delivery Gate — App Tests Shard ${{ matrix.shard_index }}",
+            }
+        )
+        with self.assertRaisesRegex(EvidenceError, "JOB_CLOSURE_MISMATCH"):
+            self.verify(jobs=templated)
 
     def test_job_closure_missing_duplicate_extra_or_unsuccessful_fails(self) -> None:
         missing = jobs_payload()[:-1]
