@@ -60,6 +60,9 @@ from lib.review_context_assembler import (  # noqa: E402
     ReviewerContextBudgetExceeded,
     assemble_reviewer_context,
 )
+from review_dispatch_terminal import (  # noqa: E402
+    classify_terminal as _classify_terminal_impl,
+)
 
 _EVIDENCE_LINE_RE = re.compile(r"^\s*evidence:\s*(?P<evidence>[a-z0-9][a-z0-9-]*)\s*$")
 ReviewDispatchError = _review_owner_manifest.ReviewDispatchError
@@ -946,74 +949,15 @@ def _classify_terminal(
     failed_evidence_ids: list[str],
     cancelled: bool,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
-    typed: list[dict[str, Any]] = []
-    codes: list[str] = []
-    reviewer_map = {item["role"]: item for item in reviewers}
-    for raw in incomplete_roles:
-        if isinstance(raw, str):
-            role, separator, reason = raw.partition("=")
-            if not separator:
-                role, reason = raw, "unspecified"
-        else:
-            role = str(raw.get("role") or "")
-            reason = str(raw.get("reason") or "unspecified")
-        reviewer = reviewer_map.get(role)
-        if reviewer is None:
-            _refuse(
-                "REVIEW.INVALID_INCOMPLETE_ROLE",
-                f"incomplete role 不在本轮 reviewers 中：{role}",
-            )
-        code = (
-            "REVIEW.REQUIRED_REVIEWER_INCOMPLETE"
-            if reviewer["required"]
-            else "REVIEW.OPTIONAL_REVIEWER_INCOMPLETE"
-        )
-        typed.append(
-            {
-                "role": role,
-                "required": reviewer["required"],
-                "reason": reason,
-                "code": code,
-            }
-        )
-        codes.append(code)
-
-    evidence_ids = {item["id"] for item in evidence}
-    invalid_evidence = [item for item in failed_evidence_ids if item not in evidence_ids]
-    if invalid_evidence:
-        _refuse(
-            "REVIEW.INVALID_EVIDENCE_RESULT",
-            "失败 evidence 不在本轮计划中：" + ", ".join(invalid_evidence),
-        )
-    if failed_evidence_ids:
-        codes.append("REVIEW.EVIDENCE_FAILED")
-    if cancelled:
-        codes.append("REVIEW.CANCELLED")
-
-    unique_codes = list(dict.fromkeys(codes))
-    terminal_contract = contract_section("terminal_codes")
-    unknown_codes = [code for code in unique_codes if code not in terminal_contract]
-    if unknown_codes:
-        _refuse(
-            "REVIEW.TERMINAL_CONTRACT_INVALID",
-            "terminal code 未注册：" + ", ".join(unknown_codes),
-        )
-    status = "READY"
-    if any(
-        (terminal_contract.get(code) or {}).get("severity") == "GATE_BLOCK"
-        for code in unique_codes
-    ):
-        status = "GATE_BLOCK"
-    elif any(
-        (terminal_contract.get(code) or {}).get("severity") == "PR_WARN"
-        for code in unique_codes
-    ):
-        status = "PR_WARN"
-    return typed, {
-        "status": status,
-        "codes": unique_codes,
-        "failed_evidence": list(dict.fromkeys(failed_evidence_ids)),
-    }
+    return _classify_terminal_impl(
+        reviewers,
+        evidence,
+        incomplete_roles=incomplete_roles,
+        failed_evidence_ids=failed_evidence_ids,
+        cancelled=cancelled,
+        contract_section=contract_section,
+        refuse=_refuse,
+    )
 
 
 def _head_sha() -> str:

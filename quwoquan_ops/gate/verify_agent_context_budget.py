@@ -24,8 +24,13 @@ sys.dont_write_bytecode = True
 ROOT = Path(__file__).resolve().parents[2]
 ORIGINAL_ROOT = ROOT
 
+sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "quwoquan_ops/cli/lib"))
 from gate_output import emit_gate_result, finding  # noqa: E402
+from quwoquan_ops.gate.agent_context_budget_skills import (  # noqa: E402
+    discover_workflow_skill_metadata,
+    frontmatter as _frontmatter,
+)
 
 
 AGENTS_CHAIN_BYTE_BUDGET = 16 * 1024
@@ -93,78 +98,13 @@ PRUNED_DIR_NAMES = {
 }
 
 def _discover_workflow_skill_metadata() -> tuple[dict[str, dict[str, Any]], list[str]]:
-    agents_root = ROOT / ".agents"
-    root = agents_root / "skills"
-    workflows: dict[str, dict[str, Any]] = {}
-    issues: list[str] = []
-    if agents_root.is_symlink():
-        return workflows, [".agents 必须是 real non-symlink directory"]
-    if not agents_root.is_dir():
-        return workflows, [".agents 不存在"]
-    if root.is_symlink():
-        return workflows, [".agents/skills 必须是 real non-symlink directory"]
-    if not root.is_dir():
-        return workflows, [".agents/skills 不存在"]
-    try:
-        children = sorted(root.iterdir(), key=lambda item: item.name)
-    except OSError as error:
-        return workflows, [f".agents/skills 无法枚举（{error}）"]
-    directories: list[Path] = []
-    for child in children:
-        if child.is_symlink():
-            issues.append(
-                f"{_rel(child)}: Skill 直接子项必须是 real directory，不得是 symlink"
-            )
-            continue
-        if child.is_dir():
-            directories.append(child)
-    for directory in directories:
-        issue_count = len(issues)
-        path = directory / "SKILL.md"
-        rel = _rel(path)
-        if path.is_symlink() or not path.is_file():
-            issues.append(f"{rel}: 每个 Skill 直接子目录必须包含 regular non-symlink SKILL.md")
-            continue
-        try:
-            text = path.read_text(encoding="utf-8")
-        except (OSError, UnicodeError) as error:
-            issues.append(f"{rel}: 无法读取 SKILL.md（{error}）")
-            continue
-        fields, error = _frontmatter(text)
-        if error or fields is None:
-            issues.append(f"{rel}: {error or 'frontmatter 无效'}")
-            continue
-        metadata = fields.get("metadata")
-        if not isinstance(metadata, dict):
-            issues.append(f"{rel}: metadata 必须是映射")
-        elif metadata.get("kind") != "workflow":
-            issues.append(f"{rel}: metadata.kind 必须为 workflow")
-        if fields.get("name") != directory.name:
-            issues.append(f"{rel}: name={fields.get('name')!r} 与目录名不一致")
-        extra = sorted(set(fields) - SPEC_FRONTMATTER_FIELDS)
-        if extra:
-            issues.append(f"{rel}: frontmatter 含非开放字段 {extra}")
-        description = fields.get("description")
-        if not isinstance(description, str) or not description:
-            issues.append(f"{rel}: 缺 description")
-        elif len(description) > SKILL_DESCRIPTION_EACH_BUDGET:
-            issues.append(f"{rel}: description 超过 {SKILL_DESCRIPTION_EACH_BUDGET} 字符")
-        if len(text.splitlines()) > SKILL_LINE_BUDGET:
-            issues.append(f"{rel}: 超过 {SKILL_LINE_BUDGET} 行，重资料应按需放 references")
-        declared = metadata.get("command") if isinstance(metadata, dict) else None
-        if declared is not None and declared != f"/{directory.name}":
-            issues.append(f"{rel}: metadata.command={declared!r}，应为 /{directory.name}")
-        headings = re.findall(r"^##\s+(.+?)\s*$", text, re.M)
-        if headings != list(REQUIRED_SKILL_SECTIONS):
-            issues.append(
-                f"{rel}: 二级段落必须且只能按顺序为 "
-                + " / ".join(REQUIRED_SKILL_SECTIONS)
-            )
-        if any(token in text for token in ("completion-criteria.md", "interaction-protocols.md")):
-            issues.append(f"{rel}: 完成与交互契约必须就地声明，不得跳转共享文档")
-        if len(issues) == issue_count:
-            workflows[directory.name] = fields
-    return workflows, issues
+    return discover_workflow_skill_metadata(
+        ROOT,
+        skill_line_budget=SKILL_LINE_BUDGET,
+        description_each_budget=SKILL_DESCRIPTION_EACH_BUDGET,
+        frontmatter_fields=SPEC_FRONTMATTER_FIELDS,
+        required_sections=REQUIRED_SKILL_SECTIONS,
+    )
 
 
 def _workflow_skill_metadata() -> dict[str, dict[str, Any]]:
@@ -352,19 +292,6 @@ def _static_glob_prefix(pattern: str) -> str:
 def _glob_can_match(pattern: str) -> bool:
     prefix = _static_glob_prefix(pattern)
     return bool(prefix and (ROOT / prefix).exists()) or next(ROOT.glob(pattern), None) is not None
-
-
-def _frontmatter(text: str) -> tuple[dict[str, Any] | None, str | None]:
-    match = re.match(r"---\n(?P<body>.*?)\n---\n", text, re.S)
-    if match is None:
-        return None, "缺 YAML frontmatter"
-    try:
-        value = yaml.safe_load(match.group("body"))
-    except yaml.YAMLError as error:
-        return None, f"frontmatter 不是合法 YAML（{str(error).splitlines()[0]}）"
-    if not isinstance(value, dict):
-        return None, "frontmatter 不是键值映射"
-    return value, None
 
 
 def _is_generated_wfr_source(rel: str) -> bool:
