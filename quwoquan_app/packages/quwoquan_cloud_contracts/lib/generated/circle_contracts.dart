@@ -1,5 +1,5 @@
 // Code generated from the canonical circle operation owner. DO NOT EDIT.
-// ContractGraph SHA256: 2f60281f6cd1239736ee76a5c2d311721b54ad94ac20167e58ba8b8c9707d705
+// ContractGraph SHA256: 351579321e32d70448f5ca43c38e8e91ec74166a3b422976158002c95b825c9d
 
 library;
 
