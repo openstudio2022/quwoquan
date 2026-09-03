@@ -24,6 +24,7 @@ FAILURE_CODE_KEYS = frozenset(
         "backsync_cas_conflict",
         "authority_unavailable",
         "source_not_main_reachable",
+        "integration_read_only",
     }
 )
 FAILURE_CODE_PATTERN = re.compile(r"^[A-Z][A-Z0-9_]*\.[A-Z][A-Z0-9_]*\.[A-Z][A-Z0-9_]*$")
@@ -31,7 +32,7 @@ FIXED_PERSISTENT_LANE_BRANCHES = frozenset(
     {
         "lane/product-mainline",
         "lane/data-engineering",
-        "lane/agent-engineering",
+        "lane/engineering",
         "lane/ops",
         "lane/small-fix",
         "lane/refactor",
@@ -63,6 +64,7 @@ RECOVERY_BY_FAILURE_KEY = {
     "backsync_cas_conflict": "refresh_remote_refs_and_retry_compare_and_swap",
     "authority_unavailable": AUTHORITY_UNAVAILABLE_RECOVERY,
     "source_not_main_reachable": "select_exact_main_reachable_source",
+    "integration_read_only": "commit_from_a_lane_worktree_then_open_pull_request",
 }
 
 
@@ -864,6 +866,21 @@ def pre_push_issues(
     return issues
 
 
+def local_commit_issues(
+    *, policy: BranchPolicy, current_branch: str | None,
+) -> list[str]:
+    """Reject local commits on read-only integration/release worktrees."""
+    if current_branch in {policy.integration_branch, policy.release_branch}:
+        return [
+            _issue(
+                policy,
+                "integration_read_only",
+                f"local commits on read-only branch '{current_branch}' are blocked",
+            )
+        ]
+    return []
+
+
 def _current_branch() -> str | None:
     try:
         rows = _run_git("symbolic-ref", "--quiet", "--short", "HEAD")
@@ -890,10 +907,16 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Verify the canonical Git branch policy"
     )
-    parser.add_argument(
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument(
         "--pre-push",
         action="store_true",
         help="validate pre-push update lines from stdin",
+    )
+    mode.add_argument(
+        "--local-commit",
+        action="store_true",
+        help="reject local commits from read-only dev1.0/main worktrees",
     )
     args = parser.parse_args(argv)
     try:
@@ -911,6 +934,11 @@ def main(argv: list[str] | None = None) -> int:
                 current_branch=_current_branch(),
                 update_lines=sys.stdin,
                 environment=os.environ,
+            )
+        elif args.local_commit:
+            issues = local_commit_issues(
+                policy=policy,
+                current_branch=_current_branch(),
             )
         else:
             issues = current_repo_issues(policy)

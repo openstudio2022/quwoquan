@@ -326,6 +326,7 @@ def test_git_hooks_only_check_boundaries_and_never_consume_receipts() -> None:
     source = PRE_COMMIT.read_text(encoding="utf-8")
     assert "commit_gate.sh" not in source
     assert "local_readiness.py staged-boundary" in source
+    assert "--local-commit" in (ROOT / "quwoquan_ops/cli/local_readiness.py").read_text(encoding="utf-8")
     assert "verify --level" not in source
     assert "scope --staged" not in source
     assert "scope_ready" not in source

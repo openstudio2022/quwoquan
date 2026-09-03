@@ -314,7 +314,9 @@ def select_pytest_paths(paths: list[str]) -> tuple[list[str], list[str]]:
         ("quwoquan_ops/hooks/post-commit", worktree_lifecycle_tests),
         ("quwoquan_ops/hooks/run_install_hooks.sh", worktree_lifecycle_tests),
         ("quwoquan_ops/cli/lib/local_worktree_inventory.py", worktree_lifecycle_tests),
+        ("quwoquan_ops/cli/lane_worktree_commands.py", worktree_lifecycle_tests),
         ("quwoquan_ops/policies/worktree_policy.yaml", worktree_lifecycle_tests),
+        ("quwoquan_ops/policies/lane_ownership.yaml", worktree_lifecycle_tests),
         (
             "quwoquan_ops/gate/lib/process_group_deadline.py",
             (

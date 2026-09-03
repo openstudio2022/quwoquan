@@ -245,7 +245,12 @@ def command_staged_boundary(_args: argparse.Namespace) -> int:
         raise LocalReadinessError("staged boundary 范围为空")
     _staged_governance(paths)
     branch = subprocess.run(
-        [sys.executable, "-B", "quwoquan_ops/gate/verify_git_branch_policy.py"],
+        [
+            sys.executable,
+            "-B",
+            "quwoquan_ops/gate/verify_git_branch_policy.py",
+            "--local-commit",
+        ],
         cwd=ROOT,
         capture_output=True,
         text=True,

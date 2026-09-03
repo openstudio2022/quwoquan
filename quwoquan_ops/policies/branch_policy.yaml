@@ -3,7 +3,7 @@ allowed_local_branches:
   - main
   - lane/product-mainline
   - lane/data-engineering
-  - lane/agent-engineering
+  - lane/engineering
   - lane/ops
   - lane/small-fix
   - lane/refactor
@@ -13,7 +13,7 @@ allowed_remote_branches:
   - main
   - lane/product-mainline
   - lane/data-engineering
-  - lane/agent-engineering
+  - lane/engineering
   - lane/ops
   - lane/small-fix
   - lane/refactor
@@ -63,3 +63,4 @@ failure_codes:
   backsync_cas_conflict: OPS.BRANCH.BACKSYNC_CAS_CONFLICT
   authority_unavailable: OPS.BRANCH.AUTHORITY_UNAVAILABLE
   source_not_main_reachable: OPS.BRANCH.SOURCE_NOT_MAIN_REACHABLE
+  integration_read_only: OPS.BRANCH.INTEGRATION_READ_ONLY

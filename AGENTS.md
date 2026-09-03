@@ -38,6 +38,8 @@ Feature Tree 与 owner 算法见 [`specs/feature-tree/README.md`](specs/feature-
 ## 共享工作树与安全
 
 - 脏工作树是常态。修改前检查 HEAD/status、目标路径 diff、untracked 与活跃 writer；只编辑本任务所有的字节，禁止回滚、覆盖、清理、kill 或隔离其他 owner 的成果。
+- 一 worktree 一 Cursor 工作区。工作区根必须是当前固定 lane 目录或唯一 `integration/`；禁止把项目容器根、bare `quwoquan.git/` 或多个 worktree 作为单个/多根 workspace 打开。
+- `lane/engineering` 拥有开发→发布态工程面（Agent/Skill、review/handoff、Feature Tree、CI/CD、gate/hook、branch/worktree/lane governance、local readiness）；`lane/ops` 只拥有发布后运行态（stackctl、环境 manifests、observability、runbook、migration、Portal、hosted authority/provider conformance）。路径判定只读 `lane_ownership.yaml`。
 - 并行执行独立读取、测试与不同 owner 的修改；同一环境变更、共享生成物和共享锁串行。
 - `.qwq_output/` 只放可删除且可从版本控制真相源重建的运行输出。源码树禁止 `__pycache__/`、`*.pyc`、`*.pyo`、`.pytest_cache/`；缓存重定向到 `.qwq_output/env/repo/local/**`。
 - 不泄露 secret/PII；不执行超出用户范围的删除、发布、外部写入或不可逆动作。
@@ -46,6 +48,7 @@ Feature Tree 与 owner 算法见 [`specs/feature-tree/README.md`](specs/feature-
 
 - 本地与远端只允许 `dev1.0`、`main` 与六条声明的长期 `lane/*` 分支；日常开发只经 `lane/* -> dev1.0` PR 合入集成分支，唯一发布 PR 边为 `dev1.0 -> main`。Prod source 必须是可达 `main` 的精确 SHA。
 - 新建 linked worktree 或再次 clone 每次都须先取得用户明确授权，并以 `QWQ_WORKTREE_AUTHZ="<授权理由>" <command>` 执行。clone 后先运行 `make install-hooks`。
+- `dev1.0` 与 `main` 是本地只读分支，不得本地提交；唯一 `integration/` 只承担集成检查。日常提交必须位于同名 lane worktree，路径与分支由 `worktree_policy.yaml` 交叉验证。
 - 只有用户明确要求时才创建提交；提交按 `commit` Skill 执行，不用 `--no-verify` 作为常规通道。
 
 ## 沟通

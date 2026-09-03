@@ -18,6 +18,8 @@
 # spec_ref: specs/feature-tree/runtime/system-architecture-and-engineering-guide/local-worktree-lifecycle-governance/spec.md#gwt-004.t1
 # spec_ref: specs/feature-tree/runtime/system-architecture-and-engineering-guide/local-worktree-lifecycle-governance/spec.md#gwt-004.t2
 # spec_ref: specs/feature-tree/runtime/system-architecture-and-engineering-guide/local-worktree-lifecycle-governance/spec.md#gwt-004.t3
+# spec_ref: specs/feature-tree/runtime/system-architecture-and-engineering-guide/local-worktree-lifecycle-governance/spec.md#gwt-004.t4
+# spec_ref: specs/feature-tree/runtime/system-architecture-and-engineering-guide/local-worktree-lifecycle-governance/spec.md#gwt-004.t5
 """本地工作副本生命周期治理的行为级 local_contract。
 
 决策表覆盖四件事：授权提醒在两个执行面只注入不阻断、滞留提醒的去重与不漏报、
@@ -44,6 +46,7 @@ for extra in (ROOT / "quwoquan_ops/cli/lib", ROOT / "quwoquan_ops/hooks"):
         sys.path.insert(0, str(extra))
 
 import local_worktree_inventory as inventory  # noqa: E402
+from quwoquan_ops.cli import lane_worktree_commands  # noqa: E402
 import worktree_authz_guard as guard  # noqa: E402
 import worktree_merge_reminder as reminder  # noqa: E402
 
@@ -51,7 +54,7 @@ AUTHZ_SCRIPT = ROOT / "quwoquan_ops/hooks/worktree_authz_guard.py"
 INSTALL_SCRIPT = ROOT / "quwoquan_ops/hooks/run_install_hooks.sh"
 GATE_SCRIPT = ROOT / "quwoquan_ops/gate/verify_local_worktree_lifecycle.py"
 REMINDER_GATE = ROOT / "quwoquan_ops/hooks/worktree_session_reminder_gate.sh"
-ALLOWED = frozenset({"dev1.0", "main", "lane/product-mainline", "lane/data-engineering", "lane/agent-engineering", "lane/ops", "lane/small-fix", "lane/refactor"})
+ALLOWED = frozenset({"dev1.0", "main", "lane/product-mainline", "lane/data-engineering", "lane/engineering", "lane/ops", "lane/small-fix", "lane/refactor"})
 
 
 @pytest.fixture(scope="module")
@@ -343,15 +346,17 @@ def test_gwt_002_t1_reports_path_counts_and_stale_days(policy) -> None:
     assert "/tmp/stale" in message
 
 
-def test_gwt_002_t2_clean_copies_never_appear(policy) -> None:
-    """三类未合入事实全为空的副本不产生提醒。它存在但没压着任何工作。"""
+def test_gwt_002_t2_clean_copies_have_identity_but_no_unmerged_item(policy) -> None:
+    """干净副本不进滞留 items，但会话 identity 必须持续可见。"""
     now = 1_000_000_000
     summary = inventory.summarize([_copy("/tmp/clean")], policy, now=now)
 
     assert summary["totalWorkCopies"] == 1
     assert summary["withUnmergedWork"] == 0
     assert summary["items"] == []
-    assert reminder.build_message(summary, hooks_ok=True, policy=policy) == ""
+    message = reminder.build_message(summary, hooks_ok=True, policy=policy)
+    assert "identity=dev1.0" in message
+    assert "ahead=0 behind=0 dirty=0" in message
 
 
 def test_gwt_002_t3_threshold_splits_soft_and_strong(policy) -> None:
@@ -518,36 +523,128 @@ def test_inventory_list_failure_is_typed_fail_closed(monkeypatch, policy) -> Non
     assert caught.value.code == inventory.INVENTORY_UNAVAILABLE
 
 
+def _canonical_path(policy, branch: str) -> str:
+    if branch == policy.integration_branch:
+        return str(ROOT.parent / policy.integration_directory)
+    return str(ROOT.parent / dict(policy.lane_worktree_directories)[branch])
+
+
+def _integration(policy, *, head: str = "same", clean: bool = True, dirty: int = 0):
+    return _linked(
+        _canonical_path(policy, policy.integration_branch),
+        policy.integration_branch,
+        head=head,
+        clean=clean,
+        dirty=dirty,
+    )
+
+
+def test_porcelain_parser_preserves_bare_record_without_branch() -> None:
+    parsed = inventory.parse_worktree_list(
+        "worktree /tmp/project/quwoquan.git\nbare\n\n"
+        "worktree /tmp/project/engineering\nHEAD abc\n"
+        "branch refs/heads/lane/engineering\n"
+    )
+    assert parsed == [
+        inventory.WorktreeListEntry(
+            path="/tmp/project/quwoquan.git", branch="", bare=True
+        ),
+        inventory.WorktreeListEntry(
+            path="/tmp/project/engineering", branch="lane/engineering", bare=False
+        ),
+    ]
+
+
+def test_discovery_validates_bare_hub_without_probing_it(tmp_path, policy, monkeypatch) -> None:
+    project = tmp_path / "quwoquan"
+    hub = project / policy.bare_hub_directory
+    integration = project / policy.integration_directory
+    hub.mkdir(parents=True)
+    integration.mkdir()
+    porcelain = (
+        f"worktree {hub}\nbare\n\n"
+        f"worktree {integration}\nHEAD {'a' * 40}\n"
+        f"branch refs/heads/{policy.integration_branch}\n"
+    )
+    actual_git = inventory._git
+
+    def fake_git(cwd, *args):
+        if args == ("worktree", "list", "--porcelain"):
+            return 0, porcelain
+        return actual_git(cwd, *args)
+
+    probed: list[Path] = []
+
+    def fake_probe(path, **kwargs):
+        probed.append(path)
+        return _linked(str(path), kwargs["branch"])
+
+    monkeypatch.setattr(inventory, "_git", fake_git)
+    monkeypatch.setattr(inventory, "probe_work_copy", fake_probe)
+    monkeypatch.setattr(inventory, "_scan_for_clones", lambda *_args: [])
+    copies = inventory.discover_work_copies(root=integration, policy=policy)
+    assert probed == [integration.resolve()]
+    assert all(copy.path != str(hub) for copy in copies)
+
+
 @pytest.mark.parametrize(
-    "copies, fragment",
+    "copies_factory, fragment",
     [
-        ([_linked("/tmp/detached", "")], "detached"),
-        ([_linked("/tmp/main", "main")], "not a fixed lane"),
-        ([_linked("/tmp/probe", "lane/ops", probe_error="status failed")], "probe failed"),
+        (lambda policy: [_integration(policy), _linked("/tmp/detached", "")], "detached"),
+        (lambda policy: [_integration(policy), _linked("/tmp/main", "main")], "not integration or a fixed lane"),
         (
-            [
-                _linked("/tmp/a", "lane/ops"),
-                _linked("/tmp/b", "lane/ops"),
+            lambda policy: [
+                _integration(policy),
+                _linked(_canonical_path(policy, "lane/ops"), "lane/ops", probe_error="status failed"),
+            ],
+            "probe failed",
+        ),
+        (
+            lambda policy: [
+                _integration(policy),
+                _linked(_canonical_path(policy, "lane/ops"), "lane/ops"),
+                _linked("/tmp/ops-copy", "lane/ops"),
             ],
             "duplicate lane binding",
         ),
         (
-            [
+            lambda policy: [
+                _integration(policy),
                 _linked("/tmp/same", "lane/ops"),
                 _linked("/tmp/same", "lane/refactor"),
             ],
             "duplicate worktree path",
         ),
+        (
+            lambda policy: [
+                _integration(policy),
+                _linked("/tmp/wrong-ops", "lane/ops"),
+            ],
+            "lane path mismatch",
+        ),
     ],
 )
-def test_discovered_linked_identity_failures_block(policy, copies, fragment) -> None:
-    issues = inventory.validate_worktree_identity(copies, policy)
-    assert any(fragment in issue for issue in issues)
+def test_discovered_linked_identity_failures_block(policy, copies_factory, fragment) -> None:
+    issues = inventory.validate_worktree_identity(copies_factory(policy), policy)
+    assert any(fragment in issue for issue in issues), issues
+
+
+def test_integration_is_unique_clean_and_bound_to_integration_directory(policy) -> None:
+    assert inventory.validate_worktree_identity([_integration(policy)], policy) == []
+    dirty = inventory.validate_worktree_identity(
+        [_integration(policy, clean=False, dirty=1)], policy
+    )
+    assert any("integration worktree is not clean" in issue for issue in dirty)
+    missing = inventory.validate_worktree_identity([], policy)
+    assert any("integration worktree must appear exactly once" in issue for issue in missing)
 
 
 def test_require_all_lanes_checks_clean_and_canonical_head(monkeypatch, policy) -> None:
     lanes = sorted(branch for branch in policy.allowed_local_branches if branch.startswith("lane/"))
-    copies = [_linked(f"/tmp/{index}", branch) for index, branch in enumerate(lanes)]
+    copies = [
+        _integration(policy),
+        *[_linked(_canonical_path(policy, branch), branch) for branch in lanes],
+    ]
     monkeypatch.setattr(inventory, "_integration_ref", lambda _root, _policy: "origin/dev1.0")
     monkeypatch.setattr(inventory, "_git", lambda *_args: (0, "same"))
     assert inventory.validate_worktree_identity(
@@ -555,13 +652,20 @@ def test_require_all_lanes_checks_clean_and_canonical_head(monkeypatch, policy) 
     ) == []
 
     dirty = list(copies)
-    dirty[0] = _linked(dirty[0].path, dirty[0].branch, clean=False, dirty=1)
-    dirty[1] = _linked(dirty[1].path, dirty[1].branch, head="other")
+    dirty[1] = _linked(dirty[1].path, dirty[1].branch, clean=False, dirty=1)
+    dirty[2] = _linked(dirty[2].path, dirty[2].branch, head="other")
     issues = inventory.validate_worktree_identity(
         dirty, policy, require_all_lanes=True, repo_root=ROOT
     )
-    assert any("not clean" in issue for issue in issues)
-    assert any("differs from origin/dev1.0" in issue for issue in issues)
+    assert any("lane worktree is not clean" in issue for issue in issues)
+    assert any("lane HEAD differs from origin/dev1.0" in issue for issue in issues)
+
+    integration_drift = list(copies)
+    integration_drift[0] = _integration(policy, head="other")
+    issues = inventory.validate_worktree_identity(
+        integration_drift, policy, require_all_lanes=True, repo_root=ROOT
+    )
+    assert any("integration HEAD differs from origin/dev1.0" in issue for issue in issues)
 
     missing = inventory.validate_worktree_identity(
         copies[:-1], policy, require_all_lanes=True, repo_root=ROOT
@@ -704,6 +808,42 @@ def test_policy_loader_rejects_unknown_duplicate_and_incomplete_contracts(
             policy_path=policy_path,
             branch_policy_path=branch_path,
         )
+
+
+def test_policy_declares_fixed_project_hub_integration_and_lane_directories(policy) -> None:
+    assert policy.schema_version == 2
+    assert policy.project_root == "{repo_parent}"
+    assert policy.bare_hub_directory == "quwoquan.git"
+    assert (policy.integration_directory, policy.integration_branch) == ("integration", "dev1.0")
+    source = (ROOT / "quwoquan_ops/policies/worktree_policy.yaml").read_text(encoding="utf-8")
+    assert "lane_worktree_directory_rule: branch_suffix" in source
+    assert "lane/engineering:" not in source, "分支闭集不得复制到物理布局策略"
+    assert dict(policy.lane_worktree_directories) == {
+        branch: branch.removeprefix("lane/")
+        for branch in ALLOWED
+        if branch.startswith("lane/")
+    }
+
+
+def test_lane_command_targets_render_without_mutation_and_derive_policy(policy) -> None:
+    bootstrap = lane_worktree_commands.render("bootstrap")
+    resync = lane_worktree_commands.render("resync")
+    assert len(bootstrap) == len(resync) == 6
+    for branch, directory in policy.lane_worktree_directories:
+        assert any(branch in command and f"/{directory}" in command for command in bootstrap)
+        assert any(f"/{directory}" in command and "merge --ff-only dev1.0" in command for command in resync)
+    source = (ROOT / "quwoquan_ops/cli/lane_worktree_commands.py").read_text(encoding="utf-8")
+    assert "subprocess" not in source
+    assert "os.system" not in source
+
+
+def test_lane_ownership_schema_is_closed_and_uses_branch_policy_lanes(policy) -> None:
+    lanes = frozenset(branch for branch in ALLOWED if branch.startswith("lane/"))
+    rules = inventory.load_lane_ownership(allowed_lanes=lanes)
+    assert inventory.ownership_owner("quwoquan_ops/gate/verify_root_layout.py", rules) == "lane/engineering"
+    assert inventory.ownership_owner("quwoquan_ops/cli/stackctl.py", rules) == "lane/ops"
+    assert inventory.ownership_owner("quwoquan_ops/policies/branch_policy.yaml", rules) == "lane/engineering"
+    assert inventory.ownership_owner("quwoquan_ops/policies/app_build_projection_policy.json", rules) == "lane/ops"
 
 
 def test_policy_install_command_matches_real_entrypoint(policy) -> None:

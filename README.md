@@ -1,6 +1,8 @@
 # 趣我圈工程目录说明
 
-本仓库按领域自治和 Ops 横切面治理组织。顶层只保留长期工程域；`.qwq_output/` 只保存可删除重跑的运行证据、发布包、进程记录和缓存，绝不保存配置、部署拓扑、证书规则或密钥。
+本仓库按领域自治组织。源代码 worktree 位于项目容器根的同名子目录；`.qwq_output/` 只保存可删除重跑的运行证据、发布包、进程记录和缓存，绝不保存配置、部署拓扑、证书规则或密钥。
+
+Cursor 必须“一 worktree 一工作区”：只打开当前 `integration/` 或某个 lane 目录，禁止打开容器根、bare `quwoquan.git/`，也禁止多根 `.code-workspace`。这样终端、Git 身份、hook 和 Agent 的 writer scope 始终属于同一条 lane。
 
 ## 顶层目录
 
@@ -20,7 +22,6 @@ docs/               少量长期工程说明；不承载命令协议、功能规
 这些目录可能在开发机上出现，但不是工程源码域，不参与职责划分：
 
 ```text
-.worktrees/         本地 Git worktree 缓存。
 ref/                外部参考实现或资料，不提交。
 .vscode/            本地 IDE 配置。
 quwoquan_ops/portal/node_modules/ Ops Portal Node 依赖缓存。
@@ -38,7 +39,8 @@ changes, openspec, app_log, runtime, build, tmp, tools, githooks, social_content
 ## 目录边界
 
 - 领域私有资产归领域：服务 Dockerfile、部署规则和 release config 位于 `quwoquan_service/services/<service>/`；App 配置与发布规则位于 `quwoquan_app/configs/`、`quwoquan_app/deploy/`；数据发布规则位于 `quwoquan_data/` 的 control plane 与 publish 边界。
-- Ops 只放横切能力：统一调度、环境拓扑、跨域策略、gate、CI/CD、全局可观测、runbook 和 Portal。
+- Engineering 拥有开发到发布态的软件工程控制：Agent/Skill、review/handoff、Feature Tree、CI/CD pipeline-as-code、gate/hook、branch/worktree/lane policy 与 local readiness。
+- Ops 拥有发布后运行态：stackctl 运行编排、四环境 manifests、全局可观测、runbook、migration、Portal、hosted authority 与 provider conformance。`quwoquan_ops/` 是历史物理根，不等于所有内容都归 `lane/ops`；逐路径归属只读 `quwoquan_ops/policies/lane_ownership.yaml`。
 - 根目录不承载工具 workspace：Ops Portal 的 `package.json`、`package-lock.json` 和 `node_modules` 归 `quwoquan_ops/portal/`，根目录不保留 Node workspace。
 - 运行输出按唯一 taxonomy 归位：环境输出为 `.qwq_output/env/<env>/{runs,observability,local/<target>/{process,cache}}/`，repo 级输出位于 `.qwq_output/env/repo/`，数据工程输出为 `.qwq_output/data/{tasks,releases,local}/`。App、Service、Legal-static 与 Portal 的 deploy payload、渲染配置、Caddy、TLS 和 env 文件统一写入 `QWQ_DEPLOY_WORK_ROOT/<target>/`；其生成规则和网络配置只在领域 `deploy/configs` 与 `quwoquan_ops/environments/` 中定义。
 
@@ -50,6 +52,24 @@ python3 quwoquan_ops/cli/stackctl.py verify --env gamma --kind all --profile int
 cd quwoquan_ops/portal && npm test && npm run build
 bash quwoquan_ops/gate/gate_repo.sh
 ```
+
+## 固定 worktree 布局
+
+项目根、bare hub、六 lane 和唯一 integration 的物理关系由 `quwoquan_ops/policies/worktree_policy.yaml` 声明；分支闭集仍只由 `branch_policy.yaml` 声明，路径 ownership 只由 `lane_ownership.yaml` 声明。
+
+```text
+quwoquan/
+  quwoquan.git/       bare hub（不得作为 Cursor 工作区）
+  integration/        dev1.0，只读集成工作区
+  product-mainline/   lane/product-mainline
+  data-engineering/   lane/data-engineering
+  engineering/        lane/engineering
+  ops/                lane/ops
+  small-fix/          lane/small-fix
+  refactor/           lane/refactor
+```
+
+`make lane-bootstrap` 与 `make lane-resync` 只打印待人工审阅的 mutation 命令；`make lane-preflight` 才执行只读身份/clean/HEAD 校验。
 
 ## 分支治理
 

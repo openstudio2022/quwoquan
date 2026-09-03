@@ -64,6 +64,7 @@ def test_ordinary_commit_never_selects_worktree_lifecycle_static_gate() -> None:
         ["README.md"],
         ["quwoquan_ops/hooks/worktree_add_guard.py"],
         ["quwoquan_ops/policies/worktree_policy.yaml"],
+        ["quwoquan_ops/policies/lane_ownership.yaml"],
     ):
         assert "local_worktree_lifecycle" not in _checks(*paths)
 
@@ -75,6 +76,13 @@ def test_ordinary_commit_never_selects_worktree_lifecycle_static_gate() -> None:
         "test_local_worktree_lifecycle__gate__local_contract_test.py"
     ]
     assert deferred == []
+
+    assert select_pytest_paths(
+        ["quwoquan_ops/policies/lane_ownership.yaml"]
+    ) == (selected, deferred)
+    assert select_pytest_paths(
+        ["quwoquan_ops/cli/lane_worktree_commands.py"]
+    ) == (selected, deferred)
 
 def test_python_test_selection_uses_the_narrow_owner_tree() -> None:
     assert select_pytest_paths(

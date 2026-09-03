@@ -1,0 +1,165 @@
+# 四个内容域 lane 的默认路径归属（逐条按序匹配，首个命中生效）。
+# lane/small-fix 与 lane/refactor 是跨路径 lead lane，不声明静态独占路径。
+# schema 只声明 ownership；分支闭集读 branch_policy.yaml，物理 worktree 布局读
+# worktree_policy.yaml，三者不得互相复制成为第二真相源。
+# 行为语义归属：
+#   specs/feature-tree/runtime/deliver-deploy-prod-pipeline/daily-merge-release-strategy/spec.md REQ-001
+# 边界原则：
+#   engineering = 开发→发布态的 AI-native 软件工程（agent 工作流面、HOTL、review/handoff、
+#                 feature-tree 工具、CI/CD pipeline-as-code、门禁、hooks、分支/worktree/lane 治理、
+#                 local readiness、三个工程 spec 目录）
+#   ops         = 发布后运行态（stackctl 运行编排、四环境 manifests、observability、runbooks、
+#                 migrations、portal、domain governance、hosted authority、provider conformance、
+#                 environment-ops / incident-inspection Skill、拓扑/观测/运行配置 spec）
+# 规则按序首个命中；跨界少量文件随 lead lane 进入允许，但 preflight 只报
+# OWNERSHIP_DRIFT、不阻断。
+schema_version: 1
+matching: first_match
+rules:
+  - owner: lane/data-engineering
+    patterns:
+      - "quwoquan_data/**"
+      - ".agents/skills/content-production/**"
+
+  - owner: lane/ops
+    patterns:
+      - "quwoquan_ops/cli/stackctl.py"
+      - "quwoquan_ops/cli/commands/**"
+      - "quwoquan_ops/cli/alpha/**"
+      - "quwoquan_ops/cli/beta/**"
+      - "quwoquan_ops/cli/gamma/**"
+      - "quwoquan_ops/cli/prod/**"
+      - "quwoquan_ops/cli/prod_sim/**"
+      - "quwoquan_ops/cli/probes/**"
+      - "quwoquan_ops/cli/smoke/**"
+      - "quwoquan_ops/cli/shared/**"
+      - "quwoquan_ops/cli/domain_governance.py"
+      - "quwoquan_ops/cli/hosted_authority.py"
+      - "quwoquan_ops/cli/hosted_authority_smoke.py"
+      - "quwoquan_ops/cli/provider_conformance_runner.py"
+      - "quwoquan_ops/cli/render_runtime_config.py"
+      - "quwoquan_ops/cli/print_local_port_profile.py"
+      - "quwoquan_ops/cli/legal_static.py"
+      - "quwoquan_ops/observability/**"
+      - "quwoquan_ops/runbooks/**"
+      - "quwoquan_ops/migrations/**"
+      - "quwoquan_ops/portal/**"
+      - "quwoquan_ops/external/**"
+      - "quwoquan_ops/tools/alert_drill.py"
+      - "quwoquan_ops/policies/migrations/**"
+      - "quwoquan_ops/policies/app_build_projection_policy.json"
+      - "quwoquan_ops/policies/cloud_contract_ownership.json"
+      - "quwoquan_ops/policies/config-release/**"
+      - "quwoquan_ops/tests/local_contract/observability/**"
+      - "quwoquan_ops/tests/local_contract/stackctl/**"
+      - "quwoquan_ops/tests/local_contract/environment/**"
+      - "quwoquan_ops/tests/local_contract/media/**"
+      - "quwoquan_ops/tests/local_contract/provider/**"
+      - "quwoquan_ops/tests/local_contract/service_ops/**"
+      - "quwoquan_ops/tests/local_contract/test_data/**"
+      - "quwoquan_ops/tests/local_contract/portal_control_plane__local_contract_test.mjs"
+      - "quwoquan_ops/tests/acceptance/**"
+      - ".agents/skills/environment-ops/**"
+      - ".agents/skills/incident-inspection/**"
+      - "specs/feature-tree/runtime/system-topology-and-networking/**"
+      - "specs/feature-tree/runtime/runtime-observability/**"
+      - "specs/feature-tree/runtime/runtime-config/**"
+
+  - owner: lane/engineering
+    patterns:
+      - "AGENTS.md"
+      - "README.md"
+      - "Makefile"
+      - ".gitignore"
+      - ".dockerignore"
+      - "LICENSE"
+      - "docs/**"
+      - ".agents/**"
+      - ".cursor/**"
+      - ".codex/**"
+      - ".github/**"
+      - "quwoquan_ops/AGENTS.md"
+      - "quwoquan_ops/__init__.py"
+      - "quwoquan_ops/gate/**"
+      - "quwoquan_ops/hooks/**"
+      - "quwoquan_ops/ci/**"
+      - "quwoquan_ops/tools/generate_agent_adapters.py"
+      - "quwoquan_ops/tools/report_asset_gc.py"
+      - "quwoquan_ops/tools/run_new_feature_fullstack.sh"
+      - "quwoquan_ops/policies/agent_governance_contract.yaml"
+      - "quwoquan_ops/policies/branch_policy.yaml"
+      - "quwoquan_ops/policies/governance_pipeline_admission_contract.yaml"
+      - "quwoquan_ops/policies/hotl_admission_contract.yaml"
+      - "quwoquan_ops/policies/human_agent_delivery_contract.yaml"
+      - "quwoquan_ops/policies/lane_ownership.yaml"
+      - "quwoquan_ops/policies/local_readiness_contract.yaml"
+      - "quwoquan_ops/policies/objective_execution_contract.yaml"
+      - "quwoquan_ops/policies/worktree_policy.yaml"
+      - "quwoquan_ops/policies/evals/**"
+      - "quwoquan_ops/policies/gates/**"
+      - "quwoquan_ops/environments/commit_gate_sla_verification.json"
+      - "quwoquan_ops/environments/commit_gate_timing_baseline.json"
+      - "quwoquan_ops/environments/pr_gate_timing_budgets.json"
+      - "quwoquan_ops/tests/local_contract/gate/**"
+      - "quwoquan_ops/tests/local_contract/ci/**"
+      - "quwoquan_ops/tests/local_contract/release/**"
+      - "quwoquan_ops/tests/support/**"
+      - "quwoquan_ops/cli/review_*.py"
+      - "quwoquan_ops/cli/handoff_*.py"
+      - "quwoquan_ops/cli/cloud_contract_handoff*.py"
+      - "quwoquan_ops/cli/human_agent_delivery.py"
+      - "quwoquan_ops/cli/hotl_admission.py"
+      - "quwoquan_ops/cli/objective_execution.py"
+      - "quwoquan_ops/cli/workflow_trace.py"
+      - "quwoquan_ops/cli/evidence_runner.py"
+      - "quwoquan_ops/cli/feature_tree.py"
+      - "quwoquan_ops/cli/feature_tree_content_review.py"
+      - "quwoquan_ops/cli/local_readiness.py"
+      - "quwoquan_ops/cli/governance_pipeline_admission.py"
+      - "quwoquan_ops/cli/repo_hygiene_audit.py"
+      - "quwoquan_ops/cli/prepare_test_python.py"
+      - "quwoquan_ops/cli/agent_host_protocol_probe.py"
+      - "quwoquan_ops/cli/read_only_entry.py"
+      - "quwoquan_ops/cli/tools/**"
+      - "quwoquan_ops/cli/lib/review_*.py"
+      - "quwoquan_ops/cli/lib/handoff_store.py"
+      - "quwoquan_ops/cli/lib/human_agent_delivery/**"
+      - "quwoquan_ops/cli/lib/hotl_admission/**"
+      - "quwoquan_ops/cli/lib/objective_execution/**"
+      - "quwoquan_ops/cli/lib/feature_tree/**"
+      - "quwoquan_ops/cli/lib/feature_context_fingerprint.py"
+      - "quwoquan_ops/cli/lib/governance_pipeline_admission/**"
+      - "quwoquan_ops/cli/lib/agent_governance_contract.py"
+      - "quwoquan_ops/cli/lib/workflow_trace*.py"
+      - "quwoquan_ops/cli/lib/candidate_evidence.py"
+      - "quwoquan_ops/cli/lib/evidence_fingerprint.py"
+      - "quwoquan_ops/cli/lib/evidence_generation.py"
+      - "quwoquan_ops/cli/lib/local_readiness/**"
+      - "quwoquan_ops/cli/lib/local_worktree_inventory.py"
+      - "quwoquan_ops/cli/lib/readiness_case_result.py"
+      - "quwoquan_ops/cli/lib/gate_output.py"
+      - "quwoquan_ops/cli/lib/repository_root.py"
+      - "quwoquan_ops/cli/lib/common.py"
+      - "quwoquan_ops/cli/lib/descriptor_safe_io.py"
+      - "quwoquan_ops/cli/lib/local_env_gate_matrix/**"
+      - "quwoquan_ops/cli/lib/local_env_gate_timing.py"
+      - "quwoquan_ops/cli/lib/acceptance_surface_identity.py"
+      - "specs/feature-tree/runtime/development-workflow-governance/**"
+      - "specs/feature-tree/runtime/deliver-deploy-prod-pipeline/**"
+      - "specs/feature-tree/runtime/system-architecture-and-engineering-guide/**"
+      - "specs/feature-tree/README.md"
+      - "specs/feature-tree/spec.md"
+      - "specs/feature-tree/design.md"
+
+  # cli/lib 其余全部是运行态基础能力（app_*、dev_up、managed_preparation、package_reuse、
+  # local_*、provider_*、runtime_*、service_*、storage_*、test_data、research_*、output_paths ...）
+  - owner: lane/ops
+    patterns:
+      - "quwoquan_ops/cli/lib/**"
+      - "quwoquan_ops/environments/**"
+
+  - owner: lane/product-mainline
+    patterns:
+      - "quwoquan_app/**"
+      - "quwoquan_service/**"
+      - "specs/feature-tree/**"

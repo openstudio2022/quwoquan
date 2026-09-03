@@ -1317,7 +1317,7 @@ config-slo-gate:
 	@python3 quwoquan_ops/cli/stackctl.py verify --kind config-slo --profile baseline --prometheus-url "$(PROMETHEUS_URL)"
 
 .PHONY: commit-gate gate-smoke gate-integration gate-release test-api-contract test-api-contract-chat
-.PHONY: install-hooks verify-local-worktree-lifecycle
+.PHONY: install-hooks verify-local-worktree-lifecycle lane-bootstrap lane-preflight lane-resync
 
 # L0 本地入库门禁（pre-commit 同源）：并行静态 + 影响面测试，目标 ≤10m / 硬顶 15m。
 commit-gate:
@@ -1331,6 +1331,17 @@ install-hooks:
 # 必须留在 gate 链上：hooks 失效时 pre-commit 恰好不会运行，自检不能只挂在 pre-commit。
 verify-local-worktree-lifecycle:
 	@PYTHONDONTWRITEBYTECODE=1 python3 quwoquan_ops/gate/verify_local_worktree_lifecycle.py
+
+# 六 lane 生命周期命令只定义仓内入口；不会由 Makefile 自动 push/merge/delete。
+# bootstrap 由已授权操作者在 bare hub 上逐条创建缺失 lane；既有 worktree 保持不动。
+lane-bootstrap:
+	@PYTHONDONTWRITEBYTECODE=1 python3 -B quwoquan_ops/cli/lane_worktree_commands.py bootstrap
+
+lane-preflight:
+	@PYTHONDONTWRITEBYTECODE=1 python3 quwoquan_ops/gate/verify_local_worktree_lifecycle.py --require-all-lanes
+
+lane-resync:
+	@PYTHONDONTWRITEBYTECODE=1 python3 -B quwoquan_ops/cli/lane_worktree_commands.py resync
 .PHONY: prepare-test-python verify-test-no-fake verify-test-nonfunctional-coverage verify-test-directory-layout verify-test-coverage-map
 .PHONY: verify-execution-profiles
 .PHONY: test-local-contract test-app-python-local-contract test-runtime-local-contract test-api-integration test-runtime-api-integration test-runtime-api-integration-gamma test-user-acceptance verify-homepage-performance-evidence test-delivery-ci-local-contract

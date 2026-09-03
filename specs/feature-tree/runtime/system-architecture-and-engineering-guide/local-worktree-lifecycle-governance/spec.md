@@ -18,15 +18,18 @@
 - 未合入工作（本地领先提交、工作树脏改动、stash）的滞留识别与分级提醒。
 - git hooks 安装状态（`core.hooksPath`）的自检与失效告知。
 - 上述判定所需清单的实时派生方式，以及「不得留存台账」的约束。
-- 六条长期 lane 的 worktree 身份与 clean/bootstrap 一致性，在准出门禁中验证。
+- 项目容器根、bare hub、六条同名 lane worktree 与唯一 `integration/dev1.0` 的固定身份、路径、clean/bootstrap 一致性，在准出门禁中验证。
+- 会话提醒展示当前 identity、相对 canonical `dev1.0` 的 ahead/behind、dirty 数和路径 ownership drift。
+- 同一物理主机上跨 worktree 共享的设备与 local-runtime 互斥身份及其 holder evidence 边界。
 
 ### Out of Scope
 
 - 分支角色、合法 PR 边与晋级准入，由 [`daily-merge-release-strategy`](../../deliver-deploy-prod-pipeline/daily-merge-release-strategy/spec.md) 的 `REQ-001`、`REQ-002` 拥有，本 Story 只引用不重复。
-- 远端 GitHub branch protection、ruleset 与托管侧强制，见该 Story 的 `OPEN-002`。
+- 远端 GitHub branch protection、ruleset 与托管侧强制，见 [`daily-merge-release-strategy` OPEN-002](../../deliver-deploy-prod-pipeline/daily-merge-release-strategy/spec.md#open-002)。
 - hook 面的任何阻断（deny/ask）。执行面 hook 只注入上下文，判断权留给执行体；hook 运行在开发者本机且执行体有权改写环境变量与仓内文件，本就不构成安全边界。真正的硬门只在准出：lane→`dev1.0` 合入、交接、发布。
 - 工作副本的自动删除、自动合并或自动 stash。提醒只产生可观察告知，处置由人决定。
 - 同一 worktree 内多会话/多子代理的 writer 互斥。共享工作树的合作规则由根 `AGENTS.md` 的行为条款承担，不以 hook、claim 文件或锁实现。
+- canonical launcher 接入 device lock 与 `launch-attempt` identity 的启动规范化；该能力仍为本 Story 的 `OPEN-002`，不属于当前工程治理实现。
 
 ## 3. 行为要求
 
@@ -66,13 +69,17 @@
 ### REQ-004 清单只实时派生，不得留存台账
 
 - worktree 与 clone 清单只能由 `git worktree list` 与策略声明的发现根实时派生；禁止提交或维护工作副本 registry、inventory、已授权 allowlist 与滞留基线。
-- `git worktree list --porcelain` 失败、linked worktree probe 失败、detached、非 fixed lane、重复 lane 绑定或路径重复均 fail-closed，不得把失败退化为空清单；默认门禁只验证已发现 linked worktree，不要求六条 lane 已全部存在。
-- 全量身份门开启时必须精确存在六条 fixed lane，且每条 worktree clean、HEAD 与优先 `origin/dev1.0` 的 canonical integration ref（不存在时才回落本地 `dev1.0`）一致。
-- 策略参数（数量上限、滞留阈值、提醒最小间隔、发现根、失败码）集中在唯一策略文件，实现不得内联第二份默认值。
+- `worktree_policy.yaml` 是物理布局唯一真相源：project root 下必须恰有一个 bare hub `quwoquan.git/`、一个 `integration/ -> dev1.0`，以及六条 `lane/<name> -> <name>/`。分支闭集只读 `branch_policy.yaml`，路径 ownership 只读 `lane_ownership.yaml`，不得复制。
+- `git worktree list --porcelain` 的 `bare` record 只验证 hub 身份，绝不运行 status/probe 或算作脏 worktree；authority 失败、linked worktree probe 失败、detached、非 integration/fixed lane、分支与目录错绑、重复 lane/integration 或路径重复均 fail-closed。
+- 默认门禁验证已发现 lane 的路径身份并单独要求唯一 integration clean；全量身份门必须精确六条 lane 均 clean 且 HEAD 等于优先 `origin/dev1.0`（不存在时回落本地 `dev1.0`）的 canonical SHA，integration 也必须 clean 且同 HEAD。
+- 会话输出必须列出每个 worktree 的 identity/ahead/behind/dirty 与 engineering ownership drift；drift 只观察不阻断，避免跨域小改动把一个 Increment 拆成多个 writer。
+- 设备与 local-runtime 属于同一物理主机上跨 worktree 共享的资源，其互斥锁必须 host-scoped，不得写入任一 worktree 的 `.qwq_output` 冒充隔离；holder evidence 至少包含 `pid`、`worktree`、`lane` 与 `head`。`integration/ -> dev1.0` 是只读集成 worktree；从该目录承载共享 runtime 时，runtime host 身份必须显式声明且不得从 worktree-local pid/receipt 推断。
+- 策略参数（固定布局、滞留阈值、提醒最小间隔、发现根、失败码）集中在唯一策略文件，实现不得内联第二份默认值。
 
 ## 4. 契约引用
 
-- canonical：`quwoquan_ops/policies/worktree_policy.yaml`
+- canonical（物理布局）：`quwoquan_ops/policies/worktree_policy.yaml`
+- canonical（路径 ownership）：`quwoquan_ops/policies/lane_ownership.yaml`
 - canonical：`quwoquan_ops/cli/lib/local_worktree_inventory.py`
 - canonical：`quwoquan_ops/hooks/worktree_authz_guard.py`
 - canonical：`quwoquan_ops/hooks/worktree_merge_reminder.py`
@@ -118,8 +125,9 @@
 
 - GIVEN 实时 worktree authority 与六条 fixed lane policy。
 - WHEN 准出门禁 `verify_local_worktree_lifecycle.py` 验证已发现 linked worktree，或以全量模式要求六条 lane 全部存在。
-- THEN inventory authority 失败、detached/非 lane/重复身份、probe error、全量 lane 缺失/dirty/HEAD 漂移均返回 typed blocker；默认模式不要求六条 lane 已全部创建。
+- THEN bare hub 被识别但不算 worktree/dirty；inventory authority 失败、detached/非 integration 或 lane、branch-path 错绑、重复身份、probe error、唯一 integration 缺失/dirty，以及全量 lane 缺失/dirty/HEAD 漂移均返回 typed blocker；默认模式不要求六条 lane 已全部创建。
 - AND 该判定只在显式运行门禁（本地 `make verify-local-worktree-lifecycle`、lane→`dev1.0` PR 的 CI）时生效，不挂在任何执行面 hook 或普通 commit gate 的无条件 static checks 上；改动 worktree 治理实现/策略时，commit gate 只选择 lifecycle focused local_contract。门禁 recovery 要求长期 lane fast-forward resync 并保留 worktree，clone 或额外废弃副本才由人工决定是否删除。
+- AND 设备与 local-runtime 锁在同一 host 跨 worktree 互斥并产出含 `pid/worktree/lane/head` 的 holder evidence，integration 仅以显式 runtime host 身份承载共享 runtime、不能因其存在而获得本地提交权限。
 
 ## 6. 依赖
 
@@ -130,4 +138,21 @@
 
 ## 7. 开放事项
 
-无。
+<a id="open-001"></a>
+### OPEN-001 六 lane 物理布局准出闭合
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺验收证据：当前物理目录已拆分，但其他 lane 尚有 WIP、落后或领先 canonical `dev1.0`，还没有一次六 lane clean + same HEAD 的真实 `lane-preflight` PASS，不能把“目录存在”冒充准出。
+- 完成判定：`GWT-004` 满足，且 `make lane-preflight` 在唯一 bare hub、唯一 clean integration、六条同名 lane worktree 均 clean 且 HEAD 等于 canonical `dev1.0` 时通过。
+
+<a id="open-002"></a>
+### OPEN-002 canonical launcher 设备锁与启动身份接线
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：Ops 已提供 host-scoped device/local-runtime lock 与 holder evidence，但 canonical launcher 尚未在同一启动事务中获取 device lock 并绑定精确 `launch-attempt` identity；当前工程治理只声明共享资源和 integration/runtime-host 边界，不复制启动实现。
+- 完成判定：`GWT-004.t6` 保持成立；启动规范 owner 的验收直接证明 canonical launcher 在安装/activation/launch 全窗口持有精确 device lock、冲突时回读 holder evidence，并把同一 lock owner 的 worktree/lane/head 绑定到唯一 `launch-attempt` receipt。
+- 依赖：`lane/ops` host-scoped lock primitive、canonical launcher owner 与 app-launch-attempt contract。

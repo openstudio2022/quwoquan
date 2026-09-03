@@ -1,31 +1,25 @@
-# 本地工作副本（linked worktree 与同源 clone）生命周期策略。
-# 行为语义归属：
-#   specs/feature-tree/runtime/system-architecture-and-engineering-guide/local-worktree-lifecycle-governance/spec.md
-# 分支白名单不在本文件重复声明，一律读 quwoquan_ops/policies/branch_policy.yaml 的
-# allowed_local_branches；两份声明会立刻成为第二真相源。
+# 本地工作副本（fixed lane worktree、唯一 integration worktree 与同源 clone）生命周期策略。
+# 分支闭集只读 branch_policy.yaml；lane 路径 ownership 只读 lane_ownership.yaml。
+# 本文件唯一拥有物理布局：project root、bare hub、固定 branch->同名目录和 integration。
+
+schema_version: 2
+project_root: "{repo_parent}"
+bare_hub_directory: quwoquan.git
+integration_worktree_directory: integration
+lane_worktree_directory_rule: branch_suffix
 
 # 创建授权凭据：随命令一次性传递的显式意图声明（留痕用，hook 只提醒不阻断）。
-# 不存在「已授权工作副本清单」——授权是行为规则，不是台账。
 authorization_env_var: QWQ_WORKTREE_AUTHZ
-
-# 未合入工作的滞留阈值与提醒最小间隔。
 unmerged_reminder_after_days: 3
 reminder_min_interval_hours: 24
 
-# 同源 clone 的发现根。clone 目标不继承本仓库 hooks，只能由源侧扫描发现。
-# {repo_parent} 在运行期解析为仓库根的父目录。
+# 同源 clone 的发现根。{repo_parent} 是当前 worktree 的父目录；扫描会跳过 bare hub。
 discovery_roots:
   - "{repo_parent}"
   - "~/.codex/worktrees"
   - "/private/tmp"
 discovery_max_depth: 2
 
-# 刻意不设 linked worktree 数量硬上限：创建入口已有授权提醒，再加一道上限会让
-# 「已获授权的工作副本」同时把聚合门禁打红，制造授权与门禁互斥的死结。
-# 数量压力由 REQ-002 的滞留提醒承担，它针对的是真正的危害——未合入工作滞留。
-
-# git hooks 安装状态自检的期望值。install_command 的字面量与
-# run_install_hooks.sh 的一致性由 local_contract 断言，防止两处漂移。
 hooks_path: quwoquan_ops/hooks
 install_command: bash quwoquan_ops/hooks/run_install_hooks.sh
 

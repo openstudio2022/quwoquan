@@ -85,6 +85,24 @@ def build_message(summary: dict[str, object], *, hooks_ok: bool, policy) -> str:
         )
         lines.append(f"    修复：{policy.install_command}")
 
+    identities = summary.get("identities")
+    identity_rows = identities if isinstance(identities, list) else []
+    for identity in identity_rows:
+        drift = identity.get("ownershipDrift")
+        drift_rows = drift if isinstance(drift, list) else []
+        lines.append(
+            f"  - identity={identity.get('branch') or '<detached>'}  "
+            f"path={identity.get('path')}  ahead={identity.get('ahead')} "
+            f"behind={identity.get('behind')} dirty={identity.get('dirty')} "
+            f"工程面漂移={len(drift_rows)}"
+        )
+        if drift_rows:
+            lines.append(
+                "    OWNERSHIP_DRIFT: "
+                + ", ".join(str(item) for item in drift_rows[:5])
+                + (" ..." if len(drift_rows) > 5 else "")
+            )
+
     items = summary.get("items")
     rows = items if isinstance(items, list) else []
     for item in rows:
@@ -92,7 +110,8 @@ def build_message(summary: dict[str, object], *, hooks_ok: bool, policy) -> str:
         code = f"{policy.failure_code('unmerged_overdue')}  " if item.get("overdue") else ""
         lines.append(
             f"{marker} {code}{item.get('path')}  滞留 {item.get('staleDays')} 天  "
-            f"ahead={item.get('ahead')} dirty={item.get('dirty')} stash={item.get('stashes')}"
+            f"ahead={item.get('ahead')} behind={item.get('behind')} "
+            f"dirty={item.get('dirty')} stash={item.get('stashes')}"
         )
         if item.get("probeError"):
             lines.append(f"    探测失败：{item.get('probeError')}")
@@ -102,10 +121,9 @@ def build_message(summary: dict[str, object], *, hooks_ok: bool, policy) -> str:
 
     tail = [
         "  处置：长期 lane 在 integration/abort 后 fast-forward resync 到 canonical dev1.0，",
-        "  并保留 worktree 供下轮复用；",
-        "  clone 或额外废弃副本是否删除仍由人工决定。",
-    ] if rows else []
-    return "\n".join(["[worktree] 本地工作副本提醒", *lines, *tail])
+        "  并保留 worktree 供下轮复用；clone 或额外废弃副本是否删除仍由人工决定。",
+    ]
+    return "\n".join(["[worktree] 会话身份与本地工作副本提醒", *lines, *tail])
 
 
 def collect(policy) -> tuple[dict[str, object], bool, list[str]]:

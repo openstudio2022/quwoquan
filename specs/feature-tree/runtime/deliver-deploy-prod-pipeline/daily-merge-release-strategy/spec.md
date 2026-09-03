@@ -32,9 +32,9 @@
 <a id="req-001"></a>
 ### REQ-001 每日合并发布策略
 
-- **分支角色**：本地与远端只允许 `dev1.0`、`main` 与六条长期 lane 分支（`lane/product-mainline`、`lane/data-engineering`、`lane/agent-engineering`、`lane/ops`、`lane/small-fix`、`lane/refactor`）；`dev1.0` 是唯一集成真相源，`main` 是唯一发布真相源，lane 分支是唯一日常开发面。白名单之外的任何临时分支或额外长期分支均非法。
+- **分支角色**：本地与远端只允许 `dev1.0`、`main` 与六条长期 lane 分支（`lane/product-mainline`、`lane/data-engineering`、`lane/engineering`、`lane/ops`、`lane/small-fix`、`lane/refactor`）；`dev1.0` 是唯一集成真相源，`main` 是唯一发布真相源，lane 分支是唯一日常开发面。白名单之外的任何临时分支或额外长期分支均非法。
 - **lane 生命周期**：六条固定 lane 由用户裁决立即开放，每条 lane 长期存在且同一时刻至多一个 writer，从 `dev1.0` 派生并只经声明 PR 边回到 `dev1.0`；每轮 integration 或 abort 后 worktree 均 retained，lane 必须 mandatory fast-forward resync 到新的 `dev1.0`，不得 cleanup/delete、force、自动 merge或改写历史。一个 Increment 只有一个 lead lane 与一个原子 PR，跨域协作不拆成多个并行 writer；启用后观察不阻断六车道准入。
-- **工程归属**：本 Story 拥有集成、晋级、回同步与发布来源的可观察行为；`platform-ops-governance` 拥有 `quwoquan_ops/policies/branch_policy.yaml` 及其 gate/hook 的机器实现，机器实现不得改写本 Story 的行为语义。
+- **工程归属**：本 Story 与 `lane/engineering` 拥有集成、晋级、回同步、发布来源及 `branch_policy.yaml`、gate/hook、worktree/lane governance 的机器实现；`lane/ops` 只拥有发布后运行态编排、环境、观测、runbook、migration、Portal 与 hosted/provider 适配。物理位于 `quwoquan_ops/` 不等于归 `lane/ops`，逐路径边界只读 `lane_ownership.yaml`。
 
 <a id="req-002"></a>
 ### REQ-002 集成、晋级与回同步准入
@@ -42,7 +42,8 @@
 - **集成主路径**：日常开发在 lead lane 分支提交，以 `lane/* -> dev1.0` PR 合入；同一精确 merge SHA 的 required integration checks 全部成功后，`dev1.0` 成为该增量的集成终态。activation 前必须先使用现有匹配本地 `dev1.0 ->` 远端 `dev1.0` direct-push 过渡通道 bootstrap 六 lane canonical policy，该通道只取得 integration evidence、不具备 release eligibility；`lane/ops -> dev1.0` activation PR 合入后才关闭该过渡通道。失败增量只能在其 retained lead lane（或 activation 前的过渡 `dev1.0`）追加修复，不得创建白名单外旁路分支。
 - **发布主路径**：release actor 只从 `dev1.0` 创建以 `main` 为 base 的 promotion PR；required promotion checks 全部成功并合入后，`main` 成为该增量的发布终态。
 - **合法 PR 边**：只允许 `lane/* -> dev1.0` 与 `dev1.0 -> main`；lane 之间的 PR、`lane/* -> main`、人工 `main -> dev1.0`、缺失 head/base 与白名单外分支全部拒绝。
-- **失败身份**：policy/schema 无效为 `OPS.BRANCH.POLICY_INVALID`，PR 边或 ref 非法为 `OPS.BRANCH.REF_NOT_ALLOWED`，人工 direct push 为 `OPS.BRANCH.DIRECT_PUSH_NOT_ALLOWED`，非 fast-forward 为 `OPS.BRANCH.BACKSYNC_NOT_FAST_FORWARD`，compare-and-swap 漂移为 `OPS.BRANCH.BACKSYNC_CAS_CONFLICT`，Hosted/Git authority 不可读为 `OPS.BRANCH.AUTHORITY_UNAVAILABLE`，Prod source 不可达 `main` 为 `OPS.BRANCH.SOURCE_NOT_MAIN_REACHABLE`；每个 blocker 必须携带 `terminal=blocked` 与按失败类型确定的稳定 recovery，OID、ref、actor 与远端诊断只进入 string context。
+- **失败身份**：policy/schema 无效为 `OPS.BRANCH.POLICY_INVALID`，PR 边或 ref 非法为 `OPS.BRANCH.REF_NOT_ALLOWED`，人工 direct push 为 `OPS.BRANCH.DIRECT_PUSH_NOT_ALLOWED`，在本地 `dev1.0`/`main` 提交为 `OPS.BRANCH.INTEGRATION_READ_ONLY`，非 fast-forward 为 `OPS.BRANCH.BACKSYNC_NOT_FAST_FORWARD`，compare-and-swap 漂移为 `OPS.BRANCH.BACKSYNC_CAS_CONFLICT`，Hosted/Git authority 不可读为 `OPS.BRANCH.AUTHORITY_UNAVAILABLE`，Prod source 不可达 `main` 为 `OPS.BRANCH.SOURCE_NOT_MAIN_REACHABLE`；每个 blocker 必须携带 `terminal=blocked` 与按失败类型确定的稳定 recovery，OID、ref、actor 与远端诊断只进入 string context。
+- **本地提交边界**：`dev1.0` 与 `main` 始终是只读 worktree；`verify_git_branch_policy.py --local-commit` 对两者返回 `OPS.BRANCH.INTEGRATION_READ_ONLY`，提交只能来自固定 lane。
 - **direct push 边界**：activation 前，人工/API token 只允许从匹配本地 `dev1.0` 更新远端 `dev1.0` 以 bootstrap lane policy，以及从匹配本地 lane 更新同名远端 lane；前者只取得 integration evidence，后者只推进 lane 自身，两者均不具备 release eligibility。`main` direct push 始终拒绝；`lane/ops` activation PR 合入后，`dev1.0` direct push 才收敛为拒绝，之后 `dev1.0` 只由合法 lane PR merge 或受管 system backsync 更新。Actions 与 release governance 必须拒绝缺少合法 promotion 事实的 SHA，在缺少 GitHub 原生保护时不得声称远端 ref 一定未被先行修改。
 - **系统回同步**：promotion 成功后，系统只能以 compare-and-swap 的无 force fast-forward 将 `main` 回同步到 `dev1.0`。两者相等时幂等成功。`dev1.0` 为 `main` ancestor 时允许推进。分叉、`main` 落后、采样后 ref 漂移或 ancestry 不可证明时返回 blocker，ref 保持采样后已确认状态且不得创建临时分支、force、自动 merge 或改写历史。
 - **发布来源**：Prod source 必须是格式精确、可达可信 `origin/main` 且绑定唯一已合并 `dev1.0 -> main` promotion 的 Git SHA；只存在于 `dev1.0`、无法证明 ancestry 或 workflow definition 不来自 `refs/heads/main` 时不得进入发布门。

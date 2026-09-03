@@ -92,6 +92,20 @@ class RootLayoutGateTest(unittest.TestCase):
             )
             self.assertIn(module.RETIRED_TOP_LEVEL["artifacts"], joined)
 
+    def test_multi_root_cursor_workspace_is_retired(self) -> None:
+        module = _load_module()
+        self.assertNotIn("quwoquan-workspace.code-workspace", module.ALLOWED_TOP_LEVEL)
+        self.assertIn("quwoquan-workspace.code-workspace", module.RETIRED_TOP_LEVEL)
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _materialize_allowed_root(root, module)
+            (root / "quwoquan-workspace.code-workspace").write_text(
+                '{"folders": [{"path": "."}, {"path": "../other"}]}',
+                encoding="utf-8",
+            )
+            issues = module.top_level_issues(root)
+            self.assertTrue(any("multi-root workspace is retired" in issue for issue in issues))
+
     def test_retired_and_allowed_names_do_not_overlap(self) -> None:
         """白名单先判、退役名单后判：两者相交会让退役提示永远打不出来。"""
         module = _load_module()
