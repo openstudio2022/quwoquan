@@ -2,54 +2,67 @@
 
 from __future__ import annotations
 
-import datetime as dt
-import fcntl
-import os
 from pathlib import Path
-from typing import TextIO
 
+from quwoquan_ops.cli.lib.host_locks import (
+    DEFAULT_HOST_LOCK_ROOT,
+    HostLock,
+    HostLockBusyError,
+    acquire_host_lock,
+    host_lock_root,
+)
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
+PATROL_EXECUTION_LOCK_NAMESPACE = "process"
+PATROL_EXECUTION_LOCK_NAME = "build-workspace.lock"
+# Historical compatibility only.  Runtime acquisition resolves
+# QWQ_HOST_LOCK_ROOT through patrol_execution_lock_path() on every call.
 PATROL_EXECUTION_LOCK = (
-    REPO_ROOT
-    / ".qwq_output"
-    / "env"
-    / "repo"
-    / "local"
-    / "locks"
-    / "environment-patrol-smoke.lock"
+    DEFAULT_HOST_LOCK_ROOT.expanduser()
+    / PATROL_EXECUTION_LOCK_NAMESPACE
+    / PATROL_EXECUTION_LOCK_NAME
 )
 
 
-def _utc_now() -> str:
-    return dt.datetime.now(dt.timezone.utc).isoformat().replace("+00:00", "Z")
+def patrol_execution_lock_path() -> Path:
+    """Return the canonical host-scoped Flutter build-workspace lock path."""
+
+    return (
+        host_lock_root()
+        / PATROL_EXECUTION_LOCK_NAMESPACE
+        / PATROL_EXECUTION_LOCK_NAME
+    )
 
 
 def acquire_patrol_execution_lock(
     *,
     env_name: str,
     target: str,
-    lock_path: Path = PATROL_EXECUTION_LOCK,
-) -> TextIO:
+    lock_path: Path | None = None,
+) -> HostLock:
     """Serialize Flutter builds that share the App build workspace."""
 
-    lock_path.parent.mkdir(parents=True, exist_ok=True)
-    handle = lock_path.open("a+", encoding="utf-8")
+    path = Path(lock_path) if lock_path is not None else patrol_execution_lock_path()
     try:
-        fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-    except BlockingIOError as error:
-        handle.seek(0)
-        holder = handle.read().strip() or "unknown"
-        handle.close()
+        return acquire_host_lock(
+            path,
+            fields={
+                "env": env_name.strip(),
+                "target": target.strip(),
+            },
+            worktree_path=REPO_ROOT,
+        )
+    except HostLockBusyError as error:
+        holder = str(error).partition(": ")[2]
         raise RuntimeError(
-            f"Patrol build workspace is already in use: {holder}",
+            f"Patrol build workspace is already in use: {holder or 'unknown'}",
         ) from error
-    handle.seek(0)
-    handle.truncate()
-    handle.write(
-        f"pid={os.getpid()} env={env_name.strip()} "
-        f"target={target.strip()} startedAt={_utc_now()}\n",
-    )
-    handle.flush()
-    os.fsync(handle.fileno())
-    return handle
+
+
+__all__ = [
+    "PATROL_EXECUTION_LOCK",
+    "PATROL_EXECUTION_LOCK_NAME",
+    "PATROL_EXECUTION_LOCK_NAMESPACE",
+    "acquire_patrol_execution_lock",
+    "patrol_execution_lock_path",
+]
