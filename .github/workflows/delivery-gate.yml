@@ -11,7 +11,7 @@ permissions:
   actions: read
 
 env:
-  QWQ_OUTPUT_ROOT: .qwq_output
+  QWQ_OUTPUT_ROOT: ${{ github.workspace }}/.qwq_output
   PUB_HOSTED_URL: https://pub.flutter-io.cn
   FLUTTER_STORAGE_BASE_URL: https://storage.flutter-io.cn
 

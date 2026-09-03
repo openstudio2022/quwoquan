@@ -406,6 +406,15 @@ def test_service_gate_phase_partition_executes_each_exact_call_set(
         assert completed.stdout.splitlines() == calls
 
 
+def test_delivery_uses_literal_absolute_output_root_for_flutter_identity() -> None:
+    workflow = (ROOT / ".github/workflows/delivery-gate.yml").read_text(
+        encoding="utf-8"
+    )
+
+    assert "QWQ_OUTPUT_ROOT: ${{ github.workspace }}/.qwq_output" in workflow
+    assert "QWQ_OUTPUT_ROOT: .qwq_output" not in workflow
+
+
 def test_delivery_runs_service_core_and_packaging_as_parallel_siblings() -> None:
     workflow = (ROOT / ".github/workflows/delivery-gate.yml").read_text(
         encoding="utf-8"
