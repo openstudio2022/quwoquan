@@ -996,6 +996,19 @@ jobs:
         run: pip install -r quwoquan_data/requirements.txt
       - name: Install repository test native dependencies
         run: bash quwoquan_ops/ci/run_bounded_apt_install.sh tesseract-ocr
+      - id: flutter
+        name: Resolve repository-pinned Flutter SDK for repository gate
+        run: python3 quwoquan_ops/ci/setup_flutter_sdk.py resolve --version-file quwoquan_app/.flutter-version
+      - name: Install verified Flutter SDK for repository gate
+        env:
+          FLUTTER_ARCHIVE_URL: ${{ steps.flutter.outputs.archive_url }}
+          FLUTTER_CACHE_PATH: ${{ steps.flutter.outputs.cache_path }}
+          FLUTTER_SHA256: ${{ steps.flutter.outputs.sha256 }}
+        run: |
+          python3 quwoquan_ops/ci/setup_flutter_sdk.py install \
+            --archive-url "$FLUTTER_ARCHIVE_URL" \
+            --cache-path "$FLUTTER_CACHE_PATH" \
+            --sha256 "$FLUTTER_SHA256"
       - name: Gate (quwoquan_data verify)
         env:
           GATE_DATA_PHASE: verify
@@ -1035,6 +1048,19 @@ jobs:
         run: pip install -r quwoquan_data/requirements.txt
       - name: Install repository test native dependencies
         run: bash quwoquan_ops/ci/run_bounded_apt_install.sh tesseract-ocr
+      - id: flutter
+        name: Resolve repository-pinned Flutter SDK for repository gate
+        run: python3 quwoquan_ops/ci/setup_flutter_sdk.py resolve --version-file quwoquan_app/.flutter-version
+      - name: Install verified Flutter SDK for repository gate
+        env:
+          FLUTTER_ARCHIVE_URL: ${{ steps.flutter.outputs.archive_url }}
+          FLUTTER_CACHE_PATH: ${{ steps.flutter.outputs.cache_path }}
+          FLUTTER_SHA256: ${{ steps.flutter.outputs.sha256 }}
+        run: |
+          python3 quwoquan_ops/ci/setup_flutter_sdk.py install \
+            --archive-url "$FLUTTER_ARCHIVE_URL" \
+            --cache-path "$FLUTTER_CACHE_PATH" \
+            --sha256 "$FLUTTER_SHA256"
       - name: Gate (quwoquan_data local_contract shard)
         env:
           GATE_DATA_PHASE: local_contract
@@ -1073,6 +1099,19 @@ jobs:
           cache-dependency-path: quwoquan_ops/portal/package-lock.json
       - name: Install repository test native dependencies
         run: bash quwoquan_ops/ci/run_bounded_apt_install.sh tesseract-ocr
+      - id: flutter
+        name: Resolve repository-pinned Flutter SDK for repository gate
+        run: python3 quwoquan_ops/ci/setup_flutter_sdk.py resolve --version-file quwoquan_app/.flutter-version
+      - name: Install verified Flutter SDK for repository gate
+        env:
+          FLUTTER_ARCHIVE_URL: ${{ steps.flutter.outputs.archive_url }}
+          FLUTTER_CACHE_PATH: ${{ steps.flutter.outputs.cache_path }}
+          FLUTTER_SHA256: ${{ steps.flutter.outputs.sha256 }}
+        run: |
+          python3 quwoquan_ops/ci/setup_flutter_sdk.py install \
+            --archive-url "$FLUTTER_ARCHIVE_URL" \
+            --cache-path "$FLUTTER_CACHE_PATH" \
+            --sha256 "$FLUTTER_SHA256"
       - name: Gate (ops-portal)
         run: |
           bash quwoquan_ops/gate/gate_repo.sh --scope portal

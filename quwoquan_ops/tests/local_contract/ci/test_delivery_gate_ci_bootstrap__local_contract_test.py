@@ -417,6 +417,19 @@ def test_hosted_gate_jobs_prepare_tesseract_before_repository_gate() -> None:
     assert "matrix.shard_index" not in install_step
 
 
+def test_hosted_non_app_repository_gates_prepare_pinned_dart_for_codegen_checks() -> None:
+    workflow = (ROOT / ".github/workflows/delivery-gate.yml").read_text(
+        encoding="utf-8"
+    )
+    for job_name in ("quwoquan_data", "quwoquan_data_tests", "ops_portal"):
+        job = _job_body(workflow, job_name)
+        assert job.count("Resolve repository-pinned Flutter SDK for repository gate") == 1, job_name
+        assert job.count("Install verified Flutter SDK for repository gate") == 1, job_name
+        assert job.index("python3 quwoquan_ops/ci/setup_flutter_sdk.py install") < job.index(
+            "bash quwoquan_ops/gate/gate_repo.sh"
+        ), job_name
+
+
 def test_service_gate_installs_required_native_test_dependencies() -> None:
     workflow = (ROOT / ".github/workflows/delivery-gate.yml").read_text(encoding="utf-8")
     job_start = workflow.index("  quwoquan_service:\n")
