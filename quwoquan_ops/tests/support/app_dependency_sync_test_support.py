@@ -48,6 +48,7 @@ def source_identity() -> dict[str, str]:
 
 def stub_sync(monkeypatch: Any, output: Path) -> None:
     monkeypatch.setenv("QWQ_OUTPUT_ROOT", str(output))
+    monkeypatch.setenv("QWQ_HOST_LOCK_ROOT", str(output / "host-locks"))
     monkeypatch.setattr(
         sync,
         "resolved_flutter_identity",

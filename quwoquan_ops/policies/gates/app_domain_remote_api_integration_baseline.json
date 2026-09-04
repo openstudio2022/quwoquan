@@ -7,14 +7,14 @@
   },
   "domains": {
     "entity": {
-      "appTestFileCount": 1,
-      "coveredObjectCount": 1,
-      "serviceTestFileCount": 8
+      "appTestFileCount": 5,
+      "coveredObjectCount": 4,
+      "serviceTestFileCount": 11
     },
     "notification": {
-      "appTestFileCount": 1,
-      "coveredObjectCount": 1,
-      "serviceTestFileCount": 10
+      "appTestFileCount": 2,
+      "coveredObjectCount": 2,
+      "serviceTestFileCount": 13
     },
     "realtime": {
       "appTestFileCount": 1,
@@ -24,12 +24,12 @@
     "recommendation": {
       "appTestFileCount": 1,
       "coveredObjectCount": 1,
-      "serviceTestFileCount": 1
+      "serviceTestFileCount": 3
     },
     "tag": {
-      "appTestFileCount": 1,
-      "coveredObjectCount": 1,
-      "serviceTestFileCount": 3
+      "appTestFileCount": 2,
+      "coveredObjectCount": 2,
+      "serviceTestFileCount": 6
     }
   },
   "ruleId": "app-domain-remote-api-integration-ratchet",

@@ -37,7 +37,7 @@ type AssetManifestItem struct {
 	// enum 唯一真相源 contracts/metadata/_shared/types.yaml
 	// MediaDeliveryAccessMode）。由 release header 的 releaseClass 单点映射写入，
 	// signed_grant 时 App 必须按 assetId 换取短签。新 immutable release 必须
-	// 显式 public|signed_grant；空串只属于具名 legacy-public migration 边界，
+	// 显式 public|signed_grant；空串只属于具名 previous-version public migration 边界，
 	// 不得进入本 importer。
 	AccessMode           string   `json:"accessMode,omitempty" bson:"accessMode,omitempty"`
 	ObjectKey            string   `json:"objectKey,omitempty" bson:"-"`

@@ -138,7 +138,7 @@ def validate_release_header(
                 and not execution_id
                 and not source_identity_digest_value
             )
-            legacy_mode = bool(
+            previous_shape_mode = bool(
                 execution_id
                 and source_identity_digest_value
                 and not selection_identity_digest
@@ -149,7 +149,7 @@ def validate_release_header(
             if (
                 not content_id
                 or not post_ref
-                or not (current_mode or legacy_mode)
+                or not (current_mode or previous_shape_mode)
                 or (current_mode and not all(
                     value.startswith("sha256:")
                     for value in (
@@ -158,7 +158,10 @@ def validate_release_header(
                         content_library_binding_digest,
                     )
                 ))
-                or (legacy_mode and not source_identity_digest_value.startswith("sha256:"))
+                or (
+                    previous_shape_mode
+                    and not source_identity_digest_value.startswith("sha256:")
+                )
                 or not isinstance(version, int)
                 or isinstance(version, bool)
                 or version < 1
@@ -166,7 +169,9 @@ def validate_release_header(
                 or post_ref in post_refs
             ):
                 raise ReleaseHeaderError(f"{label} content entry is invalid")
-            content_modes.add("handoff" if current_mode else "legacy_audit")
+            content_modes.add(
+                "handoff" if current_mode else "previous_shape_audit"
+            )
             if current_mode:
                 if selection_identity_digest in content_selection_digests:
                     raise ReleaseHeaderError(

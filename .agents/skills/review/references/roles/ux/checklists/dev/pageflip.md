@@ -1,6 +1,6 @@
 # ux · dev · pageflip
 
-- [MUST] 改动满足 owner manifest 指向的功能设计与 Story 验收，不在角色中复制几何事实。
+- [MUST] 改动满足 PRE owner identity 指向的功能设计与 Story 验收，不在角色中复制几何事实。
   check: 对照 plan.contexts 与 diff；越界或角色成为事实 owner 时判失败。
 - [MUST] 用户可见的层级、连续性、返回与降级行为有聚合证据。
   evidence: app-pageflip-back-mainline

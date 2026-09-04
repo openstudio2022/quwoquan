@@ -48,6 +48,10 @@ class EvidenceAdapterError(ContractError):
     def identity(cls, detail: str) -> "EvidenceAdapterError":
         return cls(detail, schema_valid=True, fresh=True, fingerprint_match=False)
 
+    @classmethod
+    def ineligible(cls, detail: str) -> "EvidenceAdapterError":
+        return cls(detail, schema_valid=True, fresh=True, fingerprint_match=True)
+
 
 def contract_failure(detail: str) -> dict[str, Any]:
     return {
@@ -84,7 +88,7 @@ def _source_refs(value: Mapping[str, Any], key: str) -> list[str]:
 def validate_contract(value: object) -> None:
     if not isinstance(value, Mapping):
         raise ContractError("contract root must be a mapping")
-    if value.get("schema_id") != "governance-pipeline-admission-contract" or value.get("schema_version") != 3:
+    if value.get("schema_id") != "governance-pipeline-admission-contract" or value.get("schema_version") != 4:
         raise ContractError("contract identity/version is invalid")
     owner = "specs/feature-tree/runtime/development-workflow-governance/governance-pipeline-observe-only/spec.md"
     if value.get("owner_story") != owner:
@@ -216,6 +220,7 @@ def validate_contract(value: object) -> None:
     named_layers = current.get("named_evidence_layers")
     if not isinstance(named_layers, Mapping) or set(named_layers) != {"portal_test", "portal_build"}:
         raise ContractError("named evidence layer mapping drifted")
+    required_named_ids: list[str] = []
     for layer, descriptor in named_layers.items():
         if (
             not isinstance(descriptor, Mapping)
@@ -225,6 +230,31 @@ def validate_contract(value: object) -> None:
             or descriptor.get("qualifying_result") != layers[layer]["qualifying_result"]
         ):
             raise ContractError(f"named evidence descriptor drifted: {layer}")
+        required_named_ids.append(str(descriptor["evidence_id"]))
+    if len(required_named_ids) != len(set(required_named_ids)):
+        raise ContractError("named evidence IDs must be unique")
+    registry_path = REPO_ROOT / str(expected_named_binding["registry_ref"])
+    if registry_path.is_symlink() or not registry_path.is_file():
+        raise ContractError("Review registry must be a regular non-symlink file")
+    try:
+        registry = yaml.safe_load(registry_path.read_text(encoding="utf-8")) or {}
+    except (OSError, UnicodeError, yaml.YAMLError) as error:
+        raise ContractError(f"Review registry could not be loaded: {error}") from error
+    catalog = registry.get("evidence") if isinstance(registry, Mapping) else None
+    if not isinstance(catalog, Mapping):
+        raise ContractError("Review registry evidence catalog missing")
+    for evidence_id in required_named_ids:
+        matches = [key for key in catalog if key == evidence_id]
+        descriptor = catalog.get(evidence_id)
+        if (
+            len(matches) != 1
+            or not isinstance(descriptor, Mapping)
+            or descriptor.get("segment") != "POST"
+            or descriptor.get("required") is not True
+        ):
+            raise ContractError(
+                f"required named evidence is not one required POST registry entry: {evidence_id}"
+            )
     expected_adapters = {
         "owner_manifest", "local_readiness", "review_consolidation", "named_evidence",
         "handoff", "human_calibration", "objective_inspect", "hotl_inspect",
@@ -322,7 +352,8 @@ def validate_named_evidence_plan_binding(
     plan: dict[str, Any],
     receipt: dict[str, Any],
     subject: Mapping[str, Any],
-    expected_owner_manifest_ref: str,
+    expected_owner_identity_ref: str,
+    expected_candidate_evidence_ref: str,
     contract: Mapping[str, Any],
     label: str = "named evidence receipt",
 ) -> dict[str, Any]:
@@ -340,9 +371,18 @@ def validate_named_evidence_plan_binding(
             raise EvidenceAdapterError.identity(
                 f"named evidence Review plan {field} mismatch"
             )
-    owner = plan.get("owner_manifest_identity")
+    owner = plan.get("owner_identity")
+    candidate = plan.get("candidate_evidence_identity")
+    if (
+        not isinstance(candidate, Mapping)
+        or not candidate.get("ref")
+        or candidate.get("ref") != expected_candidate_evidence_ref
+    ):
+        raise EvidenceAdapterError.identity(
+            "named evidence Review plan candidate identity mismatch"
+        )
     if not isinstance(owner, Mapping) or (
-        owner.get("ref") != expected_owner_manifest_ref
+        owner.get("ref") != expected_owner_identity_ref
         or owner.get("target") != binding["owner_manifest_target"]
         or owner.get("resolved_owner") != binding["owner_manifest_target"]
         or owner.get("scope") != binding["scope"]
@@ -365,6 +405,26 @@ def validate_named_evidence_plan_binding(
         raise ContractError(f"named evidence registry could not be loaded: {error}") from error
     if not isinstance(registry, dict):
         raise ContractError("named evidence registry must be a mapping")
+    plan_fingerprint = plan.get("fingerprint_receipt")
+    if not isinstance(plan_fingerprint, Mapping):
+        raise EvidenceAdapterError.identity(
+            "named evidence Review plan fingerprint identity missing"
+        )
+    if (
+        receipt.get("plan_fingerprint_ref") != plan_fingerprint.get("ref")
+        or receipt.get("plan_fingerprint_digest") != plan_fingerprint.get("digest")
+    ):
+        raise EvidenceAdapterError.identity(
+            "named evidence receipt belongs to a different exact Review plan"
+        )
+    if (
+        receipt.get("evidence_class") != "reusable"
+        or receipt.get("admission_eligible") is not True
+    ):
+        raise EvidenceAdapterError.ineligible(
+            "REVIEW.EVIDENCE_FEEDBACK_ONLY: named evidence is development feedback "
+            "and cannot satisfy governance admission"
+        )
     try:
         import review_dispatch
 
@@ -376,11 +436,11 @@ def validate_named_evidence_plan_binding(
             f"named evidence Review plan is not current: {error}"
         ) from error
     if (
-        receipt.get("plan_fingerprint_ref") != current_plan["ref"]
-        or receipt.get("plan_fingerprint_digest") != current_plan["digest"]
+        plan_fingerprint.get("ref") != current_plan["ref"]
+        or plan_fingerprint.get("digest") != current_plan["digest"]
     ):
         raise EvidenceAdapterError.identity(
-            "named evidence receipt belongs to a different exact Review plan"
+            "named evidence Review plan fingerprint is not current"
         )
     try:
         import handoff_consumer

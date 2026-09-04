@@ -89,7 +89,11 @@ def main(
     )
     parser.add_argument("--finding-owner", action="append", default=[])
     parser.add_argument("--previous-plan", default=None)
-    parser.add_argument("--context-manifest", default=None)
+    parser.add_argument("--owner-identity", default=None)
+    parser.add_argument("--candidate-evidence", default=None)
+    parser.add_argument("--human-decision-ref", default=None)
+    parser.add_argument("--admission-class", choices=("ordinary", "formal_prod"), default="ordinary")
+    parser.add_argument("--context-manifest", default=None, help=argparse.SUPPRESS)
     parser.add_argument("--incomplete-role", action="append", default=[])
     parser.add_argument("--evidence-failed", action="append", default=[])
     parser.add_argument("--cancelled", action="store_true")
@@ -107,6 +111,8 @@ def main(
             if args.out
             else None
         )
+        if args.context_manifest:
+            refuse("IDENTITY.MIGRATION_REQUIRED", "--context-manifest 已退役；使用 --owner-identity + --candidate-evidence")
         registry = yaml.safe_load(registry_path.read_text(encoding="utf-8")) or {}
         plan = build_plan(
             registry,
@@ -120,9 +126,12 @@ def main(
                 args.previous_plan, label="previous_plan", refuse=refuse
             ),
             context_manifest=_load_json(
-                args.context_manifest, label="context_manifest", refuse=refuse
+                args.owner_identity, label="owner_identity", refuse=refuse
             ),
-            context_manifest_ref=args.context_manifest,
+            context_manifest_ref=args.owner_identity,
+            candidate_evidence_ref=args.candidate_evidence,
+            human_decision_ref=args.human_decision_ref,
+            admission_class=args.admission_class,
             scope=args.scope,
             incomplete_roles=args.incomplete_role,
             failed_evidence_ids=args.evidence_failed,

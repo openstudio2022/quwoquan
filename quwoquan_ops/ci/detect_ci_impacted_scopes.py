@@ -25,9 +25,12 @@ from quwoquan_ops.cli.lib.evidence_fingerprint import (  # noqa: E402
     validate_evidence_fingerprint,
 )
 from quwoquan_ops.ci.impact_planner_core import (  # noqa: E402
+    DELIVERY_SCOPE_NAMES,
     SCOPE_NAMES,
+    build_delivery_impact_plan,
     classify_impacts,
     planner_identity,
+    validate_delivery_impact_plan,
     validate_exact_sha,
 )
 
@@ -39,6 +42,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--changed-file", action="append", default=[])
     parser.add_argument("--github-output", default="")
     parser.add_argument("--scope-receipt", default="")
+    parser.add_argument("--impact-plan", default="")
+    parser.add_argument("--validate-impact-plan", default="")
+    parser.add_argument("--expected-source-sha", default="")
+    parser.add_argument("--expected-plan-digest", default="")
+    parser.add_argument("--force-device", action="store_true")
     parser.add_argument(
         "--required-scope",
         action="append",
@@ -165,6 +173,22 @@ def write_scope_receipt(
 def main() -> int:
     args = parse_args()
     try:
+        if args.validate_impact_plan:
+            payload = json.loads(Path(args.validate_impact_plan).read_text(encoding="utf-8"))
+            validated = validate_delivery_impact_plan(
+                payload, expected_source_sha=args.expected_source_sha
+            )
+            impacted = dict(validated["scopes"])
+            if args.expected_plan_digest and validated["plan_digest"] != args.expected_plan_digest:
+                raise ValueError("Delivery impact plan digest differs from expected artifact identity")
+            if args.github_output:
+                write_github_outputs(args.github_output, impacted)
+                with Path(args.github_output).open("a", encoding="utf-8") as handle:
+                    handle.write(f"plan_digest={validated['plan_digest']}\n")
+            for key, value in impacted.items():
+                print(f"{key}={'true' if value else 'false'}")
+            print(f"plan_digest={validated['plan_digest']}")
+            return 0
         explicit_paths = bool(args.changed_file)
         if explicit_paths:
             changed_files = args.changed_file
@@ -182,12 +206,37 @@ def main() -> int:
             )
         for required_scope in args.required_scope:
             impacted[required_scope] = True
+        impact_plan = None
+        if args.impact_plan:
+            impact_plan = build_delivery_impact_plan(
+                classified["paths"],
+                source_sha=args.head_sha,
+                base_sha=args.base_sha,
+                force_device=args.force_device,
+                fail_closed_empty=True,
+            )
+            for required_scope in args.required_scope:
+                impact_plan["scopes"][required_scope] = True
+                impact_plan["states"][required_scope] = "required"
+            unsigned = dict(impact_plan)
+            unsigned.pop("plan_digest", None)
+            impact_plan["plan_digest"] = canonical_digest(unsigned)
+            plan_path = Path(args.impact_plan)
+            plan_path.parent.mkdir(parents=True, exist_ok=True)
+            plan_path.write_text(
+                json.dumps(impact_plan, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+            impacted = dict(impact_plan["scopes"])
     except Exception as exc:  # noqa: BLE001
         print(f"detect_ci_impacted_scopes: FAIL: {exc}", file=sys.stderr)
         return 1
 
     if args.github_output:
         write_github_outputs(args.github_output, impacted)
+        if impact_plan is not None:
+            with Path(args.github_output).open("a", encoding="utf-8") as handle:
+                handle.write(f"plan_digest={impact_plan['plan_digest']}\n")
     if args.scope_receipt:
         try:
             write_scope_receipt(

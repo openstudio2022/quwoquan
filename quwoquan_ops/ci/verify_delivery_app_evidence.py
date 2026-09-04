@@ -46,6 +46,7 @@ PHASE_BY_JOB = {
     "Delivery Gate — App Serial": "quwoquan_app_serial",
     "Delivery Gate — App Canonical Coverage": "quwoquan_app_coverage",
 }
+REUSABLE_RUN_CONCLUSION = "success"
 
 
 class EvidenceError(RuntimeError):
@@ -68,6 +69,55 @@ def _seconds(job: dict[str, object]) -> int:
     return seconds
 
 
+def _run_attempt(run: dict[str, object]) -> int:
+    try:
+        return int(run.get("run_attempt") or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _select_reusable_run(runs: list[dict[str, object]]) -> dict[str, object]:
+    if not runs:
+        raise _fail("RUN_NOT_FOUND", "no push Delivery run matched the source SHA")
+
+    run_ids = {run.get("id") for run in runs}
+    if None in run_ids:
+        raise _fail("RUN_IDENTITY_MISMATCH", "matched run ID is missing")
+
+    reusable = [
+        run
+        for run in runs
+        if run.get("status") == "completed"
+        and run.get("conclusion") == REUSABLE_RUN_CONCLUSION
+    ]
+    if reusable:
+        return max(reusable, key=_run_attempt)
+
+    incomplete_states = sorted(
+        {
+            str(run.get("status") or "unknown")
+            for run in runs
+            if run.get("status") != "completed"
+        }
+    )
+    terminal_conclusions = sorted(
+        {
+            str(run.get("conclusion") or "unknown")
+            for run in runs
+            if run.get("status") == "completed"
+        }
+    )
+    if incomplete_states:
+        raise _fail(
+            "RUN_EVIDENCE_PENDING",
+            f"no completed successful push Delivery run; statuses={incomplete_states or ['unknown']}",
+        )
+    raise _fail(
+        "RUN_EVIDENCE_UNAVAILABLE",
+        f"no completed successful push Delivery run; conclusions={terminal_conclusions or ['unknown']}",
+    )
+
+
 def verify_app_evidence(
     *,
     runs: list[dict[str, object]],
@@ -84,12 +134,7 @@ def verify_app_evidence(
     if observed > deadline:
         raise _fail("EVIDENCE_DEADLINE_EXCEEDED", "observation occurred after deadline")
 
-    run_ids = {run.get("id") for run in runs}
-    if not runs:
-        raise _fail("RUN_NOT_FOUND", "no push Delivery run matched the source SHA")
-    if len(run_ids) != 1 or None in run_ids:
-        raise _fail("RUN_AMBIGUOUS", f"matched {len(run_ids)} distinct run IDs")
-    run = max(runs, key=lambda item: int(item.get("run_attempt") or 0))
+    run = _select_reusable_run(runs)
     identity = {
         "repository": (run.get("repository") or {}).get("full_name")
         if isinstance(run.get("repository"), dict)
@@ -108,12 +153,7 @@ def verify_app_evidence(
     }
     if identity != expected_identity:
         raise _fail("RUN_IDENTITY_MISMATCH", f"expected {expected_identity}, got {identity}")
-    if run.get("status") != "completed":
-        raise _fail(
-            "RUN_NOT_COMPLETED",
-            f"status={run.get('status')}",
-        )
-    attempt = int(run.get("run_attempt") or 0)
+    attempt = _run_attempt(run)
     if attempt <= 0:
         raise _fail("RUN_IDENTITY_MISMATCH", "run attempt is missing")
 
@@ -275,26 +315,29 @@ def main() -> int:
                     },
                     deadline=deadline_at,
                 )
-                run_ids = {run.get("id") for run in runs if isinstance(run, dict)}
-                if len(run_ids) > 1:
-                    jobs = []
-                    break
-                if len(run_ids) == 1:
-                    _, all_jobs, job_stats = load_run_and_jobs(
+                request_count = int(run_stats["requestCount"] or 0)
+                retry_count = int(run_stats["retryCount"] or 0)
+                last_stats = run_stats
+                jobs = []
+                reusable_runs = [
+                    run
+                    for run in runs
+                    if isinstance(run, dict)
+                    and run.get("status") == "completed"
+                    and run.get("conclusion") == REUSABLE_RUN_CONCLUSION
+                ]
+                if reusable_runs:
+                    selected = max(reusable_runs, key=_run_attempt)
+                    selected_run, all_jobs, job_stats = load_run_and_jobs(
                         args.repository,
-                        str(next(iter(run_ids))),
+                        str(selected["id"]),
                         args.token,
                         deadline=deadline_at,
                     )
-                    authority_stats = {
-                        "requestCount": int(run_stats["requestCount"] or 0)
-                        + int(job_stats["requestCount"] or 0),
-                        "retryCount": int(run_stats["retryCount"] or 0)
-                        + int(job_stats["retryCount"] or 0),
-                        "lastHttpStatus": job_stats["lastHttpStatus"],
-                        "rateLimitRemaining": job_stats.get("rateLimitRemaining"),
-                        "rateLimitResetEpoch": job_stats.get("rateLimitResetEpoch"),
-                    }
+                    request_count += int(job_stats["requestCount"] or 0)
+                    retry_count += int(job_stats["retryCount"] or 0)
+                    last_stats = job_stats
+                    runs = [selected_run]
                     jobs = [
                         job
                         for job in all_jobs
@@ -303,15 +346,28 @@ def main() -> int:
                             "Delivery Gate — App Tests Shard "
                         )
                     ]
-                    latest = max(
-                        (run for run in runs if isinstance(run, dict)),
-                        key=lambda item: int(item.get("run_attempt") or 0),
-                    )
-                    if latest.get("status") == "completed":
-                        break
+                    authority_stats = {
+                        "requestCount": request_count,
+                        "retryCount": retry_count,
+                        "lastHttpStatus": last_stats["lastHttpStatus"],
+                        "rateLimitRemaining": last_stats.get("rateLimitRemaining"),
+                        "rateLimitResetEpoch": last_stats.get("rateLimitResetEpoch"),
+                    }
+                    break
+                authority_stats = {
+                    "requestCount": request_count,
+                    "retryCount": retry_count,
+                    "lastHttpStatus": last_stats["lastHttpStatus"],
+                    "rateLimitRemaining": last_stats.get("rateLimitRemaining"),
+                    "rateLimitResetEpoch": last_stats.get("rateLimitResetEpoch"),
+                }
+                if runs and all(
+                    isinstance(run, dict) and run.get("status") == "completed"
+                    for run in runs
+                ):
+                    break
                 remaining = (deadline_at - datetime.now(timezone.utc)).total_seconds()
                 if remaining <= 0:
-                    jobs = []
                     break
                 time.sleep(min(15.0, remaining))
         observed_at = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")

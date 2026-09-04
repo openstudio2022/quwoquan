@@ -261,6 +261,7 @@ def test_delivery_gate_packages_the_three_envs_as_parallel_siblings() -> None:
 
     assert "name: Delivery Gate — Service Packaging (${{ matrix.packaging_env }})" in job
     assert "fail-fast: false" in job
+    assert "max-parallel: 1" in job
     assert "packaging_env: [alpha, beta, gamma]" in job
     assert "QWQ_PACKAGING_ENVS: ${{ matrix.packaging_env }}" in job
     assert "runs-on: [self-hosted, macOS, ARM64]" in job

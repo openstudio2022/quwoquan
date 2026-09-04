@@ -11,7 +11,6 @@ import (
 
 	controlplanepersistence "quwoquan_service/internal/platform/controlplane/persistence"
 	"quwoquan_service/internal/platform/pgoutbox"
-	runtimemessaging "quwoquan_service/runtime/messaging"
 	"quwoquan_service/runtime/servicekit"
 	accountenforcementapp "quwoquan_service/services/product-ops-service/internal/product_ops/account_enforcement_case/application"
 	accountenforcementobservability "quwoquan_service/services/product-ops-service/internal/product_ops/account_enforcement_case/infrastructure/observability"
@@ -179,22 +178,29 @@ func assembleProductOpsDomain(asm *servicekit.Assembly, cfg *config) error {
 	if err != nil {
 		return fmt.Errorf("Experiment policy publisher invalid: %w", err)
 	}
-	for _, outbox := range []struct {
-		table     string
-		publisher runtimemessaging.EventPublisher
-	}{
-		{table: "product_ops_outbox", publisher: experimentPublisher},
-		{table: "product_control_plane_outbox", publisher: publisher},
-		{table: "premium_pool_entry_outbox", publisher: publisher},
-	} {
-		dispatcher, err := pgoutbox.NewDispatcher(
-			asm.PostgresPool, outbox.publisher, outbox.table,
-		)
-		if err != nil {
-			return fmt.Errorf("%s dispatcher invalid: %w", outbox.table, err)
-		}
-		asm.Workers.Add(dispatcher.Run)
+	experimentDispatcher, err := pgoutbox.NewDispatcher(
+		asm.PostgresPool, experimentPublisher, "product_ops_outbox",
+	)
+	if err != nil {
+		return fmt.Errorf("product_ops_outbox dispatcher invalid: %w", err)
 	}
+	asm.Workers.Add(experimentDispatcher.Run)
+
+	controlPlaneDispatcher, err := pgoutbox.NewDispatcher(
+		asm.PostgresPool, publisher, "product_control_plane_outbox",
+	)
+	if err != nil {
+		return fmt.Errorf("product_control_plane_outbox dispatcher invalid: %w", err)
+	}
+	asm.Workers.Add(controlPlaneDispatcher.Run)
+
+	premiumPoolDispatcher, err := pgoutbox.NewDispatcher(
+		asm.PostgresPool, publisher, "premium_pool_entry_outbox",
+	)
+	if err != nil {
+		return fmt.Errorf("premium_pool_entry_outbox dispatcher invalid: %w", err)
+	}
+	asm.Workers.Add(premiumPoolDispatcher.Run)
 
 	mongoVisitStore := visitpersistence.NewMongoVisitStore(asm.MongoDB)
 	if err := mongoVisitStore.EnsureIndexes(ctx); err != nil {
@@ -299,6 +305,15 @@ type eventRepositoryComposition struct {
 // assembleEventRepository 按 generated runtime.log.sink adapter 装配事件仓库。
 // 协议与契约证据由 local_contract 测试直接组装 in-memory store；生产二进制
 // 不承载任何 Memory composition，缺后端能力时 fail-closed。
+
+func newElasticsearchEventLogStore(
+	config telemetrypersistence.ElasticsearchConfig,
+	credential string,
+) (*telemetrypersistence.ElasticsearchEventLogStore, error) {
+	config.APIKey = credential
+	return telemetrypersistence.NewElasticsearchEventLogStore(config)
+}
+
 func assembleEventRepository(
 	asm *servicekit.Assembly, cfg *config,
 ) (eventRepositoryComposition, error) {
@@ -307,16 +322,17 @@ func assembleEventRepository(
 			"runtime.log.sink adapter is unsupported: %s", cfg.LogSinkAdapterID,
 		)
 	}
-	store, err := telemetrypersistence.NewElasticsearchEventLogStore(
-		telemetrypersistence.ElasticsearchConfig{
-			Endpoint:               cfg.Elasticsearch.Endpoint,
-			APIKey:                 cfg.Elasticsearch.APIKey,
-			RawIndex:               cfg.Elasticsearch.RawIndex,
-			StartupDiagnosticIndex: cfg.Elasticsearch.StartupDiagnosticIndex,
-			RuntimeLogIndex:        cfg.Elasticsearch.RuntimeLogIndex,
-			AggregateIndex:         cfg.Elasticsearch.AggregateIndex,
-			Timeout:                time.Duration(cfg.Elasticsearch.TimeoutMS) * time.Millisecond,
-		},
+	elasticsearchConfig := telemetrypersistence.ElasticsearchConfig{
+		Endpoint:               cfg.Elasticsearch.Endpoint,
+		RawIndex:               cfg.Elasticsearch.RawIndex,
+		StartupDiagnosticIndex: cfg.Elasticsearch.StartupDiagnosticIndex,
+		RuntimeLogIndex:        cfg.Elasticsearch.RuntimeLogIndex,
+		AggregateIndex:         cfg.Elasticsearch.AggregateIndex,
+		Timeout:                time.Duration(cfg.Elasticsearch.TimeoutMS) * time.Millisecond,
+	}
+	store, err := newElasticsearchEventLogStore(
+		elasticsearchConfig,
+		cfg.Elasticsearch.APIKey,
 	)
 	if err != nil {
 		return eventRepositoryComposition{}, fmt.Errorf(

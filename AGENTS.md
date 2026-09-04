@@ -6,9 +6,9 @@
 
 顺序固定为：根 `AGENTS.md` → `.agents/skills/*/SKILL.md` metadata 选择唯一 Workflow Skill（简单问答可跳过）→ Skill body → PRE 确定 exact target → 最近子树 `AGENTS.md` → exact contexts/tests。已知路径可先读子树规则，但子树不参与路由；不建中央关键词表、resolver 或第二流程正文。
 
-`explore`、`plan-next` 和 `continue` 的只读恢复 best-effort 运行 `make feature-context TARGET=<exact-path>`：唯一 owner 时消费 compact immutable exact ref；无 owner、多 owner或解析失败时记录 typed 结果，按当前 Git 快照继续只读且不得据此 mutation。`prd`、`design`、`dev` 写入前必须持有唯一 current ref，否则 `GATE_BLOCK`；显式或准出 Review 原样复用该 ref。expanded 仅供人工诊断。
+`explore`、`plan-next` 和 `continue` 的只读恢复 best-effort 运行 `make feature-context TARGET=<exact-path>`：唯一 owner 时消费 compact immutable exact ref；无 owner、多 owner或解析失败时记录 typed 结果，按当前 Git 快照继续只读且不得据此 mutation。`prd`、`design`、`dev` 写入前必须持有唯一 PRE owner identity ref，否则 `GATE_BLOCK`；显式或准出 Review 以该 ref 为 predecessor，并为 exact changed paths 生成 current candidate evidence ref。expanded 仅供人工诊断。
 
-Feature Tree 与 owner 算法见 [`specs/feature-tree/README.md`](specs/feature-tree/README.md)。各层只拥有本层 Journey/DOM/SIT/GWT 与设计决定；不建中央 backlog、registry、第二台账或完成日志。
+Feature Tree 与 owner 算法见 [`specs/feature-tree/README.md`](specs/feature-tree/README.md)。各层只拥有本层 Journey/DOM/SIT/GWT 与设计决定；不建中央自然语言 resolver、第二流程正文、backlog 或完成台账，版本化 Human/Review registry 只在各自 owner 内拥有映射。
 
 ## 工作流选择
 
@@ -32,12 +32,14 @@ Feature Tree 与 owner 算法见 [`specs/feature-tree/README.md`](specs/feature-
 
 - 验证与影响面匹配，分开报告源码/契约、本地测试、编译/打包/安装/启动、runtime health、release/import/readback 和真实设备/UAT；上游 PASS 不代表下游闭环。
 - 任一 required 证据失败时保留首个 typed blocker，不用旧 receipt、旧 plan 或旧指纹冒充当前完成。
-- 开发期 POST 默认零 Reviewer，只报告命名 evidence；仅显式 `/review` 或准出（lane→`dev1.0` PR、handoff、release）派审，原样复用 owner manifest，先去重 evidence，再按主审加最多一名专审执行；Reviewer 不补跑 gate。
+- 开发期 POST 默认零 Reviewer，只报告命名 evidence；仅显式 `/review` 或准出（lane→`dev1.0` PR、handoff、release）派审，携带 PRE owner identity + POST candidate predecessor，先去重 evidence，再按主审加最多一名专审执行；Reviewer 不补跑 gate。
 - 无法证明时返回 `GATE_BLOCK`。失败门禁不包装为成功，也不因工作树其他红项隐藏本任务结果。
 
 ## 共享工作树与安全
 
 - 脏工作树是常态。修改前检查 HEAD/status、目标路径 diff、untracked 与活跃 writer；只编辑本任务所有的字节，禁止回滚、覆盖、清理、kill 或隔离其他 owner 的成果。
+- 一 worktree 一 Cursor 工作区。工作区根必须是当前固定 lane 目录或唯一 `integration/`；禁止把项目容器根、bare `quwoquan.git/` 或多个 worktree 作为单个/多根 workspace 打开。
+- `lane/engineering` 拥有开发→发布态工程面（Agent/Skill、review/handoff、Feature Tree、CI/CD、gate/hook、branch/worktree/lane governance、local readiness）；`lane/ops` 只拥有发布后运行态（stackctl、环境 manifests、observability、runbook、migration、Portal、hosted authority/provider conformance）。路径判定只读 `lane_ownership.yaml`。
 - 并行执行独立读取、测试与不同 owner 的修改；同一环境变更、共享生成物和共享锁串行。
 - `.qwq_output/` 只放可删除且可从版本控制真相源重建的运行输出。源码树禁止 `__pycache__/`、`*.pyc`、`*.pyo`、`.pytest_cache/`；缓存重定向到 `.qwq_output/env/repo/local/**`。
 - 不泄露 secret/PII；不执行超出用户范围的删除、发布、外部写入或不可逆动作。
@@ -46,6 +48,7 @@ Feature Tree 与 owner 算法见 [`specs/feature-tree/README.md`](specs/feature-
 
 - 本地与远端只允许 `dev1.0`、`main` 与六条声明的长期 `lane/*` 分支；日常开发只经 `lane/* -> dev1.0` PR 合入集成分支，唯一发布 PR 边为 `dev1.0 -> main`。Prod source 必须是可达 `main` 的精确 SHA。
 - 新建 linked worktree 或再次 clone 每次都须先取得用户明确授权，并以 `QWQ_WORKTREE_AUTHZ="<授权理由>" <command>` 执行。clone 后先运行 `make install-hooks`。
+- `dev1.0` 与 `main` 是本地只读分支，不得本地提交；唯一 `integration/` 只承担集成检查。日常提交必须位于同名 lane worktree，路径与分支由 `worktree_policy.yaml` 交叉验证。
 - 只有用户明确要求时才创建提交；提交按 `commit` Skill 执行，不用 `--no-verify` 作为常规通道。
 
 ## 沟通

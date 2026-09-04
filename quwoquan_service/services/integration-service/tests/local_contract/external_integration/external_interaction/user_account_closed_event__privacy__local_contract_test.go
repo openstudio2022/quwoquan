@@ -66,7 +66,7 @@ func TestIntegrationUserAccountClosedConsumerInvokesOwningFacetAndACKs(t *testin
 	consumer, err := streamadapter.NewUserAccountClosedConsumer(
 		transport,
 		projection,
-		integrationAccountClosureFailureStore{},
+		&integrationAccountClosureFailureStore{},
 		"integration-account-closure-contract",
 		nil,
 		config,
@@ -130,9 +130,13 @@ func (store *integrationAccountClosureProjectionStore) ApplyUserAccountClosed(
 	return application.UserAccountClosedProjectionResult{DeletedRequests: 1}, nil
 }
 
-type integrationAccountClosureFailureStore struct{}
+type integrationAccountClosureFailureStore struct {
+	attempts     int64
+	deadLettered bool
+	clearCalls   int
+}
 
-func (integrationAccountClosureFailureStore) RecordUserAccountClosedFailure(
+func (store *integrationAccountClosureFailureStore) RecordUserAccountClosedFailure(
 	context.Context,
 	string,
 	string,
@@ -140,29 +144,98 @@ func (integrationAccountClosureFailureStore) RecordUserAccountClosedFailure(
 	string,
 	error,
 ) (int64, error) {
-	return 1, nil
+	store.attempts++
+	return store.attempts, nil
 }
 
-func (integrationAccountClosureFailureStore) IsUserAccountClosedDeadLettered(
+func (store *integrationAccountClosureFailureStore) IsUserAccountClosedDeadLettered(
 	context.Context,
 	string,
 	string,
 ) (bool, error) {
-	return false, nil
+	return store.deadLettered, nil
 }
 
-func (integrationAccountClosureFailureStore) MarkUserAccountClosedDeadLettered(
+func (store *integrationAccountClosureFailureStore) MarkUserAccountClosedDeadLettered(
 	context.Context,
 	string,
 	string,
 ) error {
+	store.deadLettered = true
 	return nil
 }
 
-func (integrationAccountClosureFailureStore) ClearUserAccountClosedFailure(
+func (store *integrationAccountClosureFailureStore) ClearUserAccountClosedFailure(
 	context.Context,
 	string,
 	string,
 ) error {
+	store.deadLettered = false
+	store.clearCalls++
 	return nil
+}
+
+func TestIntegrationUserAccountClosedConsumerDeadLettersThenReleasesForRecovery(t *testing.T) {
+	ctx := t.Context()
+	client := rtredis.NewMemoryClient()
+	transport, err := runtimemessaging.NewRedisMessageTransport(client, client)
+	if err != nil {
+		t.Fatal(err)
+	}
+	projectionStore := &integrationAccountClosureProjectionStore{}
+	projection, err := application.NewUserAccountClosedProjection(projectionStore)
+	if err != nil {
+		t.Fatal(err)
+	}
+	failureStore := &integrationAccountClosureFailureStore{}
+	config := streamadapter.DefaultUserAccountClosedConsumerConfig()
+	config.MinIdle = 0
+	config.MaxAttempts = 1
+	consumer, err := streamadapter.NewUserAccountClosedConsumer(
+		transport,
+		projection,
+		failureStore,
+		"integration-account-closure-dlq-contract",
+		nil,
+		config,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	messageID, err := client.XAdd(ctx, streamadapter.UserAccountEventStream, map[string]string{
+		"eventId":        "event-invalid-local",
+		"eventName":      application.UserAccountClosedEventName,
+		"accountId":      "account-invalid-local",
+		"accountVersion": "invalid",
+		"payload":        `{}`,
+		"occurredAt":     time.Now().UTC().Format(time.RFC3339Nano),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	processed, err := consumer.ProcessOnce(ctx)
+	if err != nil || processed != 1 {
+		t.Fatalf("dead-letter poison event: processed=%d err=%v", processed, err)
+	}
+	if !failureStore.deadLettered || failureStore.attempts != 1 {
+		t.Fatalf("failure state=%+v", failureStore)
+	}
+	processed, err = consumer.ProcessOnce(ctx)
+	if err != nil || processed != 1 || projectionStore.calls != 0 {
+		t.Fatalf(
+			"held dead-letter replay: processed=%d projectionCalls=%d err=%v",
+			processed,
+			projectionStore.calls,
+			err,
+		)
+	}
+	if err := consumer.RecoverDeadLetter(ctx, ""); err == nil {
+		t.Fatal("empty recovery identity must fail closed")
+	}
+	if err := consumer.RecoverDeadLetter(ctx, messageID); err != nil {
+		t.Fatalf("release dead-letter: %v", err)
+	}
+	if failureStore.deadLettered || failureStore.clearCalls != 1 {
+		t.Fatalf("released failure state=%+v", failureStore)
+	}
 }

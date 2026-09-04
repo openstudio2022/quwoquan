@@ -11,11 +11,16 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
-from quwoquan_ops.cli.lib.common import relpath, utc_now
-from quwoquan_ops.cli.lib.output_paths import repo_local_dir
+from quwoquan_ops.cli.lib.common import relpath
+from quwoquan_ops.cli.lib.host_locks import (
+    current_lock_owner,
+    local_runtime_lock_path,
+    parse_holder_record,
+)
 
 
 PortProbe = Callable[[str, int], bool]
+LOCAL_RUNTIME_RESOURCE_GROUP = "workstation-commercial-runtime"
 
 
 class LocalOperationLockBusyError(RuntimeError):
@@ -29,7 +34,12 @@ class LocalOperationLockBusyError(RuntimeError):
 
 
 def local_runtime_operation_lock_path() -> Path:
-    return repo_local_dir("local-runtime") / ".stackctl-operation.lock"
+    """Return the host-scoped lock shared by all canonical local targets."""
+    return local_runtime_lock_path(LOCAL_RUNTIME_RESOURCE_GROUP)
+
+
+def _owner_record(**fields: str) -> str:
+    return current_lock_owner(worktree_path=Path(__file__)).record(fields=fields)
 
 
 @contextlib.contextmanager
@@ -43,7 +53,7 @@ def local_stack_operation_lock(
         raise ValueError(f"local stack operation lock does not support {target!r}")
     lock_path = lock_path or local_runtime_operation_lock_path()
     lock_path.parent.mkdir(parents=True, exist_ok=True)
-    owner = f"pid={os.getpid()} target={target} startedAt={utc_now()}"
+    owner = _owner_record(target=target)
     with lock_path.open("a+", encoding="utf-8") as handle:
         try:
             fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -79,7 +89,7 @@ def global_local_operation_lock(
 ) -> Any:
     lock_path = lock_path or local_runtime_operation_lock_path()
     lock_path.parent.mkdir(parents=True, exist_ok=True)
-    owner = f"pid={os.getpid()} scope={scope} mode=exclusive startedAt={utc_now()}"
+    owner = _owner_record(scope=scope, mode="exclusive")
     with lock_path.open("a+", encoding="utf-8") as handle:
         try:
             fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -239,9 +249,10 @@ def acquire_local_runtime_use_lock(
         raise LocalOperationLockBusyError(
             f"local runtime operation is already running: {holder}"
         ) from error
-    record = (
-        f"pid={os.getpid()} target={target.strip()} purpose={purpose.strip()} "
-        f"startedAt={utc_now()} lease={uuid.uuid4().hex}"
+    record = _owner_record(
+        target=target.strip(),
+        purpose=purpose.strip(),
+        lease=uuid.uuid4().hex,
     )
     # 死持有者的记录顺带回收：硬杀的持有者不会走 close()，其记录会永久留在清单里，
     # 让后来的阻塞诊断指向一个不存在的进程。回收与追加一起串行在同一互斥区内。
@@ -255,6 +266,23 @@ def acquire_local_runtime_use_lock(
         handle.flush()
         os.fsync(handle.fileno())
     return LocalRuntimeUseLock(path, handle, record)
+
+
+def local_runtime_lock_holders(
+    *, lock_path: Path | None = None
+) -> list[dict[str, str]]:
+    """Read live host-level runtime holders for status diagnostics."""
+    path = lock_path or local_runtime_operation_lock_path()
+    try:
+        records = _live_holder_records(path.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        records = []
+    except OSError:
+        records = []
+    return [
+        {"path": str(path), "record": record, **parse_holder_record(record)}
+        for record in records
+    ]
 
 
 def _tcp_port_is_open(host: str, port: int) -> bool:

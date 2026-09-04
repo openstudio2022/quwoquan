@@ -108,10 +108,20 @@ def verify() -> list[str]:
             "Reclaim closed pull-request caches",
             "refs/pull/${{ github.event.pull_request.number }}/merge",
             "actions/caches/${cache_id}",
-            "runs-on: [self-hosted, macOS, ARM64]",
+            "runs-on: ubuntu-latest",
         ):
             if token not in lifecycle:
                 issues.append(f"artifact lifecycle workflow missing {token!r}")
+        lifecycle_runners = re.findall(
+            r"^\s*runs-on:\s*(.+?)\s*$", lifecycle, re.MULTILINE
+        )
+        if any(
+            all(label in runner.casefold() for label in ("self-hosted", "macos", "arm64"))
+            for runner in lifecycle_runners
+        ):
+            issues.append(
+                "artifact lifecycle workflow must not use a self-hosted macOS ARM64 runner"
+            )
         triggered_names = {
             item.strip()
             for item in re.findall(r"^\s+-\s+(.+?)\s*$", lifecycle, re.MULTILINE)

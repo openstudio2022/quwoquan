@@ -13,11 +13,12 @@ import (
 	"strings"
 	"sync"
 
+	humanauthoritygenerated "quwoquan_service/control-plane/platform-ops/generated/platform_ops/human_authority"
+	authorityapp "quwoquan_service/control-plane/platform-ops/internal/platform_ops/human_authority/application"
+	"quwoquan_service/control-plane/platform-ops/internal/platform_ops/human_authority/domain/model"
 	"quwoquan_service/control-plane/platform-ops/internal/platform_ops/human_authority/domain/ports"
 	"time"
 
-	authorityapp "quwoquan_service/control-plane/platform-ops/internal/platform_ops/human_authority/application"
-	"quwoquan_service/control-plane/platform-ops/internal/platform_ops/human_authority/domain/model"
 	rtauth "quwoquan_service/runtime/auth"
 	rterr "quwoquan_service/runtime/errors"
 )
@@ -472,59 +473,32 @@ func writeJSON(w http.ResponseWriter, status int, value any) {
 	_ = json.NewEncoder(w).Encode(value)
 }
 func writeError(w http.ResponseWriter, r *http.Request, err error) {
-	status := http.StatusInternalServerError
-	kind := rterr.KindSystem
-	reason := "human_authority_storage_failed"
-	message := "人工授权记录保存失败"
-	recovery := "retry"
+	debug := "human authority: unknown error"
+	if err != nil {
+		debug = err.Error()
+	}
+	if wrapped := new(wrappedHTTPError); errors.As(err, wrapped) {
+		rterr.WriteHTTPError(w, humanauthoritygenerated.AppErrorFromHumanAuthorityUnauthorized(wrapped.debug), rterr.HTTPWriteOptionsFromRequest(r))
+		return
+	}
+	var appErr *rterr.AppError
 	switch {
 	case errors.Is(err, model.ErrWrongRole):
-		status = http.StatusUnauthorized
-		kind = rterr.KindUser
-		reason = "human_authority_unauthorized"
-		message = "人工授权身份未授权"
-		recovery = "escalate"
+		appErr = humanauthoritygenerated.AppErrorFromHumanAuthorityWrongRole(debug)
 	case errors.Is(err, model.ErrInvalid):
-		status = http.StatusBadRequest
-		kind = rterr.KindUser
-		reason = "human_authority_invalid"
-		message = "人工授权请求无效"
-		recovery = "surface"
+		appErr = humanauthoritygenerated.AppErrorFromHumanAuthorityInvalid(debug)
 	case errors.Is(err, model.ErrNotFound):
-		status = http.StatusNotFound
-		kind = rterr.KindUser
-		reason = "human_authority_not_found"
-		message = "人工授权记录不存在"
-		recovery = "surface"
+		appErr = humanauthoritygenerated.AppErrorFromHumanAuthorityNotFound(debug)
 	case errors.Is(err, model.ErrConflict), errors.Is(err, model.ErrRoundsUnsealed), errors.Is(err, model.ErrReceiptMismatch), errors.Is(err, model.ErrReceiptExpired):
-		status = http.StatusConflict
-		kind = rterr.KindUser
-		reason = "human_authority_conflict"
-		message = "人工授权状态冲突"
-		recovery = "surface"
+		appErr = humanauthoritygenerated.AppErrorFromHumanAuthorityConflict(debug)
 	case errors.Is(err, model.ErrHardVeto):
-		status = http.StatusUnprocessableEntity
-		kind = rterr.KindUser
-		reason = "human_authority_hard_veto"
-		message = "硬否决条件未通过"
-		recovery = "surface"
+		appErr = humanauthoritygenerated.AppErrorFromHumanAuthorityHardVeto(debug)
 	case errors.Is(err, model.ErrSoD):
-		status = http.StatusUnprocessableEntity
-		kind = rterr.KindUser
-		reason = "human_authority_sod_failed"
-		message = "职责分离要求未满足"
-		recovery = "escalate"
+		appErr = humanauthoritygenerated.AppErrorFromHumanAuthoritySodFailed(debug)
 	case errors.Is(err, model.ErrEvidenceExpired):
-		status = http.StatusUnprocessableEntity
-		kind = rterr.KindUser
-		reason = "human_authority_evidence_expired"
-		message = "人工证据已过期"
-		recovery = "surface"
+		appErr = humanauthoritygenerated.AppErrorFromHumanAuthorityEvidenceExpired(debug)
+	default:
+		appErr = humanauthoritygenerated.AppErrorFromHumanAuthorityStorageFailed(debug)
 	}
-	debug := reason
-	if wrapped := new(wrappedHTTPError); errors.As(err, wrapped) {
-		debug = wrapped.debug
-	}
-	appErr := rterr.NewAppError(rterr.NewCode(rterr.ModuleOps, kind, reason), message, debug).WithMetadata(reason, status).WithRecoveryDirective(recovery, "inlineCard", 0)
 	rterr.WriteHTTPError(w, appErr, rterr.HTTPWriteOptionsFromRequest(r))
 }

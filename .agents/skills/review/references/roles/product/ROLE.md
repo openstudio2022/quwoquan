@@ -13,7 +13,7 @@
 
 ## 证据边界
 
-只消费 Review plan 的 canonical contexts、owner manifest 与 changed paths；不在角色中复制树结构规则或验收正文。
+只消费 Review plan 的 canonical contexts、PRE owner identity、candidate evidence 与 changed paths；不在角色中复制树结构规则或验收正文。
 
 ## 已知盲区
 

@@ -15,7 +15,21 @@ APP_TEST_ROOT = ROOT / "quwoquan_app" / "test" / "local_contract"
 
 DEFAULT_FLUTTER_CAP = 40
 MIN_FLUTTER_CAP = 24
-PYTEST_CAP = 80
+
+# L0 pytest selection uses a versioned, configured estimate. These values are
+# deliberately conservative planning inputs, not observed p95 measurements.
+PYTEST_ESTIMATE_SCHEMA = "commit-gate-pytest-estimate-v1"
+PYTEST_BUDGET_SECONDS = 120
+PYTEST_CAP = 80  # Defensive last resort; duration is the primary admission rule.
+DEFAULT_PYTEST_FILE_ESTIMATE_SECONDS = 12
+PYTEST_FILE_ESTIMATE_SECONDS_BY_PREFIX = (
+    ("quwoquan_ops/tests/local_contract/ci/", 18),
+    ("quwoquan_ops/tests/local_contract/gate/", 18),
+    ("quwoquan_ops/tests/local_contract/environment/", 18),
+    ("quwoquan_ops/tests/local_contract/release/", 18),
+    ("quwoquan_ops/tests/local_contract/stackctl/", 18),
+    ("quwoquan_data/tests/local_contract/", 15),
+)
 
 DATA_LOCAL_CONTRACT_ROOT = "quwoquan_data/tests/local_contract"
 
@@ -60,6 +74,14 @@ PAGEFLIP_PREFIXES = (
     "quwoquan_app/lib/service/content_service/content/post/presentation/article_reader/pageflip/",
     "quwoquan_app/test/local_contract/design_system/pageflip/",
     "quwoquan_app/test/local_contract/service/content_service/content/post/works_image_book_pageflip_journey__local_contract_test.dart",
+)
+
+# 运行矩阵是按需/准出治理说明，不进入普通 commit 的 staged impact hard gate。
+# 它仍由显式 verify-agent-context-budget 和聚焦 local_contract 校验。
+NON_COMMIT_GATE_DOCUMENTS = frozenset(
+    {
+        "specs/feature-tree/runtime/development-workflow-governance/design.md",
+    }
 )
 
 
@@ -135,6 +157,8 @@ def classify(paths: list[str]) -> dict[str, bool]:
         "has_app_uat_widget_keys": False,
     }
     for path in paths:
+        if path in NON_COMMIT_GATE_DOCUMENTS:
+            continue
         if path.startswith("quwoquan_service/"):
             flags["has_service"] = True
             if "/contracts/" in path or path.startswith(
@@ -291,14 +315,12 @@ def select_go_services(paths: list[str]) -> list[str]:
     return services
 
 
-def select_pytest_paths(paths: list[str]) -> tuple[list[str], list[str]]:
-    """返回 (本地跑的测试路径, 交给 Delivery Gate 的 data 全域回归)。
+def _select_pytest_targets(paths: list[str]) -> dict[str, object]:
+    """Build the versioned L0 pytest admission decision.
 
-    第二个返回值不是可选的诊断信息：commit gate 的硬顶是 15 分钟而 data
-    `local_contract` 全量约 21 分钟，横切实现面（`verify/`、`cli.py`、
-    `content/review/`、`content/templates/`）的影响面就是全域，本地无论怎么选都
-    覆盖不全。把它登记成 deferred 而不是选 80 条了事，是为了让「本地绿」不被读成
-    「data 全域绿」——后者只有 Delivery Gate 的四片能给。
+    Directory suites are always deferred to canonical scoped/Delivery checks.
+    File targets are admitted by a conservative configured duration estimate;
+    the estimate is explanatory planning data and is not an observed p95.
     """
     selected: list[str] = []
     seen: set[str] = set()
@@ -314,7 +336,9 @@ def select_pytest_paths(paths: list[str]) -> tuple[list[str], list[str]]:
         ("quwoquan_ops/hooks/post-commit", worktree_lifecycle_tests),
         ("quwoquan_ops/hooks/run_install_hooks.sh", worktree_lifecycle_tests),
         ("quwoquan_ops/cli/lib/local_worktree_inventory.py", worktree_lifecycle_tests),
+        ("quwoquan_ops/cli/lane_worktree_commands.py", worktree_lifecycle_tests),
         ("quwoquan_ops/policies/worktree_policy.yaml", worktree_lifecycle_tests),
+        ("quwoquan_ops/policies/lane_ownership.yaml", worktree_lifecycle_tests),
         (
             "quwoquan_ops/gate/lib/process_group_deadline.py",
             (
@@ -480,7 +504,7 @@ def select_pytest_paths(paths: list[str]) -> tuple[list[str], list[str]]:
             ("quwoquan_data/tests/local_contract/filter_catalog",),
         ),
     )
-    for path in paths:
+    for path in sorted(dict.fromkeys(paths)):
         for root in (
             "quwoquan_data/tests/local_contract",
             "quwoquan_ops/tests/local_contract",
@@ -499,27 +523,130 @@ def select_pytest_paths(paths: list[str]) -> tuple[list[str], list[str]]:
         for source_prefix, test_targets in source_mappings:
             if path.startswith(source_prefix):
                 for test_target in test_targets:
-                    if test_target in seen or not (ROOT / test_target).exists():
+                    target_path = ROOT / test_target
+                    if test_target in seen or not target_path.exists():
                         continue
-                    seen.add(test_target)
-                    selected.append(test_target)
+                    # Exact file mappings stay L0 candidates. Broad directory
+                    # mappings are explicit deferred work before budgeting.
+                    if target_path.is_dir():
+                        if test_target not in deferred:
+                            deferred.append(test_target)
+                    else:
+                        seen.add(test_target)
+                        selected.append(test_target)
                 break
-    if len(selected) > PYTEST_CAP:
-        deferred.extend(selected[PYTEST_CAP:])
-    return selected[:PYTEST_CAP], deferred
+    def file_estimate_seconds(target: str) -> int:
+        for prefix, seconds in PYTEST_FILE_ESTIMATE_SECONDS_BY_PREFIX:
+            if target.startswith(prefix):
+                return seconds
+        return DEFAULT_PYTEST_FILE_ESTIMATE_SECONDS
+
+    def target_estimate(target: str) -> tuple[int, int]:
+        target_path = ROOT / target
+        if target_path.is_dir():
+            files = sorted(target_path.rglob("test_*.py"))
+            return (
+                sum(file_estimate_seconds(item.relative_to(ROOT).as_posix()) for item in files),
+                len(files),
+            )
+        return file_estimate_seconds(target), 1
+
+    candidate_targets = selected
+    selected = []
+    deferred_seen = set(deferred)
+    estimated_seconds = 0
+    admitted_files = 0
+    estimates: list[dict[str, object]] = []
+
+    # A directory and its child must never be passed together to pytest. Broad
+    # mappings have already become deferred work, so local paths are exact files
+    # and parent/child overlap is impossible by construction.
+    for target in candidate_targets:
+        estimate, file_count = target_estimate(target)
+        target_path = ROOT / target
+        reason = "within_estimated_duration_budget"
+        decision = "selected"
+        if target_path.is_dir():
+            decision = "deferred_to_ci"
+            reason = "directory_suite"
+        elif admitted_files >= PYTEST_CAP:
+            decision = "deferred_to_ci"
+            reason = "defensive_file_cap"
+        elif estimated_seconds + estimate > PYTEST_BUDGET_SECONDS:
+            decision = "deferred_to_ci"
+            reason = "estimated_duration_budget"
+        else:
+            selected.append(target)
+            admitted_files += 1
+            estimated_seconds += estimate
+        if decision == "deferred_to_ci" and target not in deferred_seen:
+            deferred.append(target)
+            deferred_seen.add(target)
+        estimates.append(
+            {
+                "target": target,
+                "estimated_seconds": estimate,
+                "estimated_file_count": file_count,
+                "decision": decision,
+                "reason": reason,
+            }
+        )
+
+    # Cross-cutting suites can be deferred without first becoming candidates.
+    for target in deferred:
+        if any(item["target"] == target for item in estimates):
+            continue
+        estimate, file_count = target_estimate(target)
+        estimates.append(
+            {
+                "target": target,
+                "estimated_seconds": estimate,
+                "estimated_file_count": file_count,
+                "decision": "deferred_to_ci",
+                "reason": "crosscutting_directory_suite" if (ROOT / target).is_dir() else "crosscutting_target",
+            }
+        )
+
+    return {
+        "pytest_paths": selected,
+        "deferred_to_ci": deferred,
+        "estimated_pytest_seconds": estimated_seconds,
+        "pytest_budget_seconds": PYTEST_BUDGET_SECONDS,
+        "pytest_estimate_schema": PYTEST_ESTIMATE_SCHEMA,
+        "pytest_estimate_basis": "configured_conservative_estimate_not_observed_p95",
+        "pytest_target_estimates": estimates,
+    }
+
+
+def select_pytest_paths(paths: list[str]) -> tuple[list[str], list[str]]:
+    """Compatibility projection returning executable files and deferred work."""
+
+    selection = _select_pytest_targets(paths)
+    return (
+        list(selection["pytest_paths"]),
+        list(selection["deferred_to_ci"]),
+    )
 
 
 def build_plan(paths: list[str], cap: int) -> dict:
     flags = classify(paths)
     flutter_tests, deferred = select_flutter_tests(paths, cap)
-    pytest_paths, pytest_deferred = select_pytest_paths(paths)
+    pytest_selection = _select_pytest_targets(paths)
+    pytest_paths = list(pytest_selection["pytest_paths"])
+    pytest_deferred = list(pytest_selection["deferred_to_ci"])
+    combined_deferred = list(dict.fromkeys([*deferred, *pytest_deferred]))
     return {
         "changed_files": paths,
         "flags": flags,
         "static_checks": static_checks(flags),
         "flutter_tests": flutter_tests,
-        "deferred_to_ci": deferred + pytest_deferred,
+        "deferred_to_ci": combined_deferred,
         "flutter_cap": cap,
+        "estimated_pytest_seconds": pytest_selection["estimated_pytest_seconds"],
+        "pytest_budget_seconds": pytest_selection["pytest_budget_seconds"],
+        "pytest_estimate_schema": pytest_selection["pytest_estimate_schema"],
+        "pytest_estimate_basis": pytest_selection["pytest_estimate_basis"],
+        "pytest_target_estimates": pytest_selection["pytest_target_estimates"],
         "go_services": select_go_services(paths),
         "pytest_paths": pytest_paths,
         "run_portal": flags["has_portal"] and not (

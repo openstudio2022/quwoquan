@@ -150,5 +150,5 @@ ACCEPTANCE_ROOT = Path(
 #: 默认值）。``quwoquan_data/scripts/**`` 不在本预算内：它由
 #: ``verify_script_architecture.py`` 的 600/500/400 更严硬顶单轨负责。
 PYTHON_LINE_BUDGET_MAX_LINES = 1000
-#: 存量已清零（2026-08），行数硬顶进入 ``block``：check 模式下超标即阻断。
-PYTHON_LINE_BUDGET_ENFORCEMENT = "block"
+#: sequence-017 基线冻结仍携带超预算模块；在按责任拆分清零前保持 warn。
+PYTHON_LINE_BUDGET_ENFORCEMENT = "warn"

@@ -19,6 +19,8 @@
 - 高置信二进制、失效脚本、重复文档和未注册入口的原子退役。
 - Data CLI、stackctl、ML workflow 和设备脚本的唯一入口收敛。
 - Fixture 媒体反向引用闭包、App 精确资产声明和无松弛棘轮基线。
+- 项目容器根只承载 bare hub 与七个固定 worktree 目录；任一 Cursor workspace 只打开其中一个非 bare worktree。
+- Engineering 与 Ops 虽共享历史 `quwoquan_ops/` 物理根，路径 ownership 仍按开发→发布态和发布后运行态分治。
 
 ### Out of Scope
 
@@ -38,9 +40,11 @@
 - 所有最小 gate 通过，且高置信退役路径无活动源码引用。
 
 <a id="req-003"></a>
-### REQ-003 可再生产输出的统一边界：`.qwq_output/`、Flutter/Gradle/Node/Python
+### REQ-003 可再生产输出与工作区目录边界
 
-- 可再生产输出的统一边界：`.qwq_output/`、Flutter/Gradle/Node/Python
+- 可再生产输出的统一边界：`.qwq_output/`、Flutter/Gradle/Node/Python。
+- 项目容器根不是源码仓库或 Cursor workspace；`quwoquan.git/` 是 bare hub，也不得打开。源码 workspace 必须恰为 `integration/` 或六条同名 lane 目录之一，禁止多根 `.code-workspace`。
+- `lane/engineering` 拥有 Agent/Skill、review/handoff、Feature Tree、CI/CD、gate/hook、branch/worktree/lane governance 与 local readiness；`lane/ops` 拥有 stackctl、环境 manifests、observability、runbook、migration、Portal、hosted authority/provider conformance。唯一逐路径规则为 `lane_ownership.yaml`。
 
 ## 4. 契约引用
 
@@ -54,6 +58,8 @@
 - canonical：`quwoquan_ops/gate/verify_entrypoint_script_paths.py`
 - canonical：`quwoquan_ops/gate/verify_markdown_local_links.py`
 - canonical：`quwoquan_ops/gate/verify_media_delivery_contract.py`
+- canonical：`quwoquan_ops/policies/lane_ownership.yaml`
+- canonical：`quwoquan_ops/policies/worktree_policy.yaml`
 
 ## 5. 验收场景
 
@@ -78,6 +84,7 @@
 - THEN 特性树不存在 tree/index/registry/changelog/backlog，目录与父子 spec 完整自解释。
 - THEN 旧无 slice 与未引用 archived 媒体副本为零，全部权威媒体引用均有物理对象。
 - THEN App 不打包无消费者配置，已清零语义基线不可通过 update-baseline 回流。
+- THEN tracked 多根 `quwoquan-workspace.code-workspace` 不存在，README/AGENTS 明示一 worktree 一 Cursor workspace，bare hub 不被当作源码或脏工作树。
 
 ## 6. 依赖
 
@@ -95,6 +102,15 @@
 - 准出影响：`track`
 - 影响或价值：超过仓库行数预算的实现文件会混合多个职责，增加修改与审核风险。
 - 完成判定：`GWT-002` 的最小门禁闭环子句在拆分后仍成立——动态文件预算门禁无超限项；拆分保持原 facade、契约和相关测试通过。
+
+<a id="open-002"></a>
+### OPEN-002 `quwoquan_engineering` 物理域拆分
+
+- 类型：`capability_gap`
+- 优先级：`P2`
+- 准出影响：`track`
+- 影响或价值：尚缺实现：Engineering 资产当前仍与运行态 Ops 共处 `quwoquan_ops/` 历史物理根，ownership 已单轨但 `quwoquan_engineering/` 目录尚未创建，调用方仍可能按物理根误判职责。尚缺验收证据：迁移后的入口、引用、focused/full gate 与零 engineering 例外 readback。
+- 完成判定：`GWT-002` 满足：把 Agent/Skill、review/handoff、Feature Tree tooling、CI/CD、gate/hook 与治理 policy 原子迁入 `quwoquan_engineering/`，更新入口与测试后，`lane_ownership.yaml` 不再需要对 `quwoquan_ops/` 做 engineering 例外，且 focused/full gate 保持全绿。
 
 <a id="open-003"></a>
 ### OPEN-003 取证隔离区与输出布局门禁互斥，两者都无法同时成立

@@ -100,6 +100,7 @@ OPEN 的存在就是未关闭；关闭时删除 OPEN，并把已支持行为写�
 
 ```bash
 make feature-context TARGET=<spec-or-code-path>
+make feature-candidate-evidence OWNER_IDENTITY=<ref> CHANGED_PATHS="<path> ..."
 make feature-context TARGET=<spec-or-code-path> FORMAT=expanded
 make feature-tree-overview
 make feature-tree-change-report
@@ -107,7 +108,7 @@ make feature-tree-content-review
 make verify-feature-tree
 ```
 
-- `feature-context`：默认输出不超过 8KiB 的 manifest，含唯一 owner chain、精确 canonical path/anchor、适用 AGENTS、profiles、OPEN 和直接 contract/test 证据。代码路径先按 L1 最长工程根定位，再按 L2 DEC 的适用工程根与唯一影响 Story 下钻；歧义/无 owner fail-closed。`FORMAT=expanded` 仅供人工诊断。
+- `feature-context`：默认输出不超过 8KiB 的稳定 PRE owner identity manifest，含唯一 owner chain、精确 canonical path/anchor、适用 AGENTS、profiles、OPEN 和直接 contract/test 证据。代码路径先按 L1 最长工程根定位，再按 L2 DEC 的适用工程根与唯一影响 Story 下钻；歧义/无 owner fail-closed。`FORMAT=expanded` 仅供人工诊断。
 - `feature-tree-overview`：实时输出领域、能力、Story，并按 OPEN 类型、优先级、准出影响、完成判定与 L1/L2 子树聚合开放事项。
 - `feature-tree-change-report`：从 Git diff 推导受影响父链、锚点变化和未归属变更。
 - `feature-tree-content-review`：逐文件检查实际节点与模板的章节、参与者与价值、非占位要求、GWT/DOM/SIT/UAT、DEC、服务本地契约、工程引用、真实 `spec_ref` 与 OPEN 一致性，并阻断历史编号、迁移病句、通用治理占位和中心业务域 metadata 回潮。

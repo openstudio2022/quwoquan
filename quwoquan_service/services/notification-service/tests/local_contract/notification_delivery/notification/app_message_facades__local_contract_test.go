@@ -10,10 +10,16 @@ package local_contract
 import (
 	"context"
 	"errors"
+	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
+	rtauth "quwoquan_service/runtime/auth"
+	"quwoquan_service/runtime/operation"
 	"quwoquan_service/runtime/reliabletask"
+	httpadapter "quwoquan_service/services/notification-service/internal/notification_delivery/notification/adapters/inbound/http"
 	"quwoquan_service/services/notification-service/internal/notification_delivery/notification/application"
 	notification "quwoquan_service/services/notification-service/internal/notification_delivery/notification/domain"
 )
@@ -194,5 +200,91 @@ func TestAppMessageFacadesKeepLifecycleAndUnreadStateOnOneTypedAggregate(t *test
 	unread, err = queries.GetUnreadCount(t.Context(), "account-local-1")
 	if err != nil || unread.UnreadCount != 0 {
 		t.Fatalf("unread after read=%+v err=%v", unread, err)
+	}
+}
+
+func TestAppMessageHTTPRoutesPreserveAuthenticatedLifecycleAndFilters(t *testing.T) {
+	ports := newAppMessageMemoryPorts()
+	commands, err := application.NewAppMessageCommandFacade(ports, ports, ports)
+	if err != nil {
+		t.Fatalf("construct command facade: %v", err)
+	}
+	queries, err := application.NewAppMessageQueryFacade(ports, ports, ports)
+	if err != nil {
+		t.Fatalf("construct query facade: %v", err)
+	}
+	handler, err := httpadapter.NewHandler(httpadapter.HandlerDependencies{
+		AppMessageCommands: commands,
+		AppMessageQueries:  queries,
+	})
+	if err != nil {
+		t.Fatalf("construct HTTP handler: %v", err)
+	}
+	principal := rtauth.Principal{
+		Actor: operation.ActorContext{AccountID: "account-http-local"},
+	}
+	send := func(method, path, body string) *httptest.ResponseRecorder {
+		t.Helper()
+		request := httptest.NewRequest(method, path, strings.NewReader(body))
+		request = request.WithContext(rtauth.WithPrincipal(request.Context(), principal))
+		response := httptest.NewRecorder()
+		handler.Routes().ServeHTTP(response, request)
+		return response
+	}
+
+	createBody := `{"userId":"account-http-local","messageType":"interaction","source":"comment","sourceId":"comment-http-local","title":"新的评论","summary":"有人评论了你的内容","destination":{"type":"user","id":"account-http-local"},"target":{"targetType":"post","targetId":"post-http-local"}}`
+	createRequest := httptest.NewRequest(
+		http.MethodPost,
+		"/internal/app-messages",
+		strings.NewReader(createBody),
+	)
+	createRequest.Header.Set("Idempotency-Key", "notification-http-local")
+	createResponse := httptest.NewRecorder()
+	handler.Routes().ServeHTTP(createResponse, createRequest)
+	if createResponse.Code != http.StatusCreated {
+		t.Fatalf("create status=%d body=%s", createResponse.Code, createResponse.Body.String())
+	}
+	if len(ports.messages) != 1 {
+		t.Fatalf("created messages=%d, want 1", len(ports.messages))
+	}
+	var messageID string
+	for id := range ports.messages {
+		messageID = id
+	}
+
+	for _, scenario := range []struct {
+		name       string
+		method     string
+		path       string
+		wantStatus int
+	}{
+		{name: "list", method: http.MethodGet, path: "/app-messages?type=interaction&read=false&limit=1", wantStatus: http.StatusOK},
+		{name: "detail", method: http.MethodGet, path: "/app-messages/" + messageID, wantStatus: http.StatusOK},
+		{name: "unread", method: http.MethodGet, path: "/app-messages/unread-count", wantStatus: http.StatusOK},
+		{name: "ack", method: http.MethodPost, path: "/app-messages/" + messageID + "/ack", wantStatus: http.StatusOK},
+		{name: "read", method: http.MethodPost, path: "/app-messages/" + messageID + "/read", wantStatus: http.StatusOK},
+	} {
+		t.Run(scenario.name, func(t *testing.T) {
+			response := send(scenario.method, scenario.path, "")
+			if response.Code != scenario.wantStatus {
+				t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+			}
+		})
+	}
+
+	for _, path := range []string{
+		"/app-messages?limit=invalid",
+		"/app-messages?read=invalid",
+	} {
+		response := send(http.MethodGet, path, "")
+		if response.Code != http.StatusBadRequest {
+			t.Fatalf("invalid query %q status=%d body=%s", path, response.Code, response.Body.String())
+		}
+	}
+	request := httptest.NewRequest(http.MethodGet, "/app-messages", nil)
+	response := httptest.NewRecorder()
+	handler.Routes().ServeHTTP(response, request)
+	if response.Code != http.StatusUnauthorized {
+		t.Fatalf("unauthenticated list status=%d body=%s", response.Code, response.Body.String())
 	}
 }

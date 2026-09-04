@@ -17,6 +17,12 @@ from .projection import (
     visible_interaction_term_leaks,
 )
 from .router import balanced_permutations, legal_option_ids, route, stable_option_order
+from .runtime_bridge import (
+    HumanDecisionBridgeError, build_self_attested_receipt,
+    latest_runtime_decision_ref, project_runtime_decision,
+    read_runtime_decision_ref, record_runtime_decision,
+    runtime_projection_exit_code, validate_runtime_decision_receipt,
+)
 from .states import (
     accept_outcome,
     advance_campaign,
@@ -27,7 +33,7 @@ from .states import (
 
 __all__ = [
     "CalibrationError", "CalibrationWriteResult", "CommercialEvidenceError",
-    "ContractError", "accept_outcome", "advance_campaign",
+    "ContractError", "HumanDecisionBridgeError", "accept_outcome", "advance_campaign",
     "balanced_permutations", "commercial_evidence_blocker",
     "commercial_option_is_legal", "legal_option_ids", "load_contract",
     "production_concurrency_policy", "project_authorization_grant",
@@ -38,5 +44,8 @@ __all__ = [
     "validate_calibration_readback", "validate_calibration_session",
     "verify_calibration_readback", "visible_interaction_term_leaks",
     "write_create_once_calibration_session", "calibration_session_digest",
-    "typed_blocker", "validate_contract",
+    "typed_blocker", "validate_contract", "build_self_attested_receipt",
+    "latest_runtime_decision_ref", "project_runtime_decision",
+    "read_runtime_decision_ref", "record_runtime_decision",
+    "runtime_projection_exit_code", "validate_runtime_decision_receipt",
 ]

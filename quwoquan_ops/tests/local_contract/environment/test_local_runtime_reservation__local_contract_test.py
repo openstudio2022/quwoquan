@@ -3,6 +3,7 @@ from __future__ import annotations
 import fcntl
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -15,11 +16,47 @@ from quwoquan_ops.cli.lib.local_runtime_reservation import (
     acquire_local_runtime_use_lock,
     active_conflicting_local_targets,
     assert_local_runtime_available,
+    local_runtime_operation_lock_path,
     local_runtime_peer_targets,
 )
 
 
 class LocalRuntimeReservationContractTest(unittest.TestCase):
+    def test_default_lock_path_is_host_scoped(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_dir, mock.patch.dict(
+            "os.environ", {"QWQ_HOST_LOCK_ROOT": temporary_dir}
+        ):
+            lock_path = local_runtime_operation_lock_path()
+
+        self.assertEqual(
+            lock_path,
+            Path(temporary_dir).resolve()
+            / "local-runtime"
+            / "workstation-commercial-runtime.lock",
+        )
+        self.assertNotIn(".qwq_output", str(lock_path))
+
+    def test_default_use_lock_records_worktree_identity(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_dir, mock.patch.dict(
+            "os.environ", {"QWQ_HOST_LOCK_ROOT": temporary_dir}
+        ):
+            lease = acquire_local_runtime_use_lock(
+                target="alpha-local",
+                purpose="local-contract",
+            )
+            try:
+                self.assertIn("worktree=", lease.record)
+                self.assertIn("lane=", lease.record)
+                self.assertIn("headSha=", lease.record)
+                self.assertEqual(
+                    Path(temporary_dir).resolve()
+                    / "local-runtime"
+                    / "workstation-commercial-runtime.lock",
+                    local_runtime_operation_lock_path(),
+                )
+            finally:
+                lease.close()
+
     def test_local_targets_share_one_metadata_owned_resource_group(self) -> None:
         topology = load_environment_topology()
 

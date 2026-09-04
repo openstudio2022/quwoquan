@@ -26,7 +26,7 @@ from lib.local_readiness import (  # noqa: E402
     verify_receipt,
     worker_once,
 )
-from lib.local_readiness.core import parse_push_updates, push_paths, staged_paths, workspace_paths  # noqa: E402
+from lib.local_readiness.core import enqueue_paths, parse_push_updates, push_paths, staged_paths, workspace_paths  # noqa: E402
 
 
 def _json(value: Any) -> None:
@@ -78,7 +78,13 @@ def _optional_path(value: str) -> Path | None:
 
 
 def _owner(args: argparse.Namespace) -> Path | None:
-    return _optional_path(getattr(args, "owner_manifest", ""))
+    if getattr(args, "owner_manifest", ""):
+        raise LocalReadinessError("IDENTITY.MIGRATION_REQUIRED: --owner-manifest 已退役")
+    return _optional_path(getattr(args, "owner_identity", ""))
+
+
+def _candidate(args: argparse.Namespace) -> Path | None:
+    return _optional_path(getattr(args, "candidate_evidence", ""))
 
 
 def _review(args: argparse.Namespace) -> tuple[Path | None, list[Path]]:
@@ -98,6 +104,7 @@ def _build(level: str, args: argparse.Namespace) -> tuple[dict[str, Any], list[d
             paths=paths,
             mode=mode,
             owner_manifest=_owner(args),
+            candidate_evidence=_candidate(args),
             push_updates=updates,
             review_consolidation=consolidation,
             required_evidence=evidence,
@@ -124,6 +131,7 @@ def command_run(args: argparse.Namespace) -> int:
     receipt = run_readiness(
         plan,
         owner_manifest=_owner(args),
+        candidate_evidence=_candidate(args),
         push_updates=updates,
         review_consolidation=consolidation,
         required_evidence=evidence,
@@ -132,11 +140,20 @@ def command_run(args: argparse.Namespace) -> int:
     return 0 if receipt["status"] == "PASS" else 1
 
 
+def command_enqueue(args: argparse.Namespace) -> int:
+    paths = list(args.path or [])
+    if not paths:
+        raise LocalReadinessError("explicit enqueue 路径为空")
+    _json(enqueue_paths(paths, reason=args.reason))
+    return 0
+
+
 def command_produce(args: argparse.Namespace) -> int:
     plan, updates, consolidation, evidence = _build(args.command, args)
     receipt = run_readiness(
         plan,
         owner_manifest=_owner(args),
+        candidate_evidence=_candidate(args),
         push_updates=updates,
         review_consolidation=consolidation,
         required_evidence=evidence,
@@ -152,6 +169,7 @@ def command_verify(args: argparse.Namespace) -> int:
         paths=paths,
         mode=mode,
         owner_manifest=_owner(args),
+        candidate_evidence=_candidate(args),
         push_updates=updates,
         receipt_path=Path(args.receipt) if args.receipt else None,
     )
@@ -196,7 +214,8 @@ _PII_PATTERNS = (
     # 手机号两侧排除十六进制字符：sha256/digest 里任意 11 位数字子串（如 "18916601719eac…"）
     # 不是号码；否则 contract_graph.json 这类生成物每次刷新都会被误判为直接 PII。
     re.compile(rb"(?<![0-9A-Fa-f])1[3-9][0-9]{9}(?![0-9A-Fa-f])"),
-    re.compile(rb"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}"),
+    # 邮箱域名不能把静态资源的 @2x.png / @3x.png 像素密度后缀当成邮箱。
+    re.compile(rb"[A-Za-z0-9._%+-]+@(?=[A-Za-z])[A-Za-z0-9.-]+\.[A-Za-z]{2,}"),
 )
 
 
@@ -241,13 +260,70 @@ def _staged_governance(paths: list[str]) -> None:
             raise LocalReadinessError("staged generated boundary rejects generated-only changes")
 
 
+def _unstaged_paths(repo_root: Path, staged: list[str]) -> set[str]:
+    output = subprocess.run(
+        [
+            "git", "diff", "--name-status", "-z", "--find-renames",
+            "--diff-filter=ACDMRTUXB",
+        ],
+        cwd=repo_root,
+        capture_output=True,
+        check=False,
+    )
+    if output.returncode != 0:
+        raise LocalReadinessError(
+            output.stderr.decode("utf-8", errors="replace").strip()
+            or "无法读取 unstaged path 集合"
+        )
+    from lib.local_readiness.core import _parse_name_status_z
+
+    paths: set[str] = set()
+    for entry in _parse_name_status_z(output.stdout, repo_root):
+        paths.add(str(entry["source"]))
+        if entry["destination"]:
+            paths.add(str(entry["destination"]))
+    if staged:
+        untracked = subprocess.run(
+            ["git", "ls-files", "--others", "--exclude-standard", "-z", "--", *staged],
+            cwd=repo_root,
+            capture_output=True,
+            check=False,
+        )
+        if untracked.returncode != 0:
+            raise LocalReadinessError(
+                untracked.stderr.decode("utf-8", errors="replace").strip()
+                or "无法读取 staged path 的 untracked overlap"
+            )
+        paths.update(
+            normalize_repo_relative_path(raw.decode("utf-8"), repo_root)
+            for raw in untracked.stdout.split(b"\0")
+            if raw
+        )
+    return paths
+
+
+def _assert_no_staged_unstaged_overlap(paths: list[str]) -> None:
+    overlap = sorted(set(paths) & _unstaged_paths(ROOT, paths))
+    if overlap:
+        raise LocalReadinessError(
+            "LOCAL_READINESS.STAGED_UNSTAGED_OVERLAP: staged path 仍有 unstaged "
+            "bytes，提交边界不代表当前 worktree 已覆盖：" + ", ".join(overlap)
+        )
+
+
 def command_staged_boundary(_args: argparse.Namespace) -> int:
     paths = staged_paths(ROOT)
     if not paths:
         raise LocalReadinessError("staged boundary 范围为空")
+    _assert_no_staged_unstaged_overlap(paths)
     _staged_governance(paths)
     branch = subprocess.run(
-        [sys.executable, "-B", "quwoquan_ops/gate/verify_git_branch_policy.py"],
+        [
+            sys.executable,
+            "-B",
+            "quwoquan_ops/gate/verify_git_branch_policy.py",
+            "--local-commit",
+        ],
         cwd=ROOT,
         capture_output=True,
         text=True,
@@ -274,7 +350,9 @@ def _common(parser: argparse.ArgumentParser, *, allow_plan: bool = False) -> Non
     modes.add_argument("--commit", action="store_true")
     modes.add_argument("--push-updates", default="")
     parser.add_argument("--path", action="append", default=[])
-    parser.add_argument("--owner-manifest", default="")
+    parser.add_argument("--owner-identity", default="")
+    parser.add_argument("--candidate-evidence", default="")
+    parser.add_argument("--owner-manifest", default="", help=argparse.SUPPRESS)
     parser.add_argument("--review-consolidation", default="")
     parser.add_argument("--required-evidence", action="append", default=[])
     if allow_plan:
@@ -299,6 +377,11 @@ def build_parser() -> argparse.ArgumentParser:
         produce = commands.add_parser(name)
         _common(produce)
         produce.set_defaults(handler=command_produce)
+
+    enqueue = commands.add_parser("enqueue")
+    enqueue.add_argument("--path", action="append", required=True)
+    enqueue.add_argument("--reason", default="explicit_cli")
+    enqueue.set_defaults(handler=command_enqueue)
 
     inspect = commands.add_parser("inspect")
     inspect.set_defaults(handler=lambda _args: (_json(inspect_state()) or 0))

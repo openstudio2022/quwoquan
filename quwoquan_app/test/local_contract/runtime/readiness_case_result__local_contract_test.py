@@ -100,7 +100,11 @@ def _binding(*, device_id: str = "emulator-5554") -> dict[str, object]:
                 "digest": _digest("f"),
             },
         },
-        device={"identity": device_id, "class": "simulator", "registered": False},
+        device={
+            "identity": device_id,
+            "class": "simulator",
+            "registered": False,
+        },
         runner=runner,
         profile="rehearsal",
         non_promotable=True,
@@ -177,6 +181,7 @@ def test_per_cell_result_bundle_passes_canonical_schema(tmp_path: Path) -> None:
     assert result["status"] == "passed"
     assert result["specRef"] == subject.SPEC_REF
     assert result["targetUatBindingDigest"] == binding_digest
+    assert result["deviceRegistered"] is False
     assert result["entrySurface"] == "direct_or_object_route"
     assert result["carrier"] == "homepage"
     assert "schema" not in result

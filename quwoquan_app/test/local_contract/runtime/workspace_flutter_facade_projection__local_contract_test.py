@@ -13,11 +13,8 @@ import hashlib
 import importlib.util
 import json
 import os
-import pty
 import re
-import select
 import shlex
-import signal
 import shutil
 import stat
 import subprocess
@@ -26,6 +23,8 @@ import tempfile
 import time
 import unittest
 from pathlib import Path
+
+from workspace_flutter_facade_zsh_test_support import _InteractiveLoginZsh
 
 APP_DIR = Path(__file__).resolve().parents[3]
 REPO_ROOT = APP_DIR.parent
@@ -122,107 +121,6 @@ def _sha256(path: Path) -> str:
     return "sha256:" + hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-class _InteractiveLoginZsh:
-    PROMPT = b"__QWQ_TEST_PROMPT__ "
-    COMMAND_DONE = b"__QWQ_COMMAND_DONE__"
-
-    def __init__(self, *, home: Path, environment: dict[str, str]) -> None:
-        pid, descriptor = pty.fork()
-        if pid == 0:  # pragma: no cover - child process is observed through its PTY
-            child_environment = dict(environment)
-            child_environment.pop("ZDOTDIR", None)
-            child_environment.update(
-                HOME=str(home),
-                TERM="dumb",
-                LC_ALL="C",
-            )
-            os.execve("/bin/zsh", ["/bin/zsh", "-l", "-i"], child_environment)
-        self.pid = pid
-        self.descriptor = descriptor
-        self.startup_output = self._read_until_prompt()
-
-    def _read_until_prompt(self) -> str:
-        output = bytearray()
-        deadline = time.monotonic() + 10
-        while self.PROMPT not in output:
-            remaining = deadline - time.monotonic()
-            if remaining <= 0:
-                raise AssertionError(
-                    "interactive login zsh did not reach its prompt: "
-                    + output.decode("utf-8", errors="replace")
-                )
-            readable, _, _ = select.select([self.descriptor], [], [], remaining)
-            if not readable:
-                continue
-            try:
-                chunk = os.read(self.descriptor, 4096)
-            except OSError as error:
-                raise AssertionError("interactive login zsh closed early") from error
-            if not chunk:
-                raise AssertionError("interactive login zsh closed early")
-            output.extend(chunk)
-        return output.decode("utf-8", errors="replace")
-
-    def command(self, command: str) -> str:
-        token = f"{self.COMMAND_DONE.decode()}_{time.time_ns()}"
-        token_line = ("\r\n" + token + "\r\n").encode("utf-8")
-        wrapped = f"{command}; print -r -- {token}\n"
-        os.write(self.descriptor, wrapped.encode("utf-8"))
-        output = bytearray()
-        deadline = time.monotonic() + 15
-        while token_line not in output:
-            remaining = deadline - time.monotonic()
-            if remaining <= 0:
-                raise AssertionError(
-                    "interactive zsh command did not finish: "
-                    + output.decode("utf-8", errors="replace")
-                )
-            readable, _, _ = select.select([self.descriptor], [], [], remaining)
-            if not readable:
-                continue
-            try:
-                chunk = os.read(self.descriptor, 4096)
-            except OSError as error:
-                raise AssertionError("interactive zsh command closed early") from error
-            if not chunk:
-                raise AssertionError("interactive zsh command closed early")
-            output.extend(chunk)
-        return output.decode("utf-8", errors="replace")
-
-    def close(self) -> None:
-        if self.descriptor < 0:
-            return
-        try:
-            os.write(self.descriptor, b"exit\n")
-        except OSError:
-            pass
-        deadline = time.monotonic() + 0.2
-        while time.monotonic() < deadline:
-            waited, _ = os.waitpid(self.pid, os.WNOHANG)
-            if waited == self.pid:
-                break
-            time.sleep(0.02)
-        else:
-            try:
-                os.kill(self.pid, signal.SIGKILL)
-            except ProcessLookupError:
-                pass
-            kill_deadline = time.monotonic() + 0.5
-            while time.monotonic() < kill_deadline:
-                waited, _ = os.waitpid(self.pid, os.WNOHANG)
-                if waited == self.pid:
-                    break
-                time.sleep(0.02)
-        os.close(self.descriptor)
-        self.descriptor = -1
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, exc_type, exc_value, traceback) -> None:
-        self.close()
-
-
 class WorkspaceTerminalInjectionLocalContractTest(unittest.TestCase):
     def setUp(self) -> None:
         temporary = tempfile.TemporaryDirectory()
@@ -297,6 +195,12 @@ class WorkspaceTerminalInjectionLocalContractTest(unittest.TestCase):
         environment = self._environment()
         environment["PATH"] = "/usr/bin:/bin"
         return environment
+
+    def _require_macos_zsh(self) -> None:
+        if sys.platform != "darwin":
+            self.skipTest("user-zsh execution contract requires macOS")
+        if shutil.which("zsh") is None or not Path("/bin/zsh").is_file():
+            self.skipTest("user-zsh execution contract requires zsh")
 
     # ------------------------------------------------------------------
     # 退役面：shim / ZDOTDIR / receipt 不复存在
@@ -721,6 +625,7 @@ class WorkspaceTerminalInjectionLocalContractTest(unittest.TestCase):
         self.assertEqual(payload["userZsh"]["zshrcBlockState"], "drifted")
 
     def test_user_zsh_carrier_prepends_managed_path_idempotently(self) -> None:
+        self._require_macos_zsh()
         activation = self._run_cli("--scope", "user-zsh")
         self.assertEqual(activation.returncode, 0, activation.stderr)
         generated = self.home / ".config/quwoquan/flutter-facade.zsh"
@@ -846,14 +751,20 @@ class WorkspaceTerminalInjectionLocalContractTest(unittest.TestCase):
     def test_user_zsh_long_lived_shell_refreshes_cached_raw_sdk_then_manages_run(
         self,
     ) -> None:
+        self._require_macos_zsh()
         raw_bin = self.root / "raw-sdk/bin"
         raw_flutter = _write_executable(
             raw_bin / "flutter",
-            "#!/bin/sh\nprintf 'RAW_SDK %s\\n' \"$*\"\n",
+            "#!/bin/sh\n"
+            "if [ \"$*\" = \"--version --machine\" ]; then\n"
+            "  printf '%s' '{\"frameworkVersion\":\"3.47.0\","
+            "\"frameworkRevision\":\"fixture-revision\"}'\n"
+            "  exit 0\n"
+            "fi\n"
+            "printf 'RAW_SDK %s\\n' \"$*\"\n",
         )
         _write_executable(raw_bin / "run.sh", "#!/bin/sh\nprintf 'RAW_RUN\\n'\n")
         self._write_interactive_zsh_startup(path_prefix=raw_bin)
-
         with _InteractiveLoginZsh(
             home=self.home,
             environment=self._interactive_environment(),
@@ -882,9 +793,19 @@ class WorkspaceTerminalInjectionLocalContractTest(unittest.TestCase):
             fake_app.joinpath("pubspec.yaml").write_text(
                 "name: fixture_app\n", encoding="utf-8"
             )
+            fake_app.joinpath(".flutter-version").write_text(
+                "3.47.0\n", encoding="utf-8"
+            )
+            fake_stackctl = fake_app.parent / "quwoquan_ops/cli/stackctl.py"
+            fake_stackctl.parent.mkdir(parents=True)
+            fake_stackctl.touch()
             fake_carrier = fake_app / "scripts/tools/flutter_facade/user_zsh_projection.zsh"
             fake_carrier.parent.mkdir(parents=True)
             fake_carrier.write_bytes(USER_ZSH_CARRIER.read_bytes())
+            fake_facade = fake_carrier.with_name("flutter_facade.py")
+            fake_facade.write_bytes(
+                (FACADE_DIR / "flutter_facade.py").read_bytes()
+            )
             physical_python = Path(sys.executable).resolve()
             fake_projection = self.home / ".config/quwoquan/fake-flutter-facade.zsh"
             fake_projection.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
@@ -917,6 +838,7 @@ class WorkspaceTerminalInjectionLocalContractTest(unittest.TestCase):
             )
 
     def test_user_zsh_fresh_login_shell_auto_projects_commands(self) -> None:
+        self._require_macos_zsh()
         raw_bin = self.root / "raw-sdk/bin"
         _write_executable(raw_bin / "flutter", "#!/bin/sh\nprintf 'RAW\n'\n")
         self._write_interactive_zsh_startup(path_prefix=raw_bin)
@@ -932,6 +854,7 @@ class WorkspaceTerminalInjectionLocalContractTest(unittest.TestCase):
             self.assertIn(str(LAUNCHER_BIN / "run.sh"), shell.command("whence -p run.sh"))
 
     def test_user_zsh_alias_and_function_overrides_fail_closed(self) -> None:
+        self._require_macos_zsh()
         raw_bin = self.root / "raw-sdk/bin"
         _write_executable(raw_bin / "flutter", "#!/bin/sh\nprintf 'RAW\n'\n")
         cases = (
@@ -965,6 +888,7 @@ class WorkspaceTerminalInjectionLocalContractTest(unittest.TestCase):
     def test_user_zsh_carrier_fails_typed_when_pinned_identity_is_missing(
         self,
     ) -> None:
+        self._require_macos_zsh()
         activation = self._run_cli("--scope", "user-zsh")
         self.assertEqual(activation.returncode, 0, activation.stderr)
         generated = self.home / ".config/quwoquan/flutter-facade.zsh"
@@ -979,7 +903,6 @@ class WorkspaceTerminalInjectionLocalContractTest(unittest.TestCase):
         )
         self.assertIn("GATE_BLOCK", probe.stderr)
         self.assertIn("APP.LAUNCH.workspace_entrypoint_inactive", probe.stderr)
-
 
 if __name__ == "__main__":
     unittest.main()

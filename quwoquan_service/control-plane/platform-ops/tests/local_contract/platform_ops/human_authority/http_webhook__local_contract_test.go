@@ -14,6 +14,8 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -24,16 +26,22 @@ import (
 	authorityhttp "quwoquan_service/control-plane/platform-ops/internal/platform_ops/human_authority/adapters/inbound/http"
 	authorityapp "quwoquan_service/control-plane/platform-ops/internal/platform_ops/human_authority/application"
 	"quwoquan_service/control-plane/platform-ops/internal/platform_ops/human_authority/domain/model"
+	"quwoquan_service/control-plane/platform-ops/internal/platform_ops/human_authority/domain/ports"
 	authoritystore "quwoquan_service/control-plane/platform-ops/internal/platform_ops/human_authority/infrastructure/persistence"
 	rtauth "quwoquan_service/runtime/auth"
+	rterr "quwoquan_service/runtime/errors"
 	"quwoquan_service/runtime/operation"
 )
 
 func newHTTPHandler(t *testing.T) *authorityhttp.Handler {
+	return newHTTPHandlerWithStore(t, authoritystore.NewMemoryStore())
+}
+
+func newHTTPHandlerWithStore(t *testing.T, store ports.Store) *authorityhttp.Handler {
 	t.Helper()
 	_, priv, _ := ed25519.GenerateKey(nil)
 	signer, _ := authorityapp.NewEd25519Signer("test", priv, true)
-	facade, _ := authorityapp.NewFacade(authoritystore.NewMemoryStore(), signer, []authorityapp.GitHubMapping{{Repository: "quwoquan/quwoquan", Environment: "production", DecisionKind: "production_campaign_approval", Scope: "production-campaign"}})
+	facade, _ := authorityapp.NewFacade(store, signer, []authorityapp.GitHubMapping{{Repository: "quwoquan/quwoquan", Environment: "production", DecisionKind: "production_campaign_approval", Scope: "production-campaign"}})
 	roles, _ := authorityapp.NewRoleMapper(map[string][]string{"oidc-release": {"release_owner"}, "oidc-engineering": {"engineering_delivery_owner"}})
 	handler, err := authorityhttp.NewHandler(facade, roles, []byte("github-webhook-secret-value"))
 	if err != nil {
@@ -48,9 +56,7 @@ func TestOIDCRoutesRequireVerifiedPrincipalAndPermission(t *testing.T) {
 	request.Header.Set("Idempotency-Key", "create-http-1")
 	response := httptest.NewRecorder()
 	handler.ServeHTTP(response, request)
-	if response.Code != http.StatusUnauthorized {
-		t.Fatalf("anonymous status=%d", response.Code)
-	}
+	assertHumanAuthorityHTTPError(t, response, http.StatusUnauthorized, "OPS.USER.human_authority_unauthorized", "escalate", "inlineCard", 0)
 	principal := rtauth.Principal{Claims: rtauth.Claims{Issuer: "https://issuer", Subject: "operator-1", Roles: []string{"oidc-release"}, Permissions: []string{"ops.human-authority.write"}}, Actor: operation.ActorContext{AccountID: "operator-1"}}
 	request = httptest.NewRequest(http.MethodPost, authorityhttp.BasePath+"decision-units", strings.NewReader(body))
 	request.Header.Set("Idempotency-Key", "create-http-1-authenticated")
@@ -68,6 +74,65 @@ func TestOIDCRoutesRequireVerifiedPrincipalAndPermission(t *testing.T) {
 		t.Fatalf("missing read permission status=%d", response.Code)
 	}
 }
+
+type listFailureStore struct {
+	*authoritystore.MemoryStore
+	err error
+}
+
+func (s *listFailureStore) List(context.Context) ([]model.DecisionUnit, error) {
+	return nil, s.err
+}
+
+func TestHTTPErrorMappingUsesGeneratedHumanAuthorityContract(t *testing.T) {
+	tests := []struct {
+		name       string
+		err        error
+		status     int
+		code       string
+		action     string
+		disruption string
+		after      int
+	}{
+		{name: "invalid", err: model.ErrInvalid, status: http.StatusBadRequest, code: "OPS.USER.human_authority_invalid", action: "surface", disruption: "inlineCard"},
+		{name: "not found", err: model.ErrNotFound, status: http.StatusNotFound, code: "OPS.USER.human_authority_not_found", action: "surface", disruption: "inlineCard"},
+		{name: "wrong role", err: model.ErrWrongRole, status: http.StatusForbidden, code: "OPS.USER.human_authority_wrong_role", action: "escalate", disruption: "inlineCard"},
+		{name: "conflict", err: model.ErrConflict, status: http.StatusConflict, code: "OPS.USER.human_authority_conflict", action: "retry", disruption: "inlineCard"},
+		{name: "hard veto", err: model.ErrHardVeto, status: http.StatusUnprocessableEntity, code: "OPS.USER.human_authority_hard_veto", action: "surface", disruption: "inlineCard"},
+		{name: "separation of duties", err: model.ErrSoD, status: http.StatusUnprocessableEntity, code: "OPS.USER.human_authority_sod_failed", action: "escalate", disruption: "inlineCard"},
+		{name: "evidence expired", err: model.ErrEvidenceExpired, status: http.StatusUnprocessableEntity, code: "OPS.USER.human_authority_evidence_expired", action: "surface", disruption: "inlineCard"},
+		{name: "storage failure", err: errors.New("postgres unavailable"), status: http.StatusInternalServerError, code: "OPS.SYSTEM.human_authority_storage_failed", action: "retry", disruption: "snackbar", after: 2},
+	}
+	principal := rtauth.Principal{Claims: rtauth.Claims{Issuer: "https://issuer", Subject: "operator-1", Roles: []string{"oidc-release"}, Permissions: []string{"ops.human-authority.read"}}, Actor: operation.ActorContext{AccountID: "operator-1"}}
+	for _, testCase := range tests {
+		t.Run(testCase.name, func(t *testing.T) {
+			handler := newHTTPHandlerWithStore(t, &listFailureStore{MemoryStore: authoritystore.NewMemoryStore(), err: testCase.err})
+			request := httptest.NewRequest(http.MethodGet, authorityhttp.BasePath+"decision-units", nil)
+			request = request.WithContext(rtauth.WithPrincipal(request.Context(), principal))
+			response := httptest.NewRecorder()
+			handler.ServeHTTP(response, request)
+			assertHumanAuthorityHTTPError(t, response, testCase.status, testCase.code, testCase.action, testCase.disruption, testCase.after)
+		})
+	}
+}
+
+func assertHumanAuthorityHTTPError(t *testing.T, response *httptest.ResponseRecorder, status int, code, action, disruption string, after int) {
+	t.Helper()
+	if response.Code != status {
+		t.Fatalf("status=%d want=%d body=%s", response.Code, status, response.Body.String())
+	}
+	var envelope rterr.ErrorResponse
+	if err := json.Unmarshal(response.Body.Bytes(), &envelope); err != nil {
+		t.Fatalf("decode error envelope: %v body=%s", err, response.Body.String())
+	}
+	if envelope.Code != code || envelope.Module != "OPS" || envelope.UserMessage == "" {
+		t.Fatalf("unexpected error envelope: %+v", envelope)
+	}
+	if envelope.Recovery.Action != action || envelope.Recovery.DisruptionLevel != disruption || envelope.Recovery.AfterSeconds != after {
+		t.Fatalf("unexpected recovery directive: %+v", envelope.Recovery)
+	}
+}
+
 func TestGitHubWebhookHMACIdempotencyConflictAndClosedSet(t *testing.T) {
 	handler := newHTTPHandler(t)
 	payload := []byte(`{"action":"requested","installation":{"id":7},"repository":{"full_name":"quwoquan/quwoquan"},"workflow_run":{"id":9,"head_sha":"abc","run_attempt":1},"environment":"production","candidate_digest":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}`)

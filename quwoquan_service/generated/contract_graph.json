@@ -34332,6 +34332,7 @@
       "concurrency": {},
       "errorCodes": [
         "OPS.USER.human_authority_invalid",
+        "OPS.USER.human_authority_not_found",
         "OPS.USER.human_authority_unauthorized",
         "OPS.USER.human_authority_conflict",
         "OPS.SYSTEM.human_authority_storage_failed"
@@ -34472,6 +34473,7 @@
       "concurrency": {},
       "errorCodes": [
         "OPS.USER.human_authority_invalid",
+        "OPS.USER.human_authority_not_found",
         "OPS.USER.human_authority_unauthorized",
         "OPS.USER.human_authority_conflict",
         "OPS.USER.human_authority_wrong_role",
@@ -34681,6 +34683,7 @@
       },
       "concurrency": {},
       "errorCodes": [
+        "OPS.USER.human_authority_not_found",
         "OPS.USER.human_authority_unauthorized",
         "OPS.SYSTEM.human_authority_storage_failed"
       ],
@@ -34751,6 +34754,7 @@
       },
       "concurrency": {},
       "errorCodes": [
+        "OPS.USER.human_authority_not_found",
         "OPS.USER.human_authority_unauthorized",
         "OPS.SYSTEM.human_authority_storage_failed"
       ],
@@ -34821,6 +34825,7 @@
       },
       "concurrency": {},
       "errorCodes": [
+        "OPS.USER.human_authority_not_found",
         "OPS.USER.human_authority_unauthorized",
         "OPS.USER.human_authority_wrong_role",
         "OPS.SYSTEM.human_authority_storage_failed"
@@ -34898,6 +34903,7 @@
       "concurrency": {},
       "errorCodes": [
         "OPS.USER.human_authority_invalid",
+        "OPS.USER.human_authority_not_found",
         "OPS.USER.human_authority_unauthorized",
         "OPS.USER.human_authority_conflict",
         "OPS.SYSTEM.human_authority_storage_failed"
@@ -34975,6 +34981,7 @@
       "concurrency": {},
       "errorCodes": [
         "OPS.USER.human_authority_invalid",
+        "OPS.USER.human_authority_not_found",
         "OPS.USER.human_authority_unauthorized",
         "OPS.USER.human_authority_conflict",
         "OPS.USER.human_authority_wrong_role",
@@ -35051,6 +35058,7 @@
       "concurrency": {},
       "errorCodes": [
         "OPS.USER.human_authority_invalid",
+        "OPS.USER.human_authority_not_found",
         "OPS.USER.human_authority_unauthorized",
         "OPS.USER.human_authority_conflict",
         "OPS.USER.human_authority_wrong_role",
@@ -101122,7 +101130,7 @@
         "localContract": [
           {
             "path": "quwoquan_service/services/assistant-service/tests/local_contract/assistant/assistant_learning_fact/fact_validation__security__local_contract_test.go",
-            "sha256": "d6da282e9b840014b043b2eafc42b661dda8b273c132d322883b6692590ce042"
+            "sha256": "de498e50ecf7f1f7e74003614be6072e1ff1fd1fd679392b2f7280c01b5bb177"
           },
           {
             "path": "quwoquan_service/services/assistant-service/tests/local_contract/assistant/assistant_learning_fact/learning_fact__local_contract_test.go",
@@ -103116,6 +103124,10 @@
             "sha256": "b2a430b59fdc5835b2e68a4fce24fc6fc289b266eb5e27980b098f6c9f4dde27"
           },
           {
+            "path": "quwoquan_app/test/local_contract/service/assistant_service/assistant/assistant_run/run_artifacts_generated_codec__local_contract_test.dart",
+            "sha256": "36785ca7e9b836c1d71b3f381cac48e5e99b7159ab3ae350790861dae5b88880"
+          },
+          {
             "path": "quwoquan_app/test/local_contract/service/assistant_service/assistant/assistant_run/slot_schema__local_contract_test.dart",
             "sha256": "f77efd40937ef12ecaa50b28833b02c32e9b9c28c92a07a49722c09940d8a5de"
           }
@@ -104045,6 +104057,10 @@
         ],
         "presentation": [],
         "localContract": [
+          {
+            "path": "quwoquan_app/test/local_contract/service/assistant_service/assistant/assistant_turn_view/assistant_turn_generated_codec__local_contract_test.dart",
+            "sha256": "6f191b18e5ed9d2cba6fea7e982e07d31d9b0145a7071c62a37a6b5a5993d63d"
+          },
           {
             "path": "quwoquan_app/test/local_contract/service/assistant_service/assistant/assistant_turn_view/assistant_turn_message_resolver_transcript_row__local_contract_test.dart",
             "sha256": "c708469fd8bc5cd9e0674b26b1d8797f17b634f32c5d96e1e93a18b24c09d85c"
@@ -109766,7 +109782,7 @@
           }
         ],
         "userAcceptance": [],
-        "pageParticipant": false,
+        "pageParticipant": true,
         "pageOwned": false
       },
       "ops": {
@@ -111666,7 +111682,7 @@
           },
           {
             "path": "quwoquan_app/lib/service/content_service/media/media_asset/domain/work_browser_view_data.dart",
-            "sha256": "0fede78ec1ee41bd5d20a06dd214d0adc105291973ffb0863574f15c5c8ab7cd"
+            "sha256": "5b831ebeacdf9ef79efc501b0160ba86259accc8e336fcec830cf69252729c8b"
           },
           {
             "path": "quwoquan_app/lib/service/content_service/media/media_asset/domain/works_viewer_state_budget.dart",
@@ -111866,7 +111882,7 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/media/media_asset/video_player_widget__failure_experience__local_contract_test.dart",
-            "sha256": "dbc64e0cc048971049afa8b7b969333f977ec2f714f64074b99e136a79bd1116"
+            "sha256": "b58a9c66b8c3aa9293a15e9111c57d39bf9b5cd4b374ab46c90487d4880a1c8b"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/media/media_asset/video_preview_track_remote__local_contract_test.dart",
@@ -111878,7 +111894,7 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/media/media_asset/work_browser_view_data__local_contract_test.dart",
-            "sha256": "b548a6f4f039df557768f98e015a057eea5c92b3533d6aef9fea4217b9dcafac"
+            "sha256": "2e1561791aa691cb734a076ba8b5d1a5412913fa1fdf8627b287ae1f6d9eae49"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/media/media_asset/works_immersive_video_playback_journey__local_contract_test.dart",
@@ -111890,7 +111906,7 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/media/media_asset/works_immersive_viewer_widget__local_contract_test.dart",
-            "sha256": "93e51d03ef27db99628b88cfc05c2d0acf6fe3a050e0c86e7a88f07dbfef4127"
+            "sha256": "4fb1d20bc3b6b629f49d9bdc4f558988558b370b3a7a25186fcb80229ca0770e"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/media/media_asset/works_immersive_viewer_wishlist__local_contract_test.dart",
@@ -112602,7 +112618,11 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/media/original_access_quota/media_delivery_image_routing__local_contract_test.dart",
-            "sha256": "46c0d3cce8b0cd850e5e36abd76dd3ecd0a70c59ff876947864dd3302e27e049"
+            "sha256": "b3a1fff0c5d1456031bf137aaa6e4d8e100a10b559c5cf1a1544305bf64d48cb"
+          },
+          {
+            "path": "quwoquan_app/test/local_contract/service/content_service/media/original_access_quota/media_delivery_video__local_contract_test.dart",
+            "sha256": "f3ceb1deaaefb027dc6afc4158b854668f7cfb7b12f332bccaba9c77da144321"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/media/original_access_quota/original_access_quota_errors__local_contract_test.dart",
@@ -112614,7 +112634,7 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/media/original_access_quota/signed_grant_image_widget__local_contract_test.dart",
-            "sha256": "3cd5d1decd1d84a9319be5a225e541e3cfea70b6542d6bf64f81ceacb3c9cde9"
+            "sha256": "5940a908f90e06f7468e8762cb8d262e671fd0a5db3dd3811a21ead4c66860e7"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/media/original_access_quota/signed_media_delivery_coordinator__local_contract_test.dart",
@@ -112987,7 +113007,7 @@
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/post/infrastructure/releaseimport/loader.go",
-            "sha256": "a98ee5e3aaf565e684d1d9875ae873553fd1bd0ac97aac0a10c2d8acc9a9ba60"
+            "sha256": "0a07e5772079bc5c8e409bc16918a19928e9b762c9f7829a2ecb0a9455074e72"
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/post/infrastructure/releaseimport/post_manifest_validation.go",
@@ -114028,7 +114048,7 @@
           },
           {
             "path": "quwoquan_service/services/content-service/tests/api_integration/content/post/testmain__support__api_integration_test.go",
-            "sha256": "f7f3dfcee54e097671d4155ed80920da46370acc0397f3b057441a8568fc14e4"
+            "sha256": "b139fd40ab7d6ac2e663b0ace0b2a113e0c771ebf041ce916f6ecb7ea8df92ef"
           },
           {
             "path": "quwoquan_service/services/content-service/tests/api_integration/content/post/user_account_closed_cleanup__data_consistency__api_integration_test.go",
@@ -114290,7 +114310,7 @@
           },
           {
             "path": "quwoquan_app/lib/service/content_service/content/post/application/public/content_post_projection_codec.dart",
-            "sha256": "a758b83fc03009937b390d22282f022be31cfe34fba2f1761b34578b795038a5"
+            "sha256": "d2cc6fa4815232185e57927eee7a56c1c12ad4db9aa91fbeec555b7c06821c02"
           },
           {
             "path": "quwoquan_app/lib/service/content_service/content/post/application/public/content_post_projection_mapper.dart",
@@ -114564,7 +114584,7 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/content/post/article_image_tap_intent__local_contract_test.dart",
-            "sha256": "dd1712deb3ec908ae5f34adf146c5c1c44878a9468bf6b3adb402da957259bc9"
+            "sha256": "8895e148d69300a900a881e260c0dfd1e0839d83009ae9b78200f54d614d929a"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/content/post/article_immersive_geometry_single_source__local_contract_test.dart",
@@ -114672,7 +114692,7 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/content/post/content_post_projection_codec__local_contract_test.dart",
-            "sha256": "06a7e88fe51e33899caa1b5d472dd36cde18fae9885d1210cafd8ce196990ccc"
+            "sha256": "8b2f3441020054f31c763a6a2cdb504b7a2a7038eb043159f60dc6b1dc2b9589"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/content/post/content_post_remote_api_path__local_contract_test.dart",
@@ -114868,7 +114888,7 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/content/post/home_intersection_multiform_feed_widget__local_contract_test.dart",
-            "sha256": "47405b4bd6f0ec4633817c74cb4374e26105f9b67bc6ce2d03ff38f93de4ce19"
+            "sha256": "99fece4853acc10d53bd8f5cce635c307d34488a6662d7c6e9c25b493cab9819"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/content/post/home_multi_form_feed_signed_delivery_routing__local_contract_test.dart",
@@ -114944,7 +114964,7 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/content/post/post_media_delivery_binding__local_contract_test.dart",
-            "sha256": "528f4aa296ce3b41266f49c920b40c600c3cd1142db8698de626b7cb5110e53e"
+            "sha256": "6923bbaaf9de7aef4304f79692a6176e9260fff1df6f649a8de3c2927a3caa7f"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/content/post/post_publication_continuation_registry__local_contract_test.dart",
@@ -115296,6 +115316,10 @@
           {
             "path": "quwoquan_service/services/content-service/tests/local_contract/trust_safety/post_moderation_case/application/submission_case_opener__functional__local_contract_test.go",
             "sha256": "6462cd3c8580cdee2a6d5c758a4099555df9063c016b78259b6a2b24fdff2b38"
+          },
+          {
+            "path": "quwoquan_service/services/content-service/tests/local_contract/trust_safety/post_moderation_case/domain/model/post_moderation_case__local_contract_test.go",
+            "sha256": "389b597a121dbc5f6d12d387c983883eafbb74b6aa4861494d3b12244ad9fc5c"
           }
         ],
         "apiIntegration": [
@@ -115402,7 +115426,7 @@
           },
           {
             "path": "quwoquan_service/services/content-service/tests/local_contract/content/profile_interaction_activity_view/application/profile_interaction_projectors__data_consistency__local_contract_test.go",
-            "sha256": "185ec5dd21749608cc755079b514bdfe82acb6e03a60beed12b2ac0bfd68de07"
+            "sha256": "f6424e93a111eac168d423001bb0d204065e1d60f172d4b71d5e8b07c42bc09b"
           },
           {
             "path": "quwoquan_service/services/content-service/tests/local_contract/content/profile_interaction_activity_view/event_sources__contract__local_contract_test.go",
@@ -116244,7 +116268,7 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/entity_service/entity_homepage/homepage/homepage_detail_page_widget__local_contract_test.dart",
-            "sha256": "a8bc7c7e0972bcc213c375a0a6e76588db1315ef74121732eafd47928e6cabc8"
+            "sha256": "1f12c7e8aaf8515fa4ca70a0e8adb3d8e14b30fb3f13a441d522bd3d13c331af"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/entity_service/entity_homepage/homepage/homepage_detail_record_navigation__functional__local_contract_test.dart",
@@ -116268,11 +116292,11 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/entity_service/entity_homepage/homepage/homepage_introduction_page_widget__local_contract_test.dart",
-            "sha256": "bca73ed0beef8d53efd21ac8dc375cdf5a6dfcc13be0e4ac7960bddc1b2878da"
+            "sha256": "2588873b77bce9ce8ecc2c529b65b0ee3b01f264adfab4edf693ea73f793fd7a"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/entity_service/entity_homepage/homepage/homepage_introduction_signed_delivery_routing__local_contract_test.dart",
-            "sha256": "7bc5784943cc5fcad9d5a46e12e57ad55963c9b7757d8265160d88a42a7c87ec"
+            "sha256": "439c75abec7fc6cc16cc54dd2daba9a6063895038bbd44f7b03cca94eafee84f"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/entity_service/entity_homepage/homepage/homepage_maintenance_page_widget__local_contract_test.dart",
@@ -117969,7 +117993,7 @@
           },
           {
             "path": "quwoquan_service/services/integration-service/tests/local_contract/external_integration/external_interaction/user_account_closed_event__privacy__local_contract_test.go",
-            "sha256": "35b1725cbe4f6de54b2e358d8b1a54c71c6fc10f8cc1dfd98f5257f7430c6b9b"
+            "sha256": "ed6659511d97ab17a68e63e8b58a57a871ddf7c6c133cca89598fe6f58b8b729"
           }
         ],
         "apiIntegration": [
@@ -118623,7 +118647,7 @@
           },
           {
             "path": "quwoquan_service/services/notification-service/tests/local_contract/notification_delivery/notification/app_message_facades__local_contract_test.go",
-            "sha256": "fbad3da500f3e3586840d4b577b4a5755b02a604016cb87bea23c30481ccb2c7"
+            "sha256": "da9d4c086ce0383feca1c48d2ef042ebc5e44976db200b496e27fcdc4a5dde44"
           },
           {
             "path": "quwoquan_service/services/notification-service/tests/local_contract/notification_delivery/notification/app_message_publication_atomicity__data_consistency__local_contract_test.go",
@@ -119456,7 +119480,11 @@
           },
           {
             "path": "quwoquan_service/services/product-ops-service/internal/product_ops/event_record/infrastructure/persistence/elasticsearch_event_log_store.go",
-            "sha256": "ee271545bcb30503dfb24c32219af86d1fe4bf30ec789fc3037715000c1d180e"
+            "sha256": "33131ffd408788f5fb36a1b15376e5545cc5ab824089e10954fabe16d891dfb9"
+          },
+          {
+            "path": "quwoquan_service/services/product-ops-service/internal/product_ops/event_record/infrastructure/persistence/elasticsearch_index_definitions.go",
+            "sha256": "05533dedee74f2c6250530fc1b812440c19ef657ac133da221440aefc8d7cfc0"
           },
           {
             "path": "quwoquan_service/services/product-ops-service/internal/product_ops/event_record/infrastructure/persistence/elasticsearch_queries.go",
@@ -119839,6 +119867,15 @@
       "deliveryStores": [
         "product_ops_outbox"
       ],
+      "publicationDelivery": [
+        {
+          "storage": "product_ops_outbox",
+          "artifact": {
+            "path": "quwoquan_service/services/product-ops-service/cmd/api/bootstrap.go",
+            "sha256": "080ba161ff9925e02364eb8426800b326ba505eb9bbb224ecc62effe14d145b3"
+          }
+        }
+      ],
       "sourcePath": "quwoquan_service/services/product-ops-service/internal/product_ops/experiment"
     },
     {
@@ -119940,7 +119977,7 @@
         "domain": [
           {
             "path": "quwoquan_service/control-plane/platform-ops/internal/platform_ops/human_authority/domain/model/human_contract_generated.go",
-            "sha256": "2ce7ef1eb305ce8e5dd43b4929325d1fac89864d369932da103bf74ab9a49639"
+            "sha256": "f5ba623f53cacb911c9154bd8ecdd0dc7b1cc9d689f0e3f7db7c575920147f85"
           },
           {
             "path": "quwoquan_service/control-plane/platform-ops/internal/platform_ops/human_authority/domain/model/model.go",
@@ -119990,7 +120027,7 @@
         "transport": [
           {
             "path": "quwoquan_service/control-plane/platform-ops/internal/platform_ops/human_authority/adapters/inbound/http/handler.go",
-            "sha256": "ae9fc207abb009d74e9f7c2f8c02e015168f5ab2cd7bf9808e8905188976d2af"
+            "sha256": "8410800b2dce272076b36f2426ef0b9dc9175d0e6ccfd0470690b771cdcdb85c"
           }
         ],
         "localContract": [
@@ -120000,7 +120037,7 @@
           },
           {
             "path": "quwoquan_service/control-plane/platform-ops/tests/local_contract/platform_ops/human_authority/http_webhook__local_contract_test.go",
-            "sha256": "81a34fdc2270abe2822ebc7e3f77596a23ca0136ecd869e3a13cca23a227b66e"
+            "sha256": "dcf917b7f6dfa45bce14ee8bf3d073f4695cb4843bde16d8a2b9f88a53dffe35"
           }
         ],
         "apiIntegration": [
@@ -120029,9 +120066,6 @@
       "publicationStores": [
         "human_authority_events",
         "human_authority_outbox"
-      ],
-      "undeclaredStorageWrites": [
-        "human_authority_audits"
       ],
       "sourcePath": "quwoquan_service/control-plane/platform-ops/internal/platform_ops/human_authority"
     },
@@ -120123,6 +120157,15 @@
       ],
       "deliveryStores": [
         "premium_pool_entry_outbox"
+      ],
+      "publicationDelivery": [
+        {
+          "storage": "premium_pool_entry_outbox",
+          "artifact": {
+            "path": "quwoquan_service/services/product-ops-service/cmd/api/bootstrap.go",
+            "sha256": "080ba161ff9925e02364eb8426800b326ba505eb9bbb224ecc62effe14d145b3"
+          }
+        }
       ],
       "sourcePath": "quwoquan_service/services/product-ops-service/internal/product_ops/premium_pool_entry"
     },
@@ -126061,7 +126104,7 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/user_service/persona_management/persona/profile_header_signed_delivery_routing__local_contract_test.dart",
-            "sha256": "b732e0a156c480e1a9969687ffbbfcbe4f13dbe146d53076120cf19919abe8d9"
+            "sha256": "de2b1174de2889f1889d66e234d034a43fc14df010d80bda042db64bb5ca2f0a"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/user_service/persona_management/persona/profile_interaction_tab__local_contract_test.dart",
@@ -126077,7 +126120,7 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/user_service/persona_management/persona/profile_shell_widget__local_contract_test.dart",
-            "sha256": "1e843a9de224b5126b79b59a767e128631190193019e7819a10fc269848d9ebf"
+            "sha256": "bb0ab7a95f505392626770e17245d56c7ac1ee5f7772cd735df954e02c17bd15"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/user_service/persona_management/persona/profile_slogan_card__local_contract_test.dart",
@@ -128917,13 +128960,13 @@
     },
     {
       "objectId": "ops.experiment",
-      "stage": "contract-ready",
+      "stage": "implemented",
       "modeled": true,
       "contractReady": true,
-      "implemented": false,
+      "implemented": true,
       "commercialReady": false,
       "missing": [
-        "implementation.publication_delivery"
+        "commercial.result_bundle"
       ]
     },
     {
@@ -128958,19 +129001,18 @@
         "commercial.operation.RevokeHumanAuthorizationReceipt",
         "commercial.operation.SealHumanDecisionRound",
         "commercial.operation.SubmitHumanRoleEvidence",
-        "commercial.result_bundle",
-        "contract.storage_declaration_missing"
+        "commercial.result_bundle"
       ]
     },
     {
       "objectId": "ops.premium_pool_entry",
-      "stage": "contract-ready",
+      "stage": "implemented",
       "modeled": true,
       "contractReady": true,
-      "implemented": false,
+      "implemented": true,
       "commercialReady": false,
       "missing": [
-        "implementation.publication_delivery"
+        "commercial.result_bundle"
       ]
     },
     {
@@ -129567,7 +129609,7 @@
     },
     {
       "path": "_shared/page_object_contract.yaml",
-      "sha256": "65dc7c5ee2e9297a33100ff8563c1d225cf1d78474029ba20be1e08f0572f195"
+      "sha256": "7b6ed412096cece6fd70dbf413ed74f4ff4306ec8962042bba80e9c79241faa4"
     },
     {
       "path": "_shared/realtime_event_catalog.yaml",
@@ -130967,7 +131009,7 @@
     },
     {
       "path": "content/content/post/fields.yaml",
-      "sha256": "8a5fbd828b850cf12d48f9930f954318007835788494af3acd6924ed5e9f43cc"
+      "sha256": "9e4dbf6208df175daf73379a04afaa7f116697c14383640438cbf780c3a13344"
     },
     {
       "path": "content/content/post/markdown_block_sequence_cases.json",
@@ -131479,7 +131521,7 @@
     },
     {
       "path": "entity/entity_homepage/homepage/projections/homepage_introduction_asset.yaml",
-      "sha256": "d2e50a019d2214eca9c09d62136dd1f296375c1f3e545f763b0a0dd1cb88a4fb"
+      "sha256": "81b86bdf2b0896b98fd129abe70e4f1de3b06ef657a6919b78243b7a67c25d5d"
     },
     {
       "path": "entity/entity_homepage/homepage/projections/homepage_introduction_section.yaml",
@@ -132095,7 +132137,11 @@
     },
     {
       "path": "ops/platform_ops/human_authority/errors.yaml",
-      "sha256": "71a4f126182a1dbe1b42fe3c427007b1310156cec94dba4f9cc1d42297fe8248"
+      "sha256": "d81dbdb1e12ddbe2b5f2c787a33158ac9ea7f2a4d8a5d9893427ac3cf0ae86aa"
+    },
+    {
+      "path": "ops/platform_ops/human_authority/events.yaml",
+      "sha256": "aca1c2c6deff9ffd772465c80cc31393d3320d0d1ca0325f608fe5d0ce76fd91"
     },
     {
       "path": "ops/platform_ops/human_authority/fields.yaml",
@@ -132107,7 +132153,7 @@
     },
     {
       "path": "ops/platform_ops/human_authority/operations.yaml",
-      "sha256": "75308bf2239c66f0db39a578240e0cbd1edd0c134e8d9a989740be27e828627b"
+      "sha256": "c61538d2ac00940c97348f0f686e694c43fd6aa82e30b3faa548ade1e8722dce"
     },
     {
       "path": "ops/platform_ops/human_authority/projections/decision_unit_slice.yaml",
@@ -132115,7 +132161,7 @@
     },
     {
       "path": "ops/platform_ops/human_authority/storage.yaml",
-      "sha256": "ade749ce90cd5041130ae333695c379c7a5aecde15b05cfbe65563787be1721b"
+      "sha256": "1392dd1947b7489be759836bfd1ddf38fbdf283a9d913d389ae7613b26233870"
     },
     {
       "path": "ops/product_ops/account_enforcement_case/errors.yaml",
@@ -139664,7 +139710,7 @@
     },
     {
       "path": "_shared/page_object_contract.yaml",
-      "sha256": "65dc7c5ee2e9297a33100ff8563c1d225cf1d78474029ba20be1e08f0572f195",
+      "sha256": "7b6ed412096cece6fd70dbf413ed74f4ff4306ec8962042bba80e9c79241faa4",
       "mediaType": "application/yaml",
       "content": {
         "contract_id": "app_page_object_contract",
@@ -142737,12 +142783,14 @@
             "entry_widget": "GatheringDetailPage",
             "experience_owner": "circle",
             "object_ids": [
-              "circle.gathering"
+              "circle.gathering",
+              "circle.gathering_plan"
             ],
             "page_id": "circle.gathering_detail",
             "page_kind": "routed",
             "query_slices": [
-              "circle.gathering"
+              "circle.gathering",
+              "circle.gathering_plan"
             ],
             "route_id": "gatheringDetail",
             "route_registration_evidence": [
@@ -142805,7 +142853,8 @@
             },
             "typed_presentation": [
               "GatheringPublicCardSlice",
-              "GatheringPrivateDetailSlice"
+              "GatheringPrivateDetailSlice",
+              "GatheringBoardPlanSlice"
             ]
           },
           {
@@ -142903,13 +142952,15 @@
             "experience_owner": "chat",
             "object_ids": [
               "chat.conversation",
-              "circle.gathering"
+              "circle.gathering",
+              "circle.gathering_plan"
             ],
             "page_id": "chat.gathering_board",
             "page_kind": "routed",
             "query_slices": [
               "chat.conversation",
-              "circle.gathering"
+              "circle.gathering",
+              "circle.gathering_plan"
             ],
             "route_id": "gatheringBoard",
             "route_registration_evidence": [
@@ -142931,7 +142982,8 @@
             },
             "typed_presentation": [
               "GatheringChatBoardSlice",
-              "GatheringPrivateDetailSlice"
+              "GatheringPrivateDetailSlice",
+              "GatheringBoardPlanSlice"
             ]
           },
           {
@@ -259881,7 +259933,7 @@
     },
     {
       "path": "content/content/post/fields.yaml",
-      "sha256": "8a5fbd828b850cf12d48f9930f954318007835788494af3acd6924ed5e9f43cc",
+      "sha256": "9e4dbf6208df175daf73379a04afaa7f116697c14383640438cbf780c3a13344",
       "mediaType": "application/yaml",
       "content": {
         "description": "内容主体（聚合根）",
@@ -262810,7 +262862,7 @@
         },
         "value_objects": {
           "PostArticleAsset": {
-            "description": "文章素材清单中的单个不可变 typed 媒体引用。新 release/projected asset 必须 显式声明 accessMode=public|signed_grant；null/absent 只允许由具名 legacy-public migration adapter 适配，正常消费必须 fail closed。public 时 publicSliceKey 为 canonical public slice；signed_grant 时 assetId 为必需的 release authority，App 经 ReserveOriginalImageAccessGrant 换取短时签名 URL。 private HLS 当前 unsupported 并 fail closed（DEC-033/DEC-040）。",
+            "description": "文章素材清单中的单个不可变 typed 媒体引用。新 release/projected asset 必须 显式声明 accessMode=public|signed_grant；null/absent 只允许由具名 previous-version public migration adapter 适配，正常消费必须 fail closed。public 时 publicSliceKey 为 canonical public slice；signed_grant 时 assetId 为必需的 release authority，App 经 ReserveOriginalImageAccessGrant 换取短时签名 URL。 private HLS 当前 unsupported 并 fail closed（DEC-033/DEC-040）。",
             "fields": [
               {
                 "constraints": [
@@ -262830,7 +262882,7 @@
                 "constraints": [
                   "NULLABLE"
                 ],
-                "description": "新 release/projected asset 必须显式 public 或 signed_grant；null 仅允许在具名 legacy-public migration adapter 输入边界，正常消费必须 fail closed。signed_grant 必须同时携带 assetId，private HLS 当前 unsupported。",
+                "description": "新 release/projected asset 必须显式 public 或 signed_grant；null 仅允许在具名 previous-version public migration adapter 输入边界，正常消费必须 fail closed。signed_grant 必须同时携带 assetId，private HLS 当前 unsupported。",
                 "enum_ref": "MediaDeliveryAccessMode",
                 "name": "accessMode",
                 "type": "enum"
@@ -263364,7 +263416,7 @@
             ]
           },
           "PostMediaItem": {
-            "description": "Post 统一媒体序列中的 typed 交付引用。新 release/projected item 必须显式 声明 accessMode=public|signed_grant；null/absent 不得隐式解释为 public，只能 在具名 legacy-public migration adapter 边界适配。public 时 url/coverUrl 为 canonical public slice；signed_grant 时字段存 release authority 的相对私有 引用，mediaAssetId 必须在场，App 经 ReserveOriginalImageAccessGrant 换取 短时签名 URL。private HLS（m3u8/mpd/manifest）当前 unsupported 并 fail closed （DEC-031/DEC-033/DEC-040）。",
+            "description": "Post 统一媒体序列中的 typed 交付引用。新 release/projected item 必须显式 声明 accessMode=public|signed_grant；null/absent 不得隐式解释为 public，只能 在具名 previous-version public migration adapter 边界适配。public 时 url/coverUrl 为 canonical public slice；signed_grant 时字段存 release authority 的相对私有 引用，mediaAssetId 必须在场，App 经 ReserveOriginalImageAccessGrant 换取 短时签名 URL。private HLS（m3u8/mpd/manifest）当前 unsupported 并 fail closed （DEC-031/DEC-033/DEC-040）。",
             "fields": [
               {
                 "constraints": [
@@ -263391,7 +263443,7 @@
                 "constraints": [
                   "NULLABLE"
                 ],
-                "description": "新 release/projected item 必须显式 public 或 signed_grant；null 仅允许在具名 legacy-public migration adapter 输入边界，正常消费必须 fail closed。signed_grant 必须同时携带 mediaAssetId，private HLS 当前 unsupported。",
+                "description": "新 release/projected item 必须显式 public 或 signed_grant；null 仅允许在具名 previous-version public migration adapter 输入边界，正常消费必须 fail closed。signed_grant 必须同时携带 mediaAssetId，private HLS 当前 unsupported。",
                 "enum_ref": "MediaDeliveryAccessMode",
                 "name": "accessMode",
                 "type": "enum"
@@ -299340,7 +299392,7 @@
     },
     {
       "path": "entity/entity_homepage/homepage/projections/homepage_introduction_asset.yaml",
-      "sha256": "d2e50a019d2214eca9c09d62136dd1f296375c1f3e545f763b0a0dd1cb88a4fb",
+      "sha256": "81b86bdf2b0896b98fd129abe70e4f1de3b06ef657a6919b78243b7a67c25d5d",
       "mediaType": "application/yaml",
       "content": {
         "consumers": [
@@ -339147,7 +339199,7 @@
     },
     {
       "path": "ops/platform_ops/human_authority/errors.yaml",
-      "sha256": "71a4f126182a1dbe1b42fe3c427007b1310156cec94dba4f9cc1d42297fe8248",
+      "sha256": "d81dbdb1e12ddbe2b5f2c787a33158ac9ea7f2a4d8a5d9893427ac3cf0ae86aa",
       "mediaType": "application/yaml",
       "content": {
         "description": "Hosted Human Authority 的身份、闭集、证据、SoD、CAS 与存储失败语义。",
@@ -339177,6 +339229,34 @@
             "user_message": {
               "en": "The human authority request is invalid",
               "zh": "人工授权请求无效"
+            }
+          },
+          {
+            "code": "OPS.USER.human_authority_not_found",
+            "dart_const": "humanAuthorityNotFound",
+            "disruption_level": "inlineCard",
+            "emitted_by": [
+              {
+                "operations": [
+                  "SubmitHumanRoleEvidence",
+                  "SealHumanDecisionRound",
+                  "FinalizeHumanDecision",
+                  "ReadHumanDecisionUnit",
+                  "ReadHumanAuthorizationReceipt",
+                  "ReadHumanAuthoritySigningPublicKey",
+                  "ConsumeHumanAuthorizationReceipt",
+                  "RevokeHumanAuthorizationReceipt"
+                ],
+                "surface": "http"
+              }
+            ],
+            "go_const": "ErrHumanAuthorityNotFound",
+            "http_status": 404,
+            "reason": "human_authority_not_found",
+            "recovery_action": "surface",
+            "user_message": {
+              "en": "The human authority record was not found",
+              "zh": "人工授权记录不存在"
             }
           },
           {
@@ -339357,6 +339437,64 @@
               "en": "The human authority record could not be stored",
               "zh": "人工授权记录保存失败"
             }
+          }
+        ]
+      }
+    },
+    {
+      "path": "ops/platform_ops/human_authority/events.yaml",
+      "sha256": "aca1c2c6deff9ffd772465c80cc31393d3320d0d1ca0325f608fe5d0ce76fd91",
+      "mediaType": "application/yaml",
+      "content": {
+        "events": [
+          {
+            "delivery_semantics": "transactional_event_log",
+            "description": "决定单元与首个 append-only hash-chain event 已原子提交。",
+            "name": "DecisionUnitCreated",
+            "no_consumer_reason": "durable authority audit stream retained for exact readback and incident replay; no domain aggregate consumes it",
+            "payload_entity": "DecisionUnit",
+            "payload_fields": [
+              "decisionUnitId",
+              "decisionKind",
+              "scope"
+            ]
+          },
+          {
+            "delivery_semantics": "transactional_event_log",
+            "description": "authenticated principal 的职责证据已追加到决定单元 hash chain。",
+            "name": "RoleSubmissionRecorded",
+            "no_consumer_reason": "durable authority audit stream retained for exact readback and incident replay; no domain aggregate consumes it",
+            "payload_entity": "RoleSubmission",
+            "payload_fields": [
+              "submissionId",
+              "role",
+              "actorId",
+              "round",
+              "evidenceDigest"
+            ]
+          },
+          {
+            "delivery_semantics": "transactional_event_log",
+            "description": "决定单元当前职责轮次已完成并封存。",
+            "name": "RoundSealed",
+            "no_consumer_reason": "durable authority audit stream retained for exact readback and incident replay; no domain aggregate consumes it",
+            "payload_entity": "DecisionUnit",
+            "payload_fields": [
+              "decisionUnitId",
+              "sealedRounds"
+            ]
+          },
+          {
+            "delivery_semantics": "transactional_event_log",
+            "description": "最终选项、授权收据与不可变 chain commit 已原子提交。",
+            "name": "DecisionFinalized",
+            "no_consumer_reason": "durable authority audit stream retained for exact readback and incident replay; no domain aggregate consumes it",
+            "payload_entity": "DecisionUnit",
+            "payload_fields": [
+              "decisionUnitId",
+              "decision",
+              "receipt"
+            ]
           }
         ]
       }
@@ -340780,7 +340918,7 @@
     },
     {
       "path": "ops/platform_ops/human_authority/operations.yaml",
-      "sha256": "75308bf2239c66f0db39a578240e0cbd1edd0c134e8d9a989740be27e828627b",
+      "sha256": "c61538d2ac00940c97348f0f686e694c43fd6aa82e30b3faa548ade1e8722dce",
       "mediaType": "application/yaml",
       "content": {
         "api_routes": [
@@ -340927,6 +341065,7 @@
               "target_story": "hosted-human-authority"
             },
             "error_codes": [
+              "OPS.USER.human_authority_not_found",
               "OPS.USER.human_authority_unauthorized",
               "OPS.USER.human_authority_wrong_role",
               "OPS.SYSTEM.human_authority_storage_failed"
@@ -340995,6 +341134,7 @@
             },
             "error_codes": [
               "OPS.USER.human_authority_invalid",
+              "OPS.USER.human_authority_not_found",
               "OPS.USER.human_authority_unauthorized",
               "OPS.USER.human_authority_conflict",
               "OPS.USER.human_authority_wrong_role",
@@ -341067,6 +341207,7 @@
             },
             "error_codes": [
               "OPS.USER.human_authority_invalid",
+              "OPS.USER.human_authority_not_found",
               "OPS.USER.human_authority_unauthorized",
               "OPS.USER.human_authority_conflict",
               "OPS.USER.human_authority_wrong_role",
@@ -341140,6 +341281,7 @@
             },
             "error_codes": [
               "OPS.USER.human_authority_invalid",
+              "OPS.USER.human_authority_not_found",
               "OPS.USER.human_authority_unauthorized",
               "OPS.USER.human_authority_conflict",
               "OPS.USER.human_authority_wrong_role",
@@ -341212,6 +341354,7 @@
               "target_story": "hosted-human-authority"
             },
             "error_codes": [
+              "OPS.USER.human_authority_not_found",
               "OPS.USER.human_authority_unauthorized",
               "OPS.SYSTEM.human_authority_storage_failed"
             ],
@@ -341277,6 +341420,7 @@
               "target_story": "hosted-human-authority"
             },
             "error_codes": [
+              "OPS.USER.human_authority_not_found",
               "OPS.USER.human_authority_unauthorized",
               "OPS.SYSTEM.human_authority_storage_failed"
             ],
@@ -341344,6 +341488,7 @@
             },
             "error_codes": [
               "OPS.USER.human_authority_invalid",
+              "OPS.USER.human_authority_not_found",
               "OPS.USER.human_authority_unauthorized",
               "OPS.USER.human_authority_conflict",
               "OPS.SYSTEM.human_authority_storage_failed"
@@ -341416,6 +341561,7 @@
             },
             "error_codes": [
               "OPS.USER.human_authority_invalid",
+              "OPS.USER.human_authority_not_found",
               "OPS.USER.human_authority_unauthorized",
               "OPS.USER.human_authority_conflict",
               "OPS.SYSTEM.human_authority_storage_failed"
@@ -341569,12 +341715,58 @@
     },
     {
       "path": "ops/platform_ops/human_authority/storage.yaml",
-      "sha256": "ade749ce90cd5041130ae333695c379c7a5aecde15b05cfbe65563787be1721b",
+      "sha256": "1392dd1947b7489be759836bfd1ddf38fbdf283a9d913d389ae7613b26233870",
       "mediaType": "application/yaml",
       "content": {
         "backend": "postgres",
         "role": "authoritative",
         "tables": {
+          "human_authority_audits": {
+            "columns": [
+              {
+                "constraints": [
+                  "PK",
+                  "NOT_NULL"
+                ],
+                "name": "decision_unit_id",
+                "type": "VARCHAR(128)"
+              },
+              {
+                "constraints": [
+                  "PK",
+                  "NOT_NULL"
+                ],
+                "name": "action",
+                "type": "VARCHAR(96)"
+              },
+              {
+                "constraints": [
+                  "PK",
+                  "NOT_NULL"
+                ],
+                "name": "actor_id",
+                "type": "VARCHAR(256)"
+              },
+              {
+                "constraints": [
+                  "PK",
+                  "NOT_NULL"
+                ],
+                "name": "occurred_at",
+                "type": "TIMESTAMPTZ"
+              }
+            ],
+            "description": "决定单元与授权收据状态迁移的追加式 operator 审计轨；与 aggregate/event/outbox 同事务提交。",
+            "entity": "DecisionUnit",
+            "pk": [
+              "decision_unit_id",
+              "action",
+              "actor_id",
+              "occurred_at"
+            ],
+            "publication_role": "not_published",
+            "role": "append_only"
+          },
           "human_authority_events": {
             "columns": [
               {

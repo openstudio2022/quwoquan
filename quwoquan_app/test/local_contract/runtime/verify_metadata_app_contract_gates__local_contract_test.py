@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import importlib.util
 import io
+import tempfile
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
@@ -53,6 +54,46 @@ class VerifyMetadataAppContractGatesTest(unittest.TestCase):
             routes["gateway"]["ExecutePersistedGraphQLQuery"], "/graphql"
         )
         self.assertEqual(routes["gateway"]["SearchPage"], "/graphql")
+        self.assertEqual(
+            app_routes["chat"]["MarkAsRead"],
+            "/chat/conversations/{conversationId}/messages/{messageId}/read",
+        )
+        self.assertEqual(
+            app_routes["chat"]["UpdateConversationSettings"],
+            "/chat/conversations/{conversationId}/settings",
+        )
+
+    def test_route_parser_keeps_wrapped_constructor_entries_isolated(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            generated = Path(temp) / "operation_contracts.g.dart"
+            generated.write_text(
+                """const appCloudOperationContracts = <String, CloudOperationContract>{
+  "chat.conversation_user_state.MarkAsRead": CloudOperationContract(
+    localOperationId: "MarkAsRead",
+    domain: "chat",
+    pathTemplate:
+        "/chat/conversations/{conversationId}/messages/{messageId}/read",
+  ),
+  "chat.conversation_user_state.UpdateConversationSettings":
+      CloudOperationContract(
+        localOperationId: "UpdateConversationSettings",
+        domain: "chat",
+        pathTemplate: "/chat/conversations/{conversationId}/settings",
+      ),
+};
+""",
+                encoding="utf-8",
+            )
+
+            routes = self.routes.parse_app_operation_routes(generated)
+
+        self.assertEqual(
+            routes["chat"],
+            {
+                "MarkAsRead": "/chat/conversations/{conversationId}/messages/{messageId}/read",
+                "UpdateConversationSettings": "/chat/conversations/{conversationId}/settings",
+            },
+        )
 
     def test_response_gate_scans_current_canonical_declarations(self) -> None:
         declarations = self.responses.collect_response_decls()

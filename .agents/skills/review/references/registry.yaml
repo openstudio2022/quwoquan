@@ -13,14 +13,26 @@ limits:
   reviewer_context_bytes: 24576
 
 evidence:
-  feature-tree:
-    command: make verify-feature-tree
+  review-baseline:
+    command: python3 -B quwoquan_ops/gate/verify_review_baseline.py
     segment: POST
     required: true
-    timeout_seconds: 300
+    timeout_seconds: 10
     covers: []
-  agent-context-budget:
-    command: make verify-agent-context-budget
+  portal-test:
+    command: make test-ops-portal
+    segment: POST
+    required: true
+    timeout_seconds: 900
+    covers: []
+  portal-build:
+    command: make build-ops-portal
+    segment: POST
+    required: true
+    timeout_seconds: 900
+    covers: []
+  feature-tree:
+    command: make verify-feature-tree
     segment: POST
     required: true
     timeout_seconds: 300
@@ -252,6 +264,7 @@ workflows:
 
   prd:
     segments: [PRE, POST]
+    baseline_evidence: review-baseline
     deliverable: spec-node
     primary:
       role: product
@@ -260,6 +273,7 @@ workflows:
 
   design:
     segments: [PRE, POST]
+    baseline_evidence: review-baseline
     deliverable: dec
     primary:
       role: architect
@@ -268,6 +282,7 @@ workflows:
 
   dev:
     segments: [PRE, POST]
+    baseline_evidence: review-baseline
     deliverable: implementation
     primary:
       role: developer
@@ -296,6 +311,7 @@ workflows:
 
   environment-ops:
     segments: [PRE, POST]
+    baseline_evidence: review-baseline
     deliverable: release-evidence
     primary:
       role: ops
@@ -304,6 +320,7 @@ workflows:
 
   content-production:
     segments: [PRE, POST]
+    baseline_evidence: review-baseline
     deliverable: content-release
     primary:
       role: data-quality
@@ -312,6 +329,7 @@ workflows:
 
   incident-inspection:
     segments: [PRE, POST]
+    baseline_evidence: review-baseline
     deliverable: inspection-report
     primary:
       role: observability
@@ -320,6 +338,7 @@ workflows:
 
   distill:
     segments: [PRE, POST]
+    baseline_evidence: review-baseline
     deliverable: rule-candidates
     primary:
       role: architect

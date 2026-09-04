@@ -29,6 +29,33 @@ def _process_result(output: Path, result: Mapping[str, object]) -> tuple[Path, d
     return path, json.loads(path.read_text(encoding="utf-8"))
 
 
+def test_dependency_progress_reports_validated_phase() -> None:
+    observed: list[str] = []
+    progress = sync.DependencyBuildProgress(on_begin=observed.append)
+
+    progress.begin("pub-online-resolution")
+
+    assert progress.current_phase == "pub-online-resolution"
+    assert observed == ["pub-online-resolution"]
+
+
+def test_success_streams_progress_to_stderr(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    output = tmp_path / "output"
+    _stub_sync(monkeypatch, output)
+
+    result = sync.command_app_dependency_sync(
+        argparse.Namespace(), component_builder=_component_builder()
+    )
+
+    assert result["exitCode"] == 0
+    stderr = capsys.readouterr().err
+    assert "phase=dependency-sync-lock" in stderr
+    assert "phase=completed" in stderr
+
 def test_failure_process_result_is_private_closed_redacted_and_relative(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -339,6 +366,9 @@ def test_lock_failure_still_persists_process_result(
     )
 
     class DeniedLock:
+        def __init__(self, **_kwargs: object) -> None:
+            pass
+
         def __enter__(self) -> None:
             raise ValueError("APP.DEPENDENCY.sync_lock_timeout: fixture")
 
@@ -351,7 +381,7 @@ def test_lock_failure_still_persists_process_result(
 
     path, process_result = _process_result(output, result)
     assert result["exitCode"] == 2
-    assert process_result["failedPhase"] == "live-source-seal"
+    assert process_result["failedPhase"] == "dependency-sync-lock"
     assert process_result["cause"] == "value_error"
     assert process_result["details"][0].startswith(
         "APP.DEPENDENCY.sync_lock_timeout"

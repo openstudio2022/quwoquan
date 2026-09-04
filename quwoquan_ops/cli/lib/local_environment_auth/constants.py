@@ -30,7 +30,7 @@ _TEST_DATA_IDENTITY_SET_PATH_ENV = "QWQ_TEST_DATA_IDENTITY_SET_PATH"
 _TEST_DATA_IDENTITY_SET_NAME = "test-data-identity-set.json"
 _TEST_DATA_IDENTITY_SET_LOCK_NAME = "test-data-identity-set.lock"
 _TEST_DATA_PHONE_PROFILES = frozenset({"nonroutable", "mainland_ui"})
-_RESEARCH_IDENTITY_BINDING_SCHEMA = "qwq.local_research_identity_binding.v1"
+_RESEARCH_IDENTITY_BINDING_SCHEMA = "qwq.local_research_identity_binding"
 _RESEARCH_IDENTITY_BINDING_NAME = "research-identity-binding.json"
 _CROCKFORD_LOWER = "0123456789abcdefghjkmnpqrstvwxyz"
 # 原单文件为 parents[3]；包形态多一层目录，改为 parents[4]，值保持仓库根不变。

@@ -16,6 +16,7 @@ import 'package:quwoquan_app/service/content_service/media/media_asset/applicati
 import 'package:quwoquan_app/design_system/media/app_cached_network_image.dart';
 
 import '../../../../../support/runtime/cloud_boundary_test_scope.dart';
+
 import 'package:quwoquan_app/service/content_service/media/original_access_quota/presentation/media_delivery_image.dart';
 
 List<Override> _boundaryOverrides() {
@@ -55,9 +56,7 @@ void main() {
               height: 220,
               child: VideoPlaybackFailureOverlay(
                 failure: failure,
-                thumbnailBinding: MediaDeliveryBinding(
-                  assetId: '',
-                  accessMode: null,
+                thumbnailBinding: MediaDeliveryBinding.public(
                   publicUrl: thumbnail.url,
                 ),
                 onRetry: onRetry,

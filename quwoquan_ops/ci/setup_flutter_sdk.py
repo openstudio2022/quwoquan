@@ -19,6 +19,10 @@ from collections.abc import Mapping
 from pathlib import Path, PurePosixPath
 from typing import Any
 
+sys.dont_write_bytecode = True
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+
 MANIFEST_BASE_URL = "https://storage.googleapis.com/flutter_infra_release/releases"
 SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 _MANIFEST_ATTEMPTS = 4
@@ -246,6 +250,48 @@ def install(args: argparse.Namespace) -> int:
     return 0
 
 
+def _gradle_wrapper_tools() -> tuple[Any, Any, Any, Any]:
+    if str(REPO_ROOT) not in sys.path:
+        sys.path.insert(0, str(REPO_ROOT))
+    from quwoquan_app.scripts.tools.flutter_facade.flutter_facade import (
+        FacadeError,
+        resolved_flutter_identity,
+    )
+    from quwoquan_ops.cli.lib.package_reuse.android_gradle_store import (
+        canonical_android_uat_gradle_invocations,
+        materialize_pinned_flutter_gradle_wrappers,
+    )
+
+    return (
+        FacadeError,
+        resolved_flutter_identity,
+        canonical_android_uat_gradle_invocations,
+        materialize_pinned_flutter_gradle_wrappers,
+    )
+
+
+def materialize_gradle_wrappers(args: argparse.Namespace) -> int:
+    project_root = Path(args.project_root).expanduser().resolve(strict=True)
+    (
+        facade_error,
+        resolve_flutter_identity,
+        gradle_invocations,
+        materialize_wrappers,
+    ) = _gradle_wrapper_tools()
+    try:
+        flutter_identity = resolve_flutter_identity(dict(os.environ))
+    except facade_error as error:
+        raise ValueError(f"App CI Flutter identity is invalid: {error}") from error
+    invocations = gradle_invocations(project_root)
+    identities = materialize_wrappers(
+        project_root,
+        [invocation.gradle_root for invocation in invocations],
+        flutter_identity,
+    )
+    print(f"Materialized {len(identities)} pinned Flutter Gradle wrappers")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -282,12 +328,16 @@ def build_parser() -> argparse.ArgumentParser:
     install_parser.add_argument("--github-env", default=os.environ.get("GITHUB_ENV"))
     install_parser.add_argument("--github-path", default=os.environ.get("GITHUB_PATH"))
     install_parser.set_defaults(func=install)
+
+    wrappers_parser = subparsers.add_parser("materialize-gradle-wrappers")
+    wrappers_parser.add_argument("--project-root", default=str(REPO_ROOT))
+    wrappers_parser.set_defaults(func=materialize_gradle_wrappers)
     return parser
 
 
 def main() -> int:
     args = build_parser().parse_args()
-    if not args.tool_cache:
+    if args.command in {"resolve", "install"} and not args.tool_cache:
         raise ValueError("RUNNER_TOOL_CACHE is required")
     return args.func(args)
 

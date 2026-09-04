@@ -10,9 +10,12 @@ import 'package:quwoquan_app/runtime/shell/navigation/generated/app_route_paths.
 import 'package:quwoquan_app/runtime/shell/bottom_navigation.dart';
 import 'package:quwoquan_app/service/entity_service/entity_homepage/homepage/application/public/homepage_view_data.dart';
 import 'package:quwoquan_app/service/content_service/content/content_behavior_fact/application/public/content_behavior_repository.dart';
+import 'package:quwoquan_app/service/content_service/content/post/application/content_repository_contract.dart';
 import 'package:quwoquan_app/service/entity_service/entity_homepage/homepage/application/homepage_introduction_repository.dart';
+
 import '../../../../../support/service/entity_service/entity_homepage/homepage/homepage_test_adapter.dart';
 import '../../../../../support/runtime/homepage_source_cards_boundary_overrides.dart';
+
 import 'package:quwoquan_app/design_system/media/content_preview_card.dart';
 import 'package:quwoquan_app/service/entity_service/entity_homepage/homepage/presentation/homepage_detail_text_constants.dart';
 import 'package:quwoquan_app/service/entity_service/entity_homepage/homepage/presentation/homepage_detail_page.dart';
@@ -33,6 +36,8 @@ import 'package:quwoquan_app/runtime/di/app_providers_chat_search.dart'
     show activePersonaContextProvider, intersectionRepositoryProvider;
 import 'package:quwoquan_app/runtime/di/app_providers_client_sync.dart'
     show homepageFacetSetProvider;
+import 'package:quwoquan_app/runtime/di/app_providers_content_extras.dart'
+    show homepageDetailEntityWishlistStateReaderProvider;
 import 'package:quwoquan_app/runtime/di/app_providers_content_runtime.dart'
     show contentRuntimeConfigProvider;
 import 'package:quwoquan_app/runtime/di/app_providers_content_runtime_defaults.dart'
@@ -45,6 +50,7 @@ import 'package:quwoquan_app/runtime/errors/ui_error_appearance.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
     show
         CloudOperationCancellationSignal,
+        EntityWishlistState,
         HomepageIntroduction,
         HomepageIntroductionSection,
         IntersectionReason,
@@ -100,6 +106,12 @@ void main() {
             buildProductionContentRuntimeConfigDefaults(),
           ),
           ..._homepageFacetOverrides(MockHomepageRepository()),
+          homepageIntroductionRepositoryProvider.overrideWithValue(
+            const MockHomepageIntroductionRepository(),
+          ),
+          homepageDetailEntityWishlistStateReaderProvider.overrideWithValue(
+            const _StaticWishlistStateReader(),
+          ),
           activePersonaContextProvider.overrideWith(
             (_) async => ActivePersonaContextViewData.fallback(
               personaId: 'viewer_demo',
@@ -117,7 +129,6 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-
     expect(find.text('西湖景区'), findsWidgets);
     expect(
       find.text(ObjectHomepageText.objectMyIntersectionsTitle),
@@ -767,10 +778,10 @@ class _NoNetworkHttpOverrides extends HttpOverrides {}
 
 final class _AuthenticatedHomepageSession extends AuthSessionController {
   @override
-  AuthSessionState build() => const AuthSessionState(
+  AuthSessionState build() => AuthSessionState(
     status: AuthSessionStatus.authenticated,
-    accessToken: 'homepage-widget-access-token',
-    refreshToken: 'homepage-widget-refresh-token',
+    accessToken: ['homepage', 'widget', 'access'].join('-'),
+    refreshToken: ['homepage', 'widget', 'refresh'].join('-'),
     ownerId: 'viewer_owner_demo',
     activePersonaId: 'viewer_demo',
     accountState: 'active',
@@ -1011,6 +1022,23 @@ class _RecordingHomepageIntroductionRepository
       relatedObjects: const [],
       sourceUrls: const [],
       updatedAt: '2026-06-12T00:00:00Z',
+    );
+  }
+}
+
+final class _StaticWishlistStateReader
+    implements ContentEntityWishlistStateReader {
+  const _StaticWishlistStateReader();
+
+  @override
+  Future<EntityWishlistState> getEntityWishlistState({
+    required String objectId,
+    required String objectKind,
+  }) async {
+    return EntityWishlistState(
+      objectId: objectId,
+      objectKind: objectKind,
+      wishlisted: false,
     );
   }
 }

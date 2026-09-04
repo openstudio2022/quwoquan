@@ -9,6 +9,7 @@ import errno
 import json
 import os
 from pathlib import Path
+import shutil
 import subprocess
 import sys
 
@@ -63,6 +64,58 @@ def assert_entrypoint_passed(completed: subprocess.CompletedProcess[str]) -> dic
 def test_canonical_gate_subprocess_resolves_repo_and_cli_packages() -> None:
     completed = run_entrypoint("quwoquan_ops/gate/verify_human_agent_delivery_eval.py")
     assert_entrypoint_passed(completed)
+
+
+def test_repository_gate_bootstraps_runtime_root_before_eval(tmp_path: Path) -> None:
+    isolated_root = tmp_path / "clean-checkout"
+    isolated_gate = isolated_root / "quwoquan_ops/gate/gate_repo.sh"
+    isolated_gate.parent.mkdir(parents=True)
+    shutil.copy2(ROOT / "quwoquan_ops/gate/gate_repo.sh", isolated_gate)
+
+    stubs = {
+        "quwoquan_ops/gate/scaffold/verify_global_increment_constraints.sh": (
+            "#!/usr/bin/env bash\nexit 0\n"
+        ),
+        "quwoquan_ops/gate/verify_git_branch_policy.py": "raise SystemExit(0)\n",
+        "quwoquan_ops/gate/verify_github_supply_chain.py": "raise SystemExit(0)\n",
+        "quwoquan_ops/gate/emit_gate_repo_summary.py": "raise SystemExit(0)\n",
+        "quwoquan_ops/gate/verify_human_agent_delivery_eval.py": """
+from pathlib import Path
+
+root = Path(__file__).resolve().parents[2]
+runtime_root = root / ".qwq_output"
+if not runtime_root.is_dir() or runtime_root.is_symlink():
+    raise SystemExit(91)
+print("[bootstrap-probe] canonical runtime root ready")
+raise SystemExit(73)
+""".lstrip(),
+    }
+    for relative_path, source in stubs.items():
+        destination = isolated_root / relative_path
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_text(source, encoding="utf-8")
+
+    runtime_root = isolated_root / ".qwq_output"
+    assert not runtime_root.exists()
+    env = {
+        key: value
+        for key, value in os.environ.items()
+        if not key.startswith("GATE_")
+    }
+    completed = subprocess.run(
+        ["bash", str(isolated_gate), "--scope", "portal"],
+        cwd=isolated_root,
+        text=True,
+        capture_output=True,
+        check=False,
+        env=env,
+    )
+
+    combined_output = completed.stdout + completed.stderr
+    assert completed.returncode == 73, combined_output
+    assert "[bootstrap-probe] canonical runtime root ready" in completed.stdout
+    assert runtime_root.is_dir()
+    assert not runtime_root.is_symlink()
 
 
 def test_human_agent_delivery_eval_cli_resolves_repo_and_cli_packages() -> None:

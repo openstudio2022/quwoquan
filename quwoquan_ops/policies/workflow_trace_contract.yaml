@@ -1,0 +1,49 @@
+schema_id: quwoquan.workflow-trace-contract
+schema_version: 1
+owner_spec: specs/feature-tree/runtime/development-workflow-governance/agent-skill-review-context-organization/spec.md
+output_root: .qwq_output/env/repo/runs/workflow-trace
+serialization: canonical-json-utf8-sort-keys-compact-no-trailing-newline
+digest_algorithm: sha256
+ref_format: workflow-trace-v1:sha256:<64-lowercase-hex>
+entry_kinds: [natural_language, cursor_command, skill_explicit, host_event]
+hosts: [cursor, codex, unknown]
+capability_statuses: [declared, verified, unsupported]
+selected_skills:
+  - commit
+  - content-production
+  - continue
+  - design
+  - dev
+  - distill
+  - environment-ops
+  - explore
+  - incident-inspection
+  - plan-next
+  - prd
+  - review
+verification_policy:
+  verified_evidence_kinds: [cursor_command, skill_explicit, host_event]
+  natural_language_may_be_verified: false
+  actual_host_sample_required: true
+  explicit_command_evidence_required: true
+schemas:
+  start:
+    required_fields: [schema_id, schema_version, phase, entry_kind, host, selected_skill, skill_body_digest, owner_identity_ref, capability_status, started_at]
+  finish:
+    required_fields: [schema_id, schema_version, phase, start_ref, terminal, candidate_evidence_ref, capability_status, finished_at]
+  advisory:
+    required_fields: [schema_id, schema_version, code, operation, detail, retryable, blocking]
+  capability_matrix:
+    required_fields: [schema_id, schema_version, generated_at, skill_inventory, hosts]
+create_once: true
+finish_binds_exact_start_ref: true
+reference_semantics:
+  owner_identity_ref: opaque_sha_or_ref_validate_on_consumption
+  candidate_evidence_ref: opaque_sha_or_ref_validate_on_consumption
+failure_semantics:
+  blocking: false
+  result: typed_advisory
+integration:
+  hooks: false
+  hard_gate: false
+  automatic_capture: false

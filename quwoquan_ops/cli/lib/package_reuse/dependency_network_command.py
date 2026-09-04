@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
+import codecs
 import os
 import re
 import signal
 import subprocess
 import tempfile
 import time
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 
 _PROCESS_GROUP_GRACE_SECONDS = 2.0
@@ -173,6 +174,17 @@ def _stop_process_group(process: subprocess.Popen[bytes]) -> None:
             ) from error
 
 
+def _read_output(stream: object) -> str:
+    stream.seek(0)
+    return stream.read().decode("utf-8", errors="replace")
+
+
+def _read_output_since(stream: object, offset: int) -> tuple[bytes, int]:
+    size = os.fstat(stream.fileno()).st_size
+    encoded = os.pread(stream.fileno(), max(0, size - offset), offset)
+    return encoded, offset + len(encoded)
+
+
 def run_managed_subprocess(
     command: Sequence[str],
     *,
@@ -183,33 +195,85 @@ def run_managed_subprocess(
     stdout: int,
     stderr: int,
     timeout: float,
+    on_stderr: Callable[[str], None] | None = None,
 ) -> subprocess.CompletedProcess[str]:
     """Run one command in its own process group and reap the entire tree on timeout."""
 
-    if not text or stdout != subprocess.PIPE or stderr != subprocess.STDOUT:
-        raise ValueError("managed dependency subprocess requires combined text capture")
-    with tempfile.TemporaryFile() as output_file:
+    if (
+        not text
+        or stdout != subprocess.PIPE
+        or stderr not in {subprocess.PIPE, subprocess.STDOUT}
+    ):
+        raise ValueError("managed dependency subprocess requires captured text output")
+    with (
+        tempfile.TemporaryFile() as stdout_file,
+        tempfile.TemporaryFile() as stderr_file,
+    ):
         process = subprocess.Popen(
             list(command),
             cwd=str(cwd),
             env=dict(env),
-            stdout=output_file,
-            stderr=subprocess.STDOUT,
+            stdout=stdout_file,
+            stderr=(stderr_file if stderr == subprocess.PIPE else subprocess.STDOUT),
             start_new_session=True,
         )
-        try:
-            returncode = process.wait(timeout=timeout)
-        except KeyboardInterrupt:
-            _stop_process_group(process)
-            raise
-        except subprocess.TimeoutExpired as error:
-            _stop_process_group(process)
-            output_file.seek(0)
-            captured = output_file.read().decode("utf-8", errors="replace")
-            raise subprocess.TimeoutExpired(command, timeout, output=captured) from error
-        output_file.seek(0)
-        captured = output_file.read().decode("utf-8", errors="replace")
-    completed = subprocess.CompletedProcess(command, returncode, stdout=captured)
+        deadline = time.monotonic() + timeout
+        stderr_offset = 0
+        stderr_decoder = codecs.getincrementaldecoder("utf-8")(errors="replace")
+
+        def emit_stderr(*, final: bool) -> None:
+            nonlocal stderr_offset
+            if on_stderr is None or stderr != subprocess.PIPE:
+                return
+            encoded, stderr_offset = _read_output_since(stderr_file, stderr_offset)
+            chunk = stderr_decoder.decode(encoded, final=final)
+            if not chunk:
+                return
+            try:
+                on_stderr(chunk)
+            except BaseException:
+                _stop_process_group(process)
+                raise
+        while True:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                _stop_process_group(process)
+                emit_stderr(final=True)
+                captured_stdout = _read_output(stdout_file)
+                captured_stderr = (
+                    _read_output(stderr_file) if stderr == subprocess.PIPE else None
+                )
+                raise subprocess.TimeoutExpired(
+                    command,
+                    timeout,
+                    output=captured_stdout,
+                    stderr=captured_stderr,
+                )
+            try:
+                returncode = process.wait(
+                    timeout=min(1.0 if on_stderr is not None else remaining, remaining)
+                )
+            except KeyboardInterrupt:
+                _stop_process_group(process)
+                raise
+            except subprocess.TimeoutExpired:
+                emit_stderr(final=False)
+                continue
+            break
+        emit_stderr(final=True)
+        captured_stdout = _read_output(stdout_file)
+        captured_stderr = _read_output(stderr_file) if stderr == subprocess.PIPE else None
+    completed = subprocess.CompletedProcess(
+        command,
+        returncode,
+        stdout=captured_stdout,
+        stderr=captured_stderr,
+    )
     if check and returncode != 0:
-        raise subprocess.CalledProcessError(returncode, command, output=captured)
+        raise subprocess.CalledProcessError(
+            returncode,
+            command,
+            output=captured_stdout,
+            stderr=captured_stderr,
+        )
     return completed

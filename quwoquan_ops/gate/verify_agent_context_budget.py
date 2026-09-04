@@ -24,8 +24,13 @@ sys.dont_write_bytecode = True
 ROOT = Path(__file__).resolve().parents[2]
 ORIGINAL_ROOT = ROOT
 
+sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "quwoquan_ops/cli/lib"))
 from gate_output import emit_gate_result, finding  # noqa: E402
+from quwoquan_ops.gate.agent_context_budget_skills import (  # noqa: E402
+    discover_workflow_skill_metadata,
+    frontmatter as _frontmatter,
+)
 
 
 AGENTS_CHAIN_BYTE_BUDGET = 16 * 1024
@@ -34,6 +39,51 @@ REVIEWER_CONTEXT_BYTE_BUDGET = 24 * 1024
 SKILL_LINE_BUDGET = 500
 SKILL_DESCRIPTION_EACH_BUDGET = 500
 SKILL_DESCRIPTION_TOTAL_BUDGET = 8000
+HOTL_RUNTIME_MATRIX_MAX_BYTES = 32 * 1024
+HOTL_RUNTIME_MATRIX_PATH = (
+    "specs/feature-tree/runtime/development-workflow-governance/design.md"
+)
+HOTL_RUNTIME_MATRIX_START = "<!-- HOTL_RUNTIME_MATRIX:START -->"
+HOTL_RUNTIME_MATRIX_END = "<!-- HOTL_RUNTIME_MATRIX:END -->"
+HOTL_RUNTIME_MATRIX_SKILLS = (
+    "commit",
+    "content-production",
+    "continue",
+    "design",
+    "dev",
+    "distill",
+    "environment-ops",
+    "explore",
+    "incident-inspection",
+    "plan-next",
+    "prd",
+    "review",
+)
+HOTL_RUNTIME_MATRIX_BOUNDARIES = (
+    "session",
+    "shell",
+    "edit",
+    "commit",
+    "push",
+    "lane-pr",
+    "handoff",
+    "dev1.0-main",
+    "release",
+)
+HOTL_RUNTIME_MATRIX_COLUMNS = (
+    "场景",
+    "输入/入口",
+    "宿主能力（D/V/U）",
+    "加载规则/上下文",
+    "PRE",
+    "DURING",
+    "POST",
+    "阻断层",
+    "Review 触发/范围",
+    "Human / Agent 责任",
+    "恢复",
+    "预算/效能风险",
+)
 
 PRUNED_DIR_NAMES = {
     ".git",
@@ -48,78 +98,13 @@ PRUNED_DIR_NAMES = {
 }
 
 def _discover_workflow_skill_metadata() -> tuple[dict[str, dict[str, Any]], list[str]]:
-    agents_root = ROOT / ".agents"
-    root = agents_root / "skills"
-    workflows: dict[str, dict[str, Any]] = {}
-    issues: list[str] = []
-    if agents_root.is_symlink():
-        return workflows, [".agents 必须是 real non-symlink directory"]
-    if not agents_root.is_dir():
-        return workflows, [".agents 不存在"]
-    if root.is_symlink():
-        return workflows, [".agents/skills 必须是 real non-symlink directory"]
-    if not root.is_dir():
-        return workflows, [".agents/skills 不存在"]
-    try:
-        children = sorted(root.iterdir(), key=lambda item: item.name)
-    except OSError as error:
-        return workflows, [f".agents/skills 无法枚举（{error}）"]
-    directories: list[Path] = []
-    for child in children:
-        if child.is_symlink():
-            issues.append(
-                f"{_rel(child)}: Skill 直接子项必须是 real directory，不得是 symlink"
-            )
-            continue
-        if child.is_dir():
-            directories.append(child)
-    for directory in directories:
-        issue_count = len(issues)
-        path = directory / "SKILL.md"
-        rel = _rel(path)
-        if path.is_symlink() or not path.is_file():
-            issues.append(f"{rel}: 每个 Skill 直接子目录必须包含 regular non-symlink SKILL.md")
-            continue
-        try:
-            text = path.read_text(encoding="utf-8")
-        except (OSError, UnicodeError) as error:
-            issues.append(f"{rel}: 无法读取 SKILL.md（{error}）")
-            continue
-        fields, error = _frontmatter(text)
-        if error or fields is None:
-            issues.append(f"{rel}: {error or 'frontmatter 无效'}")
-            continue
-        metadata = fields.get("metadata")
-        if not isinstance(metadata, dict):
-            issues.append(f"{rel}: metadata 必须是映射")
-        elif metadata.get("kind") != "workflow":
-            issues.append(f"{rel}: metadata.kind 必须为 workflow")
-        if fields.get("name") != directory.name:
-            issues.append(f"{rel}: name={fields.get('name')!r} 与目录名不一致")
-        extra = sorted(set(fields) - SPEC_FRONTMATTER_FIELDS)
-        if extra:
-            issues.append(f"{rel}: frontmatter 含非开放字段 {extra}")
-        description = fields.get("description")
-        if not isinstance(description, str) or not description:
-            issues.append(f"{rel}: 缺 description")
-        elif len(description) > SKILL_DESCRIPTION_EACH_BUDGET:
-            issues.append(f"{rel}: description 超过 {SKILL_DESCRIPTION_EACH_BUDGET} 字符")
-        if len(text.splitlines()) > SKILL_LINE_BUDGET:
-            issues.append(f"{rel}: 超过 {SKILL_LINE_BUDGET} 行，重资料应按需放 references")
-        declared = metadata.get("command") if isinstance(metadata, dict) else None
-        if declared is not None and declared != f"/{directory.name}":
-            issues.append(f"{rel}: metadata.command={declared!r}，应为 /{directory.name}")
-        headings = re.findall(r"^##\s+(.+?)\s*$", text, re.M)
-        if headings != list(REQUIRED_SKILL_SECTIONS):
-            issues.append(
-                f"{rel}: 二级段落必须且只能按顺序为 "
-                + " / ".join(REQUIRED_SKILL_SECTIONS)
-            )
-        if any(token in text for token in ("completion-criteria.md", "interaction-protocols.md")):
-            issues.append(f"{rel}: 完成与交互契约必须就地声明，不得跳转共享文档")
-        if len(issues) == issue_count:
-            workflows[directory.name] = fields
-    return workflows, issues
+    return discover_workflow_skill_metadata(
+        ROOT,
+        skill_line_budget=SKILL_LINE_BUDGET,
+        description_each_budget=SKILL_DESCRIPTION_EACH_BUDGET,
+        frontmatter_fields=SPEC_FRONTMATTER_FIELDS,
+        required_sections=REQUIRED_SKILL_SECTIONS,
+    )
 
 
 def _workflow_skill_metadata() -> dict[str, dict[str, Any]]:
@@ -309,19 +294,6 @@ def _glob_can_match(pattern: str) -> bool:
     return bool(prefix and (ROOT / prefix).exists()) or next(ROOT.glob(pattern), None) is not None
 
 
-def _frontmatter(text: str) -> tuple[dict[str, Any] | None, str | None]:
-    match = re.match(r"---\n(?P<body>.*?)\n---\n", text, re.S)
-    if match is None:
-        return None, "缺 YAML frontmatter"
-    try:
-        value = yaml.safe_load(match.group("body"))
-    except yaml.YAMLError as error:
-        return None, f"frontmatter 不是合法 YAML（{str(error).splitlines()[0]}）"
-    if not isinstance(value, dict):
-        return None, "frontmatter 不是键值映射"
-    return value, None
-
-
 def _is_generated_wfr_source(rel: str) -> bool:
     parts = Path(rel).parts
     return any(part in WFR_GENERATED_PATH_PARTS for part in parts) or any(
@@ -396,6 +368,50 @@ def check_required_sources_and_carriers() -> list[str]:
         for path in sorted(roles_root.glob("*/references/**/*")):
             if path.is_file() or path.is_symlink():
                 issues.append(f"{_rel(path)}: role references 不得拥有或转引规范事实")
+    return issues
+
+
+def check_hotl_runtime_matrix() -> list[str]:
+    """校验单一 HOTL 场景投影的存在、闭集覆盖与独立文档预算。"""
+
+    path = ROOT / HOTL_RUNTIME_MATRIX_PATH
+    if not path.is_file():
+        return [f"缺单一 HOTL 运行矩阵: {HOTL_RUNTIME_MATRIX_PATH}"]
+    try:
+        text = path.read_text(encoding="utf-8")
+    except (OSError, UnicodeError) as error:
+        return [f"{HOTL_RUNTIME_MATRIX_PATH}: 无法读取（{error}）"]
+    issues: list[str] = []
+    if text.count(HOTL_RUNTIME_MATRIX_START) != 1 or text.count(HOTL_RUNTIME_MATRIX_END) != 1:
+        return [
+            f"{HOTL_RUNTIME_MATRIX_PATH}: HOTL 运行矩阵必须且只能包含一组 marker"
+        ]
+    start = text.index(HOTL_RUNTIME_MATRIX_START)
+    end = text.index(HOTL_RUNTIME_MATRIX_END, start)
+    section = text[start : end + len(HOTL_RUNTIME_MATRIX_END)]
+    size = len(section.encode("utf-8"))
+    if size > HOTL_RUNTIME_MATRIX_MAX_BYTES:
+        issues.append(
+            f"{HOTL_RUNTIME_MATRIX_PATH}: HOTL 运行矩阵 {size} bytes 超过 "
+            f"{HOTL_RUNTIME_MATRIX_MAX_BYTES} bytes"
+        )
+    for skill in HOTL_RUNTIME_MATRIX_SKILLS:
+        marker = f"| SKILL:{skill} |"
+        if section.count(marker) != 1:
+            issues.append(
+                f"{HOTL_RUNTIME_MATRIX_PATH}: 场景 {marker.strip('| ')} 必须恰好一行"
+            )
+    for boundary in HOTL_RUNTIME_MATRIX_BOUNDARIES:
+        marker = f"| BOUNDARY:{boundary} |"
+        if section.count(marker) != 1:
+            issues.append(
+                f"{HOTL_RUNTIME_MATRIX_PATH}: 场景 {marker.strip('| ')} 必须恰好一行"
+            )
+    expected_header = "| " + " | ".join(HOTL_RUNTIME_MATRIX_COLUMNS) + " |"
+    if section.count(expected_header) != 2:
+        issues.append(
+            f"{HOTL_RUNTIME_MATRIX_PATH}: Skill/边界矩阵必须各有一份完整固定列头"
+        )
     return issues
 
 
@@ -705,6 +721,15 @@ def check_checklists_and_registry() -> list[str]:
         if workflow in CONTROL_WORKFLOWS_WITHOUT_AUTOMATIC_REVIEW:
             issues.append(f"registry.yaml: {workflow} 控制型 workflow 必须默认零 Reviewer")
             continue
+        baseline_evidence = config.get("baseline_evidence")
+        if not isinstance(baseline_evidence, str) or not baseline_evidence:
+            issues.append(
+                f"registry.yaml: workflows.{workflow} 缺 baseline_evidence"
+            )
+        elif baseline_evidence not in evidence:
+            issues.append(
+                f"registry.yaml: workflows.{workflow}.baseline_evidence 未注册: {baseline_evidence}"
+            )
         primary = config.get("primary")
         if not isinstance(primary, dict):
             issues.append(f"registry.yaml: workflows.{workflow} 缺 primary")
@@ -906,6 +931,7 @@ def check_adapter_generation() -> list[str]:
 
 CHECKS = (
     ("载体分层", check_required_sources_and_carriers),
+    ("HOTL 运行矩阵", check_hotl_runtime_matrix),
     ("WFR 回潮", check_retired_workflow_resolution),
     ("AGENTS 链预算", check_agents_budget),
     ("默认 manifest 预算", check_manifest_budget),

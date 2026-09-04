@@ -8,9 +8,9 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
 
 /// 把文章投影里的 accessMode 字符串解析成 typed 声明（DEC-033/DEC-040）。
 ///
-/// null/空串与未知值都保持 contract failure；只有具名 [legacyPublic] adapter 能把
-/// 已确认的 legacy-public 投影显式迁成 public。消费面不得从 URL 形态或字段缺席
-/// 猜 public。
+/// null/空串与未知值都保持 contract failure；只有具名 [previousPublic] adapter
+/// 能把已确认的 previous-version public 投影显式迁成 public。消费面不得从 URL
+/// 形态或字段缺席猜 public。
 MediaDeliveryAccessMode? articleAssetAccessMode(String raw) {
   return switch (raw.trim()) {
     'signed_grant' => MediaDeliveryAccessMode.signedGrant,
@@ -36,11 +36,11 @@ class MediaDeliveryBinding {
     required this.publicUrl,
   }) : accessMode = MediaDeliveryAccessMode.public;
 
-  /// 已确认 legacy-public contract version 的唯一迁移 adapter。
+  /// 已确认 previous contract version public 的唯一迁移 adapter。
   ///
-  /// 调用者必须先在所属 decoder/version 边界确认 legacy 身份；本构造不会按 URL
-  /// 形态猜测。正常新投影不得调用它。
-  const MediaDeliveryBinding.legacyPublic({
+  /// 调用者必须先在所属 decoder/version 边界确认 previous-version 身份；
+  /// 本构造不会按 URL 形态猜测。正常新投影不得调用它。
+  const MediaDeliveryBinding.previousPublic({
     this.assetId = '',
     required this.publicUrl,
   }) : accessMode = MediaDeliveryAccessMode.public;
@@ -72,7 +72,8 @@ class MediaDeliveryBinding {
   bool get isSignedGrantWithoutAsset =>
       accessMode == MediaDeliveryAccessMode.signedGrant && assetId.isEmpty;
 
-  /// public builder 的唯一准入状态；具名 legacy adapter 也已显式适配成该 typed 值。
+  /// public builder 的唯一准入状态；具名 previous-version adapter 也已显式
+  /// 适配成该 typed 值。
   bool get isPublic => accessMode == MediaDeliveryAccessMode.public;
 
   /// 非空 URL 却没有 typed accessMode：新投影契约失败，禁止公开 fallback。

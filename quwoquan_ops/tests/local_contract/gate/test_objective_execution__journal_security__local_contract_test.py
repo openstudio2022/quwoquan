@@ -21,6 +21,8 @@ from typing import Any
 
 import pytest
 
+pytestmark = pytest.mark.usefixtures("isolated_qwq_output_root")
+
 sys.dont_write_bytecode = True
 ROOT = Path(__file__).resolve().parents[4]
 if str(ROOT / "quwoquan_ops/cli") not in sys.path:
@@ -42,13 +44,15 @@ class SimulatedCrash(RuntimeError):
 
 def _claims(action: str) -> dict[str, Any]:
     return {
-        "receipt_id": "authority-1", "actor_id": "actor-1",
+        "receipt_id": "authority-1", "decision_id": "authority-1",
+        "decision_unit_id": "unit-1", "actor_id": "actor-1",
         "actor_authenticated": True, "role": "engineering_delivery_owner",
         "scope": {"objective": "objective-1"}, "expires_at": "2026-08-30T00:00:00Z",
         "evidence_fingerprint": "sha256:evidence", "decision_kind": "delivery_authorization",
-        "actions": [action], "provider_version": "test",
+        "actions": [action], "provider_kind": "test", "provider_version": "test",
         "provider_commit": "sha256:" + "0" * 64, "contract_version": "test",
-        "issuer": "test", "receipt_state": "consumed", "receipt_generation": 2,
+        "issuer": "test", "receipt_state": "consumed",
+        "receipt_previous_generation": 1, "receipt_generation": 2,
         "receipt_etag": '"test-consumed"', "chain_commit": "sha256:" + "1" * 64,
         "winner_idempotency_key": "key-1", "winner_command_digest": "sha256:" + "2" * 64,
     }
@@ -68,6 +72,7 @@ def _envelope(action: str = "create_objective") -> dict[str, Any]:
         "authority_claims_digest": payload_digest(claims),
         "authority_winner_idempotency_key": claims["winner_idempotency_key"],
         "authority_winner_command_digest": claims["winner_command_digest"],
+        "authority_winner_previous_generation": claims["receipt_previous_generation"],
         "authority_winner_generation": claims["receipt_generation"],
         "authority_chain_commit": claims["chain_commit"],
     }

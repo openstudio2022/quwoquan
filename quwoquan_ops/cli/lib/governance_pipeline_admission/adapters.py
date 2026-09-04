@@ -118,8 +118,12 @@ def verify_owner_manifest(
             f"canonical owner manifest could not be resolved: {error}"
         ) from error
     for field in (
-        "target", "resolved_owner", "owner_chain", "canonical_contexts",
-        "applicable_agents", "open_items",
+        "target",
+        "resolved_owner",
+        "owner_chain",
+        "canonical_contexts",
+        "applicable_agents",
+        "open_items",
     ):
         if manifest[field] != canonical[field]:
             raise EvidenceAdapterError.identity(
@@ -150,7 +154,7 @@ def verify_owner_manifest(
         raise EvidenceAdapterError.identity(str(error) or type(error).__name__) from error
     readback = _readback(
         result="pass", provider_kind="local_runtime", release=False,
-        receipt_ref=receipt_ref, raw=raw, provider_timestamp=fingerprint["captured_at"],
+        receipt_ref=receipt_ref, raw=raw, provider_timestamp=verification_time.astimezone(timezone.utc).isoformat(timespec="seconds"),
         candidate_id=candidate_id, scope_id=scope_id,
         verifier_id=contract["layer_admission"]["owner_manifest"]["verifier_id"],
         verification_time=verification_time,
@@ -158,12 +162,13 @@ def verify_owner_manifest(
     return readback, fingerprint
 
 
-def verify_local_readiness(*, level: str, raw: bytes, receipt_ref: str, owner_manifest_ref: str, candidate_id: str, scope_id: str, verification_time: datetime, contract: Mapping[str, Any]) -> dict[str, Any]:
+def verify_local_readiness(*, level: str, raw: bytes, receipt_ref: str, owner_manifest_ref: str, candidate_evidence_ref: str | None = None, candidate_id: str, scope_id: str, verification_time: datetime, contract: Mapping[str, Any]) -> dict[str, Any]:
     source = contract["current_repository_evidence"]
     receipt = verify_explicit_receipt_read_only(
         level=level, receipt_path=REPO_ROOT / receipt_ref, exact_bytes=raw,
         paths=list(source["local_readiness_paths"]), mode=str(source["local_readiness_mode"]),
         owner_manifest_path=REPO_ROOT / owner_manifest_ref,
+        candidate_evidence_path=REPO_ROOT / candidate_evidence_ref if candidate_evidence_ref else None,
     )
     return _readback(
         result="scope_ready" if level == "scope" else "release_ready",
@@ -174,25 +179,43 @@ def verify_local_readiness(*, level: str, raw: bytes, receipt_ref: str, owner_ma
     )
 
 
-def verify_review(*, plan_raw: bytes, plan_ref: str, evidence_raw: bytes, evidence_ref: str, consolidation_raw: bytes, consolidation_ref: str, candidate_id: str, scope_id: str, verification_time: datetime, contract: Mapping[str, Any]) -> dict[str, Any]:
+def verify_review(*, plan_raw: bytes, plan_ref: str, evidence_raw: bytes, evidence_ref: str, reviewer_result_pairs: list[tuple[str, bytes]], consolidation_raw: bytes, consolidation_ref: str, candidate_id: str, scope_id: str, verification_time: datetime, contract: Mapping[str, Any]) -> dict[str, Any]:
     plan = _json(plan_raw, "Review plan")
     evidence = _json(evidence_raw, "Review named evidence")
     consolidation = _json(consolidation_raw, "Review consolidation")
-    import review_consolidator
-    recomputed = review_consolidator.consolidate(dict(plan), dict(evidence), list(consolidation.get("reviewer_results") or []))
-    if recomputed != consolidation:
-        raise ContractError("Review consolidation does not match current recomputation")
-    terminal = consolidation.get("terminal")
-    if terminal != {"status": "PASS", "codes": []}:
-        return _readback(
-            result="READY", provider_kind="local_runtime", release=False,
-            receipt_ref=consolidation_ref, raw=consolidation_raw,
-            provider_timestamp=str(evidence.get("finished_at")), candidate_id=candidate_id,
-            scope_id=scope_id, verifier_id=contract["layer_admission"]["review_terminal"]["verifier_id"],
-            detail="Review consolidation is not PASS", verification_time=verification_time,
+    try:
+        import handoff_consumer
+        import review_consolidator
+
+        if (
+            evidence.get("evidence_class") != "reusable"
+            or evidence.get("admission_eligible") is not True
+        ):
+            raise EvidenceAdapterError.ineligible(
+                "REVIEW.EVIDENCE_FEEDBACK_ONLY: governance review requires "
+                "admission-eligible named evidence"
+            )
+        evidence_identity = handoff_consumer.named_evidence_identity_from_raw(
+            evidence_ref, evidence_raw, evidence
         )
-    if any(item.get("severity") == "GATE_BLOCK" for item in consolidation.get("findings") or []):
-        raise ContractError("Review consolidation contains a GATE_BLOCK finding")
+        reviewer_pairs: list[tuple[str, dict[str, Any]]] = []
+        exact_bytes_by_ref = {evidence_ref: evidence_raw}
+        for result_ref, result_raw in reviewer_result_pairs:
+            exact_result = _json(result_raw, f"Review result {result_ref}")
+            reviewer_pairs.append((result_ref, exact_result))
+            exact_bytes_by_ref[result_ref] = result_raw
+        review_consolidator.validate_exact_consolidation(
+            consolidation,
+            plan=dict(plan),
+            evidence_pairs=[(evidence_ref, dict(evidence))],
+            reviewer_pairs=reviewer_pairs,
+            registry=review_consolidator._registry(),
+            exact_bytes_by_ref=exact_bytes_by_ref,
+        )
+    except ContractError:
+        raise
+    except Exception as error:
+        raise ContractError(f"Review consolidation exact validation failed: {error}") from error
     return _readback(
         result="pass", provider_kind="local_runtime", release=False,
         receipt_ref=consolidation_ref, raw=consolidation_raw,
@@ -202,14 +225,15 @@ def verify_review(*, plan_raw: bytes, plan_ref: str, evidence_raw: bytes, eviden
     )
 
 
-def verify_handoff(*, raw: bytes, receipt_ref: str, candidate_id: str, scope_id: str, verification_time: datetime, contract: Mapping[str, Any]) -> dict[str, Any]:
-    payload = _json(raw, "handoff manifest")
+def verify_handoff(*, raw: bytes, receipt_ref: str, candidate_id: str, scope_id: str, verification_time: datetime, contract: Mapping[str, Any], validate_current: bool = False) -> dict[str, Any]:
     import handoff_consumer
-    verified = handoff_consumer.validate_handoff_payload(payload)
+    verified = handoff_consumer.validate_published_bytes(
+        receipt_ref, raw, validate_current=validate_current
+    )
     fingerprint = validate_evidence_fingerprint(verified.get("fingerprint_receipt"))
     return _readback(
         result="pass", provider_kind="local_runtime", release=False,
-        receipt_ref=receipt_ref, raw=raw, provider_timestamp=fingerprint["captured_at"],
+        receipt_ref=receipt_ref, raw=raw, provider_timestamp=verification_time.astimezone(timezone.utc).isoformat(timespec="seconds"),
         candidate_id=candidate_id, scope_id=scope_id,
         verifier_id=contract["layer_admission"]["handoff_freshness"]["verifier_id"],
         verification_time=verification_time,

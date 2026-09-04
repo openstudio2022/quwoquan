@@ -231,7 +231,12 @@ void main() {
 
   testWidgets('public hero cover 维持既有 AppMediaImage 路径', (tester) async {
     await tester.pumpWidget(
-      _host(_introduction(coverUrl: 'https://cdn.example.test/cover.jpg')),
+      _host(
+        _introduction(
+          coverUrl: 'https://cdn.example.test/cover.jpg',
+          coverAccessMode: MediaDeliveryAccessMode.public,
+        ),
+      ),
     );
     await tester.pumpAndSettle();
 
@@ -346,6 +351,7 @@ void main() {
                 HomepageIntroductionAsset(
                   assetId: 'related_public_1',
                   url: 'https://cdn.example.test/rel-public.jpg',
+                  accessMode: MediaDeliveryAccessMode.public,
                   role: 'related',
                 ),
               ],

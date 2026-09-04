@@ -25,7 +25,9 @@ import review_consolidator  # noqa: E402
 import review_dispatch  # noqa: E402
 import handoff_consumer  # noqa: E402
 from lib.agent_governance_contract import canonical_bytes_sha256, contract_schema_version  # noqa: E402
-from lib.evidence_fingerprint import canonical_json_bytes  # noqa: E402
+from lib.evidence_fingerprint import canonical_json_bytes
+from lib.candidate_evidence import build_candidate_evidence
+from lib.feature_tree.content_addressed_writer import _write_content_addressed_bytes  # noqa: E402
 from lib.feature_tree.commands import _context_manifest, discover_nodes  # noqa: E402
 from lib.feature_tree.ownership import resolve_target_details  # noqa: E402
 from lib.local_readiness.core import LocalReadinessError, _load_review_inputs  # noqa: E402
@@ -35,15 +37,14 @@ CASE_ROOT = ROOT / ".qwq_output/env/repo/local/review-consolidator-tests"
 
 
 class ReviewConsolidatorTest(unittest.TestCase):
-    def setUp(self) -> None:
-        self.case = CASE_ROOT / uuid.uuid4().hex
-        self.case.mkdir(parents=True)
-        self.artifact = self.case / "asset.txt"
-        self.artifact.write_text("stable\n", encoding="utf-8")
-        self.registry = copy.deepcopy(
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls._created_content_refs: list[tuple[Path, bytes]] = []
+        registry = copy.deepcopy(
             yaml.safe_load(REGISTRY_PATH.read_text(encoding="utf-8")) or {}
         )
-        self.registry["evidence"] = {
+        registry["workflows"]["dev"]["baseline_evidence"] = ""
+        registry["evidence"] = {
             "fixture": {
                 "command": "printf fixture",
                 "segment": "POST",
@@ -68,27 +69,99 @@ class ReviewConsolidatorTest(unittest.TestCase):
             ROOT / ".qwq_output/env/repo/runs/feature-tree/by-fingerprint"
         )
         manifest_root.mkdir(parents=True, exist_ok=True)
-        self.manifest_path = manifest_root / (
+        manifest_path = manifest_root / (
             hashlib.sha256(manifest_bytes).hexdigest() + ".json"
         )
-        self.manifest_path.write_bytes(manifest_bytes)
-        with mock.patch.object(
-            review_dispatch, "_checklist_evidence", return_value=["fixture"]
+        manifest_existed = manifest_path.exists()
+        manifest_path.write_bytes(manifest_bytes)
+        if not manifest_existed:
+            cls._created_content_refs.append((manifest_path, manifest_bytes))
+        manifest_ref = manifest_path.relative_to(ROOT).as_posix()
+
+        changed_paths = [target]
+        candidate = build_candidate_evidence(
+            manifest_ref, changed_paths, repo_root=ROOT
+        )
+        candidate_bytes = canonical_json_bytes(candidate)
+        candidate_path = ROOT / (
+            ".qwq_output/env/repo/runs/feature-tree/by-fingerprint/"
+            "candidates/by-fingerprint/"
+            f"{hashlib.sha256(candidate_bytes).hexdigest()}.json"
+        )
+        candidate_existed = candidate_path.exists()
+        candidate_path = _write_content_addressed_bytes(
+            candidate_bytes, subdirectory="candidates/by-fingerprint"
+        )
+        if not candidate_existed:
+            cls._created_content_refs.append((candidate_path, candidate_bytes))
+
+        source = evidence_runner._workspace_source_classification(ROOT)
+        source["repository_clean"] = True
+        with (
+            mock.patch.object(
+                review_dispatch, "_checklist_evidence", return_value=["fixture"]
+            ),
+            mock.patch.object(
+                evidence_runner,
+                "run_command",
+                side_effect=cls._execute_fixture,
+            ),
+            mock.patch.object(
+                evidence_runner,
+                "_workspace_source_classification",
+                return_value=source,
+            ),
         ):
-            self.plan = review_dispatch.build_plan(
-                self.registry,
+            plan = review_dispatch.build_plan(
+                registry,
                 "dev",
                 "POST",
                 None,
-                [self.artifact.relative_to(ROOT).as_posix()],
+                changed_paths,
                 context_manifest=manifest,
-                context_manifest_ref=self.manifest_path.relative_to(ROOT).as_posix(),
+                context_manifest_ref=manifest_ref,
+                candidate_evidence_ref=candidate_path.relative_to(ROOT).as_posix(),
             )
-            self.evidence = evidence_runner.run_plan(
-                self.plan, registry=self.registry, cwd=ROOT, run_id="run-1"
+            evidence = evidence_runner.run_plan(
+                plan, registry=registry, cwd=ROOT, run_id="run-1",
+                plan_bytes=canonical_json_bytes(plan),
+                plan_ref=".qwq_output/test-fixture-plan.json",
             )
+        cls._registry_template = registry
+        cls._manifest_path = manifest_path
+        cls._plan_template = plan
+        cls._evidence_template = evidence
+
+    @classmethod
+    def tearDownClass(cls) -> None:
+        for path, expected in reversed(cls._created_content_refs):
+            try:
+                if path.is_file() and not path.is_symlink() and path.read_bytes() == expected:
+                    path.unlink()
+            except OSError:
+                pass
+
+    @staticmethod
+    def _execute_fixture(*_args, **_kwargs):
+        return mock.Mock(
+            returncode=0,
+            stdout=b"fixture",
+            stderr=b"",
+            timed_out=False,
+            termination_signal=None,
+        )
+
+    def setUp(self) -> None:
+        self.case = CASE_ROOT / uuid.uuid4().hex
+        self.case.mkdir(parents=True)
+        self.artifact = self.case / "asset.txt"
+        self.artifact.write_text("stable\n", encoding="utf-8")
+        self.registry = copy.deepcopy(self._registry_template)
+        self.manifest_path = self._manifest_path
+        self.plan = copy.deepcopy(self._plan_template)
+        self.evidence = copy.deepcopy(self._evidence_template)
         self.evidence_path = self.case / "evidence.json"
-        self.evidence_path.write_text(json.dumps(self.evidence), encoding="utf-8")
+        self.evidence_path.write_bytes(canonical_json_bytes(self.evidence))
 
     def tearDown(self) -> None:
         shutil.rmtree(self.case, ignore_errors=True)
@@ -111,6 +184,9 @@ class ReviewConsolidatorTest(unittest.TestCase):
             "execution_fingerprint_digest": evidence["execution_fingerprint_digest"],
             "result_fingerprint_ref": evidence["result_fingerprint_ref"],
             "result_fingerprint_digest": evidence["result_fingerprint_digest"],
+            "assembled_input_byte_count": 1024,
+            "assembled_input_digest": "sha256:" + "a" * 64,
+            "assembled_input_compression": {"mode": "full", "applied": False, "changes": [], "attempts": []},
             "started_at": evidence["finished_at"],
             "finished_at": evidence["finished_at"],
             "findings": findings or [],
@@ -129,7 +205,36 @@ class ReviewConsolidatorTest(unittest.TestCase):
                 results,
                 evidence_receipt_ref=self.evidence_path.relative_to(ROOT).as_posix(),
                 registry=self.registry,
+                generated_at=self.evidence["finished_at"],
             )
+
+    def _replace_evidence(self, *, repository_clean: bool, run_id: str) -> None:
+        source = evidence_runner._workspace_source_classification(ROOT)
+        source["repository_clean"] = repository_clean
+        with (
+            mock.patch.object(
+                review_dispatch, "_checklist_evidence", return_value=["fixture"]
+            ),
+            mock.patch.object(
+                evidence_runner,
+                "run_command",
+                side_effect=self._execute_fixture,
+            ),
+            mock.patch.object(
+                evidence_runner,
+                "_workspace_source_classification",
+                return_value=source,
+            ),
+        ):
+            self.evidence = evidence_runner.run_plan(
+                self.plan,
+                registry=self.registry,
+                cwd=ROOT,
+                run_id=run_id,
+                plan_bytes=canonical_json_bytes(self.plan),
+                plan_ref=".qwq_output/test-fixture-plan.json",
+            )
+        self.evidence_path.write_bytes(canonical_json_bytes(self.evidence))
 
     @staticmethod
     def _finding(
@@ -164,6 +269,8 @@ class ReviewConsolidatorTest(unittest.TestCase):
             [self._result("developer", findings=[finding, dict(finding)])]
         )
         self.assertEqual("PASS", result["terminal"]["status"])
+        self.assertEqual("reusable", result["evidence_identities"][0]["evidence_class"])
+        self.assertIs(result["evidence_identities"][0]["admission_eligible"], True)
         self.assertEqual(["F-001"], [item["id"] for item in result["findings"]])
 
     def test_required_incomplete_is_gate_block(self) -> None:
@@ -277,36 +384,41 @@ class ReviewConsolidatorTest(unittest.TestCase):
         )
 
 
-    def test_local_readiness_accepts_exact_consolidation_evidence_identity(self) -> None:
+    def test_local_readiness_rejects_feedback_only_consolidation_evidence(self) -> None:
+        self._replace_evidence(
+            repository_clean=False,
+            run_id="run-feedback-only",
+        )
         consolidation = self._consolidate([self._result("developer")])
         consolidation_path = self.case / "consolidation.json"
         consolidation_path.write_text(json.dumps(consolidation), encoding="utf-8")
 
-        refs, identity = _load_review_inputs(
-            consolidation_path,
-            [self.evidence_path],
-            repo_root=ROOT,
-            required=True,
-        )
-
-        self.assertEqual(
-            [
-                consolidation_path.relative_to(ROOT).as_posix(),
-                self.evidence_path.relative_to(ROOT).as_posix(),
-            ],
-            refs,
-        )
-        self.assertEqual(1, len(identity["evidence"]))
+        with self.assertRaisesRegex(
+            LocalReadinessError, "REVIEW.EVIDENCE_FEEDBACK_ONLY"
+        ):
+            _load_review_inputs(
+                consolidation_path,
+                [self.evidence_path],
+                repo_root=ROOT,
+                required=True,
+            )
 
     def test_local_readiness_rejects_drifted_consolidation_evidence_identity(self) -> None:
+        self._replace_evidence(
+            repository_clean=False,
+            run_id="run-feedback-only-drifted",
+        )
         consolidation = self._consolidate([self._result("developer")])
-        consolidation["evidence_identities"][0]["canonical_bytes_sha256"] = (
+        consolidation["evidence_identities"][0]["result_fingerprint_digest"] = (
             "sha256:" + "0" * 64
         )
         consolidation_path = self.case / "consolidation-drifted.json"
         consolidation_path.write_text(json.dumps(consolidation), encoding="utf-8")
 
-        with self.assertRaisesRegex(LocalReadinessError, "未绑定提供的 required evidence"):
+        with self.assertRaisesRegex(
+            LocalReadinessError,
+            "未绑定提供的 required evidence exact identities",
+        ):
             _load_review_inputs(
                 consolidation_path,
                 [self.evidence_path],
@@ -321,7 +433,8 @@ class ReviewConsolidatorTest(unittest.TestCase):
             review_dispatch, "_checklist_evidence", return_value=["fixture"]
         ):
             second = evidence_runner.run_plan(
-                self.plan, registry=self.registry, cwd=ROOT, run_id="run-2"
+                self.plan, registry=self.registry, cwd=ROOT, run_id="run-2",
+                plan_bytes=canonical_json_bytes(self.plan), plan_ref=".qwq_output/test-fixture-plan.json",
             )
         second_path = self.case / "evidence-run-2.json"
         second_path.write_text(json.dumps(second), encoding="utf-8")

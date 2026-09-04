@@ -34,6 +34,7 @@ from .ownership import TargetResolution, owners_for_path, resolve_target_details
 from .parsing import block_open_items, open_item_details, title
 from .patterns import PATH_RE, VALID_LEVELS
 from ..evidence_fingerprint import canonical_json_bytes
+from ..candidate_evidence import CandidateEvidenceError, build_candidate_evidence
 from ..feature_context_fingerprint import (
     build_feature_context_fingerprint,
     embedded_fingerprint_binding,
@@ -426,7 +427,7 @@ def _context_manifest(
     ]
     payload = {
         "schema_version": contract_schema_version("feature_context_manifest"),
-        "target": raw_target,
+        "target": _relative(resolution.target),
         "resolved_owner": resolution.node.rel,
         "owner_chain": [
             declared_object(
@@ -555,6 +556,29 @@ def command_context(args: argparse.Namespace) -> int:
     print(output.relative_to(context.REPO_ROOT))
     return 0
 
+
+
+def command_candidate_evidence(args: argparse.Namespace) -> int:
+    try:
+        payload = build_candidate_evidence(
+            args.owner_identity, list(args.changed_path), repo_root=context.REPO_ROOT
+        )
+        content = canonical_json_bytes(payload)
+        if len(content) > int(contract_section("candidate_evidence_manifest")["max_bytes"]):
+            raise CandidateEvidenceError(
+                "CANDIDATE.STALE", f"candidate evidence 超出预算：{len(content)} bytes"
+            )
+        output = _write_content_addressed_bytes(
+            content, subdirectory="candidates/by-fingerprint"
+        )
+    except CandidateEvidenceError as error:
+        print(f"{error.code}: {error.message}", file=sys.stderr)
+        return 2
+    except (KeyError, TypeError, ValueError) as error:
+        print(f"CANDIDATE.STALE: {error}", file=sys.stderr)
+        return 2
+    print(output.relative_to(context.REPO_ROOT))
+    return 0
 
 def command_overview(_: argparse.Namespace) -> int:
     nodes = discover_nodes()

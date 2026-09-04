@@ -9,6 +9,8 @@
 # spec_ref: specs/feature-tree/runtime/development-workflow-governance/objective-execution/spec.md#gwt-001.t7
 # spec_ref: specs/feature-tree/runtime/development-workflow-governance/objective-execution/spec.md#gwt-001.t8
 # spec_ref: specs/feature-tree/runtime/development-workflow-governance/objective-execution/spec.md#gwt-001.t9
+# spec_ref: specs/feature-tree/runtime/development-workflow-governance/objective-execution/spec.md#gwt-001.t10
+# spec_ref: specs/feature-tree/runtime/development-workflow-governance/objective-execution/spec.md#gwt-001.t11
 """
 from __future__ import annotations
 
@@ -20,6 +22,8 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+
+pytestmark = pytest.mark.usefixtures("isolated_qwq_output_root")
 
 ROOT = Path(__file__).resolve().parents[4]
 if str(ROOT / "quwoquan_ops/cli") not in sys.path:
@@ -39,15 +43,17 @@ class SimulatedCrash(RuntimeError):
 
 def authority_claims(action: str) -> dict[str, Any]:
     return {
-        "receipt_id": "authority-1", "actor_id": "actor-1",
+        "receipt_id": "authority-1", "decision_id": "authority-1",
+        "decision_unit_id": "unit-1", "actor_id": "actor-1",
         "actor_authenticated": True, "role": "engineering_delivery_owner",
         "scope": {"objective": "objective-1"},
         "expires_at": "2026-08-30T00:00:00Z",
         "evidence_fingerprint": "sha256:evidence",
-        "decision_kind": "delivery_authorization", "actions": [action],
+        "decision_kind": "delivery_authorization", "actions": [action], "provider_kind": "test",
         "provider_version": "test", "provider_commit": "sha256:" + "0" * 64,
         "contract_version": "test", "issuer": "test", "receipt_state": "consumed",
-        "receipt_generation": 2, "receipt_etag": '"test-consumed"',
+        "receipt_previous_generation": 1, "receipt_generation": 2,
+        "receipt_etag": '"test-consumed"',
         "chain_commit": "sha256:" + "1" * 64,
         "winner_idempotency_key": "create-1",
         "winner_command_digest": "sha256:" + "2" * 64,
@@ -66,6 +72,7 @@ def envelope(*, action: str, target_state: str, effect_id: str, key: str, source
         "authority_claims_digest": payload_digest(authority_claims(action)),
         "authority_winner_idempotency_key": authority_claims(action)["winner_idempotency_key"],
         "authority_winner_command_digest": authority_claims(action)["winner_command_digest"],
+        "authority_winner_previous_generation": authority_claims(action)["receipt_previous_generation"],
         "authority_winner_generation": authority_claims(action)["receipt_generation"],
         "authority_chain_commit": authority_claims(action)["chain_commit"],
     }
@@ -149,14 +156,14 @@ def test_contract_freezes_v2_schema_graph_and_recovery_terminals() -> None:
             validate_contract(broken)
 
 
-def test_legacy_v1_contract_envelope_and_event_hard_fail_without_dual_read(tmp_path: Path) -> None:
-    for field, legacy_value in (("schema_id", "objective-execution-contract-v1"), ("schema_version", 1)):
-        legacy_contract = deepcopy(load_contract())
-        legacy_contract[field] = legacy_value
+def test_retired_v1_contract_envelope_and_event_hard_fail_without_dual_read(tmp_path: Path) -> None:
+    for field, retired_value in (("schema_id", "objective-execution-contract-v1"), ("schema_version", 1)):
+        retired_contract = deepcopy(load_contract())
+        retired_contract[field] = retired_value
         with pytest.raises(ContractError, match="identity/version"):
-            validate_contract(legacy_contract)
+            validate_contract(retired_contract)
 
-    journal = tmp_path / "legacy-event"
+    journal = tmp_path / "retired-event"
     record_and_transition(journal)
     event_path = journal / "objective/objective-1/events/00000000000000000001.json"
     event = json.loads(event_path.read_text(encoding="utf-8"))
@@ -165,16 +172,16 @@ def test_legacy_v1_contract_envelope_and_event_hard_fail_without_dual_read(tmp_p
     failed = readback(journal, "objective", "objective-1")
     assert failed.status == "failed" and failed.terminal == "OEX.JOURNAL_TAMPERED"
 
-    legacy_envelope = envelope(
-        action="create_objective", target_state="draft", effect_id="effect-v1", key="legacy-v1"
+    retired_envelope = envelope(
+        action="create_objective", target_state="draft", effect_id="effect-v1", key="retired-v1"
     )
-    legacy_envelope["schema_version"] = 1
-    with pytest.raises(ContractError, match="legacy v1 is not accepted"):
+    retired_envelope["schema_version"] = 1
+    with pytest.raises(ContractError, match="retired v1 is not accepted"):
         append_event(journal / "envelope", command(
             event_kind="human_decision_recorded", action="create_objective",
             from_state=None, to_state=None, expected_head="absent",
-            expected_generation=0, key="legacy-v1", effect_id="effect-v1",
-            command_envelope=legacy_envelope,
+            expected_generation=0, key="retired-v1", effect_id="effect-v1",
+            command_envelope=retired_envelope,
         ))
 
 

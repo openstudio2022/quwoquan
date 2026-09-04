@@ -10,13 +10,53 @@ import unicodedata
 from typing import Iterable, Mapping
 
 SCOPE_NAMES = ("service", "app", "portal", "topology", "data")
+DELIVERY_SCOPE_NAMES = (*SCOPE_NAMES, "device", "coverage_service", "coverage_app")
 LOCAL_SCOPE_NAMES = (*SCOPE_NAMES, "spec_contract")
 INTEGRATION_DEPTHS = ("no_live", "alpha_integration", "abg_release_sensitive")
 SOURCE_IDENTITY = "quwoquan-impact-planner"
-SOURCE_VERSION = "impact-planner-v1"
+SOURCE_VERSION = "impact-planner-v2"
+IMPACT_PLAN_SCHEMA = "delivery-impact-plan"
+IMPACT_PLAN_SCHEMA_VERSION = 1
 _SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 _WINDOWS_DRIVE_RE = re.compile(r"^[A-Za-z]:/")
 
+_DEVICE_IMPACT_PREFIXES = (
+    "quwoquan_app/android/",
+    "quwoquan_app/ios/",
+    "quwoquan_app/lib/main.dart",
+    "quwoquan_app/lib/main_prod.dart",
+    "quwoquan_app/lib/runtime/config/",
+    "quwoquan_app/lib/runtime/platform/",
+    "quwoquan_app/lib/runtime/shell/startup/",
+    "quwoquan_app/pubspec.yaml",
+    "quwoquan_app/pubspec.lock",
+    "quwoquan_app/scripts/device/",
+    "quwoquan_app/scripts/gamma/",
+    "quwoquan_app/scripts/ios/",
+    "quwoquan_app/scripts/runtime/platform/",
+    "quwoquan_app/test_host/patrol/android/",
+    "quwoquan_app/test_host/patrol/ios/",
+    "quwoquan_app/test_host/patrol/lib/main.dart",
+    "quwoquan_app/test_host/patrol/pubspec.yaml",
+    "quwoquan_app/test_host/patrol/pubspec.lock",
+    "quwoquan_app/vendor/plugins/",
+    "quwoquan_service/runtime/",
+    "quwoquan_ops/ci/device_",
+    "quwoquan_ops/ci/device_matrix/",
+    "quwoquan_ops/ci/run_mobile_platform_matrix.sh",
+    "quwoquan_ops/ci/render_beta_device_evidence.py",
+    "quwoquan_ops/ci/render_environment_stability_attested_receipt.py",
+    "quwoquan_ops/cli/lib/environment_topology.py",
+    "quwoquan_ops/cli/lib/runtime_topology_package.py",
+    "quwoquan_ops/environments/",
+    ".github/workflows/app-env-device-matrix-self-hosted.yml",
+    ".github/workflows/beta-device-platform.yml",
+)
+_COVERAGE_GOVERNANCE_PREFIXES = (
+    "quwoquan_ops/gate/verify_canonical_coverage.py",
+    "quwoquan_ops/policies/gates/canonical_coverage",
+    "quwoquan_ops/tests/local_contract/gate/test_canonical_coverage",
+)
 _ALL_SCOPE_PREFIXES = (
     ".github/workflows/",
     "quwoquan_app/scripts/",
@@ -103,7 +143,12 @@ def planner_identity() -> dict[str, str]:
     ruleset = {
         "source": SOURCE_IDENTITY,
         "version": SOURCE_VERSION,
+        "schema": IMPACT_PLAN_SCHEMA,
+        "schema_version": IMPACT_PLAN_SCHEMA_VERSION,
         "scopes": list(SCOPE_NAMES),
+        "delivery_scopes": list(DELIVERY_SCOPE_NAMES),
+        "device_impact_prefixes": list(_DEVICE_IMPACT_PREFIXES),
+        "coverage_governance_prefixes": list(_COVERAGE_GOVERNANCE_PREFIXES),
         "all_scope_prefixes": list(_ALL_SCOPE_PREFIXES),
         "data_prefixes": list(_DATA_PREFIXES),
         "data_document_prefixes": list(_DATA_DOCUMENT_PREFIXES),
@@ -242,3 +287,111 @@ def classify_impacts(paths: Iterable[str], *, fail_closed_empty: bool = False) -
             "spec_contract": spec_contract,
         },
     }
+
+
+def _matches_prefix(path: str, prefixes: tuple[str, ...]) -> bool:
+    return any(path == prefix or path.startswith(prefix) for prefix in prefixes)
+
+
+def build_delivery_impact_plan(
+    paths: Iterable[str],
+    *,
+    source_sha: str,
+    base_sha: str,
+    force_device: bool = False,
+    fail_closed_empty: bool = False,
+) -> dict[str, object]:
+    """Build the versioned, artifact-safe Delivery impact contract once per DAG."""
+
+    source = validate_exact_sha(source_sha, label="source_sha")
+    base = validate_exact_sha(base_sha, label="base_sha")
+    classified = classify_impacts(paths, fail_closed_empty=fail_closed_empty)
+    changed_paths = list(classified["paths"])
+    runtime_scopes = dict(classified["scopes"])
+    governance_closure = any(
+        _matches_prefix(path, _COVERAGE_GOVERNANCE_PREFIXES)
+        or path == "quwoquan_ops/ci/impact_planner_core.py"
+        or path == "quwoquan_ops/ci/detect_ci_impacted_scopes.py"
+        for path in changed_paths
+    )
+    device_required = force_device or any(
+        _matches_prefix(path, _DEVICE_IMPACT_PREFIXES) for path in changed_paths
+    )
+    coverage_service = bool(runtime_scopes["service"] or governance_closure)
+    coverage_app = bool(runtime_scopes["app"] or governance_closure)
+    scopes = {
+        **runtime_scopes,
+        "device": device_required,
+        "coverage_service": coverage_service,
+        "coverage_app": coverage_app,
+    }
+    states = {
+        name: "required" if required else "not_required"
+        for name, required in scopes.items()
+    }
+    plan = {
+        "schema": IMPACT_PLAN_SCHEMA,
+        "schema_version": IMPACT_PLAN_SCHEMA_VERSION,
+        "source_sha": source,
+        "base_sha": base,
+        "impact_planner": planner_identity(),
+        "changed_paths": changed_paths,
+        "changed_paths_digest": classified["path_digest"],
+        "scopes": scopes,
+        "states": states,
+        "policy": {
+            "device_forced": bool(force_device),
+            "coverage_contract_closure": governance_closure,
+        },
+    }
+    return {**plan, "plan_digest": canonical_digest(plan)}
+
+
+def validate_delivery_impact_plan(
+    payload: Mapping[str, object],
+    *,
+    expected_source_sha: str = "",
+) -> dict[str, object]:
+    """Validate schema/version/source/path digest and the complete plan digest."""
+
+    if not isinstance(payload, Mapping):
+        raise ImpactPlannerError("Delivery impact plan 必须为 object")
+    if payload.get("schema") != IMPACT_PLAN_SCHEMA:
+        raise ImpactPlannerError("Delivery impact plan schema 不受支持")
+    if payload.get("schema_version") != IMPACT_PLAN_SCHEMA_VERSION:
+        raise ImpactPlannerError("Delivery impact plan schema_version 不受支持")
+    source_sha = validate_exact_sha(str(payload.get("source_sha") or ""), label="source_sha")
+    validate_exact_sha(str(payload.get("base_sha") or ""), label="base_sha")
+    if expected_source_sha and source_sha != validate_exact_sha(
+        expected_source_sha, label="expected_source_sha"
+    ):
+        raise ImpactPlannerError("Delivery impact plan source_sha 漂移")
+    paths = payload.get("changed_paths")
+    if not isinstance(paths, list) or any(not isinstance(path, str) for path in paths):
+        raise ImpactPlannerError("Delivery impact plan changed_paths 非 canonical list")
+    normalized = normalize_changed_paths(paths)
+    if normalized != paths:
+        raise ImpactPlannerError("Delivery impact plan changed_paths 未 canonicalize")
+    if payload.get("changed_paths_digest") != canonical_digest(normalized):
+        raise ImpactPlannerError("Delivery impact plan changed_paths digest 漂移")
+    identity = payload.get("impact_planner")
+    if identity != planner_identity():
+        raise ImpactPlannerError("Delivery impact planner identity 漂移")
+    scopes = payload.get("scopes")
+    states = payload.get("states")
+    if not isinstance(scopes, Mapping) or set(scopes) != set(DELIVERY_SCOPE_NAMES):
+        raise ImpactPlannerError("Delivery impact plan scopes 不闭合")
+    if not isinstance(states, Mapping) or set(states) != set(DELIVERY_SCOPE_NAMES):
+        raise ImpactPlannerError("Delivery impact plan states 不闭合")
+    for name in DELIVERY_SCOPE_NAMES:
+        required = scopes[name]
+        if not isinstance(required, bool):
+            raise ImpactPlannerError(f"Delivery impact scope {name} 必须为 bool")
+        expected_state = "required" if required else "not_required"
+        if states[name] != expected_state:
+            raise ImpactPlannerError(f"Delivery impact scope {name} state 漂移")
+    unsigned = dict(payload)
+    plan_digest = unsigned.pop("plan_digest", None)
+    if plan_digest != canonical_digest(unsigned):
+        raise ImpactPlannerError("Delivery impact plan digest 漂移")
+    return dict(payload)

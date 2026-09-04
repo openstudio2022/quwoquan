@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import json
+import os
+import subprocess
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -10,6 +13,7 @@ ROOT = Path(__file__).resolve().parents[4]
 DELIVERY = ROOT / ".github/workflows/delivery-gate.yml"
 CONTROLLED_PROD = ROOT / ".github/workflows/deploy-prod-auto.yml"
 GITHUB_TIMING = ROOT / "quwoquan_ops/ci/github_actions_timing.py"
+GITHUB_ACTIONS_API = ROOT / "quwoquan_ops/ci/lib/github_actions_api.py"
 AI_ADVISORY = ROOT / "quwoquan_ops/ci/ai_ci_advisory.py"
 EVIDENCE_GATE = ROOT / "quwoquan_ops/gate/verify_ci_cd_evidence_contracts.py"
 BUDGETS = ROOT / "quwoquan_ops/environments/pr_gate_timing_budgets.json"
@@ -26,6 +30,133 @@ SOURCE_ADMISSION_SPEC_REFS = (
 
 
 class ReleaseWorkflowConvergenceContractTest(unittest.TestCase):
+    def test_formal_prod_authority_preflight_fails_before_heavy_release_jobs(
+        self,
+    ) -> None:
+        import yaml
+
+        source = CONTROLLED_PROD.read_text(encoding="utf-8")
+        jobs = yaml.safe_load(source)["jobs"]
+        preflight = jobs["formal_prod_authority_preflight"]
+        preflight_commands = "\n".join(
+            str(step.get("run") or "") for step in preflight["steps"]
+        )
+
+        self.assertEqual(preflight["timeout-minutes"], 1)
+        self.assertEqual(preflight["permissions"], {"contents": "read"})
+        self.assertIn('EVENT_NAME" != "workflow_dispatch"', preflight_commands)
+        self.assertIn('DRY_RUN" == "true"', preflight_commands)
+        self.assertIn("applicability=not_applicable", preflight_commands)
+        self.assertIn("decision=pass", preflight_commands)
+        self.assertIn("OPS.BRANCH.AUTHORITY_UNAVAILABLE", preflight_commands)
+        self.assertIn("terminal=blocked", preflight_commands)
+        self.assertIn(
+            "recovery=restore_git_authority_then_retry", preflight_commands
+        )
+        self.assertNotIn("hostedProtectionVerified=true", preflight_commands)
+        self.assertNotIn("formalProd=true", preflight_commands)
+
+        def run_preflight(dry_run: str) -> tuple[subprocess.CompletedProcess[str], str]:
+            with tempfile.TemporaryDirectory() as temporary:
+                output_path = Path(temporary) / "github-output"
+                result = subprocess.run(
+                    ["bash", "-c", preflight_commands],
+                    cwd=ROOT,
+                    env={
+                        **os.environ,
+                        "EVENT_NAME": "workflow_dispatch",
+                        "DRY_RUN": dry_run,
+                        "GITHUB_OUTPUT": str(output_path),
+                    },
+                    text=True,
+                    capture_output=True,
+                    check=False,
+                )
+                output = (
+                    output_path.read_text(encoding="utf-8")
+                    if output_path.exists()
+                    else ""
+                )
+                return result, output
+
+        dry_run_result, dry_run_output = run_preflight("true")
+        self.assertEqual(dry_run_result.returncode, 0)
+        self.assertEqual(
+            dry_run_output.splitlines(),
+            ["applicability=not_applicable", "decision=pass"],
+        )
+        self.assertNotIn(
+            "OPS.BRANCH.AUTHORITY_UNAVAILABLE", dry_run_result.stdout
+        )
+
+        formal_result, formal_output = run_preflight("false")
+        self.assertEqual(formal_result.returncode, 2)
+        self.assertEqual(
+            formal_output.splitlines(),
+            ["applicability=required", "decision=blocked"],
+        )
+        self.assertIn("OPS.BRANCH.AUTHORITY_UNAVAILABLE", formal_result.stdout)
+        self.assertIn("terminal=blocked", formal_result.stdout)
+        self.assertIn(
+            "recovery=restore_git_authority_then_retry", formal_result.stdout
+        )
+
+        heavy_jobs = (
+            "source_context",
+            "service_pipeline",
+            "app_pipeline",
+            "delivery_gate",
+            "prepare",
+            "alpha_local",
+            "beta_device_matrix",
+            "gamma_local",
+            "preprod_evidence",
+            "prod_rollout",
+            "prod_soak_acceptance",
+        )
+        for job_name in heavy_jobs:
+            needs = jobs[job_name].get("needs", [])
+            if isinstance(needs, str):
+                needs = [needs]
+            self.assertIn(
+                "formal_prod_authority_preflight",
+                needs,
+                f"{job_name} can start before formal Prod authority preflight",
+            )
+
+        preflight_offset = source.index("  formal_prod_authority_preflight:\n")
+        for job_name in heavy_jobs:
+            self.assertLess(preflight_offset, source.index(f"  {job_name}:\n"))
+
+        prod_steps = jobs["prod_rollout"]["steps"]
+        defensive = next(
+            step
+            for step in prod_steps
+            if step.get("name")
+            == "Defensively recheck formal Prod hosted authority before mutation"
+        )
+        defensive_commands = str(defensive["run"])
+        self.assertEqual(
+            defensive["if"],
+            "${{ needs.prepare.outputs.dry_run != 'true' }}",
+        )
+        self.assertIn("OPS.BRANCH.AUTHORITY_UNAVAILABLE", defensive_commands)
+        self.assertIn("terminal=blocked", defensive_commands)
+        self.assertIn(
+            "recovery=restore_git_authority_then_retry", defensive_commands
+        )
+        mutation_names = (
+            "Deploy Prod canary",
+            "Deploy Prod 5%",
+            "Deploy Prod 20%",
+            "Deploy Prod 50%",
+            "Deploy Prod 100%",
+        )
+        step_names = [str(step.get("name") or "") for step in prod_steps]
+        defensive_index = step_names.index(str(defensive["name"]))
+        for mutation_name in mutation_names:
+            self.assertLess(defensive_index, step_names.index(mutation_name))
+
     def test_source_promotion_admission_precedes_candidate_and_prod_credentials(
         self,
     ) -> None:
@@ -121,7 +252,7 @@ class ReleaseWorkflowConvergenceContractTest(unittest.TestCase):
             self.assertLess(early_admission, source.index(protected_operation))
 
         formal_block = source.index(
-            "Block formal Prod while hosted protection is unverified"
+            "Defensively recheck formal Prod hosted authority before mutation"
         )
         self.assertLess(
             formal_block,
@@ -164,12 +295,16 @@ class ReleaseWorkflowConvergenceContractTest(unittest.TestCase):
     def test_delivery_gate_measures_every_app_shard_from_jobs_api(self) -> None:
         source = DELIVERY.read_text(encoding="utf-8")
         helper = GITHUB_TIMING.read_text(encoding="utf-8")
+        actions_api = GITHUB_ACTIONS_API.read_text(encoding="utf-8")
         self.assertIn("github_actions_timing.py", source)
         self.assertIn('--require-count "app_tests=4"', source)
         self.assertIn('shard_index: [0, 1, 2, 3]', source)
-        self.assertIn("/actions/runs/", helper)
-        self.assertIn("/jobs", helper)
-        self.assertIn('"filter": "latest"', helper)
+        self.assertIn("run, jobs, _ = load_run_and_jobs(", helper)
+        self.assertNotIn("/actions/runs/", helper)
+        self.assertNotIn('"filter": "latest"', helper)
+        self.assertIn("/actions/runs/", actions_api)
+        self.assertIn('f"{run_url}/jobs"', actions_api)
+        self.assertIn('query={"filter": "latest"}', actions_api)
         self.assertIn("--critical-path-source github_run_calendar", source)
         self.assertIn("--machine-critical-path-seconds", source)
         self.assertIn("CALENDAR_SECONDS", source)

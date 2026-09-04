@@ -30,12 +30,34 @@ from quwoquan_ops.cli.lib.package_reuse.android_gradle_store import (
     GradleInvocation,
     canonical_android_uat_gradle_invocations,
     copy_android_gradle_snapshot,
+    materialize_flutter_gradle_wrappers,
+    materialize_pinned_flutter_gradle_wrappers,
     run_gradle_invocations,
     seal_android_gradle_home,
     synchronize_android_gradle_dependencies,
     write_android_gradle_capsule,
 )
 
+
+
+_PINNED_FLUTTER_METADATA = {
+    "frameworkVersion": "3.47.0",
+    "frameworkRevision": "a" * 40,
+    "engineRevision": "b" * 40,
+    "dartSdkVersion": "3.13.0",
+    "channel": "stable",
+}
+_PINNED_FLUTTER_IDENTITY = {
+    "flutterVersion": _PINNED_FLUTTER_METADATA["frameworkVersion"],
+    "commandResolutionDigest": digest_bytes(
+        json.dumps(
+            _PINNED_FLUTTER_METADATA,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+    ),
+}
 
 def _wrapper(project: Path, archive: bytes = b"gradle distribution") -> Path:
     root = project / "quwoquan_app/android"
@@ -59,6 +81,39 @@ def _wrapper(project: Path, archive: bytes = b"gradle distribution") -> Path:
     gradlew.chmod(0o755)
     (root / "gradlew.bat").write_text("@echo off\r\n", encoding="utf-8")
     return root
+
+
+def _pinned_flutter_sdk(root: Path) -> tuple[Path, dict[str, bytes]]:
+    flutter_root = root / "flutter-sdk"
+    flutter = flutter_root / "bin/flutter"
+    flutter.parent.mkdir(parents=True)
+    flutter.write_text("#!/bin/sh\n", encoding="utf-8")
+    flutter.chmod(0o755)
+    artifact = {
+        "gradlew": b"#!/bin/sh\nprintf 'official wrapper\n'\n",
+        "gradlew.bat": b"@echo off\r\n",
+        "gradle/wrapper/gradle-wrapper.jar": b"official Flutter wrapper jar",
+    }
+    artifact_root = flutter_root / "bin/cache/artifacts/gradle_wrapper"
+    for relative, content in artifact.items():
+        target = artifact_root / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(content)
+        target.chmod(0o755 if relative == "gradlew" else 0o644)
+    version = (
+        "flutter_infra_release/gradle-wrapper/"
+        f"{'a' * 40}/gradle-wrapper.tgz"
+    )
+    (flutter_root / "bin/internal").mkdir(parents=True)
+    (flutter_root / "bin/internal/gradle_wrapper.version").write_text(
+        version + "\n", encoding="utf-8"
+    )
+    cache = flutter_root / "bin/cache"
+    (cache / "gradle_wrapper.stamp").write_text(version, encoding="utf-8")
+    (cache / "flutter.version.json").write_text(
+        json.dumps(_PINNED_FLUTTER_METADATA), encoding="utf-8"
+    )
+    return flutter, artifact
 
 
 def _raw_home(tmp_path: Path, archive: bytes = b"gradle distribution") -> Path:
@@ -109,6 +164,208 @@ def _sealed(tmp_path: Path) -> tuple[Path, Path, Path, object]:
         gradle_roots=[gradle_root],
     )
     return project, gradle_root, sealed, snapshot
+
+
+def test_clean_projection_materializes_both_wrappers_from_pinned_flutter(
+    tmp_path: Path,
+) -> None:
+    project = tmp_path / "clean-projection"
+    roots: list[Path] = []
+    for relative, distribution in (
+        ("quwoquan_app/android", "gradle-8.14-bin.zip"),
+        ("quwoquan_app/test_host/patrol/android", "gradle-9.3.1-all.zip"),
+    ):
+        root = project / relative
+        properties = root / "gradle/wrapper/gradle-wrapper.properties"
+        properties.parent.mkdir(parents=True)
+        properties.write_text(
+            "distributionBase=GRADLE_USER_HOME\n"
+            "distributionPath=wrapper/dists\n"
+            "zipStoreBase=GRADLE_USER_HOME\n"
+            "zipStorePath=wrapper/dists\n"
+            f"distributionUrl=https\\://services.gradle.org/distributions/{distribution}\n"
+            f"distributionSha256Sum={'a' * 64}\n",
+            encoding="utf-8",
+        )
+        roots.append(root)
+    flutter, artifact = _pinned_flutter_sdk(tmp_path)
+
+    identities = materialize_pinned_flutter_gradle_wrappers(
+        project,
+        roots,
+        {**_PINNED_FLUTTER_IDENTITY, "executable": str(flutter)},
+    )
+
+    assert [item["root"] for item in identities] == [
+        "quwoquan_app/android",
+        "quwoquan_app/test_host/patrol/android",
+    ]
+    for root in roots:
+        for relative, expected in artifact.items():
+            assert (root / relative).read_bytes() == expected
+        assert (root / "gradlew").stat().st_mode & 0o111
+        assert (root / "gradle/wrapper/gradle-wrapper.properties").is_file()
+
+
+def test_pinned_wrapper_bootstrap_requires_executable_for_nonempty_roots(
+    tmp_path: Path,
+) -> None:
+    project = tmp_path / "projection"
+
+    with pytest.raises(ValueError, match="APP.DEPENDENCY.flutter_executable_missing"):
+        materialize_pinned_flutter_gradle_wrappers(
+            project, [project / "quwoquan_app/android"], _PINNED_FLUTTER_IDENTITY
+        )
+
+    assert not project.exists()
+
+
+def test_pinned_wrapper_bootstrap_allows_empty_roots_without_executable(
+    tmp_path: Path,
+) -> None:
+    project = tmp_path / "projection"
+
+    identities = materialize_pinned_flutter_gradle_wrappers(
+        project, [], _PINNED_FLUTTER_IDENTITY
+    )
+
+    assert identities == ()
+    assert not project.exists()
+
+
+def test_wrapper_bootstrap_rejects_wrong_flutter_layout_before_write(
+    tmp_path: Path,
+) -> None:
+    project = tmp_path / "projection"
+    root = project / "quwoquan_app/android"
+    (root / "gradle/wrapper").mkdir(parents=True)
+    wrong = tmp_path / "untrusted/tool"
+    wrong.parent.mkdir()
+    wrong.write_text("#!/bin/sh\n", encoding="utf-8")
+    wrong.chmod(0o755)
+
+    with pytest.raises(ValueError, match="Flutter executable layout is invalid"):
+        materialize_flutter_gradle_wrappers(
+            project_root=project,
+            gradle_roots=[root],
+            flutter_executable=wrong,
+            expected_flutter_identity=_PINNED_FLUTTER_IDENTITY,
+        )
+
+    assert not (root / "gradlew").exists()
+
+
+def test_wrapper_bootstrap_preflights_both_hosts_before_write(
+    tmp_path: Path,
+) -> None:
+    project = tmp_path / "projection"
+    first = project / "quwoquan_app/android"
+    second = project / "quwoquan_app/test_host/patrol/android"
+    for root in (first, second):
+        wrapper = root / "gradle/wrapper"
+        wrapper.mkdir(parents=True)
+        (wrapper / "gradle-wrapper.properties").write_text(
+            "distributionUrl=https\\://services.gradle.org/distributions/"
+            "gradle-8.14-bin.zip\n"
+            f"distributionSha256Sum={'a' * 64}\n",
+            encoding="utf-8",
+        )
+    (second / "gradlew").write_text("foreign\n", encoding="utf-8")
+    flutter, _artifact = _pinned_flutter_sdk(tmp_path)
+
+    with pytest.raises(ValueError, match="bootstrap target is not fresh"):
+        materialize_flutter_gradle_wrappers(
+            project_root=project,
+            gradle_roots=[first, second],
+            flutter_executable=flutter,
+            expected_flutter_identity=_PINNED_FLUTTER_IDENTITY,
+        )
+
+    assert not (first / "gradlew").exists()
+    assert (second / "gradlew").read_text(encoding="utf-8") == "foreign\n"
+
+
+def test_wrapper_bootstrap_rejects_wrong_sdk_identity_or_unsealed_artifact(
+    tmp_path: Path,
+) -> None:
+    project = tmp_path / "projection"
+    root = project / "quwoquan_app/android"
+    (root / "gradle/wrapper").mkdir(parents=True)
+    flutter, _artifact = _pinned_flutter_sdk(tmp_path)
+    flutter_root = flutter.parent.parent
+    identity_path = flutter_root / "bin/cache/flutter.version.json"
+    identity_path.write_text(
+        json.dumps({**_PINNED_FLUTTER_METADATA, "frameworkRevision": "c" * 40}),
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="current pinned Flutter SDK identity drifted"):
+        materialize_flutter_gradle_wrappers(
+            project_root=project,
+            gradle_roots=[root],
+            flutter_executable=flutter,
+            expected_flutter_identity=_PINNED_FLUTTER_IDENTITY,
+        )
+    assert not (root / "gradlew").exists()
+
+    identity_path.write_text(json.dumps(_PINNED_FLUTTER_METADATA), encoding="utf-8")
+    (flutter_root / "bin/cache/gradle_wrapper.stamp").write_text(
+        "wrong-upstream-artifact", encoding="utf-8"
+    )
+    with pytest.raises(ValueError, match="official Flutter artifact identity is unsealed"):
+        materialize_flutter_gradle_wrappers(
+            project_root=project,
+            gradle_roots=[root],
+            flutter_executable=flutter,
+            expected_flutter_identity=_PINNED_FLUTTER_IDENTITY,
+        )
+    assert not (root / "gradlew").exists()
+
+    version = (flutter_root / "bin/internal/gradle_wrapper.version").read_text()
+    (flutter_root / "bin/cache/gradle_wrapper.stamp").write_text(
+        version.strip(), encoding="utf-8"
+    )
+    (
+        flutter_root
+        / "bin/cache/artifacts/gradle_wrapper/gradle/wrapper/gradle-wrapper.jar"
+    ).unlink()
+    with pytest.raises(ValueError, match="official Flutter artifact is unavailable"):
+        materialize_flutter_gradle_wrappers(
+            project_root=project,
+            gradle_roots=[root],
+            flutter_executable=flutter,
+            expected_flutter_identity=_PINNED_FLUTTER_IDENTITY,
+        )
+    assert not (root / "gradlew").exists()
+
+
+@pytest.mark.parametrize("linked_source", ["symlink", "hardlink"])
+def test_wrapper_bootstrap_rejects_linked_official_artifact_file(
+    tmp_path: Path, linked_source: str
+) -> None:
+    project = tmp_path / "projection"
+    root = project / "quwoquan_app/android"
+    (root / "gradle/wrapper").mkdir(parents=True)
+    flutter, _artifact = _pinned_flutter_sdk(tmp_path)
+    jar = (
+        flutter.parent.parent
+        / "bin/cache/artifacts/gradle_wrapper/gradle/wrapper/gradle-wrapper.jar"
+    )
+    outside = tmp_path / "linked-wrapper.jar"
+    outside.write_bytes(jar.read_bytes())
+    jar.unlink()
+    if linked_source == "symlink":
+        jar.symlink_to(outside)
+    else:
+        os.link(outside, jar)
+
+    with pytest.raises(ValueError, match="official Flutter artifact is unavailable"):
+        materialize_flutter_gradle_wrappers(
+            project_root=project,
+            gradle_roots=[root],
+            flutter_executable=flutter,
+            expected_flutter_identity=_PINNED_FLUTTER_IDENTITY,
+        )
+    assert not (root / "gradlew").exists()
 
 
 def test_seal_binds_wrapper_maven_artifacts_lock_and_verification_metadata(

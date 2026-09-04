@@ -37,4 +37,4 @@ if [[ "$installed" != "quwoquan_ops/hooks" ]]; then
 fi
 
 echo "[hooks] installed via core.hooksPath=quwoquan_ops/hooks (readback ok)"
-echo "[hooks] pre-commit: staged boundary（secret/PII、generated 边界、branch policy）; pre-push: branch policy; post-commit: 未合入工作副本提醒"
+echo "[hooks] pre-commit: staged boundary（secret/PII、generated 边界、branch policy）; pre-push: branch policy; post-commit: 轻量标记下次 session 检查"

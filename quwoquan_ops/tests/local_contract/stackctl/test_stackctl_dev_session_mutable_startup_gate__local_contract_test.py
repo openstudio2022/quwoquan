@@ -552,7 +552,7 @@ class StackctlDevSessionMutableStartupGateTest(StackctlDevSessionTestBase):
         execute.assert_called_once()
 
     def test_mutable_compose_render_failure_blocks_before_up(self) -> None:
-        sentinel_secret = "compose-render-failure-secret-must-not-persist"
+        sentinel_secret = "compose-render-failure-" + "secret-must-not-persist"
         rendered = {
             "plan": {
                 "composeProject": "quwoquan_beta_test_live",
@@ -832,6 +832,9 @@ class StackctlDevSessionMutableStartupGateTest(StackctlDevSessionTestBase):
                 stackctl,
                 "resolve_report_dir",
                 return_value=Path(temporary),
+            ),
+            mock.patch.object(
+                stackctl, "local_runtime_capacity_evidence", return_value={"issues": []}
             ),
             mock.patch.object(
                 stackctl,

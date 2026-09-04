@@ -107,8 +107,8 @@
 .PHONY: beta-status
 .PHONY: verify
 .PHONY: verify-global-increment-constraints
-.PHONY: verify-agent-context-budget feature-context feature-tree-overview feature-tree-change-report feature-tree-content-review verify-feature-tree
-.PHONY: verify-human-agent-delivery-eval
+.PHONY: verify-agent-context-budget feature-context feature-candidate-evidence feature-tree-overview feature-tree-change-report feature-tree-content-review verify-feature-tree
+.PHONY: verify-human-agent-delivery-eval test-human-decision-runtime-bridge
 .PHONY: verify-objective-execution
 .PHONY: verify-hotl-admission
 .PHONY: review-dispatch-plan review-run-evidence produce-handoff-manifest
@@ -830,13 +830,17 @@ stackctl-repair:
 	@python3 quwoquan_ops/cli/stackctl.py repair --target "$(TARGET)" --fix "$(FIX)"
 
 # 测试环境真机登录取验证码：交互 TTY 隐藏输入手机号，OTP 只写 /dev/tty。
-# 用法见 quwoquan_ops/environments/gamma/local/README.md「真机登录取验证码（OTP）」。
+# RESEARCH_IDENTITY=1 改用当前 target 的 Research 白名单身份手机号（同样只在 TTY 展示），
+# WAIT_SECONDS 覆盖等待 OTP 出现的预算。用法见
+# quwoquan_ops/environments/gamma/local/README.md「真机登录取验证码（OTP）」。
 stackctl-otp-read:
 	@if [ -z "$(TARGET)" ]; then \
-		echo "FAIL: TARGET is required. Example: make stackctl-otp-read TARGET=gamma-local"; \
+		echo "FAIL: TARGET is required. Example: make stackctl-otp-read TARGET=gamma-local [RESEARCH_IDENTITY=1] [WAIT_SECONDS=60]"; \
 		exit 2; \
 	fi
-	@python3 quwoquan_ops/cli/stackctl.py provider-debug otp-read --target "$(TARGET)"
+	@python3 quwoquan_ops/cli/stackctl.py provider-debug otp-read --target "$(TARGET)" \
+		$(if $(RESEARCH_IDENTITY),--research-identity,) \
+		$(if $(WAIT_SECONDS),--wait-seconds "$(WAIT_SECONDS)",)
 
 stackctl-deploy:
 	@if [ -z "$(TARGET)" ]; then \
@@ -935,6 +939,10 @@ verify-agent-context-budget:
 	@python3 quwoquan_ops/gate/verify_agent_context_budget.py
 
 # Human-Agent 角色交互代表路径：固定样本分母、硬不变量 100% 阈值、机器报告落 .qwq_output。
+test-human-decision-runtime-bridge: prepare-test-python
+	@$(PYTEST_RUNNER) $(PYTEST_INTERPRETER_FLAGS) -m pytest $(PYTEST_FLAGS) \
+		quwoquan_ops/tests/local_contract/gate/test_human_decision_runtime_bridge__local_contract_test.py -q
+
 verify-human-agent-delivery-eval:
 	@PYTHONDONTWRITEBYTECODE=1 python3 -B quwoquan_ops/gate/verify_human_agent_delivery_eval.py
 
@@ -955,9 +963,9 @@ verify-hotl-admission: prepare-test-python
 		quwoquan_ops/tests/local_contract/gate/test_hotl_admission__evaluator__local_contract_test.py -q
 
 # 校验轮次交接单（HANDOFF 物理形态）：四项齐全、三向裁决零悬空、证据字段完整。
-# 不带参数校验最新轮次；MANIFEST=<path> 校验指定文件。
+# 只接受显式 HANDOFF_REF；禁止 latest 扫描与 projection 路径消费。
 verify-handoff-manifest:
-	@python3 quwoquan_ops/gate/verify_handoff_manifest.py $(MANIFEST)
+	@python3 quwoquan_ops/gate/verify_handoff_manifest.py --handoff-ref "$(HANDOFF_REF)"
 
 # 生成 Review Board v2 计划：共享 owner contexts、去重命名 evidence 与有界 Reviewer；ARGS 透传。
 review-dispatch-plan:
@@ -1128,7 +1136,6 @@ verify-assistant-agent-replay-evaluation:
 gate:
 	@$(MAKE) verify-global-increment-constraints
 	@$(MAKE) verify-local-worktree-lifecycle
-	@$(MAKE) verify-agent-context-budget
 	@$(MAKE) verify-retired-runtime-architecture
 	@$(MAKE) verify-service-ddd-cqrs-baseline
 	@$(MAKE) verify-service-architecture
@@ -1206,6 +1213,11 @@ feature-context:
 	@if [ -z "$(TARGET)" ]; then echo "GATE_BLOCK: 请设置 TARGET=<spec-or-code-path>"; exit 2; fi
 	@PYTHONDONTWRITEBYTECODE=1 python3 quwoquan_ops/cli/feature_tree.py context --target "$(TARGET)" --format "$(if $(FORMAT),$(FORMAT),manifest)"
 
+feature-candidate-evidence:
+	@test -n "$(OWNER_IDENTITY)" || { echo "IDENTITY.MIGRATION_REQUIRED: 请设置 OWNER_IDENTITY=<content-addressed-ref>"; exit 2; }
+	@test -n "$(CHANGED_PATHS)" || { echo "CANDIDATE.SPLIT_REQUIRED: 请设置 CHANGED_PATHS='path1 path2'"; exit 2; }
+	@PYTHONDONTWRITEBYTECODE=1 python3 quwoquan_ops/cli/feature_tree.py candidate-evidence --owner-identity "$(OWNER_IDENTITY)" $(foreach path,$(CHANGED_PATHS),--changed-path "$(path)")
+
 feature-tree-overview:
 	@PYTHONDONTWRITEBYTECODE=1 python3 quwoquan_ops/cli/feature_tree.py overview
 
@@ -1221,7 +1233,6 @@ verify-feature-tree:
 
 verify:
 	@$(MAKE) verify-global-increment-constraints
-	@$(MAKE) verify-agent-context-budget
 	@$(MAKE) verify-retired-runtime-architecture
 	@$(MAKE) verify-service-ddd-cqrs-baseline
 	@$(MAKE) verify-service-architecture
@@ -1317,7 +1328,7 @@ config-slo-gate:
 	@python3 quwoquan_ops/cli/stackctl.py verify --kind config-slo --profile baseline --prometheus-url "$(PROMETHEUS_URL)"
 
 .PHONY: commit-gate gate-smoke gate-integration gate-release test-api-contract test-api-contract-chat
-.PHONY: install-hooks verify-local-worktree-lifecycle
+.PHONY: install-hooks verify-local-worktree-lifecycle lane-bootstrap lane-preflight lane-resync
 
 # L0 本地入库门禁（pre-commit 同源）：并行静态 + 影响面测试，目标 ≤10m / 硬顶 15m。
 commit-gate:
@@ -1331,6 +1342,17 @@ install-hooks:
 # 必须留在 gate 链上：hooks 失效时 pre-commit 恰好不会运行，自检不能只挂在 pre-commit。
 verify-local-worktree-lifecycle:
 	@PYTHONDONTWRITEBYTECODE=1 python3 quwoquan_ops/gate/verify_local_worktree_lifecycle.py
+
+# 六 lane 生命周期命令只定义仓内入口；不会由 Makefile 自动 push/merge/delete。
+# bootstrap 由已授权操作者在 bare hub 上逐条创建缺失 lane；既有 worktree 保持不动。
+lane-bootstrap:
+	@PYTHONDONTWRITEBYTECODE=1 python3 -B quwoquan_ops/cli/lane_worktree_commands.py bootstrap
+
+lane-preflight:
+	@PYTHONDONTWRITEBYTECODE=1 python3 quwoquan_ops/gate/verify_local_worktree_lifecycle.py --require-all-lanes
+
+lane-resync:
+	@PYTHONDONTWRITEBYTECODE=1 python3 -B quwoquan_ops/cli/lane_worktree_commands.py resync
 .PHONY: prepare-test-python verify-test-no-fake verify-test-nonfunctional-coverage verify-test-directory-layout verify-test-coverage-map
 .PHONY: verify-execution-profiles
 .PHONY: test-local-contract test-app-python-local-contract test-runtime-local-contract test-api-integration test-runtime-api-integration test-runtime-api-integration-gamma test-user-acceptance verify-homepage-performance-evidence test-delivery-ci-local-contract
@@ -1414,6 +1436,8 @@ test-gate-companion-local-contract: test-review-dispatch test-review-consolidati
 		quwoquan_ops/tests/local_contract/environment/test_env_artifact_isolation__local_contract_test.py \
 		quwoquan_ops/tests/local_contract/gate/test_git_branch_policy__local_contract_test.py \
 		quwoquan_ops/tests/local_contract/gate/test_github_supply_chain__contract__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/gate/test_github_artifact_lifecycle__gate__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/gate/test_stackctl_provider_readiness_contract__gate__local_contract_test.py \
 		quwoquan_ops/tests/local_contract/gate/test_homepage_type_contract__shared_enum_parity__contract__local_contract_test.py \
 		quwoquan_ops/tests/local_contract/environment/test_local_dependency_purity__local_contract_test.py \
 		quwoquan_ops/tests/local_contract/environment/test_local_dependency_purity_uat_analysis__local_contract_test.py \
@@ -1755,7 +1779,9 @@ verify-governance-pipeline-admission: test-governance-pipeline-admission
 # Review plan/profile 选路的公开 local contract；只生成计划，不启动 Reviewer。
 test-review-dispatch: prepare-test-python
 	@$(PYTEST_RUNNER) $(PYTEST_INTERPRETER_FLAGS) -m pytest $(PYTEST_FLAGS) \
-		quwoquan_ops/tests/local_contract/gate/test_review_dispatch__cli__local_contract_test.py -q
+		quwoquan_ops/tests/local_contract/gate/test_review_dispatch__cli__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/gate/test_review_baseline__gate__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/gate/test_candidate_evidence_migration__local_contract_test.py -q
 
 verify-review-dispatch: test-review-dispatch
 

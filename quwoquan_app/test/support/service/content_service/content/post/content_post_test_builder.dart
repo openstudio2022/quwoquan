@@ -20,6 +20,9 @@ ContentPostViewData contentPostViewDataBuilder({
   String authorId = 'author-1',
   String authorDisplayName = '测试作者',
   String authorAvatarUrl = testContentAvatarUrl,
+  String? authorAvatarAssetId,
+  MediaDeliveryAccessMode? authorAvatarAccessMode =
+      MediaDeliveryAccessMode.public,
   String? authorBackgroundUrl = testContentImageUrl,
   String title = '',
   String body = '测试正文',
@@ -28,6 +31,9 @@ ContentPostViewData contentPostViewDataBuilder({
   String? coverUrl,
   String? thumbnailUrl,
   String? videoUrl,
+  String? mediaAssetId,
+  int? mediaAssetVersion,
+  List<PostMediaItem>? mediaItems,
   int? width,
   int? height,
   int? durationMs,
@@ -49,6 +55,8 @@ ContentPostViewData contentPostViewDataBuilder({
       authorId: authorId,
       authorDisplayName: authorDisplayName,
       authorAvatarUrl: authorAvatarUrl,
+      authorAvatarAssetId: authorAvatarAssetId,
+      authorAvatarAccessMode: authorAvatarAccessMode,
       authorBackgroundUrl: authorBackgroundUrl,
       authorRoleLabel: '',
       authorIdentityTags: const <String>[],
@@ -60,6 +68,17 @@ ContentPostViewData contentPostViewDataBuilder({
       coverUrl: coverUrl,
       thumbnailUrl: thumbnailUrl,
       videoUrl: videoUrl,
+      mediaAssetId: mediaAssetId,
+      mediaAssetVersion: mediaAssetVersion,
+      mediaItems:
+          mediaItems ??
+          _previousPublicMediaItems(
+            mediaUrls: mediaUrls,
+            coverUrl: coverUrl,
+            thumbnailUrl: thumbnailUrl,
+            videoUrl: videoUrl,
+            durationMs: durationMs,
+          ),
       width: width,
       height: height,
       durationMs: durationMs,
@@ -190,3 +209,44 @@ ContentPostDetailPayload contentPostDetailPayloadBuilder({
   );
 }
 
+/// 已确认 previous contract fixture 的媒体条目适配器。
+///
+/// 本 helper 只服务测试夹具：旧夹具以顶层 URL 表达公开交付，因此在这里显式
+/// 补成 typed public；生产 decoder 与正常契约路径不得据 URL 缺省猜 public。
+List<PostMediaItem> _previousPublicMediaItems({
+  required List<String>? mediaUrls,
+  required String? coverUrl,
+  required String? thumbnailUrl,
+  required String? videoUrl,
+  required int? durationMs,
+}) {
+  final items = <PostMediaItem>[];
+  final normalizedVideo = videoUrl?.trim() ?? '';
+  if (normalizedVideo.isNotEmpty) {
+    final normalizedThumbnail = thumbnailUrl?.trim() ?? '';
+    final normalizedCover = coverUrl?.trim() ?? '';
+    items.add(
+      PostMediaItem(
+        kind: 'video',
+        url: normalizedVideo,
+        accessMode: MediaDeliveryAccessMode.public,
+        coverUrl: normalizedThumbnail.isNotEmpty
+            ? normalizedThumbnail
+            : (normalizedCover.isEmpty ? null : normalizedCover),
+        durationMs: durationMs,
+      ),
+    );
+  }
+  for (final raw in mediaUrls ?? const <String>[]) {
+    final url = raw.trim();
+    if (url.isEmpty || url == normalizedVideo) continue;
+    items.add(
+      PostMediaItem(
+        kind: 'image',
+        url: url,
+        accessMode: MediaDeliveryAccessMode.public,
+      ),
+    );
+  }
+  return List<PostMediaItem>.unmodifiable(items);
+}

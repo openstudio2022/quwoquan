@@ -431,11 +431,16 @@ func TestMain(m *testing.M) {
 	// an authentic network boundary. The comment domain no
 	// longer touches Redis at all (the write-only/racy ZSet + reaction-counter
 	// caches were removed in R-CMT01); comment counts/ranking are authoritative on Mongo.
+	redisCredential := integrationRedis.Password
+	redisScene := func(database int) rtredis.SceneConfig {
+		return rtredis.SceneConfig{
+			Mode: "standalone", Addr: integrationRedis.Addr,
+			Password: redisCredential, DB: database, TLS: integrationRedis.TLS,
+		}
+	}
 	testRouter = platformredis.MustNewRouter(rtredis.RouterConfig{
 		Scenes: map[string]rtredis.SceneConfig{
-			"general":  {Mode: "standalone", Addr: integrationRedis.Addr, Password: integrationRedis.Password, DB: 0, TLS: integrationRedis.TLS},
-			"rec":      {Mode: "standalone", Addr: integrationRedis.Addr, Password: integrationRedis.Password, DB: 1, TLS: integrationRedis.TLS},
-			"realtime": {Mode: "standalone", Addr: integrationRedis.Addr, Password: integrationRedis.Password, DB: 2, TLS: integrationRedis.TLS},
+			"general": redisScene(0), "rec": redisScene(1), "realtime": redisScene(2),
 		},
 		PrefixRoutes: rtredis.DefaultRouterConfig().PrefixRoutes,
 		DefaultScene: "general",

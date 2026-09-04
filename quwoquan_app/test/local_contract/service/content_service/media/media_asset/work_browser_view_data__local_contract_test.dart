@@ -2,6 +2,7 @@
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/public/content_post_detail_payload.dart';
+import 'package:quwoquan_app/service/content_service/content/post/application/public/content_post_view_data.dart';
 import 'package:quwoquan_app/service/content_service/media/media_asset/domain/work_browser_view_data.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
@@ -48,5 +49,44 @@ void main() {
     expect(view.entityMentions, hasLength(1));
     expect(view.entityMentions.single.subjectId, 'entity:sight:west_lake');
     expect(view.entityMentions.single.homepageId, 'homepage_sight_west_lake');
+  });
+  test('canonical Post mediaItems provide immersive typed delivery without supplemental raw', () {
+    final occurredAt = DateTime.utc(2026, 8, 4);
+    final post = ContentPostViewData.fromWire(
+      ContentPostProjection(
+        postId: 'video-post-media-items',
+        contentType: 'video',
+        contentIdentity: 'work',
+        assistantUsePolicy: AssistantUsePolicy.inherit,
+        authorId: 'author-1',
+        authorDisplayName: '作者',
+        authorAvatarUrl: '',
+        authorRoleLabel: '',
+        authorIdentityTags: const <String>[],
+        authorVerified: false,
+        videoUrl: 'media/video/s/video-1/v1/source.mp4',
+        mediaItems: const <PostMediaItem>[
+          PostMediaItem(
+            kind: 'video',
+            url: 'media/video/s/video-1/v1/source.mp4',
+            mediaAssetId: 'asset-video-1',
+            accessMode: MediaDeliveryAccessMode.signedGrant,
+          ),
+        ],
+        likeCount: 0,
+        commentCount: 0,
+        shareCount: 0,
+        createdAt: occurredAt,
+      ),
+    );
+
+    final view = WorkBrowserViewData.fromPost(post);
+
+    expect(view.mediaItems, hasLength(1));
+    expect(view.mediaItems.single.mediaAssetId, 'asset-video-1');
+    expect(
+      view.mediaItems.single.accessMode,
+      MediaDeliveryAccessMode.signedGrant,
+    );
   });
 }

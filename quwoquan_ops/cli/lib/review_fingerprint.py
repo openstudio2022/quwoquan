@@ -50,7 +50,8 @@ def sha256_text(value: str) -> str:
 
 def build_review_fingerprint(
     *, workflow: str, deliverable: str, scope: str,
-    owner_manifest_identity: dict[str, Any], terminal: dict[str, Any],
+    owner_identity: dict[str, Any], candidate_evidence_identity: dict[str, Any],
+    human_decision_projection: dict[str, Any], terminal: dict[str, Any],
     changed_paths: list[str], profiles: list[str], contexts: list[dict[str, Any]],
     initial_reviewers: list[dict[str, Any]], evidence: list[dict[str, Any]],
 ) -> dict[str, Any]:
@@ -64,7 +65,8 @@ def build_review_fingerprint(
         ))
     review_identity = {
         "workflow": workflow, "deliverable": deliverable, "scope": scope,
-        "owner_manifest_identity": owner_manifest_identity,
+        "candidate_evidence_identity": candidate_evidence_identity,
+        "human_decision_projection": human_decision_projection,
         "terminal": terminal,
         "changed_paths": changed_paths, "profiles": profiles, "contexts": contexts,
         "reviewers": [
@@ -87,10 +89,8 @@ def build_review_fingerprint(
     }
     return build_evidence_fingerprint(
         {
-            "git": {"head_sha": head_sha(), "merge_base_sha": merge_base_sha()},
-            "workspace": workspace_digests(
-                changed_paths + [item["path"] for item in contexts], repo_root=REPO_ROOT,
-            ),
+            "git": {"head_sha": canonical_digest("review-head-independent"), "merge_base_sha": canonical_digest("review-merge-base-independent")},
+            "workspace": workspace_digests([], repo_root=REPO_ROOT),
             "assets": {
                 "canonical_assets_digest": canonical_digest(contexts),
                 "review_assets_digest": canonical_digest(

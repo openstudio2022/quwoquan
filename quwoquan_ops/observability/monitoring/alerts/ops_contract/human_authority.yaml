@@ -1,0 +1,225 @@
+# Code generated from quwoquan_service/generated/contract_graph.json.
+# Regenerate with verify_object_alert_coverage.py --write.
+groups:
+  - name: quwoquan_ops_contract_human_authority
+    rules:
+      - record: quwoquan_ops_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="product-ops-service",method="POST",route=~"^/control-plane/platform/human-authority/receipts/[^/]+:consume$"})
+        labels:
+          service: "product-ops-service"
+          operation: "ops.human_authority.ConsumeHumanAuthorizationReceipt"
+          contract_metric: "ops_human_authority_commands"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "1000"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_ops_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="product-ops-service",method="POST",route=~"^/control-plane/platform/human-authority/receipts/[^/]+:consume$"})
+        labels:
+          service: "product-ops-service"
+          operation: "ops.human_authority.ConsumeHumanAuthorizationReceipt"
+          contract_metric: "ops_human_authority_commands"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "1000"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_ops_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="product-ops-service",method="POST",route="/control-plane/platform/human-authority/decision-units"})
+        labels:
+          service: "product-ops-service"
+          operation: "ops.human_authority.CreateHumanDecisionUnit"
+          contract_metric: "ops_human_authority_commands"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "1000"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_ops_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="product-ops-service",method="POST",route="/control-plane/platform/human-authority/decision-units"})
+        labels:
+          service: "product-ops-service"
+          operation: "ops.human_authority.CreateHumanDecisionUnit"
+          contract_metric: "ops_human_authority_commands"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "1000"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_ops_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="product-ops-service",method="POST",route=~"^/control-plane/platform/human-authority/decision-units/[^/]+:finalize$"})
+        labels:
+          service: "product-ops-service"
+          operation: "ops.human_authority.FinalizeHumanDecision"
+          contract_metric: "ops_human_authority_commands"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "1000"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_ops_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="product-ops-service",method="POST",route=~"^/control-plane/platform/human-authority/decision-units/[^/]+:finalize$"})
+        labels:
+          service: "product-ops-service"
+          operation: "ops.human_authority.FinalizeHumanDecision"
+          contract_metric: "ops_human_authority_commands"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "1000"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_ops_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="product-ops-service",method="POST",route="/control-plane/platform/human-authority/webhooks/github"})
+        labels:
+          service: "product-ops-service"
+          operation: "ops.human_authority.IngestGitHubHumanAuthorityWebhook"
+          contract_metric: "ops_human_authority_commands"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "1000"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_ops_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="product-ops-service",method="POST",route="/control-plane/platform/human-authority/webhooks/github"})
+        labels:
+          service: "product-ops-service"
+          operation: "ops.human_authority.IngestGitHubHumanAuthorityWebhook"
+          contract_metric: "ops_human_authority_commands"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "1000"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_ops_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="product-ops-service",method="GET",route="/control-plane/platform/human-authority/decision-units"})
+        labels:
+          service: "product-ops-service"
+          operation: "ops.human_authority.ListHumanDecisionUnits"
+          contract_metric: "ops_human_authority_commands"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "1000"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_ops_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="product-ops-service",method="GET",route="/control-plane/platform/human-authority/decision-units"})
+        labels:
+          service: "product-ops-service"
+          operation: "ops.human_authority.ListHumanDecisionUnits"
+          contract_metric: "ops_human_authority_commands"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "1000"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_ops_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="product-ops-service",method="GET",route=~"^/control-plane/platform/human-authority/signing-keys/[^/]+$"})
+        labels:
+          service: "product-ops-service"
+          operation: "ops.human_authority.ReadHumanAuthoritySigningPublicKey"
+          contract_metric: "ops_human_authority_commands"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "1000"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_ops_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="product-ops-service",method="GET",route=~"^/control-plane/platform/human-authority/signing-keys/[^/]+$"})
+        labels:
+          service: "product-ops-service"
+          operation: "ops.human_authority.ReadHumanAuthoritySigningPublicKey"
+          contract_metric: "ops_human_authority_commands"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "1000"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_ops_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="product-ops-service",method="GET",route=~"^/control-plane/platform/human-authority/receipts/[^/]+$"})
+        labels:
+          service: "product-ops-service"
+          operation: "ops.human_authority.ReadHumanAuthorizationReceipt"
+          contract_metric: "ops_human_authority_commands"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "1000"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_ops_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="product-ops-service",method="GET",route=~"^/control-plane/platform/human-authority/receipts/[^/]+$"})
+        labels:
+          service: "product-ops-service"
+          operation: "ops.human_authority.ReadHumanAuthorizationReceipt"
+          contract_metric: "ops_human_authority_commands"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "1000"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_ops_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="product-ops-service",method="GET",route=~"^/control-plane/platform/human-authority/decision-units/[^/]+$"})
+        labels:
+          service: "product-ops-service"
+          operation: "ops.human_authority.ReadHumanDecisionUnit"
+          contract_metric: "ops_human_authority_commands"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "1000"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_ops_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="product-ops-service",method="GET",route=~"^/control-plane/platform/human-authority/decision-units/[^/]+$"})
+        labels:
+          service: "product-ops-service"
+          operation: "ops.human_authority.ReadHumanDecisionUnit"
+          contract_metric: "ops_human_authority_commands"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "1000"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_ops_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="product-ops-service",method="POST",route=~"^/control-plane/platform/human-authority/receipts/[^/]+:revoke$"})
+        labels:
+          service: "product-ops-service"
+          operation: "ops.human_authority.RevokeHumanAuthorizationReceipt"
+          contract_metric: "ops_human_authority_commands"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "1000"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_ops_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="product-ops-service",method="POST",route=~"^/control-plane/platform/human-authority/receipts/[^/]+:revoke$"})
+        labels:
+          service: "product-ops-service"
+          operation: "ops.human_authority.RevokeHumanAuthorizationReceipt"
+          contract_metric: "ops_human_authority_commands"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "1000"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_ops_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="product-ops-service",method="POST",route=~"^/control-plane/platform/human-authority/decision-units/[^/]+/rounds/[^/]+:seal$"})
+        labels:
+          service: "product-ops-service"
+          operation: "ops.human_authority.SealHumanDecisionRound"
+          contract_metric: "ops_human_authority_commands"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "1000"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_ops_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="product-ops-service",method="POST",route=~"^/control-plane/platform/human-authority/decision-units/[^/]+/rounds/[^/]+:seal$"})
+        labels:
+          service: "product-ops-service"
+          operation: "ops.human_authority.SealHumanDecisionRound"
+          contract_metric: "ops_human_authority_commands"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "1000"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_ops_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="product-ops-service",method="POST",route=~"^/control-plane/platform/human-authority/decision-units/[^/]+/submissions$"})
+        labels:
+          service: "product-ops-service"
+          operation: "ops.human_authority.SubmitHumanRoleEvidence"
+          contract_metric: "ops_human_authority_commands"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "1000"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_ops_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="product-ops-service",method="POST",route=~"^/control-plane/platform/human-authority/decision-units/[^/]+/submissions$"})
+        labels:
+          service: "product-ops-service"
+          operation: "ops.human_authority.SubmitHumanRoleEvidence"
+          contract_metric: "ops_human_authority_commands"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "1000"
+          slo_availability_percent: "99.9"

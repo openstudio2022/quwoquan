@@ -216,9 +216,8 @@ abstract final class CloudRuntimeConfig {
     }
     return <String, String>{
       ...resolvedPackage.runtimeDefineSummary,
-      if (_launchProvenance != null) 'launchProvenance': _launchProvenance!,
-      if (_runtimeConfigSupplyMode != null)
-        'runtimeConfigSupplyMode': _runtimeConfigSupplyMode!,
+      'launchProvenance': ?_launchProvenance,
+      'runtimeConfigSupplyMode': ?_runtimeConfigSupplyMode,
     };
   }
 

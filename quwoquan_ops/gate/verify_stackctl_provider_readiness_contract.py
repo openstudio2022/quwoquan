@@ -8,6 +8,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 STACKCTL = ROOT / "quwoquan_ops" / "cli" / "stackctl.py"
+STACKCTL_CONTRACT = (
+    ROOT / "quwoquan_ops" / "cli" / "commands" / "stackctl_contract.py"
+)
 # stackctl 域拆分后，契约随函数定义位置迁移：
 # - command_verify → commands/verify_domain.py
 # - _run_provider_readiness_preflight → commands/environment_probe.py
@@ -33,6 +36,7 @@ def _function_source(source: str, tree: ast.Module, name: str) -> str:
 
 def main() -> int:
     source = STACKCTL.read_text(encoding="utf-8")
+    contract_source = STACKCTL_CONTRACT.read_text(encoding="utf-8")
     runner_source = RUNNER.read_text(encoding="utf-8")
     probe_source = ENVIRONMENT_PROBE.read_text(encoding="utf-8")
     probe_tree = ast.parse(probe_source, filename=str(ENVIRONMENT_PROBE))
@@ -50,7 +54,7 @@ def main() -> int:
     )
     if (
         'PROVIDER_CONFORMANCE_SCRIPT = "quwoquan_ops/cli/lib/provider_conformance.py"'
-        not in source
+        not in contract_source
     ):
         issues.append(
             "stackctl Provider readiness contract missing PROVIDER_CONFORMANCE_SCRIPT"

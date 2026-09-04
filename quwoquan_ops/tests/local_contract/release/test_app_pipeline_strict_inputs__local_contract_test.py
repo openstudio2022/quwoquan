@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import json
+import subprocess
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -16,6 +17,7 @@ from quwoquan_ops.ci import prepare_app_pipeline_inputs as subject
 
 ROOT = Path(__file__).resolve().parents[4]
 WORKFLOW = ROOT / ".github/workflows/app_pipeline.yml"
+DELIVERY_WORKFLOW = ROOT / ".github/workflows/delivery-gate.yml"
 SHA256_A = "sha256:" + "a" * 64
 SOURCE = subject.SourceIdentity(
     git_sha="1" * 40,
@@ -72,6 +74,65 @@ def _stub_stable_transaction(
     monkeypatch.setattr(subject, "_materialize_profile_trust", materialize)
     monkeypatch.setattr(subject, "_run_dependency_sync", sync)
     monkeypatch.setattr(subject, "_load_active_bundle", load_active)
+
+
+def test_dependency_sync_timeout_is_bounded_typed_and_preserves_diagnostics(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, object] = {}
+
+    def timeout_run(command: list[str], **kwargs: object) -> object:
+        captured["command"] = command
+        captured["timeout"] = kwargs.get("timeout")
+        captured["stderr"] = kwargs.get("stderr")
+        captured["on_stderr"] = kwargs.get("on_stderr")
+        raise subprocess.TimeoutExpired(
+            command,
+            timeout=kwargs["timeout"],
+            output=b"partial stackctl stdout\n",
+            stderr=(
+                b"[app-dependency-sync] phase=initialization state=running\n"
+                b"[app-dependency-sync] phase=gradle-online-resolution state=running\n"
+                b"process terminated during bounded cleanup\n"
+            ),
+        )
+
+    monkeypatch.setattr(subject, "run_managed_subprocess", timeout_run)
+    result_path = tmp_path / "app-dependency-sync-result.json"
+
+    with pytest.raises(
+        subject.PipelinePreparationError,
+        match=(
+            r"^APP\.PIPELINE\.dependency_sync_timeout: "
+            r"timeoutSeconds=1500; latestDiagnostic=\[app-dependency-sync\] "
+            r"phase=gradle-online-resolution state=running$"
+        ),
+    ):
+        subject._run_dependency_sync(
+            environment={"PYTHONDONTWRITEBYTECODE": "1"},
+            result_path=result_path,
+        )
+
+    assert captured["timeout"] == subject._DEPENDENCY_SYNC_TIMEOUT_SECONDS
+    assert captured["stderr"] == subprocess.PIPE
+    assert callable(captured["on_stderr"])
+    assert captured["command"] == [
+        subject.sys.executable,
+        str(subject.REPO_ROOT / "quwoquan_ops/cli/stackctl.py"),
+        "--output-format",
+        "json",
+        "app-dependency-sync",
+    ]
+    assert result_path.read_text(encoding="utf-8") == "partial stackctl stdout\n"
+    stderr_path = result_path.with_suffix(".stderr.log")
+    assert stderr_path.read_text(encoding="utf-8") == (
+        "[app-dependency-sync] phase=initialization state=running\n"
+        "[app-dependency-sync] phase=gradle-online-resolution state=running\n"
+        "process terminated during bounded cleanup\n"
+    )
+    assert result_path.stat().st_mode & 0o777 == 0o600
+    assert stderr_path.stat().st_mode & 0o777 == 0o600
 
 
 def test_mobile_preparation_orders_profile_trust_sync_and_fresh_active_readback(
@@ -250,6 +311,23 @@ def test_hosted_workflow_passes_exact_fresh_outputs_to_every_package() -> None:
     steps = product["steps"]
 
     assert product["runs-on"] == "macos-latest"
+    assert int(product["timeout-minutes"]) == 30
+    delivery_document = yaml.load(
+        DELIVERY_WORKFLOW.read_text(encoding="utf-8"),
+        Loader=yaml.BaseLoader,
+    )
+    delivery_packaging = delivery_document["jobs"]["quwoquan_service_packaging"]
+    assert int(delivery_packaging["timeout-minutes"]) == 40
+    strict_inputs = next(
+        step
+        for step in delivery_packaging["steps"]
+        if step.get("id") == "strict_inputs"
+    )
+    assert int(strict_inputs["timeout-minutes"]) == 30
+    assert subject._DEPENDENCY_SYNC_TIMEOUT_SECONDS < min(
+        int(product["timeout-minutes"]),
+        int(delivery_packaging["timeout-minutes"]),
+    ) * 60
     prepare_index = next(
         index for index, step in enumerate(steps) if step.get("id") == "strict_inputs"
     )

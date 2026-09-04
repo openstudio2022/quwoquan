@@ -47,9 +47,8 @@ ALLOWED_TOP_LEVEL = frozenset(
         "AGENTS.md",
         "README.md",
         "LICENSE",
-        # 构建入口与工作区
+        # 构建入口
         "Makefile",
-        "quwoquan-workspace.code-workspace",
         # 开发机本地归档：由 .gitignore 挡在版本控制之外，只在这台机器上存在。
         # 登记它是为了让根布局门禁保持封闭且不因它长期假红；它不承载任何仓库
         # 职责，被移走后这两行可以直接删除。
@@ -79,6 +78,7 @@ RETIRED_TOP_LEVEL = {
     "tmp": "runtime output belongs under .qwq_output",
     "tools": "moved into per-domain tool roots",
     "githooks": "moved into quwoquan_ops/hooks",
+    "quwoquan-workspace.code-workspace": "multi-root workspace is retired; open exactly one worktree root",
     "social_content_app": "renamed to quwoquan_app",
     "node_modules": "no root-level npm project",
     ".pytest_cache": "redirect to .qwq_output/env/repo/local/**",

@@ -247,6 +247,9 @@ final class InMemoryHomepageFacet
       title: command.title,
       subtitle: command.subtitle,
       coverUrl: command.coverUrl,
+      coverAccessMode: command.coverUrl?.trim().isEmpty == false
+          ? MediaDeliveryAccessMode.public
+          : null,
       status: 'candidate',
       claimStatus: 'unclaimed',
       categoryTags: command.categoryTags,
@@ -293,6 +296,12 @@ final class InMemoryHomepageFacet
       title: command.title ?? current.title,
       subtitle: command.subtitle ?? current.subtitle,
       coverUrl: command.coverUrl ?? current.coverUrl,
+      coverAssetId: command.coverUrl == null ? current.coverAssetId : null,
+      coverAccessMode: command.coverUrl == null
+          ? current.coverAccessMode
+          : (command.coverUrl!.trim().isEmpty
+                ? null
+                : MediaDeliveryAccessMode.public),
       status: current.status,
       claimStatus: current.claimStatus,
       categoryTags: command.categoryTags ?? current.categoryTags,
@@ -571,8 +580,7 @@ Map<String, Object?> _minimalHomepageWireExample() {
         city: '北京',
         canonicalEntityId: 'entity:school:neworiental',
         categoryTags: const <String>['教育培训', '语言学习', '校友'],
-        coverUrl:
-            'media/image/s/archived-image/circle/fixture_circle_life/v1/cover.png',
+        coverUrl: 'media/image/s/archived-image/circle/fixture_circle_life/v1/cover.png',
         impactSummary: const <String, Object?>{
           'total': 1,
           'items': <Map<String, Object?>>[
@@ -661,6 +669,15 @@ HomepageDetailView _detailFromFixture(Map<String, Object?> row) {
     title: _requiredText(row['title'], 'title'),
     subtitle: _optionalText(row['subtitle']),
     coverUrl: _optionalText(row['coverUrl']),
+    coverAssetId: _optionalText(row['coverAssetId']),
+    coverAccessMode: _optionalText(row['coverAccessMode']) == null
+        ? (_optionalText(row['coverUrl']) == null
+              ? null
+              : MediaDeliveryAccessMode.public)
+        : MediaDeliveryAccessMode.fromWire(
+            _optionalText(row['coverAccessMode']),
+            'coverAccessMode',
+          ),
     status: _optionalText(row['status']) ?? 'published',
     claimStatus: _optionalText(row['claimStatus']) ?? 'unclaimed',
     categoryTags: _stringList(row['categoryTags'], 'categoryTags'),

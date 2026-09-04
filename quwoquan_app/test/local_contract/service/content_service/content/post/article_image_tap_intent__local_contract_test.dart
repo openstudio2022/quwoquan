@@ -14,11 +14,13 @@ const ArticleDocumentAsset _fullWidthAsset = ArticleDocumentAsset(
   id: 'asset-full-canonical',
   offset: 0,
   imageUrl: 'diagnostic://pageflip/FULL',
+  accessMode: 'public',
 );
 const ArticleDocumentAsset _wrappedAsset = ArticleDocumentAsset(
   id: 'asset-wrap-canonical',
   offset: 16,
   imageUrl: 'diagnostic://pageflip/WRAP',
+  accessMode: 'public',
   imageLayout: 'wrapLeft',
 );
 

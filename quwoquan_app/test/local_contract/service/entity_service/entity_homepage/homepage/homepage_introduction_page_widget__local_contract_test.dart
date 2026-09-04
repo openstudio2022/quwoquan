@@ -24,7 +24,8 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
         HomepageIntroductionAsset,
         HomepageIntroductionSection,
         HomepageIntroductionTimelineItem,
-        HomepageSource;
+        HomepageSource,
+        MediaDeliveryAccessMode;
 
 import '../../../../../support/runtime/observability/recording_app_telemetry_recorder.dart';
 
@@ -99,8 +100,7 @@ void main() {
             sourceUrl: 'https://zh.wikipedia.org/wiki/西湖',
             title: '西湖',
             fetchedAt: '2026-06-12T00:00:00Z',
-            snapshotHash:
-                'sha256:760672367557300130bdf88db43b01f07917475ae4f60ff0b9be95aa78d7e2f1',
+            snapshotHash: 'sha256:760672367557300130bdf88db43b01f07917475ae4f60ff0b9be95aa78d7e2f1',
             policyRevision: 'encyclopedia-primary',
             sourceUseMode: 'primary_reference',
           ),
@@ -145,6 +145,7 @@ void main() {
           displayName: '都江堰',
           homepageType: 'sight',
           coverUrl: 'https://cdn.example.com/cover.jpg',
+          coverAccessMode: MediaDeliveryAccessMode.public,
           summary: '战国修建的大型水利工程',
           sections: <HomepageIntroductionSection>[
             HomepageIntroductionSection(
@@ -160,6 +161,7 @@ void main() {
                 HomepageIntroductionAsset(
                   assetId: 'inline_asset_1',
                   url: 'https://cdn.example.com/inline1.jpg',
+                  accessMode: MediaDeliveryAccessMode.public,
                   caption: '鱼嘴分水堤',
                   role: 'inline',
                 ),
@@ -173,11 +175,13 @@ void main() {
                 HomepageIntroductionAsset(
                   assetId: 'related_asset_1',
                   url: 'https://cdn.example.com/rel1.jpg',
+                  accessMode: MediaDeliveryAccessMode.public,
                   role: 'related',
                 ),
                 HomepageIntroductionAsset(
                   assetId: 'related_asset_2',
                   url: 'https://cdn.example.com/rel2.jpg',
+                  accessMode: MediaDeliveryAccessMode.public,
                   role: 'related',
                 ),
               ],

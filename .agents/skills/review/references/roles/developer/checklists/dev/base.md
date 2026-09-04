@@ -1,6 +1,6 @@
 # developer · dev
 
-- [MUST] 改动落在 owner manifest 指定的对象与契约边界内。
+- [MUST] 改动落在 PRE owner identity 指定的对象与契约边界内。
   check: 对照 changed_paths 与 plan.contexts；存在越界写入或无 owner 路径时判失败。
 - [MUST NOT] 吞异常、把失败伪装成缺席/空值，或为错误实现增加 fallback。
   check: 逐个读取新增判失败路径；catch 后无 typed failure/观测或返回零值时判失败。

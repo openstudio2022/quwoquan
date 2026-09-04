@@ -56,8 +56,37 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  formal_prod_authority_preflight:
+    name: Formal Prod authority preflight
+    runs-on: ubuntu-latest
+    timeout-minutes: 1
+    permissions:
+      contents: read
+    outputs:
+      applicability: ${{ steps.authority.outputs.applicability }}
+      decision: ${{ steps.authority.outputs.decision }}
+    steps:
+      - id: authority
+        name: Fail fast until hosted branch authority is available
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          DRY_RUN: ${{ github.event.inputs.dry_run || 'true' }}
+        run: |
+          set -euo pipefail
+          if [[ "$EVENT_NAME" != "workflow_dispatch" || "$DRY_RUN" == "true" ]]; then
+            echo "applicability=not_applicable" >> "$GITHUB_OUTPUT"
+            echo "decision=pass" >> "$GITHUB_OUTPUT"
+            echo "Formal Prod authority preflight: applicability=not_applicable decision=pass"
+            exit 0
+          fi
+          echo "applicability=required" >> "$GITHUB_OUTPUT"
+          echo "decision=blocked" >> "$GITHUB_OUTPUT"
+          echo "::error::OPS.BRANCH.AUTHORITY_UNAVAILABLE: terminal=blocked; formal Prod requires hosted branch protection/ruleset authority readback; recovery=restore_git_authority_then_retry"
+          exit 2
+
   source_context:
     name: Resolve exact mainline source
+    needs: [formal_prod_authority_preflight]
     runs-on: ubuntu-latest
     timeout-minutes: 2
     permissions:
@@ -131,7 +160,7 @@ jobs:
 
   service_pipeline:
     name: Service Pipeline (same mainline DAG)
-    needs: [source_context]
+    needs: [formal_prod_authority_preflight, source_context]
     permissions:
       contents: read
       actions: read
@@ -144,7 +173,7 @@ jobs:
 
   app_pipeline:
     name: App package evidence (same mainline DAG)
-    needs: [source_context]
+    needs: [formal_prod_authority_preflight, source_context]
     permissions:
       contents: read
       actions: read
@@ -157,7 +186,7 @@ jobs:
 
   prepare:
     name: Seal canonical candidate and prepare promotion
-    needs: [source_context, service_pipeline, app_pipeline, delivery_gate]
+    needs: [formal_prod_authority_preflight, source_context, service_pipeline, app_pipeline, delivery_gate]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -616,7 +645,7 @@ jobs:
 
   delivery_gate:
     name: Delivery Gate (mainline)
-    needs: [source_context, service_pipeline]
+    needs: [formal_prod_authority_preflight, source_context, service_pipeline]
     permissions:
       contents: read
       actions: read
@@ -709,7 +738,7 @@ jobs:
 
   alpha_local:
     name: Alpha local stage
-    needs: [prepare, delivery_gate]
+    needs: [formal_prod_authority_preflight, prepare, delivery_gate]
     runs-on: ubuntu-latest
     timeout-minutes: 8
     permissions:
@@ -854,7 +883,7 @@ jobs:
 
   beta_device_matrix:
     name: Beta local stage
-    needs: [prepare, delivery_gate]
+    needs: [formal_prod_authority_preflight, prepare, delivery_gate]
     permissions:
       contents: read
       actions: read
@@ -869,7 +898,7 @@ jobs:
 
   gamma_local:
     name: Gamma-local release-fast stage
-    needs: [prepare, delivery_gate]
+    needs: [formal_prod_authority_preflight, prepare, delivery_gate]
     runs-on: [self-hosted, macOS, ARM64]
     timeout-minutes: 8
     permissions:
@@ -1015,6 +1044,7 @@ jobs:
   preprod_evidence:
     name: Accept Alpha then Beta then Gamma receipts
     needs:
+      - formal_prod_authority_preflight
       - prepare
       - alpha_local
       - beta_device_matrix
@@ -1134,6 +1164,7 @@ jobs:
   prod_rollout:
     name: Prod rollout transaction
     needs:
+      - formal_prod_authority_preflight
       - prepare
       - alpha_local
       - beta_device_matrix
@@ -1169,10 +1200,10 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
           ref: ${{ needs.prepare.outputs.checkout_ref }}
-      - name: Block formal Prod while hosted protection is unverified
+      - name: Defensively recheck formal Prod hosted authority before mutation
         if: ${{ needs.prepare.outputs.dry_run != 'true' }}
         run: |
-          echo "::error::OPS.BRANCH.AUTHORITY_UNAVAILABLE: formal Prod requires hosted branch protection/ruleset readback"
+          echo "::error::OPS.BRANCH.AUTHORITY_UNAVAILABLE: terminal=blocked; formal Prod requires hosted branch protection/ruleset authority readback before mutation; recovery=restore_git_authority_then_retry"
           exit 2
       - name: Validate protected rollout promotion evidence root
         if: ${{ needs.prepare.outputs.dry_run != 'true' }}
@@ -1785,7 +1816,7 @@ jobs:
 
   prod_soak_acceptance:
     name: Prod hosted soak authority
-    needs: [prepare, prod_rollout]
+    needs: [formal_prod_authority_preflight, prepare, prod_rollout]
     if: ${{ needs.prepare.outputs.dry_run != 'true' && needs.prod_rollout.result == 'success' && needs.prod_rollout.outputs.release_status == 'released' }}
     runs-on: [self-hosted, macOS, ARM64]
     environment: production
@@ -1951,6 +1982,7 @@ jobs:
   mainline_summary:
     name: 07. Deploy To Prod (Controlled)
     needs:
+      - formal_prod_authority_preflight
       - source_context
       - service_pipeline
       - app_pipeline

@@ -23,7 +23,7 @@ metadata:
 
 分层报告 package、启动、health、runtime probe、发布/回滚与真实 UAT 的当前 receipt/readback；上游 PASS 不替代下游闭环。至少执行并报告 1–3 个适用入口：`python3 quwoquan_ops/cli/stackctl.py health --target <target> --scope <scope>`，其中 target 与 scope 均读取本轮 environment/workload owner facts；`python3 quwoquan_ops/cli/stackctl.py inspect --target <target> --kind <kind>`；`python3 quwoquan_ops/cli/stackctl.py verify --env <env> --kind all --profile <smoke|integration|release>`（无环境依赖时用 `--profile baseline` 且不传 `--env`）。
 
-产生 `release-evidence` 时，POST 必须把 PRE 保存的同一个 owner manifest exact ref 原样作为 `--context-manifest` 传给 Review（workflow=`environment-ops`、segment=`POST`、deliverable=`release-evidence`、scope=`<exact-path>`）；先按 plan 去重执行命名 evidence，再派 registry 主审与至多一名专审。manifest ref 缺失、与 PRE 不同或 stale，required evidence/Reviewer 未完成，均不得完成。
+产生 `release-evidence` 时，POST 必须把 PRE 保存的 owner identity ref 作为 `--owner-identity`，并把 current candidate evidence ref 作为 `--candidate-evidence` 传给 Review（workflow=`environment-ops`、segment=`POST`、deliverable=`release-evidence`、scope=`<exact-path>`）；先按 plan 去重执行命名 evidence，再派 registry 主审与至多一名专审。manifest ref 缺失、与 PRE 不同或 stale，required evidence/Reviewer 未完成，均不得完成。
 
 ## 失败与停止
 
@@ -31,4 +31,4 @@ metadata:
 
 ## 条件性交接
 
-源码/spec mutation 只交 Feature workflow；外部阻断、环境/发布、跨会话或证据复用满足 canonical 触发时生成 handoff。送审交付的 handoff 必须携带 PRE 保存并在 POST 原样复用的 owner manifest exact ref；纯只读无送审交付不生成替代 manifest。
+源码/spec mutation 只交 Feature workflow；外部阻断、环境/发布、跨会话或证据复用满足 canonical 触发时生成 handoff。送审交付的 handoff 必须携带 PRE owner identity ref 与 POST candidate evidence predecessor；纯只读无送审交付不生成替代 manifest。

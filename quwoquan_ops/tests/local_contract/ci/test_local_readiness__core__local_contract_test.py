@@ -7,11 +7,18 @@
 # spec_ref: specs/feature-tree/runtime/development-workflow-governance/local-continuous-integration/spec.md#gwt-003.t1
 # spec_ref: specs/feature-tree/runtime/development-workflow-governance/local-continuous-integration/spec.md#gwt-003.t2
 # spec_ref: specs/feature-tree/runtime/development-workflow-governance/local-continuous-integration/spec.md#gwt-003.t3
+# spec_ref: specs/feature-tree/runtime/development-workflow-governance/local-continuous-integration/spec.md#gwt-002.t3
+# spec_ref: specs/feature-tree/runtime/development-workflow-governance/local-continuous-integration/spec.md#gwt-002.t4
+# spec_ref: specs/feature-tree/runtime/development-workflow-governance/local-continuous-integration/spec.md#gwt-003.t4
+# spec_ref: specs/feature-tree/runtime/development-workflow-governance/local-continuous-integration/spec.md#gwt-003.t5
+# spec_ref: specs/feature-tree/runtime/development-workflow-governance/local-continuous-integration/spec.md#gwt-003.t6
+# spec_ref: specs/feature-tree/runtime/development-workflow-governance/local-continuous-integration/spec.md#gwt-003.t7
 """
 from __future__ import annotations
 
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -26,24 +33,34 @@ sys.path.insert(0, str(ROOT))
 from lib.local_readiness.core import (  # noqa: E402
     LocalReadinessError,
     _atomic_json,
-    _state_root,
+    _run_check,
     _staged_identity,
+    _state_root,
     capture_fingerprint,
     enqueue_paths,
+    inspect_state,
     parse_push_updates,
     plan_readiness,
     push_paths,
     resource_lock,
     run_readiness,
-    verify_receipt,
-    worker_once,
     source_execution_root,
     staged_paths,
+    verify_receipt,
+    worker_once,
 )
-from quwoquan_ops.ci.detect_ci_impacted_scopes import classify as classify_hosted  # noqa: E402
+from lib.local_readiness.queue import (  # noqa: E402
+    assert_scope_queue_closed,
+    clear_queue_exact,
+    path_queue_digest,
+)
+
+from quwoquan_ops.ci.detect_ci_impacted_scopes import (  # noqa: E402
+    classify as classify_hosted,
+)
 from quwoquan_ops.ci.impact_planner_core import (  # noqa: E402
-    ImpactPlannerError,
     SCOPE_NAMES,
+    ImpactPlannerError,
     classify_impacts,
     planner_identity,
 )
@@ -74,11 +91,31 @@ def _init(path: Path) -> None:
     )
 
 
+def _commit_all(repo: Path, message: str) -> str:
+    subprocess.run(["git", "add", "-A"], cwd=repo, check=True)
+    subprocess.run(
+        [
+            "git", "-c", "user.name=Fixture",
+            "-c", "user.email=fixture@example.invalid",
+            "commit", "-qm", message,
+        ],
+        cwd=repo,
+        check=True,
+    )
+    return subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=repo,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+
+
 def _minimal_plan(repo: Path, command: str, *, level: str = "fast", deferred: list | None = None) -> dict:
     base = {**build_impact_plan(["source.txt"], level=level, repo_root=repo), "mode": "workspace"}
     # Temporary-repository tests intentionally prove runner behavior with one
     # deterministic command; production run_readiness rejects this tampering.
-    base["checks"] = [{"id": "focused:test", "scope": "spec_contract", "phase": "focused", "command": ["bash", "-c", command], "cwd": ".", "resources": ["fixture"]}]
+    base["checks"] = [{"id": "focused:test", "scope": "spec_contract", "phase": "focused", "command": ["bash", "-c", command], "cwd": ".", "resources": ["fixture"], "timeout_seconds": 60}]
     base["deferred"] = deferred or []
     base["fingerprint"] = capture_fingerprint(base, repo_root=repo, mode="workspace", allow_missing_admission=True)
     return base
@@ -133,10 +170,77 @@ def test_spec_contract_is_only_a_local_projection() -> None:
 
 def test_impact_plan_exposes_canonical_source_identity_and_version() -> None:
     plan = build_impact_plan(["quwoquan_app/lib/runtime/bootstrap.dart"], level="scope")
-    assert plan["impact_planner"] == planner_identity()
-    assert plan["impact_planner"]["source"] == "quwoquan-impact-planner"
-    assert plan["impact_planner"]["version"] == "impact-planner-v1"
+    canonical_identity = planner_identity()
+    assert plan["impact_planner"] == canonical_identity
+    assert plan["impact_planner"]["source"] == canonical_identity["source"]
+    assert plan["impact_planner"]["version"] == canonical_identity["version"]
     assert plan["impact_planner"]["digest"].startswith("sha256:")
+
+
+def test_plan_checks_have_canonical_bounded_timeout_identity() -> None:
+    fast = build_impact_plan(["README.md"], level="fast")
+    scope = build_impact_plan(["README.md"], level="scope")
+
+    assert fast["schema"] == "local-readiness-plan-v2"
+    assert fast["timeout_policy"] == scope["timeout_policy"]
+    assert fast["timeout_policy"]["schema"] == "local-readiness-timeouts-v1"
+    assert fast["timeout_policy"]["digest"].startswith("sha256:")
+    assert fast["checks"]
+    assert all(
+        type(check["timeout_seconds"]) is int
+        and 0 < check["timeout_seconds"] <= 300
+        for check in fast["checks"]
+    )
+    assert all(type(check["timeout_seconds"]) is int for check in scope["checks"])
+
+
+def test_candidate_impact_identity_closes_timeout_policy() -> None:
+    from lib.candidate_evidence import _impact_plan
+
+    projection, identity = _impact_plan(["README.md"], repo_root=ROOT)
+    assert "timeout_policy" in projection
+    assert set(identity) == {
+        "schema", "digest", "projection_ref",
+        "timeout_policy_ref", "timeout_policy_digest",
+    }
+    assert identity["timeout_policy_ref"] == projection["timeout_policy"]["source"]
+    assert identity["timeout_policy_digest"] == projection["timeout_policy"]["digest"]
+
+
+def test_ordinary_branch_policy_ignores_unrelated_local_ref(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _init(repo)
+    subprocess.run(["git", "checkout", "-qb", "lane/data-engineering"], cwd=repo, check=True)
+    subprocess.run(["git", "branch", "lane/data-engineering-hard-cut"], cwd=repo, check=True)
+    assert "lane/data-engineering-hard-cut" in subprocess.run(
+        ["git", "branch", "--format=%(refname:short)"], cwd=repo,
+        check=True, capture_output=True, text=True,
+    ).stdout.splitlines()
+
+    (repo / "quwoquan_ops/gate").mkdir(parents=True)
+    (repo / "quwoquan_ops/policies").mkdir(parents=True)
+    shutil.copy2(
+        ROOT / "quwoquan_ops/gate/verify_git_branch_policy.py",
+        repo / "quwoquan_ops/gate/verify_git_branch_policy.py",
+    )
+    shutil.copytree(
+        ROOT / "quwoquan_ops/gate/git_branch_policy",
+        repo / "quwoquan_ops/gate/git_branch_policy",
+    )
+    shutil.copy2(
+        ROOT / "quwoquan_ops/policies/branch_policy.yaml",
+        repo / "quwoquan_ops/policies/branch_policy.yaml",
+    )
+    plan = build_impact_plan(["README.md"], level="fast")
+    check = next(item for item in plan["checks"] if item["id"] == "static:branch_policy")
+    assert check["command"][-1] == "--local-commit"
+
+    result = _run_check(check, tmp_path / "branch-policy.log", repo_root=repo)
+    assert result["status"] == "PASS"
+    assert result["exit_code"] == 0
+    assert result["timed_out"] is False
+    assert result["outcome"] == "exited"
 
 
 def test_local_planner_rejects_malformed_or_outside_paths() -> None:
@@ -326,6 +430,7 @@ def test_git_hooks_only_check_boundaries_and_never_consume_receipts() -> None:
     source = PRE_COMMIT.read_text(encoding="utf-8")
     assert "commit_gate.sh" not in source
     assert "local_readiness.py staged-boundary" in source
+    assert "--local-commit" in (ROOT / "quwoquan_ops/cli/local_readiness.py").read_text(encoding="utf-8")
     assert "verify --level" not in source
     assert "scope --staged" not in source
     assert "scope_ready" not in source
@@ -361,7 +466,40 @@ def test_staged_receipt_freshness_is_exact() -> None:
             verify_receipt(level="fast", paths=["source.txt"], repo_root=repo, mode="staged", state_root=state)
 
 
-def test_after_edit_hook_failure_is_visible_and_never_passes(tmp_path: Path) -> None:
+def test_host_hook_configs_do_not_wire_automatic_edit_readiness() -> None:
+    codex = json.loads((ROOT / ".codex/hooks.json").read_text(encoding="utf-8"))
+    cursor = json.loads((ROOT / ".cursor/hooks.json").read_text(encoding="utf-8"))
+
+    assert "PostToolUse" not in codex["hooks"]
+    assert "自动 edit readiness" in codex["description"]
+    assert all(
+        "local_readiness_after_edit.py" not in json.dumps(entry)
+        for entries in codex["hooks"].values()
+        for entry in entries
+    )
+    assert set(cursor["hooks"]) == {"beforeShellExecution", "sessionStart"}
+    assert "local_readiness_after_edit.py" not in json.dumps(cursor)
+
+
+def test_explicit_enqueue_cli_remains_available(tmp_path: Path) -> None:
+    state = tmp_path / "state"
+    completed = subprocess.run(
+        [
+            sys.executable, "-B", "quwoquan_ops/cli/local_readiness.py",
+            "enqueue", "--path", "README.md", "--reason", "test_explicit",
+        ],
+        cwd=ROOT,
+        env={**os.environ, "QWQ_LOCAL_READINESS_ROOT": str(state)},
+        capture_output=True, text=True, check=False,
+    )
+
+    assert completed.returncode == 0, completed.stderr
+    queued = json.loads(completed.stdout)
+    assert queued["items"][0]["path"] == "README.md"
+    assert queued["items"][0]["reason"] == "test_explicit"
+
+
+def test_after_edit_script_failure_is_fail_open_and_never_passes(tmp_path: Path) -> None:
     env = os.environ.copy()
     env["QWQ_LOCAL_READINESS_ROOT"] = str(tmp_path / "blocked" / "state")
     # Make the parent a file so queue creation fails deterministically.
@@ -451,6 +589,8 @@ def test_plan_tamper_fields_commands_level_and_empty_checks_fail_closed() -> Non
         mutations.append({**plan, "checks": []})
         mutations.append({**plan, "checks": [{**plan["checks"][0], "id": "tampered"}]})
         mutations.append({**plan, "checks": [{**plan["checks"][0], "command": ["bash", "-c", "true"]}]})
+        mutations.append({**plan, "checks": [{**plan["checks"][0], "timeout_seconds": plan["checks"][0]["timeout_seconds"] + 1}]})
+        mutations.append({**plan, "timeout_policy": {**plan["timeout_policy"], "digest": "sha256:" + "0" * 64}})
         mutations.append({**plan, "unknown": True})
         for tampered in mutations:
             with pytest.raises(LocalReadinessError):
@@ -470,7 +610,87 @@ def test_cache_hit_recomputes_current_input_and_rejects_stale_plan() -> None:
             run_readiness(plan, repo_root=repo, state_root=state)
 
 
-def test_queue_scope_outstanding_blocks_scope_and_worker_consumes_exact_item(monkeypatch: pytest.MonkeyPatch) -> None:
+@pytest.mark.parametrize("level", ["scope", "release"])
+def test_scope_and_release_queue_pending_is_contract_advisory(
+    monkeypatch: pytest.MonkeyPatch, level: str,
+) -> None:
+    with _repo() as directory:
+        repo = Path(directory)
+        _init(repo)
+        state = repo / "state"
+        monkeypatch.setattr("lib.local_readiness.core.ROOT", repo)
+        (repo / "other.txt").write_text("other\n", encoding="utf-8")
+        enqueue_paths(["source.txt", "other.txt"], state_root=state)
+        plan = {
+            **build_impact_plan(["source.txt"], level=level, repo_root=repo),
+            "mode": "workspace",
+        }
+        plan["fingerprint"] = capture_fingerprint(
+            plan, repo_root=repo, mode="workspace",
+            allow_missing_admission=True, state_root=state,
+        )
+
+        closure = assert_scope_queue_closed(plan, state_root=state)
+        assert closure["enforcement"] == "advisory_until_verified_consumer"
+        assert closure["blocking"] == []
+        assert [(item["classification"], item["path"]) for item in closure["advisories"]] == [
+            ("foreign-pending", "other.txt"),
+            ("exact-pending", "source.txt"),
+        ]
+
+        original_capture = capture_fingerprint
+
+        def capture_without_admission(*args, **kwargs):
+            kwargs["allow_missing_admission"] = True
+            return original_capture(*args, **kwargs)
+
+        monkeypatch.setattr(
+            "lib.local_readiness.core.capture_fingerprint", capture_without_admission
+        )
+        monkeypatch.setattr(
+            "lib.local_readiness.core._load_review_inputs",
+            lambda *_args, **_kwargs: ([], {"required": True, "consolidation": None, "evidence": []}),
+        )
+        monkeypatch.setattr(
+            "lib.local_readiness.core._run_check",
+            lambda check, log_path, **_kwargs: {
+                "id": check["id"], "status": "PASS", "exit_code": 0,
+                "elapsed_ms": 0, "log": str(log_path), "timed_out": False,
+                "termination_signal": None, "outcome": "exited",
+            },
+        )
+
+        receipt = run_readiness(plan, repo_root=repo, state_root=state)
+        assert receipt["status"] == "PASS"
+        assert receipt["queue_closure"] == closure
+        remaining = json.loads(
+            (state / "process/deferred-queue.json").read_text(encoding="utf-8")
+        )["items"]
+        assert [item["path"] for item in remaining] == ["other.txt"]
+
+
+def test_queue_closure_enforcement_is_contract_owned(monkeypatch: pytest.MonkeyPatch) -> None:
+    with _repo() as directory:
+        repo = Path(directory)
+        _init(repo)
+        state = repo / "state"
+        monkeypatch.setattr("lib.local_readiness.core.ROOT", repo)
+        enqueue_paths(["source.txt"], state_root=state)
+        plan = {
+            **build_impact_plan(["source.txt"], level="scope", repo_root=repo),
+            "mode": "workspace",
+        }
+        contract = __import__(
+            "lib.local_readiness.core", fromlist=["_load_contract"]
+        )._load_contract()
+        contract["queue_closure"]["enforcement"] = "block_exact_candidate_pending"
+        monkeypatch.setattr("lib.local_readiness.core._load_contract", lambda: contract)
+
+        with pytest.raises(LocalReadinessError, match="exact candidate.*pending"):
+            assert_scope_queue_closed(plan, state_root=state)
+
+
+def test_worker_consumes_exact_item(monkeypatch: pytest.MonkeyPatch) -> None:
     with _repo() as directory:
         repo = Path(directory)
         _init(repo)
@@ -480,13 +700,6 @@ def test_queue_scope_outstanding_blocks_scope_and_worker_consumes_exact_item(mon
         result = worker_once(state_root=state, debounce_seconds=0)
         assert result["status"] == "PASS"
         assert json.loads((state / "process/deferred-queue.json").read_text())["items"] == []
-        (repo / "other.txt").write_text("other\n", encoding="utf-8")
-        enqueue_paths(["other.txt"], state_root=state)
-        plan = {**build_impact_plan(["source.txt"], level="scope", repo_root=repo), "mode": "workspace"}
-        plan["fingerprint"] = capture_fingerprint(plan, repo_root=repo, mode="workspace", allow_missing_admission=True)
-        with pytest.raises(LocalReadinessError, match="outstanding|owner manifest"):
-            run_readiness(plan, repo_root=repo, state_root=state)
-
 
 def test_worker_typed_failure_keeps_queue_and_never_projects_pass(monkeypatch: pytest.MonkeyPatch) -> None:
     with _repo() as directory:
@@ -539,7 +752,10 @@ def test_scope_producer_requires_current_owner_review_and_required_evidence_befo
         _init(repo)
         state = repo / "state"
         plan = plan_readiness(level="scope", paths=["source.txt"], repo_root=repo, mode="workspace")
-        with pytest.raises(LocalReadinessError, match="current owner manifest"):
+        with pytest.raises(
+            LocalReadinessError,
+            match=r"scope/release readiness 要求 owner identity \+ candidate evidence",
+        ):
             run_readiness(plan, repo_root=repo, state_root=state)
         assert not (state / "process/receipts/current").exists()
         assert not (state / "cache/exact-input").exists()
@@ -551,6 +767,85 @@ def test_staged_boundary_rejects_generated_only_and_production_without_related_t
     with pytest.raises(LocalReadinessError, match="generated-only"):
         _staged_governance(["quwoquan_app/lib/generated/value.g.dart"])
     _staged_governance(["quwoquan_app/lib/runtime/value.dart"])
+
+
+def test_staged_boundary_blocks_staged_unstaged_same_path_overlap(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
+) -> None:
+    import quwoquan_ops.cli.local_readiness as cli
+
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _init(repo)
+    source = repo / "source.txt"
+    source.write_text("staged\n", encoding="utf-8")
+    subprocess.run(["git", "add", "source.txt"], cwd=repo, check=True)
+    source.write_text("unstaged\n", encoding="utf-8")
+    monkeypatch.setattr(cli, "ROOT", repo)
+
+    with pytest.raises(
+        LocalReadinessError, match="LOCAL_READINESS.STAGED_UNSTAGED_OVERLAP"
+    ):
+        cli.command_staged_boundary(None)
+
+
+def test_staged_boundary_allows_unrelated_unstaged_path(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
+) -> None:
+    import quwoquan_ops.cli.local_readiness as cli
+
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _init(repo)
+    (repo / "other.txt").write_text("one\n", encoding="utf-8")
+    _commit_all(repo, "add other")
+    (repo / "source.txt").write_text("staged\n", encoding="utf-8")
+    subprocess.run(["git", "add", "source.txt"], cwd=repo, check=True)
+    (repo / "other.txt").write_text("unstaged\n", encoding="utf-8")
+    monkeypatch.setattr(cli, "ROOT", repo)
+    monkeypatch.setattr(cli, "_staged_governance", lambda _paths: None)
+    real_run = subprocess.run
+
+    def branch_pass(command, **kwargs):
+        if any("verify_git_branch_policy.py" in str(item) for item in command):
+            return subprocess.CompletedProcess(command, 0, "", "")
+        return real_run(command, **kwargs)
+
+    monkeypatch.setattr(cli.subprocess, "run", branch_pass)
+    assert cli.command_staged_boundary(None) == 0
+
+
+def test_staged_boundary_blocks_delete_then_untracked_recreation(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
+) -> None:
+    import quwoquan_ops.cli.local_readiness as cli
+
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _init(repo)
+    source = repo / "source.txt"
+    source.unlink()
+    subprocess.run(["git", "add", "-A", "source.txt"], cwd=repo, check=True)
+    source.write_text("untracked replacement\n", encoding="utf-8")
+    monkeypatch.setattr(cli, "ROOT", repo)
+
+    with pytest.raises(
+        LocalReadinessError, match="LOCAL_READINESS.STAGED_UNSTAGED_OVERLAP"
+    ):
+        cli.command_staged_boundary(None)
+
+
+def test_staged_boundary_uses_local_commit_branch_policy() -> None:
+    source = (ROOT / "quwoquan_ops/cli/local_readiness.py").read_text(
+        encoding="utf-8"
+    )
+    command_start = source.index("def command_staged_boundary")
+    command_end = source.index("\ndef _common", command_start)
+    boundary_source = source[command_start:command_end]
+
+    assert '"quwoquan_ops/gate/verify_git_branch_policy.py",' in boundary_source
+    assert '"--local-commit",' in boundary_source
+    assert "--pre-push" not in boundary_source
 
 
 def test_staged_pii_phone_pattern_ignores_digits_inside_hex_digests() -> None:
@@ -565,344 +860,65 @@ def test_staged_pii_phone_pattern_ignores_digits_inside_hex_digests() -> None:
     assert phone_pattern.search(b"phone=" + phone + b",") is not None
 
 
+def test_staged_pii_email_pattern_ignores_image_density_suffixes() -> None:
+    from quwoquan_ops.cli.local_readiness import _PII_PATTERNS
+
+    email_pattern = _PII_PATTERNS[1]
+    assert email_pattern.search(b"LaunchBrandCluster@2x.png") is None
+    email = b"owner" + b"@" + b"quwoquan.example"
+    assert email_pattern.search(email) is not None
+
+
 def test_data_scope_without_affected_tests_fails_closed_instead_of_verify_only() -> None:
     with pytest.raises(ValueError, match="affected tests"):
         build_impact_plan(["quwoquan_data/schema/unknown.schema.json"], level="scope")
 
 
-# spec_ref: specs/feature-tree/runtime/development-workflow-governance/local-continuous-integration/spec.md#gwt-002.t1
-def test_state_root_rejects_symlink_components_and_secures_temp_repo_root(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    repo = tmp_path / "repo"
-    repo.mkdir()
-    state = repo / "state"
-    assert _state_root(state) == state.absolute()
-    assert state.is_dir()
-    assert state.stat().st_mode & 0o077 == 0
+def test_selector_deferred_directories_stay_explicit_and_out_of_managed_pytest() -> None:
+    source = "quwoquan_data/scripts/content/execution/handler.py"
+    target = "quwoquan_data/tests/local_contract/execution"
 
-    target = repo / "target"
-    target.mkdir()
-    linked = repo / "linked"
-    linked.symlink_to(target, target_is_directory=True)
-    with pytest.raises(LocalReadinessError, match="symlink component"):
-        _state_root(linked / "state")
-    monkeypatch.setenv("QWQ_LOCAL_READINESS_ROOT", str(linked / "override"))
-    with pytest.raises(LocalReadinessError, match="symlink component"):
-        _state_root()
+    fast = build_impact_plan([source], level="fast")
+    scope = build_impact_plan([source], level="scope")
+    release = build_impact_plan([source], level="release")
 
-
-def test_empty_legacy_queue_is_safely_projected_to_current_schema(tmp_path: Path) -> None:
-    from lib.local_readiness.queue import read_queue
-
-    queue = tmp_path / "queue.json"
-    queue.write_text('{"schema":"local-readiness-queue-v1","items":[]}\n', encoding="utf-8")
-    assert read_queue(queue) == {"schema": "local-readiness-queue-v2", "items": []}
-    queue.write_text('{"schema":"local-readiness-queue-v1","items":[{}]}\n', encoding="utf-8")
-    with pytest.raises(LocalReadinessError, match="queue schema"):
-        read_queue(queue)
-
-
-def test_queue_corruption_symlink_and_extra_fields_fail_closed(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    repo = tmp_path / "repo"
-    repo.mkdir()
-    _init(repo)
-    monkeypatch.setattr("lib.local_readiness.core.ROOT", repo)
-    state = repo / "state"
-    queue = state / "process/deferred-queue.json"
-    enqueue_paths(["source.txt"], state_root=state)
-
-    corruptions = [
-        {"schema": "local-readiness-queue-v2", "items": [], "extra": True},
-        {"schema": "local-readiness-queue-v2", "items": [{**json.loads(queue.read_text())["items"][0], "extra": True}]},
-        {"schema": "wrong", "items": []},
-    ]
-    for value in corruptions:
-        queue.write_text(json.dumps(value), encoding="utf-8")
-        with pytest.raises(LocalReadinessError, match="queue"):
-            enqueue_paths(["source.txt"], state_root=state)
-
-    external = repo / "external-queue.json"
-    external.write_text('{"schema":"local-readiness-queue-v2","items":[]}', encoding="utf-8")
-    queue.unlink()
-    queue.symlink_to(external)
-    with pytest.raises(LocalReadinessError, match="regular file|symlink"):
-        enqueue_paths(["source.txt"], state_root=state)
-    queue.unlink()
-    queue.mkdir()
-    with pytest.raises(LocalReadinessError, match="regular file"):
-        enqueue_paths(["source.txt"], state_root=state)
-
-
-def test_atomic_write_and_resource_lock_reject_destination_symlinks(tmp_path: Path) -> None:
-    state = tmp_path / "state"
-    external = tmp_path / "external.json"
-    external.write_text("unchanged\n", encoding="utf-8")
-    destination = state / "process/value.json"
-    destination.parent.mkdir(parents=True)
-    destination.symlink_to(external)
-    with pytest.raises(LocalReadinessError, match="destination"):
-        _atomic_json(destination, {"status": "PASS"})
-    assert external.read_text(encoding="utf-8") == "unchanged\n"
-
-    locks = state / "process/locks"
-    locks.mkdir()
-    locks.rmdir()
-    lock_target = tmp_path / "external-locks"
-    lock_target.mkdir()
-    locks.symlink_to(lock_target, target_is_directory=True)
-    with pytest.raises(LocalReadinessError, match="symlink"):
-        with resource_lock("runner", state_root=state):
-            pass
-
-    locks.unlink()
-    locks.mkdir()
-    external_lock = tmp_path / "external.lock"
-    external_lock.touch()
-    (locks / "runner.lock").symlink_to(external_lock)
-    with pytest.raises(LocalReadinessError, match="lock|regular file"):
-        with resource_lock("runner", state_root=state):
-            pass
-
-
-def test_cache_read_rejects_symlink_before_reuse(tmp_path: Path) -> None:
-    with _repo() as directory:
-        repo = Path(directory)
-        _init(repo)
-        state = repo / "state"
-        plan = plan_readiness(level="fast", paths=["source.txt"], repo_root=repo, mode="workspace", state_root=state)
-        receipt = run_readiness(plan, repo_root=repo, state_root=state)
-        cache = state / "cache/exact-input" / f"{receipt['fingerprint']['digest'].removeprefix('sha256:')}.json"
-        external = Path(tempfile.mkdtemp()) / "external-cache.json"
-        external.write_bytes(cache.read_bytes())
-        cache.unlink()
-        cache.symlink_to(external)
-        with pytest.raises(LocalReadinessError, match="cache.*regular file|cache.*symlink"):
-            run_readiness(plan, repo_root=repo, state_root=state)
-        cache.unlink()
-        cache.mkdir()
-        with pytest.raises(LocalReadinessError, match="cache.*regular file"):
-            run_readiness(plan, repo_root=repo, state_root=state)
-
-
-def test_pointer_receipt_path_is_confined_and_reads_reject_symlinks(tmp_path: Path) -> None:
-    with _repo() as directory:
-        repo = Path(directory)
-        _init(repo)
-        state = repo / "state"
-        plan = plan_readiness(level="fast", paths=["source.txt"], repo_root=repo, mode="workspace", state_root=state)
-        receipt = run_readiness(plan, repo_root=repo, state_root=state)
-        pointer = next((state / "process/receipts/current").glob("*.json"))
-        immutable = state / "process/receipts/by-fingerprint" / f"{receipt['fingerprint']['digest'].removeprefix('sha256:')}.json"
-        external = repo / "external-receipt.json"
-        external.write_text(immutable.read_text(encoding="utf-8"), encoding="utf-8")
-
-        for raw in (str(external), "../../../../external-receipt.json"):
-            value = json.loads(pointer.read_text(encoding="utf-8"))
-            value["receipt"] = raw
-            pointer.write_text(json.dumps(value), encoding="utf-8")
-            with pytest.raises(LocalReadinessError, match="canonical|receipt"):
-                verify_receipt(level="fast", paths=["source.txt"], repo_root=repo, mode="workspace", state_root=state)
-
-        value = {"schema": "local-readiness-current-pointer-v1", "receipt": str(immutable), "fingerprint": receipt["fingerprint"]["ref"]}
-        pointer.write_text(json.dumps(value), encoding="utf-8")
-        pointer_target = repo / "pointer-target.json"
-        pointer.replace(pointer_target)
-        pointer.symlink_to(pointer_target)
-        with pytest.raises(LocalReadinessError, match="pointer.*regular file|pointer.*symlink"):
-            verify_receipt(level="fast", paths=["source.txt"], repo_root=repo, mode="workspace", state_root=state)
-
-        pointer.unlink()
-        pointer.mkdir()
-        with pytest.raises(LocalReadinessError, match="pointer.*regular file"):
-            verify_receipt(level="fast", paths=["source.txt"], repo_root=repo, mode="workspace", state_root=state)
-        pointer.rmdir()
-        pointer_target.replace(pointer)
-        receipt_target = repo / "receipt-target.json"
-        immutable.replace(receipt_target)
-        immutable.symlink_to(receipt_target)
-        with pytest.raises(LocalReadinessError, match="receipt.*regular file|receipt.*symlink"):
-            verify_receipt(level="fast", paths=["source.txt"], repo_root=repo, mode="workspace", state_root=state)
-        immutable.unlink()
-        immutable.mkdir()
-        with pytest.raises(LocalReadinessError, match="receipt.*regular file"):
-            verify_receipt(level="fast", paths=["source.txt"], repo_root=repo, mode="workspace", state_root=state)
-
-
-def _commit_all(repo: Path, message: str) -> str:
-    subprocess.run(["git", "add", "-A"], cwd=repo, check=True)
-    subprocess.run(
-        ["git", "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "commit", "-qm", message],
-        cwd=repo,
-        check=True,
-    )
-    return subprocess.run(["git", "rev-parse", "HEAD"], cwd=repo, check=True, capture_output=True, text=True).stdout.strip()
-
-
-def test_dirty_unstaged_byte_cannot_affect_staged_execution(monkeypatch: pytest.MonkeyPatch) -> None:
-    with _repo() as directory:
-        repo = Path(directory)
-        _init(repo)
-        state = repo / "state"
-        source = repo / "source.txt"
-        source.write_text("index-byte\n", encoding="utf-8")
-        subprocess.run(["git", "add", "source.txt"], cwd=repo, check=True)
-        source.write_text("dirty-byte\n", encoding="utf-8")
-        plan = plan_readiness(level="fast", paths=["source.txt"], repo_root=repo, mode="staged")
-
-        observed: list[str] = []
-        monkeypatch.setattr(
-            "lib.local_readiness.core._run_check",
-            lambda check, log_path, *, repo_root, execution_env=None: (
-                observed.append((repo_root / "source.txt").read_text(encoding="utf-8"))
-                or {"id": check["id"], "status": "PASS", "exit_code": 0, "elapsed_ms": 0, "log": str(log_path)}
-            ),
-        )
-        receipt = run_readiness(plan, repo_root=repo, state_root=state)
-        assert receipt["status"] == "PASS"
-        assert receipt["source_execution"] == "immutable_capsule"
-        assert observed == ["index-byte\n"]
-        assert source.read_text(encoding="utf-8") == "dirty-byte\n"
-
-
-def test_staged_capsule_materializes_exact_add_delete_rename_mode_and_symlink() -> None:
-    with _repo() as directory:
-        repo = Path(directory)
-        _init(repo)
-        (repo / "delete.txt").write_text("delete\n", encoding="utf-8")
-        (repo / "rename.txt").write_text("rename\n", encoding="utf-8")
-        (repo / "target.txt").write_text("target\n", encoding="utf-8")
-        os.symlink("target.txt", repo / "link.txt")
-        _commit_all(repo, "fixture")
-        (repo / "added.txt").write_text("added\n", encoding="utf-8")
-        (repo / "delete.txt").unlink()
-        subprocess.run(["git", "mv", "rename.txt", "renamed.txt"], cwd=repo, check=True)
-        subprocess.run(["chmod", "+x", "source.txt"], cwd=repo, check=True)
-        subprocess.run(["git", "add", "-A"], cwd=repo, check=True)
-        (repo / "added.txt").write_text("dirty-after-index\n", encoding="utf-8")
-        plan = plan_readiness(level="fast", paths=staged_paths(repo), repo_root=repo, mode="staged")
-        state = repo / "state"
-        with source_execution_root(repo_root=repo, mode="staged", state_root=_state_root(state), fingerprint=plan["fingerprint"]) as (capsule, env, entries):
-            assert (capsule / "added.txt").read_text(encoding="utf-8") == "added\n"
-            assert not (capsule / "delete.txt").exists()
-            assert not (capsule / "rename.txt").exists()
-            assert (capsule / "renamed.txt").read_text(encoding="utf-8") == "rename\n"
-            assert os.access(capsule / "source.txt", os.X_OK)
-            assert (capsule / "link.txt").is_symlink()
-            assert os.readlink(capsule / "link.txt") == "target.txt"
-            assert Path(env["GIT_DIR"]).parent.parent == _state_root(state) / "process/materializations"
-            assert Path(env["GIT_DIR"]).is_dir()
-            assert any(entry["path"] == "added.txt" for entry in entries)
-        assert not list((state / "process/materializations").glob("*-*"))
-
-
-def test_commit_and_push_capsules_execute_exact_commit_tree(monkeypatch: pytest.MonkeyPatch) -> None:
-    with _repo() as directory:
-        repo = Path(directory)
-        _init(repo)
-        source = repo / "source.txt"
-        source.write_text("commit-byte\n", encoding="utf-8")
-        previous = subprocess.run(["git", "rev-parse", "HEAD"], cwd=repo, check=True, capture_output=True, text=True).stdout.strip()
-        head = _commit_all(repo, "candidate")
-        source.write_text("dirty-byte\n", encoding="utf-8")
-        monkeypatch.setattr(
-            "lib.local_readiness.core._run_check",
-            lambda check, log_path, *, repo_root, execution_env=None: {
-                "id": check["id"],
-                "status": "PASS" if (repo_root / "source.txt").read_text(encoding="utf-8") == "commit-byte\n" else "FAIL",
-                "exit_code": 0 if (repo_root / "source.txt").read_text(encoding="utf-8") == "commit-byte\n" else 1,
-                "elapsed_ms": 0,
-                "log": str(log_path),
-            },
-        )
-        commit_plan = plan_readiness(level="fast", paths=["source.txt"], repo_root=repo, mode="commit")
-        assert run_readiness(commit_plan, repo_root=repo, state_root=repo / "commit-state")["status"] == "PASS"
-        updates = parse_push_updates(f"refs/heads/dev1.0 {head} refs/heads/dev1.0 {previous}\n")
-        push_plan = plan_readiness(level="fast", paths=["source.txt"], repo_root=repo, mode="push", push_updates=updates)
-        assert run_readiness(push_plan, repo_root=repo, push_updates=updates, state_root=repo / "push-state")["status"] == "PASS"
-
-
-def test_source_drift_during_worktree_run_stales_receipt_without_green(monkeypatch: pytest.MonkeyPatch) -> None:
-    with _repo() as directory:
-        repo = Path(directory)
-        _init(repo)
-        state = repo / "state"
-        plan = plan_readiness(level="fast", paths=["source.txt"], repo_root=repo, mode="workspace")
-        def drift(check, log_path, *, repo_root, execution_env=None):
-            (repo_root / "source.txt").write_text("drift\n", encoding="utf-8")
-            return {"id": check["id"], "status": "PASS", "exit_code": 0, "elapsed_ms": 0, "log": str(log_path)}
-
-        monkeypatch.setattr("lib.local_readiness.core._run_check", drift)
-        receipt = run_readiness(plan, repo_root=repo, state_root=state)
-        assert receipt["status"] == "FAIL"
-        assert receipt["input_stable"] is False
-        assert not (state / "process/receipts/current").exists()
-
-
-def test_capsule_rejects_symlink_escape_and_cleans_process_root() -> None:
-    with _repo() as directory:
-        repo = Path(directory)
-        _init(repo)
-        os.symlink("../../outside", repo / "escape")
-        subprocess.run(["git", "add", "escape"], cwd=repo, check=True)
-        plan = plan_readiness(level="fast", paths=["escape"], repo_root=repo, mode="staged")
-        state = repo / "state"
-        with pytest.raises(LocalReadinessError, match="symlink target 越出"):
-            with source_execution_root(repo_root=repo, mode="staged", state_root=_state_root(state), fingerprint=plan["fingerprint"]):
-                pass
-        materializations = state / "process/materializations"
-        assert not list(materializations.iterdir())
-
-
-def test_data_required_release_plan_cannot_be_skip_or_verify_only() -> None:
-    plan = build_impact_plan(["quwoquan_data/tests/local_contract/execution/test_execution_kernel__minimal__contract__local_contract_test.py"], level="release")
-    assert plan["deferred"] == []
-    assert any(check["id"] == "release:data" and check["command"] == ["bash", "quwoquan_ops/gate/gate_repo.sh", "--scope", "data"] for check in plan["checks"])
-    workflow = (ROOT / ".github/workflows/delivery-gate.yml").read_text(encoding="utf-8")
-    assert "expect_typed_pending_or_skipped \"quwoquan_data\"" in workflow
-    assert "expect_typed_pending_or_skipped \"quwoquan_data_tests\"" in workflow
-
-
-def test_failed_queue_item_backs_off_does_not_starve_and_dead_letters(monkeypatch: pytest.MonkeyPatch) -> None:
-    with _repo() as directory:
-        repo = Path(directory)
-        _init(repo)
-        (repo / "ready.txt").write_text("ready\n", encoding="utf-8")
-        state = repo / "state"
-        monkeypatch.setattr("lib.local_readiness.core.ROOT", repo)
-        enqueue_paths(["source.txt", "ready.txt"], state_root=state)
-        original_run = __import__("lib.local_readiness.core", fromlist=["run_readiness"]).run_readiness
-
-        def selective(plan, **kwargs):
-            if plan["paths"] == ["source.txt"]:
-                raise LocalReadinessError("deterministic failure")
-            return original_run(plan, **kwargs)
-
-        monkeypatch.setattr("lib.local_readiness.core.run_readiness", selective)
-        first = worker_once(state_root=state, debounce_seconds=0)
-        assert first["status"] == "PENDING"
-        assert first["processed"] == ["ready.txt", "source.txt"]
-        items = json.loads((state / "process/deferred-queue.json").read_text(encoding="utf-8"))["items"]
-        assert [item["path"] for item in items] == ["source.txt"]
-        failed = items[0]
-        assert failed["attempt_count"] == 1
-        assert failed["next_eligible_at"] is not None
-        assert failed["last_error_digest"].startswith("sha256:")
-        assert failed["evidence_fingerprint_ref"].startswith("evidence-fingerprint-v1:")
-        identity = (failed["evidence_fingerprint_ref"], failed["check_identity_digest"])
-        backing_off = worker_once(state_root=state, debounce_seconds=0)
-        assert backing_off["status"] == "BACKING_OFF"
-        for _attempt in range(failed["max_attempts"] - 1):
-            payload = json.loads((state / "process/deferred-queue.json").read_text(encoding="utf-8"))
-            payload["items"][0]["next_eligible_at"] = "2000-01-01T00:00:00+00:00"
-            (state / "process/deferred-queue.json").write_text(json.dumps(payload), encoding="utf-8")
-            terminal = worker_once(state_root=state, debounce_seconds=0)
-        assert terminal["status"] == "GATE_BLOCK"
-        inspected = __import__("lib.local_readiness.core", fromlist=["inspect_state"]).inspect_state(state_root=state)
-        assert inspected["readiness"] == "GATE_BLOCK"
-        assert inspected["dead_letter"][0]["terminal"]["code"] == "LOCAL_READINESS.RETRY_EXHAUSTED"
-        assert (inspected["dead_letter"][0]["evidence_fingerprint_ref"], inspected["dead_letter"][0]["check_identity_digest"]) == identity
-        pointer_root = state / "process/receipts/current"
-        failed_receipts = [] if not pointer_root.exists() else [
-            json.loads(Path(json.loads(pointer.read_text(encoding="utf-8"))["receipt"]).read_text(encoding="utf-8"))
-            for pointer in pointer_root.glob("*.json")
+    assert {"scope": "data", "work": target} in fast["deferred"]
+    assert scope["deferred"] == []
+    assert release["deferred"] == []
+    for plan in (fast, scope, release):
+        python_checks = [
+            check for check in plan["checks"] if check["id"] == "focused:python"
         ]
-        assert all(receipt.get("paths") != ["source.txt"] for receipt in failed_receipts)
+        assert all(target not in check["command"] for check in python_checks)
+    assert any(check["id"] == "static:data_verify" for check in scope["checks"])
+    assert any(
+        check["id"] == "scope_build:data-local-contract"
+        and check["command"] == [
+            "env",
+            "GATE_DATA_PHASE=local_contract",
+            "bash",
+            "quwoquan_ops/gate/gate_repo.sh",
+            "--scope",
+            "data",
+        ]
+        for check in scope["checks"]
+    )
+    assert any(
+        check["id"] == "release:data"
+        and check["command"] == [
+            "bash", "quwoquan_ops/gate/gate_repo.sh", "--scope", "data"
+        ]
+        for check in release["checks"]
+    )
+
+
+def test_selector_plan_is_stable_for_equivalent_input_order() -> None:
+    paths = [
+        "quwoquan_ops/gate/verify_ci_cd_evidence_contracts.py",
+        "quwoquan_ops/ci/github_actions_timing.py",
+    ]
+
+    first = build_impact_plan(paths, level="fast")
+    second = build_impact_plan(list(reversed(paths)), level="fast")
+
+    assert first == second

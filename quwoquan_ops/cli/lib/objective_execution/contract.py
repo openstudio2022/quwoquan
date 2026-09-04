@@ -380,7 +380,7 @@ def canonical_payload_digest(payload: Mapping[str, Any]) -> str:
 
 def require_schema_v2(payload: Mapping[str, Any], label: str) -> None:
     if type(payload.get("schema_version")) is not int or payload.get("schema_version") != _SCHEMA_VERSION:
-        raise ContractError(f"{label}.schema_version must be {_SCHEMA_VERSION}; legacy v1 is not accepted")
+        raise ContractError(f"{label}.schema_version must be {_SCHEMA_VERSION}; retired v1 is not accepted")
 
 
 def validate_command_envelope(payload: Mapping[str, Any]) -> None:

@@ -158,5 +158,3 @@ def _target_uat_binding_for_execution(
     ):
         raise ValueError("TargetUatBinding exact bytes drifted after create-once write")
     return binding, {"ref": written.ref, "digest": written.digest}
-
-

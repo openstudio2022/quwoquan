@@ -482,7 +482,7 @@ void main() {
         xcodeProject,
         contains(
           'SWIFT_ACTIVE_COMPILATION_CONDITIONS = '
-          '"\$(inherited) QWQ_STARTUP_GATE_TEST_CONTROL";',
+          '"\$(inherited) DEBUG QWQ_STARTUP_GATE_TEST_CONTROL";',
         ),
       );
       // 测试控制条件只允许进入四环境 Debug configuration；任何 Release/Profile

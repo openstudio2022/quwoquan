@@ -208,7 +208,15 @@ class CanonicalLauncherContentModeContractTest(unittest.TestCase):
                 )
             )
             result = subprocess.run(
-                ["bash", "run.sh", "--mode", "ui-only", "-d", "device"],
+                [
+                    "bash",
+                    "run.sh",
+                    "--hermetic",
+                    "--mode",
+                    "ui-only",
+                    "-d",
+                    "device",
+                ],
                 cwd=app,
                 env=environment,
                 check=False,

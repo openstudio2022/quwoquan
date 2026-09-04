@@ -21,6 +21,7 @@ def load_agent_governance_contract() -> dict[str, Any]:
         raise ValueError("agent governance contract schema_version 必须为 1")
     for section in (
         "feature_context_manifest",
+        "candidate_evidence_manifest",
         "review_plan",
         "named_evidence_receipt",
         "review_finding",
@@ -70,8 +71,8 @@ def _validate_terminal_codes(value: object) -> None:
         raise ValueError("agent governance contract terminal_codes 必须为非空 mapping")
     recoveries: dict[str, str] = {}
     for code, raw in value.items():
-        if not isinstance(code, str) or not code.startswith("REVIEW."):
-            raise ValueError(f"terminal code 非 canonical REVIEW.*：{code!r}")
+        if not isinstance(code, str) or not code.startswith(("REVIEW.", "IDENTITY.", "CANDIDATE.")):
+            raise ValueError(f"terminal code 非 canonical REVIEW/IDENTITY/CANDIDATE：{code!r}")
         if not isinstance(raw, dict) or set(raw) != {
             "severity",
             "automatic_retry",
@@ -267,11 +268,15 @@ def _validate_evidence_fingerprint_contract(definition: dict[str, Any]) -> None:
         "windows-separator-normalization",
         "symlink-target-content-and-broken-target",
         "review-tracked-untracked-deleted",
-        "legacy-review-algorithm-not-consumed",
+        "retired-review-algorithm-not-consumed",
         "handoff-stale-missing-fingerprint-and-recovery-failure",
-        "feature-manifest-v3-content-addressed-fingerprint-and-budget",
+        "feature-manifest-v4-content-addressed-owner-identity-and-budget",
         "named-evidence-dedup-drift-failure-and-result",
         "handoff-six-trigger-producer-and-ordinary-noop",
+        "human-decision-create-once-tamper-ref-drift",
+        "human-decision-pause-redirect-stable-terminal",
+        "human-decision-ordinary-missing-nonblocking",
+        "human-decision-formal-prod-rejects-self-attested",
     }
     if set(fixtures) != expected_fixtures:
         raise ValueError("agent governance contract evidence_fingerprint.required_fixtures 非法")
@@ -394,3 +399,34 @@ def validate_feature_context_manifest(payload: dict[str, Any]) -> None:
     modes = contract_section("feature_context_manifest")["fingerprint_binding_modes"]
     if binding["mode"] not in modes:
         raise ValueError("feature_context_manifest.evidence_fingerprint.mode 非法")
+
+
+def validate_candidate_evidence_manifest(payload: dict[str, Any]) -> None:
+    """Validate exact candidate evidence at every producer/consumer boundary."""
+
+    validate_schema_version(payload, "candidate_evidence_manifest")
+    validate_required_fields(payload, "candidate_evidence_manifest")
+    for field, declaration in (("owner_chain", "owner_chain_fields"), ("context_snapshots", "context_snapshot_fields")):
+        values = payload[field]
+        if not isinstance(values, list):
+            raise TypeError(f"candidate_evidence_manifest.{field} 必须为列表")
+        for value in values:
+            if not isinstance(value, dict):
+                raise TypeError(f"candidate_evidence_manifest.{field} 项必须为映射")
+            validate_declared_fields(value, "candidate_evidence_manifest", declaration)
+    paths = payload["changed_paths"]
+    if not isinstance(paths, list) or not paths or not all(isinstance(item, str) and item for item in paths):
+        raise TypeError("candidate_evidence_manifest.changed_paths 必须为非空字符串列表")
+    if paths != sorted(set(paths), key=lambda item: item.encode("utf-8")):
+        raise ValueError("candidate_evidence_manifest.changed_paths 必须规范排序且无重复")
+    for field in ("owner_identity_ref", "owner_identity_canonical_bytes_sha256", "target", "resolved_owner", "impact_plan_identity"):
+        if field != "impact_plan_identity" and (not isinstance(payload[field], str) or not payload[field]):
+            raise TypeError(f"candidate_evidence_manifest.{field} 必须为非空字符串")
+    if not isinstance(payload["workspace_digests"], dict) or not isinstance(payload["impact_plan"], dict):
+        raise TypeError("candidate evidence workspace_digests/impact_plan 必须为映射")
+    identity = payload["impact_plan_identity"]
+    if not isinstance(identity, dict):
+        raise TypeError("candidate evidence impact_plan_identity 必须为映射")
+    validate_declared_fields(identity, "candidate_evidence_manifest", "impact_plan_identity_fields")
+    if not isinstance(payload["evidence_fingerprint"], dict):
+        raise TypeError("candidate evidence fingerprint 必须为映射")

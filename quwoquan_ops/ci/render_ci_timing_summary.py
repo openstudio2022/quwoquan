@@ -63,7 +63,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--budget-profile",
         default="",
-        help="Select one profileHardFailSeconds entry from the canonical gate budget.",
+        help="Select one profile entry from the canonical gate timing policy.",
     )
     parser.add_argument(
         "--machine-critical-path-seconds", type=parse_non_negative_int
@@ -87,6 +87,16 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--phase", action="append", default=[])
     parser.add_argument("--missing-evidence", action="append", default=[])
     parser.add_argument("--note", action="append", default=[])
+    parser.add_argument(
+        "--functional-outcome",
+        choices=("pass", "fail", "unknown"),
+        default="unknown",
+    )
+    parser.add_argument(
+        "--telemetry-classification",
+        choices=("attempted", "runnable", "skipped", "infra"),
+        default="attempted",
+    )
     parser.add_argument(
         "--release-outcome",
         choices=(
@@ -136,26 +146,34 @@ def optional_budget_seconds(gate_budget: Dict[str, Any], key: str) -> Optional[i
     return value
 
 
-def profile_hard_budget_seconds(
+def timing_policy(
     gate_budget: Dict[str, Any], budget_profile: str
-) -> tuple[Optional[str], Optional[int], Optional[int]]:
+) -> tuple[Optional[str], Optional[int], Optional[int], str]:
     profile = budget_profile.strip() or None
     gate_hard_seconds = optional_budget_seconds(gate_budget, "hardFailSeconds")
+    raw_policy = gate_budget.get("timingPolicy", "release_sla")
+    if raw_policy not in {"release_sla", "telemetry_advisory"}:
+        raise ValueError("canonical timing policy is invalid: {0}".format(raw_policy))
+    policy = str(raw_policy)
     if profile is None:
-        return None, gate_hard_seconds, gate_hard_seconds
-    raw_profiles = gate_budget.get("profileHardFailSeconds")
+        return None, gate_hard_seconds, gate_hard_seconds, policy
+    raw_profiles = gate_budget.get("profileTiming")
     if not isinstance(raw_profiles, dict) or profile not in raw_profiles:
         raise ValueError(
-            "canonical profile hard budget is missing: {0}".format(profile)
+            "canonical profile timing budget is missing: {0}".format(profile)
         )
-    raw_value = raw_profiles[profile]
+    profile_budget = raw_profiles[profile]
+    if not isinstance(profile_budget, dict):
+        raise ValueError("canonical profile timing budget must be an object: {0}".format(profile))
+    raw_value = profile_budget.get("hardFailSeconds")
     if isinstance(raw_value, bool) or not isinstance(raw_value, int) or raw_value <= 0:
         raise ValueError(
-            "canonical profile hard budget must be a positive integer: {0}".format(
-                profile
-            )
+            "canonical profile hard budget must be a positive integer: {0}".format(profile)
         )
-    return profile, raw_value, gate_hard_seconds
+    raw_profile_policy = profile_budget.get("policy")
+    if raw_profile_policy not in {"release_sla", "telemetry_advisory"}:
+        raise ValueError("canonical profile timing policy is invalid: {0}".format(profile))
+    return profile, raw_value, gate_hard_seconds, str(raw_profile_policy)
 
 
 def normalize_optional_timestamp(raw_value: str) -> Optional[str]:
@@ -218,10 +236,12 @@ def build_payload(
     upstream_missing_evidence: List[str],
     notes: List[str],
     release_outcome: str = "not_applicable",
+    functional_outcome: str = "unknown",
+    telemetry_classification: str = "attempted",
 ) -> Dict[str, Any]:
     soft_seconds = optional_budget_seconds(gate_budget, "budgetSeconds")
-    normalized_budget_profile, hard_seconds, gate_hard_seconds = (
-        profile_hard_budget_seconds(gate_budget, budget_profile)
+    normalized_budget_profile, hard_seconds, gate_hard_seconds, timing_policy_class = (
+        timing_policy(gate_budget, budget_profile)
     )
     critical_definition = str(gate_budget.get("criticalPath", "")).strip() or None
     raw_phase_budgets = gate_budget.get("phaseBudgetsSeconds") or {}
@@ -275,8 +295,28 @@ def build_payload(
         missing_evidence=missing_evidence,
         release_outcome=release_outcome,
     )
+    hard_budget_exceeded = (
+        not missing_evidence
+        and end_to_end_seconds is not None
+        and hard_seconds is not None
+        and end_to_end_seconds > hard_seconds
+    )
+    timing_projection = "PASS"
+    if functional_outcome == "fail":
+        timing_projection = "FUNCTIONAL_FAIL"
+    elif timing_policy_class == "release_sla" and hard_budget_exceeded:
+        timing_projection = "GATE_BLOCK"
+    elif status == "historical_incomplete":
+        timing_projection = "PR_WARN"
+    elif timing_policy_class == "telemetry_advisory" and hard_budget_exceeded:
+        timing_projection = "PR_WARN"
+    elif functional_outcome == "pass" and telemetry_classification in {
+        "runnable", "skipped", "infra"
+    }:
+        timing_projection = "PR_WARN"
 
     budget_payload: Dict[str, Any] = {
+        "policy": timing_policy_class,
         "softSeconds": soft_seconds,
         "hardSeconds": hard_seconds,
         "deltaFromSoftSeconds": (
@@ -307,6 +347,11 @@ def build_payload(
         "sourceGitSha": normalized_source_sha,
         "candidateDigest": normalized_candidate_digest,
         "status": status,
+        "outcomePolicy": {
+            "functional": functional_outcome,
+            "telemetryClassification": telemetry_classification,
+            "timing": timing_projection,
+        },
         "timestamps": timestamps,
         "durations": durations,
         "budget": budget_payload,
@@ -344,6 +389,7 @@ def render_markdown(payload: Dict[str, Any]) -> str:
         "",
         "- schema: `{0}`".format(payload["schema"]),
         "- soft budget: `{0}`".format(format_seconds(budget["softSeconds"])),
+        "- timing policy: `{0}`".format(budget["policy"]),
         "- hard budget: `{0}`".format(format_seconds(budget["hardSeconds"])),
         "- end-to-end critical path: `{0}`".format(format_seconds(critical_path["seconds"])),
         "- machine critical path diagnostic: `{0}`".format(
@@ -414,6 +460,8 @@ def main() -> int:
         upstream_missing_evidence=args.missing_evidence,
         notes=args.note,
         release_outcome=args.release_outcome,
+        functional_outcome=args.functional_outcome,
+        telemetry_classification=args.telemetry_classification,
     )
     markdown = render_markdown(payload)
     print(markdown)

@@ -4,11 +4,11 @@ from __future__ import annotations
 
 import argparse
 import contextlib
-import fcntl
 import json
 import os
 import stat
 import subprocess
+import sys
 import tempfile
 import time
 import uuid
@@ -32,6 +32,11 @@ from quwoquan_ops.cli.lib.app_dependency_sync_process_result import (
     process_result_payload as _process_result_payload,
 )
 from quwoquan_ops.cli.lib.output_paths import output_root
+from quwoquan_ops.cli.lib.host_locks import (
+    HostLockBusyError,
+    acquire_host_lock_bounded,
+    app_dependency_sync_lock_path,
+)
 from quwoquan_ops.cli.lib.app_launch_manifest_contract import (
     build_runtime_config_trust_envelope,
     load_launch_manifest_contract,
@@ -80,7 +85,9 @@ from quwoquan_ops.cli.lib.package_reuse.pub_cache_store import (
     resolution_input_identity,
 )
 
-_LOCK_TIMEOUT_SECONDS = 30
+_LOCK_TIMEOUT_SECONDS = 10 * 60
+_LOCK_PROGRESS_INTERVAL_SECONDS = 30
+_LOCK_OWNER_WORKTREE = Path(__file__).resolve().parents[3]
 _SOURCE_IDENTITY_FIELDS = {
     "flutterVersion",
     "flutterCommandResolutionDigest",
@@ -110,11 +117,14 @@ class DependencyBuildProgress:
     """Process-only phase marker; never participates in publication identity."""
 
     current_phase: str = "component-build"
+    on_begin: Callable[[str], None] | None = None
 
     def begin(self, phase: str) -> None:
         if not phase or not all(character.islower() or character.isdigit() or character == "-" for character in phase):
             raise ValueError("APP.DEPENDENCY.process_phase_invalid")
         self.current_phase = phase
+        if self.on_begin is not None:
+            self.on_begin(phase)
 
 
 @dataclass(frozen=True, slots=True)
@@ -189,39 +199,32 @@ def _atomic_json(path: Path, value: dict[str, Any], *, mode: int) -> None:
 
 
 @contextlib.contextmanager
-def _sync_lock() -> Any:
-    base = managed_dependency_bundle_root().absolute()
-    base.mkdir(parents=True, exist_ok=True)
-    assert_real_directory(base, label="managed cache root")
-    descriptor = os.open(
-        base / "sync.lock",
-        os.O_RDWR
-        | os.O_CREAT
-        | getattr(os, "O_NOFOLLOW", 0)
-        | getattr(os, "O_CLOEXEC", 0),
-        0o600,
-    )
+def _sync_lock(
+    *, on_wait: Callable[[str, float], None] | None = None
+) -> Any:
+    """Serialize dependency sync and the shared Flutter build workspace."""
+
+    held = []
     try:
-        metadata = os.fstat(descriptor)
-        if not stat.S_ISREG(metadata.st_mode) or metadata.st_nlink != 1:
-            raise ValueError("APP.DEPENDENCY.sync_lock_unsafe: lock is not regular")
-        deadline = time.monotonic() + _LOCK_TIMEOUT_SECONDS
-        while True:
-            try:
-                fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
-                break
-            except BlockingIOError as exc:
-                if time.monotonic() >= deadline:
-                    raise ValueError(
-                        "APP.DEPENDENCY.sync_lock_timeout: another sync is active"
-                    ) from exc
-                time.sleep(0.05)
-        yield
+        held.append(
+            acquire_host_lock_bounded(
+                app_dependency_sync_lock_path(),
+                timeout_seconds=_LOCK_TIMEOUT_SECONDS,
+                poll_seconds=1.0,
+                fields={"resource": "flutter-cocoapods-gradle"},
+                worktree_path=_LOCK_OWNER_WORKTREE,
+                on_wait=on_wait,
+            )
+        )
+        yield tuple(held)
+    except HostLockBusyError as exc:
+        raise ValueError(
+            "APP.DEPENDENCY.sync_lock_timeout: "
+            f"timeoutSeconds={_LOCK_TIMEOUT_SECONDS}; {exc}"
+        ) from exc
     finally:
-        try:
-            fcntl.flock(descriptor, fcntl.LOCK_UN)
-        finally:
-            os.close(descriptor)
+        for lock in reversed(held):
+            lock.close()
 
 
 def _project(repo_root: Path, destination: Path) -> Path:
@@ -597,10 +600,54 @@ def command_app_dependency_sync(
         process_root.mkdir(mode=0o700)
         assert_real_directory(process_root, label="dependency sync process root")
         process_root.chmod(0o700)
+
+        last_wait_progress_at = -_LOCK_PROGRESS_INTERVAL_SECONDS
+
+        def emit_progress(
+            phase: str,
+            *,
+            state: str = "running",
+            holder: str = "",
+            remaining_seconds: float | None = None,
+        ) -> None:
+            fields = [
+                "[app-dependency-sync]",
+                f"attemptId={attempt_id}",
+                f"phase={phase}",
+                f"state={state}",
+            ]
+            if remaining_seconds is not None:
+                fields.append(f"remainingSeconds={max(0, int(remaining_seconds))}")
+            if holder:
+                fields.append(f"holder={holder}")
+            print(" ".join(fields), file=sys.stderr, flush=True)
+
+        def wait_progress(holder: str, remaining_seconds: float) -> None:
+            nonlocal last_wait_progress_at
+            elapsed = _LOCK_TIMEOUT_SECONDS - remaining_seconds
+            if (
+                last_wait_progress_at < 0
+                or elapsed - last_wait_progress_at >= _LOCK_PROGRESS_INTERVAL_SECONDS
+                or remaining_seconds <= 0
+            ):
+                emit_progress(
+                    "dependency-sync-lock",
+                    state="waiting",
+                    holder=holder,
+                    remaining_seconds=remaining_seconds,
+                )
+                last_wait_progress_at = elapsed
+
+        emit_progress("initialization")
         failed_phase = "live-source-seal"
+        emit_progress("live-source-seal")
         live_source_seal = _builder.resolution_seal(repo_root)
-        with _sync_lock():
+        failed_phase = "dependency-sync-lock"
+        emit_progress("dependency-sync-lock", state="acquiring")
+        with _sync_lock(on_wait=wait_progress):
+            emit_progress("dependency-sync-lock", state="acquired")
             failed_phase = "toolchain-identity"
+            emit_progress("toolchain-identity")
             try:
                 flutter_identity = resolved_flutter_identity(dict(os.environ))
             except FacadeError as exc:
@@ -626,7 +673,7 @@ def command_app_dependency_sync(
             if generation_root.exists() or generation_root.is_symlink():
                 raise ValueError("APP.DEPENDENCY.attempt_identity_collision")
             generation_root.mkdir(mode=0o700)
-            progress = DependencyBuildProgress()
+            progress = DependencyBuildProgress(on_begin=emit_progress)
             context = DependencyComponentBuildContext(
                 repo_root=repo_root,
                 attempt_id=attempt_id,
@@ -651,6 +698,7 @@ def command_app_dependency_sync(
             else:
                 roots = component_builder(context)
             failed_phase = "live-source-readback"
+            emit_progress("live-source-readback")
             _builder.assert_live_resolution_seal(
                 repo_root=repo_root,
                 expected=live_source_seal,
@@ -670,12 +718,14 @@ def command_app_dependency_sync(
             if current_source != source_identity:
                 raise ValueError("APP.DEPENDENCY.source_identity_drift_during_sync")
             failed_phase = "component-readback"
+            emit_progress("component-readback")
             components = _component_declarations(
                 context=context,
                 component_roots=roots,
             )
             publication_progress = _PublicationProgress()
             failed_phase = "publication"
+            emit_progress("publication")
             try:
                 published = _publish_dependency_generation(
                     publisher=publisher or publish_dependency_bundle_activation,
@@ -758,11 +808,13 @@ def command_app_dependency_sync(
                 raise
             active_committed = True
             failed_phase = "post-publication-live-source-readback"
+            emit_progress("post-publication-live-source-readback")
             _builder.assert_live_resolution_seal(
                 repo_root=repo_root,
                 expected=live_source_seal,
             )
             _cleanup_attempt_root(work_root, cleanup_warnings)
+        emit_progress("completed")
         outcome = {
             "exitCode": 0,
             "summary": "App dependency sync completed",

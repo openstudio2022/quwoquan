@@ -888,7 +888,7 @@ class ArticleWrappedParagraph extends StatelessWidget {
                     child: mediaDeliveryImage(
                       binding: binding.hasRenderableSource
                           ? binding
-                          : MediaDeliveryBinding.legacyPublic(
+                          : MediaDeliveryBinding.previousPublic(
                               publicUrl: imageUrl,
                             ),
                       kind: MediaDeliveryKind.image,

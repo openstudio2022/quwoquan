@@ -12,7 +12,7 @@
     "pre-commit invokes commit_gate.sh only (no make gate / scope=all)",
     "Makefile gate no longer embeds test-local-contract (eliminates Flutter/Go double-run with gate_repo)",
     "Flutter guard no longer forces concurrency=1 for local_contract",
-    "impacted Flutter selection respects hard cap with deferred_to_ci",
+    "impacted Flutter selection respects its hard cap; pytest file targets use a configured conservative duration budget and directory suites are deferred_to_ci",
     "Delivery Gate app path uses 4 shards @ concurrency 8 plus serial job",
     "gate-local-gamma defaults LOCAL_GAMMA_SKIP_GATE=1",
     "feature-tree verify --changes only fails on unowned paths; OPEN release blockers do not fail commit_gate",
@@ -20,11 +20,11 @@
     "FilterCatalog Stage/Activate/Rollback bind Idempotency-Key on ContentHandler path"
   ],
   "sla": {
-    "softBudgetSeconds": 600,
-    "hardFailSeconds": 900,
+    "softBudgetSeconds": 180,
+    "hardFailSeconds": 300,
     "expectedWallSecondsModel": {
-      "crossArea": "max(L0_static_parallel<=120, L0_impacted_tests_parallel<=420) + summary <= 600 soft",
-      "notes": "Wall clock is parallel fan-out, not sum of phases. Full 598-file local_contract is CI-only."
+      "crossArea": "L0_static_parallel + L0_impacted_tests_parallel + summary <= 300 hard; 180 soft target",
+      "notes": "L0 phases share one process-group deadline. Directory local_contract suites are deferred to canonical scoped/Delivery profiles."
     },
     "regressionCapture": {
       "local": "impacted suite + fixed smoke static checks",

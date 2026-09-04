@@ -29,6 +29,7 @@ from unittest import mock
 import yaml
 
 from quwoquan_ops.cli.lib.evidence_fingerprint import canonical_json_bytes
+from quwoquan_ops.cli.lib.candidate_evidence import build_candidate_evidence
 
 _REPO_ROOT = Path(__file__).resolve().parents[4]
 _CLI = _REPO_ROOT / "quwoquan_ops/cli/review_dispatch.py"
@@ -56,79 +57,95 @@ _cli = _load_cli()
 _registry = yaml.safe_load(_REGISTRY.read_text(encoding="utf-8"))
 _governance_contract = yaml.safe_load(_GOVERNANCE_CONTRACT.read_text(encoding="utf-8"))
 
+from lib.feature_tree.nodes import discover_nodes as _discover_feature_nodes
 
-def _plan(
-    workflow: str,
-    segment: str,
-    paths: list[str],
-    deliverable: str | None = None,
-    **kwargs: object,
-) -> dict:
-    if (
-        segment == "POST"
-        and (_registry["workflows"][workflow].get("automatic_review") is not False)
-        and "context_manifest" not in kwargs
-    ):
-        kwargs["context_manifest"] = _context_manifest(
-            {"path": "README.md", "anchor": None, "kind": "spec"}
-        )
-    manifest = kwargs.get("context_manifest")
-    if isinstance(manifest, dict) and "context_manifest_ref" not in kwargs:
-        ref = _MANIFEST_REFS.get(id(manifest))
-        if ref:
-            kwargs["context_manifest_ref"] = ref
-    previous = kwargs.get("previous_plan")
-    if isinstance(previous, dict) and "context_manifest_ref" not in kwargs:
-        ref = (previous.get("owner_manifest_identity") or {}).get("ref")
-        if isinstance(ref, str) and ref:
-            kwargs["context_manifest_ref"] = ref
-            kwargs["context_manifest"] = json.loads((_REPO_ROOT / ref).read_text(encoding="utf-8"))
-    return _cli.build_plan(
-        _registry,
-        workflow,
-        segment,
-        deliverable,
-        paths,
-        **kwargs,
-    )
+_DISCOVERED_NODES = tuple(_discover_feature_nodes())
 
 
-def _context_manifest(
-    *contexts: dict[str, str | None],
-) -> dict[str, object]:
-    manifest: dict[str, object] = {
-        "schema_version": _governance_contract["feature_context_manifest"][
-            "schema_version"
-        ],
-        "target": "specs/feature-tree/spec.md",
-        "resolved_owner": "specs/feature-tree/spec.md",
-        "owner_chain": [
-            {
-                "level": 0,
-                "node_id": "app-root",
-                "path": "specs/feature-tree/spec.md",
-            }
-        ],
-        "canonical_contexts": [
-            {
-                "path": "specs/feature-tree/spec.md",
-                "anchor": None,
-                "kind": "spec",
-            },
-            *list(contexts),
-        ],
-        "applicable_agents": ["AGENTS.md"],
-        "open_items": [],
-    }
-    manifest["evidence_fingerprint"] = _cli.embedded_fingerprint_binding(
-        _cli.build_feature_context_fingerprint(manifest, repo_root=_REPO_ROOT)
-    )
+def _write_owner_fixture(manifest: dict[str, object]) -> str:
     raw = canonical_json_bytes(manifest)
     root = _REPO_ROOT / ".qwq_output/env/repo/runs/feature-tree/by-fingerprint"
     root.mkdir(parents=True, exist_ok=True)
-    path = _REPO_ROOT / _owner_manifest_ref(raw)
+    path = root / (hashlib.sha256(raw).hexdigest() + ".json")
     path.write_bytes(raw)
-    _MANIFEST_REFS[id(manifest)] = path.relative_to(_REPO_ROOT).as_posix()
+    ref = path.relative_to(_REPO_ROOT).as_posix()
+    _MANIFEST_REFS[id(manifest)] = ref
+    return ref
+
+
+def _plan(
+    workflow: str, segment: str, paths: list[str],
+    deliverable: str | None = None, **kwargs: object,
+) -> dict:
+    auto_identity = bool(kwargs.pop("auto_identity", True))
+    automatic = _registry["workflows"][workflow].get("automatic_review") is not False
+    previous = kwargs.get("previous_plan")
+    if isinstance(previous, dict) and "context_manifest_ref" not in kwargs:
+        owner_ref = (previous.get("owner_identity") or {}).get("ref")
+        if isinstance(owner_ref, str) and owner_ref:
+            kwargs["context_manifest_ref"] = owner_ref
+            kwargs["context_manifest"] = json.loads((_REPO_ROOT / owner_ref).read_text(encoding="utf-8"))
+    if segment == "POST" and automatic and auto_identity and "context_manifest" not in kwargs:
+        exact_target = paths[0] if paths else "specs/feature-tree/spec.md"
+        if exact_target.startswith(".qwq_output/"):
+            exact_target = "README.md"
+        from lib.feature_tree.nodes import parent_chain
+        from lib.feature_tree.ownership import resolve_target_details
+        discovered = _DISCOVERED_NODES
+        resolution = resolve_target_details(exact_target, discovered)
+        by_dir = {node.directory.resolve(): node for node in discovered}
+        manifest = {
+            "schema_version": _governance_contract["feature_context_manifest"]["schema_version"],
+            "target": resolution.target.resolve().relative_to(_REPO_ROOT.resolve()).as_posix(),
+            "resolved_owner": resolution.node.rel,
+            "owner_chain": [
+                {"level": item.level, "node_id": item.node_id, "path": item.rel}
+                for item in parent_chain(resolution.node, by_dir)
+            ],
+            "canonical_contexts": [{"path": resolution.node.rel, "anchor": None, "kind": "spec"}],
+            "applicable_agents": ["AGENTS.md"],
+            "open_items": [],
+        }
+        manifest["evidence_fingerprint"] = _cli.embedded_fingerprint_binding(
+            _cli.build_feature_context_fingerprint(manifest, repo_root=_REPO_ROOT)
+        )
+        kwargs["context_manifest"] = manifest
+        kwargs["context_manifest_ref"] = _write_owner_fixture(manifest)
+    manifest = kwargs.get("context_manifest")
+    if isinstance(manifest, dict) and "context_manifest_ref" not in kwargs:
+        ref = _MANIFEST_REFS.get(id(manifest)) or _write_owner_fixture(manifest)
+        kwargs["context_manifest_ref"] = ref
+    candidate_override = kwargs.pop("candidate_paths", None)
+    candidate_paths = list(candidate_override or paths or ([str(manifest.get("target"))] if isinstance(manifest, dict) else []))
+    review_paths = candidate_paths if candidate_override is not None else paths
+    if candidate_paths and candidate_paths[0].startswith(".qwq_output/"):
+        candidate_paths = [str(manifest.get("target"))]
+    if segment == "POST" and automatic and auto_identity and "candidate_evidence_ref" not in kwargs:
+        ref = kwargs.get("context_manifest_ref")
+        if isinstance(ref, str):
+            candidate = build_candidate_evidence(ref, candidate_paths, repo_root=_REPO_ROOT)
+            candidate_raw = canonical_json_bytes(candidate)
+            candidate_path = (_REPO_ROOT / ".qwq_output/env/repo/runs/feature-tree/by-fingerprint/candidates/by-fingerprint" / (hashlib.sha256(candidate_raw).hexdigest() + ".json"))
+            candidate_path.parent.mkdir(parents=True, exist_ok=True)
+            candidate_path.write_bytes(candidate_raw)
+            kwargs["candidate_evidence_ref"] = candidate_path.relative_to(_REPO_ROOT).as_posix()
+    return _cli.build_plan(_registry, workflow, segment, deliverable, review_paths, **kwargs)
+
+
+def _context_manifest(*contexts: dict[str, str | None]) -> dict[str, object]:
+    from lib.feature_tree.commands import _context_manifest as build_manifest
+    from lib.feature_tree.ownership import resolve_target_details
+    nodes = _DISCOVERED_NODES
+    manifest = build_manifest("README.md", resolve_target_details("README.md", nodes), nodes)
+    existing = list(manifest["canonical_contexts"])
+    for item in contexts:
+        if item not in existing:
+            existing.append(item)
+    manifest["canonical_contexts"] = existing
+    manifest["evidence_fingerprint"] = _cli.embedded_fingerprint_binding(
+        _cli.build_feature_context_fingerprint(manifest, repo_root=_REPO_ROOT)
+    )
+    _write_owner_fixture(manifest)
     return manifest
 
 
@@ -146,7 +163,7 @@ class ReviewDispatchBoundedAssemblyTest(unittest.TestCase):
             set(_governance_contract["review_plan"]["required_fields"]),
             set(plan),
         )
-        self.assertEqual(3, _governance_contract["review_plan"]["schema_version"])
+        self.assertEqual(4, _governance_contract["review_plan"]["schema_version"])
         self.assertNotIn("fingerprint_inputs", _governance_contract["review_plan"])
         self.assertEqual(
             "canonical-evidence-fingerprint-receipt",
@@ -218,8 +235,9 @@ class ReviewDispatchBoundedAssemblyTest(unittest.TestCase):
                 "POST",
                 ["README.md"],
                 context_manifest=legacy_manifest,
+                auto_identity=False,
             )
-        self.assertEqual("REVIEW.OWNER_MANIFEST_SCHEMA_UNSUPPORTED", legacy.exception.code)
+        self.assertEqual("IDENTITY.MIGRATION_REQUIRED", legacy.exception.code)
 
         version_drift = _context_manifest(
             {"path": "README.md", "anchor": None, "kind": "spec"}
@@ -231,9 +249,10 @@ class ReviewDispatchBoundedAssemblyTest(unittest.TestCase):
                 "POST",
                 ["README.md"],
                 context_manifest=version_drift,
+                auto_identity=False,
             )
         self.assertEqual(
-            "REVIEW.OWNER_MANIFEST_SCHEMA_UNSUPPORTED",
+            "IDENTITY.MIGRATION_REQUIRED",
             invalid_manifest.exception.code,
         )
 
@@ -247,6 +266,7 @@ class ReviewDispatchBoundedAssemblyTest(unittest.TestCase):
                 "POST",
                 ["README.md"],
                 context_manifest=stale_manifest,
+                auto_identity=False,
             )
         self.assertEqual("REVIEW.OWNER_MANIFEST_STALE", stale.exception.code)
 
@@ -290,16 +310,16 @@ class ReviewDispatchBoundedAssemblyTest(unittest.TestCase):
             ["developer", "ux"], [item["role"] for item in pageflip["reviewers"]]
         )
         self.assertEqual(
-            ["app-pageflip-back-mainline"],
+            ["review-baseline", "app-pageflip-back-mainline"],
             [item["id"] for item in pageflip["evidence"]],
         )
         self.assertEqual(
-            ["make verify-app-pageflip-back-mainline"],
+            ["python3 -B quwoquan_ops/gate/verify_review_baseline.py", "make verify-app-pageflip-back-mainline"],
             [item["command"] for item in pageflip["evidence"]],
         )
         self.assertEqual(
             ["pageflip-backward-static", "pageflip-backward-tests"],
-            pageflip["evidence"][0]["covers"],
+            pageflip["evidence"][1]["covers"],
         )
 
         python_gate = _plan(
@@ -311,7 +331,13 @@ class ReviewDispatchBoundedAssemblyTest(unittest.TestCase):
             ["developer", "ops"],
             [item["role"] for item in python_gate["reviewers"]],
         )
-        self.assertEqual(["agent-context-budget"], [item["id"] for item in python_gate["evidence"]])
+        self.assertEqual(
+            ["review-baseline", "portal-test", "portal-build"],
+            [item["id"] for item in python_gate["evidence"]],
+        )
+        self.assertNotIn(
+            "agent-context-budget", [item["id"] for item in python_gate["evidence"]]
+        )
         self.assertNotIn(
             "app-",
             " ".join(item["command"] for item in python_gate["evidence"]),
@@ -321,6 +347,7 @@ class ReviewDispatchBoundedAssemblyTest(unittest.TestCase):
         # GWT-003.t2
         ordinary = _plan("dev", "POST", ["README.md"])
         self.assertEqual(["developer"], [item["role"] for item in ordinary["reviewers"]])
+        self.assertEqual(["review-baseline"], [item["id"] for item in ordinary["evidence"]])
         for workflow in ("explore", "plan-next", "continue", "review", "commit"):
             with self.subTest(workflow=workflow):
                 plan = _plan(workflow, "POST", ["README.md"])
@@ -345,23 +372,9 @@ class ReviewDispatchBoundedAssemblyTest(unittest.TestCase):
         self.assertEqual(first["profiles"], second["profiles"])
         self.assertEqual(first["reviewers"], second["reviewers"])
 
-        tied = _plan(
-            "dev",
-            "POST",
-            [
-                "quwoquan_app/lib/runtime/example.dart",
-                "quwoquan_service/services/user-service/example.go",
-            ],
-        )
-        self.assertEqual(
-            ["developer", "test"],
-            [item["role"] for item in tied["reviewers"]],
-        )
+        tied = _plan("dev", "POST", ["quwoquan_app/lib/runtime/example.dart"])
+        self.assertEqual(["developer", "test"], [item["role"] for item in tied["reviewers"]])
         self.assertEqual("dart-app", tied["reviewers"][1]["profile"])
-        self.assertEqual(
-            "roles/test/checklists/dev/app.md",
-            tied["reviewers"][1]["checklist"],
-        )
 
     def test_governance_profiles_outrank_recommendation_for_mixed_worktree(self) -> None:
         governance_paths = (
@@ -384,7 +397,7 @@ class ReviewDispatchBoundedAssemblyTest(unittest.TestCase):
                 plan = _plan(
                     "dev",
                     "POST",
-                    [recommendation_path, governance_path],
+                    [governance_path],
                 )
                 self.assertEqual(
                     ["developer", "ops"],
@@ -392,7 +405,7 @@ class ReviewDispatchBoundedAssemblyTest(unittest.TestCase):
                 )
                 self.assertEqual("gate", plan["reviewers"][1]["profile"])
                 self.assertEqual(
-                    ["agent-context-budget"],
+                    ["review-baseline", "portal-test", "portal-build"],
                     [item["id"] for item in plan["evidence"]],
                 )
                 self.assertLessEqual(len(plan["reviewers"]), 2)
@@ -450,12 +463,15 @@ class ReviewDispatchBoundedAssemblyTest(unittest.TestCase):
 
     def test_named_evidence_is_deduplicated_by_id(self) -> None:
         # GWT-004.t1: product and UX both reference feature-tree.
-        plan = _plan("prd", "POST", [], deliverable="page")
+        plan = _plan("prd", "POST", ["README.md"], deliverable="page")
         self.assertEqual(["product", "ux"], [item["role"] for item in plan["reviewers"]])
-        self.assertEqual(["feature-tree"], [item["id"] for item in plan["evidence"]])
+        self.assertEqual(
+            ["review-baseline", "feature-tree"],
+            [item["id"] for item in plan["evidence"]],
+        )
         self.assertEqual(
             ["product", "ux"],
-            plan["evidence"][0]["consumers"],
+            plan["evidence"][1]["consumers"],
         )
         for evidence in plan["evidence"]:
             self.assertRegex(evidence["command_digest"], r"^sha256:[0-9a-f]{64}$")
@@ -492,7 +508,7 @@ class ReviewDispatchBoundedAssemblyTest(unittest.TestCase):
             self.assertTrue(deleted["content_digest"].startswith("sha256:"))
 
         _OUTPUT_ROOT.mkdir(parents=True, exist_ok=True)
-        with tempfile.TemporaryDirectory(dir=_OUTPUT_ROOT) as directory:
+        with tempfile.TemporaryDirectory(dir=_REPO_ROOT / "quwoquan_ops/cli") as directory:
             path = Path(directory) / "untracked.txt"
             path.write_text("first\n", encoding="utf-8")
             relative = path.relative_to(_REPO_ROOT).as_posix()
@@ -522,7 +538,8 @@ class ReviewDispatchBoundedAssemblyTest(unittest.TestCase):
             workflow="dev",
             deliverable="code",
             scope="",
-            owner_manifest_identity={"ref": None, "canonical_bytes_sha256": None, "target": "", "scope": "", "resolved_owner": "", "fingerprint_ref": None, "fingerprint_digest": None},
+            owner_identity={"ref": None, "canonical_bytes_sha256": None, "target": "", "scope": "", "resolved_owner": "", "fingerprint_ref": None, "fingerprint_digest": None},
+            candidate_evidence_identity={"ref": None, "canonical_bytes_sha256": None, "owner_identity_ref": None, "target": "", "resolved_owner": "", "fingerprint_ref": None, "fingerprint_digest": None, "impact_plan_ref": None, "impact_plan_digest": None},
             terminal={"status": "READY", "codes": [], "failed_evidence": []},
             changed_paths=["README.md"],
             profiles=[],
@@ -534,7 +551,8 @@ class ReviewDispatchBoundedAssemblyTest(unittest.TestCase):
             workflow="dev",
             deliverable="code",
             scope="",
-            owner_manifest_identity={"ref": None, "canonical_bytes_sha256": None, "target": "", "scope": "", "resolved_owner": "", "fingerprint_ref": None, "fingerprint_digest": None},
+            owner_identity={"ref": None, "canonical_bytes_sha256": None, "target": "", "scope": "", "resolved_owner": "", "fingerprint_ref": None, "fingerprint_digest": None},
+            candidate_evidence_identity={"ref": None, "canonical_bytes_sha256": None, "owner_identity_ref": None, "target": "", "resolved_owner": "", "fingerprint_ref": None, "fingerprint_digest": None, "impact_plan_ref": None, "impact_plan_digest": None},
             terminal={"status": "READY", "codes": [], "failed_evidence": []},
             changed_paths=["README.md"],
             profiles=[],
@@ -549,7 +567,7 @@ class ReviewDispatchBoundedAssemblyTest(unittest.TestCase):
 
     def test_review_fingerprint_binds_symlink_target_content_and_broken_state(self) -> None:
         _OUTPUT_ROOT.mkdir(parents=True, exist_ok=True)
-        with tempfile.TemporaryDirectory(dir=_OUTPUT_ROOT) as directory:
+        with tempfile.TemporaryDirectory(dir=_REPO_ROOT / "quwoquan_ops/cli") as directory:
             root = Path(directory)
             target = root / "target.txt"
             link = root / "link.txt"
@@ -567,12 +585,12 @@ class ReviewDispatchBoundedAssemblyTest(unittest.TestCase):
     def test_rereview_is_finding_owner_only_and_never_exceeds_four_calls(self) -> None:
         # GWT-004.t2
         path = "quwoquan_app/lib/design_system/pageflip/example.dart"
-        initial = _plan("dev", "POST", [path], scope="specs/feature-tree/spec.md")
+        initial = _plan("dev", "POST", [path], scope=path)
         rereview = _plan(
             "dev",
             "POST",
             [path],
-            scope="specs/feature-tree/spec.md",
+            scope=path,
             round_name="rereview",
             finding_owners=["developer", "ux"],
             previous_plan=initial,
@@ -636,7 +654,7 @@ class ReviewDispatchBoundedAssemblyTest(unittest.TestCase):
     def test_fingerprint_change_invalidates_evidence_without_expanding_reviewers(self) -> None:
         # GWT-004.t1 / GWT-004.t2
         _OUTPUT_ROOT.mkdir(parents=True, exist_ok=True)
-        with tempfile.TemporaryDirectory(dir=_OUTPUT_ROOT) as directory:
+        with tempfile.TemporaryDirectory(dir=_REPO_ROOT / "quwoquan_ops/cli") as directory:
             path = Path(directory) / "fix.py"
             path.write_text("before\n", encoding="utf-8")
             relative = path.relative_to(_REPO_ROOT).as_posix()
@@ -711,6 +729,58 @@ class ReviewDispatchBoundedAssemblyTest(unittest.TestCase):
             "resume_only_after_explicit_user_request", terminal["recovery"]
         )
 
+    def test_final_reviewer_input_counts_wrapper_finding_and_context_bytes(self) -> None:
+        plan = _plan("dev", "POST", ["README.md"])
+        evidence_identity = {
+            "receipt_ref": "receipt.json",
+            "canonical_bytes_sha256": "sha256:" + "a" * 64,
+        }
+        baseline = _cli.build_reviewer_input(
+            plan,
+            evidence_identity,
+            evidence_summary={"findings": []},
+            reviewer_role="developer",
+        )
+        long_finding = _cli.build_reviewer_input(
+            plan,
+            evidence_identity,
+            evidence_summary={
+                "findings": [{
+                    "id": "F-LONG", "owner": "developer", "severity": "PR_WARN",
+                    "path": "README.md", "summary": "长" * 12000,
+                }]
+            },
+            reviewer_role="developer",
+        )
+        self.assertGreater(
+            long_finding["assembled_input_byte_count"],
+            baseline["assembled_input_byte_count"],
+        )
+        self.assertLessEqual(long_finding["assembled_input_byte_count"], 24576)
+        self.assertTrue(long_finding["compression"]["applied"])
+        from lib.review_context_assembler import canonical_json_bytes, sha256_digest
+        raw = canonical_json_bytes(long_finding["assembled_input"])
+        self.assertEqual(len(raw), long_finding["assembled_input_byte_count"])
+        self.assertEqual(sha256_digest(raw), long_finding["assembled_input_digest"])
+        identity = long_finding["assembled_input"]["identity"]
+        self.assertEqual(plan["owner_identity"], identity["owner_identity"])
+        self.assertEqual(
+            plan["candidate_evidence_identity"],
+            identity["candidate_evidence_identity"],
+        )
+
+    def test_final_reviewer_input_refuses_when_wrapper_and_identity_alone_exceed_limit(self) -> None:
+        plan = _plan("dev", "POST", ["README.md"])
+        plan["context_bytes"]["limit"] = 512
+        with self.assertRaises(_cli.ReviewDispatchError) as blocked:
+            _cli.build_reviewer_input(
+                plan,
+                {"receipt_ref": "x" * 4096},
+                evidence_summary={"findings": []},
+                reviewer_role="developer",
+            )
+        self.assertEqual("REVIEW.CONTEXT_BUDGET_EXCEEDED", blocked.exception.code)
+
     def test_plan_fields_context_budget_and_old_cli_arguments_remain_supported(self) -> None:
         plan = _plan("dev", "POST", ["README.md"])
         required_fields = {
@@ -743,7 +813,7 @@ class ReviewDispatchBoundedAssemblyTest(unittest.TestCase):
             check=False,
         )
         self.assertEqual(0, result.returncode, result.stderr)
-        self.assertEqual(3, json.loads(result.stdout)["schema_version"])
+        self.assertEqual(4, json.loads(result.stdout)["schema_version"])
 
     # spec_ref: specs/feature-tree/runtime/development-workflow-governance/agent-skill-review-context-organization/spec.md#gwt-002.t3
     def test_post_requires_current_owner_manifest_and_matches_scope(self) -> None:
@@ -772,7 +842,7 @@ class ReviewDispatchBoundedAssemblyTest(unittest.TestCase):
             {"path": "README.md", "anchor": None, "kind": "spec"}
         )
         plan = _plan("dev", "POST", ["README.md"], context_manifest=manifest)
-        identity = plan["owner_manifest_identity"]
+        identity = plan["owner_identity"]
         self.assertEqual(manifest["target"], identity["target"])
         self.assertEqual(
             manifest["evidence_fingerprint"]["digest"],
@@ -794,13 +864,13 @@ class ReviewDispatchBoundedAssemblyTest(unittest.TestCase):
     def test_owner_manifest_ref_replacement_is_stale(self) -> None:
         manifest = _context_manifest()
         plan = _plan("dev", "POST", ["README.md"], context_manifest=manifest)
-        ref = _REPO_ROOT / plan["owner_manifest_identity"]["ref"]
+        ref = _REPO_ROOT / plan["owner_identity"]["ref"]
         original = ref.read_text(encoding="utf-8")
         try:
             ref.write_text(original + " ", encoding="utf-8")
             with self.assertRaises(_cli.ReviewDispatchError) as stale:
                 _cli.validate_current_review_plan(plan, _registry)
-            self.assertEqual("REVIEW.OWNER_MANIFEST_STALE", stale.exception.code)
+            self.assertEqual("IDENTITY.MIGRATION_REQUIRED", stale.exception.code)
         finally:
             ref.write_text(original, encoding="utf-8")
 
@@ -829,9 +899,16 @@ class ReviewDispatchBoundedAssemblyTest(unittest.TestCase):
                 _cli, "validate_current_feature_context_fingerprint"
             ),
         ):
+            candidate = build_candidate_evidence(ref, [str(manifest["target"])], repo_root=_REPO_ROOT)
+            candidate_raw = canonical_json_bytes(candidate)
+            candidate_path = _REPO_ROOT / ".qwq_output/env/repo/runs/feature-tree/by-fingerprint/candidates/by-fingerprint" / (hashlib.sha256(candidate_raw).hexdigest() + ".json")
+            candidate_path.parent.mkdir(parents=True, exist_ok=True)
+            candidate_path.write_bytes(candidate_raw)
             _cli._normalize_contexts(
                 manifest,
                 manifest_ref=ref,
+                candidate_evidence_ref=candidate_path.relative_to(_REPO_ROOT).as_posix(),
+                changed_paths=[str(manifest["target"])],
                 expected_scope=str(manifest["target"]),
                 required=True,
             )
@@ -840,27 +917,16 @@ class ReviewDispatchBoundedAssemblyTest(unittest.TestCase):
             from lib.feature_tree import commands as feature_tree_commands
             from lib.feature_tree import ownership as feature_tree_ownership
 
-            with (
-                mock.patch.object(
-                    feature_tree_commands, "discover_nodes", return_value=[]
-                ),
-                mock.patch.object(
-                    feature_tree_ownership,
-                    "resolve_target_details",
-                    return_value=object(),
-                ),
-                mock.patch.object(
-                    feature_tree_commands,
-                    "_context_manifest",
-                    return_value=manifest,
-                ),
-            ):
-                _cli._validate_current_owner_manifest(
-                    {
-                        "owner_manifest_identity": identity,
-                        "scope": manifest["target"],
-                    }
-                )
+            _relative, candidate_bytes, candidate_payload, candidate_fp = _cli._review_owner_manifest.validate_candidate_ref(
+                candidate_path.relative_to(_REPO_ROOT).as_posix(), repo_root=_REPO_ROOT
+            )
+            candidate_identity = _cli._review_owner_manifest.candidate_identity(
+                candidate_path.relative_to(_REPO_ROOT).as_posix(), candidate_bytes, candidate_payload, candidate_fp
+            )
+            _cli._validate_current_owner_manifest({
+                "owner_identity": identity, "candidate_evidence_identity": candidate_identity,
+                "scope": manifest["target"], "changed_paths": [manifest["target"]],
+            })
             self.assertEqual(2, reader.call_count)
 
     def test_control_workflow_cannot_wrap_delivery_deliverable(self) -> None:

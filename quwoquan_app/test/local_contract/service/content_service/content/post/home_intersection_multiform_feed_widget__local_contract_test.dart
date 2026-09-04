@@ -48,15 +48,19 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
         IntersectionRepresentativeActor,
         IntersectionTarget,
         IntersectionTextSpan,
-        IntersectionVisual;
+        IntersectionVisual,
+        MediaDeliveryAccessMode,
+        PostMediaItem;
 import 'package:quwoquan_cloud_contracts/generated/ops_contracts.dart' as ops;
 import 'package:quwoquan_runtime_errors/runtime_errors.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
 import '../../../../../support/service/content_service/content/content_behavior_fact/recording_content_behavior_repository.dart';
 import '../../../../../support/service/content_service/content/post/content_facet_overrides.dart';
 import '../../../../../support/service/content_service/content/post/content_post_test_builder.dart';
 import '../../../../../support/service/content_service/content/post/content_post_typed_doubles.dart';
 import '../../../../../support/runtime/cloud_boundary_test_scope.dart';
+
 import 'package:http/testing.dart';
 import 'package:quwoquan_app/runtime/transport/http/cloud_http_client.dart';
 import 'package:quwoquan_app/service/content_service/media/original_access_quota/presentation/media_delivery_image.dart';
@@ -364,6 +368,9 @@ ContentPostViewData _microPost({
     authorId: 'user_demo',
     displayName: '小趣用户',
     avatarUrl: avatarUrl,
+    authorAvatarAccessMode: avatarUrl.trim().isEmpty
+        ? null
+        : MediaDeliveryAccessMode.public,
     authorBackgroundUrl: null,
     authorRoleLabel: '旅行创作者',
     authorIdentityTags: const <String>['摄影', '川西'],
@@ -378,6 +385,20 @@ ContentPostViewData _microPost({
     body: '川西雪山和校园摄影路线',
     imageUrls: imageUrls,
     videoUrl: videoUrl,
+    mediaItems: <PostMediaItem>[
+      for (final url in imageUrls)
+        PostMediaItem(
+          kind: 'image',
+          url: url,
+          accessMode: MediaDeliveryAccessMode.public,
+        ),
+      if (videoUrl != null && !imageUrls.contains(videoUrl))
+        PostMediaItem(
+          kind: 'video',
+          url: videoUrl,
+          accessMode: MediaDeliveryAccessMode.public,
+        ),
+    ],
     durationMs: null,
     intersectionReasons: <IntersectionReason>[effectiveReason],
   );
@@ -409,6 +430,14 @@ ContentPostViewData _photoPost({
     body: '不同素材宽高比测试',
     coverUrl: imageUrls.first,
     imageUrls: imageUrls,
+    mediaItems: <PostMediaItem>[
+      for (final url in imageUrls)
+        PostMediaItem(
+          kind: 'image',
+          url: url,
+          accessMode: MediaDeliveryAccessMode.public,
+        ),
+    ],
     width: width,
     height: height,
     likeCount: 1,
@@ -437,8 +466,7 @@ ContentPostViewData _videoPost({required int width, required int height}) {
     authorIdentityTags: const <String>['影像'],
     authorVerified: false,
     body: '视频画面下方的配文',
-    videoUrl:
-        'media/video/s/video-primary-0001/post/video-content-0001/v1/source.mp4',
+    videoUrl: 'media/video/s/video-primary-0001/post/video-content-0001/v1/source.mp4',
     thumbnailUrl:
         'media/image/s/archived-image/post/fixture_video_001/v1/cover.png',
     coverUrl:
@@ -446,6 +474,16 @@ ContentPostViewData _videoPost({required int width, required int height}) {
     width: width,
     height: height,
     durationMs: 65000,
+    mediaItems: const <PostMediaItem>[
+      PostMediaItem(
+        kind: 'video',
+        url: 'media/video/s/video-primary-0001/post/video-content-0001/v1/source.mp4',
+        accessMode: MediaDeliveryAccessMode.public,
+        coverUrl:
+            'media/image/s/archived-image/post/fixture_video_001/v1/cover.png',
+        durationMs: 65000,
+      ),
+    ],
     likeCount: 1,
     commentCount: 2,
     shareCount: 3,
@@ -729,8 +767,7 @@ void main() {
     await tester.pumpWidget(
       _buildFeed(
         _microPost(
-          avatarUrl:
-              'media/avatar/s/archived-avatar/circle/fixture_circle_city/v1/avatar.png',
+          avatarUrl: 'media/avatar/s/archived-avatar/circle/fixture_circle_city/v1/avatar.png',
         ),
       ),
     );
@@ -1783,8 +1820,7 @@ void main() {
       _buildFeed(
         _articleLayoutPost(
           id: 'article_text_long',
-          bodyValue:
-              '这是一段无图长文摘要，用来验证首页文章卡在超过三行时才展示全文入口。它继续补充场景、人物和路线，让文本在手机宽度下自然溢出第三行，并且点击整卡或全文入口都进入同一篇文章浏览器。',
+          bodyValue: '这是一段无图长文摘要，用来验证首页文章卡在超过三行时才展示全文入口。它继续补充场景、人物和路线，让文本在手机宽度下自然溢出第三行，并且点击整卡或全文入口都进入同一篇文章浏览器。',
         ),
       ),
     );
@@ -1803,8 +1839,7 @@ void main() {
         _articleLayoutPost(
           id: 'article_side',
           bodyValue: '短图文保持左文右图，快速扫读也能看到封面。',
-          coverUrlValue:
-              'media/image/s/archived-image/post/fixture_article_001/v1/cover.png',
+          coverUrlValue: 'media/image/s/archived-image/post/fixture_article_001/v1/cover.png',
         ),
       ),
     );
@@ -1844,10 +1879,8 @@ void main() {
       _buildFeed(
         _articleLayoutPost(
           id: 'article_top',
-          bodyValue:
-              '有图长文在摘要较长时采用上文下图，让图片承担情绪收束，正文先交代推荐理由和阅读入口。这里继续补充一段描述，让布局明确进入上文下图状态。',
-          coverUrlValue:
-              'media/image/s/archived-image/post/fixture_article_001/v1/image-2.png',
+          bodyValue: '有图长文在摘要较长时采用上文下图，让图片承担情绪收束，正文先交代推荐理由和阅读入口。这里继续补充一段描述，让布局明确进入上文下图状态。',
+          coverUrlValue: 'media/image/s/archived-image/post/fixture_article_001/v1/image-2.png',
         ),
       ),
     );
@@ -1867,8 +1900,7 @@ void main() {
       _buildFeed(
         _articleLayoutPost(
           id: 'article_open',
-          bodyValue:
-              '这是一段用于点击测试的长文摘要，用来确保全文入口出现。它继续补充场景、人物和路线，让文本在手机宽度下自然溢出第三行，并且点击整卡或全文入口都进入同一篇文章浏览器。',
+          bodyValue: '这是一段用于点击测试的长文摘要，用来确保全文入口出现。它继续补充场景、人物和路线，让文本在手机宽度下自然溢出第三行，并且点击整卡或全文入口都进入同一篇文章浏览器。',
         ),
         onPostTap: (post, _, {feedPosts}) => opened.add(post),
       ),
@@ -2120,7 +2152,8 @@ ContentPostViewData _wishlistAnchoredPost() {
 }
 
 /// 对象级 typed double：对象交集恒为空（诚实空态分支）。
-final class _EmptyObjectIntersectionRepository implements IntersectionRepository {
+final class _EmptyObjectIntersectionRepository
+    implements IntersectionRepository {
   @override
   Future<IntersectionInboxSummary> getMyIntersectionSummary() {
     throw StateError('该 contract 不应读取交集收件箱摘要');
@@ -2230,8 +2263,7 @@ class _SinglePostFeedMapNotifier extends DiscoveryFeedMapNotifier {
         DiscoveryFeedState(
           items: <ContentPostViewData>[post],
           feedRequestId: 'frq_local_contract_single_post',
-          policyDigest:
-              'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+          policyDigest: 'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
         ),
       ),
     };

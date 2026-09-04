@@ -313,7 +313,7 @@ HISTORICAL_STITCHING_LABEL_RE = re.compile(
 COPIED_NUMBERED_FRAGMENT_RE = re.compile(
     r"(?:^|[；;])\s*\d+[.、)]\s*[^；;]+(?:[；;]\s*\d+[.、)]\s*[^；;]+){1,}"
 )
-MIXED_LEGACY_HEADING_RE = re.compile(
+TIMELINE_HEADING_LABEL_RE = re.compile(
     r"(?:现状|旧(?:版|文档|接口|实现)|迁移(?:记录|中间态|策略)|目标态)\s*[：:]"
 )
 CURRENT_GAP_TOKEN_RE = re.compile(
@@ -323,7 +323,7 @@ CURRENT_GAP_TOKEN_RE = re.compile(
     r"无法(?:通过|完成|验证|提供|交付|形成|支持)|缺(?:少|失|乏)|缺口|"
     r"(?:形成|构成).{0,160}(?:启动环|循环依赖|闭环阻断))"
 )
-LEGACY_GAP_PREFIX_RE = re.compile(
+FALLBACK_GAP_PREFIX_RE = re.compile(
     r"^(?:尚|缺|未|仍|当前|存在|无法|不能|需要|依赖|缺口)"
 )
 GAP_SUBJECT_RE = re.compile(
@@ -383,7 +383,7 @@ def capability_gap_names_current_gap(value: str) -> bool:
         ):
             continue
         return True
-    if not LEGACY_GAP_PREFIX_RE.match(normalized):
+    if not FALLBACK_GAP_PREFIX_RE.match(normalized):
         return False
     if SUCCESS_ONLY_RE.search(normalized):
         return False
@@ -408,7 +408,7 @@ def looks_like_mechanical_history_stitching(raw: str) -> bool:
         return True
     mixed_headings = {
         match.group(0).rstrip("：:").lower()
-        for match in MIXED_LEGACY_HEADING_RE.finditer(body)
+        for match in TIMELINE_HEADING_LABEL_RE.finditer(body)
     }
     return len(mixed_headings) >= 2
 
@@ -489,8 +489,16 @@ def validate_content(review: Review, text: str) -> None:
 
     if "Design" in review.kind:
         normalized_lines: dict[str, int] = {}
-        for raw in text.splitlines():
+        raw_lines = text.splitlines()
+        for index, raw in enumerate(raw_lines):
             line = raw.strip()
+            next_line = raw_lines[index + 1].strip() if index + 1 < len(raw_lines) else ""
+            table_separator = re.fullmatch(r"\|(?:\s*:?-+:?\s*\|)+", line)
+            table_header = line.startswith("|") and re.fullmatch(
+                r"\|(?:\s*:?-+:?\s*\|)+", next_line
+            )
+            if table_header or table_separator:
+                continue
             if len(line) < 20 or line.startswith(
                 (
                     "#",

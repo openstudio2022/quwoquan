@@ -160,11 +160,13 @@ void main() {
       expect(harness.resolveAttempts, 0);
     });
 
-    testWidgets('具名 legacyPublic adapter：显式适配为 public 后走公开委托', (tester) async {
+    testWidgets('具名 previousPublic adapter：显式适配为 public 后走公开委托', (
+      tester,
+    ) async {
       final harness = _Harness(_StallingOriginalAccessGateway());
       await tester.pumpWidget(
         harness.wrap(
-          const MediaDeliveryBinding.legacyPublic(
+          const MediaDeliveryBinding.previousPublic(
             publicUrl: 'https://media.example.test/public/legacy-cover.jpg',
           ),
         ),
