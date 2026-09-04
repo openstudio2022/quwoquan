@@ -15,7 +15,11 @@ func TestNilPostModerationCaseIdentityAccessorsReturnZeroValues(t *testing.T) {
 	if caseItem.ID() != "" ||
 		caseItem.Version() != 0 ||
 		caseItem.PostID() != "" ||
-		caseItem.PostVersion() != 0 {
+		caseItem.PostVersion() != 0 ||
+		caseItem.ContentDigest() != "" ||
+		caseItem.Status() != "" ||
+		caseItem.ReviewerID() != "" ||
+		caseItem.Snapshot() != (moderationmodel.Snapshot{}) {
 		t.Fatal("nil moderation case identity accessors must return zero values")
 	}
 }

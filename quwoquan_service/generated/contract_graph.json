@@ -115319,7 +115319,7 @@
           },
           {
             "path": "quwoquan_service/services/content-service/tests/local_contract/trust_safety/post_moderation_case/domain/model/post_moderation_case__local_contract_test.go",
-            "sha256": "f92f08a4abffbe4f73f960caa2ce6c2f350cb49b88724b995d2f2768e5b777d2"
+            "sha256": "389b597a121dbc5f6d12d387c983883eafbb74b6aa4861494d3b12244ad9fc5c"
           }
         ],
         "apiIntegration": [
