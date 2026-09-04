@@ -115316,6 +115316,10 @@
           {
             "path": "quwoquan_service/services/content-service/tests/local_contract/trust_safety/post_moderation_case/application/submission_case_opener__functional__local_contract_test.go",
             "sha256": "6462cd3c8580cdee2a6d5c758a4099555df9063c016b78259b6a2b24fdff2b38"
+          },
+          {
+            "path": "quwoquan_service/services/content-service/tests/local_contract/trust_safety/post_moderation_case/domain/model/post_moderation_case__local_contract_test.go",
+            "sha256": "f92f08a4abffbe4f73f960caa2ce6c2f350cb49b88724b995d2f2768e5b777d2"
           }
         ],
         "apiIntegration": [

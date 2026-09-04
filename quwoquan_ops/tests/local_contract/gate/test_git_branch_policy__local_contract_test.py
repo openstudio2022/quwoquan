@@ -250,6 +250,8 @@ def test_default_mode_still_rejects_stale_undeclared_refs(
 ) -> None:
     import quwoquan_ops.gate.verify_git_branch_policy as module
 
+    monkeypatch.delenv("GITHUB_ACTIONS", raising=False)
+
     def fake_run_git(*args: str) -> list[str]:
         if args == ("for-each-ref", "--format=%(refname:short)", "refs/heads"):
             return ["dev1.0", "lane/small-fix", "stale/local"]
@@ -579,6 +581,7 @@ def test_cli_separates_policy_and_git_authority_failures_without_traceback(
 ) -> None:
     import quwoquan_ops.gate.verify_git_branch_policy as module
 
+    monkeypatch.delenv("GITHUB_ACTIONS", raising=False)
     malformed = tmp_path / "branch-policy.yaml"
     malformed.write_text("allowed_local_branches: [", encoding="utf-8")
     actual_load_policy = module.load_policy
@@ -635,6 +638,7 @@ def test_cli_classifies_git_unicode_decode_failure_as_authority_unavailable(
 ) -> None:
     import quwoquan_ops.gate.verify_git_branch_policy as module
 
+    monkeypatch.delenv("GITHUB_ACTIONS", raising=False)
     decode_error = UnicodeDecodeError(
         "utf-8", b"\xff", 0, 1, "invalid start byte",
     )

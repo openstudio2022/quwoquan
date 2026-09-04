@@ -1,12 +1,12 @@
 {
   "generator": "codegen_graphql_app_client",
   "registrySha256": "42781cab7019d1a4d469d8a9e227d7e51a794219d05bff12cbb268a2d59fdd69",
-  "contractGraphSha256": "569af3dbf53fd87d5b5ae2ed6c0884ce37907db0b413b8f54bd21356e0284e11",
-  "appLockSha256": "b588472756a5e08ca2d02667726482bee08a146c7a5e96c0470e61e9ecd92272",
+  "contractGraphSha256": "11b123feb4f46fb4ad198ea92f24917f60217ee122cf53e07d0dd9cd62e71eb6",
+  "appLockSha256": "7107f37975dd567d869e31858ff0408af2318a25c587fd75d2f2dba258274f3b",
   "outputs": [
     {
       "path": "lib/runtime/transport/graphql_read/generated/persisted_graphql_queries.g.dart",
-      "sha256": "1b8bb383301e1eade621905946b57c526e0c737f9f7e02885145d33ab1d008c6",
+      "sha256": "bfd5cea8bb883b59801c55388c9707f4441a29537e5cdb250aec1d5131df7c14",
       "bytes": 18538
     }
   ]
