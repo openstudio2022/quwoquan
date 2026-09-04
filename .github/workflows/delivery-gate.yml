@@ -534,15 +534,15 @@ jobs:
     # packaging also builds OCI images. Keep both on the controlled macOS runner
     # so one physical Flutter/CocoaPods/Docker toolchain owns the real bundle.
     runs-on: [self-hosted, macOS, ARM64]
-    # 构建期固化恢复后，三个环境各自是一次真实镜像构建（环境固化输入进了
-    # buildInputDigest 闭包），不再是 alpha 之后两次廉价复用：
-    # 事故前 820+126+119 秒，恢复后 884+461+426 秒，串行装不进门禁的
-    # 端到端硬阀。三者互不共享中间态，按 env 并行后这条边只剩最长的一个环境。
+    # 三个环境仍各自形成独立 matrix 证据，但它们落在同一台物理主机，且
+    # App dependency sync 持有 host-wide Flutter/CocoaPods/Gradle lock。
+    # 因此 matrix 必须在该主机上串行，避免兄弟作业以 lock timeout 互相击穿。
     timeout-minutes: 30
     needs: topology_regression
     if: ${{ needs.topology_regression.outputs.service == 'true' }}
     strategy:
       fail-fast: false
+      max-parallel: 1
       matrix:
         packaging_env: [alpha, beta, gamma]
     outputs:
@@ -805,6 +805,8 @@ jobs:
             --archive-url "$FLUTTER_ARCHIVE_URL" \
             --cache-path "$FLUTTER_CACHE_PATH" \
             --sha256 "$FLUTTER_SHA256"
+      - name: Materialize pinned Flutter Gradle wrappers
+        run: python3 quwoquan_ops/ci/setup_flutter_sdk.py materialize-gradle-wrappers
       - name: Resolve locked App dependencies
         working-directory: quwoquan_app
         run: flutter pub get --enforce-lockfile
@@ -915,8 +917,13 @@ jobs:
         working-directory: quwoquan_app
         run: flutter pub get --enforce-lockfile
       - name: Gate (quwoquan_app canonical coverage)
+        # The collector owns a 1800s hard guard. Keep the outer step explicitly
+        # above it so the persistent runner cannot reapply its 300s command
+        # default; leave 20 minutes for gate prelude, lock waits and cleanup.
+        timeout-minutes: 50
         env:
           GATE_APP_PHASE: coverage
+          FLUTTER_TEST_GUARD_TIMEOUT_SECONDS: "1800"
         run: bash quwoquan_ops/gate/gate_repo.sh --scope app
       - id: finish
         if: always()

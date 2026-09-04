@@ -237,6 +237,10 @@ def test_delivery_gate_keeps_cross_platform_jobs_on_linux_and_visual_phases_on_c
         assert "runs-on: [self-hosted, macOS, ARM64]" in job_body
     packaging = _job_body(delivery, "quwoquan_service_packaging")
     assert "runs-on: [self-hosted, macOS, ARM64]" in packaging
+    # 三格匹配同一台物理 runner，并共享 host-wide App dependency sync lock；
+    # matrix 保留三份独立证据，但不得在该主机上互相争锁。
+    assert "packaging_env: [alpha, beta, gamma]" in packaging
+    assert "max-parallel: 1" in packaging
     assert "runs-on: macos-latest" not in delivery
 
 

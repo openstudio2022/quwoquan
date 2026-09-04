@@ -846,6 +846,28 @@ def test_canonical_coverage_uses_the_serial_golden_platform() -> None:
     assert "GATE_APP_PHASE: coverage" in coverage
 
 
+def test_app_coverage_step_budget_exceeds_the_collector_guard() -> None:
+    workflow = (ROOT / ".github/workflows/delivery-gate.yml").read_text(
+        encoding="utf-8"
+    )
+    jobs = yaml.safe_load(workflow)["jobs"]
+    coverage = jobs["quwoquan_app_coverage"]
+    step = next(
+        item
+        for item in coverage["steps"]
+        if item.get("name") == "Gate (quwoquan_app canonical coverage)"
+    )
+    collector_seconds = int(step["env"]["FLUTTER_TEST_GUARD_TIMEOUT_SECONDS"])
+    step_seconds = int(step["timeout-minutes"]) * 60
+    job_seconds = int(coverage["timeout-minutes"]) * 60
+
+    assert collector_seconds == 1800
+    assert step_seconds == 3000
+    assert collector_seconds < step_seconds < job_seconds
+    assert step_seconds - collector_seconds >= 1200
+    assert step["run"] == "bash quwoquan_ops/gate/gate_repo.sh --scope app"
+
+
 def test_app_shard_zero_owns_native_dependencies_and_shared_contracts() -> None:
     workflow = (ROOT / ".github/workflows/delivery-gate.yml").read_text(encoding="utf-8")
     job_start = workflow.index("  quwoquan_app_tests:\n")

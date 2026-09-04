@@ -202,3 +202,106 @@ def test_flutter_release_resolution_honors_repository_pinned_version() -> None:
         "sha256": "b" * 64,
         "version": "3.44.3",
     }
+
+
+def test_app_test_shards_materialize_sealed_wrappers_after_sdk_install() -> None:
+    workflow = (ROOT / ".github/workflows/delivery-gate.yml").read_text(
+        encoding="utf-8"
+    )
+    start = workflow.index("  quwoquan_app_tests:\n")
+    end = workflow.index("\n  quwoquan_app_serial:\n", start)
+    app_tests = workflow[start:end]
+    materialize = (
+        "python3 quwoquan_ops/ci/setup_flutter_sdk.py "
+        "materialize-gradle-wrappers"
+    )
+
+    assert app_tests.count(materialize) == 1
+    assert (
+        app_tests.index("Install verified Flutter SDK")
+        < app_tests.index(materialize)
+    )
+    assert app_tests.index(materialize) < app_tests.index(
+        "Resolve locked App dependencies"
+    )
+    assert app_tests.index(materialize) < app_tests.index(
+        "Gate (quwoquan_app tests shard)"
+    )
+
+
+def test_gradle_wrapper_bootstrap_delegates_to_pinned_sealed_materializer(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    setup = _load_setup_module()
+    project = tmp_path / "repo"
+    for relative in (
+        "quwoquan_app/android",
+        "quwoquan_app/test_host/patrol/android",
+    ):
+        (project / relative).mkdir(parents=True)
+    flutter_identity = {
+        "executable": "/pinned/flutter/bin/flutter",
+        "flutterVersion": "3.47.0",
+        "commandResolutionDigest": "sha256:" + "a" * 64,
+    }
+    calls: list[tuple[Path, list[Path], object]] = []
+
+    class FacadeError(Exception):
+        pass
+
+    monkeypatch.setattr(
+        setup,
+        "_gradle_wrapper_tools",
+        lambda: (
+            FacadeError,
+            lambda environment: flutter_identity,
+            lambda root: (
+                setup.argparse.Namespace(
+                    gradle_root=root / "quwoquan_app/android"
+                ),
+                setup.argparse.Namespace(
+                    gradle_root=(
+                        root / "quwoquan_app/test_host/patrol/android"
+                    )
+                ),
+            ),
+            lambda root, roots, identity: calls.append((root, roots, identity))
+            or ({}, {}),
+        ),
+    )
+
+    result = setup.materialize_gradle_wrappers(
+        setup.argparse.Namespace(project_root=str(project))
+    )
+
+    assert result == 0
+    assert calls == [
+        (
+            project,
+            [
+                project / "quwoquan_app/android",
+                project / "quwoquan_app/test_host/patrol/android",
+            ],
+            flutter_identity,
+        )
+    ]
+
+
+def test_gradle_wrapper_subcommand_does_not_require_tool_cache(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    setup = _load_setup_module()
+    monkeypatch.delenv("RUNNER_TOOL_CACHE", raising=False)
+    monkeypatch.setattr(setup, "materialize_gradle_wrappers", lambda _args: 0)
+    monkeypatch.setattr(
+        setup.sys,
+        "argv",
+        [
+            "setup_flutter_sdk.py",
+            "materialize-gradle-wrappers",
+            "--project-root",
+            str(ROOT),
+        ],
+    )
+
+    assert setup.main() == 0
