@@ -778,7 +778,7 @@ class _NoNetworkHttpOverrides extends HttpOverrides {}
 
 final class _AuthenticatedHomepageSession extends AuthSessionController {
   @override
-  AuthSessionState build() => const AuthSessionState(
+  AuthSessionState build() => AuthSessionState(
     status: AuthSessionStatus.authenticated,
     accessToken: ['homepage', 'widget', 'access'].join('-'),
     refreshToken: ['homepage', 'widget', 'refresh'].join('-'),
