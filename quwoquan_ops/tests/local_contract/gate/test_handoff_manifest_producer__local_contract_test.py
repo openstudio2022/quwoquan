@@ -105,7 +105,16 @@ class HandoffManifestProducerTest(unittest.TestCase):
                 termination_signal=None,
             )
 
-        with mock.patch.object(evidence_runner, "run_command", side_effect=execute):
+        source = evidence_runner._workspace_source_classification(ROOT)
+        source["repository_clean"] = True
+        with (
+            mock.patch.object(evidence_runner, "run_command", side_effect=execute),
+            mock.patch.object(
+                evidence_runner,
+                "_workspace_source_classification",
+                return_value=source,
+            ),
+        ):
             plan = review_dispatch.build_plan(
                 registry,
                 "dev",
@@ -283,11 +292,14 @@ class HandoffManifestProducerTest(unittest.TestCase):
 
     def test_same_head_dirty_artifact_change_rejects_old_handoff(self) -> None:
         data, _, artifact, _, _ = self._fixture()
+        path = producer.produce(data)
+        payload_path = path.parent / "payload.json"
         artifact.write_text("changed\n", encoding="utf-8")
+        payload = json.loads(payload_path.read_text(encoding="utf-8"))
         with self.assertRaisesRegex(
-            producer.HandoffManifestError, "REVIEW.EVIDENCE_FEEDBACK_ONLY"
+            handoff_consumer.HandoffConsumerError, "FINGERPRINT_CHANGED"
         ):
-            producer.produce(data)
+            handoff_consumer.validate_handoff_payload(payload)
 
 
     def test_rejects_evidence_ref_replacement_and_symlink_drift(self) -> None:
