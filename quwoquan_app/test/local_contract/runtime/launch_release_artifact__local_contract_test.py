@@ -286,7 +286,7 @@ class LaunchReleaseArtifactTest(unittest.TestCase):
                 side_effect=ValueError("expectation evidence digest drifted"),
             ), self.assertRaisesRegex(
                 ValueError,
-                "APP.LAUNCH.release_artifact_invalid: build receipt dependency "
+                "APP.LAUNCH.prod_artifact_invalid: build receipt dependency "
                 "projection invalid: expectation evidence digest drifted",
             ):
                 _load_exact_inputs(module, manifest_path, handoff_path)
@@ -301,7 +301,7 @@ class LaunchReleaseArtifactTest(unittest.TestCase):
             manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
             with self.assertRaisesRegex(
                 ValueError,
-                "APP.LAUNCH.release_artifact_invalid",
+                "APP.LAUNCH.prod_artifact_invalid",
             ):
                 _load_exact_inputs(module, manifest_path, handoff_path)
 

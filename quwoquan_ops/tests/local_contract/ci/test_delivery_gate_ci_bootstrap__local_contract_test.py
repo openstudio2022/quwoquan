@@ -486,7 +486,7 @@ def test_delivery_runs_service_core_and_packaging_as_parallel_siblings() -> None
     assert "needs: topology_regression" in core
     assert "needs: topology_regression" in packaging
     assert "timeout-minutes: 40" in core
-    assert "timeout-minutes: 30" in packaging
+    assert "timeout-minutes: 40" in packaging
     assert "GATE_SERVICE_PHASE: core" in core
     assert "GATE_SERVICE_PHASE: packaging" in packaging
     assert "设置 Go" not in packaging
@@ -784,7 +784,7 @@ def test_delivery_gate_has_bounded_jobs() -> None:
         "common_governance": 15,
         "topology_regression": 10,
         "quwoquan_service": 40,
-        "quwoquan_service_packaging": 30,
+        "quwoquan_service_packaging": 40,
         "search_contract_smoke": 10,
         "quwoquan_app_static": 20,
         "quwoquan_app_tests": 40,

@@ -91,7 +91,11 @@ def test_dependency_sync_timeout_is_bounded_typed_and_preserves_diagnostics(
             command,
             timeout=kwargs["timeout"],
             output=b"partial stackctl stdout\n",
-            stderr=b"app-dependency-sync warning\nsecond diagnostic line\n",
+            stderr=(
+                b"[app-dependency-sync] phase=initialization state=running\n"
+                b"[app-dependency-sync] phase=gradle-online-resolution state=running\n"
+                b"process terminated during bounded cleanup\n"
+            ),
         )
 
     monkeypatch.setattr(subject, "run_managed_subprocess", timeout_run)
@@ -101,7 +105,8 @@ def test_dependency_sync_timeout_is_bounded_typed_and_preserves_diagnostics(
         subject.PipelinePreparationError,
         match=(
             r"^APP\.PIPELINE\.dependency_sync_timeout: "
-            r"timeoutSeconds=1200; diagnostic=app-dependency-sync warning$"
+            r"timeoutSeconds=1500; latestDiagnostic=\[app-dependency-sync\] "
+            r"phase=gradle-online-resolution state=running$"
         ),
     ):
         subject._run_dependency_sync(
@@ -122,7 +127,9 @@ def test_dependency_sync_timeout_is_bounded_typed_and_preserves_diagnostics(
     assert result_path.read_text(encoding="utf-8") == "partial stackctl stdout\n"
     stderr_path = result_path.with_suffix(".stderr.log")
     assert stderr_path.read_text(encoding="utf-8") == (
-        "app-dependency-sync warning\nsecond diagnostic line\n"
+        "[app-dependency-sync] phase=initialization state=running\n"
+        "[app-dependency-sync] phase=gradle-online-resolution state=running\n"
+        "process terminated during bounded cleanup\n"
     )
     assert result_path.stat().st_mode & 0o777 == 0o600
     assert stderr_path.stat().st_mode & 0o777 == 0o600
@@ -310,7 +317,13 @@ def test_hosted_workflow_passes_exact_fresh_outputs_to_every_package() -> None:
         Loader=yaml.BaseLoader,
     )
     delivery_packaging = delivery_document["jobs"]["quwoquan_service_packaging"]
-    assert int(delivery_packaging["timeout-minutes"]) == 30
+    assert int(delivery_packaging["timeout-minutes"]) == 40
+    strict_inputs = next(
+        step
+        for step in delivery_packaging["steps"]
+        if step.get("id") == "strict_inputs"
+    )
+    assert int(strict_inputs["timeout-minutes"]) == 30
     assert subject._DEPENDENCY_SYNC_TIMEOUT_SECONDS < min(
         int(product["timeout-minutes"]),
         int(delivery_packaging["timeout-minutes"]),

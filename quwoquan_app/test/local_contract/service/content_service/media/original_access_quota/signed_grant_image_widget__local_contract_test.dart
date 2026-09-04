@@ -444,6 +444,145 @@ void main() {
       expect(image.imageUrl, contains('sign=sig-recovered'));
     });
 
+    testWidgets('组件销毁后忽略首次兑换的迟到成功与失败', (tester) async {
+      for (final fails in <bool>[false, true]) {
+        final pending = Completer<MediaOriginalAccessGrant>();
+        final gateway = _ScriptedOriginalAccessGateway((_) => pending.future);
+        await tester.pumpWidget(
+          _wrap(
+            const SignedGrantImage(
+              assetId: 'asset-1',
+              kind: MediaDeliveryKind.image,
+              accessMode: MediaDeliveryAccessMode.signedGrant,
+            ),
+            sut: coordinator(gateway),
+          ),
+        );
+        await tester.pumpWidget(const SizedBox.shrink());
+        if (fails) {
+          pending.completeError(StateError('late grant failure'));
+        } else {
+          pending.complete(_grant());
+        }
+        await tester.pump();
+        expect(tester.takeException(), isNull);
+      }
+    });
+
+    testWidgets('销毁后保留的字节失败回调不再触发换签', (tester) async {
+      final gateway = _ScriptedOriginalAccessGateway((_) async => _grant());
+      await tester.pumpWidget(
+        _wrap(
+          const SignedGrantImage(
+            assetId: 'asset-1',
+            kind: MediaDeliveryKind.image,
+            accessMode: MediaDeliveryAccessMode.signedGrant,
+          ),
+          sut: coordinator(gateway),
+        ),
+      );
+      await tester.pump();
+      await tester.pump();
+      final callback = tester
+          .widget<AppCachedNetworkImage>(find.byType(AppCachedNetworkImage))
+          .onLoadFailed!;
+      await tester.pumpWidget(const SizedBox.shrink());
+      callback(StateError('late byte failure'));
+      await tester.pump();
+      expect(gateway.commands, hasLength(1));
+    });
+
+    testWidgets('旧绑定的字节失败 microtask 不得覆盖新代际', (tester) async {
+      final gateway = _ScriptedOriginalAccessGateway((_) async => _grant());
+      await tester.pumpWidget(
+        _wrap(
+          const SignedGrantImage(
+            assetId: 'asset-1',
+            kind: MediaDeliveryKind.image,
+            accessMode: MediaDeliveryAccessMode.signedGrant,
+          ),
+          sut: coordinator(gateway),
+        ),
+      );
+      await tester.pump();
+      await tester.pump();
+      final callback = tester
+          .widget<AppCachedNetworkImage>(find.byType(AppCachedNetworkImage))
+          .onLoadFailed!;
+      final dynamic state = tester.state(find.byType(SignedGrantImage));
+      callback(StateError('old generation failure'));
+      state.didUpdateWidget(
+        const SignedGrantImage(
+          assetId: 'old-asset',
+          kind: MediaDeliveryKind.image,
+          accessMode: MediaDeliveryAccessMode.signedGrant,
+        ),
+      );
+      await tester.pump();
+      expect(gateway.commands, hasLength(1));
+      expect(find.byType(AppCachedNetworkImage), findsOneWidget);
+    });
+
+    testWidgets('组件销毁后忽略换签的迟到成功与失败', (tester) async {
+      for (final fails in <bool>[false, true]) {
+        final pending = Completer<MediaOriginalAccessGrant>();
+        var attempt = 0;
+        final gateway = _ScriptedOriginalAccessGateway((_) {
+          attempt += 1;
+          return attempt == 1 ? Future.value(_grant()) : pending.future;
+        });
+        await tester.pumpWidget(
+          _wrap(
+            const SignedGrantImage(
+              assetId: 'asset-1',
+              kind: MediaDeliveryKind.image,
+              accessMode: MediaDeliveryAccessMode.signedGrant,
+            ),
+            sut: coordinator(gateway),
+          ),
+        );
+        await tester.pump();
+        await tester.pump();
+        tester
+            .widget<AppCachedNetworkImage>(find.byType(AppCachedNetworkImage))
+            .onLoadFailed!(StateError('refresh needed'));
+        await tester.pump();
+        expect(attempt, 2);
+        await tester.pumpWidget(const SizedBox.shrink());
+        if (fails) {
+          pending.completeError(StateError('late refresh failure'));
+        } else {
+          pending.complete(_grant(sign: 'late-refresh'));
+        }
+        await tester.pump();
+        expect(tester.takeException(), isNull);
+      }
+    });
+
+    testWidgets('readyBuilder 获得校验后的短签地址与稳定缓存身份', (tester) async {
+      final gateway = _ScriptedOriginalAccessGateway((_) async => _grant());
+      await tester.pumpWidget(
+        _wrap(
+          SignedGrantImage(
+            assetId: 'asset-1',
+            kind: MediaDeliveryKind.image,
+            accessMode: MediaDeliveryAccessMode.signedGrant,
+            readyBuilder: (context, deliveryUrl, cacheIdentity) => Text(
+              '$deliveryUrl|$cacheIdentity',
+              textDirection: TextDirection.ltr,
+            ),
+          ),
+          sut: coordinator(gateway),
+        ),
+      );
+      await tester.pump();
+      await tester.pump();
+
+      expect(find.textContaining('sign=sig-a'), findsOneWidget);
+      expect(find.textContaining('signed|image|asset-1'), findsOneWidget);
+      expect(find.byType(AppCachedNetworkImage), findsNothing);
+    });
+
     testWidgets('调用方分流契约误用的终态不给恢复动作', (tester) async {
       final gateway = _ScriptedOriginalAccessGateway(
         (_) async => fail('契约误用不得触达 coordinator'),

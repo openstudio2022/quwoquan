@@ -11,6 +11,7 @@ activation、纯转换判定和 pre-push 场景按职责拆至
 """
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -535,14 +536,42 @@ def test_policy_byte_loader_rejects_non_string_declared_values(
 
 
 def _run_branch_policy_cli() -> subprocess.CompletedProcess[str]:
+    environment = dict(os.environ)
+    environment["PYTHONDONTWRITEBYTECODE"] = "1"
     return subprocess.run(
         [sys.executable, "-B", "quwoquan_ops/gate/verify_git_branch_policy.py"],
         cwd=ROOT,
         text=True,
         capture_output=True,
         check=False,
-        env={"PYTHONDONTWRITEBYTECODE": "1"},
+        env=environment,
     )
+
+
+def test_branch_policy_cli_helper_preserves_hosted_branch_authority(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    hosted_context = {
+        "GITHUB_ACTIONS": "true",
+        "GITHUB_EVENT_NAME": "push",
+        "GITHUB_REF_TYPE": "branch",
+        "GITHUB_REF_NAME": "lane/small-fix",
+    }
+    for key, value in hosted_context.items():
+        monkeypatch.setenv(key, value)
+
+    def capture_run(*args: object, **kwargs: object) -> subprocess.CompletedProcess[str]:
+        environment = kwargs["env"]
+        assert isinstance(environment, dict)
+        assert {key: environment.get(key) for key in hosted_context} == hosted_context
+        assert environment["PYTHONDONTWRITEBYTECODE"] == "1"
+        return subprocess.CompletedProcess(
+            args[0], 0, "[verify_git_branch_policy] OK\n", ""
+        )
+
+    monkeypatch.setattr(subprocess, "run", capture_run)
+
+    assert _run_branch_policy_cli().returncode == 0
 
 
 def test_cli_separates_policy_and_git_authority_failures_without_traceback(

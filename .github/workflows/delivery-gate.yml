@@ -537,7 +537,9 @@ jobs:
     # 三个环境仍各自形成独立 matrix 证据，但它们落在同一台物理主机，且
     # App dependency sync 持有 host-wide Flutter/CocoaPods/Gradle lock。
     # 因此 matrix 必须在该主机上串行，避免兄弟作业以 lock timeout 互相击穿。
-    timeout-minutes: 30
+    # Fresh five-component sync owns a 25m process guard; retain 10m for the
+    # environment package/contract/isolation gate and bounded cleanup.
+    timeout-minutes: 40
     needs: topology_regression
     if: ${{ needs.topology_regression.outputs.service == 'true' }}
     strategy:
@@ -572,6 +574,9 @@ jobs:
             --sha256 "$FLUTTER_SHA256"
       - id: strict_inputs
         name: Prepare fresh source-bound packaging inputs
+        # Keep Actions outside the managed 25m process guard so timeout cleanup
+        # and the latest streamed phase diagnostic can complete deterministically.
+        timeout-minutes: 30
         env:
           EXPECTED_SOURCE: ${{ inputs.head_sha || github.sha }}
           QWQ_DEPLOY_WORK_ROOT: ${{ runner.temp }}/quwoquan-deploy-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.packaging_env }}

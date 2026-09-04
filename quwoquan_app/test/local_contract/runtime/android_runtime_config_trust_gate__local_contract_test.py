@@ -133,9 +133,27 @@ tasks.register("assembleNonprodProfile")
             encoding="utf-8",
         )
 
+    def _gradle_user_home(self) -> Path:
+        configured = os.environ.get("GRADLE_USER_HOME", "").strip()
+        return Path(configured).expanduser() if configured else Path.home() / ".gradle"
+
+    def _android_sdk_root(self) -> Path:
+        configured = (
+            os.environ.get("ANDROID_SDK_ROOT", "").strip()
+            or os.environ.get("ANDROID_HOME", "").strip()
+        )
+        if configured:
+            return Path(configured).expanduser()
+        return Path.home() / "Library/Android/sdk"
+
     def _single_cached_jar(self, pattern: str) -> Path:
-        matches = sorted(Path.home().glob(pattern))
-        self.assertEqual(len(matches), 1, f"cached jar mismatch for {pattern}: {matches}")
+        cache_root = self._gradle_user_home()
+        matches = sorted(cache_root.glob(pattern))
+        self.assertEqual(
+            len(matches),
+            1,
+            f"cached jar mismatch below {cache_root} for {pattern}: {matches}",
+        )
         return matches[0]
 
     def test_help_and_pure_unit_task_are_explicitly_exempt(self) -> None:
@@ -189,7 +207,7 @@ tasks.register("assembleNonprodProfile")
         result = self._run(
             "assembleNonprodDebug",
             extra_environment={
-                "GRADLE_USER_HOME": str(Path.home() / ".gradle"),
+                "GRADLE_USER_HOME": str(self._gradle_user_home()),
             },
             extra_arguments=(f"-Duser.home={private_home}",),
         )
@@ -253,26 +271,24 @@ tasks.register("assembleNonprodProfile")
         self.assertIn("AppLaunchContract.RUNTIME_CONFIG_SUPPLY_MODES", source)
 
     def test_shared_java_and_patrol_activities_compile_in_isolation(self) -> None:
-        android_jar = (
-            Path.home() / "Library/Android/sdk/platforms/android-37.0/android.jar"
-        )
+        android_jar = self._android_sdk_root() / "platforms/android-37.0/android.jar"
         gson_jar = self._single_cached_jar(
-            ".gradle/caches/modules-2/files-2.1/com.google.code.gson/gson/2.13.2/*/gson-2.13.2.jar"
+            "caches/modules-2/files-2.1/com.google.code.gson/gson/2.13.2/*/gson-2.13.2.jar"
         )
         tink_jar = self._single_cached_jar(
-            ".gradle/caches/modules-2/files-2.1/com.google.crypto.tink/tink-android/1.23.0/*/tink-android-1.23.0.jar"
+            "caches/modules-2/files-2.1/com.google.crypto.tink/tink-android/1.23.0/*/tink-android-1.23.0.jar"
         )
         flutter_embedding = self._single_cached_jar(
-            ".gradle/caches/modules-2/files-2.1/io.flutter/flutter_embedding_debug/*/*/flutter_embedding_debug-*.jar"
+            "caches/modules-2/files-2.1/io.flutter/flutter_embedding_debug/*/*/flutter_embedding_debug-*.jar"
         )
         lifecycle_common = self._single_cached_jar(
-            ".gradle/caches/modules-2/files-2.1/androidx.lifecycle/lifecycle-common/2.7.0/*/lifecycle-common-2.7.0.jar"
+            "caches/modules-2/files-2.1/androidx.lifecycle/lifecycle-common/2.7.0/*/lifecycle-common-2.7.0.jar"
         )
         junit_jar = self._single_cached_jar(
-            ".gradle/caches/modules-2/files-2.1/junit/junit/4.13.2/*/junit-4.13.2.jar"
+            "caches/modules-2/files-2.1/junit/junit/4.13.2/*/junit-4.13.2.jar"
         )
         hamcrest_jar = self._single_cached_jar(
-            ".gradle/caches/modules-2/files-2.1/org.hamcrest/hamcrest-core/1.3/*/hamcrest-core-1.3.jar"
+            "caches/modules-2/files-2.1/org.hamcrest/hamcrest-core/1.3/*/hamcrest-core-1.3.jar"
         )
         for dependency in (
             android_jar,
@@ -351,28 +367,28 @@ tasks.register("assembleNonprodProfile")
         self.assertEqual(java_test.returncode, 0, java_test.stdout)
 
         kotlin_compiler = self._single_cached_jar(
-            ".gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-compiler-embeddable/2.4.0/*/kotlin-compiler-embeddable-2.4.0.jar"
+            "caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-compiler-embeddable/2.4.0/*/kotlin-compiler-embeddable-2.4.0.jar"
         )
         kotlin_stdlib = self._single_cached_jar(
-            ".gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-stdlib/2.4.0/*/kotlin-stdlib-2.4.0.jar"
+            "caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-stdlib/2.4.0/*/kotlin-stdlib-2.4.0.jar"
         )
         kotlin_script_runtime = self._single_cached_jar(
-            ".gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-script-runtime/2.4.0/*/kotlin-script-runtime-2.4.0.jar"
+            "caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-script-runtime/2.4.0/*/kotlin-script-runtime-2.4.0.jar"
         )
         kotlin_daemon = self._single_cached_jar(
-            ".gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-daemon-embeddable/2.4.0/*/kotlin-daemon-embeddable-2.4.0.jar"
+            "caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-daemon-embeddable/2.4.0/*/kotlin-daemon-embeddable-2.4.0.jar"
         )
         kotlin_reflect = self._single_cached_jar(
-            ".gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-reflect/1.6.10/*/kotlin-reflect-1.6.10.jar"
+            "caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-reflect/1.6.10/*/kotlin-reflect-1.6.10.jar"
         )
         kotlin_coroutines = self._single_cached_jar(
-            ".gradle/caches/modules-2/files-2.1/org.jetbrains.kotlinx/kotlinx-coroutines-core-jvm/1.8.1/*/kotlinx-coroutines-core-jvm-1.8.1.jar"
+            "caches/modules-2/files-2.1/org.jetbrains.kotlinx/kotlinx-coroutines-core-jvm/1.8.1/*/kotlinx-coroutines-core-jvm-1.8.1.jar"
         )
         trove = self._single_cached_jar(
-            ".gradle/caches/modules-2/files-2.1/org.jetbrains.intellij.deps/trove4j/1.0.20200330/*/trove4j-1.0.20200330.jar"
+            "caches/modules-2/files-2.1/org.jetbrains.intellij.deps/trove4j/1.0.20200330/*/trove4j-1.0.20200330.jar"
         )
         annotations = self._single_cached_jar(
-            ".gradle/caches/modules-2/files-2.1/org.jetbrains/annotations/23.0.0/*/annotations-23.0.0.jar"
+            "caches/modules-2/files-2.1/org.jetbrains/annotations/23.0.0/*/annotations-23.0.0.jar"
         )
         kotlin_output = self.root / "patrol-kotlin-classes"
         kotlin_output.mkdir()

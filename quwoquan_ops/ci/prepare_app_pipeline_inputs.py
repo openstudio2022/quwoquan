@@ -58,7 +58,10 @@ PROD_TRUSTED_PUBLIC_KEYS_JSON_ENV = (
 _GIT_SHA = re.compile(r"^[0-9a-f]{40}$")
 _TREE_DIGEST = re.compile(r"^sha1:[0-9a-f]{40}$")
 _ATTEMPT_ID = re.compile(r"^[0-9a-f]{32}$")
-_DEPENDENCY_SYNC_TIMEOUT_SECONDS = 20 * 60
+# The full five-component transaction performs two Pub, two CocoaPods and two
+# Android Gradle online/offline replays. Keep its process guard below the 30m
+# workflow-step boundary while allowing the reviewed 25m packaging phase budget.
+_DEPENDENCY_SYNC_TIMEOUT_SECONDS = 25 * 60
 
 
 class PipelinePreparationError(RuntimeError):
@@ -228,6 +231,14 @@ def _dependency_sync_stderr_path(result_path: Path) -> Path:
     return result_path.with_suffix(".stderr.log")
 
 
+def _dependency_sync_timeout_diagnostic(*, stdout: str, stderr: str) -> str:
+    lines = (stderr or stdout).strip().splitlines()
+    progress = [line for line in lines if line.startswith("[app-dependency-sync] ")]
+    if progress:
+        return progress[-1]
+    return lines[-1] if lines else "stackctl returned no diagnostic output"
+
+
 def _persist_dependency_sync_diagnostics(
     *, result_path: Path, stdout: str, stderr: str
 ) -> None:
@@ -269,11 +280,11 @@ def _run_dependency_sync(
             stdout=stdout,
             stderr=stderr,
         )
-        detail = (stderr or stdout).strip().splitlines()
-        first = detail[0] if detail else "stackctl returned no diagnostic output"
+        latest = _dependency_sync_timeout_diagnostic(stdout=stdout, stderr=stderr)
         raise PipelinePreparationError(
             "APP.PIPELINE.dependency_sync_timeout: "
-            f"timeoutSeconds={_DEPENDENCY_SYNC_TIMEOUT_SECONDS}; diagnostic={first}"
+            f"timeoutSeconds={_DEPENDENCY_SYNC_TIMEOUT_SECONDS}; "
+            f"latestDiagnostic={latest}"
         ) from error
     _persist_dependency_sync_diagnostics(
         result_path=result_path,

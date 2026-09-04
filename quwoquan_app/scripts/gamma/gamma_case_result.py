@@ -318,6 +318,7 @@ def _result(
                 "entrySurface": entry_surface,
                 "carrier": carrier,
                 "deviceIdentity": str(binding["device"]["identity"]),
+                "deviceRegistered": bool(binding["device"]["registered"]),
                 "uatProfile": str(binding["profile"]),
                 "nonPromotable": bool(binding["nonPromotable"]),
                 "artifactClass": str(binding["artifact"]["class"]),
