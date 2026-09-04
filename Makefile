@@ -1436,6 +1436,8 @@ test-gate-companion-local-contract: test-review-dispatch test-review-consolidati
 		quwoquan_ops/tests/local_contract/environment/test_env_artifact_isolation__local_contract_test.py \
 		quwoquan_ops/tests/local_contract/gate/test_git_branch_policy__local_contract_test.py \
 		quwoquan_ops/tests/local_contract/gate/test_github_supply_chain__contract__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/gate/test_github_artifact_lifecycle__gate__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/gate/test_stackctl_provider_readiness_contract__gate__local_contract_test.py \
 		quwoquan_ops/tests/local_contract/gate/test_homepage_type_contract__shared_enum_parity__contract__local_contract_test.py \
 		quwoquan_ops/tests/local_contract/environment/test_local_dependency_purity__local_contract_test.py \
 		quwoquan_ops/tests/local_contract/environment/test_local_dependency_purity_uat_analysis__local_contract_test.py \
@@ -1778,6 +1780,7 @@ verify-governance-pipeline-admission: test-governance-pipeline-admission
 test-review-dispatch: prepare-test-python
 	@$(PYTEST_RUNNER) $(PYTEST_INTERPRETER_FLAGS) -m pytest $(PYTEST_FLAGS) \
 		quwoquan_ops/tests/local_contract/gate/test_review_dispatch__cli__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/gate/test_review_baseline__gate__local_contract_test.py \
 		quwoquan_ops/tests/local_contract/gate/test_candidate_evidence_migration__local_contract_test.py -q
 
 verify-review-dispatch: test-review-dispatch
