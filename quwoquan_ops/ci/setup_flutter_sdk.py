@@ -19,6 +19,8 @@ from collections.abc import Mapping
 from pathlib import Path, PurePosixPath
 from typing import Any
 
+sys.dont_write_bytecode = True
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
 MANIFEST_BASE_URL = "https://storage.googleapis.com/flutter_infra_release/releases"
