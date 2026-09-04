@@ -95,21 +95,21 @@ class ReviewConsolidatorTest(unittest.TestCase):
         if not candidate_existed:
             cls._created_content_refs.append((candidate_path, candidate_bytes))
 
-        def execute_fixture(*_args, **_kwargs):
-            return mock.Mock(
-                returncode=0,
-                stdout=b"fixture",
-                stderr=b"",
-                timed_out=False,
-                termination_signal=None,
-            )
-
+        source = evidence_runner._workspace_source_classification(ROOT)
+        source["repository_clean"] = True
         with (
             mock.patch.object(
                 review_dispatch, "_checklist_evidence", return_value=["fixture"]
             ),
             mock.patch.object(
-                evidence_runner, "run_command", side_effect=execute_fixture
+                evidence_runner,
+                "run_command",
+                side_effect=cls._execute_fixture,
+            ),
+            mock.patch.object(
+                evidence_runner,
+                "_workspace_source_classification",
+                return_value=source,
             ),
         ):
             plan = review_dispatch.build_plan(
@@ -140,6 +140,16 @@ class ReviewConsolidatorTest(unittest.TestCase):
                     path.unlink()
             except OSError:
                 pass
+
+    @staticmethod
+    def _execute_fixture(*_args, **_kwargs):
+        return mock.Mock(
+            returncode=0,
+            stdout=b"fixture",
+            stderr=b"",
+            timed_out=False,
+            termination_signal=None,
+        )
 
     def setUp(self) -> None:
         self.case = CASE_ROOT / uuid.uuid4().hex
@@ -198,6 +208,34 @@ class ReviewConsolidatorTest(unittest.TestCase):
                 generated_at=self.evidence["finished_at"],
             )
 
+    def _replace_evidence(self, *, repository_clean: bool, run_id: str) -> None:
+        source = evidence_runner._workspace_source_classification(ROOT)
+        source["repository_clean"] = repository_clean
+        with (
+            mock.patch.object(
+                review_dispatch, "_checklist_evidence", return_value=["fixture"]
+            ),
+            mock.patch.object(
+                evidence_runner,
+                "run_command",
+                side_effect=self._execute_fixture,
+            ),
+            mock.patch.object(
+                evidence_runner,
+                "_workspace_source_classification",
+                return_value=source,
+            ),
+        ):
+            self.evidence = evidence_runner.run_plan(
+                self.plan,
+                registry=self.registry,
+                cwd=ROOT,
+                run_id=run_id,
+                plan_bytes=canonical_json_bytes(self.plan),
+                plan_ref=".qwq_output/test-fixture-plan.json",
+            )
+        self.evidence_path.write_bytes(canonical_json_bytes(self.evidence))
+
     @staticmethod
     def _finding(
         finding_id: str,
@@ -231,8 +269,8 @@ class ReviewConsolidatorTest(unittest.TestCase):
             [self._result("developer", findings=[finding, dict(finding)])]
         )
         self.assertEqual("PASS", result["terminal"]["status"])
-        self.assertEqual("feedback_only", result["evidence_identities"][0]["evidence_class"])
-        self.assertIs(result["evidence_identities"][0]["admission_eligible"], False)
+        self.assertEqual("reusable", result["evidence_identities"][0]["evidence_class"])
+        self.assertIs(result["evidence_identities"][0]["admission_eligible"], True)
         self.assertEqual(["F-001"], [item["id"] for item in result["findings"]])
 
     def test_required_incomplete_is_gate_block(self) -> None:
@@ -347,6 +385,10 @@ class ReviewConsolidatorTest(unittest.TestCase):
 
 
     def test_local_readiness_rejects_feedback_only_consolidation_evidence(self) -> None:
+        self._replace_evidence(
+            repository_clean=False,
+            run_id="run-feedback-only",
+        )
         consolidation = self._consolidate([self._result("developer")])
         consolidation_path = self.case / "consolidation.json"
         consolidation_path.write_text(json.dumps(consolidation), encoding="utf-8")
@@ -362,6 +404,10 @@ class ReviewConsolidatorTest(unittest.TestCase):
             )
 
     def test_local_readiness_rejects_drifted_consolidation_evidence_identity(self) -> None:
+        self._replace_evidence(
+            repository_clean=False,
+            run_id="run-feedback-only-drifted",
+        )
         consolidation = self._consolidate([self._result("developer")])
         consolidation["evidence_identities"][0]["result_fingerprint_digest"] = (
             "sha256:" + "0" * 64
@@ -369,7 +415,10 @@ class ReviewConsolidatorTest(unittest.TestCase):
         consolidation_path = self.case / "consolidation-drifted.json"
         consolidation_path.write_text(json.dumps(consolidation), encoding="utf-8")
 
-        with self.assertRaisesRegex(LocalReadinessError, "REVIEW.EVIDENCE_FEEDBACK_ONLY"):
+        with self.assertRaisesRegex(
+            LocalReadinessError,
+            "未绑定提供的 required evidence exact identities",
+        ):
             _load_review_inputs(
                 consolidation_path,
                 [self.evidence_path],

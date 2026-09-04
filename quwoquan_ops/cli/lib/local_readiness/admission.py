@@ -115,13 +115,6 @@ def load_review_inputs(
         for receipt in receipts:
             validate_declared_fields(receipt, "named_evidence_receipt", "required_fields")
             evidence_runner.validate_named_evidence_receipt(receipt)
-            if required:
-                try:
-                    evidence_runner.require_admission_eligible(
-                        receipt, label="scope/release required named evidence"
-                    )
-                except evidence_runner.EvidenceRunnerError as exc:
-                    raise ValueError(str(exc)) from exc
             if receipt.get("schema_version") != contract_schema_version("named_evidence_receipt"):
                 raise ValueError("required named evidence schema_version 非法")
             if receipt.get("terminal") != {"status": "PASS", "code": "EVIDENCE.PASSED", "failed_evidence": None}:
@@ -163,6 +156,14 @@ def load_review_inputs(
             for identity in supplied_identities
         ):
             raise ValueError("Review consolidation 与 evidence plan identity 不一致")
+        if required:
+            for receipt in receipts:
+                try:
+                    evidence_runner.require_admission_eligible(
+                        receipt, label="scope/release required named evidence"
+                    )
+                except evidence_runner.EvidenceRunnerError as exc:
+                    raise ValueError(str(exc)) from exc
     except (OSError, TypeError, ValueError, KeyError, json.JSONDecodeError) as exc:
         raise _core.LocalReadinessError(f"Review admission receipt 非法: {exc}") from exc
     return relatives, {

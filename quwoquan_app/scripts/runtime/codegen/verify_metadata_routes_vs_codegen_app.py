@@ -135,15 +135,17 @@ def parse_app_operation_routes(dart_path: Path) -> dict[str, dict[str, str]]:
     if not block:
         return {}
     by_domain: dict[str, dict[str, str]] = {}
-    for match in re.finditer(
-        r'"[^"]+": CloudOperationContract\(\n(?P<body>.*?)(?=\n  "[^"]+": CloudOperationContract\(|\n\};)',
-        block.group(0),
-        re.S,
-    ):
+    entry_pattern = re.compile(
+        r'^  "[^"]+":(?:\s*CloudOperationContract\(\n|\n\s+CloudOperationContract\(\n)'
+        r'(?P<body>.*?)'
+        r'(?=^  "[^"]+":(?:\s*CloudOperationContract\(\n|\n\s+CloudOperationContract\(\n)|^\};)',
+        re.S | re.M,
+    )
+    for match in entry_pattern.finditer(block.group(0)):
         body = match.group("body")
         domain_match = re.search(r'domain: "([^"]+)"', body)
         local_match = re.search(r'localOperationId: "([^"]+)"', body)
-        path_match = re.search(r'pathTemplate: "([^"]*)"', body)
+        path_match = re.search(r'pathTemplate:\s*"([^"]*)"', body)
         if not domain_match or not local_match or not path_match:
             continue
         domain = domain_match.group(1)
