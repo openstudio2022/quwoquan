@@ -58,7 +58,10 @@ from hosted_authority_smoke import (  # noqa: E402
     main as smoke_main,
     run_observe_only_smoke,
 )
-from lib.agent_governance_contract import validate_feature_context_manifest  # noqa: E402
+from lib.agent_governance_contract import (  # noqa: E402
+    contract_schema_version,
+    validate_feature_context_manifest,
+)
 from lib.evidence_fingerprint import canonical_json_bytes  # noqa: E402
 from lib.feature_context_fingerprint import build_feature_context_fingerprint  # noqa: E402
 from lib.hosted_authority.runtime import runtime_from_env  # noqa: E402
@@ -251,7 +254,7 @@ def readiness_bytes(
 
 def manifest_fixture(*, target: str = "AGENTS.md") -> tuple[str, bytes]:
     payload = {
-        "schema_version": 3, "target": target,
+        "schema_version": contract_schema_version("feature_context_manifest"), "target": target,
         "resolved_owner": "specs/feature-tree/spec.md",
         "owner_chain": [{"level": 0, "node_id": "app-root", "path": "specs/feature-tree/spec.md"}],
         "canonical_contexts": [{"path": "specs/feature-tree/spec.md", "anchor": None, "kind": "spec"}],
