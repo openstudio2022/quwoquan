@@ -214,7 +214,8 @@ _PII_PATTERNS = (
     # 手机号两侧排除十六进制字符：sha256/digest 里任意 11 位数字子串（如 "18916601719eac…"）
     # 不是号码；否则 contract_graph.json 这类生成物每次刷新都会被误判为直接 PII。
     re.compile(rb"(?<![0-9A-Fa-f])1[3-9][0-9]{9}(?![0-9A-Fa-f])"),
-    re.compile(rb"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}"),
+    # 邮箱域名不能把静态资源的 @2x.png / @3x.png 像素密度后缀当成邮箱。
+    re.compile(rb"[A-Za-z0-9._%+-]+@(?=[A-Za-z])[A-Za-z0-9.-]+\.[A-Za-z]{2,}"),
 )
 
 

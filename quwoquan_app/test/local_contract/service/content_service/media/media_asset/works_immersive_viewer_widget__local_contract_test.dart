@@ -844,6 +844,14 @@ ContentPostViewData _photoPost({
       body: body,
       coverUrl: coverUrl,
       mediaUrls: imageUrls,
+      mediaItems: <PostMediaItem>[
+        for (final url in imageUrls)
+          PostMediaItem(
+            kind: 'image',
+            url: url,
+            accessMode: MediaDeliveryAccessMode.public,
+          ),
+      ],
       width: width,
       height: height,
       likeCount: 0,
@@ -885,6 +893,15 @@ ContentPostViewData _videoPost({
       width: width,
       height: height,
       durationMs: 125000,
+      mediaItems: <PostMediaItem>[
+        PostMediaItem(
+          kind: 'video',
+          url: videoUrl,
+          accessMode: MediaDeliveryAccessMode.public,
+          coverUrl: coverUrl.isEmpty ? null : coverUrl,
+          durationMs: 125000,
+        ),
+      ],
       likeCount: 0,
       commentCount: 0,
       shareCount: 0,
@@ -2692,6 +2709,7 @@ void main() {
               'url':
                   'media/video/s/video-series-001/post/video-1/'
                   'v1/episode-$episode.mp4',
+              'accessMode': 'public',
               'durationMs': 125000,
             },
         ],
@@ -2869,11 +2887,13 @@ void main() {
           <String, dynamic>{
             'kind': 'video',
             'url': duplicateUrl,
+            'accessMode': 'public',
             'durationMs': 125000,
           },
           <String, dynamic>{
             'kind': 'video',
             'url': duplicateUrl,
+            'accessMode': 'public',
             'durationMs': 125000,
           },
         ],
@@ -2945,12 +2965,14 @@ void main() {
             'kind': 'video',
             'url':
                 'media/video/s/video-series-001/post/video-1/v1/episode-1.mp4',
+            'accessMode': 'public',
             'durationMs': 125000,
           },
           <String, dynamic>{
             'kind': 'video',
             'url':
                 'media/video/s/video-series-001/post/video-1/v1/episode-2.mp4',
+            'accessMode': 'public',
             'durationMs': 125000,
           },
         ],
@@ -3071,11 +3093,13 @@ void main() {
         <String, dynamic>{
           'kind': 'video',
           'url': 'media/video/s/video-series-001/post/video-1/v1/episode-1.mp4',
+          'accessMode': 'public',
           'durationMs': 125000,
         },
         <String, dynamic>{
           'kind': 'video',
           'url': 'media/video/s/video-series-001/post/video-1/v1/episode-2.mp4',
+          'accessMode': 'public',
           'durationMs': 125000,
         },
       ];
@@ -5793,6 +5817,7 @@ void main() {
             <String, dynamic>{
               'assetId': 'article-image',
               'publicSliceKey': articleObjectKey,
+              'accessMode': 'public',
               'role': 'inline',
               'width': 1200,
               'height': 900,

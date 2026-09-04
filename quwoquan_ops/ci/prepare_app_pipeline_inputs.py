@@ -259,6 +259,7 @@ def _run_dependency_sync(
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             timeout=_DEPENDENCY_SYNC_TIMEOUT_SECONDS,
+            on_stderr=lambda chunk: print(chunk, file=sys.stderr, end="", flush=True),
         )
     except subprocess.TimeoutExpired as error:
         stdout = _captured_text(error.stdout)

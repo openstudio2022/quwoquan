@@ -12,6 +12,7 @@ import 'package:quwoquan_app/runtime/transport/media/media_delivery_reference.da
 import 'package:quwoquan_app/service/content_service/media/original_access_quota/application/signed_media_delivery_coordinator.dart';
 import 'package:quwoquan_app/service/content_service/media/original_access_quota/presentation/signed_grant_image.dart';
 import 'package:quwoquan_app/service/content_service/media/original_access_quota/presentation/media_delivery_failure_state.dart';
+import 'package:quwoquan_app/service/content_service/media/original_access_quota/presentation/media_delivery_image.dart';
 import 'package:quwoquan_app/service/content_service/media/original_access_quota/application/original_access_quota_gateway.dart';
 import 'package:quwoquan_app/service/user_service/persona_management/persona/presentation/profile_header.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
@@ -143,6 +144,7 @@ void main() {
         const ProfileHeader(
           isDark: false,
           avatarUrl: 'https://cdn.example.test/avatar-public.jpg',
+          avatarAccessMode: MediaDeliveryAccessMode.public,
           displayName: 'Public Persona',
         ),
       ),
@@ -151,6 +153,10 @@ void main() {
 
     expect(tester.takeException(), isNull);
     expect(find.byType(SignedGrantImage), findsNothing);
+    final delivery = tester.widget<MediaDeliveryImage>(
+      find.byType(MediaDeliveryImage),
+    );
+    expect(delivery.binding.accessMode, MediaDeliveryAccessMode.public);
     expect(find.byType(AppAvatarImage), findsOneWidget);
   });
 }

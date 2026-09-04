@@ -511,7 +511,12 @@ class NamedEvidenceRunnerTest(unittest.TestCase):
                 )
 
     def test_timeout_terminates_evidence_process_group_and_emits_typed_result(self) -> None:
-        child_pid = self.case_root / "child.pid"
+        child_pid = Path(
+            self.enterContext(
+                tempfile.TemporaryDirectory(prefix="qwq-evidence-child-pid-")
+            )
+        ) / "child.pid"
+        self.assertFalse(child_pid.is_relative_to(ROOT))
         command = (
             "python3 -c \"import pathlib,subprocess,sys,time; "
             "child=subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(30)']); "

@@ -125,3 +125,43 @@ def test_timeout_reaps_the_entire_owned_process_group(
     with pytest.raises(ProcessLookupError):
         os.killpg(parent_pid, 0)
     assert elapsed <= 0.8
+
+
+def test_managed_subprocess_streams_stderr_before_exit_and_preserves_capture(
+    tmp_path: Path,
+) -> None:
+    acknowledgement = tmp_path / "stderr-observed"
+    chunks: list[str] = []
+
+    def observe(chunk: str) -> None:
+        chunks.append(chunk)
+        acknowledgement.write_text("observed\n", encoding="ascii")
+
+    completed = network.run_managed_subprocess(
+        [
+            sys.executable,
+            "-c",
+            (
+                "import pathlib,sys,time\n"
+                "ack=pathlib.Path(sys.argv[1])\n"
+                "print('phase=one', file=sys.stderr, flush=True)\n"
+                "deadline=time.monotonic()+3\n"
+                "while not ack.exists() and time.monotonic()<deadline:\n"
+                "    time.sleep(.02)\n"
+                "if not ack.exists(): raise SystemExit(7)\n"
+            ),
+            str(acknowledgement),
+        ],
+        cwd=tmp_path,
+        env={"PYTHONDONTWRITEBYTECODE": "1"},
+        check=True,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        timeout=5,
+        on_stderr=observe,
+    )
+
+    assert acknowledgement.is_file()
+    assert "".join(chunks) == "phase=one\n"
+    assert completed.stderr == "phase=one\n"

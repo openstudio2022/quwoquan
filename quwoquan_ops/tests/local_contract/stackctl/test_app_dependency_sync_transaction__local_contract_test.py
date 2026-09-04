@@ -638,6 +638,8 @@ def test_flutter_pub_commands_use_private_home_cache_spm_false_and_exact_lock(
     monkeypatch.setenv("HTTP_PROXY", "http://must-not-leak.invalid")
     monkeypatch.setenv("COCOAPODS_HOME", str(tmp_path / "global-pods"))
     monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "must-not-reach-child")
+    monkeypatch.setenv("DART_VM_OPTIONS", "--root-certs-file=/private/runner-dart-roots.pem")
+    monkeypatch.setenv("FLUTTER_STORAGE_BASE_URL", "https://storage.flutter-io.cn")
 
     def run(command: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
         calls.append({"command": command, **kwargs})
@@ -670,6 +672,8 @@ def test_flutter_pub_commands_use_private_home_cache_spm_false_and_exact_lock(
     assert environment["XDG_CACHE_HOME"].startswith(environment["HOME"])
     assert "HTTP_PROXY" not in environment
     assert environment["GIT_CONFIG_GLOBAL"] == "/dev/null"
+    assert environment["DART_VM_OPTIONS"] == "--root-certs-file=/private/runner-dart-roots.pem"
+    assert environment["FLUTTER_STORAGE_BASE_URL"] == "https://storage.flutter-io.cn"
     assert "COCOAPODS_HOME" not in environment
     assert "AWS_SECRET_ACCESS_KEY" not in environment
 
@@ -699,6 +703,7 @@ def test_concurrent_sync_lock_fails_with_bounded_typed_blocker(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("QWQ_OUTPUT_ROOT", str(tmp_path / "output"))
+    monkeypatch.setenv("QWQ_HOST_LOCK_ROOT", str(tmp_path / "host-locks"))
     monkeypatch.setattr(sync, "_LOCK_TIMEOUT_SECONDS", 0)
     with (
         sync._sync_lock(),

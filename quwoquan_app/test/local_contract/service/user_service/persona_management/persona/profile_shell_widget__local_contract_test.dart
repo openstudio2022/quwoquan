@@ -39,6 +39,7 @@ import 'package:quwoquan_app/runtime/di/signed_media_delivery_dependencies.dart'
 import 'package:quwoquan_app/service/content_service/media/original_access_quota/application/original_access_quota_gateway.dart';
 import 'package:quwoquan_app/service/content_service/media/original_access_quota/application/signed_media_delivery_coordinator.dart';
 import 'package:quwoquan_app/service/content_service/media/original_access_quota/presentation/signed_grant_image.dart';
+import 'package:quwoquan_app/service/content_service/media/original_access_quota/presentation/media_delivery_image.dart';
 import 'package:quwoquan_app/runtime/di/rtc_call_entry_dependencies.dart';
 import 'package:quwoquan_app/service/rtc_service/rtc/call_session/presentation/rtc_call_entry_presenter.dart';
 import 'package:go_router/go_router.dart';
@@ -381,6 +382,7 @@ class _ResolvedAvatarProfileRepository
       displayName: '头像同源用户',
       nicknameCustomized: true,
       avatarUrl: resolvedAvatar,
+      avatarAccessMode: MediaDeliveryAccessMode.public,
       bio: '头像同源回归',
       identityTags: const <String>['摄影'],
     );
@@ -767,30 +769,33 @@ void main() {
       );
       expect(
         tester
-            .widget<AppAvatarImage>(
+            .widget<MediaDeliveryImage>(
               find.byKey(const ValueKey<String>('profile-header-avatar-image')),
             )
-            .imageUrl,
+            .binding
+            .publicUrl,
         _ResolvedAvatarProfileRepository.resolvedAvatar,
       );
 
       await tester.drag(find.byType(CustomScrollView), const Offset(0, -900));
       await _pumpFrames(tester, count: 12);
-      expect(
-        find.byKey(
-          const ValueKey<String>('profile-shell-compact-avatar-image'),
-        ),
-        findsOneWidget,
+      final compactDelivery = tester.widget<MediaDeliveryImage>(
+        find.byType(MediaDeliveryImage).last,
       );
       expect(
-        tester
-            .widget<AppCachedNetworkImage>(
-              find.byKey(
-                const ValueKey<String>('profile-shell-compact-avatar-image'),
-              ),
-            )
-            .imageUrl,
+        compactDelivery.key,
+        const ValueKey<String>('profile-shell-compact-avatar-image'),
+      );
+      expect(
+        compactDelivery.binding.publicUrl,
         _ResolvedAvatarProfileRepository.resolvedAvatar,
+      );
+      expect(
+        find.descendant(
+          of: find.byType(MediaDeliveryImage).last,
+          matching: find.byType(AppCachedNetworkImage),
+        ),
+        findsOneWidget,
       );
     });
 
@@ -854,10 +859,11 @@ void main() {
 
       expect(
         tester
-            .widget<AppAvatarImage>(
+            .widget<MediaDeliveryImage>(
               find.byKey(const ValueKey<String>('profile-header-avatar-image')),
             )
-            .imageUrl,
+            .binding
+            .publicUrl,
         _ResolvedAvatarProfileRepository.resolvedAvatar,
       );
     });

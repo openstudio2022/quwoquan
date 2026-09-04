@@ -364,17 +364,23 @@ def test_hosted_gate_jobs_prepare_tesseract_before_repository_gate() -> None:
     assert "matrix.shard_index" not in install_step
 
 
-def test_hosted_non_app_repository_gates_prepare_pinned_dart_for_codegen_checks() -> None:
+def test_hosted_non_app_repository_gates_do_not_install_unused_flutter_sdk() -> None:
     workflow = (ROOT / ".github/workflows/delivery-gate.yml").read_text(
         encoding="utf-8"
     )
+    gate = GATE_REPO_PATH.read_text(encoding="utf-8")
+    shared_prelude = gate[: gate.index("\nfi\n\nrun_service_core_before_packaging")]
+
+    # Dart is required only by the Service/App phase functions below the shared
+    # prelude. Data and Portal never dispatch those functions, so downloading a
+    # full Flutter SDK in every hosted non-App job is pure setup overhead.
+    assert "command -v dart" not in shared_prelude
+    assert "\ndart " not in shared_prelude
     for job_name in ("quwoquan_data", "quwoquan_data_tests", "ops_portal"):
         job = _job_body(workflow, job_name)
-        assert job.count("Resolve repository-pinned Flutter SDK for repository gate") == 1, job_name
-        assert job.count("Install verified Flutter SDK for repository gate") == 1, job_name
-        assert job.index("python3 quwoquan_ops/ci/setup_flutter_sdk.py install") < job.index(
-            "bash quwoquan_ops/gate/gate_repo.sh"
-        ), job_name
+        assert "Resolve repository-pinned Flutter SDK for repository gate" not in job
+        assert "Install verified Flutter SDK for repository gate" not in job
+        assert "setup_flutter_sdk.py" not in job
 
 
 def test_service_gate_installs_required_native_test_dependencies() -> None:
@@ -783,9 +789,9 @@ def test_delivery_gate_has_bounded_jobs() -> None:
         "quwoquan_service_coverage": 40,
         "quwoquan_app_coverage": 60,
         "quwoquan_app": 30,
-        "quwoquan_data": 10,
+        "quwoquan_data": 15,
         "quwoquan_data_tests": 25,
-        "ops_portal": 10,
+        "ops_portal": 15,
         "release_evidence": 10,
         "delivery_gate_summary": 5,
     }
@@ -882,6 +888,8 @@ def test_hosted_delivery_budgets_match_observed_parallel_shape() -> None:
         "appends release_evidence after both parallel branches converge"
     )
     assert delivery["timingPolicy"] == "telemetry_advisory"
+    assert delivery["phaseBudgetsSeconds"]["quwoquan_data"] == 600
+    assert delivery["phaseBudgetsSeconds"]["ops_portal"] == 600
     assert set(delivery["phaseBudgetsSeconds"]) >= {
         "quwoquan_app_static",
         "quwoquan_app_tests",

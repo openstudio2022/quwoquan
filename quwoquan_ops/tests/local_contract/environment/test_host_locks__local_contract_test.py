@@ -10,9 +10,12 @@ from quwoquan_ops.cli.lib.host_locks import (
     HOST_LOCK_ROOT_ENV,
     HostLockBusyError,
     acquire_device_lock,
+    acquire_host_lock,
+    acquire_host_lock_bounded,
     device_lock_path,
     holder_record_is_live,
     local_runtime_lock_path,
+    named_host_lock_path,
     parse_holder_record,
 )
 
@@ -124,3 +127,40 @@ def test_host_lock_path_shapes_use_the_override(
     assert local_runtime_lock_path("alpha-local") == (
         tmp_path / "locks" / "local-runtime" / "alpha-local.lock"
     )
+
+
+def test_bounded_named_host_lock_waits_then_acquires_with_holder_evidence(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    first_worktree, second_worktree = _worktree_pair(tmp_path)
+    monkeypatch.setenv(HOST_LOCK_ROOT_ENV, str(tmp_path / "host-locks"))
+    path = named_host_lock_path("app-dependency-sync", "toolchain")
+    first = acquire_host_lock(
+        path,
+        fields={"resource": "flutter-cocoapods-gradle"},
+        worktree_path=first_worktree,
+    )
+    waits: list[tuple[str, float]] = []
+    try:
+        with pytest.raises(HostLockBusyError, match="host resource wait timed out"):
+            acquire_host_lock_bounded(
+                path,
+                timeout_seconds=0.02,
+                poll_seconds=0.005,
+                worktree_path=second_worktree,
+                on_wait=lambda holder, remaining: waits.append((holder, remaining)),
+            )
+        assert waits
+        assert str(first_worktree.resolve()) in waits[0][0]
+        assert "lane=lane/ops" in waits[0][0]
+        assert waits[-1][1] == 0
+    finally:
+        first.close()
+
+    second = acquire_host_lock_bounded(
+        path,
+        timeout_seconds=0.1,
+        worktree_path=second_worktree,
+    )
+    second.close()

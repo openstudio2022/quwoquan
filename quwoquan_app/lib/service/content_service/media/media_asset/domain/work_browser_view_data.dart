@@ -162,7 +162,7 @@ final class WorkBrowserViewData {
       mediaItems: localMediaItems.isNotEmpty
           ? List<WorkBrowserMediaViewData>.unmodifiable(localMediaItems)
           : List<WorkBrowserMediaViewData>.unmodifiable(
-              (detail?.mediaItems ?? const <PostMediaItem>[]).map(
+              (detail?.mediaItems ?? post.mediaItems).map(
                 WorkBrowserMediaViewData.fromWire,
               ),
             ),

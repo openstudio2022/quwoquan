@@ -6,9 +6,10 @@ import contextlib
 import fcntl
 import os
 import re
+import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TextIO
+from typing import Callable, TextIO
 from urllib.parse import unquote
 
 from quwoquan_ops.cli.lib.common import utc_now
@@ -114,6 +115,22 @@ def local_runtime_lock_path(target: str) -> Path:
     )
 
 
+def named_host_lock_path(namespace: str, resource: str) -> Path:
+    """Return a safe host-scoped path for a named shared resource."""
+
+    return (
+        host_lock_root()
+        / _safe_segment(namespace, name="host lock namespace")
+        / f"{_safe_segment(resource, name='host lock resource')}.lock"
+    )
+
+
+def app_dependency_sync_lock_path() -> Path:
+    """Return the host-wide Flutter/CocoaPods/Gradle sync lock."""
+
+    return named_host_lock_path("app-dependency-sync", "toolchain")
+
+
 def _pid_is_live(pid: int) -> bool:
     try:
         os.kill(pid, 0)
@@ -203,6 +220,42 @@ def acquire_host_lock(
     return HostLock(path, handle, record)
 
 
+def acquire_host_lock_bounded(
+    path: Path,
+    *,
+    timeout_seconds: float,
+    poll_seconds: float = 0.1,
+    fields: dict[str, str] | None = None,
+    worktree_path: Path | str | None = None,
+    identity: WorktreeIdentity | None = None,
+    on_wait: Callable[[str, float], None] | None = None,
+) -> HostLock:
+    """Acquire a host resource within a wall-clock bound, reporting its holder."""
+
+    if timeout_seconds < 0 or poll_seconds <= 0:
+        raise ValueError("host lock timeout and poll interval are invalid")
+    resolved_identity = identity or resolve_worktree_identity(worktree_path)
+    deadline = time.monotonic() + timeout_seconds
+    last_holder = "unknown live holder"
+    while True:
+        try:
+            return acquire_host_lock(
+                path,
+                fields=fields,
+                identity=resolved_identity,
+            )
+        except HostLockBusyError as error:
+            last_holder = str(error).partition(": ")[2] or last_holder
+            remaining = max(0.0, deadline - time.monotonic())
+            if on_wait is not None:
+                on_wait(last_holder, remaining)
+            if remaining <= 0:
+                raise HostLockBusyError(
+                    f"host resource wait timed out: {last_holder}"
+                ) from error
+            time.sleep(min(poll_seconds, remaining))
+
+
 def acquire_device_lock(
     *,
     device: str,
@@ -254,13 +307,16 @@ __all__ = [
     "HostLockOwner",
     "WorktreeIdentityError",
     "acquire_device_lock",
+    "app_dependency_sync_lock_path",
     "acquire_host_lock",
+    "acquire_host_lock_bounded",
     "acquire_local_runtime_lock",
     "device_lock_path",
     "holder_record_is_live",
     "host_lock_root",
     "local_runtime_holders",
     "local_runtime_lock_path",
+    "named_host_lock_path",
     "parse_holder_record",
     "read_lock_holder",
 ]

@@ -99,6 +99,114 @@ func TestProfileInteractionProjectionFailureDoesNotAdvanceCheckpoint(t *testing.
 	}
 }
 
+func TestProfileInteractionProjectionPreservesPreviewDeliveryBinding(t *testing.T) {
+	now := time.Date(2026, time.July, 20, 1, 15, 0, 0, time.UTC)
+	payload, err := json.Marshal(reactionFactPayload{
+		ReactionID:     "reaction-preview-delivery",
+		Version:        1,
+		TargetKind:     "post",
+		TargetID:       "post-preview-delivery",
+		TargetAuthorID: "profile-owner",
+		ActorDimension: "persona",
+		ActorID:        "profile-actor",
+		Reaction:       "like",
+		OccurredAt:     now,
+		IdempotencyKey: "profile-preview-delivery",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	scenarios := []struct {
+		name             string
+		post             activityports.PostSlice
+		wantAssetID      string
+		wantAccessMode   string
+		wantPreviewImage string
+	}{
+		{
+			name: "cover asset",
+			post: activityports.PostSlice{
+				CoverURL: " media/covers/poster.webp ",
+				MediaItems: []activityports.PostMediaSlice{{
+					CoverURL: "media/covers/poster.webp", MediaAssetID: "video-main",
+					CoverAssetID: "poster-main", AccessMode: "signed_grant",
+				}},
+			},
+			wantAssetID: "poster-main", wantAccessMode: "signed_grant",
+			wantPreviewImage: "media/covers/poster.webp",
+		},
+		{
+			name: "cover falls back to media asset",
+			post: activityports.PostSlice{
+				CoverURL: "media/covers/fallback.webp",
+				MediaItems: []activityports.PostMediaSlice{{
+					CoverURL: " media/covers/fallback.webp ", MediaAssetID: "image-main",
+					AccessMode: "public_slice",
+				}},
+			},
+			wantAssetID: "image-main", wantAccessMode: "public_slice",
+			wantPreviewImage: "media/covers/fallback.webp",
+		},
+		{
+			name: "media URL",
+			post: activityports.PostSlice{
+				MediaURLs: []string{"", " media/objects/photo.webp "},
+				MediaItems: []activityports.PostMediaSlice{{
+					URL: "media/objects/photo.webp", MediaAssetID: "photo-main",
+					AccessMode: "signed_grant",
+				}},
+			},
+			wantAssetID: "photo-main", wantAccessMode: "signed_grant",
+			wantPreviewImage: "media/objects/photo.webp",
+		},
+		{
+			name: "unmatched preview stays unbound",
+			post: activityports.PostSlice{
+				CoverURL: "media/unmatched.webp",
+				MediaItems: []activityports.PostMediaSlice{{
+					URL: "media/other.webp", MediaAssetID: "other", AccessMode: "public_slice",
+				}},
+			},
+			wantPreviewImage: "media/unmatched.webp",
+		},
+	}
+	for _, scenario := range scenarios {
+		t.Run(scenario.name, func(t *testing.T) {
+			post := scenario.post
+			post.ID = "post-preview-delivery"
+			post.Version = 1
+			post.AuthorPersonaID = "profile-owner"
+			post.ContentType = "image"
+			post.Title = "delivery-bound preview"
+			post.Status = "published"
+			post.Visibility = "public"
+			writer := newMemoryActivityWriter()
+			handler := NewProfileInteractionActivityViewProjector(
+				staticProjectionSource{post: post}, writer,
+			)
+			fact := reactionports.OutboxFact{
+				EventID: "reaction-preview-delivery:1", EventType: reactionapp.EventTypeContentReactionSet,
+				AggregateID: "reaction-preview-delivery", AggregateVersion: 1,
+				Payload: payload, OccurredAt: now,
+			}
+			if err := handler.Apply(context.Background(), ProfileInteractionActivityEvent{Reaction: &fact}); err != nil {
+				t.Fatalf("apply preview delivery event: %v", err)
+			}
+			if len(writer.rows) != 2 {
+				t.Fatalf("projection rows=%d, want received+sent", len(writer.rows))
+			}
+			for _, row := range writer.rows {
+				if row.PreviewImageURL != scenario.wantPreviewImage ||
+					row.PreviewImageAssetID != scenario.wantAssetID ||
+					row.PreviewImageAccessMode != scenario.wantAccessMode {
+					t.Fatalf("preview delivery binding=%+v", row)
+				}
+			}
+		})
+	}
+}
+
 func TestProfileInteractionActivityViewProjectorApplyOwnsProjectionBehavior(t *testing.T) {
 	now := time.Date(2026, time.July, 20, 1, 30, 0, 0, time.UTC)
 	payload, err := json.Marshal(reactionFactPayload{

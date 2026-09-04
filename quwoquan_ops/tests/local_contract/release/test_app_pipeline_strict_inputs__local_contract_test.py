@@ -86,6 +86,7 @@ def test_dependency_sync_timeout_is_bounded_typed_and_preserves_diagnostics(
         captured["command"] = command
         captured["timeout"] = kwargs.get("timeout")
         captured["stderr"] = kwargs.get("stderr")
+        captured["on_stderr"] = kwargs.get("on_stderr")
         raise subprocess.TimeoutExpired(
             command,
             timeout=kwargs["timeout"],
@@ -110,6 +111,7 @@ def test_dependency_sync_timeout_is_bounded_typed_and_preserves_diagnostics(
 
     assert captured["timeout"] == subject._DEPENDENCY_SYNC_TIMEOUT_SECONDS
     assert captured["stderr"] == subprocess.PIPE
+    assert callable(captured["on_stderr"])
     assert captured["command"] == [
         subject.sys.executable,
         str(subject.REPO_ROOT / "quwoquan_ops/cli/stackctl.py"),

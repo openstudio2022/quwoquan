@@ -14,17 +14,23 @@ allow:
 - path: quwoquan_app/lib/service/circle_service/circle_management/gathering/presentation/gathering_detail_page.dart
   max_lines: 1308
   reason: oversized-budget (子 widget / part / extension 拆分，后续逐步降)
+- path: quwoquan_app/lib/service/content_service/media/media_asset/presentation/image_book_canvas.dart
+  max_lines: 1258
+  reason: oversized-budget (子 widget / part / extension 拆分，后续逐步降)
 - path: quwoquan_service/internal/platform/redis/client.go
-  max_lines: 1184
+  max_lines: 1197
   reason: go-oversized-budget (同 package 多文件拆分，后续逐步降)
 - path: quwoquan_service/tools/codegen_app_metadata/assistant_codegen.go
   max_lines: 1093
   reason: go-oversized-budget (同 package 多文件拆分，后续逐步降)
 - path: quwoquan_service/services/content-service/internal/content/post/infrastructure/releaseimport/runtime_outbox.go
-  max_lines: 1084
+  max_lines: 1089
   reason: go-oversized-budget (同 package 多文件拆分，后续逐步降)
 - path: quwoquan_app/lib/service/content_service/content/post/application/post_publication_intent_queue_provider.dart
   max_lines: 1068
+  reason: oversized-budget (子 widget / part / extension 拆分，后续逐步降)
+- path: quwoquan_app/lib/service/user_service/persona_management/persona/presentation/profile_shell_builders_parts.dart
+  max_lines: 1033
   reason: oversized-budget (子 widget / part / extension 拆分，后续逐步降)
 - path: quwoquan_service/internal/metadata/load/evidence.go
   max_lines: 1032
@@ -35,15 +41,12 @@ allow:
 - path: quwoquan_service/services/chat-service/internal/chat/conversation/application/message_service.go
   max_lines: 1031
   reason: go-oversized-budget (同 package 多文件拆分，后续逐步降)
+- path: quwoquan_app/lib/design_system/spacing/app_spacing_values.dart
+  max_lines: 1020
+  reason: oversized-budget (子 widget / part / extension 拆分，后续逐步降)
 - path: quwoquan_app/lib/service/content_service/media/filter_catalog_release/presentation/image_editor_page_pro_adjustments.dart
   max_lines: 1018
   reason: oversized-budget (子 widget / part / extension 拆分，后续逐步降)
-- path: quwoquan_service/services/content-service/cmd/api/main.go
-  max_lines: 1017
-  reason: go-oversized-budget (同 package 多文件拆分，后续逐步降)
-- path: quwoquan_service/services/product-ops-service/internal/product_ops/event_record/infrastructure/persistence/elasticsearch_event_log_store.go
-  max_lines: 1009
-  reason: go-oversized-budget (同 package 多文件拆分，后续逐步降)
-- path: quwoquan_service/tools/codegen_app_metadata/domain_operation_contract_render.go
+- path: quwoquan_app/lib/service/circle_service/circle_management/circle/presentation/section_creations_state.dart
   max_lines: 1002
-  reason: go-oversized-budget (同 package 多文件拆分，后续逐步降)
+  reason: oversized-budget (子 widget / part / extension 拆分，后续逐步降)

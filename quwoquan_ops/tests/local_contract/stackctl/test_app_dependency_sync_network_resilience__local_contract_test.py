@@ -580,3 +580,34 @@ def test_pub_replay_state_is_inside_source_projection_for_ios_cas_validation(
 
     with pytest.raises(ValueError, match="pub_component_invalid"):
         sync._builder._pub_state_root(projection, "../outside")
+
+def test_public_pub_signal_termination_is_treated_as_transient(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls = 0
+
+    def fake_run(command: list[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        nonlocal calls
+        calls += 1
+        return subprocess.CompletedProcess(
+            command,
+            -9 if calls == 1 else 0,
+            stdout="" if calls == 1 else "recovered",
+        )
+
+    monkeypatch.setattr(builder, "run_managed_subprocess", fake_run)
+    monkeypatch.setattr(builder.time, "sleep", lambda _delay: None)
+    completed = builder._run_checked(
+        command=["flutter", "pub", "get"],
+        cwd=tmp_path,
+        environment={},
+        log_path=tmp_path / "pub.log",
+        phase="Pub network sync",
+        retry_transient_network=True,
+        public_hosted_upstream=True,
+    )
+
+    assert completed.returncode == 0
+    assert calls == 2
+    assert "cause=process_terminated" in (tmp_path / "pub.log").read_text(encoding="utf-8")

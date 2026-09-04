@@ -860,6 +860,15 @@ def test_staged_pii_phone_pattern_ignores_digits_inside_hex_digests() -> None:
     assert phone_pattern.search(b"phone=" + phone + b",") is not None
 
 
+def test_staged_pii_email_pattern_ignores_image_density_suffixes() -> None:
+    from quwoquan_ops.cli.local_readiness import _PII_PATTERNS
+
+    email_pattern = _PII_PATTERNS[1]
+    assert email_pattern.search(b"LaunchBrandCluster@2x.png") is None
+    email = b"owner" + b"@" + b"quwoquan.example"
+    assert email_pattern.search(email) is not None
+
+
 def test_data_scope_without_affected_tests_fails_closed_instead_of_verify_only() -> None:
     with pytest.raises(ValueError, match="affected tests"):
         build_impact_plan(["quwoquan_data/schema/unknown.schema.json"], level="scope")

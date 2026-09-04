@@ -126,8 +126,10 @@ _BASE_ENVIRONMENT_KEYS = {
     "ANDROID_HOME",
     "ANDROID_SDK_ROOT",
     "CI",
+    "DART_VM_OPTIONS",
     "DEVELOPER_DIR",
     "FLUTTER_ROOT",
+    "FLUTTER_STORAGE_BASE_URL",
     "JAVA_HOME",
     "LANG",
     "LC_ALL",
@@ -239,6 +241,12 @@ def _run_checked(
                 return completed
             failures.append((output, None))
             cause = transient_network_cause(output)
+            if (
+                cause is None
+                and public_hosted_upstream
+                and completed.returncode < 0
+            ):
+                cause = "process_terminated"
             if (
                 cause is None
                 and public_hosted_upstream
