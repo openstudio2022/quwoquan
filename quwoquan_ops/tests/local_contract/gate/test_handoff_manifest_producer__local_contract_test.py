@@ -227,7 +227,12 @@ class HandoffManifestProducerTest(unittest.TestCase):
         return data, registry, artifact, plan_path, receipt_path
 
     def test_all_six_triggers_reject_feedback_only_workspace_evidence(self) -> None:
-        data, _, _, _, _ = self._fixture()
+        data, _, _, _, receipt_path = self._fixture()
+        receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+        receipt["source"]["repository_clean"] = False
+        receipt["evidence_class"] = "feedback_only"
+        receipt["admission_eligible"] = False
+        receipt_path.write_bytes(canonical_json_bytes(receipt))
         for trigger in producer.contract_section("handoff_manifest")["triggers"]:
             with self.subTest(trigger=trigger):
                 data["triggers"] = [trigger]
@@ -278,11 +283,11 @@ class HandoffManifestProducerTest(unittest.TestCase):
 
     def test_same_head_dirty_artifact_change_rejects_old_handoff(self) -> None:
         data, _, artifact, _, _ = self._fixture()
+        artifact.write_text("changed\n", encoding="utf-8")
         with self.assertRaisesRegex(
             producer.HandoffManifestError, "REVIEW.EVIDENCE_FEEDBACK_ONLY"
         ):
             producer.produce(data)
-        artifact.write_text("changed\n", encoding="utf-8")
 
 
     def test_rejects_evidence_ref_replacement_and_symlink_drift(self) -> None:
