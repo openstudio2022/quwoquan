@@ -317,9 +317,18 @@ def _governance_review_fixture(
             "required": True, "timeout_seconds": 300, "covers": [],
         },
     }
-    with mock.patch.object(
-        review_dispatch, "_checklist_evidence",
-        return_value=["portal-test", "portal-build"],
+    source = evidence_runner._workspace_source_classification(ROOT)
+    source["repository_clean"] = False
+    with (
+        mock.patch.object(
+            review_dispatch, "_checklist_evidence",
+            return_value=["portal-test", "portal-build"],
+        ),
+        mock.patch.object(
+            evidence_runner,
+            "_workspace_source_classification",
+            return_value=source,
+        ),
     ):
         plan = review_dispatch.build_plan(
             registry, "dev", "POST", "implementation", changed_paths,

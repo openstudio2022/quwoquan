@@ -373,7 +373,18 @@ def subject_fingerprint_receipt(contract: Mapping[str, Any]) -> dict[str, Any]:
     ])
     managed = sorted(set(managed))
     head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=REPO_ROOT, text=True, capture_output=True, check=True).stdout.strip()
-    merge_base = subprocess.run(["git", "merge-base", "HEAD", "dev1.0"], cwd=REPO_ROOT, text=True, capture_output=True, check=True).stdout.strip()
+    merge_base = head
+    for base in ("dev1.0", "origin/dev1.0", "main", "origin/main"):
+        result = subprocess.run(
+            ["git", "merge-base", "HEAD", base],
+            cwd=REPO_ROOT,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            merge_base = result.stdout.strip()
+            break
     adapter_identity = {
         key: snapshot_path(path, repo_root=REPO_ROOT)
         for key, path in {
