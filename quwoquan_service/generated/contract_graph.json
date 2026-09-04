@@ -103124,6 +103124,10 @@
             "sha256": "b2a430b59fdc5835b2e68a4fce24fc6fc289b266eb5e27980b098f6c9f4dde27"
           },
           {
+            "path": "quwoquan_app/test/local_contract/service/assistant_service/assistant/assistant_run/run_artifacts_generated_codec__local_contract_test.dart",
+            "sha256": "36785ca7e9b836c1d71b3f381cac48e5e99b7159ab3ae350790861dae5b88880"
+          },
+          {
             "path": "quwoquan_app/test/local_contract/service/assistant_service/assistant/assistant_run/slot_schema__local_contract_test.dart",
             "sha256": "f77efd40937ef12ecaa50b28833b02c32e9b9c28c92a07a49722c09940d8a5de"
           }
@@ -104053,6 +104057,10 @@
         ],
         "presentation": [],
         "localContract": [
+          {
+            "path": "quwoquan_app/test/local_contract/service/assistant_service/assistant/assistant_turn_view/assistant_turn_generated_codec__local_contract_test.dart",
+            "sha256": "6f191b18e5ed9d2cba6fea7e982e07d31d9b0145a7071c62a37a6b5a5993d63d"
+          },
           {
             "path": "quwoquan_app/test/local_contract/service/assistant_service/assistant/assistant_turn_view/assistant_turn_message_resolver_transcript_row__local_contract_test.dart",
             "sha256": "c708469fd8bc5cd9e0674b26b1d8797f17b634f32c5d96e1e93a18b24c09d85c"
@@ -112613,6 +112621,10 @@
             "sha256": "b3a1fff0c5d1456031bf137aaa6e4d8e100a10b559c5cf1a1544305bf64d48cb"
           },
           {
+            "path": "quwoquan_app/test/local_contract/service/content_service/media/original_access_quota/media_delivery_video__local_contract_test.dart",
+            "sha256": "f3ceb1deaaefb027dc6afc4158b854668f7cfb7b12f332bccaba9c77da144321"
+          },
+          {
             "path": "quwoquan_app/test/local_contract/service/content_service/media/original_access_quota/original_access_quota_errors__local_contract_test.dart",
             "sha256": "6c76be56109b9e420f37c921ec3f00aa31d05130941762763b61c3367c95b244"
           },
@@ -112622,7 +112634,7 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/media/original_access_quota/signed_grant_image_widget__local_contract_test.dart",
-            "sha256": "3cd5d1decd1d84a9319be5a225e541e3cfea70b6542d6bf64f81ceacb3c9cde9"
+            "sha256": "5940a908f90e06f7468e8762cb8d262e671fd0a5db3dd3811a21ead4c66860e7"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/media/original_access_quota/signed_media_delivery_coordinator__local_contract_test.dart",
