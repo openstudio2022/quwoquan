@@ -2,7 +2,7 @@
   "generator": "codegen_graphql_app_search_client",
   "registrySha256": "42781cab7019d1a4d469d8a9e227d7e51a794219d05bff12cbb268a2d59fdd69",
   "contractGraphSha256": "11b123feb4f46fb4ad198ea92f24917f60217ee122cf53e07d0dd9cd62e71eb6",
-  "appLockSha256": "7107f37975dd567d869e31858ff0408af2318a25c587fd75d2f2dba258274f3b",
+  "appLockSha256": "15c39489a9f271c2769846ab9dfa7c7c897c9113fab0be6a3fbbd0875360fd79",
   "outputs": [
     {
       "path": "lib/runtime/transport/graphql_read/generated/search_page.g.dart",
