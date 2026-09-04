@@ -71,7 +71,10 @@ def resolve_worktree_identity(path: Path | str | None = None) -> WorktreeIdentit
         if is_bare
         else Path(_git(origin, "rev-parse", "--show-toplevel")).resolve()
     )
-    branch = _git(repository, "symbolic-ref", "--quiet", "--short", "HEAD")
+    try:
+        branch = _git(repository, "symbolic-ref", "--quiet", "--short", "HEAD")
+    except WorktreeIdentityError:
+        branch = ""
     head_sha = _git(repository, "rev-parse", "HEAD")
     if is_bare:
         worktree_root = None
@@ -82,7 +85,7 @@ def resolve_worktree_identity(path: Path | str | None = None) -> WorktreeIdentit
             repository, "status", "--porcelain=v1", "--untracked-files=all"
         )
         dirty_count = len([line for line in status.splitlines() if line.strip()])
-    lane = branch
+    lane = branch or f"detached@{head_sha[:12]}"
     is_integration = not is_bare and (
         branch == "dev1.0" or repository.name == "integration"
     )

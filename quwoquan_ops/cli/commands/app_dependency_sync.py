@@ -37,7 +37,6 @@ from quwoquan_ops.cli.lib.host_locks import (
     acquire_host_lock_bounded,
     app_dependency_sync_lock_path,
 )
-from quwoquan_ops.cli.lib.patrol_execution_lock import patrol_execution_lock_path
 from quwoquan_ops.cli.lib.app_launch_manifest_contract import (
     build_runtime_config_trust_envelope,
     load_launch_manifest_contract,
@@ -205,23 +204,18 @@ def _sync_lock(
 ) -> Any:
     """Serialize dependency sync and the shared Flutter build workspace."""
 
-    deadline = time.monotonic() + _LOCK_TIMEOUT_SECONDS
     held = []
     try:
-        for path, resource in (
-            (app_dependency_sync_lock_path(), "flutter-cocoapods-gradle"),
-            (patrol_execution_lock_path(), "flutter-build-workspace"),
-        ):
-            held.append(
-                acquire_host_lock_bounded(
-                    path,
-                    timeout_seconds=max(0.0, deadline - time.monotonic()),
-                    poll_seconds=1.0,
-                    fields={"resource": resource},
-                    worktree_path=_LOCK_OWNER_WORKTREE,
-                    on_wait=on_wait,
-                )
+        held.append(
+            acquire_host_lock_bounded(
+                app_dependency_sync_lock_path(),
+                timeout_seconds=_LOCK_TIMEOUT_SECONDS,
+                poll_seconds=1.0,
+                fields={"resource": "flutter-cocoapods-gradle"},
+                worktree_path=_LOCK_OWNER_WORKTREE,
+                on_wait=on_wait,
             )
+        )
         yield tuple(held)
     except HostLockBusyError as exc:
         raise ValueError(

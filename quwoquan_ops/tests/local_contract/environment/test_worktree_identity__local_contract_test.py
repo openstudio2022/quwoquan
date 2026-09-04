@@ -83,3 +83,18 @@ def test_dev1_branch_is_integration_even_outside_named_directory(tmp_path: Path)
     assert identity.head_sha == head
     assert identity.dirty_count == 0
     assert identity.is_integration is True
+
+
+def test_detached_checkout_retains_host_lock_identity(tmp_path: Path) -> None:
+    repository = tmp_path / "detached-runner"
+    _git(tmp_path, "init", "-b", "lane/small-fix", str(repository))
+    head = _commit(repository)
+    _git(repository, "checkout", "--detach", head)
+
+    identity = resolve_worktree_identity(repository)
+
+    assert identity.branch == ""
+    assert identity.lane == f"detached@{head[:12]}"
+    assert identity.head_sha == head
+    assert identity.worktree_root == str(repository.resolve())
+    assert identity.is_integration is False

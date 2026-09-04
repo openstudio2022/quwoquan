@@ -7,7 +7,11 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from quwoquan_ops.cli.lib.host_locks import HOST_LOCK_ROOT_ENV
+from quwoquan_ops.cli.lib.host_locks import (
+    HOST_LOCK_ROOT_ENV,
+    acquire_host_lock,
+    app_dependency_sync_lock_path,
+)
 from quwoquan_ops.cli.lib import patrol_execution_lock
 from quwoquan_ops.cli.lib.patrol_execution_lock import (
     PATROL_EXECUTION_LOCK_NAME,
@@ -127,6 +131,90 @@ class PatrolExecutionLockContractTest(unittest.TestCase):
                 finally:
                     if first is not None:
                         first.close()
+
+    def test_dependency_sync_host_lock_blocks_flutter_workspace_consumer(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_dir:
+            root = Path(temporary_dir)
+            worktree, _other = _worktree_pair(root)
+            lock_root = root / "host-locks"
+            with (
+                mock.patch.dict(
+                    os.environ,
+                    {HOST_LOCK_ROOT_ENV: str(lock_root)},
+                ),
+                mock.patch.object(patrol_execution_lock, "REPO_ROOT", worktree),
+                acquire_host_lock(
+                    app_dependency_sync_lock_path(),
+                    fields={"resource": "flutter-cocoapods-gradle"},
+                    worktree_path=worktree,
+                ),
+            ):
+                with self.assertRaisesRegex(
+                    RuntimeError,
+                    "dependency-sync.*lane=lane/ops",
+                ):
+                    acquire_patrol_execution_lock(
+                        env_name="alpha-local",
+                        target="homepage-feed",
+                    )
+
+    def test_dependency_sync_cannot_enter_between_patrol_admission_and_workspace_lock(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temporary_dir:
+            root = Path(temporary_dir)
+            worktree, _other = _worktree_pair(root)
+            lock_root = root / "host-locks"
+            real_acquire = patrol_execution_lock.acquire_host_lock
+            dependency_attempts = []
+
+            def acquire_with_race_probe(path: Path, **kwargs: object):
+                if path == patrol_execution_lock_path():
+                    try:
+                        dependency_attempts.append(
+                            real_acquire(
+                                app_dependency_sync_lock_path(),
+                                fields={"resource": "dependency-sync-race-probe"},
+                                worktree_path=worktree,
+                            )
+                        )
+                    except patrol_execution_lock.HostLockBusyError:
+                        pass
+                return real_acquire(path, **kwargs)
+
+            with (
+                mock.patch.dict(
+                    os.environ,
+                    {HOST_LOCK_ROOT_ENV: str(lock_root)},
+                ),
+                mock.patch.object(patrol_execution_lock, "REPO_ROOT", worktree),
+                mock.patch.object(
+                    patrol_execution_lock,
+                    "acquire_host_lock",
+                    side_effect=acquire_with_race_probe,
+                ),
+            ):
+                patrol_lock = acquire_patrol_execution_lock(
+                    env_name="alpha-local",
+                    target="homepage-feed",
+                )
+                self.addCleanup(patrol_lock.close)
+                dependency_path = app_dependency_sync_lock_path()
+
+            self.assertEqual(dependency_attempts, [])
+            with self.assertRaises(patrol_execution_lock.HostLockBusyError):
+                real_acquire(
+                    dependency_path,
+                    fields={"resource": "dependency-sync-after-admission"},
+                    worktree_path=worktree,
+                )
+            patrol_lock.close()
+            dependency_lock = real_acquire(
+                dependency_path,
+                fields={"resource": "dependency-sync-after-patrol"},
+                worktree_path=worktree,
+            )
+            dependency_lock.close()
 
     def test_explicit_lock_path_preserves_independent_mutex_injection(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_dir:
