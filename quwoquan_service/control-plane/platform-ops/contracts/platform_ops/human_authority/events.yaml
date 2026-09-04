@@ -1,0 +1,25 @@
+events:
+- name: DecisionUnitCreated
+  description: 决定单元与首个 append-only hash-chain event 已原子提交。
+  no_consumer_reason: durable authority audit stream retained for exact readback and incident replay; no domain aggregate consumes it
+  delivery_semantics: transactional_event_log
+  payload_entity: DecisionUnit
+  payload_fields: [decisionUnitId, decisionKind, scope]
+- name: RoleSubmissionRecorded
+  description: authenticated principal 的职责证据已追加到决定单元 hash chain。
+  no_consumer_reason: durable authority audit stream retained for exact readback and incident replay; no domain aggregate consumes it
+  delivery_semantics: transactional_event_log
+  payload_entity: RoleSubmission
+  payload_fields: [submissionId, role, actorId, round, evidenceDigest]
+- name: RoundSealed
+  description: 决定单元当前职责轮次已完成并封存。
+  no_consumer_reason: durable authority audit stream retained for exact readback and incident replay; no domain aggregate consumes it
+  delivery_semantics: transactional_event_log
+  payload_entity: DecisionUnit
+  payload_fields: [decisionUnitId, sealedRounds]
+- name: DecisionFinalized
+  description: 最终选项、授权收据与不可变 chain commit 已原子提交。
+  no_consumer_reason: durable authority audit stream retained for exact readback and incident replay; no domain aggregate consumes it
+  delivery_semantics: transactional_event_log
+  payload_entity: DecisionUnit
+  payload_fields: [decisionUnitId, decision, receipt]

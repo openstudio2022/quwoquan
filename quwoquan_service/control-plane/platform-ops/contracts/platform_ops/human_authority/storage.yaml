@@ -74,6 +74,17 @@ tables:
     - {name: key_id, type: VARCHAR(128), constraints: [PK, NOT_NULL]}
     - {name: public_key, type: BYTEA, constraints: [NOT_NULL]}
     - {name: created_at, type: TIMESTAMPTZ, constraints: [NOT_NULL]}
+  human_authority_audits:
+    publication_role: not_published
+    entity: DecisionUnit
+    role: append_only
+    description: 决定单元与授权收据状态迁移的追加式 operator 审计轨；与 aggregate/event/outbox 同事务提交。
+    pk: [decision_unit_id, action, actor_id, occurred_at]
+    columns:
+    - {name: decision_unit_id, type: VARCHAR(128), constraints: [PK, NOT_NULL]}
+    - {name: action, type: VARCHAR(96), constraints: [PK, NOT_NULL]}
+    - {name: actor_id, type: VARCHAR(256), constraints: [PK, NOT_NULL]}
+    - {name: occurred_at, type: TIMESTAMPTZ, constraints: [PK, NOT_NULL]}
   human_authority_outbox:
     publication_role: transactional_event_log
     entity: DecisionUnit

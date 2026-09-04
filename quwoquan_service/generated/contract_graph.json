@@ -109782,7 +109782,7 @@
           }
         ],
         "userAcceptance": [],
-        "pageParticipant": false,
+        "pageParticipant": true,
         "pageOwned": false
       },
       "ops": {
@@ -119867,6 +119867,15 @@
       "deliveryStores": [
         "product_ops_outbox"
       ],
+      "publicationDelivery": [
+        {
+          "storage": "product_ops_outbox",
+          "artifact": {
+            "path": "quwoquan_service/services/product-ops-service/cmd/api/bootstrap.go",
+            "sha256": "080ba161ff9925e02364eb8426800b326ba505eb9bbb224ecc62effe14d145b3"
+          }
+        }
+      ],
       "sourcePath": "quwoquan_service/services/product-ops-service/internal/product_ops/experiment"
     },
     {
@@ -120058,9 +120067,6 @@
         "human_authority_events",
         "human_authority_outbox"
       ],
-      "undeclaredStorageWrites": [
-        "human_authority_audits"
-      ],
       "sourcePath": "quwoquan_service/control-plane/platform-ops/internal/platform_ops/human_authority"
     },
     {
@@ -120151,6 +120157,15 @@
       ],
       "deliveryStores": [
         "premium_pool_entry_outbox"
+      ],
+      "publicationDelivery": [
+        {
+          "storage": "premium_pool_entry_outbox",
+          "artifact": {
+            "path": "quwoquan_service/services/product-ops-service/cmd/api/bootstrap.go",
+            "sha256": "080ba161ff9925e02364eb8426800b326ba505eb9bbb224ecc62effe14d145b3"
+          }
+        }
       ],
       "sourcePath": "quwoquan_service/services/product-ops-service/internal/product_ops/premium_pool_entry"
     },
@@ -128945,13 +128960,13 @@
     },
     {
       "objectId": "ops.experiment",
-      "stage": "contract-ready",
+      "stage": "implemented",
       "modeled": true,
       "contractReady": true,
-      "implemented": false,
+      "implemented": true,
       "commercialReady": false,
       "missing": [
-        "implementation.publication_delivery"
+        "commercial.result_bundle"
       ]
     },
     {
@@ -128986,19 +129001,18 @@
         "commercial.operation.RevokeHumanAuthorizationReceipt",
         "commercial.operation.SealHumanDecisionRound",
         "commercial.operation.SubmitHumanRoleEvidence",
-        "commercial.result_bundle",
-        "contract.storage_declaration_missing"
+        "commercial.result_bundle"
       ]
     },
     {
       "objectId": "ops.premium_pool_entry",
-      "stage": "contract-ready",
+      "stage": "implemented",
       "modeled": true,
       "contractReady": true,
-      "implemented": false,
+      "implemented": true,
       "commercialReady": false,
       "missing": [
-        "implementation.publication_delivery"
+        "commercial.result_bundle"
       ]
     },
     {
@@ -129595,7 +129609,7 @@
     },
     {
       "path": "_shared/page_object_contract.yaml",
-      "sha256": "65dc7c5ee2e9297a33100ff8563c1d225cf1d78474029ba20be1e08f0572f195"
+      "sha256": "7b6ed412096cece6fd70dbf413ed74f4ff4306ec8962042bba80e9c79241faa4"
     },
     {
       "path": "_shared/realtime_event_catalog.yaml",
@@ -132126,6 +132140,10 @@
       "sha256": "d81dbdb1e12ddbe2b5f2c787a33158ac9ea7f2a4d8a5d9893427ac3cf0ae86aa"
     },
     {
+      "path": "ops/platform_ops/human_authority/events.yaml",
+      "sha256": "aca1c2c6deff9ffd772465c80cc31393d3320d0d1ca0325f608fe5d0ce76fd91"
+    },
+    {
       "path": "ops/platform_ops/human_authority/fields.yaml",
       "sha256": "e0d48389883190f2a5ae4d414ac21f734d0951488dbc26dfe1c320918e3393e9"
     },
@@ -132143,7 +132161,7 @@
     },
     {
       "path": "ops/platform_ops/human_authority/storage.yaml",
-      "sha256": "ade749ce90cd5041130ae333695c379c7a5aecde15b05cfbe65563787be1721b"
+      "sha256": "1392dd1947b7489be759836bfd1ddf38fbdf283a9d913d389ae7613b26233870"
     },
     {
       "path": "ops/product_ops/account_enforcement_case/errors.yaml",
@@ -139692,7 +139710,7 @@
     },
     {
       "path": "_shared/page_object_contract.yaml",
-      "sha256": "65dc7c5ee2e9297a33100ff8563c1d225cf1d78474029ba20be1e08f0572f195",
+      "sha256": "7b6ed412096cece6fd70dbf413ed74f4ff4306ec8962042bba80e9c79241faa4",
       "mediaType": "application/yaml",
       "content": {
         "contract_id": "app_page_object_contract",
@@ -142765,12 +142783,14 @@
             "entry_widget": "GatheringDetailPage",
             "experience_owner": "circle",
             "object_ids": [
-              "circle.gathering"
+              "circle.gathering",
+              "circle.gathering_plan"
             ],
             "page_id": "circle.gathering_detail",
             "page_kind": "routed",
             "query_slices": [
-              "circle.gathering"
+              "circle.gathering",
+              "circle.gathering_plan"
             ],
             "route_id": "gatheringDetail",
             "route_registration_evidence": [
@@ -142833,7 +142853,8 @@
             },
             "typed_presentation": [
               "GatheringPublicCardSlice",
-              "GatheringPrivateDetailSlice"
+              "GatheringPrivateDetailSlice",
+              "GatheringBoardPlanSlice"
             ]
           },
           {
@@ -142931,13 +142952,15 @@
             "experience_owner": "chat",
             "object_ids": [
               "chat.conversation",
-              "circle.gathering"
+              "circle.gathering",
+              "circle.gathering_plan"
             ],
             "page_id": "chat.gathering_board",
             "page_kind": "routed",
             "query_slices": [
               "chat.conversation",
-              "circle.gathering"
+              "circle.gathering",
+              "circle.gathering_plan"
             ],
             "route_id": "gatheringBoard",
             "route_registration_evidence": [
@@ -142959,7 +142982,8 @@
             },
             "typed_presentation": [
               "GatheringChatBoardSlice",
-              "GatheringPrivateDetailSlice"
+              "GatheringPrivateDetailSlice",
+              "GatheringBoardPlanSlice"
             ]
           },
           {
@@ -339418,6 +339442,64 @@
       }
     },
     {
+      "path": "ops/platform_ops/human_authority/events.yaml",
+      "sha256": "aca1c2c6deff9ffd772465c80cc31393d3320d0d1ca0325f608fe5d0ce76fd91",
+      "mediaType": "application/yaml",
+      "content": {
+        "events": [
+          {
+            "delivery_semantics": "transactional_event_log",
+            "description": "决定单元与首个 append-only hash-chain event 已原子提交。",
+            "name": "DecisionUnitCreated",
+            "no_consumer_reason": "durable authority audit stream retained for exact readback and incident replay; no domain aggregate consumes it",
+            "payload_entity": "DecisionUnit",
+            "payload_fields": [
+              "decisionUnitId",
+              "decisionKind",
+              "scope"
+            ]
+          },
+          {
+            "delivery_semantics": "transactional_event_log",
+            "description": "authenticated principal 的职责证据已追加到决定单元 hash chain。",
+            "name": "RoleSubmissionRecorded",
+            "no_consumer_reason": "durable authority audit stream retained for exact readback and incident replay; no domain aggregate consumes it",
+            "payload_entity": "RoleSubmission",
+            "payload_fields": [
+              "submissionId",
+              "role",
+              "actorId",
+              "round",
+              "evidenceDigest"
+            ]
+          },
+          {
+            "delivery_semantics": "transactional_event_log",
+            "description": "决定单元当前职责轮次已完成并封存。",
+            "name": "RoundSealed",
+            "no_consumer_reason": "durable authority audit stream retained for exact readback and incident replay; no domain aggregate consumes it",
+            "payload_entity": "DecisionUnit",
+            "payload_fields": [
+              "decisionUnitId",
+              "sealedRounds"
+            ]
+          },
+          {
+            "delivery_semantics": "transactional_event_log",
+            "description": "最终选项、授权收据与不可变 chain commit 已原子提交。",
+            "name": "DecisionFinalized",
+            "no_consumer_reason": "durable authority audit stream retained for exact readback and incident replay; no domain aggregate consumes it",
+            "payload_entity": "DecisionUnit",
+            "payload_fields": [
+              "decisionUnitId",
+              "decision",
+              "receipt"
+            ]
+          }
+        ]
+      }
+    },
+    {
       "path": "ops/platform_ops/human_authority/fields.yaml",
       "sha256": "e0d48389883190f2a5ae4d414ac21f734d0951488dbc26dfe1c320918e3393e9",
       "mediaType": "application/yaml",
@@ -341633,12 +341715,58 @@
     },
     {
       "path": "ops/platform_ops/human_authority/storage.yaml",
-      "sha256": "ade749ce90cd5041130ae333695c379c7a5aecde15b05cfbe65563787be1721b",
+      "sha256": "1392dd1947b7489be759836bfd1ddf38fbdf283a9d913d389ae7613b26233870",
       "mediaType": "application/yaml",
       "content": {
         "backend": "postgres",
         "role": "authoritative",
         "tables": {
+          "human_authority_audits": {
+            "columns": [
+              {
+                "constraints": [
+                  "PK",
+                  "NOT_NULL"
+                ],
+                "name": "decision_unit_id",
+                "type": "VARCHAR(128)"
+              },
+              {
+                "constraints": [
+                  "PK",
+                  "NOT_NULL"
+                ],
+                "name": "action",
+                "type": "VARCHAR(96)"
+              },
+              {
+                "constraints": [
+                  "PK",
+                  "NOT_NULL"
+                ],
+                "name": "actor_id",
+                "type": "VARCHAR(256)"
+              },
+              {
+                "constraints": [
+                  "PK",
+                  "NOT_NULL"
+                ],
+                "name": "occurred_at",
+                "type": "TIMESTAMPTZ"
+              }
+            ],
+            "description": "决定单元与授权收据状态迁移的追加式 operator 审计轨；与 aggregate/event/outbox 同事务提交。",
+            "entity": "DecisionUnit",
+            "pk": [
+              "decision_unit_id",
+              "action",
+              "actor_id",
+              "occurred_at"
+            ],
+            "publication_role": "not_published",
+            "role": "append_only"
+          },
           "human_authority_events": {
             "columns": [
               {

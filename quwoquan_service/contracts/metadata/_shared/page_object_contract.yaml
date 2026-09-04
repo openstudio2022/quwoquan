@@ -1532,9 +1532,9 @@ pages:
     surface_ids: [gatheringDetail]
     experience_owner: circle
     data_owners: [circle]
-    object_ids: [circle.gathering]
-    query_slices: [circle.gathering]
-    typed_presentation: [GatheringPublicCardSlice, GatheringPrivateDetailSlice]
+    object_ids: [circle.gathering, circle.gathering_plan]
+    query_slices: [circle.gathering, circle.gathering_plan]
+    typed_presentation: [GatheringPublicCardSlice, GatheringPrivateDetailSlice, GatheringBoardPlanSlice]
     auth_requirement: optional
     capability_requirements: { all_of: [], any_of: [] }
     telemetry_descriptor:
@@ -1609,9 +1609,9 @@ pages:
     surface_ids: [gatheringBoard]
     experience_owner: chat
     data_owners: [chat, circle]
-    object_ids: [chat.conversation, circle.gathering]
-    query_slices: [chat.conversation, circle.gathering]
-    typed_presentation: [GatheringChatBoardSlice, GatheringPrivateDetailSlice]
+    object_ids: [chat.conversation, circle.gathering, circle.gathering_plan]
+    query_slices: [chat.conversation, circle.gathering, circle.gathering_plan]
+    typed_presentation: [GatheringChatBoardSlice, GatheringPrivateDetailSlice, GatheringBoardPlanSlice]
     auth_requirement: required
     capability_requirements: { all_of: [], any_of: [] }
     telemetry_descriptor: { event_namespace: page.chat.gathering_board, lifecycle: [enter, exit, refresh, open_capability, failure] }
