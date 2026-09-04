@@ -106,3 +106,15 @@ func TestRedactedPayloadKeepsTrustedContextWithoutRawText(t *testing.T) {
 		}
 	}
 }
+
+func TestSortedProjectionReasonCodesUsesCanonicalOrder(t *testing.T) {
+	t.Parallel()
+
+	got := learningmodel.SortedProjectionReasonCodes(map[string]int64{
+		"quality":    2,
+		"completion": 1,
+	})
+	if len(got) != 2 || got[0] != "completion" || got[1] != "quality" {
+		t.Fatalf("sorted projection reason codes = %v", got)
+	}
+}

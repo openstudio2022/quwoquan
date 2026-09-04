@@ -101130,7 +101130,7 @@
         "localContract": [
           {
             "path": "quwoquan_service/services/assistant-service/tests/local_contract/assistant/assistant_learning_fact/fact_validation__security__local_contract_test.go",
-            "sha256": "d6da282e9b840014b043b2eafc42b661dda8b273c132d322883b6692590ce042"
+            "sha256": "de498e50ecf7f1f7e74003614be6072e1ff1fd1fd679392b2f7280c01b5bb177"
           },
           {
             "path": "quwoquan_service/services/assistant-service/tests/local_contract/assistant/assistant_learning_fact/learning_fact__local_contract_test.go",

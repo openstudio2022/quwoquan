@@ -1,5 +1,5 @@
 // Code generated from the accepted ContractGraph. DO NOT EDIT.
-// ContractGraph SHA256: 692d9cee9361c0808d878fedc1fd14cffbf1309a5abe57519717852663f44024
+// ContractGraph SHA256: fab62e2fdbd44afc23fe0c42c057f85e6ee36b06af3fa9889ffa9a7a1bc0c2f1
 
 part of '../../../realtime/realtime_operation_contracts.g.dart';
 
