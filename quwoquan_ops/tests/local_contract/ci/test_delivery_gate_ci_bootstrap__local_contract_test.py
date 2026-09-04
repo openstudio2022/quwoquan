@@ -364,23 +364,26 @@ def test_hosted_gate_jobs_prepare_tesseract_before_repository_gate() -> None:
     assert "matrix.shard_index" not in install_step
 
 
-def test_hosted_non_app_repository_gates_do_not_install_unused_flutter_sdk() -> None:
+def test_hosted_non_app_repository_gates_install_shared_codegen_flutter_sdk() -> None:
     workflow = (ROOT / ".github/workflows/delivery-gate.yml").read_text(
         encoding="utf-8"
     )
     gate = GATE_REPO_PATH.read_text(encoding="utf-8")
     shared_prelude = gate[: gate.index("\nfi\n\nrun_service_core_before_packaging")]
 
-    # Dart is required only by the Service/App phase functions below the shared
-    # prelude. Data and Portal never dispatch those functions, so downloading a
-    # full Flutter SDK in every hosted non-App job is pure setup overhead.
-    assert "command -v dart" not in shared_prelude
-    assert "\ndart " not in shared_prelude
+    # Every repository scope executes the shared App generated-manifest clean
+    # rebuild. The verifier invokes Dart indirectly through codegen, so hosted
+    # Data and Portal jobs must install the repository-pinned Flutter SDK.
+    assert "verify_app_generated_manifest.py" in shared_prelude
     for job_name in ("quwoquan_data", "quwoquan_data_tests", "ops_portal"):
         job = _job_body(workflow, job_name)
-        assert "Resolve repository-pinned Flutter SDK for repository gate" not in job
-        assert "Install verified Flutter SDK for repository gate" not in job
-        assert "setup_flutter_sdk.py" not in job
+        resolve = "Resolve repository-pinned Flutter SDK for repository gate"
+        install = "Install verified Flutter SDK for repository gate"
+        assert job.count(resolve) == 1
+        assert job.count(install) == 1
+        assert job.count("setup_flutter_sdk.py resolve") == 1
+        assert job.count("setup_flutter_sdk.py install") == 1
+        assert job.index(install) < job.index("bash quwoquan_ops/gate/gate_repo.sh")
 
 
 def test_service_gate_installs_required_native_test_dependencies() -> None:

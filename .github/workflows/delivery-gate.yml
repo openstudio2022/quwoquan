@@ -246,7 +246,7 @@ jobs:
             echo "- exact SHA: \`${{ inputs.head_sha || github.sha }}\`"
             echo "- elapsed: \`${DURATION_SECONDS}s\`"
             echo "- job hard boundary: \`900s (15m)\`"
-            echo "- Delivery PR soft/hard targets remain \`600s/900s\`; this job timing alone does not claim the whole run meets them."
+            echo "- Canonical Delivery PR soft/hard targets remain \`1500s/1800s\`; this 900s job boundary does not replace the whole-run budget."
           } >> "$GITHUB_STEP_SUMMARY"
 
   topology_regression:
