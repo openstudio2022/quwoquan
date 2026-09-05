@@ -197,11 +197,16 @@ def test_current_task_init_documents_publish_one_post_plan_and_apply(
         "content.release.canonical.publish_object.execution_root",
         lambda _execution_id: execution,
     )
-    monkeypatch.setattr(
-        "content.release.canonical.publish_object._review_approved",
-        lambda _execution_id, _path, **_kwargs: None,
-    )
+    review_gate_calls: list[tuple[str, str]] = []
 
+    def validate_review_gate(*, execution_id: str, target_ref: str, **_kwargs: object) -> tuple[object, dict[str, str]]:
+        review_gate_calls.append((execution_id, target_ref))
+        return object(), {"decision": "approved"}
+
+    monkeypatch.setattr(
+        "content.release.canonical.publish_object.validate_publish_review_chain",
+        validate_review_gate,
+    )
     planned = publish_object(EXECUTION_ID, f"posts/{CURRENT_POST_REF}")
     applied = publish_object(EXECUTION_ID, f"posts/{CURRENT_POST_REF}", apply=True)
 
@@ -212,6 +217,10 @@ def test_current_task_init_documents_publish_one_post_plan_and_apply(
     )
     assert planned["status"] == "ready"
     assert applied["status"] == "published"
+    assert review_gate_calls == [
+        (EXECUTION_ID, f"posts/{CURRENT_POST_REF}"),
+        (EXECUTION_ID, f"posts/{CURRENT_POST_REF}"),
+    ]
     assert applied["admissionResult"] == "appended"
     assert published["sourceIdentity"]["executionId"] == EXECUTION_ID
     assert "sourceDigest" not in published
