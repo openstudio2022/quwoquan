@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 from content.release.canonical import aggregate_release_pool as pool
-from content.release.canonical.environment_release_candidate import PoolCandidate
+from content.release.canonical.aggregate_release_selection import PoolCandidate
 from content.release.canonical.object_transaction_contract import ObjectTransactionError
 from core.schema import assert_valid
 
@@ -46,7 +46,7 @@ def _article_candidate() -> PoolCandidate:
 def _stub_pool_facts(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         pool,
-        "discover_pool_candidates",
+        "discover_explicit_cohort_candidates",
         lambda **_kwargs: ([_article_candidate()], []),
     )
     monkeypatch.setattr(
@@ -80,10 +80,9 @@ def test_partial_research_cohort_omits_milestone_and_builds_exact_explicit_set(
         release_class="research",
     )
 
-    assert prepared.environment_selection.selection_scope == "explicit_cohort"
-    assert prepared.environment_selection.milestone is None
-    assert prepared.environment_selection.milestone_targets is None
-    assert prepared.environment_selection.counts == {
+    assert prepared.cohort_selection.milestone is None
+    assert prepared.cohort_selection.milestone_targets is None
+    assert prepared.cohort_selection.counts == {
         "homepage": 0,
         "article": 1,
         "image": 0,
@@ -99,7 +98,7 @@ def test_commercial_post_scope_rejected_before_candidate_closure(
     calls: list[str] = []
     monkeypatch.setattr(
         pool,
-        "discover_pool_candidates",
+        "discover_explicit_cohort_candidates",
         lambda **_kwargs: ([_article_candidate()], []),
     )
     monkeypatch.setattr(

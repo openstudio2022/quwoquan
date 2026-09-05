@@ -705,7 +705,7 @@ def test_sealed_release_rejects_unsafe_ref_and_parent_symlink(terminal, tmp_path
 def test_historical_reader_and_exact_replay_ignore_future_contract_revision(terminal) -> None:
     document, path, _ = _write_handoff(terminal)
     terminal[-1].clear()
-    contract = terminal[0] / handoff._PRODUCER_CONTRACT_PATHS[0] / "contract.json"
+    contract = terminal[0] / handoff._PRODUCER_CONTRACT_PATHS[0]
     _canonical(contract, {"contract": "next-revision"})
     subprocess.run(["git", "add", str(contract.relative_to(terminal[0]))], cwd=terminal[0], check=True)
     subprocess.run(["git", "commit", "-qm", "next contract"], cwd=terminal[0], check=True)
@@ -719,7 +719,7 @@ def test_historical_reader_and_exact_replay_ignore_future_contract_revision(term
 
 
 def test_new_handoff_rejects_current_contract_baseline_drift(terminal) -> None:
-    contract = terminal[0] / handoff._PRODUCER_CONTRACT_PATHS[0] / "contract.json"
+    contract = terminal[0] / handoff._PRODUCER_CONTRACT_PATHS[0]
     _canonical(contract, {"contract": "drift"})
     with pytest.raises(handoff.ProducerReleaseHandoffError, match="BASELINE_DRIFT"):
         _write_handoff(terminal)
@@ -783,6 +783,20 @@ def test_new_handoff_ignores_environment_consumer_schema_drift(
 ) -> None:
     schema = terminal[0] / consumer_schema
     _canonical(schema, {"contract": "consumer schema drift"})
+
+    document, path, replayed = _write_handoff(terminal)
+
+    assert replayed is False
+    assert document["schema"] == "quwoquan_data.producer_release_handoff"
+    assert path.is_file()
+
+
+def test_new_handoff_ignores_environment_consumer_implementation_drift(terminal) -> None:
+    implementation = terminal[0] / (
+        "quwoquan_data/scripts/content/release/environment/consumer.py"
+    )
+    implementation.parent.mkdir(parents=True, exist_ok=True)
+    implementation.write_text("CONSUMER = 'changed'\n", encoding="utf-8")
 
     document, path, replayed = _write_handoff(terminal)
 

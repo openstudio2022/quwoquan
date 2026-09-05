@@ -12,7 +12,7 @@ from content.release.canonical.aggregate_release_documents import (
     release_attestation_document,
     release_header_document,
 )
-from content.release.canonical.environment_release_candidate import EnvironmentReleaseSelection
+from content.release.canonical.aggregate_release_selection import ExplicitCohortSelection
 from content.release.canonical.object_transaction_contract import (
     ObjectTransactionError,
     _read_json,
@@ -43,7 +43,7 @@ def reuse_existing_aggregate_release(
     source_digests: tuple[SourceDefinitionSnapshot, ...],
     desired: dict[str, list[str]],
     release_class: str,
-    cohort_selection: EnvironmentReleaseSelection,
+    cohort_selection: ExplicitCohortSelection,
     release_contents: list[dict[str, object]] | None,
     release_authors: list[dict[str, object]] | None,
     milestone: str | None,

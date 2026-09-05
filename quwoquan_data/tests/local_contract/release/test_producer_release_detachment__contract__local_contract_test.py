@@ -137,7 +137,10 @@ def test_producer_forward_import_graph_has_no_environment_edge() -> None:
         "content.release.canonical.aggregate_release_builder",
         "content.release.canonical.aggregate_release_existing",
         "content.release.canonical.aggregate_release_documents",
+        "content.release.canonical.aggregate_release_pool",
+        "content.release.canonical.aggregate_release_pool_closure",
         "content.release.canonical.aggregate_release_result",
+        "content.release.canonical.aggregate_release_selection",
         "content.release.canonical.handler_pool",
         "content.release.canonical.producer_release_handoff",
         "content.release.canonical.integrity",
@@ -151,6 +154,20 @@ def test_producer_forward_import_graph_has_no_environment_edge() -> None:
         imports.update(_imports(path))
 
     assert not any(name.startswith("content.release.environment") for name in imports)
+
+
+def test_producer_release_graph_has_no_consumer_named_selection_model() -> None:
+    for name in (
+        "aggregate_release_builder.py",
+        "aggregate_release_existing.py",
+        "aggregate_release_pool.py",
+        "aggregate_release_selection.py",
+    ):
+        source = (_CANONICAL_ROOT / name).read_text(encoding="utf-8")
+        assert "EnvironmentRelease" not in source
+        assert "environment_selection" not in source
+        assert "selection_scope" not in source
+        assert "targetEnvironment" not in source
 
 
 def test_producer_cli_registration_does_not_load_consumer_modules() -> None:
@@ -183,7 +200,7 @@ def test_milestone_build_writes_no_uat_artifact_or_consumer_fields(
     )
     preparation = SimpleNamespace(
         excluded=(),
-        environment_selection=selection,
+        cohort_selection=selection,
         execution_ids=[execution_id],
         source_digests=(SourceDefinitionSnapshot("sha256:" + "1" * 64),),
         source_identities=({

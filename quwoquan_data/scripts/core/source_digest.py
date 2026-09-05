@@ -19,10 +19,42 @@ from pathlib import Path
 from core.paths import DATA_CACHE_ROOT, REPO_ROOT
 
 _SOURCE_DEFINITION_INPUT_ROOTS = (
-    'quwoquan_data/schema/_common',
-    'quwoquan_data/schema/content',
-    'quwoquan_data/schema/execution',
-    'quwoquan_data/schema/source',
+    '.agents/skills/content-production/SKILL.md',
+    '.agents/skills/content-production/references/boundary.md',
+    '.agents/skills/content-production/references/execution-layout.md',
+    '.agents/skills/content-production/references/handoff-protocol.md',
+    '.agents/skills/content-production/references/orchestration.md',
+    '.agents/skills/content-production/references/recovery.md',
+    '.agents/skills/content-production/references/stage-contracts/0.plan.md',
+    '.agents/skills/content-production/references/stage-contracts/sources.md',
+    '.agents/skills/content-production/references/stage-contracts/1.download.md',
+    '.agents/skills/content-production/references/stage-contracts/2.quality.md',
+    '.agents/skills/content-production/references/stage-contracts/3.compose.md',
+    '.agents/skills/content-production/references/stage-contracts/4.draft.md',
+    '.agents/skills/content-production/references/stage-contracts/5.review.md',
+    '.agents/skills/content-production/references/stage-contracts/publish.md',
+    '.agents/skills/content-production/references/stage-contracts/release.md',
+    'quwoquan_data/schema/_common/data_issue.schema.json',
+    'quwoquan_data/schema/content/content_review.schema.json',
+    'quwoquan_data/schema/content/entity_page_input.schema.json',
+    'quwoquan_data/schema/content/image_work.schema.json',
+    'quwoquan_data/schema/content/post_manifest.schema.json',
+    'quwoquan_data/schema/content/quality_analysis.schema.json',
+    'quwoquan_data/schema/content/video_script.schema.json',
+    'quwoquan_data/schema/content/writing_pack.schema.json',
+    'quwoquan_data/schema/execution/carrier_demand.schema.json',
+    'quwoquan_data/schema/execution/content_execution_manifest.schema.json',
+    'quwoquan_data/schema/execution/immutable_candidate_bindings.schema.json',
+    'quwoquan_data/schema/execution/publish_ref.schema.json',
+    'quwoquan_data/schema/execution/stage_close_input.schema.json',
+    'quwoquan_data/schema/execution/stage_open_request.schema.json',
+    'quwoquan_data/schema/execution/stage_receipt.schema.json',
+    'quwoquan_data/schema/execution/target_set.schema.json',
+    'quwoquan_data/schema/execution/task_init_request.schema.json',
+    'quwoquan_data/schema/source/atomic_source_unit_meta.schema.json',
+    'quwoquan_data/schema/source/object_source_refs.schema.json',
+    'quwoquan_data/schema/source/source_candidate.schema.json',
+    'quwoquan_data/schema/source/source_plan.schema.json',
     'quwoquan_data/schema/publish/entity.schema.json',
     'quwoquan_data/schema/release/asset_rights_closure.schema.json',
     'quwoquan_data/schema/release/content_pool_handoff_query.schema.json',
@@ -37,25 +69,86 @@ _SOURCE_DEFINITION_INPUT_ROOTS = (
     'quwoquan_data/schema/release/release_header.schema.json',
     'quwoquan_data/schema/governance/_definition.schema.json',
     'quwoquan_data/schema/governance/content_distribution_policy.schema.json',
-    'quwoquan_data/control_plane',
+    'quwoquan_data/control_plane/_shared/content_distribution.policy.yaml',
+    'quwoquan_data/control_plane/_shared/media_processing.policy.yaml',
+    'quwoquan_data/control_plane/_shared/catalogs/content_source_registry.yaml',
     'quwoquan_data/prompts',
     'quwoquan_data/templates',
     'quwoquan_data/verticals/travel',
-    'quwoquan_data/reference',
     'quwoquan_data/requirements.txt',
+    'quwoquan_data/scripts/content/execution',
+    'quwoquan_data/scripts/content/source',
+    'quwoquan_data/scripts/content/release/canonical/aggregate_release.py',
+    'quwoquan_data/scripts/content/release/canonical/aggregate_release_builder.py',
+    'quwoquan_data/scripts/content/release/canonical/aggregate_release_closure.py',
+    'quwoquan_data/scripts/content/release/canonical/aggregate_release_documents.py',
+    'quwoquan_data/scripts/content/release/canonical/aggregate_release_existing.py',
+    'quwoquan_data/scripts/content/release/canonical/aggregate_release_pool.py',
+    'quwoquan_data/scripts/content/release/canonical/aggregate_release_pool_closure.py',
+    'quwoquan_data/scripts/content/release/canonical/aggregate_release_result.py',
+    'quwoquan_data/scripts/content/release/canonical/aggregate_release_selection.py',
+    'quwoquan_data/scripts/content/release/canonical/content_pool_handoff.py',
+    'quwoquan_data/scripts/content/release/canonical/content_pool_record.py',
+    'quwoquan_data/scripts/content/release/canonical/creator_avatar_quality.py',
+    'quwoquan_data/scripts/content/release/canonical/effective_admission.py',
+    'quwoquan_data/scripts/content/release/canonical/handler.py',
+    'quwoquan_data/scripts/content/release/canonical/handler_pool.py',
+    'quwoquan_data/scripts/content/release/canonical/image_identity.py',
+    'quwoquan_data/scripts/content/release/canonical/media_holding_closure.py',
+    'quwoquan_data/scripts/content/release/canonical/media_library_holding.py',
+    'quwoquan_data/scripts/content/release/canonical/object_source_identity.py',
+    'quwoquan_data/scripts/content/release/canonical/object_transaction_bindings.py',
+    'quwoquan_data/scripts/content/release/canonical/object_transaction_contract.py',
+    'quwoquan_data/scripts/content/release/canonical/object_transaction_environment.py',
+    'quwoquan_data/scripts/content/release/canonical/object_transaction_lock.py',
+    'quwoquan_data/scripts/content/release/canonical/pool_record_history.py',
+    'quwoquan_data/scripts/content/release/canonical/pool_source_attribution.py',
+    'quwoquan_data/scripts/content/release/canonical/producer_release_handoff.py',
+    'quwoquan_data/scripts/content/release/canonical/publish_homepage_object.py',
+    'quwoquan_data/scripts/content/release/canonical/publish_object.py',
+    'quwoquan_data/scripts/content/release/canonical/release_admission.py',
+    'quwoquan_data/scripts/content/release/canonical/release_attestation.py',
+    'quwoquan_data/scripts/content/release/canonical/release_consistency.py',
+    'quwoquan_data/scripts/content/release/canonical/release_consistency_report.py',
+    'quwoquan_data/scripts/content/release/canonical/release_header.py',
+    'quwoquan_data/scripts/content/release/canonical/release_media_consistency.py',
+    'quwoquan_data/scripts/content/release/canonical/review_rights_binding.py',
+    'quwoquan_data/scripts/content/release/canonical/sealed_release_facts.py',
+    'quwoquan_data/scripts/core/asset_identity.py',
+    'quwoquan_data/scripts/core/content_library.py',
+    'quwoquan_data/scripts/core/content_source_registry.py',
+    'quwoquan_data/scripts/core/control_types.py',
+    'quwoquan_data/scripts/core/image_decode.py',
+    'quwoquan_data/scripts/core/image_rules.py',
+    'quwoquan_data/scripts/core/image_variants.py',
+    'quwoquan_data/scripts/core/io.py',
+    'quwoquan_data/scripts/core/media_asset_url.py',
+    'quwoquan_data/scripts/core/media_processing_policy.py',
+    'quwoquan_data/scripts/core/object_storage_budget.py',
+    'quwoquan_data/scripts/core/paths.py',
+    'quwoquan_data/scripts/core/release_layout.py',
+    'quwoquan_data/scripts/core/release_media_binding.py',
+    'quwoquan_data/scripts/core/schema.py',
+    'quwoquan_data/scripts/core/source_attribution.py',
+    'quwoquan_data/scripts/core/source_digest.py',
+    'quwoquan_data/scripts/core/tree_integrity.py',
+    'quwoquan_data/scripts/governance/coverage/distribution.py',
+    'quwoquan_data/scripts/governance/coverage/license.py',
     'quwoquan_service/services/content-service/contracts/media/media_asset/image_variant_policy.yaml',
 )
 _EXECUTION_BUNDLE_INPUT_ROOTS = (
-    "quwoquan_data/scripts",
+    "quwoquan_data/scripts/content/execution",
+    "quwoquan_data/scripts/content/source",
     "quwoquan_data/requirements.txt",
-    "quwoquan_ops/policies/branch_policy.yaml",
-    "specs/feature-tree/discovery-content/object-homepage-coverage-scaling/spec.md",
-    "specs/feature-tree/discovery-content/object-homepage-coverage-scaling/design.md",
-    "specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md",
 )
-# Kept for terminal legacy evidence only. New candidates bind the two identities
-# separately so executor refactors do not pretend that content semantics changed.
-_INPUT_ROOTS = ("quwoquan_data/scripts", *_SOURCE_DEFINITION_INPUT_ROOTS)
+
+# Historical combined sourceDigest documents used the broad scripts root. Keep
+# that input name only for immutable terminal evidence parsing; current producer
+# source-definition and execution-bundle identities use the exact tuples above.
+_LEGACY_SOURCE_DIGEST_INPUT_ROOTS = (
+    "quwoquan_data/scripts",
+    *_SOURCE_DEFINITION_INPUT_ROOTS,
+)
 # Data execution identity is deliberately environment-neutral. Environment
 # topology and readiness policy apply only when an immutable release is shipped.
 _DIGEST_PREFIX = "sha256:"
@@ -102,7 +195,7 @@ class SourceDigest:
                 previous_entries = {}
             next_entries: dict[str, dict[str, object]] = {}
             digest = hashlib.sha256()
-            for relative_root in _INPUT_ROOTS:
+            for relative_root in _LEGACY_SOURCE_DIGEST_INPUT_ROOTS:
                 root = normalized_root / relative_root
                 if not root.exists():
                     raise SourceDigestError(
@@ -152,7 +245,7 @@ class SourceDigest:
         if not isinstance(digest, str) or not _is_sha256(digest):
             raise SourceDigestError("sourceDigest.digest must be a sha256 digest")
         inputs = value.get("inputs")
-        if not isinstance(inputs, list) or tuple(inputs) != _INPUT_ROOTS:
+        if not isinstance(inputs, list) or tuple(inputs) != _LEGACY_SOURCE_DIGEST_INPUT_ROOTS:
             raise SourceDigestError("sourceDigest.inputs must name the fixed repository inputs")
         return cls(digest=digest)
 
@@ -160,7 +253,7 @@ class SourceDigest:
         return {
             "algorithm": "sha256",
             "digest": self.digest,
-            "inputs": list(_INPUT_ROOTS),
+            "inputs": list(_LEGACY_SOURCE_DIGEST_INPUT_ROOTS),
         }
 
 
