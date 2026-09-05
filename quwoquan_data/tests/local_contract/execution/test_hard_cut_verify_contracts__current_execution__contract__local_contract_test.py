@@ -345,6 +345,96 @@ def test_video_script_schema_and_stage_gate_require_execution_identity(
     assert any("video_script.json: executionId drift" in item for item in report["issues"])
 
 
+def test_quality_and_compose_hard_gates_bind_selected_source_anchors(
+    initialized: tuple[Path, Path], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root, _ = initialized
+    object_root = root / TARGET_REF
+    source_ref = "sources/source-a/source.md"
+    source_path = root / source_ref
+    source_path.parent.mkdir(parents=True, exist_ok=True)
+    source_path.write_text("source facts\n", encoding="utf-8")
+    _write(object_root / "1.download/source_refs.json", {
+        "schema": "quwoquan_data.object_source_refs",
+        "executionId": EXECUTION_ID,
+        "objectRef": TARGET_REF,
+        "sources": [{
+            "sourceUnitId": "source-a",
+            "sourceRef": source_ref,
+            "metaRef": "sources/source-a/meta.json",
+            "sourcePlanRef": "sources/plans/" + "a" * 64 + ".json",
+            "sourcePlanDigest": "sha256:" + "b" * 64,
+            "chosenCandidateDigest": "sha256:" + "c" * 64,
+            "sourceId": "source-a",
+            "sourceClass": "official",
+            "targetRefs": [TARGET_REF],
+        }],
+    })
+    quality_path = _write(object_root / "2.quality/quality_analysis.json", {
+        "schema": "quwoquan_data.quality_analysis",
+        "stage": "2.quality",
+        "executionId": EXECUTION_ID,
+        "executionBinding": "frozen",
+        "recommendation": "proceed",
+        "sourceRefs": {
+            "ref": "1.download/source_refs.json",
+            "digest": _digest(object_root / "1.download/source_refs.json"),
+        },
+        "sourcePaths": [source_ref],
+        "sourceAdmissions": [{
+            "sourceRef": source_ref,
+            "decision": "selected",
+            "evidenceHash": _digest(source_path),
+        }],
+        "rejectionReasons": [],
+        "evidenceHashes": [_digest(source_path)],
+    })
+    compose_path = _write(object_root / "3.compose/writing_pack.json", {
+        "schema": "quwoquan_data.writing_pack",
+        "stage": "3.compose",
+        "executionId": EXECUTION_ID,
+        "executionBinding": "frozen",
+        "qualityRef": "2.quality/quality_analysis.json",
+        "qualityDigest": _digest(quality_path),
+        "selectedSourceUrls": ["https://example.com/source"],
+        "selectedSourceRefs": [source_ref],
+        "ref": TARGET_REF,
+        "kind": "post",
+        "title": "西湖秋色",
+        "carrier": "video",
+    })
+    monkeypatch.setattr(stage_artifacts, "execution_root", lambda _execution_id: root)
+
+    quality_report = stage_artifacts.verify_stage_artifacts(
+        execution_id=EXECUTION_ID,
+        publish_root=root / "publish",
+        release_root=root / "release",
+        through="2.quality",
+    )
+    compose_report = stage_artifacts.verify_stage_artifacts(
+        execution_id=EXECUTION_ID,
+        publish_root=root / "publish",
+        release_root=root / "release",
+        through="3.compose",
+    )
+    assert quality_report["passed"], quality_report["issues"]
+    assert compose_report["passed"], compose_report["issues"]
+
+    quality = json.loads(quality_path.read_text(encoding="utf-8"))
+    quality["sourceAdmissions"][0]["decision"] = "rejected"
+    _write(quality_path, quality)
+    compose = json.loads(compose_path.read_text(encoding="utf-8"))
+    compose["qualityDigest"] = _digest(quality_path)
+    _write(compose_path, compose)
+    report = stage_artifacts.verify_stage_artifacts(
+        execution_id=EXECUTION_ID,
+        publish_root=root / "publish",
+        release_root=root / "release",
+        through="3.compose",
+    )
+    assert any("non-retained source IDs" in issue for issue in report["issues"])
+
+
 # spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-020.t12
 def test_content_review_schema_owns_one_decision_and_asset_rights() -> None:
     document = {
