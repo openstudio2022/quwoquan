@@ -87,6 +87,25 @@ def _source_rows(execution_root: Path, object_dir: Path) -> list[dict[str, Any]]
     return rows
 
 
+def _homepage_source_kind(raw: Mapping[str, Any]) -> tuple[str, str, str]:
+    identity = " ".join(
+        (
+            str(raw.get("sourceId") or ""),
+            str(raw.get("sourceKind") or ""),
+            str((raw.get("meta") or {}).get("sourceClass") or ""),
+        )
+    ).lower()
+    if "wikipedia" in identity:
+        return "wikipedia", "wikipedia_api", "encyclopedia-primary"
+    if "baidu" in identity:
+        return "baidu_baike", "baidu_baike_html", "encyclopedia-primary"
+    if "toutiao" in identity:
+        return "toutiao_baike", "toutiao_baike_html", "encyclopedia-primary"
+    if any(marker in identity for marker in ("media", "image", "commons")):
+        return "image_collection", "image_collection_download", "image-collection-attribution"
+    raise ObjectTransactionError("homepage source catalog source kind is unsupported")
+
+
 def _source_catalog(
     rows: Sequence[Mapping[str, Any]], *, entity_name: str
 ) -> dict[str, Any]:
@@ -95,24 +114,13 @@ def _source_catalog(
         meta = raw.get("meta") if isinstance(raw.get("meta"), Mapping) else {}
         url = str(raw.get("sourceUrl") or "").strip()
         mode = str(raw.get("sourceUseMode") or "").strip()
-        source_id = str(raw.get("sourceId") or "").strip()
-        identity = " ".join((source_id, str(raw.get("sourceKind") or ""))).lower()
-        source_kind = (
-            "wikipedia"
-            if "wikipedia" in identity
-            else "baidu_baike"
-            if "baidu" in identity
-            else "toutiao_baike"
-            if "toutiao" in identity
-            else ""
-        )
+        source_kind, extractor, policy_revision = _homepage_source_kind(raw)
         if (
             not url.startswith("https://")
             or mode not in {"licensed_adaptation", "factual_reference_only"}
-            or not source_kind
         ):
             raise ObjectTransactionError(
-                "homepage source catalog lacks canonical encyclopedia facts"
+                "homepage source catalog lacks canonical source facts"
             )
         source_ref = str(raw.get("sourceRef") or "")
         unit_id = Path(source_ref).parts[1]
@@ -121,28 +129,27 @@ def _source_catalog(
             "sourceUnitId": unit_id,
             "entityName": entity_name,
             "sourceKind": source_kind,
-            "extractor": {
-                "wikipedia": "wikipedia_api",
-                "baidu_baike": "baidu_baike_html",
-                "toutiao_baike": "toutiao_baike_html",
-            }[source_kind],
+            "extractor": extractor,
             "canonicalUrl": url,
             "sourceUrl": url,
             "title": str(meta.get("title") or entity_name),
             "fetchedAt": str(raw.get("fetchedAt") or ""),
             "snapshotHash": str(meta.get("rawSha256") or raw.get("digest") or ""),
-            "policyRevision": "encyclopedia-primary",
+            "policyRevision": policy_revision,
             "sourceUseMode": mode,
             "evidenceRef": f"evidence/sources/{unit_id}/meta.json",
         }
         sources.append(row)
-    if not sources:
-        raise ObjectTransactionError("homepage source catalog requires sources")
+    primaries = [
+        row for row in sources if row["policyRevision"] == "encyclopedia-primary"
+    ]
+    if not primaries:
+        raise ObjectTransactionError("homepage source catalog requires encyclopedia primary")
     catalog = {
         "schema": "quwoquan_data.object_source_catalog",
         "policyRevision": "encyclopedia-primary",
-        "primaryEvidenceRef": sources[0]["evidenceRef"],
-        "primarySource": sources[0],
+        "primaryEvidenceRef": primaries[0]["evidenceRef"],
+        "primarySource": primaries[0],
         "sources": sources,
     }
     assert_valid(catalog, "publish", "source_catalog", label="homepage source catalog")
@@ -167,18 +174,34 @@ def _text_attribution(
         if len(identities) != 1:
             raise ObjectTransactionError("selected sourceAttribution values drift")
         return dict(explicit[0])
-    primary = rows[0]
+    encyclopedia = [
+        raw
+        for raw in rows
+        if any(
+            marker in " ".join(
+                str(raw.get(key) or "")
+                for key in ("sourceId", "sourceRef", "sourceKind")
+            ).lower()
+            for marker in ("wikipedia", "baidu", "toutiao")
+        )
+    ]
+    primary = encyclopedia[0] if encyclopedia else rows[0]
     source_url = str(primary.get("sourceUrl") or "")
     source_identity = " ".join(
         str(primary.get(key) or "")
         for key in ("sourceId", "sourceRef", "sourceKind")
     ).lower()
-    if "wikipedia" in source_identity:
-        return encyclopedia_source_attribution(
-            source_kind="wikipedia",
-            source_url=source_url,
-            captured_at=str(primary.get("fetchedAt") or ""),
-        )
+    for marker, source_kind in (
+        ("wikipedia", "wikipedia"),
+        ("baidu", "baidu_baike"),
+        ("toutiao", "toutiao_baike"),
+    ):
+        if marker in source_identity:
+            return encyclopedia_source_attribution(
+                source_kind=source_kind,
+                source_url=source_url,
+                captured_at=str(primary.get("fetchedAt") or ""),
+            )
     collected_at = str(primary.get("fetchedAt") or "").strip()
     author_id = str(creator.get("authorId") or "").strip()
     if not source_url.startswith("https://") or not collected_at or not author_id:
@@ -581,6 +604,7 @@ def _asset_projection(
             else "detail"
         ),
         "sourceAssetId": str(source.get("sourceAssetId") or ""),
+        "sourceRef": (Path(source_ref).parent.parent / "source.md").as_posix(),
         "creator": creator,
         "platform": str(source.get("platform") or "")
         or urlparse(source_url).netloc,
@@ -695,6 +719,13 @@ def _project_assets(
             raise ObjectTransactionError(
                 "video final projection requires exact video+poster assets"
             )
+    binding_captions = {
+        str(raw.get("sourceAssetRef") or raw.get("assetRef") or "").strip(): str(
+            raw.get("caption") or raw.get("captionIntent") or ""
+        ).strip()
+        for raw in compose.get("assets") or []
+        if isinstance(raw, Mapping)
+    }
     caption = str(draft.get("caption") or compose.get("title") or "")
     assets: list[dict[str, Any]] = []
     files: dict[Path, bytes | Path] = {}
@@ -703,7 +734,7 @@ def _project_assets(
             execution_root=execution_root,
             source_ref=ref,
             source=index[ref],
-            caption=caption,
+            caption=binding_captions.get(ref) or caption,
         )
         if destination in files and files[destination] != source_path:
             raise ObjectTransactionError(
@@ -732,8 +763,16 @@ def _homepage_surface(
     )
     attribution = _text_attribution(source_rows, creator)
     payload = compose.get("payload") if isinstance(compose.get("payload"), Mapping) else {}
+    bindings = payload.get("imagePlaceholderBindings") or []
     homepage_compose = {
-        "assets": payload.get("imagePlaceholderBindings") or [],
+        "assets": [
+            {
+                **dict(raw),
+                "caption": str(raw.get("captionIntent") or ""),
+            }
+            for raw in bindings
+            if isinstance(raw, Mapping)
+        ],
         "title": str(target.get("name") or ""),
     }
     assets, media = _project_assets(
@@ -743,9 +782,20 @@ def _homepage_surface(
         compose=homepage_compose,
         draft={},
     ) if homepage_compose["assets"] else ([], {})
+    for asset in assets:
+        asset["fileName"] = Path(str(asset["fileName"])).name
     entity_ref = "/entity/" + target_ref.removeprefix("entities/")
     domain, type_name = str(target.get("entityType") or "").split("/", 1)
-    tag_refs = _target_tag_refs(target)
+    geo_tag_ref = "Topic/地理/行政区/" + str(target.get("region") or "").strip("/")
+    if geo_tag_ref.endswith("/"):
+        raise ObjectTransactionError("homepage target lacks geo region")
+    tag_refs = sorted({*_target_tag_refs(target), geo_tag_ref})
+    catalog = _source_catalog(source_rows, entity_name=str(target.get("name") or ""))
+    primary_source = {
+        key: value
+        for key, value in catalog["primarySource"].items()
+        if key not in {"schema", "sourceUnitId", "evidenceRef"}
+    }
     entity = {
         "label": str(target.get("name") or ""),
         "domain": domain,
@@ -754,29 +804,24 @@ def _homepage_surface(
         "entityRef": entity_ref,
         "sourceRefs": [str(row["sourceRef"]) for row in source_rows],
         "sourceUrls": [str(row["sourceUrl"]) for row in source_rows],
-        "primarySource": {
-            "sourceKind": str(source_rows[0].get("sourceKind") or ""),
-            "sourceUrl": str(source_rows[0].get("sourceUrl") or ""),
-            "fetchedAt": str(source_rows[0].get("fetchedAt") or ""),
-        },
+        "primarySource": primary_source,
         "sourceAttribution": attribution,
         "tagRefs": tag_refs,
+        "geoTagRef": geo_tag_ref,
         **creator,
     }
     manifest = {
         "vertical": "travel",
         "sourceAttribution": attribution,
         "assets": assets,
-        "contentType": "article",
-        "publishMediaMode": "text_only",
+        "contentType": "homepage",
+        "publishMediaMode": "not_applicable" if assets else "text_only",
     }
     return {
         Path("page.md"): page_path,
         Path("_entity.json"): _json_bytes(entity),
         Path("manifest.json"): _json_bytes(manifest),
-        Path("evidence/source_catalog.json"): _json_bytes(
-            _source_catalog(source_rows, entity_name=str(target.get("name") or ""))
-        ),
+        Path("evidence/source_catalog.json"): _json_bytes(catalog),
         **media,
     }
 

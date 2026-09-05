@@ -356,9 +356,116 @@ def test_homepage_projects_entity_page_manifest_and_source_catalog(
     )
     assert entity["entityRef"] == "/entity/地点/景区/西门"
     assert entity["creatorProfileId"] == "qwq_creator_geo_editor_001"
+    assert entity["geoTagRef"] == "Topic/地理/行政区/中国/测试区"
     assert catalog["primarySource"]["sourceKind"] == "wikipedia"
+    assert_valid(entity, "publish", "entity")
     assert_valid(catalog, "publish", "source_catalog")
 
+
+
+def _homepage_media_fixture(
+    tmp_path: Path,
+) -> tuple[Path, Path, dict[str, object], str]:
+    root, obj, target = _homepage_fixture(tmp_path)
+    asset_ref = "sources/commons/assets/cover.jpg"
+    asset = root / asset_ref
+    asset.parent.mkdir(parents=True)
+    from PIL import Image
+
+    Image.new("RGB", (32, 24), color=(32, 96, 160)).save(asset)
+    source = root / "sources/commons/source.md"
+    source.write_text("# Commons image source\n", encoding="utf-8")
+    _write_json(
+        root / "sources/commons/meta.json",
+        {
+            "sourceId": "wikimedia_commons",
+            "canonicalUrl": "https://commons.example.test/file",
+            "sourceUseMode": "licensed_adaptation",
+            "sourceClass": "open_license_media",
+            "title": "西门封面",
+            "fetchedAt": "2026-09-06T00:00:01Z",
+            "rawSha256": _digest(source),
+            "rightsClue": "作者 Fixture Photographer，CC BY 4.0。",
+        },
+    )
+    _write_json(
+        root / "sources/commons/assets/index.json",
+        {
+            "assets": [
+                {
+                    "fileName": "cover.jpg",
+                    "sourceAssetId": "cover",
+                    "assetRole": "image",
+                    "mimeType": "image/jpeg",
+                    "sourceUrl": "https://commons.example.test/file",
+                    "license": "CC BY 4.0",
+                    "termsUrl": "https://creativecommons.org/licenses/by/4.0",
+                    "authorizationProof": "https://commons.example.test/file",
+                    "rightsStatus": "verified",
+                    "rightsIssues": [],
+                    "distributionDecision": "commercial_allowed",
+                    "acquisitionReceiptRef": "receipts/acquired.json",
+                    "usageScope": "app_publish",
+                    "modelReleaseStatus": "not_required",
+                    "propertyReleaseStatus": "not_required",
+                }
+            ]
+        },
+    )
+    source_refs_path = obj / "1.download/source_refs.json"
+    source_refs = json.loads(source_refs_path.read_text(encoding="utf-8"))
+    source_refs["sources"].append(
+        {
+            "sourceId": "wikimedia_commons",
+            "sourceRef": "sources/commons/source.md",
+            "metaRef": "sources/commons/meta.json",
+            "sourceUrl": "https://commons.example.test/file",
+        }
+    )
+    _write_json(source_refs_path, source_refs)
+    compose_path = obj / "3.compose/entity_page_input.json"
+    compose = json.loads(compose_path.read_text(encoding="utf-8"))
+    compose["selectedSourceRefs"].append("sources/commons/source.md")
+    compose["selectedSourceUrls"].append("https://commons.example.test/file")
+    compose["payload"]["imagePlaceholderBindings"] = [
+        {
+            "placeholderId": "cover",
+            "captionIntent": "西门日间实景",
+            "sourceAssetRef": asset_ref,
+        }
+    ]
+    _write_json(compose_path, compose)
+    return root, obj, target, asset_ref
+
+
+def test_homepage_projects_exact_selected_media_and_keeps_encyclopedia_primary(
+    tmp_path: Path,
+) -> None:
+    root, obj, target, asset_ref = _homepage_media_fixture(tmp_path)
+
+    project_publish_final_surface(
+        execution_root=root,
+        object_dir=obj,
+        target_ref="entities/地点/景区/西门",
+        target=target,
+        carrier="homepage",
+    )
+
+    manifest = json.loads((obj / "manifest.json").read_text(encoding="utf-8"))
+    catalog = json.loads(
+        (obj / "evidence/source_catalog.json").read_text(encoding="utf-8")
+    )
+    assert manifest["publishMediaMode"] == "not_applicable"
+    assert [asset["sourceAssetRef"] for asset in manifest["assets"]] == [asset_ref]
+    assert manifest["assets"][0]["caption"] == "西门日间实景"
+    assert manifest["assets"][0]["fileName"] == "cover.jpg"
+    assert (obj / "assets/cover.jpg").read_bytes() == (root / asset_ref).read_bytes()
+    assert catalog["primarySource"]["sourceKind"] == "wikipedia"
+    assert [row["sourceKind"] for row in catalog["sources"]] == [
+        "wikipedia",
+        "image_collection",
+    ]
+    assert_valid(catalog, "publish", "source_catalog")
 
 def _video_fixture(tmp_path: Path) -> tuple[Path, Path, dict[str, object], str, str]:
     execution_id = "20260906--travel-video-final-surface--test-region-a--pilot-001"
