@@ -176,11 +176,12 @@ jobs:
           MODE=direct
           if [[ "$RELEASE_CALL" == "true" ]]; then
             MODE=release_call
-            [[ "$INPUT_CHECKOUT_REF" =~ ^[0-9a-f]{40}$ ]] &&
-            [[ "$INPUT_BASE_SHA" =~ ^[0-9a-f]{40}$ ]] &&
-            [[ "$INPUT_HEAD_SHA" =~ ^[0-9a-f]{40}$ ]] || {
-              echo "::error::GATE_BLOCK: release call requires exact SHA identity"; exit 2;
-            }
+            if [[ ! "$INPUT_CHECKOUT_REF" =~ ^[0-9a-f]{40}$ ]] ||
+               [[ ! "$INPUT_BASE_SHA" =~ ^[0-9a-f]{40}$ ]] ||
+               [[ ! "$INPUT_HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+              echo "::error::GATE_BLOCK: release call requires exact SHA identity"
+              exit 2
+            fi
           elif [[ "$EVENT_NAME" == pull_request ]]; then
             MODE=pull_request
             [[ "$PR_HEAD_REPOSITORY" == "${{ github.repository }}" ]] || {
