@@ -53,14 +53,17 @@ def required_review_asset_refs(
     ):
         raise ObjectTransactionError("published manifest assets must be an array of objects")
     assets = [raw for raw in raw_assets if isinstance(raw, Mapping)]
+    content_type = str(manifest.get("contentType") or "").strip()
     text_only = (
-        str(manifest.get("contentType") or "").strip() == "article"
-        and str(manifest.get("publishMediaMode") or "").strip() == "text_only"
-        and object_kind in {"posts", "entity", "entities"}
+        str(manifest.get("publishMediaMode") or "").strip() == "text_only"
+        and (
+            (object_kind == "posts" and content_type == "article")
+            or (object_kind in {"entity", "entities"} and content_type in {"article", "homepage"})
+        )
     )
     if text_only:
         if assets:
-            raise ObjectTransactionError("text-only article must publish an empty asset set")
+            raise ObjectTransactionError("text-only object must publish an empty asset set")
         return ()
     if not assets:
         raise ObjectTransactionError("non-text-only object must publish at least one asset")
