@@ -67,7 +67,17 @@ def validate(now: dt.datetime | None = None) -> dict[str, object]:
             raise QualityPolicyError("promotion-critical tests cannot be quarantined")
 
     slo = _load(ROOT / "quwoquan_ops/environments/feedback_slo_activation.json")
-    if slo.get("schema") != "feedback-slo-activation" or slo.get("schemaVersion") != 1:
+    if set(slo) != {
+        "activationRule",
+        "cleanRunEvidenceRefs",
+        "gate",
+        "minimumCleanRuns",
+        "observedCleanRuns",
+        "schema",
+        "state",
+    }:
+        raise QualityPolicyError("feedback SLO activation fields must be closed")
+    if slo.get("schema") != "feedback-slo-activation":
         raise QualityPolicyError("feedback SLO activation schema is unsupported")
     refs = slo.get("cleanRunEvidenceRefs")
     observed = slo.get("observedCleanRuns")

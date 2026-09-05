@@ -26,7 +26,7 @@ import pytest
 
 from quwoquan_ops.gate import verify_incremental_code_health
 from quwoquan_ops.gate.code_health_delta.classification import classify_path
-from quwoquan_ops.gate.code_health_delta.engine import analyze_delta
+from quwoquan_ops.gate.code_health_delta.engine import REPORT_SCHEMA, analyze_delta
 from quwoquan_ops.gate.code_health_delta import git_delta
 from quwoquan_ops.gate.code_health_delta.metrics import reuse_scope_key
 from quwoquan_ops.gate.code_health_delta.policy import PolicyError, load_policy
@@ -353,7 +353,7 @@ def test_report_shape_is_digest_bound_and_ai_has_no_control_authority(tmp_path: 
     write(repo, "quwoquan_ops/ci/value.py", "VALUE = 1\n")
     head = commit(repo)
     report = analyze_delta(repo, base=base, head=head, policy_path=repo / "quwoquan_ops/policies/code_health_policy.yaml", mode="fast")
-    assert report["schema"] == "quwoquan.code-health-delta.v1"
+    assert report["schema"] == REPORT_SCHEMA
     assert report["changedPathsDigest"].startswith("sha256:")
     assert report["policyDigest"].startswith("sha256:")
     assert report["implementationDigest"].startswith("sha256:")

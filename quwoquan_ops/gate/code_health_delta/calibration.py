@@ -8,6 +8,8 @@ from typing import Any, Iterable
 
 from quwoquan_ops.ci.impact_planner_core import canonical_digest
 
+from .engine import REPORT_SCHEMA
+
 
 class CalibrationError(ValueError):
     """Raised when calibration samples cannot support an honest result."""
@@ -44,7 +46,7 @@ def aggregate_calibration(
             raise CalibrationError("pullRequest 必须为正整数")
         if isinstance(duration, bool) or not isinstance(duration, (int, float)) or duration < 0:
             raise CalibrationError("durationSeconds 必须为非负数")
-        if not isinstance(report, dict) or report.get("schema") != "quwoquan.code-health-delta.v1":
+        if not isinstance(report, dict) or report.get("schema") != REPORT_SCHEMA:
             raise CalibrationError("sample report schema 非法")
         if report.get("candidateSource") != "commit":
             raise CalibrationError("calibration 只接受 clean commit candidate")

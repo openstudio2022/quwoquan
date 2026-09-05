@@ -5,6 +5,5 @@
   "minimumCleanRuns": 20,
   "observedCleanRuns": 0,
   "schema": "feedback-slo-activation",
-  "schemaVersion": 1,
   "state": "learning"
 }

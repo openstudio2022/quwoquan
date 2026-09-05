@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from quwoquan_ops.gate.code_health_delta.calibration import aggregate_calibration
+from quwoquan_ops.gate.code_health_delta.engine import REPORT_SCHEMA
 from quwoquan_ops.gate.code_health_delta.policy import load_policy
 
 ROOT = Path(__file__).resolve().parents[4]
@@ -18,7 +19,7 @@ POLICY = load_policy(ROOT / "quwoquan_ops/policies/code_health_policy.yaml")
 def _sample(number: int, *, reviewed: bool) -> dict:
     finding = {"code": "CODE_HEALTH.COMPLEXITY_ADVISORY", "path": f"quwoquan_ops/ci/{number}.py", "terminal": "PR_WARN"}
     report = {
-        "schema": "quwoquan.code-health-delta.v1", "candidateSource": "commit",
+        "schema": REPORT_SCHEMA, "candidateSource": "commit",
         "headSha": f"{number:040x}", "terminal": "PR_WARN", "findings": [finding],
         "evidenceFingerprint": {"digest": "sha256:" + f"{number:064x}"},
     }

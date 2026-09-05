@@ -10,6 +10,9 @@ from pathlib import Path
 import pytest
 
 from quwoquan_ops.cli.lib import app_readiness_facts as subject
+from quwoquan_ops.cli.lib.app_launch_attempt import (
+    SCHEMA as APP_LAUNCH_ATTEMPT_SCHEMA,
+)
 
 D = "sha256:" + "a" * 64
 TREE = "sha1:" + "b" * 40
@@ -40,7 +43,7 @@ def _launch(root: Path, *, non_promotable: bool) -> Path:
     }
     terminal_ref = _write(root, "startup-terminal.json", terminal)
     attempt = {
-        "schema": "quwoquan.app_launch_attempt.v1", "attemptId": ATTEMPT, "status": "launched",
+        "schema": APP_LAUNCH_ATTEMPT_SCHEMA, "attemptId": ATTEMPT, "status": "launched",
         "artifactDigest": D, "runtimeConfigPackageDigest": D, "runtimeConfigTrustEnvelopeDigest": D,
         "launchDigest": D, "platform": "android", "deviceId": "pixel-1", "nonPromotable": non_promotable,
     }

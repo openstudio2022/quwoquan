@@ -21,6 +21,9 @@ from .metrics import (
 from .policy import load_policy
 
 
+REPORT_SCHEMA = "quwoquan.code-health-delta"
+
+
 _SEVERITY = {"PASS": 0, "PR_WARN": 1, "GATE_BLOCK": 2}
 
 
@@ -202,7 +205,7 @@ def analyze_delta(repo: Path, *, base: str, head: str, policy_path: Path, mode: 
     }, captured_at="code-health-delta-v1", captured_by="verify_incremental_code_health", captured_metadata={"mode": mode, "changed_paths_digest": impact["path_digest"]})
     category_summary = _category_summary(policy, delta)
     return {
-        "schema": "quwoquan.code-health-delta.v1", "terminal": terminal,
+        "schema": REPORT_SCHEMA, "terminal": terminal,
         "baseSha": base_sha, "headSha": head_sha, "changedPaths": paths,
         "changedPathsDigest": impact_digest(paths), "impactPlanner": impact["source"],
         "policyId": policy["policy_id"], "policyDigest": policy_digest, "implementationDigest": implementation_digest,

@@ -55,6 +55,18 @@ def test_twenty_exact_clean_runs_are_required_for_enforcement() -> None:
 
 
 @pytest.mark.parametrize("mutation", [
+    lambda payload: payload.update(schema="other-feedback-slo-activation"),
+    lambda payload: payload.update(unexpectedField=True),
+    lambda payload: payload.pop("gate"),
+])
+def test_feedback_slo_control_document_has_closed_stable_schema(mutation) -> None:
+    files = _files()
+    mutation(files["feedback_slo_activation.json"])
+    with pytest.raises(policy.QualityPolicyError):
+        _validate(files)
+
+
+@pytest.mark.parametrize("mutation", [
     lambda files: files["flaky_test_policy.json"]["retry"].update(maximumFreshRetries=2),
     lambda files: files["feedback_slo_activation.json"].update(state="enforced"),
     lambda files: files["feedback_slo_activation.json"].update(observedCleanRuns=20),
