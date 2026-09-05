@@ -67,11 +67,7 @@ EXPECTED_SOURCE_POLICIES = {
 }
 
 def assert_environment_neutral(root: Path) -> None:
-    """Reject mutable activation state from an immutable release payload.
-
-    ``targetEnvironment`` is an immutable build policy and is intentionally
-    allowed; mutable environment state still belongs only to stackctl runs.
-    """
+    """Reject consumer or mutable environment state from producer release bytes."""
     for path in _files(root):
         if path.suffix != ".json":
             continue
