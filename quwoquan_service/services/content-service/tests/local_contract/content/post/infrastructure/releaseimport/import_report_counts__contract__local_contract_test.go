@@ -25,6 +25,7 @@ func TestWriteImportReportKeepsZeroEntitiesLoaded(t *testing.T) {
 		"manifestDigest": "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
 		"mode":           "sync",
 		"deletePolicy":   "tombstone",
+		"activationMode": "stage-only",
 		"counts": bson.M{
 			"postsLoaded": 4,
 			// Intentionally omit entitiesLoaded to prove WriteImportReport
@@ -53,6 +54,9 @@ func TestWriteImportReportKeepsZeroEntitiesLoaded(t *testing.T) {
 	}
 	if got, ok := counts["entitiesLoaded"].(float64); !ok || got != 0 {
 		t.Fatalf("entitiesLoaded=%v, want 0 (field must be present)", counts["entitiesLoaded"])
+	}
+	if got := report["activationMode"]; got != "stage-only" {
+		t.Fatalf("activationMode=%v, want stage-only", got)
 	}
 }
 

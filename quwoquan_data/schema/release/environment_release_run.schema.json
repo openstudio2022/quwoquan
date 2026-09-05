@@ -9,7 +9,7 @@
     "environment": {"enum": ["alpha", "beta", "gamma", "prod"]},
     "releaseId": {"type": "string", "minLength": 1},
     "runId": {"type": "string", "minLength": 1},
-    "kind": {"enum": ["apply", "rollback", "verify"]},
+    "kind": {"enum": ["apply", "activate", "rollback", "verify"]},
     "startedAt": {"type": "string", "minLength": 1}
   }
 }

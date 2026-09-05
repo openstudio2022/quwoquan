@@ -30,6 +30,7 @@ type MongoActiveSupplyReader struct {
 type MongoActiveSupplyReaderOption func(*MongoActiveSupplyReader)
 
 type activeSupplyReleaseState struct {
+	Kind            string    `bson:"kind"`
 	Environment     string    `bson:"environment"`
 	SourceOwner     string    `bson:"sourceOwner"`
 	Status          string    `bson:"status"`
@@ -37,6 +38,7 @@ type activeSupplyReleaseState struct {
 	ManifestDigest  string    `bson:"manifestDigest"`
 	ReleaseClass    string    `bson:"releaseClass"`
 	ActivatedAt     time.Time `bson:"activatedAt"`
+	Revision        int64     `bson:"revision"`
 }
 
 func WithPlayableVideoSupplyReader(
@@ -136,7 +138,8 @@ func (r *MongoActiveSupplyReader) ActiveSupplySnapshot(
 		}
 		if !currentFound || strings.TrimSpace(current.ActiveReleaseID) != releaseID ||
 			strings.TrimSpace(current.ManifestDigest) != manifestDigest ||
-			strings.TrimSpace(current.ReleaseClass) != strings.TrimSpace(state.ReleaseClass) {
+			strings.TrimSpace(current.ReleaseClass) != strings.TrimSpace(state.ReleaseClass) ||
+			current.Revision != state.Revision {
 			return empty, fmt.Errorf("active release changed during supply readback")
 		}
 		return snapshot, nil
@@ -152,20 +155,24 @@ func (r *MongoActiveSupplyReader) readActiveSupplyReleaseState(
 		bson.M{
 			"environment":     r.environment,
 			"sourceOwner":     "qwq_data",
+			"kind":            "active_pointer",
 			"status":          "active",
 			"activeReleaseId": bson.M{"$type": "string", "$ne": ""},
 		},
 		options.FindOne().SetProjection(bson.M{
-			"environment": 1, "sourceOwner": 1, "status": 1,
+			"kind": 1, "environment": 1, "sourceOwner": 1, "status": 1,
 			"activeReleaseId": 1, "manifestDigest": 1, "releaseClass": 1,
-			"activatedAt": 1,
-		}).SetSort(bson.D{{Key: "activatedAt", Value: -1}}),
+			"activatedAt": 1, "revision": 1,
+		}),
 	).Decode(&state)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
 			return activeSupplyReleaseState{}, false, nil
 		}
 		return activeSupplyReleaseState{}, false, err
+	}
+	if state.Kind != "active_pointer" || state.Status != "active" || state.SourceOwner != "qwq_data" {
+		return activeSupplyReleaseState{}, false, fmt.Errorf("active release pointer shape is malformed")
 	}
 	return state, true, nil
 }

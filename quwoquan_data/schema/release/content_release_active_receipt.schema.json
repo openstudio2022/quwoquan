@@ -1,0 +1,125 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Content active release pointer receipt",
+  "type": "object",
+  "required": [
+    "schema",
+    "status",
+    "environment",
+    "sourceOwner",
+    "generatedAt"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "quwoquan.content_release_active_receipt"
+    },
+    "status": {
+      "enum": [
+        "found",
+        "not_found"
+      ]
+    },
+    "environment": {
+      "enum": [
+        "alpha",
+        "beta",
+        "gamma",
+        "prod"
+      ]
+    },
+    "sourceOwner": {
+      "const": "qwq_data"
+    },
+    "generatedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "releaseId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "manifestDigest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "releaseClass": {
+      "enum": [
+        "research",
+        "commercial"
+      ]
+    },
+    "projectionVersion": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "revision": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "activatedAt": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "found"
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "then": {
+        "required": [
+          "releaseId",
+          "manifestDigest",
+          "releaseClass",
+          "projectionVersion",
+          "revision",
+          "activatedAt"
+        ]
+      },
+      "else": {
+        "not": {
+          "anyOf": [
+            {
+              "required": [
+                "releaseId"
+              ]
+            },
+            {
+              "required": [
+                "manifestDigest"
+              ]
+            },
+            {
+              "required": [
+                "releaseClass"
+              ]
+            },
+            {
+              "required": [
+                "projectionVersion"
+              ]
+            },
+            {
+              "required": [
+                "revision"
+              ]
+            },
+            {
+              "required": [
+                "activatedAt"
+              ]
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

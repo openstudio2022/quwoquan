@@ -13,6 +13,7 @@ import (
 	rtredis "quwoquan_service/runtime/redis"
 	deliveryredis "quwoquan_service/services/content-service/internal/content/feed_delivery_page/infrastructure/redis"
 	httpadapter "quwoquan_service/services/content-service/internal/content/post/adapters/inbound/http"
+	postapp "quwoquan_service/services/content-service/internal/content/post/application"
 	feedapp "quwoquan_service/services/content-service/internal/content/post/application/feed"
 	postports "quwoquan_service/services/content-service/internal/content/post/domain/ports"
 )
@@ -161,5 +162,88 @@ func TestGetFeedDerivesResearchPrincipalOnlyFromVerifiedPrincipal(t *testing.T) 
 	if response.Outcome != "content" || len(response.Items) != 1 ||
 		response.Items[0].PostID != "post-research-http-boundary" {
 		t.Fatalf("verified research principal must reach release content: %+v", response)
+	}
+}
+
+type researchQueryDetailReader struct {
+	calls   int
+	request postports.PostDetailReadRequest
+}
+
+func (reader *researchQueryDetailReader) FindPostDetail(
+	context.Context,
+	postports.PostID,
+) (postports.PostDetailSlice, bool, error) {
+	reader.calls++
+	return postports.PostDetailSlice{}, false, nil
+}
+
+func (reader *researchQueryDetailReader) FindReleaseBoundPostDetail(
+	_ context.Context,
+	request postports.PostDetailReadRequest,
+) (postports.PostDetailSlice, bool, error) {
+	reader.calls++
+	reader.request = request
+	return postports.PostDetailSlice{
+		PostID: "post-research-http-boundary", AuthorPersonaID: "persona-author",
+		ContentType: "article", Title: "research detail",
+		Status: "published", Visibility: "public", ModerationStatus: "approved",
+	}, true, nil
+}
+
+func researchQueryHTTPHandler(reader *researchQueryDetailReader) http.Handler {
+	return httpadapter.NewContentHandler(
+		nil,
+		nil,
+		postapp.NewPostQueryFacade(postapp.PostQueryDependencies{
+			Detail: reader, ActiveSupply: researchFeedActiveSupplyReader{},
+		}),
+		nil,
+		nil,
+		nil,
+		nil,
+	).Routes()
+}
+
+func TestGetPostDerivesResearchRoleOnlyFromVerifiedPrincipal(t *testing.T) {
+	reader := &researchQueryDetailReader{}
+	handler := researchQueryHTTPHandler(reader)
+
+	for _, request := range []*http.Request{
+		httptest.NewRequest(http.MethodGet, "/content/posts/post-research-http-boundary", nil),
+		func() *http.Request {
+			r := httptest.NewRequest(http.MethodGet, "/content/posts/post-research-http-boundary", nil)
+			r.Header.Set("X-Research-Role", "research")
+			return r
+		}(),
+		func() *http.Request {
+			r := httptest.NewRequest(http.MethodGet, "/content/posts/post-research-http-boundary", nil)
+			return r.WithContext(rtauth.WithPrincipal(r.Context(), rtauth.Principal{
+				Claims: rtauth.Claims{Roles: []string{"member"}},
+			}))
+		}(),
+	} {
+		recorder := httptest.NewRecorder()
+		handler.ServeHTTP(recorder, request)
+		if recorder.Code != http.StatusNotFound {
+			t.Fatalf("non-research GetPost status=%d body=%s", recorder.Code, recorder.Body.String())
+		}
+	}
+	if reader.calls != 0 {
+		t.Fatalf("non-research requests reached detail reader: calls=%d", reader.calls)
+	}
+
+	request := httptest.NewRequest(http.MethodGet, "/content/posts/post-research-http-boundary", nil)
+	request = request.WithContext(rtauth.WithPrincipal(request.Context(), rtauth.Principal{
+		Claims: rtauth.Claims{Roles: []string{rtauth.RoleResearch}},
+	}))
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("research GetPost status=%d body=%s", recorder.Code, recorder.Body.String())
+	}
+	if reader.calls != 1 || reader.request.ActiveReleaseID() != "rel_research_local_contract" ||
+		reader.request.ManifestDigest() != researchFeedManifestDigest {
+		t.Fatalf("research detail request not exact-release-bound: calls=%d request=%+v", reader.calls, reader.request)
 	}
 }

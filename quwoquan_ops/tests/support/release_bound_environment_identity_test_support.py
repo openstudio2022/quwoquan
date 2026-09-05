@@ -487,12 +487,20 @@ class Fixture:
                 }
             ),
         )
-        import_refs = {
+        result_refs = {
             "homepageVerificationCasesRef": "homepage-verification-cases.json",
             "tagImportReportRef": "tag-import.json",
             "creatorImportReportRef": "creator-import.json",
             "contentImportReportRef": "import.json",
             "homepageImportReportRef": "homepage-import.json",
+            "coverageReceiptRef": "coverage-receipt.json",
+            "lifecycleExitRef": "",
+            "postApiVerificationRef": "",
+            "releaseReadinessRef": "",
+            "researchIsolationVerificationRef": "",
+            "tagConsumerVerificationRef": "",
+            "homepageApiVerificationRef": "",
+            "baselineApiVerificationRef": "",
         }
         self.paths["import"] = _write(
             self.root / "import.json",
@@ -501,14 +509,28 @@ class Fixture:
                     "schema": "quwoquan_data.environment_release_result",
                     "environment": self.environment,
                     "releaseId": RELEASE_ID,
+                    "releaseClass": "research",
+                    "productLifecycleState": "research",
+                    "containsUnverifiedAssets": True,
+                    "manifestDigest": RELEASE_DIGEST,
+                    "admissionKind": "producer_handoff",
+                    "admissionRef": (
+                        f"data/releases/{RELEASE_ID}/producer_release_handoff.json"
+                    ),
+                    "admissionDigest": DIGEST_A,
                     "runId": "import-001",
                     "status": "completed",
+                    "startedAt": "2026-07-28T21:10:00Z",
+                    "endedAt": "2026-07-28T21:10:01Z",
+                    "durationMs": 1000,
                     **{
                         field: (
                             f"env/{self.environment}/runs/data-release/{RELEASE_ID}/"
                             f"import-001/{name}"
+                            if name
+                            else ""
                         )
-                        for field, name in import_refs.items()
+                        for field, name in result_refs.items()
                     },
                 }
             ),
@@ -520,14 +542,28 @@ class Fixture:
                     "schema": "quwoquan_data.environment_release_result",
                     "environment": self.environment,
                     "releaseId": RELEASE_ID,
+                    "releaseClass": "research",
+                    "productLifecycleState": "research",
+                    "containsUnverifiedAssets": True,
+                    "manifestDigest": RELEASE_DIGEST,
+                    "admissionKind": "producer_handoff",
+                    "admissionRef": (
+                        f"data/releases/{RELEASE_ID}/producer_release_handoff.json"
+                    ),
+                    "admissionDigest": DIGEST_A,
                     "runId": "replay-001",
                     "status": "completed",
+                    "startedAt": "2026-07-28T21:20:00Z",
+                    "endedAt": "2026-07-28T21:20:01Z",
+                    "durationMs": 1000,
                     **{
                         field: (
                             f"env/{self.environment}/runs/data-release/{RELEASE_ID}/"
                             f"replay-001/{name}"
+                            if name
+                            else ""
                         )
-                        for field, name in import_refs.items()
+                        for field, name in result_refs.items()
                     },
                 }
             ),

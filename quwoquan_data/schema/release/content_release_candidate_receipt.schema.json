@@ -1,0 +1,214 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Content verified release candidate receipt",
+  "type": "object",
+  "required": [
+    "schema",
+    "status",
+    "environment",
+    "sourceOwner",
+    "releaseId",
+    "manifestDigest",
+    "generatedAt"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "quwoquan.content_release_candidate_receipt"
+    },
+    "status": {
+      "enum": [
+        "found",
+        "not_found"
+      ]
+    },
+    "environment": {
+      "enum": [
+        "alpha",
+        "beta",
+        "gamma",
+        "prod"
+      ]
+    },
+    "sourceOwner": {
+      "const": "qwq_data"
+    },
+    "releaseId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "manifestDigest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "generatedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "releaseClass": {
+      "enum": [
+        "research",
+        "commercial"
+      ]
+    },
+    "releaseKind": {
+      "enum": [
+        "content",
+        "empty_baseline"
+      ]
+    },
+    "mode": {
+      "enum": [
+        "upsert",
+        "sync"
+      ]
+    },
+    "deletePolicy": {
+      "enum": [
+        "none",
+        "tombstone"
+      ]
+    },
+    "projectionVersion": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "verifiedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "closureDigests": {
+      "type": "object",
+      "required": [
+        "posts",
+        "facts",
+        "media"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "posts": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "facts": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "media": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      }
+    },
+    "counts": {
+      "type": "object",
+      "required": [
+        "postsExpected",
+        "postsProjected",
+        "outboxExpected",
+        "outboxProjected",
+        "mediaExpected",
+        "mediaProjected"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "postsExpected": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "postsProjected": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "outboxExpected": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "outboxProjected": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "mediaExpected": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "mediaProjected": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "found"
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "then": {
+        "required": [
+          "releaseClass",
+          "releaseKind",
+          "mode",
+          "deletePolicy",
+          "projectionVersion",
+          "verifiedAt",
+          "closureDigests",
+          "counts"
+        ]
+      },
+      "else": {
+        "not": {
+          "anyOf": [
+            {
+              "required": [
+                "releaseClass"
+              ]
+            },
+            {
+              "required": [
+                "releaseKind"
+              ]
+            },
+            {
+              "required": [
+                "mode"
+              ]
+            },
+            {
+              "required": [
+                "deletePolicy"
+              ]
+            },
+            {
+              "required": [
+                "projectionVersion"
+              ]
+            },
+            {
+              "required": [
+                "verifiedAt"
+              ]
+            },
+            {
+              "required": [
+                "closureDigests"
+              ]
+            },
+            {
+              "required": [
+                "counts"
+              ]
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

@@ -243,3 +243,72 @@ func bsonFieldValue(document bson.D, key string) any {
 	}
 	return nil
 }
+
+func TestPublicReleaseFenceRequiresExactIdentityForDataOwnedPosts(t *testing.T) {
+	const releaseID = "rel-active"
+	const manifestDigest = "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+
+	fence := PublicReleaseFence(releaseID, manifestDigest)
+	if len(fence) != 1 || fence[0].Key != "$or" {
+		t.Fatalf("release fence=%#v, want one $or predicate", fence)
+	}
+	branches, ok := fence[0].Value.(bson.A)
+	if !ok || len(branches) != 2 {
+		t.Fatalf("release fence branches=%#v", fence[0].Value)
+	}
+	canonical, ok := branches[1].(bson.M)
+	if !ok {
+		t.Fatalf("canonical branch=%#v", branches[1])
+	}
+	want := bson.M{
+		"sourceOwner": "qwq_data", "releaseId": releaseID,
+		"manifestDigest": manifestDigest, "lifecycleStatus": "active",
+	}
+	if !reflect.DeepEqual(canonical, want) {
+		t.Fatalf("canonical branch=%#v want=%#v", canonical, want)
+	}
+}
+
+func TestPublicReleaseFenceHidesDataOwnedPostsWithoutCompleteIdentity(t *testing.T) {
+	for _, fence := range []bson.D{
+		PublicReleaseFence("", ""),
+		PublicReleaseFence("rel-active", ""),
+	} {
+		if len(fence) != 1 || fence[0].Key != "sourceOwner" {
+			t.Fatalf("incomplete binding fence=%#v", fence)
+		}
+		condition, ok := fence[0].Value.(bson.M)
+		if !ok || condition["$ne"] != "qwq_data" {
+			t.Fatalf("incomplete binding must exclude qwq_data: %#v", fence)
+		}
+	}
+}
+
+func TestReleaseBoundCursorScopesIncludeExactActiveIdentity(t *testing.T) {
+	base := postports.NewAuthorPostReadRequest(
+		"persona", postports.AuthorPostAccessPublic, "", "", "",
+		postports.AuthorPostCursor{}, 20,
+	)
+	active := postports.NewAuthorPostReadRequest(
+		"persona", postports.AuthorPostAccessPublic, "", "", "",
+		postports.AuthorPostCursor{}, 20,
+		"rel-active", "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+	)
+	changed := postports.NewAuthorPostReadRequest(
+		"persona", postports.AuthorPostAccessPublic, "", "", "",
+		postports.AuthorPostCursor{}, 20,
+		"rel-active", "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+	)
+	if base.CursorScope() == active.CursorScope() || active.CursorScope() == changed.CursorScope() {
+		t.Fatal("author cursor scope must bind releaseId and manifestDigest")
+	}
+
+	gatheringBase := postports.NewGatheringPostReadRequest("gathering", postports.AuthorPostCursor{}, 20)
+	gatheringActive := postports.NewGatheringPostReadRequest(
+		"gathering", postports.AuthorPostCursor{}, 20,
+		"rel-active", "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+	)
+	if gatheringBase.CursorScope() == gatheringActive.CursorScope() {
+		t.Fatal("gathering cursor scope must bind active release identity")
+	}
+}

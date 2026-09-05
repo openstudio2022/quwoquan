@@ -452,11 +452,15 @@ func TestMain(m *testing.M) {
 	activeSupplyDB := mongoDB
 	if _, err := activeSupplyDB.Collection("data_release_state").UpdateOne(
 		ctx,
-		bson.M{"environment": integrationEnvironment, "sourceOwner": "qwq_data"},
+		bson.M{
+			"environment": integrationEnvironment, "sourceOwner": "qwq_data",
+			"kind": "active_pointer",
+		},
 		bson.M{"$set": bson.M{
 			"environment": integrationEnvironment, "sourceOwner": "qwq_data",
-			"status": "active", "activeReleaseId": integrationReleaseID,
-			"manifestDigest": integrationManifestDigest, "releaseClass": "commercial",
+			"kind": "active_pointer", "status": "active",
+			"activeReleaseId": integrationReleaseID,
+			"manifestDigest":  integrationManifestDigest, "releaseClass": "commercial",
 		}},
 		mongoopts.UpdateOne().SetUpsert(true),
 	); err != nil {
@@ -664,6 +668,7 @@ func TestMain(m *testing.M) {
 			Gathering:    postQueryReader,
 			Tombstones:   postStore,
 			ViewerBlocks: personaBlockReader,
+			ActiveSupply: persistence.NewMongoActiveSupplyReader(mongoDB, "api-integration"),
 		}),
 		commenthttp.NewHandler(commentapp.BindFacades(testCommentService)),
 		reactionhttp.NewHandler(reactionapp.BindFacades(reactionService)),

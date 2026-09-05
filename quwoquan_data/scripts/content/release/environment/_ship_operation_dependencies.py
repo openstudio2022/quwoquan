@@ -13,7 +13,7 @@ class ShipOperationDependencies:
     """由公开 handler 注入的路径与边界操作，保留既有测试替换点。"""
 
     output_root: Path
-    load_release: Callable[[str], tuple[Path, dict[str, Any]]]
+    admit_release: Callable[[Any], Any]
     release_requires_full_sync: Callable[[Path], bool]
     release_has_posts: Callable[[Mapping[str, Any]], bool]
     create_run: Callable[..., Path]
@@ -39,4 +39,8 @@ class ShipOperationDependencies:
     write_research_isolation_verification: Callable[..., Path]
     write_environment_release_readiness: Callable[..., Path]
     now_compact: Callable[[], str]
-    restore_previous_release: Callable[..., None] | None = None
+    require_owner_local_staging_admission: Callable[..., None] | None = None
+    query_content_release_candidate: Callable[..., Any] | None = None
+    load_content_release_candidate_receipt: Callable[..., Any] | None = None
+    query_content_active_release: Callable[..., Any] | None = None
+    activate_content_release: Callable[..., Any] | None = None

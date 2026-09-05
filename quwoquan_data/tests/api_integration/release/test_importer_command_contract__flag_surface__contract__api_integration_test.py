@@ -76,7 +76,9 @@ def _assembled_commands(tmp_path: Path) -> list[tuple[list[str], Path]]:
             "read_json",
             lambda _path: {"desiredRefs": {"entities": [], "tags": [], "creators": []}},
         )
-        patch.setattr(importers, "payload_digest", lambda _release: "sha256:" + "0" * 64)
+        patch.setattr(
+            importers, "payload_digest", lambda _release: "sha256:" + "0" * 64
+        )
 
         importers.run_tag_importer(
             release=release,
@@ -116,6 +118,11 @@ def _assembled_commands(tmp_path: Path) -> list[tuple[list[str], Path]]:
             mode=ImportMode.UPSERT,
         )
     assert len(commands) == 4
+    content_command = commands[2][0]
+    assert content_command.count("--activation-mode") == 1
+    assert (
+        content_command[content_command.index("--activation-mode") + 1] == "stage-only"
+    )
     return commands
 
 
@@ -151,3 +158,18 @@ def test_unknown_flag_is_rejected_so_the_probe_cannot_go_stale(
     command, cwd = _assembled_commands(tmp_path)[0]
     output = _execute([*command, "--qwq-flag-probe-unknown"], cwd)
     assert "flag provided but not defined" in output, output[-800:]
+
+
+@pytest.mark.api_integration
+def test_content_importer_without_activation_mode_fails_closed(
+    tmp_path: Path,
+) -> None:
+    command, cwd = _assembled_commands(tmp_path)[2]
+    activation_index = command.index("--activation-mode")
+    command_without_activation = (
+        command[:activation_index] + command[activation_index + 2 :]
+    )
+
+    output = _execute(command_without_activation, cwd)
+
+    assert "--activation-mode is required" in output, output[-800:]

@@ -15,7 +15,6 @@ import (
 	rtredis "quwoquan_service/runtime/redis"
 	contentgenerated "quwoquan_service/services/content-service/generated/content/post"
 	commenthttp "quwoquan_service/services/content-service/internal/content/comment/adapters/inbound/http"
-	contentpublicweb "quwoquan_service/services/content-service/internal/content/post/adapters/inbound/publicweb"
 	commentapp "quwoquan_service/services/content-service/internal/content/comment/application"
 	commentpersistence "quwoquan_service/services/content-service/internal/content/comment/infrastructure/persistence"
 	behaviorhttp "quwoquan_service/services/content-service/internal/content/content_behavior_fact/adapters/inbound/http"
@@ -36,6 +35,7 @@ import (
 	outboundshareapp "quwoquan_service/services/content-service/internal/content/outbound_share_fact/application/command"
 	postgraphql "quwoquan_service/services/content-service/internal/content/post/adapters/inbound/graphql"
 	httpadapter "quwoquan_service/services/content-service/internal/content/post/adapters/inbound/http"
+	contentpublicweb "quwoquan_service/services/content-service/internal/content/post/adapters/inbound/publicweb"
 	postapp "quwoquan_service/services/content-service/internal/content/post/application"
 	feedapp "quwoquan_service/services/content-service/internal/content/post/application/feed"
 	"quwoquan_service/services/content-service/internal/content/post/application/ports"
@@ -213,6 +213,7 @@ func buildContentHTTPHandler(input contentHTTPHandlerInput) (contentHTTPHandlers
 		SocialProof:  input.gatheringSocialProofReader,
 		Tombstones:   store,
 		ViewerBlocks: viewerBlockReader,
+		ActiveSupply: activeSupplyReader,
 	})
 	if reactionStore == nil || reactionServiceCore == nil || commentDataAdapter == nil || commentServiceCore == nil {
 		return contentHTTPHandlers{}, fmt.Errorf("content-service Comment/ContentReaction object composition is not configured")
@@ -425,7 +426,10 @@ func buildContentHTTPHandler(input contentHTTPHandlerInput) (contentHTTPHandlers
 			origin,
 			os.Getenv("CONTENT_PUBLIC_WEB_CDN_ORIGIN"),
 			postQueryService,
-			postQueryReader,
+			publicWebSitemapLister{
+				facade: postQueryService,
+				reader: postQueryReader,
+			},
 		).Routes()
 	}
 	return contentHTTPHandlers{
@@ -433,6 +437,18 @@ func buildContentHTTPHandler(input contentHTTPHandlerInput) (contentHTTPHandlers
 		internalGraphQL: internalGraphQLHandler,
 		publicWeb:       publicWebHandler,
 	}, nil
+}
+
+type publicWebSitemapLister struct {
+	facade *postapp.PostQueryFacade
+	reader postapp.PublicPostIDLister
+}
+
+func (lister publicWebSitemapLister) ListPublicPostIDs(
+	ctx context.Context,
+	limit int,
+) ([]string, error) {
+	return lister.facade.ListPublicPostIDs(ctx, lister.reader, limit, false)
 }
 
 // viewerPostReactionReader 把 content_reaction 聚合的批量点赞读适配为 post

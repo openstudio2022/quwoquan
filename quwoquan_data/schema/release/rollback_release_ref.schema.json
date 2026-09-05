@@ -2,12 +2,43 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "Environment release rollback intent",
   "type": "object",
-  "required": ["schema", "rollbackTo", "rollbackFromReleaseId", "releaseRef"],
+  "required": [
+    "schema",
+    "authority",
+    "rollbackTo",
+    "rollbackFromReleaseId",
+    "releaseRef",
+    "rollbackFromManifestDigest",
+    "rollbackToManifestDigest"
+  ],
   "additionalProperties": false,
   "properties": {
-    "schema": {"const": "quwoquan_data.rollback_release_ref"},
-    "rollbackTo": {"type": "string", "minLength": 1},
-    "rollbackFromReleaseId": {"type": "string", "minLength": 1},
-    "releaseRef": {"type": "string", "minLength": 1}
+    "schema": {
+      "const": "quwoquan_data.rollback_release_ref"
+    },
+    "authority": {
+      "const": "asserted_intent",
+      "description": "Operator-provided from identity is an assertion only; Content pre-active query receipt is the revision-bearing CAS authority."
+    },
+    "rollbackTo": {
+      "type": "string",
+      "minLength": 1
+    },
+    "rollbackFromReleaseId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "releaseRef": {
+      "type": "string",
+      "minLength": 1
+    },
+    "rollbackFromManifestDigest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "rollbackToManifestDigest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
   }
 }

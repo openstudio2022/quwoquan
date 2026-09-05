@@ -47,13 +47,22 @@ func (r *MongoPostQueryReader) PostExists(
 func (r *MongoPostQueryReader) ListPublicPostIDs(
 	ctx context.Context,
 	limit int,
+	activeReleaseBinding ...string,
 ) ([]string, error) {
 	if limit <= 0 || limit > 5000 {
 		limit = 500
 	}
+	activeReleaseID, manifestDigest := releaseBindingValues(activeReleaseBinding)
+	filter := bson.D{
+		{Key: "visibility", Value: "public"},
+		{Key: "status", Value: "published"},
+		{Key: "moderationStatus", Value: "approved"},
+		{Key: "accountRestricted", Value: bson.M{"$ne": true}},
+	}
+	filter = appendPublicReleaseFence(filter, activeReleaseID, manifestDigest)
 	cursor, err := r.coll.Find(
 		ctx,
-		bson.M{"visibility": "public", "status": "published"},
+		filter,
 		options.Find().
 			SetProjection(bson.M{"_id": 1}).
 			SetSort(bson.D{{Key: "publishedAt", Value: -1}}).
@@ -115,20 +124,39 @@ func (r *MongoPostQueryReader) FindPostDetail(
 	ctx context.Context,
 	postID postports.PostID,
 ) (postports.PostDetailSlice, bool, error) {
+	return r.findPostDetail(
+		ctx,
+		postports.NewPostDetailReadRequest(postID, "", ""),
+	)
+}
+
+func (r *MongoPostQueryReader) FindReleaseBoundPostDetail(
+	ctx context.Context,
+	request postports.PostDetailReadRequest,
+) (postports.PostDetailSlice, bool, error) {
+	return r.findPostDetail(ctx, request)
+}
+
+func (r *MongoPostQueryReader) findPostDetail(
+	ctx context.Context,
+	request postports.PostDetailReadRequest,
+) (postports.PostDetailSlice, bool, error) {
 	if err := r.ready(); err != nil {
 		return postports.PostDetailSlice{}, false, err
 	}
-	if strings.TrimSpace(string(postID)) == "" {
+	if strings.TrimSpace(string(request.PostID())) == "" {
 		return postports.PostDetailSlice{}, false, errors.New("post detail query requires post id")
 	}
 
+	filter := bson.D{
+		{Key: "_id", Value: string(request.PostID())},
+		{Key: "accountRestricted", Value: bson.M{"$ne": true}},
+	}
+	filter = appendPublicReleaseFence(filter, request.ActiveReleaseID(), request.ManifestDigest())
 	var detail postports.PostDetailSlice
 	err := r.coll.FindOne(
 		ctx,
-		bson.D{
-			{Key: "_id", Value: string(postID)},
-			{Key: "accountRestricted", Value: bson.M{"$ne": true}},
-		},
+		filter,
 		options.FindOne().SetProjection(PostDetailProjection()),
 	).Decode(&detail)
 	if errors.Is(err, mongo.ErrNoDocuments) {
@@ -205,6 +233,11 @@ func (r *MongoPostQueryReader) ListAuthorPosts(
 	if err != nil {
 		return postports.AuthorPostPageSlice{}, err
 	}
+	filter = appendPublicReleaseFence(
+		filter,
+		request.ActiveReleaseID(),
+		request.ManifestDigest(),
+	)
 	sortField := request.SortField()
 	if cursor := request.Cursor(); cursor.IsSet() {
 		filter = bson.D{{Key: "$and", Value: bson.A{
@@ -271,6 +304,11 @@ func (r *MongoPostQueryReader) ListGatheringPosts(
 	}
 
 	filter := GatheringPostFilter(request)
+	filter = appendPublicReleaseFence(
+		filter,
+		request.ActiveReleaseID(),
+		request.ManifestDigest(),
+	)
 	sortField := request.SortField()
 	if cursor := request.Cursor(); cursor.IsSet() {
 		filter = bson.D{{Key: "$and", Value: bson.A{
@@ -536,6 +574,50 @@ func (r *MongoPostQueryReader) ListPublishedFeedPosts(
 		return postports.PostFeedSlice{}, fmt.Errorf("iterate published feed posts: %w", err)
 	}
 	return postports.PostFeedSlice{Items: items}, nil
+}
+
+func PublicReleaseFence(
+	activeReleaseID string,
+	manifestDigest string,
+) bson.D {
+	return appendPublicReleaseFence(nil, activeReleaseID, manifestDigest)
+}
+
+func releaseBindingValues(values []string) (string, string) {
+	activeReleaseID := ""
+	manifestDigest := ""
+	if len(values) > 0 {
+		activeReleaseID = strings.TrimSpace(values[0])
+	}
+	if len(values) > 1 {
+		manifestDigest = strings.TrimSpace(values[1])
+	}
+	return activeReleaseID, manifestDigest
+}
+
+// appendPublicReleaseFence preserves user-generated Posts while requiring every
+// qwq_data Post to match the exact active release identity selected by the
+// application facade. Without a complete binding, data-owned Posts are hidden.
+func appendPublicReleaseFence(
+	filter bson.D,
+	activeReleaseID string,
+	manifestDigest string,
+) bson.D {
+	activeReleaseID = strings.TrimSpace(activeReleaseID)
+	manifestDigest = strings.TrimSpace(manifestDigest)
+	canonical := bson.M{
+		"sourceOwner":     "qwq_data",
+		"releaseId":       activeReleaseID,
+		"manifestDigest":  manifestDigest,
+		"lifecycleStatus": "active",
+	}
+	if activeReleaseID == "" || manifestDigest == "" {
+		return append(filter, bson.E{Key: "sourceOwner", Value: bson.M{"$ne": "qwq_data"}})
+	}
+	return append(filter, bson.E{Key: "$or", Value: bson.A{
+		bson.M{"sourceOwner": bson.M{"$ne": "qwq_data"}},
+		canonical,
+	}})
 }
 
 func appendReleaseBoundHydrationFilter(
@@ -867,9 +949,10 @@ func PostFeedProjection() bson.D {
 }
 
 var (
-	_ postports.PostRevisionSliceReader = (*MongoPostQueryReader)(nil)
-	_ postports.PostDetailReader        = (*MongoPostQueryReader)(nil)
-	_ postports.AuthorPostReader        = (*MongoPostQueryReader)(nil)
-	_ postports.GatheringPostReader     = (*MongoPostQueryReader)(nil)
-	_ postports.PostFeedReader          = (*MongoPostQueryReader)(nil)
+	_ postports.PostRevisionSliceReader      = (*MongoPostQueryReader)(nil)
+	_ postports.PostDetailReader             = (*MongoPostQueryReader)(nil)
+	_ postports.ReleaseBoundPostDetailReader = (*MongoPostQueryReader)(nil)
+	_ postports.AuthorPostReader             = (*MongoPostQueryReader)(nil)
+	_ postports.GatheringPostReader          = (*MongoPostQueryReader)(nil)
+	_ postports.PostFeedReader               = (*MongoPostQueryReader)(nil)
 )

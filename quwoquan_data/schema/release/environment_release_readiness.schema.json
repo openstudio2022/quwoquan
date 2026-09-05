@@ -62,7 +62,7 @@
       "items": {"$ref": "#/$defs/sourceIdentity"}
     },
     "sourceIdentitySetDigest": {"$ref": "#/$defs/digest"},
-    "milestone": {"enum": ["M100", "M1000", "M10000"]},
+    "milestone": {"enum": ["M1", "M10", "M100", "M1000", "M10000"]},
     "readinessPhase": {"enum": ["research", "consumer", "commercial"]},
     "manifestDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
     "mediaManifestDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
@@ -374,7 +374,7 @@
           "items": {"$ref": "#/$defs/sourceIdentity"}
         },
         "sourceIdentitySetDigest": {"$ref": "#/$defs/digest"},
-        "milestone": {"enum": ["M100", "M1000", "M10000"]},
+        "milestone": {"enum": ["M1", "M10", "M100", "M1000", "M10000"]},
         "previousEnvironmentActivation": {
           "oneOf": [
             {"type": "null"},
