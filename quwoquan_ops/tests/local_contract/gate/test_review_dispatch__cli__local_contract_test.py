@@ -163,7 +163,7 @@ class ReviewDispatchBoundedAssemblyTest(unittest.TestCase):
             set(_governance_contract["review_plan"]["required_fields"]),
             set(plan),
         )
-        self.assertEqual(4, _governance_contract["review_plan"]["schema_version"])
+        self.assertEqual(5, _governance_contract["review_plan"]["schema_version"])
         self.assertNotIn("fingerprint_inputs", _governance_contract["review_plan"])
         self.assertEqual(
             "canonical-evidence-fingerprint-receipt",
@@ -314,7 +314,7 @@ class ReviewDispatchBoundedAssemblyTest(unittest.TestCase):
             [item["id"] for item in pageflip["evidence"]],
         )
         self.assertEqual(
-            ["python3 -B quwoquan_ops/gate/verify_review_baseline.py", "make verify-code-health-delta", "make verify-app-pageflip-back-mainline"],
+            ["python3 -B quwoquan_ops/gate/verify_review_baseline.py", "python3 -B quwoquan_ops/gate/verify_review_code_health.py", "make verify-app-pageflip-back-mainline"],
             [item["command"] for item in pageflip["evidence"]],
         )
         self.assertEqual(
@@ -816,7 +816,7 @@ class ReviewDispatchBoundedAssemblyTest(unittest.TestCase):
             check=False,
         )
         self.assertEqual(0, result.returncode, result.stderr)
-        self.assertEqual(4, json.loads(result.stdout)["schema_version"])
+        self.assertEqual(5, json.loads(result.stdout)["schema_version"])
 
     # spec_ref: specs/feature-tree/runtime/development-workflow-governance/agent-skill-review-context-organization/spec.md#gwt-002.t3
     def test_post_requires_current_owner_manifest_and_matches_scope(self) -> None:

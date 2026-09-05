@@ -38,7 +38,7 @@ candidate_evidence_manifest:
   owner_chain_storage: digest_only_per_impacted_owner_identity-rebuilt_with_current_feature_tree_resolver
 
 review_plan:
-  schema_version: 4
+  schema_version: 5
   required_fields:
     - schema_version
     - workflow
@@ -66,6 +66,7 @@ review_plan:
     - invalidations
     - terminal
     - head_sha
+    - merge_base_sha
     - generated_at
   owner_identity_fields: [ref, canonical_bytes_sha256, target, scope, resolved_owner, fingerprint_ref, fingerprint_digest]
   candidate_evidence_identity_fields: [ref, canonical_bytes_sha256, schema_version, owner_identity_ref, delivery_owner, lead_lane, delivery_policy_digests, target, resolved_owner, impacted_owner_groups_digest, changed_paths_digest, workspace_digests, fingerprint_ref, fingerprint_digest, impact_plan_ref, impact_plan_digest]
@@ -94,6 +95,7 @@ review_plan:
     - timeout_seconds
     - command_digest
     - consumers
+    - result_artifact
     - reusable
   context_bytes_fields: [manifest, reviewers, max_reviewer, limit]
   incomplete_role_fields: [role, required, reason, code]
@@ -106,7 +108,7 @@ review_plan:
   fingerprint_identity: canonical-evidence-fingerprint-receipt
 
 named_evidence_receipt:
-  schema_version: 4
+  schema_version: 5
   required_fields:
     - schema_version
     - run_id
@@ -140,6 +142,8 @@ named_evidence_receipt:
     - finished_at
     - captured_by
     - required
+    - artifact
+  evidence_artifact_fields: [kind, ref, canonical_bytes_sha256, schema, terminal, report_identity, evidence_fingerprint_ref, evidence_fingerprint_digest, base_sha, head_sha, changed_paths_digest, impact_plan_ref, impact_plan_digest, candidate_evidence_ref, candidate_evidence_sha256, plan_ref, plan_sha256, summary, findings]
   terminal_fields: [status, code, failed_evidence]
   command_digest_format: "sha256:<64-lowercase-hex>"
 

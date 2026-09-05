@@ -41,11 +41,17 @@ from quwoquan_ops.gate.local_dependency_purity.shell_commands import (
     reachable_shell_array_tokens,
     reachable_shell_command_tokens,
 )
+from quwoquan_ops.tests.support.delivery_gate_data_trigger_support import (
+    DATA_TESTS_JOB,
+    DATA_TRIGGER_SCOPE,
+    assert_data_jobs_trigger_scoped,
+    assert_summary_contract,
+    run_summary,
+)
 
 SHARD_CLI = ROOT / "quwoquan_ops" / "gate" / "delivery_gate_data_shard.py"
 GATE_REPO = ROOT / "quwoquan_ops" / "gate" / "gate_repo.sh"
 WORKFLOW = ROOT / ".github" / "workflows" / "delivery-gate.yml"
-DATA_TESTS_JOB = "quwoquan_data_tests"
 EXPECTED_SHARD_INDICES = (0, 1, 2, 3)
 EXPECTED_SHARD_ENVIRONMENT = {
     "GATE_DATA_PHASE": "local_contract",
@@ -127,34 +133,6 @@ def _assert_executable_command(run: str, expected_prefix: tuple[str, ...]) -> No
     assert len(matches) == 1, (
         f"workflow 必须真实执行 {' '.join(expected_prefix)}，注释/heredoc/未调用函数不算"
     )
-
-
-def _assert_summary_shard_blocker_contract(summary: dict) -> None:
-    assert summary.get("if") == "always()"
-    assert summary.get("continue-on-error") in (None, False)
-    steps = [
-        candidate
-        for candidate in summary["steps"]
-        if "DATA_TESTS" in candidate.get("env", {})
-    ]
-    assert len(steps) == 1
-    step = steps[0]
-    assert step.get("if") == "always()"
-    assert step.get("continue-on-error") in (None, False)
-    assert step.get("shell") is None
-    assert step["env"]["DATA_TESTS"] == "${{ needs.quwoquan_data_tests.result }}"
-    assert type(step.get("run")) is str
-    _assert_executable_command(
-        step["run"],
-        ("expect_success", DATA_TESTS_JOB, "${DATA_TESTS}"),
-    )
-
-
-def _assert_data_jobs_are_unconditional(workflow: dict) -> None:
-    for job_name in ("quwoquan_data", DATA_TESTS_JOB):
-        job = workflow["jobs"][job_name]
-        assert job.get("if") is None, f"{job_name} 必须在每次 Delivery Gate 调用执行"
-        assert job.get("continue-on-error") in (None, False)
 
 
 def _assert_token_sequence(tokens: tuple[str, ...], expected: tuple[str, ...]) -> None:
@@ -393,7 +371,7 @@ def test_delivery_gate_runs_the_declared_shard_count(
 ) -> None:
     shard_total = len(declared_shard_indices)
     _shard_step(data_tests_job, shard_total=shard_total)
-    assert data_tests_job.get("if") is None
+    assert data_tests_job.get("if") == DATA_TRIGGER_SCOPE
     assert data_tests_job["strategy"]["fail-fast"] is False
 
 
@@ -503,21 +481,20 @@ def test_a_red_shard_blocks_the_delivery_gate(workflow: dict) -> None:
         and f"needs.{DATA_TESTS_JOB}.result" in str(step["env"]["DATA_TESTS"])
     ]
     assert block_steps, "汇总步骤必须读取分片 job 的结果"
-    _assert_executable_command(
-        block_steps[0]["run"],
-        ("expect_success", DATA_TESTS_JOB, "${DATA_TESTS}"),
-    )
+    red_shard = run_summary(summary, event_name="pull_request", data_tests="failure", repo_root=ROOT)
+    assert red_shard.returncode == 1
+    assert "quwoquan_data_tests expected success, got failure" in red_shard.stdout
 
 
 @pytest.mark.parametrize("produce_release_evidence", (False, True))
-def test_data_false_still_requires_producers_and_consumers(
+def test_pr_release_always_require_data_producers_and_consumers(
     workflow: dict,
     produce_release_evidence: bool,
 ) -> None:
     data_impacted = False
     assert data_impacted is False
-    _assert_data_jobs_are_unconditional(workflow)
-    _assert_summary_shard_blocker_contract(workflow["jobs"]["delivery_gate_summary"])
+    assert_data_jobs_trigger_scoped(workflow)
+    assert_summary_contract(workflow["jobs"]["delivery_gate_summary"], repo_root=ROOT)
     if produce_release_evidence:
         evidence = workflow["jobs"]["release_evidence"]
         assert DATA_TESTS_JOB in evidence["needs"]
@@ -551,7 +528,7 @@ def test_summary_rejects_non_executable_shard_blocker_text(
     )
     executable = (
         'expect_success "quwoquan_data_tests" "${DATA_TESTS}" '
-        '"检查 data local_contract 分片测试"'
+        '"PR/release Delivery 必须执行 Data tests"'
     )
     replacement = (
         f"# {executable}"
@@ -567,11 +544,11 @@ def test_summary_rejects_non_executable_shard_blocker_text(
         )
 
 
-def test_summary_shard_blocker_is_bound_to_unconditional_workflow_step(
+def test_summary_shard_blocker_is_bound_to_trigger_aware_workflow_step(
     workflow: dict,
 ) -> None:
     summary = workflow["jobs"]["delivery_gate_summary"]
-    _assert_summary_shard_blocker_contract(summary)
+    assert_summary_contract(summary, repo_root=ROOT)
 
 
 @pytest.mark.parametrize(
@@ -602,7 +579,7 @@ def test_summary_shard_blocker_rejects_workflow_bypass_mutations(
     target[key] = value
 
     with pytest.raises(AssertionError):
-        _assert_summary_shard_blocker_contract(summary)
+        assert_summary_contract(summary, repo_root=ROOT)
 
 
 @pytest.mark.parametrize(
@@ -612,7 +589,6 @@ def test_summary_shard_blocker_rejects_workflow_bypass_mutations(
         'exit 0\nexpect_success "quwoquan_data_tests" "${DATA_TESTS}"',
         'false && expect_success "quwoquan_data_tests" "${DATA_TESTS}"',
         'true || expect_success "quwoquan_data_tests" "${DATA_TESTS}"',
-        'if true; then expect_success "quwoquan_data_tests" "${DATA_TESTS}"; fi',
         '(expect_success "quwoquan_data_tests" "${DATA_TESTS}")',
         'expect_success "quwoquan_data_tests" "${DATA_TESTS}" | tee /tmp/result',
         'expect_success "quwoquan_data_tests" "${DATA_TESTS}" & wait',
@@ -630,12 +606,12 @@ def test_summary_rejects_unreachable_shard_blocker_command(
     )
     executable = (
         'expect_success "quwoquan_data_tests" "${DATA_TESTS}" '
-        '"检查 data local_contract 分片测试"'
+        '"PR/release Delivery 必须执行 Data tests"'
     )
     step["run"] = step["run"].replace(executable, replacement, 1)
 
     with pytest.raises(AssertionError):
-        _assert_summary_shard_blocker_contract(summary)
+        assert_summary_contract(summary, repo_root=ROOT)
 
 
 def test_summary_rejects_blocker_after_guaranteed_static_exit(workflow: dict) -> None:
@@ -647,7 +623,7 @@ def test_summary_rejects_blocker_after_guaranteed_static_exit(workflow: dict) ->
     )
     executable = (
         'expect_success "quwoquan_data_tests" "${DATA_TESTS}" '
-        '"检查 data local_contract 分片测试"'
+        '"PR/release Delivery 必须执行 Data tests"'
     )
     step["run"] = step["run"].replace(
         executable,
@@ -656,7 +632,7 @@ def test_summary_rejects_blocker_after_guaranteed_static_exit(workflow: dict) ->
     )
 
     with pytest.raises(AssertionError):
-        _assert_summary_shard_blocker_contract(summary)
+        assert_summary_contract(summary, repo_root=ROOT)
 
 
 @pytest.mark.parametrize(
@@ -755,7 +731,7 @@ def test_summary_rejects_shell_override(workflow: dict) -> None:
     step["shell"] = "bash --noprofile --norc -o errexit {0}"
 
     with pytest.raises(AssertionError):
-        _assert_summary_shard_blocker_contract(summary)
+        assert_summary_contract(summary, repo_root=ROOT)
 
 
 def test_required_shard_count_matches_the_matrix(
@@ -770,8 +746,14 @@ def test_required_shard_count_matches_the_matrix(
         array_name="ARGS",
         consumer_prefix=("python3", "quwoquan_ops/ci/github_actions_timing.py"),
     )
-    _assert_token_sequence(
-        arguments, ("--require-count", f"data_tests={declared_shard_total}")
+    expected = (
+        'if [[ "$RELEASE_CALL" == "true" || "$EVENT_NAME" != push ]]; then\n'
+        f'  ARGS+=(--require-count "data=1" --require-count "data_tests={declared_shard_total}")\n'
+        '  FANOUT+=(data data_tests)\n'
+        'fi'
+    )
+    assert run.count(expected) == 1, (
+        "Data 四片计时必须只在 PR/release fanout 分支写入 canonical ARGS"
     )
     _assert_token_sequence(
         arguments, ("--phase-prefix", "data_tests=Delivery Gate — Data Tests Shard ")

@@ -22,6 +22,10 @@ PYTEST_ESTIMATE_SCHEMA = "commit-gate-pytest-estimate-v1"
 PYTEST_BUDGET_SECONDS = 120
 PYTEST_CAP = 80  # Defensive last resort; duration is the primary admission rule.
 DEFAULT_PYTEST_FILE_ESTIMATE_SECONDS = 12
+PYTEST_FILE_ESTIMATE_SECONDS_BY_EXACT_PATH = {
+    "quwoquan_ops/tests/local_contract/gate/test_named_evidence_runner__local_contract_test.py": 120,
+    "quwoquan_ops/tests/local_contract/gate/test_review_dispatch__cli__local_contract_test.py": 120,
+}
 PYTEST_FILE_ESTIMATE_SECONDS_BY_PREFIX = (
     ("quwoquan_ops/tests/local_contract/ci/", 18),
     ("quwoquan_ops/tests/local_contract/gate/", 18),
@@ -560,6 +564,9 @@ def _select_pytest_targets(paths: list[str]) -> dict[str, object]:
                         selected.append(test_target)
                 break
     def file_estimate_seconds(target: str) -> int:
+        exact = PYTEST_FILE_ESTIMATE_SECONDS_BY_EXACT_PATH.get(target)
+        if exact is not None:
+            return exact
         for prefix, seconds in PYTEST_FILE_ESTIMATE_SECONDS_BY_PREFIX:
             if target.startswith(prefix):
                 return seconds

@@ -70,9 +70,10 @@ evidence:
     timeout_seconds: 300
     covers: []
   code-health-delta:
-    command: make verify-code-health-delta
+    command: python3 -B quwoquan_ops/gate/verify_review_code_health.py
     segment: POST
     required: true
+    result_artifact: code-health-report-v1
     timeout_seconds: 300
     covers:
       - changed-source-classification

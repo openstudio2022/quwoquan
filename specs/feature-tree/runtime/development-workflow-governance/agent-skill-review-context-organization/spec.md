@@ -68,6 +68,7 @@
   `check:`，不得保存命令。
 - board 每个 evidence ID 只执行一次并把结果共享给 Reviewer。Reviewer 缺 evidence 时报告 incomplete，禁止自行补跑命令。Evidence runner 在首条命令前按 plan changed paths、canonical contexts 与 review assets 重算 current EvidenceFingerprint；tracked/untracked/deleted/renamed/symlink/context/registry command 任一变化必须零命令返回 `REVIEW.FINGERPRINT_CHANGED`。
 - 每条命令后与最终收口都必须复核同一输入 identity；运行中受管内容变化使 result stale/GATE_BLOCK。execution/result receipt 必须携带真实 workspace digests，不能以空摘要代替当前工作树。
+- 产出结构化 artifact 的 evidence 必须在 registry 声明唯一 artifact kind，并只通过 runner 注入的 create-once descriptor path 回传；runner 从 exact plan/candidate 校验 artifact regular-file/ref/bytes digest、range、changed-path 与 ImpactPlan identity 后，将 report identity、typed terminal、summary/findings 原样写入 named-evidence receipt。Reviewer 只消费该 receipt 中的 runner-validated artifact 投影，不扫描 latest、不信任 stdout，也不自行重跑 producer。
 - 复用指纹必须消费 canonical contract 声明的全部输入；tracked、untracked、删除、symlink、
   context 或 evidence 定义的变化都不得复用旧结论。
 - re-review 必须引用 initial plan，finding owner 必须来自首次 Reviewer；scope、profile 或路径集合变化时
@@ -165,6 +166,7 @@
 - GIVEN 一个 POST plan、canonical named evidence receipt、结构化 reviewer results 与 handoff artifact/ref。
 - WHEN plan 后任一受管工作树字节、context、registry command、review asset 或 artifact 在执行前、命令间或下游消费前变化。
 - THEN 变化在首条命令前导致零命令 `REVIEW.FINGERPRINT_CHANGED`，运行中变化导致 stale/GATE_BLOCK；handoff 拒绝不存在、非 PASS、plan identity 不匹配或 freshness stale 的 evidence ref，并投影真实执行字段。
+- AND candidate-bound Code Health evidence 只接受 runner 注入的 exact plan path/SHA/ref，在 clean `merge-base → plan HEAD` 上产生非空 report；plan/candidate/path/ImpactPlan 任一漂移、descriptor/report 非 regular file 或 report bytes digest 不符均 fail-closed，Reviewer assembled input 只含 runner 已验证并写入 receipt 的 exact report 投影。
 - AND 空 triggers 即使未提供 artifacts/Review/authority 也只返回 `no_persistent_handoff` 且零 projection/store；六类 trigger 任一成立则必须通过 exact owner/candidate/named evidence/Reviewer/consolidation 完整链，格式合法但 byte digest 错误的 foreign ref 返回 `HandoffStoreConflict`。
 - AND 仅 current fresh 输入可被确定性 consolidation；required incomplete 为 `GATE_BLOCK`、optional incomplete 为 `PR_WARN`、finding 去重稳定，downstream 只能来自 canonical workflow registry。
 

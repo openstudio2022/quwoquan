@@ -244,6 +244,20 @@ def test_parent_directory_is_deferred_without_duplicate_child_execution() -> Non
     )
 
 
+def test_known_slow_review_suites_are_deferred_before_l0_hard_timeout() -> None:
+    slow = [
+        "quwoquan_ops/tests/local_contract/gate/test_named_evidence_runner__local_contract_test.py",
+        "quwoquan_ops/tests/local_contract/gate/test_review_dispatch__cli__local_contract_test.py",
+    ]
+    plan = build_plan(slow, 40)
+
+    assert plan["pytest_paths"] == [slow[0]]
+    assert slow[1] in plan["deferred_to_ci"]
+    assert plan["estimated_pytest_seconds"] == 120
+    by_target = {item["target"]: item for item in plan["pytest_target_estimates"]}
+    assert by_target[slow[1]]["reason"] == "estimated_duration_budget"
+
+
 def test_estimated_duration_is_primary_budget_and_plan_is_stable() -> None:
     changed = sorted(
         path.relative_to(ROOT).as_posix()

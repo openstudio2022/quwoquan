@@ -35,7 +35,9 @@ def test_deadline_terminates_the_entire_child_process_group(tmp_path: Path) -> N
             sys.executable,
             str(RUNNER),
             "--deadline-epoch-seconds",
-            str(time.time() + 0.35),
+            # 给两层 Python 启动及 child PID 落盘留出确定性余量；验证的仍是
+            # deadline 到达后整个独立进程组被终止，而不是解释器冷启动速度。
+            str(time.time() + 1.0),
             "--grace-seconds",
             "0.1",
             "--result-json",

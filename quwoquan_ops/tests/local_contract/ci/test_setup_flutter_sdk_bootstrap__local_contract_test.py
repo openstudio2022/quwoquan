@@ -236,8 +236,28 @@ def test_app_test_shards_materialize_sealed_wrappers_after_sdk_install() -> None
     assert ":app:testNonprodDebugUnitTest" in android_step
     assert "--tests com.quwoquan.quwoquan_app.RuntimeConfigPackageStoreTest" in android_step
     assert ":app:dependencies" not in android_step
+    resolve_patrol = "Resolve locked Patrol test host dependencies"
+    materialize_patrol = "Materialize Patrol Android Kotlin dependencies"
+    assert app_tests.count(resolve_patrol) == 1
+    assert app_tests.count(materialize_patrol) == 1
+    patrol_step = app_tests[
+        app_tests.index(resolve_patrol) : app_tests.index(
+            "Install repository test native dependencies"
+        )
+    ]
+    assert "if: ${{ matrix.shard_index == 0 }}" in patrol_step
+    assert "working-directory: quwoquan_app/test_host/patrol" in patrol_step
+    assert "flutter pub get --enforce-lockfile" in patrol_step
+    assert "working-directory: quwoquan_app/test_host/patrol/android" in patrol_step
+    assert "./gradlew --no-daemon :app:compileDebugKotlin" in patrol_step
+    settings = (ROOT / "quwoquan_app/test_host/patrol/android/settings.gradle.kts").read_text(encoding="utf-8")
+    assert 'id("org.jetbrains.kotlin.android") version "2.4.0" apply false' in settings
+    assert ":app:dependencies" not in patrol_step
+    assert "quwoquan_app/test_host/patrol/pubspec.lock" in app_tests
     assert app_tests.index(materialize) < app_tests.index(resolve_android)
-    assert app_tests.index(resolve_android) < app_tests.index(
+    assert app_tests.index(resolve_android) < app_tests.index(resolve_patrol)
+    assert app_tests.index(resolve_patrol) < app_tests.index(materialize_patrol)
+    assert app_tests.index(materialize_patrol) < app_tests.index(
         "Gate (quwoquan_app tests shard)"
     )
 

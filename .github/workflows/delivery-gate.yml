@@ -872,7 +872,7 @@ jobs:
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
           path: ~/.pub-cache
-          key: "pub-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('quwoquan_app/pubspec.lock') }}"
+          key: "pub-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('quwoquan_app/pubspec.lock', 'quwoquan_app/test_host/patrol/pubspec.lock') }}"
           restore-keys: |
             pub-${{ runner.os }}-${{ runner.arch }}-
       - name: Install verified Flutter SDK
@@ -897,6 +897,14 @@ jobs:
           ./gradlew --no-daemon
           :app:testNonprodDebugUnitTest
           --tests com.quwoquan.quwoquan_app.RuntimeConfigPackageStoreTest
+      - name: Resolve locked Patrol test host dependencies
+        if: ${{ matrix.shard_index == 0 }}
+        working-directory: quwoquan_app/test_host/patrol
+        run: flutter pub get --enforce-lockfile
+      - name: Materialize Patrol Android Kotlin dependencies
+        if: ${{ matrix.shard_index == 0 }}
+        working-directory: quwoquan_app/test_host/patrol/android
+        run: ./gradlew --no-daemon :app:compileDebugKotlin
       - name: Install repository test native dependencies
         run: bash quwoquan_ops/ci/run_bounded_apt_install.sh tesseract-ocr
       - name: Gate (quwoquan_app tests shard)

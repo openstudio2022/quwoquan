@@ -42,6 +42,10 @@ from lib.readiness_case_result import (  # noqa: E402
     ReadinessCaseResultError,
     write_create_once_json,
 )
+from lib.named_evidence_artifact import (  # noqa: E402
+    NamedEvidenceArtifactError,
+    read_result_artifact,
+)
 
 sys.path.insert(0, str(ROOT / "quwoquan_ops/gate/lib"))
 from process_group_deadline import run_command  # noqa: E402
@@ -50,6 +54,9 @@ OUTPUT_ROOT = ROOT / ".qwq_output/env/repo/runs/review-evidence"
 BASELINE_PLAN_ENV = "QWQ_REVIEW_BASELINE_PLAN_PATH"
 BASELINE_PLAN_SHA_ENV = "QWQ_REVIEW_BASELINE_PLAN_SHA256"
 BASELINE_PLAN_REF_ENV = "QWQ_REVIEW_BASELINE_PLAN_REF"
+RESULT_PATH_ENV = "QWQ_NAMED_EVIDENCE_RESULT_PATH"
+SOURCE_HEAD_ENV = "QWQ_REVIEW_EVIDENCE_HEAD_SHA"
+SOURCE_MERGE_BASE_ENV = "QWQ_REVIEW_EVIDENCE_MERGE_BASE_SHA"
 
 
 class EvidenceRunnerError(ValueError):
@@ -85,7 +92,7 @@ def _workspace_source_classification(repo_root: Path = ROOT) -> dict[str, Any]:
     if not head_sha:
         raise EvidenceRunnerError("无法读取 source HEAD")
     merge_base_sha = head_sha
-    for base in ("dev1.0", "main"):
+    for base in ("origin/dev1.0", "dev1.0", "main"):
         result = subprocess.run(
             ["git", "merge-base", head_sha, base],
             cwd=repo_root,
@@ -291,6 +298,12 @@ def _assert_same_fingerprint(
             )
 
 
+def _assert_plan_source_range(
+    plan: dict[str, Any], source: dict[str, Any]
+) -> None:
+    _assert_plan_source_range(plan, source)
+
+
 def run_plan(
     plan: dict[str, Any],
     *,
@@ -388,6 +401,7 @@ def run_plan(
                 "command_digest": exact,
                 "required": bool(raw.get("required", True)),
                 "timeout_seconds": timeout_seconds,
+                "result_artifact": registered.get("result_artifact"),
             }
         )
 
@@ -397,6 +411,13 @@ def run_plan(
     started_at = _now()
     repo_root = cwd.resolve()
     source = _workspace_source_classification(repo_root)
+    if (
+        source["head_sha"] != plan["head_sha"]
+        or source["merge_base_sha"] != plan["merge_base_sha"]
+    ):
+        raise EvidenceRunnerError(
+            "REVIEW.FINGERPRINT_CHANGED: evidence source exact Git range 与 plan 漂移"
+        )
     evidence_class, admission_eligible = _evidence_classification(source)
     execution_fingerprint = _fingerprint(
         plan=plan, evidence=evidence, results=[], phase="execution_input", registry=registry,
@@ -410,25 +431,45 @@ def run_plan(
         plan_input.write_bytes(exact_plan_bytes)
         plan_input.chmod(0o400)
         command_env = os.environ.copy()
-        for reserved in (BASELINE_PLAN_ENV, BASELINE_PLAN_SHA_ENV, BASELINE_PLAN_REF_ENV):
+        for reserved in (
+            BASELINE_PLAN_ENV,
+            BASELINE_PLAN_SHA_ENV,
+            BASELINE_PLAN_REF_ENV,
+            RESULT_PATH_ENV,
+            SOURCE_HEAD_ENV,
+            SOURCE_MERGE_BASE_ENV,
+        ):
             command_env.pop(reserved, None)
         command_env.update(
             {
                 BASELINE_PLAN_ENV: str(plan_input),
                 BASELINE_PLAN_SHA_ENV: exact_plan_sha256,
                 BASELINE_PLAN_REF_ENV: resolved_plan_ref,
+                SOURCE_HEAD_ENV: source["head_sha"],
+                SOURCE_MERGE_BASE_ENV: source["merge_base_sha"],
             }
         )
         for item in evidence:
             item_started = _now()
+            descriptor_path = Path(directory) / f"{item['id']}.json"
+            item_env = dict(command_env)
+            item_env[RESULT_PATH_ENV] = str(descriptor_path)
             completed = run_command(
                 ["/bin/sh", "-c", item["command"]],
                 cwd=cwd,
                 timeout_seconds=float(item["timeout_seconds"]),
                 capture_output=True,
-                env=command_env,
+                env=item_env,
             )
             item_finished = _now()
+            try:
+                artifact = read_result_artifact(
+                    kind=item["result_artifact"], descriptor_path=descriptor_path,
+                    evidence_id=item["id"], plan=plan, plan_ref=resolved_plan_ref,
+                    plan_sha256=exact_plan_sha256, source=source, repo_root=repo_root,
+                )
+            except NamedEvidenceArtifactError as exc:
+                raise EvidenceRunnerError(str(exc)) from exc
             results.append(
                 declared_object(
                     {
@@ -446,6 +487,7 @@ def run_plan(
                         "finished_at": item_finished,
                         "captured_by": captured_by,
                         "required": item["required"],
+                        "artifact": artifact,
                     },
                     "named_evidence_receipt",
                     "evidence_result_fields",

@@ -218,8 +218,8 @@ class NamedEvidenceRunnerTest(unittest.TestCase):
         plan, registry = self._plan([("safe", True, "printf safe")])
         clean_source = {
             "mode": "workspace",
-            "head_sha": "a" * 40,
-            "merge_base_sha": "b" * 40,
+            "head_sha": plan["head_sha"],
+            "merge_base_sha": plan["merge_base_sha"],
             "repository_clean": True,
             "immutable": False,
         }
@@ -319,9 +319,48 @@ class NamedEvidenceRunnerTest(unittest.TestCase):
                 "sha": env[runner.BASELINE_PLAN_SHA_ENV],
                 "ref": env[runner.BASELINE_PLAN_REF_ENV],
             })
-            result = real_run(args, *positional, **kwargs)
-            captured["stderr"] = result.stderr.decode("utf-8", errors="replace")
-            return result
+            if "verify_review_baseline.py" in args[2]:
+                result = real_run(args, *positional, **kwargs)
+                captured["stderr"] = result.stderr.decode("utf-8", errors="replace")
+                return result
+            descriptor_raw = env.get(runner.RESULT_PATH_ENV)
+            if descriptor_raw:
+                descriptor = Path(descriptor_raw)
+                candidate_identity = plan["candidate_evidence_identity"]
+                report = {
+                    "schema": "quwoquan.code-health-delta",
+                    "terminal": "PASS",
+                    "baseSha": plan["merge_base_sha"],
+                    "headSha": plan["head_sha"],
+                    "changedPathsDigest": candidate_identity["changed_paths_digest"],
+                    "summary": {"changedFiles": len(plan["changed_paths"])},
+                    "findings": [],
+                    "evidenceFingerprint": {
+                        "ref": "evidence-fingerprint-v1:sha256:" + "c" * 64,
+                        "digest": "sha256:" + "c" * 64,
+                    },
+                }
+                report_path = self.case_root / "baseline-code-health-report.json"
+                report_path.write_text(json.dumps(report, sort_keys=True), encoding="utf-8")
+                descriptor.write_text(json.dumps({
+                    "kind": "code-health-report-v1",
+                    "ref": report_path.relative_to(ROOT).as_posix(),
+                    "canonical_bytes_sha256": "sha256:" + hashlib.sha256(report_path.read_bytes()).hexdigest(),
+                    "schema": report["schema"], "terminal": report["terminal"],
+                    "report_identity": "sha256:" + "d" * 64,
+                    "evidence_fingerprint_ref": report["evidenceFingerprint"]["ref"],
+                    "evidence_fingerprint_digest": report["evidenceFingerprint"]["digest"],
+                    "base_sha": plan["merge_base_sha"], "head_sha": plan["head_sha"],
+                    "changed_paths_digest": candidate_identity["changed_paths_digest"],
+                    "impact_plan_ref": candidate_identity["impact_plan_ref"],
+                    "impact_plan_digest": candidate_identity["impact_plan_digest"],
+                    "candidate_evidence_ref": candidate_identity["ref"],
+                    "candidate_evidence_sha256": candidate_identity["canonical_bytes_sha256"],
+                    "plan_ref": env[runner.BASELINE_PLAN_REF_ENV],
+                    "plan_sha256": env[runner.BASELINE_PLAN_SHA_ENV],
+                    "summary": report["summary"], "findings": report["findings"],
+                }, sort_keys=True), encoding="utf-8")
+            return type("Completed", (), {"returncode": 0, "timed_out": False, "termination_signal": None, "stdout": b"", "stderr": b""})()
 
         hostile = {
             runner.BASELINE_PLAN_ENV: "/tmp/forged-plan.json",
@@ -349,6 +388,141 @@ class NamedEvidenceRunnerTest(unittest.TestCase):
         )
         self.assertEqual(source_ref, captured["ref"])
         self.assertFalse(captured["path"].exists())
+
+    def test_declared_artifact_is_runner_bound_and_projected_to_reviewer(self) -> None:
+        plan, registry = self._plan([("artifact", True, "printf artifact")])
+        registry["evidence"]["artifact"]["result_artifact"] = "code-health-report-v1"
+        artifact_path = self.case_root / "report.json"
+        report = {
+            "schema": "quwoquan.code-health-delta",
+            "terminal": "PR_WARN",
+            "baseSha": plan["merge_base_sha"],
+            "headSha": plan["head_sha"],
+            "changedPathsDigest": plan["candidate_evidence_identity"]["changed_paths_digest"],
+            "summary": {"changedFiles": len(plan["changed_paths"])},
+            "findings": [{"code": "CODE_HEALTH.CHANGE_SIZE_ADVISORY", "path": "<candidate>", "terminal": "PR_WARN", "message": "large"}],
+            "evidenceFingerprint": {"ref": "evidence-fingerprint-v1:sha256:" + "c" * 64, "digest": "sha256:" + "c" * 64},
+        }
+        artifact_path.write_text(json.dumps(report, sort_keys=True), encoding="utf-8")
+        artifact_ref = artifact_path.relative_to(ROOT).as_posix()
+
+        def emit(_args, *positional, **kwargs):
+            descriptor = Path(kwargs["env"][runner.RESULT_PATH_ENV])
+            payload = {
+                "kind": "code-health-report-v1",
+                "ref": artifact_ref,
+                "canonical_bytes_sha256": "sha256:" + hashlib.sha256(artifact_path.read_bytes()).hexdigest(),
+                "schema": report["schema"],
+                "terminal": report["terminal"],
+                "report_identity": "sha256:" + "d" * 64,
+                "evidence_fingerprint_ref": report["evidenceFingerprint"]["ref"],
+                "evidence_fingerprint_digest": report["evidenceFingerprint"]["digest"],
+                "base_sha": plan["merge_base_sha"],
+                "head_sha": plan["head_sha"],
+                "changed_paths_digest": plan["candidate_evidence_identity"]["changed_paths_digest"],
+                "impact_plan_ref": plan["candidate_evidence_identity"]["impact_plan_ref"],
+                "impact_plan_digest": plan["candidate_evidence_identity"]["impact_plan_digest"],
+                "candidate_evidence_ref": plan["candidate_evidence_identity"]["ref"],
+                "candidate_evidence_sha256": plan["candidate_evidence_identity"]["canonical_bytes_sha256"],
+                "plan_ref": "test-fixture:exact-plan",
+                "plan_sha256": "sha256:" + hashlib.sha256(canonical_json_bytes(plan)).hexdigest(),
+                "summary": report["summary"],
+                "findings": report["findings"],
+            }
+            descriptor.write_text(json.dumps(payload, sort_keys=True), encoding="utf-8")
+            return type("Completed", (), {"returncode": 0, "timed_out": False, "termination_signal": None, "stdout": b"", "stderr": b""})()
+
+        source = {"mode": "workspace", "head_sha": plan["head_sha"], "merge_base_sha": plan["merge_base_sha"], "repository_clean": True, "immutable": False}
+        with mock.patch.object(runner, "run_command", side_effect=emit), mock.patch.object(
+            runner, "_workspace_source_classification", return_value=source
+        ), mock.patch.object(runner, "_assert_source_head"):
+            receipt = self._run(plan, registry)
+        artifact = receipt["evidence"][0]["artifact"]
+        self.assertEqual("code-health-report-v1", artifact["kind"])
+        self.assertEqual(report["findings"], artifact["findings"])
+        reviewer = review.build_reviewer_input(
+            plan,
+            {"receipt_ref": "receipt.json", "canonical_bytes_sha256": "sha256:" + "e" * 64},
+            evidence_summary=receipt,
+            reviewer_role=plan["reviewers"][0]["role"],
+        )
+        projected = reviewer["assembled_input"]["evidence_summary"]["results"][0]["artifact"]
+        self.assertEqual(artifact, projected)
+
+    def test_declared_artifact_identity_drift_and_missing_descriptor_fail_closed(self) -> None:
+        plan, registry = self._plan([("artifact", True, "printf artifact")])
+        registry["evidence"]["artifact"]["result_artifact"] = "code-health-report-v1"
+        source = {"mode": "workspace", "head_sha": plan["head_sha"], "merge_base_sha": plan["merge_base_sha"], "repository_clean": True, "immutable": False}
+        completed = type("Completed", (), {"returncode": 0, "timed_out": False, "termination_signal": None, "stdout": b"", "stderr": b""})()
+        with mock.patch.object(runner, "run_command", return_value=completed), mock.patch.object(
+            runner, "_workspace_source_classification", return_value=source
+        ), mock.patch.object(runner, "_assert_source_head"), self.assertRaisesRegex(
+            runner.EvidenceRunnerError, "descriptor"
+        ):
+            self._run(plan, registry)
+
+        report_path = self.case_root / "drift-report.json"
+        report = {"schema": "quwoquan.code-health-delta", "terminal": "PASS", "baseSha": plan["merge_base_sha"], "headSha": plan["head_sha"], "changedPathsDigest": plan["candidate_evidence_identity"]["changed_paths_digest"], "summary": {}, "findings": [], "evidenceFingerprint": {"ref": "evidence-fingerprint-v1:sha256:" + "c" * 64, "digest": "sha256:" + "c" * 64}}
+        report_path.write_text(json.dumps(report, sort_keys=True), encoding="utf-8")
+
+        for field in ("plan_ref", "candidate_evidence_ref", "changed_paths_digest", "impact_plan_digest"):
+            with self.subTest(field=field):
+                def emit(_args, *positional, **kwargs):
+                    candidate = plan["candidate_evidence_identity"]
+                    payload = {
+                        "kind": "code-health-report-v1", "ref": report_path.relative_to(ROOT).as_posix(),
+                        "canonical_bytes_sha256": "sha256:" + hashlib.sha256(report_path.read_bytes()).hexdigest(),
+                        "schema": report["schema"], "terminal": report["terminal"], "report_identity": "sha256:" + "d" * 64,
+                        "evidence_fingerprint_ref": report["evidenceFingerprint"]["ref"], "evidence_fingerprint_digest": report["evidenceFingerprint"]["digest"],
+                        "base_sha": plan["merge_base_sha"], "head_sha": plan["head_sha"], "changed_paths_digest": candidate["changed_paths_digest"],
+                        "impact_plan_ref": candidate["impact_plan_ref"], "impact_plan_digest": candidate["impact_plan_digest"],
+                        "candidate_evidence_ref": candidate["ref"], "candidate_evidence_sha256": candidate["canonical_bytes_sha256"],
+                        "plan_ref": "test-fixture:exact-plan", "plan_sha256": "sha256:" + hashlib.sha256(canonical_json_bytes(plan)).hexdigest(),
+                        "summary": report["summary"], "findings": report["findings"],
+                    }
+                    payload[field] = "sha256:" + "0" * 64 if field.endswith("digest") else "forged"
+                    Path(kwargs["env"][runner.RESULT_PATH_ENV]).write_text(json.dumps(payload, sort_keys=True), encoding="utf-8")
+                    return completed
+                with mock.patch.object(runner, "run_command", side_effect=emit), mock.patch.object(
+                    runner, "_workspace_source_classification", return_value=source
+                ), mock.patch.object(runner, "_assert_source_head"), self.assertRaisesRegex(
+                    runner.EvidenceRunnerError, "identity 漂移"
+                ):
+                    self._run(plan, registry)
+
+    def test_declared_artifact_digest_drift_fails_closed(self) -> None:
+        plan, registry = self._plan([("artifact", True, "printf artifact")])
+        registry["evidence"]["artifact"]["result_artifact"] = "code-health-report-v1"
+
+        def emit(_args, *positional, **kwargs):
+            descriptor = Path(kwargs["env"][runner.RESULT_PATH_ENV])
+            candidate = plan["candidate_evidence_identity"]
+            descriptor.write_text(json.dumps({
+                "kind": "code-health-report-v1", "ref": "README.md",
+                "canonical_bytes_sha256": "sha256:" + "0" * 64,
+                "schema": "quwoquan.code-health-delta", "terminal": "PASS",
+                "report_identity": "sha256:" + "d" * 64,
+                "evidence_fingerprint_ref": "evidence-fingerprint-v1:sha256:" + "c" * 64,
+                "evidence_fingerprint_digest": "sha256:" + "c" * 64,
+                "base_sha": plan["merge_base_sha"], "head_sha": plan["head_sha"],
+                "changed_paths_digest": candidate["changed_paths_digest"],
+                "impact_plan_ref": candidate["impact_plan_ref"],
+                "impact_plan_digest": candidate["impact_plan_digest"],
+                "candidate_evidence_ref": candidate["ref"],
+                "candidate_evidence_sha256": candidate["canonical_bytes_sha256"],
+                "plan_ref": "test-fixture:exact-plan",
+                "plan_sha256": "sha256:" + hashlib.sha256(canonical_json_bytes(plan)).hexdigest(),
+                "summary": {}, "findings": [],
+            }, sort_keys=True), encoding="utf-8")
+            return type("Completed", (), {"returncode": 0, "timed_out": False, "termination_signal": None, "stdout": b"", "stderr": b""})()
+
+        source = {"mode": "workspace", "head_sha": plan["head_sha"], "merge_base_sha": plan["merge_base_sha"], "repository_clean": True, "immutable": False}
+        with mock.patch.object(runner, "run_command", side_effect=emit), mock.patch.object(
+            runner, "_workspace_source_classification", return_value=source
+        ), mock.patch.object(runner, "_assert_source_head"), self.assertRaisesRegex(
+            runner.EvidenceRunnerError, "bytes digest"
+        ):
+            self._run(plan, registry)
 
     def test_runner_refuses_missing_exact_plan_channel(self) -> None:
         plan, registry = self._plan([("safe", True, "printf safe")])
