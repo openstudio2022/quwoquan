@@ -422,7 +422,7 @@ def build_entity_object_transaction_package(
             )
 
         if not cas_rows and not (
-            str(source_manifest.get("contentType") or "") == "article"
+            str(source_manifest.get("contentType") or "") in {"article", "homepage"}
             and str(source_manifest.get("publishMediaMode") or "") == "text_only"
         ):
             raise ObjectTransactionError("non-text-only entity transaction requires an authorized asset")
