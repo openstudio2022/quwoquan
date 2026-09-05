@@ -890,6 +890,13 @@ jobs:
       - name: Resolve locked App dependencies
         working-directory: quwoquan_app
         run: flutter pub get --enforce-lockfile
+      - name: Resolve App shared contract Android dependencies
+        if: ${{ matrix.shard_index == 0 }}
+        working-directory: quwoquan_app/android
+        run: >-
+          ./gradlew --no-daemon
+          :app:dependencies
+          --configuration nonprodDebugUnitTestCompileClasspath
       - name: Install repository test native dependencies
         run: bash quwoquan_ops/ci/run_bounded_apt_install.sh tesseract-ocr
       - name: Gate (quwoquan_app tests shard)

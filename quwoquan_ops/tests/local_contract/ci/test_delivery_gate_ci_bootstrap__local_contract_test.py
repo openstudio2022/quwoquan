@@ -890,8 +890,12 @@ def test_app_shard_zero_owns_native_dependencies_and_shared_contracts() -> None:
     job = workflow[job_start:job_end]
     gate = (ROOT / "quwoquan_ops/gate/gate_repo.sh").read_text(encoding="utf-8")
 
-    assert "Install repository test native dependencies" in job
-    assert "if: ${{ matrix.shard_index == 0 }}" not in job
+    native_step = job[
+        job.index("Install repository test native dependencies") : job.index(
+            "Gate (quwoquan_app tests shard)"
+        )
+    ]
+    assert "if: ${{ matrix.shard_index == 0 }}" not in native_step
     assert "tesseract-ocr" in job
     assert "run_bounded_apt_install.sh" in job
     assert "apt-get" not in job

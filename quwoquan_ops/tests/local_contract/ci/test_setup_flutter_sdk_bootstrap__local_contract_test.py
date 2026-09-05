@@ -224,7 +224,19 @@ def test_app_test_shards_materialize_sealed_wrappers_after_sdk_install() -> None
     assert app_tests.index(materialize) < app_tests.index(
         "Resolve locked App dependencies"
     )
-    assert app_tests.index(materialize) < app_tests.index(
+    resolve_android = "Resolve App shared contract Android dependencies"
+    assert app_tests.count(resolve_android) == 1
+    android_step = app_tests[
+        app_tests.index(resolve_android) : app_tests.index(
+            "Install repository test native dependencies"
+        )
+    ]
+    assert "if: ${{ matrix.shard_index == 0 }}" in android_step
+    assert "working-directory: quwoquan_app/android" in android_step
+    assert ":app:dependencies" in android_step
+    assert "--configuration nonprodDebugUnitTestCompileClasspath" in android_step
+    assert app_tests.index(materialize) < app_tests.index(resolve_android)
+    assert app_tests.index(resolve_android) < app_tests.index(
         "Gate (quwoquan_app tests shard)"
     )
 
