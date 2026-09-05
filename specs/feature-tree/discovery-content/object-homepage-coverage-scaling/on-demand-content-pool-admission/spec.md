@@ -4,7 +4,7 @@
 >
 > Journey / Scenario：[`JNY-014 / SCN-035`](../../../spec.md#scn-035)
 >
-> 设计归属：[L2 DEC-022](../design.md#dec-022)、[L2 DEC-026](../design.md#dec-026)
+> 设计归属：[L2 DEC-026](../design.md#dec-026)
 
 ## 1. 用户价值
 
@@ -16,7 +16,7 @@
 
 - article lane 在冻结 target set 之前完成实体级来源预筛，并把候选级拒绝原因聚合为实体级单一首要失败原因。
 - image/video 的媒体来源准入、workUnit 冻结与 execution 后独立内容审核。
-- 宿主 AI 按十阶段完成来源、创作与独立 review；publish AI 对 approved 对象逐个调用 canonical 单对象事务，历史 raw backfill/pool-append/campaign 不进入正常生产。
+- 宿主 AI 按 producer 九阶段完成来源、创作与独立 review；publish AI 对 approved 对象逐个调用 canonical 单对象事务。
 - homepage 正文在 `4.draft` 自检截面的派生度准入：段落相对底稿的逐字重合与正文内部的段落自我重复。
 - 单对象结果互斥五态与非成功终态的结构化 `nextAction + reentryRef`。
 - 同一冻结请求的 exact replay 零增量验证。
@@ -24,7 +24,7 @@
 ### Out of Scope
 
 - 意图 preview 与 envelope 编译（归 [`work-request-compilation`](../work-request-compilation/spec.md)）。
-- immutable release、环境导入与 App 消费（归 [`multi-carrier-release`](../multi-carrier-release/spec.md)）。
+- immutable release producer handoff（归 [`multi-carrier-release`](../multi-carrier-release/spec.md)）；环境导入与 App 消费由下游环境 owner 独立拥有。
 - invalid canonical identity 的修复裁决（归 [`canonical-content-identity-recovery`](../canonical-content-identity-recovery/spec.md)）。
 - article 来源预筛的匹配置信度、最小正文字数与探测预算的具体数值（见 `OPEN-001`）。
 - 绕过登录、付费墙、验证码、访问控制、DRM 或平台技术限制取得素材；直接生成图片或视频。
@@ -60,7 +60,7 @@
 <a id="req-002"></a>
 ### REQ-002 唯一入池路径、结果五态与可重入恢复面
 
-- 新内容的唯一写路径固定为宿主 AI 十阶段产出 accepted independent review，随后 publish AI 对每个 approved 对象直接调用 canonical 单对象事务。单对象事务是原子与幂等单位；不存在 drain/process manager 或 execution 级 publish。
+- 新内容的唯一写路径固定为宿主 AI producer 九阶段产出 accepted independent review，随后 publish AI 对每个 approved 对象直接调用 canonical 单对象事务。单对象事务是原子与幂等单位；不存在 drain/process manager 或 execution 级 publish。
 - 每个对象由 AI 显式提交 `published|blocked` 与 typed issues；原子事务另提供 `applied|replayed|conflict` 硬事实。汇总只读对象 receipts、review 与 transaction facts，不新增可写台账。
 - 任一对象失败由 AI 在 stage CLOSE 中写 typed issue 与 evidence refs；代码不生成 nextAction/reentry 或 recovery stage。整个 execution blocked 后以新 execution 重新开始。
 - 入池冻结证据必须绑定 batch 输入摘要、逐对象 record（`contentVersion/recordSequence/结果态`）与 post-apply 池 readback，不得只引用一次终端输出；追加过程中断（含尾部快照刷新失败窗口）必须可重入且不产生半可见对象。
@@ -87,7 +87,7 @@
 
 - media candidate 的对象身份只在 immutable candidate binding 中物化一次。每个 accepted candidate 导出一个对象身份绑定，brief 与 content object 逐一共享同一 candidate identity；两侧不得各自拼装身份，因此不存在「brief 有身份而 content object 没有」或两侧身份不同的中间态。
 - 对象 ref 由该绑定按 candidate id 派生，是 candidate id 的单向派生物，不得反向决定 candidate id。
-- accepted candidate 无法唯一映射为一个对象（缺 canonical coverage target、摘要漂移或同一 identity 重复）时判否，只排除该资产并写 typed exclusion，同批其它资产照常绑定；绝不静默产出无身份对象。旧 `workUnitId`/`execution_spec.content.workUnits` 分叉已删除，不得作为兼容输入。
+- accepted candidate 无法唯一映射为一个对象（缺 canonical coverage target、摘要漂移或同一 identity 重复）时判否，只排除该资产并写 typed exclusion，同批其它资产照常绑定；绝不静默产出无身份对象。对象 identity 必须完全来自 immutable candidate binding。
 - 数量三值分离：`targetObjectCount` 等于可映射 accepted assets 数，`targetEntityCount` 等于唯一 canonical coverage target 数，`approvedQuota` 保留请求的对象下限。实体维度不得改写对象下限，因此 workUnit 模式下 `approvedQuota` 允许大于 `targetEntityCount` 与 `targetObjectCount`，shortfall 仍按保留的 `approvedQuota` 计算。
 - 素材水印高风险的排除判据是出处类别裁决，不是文件名或 URL 的字面匹配。裁决只读三个出处事实：上传者与权利人是否同一主体、是否经批量导入工具搬运、原始平台是否属水印高风险闭集。同一出处类别的素材必须得到同一结论，命名差异不得使结论反转。
 - 三个出处事实各自是受版本控制的显式闭集（`quwoquan_data/scripts/core/media_source_provenance.py`）。闭集之外的入站取值落到各自的显式未知成员；未知成员不等价于任何放行态：它与任一其它风险事实组合时判否，也不能替代「已声明的低风险平台」。
@@ -96,7 +96,7 @@
 - 出处事实只从素材行上与裁决入参一一对应的显式声明位解析（作者、出处、上传者、描述）。画面主题一类的描述位不算出处声明：它讲画面里有什么，不讲谁上传、谁持权、来自哪个平台。素材行一个声明位都没写时判否并给稳定 typed 理由，不静默放行也不由读侧补默认值——三个事实此时全落各自的未知成员，而未知成员不等价于任何放行态。
 - CC 协议要求指明的衍生修改由 `sourceAttribution` 的必填字段承载，取值限于 `DerivedModification` 闭集（`video_frame_extraction|crop|format_conversion`）。该字段在场为空（空数组）表示发布字节相对原始素材逐字节原样，缺席不合法：两者是不同的事实，缺席时读不出发布物有没有被改过。
 - 该字段只在写侧按本次交付真实发生的操作一次物化，读侧与测试替身都不得补默认值。视频交付侧从真实做过的操作派生——重编码为交付容器与编码写 `format_conversion`，取封面帧写 `video_frame_extraction`，只有来源长于交付上限而真的截断时间轴才写 `crop`；不做任何修改的采集与文本来源写空数组。
-- 被排除素材保留 `policyExcluded` 处置与稳定 `reason`，不删字节；处置在 `1.download` 截面一次冻结（[L2 DEC-029](../design.md#dec-029)）。
+- 被排除素材保留 `policyExcluded` 处置与稳定 `reason`，不删字节；处置在 `1.download` 截面一次冻结，并由该阶段 receipt 冻结。
 - OCR 像素检测仍是主检测器。文件身份层的补充判据只关闭「角标低于 OCR 置信阈值但文件身份写明高风险托管源」这一漏检类，它与出处类别裁决共用同一高风险平台闭集，不构成第二套判据。
 
 ## 4. 契约引用
@@ -159,7 +159,7 @@
 - WHEN publish AI 只对 approved 对象逐个调用 canonical single-object transaction，并 exact replay 已成功对象。
 - THEN 每对象 transaction 原子且幂等；一个对象 blocked/conflict 不撤销其它已成功对象，replay 不增加 pool record。
 - THEN stage CLOSE 由 AI 显式提交每对象 verdict、typed issues、result refs 与 verifier facts；transaction 代码不生成业务 verdict、nextAction 或 recovery stage。
-- THEN raw backfill、pool-append、campaign delivery、drain/process manager 与 execution 级 publish 均不可达；consumer projection 不暴露运行身份。
+- THEN consumer projection 不暴露运行身份，canonical 写入单位始终是单对象事务。
 
 <a id="gwt-006"></a>
 ### GWT-006 homepage 正文的复述原文与自我重复在 4.draft 自检即判否
@@ -175,7 +175,7 @@
 ## 6. 依赖
 
 - 前置要求：[`work-request-compilation`](../work-request-compilation/spec.md) 交付的 confirmed carrier demand 与 immutable candidate bindings。
-- 上游事实：来源发现产出的 source-ready candidate bindings、独立审核结果与权利证据。
+- 上游事实：宿主来源阶段产出的 immutable candidate bindings、独立审核结果与权利证据。
 - 下游结果：canonical object package + append-only pool record，并通过无写权限、字段白名单 handoff query 供 [`multi-carrier-release`](../multi-carrier-release/spec.md) 构建 immutable release。
 - 父级设计：`DEC-022`、`DEC-026`
 
@@ -188,7 +188,7 @@
 - 优先级：`P0`
 - 准出影响：`block`
 - 影响或价值：缺 article target set 冻结前预筛的受治理阈值 receipt，四态判定也未接入 target selection。`matchConfidence`、成稿最小字数与首轮 `oversampleFactor` 都不是合法预筛阈值来源。
-- 已达成的部分：四态闭集、六个子原因、归并优先级、恢复方向与实体级四类计量已是单一真相源，判定未完成单独计量而不并入前三类；qualifier 现有的四个拒绝原因各自归入一态一子原因，归类表之外的取值以 `探测失败` fail closed 并点名，不被替它选成缺席或在场不足。阈值面在受治理标定值对象里与容量、存活并列声明且不提供默认常量，整段缺席即判否。
+- 已达成的部分：四态闭集、六个子原因、归并优先级、恢复方向与实体级四类计量已是单一真相源，判定未完成单独计量而不并入前三类；qualifier 现有的四个拒绝原因各自归入一态一子原因，归类表之外的取值以 `探测失败` fail closed 并点名，不被替它选成缺席或在场不足。阈值面在受治理标定值对象里与存活判据并列声明且不提供默认常量，整段缺席即判否。
 - 尚缺实现：实体锚定判定、最小正文门槛与单实体探测预算的取值尚未标定，四态判定因此尚未接入 article target selection；补采重筛与三阶段逐实体对账未接入。
 - 尚缺验收证据：缺少受治理 provider-state 下拒绝、超时与探测预算耗尽的 api_integration，以及一次真实 execution 的 selection、auto_research、content_plan receipt 对账。
 - 完成判定：`GWT-001` 与 `GWT-002` 的全部结果子句成立，且预筛阈值与探测预算来自 calibration receipt，而不是默认常量或从成稿质量门挪用的数值。M1 的单实体 article 实例通过不关闭本 OPEN；只有对初始支持 provider/source strategy 矩阵完成预筛 calibration 与直接证据后才关闭或收窄。
@@ -213,7 +213,7 @@
 - 类型：`capability_gap`
 - 优先级：`P0`
 - 准出影响：`block`
-- 影响或价值：唯一入池判据和 receipt 协议 publish 已实现，但仍未有一次 confirmed carrier demand → candidate-backed `task init` → 宿主十阶段 → accepted independent review → reviewed delivery → canonical append 的完整走通，也未以同一请求做 exact replay 零增量。缺口是目标单轨的真实 evidence，不是五态/原子事务机制本身。
+- 影响或价值：唯一入池判据和 receipt 协议 publish 已实现，但仍未有一次 confirmed carrier demand → candidate-backed `task init` → 宿主 producer 九阶段 → accepted independent review → reviewed delivery → canonical append 的完整走通，也未以同一请求做 exact replay 零增量。缺口是目标单轨的真实 evidence，不是五态/原子事务机制本身。
 - contract-reset 要求删除 drain/recovery action 闭集及其 processor；新轨只保留 AI typed issues、单对象 transaction 硬事实与 pool record。规格不声称对应实现已完成。
 - 完成判定：[`GWT-005`](#gwt-005) 由新 `task init` 和宿主 AI 完成 Article M1 的逐对象首次 apply 与 exact replay，并断言无 drain/process manager/recovery action 与 legacy publish 入口。
 - 依赖：入池原子性与唯一写路径由 [L2 DEC-026](../design.md#dec-026) 冻结；中性初始化由 [`work-request-compilation`](../work-request-compilation/spec.md) 的 `OPEN-003` 先行关闭。
@@ -226,7 +226,7 @@
 - 准出影响：`block`
 - 影响或价值：缺口在于 homepage 目标集只按正文来源可得性冻结，图片供给要到 `5.review` 物化才判定，落空即 `HOMEPAGE_ASSET_SHORTFALL`，而此时该实体的调研、抽事实、组包、创作与自查成本已全部发生。实测一次 10 目标的 homepage execution：`sources` 与 `1.download` 全部判 pass 且 `candidateCount=0` 未被拦下，正文一路做到 `4.draft` 两条判据 exit 0，`5.review` 才报十个实体 `sources/*/assets` 全空；补采一轮后仍有 5 个实体 `gate_block`，逐个原因为 wiki 无 bitmap、头条百科无图、开放许可缺 audited `sourceAttribution`、以及唯一候选图低于 640×426。按该样本，长尾实体的图片供给命中率约五成，等于一半创作成本被投在注定无法物化的对象上。
 - 已达成的部分：失败面是可归因的而不是笼统的——`HOMEPAGE_ASSET_SHORTFALL` 带逐实体子原因，`media_dispositions.json` 的缺席也逐实体点名，补采轮次会区分「无 bitmap」「无许可」「分辨率不足」「实体忠实度不足」四类，因此预筛所需的判据集合已经存在，只是被放在了太晚的截面。
-- 尚缺实现：把图片供给探测提前到目标集冻结之前，与正文来源预筛同一截面执行；选择器需按「正文可得且图片可得」联合判定而不是只看正文，`source-ready-priority` 一类选择器要显式消费该判据。四态契约与探测预算已与 [`OPEN-001`](#open-001) 共用同一声明，图片侧的最小候选数阈值与该预算的取值仍待实测标定，未标定即判否。
+- 尚缺实现：把图片供给探测提前到目标集冻结之前，与正文来源预筛同一截面执行；选择器需按「正文可得且图片可得」联合判定而不是只看正文，candidate selector 要显式消费该判据。四态契约与探测预算已与 [`OPEN-001`](#open-001) 共用同一声明，图片侧的最小候选数阈值与该预算的取值仍待实测标定，未标定即判否。
 - 尚缺验收证据：一个 api_integration 以真实 provider 状态证明图片供给不足的实体在目标集冻结前即被排除并给出四态子原因，且同一目标集冻结后不再出现物化期 `HOMEPAGE_ASSET_SHORTFALL`；一个 local_contract 证明「正文可得但图片不可得」的实体不会进入冻结目标集。
 - 完成判定：[`GWT-001`](#gwt-001) 的预筛四态不塌陷子句同时覆盖正文与图片两条供给，即冻结目标集内每个实体都已有可物化的图片候选。
 - 依赖：与 [`OPEN-001`](#open-001) 的 article 正文预筛共用探测预算与四态契约，两者应在同一截面收敛而不是各建一套。
@@ -275,6 +275,6 @@
 - 优先级：`P0`
 - 准出影响：`block`
 - 影响或价值：当前阶段为 `post_delete_projection_pending`。旧 materialization/ScaleSourcePool 编排与 workUnit schema 已删除，当前树尚无测试直接证明 media quota、对象/实体数量与 candidate identity 按 [`GWT-003`](#gwt-003) 的七条结果子句完整投影，因此数量、身份与局部失败语义尚无可执行验收保障。
-- 尚缺实现：需要由当前宿主单轨从 immutable acquisition receipt 构造 image/video candidate binding，并直接证明 `targetObjectCount`、`targetEntityCount`、`approvedQuota` 三值分离，brief/content object 共用同一 candidate identity，以及歧义/局部失败只影响对应资产。尚缺验收证据为上述行为的逐子句 local_contract/api_integration；不得恢复旧 capsule materialization、wave、workUnit schema 或 ScaleSourcePool controller 来满足该验收。
+- 尚缺实现：需要由当前宿主单轨从 immutable acquisition receipt 构造 image/video candidate binding，并直接证明 `targetObjectCount`、`targetEntityCount`、`approvedQuota` 三值分离，brief/content object 共用同一 candidate identity，以及歧义/局部失败只影响对应资产。尚缺验收证据为上述行为的逐子句 local_contract/api_integration；不得以任何平行运行身份或批量写入器来满足该验收。
 - 完成判定：[`GWT-003.t1`](#gwt-003) 至 [`GWT-003.t7`](#gwt-003) 逐条由硬切后当前实现的 local_contract/api_integration 绑定并实际通过，至少覆盖同一实体多资产、单资产歧义和 partial/blocked 两种终态。
 - 依赖：media acquisition 与 candidate-backed task init 的当前边界；fresh 四载体 M1 链路另由 [`multi-carrier-release` OPEN-006](../multi-carrier-release/spec.md#open-006) 跟踪。

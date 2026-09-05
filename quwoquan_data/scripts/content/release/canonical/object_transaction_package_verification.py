@@ -28,9 +28,6 @@ from content.release.canonical.object_transaction_contract import (
     _tag_exists,
     _tree_digest,
 )
-from content.release.canonical.post_metadata_adoption_contract import (
-    metadata_adoption_binding,
-)
 from core.schema import assert_valid
 
 
@@ -239,11 +236,6 @@ def verify_package(
             "对象 asset closure 与事务包 CAS 不一致："
             f"object={sorted(referenced_keys)} package={sorted(seen_keys)}"
         )
-    metadata_adoption = metadata_adoption_binding(
-        package_root=package_root,
-        object_root=object_root,
-        package=package,
-    )
     closure_digest = _closure_digest(
         object_root=object_root,
         object_kind=object_kind,
@@ -253,7 +245,6 @@ def verify_package(
         closure=closure,
         cas_rows=cas_rows,
         review=review,
-        metadata_adoption=metadata_adoption,
     )
     if closure_digest != str(package.get("objectClosureDigest") or ""):
         raise ObjectTransactionError(

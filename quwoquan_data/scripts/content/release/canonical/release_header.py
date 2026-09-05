@@ -100,19 +100,19 @@ def validate_release_header(
         counts = document.get("counts")
         if not isinstance(counts, Mapping) or int(counts.get("total") or 0) != sum(
             int(counts.get(content_type) or 0)
-            for content_type in ("article", "image", "video")
+            for content_type in ("homepage", "article", "image", "video")
         ):
             raise ReleaseHeaderError(f"{label} carrier counts are inconsistent")
         contents = document.get("contents")
         authors = document.get("authors")
-        if not isinstance(contents, list) or len(contents) != int(
-            counts.get("total") or 0
+        if not isinstance(contents, list) or len(contents) != sum(
+            int(counts.get(content_type) or 0)
+            for content_type in ("article", "image", "video")
         ):
-            raise ReleaseHeaderError(f"{label} contents do not match counts.total")
+            raise ReleaseHeaderError(f"{label} contents do not match post carrier counts")
         content_ids: set[str] = set()
         post_refs: set[str] = set()
         content_selection_digests: set[str] = set()
-        content_modes: set[str] = set()
         for item in contents:
             if not isinstance(item, Mapping):
                 raise ReleaseHeaderError(f"{label} content entry is invalid")
@@ -127,29 +127,16 @@ def validate_release_header(
             content_library_binding_digest = str(
                 item.get("contentLibraryBindingDigest") or ""
             ).strip()
-            execution_id = str(item.get("executionId") or "").strip()
-            source_identity_digest_value = str(
-                item.get("sourceIdentityDigest") or ""
-            ).strip()
             current_mode = bool(
                 selection_identity_digest
                 and canonical_object_digest
                 and content_library_binding_digest
-                and not execution_id
-                and not source_identity_digest_value
-            )
-            previous_shape_mode = bool(
-                execution_id
-                and source_identity_digest_value
-                and not selection_identity_digest
-                and not canonical_object_digest
-                and not content_library_binding_digest
             )
             version = item.get("version")
             if (
                 not content_id
                 or not post_ref
-                or not (current_mode or previous_shape_mode)
+                or not current_mode
                 or (current_mode and not all(
                     value.startswith("sha256:")
                     for value in (
@@ -158,10 +145,6 @@ def validate_release_header(
                         content_library_binding_digest,
                     )
                 ))
-                or (
-                    previous_shape_mode
-                    and not source_identity_digest_value.startswith("sha256:")
-                )
                 or not isinstance(version, int)
                 or isinstance(version, bool)
                 or version < 1
@@ -169,9 +152,6 @@ def validate_release_header(
                 or post_ref in post_refs
             ):
                 raise ReleaseHeaderError(f"{label} content entry is invalid")
-            content_modes.add(
-                "handoff" if current_mode else "previous_shape_audit"
-            )
             if current_mode:
                 if selection_identity_digest in content_selection_digests:
                     raise ReleaseHeaderError(
@@ -180,10 +160,20 @@ def validate_release_header(
                 content_selection_digests.add(selection_identity_digest)
             content_ids.add(content_id)
             post_refs.add(post_ref)
-        if len(content_modes) > 1:
-            raise ReleaseHeaderError(
-                f"{label} content entries mix current handoff and historical audit shapes"
+        milestone = document.get("milestone")
+        milestone_targets = document.get("milestoneTargets")
+        if milestone is not None:
+            from governance.coverage.distribution import load_content_distribution_policy
+
+            expected_targets = load_content_distribution_policy().milestone_targets().get(
+                str(milestone)
             )
+            if expected_targets is None or milestone_targets != expected_targets:
+                raise ReleaseHeaderError(f"{label} milestone targets are inconsistent")
+            if {key: int(counts.get(key) or 0) for key in ("homepage", "article", "image", "video")} != expected_targets:
+                raise ReleaseHeaderError(f"{label} milestone counts are inconsistent")
+        elif milestone_targets is not None:
+            raise ReleaseHeaderError(f"{label} milestoneTargets require milestone")
         if not isinstance(authors, list):
             raise ReleaseHeaderError(f"{label} authors must be an array")
         author_ids: set[str] = set()
@@ -252,10 +242,6 @@ def validate_release_header(
         field for field in _SOURCE_IDENTITY_SET_FIELDS if field in document
     }
     if release_kind is ReleaseKind.EMPTY_BASELINE:
-        if "reviewedClosureAdoption" in document:
-            raise ReleaseHeaderError(
-                f"{label} empty baseline cannot carry adoption provenance"
-            )
         if selection_scope is not None:
             raise ReleaseHeaderError(
                 f"{label} empty baseline cannot carry a pool selection"
@@ -347,7 +333,7 @@ def validate_release_header(
                 raise ReleaseHeaderError(
                     f"{label} source identity set closure drifted"
                 )
-            return _validate_reviewed_adoption(document, label=label)
+            return document
         if present_identity != set(_SOURCE_IDENTITY_FIELDS):
             raise ReleaseHeaderError(
                 f"{label} content source identity is incomplete"
@@ -381,46 +367,6 @@ def validate_release_header(
         raise ReleaseHeaderError(
             f"{label} sourceRevision does not match sourceDigest/entityCatalogDigest"
         )
-    return _validate_reviewed_adoption(document, label=label)
-
-
-def _validate_reviewed_adoption(
-    document: dict[str, Any],
-    *,
-    label: str,
-) -> dict[str, Any]:
-    adoption = document.get("reviewedClosureAdoption")
-    migration = document.get("contractMigration")
-    if adoption is not None and migration is not None:
-        raise ReleaseHeaderError(
-            f"{label} adoption and contract migration are mutually exclusive"
-        )
-    if adoption is not None:
-        if not isinstance(adoption, Mapping):
-            raise ReleaseHeaderError(f"{label} adoption provenance is invalid")
-        source_identity = adoption.get("sourceReleaseIdentity")
-        if not isinstance(source_identity, Mapping) or source_identity.get(
-            "releaseId"
-        ) == document.get("releaseId"):
-            raise ReleaseHeaderError(
-                f"{label} cannot reuse the collided source releaseId"
-            )
-    if migration is not None:
-        if not isinstance(migration, Mapping):
-            raise ReleaseHeaderError(
-                f"{label} contract migration provenance is invalid"
-            )
-        if (
-            migration.get("sourceReleaseId") == document.get("releaseId")
-            or migration.get("sourceCanonicalMerkle")
-            != document.get("canonicalMerkle")
-            or migration.get("sourceSamplePlanRef") != "uat/sample_plan.json"
-            or document.get("samplePlanRef") != "uat/sample_plan.json"
-            or not document.get("samplePlanDigest")
-        ):
-            raise ReleaseHeaderError(
-                f"{label} contract migration provenance drifted"
-            )
     return document
 
 

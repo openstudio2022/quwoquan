@@ -25,6 +25,22 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     pool_build.add_argument("--release-root")
     pool_build.set_defaults(handler=owner.handle_pool_release_build)
 
+    handoff = commands.add_parser(
+        "handoff",
+        help="在 release CLOSE 后 create-once 物化 producer terminal handoff",
+    )
+    handoff.add_argument("--release-id", required=True)
+    handoff.add_argument("--cohort-file", required=True)
+    handoff.add_argument(
+        "--milestone",
+        choices=("M1", "M10", "M100", "M1000", "M10000"),
+        required=True,
+    )
+    handoff.add_argument("--producer-baseline-revision", required=True)
+    handoff.add_argument("--publish-root")
+    handoff.add_argument("--release-root")
+    handoff.set_defaults(handler=owner.handle_producer_release_handoff)
+
     publish_object = commands.add_parser(
         "publish-object",
         help="校验并原子发布 target_set 中一个明确对象",

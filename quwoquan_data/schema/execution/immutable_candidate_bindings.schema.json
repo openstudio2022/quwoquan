@@ -42,5 +42,59 @@
         "$ref": "target_set.schema.json#/$defs/target"
       }
     }
-  }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "carrier": {
+            "const": "homepage"
+          }
+        },
+        "required": [
+          "carrier"
+        ]
+      },
+      "then": {
+        "properties": {
+          "targets": {
+            "items": {
+              "not": {
+                "anyOf": [
+                  {
+                    "required": [
+                      "publishAngle"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "publishTitle"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "publishSeq"
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "targets": {
+            "items": {
+              "required": [
+                "publishAngle",
+                "publishTitle",
+                "publishSeq"
+              ]
+            }
+          }
+        }
+      }
+    }
+  ]
 }

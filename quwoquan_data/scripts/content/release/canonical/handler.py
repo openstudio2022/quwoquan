@@ -17,6 +17,10 @@ from content.release.canonical.object_transaction_lock import canonical_publish_
 from content.release.canonical.object_transaction_replay import (
     replay_object_transaction_package,
 )
+from content.release.canonical.producer_release_handoff import (
+    ProducerReleaseHandoffError,
+    write_producer_release_handoff,
+)
 from content.release.canonical.release_operation_lock import (
     ReleaseOperationConflict,
     release_operation_guard,
@@ -24,9 +28,35 @@ from content.release.canonical.release_operation_lock import (
 )
 from content.release.canonical.reset import handle_reset_canonical  # noqa: F401
 from core.io import read_json
-from core.paths import OUTPUT_ROOT, PUBLISH_ROOT
+from core.paths import OUTPUT_ROOT, PUBLISH_ROOT, REPO_ROOT
 from core.release_layout import attestation_root
 
+
+
+def handle_producer_release_handoff(args: argparse.Namespace) -> None:
+    """Materialize one cycle-free producer handoff after release CLOSE."""
+    output_root = Path(OUTPUT_ROOT).resolve()
+    release_root = Path(args.release_root or output_root / "data/releases").resolve()
+    try:
+        document, path, replayed = write_producer_release_handoff(
+            release_id=str(args.release_id),
+            cohort_file=Path(args.cohort_file).expanduser().resolve(),
+            milestone=str(args.milestone),
+            producer_baseline_revision=str(args.producer_baseline_revision),
+            repo_root=Path(REPO_ROOT).resolve(),
+            output_root=output_root,
+            publish_root=Path(args.publish_root or PUBLISH_ROOT).resolve(),
+            release_root=release_root,
+        )
+    except (FileNotFoundError, OSError, ProducerReleaseHandoffError, TypeError, ValueError) as exc:
+        raise SystemExit(f"[release handoff] GATE_BLOCK {exc}") from exc
+    print(json.dumps({
+        "schema": "quwoquan_data.producer_release_handoff_result",
+        "status": "replayed" if replayed else "created",
+        "handoffRef": path.relative_to(output_root).as_posix(),
+        "handoffDigest": "sha256:" + __import__("hashlib").sha256(path.read_bytes()).hexdigest(),
+        "handoff": document,
+    }, ensure_ascii=False, indent=2))
 
 def handle_object_transaction_rollback(args: argparse.Namespace) -> None:
     """Rollback one exact applied canonical object transaction."""

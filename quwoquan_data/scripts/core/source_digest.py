@@ -320,14 +320,14 @@ def content_source_revision(
     source_digest: str,
     entity_catalog_digest: str,
 ) -> str:
-    """Derive the one content revision shared by campaign and release evidence."""
+    """Derive the content revision shared by task and release evidence."""
     if not _is_sha256(source_digest):
         raise SourceDigestError("sourceDigest must be a sha256 digest")
     if not _is_sha256(entity_catalog_digest):
         raise SourceDigestError("entityCatalogDigest must be a sha256 digest")
     encoded = json.dumps(
         {
-            "schema": "quwoquan_data.campaign_content_source_revision",
+            "schema": "quwoquan_data.content_source_revision",
             "sourceDigest": source_digest,
             "entityCatalogDigest": entity_catalog_digest,
         },

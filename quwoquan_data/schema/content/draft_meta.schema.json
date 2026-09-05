@@ -8,6 +8,8 @@
     "executionId",
     "executionBinding",
     "objectRef",
+    "composeRef",
+    "composeDigest",
     "status",
     "hostRuntime",
     "hostActor",
@@ -34,6 +36,8 @@
       "type": "string",
       "minLength": 1
     },
+    "composeRef": {"enum": ["3.compose/writing_pack.json", "3.compose/entity_page_input.json"]},
+    "composeDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
     "status": {
       "enum": [
         "pending_agent",
@@ -67,7 +71,9 @@
         "issues"
       ],
       "properties": {
-        "status": {
+        "composeRef": {"enum": ["3.compose/writing_pack.json", "3.compose/entity_page_input.json"]},
+    "composeDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "status": {
           "enum": [
             "pending",
             "passed",

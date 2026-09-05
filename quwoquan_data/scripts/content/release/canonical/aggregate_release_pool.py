@@ -26,9 +26,11 @@ from content.release.canonical.content_pool_record import (
 from content.release.canonical.effective_admission import (
     effective_admission_record as _effective_record,
 )
-from content.release.canonical.environment_release_selection import (
+from content.release.canonical.environment_release_candidate import (
     EnvironmentReleaseSelection,
     PoolExclusion,
+)
+from content.release.canonical.environment_release_selection import (
     discover_pool_candidates,
     pool_candidate_digest,
 )
@@ -45,6 +47,7 @@ from content.release.canonical.object_transaction_contract import (
 )
 from core.paths import CONTROL_PLANE_TAXONOMY_ROOT
 from core.source_digest import SourceDefinitionSnapshot
+from governance.coverage.distribution import load_content_distribution_policy
 
 
 @dataclass(frozen=True)
@@ -287,6 +290,15 @@ def prepare_pool_release(
     )
     if exclusions or {row.post_ref for row in candidates} != post_refs:
         raise ObjectTransactionError("DATA.RELEASE.COHORT_POST_NOT_PUBLISHABLE")
+    if normalized_release_class == "commercial":
+        noncommercial_posts = sorted(
+            row.post_ref for row in candidates if row.usage_scope != "commercial"
+        )
+        if noncommercial_posts:
+            raise ObjectTransactionError(
+                "DATA.POOL.COMMERCIAL_RIGHTS_REQUIRED: "
+                f"posts/{noncommercial_posts[0]}"
+            )
     closure_cache: dict[
         str, tuple[set[str], list[str], list[str], list[dict[str, object]]]
     ] = {}
@@ -329,6 +341,22 @@ def prepare_pool_release(
         raise ObjectTransactionError(
             f"DATA.RELEASE.COHORT_COUNT_DRIFT: expected={expected_counts} actual={counts}"
         )
+    raw_milestone = cohort.get("milestone")
+    milestone = str(raw_milestone).strip() if raw_milestone is not None else None
+    milestone_targets = None
+    if milestone is not None:
+        milestone_targets = load_content_distribution_policy().milestone_targets().get(
+            milestone
+        )
+        if milestone_targets is None:
+            raise ObjectTransactionError(
+                f"DATA.RELEASE.COHORT_MILESTONE_INVALID: {milestone!r}"
+            )
+        if counts != milestone_targets:
+            raise ObjectTransactionError(
+                "DATA.RELEASE.COHORT_MILESTONE_COUNT_DRIFT: "
+                f"milestone={milestone} expected={milestone_targets} actual={counts}"
+            )
     execution_ids, source_digests, source_identities, source_identity_set_digest = (
         pool_audit_provenance(
             publish_root, entity_refs=entity_refs, post_refs=post_refs
@@ -364,16 +392,15 @@ def prepare_pool_release(
         post_refs=tuple(row.post_ref for row in selected_candidates),
         candidates=selected_candidates,
         pool_digest=pool_candidate_digest(selected_candidates),
-        eligible_count=len(selected_candidates),
-        eligible_counts={key: counts[key] for key in ("article", "image", "video")},
-        counts={
-            **{key: counts[key] for key in ("article", "image", "video")},
-            "total": len(selected_candidates),
-        },
+        eligible_count=sum(counts.values()),
+        eligible_counts=dict(counts),
+        counts={**counts, "total": sum(counts.values())},
         excluded=(),
         selection_scope="explicit_cohort",
-        milestone=None,
-        milestone_targets=None,
+        milestone=milestone,
+        milestone_targets=(
+            dict(milestone_targets) if milestone_targets is not None else None
+        ),
     )
     return PoolReleasePreparation(
         environment_selection=selection,

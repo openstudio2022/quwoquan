@@ -1,5 +1,5 @@
 # 旅行文章内容基线 preset（默认值唯一真相源；family recipe 的 presetRef 指向本文件）。
-# defaults 与 execution spec 同构：实例未显式声明的字段由此补齐。
+# defaults 是静态 family 默认值；实例值只进入 task init 输入。
 schema: quwoquan.content.preset
 presetId: content/travel/article/base
 title: 旅行文章任务基线

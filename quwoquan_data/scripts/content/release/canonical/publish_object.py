@@ -44,7 +44,7 @@ def _target_object(execution_id: str, target_ref: str) -> tuple[str, str, Path]:
     return kind, canonical_ref, path
 
 
-def _review_approved(object_dir: Path) -> None:
+def _review_approved(object_dir: Path, *, expected_object_ref: str | None = None) -> None:
     documents: dict[str, dict[str, Any]] = {}
     for name, schema_name in (
         ("rubric_review.json", "rubric_review"),
@@ -57,6 +57,43 @@ def _review_approved(object_dir: Path) -> None:
         assert_valid(document, "content", schema_name, label=path.as_posix())
         documents[name] = document
     attestation = documents["attestation.json"]
+    manifest = read_json(object_dir / "manifest.json")
+    from content.release.canonical.review_rights_binding import validate_review_authority
+
+    object_kind = "entity" if (object_dir / "_entity.json").is_file() else "posts"
+    if not manifest.get("assets"):
+        source_assets = {}
+    elif object_kind == "entity":
+        from content.release.canonical.entity_transaction_sources import source_assets_by_ref
+
+        source_assets = source_assets_by_ref(object_dir.parents[3])
+    else:
+        from content.release.canonical.post_transaction_assets import source_assets as load_source_assets
+
+        source_assets = load_source_assets(object_dir.parents[4])
+    validate_review_authority(
+        review_root=object_dir / "5.review",
+        manifest=manifest,
+        object_kind=object_kind,
+        execution_id=str(attestation.get("executionId") or ""),
+        object_ref=str(attestation.get("objectRef") or expected_object_ref or ""),
+        attestation=attestation,
+        source_assets=source_assets,
+    )
+    expected_ref = (
+        str(expected_object_ref).strip("/")
+        if expected_object_ref is not None
+        else str(attestation.get("objectRef") or "").strip("/")
+    )
+    attested_ref = str(attestation.get("objectRef") or "").strip("/")
+    manifest_topic_ref = str(manifest.get("topicId") or "").strip("/")
+    valid_refs = {expected_ref}
+    if object_kind == "posts" and manifest_topic_ref:
+        valid_refs.add(manifest_topic_ref)
+    if attested_ref not in valid_refs:
+        raise ObjectTransactionError("target review attestation object binding drift")
+    if attestation.get("independentReviewer", {}).get("actor") != documents["reviewer_result.json"].get("actor"):
+        raise ObjectTransactionError("target review attestation reviewer binding drift")
     if attestation.get("decision") != "approved":
         raise ObjectTransactionError("target review attestation is not approved")
     for field in ("deterministicGate", "independentReviewer", "mediaRefReview"):
@@ -72,7 +109,7 @@ def _review_approved(object_dir: Path) -> None:
 
 def publish_object(execution_id: str, target_ref: str, *, apply: bool = False) -> dict[str, Any]:
     kind, canonical_ref, object_dir = _target_object(execution_id, target_ref)
-    _review_approved(object_dir)
+    _review_approved(object_dir, expected_object_ref=target_ref)
     if not apply:
         return {
             "schema": "quwoquan_data.publish_object_result",
@@ -127,6 +164,21 @@ def publish_object(execution_id: str, target_ref: str, *, apply: bool = False) -
             "objectClosureDigest": str(applied.get("objectClosureDigest") or ""),
             "admissionResult": admission,
         }
+    canonical_object_ref = str(result["canonicalObjectRef"])
+    canonical_object = PUBLISH_ROOT / canonical_object_ref
+    from content.release.canonical.content_pool_record import latest_pool_record
+    pool_type = "homepage" if kind == "entity" else "content"
+    record = latest_pool_record(canonical_object, pool_type)
+    if not isinstance(record, dict):
+        raise ObjectTransactionError("published object lacks canonical pool record")
+    pool_record_ref = (
+        f"{canonical_object_ref}/_pool/versions/{int(record['recordSequence'])}.json"
+    )
+    result.update(
+        packageRef=f"evidence/object-transactions/{result['transactionId']}/package.json",
+        attestationRef=f"{target_ref.strip('/')}/5.review/attestation.json",
+        poolRecordRef=pool_record_ref,
+    )
     return {
         "schema": "quwoquan_data.publish_object_result",
         "executionId": execution_id,

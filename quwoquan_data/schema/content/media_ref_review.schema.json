@@ -41,5 +41,27 @@
       }
     },
     "schema": {"const": "quwoquan_data.media_ref_review"}
-  }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {"passed": {"const": true}},
+        "required": ["passed"]
+      },
+      "then": {
+        "properties": {
+          "mediaIssues": {"maxItems": 0},
+          "referenceIssues": {"maxItems": 0},
+          "rightsReviews": {
+            "items": {
+              "properties": {
+                "passed": {"const": true},
+                "issues": {"maxItems": 0}
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
 }

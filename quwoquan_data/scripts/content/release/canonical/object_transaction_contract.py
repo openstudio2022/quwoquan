@@ -346,6 +346,21 @@ def _review_binding(object_root: Path, package: Mapping[str, Any]) -> dict[str, 
     if not attestation_path.is_file():
         raise ObjectTransactionError("对象包缺 review attestation")
     attestation = _read_json(attestation_path)
+    media_binding = attestation.get("mediaRefReview")
+    if not isinstance(media_binding, dict):
+        raise ObjectTransactionError("对象包缺 mediaRefReview binding")
+    media_ref = _safe_rel(
+        str(media_binding.get("ref") or ""),
+        label="attestation.mediaRefReview.ref",
+    )
+    media_path = object_root / media_ref
+    if (
+        media_ref.as_posix() != "5.review/media_ref_review.json"
+        or media_path.is_symlink()
+        or not media_path.is_file()
+        or _digest_file(media_path) != media_binding.get("digest")
+    ):
+        raise ObjectTransactionError("对象包 mediaRefReview exact binding drift")
     if attestation.get("decision") != "approved":
         raise ObjectTransactionError("对象未 review-approved")
     for key in ("deterministicGate", "independentReviewer", "mediaRefReview"):
@@ -355,6 +370,8 @@ def _review_binding(object_root: Path, package: Mapping[str, Any]) -> dict[str, 
     return {
         "attestationRef": attestation_ref.as_posix(),
         "attestationSha256": _digest_file(attestation_path),
+        "mediaRefReviewRef": media_ref.as_posix(),
+        "mediaRefReviewSha256": _digest_file(media_path),
     }
 
 def _rights_binding(
@@ -488,26 +505,13 @@ def _closure_digest(
     closure: Mapping[str, Any],
     cas_rows: list[dict[str, Any]],
     review: Mapping[str, Any],
-    metadata_adoption: Mapping[str, Any] | None = None,
 ) -> str:
-    """Digest everything an object's identity may not silently change.
-
-    An adopted successor differs from a freshly authored object only by the
-    adoption receipt that authorizes it, so that binding has to be inside the
-    digest: otherwise a v2 could be re-pointed at a different source review and
-    still present the same closure digest. Objects with no adoption keep their
-    digest input shape unchanged, so already-sealed digests stay reproducible.
-    """
+    """Digest everything an object's identity may not silently change."""
 
     _admit_object_storage_budget(
         object_root,
         object_kind=object_kind,
         object_ref=object_ref,
-    )
-    adoption = (
-        {"metadataAdoption": dict(metadata_adoption)}
-        if metadata_adoption is not None
-        else {}
     )
     return _digest_bytes(
         _json_bytes(
@@ -545,7 +549,6 @@ def _closure_digest(
                 },
                 "cas": sorted(cas_rows, key=lambda row: row["objectKey"]),
                 "review": dict(review),
-                **adoption,
             }
         )
     )

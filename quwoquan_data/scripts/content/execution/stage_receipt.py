@@ -653,8 +653,6 @@ def close_stage(execution_id: str, stage: str, input_path: Path) -> Path:
     issues = request["typedIssues"]
     results = request["resultRefs"]
     facts = request["verifierFacts"]
-    if any(_STAGE_INDEX[issue["recoveryStage"]] > sequence - 1 for issue in issues):
-        raise StageProtocolError("typedIssues.recoveryStage 只能是当前或已完成 stage")
     if verdict == "pass":
         if (
             issues

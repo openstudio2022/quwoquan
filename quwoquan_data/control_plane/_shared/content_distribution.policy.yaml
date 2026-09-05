@@ -49,6 +49,16 @@ articleMedia:
   textOnlyRateTarget: 0.1
   requireCoverAndBodyImage: false
 scaleMilestones:
+  m1Targets:
+    homepage: 1
+    article: 1
+    image: 1
+    video: 1
+  m10Targets:
+    homepage: 10
+    article: 10
+    image: 10
+    video: 2
   m100Targets:
     homepage: 100
     article: 100
@@ -68,7 +78,3 @@ scaleMilestones:
   requireM1000PromotionBeforeM10000: false
   milestoneAttainmentRequired: true
   attainmentCountingMode: cumulative_unique_finalized_objects
-  automaticRecovery:
-    targetRate: 0.95
-    statistical: true
-    nonBlocking: true

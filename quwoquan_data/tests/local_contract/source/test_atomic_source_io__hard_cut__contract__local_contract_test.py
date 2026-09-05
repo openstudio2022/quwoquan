@@ -30,6 +30,8 @@ def _write(path: Path, value: object) -> Path:
 def _candidate(body: bytes, *, source_id: str = "explicit-text") -> dict[str, object]:
     return {
         "schema": "quwoquan_data.source_candidate",
+        "sourcePlanRef": "sources/plans/" + "a" * 64 + ".json",
+        "sourcePlanDigest": "sha256:" + "b" * 64,
         "sourceId": source_id,
         "title": "西湖显式来源",
         "sourceClass": "manual_text_snapshot",
@@ -40,6 +42,20 @@ def _candidate(body: bytes, *, source_id: str = "explicit-text") -> dict[str, ob
         "contentSha256": "sha256:" + hashlib.sha256(body).hexdigest(),
         "fetchedAt": "2026-09-03T00:00:00Z",
     }
+
+
+def _bind_candidate_to_plan(execution: Path, candidate: dict[str, object], *, target_ref: str = TARGET_REF) -> dict[str, object]:
+    planned = {key: value for key, value in candidate.items() if key not in {"schema", "sourcePlanRef", "sourcePlanDigest", "fetchedAt"}}
+    plan = {
+        "schema": "quwoquan_data.source_plan",
+        "executionId": EXECUTION_ID,
+        "targetRef": target_ref,
+        "carrier": "article",
+        "candidates": [planned],
+    }
+    ref = "sources/plans/" + hashlib.sha256(target_ref.encode()).hexdigest() + ".json"
+    path = _write(execution / ref, plan)
+    return {**candidate, "sourcePlanRef": ref, "sourcePlanDigest": "sha256:" + hashlib.sha256(path.read_bytes()).hexdigest()}
 
 
 def _target_set() -> dict[str, object]:
@@ -100,7 +116,8 @@ def test_one_manual_candidate_materializes_cas_unit_and_ref_once(tmp_path: Path,
     manual = tmp_path / "manual"
     manual.mkdir()
     (manual / "west-lake.txt").write_bytes(body)
-    candidate_path = _write(tmp_path / "candidate.json", _candidate(body))
+    candidate = _bind_candidate_to_plan(output / "data/tasks" / EXECUTION_ID, _candidate(body))
+    candidate_path = _write(tmp_path / "candidate.json", candidate)
     meta, unit = materialize_source_candidate(candidate_path, execution_id=EXECUTION_ID, target_ref=TARGET_REF, manual_root=manual)
     repeated, repeated_unit = materialize_source_candidate(candidate_path, execution_id=EXECUTION_ID, target_ref=TARGET_REF, manual_root=manual)
     assert repeated_unit == unit and repeated == meta
@@ -243,17 +260,18 @@ def test_existing_atomic_meta_rejects_source_use_mode_drift(
     manual = tmp_path / "manual"
     manual.mkdir()
     (manual / "west-lake.txt").write_bytes(body)
-    candidate_path = _write(tmp_path / "candidate.json", _candidate(body))
+    candidate = _bind_candidate_to_plan(output / "data/tasks" / EXECUTION_ID, _candidate(body))
+    candidate_path = _write(tmp_path / "candidate.json", candidate)
     original, unit = materialize_source_candidate(
         candidate_path,
         execution_id=EXECUTION_ID,
         target_ref=TARGET_REF,
         manual_root=manual,
     )
-    changed = {**_candidate(body), "sourceUseMode": "licensed_adaptation"}
+    changed = {**candidate, "sourceUseMode": "licensed_adaptation"}
     _write(candidate_path, changed)
 
-    with pytest.raises(ValueError, match="create-once collision"):
+    with pytest.raises(ValueError, match="not exactly one source plan candidate"):
         materialize_source_candidate(
             candidate_path,
             execution_id=EXECUTION_ID,
@@ -279,9 +297,17 @@ def test_binary_manual_file_cannot_bypass_atomic_acquisition(tmp_path: Path) -> 
     manual = tmp_path / "manual"
     manual.mkdir()
     (manual / "west-lake.txt").write_bytes(body)
-    path = _write(tmp_path / "candidate.json", _candidate(body))
-    with pytest.raises(ValueError, match="image/video require atomic acquisition"):
-        materialize_source_candidate(path, execution_id=EXECUTION_ID, target_ref=TARGET_REF, manual_root=manual)
+    execution = tmp_path / "execution"
+    candidate = _bind_candidate_to_plan(execution, _candidate(body))
+    path = _write(tmp_path / "candidate.json", candidate)
+    from content.source import atomic_source_io
+    original_root = atomic_source_io.execution_root
+    atomic_source_io.execution_root = lambda _execution_id: execution
+    try:
+        with pytest.raises(ValueError, match="image/video require atomic acquisition"):
+            materialize_source_candidate(path, execution_id=EXECUTION_ID, target_ref=TARGET_REF, manual_root=manual)
+    finally:
+        atomic_source_io.execution_root = original_root
 
 def test_video_cli_exposes_manifest_only() -> None:
     completed = subprocess.run([sys.executable, str(CLI), "task", "acquire-videos", "--help"], cwd=DATA_ROOT.parent, text=True, capture_output=True, check=False)
@@ -321,7 +347,8 @@ def test_stage_artifacts_accepts_atomic_source_unit_through_download(tmp_path: P
     manual = tmp_path / "manual"
     manual.mkdir()
     (manual / "west-lake.txt").write_bytes(body)
-    candidate_path = _write(tmp_path / "candidate.json", _candidate(body))
+    candidate = _bind_candidate_to_plan(root, _candidate(body))
+    candidate_path = _write(tmp_path / "candidate.json", candidate)
     from content.source import atomic_source_io
     monkeypatch.setattr(atomic_source_io, "execution_root", lambda _execution_id: root)
     monkeypatch.setattr(atomic_source_io, "execution_source_unit_dir", lambda _execution_id, unit_id: root / "sources" / unit_id)
@@ -524,6 +551,8 @@ def test_video_receipt_materializes_video_and_poster_with_explicit_rights(
     receipt_path, video_body, poster_body, receipt_row = _video_receipt(acquisition)
     candidate = {
         "schema": "quwoquan_data.source_candidate",
+        "sourcePlanRef": "sources/plans/" + "a" * 64 + ".json",
+        "sourcePlanDigest": "sha256:" + "b" * 64,
         "sourceId": "commons-video",
         "title": "西湖 Commons 视频",
         "sourceClass": "open_license_media",
@@ -533,6 +562,7 @@ def test_video_receipt_materializes_video_and_poster_with_explicit_rights(
         "url": "https://commons.wikimedia.org/wiki/File:Atomic.webm",
         "fetchedAt": "2026-09-03T00:00:00Z",
     }
+    candidate = _bind_candidate_to_plan(execution, candidate)
     meta, unit = materialize_source_candidate(
         _write(tmp_path / "candidate-video.json", candidate),
         execution_id=EXECUTION_ID,
@@ -609,3 +639,119 @@ def test_video_review_rights_must_cover_video_and_poster(
         object_root=object_root,
         media_review={"rightsReviews": [video_review, poster_review]},
     ) == []
+
+# spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-027
+def test_download_budget_uses_shared_policy_and_typed_over_budget(monkeypatch: pytest.MonkeyPatch) -> None:
+    from content.source import atomic_source_io
+
+    monkeypatch.setattr(atomic_source_io, "source_unit_asset_budget_bytes", lambda lane: 8)
+    body = b"0123456789"
+    with pytest.raises(ValueError, match="DATA.MEDIA.ASSET_OVER_BUDGET"):
+        atomic_source_io._budget_media_body(
+            body,
+            acquisition_kind="video",
+            research_lane="video",
+        )
+    assert atomic_source_io._budget_media_body(
+        b"1234", acquisition_kind="video", research_lane="video"
+    ) == (b"1234", None)
+
+
+def test_download_budget_rebinds_deterministic_image_variant(monkeypatch: pytest.MonkeyPatch) -> None:
+    from content.source import atomic_source_io
+
+    derived = b"small"
+    monkeypatch.setattr(atomic_source_io, "source_unit_asset_budget_bytes", lambda lane: 8)
+    monkeypatch.setattr(
+        atomic_source_io,
+        "derive_budget_compliant_variant",
+        lambda _body, *, budget_bytes: {
+            "bytes": derived,
+            "width": 640,
+            "height": 480,
+            "mimeType": "image/webp",
+        },
+    )
+    result, evidence = atomic_source_io._budget_media_body(
+        b"0123456789", acquisition_kind="image", research_lane="image"
+    )
+    assert result == derived
+    assert evidence == {
+        "operation": "policy_declared_image_rendition",
+        "sourceSha256": "sha256:" + hashlib.sha256(b"0123456789").hexdigest(),
+        "sourceBytes": 10,
+        "resultSha256": "sha256:" + hashlib.sha256(derived).hexdigest(),
+        "resultBytes": 5,
+        "width": 640,
+        "height": 480,
+        "mimeType": "image/webp",
+        "budgetBytes": 8,
+    }
+
+
+def test_professional_image_transport_limit_comes_from_media_policy() -> None:
+    from content.source import professional_image_acquisition
+    from core.media_processing_policy import MEDIA_PROCESSING_POLICY
+
+    assert professional_image_acquisition._MAX_IMAGE_BYTES == MEDIA_PROCESSING_POLICY.source_asset_max_bytes
+
+
+def test_image_derivative_preserves_original_receipt_identity_and_mime_suffix(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from content.source import atomic_source_io
+
+    original = b"original-large-image"
+    derived = b"small-webp"
+    receipt_row = {
+        "assetId": "image-1",
+        "assetRef": "cas/original.jpg",
+        "contentSha256": "sha256:" + hashlib.sha256(original).hexdigest(),
+        "bytes": len(original),
+        "mimeType": "image/jpeg",
+        "sourceUrl": "https://example.test/image",
+        "license": "CC BY 4.0",
+        "termsUrl": "https://example.test/terms",
+        "authorizationProof": "https://example.test/proof",
+        "rightsStatus": "verified",
+        "authorizationRequired": False,
+        "distributionDecision": "commercial_allowed",
+        "rightsIssues": [],
+        "_receiptRef": "receipts/image.json",
+    }
+    execution = tmp_path / "output/data/tasks" / EXECUTION_ID
+    monkeypatch.setattr(atomic_source_io, "execution_root", lambda _execution_id: execution)
+    monkeypatch.setattr(atomic_source_io, "execution_source_unit_dir", lambda _execution_id, unit_id: execution / "sources" / unit_id)
+    monkeypatch.setattr(
+        atomic_source_io,
+        "_candidate_bytes",
+        lambda *args, **kwargs: (original, receipt_row["sourceUrl"], dict(receipt_row), "image", {}),
+    )
+    monkeypatch.setattr(atomic_source_io, "source_unit_asset_budget_bytes", lambda _lane: 10)
+    monkeypatch.setattr(
+        atomic_source_io,
+        "derive_budget_compliant_variant",
+        lambda _body, *, budget_bytes: {"bytes": derived, "width": 10, "height": 10, "mimeType": "image/webp"},
+    )
+    candidate = _bind_candidate_to_plan(execution, {
+        "schema": "quwoquan_data.source_candidate", "sourcePlanRef": "sources/plans/" + "a" * 64 + ".json",
+        "sourcePlanDigest": "sha256:" + "b" * 64, "sourceId": "image", "title": "image",
+        "sourceClass": "open_license_media", "sourceUseMode": "licensed_adaptation", "purpose": "image",
+        "rightsClue": "CC BY 4.0", "url": "https://example.test/image", "fetchedAt": "2026-09-03T00:00:00Z",
+    })
+    meta, unit = materialize_source_candidate(
+        _write(tmp_path / "candidate-image.json", candidate), execution_id=EXECUTION_ID,
+        target_ref=TARGET_REF, receipt_path=tmp_path / "receipt.json", receipt_asset_id="image-1",
+        acquisition_root=tmp_path,
+    )
+    acquisition = meta["acquisition"]
+    binding = acquisition["derivativeBinding"]
+    assert acquisition["contentSha256"] == receipt_row["contentSha256"]
+    assert acquisition["bytes"] == receipt_row["bytes"]
+    assert acquisition["mimeType"] == "image/jpeg"
+    assert binding["derivedSha256"] == "sha256:" + hashlib.sha256(derived).hexdigest()
+    assert binding["derivedMimeType"] == "image/webp"
+    assert binding["derivedExtension"] == ".webp"
+    assert Path(acquisition["assetRef"]).suffix == ".webp"
+    assert (unit / acquisition["assetRef"]).read_bytes() == derived

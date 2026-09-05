@@ -55,13 +55,21 @@ class ContentLibraryBinding:
     asset_id: str
     object_key: str
     sha256: str
+    source_asset_refs: tuple[str, ...]
+    acquisition_receipt_refs: tuple[str, ...]
+    derivative_binding: Mapping[str, Any] | None = None
 
-    def as_document(self) -> dict[str, str]:
-        return {
+    def as_document(self) -> dict[str, object]:
+        document: dict[str, object] = {
             "assetId": self.asset_id,
             "objectKey": self.object_key,
             "sha256": self.sha256,
+            "sourceAssetRefs": list(self.source_asset_refs),
+            "acquisitionReceiptRefs": list(self.acquisition_receipt_refs),
         }
+        if self.derivative_binding is not None:
+            document["derivativeBinding"] = dict(self.derivative_binding)
+        return document
 
 
 @dataclass(frozen=True, slots=True)
@@ -77,6 +85,9 @@ class ContentPoolHandoffQuery:
     process_result: str
     quality_result: str
     eligibility_result: str
+    rights_result: str
+    rights_authority_ref: str
+    rights_authority_digest: str
     usage_scope: str
     variant_purpose: str
     evidence_ref: str
@@ -119,7 +130,9 @@ class ContentPoolHandoffQuery:
                 "processResult": self.process_result,
                 "qualityResult": self.quality_result,
                 "eligibilityResult": self.eligibility_result,
-                "rightsResult": "passed",
+                "rightsResult": self.rights_result,
+                "rightsAuthorityRef": self.rights_authority_ref,
+                "rightsAuthorityDigest": self.rights_authority_digest,
                 "evidenceRef": self.evidence_ref,
                 "evidenceDigest": self.evidence_digest,
             },
@@ -160,6 +173,66 @@ def _creator_ref(object_root: Path, manifest: Mapping[str, Any]) -> str:
     return author_id
 
 
+def project_content_library_bindings(
+    raw_bindings: object,
+) -> tuple[ContentLibraryBinding, ...]:
+    if not isinstance(raw_bindings, list):
+        raise ObjectTransactionError("DATA.POOL.CONTENT_LIBRARY_BINDING_INVALID")
+    rows: list[ContentLibraryBinding] = []
+    seen_asset_ids: set[str] = set()
+    for raw in raw_bindings:
+        if not isinstance(raw, Mapping) or "publicSliceKey" in raw:
+            raise ObjectTransactionError("DATA.POOL.CONTENT_LIBRARY_BINDING_INVALID")
+        asset_id = str(raw.get("assetId") or "").strip()
+        object_key = str(raw.get("objectKey") or "").strip()
+        digest = str(raw.get("sha256") or "").strip()
+        source_asset_refs = raw.get("sourceAssetRefs")
+        acquisition_receipt_refs = raw.get("acquisitionReceiptRefs")
+        derivative_binding = raw.get("derivativeBinding")
+        derivative_consistent = True
+        if isinstance(derivative_binding, Mapping):
+            derivative_consistent = (
+                derivative_binding.get("derivedSha256") == digest
+                and derivative_binding.get("derivedBytes") == raw.get("bytes")
+                and str(derivative_binding.get("derivedExtension") or "")
+                == Path(object_key).suffix
+            )
+        if (
+            not asset_id
+            or asset_id in seen_asset_ids
+            or not is_cas_media_object_key(object_key)
+            or not _DIGEST.fullmatch(digest)
+            or f"/{digest[7:9]}/{digest[9:11]}/{digest[7:]}" not in object_key
+            or not isinstance(source_asset_refs, list)
+            or not source_asset_refs
+            or source_asset_refs != sorted(set(source_asset_refs))
+            or any(not isinstance(ref, str) or not ref for ref in source_asset_refs)
+            or not isinstance(acquisition_receipt_refs, list)
+            or not acquisition_receipt_refs
+            or acquisition_receipt_refs != sorted(set(acquisition_receipt_refs))
+            or any(not isinstance(ref, str) or not ref for ref in acquisition_receipt_refs)
+            or (derivative_binding is not None and not isinstance(derivative_binding, Mapping))
+            or not derivative_consistent
+        ):
+            raise ObjectTransactionError("DATA.POOL.CONTENT_LIBRARY_BINDING_INVALID")
+        seen_asset_ids.add(asset_id)
+        rows.append(
+            ContentLibraryBinding(
+                asset_id=asset_id,
+                object_key=object_key,
+                sha256=digest,
+                source_asset_refs=tuple(source_asset_refs),
+                acquisition_receipt_refs=tuple(acquisition_receipt_refs),
+                derivative_binding=(
+                    dict(derivative_binding)
+                    if isinstance(derivative_binding, Mapping)
+                    else None
+                ),
+            )
+        )
+    return tuple(sorted(rows, key=lambda row: (row.asset_id, row.object_key)))
+
+
 def _content_library_bindings(
     object_root: Path,
     manifest: Mapping[str, Any],
@@ -175,38 +248,22 @@ def _content_library_bindings(
         path = object_root / "asset.refs.json"
         binding_ref = "asset.refs.json" if path.is_file() and not path.is_symlink() else None
     if binding_ref is None:
-        bindings: tuple[ContentLibraryBinding, ...] = ()
-        return None, bindings, _canonical_digest([])
+        if (
+            str(manifest.get("contentType") or "") == "article"
+            and str(manifest.get("publishMediaMode") or "") == "text_only"
+        ):
+            return None, (), _canonical_digest([])
+        raise ObjectTransactionError("DATA.POOL.CONTENT_LIBRARY_BINDING_MISSING")
 
     document = _read_json(path)
-    raw_bindings = document.get("assets")
-    if not isinstance(raw_bindings, list):
-        raise ObjectTransactionError("DATA.POOL.CONTENT_LIBRARY_BINDING_INVALID")
-    rows: list[ContentLibraryBinding] = []
-    seen_asset_ids: set[str] = set()
-    for raw in raw_bindings:
-        if not isinstance(raw, Mapping) or "publicSliceKey" in raw:
-            raise ObjectTransactionError("DATA.POOL.CONTENT_LIBRARY_BINDING_INVALID")
-        asset_id = str(raw.get("assetId") or "").strip()
-        object_key = str(raw.get("objectKey") or "").strip()
-        digest = str(raw.get("sha256") or "").strip()
+    bindings = project_content_library_bindings(document.get("assets"))
+    if not bindings:
         if (
-            not asset_id
-            or asset_id in seen_asset_ids
-            or not is_cas_media_object_key(object_key)
-            or not _DIGEST.fullmatch(digest)
-            or f"/{digest[7:9]}/{digest[9:11]}/{digest[7:]}" not in object_key
+            str(manifest.get("contentType") or "") == "article"
+            and str(manifest.get("publishMediaMode") or "") == "text_only"
         ):
-            raise ObjectTransactionError("DATA.POOL.CONTENT_LIBRARY_BINDING_INVALID")
-        seen_asset_ids.add(asset_id)
-        rows.append(
-            ContentLibraryBinding(
-                asset_id=asset_id,
-                object_key=object_key,
-                sha256=digest,
-            )
-        )
-    bindings = tuple(sorted(rows, key=lambda row: (row.asset_id, row.object_key)))
+            return None, (), _canonical_digest([])
+        raise ObjectTransactionError("DATA.POOL.CONTENT_LIBRARY_BINDING_INVALID")
     return (
         binding_ref,
         bindings,
@@ -291,6 +348,17 @@ def project_content_pool_handoff(
             f"DATA.POOL.SOURCE_ATTRIBUTION_INCOMPLETE: {kind}/{normalized_ref}"
         )
 
+    rights_result = str(record.get("rightsResult") or "").strip()
+    rights_authority_ref = str(record.get("rightsAuthorityRef") or "").strip()
+    rights_authority_digest = str(record.get("rightsAuthorityDigest") or "").strip()
+    if (
+        rights_result != "passed"
+        or not rights_authority_ref
+        or not _DIGEST.fullmatch(rights_authority_digest)
+    ):
+        raise ObjectTransactionError(
+            f"DATA.POOL.RIGHTS_FAILED: {kind}/{normalized_ref}"
+        )
     usage_scope = str(record.get("usageScope") or "").strip()
     if usage_scope not in {"research", "commercial"}:
         raise ObjectTransactionError(
@@ -307,7 +375,7 @@ def project_content_pool_handoff(
             raise ObjectTransactionError(
                 f"DATA.POOL.GENERATOR_PROVENANCE_INVALID: {normalized_ref}"
             )
-        variant_purpose = str(manifest.get("variantPurpose") or "original").strip()
+        variant_purpose = str(manifest.get("variantPurpose") or "").strip()
         if variant_purpose not in {"original", "commercial_variant"}:
             raise ObjectTransactionError(
                 f"DATA.POOL.VARIANT_INVALID: {normalized_ref}"
@@ -352,6 +420,9 @@ def project_content_pool_handoff(
         "processResult": str(record.get("processResult") or ""),
         "qualityResult": str(record.get("qualityResult") or ""),
         "eligibilityResult": str(record.get("eligibilityResult") or ""),
+        "rightsResult": rights_result,
+        "rightsAuthorityRef": rights_authority_ref,
+        "rightsAuthorityDigest": rights_authority_digest,
         "usageScope": usage_scope,
         "variantPurpose": variant_purpose,
         "contentLibraryBindingDigest": binding_digest,
@@ -368,6 +439,9 @@ def project_content_pool_handoff(
         process_result=str(record.get("processResult") or ""),
         quality_result=str(record.get("qualityResult") or ""),
         eligibility_result=str(record.get("eligibilityResult") or ""),
+        rights_result=rights_result,
+        rights_authority_ref=rights_authority_ref,
+        rights_authority_digest=rights_authority_digest,
         usage_scope=usage_scope,
         variant_purpose=variant_purpose,
         evidence_ref=evidence_ref,
@@ -393,5 +467,6 @@ def project_content_pool_handoff(
 __all__ = [
     "ContentLibraryBinding",
     "ContentPoolHandoffQuery",
+    "project_content_library_bindings",
     "project_content_pool_handoff",
 ]

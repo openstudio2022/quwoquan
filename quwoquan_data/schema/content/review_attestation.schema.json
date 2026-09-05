@@ -77,7 +77,15 @@
       }
     },
     "mediaRefReview": {
-      "$ref": "#/$defs/check"
+      "type": "object",
+      "required": ["status", "issues", "ref", "digest"],
+      "additionalProperties": false,
+      "properties": {
+        "status": {"enum": ["passed", "failed"]},
+        "issues": {"type": "array", "items": {"type": "string"}},
+        "ref": {"const": "5.review/media_ref_review.json"},
+        "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+      }
     },
     "repair": {
       "type": "object",

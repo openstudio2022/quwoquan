@@ -14,6 +14,10 @@ from pathlib import Path, PurePosixPath
 from typing import Any, Iterator
 
 from content.execution.identity import parse_execution_id, validate_execution_id
+from content.execution.receipt_chain import (
+    ReceiptChainError,
+    validate_live_receipt_chain,
+)
 from core import paths
 from core.schema import assert_valid
 
@@ -183,7 +187,7 @@ def _target_ref(target: Mapping[str, Any], *, carrier: str) -> str:
         return f"entities/{entity_type}/{name}"
     angle = str(target.get("publishAngle") or "").strip()
     title = str(target.get("publishTitle") or "").strip()
-    sequence = target.get("publishSeq", 1)
+    sequence = target.get("publishSeq")
     if not angle or not title or isinstance(sequence, bool) or not isinstance(sequence, int) or sequence < 1:
         raise TaskInitError(f"候选缺少合法的发布坐标：{name}")
     return f"posts/{carrier}/{angle}/{title}/{sequence}"
@@ -203,7 +207,6 @@ def _normalized_targets(value: object, *, carrier: str) -> tuple[list[dict[str, 
         if carrier != "homepage":
             target["publishAngle"] = str(target.get("publishAngle") or "").strip()
             target["publishTitle"] = str(target.get("publishTitle") or "").strip()
-            target["publishSeq"] = target.get("publishSeq", 1)
         ref = _target_ref(target, carrier=carrier)
         if ref in seen:
             raise TaskInitError(f"targetRef 重复：{ref}")
@@ -213,24 +216,78 @@ def _normalized_targets(value: object, *, carrier: str) -> tuple[list[dict[str, 
     return [target for _, target in pairs], [ref for ref, _ in pairs]
 
 
-def _validate_retry(execution_id: str, retry_of: object) -> str | None:
+def _assert_regular_bytes(path: Path, *, label: str) -> bytes:
+    absolute = _absolute(path)
+    current = Path(absolute.anchor)
+    try:
+        for part in absolute.parts[1:]:
+            current = current / part
+            if stat.S_ISLNK(os.lstat(current).st_mode):
+                raise TaskInitError(f"{label} 不得包含 symlink：{path}")
+    except FileNotFoundError as exc:
+        raise TaskInitError(f"{label} 不存在：{path}") from exc
+    if not absolute.is_file():
+        raise TaskInitError(f"{label} 必须是 regular file：{path}")
+    return absolute.read_bytes()
+
+def _retry_binding(execution_id: str, retry_of: object) -> dict[str, Any] | None:
+    """Validate the caller-selected blocked execution and freeze its terminal receipt."""
+
     if retry_of is None:
         return None
     previous_id = validate_execution_id(str(retry_of))
-    current = parse_execution_id(execution_id)
-    previous = parse_execution_id(previous_id)
-    if (
-        previous_id == execution_id
-        or previous.run_date != current.run_date
-        or previous.vertical != current.vertical
-        or previous.content_type != current.content_type
-        or previous.intent != current.intent
-        or previous.scope != current.scope
-        or previous.phase != current.phase
-        or previous.sequence >= current.sequence
-    ):
-        raise TaskInitError("retryOf 必须是同一 execution scope 的更早 sequence")
-    return previous_id
+    if previous_id == execution_id:
+        raise TaskInitError("retryOf 不得引用当前 executionId")
+
+    previous_root = paths.DATA_EXECUTIONS_ROOT / previous_id
+    try:
+        manifest_raw = _assert_regular_bytes(
+            previous_root / "execution_manifest.json",
+            label="retryOf execution manifest",
+        )
+        manifest = json.loads(manifest_raw)
+        assert_valid(
+            manifest,
+            "execution",
+            "content_execution_manifest",
+            label="retryOf execution manifest",
+        )
+        if (
+            not isinstance(manifest, dict)
+            or manifest.get("executionId") != previous_id
+            or manifest_raw != _canonical_bytes(manifest)
+        ):
+            raise TaskInitError("retryOf execution manifest 身份或 canonical bytes 非法")
+        chain = validate_live_receipt_chain(
+            execution_id=previous_id,
+            execution_root=previous_root,
+            repo_root=paths.REPO_ROOT,
+            output_root=paths.OUTPUT_ROOT,
+            terminal_verdict="blocked",
+        )
+    except TaskInitError:
+        raise
+    except ReceiptChainError as exc:
+        raise TaskInitError(f"retryOf receipt 链不可信：{exc}") from exc
+    except (FileNotFoundError, OSError, UnicodeDecodeError, json.JSONDecodeError, TypeError, ValueError) as exc:
+        raise TaskInitError(f"retryOf execution 不存在或 receipt 链不可信：{previous_id}") from exc
+
+    terminal_name = (
+        f"{len(chain.receipts):03d}-{chain.terminal_receipt['stage']}.json"
+    )
+    receipt_ref = _relative_ref(
+        previous_root / "_shared/receipts" / terminal_name,
+        root=paths.OUTPUT_ROOT,
+        label="retryOf terminal receipt",
+    )
+    return {
+        "executionId": previous_id,
+        "terminalReceipt": {
+            "scope": "output",
+            "ref": receipt_ref,
+            "digest": _sha256(chain.terminal_raw),
+        },
+    }
 
 
 @contextmanager
@@ -342,7 +399,7 @@ def initialize_task(*, carrier_demand_path: Path, candidate_bindings_path: Path)
         raise TaskInitError("candidateCount 必须等于 targets 数量")
     if candidate_count < quota:
         raise TaskInitError("candidateCount 不得小于 quota")
-    retry_of = _validate_retry(execution_id, demand.get("retryOf"))
+    retry_of = _retry_binding(execution_id, demand.get("retryOf"))
 
     demand_binding = {"scope": "output", "ref": demand_ref, "digest": _sha256(demand_canonical)}
     candidate_binding = {"scope": "output", "ref": bindings_ref, "digest": _sha256(bindings_canonical)}

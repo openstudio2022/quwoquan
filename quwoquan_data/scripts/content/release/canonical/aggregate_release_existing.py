@@ -13,9 +13,7 @@ from content.release.canonical.aggregate_release_documents import (
     release_attestation_document,
     release_header_document,
 )
-from content.release.canonical.environment_release_selection import (
-    EnvironmentReleaseSelection,
-)
+from content.release.canonical.environment_release_candidate import EnvironmentReleaseSelection
 from content.release.canonical.object_transaction_contract import (
     ObjectTransactionError,
     _read_json,
@@ -131,9 +129,6 @@ def reuse_existing_aggregate_release(
     source_digests: tuple[SourceDefinitionSnapshot, ...],
     desired: dict[str, list[str]],
     release_class: str,
-    reviewed_closure_adoption: Mapping[str, Any] | None,
-    adoption_output_root: Path | None,
-    reviewed_selection: object | None,
     environment_selection: EnvironmentReleaseSelection | None,
     release_contents: list[dict[str, object]] | None,
     release_authors: list[dict[str, object]] | None,
@@ -153,6 +148,13 @@ def reuse_existing_aggregate_release(
     post_refs = set(desired["posts"])
     creator_refs = list(desired["creators"])
     tag_refs = list(desired["tags"])
+    carrier_counts = {
+        "homepage": len(entity_refs),
+        "article": sum(ref.startswith("article/") for ref in post_refs),
+        "image": sum(ref.startswith("image/") for ref in post_refs),
+        "video": sum(ref.startswith("video/") for ref in post_refs),
+    }
+    carrier_counts["total"] = sum(carrier_counts.values())
     try:
         desired_state = _read_json(payload_file(final_root, "desired_state.json"))
         expected_desired_state = {
@@ -195,7 +197,7 @@ def reuse_existing_aggregate_release(
 
         selected_merkle = objects_merkle(final_root)
         sample_plan_digest: str | None = None
-        if environment_selection is not None:
+        if environment_selection is not None and milestone is not None:
             sample_plan_digest = validate_existing_release_uat_sample_plan(
                 final_root=final_root,
                 release_id=release_id,
@@ -235,14 +237,8 @@ def reuse_existing_aggregate_release(
             canonical_merkle=selected_merkle,
             release_class=release_class,
             product_lifecycle_state=release_class,
-            reviewed_closure_adoption=reviewed_closure_adoption,
             selection_scope=(
                 environment_selection.selection_scope
-                if environment_selection is not None
-                else None
-            ),
-            target_environment=(
-                environment_selection.environment
                 if environment_selection is not None
                 else None
             ),
@@ -349,6 +345,7 @@ def reuse_existing_aggregate_release(
             source_digests=source_digests,
             asset_admission=asset_admission,
             canonical_merkle=selected_merkle,
+            carrier_counts=carrier_counts,
             entity_count=len(entity_refs),
             post_count=len(post_refs),
             creator_count=len(creator_refs),
@@ -373,6 +370,7 @@ def reuse_existing_aggregate_release(
         "entityCount": len(entity_refs),
         "postCount": len(post_refs),
         "creatorCount": len(creator_refs),
+        "counts": carrier_counts,
         "canonicalMerkle": selected_merkle,
         "manifestDigest": payload_digest(final_root),
         "idempotent": True,
@@ -385,8 +383,6 @@ def reuse_existing_aggregate_release(
             "poolEligibleCount": environment_selection.eligible_count,
             "counts": environment_selection.counts,
         })
-        if environment_selection.environment is not None:
-            result["targetEnvironment"] = environment_selection.environment
         if environment_selection.milestone is not None:
             result["milestone"] = environment_selection.milestone
             result["milestoneTargets"] = dict(

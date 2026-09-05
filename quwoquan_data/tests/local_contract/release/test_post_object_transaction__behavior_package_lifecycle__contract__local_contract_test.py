@@ -5,6 +5,7 @@
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import shutil
 from datetime import datetime
@@ -75,6 +76,136 @@ def test_post_transaction_resolves_independently_admitted_creator(
     assert "sourceDigest" not in published_manifest
     assert "executionBundle" not in published_manifest
     assert validate_publish_invariants(publish)["status"] == "passed"
+
+
+def test_post_transaction_caps_commercial_facts_at_ai_research_scope(
+    tmp_path: Path,
+) -> None:
+    execution, package, _publish, transaction_id = _fixture(tmp_path)
+    manifest_path = execution / "posts" / POST_REF / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["sourceAttribution"].update(
+        publicationAdmission="commercial_release",
+        commercialAuthorizationStatus="verified",
+        authorizationProofUrl="https://example.test/proof",
+        termsUrl="https://example.test/terms",
+    )
+    manifest["assets"][0]["distributionDecision"] = "commercial_allowed"
+    _write_json(manifest_path, manifest)
+    source_index_path = execution / "sources/commons/assets/index.json"
+    source_index = json.loads(source_index_path.read_text(encoding="utf-8"))
+    source_index["assets"][0]["distributionDecision"] = "commercial_allowed"
+    _write_json(source_index_path, source_index)
+    review_path = execution / "posts" / POST_REF / "5.review/media_ref_review.json"
+    review = json.loads(review_path.read_text(encoding="utf-8"))
+    review["rightsReviews"][0]["usageScope"] = "research"
+    _write_json(review_path, review)
+    attestation_path = execution / "posts" / POST_REF / "5.review/attestation.json"
+    attestation = json.loads(attestation_path.read_text(encoding="utf-8"))
+    attestation["mediaRefReview"]["digest"] = (
+        "sha256:" + hashlib.sha256(review_path.read_bytes()).hexdigest()
+    )
+    _write_json(attestation_path, attestation)
+
+    build_post_object_transaction_package(
+        execution_root=execution,
+        object_ref=POST_REF,
+        transaction_id=transaction_id,
+        package_root=package,
+    )
+    canonical = json.loads(
+        (package / "object/manifest.json").read_text(encoding="utf-8")
+    )
+    assert canonical["admission"]["usageScope"] == "research"
+
+
+def test_post_transaction_rejects_ai_research_commercial_variant(
+    tmp_path: Path,
+) -> None:
+    execution, package, _publish, transaction_id = _fixture(tmp_path)
+    manifest_path = execution / "posts" / POST_REF / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["variantPurpose"] = "commercial_variant"
+    manifest["sourceAttribution"].update(
+        publicationAdmission="commercial_release",
+        commercialAuthorizationStatus="verified",
+        authorizationProofUrl="https://example.test/proof",
+        termsUrl="https://example.test/terms",
+    )
+    manifest["assets"][0]["distributionDecision"] = "commercial_allowed"
+    _write_json(manifest_path, manifest)
+    source_index_path = execution / "sources/commons/assets/index.json"
+    source_index = json.loads(source_index_path.read_text(encoding="utf-8"))
+    source_index["assets"][0]["distributionDecision"] = "commercial_allowed"
+    _write_json(source_index_path, source_index)
+    review_path = execution / "posts" / POST_REF / "5.review/media_ref_review.json"
+    review = json.loads(review_path.read_text(encoding="utf-8"))
+    review["rightsReviews"][0]["usageScope"] = "research"
+    _write_json(review_path, review)
+    attestation_path = execution / "posts" / POST_REF / "5.review/attestation.json"
+    attestation = json.loads(attestation_path.read_text(encoding="utf-8"))
+    attestation["mediaRefReview"]["digest"] = (
+        "sha256:" + hashlib.sha256(review_path.read_bytes()).hexdigest()
+    )
+    _write_json(attestation_path, attestation)
+
+    with pytest.raises(ObjectTransactionError, match="COMMERCIAL_VARIANT_NOT_ADMITTED"):
+        build_post_object_transaction_package(
+            execution_root=execution,
+            object_ref=POST_REF,
+            transaction_id=transaction_id,
+            package_root=package,
+        )
+
+
+def test_post_transaction_copies_source_asset_hard_facts(tmp_path: Path) -> None:
+    execution, package, _publish, transaction_id = _fixture(tmp_path)
+    source_index_path = execution / "sources/commons/assets/index.json"
+    source_index = json.loads(source_index_path.read_text(encoding="utf-8"))
+    source_index["assets"][0]["acquisitionReceiptRef"] = "receipts/acquired.json"
+    published_asset = execution / "posts" / POST_REF / "assets/cover.jpg"
+    derivative = {
+        "originalSha256": "sha256:" + "1" * 64,
+        "originalBytes": 12,
+        "originalMimeType": "image/jpeg",
+        "policy": "source_unit_asset_budget",
+        "profile": "image",
+        "derivedSha256": "sha256:" + hashlib.sha256(published_asset.read_bytes()).hexdigest(),
+        "derivedBytes": published_asset.stat().st_size,
+        "derivedMimeType": "image/jpeg",
+        "derivedExtension": ".jpg",
+    }
+    source_index["assets"][0]["derivativeBinding"] = derivative
+    _write_json(source_index_path, source_index)
+
+    build_post_object_transaction_package(
+        execution_root=execution,
+        object_ref=POST_REF,
+        transaction_id=transaction_id,
+        package_root=package,
+    )
+    binding = json.loads(
+        (package / "object/asset.refs.json").read_text(encoding="utf-8")
+    )["assets"][0]
+    assert binding["sourceAssetRefs"] == ["sources/commons/assets/cover.jpg"]
+    assert binding["acquisitionReceiptRefs"] == ["receipts/acquired.json"]
+    assert binding["derivativeBinding"] == derivative
+
+
+def test_post_transaction_rejects_missing_acquisition_receipt(tmp_path: Path) -> None:
+    execution, package, _publish, transaction_id = _fixture(tmp_path)
+    source_index_path = execution / "sources/commons/assets/index.json"
+    source_index = json.loads(source_index_path.read_text(encoding="utf-8"))
+    source_index["assets"][0].pop("acquisitionReceiptRef")
+    _write_json(source_index_path, source_index)
+
+    with pytest.raises(ObjectTransactionError, match="acquisitionReceiptRef"):
+        build_post_object_transaction_package(
+            execution_root=execution,
+            object_ref=POST_REF,
+            transaction_id=transaction_id,
+            package_root=package,
+        )
 
 
 def test_post_transaction_same_key_requires_same_payload_digest(

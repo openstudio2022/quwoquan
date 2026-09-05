@@ -14,15 +14,6 @@ VIDEO_SOURCE_KINDS = {
 PUBLICATION_ADMISSIONS = {
     "research_release",
     "commercial_release",
-    "risk_accepted_attribution_only",
-}
-RISK_ATTRIBUTION_SOURCES = {
-    "douyin",
-    "tiktok",
-    "weibo",
-    "toutiao_video",
-    "travel_vlog",
-    "chinese_tourism_vertical",
 }
 REQUIRED_EVIDENCE = {
     "directly_downloadable_asset",
@@ -274,30 +265,6 @@ def verify_video_commercial_admission(
                 issues.append(
                     f"video matrix {source_id}: research_release admission is required"
                 )
-        if "risk_accepted_attribution_only" in admissions and (
-            source.get("defaultRole") != "publish_candidate"
-            or source.get("fetchMode") != "attribution_manifest"
-            or source.get("rightsPolicy") != "attribution_no_watermark"
-        ):
-            issues.append(
-                f"video matrix {source_id}: risk-attribution source wiring "
-                "must be publish_candidate/attribution_manifest/"
-                "attribution_no_watermark"
-            )
-    missing_risk_sources = sorted(
-        RISK_ATTRIBUTION_SOURCES
-        - {
-            str(row.get("sourceId") or "")
-            for row in matrix_rows
-            if "risk_accepted_attribution_only"
-            in (row.get("publicationAdmissions") or [])
-        }
-    )
-    if missing_risk_sources:
-        issues.append(
-            "video matrix misses required attribution sources "
-            f"{missing_risk_sources}"
-        )
     return issues
 
 

@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Any
 
 from core.io import read_json
+from core.media_processing_policy import MEDIA_PROCESSING_POLICY
 from core.paths import SOURCE_ACQUISITION_ROOT
 from core.schema import assert_valid
 
@@ -39,7 +40,7 @@ from content.source.professional_safety_evidence import (
 )
 
 ACQUISITION_ROOT = SOURCE_ACQUISITION_ROOT
-_MAX_IMAGE_BYTES = 64 * 1024 * 1024
+_MAX_IMAGE_BYTES = MEDIA_PROCESSING_POLICY.source_asset_max_bytes
 _MIN_IMAGE_BYTES = 3_000
 
 

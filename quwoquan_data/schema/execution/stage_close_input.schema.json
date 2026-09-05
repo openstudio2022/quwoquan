@@ -190,8 +190,7 @@
       "additionalProperties": false,
       "required": [
         "code",
-        "message",
-        "recoveryStage"
+        "message"
       ],
       "properties": {
         "code": {
@@ -201,20 +200,6 @@
         "message": {
           "type": "string",
           "minLength": 1
-        },
-        "recoveryStage": {
-          "enum": [
-            "0.plan",
-            "sources",
-            "1.download",
-            "2.quality",
-            "3.compose",
-            "4.draft",
-            "5.review",
-            "publish",
-            "release",
-            "ship"
-          ]
         },
         "ref": {
           "type": "string",

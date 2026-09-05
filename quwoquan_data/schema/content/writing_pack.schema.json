@@ -27,6 +27,8 @@
       "type": "string",
       "pattern": "^sha256:[0-9a-f]{64}$"
     },
+    "qualityRef": {"const": "2.quality/quality_analysis.json"},
+    "qualityDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
     "selectedSourceUrls": {
       "type": "array",
       "items": {
@@ -154,6 +156,8 @@
     "sourcePolicyRevision",
     "sourceRevision",
     "promptBundleRevision",
+    "qualityRef",
+    "qualityDigest",
     "selectedSourceUrls",
     "ref",
     "kind",

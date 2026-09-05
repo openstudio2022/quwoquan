@@ -180,6 +180,13 @@ def test_current_task_init_documents_publish_one_post_plan_and_apply(
     monkeypatch.setattr(post_promotion, "PUBLISH_ROOT", publish)
     monkeypatch.setattr(post_promotion, "OUTPUT_ROOT", tmp_path / "current-output")
     monkeypatch.setattr(
+        "content.release.canonical.publish_object.PUBLISH_ROOT", publish
+    )
+    monkeypatch.setattr(
+        "content.release.canonical.publish_object.OUTPUT_ROOT",
+        tmp_path / "current-output",
+    )
+    monkeypatch.setattr(
         post_promotion, "execution_root", lambda _execution_id: execution
     )
     monkeypatch.setattr(
@@ -187,7 +194,8 @@ def test_current_task_init_documents_publish_one_post_plan_and_apply(
         lambda _execution_id: execution,
     )
     monkeypatch.setattr(
-        "content.release.canonical.publish_object._review_approved", lambda _path: None
+        "content.release.canonical.publish_object._review_approved",
+        lambda _path, **_kwargs: None,
     )
 
     planned = publish_object(EXECUTION_ID, f"posts/{CURRENT_POST_REF}")
@@ -261,9 +269,15 @@ def test_current_task_init_identity_rejects_target_drift_even_with_rebound_diges
         )
 
 
+@pytest.mark.parametrize(
+    ("has_acquisition_receipt", "review_usage_scope"),
+    [(True, "commercial"), (True, "research"), (False, "commercial")],
+)
 def test_current_task_init_documents_build_entity_package(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    has_acquisition_receipt: bool,
+    review_usage_scope: str,
 ) -> None:
     execution, _post_package, _publish, _post_transaction = _current_execution(
         tmp_path, monkeypatch
@@ -325,6 +339,16 @@ def test_current_task_init_documents_build_entity_package(
     source_unit_asset = execution / "sources/commons/assets/cover.jpg"
     source_unit_asset.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(source_asset, source_unit_asset)
+    source_index_path = execution / "sources/commons/assets/index.json"
+    source_index = json.loads(source_index_path.read_text(encoding="utf-8"))
+    source_index["assets"][0]["distributionDecision"] = "commercial_allowed"
+    if has_acquisition_receipt:
+        source_index["assets"][0]["acquisitionReceiptRef"] = (
+            "receipts/fixture-image-acquisition.json"
+        )
+    else:
+        source_index["assets"][0].pop("acquisitionReceiptRef", None)
+    _write(source_index_path, source_index)
     (entity_root / "assets").mkdir(parents=True)
     shutil.copy2(source_asset, entity_root / "assets/cover.jpg")
     source_attribution = json.loads(
@@ -332,6 +356,12 @@ def test_current_task_init_documents_build_entity_package(
             encoding="utf-8"
         )
     )["sourceAttribution"]
+    source_attribution.update(
+        publicationAdmission="commercial_release",
+        commercialAuthorizationStatus="verified",
+        authorizationProofUrl="https://example.test/proof",
+        termsUrl="https://example.test/terms",
+    )
     _write(
         entity_root / "_entity.json",
         {
@@ -361,7 +391,7 @@ def test_current_task_init_documents_build_entity_package(
                     "termsUrl": "https://creativecommons.org/licenses/by/4.0/",
                     "authorizationProof": "https://commons.wikimedia.org/wiki/File:Example.jpg",
                     "usageScope": "app_publish",
-                    "distributionDecision": "research_allowed",
+                    "distributionDecision": "commercial_allowed",
                     "modelReleaseStatus": "not_required",
                     "rightsAuditStatus": "verified",
                     "rightsAuditIssues": [],
@@ -371,16 +401,45 @@ def test_current_task_init_documents_build_entity_package(
     )
     (entity_root / "page.md").write_text("# 西湖\n", encoding="utf-8")
     _write(entity_root / "evidence/source_catalog.json", {"sources": []})
+    media_review_path = _write(
+        entity_root / "5.review/media_ref_review.json",
+        {
+            "schema": "quwoquan_data.media_ref_review",
+            "stage": "5.review",
+            "executionId": EXECUTION_ID,
+            "objectRef": target_ref,
+            "passed": True,
+            "mediaIssues": [],
+            "referenceIssues": [],
+            "rightsReviews": [
+                {
+                    "assetRef": "sources/commons/assets/cover.jpg",
+                    "sourceUrl": "https://upload.wikimedia.org/wikipedia/commons/example.jpg",
+                    "license": "CC BY 4.0",
+                    "termsUrl": "https://creativecommons.org/licenses/by/4.0/",
+                    "authorizationProof": "https://commons.wikimedia.org/wiki/File:Example.jpg",
+                    "usageScope": review_usage_scope,
+                    "passed": True,
+                    "issues": [],
+                }
+            ],
+        },
+    )
     _write(
         entity_root / "5.review/attestation.json",
         {
             "decision": "approved",
             "deterministicGate": {"status": "passed"},
             "independentReviewer": {"status": "passed"},
-            "mediaRefReview": {"status": "passed"},
+            "mediaRefReview": {
+                "status": "passed",
+                "issues": [],
+                "ref": "5.review/media_ref_review.json",
+                "digest": "sha256:" + hashlib.sha256(media_review_path.read_bytes()).hexdigest(),
+            },
         },
     )
-    for name in ("rubric_review.json", "reviewer_result.json", "media_ref_review.json"):
+    for name in ("rubric_review.json", "reviewer_result.json"):
         _write(entity_root / "5.review" / name, {})
     monkeypatch.setattr(
         object_transaction,
@@ -392,6 +451,16 @@ def test_current_task_init_documents_build_entity_package(
         f"{hashlib.sha256(entity_ref.encode('utf-8')).hexdigest()[:12]}"
     )
     package = execution / "evidence/object-transactions" / transaction_id
+
+    if not has_acquisition_receipt:
+        with pytest.raises(ObjectTransactionError, match="acquisitionReceiptRef"):
+            build_entity_object_transaction_package(
+                execution_root=execution,
+                object_ref=f"/entity/{entity_ref}",
+                transaction_id=transaction_id,
+                package_root=package,
+            )
+        return
 
     built = build_entity_object_transaction_package(
         execution_root=execution,
@@ -405,5 +474,13 @@ def test_current_task_init_documents_build_entity_package(
     )
     assert built["target"]["objectKind"] == "entities"
     assert canonical_manifest["sourceIdentity"]["executionId"] == EXECUTION_ID
+    assert canonical_manifest["admission"]["usageScope"] == review_usage_scope
     assert "sourceDigest" not in canonical_manifest
     assert "executionBundle" not in canonical_manifest
+    asset_binding = json.loads(
+        (package / "object/asset.refs.json").read_text(encoding="utf-8")
+    )["assets"][0]
+    assert asset_binding["sourceAssetRefs"] == ["sources/commons/assets/cover.jpg"]
+    assert asset_binding["acquisitionReceiptRefs"] == [
+        "receipts/fixture-image-acquisition.json"
+    ]

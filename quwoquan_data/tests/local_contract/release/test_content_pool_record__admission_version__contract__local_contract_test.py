@@ -67,6 +67,14 @@ def _reserved_identity(content_id: str, version: int) -> dict[str, object]:
     return {"contentId": content_id, "version": version}
 
 
+def _rights_authority(*, usage_scope: str = "commercial") -> dict[str, str]:
+    return {
+        "ref": "posts/article/test/5.review/media_ref_review.json",
+        "digest": "sha256:" + "9" * 64,
+        "usageScope": usage_scope,
+    }
+
+
 def _source_attribution() -> dict[str, object]:
     return {
         "isOriginal": False,
@@ -128,6 +136,9 @@ def _pre_contract_record(root: Path, *, migration_identity: bool) -> None:
         "processResult": "completed",
         "qualityResult": "passed",
         "eligibilityResult": "passed",
+        "rightsResult": "passed",
+        "rightsAuthorityRef": "posts/article/test/5.review/media_ref_review.json",
+        "rightsAuthorityDigest": "sha256:" + "9" * 64,
         "usageScope": "research",
         "evidenceRef": evidence_ref,
         "evidenceDigest": evidence_digest,
@@ -219,12 +230,13 @@ def _write_author_history(
 
 
 def test_unknown_usage_defaults_to_research(tmp_path: Path) -> None:
-    source_manifest = {"contentId": "content-a", "version": 1}
+    source_manifest = {"contentId": "content-a", "version": 1, "variantPurpose": "original"}
     fields = build_content_pool_fields(
         source_manifest=source_manifest,
         canonical_ref="article/guide/a/1",
         source_task_id="task-1",
         attestation_path=_attestation(tmp_path),
+        rights_authority=_rights_authority(),
         publish_root=tmp_path / "publish",
         rights_rows=[],
         reserved_identity=_reserved_identity("content-a", 1),
@@ -232,6 +244,50 @@ def test_unknown_usage_defaults_to_research(tmp_path: Path) -> None:
     assert fields["version"] == 1
     assert fields["admission"]["usageScope"] == "research"
     assert fields["variantPurpose"] == "original"
+
+
+def test_content_pool_fields_require_explicit_variant_purpose(tmp_path: Path) -> None:
+    with pytest.raises(ObjectTransactionError, match="variantPurpose"):
+        build_content_pool_fields(
+            source_manifest={"contentId": "content-a", "version": 1},
+            canonical_ref="article/guide/a/1",
+            source_task_id="task-1",
+            attestation_path=_attestation(tmp_path),
+            rights_authority=_rights_authority(),
+            publish_root=tmp_path / "publish",
+            rights_rows=[],
+            reserved_identity=_reserved_identity("content-a", 1),
+        )
+
+
+def test_ai_research_scope_caps_commercial_hard_facts(tmp_path: Path) -> None:
+    manifest = _commercial_manifest()
+    manifest["variantPurpose"] = "original"
+    fields = build_content_pool_fields(
+        source_manifest=manifest,
+        canonical_ref="article/guide/ai-research/1",
+        source_task_id="task-ai-research",
+        attestation_path=_attestation(tmp_path),
+        rights_authority=_rights_authority(usage_scope="research"),
+        publish_root=tmp_path / "publish",
+        rights_rows=_commercial_rights(),
+        reserved_identity=_reserved_identity("travel_panda_base_guide", 2),
+    )
+    assert fields["admission"]["usageScope"] == "research"
+
+
+def test_ai_research_scope_rejects_commercial_variant(tmp_path: Path) -> None:
+    with pytest.raises(ObjectTransactionError, match="COMMERCIAL_VARIANT_NOT_ADMITTED"):
+        build_content_pool_fields(
+            source_manifest=_commercial_manifest(),
+            canonical_ref="article/guide/ai-research-commercial/1",
+            source_task_id="task-ai-research-commercial",
+            attestation_path=_attestation(tmp_path),
+            rights_authority=_rights_authority(usage_scope="research"),
+            publish_root=tmp_path / "publish",
+            rights_rows=_commercial_rights(),
+            reserved_identity=_reserved_identity("travel_panda_base_guide", 2),
+        )
 
 
 def test_commercial_variant_requires_publication_proof(tmp_path: Path) -> None:
@@ -243,6 +299,7 @@ def test_commercial_variant_requires_publication_proof(tmp_path: Path) -> None:
             canonical_ref="article/guide/a-commercial/1",
             source_task_id="task-2",
             attestation_path=_attestation(tmp_path),
+            rights_authority=_rights_authority(),
             publish_root=tmp_path / "publish",
             rights_rows=_commercial_rights(),
             reserved_identity=_reserved_identity(
@@ -263,6 +320,7 @@ def test_existing_version_requires_exact_next_append(tmp_path: Path) -> None:
         canonical_ref="article/guide/a-commercial/1",
         source_task_id="task-2",
         attestation_path=_attestation(tmp_path),
+        rights_authority=_rights_authority(),
         publish_root=tmp_path / "publish",
         rights_rows=_commercial_rights(),
         reserved_identity=_reserved_identity("travel_panda_base_guide", 2),
@@ -284,10 +342,11 @@ def test_pre_sequence_record_is_excluded_but_does_not_block_new_identity(
     _pre_contract_record(stale, migration_identity=False)
 
     fields = build_content_pool_fields(
-        source_manifest={"contentId": "modern-content", "version": 1},
+        source_manifest={"contentId": "modern-content", "version": 1, "variantPurpose": "original"},
         canonical_ref="article/modern/1",
         source_task_id="modern-task",
         attestation_path=_attestation(tmp_path),
+        rights_authority=_rights_authority(),
         publish_root=tmp_path / "publish",
         rights_rows=[],
         reserved_identity=_reserved_identity("modern-content", 1),
@@ -297,10 +356,11 @@ def test_pre_sequence_record_is_excluded_but_does_not_block_new_identity(
     assert fields["version"] == 1
     with pytest.raises(ObjectTransactionError, match="VERSION_CONFLICT"):
         build_content_pool_fields(
-            source_manifest={"contentId": "pre-contract-content", "version": 1},
+            source_manifest={"contentId": "pre-contract-content", "version": 1, "variantPurpose": "original"},
             canonical_ref="article/modern/1",
             source_task_id="modern-task",
             attestation_path=_attestation(tmp_path),
+            rights_authority=_rights_authority(),
             publish_root=tmp_path / "publish",
             rights_rows=[],
             reserved_identity=_reserved_identity("pre-contract-content", 1),
@@ -389,10 +449,11 @@ def test_retired_migration_identity_is_collision_only(tmp_path: Path) -> None:
     _pre_contract_record(stale, migration_identity=True)
 
     fields = build_content_pool_fields(
-        source_manifest={"contentId": "modern-content", "version": 1},
+        source_manifest={"contentId": "modern-content", "version": 1, "variantPurpose": "original"},
         canonical_ref="article/modern/1",
         source_task_id="modern-task",
         attestation_path=_attestation(tmp_path),
+        rights_authority=_rights_authority(),
         publish_root=tmp_path / "publish",
         rights_rows=[],
         reserved_identity=_reserved_identity("modern-content", 1),
@@ -403,10 +464,11 @@ def test_retired_migration_identity_is_collision_only(tmp_path: Path) -> None:
         latest_pool_record(stale, "content")
     with pytest.raises(ObjectTransactionError, match="VERSION_CONFLICT"):
         build_content_pool_fields(
-            source_manifest={"contentId": "pre-contract-content", "version": 1},
+            source_manifest={"contentId": "pre-contract-content", "version": 1, "variantPurpose": "original"},
             canonical_ref="article/modern/1",
             source_task_id="modern-task",
             attestation_path=_attestation(tmp_path),
+            rights_authority=_rights_authority(),
             publish_root=tmp_path / "publish",
             rights_rows=[],
             reserved_identity=_reserved_identity("pre-contract-content", 1),
@@ -446,6 +508,9 @@ def test_modern_record_requires_complete_matching_manifest_identity(
             "processResult": "completed",
             "qualityResult": "passed",
             "eligibilityResult": "passed",
+            "rightsResult": "passed",
+            "rightsAuthorityRef": "posts/article/test/5.review/media_ref_review.json",
+            "rightsAuthorityDigest": "sha256:" + "9" * 64,
             "usageScope": "research",
             "evidenceRef": evidence_ref,
             "evidenceDigest": evidence_digest,
@@ -458,10 +523,11 @@ def test_modern_record_requires_complete_matching_manifest_identity(
 
     with pytest.raises(ObjectTransactionError, match="IDENTITY_INVALID"):
         build_content_pool_fields(
-            source_manifest={"contentId": "modern-content", "version": 1},
+            source_manifest={"contentId": "modern-content", "version": 1, "variantPurpose": "original"},
             canonical_ref="article/modern/1",
             source_task_id="modern-task",
             attestation_path=_attestation(tmp_path),
+            rights_authority=_rights_authority(),
             publish_root=tmp_path / "publish",
             rights_rows=[],
             reserved_identity=_reserved_identity("modern-content", 1),
@@ -491,6 +557,9 @@ def test_complete_manifest_identity_must_match_pool_record(tmp_path: Path) -> No
             "processResult": "completed",
             "qualityResult": "passed",
             "eligibilityResult": "passed",
+            "rightsResult": "passed",
+            "rightsAuthorityRef": "posts/article/test/5.review/media_ref_review.json",
+            "rightsAuthorityDigest": "sha256:" + "9" * 64,
             "usageScope": "research",
             "evidenceRef": evidence_ref,
             "evidenceDigest": evidence_digest,
@@ -503,10 +572,11 @@ def test_complete_manifest_identity_must_match_pool_record(tmp_path: Path) -> No
 
     with pytest.raises(ObjectTransactionError, match="manifest/pool record identity drift"):
         build_content_pool_fields(
-            source_manifest={"contentId": "modern-content", "version": 1},
+            source_manifest={"contentId": "modern-content", "version": 1, "variantPurpose": "original"},
             canonical_ref="article/modern/1",
             source_task_id="modern-task",
             attestation_path=_attestation(tmp_path),
+            rights_authority=_rights_authority(),
             publish_root=tmp_path / "publish",
             rights_rows=[],
             reserved_identity=_reserved_identity("modern-content", 1),
@@ -526,6 +596,7 @@ def test_same_content_version_conflicts(tmp_path: Path) -> None:
             canonical_ref="article/guide/a-commercial/1",
             source_task_id="task-2",
             attestation_path=_attestation(tmp_path),
+            rights_authority=_rights_authority(),
             publish_root=tmp_path / "publish",
             rights_rows=_commercial_rights(),
             reserved_identity=_reserved_identity(
@@ -543,6 +614,10 @@ def test_explicit_content_record_uses_content_identity_not_author_identity(
     source_identity, source_digest = _source_identity(execution_id)
     attestation = root / "attestation.json"
     attestation.write_text('{"decision":"approved"}\n', encoding="utf-8")
+    review = root / "5.review/media_ref_review.json"
+    review.parent.mkdir(parents=True, exist_ok=True)
+    review.write_text('{"passed":true}\n', encoding="utf-8")
+    review_digest = "sha256:" + hashlib.sha256(review.read_bytes()).hexdigest()
     (root / "manifest.json").write_text(
         json.dumps(
             {
@@ -558,6 +633,9 @@ def test_explicit_content_record_uses_content_identity_not_author_identity(
                     "processResult": "completed",
                     "qualityResult": "passed",
                     "usageScope": "research",
+                    "rightsResult": "passed",
+                    "rightsAuthorityRef": "posts/article/work/1/5.review/media_ref_review.json",
+                    "rightsAuthorityDigest": review_digest,
                     "evidenceRef": "attestation.json",
                     "evidenceDigest": (
                         "sha256:"

@@ -3,39 +3,219 @@
   "$id": "quwoquan_data/schema/source/atomic_source_unit_meta.schema.json",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schema", "stage", "executionId", "executionBinding", "sourceUnitId", "sourceId", "targetRef", "carrier", "title", "sourceClass", "sourceUseMode", "purpose", "rightsClue", "canonicalUrl", "fetchedAt", "rawSha256", "sourceMarkdownSha256"],
+  "required": [
+    "schema",
+    "stage",
+    "executionId",
+    "executionBinding",
+    "sourceUnitId",
+    "sourcePlanRef",
+    "sourcePlanDigest",
+    "chosenCandidateDigest",
+    "sourceId",
+    "targetRef",
+    "carrier",
+    "title",
+    "sourceClass",
+    "sourceUseMode",
+    "purpose",
+    "rightsClue",
+    "canonicalUrl",
+    "fetchedAt",
+    "rawSha256",
+    "sourceMarkdownSha256"
+  ],
   "properties": {
-    "schema": {"const": "quwoquan_data.atomic_source_unit"},
-    "stage": {"const": "1.download"},
-    "executionId": {"type": "string", "minLength": 1},
-    "executionBinding": {"const": "frozen"},
-    "sourceUnitId": {"type": "string", "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$"},
-    "sourceId": {"type": "string", "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$"},
-    "targetRef": {"type": "string", "pattern": "^(?:/?entity/[^/]+/[^/]+/[^/]+|entities/[^/]+/[^/]+/[^/]+|posts/(?:article|image|video)/.+)$"},
-    "carrier": {"enum": ["homepage", "article", "image", "video"]},
-    "title": {"type": "string", "minLength": 1},
-    "sourceClass": {"type": "string", "minLength": 1},
-    "sourceUseMode": {"enum": ["licensed_adaptation", "factual_reference_only", "rights_audit_only"]},
-    "purpose": {"type": "string", "minLength": 1},
-    "rightsClue": {"type": "string", "minLength": 1},
-    "canonicalUrl": {"type": "string", "pattern": "^(?:|https://)"},
-    "fetchedAt": {"type": "string", "minLength": 1},
-    "rawSha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
-    "sourceMarkdownSha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "schema": {
+      "const": "quwoquan_data.atomic_source_unit"
+    },
+    "stage": {
+      "const": "1.download"
+    },
+    "executionId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "executionBinding": {
+      "const": "frozen"
+    },
+    "sourceUnitId": {
+      "type": "string",
+      "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$"
+    },
+    "sourcePlanRef": {
+      "type": "string",
+      "pattern": "^sources/plans/[0-9a-f]{64}\\.json$"
+    },
+    "sourcePlanDigest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "chosenCandidateDigest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "sourceId": {
+      "type": "string",
+      "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$"
+    },
+    "targetRef": {
+      "type": "string",
+      "pattern": "^(?:/?entity/[^/]+/[^/]+/[^/]+|entities/[^/]+/[^/]+/[^/]+|posts/(?:article|image|video)/.+)$"
+    },
+    "carrier": {
+      "enum": [
+        "homepage",
+        "article",
+        "image",
+        "video"
+      ]
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1
+    },
+    "sourceClass": {
+      "type": "string",
+      "minLength": 1
+    },
+    "sourceUseMode": {
+      "enum": [
+        "licensed_adaptation",
+        "factual_reference_only",
+        "rights_audit_only"
+      ]
+    },
+    "purpose": {
+      "type": "string",
+      "minLength": 1
+    },
+    "rightsClue": {
+      "type": "string",
+      "minLength": 1
+    },
+    "canonicalUrl": {
+      "type": "string",
+      "pattern": "^(?:|https://)"
+    },
+    "fetchedAt": {
+      "type": "string",
+      "minLength": 1
+    },
+    "rawSha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "sourceMarkdownSha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
     "acquisition": {
-      "type": "object", "additionalProperties": false,
-      "required": ["receiptRef", "assetId", "assetRef", "contentSha256"],
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "receiptRef",
+        "assetId",
+        "assetRef",
+        "contentSha256"
+      ],
       "dependentRequired": {
-        "posterAssetRef": ["posterContentSha256"],
-        "posterContentSha256": ["posterAssetRef"]
+        "posterAssetRef": [
+          "posterContentSha256"
+        ],
+        "posterContentSha256": [
+          "posterAssetRef"
+        ]
       },
       "properties": {
-        "receiptRef": {"type": "string", "pattern": "^receipts/[^/]+\\.json$"},
-        "assetId": {"type": "string", "minLength": 1},
-        "assetRef": {"type": "string", "pattern": "^assets/[^/]+$"},
-        "contentSha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
-        "posterAssetRef": {"type": "string", "pattern": "^assets/[^/]+$"},
-        "posterContentSha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+        "receiptRef": {
+          "type": "string",
+          "pattern": "^receipts/[^/]+\\.json$"
+        },
+        "assetId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "assetRef": {
+          "type": "string",
+          "pattern": "^assets/[^/]+$"
+        },
+        "contentSha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "posterAssetRef": {
+          "type": "string",
+          "pattern": "^assets/[^/]+$"
+        },
+        "posterContentSha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "bytes": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "mimeType": {
+          "type": "string",
+          "pattern": "^(image|video)/"
+        },
+        "derivativeBinding": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "originalSha256",
+            "originalBytes",
+            "originalMimeType",
+            "policy",
+            "profile",
+            "derivedSha256",
+            "derivedBytes",
+            "derivedMimeType",
+            "derivedExtension"
+          ],
+          "properties": {
+            "originalSha256": {
+              "type": "string",
+              "pattern": "^sha256:[0-9a-f]{64}$"
+            },
+            "originalBytes": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "originalMimeType": {
+              "type": "string",
+              "pattern": "^image/"
+            },
+            "policy": {
+              "const": "source_unit_asset_budget"
+            },
+            "profile": {
+              "enum": [
+                "homepage",
+                "article",
+                "image",
+                "video"
+              ]
+            },
+            "derivedSha256": {
+              "type": "string",
+              "pattern": "^sha256:[0-9a-f]{64}$"
+            },
+            "derivedBytes": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "derivedMimeType": {
+              "type": "string",
+              "pattern": "^image/"
+            },
+            "derivedExtension": {
+              "type": "string",
+              "pattern": "^\\.[A-Za-z0-9]+$"
+            }
+          }
+        }
       }
     }
   }

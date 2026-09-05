@@ -14,11 +14,11 @@ def aggregate_release_result(
     entity_count: int,
     post_count: int,
     creator_count: int,
+    carrier_counts: Mapping[str, int],
     canonical_merkle: str,
     manifest_digest: str,
     environment_selection: Any | None,
     excluded: tuple[Mapping[str, str], ...],
-    pool_wide: bool,
     sample_plan_ref: str | None,
     sample_plan_digest: str | None,
 ) -> dict[str, Any]:
@@ -30,6 +30,7 @@ def aggregate_release_result(
         "entityCount": entity_count,
         "postCount": post_count,
         "creatorCount": creator_count,
+        "counts": dict(carrier_counts),
         "canonicalMerkle": canonical_merkle,
         "manifestDigest": manifest_digest,
         "idempotent": False,
@@ -44,18 +45,16 @@ def aggregate_release_result(
                 "counts": environment_selection.counts,
             }
         )
-        if environment_selection.environment is not None:
-            result["targetEnvironment"] = environment_selection.environment
         if environment_selection.milestone is not None:
             result["milestone"] = environment_selection.milestone
             result["milestoneTargets"] = dict(
                 environment_selection.milestone_targets or {}
             )
-        result["samplePlanRef"] = sample_plan_ref
-        result["samplePlanDigest"] = sample_plan_digest
-    if pool_wide:
-        result["excluded"] = list(excluded)
-        result["excludedCount"] = len(excluded)
+        if sample_plan_ref is not None:
+            result["samplePlanRef"] = sample_plan_ref
+            result["samplePlanDigest"] = sample_plan_digest
+    result["excluded"] = list(excluded)
+    result["excludedCount"] = len(excluded)
     return result
 
 

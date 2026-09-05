@@ -26,7 +26,7 @@
     "rightsBasis": { "type": "string", "minLength": 1 },
     "commercialAuthorizationStatus": { "enum": ["verified", "unverified"] },
     "publicationAdmission": {
-      "enum": ["research_release", "commercial_release", "risk_accepted_attribution_only"]
+      "enum": ["research_release", "commercial_release"]
     },
     "authorizationProofUrl": {
       "type": ["string", "null"],
@@ -35,10 +35,6 @@
     "termsUrl": {
       "type": ["string", "null"],
       "format": "uri"
-    },
-    "riskAcceptanceId": {
-      "type": ["string", "null"],
-      "minLength": 1
     },
     "audioRightsStatus": {
       "enum": [

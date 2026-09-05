@@ -33,6 +33,8 @@
         "null"
       ],
       "enum": [
+        "M1",
+        "M10",
         "M100",
         "M1000",
         "M10000",
@@ -162,7 +164,7 @@
         "properties": {
           "sampleId": {
             "type": "string",
-            "pattern": "^(m(100|1000|10000)|baseline)-(homepage|article|image|video)-[0-9]{3}$"
+            "pattern": "^(m(1|10|100|1000|10000)|baseline)-(homepage|article|image|video)-[0-9]{3}$"
           },
           "carrier": {
             "$ref": "#/$defs/carrier"

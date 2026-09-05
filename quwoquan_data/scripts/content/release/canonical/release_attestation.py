@@ -67,6 +67,7 @@ class ReleaseAttestation:
     research_accepted_count: int
     commercial_accepted_count: int
     execution_ids: tuple[str, ...]
+    carrier_counts: dict[str, int]
     entity_count: int
     post_count: int
     creator_count: int
@@ -133,6 +134,14 @@ class ReleaseAttestation:
             raise ReleaseAttestationError("recordedAt is required")
         if any(count < 0 for count in self.counts):
             raise ReleaseAttestationError("release counts must be non-negative")
+        if set(self.carrier_counts) != {"homepage", "article", "image", "video", "total"}:
+            raise ReleaseAttestationError("carrierCounts is incomplete")
+        if any(isinstance(value, bool) or not isinstance(value, int) or value < 0 for value in self.carrier_counts.values()):
+            raise ReleaseAttestationError("carrierCounts is invalid")
+        if self.carrier_counts["total"] != sum(self.carrier_counts[key] for key in ("homepage", "article", "image", "video")):
+            raise ReleaseAttestationError("carrierCounts.total is inconsistent")
+        if self.carrier_counts["homepage"] != self.entity_count or sum(self.carrier_counts[key] for key in ("article", "image", "video")) != self.post_count:
+            raise ReleaseAttestationError("carrierCounts differs from entity/post counts")
         if len(self.execution_ids) != len(set(self.execution_ids)):
             raise ReleaseAttestationError("executionIds must be unique")
         if not self.source_digests:
@@ -256,6 +265,7 @@ class ReleaseAttestation:
             "researchAcceptedCount": self.research_accepted_count,
             "commercialAcceptedCount": self.commercial_accepted_count,
             "executionIds": list(self.execution_ids),
+            "carrierCounts": dict(self.carrier_counts),
             "entityCount": self.entity_count,
             "postCount": self.post_count,
             "creatorCount": self.creator_count,
@@ -324,6 +334,7 @@ class ReleaseAttestation:
                     "commercialAcceptedCount"
                 ),
                 execution_ids=document.string_sequence("executionIds"),
+                carrier_counts={key: int(value) for key, value in document.object("carrierCounts").to_document().items()},
                 entity_count=document.integer("entityCount"),
                 post_count=document.integer("postCount"),
                 creator_count=document.integer("creatorCount"),

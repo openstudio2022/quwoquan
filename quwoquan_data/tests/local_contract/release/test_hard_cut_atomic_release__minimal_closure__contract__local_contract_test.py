@@ -3,13 +3,13 @@
 # spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-020.t9
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 
 import pytest
 
 from content.release.canonical.object_transaction_contract import ObjectTransactionError
-from content.source import independent_asset_review
 from content.release.canonical.publish_object import _review_approved, _target_object
 from core.schema import assert_valid
 from core.stage_artifact_contract import required_stage_artifacts
@@ -36,7 +36,14 @@ def _target_set(refs: list[str]) -> dict[str, object]:
         },
         "targetCount": len(refs),
         "targetRefs": refs,
-        "targets": [{"name": f"target-{index}", "entityType": "地点/景区"} for index, _ in enumerate(refs)],
+        "targets": [
+            {
+                "name": f"target-{index}", "entityType": "地点/景区",
+                "publishAngle": "angle", "publishTitle": "title",
+                "publishSeq": index + 1,
+            }
+            for index, _ in enumerate(refs)
+        ],
     }
 
 
@@ -83,7 +90,12 @@ def test_review_attestation_schema_accepts_minimal_four_file_closure() -> None:
                 },
             },
         },
-        "mediaRefReview": {"status": "passed", "issues": []},
+        "mediaRefReview": {
+            "status": "passed",
+            "issues": [],
+            "ref": "5.review/media_ref_review.json",
+            "digest": "sha256:" + "d" * 64,
+        },
         "repair": {"status": "not_required"},
     }
     assert_valid(document, "content", "review_attestation")
@@ -150,8 +162,9 @@ def test_publish_review_accepts_only_minimal_four_file_closure(tmp_path: Path) -
         "resultHash": "sha256:" + "c" * 64,
     }
     _write(review / "reviewer_result.json", reviewer)
+    media_review_path = review / "media_ref_review.json"
     _write(
-        review / "media_ref_review.json",
+        media_review_path,
         {
             "schema": "quwoquan_data.media_ref_review",
             "stage": "5.review",
@@ -162,6 +175,10 @@ def test_publish_review_accepts_only_minimal_four_file_closure(tmp_path: Path) -
             "referenceIssues": [],
             "rightsReviews": [],
         },
+    )
+    _write(
+        review.parent / "manifest.json",
+        {"contentType": "article", "publishMediaMode": "text_only", "assets": []},
     )
     attestation = {
         "schema": "quwoquan_data.review_attestation",
@@ -184,7 +201,12 @@ def test_publish_review_accepts_only_minimal_four_file_closure(tmp_path: Path) -
                 },
             },
         },
-        "mediaRefReview": {"status": "passed", "issues": []},
+        "mediaRefReview": {
+            "status": "passed",
+            "issues": [],
+            "ref": "5.review/media_ref_review.json",
+            "digest": "sha256:" + hashlib.sha256(media_review_path.read_bytes()).hexdigest(),
+        },
         "repair": {"status": "not_required"},
     }
     _write(review / "attestation.json", attestation)
@@ -194,167 +216,6 @@ def test_publish_review_accepts_only_minimal_four_file_closure(tmp_path: Path) -
     _write(review / "reviewer_result.json", reviewer)
     with pytest.raises(ObjectTransactionError, match="independent reviewer"):
         _review_approved(review.parent)
-
-
-def test_independent_asset_review_accepts_only_current_reviewer_contract(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    output_root = tmp_path / "output"
-    object_ref = "posts/image/angle/title/1"
-    source_digest = "sha256:" + "1" * 64
-    judgment = {
-        "rightsStatus": "unverified",
-        "authorizationRequired": True,
-        "distributionDecision": "research_allowed",
-        "safetyStatus": "passed",
-        "entityMatch": "matched",
-        "qualityStatus": "passed",
-        "privacyRisk": "none",
-        "minorRisk": "none",
-        "maliciousMediaRisk": "none",
-        "watermarkStatus": "absent",
-        "findings": ["independent review passed"],
-    }
-    receipt = {
-        "manifestId": "image-acquisition-1",
-        "sourceRevision": "source-revision-1",
-        "sourceDigest": source_digest,
-        "entityCatalogDigest": "sha256:" + "2" * 64,
-        "receiptDigest": "sha256:" + "3" * 64,
-        "assets": [
-            {
-                "assetId": "image-1",
-                "entityId": "entity-1",
-                "observedEntityId": "entity-1",
-                "contentSha256": "sha256:" + "4" * 64,
-                "assetRef": "cas/image-1.jpg",
-                "sourceUrl": "https://example.com/image-1.jpg",
-                "platform": "example",
-                "creator": "creator",
-                "capturedAt": "2026-09-03T00:00:00Z",
-                "license": "unknown",
-                "termsUrl": "https://example.com/terms",
-                "authorizationProof": "",
-                "rightsIssues": ["commercial authorization missing"],
-                "acquisitionStatus": "acquired",
-                "rightsStatus": "unverified",
-                "authorizationRequired": True,
-                "distributionDecision": "research_allowed",
-                "safetyReview": {
-                    "status": "passed",
-                    "entityMatch": "matched",
-                    "privacyRisk": "none",
-                    "minorRisk": "none",
-                    "maliciousMediaRisk": "none",
-                    "watermarkStatus": "absent",
-                },
-            }
-        ],
-    }
-    manifest = {
-        "executionId": EXECUTION_ID,
-        "sourceDigest": {"digest": source_digest},
-    }
-    author = {
-        "executionId": EXECUTION_ID,
-        "ref": object_ref,
-        "stage": "author",
-        "agent": {
-            "provider": "cursor-host",
-            "model": "composer-2.5",
-            "runId": "author-run-1",
-            "promptSha256": "sha256:" + "5" * 64,
-        },
-        "files": [],
-        "gates": [],
-    }
-
-    monkeypatch.setattr(
-        independent_asset_review,
-        "_load_acquisition",
-        lambda *_args, **_kwargs: (
-            receipt,
-            "acquisition/receipts/image-acquisition-1.json",
-            "sha256:" + "6" * 64,
-        ),
-    )
-
-    def load_document(_path: Path, *, schema_name: str, **_kwargs: object):
-        if schema_name == "content_execution_manifest":
-            return manifest, "tasks/execution_manifest.json", "sha256:" + "7" * 64
-        return author, "tasks/author.json", "sha256:" + "8" * 64
-
-    monkeypatch.setattr(independent_asset_review, "load_document", load_document)
-    reviewer_path = output_root / "tasks/reviewer.json"
-    reviewer = {
-        "schema": "quwoquan_data.reviewer_result",
-        "stage": "5.review",
-        "executionId": EXECUTION_ID,
-        "objectRef": object_ref,
-        "actor": {
-            "host": "cursor",
-            "sessionId": "review-session-1",
-            "modelFamily": "composer",
-            "invocation": {
-                "provider": "cursor-host",
-                "model": "composer-2.5",
-                "runId": "review-run-1",
-            },
-        },
-        "verdict": "passed",
-        "issues": [],
-        "findings": judgment["findings"],
-        "resultHash": independent_asset_review.canonical_digest(judgment),
-    }
-    _write(reviewer_path, reviewer)
-
-    stable = independent_asset_review._prepare_stable(
-        output_root=output_root,
-        acquisition_receipt_path=output_root / "acquisition.json",
-        asset_kind="image",
-        asset_id="image-1",
-        execution_manifest_path=output_root / "execution_manifest.json",
-        author_evidence_path=output_root / "author.json",
-        reviewer_evidence_path=reviewer_path,
-        object_ref=object_ref,
-        judgment=judgment,
-    )
-
-    assert stable["reviewerExecution"] == {
-        "executionId": "host-review:review-session-1",
-        "objectRef": object_ref,
-        "provider": "cursor-host",
-        "model": "composer-2.5",
-        "modelFamily": "composer",
-        "runId": "review-run-1",
-        "resultHash": reviewer["resultHash"],
-        "evidenceRef": "tasks/reviewer.json",
-        "evidenceSha256": independent_asset_review.file_digest(reviewer_path),
-    }
-
-    _write(
-        reviewer_path,
-        {
-            "schema": "quwoquan_data.host_source_review_result",
-            "actor": {"sessionId": "legacy-session"},
-            "resultDigest": reviewer["resultHash"],
-        },
-    )
-    with pytest.raises(
-        independent_asset_review.IndependentAssetReviewError,
-        match="asset independent reviewer evidence",
-    ):
-        independent_asset_review._prepare_stable(
-            output_root=output_root,
-            acquisition_receipt_path=output_root / "acquisition.json",
-            asset_kind="image",
-            asset_id="image-1",
-            execution_manifest_path=output_root / "execution_manifest.json",
-            author_evidence_path=output_root / "author.json",
-            reviewer_evidence_path=reviewer_path,
-            object_ref=object_ref,
-            judgment=judgment,
-        )
 
 
 def test_stage_gate_fails_when_declared_target_directory_is_missing(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -377,6 +238,8 @@ def test_release_cohort_schema_requires_exact_four_carrier_counts() -> None:
     cohort = {
         "schema": "quwoquan_data.release_cohort",
         "releaseClass": "research",
+        "milestone": "M1",
+        "producerBaselineRevision": "a" * 40,
         "objectRefs": ["entities/地点/景区/西湖", "posts/article/攻略/西湖/1"],
         "expectedCarrierCounts": {"homepage": 1, "article": 1, "image": 0, "video": 0},
     }
@@ -384,6 +247,7 @@ def test_release_cohort_schema_requires_exact_four_carrier_counts() -> None:
     cohort["expectedCarrierCounts"].pop("video")
     with pytest.raises(ValueError, match="video"):
         assert_valid(cohort, "release", "release_cohort")
+
 
 
 def test_publish_object_rejects_target_outside_target_set(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

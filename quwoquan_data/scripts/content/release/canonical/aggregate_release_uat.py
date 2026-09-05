@@ -6,9 +6,7 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
-from content.release.canonical.environment_release_selection import (
-    EnvironmentReleaseSelection,
-)
+from content.release.canonical.environment_release_candidate import EnvironmentReleaseSelection
 from content.release.canonical.object_source_identity import source_identity_set
 from content.release.canonical.object_transaction_contract import (
     ObjectTransactionError,
@@ -67,7 +65,15 @@ def build_release_uat_sample_plan_artifact(
     sampling_authority_binding: Mapping[str, str] | None,
 ) -> tuple[dict[str, Any] | None, str | None]:
     """Build and write the release-bound UAT plan for every content selection."""
-    if environment_selection is None:
+    if environment_selection is None or environment_selection.milestone is None:
+        if any(
+            item is not None
+            for item in (sampling_authority_artifact_root, sampling_authority_binding)
+        ):
+            raise ObjectTransactionError(
+                "DATA.RELEASE.UAT_SAMPLE_AUTHORITY_UNEXPECTED: sampling authority "
+                "requires milestone attainment"
+            )
         return None, None
 
     sampling_authority: Mapping[str, Any] | None = None

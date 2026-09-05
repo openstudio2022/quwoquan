@@ -8,9 +8,9 @@ from pathlib import Path
 from core import paths as _paths
 from core.data_root import DataRoot
 from core.paths import (
-    OBJECT_STAGES, STAGE_COMPOSE, STAGE_DOWNLOAD, WORKSPACE_ROOT_BY_COMMAND,
+    OBJECT_STAGES, STAGE_COMPOSE, STAGE_DOWNLOAD,
     _INTENT_LABEL_MAX, _LABEL_STRIP_RE, execution_root, is_execution_id,
-    normalize_execution_id, normalize_execution_workspace_command,
+    normalize_execution_id,
 )
 
 
@@ -56,22 +56,6 @@ def iter_all_execution_dirs() -> list[Path]:
 
 def execution_id_from_dir(execution_dir: Path) -> str:
     return execution_dir.name if is_execution_id(execution_dir.name) else ""
-
-def execution_command_root(execution_id: str, command: str) -> Path:
-    name = WORKSPACE_ROOT_BY_COMMAND[normalize_execution_workspace_command(command)]
-    return _paths.DATA_LOCAL_ROOT / "workspace" / "object-transactions" / execution_id / name
-
-def execution_inputs_dir(execution_id: str, command: str, step: str) -> Path:
-    return execution_command_root(execution_id, command) / "inputs" / step
-
-def execution_results_dir(execution_id: str, command: str, step: str) -> Path:
-    return execution_command_root(execution_id, command) / "results" / step
-
-def execution_assistant_task(execution_id: str, command: str, step: str) -> Path:
-    return execution_command_root(execution_id, command) / "assistant_tasks" / f"{step}.json"
-
-def execution_sources_dir(execution_id: str, entity_name: str) -> Path:
-    return execution_command_root(execution_id, "source") / "sources" / entity_name
 
 def ensure_object_stages(object_dir: Path) -> None:
     for stage in OBJECT_STAGES:
@@ -128,10 +112,4 @@ def ensure_execution_layout(execution_id: str) -> Path:
     root.mkdir(parents=True, exist_ok=True)
     execution_shared_dir(execution_id).mkdir(parents=True, exist_ok=True)
     execution_data(execution_id).entities_dir().mkdir(exist_ok=True)
-    return root
-
-def ensure_execution_command_layout(execution_id: str, command: str) -> Path:
-    root = execution_command_root(execution_id, command)
-    for child in ("inputs", "results", "assistant_tasks"):
-        (root / child).mkdir(parents=True, exist_ok=True)
     return root

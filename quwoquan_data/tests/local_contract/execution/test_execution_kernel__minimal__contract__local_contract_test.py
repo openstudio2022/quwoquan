@@ -70,6 +70,26 @@ def _open_input(tmp_path: Path, refs: list[dict[str, str]]) -> Path:
     return _write(tmp_path / "open.json", {"inputRefs": refs})
 
 
+def test_producer_receipt_sequence_ends_at_release_and_rejects_ship(
+    kernel: tuple[Path, Path], tmp_path: Path
+) -> None:
+    assert stage_receipt.RECEIPT_STAGES == (
+        "0.plan",
+        "sources",
+        "1.download",
+        "2.quality",
+        "3.compose",
+        "4.draft",
+        "5.review",
+        "publish",
+        "release",
+    )
+    with pytest.raises(stage_receipt.StageProtocolError, match="未知 stage"):
+        stage_receipt.open_stage(
+            EXECUTION_ID, "ship", _open_input(tmp_path / "ship", [])
+        )
+
+
 def _close_input(
     tmp_path: Path,
     *,
@@ -182,6 +202,28 @@ def test_homepage_target_ref_matches_execution_object_directory(
     assert root / target_set["targetRefs"][0] == root / "entities/地点/景区/西湖"
 
 
+def test_init_rejects_non_homepage_target_without_publish_seq(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    output = tmp_path / "output"
+    tasks = output / "data/tasks"
+    local = output / "data/local"
+    for module in (paths, task_init.paths):
+        monkeypatch.setattr(module, "OUTPUT_ROOT", output)
+        monkeypatch.setattr(module, "DATA_EXECUTIONS_ROOT", tasks)
+        monkeypatch.setattr(module, "DATA_LOCAL_ROOT", local)
+    demand, bindings = _inputs(output)
+    bindings_doc = json.loads(bindings.read_text(encoding="utf-8"))
+    bindings_doc["targets"][0].pop("publishSeq")
+    _write(bindings, bindings_doc)
+
+    with pytest.raises((task_init.TaskInitError, ValueError), match="publishSeq|发布坐标"):
+        task_init.initialize_task(
+            carrier_demand_path=demand,
+            candidate_bindings_path=bindings,
+        )
+
+
 def test_open_freezes_exact_refs_and_enforces_order(kernel: tuple[Path, Path], tmp_path: Path) -> None:
     _output, root = kernel
     open_input = _open_input(tmp_path, [{"scope": "execution", "ref": "execution_manifest.json"}])
@@ -237,7 +279,7 @@ def test_blocked_close_stops_following_stages(kernel: tuple[Path, Path], tmp_pat
     _output, root = kernel
     open_input = _open_input(tmp_path, [])
     stage_receipt.open_stage(EXECUTION_ID, "0.plan", open_input)
-    issue = {"code": "DATA.TEST", "message": "等待人工", "recoveryStage": "0.plan"}
+    issue = {"code": "DATA.TEST", "message": "等待人工"}
     close_input = _close_input(
         tmp_path,
         verdict="blocked",
@@ -403,7 +445,7 @@ def test_closed_reopen_and_blocked_execution_are_terminal(
     with pytest.raises(stage_receipt.StageProtocolError, match="已关闭"):
         stage_receipt.open_stage(EXECUTION_ID, "0.plan", open_input)
     stage_receipt.open_stage(EXECUTION_ID, "sources", _open_input(tmp_path / "sources", []))
-    issue = {"code": "DATA.TEST", "message": "stop", "recoveryStage": "0.plan"}
+    issue = {"code": "DATA.TEST", "message": "stop"}
     blocked = _close_input(
         tmp_path / "blocked",
         verdict="blocked",
@@ -603,3 +645,206 @@ def test_init_reads_each_source_once_and_embeds_canonical_values(
     manifest = json.loads((root / "execution_manifest.json").read_text(encoding="utf-8"))
     assert request["submittedInputs"] == manifest["submittedInputs"]
     assert request["submittedInputs"]["carrierDemand"]["quota"] == 1
+
+
+
+def _canonical_write(path: Path, value: object) -> Path:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":")) + "\n",
+        encoding="utf-8",
+    )
+    return path
+
+
+def _blocked_retry_execution(output: Path, execution_id: str, *, verdict: str = "blocked") -> Path:
+    root = output / "data/tasks" / execution_id
+    manifest = {
+        "schema": "quwoquan_data.content_execution_manifest",
+        "executionId": execution_id,
+        "carrier": "article",
+        "familyRef": {"ref": "content/travel/article/article", "digest": "sha256:" + "1" * 64},
+        "initInputs": {
+            "carrierDemand": {"scope": "output", "ref": "inputs/previous-demand.json", "digest": "sha256:" + "2" * 64},
+            "immutableCandidateBindings": {"scope": "output", "ref": "inputs/previous-bindings.json", "digest": "sha256:" + "3" * 64},
+        },
+        "submittedInputs": {
+            "carrierDemand": {
+                "schema": "quwoquan_data.carrier_demand", "status": "confirmed",
+                "executionId": execution_id, "carrier": "article",
+                "familyRef": "content/travel/article/article", "quota": 1, "retryOf": None,
+            },
+            "immutableCandidateBindings": {
+                "schema": "quwoquan_data.immutable_candidate_bindings", "executionId": execution_id,
+                "carrier": "article", "entityCatalogDigest": "sha256:" + "4" * 64,
+                "candidateCount": 1,
+                "targets": [{"name": "西湖", "entityType": "地点/景区", "publishAngle": "攻略", "publishTitle": "西湖一日游", "publishSeq": 1}],
+            },
+        },
+        "request": {"ref": "0.plan/request.json", "digest": "sha256:" + "5" * 64},
+        "targetSet": {"ref": "0.plan/target_set.json", "digest": "sha256:" + "6" * 64},
+        "retryOf": None,
+    }
+    _canonical_write(root / "execution_manifest.json", manifest)
+    submitted_input = {"inputRefs": []}
+    open_doc = {
+        "schema": "quwoquan_data.stage_open_request", "executionId": execution_id,
+        "stage": "0.plan", "sequence": 1, "predecessor": None,
+        "input": {"digest": "sha256:" + hashlib.sha256((json.dumps(submitted_input, ensure_ascii=False, sort_keys=True, separators=(",", ":")) + "\n").encode()).hexdigest()},
+        "submittedInput": submitted_input, "inputRefs": [],
+    }
+    open_path = _canonical_write(root / "_shared/stage-open/001-0.plan.json", open_doc)
+    result_refs: list[dict[str, str]] = []
+    frozen_results: list[dict[str, str]] = []
+    facts = [{"name": "fixture", "status": "failed", "command": "false", "exitCode": 1, "observedAt": "2026-09-02T00:00:00Z"}]
+    if verdict == "pass":
+        result = _canonical_write(root / "0.plan/result.json", {"ok": True})
+        result_refs = [{"scope": "execution", "ref": "0.plan/result.json"}]
+        frozen_results = [{**result_refs[0], "digest": "sha256:" + hashlib.sha256(result.read_bytes()).hexdigest()}]
+        facts = [{"name": "fixture", "status": "passed", "command": "true", "exitCode": 0, "observedAt": "2026-09-02T00:00:00Z", "evidenceRef": result_refs[0], "evidenceDigest": "sha256:" + hashlib.sha256(result.read_bytes()).hexdigest()}]
+    typed_issues = [] if verdict == "pass" else [{"code": "DATA.RETRY", "message": "blocked"}]
+    submitted_close = {
+        "actor": {"host": "cursor", "modelFamily": "gpt", "sessionId": "previous", "invocation": None},
+        "verdict": verdict, "typedIssues": typed_issues,
+        "resultRefs": result_refs, "verifierFacts": facts,
+    }
+    receipt = {
+        "schema": "quwoquan_data.stage_receipt", "executionId": execution_id,
+        "stage": "0.plan", "sequence": 1, "predecessor": None,
+        "openRequest": {"scope": "execution", "ref": "_shared/stage-open/001-0.plan.json", "digest": "sha256:" + hashlib.sha256(open_path.read_bytes()).hexdigest()},
+        "closeInput": {"digest": "sha256:" + hashlib.sha256((json.dumps(submitted_close, ensure_ascii=False, sort_keys=True, separators=(",", ":")) + "\n").encode()).hexdigest()},
+        "submittedClose": submitted_close,
+        "actor": submitted_close["actor"], "verdict": verdict,
+        "typedIssues": typed_issues, "inputRefs": [],
+        "resultRefs": frozen_results, "verifierFacts": facts,
+    }
+    return _canonical_write(root / "_shared/receipts/001-0.plan.json", receipt)
+
+
+def test_init_retry_accepts_cross_day_blocked_execution_and_freezes_terminal_receipt(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    output = tmp_path / "output"
+    tasks = output / "data/tasks"
+    local = output / "data/local"
+    for module in (paths, task_init.paths):
+        monkeypatch.setattr(module, "OUTPUT_ROOT", output)
+        monkeypatch.setattr(module, "DATA_EXECUTIONS_ROOT", tasks)
+        monkeypatch.setattr(module, "DATA_LOCAL_ROOT", local)
+    previous_id = "20260902--travel-article-previous--other-scope--scale-999"
+    terminal = _blocked_retry_execution(output, previous_id)
+    demand, bindings = _inputs(output)
+    demand_doc = json.loads(demand.read_text(encoding="utf-8"))
+    demand_doc["retryOf"] = previous_id
+    _write(demand, demand_doc)
+
+    task_init.initialize_task(carrier_demand_path=demand, candidate_bindings_path=bindings)
+    request = json.loads((tasks / EXECUTION_ID / "0.plan/request.json").read_text(encoding="utf-8"))
+    manifest = json.loads((tasks / EXECUTION_ID / "execution_manifest.json").read_text(encoding="utf-8"))
+    expected = {
+        "executionId": previous_id,
+        "terminalReceipt": {
+            "scope": "output",
+            "ref": f"data/tasks/{previous_id}/_shared/receipts/001-0.plan.json",
+            "digest": "sha256:" + hashlib.sha256(terminal.read_bytes()).hexdigest(),
+        },
+    }
+    assert request["retryOf"] == expected
+    assert manifest["retryOf"] == expected
+
+
+def test_init_retry_rejects_non_blocked_terminal_receipt(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    output = tmp_path / "output"
+    tasks = output / "data/tasks"
+    local = output / "data/local"
+    for module in (paths, task_init.paths):
+        monkeypatch.setattr(module, "OUTPUT_ROOT", output)
+        monkeypatch.setattr(module, "DATA_EXECUTIONS_ROOT", tasks)
+        monkeypatch.setattr(module, "DATA_LOCAL_ROOT", local)
+    previous_id = "20260901--travel-article-previous--other-scope--full-123"
+    root = output / "data/tasks" / previous_id
+    _canonical_write(root / "0.plan/result.json", {"ok": True})
+    _blocked_retry_execution(output, previous_id, verdict="pass")
+    demand, bindings = _inputs(output)
+    demand_doc = json.loads(demand.read_text(encoding="utf-8"))
+    demand_doc["retryOf"] = previous_id
+    _write(demand, demand_doc)
+    with pytest.raises(task_init.TaskInitError, match="terminal receipt 必须为 blocked|receipt 链不可信"):
+        task_init.initialize_task(carrier_demand_path=demand, candidate_bindings_path=bindings)
+
+
+@pytest.mark.parametrize(
+    "target,mutation",
+    [
+        ("_shared/stage-open/001-0.plan.json", lambda value: value["input"].update({"digest": "sha256:" + "0" * 64})),
+        ("_shared/receipts/001-0.plan.json", lambda value: value["closeInput"].update({"digest": "sha256:" + "0" * 64})),
+        ("_shared/receipts/001-0.plan.json", lambda value: value["submittedClose"].update({"verdict": "pass", "typedIssues": [], "resultRefs": [], "verifierFacts": []})),
+    ],
+)
+def test_init_retry_rejects_open_close_and_submitted_close_tamper(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, target: str, mutation
+) -> None:
+    output = tmp_path / "output"
+    tasks = output / "data/tasks"
+    local = output / "data/local"
+    for module in (paths, task_init.paths):
+        monkeypatch.setattr(module, "OUTPUT_ROOT", output)
+        monkeypatch.setattr(module, "DATA_EXECUTIONS_ROOT", tasks)
+        monkeypatch.setattr(module, "DATA_LOCAL_ROOT", local)
+    previous_id = "20260902--travel-article-previous--tamper--scale-999"
+    _blocked_retry_execution(output, previous_id)
+    target_path = tasks / previous_id / target
+    value = json.loads(target_path.read_text(encoding="utf-8"))
+    mutation(value)
+    _canonical_write(target_path, value)
+    demand, bindings = _inputs(output)
+    demand_doc = json.loads(demand.read_text(encoding="utf-8"))
+    demand_doc["retryOf"] = previous_id
+    _write(demand, demand_doc)
+    with pytest.raises(task_init.TaskInitError, match="receipt 链不可信"):
+        task_init.initialize_task(carrier_demand_path=demand, candidate_bindings_path=bindings)
+
+
+@pytest.mark.parametrize("tamper_kind", ("result", "evidence"))
+def test_init_retry_rejects_result_and_evidence_exact_byte_tamper(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, tamper_kind: str
+) -> None:
+    output = tmp_path / "output"
+    tasks = output / "data/tasks"
+    local = output / "data/local"
+    for module in (paths, task_init.paths):
+        monkeypatch.setattr(module, "OUTPUT_ROOT", output)
+        monkeypatch.setattr(module, "DATA_EXECUTIONS_ROOT", tasks)
+        monkeypatch.setattr(module, "DATA_LOCAL_ROOT", local)
+    previous_id = "20260902--travel-article-previous--result-tamper--scale-999"
+    root = tasks / previous_id
+    _blocked_retry_execution(output, previous_id, verdict="pass")
+    receipt_path = root / "_shared/receipts/001-0.plan.json"
+    receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+    receipt["submittedClose"]["verdict"] = "blocked"
+    receipt["submittedClose"]["typedIssues"] = [{"code": "DATA.RETRY", "message": "blocked"}]
+    receipt["verdict"] = "blocked"
+    receipt["typedIssues"] = receipt["submittedClose"]["typedIssues"]
+    receipt["closeInput"]["digest"] = "sha256:" + hashlib.sha256((json.dumps(receipt["submittedClose"], ensure_ascii=False, sort_keys=True, separators=(",", ":")) + "\n").encode()).hexdigest()
+    _canonical_write(receipt_path, receipt)
+    if tamper_kind == "result":
+        (root / "0.plan/result.json").write_bytes(b'{"tampered":true}\n')
+    else:
+        evidence = _canonical_write(root / "0.plan/evidence.json", {"ok": True})
+        receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+        evidence_ref = {"scope": "execution", "ref": "0.plan/evidence.json"}
+        evidence_digest = "sha256:" + hashlib.sha256(evidence.read_bytes()).hexdigest()
+        receipt["submittedClose"]["verifierFacts"][0]["evidenceRef"] = evidence_ref
+        receipt["submittedClose"]["verifierFacts"][0]["evidenceDigest"] = evidence_digest
+        receipt["verifierFacts"] = receipt["submittedClose"]["verifierFacts"]
+        receipt["closeInput"]["digest"] = "sha256:" + hashlib.sha256((json.dumps(receipt["submittedClose"], ensure_ascii=False, sort_keys=True, separators=(",", ":")) + "\n").encode()).hexdigest()
+        _canonical_write(receipt_path, receipt)
+        evidence.write_bytes(b'{"tampered":true}\n')
+    demand, bindings = _inputs(output)
+    demand_doc = json.loads(demand.read_text(encoding="utf-8"))
+    demand_doc["retryOf"] = previous_id
+    _write(demand, demand_doc)
+    with pytest.raises(task_init.TaskInitError, match="receipt 链不可信"):
+        task_init.initialize_task(carrier_demand_path=demand, candidate_bindings_path=bindings)

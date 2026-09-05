@@ -90,6 +90,14 @@ def _validated_pool_record(
         raise ObjectTransactionError("DATA.POOL.RECORD_PROCESS_INVALID")
     if record.get("qualityResult") not in POOL_QUALITY_VALUES:
         raise ObjectTransactionError("DATA.POOL.RECORD_QUALITY_INVALID")
+    if actual_type != "author":
+        if record.get("rightsResult") != "passed":
+            raise ObjectTransactionError("DATA.POOL.RECORD_RIGHTS_INVALID")
+        if not str(record.get("rightsAuthorityRef") or "").strip():
+            raise ObjectTransactionError("DATA.POOL.RECORD_RIGHTS_AUTHORITY_MISSING")
+        rights_digest = str(record.get("rightsAuthorityDigest") or "")
+        if len(rights_digest) != 71 or not rights_digest.startswith("sha256:"):
+            raise ObjectTransactionError("DATA.POOL.RECORD_RIGHTS_AUTHORITY_DIGEST_INVALID")
     eligibility = record.get("eligibilityResult")
     if eligibility not in POOL_ELIGIBILITY_VALUES:
         raise ObjectTransactionError("DATA.POOL.RECORD_ELIGIBILITY_INVALID")

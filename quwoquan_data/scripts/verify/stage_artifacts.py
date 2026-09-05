@@ -104,8 +104,12 @@ def _review_identity_issues(
     issues: list[str] = []
     if str(reviewer_result.get("objectRef") or "").strip().strip("/") != object_ref.strip("/"):
         issues.append("reviewer_result.objectRef 与对象路径不一致")
-    if str(attestation.get("objectRef") or "").strip().strip("/") != object_ref.strip("/"):
-        issues.append("attestation.objectRef 与对象路径不一致")
+    attested_ref = str(attestation.get("objectRef") or "").strip().strip("/")
+    if attested_ref != object_ref.strip("/"):
+        manifest_path = execution_root_path / object_ref.strip("/") / "manifest.json"
+        manifest = read_json(manifest_path) if manifest_path.is_file() else {}
+        if attested_ref != str(manifest.get("topicId") or "").strip().strip("/"):
+            issues.append("attestation.objectRef 与对象路径/manifest topicId 不一致")
     reviewer_actor = reviewer_result.get("actor")
     reviewer_actor = reviewer_actor if isinstance(reviewer_actor, dict) else {}
     attested_actor = (attestation.get("independentReviewer") or {}).get("actor")
@@ -309,20 +313,57 @@ def verify_stage_artifacts(
                     workspace_root=path.parent,
                 )
                 issues.extend(f"{rel}/{relative}: {issue}" for issue in envelope_issues)
+        if "3.compose" in stage_cut:
+            quality_path = obj / "2.quality/quality_analysis.json"
+            compose_path = obj / (_COMPOSE_HOMEPAGE_REL if lane == "homepage" else _COMPOSE_PACK_REL)
+            if quality_path.is_file() and compose_path.is_file():
+                import hashlib
+
+                compose = read_json(compose_path)
+                expected = "sha256:" + hashlib.sha256(quality_path.read_bytes()).hexdigest()
+                if compose.get("qualityRef") != "2.quality/quality_analysis.json" or compose.get("qualityDigest") != expected:
+                    issues.append(f"{rel}/3.compose: quality exact binding drift")
+        if "4.draft" in stage_cut:
+            compose_path = obj / (_COMPOSE_HOMEPAGE_REL if lane == "homepage" else _COMPOSE_PACK_REL)
+            draft_meta_path = obj / "4.draft/draft_meta.json"
+            if compose_path.is_file() and draft_meta_path.is_file():
+                import hashlib
+
+                draft_meta = read_json(draft_meta_path)
+                expected = "sha256:" + hashlib.sha256(compose_path.read_bytes()).hexdigest()
+                expected_ref = _COMPOSE_HOMEPAGE_REL if lane == "homepage" else _COMPOSE_PACK_REL
+                if draft_meta.get("composeRef") != expected_ref or draft_meta.get("composeDigest") != expected:
+                    issues.append(f"{rel}/4.draft: compose exact binding drift")
         if "5.review" in stage_cut:
             reviewer_path = obj / "5.review/reviewer_result.json"
             attestation_path = obj / "5.review/attestation.json"
             media_review_path = obj / "5.review/media_ref_review.json"
-            if lane == "video" and media_review_path.is_file():
-                media_review = read_json(media_review_path)
-                issues.extend(
-                    f"{rel}/5.review: {issue}"
-                    for issue in _video_rights_coverage_issues(
-                        root,
-                        object_root=obj,
-                        media_review=media_review,
+            if media_review_path.is_file() and attestation_path.is_file():
+                try:
+                    from content.release.canonical.review_rights_binding import validate_review_authority
+
+                    manifest = read_json(obj / "manifest.json")
+                    if lane == "homepage":
+                        from content.release.canonical.entity_transaction_sources import source_assets_by_ref
+
+                        source_assets = source_assets_by_ref(root)
+                        object_kind = "entity"
+                    else:
+                        from content.release.canonical.post_transaction_assets import source_assets as load_source_assets
+
+                        source_assets = load_source_assets(root)
+                        object_kind = "posts"
+                    validate_review_authority(
+                        review_root=obj / "5.review",
+                        manifest=manifest,
+                        object_kind=object_kind,
+                        execution_id=execution_id,
+                        object_ref=str(read_json(attestation_path).get("objectRef") or rel.as_posix()),
+                        attestation=read_json(attestation_path),
+                        source_assets=source_assets,
                     )
-                )
+                except Exception as exc:  # noqa: BLE001
+                    issues.append(f"{rel}/5.review: {exc}")
             if reviewer_path.is_file() and attestation_path.is_file():
                 reviewer_result = read_json(reviewer_path)
                 attestation = read_json(attestation_path)
@@ -386,10 +427,75 @@ def verify_stage_artifacts(
                 )
                 if execution_id and str(meta.get("executionId") or "") != execution_id:
                     issues.append(f"{rel}: source meta executionId drift: {meta_ref}")
+                acquisition = meta.get("acquisition")
+                if isinstance(acquisition, dict):
+                    asset_ref = str(acquisition.get("assetRef") or "")
+                    asset_path = meta_path.parent / asset_ref
+                    index_path = meta_path.parent / "assets/index.json"
+                    asset_index = read_json(index_path) if index_path.is_file() else {}
+                    asset_rows = asset_index.get("assets") if isinstance(asset_index, dict) else []
+                    matches = [
+                        asset for asset in asset_rows or []
+                        if isinstance(asset, dict) and asset.get("fileName") == Path(asset_ref).name
+                    ]
+                    if len(matches) != 1 or not asset_path.is_file() or asset_path.is_symlink():
+                        issues.append(f"{rel}: acquisition asset binding missing: {asset_ref}")
+                    else:
+                        import hashlib
+                        import mimetypes
+
+                        asset_row = matches[0]
+                        actual_digest = "sha256:" + hashlib.sha256(asset_path.read_bytes()).hexdigest()
+                        derivative = acquisition.get("derivativeBinding")
+                        if isinstance(derivative, dict):
+                            expected_ext = mimetypes.guess_extension(
+                                str(derivative.get("derivedMimeType") or ""), strict=False
+                            )
+                            if (
+                                acquisition.get("contentSha256") != derivative.get("originalSha256")
+                                or acquisition.get("bytes") != derivative.get("originalBytes")
+                                or acquisition.get("mimeType") != derivative.get("originalMimeType")
+                                or asset_row.get("contentSha256") != derivative.get("derivedSha256")
+                                or asset_row.get("bytes") != derivative.get("derivedBytes")
+                                or asset_row.get("mimeType") != derivative.get("derivedMimeType")
+                                or asset_row.get("derivativeBinding") != derivative
+                                or actual_digest != derivative.get("derivedSha256")
+                                or asset_path.stat().st_size != derivative.get("derivedBytes")
+                                or asset_path.suffix != derivative.get("derivedExtension")
+                                or (expected_ext and asset_path.suffix != expected_ext)
+                            ):
+                                issues.append(f"{rel}: acquisition derivative binding drift: {asset_ref}")
+                        elif (
+                            actual_digest != acquisition.get("contentSha256")
+                            or (acquisition.get("bytes") is not None and asset_path.stat().st_size != acquisition.get("bytes"))
+                            or asset_row.get("contentSha256") != acquisition.get("contentSha256")
+                            or (acquisition.get("bytes") is not None and asset_row.get("bytes") != acquisition.get("bytes"))
+                            or (acquisition.get("mimeType") and asset_row.get("mimeType") != acquisition.get("mimeType"))
+                        ):
+                            issues.append(f"{rel}: acquisition receipt asset identity drift: {asset_ref}")
                 expected_unit_id = str(row.get("sourceUnitId") or "").strip()
                 actual_unit_id = str(meta.get("sourceUnitId") or "").strip()
                 if not expected_unit_id or expected_unit_id != actual_unit_id:
                     issues.append(f"{rel}: source unit identity drift: {meta_ref}")
+                for binding_field in ("sourcePlanRef", "sourcePlanDigest", "chosenCandidateDigest"):
+                    if row.get(binding_field) != meta.get(binding_field):
+                        issues.append(f"{rel}: source refs/meta {binding_field} drift: {meta_ref}")
+                source_plan_ref = str(meta.get("sourcePlanRef") or "")
+                source_plan_path = root / source_plan_ref
+                if (
+                    not source_plan_ref.startswith("sources/plans/")
+                    or source_plan_path.is_symlink()
+                    or not source_plan_path.is_file()
+                ):
+                    issues.append(f"{rel}: source plan binding missing: {source_plan_ref or '<empty>'}")
+                else:
+                    import hashlib
+
+                    source_plan_digest = "sha256:" + hashlib.sha256(
+                        source_plan_path.read_bytes()
+                    ).hexdigest()
+                    if source_plan_digest != meta.get("sourcePlanDigest"):
+                        issues.append(f"{rel}: source plan digest drift: {source_plan_ref}")
         # review 通过性是完成型断言：显式截止到 5.review 或执行
         # publish 后 final 闭包时适用；更早阶段可能存在尚未生效的 review 产物。
         attestation_path = obj / "5.review/attestation.json"

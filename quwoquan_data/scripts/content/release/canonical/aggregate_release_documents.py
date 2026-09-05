@@ -65,7 +65,6 @@ def release_header_document(
     canonical_merkle: str,
     release_class: str,
     product_lifecycle_state: str,
-    reviewed_closure_adoption: Mapping[str, Any] | None,
     selection_scope: str | None = None,
     target_environment: str | None = None,
     release_mode: str | None = None,
@@ -141,8 +140,6 @@ def release_header_document(
         assert source_identities is not None
         document["sourceIdentities"] = list(source_identities)
         document["sourceIdentitySetDigest"] = source_identity_set_digest
-    if reviewed_closure_adoption is not None:
-        document["reviewedClosureAdoption"] = dict(reviewed_closure_adoption)
     if pool_digest is not None:
         document.update(
             {
@@ -177,6 +174,7 @@ def release_attestation_document(
     source_digests: tuple[SourceDefinitionSnapshot, ...],
     asset_admission: Mapping[str, Any],
     canonical_merkle: str,
+    carrier_counts: Mapping[str, int],
     entity_count: int,
     post_count: int,
     creator_count: int,
@@ -203,6 +201,7 @@ def release_attestation_document(
         research_accepted_count=int(asset_admission["researchAcceptedCount"]),
         commercial_accepted_count=int(asset_admission["commercialAcceptedCount"]),
         execution_ids=tuple(execution_ids),
+        carrier_counts=dict(carrier_counts),
         entity_count=entity_count,
         post_count=post_count,
         creator_count=creator_count,

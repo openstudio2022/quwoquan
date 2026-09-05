@@ -162,6 +162,14 @@ def is_pool_record_admitted(record: Mapping[str, Any] | None) -> bool:
         and record.get("eligibilityResult") == "passed"
         and (
             record.get("objectType") == "author"
+            or (
+                record.get("rightsResult") == "passed"
+                and bool(str(record.get("rightsAuthorityRef") or "").strip())
+                and str(record.get("rightsAuthorityDigest") or "").startswith("sha256:")
+            )
+        )
+        and (
+            record.get("objectType") == "author"
             or record.get("usageScope") in {"research", "commercial"}
         )
     )
@@ -238,6 +246,22 @@ def build_canonical_pool_record(
         evidence_ref, label="poolRecord.evidenceRef"
     )
     evidence_digest = str(admission.get("evidenceDigest") or "").strip()
+    rights_authority_ref = str(admission.get("rightsAuthorityRef") or "").strip()
+    rights_authority_digest = str(admission.get("rightsAuthorityDigest") or "").strip()
+    authority_suffix = "5.review/media_ref_review.json"
+    authority_pos = rights_authority_ref.find(authority_suffix)
+    authority_relative = rights_authority_ref[authority_pos:] if authority_pos >= 0 else ""
+    authority_path = object_root / authority_relative
+    if (
+        admission.get("rightsResult") != "passed"
+        or not authority_relative
+        or len(rights_authority_digest) != 71
+        or not rights_authority_digest.startswith("sha256:")
+        or authority_path.is_symlink()
+        or not authority_path.is_file()
+        or _digest_file(authority_path) != rights_authority_digest
+    ):
+        raise ObjectTransactionError("DATA.POOL.RIGHTS_AUTHORITY_DRIFT")
     if (
         evidence.is_symlink()
         or not evidence.is_file()
@@ -260,6 +284,9 @@ def build_canonical_pool_record(
             "processResult": str(admission.get("processResult") or "failed"),
             "qualityResult": str(admission.get("qualityResult") or "failed"),
             "eligibilityResult": "passed",
+            "rightsResult": "passed",
+            "rightsAuthorityRef": rights_authority_ref,
+            "rightsAuthorityDigest": rights_authority_digest,
             "usageScope": str(admission.get("usageScope") or "").strip() or None,
             "evidenceRef": evidence_ref,
             "evidenceDigest": evidence_digest,
@@ -457,6 +484,7 @@ def build_content_pool_fields(
     canonical_ref: str,
     source_task_id: str,
     attestation_path: Path,
+    rights_authority: Mapping[str, str],
     publish_root: Path,
     rights_rows: list[dict[str, Any]],
     reserved_identity: Mapping[str, Any],
@@ -488,8 +516,20 @@ def build_content_pool_fields(
             "DATA.POOL.VERSION_GAP: "
             f"contentId={content_id} expected={known_versions[-1] + 1} actual={version}"
         )
-    usage_scope = pool_usage_scope(source_manifest, rights_rows)
-    variant_purpose = str(source_manifest.get("variantPurpose") or "original").strip()
+    review_usage_scope = str(rights_authority.get("usageScope") or "").strip()
+    if (
+        not str(rights_authority.get("ref") or "").endswith("5.review/media_ref_review.json")
+        or not str(rights_authority.get("digest") or "").startswith("sha256:")
+        or review_usage_scope not in {"research", "commercial"}
+    ):
+        raise ObjectTransactionError("DATA.POOL.RIGHTS_AUTHORITY_INVALID")
+    hard_fact_scope = pool_usage_scope(source_manifest, rights_rows)
+    usage_scope = (
+        "commercial"
+        if hard_fact_scope == "commercial" and review_usage_scope == "commercial"
+        else "research"
+    )
+    variant_purpose = str(source_manifest.get("variantPurpose") or "").strip()
     if variant_purpose not in {"original", "commercial_variant"}:
         raise ObjectTransactionError(
             f"content variantPurpose is invalid: {variant_purpose!r}"
@@ -507,6 +547,9 @@ def build_content_pool_fields(
             "processResult": "completed",
             "qualityResult": "passed",
             "usageScope": usage_scope,
+            "rightsResult": "passed",
+            "rightsAuthorityRef": str(rights_authority["ref"]),
+            "rightsAuthorityDigest": str(rights_authority["digest"]),
             "evidenceRef": "attestation.json",
             "evidenceDigest": _digest_file(attestation_path),
         },

@@ -15,8 +15,6 @@ from core.schema import assert_valid
 
 SCHEMA = "quwoquan_data.protected_quarantine_evidence"
 RECEIPT_DIRECTORY = Path("local/cache/protected-quarantines")
-QUARANTINE_DIRECTORY = Path("local/workspace/quarantine")
-DEFAULT_REASON = "historical release evidence preserved after output layout migration"
 FORENSIC_QUARANTINE_DIRECTORY = Path("quarantine")
 FORENSIC_MARKER_NAME = "QUARANTINE.json"
 FORENSIC_REQUIRED_CONSUMPTION = "forbidden"
@@ -61,21 +59,6 @@ def _relative_to_output(path: Path, *, data_output_root: Path) -> str:
         raise ProtectedQuarantineEvidenceError(
             f"path escaped the governed Data output root: {resolved}"
         ) from exc
-
-
-def _quarantine_ref(path: Path, *, data_output_root: Path) -> str:
-    if path.is_symlink():
-        raise ProtectedQuarantineEvidenceError("quarantine root must not be a symlink")
-    relative = _relative_to_output(path, data_output_root=data_output_root)
-    parts = Path(relative).parts
-    expected = QUARANTINE_DIRECTORY.parts
-    if len(parts) != len(expected) + 1 or parts[: len(expected)] != expected:
-        raise ProtectedQuarantineEvidenceError(
-            "quarantine must be one direct child of local/workspace/quarantine"
-        )
-    if not path.is_dir():
-        raise ProtectedQuarantineEvidenceError(f"quarantine is missing: {path}")
-    return relative
 
 
 def _forensic_quarantine_ref(path: Path, *, data_output_root: Path) -> str:
@@ -211,102 +194,6 @@ def _tree_inventory(root: Path) -> dict[str, object]:
     }
 
 
-def _validate_migration_receipt(
-    path: Path,
-    *,
-    data_output_root: Path,
-) -> dict[str, str]:
-    if not path.is_file() or path.is_symlink():
-        raise ProtectedQuarantineEvidenceError(
-            f"migration apply receipt is missing or not a regular file: {path}"
-        )
-    relative = _relative_to_output(path, data_output_root=data_output_root)
-    parts = Path(relative).parts
-    expected_prefix = ("local", "cache", "output-layout-migrations")
-    if (
-        len(parts) != 5
-        or parts[:3] != expected_prefix
-        or len(parts[3]) != 64
-        or any(character not in "0123456789abcdef" for character in parts[3])
-        or parts[4] != "apply.json"
-    ):
-        raise ProtectedQuarantineEvidenceError(
-            "migration receipt must use the canonical output-layout-migrations path"
-        )
-    body = path.read_bytes()
-    try:
-        payload = json.loads(body)
-        assert_valid(
-            payload,
-            "governance",
-            "data_output_layout_migration",
-            label="quwoquan_data.data_output_layout_migration",
-        )
-    except (ValueError, json.JSONDecodeError) as exc:
-        raise ProtectedQuarantineEvidenceError(
-            f"migration apply receipt is invalid: {path}: {exc}"
-        ) from exc
-    plan_digest = "sha256:" + parts[3]
-    if (
-        payload.get("documentKind") != "apply_receipt"
-        or payload.get("status") != "applied"
-        or payload.get("planDigest") != plan_digest
-    ):
-        raise ProtectedQuarantineEvidenceError(
-            "migration provenance is not an applied receipt bound to its path"
-        )
-    if Path(str(payload.get("dataOutputRoot", ""))).expanduser().resolve() != data_output_root:
-        raise ProtectedQuarantineEvidenceError(
-            "migration apply receipt belongs to a different Data output root"
-        )
-    quarantine_entries = [
-        entry
-        for entry in payload.get("entries", [])
-        if isinstance(entry, Mapping)
-        and entry.get("sourceRef") == "quarantine"
-        and entry.get("destinationRef") == "local/workspace/quarantine"
-    ]
-    if len(quarantine_entries) != 1:
-        raise ProtectedQuarantineEvidenceError(
-            "migration apply receipt does not bind quarantine -> local/workspace/quarantine"
-        )
-    migration_entry = quarantine_entries[0]
-    return {
-        "migrationApplyReceiptRef": relative,
-        "migrationApplyReceiptSha256": _sha256_bytes(body),
-        "migrationPlanDigest": plan_digest,
-        "migrationSourceRef": "quarantine",
-        "migrationDestinationRef": "local/workspace/quarantine",
-        "migrationEntryFileCount": int(migration_entry["fileCount"]),
-        "migrationEntryByteCount": int(migration_entry["byteCount"]),
-        "migrationEntryDigest": str(migration_entry["digest"]),
-    }
-
-
-#: migration 变体的冻结字段集不可变动:变动会改变既有 receipt 的 manifestDigest。
-_MIGRATION_MANIFEST_KEYS = (
-    "schema",
-    "status",
-    "quarantineRef",
-    "reason",
-    "reusableSourceTruthAllowed",
-    "migrationApplyReceiptRef",
-    "migrationApplyReceiptSha256",
-    "migrationPlanDigest",
-    "migrationSourceRef",
-    "migrationDestinationRef",
-    "migrationEntryFileCount",
-    "migrationEntryByteCount",
-    "migrationEntryDigest",
-    "directories",
-    "files",
-    "symlinks",
-    "directoryCount",
-    "fileCount",
-    "symlinkCount",
-    "byteCount",
-    "treeDigest",
-)
 _FORENSIC_MANIFEST_KEYS = (
     "schema",
     "status",
@@ -331,12 +218,7 @@ _FORENSIC_MANIFEST_KEYS = (
 
 
 def _stable_manifest(payload: Mapping[str, object]) -> dict[str, object]:
-    keys = (
-        _FORENSIC_MANIFEST_KEYS
-        if payload.get("provenance") == "forensic"
-        else _MIGRATION_MANIFEST_KEYS
-    )
-    return {key: payload[key] for key in keys}
+    return {key: payload[key] for key in _FORENSIC_MANIFEST_KEYS}
 
 
 def validate_protected_quarantine_receipt(
@@ -370,27 +252,14 @@ def validate_protected_quarantine_receipt(
             "protected quarantine receipt path does not match manifestDigest"
         )
     quarantine_root = root / str(payload["quarantineRef"])
-    if payload.get("provenance") == "forensic":
-        if (
-            _forensic_quarantine_ref(quarantine_root, data_output_root=root)
-            != payload["quarantineRef"]
-        ):
-            raise ProtectedQuarantineEvidenceError(
-                "quarantine reference is not canonical"
-            )
-        provenance = _validate_forensic_marker(quarantine_root)
-    else:
-        if (
-            _quarantine_ref(quarantine_root, data_output_root=root)
-            != payload["quarantineRef"]
-        ):
-            raise ProtectedQuarantineEvidenceError(
-                "quarantine reference is not canonical"
-            )
-        provenance = _validate_migration_receipt(
-            root / str(payload["migrationApplyReceiptRef"]),
-            data_output_root=root,
+    if (
+        _forensic_quarantine_ref(quarantine_root, data_output_root=root)
+        != payload["quarantineRef"]
+    ):
+        raise ProtectedQuarantineEvidenceError(
+            "quarantine reference is not canonical"
         )
+    provenance = _validate_forensic_marker(quarantine_root)
     for key, value in provenance.items():
         if payload.get(key) != value:
             raise ProtectedQuarantineEvidenceError(

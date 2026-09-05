@@ -109,7 +109,7 @@ def _target_ref(target: Mapping[str, Any], *, carrier: str) -> str | None:
         return f"entities/{entity_type}/{name}"
     angle = str(target.get("publishAngle") or "").strip()
     title = str(target.get("publishTitle") or "").strip()
-    sequence = target.get("publishSeq", 1)
+    sequence = target.get("publishSeq")
     if (
         not angle
         or not title
@@ -136,7 +136,6 @@ def _candidate_projection(
         if carrier != "homepage":
             target["publishAngle"] = str(target.get("publishAngle") or "").strip()
             target["publishTitle"] = str(target.get("publishTitle") or "").strip()
-            target["publishSeq"] = target.get("publishSeq", 1)
         ref = _target_ref(target, carrier=carrier)
         if ref is None:
             return None

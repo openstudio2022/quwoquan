@@ -1,142 +1,52 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "quwoquan_data.protected_quarantine_evidence",
-  "title": "Protected historical Data quarantine evidence receipt",
-  "description": "Two mutually exclusive provenance classes. migration freezes a tree relocated by the one-shot output-layout migration, credentialed by the migration apply receipt. forensic freezes an incident quarantine, credentialed by the tree's own QUARANTINE.json marker. A receipt carries exactly one credential set: mixing them would let a forensic tree borrow migration provenance it cannot produce.",
-  "oneOf": [
-    {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "schema",
-        "status",
-        "quarantineRef",
-        "reason",
-        "reusableSourceTruthAllowed",
-        "migrationApplyReceiptRef",
-        "migrationApplyReceiptSha256",
-        "migrationPlanDigest",
-        "migrationSourceRef",
-        "migrationDestinationRef",
-        "migrationEntryFileCount",
-        "migrationEntryByteCount",
-        "migrationEntryDigest",
-        "directories",
-        "files",
-        "symlinks",
-        "directoryCount",
-        "fileCount",
-        "symlinkCount",
-        "byteCount",
-        "treeDigest",
-        "manifestDigest",
-        "recordedAt"
-      ],
-      "properties": {
-        "schema": {"$ref": "#/$defs/schemaId"},
-        "status": {"$ref": "#/$defs/status"},
-        "quarantineRef": {
-          "type": "string",
-          "pattern": "^local/workspace/quarantine/[A-Za-z0-9][A-Za-z0-9._-]*$"
-        },
-        "reason": {"$ref": "#/$defs/reason"},
-        "reusableSourceTruthAllowed": {"$ref": "#/$defs/reusableSourceTruthAllowed"},
-        "migrationApplyReceiptRef": {
-          "type": "string",
-          "pattern": "^local/cache/output-layout-migrations/[0-9a-f]{64}/apply\\.json$"
-        },
-        "migrationApplyReceiptSha256": {"$ref": "#/$defs/digest"},
-        "migrationPlanDigest": {"$ref": "#/$defs/digest"},
-        "migrationSourceRef": {"const": "quarantine"},
-        "migrationDestinationRef": {"const": "local/workspace/quarantine"},
-        "migrationEntryFileCount": {"type": "integer", "minimum": 1},
-        "migrationEntryByteCount": {"type": "integer", "minimum": 0},
-        "migrationEntryDigest": {"$ref": "#/$defs/digest"},
-        "directories": {"$ref": "#/$defs/directories"},
-        "files": {"$ref": "#/$defs/files"},
-        "symlinks": {"$ref": "#/$defs/symlinks"},
-        "directoryCount": {"$ref": "#/$defs/nonNegativeCount"},
-        "fileCount": {"$ref": "#/$defs/fileCount"},
-        "symlinkCount": {"$ref": "#/$defs/nonNegativeCount"},
-        "byteCount": {"$ref": "#/$defs/nonNegativeCount"},
-        "treeDigest": {"$ref": "#/$defs/digest"},
-        "manifestDigest": {"$ref": "#/$defs/digest"},
-        "recordedAt": {"$ref": "#/$defs/recordedAt"}
-      }
-    },
-    {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "schema",
-        "status",
-        "provenance",
-        "quarantineRef",
-        "reason",
-        "reusableSourceTruthAllowed",
-        "forensicMarkerPath",
-        "forensicMarkerSha256",
-        "forensicDecision",
-        "forensicConsumption",
-        "forensicRecovery",
-        "directories",
-        "files",
-        "symlinks",
-        "directoryCount",
-        "fileCount",
-        "symlinkCount",
-        "byteCount",
-        "treeDigest",
-        "manifestDigest",
-        "recordedAt"
-      ],
-      "properties": {
-        "schema": {"$ref": "#/$defs/schemaId"},
-        "status": {"$ref": "#/$defs/status"},
-        "provenance": {"const": "forensic"},
-        "quarantineRef": {
-          "type": "string",
-          "pattern": "^quarantine/[A-Za-z0-9][A-Za-z0-9._-]*$"
-        },
-        "reason": {"$ref": "#/$defs/reason"},
-        "reusableSourceTruthAllowed": {"$ref": "#/$defs/reusableSourceTruthAllowed"},
-        "forensicMarkerPath": {"const": "QUARANTINE.json"},
-        "forensicMarkerSha256": {"$ref": "#/$defs/digest"},
-        "forensicDecision": {"type": "string", "minLength": 1},
-        "forensicConsumption": {"const": "forbidden"},
-        "forensicRecovery": {"const": "retain_for_forensics_only"},
-        "directories": {"$ref": "#/$defs/directories"},
-        "files": {"$ref": "#/$defs/files"},
-        "symlinks": {"$ref": "#/$defs/symlinks"},
-        "directoryCount": {"$ref": "#/$defs/nonNegativeCount"},
-        "fileCount": {"$ref": "#/$defs/fileCount"},
-        "symlinkCount": {"$ref": "#/$defs/nonNegativeCount"},
-        "byteCount": {"$ref": "#/$defs/nonNegativeCount"},
-        "treeDigest": {"$ref": "#/$defs/digest"},
-        "manifestDigest": {"$ref": "#/$defs/digest"},
-        "recordedAt": {"$ref": "#/$defs/recordedAt"}
-      }
-    }
-  ],
+  "title": "Protected immutable forensic quarantine evidence receipt",
+  "description": "Freezes an incident quarantine using its own QUARANTINE.json marker; no migration provenance is accepted.",
   "$defs": {
-    "schemaId": {"const": "quwoquan_data.protected_quarantine_evidence"},
-    "status": {"const": "protected_read_only"},
-    "reason": {"type": "string", "minLength": 1},
-    "reusableSourceTruthAllowed": {"const": false},
-    "recordedAt": {"type": "string", "minLength": 1},
-    "nonNegativeCount": {"type": "integer", "minimum": 0},
-    "fileCount": {"type": "integer", "minimum": 1},
+    "schemaId": {
+      "const": "quwoquan_data.protected_quarantine_evidence"
+    },
+    "status": {
+      "const": "protected_read_only"
+    },
+    "reason": {
+      "type": "string",
+      "minLength": 1
+    },
+    "reusableSourceTruthAllowed": {
+      "const": false
+    },
+    "recordedAt": {
+      "type": "string",
+      "minLength": 1
+    },
+    "nonNegativeCount": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "fileCount": {
+      "type": "integer",
+      "minimum": 1
+    },
     "directories": {
       "type": "array",
-      "items": {"type": "string", "minLength": 1}
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
     },
     "files": {
       "type": "array",
-      "items": {"$ref": "#/$defs/file"}
+      "items": {
+        "$ref": "#/$defs/file"
+      }
     },
     "symlinks": {
       "type": "array",
-      "items": {"$ref": "#/$defs/symlink"}
+      "items": {
+        "$ref": "#/$defs/symlink"
+      }
     },
     "digest": {
       "type": "string",
@@ -145,22 +55,138 @@
     "file": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["path", "byteCount", "sha256"],
+      "required": [
+        "path",
+        "byteCount",
+        "sha256"
+      ],
       "properties": {
-        "path": {"type": "string", "minLength": 1},
-        "byteCount": {"type": "integer", "minimum": 0},
-        "sha256": {"$ref": "#/$defs/digest"}
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "byteCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "sha256": {
+          "$ref": "#/$defs/digest"
+        }
       }
     },
     "symlink": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["path", "target", "targetSha256"],
+      "required": [
+        "path",
+        "target",
+        "targetSha256"
+      ],
       "properties": {
-        "path": {"type": "string", "minLength": 1},
-        "target": {"type": "string", "minLength": 1},
-        "targetSha256": {"$ref": "#/$defs/digest"}
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "target": {
+          "type": "string",
+          "minLength": 1
+        },
+        "targetSha256": {
+          "$ref": "#/$defs/digest"
+        }
       }
+    }
+  },
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "status",
+    "provenance",
+    "quarantineRef",
+    "reason",
+    "reusableSourceTruthAllowed",
+    "forensicMarkerPath",
+    "forensicMarkerSha256",
+    "forensicDecision",
+    "forensicConsumption",
+    "forensicRecovery",
+    "directories",
+    "files",
+    "symlinks",
+    "directoryCount",
+    "fileCount",
+    "symlinkCount",
+    "byteCount",
+    "treeDigest",
+    "manifestDigest",
+    "recordedAt"
+  ],
+  "properties": {
+    "schema": {
+      "$ref": "#/$defs/schemaId"
+    },
+    "status": {
+      "$ref": "#/$defs/status"
+    },
+    "provenance": {
+      "const": "forensic"
+    },
+    "quarantineRef": {
+      "type": "string",
+      "pattern": "^quarantine/[A-Za-z0-9][A-Za-z0-9._-]*$"
+    },
+    "reason": {
+      "$ref": "#/$defs/reason"
+    },
+    "reusableSourceTruthAllowed": {
+      "$ref": "#/$defs/reusableSourceTruthAllowed"
+    },
+    "forensicMarkerPath": {
+      "const": "QUARANTINE.json"
+    },
+    "forensicMarkerSha256": {
+      "$ref": "#/$defs/digest"
+    },
+    "forensicDecision": {
+      "type": "string",
+      "minLength": 1
+    },
+    "forensicConsumption": {
+      "const": "forbidden"
+    },
+    "forensicRecovery": {
+      "const": "retain_for_forensics_only"
+    },
+    "directories": {
+      "$ref": "#/$defs/directories"
+    },
+    "files": {
+      "$ref": "#/$defs/files"
+    },
+    "symlinks": {
+      "$ref": "#/$defs/symlinks"
+    },
+    "directoryCount": {
+      "$ref": "#/$defs/nonNegativeCount"
+    },
+    "fileCount": {
+      "$ref": "#/$defs/fileCount"
+    },
+    "symlinkCount": {
+      "$ref": "#/$defs/nonNegativeCount"
+    },
+    "byteCount": {
+      "$ref": "#/$defs/nonNegativeCount"
+    },
+    "treeDigest": {
+      "$ref": "#/$defs/digest"
+    },
+    "manifestDigest": {
+      "$ref": "#/$defs/digest"
+    },
+    "recordedAt": {
+      "$ref": "#/$defs/recordedAt"
     }
   }
 }

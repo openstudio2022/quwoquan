@@ -5,12 +5,10 @@ from __future__ import annotations
 import hashlib
 import shutil
 import tempfile
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
-from content.release.canonical.asset_review_adoption import (
-    adopt_independent_asset_review,
-)
 from content.release.canonical.content_pool_record import (
     append_pool_record,
     build_canonical_pool_record,
@@ -50,6 +48,7 @@ from content.release.canonical.object_transaction_contract import (
 from content.release.canonical.pool_source_attribution import (
     source_attribution_complete,
 )
+from content.release.canonical.review_rights_binding import validate_review_authority
 from core.source_attribution import canonical_source_attribution
 from governance.coverage.license import (
     RightsAuditStatus,
@@ -124,6 +123,16 @@ def build_entity_object_transaction_package(
     for key in ("deterministicGate", "independentReviewer", "mediaRefReview"):
         if str((attestation.get(key) or {}).get("status") or "") != "passed":
             raise ObjectTransactionError(f"review 前置未通过：{key}")
+    source_assets = _source_assets_by_ref(execution_root)
+    review_authority = validate_review_authority(
+        review_root=attestation_source.parent,
+        manifest=source_manifest,
+        object_kind="entity",
+        execution_id=execution_id,
+        object_ref=f"entities/{canonical_target_ref}",
+        attestation=attestation,
+        source_assets=source_assets,
+    )
 
     expected_transaction_id = (
         f"{execution_id}--entity-"
@@ -159,8 +168,9 @@ def build_entity_object_transaction_package(
             raise ObjectTransactionError("entity 缺 source catalog")
         shutil.copy2(source_catalog_source, object_root / source_catalog_ref)
         shutil.copy2(attestation_source, object_root / "attestation.json")
-
-        source_assets = _source_assets_by_ref(execution_root)
+        canonical_review_path = object_root / "5.review/media_ref_review.json"
+        canonical_review_path.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(attestation_source.parent / "media_ref_review.json", canonical_review_path)
 
         cas_rows: list[dict[str, Any]] = []
         asset_refs: list[dict[str, Any]] = []
@@ -191,17 +201,6 @@ def build_entity_object_transaction_package(
             source_asset_ref, source_asset = _source_asset_for_manifest_asset(
                 raw,
                 source_assets,
-            )
-            independent_review = adopt_independent_asset_review(
-                raw_asset=raw,
-                related_sources=(source_asset,),
-                asset_kind="image",
-                asset_id=asset_id,
-                content_sha256=digest,
-                object_ref=object_ref,
-                execution_root=execution_root,
-                source_identity=source_identity,
-                object_root=object_root,
             )
             canonical_file_page = str(
                 raw.get("authorizationProof")
@@ -269,9 +268,8 @@ def build_entity_object_transaction_package(
                 rights_audit_status is RightsAuditStatus.VERIFIED
                 and not authorization_proof
             ):
-                rights_audit_status = RightsAuditStatus.UNVERIFIED
-                rights_audit_issues.append(
-                    "authorizationProof: not independently verified for research distribution"
+                raise ObjectTransactionError(
+                    f"asset {asset_id} verified rights lack authorizationProof"
                 )
             if (
                 rights_audit_status is not RightsAuditStatus.VERIFIED
@@ -293,21 +291,6 @@ def build_entity_object_transaction_package(
                 or source_asset.get("modelReleaseStatus")
                 or ""
             ).strip()
-            # Older physical Homepage capsules recorded the exact acquisition
-            # and research distribution decision but omitted the equivalent
-            # canonical usage vocabulary.  Recover only the narrower research
-            # scope from those frozen facts.  This does not upgrade rights:
-            # the original audit status/issues remain in the closure, and the
-            # commercial lifecycle still requires explicit proof above.
-            if (
-                not usage_scope
-                and source_asset.get("acquisitionStatus") == "acquired"
-                and source_asset.get("distributionDecision") == "research_allowed"
-                and canonical_file_page.startswith("https://")
-                and bool(author)
-                and bool(license_name)
-            ):
-                usage_scope = "editorial"
             if usage_scope not in {
                 "internal_reference",
                 "app_publish",
@@ -338,14 +321,23 @@ def build_entity_object_transaction_package(
                 )
             if distribution_decision == "commercial_allowed" and (
                 rights_audit_status is not RightsAuditStatus.VERIFIED
+                or rights_audit_issues
                 or not authorization_proof.startswith("https://")
                 or not license_url.startswith("https://")
                 or not author
                 or not license_name
             ):
-                distribution_decision = "research_allowed"
-                rights_audit_issues.append(
-                    "commercial distribution proof incomplete; retained for research"
+                raise ObjectTransactionError(
+                    f"asset {asset_id} commercial rights proof is incomplete"
+                )
+            if (
+                rights_audit_status is not RightsAuditStatus.VERIFIED
+                or rights_audit_issues
+                or not authorization_proof.startswith("https://")
+                or not license_url.startswith("https://")
+            ):
+                raise ObjectTransactionError(
+                    f"asset {asset_id} unresolved rights are not publishable"
                 )
             rights_row = {
                 "assetId": asset_id,
@@ -393,11 +385,6 @@ def build_entity_object_transaction_package(
                 "rightsAuditIssues": rights_audit_issues,
                 "modelReleaseStatus": model_release_status,
             }
-            if independent_review is not None:
-                rights_row.update(
-                    acquisitionReceiptRef=independent_review["acquisitionReceiptRef"],
-                    independentAssetReview=independent_review,
-                )
             rights_rows.append(rights_row)
             cas_rows.append(
                 {
@@ -407,14 +394,36 @@ def build_entity_object_transaction_package(
                     "bytes": asset_source.stat().st_size,
                 }
             )
-            asset_refs.append(
-                {
-                    "assetId": asset_id,
-                    "objectKey": object_key,
-                    "sha256": digest,
-                    "bytes": asset_source.stat().st_size,
-                }
-            )
+            acquisition_receipt_ref = str(
+                source_asset.get("acquisitionReceiptRef") or ""
+            ).strip()
+            if not acquisition_receipt_ref:
+                raise ObjectTransactionError(
+                    f"asset {asset_id} lacks acquisitionReceiptRef"
+                )
+            asset_binding = {
+                "assetId": asset_id,
+                "objectKey": object_key,
+                "sha256": digest,
+                "bytes": asset_source.stat().st_size,
+                "sourceAssetRefs": [source_asset_ref],
+                "acquisitionReceiptRefs": (
+                    [acquisition_receipt_ref] if acquisition_receipt_ref else []
+                ),
+            }
+            derivative_binding = source_asset.get("derivativeBinding")
+            if isinstance(derivative_binding, Mapping):
+                if (
+                    derivative_binding.get("derivedSha256") != digest
+                    or derivative_binding.get("derivedBytes") != asset_source.stat().st_size
+                    or derivative_binding.get("derivedMimeType") != mime
+                    or derivative_binding.get("derivedExtension") != asset_source.suffix.lower()
+                ):
+                    raise ObjectTransactionError(
+                        f"asset {asset_id} source derivativeBinding 与发布字节不一致"
+                    )
+                asset_binding["derivativeBinding"] = dict(derivative_binding)
+            asset_refs.append(asset_binding)
             canonical_assets.append(
                 {
                     **raw,
@@ -471,10 +480,18 @@ def build_entity_object_transaction_package(
                 "admission": {
                     "processResult": "completed",
                     "qualityResult": "passed",
-                    "usageScope": pool_usage_scope(
-                        {"sourceAttribution": source_attribution},
-                        rights_rows,
+                    "usageScope": (
+                        "commercial"
+                        if pool_usage_scope(
+                            {"sourceAttribution": source_attribution},
+                            rights_rows,
+                        ) == "commercial"
+                        and review_authority["usageScope"] == "commercial"
+                        else "research"
                     ),
+                    "rightsResult": "passed",
+                    "rightsAuthorityRef": review_authority["ref"],
+                    "rightsAuthorityDigest": review_authority["digest"],
                     "evidenceRef": "attestation.json",
                     "evidenceDigest": _digest_file(attestation_source),
                 },

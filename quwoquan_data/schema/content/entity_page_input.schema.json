@@ -13,6 +13,8 @@
     "executionId",
     "step",
     "ref",
+    "qualityRef",
+    "qualityDigest",
     "selectedSourceUrls",
     "payload"
   ],
@@ -48,6 +50,8 @@
       "type": "string",
       "minLength": 1
     },
+    "qualityRef": {"const": "2.quality/quality_analysis.json"},
+    "qualityDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
     "selectedSourceUrls": {
       "type": "array",
       "items": {

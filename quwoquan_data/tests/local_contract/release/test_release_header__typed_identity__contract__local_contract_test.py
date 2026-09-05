@@ -117,7 +117,7 @@ def _target_environment_identity_set_header() -> dict[str, object]:
             "samplePlanDigest": "sha256:" + "8" * 64,
             "releaseMode": "research",
             "poolDigest": "sha256:" + "3" * 64,
-            "counts": {"article": 1, "image": 0, "video": 0, "total": 1},
+            "counts": {"homepage": 0, "article": 1, "image": 0, "video": 0, "total": 1},
             "contents": [
                 {
                     "contentId": "content-alpha-001",

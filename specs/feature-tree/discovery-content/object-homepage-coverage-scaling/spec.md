@@ -14,7 +14,7 @@
 
 - family、provider policy、reference 与 execution request 的职责隔离。
 - entity homepage、article、image、video 的五阶段生产、review、canonical publish 与 release。
-- immutable release 的环境导入、API 验证、App 消费、rollback 与 replay 证据。
+- immutable release handoff；以及由下游环境 owner 独立拥有的导入、API 验证、App 消费、rollback 与 replay 证据。
 
 ### Out of Scope
 
@@ -34,8 +34,8 @@
 - [`work-request-compilation`](./work-request-compilation/spec.md)：confirmed 按需意图收敛为现役逐载体 demand 与 immutable candidate bindings；旧 handoff/WorkRequest/request-envelope schema 已删除。
 - [`on-demand-content-pool-admission`](./on-demand-content-pool-admission/spec.md)：所选载体生产、来源/媒体准入、article 来源预筛与唯一 reviewed delivery 入池路径，终点为 canonical pool record 与可恢复 typed 终态。
 - [`source-discovery-scale-reliability`](./source-discovery-scale-reliability/spec.md)：来源发现由宿主 AI 原生串并行，仓内 worker/slot/heartbeat 控制面退役。
-- [`canonical-content-identity-recovery`](./canonical-content-identity-recovery/spec.md)：invalid canonical identity 的互斥状态、受治理修复与 source-ready 调度不再永久饥饿。
-- [`multi-carrier-release`](./multi-carrier-release/spec.md)：每个发布对象必须闭合 creator、tag、entity、media 与 source 引用，运行 receipt 只能写入输出目录、不得回写静态真相源；immutable release、环境导入与 App 消费是本 Story 的唯一下游终点。
+- [`multi-carrier-release`](./multi-carrier-release/spec.md)：每个发布对象必须闭合 creator、tag、entity、media 与 source 引用，运行 receipt 只能写入输出目录、不得回写静态真相源；immutable release handoff 是 producer 终点；环境导入与 App 消费由下游环境 owner 只读 handoff 后独立闭合。
+- [`canonical-content-identity-recovery`](./canonical-content-identity-recovery/spec.md)：invalid canonical identity 只通过显式对象治理 query/command 收敛，不成为内容生产自动恢复。
 
 ## 5. 能力要求
 
@@ -45,12 +45,11 @@
 - 静态 family、provider、schema、prompt/template 与 reference 不含运行实例值。
 - execution packet 的 request 与 target set 均固化在 `0.plan`，且 output 删除后仍可从受版本控制的静态输入重建。
 - 四类载体均能由同一 CLI 门面创建、review、promote 与聚合 release。
-- homepage/article/image/video 的 quota/count 同时表达日常请求负载与累计 milestone target；日常 publish 允许 partial 并发布全部合格对象，M100 的唯一目标为 `100/100/100/10`，后继规模按当前池中唯一合格对象计算差额。
-- milestone 只表示池中已达到的累计规模，不是日常 Research 发布的前驱门；历史批次、不同 source identity 与既有 release 中的合格对象可以按稳定对象身份累计，未达到目标时如实报告 gap 并继续增量发布。
-- 文章配图率、素材来源分布、视频热度与宿主实际并发仅作外部诊断，不进入 Data 业务 authority；不存在仓内 automatic recovery、workspace/soak/capacity 状态。
+- 每次 release 只消费调用方显式给出的 exact cohort；日常 publish 允许 partial 并保留全部合格对象。
+- 文章配图率、素材来源分布、视频热度与宿主实际并发仅作外部诊断，不进入 Data 业务 authority。
 - homepage/article/image/video execution 可由宿主原生串行或重叠运行，不要求固定并发。每个 stage 的 verdict/typed issues 由宿主 AI 显式提交；共享 canonical 只经单对象事务，release 只消费显式 cohort。
 - 宿主并发、截止、模型与会话重启不进入 execution 或仓库配置。对象下限与工作单元数相互独立；宿主运行能力不得成为第三个业务 authority。
-- release 只绑定 execution/source digest 与 desired state；环境 receipt、rollback/replay 通过 ship 写入输出。
+- release handoff 只绑定 immutable producer facts；环境 receipt、rollback/replay 由下游 owner 通过既有 ship/Ops 能力写入自身输出，不进入 producer stage chain。
 
 <a id="req-002"></a>
 ### REQ-002 `reference/<vertical>/entities`：稳定实体、别名、分类与行政归属
@@ -58,7 +57,7 @@
 - `reference/<vertical>/entities`：稳定实体、别名、分类与行政归属；不得写来源 URL 或运行结论。
 - 静态资产不得包含区域、实体、日期、数量、运行路径或活动阶段；这些值只在 `0.plan` 冻结。
 - 每个发布对象必须有 source、媒体处置、creator/tag 引用、review 与 execution source digest。
-- 运行 profile、schema、provider policy 或 target set 改变时，必须创建新 sequence，并以 `retryOf` 关联重试。
+- 运行 profile、schema、provider policy 或 target set 改变时，必须创建新 execution，并以 `retryOf` 关联重试。
 - 环境导入、API 与 App 消费未完成时保留对应 `GATE_BLOCK`；静态目录与本地 gate 不得冒充环境交付。
 
 <a id="req-003"></a>
@@ -87,11 +86,11 @@
 - THEN 静态 family、provider、schema、prompt/template 与 reference 不含运行实例值。
 - THEN execution packet 的 request 与 target set 均固化在 `0.plan`，且 output 删除后仍可从受版本控制的静态输入重建。
 - THEN 四类载体均能由同一 CLI 门面创建、review、promote 与聚合 release。
-- THEN 池按稳定对象身份累计四类唯一合格对象，M100 只以 `100/100/100/10` 判断目标是否达到；未达到时返回 gap，已合格对象仍可形成 partial Research release。
-- THEN 文章配图、来源分布、视频热度与宿主实际重叠只作诊断；仓内不存在 automatic recovery、workspace/soak/capacity authority。
+- THEN release 只消费显式 exact cohort；未合格对象不进入 cohort，已合格对象可形成 partial Research release。
+- THEN 文章配图、来源分布、视频热度与宿主实际重叠只作诊断，不形成业务 authority。
 - THEN 每个实际启动的 task 分别形成 typed 终态；排队、未启动或诊断 sample 不算 task 结果。canonical publish 以单写对象事务接收已合格对象，最终 Manifest/release 对被选对象及引用做 exact closure。
-- THEN 对象下限与工作单元数独立冻结；宿主并发/截止不写入 execution，receipt 不记录 worker/wave/fleet authority。
-- THEN release 只绑定 execution/source digest 与 desired state；环境 receipt、rollback/replay 通过 ship 写入输出。
+- THEN 对象下限与工作单元数独立冻结；宿主并发/截止不写入 execution，receipt 不记录宿主调度 authority。
+- THEN release handoff 只绑定 immutable producer facts；环境 receipt、rollback/replay 由下游 owner 通过既有 ship/Ops 能力写入自身输出，不进入 producer stage chain。
 
 <a id="sit-002"></a>
 ### SIT-002 媒体字节持有方可兑现、故障可区分且耐久性不被默认宣称
@@ -112,7 +111,7 @@
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`track`
-- 影响或价值：仍缺 `SIT-001` 的子句级 `spec_ref` 绑定。可复用内容 execution 与发布链有真实 execution 走通实例（receipt 协议十阶段至 `succeeded` 终态），静态 family、provider、schema、prompt/template 与 reference 不含运行实例值的目标保持有效，但组合行为尚无直接测试证据锚定。
+- 影响或价值：仍缺 `SIT-001` 的子句级 `spec_ref` 绑定。可复用内容 execution 与发布链存在历史走通实例，但 producer 九阶段 `release -> END` 与完整 immutable handoff 仍缺 current 同 revision 复合证据，静态 family、provider、schema、prompt/template 与 reference 不含运行实例值的目标保持有效，但组合行为尚无直接测试证据锚定。
 - 完成判定：`SIT-001` 对应行为满足且真实测试 `spec_ref` 有效
 
 <a id="open-002"></a>

@@ -76,6 +76,14 @@ def make_text_only_article(execution_root: Path) -> None:
         assets=[],
     )
     _write_json(manifest_path, manifest)
+    media_path = post / "5.review/media_ref_review.json"
+    media_review = json.loads(media_path.read_text(encoding="utf-8"))
+    media_review["rightsReviews"] = []
+    _write_json(media_path, media_review)
+    attestation_path = post / "5.review/attestation.json"
+    attestation = json.loads(attestation_path.read_text(encoding="utf-8"))
+    attestation["mediaRefReview"]["digest"] = _file_digest(media_path)
+    _write_json(attestation_path, attestation)
     (post / "article.md").write_text(
         "# 西湖光影\n\n文本 post 的正文，不依赖任何媒体字节。\n",
         encoding="utf-8",
@@ -298,6 +306,7 @@ def _fixture(
                     "collectionPageUrl": "https://commons.wikimedia.org/wiki/File:Example.jpg",
                     "authorizationProof": "https://commons.wikimedia.org/wiki/File:Example.jpg",
                     "termsUrl": "https://creativecommons.org/licenses/by/4.0/",
+                    "acquisitionReceiptRef": "receipts/fixture-image-acquisition.json",
                     "creator": "Fixture Photographer",
                     "license": "CC BY 4.0",
                     "platform": "Wikimedia Commons",
@@ -325,6 +334,7 @@ def _fixture(
             "contentIdentity": "work",
             "contentId": "qwq_data_west_lake_image_fixture",
             "version": 1,
+            "variantPurpose": "original",
             "contentType": "image",
             "carrier": "image",
             "title": "西湖光影",
@@ -366,20 +376,47 @@ def _fixture(
             ]
         },
     )
+    media_review_path = post / "5.review/media_ref_review.json"
+    _write_json(
+        media_review_path,
+        {
+            "schema": "quwoquan_data.media_ref_review",
+            "stage": "5.review",
+            "executionId": EXECUTION_ID,
+            "objectRef": f"posts/{POST_REF}",
+            "passed": True,
+            "mediaIssues": [],
+            "referenceIssues": [],
+            "rightsReviews": [
+                {
+                    "assetRef": "sources/commons/assets/cover.jpg",
+                    "sourceUrl": "https://upload.wikimedia.org/wikipedia/commons/example.jpg",
+                    "license": "CC BY 4.0",
+                    "termsUrl": "https://creativecommons.org/licenses/by/4.0/",
+                    "authorizationProof": "https://commons.wikimedia.org/wiki/File:Example.jpg",
+                    "usageScope": "commercial",
+                    "passed": True,
+                    "issues": [],
+                }
+            ],
+        },
+    )
+    media_review_digest = _file_digest(media_review_path)
     _write_json(
         post / "5.review/attestation.json",
         {
             "decision": "approved",
             "deterministicGate": {"status": "passed"},
             "independentReviewer": {"status": "passed"},
-            "mediaRefReview": {"status": "passed"},
+            "mediaRefReview": {
+                "status": "passed",
+                "issues": [],
+                "ref": "5.review/media_ref_review.json",
+                "digest": media_review_digest,
+            },
         },
     )
-    for review_name in (
-        "rubric_review.json",
-        "reviewer_result.json",
-        "media_ref_review.json",
-    ):
+    for review_name in ("rubric_review.json", "reviewer_result.json"):
         _write_json(post / "5.review" / review_name, {})
     _write_json(post / "5.review/evidence_index.json", {"evidence": []})
     publish = tmp_path / "publish"

@@ -38,14 +38,13 @@
         "4.draft",
         "5.review",
         "publish",
-        "release",
-        "ship"
+        "release"
       ]
     },
     "sequence": {
       "type": "integer",
       "minimum": 1,
-      "maximum": 10
+      "maximum": 9
     },
     "predecessor": {
       "$ref": "#/$defs/predecessor"
@@ -272,25 +271,6 @@
         "properties": {
           "sequence": {
             "const": 9
-          }
-        }
-      }
-    },
-    {
-      "if": {
-        "properties": {
-          "stage": {
-            "const": "ship"
-          }
-        },
-        "required": [
-          "stage"
-        ]
-      },
-      "then": {
-        "properties": {
-          "sequence": {
-            "const": 10
           }
         }
       }

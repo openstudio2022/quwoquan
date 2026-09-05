@@ -16,7 +16,11 @@
       }
     },
     "publishMediaMode": {
-      "enum": ["not_applicable", "text_only", "embedded_media"]
+      "enum": [
+        "not_applicable",
+        "text_only",
+        "embedded_media"
+      ]
     },
     "schema": {
       "const": "quwoquan_data.asset_rights_closure"
@@ -25,16 +29,34 @@
   "allOf": [
     {
       "if": {
-        "properties": {"publishMediaMode": {"const": "text_only"}},
-        "required": ["publishMediaMode"]
+        "properties": {
+          "publishMediaMode": {
+            "const": "text_only"
+          }
+        },
+        "required": [
+          "publishMediaMode"
+        ]
       },
       "then": {
-        "properties": {"assets": {"maxItems": 0}},
-        "required": ["assets"]
+        "properties": {
+          "assets": {
+            "maxItems": 0
+          }
+        },
+        "required": [
+          "assets"
+        ]
       },
       "else": {
-        "properties": {"assets": {"minItems": 1}},
-        "required": ["assets"]
+        "properties": {
+          "assets": {
+            "minItems": 1
+          }
+        },
+        "required": [
+          "assets"
+        ]
       }
     }
   ],
@@ -70,68 +92,6 @@
           "type": "integer"
         }
       }
-    },
-    "independentAssetReview": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "reviewId", "assetKind", "objectRef", "receiptRef",
-        "receiptDigest", "receiptFileSha256", "sourceRevision",
-        "sourceDigest", "entityCatalogDigest", "acquisitionReceiptRef",
-        "acquisitionReceiptDigest", "acquisitionReceiptSha256",
-        "acquisitionAssetId", "contentSha256", "casRef",
-        "reviewDecision", "reviewer"
-      ],
-      "properties": {
-        "reviewId": {
-          "type": "string",
-          "pattern": "^asset-review-[0-9a-f]{64}$"
-        },
-        "assetKind": {"enum": ["image", "video"]},
-        "objectRef": {"type": "string", "minLength": 1},
-        "receiptRef": {
-          "type": "string",
-          "pattern": "^data/tasks/[^/]+/evidence/asset_reviews/receipts/asset-review-[0-9a-f]{64}\\.json$"
-        },
-        "receiptDigest": {"$ref": "#/$defs/sha256"},
-        "receiptFileSha256": {"$ref": "#/$defs/sha256"},
-        "sourceRevision": {"$ref": "#/$defs/sha256"},
-        "sourceDigest": {"$ref": "#/$defs/sha256"},
-        "entityCatalogDigest": {"$ref": "#/$defs/sha256"},
-        "acquisitionReceiptRef": {
-          "type": "string",
-          "pattern": "^data/local/workspace/source-acquisition/((video/)?receipts|professional-image-supported-api-preparations/professional-image-supported-api-[0-9a-f]{16}/receipts)/[0-9a-f]{64}(-attempt-[0-9]{3,})?\\.json$"
-        },
-        "acquisitionReceiptDigest": {"$ref": "#/$defs/sha256"},
-        "acquisitionReceiptSha256": {"$ref": "#/$defs/sha256"},
-        "acquisitionAssetId": {"type": "string", "minLength": 1},
-        "contentSha256": {"$ref": "#/$defs/sha256"},
-        "casRef": {"type": "string", "minLength": 1},
-        "reviewDecision": {"const": "accepted"},
-        "mediaProbeDigest": {"$ref": "#/$defs/sha256"},
-        "popularitySignalsDigest": {"$ref": "#/$defs/sha256"},
-        "reviewer": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": ["provider", "model", "runId"],
-          "properties": {
-            "provider": {"type": "string", "minLength": 1},
-            "model": {"type": "string", "minLength": 1},
-            "runId": {"type": "string", "minLength": 1}
-          }
-        }
-      },
-      "allOf": [
-        {
-          "if": {
-            "properties": {"assetKind": {"const": "video"}},
-            "required": ["assetKind"]
-          },
-          "then": {
-            "required": ["mediaProbeDigest", "popularitySignalsDigest"]
-          }
-        }
-      ]
     },
     "sha256": {
       "type": "string",
@@ -171,13 +131,6 @@
         "assetId": {
           "type": "string",
           "minLength": 1
-        },
-        "acquisitionReceiptRef": {
-          "type": "string",
-          "pattern": "^data/local/workspace/source-acquisition/((video/)?receipts|professional-image-supported-api-preparations/professional-image-supported-api-[0-9a-f]{16}/receipts)/[0-9a-f]{64}(-attempt-[0-9]{3,})?\\.json$"
-        },
-        "independentAssetReview": {
-          "$ref": "#/$defs/independentAssetReview"
         },
         "sourceKind": {
           "type": "string",
@@ -301,24 +254,32 @@
           ]
         },
         "rightsAuditStatus": {
-          "enum": ["verified", "unverified", "restricted", "unknown"]
+          "enum": [
+            "verified",
+            "unverified",
+            "restricted",
+            "unknown"
+          ]
         },
         "rightsAuditIssues": {
           "type": "array",
-          "items": { "type": "string", "minLength": 1 }
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
         }
-      },
-      "dependentRequired": {
-        "acquisitionReceiptRef": ["independentAssetReview"],
-        "independentAssetReview": ["acquisitionReceiptRef"]
       },
       "allOf": [
         {
           "if": {
             "properties": {
-              "rightsAuditStatus": { "const": "verified" }
+              "rightsAuditStatus": {
+                "const": "verified"
+              }
             },
-            "required": ["rightsAuditStatus"]
+            "required": [
+              "rightsAuditStatus"
+            ]
           },
           "then": {
             "properties": {
@@ -329,17 +290,31 @@
                   "self_generated_original"
                 ]
               },
-              "author": { "minLength": 1 },
-              "licenseName": { "minLength": 1 },
-              "licenseShortName": { "minLength": 1 },
-              "authorizationProof": { "pattern": "^https://" },
-              "rightsAuditIssues": { "maxItems": 0 }
+              "author": {
+                "minLength": 1
+              },
+              "licenseName": {
+                "minLength": 1
+              },
+              "licenseShortName": {
+                "minLength": 1
+              },
+              "authorizationProof": {
+                "pattern": "^https://"
+              },
+              "rightsAuditIssues": {
+                "maxItems": 0
+              }
             }
           },
           "else": {
             "properties": {
-              "sourceUseMode": { "const": "rights_audit_only" },
-              "rightsAuditIssues": { "minItems": 1 }
+              "sourceUseMode": {
+                "const": "rights_audit_only"
+              },
+              "rightsAuditIssues": {
+                "minItems": 1
+              }
             }
           }
         }

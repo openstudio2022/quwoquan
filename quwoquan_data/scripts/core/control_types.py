@@ -28,7 +28,7 @@ def expected_content_generator(content_type: ContentType) -> ContentGenerator:
 
 
 class ExecutionPhase(StrEnum):
-    """Generic runtime scale marker; product campaigns are never static types."""
+    """Generic runtime scale marker; product runs are never static types."""
 
     PILOT = "pilot"
     SCALE = "scale"
@@ -118,7 +118,7 @@ class SourcePolicyRevision(StrEnum):
 
 
 class ReceiptStage(StrEnum):
-    """十阶段 receipt 协议的阶段闭集（DEC-005）。
+    """producer 九阶段 receipt 协议的阶段闭集（DEC-005）。
 
     对象目录下的过程阶段是本闭集的一个连续子段，不是另一份枚举。receipt CLI、
     工作包目录契约与 layout 门禁都从这里取值——同一个阶段名在三处各写一遍时，
@@ -134,7 +134,6 @@ class ReceiptStage(StrEnum):
     REVIEW = "5.review"
     PUBLISH = "publish"
     RELEASE = "release"
-    SHIP = "ship"
 
 
 RECEIPT_STAGE_SEQUENCE: tuple[ReceiptStage, ...] = (
@@ -147,7 +146,6 @@ RECEIPT_STAGE_SEQUENCE: tuple[ReceiptStage, ...] = (
     ReceiptStage.REVIEW,
     ReceiptStage.PUBLISH,
     ReceiptStage.RELEASE,
-    ReceiptStage.SHIP,
 )
 
 # 逐对象推进、在对象目录下留痕的阶段。显式列出而不是对上面的序列切片：切片会让
@@ -216,24 +214,14 @@ class MediaHoldingRecoveryAction(StrEnum):
     NONE = "none"
 
 
-class PoolObjectRetirementReason(StrEnum):
-    """canonical 池内历史对象逐对象退役的原因闭集。
-
-    每个成员绑定一条 discovery 层已经在产出的 typed 不可准入判据，退役请求必须
-    观测到该判据才成立；成员不表达「操作者想下架」，因此本闭集不能用来把合格
-    对象移出可选集。schema 侧真相源是
-    `schema/release/pool_object_retirement_receipt.schema.json`。
-    """
-
-    HISTORICAL_GENERATOR_NOT_AGENT = "historical_generator_not_agent"
 
 
 __all__ = [
     "AppUatDataSource", "AppUatStatus", "ContentGenerator", "ContentImportStatus",
     "ContentType", "DeploymentEnvironment", "ExecutionPhase", "ImageSafetyReviewStatus", "MediaClosureVerdict",
     "MediaDurabilityState", "MediaHoldingRecoveryAction", "MediaHoldingState",
-    "OBJECT_STAGE_SEQUENCE", "PoolObjectRetirementReason",
-    "PostStage", "RECEIPT_STAGE_SEQUENCE", "ReceiptStage", "ReleaseDeletePolicy",
+    "OBJECT_STAGE_SEQUENCE",
+    "RECEIPT_STAGE_SEQUENCE", "ReceiptStage", "ReleaseDeletePolicy",
     "ReleaseRunKind", "ReleaseRunStatus", "ReleaseSourceOwner", "ReleaseSyncMode",
     "ReviewItemKind", "ReviewJudgment", "ReviewOverride",
     "ReviewPublishState", "SourcePolicyRevision",

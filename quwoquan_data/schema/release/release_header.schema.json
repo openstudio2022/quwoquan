@@ -194,6 +194,7 @@
     "counts": {
       "type": "object",
       "required": [
+        "homepage",
         "article",
         "image",
         "video",
@@ -201,6 +202,10 @@
       ],
       "additionalProperties": false,
       "properties": {
+        "homepage": {
+          "type": "integer",
+          "minimum": 0
+        },
         "article": {
           "type": "integer",
           "minimum": 0
@@ -223,14 +228,7 @@
       "type": "array",
       "uniqueItems": true,
       "items": {
-        "oneOf": [
-          {
-            "$ref": "#/$defs/handoffContent"
-          },
-          {
-            "$ref": "#/$defs/legacyAuditContent"
-          }
-        ]
+        "$ref": "#/$defs/handoffContent"
       }
     },
     "authors": {
@@ -299,6 +297,12 @@
         }
       }
     },
+    "milestone": {
+      "enum": ["M1", "M10", "M100", "M1000", "M10000"]
+    },
+    "milestoneTargets": {
+      "$ref": "#/$defs/carrierCountsWithoutTotal"
+    },
     "samplePlanRef": {
       "const": "uat/sample_plan.json"
     },
@@ -308,6 +312,17 @@
     }
   },
   "$defs": {
+    "carrierCountsWithoutTotal": {
+      "type": "object",
+      "required": ["homepage", "article", "image", "video"],
+      "additionalProperties": false,
+      "properties": {
+        "homepage": {"type": "integer", "minimum": 0},
+        "article": {"type": "integer", "minimum": 0},
+        "image": {"type": "integer", "minimum": 0},
+        "video": {"type": "integer", "minimum": 0}
+      }
+    },
     "handoffContent": {
       "type": "object",
       "required": [
@@ -341,39 +356,6 @@
           "pattern": "^sha256:[0-9a-f]{64}$"
         },
         "contentLibraryBindingDigest": {
-          "type": "string",
-          "pattern": "^sha256:[0-9a-f]{64}$"
-        }
-      }
-    },
-    "legacyAuditContent": {
-      "type": "object",
-      "required": [
-        "contentId",
-        "version",
-        "postRef",
-        "executionId",
-        "sourceIdentityDigest"
-      ],
-      "additionalProperties": false,
-      "properties": {
-        "contentId": {
-          "type": "string",
-          "minLength": 1
-        },
-        "version": {
-          "type": "integer",
-          "minimum": 1
-        },
-        "postRef": {
-          "type": "string",
-          "minLength": 1
-        },
-        "executionId": {
-          "type": "string",
-          "minLength": 1
-        },
-        "sourceIdentityDigest": {
           "type": "string",
           "pattern": "^sha256:[0-9a-f]{64}$"
         }

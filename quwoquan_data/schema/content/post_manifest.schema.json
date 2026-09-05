@@ -66,11 +66,10 @@
         "rightsBasis": { "type": "string", "minLength": 1 },
         "commercialAuthorizationStatus": { "enum": ["verified", "unverified"] },
         "publicationAdmission": {
-          "enum": ["research_release", "commercial_release", "risk_accepted_attribution_only"]
+          "enum": ["research_release", "commercial_release"]
         },
         "authorizationProofUrl": { "type": ["string", "null"] },
         "termsUrl": { "type": ["string", "null"] },
-        "riskAcceptanceId": { "type": ["string", "null"] },
         "watermarkStatus": { "const": "absent" },
         "audioRightsStatus": {
           "enum": [
