@@ -105,6 +105,18 @@ class _HomePageState extends ConsumerState<HomePage>
       }
       _scheduleAutomaticRecoveryBackoff(next);
     }, fireImmediately: true);
+    ref.listenManual<AuthSessionState>(authSessionControllerProvider, (
+      previous,
+      next,
+    ) {
+      final justLoggedIn =
+          next.isAuthenticated &&
+          (previous == null || !previous.isAuthenticated);
+      if (justLoggedIn) {
+        _resumeHomeChannelContinuation();
+        unawaited(_feedNotifier.load(_activeChannelId, force: true));
+      }
+    });
     WidgetsBinding.instance.addObserver(this);
     _networkSubscription = ref
         .read(appTelemetryContextProvider)
@@ -446,17 +458,6 @@ class _HomePageState extends ConsumerState<HomePage>
   @override
   Widget build(BuildContext context) {
     super.build(context);
-    ref.listen<AuthSessionState>(authSessionControllerProvider, (
-      AuthSessionState? previous,
-      AuthSessionState next,
-    ) {
-      final justLoggedIn =
-          next.isAuthenticated &&
-          (previous == null || !previous.isAuthenticated);
-      if (justLoggedIn) {
-        _resumeHomeChannelContinuation();
-      }
-    });
     if (ref.watch(authSessionControllerProvider).isAuthenticated) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {

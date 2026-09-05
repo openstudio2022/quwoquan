@@ -1,4 +1,5 @@
 import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 import 'package:quwoquan_app/runtime/di/cloud_http_client_provider.dart';
@@ -43,6 +44,7 @@ import 'package:quwoquan_app/service/chat_service/chat/conversation/adapters/con
 import 'package:quwoquan_app/service/chat_service/chat/conversation/adapters/conversation_sync_service.dart';
 import 'package:quwoquan_app/runtime/di/cache_management_service.dart';
 import 'package:quwoquan_app/service/content_service/content/post/adapters/content_cache_services.dart';
+import 'package:quwoquan_app/service/content_service/content/feed_delivery_page/application/public/content_activation_identity.dart';
 import 'package:quwoquan_app/service/search_service/search/search_index_view/adapters/local_chat_search_store.dart';
 import 'package:quwoquan_app/service/search_service/search/search_index_view/application/public/local_search_namespace.dart';
 import 'package:quwoquan_app/runtime/di/local_chat_search_sync_service.dart';
@@ -246,22 +248,56 @@ final userProfileCacheProvider = Provider<UserProfileCacheService>((ref) {
 
 final postObjectCacheProvider = Provider<PostObjectCacheService>((ref) {
   final profile = ref.watch(appResourceCacheProfileProvider);
-  return PostObjectCacheService(
+  final cache = PostObjectCacheService(
     maxMemoryEntries: profile.maxPostObjectCacheEntries,
   );
+  ref.listen<ContentCacheIsolationIdentity?>(
+    contentCacheIsolationIdentityProvider,
+    (_, identity) {
+      if (identity == null) {
+        cache.clearNamespace();
+      } else {
+        cache.adoptNamespace(identity);
+      }
+    },
+    fireImmediately: true,
+  );
+  return cache;
 });
+
+/// 当前 principal 已由 Remote 权威确认的内容缓存隔离身份。
+///
+/// `null` 表示当前账号/Persona 尚未取得 active release tuple；此时 Research
+/// 登录切换后不得回放匿名 `no_active_release` 或任何历史磁盘快照。
+final contentCacheIsolationIdentityProvider =
+    NotifierProvider<
+      ContentCacheIsolationIdentityNotifier,
+      ContentCacheIsolationIdentity?
+    >(ContentCacheIsolationIdentityNotifier.new);
+
+final class ContentCacheIsolationIdentityNotifier
+    extends Notifier<ContentCacheIsolationIdentity?> {
+  @override
+  ContentCacheIsolationIdentity? build() => null;
+
+  void adopt(ContentCacheIsolationIdentity identity) => state = identity;
+
+  void clear() => state = null;
+}
 
 final contentQuerySnapshotStoreProvider = Provider<ContentQuerySnapshotStore>((
   ref,
 ) {
-  // 内容身份是服务端运行时事实（DEC-004）：快照逐条携带
-  // ContentActivationIdentity，store 在收到首个权威 Feed 响应后原子采纳
-  // 身份并只回放一致快照；权威身份到达前允许最大年龄内的 LKG 回放。
-  // 因此磁盘持久化不再依赖构建期 release namespace。
-  return ContentQuerySnapshotStore(
+  final store = ContentQuerySnapshotStore(
     persistToPreferences: true,
     telemetrySink: ref.watch(cacheTelemetrySinkProvider),
   );
+  ref.listen<ContentCacheIsolationIdentity?>(
+    contentCacheIsolationIdentityProvider,
+    (_, identity) => store.adoptContentCacheIsolationIdentity(identity),
+    fireImmediately: true,
+  );
+  return store;
 });
 
 final cacheManagementServiceProvider = Provider<CacheManagementService>((ref) {
