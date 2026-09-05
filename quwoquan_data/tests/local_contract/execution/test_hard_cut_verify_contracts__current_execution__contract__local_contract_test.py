@@ -370,7 +370,8 @@ def test_quality_and_compose_hard_gates_bind_selected_source_anchors(
             "targetRefs": [TARGET_REF],
         }],
     })
-    quality_path = _write(object_root / "2.quality/quality_analysis.json", {
+    quality_path = object_root / "2.quality/quality_analysis.json"
+    _write(quality_path, {
         "schema": "quwoquan_data.quality_analysis",
         "stage": "2.quality",
         "executionId": EXECUTION_ID,
@@ -389,7 +390,8 @@ def test_quality_and_compose_hard_gates_bind_selected_source_anchors(
         "rejectionReasons": [],
         "evidenceHashes": [_digest(source_path)],
     })
-    compose_path = _write(object_root / "3.compose/writing_pack.json", {
+    compose_path = object_root / "3.compose/writing_pack.json"
+    _write(compose_path, {
         "schema": "quwoquan_data.writing_pack",
         "stage": "3.compose",
         "executionId": EXECUTION_ID,
