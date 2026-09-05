@@ -739,6 +739,7 @@ def test_producer_baseline_paths_exclude_consumer_and_broad_script_roots() -> No
     paths = set(handoff._PRODUCER_CONTRACT_PATHS)
 
     assert "quwoquan_data/scripts/core" not in paths
+    assert all((Path(__file__).resolve().parents[4] / item).is_file() for item in paths)
     assert "quwoquan_data/scripts/verify" not in paths
     assert not any("/release/environment" in item for item in paths)
     assert not any("import_report" in item for item in paths)

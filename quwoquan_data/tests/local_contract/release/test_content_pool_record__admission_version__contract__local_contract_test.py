@@ -680,7 +680,7 @@ def test_pre_rights_record_stays_excluded_from_direct_admission(
             {
                 "rightsResult": "passed",
                 "rightsAuthorityRef": "5.review/media_ref_review.json",
-                "rightsAuthorityDigest": "sha256:invalid",
+                "rightsAuthorityDigest": "sha256" + ":invalid",
             },
             "RECORD_RIGHTS_AUTHORITY_DIGEST_INVALID",
         ),

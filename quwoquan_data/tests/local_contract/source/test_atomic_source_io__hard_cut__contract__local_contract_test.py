@@ -576,8 +576,23 @@ def test_video_receipt_materializes_video_and_poster_with_explicit_rights(
     assert (unit / "assets" / index["assets"][0]["fileName"]).read_bytes() == video_body
     assert (unit / "assets" / index["assets"][1]["fileName"]).read_bytes() == poster_body
     assert index["assets"][1]["contentSha256"] == receipt_row["posterContentSha256"]
-    assert index["assets"][1]["sourceUrl"] == receipt_row["sourceUrl"]
-    assert index["assets"][1]["license"] == receipt_row["license"]
+    video, poster = index["assets"]
+    for materialized in (video, poster):
+        assert materialized["creator"] == receipt_row["creator"]
+        assert materialized["platform"] == receipt_row["platform"]
+        assert (
+            materialized["originalAssetUrl"]
+            == receipt_row["planVideoSpec"]["originalAssetUrl"]
+        )
+        assert materialized["modelReleaseStatus"] == receipt_row["modelReleaseStatus"]
+        assert (
+            materialized["propertyReleaseStatus"]
+            == receipt_row["propertyReleaseStatus"]
+        )
+    assert poster["sourceUrl"] == receipt_row["posterRights"]["sourceUrl"]
+    assert poster["license"] == receipt_row["posterRights"]["license"]
+    assert poster["posterRights"] == receipt_row["posterRights"]
+    assert poster["derivation"] == receipt_row["posterRights"]["derivation"]
     assert meta["acquisition"]["posterContentSha256"] == receipt_row["posterContentSha256"]
 
 
@@ -729,7 +744,18 @@ def test_image_derivative_preserves_original_receipt_identity_and_mime_suffix(
         "bytes": len(original),
         "mimeType": "image/jpeg",
         "sourceUrl": "https://example.test/image",
+        "creator": "Example creator",
+        "platform": "Example Media",
+        "capturedAt": "2026-09-03T00:00:00Z",
         "license": "CC BY 4.0",
+        "licenseSnapshot": "CC BY 4.0 frozen at source capture",
+        "usageScope": "app_publish",
+        "modelReleaseStatus": "not_required",
+        "sourceAttribution": {
+            "sourcePostUrl": "https://example.test/image",
+            "originalAssetUrl": "https://cdn.example.test/original.jpg",
+            "propertyReleaseStatus": "not_required",
+        },
         "termsUrl": "https://example.test/terms",
         "authorizationProof": "https://example.test/proof",
         "rightsStatus": "verified",

@@ -421,8 +421,11 @@ def build_entity_object_transaction_package(
                 }
             )
 
-        if not cas_rows:
-            raise ObjectTransactionError("entity 事务至少需要一个已授权发布资产")
+        if not cas_rows and not (
+            str(source_manifest.get("contentType") or "") == "article"
+            and str(source_manifest.get("publishMediaMode") or "") == "text_only"
+        ):
+            raise ObjectTransactionError("non-text-only entity transaction requires an authorized asset")
         tag_refs = sorted(
             {str(item) for item in entity.get("tagRefs") or [] if str(item)}
         )
@@ -438,7 +441,11 @@ def build_entity_object_transaction_package(
             object_root / rights_ref,
             {
                 "schema": "quwoquan_data.asset_rights_closure",
-                "publishMediaMode": "not_applicable",
+                "publishMediaMode": (
+                    "text_only"
+                    if str(source_manifest.get("publishMediaMode") or "") == "text_only"
+                    else "not_applicable"
+                ),
                 "assets": rights_rows,
             },
         )
@@ -465,6 +472,12 @@ def build_entity_object_transaction_package(
                 "tagRefsRef": "tag.refs.json",
                 "assetRefsRef": "asset.refs.json",
                 "assets": canonical_assets,
+                "contentType": (
+                    "article"
+                    if str(source_manifest.get("publishMediaMode") or "") == "text_only"
+                    else "homepage"
+                ),
+                "publishMediaMode": str(source_manifest.get("publishMediaMode") or "not_applicable"),
                 "admission": {
                     "processResult": "completed",
                     "qualityResult": "passed",
@@ -518,7 +531,11 @@ def build_entity_object_transaction_package(
             "schema": PACKAGE_SCHEMA,
             "transactionId": transaction_id,
             "executionId": execution_id,
-            "publishMediaMode": "not_applicable",
+            "publishMediaMode": (
+                "text_only"
+                if str(source_manifest.get("publishMediaMode") or "") == "text_only"
+                else "not_applicable"
+            ),
             "sourcePolicyRevision": REQUIRED_SOURCE_POLICY,
             "target": {
                 "layoutSchema": LAYOUT_SCHEMA,

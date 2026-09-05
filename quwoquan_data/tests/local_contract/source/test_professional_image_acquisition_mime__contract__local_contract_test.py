@@ -227,6 +227,16 @@ def test_accepted_image_mime_propagates_into_atomic_materialization(
     materialized = index["assets"][0]
     assert meta["acquisition"]["mimeType"] == "image/jpeg"
     assert materialized["mimeType"] == "image/jpeg"
+    assert materialized["creator"] == row["creator"]
+    assert materialized["platform"] == row["platform"]
+    assert (
+        materialized["originalAssetUrl"]
+        == row["sourceAttribution"]["originalAssetUrl"]
+    )
+    assert materialized["sourceAttribution"] == row["sourceAttribution"]
+    assert materialized["licenseSnapshot"] == row["licenseSnapshot"]
+    assert materialized["usageScope"] == row["usageScope"]
+    assert materialized["modelReleaseStatus"] == row["modelReleaseStatus"]
     assert Path(materialized["fileName"]).suffix == ".jpg"
     assert (unit / "assets" / materialized["fileName"]).read_bytes() == body
 

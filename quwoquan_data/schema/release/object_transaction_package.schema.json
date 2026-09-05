@@ -215,7 +215,7 @@
           "target": {
             "properties": {
               "objectKind": {
-                "const": "posts"
+                "enum": ["posts", "entities"]
               }
             },
             "required": [

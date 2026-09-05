@@ -305,6 +305,37 @@ def _render_source_markdown(candidate: Mapping[str, Any], body: bytes, *, acquis
     return body.decode("utf-8", errors="replace")
 
 
+def _receipt_media_identity_fields(
+    receipt_row: Mapping[str, Any],
+    *,
+    acquisition_kind: str,
+) -> dict[str, Any]:
+    if acquisition_kind == "image":
+        source_attribution = receipt_row["sourceAttribution"]
+        return {
+            "creator": receipt_row["creator"],
+            "platform": receipt_row["platform"],
+            "collectionPageUrl": source_attribution["sourcePostUrl"],
+            "originalAssetUrl": source_attribution["originalAssetUrl"],
+            "capturedAt": receipt_row["capturedAt"],
+            "licenseSnapshot": receipt_row["licenseSnapshot"],
+            "usageScope": receipt_row["usageScope"],
+            "modelReleaseStatus": receipt_row["modelReleaseStatus"],
+            "propertyReleaseStatus": source_attribution["propertyReleaseStatus"],
+            "sourceAttribution": dict(source_attribution),
+        }
+    plan_spec = receipt_row["planVideoSpec"]
+    return {
+        "creator": receipt_row["creator"],
+        "platform": receipt_row["platform"],
+        "collectionPageUrl": plan_spec["sourcePostUrl"],
+        "originalAssetUrl": plan_spec["originalAssetUrl"],
+        "capturedAt": receipt_row["capturedAt"],
+        "modelReleaseStatus": receipt_row["modelReleaseStatus"],
+        "propertyReleaseStatus": receipt_row["propertyReleaseStatus"],
+    }
+
+
 def _build_meta(
     *,
     execution_id: str,
@@ -465,15 +496,22 @@ def materialize_source_candidate(
                 link_bytes_from_library(body, asset_path, kind="media", library_root=library_root)
                 asset_ref = f"assets/{asset_path.name}"
                 rights_fields = {
-                    "sourceUrl": str(receipt_row["sourceUrl"]),
-                    "license": str(receipt_row["license"]),
-                    "termsUrl": str(receipt_row["termsUrl"]),
-                    "authorizationProof": str(receipt_row["authorizationProof"]),
-                    "rightsStatus": str(receipt_row["rightsStatus"]),
-                    "authorizationRequired": receipt_row["authorizationRequired"],
-                    "distributionDecision": str(receipt_row["distributionDecision"]),
-                    "rightsIssues": list(receipt_row["rightsIssues"]),
+                    key: receipt_row[key]
+                    for key in (
+                        "sourceUrl",
+                        "license",
+                        "termsUrl",
+                        "authorizationProof",
+                        "rightsStatus",
+                        "authorizationRequired",
+                        "distributionDecision",
+                        "rightsIssues",
+                    )
                 }
+                media_identity_fields = _receipt_media_identity_fields(
+                    receipt_row,
+                    acquisition_kind=acquisition_kind,
+                )
                 if budget_derivation is not None:
                     if (
                         budget_derivation.get("sourceSha256") != receipt_row.get("contentSha256")
@@ -501,6 +539,7 @@ def materialize_source_candidate(
                         "derivedMimeType": materialized_mime,
                         "derivedExtension": suffix,
                     }} if budget_derivation is not None else {}),
+                    **media_identity_fields,
                     **rights_fields,
                 })
                 if acquisition_kind == "video":
@@ -524,6 +563,9 @@ def materialize_source_candidate(
                         "acquisitionReceiptRef": str(receipt_row.get("_receiptRef") or ""),
                         "professionalAssetId": str(receipt_row["assetId"]),
                         "derivedFromSourceAssetId": f"{safe_asset_id}:video",
+                        "derivation": poster_rights["derivation"],
+                        "posterRights": dict(poster_rights),
+                        **media_identity_fields,
                         **{
                             key: poster_rights[key]
                             for key in (

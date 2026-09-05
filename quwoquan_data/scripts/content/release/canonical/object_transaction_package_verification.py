@@ -101,9 +101,14 @@ def verify_package(
             raise ObjectTransactionError(
                 "publishMediaMode 与 packaged post manifest 漂移"
             )
+    elif object_kind == "entities":
+        manifest_mode = str(object_manifest.get("publishMediaMode") or "").strip()
+        expected_mode = "text_only" if manifest_mode == "text_only" else "not_applicable"
+        if media_mode != expected_mode:
+            raise ObjectTransactionError("publishMediaMode 与 packaged entity manifest 漂移")
     elif media_mode != "not_applicable":
         raise ObjectTransactionError(
-            "non-post object transaction publishMediaMode 必须为 not_applicable"
+            "non-content object transaction publishMediaMode 必须为 not_applicable"
         )
     review = _review_binding(object_root, package)
     closure = package.get("closure")

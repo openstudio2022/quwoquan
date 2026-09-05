@@ -23,7 +23,7 @@ import (
 )
 
 const (
-	ContentLegacyReleaseStateMigrationReceiptSchema = "quwoquan.content_legacy_release_state_migration_receipt.v1"
+	ContentLegacyReleaseStateMigrationReceiptSchema = "quwoquan.content_legacy_release_state_migration_receipt"
 	LegacyReleaseStateIndexSetV1                    = "content_release_state_legacy_v1"
 	LegacyReleaseStageReceiptIndexSetV1             = "content_release_stage_receipt_legacy_v1"
 	ContentReleaseStageReceiptSourceOwner           = "qwq_data"

@@ -69,6 +69,7 @@ def test_source_definition_inputs_are_producer_owned_and_exact() -> None:
         "quwoquan_data/scripts/verify",
     ):
         assert forbidden not in inputs
+    assert all((DATA_SCRIPTS.parents[1] / item).is_file() for item in inputs)
     assert not any("recommendation-service" in item for item in inputs)
     assert not any(item.endswith("/ui_config.yaml") for item in inputs)
     assert not any("release_uat" in item or "/release/environment" in item for item in inputs)

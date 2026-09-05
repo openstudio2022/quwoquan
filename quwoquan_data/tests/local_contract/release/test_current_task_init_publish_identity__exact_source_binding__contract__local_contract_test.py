@@ -27,6 +27,7 @@ from content.release.canonical.post_transaction import (
 )
 from content.release.canonical.publish_object import publish_object
 from support.post_object_transaction_fixture import (
+    CREATOR_REF,
     EXECUTION_ID,
     POST_REF,
     _admit_packaged_creator,
@@ -173,13 +174,67 @@ def test_current_task_init_documents_publish_one_post_plan_and_apply(
     execution, package, publish, transaction_id = _current_execution(
         tmp_path, monkeypatch
     )
-    build_post_object_transaction_package(
-        execution_root=execution,
-        object_ref=CURRENT_POST_REF,
-        transaction_id=transaction_id,
-        package_root=package,
+    post = execution / "posts" / CURRENT_POST_REF
+    source_asset = execution / "sources/commons/assets/cover.jpg"
+    source_asset.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(post / "assets/cover.jpg", source_asset)
+    source_index_path = execution / "sources/commons/assets/index.json"
+    source_index = json.loads(source_index_path.read_text(encoding="utf-8"))
+    source_index["assets"][0].update(rightsStatus="verified", rightsIssues=[])
+    _write(source_index_path, source_index)
+    _write(
+        execution / "sources/commons/meta.json",
+        {
+            "sourceId": "commons",
+            "canonicalUrl": "https://commons.wikimedia.org/wiki/File:Example.jpg",
+            "sourceUseMode": "licensed_adaptation",
+            "sourceClass": "open_license_media",
+            "fetchedAt": "2026-07-18T04:00:00Z",
+            "rightsClue": "作者 Fixture Photographer，CC BY 4.0。",
+        },
     )
-    _admit_packaged_creator(package, publish)
+    _write(
+        post / "1.download/source_refs.json",
+        {
+            "sources": [
+                {
+                    "sourceId": "commons",
+                    "sourceRef": "sources/commons/source.md",
+                    "metaRef": "sources/commons/meta.json",
+                    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Example.jpg",
+                }
+            ]
+        },
+    )
+    (execution / "sources/commons/source.md").write_text(
+        "# Commons fixture\n", encoding="utf-8"
+    )
+    _write(
+        post / "3.compose/writing_pack.json",
+        {
+            "vertical": "travel",
+            "title": "光影",
+            "publishLayout": "image",
+            "creatorProfileRef": CREATOR_REF,
+            "selectedSourceRefs": ["sources/commons/source.md"],
+            "tagRefs": ["Topic/旅行/玩法/摄影旅拍"],
+        },
+    )
+    _write(
+        post / "4.draft/image_work.json",
+        {
+            "schema": "quwoquan_data.image_work",
+            "executionId": EXECUTION_ID,
+            "objectRef": f"posts/{CURRENT_POST_REF}",
+            "assetRefs": ["sources/commons/assets/cover.jpg"],
+            "caption": "湖岸与长桥的光影",
+        },
+    )
+    _write(
+        execution / "_shared/receipts/006-4.draft.json",
+        {"actor": {"invocation": {"model": "fixture-model"}}},
+    )
+    (post / "manifest.json").unlink()
     monkeypatch.setattr(post_transaction, "PUBLISH_ROOT", publish)
     monkeypatch.setattr(post_promotion, "PUBLISH_ROOT", publish)
     monkeypatch.setattr(post_promotion, "OUTPUT_ROOT", tmp_path / "current-output")
@@ -208,6 +263,14 @@ def test_current_task_init_documents_publish_one_post_plan_and_apply(
         validate_review_gate,
     )
     planned = publish_object(EXECUTION_ID, f"posts/{CURRENT_POST_REF}")
+    assert (post / "manifest.json").is_file()
+    build_post_object_transaction_package(
+        execution_root=execution,
+        object_ref=CURRENT_POST_REF,
+        transaction_id=transaction_id,
+        package_root=package,
+    )
+    _admit_packaged_creator(package, publish)
     applied = publish_object(EXECUTION_ID, f"posts/{CURRENT_POST_REF}", apply=True)
 
     published = json.loads(

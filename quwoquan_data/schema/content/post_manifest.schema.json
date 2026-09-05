@@ -344,13 +344,14 @@
               "required": [
                 "assetId", "fileName", "kind", "sha256", "mimeType",
                 "durationMs", "width", "height", "container", "codec",
-                "pixelFormat", "posterFileName", "subtitlesFileName",
-                "posterAssetId", "posterSha256", "subtitlesSha256", "provenanceRef",
+                "pixelFormat", "posterFileName", "posterAssetId", "posterSha256",
                 "sourceAssetRefs", "rightsRefs"
               ],
               "properties": {
                 "kind": { "const": "video" },
-                "mimeType": { "const": "video/mp4" },
+                "mimeType": {
+                  "enum": ["video/mp4", "video/webm", "video/ogg", "video/quicktime"]
+                },
                 "sha256": { "$ref": "#/$defs/sha256Digest" },
                 "posterAssetId": { "type": "string", "minLength": 1 },
                 "posterSha256": { "$ref": "#/$defs/sha256Digest" },

@@ -14,7 +14,7 @@ OBJECT_ASSET_OVER_BUDGET = "DATA.PUBLISH.OBJECT_ASSET_OVER_BUDGET"
 OBJECT_CLOSURE_OVER_BUDGET = "DATA.PUBLISH.OBJECT_CLOSURE_OVER_BUDGET"
 
 
-class TypedPublishExclusion:
+class TypedPublishExclusion(Exception):
     """Typed mechanical publish exclusion without execution orchestration."""
 
     def __init__(self, issue_code: str, message: str) -> None:

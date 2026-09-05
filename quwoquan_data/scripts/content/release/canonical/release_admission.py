@@ -193,7 +193,13 @@ def _object_media_is_admissible(row: Mapping[str, Any]) -> bool:
     if carrier == "article":
         text_only = str(manifest.get("publishMediaMode") or "").strip() == "text_only"
         return not manifest_assets if text_only else bool(manifest_assets)
-    if carrier in {"homepage", "image"}:
+    if carrier == "homepage":
+        text_only = str(manifest.get("publishMediaMode") or "").strip() == "text_only"
+        return not manifest_assets if text_only else any(
+            str(asset.get("kind") or "image").strip() == "image"
+            for asset in manifest_assets
+        )
+    if carrier == "image":
         return any(
             str(asset.get("kind") or "image").strip() == "image"
             for asset in manifest_assets
