@@ -192,6 +192,26 @@ def _managed_paths(plan: dict[str, Any]) -> list[str]:
     return sorted(set(paths))
 
 
+def _fingerprint_results(results: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Bind artifact reports by exact bytes without re-encoding metric numbers."""
+
+    projected: list[dict[str, Any]] = []
+    for result in results:
+        item = dict(result)
+        artifact = item.get("artifact")
+        if isinstance(artifact, dict):
+            # summary/findings may contain finite decimal metrics. EvidenceFingerprint's
+            # cross-runtime canonical subset is integer-only, while the report's exact
+            # byte digest already binds those projections after fail-closed validation.
+            item["artifact"] = {
+                key: value
+                for key, value in artifact.items()
+                if key not in {"summary", "findings"}
+            }
+        projected.append(item)
+    return projected
+
+
 def _fingerprint(
     *,
     plan: dict[str, Any],
@@ -248,7 +268,7 @@ def _fingerprint(
                     {
                         "plan_assets": payload["assets"],
                         "source": source,
-                        "results": results,
+                        "results": _fingerprint_results(results),
                     }
                 ),
             },

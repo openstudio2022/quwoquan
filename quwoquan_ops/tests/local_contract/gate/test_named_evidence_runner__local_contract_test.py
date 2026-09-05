@@ -399,7 +399,10 @@ class NamedEvidenceRunnerTest(unittest.TestCase):
             "baseSha": plan["merge_base_sha"],
             "headSha": plan["head_sha"],
             "changedPathsDigest": plan["candidate_evidence_identity"]["changed_paths_digest"],
-            "summary": {"changedFiles": len(plan["changed_paths"])},
+            "summary": {
+                "changedFiles": len(plan["changed_paths"]),
+                "duplicationPercent": 1.043,
+            },
             "findings": [{"code": "CODE_HEALTH.CHANGE_SIZE_ADVISORY", "path": "<candidate>", "terminal": "PR_WARN", "message": "large"}],
             "evidenceFingerprint": {"ref": "evidence-fingerprint-v1:sha256:" + "c" * 64, "digest": "sha256:" + "c" * 64},
         }
@@ -439,7 +442,9 @@ class NamedEvidenceRunnerTest(unittest.TestCase):
             receipt = self._run(plan, registry)
         artifact = receipt["evidence"][0]["artifact"]
         self.assertEqual("code-health-report-v1", artifact["kind"])
+        self.assertEqual(report["summary"], artifact["summary"])
         self.assertEqual(report["findings"], artifact["findings"])
+        runner.validate_named_evidence_receipt(receipt)
         reviewer = review.build_reviewer_input(
             plan,
             {"receipt_ref": "receipt.json", "canonical_bytes_sha256": "sha256:" + "e" * 64},
