@@ -21,9 +21,11 @@ from quwoquan_ops.cli.lib.local_env_gate_matrix.data_phases import (
     _run_data_phase,
 )
 from quwoquan_ops.cli.lib.local_env_gate_matrix.evidence import (
-    _down_target,
+    _drain_resource_journal,
     _live_matrix_evidence_errors,
+    _pre_down_shared_targets,
     _provider_local_functional_errors,
+    _run_down_phase,
 )
 from quwoquan_ops.cli.lib.local_env_gate_matrix.identity import (
     CANONICAL_TARGETS,
@@ -38,13 +40,9 @@ from quwoquan_ops.cli.lib.local_env_gate_matrix.identity import (
     _startup_attempt_matches_package_identity,
 )
 from quwoquan_ops.cli.lib.local_env_gate_matrix.input_validation import (
-    ResearchLifecycleUnsupported,
-    _resolve_matrix_inputs,
+    ResearchLifecycleUnsupported, _resolve_matrix_inputs,
 )
-from quwoquan_ops.cli.lib.local_env_gate_matrix.preflight import (
-    _device_uat_bindings,
-    _docker_daemon_ready,
-)
+from quwoquan_ops.cli.lib.local_env_gate_matrix.preflight import _device_uat_bindings, _docker_daemon_ready
 from quwoquan_ops.cli.lib.local_env_gate_matrix.reporting import _write_matrix_result
 from quwoquan_ops.cli.lib.local_env_gate_timing import (
     PhaseTimer,
@@ -75,6 +73,7 @@ def _run_local_env_gate_matrix(
     ios_simulator_device: str = "",
     android_emulator_device: str = "",
     android_physical_device: str = "",
+    ios_physical_device: str = "",
     device_profile: str = DEVICE_PROFILE_FULL,
     data_fn: DataRunner = _data_cli_runner,
     execution_class: str = "live",
@@ -110,6 +109,7 @@ def _run_local_env_gate_matrix(
             ios_simulator_device=ios_simulator_device,
             android_emulator_device=android_emulator_device,
             android_physical_device=android_physical_device,
+            ios_physical_device=ios_physical_device,
             device_profile=device_profile,
             execution_class=execution_class,
         )
@@ -151,6 +151,7 @@ def _run_local_env_gate_matrix(
     failure_category = ""
     matrix_release_train_id = ""
     package_baselines: dict[str, str] = {}
+    resource_journal: list[str] = []
 
     docker_ok, docker_detail = _docker_daemon_ready()
     phases.append(
@@ -195,20 +196,12 @@ def _run_local_env_gate_matrix(
         block["dataRunIds"] = data_ids
         environments[target] = block
 
-        # The local targets share resources. Normal down is the sole cleanup path.
-        for other in CANONICAL_TARGETS:
-            down_payload = _down_target(other, down_fn=down_fn)
-            down_exit = _record_phase(
-                phases,
-                name=f"{target}_pre_down_{other}",
-                payload=down_payload,
-            )
-            if down_exit != 0:
-                block["preDown"] = down_payload
-                overall_exit = down_exit
-                failure_category = "down"
-                break
-        if overall_exit != 0:
+        down_exit = _pre_down_shared_targets(
+            target, down_fn=down_fn, phases=phases, block=block
+        )
+        if down_exit != 0:
+            overall_exit = down_exit
+            failure_category = "down"
             break
 
         package_payload = _invoke_env(
@@ -331,19 +324,21 @@ def _run_local_env_gate_matrix(
         )
         block["up"] = up_payload
         up_exit = _record_phase(phases, name=f"{target}_up", payload=up_payload)
+        if up_exit == 0:
+            resource_journal.append(target)
         if up_exit != 0:
             overall_exit = up_exit
             failure_category = "up"
-            cleanup_payload = _down_target(target, down_fn=down_fn)
-            block["failedUpCleanup"] = cleanup_payload
-            cleanup_exit = _record_phase(
-                phases,
-                name=f"{target}_failed_up_cleanup",
-                payload=cleanup_payload,
+            cleanup_payload, cleanup_exit = _run_down_phase(
+                target, down_fn=down_fn, phases=phases,
+                phase_name=f"{target}_failed_up_cleanup",
             )
+            block["failedUpCleanup"] = cleanup_payload
             if cleanup_exit != 0:
                 overall_exit = cleanup_exit
                 failure_category = "down"
+            elif target in resource_journal:
+                resource_journal.remove(target)
             environments[target] = block
             break
 
@@ -378,13 +373,11 @@ def _run_local_env_gate_matrix(
                 failure_category = "startup_identity"
 
         if overall_exit != 0:
-            cleanup_payload = _down_target(target, down_fn=down_fn)
-            block["startupIdentityCleanup"] = cleanup_payload
-            cleanup_exit = _record_phase(
-                phases,
-                name=f"{target}_startup_identity_cleanup",
-                payload=cleanup_payload,
+            cleanup_payload, cleanup_exit = _run_down_phase(
+                target, down_fn=down_fn, phases=phases,
+                phase_name=f"{target}_startup_identity_cleanup",
             )
+            block["startupIdentityCleanup"] = cleanup_payload
             if cleanup_exit != 0:
                 overall_exit = cleanup_exit
                 failure_category = "down"
@@ -842,6 +835,7 @@ def _run_local_env_gate_matrix(
                 ios_simulator_device=ios_simulator_device,
                 android_emulator_device=android_emulator_device,
                 android_physical_device=android_physical_device,
+                ios_physical_device=ios_physical_device,
             ):
                 uat_payload = _invoke_env(
                     app_uat_fn,
@@ -935,16 +929,15 @@ def _run_local_env_gate_matrix(
                 overall_exit = revoke_exit
                 failure_category = "acceptance_lease_revoke"
 
-        down_payload = _down_target(target, down_fn=down_fn)
-        block["down"] = down_payload
-        down_exit = _record_phase(
-            phases,
-            name=f"{target}_down",
-            payload=down_payload,
+        down_payload, down_exit = _run_down_phase(
+            target, down_fn=down_fn, phases=phases, phase_name=f"{target}_down"
         )
+        block["down"] = down_payload
         if down_exit != 0:
             overall_exit = down_exit
             failure_category = "down"
+        elif target in resource_journal:
+            resource_journal.remove(target)
 
         environments[target] = block
         if overall_exit != 0:
@@ -967,6 +960,13 @@ def _run_local_env_gate_matrix(
         if evidence_errors:
             overall_exit = 2
             failure_category = "evidence_identity"
+
+    cleanup_exit = _drain_resource_journal(
+        resource_journal, down_fn=down_fn, phases=phases, environments=environments
+    )
+    if cleanup_exit != 0 and overall_exit == 0:
+        overall_exit = cleanup_exit
+        failure_category = "resource_journal_cleanup"
 
     wall_seconds = time.monotonic() - wall_started
     if wall_seconds > int(budgets["hardBudgetSeconds"]) and overall_exit == 0:

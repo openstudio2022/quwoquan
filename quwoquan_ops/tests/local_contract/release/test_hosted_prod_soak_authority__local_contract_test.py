@@ -149,7 +149,7 @@ def _fixture(
     )
     full_receipt = full_readback["receipt"]
     manifest = {
-        "candidateId": DIGEST_B,
+        "releaseCompositionId": DIGEST_B,
         "artifactDigest": DIGEST_D,
         "source": {
             "gitSha": SOURCE_SHA,
@@ -181,7 +181,7 @@ def _fixture(
         "environment": "prod",
         "target": "prod-hosted",
         "fullRolloutReceiptId": full_receipt["receiptId"],
-        "candidateId": DIGEST_B,
+        "releaseCompositionId": DIGEST_B,
         "rolloutArtifactDigest": DIGEST_C,
         "artifactDigest": DIGEST_D,
         "sourceGitSha": SOURCE_SHA,
@@ -522,13 +522,13 @@ def test_candidate_drift_is_rejected(tmp_path: Path) -> None:
     path, rollout, manifest = _fixture(tmp_path)
     _rewrite(
         path,
-        lambda receipt: receipt.__setitem__("candidateId", DIGEST_A),
+        lambda receipt: receipt.__setitem__("releaseCompositionId", DIGEST_A),
         rehash=True,
     )
     with patch(
         "quwoquan_ops.cli.lib.environment_stability_final_acceptance.subprocess.run",
         _remote_readback(path),
-    ), pytest.raises(ValueError, match="candidateId"):
+    ), pytest.raises(ValueError, match="releaseCompositionId"):
         verify_canonical_hosted_prod_soak(path, rollout, manifest)
 
 

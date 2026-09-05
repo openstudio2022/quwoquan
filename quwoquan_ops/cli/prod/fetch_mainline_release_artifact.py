@@ -119,7 +119,7 @@ def fetch(
     return {
         "ref": ref,
         "manifest": str(output_dir / "manifest.json"),
-        "candidateId": str(manifest["candidateId"]),
+        "releaseCompositionId": str(manifest["releaseCompositionId"]),
         "artifactDigest": str(manifest["artifactDigest"]),
     }
 

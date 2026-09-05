@@ -357,6 +357,25 @@ def test_repository_governance_test_and_gate_roots_follow_their_runtime_stories(
         assert resolution.design_ownership is not None
 
 
+def test_code_health_assets_resolve_to_incremental_code_health_story() -> None:
+    # spec_ref: specs/feature-tree/runtime/system-architecture-and-engineering-guide/incremental-code-health-governance/spec.md#gwt-002.t1
+    nodes = feature_tree.discover_nodes()
+    targets = (
+        "quwoquan_ops/policies/code_health_policy.yaml",
+        "quwoquan_ops/gate/code_health_delta/engine.py",
+        "quwoquan_ops/gate/verify_incremental_code_health.py",
+        "quwoquan_ops/tests/local_contract/gate/test_incremental_code_health__gate__local_contract_test.py",
+    )
+
+    for target in targets:
+        resolution = feature_tree.resolve_target_details(target, nodes)
+        assert resolution.l1_owner is not None
+        assert resolution.l1_owner.node_id == "runtime"
+        assert resolution.node.node_id == "incremental-code-health-governance"
+        assert resolution.design_ownership is not None
+        assert resolution.design_ownership.anchor == "dec-031"
+
+
 def test_hosted_authority_adapter_stays_with_platform_ops_owner() -> None:
     # spec_ref: specs/feature-tree/runtime/development-workflow-governance/agent-skill-review-context-organization/spec.md#gwt-002.t2
     nodes = feature_tree.discover_nodes()

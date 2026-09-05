@@ -104,8 +104,8 @@ def _parse_named_paths(items: list[str]) -> dict[str, Path]:
 def _validate_manifest_identity(
     manifest: dict[str, Any],
 ) -> tuple[str, str, str, str]:
-    validate_manifest(manifest, allowed_statuses={"candidate-ready", "deployable"})
-    candidate = str(manifest.get("candidateId") or "")
+    validate_manifest(manifest, allowed_statuses={"qualified", "main-admitted"})
+    candidate = str(manifest.get("releaseCompositionId") or "")
     source = manifest.get("source")
     if DIGEST_PATTERN.fullmatch(candidate) is None or not isinstance(source, dict):
         raise ValueError("Beta device evidence requires one sealed candidate")
@@ -130,7 +130,7 @@ def _require_direct_binding(
     tree_digest: str,
 ) -> None:
     expected = {
-        "candidateId": candidate,
+        "releaseCompositionId": candidate,
         "sourceGitSha": git_sha,
         "sourceTreeDigest": tree_digest,
     }
@@ -271,7 +271,7 @@ def render_stack_bundle(
         "environment": "beta",
         "target": "beta-local",
         "status": "passed",
-        "candidateId": candidate,
+        "releaseCompositionId": candidate,
         "sourceGitSha": git_sha,
         "sourceTreeDigest": tree_digest,
         "artifactDigest": artifact_digest,
@@ -370,7 +370,7 @@ def render_platform_bundle(
         "target": "beta-local",
         "platform": platform,
         "status": "passed",
-        "candidateId": candidate,
+        "releaseCompositionId": candidate,
         "sourceGitSha": git_sha,
         "sourceTreeDigest": tree_digest,
         "artifactDigest": artifact_digest,
@@ -597,7 +597,7 @@ def merge_platform_bundles(
         "environment": "beta",
         "target": "beta-local",
         "status": "passed",
-        "candidateId": candidate,
+        "releaseCompositionId": candidate,
         "sourceGitSha": git_sha,
         "sourceTreeDigest": tree_digest,
         "artifactDigest": artifact_digests.pop(),

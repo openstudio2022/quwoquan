@@ -18,7 +18,7 @@ from unittest import mock
 from quwoquan_ops.ci import generate_release_bound_environment_identity as renderer
 from quwoquan_ops.ci import release_bound_data_evidence as data_validator
 from quwoquan_ops.cli.prod.finalize_mainline_release_artifact import (
-    canonical_candidate_digest,
+    canonical_release_composition_id,
     canonical_manifest_digest,
 )
 from quwoquan_ops.tests.support.release_bound_environment_identity_test_support import (
@@ -350,7 +350,7 @@ class ReleaseBoundEnvironmentIdentityContractTest(unittest.TestCase):
                 if mutation == "manifest-shape":
                     payload = json.loads(fixture.paths["manifest"].read_text())
                     payload["secondTruth"] = True
-                    payload["candidateId"] = canonical_candidate_digest(payload)
+                    payload["releaseCompositionId"] = canonical_release_composition_id(payload)
                     payload["artifactDigest"] = canonical_manifest_digest(payload)
                     _write(fixture.paths["manifest"], payload)
                 elif mutation == "object-closure":

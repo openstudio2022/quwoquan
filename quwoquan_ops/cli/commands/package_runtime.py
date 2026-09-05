@@ -513,7 +513,7 @@ def _command_package_unlocked(
         if materialized_release_evidence:
             details.append(
                 f"{env_name} release evidence materialized: "
-                f"candidateId={materialized_release_evidence['candidateId']}"
+                f"releaseCompositionId={materialized_release_evidence['releaseCompositionId']}"
             )
 
     if not args.service:

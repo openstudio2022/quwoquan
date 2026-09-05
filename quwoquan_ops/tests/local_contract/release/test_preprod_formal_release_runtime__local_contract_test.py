@@ -80,7 +80,7 @@ class PreprodFormalReleaseRuntimeTest(unittest.TestCase):
         self,
     ) -> None:
         composition = {
-            "candidateId": DIGEST,
+            "releaseCompositionId": DIGEST,
             "artifactDigest": "sha256:" + "b" * 64,
             "images": {"content-service": {"ref": "exact", "digest": DIGEST}},
         }
@@ -105,7 +105,7 @@ class PreprodFormalReleaseRuntimeTest(unittest.TestCase):
                     device_id="",
                     rollout_mode="",
                 )
-                report_dir = Path(temp) / "report"
+                report_dir = stackctl.output_root() / "env" / target_name.removesuffix("-local") / "runs" / f"preprod-oci-closure-{target_name}"
                 runtime = {"content-service": {"ref": "exact", "digest": DIGEST}}
                 active_candidate_patcher = mock.patch.object(
                     stackctl,
@@ -289,7 +289,7 @@ class PreprodFormalReleaseRuntimeTest(unittest.TestCase):
                     "\n".join(result["details"]),
                 )
                 bind_provider.assert_called_once()
-                active_candidate.assert_called_once_with(target_name)
+                assert active_candidate.call_args_list == [mock.call(target_name), mock.call(target_name)]
                 assert_candidate.assert_called()
                 bind_candidate.assert_not_called()
                 run_runtime.assert_not_called()
@@ -308,7 +308,7 @@ class PreprodFormalReleaseRuntimeTest(unittest.TestCase):
             ("service-b", "QWQ_COMPOSE_SERVICE_B_IMAGE"),
         )
         manifest = {
-            "candidateId": DIGEST,
+            "releaseCompositionId": DIGEST,
             "artifactDigest": "sha256:" + "b" * 64,
             "contractGraphDigest": DIGEST,
             "environmentArtifacts": {
@@ -378,7 +378,7 @@ class PreprodFormalReleaseRuntimeTest(unittest.TestCase):
                 )
 
         self.assertTrue(both_started.is_set())
-        self.assertEqual(composition["candidateId"], DIGEST)
+        self.assertEqual(composition["releaseCompositionId"], DIGEST)
         self.assertEqual(environment["QWQ_RELEASE_CANDIDATE_DIGEST"], DIGEST)
         self.assertEqual(
             environment["LOCAL_GAMMA_CONFIG_VERSION"],
@@ -393,7 +393,7 @@ class PreprodFormalReleaseRuntimeTest(unittest.TestCase):
         self,
     ) -> None:
         composition = {
-            "candidateId": DIGEST,
+            "releaseCompositionId": DIGEST,
             "artifactDigest": "sha256:" + "b" * 64,
             "contractGraphDigest": DIGEST,
             "images": {
@@ -505,7 +505,7 @@ class PreprodFormalReleaseRuntimeTest(unittest.TestCase):
             manifest_path.write_text(
                 json.dumps(
                     {
-                        "candidateId": DIGEST,
+                        "releaseCompositionId": DIGEST,
                         "artifactDigest": "sha256:" + "b" * 64,
                         "images": {
                             service: {

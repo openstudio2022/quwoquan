@@ -68,7 +68,7 @@ class ProdHostedPackageOciManifestContractTest(unittest.TestCase):
                         "manifest": str(self.release_manifest),
                         "evidenceFileDigest": self.release_manifest_digest,
                         "artifactDigest": self.artifact_digest,
-                        "candidateId": self.candidate_id,
+                        "releaseCompositionId": self.candidate_id,
                         "verifiedConfigDigest": config_digest,
                     },
                 },
@@ -78,7 +78,7 @@ class ProdHostedPackageOciManifestContractTest(unittest.TestCase):
             "images": {},
         }
         self.release_identity = {
-            "candidateId": self.candidate_id,
+            "releaseCompositionId": self.candidate_id,
             "artifactDigest": self.artifact_digest,
             "sourceGitSha": self.source_revision,
             "sourceTreeDigest": self.source_tree_digest,
@@ -155,8 +155,8 @@ class ProdHostedPackageOciManifestContractTest(unittest.TestCase):
             }
         return {
             "schema": "release-evidence-manifest",
-            "status": "deployable",
-            "candidateId": self.candidate_id,
+            "status": "main-admitted",
+            "releaseCompositionId": self.candidate_id,
             "artifactDigest": self.artifact_digest,
             "source": {
                 "gitSha": self.source_revision,
@@ -233,7 +233,7 @@ class ProdHostedPackageOciManifestContractTest(unittest.TestCase):
             self._materialize()
 
         drifted = dict(self.release_identity)
-        drifted["candidateId"] = "sha256:" + "f" * 64
+        drifted["releaseCompositionId"] = "sha256:" + "f" * 64
         with self.assertRaisesRegex(ValueError, "hosted release evidence identity drifted"):
             candidate_manifest._materialize_prod_hosted_oci_manifest(
                 "prod",
@@ -306,7 +306,7 @@ class ProdHostedPackageOciManifestContractTest(unittest.TestCase):
                 fingerprint_path=fingerprint_path,
                 manifest_path=candidate_path,
             ),
-            identity,
+            {**identity, "appLaunchBundle": None},
         )
         with mock.patch.dict(os.environ, {}, clear=True), self.assertRaisesRegex(
             FileNotFoundError,

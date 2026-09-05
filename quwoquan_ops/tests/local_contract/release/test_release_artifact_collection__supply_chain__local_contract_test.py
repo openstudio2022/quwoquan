@@ -58,7 +58,7 @@ class ReleaseArtifactCollectionContractTest(unittest.TestCase):
             {
                 "schema": finalizer.SCHEMA,
                 "releaseTrainId": None,
-                "candidateId": None,
+                "releaseCompositionId": None,
                 "status": "component-ready",
                 "generatedAt": "2026-07-28T00:00:00Z",
                 "source": {
@@ -476,7 +476,7 @@ class ReleaseArtifactCollectionContractTest(unittest.TestCase):
                     )
                 self.assertRegex(descriptor["digest"], r"^sha256:[0-9a-f]{64}$")
             finalized = finalizer.finalize(artifact, None, descriptors)
-            self.assertEqual(finalized["status"], "candidate-ready")
+            self.assertEqual(finalized["status"], "qualified")
             self.assertEqual(
                 set(finalized["applicationPackages"]),
                 set(finalizer.APPLICATION_PACKAGES),
@@ -622,9 +622,9 @@ class ReleaseArtifactCollectionContractTest(unittest.TestCase):
             manifest = json.loads(
                 (artifact / "manifest.json").read_text(encoding="utf-8")
             )
-            self.assertEqual(manifest["status"], "candidate-ready")
+            self.assertEqual(manifest["status"], "qualified")
             self.assertIn(
-                "environment-qualification-evidence-pending",
+                "main-admission-evidence-pending",
                 manifest["blockers"],
             )
 
@@ -648,7 +648,7 @@ class ReleaseArtifactCollectionContractTest(unittest.TestCase):
                 )
             self._write_json(
                 artifact / "manifest.json",
-                {"schema": "mainline-release-artifact", "status": "deployable"},
+                {"schema": "mainline-release-artifact", "status": "main-admitted"},
             )
             with self.assertRaisesRegex(ValueError, "fields mismatch"):
                 collector.collect(

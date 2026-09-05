@@ -38,7 +38,7 @@ from quwoquan_ops.cli.lib.deployment_candidate_manifest import (  # noqa: F401
 from quwoquan_ops.cli.prod import oci_supply_chain  # noqa: F401
 from quwoquan_ops.cli.prod.finalize_mainline_release_artifact import (  # noqa: F401
     DIGEST_PATTERN,
-    canonical_candidate_digest,
+    canonical_release_composition_id,
     canonical_manifest_digest,
     sha256_file,
     validate_manifest,

@@ -26,7 +26,7 @@ class GithubSupplyChainContractTest(unittest.TestCase):
     def test_retired_production_runner_label_fails_closed(self) -> None:
         production = ROOT / ".github" / "workflows" / "deploy-prod-auto.yml"
         forged = production.read_text(encoding="utf-8").replace(
-            "runs-on: [self-hosted, macOS, ARM64]",
+            "runs-on: [self-hosted, macOS, ARM64, quwoquan-release-authority]",
             "runs-on: [self-hosted, macOS, prod-release]",
         )
         original_read_text = Path.read_text
@@ -53,7 +53,7 @@ class GithubSupplyChainContractTest(unittest.TestCase):
         self.assertTrue(
             any(
                 "missing production isolation control: "
-                "runs-on: [self-hosted, macOS, ARM64]" in failure
+                "runs-on: [self-hosted, macOS, ARM64, quwoquan-release-authority]" in failure
                 for failure in failures
             ),
             failures,

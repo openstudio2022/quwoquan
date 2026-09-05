@@ -78,12 +78,12 @@ class ReleaseEvidenceManifestCanonicalContractTest(
             )
 
             self.assertEqual(set(candidate), finalizer.ROOT_FIELDS)
-            self.assertEqual(candidate["status"], "candidate-ready")
+            self.assertEqual(candidate["status"], "qualified")
             self.assertNotEqual(candidate["generatedAt"], component["generatedAt"])
-            self.assertNotEqual(candidate["candidateId"], candidate["artifactDigest"])
+            self.assertNotEqual(candidate["releaseCompositionId"], candidate["artifactDigest"])
             self.assertEqual(
-                candidate["candidateId"],
-                finalizer.canonical_candidate_digest(candidate),
+                candidate["releaseCompositionId"],
+                finalizer.canonical_release_composition_id(candidate),
             )
             self.assertEqual(
                 candidate["artifactDigest"],
@@ -110,24 +110,24 @@ class ReleaseEvidenceManifestCanonicalContractTest(
                 changed_configuration, "gamma"
             )
             self.assertNotEqual(
-                finalizer.canonical_candidate_digest(changed_configuration),
-                candidate["candidateId"],
+                finalizer.canonical_release_composition_id(changed_configuration),
+                candidate["releaseCompositionId"],
             )
             changed_application = json.loads(json.dumps(candidate))
             changed_application["applicationPackages"]["ios-nonprod-app"][
                 "digest"
             ] = "sha256:" + ("e" * 64)
             self.assertNotEqual(
-                finalizer.canonical_candidate_digest(changed_application),
-                candidate["candidateId"],
+                finalizer.canonical_release_composition_id(changed_application),
+                candidate["releaseCompositionId"],
             )
             changed_payload = json.loads(json.dumps(candidate))
             changed_payload["applicationPackages"]["ios-nonprod-app"][
                 "packageDigest"
             ] = "sha256:" + ("f" * 64)
             self.assertNotEqual(
-                finalizer.canonical_candidate_digest(changed_payload),
-                candidate["candidateId"],
+                finalizer.canonical_release_composition_id(changed_payload),
+                candidate["releaseCompositionId"],
             )
             # 运输位置不是内容身份：换 sourceRef 或换镜像仓库/tag 不得产生新候选
             # （DEC-006 组合身份排除 OCI 仓库/tag 与 transport locator）。
@@ -136,15 +136,15 @@ class ReleaseEvidenceManifestCanonicalContractTest(
                 "sourceRef"
             ] = "oci://ghcr.io/owner/repo/other-app@" + DIGEST
             self.assertEqual(
-                finalizer.canonical_candidate_digest(changed_locator),
-                candidate["candidateId"],
+                finalizer.canonical_release_composition_id(changed_locator),
+                candidate["releaseCompositionId"],
             )
             changed_portal = json.loads(json.dumps(candidate))
             changed_portal["opsPortal"]["digest"] = "sha256:" + ("9" * 64)
             changed_portal["opsPortal"]["packageDigest"] = "sha256:" + ("8" * 64)
-            self.assertEqual(
-                finalizer.canonical_candidate_digest(changed_portal),
-                candidate["candidateId"],
+            self.assertNotEqual(
+                finalizer.canonical_release_composition_id(changed_portal),
+                candidate["releaseCompositionId"],
             )
             changed_transport = json.loads(json.dumps(candidate))
             gamma_image = changed_transport["environmentArtifacts"]["gamma"][
@@ -160,8 +160,8 @@ class ReleaseEvidenceManifestCanonicalContractTest(
                 changed_transport, "gamma"
             )
             self.assertEqual(
-                finalizer.canonical_candidate_digest(changed_transport),
-                candidate["candidateId"],
+                finalizer.canonical_release_composition_id(changed_transport),
+                candidate["releaseCompositionId"],
             )
             # 灰度阶段、campaign、渠道回执是部署/激活期事实（DEC-007）：
             # 候选摘要投影结构性排除它们，附加这些字段不得产生新候选。
@@ -175,11 +175,26 @@ class ReleaseEvidenceManifestCanonicalContractTest(
                 {"channelId": "vivo_market", "phase": "published"}
             ]
             self.assertEqual(
-                finalizer.canonical_candidate_digest(changed_activation),
-                candidate["candidateId"],
+                finalizer.canonical_release_composition_id(changed_activation),
+                candidate["releaseCompositionId"],
             )
             self.assertEqual(candidate["providerEvidence"]["status"], "passed")
             self.assertEqual(candidate["testEvidence"]["status"], "passed")
+
+            self.assertEqual(
+                candidate["evidenceSetDigest"],
+                finalizer.canonical_evidence_set_digest(candidate),
+            )
+            refreshed = json.loads(json.dumps(candidate))
+            refreshed["providerEvidence"]["digest"] = "sha256:" + ("7" * 64)
+            self.assertEqual(
+                finalizer.canonical_release_composition_id(refreshed),
+                candidate["releaseCompositionId"],
+            )
+            self.assertNotEqual(
+                finalizer.canonical_evidence_set_digest(refreshed),
+                candidate["evidenceSetDigest"],
+            )
 
             preprod_receipts = root / "preprod-receipts"
             for environment in finalizer.PRE_PROD_ENVIRONMENTS:
@@ -203,8 +218,8 @@ class ReleaseEvidenceManifestCanonicalContractTest(
                 environment_receipts_dir=preprod_receipts,
                 rollback_receipt_path=rollback_ready,
             )
-            self.assertEqual(deployable["status"], "deployable")
-            self.assertEqual(deployable["candidateId"], candidate["candidateId"])
+            self.assertEqual(deployable["status"], "main-admitted")
+            self.assertEqual(deployable["releaseCompositionId"], candidate["releaseCompositionId"])
             self.assertNotEqual(deployable["artifactDigest"], candidate["artifactDigest"])
             self.assertEqual(
                 deployable["missingEvidence"],
@@ -274,7 +289,7 @@ class ReleaseEvidenceManifestCanonicalContractTest(
                 rollback_receipt_path=rollback,
             )
             self.assertEqual(released["status"], "released")
-            self.assertEqual(released["candidateId"], candidate["candidateId"])
+            self.assertEqual(released["releaseCompositionId"], candidate["releaseCompositionId"])
             self.assertNotEqual(released["artifactDigest"], deployable["artifactDigest"])
             self.assertEqual(released["blockers"], [])
             self.assertEqual(released["missingEvidence"], [])
@@ -381,7 +396,7 @@ class ReleaseEvidenceManifestCanonicalContractTest(
                 rollback_receipt_path=rollback,
             )
             self.assertEqual(rolled_back["status"], "rolled-back")
-            self.assertEqual(rolled_back["candidateId"], candidate["candidateId"])
+            self.assertEqual(rolled_back["releaseCompositionId"], candidate["releaseCompositionId"])
             self.assertEqual(rolled_back["missingEvidence"], [])
             self.assertEqual(rolled_back["blockers"], ["candidate-rolled-back"])
 

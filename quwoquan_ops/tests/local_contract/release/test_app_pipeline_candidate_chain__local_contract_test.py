@@ -767,7 +767,7 @@ def test_beta_device_receipt_binds_candidate_directly_without_identity_shim() ->
 
     assert "--identity-evidence" not in text
     assert "release-bound-environment-identity" not in text
-    assert '"candidateId": candidate' in evidence
+    assert '"releaseCompositionId": candidate' in evidence
     assert '"sourceGitSha": git_sha' in evidence
     assert '"sourceTreeDigest": tree_digest' in evidence
     assert '--evidence "devices=$RAW/devices.json"' in workflow
@@ -833,7 +833,7 @@ def test_beta_android_and_ios_run_in_parallel_before_one_receipt_aggregation() -
     }
     assert aggregate_job["name"] == "Aggregate mobile matrix evidence"
     assert aggregate_job["runs-on"] == "ubuntu-latest"
-    canonical_mobile_runner = ["self-hosted", "macOS", "ARM64"]
+    canonical_mobile_runner = ["self-hosted", "macOS", "ARM64", "quwoquan-release-authority"]
     assert jobs["beta_stack"]["runs-on"] == canonical_mobile_runner
     assert jobs["beta_teardown"]["runs-on"] == canonical_mobile_runner
     assert (
@@ -859,7 +859,7 @@ def test_beta_android_and_ios_run_in_parallel_before_one_receipt_aggregation() -
             == "${{ inputs.account_closure_prod_platform || 'ios' }}"
         )
     assert jobs["beta_teardown"]["needs"][-1] == "mobile_matrix"
-    assert "runs-on: [self-hosted, macOS, ARM64]" in platform_text
+    assert "runs-on: [self-hosted, macOS, ARM64, quwoquan-release-authority]" in platform_text
     assert "PUB_HOSTED_URL: https://pub.flutter-io.cn" in platform_text
     assert "FLUTTER_STORAGE_BASE_URL: https://storage.flutter-io.cn" in platform_text
     assert "flutter pub get --enforce-lockfile" in platform_text

@@ -67,6 +67,31 @@ def _repo_relative(raw_path: str, *, repo_root: Path) -> str:
     raise AssertionError("unreachable")
 
 
+def _empty_candidate_identity() -> dict[str, Any]:
+    return declared_object(
+        {
+            "ref": None,
+            "canonical_bytes_sha256": None,
+            "schema_version": None,
+            "owner_identity_ref": None,
+            "delivery_owner": None,
+            "lead_lane": None,
+            "delivery_policy_digests": None,
+            "target": "",
+            "resolved_owner": "",
+            "impacted_owner_groups_digest": None,
+            "changed_paths_digest": None,
+            "workspace_digests": None,
+            "fingerprint_ref": None,
+            "fingerprint_digest": None,
+            "impact_plan_ref": None,
+            "impact_plan_digest": None,
+        },
+        "review_plan",
+        "candidate_evidence_identity_fields",
+    )
+
+
 def read_owner_manifest_exact_bytes(
     manifest_ref: str, *, repo_root: Path = REPO_ROOT
 ) -> bytes:
@@ -126,12 +151,7 @@ def normalize_contexts(
                 "review_plan",
                 "owner_identity_fields",
             ),
-            declared_object(
-                {"ref": None, "canonical_bytes_sha256": None, "owner_identity_ref": None,
-                 "target": "", "resolved_owner": "", "fingerprint_ref": None,
-                 "fingerprint_digest": None, "impact_plan_ref": None, "impact_plan_digest": None},
-                "review_plan", "candidate_evidence_identity_fields",
-            ),
+            _empty_candidate_identity(),
         )
     expected_version = contract_schema_version("feature_context_manifest")
     if manifest.get("schema_version") != expected_version:
@@ -227,12 +247,7 @@ def normalize_contexts(
         "review_plan",
         "owner_identity_fields",
     )
-    candidate = declared_object(
-        {"ref": None, "canonical_bytes_sha256": None, "owner_identity_ref": None,
-         "target": "", "resolved_owner": "", "fingerprint_ref": None,
-         "fingerprint_digest": None, "impact_plan_ref": None, "impact_plan_digest": None},
-        "review_plan", "candidate_evidence_identity_fields",
-    )
+    candidate = _empty_candidate_identity()
     if required:
         if not candidate_evidence_ref:
             _refuse("IDENTITY.MIGRATION_REQUIRED", "POST Review 必须携带 --candidate-evidence")

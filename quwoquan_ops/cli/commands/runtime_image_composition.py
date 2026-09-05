@@ -627,7 +627,7 @@ def _load_package_bound_local_image_composition(
         expected_target=target_name,
     )
     return {
-        "candidateId": str(candidate["baselineId"]),
+        "releaseCompositionId": str(candidate["baselineId"]),
         "imageVersion": _stackctl.immutable_image_digest(first_party_runtime_refs),
         "startupImageCompositionFile": str(manifest_path),
         "startupImageTransportTag": str(
@@ -714,7 +714,7 @@ def _resolve_gamma_release_image_composition(
         raise ValueError("formal release manifest must be an object")
     _stackctl.finalize_mainline_release_artifact.validate_manifest(
         manifest,
-        allowed_statuses={"candidate-ready", "deployable", "released"},
+        allowed_statuses={"qualified", "main-admitted", "released"},
     )
     _stackctl.finalize_mainline_release_artifact.validate_manifest_files(
         manifest_path.parent,
@@ -749,7 +749,7 @@ def _resolve_gamma_release_image_composition(
         {service: descriptor["ref"] for service, descriptor in bound.items()}
     )
     return {
-        "candidateId": str(manifest["candidateId"]),
+        "releaseCompositionId": str(manifest["releaseCompositionId"]),
         "artifactDigest": str(manifest["artifactDigest"]),
         "environmentArtifactDigest": str(artifact["environmentArtifactDigest"]),
         "contractGraphDigest": str(manifest["contractGraphDigest"]),
@@ -789,7 +789,7 @@ def _apply_gamma_image_composition(
     environment["LOCAL_GAMMA_IMAGE_VERSION"] = actual_version
     environment["QWQ_COMPOSE_IMAGE_VERSION"] = actual_version
     environment["QWQ_COMPOSE_IMAGE_TAG"] = actual_version.removeprefix("sha256:")
-    candidate_id = str(composition.get("candidateId") or "")
+    candidate_id = str(composition.get("releaseCompositionId") or "")
     artifact_digest = str(composition.get("artifactDigest") or "")
     if candidate_id:
         environment["QWQ_RELEASE_CANDIDATE_DIGEST"] = candidate_id

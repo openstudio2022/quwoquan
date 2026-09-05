@@ -52,16 +52,16 @@ void main() {
     );
   });
 
-  test('已达标 HomepageStatusReport 文件不得进入 R03 allowlist', () {
+  test('已达标 HomepageStatusReport 文件不得进入 code health policy', () {
     final allowlist = _readRepoFile(
-      'quwoquan_ops/policies/gates/file_line_budget_allowlist.yaml',
+      'quwoquan_ops/policies/code_health_policy.yaml',
     );
 
     for (final path in appFiles) {
       expect(
         allowlist,
         isNot(contains('quwoquan_app/$path')),
-        reason: '$path 已低于阈值，不得新增 allowlist 豁免',
+        reason: '$path 已低于阈值，不得新增 路径豁免',
       );
     }
   });

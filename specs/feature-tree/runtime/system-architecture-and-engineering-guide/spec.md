@@ -15,6 +15,7 @@
 - service-local contracts 与 context/object/layer 物理路径唯一反向映射
 - 从服务本地契约扫描发现全部 context、独立对象根、聚合成员及六类 object kind，不维护冻结数量清单
 - 服务与 App 源码、metadata 和三层测试按同一 service/context/object 身份反向映射；L1 domain 只由 service `domain.yaml` 与特性树工程 owner 派生，不进入第二份路径 registry
+- 增量代码健康分类、复杂度、重复、可达性、文件规模与变更认知预算的确定性治理
 - App 业务纵切、页面 source owner/participants、层间依赖和唯一 composition root
 - 服务自治 config/resources/deploy、四环境差异、secret reference 与 release package 边界
 - 服务四环境 Kustomize 入口与 Ops 可执行装配闭环
@@ -71,6 +72,7 @@
 - [`local-worktree-lifecycle-governance`](./local-worktree-lifecycle-governance/spec.md)：新建工作副本需显式授权，未合入工作按滞留时长分级提醒。
 - [`explicit-semantics-no-implicit-inference`](./explicit-semantics-no-implicit-inference/spec.md)：行为分支只读显式声明，值的在场与形态不构成声明。
 - [`model-attribute-semantics`](./model-attribute-semantics/spec.md)：模型属性的闭集取值在每条消费管线上类型化，四种输入形态各自独立判定。
+- [`incremental-code-health-governance`](./incremental-code-health-governance/spec.md)：新代码不增加高置信维护债，存量按可复现热点报告逐步收敛。
 
 ## 5. 能力要求
 
@@ -172,6 +174,16 @@
 - 脚手架、三层测试目录、case ID 和统一架构门禁。
 - 缺 gamma/prod 当前证据时，禁止声明商业就绪。
 
+<a id="req-008"></a>
+### REQ-008 增量代码健康与热点收敛
+
+- 代码健康准出只判定当前 candidate 新增或恶化的高置信维护债，存量债务不得使无关变更失败。
+- source LOC、文件数、提交数与测试/生产比只用于容量和趋势观测，不得作为 Agent、个人或 candidate 的生产力评价。
+- source 分类、复杂度、重复、可达性、文件规模、手写变更规模与 rollout terminal 必须由一个版本化策略和一个 canonical delta 入口派生。
+- generated、vendor、test、contract-metadata、config-data、docs 与 handwritten-production 必须互斥分类；generated/vendor 不参与复杂度、重复或认知预算判罚。
+- 确定性工具拥有 `PASS`、`PR_WARN`、`GATE_BLOCK`，AI advisory、Reviewer 与自然语言理由均不得改写 terminal 或自动修改棘轮基线。
+- 全仓存量只经定时 report-only 热点观测进入最低 owner 的可行动 OPEN，不建立中央债务台账、路径豁免或质量数据库。
+
 ## 6. 契约与依赖
 
 - 上游能力：[`runtime`](../spec.md) 声明的领域入口。
@@ -271,6 +283,17 @@
 - THEN user_acceptance 覆盖 Journey/Scenario、环境行为和用户可见恢复动作
 - THEN readiness 由静态结构证据与 runner 结果证据分阶段计算，metadata source 不手写 implemented/commercial-ready，且文件存在不会产生通过结果
 - THEN gamma/prod 当前证据缺失时结论保持 structure-governance-complete 或更低
+
+<a id="sit-007"></a>
+### SIT-007 增量代码健康与热点收敛
+
+- GIVEN 当前 candidate 具有 exact base/head、changed paths、policy 与 toolchain 身份。
+- WHEN 本地 L0/L1 或 Delivery Gate 执行 canonical code-health delta。
+- THEN 报告按七类互斥 source category 输出 changed-code 度量、typed finding 与 digest-bound EvidenceFingerprint。
+- THEN 新越过 1000 行、既有超限继续增长或明确新增且无生产入口的高置信代码债返回 `GATE_BLOCK`，advisory rollout 指标只返回 `PR_WARN`。
+- THEN policy、toolchain、changed paths、base/head 或 candidate 字节任一漂移都会产生不同 receipt，clean CI 不信任本地脏树回执。
+- THEN L0 只执行秒级 changed-file 判据，L1 与独立 Delivery job 执行完整 delta，scheduled workflow 只产出全仓 report-only 热点。
+- THEN AI 与 Reviewer 只消费命名证据并提出修复建议，不能覆盖确定性 terminal、创建路径豁免或自动升格 rollout。
 
 ## 8. 开放事项
 

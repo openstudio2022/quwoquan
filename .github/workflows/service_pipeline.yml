@@ -62,7 +62,7 @@ env:
 jobs:
   prepare-release:
     name: Prepare canonical release transport
-    runs-on: [self-hosted, macOS, ARM64]
+    runs-on: [self-hosted, macOS, ARM64, quwoquan-release-authority]
     timeout-minutes: 10
     permissions:
       contents: read
@@ -157,7 +157,7 @@ jobs:
 
   build-go:
     name: Go 构建与测试
-    runs-on: [self-hosted, macOS, ARM64]
+    runs-on: [self-hosted, macOS, ARM64, quwoquan-release-authority]
     timeout-minutes: 10
     needs: [prepare-release]
     outputs:
@@ -208,7 +208,7 @@ jobs:
 
   build-release-images:
     name: 构建 ${{ matrix.trust_domain }}/${{ matrix.runtime_image_owner }} 不可变镜像
-    runs-on: [self-hosted, macOS, ARM64]
+    runs-on: [self-hosted, macOS, ARM64, quwoquan-release-authority]
     timeout-minutes: 10
     needs: [prepare-release]
     permissions:
@@ -353,7 +353,7 @@ jobs:
       - prepare-release
       - build-go
       - build-release-images
-    runs-on: [self-hosted, macOS, ARM64]
+    runs-on: [self-hosted, macOS, ARM64, quwoquan-release-authority]
     timeout-minutes: 10
     permissions:
       contents: read
@@ -454,8 +454,8 @@ jobs:
               raise SystemExit("release evidence schema mismatch")
           artifact = str(manifest.get("artifactDigest") or "")
           source = manifest.get("source") or {}
-          if manifest.get("status") != "component-ready" or manifest.get("candidateId") is not None:
-              raise SystemExit("Service Pipeline must stop at component-ready without candidateId")
+          if manifest.get("status") != "component-ready" or manifest.get("releaseCompositionId") is not None:
+              raise SystemExit("Service Pipeline must stop at component-ready without releaseCompositionId")
           if not artifact.startswith("sha256:"):
               raise SystemExit("component evidence artifactDigest is missing")
           if source.get("workflowRunId") != os.environ["GITHUB_RUN_ID"]:
@@ -588,7 +588,7 @@ jobs:
       - build-release-images
       - validate-deploy
     if: always()
-    runs-on: [self-hosted, macOS, ARM64]
+    runs-on: [self-hosted, macOS, ARM64, quwoquan-release-authority]
     timeout-minutes: 5
     permissions:
       contents: read

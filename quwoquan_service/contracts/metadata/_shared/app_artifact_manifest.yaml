@@ -372,7 +372,7 @@ schemas:
     required_fields:
       - schema
       - channelId
-      - candidateId
+      - releaseCompositionId
       - artifactDigest
       - applicationId
       - displayVersion
@@ -397,7 +397,7 @@ schemas:
             tencent_myapp,
             official_web,
           ]
-      candidateId: { type: string, format: sha256_identity }
+      releaseCompositionId: { type: string, format: sha256_identity }
       artifactDigest: { type: string, format: sha256_identity }
       applicationId: { type: string, min_length: 1 }
       displayVersion: { type: string, min_length: 1 }
@@ -420,10 +420,10 @@ schemas:
       recordedAt: { type: string, format: rfc3339_utc }
     constraints:
       - 回执 append-only 且逐渠道独立；一个渠道的回执不得替代另一渠道，失败/驳回回执不得被后续成功覆盖。
-      - 同一 candidateId 下所有 android 渠道回执必须引用同一 release APK artifactDigest；fan-out 只复用 reviewed 制品，不复制、不重签、不重编。
+      - 同一 releaseCompositionId 下所有 android 渠道回执必须引用同一 release APK artifactDigest；fan-out 只复用 reviewed 制品，不复制、不重签、不重编。
       - channelId、phase 与 readback 均为部署/分发期事实，不进入 AppArtifactManifest 或候选身份（DEC-005/DEC-006）。
       - readbackMethod 必须与 distribution_channels 中该渠道声明的 readback 一致；platformRecordId 只保留平台侧脱敏 ID，凭据与平台原始响应不入回执。
-      - 非 uploaded 的 phase 回执要求同渠道同 candidateId 已存在 uploaded 回执；分发状态链必须可追溯到一次真实上传。
+      - 非 uploaded 的 phase 回执要求同渠道同 releaseCompositionId 已存在 uploaded 回执；分发状态链必须可追溯到一次真实上传。
 
   # ReleaseEvidenceManifest 内的 App build-product 证据；render/validate 工具消费本段，
   # 不得在脚本内自持字段集合或按四环境复制同一可执行字节。

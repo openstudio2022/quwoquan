@@ -48,7 +48,7 @@ def test_trusted_producer_verifiers_accept_compiled_cells_and_closed_artifact() 
 
     assert payload["verdict"] == "PROMOTABLE"
     assert payload["blockers"] == []
-    assert payload["artifactClosure"]["candidateId"] == fixture.manifest["candidateId"]
+    assert payload["artifactClosure"]["releaseCompositionId"] == fixture.manifest["releaseCompositionId"]
     assert payload["inputs"]["recoveryUat"]["ios"]["authority"]["kind"] == (
         "github-actions-oidc"
     )

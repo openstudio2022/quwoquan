@@ -20,12 +20,22 @@ feature_context_manifest:
   fingerprint_binding_modes: [embedded, referenced]
 
 candidate_evidence_manifest:
-  schema_version: 1
-  max_bytes: 16384
-  required_fields: [schema_version, owner_identity_ref, owner_identity_canonical_bytes_sha256, target, resolved_owner, owner_chain, changed_paths, workspace_digests, context_snapshots, impact_plan, impact_plan_identity, evidence_fingerprint]
+  schema_version: 2
+  max_bytes: 65536
+  required_fields: [schema_version, owner_identity_ref, owner_identity_canonical_bytes_sha256, delivery_owner, lead_lane, delivery_policy_digests, target, resolved_owner, impacted_owner_groups, workspace_digests, context_snapshots, impact_plan_identity, evidence_fingerprint]
+  owner_identity_ref_semantics: primary_delivery_predecessor
+  delivery_identity_source: current_branch_validated_by_branch_and_lane_ownership_policies
   owner_chain_fields: [level, node_id, path]
+  impacted_owner_group_fields: [owner_identity, paths]
+  impacted_owner_identity_fields: [resolved_owner, owner_chain_digest]
+  delivery_policy_digest_fields: [branch_policy_digest, lane_ownership_digest]
+  workspace_digest_fields: [tracked_digest, untracked_digest, deleted_digest, renamed_digest, symlink_digest]
   context_snapshot_fields: [path, anchor, kind, exists, content_digest]
   impact_plan_identity_fields: [schema, digest, projection_ref, timeout_policy_ref, timeout_policy_digest]
+  impacted_owner_group_order: owner_identity.resolved_owner-bytewise-utf8
+  changed_path_storage: exactly_once_in_impacted_owner_groups
+  changed_path_order: repository-relative-bytewise-utf8-within-owner-group
+  owner_chain_storage: digest_only_per_impacted_owner_identity-rebuilt_with_current_feature_tree_resolver
 
 review_plan:
   schema_version: 4
@@ -58,7 +68,7 @@ review_plan:
     - head_sha
     - generated_at
   owner_identity_fields: [ref, canonical_bytes_sha256, target, scope, resolved_owner, fingerprint_ref, fingerprint_digest]
-  candidate_evidence_identity_fields: [ref, canonical_bytes_sha256, owner_identity_ref, target, resolved_owner, fingerprint_ref, fingerprint_digest, impact_plan_ref, impact_plan_digest]
+  candidate_evidence_identity_fields: [ref, canonical_bytes_sha256, schema_version, owner_identity_ref, delivery_owner, lead_lane, delivery_policy_digests, target, resolved_owner, impacted_owner_groups_digest, changed_paths_digest, workspace_digests, fingerprint_ref, fingerprint_digest, impact_plan_ref, impact_plan_digest]
   human_decision_projection_fields: [schema_version, target_kind, admission_class, human_decision_ref, status, projection, decision, redirect_target, authority_status, formal_admission_satisfied, blocks_execution, terminal]
   human_decision_semantics:
     ref_optional: true
@@ -344,10 +354,14 @@ terminal_codes:
     severity: GATE_BLOCK
     automatic_retry: false
     recovery: regenerate_owner_and_candidate_with_current_schema
-  CANDIDATE.SPLIT_REQUIRED:
+  CANDIDATE.EMPTY_CHANGED_PATHS:
     severity: GATE_BLOCK
     automatic_retry: false
-    recovery: split_changed_paths_by_owner
+    recovery: provide_complete_nonempty_changed_paths
+  CANDIDATE.OWNER_RESOLUTION_FAILED:
+    severity: GATE_BLOCK
+    automatic_retry: false
+    recovery: resolve_every_changed_path_to_one_feature_owner
   CANDIDATE.OWNER_DRIFT:
     severity: GATE_BLOCK
     automatic_retry: false

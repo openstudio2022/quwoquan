@@ -1,20 +1,42 @@
 from __future__ import annotations
 
 import json
+import re
 import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
 
 from quwoquan_ops.ci import consume_released_release_evidence as consumer
+from quwoquan_ops.cli.prod import finalize_mainline_release_artifact as finalizer
 from quwoquan_ops.cli.prod.finalize_mainline_release_artifact import (
     RELEASE_CLOSURE_PATHS,
+)
+from quwoquan_ops.tests.support.release_evidence_manifest_fixture_test_support import (
+    ReleaseEvidenceManifestFixtureMixin,
 )
 
 DIGEST = "sha256:" + ("a" * 64)
 OTHER_DIGEST = "sha256:" + ("b" * 64)
 SOURCE_SHA = "c" * 40
 REF = f"ghcr.io/owner/repo/release-artifact@{DIGEST}"
+ROOT = Path(__file__).resolve().parents[4]
+WORKFLOW_REQUIRED_STATUSES = {
+    ".github/workflows/app-env-device-matrix-self-hosted.yml": {
+        "qualified",
+        "released",
+    },
+    ".github/workflows/beta-device-platform.yml": {"qualified", "released"},
+    ".github/workflows/prod-sim-manual-admission.yml": {"main-admitted"},
+}
+
+
+def _selected_required_statuses(path: Path) -> set[str]:
+    source = path.read_text(encoding="utf-8")
+    return {
+        *re.findall(r"\bREQUIRED_STATUS=([a-z][a-z-]*)\b", source),
+        *re.findall(r"--require-status\s+([a-z][a-z-]*)\b", source),
+    }
 
 
 def write_fixture(root: Path, *, status: str = "released") -> None:
@@ -41,7 +63,7 @@ def write_fixture(root: Path, *, status: str = "released") -> None:
     manifest = {
         "schema": "release-evidence-manifest",
         "status": status,
-        "candidateId": DIGEST,
+        "releaseCompositionId": DIGEST,
         "artifactDigest": OTHER_DIGEST,
         "source": {
             "gitSha": SOURCE_SHA,
@@ -61,7 +83,61 @@ def write_fixture(root: Path, *, status: str = "released") -> None:
     )
 
 
-class ConsumeReleasedReleaseEvidenceTest(unittest.TestCase):
+class ConsumeReleasedReleaseEvidenceTest(
+    ReleaseEvidenceManifestFixtureMixin, unittest.TestCase
+):
+    def test_active_workflow_statuses_compose_with_canonical_consumer(self) -> None:
+        selected_by_workflow = {
+            path: _selected_required_statuses(ROOT / path)
+            for path in WORKFLOW_REQUIRED_STATUSES
+        }
+        self.assertEqual(selected_by_workflow, WORKFLOW_REQUIRED_STATUSES)
+        selected = set().union(*selected_by_workflow.values())
+        self.assertEqual(selected, set(consumer.CONSUMABLE_STATUSES))
+        self.assertNotIn("candidate-ready", selected)
+        self.assertNotIn("deployable", selected)
+        self.assertIs(consumer.validate_manifest, finalizer.validate_manifest)
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            artifact, qualified = self._candidate_manifest(root)
+            main_admitted = self._deployable_manifest(root, artifact, qualified)
+            prod_receipts = root / "prod-receipts"
+            prod = self._receipt(
+                root, main_admitted, kind="environment", environment="prod"
+            )
+            self._write_json(
+                prod_receipts / "prod.json",
+                json.loads(prod.read_text(encoding="utf-8")),
+            )
+            rollout = self._receipt(
+                root, main_admitted, kind="rollout", environment="prod"
+            )
+            rollback = self._receipt(
+                root,
+                main_admitted,
+                kind="rollback",
+                environment="prod",
+                status="not_triggered",
+            )
+            released = finalizer.finalize(
+                artifact,
+                None,
+                environment_receipts_dir=prod_receipts,
+                rollout_receipt_path=rollout,
+                rollback_receipt_path=rollback,
+            )
+            manifests = {
+                str(manifest["status"]): manifest
+                for manifest in (qualified, main_admitted, released)
+            }
+            self.assertEqual(set(manifests), selected)
+            for required_status in selected:
+                consumer.validate_manifest(
+                    manifests[required_status],
+                    allowed_statuses={required_status},
+                )
+
     def test_one_reference_derives_candidate_producer_and_closure(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

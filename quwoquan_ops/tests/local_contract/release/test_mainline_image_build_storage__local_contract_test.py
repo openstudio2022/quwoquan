@@ -214,7 +214,7 @@ def test_mainline_pipeline_uses_controlled_self_hosted_amd64_builder() -> None:
         encoding="utf-8"
     )
 
-    assert workflow.count("runs-on: [self-hosted, macOS, ARM64]") == 5
+    assert workflow.count("runs-on: [self-hosted, macOS, ARM64, quwoquan-release-authority]") == 5
     assert "runs-on: ubuntu-latest" not in workflow
     assert "actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830" in workflow
     assert (

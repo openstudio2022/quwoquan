@@ -197,7 +197,7 @@ class DetectCiImpactedScopesTest(unittest.TestCase):
             },
         )
         self.assertEqual(
-            validated["captured_metadata"]["planner_version"], "impact-planner-v2"
+            validated["captured_metadata"]["planner_version"], "impact-planner-v3"
         )
 
     def test_receipt_requires_lowercase_exact_shas(self) -> None:
@@ -313,15 +313,54 @@ class DetectCiImpactedScopesTest(unittest.TestCase):
             ["quwoquan_app/lib/runtime/shell/startup/app_bootstrap.dart"],
             source_sha="b" * 40,
             base_sha="a" * 40,
+            source_tree_digest="sha1:" + "c" * 40,
         )
         validated = validate_delivery_impact_plan(
             plan, expected_source_sha="b" * 40
         )
         self.assertEqual(validated["schema"], "delivery-impact-plan")
-        self.assertEqual(validated["schema_version"], 1)
+        self.assertEqual(validated["schema_version"], 2)
         self.assertEqual(validated["states"]["device"], "required")
         self.assertRegex(validated["changed_paths_digest"], r"^sha256:[0-9a-f]{64}$")
         self.assertRegex(validated["plan_digest"], r"^sha256:[0-9a-f]{64}$")
+
+    def test_impact_plan_github_outputs_include_changed_path_identity(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            plan = root / "impact-plan.json"
+            output = root / "github-output"
+            completed = subprocess.run(
+                [
+                    sys.executable,
+                    str(SCRIPT),
+                    "--changed-file",
+                    "quwoquan_ops/ci/detect_ci_impacted_scopes.py",
+                    "--base-sha",
+                    "a" * 40,
+                    "--head-sha",
+                    "b" * 40,
+                    "--source-tree-digest",
+                    "sha1:" + "c" * 40,
+                    "--impact-plan",
+                    str(plan),
+                    "--github-output",
+                    str(output),
+                ],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            payload = json.loads(plan.read_text(encoding="utf-8"))
+            github_outputs = dict(
+                line.split("=", 1)
+                for line in output.read_text(encoding="utf-8").splitlines()
+            )
+            self.assertEqual(github_outputs["plan_digest"], payload["plan_digest"])
+            self.assertEqual(
+                github_outputs["changed_paths_digest"],
+                payload["changed_paths_digest"],
+            )
 
     def test_device_impact_is_narrow_and_manual_force_is_explicit(self) -> None:
         from quwoquan_ops.ci.impact_planner_core import build_delivery_impact_plan
@@ -344,17 +383,19 @@ class DetectCiImpactedScopesTest(unittest.TestCase):
         )
         for changed_path in not_required_paths:
             plan = build_delivery_impact_plan(
-                [changed_path], source_sha="b" * 40, base_sha="a" * 40
+                [changed_path], source_sha="b" * 40, base_sha="a" * 40,
+                source_tree_digest="sha1:" + "c" * 40,
             )
             self.assertEqual(plan["states"]["device"], "not_required", changed_path)
         for changed_path in required_paths:
             plan = build_delivery_impact_plan(
-                [changed_path], source_sha="b" * 40, base_sha="a" * 40
+                [changed_path], source_sha="b" * 40, base_sha="a" * 40,
+                source_tree_digest="sha1:" + "c" * 40,
             )
             self.assertEqual(plan["states"]["device"], "required", changed_path)
         forced = build_delivery_impact_plan(
             ["docs/ci/readme.md"], source_sha="b" * 40, base_sha="a" * 40,
-            force_device=True,
+            source_tree_digest="sha1:" + "c" * 40, force_device=True,
         )
         self.assertEqual(forced["states"]["device"], "required")
 
@@ -364,9 +405,66 @@ class DetectCiImpactedScopesTest(unittest.TestCase):
         plan = build_delivery_impact_plan(
             ["quwoquan_ops/policies/gates/canonical_coverage_baseline.json"],
             source_sha="b" * 40, base_sha="a" * 40,
+            source_tree_digest="sha1:" + "c" * 40,
         )
         self.assertEqual(plan["states"]["coverage_service"], "required")
         self.assertEqual(plan["states"]["coverage_app"], "required")
+
+    def test_risk_ids_candidate_products_and_exact_tree_are_machine_derived(self) -> None:
+        from quwoquan_ops.ci.impact_planner_core import build_delivery_impact_plan
+
+        plan = build_delivery_impact_plan(
+            ["quwoquan_app/lib/runtime/shell/startup/app_bootstrap.dart"],
+            source_sha="b" * 40, base_sha="a" * 40,
+            head_sha="b" * 40, synthetic_sha="b" * 40,
+            source_tree_digest="sha1:" + "c" * 40,
+        )
+        self.assertEqual(plan["risk"]["level"], "R2")
+        self.assertEqual(plan["candidate_products"], ["app"])
+        self.assertEqual(plan["source_tree_digest"], "sha1:" + "c" * 40)
+        self.assertIn("TEST-APP-LOCAL-CONTRACT", plan["required_ids"]["testIds"])
+        self.assertIn("JOURNEY-DUAL-PHYSICAL-DEVICE", plan["required_ids"]["journeyIds"])
+        self.assertRegex(plan["planner_digest"], r"^sha256:[0-9a-f]{64}$")
+        self.assertRegex(plan["test_ownership_digest"], r"^sha256:[0-9a-f]{64}$")
+
+    def test_unknown_governance_and_promotion_escalate_fail_closed(self) -> None:
+        from quwoquan_ops.ci.impact_planner_core import build_delivery_impact_plan
+
+        unknown = build_delivery_impact_plan(
+            ["new-root/runtime.bin"], source_sha="b" * 40, base_sha="a" * 40,
+            source_tree_digest="sha1:" + "c" * 40,
+        )
+        self.assertEqual(unknown["risk"]["level"], "R3")
+        self.assertTrue(all(unknown["scopes"][name] for name in ("service", "app", "portal", "topology", "data")))
+        governance = build_delivery_impact_plan(
+            ["quwoquan_ops/ci/impact_planner_core.py"],
+            source_sha="b" * 40, base_sha="a" * 40,
+            source_tree_digest="sha1:" + "c" * 40,
+        )
+        self.assertEqual(governance["risk"]["level"], "R4")
+        promotion = build_delivery_impact_plan(
+            ["docs/ci/readme.md"], source_sha="b" * 40, base_sha="a" * 40,
+            source_tree_digest="sha1:" + "c" * 40, execution_profile="promotion",
+        )
+        self.assertEqual(promotion["risk"]["level"], "R4")
+        self.assertEqual(promotion["states"]["device"], "required")
+        self.assertIn("TEST-SERVICE-COVERAGE", promotion["required_ids"]["testIds"])
+
+    def test_rederived_plan_rejects_self_consistent_policy_tampering(self) -> None:
+        from quwoquan_ops.ci.impact_planner_core import (
+            ImpactPlannerError, build_delivery_impact_plan, canonical_digest,
+            validate_delivery_impact_plan,
+        )
+        plan = build_delivery_impact_plan(
+            ["quwoquan_app/lib/main.dart"], source_sha="b" * 40, base_sha="a" * 40,
+            source_tree_digest="sha1:" + "c" * 40,
+        )
+        plan["risk"]["level"] = "R0"
+        unsigned = dict(plan)
+        unsigned.pop("plan_digest")
+        plan["plan_digest"] = canonical_digest(unsigned)
+        with self.assertRaises(ImpactPlannerError):
+            validate_delivery_impact_plan(plan)
 
     def test_plan_digest_or_source_tampering_fails_closed(self) -> None:
         from quwoquan_ops.ci.impact_planner_core import (
@@ -374,7 +472,8 @@ class DetectCiImpactedScopesTest(unittest.TestCase):
         )
 
         plan = build_delivery_impact_plan(
-            ["quwoquan_app/lib/main.dart"], source_sha="b" * 40, base_sha="a" * 40
+            ["quwoquan_app/lib/main.dart"], source_sha="b" * 40, base_sha="a" * 40,
+            source_tree_digest="sha1:" + "c" * 40,
         )
         plan["changed_paths_digest"] = "sha256:" + "0" * 64
         with self.assertRaises(ImpactPlannerError):

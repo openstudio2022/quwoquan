@@ -193,7 +193,7 @@ def _validate_immutable_runtime(
         payload.get("formalRelease") is not True
         or payload.get("releaseInputClassification") != "commercial_inputs"
         or payload.get("runtimeMode") != "immutable-oci"
-        or payload.get("runtimeCandidateDigest") != manifest.get("candidateId")
+        or payload.get("runtimeCandidateDigest") != manifest.get("releaseCompositionId")
         or payload.get("environmentArtifactDigest")
         != artifact.get("environmentArtifactDigest")
         or payload.get("destructiveRepairPerformed") is not False
@@ -490,10 +490,10 @@ def render(
     required_evidence: list[str],
     archive_prefix: str,
 ) -> dict[str, Any]:
-    validate_manifest(manifest, allowed_statuses={"candidate-ready", "deployable"})
-    candidate = str(manifest.get("candidateId") or "")
+    validate_manifest(manifest, allowed_statuses={"qualified", "main-admitted"})
+    candidate = str(manifest.get("releaseCompositionId") or "")
     if DIGEST_PATTERN.fullmatch(candidate) is None:
-        raise ValueError("environment receipt requires a sealed candidateId")
+        raise ValueError("environment receipt requires a sealed releaseCompositionId")
     if environment not in TARGETS:
         raise ValueError(f"unsupported environment: {environment}")
     canonical_required = set(required_evidence)
@@ -540,11 +540,11 @@ def render(
         if declared_target not in {None, expected_target}:
             raise ValueError(f"{label} evidence target mismatch")
         require_direct_binding = label in {"package", "devices"}
-        declared_candidate = payload.get("candidateId")
+        declared_candidate = payload.get("releaseCompositionId")
         if require_direct_binding and declared_candidate is None:
-            raise ValueError(f"{label} evidence has no direct candidateId binding")
+            raise ValueError(f"{label} evidence has no direct releaseCompositionId binding")
         if declared_candidate is not None and declared_candidate != candidate:
-            raise ValueError(f"{label} evidence candidateId mismatch")
+            raise ValueError(f"{label} evidence releaseCompositionId mismatch")
         declared_artifact = payload.get("artifactDigest")
         if label == "package" and declared_artifact is None:
             raise ValueError("package evidence has no direct artifactDigest binding")
@@ -634,7 +634,7 @@ def render(
 
     source = manifest["source"]
     evidence_projection = {
-        "candidateId": candidate,
+        "releaseCompositionId": candidate,
         "environment": environment,
         "sourceGitSha": source["gitSha"],
         "sourceTreeDigest": source["treeDigest"],
@@ -650,7 +650,7 @@ def render(
         "schema": "release-environment-receipt",
         "environment": environment,
         "status": "passed",
-        "candidateId": candidate,
+        "releaseCompositionId": candidate,
         "sourceGitSha": source["gitSha"],
         "sourceTreeDigest": source["treeDigest"],
         "evidenceDigest": "sha256:" + hashlib.sha256(encoded).hexdigest(),

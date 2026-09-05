@@ -493,7 +493,19 @@ def test_lane_ownership_schema_is_closed_and_uses_branch_policy_lanes(policy) ->
     lanes = frozenset(branch for branch in ALLOWED if branch.startswith("lane/"))
     rules = inventory.load_lane_ownership(allowed_lanes=lanes)
     assert inventory.ownership_owner("quwoquan_ops/gate/verify_root_layout.py", rules) == "lane/engineering"
+    assert inventory.ownership_owner("quwoquan_app/run.sh", rules) == "lane/engineering"
+    assert inventory.ownership_owner("quwoquan_app/scripts/device/supervise_app_launch.py", rules) == "lane/engineering"
+    assert inventory.ownership_owner("quwoquan_ops/cli/lib/app_readiness_facts.py", rules) == "lane/engineering"
+    assert inventory.ownership_owner("quwoquan_ops/cli/lib/environment_acceptance_fact.py", rules) == "lane/engineering"
+    assert inventory.ownership_owner("quwoquan_ops/cli/lib/deployment_candidate_manifest/manifest.py", rules) == "lane/engineering"
+    assert inventory.ownership_owner("quwoquan_ops/cli/commands/deploy_rollout.py", rules) == "lane/engineering"
+    assert inventory.ownership_owner("quwoquan_ops/cli/prod/hosted_release_ledger.py", rules) == "lane/engineering"
     assert inventory.ownership_owner("quwoquan_ops/cli/stackctl.py", rules) == "lane/ops"
+    assert inventory.ownership_owner("quwoquan_ops/cli/commands/health.py", rules) == "lane/ops"
+    assert inventory.ownership_owner("quwoquan_ops/cli/prod/render_prod_plane_stack.py", rules) == "lane/ops"
+    assert inventory.ownership_owner("quwoquan_ops/observability/prometheus.yml", rules) == "lane/ops"
+    assert inventory.ownership_owner("quwoquan_ops/environments/prod/environment.yaml", rules) == "lane/ops"
+    assert inventory.ownership_owner("quwoquan_app/lib/main.dart", rules) == "lane/product-mainline"
     assert inventory.ownership_owner("quwoquan_ops/policies/branch_policy.yaml", rules) == "lane/engineering"
     assert inventory.ownership_owner("quwoquan_ops/policies/app_build_projection_policy.json", rules) == "lane/ops"
 

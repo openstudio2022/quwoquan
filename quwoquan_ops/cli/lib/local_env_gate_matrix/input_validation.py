@@ -19,7 +19,7 @@ from quwoquan_ops.cli.lib.local_env_gate_matrix.preflight import (
 
 
 class ResearchLifecycleUnsupported(ValueError):
-    """表示 commercial-only matrix 收到了 Research 发布绑定。"""
+    """Retained import name for callers; Research is now a supported branch."""
 
 
 @dataclass(frozen=True)
@@ -47,6 +47,7 @@ def _resolve_matrix_inputs(
     ios_simulator_device: str,
     android_emulator_device: str,
     android_physical_device: str,
+    ios_physical_device: str = "",
     device_profile: str,
     execution_class: str,
 ) -> MatrixInputBindings:
@@ -60,23 +61,14 @@ def _resolve_matrix_inputs(
     if candidate_release["releaseId"] == rollback_release["releaseId"]:
         raise ValueError("candidate and rollback release must be different")
 
-    research_bindings = [
-        label
-        for label, binding in (
-            ("candidate", candidate_release),
-            ("rollback", rollback_release),
-        )
-        if binding["releaseClass"] == "research"
-    ]
-    if research_bindings:
-        raise ResearchLifecycleUnsupported(
-            "research_lifecycle_unsupported: stackctl matrix is "
-            "commercial-only and does not implement the canonical "
-            "Research lifecycle order (research isolation, Research "
-            "readiness, rollback/replay, and lifecycle exit); run that "
-            "canonical Research lifecycle outside matrix before retrying; "
-            f"researchBindings={','.join(research_bindings)}"
-        )
+    # Research and commercial are explicit release metadata branches.  The
+    # matrix must not reject either class or infer it from an environment; the
+    # downstream lifecycle phases consume the two exact attestation identities.
+    candidate_class = str(candidate_release["releaseClass"])
+    rollback_class = str(rollback_release["releaseClass"])
+    if candidate_class not in {"research", "commercial"} or rollback_class not in {"research", "commercial"}:
+        raise ValueError("matrix release lifecycle branch is unknown")
+
 
     request_by_target = dict(test_data_request or {})
     evidence_by_target = dict(test_data_evidence or {})
@@ -134,6 +126,7 @@ def _resolve_matrix_inputs(
             ios_simulator_device=ios_simulator_device,
             android_emulator_device=android_emulator_device,
             android_physical_device=android_physical_device,
+            ios_physical_device=ios_physical_device,
         )
         if device_errors:
             raise ValueError("; ".join(device_errors))

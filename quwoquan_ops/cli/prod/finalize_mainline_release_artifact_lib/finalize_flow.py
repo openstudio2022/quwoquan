@@ -233,9 +233,9 @@ def finalize(
             load_release_evidence(artifact_dir, artifact_descriptors_dir),
         )
     else:
-        if original_status not in {"candidate-ready", "deployable"}:
+        if original_status not in {"qualified", "main-admitted"}:
             raise ValueError("release receipts require a sealed candidate")
-        if original_status == "deployable":
+        if original_status == "main-admitted":
             if set(manifest["environmentReceipts"]) != set(PRE_PROD_ENVIRONMENTS):
                 raise ValueError("deployable input is missing pre-prod receipts")
             if not isinstance(manifest["rollbackReceipt"], dict) or manifest[
@@ -247,7 +247,7 @@ def finalize(
                 str(load_json(path).get("environment") or "")
                 for path in sorted(environment_receipts_dir.glob("*.json"))
             }
-            if "prod" in incoming_environments and original_status != "deployable":
+            if "prod" in incoming_environments and original_status != "main-admitted":
                 raise ValueError("prod receipt requires a previously deployable snapshot")
             incoming = _load_environment_receipts(
                 artifact_dir=artifact_dir,
@@ -262,7 +262,7 @@ def finalize(
                     )
                 manifest["environmentReceipts"][environment] = descriptor
         if rollout_receipt_path is not None:
-            if original_status != "deployable":
+            if original_status != "main-admitted":
                 raise ValueError("rollout receipt requires a previously deployable snapshot")
             manifest["rolloutReceipt"] = _receipt_descriptor(
                 artifact_dir=artifact_dir,
@@ -278,11 +278,11 @@ def finalize(
                 "not_triggered",
                 "rolled_back",
                 "rollback_failed",
-            } and original_status != "deployable":
+            } and original_status != "main-admitted":
                 raise ValueError(
                     "completed rollback receipt requires a previously deployable snapshot"
                 )
-            if rollback_status == "ready" and original_status != "candidate-ready":
+            if rollback_status == "ready" and original_status != "qualified":
                 raise ValueError("rollback readiness requires a candidate-ready snapshot")
             manifest["rollbackReceipt"] = _receipt_descriptor(
                 artifact_dir=artifact_dir,

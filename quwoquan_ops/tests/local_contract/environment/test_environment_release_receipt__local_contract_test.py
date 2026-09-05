@@ -39,10 +39,10 @@ class EnvironmentReleaseReceiptTest(unittest.TestCase):
             "digest": digest,
         }
 
-    def _manifest(self, *, status: str = "candidate-ready") -> dict:
+    def _manifest(self, *, status: str = "qualified") -> dict:
         return {
             "status": status,
-            "candidateId": self.candidate_id,
+            "releaseCompositionId": self.candidate_id,
             "artifactDigest": "sha256:" + "d" * 64,
             "contractGraphDigest": self.contract_graph_digest,
             "source": {
@@ -98,7 +98,7 @@ class EnvironmentReleaseReceiptTest(unittest.TestCase):
                 "environment": "beta",
                 "target": "beta-local",
                 "status": "passed",
-                "candidateId": self.candidate_id,
+                "releaseCompositionId": self.candidate_id,
                 "sourceGitSha": self.source_git_sha,
                 "sourceTreeDigest": self.source_tree_digest,
                 "platforms": {
@@ -157,7 +157,7 @@ class EnvironmentReleaseReceiptTest(unittest.TestCase):
             "env": environment,
             "target": target,
             "status": "ok",
-            "candidateId": self.candidate_id,
+            "releaseCompositionId": self.candidate_id,
             "artifactDigest": "sha256:" + "d" * 64,
             "sourceGitSha": self.source_git_sha,
             "sourceTreeDigest": self.source_tree_digest,
@@ -197,7 +197,7 @@ class EnvironmentReleaseReceiptTest(unittest.TestCase):
         ):
             return render(
                 manifest=self._manifest(
-                    status="deployable" if environment == "prod" else "candidate-ready"
+                    status="main-admitted" if environment == "prod" else "qualified"
                 ),
                 environment=environment,
                 evidence=evidence,
@@ -208,7 +208,7 @@ class EnvironmentReleaseReceiptTest(unittest.TestCase):
     def test_passed_package_binds_candidate_and_source_without_wrapper(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             receipt = self._render(root=Path(temporary))
-        self.assertEqual(receipt["candidateId"], self.candidate_id)
+        self.assertEqual(receipt["releaseCompositionId"], self.candidate_id)
         self.assertEqual(receipt["sourceGitSha"], self.source_git_sha)
         self.assertRegex(receipt["evidenceDigest"], r"^sha256:[0-9a-f]{64}$")
 
@@ -249,7 +249,7 @@ class EnvironmentReleaseReceiptTest(unittest.TestCase):
 
     def test_package_must_bind_exact_candidate_and_source(self) -> None:
         cases = {
-            "candidateId": "candidateId",
+            "releaseCompositionId": "releaseCompositionId",
             "artifactDigest": "artifactDigest",
             "sourceGitSha": "source Git SHA",
             "sourceTreeDigest": "source tree",
@@ -263,9 +263,9 @@ class EnvironmentReleaseReceiptTest(unittest.TestCase):
 
     def test_missing_direct_package_binding_is_gate_block(self) -> None:
         payload = self._package()
-        payload.pop("candidateId")
+        payload.pop("releaseCompositionId")
         with tempfile.TemporaryDirectory() as temporary, self.assertRaisesRegex(
-            ValueError, "direct candidateId"
+            ValueError, "direct releaseCompositionId"
         ):
             self._render(root=Path(temporary), package=payload)
 
@@ -292,7 +292,7 @@ class EnvironmentReleaseReceiptTest(unittest.TestCase):
             "environment": "beta",
             "target": "beta-local",
             "status": "passed",
-            "candidateId": self.candidate_id,
+            "releaseCompositionId": self.candidate_id,
             "sourceGitSha": self.source_git_sha,
             "sourceTreeDigest": self.source_tree_digest,
             "platforms": {
@@ -307,9 +307,9 @@ class EnvironmentReleaseReceiptTest(unittest.TestCase):
             )
         self.assertEqual(receipt["environment"], "beta")
 
-        devices["candidateId"] = "sha256:" + "e" * 64
+        devices["releaseCompositionId"] = "sha256:" + "e" * 64
         with tempfile.TemporaryDirectory() as temporary, self.assertRaisesRegex(
-            ValueError, "devices evidence candidateId mismatch"
+            ValueError, "devices evidence releaseCompositionId mismatch"
         ):
             self._render(
                 root=Path(temporary), environment="beta", extra={"devices": devices}

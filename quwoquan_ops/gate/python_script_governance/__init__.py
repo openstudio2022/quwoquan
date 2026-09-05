@@ -10,7 +10,7 @@
 - ``hygiene``：命名、缓存/临时文件卫生与无 owner tool。
 - ``bytecode_guard``：可直接调用入口的字节码抑制守卫（防源码树 pyc 回潮）。
 - ``structure``：App/Service/Ops/Data 目录结构规则。
-- ``line_budget``：Python 文件行数硬顶（Data scripts 由其自有 600 行门负责）。
+- ``line_budget``：全部手写 Python 文件共用 1000 行增量硬顶。
 - ``report``：报告组装、CLI 参数与 main 入口。
 """
 from __future__ import annotations

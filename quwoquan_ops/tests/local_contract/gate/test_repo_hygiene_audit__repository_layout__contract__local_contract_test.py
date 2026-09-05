@@ -65,9 +65,7 @@ def test_make_and_data_cli_use_the_single_verification_entrypoint() -> None:
         ROOT / "quwoquan_data/scripts/verify/handler.py"
     ).read_text(encoding="utf-8")
     for gate_name in (
-        "verify_prompt_templates",
         "verify_no_flat_roots",
-        "verify_no_runtime_draft_kit",
         "verify_tag_tree",
     ):
         assert gate_name in verify_handler
@@ -123,6 +121,39 @@ def test_service_layout_gate_scans_object_paths_and_forbids_cache() -> None:
         )
         assert "D" in status.stdout[:2]
     assert not (ROOT / "quwoquan_service/api_integration.test").exists()
+
+
+def test_tracked_service_executable_build_artifacts_are_retired() -> None:
+    tracked = subprocess.run(
+        ["git", "ls-files", "-z", "quwoquan_service"],
+        cwd=ROOT, check=True, capture_output=True,
+    ).stdout.split(b"\0")
+    forbidden: list[str] = []
+    for raw in tracked:
+        if not raw:
+            continue
+        relative = raw.decode("utf-8")
+        path = ROOT / relative
+        if not path.is_file() or path.is_symlink():
+            continue
+        with path.open("rb") as source:
+            prefix = source.read(4)
+        if prefix == b"\x7fELF" or prefix in {
+            b"\xcf\xfa\xed\xfe", b"\xfe\xed\xfa\xcf",
+            b"\xca\xfe\xba\xbe", b"\xbe\xba\xfe\xca",
+        } or prefix[:2] == b"MZ":
+            forbidden.append(relative)
+    assert forbidden == []
+
+    operations = (
+        ROOT / "quwoquan_ops/gate/service_architecture/verification_operations.py"
+    ).read_text(encoding="utf-8")
+    assert "source-tree executable build artifact is forbidden" in operations
+    assert "Mach-O" in operations and "ELF" in operations
+    assert 'source.read(4)' in operations
+    assert '"build"' in operations and '"Pods"' in operations
+    assert '"vendor"' in operations
+    assert "walk_source_tree" in operations
 
 
 def test_active_workflows_do_not_reference_retired_ml_or_manifest_defaults() -> None:

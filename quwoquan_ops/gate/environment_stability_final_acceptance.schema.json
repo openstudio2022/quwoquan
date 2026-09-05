@@ -123,7 +123,7 @@
       "required": [
         "root",
         "manifest",
-        "candidateId",
+        "releaseCompositionId",
         "artifactDigest",
         "providerEvidence",
         "testEvidence",
@@ -139,7 +139,7 @@
         "manifest": {
           "$ref": "#/$defs/fileBinding"
         },
-        "candidateId": {
+        "releaseCompositionId": {
           "$ref": "#/$defs/digest"
         },
         "artifactDigest": {

@@ -26,7 +26,7 @@ class ReleaseLifecycleReceiptsTest(unittest.TestCase):
     def _manifest(self, status: str) -> dict:
         return {
             "status": status,
-            "candidateId": self.candidate,
+            "releaseCompositionId": self.candidate,
             "artifactDigest": self.artifact,
             "source": {
                 "gitSha": "b" * 40,
@@ -34,7 +34,7 @@ class ReleaseLifecycleReceiptsTest(unittest.TestCase):
             },
             "environmentReceipts": (
                 {environment: {} for environment in ("alpha", "beta", "gamma")}
-                if status == "candidate-ready"
+                if status == "qualified"
                 else {environment: {} for environment in ("alpha", "beta", "gamma")}
             ),
         }
@@ -77,8 +77,8 @@ class ReleaseLifecycleReceiptsTest(unittest.TestCase):
             "rollbackEvidence": (
                 {
                     "triggered": True,
-                    "startedAt": "2026-07-28T00:03:00Z",
-                    "endedAt": "2026-07-28T00:04:00Z",
+                    "startedAt": "2026-09-04T00:03:00Z",
+                    "endedAt": "2026-09-04T00:04:00Z",
                     "durationMs": 60_000,
                     "postChecks": [
                         {
@@ -96,6 +96,15 @@ class ReleaseLifecycleReceiptsTest(unittest.TestCase):
                 else {"triggered": False}
             ),
             "artifactDigest": self.artifact,
+            "environmentAcceptanceRef": "eaf/prod.json",
+            "environmentAcceptanceDigest": digest("7"),
+            "environmentAcceptanceFactId": digest("8"),
+            "gammaPredecessorFactId": digest("9"),
+            "gammaPredecessorDigest": digest("a"),
+            "engineeringEligibilityRef": "eligibility/prod.json",
+            "engineeringEligibilityDigest": digest("b"),
+            "durableApprovalRef": "approval/prod.json",
+            "durableApprovalDigest": digest("c"),
             "imageDigest": digest("1"),
             "configDigest": digest("2"),
             "contractGraphDigest": digest("3"),
@@ -124,7 +133,7 @@ class ReleaseLifecycleReceiptsTest(unittest.TestCase):
                 }
             ],
             "lastGoodCandidateDigest": last_good or to_value,
-            "verifiedAt": "2026-07-28T00:05:00Z",
+            "verifiedAt": "2026-09-04T00:05:00Z",
         }
         receipt["receiptId"] = lifecycle._receipt_id(receipt)
         return receipt
@@ -154,6 +163,15 @@ class ReleaseLifecycleReceiptsTest(unittest.TestCase):
             "decision": receipt["decision"],
             "rollback_outcome": receipt["rollbackOutcome"],
             "artifact_digest": receipt["artifactDigest"],
+            "environment_acceptance_ref": receipt["environmentAcceptanceRef"],
+            "environment_acceptance_digest": receipt["environmentAcceptanceDigest"],
+            "environment_acceptance_fact_id": receipt["environmentAcceptanceFactId"],
+            "gamma_predecessor_fact_id": receipt["gammaPredecessorFactId"],
+            "gamma_predecessor_digest": receipt["gammaPredecessorDigest"],
+            "engineering_eligibility_ref": receipt["engineeringEligibilityRef"],
+            "engineering_eligibility_digest": receipt["engineeringEligibilityDigest"],
+            "durable_approval_ref": receipt["durableApprovalRef"],
+            "durable_approval_digest": receipt["durableApprovalDigest"],
             "image_digest": receipt["imageDigest"],
             "config_digest": receipt["configDigest"],
             "contract_graph_digest": receipt["contractGraphDigest"],
@@ -219,7 +237,7 @@ class ReleaseLifecycleReceiptsTest(unittest.TestCase):
             backup_path = self._write(root / "backup.json", backup)
             with patch.object(lifecycle, "validate_manifest"):
                 receipt = lifecycle.render_rollback_readiness(
-                    manifest=self._manifest("candidate-ready"),
+                    manifest=self._manifest("qualified"),
                     service=self.service,
                     from_candidate_digest=self.from_candidate,
                     current_ledger_path=current_path,
@@ -233,7 +251,7 @@ class ReleaseLifecycleReceiptsTest(unittest.TestCase):
                 )
         self.assertEqual(receipt["schema"], "release-rollback-receipt")
         self.assertEqual(receipt["status"], "ready")
-        self.assertEqual(receipt["candidateId"], self.candidate)
+        self.assertEqual(receipt["releaseCompositionId"], self.candidate)
 
     def test_readiness_rejects_a_non_recovery_drill(self) -> None:
         current = self._hosted_receipt(
@@ -260,7 +278,7 @@ class ReleaseLifecycleReceiptsTest(unittest.TestCase):
                 ValueError, "does not recover the current stable candidate"
             ):
                 lifecycle.render_rollback_readiness(
-                    manifest=self._manifest("candidate-ready"),
+                    manifest=self._manifest("qualified"),
                     service=self.service,
                     from_candidate_digest=self.from_candidate,
                     current_ledger_path=current_path,
@@ -313,7 +331,7 @@ class ReleaseLifecycleReceiptsTest(unittest.TestCase):
             "terminalStage": receipt["stage"],
             "rolloutDecision": "rollback" if failed else "continue",
             "artifactDigest": self.artifact,
-            "candidateId": self.candidate,
+            "releaseCompositionId": self.candidate,
             "releaseReceiptId": receipt["receiptId"],
             "releaseReceiptRef": f"receipt:hosted:{receipt['receiptId']}",
             "releaseReceiptAuthority": lifecycle.HOSTED_AUTHORITY,
@@ -323,8 +341,8 @@ class ReleaseLifecycleReceiptsTest(unittest.TestCase):
             "rollbackPostChecks": [{"exitCode": 0}] if rollback_outcome == "rolled_back" else [],
             "rollback": {
                 "triggered": failed,
-                "startedAt": "2026-07-28T00:05:00Z" if failed else "",
-                "endedAt": "2026-07-28T00:06:00Z" if failed else "",
+                "startedAt": "2026-09-04T00:05:00Z" if failed else "",
+                "endedAt": "2026-09-04T00:06:00Z" if failed else "",
                 "durationMs": 60_000 if failed else 0,
             },
         }
@@ -342,7 +360,7 @@ class ReleaseLifecycleReceiptsTest(unittest.TestCase):
                 reports[stage], readbacks[stage] = self._stage_pair(root, stage=stage)
             with patch.object(lifecycle, "validate_manifest"):
                 result = lifecycle.render_prod_outcome(
-                    manifest=self._manifest("deployable"),
+                    manifest=self._manifest("main-admitted"),
                     service=self.service,
                     from_candidate_digest=self.from_candidate,
                     reports=reports,
@@ -350,7 +368,7 @@ class ReleaseLifecycleReceiptsTest(unittest.TestCase):
                     archive_prefix="evidence/raw/prod/outcome",
                     hard_deadline_epoch=int(
                         lifecycle.dt.datetime(
-                            2026, 7, 28, 0, 30, tzinfo=lifecycle.dt.timezone.utc
+                            2026, 9, 4, 0, 30, tzinfo=lifecycle.dt.timezone.utc
                         ).timestamp()
                     ),
                     rollback_budget_seconds=300,
@@ -374,7 +392,7 @@ class ReleaseLifecycleReceiptsTest(unittest.TestCase):
             )
             with patch.object(lifecycle, "validate_manifest"):
                 result = lifecycle.render_prod_outcome(
-                    manifest=self._manifest("deployable"),
+                    manifest=self._manifest("main-admitted"),
                     service=self.service,
                     from_candidate_digest=self.from_candidate,
                     reports=reports,
@@ -382,7 +400,7 @@ class ReleaseLifecycleReceiptsTest(unittest.TestCase):
                     archive_prefix="evidence/raw/prod/outcome",
                     hard_deadline_epoch=int(
                         lifecycle.dt.datetime(
-                            2026, 7, 28, 0, 30, tzinfo=lifecycle.dt.timezone.utc
+                            2026, 9, 4, 0, 30, tzinfo=lifecycle.dt.timezone.utc
                         ).timestamp()
                     ),
                     rollback_budget_seconds=300,
@@ -402,7 +420,7 @@ class ReleaseLifecycleReceiptsTest(unittest.TestCase):
             )
             with patch.object(lifecycle, "validate_manifest"):
                 result = lifecycle.render_prod_outcome(
-                    manifest=self._manifest("deployable"),
+                    manifest=self._manifest("main-admitted"),
                     service=self.service,
                     from_candidate_digest=self.from_candidate,
                     reports={"canary": report},
@@ -410,7 +428,7 @@ class ReleaseLifecycleReceiptsTest(unittest.TestCase):
                     archive_prefix="evidence/raw/prod/outcome",
                     hard_deadline_epoch=int(
                         lifecycle.dt.datetime(
-                            2026, 7, 28, 0, 30, tzinfo=lifecycle.dt.timezone.utc
+                            2026, 9, 4, 0, 30, tzinfo=lifecycle.dt.timezone.utc
                         ).timestamp()
                     ),
                     rollback_budget_seconds=300,
@@ -434,7 +452,7 @@ class ReleaseLifecycleReceiptsTest(unittest.TestCase):
                 ValueError, "300-second budget"
             ):
                 lifecycle.render_prod_outcome(
-                    manifest=self._manifest("deployable"),
+                    manifest=self._manifest("main-admitted"),
                     service=self.service,
                     from_candidate_digest=self.from_candidate,
                     reports={"canary": (report_path, report_payload)},
@@ -442,7 +460,7 @@ class ReleaseLifecycleReceiptsTest(unittest.TestCase):
                     archive_prefix="evidence/raw/prod/outcome",
                     hard_deadline_epoch=int(
                         lifecycle.dt.datetime(
-                            2026, 7, 28, 0, 30, tzinfo=lifecycle.dt.timezone.utc
+                            2026, 9, 4, 0, 30, tzinfo=lifecycle.dt.timezone.utc
                         ).timestamp()
                     ),
                     rollback_budget_seconds=300,
@@ -456,7 +474,7 @@ class ReleaseLifecycleReceiptsTest(unittest.TestCase):
                 ValueError, "full rollout evidence is incomplete"
             ):
                 lifecycle.render_prod_outcome(
-                    manifest=self._manifest("deployable"),
+                    manifest=self._manifest("main-admitted"),
                     service=self.service,
                     from_candidate_digest=self.from_candidate,
                     reports={"canary": report},
@@ -464,7 +482,7 @@ class ReleaseLifecycleReceiptsTest(unittest.TestCase):
                     archive_prefix="evidence/raw/prod/outcome",
                     hard_deadline_epoch=int(
                         lifecycle.dt.datetime(
-                            2026, 7, 28, 0, 30, tzinfo=lifecycle.dt.timezone.utc
+                            2026, 9, 4, 0, 30, tzinfo=lifecycle.dt.timezone.utc
                         ).timestamp()
                     ),
                     rollback_budget_seconds=300,

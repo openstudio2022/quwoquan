@@ -62,7 +62,7 @@ def _validate_timestamp(value: Any, label: str) -> str:
 
 
 def _manifest_source(manifest: dict[str, Any]) -> tuple[str, str, str]:
-    candidate = str(manifest["candidateId"])
+    candidate = str(manifest["releaseCompositionId"])
     source = manifest["source"]
     return candidate, str(source["gitSha"]), str(source["treeDigest"])
 
@@ -80,7 +80,7 @@ def _canonical_receipt(
         "schema": schema,
         "environment": "prod",
         "status": status,
-        "candidateId": candidate,
+        "releaseCompositionId": candidate,
         "sourceGitSha": git_sha,
         "sourceTreeDigest": tree_digest,
         "evidenceDigest": _digest_bytes(_canonical_bytes(evidence_projection)),

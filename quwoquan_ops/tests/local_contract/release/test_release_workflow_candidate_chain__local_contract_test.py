@@ -59,9 +59,9 @@ class ServiceReleaseImagePlanTest(unittest.TestCase):
                 {
                     "schema": "release-evidence-manifest",
                     "releaseTrainId": DIGEST,
-                    "candidateId": DIGEST,
+                    "releaseCompositionId": DIGEST,
                     "artifactDigest": ARTIFACT_DIGEST,
-                    "status": "candidate-ready",
+                    "status": "qualified",
                     "environmentArtifacts": environment_artifacts,
                 }
             ),
@@ -193,9 +193,9 @@ class ServiceReleaseImagePlanTest(unittest.TestCase):
                     {
                         "schema": "release-evidence-manifest",
                         "releaseTrainId": DIGEST,
-                        "candidateId": DIGEST,
+                        "releaseCompositionId": DIGEST,
                         "artifactDigest": ARTIFACT_DIGEST,
-                        "status": "candidate-ready",
+                        "status": "qualified",
                         "images": {},
                     }
                 ),
@@ -266,9 +266,9 @@ class WorkflowCandidateBindingTest(unittest.TestCase):
     def _manifest(self, root: Path, *, deployable: bool = False) -> Path:
         payload = {
             "schema": "release-evidence-manifest",
-            "candidateId": DIGEST,
+            "releaseCompositionId": DIGEST,
             "artifactDigest": ARTIFACT_DIGEST,
-            "status": "deployable" if deployable else "candidate-ready",
+            "status": "main-admitted" if deployable else "qualified",
             "source": {
                 "gitSha": SOURCE_SHA,
                 "treeDigest": "sha256:" + hashlib.sha256(b"tree").hexdigest(),
@@ -312,7 +312,7 @@ class WorkflowCandidateBindingTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             path = self._manifest(Path(directory))
             payload = json.loads(path.read_text(encoding="utf-8"))
-            payload["candidateId"] = None
+            payload["releaseCompositionId"] = None
             payload["status"] = "component-ready"
             path.write_text(json.dumps(payload), encoding="utf-8")
             args = self._args(
@@ -332,7 +332,7 @@ class WorkflowCandidateBindingTest(unittest.TestCase):
             )
             validate(args)
         canonical.assert_called_once()
-        self.assertEqual(canonical.call_args.kwargs["allowed_statuses"], {"deployable"})
+        self.assertEqual(canonical.call_args.kwargs["allowed_statuses"], {"main-admitted"})
 
 
 if __name__ == "__main__":

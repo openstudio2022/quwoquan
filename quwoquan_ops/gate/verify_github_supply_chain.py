@@ -72,8 +72,8 @@ def verify_production_execution_isolation() -> list[str]:
             )
         if path in deploy_paths:
             for token in (
-                "runs-on: [self-hosted, macOS, ARM64]",
-                "environment: production",
+                "runs-on: [self-hosted, macOS, ARM64, quwoquan-release-authority]",
+                "name: ${{ needs.prepare.outputs.dry_run != 'true' && 'production' || 'release-validation' }}",
                 "verify_release_governance.py",
                 "governance-receipt.json",
                 "pull-requests: read",

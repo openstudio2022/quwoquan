@@ -426,7 +426,7 @@ def main() -> int:
             try:
                 validate_manifest(
                     manifest,
-                    allowed_statuses={"candidate-ready", "deployable", "released"},
+                    allowed_statuses={"qualified", "main-admitted", "released"},
                 )
             except ValueError as error:
                 raise RuntimeError(

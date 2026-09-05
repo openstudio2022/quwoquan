@@ -114,8 +114,8 @@ def _validate_hosted_readbacks(
         or rollout_receipt.get("triggerStage") != "100"
         or rollout_receipt.get("decision") != "continue"
         or rollout_receipt.get("rollbackOutcome") != "not_triggered"
-        or rollout_receipt.get("toCandidateDigest") != manifest["candidateId"]
-        or rollout_receipt.get("lastGoodCandidateDigest") != manifest["candidateId"]
+        or rollout_receipt.get("toCandidateDigest") != manifest["releaseCompositionId"]
+        or rollout_receipt.get("lastGoodCandidateDigest") != manifest["releaseCompositionId"]
         or not _manifest_contains_receipt_id(manifest["rolloutReceipt"], receipt_id)
         or not _manifest_contains_receipt_id(manifest["rollbackReceipt"], receipt_id)
     ):
@@ -239,7 +239,7 @@ def verify_canonical_hosted_prod_soak(
     config_graph_digest = _canonical_digest(configuration_packages)
     expected_bindings = {
         "fullRolloutReceiptId": rollout_receipt.get("receiptId"),
-        "candidateId": manifest.get("candidateId"),
+        "releaseCompositionId": manifest.get("releaseCompositionId"),
         "rolloutArtifactDigest": rollout_receipt.get("artifactDigest"),
         "artifactDigest": manifest.get("artifactDigest"),
         "sourceGitSha": source.get("gitSha"),

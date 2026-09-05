@@ -1,8 +1,7 @@
-# Delivery Gate — PR 合入主门禁（L1+L2）
-# 触发：dev1.0/lane push + pull_request + workflow_dispatch；生产 branch evaluator 决定合法边。
-# lane push 生产该 head 的完整 G0 证据（含 App 重活）；lane -> dev1.0 PR 在 merge ref 上
-# 重跑 Service closure 并核验 push 侧 App 证据，required scope 不得以 skipped 计绿。
-# 职责：拓扑校验 + metadata + L1(Flutter) + L2(Go contract) + portal
+# Delivery Gate — 单一 PR Admission 主门禁（L1+L2）
+# 普通 lane PR 只在 GitHub-hosted runner 上验证 exact synthetic merge candidate；
+# self-hosted、正式 packaging/full coverage、设备、Provider 与签名只允许受保护 release 调用。
+# 职责：身份/权限/影响计划 + metadata + 受影响 App/Service/Data/Portal 快检查。
 # 交付契约见 specs/feature-tree/runtime/development-workflow-governance/spec.md；本 workflow 是 CI 行为真相源。
 name: 03. Delivery Gate
 
@@ -15,20 +14,22 @@ env:
   PUB_HOSTED_URL: https://pub.flutter-io.cn
   FLUTTER_STORAGE_BASE_URL: https://storage.flutter-io.cn
 
-# push 与 pull_request 覆盖的是两段不同的变更区间（前者对上一个 tip，后者对 main），
-# 不能按 head SHA 合并成一条跑道，否则会悄悄丢掉一段区间。这里只在同类跑道内归一：
-# 新提交到达时取消同一 ref 上被顶替的旧跑道，避免过期跑道继续占用运行器。
+# 新 head 到达时取消同一 PR/ref 的旧跑道；push 不再生产 admission 重证据。
 concurrency:
-  group: delivery-gate-${{ github.event_name }}-${{ github.ref }}
+  group: delivery-gate-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 on:
   push:
-    branches: [dev1.0, 'lane/**']
+    branches: [dev1.0]
   pull_request:
   workflow_dispatch:
   workflow_call:
     inputs:
+      release_call:
+        description: Explicit caller-owned release execution mode
+        required: true
+        type: boolean
       checkout_ref:
         description: Caller commit SHA/ref for checkout
         required: true
@@ -42,7 +43,7 @@ on:
         required: true
         type: string
       candidate_digest:
-        description: Stable candidateId from the same Service Pipeline DAG
+        description: Stable releaseCompositionId from the same Service Pipeline DAG
         required: false
         type: string
         default: ''
@@ -136,6 +137,7 @@ jobs:
       actionlint_state: ${{ steps.workflow_impact.outputs.actionlint_state }}
       actionlint_base_sha: ${{ steps.workflow_impact.outputs.base_sha }}
       actionlint_head_sha: ${{ steps.workflow_impact.outputs.head_sha }}
+      admission_mode: ${{ steps.identity.outputs.admission_mode }}
     steps:
       - id: start
         name: Start bounded short-reverification timer
@@ -158,11 +160,44 @@ jobs:
             echo "::error::GATE_BLOCK: common governance requires a clean checkout"
             exit 2
           fi
+      - id: identity
+        name: Fail fast on untrusted PR and reusable-call identity
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name || '' }}
+          PR_BASE_BRANCH: ${{ github.event.pull_request.base.ref || '' }}
+          PR_HEAD_BRANCH: ${{ github.event.pull_request.head.ref || '' }}
+          RELEASE_CALL: ${{ inputs.release_call || false }}
+          INPUT_CHECKOUT_REF: ${{ inputs.checkout_ref || '' }}
+          INPUT_BASE_SHA: ${{ inputs.base_sha || '' }}
+          INPUT_HEAD_SHA: ${{ inputs.head_sha || '' }}
+        run: |
+          set -euo pipefail
+          MODE=direct
+          if [[ "$RELEASE_CALL" == "true" ]]; then
+            MODE=release_call
+            [[ "$INPUT_CHECKOUT_REF" =~ ^[0-9a-f]{40}$ ]] &&
+            [[ "$INPUT_BASE_SHA" =~ ^[0-9a-f]{40}$ ]] &&
+            [[ "$INPUT_HEAD_SHA" =~ ^[0-9a-f]{40}$ ]] || {
+              echo "::error::GATE_BLOCK: release call requires exact SHA identity"; exit 2;
+            }
+          elif [[ "$EVENT_NAME" == pull_request ]]; then
+            MODE=pull_request
+            [[ "$PR_HEAD_REPOSITORY" == "${{ github.repository }}" ]] || {
+              echo "::error::GATE_BLOCK: fork PR is outside trusted admission scope"; exit 2;
+            }
+            [[ "$PR_BASE_BRANCH" == dev1.0 || ( "$PR_BASE_BRANCH" == main && "$PR_HEAD_BRANCH" == dev1.0 ) ]] || {
+              echo "::error::GATE_BLOCK: pull request edge is not an admitted lane or promotion"; exit 2;
+            }
+          fi
+          echo "admission_mode=$MODE" >> "$GITHUB_OUTPUT"
       - name: Enforce canonical repository branch admission
-        if: ${{ github.event_name == 'pull_request' || github.event_name == 'push' || github.event_name == 'workflow_dispatch' }}
+        if: ${{ !inputs.release_call && (github.event_name == 'pull_request' || github.event_name == 'push' || github.event_name == 'workflow_dispatch') }}
         run: python3 quwoquan_ops/gate/verify_git_branch_policy.py
       - name: Verify protected GitHub supply chain
         run: python3 quwoquan_ops/gate/verify_github_supply_chain.py
+      - name: Validate test ownership, flaky and feedback SLO policy
+        run: python3 quwoquan_ops/ci/validate_quality_policy.py
       - id: workflow_impact
         name: Resolve workflow-only actionlint requirement
         env:
@@ -251,6 +286,7 @@ jobs:
 
   topology_regression:
     name: Delivery Gate — Topology
+    needs: common_governance
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -260,13 +296,16 @@ jobs:
       duration_seconds: ${{ steps.finish.outputs.duration_seconds }}
       service: ${{ steps.detect.outputs.service }}
       app: ${{ steps.detect.outputs.app }}
-      candidate_app: ${{ steps.detect_candidate.outputs.app }}
+      candidate_app: ${{ steps.detect.outputs.app }}
       portal: ${{ steps.detect.outputs.portal }}
       topology: ${{ steps.detect.outputs.topology }}
       data: ${{ steps.detect.outputs.data }}
       coverage_service: ${{ steps.detect.outputs.coverage_service }}
       coverage_app: ${{ steps.detect.outputs.coverage_app }}
       impact_plan_digest: ${{ steps.detect.outputs.plan_digest }}
+      base_sha: ${{ steps.impact_range.outputs.base_sha }}
+      head_sha: ${{ steps.impact_range.outputs.head_sha }}
+      changed_paths_digest: ${{ steps.detect.outputs.changed_paths_digest }}
       candidate_digest: ${{ steps.candidate.outputs.candidate_digest }}
       artifact_digest: ${{ steps.candidate.outputs.artifact_digest }}
     steps:
@@ -295,25 +334,44 @@ jobs:
           fi
           if [[ -z "$BASE_SHA" ]]; then BASE_SHA="$(git rev-parse "${HEAD_SHA}^" 2>/dev/null || true)"; fi
           [[ "$BASE_SHA" =~ ^[0-9a-f]{40}$ ]] && [[ "$HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]
-          { echo "base_sha=$BASE_SHA"; echo "head_sha=$HEAD_SHA"; } >> "$GITHUB_OUTPUT"
+          TREE_DIGEST="sha1:$(git rev-parse "${HEAD_SHA}^{tree}")"
+          {
+            echo "base_sha=$BASE_SHA"
+            echo "head_sha=$HEAD_SHA"
+            echo "tree_digest=$TREE_DIGEST"
+          } >> "$GITHUB_OUTPUT"
       - id: detect
         name: Generate canonical Delivery impact plan once
         env:
           BASE_SHA: ${{ steps.impact_range.outputs.base_sha }}
           HEAD_SHA: ${{ steps.impact_range.outputs.head_sha }}
+          TREE_DIGEST: ${{ steps.impact_range.outputs.tree_digest }}
+          RELEASE_CALL: ${{ inputs.release_call || false }}
+          EVENT_NAME: ${{ github.event_name }}
         run: |
+          PROFILE="pr"
+          if [[ "$RELEASE_CALL" == "true" ]]; then PROFILE="promotion"; fi
+          if [[ "$EVENT_NAME" == "schedule" ]]; then PROFILE="nightly"; fi
           IMPACT_ROOT="$RUNNER_TEMP/delivery-impact-plan"
           mkdir -p "$IMPACT_ROOT"
           python3 quwoquan_ops/ci/detect_ci_impacted_scopes.py \
             --base-sha "${BASE_SHA}" \
             --head-sha "${HEAD_SHA}" \
+            --source-tree-digest "${TREE_DIGEST}" \
+            --execution-profile "${PROFILE}" \
             --impact-plan "$IMPACT_ROOT/impact-plan.json" \
             --github-output "$GITHUB_OUTPUT"
           python3 quwoquan_ops/ci/detect_ci_impacted_scopes.py \
             --validate-impact-plan "$IMPACT_ROOT/impact-plan.json" \
             --expected-source-sha "$HEAD_SHA" \
+            --expected-tree-digest "$TREE_DIGEST" \
             --github-output "$RUNNER_TEMP/validated-impact-outputs"
-      - name: Upload versioned Delivery impact plan
+          python3 quwoquan_ops/ci/verify_ci_changed_boundary.py \
+            --impact-plan "$IMPACT_ROOT/impact-plan.json" \
+            --expected-source-sha "$HEAD_SHA" \
+            --expected-tree-digest "$TREE_DIGEST" \
+            --expected-plan-digest "$(awk -F= '$1 == "plan_digest" {print $2}' "$GITHUB_OUTPUT" | tail -n 1)"
+      - name: Upload failed Delivery impact plan diagnostic
         if: ${{ failure() && !cancelled() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
@@ -322,35 +380,6 @@ jobs:
           if-no-files-found: error
           compression-level: 0
           retention-days: 3
-      - id: detect_candidate
-        name: Detect candidate-level App scope
-        env:
-          EVENT_NAME: ${{ github.event_name }}
-          INPUT_BASE_SHA: ${{ inputs.base_sha || '' }}
-          PR_BASE_SHA: ${{ github.event.pull_request.base.sha || '' }}
-          HEAD_SHA: ${{ inputs.head_sha || github.sha }}
-        run: |
-          set -euo pipefail
-          if [[ "$EVENT_NAME" == "push" ]]; then
-            CANDIDATE_BASE_SHA="$(git merge-base origin/main "$HEAD_SHA")"
-          elif [[ "$EVENT_NAME" == "pull_request" ]]; then
-            CANDIDATE_BASE_SHA="$PR_BASE_SHA"
-          else
-            CANDIDATE_BASE_SHA="$INPUT_BASE_SHA"
-            if [[ -z "$CANDIDATE_BASE_SHA" ]]; then
-              CANDIDATE_BASE_SHA="$(git rev-parse "${HEAD_SHA}^" 2>/dev/null || true)"
-            fi
-          fi
-          SCOPE_ARGS=()
-          if [[ "$EVENT_NAME" == "workflow_call" ]]; then
-            SCOPE_ARGS+=(--required-scope app)
-          fi
-          python3 quwoquan_ops/ci/detect_ci_impacted_scopes.py \
-            --base-sha "$CANDIDATE_BASE_SHA" \
-            --head-sha "$HEAD_SHA" \
-            --scope-receipt "$QWQ_OUTPUT_ROOT/env/repo/runs/ci-scope/candidate-scope.json" \
-            --github-output "$GITHUB_OUTPUT" \
-            ${SCOPE_ARGS[@]+"${SCOPE_ARGS[@]}"}
       - name: Login GHCR for candidate binding
         if: ${{ inputs.candidate_digest != '' || inputs.artifact_digest != '' || inputs.release_evidence_ref != '' || inputs.producer_workflow_run_id != '' || inputs.source_git_sha != '' }}
         uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9
@@ -407,13 +436,56 @@ jobs:
         run: |
           echo "duration_seconds=$(( $(date +%s) - ${{ steps.start.outputs.started_at }} ))" >> "$GITHUB_OUTPUT"
 
+  code_health_delta:
+    name: Delivery Gate — Code Health Delta
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: topology_regression
+    outputs:
+      duration_seconds: ${{ steps.finish.outputs.duration_seconds }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          fetch-depth: 0
+          ref: ${{ inputs.checkout_ref || github.sha }}
+      - id: start
+        name: Start timer
+        run: echo "started_at=$(date +%s)" >> "$GITHUB_OUTPUT"
+      - name: Verify exact clean-candidate Code Health Delta
+        env:
+          BASE_SHA: ${{ inputs.base_sha || needs.topology_regression.outputs.base_sha }}
+          HEAD_SHA: ${{ inputs.head_sha || github.sha }}
+          EXPECTED_PATH_DIGEST: ${{ needs.topology_regression.outputs.changed_paths_digest }}
+          EXPECTED_PLAN_DIGEST: ${{ needs.topology_regression.outputs.impact_plan_digest }}
+        run: |
+          set -euo pipefail
+          git diff --quiet && git diff --cached --quiet
+          python3 quwoquan_ops/ci/verify_code_health_delivery.py \
+            --base-sha "$BASE_SHA" \
+            --head-sha "$HEAD_SHA" \
+            --expected-path-digest "$EXPECTED_PATH_DIGEST" \
+            --expected-impact-plan-digest "$EXPECTED_PLAN_DIGEST"
+      - id: finish
+        if: always()
+        name: Finish timer
+        run: echo "duration_seconds=$(( $(date +%s) - ${{ steps.start.outputs.started_at }} ))" >> "$GITHUB_OUTPUT"
+      - name: Upload failed Code Health Delta diagnostic
+        if: failure() && !cancelled()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: code-health-delta-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ env.QWQ_OUTPUT_ROOT }}/env/repo/runs/code-health/**/report.json
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 3
+
   quwoquan_service:
     name: Delivery Gate — Service Core (L2)
     runs-on: ubuntu-latest
     timeout-minutes: 40
     needs: topology_regression
     # G1：service impacted 的 exact merge candidate 必须在 PR merge ref 上重跑，不得 skip。
-    if: ${{ needs.topology_regression.outputs.service == 'true' }}
+    if: ${{ (inputs.release_call || github.event_name != 'push') && needs.topology_regression.outputs.service == 'true' }}
     outputs:
       duration_seconds: ${{ steps.finish.outputs.duration_seconds }}
     steps:
@@ -533,7 +605,7 @@ jobs:
     # Canonical App dependency sync seals both CocoaPods hosts, while runtime
     # packaging also builds OCI images. Keep both on the controlled macOS runner
     # so one physical Flutter/CocoaPods/Docker toolchain owns the real bundle.
-    runs-on: [self-hosted, macOS, ARM64]
+    runs-on: [self-hosted, macOS, ARM64, quwoquan-release-authority]
     # 三个环境仍各自形成独立 matrix 证据，但它们落在同一台物理主机，且
     # App dependency sync 持有 host-wide Flutter/CocoaPods/Gradle lock。
     # 因此 matrix 必须在该主机上串行，避免兄弟作业以 lock timeout 互相击穿。
@@ -541,7 +613,7 @@ jobs:
     # environment package/contract/isolation gate and bounded cleanup.
     timeout-minutes: 40
     needs: topology_regression
-    if: ${{ needs.topology_regression.outputs.service == 'true' }}
+    if: ${{ inputs.release_call && needs.topology_regression.outputs.service == 'true' }}
     strategy:
       fail-fast: false
       max-parallel: 1
@@ -612,7 +684,7 @@ jobs:
     # 因此与 App 侧一样独立成格：core 这条边省下这段采集时间。
     timeout-minutes: 40
     needs: topology_regression
-    if: ${{ needs.topology_regression.outputs.coverage_service == 'true' }}
+    if: ${{ inputs.release_call && needs.topology_regression.outputs.coverage_service == 'true' }}
     outputs:
       duration_seconds: ${{ steps.finish.outputs.duration_seconds }}
     steps:
@@ -665,10 +737,12 @@ jobs:
     needs: topology_regression
     if: >-
       ${{
+        (inputs.release_call || github.event_name != 'push') && (
         needs.topology_regression.outputs.service == 'true' ||
         needs.topology_regression.outputs.candidate_app == 'true' ||
         needs.topology_regression.outputs.topology == 'true' ||
         inputs.produce_release_evidence
+        )
       }}
     outputs:
       duration_seconds: ${{ steps.finish.outputs.duration_seconds }}
@@ -715,7 +789,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     needs: topology_regression
-    if: ${{ github.event_name != 'pull_request' && (github.event_name == 'workflow_call' || needs.topology_regression.outputs.candidate_app == 'true') }}
+    if: ${{ (inputs.release_call || github.event_name != 'push') && (inputs.release_call || needs.topology_regression.outputs.candidate_app == 'true') }}
     outputs:
       duration_seconds: ${{ steps.finish.outputs.duration_seconds }}
     steps:
@@ -773,7 +847,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 40
     needs: topology_regression
-    if: ${{ github.event_name != 'pull_request' && (github.event_name == 'workflow_call' || needs.topology_regression.outputs.candidate_app == 'true') }}
+    if: ${{ (inputs.release_call || github.event_name != 'push') && (inputs.release_call || needs.topology_regression.outputs.candidate_app == 'true') }}
     strategy:
       fail-fast: false
       matrix:
@@ -834,10 +908,10 @@ jobs:
 
   quwoquan_app_serial:
     name: Delivery Gate — App Serial
-    runs-on: [self-hosted, macOS, ARM64]
+    runs-on: [self-hosted, macOS, ARM64, quwoquan-release-authority]
     timeout-minutes: 40
     needs: topology_regression
-    if: ${{ github.event_name != 'pull_request' && (github.event_name == 'workflow_call' || needs.topology_regression.outputs.candidate_app == 'true') }}
+    if: ${{ inputs.release_call }}
     outputs:
       duration_seconds: ${{ steps.finish.outputs.duration_seconds }}
     steps:
@@ -885,12 +959,12 @@ jobs:
     # Canonical coverage includes the serial/visual subset. Its tracked goldens
     # are produced and validated on the same macOS ARM64 lane as App Serial;
     # running that subset on Linux changes rasterization rather than behavior.
-    runs-on: [self-hosted, macOS, ARM64]
+    runs-on: [self-hosted, macOS, ARM64, quwoquan-release-authority]
     # activation 单轨与 executor 负路径批量入树后，真实耗时已达 40 分钟量级；
     # 预算跟随测试规模，保留约 50% 余量。
     timeout-minutes: 60
     needs: topology_regression
-    if: ${{ github.event_name != 'pull_request' && (github.event_name == 'workflow_call' || needs.topology_regression.outputs.coverage_app == 'true') }}
+    if: ${{ inputs.release_call }}
     outputs:
       duration_seconds: ${{ steps.finish.outputs.duration_seconds }}
     steps:
@@ -939,54 +1013,39 @@ jobs:
   quwoquan_app:
     name: Delivery Gate — App (L1)
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 5
     needs:
       - topology_regression
       - quwoquan_app_static
       - quwoquan_app_tests
       - quwoquan_app_serial
       - quwoquan_app_coverage
-    if: always() && needs.topology_regression.outputs.candidate_app == 'true'
-    outputs:
-      source_run_id: ${{ steps.external.outputs.run_id }}
-      source_run_attempt: ${{ steps.external.outputs.run_attempt }}
-      job_closure_digest: ${{ steps.external.outputs.job_closure_digest }}
-      phase_quwoquan_app_static: ${{ steps.external.outputs.phase_quwoquan_app_static }}
-      phase_quwoquan_app_tests: ${{ steps.external.outputs.phase_quwoquan_app_tests }}
-      phase_quwoquan_app_serial: ${{ steps.external.outputs.phase_quwoquan_app_serial }}
-      phase_quwoquan_app_coverage: ${{ steps.external.outputs.phase_quwoquan_app_coverage }}
+    if: always() && (inputs.release_call || needs.topology_regression.outputs.candidate_app == 'true')
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
-        with:
-          ref: ${{ inputs.checkout_ref || github.sha }}
-      - id: external
-        name: Verify push-owned App evidence
-        if: ${{ github.event_name == 'pull_request' }}
+      - name: Require App phases owned by this exact candidate DAG
         env:
-          GITHUB_TOKEN: ${{ github.token }}
-          # head.ref 是不可信输入，经 env 传入而不内联进 shell（actionlint）。
-          PR_HEAD_BRANCH: ${{ github.event.pull_request.head.ref }}
-        run: |
-          make verify-delivery-app-evidence ARGS="--repository ${{ github.repository }} --head-sha ${{ github.event.pull_request.head.sha }} --head-branch $PR_HEAD_BRANCH --current-run-id ${{ github.run_id }} --github-output $GITHUB_OUTPUT"
-      - id: combine
-        name: Require every local App phase
-        if: ${{ github.event_name != 'pull_request' }}
-        env:
+          RELEASE_CALL: ${{ inputs.release_call || false }}
           TESTS_RESULT: ${{ needs.quwoquan_app_tests.result }}
           STATIC_RESULT: ${{ needs.quwoquan_app_static.result }}
           SERIAL_RESULT: ${{ needs.quwoquan_app_serial.result }}
           COVERAGE_RESULT: ${{ needs.quwoquan_app_coverage.result }}
         run: |
           set -euo pipefail
-          if [ "${STATIC_RESULT}" != "success" ] || [ "${SERIAL_RESULT}" != "success" ] || [ "${TESTS_RESULT}" != "success" ] || [ "${COVERAGE_RESULT}" != "success" ]; then
-            echo "::error::App L1 phases failed (static=${STATIC_RESULT}, tests=${TESTS_RESULT}, serial=${SERIAL_RESULT}, coverage=${COVERAGE_RESULT})"
-            exit 1
+          test "$STATIC_RESULT" = success
+          test "$TESTS_RESULT" = success
+          if [[ "$RELEASE_CALL" == "true" ]]; then
+            test "$SERIAL_RESULT" = success
+            test "$COVERAGE_RESULT" = success
+          else
+            test "$SERIAL_RESULT" = skipped
+            test "$COVERAGE_RESULT" = skipped
           fi
-          echo "App L1 static, all four test shards, serial suites and canonical coverage succeeded."
+          echo "App L1 exact-candidate phases are self-contained in this workflow DAG."
 
   quwoquan_data:
     name: Delivery Gate — Data
     runs-on: ubuntu-latest
+    if: ${{ inputs.release_call || github.event_name != 'push' }}
     # Shared repository governance performs an App generated clean rebuild, so
     # this scope needs the pinned Flutter SDK and the 900s Delivery hard guard.
     timeout-minutes: 15
@@ -1037,6 +1096,7 @@ jobs:
   quwoquan_data_tests:
     name: Delivery Gate — Data Tests Shard ${{ matrix.shard_index }}
     runs-on: ubuntu-latest
+    if: ${{ inputs.release_call || github.event_name != 'push' }}
     timeout-minutes: 25
     needs: topology_regression
     strategy:
@@ -1095,7 +1155,7 @@ jobs:
     # before npm test/build; retain Flutter bootstrap and allow the hard guard.
     timeout-minutes: 15
     needs: topology_regression
-    if: ${{ needs.topology_regression.outputs.portal == 'true' }}
+    if: ${{ (inputs.release_call || github.event_name != 'push') && needs.topology_regression.outputs.portal == 'true' }}
     outputs:
       duration_seconds: ${{ steps.finish.outputs.duration_seconds }}
     steps:
@@ -1143,6 +1203,7 @@ jobs:
     needs:
       - common_governance
       - topology_regression
+      - code_health_delta
       - quwoquan_service
       - quwoquan_service_packaging
       - quwoquan_service_coverage
@@ -1284,6 +1345,7 @@ jobs:
           SERVICE_COVERAGE_IMPACTED: ${{ needs.topology_regression.outputs.coverage_service }}
           APP_COVERAGE_IMPACTED: ${{ needs.topology_regression.outputs.coverage_app }}
           APP_IMPACTED: ${{ needs.topology_regression.outputs.candidate_app }}
+          RELEASE_CALL: ${{ inputs.release_call || false }}
           PORTAL_IMPACTED: ${{ needs.topology_regression.outputs.portal }}
           COMMON_GOVERNANCE_RESULT: ${{ needs.common_governance.result }}
           TOPOLOGY_RESULT: ${{ needs.topology_regression.result }}
@@ -1337,7 +1399,7 @@ jobs:
           )
           if [[ "$SERVICE_IMPACTED" == "true" ]]; then ARGS+=(--local-required service --local-required service_packaging); fi
           if [[ "${{ needs.topology_regression.outputs.coverage_service }}" == "true" ]]; then ARGS+=(--local-required service_coverage); fi
-          if [[ "$APP_IMPACTED" == "true" ]]; then
+          if [[ "$RELEASE_CALL" == "true" || "$APP_IMPACTED" == "true" ]]; then
             ARGS+=(--local-required app_static --local-required app_tests --local-required app_serial --local-required app_coverage)
           fi
           if [[ "$PORTAL_IMPACTED" == "true" ]]; then ARGS+=(--local-required portal); fi
@@ -1369,6 +1431,7 @@ jobs:
     needs:
       - common_governance
       - topology_regression
+      - code_health_delta
       - quwoquan_service
       - quwoquan_service_packaging
       - quwoquan_service_coverage
@@ -1402,11 +1465,8 @@ jobs:
           SERVICE_COVERAGE_IMPACTED: ${{ needs.topology_regression.outputs.coverage_service }}
           APP_IMPACTED: ${{ needs.topology_regression.outputs.candidate_app }}
           APP_COVERAGE_IMPACTED: ${{ needs.topology_regression.outputs.coverage_app }}
-          APP_STATIC_EXTERNAL: ${{ needs.quwoquan_app.outputs.phase_quwoquan_app_static }}
-          APP_TESTS_EXTERNAL: ${{ needs.quwoquan_app.outputs.phase_quwoquan_app_tests }}
-          APP_SERIAL_EXTERNAL: ${{ needs.quwoquan_app.outputs.phase_quwoquan_app_serial }}
-          APP_COVERAGE_EXTERNAL: ${{ needs.quwoquan_app.outputs.phase_quwoquan_app_coverage }}
           EVENT_NAME: ${{ github.event_name }}
+          RELEASE_CALL: ${{ inputs.release_call || false }}
           PORTAL_IMPACTED: ${{ needs.topology_regression.outputs.portal }}
           TOPOLOGY_IMPACTED: ${{ needs.topology_regression.outputs.topology }}
           PRODUCE_RELEASE_EVIDENCE: ${{ inputs.produce_release_evidence }}
@@ -1415,6 +1475,7 @@ jobs:
             --repository "${{ github.repository }}"
             --run-id "${{ github.run_id }}"
             --phase-exact "common_governance=Delivery Gate — Common Governance"
+            --phase-exact "code_health_delta=Delivery Gate — Code Health Delta"
             --phase-exact "topology=Delivery Gate — Topology"
             --phase-exact "service=Delivery Gate — Service Core (L2)"
             --phase-prefix "service_packaging=Delivery Gate — Service Packaging"
@@ -1426,60 +1487,50 @@ jobs:
             --phase-exact "portal=Delivery Gate — Ops Portal"
             --phase-exact "release_evidence=Delivery Gate — Candidate qualification evidence"
             --require-count "common_governance=1"
+            --require-count "code_health_delta=1"
             --require-count "topology=1"
-            --require-count "data=1"
-            --require-count "data_tests=4"
             --critical-start run
             --github-output "$GITHUB_OUTPUT"
           )
-          FANOUT=(data data_tests)
-          if [[ "$SERVICE_IMPACTED" == "true" ]]; then
+          FANOUT=(code_health_delta)
+          if [[ "$RELEASE_CALL" == "true" || "$EVENT_NAME" != push ]]; then
+            ARGS+=(--require-count "data=1" --require-count "data_tests=4")
+            FANOUT+=(data data_tests)
+          fi
+          if [[ ( "$RELEASE_CALL" == "true" || "$EVENT_NAME" != push ) && "$SERVICE_IMPACTED" == "true" ]]; then
             ARGS+=(--require-count "service=1" --require-count "service_packaging=3")
             FANOUT+=(service service_packaging)
           fi
-          if [[ "$SERVICE_COVERAGE_IMPACTED" == "true" ]]; then ARGS+=(--require-count "service_coverage=1"); FANOUT+=(service_coverage); fi
-          if [[ "$SERVICE_IMPACTED" == "true" || "$APP_IMPACTED" == "true" || "$TOPOLOGY_IMPACTED" == "true" || "$PRODUCE_RELEASE_EVIDENCE" == "true" ]]; then ARGS+=(--require-count "search=1"); FANOUT+=(search); fi
-          if [[ "$APP_IMPACTED" == "true" ]]; then
-            if [[ "$EVENT_NAME" == "pull_request" ]]; then
-              REQUIRED_EXTERNAL=(APP_STATIC_EXTERNAL APP_TESTS_EXTERNAL APP_SERIAL_EXTERNAL APP_COVERAGE_EXTERNAL)
-              for name in "${REQUIRED_EXTERNAL[@]}"; do
-                if [[ ! "${!name}" =~ ^[0-9]+$ ]]; then
-                  echo "::error::GATE_BLOCK: verified push App timing is missing ${name}"
-                  exit 2
-                fi
-              done
+          if [[ "$RELEASE_CALL" == "true" && "$SERVICE_COVERAGE_IMPACTED" == "true" ]]; then ARGS+=(--require-count "service_coverage=1"); FANOUT+=(service_coverage); fi
+          if [[ ( "$RELEASE_CALL" == "true" || "$EVENT_NAME" != push ) && ( "$SERVICE_IMPACTED" == "true" || "$APP_IMPACTED" == "true" || "$TOPOLOGY_IMPACTED" == "true" || "$PRODUCE_RELEASE_EVIDENCE" == "true" ) ]]; then ARGS+=(--require-count "search=1"); FANOUT+=(search); fi
+          if [[ ( "$RELEASE_CALL" == "true" || "$EVENT_NAME" != push ) && "$APP_IMPACTED" == "true" ]]; then
+            ARGS+=(
+              --phase-exact "app_static=Delivery Gate — App Static"
+              --phase-prefix "app_tests=Delivery Gate — App Tests Shard "
+              --require-count "app_static=1"
+              --require-count "app_tests=4"
+            )
+            FANOUT+=(app_static app_tests)
+            if [[ "$RELEASE_CALL" == "true" ]]; then
               ARGS+=(
-                --require-count "app_evidence=1"
-                --external-phase "app_static=$APP_STATIC_EXTERNAL"
-                --external-phase "app_tests=$APP_TESTS_EXTERNAL"
-                --external-phase "app_serial=$APP_SERIAL_EXTERNAL"
-                --external-phase "app_coverage=$APP_COVERAGE_EXTERNAL"
-              )
-            else
-              ARGS+=(
-                --phase-exact "app_static=Delivery Gate — App Static"
-                --phase-prefix "app_tests=Delivery Gate — App Tests Shard "
                 --phase-exact "app_serial=Delivery Gate — App Serial"
                 --phase-exact "app_coverage=Delivery Gate — App Canonical Coverage"
-                --require-count "app_static=1"
-                --require-count "app_tests=4"
                 --require-count "app_serial=1"
                 --require-count "app_coverage=1"
               )
+              FANOUT+=(app_serial app_coverage)
             fi
-            FANOUT+=(app_static app_tests app_serial app_coverage)
           fi
-          if [[ "$PORTAL_IMPACTED" == "true" ]]; then ARGS+=(--require-count "portal=1"); FANOUT+=(portal); fi
+          if [[ ( "$RELEASE_CALL" == "true" || "$EVENT_NAME" != push ) && "$PORTAL_IMPACTED" == "true" ]]; then ARGS+=(--require-count "portal=1"); FANOUT+=(portal); fi
           RELEASE_BRANCH_SUFFIX=""
           if [[ "$PRODUCE_RELEASE_EVIDENCE" == "true" ]]; then
             ARGS+=(--require-count "release_evidence=1")
             RELEASE_BRANCH_SUFFIX=";release_evidence"
           fi
-          ARGS+=(--dag-branch "common_governance${RELEASE_BRANCH_SUFFIX}")
           if (( ${#FANOUT[@]} > 0 )); then
-            ARGS+=(--dag-branch "topology;$(IFS=,; echo "${FANOUT[*]}")${RELEASE_BRANCH_SUFFIX}")
+            ARGS+=(--dag-branch "common_governance;topology;$(IFS=,; echo "${FANOUT[*]}")${RELEASE_BRANCH_SUFFIX}")
           else
-            ARGS+=(--dag-branch "topology${RELEASE_BRANCH_SUFFIX}")
+            ARGS+=(--dag-branch "common_governance;topology${RELEASE_BRANCH_SUFFIX}")
           fi
           set +e
           python3 quwoquan_ops/ci/github_actions_timing.py "${ARGS[@]}"
@@ -1509,6 +1560,7 @@ jobs:
         id: timing
         env:
           COMMON_GOVERNANCE_SECONDS: ${{ steps.job_timing.outputs.phase_common_governance }}
+          CODE_HEALTH_SECONDS: ${{ steps.job_timing.outputs.phase_code_health_delta }}
           TOPOLOGY_SECONDS: ${{ steps.job_timing.outputs.phase_topology }}
           SERVICE_SECONDS: ${{ steps.job_timing.outputs.phase_service }}
           SERVICE_PACKAGING_SECONDS: ${{ steps.job_timing.outputs.phase_service_packaging }}
@@ -1538,7 +1590,7 @@ jobs:
             echo "timing_policy=PR_WARN" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          REQUIRED=(COMMON_GOVERNANCE_SECONDS TOPOLOGY_SECONDS MACHINE_CRITICAL_PATH_SECONDS RUN_CREATED_AT CANDIDATE_READY_AT CALENDAR_SECONDS)
+          REQUIRED=(COMMON_GOVERNANCE_SECONDS CODE_HEALTH_SECONDS TOPOLOGY_SECONDS MACHINE_CRITICAL_PATH_SECONDS RUN_CREATED_AT CANDIDATE_READY_AT CALENDAR_SECONDS)
           for name in "${REQUIRED[@]}"; do
             if [[ -z "${!name}" ]]; then
               echo "::warning::TIMING_PR_WARN: official Delivery Gate timing is missing ${name}; functional checks decide PASS/FAIL"
@@ -1546,7 +1598,7 @@ jobs:
               exit 0
             fi
           done
-          PHASE_ARGS=(--phase "common_governance=${COMMON_GOVERNANCE_SECONDS}" --phase "topology_regression=${TOPOLOGY_SECONDS}")
+          PHASE_ARGS=(--phase "common_governance=${COMMON_GOVERNANCE_SECONDS}" --phase "code_health_delta=${CODE_HEALTH_SECONDS}" --phase "topology_regression=${TOPOLOGY_SECONDS}")
           if [[ -n "$SERVICE_SECONDS" ]]; then PHASE_ARGS+=(--phase "quwoquan_service=${SERVICE_SECONDS}"); fi
           if [[ -n "$SERVICE_PACKAGING_SECONDS" ]]; then PHASE_ARGS+=(--phase "quwoquan_service_packaging=${SERVICE_PACKAGING_SECONDS}"); fi
           if [[ -n "$SERVICE_COVERAGE_SECONDS" ]]; then PHASE_ARGS+=(--phase "quwoquan_service_coverage=${SERVICE_COVERAGE_SECONDS}"); fi
@@ -1602,6 +1654,7 @@ jobs:
         if: always()
         env:
           COMMON_GOVERNANCE: ${{ needs.common_governance.result }}
+          CODE_HEALTH_DELTA: ${{ needs.code_health_delta.result }}
           TOPOLOGY: ${{ needs.topology_regression.result }}
           SERVICE: ${{ needs.quwoquan_service.result }}
           SERVICE_PACKAGING: ${{ needs.quwoquan_service_packaging.result }}
@@ -1619,6 +1672,8 @@ jobs:
           PORTAL: ${{ needs.ops_portal.result }}
           RELEASE_EVIDENCE: ${{ needs.release_evidence.result }}
           PRODUCE_RELEASE_EVIDENCE: ${{ inputs.produce_release_evidence }}
+          RELEASE_CALL: ${{ inputs.release_call || false }}
+          EVENT_NAME: ${{ github.event_name }}
         run: |
           set -euo pipefail
           fail=0
@@ -1646,21 +1701,39 @@ jobs:
             fi
           }
           expect_success "common_governance" "${COMMON_GOVERNANCE}" "检查 exact-SHA、branch、supply-chain 与 workflow 治理"
+          expect_success "code_health_delta" "${CODE_HEALTH_DELTA}" "检查 exact clean candidate 的新增/恶化代码健康债"
           expect_success "topology_regression" "${TOPOLOGY}" "检查部署拓扑 / metadata 回归脚本"
-          expect_typed_pending_or_skipped "quwoquan_service" "${SERVICE}" "$SERVICE_IMPACTED" "Service required 时必须在 exact candidate 上执行 core gate，不得以 skipped 计绿"
-          expect_typed_pending_or_skipped "quwoquan_service_packaging" "${SERVICE_PACKAGING}" "$SERVICE_IMPACTED" "Service required 时三环境 packaging contract 必须成功，不得以 skipped 计绿"
-          expect_typed_pending_or_skipped "quwoquan_service_coverage" "${SERVICE_COVERAGE}" "$SERVICE_COVERAGE_IMPACTED" "Service required 时云侧 canonical coverage 棘轮必须成功，不得以 skipped 计绿"
-          expect_success_or_skipped "search_contract_smoke" "${SEARCH}" "检查 /search 商业信封与四环境探针契约"
-          expect_success_or_skipped "quwoquan_app" "${APP}" "检查 app scope 汇总"
-          if [[ "${{ github.event_name }}" != "pull_request" ]]; then
-            expect_success_or_skipped "quwoquan_app_static" "${APP_STATIC}" "检查 app static + PA core"
-            expect_success_or_skipped "quwoquan_app_tests" "${APP_TESTS}" "检查 app 分片测试"
-            expect_success_or_skipped "quwoquan_app_serial" "${APP_SERIAL}" "检查 app 串行套件"
-            expect_success_or_skipped "quwoquan_app_coverage" "${APP_COVERAGE}" "检查 app canonical coverage"
+          if [[ "$RELEASE_CALL" != "true" && "$EVENT_NAME" == "push" ]]; then
+            for result in "$SERVICE" "$SERVICE_PACKAGING" "$SERVICE_COVERAGE" "$SEARCH" "$APP" "$APP_STATIC" "$APP_TESTS" "$APP_SERIAL" "$APP_COVERAGE" "$DATA" "$DATA_TESTS" "$PORTAL"; do
+              [[ "$result" == skipped ]] || { echo "::error::push trigger-stop must not run candidate fanout"; fail=1; }
+            done
+          else
+            expect_typed_pending_or_skipped "quwoquan_service" "${SERVICE}" "$SERVICE_IMPACTED" "Service required 时必须在 exact candidate 上执行 core gate，不得以 skipped 计绿"
+            if [[ "$RELEASE_CALL" == "true" ]]; then
+              expect_typed_pending_or_skipped "quwoquan_service_packaging" "${SERVICE_PACKAGING}" "$SERVICE_IMPACTED" "release 调用必须执行三环境 packaging"
+              expect_typed_pending_or_skipped "quwoquan_service_coverage" "${SERVICE_COVERAGE}" "$SERVICE_COVERAGE_IMPACTED" "release 调用必须执行 canonical coverage"
+            else
+              [[ "$SERVICE_PACKAGING" == skipped ]] || { echo "::error::ordinary PR must not run self-hosted packaging"; fail=1; }
+              [[ "$SERVICE_COVERAGE" == skipped ]] || { echo "::error::ordinary PR must not run full service coverage"; fail=1; }
+            fi
+            expect_success_or_skipped "search_contract_smoke" "${SEARCH}" "检查 /search 商业信封与四环境探针契约"
+          if [[ "$RELEASE_CALL" == "true" ]]; then
+            expect_success "quwoquan_app" "${APP}" "release 调用必须汇总完整 exact candidate App phases"
+            expect_success "quwoquan_app_static" "${APP_STATIC}" "release 调用必须执行 App static"
+            expect_success "quwoquan_app_tests" "${APP_TESTS}" "release 调用必须执行 App parallel tests"
+            expect_success "quwoquan_app_serial" "${APP_SERIAL}" "release 调用必须执行 App serial"
+            expect_success "quwoquan_app_coverage" "${APP_COVERAGE}" "release 调用必须执行 App canonical coverage"
+          else
+            expect_typed_pending_or_skipped "quwoquan_app" "${APP}" "${{ needs.topology_regression.outputs.candidate_app }}" "App required 时必须汇总 exact candidate phases"
+            expect_typed_pending_or_skipped "quwoquan_app_static" "${APP_STATIC}" "${{ needs.topology_regression.outputs.candidate_app }}" "App required 时 static 必须在本 DAG 成功"
+            expect_typed_pending_or_skipped "quwoquan_app_tests" "${APP_TESTS}" "${{ needs.topology_regression.outputs.candidate_app }}" "App required 时并行 tests 必须在本 DAG 成功"
+            [[ "$APP_SERIAL" == skipped ]] || { echo "::error::ordinary admission must not run self-hosted App serial"; fail=1; }
+            [[ "$APP_COVERAGE" == skipped ]] || { echo "::error::ordinary admission must not run self-hosted App coverage"; fail=1; }
           fi
-          expect_success "quwoquan_data" "${DATA}" "Data 每次 Delivery 必须执行 full verify，不得以 skipped 计绿"
-          expect_success "quwoquan_data_tests" "${DATA_TESTS}" "检查 data local_contract 分片测试"
-          expect_success_or_skipped "ops_portal" "${PORTAL}" "检查 portal scope gate 输出"
+            expect_success "quwoquan_data" "${DATA}" "PR/release Delivery 必须执行 Data verify"
+            expect_success "quwoquan_data_tests" "${DATA_TESTS}" "PR/release Delivery 必须执行 Data tests"
+            expect_success_or_skipped "ops_portal" "${PORTAL}" "检查 portal scope gate 输出"
+          fi
           if [ "${PRODUCE_RELEASE_EVIDENCE}" = "true" ]; then
             expect_success "release_evidence" "${RELEASE_EVIDENCE}" "检查 Provider 与真实 Remote user_acceptance 不可变证据"
           else

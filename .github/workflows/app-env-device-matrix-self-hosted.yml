@@ -17,6 +17,7 @@ on:
   schedule:
     - cron: '0 18 * * *'
   pull_request:
+    branches: [main]
   workflow_dispatch:
     inputs:
       validation_profile:
@@ -283,7 +284,7 @@ jobs:
               ;;
             mainline_auto_prod|release_candidate)
               RELEASE_REF="$INPUT_RELEASE_REF"
-              REQUIRED_STATUS=candidate-ready
+              REQUIRED_STATUS=qualified
               CHECKOUT_REF=""
               ;;
             manual_full|nightly_full)
@@ -339,8 +340,9 @@ jobs:
   beta_stack:
     name: Prepare one Beta stack prerequisite
     needs: resolve_release_evidence
-    if: ${{ vars.ENABLE_SELF_HOSTED_MOBILE_MATRIX == 'true' }}
-    runs-on: [self-hosted, macOS, ARM64]
+    if: ${{ vars.ENABLE_SELF_HOSTED_MOBILE_MATRIX == 'true' && (github.event_name != 'pull_request' || (github.event.pull_request.head.ref == 'dev1.0' && github.event.pull_request.base.ref == 'main')) }}
+    runs-on: [self-hosted, macOS, ARM64, quwoquan-release-authority]
+    environment: device-matrix
     # A cold public-repository checkout has exceeded ten minutes on this
     # dedicated runner. Keep one bounded 20-minute budget for every profile;
     # all candidate, device and aggregation assertions remain fail closed.
@@ -813,7 +815,7 @@ jobs:
           python3 quwoquan_ops/ci/consume_released_release_evidence.py \
             --ref "${{ needs.beta_stack.outputs.release_evidence_ref }}" \
             --repository "${{ github.repository }}" \
-            --require-status candidate-ready \
+            --require-status qualified \
             --expected-candidate "${{ needs.beta_stack.outputs.candidate_digest }}" \
             --expected-artifact-digest "${{ needs.beta_stack.outputs.artifact_digest }}" \
             --expected-source-sha "${{ needs.beta_stack.outputs.source_git_sha }}" \
@@ -908,7 +910,7 @@ jobs:
     name: Teardown the stack owned by this matrix run
     needs: [beta_stack, android_device_matrix, ios_device_matrix, mobile_matrix]
     if: ${{ always() && (needs.beta_stack.outputs.formal_runtime_started == 'true' || needs.beta_stack.outputs.managed_runtime_started == 'true') }}
-    runs-on: [self-hosted, macOS, ARM64]
+    runs-on: [self-hosted, macOS, ARM64, quwoquan-release-authority]
     timeout-minutes: ${{ needs.beta_stack.outputs.managed_runtime_started == 'true' && 10 || 1 }}
     permissions:
       contents: read

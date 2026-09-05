@@ -53,13 +53,13 @@ def render(
     stage: str,
     service: str,
 ) -> dict[str, Any]:
-    validate_manifest(manifest, allowed_statuses={"deployable"})
+    validate_manifest(manifest, allowed_statuses={"main-admitted"})
     if stage not in STAGES:
         raise ValueError("hosted release stage is invalid")
     if not service.strip():
         raise ValueError("hosted release service is missing")
     receipt = _validate_receipt_readback(stage_readback, service=service)
-    candidate = str(manifest.get("candidateId") or "")
+    candidate = str(manifest.get("releaseCompositionId") or "")
     artifact = str(manifest.get("artifactDigest") or "")
     post_checks = receipt.get("postChecks")
     rollback_outcome = receipt.get("rollbackOutcome")
@@ -149,7 +149,7 @@ def render(
         "terminalStage": receipt["stage"],
         "rolloutDecision": rollout_decision,
         "artifactDigest": artifact,
-        "candidateId": candidate,
+        "releaseCompositionId": candidate,
         "releaseReceiptId": receipt_id,
         "releaseReceiptRef": receipt_ref,
         "releaseReceiptAuthority": HOSTED_AUTHORITY,

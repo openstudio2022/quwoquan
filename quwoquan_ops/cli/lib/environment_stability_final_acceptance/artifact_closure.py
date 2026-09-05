@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from quwoquan_ops.cli.prod.finalize_mainline_release_artifact import (
-    canonical_candidate_digest,
+    canonical_release_composition_id,
     canonical_manifest_digest,
     sha256_file,
     validate_manifest,
@@ -63,7 +63,7 @@ def _artifact_closure(
         )
         return None, None
     if (
-        manifest.get("candidateId") != canonical_candidate_digest(manifest)
+        manifest.get("releaseCompositionId") != canonical_release_composition_id(manifest)
         or manifest.get("artifactDigest") != canonical_manifest_digest(manifest)
     ):
         evaluation.block(
@@ -105,7 +105,7 @@ def _artifact_closure(
             "path": manifest_receipt.path.as_posix(),
             "digest": manifest_receipt.digest,
         },
-        "candidateId": manifest["candidateId"],
+        "releaseCompositionId": manifest["releaseCompositionId"],
         "artifactDigest": manifest["artifactDigest"],
         "providerEvidence": _bound_descriptor(artifact_root, manifest["providerEvidence"]),
         "testEvidence": _bound_descriptor(artifact_root, manifest["testEvidence"]),

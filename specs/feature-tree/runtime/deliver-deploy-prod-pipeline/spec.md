@@ -48,9 +48,11 @@
 
 - 合法 `dev1.0 -> main` promotion 入库后自动启动候选 DAG，生成带 canonical candidate digest 的 OCI `ReleaseEvidenceManifest` 并完成 Alpha/Beta/Gamma 阻断验证；`dev1.0` push 只生成集成证据，`main` push 不得静默执行正式 Prod apply。
 - 第一方容器预验证由显式 `stackctl deploy --mode prevalidate` 在独立 namespace 执行，不属于正式 rollout。
-- 正式 Prod apply 只能由人工 dispatch 绑定可达 main 的精确 Git SHA、显式关闭 dry-run 并通过 production environment approval；`workflow_dispatch dry_run=false` 必须先运行轻量 `formal_prod_authority_preflight`，并在任何 Service/App/Delivery/candidate、Alpha/Beta/Gamma/preprod 重型 job 前从 Hosted protection/ruleset authority 得出权威结论。当前该 authority 尚未接入，因此必须立即以 `OPS.BRANCH.AUTHORITY_UNAVAILABLE: terminal=blocked` 和稳定 `recovery=restore_git_authority_then_retry` fail closed；不得伪造 authority，也不得关闭相关 OPEN。`dry_run=true` 与非 dispatch 运行必须返回 typed `applicability=not_applicable / decision=pass` 并继续验证链；`prod_rollout` 在任何 mutation 前仍须保留独立防御性 authority 复核。通过 authority 后，同一候选摘要进入 `alpha-local / beta-local / gamma-local` 隔离 fanout，准入聚合严格按 `alpha -> beta -> gamma` 判定，全部通过后才能进入 `prod-hosted(canary -> 5 -> 20 -> 50 -> 100)`。
+- 正式 Prod apply 只能由人工 dispatch 绑定可达 main 的精确 Git SHA、显式关闭 dry-run 并通过 production environment approval；`workflow_dispatch dry_run=false` 必须先运行轻量 `formal_prod_authority_preflight`，并在任何 Service/App/Delivery/candidate、Alpha/Beta/Gamma/preprod 重型 job 前由专用、repository-scoped 且仅授予 Actions/Administration/Contents/Vulnerability alerts 读取权限的 GitHub App token 从 GitHub API 动态回读 repository/default branch、Actions 默认只读权限与 action SHA pin、secret/dependency security、`dev1.0/main` 适用 ruleset、无 bypass、required check 的 GitHub Actions integration identity，以及 `production/release-signing/device-matrix` Environment 的 admin bypass、reviewer 与允许 ref 闭集（device-matrix 显式包含 promotion PR 的 `refs/pull/*/merge`）。任一 API、schema、策略或精确 producer 漂移都必须以 `OPS.BRANCH.AUTHORITY_UNAVAILABLE: terminal=blocked` 和稳定 `recovery=restore_git_authority_then_retry` fail closed。`dry_run=true` 与非 dispatch 运行返回 typed `applicability=not_applicable / decision=pass` 并继续只读验证链；`prod_rollout` 在任何 mutation 前使用 preflight digest 再次执行同一动态 readback，防止 TOCTOU。`production` 是全事务唯一人工审批面；在第二位真实 principal 可用前，prevent-self-review 必须继续阻断正式 apply，不得降级。通过 authority 后，同一候选摘要进入 `alpha-local / beta-local / gamma-local` 隔离 fanout，准入聚合严格按 `alpha -> beta -> gamma` 判定，全部通过后才能进入 `prod-hosted(canary -> 5 -> 20 -> 50 -> 100)`。
 - `stackctl`、workflow、runbook 与环境矩阵口径一致，不再维护第二套自动推进或回滚逻辑。
 - `canary -> 5 -> 20 -> 50 -> 100` 各阶段的健康检查、只读集成探针、SLO gate 与 rollback 可验证；Provider、SFU、真实数据、观测和灾备证据未齐时不得启动正式 apply。
+- canonical `quwoquan_app/run.sh` 在真实 compile/install/configure/launch 与 safe-terminal 完成后，只从同一 attempt 目录的 canonical launch report、launch attempt 和 installed runtime-config readback 创建 `LaunchReadyFact`；普通 `test_live` 永远 `nonPromotable=true`，不得由 preflight/health 或输入 mode 直接签发 `ContentReadyFact` / `ReleaseReadyFact`。
+- readiness facts 是闭集、create-once、exact-byte 摘要链：`LaunchReadyFact -> ContentReadyFact -> ReleaseReadyFact` 不得越级或逆向。`ContentReadyFact` 必须直接绑定已完成的 App 原始用户验收旅程，完整覆盖 OTP 登录、匿名隔离、Feed、内容图、作者头像、视频/详情终态及 persona/release/cache/grant 隔离；服务 health/preflight 不能替代。`ReleaseReadyFact` 只接受 promotable predecessor，并绑定 immutable `releaseCompositionId`/artifact、EAF、Android+iOS 登记物理设备、真实 Provider、migration、rollback、performance、reliability 与 cleanup exact evidence。
 
 <a id="req-002"></a>
 ### REQ-002 prod-hosted ssh-hosted 部署形态（modular-monolith-first + split-ready）SIT
@@ -80,9 +82,11 @@
   mutable tag 与调用方重复声明派生身份。
 - 仓库不定义 `gamma-hosted` 环境；`gamma-local` 的 release-fast 验证是正式主链阻断阶段，云侧真实复验仍由 prod `canary` rollout stage 承接。
 - `03/04/05` 名称与 required-check 语义必须保持稳定。
-- 同一 lane 或 `dev1.0` source SHA 的候选级 App `static/tests/serial/coverage` 证据只由对应 source 分支的 push lane 执行一次。push 的 App 影响面按当前 source 分支的 exact push 区间派生，lane 首推按 `merge-base(origin/dev1.0, HEAD) -> HEAD` 派生，不得只看最后一次 push。该判定只允许 typed `required|not_required` 两态且写入 scope receipt，`not_required` 必须绑定 base/head 与完整 changed-path digest，不能由普通 job skipped 反推。PR 继续独立验证 base SHA 到 head SHA 的区间敏感 gate。App required 时，App L1 必须从 GitHub Actions 只读 authority 精确验签同 workflow、同 repository、`event=push`、`head_branch=<PR source branch>`、同 head SHA 的唯一 push run、该 run 的最高 `run_attempt` 及 7 个 App jobs（static、4 shards、serial、coverage）全部 completed/success。缺失、多个不同 run ID、未完成、失败、取消、skipped、attempt 混用、job 集不闭合或 SHA/branch/workflow 漂移一律 `GATE_BLOCK`，不得本地重跑第二份候选 App 证据或把 skipped 当成功。
-- PR 验签使用当前 PR workflow 的官方 `created_at` 推导绝对 `evidenceDeadline=created_at+1500s` 与 `hardDeadline=created_at+1800s`。job 因排队晚启动时不得重开相对计时。缺失/运行中只在 evidence deadline 前轮询，HTTP timeout、退避与 sleep 必须被剩余时间 clamp。到 1500 秒仍未取得完整成功闭包即停止继续等待并阻断，为汇总保留 300 秒。PR 的 candidate-ready 取本地各区间 gate 官方 `completed_at` 与 push evidence 验签 job 官方 `completed_at` 的最大值，日历仍从 PR workflow `created_at` 开始。push App phase duration 只进入 machine 诊断，不得替代 PR 等待时间或借用 push 的更早起点。workflow_call / release 调用不依赖独立 push run，仍在调用 DAG 内执行完整 App 证据。
-- GitHub authority reader 必须全分页读取并保持最小 `actions:read`，对 401、普通 403 与不可解析响应 fail closed。429、rate-limit 403、5xx、timeout 与网络暂态按 `Retry-After`/`X-RateLimit-Reset` 有界重试且受绝对 deadline 限制。诊断只记录 reason、request/retry count、最后 HTTP 状态、脱敏 rate-limit、matched run count、run ID/attempt、observed/deadline 与 job-closure digest，不记录 token。唯一 run ID 的 rerun 只接受最高 attempt 的完整成功闭包。失败或取消后由人工对该唯一 run 发起 rerun，再重跑 PR 验签。多个不同 run ID 不任选，必须以新提交形成新 SHA。API 暂态耗尽只重跑 PR 验签，不制造第二份 App 证据。回滚只允许原子 Git revert 本增量，禁止运行时双轨开关。
+- 单一 PR Admission 只验证 GitHub 生成的 exact synthetic merge candidate。`lane/* -> dev1.0` 普通 PR 在 GitHub-hosted runner 直接执行受影响 App static 与并行测试、Service core、Data/Portal 与窄 integration；不得消费 lane push 的外部 App 证据，也不得进入 persistent self-hosted、正式 packaging、canonical full coverage、serial/visual、设备、真实 Provider、签名或 Prod secret。`dev1.0 -> main` promotion 与默认分支 nightly/release workflow 才执行这些候选级重证据。
+- Admission 在一个 DAG 内只计算一次 versioned `ImpactPlan`，绑定 base/head/synthetic merge SHA、source tree digest、R0–R4、integration depth、required test/API/Journey IDs、candidate products 与 planner digest。所有 sibling 只消费同一 digest；unknown、planner/selector/ContractGraph、workflow/签名/EAF/Prod/供应链变更自动升 R3/R4，第一次 promotion 固定 R4。
+- `R0` 为 non-runtime，`R1` 为单业务 scope，`R2` 为跨 scope 或 device-sensitive，`R3` 为环境/治理/未知路径，`R4` 为 planner/selector/发布工作流/供应链权威或 promotion。required IDs 必须全部存在于 `ci_test_ownership.json` 且 owner 属于 lane vocabulary；计划校验器会从 changed paths 与 execution profile 重新推导全部字段，不能通过重算 `plan_digest` 伪造降级。
+- `03. Delivery Gate` 是 `dev1.0` 唯一 required summary，显式区分 `required/not_required/source_failed/infra_failed`。确定性失败不得通过 rerun 消红；仅已分类 infra/transport/device bridge 可保留 attempt-1 后 fresh retry 一次。普通 PR 新 head 取消同 PR 旧 run，公共治理失败后重任务不可达；lane push 不再运行候选重活或充当 admission producer。
+- flaky policy 使用测试 ID 对应的 lane owner；隔离记录必须绑定 issue、分类和起止时间，最长 7 天，promotion-critical 测试禁止隔离。Flutter guard 的 transient marker 最多形成一次 fresh retry。反馈 hard SLO 由 exact OCI clean-run refs 计数，少于 20 个唯一完整 clean runs 时保持 `learning`，禁止硬阻断。
 - Delivery CI/latency 切片统一由版本化 `delivery-impact-plan` artifact 驱动：同一 workflow 只计算一次 changed paths，artifact 必须绑定 `schema_version`、`source_sha`、canonical `changed_paths_digest`、planner identity 与 plan digest；所有 shard/coverage/device 消费前验证，不得各自重新推导。App Device Matrix 的普通 PR 只在 runtime/bootstrap、platform/plugin、permissions/entitlements、device scripts/workflows 或 environment/topology 路径命中时执行，普通 UI/domain Dart 改动产出 typed `not_required`/`skipped`；promotion/release/manual/nightly profile 与显式 `force_device_matrix` 仍强制执行。
 - `pr_light` 目标为 120 秒、job 硬边界 180 秒；只保留 changed candidate secret/PII/generated boundary 与 canonical impact plan，不再重复运行 detect/timing 三份 pytest 治理测试。`manual_full/mainline_auto_prod` 的 live `/search` admission 不降级，merge admission full profile 不受该切片影响。
 - timing telemetry 对 job 分为 `attempted/runnable/skipped/infra`，预算显式区分 `release_sla` 与 `telemetry_advisory`。`release_sla` 的完整 telemetry 超过 hard budget 投影 `GATE_BLOCK`；`telemetry_advisory` 的缺失或超预算在功能 PASS 时仅投影 `PR_WARN`。功能 job 自身 timeout/失败仍 FAIL，不得用 timing warning 覆盖。当前 Delivery PR 与普通 device PR timing 均为 advisory；`mainline_auto_prod` device profile 使用 7800 秒 release SLA，覆盖 beta stack 1200 秒、双平台最长 5400 秒与聚合 1200 秒的完整 machine path，不宣称 8 分钟。
@@ -118,12 +122,13 @@
 - GIVEN 执行“deliver deploy prod pipeline 能力”所需的身份、输入与上游事实均有效。
 - WHEN 参与者发起“deliver deploy prod pipeline 能力”对应动作。
 - THEN `dev1.0` 直接 push 绑定该精确 SHA 的 `03/04/05` hosted check evidence，但不生成正式 candidate 或 Prod apply。
-- THEN 同 SHA 的候选级 App 四相位只在 push lane 执行一次，promotion PR 的 `03` 在保留 `main -> head` 区间 gate 的同时 fail-closed 验签该唯一 push App job 闭包，且 PR 日历 SLI 包含等待证据的全部时间。
-- THEN 只有具备治理回执的合法 `dev1.0 -> main` promotion 入库后才自动生成可验证 OCI `ReleaseEvidenceManifest` 并执行三个前置环境；人工 `workflow_dispatch dry_run=false` 在这些 Service/App/Delivery/Alpha/Beta/Gamma/preprod 重型阶段前先运行 `formal_prod_authority_preflight`，当前 authority 未接入时立即返回 `OPS.BRANCH.AUTHORITY_UNAVAILABLE: terminal=blocked; recovery=restore_git_authority_then_retry`，而 dry-run 返回 typed `not_applicable/pass` 且不被阻断。
+- THEN 普通 lane PR 的 `03` 在同一 synthetic merge candidate 上自洽执行受影响快速检查，且不会启动 self-hosted、正式 packaging/full coverage、设备、Provider、签名或 Prod secret；promotion/nightly 才执行候选重证据。
+- THEN 只有具备治理回执的合法 `dev1.0 -> main` promotion 入库后才自动生成可验证 OCI `ReleaseEvidenceManifest` 并执行三个前置环境；人工 `workflow_dispatch dry_run=false` 在这些 Service/App/Delivery/Alpha/Beta/Gamma/preprod 重型阶段前先运行 `formal_prod_authority_preflight`，Hosted 动态 readback 任一项不可证明时立即返回 `OPS.BRANCH.AUTHORITY_UNAVAILABLE: terminal=blocked; recovery=restore_git_authority_then_retry`，而 dry-run 返回 typed `not_applicable/pass` 且不被阻断。
 - THEN promotion 成功后系统仅以 compare-and-swap fast-forward 将 `main` backsync 到 `dev1.0`，分叉或 ref 漂移时停止且不得 force；缺 promotion receipt、可信 `main` ancestry 或 durable Prod approval 时在 candidate eligibility、Prod credential 与 canary 前阻断，正式 Prod apply 还必须由精确 SHA 的人工 dispatch 显式关闭 dry-run。
 - THEN 第一方 prevalidate 不写正式 rollout、ledger 或 receipt。
 - THEN 同一候选在隔离运行面并行执行 Alpha、Beta、Gamma，按 `alpha -> beta -> gamma` 聚合准入后，才执行 `prod-hosted(canary -> 5 -> 20 -> 50 -> 100)`；即使前置 authority 已通过，`prod_rollout` 仍在首个 mutation 前防御性复核，不得删除硬门或把 OPEN 标记为关闭。
 - THEN `stackctl`、workflow、runbook 与环境矩阵口径一致，不再维护第二套自动推进或回滚逻辑。
+- THEN canonical launcher 成功时在当前 attempt 目录追加且只追加 `LaunchReadyFact`；失败、degraded runtime、缺 consumer lease/transport/config readback 或 stale/symlink evidence 时 typed `APP.READINESS.*` 阻断。后续 UAT aggregator 只有在 11 类 raw journey 全部 `passed` 后才能追加 `ContentReadyFact`，可信 promotion aggregator 只有在双物理/EAF/Provider/migration/rollback/performance/reliability/cleanup 闭合后才能追加 `ReleaseReadyFact`。
 - THEN Prod 五个 rollout stage 在一个受审批事务中复用一次制品物化与治理校验，健康检查、只读集成探针、SLO gate 与 auto rollback 可验证。
 - THEN 权威计时包含 runner 排队与矩阵长尾，600 秒软目标、1800 秒硬门和 1500 秒晋级截止均可验证。
 
@@ -205,3 +210,23 @@
 - 影响或价值：尚缺一次带计时 receipt 的真实演练验收证据，无法证明三条止损路径各自在 300 秒内完成。三条工具链实现均已存在且不触发重打包：内容 active pointer 回上一 immutable release（`quwoquan_data ship rollback`）、Web current pointer 回上一 artifact（`stackctl deploy --artifact-kind web --expected-current` CAS 切换）、远端配置关闭不兼容能力（`GetAppConfig` kill_switches `immediate`）；演练仍依赖运行中的环境和可回切的上一 release/artifact。
 - 目标：在 `gamma-local` 对三条止损路径各执行一次演练，产出含开始/结束时间戳与恢复验证的机器 receipt，全程无打包/编译步骤。
 - 完成判定：`SIT-001` 的 auto rollback 可验证子句满足，且演练 receipt 证明三条路径耗时 ≤300 秒并有真实 `spec_ref` 绑定
+
+<a id="open-007"></a>
+### OPEN-007 ContentReadyFact 与 ReleaseReadyFact 生产聚合链未接线
+
+- 类型：`capability_gap`
+- 优先级：`P0`
+- 准出影响：`block`
+- 影响或价值：仓库已有 readiness fact 的闭集模型、校验与 local contract，但尚无生产 App UAT aggregator 从 11 类真实 raw journey 生成并持久化 `ContentReadyFact`，也无可信 Hosted promotion aggregator 消费 promotable predecessor 与完整 qualification evidence 生成并持久化 `ReleaseReadyFact`；当前代码存在不能证明 runtime、UAT 或 Prod readiness 闭环。
+- 完成判定：`SIT-001` 中两个后继 fact 的行为由生产 producer 接线，并由独立 consumer 对同一 attempt 的 exact ref/digest 完成 readback；`api_integration` 证明 producer→create-once store→consumer 的真实边界，Android+iOS 登记物理设备的 `user_acceptance` 证明 raw journey 与 release qualification 均来自真实执行，缺项、stale 或篡改均 fail closed。
+- 依赖：App UAT 原始 Journey producer、Hosted promotion authority、immutable ReleaseEvidenceManifest 与 qualification evidence。
+
+<a id="open-008"></a>
+### OPEN-008 main-tree seal 与 OCI release planner 真实主链接线未闭合
+
+- 类型：`capability_gap`
+- 优先级：`P0`
+- 准出影响：`block`
+- 影响或价值：main-tree seal 与 OCI artifact planning 目前只有生产模块、workflow 声明或 contract-level 约束，尚无足以证明受保护 main promotion 中真实 producer、下游 consumer 与 hosted readback 绑定同一 qualified composition、synthetic tree、main merge tree 及不可变 OCI digest 的闭环证据；不得据此声称 main admission 或 Prod 准出已闭合。
+- 完成判定：`SIT-001` 由受保护 promotion 的真实 producer 生成 create-once main-tree seal 与 canonical OCI plan，下游 candidate publisher/consumer exact-byte 消费且 hosted registry/GitHub authority readback 返回同一 tree、composition、artifact 与 OCI digest；`api_integration` 覆盖 producer→consumer→readback，真实 promotion `user_acceptance` 证明漂移或缺失时在发布前 fail closed。
+- 依赖：受保护 `dev1.0 -> main` promotion authority、canonical release artifact planner、immutable OCI registry readback。

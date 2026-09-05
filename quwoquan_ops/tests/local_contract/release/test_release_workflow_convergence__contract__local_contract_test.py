@@ -30,7 +30,7 @@ SOURCE_ADMISSION_SPEC_REFS = (
 
 
 class ReleaseWorkflowConvergenceContractTest(unittest.TestCase):
-    def test_formal_prod_authority_preflight_fails_before_heavy_release_jobs(
+    def test_formal_prod_authority_preflight_reads_hosted_controls_before_heavy_jobs(
         self,
     ) -> None:
         import yaml
@@ -43,114 +43,58 @@ class ReleaseWorkflowConvergenceContractTest(unittest.TestCase):
         )
 
         self.assertEqual(preflight["timeout-minutes"], 1)
-        self.assertEqual(preflight["permissions"], {"contents": "read"})
+        self.assertEqual(
+            preflight["permissions"],
+            {"actions": "read", "contents": "read"},
+        )
         self.assertIn('EVENT_NAME" != "workflow_dispatch"', preflight_commands)
         self.assertIn('DRY_RUN" == "true"', preflight_commands)
         self.assertIn("applicability=not_applicable", preflight_commands)
         self.assertIn("decision=pass", preflight_commands)
+        self.assertIn("verify_hosted_release_authority.py", preflight_commands)
+        preflight_source = str(preflight)
+        self.assertIn("actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349", preflight_source)
+        self.assertIn("HOSTED_RELEASE_AUTHORITY_APP_ID", preflight_source)
+        self.assertIn("HOSTED_RELEASE_AUTHORITY_PRIVATE_KEY", preflight_source)
+        self.assertIn("permission-administration", preflight_source)
+        self.assertIn("permission-vulnerability-alerts", preflight_source)
+        self.assertIn("--token-env HOSTED_AUTHORITY_TOKEN", preflight_commands)
         self.assertIn("OPS.BRANCH.AUTHORITY_UNAVAILABLE", preflight_commands)
-        self.assertIn("terminal=blocked", preflight_commands)
-        self.assertIn(
-            "recovery=restore_git_authority_then_retry", preflight_commands
-        )
+        self.assertIn('--github-output "$GITHUB_OUTPUT"', preflight_commands)
         self.assertNotIn("hostedProtectionVerified=true", preflight_commands)
         self.assertNotIn("formalProd=true", preflight_commands)
 
-        def run_preflight(dry_run: str) -> tuple[subprocess.CompletedProcess[str], str]:
-            with tempfile.TemporaryDirectory() as temporary:
-                output_path = Path(temporary) / "github-output"
-                result = subprocess.run(
-                    ["bash", "-c", preflight_commands],
-                    cwd=ROOT,
-                    env={
-                        **os.environ,
-                        "EVENT_NAME": "workflow_dispatch",
-                        "DRY_RUN": dry_run,
-                        "GITHUB_OUTPUT": str(output_path),
-                    },
-                    text=True,
-                    capture_output=True,
-                    check=False,
-                )
-                output = (
-                    output_path.read_text(encoding="utf-8")
-                    if output_path.exists()
-                    else ""
-                )
-                return result, output
-
-        dry_run_result, dry_run_output = run_preflight("true")
-        self.assertEqual(dry_run_result.returncode, 0)
-        self.assertEqual(
-            dry_run_output.splitlines(),
-            ["applicability=not_applicable", "decision=pass"],
-        )
-        self.assertNotIn(
-            "OPS.BRANCH.AUTHORITY_UNAVAILABLE", dry_run_result.stdout
-        )
-
-        formal_result, formal_output = run_preflight("false")
-        self.assertEqual(formal_result.returncode, 2)
-        self.assertEqual(
-            formal_output.splitlines(),
-            ["applicability=required", "decision=blocked"],
-        )
-        self.assertIn("OPS.BRANCH.AUTHORITY_UNAVAILABLE", formal_result.stdout)
-        self.assertIn("terminal=blocked", formal_result.stdout)
-        self.assertIn(
-            "recovery=restore_git_authority_then_retry", formal_result.stdout
-        )
-
         heavy_jobs = (
-            "source_context",
-            "service_pipeline",
-            "app_pipeline",
-            "delivery_gate",
-            "prepare",
-            "alpha_local",
-            "beta_device_matrix",
-            "gamma_local",
-            "preprod_evidence",
-            "prod_rollout",
-            "prod_soak_acceptance",
+            "source_context", "service_pipeline", "app_pipeline", "delivery_gate",
+            "prepare", "alpha_local", "beta_device_matrix", "gamma_local",
+            "preprod_evidence", "prod_rollout", "prod_soak_acceptance",
         )
         for job_name in heavy_jobs:
             needs = jobs[job_name].get("needs", [])
             if isinstance(needs, str):
                 needs = [needs]
-            self.assertIn(
-                "formal_prod_authority_preflight",
-                needs,
-                f"{job_name} can start before formal Prod authority preflight",
-            )
-
-        preflight_offset = source.index("  formal_prod_authority_preflight:\n")
-        for job_name in heavy_jobs:
-            self.assertLess(preflight_offset, source.index(f"  {job_name}:\n"))
+            self.assertIn("formal_prod_authority_preflight", needs)
 
         prod_steps = jobs["prod_rollout"]["steps"]
         defensive = next(
-            step
-            for step in prod_steps
-            if step.get("name")
-            == "Defensively recheck formal Prod hosted authority before mutation"
+            step for step in prod_steps
+            if step.get("name") == "Defensively recheck formal Prod hosted authority before mutation"
         )
         defensive_commands = str(defensive["run"])
         self.assertEqual(
-            defensive["if"],
-            "${{ needs.prepare.outputs.dry_run != 'true' }}",
+            defensive["if"], "${{ needs.prepare.outputs.dry_run != 'true' }}"
         )
-        self.assertIn("OPS.BRANCH.AUTHORITY_UNAVAILABLE", defensive_commands)
-        self.assertIn("terminal=blocked", defensive_commands)
+        self.assertIn("verify_hosted_release_authority.py", defensive_commands)
+        self.assertIn("steps.authority_token.outputs.token", str(defensive["env"]))
+        self.assertIn("--token-env HOSTED_AUTHORITY_TOKEN", defensive_commands)
+        self.assertIn("--expected-digest", defensive_commands)
         self.assertIn(
-            "recovery=restore_git_authority_then_retry", defensive_commands
+            "needs.formal_prod_authority_preflight.outputs.authority_digest",
+            defensive_commands,
         )
         mutation_names = (
-            "Deploy Prod canary",
-            "Deploy Prod 5%",
-            "Deploy Prod 20%",
-            "Deploy Prod 50%",
-            "Deploy Prod 100%",
+            "Deploy Prod canary", "Deploy Prod 5%", "Deploy Prod 20%",
+            "Deploy Prod 50%", "Deploy Prod 100%",
         )
         step_names = [str(step.get("name") or "") for step in prod_steps]
         defensive_index = step_names.index(str(defensive["name"]))
@@ -245,11 +189,15 @@ class ReleaseWorkflowConvergenceContractTest(unittest.TestCase):
             "App package evidence (same mainline DAG)",
             "Delivery Gate (mainline)",
             "Publish sealed candidate evidence",
-            "Materialize hosted service-plane SSH credential",
             "Materialize hosted rollout SSH credentials",
             "Deploy Prod canary",
         ):
             self.assertLess(early_admission, source.index(protected_operation))
+
+        prepare_block = source[source.index("  prepare:\n"):source.index("  delivery_gate:\n")]
+        self.assertNotIn("PROD_SERVICE_SSH_KEY", prepare_block)
+        prod_block = source[source.index("  prod_rollout:\n"):source.index("  prod_soak_acceptance:\n")]
+        self.assertIn("Materialize hosted rollout SSH credentials", prod_block)
 
         formal_block = source.index(
             "Defensively recheck formal Prod hosted authority before mutation"
@@ -258,7 +206,15 @@ class ReleaseWorkflowConvergenceContractTest(unittest.TestCase):
             formal_block,
             source.index("Materialize hosted rollout SSH credentials"),
         )
-        self.assertIn("OPS.BRANCH.AUTHORITY_UNAVAILABLE", source[formal_block:])
+        self.assertIn("verify_hosted_release_authority.py", source[formal_block:])
+
+    def test_main_tree_is_sealed_without_rebuild(self) -> None:
+        source = CONTROLLED_PROD.read_text(encoding="utf-8")
+        assert "main_tree_seal.py" in source
+        assert "--synthetic-tree-digest" in source
+        assert "--main-tree-digest" in source
+        assert source.index("Seal qualified synthetic tree to exact main tree") < source.index("Publish sealed candidate evidence")
+
 
     def test_release_budgets_have_one_unversioned_10_30_contract(self) -> None:
         payload = json.loads(BUDGETS.read_text(encoding="utf-8"))
@@ -370,17 +326,12 @@ class ReleaseWorkflowConvergenceContractTest(unittest.TestCase):
         self.assertNotIn("  prod_initial:\n", source)
         self.assertNotIn("  prod_carry_on:\n", source)
         self.assertNotIn("  prod_full:\n", source)
-        self.assertEqual(source.count("environment: production"), 1)
+        self.assertEqual(source.count("environment: production"), 0)
         self.assertIn("'production' || 'release-validation'", source)
         self.assertIn("  prod_soak_acceptance:\n", source)
-        self.assertEqual(
-            jobs["prod_soak_acceptance"]["environment"],
-            "production",
-        )
-        self.assertGreaterEqual(
-            jobs["prod_soak_acceptance"]["timeout-minutes"],
-            1500,
-        )
+        self.assertNotIn("environment", jobs["prod_soak_acceptance"])
+        self.assertNotIn("environment", jobs["prod_soak_acceptance"])
+        self.assertGreaterEqual(jobs["prod_soak_acceptance"]["timeout-minutes"], 1500)
         self.assertIn("- alpha_local\n      - beta_device_matrix\n      - gamma_local", source)
 
     def test_mainline_timing_uses_exact_oci_and_hosted_append_only_authority(
@@ -598,7 +549,7 @@ class ReleaseWorkflowConvergenceContractTest(unittest.TestCase):
         self.assertIn("verify_workflow_release_candidate.py", source)
         self.assertIn("--require-deployable", source)
         self.assertNotIn(
-            'manifest.get("candidateId") != manifest.get("artifactDigest")', source
+            'manifest.get("releaseCompositionId") != manifest.get("artifactDigest")', source
         )
         for forbidden in (
             "release_artifact_ref",

@@ -83,6 +83,9 @@ def derive_role(
     if stem.startswith(("generate_", "sync_", "build_", "gen_")):
         reasons.append("generator naming")
         return "generator", tuple(reasons)
+    if stem.startswith("plan_"):
+        reasons.append("planner naming")
+        return "planner", tuple(reasons)
     if stem.startswith("run_"):
         reasons.append("runner naming")
         return "runner", tuple(reasons)
@@ -115,17 +118,24 @@ def role_records(
         relative = relative_path(root, path)
         referenced_by = tuple(sorted(path_references.get(relative, set())))
         imported_by = tuple(sorted(import_references.get(relative, set())))
+        owned_data_package_module = is_owned_data_package_module(root, path)
         role, reasons = derive_role(
             relative,
             referenced_by,
             imported_by,
-            owned_data_package_module=is_owned_data_package_module(root, path),
+            owned_data_package_module=owned_data_package_module,
         )
         orphan_candidate = (
-            role in {"gate", "generator", "runner", "unclassified"}
-            and not referenced_by
+            not referenced_by
             and not imported_by
             and not is_acceptance_script(relative)
+            and (
+                role in {"gate", "generator", "planner", "runner", "unclassified"}
+                or (
+                    owned_data_package_module
+                    and path.name not in {"__init__.py", "handler.py"}
+                )
+            )
         )
         records.append(
             ScriptRecord(

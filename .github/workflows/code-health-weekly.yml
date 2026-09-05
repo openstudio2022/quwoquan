@@ -1,0 +1,89 @@
+# Report-only observation; never a pull-request required check and never writes repository snapshots.
+name: 11. Weekly Code Health Observation
+
+permissions:
+  contents: read
+  actions: read
+
+env:
+  QWQ_OUTPUT_ROOT: ${{ github.workspace }}/.qwq_output
+
+on:
+  schedule:
+    - cron: '43 3 * * 1'
+  workflow_dispatch:
+
+concurrency:
+  group: code-health-weekly
+  cancel-in-progress: false
+
+jobs:
+  report:
+    name: Weekly Code Health — Report Only
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          fetch-depth: 0
+      - name: Install pinned report dependencies
+        run: |
+          python3 -m pip install --disable-pip-version-check PyYAML==6.0.3
+          curl --fail --location --silent --show-error \
+            https://github.com/AlDanial/cloc/releases/download/v2.06/cloc-2.06.pl \
+            --output "$RUNNER_TEMP/cloc"
+          echo "ed9fbdd081a2ceb933ea490b3c1cfacc87d3898ae2650d0d6756439695a836c8  $RUNNER_TEMP/cloc" | sha256sum --check --strict
+          chmod +x "$RUNNER_TEMP/cloc"
+      - name: Fetch Delivery outcomes for governance side-effect comparison
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api --paginate --slurp \
+            -H "Accept: application/vnd.github+json" \
+            "/repos/${{ github.repository }}/actions/workflows/delivery-gate.yml/runs?per_page=100&created=>=$(date -u -d '56 days ago' +%Y-%m-%d)" \
+            > "$RUNNER_TEMP/delivery-runs.json"
+      - name: Generate canonical report-only observation
+        run: |
+          PYTHONDONTWRITEBYTECODE=1 python3 -B quwoquan_ops/gate/report_code_health_weekly.py \
+            --head "${{ github.sha }}" \
+            --cloc "$RUNNER_TEMP/cloc" \
+            --delivery-runs "$RUNNER_TEMP/delivery-runs.json"
+      - name: Render successful report summary
+        if: success()
+        run: |
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          report_path = next(Path(os.environ["QWQ_OUTPUT_ROOT"]).glob("env/repo/runs/code-health/weekly/**/report.json"))
+          report = json.loads(report_path.read_text(encoding="utf-8"))
+          with Path(os.environ["GITHUB_STEP_SUMMARY"]).open("a", encoding="utf-8") as summary:
+              summary.write("# Weekly Code Health (report-only)\n")
+              summary.write(f"- identity: `{report['identityDigest']}`\n")
+              summary.write(f"- tracked / handwritten files: {report['summary']['trackedFiles']} / {report['summary']['handwrittenProductionFiles']}\n")
+              summary.write(f"- clone groups / dead candidates: {report['summary']['cloneGroupCount']} / {report['summary']['deadCandidateCount']}\n")
+              summary.write(f"- top hotspots: {len(report['topHotspots'])}\n")
+              outcomes = report["deliveryOutcomes"]
+              current = outcomes.get("current", {})
+              previous = outcomes.get("previous", {})
+              summary.write(f"- Delivery completed runs (current / previous): {current.get('completedRuns', 'n/a')} / {previous.get('completedRuns', 'n/a')}\n")
+              summary.write(f"- Delivery comparison status: `{outcomes.get('comparisonStatus', 'insufficient-history')}`\n")
+              summary.write(f"- Delivery regression flags: `{json.dumps(outcomes.get('regressionFlags'), sort_keys=True)}`\n")
+          PY
+      - name: Upload successful weekly report
+        if: success()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: code-health-weekly-report-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ env.QWQ_OUTPUT_ROOT }}/env/repo/runs/code-health/weekly/**/report.json
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14
+      - name: Upload failed weekly diagnostic
+        if: failure() && !cancelled()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: code-health-weekly-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ env.QWQ_OUTPUT_ROOT }}/env/repo/runs/code-health/weekly/**/report.json
+          if-no-files-found: ignore
+          compression-level: 0
+          retention-days: 3

@@ -28,7 +28,7 @@
 ### REQ-001 多环境波次部署
 
 - 同一 `releaseTrainId` 必须贯穿 Alpha、Beta、Gamma-local 与 Prod，并绑定同一 source capsule、ContractGraph 和 toolchain。每个环境拥有独立 `environmentArtifactDigest`，其投影由兼容信任域的组件 digest 与本环境 configuration、Provider binding、endpoint authority、runtime topology 摘要组成。
-- `candidate-ready` 必须在环境验证前一次性封存 Android nonprod/prod、iOS nonprod/prod、单一 Web bundle 与 Cloud nonprod/prod 组件，并为四环境封存配置 composition。Alpha、Beta、Gamma 必须引用同一 nonprod App bytes 及同一 owner 的 nonprod Cloud digest，Prod 引用 prod digest。进入波次后不得重新构建、codegen 或替换其中任一输入。
+- `qualified` 必须在环境验证前一次性封存 Android nonprod/prod、iOS nonprod/prod、单一 Web bundle 与 Cloud nonprod/prod 组件、四环境配置 composition、ContractGraph、真实 Provider readiness 与完整资格证据。Alpha、Beta、Gamma 必须引用同一 nonprod App bytes 及同一 owner 的 nonprod Cloud digest，Prod 引用 prod digest。进入波次后不得重新构建、codegen 或替换其中任一输入。
 - Alpha、Beta、Gamma-local 可以在隔离 runner 并行执行配置 package、镜像预取与静态校验。任何 Data mutation、activation、App UAT 或 passed acceptance receipt 必须严格按 `alpha -> beta -> gamma -> prod` 执行，任一失败即停止下一环境首个 mutation。
 - Gamma-local 是正式阻断阶段，不由旧 nightly 或其他候选摘要的证据替代；仓库不新增 `gamma-hosted`。
 - 三个前置环境全部通过后，Prod 才能进入同一个受审批事务 job，并按 `canary -> 5 -> 20 -> 50 -> 100` 晋级。

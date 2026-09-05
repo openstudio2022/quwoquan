@@ -92,7 +92,7 @@ def _write_build_input(
         {
             "schema": finalizer.SCHEMA,
             "releaseTrainId": None,
-            "candidateId": None,
+            "releaseCompositionId": None,
             "status": "build-input",
             "generatedAt": "2026-07-28T00:00:00Z",
             "source": {
@@ -227,7 +227,7 @@ def _write_receipt(
             }[kind],
             "environment": environment,
             "status": status,
-            "candidateId": manifest["candidateId"],
+            "releaseCompositionId": manifest["releaseCompositionId"],
             "sourceGitSha": source["gitSha"],
             "sourceTreeDigest": source["treeDigest"],
             "evidenceDigest": evidence_digest,
@@ -334,9 +334,9 @@ class ProdReleaseTransactionContractTest(unittest.TestCase):
                 provider_raw_dir=_provider_raw_dir(root),
             )
             candidate = finalizer.finalize(artifact, None, artifact_descriptors)
-            self.assertEqual(candidate["status"], "candidate-ready")
+            self.assertEqual(candidate["status"], "qualified")
             finalized = _qualify_for_prod(root, artifact, candidate)
-            self.assertEqual(finalized["status"], "deployable")
+            self.assertEqual(finalized["status"], "main-admitted")
             self.assertEqual(
                 set(finalized["applicationPackages"]),
                 set(finalizer.APPLICATION_PACKAGES),
@@ -356,7 +356,7 @@ class ProdReleaseTransactionContractTest(unittest.TestCase):
             )
             path, digest, loaded = stackctl._deployable_release_manifest(
                 str(artifact / "manifest.json"),
-                candidate_digest=finalized["candidateId"],
+                candidate_digest=finalized["releaseCompositionId"],
             )
             self.assertEqual(path, (artifact / "manifest.json").resolve())
             self.assertEqual(digest, finalized["artifactDigest"])
@@ -376,7 +376,7 @@ class ProdReleaseTransactionContractTest(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "config digest mismatch"):
                 stackctl._deployable_release_manifest(
                     str(artifact / "manifest.json"),
-                    candidate_digest=finalized["candidateId"],
+                    candidate_digest=finalized["releaseCompositionId"],
                 )
 
     def test_release_ledger_is_cas_ordered_and_receipted(self) -> None:

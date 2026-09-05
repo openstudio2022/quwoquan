@@ -105,7 +105,7 @@ FORBIDDEN_ROLLOUT_TOKENS = (
 )
 
 
-PROD_ENVIRONMENT_JOBS = ("prod_rollout", "prod_soak_acceptance")
+PROD_ENVIRONMENT_JOBS = ("prod_rollout",)
 PROD_ROLLOUT_ENVIRONMENT = (
     "${{ needs.prepare.outputs.dry_run != 'true' && 'production' || "
     "'release-validation' }}"
@@ -150,10 +150,9 @@ def prod_environment_job_issues(path: Path) -> list[str]:
             f"{rel} job prod_rollout must bind the exact dry-run release-validation / "
             "real-apply production environment expression"
         )
-    if environment_names.get("prod_soak_acceptance") != "production":
+    if environment_names.get("prod_soak_acceptance"):
         issues.append(
-            f"{rel} job prod_soak_acceptance must bind environment: production "
-            "for manual prod admission"
+            f"{rel} job prod_soak_acceptance must not request a second production approval"
         )
     return issues
 
@@ -254,7 +253,7 @@ def hosted_soak_authority_issues() -> list[str]:
     collector_text = SOAK_COLLECTOR.read_text(encoding="utf-8")
     for token in (
         "prod_soak_acceptance:",
-        "environment: production",
+        "name: ${{ needs.prepare.outputs.dry_run != 'true' && 'production' || 'release-validation' }}",
         "collect_prod_soak_observations.py",
         "release-ledger-soak-commit",
         "release-ledger-soak-receipt",
@@ -393,7 +392,7 @@ def main() -> int:
         "IMAGE_JOB_COUNT=$((BUILD_IMAGE_COUNT + REUSE_IMAGE_COUNT))",
         '--require-count "build_release_images=${IMAGE_JOB_COUNT}"',
         "id: base_images",
-        "runs-on: [self-hosted, macOS, ARM64]",
+        "runs-on: [self-hosted, macOS, ARM64, quwoquan-release-authority]",
         "docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130",
         "image: docker.io/tonistiigi/binfmt@sha256:b4c6a09270133b3c5b4dff94f83067df4dd27eced195fc6a1dbad102999e24dd",
         "platforms: amd64",

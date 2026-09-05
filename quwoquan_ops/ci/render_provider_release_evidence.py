@@ -52,7 +52,7 @@ def render(
     generated_at: str,
 ) -> dict[str, Any]:
     validate_manifest(manifest, allowed_statuses={"component-ready"})
-    if manifest.get("candidateId") is not None:
+    if manifest.get("releaseCompositionId") is not None:
         raise ValueError("Provider qualification must precede candidate sealing")
     if DIGEST_PATTERN.fullmatch(contract_graph_digest) is None:
         raise ValueError("ContractGraph digest is not immutable")

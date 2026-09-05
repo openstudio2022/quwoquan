@@ -69,6 +69,15 @@ evidence:
     required: true
     timeout_seconds: 300
     covers: []
+  code-health-delta:
+    command: make verify-code-health-delta
+    segment: POST
+    required: true
+    timeout_seconds: 300
+    covers:
+      - changed-source-classification
+      - incremental-complexity-duplication-reachability
+      - code-health-evidence-fingerprint
   recommendation-event-contract:
     command: make verify-behavior-event-type-contract
     segment: POST

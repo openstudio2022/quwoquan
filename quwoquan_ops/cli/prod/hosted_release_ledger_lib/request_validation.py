@@ -42,7 +42,7 @@ def validate_promotion_evidence(
     if (
         value.get("schema") != "prod-rollout-stage-promotion-evidence"
         or value.get("authority") != "protected-prod-runner"
-        or value.get("candidateId") != candidate_id
+        or value.get("releaseCompositionId") != candidate_id
         or value.get("artifactDigest") != artifact_digest
         or value.get("stage") != stage
         or not _require_safe_string(value.get("campaignId"), field="campaignId")
@@ -377,7 +377,7 @@ def _validate_soak_request(value: object) -> dict[str, Any]:
     ):
         raise ValueError("fullRolloutReceiptId is invalid")
     for field in (
-        "candidateId",
+        "releaseCompositionId",
         "rolloutArtifactDigest",
         "artifactDigest",
         "rolloutConfigDigest",

@@ -614,8 +614,8 @@ def _release_manifest(
     manifest = finalizer.seal_manifest({
         "schema": finalizer.SCHEMA,
         "releaseTrainId": None,
-        "candidateId": None,
-        "status": "candidate-ready",
+        "releaseCompositionId": None,
+        "status": "qualified",
         "generatedAt": "2026-07-28T00:00:00Z",
         "source": {
             "gitSha": source_git_sha,
@@ -749,7 +749,7 @@ def _release_manifest(
             "schema": finalizer.ENVIRONMENT_RECEIPT_SCHEMA,
             "environment": environment,
             "status": "passed",
-            "candidateId": manifest["candidateId"],
+            "releaseCompositionId": manifest["releaseCompositionId"],
             "sourceGitSha": source["gitSha"],
             "sourceTreeDigest": source["treeDigest"],
             "evidenceDigest": evidence_digest,
@@ -768,7 +768,7 @@ def _release_manifest(
         "schema": finalizer.ROLLBACK_RECEIPT_SCHEMA,
         "environment": "prod",
         "status": "ready",
-        "candidateId": manifest["candidateId"],
+        "releaseCompositionId": manifest["releaseCompositionId"],
         "sourceGitSha": source["gitSha"],
         "sourceTreeDigest": source["treeDigest"],
         "evidenceDigest": evidence_digest,
@@ -784,7 +784,7 @@ def _release_manifest(
         "path": rollback_path.relative_to(root).as_posix(),
         "digest": _sha256_prefixed(rollback_path),
     }
-    manifest["status"] = "deployable"
+    manifest["status"] = "main-admitted"
     manifest["blockers"] = ["prod-release-evidence-pending"]
     manifest["missingEvidence"] = [
         "environmentReceipts.prod",

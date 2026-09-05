@@ -48,9 +48,9 @@ def validate(args: argparse.Namespace) -> None:
         {"component-ready"}
         if args.expect_component_ready
         else (
-            {"deployable"}
+            {"main-admitted"}
             if args.require_deployable
-            else {"candidate-ready", "deployable"}
+            else {"qualified", "main-admitted"}
         )
     )
     validate_manifest(manifest, allowed_statuses=allowed_statuses)
@@ -62,15 +62,15 @@ def validate(args: argparse.Namespace) -> None:
     if args.expect_component_ready:
         if (
             manifest.get("status") != "component-ready"
-            or manifest.get("candidateId") is not None
+            or manifest.get("releaseCompositionId") is not None
         ):
-            raise ValueError("Service Pipeline evidence must be component-ready without candidateId")
+            raise ValueError("Service Pipeline evidence must be component-ready without releaseCompositionId")
         if args.expected_candidate:
-            raise ValueError("component-ready verification must not expect a candidateId")
+            raise ValueError("component-ready verification must not expect a releaseCompositionId")
     else:
-        candidate = str(manifest.get("candidateId") or "")
+        candidate = str(manifest.get("releaseCompositionId") or "")
         if DIGEST.fullmatch(candidate) is None:
-            raise ValueError("candidateId is not an immutable digest")
+            raise ValueError("releaseCompositionId is not an immutable digest")
         if candidate != args.expected_candidate:
             raise ValueError("candidate digest does not match sealed candidate output")
     source = manifest.get("source")
@@ -95,7 +95,7 @@ def validate(args: argparse.Namespace) -> None:
     if expected_ref and discovered_ref and expected_ref != discovered_ref:
         raise ValueError("source-SHA discovery did not resolve the Service Pipeline OCI ref")
     if args.require_deployable:
-        if manifest.get("status") != "deployable":
+        if manifest.get("status") != "main-admitted":
             raise ValueError("GATE_BLOCK: real Prod apply requires deployable evidence")
         receipts = manifest.get("environmentReceipts")
         missing_envs = sorted(

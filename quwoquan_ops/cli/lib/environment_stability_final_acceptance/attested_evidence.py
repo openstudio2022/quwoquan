@@ -49,11 +49,11 @@ def verify_github_actions_receipt(
     if not isinstance(receipt_payload, Mapping):
         raise TypeError("GitHub-attested receipt root must be an object")
     receipt_candidate = (
-        (receipt_payload.get("releaseEvidence") or {}).get("candidateId")
+        (receipt_payload.get("releaseEvidence") or {}).get("releaseCompositionId")
         if kind == "prod_sim"
-        else receipt_payload.get("candidateId")
+        else receipt_payload.get("releaseCompositionId")
     )
-    if receipt_candidate != manifest["candidateId"]:
+    if receipt_candidate != manifest["releaseCompositionId"]:
         raise ValueError("GitHub-attested receipt candidate differs from manifest")
     result = runner(
         [
@@ -96,7 +96,7 @@ def verify_github_actions_receipt(
                 f"repository:{repository}",
                 f"workflow:{workflow}",
                 f"issuer:{oci_supply_chain.OIDC_ISSUER}",
-                f"candidate:{manifest['candidateId']}",
+                f"candidate:{manifest['releaseCompositionId']}",
             }
         ),
     )
@@ -152,7 +152,7 @@ def _verify_authority(
         f"repository:{repository}",
         f"workflow:{repository}/{workflow_path}",
         f"issuer:{oci_supply_chain.OIDC_ISSUER}",
-        f"candidate:{manifest['candidateId']}",
+        f"candidate:{manifest['releaseCompositionId']}",
     }
     if (
         verified.authority != "github-actions-oidc"
@@ -203,7 +203,7 @@ def _validate_ci_evidence(
             "CI case result is not a complete executed canonical case",
         )
     if manifest is not None and (
-        payload.get("candidateId") != manifest["candidateId"]
+        payload.get("releaseCompositionId") != manifest["releaseCompositionId"]
         or payload.get("commit") != manifest["source"]["gitSha"]
     ):
         evaluation.block(
@@ -270,7 +270,7 @@ def _validate_prod_sim(
         )
     if manifest is not None and (
         not isinstance(release, Mapping)
-        or release.get("candidateId") != manifest["candidateId"]
+        or release.get("releaseCompositionId") != manifest["releaseCompositionId"]
         or (release.get("source") or {}).get("gitSha")
         != manifest["source"]["gitSha"]
     ):

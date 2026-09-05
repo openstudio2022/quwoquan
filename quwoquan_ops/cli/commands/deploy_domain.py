@@ -426,7 +426,7 @@ def _command_prod_prevalidate(args: argparse.Namespace) -> dict[str, Any]:
         "releaseEvidence": {
             "path": str(manifest_path) if manifest_value else "",
             "artifactDigest": artifact_digest,
-            "candidateId": manifest_payload.get("candidateId") or "",
+            "releaseCompositionId": manifest_payload.get("releaseCompositionId") or "",
             "source": manifest_payload.get("source") or {},
         },
         "hostPreflight": host_payload.get("hostPreflight") or {},
@@ -533,7 +533,7 @@ def _command_deploy_distribution(args: argparse.Namespace) -> dict[str, Any]:
         try:
             release_payload = json.loads(Path(release_manifest).read_text(encoding="utf-8"))
             candidate_digest = (
-                str(release_payload.get("candidateId") or "")
+                str(release_payload.get("releaseCompositionId") or "")
                 if isinstance(release_payload, dict)
                 else ""
             )
@@ -613,7 +613,7 @@ def _command_deploy_distribution(args: argparse.Namespace) -> dict[str, Any]:
         ),
         "details": issues or [
             f"artifactDigest={receipt.get('artifactDigest')}",
-            f"candidateId={receipt.get('candidateId')}",
+            f"releaseCompositionId={receipt.get('releaseCompositionId')}",
             f"receiptSHA256={receipt.get('receiptSHA256')}",
         ],
         "reportDir": _stackctl.relpath(report_dir),
@@ -686,7 +686,7 @@ def register_parser(subparsers: "argparse._SubParsersAction") -> None:
     deploy_parser.add_argument(
         "--to-candidate-digest",
         default="",
-        help="ReleaseEvidenceManifest candidateId；只用于发布 CAS",
+        help="ReleaseEvidenceManifest releaseCompositionId；只用于发布 CAS",
     )
     deploy_parser.add_argument(
         "--release-evidence-ref",

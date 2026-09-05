@@ -11,6 +11,7 @@ on:
   push:
     branches: [dev1.0]
   pull_request:
+    branches: [main]
   workflow_dispatch:
     inputs:
       validation_profile:
@@ -56,8 +57,18 @@ jobs:
           persist-credentials: false
       - id: profile
         name: Resolve validation profile
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_HEAD_REF: ${{ github.event.pull_request.head.ref || '' }}
+          PR_BASE_REF: ${{ github.event.pull_request.base.ref || '' }}
+          VALIDATION_PROFILE: ${{ inputs.validation_profile || 'pr_light' }}
         run: |
-          PROFILE="${{ inputs.validation_profile || 'pr_light' }}"
+          PROFILE="$VALIDATION_PROFILE"
+          if [[ "$EVENT_NAME" == "pull_request" ]]; then
+            [[ "$PR_HEAD_REF" == "dev1.0" && "$PR_BASE_REF" == "main" ]] || {
+              echo "::error::GATE_BLOCK: 04 only admits dev1.0 to main promotion"; exit 2;
+            }
+          fi
           case "$PROFILE" in pr_light|manual_full|mainline_auto_prod) ;; *) exit 2 ;; esac
           echo "profile=$PROFILE" >> "$GITHUB_OUTPUT"
       - id: range
@@ -110,7 +121,7 @@ jobs:
     name: Pre-Release — Search /search Runtime Smoke
     needs: pr_light_governance
     if: ${{ needs.pr_light_governance.outputs.profile != 'pr_light' }}
-    runs-on: [self-hosted, macOS, ARM64]
+    runs-on: [self-hosted, macOS, ARM64, quwoquan-release-authority]
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5

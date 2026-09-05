@@ -62,9 +62,9 @@ def _release_identity(
 ) -> tuple[dict[str, Any], str]:
     manifest = _load(manifest_path)
     validate_manifest(manifest, allowed_statuses={"released"})
-    candidate = str(manifest.get("candidateId") or "")
+    candidate = str(manifest.get("releaseCompositionId") or "")
     if DIGEST.fullmatch(candidate) is None:
-        raise ValueError("Provider qualification requires a released candidateId")
+        raise ValueError("Provider qualification requires a released releaseCompositionId")
     if (
         IMMUTABLE_REF.fullmatch(release_evidence_ref) is None
         or "/release-artifact@" not in release_evidence_ref
@@ -120,7 +120,7 @@ def command_identity(args: argparse.Namespace) -> int:
         "producerWorkflowRunId": source["workflowRunId"],
         "releaseEvidenceRef": args.release_evidence_ref,
         "releaseEvidenceDigest": args.release_evidence_ref.rsplit("@", 1)[1],
-        "candidateId": manifest["candidateId"],
+        "releaseCompositionId": manifest["releaseCompositionId"],
         "artifactDigest": manifest["artifactDigest"],
         "expectedImageDigest": image_digest,
     }
@@ -364,7 +364,7 @@ def command_package(args: argparse.Namespace) -> int:
         "producerWorkflowRunId": source["workflowRunId"],
         "releaseEvidenceRef": args.release_evidence_ref,
         "releaseEvidenceDigest": args.release_evidence_ref.rsplit("@", 1)[1],
-        "candidateId": manifest["candidateId"],
+        "releaseCompositionId": manifest["releaseCompositionId"],
         "artifactDigest": manifest["artifactDigest"],
         "expectedImageDigest": expected_image_digest,
         "evidenceCount": len(evidence_paths),

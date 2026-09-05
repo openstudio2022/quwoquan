@@ -133,7 +133,7 @@ def test_receipts_are_validated_after_execution_and_before_attestation() -> None
             _step_index(job, name) for name in names
         )
     producer = prod_sim["jobs"]["prod_sim_admission"]
-    assert producer["runs-on"] == ["self-hosted", "macOS", "ARM64"]
+    assert producer["runs-on"] == ["self-hosted", "macOS", "ARM64", "quwoquan-release-authority"]
     assert producer["environment"] == "prod-sim-admission"
     assert _step_index(
         producer,
@@ -221,7 +221,7 @@ def test_workflows_have_no_local_or_secret_attestation_fallback() -> None:
         assert forbidden not in combined
 
 
-def test_prod_sim_consumes_clean_deployable_release_closure() -> None:
+def test_prod_sim_consumes_clean_main_admitted_release_closure() -> None:
     workflow = _workflow(PROD_SIM_WORKFLOW_PATH)
     producer = workflow["jobs"]["prod_sim_admission"]
     checkout = next(
@@ -243,10 +243,10 @@ def test_prod_sim_consumes_clean_deployable_release_closure() -> None:
     candidate = next(
         step
         for step in producer["steps"]
-        if step.get("name") == "Verify deployable manifest, OIDC and artifact closure"
+        if step.get("name") == "Verify main-admitted manifest, OIDC and artifact closure"
     )["run"]
     assert "consume_released_release_evidence.py" in candidate
-    assert "--require-status deployable" in candidate
+    assert "--require-status main-admitted" in candidate
     assert '--expected-source-sha "${{ inputs.source_sha }}"' in candidate
     assert '--github-output "$GITHUB_OUTPUT"' in candidate
 
@@ -263,7 +263,7 @@ def test_receipt_validator_rejects_local_authority_and_noncanonical_fields() -> 
         "schema": "quwoquan.test.case-result",
         "caseId": "environment-stability.recovery.ios",
         "status": "passed",
-        "candidateId": "sha256:" + "1" * 64,
+        "releaseCompositionId": "sha256:" + "1" * 64,
         "commit": "2" * 40,
         "releaseId": "release--pilot-003",
         "releaseDigest": "sha256:" + "3" * 64,
@@ -288,7 +288,7 @@ def test_receipt_validator_rejects_noncanonical_file_bytes(tmp_path: Path) -> No
         "schema": "quwoquan.test.case-result",
         "caseId": "environment-stability.nightly-full",
         "status": "passed",
-        "candidateId": "sha256:" + "1" * 64,
+        "releaseCompositionId": "sha256:" + "1" * 64,
         "commit": "2" * 40,
         "releaseId": "release--pilot-003",
         "releaseDigest": "sha256:" + "3" * 64,

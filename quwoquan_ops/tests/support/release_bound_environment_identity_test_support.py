@@ -26,8 +26,9 @@ from quwoquan_ops.cli.prod.finalize_mainline_release_artifact import (
     DISTRIBUTION_EVIDENCE_PATHS,
     ENVIRONMENTS,
     RELEASE_CLOSURE_PATHS,
-    canonical_candidate_digest,
+    canonical_release_composition_id,
     canonical_environment_artifact_digest,
+    canonical_evidence_set_digest,
     canonical_manifest_digest,
     canonical_release_train_digest,
 )
@@ -191,8 +192,8 @@ class Fixture:
         manifest: dict[str, Any] = {
             "schema": "release-evidence-manifest",
             "releaseTrainId": None,
-            "candidateId": None,
-            "status": "candidate-ready",
+            "releaseCompositionId": None,
+            "status": "qualified",
             "generatedAt": "2026-07-28T21:00:00Z",
             "source": {
                 "gitSha": GIT_SHA,
@@ -202,6 +203,7 @@ class Fixture:
                 "sourceArchiveDigest": DIGEST_A,
             },
             "artifactDigest": None,
+            "evidenceSetDigest": None,
             "environmentArtifacts": {
                 environment: {
                     "environment": environment,
@@ -314,7 +316,7 @@ class Fixture:
             "environmentReceipts": {},
             "rolloutReceipt": None,
             "rollbackReceipt": None,
-            "blockers": ["environment-qualification-evidence-pending"],
+            "blockers": ["main-admission-evidence-pending"],
             "missingEvidence": [
                 *(f"environmentReceipts.{environment}" for environment in ENVIRONMENTS),
                 "rollbackReceipt.ready",
@@ -327,12 +329,12 @@ class Fixture:
                 "environmentArtifactDigest"
             ] = canonical_environment_artifact_digest(manifest, environment)
         manifest["releaseTrainId"] = canonical_release_train_digest(manifest)
-        manifest["candidateId"] = canonical_candidate_digest(manifest)
+        manifest["releaseCompositionId"] = canonical_release_composition_id(manifest)
         if self.environment == "prod":
 
             def receipt(kind: str, environment: str, status: str) -> dict[str, Any]:
                 evidence = {
-                    "candidateId": manifest["candidateId"],
+                    "releaseCompositionId": manifest["releaseCompositionId"],
                     "environment": environment,
                     "kind": kind,
                 }
@@ -341,7 +343,7 @@ class Fixture:
                     "schema": f"release-{kind}-receipt",
                     "environment": environment,
                     "status": status,
-                    "candidateId": manifest["candidateId"],
+                    "releaseCompositionId": manifest["releaseCompositionId"],
                     "sourceGitSha": GIT_SHA,
                     "sourceTreeDigest": TREE_DIGEST,
                     "evidenceDigest": evidence_digest,
@@ -351,7 +353,7 @@ class Fixture:
                     "digest": DIGEST_A,
                 }
 
-            manifest["status"] = "deployable"
+            manifest["status"] = "main-admitted"
             manifest["environmentReceipts"] = {
                 environment: receipt("environment", environment, "passed")
                 for environment in ("alpha", "beta", "gamma")
@@ -363,6 +365,7 @@ class Fixture:
                 "rolloutReceipt",
                 "rollbackReceipt.outcome",
             ]
+        manifest["evidenceSetDigest"] = canonical_evidence_set_digest(manifest)
         manifest["artifactDigest"] = canonical_manifest_digest(manifest)
         self.paths["manifest"] = _write(self.root / "manifest.json", manifest)
 

@@ -114,7 +114,7 @@ def _release_image_sources(
     if not isinstance(manifest, dict):
         raise SystemExit("FAIL: release manifest must be an object")
     try:
-        validate_manifest(manifest, allowed_statuses={"deployable"})
+        validate_manifest(manifest, allowed_statuses={"main-admitted"})
         validate_manifest_files(manifest_path.parent, manifest)
     except ValueError as error:
         raise SystemExit(f"FAIL: release evidence manifest is invalid: {error}") from error

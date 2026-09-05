@@ -923,7 +923,7 @@ def _command_up_impl(args: argparse.Namespace) -> dict[str, Any]:
             "releaseComposition": release_composition,
             "runtimeMode": "immutable-oci" if formal_release else "",
             "runtimeCandidateDigest": (
-                str(release_composition.get("candidateId") or "")
+                str(release_composition.get("releaseCompositionId") or "")
                 if formal_release
                 else ""
             ),
@@ -960,7 +960,7 @@ def _command_up_impl(args: argparse.Namespace) -> dict[str, Any]:
             "releaseComposition": release_composition,
             "runtimeMode": "immutable-oci" if formal_release else "",
             "runtimeCandidateDigest": (
-                str(release_composition.get("candidateId") or "")
+                str(release_composition.get("releaseCompositionId") or "")
                 if formal_release
                 else ""
             ),

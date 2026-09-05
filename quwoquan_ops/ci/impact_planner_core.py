@@ -7,6 +7,7 @@ import json
 import posixpath
 import re
 import unicodedata
+from pathlib import Path
 from typing import Iterable, Mapping
 
 SCOPE_NAMES = ("service", "app", "portal", "topology", "data")
@@ -14,10 +15,15 @@ DELIVERY_SCOPE_NAMES = (*SCOPE_NAMES, "device", "coverage_service", "coverage_ap
 LOCAL_SCOPE_NAMES = (*SCOPE_NAMES, "spec_contract")
 INTEGRATION_DEPTHS = ("no_live", "alpha_integration", "abg_release_sensitive")
 SOURCE_IDENTITY = "quwoquan-impact-planner"
-SOURCE_VERSION = "impact-planner-v2"
+SOURCE_VERSION = "impact-planner-v3"
 IMPACT_PLAN_SCHEMA = "delivery-impact-plan"
-IMPACT_PLAN_SCHEMA_VERSION = 1
+IMPACT_PLAN_SCHEMA_VERSION = 2
+RISK_LEVELS = ("R0", "R1", "R2", "R3", "R4")
+EXECUTION_PROFILES = ("pr", "promotion", "nightly", "manual")
+ROOT = Path(__file__).resolve().parents[2]
+TEST_OWNERSHIP_POLICY = ROOT / "quwoquan_ops/policies/ci_test_ownership.json"
 _SHA_RE = re.compile(r"^[0-9a-f]{40}$")
+_TREE_DIGEST_RE = re.compile(r"^(?:sha1:[0-9a-f]{40}|sha256:[0-9a-f]{64})$")
 _WINDOWS_DRIVE_RE = re.compile(r"^[A-Za-z]:/")
 
 _DEVICE_IMPACT_PREFIXES = (
@@ -68,6 +74,32 @@ _DATA_DOCUMENT_PREFIXES = ("specs/feature-tree/discovery-content/",)
 _DOC_ONLY_PREFIXES = ("specs/", "docs/")
 _DOC_ONLY_SUFFIXES = {".md", ".mdc", ".png", ".jpg", ".jpeg", ".gif", ".svg"}
 _ROOT_LEVEL_ALL_SCOPE_FILES = {"Makefile"}
+
+_R4_GOVERNANCE_PREFIXES = (
+    ".github/workflows/",
+    "quwoquan_ops/ci/impact_planner_core.py",
+    "quwoquan_ops/ci/detect_ci_impacted_scopes.py",
+    "quwoquan_ops/ci/verify_ci_changed_boundary.py",
+    "quwoquan_ops/ci/verify_hosted_release_authority.py",
+    "quwoquan_ops/policies/branch_policy.yaml",
+    "quwoquan_ops/policies/ci_test_ownership.json",
+    "quwoquan_ops/policies/flaky_test_policy.json",
+    "quwoquan_ops/gate/verify_github_supply_chain.py",
+)
+_R3_GOVERNANCE_PREFIXES = (
+    "quwoquan_ops/",
+    "quwoquan_service/contracts/",
+    "quwoquan_ops/environments/",
+)
+_RECOMMENDATION_PREFIXES = (
+    "quwoquan_service/services/recommendation-service/",
+    "quwoquan_service/runtime/recommendation/",
+    "quwoquan_service/runtime/recpolicy/",
+)
+_KNOWN_TOP_LEVEL_PREFIXES = (
+    ".agents/", ".codex/", ".cursor/", ".github/", "docs/", "specs/",
+    "quwoquan_app/", "quwoquan_data/", "quwoquan_ops/", "quwoquan_service/",
+)
 _METADATA_PREFIX = "quwoquan_service/contracts/metadata/"
 _SERVICE_CONTRACT_PREFIX = "quwoquan_service/services/"
 _SERVICE_CONTRACT_SEGMENT = "/contracts/"
@@ -139,12 +171,132 @@ def validate_exact_sha(value: str, *, label: str) -> str:
     return value
 
 
+def validate_tree_digest(value: str) -> str:
+    if not isinstance(value, str) or _TREE_DIGEST_RE.fullmatch(value) is None:
+        raise ImpactPlannerError("source_tree_digest 必须为 lowercase sha1/sha256 digest")
+    return value
+
+
+def _load_test_ownership_policy() -> tuple[dict[str, object], str]:
+    try:
+        payload = json.loads(TEST_OWNERSHIP_POLICY.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise ImpactPlannerError(f"test ownership policy 不可读：{error}") from error
+    if (
+        not isinstance(payload, dict)
+        or payload.get("schema") != "ci-test-ownership-policy"
+        or payload.get("schemaVersion") != 1
+    ):
+        raise ImpactPlannerError("test ownership policy schema 不受支持")
+    owners = payload.get("ownerVocabulary")
+    if not isinstance(owners, list) or not owners or any(not isinstance(item, str) for item in owners):
+        raise ImpactPlannerError("test ownership vocabulary 不闭合")
+    for collection in ("tests", "apis", "journeys"):
+        entries = payload.get(collection)
+        if not isinstance(entries, dict) or not entries:
+            raise ImpactPlannerError(f"test ownership {collection} 为空")
+        for item_id, entry in entries.items():
+            if (
+                not isinstance(item_id, str)
+                or not isinstance(entry, dict)
+                or entry.get("owner") not in owners
+                or not isinstance(entry.get("selector"), str)
+                or not entry["selector"]
+            ):
+                raise ImpactPlannerError(f"test ownership {collection}.{item_id} 非法")
+    return payload, canonical_digest(payload)
+
+
+def _known_path(path: str) -> bool:
+    return path in _ROOT_LEVEL_ALL_SCOPE_FILES or path in {
+        "AGENTS.md", "README.md", "LICENSE", ".gitignore", ".dockerignore"
+    } or path.startswith(_KNOWN_TOP_LEVEL_PREFIXES)
+
+
+def _derive_risk(
+    paths: list[str], *, scopes: Mapping[str, bool], device_required: bool,
+    execution_profile: str,
+) -> tuple[str, list[str]]:
+    reasons: list[str] = []
+    unknown = [path for path in paths if not _known_path(path)]
+    if execution_profile == "promotion":
+        return "R4", ["promotion_full_qualification"]
+    if any(_matches_prefix(path, _R4_GOVERNANCE_PREFIXES) for path in paths):
+        return "R4", ["release_or_planner_governance_changed"]
+    if unknown:
+        return "R3", ["unknown_path_fail_closed", *[f"unknown:{path}" for path in unknown]]
+    if any(_matches_prefix(path, _R3_GOVERNANCE_PREFIXES) for path in paths):
+        return "R3", ["governance_contract_or_environment_changed"]
+    required_runtime = [name for name, required in scopes.items() if required]
+    if device_required or len(required_runtime) > 1:
+        reasons.append("cross_scope_or_device_impact")
+        return "R2", reasons
+    if required_runtime:
+        return "R1", [f"single_scope:{required_runtime[0]}"]
+    return "R0", ["non_runtime_change"]
+
+
+def _require_ids(policy: Mapping[str, object], collection: str, ids: Iterable[str]) -> list[str]:
+    entries = policy.get(collection)
+    if not isinstance(entries, Mapping):
+        raise ImpactPlannerError(f"test ownership {collection} 非法")
+    result = sorted(set(ids))
+    missing = [item for item in result if item not in entries]
+    if missing:
+        raise ImpactPlannerError(f"required {collection} IDs 未登记：{missing}")
+    return result
+
+
+def _derive_required_ids(
+    *, policy: Mapping[str, object], scopes: Mapping[str, bool],
+    device_required: bool, integration_depth: str, paths: list[str],
+    execution_profile: str,
+) -> dict[str, list[str]]:
+    tests = ["TEST-COMMON-GOVERNANCE"]
+    apis: list[str] = []
+    journeys: list[str] = []
+    if scopes["topology"]:
+        tests.append("TEST-TOPOLOGY-REGRESSION")
+    if scopes["service"]:
+        tests.append("TEST-SERVICE-CORE")
+        apis.extend(("API-SERVICE-CONTRACT", "API-SEARCH-CONTRACT"))
+    if scopes["app"]:
+        tests.extend(("TEST-APP-STATIC", "TEST-APP-LOCAL-CONTRACT"))
+        journeys.append("JOURNEY-APP-LOCAL-CONTRACT")
+    if scopes["data"]:
+        tests.extend(("TEST-DATA-VERIFY", "TEST-DATA-LOCAL-CONTRACT"))
+    if scopes["portal"]:
+        tests.append("TEST-PORTAL")
+        apis.append("API-PORTAL-CONTRACT")
+    if any(_matches_prefix(path, _RECOMMENDATION_PREFIXES) for path in paths):
+        apis.append("API-RECOMMENDATION")
+    if device_required:
+        tests.append("TEST-DEVICE-MATRIX")
+        journeys.append("JOURNEY-DUAL-PHYSICAL-DEVICE")
+    if integration_depth == "abg_release_sensitive":
+        journeys.append("JOURNEY-ABG-READINESS")
+    if execution_profile in {"promotion", "nightly", "manual"}:
+        if scopes["service"]:
+            tests.append("TEST-SERVICE-COVERAGE")
+        if scopes["app"]:
+            tests.extend(("TEST-APP-SERIAL", "TEST-APP-COVERAGE"))
+    return {
+        "testIds": _require_ids(policy, "tests", tests),
+        "apiIds": _require_ids(policy, "apis", apis),
+        "journeyIds": _require_ids(policy, "journeys", journeys),
+    }
+
+
 def planner_identity() -> dict[str, str]:
+    _policy, ownership_digest = _load_test_ownership_policy()
     ruleset = {
         "source": SOURCE_IDENTITY,
         "version": SOURCE_VERSION,
         "schema": IMPACT_PLAN_SCHEMA,
         "schema_version": IMPACT_PLAN_SCHEMA_VERSION,
+        "risk_levels": list(RISK_LEVELS),
+        "execution_profiles": list(EXECUTION_PROFILES),
+        "test_ownership_digest": ownership_digest,
         "scopes": list(SCOPE_NAMES),
         "delivery_scopes": list(DELIVERY_SCOPE_NAMES),
         "device_impact_prefixes": list(_DEVICE_IMPACT_PREFIXES),
@@ -271,6 +423,8 @@ def classify_impacts(paths: Iterable[str], *, fail_closed_empty: bool = False) -
     else:
         for path in normalized:
             _classify_one(path, scopes)
+        if any(not _known_path(path) for path in normalized):
+            _apply_all(scopes)
 
     spec_contract = any(
         path.startswith(("specs/", "quwoquan_ops/policies/"))
@@ -298,25 +452,47 @@ def build_delivery_impact_plan(
     *,
     source_sha: str,
     base_sha: str,
+    head_sha: str = "",
+    synthetic_sha: str = "",
+    source_tree_digest: str,
+    execution_profile: str = "pr",
     force_device: bool = False,
     fail_closed_empty: bool = False,
+    required_scopes: Iterable[str] = (),
 ) -> dict[str, object]:
-    """Build the versioned, artifact-safe Delivery impact contract once per DAG."""
+    """Build one exact, versioned Delivery impact contract for the whole DAG."""
 
     source = validate_exact_sha(source_sha, label="source_sha")
     base = validate_exact_sha(base_sha, label="base_sha")
+    head = validate_exact_sha(head_sha or source, label="head_sha")
+    synthetic = validate_exact_sha(synthetic_sha or source, label="synthetic_sha")
+    tree = validate_tree_digest(source_tree_digest)
+    if source != synthetic:
+        raise ImpactPlannerError("source_sha 必须等于 exact synthetic_sha")
+    if execution_profile not in EXECUTION_PROFILES:
+        raise ImpactPlannerError("execution_profile 不受支持")
+    requested_scopes = sorted(set(required_scopes))
+    if any(scope not in SCOPE_NAMES for scope in requested_scopes):
+        raise ImpactPlannerError("required scope override 不受支持")
+
     classified = classify_impacts(paths, fail_closed_empty=fail_closed_empty)
     changed_paths = list(classified["paths"])
     runtime_scopes = dict(classified["scopes"])
+    for scope in requested_scopes:
+        runtime_scopes[scope] = True
     governance_closure = any(
         _matches_prefix(path, _COVERAGE_GOVERNANCE_PREFIXES)
-        or path == "quwoquan_ops/ci/impact_planner_core.py"
-        or path == "quwoquan_ops/ci/detect_ci_impacted_scopes.py"
+        or _matches_prefix(path, _R4_GOVERNANCE_PREFIXES)
         for path in changed_paths
     )
     device_required = force_device or any(
         _matches_prefix(path, _DEVICE_IMPACT_PREFIXES) for path in changed_paths
     )
+    if execution_profile == "promotion":
+        for name in runtime_scopes:
+            runtime_scopes[name] = True
+        device_required = True
+        governance_closure = True
     coverage_service = bool(runtime_scopes["service"] or governance_closure)
     coverage_app = bool(runtime_scopes["app"] or governance_closure)
     scopes = {
@@ -325,23 +501,52 @@ def build_delivery_impact_plan(
         "coverage_service": coverage_service,
         "coverage_app": coverage_app,
     }
-    states = {
-        name: "required" if required else "not_required"
-        for name, required in scopes.items()
-    }
+    states = {name: "required" if required else "not_required" for name, required in scopes.items()}
+    integration_depth = derive_integration_depth({"scopes": runtime_scopes})
+    risk_level, risk_reasons = _derive_risk(
+        changed_paths,
+        scopes=runtime_scopes,
+        device_required=device_required,
+        execution_profile=execution_profile,
+    )
+    ownership_policy, ownership_digest = _load_test_ownership_policy()
+    required_ids = _derive_required_ids(
+        policy=ownership_policy,
+        scopes=runtime_scopes,
+        device_required=device_required,
+        integration_depth=integration_depth,
+        paths=changed_paths,
+        execution_profile=execution_profile,
+    )
+    candidate_products = sorted(
+        name for name in ("service", "app", "portal", "data") if runtime_scopes[name]
+    )
+    identity = planner_identity()
     plan = {
         "schema": IMPACT_PLAN_SCHEMA,
         "schema_version": IMPACT_PLAN_SCHEMA_VERSION,
         "source_sha": source,
         "base_sha": base,
-        "impact_planner": planner_identity(),
+        "head_sha": head,
+        "synthetic_sha": synthetic,
+        "source_tree_digest": tree,
+        "execution_profile": execution_profile,
+        "impact_planner": identity,
+        "planner_digest": identity["digest"],
+        "test_ownership_digest": ownership_digest,
         "changed_paths": changed_paths,
         "changed_paths_digest": classified["path_digest"],
+        "risk": {"level": risk_level, "reasons": risk_reasons},
+        "integration_depth": integration_depth,
+        "required_ids": required_ids,
+        "candidate_products": candidate_products,
         "scopes": scopes,
         "states": states,
         "policy": {
             "device_forced": bool(force_device),
             "coverage_contract_closure": governance_closure,
+            "empty_diff_fail_closed": bool(fail_closed_empty),
+            "required_scope_overrides": requested_scopes,
         },
     }
     return {**plan, "plan_digest": canonical_digest(plan)}
@@ -351,8 +556,9 @@ def validate_delivery_impact_plan(
     payload: Mapping[str, object],
     *,
     expected_source_sha: str = "",
+    expected_tree_digest: str = "",
 ) -> dict[str, object]:
-    """Validate schema/version/source/path digest and the complete plan digest."""
+    """Re-derive every policy field; a self-consistent forged plan is rejected."""
 
     if not isinstance(payload, Mapping):
         raise ImpactPlannerError("Delivery impact plan 必须为 object")
@@ -361,37 +567,37 @@ def validate_delivery_impact_plan(
     if payload.get("schema_version") != IMPACT_PLAN_SCHEMA_VERSION:
         raise ImpactPlannerError("Delivery impact plan schema_version 不受支持")
     source_sha = validate_exact_sha(str(payload.get("source_sha") or ""), label="source_sha")
-    validate_exact_sha(str(payload.get("base_sha") or ""), label="base_sha")
-    if expected_source_sha and source_sha != validate_exact_sha(
-        expected_source_sha, label="expected_source_sha"
-    ):
+    if expected_source_sha and source_sha != validate_exact_sha(expected_source_sha, label="expected_source_sha"):
         raise ImpactPlannerError("Delivery impact plan source_sha 漂移")
+    tree_digest = validate_tree_digest(str(payload.get("source_tree_digest") or ""))
+    if expected_tree_digest and tree_digest != validate_tree_digest(expected_tree_digest):
+        raise ImpactPlannerError("Delivery impact plan source tree 漂移")
     paths = payload.get("changed_paths")
     if not isinstance(paths, list) or any(not isinstance(path, str) for path in paths):
         raise ImpactPlannerError("Delivery impact plan changed_paths 非 canonical list")
     normalized = normalize_changed_paths(paths)
     if normalized != paths:
         raise ImpactPlannerError("Delivery impact plan changed_paths 未 canonicalize")
-    if payload.get("changed_paths_digest") != canonical_digest(normalized):
-        raise ImpactPlannerError("Delivery impact plan changed_paths digest 漂移")
-    identity = payload.get("impact_planner")
-    if identity != planner_identity():
-        raise ImpactPlannerError("Delivery impact planner identity 漂移")
-    scopes = payload.get("scopes")
-    states = payload.get("states")
-    if not isinstance(scopes, Mapping) or set(scopes) != set(DELIVERY_SCOPE_NAMES):
-        raise ImpactPlannerError("Delivery impact plan scopes 不闭合")
-    if not isinstance(states, Mapping) or set(states) != set(DELIVERY_SCOPE_NAMES):
-        raise ImpactPlannerError("Delivery impact plan states 不闭合")
-    for name in DELIVERY_SCOPE_NAMES:
-        required = scopes[name]
-        if not isinstance(required, bool):
-            raise ImpactPlannerError(f"Delivery impact scope {name} 必须为 bool")
-        expected_state = "required" if required else "not_required"
-        if states[name] != expected_state:
-            raise ImpactPlannerError(f"Delivery impact scope {name} state 漂移")
-    unsigned = dict(payload)
-    plan_digest = unsigned.pop("plan_digest", None)
-    if plan_digest != canonical_digest(unsigned):
-        raise ImpactPlannerError("Delivery impact plan digest 漂移")
+    policy = payload.get("policy")
+    if not isinstance(policy, Mapping):
+        raise ImpactPlannerError("Delivery impact plan policy 非 object")
+    required_scope_overrides = policy.get("required_scope_overrides")
+    if not isinstance(required_scope_overrides, list) or any(
+        not isinstance(item, str) for item in required_scope_overrides
+    ):
+        raise ImpactPlannerError("Delivery impact plan required scope overrides 非法")
+    rebuilt = build_delivery_impact_plan(
+        normalized,
+        source_sha=source_sha,
+        base_sha=str(payload.get("base_sha") or ""),
+        head_sha=str(payload.get("head_sha") or ""),
+        synthetic_sha=str(payload.get("synthetic_sha") or ""),
+        source_tree_digest=tree_digest,
+        execution_profile=str(payload.get("execution_profile") or ""),
+        force_device=policy.get("device_forced") is True,
+        fail_closed_empty=policy.get("empty_diff_fail_closed") is True,
+        required_scopes=required_scope_overrides,
+    )
+    if dict(payload) != rebuilt:
+        raise ImpactPlannerError("Delivery impact plan policy derivation 漂移")
     return dict(payload)

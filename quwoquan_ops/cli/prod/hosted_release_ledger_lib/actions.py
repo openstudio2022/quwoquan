@@ -201,7 +201,7 @@ def commit_soak(root: Path, request: object) -> dict[str, Any]:
             receipt_id=full_receipt_id,
         )
         expected_bindings = {
-            "candidateId": full_receipt["toCandidateDigest"],
+            "releaseCompositionId": full_receipt["toCandidateDigest"],
             "rolloutArtifactDigest": full_receipt["artifactDigest"],
             "rolloutConfigDigest": full_receipt["configDigest"],
             "contractGraphDigest": full_receipt["contractGraphDigest"],

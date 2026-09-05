@@ -411,12 +411,12 @@ REQUIRED_SOURCE_TOKENS = {
     ),
     "quwoquan_ops/cli/prod/generate_mainline_release_artifact.py": (
         '"schema": SCHEMA',
-        '"candidateId"',
+        '"releaseCompositionId"',
         '"artifactDigest"',
     ),
     "quwoquan_ops/cli/prod/finalize_mainline_release_artifact.py": (
         'SCHEMA = "release-evidence-manifest"',
-        '"candidateId"',
+        '"releaseCompositionId"',
         '"artifactDigest"',
     ),
     "quwoquan_ops/cli/lib/android_official_release.py": (
@@ -458,7 +458,7 @@ REQUIRED_SOURCE_TOKENS = {
     ),
     "quwoquan_ops/ci/render_beta_device_evidence.py": (
         '"schema": "release-device-matrix-evidence"',
-        '"candidateId": candidate',
+        '"releaseCompositionId": candidate',
         '"sourceGitSha": git_sha',
         '"sourceTreeDigest": tree_digest',
         '"artifactDigest": artifact_digest',
@@ -476,7 +476,7 @@ REQUIRED_SOURCE_TOKENS = {
         'raise ValueError(f"{platform} device already has an active lease")',
     ),
     "quwoquan_ops/ci/render_environment_release_receipt.py": (
-        '"candidateId": candidate',
+        '"releaseCompositionId": candidate',
         '"sourceGitSha": source["gitSha"]',
         '"sourceTreeDigest": source["treeDigest"]',
         'manifest["artifactDigest"]',
@@ -539,13 +539,13 @@ REQUIRED_SOURCE_TOKENS = {
     ),
     "quwoquan_ops/ci/verify_workflow_release_candidate.py": (
         '"--require-deployable"',
-        'manifest.get("candidateId")',
+        'manifest.get("releaseCompositionId")',
         'manifest.get("artifactDigest")',
         'manifest.get("environmentReceipts")',
     ),
     "quwoquan_ops/cli/prod/fetch_mainline_release_artifact.py": (
         "validate_manifest",
-        'manifest["candidateId"]',
+        'manifest["releaseCompositionId"]',
         'manifest["artifactDigest"]',
     ),
 }

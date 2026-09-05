@@ -124,7 +124,7 @@ def validate_observation(
     expected_fields = {
         "schema",
         "authority",
-        "candidateId",
+        "releaseCompositionId",
         "artifactDigest",
         "campaignId",
         "routingPolicyDigest",
@@ -143,7 +143,7 @@ def validate_observation(
     if (
         value.get("schema") != SCHEMA
         or value.get("authority") != AUTHORITY
-        or value.get("candidateId") != candidate_id
+        or value.get("releaseCompositionId") != candidate_id
         or value.get("artifactDigest") != artifact_digest
         or value.get("campaignId") != campaign_id
         or value.get("routingPolicyDigest") != routing_policy_digest
@@ -237,7 +237,7 @@ def validate_observation(
     projection = {
         "schema": RECEIPT_SCHEMA,
         "authority": AUTHORITY,
-        "candidateId": candidate_id,
+        "releaseCompositionId": candidate_id,
         "artifactDigest": artifact_digest,
         "campaignId": campaign_id,
         "routingPolicyDigest": routing_policy_digest,
@@ -269,7 +269,7 @@ def validate_receipt_evidence(
     expected_fields = {
         "schema",
         "authority",
-        "candidateId",
+        "releaseCompositionId",
         "artifactDigest",
         "campaignId",
         "routingPolicyDigest",
@@ -291,7 +291,7 @@ def validate_receipt_evidence(
     if (
         value.get("schema") != RECEIPT_SCHEMA
         or value.get("authority") != AUTHORITY
-        or value.get("candidateId") != candidate_id
+        or value.get("releaseCompositionId") != candidate_id
         or value.get("artifactDigest") != artifact_digest
         or value.get("stage") != stage
         or DIGEST_RE.fullmatch(str(value.get("routingPolicyDigest") or "")) is None

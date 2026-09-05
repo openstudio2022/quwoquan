@@ -96,7 +96,7 @@ class PythonLineBudgetContractTest(unittest.TestCase):
         )
         self.assertEqual(set(), self._budget_entries(report, "issues"))
 
-    def test_generated_vendor_and_data_scripts_are_exempt(self) -> None:
+    def test_generated_vendor_are_exempt_but_data_uses_same_budget(self) -> None:
         records = [
             PythonFileRecord(
                 path="quwoquan_service/generated/oversized_generated.py",
@@ -125,11 +125,14 @@ class PythonLineBudgetContractTest(unittest.TestCase):
 
         issues = line_budget_issues(self.root, records)
 
-        # Data scripts 由 verify_script_architecture 的 600 行硬顶单轨负责；
-        # generated/vendor 不占预算；Data 测试树仍在本预算内。
+        # Data 不存在另一套 600/500/400 行门；所有非 generated/vendor
+        # Python 边界使用同一 1000 行事实源。
         self.assertEqual(
-            ["quwoquan_data/tests/local_contract/"
-             "test_oversized__contract__local_contract_test.py"],
+            [
+                "quwoquan_data/scripts/content/oversized_data_module.py",
+                "quwoquan_data/tests/local_contract/"
+                "test_oversized__contract__local_contract_test.py",
+            ],
             [issue.path for issue in issues],
         )
 

@@ -129,7 +129,7 @@ def test_provider_oci_is_bound_to_released_candidate_and_manifest_closure() -> N
     assert "provider-conformance-prod-candidate-image-set" in helper
     assert "allowed_statuses={\"released\"}" in helper
     assert '"releaseEvidenceRef": args.release_evidence_ref' in helper
-    assert '"candidateId": manifest["candidateId"]' in helper
+    assert '"releaseCompositionId": manifest["releaseCompositionId"]' in helper
     assert '"artifactDigest": manifest["artifactDigest"]' in helper
     assert "RELEASE_CLOSURE_PATHS" in helper
     assert "sha256_file(source_path)" in helper
@@ -184,7 +184,7 @@ def test_prod_sim_is_manual_approved_and_explicitly_non_promotable() -> None:
 
     assert set(payload["on"]) == {"workflow_dispatch"}
     assert job["environment"] == "prod-sim-admission"
-    assert job["runs-on"] == ["self-hosted", "macOS", "ARM64"]
+    assert job["runs-on"] == ["self-hosted", "macOS", "ARM64", "quwoquan-release-authority"]
     assert job["env"]["PROD_SIM_SSH_MANAGEMENT_HOST"] == (
         "${{ vars.PROD_SIM_SSH_MANAGEMENT_HOST }}"
     )

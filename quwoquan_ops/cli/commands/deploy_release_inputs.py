@@ -191,12 +191,12 @@ def _deployable_release_manifest(
     try:
         _stackctl.finalize_mainline_release_artifact.validate_manifest(
             manifest,
-            allowed_statuses={"deployable"},
+            allowed_statuses={"main-admitted"},
         )
     except ValueError as error:
         raise RuntimeError(f"release evidence manifest is not deployable: {error}") from error
     declared_digest = str(manifest["artifactDigest"])
-    if candidate_digest != str(manifest["candidateId"]):
+    if candidate_digest != str(manifest["releaseCompositionId"]):
         raise RuntimeError("release candidate digest does not match reviewed evidence")
     source = manifest.get("source")
     source_sha = str(source.get("gitSha") or "") if isinstance(source, dict) else ""
@@ -281,7 +281,7 @@ def _prevalidation_release_manifest(
     try:
         _stackctl.finalize_mainline_release_artifact.validate_manifest(
             manifest,
-            allowed_statuses={"deployable"},
+            allowed_statuses={"main-admitted"},
         )
         _stackctl.finalize_mainline_release_artifact.validate_manifest_files(
             path.parent,
@@ -305,7 +305,7 @@ def _prevalidation_release_manifest(
     ):
         raise RuntimeError("release manifest source is not a Service Pipeline commit")
     image_transport_tag = _stackctl._release_transport_tag(manifest)
-    candidate_digest = str(manifest["candidateId"])
+    candidate_digest = str(manifest["releaseCompositionId"])
     required_artifacts = manifest["requiredEvidence"]["environmentArtifacts"]
     artifacts = manifest.get("environmentArtifacts")
     prod_artifact = artifacts.get("prod") if isinstance(artifacts, dict) else None

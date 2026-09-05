@@ -2571,9 +2571,12 @@ if [[ -n "$TEST_LIVE_REPORT_OVERRIDE" ]]; then
   TEST_LIVE_REPORT_PATH="$TEST_LIVE_REPORT_OVERRIDE"
   TEST_LIVE_REPORT_DIR="$(dirname "$TEST_LIVE_REPORT_PATH")"
 else
-  TEST_LIVE_REPORT_DIR="$QWQ_OUTPUT_ROOT/env/repo/runs/$(date -u +%Y%m%dT%H%M%SZ)-$$-${QWQ_LAUNCH_TARGET}-flutter-test-live"
+  TEST_LIVE_REPORT_DIR="$(dirname "$LAUNCH_RECEIPT")"
   TEST_LIVE_REPORT_PATH="$TEST_LIVE_REPORT_DIR/report.json"
 fi
+[[ "$TEST_LIVE_REPORT_DIR" == "$(dirname "$LAUNCH_RECEIPT")" ]] || {
+  echo "[run] APP.READINESS.stale_attempt: launch report must belong to the launch attempt directory." >&2; exit 2;
+}
 mkdir -p "$TEST_LIVE_REPORT_DIR"
 PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$ROOT_DIR${PYTHONPATH:+:$PYTHONPATH}" \
 python3 - \
@@ -2614,11 +2617,8 @@ import pathlib
 import re
 import sys
 
-from quwoquan_ops.cli.lib.app_launch_attempt import (
-    LAUNCH_BLOCKERS,
-    read_app_launch_attempt,
-)
-
+from quwoquan_ops.cli.lib import app_readiness_facts
+from quwoquan_ops.cli.lib.app_launch_attempt import LAUNCH_BLOCKERS, read_app_launch_attempt
 (
     preflight_json,
     flutter_exit_code,
@@ -2757,13 +2757,6 @@ if not isinstance(runtime_package, dict):
     raise SystemExit(
         "APP.LAUNCH.receipt_invalid: launcher handoff runtime package is missing"
     )
-canonical_attempt = json.dumps(
-    receipt,
-    ensure_ascii=False,
-    sort_keys=True,
-    separators=(",", ":"),
-).encode("utf-8")
-launch_attempt_digest = "sha256:" + hashlib.sha256(canonical_attempt).hexdigest()
 projection_evidence = {}
 if source_projection_evidence_ref:
     projection_evidence = json.loads(
@@ -2916,8 +2909,8 @@ report = {
     "sourceTreeDigest": runtime_package.get("sourceTreeDigest"),
     "launchAttemptId": receipt.get("attemptId"),
     "launchAttemptRef": launch_receipt_path,
-    "launchAttemptDigest": launch_attempt_digest,
     "artifactDigest": artifact_digest,
+    **app_readiness_facts.launch_ready_report_fields(handoff=handoff, receipt=receipt),
     **terminal_identity,
     "candidateDigest": candidate_digest,
     "candidatePackageDigest": candidate_package_digest,
@@ -2949,6 +2942,13 @@ written_report = write_app_content_launch_report(
     report_path=pathlib.Path(report_path),
 )
 print(f"[run] test_live report: {written_report['launchReportRef']}")
+if exit_code == 0:
+    try:
+        fact_path = app_readiness_facts.create_launch_ready_fact_from_report(
+            report_path=pathlib.Path(report_path)
+        )
+    except Exception:
+        raise SystemExit("[run] APP.READINESS.evidence_blocked: canonical launch completed but LaunchReadyFact could not be sealed.") from None
+    print(f"[run] LaunchReadyFact: {fact_path}")
 PY
-
 exit "$FLUTTER_RUN_EXIT_CODE"

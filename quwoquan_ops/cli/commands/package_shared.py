@@ -671,7 +671,7 @@ def _command_package_release_manifest(args: argparse.Namespace) -> dict[str, Any
     timing = _stackctl._finish_timing(started_monotonic, started_at)
     status = "ok" if not issues else _stackctl.ProbeOutcome.GATE_BLOCK.value
     details = issues or [
-        f"candidateId={manifest.get('candidateId')}",
+        f"releaseCompositionId={manifest.get('releaseCompositionId')}",
         f"artifactDigest={manifest.get('artifactDigest')}",
         "evidence="
         + ",".join(
@@ -700,7 +700,7 @@ def _command_package_release_manifest(args: argparse.Namespace) -> dict[str, Any
             "env": env_name,
             "target": target_name,
             "status": status,
-            "candidateId": manifest.get("candidateId"),
+            "releaseCompositionId": manifest.get("releaseCompositionId"),
             "artifactDigest": manifest.get("artifactDigest"),
             "issues": issues,
             **timing,

@@ -139,7 +139,7 @@ def deploy_official_distribution(
         "schema": "client-app.official-distribution.receipt",
         "artifactKind": kind,
         "artifactDigest": release_digest,
-        "candidateId": release_manifest["candidateId"],
+        "releaseCompositionId": release_manifest["releaseCompositionId"],
         **result,
     }
     receipt_bytes = _canonical_bytes(receipt)
@@ -711,7 +711,7 @@ def _receipt_digest(value: Any, label: str) -> str:
 def _release_manifest(path: Path) -> tuple[dict[str, Any], str]:
     manifest = _json_object(path, "release manifest")
     try:
-        validate_manifest(manifest, allowed_statuses={"deployable"})
+        validate_manifest(manifest, allowed_statuses={"main-admitted"})
         validate_manifest_files(path.parent, manifest)
     except ValueError as error:
         raise OfficialDistributionReleaseError(

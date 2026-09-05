@@ -310,16 +310,16 @@ class ReviewDispatchBoundedAssemblyTest(unittest.TestCase):
             ["developer", "ux"], [item["role"] for item in pageflip["reviewers"]]
         )
         self.assertEqual(
-            ["review-baseline", "app-pageflip-back-mainline"],
+            ["review-baseline", "code-health-delta", "app-pageflip-back-mainline"],
             [item["id"] for item in pageflip["evidence"]],
         )
         self.assertEqual(
-            ["python3 -B quwoquan_ops/gate/verify_review_baseline.py", "make verify-app-pageflip-back-mainline"],
+            ["python3 -B quwoquan_ops/gate/verify_review_baseline.py", "make verify-code-health-delta", "make verify-app-pageflip-back-mainline"],
             [item["command"] for item in pageflip["evidence"]],
         )
         self.assertEqual(
             ["pageflip-backward-static", "pageflip-backward-tests"],
-            pageflip["evidence"][1]["covers"],
+            pageflip["evidence"][2]["covers"],
         )
 
         python_gate = _plan(
@@ -332,7 +332,7 @@ class ReviewDispatchBoundedAssemblyTest(unittest.TestCase):
             [item["role"] for item in python_gate["reviewers"]],
         )
         self.assertEqual(
-            ["review-baseline", "portal-test", "portal-build"],
+            ["review-baseline", "code-health-delta", "portal-test", "portal-build"],
             [item["id"] for item in python_gate["evidence"]],
         )
         self.assertNotIn(
@@ -347,7 +347,10 @@ class ReviewDispatchBoundedAssemblyTest(unittest.TestCase):
         # GWT-003.t2
         ordinary = _plan("dev", "POST", ["README.md"])
         self.assertEqual(["developer"], [item["role"] for item in ordinary["reviewers"]])
-        self.assertEqual(["review-baseline"], [item["id"] for item in ordinary["evidence"]])
+        self.assertEqual(
+            ["review-baseline", "code-health-delta"],
+            [item["id"] for item in ordinary["evidence"]],
+        )
         for workflow in ("explore", "plan-next", "continue", "review", "commit"):
             with self.subTest(workflow=workflow):
                 plan = _plan(workflow, "POST", ["README.md"])
@@ -405,7 +408,7 @@ class ReviewDispatchBoundedAssemblyTest(unittest.TestCase):
                 )
                 self.assertEqual("gate", plan["reviewers"][1]["profile"])
                 self.assertEqual(
-                    ["review-baseline", "portal-test", "portal-build"],
+                    ["review-baseline", "code-health-delta", "portal-test", "portal-build"],
                     [item["id"] for item in plan["evidence"]],
                 )
                 self.assertLessEqual(len(plan["reviewers"]), 2)
@@ -539,7 +542,7 @@ class ReviewDispatchBoundedAssemblyTest(unittest.TestCase):
             deliverable="code",
             scope="",
             owner_identity={"ref": None, "canonical_bytes_sha256": None, "target": "", "scope": "", "resolved_owner": "", "fingerprint_ref": None, "fingerprint_digest": None},
-            candidate_evidence_identity={"ref": None, "canonical_bytes_sha256": None, "owner_identity_ref": None, "target": "", "resolved_owner": "", "fingerprint_ref": None, "fingerprint_digest": None, "impact_plan_ref": None, "impact_plan_digest": None},
+            candidate_evidence_identity={"ref": None, "canonical_bytes_sha256": None, "schema_version": None, "owner_identity_ref": None, "delivery_owner": None, "lead_lane": None, "delivery_policy_digests": None, "target": "", "resolved_owner": "", "impacted_owner_groups_digest": None, "changed_paths_digest": None, "workspace_digests": None, "fingerprint_ref": None, "fingerprint_digest": None, "impact_plan_ref": None, "impact_plan_digest": None},
             terminal={"status": "READY", "codes": [], "failed_evidence": []},
             changed_paths=["README.md"],
             profiles=[],
@@ -552,7 +555,7 @@ class ReviewDispatchBoundedAssemblyTest(unittest.TestCase):
             deliverable="code",
             scope="",
             owner_identity={"ref": None, "canonical_bytes_sha256": None, "target": "", "scope": "", "resolved_owner": "", "fingerprint_ref": None, "fingerprint_digest": None},
-            candidate_evidence_identity={"ref": None, "canonical_bytes_sha256": None, "owner_identity_ref": None, "target": "", "resolved_owner": "", "fingerprint_ref": None, "fingerprint_digest": None, "impact_plan_ref": None, "impact_plan_digest": None},
+            candidate_evidence_identity={"ref": None, "canonical_bytes_sha256": None, "schema_version": None, "owner_identity_ref": None, "delivery_owner": None, "lead_lane": None, "delivery_policy_digests": None, "target": "", "resolved_owner": "", "impacted_owner_groups_digest": None, "changed_paths_digest": None, "workspace_digests": None, "fingerprint_ref": None, "fingerprint_digest": None, "impact_plan_ref": None, "impact_plan_digest": None},
             terminal={"status": "READY", "codes": [], "failed_evidence": []},
             changed_paths=["README.md"],
             profiles=[],

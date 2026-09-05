@@ -67,6 +67,7 @@ def _device_uat_bindings(
     ios_simulator_device: str,
     android_emulator_device: str,
     android_physical_device: str,
+    ios_physical_device: str = "",
 ) -> tuple[tuple[str, str, str], ...]:
     if device_profile not in DEVICE_PROFILES:
         raise ValueError(
@@ -77,9 +78,10 @@ def _device_uat_bindings(
         ("androidEmulatorUAT", "android", android_emulator_device),
     ]
     if device_profile == DEVICE_PROFILE_FULL:
-        bindings.append(
-            ("androidPhysicalUAT", "android", android_physical_device)
-        )
+        bindings.extend((
+            ("androidPhysicalUAT", "android", android_physical_device),
+            ("iosPhysicalUAT", "ios-physical", ios_physical_device),
+        ))
     return tuple(bindings)
 
 
@@ -89,6 +91,7 @@ def _device_binding_errors(
     ios_simulator_device: str,
     android_emulator_device: str,
     android_physical_device: str,
+    ios_physical_device: str = "",
 ) -> list[str]:
     """Reject absent or misclassified device bindings before mutating runtimes."""
 
@@ -99,6 +102,7 @@ def _device_binding_errors(
             ios_simulator_device=ios_simulator_device,
             android_emulator_device=android_emulator_device,
             android_physical_device=android_physical_device,
+            ios_physical_device=ios_physical_device,
         )
     except ValueError as exc:
         return [str(exc)]
@@ -106,6 +110,7 @@ def _device_binding_errors(
         "iosSimulatorUAT": "iOS Simulator",
         "androidEmulatorUAT": "Android Emulator",
         "androidPhysicalUAT": "Android physical device",
+        "iosPhysicalUAT": "iOS physical device",
     }
     bindings = {
         labels[key]: device_id.strip()
@@ -150,6 +155,20 @@ def _device_binding_errors(
         errors.append("configured iOS Simulator is not available")
 
     for key, platform, device_id in uat_bindings:
+        if platform == "ios-physical":
+            try:
+                physical = subprocess.run(
+                    ["xcrun", "devicectl", "list", "devices", "--json-output", "/dev/stdout"],
+                    text=True, capture_output=True, check=False,
+                )
+                physical_payload = json.loads(physical.stdout)
+            except (OSError, json.JSONDecodeError):
+                errors.append("xcrun devicectl physical inventory is unavailable")
+                continue
+            serialized = json.dumps(physical_payload, ensure_ascii=False)
+            if physical.returncode != 0 or device_id not in serialized:
+                errors.append("configured iOS physical device is not connected")
+            continue
         if platform != "android":
             continue
         label = labels[key]

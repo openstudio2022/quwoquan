@@ -61,28 +61,68 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 1
     permissions:
+      actions: read
       contents: read
     outputs:
       applicability: ${{ steps.authority.outputs.applicability }}
       decision: ${{ steps.authority.outputs.decision }}
+      authority_digest: ${{ steps.authority.outputs.authority_digest }}
     steps:
-      - id: authority
-        name: Fail fast until hosted branch authority is available
+      - id: authority_inputs
+        name: Require dedicated read-only GitHub App authority
         env:
           EVENT_NAME: ${{ github.event_name }}
           DRY_RUN: ${{ github.event.inputs.dry_run || 'true' }}
+          AUTHORITY_APP_ID: ${{ vars.HOSTED_RELEASE_AUTHORITY_APP_ID }}
+          AUTHORITY_PRIVATE_KEY: ${{ secrets.HOSTED_RELEASE_AUTHORITY_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          FORMAL=false
+          if [[ "$EVENT_NAME" == "workflow_dispatch" && "$DRY_RUN" != "true" ]]; then FORMAL=true; fi
+          if [[ "$FORMAL" == "true" && ( -z "$AUTHORITY_APP_ID" || -z "$AUTHORITY_PRIVATE_KEY" ) ]]; then
+            echo "::error::OPS.BRANCH.AUTHORITY_UNAVAILABLE: terminal=blocked; formal Prod requires the dedicated read-only GitHub App authority; recovery=restore_git_authority_then_retry"
+            exit 2
+          fi
+          echo "formal=$FORMAL" >> "$GITHUB_OUTPUT"
+      - id: authority_token
+        name: Mint repository-scoped Hosted authority token
+        if: ${{ steps.authority_inputs.outputs.formal == 'true' }}
+        uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349
+        with:
+          app-id: ${{ vars.HOSTED_RELEASE_AUTHORITY_APP_ID }}
+          private-key: ${{ secrets.HOSTED_RELEASE_AUTHORITY_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+          permission-actions: read
+          permission-administration: read
+          permission-contents: read
+          permission-vulnerability-alerts: read
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          ref: ${{ github.event.inputs.source_sha || github.sha }}
+          persist-credentials: false
+      - id: authority
+        name: Read back formal Prod hosted authority
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          DRY_RUN: ${{ github.event.inputs.dry_run || 'true' }}
+          HOSTED_AUTHORITY_TOKEN: ${{ steps.authority_token.outputs.token }}
         run: |
           set -euo pipefail
           if [[ "$EVENT_NAME" != "workflow_dispatch" || "$DRY_RUN" == "true" ]]; then
-            echo "applicability=not_applicable" >> "$GITHUB_OUTPUT"
-            echo "decision=pass" >> "$GITHUB_OUTPUT"
+            {
+              echo "applicability=not_applicable"
+              echo "decision=pass"
+              echo "authority_digest="
+            } >> "$GITHUB_OUTPUT"
             echo "Formal Prod authority preflight: applicability=not_applicable decision=pass"
             exit 0
           fi
-          echo "applicability=required" >> "$GITHUB_OUTPUT"
-          echo "decision=blocked" >> "$GITHUB_OUTPUT"
-          echo "::error::OPS.BRANCH.AUTHORITY_UNAVAILABLE: terminal=blocked; formal Prod requires hosted branch protection/ruleset authority readback; recovery=restore_git_authority_then_retry"
-          exit 2
+          python3 quwoquan_ops/ci/verify_hosted_release_authority.py \
+            --repository "${{ github.repository }}" \
+            --token-env HOSTED_AUTHORITY_TOKEN \
+            --output "$RUNNER_TEMP/hosted-release-authority.json" \
+            --github-output "$GITHUB_OUTPUT"
 
   source_context:
     name: Resolve exact mainline source
@@ -97,6 +137,10 @@ jobs:
     outputs:
       source_git_sha: ${{ steps.source.outputs.source_git_sha }}
       base_sha: ${{ steps.source.outputs.base_sha }}
+      source_tree_digest: ${{ steps.source.outputs.source_tree_digest }}
+      promotion_receipt_ref: ${{ steps.promotion_receipt.outputs.ref }}
+      promotion_receipt_digest: ${{ steps.promotion_receipt.outputs.digest }}
+      promotion_head_oid: ${{ steps.promotion_receipt.outputs.promotion_head_oid }}
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
@@ -127,9 +171,13 @@ jobs:
             echo "::error::GATE_BLOCK: diff base must be an exact Git SHA"
             exit 2
           fi
-          echo "source_git_sha=$SOURCE_SHA" >> "$GITHUB_OUTPUT"
-          echo "base_sha=$BASE_SHA" >> "$GITHUB_OUTPUT"
-      - name: Admit the unique reviewed dev1.0 to main promotion
+          {
+            echo "source_git_sha=$SOURCE_SHA"
+            echo "base_sha=$BASE_SHA"
+            echo "source_tree_digest=sha1:$(git rev-parse "${SOURCE_SHA}^{tree}")"
+          } >> "$GITHUB_OUTPUT"
+      - id: promotion_admission
+        name: Admit the unique reviewed dev1.0 to main promotion
         env:
           GITHUB_TOKEN: ${{ github.token }}
           SOURCE_SHA: ${{ steps.source.outputs.source_git_sha }}
@@ -156,6 +204,20 @@ jobs:
               raise SystemExit(
                   f"OPS.BRANCH.POLICY_INVALID: early promotion admission drift: {observed}"
               )
+          PY
+      - id: promotion_receipt
+        name: Bind exact promotion receipt bytes
+        run: |
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import hashlib
+          from pathlib import Path
+          path = Path("${{ runner.temp }}/source-promotion-admission.json")
+          raw = path.read_bytes()
+          import json
+          payload = json.loads(raw)
+          print(f"ref={path}")
+          print(f"digest=sha256:{hashlib.sha256(raw).hexdigest()}")
+          print(f"promotion_head_oid={payload['promotionHeadOid']}")
           PY
 
   service_pipeline:
@@ -469,13 +531,13 @@ jobs:
               (Path(os.environ["QWQ_OUTPUT_ROOT"]) / "env/repo/local/ci-packages/process/service/release-evidence-manifest/manifest.json").read_text(encoding="utf-8")
           )
           digest = re.compile(r"sha256:[0-9a-f]{64}")
-          candidate = str(manifest.get("candidateId") or "")
+          candidate = str(manifest.get("releaseCompositionId") or "")
           artifact = str(manifest.get("artifactDigest") or "")
           source = manifest.get("source") or {}
-          if manifest.get("status") != "candidate-ready":
-              raise SystemExit("GATE_BLOCK: whole-candidate evidence did not seal candidate-ready")
+          if manifest.get("status") != "qualified":
+              raise SystemExit("GATE_BLOCK: whole-candidate evidence did not reach qualified")
           if digest.fullmatch(candidate) is None or digest.fullmatch(artifact) is None:
-              raise SystemExit("GATE_BLOCK: candidateId/artifactDigest are not immutable")
+              raise SystemExit("GATE_BLOCK: releaseCompositionId/artifactDigest are not immutable")
           if source.get("workflowRunId") != os.environ["EXPECTED_WORKFLOW_RUN_ID"]:
               raise SystemExit("GATE_BLOCK: sealed candidate workflowRunId drift")
           if source.get("gitSha") != os.environ["EXPECTED_SOURCE_SHA"]:
@@ -483,6 +545,18 @@ jobs:
           print(f"candidate_digest={candidate}")
           print(f"artifact_digest={artifact}")
           PY
+      - id: main_tree_seal
+        name: Seal qualified synthetic tree to exact main tree
+        run: |
+          ROOT="$QWQ_OUTPUT_ROOT/env/repo/local/ci-packages/process/service/release-evidence-manifest"
+          python3 quwoquan_ops/ci/main_tree_seal.py \
+            --manifest "$ROOT/manifest.json" \
+            --synthetic-tree-digest "${{ needs.source_context.outputs.source_tree_digest }}" \
+            --main-merge-sha "${{ needs.source_context.outputs.source_git_sha }}" \
+            --main-tree-digest "sha1:$(git rev-parse '${{ needs.source_context.outputs.source_git_sha }}^{tree}')" \
+            --promotion-receipt-ref "${{ needs.source_context.outputs.promotion_receipt_ref }}" \
+            --promotion-receipt-digest "${{ needs.source_context.outputs.promotion_receipt_digest }}" \
+            --output "$ROOT/main-tree-seal.json"
       - name: Setup Buildx for immutable candidate publication
         uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
         with:
@@ -541,19 +615,6 @@ jobs:
             --release-manifest "$QWQ_OUTPUT_ROOT/env/repo/local/ci-packages/process/service/release-evidence-manifest/manifest.json" \
             --minimum-approvals 1 \
             --output "$QWQ_OUTPUT_ROOT/env/repo/local/ci-packages/process/service/release-evidence-manifest/governance-receipt.json"
-      - name: Materialize hosted service-plane SSH credential
-        env:
-          KEY_MATERIAL: ${{ secrets.PROD_SERVICE_SSH_KEY }}
-        run: |
-          set -euo pipefail
-          if [[ -z "$KEY_MATERIAL" || "$KEY_MATERIAL" != *"PRIVATE KEY"* ]]; then
-            echo "::error::GATE_BLOCK: PROD_SERVICE_SSH_KEY is missing or is not private-key material"
-            exit 2
-          fi
-          KEY_FILE="$RUNNER_TEMP/prod-service-ssh-key"
-          (umask 077 && printf '%s\n' "$KEY_MATERIAL" > "$KEY_FILE")
-          chmod 600 "$KEY_FILE"
-          echo "PROD_SERVICE_SSH_KEY_FILE=$KEY_FILE" >> "$GITHUB_ENV"
       - name: Resolve rollout inputs
         id: inputs
         run: |
@@ -571,7 +632,7 @@ jobs:
           from pathlib import Path
           manifest_path = Path(os.environ["QWQ_OUTPUT_ROOT"]) / "env/repo/local/ci-packages/process/service/release-evidence-manifest/manifest.json"
           manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-          candidate = str(manifest["candidateId"])
+          candidate = str(manifest["releaseCompositionId"])
           print(candidate)
           PY
           )"
@@ -652,6 +713,7 @@ jobs:
       packages: write
     uses: ./.github/workflows/delivery-gate.yml
     with:
+      release_call: true
       checkout_ref: ${{ needs.source_context.outputs.source_git_sha }}
       base_sha: ${{ needs.source_context.outputs.base_sha }}
       head_sha: ${{ needs.source_context.outputs.source_git_sha }}
@@ -899,7 +961,7 @@ jobs:
   gamma_local:
     name: Gamma-local release-fast stage
     needs: [formal_prod_authority_preflight, prepare, delivery_gate]
-    runs-on: [self-hosted, macOS, ARM64]
+    runs-on: [self-hosted, macOS, ARM64, quwoquan-release-authority]
     timeout-minutes: 8
     permissions:
       contents: read
@@ -1127,10 +1189,10 @@ jobs:
           manifest = json.loads(
               (Path(os.environ["QWQ_OUTPUT_ROOT"]) / "env/repo/local/mainline-preprod/process/release-evidence-manifest/manifest.json").read_text(encoding="utf-8")
           )
-          candidate = str(manifest.get("candidateId") or "")
+          candidate = str(manifest.get("releaseCompositionId") or "")
           artifact = str(manifest.get("artifactDigest") or "")
           if candidate != os.environ["EXPECTED_CANDIDATE"]:
-              raise SystemExit("GATE_BLOCK: candidateId changed while appending environment receipts")
+              raise SystemExit("GATE_BLOCK: releaseCompositionId changed while appending environment receipts")
           if set(manifest.get("environmentReceipts") or {}) != {"alpha", "beta", "gamma"}:
               raise SystemExit("GATE_BLOCK: pre-Prod environment receipt set is incomplete")
           if re.fullmatch(r"sha256:[0-9a-f]{64}", artifact) is None:
@@ -1170,7 +1232,7 @@ jobs:
       - beta_device_matrix
       - gamma_local
       - preprod_evidence
-    runs-on: [self-hosted, macOS, ARM64]
+    runs-on: [self-hosted, macOS, ARM64, quwoquan-release-authority]
     environment:
       name: ${{ needs.prepare.outputs.dry_run != 'true' && 'production' || 'release-validation' }}
     timeout-minutes: 30
@@ -1200,11 +1262,29 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
           ref: ${{ needs.prepare.outputs.checkout_ref }}
+      - id: authority_token
+        name: Mint fresh Hosted authority token before mutation
+        if: ${{ needs.prepare.outputs.dry_run != 'true' }}
+        uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349
+        with:
+          app-id: ${{ vars.HOSTED_RELEASE_AUTHORITY_APP_ID }}
+          private-key: ${{ secrets.HOSTED_RELEASE_AUTHORITY_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+          permission-actions: read
+          permission-administration: read
+          permission-contents: read
+          permission-vulnerability-alerts: read
       - name: Defensively recheck formal Prod hosted authority before mutation
         if: ${{ needs.prepare.outputs.dry_run != 'true' }}
+        env:
+          HOSTED_AUTHORITY_TOKEN: ${{ steps.authority_token.outputs.token }}
         run: |
-          echo "::error::OPS.BRANCH.AUTHORITY_UNAVAILABLE: terminal=blocked; formal Prod requires hosted branch protection/ruleset authority readback before mutation; recovery=restore_git_authority_then_retry"
-          exit 2
+          python3 quwoquan_ops/ci/verify_hosted_release_authority.py \
+            --repository "${{ github.repository }}" \
+            --token-env HOSTED_AUTHORITY_TOKEN \
+            --expected-digest "${{ needs.formal_prod_authority_preflight.outputs.authority_digest }}" \
+            --output "$RUNNER_TEMP/hosted-release-authority-before-mutation.json"
       - name: Validate protected rollout promotion evidence root
         if: ${{ needs.prepare.outputs.dry_run != 'true' }}
         run: |
@@ -1671,7 +1751,7 @@ jobs:
           ledger = json.load(open(sys.argv[1], encoding="utf-8"))
           manifest = json.load(open(sys.argv[2], encoding="utf-8"))
           state = ledger.get("state") or {}
-          candidate = manifest.get("candidateId")
+          candidate = manifest.get("releaseCompositionId")
           artifact = manifest.get("artifactDigest")
           source = sys.argv[3]
           decision = state.get("decision")
@@ -1818,8 +1898,7 @@ jobs:
     name: Prod hosted soak authority
     needs: [formal_prod_authority_preflight, prepare, prod_rollout]
     if: ${{ needs.prepare.outputs.dry_run != 'true' && needs.prod_rollout.result == 'success' && needs.prod_rollout.outputs.release_status == 'released' }}
-    runs-on: [self-hosted, macOS, ARM64]
-    environment: production
+    runs-on: [self-hosted, macOS, ARM64, quwoquan-release-authority]
     timeout-minutes: 1500
     permissions:
       contents: read

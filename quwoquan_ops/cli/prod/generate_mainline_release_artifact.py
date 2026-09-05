@@ -133,7 +133,7 @@ def write_summary(path: Path, manifest: dict[str, Any]) -> None:
         "## Release Evidence Manifest",
         "",
         f"- `releaseTrainId`: `{manifest['releaseTrainId']}`",
-        f"- `candidateId`: `{manifest['candidateId']}`",
+        f"- `releaseCompositionId`: `{manifest['releaseCompositionId']}`",
         f"- `artifactDigest`: `{manifest['artifactDigest']}`",
         "- `status`: `build-input`（全部不可变摘要与证据收齐后才可部署）",
         "",
@@ -224,7 +224,7 @@ def main() -> int:
         {
             "schema": SCHEMA,
             "releaseTrainId": None,
-            "candidateId": None,
+            "releaseCompositionId": None,
             "status": "build-input",
             "generatedAt": utc_now(),
             "source": {
@@ -235,6 +235,7 @@ def main() -> int:
                 "sourceArchiveDigest": None,
             },
             "artifactDigest": None,
+            "evidenceSetDigest": None,
             "environmentArtifacts": environment_artifacts,
             "applicationPackages": {},
             "publicWeb": None,

@@ -10,7 +10,7 @@ on:
         description: Exact reviewed main commit SHA
         required: true
       release_evidence_ref:
-        description: Exact deployable ReleaseEvidenceManifest OCI ref
+        description: Exact main-admitted ReleaseEvidenceManifest OCI ref
         required: true
 
 concurrency:
@@ -26,7 +26,7 @@ env:
 jobs:
   prod_sim_admission:
     name: Non-promotable prod-sim first-party prevalidation
-    runs-on: [self-hosted, macOS, ARM64]
+    runs-on: [self-hosted, macOS, ARM64, quwoquan-release-authority]
     environment: prod-sim-admission
     timeout-minutes: 30
     permissions:
@@ -71,7 +71,7 @@ jobs:
           cache-binary: false
           clean: false
       - id: candidate
-        name: Verify deployable manifest, OIDC and artifact closure
+        name: Verify main-admitted manifest, OIDC and artifact closure
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -80,7 +80,7 @@ jobs:
           python3 quwoquan_ops/ci/consume_released_release_evidence.py \
             --ref "${{ inputs.release_evidence_ref }}" \
             --repository "${{ github.repository }}" \
-            --require-status deployable \
+            --require-status main-admitted \
             --expected-source-sha "${{ inputs.source_sha }}" \
             --output-dir "$ROOT" \
             --github-output "$GITHUB_OUTPUT"

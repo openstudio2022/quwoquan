@@ -65,7 +65,7 @@
 .PHONY: verify-local-port-manifest
 .PHONY: verify-public-vs-upstream-url-contract
 .PHONY: verify-domain-governance
-.PHONY: verify-python-script-governance verify-service-probe-homology
+.PHONY: verify-python-script-governance verify-code-health-delta test-code-health-delta calibrate-code-health report-code-health-weekly verify-service-probe-homology
 .PHONY: verify-vertical-architecture-ratchet
 .PHONY: test-vertical-architecture-ratchet-local-contract
 .PHONY: sync-page-object-source-paths verify-page-object-source-paths
@@ -492,6 +492,19 @@ verify-domain-governance:
 
 verify-python-script-governance:
 	@PYTHONDONTWRITEBYTECODE=1 python3 quwoquan_ops/gate/verify_python_script_governance.py --scope all --mode check
+
+verify-code-health-delta:
+	@PYTHONDONTWRITEBYTECODE=1 python3 -B quwoquan_ops/gate/verify_incremental_code_health.py --base HEAD --head HEAD --working-tree --mode full
+
+test-code-health-delta:
+	@$(PYTEST_RUNNER) $(PYTEST_INTERPRETER_FLAGS) -m pytest $(PYTEST_FLAGS) -p no:cacheprovider quwoquan_ops/tests/local_contract/gate/test_incremental_code_health__gate__local_contract_test.py quwoquan_ops/tests/local_contract/gate/test_code_health_calibration__gate__local_contract_test.py quwoquan_ops/tests/local_contract/gate/test_code_health_weekly__gate__local_contract_test.py quwoquan_ops/tests/local_contract/ci/test_code_health_delivery__local_contract_test.py -q
+
+calibrate-code-health:
+	@test -n "$(SAMPLES)" || (echo "usage: make calibrate-code-health SAMPLES='--sample <pr>=<merge-sha> ...'" >&2; exit 2)
+	@PYTHONDONTWRITEBYTECODE=1 python3 -B quwoquan_ops/gate/run_code_health_calibration.py $(SAMPLES)
+
+report-code-health-weekly:
+	@PYTHONDONTWRITEBYTECODE=1 python3 -B quwoquan_ops/gate/report_code_health_weekly.py
 
 # 服务端就绪路由与 deploy readinessProbe 同源：探针错配会让依赖断裂报绿。
 verify-service-probe-homology:
@@ -977,10 +990,6 @@ review-run-evidence:
 produce-handoff-manifest:
 	@python3 quwoquan_ops/cli/handoff_manifest.py $(ARGS)
 
-# Promotion PR 只读验签同 SHA push-owned App 证据；ARGS 传入 repository/head/run/timing。
-verify-delivery-app-evidence:
-	@python3 -B quwoquan_ops/ci/verify_delivery_app_evidence.py $(ARGS)
-
 # 资产垃圾回收报告（僵尸 reference / harness 分叉 / AGENTS.md 与特性树重复正文），
 # 报告型不阻断，落 .qwq_output/env/repo/runs/asset-gc/report.md。
 asset-gc-report:
@@ -1215,7 +1224,7 @@ feature-context:
 
 feature-candidate-evidence:
 	@test -n "$(OWNER_IDENTITY)" || { echo "IDENTITY.MIGRATION_REQUIRED: 请设置 OWNER_IDENTITY=<content-addressed-ref>"; exit 2; }
-	@test -n "$(CHANGED_PATHS)" || { echo "CANDIDATE.SPLIT_REQUIRED: 请设置 CHANGED_PATHS='path1 path2'"; exit 2; }
+	@test -n "$(CHANGED_PATHS)" || { echo "CANDIDATE.EMPTY_CHANGED_PATHS: 请设置 CHANGED_PATHS='path1 path2'"; exit 2; }
 	@PYTHONDONTWRITEBYTECODE=1 python3 quwoquan_ops/cli/feature_tree.py candidate-evidence --owner-identity "$(OWNER_IDENTITY)" $(foreach path,$(CHANGED_PATHS),--changed-path "$(path)")
 
 feature-tree-overview:

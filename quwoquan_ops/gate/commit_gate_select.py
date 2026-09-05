@@ -204,8 +204,18 @@ def classify(paths: list[str]) -> dict[str, bool]:
     return flags
 
 
-def static_checks(flags: dict[str, bool]) -> list[str]:
+def static_checks(flags: dict[str, bool], paths: list[str] | None = None) -> list[str]:
     checks = ["branch_policy", "entrypoint_script_paths"]
+    source_changed = (
+        any(
+            path.startswith(("quwoquan_app/", "quwoquan_service/", "quwoquan_data/", "quwoquan_ops/"))
+            for path in paths
+        )
+        if paths is not None
+        else any(flags[f"has_{scope}"] for scope in ("app", "service", "data", "portal"))
+    )
+    if source_changed:
+        checks.append("code_health_delta_fast")
     if flags["has_specs"]:
         checks.append("feature_tree")
     for scope in ("app", "service", "ops", "data"):
@@ -346,6 +356,20 @@ def _select_pytest_targets(paths: list[str]) -> dict[str, object]:
                 "test_commit_gate_fast_path__local_contract_test.py",
                 "quwoquan_ops/tests/local_contract/gate/"
                 "test_process_group_deadline__local_contract_test.py",
+            ),
+        ),
+        (
+            "quwoquan_ops/gate/code_health_delta/",
+            (
+                "quwoquan_ops/tests/local_contract/gate/"
+                "test_incremental_code_health__gate__local_contract_test.py",
+            ),
+        ),
+        (
+            "quwoquan_ops/gate/verify_incremental_code_health.py",
+            (
+                "quwoquan_ops/tests/local_contract/gate/"
+                "test_incremental_code_health__gate__local_contract_test.py",
             ),
         ),
         (
@@ -638,7 +662,7 @@ def build_plan(paths: list[str], cap: int) -> dict:
     return {
         "changed_files": paths,
         "flags": flags,
-        "static_checks": static_checks(flags),
+        "static_checks": static_checks(flags, paths),
         "flutter_tests": flutter_tests,
         "deferred_to_ci": combined_deferred,
         "flutter_cap": cap,

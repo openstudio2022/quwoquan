@@ -1,0 +1,26 @@
+{
+  "quarantine": {
+    "maximumDays": 7,
+    "promotionCriticalAllowed": false,
+    "requiredFields": [
+      "testId",
+      "owner",
+      "classification",
+      "openedAt",
+      "expiresAt",
+      "trackingIssue"
+    ]
+  },
+  "quarantinedTests": [],
+  "retry": {
+    "allowedClassifications": [
+      "infra",
+      "transport",
+      "device_bridge"
+    ],
+    "deterministicFailureRetryForbidden": true,
+    "maximumFreshRetries": 1
+  },
+  "schema": "flaky-test-policy",
+  "schemaVersion": 1
+}

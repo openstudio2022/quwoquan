@@ -31,7 +31,7 @@ from quwoquan_ops.cli.prod.finalize_mainline_release_artifact import (
 )
 from quwoquan_ops.cli.prod.finalize_mainline_release_artifact_lib.canonical_digests import (
     _canonical_json_bytes,
-    canonical_candidate_digest,
+    canonical_release_composition_id,
     canonical_manifest_digest,
 )
 
@@ -436,8 +436,8 @@ def _validate_receipt_descriptor(
         allowed_statuses = {"passed"}
     if descriptor.get("status") not in allowed_statuses:
         raise ValueError(f"{kind} receipt status is invalid")
-    if descriptor.get("candidateId") != manifest.get("candidateId"):
-        raise ValueError(f"{kind} receipt candidateId mismatch")
+    if descriptor.get("releaseCompositionId") != manifest.get("releaseCompositionId"):
+        raise ValueError(f"{kind} receipt releaseCompositionId mismatch")
     source = manifest["source"]
     if descriptor.get("sourceGitSha") != source["gitSha"]:
         raise ValueError(f"{kind} receipt source git mismatch")
@@ -498,10 +498,10 @@ def _derive_status(manifest: dict[str, Any]) -> str:
         for artifact in artifacts.values()
         for descriptor in artifact["images"].values()
     )
-    candidate_complete = manifest.get("candidateId") is not None
+    composition_complete = manifest.get("releaseCompositionId") is not None
     if not immutable_images:
         return "build-input"
-    if not candidate_complete:
+    if not composition_complete:
         return "component-ready"
 
     environments = set(manifest["environmentReceipts"])
@@ -524,8 +524,10 @@ def _derive_status(manifest: dict[str, Any]) -> str:
                 return terminal
         raise ValueError("production receipts are incomplete or out of lifecycle order")
     if preprod_ready and rollback_status == "ready":
-        return "deployable"
-    return "candidate-ready"
+        return "main-admitted"
+    if manifest.get("evidenceSetDigest") is not None:
+        return "qualified"
+    return "artifact-complete"
 
 
 def _expected_gaps(manifest: dict[str, Any], status: str) -> tuple[list[str], list[str]]:
@@ -578,10 +580,12 @@ def _expected_gaps(manifest: dict[str, Any], status: str) -> tuple[list[str], li
         blockers = ["candidate-rolled-back"]
     elif status == "rollback-failed":
         blockers = ["rollback-recovery-failed"]
-    elif status == "deployable":
+    elif status == "main-admitted":
         blockers = ["prod-release-evidence-pending"]
-    elif status == "candidate-ready":
-        blockers = ["environment-qualification-evidence-pending"]
+    elif status == "qualified":
+        blockers = ["main-admission-evidence-pending"]
+    elif status == "artifact-complete":
+        blockers = ["qualification-evidence-pending"]
     elif status == "component-ready":
         blockers = ["whole-application-evidence-pending"]
     else:
@@ -708,13 +712,20 @@ def validate_manifest(
     if blockers != expected_blockers or missing_evidence != expected_missing:
         raise ValueError("release evidence blockers or missingEvidence do not match lifecycle")
 
-    expected_candidate: str | None
+    expected_composition: str | None
     try:
-        expected_candidate = canonical_candidate_digest(manifest)
+        expected_composition = canonical_release_composition_id(manifest)
     except ValueError:
-        expected_candidate = None
-    if manifest.get("candidateId") != expected_candidate:
-        raise ValueError("release evidence candidate digest mismatch")
+        expected_composition = None
+    if manifest.get("releaseCompositionId") != expected_composition:
+        raise ValueError("release evidence composition digest mismatch")
+    from quwoquan_ops.cli.prod.finalize_mainline_release_artifact_lib.canonical_digests import canonical_evidence_set_digest
+    try:
+        expected_evidence_set = canonical_evidence_set_digest(manifest)
+    except ValueError:
+        expected_evidence_set = None
+    if manifest.get("evidenceSetDigest") != expected_evidence_set:
+        raise ValueError("release evidence set digest mismatch")
     digest = canonical_manifest_digest(manifest)
     if manifest.get("artifactDigest") != digest:
         raise ValueError("release evidence manifest digest mismatch")

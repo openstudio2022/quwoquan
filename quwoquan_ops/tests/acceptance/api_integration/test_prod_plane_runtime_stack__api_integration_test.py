@@ -92,7 +92,7 @@ class ProdPlaneRuntimeStackTest(unittest.TestCase):
                             "manifest": str(artifact_manifest),
                             "evidenceFileDigest": digest(artifact_manifest),
                             "artifactDigest": ARTIFACT_DIGEST,
-                            "candidateId": CANDIDATE_DIGEST,
+                            "releaseCompositionId": CANDIDATE_DIGEST,
                             "verifiedConfigDigest": config_digest,
                         },
                     }

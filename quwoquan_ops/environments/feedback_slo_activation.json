@@ -1,0 +1,10 @@
+{
+  "activationRule": "hard enforcement is legal only after at least 20 unique complete clean-run evidence refs",
+  "cleanRunEvidenceRefs": [],
+  "gate": "03.delivery_gate",
+  "minimumCleanRuns": 20,
+  "observedCleanRuns": 0,
+  "schema": "feedback-slo-activation",
+  "schemaVersion": 1,
+  "state": "learning"
+}

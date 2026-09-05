@@ -1,11 +1,11 @@
-"""Candidate evidence producer/consumer for POST workspace identity."""
+"""Candidate evidence v2 producer/consumer for one atomic delivery identity."""
 from __future__ import annotations
 
 import hashlib
 import json
 import re
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 from .agent_governance_contract import (
     contract_schema_version, declared_object, validate_candidate_evidence_manifest,
@@ -24,9 +24,11 @@ from .feature_context_fingerprint import (
 
 CANDIDATE_GENERATOR_PATH = "quwoquan_ops/cli/lib/candidate_evidence.py"
 IMPACT_PLAN_SOURCE = "quwoquan_ops/ci/local_readiness_planner.py"
+BRANCH_POLICY_PATH = "quwoquan_ops/policies/branch_policy.yaml"
+LANE_OWNERSHIP_PATH = "quwoquan_ops/policies/lane_ownership.yaml"
 _REF_RE = re.compile(r"^\.qwq_output/env/repo/runs/feature-tree/by-fingerprint/candidates/by-fingerprint/[0-9a-f]{64}\.json$")
 _OWNER_PARTS = (".qwq_output", "env", "repo", "runs", "feature-tree", "by-fingerprint")
-_CANDIDATE_PARTS = (".qwq_output", "env", "repo", "runs", "feature-tree", "by-fingerprint", "candidates", "by-fingerprint")
+_CANDIDATE_PARTS = (*_OWNER_PARTS, "candidates", "by-fingerprint")
 
 
 class CandidateEvidenceError(ValueError):
@@ -77,6 +79,7 @@ def _current_owner(
     from .feature_tree import context as tree_context
     from .feature_tree.nodes import discover_nodes, parent_chain
     from .feature_tree.ownership import resolve_target_details
+
     old_root, old_tree = tree_context.REPO_ROOT, tree_context.TREE_ROOT
     try:
         tree_context.REPO_ROOT = repo_root
@@ -113,6 +116,97 @@ def _context_snapshots(current: dict[str, Any], *, repo_root: Path) -> list[dict
     return snapshots
 
 
+def _policy_digest(relative: str, *, repo_root: Path) -> str:
+    path = repo_root / relative
+    if not path.is_file() or path.is_symlink():
+        _refuse("CANDIDATE.OWNER_DRIFT", f"delivery identity policy 不可用：{relative}")
+    return "sha256:" + hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def _allowed_delivery_lanes(*, repo_root: Path) -> set[str]:
+    try:
+        import yaml
+        payload = yaml.safe_load((repo_root / BRANCH_POLICY_PATH).read_text(encoding="utf-8"))
+        lanes = payload["allowed_local_branches"]
+    except (OSError, UnicodeError, KeyError, TypeError, ValueError) as exc:
+        _refuse("CANDIDATE.OWNER_DRIFT", f"branch policy 无法确定 delivery lane：{exc}")
+    if not isinstance(lanes, list):
+        _refuse("CANDIDATE.OWNER_DRIFT", "branch policy allowed_local_branches 必须为列表")
+    return {item for item in lanes if isinstance(item, str) and item.startswith("lane/")}
+
+
+def _delivery_identity(*, repo_root: Path) -> tuple[str, str, dict[str, str]]:
+    import subprocess
+
+    result = subprocess.run(
+        ["git", "-C", str(repo_root), "symbolic-ref", "--quiet", "--short", "HEAD"],
+        capture_output=True, text=True, check=False,
+    )
+    branch = result.stdout.strip()
+    if result.returncode != 0 or branch not in _allowed_delivery_lanes(repo_root=repo_root):
+        _refuse("CANDIDATE.OWNER_DRIFT", f"current branch 不是版本化 policy 允许的逻辑 lane：{branch or 'detached'}")
+    policy_digests = declared_object({
+        "branch_policy_digest": _policy_digest(BRANCH_POLICY_PATH, repo_root=repo_root),
+        "lane_ownership_digest": _policy_digest(LANE_OWNERSHIP_PATH, repo_root=repo_root),
+    }, "candidate_evidence_manifest", "delivery_policy_digest_fields")
+    # 最小 v2 中一个 current logical lane 同时承担 delivery owner 与 lead lane；
+    # 不携带本机 worktree/clone inventory 或绝对路径。
+    return branch, branch, policy_digests
+
+
+def _impacted_owner_groups(paths: list[str], *, repo_root: Path) -> list[dict[str, Any]]:
+    from .feature_tree import context as tree_context
+    from .feature_tree.nodes import discover_nodes, parent_chain
+    from .feature_tree.ownership import resolve_target_details
+
+    old_root, old_tree = tree_context.REPO_ROOT, tree_context.TREE_ROOT
+    try:
+        tree_context.REPO_ROOT = repo_root
+        tree_context.TREE_ROOT = repo_root / "specs/feature-tree"
+        nodes = discover_nodes()
+        by_dir = {node.directory.resolve(): node for node in nodes}
+        groups: dict[str, dict[str, Any]] = {}
+        for path in paths:
+            try:
+                resolution = resolve_target_details(path, nodes)
+            except ValueError as exc:
+                _refuse("CANDIDATE.OWNER_RESOLUTION_FAILED", f"changed path 无唯一 owner：{path}: {exc}")
+            owner = resolution.node.rel
+            chain = [
+                {"level": item.level, "node_id": item.node_id, "path": item.rel}
+                for item in parent_chain(resolution.node, by_dir)
+            ]
+            identity = declared_object(
+                {
+                    "resolved_owner": owner,
+                    "owner_chain_digest": canonical_digest(chain),
+                },
+                "candidate_evidence_manifest", "impacted_owner_identity_fields",
+            )
+            existing = groups.get(owner)
+            if existing is None:
+                groups[owner] = {"owner_identity": identity, "paths": [path]}
+            elif existing["owner_identity"] != identity:
+                _refuse("CANDIDATE.OWNER_RESOLUTION_FAILED", f"owner identity 非确定：{owner}")
+            else:
+                existing["paths"].append(path)
+        return [
+            declared_object(groups[key], "candidate_evidence_manifest", "impacted_owner_group_fields")
+            for key in sorted(groups, key=lambda item: item.encode("utf-8"))
+        ]
+    finally:
+        tree_context.REPO_ROOT, tree_context.TREE_ROOT = old_root, old_tree
+
+
+def _changed_paths(payload: dict[str, Any]) -> list[str]:
+    """Rebuild the canonical exact path projection stored once in owner groups."""
+
+    return sorted(
+        [path for group in payload["impacted_owner_groups"] for path in group["paths"]],
+        key=lambda item: item.encode("utf-8"),
+    )
+
+
 def _impact_plan(paths: list[str], *, repo_root: Path) -> tuple[dict[str, Any], dict[str, Any]]:
     try:
         from quwoquan_ops.ci.local_readiness_planner import build_impact_plan
@@ -139,7 +233,7 @@ def _impact_plan(paths: list[str], *, repo_root: Path) -> tuple[dict[str, Any], 
 
 def build_candidate_fingerprint(payload: dict[str, Any], *, repo_root: Path, captured_by: str = "candidate_evidence") -> dict[str, Any]:
     identity = {key: payload[key] for key in payload if key != "evidence_fingerprint"}
-    changed = list(payload["changed_paths"])
+    changed = _changed_paths(payload)
     return build_evidence_fingerprint({
         "git": {
             "head_sha": canonical_digest("candidate-head-independent"),
@@ -149,12 +243,16 @@ def build_candidate_fingerprint(payload: dict[str, Any], *, repo_root: Path, cap
         "assets": {
             "canonical_assets_digest": canonical_digest(identity),
             "review_assets_digest": canonical_digest({
+                "delivery_owner": payload["delivery_owner"],
+                "lead_lane": payload["lead_lane"],
+                "delivery_policy_digests": payload["delivery_policy_digests"],
+                "impacted_owner_groups": payload["impacted_owner_groups"],
                 "context_snapshots": payload["context_snapshots"],
                 "impact_plan_identity": payload["impact_plan_identity"],
             }),
         },
         "execution": {
-            "commands_digest": canonical_digest(payload["impact_plan"].get("checks", [])),
+            "commands_digest": canonical_digest(payload["impact_plan_identity"]),
             "toolchain_digest": canonical_digest({
                 "candidate_schema": contract_schema_version("candidate_evidence_manifest"),
                 "impact_plan_schema": payload["impact_plan_identity"]["schema"],
@@ -166,46 +264,42 @@ def build_candidate_fingerprint(payload: dict[str, Any], *, repo_root: Path, cap
                 "impact_plan": IMPACT_PLAN_SOURCE,
             }),
         },
-    }, captured_at="candidate-evidence-v1", captured_by="candidate_evidence", captured_metadata={"consumer": "candidate_evidence_manifest"})
+    }, captured_at="candidate-evidence-v2", captured_by=captured_by, captured_metadata={"consumer": "candidate_evidence_manifest"})
 
 
 def build_candidate_evidence(owner_identity_ref: str, changed_paths: list[str], *, repo_root: Path) -> dict[str, Any]:
     owner_ref, owner_raw, owner = _load_owner(owner_identity_ref, repo_root=repo_root)
-    normalized = sorted({normalize_repo_relative_path(path, repo_root) for path in changed_paths}, key=lambda item: item.encode("utf-8"))
+    normalized = sorted(
+        {normalize_repo_relative_path(path, repo_root) for path in changed_paths},
+        key=lambda item: item.encode("utf-8"),
+    )
     if not normalized:
-        _refuse("CANDIDATE.SPLIT_REQUIRED", "candidate changed_paths 不得为空")
+        _refuse("CANDIDATE.EMPTY_CHANGED_PATHS", "candidate changed_paths 不得为空")
     current = _current_owner(str(owner["target"]), repo_root=repo_root, canonical_contexts=list(owner["canonical_contexts"]))
     if _owner_facts(current) != _owner_facts(owner):
         _refuse("CANDIDATE.OWNER_DRIFT", "PRE owner identity 与当前 owner 解析漂移")
-    from .feature_tree import context as tree_context
-    from .feature_tree.nodes import discover_nodes
-    from .feature_tree.ownership import resolve_target_details
-    old_root, old_tree = tree_context.REPO_ROOT, tree_context.TREE_ROOT
-    try:
-        tree_context.REPO_ROOT = repo_root
-        tree_context.TREE_ROOT = repo_root / "specs/feature-tree"
-        nodes = discover_nodes()
-        owners = []
-        for path in normalized:
-            try:
-                resolution = resolve_target_details(path, nodes)
-            except ValueError as exc:
-                _refuse("CANDIDATE.SPLIT_REQUIRED", f"changed path 无唯一 owner：{path}: {exc}")
-            owners.append(resolution.node.rel)
-    finally:
-        tree_context.REPO_ROOT, tree_context.TREE_ROOT = old_root, old_tree
-    if set(owners) != {owner["resolved_owner"]}:
-        _refuse("CANDIDATE.SPLIT_REQUIRED", f"changed_paths 跨 owner：{dict(zip(normalized, owners))}")
-    impact_plan, impact_identity = _impact_plan(normalized, repo_root=repo_root)
+    impacted_groups = _impacted_owner_groups(normalized, repo_root=repo_root)
+    impacted_owners = {item["owner_identity"]["resolved_owner"] for item in impacted_groups}
+    if owner["resolved_owner"] not in impacted_owners:
+        _refuse("CANDIDATE.OWNER_DRIFT", "primary PRE target owner 未出现在 impacted owner groups")
+    delivery_owner, lead_lane, policy_digests = _delivery_identity(repo_root=repo_root)
+    _, impact_identity = _impact_plan(normalized, repo_root=repo_root)
     payload: dict[str, Any] = {
         "schema_version": contract_schema_version("candidate_evidence_manifest"),
         "owner_identity_ref": owner_ref,
         "owner_identity_canonical_bytes_sha256": "sha256:" + hashlib.sha256(owner_raw).hexdigest(),
+        "delivery_owner": delivery_owner,
+        "lead_lane": lead_lane,
+        "delivery_policy_digests": policy_digests,
         "target": owner["target"], "resolved_owner": owner["resolved_owner"],
-        "owner_chain": owner["owner_chain"], "changed_paths": normalized,
+        # Exact paths live only in their Feature-owner group. Owner chains are
+        # current resolver facts bound by digest, rather than repeated arrays.
+        "impacted_owner_groups": impacted_groups,
         "workspace_digests": workspace_digests(normalized, repo_root=repo_root),
         "context_snapshots": _context_snapshots(current, repo_root=repo_root),
-        "impact_plan": impact_plan, "impact_plan_identity": impact_identity,
+        # Candidate 只内嵌 content-addressed ImpactPlan identity。完整 projection
+        # 可由 changed_paths + current planner 重建；重复嵌入会让大原子候选突破预算。
+        "impact_plan_identity": impact_identity,
     }
     payload["evidence_fingerprint"] = build_candidate_fingerprint(payload, repo_root=repo_root)
     validate_candidate_evidence_manifest(payload)
@@ -217,33 +311,49 @@ def validate_candidate_ref(raw_ref: str, *, repo_root: Path, expected_owner_iden
     if _REF_RE.fullmatch(relative) is None:
         _refuse("IDENTITY.MIGRATION_REQUIRED", f"candidate ref 非 canonical content-addressed path：{relative}")
     raw = _read_exact(relative, repo_root=repo_root, candidate=True)
-    if hashlib.sha256(raw).hexdigest() != Path(relative).stem or canonical_json_bytes(json.loads(raw)) != raw:
+    try:
+        decoded = json.loads(raw)
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        _refuse("IDENTITY.MIGRATION_REQUIRED", str(exc))
+    if hashlib.sha256(raw).hexdigest() != Path(relative).stem or canonical_json_bytes(decoded) != raw:
         _refuse("CANDIDATE.STALE", "candidate ref bytes/filename/canonical JSON 不一致")
     try:
-        payload = json.loads(raw)
-        if payload.get("schema_version") != contract_schema_version("candidate_evidence_manifest"):
+        payload = decoded
+        if not isinstance(payload, dict) or payload.get("schema_version") != contract_schema_version("candidate_evidence_manifest"):
             _refuse("IDENTITY.MIGRATION_REQUIRED", "candidate evidence 使用旧 schema")
         validate_candidate_evidence_manifest(payload)
     except CandidateEvidenceError:
         raise
-    except (KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
+    except (KeyError, TypeError, ValueError) as exc:
         _refuse("IDENTITY.MIGRATION_REQUIRED", str(exc))
     if expected_owner_identity_ref and payload["owner_identity_ref"] != normalize_repo_relative_path(expected_owner_identity_ref, repo_root):
         _refuse("CANDIDATE.OWNER_DRIFT", "candidate predecessor owner identity 不匹配")
+    changed = _changed_paths(payload)
     if expected_changed_paths is not None:
-        expected = sorted({normalize_repo_relative_path(path, repo_root) for path in expected_changed_paths}, key=lambda item: item.encode("utf-8"))
-        if payload["changed_paths"] != expected:
-            _refuse("CANDIDATE.STALE", "candidate changed_paths 与 Review exact changed_paths 不一致")
+        expected = sorted(
+            {normalize_repo_relative_path(path, repo_root) for path in expected_changed_paths},
+            key=lambda item: item.encode("utf-8"),
+        )
+        if changed != expected:
+            _refuse("CANDIDATE.STALE", "candidate owner groups 与 Review exact changed_paths 不一致")
     owner_ref, owner_raw, owner = _load_owner(payload["owner_identity_ref"], repo_root=repo_root)
     if payload["owner_identity_canonical_bytes_sha256"] != "sha256:" + hashlib.sha256(owner_raw).hexdigest():
         _refuse("CANDIDATE.OWNER_DRIFT", "candidate owner identity raw sha 漂移")
     current = _current_owner(str(owner["target"]), repo_root=repo_root, canonical_contexts=list(owner["canonical_contexts"]))
     if _owner_facts(current) != _owner_facts(owner):
         _refuse("CANDIDATE.OWNER_DRIFT", "candidate 当前 owner 重算漂移")
-    rebuilt = build_candidate_evidence(owner_ref, list(payload["changed_paths"]), repo_root=repo_root)
-    for field in ("target", "resolved_owner", "owner_chain", "workspace_digests", "context_snapshots", "impact_plan", "impact_plan_identity"):
+    rebuilt = build_candidate_evidence(owner_ref, changed, repo_root=repo_root)
+    owner_fields = {
+        "target", "resolved_owner", "impacted_owner_groups", "delivery_owner",
+        "lead_lane", "delivery_policy_digests",
+    }
+    for field in (
+        "delivery_owner", "lead_lane", "delivery_policy_digests", "target", "resolved_owner",
+        "impacted_owner_groups", "workspace_digests", "context_snapshots",
+        "impact_plan_identity",
+    ):
         if rebuilt[field] != payload[field]:
-            code = "CANDIDATE.OWNER_DRIFT" if field in {"target", "resolved_owner", "owner_chain"} else "CANDIDATE.STALE"
+            code = "CANDIDATE.OWNER_DRIFT" if field in owner_fields else "CANDIDATE.STALE"
             _refuse(code, f"candidate current {field} 已漂移")
     actual = validate_evidence_fingerprint(payload["evidence_fingerprint"])
     expected = build_candidate_fingerprint(payload, repo_root=repo_root, captured_by="candidate_evidence_consumer")
@@ -255,9 +365,19 @@ def validate_candidate_ref(raw_ref: str, *, repo_root: Path, expected_owner_iden
 
 def candidate_identity(ref: str, raw: bytes, payload: dict[str, Any], fingerprint: dict[str, Any]) -> dict[str, Any]:
     return declared_object({
-        "ref": ref, "canonical_bytes_sha256": "sha256:" + hashlib.sha256(raw).hexdigest(),
-        "owner_identity_ref": payload["owner_identity_ref"], "target": payload["target"],
-        "resolved_owner": payload["resolved_owner"], "fingerprint_ref": fingerprint["ref"],
+        "ref": ref,
+        "canonical_bytes_sha256": "sha256:" + hashlib.sha256(raw).hexdigest(),
+        "schema_version": payload["schema_version"],
+        "owner_identity_ref": payload["owner_identity_ref"],
+        "delivery_owner": payload["delivery_owner"],
+        "lead_lane": payload["lead_lane"],
+        "delivery_policy_digests": payload["delivery_policy_digests"],
+        "target": payload["target"],
+        "resolved_owner": payload["resolved_owner"],
+        "impacted_owner_groups_digest": canonical_digest(payload["impacted_owner_groups"]),
+        "changed_paths_digest": canonical_digest(_changed_paths(payload)),
+        "workspace_digests": payload["workspace_digests"],
+        "fingerprint_ref": fingerprint["ref"],
         "fingerprint_digest": fingerprint["digest"],
         "impact_plan_ref": payload["impact_plan_identity"]["projection_ref"],
         "impact_plan_digest": payload["impact_plan_identity"]["digest"],

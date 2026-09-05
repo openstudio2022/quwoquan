@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from quwoquan_ops.cli.lib.local_worktree_inventory import load_lane_ownership, ownership_owner
 from quwoquan_ops.gate.commit_gate_select import (
     PYTEST_BUDGET_SECONDS,
     PYTEST_CAP,
@@ -16,7 +17,7 @@ ROOT = Path(__file__).resolve().parents[4]
 
 
 def _checks(*paths: str) -> list[str]:
-    return static_checks(classify(list(paths)))
+    return static_checks(classify(list(paths)), list(paths))
 
 
 def test_workflow_toolchain_and_go_test_changes_do_not_run_unrelated_global_gates() -> None:
@@ -33,6 +34,23 @@ def test_workflow_toolchain_and_go_test_changes_do_not_run_unrelated_global_gate
     assert "app_generated_manifest" not in checks
     assert "metadata_contract" not in checks
     assert not any(item.startswith("python_script_governance_") for item in checks)
+
+
+def test_code_health_policy_is_owned_by_engineering_lane() -> None:
+    rules = load_lane_ownership()
+    assert ownership_owner("quwoquan_ops/policies/code_health_policy.yaml", rules) == "lane/engineering"
+
+
+def test_source_changes_select_fast_code_health_but_docs_do_not() -> None:
+    for path in (
+        "quwoquan_app/lib/runtime/value.dart",
+        "quwoquan_service/services/chat-service/internal/value.go",
+        "quwoquan_data/scripts/content/value.py",
+        "quwoquan_ops/ci/value.py",
+        "quwoquan_ops/portal/src/value.ts",
+    ):
+        assert "code_health_delta_fast" in _checks(path), path
+    assert "code_health_delta_fast" not in _checks("specs/feature-tree/runtime/spec.md")
 
 
 def test_each_python_script_owner_runs_only_its_own_governance_scope() -> None:

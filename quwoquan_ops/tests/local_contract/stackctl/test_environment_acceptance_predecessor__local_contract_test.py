@@ -24,6 +24,7 @@ def _minimal_fact(environment: str = "alpha") -> dict[str, object]:
     return {
         "schema": facts.SCHEMA,
         "factId": FACT_ID,
+        "acceptanceProfile": "environment_promotion",
         "environment": environment,
         "target": f"{environment}-local",
         "releaseId": RELEASE_ID,

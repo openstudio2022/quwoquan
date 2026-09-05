@@ -77,7 +77,7 @@ class ProviderReleaseEvidenceTest(unittest.TestCase):
 
     def _manifest(self) -> dict:
         return {
-            "candidateId": None,
+            "releaseCompositionId": None,
             "source": {
                 "gitSha": "a" * 40,
                 "treeDigest": "sha1:" + "b" * 40,
@@ -225,7 +225,7 @@ class ProviderReleaseEvidenceTest(unittest.TestCase):
 class ProviderReleaseEvidenceProducerTest(unittest.TestCase):
     def _released_manifest(self, *, candidate_id: object = None) -> dict:
         return {
-            "candidateId": candidate_id or "sha256:" + "d" * 64,
+            "releaseCompositionId": candidate_id or "sha256:" + "d" * 64,
             "artifactDigest": "sha256:" + "f" * 64,
             "status": "released",
             "source": {
@@ -290,7 +290,7 @@ class ProviderReleaseEvidenceProducerTest(unittest.TestCase):
             manifest_path = root / "manifest.json"
             github_output = root / "github_output"
             missing_candidate = self._released_manifest(candidate_id="")
-            missing_candidate["candidateId"] = None
+            missing_candidate["releaseCompositionId"] = None
             manifest_path.write_text(json.dumps(missing_candidate), encoding="utf-8")
             with patch.object(
                 producer,
@@ -306,7 +306,7 @@ class ProviderReleaseEvidenceProducerTest(unittest.TestCase):
                 )(),
             ), self.assertRaisesRegex(
                 ValueError,
-                "released candidateId",
+                "released releaseCompositionId",
             ):
                 producer._release_identity(
                     manifest_path,
@@ -345,7 +345,7 @@ class ProviderReleaseEvidenceProducerTest(unittest.TestCase):
                 "releaseEvidenceRef=ghcr.io/owner/repo/release-artifact@sha256:",
                 output,
             )
-            self.assertIn("candidateId=sha256:", output)
+            self.assertIn("releaseCompositionId=sha256:", output)
             self.assertIn("artifactDigest=sha256:", output)
 
     def test_execute_prod_invokes_stackctl_for_enabled_bindings_only(self) -> None:

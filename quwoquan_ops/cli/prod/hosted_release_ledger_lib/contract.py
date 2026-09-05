@@ -37,7 +37,7 @@ PROMOTION_EVIDENCE_FIELDS = frozenset(
     {
         "schema",
         "authority",
-        "candidateId",
+        "releaseCompositionId",
         "artifactDigest",
         "campaignId",
         "routingPolicyDigest",
@@ -187,7 +187,7 @@ SOAK_REQUEST_FIELDS = frozenset(
         "environment",
         "target",
         "fullRolloutReceiptId",
-        "candidateId",
+        "releaseCompositionId",
         "rolloutArtifactDigest",
         "artifactDigest",
         "sourceGitSha",

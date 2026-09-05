@@ -59,6 +59,7 @@ STATIC_COMMANDS: dict[str, tuple[list[str], str, list[str]]] = {
     "verify-app-login-entry-loop": (["make", "verify-app-login-entry-loop-contract"], ".", ["app-static"]),
     "verify-app-enum-typed-binding": (["make", "verify-app-enum-typed-binding"], ".", ["app-static"]),
     "verify-app-assistant-search-weak-typing-ratchet": (["make", "verify-app-assistant-search-weak-typing-ratchet"], ".", ["app-static"]),
+    "code_health_delta_fast": (["python3", "-B", "quwoquan_ops/gate/verify_incremental_code_health.py", "--base", "HEAD", "--head", "HEAD", "--working-tree", "--mode", "fast"], ".", ["code-health"]),
 }
 
 
@@ -242,6 +243,19 @@ def build_impact_plan(
             raise ValueError(f"unregistered canonical static check: {static}")
         checks.append(check)
 
+    source_paths = [
+        path for path in normalized
+        if path.startswith(("quwoquan_app/", "quwoquan_service/", "quwoquan_data/", "quwoquan_ops/"))
+    ]
+    if level != "fast" and source_paths:
+        checks = [check for check in checks if check["id"] != "static:code_health_delta_fast"]
+        code_health_command = [
+            "python3", "-B", "quwoquan_ops/gate/verify_incremental_code_health.py",
+            "--base", "HEAD", "--head", "HEAD", "--working-tree", "--mode", "full",
+        ]
+        for path in source_paths:
+            code_health_command.extend(["--changed-file", path])
+        checks.append(_check("static:code-health-delta", "spec_contract", "static", code_health_command, resources=["code-health"]))
     pytest_paths = list(commit["pytest_paths"])
     pytest_deferred = [
         path

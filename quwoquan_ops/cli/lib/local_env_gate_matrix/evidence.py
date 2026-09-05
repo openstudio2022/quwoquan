@@ -10,7 +10,7 @@ from quwoquan_ops.cli.lib import provider_conformance
 from quwoquan_ops.cli.lib.deployment_candidate_manifest import (
     validate_packaged_provider_runtime,
 )
-from quwoquan_ops.cli.lib.local_env_gate_matrix.data_phases import _invoke_env
+from quwoquan_ops.cli.lib.local_env_gate_matrix.data_phases import _invoke_env, _record_phase
 from quwoquan_ops.cli.lib.local_env_gate_matrix.identity import (
     _ATTEMPT_ID,
     _PROVIDER_CAPABILITY_ID,
@@ -120,6 +120,56 @@ def _down_target(target: str, *, down_fn: EnvRunner) -> dict[str, Any]:
         ),
         action=f"{target} down",
     )
+
+
+def _run_down_phase(
+    target: str,
+    *,
+    down_fn: EnvRunner,
+    phases: list[dict[str, Any]],
+    phase_name: str,
+) -> tuple[dict[str, Any], int]:
+    payload = _down_target(target, down_fn=down_fn)
+    return payload, _record_phase(phases, name=phase_name, payload=payload)
+
+
+def _pre_down_shared_targets(
+    target: str,
+    *,
+    down_fn: EnvRunner,
+    phases: list[dict[str, Any]],
+    block: dict[str, Any],
+) -> int:
+    for other in CANONICAL_TARGETS:
+        payload, exit_code = _run_down_phase(
+            other, down_fn=down_fn, phases=phases, phase_name=f"{target}_pre_down_{other}"
+        )
+        if exit_code != 0:
+            block["preDown"] = payload
+            return exit_code
+    return 0
+
+
+def _drain_resource_journal(
+    resource_journal: list[str],
+    *,
+    down_fn: EnvRunner,
+    phases: list[dict[str, Any]],
+    environments: dict[str, Any],
+) -> int:
+    first_exit = 0
+    for target in reversed(resource_journal):
+        payload, exit_code = _run_down_phase(
+            target,
+            down_fn=down_fn,
+            phases=phases,
+            phase_name=f"{target}_resource_journal_finally_down",
+        )
+        environments.setdefault(target, {})["resourceJournalFinallyDown"] = payload
+        if exit_code != 0 and first_exit == 0:
+            first_exit = exit_code
+    resource_journal.clear()
+    return first_exit
 
 
 def _package_candidate_release_identity(

@@ -39,7 +39,7 @@ def materialize_prod_sim_app_launch_bundle_impl(
     release_manifest = json.loads(release_manifest_path.read_text(encoding="utf-8"))
     _stackctl.finalize_mainline_release_artifact.validate_manifest(
         release_manifest,
-        allowed_statuses={"deployable", "released"},
+        allowed_statuses={"main-admitted", "released"},
     )
     _stackctl.finalize_mainline_release_artifact.validate_manifest_files(
         artifact_root,
@@ -47,7 +47,7 @@ def materialize_prod_sim_app_launch_bundle_impl(
     )
     source = release_manifest.get("source")
     release_source = {
-        "candidateId": str(release_manifest.get("candidateId") or ""),
+        "releaseCompositionId": str(release_manifest.get("releaseCompositionId") or ""),
         "artifactDigest": str(release_manifest.get("artifactDigest") or ""),
         "sourceGitSha": str(source.get("gitSha") or "") if isinstance(source, Mapping) else "",
         "sourceTreeDigest": str(source.get("treeDigest") or "") if isinstance(source, Mapping) else "",

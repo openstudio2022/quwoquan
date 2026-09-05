@@ -40,7 +40,7 @@ from quwoquan_ops.ci.release_bound_environment_acceptance import (
     validate_environment_acceptance_authority as _validate_environment_acceptance_authority_impl,
 )
 from quwoquan_ops.cli.prod.finalize_mainline_release_artifact import (
-    canonical_candidate_digest,
+    canonical_release_composition_id,
     canonical_manifest_digest,
     validate_manifest,
     validate_manifest_files,
@@ -220,17 +220,17 @@ def _validate_manifest(
 ) -> tuple[str, str, str]:
     try:
         validate_manifest(
-            value, allowed_statuses={"candidate-ready", "deployable", "released"}
+            value, allowed_statuses={"qualified", "main-admitted", "released"}
         )
     except ValueError as exc:
         raise IdentityEvidenceError(
             f"ReleaseEvidenceManifest is not canonical: {exc}"
         ) from exc
-    if environment == "prod" and value.get("status") == "candidate-ready":
+    if environment == "prod" and value.get("status") == "qualified":
         raise IdentityEvidenceError("Prod requires a deployable or released manifest")
-    candidate = _digest(value.get("candidateId"), label="candidateId")
+    candidate = _digest(value.get("releaseCompositionId"), label="releaseCompositionId")
     artifact = _digest(value.get("artifactDigest"), label="artifactDigest")
-    if candidate != canonical_candidate_digest(
+    if candidate != canonical_release_composition_id(
         value
     ) or artifact != canonical_manifest_digest(value):
         raise IdentityEvidenceError("ReleaseEvidenceManifest seal drift")
@@ -712,11 +712,13 @@ def _acceptance_relative_ref(path: Path, *, evidence_root: Path) -> str:
 def _validate_environment_acceptance_authority(
     path: Path, *, evidence_root: Path, environment: str, target: str,
     release_id: str, release_digest: str,
+    required_target_profiles: list[dict[str, str]] | tuple[dict[str, str], ...],
 ) -> dict[str, Any]:
     try:
         return _validate_environment_acceptance_authority_impl(
             path, evidence_root=evidence_root, environment=environment, target=target,
             release_id=release_id, release_digest=release_digest,
+            required_target_profiles=required_target_profiles,
         )
     except ValueError as exc:
         raise IdentityEvidenceError(str(exc)) from exc
@@ -776,6 +778,10 @@ def render(args: argparse.Namespace) -> dict[str, Any]:
         target=target,
         release_id=str(release["releaseId"]),
         release_digest=str(release["releaseDigest"]),
+        required_target_profiles=(
+            {"platform": "android", "deviceProfile": "promotable"},
+            {"platform": "ios", "deviceProfile": "promotable"},
+        ),
     )
     import_run = _validate_run(
         import_receipt,
@@ -853,7 +859,7 @@ def render(args: argparse.Namespace) -> dict[str, Any]:
             raise IdentityEvidenceError(f"evidence changed during validation: {path}")
     identity = {
         "baselineId": baseline_id,
-        "candidateId": candidate_id,
+        "releaseCompositionId": candidate_id,
         "sourceGitSha": git_sha,
         "sourceTreeDigest": tree_digest,
         "environment": environment,

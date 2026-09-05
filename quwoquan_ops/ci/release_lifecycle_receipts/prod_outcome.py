@@ -35,7 +35,7 @@ def render_prod_outcome(
     hard_deadline_epoch: int,
     rollback_budget_seconds: int,
 ) -> dict[str, dict[str, Any]]:
-    _pkg.validate_manifest(manifest, allowed_statuses={"deployable"})
+    _pkg.validate_manifest(manifest, allowed_statuses={"main-admitted"})
     if DIGEST_PATTERN.fullmatch(from_candidate_digest) is None:
         raise ValueError("from candidate digest is invalid")
     if not reports or set(reports) != set(readbacks):
@@ -47,7 +47,7 @@ def render_prod_outcome(
         raise ValueError("Prod stage evidence must be a contiguous rollout prefix")
 
     normalized_prefix = _validate_archive_prefix(archive_prefix)
-    candidate = str(manifest["candidateId"])
+    candidate = str(manifest["releaseCompositionId"])
     artifact = str(manifest["artifactDigest"])
     evidence_files: dict[str, dict[str, str]] = {}
     receipts: list[dict[str, Any]] = []
@@ -62,7 +62,7 @@ def render_prod_outcome(
             or report.get("triggerStage") != stage
             or report.get("terminalStage") != receipt.get("stage")
             or report.get("dryRun") is not False
-            or report.get("candidateId") != candidate
+            or report.get("releaseCompositionId") != candidate
             or report.get("artifactDigest") != artifact
             or report.get("releaseReceiptId") != receipt["receiptId"]
             or report.get("releaseReceiptRef")
@@ -152,7 +152,7 @@ def render_prod_outcome(
         raise ValueError("paused or unknown Prod outcome cannot seal release evidence")
 
     projection = {
-        "candidateId": candidate,
+        "releaseCompositionId": candidate,
         "fromCandidateDigest": from_candidate_digest,
         "outcome": rollback_status,
         "stages": evidence_files,

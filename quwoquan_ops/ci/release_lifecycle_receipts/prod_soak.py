@@ -45,7 +45,7 @@ def render_prod_soak_request(
 ) -> dict[str, Any]:
     _pkg.validate_manifest(manifest, allowed_statuses={"released"})
     full = _validate_receipt_readback(full_readback, service=service)
-    candidate = str(manifest["candidateId"])
+    candidate = str(manifest["releaseCompositionId"])
     source = manifest["source"]
     if not (
         full.get("triggerStage") == "100"
@@ -234,7 +234,7 @@ def render_prod_soak_request(
         "environment": "prod",
         "target": "prod-hosted",
         "fullRolloutReceiptId": full["receiptId"],
-        "candidateId": candidate,
+        "releaseCompositionId": candidate,
         "rolloutArtifactDigest": full["artifactDigest"],
         "artifactDigest": manifest["artifactDigest"],
         "sourceGitSha": source["gitSha"],

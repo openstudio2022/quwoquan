@@ -266,7 +266,7 @@ class StackctlRuntimeReceiptSingleTrackContractTest(unittest.TestCase):
                     "alpha-local",
                 )
 
-        self.assertEqual(composition["candidateId"], baseline_id)
+        self.assertEqual(composition["releaseCompositionId"], baseline_id)
         self.assertEqual(
             composition["startupImageCompositionFile"],
             str(manifest_path),

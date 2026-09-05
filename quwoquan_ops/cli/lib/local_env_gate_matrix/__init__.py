@@ -77,6 +77,9 @@ from quwoquan_ops.cli.lib.local_env_gate_matrix.identity import (  # noqa: F401
     _new_matrix_run_id,
     _repo_matrix_dir,
 )
+from quwoquan_ops.cli.lib.local_env_gate_matrix.input_validation import (  # noqa: F401
+    _resolve_matrix_inputs,
+)
 from quwoquan_ops.cli.lib.local_env_gate_matrix.orchestrator import (  # noqa: F401
     _run_local_env_gate_matrix,
 )

@@ -249,6 +249,31 @@ class FlutterTestGuardRuntimeEnvironmentContractTest(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "literal values"):
                 subject.declares_serial_tests(test_file)
 
+    def test_default_policy_allows_only_one_classified_fresh_retry(self) -> None:
+        subject = _load_subject()
+        self.assertEqual(subject.DEFAULT_MAX_ATTEMPTS, 2)
+        with mock.patch.object(
+            subject,
+            "_stream_command",
+            side_effect=[
+                (1, "Connection closed while receiving data", False),
+                (1, "Connection closed while receiving data", False),
+                (0, "", False),
+            ],
+        ) as run, mock.patch.object(subject.time, "sleep"):
+            exit_code = subject._run_flutter_test_with_retries(["flutter", "test"])
+        self.assertEqual(exit_code, 1)
+        self.assertEqual(run.call_count, 2)
+
+    def test_deterministic_flutter_failure_is_never_retried(self) -> None:
+        subject = _load_subject()
+        with mock.patch.object(
+            subject, "_stream_command", return_value=(1, "Expected true, got false", False)
+        ) as run:
+            exit_code = subject._run_flutter_test_with_retries(["flutter", "test"])
+        self.assertEqual(exit_code, 1)
+        self.assertEqual(run.call_count, 1)
+
     def test_coverage_retry_removes_the_previous_attempt_artifact(self) -> None:
         subject = _load_subject()
         with tempfile.TemporaryDirectory() as temporary:

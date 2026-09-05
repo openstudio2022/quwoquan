@@ -38,7 +38,7 @@ def render_rollback_readiness(
     archive_prefix: str,
     rollback_drill_max_age_seconds: int,
 ) -> dict[str, Any]:
-    _pkg.validate_manifest(manifest, allowed_statuses={"candidate-ready"})
+    _pkg.validate_manifest(manifest, allowed_statuses={"qualified"})
     if set(manifest.get("environmentReceipts") or {}) != {
         "alpha",
         "beta",
@@ -109,7 +109,7 @@ def render_rollback_readiness(
 
     normalized_prefix = _validate_archive_prefix(archive_prefix)
     evidence = {
-        "candidateId": manifest["candidateId"],
+        "releaseCompositionId": manifest["releaseCompositionId"],
         "fromCandidateDigest": from_candidate_digest,
         "hostedLedger": {
             "receiptId": current["receiptId"],

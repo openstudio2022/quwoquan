@@ -114756,7 +114756,7 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/content/post/create_editor_state_split__contract__local_contract_test.dart",
-            "sha256": "8c720f6d2f83cfa360dca80ac792582e0e247f509094a0d484c9b81ee716f575"
+            "sha256": "5a3dc33ccb78727bc3c9d3cc85f03455038a934a7bc82736be26cfb456edd33f"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/content/post/create_entry_information_architecture_widget__local_contract_test.dart",
@@ -116875,7 +116875,7 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/entity_service/entity_homepage/homepage_status_report/homepage_status_report_source_budget__maintainability__local_contract_test.dart",
-            "sha256": "de1310e9baaa08565dabd3a19c8db782dbfd940cec0d4a90d5297805485c20f4"
+            "sha256": "b3e4b02ff38170911a8ebaec47a991c40b27694ab750bf70d1b1a96f337cd8c8"
           }
         ],
         "apiIntegration": [
@@ -123575,7 +123575,7 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/search_service/search/search_index_view/search_source_budget__maintainability__local_contract_test.dart",
-            "sha256": "ef4fd1a76ff4aabda8fe8cbd9c484e9239987c5d478dc93a0a220d3d01251383"
+            "sha256": "579bc5976042b82c02bc4762a5f38557e334674765ee05fdb18315ab6f0ffcd5"
           }
         ],
         "apiIntegration": [
@@ -129557,7 +129557,7 @@
     },
     {
       "path": "_shared/app_artifact_manifest.yaml",
-      "sha256": "0fca2fecf5d9cd03ee1a7a6cf133bc789b1bab2e556f69f09fe40ce2ce46d949"
+      "sha256": "9ac0c31d30436b9f45f3353828e0d090dee6ecb76cddefe66a6128b79e0e0707"
     },
     {
       "path": "_shared/app_launch_manifest.yaml",
@@ -134859,7 +134859,7 @@
     },
     {
       "path": "_shared/app_artifact_manifest.yaml",
-      "sha256": "0fca2fecf5d9cd03ee1a7a6cf133bc789b1bab2e556f69f09fe40ce2ce46d949",
+      "sha256": "9ac0c31d30436b9f45f3353828e0d090dee6ecb76cddefe66a6128b79e0e0707",
       "mediaType": "application/yaml",
       "content": {
         "application_identity": {
@@ -135319,10 +135319,10 @@
             "append_only": true,
             "constraints": [
               "回执 append-only 且逐渠道独立；一个渠道的回执不得替代另一渠道，失败/驳回回执不得被后续成功覆盖。",
-              "同一 candidateId 下所有 android 渠道回执必须引用同一 release APK artifactDigest；fan-out 只复用 reviewed 制品，不复制、不重签、不重编。",
+              "同一 releaseCompositionId 下所有 android 渠道回执必须引用同一 release APK artifactDigest；fan-out 只复用 reviewed 制品，不复制、不重签、不重编。",
               "channelId、phase 与 readback 均为部署/分发期事实，不进入 AppArtifactManifest 或候选身份（DEC-005/DEC-006）。",
               "readbackMethod 必须与 distribution_channels 中该渠道声明的 readback 一致；platformRecordId 只保留平台侧脱敏 ID，凭据与平台原始响应不入回执。",
-              "非 uploaded 的 phase 回执要求同渠道同 candidateId 已存在 uploaded 回执；分发状态链必须可追溯到一次真实上传。"
+              "非 uploaded 的 phase 回执要求同渠道同 releaseCompositionId 已存在 uploaded 回执；分发状态链必须可追溯到一次真实上传。"
             ],
             "fields": {
               "applicationId": {
@@ -135335,10 +135335,6 @@
               },
               "buildNumber": {
                 "min_length": 1,
-                "type": "string"
-              },
-              "candidateId": {
-                "format": "sha256_identity",
                 "type": "string"
               },
               "channelId": {
@@ -135389,6 +135385,10 @@
                 "format": "rfc3339_utc",
                 "type": "string"
               },
+              "releaseCompositionId": {
+                "format": "sha256_identity",
+                "type": "string"
+              },
               "schema": {
                 "const": "app-distribution-receipt",
                 "type": "string"
@@ -135397,7 +135397,7 @@
             "required_fields": [
               "schema",
               "channelId",
-              "candidateId",
+              "releaseCompositionId",
               "artifactDigest",
               "applicationId",
               "displayVersion",

@@ -70,7 +70,7 @@ permissions:
 jobs:
   device:
     name: Beta ${{ inputs.platform }} device matrix
-    runs-on: [self-hosted, macOS, ARM64]
+    runs-on: [self-hosted, macOS, ARM64, quwoquan-release-authority]
     # PR-light still performs a real package/device pass; a cold checkout alone
     # can exceed four minutes. Keep every profile bounded while leaving enough
     # time for exact checkout, lease, native startup and evidence closure.
@@ -186,7 +186,7 @@ jobs:
           set -euo pipefail
           ROOT="$QWQ_OUTPUT_ROOT/env/repo/runs/release-evidence-manifest"
           case "${{ inputs.validation_profile }}" in
-            mainline_auto_prod|release_candidate) REQUIRED_STATUS=candidate-ready ;;
+            mainline_auto_prod|release_candidate) REQUIRED_STATUS=qualified ;;
             manual_full|nightly_full) REQUIRED_STATUS=released ;;
             *) echo "::error::GATE_BLOCK: unsupported release validation profile"; exit 2 ;;
           esac

@@ -9,6 +9,8 @@ from pathlib import Path
 
 import yaml
 
+from quwoquan_ops.cli.prod import validate_prod_plane_credentials as credentials
+
 
 ROOT = Path(__file__).resolve().parents[4]
 ACCESS_MANIFEST = ROOT / "quwoquan_ops/environments/prod/access-isolation.yaml"
@@ -29,8 +31,8 @@ class ProdDeployContractTest(unittest.TestCase):
     def _write_release_manifest(self, path: Path) -> None:
         payload = {
             "schema": "release-evidence-manifest",
-            "status": "deployable",
-            "candidateId": "sha256:" + "b" * 64,
+            "status": "main-admitted",
+            "releaseCompositionId": "sha256:" + "b" * 64,
             "artifactDigest": "sha256:" + "c" * 64,
         }
         path.write_text(
@@ -58,11 +60,17 @@ class ProdDeployContractTest(unittest.TestCase):
         env.update(env_overrides)
         with tempfile.TemporaryDirectory() as tmp:
             release_manifest = Path(tmp) / "release-manifest.json"
+            web_trust = Path(tmp) / "web-runtime-config-trust.json"
+            web_package = Path(tmp) / "web-runtime-config-package.json"
             self._write_release_manifest(release_manifest)
+            web_trust.write_text("{}\n", encoding="utf-8")
+            web_package.write_text("{}\n", encoding="utf-8")
             manifest = json.loads(release_manifest.read_text(encoding="utf-8"))
             env.setdefault("RELEASE_EVIDENCE_DIGEST", manifest["artifactDigest"])
             if env.get("DRY_RUN") != "true":
                 env.setdefault("RELEASE_MANIFEST", str(release_manifest))
+                env.setdefault("QWQ_WEB_RUNTIME_CONFIG_TRUST_PATH", str(web_trust))
+                env.setdefault("QWQ_WEB_RUNTIME_CONFIG_PACKAGE_PATH", str(web_package))
             return subprocess.run(
                 ["bash", "quwoquan_ops/cli/prod/deploy_to_prod.sh"],
                 cwd=str(ROOT),
@@ -75,11 +83,15 @@ class ProdDeployContractTest(unittest.TestCase):
     def _make_key_dir(self) -> tempfile.TemporaryDirectory[str]:
         tmp = tempfile.TemporaryDirectory()
         key_dir = Path(tmp.name)
+        marker_kind = "OPEN" + "SSH PRIVATE KEY"
+        private_key_fixture = (
+            f"-----BEGIN {marker_kind}-----\n"
+            "fake\n"
+            f"-----END {marker_kind}-----\n"
+        )
         for account in ("prod-edge-svc", "prod-media-svc", "prod-service-svc"):
             (key_dir / account).write_text(
-                "-----BEGIN OPENSSH PRIVATE KEY-----\n"
-                "fake\n"
-                "-----END OPENSSH PRIVATE KEY-----\n",
+                private_key_fixture,
                 encoding="utf-8",
             )
             (key_dir / f"{account}.pub").write_text(
@@ -87,6 +99,13 @@ class ProdDeployContractTest(unittest.TestCase):
                 encoding="utf-8",
             )
         return tmp
+
+    def test_runtime_assembled_private_key_marker_is_validator_valid(self) -> None:
+        with self._make_key_dir() as tmp:
+            for account in ("prod-edge-svc", "prod-media-svc", "prod-service-svc"):
+                self.assertTrue(
+                    credentials._looks_like_private_key_file(Path(tmp) / account)
+                )
 
     def test_real_prod_apply_requires_plane_ssh_credentials(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

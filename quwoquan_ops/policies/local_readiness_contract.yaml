@@ -39,7 +39,9 @@ timeouts:
     fast: 300
     scope: 1800
     release: 7200
-  overrides_by_check: {}
+  overrides_by_check:
+    static:code_health_delta_fast: 30
+    static:code-health-delta: 300
   resolution_order: [check, phase, level, default]
 scope_profiles:
   service:

@@ -23,11 +23,13 @@ def acceptance_relative_ref(path: Path, *, evidence_root: Path) -> str:
 def validate_environment_acceptance_authority(
     path: Path, *, evidence_root: Path, environment: str, target: str,
     release_id: str, release_digest: str,
+    required_target_profiles: list[dict[str, str]] | tuple[dict[str, str], ...],
 ) -> dict[str, Any]:
     try:
         relative = acceptance_relative_ref(path, evidence_root=evidence_root)
         fact, fact_digest = load_environment_acceptance_fact(
-            relative, evidence_root=evidence_root, required_target_profiles=None,
+            relative, evidence_root=evidence_root,
+            required_target_profiles=required_target_profiles,
             verify_references=True,
         )
     except EnvironmentAcceptanceFactError as exc:

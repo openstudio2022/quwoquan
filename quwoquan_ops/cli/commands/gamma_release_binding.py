@@ -696,9 +696,9 @@ def _materialize_release_evidence_configuration(
     if not isinstance(manifest, dict):
         raise ValueError(f"invalid release evidence manifest: {manifest_path}")
     allowed_statuses = (
-        {"deployable", "released"}
+        {"main-admitted", "released"}
         if env_name == "prod"
-        else {"candidate-ready", "deployable", "released"}
+        else {"qualified", "main-admitted", "released"}
     )
     _stackctl.finalize_mainline_release_artifact.validate_manifest(
         manifest, allowed_statuses=allowed_statuses
@@ -707,7 +707,7 @@ def _materialize_release_evidence_configuration(
         artifact_root,
         manifest,
     )
-    candidate_id = str(manifest["candidateId"])
+    candidate_id = str(manifest["releaseCompositionId"])
     configuration_packages = manifest["environmentArtifacts"][env_name][
         "configurationPackages"
     ]
@@ -745,13 +745,13 @@ def _materialize_release_evidence_configuration(
             "manifest": _stackctl.relpath(manifest_path),
             "evidenceFileDigest": archive_digest,
             "artifactDigest": manifest["artifactDigest"],
-            "candidateId": candidate_id,
+            "releaseCompositionId": candidate_id,
             "verifiedConfigDigest": effective_digest,
         }
         _stackctl.write_json(report_path, provenance)
     source = manifest["source"]
     return {
-        "candidateId": candidate_id,
+        "releaseCompositionId": candidate_id,
         "artifactDigest": str(manifest["artifactDigest"]),
         "sourceGitSha": str(source["gitSha"]),
         "sourceTreeDigest": str(source["treeDigest"]),

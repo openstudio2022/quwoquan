@@ -23,7 +23,7 @@ permissions:
 jobs:
   provider_release_evidence:
     name: Execute and publish Provider release evidence
-    runs-on: [self-hosted, macOS, ARM64]
+    runs-on: [self-hosted, macOS, ARM64, quwoquan-release-authority]
     environment: production
     timeout-minutes: 240
     permissions:

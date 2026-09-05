@@ -40,8 +40,9 @@ from quwoquan_ops.cli.prod.finalize_mainline_release_artifact import (
     DISTRIBUTION_EVIDENCE_PATHS,
     ENVIRONMENTS,
     RELEASE_CLOSURE_PATHS,
-    canonical_candidate_digest,
+    canonical_release_composition_id,
     canonical_environment_artifact_digest,
+    canonical_evidence_set_digest,
     canonical_manifest_digest,
     canonical_release_train_digest,
     sha256_file,
@@ -136,7 +137,7 @@ def _trusted_attestation(
                 f"repository:{repository}",
                 f"workflow:{repository}/{workflow}",
                 "issuer:https://token.actions.githubusercontent.com",
-                f"candidate:{manifest['candidateId']}",
+                f"candidate:{manifest['releaseCompositionId']}",
             }
         ),
     )
@@ -147,7 +148,7 @@ def _trusted_soak(
     rollout_receipt: dict[str, Any],
     manifest: dict[str, Any],
 ) -> VerifiedAuthority:
-    assert rollout_receipt["toCandidateDigest"] == manifest["candidateId"]
+    assert rollout_receipt["toCandidateDigest"] == manifest["releaseCompositionId"]
     return VerifiedAuthority(
         authority=lifecycle.HOSTED_AUTHORITY,
         subject_digest=sha256_file(path),
@@ -448,7 +449,7 @@ class FinalAcceptanceFixture:
             "schema": f"release-{kind}-receipt",
             "environment": environment,
             "status": status,
-            "candidateId": manifest["candidateId"],
+            "releaseCompositionId": manifest["releaseCompositionId"],
             "sourceGitSha": COMMIT,
             "sourceTreeDigest": TREE,
             "evidenceDigest": _canonical_digest(evidence),
@@ -488,6 +489,15 @@ class FinalAcceptanceFixture:
             "rollbackOutcome": "not_triggered",
             "rollbackEvidence": {"triggered": False},
             "artifactDigest": TEST_DIGEST,
+            "environmentAcceptanceRef": "evidence/environment-acceptance.json",
+            "environmentAcceptanceDigest": TEST_DIGEST,
+            "environmentAcceptanceFactId": "environment-acceptance-fixture",
+            "gammaPredecessorFactId": "gamma-predecessor-fixture",
+            "gammaPredecessorDigest": TEST_DIGEST,
+            "engineeringEligibilityRef": "evidence/engineering-eligibility.json",
+            "engineeringEligibilityDigest": TEST_DIGEST,
+            "durableApprovalRef": "evidence/durable-approval.json",
+            "durableApprovalDigest": TEST_DIGEST,
             "imageDigest": IMAGE,
             "configDigest": TEST_DIGEST,
             "contractGraphDigest": self.contract_digest,
@@ -536,6 +546,15 @@ class FinalAcceptanceFixture:
             "decision": "continue",
             "rollback_outcome": "not_triggered",
             "artifact_digest": TEST_DIGEST,
+            "environment_acceptance_ref": receipt["environmentAcceptanceRef"],
+            "environment_acceptance_digest": receipt["environmentAcceptanceDigest"],
+            "environment_acceptance_fact_id": receipt["environmentAcceptanceFactId"],
+            "gamma_predecessor_fact_id": receipt["gammaPredecessorFactId"],
+            "gamma_predecessor_digest": receipt["gammaPredecessorDigest"],
+            "engineering_eligibility_ref": receipt["engineeringEligibilityRef"],
+            "engineering_eligibility_digest": receipt["engineeringEligibilityDigest"],
+            "durable_approval_ref": receipt["durableApprovalRef"],
+            "durable_approval_digest": receipt["durableApprovalDigest"],
             "image_digest": IMAGE,
             "config_digest": TEST_DIGEST,
             "contract_graph_digest": self.contract_digest,
@@ -639,8 +658,8 @@ class FinalAcceptanceFixture:
         manifest: dict[str, Any] = {
             "schema": "release-evidence-manifest",
             "releaseTrainId": None,
-            "candidateId": None,
-            "status": "candidate-ready",
+            "releaseCompositionId": None,
+            "status": "qualified",
             "generatedAt": OBSERVED_AT,
             "source": {
                 "gitSha": COMMIT,
@@ -650,6 +669,7 @@ class FinalAcceptanceFixture:
                 "sourceArchiveDigest": TEST_DIGEST,
             },
             "artifactDigest": None,
+            "evidenceSetDigest": None,
             "environmentArtifacts": {
                 environment: {
                     "environment": environment,
@@ -734,10 +754,10 @@ class FinalAcceptanceFixture:
                 "environmentArtifactDigest"
             ] = canonical_environment_artifact_digest(manifest, environment)
         manifest["releaseTrainId"] = canonical_release_train_digest(manifest)
-        manifest["candidateId"] = canonical_candidate_digest(manifest)
+        manifest["releaseCompositionId"] = canonical_release_composition_id(manifest)
 
         receipt_readback, ledger_readback, receipt_id = self._hosted_readbacks(
-            manifest["candidateId"]
+            manifest["releaseCompositionId"]
         )
         percent_100_readback_path = self._store(
             "prod_rollout_readback",
@@ -799,7 +819,7 @@ class FinalAcceptanceFixture:
                 filename=environment,
             )
         outcome = {
-            "candidateId": manifest["candidateId"],
+            "releaseCompositionId": manifest["releaseCompositionId"],
             "outcome": "not_triggered",
             "stages": {"100": stage},
         }
@@ -822,6 +842,7 @@ class FinalAcceptanceFixture:
         manifest["status"] = "released"
         manifest["blockers"] = []
         manifest["missingEvidence"] = []
+        manifest["evidenceSetDigest"] = canonical_evidence_set_digest(manifest)
         manifest["artifactDigest"] = canonical_manifest_digest(manifest)
         manifest_path = self._store(
             "candidate",
@@ -835,7 +856,7 @@ class FinalAcceptanceFixture:
         common = {
             "schema": "quwoquan.test.case-result",
             "status": "passed",
-            "candidateId": self.manifest["candidateId"],
+            "releaseCompositionId": self.manifest["releaseCompositionId"],
             "commit": COMMIT,
             "artifactDigest": TEST_DIGEST,
             "releaseId": RELEASE_ID,
@@ -874,7 +895,7 @@ class FinalAcceptanceFixture:
                 "scope": "first-party",
                 "dryRun": False,
                 "releaseEvidence": {
-                    "candidateId": self.manifest["candidateId"],
+                    "releaseCompositionId": self.manifest["releaseCompositionId"],
                     "artifactDigest": TEST_DIGEST,
                     "source": {"gitSha": COMMIT},
                 },
@@ -896,7 +917,7 @@ class FinalAcceptanceFixture:
             self.root / "prod-soak-readback.json",
             {
                 "schema": "future-canonical-hosted-soak-readback",
-                "candidateId": self.manifest["candidateId"],
+                "releaseCompositionId": self.manifest["releaseCompositionId"],
                 "verifiedAt": OBSERVED_AT,
             },
         )

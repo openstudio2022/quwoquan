@@ -60,7 +60,7 @@ void main() {
 DEFAULT_TEST_TIMEOUT_SECONDS = int(
   os.environ.get("FLUTTER_TEST_GUARD_TIMEOUT_SECONDS", "1200")
 )
-DEFAULT_MAX_ATTEMPTS = int(os.environ.get("FLUTTER_TEST_GUARD_MAX_ATTEMPTS", "3"))
+DEFAULT_MAX_ATTEMPTS = int(os.environ.get("FLUTTER_TEST_GUARD_MAX_ATTEMPTS", "2"))
 
 
 def _cpu_default_concurrency(*, full_local_contract: bool) -> int:
@@ -235,7 +235,7 @@ def _run_flutter_test_with_retries(
   cmd: list[str],
   *,
   cwd: Path = APP_ROOT,
-  max_attempts: int = 3,
+  max_attempts: int = 2,
   timeout_seconds: int = DEFAULT_TEST_TIMEOUT_SECONDS,
 ) -> int:
   for attempt in range(1, max_attempts + 1):

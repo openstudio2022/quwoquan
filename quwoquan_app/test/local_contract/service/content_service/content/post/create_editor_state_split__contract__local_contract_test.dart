@@ -102,15 +102,15 @@ void main() {
     expect(panelSources, contains('ContentText.'));
   });
 
-  test('四个已达标原文件不再进入 file_line_budget allowlist', () {
+  test('四个已达标原文件不再进入 code health policy', () {
     final allowlist = _readRepoFile(
-      'quwoquan_ops/policies/gates/file_line_budget_allowlist.yaml',
+      'quwoquan_ops/policies/code_health_policy.yaml',
     );
     for (final files in groups.values) {
       expect(
         allowlist,
         isNot(contains('quwoquan_app/${files.first}')),
-        reason: '${files.first} 已低于阈值，不得保留 allowlist 豁免',
+        reason: '${files.first} 已低于阈值，不得保留 路径豁免',
       );
     }
   });

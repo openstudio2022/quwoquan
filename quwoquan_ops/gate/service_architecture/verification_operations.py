@@ -288,7 +288,10 @@ class OperationsVerificationMixin:
             ".qwq_output",
             ".dart_tool",
             ".pytest_cache",
+            "Pods",
             "__pycache__",
+            "build",
+            "dist",
             "node_modules",
         }
         retired_seed_box_found = False
@@ -397,6 +400,21 @@ class OperationsVerificationMixin:
                 tail = "\n".join((result.stdout + result.stderr).splitlines()[-8:])
                 self.error(f"{relative(entry)}: kustomize build failed:\n{tail}")
 
+    @staticmethod
+    def _executable_magic(path: Path) -> str | None:
+        try:
+            with path.open("rb") as source:
+                prefix = source.read(4)
+        except OSError:
+            return None
+        if prefix == b"\x7fELF":
+            return "ELF"
+        if prefix in {b"\xcf\xfa\xed\xfe", b"\xfe\xed\xfa\xcf", b"\xca\xfe\xba\xbe", b"\xbe\xba\xfe\xca"}:
+            return "Mach-O"
+        if prefix[:2] == b"MZ":
+            return "PE"
+        return None
+
     def verify_no_source_artifacts(self) -> None:
         # Align with gate_repo.sh: purge ephemeral caches before asserting absence.
         # Concurrent local agents may recreate bytecode mid-gate; a single purge+scan
@@ -409,10 +427,35 @@ class OperationsVerificationMixin:
             ROOT / "quwoquan_data",
             OPS_ROOT,
         )
+        ignored_directories = {
+            ".dart_tool",
+            ".git",
+            ".gradle",
+            ".idea",
+            ".qwq_output",
+            ".venv",
+            "Pods",
+            "build",
+            "dist",
+            "node_modules",
+            "vendor",
+        }
+
+        def walk_source_tree(source_root: Path):
+            for current, directories, files in os.walk(source_root):
+                directories[:] = [
+                    name for name in directories if name not in ignored_directories
+                ]
+                current_path = Path(current)
+                for directory in directories:
+                    yield current_path / directory
+                for filename in files:
+                    yield current_path / filename
+
         for source_root in source_roots:
             if not source_root.is_dir():
                 continue
-            for path in source_root.rglob("*"):
+            for path in walk_source_tree(source_root):
                 if path.name in {"__pycache__", ".pytest_cache"}:
                     shutil.rmtree(path, ignore_errors=True)
                 elif path.suffix in {".pyc", ".pyo"} and path.is_file():
@@ -420,7 +463,7 @@ class OperationsVerificationMixin:
         for source_root in source_roots:
             if not source_root.is_dir():
                 continue
-            for path in source_root.rglob("*"):
+            for path in walk_source_tree(source_root):
                 if path.name in {"__pycache__", ".pytest_cache"} or path.suffix in {
                     ".pyc",
                     ".pyo",
@@ -428,6 +471,10 @@ class OperationsVerificationMixin:
                     self.error(f"source-tree cache is forbidden: {relative(path)}")
                 if path.is_file() and (path.name in {".coverage", "coverage.out"} or path.suffix == ".test"):
                     self.error(f"source-tree test artifact is forbidden: {relative(path)}")
+                if path.is_file() and not path.is_symlink():
+                    magic = self._executable_magic(path)
+                    if magic:
+                        self.error(f"source-tree executable build artifact is forbidden: {relative(path)} ({magic})")
 
     def run_subgates(self) -> None:
         commands = [

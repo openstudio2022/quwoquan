@@ -228,16 +228,16 @@ def reusable_refs(path: Path | None) -> dict[tuple[str, str], str]:
     if payload.get("schema") != "release-evidence-manifest":
         raise ValueError("previous evidence is not canonical ReleaseEvidenceManifest")
     if payload.get("status") not in {
-        "candidate-ready",
-        "deployable",
+        "qualified",
+        "main-admitted",
         "released",
         "rolled-back",
     }:
         raise ValueError("previous evidence is not a sealed reusable candidate")
     if DIGEST_PATTERN.fullmatch(str(payload.get("releaseTrainId") or "")) is None:
         raise ValueError("previous evidence releaseTrainId is not immutable")
-    if DIGEST_PATTERN.fullmatch(str(payload.get("candidateId") or "")) is None:
-        raise ValueError("previous evidence candidateId is not immutable")
+    if DIGEST_PATTERN.fullmatch(str(payload.get("releaseCompositionId") or "")) is None:
+        raise ValueError("previous evidence releaseCompositionId is not immutable")
     if DIGEST_PATTERN.fullmatch(str(payload.get("artifactDigest") or "")) is None:
         raise ValueError("previous evidence artifactDigest is not immutable")
     if "images" in payload:

@@ -241,8 +241,8 @@ class ProdHostedPrevalidationContractTest(unittest.TestCase):
         payload = finalizer.seal_manifest({
             "schema": finalizer.SCHEMA,
             "releaseTrainId": None,
-            "candidateId": None,
-            "status": "candidate-ready",
+            "releaseCompositionId": None,
+            "status": "qualified",
             "generatedAt": "2026-07-28T00:00:00Z",
             "source": {
                 "gitSha": "a" * 40,
@@ -334,7 +334,7 @@ class ProdHostedPrevalidationContractTest(unittest.TestCase):
                 "schema": finalizer.ENVIRONMENT_RECEIPT_SCHEMA,
                 "environment": environment,
                 "status": "passed",
-                "candidateId": payload["candidateId"],
+                "releaseCompositionId": payload["releaseCompositionId"],
                 "sourceGitSha": source["gitSha"],
                 "sourceTreeDigest": source["treeDigest"],
                 "evidenceDigest": evidence_digest,
@@ -354,7 +354,7 @@ class ProdHostedPrevalidationContractTest(unittest.TestCase):
             "schema": finalizer.ROLLBACK_RECEIPT_SCHEMA,
             "environment": "prod",
             "status": "ready",
-            "candidateId": payload["candidateId"],
+            "releaseCompositionId": payload["releaseCompositionId"],
             "sourceGitSha": source["gitSha"],
             "sourceTreeDigest": source["treeDigest"],
             "evidenceDigest": evidence_digest,
@@ -371,7 +371,7 @@ class ProdHostedPrevalidationContractTest(unittest.TestCase):
             "digest": "sha256:"
             + hashlib.sha256(rollback_path.read_bytes()).hexdigest(),
         }
-        payload["status"] = "deployable"
+        payload["status"] = "main-admitted"
         payload["blockers"] = ["prod-release-evidence-pending"]
         payload["missingEvidence"] = [
             "environmentReceipts.prod",
@@ -567,7 +567,7 @@ class ProdHostedPrevalidationContractTest(unittest.TestCase):
             with mock.patch.object(stackctl, "run", side_effect=git_results):
                 resolved = stackctl._prevalidation_release_manifest(str(manifest))
             self.assertEqual(resolved[3], "1.20260726.42")
-            self.assertEqual(resolved[4], resolved[2]["candidateId"])
+            self.assertEqual(resolved[4], resolved[2]["releaseCompositionId"])
 
             dirty_results = [
                 subprocess.CompletedProcess(["git"], 0, stdout=("a" * 40) + "\n", stderr=""),

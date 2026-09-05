@@ -290,6 +290,7 @@ def test_content_consumer_nonempty_feed_probe_skips_commercial_checks__local_con
         report_dir,
         *,
         require_non_empty_content_feed=False,
+        research_anonymous_convergence=False,
         release_post_expectations=None,
         release_readiness_path=None,
         only_checks=(),

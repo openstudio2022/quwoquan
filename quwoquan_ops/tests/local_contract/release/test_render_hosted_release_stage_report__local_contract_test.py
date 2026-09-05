@@ -20,8 +20,8 @@ class HostedReleaseStageReportTest(unittest.TestCase):
 
     def _manifest(self) -> dict:
         return {
-            "status": "deployable",
-            "candidateId": self.candidate,
+            "status": "main-admitted",
+            "releaseCompositionId": self.candidate,
             "artifactDigest": self.artifact,
             "source": {
                 "gitSha": "a" * 40,
@@ -80,6 +80,15 @@ class HostedReleaseStageReportTest(unittest.TestCase):
                 else {"triggered": False}
             ),
             "artifactDigest": artifact or self.artifact,
+            "environmentAcceptanceRef": "eaf/prod.json",
+            "environmentAcceptanceDigest": "sha256:" + "6" * 64,
+            "environmentAcceptanceFactId": "sha256:" + "7" * 64,
+            "gammaPredecessorFactId": "sha256:" + "8" * 64,
+            "gammaPredecessorDigest": "sha256:" + "9" * 64,
+            "engineeringEligibilityRef": "eligibility/prod.json",
+            "engineeringEligibilityDigest": "sha256:" + "a" * 64,
+            "durableApprovalRef": "approval/prod.json",
+            "durableApprovalDigest": "sha256:" + "b" * 64,
             "imageDigest": "sha256:" + "1" * 64,
             "configDigest": "sha256:" + "2" * 64,
             "contractGraphDigest": "sha256:" + "3" * 64,

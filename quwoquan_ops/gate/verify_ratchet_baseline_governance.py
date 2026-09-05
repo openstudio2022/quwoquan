@@ -33,12 +33,16 @@ spec_ref: specs/feature-tree/runtime/system-architecture-and-engineering-guide/a
 """
 from __future__ import annotations
 
+import argparse
 import json
 import os
+import re
 import subprocess
 import sys
 import uuid
 from pathlib import Path
+
+import yaml
 
 sys.dont_write_bytecode = True
 
@@ -47,12 +51,14 @@ ROOT = Path(__file__).resolve().parents[2]
 #: 棘轮基线的物理位置。新增基线必须落在这里，否则不受治理约束。
 BASELINE_PATHS = (
     "quwoquan_ops/policies/gates",
+    "quwoquan_ops/policies/baselines",
     "quwoquan_app/scripts/runtime/page",
     "quwoquan_app/scripts/runtime/observability",
     "quwoquan_service/scripts/verify/structure",
     "quwoquan_ops/environments",
 )
-BASELINE_SUFFIXES = {".json", ".yaml"}
+BASELINE_SUFFIXES = {".json", ".yaml", ".yml"}
+_SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 
 #: 棘轮基线的命名标记。按名字而不是按豁免名单识别，是为了让新增的基线自动落入
 #: 治理范围：漏登记一个豁免只会放过一个文件，而漏更新一份「纳入名单」会放过全部
@@ -91,21 +97,40 @@ def known_owners() -> frozenset[str]:
     return frozenset(nodes | GOVERNANCE_FUNCTIONS)
 
 
-def baseline_files() -> list[Path]:
-    files: list[Path] = []
+def _is_ratchet(relative: str) -> bool:
+    name = Path(relative).name
+    return (
+        Path(relative).suffix in BASELINE_SUFFIXES
+        and name not in NON_RATCHET_POLICIES
+        and any(marker in name for marker in RATCHET_NAME_MARKERS)
+    )
+
+
+def baseline_files(*, sha: str | None = None) -> list[Path]:
+    """Discover candidate or exact-tree baselines recursively."""
+    relative_paths: set[str] = set()
     for relative in BASELINE_PATHS:
-        directory = ROOT / relative
-        if not directory.is_dir():
+        if sha is not None:
+            result = subprocess.run(
+                ["git", "ls-tree", "-r", "--name-only", "-z", sha, "--", relative],
+                cwd=ROOT, capture_output=True, check=False,
+            )
+            if result.returncode != 0:
+                raise ValueError(result.stderr.decode("utf-8", "replace").strip() or "git ls-tree failed")
+            relative_paths.update(
+                item.decode("utf-8", "replace")
+                for item in result.stdout.split(b"\0")
+                if item and _is_ratchet(item.decode("utf-8", "replace"))
+            )
             continue
-        for path in sorted(directory.iterdir()):
-            if path.suffix not in BASELINE_SUFFIXES:
-                continue
-            if path.name in NON_RATCHET_POLICIES:
-                continue
-            if not any(marker in path.name for marker in RATCHET_NAME_MARKERS):
-                continue
-            files.append(path)
-    return files
+        directory = ROOT / relative
+        if directory.is_dir():
+            relative_paths.update(
+                path.relative_to(ROOT).as_posix()
+                for path in directory.rglob("*")
+                if path.is_file() and _is_ratchet(path.relative_to(ROOT).as_posix())
+            )
+    return [ROOT / relative for relative in sorted(relative_paths)]
 
 
 def governance_block(path: Path) -> dict[str, str]:
@@ -143,70 +168,104 @@ def governance_block(path: Path) -> dict[str, str]:
     return fields
 
 
-def head_revision(relative: str) -> str | None:
+def revision(relative: str, sha: str) -> str | None:
     result = subprocess.run(
-        ["git", "show", f"HEAD:{relative}"],
-        cwd=ROOT,
-        capture_output=True,
-        text=True,
-        check=False,
+        ["git", "show", f"{sha}:{relative}"],
+        cwd=ROOT, capture_output=True, text=True, check=False,
     )
     return result.stdout if result.returncode == 0 else None
 
 
-def debt_entries(document: object) -> dict[str, int]:
-    """债务计数型条目，展平成 `身份 -> 计数`。
+def head_revision(relative: str) -> str | None:
+    return revision(relative, "HEAD")
 
-    键含 `/` 才算——债务基线的键是文件路径，耗时预算的键是场景名。值支持两种形状：
-    直接是计数，或是 `{identity -> count}`（细到函数/字段，使同文件内的位置替换也
-    藏不住）。
-    """
-    if not isinstance(document, dict):
-        return {}
+
+def _base_revision(relative: str, sha: str) -> str | None:
+    # Preserve the dirty-worktree seam used by local contract fixtures.
+    return head_revision(relative) if sha == "HEAD" else revision(relative, sha)
+
+
+def _load_document(body: str, suffix: str) -> object:
+    return json.loads(body) if suffix == ".json" else yaml.safe_load(body)
+
+
+def debt_entries(document: object) -> dict[str, int]:
+    """Flatten known debt identities from JSON/YAML without a second schema registry."""
     entries: dict[str, int] = {}
-    if document.get("schema") == "single-track-exact-fingerprint-baseline":
-        findings = document.get("findings")
-        if not isinstance(findings, list):
-            return entries
-        for finding in findings:
-            if not isinstance(finding, dict):
-                continue
-            path = finding.get("path")
-            fingerprint = finding.get("fingerprint")
-            count = finding.get("count")
-            if (
-                isinstance(path, str)
-                and "/" in path
-                and isinstance(fingerprint, str)
-                and isinstance(count, int)
-                and not isinstance(count, bool)
-            ):
-                entries[f"{path}::{fingerprint}"] = count
+
+    if (
+        isinstance(document, dict)
+        and document.get("schema") == "single-track-exact-fingerprint-baseline"
+    ):
+        paths = document.get("paths")
+        if isinstance(paths, dict):
+            for path, item in paths.items():
+                if not isinstance(path, str) or not isinstance(item, dict):
+                    continue
+                fingerprints = item.get("fingerprints")
+                if isinstance(fingerprints, dict):
+                    for fingerprint, count in fingerprints.items():
+                        if isinstance(fingerprint, str) and isinstance(count, int) and not isinstance(count, bool):
+                            entries[f"{path}::{fingerprint}"] = count
         return entries
-    for key, value in document.items():
-        if key == "_governance" or not isinstance(key, str) or "/" not in key:
-            continue
-        if isinstance(value, bool):
-            continue
-        if isinstance(value, int):
-            entries[key] = value
-        elif isinstance(value, dict):
-            for identity, count in value.items():
-                if isinstance(count, int) and not isinstance(count, bool):
-                    entries[f"{key}::{identity}"] = count
+
+    def visit(value: object, context: tuple[str, ...] = ()) -> None:
+        if isinstance(value, list):
+            for item in value:
+                if not isinstance(item, dict):
+                    continue
+                path = item.get("path")
+                spec = item.get("spec")
+                identity: str | None = None
+                if isinstance(path, str) and "/" in path:
+                    identity = path
+                elif isinstance(spec, str) and "/" in spec:
+                    anchor = item.get("anchor") or item.get("open_id") or item.get("id")
+                    identity = f"{spec}::{anchor}" if isinstance(anchor, str) and anchor else spec
+                if identity is not None:
+                    discriminator = item.get("fingerprint") or item.get("id")
+                    if isinstance(discriminator, str) and discriminator and discriminator not in identity:
+                        identity = f"{identity}::{discriminator}"
+                    measured = False
+                    for measure in ("max_lines", "count"):
+                        count = item.get(measure)
+                        if isinstance(count, int) and not isinstance(count, bool):
+                            entries[f"{'/'.join(context)}::{identity}::{measure}"] = count
+                            measured = True
+                    if not measured:
+                        entries[f"{'/'.join(context)}::{identity}"] = 1
+                visit(item, context)
+            return
+        if not isinstance(value, dict):
+            return
+        for key, child in value.items():
+            if key in {"_governance", "governance"}:
+                continue
+            if isinstance(key, str) and "/" in key:
+                if isinstance(child, int) and not isinstance(child, bool):
+                    entries[f"{'/'.join(context)}::{key}" if context else key] = child
+                elif isinstance(child, dict):
+                    for identity, count in child.items():
+                        if isinstance(count, int) and not isinstance(count, bool):
+                            entries[f"{'/'.join(context)}::{key}::{identity}" if context else f"{key}::{identity}"] = count
+            if isinstance(child, (dict, list)):
+                visit(child, (*context, str(key)))
+
+    visit(document)
     return entries
 
 
-def debt_growth(path: Path, relative: str) -> list[str]:
-    """相对 HEAD 变大或新增的债务条目。文件在 HEAD 不存在时无从比较。"""
-    body = head_revision(relative)
-    if body is None or path.suffix != ".json":
+def debt_growth(path: Path, relative: str, *, base_sha: str = "HEAD", candidate_body: str | None = None) -> list[str]:
+    """Compare one candidate baseline to an exact base revision."""
+    body = _base_revision(relative, base_sha)
+    if body is None:
         return []
     try:
-        before = debt_entries(json.loads(body))
-        after = debt_entries(json.loads(path.read_text(encoding="utf-8")))
-    except (json.JSONDecodeError, UnicodeError):
-        return []
+        before = debt_entries(_load_document(body, path.suffix))
+        after_body = path.read_text(encoding="utf-8") if candidate_body is None else candidate_body
+        after = debt_entries(_load_document(after_body, path.suffix))
+    except (json.JSONDecodeError, UnicodeError, yaml.YAMLError) as error:
+        raise ValueError(f"{relative}: baseline 无法解析（{error}）") from error
     if not before and not after:
         return []
     growth: list[str] = []
@@ -217,9 +276,9 @@ def debt_growth(path: Path, relative: str) -> list[str]:
     return growth
 
 
-def measure_of_head(path: Path, relative: str) -> str | None:
-    """取 HEAD 版本的 measure，用于判断本次是否换了口径。"""
-    body = head_revision(relative)
+def measure_of_revision(path: Path, relative: str, sha: str = "HEAD") -> str | None:
+    """Read the governance measure from an exact revision."""
+    body = _base_revision(relative, sha)
     if body is None:
         return None
     # 进程唯一命名：并发 gate 进程处理同名 baseline 时禁止共享 scratch 文件互删。
@@ -238,18 +297,71 @@ def measure_of_head(path: Path, relative: str) -> str | None:
         scratch.unlink(missing_ok=True)
 
 
-def main() -> int:
+def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--base-sha")
+    parser.add_argument("--head-sha")
+    args = parser.parse_args(argv)
+    if (args.base_sha is None) != (args.head_sha is None):
+        parser.error("--base-sha 与 --head-sha 必须成对提供")
+    for label in ("base_sha", "head_sha"):
+        value = getattr(args, label)
+        if value is not None and not _SHA_RE.fullmatch(value):
+            parser.error(f"--{label.replace('_', '-')} 必须为 lowercase exact SHA")
+    return args
+
+
+def main(argv: list[str] | None = None) -> int:
+    try:
+        args = _parse_args([] if argv is None else argv)
+    except SystemExit as error:
+        return int(error.code or 0)
     failures: list[str] = []
     checked = 0
     owners = known_owners()
-    for path in baseline_files():
-        relative = path.relative_to(ROOT).as_posix()
-        checked += 1
-        try:
-            block = governance_block(path)
-        except json.JSONDecodeError as error:
-            failures.append(f"{relative}: 无法解析（{error}）")
+    base_sha = args.base_sha or "HEAD"
+    candidate_sha = args.head_sha
+    try:
+        candidate_files = baseline_files(sha=candidate_sha) if candidate_sha else baseline_files()
+        base_files = baseline_files(sha=base_sha) if candidate_sha else candidate_files
+    except ValueError as error:
+        print(f"[ratchet-baseline-governance] GATE_BLOCK: {error}")
+        return 2
+    relatives = sorted(
+        {path.relative_to(ROOT).as_posix() for path in candidate_files}
+        | {path.relative_to(ROOT).as_posix() for path in base_files}
+    )
+    for relative in relatives:
+        path = ROOT / relative
+        candidate_body = revision(relative, candidate_sha) if candidate_sha else (
+            path.read_text(encoding="utf-8") if path.is_file() else None
+        )
+        base_body = _base_revision(relative, base_sha)
+        if candidate_body is None:
+            if base_body is not None:
+                try:
+                    has_debt = bool(debt_entries(_load_document(base_body, path.suffix)))
+                except (json.JSONDecodeError, UnicodeError, yaml.YAMLError) as error:
+                    failures.append(f"{relative}: base baseline 无法解析（{error}）")
+                    continue
+                if has_debt:
+                    failures.append(f"{relative}: 仍含债务的 baseline 不得删除")
             continue
+        checked += 1
+        scratch = (
+            ROOT / ".qwq_output/env/repo/local/ratchet-governance"
+            / f"{os.getpid()}-{uuid.uuid4().hex[:8]}-{path.name}"
+        )
+        scratch.parent.mkdir(parents=True, exist_ok=True)
+        scratch.write_text(candidate_body, encoding="utf-8")
+        try:
+            block = governance_block(scratch)
+        except (json.JSONDecodeError, yaml.YAMLError) as error:
+            failures.append(f"{relative}: 无法解析（{error}）")
+            scratch.unlink(missing_ok=True)
+            continue
+        finally:
+            scratch.unlink(missing_ok=True)
 
         missing = [field for field in REQUIRED_FIELDS if not block.get(field)]
         if missing:
@@ -258,28 +370,30 @@ def main() -> int:
                 "棘轮基线必须能被独立复算，否则换口径重建就无痕"
             )
             continue
-
         owner = block["owner"]
         if owner not in owners:
             failures.append(
                 f"{relative}: owner {owner!r} 既不是 specs/feature-tree 下的节点，"
                 "也不在 GOVERNANCE_FUNCTIONS 里；无法追责的 owner 等于没有 owner"
             )
-
-        previous = measure_of_head(path, relative)
-        if previous is not None and previous != block["measure"]:
-            if not block.get("superseded_measure"):
-                failures.append(
-                    f"{relative}: measure 相对 HEAD 已变更，但没有 superseded_measure；"
-                    "换度量口径必须同批写下旧口径是什么、为什么换、旧口径下的实测值"
-                )
-
-        growth = debt_growth(path, relative)
+        previous = measure_of_revision(path, relative, base_sha)
+        if previous is not None and previous != block["measure"] and not block.get("superseded_measure"):
+            failures.append(
+                f"{relative}: measure 相对 HEAD 已变更（exact range 时 HEAD 指 base），但没有 superseded_measure；"
+                "换度量口径必须同批写下旧口径是什么、为什么换、旧口径下的实测值"
+            )
+        try:
+            growth = debt_growth(
+                path, relative, base_sha=base_sha, candidate_body=candidate_body
+            )
+        except ValueError as error:
+            failures.append(str(error))
+            continue
         if growth:
             listed = "；".join(growth[:5])
             more = f"（另有 {len(growth) - 5} 项）" if len(growth) > 5 else ""
             failures.append(
-                f"{relative}: {len(growth)} 处债务条目相对 HEAD 变大或新增 —— "
+                f"{relative}: {len(growth)} 处债务条目相对 HEAD 变大或新增（exact range 时 HEAD 指 base） —— "
                 f"{listed}{more}；棘轮只能下降，先消化债务再谈基线"
             )
 
@@ -293,4 +407,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(main(sys.argv[1:]))

@@ -170,34 +170,34 @@ def test_app_test_phase_rejects_invalid_shards_before_execution(
         assert not log_path.exists()
 
 
-def test_delivery_pr_reuses_push_owned_app_evidence_without_merging_ranges() -> None:
+def test_delivery_pr_is_self_contained_and_never_uses_push_or_self_hosted_evidence() -> None:
     workflow = (ROOT / ".github/workflows/delivery-gate.yml").read_text(
         encoding="utf-8"
     )
-    local_app_if = (
-        "github.event_name != 'pull_request' && (github.event_name == "
-        "'workflow_call' || needs.topology_regression.outputs.candidate_app == 'true')"
+    assert "name: Generate canonical Delivery impact plan once" in workflow
+    assert workflow.count("--impact-plan") == 2  # producer plus changed-boundary consumer
+    assert "verify_ci_changed_boundary.py" in workflow
+    assert "name: Detect candidate-level App scope" not in workflow
+    assert "Verify push-owned App evidence" not in workflow
+    assert "verify-delivery-app-evidence" not in workflow
+    assert "--external-phase" not in workflow
+    assert "github.event.pull_request.head.sha" not in workflow
+    assert "inputs.release_call" in _job_body(
+        workflow, "quwoquan_service_packaging"
     )
-    assert workflow.count(local_app_if) == 3
-    assert "needs.topology_regression.outputs.coverage_app == 'true'" in workflow
-    assert "name: Detect candidate-level App scope" in workflow
-    assert "git merge-base origin/main \"$HEAD_SHA\"" in workflow
-    assert "--scope-receipt" in workflow
-    assert "SCOPE_ARGS+=(--required-scope app)" in workflow
-    assert '${SCOPE_ARGS[@]+"${SCOPE_ARGS[@]}"}' in workflow
-    assert "name: Verify push-owned App evidence" in workflow
-    assert "make verify-delivery-app-evidence" in workflow
-    assert "job_closure_digest: ${{ steps.external.outputs.job_closure_digest }}" in workflow
-    assert "if: ${{ github.event_name == 'pull_request' }}" in workflow
-    assert 'if [[ "${{ github.event_name }}" != "pull_request" ]]; then' in workflow
-    assert "if: ${{ github.event_name != 'pull_request' }}" in workflow
-    assert "--external-phase \"app_static=$APP_STATIC_EXTERNAL\"" in workflow
-    assert "--external-phase \"app_coverage=$APP_COVERAGE_EXTERNAL\"" in workflow
-    assert '--candidate-job "Delivery Gate — App (L1)"' not in workflow
+    assert "inputs.release_call" in _job_body(
+        workflow, "quwoquan_app_serial"
+    )
+    assert "inputs.release_call" in _job_body(
+        workflow, "quwoquan_app_coverage"
+    )
+    for job_name in ("quwoquan_app_static", "quwoquan_app_tests"):
+        body = _job_body(workflow, job_name)
+        assert "runs-on: ubuntu-latest" in body
+        assert "github.event_name != 'push'" in body
     concurrency = workflow[workflow.index("concurrency:") : workflow.index("\non:")]
-    assert "github.event_name" in concurrency
-    assert "github.ref" in concurrency
-    assert "head.sha" not in concurrency
+    assert "github.event.pull_request.number || github.ref" in concurrency
+    assert "cancel-in-progress: true" in concurrency
 
 
 def test_delivery_gate_keeps_cross_platform_jobs_on_linux_and_visual_phases_on_controlled_macos() -> None:
@@ -234,9 +234,9 @@ def test_delivery_gate_keeps_cross_platform_jobs_on_linux_and_visual_phases_on_c
         job_start = delivery.index(f"  {job_name}:\n")
         job_end = delivery.index(f"\n  {next_job_name}:\n", job_start)
         job_body = delivery[job_start:job_end]
-        assert "runs-on: [self-hosted, macOS, ARM64]" in job_body
+        assert "runs-on: [self-hosted, macOS, ARM64, quwoquan-release-authority]" in job_body
     packaging = _job_body(delivery, "quwoquan_service_packaging")
-    assert "runs-on: [self-hosted, macOS, ARM64]" in packaging
+    assert "runs-on: [self-hosted, macOS, ARM64, quwoquan-release-authority]" in packaging
     # 三格匹配同一台物理 runner，并共享 host-wide App dependency sync lock；
     # matrix 保留三份独立证据，但不得在该主机上互相争锁。
     assert "packaging_env: [alpha, beta, gamma]" in packaging
@@ -266,7 +266,7 @@ def test_environment_writing_jobs_stay_on_controlled_runners() -> None:
         encoding="utf-8"
     )
     assert "runs-on: macos-latest" not in workflow
-    assert "runs-on: [self-hosted, macOS, ARM64]" in workflow
+    assert "runs-on: [self-hosted, macOS, ARM64, quwoquan-release-authority]" in workflow
 
 
 def test_contract_metadata_bootstrap_creates_cache_parent_before_mktemp() -> None:
@@ -291,9 +291,12 @@ def test_ff_config_contract_uses_portable_grep() -> None:
 def test_delivery_impact_plan_is_generated_once_and_artifacted() -> None:
     workflow = (ROOT / ".github/workflows/delivery-gate.yml").read_text(encoding="utf-8")
     topology = _job_body(workflow, "topology_regression")
-    assert topology.count("--impact-plan") == 1
+    assert topology.count("--impact-plan") == 2
+    assert topology.count('--impact-plan "$IMPACT_ROOT/impact-plan.json"') == 2
     assert "--validate-impact-plan" in topology
-    assert "Upload versioned Delivery impact plan" in topology
+    assert "verify_ci_changed_boundary.py" in topology
+    assert "Upload failed Delivery impact plan diagnostic" in topology
+    assert "failure() && !cancelled()" in topology
     assert "impact_plan_digest: ${{ steps.detect.outputs.plan_digest }}" in topology
     for job_name in ("quwoquan_app_tests", "quwoquan_data_tests"):
         assert "detect_ci_impacted_scopes.py" not in _job_body(workflow, job_name)
@@ -302,7 +305,8 @@ def test_delivery_impact_plan_is_generated_once_and_artifacted() -> None:
 def test_coverage_jobs_use_business_impact_or_governance_contract_closure() -> None:
     workflow = (ROOT / ".github/workflows/delivery-gate.yml").read_text(encoding="utf-8")
     assert "outputs.coverage_service == 'true'" in _job_body(workflow, "quwoquan_service_coverage")
-    assert "outputs.coverage_app == 'true'" in _job_body(workflow, "quwoquan_app_coverage")
+    assert "inputs.release_call" in _job_body(workflow, "quwoquan_app_coverage")
+    assert "outputs.coverage_app == 'true'" not in _job_body(workflow, "quwoquan_app_coverage")
     assert 'expect_typed_pending_or_skipped "quwoquan_service_coverage" "${SERVICE_COVERAGE}" "$SERVICE_COVERAGE_IMPACTED"' in workflow
 
 

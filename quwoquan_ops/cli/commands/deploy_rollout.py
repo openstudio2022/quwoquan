@@ -262,7 +262,7 @@ def _command_deploy_with_lock(args: argparse.Namespace) -> dict[str, Any]:
                     )
                 release_id = str(
                     release_manifest_payload.get("releaseTrainId")
-                    or release_manifest_payload.get("candidateId")
+                    or release_manifest_payload.get("releaseCompositionId")
                     or ""
                 )
                 environment_acceptance = _stackctl._load_prod_environment_acceptance(
@@ -296,7 +296,7 @@ def _command_deploy_with_lock(args: argparse.Namespace) -> dict[str, Any]:
                     _stackctl.rollout_stage_promotion_evidence.validate_observation(
                         promotion_observation,
                         candidate_id=str(
-                            release_manifest_payload.get("candidateId") or ""
+                            release_manifest_payload.get("releaseCompositionId") or ""
                         ),
                         artifact_digest=release_artifact_digest,
                         campaign_id=str(rollout_canary_contract["campaignId"]),
@@ -462,7 +462,7 @@ def _command_deploy_with_lock(args: argparse.Namespace) -> dict[str, Any]:
                 "rolloutStage": rollout_stage,
                 "rolloutDecision": hosted_receipt.get("decision"),
                 "artifactDigest": release_artifact_digest,
-                "candidateId": release_manifest_payload.get("candidateId"),
+                "releaseCompositionId": release_manifest_payload.get("releaseCompositionId"),
                 "releaseReceiptId": release_receipt_id,
                 "releaseReceiptRef": f"receipt:hosted:{release_receipt_id}",
                 "releaseReceiptAuthority": "prod-hosted-service-plane",
@@ -517,7 +517,7 @@ def _command_deploy_with_lock(args: argparse.Namespace) -> dict[str, Any]:
             package_binding = _stackctl._materialize_release_evidence_configuration(
                 "prod", target=args.target
             )
-            if package_binding.get("candidateId") != args.to_candidate_digest:
+            if package_binding.get("releaseCompositionId") != args.to_candidate_digest:
                 raise ValueError(
                     "fixed prod package does not bind the rollout candidate"
                 )
@@ -616,7 +616,7 @@ def _command_deploy_with_lock(args: argparse.Namespace) -> dict[str, Any]:
                         _stackctl.rollout_stage_promotion_evidence.validate_observation(
                             promotion_observation,
                             candidate_id=str(
-                                release_manifest_payload.get("candidateId") or ""
+                                release_manifest_payload.get("releaseCompositionId") or ""
                             ),
                             artifact_digest=release_artifact_digest,
                             campaign_id=str(rollout_canary_contract["campaignId"]),
@@ -900,8 +900,8 @@ def _command_deploy_with_lock(args: argparse.Namespace) -> dict[str, Any]:
             "rolloutDecision": rollout_decision,
             "artifactDigest": release_artifact_digest,
             "releaseEvidenceRef": to_release_evidence_ref,
-            "candidateId": (
-                release_manifest_payload.get("candidateId")
+            "releaseCompositionId": (
+                release_manifest_payload.get("releaseCompositionId")
                 if release_manifest_payload
                 else ""
             ),

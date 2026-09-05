@@ -264,7 +264,7 @@ def test_delivery_gate_packages_the_three_envs_as_parallel_siblings() -> None:
     assert "max-parallel: 1" in job
     assert "packaging_env: [alpha, beta, gamma]" in job
     assert "QWQ_PACKAGING_ENVS: ${{ matrix.packaging_env }}" in job
-    assert "runs-on: [self-hosted, macOS, ARM64]" in job
+    assert "runs-on: [self-hosted, macOS, ARM64, quwoquan-release-authority]" in job
     assert "id: strict_inputs" in job
     assert "prepare_app_pipeline_inputs.py" in job
     assert "--build-product-id android-nonprod-apk" in job
@@ -293,7 +293,7 @@ def test_delivery_gate_cancels_superseded_runs_without_merging_the_two_ranges() 
     workflow = (ROOT / ".github/workflows/delivery-gate.yml").read_text(encoding="utf-8")
     concurrency = workflow[workflow.index("concurrency:") : workflow.index("\non:")]
 
-    assert "group: delivery-gate-${{ github.event_name }}-${{ github.ref }}" in concurrency
+    assert "group: delivery-gate-${{ github.event.pull_request.number || github.ref }}" in concurrency
     assert "cancel-in-progress: true" in concurrency
     # push 对上一个 tip、pull_request 对 main，两段区间不同；按 head SHA 归一会丢区间。
     assert "head.sha" not in concurrency

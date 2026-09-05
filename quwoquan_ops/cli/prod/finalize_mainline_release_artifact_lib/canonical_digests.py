@@ -107,99 +107,79 @@ def canonical_release_train_digest(payload: dict[str, Any]) -> str:
 
 
 def _candidate_projection(payload: dict[str, Any]) -> dict[str, Any]:
+    """Project deployable software/config only; qualification is separate."""
+
     source = payload.get("source")
     artifacts = payload.get("environmentArtifacts")
     applications = payload.get("applicationPackages")
-    distributions = {
-        evidence_key: payload.get(evidence_key)
-        for evidence_key in DISTRIBUTION_EVIDENCE_PATHS
-    }
-    provider = payload.get("providerEvidence")
-    test = payload.get("testEvidence")
+    portal = payload.get("opsPortal")
     contract_graph = payload.get("contractGraphDigest")
     release_train_id = payload.get("releaseTrainId")
     if not isinstance(source, dict) or not isinstance(artifacts, dict):
-        raise ValueError("candidate source or environment artifacts are incomplete")
+        raise ValueError("release composition source or environment artifacts are incomplete")
     if set(artifacts) != set(ENVIRONMENTS):
-        raise ValueError("candidate environment artifact material is incomplete")
-    if not isinstance(applications, dict) or set(applications) != set(
-        APPLICATION_PACKAGES
-    ):
-        raise ValueError("candidate App build product material is incomplete")
-    if any(
-        not isinstance(descriptor, dict)
-        or DIGEST_PATTERN.fullmatch(str(descriptor.get("digest") or "")) is None
-        for descriptor in distributions.values()
-    ):
-        raise ValueError("candidate distribution evidence is incomplete")
-    if not isinstance(provider, dict) or not isinstance(test, dict):
-        raise ValueError("candidate qualification material is incomplete")
+        raise ValueError("release composition environment artifact material is incomplete")
+    if not isinstance(applications, dict) or set(applications) != set(APPLICATION_PACKAGES):
+        raise ValueError("release composition App build product material is incomplete")
+    if not isinstance(portal, dict) or DIGEST_PATTERN.fullmatch(str(portal.get("packageDigest") or "")) is None:
+        raise ValueError("release composition Ops Portal material is incomplete")
     if DIGEST_PATTERN.fullmatch(str(contract_graph or "")) is None:
-        raise ValueError("candidate contract graph material is incomplete")
+        raise ValueError("release composition contract graph material is incomplete")
     if DIGEST_PATTERN.fullmatch(str(release_train_id or "")) is None:
-        raise ValueError("candidate release train identity is incomplete")
+        raise ValueError("release composition train identity is incomplete")
 
     projected_artifacts: dict[str, Any] = {}
     for environment in ENVIRONMENTS:
         projection = _environment_artifact_projection(payload, environment)
         artifact = artifacts[environment]
         environment_digest = artifact.get("environmentArtifactDigest")
-        if environment_digest != canonical_environment_artifact_digest(
-            payload, environment
-        ):
-            raise ValueError(
-                f"environment artifact digest is incomplete: {environment}"
-            )
-        projected_artifacts[environment] = {
-            **projection,
-            "environmentArtifactDigest": environment_digest,
-        }
+        if environment_digest != canonical_environment_artifact_digest(payload, environment):
+            raise ValueError(f"environment artifact digest is incomplete: {environment}")
+        projected_artifacts[environment] = {**projection, "environmentArtifactDigest": environment_digest}
 
-    # sourceRef 是 CI 运输位置，不是内容身份；候选摘要只保留五产品内容 digest。
     projected_applications = {
-        build_product_id: {
-            "digest": descriptor.get("digest"),
-            "packageDigest": descriptor.get("packageDigest"),
-        }
-        for build_product_id, descriptor in sorted(applications.items())
-        if isinstance(descriptor, dict)
+        product: {"digest": descriptor.get("digest"), "packageDigest": descriptor.get("packageDigest")}
+        for product, descriptor in sorted(applications.items()) if isinstance(descriptor, dict)
     }
     if len(projected_applications) != len(APPLICATION_PACKAGES):
-        raise ValueError("candidate App build product material is invalid")
-    for build_product_id, descriptor in projected_applications.items():
-        if any(
-            DIGEST_PATTERN.fullmatch(str(descriptor.get(field) or "")) is None
-            for field in ("digest", "packageDigest")
-        ):
-            raise ValueError(
-                f"candidate App build product material is not immutable: {build_product_id}"
-            )
-
+        raise ValueError("release composition App material is invalid")
+    for product, descriptor in projected_applications.items():
+        if any(DIGEST_PATTERN.fullmatch(str(descriptor.get(field) or "")) is None for field in ("digest", "packageDigest")):
+            raise ValueError(f"release composition App material is not immutable: {product}")
     return {
-        "schema": SCHEMA,
-        "releaseTrainId": release_train_id,
-        "source": {
-            "gitSha": source.get("gitSha"),
-            "treeDigest": source.get("treeDigest"),
-            "repository": source.get("repository"),
-        },
-        "environmentArtifacts": projected_artifacts,
-        "applicationPackages": projected_applications,
-        "distributionEvidence": {
-            evidence_key: {"digest": descriptor["digest"]}
-            for evidence_key, descriptor in sorted(distributions.items())
-        },
+        "schema": SCHEMA, "releaseTrainId": release_train_id,
+        "source": {"gitSha": source.get("gitSha"), "treeDigest": source.get("treeDigest"), "repository": source.get("repository")},
+        "environmentArtifacts": projected_artifacts, "applicationPackages": projected_applications,
+        "opsPortal": {"packageDigest": portal.get("packageDigest")},
         "contractGraphDigest": contract_graph,
-        "providerEvidence": {"digest": provider.get("digest")},
-        "testEvidence": {
-            "digest": test.get("digest"),
-            "layers": test.get("layers"),
-        },
     }
 
 
-def canonical_candidate_digest(payload: dict[str, Any]) -> str:
+def _evidence_projection(payload: dict[str, Any]) -> dict[str, Any]:
+    provider = payload.get("providerEvidence")
+    tests = payload.get("testEvidence")
+    distributions = {key: payload.get(key) for key in DISTRIBUTION_EVIDENCE_PATHS}
+    if not isinstance(provider, dict) or not isinstance(tests, dict):
+        raise ValueError("qualification evidence is incomplete")
+    if any(not isinstance(value, dict) or DIGEST_PATTERN.fullmatch(str(value.get("digest") or "")) is None for value in distributions.values()):
+        raise ValueError("distribution qualification evidence is incomplete")
+    if DIGEST_PATTERN.fullmatch(str(provider.get("digest") or "")) is None or DIGEST_PATTERN.fullmatch(str(tests.get("digest") or "")) is None:
+        raise ValueError("Provider/test qualification evidence is incomplete")
+    return {
+        "schema": SCHEMA, "releaseCompositionId": payload.get("releaseCompositionId"),
+        "distributionEvidence": {key: {"digest": value["digest"]} for key, value in sorted(distributions.items())},
+        "providerEvidence": {"digest": provider.get("digest"), "status": provider.get("status")},
+        "testEvidence": {"digest": tests.get("digest"), "status": tests.get("status"), "layers": tests.get("layers")},
+    }
+
+
+def canonical_release_composition_id(payload: dict[str, Any]) -> str:
     projection = _candidate_projection(payload)
+    return "sha256:" + hashlib.sha256(_canonical_json_bytes(projection)).hexdigest()
+
+
+def canonical_evidence_set_digest(payload: dict[str, Any]) -> str:
+    projection = _evidence_projection(payload)
     return "sha256:" + hashlib.sha256(_canonical_json_bytes(projection)).hexdigest()
 
 
@@ -240,7 +220,7 @@ def seal_manifest(payload: dict[str, Any]) -> dict[str, Any]:
             if (
                 immutable_images
                 and existing_digest not in {None, environment_digest}
-                and payload.get("candidateId") is not None
+                and payload.get("releaseCompositionId") is not None
             ):
                 raise ValueError(
                     "environment artifact identity changed across lifecycle snapshots: "
@@ -250,13 +230,18 @@ def seal_manifest(payload: dict[str, Any]) -> dict[str, Any]:
             artifacts[environment] = artifact
 
     try:
-        candidate_digest: str | None = canonical_candidate_digest(sealed)
+        composition_id: str | None = canonical_release_composition_id(sealed)
     except ValueError:
-        candidate_digest = None
-    existing_candidate = payload.get("candidateId")
-    if existing_candidate not in {None, candidate_digest}:
-        raise ValueError("release candidate identity changed across lifecycle snapshots")
-    sealed["candidateId"] = candidate_digest
+        composition_id = None
+    existing_composition = payload.get("releaseCompositionId")
+    if existing_composition not in {None, composition_id}:
+        raise ValueError("release composition identity changed across lifecycle snapshots")
+    sealed["releaseCompositionId"] = composition_id
+    try:
+        evidence_set_digest: str | None = canonical_evidence_set_digest(sealed)
+    except ValueError:
+        evidence_set_digest = None
+    sealed["evidenceSetDigest"] = evidence_set_digest
     sealed["artifactDigest"] = canonical_manifest_digest(sealed)
     return sealed
 
@@ -324,7 +309,8 @@ def write_summary(path: Path, manifest: dict[str, Any]) -> None:
         "",
         f"- `status`: `{manifest['status']}`",
         f"- `releaseTrainId`: `{manifest['releaseTrainId']}`",
-        f"- `candidateId`: `{manifest['candidateId']}`",
+        f"- `releaseCompositionId`: `{manifest['releaseCompositionId']}`",
+        f"- `evidenceSetDigest`: `{manifest['evidenceSetDigest']}`",
         f"- `artifactDigest`: `{manifest['artifactDigest']}`",
         f"- `environmentArtifacts`: `{len(manifest['environmentArtifacts'])}`",
         f"- `immutableImages`: `{immutable_images}`",

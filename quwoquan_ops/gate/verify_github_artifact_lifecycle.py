@@ -12,6 +12,22 @@ WORKFLOWS = ROOT / ".github" / "workflows"
 LIFECYCLE_WORKFLOW = WORKFLOWS / "artifact-lifecycle.yml"
 LIFECYCLE_SCRIPT = ROOT / "quwoquan_ops" / "ci" / "manage_actions_artifacts.py"
 SERVICE_PIPELINE = WORKFLOWS / "service_pipeline.yml"
+WEEKLY_REPORT_WORKFLOW = WORKFLOWS / "code-health-weekly.yml"
+WEEKLY_REPORT_NAME = (
+    "code-health-weekly-report-${{ github.run_id }}-${{ github.run_attempt }}"
+)
+WEEKLY_REPORT_PATH = (
+    "${{ env.QWQ_OUTPUT_ROOT }}/env/repo/runs/code-health/weekly/**/report.json"
+)
+WEEKLY_REPORT_RETENTION_DAYS = "14"
+WEEKLY_REPORT_IF_NO_FILES_FOUND = "error"
+WEEKLY_REPORT_FORBIDDEN_TOKENS = (
+    "actions/download-artifact@",
+    "create-open",
+    "create_open",
+    "promotion",
+    "mutation",
+)
 UPLOAD_PATTERN = re.compile(
     r"^(?P<indent>\s*)uses:\s*actions/upload-artifact@[0-9a-f]{40}\s*$",
     re.MULTILINE,
@@ -46,27 +62,76 @@ def _upload_block(text: str, match: re.Match[str]) -> str:
     return text[start:end]
 
 
+def _scalar_value(block: str, key: str) -> str | None:
+    match = re.search(rf"^\s*{re.escape(key)}:\s*(.+?)\s*$", block, re.MULTILINE)
+    if match is None:
+        return None
+    return match.group(1).strip().strip("\"'")
+
+
+def _is_bounded_weekly_report_upload(workflow: Path, block: str) -> bool:
+    if workflow != WEEKLY_REPORT_WORKFLOW:
+        return False
+    if _scalar_value(block, "if") != "success()":
+        return False
+    if _scalar_value(block, "name") != WEEKLY_REPORT_NAME:
+        return False
+    if _scalar_value(block, "path") != WEEKLY_REPORT_PATH:
+        return False
+    if _scalar_value(block, "if-no-files-found") != WEEKLY_REPORT_IF_NO_FILES_FOUND:
+        return False
+    if _scalar_value(block, "retention-days") != WEEKLY_REPORT_RETENTION_DAYS:
+        return False
+    return True
+
+
+def _weekly_report_workflow_is_report_only(text: str) -> bool:
+    casefolded = text.casefold()
+    return all(token not in casefolded for token in WEEKLY_REPORT_FORBIDDEN_TOKENS)
+
+
 def verify() -> list[str]:
     issues: list[str] = []
-    uploaded_workflow_names: set[str] = set()
     for workflow in sorted([*WORKFLOWS.glob("*.yml"), *WORKFLOWS.glob("*.yaml")]):
         text = workflow.read_text(encoding="utf-8")
         name_match = re.search(r"^name:\s*(.+?)\s*$", text, re.MULTILINE)
         workflow_name = name_match.group(1).strip().strip("\"'") if name_match else ""
-        for match in UPLOAD_PATTERN.finditer(text):
-            uploaded_workflow_names.add(workflow_name)
+        upload_matches = list(UPLOAD_PATTERN.finditer(text))
+        bounded_weekly_uploads = [
+            match
+            for match in upload_matches
+            if _is_bounded_weekly_report_upload(workflow, _upload_block(text, match))
+        ]
+        weekly_report_only = _weekly_report_workflow_is_report_only(text)
+        allow_bounded_weekly_upload = (
+            workflow == WEEKLY_REPORT_WORKFLOW
+            and len(bounded_weekly_uploads) == 1
+            and weekly_report_only
+        )
+        for match in upload_matches:
             block = _upload_block(text, match)
             line = text.count("\n", 0, match.start()) + 1
             prefix = f"{workflow.relative_to(ROOT)}:{line}"
             if "retention-days:" not in block:
                 issues.append(f"{prefix}: artifact uploads require explicit retention-days")
-            if FAILURE_ONLY_CONDITION not in block:
+            bounded_weekly_report = (
+                allow_bounded_weekly_upload
+                and match is bounded_weekly_uploads[0]
+            )
+            if FAILURE_ONLY_CONDITION not in block and not bounded_weekly_report:
                 issues.append(
                     f"{prefix}: Actions artifacts are failure diagnostics only; "
                     f"require {FAILURE_ONLY_CONDITION}"
                 )
             if re.search(r"/runs/\*\*(?:\s|$)", block):
                 issues.append(f"{prefix}: broad runs/** upload is forbidden; select report.json/summary.json")
+        if workflow == WEEKLY_REPORT_WORKFLOW and (
+            len(bounded_weekly_uploads) != 1 or not weekly_report_only
+        ):
+            issues.append(
+                f"{workflow.relative_to(ROOT)}: code-health weekly requires exactly one "
+                "bounded successful weekly report in a report-only workflow"
+            )
         if DOWNLOAD_PATTERN.search(text):
             issues.append(
                 f"{workflow.relative_to(ROOT)}: Actions Artifact job exchange is forbidden; "
@@ -99,12 +164,10 @@ def verify() -> list[str]:
             "manage_actions_artifacts.py",
             "--apply",
             "--failed-retention-days 3",
-            "workflow_run:",
+            "schedule:",
+            "workflow_dispatch:",
             "pull_request:",
             "types: [closed]",
-            "--run-id",
-            "github.event.workflow_run.name == '02. Service Pipeline'",
-            "github.event.workflow_run.conclusion != 'success'",
             "Reclaim closed pull-request caches",
             "refs/pull/${{ github.event.pull_request.number }}/merge",
             "actions/caches/${cache_id}",
@@ -112,6 +175,8 @@ def verify() -> list[str]:
         ):
             if token not in lifecycle:
                 issues.append(f"artifact lifecycle workflow missing {token!r}")
+        if "workflow_run:" in lifecycle:
+            issues.append("artifact lifecycle workflow must not fan out on workflow_run")
         lifecycle_runners = re.findall(
             r"^\s*runs-on:\s*(.+?)\s*$", lifecycle, re.MULTILINE
         )
@@ -122,18 +187,6 @@ def verify() -> list[str]:
             issues.append(
                 "artifact lifecycle workflow must not use a self-hosted macOS ARM64 runner"
             )
-        triggered_names = {
-            item.strip()
-            for item in re.findall(r"^\s+-\s+(.+?)\s*$", lifecycle, re.MULTILINE)
-        }
-        for workflow_name in sorted(uploaded_workflow_names):
-            if not workflow_name:
-                issues.append("artifact-uploading workflow has no name")
-            elif workflow_name not in triggered_names:
-                issues.append(
-                    "artifact lifecycle workflow must observe every artifact-producing "
-                    f"workflow: {workflow_name!r}"
-                )
     if not SERVICE_PIPELINE.is_file():
         issues.append("missing .github/workflows/service_pipeline.yml")
     else:

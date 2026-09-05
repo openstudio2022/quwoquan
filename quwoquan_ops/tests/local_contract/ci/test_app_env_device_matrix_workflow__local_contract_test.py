@@ -100,7 +100,9 @@ class AppEnvDeviceMatrixWorkflowContractTest(unittest.TestCase):
         cls.timing_budgets = json.loads(TIMING_BUDGETS.read_text(encoding="utf-8"))
 
     def test_promotion_pull_request_is_gated_by_canonical_branch_policy(self) -> None:
-        self.assertNotIn("pull_request:\n    branches:", self.workflow)
+        self.assertIn("pull_request:\n    branches: [main]", self.workflow)
+        self.assertIn("github.event.pull_request.head.ref == 'dev1.0'", self.workflow)
+        self.assertIn("github.event.pull_request.base.ref == 'main'", self.workflow)
         self.assertIn("App Matrix — Impact Plan", self.workflow)
         self.assertIn("Generate and validate typed device impact plan", self.workflow)
         self.assertIn("App Matrix — Branch Policy", self.workflow)
