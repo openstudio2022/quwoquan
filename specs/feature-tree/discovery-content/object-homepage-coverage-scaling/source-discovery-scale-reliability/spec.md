@@ -14,7 +14,7 @@
 
 ### In Scope
 
-- 宿主 AI 在 `sources` 为每个冻结 target 写来源计划，在 `1.download` 按计划取得 source units/source refs。
+- immutable candidate binding 只冻结 target identity；宿主 AI 在 `sources` 为每个冻结 target 选择来源并写计划，在 `1.download` 才按计划取得 source units/source refs 与媒体 bytes/CAS。
 - 每份来源结果绑定唯一 target identity；多个 target 或 execution 的串并行由宿主原生能力承担。
 - 跨会话只读 stage OPEN/CLOSE receipts 与业务 result refs。
 
@@ -29,7 +29,7 @@
 <a id="req-001"></a>
 ### REQ-001 每个 target 的来源计划与取得结果保持单轨
 
-- producer 九阶段 Skill是唯一业务工作说明；`sources` 只写逐 target source plan，`1.download` 才创建 source unit、source ref 与取得字节。
+- producer 九阶段 Skill是唯一业务工作说明；candidate binding 不承担来源 admission，`sources` 只写逐 target source plan，`1.download` 才创建 source unit、source ref 与取得字节/CAS。
 - 宿主可串行或并发调研 target，但每个计划、source unit、typed issue 与 result ref 必须绑定对应 target exact identity，不得因并发丢失、合并或复制 target。
 - OPEN 无 CLOSE 时新会话读取同一冻结输入并重做该 stage；CLOSE blocked 后只新建 execution，不由代码生成 recovery stage。
 
@@ -53,15 +53,15 @@
 <a id="gwt-001"></a>
 ### GWT-001 多 target 来源发现保持逐 target 单轨
 
-- GIVEN 一个 candidate-backed execution 冻结了多个 target。
+- GIVEN 一个由 identity-only candidate bindings 冻结多个 target 的 execution，task-init 前没有 source/media admission。
 - WHEN 宿主 AI 使用原生串行或并发能力完成 `sources` 与 `1.download`。
-- THEN 每个 target 先有 source plan，下载阶段才有 source units/source refs，且每份结果只绑定一个 target。
+- THEN 每个 target 先有 source plan，下载阶段才有 source units/source refs/媒体 bytes 与 CAS，且每份结果只绑定一个 target；candidate binding 不被提升为 source evidence。
 - THEN 单 target 失败产生该 target 的 typed issue，其它 target 的已完成结果不被撤销或覆盖。
 - THEN 仓库中不存在来源发现编排或进度 authority，后继只由 Skill 固定。
 
 ## 6. 依赖
 
-- 前置要求：[`work-request-compilation`](../work-request-compilation/spec.md) 提供 confirmed carrier demand 与 immutable candidate bindings。
+- 前置要求：[`work-request-compilation`](../work-request-compilation/spec.md) 提供 confirmed carrier demand 与只冻结目标对象身份的 immutable candidate bindings。
 - 上游事实：冻结 target identity 与允许来源策略。
 - 下游结果：逐 target source plan、source units/source refs 或 typed blocked evidence。
 - 父级设计：`DEC-001`、`DEC-028`
@@ -75,6 +75,6 @@
 - 优先级：`P1`
 - 准出影响：`track`
 - 影响或价值：旧来源发现编排与进度控制面已物理删除，并由 post-delete architecture/public CLI live-import gates 持续锁定；但当前尚缺硬切后多 target 来源发现的行为证据，不能仅凭删除门宣称逐 target 计划、下载与局部失败隔离已经实现或闭合。
-- 尚缺验收证据：同一 candidate-backed execution 至少包含一个成功 target 与一个 typed blocked target，直接证明计划先于下载、结果 identity 不串线、局部失败不覆盖其它 target。
-- 完成判定：[`GWT-001.t1`](#gwt-001)、[`GWT-001.t2`](#gwt-001) 与 [`GWT-001.t3`](#gwt-001) 逐条由硬切后 current local_contract/api_integration 绑定并实际通过；fresh 四载体 M1→Alpha E2E 仍由 [`multi-carrier-release` OPEN-006](../multi-carrier-release/spec.md#open-006) 跟踪。
+- 尚缺验收证据：同一 identity-only candidate-backed execution 至少包含一个成功 target 与一个 typed blocked target，直接证明计划先于下载、结果 identity 不串线、局部失败不覆盖其它 target。
+- 完成判定：[`GWT-001.t1`](#gwt-001)、[`GWT-001.t2`](#gwt-001) 与 [`GWT-001.t3`](#gwt-001) 逐条由硬切后 current local_contract/api_integration 绑定并实际通过；fresh 四载体 producer release handoff 由 [`multi-carrier-release` OPEN-020](../multi-carrier-release/spec.md#open-020) 跟踪，下游环境消费不构成本 Story 验收。
 - 依赖：当前 source plan、atomic acquisition 与 stage OPEN/CLOSE 边界；不得恢复旧编排来补证据。

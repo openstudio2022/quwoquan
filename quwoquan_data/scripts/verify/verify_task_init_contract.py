@@ -121,6 +121,24 @@ def _target_ref(target: Mapping[str, Any], *, carrier: str) -> str | None:
     return f"posts/{carrier}/{angle}/{title}/{sequence}"
 
 
+def _retry_execution_id(value: object, *, failures: list[str]) -> str | None:
+    if value is None:
+        return None
+    if not isinstance(value, Mapping):
+        failures.append("task-init retryOf binding is invalid")
+        return None
+    execution_id = value.get("executionId")
+    terminal_receipt = value.get("terminalReceipt")
+    if not isinstance(execution_id, str) or not isinstance(terminal_receipt, Mapping):
+        failures.append("task-init retryOf binding is invalid")
+        return None
+    try:
+        return validate_execution_id(execution_id)
+    except ValueError:
+        failures.append("task-init retryOf binding is invalid")
+        return None
+
+
 def _candidate_projection(
     value: object, *, carrier: str
 ) -> tuple[list[dict[str, Any]], list[str]] | None:
@@ -208,12 +226,15 @@ def issues(execution_id: str) -> list[str]:
     demand_input = bound_inputs["carrierDemand"]
     candidate_input = bound_inputs["immutableCandidateBindings"]
     if demand_input is not None:
+        retry_execution_id = _retry_execution_id(
+            request.get("retryOf"), failures=failures
+        )
         expected_demand = {
             "executionId": normalized,
             "carrier": carrier,
             "familyRef": request.get("familyRef"),
             "quota": request.get("quota"),
-            "retryOf": request.get("retryOf"),
+            "retryOf": retry_execution_id,
         }
         if any(demand_input.get(field) != value for field, value in expected_demand.items()):
             failures.append("task-init carrier demand projection drift")
@@ -259,8 +280,8 @@ def issues(execution_id: str) -> list[str]:
     if request.get("candidateCount") != len(targets) or candidate_count != len(targets):
         failures.append("task-init candidate count drift")
     quota = request.get("quota")
-    if isinstance(quota, bool) or not isinstance(quota, int) or quota < 1 or quota > len(targets):
-        failures.append("task-init quota is not covered")
+    if isinstance(quota, bool) or not isinstance(quota, int) or quota < 1:
+        failures.append("task-init quota is invalid")
 
     return failures
 

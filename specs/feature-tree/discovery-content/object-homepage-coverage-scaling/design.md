@@ -14,7 +14,7 @@
 ## 2. Story 协作与状态流
 
 - [`work-request-compilation`](./work-request-compilation/spec.md)：上游 confirmed intent 收敛为现役逐载体 demand，确认前零 execution 事实；旧 handoff/WorkRequest/envelope schema 已删除。
-- [`on-demand-content-pool-admission`](./on-demand-content-pool-admission/spec.md)：消费 confirmed carrier demand 与 immutable candidate bindings，经来源/媒体准入、生产与独立审核后，由 AI 逐 approved 对象进入 canonical 池。
+- [`on-demand-content-pool-admission`](./on-demand-content-pool-admission/spec.md)：消费 confirmed carrier demand 与只冻结目标对象身份的 immutable candidate bindings；来源选择、字节取得、质量判断、创作与独立审核均在 execution 内完成，再由 AI 逐 approved 对象进入 canonical 池。
 - [`source-discovery-scale-reliability`](./source-discovery-scale-reliability/spec.md)：来源发现由宿主 AI 原生串行或并发执行，仓内 scheduler/worker/slot/heartbeat 控制面属于硬删除范围。
 - [`canonical-content-identity-recovery`](./canonical-content-identity-recovery/spec.md)：invalid canonical identity 的显式治理属于独立 owner，不参与内容生产编排。
 - [`multi-carrier-release`](./multi-carrier-release/spec.md)：每个发布对象必须闭合 creator、tag、entity、media 与 source 引用，运行 receipt 只能写入输出目录、不得回写静态真相源；canonical 池之后的 immutable release handoff 由 producer 拥有；环境与 App 消费由下游环境 owner 只读 handoff 后独立拥有。
@@ -38,17 +38,17 @@
 - 关联验收：`GWT-020`
 
 <a id="dec-022"></a>
-### DEC-022 media source admission 与 post-author independent review 顺序固定
+### DEC-022 candidate 只冻结对象身份，source 与 review 在 execution 内单轨形成
 
-- 对象边界：`MediaSourceAdmissionReceipt` 由 source owner create-once 写入，绑定 asset bytes、目标实体、acquisition、媒体探测、rights attribution、source-scoped semantic review 与 portable source evidence root。现役 immutable candidate binding 只引用 accepted source admission，不拥有或推导内容级审核。`IndependentAssetReviewReceipt` 由 execution 后的 review owner 另行写入，绑定同一 asset/object、execution manifest、author/reviewer identity。canonical publish 只消费 accepted independent receipt。
-- 固定时序：唯一顺序为 `acquire/probe/rights/source review -> source admission -> immutable candidate binding -> task init/execution -> author/reviewer -> independent review -> canonical publish/release`。已删除的 ScaleSourcePool/WorkRequest schema 不得恢复为中间控制面。
-- source review 执行边界：唯一语义执行主体是当前宿主 Cursor/Codex 会话。仓内 command 只允许确定性冻结 `host-source-review/v1` request，并校验/create-once 记录宿主 result；不得 import SDK、选择 provider/model、自动重试或把 provider/model 作为 eligibility。
-- Evidence root：catalog、acquisition、probe、rights 与 source review 全部使用 root-relative safe ref，并绑定逐文件摘要。禁止绝对路径、`..`、symlink、调用者本地路径和人工复制 JSON。
-- 失败恢复：source root/ref/digest 漂移时零 accepted candidate binding，只能从原 acquisition bytes 以新 admission identity 重建。post-author review 缺失或 blocked 时 canonical 为零，恢复必须产生新 author/reviewer evidence，不改写旧 receipt。
-- 可测试面：local_contract 证明 candidate binding 只绑定 source admission、publish 只绑定 independent receipt且二者不可互换；api_integration 从干净 root 对 Image/Video 各跑一条完整链，并覆盖 root/digest/identity drift。
-- 被否决方案：恢复 ScaleSourcePool；把 source-scoped review 冒充内容 independent review；仅凭 candidate binding 放行 publish；跨 root 相对路径或绝对路径；旧 independent receipt 与新 source admission 双读 fallback。
+- 对象边界：immutable candidate binding 只冻结目标对象身份、carrier、canonical coverage target 与 candidate identity；它不携带或要求 task-init 前 source/media admission、acquisition、rights 或 semantic verdict。`sources` 由宿主 Cursor/Codex Agent 选择来源，`1.download` 才取得 bytes、登记 source refs 与媒体 CAS/hard facts，`2.quality` 作语义保留/淘汰，`3.compose` 组织创作输入。
+- 单一产物：`4.draft` 每对象只有载体主产物 `page.md|draft.article.md|image_work.json|video_script.json`；author actor/invocation、自检以及 prompt/compose/draft exact ref/digest 只由 sequence-006 CLOSE receipt 冻结，不再写 `draft_meta.json`、`author_self_check.json` 或 `agent_result_envelope.json`。`5.review` 每对象只有 `content_review.json`，统一承载 `approved|rejected`、简短 dimensions/blockingIssues 与逐资产 rights 结论；reviewer actor/invocation 及该文件 exact ref/digest 只由 sequence-007 CLOSE receipt 冻结，不再建立独立 review receipt 或镜像 verdict。
+- 固定时序：唯一顺序为 `identity-only candidate binding -> task init -> sources -> 1.download -> 2.quality -> 3.compose -> 4.draft -> 5.review -> canonical publish/release`。acquisition/probe/digest/MIME 是 `1.download` 的机械硬事实；semantic 保留属于 `2.quality`；rights hard facts在下载时保留，逐资产使用裁决只在独立 `content_review.json` 单写。
+- 语义主体：来源选择、质量判断、compose、创作、自检与 review 的唯一主体是直接执行 Skill 的宿主 Cursor/Codex Agent。仓内只做 deterministic init、OPEN/CLOSE、atomic download/CAS、hard-fact verify 与原子 publish/release；不得新增 resolver、projector、runner、controller、queue、registry、SDK、自动恢复或 actor projection。
+- 失败恢复：source/ref/digest 或 stage-wide identity/integrity 漂移时当前 stage blocked；逐对象 approved/rejected 可混合，短缺写入 stage result artifact/typed issue，通用 receipt 仍只有 `pass|blocked`，只有零 approved 或 stage-wide identity/integrity failure 才 blocked。blocked 后用新 execution 重试，不改写旧 receipt。
+- 可测试面：local_contract 证明 candidate binding 不要求 source admission，sequence-006/007 receipts 各自冻结真实 actor 与唯一业务产物 exact refs，publish 只消费 `content_review.json` 的 approved 对象；api_integration 从 identity-only Image/Video candidate 跑通 download→review→publish 并覆盖 identity/digest drift。
+- 被否决方案：task-init 前 media admission；source-scoped semantic review；独立 review receipt 作为第二 authority；三份 draft 元数据镜像；四份 review/attestation 镜像；对象级 actor projection；仓内语义执行器或自动恢复。
 - 关联要求：[`multi-carrier-release`](./multi-carrier-release/spec.md) 的 `REQ-001`、`REQ-002` 与 [`work-request-compilation`](./work-request-compilation/spec.md) 的 `REQ-001`
-- 影响 Story：[`on-demand-content-pool-admission`](./on-demand-content-pool-admission/spec.md) 的首波 media candidate binding 与发布准入
+- 影响 Story：[`on-demand-content-pool-admission`](./on-demand-content-pool-admission/spec.md) 的 identity-only candidate binding 与发布准入
 - 关联验收：[`on-demand-content-pool-admission`](./on-demand-content-pool-admission/spec.md) 的 `GWT-004`
 
 <a id="dec-023"></a>
@@ -79,7 +79,7 @@
 
 <a id="dec-027"></a>
 ### DEC-027 publish 由 AI 对 approved 对象逐个调用单对象事务
-- 决策：`5.review` 独立 AI 对每对象写 rubric/reviewer/media/rights/attestation；publish AI 只对 approved 对象逐个准备最终 package 并调用 `DEC-026` canonical single-object transaction。不存在 `publish-execution`、drain/process manager 或 execution 级发布编排。
+- 决策：`5.review` 独立 AI 对每对象只写一份 `content_review.json`，其中统一给出 `approved|rejected`、简短 dimensions/blockingIssues 与逐资产 rights 结论；publish AI 只对 `approved` 对象逐个准备最终 package 并调用 `DEC-026` canonical single-object transaction。不存在独立 review receipt、镜像 verdict、`publish-execution`、drain/process manager 或 execution 级发布编排。
 - 单轨约束：transaction core 只重验对象 package、review/rights/source/media exact facts 并执行原子 IO，不感知宿主、模型或阶段状态。
 - 失败语义：单对象失败零半可见，且不撤销其它成功对象；AI 在 CLOSE 中如实提交 typed issues。release 只消费 AI 显式 cohort，禁止 all-publishable。
 - 可测试面：local_contract 覆盖逐对象资格、幂等、失败隔离与零 legacy publish reference；api_integration 跑通 approved object 到 canonical。
@@ -88,14 +88,25 @@
 - 关联验收：[`multi-carrier-release`](./multi-carrier-release/spec.md) 的 `GWT-020`
 
 <a id="dec-028"></a>
-### DEC-028 宿主原生串并行且跨会话只认 receipts
-- 决策：宿主可串行执行一个 execution，也可用原生子会话并发不同 execution/独立 reviewer。`5.review` 的独立性由与作者不同的宿主 session/actor/runId 和真实 invocation 证明，不要求不同 model family；仓库不提供 runner、fleet、claim、模型路由、worker queue 或自动恢复。
+### DEC-028 execution 内 author/reviewer 单会话，跨 execution 由宿主原生并行
+- 决策：一个 execution 的 `4.draft` 全部对象由一个真实 author actor 会话负责，一个 execution 的 `5.review` 全部对象由另一个真实 reviewer actor 会话负责；二者必须是不同 session/runId，可为同一 model family。不同 execution 可由宿主原生并行，仓库不提供 runner、fleet、claim、模型路由、worker queue、actor projection 或自动恢复。
+- actor 真相源：sequence-006 receipt 的 actor/invocation 就是该 execution 的真实 author，sequence-007 receipt 的 actor/invocation 就是其真实 reviewer；对象业务产物不复制 actor，代码也不从对象投影、聚合或补写 actor。
 - 交接：producer 跨会话只读 stage OPEN/CLOSE receipts、业务 result refs 与 immutable release handoff。后继由 Skill 固定，代码不得解释 receipt 推进流程；环境 facts 属下游 owner，不参与 producer 恢复。
-- 失败恢复：OPEN 无 CLOSE 重做本 stage；CLOSE blocked 新建 execution。任何旧 sequence、checkpoint 或 execution-state projection 均不迁移。
-- 可测试面：静态检查锁定零旧控制面引用，行为测试锁定 create-once receipts 与并发单对象原子 IO。
+- 失败恢复：OPEN 无 CLOSE 时由同一 stage 的一个真实 actor 会话基于冻结输入完整重做；CLOSE blocked 新建 execution。任何旧 sequence、checkpoint 或 execution-state projection 均不迁移。
+- 可测试面：静态检查锁定零旧控制面与 actor projection，行为测试锁定 sequence-006/007 actor 不同、各 stage 每 execution 单一 actor、create-once receipts 与并发单对象原子 IO。
 - 关联要求：[`multi-carrier-release`](./multi-carrier-release/spec.md) 的 `REQ-006`、`REQ-007`
 - 影响 Story：[`multi-carrier-release`](./multi-carrier-release/spec.md)
 - 关联验收：[`multi-carrier-release`](./multi-carrier-release/spec.md) 的 `GWT-020`
+
+<a id="dec-029"></a>
+### DEC-029 规模里程碑累计复用 canonical 对象与原始 producer proof
+- 决策：M1、M10、M100、M1000 按 `cumulative_unique_finalized_objects` 计数。达到更高级别时可复用已 finalized 的 canonical 对象，以及该对象首次产出时的原 execution、publish transaction 与九阶段 receipt proof；不得为复用对象伪造新 execution 或新九阶段 receipts。
+- 每级交付：每个里程碑仍必须形成自己的完整、显式、create-once cohort、immutable release 与 producer handoff，并逐对象绑定原始 producer proof。新级别至少新增足量唯一 finalized 对象使累计值达标，cohort 不得靠重复 identity padding。
+- 边界：handoff 只冻结 travel Research producer facts；不携带 UAT sample authority、import/activate/readback、App/API UAT、EAF、environment promotion 或 rollback facts。
+- 可测试面：同一对象跨相邻里程碑的 canonical identity、原 execution/publish proof refs/digests 保持不变；各级 cohort/release/handoff identity 不同且完整；重复对象不增加累计值。
+- 关联要求：[`multi-carrier-release`](./multi-carrier-release/spec.md) 的 `REQ-008`
+- 影响 Story：[`multi-carrier-release`](./multi-carrier-release/spec.md)
+- 关联验收：[`multi-carrier-release`](./multi-carrier-release/spec.md) 的 `GWT-034`
 
 <a id="dec-031"></a>
 ### DEC-031 research release 媒体以 CAS objectKey 私有交付并走短签消费，commercial 保留公开切片
