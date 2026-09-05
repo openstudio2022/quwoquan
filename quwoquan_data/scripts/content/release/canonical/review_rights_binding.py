@@ -56,7 +56,7 @@ def required_review_asset_refs(
     text_only = (
         str(manifest.get("contentType") or "").strip() == "article"
         and str(manifest.get("publishMediaMode") or "").strip() == "text_only"
-        and object_kind in {"posts", "entity"}
+        and object_kind in {"posts", "entity", "entities"}
     )
     if text_only:
         if assets:
