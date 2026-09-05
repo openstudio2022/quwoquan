@@ -717,8 +717,19 @@ def verify_stage_artifacts(
                 except Exception as exc:  # noqa: BLE001
                     issues.append(f"{rel}/5.review: {exc}")
 
-    issues.extend(_boundary_issues(Path(publish_root), root_kind="publish"))
-    issues.extend(_boundary_issues(Path(release_root), root_kind="release"))
+    # Per-stage verification is execution-local.  Final closure inspects only
+    # the canonical objects declared by this execution; unrelated historical
+    # publish/release rows must not block a fresh producer run.  Release payload
+    # purity is enforced by the release builder against the exact sealed cohort.
+    if through is None:
+        for obj in _object_roots(root, through):
+            relative = obj.relative_to(root)
+            issues.extend(
+                _boundary_issues(
+                    Path(publish_root) / relative,
+                    root_kind=f"publish/{relative.as_posix()}",
+                )
+            )
     return {
         "schema": "quwoquan_data.stage_artifact_verification",
         "executionId": execution_id,
