@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import subprocess
+from unittest import mock
 from pathlib import Path
 
 from quwoquan_ops.cli.repo_hygiene_audit import _category, _status_paths
@@ -11,6 +12,9 @@ from quwoquan_ops.gate.verify_entrypoint_script_paths import (
     entrypoint_script_path_issues,
 )
 from quwoquan_ops.gate.verify_markdown_local_links import markdown_link_issues
+from quwoquan_ops.gate.service_architecture.verification_operations import (
+    OperationsVerificationMixin,
+)
 
 
 ROOT = Path(__file__).resolve().parents[4]
@@ -154,6 +158,18 @@ def test_tracked_service_executable_build_artifacts_are_retired() -> None:
     assert '"build"' in operations and '"Pods"' in operations
     assert '"vendor"' in operations
     assert "walk_source_tree" in operations
+
+
+def test_executable_magic_read_failure_is_not_treated_as_absence(tmp_path: Path) -> None:
+    target = tmp_path / "candidate"
+    target.write_bytes(b"fixture")
+    with mock.patch.object(Path, "open", side_effect=OSError("denied")):
+        try:
+            OperationsVerificationMixin._executable_magic(target)
+        except ValueError as error:
+            assert "executable magic unreadable" in str(error)
+        else:
+            raise AssertionError("unreadable executable candidate must fail closed")
 
 
 def test_active_workflows_do_not_reference_retired_ml_or_manifest_defaults() -> None:

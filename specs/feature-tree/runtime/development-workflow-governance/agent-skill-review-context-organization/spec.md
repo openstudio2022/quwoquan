@@ -207,3 +207,13 @@
 - 准出影响：`track`
 - 影响或价值：当前 `cross_session_incomplete` 与 `multi_party_parallel` 已是六类正式 durable handoff trigger，必须走完整 Review/handoff 链；普通工作若需要更轻的跨会话 checkpoint，仓库尚无可复用的 canonical owner/schema。
 - 完成判定：由唯一 owner 冻结 checkpoint identity、schema、create-once/freshness/consumer 语义及与正式 handoff 的迁移边界，并以 `GWT-007.t2` 的独立验收证明不会形成第二执行状态源；在此之前不得用临时 JSON、聊天摘要或投影目录冒充 checkpoint authority。
+
+<a id="open-003"></a>
+### OPEN-003 Review evidence 与 schema consumer 结构热点收敛
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：当前 exact candidate-bound Code Health report 将 `evidence_runner.py::run_plan`、`agent_governance_contract.py::validate_candidate_evidence_manifest` 标为 `CODE_HEALTH.COMPLEXITY_ADVISORY`，并将 `review_dispatch.py` 标为 `CODE_HEALTH.FILE_LINES_ADVISORY`；这些 calibration `PR_WARN` 不阻断 candidate，但会增加 exact identity、artifact 与 fail-closed 分支的审计成本。
+- 完成判定：`GWT-003` 与 `GWT-007` 对应行为继续满足；在独立 owner increment 中逐项收敛这 3 个 identity，保持现有 Review schema、create-once、digest 与 terminal 合同；fresh clean-range Code Health 不再产生对应 advisory，且不得新增 allowlist、baseline 或削弱 Reviewer 输入预算。
+- 依赖：current Code Health named evidence与 Review focused contracts。

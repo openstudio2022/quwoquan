@@ -30,8 +30,8 @@ def line_count(body: bytes | None) -> int:
 def _python_functions(text: str) -> list[FunctionMetric]:
     try:
         tree = ast.parse(text)
-    except SyntaxError:
-        return []
+    except SyntaxError as error:
+        raise ValueError(f"Python source syntax unavailable for complexity analysis: {error}") from error
     metrics: list[FunctionMetric] = []
     for node in ast.walk(tree):
         if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):

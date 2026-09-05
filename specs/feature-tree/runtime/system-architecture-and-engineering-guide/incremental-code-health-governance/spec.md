@@ -93,4 +93,12 @@
 
 ## 7. 开放事项
 
-无本 Story 内开放事项。
+<a id="open-001"></a>
+### OPEN-001 Code Health 实现自身复杂度热点收敛
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：当前 exact candidate-bound Code Health report 将 `calibration.py::aggregate_calibration`、`engine.py::analyze_delta`、`git_delta.py::working_tree_changes`、`metrics.py::has_repository_entry`、`policy.py::load_policy`、`weekly.py::_clone_facts`、`weekly.py::delivery_outcomes` 与 `weekly.py::analyze_weekly` 标为 `CODE_HEALTH.COMPLEXITY_ADVISORY`；这些 calibration `PR_WARN` 不阻断 candidate，但治理实现自身的高复杂度会降低判罚、校准与周报的可信可审计性。
+- 完成判定：`GWT-001` 至 `GWT-003` 对应行为继续满足；在独立 owner increment 中逐项收敛上述 8 个 symbol，保持 exact range、分类、terminal 与 EvidenceFingerprint 合同；fresh clean-range Code Health 不再产生对应 advisory，且不得调高阈值、引入 allowlist/baseline 或把异常改为缺失事实。
+- 依赖：current Code Health named evidence及本 Story 的 focused contracts。

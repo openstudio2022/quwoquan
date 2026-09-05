@@ -405,8 +405,8 @@ class OperationsVerificationMixin:
         try:
             with path.open("rb") as source:
                 prefix = source.read(4)
-        except OSError:
-            return None
+        except OSError as error:
+            raise ValueError(f"executable magic unreadable: {path}: {error}") from error
         if prefix == b"\x7fELF":
             return "ELF"
         if prefix in {b"\xcf\xfa\xed\xfe", b"\xfe\xed\xfa\xcf", b"\xca\xfe\xba\xbe", b"\xbe\xba\xfe\xca"}:
@@ -472,7 +472,11 @@ class OperationsVerificationMixin:
                 if path.is_file() and (path.name in {".coverage", "coverage.out"} or path.suffix == ".test"):
                     self.error(f"source-tree test artifact is forbidden: {relative(path)}")
                 if path.is_file() and not path.is_symlink():
-                    magic = self._executable_magic(path)
+                    try:
+                        magic = self._executable_magic(path)
+                    except ValueError as error:
+                        self.error(str(error))
+                        continue
                     if magic:
                         self.error(f"source-tree executable build artifact is forbidden: {relative(path)} ({magic})")
 

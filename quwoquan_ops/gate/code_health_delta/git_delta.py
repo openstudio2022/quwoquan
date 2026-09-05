@@ -195,15 +195,26 @@ def working_tree_blob(repo: Path, path: str | None) -> bytes | None:
     candidate = repo / path
     try:
         return candidate.read_bytes() if candidate.is_file() else None
-    except OSError:
-        return None
+    except OSError as error:
+        raise ValueError(f"candidate bytes unavailable for {path}") from error
 
 
 def index_blob(repo: Path, path: str | None) -> bytes | None:
     if not path:
         return None
     result = subprocess.run(["git", "show", f":{path}"], cwd=repo, capture_output=True, check=False)
-    return result.stdout if result.returncode == 0 else None
+    if result.returncode == 0:
+        return result.stdout
+    missing = subprocess.run(
+        ["git", "ls-files", "--error-unmatch", "--", path],
+        cwd=repo, capture_output=True, check=False,
+    )
+    if missing.returncode != 0:
+        return None
+    raise ValueError(
+        result.stderr.decode("utf-8", "replace").strip()
+        or f"index candidate bytes unavailable for {path}"
+    )
 
 
 def working_tree_changes(repo: Path, base: str, explicit_paths: list[str] | None = None, *, index_only: bool = False) -> list[Change]:

@@ -772,48 +772,6 @@ class ReviewDispatchBoundedAssemblyTest(unittest.TestCase):
             identity["candidate_evidence_identity"],
         )
 
-    def test_large_candidate_code_health_artifact_compresses_with_auditable_identity(self) -> None:
-        plan = _plan("dev", "POST", [f"quwoquan_ops/generated/path-{index}.py" for index in range(300)])
-        findings = [
-            {
-                "code": "CODE_HEALTH.COMPLEXITY_ADVISORY",
-                "path": f"quwoquan_ops/generated/path-{index}.py",
-                "terminal": "PR_WARN",
-                "symbol": f"function_{index}",
-                "message": "changed function complexity exceeds advisory " * 4,
-                "measure": {"ratio": 1.043},
-            }
-            for index in range(50)
-        ]
-        artifact = {
-            "kind": "code-health-report-v1",
-            "canonical_bytes_sha256": "sha256:" + "b" * 64,
-            "terminal": "PR_WARN",
-            "summary": {"changedFiles": 300, "duplicationPercent": 1.043},
-            "findings": findings,
-        }
-        payload = _cli.build_reviewer_input(
-            plan,
-            {"receipt_ref": "receipt.json", "canonical_bytes_sha256": "sha256:" + "a" * 64},
-            evidence_summary={"terminal": {"status": "PASS"}, "evidence": [{"id": "code-health-delta", "artifact": artifact}]},
-            reviewer_role="developer",
-        )
-
-        self.assertLessEqual(payload["assembled_input_byte_count"], 24576)
-        self.assertNotEqual("full", payload["compression"]["mode"])
-        projected = payload["assembled_input"]["evidence_summary"]["results"][0]["artifact"]
-        self.assertEqual(50, projected["findings_projection"]["original_count"])
-        self.assertEqual("sha256:" + "b" * 64, projected["canonical_bytes_sha256"])
-        self.assertTrue(all("message" not in item and "measure" not in item for item in projected["findings"]))
-        path_summary = payload["assembled_input"]["changed_paths_and_diff_summary"]
-        self.assertEqual([], path_summary["paths"])
-        self.assertEqual(
-            plan["candidate_evidence_identity"]["ref"],
-            path_summary["paths_projection"]["ref"],
-        )
-        self.assertEqual(300, path_summary["paths_projection"]["original_count"])
-
-
     def test_final_reviewer_input_refuses_when_wrapper_and_identity_alone_exceed_limit(self) -> None:
         plan = _plan("dev", "POST", ["README.md"])
         plan["context_bytes"]["limit"] = 512

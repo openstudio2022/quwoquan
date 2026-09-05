@@ -107,3 +107,13 @@
 - 影响或价值：Cursor 没有 after-edit hook，Codex PostToolUse 当前也未接线且本机无真实 Codex smoke；自动 edit enqueue 已停用，队列没有受管自动 consumer，历史或显式入队项可长期停留在 `PENDING`。因此队列在本能力阶段只作 advisory，不阻断普通 Skill、scope 或 release。
 - 完成判定：真实 Cursor/Codex 宿主 smoke 证明 edit producer 的输入/输出协议受支持，并证明 idle 或等价受管 consumer 在声明 SLO 内幂等启动 bounded worker；随后才可通过新 contract 版本重新评估 queue enforcement。`GWT-002.t3..t4` 持续证明积压量、最老入队时间、`exact-pending`/`foreign-pending` 与失败 typed pending 可见且不伪造 PASS。
 - 依赖：Cursor/Codex 可验证的 edit/idle 生命周期事件、真实 Codex smoke，以及现有 `local_readiness.py enqueue|worker --once|inspect` 显式入口。
+
+<a id="open-002"></a>
+### OPEN-002 local readiness impact planner 复杂度热点收敛
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：当前 exact candidate-bound Code Health report 将 `quwoquan_ops/ci/local_readiness_planner.py` 的 `build_impact_plan` 标为 `CODE_HEALTH.COMPLEXITY_ADVISORY`；该 calibration `PR_WARN` 不阻断 candidate，但继续增长会降低 planner 分支与降级语义的可审计性。
+- 完成判定：`GWT-001` 与 `GWT-002` 对应行为继续满足；在独立 owner increment 中保留现有 impact-plan 合同并收敛该函数；fresh clean-range Code Health 不再为该 symbol 产生复杂度 advisory，且不得新增 allowlist、baseline 或改变 fail-closed terminal。
+- 依赖：current Code Health named evidence与 planner focused contracts。

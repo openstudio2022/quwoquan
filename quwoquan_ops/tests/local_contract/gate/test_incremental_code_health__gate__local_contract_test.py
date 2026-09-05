@@ -141,6 +141,27 @@ def test_suffixless_tracked_executable_blocks_before_source_classification(tmp_p
     )
 
 
+def test_invalid_python_and_candidate_blob_read_fail_closed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo, base = init_repo(tmp_path)
+    invalid = write(repo, "quwoquan_ops/ci/invalid.py", "def broken(:\n")
+    head = commit(repo)
+    with pytest.raises(ValueError, match="syntax unavailable"):
+        analyze_delta(repo, base=base, head=head, policy_path=POLICY, mode="full")
+
+    invalid.write_text("VALUE = 1\n", encoding="utf-8")
+    original = Path.read_bytes
+    monkeypatch.setattr(
+        Path,
+        "read_bytes",
+        lambda path: (_ for _ in ()).throw(OSError("denied"))
+        if path == invalid else original(path),
+    )
+    with pytest.raises(ValueError, match="candidate bytes unavailable"):
+        git_delta.working_tree_blob(repo, "quwoquan_ops/ci/invalid.py")
+
+
 def test_new_oversized_file_blocks_but_generated_and_test_do_not(tmp_path: Path) -> None:
     repo, base = init_repo(tmp_path)
     body = "value = 1\n" * 1001
