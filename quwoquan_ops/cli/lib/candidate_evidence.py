@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
 from pathlib import Path
 from typing import Any
@@ -143,7 +144,18 @@ def _delivery_identity(*, repo_root: Path) -> tuple[str, str, dict[str, str]]:
         capture_output=True, text=True, check=False,
     )
     branch = result.stdout.strip()
-    if result.returncode != 0 or branch not in _allowed_delivery_lanes(repo_root=repo_root):
+    if result.returncode != 0:
+        # actions/checkout intentionally leaves pull-request jobs on an exact,
+        # detached merge SHA. GitHub's reviewed head ref is the logical lane;
+        # the canonical branch gate validates the same hosted context first.
+        if (
+            os.environ.get("GITHUB_ACTIONS") == "true"
+            and os.environ.get("GITHUB_EVENT_NAME") == "pull_request"
+        ):
+            branch = os.environ.get("GITHUB_HEAD_REF", "").strip()
+        else:
+            branch = ""
+    if branch not in _allowed_delivery_lanes(repo_root=repo_root):
         _refuse("CANDIDATE.OWNER_DRIFT", f"current branch 不是版本化 policy 允许的逻辑 lane：{branch or 'detached'}")
     policy_digests = declared_object({
         "branch_policy_digest": _policy_digest(BRANCH_POLICY_PATH, repo_root=repo_root),

@@ -65,6 +65,56 @@ def _write_tampered_candidate(payload: dict) -> str:
     return path.relative_to(ROOT).as_posix()
 
 
+def test_detached_github_pull_request_uses_reviewed_head_lane(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("GITHUB_ACTIONS", "true")
+    monkeypatch.setenv("GITHUB_EVENT_NAME", "pull_request")
+    monkeypatch.setenv("GITHUB_HEAD_REF", "lane/engineering")
+    owner_ref = _owner_ref()
+    original_run = subprocess.run
+
+    def detached_symbolic_ref(*args: object, **kwargs: object):
+        command = args[0]
+        if isinstance(command, list) and "symbolic-ref" in command:
+            return subprocess.CompletedProcess(
+                args=command, returncode=1, stdout="", stderr=""
+            )
+        return original_run(*args, **kwargs)
+
+    monkeypatch.setattr(subprocess, "run", detached_symbolic_ref)
+
+    candidate = build_candidate_evidence(owner_ref, CHANGED, repo_root=ROOT)
+
+    assert candidate["delivery_owner"] == "lane/engineering"
+    assert candidate["lead_lane"] == "lane/engineering"
+
+
+def test_detached_non_pull_request_still_fails_closed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("GITHUB_ACTIONS", raising=False)
+    monkeypatch.delenv("GITHUB_EVENT_NAME", raising=False)
+    monkeypatch.delenv("GITHUB_HEAD_REF", raising=False)
+    owner_ref = _owner_ref()
+    original_run = subprocess.run
+
+    def detached_symbolic_ref(*args: object, **kwargs: object):
+        command = args[0]
+        if isinstance(command, list) and "symbolic-ref" in command:
+            return subprocess.CompletedProcess(
+                args=command, returncode=1, stdout="", stderr=""
+            )
+        return original_run(*args, **kwargs)
+
+    monkeypatch.setattr(subprocess, "run", detached_symbolic_ref)
+
+    with pytest.raises(CandidateEvidenceError) as detached:
+        build_candidate_evidence(owner_ref, CHANGED, repo_root=ROOT)
+
+    assert detached.value.code == "CANDIDATE.OWNER_DRIFT"
+
+
 def test_cross_owner_candidate_is_one_atomic_review_identity() -> None:
     owner_ref = _owner_ref()
     candidate_ref = _candidate_ref(owner_ref, CHANGED)
