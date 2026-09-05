@@ -162,6 +162,25 @@ def test_invalid_python_and_candidate_blob_read_fail_closed(
         git_delta.working_tree_blob(repo, "quwoquan_ops/ci/invalid.py")
 
 
+def test_tracked_index_blob_read_failure_is_not_treated_as_absent(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo, _ = init_repo(tmp_path)
+    path = "quwoquan_ops/ci/tracked.py"
+    write(repo, path, "VALUE = 1\n")
+    subprocess.run(["git", "add", path], cwd=repo, check=True)
+    original_run = subprocess.run
+
+    def fail_show(command, *args, **kwargs):
+        if command[:2] == ["git", "show"]:
+            return subprocess.CompletedProcess(command, 128, b"", b"index read denied")
+        return original_run(command, *args, **kwargs)
+
+    monkeypatch.setattr(git_delta.subprocess, "run", fail_show)
+    with pytest.raises(ValueError, match="index read denied"):
+        git_delta.index_blob(repo, path)
+
+
 def test_new_oversized_file_blocks_but_generated_and_test_do_not(tmp_path: Path) -> None:
     repo, base = init_repo(tmp_path)
     body = "value = 1\n" * 1001
