@@ -6,6 +6,7 @@ import argparse
 import json
 from pathlib import Path
 
+from content.release.canonical.acceptance_lease import handle_acceptance_lease  # noqa: F401
 from content.release.canonical.application import rollback_object_transaction
 from content.release.canonical.build_lookup_indexes import (
     build_publish_lookup_indexes,
@@ -13,6 +14,7 @@ from content.release.canonical.build_lookup_indexes import (
 from content.release.canonical.publish_object import handle_publish_object  # noqa: F401
 from content.release.canonical.handler_pool import handle_pool_release_build  # noqa: F401
 from content.release.canonical.object_transaction_contract import ObjectTransactionError
+from content.release.canonical.lifecycle_exit import handle_lifecycle_exit  # noqa: F401
 from content.release.canonical.object_transaction_lock import canonical_publish_lock
 from content.release.canonical.object_transaction_replay import (
     replay_object_transaction_package,
