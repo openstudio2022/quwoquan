@@ -41,8 +41,8 @@ def test_verify_all_rehydrates_before_deduplicated_static_gates(
     observed_names = observed[1:]
     assert len(observed_names) == len(set(observed_names))
     assert "active-runtime-preflight" not in observed_names
-    assert "publish-purity" in observed_names
-    assert "publish-closure" in observed_names
+    assert "publish-purity" not in observed_names
+    assert observed_names.count("publish-closure") == 1
 
 
 def test_verify_all_stops_when_carried_media_cannot_be_admitted(
