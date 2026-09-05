@@ -475,16 +475,17 @@ def _review_asset_refs(
         refs = [str(value or "").strip() for value in raw_refs]
     elif lane == "video":
         source_video = compose.get("sourceVideo")
-        if not isinstance(source_video, Mapping):
-            raise ValueError("video compose sourceVideo must select one source video")
-        video_ref = str(
-            source_video.get("assetRef") or source_video.get("sourceAssetRef") or ""
-        ).strip()
+        if isinstance(source_video, Mapping):
+            video_ref = str(source_video.get("assetRef") or source_video.get("sourceAssetRef") or "").strip()
+            explicit_poster = str(source_video.get("posterAssetRef") or compose.get("posterAssetRef") or "").strip()
+        else:
+            rows = compose.get("assets")
+            selected = [str(row.get("assetRef") or row.get("sourceAssetRef") or "").strip() for row in (rows or []) if isinstance(row, Mapping) and str(row.get("assetRole") or "").strip() == "video"]
+            if len(selected) != 1:
+                raise ValueError("video compose assets must select one source video")
+            video_ref, explicit_poster = selected[0], ""
         if not video_ref:
-            raise ValueError("video compose sourceVideo assetRef is missing")
-        explicit_poster = str(
-            source_video.get("posterAssetRef") or compose.get("posterAssetRef") or ""
-        ).strip()
+            raise ValueError("video compose source video assetRef is missing")
         poster_ref = _video_poster_ref(
             video_ref,
             explicit_poster,
