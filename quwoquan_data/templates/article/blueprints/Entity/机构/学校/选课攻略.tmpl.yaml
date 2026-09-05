@@ -17,7 +17,7 @@ render: { articleTemplate: gentle, fontPreset: clean }
 structure:
   required: [选课前准备, 必修与通识, 抢课策略, 退补选, 风险提醒]
   optional: [高年级建议, GPA管理]
-mustIncludeFacts: [选课阶段, 课程类型, 风险提醒]
+evidenceConditionedFacts: [选课阶段, 课程类型, 风险提醒]
 forbiddenPhrases: [冷启动, 批次, 角色：, 占位, contract_fixture]
 wordCount: { min: 800, max: 1600 }
 imagePlan:
@@ -27,5 +27,5 @@ crossRefs: { minEntity: 1, minTag: 3 }
 recommendation:
   authorBinding: { required: true, source: creator_profile_catalog }
   exposeStyleTags: true
-  qualitySignals: [bodyLength, requiredFactsCovered, imageSlotCoverage, entityRefCount]
+  qualitySignals: [bodyLength, evidenceSupportedFactCoverage, imageSlotCoverage, entityRefCount]
   bodyForbiddenFields: [qualityScore, templateId, routingReason, coldStartBoost, isSystemBuiltin]

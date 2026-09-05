@@ -582,14 +582,18 @@ def test_video_receipt_materializes_video_and_poster_with_explicit_rights(
 
 
 
-def test_video_review_rights_must_cover_video_and_poster(
+def test_video_review_asset_set_derives_selected_video_and_exact_poster(
     tmp_path: Path,
 ) -> None:
-    from verify.stage_artifacts import _video_rights_coverage_issues
+    from content.release.canonical.post_transaction_assets import source_assets
+    from verify.stage_artifacts import _review_asset_refs
 
     execution = tmp_path / EXECUTION_ID
     object_root = execution / TARGET_REF
     unit = execution / "sources/commons-video"
+    video_ref = "sources/commons-video/assets/video.webm"
+    poster_ref = "sources/commons-video/assets/poster.png"
+    unused_ref = "sources/commons-video/assets/unused.jpg"
     _write(
         object_root / "1.download/source_refs.json",
         {
@@ -599,6 +603,10 @@ def test_video_review_rights_must_cover_video_and_poster(
                 "metaRef": "sources/commons-video/meta.json",
             }]
         },
+    )
+    _write(
+        unit / "meta.json",
+        {"acquisition": {"posterAssetRef": "assets/poster.png"}},
     )
     rights = {
         "sourceUrl": "https://commons.wikimedia.org/wiki/File:Atomic.webm",
@@ -610,35 +618,45 @@ def test_video_review_rights_must_cover_video_and_poster(
         unit / "assets/index.json",
         {
             "assets": [
-                {"fileName": "video.webm", "assetRole": "video", **rights},
-                {"fileName": "poster.png", "assetRole": "poster", **rights},
+                {
+                    "fileName": "video.webm",
+                    "assetRole": "video",
+                    "sourceAssetId": "source-video:video",
+                    **rights,
+                },
+                {
+                    "fileName": "poster.png",
+                    "assetRole": "poster",
+                    "sourceAssetId": "source-video:poster",
+                    "derivedFromSourceAssetId": "source-video:video",
+                    **rights,
+                },
+                {"fileName": "unused.jpg", "assetRole": "image", **rights},
             ]
         },
     )
-    video_review = {
-        "assetRef": "sources/commons-video/assets/video.webm",
-        **rights,
-        "usageScope": "commercial",
-        "passed": True,
-        "issues": [],
-    }
-    missing = _video_rights_coverage_issues(
-        execution,
-        object_root=object_root,
-        media_review={"rightsReviews": [video_review]},
+    for name in ("video.webm", "poster.png", "unused.jpg"):
+        asset_path = unit / "assets" / name
+        asset_path.parent.mkdir(parents=True, exist_ok=True)
+        asset_path.write_bytes(name.encode())
+
+    assert _review_asset_refs(
+        root=execution,
+        obj=object_root,
+        lane="video",
+        draft={},
+        compose={"sourceVideo": {"assetRef": video_ref}},
+        source_assets=source_assets(execution),
+    ) == (video_ref, poster_ref)
+    assert unused_ref not in _review_asset_refs(
+        root=execution,
+        obj=object_root,
+        lane="video",
+        draft={},
+        compose={"sourceVideo": {"assetRef": video_ref}},
+        source_assets=source_assets(execution),
     )
-    assert missing == [
-        "media rights review 未覆盖 poster asset: sources/commons-video/assets/poster.png"
-    ]
-    poster_review = {
-        **video_review,
-        "assetRef": "sources/commons-video/assets/poster.png",
-    }
-    assert _video_rights_coverage_issues(
-        execution,
-        object_root=object_root,
-        media_review={"rightsReviews": [video_review, poster_review]},
-    ) == []
+
 
 # spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-027
 def test_download_budget_uses_shared_policy_and_typed_over_budget(monkeypatch: pytest.MonkeyPatch) -> None:

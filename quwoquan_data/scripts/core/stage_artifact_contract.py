@@ -15,17 +15,7 @@ LANES: Final[tuple[str, ...]] = ("homepage", "article", "image", "video")
 COMMON_STAGE_ARTIFACTS: Final[dict[str, tuple[str, ...]]] = {
     "1.download": ("source_refs.json",),
     "2.quality": ("quality_analysis.json",),
-    "4.draft": (
-        "draft_meta.json",
-        "author_self_check.json",
-        "agent_result_envelope.json",
-    ),
-    "5.review": (
-        "rubric_review.json",
-        "reviewer_result.json",
-        "media_ref_review.json",
-        "attestation.json",
-    ),
+    "5.review": ("content_review.json",),
 }
 
 LANE_ADAPTERS: Final[dict[str, dict[str, tuple[str, ...]]]] = {
@@ -54,22 +44,25 @@ LANE_ADAPTERS: Final[dict[str, dict[str, tuple[str, ...]]]] = {
 SOURCE_UNIT_ARTIFACTS: Final[tuple[str, ...]] = (
     "meta.json",
     "source.md",
-    "source.clean.md",
-    "source.layout.json",
-    "source.quality.json",
+    "snapshot.bin",
     "assets/index.json",
 )
 
-PROCESS_ARTIFACT_NAMES: Final[frozenset[str]] = frozenset(
+# Canonical publish/release must never contain live execution-process files. The
+# hard-cut names below include retired producer mirrors so stale packages fail
+# closed instead of reintroducing a second authority.
+CANONICAL_FORBIDDEN_PROCESS_ARTIFACT_NAMES: Final[frozenset[str]] = frozenset(
     {
         "author_self_check.json",
         "agent_result_envelope.json",
         "draft_meta.json",
+        "rubric_review.json",
+        "reviewer_result.json",
+        "media_ref_review.json",
+        "attestation.json",
         "repair_report.json",
         "failure.json",
-        "reviewer_result.json",
         "deterministic_gate.json",
-        "media_ref_review.json",
         "runbook.md",
         "rollout.json",
         "rollback.json",

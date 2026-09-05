@@ -51,3 +51,16 @@ def test_runtime_output_is_never_an_accepted_input_closure() -> None:
 
     with pytest.raises(SourceDigestError):
         parse_immutable_source_digest_document(document)
+
+
+def test_source_definition_inputs_are_producer_owned_and_exact() -> None:
+    inputs = SourceDefinitionSnapshot(CURRENT_DIGEST).to_document()["inputs"]
+
+    assert "quwoquan_data/schema" not in inputs
+    assert not any("recommendation-service" in item for item in inputs)
+    assert not any(item.endswith("/ui_config.yaml") for item in inputs)
+    assert (
+        "quwoquan_service/services/content-service/contracts/media/media_asset/"
+        "image_variant_policy.yaml"
+    ) in inputs
+    assert all("/release/environment" not in item for item in inputs)

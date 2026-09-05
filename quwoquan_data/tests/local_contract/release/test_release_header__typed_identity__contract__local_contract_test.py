@@ -2,8 +2,6 @@
 """Public release consumers enforce cross-field identity beyond schema shape."""
 from __future__ import annotations
 
-from pathlib import Path
-
 import pytest
 from content.release.canonical.object_source_identity import (
     source_identity_digest,
@@ -13,9 +11,6 @@ from content.release.canonical.release_header import (
     ReleaseHeaderError,
     validate_release_header,
 )
-from content.release.environment.release_runtime import load_release
-from core.io import write_json
-from core.release_layout import payload_file
 from core.source_digest import (
     content_source_revision,
     current_source_definition_snapshot,
@@ -99,7 +94,7 @@ def test_typed_header_rejects_execution_bundle_inputs_as_source_identity() -> No
         validate_release_header(document)
 
 
-def _target_environment_identity_set_header() -> dict[str, object]:
+def _explicit_cohort_identity_set_header() -> dict[str, object]:
     document = _header(release_id="content-alpha-identity-set-001")
     execution_id = str(document["executionIds"][0])
     identity = {
@@ -111,11 +106,6 @@ def _target_environment_identity_set_header() -> dict[str, object]:
     identities, identity_set_digest = source_identity_set([identity])
     document.update(
         {
-            "selectionScope": "target_environment",
-            "targetEnvironment": "alpha",
-            "samplePlanRef": "uat/sample_plan.json",
-            "samplePlanDigest": "sha256:" + "8" * 64,
-            "releaseMode": "research",
             "poolDigest": "sha256:" + "3" * 64,
             "counts": {"homepage": 0, "article": 1, "image": 0, "video": 0, "total": 1},
             "contents": [
@@ -137,14 +127,14 @@ def _target_environment_identity_set_header() -> dict[str, object]:
     return document
 
 
-def test_typed_header_accepts_research_target_environment_identity_set() -> None:
-    document = _target_environment_identity_set_header()
+def test_typed_header_accepts_research_explicit_cohort_identity_set() -> None:
+    document = _explicit_cohort_identity_set_header()
 
     assert validate_release_header(document) == document
 
 
 def test_typed_header_rejects_scalar_and_set_identity_together() -> None:
-    document = _target_environment_identity_set_header()
+    document = _explicit_cohort_identity_set_header()
     source_digest = str(document["sourceDigests"][0]["digest"])
     document.update(
         {
@@ -161,13 +151,12 @@ def test_typed_header_rejects_scalar_and_set_identity_together() -> None:
         validate_release_header(document)
 
 
-def test_typed_header_accepts_commercial_target_environment_identity_set() -> None:
-    document = _target_environment_identity_set_header()
+def test_typed_header_accepts_commercial_explicit_cohort_identity_set() -> None:
+    document = _explicit_cohort_identity_set_header()
     document.update(
         {
             "releaseClass": "commercial",
             "productLifecycleState": "commercial",
-            "releaseMode": "commercial",
         }
     )
 
@@ -175,44 +164,38 @@ def test_typed_header_accepts_commercial_target_environment_identity_set() -> No
 
 
 def test_typed_header_rejects_identity_set_outside_pool_release() -> None:
-    document = _target_environment_identity_set_header()
+    document = _explicit_cohort_identity_set_header()
     for key in (
-            "selectionScope",
-            "targetEnvironment",
-            "releaseMode",
         "poolDigest",
         "counts",
         "contents",
         "authors",
         "buildResult",
-        "samplePlanRef",
-        "samplePlanDigest",
     ):
         document.pop(key)
 
-    with pytest.raises(ReleaseHeaderError, match="pool selection"):
+    with pytest.raises(ReleaseHeaderError, match="pool release"):
         validate_release_header(document)
 
 
-def test_ship_loader_uses_typed_header_boundary(tmp_path: Path) -> None:
-    release_id = "content-typed-003"
-    release = tmp_path / release_id
-    write_json(
-        payload_file(release, "desired_state.json"),
-        {
-            "schema": "quwoquan_data.release_desired_state",
-            "releaseId": release_id,
-            "desiredRefs": {
-                "creators": [],
-                "entities": [],
-                "posts": [],
-                "tags": [],
-            },
-        },
+@pytest.mark.parametrize(
+    "forbidden_field",
+    (
+        "targetEnvironment",
+        "selectionScope",
+        "releaseMode",
+        "samplePlanRef",
+        "samplePlanDigest",
+        "contractMigration",
+    ),
+)
+def test_typed_header_rejects_consumer_fields(forbidden_field: str) -> None:
+    document = _explicit_cohort_identity_set_header()
+    document[forbidden_field] = (
+        {"reasonCode": "consumer"}
+        if forbidden_field == "contractMigration"
+        else "consumer"
     )
-    invalid = _header(release_id=release_id)
-    invalid["sourceRevision"] = "sha256:" + "4" * 64
-    write_json(payload_file(release, "release.json"), invalid)
 
-    with pytest.raises(SystemExit, match="immutable release contract invalid"):
-        load_release(tmp_path, release_id)
+    with pytest.raises(ReleaseHeaderError):
+        validate_release_header(document)

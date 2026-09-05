@@ -18,7 +18,10 @@ from content.release.canonical.object_source_identity import (
 from content.release.canonical.object_transaction import (
     build_entity_object_transaction_package,
 )
-from content.release.canonical.object_transaction_contract import ObjectTransactionError
+from content.release.canonical.object_transaction_contract import (
+    ObjectTransactionError,
+    canonical_transaction_id,
+)
 from content.release.canonical.post_transaction import (
     build_post_object_transaction_package,
 )
@@ -151,9 +154,10 @@ def _current_execution(
         legacy / "posts" / POST_REF,
         execution / "posts" / CURRENT_POST_REF,
     )
-    transaction_id = (
-        f"{EXECUTION_ID}--post-"
-        f"{hashlib.sha256(CURRENT_POST_REF.encode('utf-8')).hexdigest()[:12]}"
+    transaction_id = canonical_transaction_id(
+        execution_id=EXECUTION_ID,
+        object_kind="posts",
+        object_ref=CURRENT_POST_REF,
     )
     package = execution / "evidence/object-transactions" / transaction_id
     publish = tmp_path / "publish"
@@ -195,7 +199,7 @@ def test_current_task_init_documents_publish_one_post_plan_and_apply(
     )
     monkeypatch.setattr(
         "content.release.canonical.publish_object._review_approved",
-        lambda _path, **_kwargs: None,
+        lambda _execution_id, _path, **_kwargs: None,
     )
 
     planned = publish_object(EXECUTION_ID, f"posts/{CURRENT_POST_REF}")
@@ -401,17 +405,18 @@ def test_current_task_init_documents_build_entity_package(
     )
     (entity_root / "page.md").write_text("# 西湖\n", encoding="utf-8")
     _write(entity_root / "evidence/source_catalog.json", {"sources": []})
-    media_review_path = _write(
-        entity_root / "5.review/media_ref_review.json",
+    _write(
+        entity_root / "5.review/content_review.json",
         {
-            "schema": "quwoquan_data.media_ref_review",
+            "schema": "quwoquan_data.content_review",
             "stage": "5.review",
             "executionId": EXECUTION_ID,
             "objectRef": target_ref,
-            "passed": True,
-            "mediaIssues": [],
-            "referenceIssues": [],
-            "rightsReviews": [
+            "decision": "approved",
+            "draft": {"ref": "4.draft/page.md", "digest": "sha256:" + "1" * 64},
+            "dimensions": [{"name": "content", "decision": "approved", "issues": []}],
+            "blockingIssues": [],
+            "assetRights": [
                 {
                     "assetRef": "sources/commons/assets/cover.jpg",
                     "sourceUrl": "https://upload.wikimedia.org/wikipedia/commons/example.jpg",
@@ -419,36 +424,21 @@ def test_current_task_init_documents_build_entity_package(
                     "termsUrl": "https://creativecommons.org/licenses/by/4.0/",
                     "authorizationProof": "https://commons.wikimedia.org/wiki/File:Example.jpg",
                     "usageScope": review_usage_scope,
-                    "passed": True,
+                    "decision": "approved",
                     "issues": [],
                 }
             ],
         },
     )
-    _write(
-        entity_root / "5.review/attestation.json",
-        {
-            "decision": "approved",
-            "deterministicGate": {"status": "passed"},
-            "independentReviewer": {"status": "passed"},
-            "mediaRefReview": {
-                "status": "passed",
-                "issues": [],
-                "ref": "5.review/media_ref_review.json",
-                "digest": "sha256:" + hashlib.sha256(media_review_path.read_bytes()).hexdigest(),
-            },
-        },
-    )
-    for name in ("rubric_review.json", "reviewer_result.json"):
-        _write(entity_root / "5.review" / name, {})
     monkeypatch.setattr(
         object_transaction,
         "_project_entity_creator_closure",
         lambda **_kwargs: ([], []),
     )
-    transaction_id = (
-        f"{EXECUTION_ID}--entity-"
-        f"{hashlib.sha256(entity_ref.encode('utf-8')).hexdigest()[:12]}"
+    transaction_id = canonical_transaction_id(
+        execution_id=EXECUTION_ID,
+        object_kind="entities",
+        object_ref=entity_ref,
     )
     package = execution / "evidence/object-transactions" / transaction_id
 

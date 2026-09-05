@@ -30,7 +30,14 @@
     "resultRefs": {
       "type": "array",
       "items": {
-        "$ref": "#/$defs/refInput"
+        "oneOf": [
+          {
+            "$ref": "#/$defs/refInput"
+          },
+          {
+            "$ref": "#/$defs/actorResultRef"
+          }
+        ]
       }
     },
     "verifierFacts": {
@@ -56,8 +63,7 @@
       "then": {
         "properties": {
           "typedIssues": {
-            "type": "array",
-            "maxItems": 0
+            "type": "array"
           },
           "resultRefs": {
             "type": "array",
@@ -282,6 +288,28 @@
           }
         }
       ]
+    },
+    "actorResultRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "scope",
+        "ref",
+        "actor"
+      ],
+      "properties": {
+        "scope": {
+          "const": "execution"
+        },
+        "ref": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))[^\\u0000]+$"
+        },
+        "actor": {
+          "$ref": "#/$defs/actor"
+        }
+      }
     }
   }
 }

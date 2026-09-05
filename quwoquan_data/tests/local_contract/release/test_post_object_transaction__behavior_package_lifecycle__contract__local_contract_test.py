@@ -22,6 +22,7 @@ from content.release.canonical.object_transaction_audit import (
 from content.release.canonical.post_transaction import (
     ObjectTransactionError,
 )
+from core.schema import assert_valid
 from support.post_object_transaction_fixture import (
     CREATOR_REF,
     EXECUTION_ID,
@@ -39,6 +40,7 @@ def test_post_transaction_resolves_independently_admitted_creator(
     tmp_path: Path,
 ) -> None:
     execution, package, publish, transaction_id = _fixture(tmp_path)
+    assert transaction_id.endswith("--content-review-v1")
     transaction = build_post_object_transaction_package(
         execution_root=execution,
         object_ref=POST_REF,
@@ -75,7 +77,59 @@ def test_post_transaction_resolves_independently_admitted_creator(
     assert published_manifest["sourceIdentity"]["executionId"] == EXECUTION_ID
     assert "sourceDigest" not in published_manifest
     assert "executionBundle" not in published_manifest
+    canonical_review = publish / "posts" / POST_REF / "content_review.json"
+    source_review = execution / "posts" / POST_REF / "5.review/content_review.json"
+    assert canonical_review.read_bytes() == source_review.read_bytes()
+    assert not (publish / "posts" / POST_REF / "5.review").exists()
+    assert not (publish / "posts" / POST_REF / "attestation.json").exists()
+    assert not (publish / "posts" / POST_REF / "rights_authority.json").exists()
+    assert published_manifest["admission"]["evidenceRef"] == "content_review.json"
+    assert published_manifest["admission"]["rightsAuthorityRef"] == (
+        f"posts/{POST_REF}/content_review.json"
+    )
+    expected_review_digest = "sha256:" + hashlib.sha256(canonical_review.read_bytes()).hexdigest()
+    assert published_manifest["admission"]["evidenceDigest"] == expected_review_digest
+    assert published_manifest["admission"]["rightsAuthorityDigest"] == expected_review_digest
     assert validate_publish_invariants(publish)["status"] == "passed"
+
+
+def test_fresh_reviewed_work_without_variant_publishes_as_original(
+    tmp_path: Path,
+) -> None:
+    execution, package, _publish, transaction_id = _fixture(tmp_path)
+    make_text_only_article(execution)
+    manifest_path = execution / "posts" / POST_REF / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest.pop("variantPurpose")
+    manifest.update(
+        generator="agent",
+        createdAt="2026-09-05T12:00:00Z",
+        updatedAt="2026-09-05T12:00:00Z",
+    )
+    assert manifest["contentIdentity"] == "work"
+    assert manifest["contentType"] == "article"
+    assert manifest["sourceAttribution"]["publicationAdmission"] == "research_release"
+    _write_json(manifest_path, manifest)
+
+    build_post_object_transaction_package(
+        execution_root=execution,
+        object_ref=POST_REF,
+        transaction_id=transaction_id,
+        package_root=package,
+    )
+
+    canonical = json.loads(
+        (package / "object/manifest.json").read_text(encoding="utf-8")
+    )
+    assert canonical["contentIdentity"] == "work"
+    assert canonical["sourceType"] == "data"
+    assert canonical["variantPurpose"] == "original"
+    assert canonical["admission"]["processResult"] == "completed"
+    assert canonical["admission"]["qualityResult"] == "passed"
+    assert canonical["admission"]["rightsResult"] == "passed"
+    assert canonical["admission"]["usageScope"] == "research"
+    assert canonical["status"] == "active"
+    assert_valid(canonical, "content", "post_manifest")
 
 
 def test_post_transaction_caps_commercial_facts_at_ai_research_scope(
@@ -96,16 +150,10 @@ def test_post_transaction_caps_commercial_facts_at_ai_research_scope(
     source_index = json.loads(source_index_path.read_text(encoding="utf-8"))
     source_index["assets"][0]["distributionDecision"] = "commercial_allowed"
     _write_json(source_index_path, source_index)
-    review_path = execution / "posts" / POST_REF / "5.review/media_ref_review.json"
+    review_path = execution / "posts" / POST_REF / "5.review/content_review.json"
     review = json.loads(review_path.read_text(encoding="utf-8"))
-    review["rightsReviews"][0]["usageScope"] = "research"
+    review["assetRights"][0]["usageScope"] = "research"
     _write_json(review_path, review)
-    attestation_path = execution / "posts" / POST_REF / "5.review/attestation.json"
-    attestation = json.loads(attestation_path.read_text(encoding="utf-8"))
-    attestation["mediaRefReview"]["digest"] = (
-        "sha256:" + hashlib.sha256(review_path.read_bytes()).hexdigest()
-    )
-    _write_json(attestation_path, attestation)
 
     build_post_object_transaction_package(
         execution_root=execution,
@@ -138,16 +186,10 @@ def test_post_transaction_rejects_ai_research_commercial_variant(
     source_index = json.loads(source_index_path.read_text(encoding="utf-8"))
     source_index["assets"][0]["distributionDecision"] = "commercial_allowed"
     _write_json(source_index_path, source_index)
-    review_path = execution / "posts" / POST_REF / "5.review/media_ref_review.json"
+    review_path = execution / "posts" / POST_REF / "5.review/content_review.json"
     review = json.loads(review_path.read_text(encoding="utf-8"))
-    review["rightsReviews"][0]["usageScope"] = "research"
+    review["assetRights"][0]["usageScope"] = "research"
     _write_json(review_path, review)
-    attestation_path = execution / "posts" / POST_REF / "5.review/attestation.json"
-    attestation = json.loads(attestation_path.read_text(encoding="utf-8"))
-    attestation["mediaRefReview"]["digest"] = (
-        "sha256:" + hashlib.sha256(review_path.read_bytes()).hexdigest()
-    )
-    _write_json(attestation_path, attestation)
 
     with pytest.raises(ObjectTransactionError, match="COMMERCIAL_VARIANT_NOT_ADMITTED"):
         build_post_object_transaction_package(

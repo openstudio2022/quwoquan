@@ -1,15 +1,11 @@
 template: entity_homepage
 system:
-  required:
-    - min_page_chars
-    - min_section_chars
+  required: []
   optional: []
 task:
   required:
-    - name
-    - base_draft_block
-  optional:
-    - base_source_line
-    - section_outline_block
-    - available_images_block
-    - type_focus_block
+    - target
+    - retained_evidence_excerpts
+    - selected_blueprint_intent
+    - output_path
+  optional: []

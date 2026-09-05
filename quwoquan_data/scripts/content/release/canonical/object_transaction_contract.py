@@ -40,6 +40,9 @@ ROLLBACK_SCHEMA = "quwoquan_data.object_transaction_rollback"
 LAYOUT_SCHEMA = "quwoquan_data.canonical_publish"
 RELEASE_SCHEMA = "quwoquan_data.release"
 REQUIRED_SOURCE_POLICY = SourcePolicyRevision.ENCYCLOPEDIA_PRIMARY.value
+EXECUTION_CONTENT_REVIEW_REF = "5.review/content_review.json"
+CANONICAL_CONTENT_REVIEW_REF = "content_review.json"
+CANONICAL_TRANSACTION_LAYOUT_REVISION = "content-review-v1"
 ALLOWED_OBJECT_KINDS = {"creators", "entities", "posts"}
 # Canonical publish holds the documents that describe a work, never the bytes it
 # shows: media bodies are owned once by the content library and reached by the
@@ -138,6 +141,24 @@ def _safe_id(value: str, *, label: str) -> str:
     if not text or "/" in text or "\\" in text or text in {".", ".."}:
         raise ObjectTransactionError(f"{label} 非法：{value!r}")
     return text
+
+
+def canonical_transaction_id(
+    *, execution_id: str, object_kind: str, object_ref: str
+) -> str:
+    """Bind create-once transaction identity to the hard-cut package layout."""
+
+    normalized_execution = _execution_id(execution_id)
+    marker = {"entities": "entity", "posts": "post"}.get(object_kind)
+    if marker is None:
+        raise ObjectTransactionError(f"transaction objectKind 不支持：{object_kind}")
+    normalized_ref = _safe_rel(object_ref, label="objectRef").as_posix()
+    ref_digest = hashlib.sha256(normalized_ref.encode("utf-8")).hexdigest()[:12]
+    return (
+        f"{normalized_execution}--{marker}-{ref_digest}--"
+        f"{CANONICAL_TRANSACTION_LAYOUT_REVISION}"
+    )
+
 
 def _safe_rel(value: str, *, label: str) -> Path:
     text = str(value or "").strip().strip("/")
@@ -338,40 +359,35 @@ def _review_binding(object_root: Path, package: Mapping[str, Any]) -> dict[str, 
     review = package.get("review")
     if not isinstance(review, dict):
         raise ObjectTransactionError("对象包缺 review binding")
-    attestation_ref = _safe_rel(
-        str(review.get("attestationRef") or ""),
-        label="review.attestationRef",
+    content_review_ref = _safe_rel(
+        str(review.get("contentReviewRef") or ""),
+        label="review.contentReviewRef",
     )
-    attestation_path = object_root / attestation_ref
-    if not attestation_path.is_file():
-        raise ObjectTransactionError("对象包缺 review attestation")
-    attestation = _read_json(attestation_path)
-    media_binding = attestation.get("mediaRefReview")
-    if not isinstance(media_binding, dict):
-        raise ObjectTransactionError("对象包缺 mediaRefReview binding")
-    media_ref = _safe_rel(
-        str(media_binding.get("ref") or ""),
-        label="attestation.mediaRefReview.ref",
-    )
-    media_path = object_root / media_ref
+    content_review_path = object_root / content_review_ref
     if (
-        media_ref.as_posix() != "5.review/media_ref_review.json"
-        or media_path.is_symlink()
-        or not media_path.is_file()
-        or _digest_file(media_path) != media_binding.get("digest")
+        content_review_ref.as_posix() != CANONICAL_CONTENT_REVIEW_REF
+        or content_review_path.is_symlink()
+        or not content_review_path.is_file()
     ):
-        raise ObjectTransactionError("对象包 mediaRefReview exact binding drift")
-    if attestation.get("decision") != "approved":
+        raise ObjectTransactionError("对象包 content review exact binding drift")
+    content_review = _read_json(content_review_path)
+    try:
+        assert_valid(
+            content_review,
+            "content",
+            "content_review",
+            label=content_review_path.as_posix(),
+        )
+    except (FileNotFoundError, TypeError, ValueError) as exc:
+        raise ObjectTransactionError(str(exc)) from exc
+    if content_review.get("decision") != "approved":
         raise ObjectTransactionError("对象未 review-approved")
-    for key in ("deterministicGate", "independentReviewer", "mediaRefReview"):
-        value = attestation.get(key)
-        if not isinstance(value, dict) or value.get("status") != "passed":
-            raise ObjectTransactionError(f"review 前置未通过：{key}")
+    digest = _digest_file(content_review_path)
     return {
-        "attestationRef": attestation_ref.as_posix(),
-        "attestationSha256": _digest_file(attestation_path),
-        "mediaRefReviewRef": media_ref.as_posix(),
-        "mediaRefReviewSha256": _digest_file(media_path),
+        "contentReviewRef": content_review_ref.as_posix(),
+        "contentReviewSha256": digest,
+        "rightsAuthorityRef": content_review_ref.as_posix(),
+        "rightsAuthoritySha256": digest,
     }
 
 def _rights_binding(

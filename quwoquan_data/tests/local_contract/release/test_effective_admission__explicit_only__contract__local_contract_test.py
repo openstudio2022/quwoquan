@@ -72,20 +72,17 @@ def _write_post(
     root = publish / "posts/article/history/1"
     manifest = _post_manifest()
     write_json(root / "manifest.json", manifest)
-    attestation = {
-        "schema": "quwoquan_data.review_attestation",
+    content_review = {
+        "schema": "quwoquan_data.content_review",
         "executionId": "execution-history",
         "decision": "approved",
-        "deterministicGate": {"status": "passed", "issues": []},
-        "independentReviewer": {"status": "passed"},
-        "mediaRefReview": {"status": "passed", "issues": []},
     }
-    write_json(root / "attestation.json", attestation)
+    write_json(root / "content_review.json", content_review)
     if not with_sidecar:
         return root, manifest
-    attestation_sha = (
+    content_review_sha = (
         "sha256:"
-        + hashlib.sha256((root / "attestation.json").read_bytes()).hexdigest()
+        + hashlib.sha256((root / "content_review.json").read_bytes()).hexdigest()
     )
     payload_digest = pool_payload_digest(root)
     identity = {
@@ -106,11 +103,11 @@ def _write_post(
         "qualityResult": "passed",
         "eligibilityResult": "passed",
         "rightsResult": "passed",
-        "rightsAuthorityRef": "posts/article/history/1/5.review/media_ref_review.json",
-        "rightsAuthorityDigest": "sha256:" + "9" * 64,
+        "rightsAuthorityRef": "posts/article/history/1/content_review.json",
+        "rightsAuthorityDigest": content_review_sha,
         "usageScope": "research",
-        "evidenceRef": "attestation.json",
-        "evidenceDigest": attestation_sha,
+        "evidenceRef": "content_review.json",
+        "evidenceDigest": content_review_sha,
         "payloadDigest": payload_digest,
         "canonicalObjectDigest": payload_digest,
         "sourceIdentity": {

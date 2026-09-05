@@ -4,8 +4,6 @@ from __future__ import annotations
 
 import shutil
 import tempfile
-from dataclasses import replace
-from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
@@ -34,12 +32,6 @@ from content.release.canonical.aggregate_release_pool import (
 from content.release.canonical.aggregate_release_result import (
     aggregate_release_result,
 )
-from content.release.canonical.aggregate_release_uat import (
-    UAT_SAMPLE_PLAN_REF,
-    build_release_uat_sample_plan_artifact,
-    derive_release_sample_source_identity_set_digest,
-)
-from content.release.canonical.environment_release_candidate import EnvironmentReleaseSelection
 from content.release.canonical.object_transaction_contract import (
     ObjectTransactionError,
     _copy_tree,
@@ -54,8 +46,7 @@ from content.release.canonical.object_transaction_lock import (
 from content.release.canonical.release_admission import (
     build_release_asset_admission,
 )
-from content.release.environment.consistency import scan_release_contract
-from content.release.model import DataSourceOwner
+from content.release.canonical.release_consistency import scan_release_contract
 from core.media_asset_url import (
     build_release_media_manifest,
     copy_release_media_objects,
@@ -78,8 +69,6 @@ def _build_aggregate_release(
     release_id: str,
     release_class: str,
     cohort: dict[str, object],
-    sampling_authority_artifact_root: Path | None = None,
-    sampling_authority_binding: Mapping[str, str] | None = None,
 ) -> dict[str, Any]:
     """Create one immutable release from canonical objects bound to execution IDs."""
     release_id = _safe_id(release_id, label="releaseId")
@@ -96,9 +85,7 @@ def _build_aggregate_release(
         release_class=release_class,
     )
     pool_excluded = pool_preparation.excluded
-    environment_selection: EnvironmentReleaseSelection | None = (
-        pool_preparation.environment_selection
-    )
+    cohort_selection = pool_preparation.environment_selection
     execution_ids = pool_preparation.execution_ids
     source_digests = pool_preparation.source_digests
     source_identities = pool_preparation.source_identities
@@ -122,38 +109,15 @@ def _build_aggregate_release(
         "video": sum(ref.startswith("video/") for ref in post_refs),
     }
     carrier_counts["total"] = sum(carrier_counts.values())
-    if environment_selection is not None:
-        eligible_counts = dict(environment_selection.eligible_counts)
-        eligible_counts["homepage"] = max(int(eligible_counts.get("homepage", 0)), len(entity_refs))
-        environment_selection = replace(
-            environment_selection,
-            eligible_count=sum(int(eligible_counts.get(key, 0)) for key in ("homepage", "article", "image", "video")),
-            eligible_counts=eligible_counts,
-            counts=carrier_counts,
-        )
     if not entity_refs and not post_refs:
         raise ObjectTransactionError("aggregate release has no canonical object")
     creator_refs = list(desired["creators"])
     tag_refs = list(desired["tags"])
-    release_contents = build_release_contents(environment_selection)
-    release_authors = (
-        build_release_authors(
-            object_source_root,
-            creator_refs=creator_refs,
-            strict_admission=True,
-        )
-        if environment_selection is not None
-        else None
-    )
-    sample_source_identity_set_digest = (
-        derive_release_sample_source_identity_set_digest(
-            environment_selection=environment_selection,
-            source_identity_set_digest=source_identity_set_digest,
-            execution_ids=execution_ids,
-            source_revision=source_revision,
-            source_digest=source_digest,
-            entity_catalog_digest=entity_catalog_digest,
-        )
+    release_contents = build_release_contents(cohort_selection)
+    release_authors = build_release_authors(
+        object_source_root,
+        creator_refs=creator_refs,
+        strict_admission=True,
     )
     final_root = release_root / release_id
     if final_root.exists():
@@ -169,27 +133,16 @@ def _build_aggregate_release(
             source_digests=source_digests,
             desired=desired,
             release_class=release_mode,
-            environment_selection=environment_selection,
+            cohort_selection=cohort_selection,
             release_contents=release_contents,
             release_authors=release_authors,
-            milestone=(
-                environment_selection.milestone
-                if environment_selection is not None
-                else None
-            ),
-            milestone_targets=(
-                environment_selection.milestone_targets
-                if environment_selection is not None
-                else None
-            ),
+            milestone=cohort_selection.milestone,
+            milestone_targets=cohort_selection.milestone_targets,
             source_identities=source_identities,
             source_identity_set_digest=source_identity_set_digest,
-            sample_source_identity_set_digest=sample_source_identity_set_digest,
             build_release_asset_admission_fn=build_release_asset_admission,
             build_release_media_manifest_fn=build_release_media_manifest,
             scan_release_contract_fn=scan_release_contract,
-            sampling_authority_artifact_root=sampling_authority_artifact_root,
-            sampling_authority_binding=sampling_authority_binding,
         )
         existing["excluded"] = list(pool_excluded)
         existing["excludedCount"] = len(pool_excluded)
@@ -243,23 +196,6 @@ def _build_aggregate_release(
         )
         _write_json(payload / "asset_admission.json", asset_admission)
         selected_merkle = objects_merkle(staging, create=True)
-        uat_sample_plan, sample_plan_digest = (
-            build_release_uat_sample_plan_artifact(
-                payload=payload,
-                release_id=release_id,
-                environment_selection=environment_selection,
-                sample_source_identity_set_digest=(
-                    sample_source_identity_set_digest
-                ),
-                selected_merkle=selected_merkle,
-                release_contents=release_contents,
-                entity_refs=desired["entities"],
-                sampling_authority_artifact_root=(
-                    sampling_authority_artifact_root
-                ),
-                sampling_authority_binding=sampling_authority_binding,
-            )
-        )
         release_header = release_header_document(
             release_id=release_id,
             execution_ids=execution_ids,
@@ -271,38 +207,12 @@ def _build_aggregate_release(
             canonical_merkle=selected_merkle,
             release_class=release_mode,
             product_lifecycle_state=release_mode,
-            selection_scope=environment_selection.selection_scope,
-            release_mode=(
-                environment_selection.release_mode
-                if environment_selection is not None
-                else None
-            ),
-            pool_digest=(
-                environment_selection.pool_digest
-                if environment_selection is not None
-                else None
-            ),
-            counts=(
-                environment_selection.counts
-                if environment_selection is not None
-                else None
-            ),
+            pool_digest=cohort_selection.pool_digest,
+            counts=carrier_counts,
             contents=release_contents,
             authors=release_authors,
-            milestone=(
-                environment_selection.milestone
-                if environment_selection is not None
-                else None
-            ),
-            milestone_targets=(
-                environment_selection.milestone_targets
-                if environment_selection is not None
-                else None
-            ),
-            sample_plan_ref=(
-                UAT_SAMPLE_PLAN_REF if uat_sample_plan is not None else None
-            ),
-            sample_plan_digest=sample_plan_digest,
+            milestone=cohort_selection.milestone,
+            milestone_targets=cohort_selection.milestone_targets,
             source_identities=list(source_identities),
             source_identity_set_digest=source_identity_set_digest,
         )
@@ -383,12 +293,8 @@ def _build_aggregate_release(
             carrier_counts=carrier_counts,
             canonical_merkle=selected_merkle,
             manifest_digest=payload_digest(final_root),
-            environment_selection=environment_selection,
+            cohort_selection=cohort_selection,
             excluded=pool_excluded,
-            sample_plan_ref=(
-                UAT_SAMPLE_PLAN_REF if uat_sample_plan is not None else None
-            ),
-            sample_plan_digest=sample_plan_digest,
         )
     except Exception:
         shutil.rmtree(staging, ignore_errors=True)

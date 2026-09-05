@@ -192,29 +192,33 @@ def terminal(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         fact = _object_identity(object_ref)
         manifest_id = "entityId" if fact["objectType"] == "homepage" else "contentId"
         sealed_object = release_dir / "payload/objects" / object_ref
-        media_review = {
-            "schema": "quwoquan_data.media_ref_review", "stage": "5.review",
+        content_review = {
+            "schema": "quwoquan_data.content_review",
+            "stage": "5.review",
             "executionId": execution_ids[cohort["objectRefs"].index(object_ref)],
-            "objectRef": object_ref, "passed": True, "mediaIssues": [],
-            "referenceIssues": [], "rightsReviews": [],
-        }
-        media_path = _canonical(sealed_object / "5.review/media_ref_review.json", media_review)
-        attestation = {
-            "schema": "quwoquan_data.review_attestation", "stage": "5.review",
-            "executionId": media_review["executionId"], "executionBinding": "frozen",
-            "objectRef": object_ref, "decision": "approved",
-            "deterministicGate": {"status": "passed", "issues": []},
-            "independentReviewer": {
-                "status": "passed", "actor": {"host": "cursor", "sessionId": "fixture-review",
-                "modelFamily": "gpt", "invocation": {"provider": "host", "model": "gpt-5.6", "runId": "fixture-run"}},
+            "objectRef": object_ref,
+            "decision": "approved",
+            "draft": {
+                "ref": (
+                    "4.draft/page.md"
+                    if fact["objectType"] == "homepage"
+                    else {
+                        "article": "4.draft/draft.article.md",
+                        "image": "4.draft/image_work.json",
+                        "video": "4.draft/video_script.json",
+                    }[fact["carrier"]]
+                ),
+                "digest": "sha256:" + "d" * 64,
             },
-            "mediaRefReview": {"status": "passed", "issues": [], "ref": "5.review/media_ref_review.json", "digest": _digest(media_path)},
-            "repair": {"status": "not_required"},
+            "dimensions": [
+                {"name": "content-quality", "decision": "approved", "issues": []}
+            ],
+            "blockingIssues": [],
+            "assetRights": [],
         }
-        attestation_path = _canonical(sealed_object / "attestation.json", attestation)
         manifest = {
             manifest_id: fact["objectId"], "version": 1,
-            "executionId": media_review["executionId"], "assets": [],
+            "executionId": content_review["executionId"], "assets": [],
             "admission": {"usageScope": "research"},
         }
         if fact["objectType"] == "content":
@@ -232,15 +236,36 @@ def terminal(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
                 sealed_object / "asset.refs.json",
                 {"assets": _asset_bindings(object_ref)},
             )
-            media_review["rightsReviews"] = [{
+            content_review["assetRights"] = [{
                 "assetRef": "sources/fixture/assets/cover.jpg", "sourceUrl": "https://example.test/cover.jpg",
                 "license": "CC BY 4.0", "termsUrl": "https://example.test/terms",
                 "authorizationProof": "https://example.test/proof", "usageScope": "research",
-                "passed": True, "issues": [],
+                "decision": "approved", "issues": [],
             }]
-            media_path = _canonical(sealed_object / "5.review/media_ref_review.json", media_review)
-            attestation["mediaRefReview"]["digest"] = _digest(media_path)
-            attestation_path = _canonical(sealed_object / "attestation.json", attestation)
+            _canonical(
+                sealed_object / "rights_snapshots/cover.json",
+                {
+                    "schema": "quwoquan_data.asset_rights_snapshot",
+                    "executionId": content_review["executionId"],
+                    "assetId": "cover",
+                    "manifestAsset": manifest["assets"][0],
+                    "sourceAsset": {
+                        "sourceUrl": "https://example.test/cover.jpg",
+                        "license": "CC BY 4.0",
+                        "termsUrl": "https://example.test/terms",
+                        "authorizationProof": "https://example.test/proof",
+                    },
+                },
+            )
+        review_path = _canonical(sealed_object / "content_review.json", content_review)
+        review_digest = _digest(review_path)
+        manifest["admission"].update(
+            rightsResult="passed",
+            rightsAuthorityRef=f"{object_ref}/content_review.json",
+            rightsAuthorityDigest=review_digest,
+            evidenceRef="content_review.json",
+            evidenceDigest=review_digest,
+        )
         _canonical(sealed_object / "manifest.json", manifest)
         _canonical(
             sealed_object / "_pool/versions/1.json",
@@ -249,9 +274,9 @@ def terminal(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
                 "objectRef": fact["projectedRef"], "recordSequence": 1,
                 "contentVersion": 1, "payloadDigest": fact["canonicalDigest"],
                 "canonicalObjectDigest": fact["canonicalDigest"], "usageScope": "research",
-                "rightsResult": "passed", "rightsAuthorityRef": f"{object_ref}/5.review/media_ref_review.json",
-                "rightsAuthorityDigest": _digest(media_path), "evidenceRef": "attestation.json",
-                "evidenceDigest": _digest(attestation_path),
+                "rightsResult": "passed", "rightsAuthorityRef": f"{object_ref}/content_review.json",
+                "rightsAuthorityDigest": review_digest, "evidenceRef": "content_review.json",
+                "evidenceDigest": review_digest,
             },
         )
     for execution_id in execution_ids:
@@ -571,12 +596,16 @@ def test_commercial_handoff_rejects_noncommercial_query_scope(terminal) -> None:
         )
 
 
-def test_reader_rejects_canonical_attestation_binding_tamper(terminal) -> None:
+def test_reader_rejects_canonical_content_review_tamper(terminal) -> None:
     document, _path, _ = _write_handoff(terminal)
-    attestation_path = terminal[3] / terminal[5] / "payload/objects/entities/地点/景区/西湖/attestation.json"
-    attestation = json.loads(attestation_path.read_text(encoding="utf-8"))
-    attestation["mediaRefReview"]["digest"] = "sha256:" + "0" * 64
-    _canonical(attestation_path, attestation)
+    review_path = (
+        terminal[3]
+        / terminal[5]
+        / "payload/objects/entities/地点/景区/西湖/content_review.json"
+    )
+    tampered = json.loads(review_path.read_text(encoding="utf-8"))
+    tampered["assetRights"][0]["sourceUrl"] = "https://example.test/tampered.jpg"
+    _canonical(review_path, tampered)
     with pytest.raises(handoff.ProducerReleaseHandoffError, match="POOL_RIGHTS_DRIFT"):
         handoff.validate_producer_release_handoff(
             document,
@@ -586,13 +615,63 @@ def test_reader_rejects_canonical_attestation_binding_tamper(terminal) -> None:
         )
 
 
-def test_reader_rejects_canonical_review_tamper(terminal) -> None:
+@pytest.mark.parametrize(
+    ("field", "value"),
+    (
+        ("evidenceRef", "other_review.json"),
+        ("evidenceDigest", "sha256:" + "0" * 64),
+        ("rightsAuthorityRef", "entities/地点/景区/西湖/other_review.json"),
+        ("rightsAuthorityDigest", "sha256:" + "0" * 64),
+    ),
+)
+def test_reader_rejects_content_review_ref_digest_drift(
+    terminal, field: str, value: str
+) -> None:
     document, _path, _ = _write_handoff(terminal)
-    review = terminal[3] / terminal[5] / "payload/objects/entities/地点/景区/西湖/5.review/media_ref_review.json"
-    tampered = json.loads(review.read_text(encoding="utf-8"))
-    tampered["rightsReviews"][0]["usageScope"] = "commercial"
-    _canonical(review, tampered)
+    drift = json.loads(json.dumps(document))
+    row = drift["contentPoolObjects"][0]
+    row["queryDocument"]["admission"][field] = value
+    row["queryDigest"] = handoff.canonical_digest(row["queryDocument"])
     with pytest.raises(handoff.ProducerReleaseHandoffError, match="POOL_RIGHTS_DRIFT"):
+        handoff.validate_producer_release_handoff(
+            drift,
+            repo_root=terminal[0],
+            output_root=terminal[1],
+            release_root=terminal[3],
+        )
+
+
+def test_reader_rejects_content_review_source_hard_fact_drift(terminal) -> None:
+    document, _path, _ = _write_handoff(terminal)
+    review_path = (
+        terminal[3]
+        / terminal[5]
+        / "payload/objects/entities/地点/景区/西湖/content_review.json"
+    )
+    review = json.loads(review_path.read_text(encoding="utf-8"))
+    review["assetRights"][0]["license"] = "CC BY-SA 4.0"
+    _canonical(review_path, review)
+    review_digest = _digest(review_path)
+    object_root = review_path.parent
+    manifest_path = object_root / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["admission"]["rightsAuthorityDigest"] = review_digest
+    manifest["admission"]["evidenceDigest"] = review_digest
+    _canonical(manifest_path, manifest)
+    pool_path = object_root / "_pool/versions/1.json"
+    pool = json.loads(pool_path.read_text(encoding="utf-8"))
+    pool["rightsAuthorityDigest"] = review_digest
+    pool["evidenceDigest"] = review_digest
+    _canonical(pool_path, pool)
+    row = document["contentPoolObjects"][0]
+    row["queryDocument"]["admission"]["rightsAuthorityDigest"] = review_digest
+    row["queryDocument"]["admission"]["evidenceDigest"] = review_digest
+    row["queryDigest"] = handoff.canonical_digest(row["queryDocument"])
+
+    with pytest.raises(
+        handoff.ProducerReleaseHandoffError,
+        match="content_review source rights facts drift",
+    ):
         handoff.validate_producer_release_handoff(
             document,
             repo_root=terminal[0],
@@ -654,6 +733,42 @@ def test_new_handoff_rejects_producer_release_schema_drift(terminal) -> None:
 
     with pytest.raises(handoff.ProducerReleaseHandoffError, match="BASELINE_DRIFT"):
         _write_handoff(terminal)
+
+
+def test_producer_baseline_paths_exclude_consumer_and_broad_script_roots() -> None:
+    paths = set(handoff._PRODUCER_CONTRACT_PATHS)
+
+    assert "quwoquan_data/scripts/core" not in paths
+    assert "quwoquan_data/scripts/verify" not in paths
+    assert not any("/release/environment" in item for item in paths)
+    assert not any("import_report" in item for item in paths)
+    assert not any("uat" in item.lower() for item in paths)
+    assert not any("recommendation-service" in item for item in paths)
+    assert not any(item.endswith("/ui_config.yaml") for item in paths)
+    assert (
+        "quwoquan_service/services/content-service/contracts/media/media_asset/"
+        "image_variant_policy.yaml"
+    ) in paths
+
+
+def test_producer_handoff_schema_has_no_consumer_fields() -> None:
+    schema_path = (
+        Path(__file__).resolve().parents[3]
+        / "schema/release/producer_release_handoff.schema.json"
+    )
+    serialized = schema_path.read_text(encoding="utf-8")
+
+    for forbidden in (
+        "targetEnvironment",
+        "samplePlan",
+        "samplingAuthority",
+        "importReport",
+        "activation",
+        "readback",
+        "appUat",
+        "eaf",
+    ):
+        assert forbidden not in serialized
 
 
 @pytest.mark.parametrize(

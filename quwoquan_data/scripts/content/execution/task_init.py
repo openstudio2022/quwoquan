@@ -173,9 +173,10 @@ def _load_bound_document(
         raise TaskInitError(f"{schema_name} 必须是合法 JSON") from exc
     if not isinstance(value, dict):
         raise TaskInitError(f"{schema_name} 必须是 JSON 对象")
+    if raw != _canonical_bytes(value):
+        raise TaskInitError(f"{schema_name} 必须是 canonical JSON exact bytes")
     assert_valid(value, "execution", schema_name, label=f"task init {schema_name}")
-    canonical = _canonical_bytes(value)
-    return value, ref, canonical
+    return value, ref, raw
 
 
 def _target_ref(target: Mapping[str, Any], *, carrier: str) -> str:
@@ -397,8 +398,6 @@ def initialize_task(*, carrier_demand_path: Path, candidate_bindings_path: Path)
     quota = int(demand["quota"])
     if candidate_count != len(targets):
         raise TaskInitError("candidateCount 必须等于 targets 数量")
-    if candidate_count < quota:
-        raise TaskInitError("candidateCount 不得小于 quota")
     retry_of = _retry_binding(execution_id, demand.get("retryOf"))
 
     demand_binding = {"scope": "output", "ref": demand_ref, "digest": _sha256(demand_canonical)}

@@ -1,10 +1,13 @@
 """Service importers consume immutable release object snapshots only."""
+
 from __future__ import annotations
 
 import hashlib
 import json
 from types import SimpleNamespace
 from pathlib import Path
+
+import pytest
 
 from content.release.environment import importers
 from content.release.environment.handler import _sync_media
@@ -42,9 +45,7 @@ def test_importers_read_release_payload_without_publish_root(
     monkeypatch.setattr(
         importers,
         "read_json",
-        lambda _path: {
-            "desiredRefs": {"entities": [], "tags": ["Topic/旅行"]}
-        },
+        lambda _path: {"desiredRefs": {"entities": [], "tags": ["Topic/旅行"]}},
     )
 
     importers.run_tag_importer(
@@ -87,6 +88,9 @@ def test_importers_read_release_payload_without_publish_root(
 
     assert len(commands) == 4
     assert "--creator-receipt" in commands[1]
+    assert commands[1].count("--activation-mode") == 1
+    assert commands[1][commands[1].index("--activation-mode") + 1] == "stage-only"
+    assert not any(flag.startswith("--expected-active-") for flag in commands[1])
     assert "--redis-addr" not in commands[1]
     assert "--redis-db" not in commands[1]
     assert commands[1][commands[1].index("--media-avatar-base-url") + 1] == (
@@ -154,3 +158,19 @@ def test_media_sync_reads_only_immutable_release_payload(tmp_path: Path) -> None
     report = json.loads((run / "media-sync.json").read_text(encoding="utf-8"))
     assert report["copied"] == 1
     assert report["failed"] == 0
+
+
+def _content_importer_kwargs(tmp_path: Path) -> dict[str, object]:
+    release = tmp_path / "releases/release-a"
+    (release / "payload").mkdir(parents=True)
+    return {
+        "release": release,
+        "env": "gamma",
+        "run": tmp_path / "runs/apply-a",
+        "mongo_uri": "mongodb://gamma",
+        "media_avatar_base_url": "https://cdn.example.invalid",
+        "media_image_base_url": "https://cdn.example.invalid",
+        "media_video_base_url": "https://cdn.example.invalid",
+        "dry_run": True,
+        "creator_receipt": tmp_path / "runs/apply-a/creator-import.json",
+    }

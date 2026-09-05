@@ -28,6 +28,7 @@ def _row(digest: str) -> dict[str, object]:
         "contentSha256": f"sha256:{digest}",
         "assetRef": f"cas/sha256/{digest[:2]}/{digest}.jpg",
         "bytes": 1,
+        "mimeType": "image/jpeg",
         "width": 1,
         "height": 1,
     }

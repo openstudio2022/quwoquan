@@ -1,0 +1,210 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/content/content_review.schema.json",
+  "description": "5.review 每对象唯一内容与逐资产权利裁决；actor/digest 只由 sequence-007 receipt 冻结。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "stage",
+    "executionId",
+    "objectRef",
+    "decision",
+    "draft",
+    "dimensions",
+    "blockingIssues",
+    "assetRights"
+  ],
+  "properties": {
+    "schema": {
+      "const": "quwoquan_data.content_review"
+    },
+    "stage": {
+      "const": "5.review"
+    },
+    "executionId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "objectRef": {
+      "type": "string",
+      "pattern": "^(?:entities/[^/]+/[^/]+/[^/]+|posts/(?:article|image|video)/[^/]+/[^/]+/[1-9][0-9]*)$"
+    },
+    "decision": {
+      "enum": [
+        "approved",
+        "rejected"
+      ]
+    },
+    "dimensions": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 12,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "decision",
+          "issues"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "decision": {
+            "enum": [
+              "approved",
+              "rejected"
+            ]
+          },
+          "issues": {
+            "type": "array",
+            "maxItems": 12,
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 500
+            }
+          }
+        }
+      }
+    },
+    "blockingIssues": {
+      "type": "array",
+      "maxItems": 50,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 1000
+      }
+    },
+    "assetRights": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "assetRef",
+          "sourceUrl",
+          "license",
+          "termsUrl",
+          "authorizationProof",
+          "usageScope",
+          "decision",
+          "issues"
+        ],
+        "properties": {
+          "assetRef": {
+            "type": "string",
+            "minLength": 1
+          },
+          "sourceUrl": {
+            "type": "string",
+            "pattern": "^https://"
+          },
+          "license": {
+            "type": "string",
+            "minLength": 1
+          },
+          "termsUrl": {
+            "type": "string",
+            "pattern": "^https://"
+          },
+          "authorizationProof": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^https://"
+          },
+          "usageScope": {
+            "enum": [
+              "research",
+              "commercial"
+            ]
+          },
+          "decision": {
+            "enum": [
+              "approved",
+              "rejected"
+            ]
+          },
+          "issues": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1000
+            }
+          }
+        }
+      }
+    },
+    "draft": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ref",
+        "digest"
+      ],
+      "properties": {
+        "ref": {
+          "type": "string",
+          "pattern": "^4\\.draft/(?:page\\.md|draft\\.article\\.md|image_work\\.json|video_script\\.json)$"
+        },
+        "digest": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "decision": {
+            "const": "approved"
+          }
+        },
+        "required": [
+          "decision"
+        ]
+      },
+      "then": {
+        "properties": {
+          "blockingIssues": {
+            "maxItems": 0
+          },
+          "dimensions": {
+            "items": {
+              "properties": {
+                "decision": {
+                  "const": "approved"
+                },
+                "issues": {
+                  "maxItems": 0
+                }
+              }
+            }
+          },
+          "assetRights": {
+            "items": {
+              "properties": {
+                "decision": {
+                  "const": "approved"
+                },
+                "issues": {
+                  "maxItems": 0
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

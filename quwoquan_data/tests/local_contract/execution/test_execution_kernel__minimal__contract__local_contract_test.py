@@ -21,7 +21,10 @@ CLI = DATA_ROOT / "scripts/cli.py"
 
 def _write(path: Path, value: object) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(value, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    path.write_text(
+        json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":")) + "\n",
+        encoding="utf-8",
+    )
     return path
 
 
@@ -66,6 +69,32 @@ def kernel(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[Path, Path]
     return output, tasks / EXECUTION_ID
 
 
+@pytest.fixture
+def mixed_review_kernel(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> tuple[Path, Path]:
+    output = tmp_path / "output"
+    tasks = output / "data/tasks"
+    local = output / "data/local"
+    for module in (paths, task_init.paths, stage_receipt.paths):
+        monkeypatch.setattr(module, "OUTPUT_ROOT", output)
+        monkeypatch.setattr(module, "DATA_EXECUTIONS_ROOT", tasks)
+        monkeypatch.setattr(module, "DATA_LOCAL_ROOT", local)
+    demand, bindings = _inputs(output)
+    demand_value = json.loads(demand.read_text(encoding="utf-8"))
+    demand_value["quota"] = 2
+    _write(demand, demand_value)
+    bindings_value = json.loads(bindings.read_text(encoding="utf-8"))
+    bindings_value["candidateCount"] = 2
+    bindings_value["targets"].append({
+        "name": "灵隐寺", "entityType": "地点/景区", "publishAngle": "攻略",
+        "publishTitle": "灵隐寺半日游", "publishSeq": 1,
+    })
+    _write(bindings, bindings_value)
+    task_init.initialize_task(carrier_demand_path=demand, candidate_bindings_path=bindings)
+    return output, tasks / EXECUTION_ID
+
+
 def _open_input(tmp_path: Path, refs: list[dict[str, str]]) -> Path:
     return _write(tmp_path / "open.json", {"inputRefs": refs})
 
@@ -95,7 +124,7 @@ def _close_input(
     *,
     verdict: str = "pass",
     issues: list[dict] | None = None,
-    result_refs: list[dict[str, str]] | None = None,
+    result_refs: list[dict] | None = None,
     evidence_ref: dict[str, str] | None = None,
     evidence_digest: str | None = None,
     facts: list[dict] | None = None,
@@ -164,6 +193,46 @@ def test_init_has_only_new_bindings_and_replays_same_bytes(kernel: tuple[Path, P
     manifest = json.loads((root / "execution_manifest.json").read_text(encoding="utf-8"))
     assert request["carrierDemand"]["digest"].startswith("sha256:")
     assert manifest["initInputs"]["immutableCandidateBindings"]["digest"].startswith("sha256:")
+
+
+def test_init_requires_canonical_exact_bytes_before_mutation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    output = tmp_path / "output"
+    tasks = output / "data/tasks"
+    local = output / "data/local"
+    for module in (paths, task_init.paths):
+        monkeypatch.setattr(module, "OUTPUT_ROOT", output)
+        monkeypatch.setattr(module, "DATA_EXECUTIONS_ROOT", tasks)
+        monkeypatch.setattr(module, "DATA_LOCAL_ROOT", local)
+    demand, bindings = _inputs(output)
+    demand_doc = json.loads(demand.read_text(encoding="utf-8"))
+    demand_doc["quota"] = 2
+    demand.write_text(json.dumps(demand_doc, ensure_ascii=False, indent=4) + "\n", encoding="utf-8")
+    with pytest.raises(task_init.TaskInitError, match="canonical JSON exact bytes"):
+        task_init.initialize_task(carrier_demand_path=demand, candidate_bindings_path=bindings)
+    assert not tasks.exists()
+
+    _canonical_write(demand, demand_doc)
+    bindings_doc = json.loads(bindings.read_text(encoding="utf-8"))
+    _canonical_write(bindings, bindings_doc)
+    task_init.initialize_task(carrier_demand_path=demand, candidate_bindings_path=bindings)
+    manifest = json.loads((tasks / EXECUTION_ID / "execution_manifest.json").read_text(encoding="utf-8"))
+    assert manifest["initInputs"]["carrierDemand"]["digest"] == "sha256:" + hashlib.sha256(demand.read_bytes()).hexdigest()
+    assert manifest["initInputs"]["immutableCandidateBindings"]["digest"] == "sha256:" + hashlib.sha256(bindings.read_bytes()).hexdigest()
+
+
+def test_candidate_bindings_reject_source_and_media_admission_fields(
+    tmp_path: Path
+) -> None:
+    document = _inputs(tmp_path)[1]
+    value = json.loads(document.read_text(encoding="utf-8"))
+    value["targets"][0]["qualifiedHomepageSource"] = {
+        "provider": "wikipedia", "title": "西湖", "url": "https://example.test"
+    }
+    with pytest.raises(ValueError, match="qualifiedHomepageSource|unexpected"):
+        from core.schema import assert_valid
+        assert_valid(value, "execution", "immutable_candidate_bindings")
 
 
 def test_homepage_target_ref_matches_execution_object_directory(
@@ -499,122 +568,239 @@ def test_receipts_bind_direct_predecessor_hash_chain(
 
 
 # spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-020.t10
-def test_review_close_allows_same_family_but_rejects_author_session(
-    kernel: tuple[Path, Path], tmp_path: Path
-) -> None:
-    _output, root = kernel
+def _review_document(
+    *,
+    object_ref: str = "posts/article/攻略/西湖一日游/1",
+    decision: str = "approved",
+) -> dict:
+    return {
+        "schema": "quwoquan_data.content_review",
+        "stage": "5.review",
+        "executionId": EXECUTION_ID,
+        "objectRef": object_ref,
+        "decision": decision,
+        "draft": {"ref": "4.draft/draft.article.md", "digest": "sha256:" + "1" * 64},
+        "dimensions": [{"name": "content", "decision": decision, "issues": [] if decision == "approved" else ["needs work"]}],
+        "blockingIssues": [] if decision == "approved" else ["needs work"],
+        "assetRights": [],
+    }
+
+
+def _advance_to_review(root: Path, tmp_path: Path, *, author_actor: dict) -> None:
     for stage in ("0.plan", "sources", "1.download", "2.quality", "3.compose"):
         _open_and_pass(root, tmp_path, stage)
-
-    author_actor = {
-        "host": "cursor",
-        "modelFamily": "gpt",
-        "sessionId": "author-session",
-        "invocation": {"provider": "host", "model": "gpt-5.6", "runId": "author-run"},
-    }
-    stage_receipt.open_stage(EXECUTION_ID, "4.draft", _open_input(tmp_path / "draft", []))
-    draft_result = _write(root / "4.draft/result.json", {"stage": "4.draft"})
-    draft_ref = {"scope": "execution", "ref": "4.draft/result.json"}
-    draft_digest = "sha256:" + hashlib.sha256(draft_result.read_bytes()).hexdigest()
+    target_refs = json.loads(
+        (root / "0.plan/target_set.json").read_text(encoding="utf-8")
+    )["targetRefs"]
+    compose_refs = []
+    draft_refs = []
+    for target_ref in target_refs:
+        compose = _write(root / target_ref / "3.compose/writing_pack.json", {"carrier": "article"})
+        draft = root / target_ref / "4.draft/draft.article.md"
+        draft.parent.mkdir(parents=True, exist_ok=True)
+        draft.write_text(f"# {Path(target_ref).parts[-2]}\n", encoding="utf-8")
+        compose_refs.append({"scope": "execution", "ref": compose.relative_to(root).as_posix()})
+        draft_refs.append({"scope": "execution", "ref": draft.relative_to(root).as_posix()})
+    stage_receipt.open_stage(
+        EXECUTION_ID,
+        "4.draft",
+        _open_input(tmp_path / "draft", compose_refs),
+    )
+    evidence_ref = draft_refs[0]
+    evidence_digest = "sha256:" + hashlib.sha256(
+        (root / evidence_ref["ref"]).read_bytes()
+    ).hexdigest()
     stage_receipt.close_stage(
         EXECUTION_ID,
         "4.draft",
         _close_input(
             tmp_path / "draft-close",
-            result_refs=[draft_ref],
-            evidence_ref=draft_ref,
-            evidence_digest=draft_digest,
+            result_refs=draft_refs,
+            evidence_ref=evidence_ref,
+            evidence_digest=evidence_digest,
             actor=author_actor,
         ),
     )
 
+
+def test_review_close_allows_same_family_mixed_decisions_and_exact_results(
+    mixed_review_kernel: tuple[Path, Path], tmp_path: Path
+) -> None:
+    _output, root = mixed_review_kernel
+    author_actor = {
+        "host": "cursor", "modelFamily": "gpt", "sessionId": "author-session",
+        "invocation": {"provider": "host", "model": "gpt-5.6", "runId": "author-run"},
+    }
+    _advance_to_review(root, tmp_path, author_actor=author_actor)
     reviewer_actor = {
-        "host": "cursor",
-        "modelFamily": "gpt",
-        "sessionId": "review-session",
+        "host": "cursor", "modelFamily": "gpt", "sessionId": "review-session",
         "invocation": {"provider": "host", "model": "gpt-5.6", "runId": "review-run"},
     }
-    reviewer_result = _write(root / "posts/article/攻略/西湖一日游/1/5.review/reviewer_result.json", {
-        "schema": "quwoquan_data.reviewer_result",
-        "stage": "5.review",
-        "executionId": EXECUTION_ID,
-        "executionBinding": "frozen",
-        "objectRef": "posts/article/攻略/西湖一日游/1",
-        "actor": reviewer_actor,
-        "verdict": "passed",
-        "issues": [],
-        "resultHash": "sha256:" + "a" * 64,
-    })
-    reviewer_ref = {"scope": "execution", "ref": reviewer_result.relative_to(root).as_posix()}
-    reviewer_digest = "sha256:" + hashlib.sha256(reviewer_result.read_bytes()).hexdigest()
+    approved_object = "posts/article/攻略/西湖一日游/1"
+    rejected_object = "posts/article/攻略/灵隐寺半日游/1"
+    approved_review = _write(
+        root / approved_object / "5.review/content_review.json",
+        _review_document(object_ref=approved_object),
+    )
+    rejected_review = _write(
+        root / rejected_object / "5.review/content_review.json",
+        _review_document(object_ref=rejected_object, decision="rejected"),
+    )
+    review_refs = [
+        {"scope": "execution", "ref": approved_review.relative_to(root).as_posix()},
+        {"scope": "execution", "ref": rejected_review.relative_to(root).as_posix()},
+    ]
+    digest = "sha256:" + hashlib.sha256(approved_review.read_bytes()).hexdigest()
+    issue = {
+        "code": "DATA.SHORTFALL",
+        "message": "one object rejected",
+        "ref": review_refs[1]["ref"],
+    }
     stage_receipt.open_stage(EXECUTION_ID, "5.review", _open_input(tmp_path / "review", []))
-    stage_receipt.close_stage(
+    receipt_path = stage_receipt.close_stage(
         EXECUTION_ID,
         "5.review",
         _close_input(
             tmp_path / "review-close",
-            result_refs=[reviewer_ref],
-            evidence_ref=reviewer_ref,
-            evidence_digest=reviewer_digest,
+            issues=[issue],
+            result_refs=review_refs, evidence_ref=review_refs[0], evidence_digest=digest,
             actor=reviewer_actor,
         ),
     )
+    receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+    assert receipt["verdict"] == "pass"
+    assert receipt["typedIssues"] == [issue]
+    assert [item["ref"] for item in receipt["resultRefs"]] == [
+        item["ref"] for item in review_refs
+    ]
 
 
-# spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-020.t11
+def test_review_close_freezes_per_object_reviewers(
+    mixed_review_kernel: tuple[Path, Path], tmp_path: Path
+) -> None:
+    _output, root = mixed_review_kernel
+    author_actor = {
+        "host": "cursor", "modelFamily": "gpt", "sessionId": "author-session",
+        "invocation": {"provider": "host", "model": "gpt-5.6", "runId": "author-run"},
+    }
+    _advance_to_review(root, tmp_path, author_actor=author_actor)
+    objects = (
+        "posts/article/攻略/西湖一日游/1",
+        "posts/article/攻略/灵隐寺半日游/1",
+    )
+    reviewers = (
+        {
+            "host": "cursor", "modelFamily": "gpt", "sessionId": "review-session-1",
+            "invocation": {"provider": "host", "model": "gpt-5.6", "runId": "review-run-1"},
+        },
+        {
+            "host": "cursor", "modelFamily": "gpt", "sessionId": "review-session-2",
+            "invocation": {"provider": "host", "model": "gpt-5.6", "runId": "review-run-2"},
+        },
+    )
+    refs = []
+    for object_ref, reviewer in zip(objects, reviewers, strict=True):
+        review = _write(
+            root / object_ref / "5.review/content_review.json",
+            _review_document(object_ref=object_ref),
+        )
+        refs.append({
+            "scope": "execution",
+            "ref": review.relative_to(root).as_posix(),
+            "actor": reviewer,
+        })
+    digest = "sha256:" + hashlib.sha256((root / refs[0]["ref"]).read_bytes()).hexdigest()
+    stage_receipt.open_stage(EXECUTION_ID, "5.review", _open_input(tmp_path / "review", []))
+    receipt_path = stage_receipt.close_stage(
+        EXECUTION_ID,
+        "5.review",
+        _close_input(
+            tmp_path / "review-close",
+            result_refs=refs,
+            evidence_ref={"scope": "execution", "ref": refs[0]["ref"]},
+            evidence_digest=digest,
+            actor=reviewers[0],
+        ),
+    )
+    receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+    assert [row["actor"] for row in receipt["resultRefs"]] == list(reviewers)
+
+
+@pytest.mark.parametrize(
+    "issue",
+    [
+        {"code": "DATA.SHORTFALL"},
+        {"code": "", "message": "rejected object"},
+        {"code": "DATA.SHORTFALL", "message": "rejected object", "severity": "warning"},
+    ],
+    ids=("missing-message", "empty-code", "unexpected-field"),
+)
+def test_pass_rejects_malformed_typed_issue(
+    kernel: tuple[Path, Path], tmp_path: Path, issue: dict
+) -> None:
+    _output, root = kernel
+    stage_receipt.open_stage(EXECUTION_ID, "0.plan", _open_input(tmp_path, []))
+    result = _write(root / "0.plan/result.json", {"ok": True})
+    result_ref = {"scope": "execution", "ref": result.relative_to(root).as_posix()}
+    digest = "sha256:" + hashlib.sha256(result.read_bytes()).hexdigest()
+    with pytest.raises(stage_receipt.StageProtocolError, match="typedIssues"):
+        stage_receipt.close_stage(
+            EXECUTION_ID,
+            "0.plan",
+            _close_input(
+                tmp_path / "malformed-issue",
+                issues=[issue],
+                result_refs=[result_ref],
+                evidence_ref=result_ref,
+                evidence_digest=digest,
+            ),
+        )
+
+
 def test_review_close_rejects_author_self_review(
     kernel: tuple[Path, Path], tmp_path: Path
 ) -> None:
     _output, root = kernel
-    for stage in ("0.plan", "sources", "1.download", "2.quality", "3.compose"):
-        _open_and_pass(root, tmp_path, stage)
     author_actor = {
-        "host": "cursor",
-        "modelFamily": "gpt",
-        "sessionId": "same-session",
+        "host": "cursor", "modelFamily": "gpt", "sessionId": "same-session",
         "invocation": {"provider": "host", "model": "gpt-5.6", "runId": "author-run"},
     }
-    stage_receipt.open_stage(EXECUTION_ID, "4.draft", _open_input(tmp_path / "draft", []))
-    draft_result = _write(root / "4.draft/result.json", {"stage": "4.draft"})
-    draft_ref = {"scope": "execution", "ref": "4.draft/result.json"}
-    draft_digest = "sha256:" + hashlib.sha256(draft_result.read_bytes()).hexdigest()
-    stage_receipt.close_stage(
-        EXECUTION_ID,
-        "4.draft",
-        _close_input(
-            tmp_path / "draft-close",
-            result_refs=[draft_ref],
-            evidence_ref=draft_ref,
-            evidence_digest=draft_digest,
-            actor=author_actor,
-        ),
-    )
+    _advance_to_review(root, tmp_path, author_actor=author_actor)
     self_actor = {**author_actor, "invocation": {**author_actor["invocation"], "runId": "review-run"}}
-    reviewer_result = _write(root / "posts/article/攻略/西湖一日游/1/5.review/reviewer_result.json", {
-        "schema": "quwoquan_data.reviewer_result",
-        "stage": "5.review",
-        "executionId": EXECUTION_ID,
-        "executionBinding": "frozen",
-        "objectRef": "posts/article/攻略/西湖一日游/1",
-        "actor": self_actor,
-        "verdict": "passed",
-        "issues": [],
-        "resultHash": "sha256:" + "a" * 64,
-    })
-    reviewer_ref = {"scope": "execution", "ref": reviewer_result.relative_to(root).as_posix()}
-    reviewer_digest = "sha256:" + hashlib.sha256(reviewer_result.read_bytes()).hexdigest()
+    review = _write(root / "posts/article/攻略/西湖一日游/1/5.review/content_review.json", _review_document())
+    review_ref = {"scope": "execution", "ref": review.relative_to(root).as_posix()}
+    digest = "sha256:" + hashlib.sha256(review.read_bytes()).hexdigest()
     stage_receipt.open_stage(EXECUTION_ID, "5.review", _open_input(tmp_path / "review", []))
     with pytest.raises(stage_receipt.StageProtocolError, match="同一 host/sessionId"):
         stage_receipt.close_stage(
             EXECUTION_ID,
             "5.review",
-            _close_input(
-                tmp_path / "review-close",
-                result_refs=[reviewer_ref],
-                evidence_ref=reviewer_ref,
-                evidence_digest=reviewer_digest,
-                actor=self_actor,
-            ),
+            _close_input(tmp_path / "review-close", result_refs=[review_ref], evidence_ref=review_ref, evidence_digest=digest, actor=self_actor),
+        )
+
+
+def test_review_close_rejects_zero_approved(
+    kernel: tuple[Path, Path], tmp_path: Path
+) -> None:
+    _output, root = kernel
+    author_actor = {
+        "host": "cursor", "modelFamily": "gpt", "sessionId": "author-session",
+        "invocation": {"provider": "host", "model": "gpt-5.6", "runId": "author-run"},
+    }
+    _advance_to_review(root, tmp_path, author_actor=author_actor)
+    reviewer_actor = {
+        "host": "cursor", "modelFamily": "gpt", "sessionId": "review-session",
+        "invocation": {"provider": "host", "model": "gpt-5.6", "runId": "review-run"},
+    }
+    review = _write(root / "posts/article/攻略/西湖一日游/1/5.review/content_review.json", _review_document(decision="rejected"))
+    review_ref = {"scope": "execution", "ref": review.relative_to(root).as_posix()}
+    digest = "sha256:" + hashlib.sha256(review.read_bytes()).hexdigest()
+    stage_receipt.open_stage(EXECUTION_ID, "5.review", _open_input(tmp_path / "review", []))
+    with pytest.raises(stage_receipt.StageProtocolError, match="至少包含一个 approved"):
+        stage_receipt.close_stage(
+            EXECUTION_ID,
+            "5.review",
+            _close_input(tmp_path / "review-close", result_refs=[review_ref], evidence_ref=review_ref, evidence_digest=digest, actor=reviewer_actor),
         )
 
 

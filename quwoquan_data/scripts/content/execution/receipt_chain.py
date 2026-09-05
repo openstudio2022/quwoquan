@@ -99,38 +99,63 @@ def _binding_key(binding: Mapping[str, Any], *, label: str) -> tuple[str, str, s
     return scope, ref, digest
 
 
-def _input_refs(value: object, *, label: str) -> list[dict[str, str]]:
+def _actor(value: object, *, label: str) -> dict[str, Any]:
+    if not isinstance(value, Mapping):
+        raise ReceiptChainError(f"{label} actor 非法")
+    return dict(value)
+
+
+def _input_refs(
+    value: object, *, label: str, allow_actor: bool = False
+) -> list[dict[str, Any]]:
     if not isinstance(value, list):
         raise ReceiptChainError(f"{label} 必须是数组")
-    result: list[dict[str, str]] = []
+    result: list[dict[str, Any]] = []
     seen: set[tuple[str, str]] = set()
     for row in value:
-        if not isinstance(row, Mapping) or set(row) != {"scope", "ref"}:
-            raise ReceiptChainError(f"{label} 元素必须只含 scope/ref")
+        if not isinstance(row, Mapping):
+            raise ReceiptChainError(f"{label} 元素必须是对象")
+        allowed_shapes = ({"scope", "ref"}, {"scope", "ref", "actor"})
+        if set(row) not in (allowed_shapes if allow_actor else allowed_shapes[:1]):
+            raise ReceiptChainError(f"{label} 元素字段非法")
         scope = str(row.get("scope") or "")
         ref = _safe_ref(row.get("ref"), label=label)
         key = (scope, ref)
         if scope not in {"execution", "output", "repo"} or key in seen:
             raise ReceiptChainError(f"{label} scope 或唯一性非法")
         seen.add(key)
-        result.append({"scope": scope, "ref": ref})
+        item: dict[str, Any] = {"scope": scope, "ref": ref}
+        if "actor" in row:
+            item["actor"] = _actor(row.get("actor"), label=label)
+        result.append(item)
     return result
 
 
-def _frozen_refs(value: object, *, label: str) -> list[dict[str, str]]:
+def _frozen_refs(
+    value: object, *, label: str, allow_actor: bool = False
+) -> list[dict[str, Any]]:
     if not isinstance(value, list):
         raise ReceiptChainError(f"{label} 必须是数组")
-    result: list[dict[str, str]] = []
+    result: list[dict[str, Any]] = []
     seen: set[tuple[str, str]] = set()
     for row in value:
-        if not isinstance(row, Mapping) or set(row) != {"scope", "ref", "digest"}:
-            raise ReceiptChainError(f"{label} 元素必须只含 scope/ref/digest")
+        if not isinstance(row, Mapping):
+            raise ReceiptChainError(f"{label} 元素必须是对象")
+        allowed_shapes = (
+            {"scope", "ref", "digest"},
+            {"scope", "ref", "digest", "actor"},
+        )
+        if set(row) not in (allowed_shapes if allow_actor else allowed_shapes[:1]):
+            raise ReceiptChainError(f"{label} 元素字段非法")
         scope, ref, digest = _binding_key(row, label=label)
         key = (scope, ref)
         if key in seen:
             raise ReceiptChainError(f"{label} 含重复引用：{scope}:{ref}")
         seen.add(key)
-        result.append({"scope": scope, "ref": ref, "digest": digest})
+        item: dict[str, Any] = {"scope": scope, "ref": ref, "digest": digest}
+        if "actor" in row:
+            item["actor"] = _actor(row.get("actor"), label=label)
+        result.append(item)
     return result
 
 
@@ -252,7 +277,9 @@ def _validate_documents(
         if not isinstance(submitted_close, Mapping):
             raise ReceiptChainError(f"receipt submittedClose 非法：{name}")
         frozen_results = _frozen_refs(
-            receipt.get("resultRefs"), label=f"receipt resultRefs:{name}"
+            receipt.get("resultRefs"),
+            label=f"receipt resultRefs:{name}",
+            allow_actor=stage in {"4.draft", "5.review"},
         )
         if receipt.get("closeInput") != {
             "digest": digest_bytes(canonical_bytes(submitted_close))
@@ -262,8 +289,13 @@ def _validate_documents(
             if receipt.get(field) != submitted_close.get(field):
                 raise ReceiptChainError(f"receipt submittedClose.{field} 镜像漂移：{name}")
         if _input_refs(
-            submitted_close.get("resultRefs"), label=f"submittedClose resultRefs:{name}"
-        ) != [{"scope": row["scope"], "ref": row["ref"]} for row in frozen_results]:
+            submitted_close.get("resultRefs"),
+            label=f"submittedClose resultRefs:{name}",
+            allow_actor=stage in {"4.draft", "5.review"},
+        ) != [
+            {key: row[key] for key in ("scope", "ref", "actor") if key in row}
+            for row in frozen_results
+        ]:
             raise ReceiptChainError(f"receipt submittedClose.resultRefs 镜像漂移：{name}")
         if index < len(opens) and receipt.get("verdict") != "pass":
             raise ReceiptChainError(f"非 terminal receipt 必须为 pass：{name}")
@@ -274,7 +306,10 @@ def _validate_documents(
             ("receipt resultRefs", frozen_results),
         ):
             for binding in bindings:
-                verify_ref(binding, label=f"{execution_id} {name} {field}")
+                verify_ref(
+                    {key: binding[key] for key in ("scope", "ref", "digest")},
+                    label=f"{execution_id} {name} {field}",
+                )
         facts = receipt.get("verifierFacts")
         if not isinstance(facts, list):
             raise ReceiptChainError(f"receipt verifierFacts 非法：{name}")
@@ -438,6 +473,122 @@ def validate_embedded_receipt_chain(
     return validated
 
 
+def _receipt_result_actor(
+    receipt: Mapping[str, Any], *, ref: str, label: str
+) -> Mapping[str, Any]:
+    matches = [
+        row
+        for row in receipt.get("resultRefs") or []
+        if isinstance(row, Mapping) and row.get("ref") == ref
+    ]
+    if len(matches) != 1:
+        raise ReceiptChainError(f"{label} result ref 必须唯一")
+    actor = matches[0].get("actor", receipt.get("actor"))
+    if not isinstance(actor, Mapping):
+        raise ReceiptChainError(f"{label} actor 非法")
+    invocation = actor.get("invocation")
+    if (
+        not str(actor.get("host") or "").strip()
+        or not str(actor.get("sessionId") or "").strip()
+        or not isinstance(invocation, Mapping)
+        or not str(invocation.get("runId") or "").strip()
+    ):
+        raise ReceiptChainError(f"{label} actor 必须记录真实 host/sessionId/invocation.runId")
+    return actor
+
+
+def _independent_actors(
+    author: Mapping[str, Any], reviewer: Mapping[str, Any]
+) -> None:
+    if (author.get("host"), author.get("sessionId")) == (
+        reviewer.get("host"), reviewer.get("sessionId")
+    ):
+        raise ReceiptChainError("sequence-006/007 object actors share host/sessionId")
+    author_invocation = author.get("invocation") if isinstance(author.get("invocation"), Mapping) else {}
+    reviewer_invocation = reviewer.get("invocation") if isinstance(reviewer.get("invocation"), Mapping) else {}
+    author_run_id = str(author_invocation.get("runId") or "").strip()
+    reviewer_run_id = str(reviewer_invocation.get("runId") or "").strip()
+    if not author_run_id or not reviewer_run_id or author_run_id == reviewer_run_id:
+        raise ReceiptChainError("sequence-006/007 object actors share invocation.runId")
+
+
+def validate_publish_review_chain(
+    *,
+    execution_id: str,
+    execution_root: Path,
+    repo_root: Path,
+    output_root: Path,
+    target_ref: str,
+) -> tuple[ValidatedReceiptChain, dict[str, Any]]:
+    """Validate the live sequence-007 approval for exactly one object."""
+
+    chain = validate_live_receipt_chain(
+        execution_id=execution_id,
+        execution_root=execution_root,
+        repo_root=repo_root,
+        output_root=output_root,
+        expected_count=7,
+        terminal_verdict="pass",
+    )
+    draft_receipt = chain.receipts[5]
+    review_receipt = chain.receipts[6]
+    normalized_ref = str(target_ref or "").strip().strip("/")
+    draft_names = {
+        "homepage": "page.md",
+        "article": "draft.article.md",
+        "image": "image_work.json",
+        "video": "video_script.json",
+    }
+    carrier = "homepage" if normalized_ref.startswith("entities/") else normalized_ref.split("/", 2)[1]
+    draft_ref = f"{normalized_ref}/4.draft/{draft_names[carrier]}"
+    review_ref = f"{normalized_ref}/5.review/content_review.json"
+    author = _receipt_result_actor(
+        draft_receipt, ref=draft_ref, label="sequence-006"
+    )
+    reviewer = _receipt_result_actor(
+        review_receipt, ref=review_ref, label="sequence-007"
+    )
+    _independent_actors(author, reviewer)
+
+    review_path = execution_root / review_ref
+    review_raw = _read_regular(review_path, label=review_ref)
+    review = _parse_content_review(review_raw, label=review_ref)
+    if review.get("executionId") != execution_id or review.get("objectRef") != normalized_ref:
+        raise ReceiptChainError("content_review target identity drift")
+    expected = {
+        "scope": "execution",
+        "ref": review_ref,
+        "digest": digest_bytes(review_raw),
+    }
+    matches = [
+        row
+        for row in review_receipt.get("resultRefs") or []
+        if isinstance(row, Mapping)
+        and {key: row.get(key) for key in expected} == expected
+    ]
+    if len(matches) != 1:
+        raise ReceiptChainError("sequence-007 resultRefs do not exact-bind content_review")
+    if review.get("decision") != "approved":
+        raise ReceiptChainError("content_review is not approved")
+    return chain, review
+
+
+def _parse_content_review(raw: bytes, *, label: str) -> dict[str, Any]:
+    try:
+        value = json.loads(raw)
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise ReceiptChainError(f"{label} 不是合法 JSON") from exc
+    if not isinstance(value, dict):
+        raise ReceiptChainError(f"{label} 必须是 JSON 对象")
+    try:
+        assert_valid(value, "content", "content_review", label=label)
+    except (TypeError, ValueError) as exc:
+        raise ReceiptChainError(str(exc)) from exc
+    if raw != canonical_bytes(value):
+        raise ReceiptChainError(f"{label} 不是 canonical JSON")
+    return value
+
+
 __all__ = [
     "ReceiptChainError",
     "ValidatedReceiptChain",
@@ -445,4 +596,5 @@ __all__ = [
     "digest_bytes",
     "validate_embedded_receipt_chain",
     "validate_live_receipt_chain",
+    "validate_publish_review_chain",
 ]

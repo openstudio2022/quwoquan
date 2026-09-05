@@ -8,11 +8,11 @@
 
 ## 并发
 
-宿主具备原生子会话或任务能力时，可以并发处理不同 execution、不同对象，或为 `5.review` 派发独立 reviewer 会话。每个会话只写自己负责的 execution/对象；共享 canonical 与 release 只能经对应单对象或显式 cohort 原子 I/O 命令写入。
+宿主具备原生子会话或任务能力时，可以并发处理不同 execution。同一 execution 的 `4.draft` 全部对象必须由一个 author actor 会话负责，`5.review` 全部对象必须由另一个 reviewer actor 会话负责；不得在同一 stage 内按对象拆 actor，也不得建立 actor projection。共享 canonical 与 release 只能经对应单对象或显式 cohort 原子 I/O 命令写入。
 
 并发数量、限流、模型选择、reviewer session 派发、会话重启和任务排队属于宿主 runtime，不进入仓库业务契约、receipt、对象资格、release cohort 或 milestone。仓库中不得保存模型策略、fleet 状态、lane claim、worker identity、自动恢复或调度配置。
 
-下游环境 owner 可在 immutable handoff 可读后独立调度 import/activate/readback/UAT/EAF；环境调度与结果不写回 producer execution。
+下游 import/activate/readback、App/API UAT、EAF、sampling authority、promotion/rollback/replay 全部在本 producer workflow 范围外；如由其他 owner 独立消费 handoff，其调度与结果不得进入 handoff或写回 producer execution。
 
 ## 跨会话
 

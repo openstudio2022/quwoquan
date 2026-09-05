@@ -162,7 +162,7 @@
         "acquisitionPath", "assetUrl", "manualFile", "apiEvidence", "accessEvidence",
         "acquisitionStatus", "rightsStatus", "authorizationRequired",
         "distributionDecision", "sourceUrl", "creator", "capturedAt", "contentSha256",
-        "assetRef", "bytes", "width", "height", "license", "licenseSnapshot",
+        "assetRef", "bytes", "mimeType", "width", "height", "license", "licenseSnapshot",
         "usageScope", "modelReleaseStatus", "termsUrl",
         "authorizationProof", "rightsIssues", "caption", "relevance", "safetyReview",
         "withdrawalRequired", "failureCode", "failure", "planImageSpec",
@@ -202,6 +202,7 @@
           ]
         },
         "bytes": {"type": "integer", "minimum": 0},
+        "mimeType": {"enum": ["", "image/gif", "image/jpeg", "image/png", "image/webp"]},
         "width": {"type": "integer", "minimum": 0},
         "height": {"type": "integer", "minimum": 0},
         "license": {"type": "string", "minLength": 1},
@@ -252,6 +253,7 @@
                 "pattern": "^cas/sha256/[0-9a-f]{2}/[0-9a-f]{64}\\.(gif|jpg|png|webp)$"
               },
               "bytes": {"type": "integer", "minimum": 3000},
+              "mimeType": {"type": "string", "pattern": "^image/(gif|jpeg|png|webp)$"},
               "width": {"type": "integer", "minimum": 640},
               "height": {"type": "integer", "minimum": 426},
               "failureCode": {"const": ""},
@@ -282,6 +284,26 @@
                 }
               }
             ]
+          }
+        },
+        {
+          "if": {
+            "properties": {"acquisitionStatus": {"const": "acquired"}},
+            "required": ["acquisitionStatus"]
+          },
+          "then": {
+            "properties": {
+              "mimeType": {"type": "string", "pattern": "^image/(gif|jpeg|png|webp)$"}
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {"acquisitionStatus": {"enum": ["failed", "blocked"]}},
+            "required": ["acquisitionStatus"]
+          },
+          "then": {
+            "properties": {"mimeType": {"const": ""}}
           }
         },
         {

@@ -17,7 +17,7 @@ render: { articleTemplate: gentle, fontPreset: clean }
 structure:
   required: [城市与交通, 学科与资源, 生活与安全, 成长支持, 适合哪类孩子]
   optional: [家长探校路线, 常见误区]
-mustIncludeFacts: [城市交通, 学科资源, 生活安全, 适合人群]
+evidenceConditionedFacts: [城市交通, 学科资源, 生活安全, 适合人群]
 forbiddenPhrases: [冷启动, 批次, 角色：, 占位, contract_fixture, 保就业]
 wordCount: { min: 900, max: 1800 }
 imagePlan:
@@ -27,5 +27,5 @@ crossRefs: { minEntity: 1, minTag: 3 }
 recommendation:
   authorBinding: { required: true, source: creator_profile_catalog }
   exposeStyleTags: true
-  qualitySignals: [bodyLength, requiredFactsCovered, imageSlotCoverage, entityRefCount]
+  qualitySignals: [bodyLength, evidenceSupportedFactCoverage, imageSlotCoverage, entityRefCount]
   bodyForbiddenFields: [qualityScore, templateId, routingReason, coldStartBoost, isSystemBuiltin]

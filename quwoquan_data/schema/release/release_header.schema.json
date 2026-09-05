@@ -152,40 +152,35 @@
           },
           "inputs": {
             "const": [
-              "quwoquan_data/schema",
+              "quwoquan_data/schema/_common",
+              "quwoquan_data/schema/content",
+              "quwoquan_data/schema/execution",
+              "quwoquan_data/schema/source",
+              "quwoquan_data/schema/publish/entity.schema.json",
+              "quwoquan_data/schema/release/asset_rights_closure.schema.json",
+              "quwoquan_data/schema/release/content_pool_handoff_query.schema.json",
+              "quwoquan_data/schema/release/media_manifest.schema.json",
+              "quwoquan_data/schema/release/object_transaction_package.schema.json",
+              "quwoquan_data/schema/release/pool_object_record.schema.json",
+              "quwoquan_data/schema/release/producer_release_handoff.schema.json",
+              "quwoquan_data/schema/release/release_asset_admission.schema.json",
+              "quwoquan_data/schema/release/release_attestation.schema.json",
+              "quwoquan_data/schema/release/release_cohort.schema.json",
+              "quwoquan_data/schema/release/release_desired_state.schema.json",
+              "quwoquan_data/schema/release/release_header.schema.json",
+              "quwoquan_data/schema/governance/_definition.schema.json",
+              "quwoquan_data/schema/governance/content_distribution_policy.schema.json",
               "quwoquan_data/control_plane",
               "quwoquan_data/prompts",
               "quwoquan_data/templates",
               "quwoquan_data/verticals/travel",
               "quwoquan_data/reference",
               "quwoquan_data/requirements.txt",
-              "quwoquan_service/services/content-service/contracts/media/media_asset",
-              "quwoquan_service/services/content-service/contracts/content/post/ui_config.yaml",
-              "quwoquan_service/services/recommendation-service/contracts/recommendation/recommendation_feature_profile_view/projections/intersection_reason.yaml"
+              "quwoquan_service/services/content-service/contracts/media/media_asset/image_variant_policy.yaml"
             ]
           }
         }
       }
-    },
-    "selectionScope": {
-      "enum": [
-        "target_environment",
-        "explicit_cohort"
-      ]
-    },
-    "targetEnvironment": {
-      "enum": [
-        "alpha",
-        "beta",
-        "gamma",
-        "prod"
-      ]
-    },
-    "releaseMode": {
-      "enum": [
-        "research",
-        "commercial"
-      ]
     },
     "poolDigest": {
       "type": "string",
@@ -261,66 +256,46 @@
     "buildResult": {
       "const": "completed"
     },
-    "contractMigration": {
-      "type": "object",
-      "required": [
-        "sourceReleaseId",
-        "sourcePayloadSha256",
-        "sourceCanonicalMerkle",
-        "sourceSamplePlanRef",
-        "sourceSamplePlanDigest",
-        "reasonCode"
-      ],
-      "additionalProperties": false,
-      "properties": {
-        "sourceReleaseId": {
-          "type": "string",
-          "minLength": 1
-        },
-        "sourcePayloadSha256": {
-          "type": "string",
-          "pattern": "^sha256:[0-9a-f]{64}$"
-        },
-        "sourceCanonicalMerkle": {
-          "type": "string",
-          "pattern": "^sha256:[0-9a-f]{64}$"
-        },
-        "sourceSamplePlanRef": {
-          "const": "uat/sample_plan.json"
-        },
-        "sourceSamplePlanDigest": {
-          "type": "string",
-          "pattern": "^sha256:[0-9a-f]{64}$"
-        },
-        "reasonCode": {
-          "const": "RELEASE_UAT_SAMPLE_PLAN_CONTRACT_CUTOVER"
-        }
-      }
-    },
     "milestone": {
-      "enum": ["M1", "M10", "M100", "M1000", "M10000"]
+      "enum": [
+        "M1",
+        "M10",
+        "M100",
+        "M1000",
+        "M10000"
+      ]
     },
     "milestoneTargets": {
       "$ref": "#/$defs/carrierCountsWithoutTotal"
-    },
-    "samplePlanRef": {
-      "const": "uat/sample_plan.json"
-    },
-    "samplePlanDigest": {
-      "type": "string",
-      "pattern": "^sha256:[0-9a-f]{64}$"
     }
   },
   "$defs": {
     "carrierCountsWithoutTotal": {
       "type": "object",
-      "required": ["homepage", "article", "image", "video"],
+      "required": [
+        "homepage",
+        "article",
+        "image",
+        "video"
+      ],
       "additionalProperties": false,
       "properties": {
-        "homepage": {"type": "integer", "minimum": 0},
-        "article": {"type": "integer", "minimum": 0},
-        "image": {"type": "integer", "minimum": 0},
-        "video": {"type": "integer", "minimum": 0}
+        "homepage": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "article": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "image": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "video": {
+          "type": "integer",
+          "minimum": 0
+        }
       }
     },
     "handoffContent": {
@@ -430,16 +405,6 @@
             {
               "required": [
                 "sourceIdentitySetDigest"
-              ]
-            },
-            {
-              "required": [
-                "samplePlanRef"
-              ]
-            },
-            {
-              "required": [
-                "samplePlanDigest"
               ]
             }
           ]

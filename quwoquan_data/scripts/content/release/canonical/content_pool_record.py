@@ -10,6 +10,7 @@ from content.release.canonical.object_source_identity import (
     validate_object_source_identity,
 )
 from content.release.canonical.object_transaction_contract import (
+    CANONICAL_CONTENT_REVIEW_REF,
     ObjectTransactionError,
     _digest_bytes,
     _digest_file,
@@ -28,6 +29,7 @@ from content.release.canonical.pool_record_history import (
     PoolRecordExclusion,
     PoolRecordHistory,
     _validated_pool_record,
+    _is_pre_rights_pool_record,
     iter_pool_records,
     pool_source_identity_digest,
     read_pool_record_history,
@@ -248,13 +250,14 @@ def build_canonical_pool_record(
     evidence_digest = str(admission.get("evidenceDigest") or "").strip()
     rights_authority_ref = str(admission.get("rightsAuthorityRef") or "").strip()
     rights_authority_digest = str(admission.get("rightsAuthorityDigest") or "").strip()
-    authority_suffix = "5.review/media_ref_review.json"
-    authority_pos = rights_authority_ref.find(authority_suffix)
-    authority_relative = rights_authority_ref[authority_pos:] if authority_pos >= 0 else ""
-    authority_path = object_root / authority_relative
+    canonical_kind = "entities" if object_type == "homepage" else "posts"
+    expected_authority_ref = (
+        f"{canonical_kind}/{object_ref}/{CANONICAL_CONTENT_REVIEW_REF}"
+    )
+    authority_path = object_root / CANONICAL_CONTENT_REVIEW_REF
     if (
         admission.get("rightsResult") != "passed"
-        or not authority_relative
+        or rights_authority_ref != expected_authority_ref
         or len(rights_authority_digest) != 71
         or not rights_authority_digest.startswith("sha256:")
         or authority_path.is_symlink()
@@ -304,7 +307,7 @@ def _pool_identity_rows(
     *,
     object_ref: str,
 ) -> list[tuple[str, int, bool]]:
-    """Read collision identity without promoting a retired record to admission."""
+    """Read reserved identity without promoting excluded history to admission."""
 
     rows: list[tuple[str, int, bool]] = []
     versions_root = object_root / "_pool/versions"
@@ -339,14 +342,20 @@ def _pool_identity_rows(
                 )
             try:
                 _validated_pool_record(raw, object_type="content")
-                retired = False
+                excluded = False
             except ObjectTransactionError as exc:
-                retired = str(exc) in {
+                reason = str(exc).split(":", 1)[0]
+                excluded = reason in {
                     "DATA.POOL.SOURCE_IDENTITY_INVALID",
                     "DATA.POOL.SOURCE_ATTRIBUTION_INCOMPLETE",
                     "DATA.POOL.CANONICAL_DIGEST_DRIFT",
-                }
-                if not retired:
+                } or (
+                    reason == "DATA.POOL.RECORD_RIGHTS_INVALID"
+                    and _is_pre_rights_pool_record(
+                        raw, object_type="content"
+                    )
+                )
+                if not excluded:
                     raise
         else:
             content_version = raw.get("version")
@@ -358,8 +367,8 @@ def _pool_identity_rows(
                 raise ObjectTransactionError(
                     "DATA.POOL.RECORD_SEQUENCE_MISSING"
                 )
-            retired = True
-        rows.append((object_id, int(content_version), retired))
+            excluded = True
+        rows.append((object_id, int(content_version), excluded))
     return rows
 
 
@@ -386,14 +395,16 @@ def _known_versions(publish_root: Path, content_id: str) -> list[int]:
                     raise ObjectTransactionError(
                         "DATA.POOL.IDENTITY_INVALID: modern pool record lacks manifest identity"
                     )
-                retired_pairs = {(row[0], row[1]) for row in identity_rows}
-                if len(retired_pairs) != 1:
+                excluded_pairs = {(row[0], row[1]) for row in identity_rows}
+                if len(excluded_pairs) != 1:
                     raise ObjectTransactionError(
                         "DATA.POOL.IDENTITY_INVALID: pool record identity drift"
                     )
-                retired_content_id, retired_version = next(iter(retired_pairs))
-                if retired_content_id == content_id:
-                    versions.append(retired_version)
+                excluded_content_id, excluded_version = next(
+                    iter(excluded_pairs)
+                )
+                if excluded_content_id == content_id:
+                    versions.append(excluded_version)
                 continue
             continue
         if (
@@ -404,13 +415,18 @@ def _known_versions(publish_root: Path, content_id: str) -> list[int]:
             raise ObjectTransactionError(
                 "DATA.POOL.IDENTITY_INVALID: manifest.version must be positive"
             )
-        if identity_rows and any(
-            row[:2] != (manifest_content_id, manifest_version)
-            for row in identity_rows
-        ):
-            raise ObjectTransactionError(
-                "DATA.POOL.IDENTITY_INVALID: manifest/pool record identity drift"
-            )
+        if identity_rows:
+            if any(
+                row[:2] != (manifest_content_id, manifest_version)
+                for row in identity_rows
+            ):
+                raise ObjectTransactionError(
+                    "DATA.POOL.IDENTITY_INVALID: manifest/pool record identity drift"
+                )
+            record_content_id, record_version, _excluded = identity_rows[0]
+            if record_content_id == content_id:
+                versions.append(record_version)
+            continue
         if manifest_content_id == content_id:
             versions.append(manifest_version)
     if len(versions) != len(set(versions)):
@@ -483,7 +499,7 @@ def build_content_pool_fields(
     source_manifest: Mapping[str, Any],
     canonical_ref: str,
     source_task_id: str,
-    attestation_path: Path,
+    content_review_path: Path,
     rights_authority: Mapping[str, str],
     publish_root: Path,
     rights_rows: list[dict[str, Any]],
@@ -517,8 +533,9 @@ def build_content_pool_fields(
             f"contentId={content_id} expected={known_versions[-1] + 1} actual={version}"
         )
     review_usage_scope = str(rights_authority.get("usageScope") or "").strip()
+    expected_authority_ref = f"posts/{canonical_ref}/{CANONICAL_CONTENT_REVIEW_REF}"
     if (
-        not str(rights_authority.get("ref") or "").endswith("5.review/media_ref_review.json")
+        str(rights_authority.get("ref") or "") != expected_authority_ref
         or not str(rights_authority.get("digest") or "").startswith("sha256:")
         or review_usage_scope not in {"research", "commercial"}
     ):
@@ -529,11 +546,22 @@ def build_content_pool_fields(
         if hard_fact_scope == "commercial" and review_usage_scope == "commercial"
         else "research"
     )
-    variant_purpose = str(source_manifest.get("variantPurpose") or "").strip()
-    if variant_purpose not in {"original", "commercial_variant"}:
-        raise ObjectTransactionError(
-            f"content variantPurpose is invalid: {variant_purpose!r}"
+    raw_variant_purpose = source_manifest.get("variantPurpose")
+    if "variantPurpose" not in source_manifest:
+        if source_manifest.get("contentIdentity") != "work":
+            raise ObjectTransactionError(
+                "DATA.POOL.VARIANT_PURPOSE_AMBIGUOUS: "
+                "missing variantPurpose requires explicit contentIdentity=work"
+            )
+        variant_purpose = "original"
+    else:
+        variant_purpose = (
+            raw_variant_purpose if isinstance(raw_variant_purpose, str) else ""
         )
+        if variant_purpose not in {"original", "commercial_variant"}:
+            raise ObjectTransactionError(
+                f"content variantPurpose is invalid: {raw_variant_purpose!r}"
+            )
     if variant_purpose == "commercial_variant" and usage_scope != "commercial":
         raise ObjectTransactionError(
             "DATA.POOL.COMMERCIAL_VARIANT_NOT_ADMITTED: commercial_variant must be commercial"
@@ -550,8 +578,8 @@ def build_content_pool_fields(
             "rightsResult": "passed",
             "rightsAuthorityRef": str(rights_authority["ref"]),
             "rightsAuthorityDigest": str(rights_authority["digest"]),
-            "evidenceRef": "attestation.json",
-            "evidenceDigest": _digest_file(attestation_path),
+            "evidenceRef": CANONICAL_CONTENT_REVIEW_REF,
+            "evidenceDigest": _digest_file(content_review_path),
         },
         "status": "active",
         "sourceTaskId": source_task_id,

@@ -288,15 +288,26 @@ def _resolve_ref(binding: dict[str, Any], *, execution_fd: int) -> dict[str, str
     return {"scope": scope, "ref": ref, "digest": _sha256(raw)}
 
 
-def _freeze_refs(value: object, *, execution_fd: int, label: str) -> list[dict[str, str]]:
+def _freeze_refs(
+    value: object,
+    *,
+    execution_fd: int,
+    label: str,
+    allow_actor: bool = False,
+) -> list[dict[str, Any]]:
     if not isinstance(value, list):
         raise StageProtocolError(f"{label} 必须是数组")
-    frozen: list[dict[str, str]] = []
+    frozen: list[dict[str, Any]] = []
     seen: set[tuple[str, str]] = set()
     for raw in value:
-        if not isinstance(raw, dict) or set(raw) != {"scope", "ref"}:
-            raise StageProtocolError(f"{label} 元素只能包含 scope/ref")
-        binding = _resolve_ref(raw, execution_fd=execution_fd)
+        if not isinstance(raw, dict):
+            raise StageProtocolError(f"{label} 元素必须是对象")
+        allowed = ({"scope", "ref"}, {"scope", "ref", "actor"})
+        if set(raw) not in (allowed if allow_actor else allowed[:1]):
+            raise StageProtocolError(f"{label} 元素字段非法")
+        binding: dict[str, Any] = _resolve_ref(raw, execution_fd=execution_fd)
+        if "actor" in raw:
+            binding["actor"] = raw["actor"]
         key = (binding["scope"], binding["ref"])
         if key in seen:
             raise StageProtocolError(f"{label} 含重复引用：{key[0]}:{key[1]}")
@@ -305,66 +316,154 @@ def _freeze_refs(value: object, *, execution_fd: int, label: str) -> list[dict[s
     return frozen
 
 
-def _validate_review_close_actor(
-    request: dict[str, Any],
-    *,
-    execution_fd: int,
-) -> None:
-    """5.review CLOSE 必须复用独立 reviewer 的真实 actor，而非作者身份。"""
-    close_actor = request.get("actor")
-    close_actor = close_actor if isinstance(close_actor, dict) else {}
-    close_invocation = close_actor.get("invocation")
-    if not isinstance(close_invocation, dict):
-        raise StageProtocolError("5.review actor.invocation 必须记录真实 provider/model/runId")
+def _target_refs(execution_fd: int) -> list[str]:
+    raw = _read_regular_at(execution_fd, "0.plan/target_set.json", label="target_set")
+    target_set = _parse_json_object(raw, label="target_set")
+    try:
+        assert_valid(target_set, "execution", "target_set", label="target_set")
+    except ValueError as exc:
+        raise StageProtocolError(str(exc)) from exc
+    refs = target_set.get("targetRefs")
+    if not isinstance(refs, list) or any(not isinstance(ref, str) for ref in refs):
+        raise StageProtocolError("target_set.targetRefs 必须是字符串数组")
+    return list(refs)
 
-    reviewer_actors: list[dict[str, Any]] = []
-    for binding in request.get("resultRefs") or []:
-        if not isinstance(binding, dict):
+
+def _actor_identity(actor: object, *, label: str) -> tuple[str, str, str]:
+    value = actor if isinstance(actor, dict) else {}
+    invocation = value.get("invocation")
+    if not isinstance(invocation, dict):
+        raise StageProtocolError(f"{label}.invocation 必须记录真实 provider/model/runId")
+    host = str(value.get("host") or "").strip()
+    session_id = str(value.get("sessionId") or "").strip()
+    run_id = str(invocation.get("runId") or "").strip()
+    if not host or not session_id or not run_id:
+        raise StageProtocolError(f"{label} 必须记录真实 host/sessionId/invocation.runId")
+    return host, session_id, run_id
+
+
+def _result_bindings(request: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    return {
+        str(row.get("ref") or ""): row
+        for row in request.get("resultRefs") or []
+        if isinstance(row, dict) and row.get("scope") == "execution"
+    }
+
+
+def _binding_actor(
+    binding: dict[str, Any], *, fallback: object, label: str
+) -> dict[str, Any]:
+    actor = binding.get("actor", fallback)
+    _actor_identity(actor, label=label)
+    if not isinstance(actor, dict):
+        raise StageProtocolError(f"{label} 必须是对象")
+    return actor
+
+
+def _validate_draft_close(
+    request: dict[str, Any], *, execution_fd: int
+) -> None:
+    fallback = request.get("actor")
+    _actor_identity(fallback, label="4.draft actor")
+    expected: set[str] = set()
+    for target_ref in _target_refs(execution_fd):
+        carrier = "homepage" if target_ref.startswith("entities/") else target_ref.split("/", 2)[1]
+        name = {
+            "homepage": "page.md",
+            "article": "draft.article.md",
+            "image": "image_work.json",
+            "video": "video_script.json",
+        }[carrier]
+        expected.add(f"{target_ref}/4.draft/{name}")
+    bindings = _result_bindings(request)
+    if set(bindings) != expected:
+        raise StageProtocolError("4.draft resultRefs 必须 exact 包含每对象唯一 carrier 主产物")
+    for ref, binding in bindings.items():
+        _binding_actor(binding, fallback=fallback, label=f"4.draft author:{ref}")
+
+
+def _author_by_object(draft_receipt: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    fallback = draft_receipt.get("actor")
+    authors: dict[str, dict[str, Any]] = {}
+    for raw in draft_receipt.get("resultRefs") or []:
+        if not isinstance(raw, dict) or raw.get("scope") != "execution":
             continue
-        scope = str(binding.get("scope") or "")
-        ref = str(binding.get("ref") or "")
-        if not ref.endswith("5.review/reviewer_result.json"):
+        ref = str(raw.get("ref") or "")
+        marker = "/4.draft/"
+        if marker not in ref:
             continue
-        if scope != "execution":
-            raise StageProtocolError("5.review reviewer_result 必须使用 execution ref")
-        raw = _read_regular_at(execution_fd, ref, label="5.review reviewer_result")
-        reviewer_result = _parse_json_object(raw, label="5.review reviewer_result")
+        object_ref = ref.split(marker, 1)[0]
+        if object_ref in authors:
+            raise StageProtocolError(f"4.draft 对象 author binding 重复：{object_ref}")
+        authors[object_ref] = _binding_actor(
+            raw, fallback=fallback, label=f"4.draft author:{object_ref}"
+        )
+    return authors
+
+
+def _independent_actor_pair(
+    author: object, reviewer: object, *, object_ref: str
+) -> None:
+    author_host, author_session, author_run = _actor_identity(
+        author, label=f"4.draft author:{object_ref}"
+    )
+    reviewer_host, reviewer_session, reviewer_run = _actor_identity(
+        reviewer, label=f"5.review reviewer:{object_ref}"
+    )
+    if (author_host, author_session) == (reviewer_host, reviewer_session):
+        raise StageProtocolError(
+            f"5.review reviewer 与对应 4.draft 作者使用同一 host/sessionId：{object_ref}"
+        )
+    if author_run == reviewer_run:
+        raise StageProtocolError(
+            f"5.review reviewer 与对应 4.draft 作者使用同一 invocation.runId：{object_ref}"
+        )
+
+
+def _validate_review_close(
+    request: dict[str, Any], *, execution_fd: int, execution_id: str
+) -> None:
+    fallback = request.get("actor")
+    _actor_identity(fallback, label="5.review actor")
+    expected_refs = {
+        f"{target_ref}/5.review/content_review.json"
+        for target_ref in _target_refs(execution_fd)
+    }
+    bindings = _result_bindings(request)
+    if set(bindings) != expected_refs:
+        raise StageProtocolError("5.review resultRefs 必须 exact 包含每对象 content_review.json")
+
+    draft_loaded = _load_artifact(
+        execution_fd, _RECEIPT_DIRECTORY, _expected_name("4.draft"),
+        label="4.draft stage receipt", schema_name="stage_receipt",
+    )
+    if draft_loaded is None:
+        raise StageProtocolError("5.review 缺少 4.draft receipt")
+    authors = _author_by_object(draft_loaded[0])
+
+    approved = 0
+    for ref in sorted(expected_refs):
+        target_ref = ref.removesuffix("/5.review/content_review.json")
+        author = authors.get(target_ref)
+        if author is None:
+            raise StageProtocolError(f"5.review 缺少对应 4.draft author binding：{target_ref}")
+        reviewer = _binding_actor(
+            bindings[ref], fallback=fallback, label=f"5.review reviewer:{target_ref}"
+        )
+        _independent_actor_pair(author, reviewer, object_ref=target_ref)
+        raw = _read_regular_at(execution_fd, ref, label="5.review content_review")
+        review = _parse_json_object(raw, label="5.review content_review")
         try:
-            assert_valid(
-                reviewer_result,
-                "content",
-                "reviewer_result",
-                label="5.review reviewer_result",
-            )
+            assert_valid(review, "content", "content_review", label=ref)
         except ValueError as exc:
             raise StageProtocolError(str(exc)) from exc
-        reviewer_actors.append(dict(reviewer_result["actor"]))
-    if not reviewer_actors:
-        raise StageProtocolError("5.review resultRefs 必须包含 reviewer_result.json")
-    if any(actor != close_actor for actor in reviewer_actors):
-        raise StageProtocolError("5.review CLOSE actor 与 reviewer_result.actor 不一致")
-    draft_receipt = _load_artifact(
-        execution_fd,
-        _RECEIPT_DIRECTORY,
-        _expected_name("4.draft"),
-        label="4.draft stage receipt",
-        schema_name="stage_receipt",
-    )
-    if draft_receipt is None:
-        raise StageProtocolError("5.review 缺少 4.draft receipt")
-    author_actor = draft_receipt[0].get("actor")
-    author_actor = author_actor if isinstance(author_actor, dict) else {}
-    if (close_actor.get("host"), close_actor.get("sessionId")) == (
-        author_actor.get("host"),
-        author_actor.get("sessionId"),
-    ):
-        raise StageProtocolError("5.review reviewer 与 4.draft 作者使用同一 host/sessionId")
-    author_invocation = author_actor.get("invocation")
-    author_invocation = author_invocation if isinstance(author_invocation, dict) else {}
-    author_run_id = str(author_invocation.get("runId") or "").strip()
-    reviewer_run_id = str(close_invocation.get("runId") or "").strip()
-    if not author_run_id or author_run_id == reviewer_run_id:
-        raise StageProtocolError("5.review reviewer 必须使用不同于作者的真实 invocation.runId")
+        if review.get("executionId") != execution_id:
+            raise StageProtocolError("content_review executionId 与 execution 漂移")
+        if str(review.get("objectRef") or "").strip("/") != target_ref:
+            raise StageProtocolError("content_review objectRef 与 target_set 漂移")
+        approved += review.get("decision") == "approved"
+    if approved == 0:
+        raise StageProtocolError("5.review pass 必须至少包含一个 approved 对象")
 
 
 def _load_artifact(root_fd: int, directory: str, name: str, *, label: str, schema_name: str) -> tuple[dict[str, Any], bytes] | None:
@@ -655,8 +754,7 @@ def close_stage(execution_id: str, stage: str, input_path: Path) -> Path:
     facts = request["verifierFacts"]
     if verdict == "pass":
         if (
-            issues
-            or not results
+            not results
             or not facts
             or any(
                 fact.get("status") != "passed"
@@ -666,7 +764,7 @@ def close_stage(execution_id: str, stage: str, input_path: Path) -> Path:
                 for fact in facts
             )
         ):
-            raise StageProtocolError("pass 必须 resultRefs 非空、typedIssues 为空，且 verifierFacts 全部 passed/exitCode=0 并绑定 evidence")
+            raise StageProtocolError("pass 必须 resultRefs 非空，且 verifierFacts 全部 passed/exitCode=0 并绑定 evidence")
     elif not issues:
         raise StageProtocolError("blocked 必须包含 typedIssues")
 
@@ -675,8 +773,14 @@ def close_stage(execution_id: str, stage: str, input_path: Path) -> Path:
         root, root_fd = _execution_root_fd(normalized_id)
         try:
             _reject_if_blocked(root_fd, normalized_id)
+            if normalized_stage == "4.draft" and verdict == "pass":
+                _validate_draft_close(request, execution_fd=root_fd)
             if normalized_stage == "5.review" and verdict == "pass":
-                _validate_review_close_actor(request, execution_fd=root_fd)
+                _validate_review_close(
+                    request,
+                    execution_fd=root_fd,
+                    execution_id=normalized_id,
+                )
             facts = _validate_verifier_facts(facts, root_fd=root_fd)
             if verdict == "pass" and any(
                 fact.get("status") != "passed"
@@ -701,7 +805,12 @@ def close_stage(execution_id: str, stage: str, input_path: Path) -> Path:
             if open_value.get("predecessor") != predecessor:
                 raise StageProtocolError("stage open predecessor 漂移")
             _revalidate_open_inputs(root_fd, open_value)
-            frozen_results = _freeze_refs(results, execution_fd=root_fd, label="resultRefs")
+            frozen_results = _freeze_refs(
+                results,
+                execution_fd=root_fd,
+                label="resultRefs",
+                allow_actor=normalized_stage in {"4.draft", "5.review"},
+            )
             frozen_facts = facts
             value = {
                 "schema": "quwoquan_data.stage_receipt",

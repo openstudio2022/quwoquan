@@ -3,14 +3,12 @@
 # spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-020.t9
 from __future__ import annotations
 
-import hashlib
 import json
 from pathlib import Path
 
 import pytest
 
-from content.release.canonical.object_transaction_contract import ObjectTransactionError
-from content.release.canonical.publish_object import _review_approved, _target_object
+from content.release.canonical.publish_object import _target_object
 from core.schema import assert_valid
 from core.stage_artifact_contract import required_stage_artifacts
 from verify import stage_artifacts
@@ -48,13 +46,9 @@ def _target_set(refs: list[str]) -> dict[str, object]:
 
 
 def test_stage_contract_uses_ai_written_target_artifacts() -> None:
-    assert required_stage_artifacts("video")["4.draft"] == (
-        "draft_meta.json", "author_self_check.json", "agent_result_envelope.json", "video_script.json"
-    )
-    assert required_stage_artifacts("image")["4.draft"][-1] == "image_work.json"
-    assert required_stage_artifacts("article")["5.review"] == (
-        "rubric_review.json", "reviewer_result.json", "media_ref_review.json", "attestation.json"
-    )
+    assert required_stage_artifacts("video")["4.draft"] == ("video_script.json",)
+    assert required_stage_artifacts("image")["4.draft"] == ("image_work.json",)
+    assert required_stage_artifacts("article")["5.review"] == ("content_review.json",)
 
 
 def test_stage_verifier_schema_map_matches_minimal_stage_contract() -> None:
@@ -68,58 +62,23 @@ def test_stage_verifier_schema_map_matches_minimal_stage_contract() -> None:
     assert retired.isdisjoint(stage_artifacts._SCHEMA_FILES)
 
 
-def test_review_attestation_schema_accepts_minimal_four_file_closure() -> None:
+def test_content_review_schema_rejects_old_review_mirrors() -> None:
     document = {
-        "schema": "quwoquan_data.review_attestation",
+        "schema": "quwoquan_data.content_review",
         "stage": "5.review",
         "executionId": EXECUTION_ID,
-        "executionBinding": "frozen",
         "objectRef": "posts/video/angle/title/1",
         "decision": "approved",
-        "deterministicGate": {"status": "passed", "issues": []},
-        "independentReviewer": {
-            "status": "passed",
-            "actor": {
-                "host": "cursor",
-                "sessionId": "review-session-1",
-                "modelFamily": "composer",
-                "invocation": {
-                    "provider": "cursor-host",
-                    "model": "composer-2.5",
-                    "runId": "review-run-1",
-                },
-            },
-        },
-        "mediaRefReview": {
-            "status": "passed",
-            "issues": [],
-            "ref": "5.review/media_ref_review.json",
-            "digest": "sha256:" + "d" * 64,
-        },
-        "repair": {"status": "not_required"},
+        "draft": {"ref": "4.draft/video_script.json", "digest": "sha256:" + "d" * 64},
+        "dimensions": [{"name": "content", "decision": "approved", "issues": []}],
+        "blockingIssues": [],
+        "assetRights": [],
     }
-    assert_valid(document, "content", "review_attestation")
-    same_family = json.loads(json.dumps(document))
-    same_family["independentReviewer"]["actor"]["modelFamily"] = "gpt"
-    assert_valid(same_family, "content", "review_attestation")
-    for missing in ("sessionId", "invocation"):
-        invalid_actor = json.loads(json.dumps(document))
-        invalid_actor["independentReviewer"]["actor"].pop(missing)
-        with pytest.raises(ValueError, match=missing):
-            assert_valid(invalid_actor, "content", "review_attestation")
-    for field in ("modelFamily", "provider", "model"):
-        invalid_actor = json.loads(json.dumps(document))
-        target = invalid_actor["independentReviewer"]["actor"]
-        if field in ("provider", "model"):
-            target = target["invocation"]
-        target[field] = "auto"
-        with pytest.raises(ValueError, match="not"):
-            assert_valid(invalid_actor, "content", "review_attestation")
-    for field in ("deterministicGate", "independentReviewer", "mediaRefReview"):
-        invalid = dict(document)
-        invalid.pop(field)
-        with pytest.raises(ValueError, match=field):
-            assert_valid(invalid, "content", "review_attestation")
+    assert_valid(document, "content", "content_review")
+    for old_field in ("actor", "score", "repair", "verdict", "mediaRefReview"):
+        with pytest.raises(ValueError):
+            assert_valid({**document, old_field: {}}, "content", "content_review")
+
 
 
 def test_writing_pack_schema_declares_host_ai_producer() -> None:
@@ -130,92 +89,15 @@ def test_writing_pack_schema_declares_host_ai_producer() -> None:
     assert "CLI prepare" not in description
 
 
-def test_publish_review_accepts_only_minimal_four_file_closure(tmp_path: Path) -> None:
-    review = tmp_path / "object/5.review"
-    object_ref = "posts/video/angle/title/1"
-    _write(
-        review / "rubric_review.json",
-        {
-            "schema": "quwoquan_data.rubric_review",
-            "ref": object_ref,
-            "dimensions": [{"name": "readability", "scores": [9], "verdict": "pass", "rationale": "clear"}],
-            "decision": "approved",
-        },
-    )
-    reviewer = {
-        "schema": "quwoquan_data.reviewer_result",
-        "stage": "5.review",
-        "executionId": EXECUTION_ID,
-        "objectRef": object_ref,
-        "actor": {
-            "host": "cursor",
-            "sessionId": "review-session-1",
-            "modelFamily": "composer",
-            "invocation": {
-                "provider": "cursor-host",
-                "model": "composer-2.5",
-                "runId": "review-run-1",
-            },
-        },
-        "verdict": "passed",
-        "issues": [],
-        "resultHash": "sha256:" + "c" * 64,
-    }
-    _write(review / "reviewer_result.json", reviewer)
-    media_review_path = review / "media_ref_review.json"
-    _write(
-        media_review_path,
-        {
-            "schema": "quwoquan_data.media_ref_review",
-            "stage": "5.review",
-            "executionId": EXECUTION_ID,
-            "objectRef": object_ref,
-            "passed": True,
-            "mediaIssues": [],
-            "referenceIssues": [],
-            "rightsReviews": [],
-        },
-    )
-    _write(
-        review.parent / "manifest.json",
-        {"contentType": "article", "publishMediaMode": "text_only", "assets": []},
-    )
-    attestation = {
-        "schema": "quwoquan_data.review_attestation",
-        "stage": "5.review",
-        "executionId": EXECUTION_ID,
-        "executionBinding": "frozen",
-        "objectRef": object_ref,
-        "decision": "approved",
-        "deterministicGate": {"status": "passed", "issues": []},
-        "independentReviewer": {
-            "status": "passed",
-            "actor": {
-                "host": "cursor",
-                "sessionId": "review-session-1",
-                "modelFamily": "composer",
-                "invocation": {
-                    "provider": "cursor-host",
-                    "model": "composer-2.5",
-                    "runId": "review-run-1",
-                },
-            },
-        },
-        "mediaRefReview": {
-            "status": "passed",
-            "issues": [],
-            "ref": "5.review/media_ref_review.json",
-            "digest": "sha256:" + hashlib.sha256(media_review_path.read_bytes()).hexdigest(),
-        },
-        "repair": {"status": "not_required"},
-    }
-    _write(review / "attestation.json", attestation)
+def test_content_review_is_the_only_review_stage_artifact() -> None:
+    schema_files = set(stage_artifacts._SCHEMA_FILES)
+    assert "5.review/content_review.json" in schema_files
+    for retired in (
+        "5.review/rubric_review.json", "5.review/reviewer_result.json",
+        "5.review/media_ref_review.json", "5.review/attestation.json",
+    ):
+        assert retired not in schema_files
 
-    _review_approved(review.parent)
-    reviewer["verdict"] = "failed"
-    _write(review / "reviewer_result.json", reviewer)
-    with pytest.raises(ObjectTransactionError, match="independent reviewer"):
-        _review_approved(review.parent)
 
 
 def test_stage_gate_fails_when_declared_target_directory_is_missing(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

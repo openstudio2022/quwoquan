@@ -3,10 +3,10 @@ from __future__ import annotations
 
 import argparse
 
-from content.release.canonical import handler as owner
 
 
 def register_parser(subparsers: argparse._SubParsersAction) -> None:
+    from content.release.canonical import handler as owner
     parser = subparsers.add_parser("release", help="构建不可变的通用内容发布包")
     commands = parser.add_subparsers(dest="release_command", required=True)
 
@@ -57,14 +57,14 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     lease_acquire.add_argument("--verify-run-id", required=True)
     lease_acquire.add_argument("--ttl-seconds", type=int, default=3600)
     lease_acquire.add_argument("--event-id", default="")
-    lease_acquire.set_defaults(handler=owner.handle_acceptance_lease)
+    lease_acquire.set_defaults(handler=_load_acceptance_lease)
     lease_revoke = lease_actions.add_parser("revoke")
     lease_revoke.add_argument("--env", required=True)
     lease_revoke.add_argument("--release-id", required=True)
     lease_revoke.add_argument("--lease-id", required=True)
     lease_revoke.add_argument("--acquire-event-ref", required=True)
     lease_revoke.add_argument("--event-id", default="")
-    lease_revoke.set_defaults(handler=owner.handle_acceptance_lease)
+    lease_revoke.set_defaults(handler=_load_acceptance_lease)
 
     lifecycle_exit = commands.add_parser(
         "lifecycle-exit",
@@ -80,7 +80,7 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     lifecycle_exit.add_argument("--replay-import-run-id", required=True)
     lifecycle_exit.add_argument("--replay-verify-run-id", required=True)
     lifecycle_exit.add_argument("--run-id", required=True)
-    lifecycle_exit.set_defaults(handler=owner.handle_lifecycle_exit)
+    lifecycle_exit.set_defaults(handler=_load_lifecycle_exit)
 
     publish_object = commands.add_parser(
         "publish-object",
@@ -107,7 +107,7 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     object_transaction_rollback.add_argument("--output-root")
     object_transaction_rollback.add_argument("--publish-root")
     object_transaction_rollback.set_defaults(
-        handler=owner.handle_object_transaction_rollback
+        handler=_load_object_transaction_rollback
     )
     object_transaction_replay = object_transaction_actions.add_parser(
         "replay-package",
@@ -119,7 +119,7 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     object_transaction_replay.add_argument("--output-root")
     object_transaction_replay.add_argument("--publish-root")
     object_transaction_replay.set_defaults(
-        handler=owner.handle_object_transaction_replay_package
+        handler=_load_object_transaction_replay_package
     )
 
     build_lookups = commands.add_parser(
@@ -130,7 +130,7 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     build_lookups.add_argument("--publish-root")
     build_lookups.add_argument("--release-root")
     build_lookups.add_argument("--taxonomy-root")
-    build_lookups.set_defaults(handler=owner.handle_build_lookup_indexes)
+    build_lookups.set_defaults(handler=_load_build_lookup_indexes)
 
     reset_canonical = commands.add_parser(
         "reset-canonical",
@@ -140,4 +140,44 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     reset_canonical.add_argument(
         "--env", required=True, help="已应用空基线的目标环境，逗号分隔"
     )
-    reset_canonical.set_defaults(handler=owner.handle_reset_canonical)
+    reset_canonical.set_defaults(handler=_load_reset_canonical)
+
+
+def _load_object_transaction_rollback(args: argparse.Namespace) -> None:
+    from content.release.canonical.handler_consumers import (
+        handle_object_transaction_rollback,
+    )
+
+    handle_object_transaction_rollback(args)
+
+
+def _load_object_transaction_replay_package(args: argparse.Namespace) -> None:
+    from content.release.canonical.handler_consumers import (
+        handle_object_transaction_replay_package,
+    )
+
+    handle_object_transaction_replay_package(args)
+
+
+def _load_build_lookup_indexes(args: argparse.Namespace) -> None:
+    from content.release.canonical.handler_consumers import handle_build_lookup_indexes
+
+    handle_build_lookup_indexes(args)
+
+
+def _load_reset_canonical(args: argparse.Namespace) -> None:
+    from content.release.canonical.reset import handle_reset_canonical
+
+    handle_reset_canonical(args)
+
+
+def _load_acceptance_lease(args: argparse.Namespace) -> None:
+    from content.release.canonical.acceptance_lease import handle_acceptance_lease
+
+    handle_acceptance_lease(args)
+
+
+def _load_lifecycle_exit(args: argparse.Namespace) -> None:
+    from content.release.canonical.lifecycle_exit import handle_lifecycle_exit
+
+    handle_lifecycle_exit(args)

@@ -145,6 +145,66 @@ def _record_error_code(exc: ObjectTransactionError) -> str:
     return str(exc).split(":", 1)[0]
 
 
+_PRE_RIGHTS_RECORD_FIELDS = frozenset(
+    {
+        "schema",
+        "objectType",
+        "objectId",
+        "objectRef",
+        "recordSequence",
+        "contentVersion",
+        "status",
+        "processResult",
+        "qualityResult",
+        "eligibilityResult",
+        "usageScope",
+        "evidenceRef",
+        "evidenceDigest",
+        "payloadDigest",
+        "canonicalObjectDigest",
+        "sourceIdentity",
+        "sourceAttribution",
+    }
+)
+
+
+def _is_pre_rights_pool_record(
+    raw: Mapping[str, Any],
+    *,
+    object_type: str | None = None,
+) -> bool:
+    """Recognize the exact valid contract that predates rights fields.
+
+    This classification is only for collision-identity reservation. It never
+    turns the historical record into admission or supplies rights from a
+    manifest.
+    """
+
+    actual_type = str(raw.get("objectType") or "").strip()
+    rights_fields = (
+        "rightsResult",
+        "rightsAuthorityRef",
+        "rightsAuthorityDigest",
+    )
+    if (
+        actual_type not in {"homepage", "content"}
+        or set(raw) != _PRE_RIGHTS_RECORD_FIELDS
+        or any(field in raw for field in rights_fields)
+    ):
+        return False
+    candidate = dict(raw)
+    candidate.update(
+        rightsResult="passed",
+        rightsAuthorityRef="historical-rights-contract-validation",
+        rightsAuthorityDigest="sha256:" + "0" * 64,
+    )
+    try:
+        _validated_pool_record(candidate, object_type=object_type)
+    except ObjectTransactionError:
+        return False
+    return True
+
+
 def _physical_record_sequence(path: Path) -> int:
     raw = path.stem
     if not raw.isdigit() or raw.startswith("0"):
@@ -225,9 +285,10 @@ def read_pool_record_history(
 ) -> PoolRecordHistory:
     """Read one ledger without allowing an invalid record to become admission.
 
-    The only isolated historical shape is the retired explicit ``version``
-    contract, and only when a later canonical record proves an exact metadata
-    repair. Other malformed records and integrity conflicts remain blocking.
+    The retired explicit ``version`` shape can be superseded only by an exact
+    metadata repair. A valid pre-rights contract is kept as a typed exclusion
+    for collision-only consumers, but remains blocking here and in direct
+    admission. Other malformed records and integrity conflicts also block.
     """
 
     versions_root = object_root / "_pool" / "versions"

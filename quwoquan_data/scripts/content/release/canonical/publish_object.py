@@ -1,19 +1,23 @@
 """Canonical single-object publish transaction."""
 from __future__ import annotations
 
-import hashlib
 import json
 from pathlib import Path
 from typing import Any
 
 from content.release.canonical.application import apply_object_transaction
+from content.execution.receipt_chain import ReceiptChainError, validate_publish_review_chain
 from content.release.canonical.canonical_inventory import load_or_bootstrap_inventory
 from content.release.canonical.object_transaction import build_entity_object_transaction_package
 from content.release.canonical.object_transaction_audit import audit_object_transaction
-from content.release.canonical.object_transaction_contract import ObjectTransactionError
+from content.release.canonical.object_transaction_contract import (
+    ObjectTransactionError,
+    canonical_transaction_id,
+)
 from content.release.canonical.object_transaction_lock import canonical_publish_lock
 from content.release.canonical.post_promotion import promote_post_object
 from core.io import read_json
+from core import paths
 from core.paths import OUTPUT_ROOT, PUBLISH_ROOT, execution_root
 from core.schema import assert_valid
 from core.tree_integrity import tree_integrity_stats
@@ -44,72 +48,51 @@ def _target_object(execution_id: str, target_ref: str) -> tuple[str, str, Path]:
     return kind, canonical_ref, path
 
 
-def _review_approved(object_dir: Path, *, expected_object_ref: str | None = None) -> None:
-    documents: dict[str, dict[str, Any]] = {}
-    for name, schema_name in (
-        ("rubric_review.json", "rubric_review"),
-        ("reviewer_result.json", "reviewer_result"),
-        ("media_ref_review.json", "media_ref_review"),
-        ("attestation.json", "review_attestation"),
-    ):
-        path = object_dir / "5.review" / name
-        document = read_json(path)
-        assert_valid(document, "content", schema_name, label=path.as_posix())
-        documents[name] = document
-    attestation = documents["attestation.json"]
+def _review_approved(
+    execution_id: str,
+    object_dir: Path,
+    *,
+    expected_object_ref: str,
+) -> None:
+    root = execution_root(execution_id)
+    try:
+        _chain, document = validate_publish_review_chain(
+            execution_id=execution_id,
+            execution_root=root,
+            repo_root=paths.REPO_ROOT,
+            output_root=paths.OUTPUT_ROOT,
+            target_ref=expected_object_ref,
+        )
+    except ReceiptChainError as exc:
+        raise ObjectTransactionError(
+            f"publish requires live sequence-007 approval: {exc}"
+        ) from exc
+
     manifest = read_json(object_dir / "manifest.json")
     from content.release.canonical.review_rights_binding import validate_review_authority
-
     object_kind = "entity" if (object_dir / "_entity.json").is_file() else "posts"
     if not manifest.get("assets"):
         source_assets = {}
     elif object_kind == "entity":
         from content.release.canonical.entity_transaction_sources import source_assets_by_ref
-
-        source_assets = source_assets_by_ref(object_dir.parents[3])
+        source_assets = source_assets_by_ref(root)
     else:
         from content.release.canonical.post_transaction_assets import source_assets as load_source_assets
-
-        source_assets = load_source_assets(object_dir.parents[4])
+        source_assets = load_source_assets(root)
     validate_review_authority(
         review_root=object_dir / "5.review",
         manifest=manifest,
         object_kind=object_kind,
-        execution_id=str(attestation.get("executionId") or ""),
-        object_ref=str(attestation.get("objectRef") or expected_object_ref or ""),
-        attestation=attestation,
+        execution_id=execution_id,
+        object_ref=expected_object_ref,
         source_assets=source_assets,
     )
-    expected_ref = (
-        str(expected_object_ref).strip("/")
-        if expected_object_ref is not None
-        else str(attestation.get("objectRef") or "").strip("/")
-    )
-    attested_ref = str(attestation.get("objectRef") or "").strip("/")
-    manifest_topic_ref = str(manifest.get("topicId") or "").strip("/")
-    valid_refs = {expected_ref}
-    if object_kind == "posts" and manifest_topic_ref:
-        valid_refs.add(manifest_topic_ref)
-    if attested_ref not in valid_refs:
-        raise ObjectTransactionError("target review attestation object binding drift")
-    if attestation.get("independentReviewer", {}).get("actor") != documents["reviewer_result.json"].get("actor"):
-        raise ObjectTransactionError("target review attestation reviewer binding drift")
-    if attestation.get("decision") != "approved":
-        raise ObjectTransactionError("target review attestation is not approved")
-    for field in ("deterministicGate", "independentReviewer", "mediaRefReview"):
-        if (attestation.get(field) or {}).get("status") != "passed":
-            raise ObjectTransactionError(f"target review attestation {field} is not passed")
-    if documents["rubric_review.json"].get("decision") != "approved":
-        raise ObjectTransactionError("target rubric review is not approved")
-    if documents["reviewer_result.json"].get("verdict") != "passed":
-        raise ObjectTransactionError("target independent reviewer result is not passed")
-    if documents["media_ref_review.json"].get("passed") is not True:
-        raise ObjectTransactionError("target media and rights review is not passed")
-
+    if document.get("decision") != "approved":
+        raise ObjectTransactionError("target content_review is not approved")
 
 def publish_object(execution_id: str, target_ref: str, *, apply: bool = False) -> dict[str, Any]:
     kind, canonical_ref, object_dir = _target_object(execution_id, target_ref)
-    _review_approved(object_dir, expected_object_ref=target_ref)
+    _review_approved(execution_id, object_dir, expected_object_ref=target_ref)
     if not apply:
         return {
             "schema": "quwoquan_data.publish_object_result",
@@ -121,9 +104,10 @@ def publish_object(execution_id: str, target_ref: str, *, apply: bool = False) -
     if kind == "post":
         result = promote_post_object(execution_id, canonical_ref)
     else:
-        transaction_id = (
-            f"{execution_id}--entity-"
-            f"{hashlib.sha256(canonical_ref.encode('utf-8')).hexdigest()[:12]}"
+        transaction_id = canonical_transaction_id(
+            execution_id=execution_id,
+            object_kind="entities",
+            object_ref=canonical_ref,
         )
         root = execution_root(execution_id)
         package_root = root / "evidence/object-transactions" / transaction_id
@@ -176,7 +160,7 @@ def publish_object(execution_id: str, target_ref: str, *, apply: bool = False) -
     )
     result.update(
         packageRef=f"evidence/object-transactions/{result['transactionId']}/package.json",
-        attestationRef=f"{target_ref.strip('/')}/5.review/attestation.json",
+        contentReviewRef=f"{target_ref.strip('/')}/5.review/content_review.json",
         poolRecordRef=pool_record_ref,
     )
     return {

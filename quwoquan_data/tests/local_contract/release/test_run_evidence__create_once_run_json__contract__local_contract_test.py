@@ -52,6 +52,27 @@ def test_create_run_accepts_predeposited_runtime_proof_directory(
     assert (created / "research-isolation-runtime-proof.json").is_file()
 
 
+def test_create_run_verify_rejects_noncanonical_predeposited_file(
+    tmp_path: Path,
+) -> None:
+    run_dir = (
+        tmp_path
+        / "env/gamma/runs/data-release/release-a/research-api-unexpected"
+    )
+    run_dir.mkdir(parents=True)
+    (run_dir / "result.json").write_text("{}", encoding="utf-8")
+
+    with pytest.raises(SystemExit, match="预存证据"):
+        create_run(
+            output_root=tmp_path,
+            environment="gamma",
+            release_id="release-a",
+            run_id="research-api-unexpected",
+            kind="verify",
+            valid_environments=_VALID,
+        )
+
+
 def test_create_run_rejects_existing_run_json(tmp_path: Path) -> None:
     _create(tmp_path)
 

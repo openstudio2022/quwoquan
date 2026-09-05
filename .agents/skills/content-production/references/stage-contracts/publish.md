@@ -4,7 +4,7 @@ AI 对每个 approved 对象逐个调用 canonical 单对象事务；不存在 e
 
 ## PRE
 
-AI 在 OPEN 只提交并冻结 approved 对象清单，以及每对象 draft/final manifest 输入、attestation、source/rights/media/content-library bindings 的 exact refs；video 还提交 source video/source poster CAS 与对应 rights review exact refs。
+AI 在 OPEN 只提交并冻结 approved 对象清单，以及每对象唯一 carrier draft、唯一 `content_review.json`、source/media/content-library bindings 的 exact refs；逐资产 rights 结论直接来自同一 `content_review.json`。video 还提交 source video/source poster CAS exact refs。
 
 ## DURING
 
@@ -27,7 +27,7 @@ python3 quwoquan_data/scripts/cli.py verify publish-purity
 python3 quwoquan_data/scripts/cli.py verify publish-closure
 ```
 
-AI self-check：逐对象对账 attestation → package → canonical object → pool record/content-library binding；确认 rejected 对象未写入且 partial failures 已保留 typed issues。
+AI self-check：逐对象对账 `content_review.json` approved → package → canonical object → pool record/content-library binding；确认 rejected 对象未写入且对象失败/shortfall 已保留 typed issues。
 
 ## HANDOFF
 

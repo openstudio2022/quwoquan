@@ -11,7 +11,6 @@ def publish_homepage_object(
     object_ref: str,
 ) -> dict[str, str]:
     """Apply one reviewed homepage through the canonical object transaction."""
-    import hashlib
 
     from core.io import read_json
     from core.paths import OUTPUT_ROOT, PUBLISH_ROOT
@@ -28,13 +27,17 @@ def publish_homepage_object(
     from content.release.canonical.object_transaction_audit import (
         audit_object_transaction,
     )
+    from content.release.canonical.object_transaction_contract import (
+        canonical_transaction_id,
+    )
 
     canonical_ref = str(object_ref or "").removeprefix("/entity/").strip("/")
     if len(canonical_ref.split("/")) < 3:
         raise ValueError(f"homepage objectRef 无效：{object_ref!r}")
-    transaction_id = (
-        f"{execution_id}--entity-"
-        f"{hashlib.sha256(canonical_ref.encode('utf-8')).hexdigest()[:12]}"
+    transaction_id = canonical_transaction_id(
+        execution_id=execution_id,
+        object_kind="entities",
+        object_ref=canonical_ref,
     )
     execution_dir = execution_root(execution_id)
     package_root = execution_dir / "evidence/object-transactions" / transaction_id

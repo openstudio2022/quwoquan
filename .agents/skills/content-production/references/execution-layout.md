@@ -29,6 +29,6 @@
 - approved 对象逐个经单对象事务原子写入 canonical publish；
 - immutable release 只消费宿主 AI 显式 cohort；
 - producer handoff 只暴露 immutable release/cohort/content-pool refs、digests、milestone、carrier counts 与 producer baseline revision；
-- 下游环境 owner 只读 handoff 后写自己的 import/readback/health/UAT/EAF facts，不写回 execution；
+- producer handoff 不含 import/readback/health/UAT/EAF 或 sampling authority；任何下游 consumer facts 都不写回 execution；
 - canonical 不包含 raw source、草稿、prompt、日志、receipt 或运行状态；
 - 禁止 dual-read、旧路径 fallback、shim 与 sequence-017 兼容。

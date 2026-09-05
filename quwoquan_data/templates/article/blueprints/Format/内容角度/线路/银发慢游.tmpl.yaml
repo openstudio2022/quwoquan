@@ -40,7 +40,7 @@ routeCoverageExpectations:
 structure:
   required: [强度判断, 交通与换乘, 休息点, 医疗与厕所, 舒适住宿, 替代方案]
   optional: [陪同者建议, 雨天版本]
-mustIncludeFacts: [步行强度, 换乘次数, 休息点, 医疗点, 住宿舒适度]
+evidenceConditionedFacts: [步行强度, 换乘次数, 休息点, 医疗点, 住宿舒适度]
 forbiddenPhrases: [冷启动, 批次, 角色：, 占位, contract_fixture, 医疗保证]
 wordCount: { min: 900, max: 1800 }
 imagePlan:
@@ -51,7 +51,7 @@ crossRefs: { minEntity: 2, minTag: 4 }
 recommendation:
   authorBinding: { required: true, source: creator_profile_catalog }
   exposeStyleTags: true
-  qualitySignals: [bodyLength, requiredFactsCovered, imageSlotCoverage, entityRefCount]
+  qualitySignals: [bodyLength, evidenceSupportedFactCoverage, imageSlotCoverage, entityRefCount]
   bodyForbiddenFields: [qualityScore, templateId, routingReason, coldStartBoost, isSystemBuiltin]
 openingTension: { required: true, focus: 出发动机与犹豫 }
 explicitFeelings: { requireLike: true, requireDislike: true }

@@ -65,17 +65,12 @@ def release_header_document(
     canonical_merkle: str,
     release_class: str,
     product_lifecycle_state: str,
-    selection_scope: str | None = None,
-    target_environment: str | None = None,
-    release_mode: str | None = None,
     pool_digest: str | None = None,
     counts: Mapping[str, int] | None = None,
     contents: list[dict[str, object]] | None = None,
     authors: list[dict[str, object]] | None = None,
     milestone: str | None = None,
     milestone_targets: Mapping[str, int] | None = None,
-    sample_plan_ref: str | None = None,
-    sample_plan_digest: str | None = None,
     source_identities: list[dict[str, object]] | None = None,
     source_identity_set_digest: str | None = None,
 ) -> dict[str, Any]:
@@ -117,17 +112,6 @@ def release_header_document(
         "executionIds": execution_ids,
         "sourceDigests": source_digest_documents,
     }
-    sample_binding = (sample_plan_ref, sample_plan_digest)
-    if any(value is not None for value in sample_binding) and not all(
-        value is not None for value in sample_binding
-    ):
-        raise ObjectTransactionError(
-            "DATA.RELEASE.UAT_SAMPLE_BINDING_INCOMPLETE"
-        )
-    if milestone is not None and sample_plan_ref is None:
-        raise ObjectTransactionError(
-            "DATA.RELEASE.UAT_SAMPLE_BINDING_REQUIRED"
-        )
     if scalar_mode:
         document.update(
             {
@@ -143,8 +127,6 @@ def release_header_document(
     if pool_digest is not None:
         document.update(
             {
-                "selectionScope": selection_scope,
-                "releaseMode": release_mode,
                 "poolDigest": pool_digest,
                 "counts": dict(counts or {}),
                 "contents": list(contents or []),
@@ -152,14 +134,9 @@ def release_header_document(
                 "buildResult": "completed",
             }
         )
-        if target_environment is not None:
-            document["targetEnvironment"] = target_environment
         if milestone is not None:
             document["milestone"] = milestone
             document["milestoneTargets"] = dict(milestone_targets or {})
-        if sample_plan_ref is not None:
-            document["samplePlanRef"] = sample_plan_ref
-            document["samplePlanDigest"] = sample_plan_digest
     validate_release_header(document, label=f"release_header:{release_id}")
     return document
 

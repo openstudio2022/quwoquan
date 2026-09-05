@@ -17,7 +17,7 @@ python3 quwoquan_data/scripts/cli.py task stage-open \
 
 ## DURING：AI 直接完成业务工作
 
-宿主 AI 只读 OPEN 冻结输入，按当前 stage contract 直接写对象级业务结果。AI 承担选源、质量判断、compose、正文/image caption/video script、self-check、独立 review、verdict/typed issues、approved 对象与 explicit cohort/milestone；需要下载/CAS 或原子 I/O 时只调用契约点名的窄命令。
+宿主 Agent 只读 OPEN 冻结输入，按当前 stage contract 直接写业务结果。candidate binding 只冻结对象身份；`sources` 选源，`1.download` 取得 bytes/CAS，`2.quality` 判断语义与保留，`3.compose` 定结构，`4.draft` 每对象只写 carrier 主产物，`5.review` 每对象只写 `content_review.json`。AI 还承担 self-check、verdict/typed issues、approved 对象与 explicit cohort/milestone；需要原子 I/O 时只调用契约点名的窄命令。
 
 禁止 `semantic-prepare`、`semantic-record`、stage-gate、canonical argv registry、runner/fleet/lane claim、自动重试/rewind 与 execution-state 写入。批量并发、限流与 reviewer session 编排是宿主 runtime 责任，不写仓内状态。
 
@@ -29,7 +29,7 @@ python3 quwoquan_data/scripts/cli.py task stage-open \
 2. 逐条运行当前 stage contract 显式点名且当前真实存在的 verifier；
 3. 保存每条真实 verifier fact，至少绑定 verifier identity、argv、`passed|failed`、exit code、observedAt 与 evidence ref/digest；
 4. 完成当前契约列出的 AI self-check；
-5. 决定 `pass|blocked`，并逐条写 typed issue。业务语义失败不得被脚本改写为 pass。
+5. 决定 `pass|blocked`，并逐条写 typed issue。approved/rejected 可混合，shortfall 写 stage result/typed issue而不扩展 receipt verdict；只有零 approved 或 stage-wide identity/integrity failure 才 blocked。业务语义失败不得被脚本改写为 pass。
 
 `verifierFacts` 是宿主对“已执行显式 verifier”的 attestation，不是内核执行证明。内核不会运行 command，也无法证明 command 真的执行；它只冻结宿主提交的 command/status/exit/observedAt，并从同一个 no-follow 打开的 regular-file fd 重算 evidence bytes digest。任何不能信任宿主的消费者都必须重跑当前 stage contract 点名的 verifier，不能仅凭 receipt 接受其事实。
 
@@ -52,4 +52,4 @@ python3 quwoquan_data/scripts/cli.py task stage-close \
 
 内核只重验 OPEN exact bytes、结果 schema、result refs、verifier attestation 结构与 evidence bytes、严格 receipt 前缀/hash predecessor 链及 create-once 冲突，并写入 `data/tasks/<executionId>/_shared/receipts/<sequence>-<stage>.json`；不运行隐藏 gate，不改写 actor/verdict/issues，不计算后继，不投影 execution state。
 
-CLOSE 后，`pass` 按 `SKILL.md` 固定顺序进入后继；所有 release header 绑定 execution 都有 sequence-009/pass 后，还必须 create-once 物化并复核 terminal immutable handoff，成功后才固定进入 `END`。`blocked` 终止该 execution，新尝试必须经 `task init` 创建新 execution，并从 `0.plan` 开始。producer receipt 与 release handoff facts 是跨会话唯一交接；环境事实属于下游 owner，不进入 producer receipt 链。
+CLOSE 后，`pass` 按 `SKILL.md` 固定顺序进入后继；sequence-006 的 actor/invocation 就是该 execution 唯一真实 author，sequence-007 的 actor/invocation 就是其唯一真实 reviewer，二者 session/runId 必须不同且不投影到对象文件。所有 release header 绑定 execution 都有 sequence-009/pass 后，还必须 create-once 物化并复核 terminal immutable handoff，成功后才固定进入 `END`。`blocked` 终止该 execution，新尝试必须经 `task init` 创建新 execution。producer receipt 与 release handoff facts 是跨会话唯一交接；环境/consumer facts不进入 producer receipt 链或 handoff。

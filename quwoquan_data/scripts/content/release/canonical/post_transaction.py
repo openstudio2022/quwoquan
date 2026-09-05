@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
 import json
 import shutil
 import tempfile
@@ -21,12 +20,14 @@ from content.release.canonical.object_source_identity import (
     freeze_execution_source_identity,
 )
 from content.release.canonical.object_transaction_contract import (
+    CANONICAL_CONTENT_REVIEW_REF,
     EXPECTED_OBJECT_SCHEMAS,
     LAYOUT_SCHEMA,
     PACKAGE_SCHEMA,
     ObjectTransactionError,
     _closure_digest,
     _digest_file,
+    canonical_transaction_id,
     _execution_id,
     _read_json,
     _review_binding,
@@ -100,34 +101,21 @@ def build_post_object_transaction_package(
     # contract.  The transaction must consume that exact digest instead of
     # deriving a second, transaction-private tree identity.
     input_payload_digest = str(tree_integrity_stats(source)["merkleRoot"])
-    attestation_source = source / "5.review/attestation.json"
-    attestation = _read_json(attestation_source)
-    for review_name in (
-        "rubric_review.json",
-        "reviewer_result.json",
-        "media_ref_review.json",
-    ):
-        if not (attestation_source.parent / review_name).is_file():
-            raise ObjectTransactionError(f"对象缺 AI 直写 review 产物：{review_name}")
-    if attestation.get("decision") != "approved":
-        raise ObjectTransactionError("post 未 review-approved")
-    for key in ("deterministicGate", "independentReviewer", "mediaRefReview"):
-        if str((attestation.get(key) or {}).get("status") or "") != "passed":
-            raise ObjectTransactionError(f"post review 前置未通过：{key}")
+    content_review_source = source / "5.review/content_review.json"
     source_assets = _source_assets(execution_root)
     review_authority = validate_review_authority(
-        review_root=attestation_source.parent,
+        review_root=content_review_source.parent,
         manifest=source_manifest,
         object_kind="posts",
         execution_id=execution_id,
         object_ref=canonical_target_ref,
-        attestation=attestation,
         source_assets=source_assets,
     )
 
-    expected_transaction_id = (
-        f"{execution_id}--post-"
-        f"{hashlib.sha256(canonical_ref.encode('utf-8')).hexdigest()[:12]}"
+    expected_transaction_id = canonical_transaction_id(
+        execution_id=execution_id,
+        object_kind="posts",
+        object_ref=canonical_ref,
     )
     transaction_id = _safe_id(transaction_id, label="transactionId")
     if transaction_id != expected_transaction_id:
@@ -168,10 +156,10 @@ def build_post_object_transaction_package(
         object_root = staging / "object"
         object_root.mkdir(parents=True)
         _copy_post_surface(source, object_root)
-        shutil.copy2(attestation_source, object_root / "attestation.json")
-        canonical_review_path = object_root / "5.review/media_ref_review.json"
-        canonical_review_path.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(attestation_source.parent / "media_ref_review.json", canonical_review_path)
+        shutil.copy2(
+            content_review_source,
+            object_root / CANONICAL_CONTENT_REVIEW_REF,
+        )
         source_catalog = _source_catalog(execution_root, source, source_manifest)
         _write_json(object_root / "source_catalog.json", source_catalog)
 
@@ -515,7 +503,7 @@ def build_post_object_transaction_package(
             source_manifest=effective_source_manifest,
             canonical_ref=canonical_ref,
             source_task_id=execution_id,
-            attestation_path=attestation_source,
+            content_review_path=content_review_source,
             rights_authority=review_authority,
             publish_root=PUBLISH_ROOT,
             rights_rows=rights_rows,
@@ -559,7 +547,7 @@ def build_post_object_transaction_package(
             "rightsRef": "rights.json",
             "casRefs": cas_rows,
         }
-        review = {"attestationRef": "attestation.json"}
+        review = {"contentReviewRef": CANONICAL_CONTENT_REVIEW_REF}
         review_binding = _review_binding(object_root, {"review": review})
         source_policy = SourcePolicyRevision.RIGHTS_CLEARED_CONTENT.value
         closure_digest = _closure_digest(

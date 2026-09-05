@@ -17,10 +17,8 @@ def aggregate_release_result(
     carrier_counts: Mapping[str, int],
     canonical_merkle: str,
     manifest_digest: str,
-    environment_selection: Any | None,
+    cohort_selection: Any,
     excluded: tuple[Mapping[str, str], ...],
-    sample_plan_ref: str | None,
-    sample_plan_digest: str | None,
 ) -> dict[str, Any]:
     result: dict[str, Any] = {
         "schema": "quwoquan_data.aggregate_release_result",
@@ -35,24 +33,17 @@ def aggregate_release_result(
         "manifestDigest": manifest_digest,
         "idempotent": False,
     }
-    if environment_selection is not None:
-        result.update(
-            {
-                "selectionScope": environment_selection.selection_scope,
-                "releaseMode": environment_selection.release_mode,
-                "poolDigest": environment_selection.pool_digest,
-                "poolEligibleCount": environment_selection.eligible_count,
-                "counts": environment_selection.counts,
-            }
+    result.update(
+        {
+            "poolDigest": cohort_selection.pool_digest,
+            "poolEligibleCount": cohort_selection.eligible_count,
+        }
+    )
+    if cohort_selection.milestone is not None:
+        result["milestone"] = cohort_selection.milestone
+        result["milestoneTargets"] = dict(
+            cohort_selection.milestone_targets or {}
         )
-        if environment_selection.milestone is not None:
-            result["milestone"] = environment_selection.milestone
-            result["milestoneTargets"] = dict(
-                environment_selection.milestone_targets or {}
-            )
-        if sample_plan_ref is not None:
-            result["samplePlanRef"] = sample_plan_ref
-            result["samplePlanDigest"] = sample_plan_digest
     result["excluded"] = list(excluded)
     result["excludedCount"] = len(excluded)
     return result

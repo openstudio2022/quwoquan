@@ -173,6 +173,7 @@ def _excluded_row(
         "contentSha256": "",
         "assetRef": "",
         "bytes": 0,
+        "mimeType": "",
         "width": 0,
         "height": 0,
         "failureCode": code,
@@ -274,6 +275,50 @@ def acquire_professional_image_item(
             rights_status=rights_status,
             provider=provider,
         )
+    payload_ext = str(payload.get("ext") or "").strip().casefold()
+    transport_mime = (
+        str(payload.get("contentType") or "").split(";", 1)[0].strip().casefold()
+    )
+    if not probe.mime_type.startswith("image/"):
+        return _excluded_row(
+            item,
+            code="DATA.SOURCE.IMAGE_MIME_INVALID",
+            detail="decoded image MIME type is unavailable",
+            acquisition_status=AcquisitionStatus.FAILED,
+            rights_status=rights_status,
+            provider=provider,
+        )
+    expected_ext_by_mime = {
+        "image/gif": ".gif",
+        "image/jpeg": ".jpg",
+        "image/png": ".png",
+        "image/webp": ".webp",
+    }
+    expected_ext = expected_ext_by_mime.get(probe.mime_type, "")
+    if not expected_ext or payload_ext != expected_ext:
+        return _excluded_row(
+            item,
+            code="DATA.SOURCE.IMAGE_EXTENSION_DRIFT",
+            detail=(
+                f"payload extension {payload_ext or '<empty>'} does not match "
+                f"decoded MIME {probe.mime_type}"
+            ),
+            acquisition_status=AcquisitionStatus.FAILED,
+            rights_status=rights_status,
+            provider=provider,
+        )
+    if transport_mime and transport_mime != probe.mime_type:
+        return _excluded_row(
+            item,
+            code="DATA.SOURCE.IMAGE_MIME_DRIFT",
+            detail=(
+                f"transport MIME {transport_mime} does not match "
+                f"decoded MIME {probe.mime_type}"
+            ),
+            acquisition_status=AcquisitionStatus.FAILED,
+            rights_status=rights_status,
+            provider=provider,
+        )
     try:
         safety_validator(
             safety_evidence,
@@ -333,6 +378,7 @@ def acquire_professional_image_item(
         "contentSha256": content_sha256,
         "assetRef": asset_ref,
         "bytes": len(body),
+        "mimeType": probe.mime_type,
         "width": probe.width,
         "height": probe.height,
         "failureCode": failure_code,

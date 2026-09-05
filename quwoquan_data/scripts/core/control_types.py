@@ -1,4 +1,5 @@
 """Closed vocabularies shared by data execution and release control flow."""
+
 from __future__ import annotations
 
 from enum import StrEnum
@@ -44,6 +45,7 @@ class DeploymentEnvironment(StrEnum):
 
 class ReleaseRunKind(StrEnum):
     APPLY = "apply"
+    ACTIVATE = "activate"
     VERIFY = "verify"
     ROLLBACK = "rollback"
 
@@ -214,16 +216,31 @@ class MediaHoldingRecoveryAction(StrEnum):
     NONE = "none"
 
 
-
-
 __all__ = [
-    "AppUatDataSource", "AppUatStatus", "ContentGenerator", "ContentImportStatus",
-    "ContentType", "DeploymentEnvironment", "ExecutionPhase", "ImageSafetyReviewStatus", "MediaClosureVerdict",
-    "MediaDurabilityState", "MediaHoldingRecoveryAction", "MediaHoldingState",
+    "AppUatDataSource",
+    "AppUatStatus",
+    "ContentGenerator",
+    "ContentImportStatus",
+    "ContentType",
+    "DeploymentEnvironment",
+    "ExecutionPhase",
+    "ImageSafetyReviewStatus",
+    "MediaClosureVerdict",
+    "MediaDurabilityState",
+    "MediaHoldingRecoveryAction",
+    "MediaHoldingState",
     "OBJECT_STAGE_SEQUENCE",
-    "RECEIPT_STAGE_SEQUENCE", "ReceiptStage", "ReleaseDeletePolicy",
-    "ReleaseRunKind", "ReleaseRunStatus", "ReleaseSourceOwner", "ReleaseSyncMode",
-    "ReviewItemKind", "ReviewJudgment", "ReviewOverride",
-    "ReviewPublishState", "SourcePolicyRevision",
+    "RECEIPT_STAGE_SEQUENCE",
+    "ReceiptStage",
+    "ReleaseDeletePolicy",
+    "ReleaseRunKind",
+    "ReleaseRunStatus",
+    "ReleaseSourceOwner",
+    "ReleaseSyncMode",
+    "ReviewItemKind",
+    "ReviewJudgment",
+    "ReviewOverride",
+    "ReviewPublishState",
+    "SourcePolicyRevision",
     "expected_content_generator",
 ]

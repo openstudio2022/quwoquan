@@ -21,13 +21,15 @@ from content.release.canonical.content_pool_handoff import (
     project_content_library_bindings,
     project_content_pool_handoff,
 )
-from content.release.canonical.object_transaction_contract import ObjectTransactionError
+from content.release.canonical.object_transaction_contract import (
+    CANONICAL_CONTENT_REVIEW_REF,
+    ObjectTransactionError,
+)
 from content.release.canonical.review_rights_binding import (
     required_review_asset_refs,
-    validate_media_review_document,
+    validate_content_review_document,
 )
 from content.release.canonical.release_header import validate_release_header
-from content.release.canonical.release_uat_sample_plan import canonical_digest
 from content.release.canonical.sealed_release_facts import validate_sealed_release_structure
 from core.release_layout import objects_merkle, payload_digest, verify_release_holdings
 from core.schema import assert_valid
@@ -38,41 +40,88 @@ _FILE_NAME = "producer_release_handoff.json"
 _CARRIERS = ("homepage", "article", "image", "video")
 _COMMIT = re.compile(r"^[0-9a-f]{40}$")
 _PRODUCER_CONTRACT_PATHS = (
-    ".agents/skills/content-production",
-    "quwoquan_data/schema/_common",
-    "quwoquan_data/schema/content",
-    "quwoquan_data/schema/execution",
-    "quwoquan_data/schema/source",
-    "quwoquan_data/schema/publish/entity.schema.json",
-    "quwoquan_data/schema/release/asset_rights_closure.schema.json",
-    "quwoquan_data/schema/release/content_pool_handoff_query.schema.json",
-    "quwoquan_data/schema/release/m1000_app_uat_sampling_authority_readback.schema.json",
-    "quwoquan_data/schema/release/m1000_app_uat_sampling_strategy.schema.json",
-    "quwoquan_data/schema/release/media_manifest.schema.json",
-    "quwoquan_data/schema/release/object_transaction_package.schema.json",
-    "quwoquan_data/schema/release/pool_object_record.schema.json",
-    "quwoquan_data/schema/release/producer_release_handoff.schema.json",
-    "quwoquan_data/schema/release/release_asset_admission.schema.json",
-    "quwoquan_data/schema/release/release_attestation.schema.json",
-    "quwoquan_data/schema/release/release_cohort.schema.json",
-    "quwoquan_data/schema/release/release_desired_state.schema.json",
-    "quwoquan_data/schema/release/release_header.schema.json",
-    "quwoquan_data/schema/release/release_uat_sample_plan.schema.json",
-    "quwoquan_data/schema/release/release_uat_sampling_authority.schema.json",
-    "quwoquan_data/schema/governance/_definition.schema.json",
-    "quwoquan_data/schema/governance/content_distribution_policy.schema.json",
-    "quwoquan_data/control_plane",
-    "quwoquan_data/prompts",
-    "quwoquan_data/templates",
-    "quwoquan_data/verticals",
-    "quwoquan_data/scripts/content/execution",
-    "quwoquan_data/scripts/content/source",
-    "quwoquan_data/scripts/content/release/canonical",
-    "quwoquan_data/scripts/core",
-    "quwoquan_data/scripts/verify",
-    "quwoquan_service/services/content-service/contracts/media/media_asset",
-    "quwoquan_service/services/content-service/contracts/content/post/ui_config.yaml",
-    "quwoquan_service/services/recommendation-service/contracts/recommendation/recommendation_feature_profile_view/projections/intersection_reason.yaml",
+    '.agents/skills/content-production',
+    'quwoquan_data/schema/_common',
+    'quwoquan_data/schema/content',
+    'quwoquan_data/schema/execution',
+    'quwoquan_data/schema/source',
+    'quwoquan_data/schema/publish/entity.schema.json',
+    'quwoquan_data/schema/release/asset_rights_closure.schema.json',
+    'quwoquan_data/schema/release/content_pool_handoff_query.schema.json',
+    'quwoquan_data/schema/release/media_manifest.schema.json',
+    'quwoquan_data/schema/release/object_transaction_package.schema.json',
+    'quwoquan_data/schema/release/pool_object_record.schema.json',
+    'quwoquan_data/schema/release/producer_release_handoff.schema.json',
+    'quwoquan_data/schema/release/release_asset_admission.schema.json',
+    'quwoquan_data/schema/release/release_attestation.schema.json',
+    'quwoquan_data/schema/release/release_cohort.schema.json',
+    'quwoquan_data/schema/release/release_desired_state.schema.json',
+    'quwoquan_data/schema/release/release_header.schema.json',
+    'quwoquan_data/schema/governance/_definition.schema.json',
+    'quwoquan_data/schema/governance/content_distribution_policy.schema.json',
+    'quwoquan_data/control_plane',
+    'quwoquan_data/prompts',
+    'quwoquan_data/templates',
+    'quwoquan_data/verticals/travel',
+    'quwoquan_data/reference',
+    'quwoquan_data/requirements.txt',
+    'quwoquan_data/scripts/content/execution',
+    'quwoquan_data/scripts/content/source',
+    'quwoquan_data/scripts/content/release/canonical/aggregate_release.py',
+    'quwoquan_data/scripts/content/release/canonical/aggregate_release_builder.py',
+    'quwoquan_data/scripts/content/release/canonical/aggregate_release_closure.py',
+    'quwoquan_data/scripts/content/release/canonical/aggregate_release_documents.py',
+    'quwoquan_data/scripts/content/release/canonical/aggregate_release_existing.py',
+    'quwoquan_data/scripts/content/release/canonical/aggregate_release_pool.py',
+    'quwoquan_data/scripts/content/release/canonical/aggregate_release_pool_closure.py',
+    'quwoquan_data/scripts/content/release/canonical/aggregate_release_result.py',
+    'quwoquan_data/scripts/content/release/canonical/content_pool_handoff.py',
+    'quwoquan_data/scripts/content/release/canonical/content_pool_record.py',
+    'quwoquan_data/scripts/content/release/canonical/creator_avatar_quality.py',
+    'quwoquan_data/scripts/content/release/canonical/effective_admission.py',
+    'quwoquan_data/scripts/content/release/canonical/environment_release_candidate.py',
+    'quwoquan_data/scripts/content/release/canonical/environment_release_selection.py',
+    'quwoquan_data/scripts/content/release/canonical/environment_release_support.py',
+    'quwoquan_data/scripts/content/release/canonical/handler.py',
+    'quwoquan_data/scripts/content/release/canonical/handler_cli.py',
+    'quwoquan_data/scripts/content/release/canonical/handler_pool.py',
+    'quwoquan_data/scripts/content/release/canonical/image_identity.py',
+    'quwoquan_data/scripts/content/release/canonical/media_holding_closure.py',
+    'quwoquan_data/scripts/content/release/canonical/media_library_holding.py',
+    'quwoquan_data/scripts/content/release/canonical/object_source_identity.py',
+    'quwoquan_data/scripts/content/release/canonical/object_transaction_bindings.py',
+    'quwoquan_data/scripts/content/release/canonical/object_transaction_contract.py',
+    'quwoquan_data/scripts/content/release/canonical/object_transaction_lock.py',
+    'quwoquan_data/scripts/content/release/canonical/pool_record_history.py',
+    'quwoquan_data/scripts/content/release/canonical/pool_source_attribution.py',
+    'quwoquan_data/scripts/content/release/canonical/producer_release_handoff.py',
+    'quwoquan_data/scripts/content/release/canonical/publish_homepage_object.py',
+    'quwoquan_data/scripts/content/release/canonical/publish_object.py',
+    'quwoquan_data/scripts/content/release/canonical/release_admission.py',
+    'quwoquan_data/scripts/content/release/canonical/release_attestation.py',
+    'quwoquan_data/scripts/content/release/canonical/release_consistency.py',
+    'quwoquan_data/scripts/content/release/canonical/release_consistency_report.py',
+    'quwoquan_data/scripts/content/release/canonical/release_header.py',
+    'quwoquan_data/scripts/content/release/canonical/release_media_consistency.py',
+    'quwoquan_data/scripts/content/release/canonical/release_operation_lock.py',
+    'quwoquan_data/scripts/content/release/canonical/review_rights_binding.py',
+    'quwoquan_data/scripts/content/release/canonical/sealed_release_facts.py',
+    'quwoquan_data/scripts/content/templates',
+    'quwoquan_data/scripts/core/asset_identity.py',
+    'quwoquan_data/scripts/core/content_library.py',
+    'quwoquan_data/scripts/core/content_source_registry.py',
+    'quwoquan_data/scripts/core/image_rules.py',
+    'quwoquan_data/scripts/core/image_variants.py',
+    'quwoquan_data/scripts/core/io.py',
+    'quwoquan_data/scripts/core/media_asset_url.py',
+    'quwoquan_data/scripts/core/paths.py',
+    'quwoquan_data/scripts/core/release_layout.py',
+    'quwoquan_data/scripts/core/release_media_binding.py',
+    'quwoquan_data/scripts/core/schema.py',
+    'quwoquan_data/scripts/core/source_digest.py',
+    'quwoquan_data/scripts/core/tree_integrity.py',
+    'quwoquan_data/scripts/governance/coverage',
+    'quwoquan_service/services/content-service/contracts/media/media_asset/image_variant_policy.yaml',
 )
 
 
@@ -86,6 +135,13 @@ def _error(code: str, detail: str) -> ProducerReleaseHandoffError:
 
 def _digest(raw: bytes) -> str:
     return "sha256:" + hashlib.sha256(raw).hexdigest()
+
+
+def canonical_digest(value: object) -> str:
+    encoded = json.dumps(
+        value, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+    ).encode("utf-8")
+    return _digest(encoded)
 
 
 def _canonical_bytes(value: Mapping[str, Any]) -> bytes:
@@ -380,6 +436,58 @@ def _read_sealed_identity_file(
     return document
 
 
+def _sealed_review_source_assets(
+    sealed_object: Path, *, required_asset_refs: tuple[str, ...]
+) -> dict[str, dict[str, Any]]:
+    if not required_asset_refs:
+        return {}
+    snapshots_root = _assert_no_symlink(
+        sealed_object / "rights_snapshots",
+        label="canonical rights snapshots",
+        regular=False,
+    )
+    source_assets: dict[str, dict[str, Any]] = {}
+    for snapshot_path in sorted(snapshots_root.glob("*.json")):
+        snapshot, _ = _read_json_file(
+            snapshot_path, label="canonical rights snapshot", canonical=False
+        )
+        manifest_asset = snapshot.get("manifestAsset")
+        if not isinstance(manifest_asset, Mapping):
+            raise ObjectTransactionError("canonical rights snapshot lacks manifestAsset")
+        refs = [str(manifest_asset.get("sourceAssetRef") or "").strip()]
+        raw_refs = manifest_asset.get("sourceAssetRefs")
+        if isinstance(raw_refs, list):
+            refs.extend(str(ref or "").strip() for ref in raw_refs)
+        refs = [ref for ref in refs if ref]
+        source_asset = snapshot.get("sourceAsset")
+        source_asset_rows = snapshot.get("sourceAssets")
+        if isinstance(source_asset, Mapping) and len(refs) == 1:
+            pairs = ((refs[0], source_asset),)
+        elif (
+            isinstance(source_asset_rows, list)
+            and all(isinstance(row, Mapping) for row in source_asset_rows)
+            and len(refs) == len(source_asset_rows)
+        ):
+            pairs = tuple(zip(refs, source_asset_rows, strict=True))
+        else:
+            raise ObjectTransactionError(
+                "canonical rights snapshot source binding drift"
+            )
+        for source_ref, raw_source in pairs:
+            source = dict(raw_source)
+            existing = source_assets.get(source_ref)
+            if existing is not None and existing != source:
+                raise ObjectTransactionError(
+                    f"canonical source rights facts conflict: {source_ref}"
+                )
+            source_assets[source_ref] = source
+    if set(source_assets) != set(required_asset_refs):
+        raise ObjectTransactionError(
+            "canonical rights snapshot asset set differs from published assets"
+        )
+    return source_assets
+
+
 def _validate_query_against_sealed(
     *,
     row: Mapping[str, Any],
@@ -459,6 +567,7 @@ def _validate_query_against_sealed(
         or scope.get("variantPurpose") != expected_variant
     ):
         raise _error("DATA.RELEASE.HANDOFF_POOL_IDENTITY_DRIFT", object_ref)
+    manifest_admission = manifest["admission"]
     for field in (
         "rightsResult",
         "rightsAuthorityRef",
@@ -466,7 +575,10 @@ def _validate_query_against_sealed(
         "evidenceRef",
         "evidenceDigest",
     ):
-        if admission.get(field) != pool_record.get(field):
+        if (
+            admission.get(field) != pool_record.get(field)
+            or admission.get(field) != manifest_admission.get(field)
+        ):
             raise _error("DATA.RELEASE.HANDOFF_POOL_RIGHTS_DRIFT", f"{object_ref} {field}")
     if release_class == "commercial" and scope.get("usageScope") != "commercial":
         raise _error("DATA.RELEASE.HANDOFF_COMMERCIAL_SCOPE_INVALID", object_ref)
@@ -499,55 +611,50 @@ def _validate_query_against_sealed(
     ):
         raise _error("DATA.RELEASE.HANDOFF_POOL_BINDING_DRIFT", object_ref)
 
-    attestation = _read_sealed_identity_file(
-        sealed_root,
-        f"{object_ref}/attestation.json",
-        object_ref=object_ref,
-        label="canonical attestation",
-    )
-    media_review = _read_sealed_identity_file(
-        sealed_root,
-        f"{object_ref}/5.review/media_ref_review.json",
-        object_ref=object_ref,
-        label="canonical media_ref_review",
-    )
+    expected_review_ref = f"{object_ref}/{CANONICAL_CONTENT_REVIEW_REF}"
     try:
-        assert_valid(attestation, "content", "review_attestation", label=f"{object_ref}/attestation.json")
-        assert_valid(media_review, "content", "media_ref_review", label=f"{object_ref}/5.review/media_ref_review.json")
-        binding = attestation.get("mediaRefReview")
-        media_path = sealed_root / object_ref / "5.review/media_ref_review.json"
+        content_review = _read_sealed_identity_file(
+            sealed_root,
+            expected_review_ref,
+            object_ref=object_ref,
+            label="canonical content review",
+        )
+        review_path = sealed_root / expected_review_ref
+        review_digest = _digest(review_path.read_bytes())
         if (
-            not isinstance(binding, Mapping)
-            or binding.get("ref") != "5.review/media_ref_review.json"
-            or binding.get("digest") != _digest(media_path.read_bytes())
-            or binding.get("status") != "passed"
-            or binding.get("issues") != []
-            or admission.get("evidenceRef") != "attestation.json"
-            or admission.get("evidenceDigest") != _digest(
-                (sealed_root / object_ref / "attestation.json").read_bytes()
-            )
-            or admission.get("rightsAuthorityRef")
-            != f"{object_ref}/5.review/media_ref_review.json"
-            or admission.get("rightsAuthorityDigest") != _digest(media_path.read_bytes())
+            admission.get("rightsResult") != "passed"
+            or admission.get("evidenceRef") != CANONICAL_CONTENT_REVIEW_REF
+            or admission.get("evidenceDigest") != review_digest
+            or admission.get("rightsAuthorityRef") != expected_review_ref
+            or admission.get("rightsAuthorityDigest") != review_digest
         ):
-            raise ObjectTransactionError("canonical review exact binding drift")
-        validate_media_review_document(
-            media_review,
+            raise ObjectTransactionError("canonical content review exact binding drift")
+        required_asset_refs = required_review_asset_refs(
+            manifest,
+            object_kind="posts" if expected_type == "content" else "entities",
+        )
+        validate_content_review_document(
+            content_review,
             execution_id=str(manifest.get("executionId") or ""),
             object_ref=object_ref,
             object_aliases=(projected_ref, str(manifest.get("topicId") or "")),
-            required_asset_refs=required_review_asset_refs(
-                manifest,
-                object_kind="posts" if expected_type == "content" else "entities",
+            required_asset_refs=required_asset_refs,
+            source_assets=_sealed_review_source_assets(
+                sealed_root / object_ref,
+                required_asset_refs=required_asset_refs,
             ),
+            require_approved=True,
         )
-        if release_class == "commercial" and any(
-            review.get("usageScope") != "commercial"
-            for review in media_review.get("rightsReviews", [])
-            if isinstance(review, Mapping)
+        if scope.get("usageScope") == "commercial" and (
+            not content_review.get("assetRights")
+            or any(
+                review.get("usageScope") != "commercial"
+                for review in content_review.get("assetRights", [])
+                if isinstance(review, Mapping)
+            )
         ):
-            raise ObjectTransactionError("commercial media review usageScope drift")
-    except (FileNotFoundError, TypeError, ValueError, ObjectTransactionError) as exc:
+            raise ObjectTransactionError("commercial content review usageScope drift")
+    except (OSError, TypeError, ValueError, ObjectTransactionError) as exc:
         raise _error("DATA.RELEASE.HANDOFF_POOL_RIGHTS_DRIFT", str(exc)) from exc
 
     if expected_type == "homepage":

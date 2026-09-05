@@ -14,4 +14,4 @@
 
 blocked 后禁止在原 execution rewind、覆盖输入、补写旧结果或推导恢复阶段。新 execution 可在 manifest 中显式引用前一次 execution 作为审计背景，但不得兼容或复用 sequence-017，也不得把旧状态迁入新 receipt。
 
-环境 import/activate/readback/UAT/EAF 的失败或成功不改变以上 producer 规则；环境重试、rollback 与 replay 由下游 owner 基于 release handoff 独立处理。
+import/activate/readback、App/API UAT、EAF、sampling authority、environment promotion/rollback/replay 全部 out of scope；其失败、成功或未运行都不改变 producer terminal，也不进入 handoff。

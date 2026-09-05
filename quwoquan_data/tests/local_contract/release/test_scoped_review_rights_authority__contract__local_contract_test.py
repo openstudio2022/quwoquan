@@ -42,69 +42,45 @@ def _rights_row(*, passed: bool = True, issues: list[str] | None = None) -> dict
         "termsUrl": "https://example.test/terms",
         "authorizationProof": "https://example.test/proof",
         "usageScope": "commercial",
-        "passed": passed,
+        "decision": "approved" if passed else "rejected",
         "issues": list(issues or []),
     }
 
 
-def _review(root: Path, *, extra_rows: list[dict[str, object]] | None = None) -> tuple[dict[str, object], dict[str, object]]:
-    media = {
-        "schema": "quwoquan_data.media_ref_review",
+def _review(root: Path, *, extra_rows: list[dict[str, object]] | None = None) -> dict[str, object]:
+    review = {
+        "schema": "quwoquan_data.content_review",
         "stage": "5.review",
         "executionId": EXECUTION_ID,
-        "objectRef": TARGET_REF,
-        "passed": True,
-        "mediaIssues": [],
-        "referenceIssues": [],
-        "rightsReviews": [_rights_row(), *(extra_rows or [])],
-    }
-    media_path = _write(root / "5.review/media_ref_review.json", media)
-    attestation = {
-        "schema": "quwoquan_data.review_attestation",
-        "stage": "5.review",
-        "executionId": EXECUTION_ID,
-        "executionBinding": "frozen",
         "objectRef": TARGET_REF,
         "decision": "approved",
-        "deterministicGate": {"status": "passed", "issues": []},
-        "independentReviewer": {
-            "status": "passed",
-            "actor": {
-                "host": "cursor",
-                "sessionId": "review-session",
-                "modelFamily": "gpt",
-                "invocation": {"provider": "host", "model": "gpt-5.6", "runId": "review-run"},
-            },
-        },
-        "mediaRefReview": {
-            "status": "passed",
-            "issues": [],
-            "ref": "5.review/media_ref_review.json",
-            "digest": _digest(media_path),
-        },
-        "repair": {"status": "not_required"},
+        "draft": {"ref": "4.draft/image_work.json", "digest": "sha256:" + "1" * 64},
+        "dimensions": [{"name": "content", "decision": "approved", "issues": []}],
+        "blockingIssues": [],
+        "assetRights": [_rights_row(), *(extra_rows or [])],
     }
-    _write(root / "5.review/attestation.json", attestation)
-    return media, attestation
+    _write(root / "5.review/content_review.json", review)
+    return review
 
 
-def test_passed_media_review_requires_empty_issues_per_asset() -> None:
-    media = {
-        "schema": "quwoquan_data.media_ref_review",
+def test_approved_content_review_requires_empty_issues_per_asset() -> None:
+    review = {
+        "schema": "quwoquan_data.content_review",
         "stage": "5.review",
         "executionId": EXECUTION_ID,
         "objectRef": TARGET_REF,
-        "passed": True,
-        "mediaIssues": [],
-        "referenceIssues": [],
-        "rightsReviews": [_rights_row(passed=False, issues=["unresolved rights"])],
+        "decision": "approved",
+        "draft": {"ref": "4.draft/image_work.json", "digest": "sha256:" + "1" * 64},
+        "dimensions": [{"name": "content", "decision": "approved", "issues": []}],
+        "blockingIssues": [],
+        "assetRights": [_rights_row(passed=False, issues=["unresolved rights"])],
     }
     with pytest.raises(ValueError):
-        assert_valid(media, "content", "media_ref_review")
+        assert_valid(review, "content", "content_review")
 
 
 def test_review_authority_requires_exact_unique_asset_set_and_digest(tmp_path: Path) -> None:
-    _media, attestation = _review(tmp_path)
+    content_review = _review(tmp_path)
     source_asset = {
         "sourceUrl": "https://example.test/cover.jpg",
         "license": "CC BY 4.0",
@@ -117,22 +93,14 @@ def test_review_authority_requires_exact_unique_asset_set_and_digest(tmp_path: P
         object_kind="posts",
         execution_id=EXECUTION_ID,
         object_ref=TARGET_REF,
-        attestation=attestation,
         source_assets={ASSET_REF: source_asset},
     )
-    assert binding["digest"] == attestation["mediaRefReview"]["digest"]
+    assert binding["digest"] == _digest(tmp_path / "5.review/content_review.json")
     assert binding["usageScope"] == "commercial"
 
     duplicate = _rights_row()
-    duplicate_media = {**_media, "rightsReviews": [_rights_row(), duplicate]}
-    duplicate_path = _write(tmp_path / "5.review/media_ref_review.json", duplicate_media)
-    duplicate_attestation = {
-        **attestation,
-        "mediaRefReview": {
-            "status": "passed", "issues": [],
-            "ref": "5.review/media_ref_review.json", "digest": _digest(duplicate_path),
-        },
-    }
+    duplicate_review = {**content_review, "assetRights": [_rights_row(), duplicate]}
+    _write(tmp_path / "5.review/content_review.json", duplicate_review)
     with pytest.raises(ObjectTransactionError, match="unique"):
         validate_review_authority(
             review_root=tmp_path / "5.review",
@@ -140,25 +108,23 @@ def test_review_authority_requires_exact_unique_asset_set_and_digest(tmp_path: P
             object_kind="posts",
             execution_id=EXECUTION_ID,
             object_ref=TARGET_REF,
-            attestation=duplicate_attestation,
             source_assets={ASSET_REF: source_asset},
         )
 
 
 def test_text_only_article_allows_explicit_empty_rights_set(tmp_path: Path) -> None:
-    media_path = _write(tmp_path / "5.review/media_ref_review.json", {
-        "schema": "quwoquan_data.media_ref_review", "stage": "5.review",
-        "executionId": EXECUTION_ID, "objectRef": TARGET_REF, "passed": True,
-        "mediaIssues": [], "referenceIssues": [], "rightsReviews": [],
+    _write(tmp_path / "5.review/content_review.json", {
+        "schema": "quwoquan_data.content_review", "stage": "5.review",
+        "executionId": EXECUTION_ID, "objectRef": TARGET_REF, "decision": "approved",
+        "draft": {"ref": "4.draft/draft.article.md", "digest": "sha256:" + "1" * 64},
+        "dimensions": [{"name": "content", "decision": "approved", "issues": []}],
+        "blockingIssues": [], "assetRights": [],
     })
-    attestation = {
-        "mediaRefReview": {"status": "passed", "issues": [], "ref": "5.review/media_ref_review.json", "digest": _digest(media_path)}
-    }
     binding = validate_review_authority(
         review_root=tmp_path / "5.review",
         manifest={"contentType": "article", "publishMediaMode": "text_only", "assets": []},
         object_kind="posts", execution_id=EXECUTION_ID, object_ref=TARGET_REF,
-        attestation=attestation, source_assets={},
+        source_assets={},
     )
     assert binding["usageScope"] == "research"
 
@@ -213,8 +179,7 @@ def test_content_pool_query_rejects_empty_acquisition_receipts(tmp_path: Path) -
 def test_content_pool_query_projects_complete_asset_hard_facts(tmp_path: Path) -> None:
     publish = tmp_path / "publish"
     root = publish / "posts/image/asset-facts/1"
-    attestation = _write(root / "attestation.json", {"decision": "approved"})
-    review = _write(root / "5.review/media_ref_review.json", {"passed": True})
+    review = _write(root / "content_review.json", {"decision": "approved"})
     digest = "sha256:" + "a" * 64
     source_digest = "sha256:" + "2" * 64
     entity_digest = "sha256:" + "3" * 64
@@ -253,9 +218,9 @@ def test_content_pool_query_projects_complete_asset_hard_facts(tmp_path: Path) -
         "sourceAttribution": _attribution(),
         "admission": {
             "processResult": "completed", "qualityResult": "passed", "usageScope": "commercial",
-            "rightsResult": "passed", "rightsAuthorityRef": f"posts/image/asset-facts/1/5.review/media_ref_review.json",
-            "rightsAuthorityDigest": _digest(review), "evidenceRef": "attestation.json",
-            "evidenceDigest": _digest(attestation),
+            "rightsResult": "passed", "rightsAuthorityRef": f"posts/image/asset-facts/1/content_review.json",
+            "rightsAuthorityDigest": _digest(review), "evidenceRef": "content_review.json",
+            "evidenceDigest": _digest(review),
         },
     })
     record = build_canonical_pool_record(
@@ -333,8 +298,7 @@ def test_content_pool_query_rejects_derivative_binding_tamper(tmp_path: Path) ->
 def test_pool_record_and_query_project_bound_rights_authority(tmp_path: Path) -> None:
     publish = tmp_path / "publish"
     root = publish / "posts/image/rights/1"
-    review_path = _write(root / "5.review/media_ref_review.json", {"passed": True})
-    attestation = _write(root / "attestation.json", {"decision": "approved"})
+    review_path = _write(root / "content_review.json", {"decision": "approved"})
     source_digest = "sha256:" + "2" * 64
     entity_digest = "sha256:" + "3" * 64
     identity = {
@@ -359,8 +323,8 @@ def test_pool_record_and_query_project_bound_rights_authority(tmp_path: Path) ->
         "sourceAttribution": _attribution(),
         "admission": {
             "processResult": "completed", "qualityResult": "passed", "usageScope": "commercial",
-            "rightsResult": "passed", "rightsAuthorityRef": f"{TARGET_REF}/5.review/media_ref_review.json",
-            "rightsAuthorityDigest": _digest(review_path), "evidenceRef": "attestation.json", "evidenceDigest": _digest(attestation),
+            "rightsResult": "passed", "rightsAuthorityRef": "posts/image/rights/1/content_review.json",
+            "rightsAuthorityDigest": _digest(review_path), "evidenceRef": "content_review.json", "evidenceDigest": _digest(review_path),
         },
     }
     _write(root / "manifest.json", manifest)

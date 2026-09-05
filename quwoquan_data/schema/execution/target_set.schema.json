@@ -107,30 +107,6 @@
         "region": {
           "type": "string"
         },
-        "sourceName": {
-          "type": "string"
-        },
-        "geoTagRef": {
-          "type": "string"
-        },
-        "geoTagRefs": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "typeTagRefs": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "aliases": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
         "publishAngle": {
           "type": "string",
           "minLength": 1,
@@ -144,32 +120,6 @@
         "publishSeq": {
           "type": "integer",
           "minimum": 1
-        },
-        "qualifiedHomepageSource": {
-          "type": "object",
-          "required": [
-            "provider",
-            "title",
-            "url"
-          ],
-          "additionalProperties": false,
-          "properties": {
-            "provider": {
-              "enum": [
-                "wikipedia",
-                "baidu_baike",
-                "toutiao_baike"
-              ]
-            },
-            "title": {
-              "type": "string",
-              "minLength": 1
-            },
-            "url": {
-              "type": "string",
-              "pattern": "^https://"
-            }
-          }
         }
       }
     }

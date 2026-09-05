@@ -182,12 +182,11 @@
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "attestationRef"
+        "contentReviewRef"
       ],
       "properties": {
-        "attestationRef": {
-          "type": "string",
-          "minLength": 1
+        "contentReviewRef": {
+          "const": "content_review.json"
         }
       }
     },

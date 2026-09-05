@@ -20,22 +20,15 @@ from governance.coverage.distribution import (
 _CARRIERS = ("homepage", "article", "image", "video")
 
 
-def _review_attestation_passed(root: Path) -> bool:
-    path = root / "attestation.json"
+def _content_review_approved(root: Path) -> bool:
+    path = root / "content_review.json"
     if not path.is_file():
         return False
-    attestation = _read_json(path)
+    review = _read_json(path)
     return bool(
-        attestation.get("schema") == "quwoquan_data.review_attestation"
-        and attestation.get("decision") == "approved"
-        and isinstance(attestation.get("deterministicGate"), Mapping)
-        and attestation["deterministicGate"].get("status") == "passed"
-        and isinstance(attestation.get("independentReviewer"), Mapping)
-        and attestation["independentReviewer"].get("status") == "passed"
-        and isinstance(attestation.get("mediaRefReview"), Mapping)
-        and attestation["mediaRefReview"].get("status") == "passed"
+        review.get("schema") == "quwoquan_data.content_review"
+        and review.get("decision") == "approved"
     )
-
 
 def _object_rows(
     objects_root: Path,
@@ -87,7 +80,7 @@ def _object_rows(
                     "carrier": carrier,
                     "manifest": manifest,
                     "assets": assets,
-                    "reviewAttestationPassed": _review_attestation_passed(root),
+                    "contentReviewApproved": _content_review_approved(root),
                 }
             )
     return rows
@@ -218,7 +211,7 @@ def _object_media_is_admissible(row: Mapping[str, Any]) -> bool:
             if (
                 mime_type.startswith("video/")
                 and sha256.startswith("sha256:")
-                and bool(row.get("reviewAttestationPassed"))
+                and bool(row.get("contentReviewApproved"))
                 and isinstance(poster, Mapping)
                 and str(poster.get("kind") or "").strip() == "image"
                 and str(poster.get("role") or "").strip() == "cover"

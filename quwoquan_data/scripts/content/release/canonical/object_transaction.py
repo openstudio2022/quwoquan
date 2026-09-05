@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
 import shutil
 import tempfile
 from collections.abc import Mapping
@@ -31,12 +30,14 @@ from content.release.canonical.object_source_identity import (
     freeze_execution_source_identity,
 )
 from content.release.canonical.object_transaction_contract import (
+    CANONICAL_CONTENT_REVIEW_REF,
     LAYOUT_SCHEMA,
     PACKAGE_SCHEMA,
     REQUIRED_SOURCE_POLICY,
     ObjectTransactionError,
     _closure_digest,
     _digest_file,
+    canonical_transaction_id,
     _execution_id,
     _read_json,
     _review_binding,
@@ -109,34 +110,21 @@ def build_entity_object_transaction_package(
     canonical_ref = rel.as_posix()
     if str(entity.get("entityRef") or "").removeprefix("/entity/") != canonical_ref:
         raise ObjectTransactionError("entityRef 与对象路径不一致")
-    attestation_source = object_source / "5.review/attestation.json"
-    attestation = _read_json(attestation_source)
-    for review_name in (
-        "rubric_review.json",
-        "reviewer_result.json",
-        "media_ref_review.json",
-    ):
-        if not (attestation_source.parent / review_name).is_file():
-            raise ObjectTransactionError(f"对象缺 AI 直写 review 产物：{review_name}")
-    if attestation.get("decision") != "approved":
-        raise ObjectTransactionError("对象未 review-approved")
-    for key in ("deterministicGate", "independentReviewer", "mediaRefReview"):
-        if str((attestation.get(key) or {}).get("status") or "") != "passed":
-            raise ObjectTransactionError(f"review 前置未通过：{key}")
+    content_review_source = object_source / "5.review/content_review.json"
     source_assets = _source_assets_by_ref(execution_root)
     review_authority = validate_review_authority(
-        review_root=attestation_source.parent,
+        review_root=content_review_source.parent,
         manifest=source_manifest,
         object_kind="entity",
         execution_id=execution_id,
         object_ref=f"entities/{canonical_target_ref}",
-        attestation=attestation,
         source_assets=source_assets,
     )
 
-    expected_transaction_id = (
-        f"{execution_id}--entity-"
-        f"{hashlib.sha256(canonical_ref.encode('utf-8')).hexdigest()[:12]}"
+    expected_transaction_id = canonical_transaction_id(
+        execution_id=execution_id,
+        object_kind="entities",
+        object_ref=canonical_ref,
     )
     transaction_id = _safe_id(transaction_id, label="transactionId")
     if transaction_id != expected_transaction_id:
@@ -167,10 +155,10 @@ def build_entity_object_transaction_package(
         if not source_catalog_source.is_file():
             raise ObjectTransactionError("entity 缺 source catalog")
         shutil.copy2(source_catalog_source, object_root / source_catalog_ref)
-        shutil.copy2(attestation_source, object_root / "attestation.json")
-        canonical_review_path = object_root / "5.review/media_ref_review.json"
-        canonical_review_path.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(attestation_source.parent / "media_ref_review.json", canonical_review_path)
+        shutil.copy2(
+            content_review_source,
+            object_root / CANONICAL_CONTENT_REVIEW_REF,
+        )
 
         cas_rows: list[dict[str, Any]] = []
         asset_refs: list[dict[str, Any]] = []
@@ -492,8 +480,8 @@ def build_entity_object_transaction_package(
                     "rightsResult": "passed",
                     "rightsAuthorityRef": review_authority["ref"],
                     "rightsAuthorityDigest": review_authority["digest"],
-                    "evidenceRef": "attestation.json",
-                    "evidenceDigest": _digest_file(attestation_source),
+                    "evidenceRef": CANONICAL_CONTENT_REVIEW_REF,
+                    "evidenceDigest": _digest_file(content_review_source),
                 },
                 "status": "active",
             },
@@ -514,7 +502,7 @@ def build_entity_object_transaction_package(
             "rightsRef": rights_ref.as_posix(),
             "casRefs": cas_rows,
         }
-        review = {"attestationRef": "attestation.json"}
+        review = {"contentReviewRef": CANONICAL_CONTENT_REVIEW_REF}
         review_binding = _review_binding(object_root, {"review": review})
         closure_digest = _closure_digest(
             object_root=object_root,
