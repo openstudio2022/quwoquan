@@ -118,8 +118,9 @@ def test_repository_policy_declares_dev_integration_main_release_and_six_lanes()
         active_accepted_updates=(
             "lane_pull_request_merge",
             "system_fast_forward_backsync",
+            "integration_matching_fast_forward_push",
         ),
-        active_direct_push="forbidden",
+        active_direct_push="matching_integration_or_lane_only",
     )
     assert policy.production_source_branch == "main"
     assert policy.production_workflow == ".github/workflows/deploy-prod-auto.yml"
@@ -164,13 +165,17 @@ def test_repository_policy_declares_dev_integration_main_release_and_six_lanes()
     }
 
 
-@pytest.mark.parametrize("branch", ["dev1.0", "main"])
-def test_local_commit_rejects_integration_and_release(branch: str) -> None:
+@pytest.mark.parametrize("branch", ["main"])
+def test_local_commit_rejects_release(branch: str) -> None:
     issues = local_commit_issues(policy=_repository_policy(), current_branch=branch)
     assert len(issues) == 1
     assert issues[0].startswith("OPS.BRANCH.INTEGRATION_READ_ONLY:")
     assert "terminal=blocked" in issues[0]
-    assert "commit_from_a_lane_worktree_then_open_pull_request" in issues[0]
+    assert "commit_from_declared_writer_branch_not_release" in issues[0]
+
+
+def test_local_commit_accepts_integration_like_lanes() -> None:
+    assert local_commit_issues(policy=_repository_policy(), current_branch="dev1.0") == []
 
 
 @pytest.mark.parametrize("branch", list(LANE_BRANCHES))
@@ -666,15 +671,24 @@ def test_real_cli_passes_without_traceback() -> None:
     assert "Traceback" not in completed.stdout + completed.stderr
 
 
-def test_cli_local_commit_mode_rejects_integration_branch(monkeypatch, capsys) -> None:
+def test_cli_local_commit_mode_accepts_integration_branch(monkeypatch, capsys) -> None:
     import quwoquan_ops.gate.verify_git_branch_policy as module
 
     monkeypatch.setattr(module, "_current_branch", lambda: "dev1.0")
+    assert module.main(["--local-commit"]) == 0
+    output = capsys.readouterr().out
+    assert "[verify_git_branch_policy] OK" in output
+
+
+def test_cli_local_commit_mode_rejects_release_branch(monkeypatch, capsys) -> None:
+    import quwoquan_ops.gate.verify_git_branch_policy as module
+
+    monkeypatch.setattr(module, "_current_branch", lambda: "main")
     assert module.main(["--local-commit"]) == 1
     output = capsys.readouterr().out
     assert "OPS.BRANCH.INTEGRATION_READ_ONLY" in output
     assert "terminal=blocked" in output
-    assert "commit_from_a_lane_worktree_then_open_pull_request" in output
+    assert "commit_from_declared_writer_branch_not_release" in output
 
 
 def test_policy_byte_loader_rejects_unknown_or_missing_root_fields() -> None:

@@ -48,7 +48,7 @@
 <a id="req-003"></a>
 ### REQ-003 Git hook 只做边界检查，回执在准出消费
 
-- 硬门只在准出（lane→`dev1.0` PR、交接、发布）。本地 git hooks 不消费 `scope_ready`/`release_ready` 回执，也不自动运行全面测试：pre-commit 只运行 staged boundary（secret/PII、generated/cache 边界，以及 `--local-commit` 当前 HEAD 分支检查），失败时只给出唯一恢复命令；pre-push 只运行 branch policy：普通 lane push 只校验同名远端，不要求同时推送全部 lane；canonical activation 为 `active` 时阻断直推 `dev1.0`/`main`，并只放行可证明的受管 system fast-forward backsync。
+- 硬门只在准出（lane→`dev1.0` PR、交接、发布）。本地 git hooks 不消费 `scope_ready`/`release_ready` 回执，也不自动运行全面测试：pre-commit 只运行 staged boundary（secret/PII、generated/cache 边界，以及 `--local-commit` 当前 HEAD 分支检查），失败时只给出唯一恢复命令；pre-push 只运行 branch policy：普通 lane 与 `integration/` 都只校验同名远端，不要求同时推送全部 lane；`integration/` → `origin/dev1.0` 另强制 expected-old 快进；canonical activation 为 `active` 时阻断直推 `main`，并只放行可证明的受管 system fast-forward backsync。
 - `--local-commit` 必须只校验当前 HEAD 非 detached、Git authority 可读且分支属于 `allowed_local_branches`，不得枚举或治理其他 local/remote-tracking refs；无参数默认模式继续执行全 ref 治理，`--pre-push` 必须消费 canonical activation state。L0 `commit_gate.sh` 的提交前 branch 检查也必须使用 `--local-commit`。
 - `scope_ready`/`release_ready` 仍由显式 CLI 产出并绑定精确输入 fingerprint，供 Skill 报告、交接单与 lane→`dev1.0` PR 说明消费；PR 准出由 CI Delivery Gate 在独立并行 job 重新执行 required `code-health-delta`，不信任本地回执。
 - L0 的 code-health 快判不得网络安装工具且以 p95 30 秒为目标；L1 执行完整 candidate delta；scheduled 全仓热点只 report-only。指标与阈值唯一引用系统架构能力的 `REQ-008` 与 `DEC-031`，本 Story 不复制。
@@ -85,7 +85,7 @@
 
 - GIVEN 开发者在 lane worktree 上暂存改动并提交或推送。
 - WHEN pre-commit 或 pre-push 运行。
-- THEN pre-commit 只运行 staged boundary（secret/PII、generated/cache 边界，以及 `--local-commit` 当前 HEAD 分支检查），pre-push 只运行既有 `--pre-push` branch policy；普通 lane push 不要求 all lanes，active 集成分支的 direct push 被拒绝，可证明的 system fast-forward backsync 可通过；两者都不读取 readiness 回执，秒级完成。
+- THEN pre-commit 只运行 staged boundary（secret/PII、generated/cache 边界，以及 `--local-commit` 当前 HEAD 分支检查），pre-push 只运行既有 `--pre-push` branch policy；普通 lane 与 integration 同名 push 不要求 all lanes，`main` direct push 被拒绝，integration matching expected-old 快进与可证明的 system fast-forward backsync 可通过；两者都不读取 readiness 回执，秒级完成。
 - AND 合法 current lane 即使存在非法陈旧 local/remote-tracking refs 也通过 `--local-commit`；非法当前分支、detached HEAD 或 Git authority 不可读必须失败；无参数默认模式仍拒绝额外 refs。
 - AND 任一边界检查失败都阻断并只返回一个稳定 recovery。hook 不读取 readiness receipt、也不输出 readiness PASS，缺少 `scope_ready`/`release_ready` 不构成 lane 提交或推送的阻断理由。
 

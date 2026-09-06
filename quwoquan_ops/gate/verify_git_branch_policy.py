@@ -7,7 +7,7 @@ import json
 import os
 import subprocess
 import sys
-from collections.abc import Iterable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from pathlib import Path
 
 import yaml
@@ -238,7 +238,8 @@ def _git_is_ancestor(ancestor: str, descendant: str) -> bool:
         return True
     if completed.returncode == 1:
         return False
-    raise OSError(_safe_error_detail(RuntimeError(completed.stderr)))
+    # 未知 OID / Git authority 失败时 fail-closed：不得当作快进成功。
+    return False
 
 
 def _is_managed_system_backsync_environment(
@@ -329,8 +330,10 @@ def pre_push_issues(
     current_branch: str | None,
     update_lines: Iterable[str],
     environment: Mapping[str, str],
+    is_ancestor: Callable[[str, str], bool] | None = None,
 ) -> list[str]:
     issues: list[str] = []
+    ancestor_check = is_ancestor or _git_is_ancestor
     if not current_branch:
         return [
             _issue(
@@ -421,6 +424,32 @@ def pre_push_issues(
                             f"matching local {policy.integration_branch} branch",
                         )
                     )
+            elif matching_integration_source and (
+                "integration_matching_fast_forward_push"
+                in activation.active_accepted_updates
+            ):
+                # 与 lane 同名推送一视同仁：只允许 integration 工作区推同名远端；
+                # 另强制 expected-old 快进（remote tip 必须是 local tip 的祖先）。
+                if remote_sha == ZERO_SHA:
+                    issues.append(
+                        _issue(
+                            policy,
+                            "direct_push_not_allowed",
+                            f"active update of '{remote_branch}' rejects create-only bootstrap; "
+                            "fetch the existing remote tip then fast-forward",
+                        )
+                    )
+                elif remote_sha != local_sha and not ancestor_check(
+                    remote_sha, local_sha
+                ):
+                    issues.append(
+                        _issue(
+                            policy,
+                            "backsync_not_fast_forward",
+                            f"matching integration push to '{remote_branch}' must be a "
+                            "fast-forward from the exact remote tip (expected-old)",
+                        )
+                    )
             elif matching_backsync_source and _is_managed_system_backsync_environment(
                 environment
             ):
@@ -435,9 +464,7 @@ def pre_push_issues(
                         before_oid=remote_sha,
                         after_oid=local_sha,
                     ),
-                    is_ancestor=lambda ancestor, descendant: _git_is_ancestor(
-                        ancestor, descendant
-                    ),
+                    is_ancestor=ancestor_check,
                 )
                 if not decision.allowed:
                     failure_key = _failure_key_for_code(policy, decision.reason_code)
@@ -454,7 +481,8 @@ def pre_push_issues(
                         policy,
                         "direct_push_not_allowed",
                         f"direct update of active integration branch '{remote_branch}' is blocked; "
-                        "use a lane pull request or managed system fast-forward backsync",
+                        "use the integration worktree matching push, a lane pull request, "
+                        "or managed system fast-forward backsync",
                     )
                 )
             continue
@@ -481,7 +509,7 @@ def pre_push_issues(
 def local_commit_issues(
     policy: BranchPolicy, current_branch: str | None,
 ) -> list[str]:
-    """Validate the commit branch, then enforce read-only integration surfaces."""
+    """Validate the commit branch; only the release branch stays locally read-only."""
     if not current_branch:
         return [
             _issue(
@@ -499,7 +527,7 @@ def local_commit_issues(
                 f"{sorted(policy.allowed_local)}",
             )
         ]
-    if current_branch in {policy.integration_branch, policy.release_branch}:
+    if current_branch == policy.release_branch:
         return [
             _issue(
                 policy,

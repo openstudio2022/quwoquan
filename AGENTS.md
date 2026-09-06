@@ -46,9 +46,9 @@ Feature Tree 与 owner 算法见 [`specs/feature-tree/README.md`](specs/feature-
 
 ## Git 不变量
 
-- 本地与远端只允许 `dev1.0`、`main` 与六条声明的长期 `lane/*` 分支；日常开发只经 `lane/* -> dev1.0` PR 合入集成分支，唯一发布 PR 边为 `dev1.0 -> main`。Prod source 必须是可达 `main` 的精确 SHA。
+- 本地与远端只允许 `dev1.0`、`main` 与六条声明的长期 `lane/*` 分支；日常开发主要在 `lane/*`，经 PR 或 `integration/` 同名 expected-old 快进合入 `dev1.0`；唯一发布 PR 边为 `dev1.0 -> main`。Prod source 必须是可达 `main` 的精确 SHA。
 - 新建 linked worktree 或再次 clone 每次都须先取得用户明确授权，并以 `QWQ_WORKTREE_AUTHZ="<授权理由>" <command>` 执行。clone 后先运行 `make install-hooks`。
-- `dev1.0` 与 `main` 是本地只读分支，不得本地提交；唯一 `integration/` 只承担集成检查。日常提交必须位于同名 lane worktree，路径与分支由 `worktree_policy.yaml` 交叉验证。
+- `main` 是本地只读分支，不得本地提交；`integration/`（`dev1.0`）与六条 lane 一视同仁：可本地合入并推送同名远端，integration 另强制 expected-old 快进。日常功能开发优先同名 lane worktree，路径与分支由 `worktree_policy.yaml` 交叉验证。
 - 只有用户明确要求时才创建提交；提交按 `commit` Skill 执行，不用 `--no-verify` 作为常规通道。
 
 ## 沟通

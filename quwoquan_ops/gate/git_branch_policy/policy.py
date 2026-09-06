@@ -66,7 +66,7 @@ RECOVERY_BY_FAILURE_KEY = {
     "backsync_cas_conflict": "refresh_remote_refs_and_retry_compare_and_swap",
     "authority_unavailable": "restore_git_authority_then_retry",
     "source_not_main_reachable": "select_exact_main_reachable_source",
-    "integration_read_only": "commit_from_a_lane_worktree_then_open_pull_request",
+    "integration_read_only": "commit_from_declared_writer_branch_not_release",
 }
 
 
@@ -421,10 +421,11 @@ def _integration_branch_activation(
     if set(activation.active_accepted_updates) != {
         "lane_pull_request_merge",
         "system_fast_forward_backsync",
-    } or activation.active_direct_push != "forbidden":
+        "integration_matching_fast_forward_push",
+    } or activation.active_direct_push != "matching_integration_or_lane_only":
         raise ValueError(
-            "branch policy integration_branch_activation.active must accept exactly lane PR "
-            "merge/system fast-forward backsync and forbid direct push"
+            "branch policy integration_branch_activation.active must accept lane PR merge, "
+            "system fast-forward backsync, and matching integration fast-forward push"
         )
     return activation
 
@@ -692,21 +693,34 @@ def evaluate_transition(
             string_context=context,
         )
     if transition.event == "direct_push":
-        integration_direct_push_allowed = (
-            policy.integration_branch_activation.state == "bootstrap"
+        activation = policy.integration_branch_activation
+        bootstrap_create_only = (
+            activation.state == "bootstrap"
             and transition.head == policy.integration_branch
             and transition.base == policy.integration_branch
             and transition.before_oid == ZERO_SHA
             and bool(transition.after_oid)
             and transition.after_oid != ZERO_SHA
         )
-        if integration_direct_push_allowed or (
+        matching_lane_push = (
             transition.head == transition.base
             and transition.head in policy.allowed_local
             and _matches_pull_request_prefix(
                 transition.head, policy.pull_request_prefixes
             )
-        ):
+        )
+        matching_integration_push = (
+            activation.state == "active"
+            and "integration_matching_fast_forward_push"
+            in activation.active_accepted_updates
+            and transition.head == policy.integration_branch
+            and transition.base == policy.integration_branch
+            and bool(transition.before_oid)
+            and transition.before_oid != ZERO_SHA
+            and bool(transition.after_oid)
+            and transition.after_oid != ZERO_SHA
+        )
+        if bootstrap_create_only or matching_lane_push or matching_integration_push:
             return BranchDecision(status="allowed", string_context=context)
         return BranchDecision(
             status="blocked",

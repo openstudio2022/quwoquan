@@ -36,7 +36,10 @@ integration_branch_activation:
     accepted_updates:
       - lane_pull_request_merge
       - system_fast_forward_backsync
-    direct_push: forbidden
+      - integration_matching_fast_forward_push
+    # matching_integration_or_lane_only：integration 与 lane 一样只允许推同名远端；
+    # integration→origin/dev1.0 另强制 expected-old 快进；main 仍禁止直推。
+    direct_push: matching_integration_or_lane_only
 release_branch: main
 production_source_branch: main
 production_workflow: .github/workflows/deploy-prod-auto.yml

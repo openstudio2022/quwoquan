@@ -218,8 +218,7 @@ def test_transition_evaluator_applies_activation_state_to_dev_direct_push() -> N
         ),
     )
 
-    assert active.allowed is False
-    assert active.reason_code == "OPS.BRANCH.DIRECT_PUSH_NOT_ALLOWED"
+    assert active.allowed is True
     assert bootstrap_create.allowed is True
     assert bootstrap_update.allowed is False
 
@@ -331,11 +330,40 @@ def test_pre_push_bootstrap_exception_is_strictly_create_only() -> None:
         )
 
 
-def test_pre_push_active_rejects_direct_dev_update() -> None:
+def test_pre_push_active_accepts_matching_integration_fast_forward() -> None:
+    assert (
+        pre_push_issues(
+            policy=_repository_policy(),
+            current_branch="dev1.0",
+            update_lines=[_update(local_branch="dev1.0", remote_branch="dev1.0")],
+            environment={},
+            is_ancestor=lambda _ancestor, _descendant: True,
+        )
+        == []
+    )
+
+
+def test_pre_push_active_rejects_non_fast_forward_integration_update() -> None:
     issues = pre_push_issues(
         policy=_repository_policy(),
         current_branch="dev1.0",
         update_lines=[_update(local_branch="dev1.0", remote_branch="dev1.0")],
+        environment={},
+        is_ancestor=lambda _ancestor, _descendant: False,
+    )
+
+    assert len(issues) == 1
+    assert issues[0].startswith("OPS.BRANCH.BACKSYNC_NOT_FAST_FORWARD:")
+    assert "expected-old" in issues[0]
+
+
+def test_pre_push_active_rejects_foreign_source_dev_update() -> None:
+    issues = pre_push_issues(
+        policy=_repository_policy(),
+        current_branch="lane/ops",
+        update_lines=[
+            _update(local_branch="lane/ops", remote_branch="dev1.0")
+        ],
         environment={},
     )
 
@@ -538,13 +566,24 @@ def test_pre_push_system_identity_still_requires_matching_main_source() -> None:
         ),
     }
 
+    # 即便带上受管 backsync 环境，integration 同名推送仍走 matching FF 路径，不冒充 backsync。
+    assert (
+        pre_push_issues(
+            policy=_repository_policy(),
+            current_branch="dev1.0",
+            update_lines=[_update(local_branch="dev1.0", remote_branch="dev1.0")],
+            environment=environment,
+            is_ancestor=lambda _ancestor, _descendant: True,
+        )
+        == []
+    )
+    # 非 main 源即使有受管身份也不能走 backsync；lane→dev1.0 仍拒绝。
     issues = pre_push_issues(
         policy=_repository_policy(),
-        current_branch="dev1.0",
-        update_lines=[_update(local_branch="dev1.0", remote_branch="dev1.0")],
+        current_branch="lane/ops",
+        update_lines=[_update(local_branch="lane/ops", remote_branch="dev1.0")],
         environment=environment,
     )
-
     assert len(issues) == 1
     assert issues[0].startswith("OPS.BRANCH.DIRECT_PUSH_NOT_ALLOWED:")
 

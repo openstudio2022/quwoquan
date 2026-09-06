@@ -30,7 +30,7 @@
 
 <a id="dec-001"></a>
 ### DEC-001 dev1.0 集成与 main 发布组成唯一受控主链
-- 决策：仓库只保留 `dev1.0`、`main` 与六条声明的长期 lane。日常开发面固定为 lane，长期集成真相源固定为 `dev1.0` 且只接受 `lane/* -> dev1.0` PR 与过渡期受控 direct push；唯一发布真相源固定为 `main` 且只接受 `dev1.0 -> main` promotion PR；promotion 成功后仅受管系统可把 `main` fast-forward backsync 到 `dev1.0`。
+- 决策：仓库只保留 `dev1.0`、`main` 与六条声明的长期 lane。日常开发面固定为 lane，长期集成真相源固定为 `dev1.0` 且接受 `lane/* -> dev1.0` PR、`integration/` 对同名远端的 expected-old 快进合入，以及 promotion 成功后的受管 system fast-forward backsync；唯一发布真相源固定为 `main` 且只接受 `dev1.0 -> main` promotion PR；promotion 成功后仅受管系统可把 `main` fast-forward backsync 到 `dev1.0`。
 - 单向状态流：`dev1.0` push 只生成绑定精确 SHA 的 `03/04/05` hosted check evidence，不取得 release eligibility。`dev1.0` 合入 `main` 后生成 promotion receipt 并允许 mainline candidate admission。系统 backsync 只同步 ref，不生成新的 promotion 或 release eligibility。
 - 单一 PR Admission：`lane/* -> dev1.0` 只对 GitHub synthetic merge candidate 在 GitHub-hosted runner 执行受影响快速检查；禁止从 lane push 拼接 App 证据，禁止普通 PR 进入 persistent self-hosted、正式 packaging/full coverage、设备、Provider、签名或 Prod secret。`dev1.0 -> main` promotion 与 nightly/release workflow 才执行重证据。
 - 影响与计时边界：同一 DAG 只生成一次绑定 base/head/synthetic SHA、source tree、R0–R4 与 required IDs 的 ImpactPlan，所有 job 验同一 digest。风险按 `R0 non-runtime / R1 single-scope / R2 cross-scope-or-device / R3 governance-or-unknown / R4 release-authority-or-promotion` 单调升级；required test/API/Journey ID 由版本化 ownership policy 解析并随 planner digest 封存。普通 PR 的官方 `created_at -> candidate-ready` 只计算本 DAG；push 不再作为外部前序。功能失败与 infra 失败分别投影，时延 hard gate 只有在 `feedback_slo_activation.json` 绑定至少 20 个唯一 exact OCI clean-run refs 后才能从 learning 激活；flaky 仅允许 infra/transport/device-bridge 一次 fresh retry，隔离最多 7 天且不得包含 promotion-critical 测试。

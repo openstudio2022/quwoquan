@@ -75,7 +75,7 @@
 - `git worktree list --porcelain` 的 `bare` record 只验证 hub 身份，绝不运行 status/probe 或算作脏 worktree；authority 失败、linked worktree probe 失败、detached、非 integration/fixed lane、分支与目录错绑、重复 lane/integration 或路径重复均 fail-closed。
 - 默认门禁验证已发现 lane 的路径身份并单独要求唯一 integration clean；全量身份门必须精确六条 lane 均 clean 且 HEAD 等于优先 `origin/dev1.0`（不存在时回落本地 `dev1.0`）的 canonical SHA，integration 也必须 clean 且同 HEAD。
 - 会话输出必须列出每个 worktree 的 identity/ahead/behind/dirty 与 engineering ownership drift；drift 只观察不阻断，避免跨域小改动把一个 Increment 拆成多个 writer。
-- 设备与 local-runtime 属于同一物理主机上跨 worktree 共享的资源，其互斥锁必须 host-scoped，不得写入任一 worktree 的 `.qwq_output` 冒充隔离；holder evidence 至少包含 `pid`、`worktree`、`lane` 与 `head`。`integration/ -> dev1.0` 是只读集成 worktree；从该目录承载共享 runtime 时，runtime host 身份必须显式声明且不得从 worktree-local pid/receipt 推断。
+- 设备与 local-runtime 属于同一物理主机上跨 worktree 共享的资源，其互斥锁必须 host-scoped，不得写入任一 worktree 的 `.qwq_output` 冒充隔离；holder evidence 至少包含 `pid`、`worktree`、`lane` 与 `head`。`integration/ -> dev1.0` 是与 lane 一视同仁的合入工作区（同名远端 + expected-old 快进）；从该目录承载共享 runtime 时，runtime host 身份必须显式声明且不得从 worktree-local pid/receipt 推断。
 - 策略参数（固定布局、滞留阈值、提醒最小间隔、发现根、失败码）集中在唯一策略文件，实现不得内联第二份默认值。
 
 
