@@ -766,10 +766,31 @@ def _validate_query_against_sealed(
         raw_bindings = binding_document.get("assets")
         if not isinstance(raw_bindings, list):
             raise _error("DATA.RELEASE.HANDOFF_POOL_BINDING_DRIFT", object_ref)
+        # Sealed release objects intentionally remove private CAS objectKey.
+        # Rebind that one delivery-private field from the sealed MediaAsset
+        # authority before projecting the producer content-library identity.
+        media_manifest = _read_sealed_identity_file(
+            sealed_root,
+            "media_manifest.json",
+            object_ref=object_ref,
+            label="release MediaAsset authority",
+        )
+        media_by_id = {
+            str(asset.get("assetId") or ""): asset
+            for asset in media_manifest.get("assets") or []
+            if isinstance(asset, Mapping)
+        }
+        resolved_bindings = []
+        for raw in raw_bindings:
+            resolved = dict(raw) if isinstance(raw, Mapping) else raw
+            if isinstance(resolved, dict) and not resolved.get("objectKey"):
+                authority = media_by_id.get(str(resolved.get("assetId") or ""), {})
+                resolved["objectKey"] = authority.get("privateObjectKey")
+            resolved_bindings.append(resolved)
         try:
             expected_bindings = [
                 binding.as_document()
-                for binding in project_content_library_bindings(raw_bindings)
+                for binding in project_content_library_bindings(resolved_bindings)
             ]
         except ObjectTransactionError as exc:
             raise _error("DATA.RELEASE.HANDOFF_POOL_BINDING_DRIFT", str(exc)) from exc
