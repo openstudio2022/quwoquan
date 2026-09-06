@@ -168,7 +168,7 @@ def _compact_artifact(
         else [
             {
                 key: finding[key]
-                for key in ("code", "path", "terminal", "symbol")
+                for key in ("code", "path", "terminal", "symbol", "recovery")
                 if key in finding
             }
             for finding in raw_findings

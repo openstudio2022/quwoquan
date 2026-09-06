@@ -321,7 +321,13 @@ def _assert_same_fingerprint(
 def _assert_plan_source_range(
     plan: dict[str, Any], source: dict[str, Any]
 ) -> None:
-    _assert_plan_source_range(plan, source)
+    if (
+        source["head_sha"] != plan["head_sha"]
+        or source["merge_base_sha"] != plan["merge_base_sha"]
+    ):
+        raise EvidenceRunnerError(
+            "REVIEW.FINGERPRINT_CHANGED: evidence source exact Git range 与 plan 漂移"
+        )
 
 
 def run_plan(
@@ -431,13 +437,7 @@ def run_plan(
     started_at = _now()
     repo_root = cwd.resolve()
     source = _workspace_source_classification(repo_root)
-    if (
-        source["head_sha"] != plan["head_sha"]
-        or source["merge_base_sha"] != plan["merge_base_sha"]
-    ):
-        raise EvidenceRunnerError(
-            "REVIEW.FINGERPRINT_CHANGED: evidence source exact Git range 与 plan 漂移"
-        )
+    _assert_plan_source_range(plan, source)
     evidence_class, admission_eligible = _evidence_classification(source)
     execution_fingerprint = _fingerprint(
         plan=plan, evidence=evidence, results=[], phase="execution_input", registry=registry,

@@ -133,12 +133,13 @@ def test_suffixless_tracked_executable_blocks_before_source_classification(tmp_p
     report = analyze_delta(repo, base=base, head=head, policy_path=POLICY)
 
     assert classify_path("quwoquan_service/codegen_storage", load_policy(POLICY)) == "config-data"
-    assert any(
-        finding["code"] == "CODE_HEALTH.TRACKED_SOURCE_EXECUTABLE"
-        and finding["path"] == "quwoquan_service/codegen_storage"
-        and finding["terminal"] == "GATE_BLOCK"
-        for finding in report["findings"]
+    blocker = next(
+        finding for finding in report["findings"]
+        if finding["code"] == "CODE_HEALTH.TRACKED_SOURCE_EXECUTABLE"
     )
+    assert blocker["path"] == "quwoquan_service/codegen_storage"
+    assert blocker["terminal"] == "GATE_BLOCK"
+    assert blocker["recovery"] == "remove_executable_artifact_from_source_tree"
 
 
 def test_invalid_python_and_candidate_blob_read_fail_closed(
@@ -191,8 +192,12 @@ def test_new_oversized_file_blocks_but_generated_and_test_do_not(tmp_path: Path)
     report = analyze_delta(repo, base=base, head=head, policy_path=repo / "quwoquan_ops/policies/code_health_policy.yaml", mode="fast")
     assert report["terminal"] == "GATE_BLOCK"
     blockers = [item for item in report["findings"] if item["terminal"] == "GATE_BLOCK"]
-    assert [(item["code"], item["path"]) for item in blockers] == [
-        ("CODE_HEALTH.NEW_FILE_OVER_BLOCK", "quwoquan_ops/ci/new_module.py")
+    assert [(item["code"], item["path"], item["recovery"]) for item in blockers] == [
+        (
+            "CODE_HEALTH.NEW_FILE_OVER_BLOCK",
+            "quwoquan_ops/ci/new_module.py",
+            "split_or_reduce_new_file_below_block_threshold",
+        )
     ]
 
 
@@ -203,7 +208,11 @@ def test_existing_oversized_growth_blocks_and_shrink_passes(tmp_path: Path) -> N
     target.write_text("value = 1\n" * 1002, encoding="utf-8")
     grown = commit(repo, "grow")
     report = analyze_delta(repo, base=base, head=grown, policy_path=repo / "quwoquan_ops/policies/code_health_policy.yaml", mode="fast")
-    assert any(item["code"] == "CODE_HEALTH.OVERSIZED_FILE_GROWTH" for item in report["findings"])
+    blocker = next(
+        item for item in report["findings"]
+        if item["code"] == "CODE_HEALTH.OVERSIZED_FILE_GROWTH"
+    )
+    assert blocker["recovery"] == "reduce_oversized_file_to_previous_or_below_block_size"
     target.write_text("value = 1\n" * 900, encoding="utf-8")
     shrunk = commit(repo, "shrink")
     report = analyze_delta(repo, base=grown, head=shrunk, policy_path=repo / "quwoquan_ops/policies/code_health_policy.yaml", mode="fast")
@@ -261,7 +270,11 @@ def test_new_unreferenced_python_module_blocks_but_imported_module_passes(tmp_pa
     write(repo, "quwoquan_data/scripts/content/private_orphan.py", "def calculate():\n    return 1\n")
     first = commit(repo, "orphan")
     report = analyze_delta(repo, base=base, head=first, policy_path=repo / "quwoquan_ops/policies/code_health_policy.yaml", mode="fast")
-    assert any(item["code"] == "CODE_HEALTH.NEW_PRIVATE_PYTHON_WITHOUT_ENTRY" for item in report["findings"])
+    blocker = next(
+        item for item in report["findings"]
+        if item["code"] == "CODE_HEALTH.NEW_PRIVATE_PYTHON_WITHOUT_ENTRY"
+    )
+    assert blocker["recovery"] == "add_canonical_repository_entry_or_remove_private_module"
 
     write(repo, "quwoquan_data/scripts/cli.py", "from quwoquan_data.scripts.content.private_orphan import calculate\nprint(calculate())\n")
     second = commit(repo, "wire entry")
@@ -283,6 +296,66 @@ def test_rename_delete_and_atomic_migration_are_not_size_blockers(tmp_path: Path
     report = analyze_delta(repo, base=head, head=deleted, policy_path=repo / "quwoquan_ops/policies/code_health_policy.yaml", mode="full")
     assert report["summary"]["deletedFiles"] == 1
     assert report["terminal"] == "PASS"
+
+
+def test_index_only_entry_analysis_reads_staged_module_not_worktree(
+    tmp_path: Path,
+) -> None:
+    repo, base = init_repo(tmp_path)
+    relative = "quwoquan_data/scripts/content/staged_orphan.py"
+    target = write(repo, relative, "def calculate():\n    return 1\n")
+    git(repo, "add", relative)
+    target.write_text(
+        "def calculate():\n    return 1\n\n"
+        "if __name__ == '__main__':\n    print(calculate())\n",
+        encoding="utf-8",
+    )
+
+    staged = analyze_delta(
+        repo, base=base, head=base,
+        policy_path=repo / "quwoquan_ops/policies/code_health_policy.yaml",
+        mode="fast", explicit_paths=[relative], working_tree=True, index_only=True,
+    )
+    worktree = analyze_delta(
+        repo, base=base, head=base,
+        policy_path=repo / "quwoquan_ops/policies/code_health_policy.yaml",
+        mode="fast", explicit_paths=[relative], working_tree=True,
+    )
+
+    assert staged["candidateSource"] == "index"
+    assert any(
+        item["code"] == "CODE_HEALTH.NEW_PRIVATE_PYTHON_WITHOUT_ENTRY"
+        for item in staged["findings"]
+    )
+    assert not any(
+        item["code"] == "CODE_HEALTH.NEW_PRIVATE_PYTHON_WITHOUT_ENTRY"
+        for item in worktree["findings"]
+    )
+
+
+def test_cli_gate_block_is_nonzero_and_report_only_bypass_is_rejected(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo, _ = init_repo(tmp_path)
+    write(repo, "quwoquan_ops/ci/oversized.py", "value = 1\n" * 1001)
+    output = tmp_path / "report.json"
+    monkeypatch.setattr(verify_incremental_code_health, "ROOT", repo)
+
+    assert verify_incremental_code_health.main([
+        "--mode", "fast", "--output", str(output),
+    ]) == 1
+    report = json.loads(output.read_text(encoding="utf-8"))
+    assert report["terminal"] == "GATE_BLOCK"
+    assert all(
+        isinstance(item.get("recovery"), str) and item["recovery"]
+        for item in report["findings"]
+        if item["terminal"] == "GATE_BLOCK"
+    )
+    with pytest.raises(SystemExit) as rejected:
+        verify_incremental_code_health.main([
+            "--report-only", "--mode", "fast", "--output", str(output),
+        ])
+    assert rejected.value.code == 2
 
 
 def test_index_only_reads_staged_bytes_and_ignores_later_worktree_edits(tmp_path: Path) -> None:

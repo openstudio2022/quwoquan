@@ -214,6 +214,23 @@ class NamedEvidenceRunnerTest(unittest.TestCase):
             )
             self.assertFalse(dirty["repository_clean"])
 
+    def test_plan_source_range_drift_fails_before_first_command(self) -> None:
+        plan, registry = self._plan([("safe", True, "printf safe")])
+        source = {
+            "mode": "workspace",
+            "head_sha": "0" * len(plan["head_sha"]),
+            "merge_base_sha": plan["merge_base_sha"],
+            "repository_clean": True,
+            "immutable": False,
+        }
+        with mock.patch.object(
+            runner, "_workspace_source_classification", return_value=source
+        ), mock.patch.object(runner, "run_command") as command, self.assertRaisesRegex(
+            runner.EvidenceRunnerError, "source exact Git range"
+        ):
+            self._run(plan, registry)
+        command.assert_not_called()
+
     def test_clean_exact_sha_workspace_receipt_is_admission_eligible(self) -> None:
         plan, registry = self._plan([("safe", True, "printf safe")])
         clean_source = {

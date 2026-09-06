@@ -23,7 +23,6 @@ def parser() -> argparse.ArgumentParser:
     value.add_argument("--changed-file", action="append", default=[])
     value.add_argument("--policy", type=Path, default=ROOT / "quwoquan_ops/policies/code_health_policy.yaml")
     value.add_argument("--output", type=Path)
-    value.add_argument("--report-only", action="store_true")
     value.add_argument("--working-tree", action="store_true", help="Compare current worktree materialization to --base; default when base/head are omitted")
     value.add_argument("--index-only", action="store_true", help="Compare staged index materialization to --base; requires --working-tree")
     return value
@@ -55,7 +54,7 @@ def main(argv: list[str] | None = None) -> int:
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     print(f"verify_incremental_code_health: {report['terminal']} findings={report['summary']['findingCount']} output={output}")
-    if args.report_only or report["terminal"] in {"PASS", "PR_WARN"}:
+    if report["terminal"] in {"PASS", "PR_WARN"}:
         return 0
     return 1
 

@@ -47,7 +47,10 @@ def _implementation_digest() -> str:
 
 
 def _finding(code: str, path: str, terminal: str, message: str, **extra: object) -> dict[str, object]:
-    return {"code": code, "path": path, "terminal": terminal, "message": message, **extra}
+    finding = {"code": code, "path": path, "terminal": terminal, "message": message, **extra}
+    if terminal == "GATE_BLOCK" and not finding.get("recovery"):
+        raise ValueError(f"{code} GATE_BLOCK finding 缺 recovery")
+    return finding
 
 
 def _workspace_identity(repo: Path, head: str, delta: list[Change], *, working_tree: bool = False, index_only: bool = False, commit_blobs: dict[str, bytes] | None = None) -> dict[str, str]:
@@ -107,6 +110,7 @@ def analyze_delta(repo: Path, *, base: str, head: str, policy_path: Path, mode: 
             findings.append(_finding(
                 "CODE_HEALTH.TRACKED_SOURCE_EXECUTABLE", item.path, "GATE_BLOCK",
                 f"tracked source path contains {magic} executable build artifact",
+                recovery="remove_executable_artifact_from_source_tree",
             ))
 
     production = [item for item in delta if categories[item.path] == "handwritten-production"]
@@ -120,13 +124,13 @@ def analyze_delta(repo: Path, *, base: str, head: str, policy_path: Path, mode: 
         before_lines = line_count(old); after_lines = line_count(new)
         advisory = thresholds["file_lines"]["advisory"]; block = thresholds["file_lines"]["block"]
         if after_lines > block and before_lines <= block:
-            findings.append(_finding("CODE_HEALTH.NEW_FILE_OVER_BLOCK", item.path, "GATE_BLOCK", f"file lines {before_lines}->{after_lines} crossed block threshold {block}", measure={"before": before_lines, "after": after_lines, "threshold": block}))
+            findings.append(_finding("CODE_HEALTH.NEW_FILE_OVER_BLOCK", item.path, "GATE_BLOCK", f"file lines {before_lines}->{after_lines} crossed block threshold {block}", recovery="split_or_reduce_new_file_below_block_threshold", measure={"before": before_lines, "after": after_lines, "threshold": block}))
         elif after_lines > block and after_lines > before_lines:
-            findings.append(_finding("CODE_HEALTH.OVERSIZED_FILE_GROWTH", item.path, "GATE_BLOCK", f"oversized file grew {before_lines}->{after_lines}; debt must only decrease", measure={"before": before_lines, "after": after_lines, "threshold": block}))
+            findings.append(_finding("CODE_HEALTH.OVERSIZED_FILE_GROWTH", item.path, "GATE_BLOCK", f"oversized file grew {before_lines}->{after_lines}; debt must only decrease", recovery="reduce_oversized_file_to_previous_or_below_block_size", measure={"before": before_lines, "after": after_lines, "threshold": block}))
         elif after_lines > advisory and after_lines > before_lines:
             findings.append(_finding("CODE_HEALTH.FILE_LINES_ADVISORY", item.path, "PR_WARN", f"file lines {before_lines}->{after_lines} exceeds advisory {advisory}", measure={"before": before_lines, "after": after_lines, "threshold": advisory}))
         if item.status == "A" and item.path.startswith("quwoquan_data/scripts/") and item.path.endswith(".py") and not has_repository_entry(repo, head_sha, item.path, working_tree=working_tree, index_only=index_only):
-            findings.append(_finding("CODE_HEALTH.NEW_PRIVATE_PYTHON_WITHOUT_ENTRY", item.path, "GATE_BLOCK", "new Data package module has no language or repository entry edge"))
+            findings.append(_finding("CODE_HEALTH.NEW_PRIVATE_PYTHON_WITHOUT_ENTRY", item.path, "GATE_BLOCK", "new Data package module has no language or repository entry edge", recovery="add_canonical_repository_entry_or_remove_private_module"))
         if mode == "full":
             findings.extend(changed_complexity_findings(item.path, old, new, item.changed_new_lines, thresholds["complexity"]["cyclomatic_advisory"], thresholds["complexity"]["cognitive_advisory"]))
 

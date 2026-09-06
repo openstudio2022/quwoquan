@@ -49,6 +49,7 @@ def test_large_candidate_code_health_artifact_compresses_with_auditable_identity
         "path": f"quwoquan_ops/generated/path-{index}.py",
         "terminal": "PR_WARN",
         "symbol": f"function_{index}",
+        "recovery": "split_changed_function",
         "message": "changed function complexity exceeds advisory " * 4,
         "measure": {"ratio": 1.043},
     } for index in range(50)]
@@ -72,6 +73,7 @@ def test_large_candidate_code_health_artifact_compresses_with_auditable_identity
     assert projected["findings_projection"]["original_count"] == 50
     assert projected["canonical_bytes_sha256"] == "sha256:" + "b" * 64
     assert all("message" not in item and "measure" not in item for item in projected["findings"])
+    assert all(item["recovery"] == "split_changed_function" for item in projected["findings"])
     path_summary = payload["assembled_input"]["changed_paths_and_diff_summary"]
     assert path_summary["paths"] == []
     assert path_summary["paths_projection"]["ref"] == plan["candidate_evidence_identity"]["ref"]

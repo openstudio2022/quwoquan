@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
 
-from .git_delta import blob
+from .git_delta import blob, index_blob, working_tree_blob
 
 
 @dataclass(frozen=True)
@@ -173,7 +173,13 @@ def tracked_paths(repo: Path, sha: str) -> list[str]:
 def has_repository_entry(repo: Path, head: str, path: str, *, working_tree: bool = False, index_only: bool = False) -> bool:
     if path.endswith("/__init__.py") or Path(path).name in {"cli.py", "stackctl.py"}:
         return True
-    body = ((repo / path).read_bytes() if working_tree and (repo / path).is_file() else blob(repo, head, path)) or b""
+    body = (
+        index_blob(repo, path)
+        if index_only
+        else working_tree_blob(repo, path)
+        if working_tree
+        else blob(repo, head, path)
+    ) or b""
     if b'__name__ == "__main__"' in body or b"__name__ == '__main__'" in body:
         return True
     dotted = path[:-3].replace("/", ".")
