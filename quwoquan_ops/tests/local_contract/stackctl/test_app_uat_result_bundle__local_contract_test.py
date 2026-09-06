@@ -60,7 +60,7 @@ def _plan(root: Path, *, na: tuple[str, str] | None = ("recommendation", "video"
         "eligiblePopulationCounts": {carrier: 100 for carrier in CARRIERS},
         "exactCohortCounts": {carrier: 100 for carrier in CARRIERS},
         "entryCarrierCells": cells,
-        "sampleStrategy": {"name": "stratified_exact", "version": 1, "seedDigest": _digest("d"), "carrierOrder": list(CARRIERS), "sortKey": "identity", "direction": "ascending", "objectDigestAlgorithm": "sha256-path-blob-merkle", "sampleDistribution": distribution},
+        "sampleStrategy": {"authority": None, "name": "stratified_exact", "version": 1, "seedDigest": _digest("d"), "carrierOrder": list(CARRIERS), "sortKey": "identity", "direction": "ascending", "objectDigestAlgorithm": "sha256-path-blob-merkle", "sampleDistribution": distribution},
         "sampleCount": 100,
         "samples": [{"sampleId": f"m100-{carrier}-{index:03d}", "carrier": carrier, "objectId": (f"/entity/{carrier}-{index:03d}" if carrier == "homepage" else f"{carrier}-{index:03d}"), "objectRef": (f"objects/entities/{carrier}-{index:03d}" if carrier == "homepage" else f"objects/posts/{carrier}/{carrier}-{index:03d}"), "objectDigest": _digest("e")} for carrier, count in distribution.items() for index in range(1, count + 1)],
     }
@@ -161,7 +161,7 @@ def _raw(
         "entrySurface": entry, "carrier": carrier, "deviceIdentity": device, "uatProfile": profile,
         "nonPromotable": profile == "rehearsal", "artifactClass": "production_behavior", "physicalDevice": profile != "rehearsal",
         "environment": target.removesuffix("-local"), "platform": platform, "deviceClass": "simulator" if profile == "rehearsal" else "physical",
-        "provider": "first-party-https", "startedAt": "2026-08-29T07:00:00Z", "completedAt": "2026-08-29T07:01:00Z",
+        "deviceRegistered": profile != "rehearsal", "provider": "first-party-https", "startedAt": "2026-08-29T07:00:00Z", "completedAt": "2026-08-29T07:01:00Z",
         "runnerIdentity": runner, "artifactSha256": hashlib.sha256(b"receipt bytes").hexdigest(), "artifactPath": artifact_ref,
     }
     if state != "passed":
@@ -222,6 +222,22 @@ def test_complete_multi_binding_projection_is_deterministic_and_schema_valid(tmp
     assert subject.validate(first) == first
 
 
+def test_non_m1000_plan_requires_null_sampling_authority(tmp_path: Path) -> None:
+    plan = _plan(tmp_path)
+    plan_path = tmp_path / plan["ref"]
+    value = json.loads(plan_path.read_text())
+    del value["sampleStrategy"]["authority"]
+    plan = _write(tmp_path, plan["ref"], value)
+    binding = _binding(
+        tmp_path,
+        plan,
+        target="alpha-local",
+        platform="android",
+        device="emulator-5554",
+    )
+
+    with pytest.raises(subject.AppUatResultBundleError, match="'authority' is a required property"):
+        _build(tmp_path, plan, [binding], [])
 
 
 def test_projection_preserves_exact_sample_object_identity(tmp_path: Path) -> None:

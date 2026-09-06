@@ -1,0 +1,48 @@
+schema_version: 1
+contract_id: scoped-integration-candidate-v1
+integration_branch: dev1.0
+candidate_source_branches:
+  - dev1.0
+  - lane/product-mainline
+  - lane/data-engineering
+  - lane/engineering
+  - lane/ops
+  - lane/small-fix
+  - lane/refactor
+scope:
+  granularity: exact_file
+  normalization: repository_relative_posix
+  conflict_kinds: [same_path, ancestor_descendant, rename_endpoint, delete, generated_output]
+  symlink_policy: reject_any_component
+claim:
+  storage_root: .qwq_output/env/repo/local/scoped-candidate/process
+  authority: append_only_generation
+  expiry_recovery: explicit_reconcile_only
+  query_parallel: true
+private_index:
+  required: true
+  initialize_from: expected_parent
+  stage_source: claimed_paths_only
+  scope_outside_tree: exact_parent_bytes
+  mutate_default_index: false
+  mutate_head_or_ref: false
+candidate_request:
+  schema: quwoquan_ops.exact_integration_candidate.v1
+  required_identities: [claimDigest, ownerIdentityRef, expectedParent, commit, tree, pathsDigest, impactPlanDigest]
+publisher:
+  writer_kind: trusted_integration_publisher
+  target_ref: refs/heads/dev1.0
+  update_mode: fast_forward_compare_and_swap
+  force: false
+  required_environment_facts: [alpha, conditional_beta]
+  unknown_outcome: readback_before_after_other
+  hosted_adapter: external_authenticated_broker
+  local_test_adapter: local_ref_cas
+failures:
+  invalid: SCOPED_CANDIDATE.INVALID
+  conflict: SCOPED_CANDIDATE.CLAIM_CONFLICT
+  stale: SCOPED_CANDIDATE.STALE
+  scope_drift: SCOPED_CANDIDATE.SCOPE_DRIFT
+  create_conflict: SCOPED_CANDIDATE.CREATE_CONFLICT
+  publisher_unavailable: SCOPED_CANDIDATE.PUBLISHER_UNAVAILABLE
+  cas_conflict: SCOPED_CANDIDATE.CAS_CONFLICT

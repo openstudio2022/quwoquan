@@ -83,6 +83,7 @@ def test_package_identity_readback_is_exact_and_has_no_formal_release_claim() ->
             "releaseInputClassification": "commercial_inputs",
             "contractGraphDigest": CONTRACT_GRAPH_DIGEST,
             "graphqlReadRegistry": GRAPHQL_READ_REGISTRY,
+            "appLaunchBundle": None,
         }
         for path in paths.values():
             path.write_text(json.dumps(identity) + "\n", encoding="utf-8")
@@ -139,6 +140,7 @@ def test_runtime_package_outer_readback_resolves_report_directory(
             "releaseInputClassification": "research_inputs",
             "contractGraphDigest": CONTRACT_GRAPH_DIGEST,
             "graphqlReadRegistry": GRAPHQL_READ_REGISTRY,
+            "appLaunchBundle": None,
         }
         (report_dir / "report.json").write_text(
             json.dumps(identity) + "\n",

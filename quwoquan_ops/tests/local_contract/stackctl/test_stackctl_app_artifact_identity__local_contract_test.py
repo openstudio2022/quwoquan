@@ -11,6 +11,8 @@ import unittest
 import uuid
 import warnings
 import zipfile
+
+import yaml
 from pathlib import Path
 from unittest import mock
 
@@ -27,6 +29,8 @@ from quwoquan_ops.cli.commands.package_app_artifact import (
     _ios_unsigned_release_command,
     _materialize_protected_inputs,
     _materialize_runtime_config_inputs,
+    _rc_build_authority,
+    _version,
     build_product_artifact_segment,
     command_package_app_artifact,
 )
@@ -199,10 +203,16 @@ class StackctlAppArtifactIdentityTest(unittest.TestCase):
         )
 
     def test_ios_release_command_uses_profile_and_zero_runtime_defines(self) -> None:
-        command = _ios_unsigned_release_command(build_profile="nonprod")
+        command = _ios_unsigned_release_command(
+            build_profile="nonprod",
+            product_version="1.2.0",
+            artifact_build_number="42",
+        )
         self.assertIn("--release", command)
         self.assertIn("--no-codesign", command)
         self.assertEqual(command[command.index("--flavor") + 1], "nonprod")
+        self.assertEqual(command[command.index("--build-name") + 1], "1.2.0")
+        self.assertEqual(command[command.index("--build-number") + 1], "42")
         self.assertFalse(any("dart-define" in token for token in command))
         for forbidden in (
             "APP_RUNTIME_ENV",
@@ -211,6 +221,112 @@ class StackctlAppArtifactIdentityTest(unittest.TestCase):
             "QWQ_LAUNCH_TARGET",
         ):
             self.assertNotIn(forbidden, " ".join(command))
+
+    def test_product_version_requires_active_manifest_and_hosted_build_number(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            manifest = Path(directory) / "product_version.yaml"
+            inactive = (
+                ROOT / "quwoquan_ops/policies/product_version.yaml"
+            ).read_text(encoding="utf-8")
+            manifest.write_text(inactive, encoding="utf-8")
+            with mock.patch.dict(os.environ, {}, clear=False):
+                os.environ.pop("QWQ_ARTIFACT_BUILD_NUMBER", None)
+                with self.assertRaisesRegex(Exception, "product_version_manifest_inactive"):
+                    _version(
+                        require_hosted_build_number=True,
+                        manifest_path=manifest,
+                    )
+            active = inactive.replace("state: inactive", "state: active").replace(
+                "targetVersion: null", "targetVersion: 1.2.0"
+            )
+            manifest.write_text(active, encoding="utf-8")
+            with mock.patch.dict(os.environ, {}, clear=False):
+                os.environ.pop("QWQ_ARTIFACT_BUILD_NUMBER", None)
+                with self.assertRaisesRegex(Exception, "artifact_build_number_missing"):
+                    _version(
+                        require_hosted_build_number=True,
+                        manifest_path=manifest,
+                    )
+            with mock.patch.dict(
+                os.environ,
+                {"QWQ_ARTIFACT_BUILD_NUMBER": "42"},
+                clear=False,
+            ):
+                self.assertEqual(
+                    _version(
+                        require_hosted_build_number=True,
+                        manifest_path=manifest,
+                    ),
+                    ("1.2.0", "42"),
+                )
+
+    def test_nonpromotable_version_uses_local_diagnostic_identity(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            pubspec = Path(directory) / "pubspec.yaml"
+            pubspec.write_text("name: app\nversion: 9.8.7+6\n", encoding="utf-8")
+            with mock.patch.dict(os.environ, {}, clear=False):
+                os.environ.pop("QWQ_ARTIFACT_BUILD_NUMBER", None)
+                self.assertEqual(
+                    _version(
+                        require_hosted_build_number=False,
+                        pubspec_path=pubspec,
+                    ),
+                    ("9.8.7", "6"),
+                )
+            active_manifest = Path(directory) / "product_version.yaml"
+            active_manifest.write_text(
+                "schema: quwoquan_ops.product_version_manifest.v1\n"
+                "releaseTrain:\n"
+                "  state: active\n"
+                "  targetVersion: 1.2.0\n",
+                encoding="utf-8",
+            )
+            with mock.patch.dict(
+                os.environ, {"QWQ_ARTIFACT_BUILD_NUMBER": "42"}, clear=False
+            ):
+                self.assertEqual(
+                    _version(
+                        require_hosted_build_number=True,
+                        manifest_path=active_manifest,
+                        pubspec_path=pubspec,
+                    ),
+                    ("1.2.0", "42"),
+                )
+
+    def test_promotable_build_authority_requires_exact_request_and_allocation(self) -> None:
+        digest = "sha256:" + "a" * 64
+        request_ref = f"ghcr.io/example/release-qualification-request@{digest}"
+        allocation_ref = f"ghcr.io/example/artifact-build-number-allocation@{digest}"
+        rc_ref = f"ghcr.io/example/rc-tag-admission@{digest}"
+        environment = {
+            "QWQ_QUALIFICATION_REQUEST_REF": request_ref,
+            "QWQ_QUALIFICATION_REQUEST_DIGEST": digest,
+            "QWQ_RC_TAG_ADMISSION_REF": rc_ref,
+            "QWQ_ARTIFACT_BUILD_NUMBER_ALLOCATION_REF": allocation_ref,
+            "QWQ_ARTIFACT_BUILD_NUMBER_ALLOCATION_DIGEST": digest,
+        }
+        with mock.patch.dict(os.environ, environment, clear=False):
+            self.assertEqual(
+                _rc_build_authority(),
+                {
+                    "qualificationRequestRef": request_ref,
+                    "qualificationRequestDigest": digest,
+                    "rcTagAdmissionRef": rc_ref,
+                    "artifactBuildNumberAllocationRef": allocation_ref,
+                    "artifactBuildNumberAllocationDigest": digest,
+                },
+            )
+        with mock.patch.dict(
+            os.environ,
+            {
+                **environment,
+                "QWQ_ARTIFACT_BUILD_NUMBER_ALLOCATION_DIGEST": "sha256:" + "b" * 64,
+            },
+            clear=False,
+        ):
+            with self.assertRaisesRegex(Exception, "does not bind"):
+                _rc_build_authority()
+
 
     def test_old_environment_interface_is_rejected_without_fallback(self) -> None:
         for legacy in (

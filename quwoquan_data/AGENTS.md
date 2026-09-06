@@ -20,7 +20,7 @@
 - `task stage-close` 重验 exact bytes/schema/verifier facts 并 create-once 写 receipt；
 - 下载与媒体 CAS；
 - schema、摘要、引用闭包、媒体/环境硬事实 verify；
-- approved 单对象 publish 事务、显式 cohort immutable release、ship apply/readback/health/EAF 原子 IO。
+- approved 单对象 publish 事务、显式 cohort immutable release、ship apply/readback/health 与 raw CaseResult 原子 IO。
 
 禁止保留或新增 stage-gate registry、semantic prepare/record wrapper、runner/fleet/lane claim、agent/controller/queue/campaign/recovery、自动恢复、execution-state reducer、managed SDK/provider、第二 registry/processor/脚本。旧 sequence-017 不修、不迁、不兼容；任何旧轨引用、import、CLI、schema、fixture、test 与文档必须在物理删除增量中归零，不得用 shim 或 dual-read 保留。
 
@@ -33,16 +33,17 @@
 - `3.compose` 的选材由 AI 完成；`4.draft` 必须有正文或 `video_script`、draft meta、self-check 与 agent result envelope；`5.review` 由独立 AI 逐对象写 rubric、reviewer、media、rights 与 attestation，禁止脚本合成。
 - homepage 正文底稿仅允许 Wikipedia、百度百科公开词条、今日头条百科；结构化事实可额外使用官网与政府/文旅门户，并逐字段保留 `factSources`。OTA、聚合门户与媒体不得伪装为正文主证据。
 - 不可追溯 source、rights、creator/tag/entity/media identity 或 review 结论不得 publish。
-- approved 对象由 AI 逐个调用单对象事务；release cohort 必须显式，禁止 all-publishable；ship 必须由 AI 显式执行 apply、readback/health 与 EAF。
+- approved 对象由 AI 逐个调用单对象事务；release cohort 必须显式，禁止 all-publishable；ship 必须由 AI 显式执行 apply、readback/health 与 raw CaseResult；Data 不得直接写 EAF。
 
 ## E2E 完成
 
-完成必须同时绑定十阶段 receipts、immutable release、环境 import/readback/health 与同 identity `EnvironmentAcceptanceFact`。
+完成必须同时绑定十阶段 receipts、immutable release、环境 apply/readback/health 与同 candidate raw CaseResult，并把同 candidate exact evidence 交接给 Environment Ops scheduler，消费其签发的 `EnvironmentAcceptanceFact` v2。
 
-- `m1_api_consumer`：以 Alpha 服务/API consumer 的 16-cell fresh raw facts 闭合，不要求 App/设备 UAT。
-- `environment_promotion`：才要求 target-bound App UAT raw facts、target binding 与 promotion EAF。
+- `m1_api_consumer` 仅可作为内容 API consumer 执行意图，不是 EAF profile；API consumer raw CaseResult 与 App UAT 证据不得互相冒充，App physical acceptance 属于 RC qualification。
+- `EnvironmentAcceptanceFact` v2 的唯一 producer 是 Environment Ops scheduler，profile 闭集为 `smoke|integration|release`；fact 必须绑定 candidate、`impactPlanDigest`、`caseResultRefs`、八类 named closures（`runtimeIdentity`、`dataLifecycle`、`providerReadiness`、`observabilityReadiness`、`inspectEvidence`、`doctorEvidence`、`cleanupEvidence`、`leaseClosureEvidence`）、predecessor 与 DSSE。
+- Prod 接受属于 `ProdActivationAdmissionFact`，不由 Data 或 EAF v2 签发。
 
-不得把 release-only、静态 gate、fixture、旧 proof、sequence-017 或 counts 当作环境完成。涉及环境操作时同步读取 `quwoquan_ops/AGENTS.md`。
+缺少完整 EAF v2 closure 时必须 `GATE_BLOCK`；不得把 release-only、静态 gate、fixture、旧 proof、sequence-017 或 counts 当作环境完成。涉及环境操作时同步读取 `quwoquan_ops/AGENTS.md`。
 
 ## 工程卫生
 

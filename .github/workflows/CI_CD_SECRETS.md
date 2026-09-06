@@ -1,358 +1,212 @@
-# GitHub Actions CI/CD — Secrets 与 Workflow 说明
+# GitHub Actions CI/CD：五分钟源码晋级与标签驱动发布
 
-本文档说明所有 Workflow 的触发条件、职责及需配置的 GitHub Secrets，与根 `AGENTS.md` 的执行契约对应。
+本文档只描述当前永久单轨合同、现行 workflow 接线与尚待闭合的外部前提。它不证明 GitHub Environments、Apps、keys、rulesets、hosted authorities、runner 或生产基础设施已经配置；缺少对应权威 readback 时必须保持 `GATE_BLOCK`。
 
-**当前部署目标**：CI/CD 的唯一生产执行面是 `prod-hosted` 的 SSH-hosted rootless
-Podman；ACK 仅作为后续演进项。volcengine、huaweicloud 入口保留，暂不接入 CI。
+合同真相源：
 
----
+- `specs/feature-tree/runtime/deliver-deploy-prod-pipeline/spec.md`
+- `specs/feature-tree/runtime/deliver-deploy-prod-pipeline/design.md`
+- `quwoquan_ops/policies/branch_policy.yaml`
+- `quwoquan_ops/policies/release_selection_policy.yaml`
+- `quwoquan_ops/policies/product_version.yaml`
+- `quwoquan_ops/environments/prod/access-isolation.yaml`
 
-## 一、Workflow 总览（与主线阶段对应）
+## 1. 永久执行边界
 
-| Workflow | 触发 | 职责 | 对应阶段 |
-|----------|------|------|----------|
-| **delivery-gate.yml** | `push dev1.0`、`pull_request(dev1.0 -> main)`、手动 | 集成与 promotion 主门禁：拓扑校验、L1+L2 | G0~G3 |
-| **service_pipeline.yml** | `push main`、手动 | main 后 Go 构建、rec-model 镜像、kustomize 校验 | G2 |
-| **app_pipeline.yml** | 仅由 mainline `workflow_call` | 五产品 Android/iOS/Web canonical 编译与 immutable App OCI evidence | G2 / 候选 |
-| **pre-release-gate.yml** | `push dev1.0`、`pull_request(dev1.0 -> main)`、手动 | deploy → L3 → L4 → gamma smoke | G3→G5b |
-| **app-env-device-matrix-self-hosted.yml** | `push dev1.0` / `pull_request(dev1.0 -> main)` / 被调用 / 手动 | self-hosted 动态设备矩阵唯一入口 | G5b |
-| **prod-sim-manual-admission.yml** | 手动 | exact main SHA 的隔离、不可晋级 first-party 预演 | G5b 诊断 |
-| **deploy-prod-auto.yml** | `push main`、手动 | main 后自动推进 prod 主链，并在 `canary` 承接真实远端集成复验 | G5c |
-| **domain-governance.yml** | 每周、手动 | DNS 唯一记录收敛、DNS-01 续期与加密证书交接 | 环境治理 |
+发布链严格分成四段：
 
----
+1. Environment Ops 在受控本地执行面生产 Alpha、Beta、Gamma（ABG）事实。
+2. `03. Delivery Gate` 只验真 `dev1.0 -> main` 源码 promotion evidence。
+3. RC qualification 对一个不可变 RC 构建、签名、SBOM、provenance 并完成最终资格归约；stable tag controller 只选择已 qualified 的同一份物料。
+4. Prod 只消费 stable `ReleaseTagAdmissionFact` 绑定的 exact OCI digests，在一次审批与一次物化后执行 `canary -> 5 -> 20 -> 50 -> 100`。
 
-## 二、Delivery Gate（delivery-gate.yml）
+所有后继事实都必须引用前驱 canonical bytes digest。Actions Artifact 仅是可删除诊断副本，不是 admission authority。禁止 `latest`、repository variable、裸 Git SHA、`main HEAD`、RC tag 或 workflow success 充当 Prod selector；禁止兼容双读、双写、可变指针 fallback 或第二发布入口。
 
-**Secrets**：无。仅需仓库代码与脚本。
+普通 `main` 分支更新只表示最新 `source-admitted` 可用源码：不会自动构建、签名、创建标签、打包或发布到 Prod，也不会改变历史 RC、stable tag 或当前生产 digest。现行 `service_pipeline.yml` 只接受 `workflow_call`/手动触发，`app_pipeline.yml` 只接受 `workflow_call`；三个 release workflow 也都只接受手动 dispatch，因此没有由 `main` 更新触发的发布链。
 
----
+## 2. 本地 Environment Ops 生产 ABG
 
-## 三、Service Pipeline（service_pipeline.yml）
+Alpha、Beta、Gamma 的正式 producer 只能位于受控本地 Environment Ops 执行面；GitHub-hosted 和 GitHub self-hosted workflow 都不得执行 ABG、Data mutation、设备 Journey 或环境 cleanup。
 
-### 必须配置（仅部署时）
+- Alpha：在尚未移动 `dev1.0` 的 detached exact candidate 上执行默认真实依赖最小闭包。
+- Beta：只在 typed 高风险 `ImpactPlan` 要求时执行；`no_live` 必须产生绑定 candidate 与 ImpactPlan 的 `not_required` fact，不能从 skipped 推导通过。
+- trusted integration publisher：保留为带资格的可选更新通道，只在 Alpha/conditional Beta 的 `EnvironmentAcceptanceFact` 与 source facts 精确绑定同一 candidate、签名、cleanup 与 lease closure 后，以 expected-old 非 force fast-forward CAS 更新 `dev1.0` 并 exact readback；integration worktree direct fast-forward push 不生产或替代这些事实。
+- Gamma：integration scheduler 只对 current exact `dev1.0` head 执行，引用同一 Alpha/Beta exact-byte predecessor，封存 `IntegrationQualificationFact`。新 head 会使旧 Gamma 与 promotion eligibility 失效。
 
-| Secret | 用途 | 示例值 |
-|--------|------|--------|
-| **DOCKER_REGISTRY** | Docker 镜像仓库地址 | `ghcr.io` 或 `registry.example.com` |
-| **DOCKER_TOKEN** | 镜像仓库推送凭证（或使用 GITHUB_TOKEN） | `ghp_xxx` |
+每个环境事实必须闭合 package identity、startup、full health、受影响 CaseResult、readback、inspect/doctor、finally teardown、lease revoke 和端口释放。环境、设备、package、Git index 与 Git ref 均为单 writer 资源，不能由并行 workflow 竞争。
 
-### 可选（替代 DOCKER_TOKEN）
+## 3. `03. Delivery Gate` 只做 promotion evidence 验真
 
-| Secret | 用途 |
-|--------|------|
-| DOCKER_USERNAME | 用户名/密码认证 |
-| DOCKER_PASSWORD | 与 DOCKER_USERNAME 配合 |
+`.github/workflows/delivery-gate.yml` 是 `dev1.0 -> main` 的唯一 required context，context 名精确为 `03. Delivery Gate`。它只允许 promotion PR 与显式手动诊断，不监听普通分支更新。
 
-### 说明
+当前职责是：
 
-- 构建与测试阶段可不配置 Secrets；`DOCKER_TOKEN` 缺省时使用 `GITHUB_TOKEN`。
+- 校验 head/base/merge SHA 与唯一合法分支边；
+- 验证 current dev head 的 `IntegrationQualificationFact`；
+- 验证 approval、threads、ruleset、changed-boundary 与 required evidence 的 exact OCI `@sha256` refs；
+- 校验 secret/PII/generated/changed-path 边界；
+- 只验真 promotion admission 所需前驱与 exact identity，不在该 context 内执行合并、ref mutation 或 post-merge effect；
+- 为后继受信 controller 在合并与 `main` exact readback 后形成 `MainSourceSeal` 提供准入事实；固定 SLI `promotionReadyAt -> mainReadbackAt` 的目标 p95 为 300 秒。
 
----
+该 context 禁止安装语言工具链、构建、源码测试、打包、ABG、Provider live、设备执行、环境 cleanup、合并或 Git ref 写入。仓库 ruleset 只应要求这一项 promotion context；不得再把其他编号 context 组合成源码晋级条件。
 
-## 四、App Pipeline（app_pipeline.yml）
+当前 workflow 中由表达式拼接的 evidence locator 仍只是 fail-closed 接线占位；若不能从真实 OCI authority 得到 64 位 digest、签名、时效和 exact readback，就不能据此宣称 Hosted promotion 已闭合。
 
-### `release-signing` Environment 必须配置
+## 4. 三个 release workflow 的单一职责
 
-`release-signing` 只保护候选签名和构建材料，不承担 production rollout 审批；
-Production approval 仍只存在于 Prod 事务 job。该 Environment 若未配置或误设人工审批，
-App 候选构建会 fail closed，且会把人为等待错误引入 600 秒关键路径。
+### 4.1 RC qualification：`release-qualification.yml`
 
-| Secret | 用途 |
-|--------|------|
-| **QWQ_ANDROID_RELEASE_KEYSTORE_B64** | Base64 编码的 Android release keystore |
-| **QWQ_ANDROID_RELEASE_STORE_PASSWORD** | Android keystore 密码 |
-| **QWQ_ANDROID_RELEASE_KEY_ALIAS** | Android 签名 key alias |
-| **QWQ_ANDROID_RELEASE_KEY_PASSWORD** | Android 签名 key 密码 |
-| **QWQ_ANDROID_NONPROD_GOOGLE_SERVICES_JSON** | `android-nonprod-apk` 信任域的 Firebase Provider 注册配置原文 |
-| **QWQ_ANDROID_PROD_GOOGLE_SERVICES_JSON** | `android-prod-apk` 信任域的 Firebase Provider 注册配置原文 |
+入口只接受精确 RC 资格图：
 
-iOS Distribution P12、Provisioning Profile 与 ExportOptions 只属于独立的签名 IPA/商店分发 gate，
-不进入本 workflow 的五产品基础编译矩阵。Flutter 不支持 iOS Release simulator；iOS 基础产品编译 unsigned iphoneos Release `.app`，Simulator 启动另走 non-promotable Debug gate。Prod iOS 正式 ID 未登记时，
-该分发 gate 必须保持 `GATE_BLOCK`。
+- `rc_tag_admission_ref` 与 `qualification_request_ref`：不可变 RC AdmissionFact/QualificationRequest 的 exact OCI `@sha256` ref；
+- `source_git_sha`：RC peeled commit；
+- `product_version_manifest_ref`：当前 ProductVersionManifest 的 exact OCI `@sha256` ref；
+- `package_acceptance_fact_ref`、`provider_fact_ref`、`uat_fact_ref`、`supply_chain_fact_ref`：必须全部绑定同一 material/source 的 exact OCI `@sha256` refs。
 
-### 发布证明
+移动端 `artifactBuildNumber` 不由调用者输入；workflow 在 `release-qualification` Environment 内用 hosted run identity 调用单调 allocator，随后把 allocation exact ref/digest 同时传给 App factory 与 CandidateMaterialManifest reducer。
 
-- 本 workflow 不再接受 tag 或独立手动发布；只能绑定 mainline 传入的完整 Git SHA。
-- Android、iOS、Web 并行构建五个 metadata-owned 产品：`android-nonprod-apk`、
-  `android-prod-apk`、`ios-nonprod-app`、`ios-prod-app`、`web-shared`。每个 product job
-  只调用 `stackctl package --kind app-artifact --build-product-id ...`，不直接持有 Flutter
-  构建命令；Alpha/Beta/Gamma 不再触发重复编译。
-- 每个产品 shard 直接写入 run/attempt 唯一的 GHCR OCI transport tag；aggregate 先将 tag
-  原子解析为 digest，再只按 exact `ghcr.io/...@sha256:...` 回读并拒绝文件冲突。Actions
-  Artifact 不参与 job 间交换。aggregate 要求恰好五份实际 payload 后发布唯一正式 App
-  evidence OCI；后续 seal 和环境晋级只接受该 workflow 输出的 exact digest ref。
-- `ReleaseEvidenceManifest.applicationPackages[*][*].sourceRef` 使用
-  `oci://ghcr.io/...@sha256:...`，`packageDigest` 来自实际 payload 内容；OCI transport digest
-  仅证明传输物，不替代 candidate digest。
+`release-qualification` job 只能对该 RC commit build/sign/attest once，产出一个 `CandidateMaterialManifest`，绑定 Android、iOS、Service、Web exact OCI digests、同一 build number、SBOM、provenance 与 signing receipt。最终 `QualificationFact` 还必须绑定同一 `materialId` 的 Android/iOS 物理设备 package acceptance、Provider、真实 Remote UAT 与 supply-chain facts。源码、版本投影或制品字节变化必须创建下一个 RC；同一 RC 只能重试同身份的未完成步骤。
 
----
+现行 workflow 已串联 hosted build-number allocation、Service/App reusable factories、CandidateMaterialManifest reducer 与 QualificationFact finalizer；但只有外部 package/Provider/UAT/supply-chain facts 的 exact bytes 均可拉取并通过同一 material/source 绑定时才会产出资格事实。仓库接线通过不等于真实最终签名包或物理设备事实已经产生。
 
-## 五、Pre-release Gate（pre-release-gate.yml）
+### 4.2 stable tag selection/admission：`release-tag-selection.yml`
 
-### 必须配置（端到端闭环时）
+唯一 `release-controller` 负责 create-only annotated RC/stable SemVer tag。stable 只能选择一个 exact qualified RC，必须与其指向同一 main-reachable commit，并复用同一 source tree、`CandidateMaterialManifest`、artifact build number 与 OCI digests，禁止 rebuild。
 
-| Secret | 用途 |
-|--------|------|
-| **GAMMA_TEST_AUTH_TOKEN** | `api_integration` / `user_acceptance` 鉴权 Token |
+controller 必须在创建后 exact readback tag object OID、peeled commit、creator identity 与 tag ruleset，并生成 `ReleaseTagAdmissionFact`。tag 必须直接指向 commit；lightweight tag、tag-of-tag、移动、删除、重建、同 material 多 stable tag 全部拒绝。
 
-### 说明
+现行 workflow 的 controller 路径要求 admission evaluator 在 create-only push 前通过，并在 push 后 exact readback tag object 与 peeled commit；creator/ruleset facts 必须以 exact refs 参与 evaluator。仅有 Git tag 或 workflow success 仍不构成 stable admission。
 
-- `api_integration` / `user_acceptance` 验证统一跑 `gamma-local`，默认 URL 由 `quwoquan_ops/environments/gamma/runtime.yaml` 经 `stackctl` 解析。
-- 如需手动覆盖 local-gamma 入口，可在命令行或 workflow input 传 `gamma_base_url`，而不是维护第二套 GitHub secret。
-- `user_acceptance` Patrol 已统一迁到 **本机 macOS self-hosted runner**，通过 `flutter devices --machine` 动态发现当前可见的 Android/iOS 模拟器或真机。`03` / `04` / `05` 的 required PR 路径要求 Android 与 iOS 两个独立 job 均成功，任一平台缺席或失败都会 fail-closed。
-- `main` 的 `dev1.0 -> main` promotion 合入规则中，`03` / `04` / `05` 需同时配置为 required checks；`dev1.0` direct push 会为同一精确 SHA 生成三项 integration check evidence。
+### 4.3 stable-tag Prod：`deploy-prod-auto.yml`
 
----
+唯一输入是 `release_tag_admission_ref`，必须为 stable `ReleaseTagAdmissionFact` 的 exact immutable OCI `@sha256` ref。Prod admission 从该 fact 解析并复核 QualificationFact、source/control-plane SHA、全部 exact OCI digests、previous active released ledger 与 rollback readiness；不得从源码分支、裸 SHA、RC、transport tag 或“最新 qualified”查询推导发布物。
 
-## 六、App Env Device Matrix（app-env-device-matrix-self-hosted.yml）
+`production` approval 后只允许一次拉取、验签、解包和物化，随后同一事务通过：
 
-### self-hosted（dev1.0 push / promotion pull_request / workflow_call / 手动统一复用）
-
-| Secret | 用途 |
-|--------|------|
-| ALPHA_TEST_AUTH_TOKEN | alpha-local Remote 鉴权覆盖（按 validation profile 配置） |
-| BETA_TEST_AUTH_TOKEN | beta-local 鉴权覆盖（可选） |
-| GAMMA_TEST_AUTH_TOKEN | gamma-local 鉴权覆盖（可选） |
-| PROD_TEST_AUTH_TOKEN | prod-sim/prod 鉴权覆盖（可选） |
-| PROD_ACCOUNT_CLOSURE_TEST_AUTH_TOKEN | `production` Environment 内一次性注销账号 access token（仅手动证据） |
-| PROD_ACCOUNT_CLOSURE_TEST_REFRESH_TOKEN | 同一一次性账号 refresh token（仅手动证据） |
-| PROD_ACCOUNT_CLOSURE_OWNER_ID | 同一一次性账号 owner id（敏感证据，不得写入日志） |
-| PROD_ACCOUNT_CLOSURE_PERSONA_ID | 同一一次性账号 active persona id（敏感证据，不得写入日志） |
-
-### Actions Variable
-
-| Variable | 用途 |
-|----------|------|
-| **ENABLE_SELF_HOSTED_MOBILE_MATRIX** | required PR/main 路径必须精确为 `true`；缺失或其他值均输出 `GATE_BLOCK`。仅独立 `workflow_dispatch` 且显式设置 `allow_disabled_mobile_matrix_debug=true` 时可返回不构成准出的 `result=skipped` |
-| VIDEO_PLAYBACK_CANARY_WORK_ID | `environment-smoke` 当前已发布视频对象；缺失时设备矩阵 fail-closed |
-| **RELEASED_RELEASE_EVIDENCE_REF** | Nightly schedule 与 Provider producer 共用的唯一稳定发现指针；值必须是 status=`released` 的 exact `ghcr.io/.../release-artifact@sha256:...`。消费端会校验完整 manifest/文件闭包、BuildKit SBOM/provenance、GitHub OIDC issuer 与 `deploy-prod-auto.yml` signer identity |
-
-### 说明
-
-- `app-env-device-matrix-self-hosted.yml` 已成为唯一的 **05. App Env Device Matrix** 入口；同时支持 `push dev1.0`、`pull_request(dev1.0 -> main)`、被其他 workflow 调用以及手动调试。
-- Nightly schedule 只读取 `RELEASED_RELEASE_EVIDENCE_REF`；手动 full/release-candidate 与
-  reusable caller 只接受一个 `release_evidence_ref`。`candidateId`、`artifactDigest`、
-  source Git SHA/workflow run、pilot/rollback attestation、Alpha/Beta/Gamma lifecycle 与
-  Green Matrix 均从该 manifest-bound closure 导出，仓库不再配置任何 `NIGHTLY_*`。
-- `provider-release-evidence.yml` 与 schedule 使用同一个稳定指针（手动输入的 exact ref
-  可显式覆盖），并从同一 released candidate 重跑 compiled required nonprod cell set
-  与 Prod user_acceptance cell set。仓库不再配置
-  `PROVIDER_{ALPHA,BETA,GAMMA,IOS,ANDROID}_*` 路径或设备变量。
-- 更新稳定指针时必须一次性写入刚由受控 Prod workflow 发布并完成 OIDC 验证的 terminal
-  digest ref；禁止写 tag、`latest`、candidate/preprod/deployable ref 或裸 manifest 路径。
-- gamma 网关默认从 topology `gamma-local.publicBases.api` 解析，不再依赖 `GAMMA_BASE_URL` GitHub secret。
-- `05` 已统一固定到 **本机 macOS self-hosted runner**；不再依赖自定义 runner label，也不再依赖固定 `ANDROID_DEVICE_ID` / `IOS_DEVICE_ID`。
-- `alpha` 设备测试与其他环境使用同一 production Remote composition；第一方业务对象来自已激活 canonical release，所需鉴权按环境 validation profile 配置，禁止 runner/UAT fixture override。
-- `beta` 在 runner 内启动本地 beta assistant-service + gateway；设备列表通过 `flutter devices --machine` 动态发现，当前可见的每台 Android/iOS 模拟器或真机都会执行。
-- 四环境 token 严格按环境变量解析；禁止 alpha/beta/prod 回退复用 `GAMMA_TEST_AUTH_TOKEN`。
-- beta CI 默认使用 deterministic provider；真实模型链路仍以人工/专门 beta 验证为准。
-- Gamma 账号注销已进入 `nightly_full` / `release_candidate` 的
-  `account-closure` 设备矩阵，并按设备生成独立 install identity。
-- Prod 账号注销只允许手动 `workflow_dispatch`：传
-  `env_json=["prod"]`、`matrix_kind=account-closure` 且显式确认
-  `account_closure_disposable_ack=true`，并以
-  `account_closure_prod_platform` + `account_closure_prod_device_id` 唯一选择一台设备；
-  同一组凭据禁止并发或跨设备复用。四项 `PROD_ACCOUNT_CLOSURE_*`
-  必须配置在受审批的 `production` GitHub Environment，且每次运行前替换为新建、允许永久注销的一次性账号；不得复用日常验收账号。
-
-### self-hosted runner 前提
-
-| 条目 | 用途 |
-|------|------|
-| **`self-hosted` + `macOS` runner** | 所有设备类 job 统一调度到当前开发 Mac |
-| **Android 与 iOS 双平台可见** | required PR/main 路径必须分别租约一台 Android 与一台 iOS 模拟器或真机；任一平台 job 缺席、跳过或失败，或 aggregation 未成功，矩阵都直接 `GATE_BLOCK` |
-
-### Prod-Sim 手动准入的独立前提
-
-`prod-sim-manual-admission.yml` 使用 `prod-sim-admission` GitHub Environment，
-只生成 `nonPromotable=true` 的隔离预演证据，不构成 Prod 发布或 promotion 证据。
-
-| 配置位置 | 名称 / 路径 | 约束 |
-|----------|-------------|------|
-| `prod-sim-admission` Environment variable | **PROD_SIM_SSH_MANAGEMENT_HOST** | 必须是裸 SSH host（域名或 IPv4），不得包含 scheme、端口、用户名、路径或空白 |
-| self-hosted runner 本地文件 | **`~/.ssh/quwoquan-prod/prod-edge-svc`** | `prod-edge-svc` 私钥，必须为普通文件且 mode 精确 `0600` |
-| self-hosted runner 本地文件 | **`~/.ssh/quwoquan-prod/prod-service-svc`** | `prod-service-svc` 私钥，必须为普通文件且 mode 精确 `0600` |
-
-上述两个私钥是 runner-local 运维凭据，不是 GitHub Secret，也不得进入仓库、
-Actions Artifact 或日志。缺 host、缺任一 key、权限漂移或 source SHA 不可达
-`main` 时 workflow 必须 fail closed。
-
----
-
-## 七、远端 Gamma（已退役）
-
-远端 ECS gamma onebox 部署已退役，所有 `GAMMA_ECS_*` secret/var（`GAMMA_ECS_SSH_KEY`、`GAMMA_ECS_PASSWORD`、`GAMMA_ECS_HOST`、`GAMMA_ECS_REMOTE_DIR`、`GAMMA_ECS_CONTAINER_REGISTRY_MIRROR`、`GAMMA_ECS_*_TIMEOUT_SECONDS` 等）均不再使用。
-
-- `gamma` 仅本地（local-gamma mirror），本地 left-shift 验证不需要任何远端 secret。
-- 真实远端发布、就地升级与集成 / curated 媒体路由复验统一由 prod `canary` rollout stage 承接（见第八节 `deploy-prod-auto.yml`）。
-- prod 远端访问统一走**按平面 SSH 凭据**（见第八节），不得复用任何 `GAMMA_ECS_*` 命名，亦不再使用单一全权 `PROD_KUBECONFIG`。
-
----
-
-## 八、Prod Hosted Deploy（deploy-prod-auto.yml）
-
-PR/Delivery 的打包门分两层：Alpha/Beta/Gamma 使用临时部署根真实执行 hermetic
-package；Prod 只执行 fail-closed contract、artifact isolation、OCI evidence 与 purity
-测试，不注入虚构法务或签名事实，也不形成 active candidate。`main` 发布事务必须在
-真实 `stackctl package --env prod --target prod-hosted` 后立即执行 packaging verify；
-真实 legal/signing/release evidence 任一缺失都会阻断，独立的
-`verify-prod-hosted-runtime-readiness` 只用于 live legal/health/SSH plane 诊断，不是构包
-或发布准出回执。
-
-> 远端唯一托管目标为 `prod-hosted`（backend=ssh-hosted，与原 gamma 同台 ECS，rootless podman compose）。
-> 已**退役** `PROD_KUBECONFIG` 单一全权凭据，改为按 `edge / media / service / data` 四平面去 root 隔离的 SSH 凭据。
-> 访问隔离单一真相源：`quwoquan_ops/environments/prod/access-isolation.yaml`。
-
-### 必须配置
-
-| Secret | 用途 |
-|--------|------|
-| **PROD_EDGE_SSH_KEY** | `edge` 平面账号 `prod-edge-svc` 的 SSH 私钥（realtime-gateway / rtc-service） |
-| **PROD_MEDIA_SSH_KEY** | `media` 平面账号 `prod-media-svc` 的 SSH 私钥（livekit-sfu / coturn） |
-| **PROD_SERVICE_SSH_KEY** | `service` 平面账号 `prod-service-svc` 的 SSH 私钥（各第一方服务自治 workload） |
-| **AI_CI_SHADOW_TOKEN** | 仅可调用脱敏 CI 建议端点的短期只读 token；不得拥有仓库、门禁、部署或云资源权限 |
-| **PROD_PROMETHEUS_URL**（Environment variable） | 生产 Prometheus API base URL，供 `stackctl deploy` 自动回读 error rate/P95/Redis error rate |
-| **PROD_ALERTMANAGER_URL**（Environment variable） | 生产 Alertmanager API base URL，供 full rollout 后 canonical soak 证明无 active firing alerts |
-| **PROD_{EDGE,SERVICE}_SSH_KEY_REFERENCE**（Environment variable） | 凭据管理系统中的不可变安全引用；不得填写私钥、token 或 runner 本地路径 |
-| **PROD_{EDGE,SERVICE}_SSH_KEY_PUBLIC_DIGEST**（Environment variable） | 对规范化 SSH 公钥 bytes 的 `sha256:` 摘要，必须与运行时私钥导出的公钥一致 |
-| **PROD_{EDGE,SERVICE}_SSH_KEY_ISSUER**（Environment variable） | 凭据签发方标识 |
-| **PROD_{EDGE,SERVICE}_SSH_KEY_EXPIRES_AT**（Environment variable） | 带时区的凭据到期时间；过期或缺失会阻断 hosted soak receipt |
-| **PROD_SERVICE_NETWORK**（prod-hosted 主机变量） | Prometheus/Alertmanager/OTel Collector 加入的 service plane 共享 rootless network 名称 |
-| **OTEL_EXPORTER_OTLP_ENDPOINT**（prod-hosted 主机变量，可选） | 服务 trace 的 OTLP/HTTP 接收端，必须是带 scheme 的绝对 URL（`http://host:port` 或 `https://host:port`，scheme 决定是否加密传输，缺 scheme 服务判否）；未设置时使用共享网络内 `http://otel-collector:4318` |
-| **PROD_OPS_OIDC_ISSUER**（Environment variable） | 运维运营 Portal 的生产 OIDC issuer（`build_portal_release.py` 构建期注入） |
-| **PROD_OPS_OIDC_CLIENT_ID**（Environment variable） | Portal 生产 OIDC 公共 client id（SPA，非机密） |
-| **PROD_OPS_OIDC_AUDIENCE**（Environment variable） | Portal 与 `product-ops-service` / `platform-ops-service` 共用的生产控制面 API audience |
-| **PROD_OPS_OIDC_SCOPE**（Environment variable） | IdP 为 Portal client 登记的最小 operator scope 集；必须包含 `openid` 与菜单所需权限 |
-| **OPS_OIDC_ISSUER / OPS_OIDC_AUDIENCE / OPS_OIDC_JWKS_URL**（prod-hosted 主机变量） | 两个 Ops 服务的服务端 OIDC 验签配置；任一缺失时 production composition 拒绝启动 |
-| **ALERT_INGEST_TOKEN**（prod-hosted 主机变量） | Alertmanager → platform-ops-service 告警回流 ingest 的机器 token；与观测栈 `ALERT_INGEST_TOKEN_SECRET_FILE` 内容一致 |
-| **RUNTIME_LOG_INGEST_TOKEN**（prod-hosted 主机变量） | 云侧服务日志上云内部通道（各服务 → product-ops `/ops/internal/runtime-logs:ingest`）的机器 token；服务端 fail-closed |
-| **PROD_RELEASE_STATE_DIR**（Environment variable） | Prod runner 的可删除 hosted-ledger 回读缓存目录；不作为发布真相源 |
-| **PROD_BACKUP_RECOVERY_RECEIPT**（Environment variable） | 当前有效的 hosted 备份与隔离恢复回执路径；校验失败或过期时阻断发布 |
-| **PROD_ROLLBACK_DRILL_RECEIPT_ID**（Environment variable） | 已成功真实回滚的 hosted ledger receipt SHA-256 id；发布前必须从 service plane 按 id 回读并验真 |
-| **PROD_PROVIDER_EVIDENCE_REF**（Repository variable） | 受控 Provider conformance 原始证据的 exact GHCR OCI digest ref；Delivery runner 只按 digest 回读 |
-| **PROD_PROVIDER_EVIDENCE_DIGEST**（Repository variable） | 上述 Provider evidence OCI 的 `sha256:...` transport digest，必须与 ref 一致 |
-| **RELEASE_USER_ACCEPTANCE_EVIDENCE_REF**（Repository variable） | 与待发布 Git tree、ContractGraph 和候选制品内容摘要一致的真实 Remote `user_acceptance` 证据 exact GHCR OCI digest ref；禁止用 contract smoke 代替 |
-| **RELEASE_USER_ACCEPTANCE_EVIDENCE_DIGEST**（Repository variable） | 上述真实 Remote `user_acceptance` OCI 的 `sha256:...` transport digest，必须与 ref 一致 |
-
-### 说明
-
-- 每个 GitHub Secret 保存 **OpenSSH/PEM 私钥原文**（含 `BEGIN ... PRIVATE KEY`），不是文件路径。workflow 必须在 `$RUNNER_TEMP` 以 `0600` 权限一次性物化，并仅通过 `<SSH_KEY_SECRET>_FILE` 交给发布 CLI；CLI 不把原文或本地缓存当作 hosted authority。
-- `PROD_SSH_HOST` 属于受限管理面，必须单独注入；禁止从面向 App 的
-  `prod-hosted.publicBases.api` 推导。
-- `AI_CI_SHADOW_ENDPOINT` 是 repository variable，必须是无凭据的 HTTPS URL；
-  对应 shadow job 不在候选制品、四环境或 Prod 晋级的依赖链中，输出仅为
-  canonical `AiCiAdvisory`，失败不得修改任何确定性门禁结果。
-- `deploy-prod-auto.yml` 在真实发布（`dry_run != true`）前会调用 `quwoquan_ops/cli/prod/validate_prod_plane_credentials.py` 按 rollout stage 硬校验对应平面凭据；缺失/非法即硬失败。生产灰度只是 `prod` 的 rollout stage，不存在第二个 Prod workflow 或环境。
-- `deploy-prod-auto.yml` 的 dry-run 同样读取托管 ledger、真实回滚演练和备份恢复证据；三者缺一时停在 `candidate-ready`，不得生成 `deployable` 或伪造 Prod 回执。
-- mainline `CiTimingSummary` 由最终 summary job 以 exact GHCR OCI digest 发布，并使用 `PROD_SERVICE_SSH_KEY` 写入 `/home/prod-service-svc/stack/ci-timing-ledger` 的独立 append-only authority；该 authority 不复用 Prod rollout CAS。
-- hosted timing authority 必须由运维预先执行 `hosted_ci_timing_ledger.py --action initialize` 建立 marker。workflow 只有 bind/query 路径，缺 marker、SSH、exact OCI digest 或读后不一致均 `GATE_BLOCK`；三天 Actions Artifact 只是诊断副本。
-- `quwoquan_ops/cli/prod/deploy_to_prod.sh` 按平面账号 `prod-<plane>-svc` 自登录，`podman compose` 拉起本平面 governedWorkloads + rollout 等待 + 失败回滚；**不再允许**凭据缺失时以 warning 形式跳过并返回成功。
-- `PROD_KUBECONFIG` 已退役：一旦检测到该变量被注入，`deploy_to_prod.sh` 与凭据校验脚本都会直接硬失败，禁止 kube 路径复活。
-- `PROD_OPS_SSH_KEY`（relay）与 `PROD_DATA_SSH_KEY`（readonly audit）只在本地 bootstrap / 审计场景下按需生成，不属于当前 GitHub Actions 发布最小 secret 集。
-- 账号一次性创建见 `quwoquan_ops/cli/prod/bootstrap_prod_plane_accounts.sh`（去 root、rootless podman、独立 home/compose 根/credentials）。
-- `canary` 先取 candidate 服务池单实例验证（承接原远端 gamma 验证职责），通过后依次推进 `5/20/50/100`；candidate 与 stable 服务池共享同一物理 ECS 为成本驱动保留项。
-- 非 dry-run 发布禁止使用 workflow 输入中的 SLO 数字；`stackctl deploy` 必须通过
-  `PROD_PROMETHEUS_URL` 查询生产窗口，并由
-  `quwoquan_ops/policies/config-release/slo_thresholds.yaml` 唯一决定
-  continue/pause/rollback。
-- 观测栈启动还需要 rootless 主机 Secret 文件
-  `ALERTMANAGER_WEBHOOK_SECRET_FILE`；通知 URL 不进入 GitHub 仓库或 workflow 日志。
-
----
-
-## 九、项目结构与路径
-
-```
-├── quwoquan_service/     # Go monorepo + recommendation-service (Python)
-├── quwoquan_app/         # Flutter 应用
-├── quwoquan_service/services/*/environments/{alpha,beta,gamma,prod}/deploy/
-├── quwoquan_ops/environments/{alpha,beta,gamma,prod}/
-├── quwoquan_ops/external/{coturn,livekit}/
-└── .github/workflows/
-    ├── delivery-gate.yml
-    ├── service_pipeline.yml
-    ├── app_pipeline.yml
-    ├── pre-release-gate.yml
-    ├── domain-governance.yml
-    ├── deploy-prod-auto.yml
-    └── app-env-device-matrix-self-hosted.yml
+```text
+stackctl deploy --target prod-hosted --stage canary|5|20|50|100
 ```
 
----
+顺序推进五个 stage。每阶段必须封存 activation、health、SLO、placement 与 readback facts；失败只回滚到 hosted ledger 证明仍存在且兼容的 previous stable exact digests，builder invocation 必须为 0。terminal released fact 与只读 `PostReleaseSoakFact` 分离。
 
-## 十、Domain Governance
+现行 workflow 必须先物化 stable admission、previous active released ledger、rollback readiness 及其 qualification/material 前驱，并经 `release_control.py prod-admit` 生成 exact `ProdActivationAdmissionFact`，之后才允许正式 mutation。真实 runner credential、每阶段 evidence、terminal 与 soak readback 未满足时不得宣称 Prod 发布完成。
 
-在 GitHub `domain-governance` Environment 配置：
+## 5. 必需 GitHub Environments
 
-| Secret | 用途 |
-|--------|------|
-| `QWQ_DNS_PROVISIONING_API_TOKEN` | 权威 DNS 记录写入凭据，仅供 canonical A/AAAA/CAA/MX/TXT apply |
-| `QWQ_ACME_DNS_API_TOKEN` | DNS-01 challenge 专用凭据，与 provisioning 凭据独立轮换 |
-| `QWQ_PROD_EDGE_IPV4` | 生产 edge 的公网 IPv4；只在 apply 时注入，不入仓库 |
-| `QWQ_TLS_AGE_RECIPIENT` | 证书部署方持有私钥的 age 公钥；CI 只上传加密后的证书包 |
+以下是永久交付链需要的四个 Environment；这里列的是 required configuration contract，不是当前配置证明。
 
-变量名与 workflow 接线是供应商中立的；具体厂商只由
-`quwoquan_ops/environments/domain_governance.yaml` 的 `dnsProvider.kind` 与
-`acme.dnsProvider` 决定，当前现役实现是阿里云云解析（`aliyun-dns` / lego `alidns`）。
-在该实现下两个 DNS 凭据的值形状为 `<accessKeyId>:<accessKeySecret>`，分别对应两个
-独立 RAM 用户。凭据形状由 provider 实现解释，策略只声明「环境变量名 -> 凭据部件名」，
-因此换服务商只需新增 provider 实现，secret 名、策略键与 workflow 都不变。
+### `release-qualification`
 
-zone 标识不是 secret：它就是策略已声明的 `registrableDomain`，再要一份部署时输入
-只会形成第二真相源。ACME 注册邮箱同理不是签发前提——Let's Encrypt 已不要求联系
-邮箱，签发命令不传 `--email`，因此这里不需要任何邮箱。
+- 只允许受信 RC qualification automation 使用；授予 `contents: read`、`id-token: write`、`attestations: write`、`packages: write` 所需最小权限。
+- 必须绑定 immutable RC admission、hosted build-number allocation 与 build/sign/attest identities。
+- 当前 App factory 还引用 `release-signing` Environment；其签名输入必须由 qualification 边界受控，不能变成独立发布入口。
+- 物理设备、Provider、UAT、supply-chain 任一事实缺失或 material/source 不一致即 fail closed。
 
-两个 RAM 用户在授权面上的实际差异只有「是否独立轮换与吊销」：云解析的授权粒度到
-域名为止，无法把 challenge 用户限定在 `_acme-challenge` 前缀，详见下文与 `OPEN-008`。
+### `release-selection`
 
-公网核对使用的两个 DoH 解析器都不属于权威服务商——用服务商自家解析器核对自家写入
-等于自证，门禁会拦。这两个解析器只做只读取证，不构成任何服务商依赖。
+- 只允许唯一 `release-controller`；不得允许普通 `GITHUB_TOKEN`、个人 PAT 或通用 deploy key 绕过 controller identity。
+- 保存 dedicated `RELEASE_CONTROLLER_DEPLOY_KEY`，仅授予创建目标 release tag 所需权限。
+- tag ruleset 必须 create-only，update/delete 全拒绝且无 bypass actor；creator/ruleset API readback 必须绑定刚创建的 tag object。
+- product authority、release authority、active product version train 或 exact qualified RC 任一缺失时不得创建 stable tag。
 
-现役实现下两个 RAM 用户各自的最小权限如下。两者都只勾选「编程访问」，不加控制台
-登录，也不加入任何带 `AliyunDNSFullAccess` 的用户组。
+### `system-backsync`
 
-provisioning 用户（`QWQ_DNS_PROVISIONING_API_TOKEN`）需要 canonical 记录集的读写
-与对账能力：`alidns:DescribeDomainRecords`、`alidns:DescribeDomainRecordInfo`、
-`alidns:AddDomainRecord`、`alidns:UpdateDomainRecord`、`alidns:DeleteDomainRecord`、
-`alidns:SetDomainRecordStatus`，资源限定到 `quwoquan.com` 这一个域名。不要授予
-域名转移、NS 变更、DNS 安全加速或账单相关动作。
+- 只允许 `delivery-gate.yml` 的 post-merge `main` push job 以 `workflow_call` 调用 canonical `system-backsync.yml@refs/heads/main`；不提供手工、定时或 latest/main discovery 第二入口。
+- 输入只接受同一 promotion 的 exact `main_source_seal_ref` / `main_source_seal_digest`、`source_sha` 与 `expected_dev_before`；不得要求 `ProdReleasedFact`、`PostReleaseSoakFact`、生产 SSH 或 hosted Prod ledger。
+- 保存 dedicated `SYSTEM_BACKSYNC_DEPLOY_KEY`，仅授予对 `dev1.0` 的 expected-before、nonforce fast-forward 更新；不得复用 `PROD_SERVICE_SSH_KEY`、开发者 key、release controller key 或通用 PAT。
+- Environment protected variables 必须配置 trusted GitHub App identity：`QWQ_PROMOTION_RECORDER_APP_SLUG` 与正整数 `QWQ_PROMOTION_RECORDER_APP_ID`。backsync 只读 source SHA 上唯一名为 `quwoquan/promotion-admission-handoff/v1` 的 Check Run，并由 canonical `promotion_evidence.py validate-hosted-handoff` 结合对应 workflow run 校验 App、actor、run/ref/digest；旧 Commit Status API/shape 不可接受。
+- `main` branch policy 必须只允许 `dev1.0 -> main` promotion PR，并由 post-merge caller 在 `MainSourceSeal` exact readback 后立即调用 backsync；backsync job 固定 300 秒 timeout、串行执行，equal 幂等，分叉、unknown readback 或 actor/key authority 不可验证时 `GATE_BLOCK`。
+- 当前仓库只声明了 workflow 与本地合同；Environment、dedicated key、Hosted ruleset/system actor 以及真实 post-merge caller/readback 尚无外部配置证明，当前状态仍为 blocked，不能宣称已配置或已完成 300 秒实跑。
 
-challenge 用户（`QWQ_ACME_DNS_API_TOKEN`）只需要 lego 完成 DNS-01 所需的四个动作：
-`alidns:DescribeDomainRecords`、`alidns:AddDomainRecord`、`alidns:UpdateDomainRecord`、
-`alidns:DeleteDomainRecord`，同样限定到 `quwoquan.com`。云解析的 RAM 授权粒度到
-域名为止，无法在授权层把它限定在 `_acme-challenge` 前缀，因此该范围由凭据隔离与
-工具链行为保证，策略侧已如实标注为 `credential-isolation-only`，风险与三条候选收紧
-路径登记在环境拓扑节点的 `OPEN-008`。
+### `production`
 
-`QWQ_PROD_EDGE_IPV4` 填生产 edge 的公网 IPv4；换机时同时改这个 secret 与
-`quwoquan_ops/environments/prod/access-isolation.yaml` 的 `sshHost`，前者是数据面、
-后者是管理面，两者不共享同一份取值。这个地址不是机密（公网 DNS 本就可查），放
-secret 的理由是换机只改注入值、不产生仓库改动。
+- 只接受 stable `ReleaseTagAdmissionFact`；一次发布只产生一次 approval 与一个串行 rollout transaction。
+- job 固定使用受保护的 `[self-hosted, macOS, ARM64]` runner；runner 只能物化已 admission 的 exact OCI digests。
+- 环境审批事实必须来自可认证、可回读的 hosted approval authority；若 GitHub 原生 required reviewers 不可用，不能用 queue/start time、Deployment status 或人工布尔输入替代。
+- production approval、previous stable ledger、rollback readiness、host placement、SLO/Alertmanager readback 或凭据任一不可验证时，必须在首个 mutation 前停止。
 
-写入生产 DNS 记录属于破坏性动作：定时触发只跑 plan 与漂移核对，覆盖或删除现存
-生产记录必须手动 dispatch 并勾选 `applyProductionRecords`，否则 CLI 先行
-`GATE_BLOCK` 且不产生任何 provider 写入。首次下发生产记录不需要该确认。
+## 6. Trusted Apps、keys 与受信输入
 
-收敛的所有权按记录类型划定：地址（`A`/`AAAA`/`CNAME`）与 zone 级授权（`CAA`/`MX`）
-由计划完全拥有，同名同类型的多余值会被清除；`TXT` 是共享类型，收敛只认自己声明的
-`v=spf1` 与 `v=DMARC1`，备案与第三方站点校验令牌不会被占用或删除，只在 receipt 的
-`observedUnmanaged` 里列出。因此在控制台加备案 TXT 是安全的，加第二条 apex A 记录
-不是。
+### GitHub 与 release controller
 
-Workflow 不上传明文私钥；证书包以 age 加密、保留 7 天。DNS apply 与 live DNS
-证据不含 token，保留 30 天。生产证书由 `public-ca-prod` profile 经同一 DNS-01
-自动化签发，不再依赖仓外人工发布面。未注入 `QWQ_PROD_EDGE_IPV4` 时生产地址记录
-保持缺席并在 receipt 的 `pending` 中如实报告，既不写占位值，也不删除现存记录。
+- trusted integration publisher：受信 GitHub App/broker 对 `dev1.0` 执行 expected-old fast-forward CAS；客户端通过 exact HTTPS broker URL 和短期 token 调用，CLI 默认 token 名为 `QWQ_INTEGRATION_PUBLISHER_TOKEN`。该通道保留为执行 Alpha/Beta 准入并签发集成资格的发布通道，但不再是 `dev1.0` 唯一 writer。`integration/` 工作区可用普通认证 Git 凭据把匹配本地 `refs/heads/dev1.0` non-force fast-forward 推到远端同名分支；缺 before/after OID、ancestry authority 不可用、非快进、force/delete 或来源不匹配必须阻断。此 direct push 只提交源码，不签发 `integrationEligibility`、Alpha/Beta/Gamma、`IntegrationQualificationFact`、promotion、release 或 Prod authority。
+- managed system actor：promotion 后由 Delivery Gate 将 exact `MainSourceSeal` ref/digest、sealed `source_sha` 与 `expected_dev_before=source_sha` 传给 reusable system backsync；后者只执行 `main -> dev1.0` expected-before nonforce fast-forward CAS 并 exact readback。分叉、unknown outcome 或 actor identity 不可证明时零写停止。
+- release controller：`RELEASE_CONTROLLER_DEPLOY_KEY` 必须是独立、最小权限、可轮换的 SSH key，并与 hosted creator identity/ruleset readback 对应；不能复用开发者 key。
+- production approval ingress：受控 GitHub App installation + webhook secret。必须先对 raw request bytes 校验 `X-Hub-Signature-256`，再 append request/approved 事件；重复 delivery 不同 payload、乱序、自批或身份映射漂移全部拒绝。
 
----
+### RC build/sign/attest
 
-## 十一、配置步骤
+当前 `app_pipeline.yml` 实际读取以下 `release-signing` secrets；缺失时 Android 产品必须 fail closed：
 
-1. 进入仓库 **Settings → Secrets and variables → Actions**。
-2. 点击 **New repository secret**。
-3. 按上述各 Workflow 表格添加所需 Secrets。
-4. 保存后，对应 push/PR/tag 或手动触发时将使用新 Secrets。
-5. 若已在本机生成 prod 平面私钥，可直接自动同步并清理退役项：`bash quwoquan_ops/cli/prod/setup_prod_plane_ssh_access.sh --mode all --include-relay --include-readonly --github-sync --github-prune-obsolete-secrets`
+- `QWQ_ANDROID_RELEASE_KEYSTORE_B64`
+- `QWQ_ANDROID_RELEASE_STORE_PASSWORD`
+- `QWQ_ANDROID_RELEASE_KEY_ALIAS`
+- `QWQ_ANDROID_RELEASE_KEY_PASSWORD`
+- `QWQ_ANDROID_EXPECTED_SIGNING_CERTIFICATE_SHA256`
+- `QWQ_ANDROID_NONPROD_GOOGLE_SERVICES_JSON`
+- `QWQ_ANDROID_PROD_GOOGLE_SERVICES_JSON`
+- `QWQ_APP_RUNTIME_CONFIG_PROD_TRUSTED_PUBLIC_KEYS_JSON`
 
-**参考**：`quwoquan_ops/environments/prod/access-isolation.yaml`、`quwoquan_ops/environments/prod/rollout/stages.yaml`。
+当前 App factory 同时读取这些非机密 Environment variables：
+
+- `PROD_OPS_OIDC_ISSUER`
+- `PROD_OPS_OIDC_CLIENT_ID`
+- `PROD_OPS_OIDC_AUDIENCE`
+- `PROD_OPS_OIDC_SCOPE`
+
+GitHub OIDC、GHCR write/read 与 attestation signer identity必须有受信策略校验。iOS 最终签名/分发凭据尚无当前 workflow 中的正式 secret 命名与接线；不得虚构名称或用 unsigned `.app` 代替最终 iOS package acceptance。
+
+### Prod runner-local SSH keys
+
+`deploy-prod-auto.yml` 当前没有直接读取自定义 Actions SSH secret。正式 `prod-hosted` 运行应由受保护 runner 按 `quwoquan_ops/environments/prod/access-isolation.yaml` 使用本地 keyring 或 ssh-agent；私钥不能进入仓库、Actions Artifact 或日志。
+
+默认 runner-local keyring 是 `~/.ssh/quwoquan-prod/`，文件按 Linux service account 命名：
+
+- `prod-edge-svc` 对应 `PROD_EDGE_SSH_KEY`；
+- `prod-media-svc` 对应 `PROD_MEDIA_SSH_KEY`；
+- `prod-service-svc` 对应 `PROD_SERVICE_SSH_KEY`；
+- `prod-data-svc` 对应只读审计 `PROD_DATA_SSH_KEY`；
+- `prod-ops` 对应仅 bootstrap/凭据分发使用的 `PROD_OPS_SSH_KEY`。
+
+正式 rollout 只要求当前 stage/placement 实际涉及的 read-write 平面。每把运行 key 还必须有安全引用、签发方、带时区有效期与规范化公钥 SHA-256 metadata，并与私钥导出的公钥一致。当前 workflow 尚未展示这些值的安全注入与 validator 接线，因此不能把本节当作“runner 已就绪”的证明。
+
+## 7. 必需 hosted authorities
+
+以下 authority 必须 create-once、可认证、可 exact-byte readback，且后继只按 digest 引用：
+
+- GitHub refs、promotion PR/check、branch/tag ruleset、creator 与 main reachability readback；
+- trusted integration publisher broker 的 CAS before/after/other 终态；
+- Environment Ops 的 DSSE signer/key trust 与 Alpha/Beta/Gamma evidence store；
+- promotion approval/threads/boundary/ruleset facts 和永久全样本 timing ledger；
+- RC selection、monotonic artifact build-number allocator、SBOM/provenance/signing attestations 与 qualification evidence store；
+- ProductVersionManifest 对应的 previous-stable import 或 initial-release authority、product authority、release authority；
+- hosted human authority：真实 PostgreSQL、独立 provider signing key、正式 OIDC issuer/client/JWKS/groups、至少两个不同 MFA principals，以及 GitHub App webhook append-only ledger；
+- Prod service-plane append-only ledger：previous active released digests、rollback readiness、每 placement/stage evidence、terminal released fact 与独立 soak observations；
+- GHCR/OCI registry 的 digest existence、signature、OIDC issuer/workflow identity 与 readback authority。
+
+这些 authority 不能由本地 JSON、聊天确认、Review PASS、workflow conclusion、Actions Artifact 或 repository variable 替代。
+
+## 8. 当前必须 fail closed 的外部前提
+
+截至当前仓库快照，以下事实不能从源码与 workflow 文件推导为已闭合：
+
+- `quwoquan_ops/policies/product_version.yaml` 的 release train 为 `inactive`，previous stable 为 `not_imported`，initial release authority 为 `absent`，activation 为 `blocked`；因此 RC/stable 发布链尚未激活。
+- Hosted branch protection/ruleset、唯一 promotion binding、system actor 与八条允许 refs 的真实 API readback 尚未提供；在此前 `hostedProtectionVerified=false`、`formalProd=false`。
+- 外部查询 `system-backsync` Environment 当前仍返回 404，表明该 Environment 不存在；仓库内 post-merge reusable caller wiring 已接通；`QWQ_PROMOTION_RECORDER_APP_SLUG` / `QWQ_PROMOTION_RECORDER_APP_ID`、仅写 `dev1.0` 的 `SYSTEM_BACKSYNC_DEPLOY_KEY`、Hosted ruleset/system actor 与一次真实 300 秒内 exact ref readback 仍未配置或未提供；源码中的合同不能证明这些 Hosted 配置已经存在。
+- trusted publisher 的真实 GitHub App/broker credential、跨主机协调与 Hosted ref CAS/readback 尚缺外部证明。
+- RC workflow 尚未真实闭合 service/app factory dispatch、hosted build-number CAS、最终 Android/iOS 签名包、双物理平台 acceptance、Provider、Remote UAT 与 supply-chain facts。
+- release controller 尚未闭合 creator/ruleset readback、RC/stable admission 发布和不可变 tag 保护的真实 Hosted 证据。
+- production approval authority 所需 GitHub App installation/webhook secret、hosted DB/provider signing key、OIDC/MFA principals 与 durable request/approved readback 尚缺正式 UAT evidence。
+- `prod-hosted` 多 placement 真实 SSH rollout、SLO gate、故障注入、previous-stable 自动回滚与 terminal/soak readback 尚缺生产演练证据。
+- 当前 Prod workflow 的 admission output 与 runner credentials 仍为未闭合接线，不能启动正式 mutation。
+- 正式 iOS identity、签名/分发接线与物理设备验收尚未闭合；Android 外部平台登记也必须与冻结 applicationId 和签名证书摘要一致。
+
+任一前提缺失、过期、签名错误、source/tree/material/tag/digest/authority 漂移或 readback 不一致，都必须保留首个 typed blocker，不得降级为 warning 或借用历史 receipt。
+
+## 9. 配置与核对原则
+
+1. 先在 Hosted 系统建立独立 Apps、Environments、keys、rulesets 与 append-only authorities，再以只读 API/readback证明实际状态。
+2. 只把当前 workflow 明确读取的 secret/variable 配置到对应 Environment；尚无接线的 credential 先保持外部 blocker，不创建同义变量或“备用”入口。
+3. 所有 private key/token 只在最小权限边界短时物化；日志、Artifact、receipt 与仓库只能记录不可逆 public digest/reference。
+4. 首次 formal release 前，必须完成从 qualified RC 到 stable admission、一次 production approval、exact-digest rollout、failure rollback 与 soak 的同一 candidate真实演练。
+5. 任何文档、测试或 workflow 只能陈述已由当前 exact readback证明的层级；本地 contract PASS 不等于 Hosted、runtime、release 或 UAT 闭环。

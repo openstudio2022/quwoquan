@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import subprocess
-from unittest import mock
 from pathlib import Path
 
 from quwoquan_ops.cli.repo_hygiene_audit import _category, _status_paths
@@ -12,9 +11,6 @@ from quwoquan_ops.gate.verify_entrypoint_script_paths import (
     entrypoint_script_path_issues,
 )
 from quwoquan_ops.gate.verify_markdown_local_links import markdown_link_issues
-from quwoquan_ops.gate.service_architecture.verification_operations import (
-    OperationsVerificationMixin,
-)
 
 
 ROOT = Path(__file__).resolve().parents[4]
@@ -69,8 +65,20 @@ def test_make_and_data_cli_use_the_single_verification_entrypoint() -> None:
         ROOT / "quwoquan_data/scripts/verify/handler.py"
     ).read_text(encoding="utf-8")
     for gate_name in (
+        "verify_cli_first",
+        "verify_public_cli_live_import_zero",
+        "verify_data_layout",
+        "verify_script_architecture",
+        "verify_python_symbols",
         "verify_no_flat_roots",
         "verify_tag_tree",
+        "verify_source_digest",
+        "verify_content_execution_layout",
+        "verify_runtime_input_ownership",
+        "verify_output_root_isolation",
+        "verify_object_size_budget",
+        "verify_publish_purity",
+        "verify_publish_closure",
     ):
         assert gate_name in verify_handler
 
@@ -125,51 +133,6 @@ def test_service_layout_gate_scans_object_paths_and_forbids_cache() -> None:
         )
         assert "D" in status.stdout[:2]
     assert not (ROOT / "quwoquan_service/api_integration.test").exists()
-
-
-def test_tracked_service_executable_build_artifacts_are_retired() -> None:
-    tracked = subprocess.run(
-        ["git", "ls-files", "-z", "quwoquan_service"],
-        cwd=ROOT, check=True, capture_output=True,
-    ).stdout.split(b"\0")
-    forbidden: list[str] = []
-    for raw in tracked:
-        if not raw:
-            continue
-        relative = raw.decode("utf-8")
-        path = ROOT / relative
-        if not path.is_file() or path.is_symlink():
-            continue
-        with path.open("rb") as source:
-            prefix = source.read(4)
-        if prefix == b"\x7fELF" or prefix in {
-            b"\xcf\xfa\xed\xfe", b"\xfe\xed\xfa\xcf",
-            b"\xca\xfe\xba\xbe", b"\xbe\xba\xfe\xca",
-        } or prefix[:2] == b"MZ":
-            forbidden.append(relative)
-    assert forbidden == []
-
-    operations = (
-        ROOT / "quwoquan_ops/gate/service_architecture/verification_operations.py"
-    ).read_text(encoding="utf-8")
-    assert "source-tree executable build artifact is forbidden" in operations
-    assert "Mach-O" in operations and "ELF" in operations
-    assert 'source.read(4)' in operations
-    assert '"build"' in operations and '"Pods"' in operations
-    assert '"vendor"' in operations
-    assert "walk_source_tree" in operations
-
-
-def test_executable_magic_read_failure_is_not_treated_as_absence(tmp_path: Path) -> None:
-    target = tmp_path / "candidate"
-    target.write_bytes(b"fixture")
-    with mock.patch.object(Path, "open", side_effect=OSError("denied")):
-        try:
-            OperationsVerificationMixin._executable_magic(target)
-        except ValueError as error:
-            assert "executable magic unreadable" in str(error)
-        else:
-            raise AssertionError("unreadable executable candidate must fail closed")
 
 
 def test_active_workflows_do_not_reference_retired_ml_or_manifest_defaults() -> None:

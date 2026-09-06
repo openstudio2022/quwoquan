@@ -1,13 +1,14 @@
 {
   "_governance": {
     "owner": "delivery-gate",
-    "reason": "PR 门禁预算必须由同一 SHA 的 GitHub official calendar 与 job DAG 证据校准；精确 hosted 证据证伪旧值时允许显式回正并同步结构优化，禁止无证据静默放宽",
-    "expires_when": "首个全绿同 SHA hosted run 完成后按官方 job timing 复采样；后续仅随分片与缓存优化下调，或由新的精确反证重新裁决",
-    "measure": "按 gate/profile 声明 timingPolicy、budgetSeconds / hardFailSeconds 与关键路径构成；release_sla 的完整 telemetry 超过 hardFailSeconds 投影 GATE_BLOCK，telemetry_advisory 的缺失或超预算只投影 PR_WARN，不覆盖功能 PASS/FAIL。"
+    "reason": "本地质量生产、GitHub evidence-only promotion 与 stable-tag Prod 三个日历独立度量；旧的单体 03/04/05/07 DAG 已删除。",
+    "expires_when": "never; permanent responsibility-specific timing contract",
+    "measure": "03 使用 promotionReadyAt 到 mainReadbackAt 的永久 timing ratchet；RC qualification 与 stable-tag Prod 各自从显式请求到 terminal fact，产品审批等待单列且不混入 promotion。",
+    "superseded_measure": "旧口径把 Delivery 重型源码测试、04 Gamma smoke、05 设备矩阵和 07 main-push 自动发布混入同一 Actions DAG，预算分别 1500/180/3600/600 秒；本次原子删除旧 evaluator，改为职责分离的永久度量。"
   },
-  "softBudgetSeconds": 600,
+  "softBudgetSeconds": 300,
   "hardFailSeconds": 1800,
-  "promotionCutoffSeconds": 1500,
+  "promotionCutoffSeconds": 300,
   "modeScope": {
     "prod-hosted": {
       "supportedModes": [],
@@ -56,92 +57,36 @@
       "timingPolicy": "release_sla"
     },
     "03.delivery_gate": {
-      "budgetSeconds": 1500,
+      "budgetSeconds": 300,
       "hardFailSeconds": 1800,
-      "criticalPath": "workflow run created_at -> candidate evidence completed_at, including queue and setup waits",
-      "machinePath": "common_governance + topology_regression + max(code_health_delta, quwoquan_service, quwoquan_service_packaging, quwoquan_service_coverage, search_contract_smoke, quwoquan_app_static, quwoquan_app_tests, quwoquan_app_serial, quwoquan_app_coverage, quwoquan_data, quwoquan_data_tests, ops_portal)); Data verify and all Data test shards run on every PR/release Delivery while push trigger-stop runs only fail-fast governance, topology, and code health; pull_request runs App static/tests in the same synthetic-candidate DAG while serial/full coverage/packaging remain release-call only; produce_release_evidence appends release_evidence after the fail-fast governance/topology/fanout chain converges",
-      "phaseBudgetsSeconds": {
-        "code_health_delta": 180,
-        "topology_regression": 120,
-        "quwoquan_service": 1500,
-        "quwoquan_service_packaging": 1500,
-        "quwoquan_service_coverage": 1500,
-        "search_contract_smoke": 600,
-        "quwoquan_app_static": 1200,
-        "quwoquan_app_tests": 1500,
-        "quwoquan_app_serial": 1500,
-        "quwoquan_app_coverage": 1500,
-        "quwoquan_data": 600,
-        "quwoquan_data_tests": 1500,
-        "ops_portal": 600
-      },
-      "timingPolicy": "telemetry_advisory"
+      "criticalPath": "promotionReadyAt -> mainReadbackAt; includes hosted queue, immutable evidence verification, merge and exact ref readback",
+      "machinePath": "promotion_verify only; no build, source test, packaging, ABG, Provider live, device or self-hosted job",
+      "phaseBudgetsSeconds": {},
+      "timingPolicy": "promotion_timing_ratchet",
+      "timingAuthority": "quwoquan_ops/policies/promotion_timing_ratchet.yaml",
+      "diagnosticSummaryOnly": true
     },
-    "04.pre_release_gate_pr": {
-      "budgetSeconds": 180,
-      "criticalPath": "gamma_environment_ready + max(assistant_api_protocol_smoke, chat_avatar_api_probe)",
+    "06.rc_qualification": {
+      "budgetSeconds": 3600,
+      "hardFailSeconds": 7200,
+      "criticalPath": "explicit admitted RC -> build/sign/attest once -> final package/provider/UAT/supply-chain QualificationFact",
+      "machinePath": "release-qualification factory and external package validator; asynchronous after main",
       "phaseBudgetsSeconds": {
-        "gamma_environment_ready": 30,
-        "assistant_api_protocol_smoke": 60,
-        "chat_avatar_api_probe": 90
+        "build_sign_attest_once": 3600,
+        "external_package_acceptance": 3600
       },
       "timingPolicy": "release_sla"
     },
-    "05.app_env_device_matrix_pr": {
-      "budgetSeconds": 3600,
-      "hardFailSeconds": 7200,
-      "criticalPath": "workflow run created_at -> device evidence aggregation completed_at, including queue and setup waits",
-      "machinePath": "beta_stack + max(android_device_matrix, ios_device_matrix) + mobile_matrix",
-      "phaseBudgetsSeconds": {
-        "beta_stack": 1200,
-        "android": 5400,
-        "ios": 5400,
-        "aggregation": 1200
-      },
-      "timingPolicy": "telemetry_advisory",
-      "profileTiming": {
-        "pr_light": {
-          "policy": "telemetry_advisory",
-          "hardFailSeconds": 5400
-        },
-        "manual_full": {
-          "policy": "telemetry_advisory",
-          "hardFailSeconds": 7200
-        },
-        "release_candidate": {
-          "policy": "telemetry_advisory",
-          "hardFailSeconds": 7200
-        },
-        "mainline_auto_prod": {
-          "policy": "release_sla",
-          "hardFailSeconds": 7800
-        },
-        "nightly_full": {
-          "policy": "telemetry_advisory",
-          "hardFailSeconds": 7200
-        }
-      }
-    },
-    "07.mainline_auto_prod": {
-      "budgetSeconds": 600,
-      "hardFailSeconds": 1800,
-      "promotionCutoffSeconds": 1500,
+    "07.stable_tag_prod": {
+      "budgetSeconds": 1800,
+      "hardFailSeconds": 3600,
       "rollbackBudgetSeconds": 300,
-      "rollbackDrillMaxAgeSeconds": 2592000,
-      "criticalPath": "workflow run created_at -> Prod full verification completed_at, including queue, setup and official approval waits",
-      "machinePath": "source_context + max(service_pipeline, app_pipeline, delivery_gate) + prepare + max(alpha_stage, beta_device_matrix, gamma_local) + preprod_evidence + prod_rollout_transaction",
+      "criticalPath": "stable ReleaseTagAdmissionFact -> ProdActivationAdmissionFact -> canary/5/20/50/100 -> terminal release or rollback",
+      "machinePath": "tag-bound exact OCI digest activation only; no build, qualification or ABG",
       "phaseBudgetsSeconds": {
-        "source_context": 10,
-        "service_pipeline": 120,
-        "app_pipeline": 120,
-        "delivery_gate": 120,
-        "prepare": 30,
-        "alpha_stage": 60,
-        "beta_device_matrix": 60,
-        "gamma_local": 60,
-        "preprod_evidence": 20,
-        "prod_rollout_transaction": 390,
-        "orchestration_queue": 30
+        "activation_admission": 60,
+        "rollout": 1500,
+        "terminal_readback": 240
       },
       "timingPolicy": "release_sla"
     }

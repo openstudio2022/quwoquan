@@ -489,3 +489,68 @@ def test_report_shape_is_digest_bound_and_ai_has_no_control_authority(tmp_path: 
         "contract-metadata", "config-data", "docs",
     }
     assert not {"promotionDecision", "gateStatus"} & set(json.loads(json.dumps(report)))
+
+
+def merge_fixture(tmp_path: Path) -> tuple[Path, str, str, str]:
+    """base -> (lane edit | other-parent oversized file) -> merge with one authored file."""
+    repo, base = init_repo(tmp_path)
+    git(repo, "checkout", "-q", "-b", "other")
+    write(repo, "quwoquan_ops/ci/inherited.py", "value = 1\n" * 1200)
+    other = commit(repo, "other parent debt")
+    git(repo, "checkout", "-q", "-")
+    write(repo, "quwoquan_ops/ci/lane.py", "LANE = 1\n")
+    commit(repo, "lane work")
+    git(repo, "merge", "-q", "--no-ff", "--no-commit", other)
+    return repo, base, other, git(repo, "rev-parse", "HEAD")
+
+
+def test_merge_candidate_does_not_own_the_other_parent_debt(tmp_path: Path) -> None:
+    repo, base, other, _ = merge_fixture(tmp_path)
+    write(repo, "quwoquan_ops/ci/authored.py", "value = 2\n" * 1200)
+    head = commit(repo, "merge")
+    policy_path = repo / "quwoquan_ops/policies/code_health_policy.yaml"
+
+    unaware = analyze_delta(repo, base=base, head=head, policy_path=policy_path, mode="fast")
+    blocked = {
+        item["path"] for item in unaware["findings"]
+        if item["code"] == "CODE_HEALTH.NEW_FILE_OVER_BLOCK"
+    }
+    assert blocked == {"quwoquan_ops/ci/inherited.py", "quwoquan_ops/ci/authored.py"}
+
+    aware = analyze_delta(
+        repo, base=base, head=head, policy_path=policy_path, mode="fast",
+        merge_parents=[other],
+    )
+    assert aware["mergeParents"] == [other]
+    assert "quwoquan_ops/ci/inherited.py" not in aware["changedPaths"]
+    assert "quwoquan_ops/ci/authored.py" in aware["changedPaths"]
+    assert [
+        item["path"] for item in aware["findings"]
+        if item["code"] == "CODE_HEALTH.NEW_FILE_OVER_BLOCK"
+    ] == ["quwoquan_ops/ci/authored.py"]
+    assert aware["terminal"] == "GATE_BLOCK"
+    assert unaware["evidenceFingerprint"]["digest"] != aware["evidenceFingerprint"]["digest"]
+
+
+def test_merge_parents_are_auto_detected_and_fail_closed(tmp_path: Path) -> None:
+    repo, base, other, _ = merge_fixture(tmp_path)
+    assert git_delta.in_progress_merge_parents(repo) == [other]
+    assert verify_incremental_code_health.resolve_merge_parents(
+        repo, base=base, head="HEAD", working_tree=True
+    ) == [other]
+
+    head = commit(repo, "merge")
+    assert verify_incremental_code_health.resolve_merge_parents(
+        repo, base=base, head=head, working_tree=False
+    ) == [other]
+    assert git_delta.in_progress_merge_parents(repo) == []
+    assert verify_incremental_code_health.resolve_merge_parents(
+        repo, base=base, head=base, working_tree=False
+    ) == []
+
+    with pytest.raises(ValueError):
+        analyze_delta(
+            repo, base=base, head=head,
+            policy_path=repo / "quwoquan_ops/policies/code_health_policy.yaml",
+            mode="fast", merge_parents=["0" * 40],
+        )

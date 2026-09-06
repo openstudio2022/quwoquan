@@ -9,14 +9,14 @@
 ## 1. 用户价值
 
 作为开发、测试或运维角色，
-我希望日常开发在六条长期 lane 分支上并行推进、只经声明的 PR 边合入只承担集成的 `dev1.0`、由 `main` 承接唯一发布，并在 lane 合入或 abort 后保留 worktree 并强制 fast-forward resync，
-从而获得可审计、可恢复且不会把未晋级代码送入 Prod 的交付结果。
+我希望 lane worktree 与 integration 都能在明确文件范围内并行构造 exact candidate，既可由受信 publisher 在本地环境准入后 CAS 更新 `dev1.0`，也可由唯一 integration 工作区以可证明的 non-force fast-forward 普通 push 提交源码，再把具备完整资格链的已集成可用源码快速晋级到 `main`，
+从而既不强迫跨模块修复返回原 worktree，也不让未验字节、并行覆盖或 main 最新状态直接进入 Prod。
 
 ## 2. 范围与非目标
 
 ### In Scope
 
-- `dev1.0` 集成分支、`main` 发布分支与六条长期 lane 分支的唯一角色、合法 PR 边闭集以及白名单外任何分支的禁令。
+- `dev1.0` 集成分支、`main` 可用源码分支与六条长期 lane 分支的唯一角色、合法 promotion 边以及白名单外任何分支的禁令。
 - 人工 direct push、PR head/base、系统 fast-forward backsync 与 Prod source admission 的可观察准入结果。
 - 非法边、非 fast-forward、远端状态不可证明与 SHA 不可达 `main` 时的 fail-closed 终态。
 - GitHub 托管 refs、branch protection/ruleset 与 system actor 权限的只读 readback 和当前有效性证明。
@@ -30,24 +30,20 @@
 ## 3. 行为要求
 
 <a id="req-001"></a>
-### REQ-001 每日合并发布策略
+### REQ-001 分支角色与 scoped candidate
 
-- **分支角色**：本地与远端只允许 `dev1.0`、`main` 与六条长期 lane 分支（`lane/product-mainline`、`lane/data-engineering`、`lane/engineering`、`lane/ops`、`lane/small-fix`、`lane/refactor`）；`dev1.0` 是唯一集成真相源，`main` 是唯一发布真相源，lane 分支是唯一日常开发面。白名单之外的任何临时分支或额外长期分支均非法。
-- **lane 生命周期**：六条固定 lane 由用户裁决立即开放，每条 lane 长期存在且同一时刻至多一个 writer，从 `dev1.0` 派生并只经声明 PR 边回到 `dev1.0`；每轮 integration 或 abort 后 worktree 均 retained，lane 必须 mandatory fast-forward resync 到新的 `dev1.0`，不得 cleanup/delete、force、自动 merge或改写历史。一个 Increment 只有一个 lead lane 与一个原子 PR，跨域协作不拆成多个并行 writer；启用后观察不阻断六车道准入。
-- **工程归属**：本 Story 与 `lane/engineering` 拥有集成、晋级、回同步、发布来源及 `branch_policy.yaml`、gate/hook、worktree/lane governance 的机器实现；`lane/ops` 只拥有发布后运行态编排、环境、观测、runbook、migration、Portal 与 hosted/provider 适配。物理位于 `quwoquan_ops/` 不等于归 `lane/ops`，逐路径边界只读 `lane_ownership.yaml`。
+- 本地与远端只允许 `dev1.0`、`main` 与六条长期 `lane/*`。lane 是长期来源工作面，integration 是跨模块集成工作面；两者都可按不重叠整文件 scope 构造 candidate。lane 仍只推同名 lane；唯一 `integration/` 工作区可从匹配本地 `refs/heads/dev1.0` 以普通认证 Git push 更新远端同名分支，但只允许 non-force fast-forward。
+- `dev1.0` 是唯一集成 ref，接受 `trusted_integration_publisher_cas`、`integration_worktree_fast_forward` 与 `system_fast_forward_backsync` 三条通道；publisher 保留为 exact candidate + Alpha/Beta 准入通道，但不再是唯一 writer。`main` 是最新 source-admitted 源码，只接受 `dev1.0 -> main` promotion PR，不是 Prod source selector。
+- 每个 candidate 必须绑定 expected `origin/dev1.0` parent、exact commit/tree、scope、changed paths、owner、ImpactPlan、source facts 与私有 index identity；scope 外 tree 逐字继承 parent。parent 或 scope generation 漂移使 candidate 和全部环境事实失效。
+- 同一 worktree 可有多个不重叠文件 writer；同文件、父子路径、rename/delete、生成物、Git index/HEAD/ref、环境、设备、package 与外部 mutation 竞争只能有一个 winner。未知 dirty、无 owner 或越界字节不得被隐式纳入 candidate。
 
 <a id="req-002"></a>
-### REQ-002 集成、晋级与回同步准入
+### REQ-002 集成、promotion 与回同步准入
 
-- **集成主路径**：日常开发在 lead lane 分支提交，以 `lane/* -> dev1.0` PR 合入，或在已绑定 `origin/dev1.0` 的 `integration/` 工作区对同名远端做 expected-old 快进合入；同一精确 merge SHA 的 required integration checks 全部成功后，`dev1.0` 成为该增量的集成终态。canonical `integration_branch_activation.state` 为 `bootstrap|active` 闭集，当前成熟仓库为 `active`；active 下 `dev1.0` 接受 lane PR merge、`integration/` 匹配同名快进推送，或受管 system fast-forward backsync。bootstrap 仅允许远端 integration ref 不存在时，由匹配本地 `dev1.0` create 远端 `dev1.0`，且无 release eligibility；它不是永久隐式例外。失败增量只能在 retained lead lane 或 `integration/` 追加修复，不得创建白名单外旁路分支。
-- **发布主路径**：release actor 只从 `dev1.0` 创建以 `main` 为 base 的 promotion PR；required promotion checks 全部成功并合入后，`main` 成为该增量的发布终态。
-- **合法 PR 边**：只允许 `lane/* -> dev1.0` 与 `dev1.0 -> main`；lane 之间的 PR、`lane/* -> main`、人工 `main -> dev1.0`、缺失 head/base 与白名单外分支全部拒绝。
-- **失败身份**：policy/schema 无效为 `OPS.BRANCH.POLICY_INVALID`，PR 边或 ref 非法为 `OPS.BRANCH.REF_NOT_ALLOWED`，非法 direct push 为 `OPS.BRANCH.DIRECT_PUSH_NOT_ALLOWED`，在本地 `main` 提交为 `OPS.BRANCH.INTEGRATION_READ_ONLY`，非 fast-forward 为 `OPS.BRANCH.BACKSYNC_NOT_FAST_FORWARD`，compare-and-swap 漂移为 `OPS.BRANCH.BACKSYNC_CAS_CONFLICT`，Hosted/Git authority 不可读为 `OPS.BRANCH.AUTHORITY_UNAVAILABLE`，Prod source 不可达 `main` 为 `OPS.BRANCH.SOURCE_NOT_MAIN_REACHABLE`；每个 blocker 必须携带 `terminal=blocked` 与按失败类型确定的稳定 recovery，OID、ref、actor 与远端诊断只进入 string context。
-- **本地提交边界**：`main` 始终是只读 worktree；`verify_git_branch_policy.py --local-commit` 对 `main` 返回 `OPS.BRANCH.INTEGRATION_READ_ONLY`。`integration/`（`dev1.0`）与六条 lane 一视同仁允许本地合入提交。
-- **direct push 与 activation 边界**：普通 lane 与 `integration/` 都只允许更新同名远端，不要求一次 push 全部 lane。`integration/` → `origin/dev1.0` 必须是相对远端 tip 的 expected-old 快进。bootstrap 下仅上述 create-only integration 初始化例外通过，已有远端 `dev1.0` 的 bootstrap update 必须拒绝；显式 transition CLI 只能在当前 state 为 bootstrap 时 create-once 写出 untracked evidence、active proposal 与人工提交指令，不得改 tracked policy。tracked policy 经人工提交为 active 后，非匹配源推送 `dev1.0` 仍拒绝；`main` direct push 拒绝。Hosted PR gate 只验证事件提供的 remote head/base 事实，不枚举本地 lane。Actions 与 release governance 必须拒绝缺少合法 promotion 事实的 SHA，在缺少 GitHub 原生保护时不得声称远端 ref 一定未被先行修改。
-- **系统回同步**：promotion 成功后，系统只能以 compare-and-swap 的无 force fast-forward 将 `main` 回同步到 `dev1.0`。两者相等时幂等成功。`dev1.0` 为 `main` ancestor 时允许推进。分叉、`main` 落后、采样后 ref 漂移或 ancestry 不可证明时返回 blocker，ref 保持采样后已确认状态且不得创建临时分支、force、自动 merge 或改写历史。
-- **发布来源**：Prod source 必须是格式精确、可达可信 `origin/main` 且绑定唯一已合并 `dev1.0 -> main` promotion 的 Git SHA；只存在于 `dev1.0`、无法证明 ancestry 或 workflow definition 不来自 `refs/heads/main` 时不得进入发布门。
-- **正式 Prod 边界**：`main` push 只生成发布验证，不执行正式 Prod apply；正式 apply 的 approval、凭据、rollout 与回滚由父 L2 和 `gray-release-to-prod` 拥有，本 Story 只拥有进入该发布门之前的 branch/source admission。
+- trusted publisher 只在 source facts 与 required Alpha/Beta `EnvironmentAcceptanceFact` 均绑定同一 candidate、签名和 cleanup 闭合时，以 expected remote OID 执行一次非 force fast-forward CAS 并 exact readback。唯一 integration 工作区的普通认证 direct push 必须 head/base 均为 `dev1.0`、本地来源精确为 `refs/heads/dev1.0`，并使用 pre-push update line 的 before/after OID 调用 Git ancestry authority；相等可幂等通过，缺 OID、authority 不可用、非快进、force、删除、来源不匹配、lane→dev、任意 `main` direct push、未知 remote/ref 或 unknown result 盲重试全部拒绝。
+- CAS loser必须从新parent重建candidate与环境事实；网络结果按remote=`before|after|other`回读收口，不得stash、reset、自动merge或吸收其他writer字节。
+- `dev1.0 -> main` 是唯一 promotion PR 边，只接受 current dev head 的 `IntegrationQualificationFact`。promotion成功后，受管system actor仅以expected-before做`main -> dev1.0`无force fast-forward backsync；equal幂等成功，分叉或漂移阻断。
+- integration worktree direct fast-forward push 仅把源码提交到 `dev1.0`，不签发 `integrationEligibility`、Alpha/Beta/Gamma、`IntegrationQualificationFact`、promotion、release 或 Prod authority。需要 main promotion/发布时仍必须走 exact candidate + Alpha/Beta（可由 publisher 通道）、current dev head Gamma 与既有后续资格链。main合入结果也仅为`source-admitted`；Prod source admission必须从不可移动正式SemVer标签的AdmissionFact解析可达main的peeled commit和exact OCI digests；dev-only、RC-only、main HEAD、裸SHA或缺唯一promotion绑定均不得进入Prod。
 
 ## 4. 契约引用
 
@@ -57,28 +53,27 @@
 ## 5. 验收场景
 
 <a id="gwt-001"></a>
-### GWT-001 集成与发布 PR 边
+### GWT-001 scoped candidate与受信集成发布
 
-- GIVEN policy 声明 `integration=dev1.0`、`release=main`、六条 `lane/*` 长期 writer 分支与 `lane/` 前缀，且输入包含完整 event、actor、head/base 与 ref OID。
-- WHEN gate 评估长期 refs、PR 或 direct push 的准入。
-- THEN bootstrap 只接受远端 ref 不存在时匹配本地 `dev1.0` 的 create-only 初始化；active（当前 canonical state）接受 `lane/* -> dev1.0` PR merge、`integration/` 对 `origin/dev1.0` 的匹配 expected-old 快进推送，或可证明的 system fast-forward backsync。匹配同名远端的单条普通 lane push、`lane/* -> dev1.0` PR 与 `dev1.0 -> main` PR 合法；lane push 不要求 all lanes，Hosted PR 只验证 remote 事件事实。
-- AND 白名单外任何分支、lane 之间的 PR、`lane/* -> main`、人工 `main -> dev1.0`、缺失 head/base、`main` direct push、bootstrap 对既有 `dev1.0` 的 update、非匹配源推送 `dev1.0`、非快进 matching push、非匹配 lane push 以及非受管 backsync 均返回无 traceback 的 typed blocker；transition evidence 已存在时拒绝覆盖，tracked policy 只能由人提交。
+- GIVEN 两个writer基于同一expected dev parent声明候选scope。
+- WHEN 它们构造并请求发布candidate。
+- THEN 不重叠整文件scope可分别形成只含本scope字节的exact commit；同路径、父子、rename/delete、共享生成物或Git ref竞争只有一个winner。
+- AND source及required Alpha/Beta事实完全匹配的candidate可由trusted publisher CAS写入dev；匹配integration worktree的普通认证push仅在before/after OID可证明non-force fast-forward时写入源码。direct push不产生任何集成、晋级、发布或Prod资格；parent漂移、未知dirty、越界字节、签名或cleanup缺失仍不得冒充publisher准入。
 
 <a id="gwt-002"></a>
-### GWT-002 系统 fast-forward backsync
+### GWT-002 五分钟promotion与system backsync
 
-- GIVEN promotion 已成功，系统取得 `main`、`dev1.0` 的可信 before OID 与当前 readback。
-- WHEN 受管系统身份请求 `main -> dev1.0` backsync。
-- THEN 两 ref 相等时幂等完成，或仅在 `dev1.0` before OID 是 `main` OID 的 ancestor 且 CAS 未漂移时执行无 force fast-forward，并回读 exact after OID。
-- AND 人工调用、错误 ref、force/non-fast-forward、分叉、ancestry 不可证明、权限/网络不可确认或 compare-and-swap 竞态全部 `GATE_BLOCK`，禁止覆盖、自动 merge 或伪造成功回执。
+- GIVEN current dev head已有匹配的IntegrationQualificationFact且main base稳定。
+- WHEN 创建`dev1.0 -> main` promotion并完成merge。
+- THEN 唯一required context只验branch/tree/evidence/approval/ruleset并生成MainSourceSeal，随后system actor以expected-before无forceCAS回同步dev；equal幂等，分叉或漂移零写阻断。
 
 <a id="gwt-003"></a>
-### GWT-003 Prod main reachability
+### GWT-003 main可用源码与Prod版本选择分离
 
-- GIVEN 输入是精确 Git SHA、可信 `origin/main`、候选身份和已合并 promotion 事实。
-- WHEN Prod source admission 在任何 Prod credential 或 canary 操作前评估候选。
-- THEN 仅当 source SHA 可达 `origin/main`、绑定唯一已合并 `dev1.0 -> main` promotion 且 workflow definition 来自 `refs/heads/main` 时允许进入父能力发布门。
-- AND dev1-only SHA、格式或对象类型错误、ancestry 不可证明、错误 workflow ref 或缺 promotion binding 时返回 `OPS.BRANCH.SOURCE_NOT_MAIN_REACHABLE` 或对应 branch blocker，不创建 candidate eligibility、部署或晋级成功事实。
+- GIVEN main持续前移且历史上存在qualified RC与stable release。
+- WHEN 查询或请求Prod source admission。
+- THEN main head变化不创建tag、不构建、不改变Prod；只有stable tag AdmissionFact绑定的main-reachable commit和exact digests可进入Prod。
+- AND dev-only、RC-only、main HEAD、裸SHA、mutable tag或“最新qualified”查询均不能取得Prod eligibility。
 
 ## 6. 依赖
 
@@ -94,8 +89,8 @@
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`block`
-- 影响或价值：canonical activation 已为 `active`，仓内 decision-table 已覆盖 bootstrap create-only 例外、active direct push 拒绝、普通 lane push 与可证明 system fast-forward backsync；尚缺真实 lane push、`lane/* -> dev1.0` 与 `dev1.0 -> main` PR/check、promotion 后系统 CAS backsync，以及 hosted 八条分支权威清单与干净 clone 复现回执。
-- 完成判定：`GWT-001.t1..t2` 与 `GWT-002.t1..t2` 具备 decision-table local contract；当前最终 SHA 的 hosted readback 证明 active state、lane PR/check、promotion PR/check、system actor 与八条 refs 闭集，真实 system backsync 证明 CAS 与 ref before/after。
+- 影响或价值：仓内 decision-table 已覆盖普通 lane 同名 push、匹配 integration worktree 的 direct fast-forward push，以及可证明 system fast-forward backsync；尚缺真实 scoped candidate、trusted publisher CAS、`dev1.0 -> main` PR/check、promotion 后 system CAS backsync，以及 hosted 八条分支权威清单与干净 clone 复现回执。Hosted 仍需证明 non-fast-forward、delete/force 与 `main` direct push 保护，但 direct fast-forward dev push 不再定义为非法。
+- 完成判定：`GWT-001.t1..t2` 与 `GWT-002.t1..t2` 具备 decision-table local contract；当前最终 SHA 的 hosted readback 证明 lane PR/check、promotion PR/check、system actor、八条 refs 闭集以及 dev non-FF/force/delete 与 main direct-push 保护，真实 system backsync 证明 CAS 与 ref before/after。
 
 <a id="open-002"></a>
 ### OPEN-002 private-free GitHub 托管分支保护
@@ -104,7 +99,7 @@
 - 优先级：`P0`
 - 准出影响：`block`
 - 阻断边界：仅阻断 `formalProd` 与“GitHub 原生保护已闭合”声明；不阻断已由 Hosted API 精确证明的 promotion source validation。
-- 影响或价值：仓内 hook/Actions 不能冒充服务端保护。当前 source admission 必须逐次从 Hosted API 证明 exact merge SHA、最终 `dev1.0` head、绑定该 head 的 approval、canonical required workflow run/attempt/check identity、当前 main reachability、repository default branch 与当前 workflow attempt；历史 bootstrap create 与普通 lane push 都缺唯一 promotion binding且不具备 release eligibility；当前 active state 下任何非受管 `dev1.0` direct push 均非法。托管 ruleset 的适用条件、bypass actor 与 required check readback 未精确闭合前，不能签发正式 Prod。
+- 影响或价值：仓内 hook/Actions 不能冒充服务端保护。当前 source admission 必须逐次从 Hosted API 证明 exact merge SHA、最终 `dev1.0` head、绑定该 head 的 approval、canonical required workflow run/attempt/check identity、当前 main reachability、repository default branch 与当前 workflow attempt；历史 bootstrap create、普通 lane push与integration worktree direct fast-forward push都缺唯一promotion binding且不具备release eligibility。Hosted ruleset仍须证明`dev1.0` non-fast-forward、force/delete与`main` direct push被阻断；合法matching integration fast-forward不再被定义为绕过publisher或非法更新。托管ruleset的适用条件、bypass actor与required check readback未精确闭合前，不能签发正式Prod。
 - 完成判定：`GWT-002.t1..t2` 与 `GWT-003.t1..t2` 的 GitHub refs、适用 ruleset/branch protection 与 system actor 权限均由托管 API readback 证明；在此之前 `hostedProtectionVerified=false / formalProd=false` 保持不变。
 
 <a id="open-003"></a>
@@ -113,6 +108,6 @@
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`track`
-- 影响或价值：六条固定 lane 已开放，canonical state 已显式为 `active`，bootstrap 不再是隐式例外。尚缺 active state 的 hosted readback、六条 lane canary、integration/abort 终态与 retained worktree mandatory fast-forward resync 证据；该观察证据不反向打开 direct push，也不阻断 machine contract 的六 writer 准入。
+- 影响或价值：六条固定 lane 已开放。尚缺 hosted readback、六条 lane canary、integration/abort 终态与 retained worktree mandatory fast-forward resync 证据；该观察证据不改变 lane→dev、main direct push、non-fast-forward、force/delete禁令，也不把integration direct fast-forward push升级为任何资格事实。
 - 完成判定：`GWT-001.t3`、`GWT-001.t4` 持续由 local contract 绑定；hosted readback 证明 canonical active，六条 lane 各至少完成一次 canary，integration 或 abort 后均证明 worktree retained、lane fast-forward 到新的 `dev1.0`。
 - 依赖：[`objective-execution` OPEN-002](../../development-workflow-governance/objective-execution/spec.md#open-002) 的六并发证据、[`local-worktree-lifecycle-governance`](../../system-architecture-and-engineering-guide/local-worktree-lifecycle-governance/spec.md) 的 worktree 授权提醒、Delivery Gate exact candidate evidence。

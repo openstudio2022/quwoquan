@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from quwoquan_ops.cli.prod import oci_supply_chain
-from quwoquan_ops.cli.prod.finalize_mainline_release_artifact import (
+from quwoquan_ops.ci.release_evidence_reader import (
     DIGEST_PATTERN,
     sha256_file,
 )
@@ -19,12 +19,12 @@ from quwoquan_ops.cli.lib.environment_stability_final_acceptance.model import (
     CommandRunner,
     GITHUB_ATTESTED_WORKFLOW_BY_KIND,
     LoadedReceipt,
+    RETIRED_GITHUB_ATTESTED_EVIDENCE_KINDS,
     VerifiedAuthority,
     _Evaluation,
 )
 from quwoquan_ops.cli.lib.environment_stability_final_acceptance.receipt_io import (
     _canonical_digest,
-    _passed,
     _schema,
     _timestamp,
 )
@@ -49,11 +49,11 @@ def verify_github_actions_receipt(
     if not isinstance(receipt_payload, Mapping):
         raise TypeError("GitHub-attested receipt root must be an object")
     receipt_candidate = (
-        (receipt_payload.get("releaseEvidence") or {}).get("releaseCompositionId")
+        (receipt_payload.get("releaseEvidence") or {}).get("candidateId")
         if kind == "prod_sim"
-        else receipt_payload.get("releaseCompositionId")
+        else receipt_payload.get("candidateId")
     )
-    if receipt_candidate != manifest["releaseCompositionId"]:
+    if receipt_candidate != manifest["candidateId"]:
         raise ValueError("GitHub-attested receipt candidate differs from manifest")
     result = runner(
         [
@@ -96,7 +96,7 @@ def verify_github_actions_receipt(
                 f"repository:{repository}",
                 f"workflow:{workflow}",
                 f"issuer:{oci_supply_chain.OIDC_ISSUER}",
-                f"candidate:{manifest['releaseCompositionId']}",
+                f"candidate:{manifest['candidateId']}",
             }
         ),
     )
@@ -152,7 +152,7 @@ def _verify_authority(
         f"repository:{repository}",
         f"workflow:{repository}/{workflow_path}",
         f"issuer:{oci_supply_chain.OIDC_ISSUER}",
-        f"candidate:{manifest['releaseCompositionId']}",
+        f"candidate:{manifest['candidateId']}",
     }
     if (
         verified.authority != "github-actions-oidc"
@@ -169,63 +169,28 @@ def _verify_authority(
     evaluation.authority[receipt.label] = verified
 
 
-def _validate_ci_evidence(
+def _reject_retired_ci_evidence(
     evaluation: _Evaluation,
     receipt: LoadedReceipt | None,
     *,
     kind: str,
-    manifest: Mapping[str, Any] | None,
-    pilot: Mapping[str, str] | None,
-    now: datetime,
-    max_age_seconds: int,
 ) -> None:
+    """对签发 workflow 已退役的旧输入保持 fail-closed。"""
+
+    if kind not in RETIRED_GITHUB_ATTESTED_EVIDENCE_KINDS:
+        raise ValueError(f"evidence kind is not retired: {kind}")
     if receipt is None:
         return
-    if not _schema(evaluation, receipt, "quwoquan.test.case-result"):
-        return
-    payload = receipt.payload
-    _passed(evaluation, receipt)
-    expected_case = {
-        "recovery.ios": "environment-stability.recovery.ios",
-        "recovery.android": "environment-stability.recovery.android",
-        "nightly": "environment-stability.nightly_full",
-    }[kind]
-    if (
-        payload.get("caseId") != expected_case
-        or not isinstance(payload.get("executed"), int)
-        or payload["executed"] <= 0
-        or payload.get("skipped") != 0
-        or DIGEST_PATTERN.fullmatch(str(payload.get("artifactDigest") or "")) is None
-    ):
-        evaluation.block(
-            "STATUS_NOT_PASSED",
-            receipt.label,
-            "CI case result is not a complete executed canonical case",
-        )
-    if manifest is not None and (
-        payload.get("releaseCompositionId") != manifest["releaseCompositionId"]
-        or payload.get("commit") != manifest["source"]["gitSha"]
-    ):
-        evaluation.block(
-            "IDENTITY_MISMATCH",
-            receipt.label,
-            "CI case result differs from ReleaseEvidenceManifest",
-        )
-    if pilot is not None and (
-        payload.get("releaseId") != pilot["releaseId"]
-        or payload.get("releaseDigest") != pilot["releaseDigest"]
-    ):
-        evaluation.block(
-            "DIGEST_MISMATCH",
-            receipt.label,
-            "CI case result content release differs from pilot-003",
-        )
-    _timestamp(
-        evaluation,
-        receipt,
-        ("executedAt", "generatedAt"),
-        now=now,
-        max_age_seconds=max_age_seconds,
+    evaluation.block(
+        "UNSUPPORTED_INPUT",
+        receipt.label,
+        "retired recovery/nightly receipts are not accepted by final acceptance",
+    )
+    evaluation.block(
+        "NON_PROMOTABLE",
+        receipt.label,
+        "local Environment Ops evidence cannot impersonate hosted OIDC; "
+        "physical-device package acceptance belongs to QualificationFact",
     )
 
 
@@ -270,7 +235,7 @@ def _validate_prod_sim(
         )
     if manifest is not None and (
         not isinstance(release, Mapping)
-        or release.get("releaseCompositionId") != manifest["releaseCompositionId"]
+        or release.get("candidateId") != manifest["candidateId"]
         or (release.get("source") or {}).get("gitSha")
         != manifest["source"]["gitSha"]
     ):

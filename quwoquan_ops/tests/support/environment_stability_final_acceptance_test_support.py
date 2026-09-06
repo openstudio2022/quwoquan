@@ -18,7 +18,7 @@ from unittest.mock import patch
 import pytest
 from jsonschema import Draft202012Validator, FormatChecker
 
-from quwoquan_ops.ci import render_release_lifecycle_receipts as lifecycle
+from quwoquan_ops.ci import release_evidence_reader as lifecycle
 from quwoquan_ops.tests.support.app_artifact_manifest_test_support import (
     app_artifact_manifest,
 )
@@ -27,6 +27,9 @@ from quwoquan_ops.tests.support.rollout_stage_promotion_evidence_test_support im
 )
 from quwoquan_ops.cli.lib import external_provider_governance, provider_conformance
 from quwoquan_ops.cli.lib.app_identity import resolve_build_product
+from quwoquan_ops.cli.lib.environment_stability_final_acceptance.artifact_closure import (
+    validate_historical_artifact_closure,
+)
 from quwoquan_ops.cli.lib.environment_stability_final_acceptance import (
     GITHUB_ATTESTED_WORKFLOW_BY_KIND,
     REQUIRED_SOAK_CLAIMS,
@@ -35,7 +38,7 @@ from quwoquan_ops.cli.lib.environment_stability_final_acceptance import (
     VerifiedAuthority,
     evaluate_final_acceptance,
 )
-from quwoquan_ops.cli.prod.finalize_mainline_release_artifact import (
+from quwoquan_ops.ci.release_evidence_reader import (
     APPLICATION_PACKAGES,
     DISTRIBUTION_EVIDENCE_PATHS,
     ENVIRONMENTS,
@@ -46,7 +49,6 @@ from quwoquan_ops.cli.prod.finalize_mainline_release_artifact import (
     canonical_manifest_digest,
     canonical_release_train_digest,
     sha256_file,
-    validate_manifest_files,
 )
 from quwoquan_ops.gate import verify_environment_stability_final_acceptance as cli
 
@@ -932,9 +934,10 @@ class FinalAcceptanceFixture:
             "content_lifecycle_beta": self.paths["content_beta"],
             "content_lifecycle_gamma": self.paths["content_gamma"],
             "local_env_green_matrix": self.paths["green_matrix"],
-            "ios_recovery_uat": self.paths["recovery_ios"],
-            "android_recovery_uat": self.paths["recovery_android"],
-            "nightly_artifact": self.paths["nightly"],
+            # 当前主路径不再提供退役 workflow 输入；兼容性用例显式传入旧回执。
+            "ios_recovery_uat": None,
+            "android_recovery_uat": None,
+            "nightly_artifact": None,
             "prod_sim_receipt": self.paths["prod_sim"],
             "prod_rollout_readback": self.paths["prod_rollout_readback"],
             "prod_rollback_readback": self.paths["prod_rollback_readback"],

@@ -26,12 +26,10 @@ from quwoquan_ops.gate.verify_git_branch_policy import (
     BranchDecision,
     BranchPolicy,
     BranchTransition,
-    activation_readback,
     evaluate_transition,
     load_policy,
     load_policy_bytes,
     pre_push_issues,
-    write_activation_transition_evidence,
 )
 
 
@@ -52,136 +50,124 @@ def _update(
     )
 
 
-def _policy_with_activation_state(state: object) -> BranchPolicy:
-    payload = yaml.safe_load(
-        (ROOT / "quwoquan_ops/policies/branch_policy.yaml").read_text(
-            encoding="utf-8"
-        )
+def test_transition_evaluator_allows_integration_worktree_fast_forward() -> None:
+    before = "b" * 40
+    after = "a" * 40
+    calls: list[tuple[str, str]] = []
+
+    decision = evaluate_transition(
+        policy=_repository_policy(),
+        transition=BranchTransition(
+            event="direct_push",
+            actor_kind="integration_worktree",
+            repository="owner/repo",
+            head="dev1.0",
+            base="dev1.0",
+            before_oid=before,
+            after_oid=after,
+        ),
+        is_ancestor=lambda ancestor, descendant: (
+            calls.append((ancestor, descendant)) or True
+        ),
     )
-    payload["integration_branch_activation"]["state"] = state
-    return load_policy_bytes(
-        yaml.safe_dump(payload, allow_unicode=True, sort_keys=False).encode("utf-8")
+
+    assert decision.allowed is True
+    assert calls == [(before, after)]
+
+
+def test_transition_evaluator_allows_idempotent_integration_worktree_update() -> None:
+    oid = "a" * 40
+    decision = evaluate_transition(
+        policy=_repository_policy(),
+        transition=BranchTransition(
+            event="direct_push",
+            actor_kind="integration_worktree",
+            repository="owner/repo",
+            head="dev1.0",
+            base="dev1.0",
+            before_oid=oid,
+            after_oid=oid,
+        ),
     )
 
-
-def test_activation_contract_closes_readme_and_specs() -> None:
-    readme = (ROOT / "README.md").read_text(encoding="utf-8")
-    release_spec = (
-        ROOT
-        / "specs/feature-tree/runtime/deliver-deploy-prod-pipeline/"
-        "daily-merge-release-strategy/spec.md"
-    ).read_text(encoding="utf-8")
-    local_ci_spec = (
-        ROOT
-        / "specs/feature-tree/runtime/development-workflow-governance/"
-        "local-continuous-integration/spec.md"
-    ).read_text(encoding="utf-8")
-
-    assert "integration_branch_activation.state=active" in readme
-    assert "`bootstrap|active` 闭集" in release_spec
-    assert "当前成熟仓库为 `active`" in release_spec
-    assert "bootstrap 仅允许远端 integration ref 不存在" in release_spec
-    assert "`--pre-push` 必须消费 canonical activation state" in local_ci_spec
-    for stale_claim in (
-        "bootstrap direct-push 通道",
-        "activation PR 合入后才关闭",
-        "`--pre-push` 语义不变",
-        "`--pre-push` 行为保持不变",
-    ):
-        assert stale_claim not in readme
-        assert stale_claim not in release_spec
-        assert stale_claim not in local_ci_spec
+    assert decision.allowed is True
 
 
-def test_activation_state_is_strictly_typed_and_closed() -> None:
-    for malformed in (True, 1, None, "pending", " active"):
-        with pytest.raises((TypeError, ValueError), match="integration_branch_activation.state"):
-            _policy_with_activation_state(malformed)
-
-
-def test_active_activation_readback_is_explicit_and_non_mutating() -> None:
-    readback = activation_readback(_repository_policy())
-
-    assert readback["state"] == "active"
-    assert readback["integration_branch"] == "dev1.0"
-    assert readback["kind"] == "integration_branch_activation_v1"
-    assert readback["tracked_policy_mutated"] is False
-    assert "--activation-transition" in str(readback["transition_command"])
-
-
-def test_activation_transition_requires_bootstrap_and_writes_create_once_evidence(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+@pytest.mark.parametrize(
+    ("missing_field", "missing_value"),
+    [
+        ("before_oid", None),
+        ("after_oid", None),
+        ("before_oid", ZERO_SHA),
+        ("after_oid", ZERO_SHA),
+    ],
+)
+def test_transition_evaluator_rejects_integration_update_without_oids(
+    missing_field: str, missing_value: str | None,
 ) -> None:
-    import quwoquan_ops.gate.verify_git_branch_policy as module
+    values: dict[str, str | None] = {
+        "before_oid": "b" * 40,
+        "after_oid": "a" * 40,
+    }
+    values[missing_field] = missing_value
 
-    policy_path = tmp_path / "branch_policy.yaml"
-    payload = yaml.safe_load(
-        (ROOT / "quwoquan_ops/policies/branch_policy.yaml").read_text(
-            encoding="utf-8"
-        )
-    )
-    payload["integration_branch_activation"]["state"] = "bootstrap"
-    policy_path.write_text(
-        yaml.safe_dump(payload, allow_unicode=True, sort_keys=False), encoding="utf-8"
-    )
-    policy = load_policy(policy_path)
-    evidence_path = tmp_path / ".qwq_output/evidence/activation.json"
-    monkeypatch.setattr(module, "ROOT", tmp_path)
-    monkeypatch.setattr(module, "POLICY_PATH", policy_path)
-
-    before = policy_path.read_bytes()
-    first = write_activation_transition_evidence(
-        policy=policy, evidence_path=str(evidence_path)
+    decision = evaluate_transition(
+        policy=_repository_policy(),
+        transition=BranchTransition(
+            event="direct_push",
+            actor_kind="integration_worktree",
+            repository="owner/repo",
+            head="dev1.0",
+            base="dev1.0",
+            before_oid=values["before_oid"],
+            after_oid=values["after_oid"],
+        ),
+        is_ancestor=lambda _ancestor, _descendant: True,
     )
 
-    assert first["from_state"] == "bootstrap"
-    assert first["proposed_state"] == "active"
-    assert first["tracked_policy_mutated"] is False
-    assert first["proposal"]["path"] == "branch_policy.yaml"
-    assert policy_path.read_bytes() == before
-    assert yaml.safe_load(evidence_path.read_text(encoding="utf-8")) == first
-    with pytest.raises(ValueError, match="create-once"):
-        write_activation_transition_evidence(
-            policy=policy, evidence_path=str(evidence_path)
-        )
+    assert decision.allowed is False
+    assert decision.reason_code == "OPS.BRANCH.DIRECT_PUSH_NOT_ALLOWED"
 
 
-def test_activation_transition_rejects_current_active_state(tmp_path: Path) -> None:
-    with pytest.raises(ValueError, match="requires current state 'bootstrap'"):
-        write_activation_transition_evidence(
-            policy=_repository_policy(),
-            evidence_path=str(tmp_path / ".qwq_output/evidence/activation.json"),
-        )
-
-
-def test_activation_cli_malformed_state_is_typed_without_traceback(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str],
-) -> None:
-    import quwoquan_ops.gate.verify_git_branch_policy as module
-
-    payload = yaml.safe_load(
-        (ROOT / "quwoquan_ops/policies/branch_policy.yaml").read_text(
-            encoding="utf-8"
-        )
+def test_transition_evaluator_rejects_integration_update_without_ancestry_authority() -> None:
+    decision = evaluate_transition(
+        policy=_repository_policy(),
+        transition=BranchTransition(
+            event="direct_push",
+            actor_kind="integration_worktree",
+            repository="owner/repo",
+            head="dev1.0",
+            base="dev1.0",
+            before_oid="b" * 40,
+            after_oid="a" * 40,
+        ),
     )
-    payload["integration_branch_activation"]["state"] = {"malformed": True}
-    malformed = tmp_path / "branch_policy.yaml"
-    malformed.write_text(
-        yaml.safe_dump(payload, allow_unicode=True, sort_keys=False), encoding="utf-8"
+
+    assert decision.allowed is False
+    assert decision.reason_code == "OPS.BRANCH.AUTHORITY_UNAVAILABLE"
+
+
+def test_transition_evaluator_rejects_integration_non_fast_forward() -> None:
+    decision = evaluate_transition(
+        policy=_repository_policy(),
+        transition=BranchTransition(
+            event="direct_push",
+            actor_kind="integration_worktree",
+            repository="owner/repo",
+            head="dev1.0",
+            base="dev1.0",
+            before_oid="b" * 40,
+            after_oid="a" * 40,
+        ),
+        is_ancestor=lambda _ancestor, _descendant: False,
     )
-    actual_load_policy = module.load_policy
-    monkeypatch.setattr(module, "load_policy", lambda: actual_load_policy(malformed))
 
-    assert module.main(["--activation-readback"]) == 1
-    captured = capsys.readouterr()
-    output = captured.out + captured.err
-    assert "OPS.BRANCH.POLICY_INVALID" in output
-    assert "integration_branch_activation.state" in output
-    assert "Traceback" not in output
+    assert decision.allowed is False
+    assert decision.reason_code == "OPS.BRANCH.DIRECT_PUSH_NOT_ALLOWED"
 
 
-def test_transition_evaluator_applies_activation_state_to_dev_direct_push() -> None:
-    active = evaluate_transition(
+def test_transition_evaluator_rejects_non_integration_actor_dev_direct_push() -> None:
+    decision = evaluate_transition(
         policy=_repository_policy(),
         transition=BranchTransition(
             event="direct_push",
@@ -192,35 +178,11 @@ def test_transition_evaluator_applies_activation_state_to_dev_direct_push() -> N
             before_oid="b" * 40,
             after_oid="a" * 40,
         ),
-    )
-    bootstrap_create = evaluate_transition(
-        policy=_policy_with_activation_state("bootstrap"),
-        transition=BranchTransition(
-            event="direct_push",
-            actor_kind="human",
-            repository="owner/repo",
-            head="dev1.0",
-            base="dev1.0",
-            before_oid=ZERO_SHA,
-            after_oid="a" * 40,
-        ),
-    )
-    bootstrap_update = evaluate_transition(
-        policy=_policy_with_activation_state("bootstrap"),
-        transition=BranchTransition(
-            event="direct_push",
-            actor_kind="human",
-            repository="owner/repo",
-            head="dev1.0",
-            base="dev1.0",
-            before_oid="b" * 40,
-            after_oid="a" * 40,
-        ),
+        is_ancestor=lambda _ancestor, _descendant: True,
     )
 
-    assert active.allowed is True
-    assert bootstrap_create.allowed is True
-    assert bootstrap_update.allowed is False
+    assert decision.allowed is False
+    assert decision.reason_code == "OPS.BRANCH.DIRECT_PUSH_NOT_ALLOWED"
 
 
 def test_transition_evaluator_has_single_typed_result_semantics() -> None:
@@ -288,14 +250,71 @@ def test_transition_evaluator_direct_push_decision_covers_lane_branches(
     assert decision.allowed is allowed
     if not allowed:
         assert decision.reason_code == "OPS.BRANCH.DIRECT_PUSH_NOT_ALLOWED"
-        assert decision.recovery_action == "open_allowed_pull_request_then_retry"
+        assert decision.recovery_action == "use_canonical_publisher_or_allowed_pull_request_then_retry"
 
 
-def test_pre_push_bootstrap_exception_is_strictly_create_only() -> None:
-    policy = _policy_with_activation_state("bootstrap")
+def test_pre_push_allows_matching_integration_worktree_fast_forward(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import quwoquan_ops.gate.verify_git_branch_policy as module
+
+    before = "b" * 40
+    after = "a" * 40
+    calls: list[tuple[str, str]] = []
+    monkeypatch.setattr(
+        module,
+        "_git_is_ancestor",
+        lambda ancestor, descendant: calls.append((ancestor, descendant)) or True,
+    )
 
     assert pre_push_issues(
-        policy=policy,
+        policy=_repository_policy(),
+        current_branch="dev1.0",
+        update_lines=[
+            _update(
+                local_branch="dev1.0",
+                remote_branch="dev1.0",
+                local_sha=after,
+                remote_sha=before,
+            )
+        ],
+        environment={},
+    ) == []
+    assert calls == [(before, after)]
+
+
+def test_pre_push_rejects_matching_integration_worktree_non_fast_forward(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import quwoquan_ops.gate.verify_git_branch_policy as module
+
+    monkeypatch.setattr(module, "_git_is_ancestor", lambda _before, _after: False)
+    issues = pre_push_issues(
+        policy=_repository_policy(),
+        current_branch="dev1.0",
+        update_lines=[_update(local_branch="dev1.0", remote_branch="dev1.0")],
+        environment={},
+    )
+
+    assert len(issues) == 1
+    assert issues[0].startswith("OPS.BRANCH.DIRECT_PUSH_NOT_ALLOWED:")
+    assert "integration worktree fast-forward update" in issues[0]
+
+
+def test_pre_push_rejects_integration_update_without_remote_before_oid(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import quwoquan_ops.gate.verify_git_branch_policy as module
+
+    monkeypatch.setattr(
+        module,
+        "_git_is_ancestor",
+        lambda _before, _after: (_ for _ in ()).throw(
+            AssertionError("missing before OID queried ancestry")
+        ),
+    )
+    issues = pre_push_issues(
+        policy=_repository_policy(),
         current_branch="dev1.0",
         update_lines=[
             _update(
@@ -305,71 +324,31 @@ def test_pre_push_bootstrap_exception_is_strictly_create_only() -> None:
             )
         ],
         environment={},
-    ) == []
-    for current_branch, remote_sha in (
-        ("dev1.0", "b" * 40),
-        ("main", ZERO_SHA),
-        ("lane/ops", ZERO_SHA),
-    ):
-        issues = pre_push_issues(
-            policy=policy,
-            current_branch=current_branch,
-            update_lines=[
-                _update(
-                    local_branch=current_branch,
-                    remote_branch="dev1.0",
-                    remote_sha=remote_sha,
-                )
-            ],
-            environment={},
-        )
-        assert issues
-        assert all(
-            issue.startswith("OPS.BRANCH.DIRECT_PUSH_NOT_ALLOWED:")
-            for issue in issues
-        )
-
-
-def test_pre_push_active_accepts_matching_integration_fast_forward() -> None:
-    assert (
-        pre_push_issues(
-            policy=_repository_policy(),
-            current_branch="dev1.0",
-            update_lines=[_update(local_branch="dev1.0", remote_branch="dev1.0")],
-            environment={},
-            is_ancestor=lambda _ancestor, _descendant: True,
-        )
-        == []
     )
 
+    assert len(issues) == 1
+    assert issues[0].startswith("OPS.BRANCH.DIRECT_PUSH_NOT_ALLOWED:")
 
-def test_pre_push_active_rejects_non_fast_forward_integration_update() -> None:
+
+def test_pre_push_rejects_matching_integration_worktree_without_git_authority(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import quwoquan_ops.gate.verify_git_branch_policy as module
+
+    monkeypatch.setattr(
+        module,
+        "_git_is_ancestor",
+        lambda _before, _after: (_ for _ in ()).throw(OSError("unavailable")),
+    )
     issues = pre_push_issues(
         policy=_repository_policy(),
         current_branch="dev1.0",
         update_lines=[_update(local_branch="dev1.0", remote_branch="dev1.0")],
         environment={},
-        is_ancestor=lambda _ancestor, _descendant: False,
     )
 
     assert len(issues) == 1
-    assert issues[0].startswith("OPS.BRANCH.BACKSYNC_NOT_FAST_FORWARD:")
-    assert "expected-old" in issues[0]
-
-
-def test_pre_push_active_rejects_foreign_source_dev_update() -> None:
-    issues = pre_push_issues(
-        policy=_repository_policy(),
-        current_branch="lane/ops",
-        update_lines=[
-            _update(local_branch="lane/ops", remote_branch="dev1.0")
-        ],
-        environment={},
-    )
-
-    assert len(issues) == 1
-    assert "active integration branch 'dev1.0'" in issues[0]
-    assert issues[0].startswith("OPS.BRANCH.DIRECT_PUSH_NOT_ALLOWED:")
+    assert issues[0].startswith("OPS.BRANCH.AUTHORITY_UNAVAILABLE:")
 
 
 def test_pre_push_one_ordinary_lane_does_not_require_all_lanes() -> None:
@@ -482,7 +461,7 @@ def test_pre_push_blocks_direct_main_update() -> None:
         issue.startswith("OPS.BRANCH.DIRECT_PUSH_NOT_ALLOWED:") for issue in issues
     )
     assert all("terminal=blocked" in issue for issue in issues)
-    assert all("recovery=open_allowed_pull_request_then_retry" in issue for issue in issues)
+    assert all("recovery=use_canonical_publisher_or_allowed_pull_request_then_retry" in issue for issue in issues)
 
 
 def test_pre_push_rejects_self_reported_system_backsync_identity() -> None:
@@ -526,14 +505,21 @@ def test_pre_push_accepts_provable_managed_system_fast_forward_backsync(
     )
     environment = {
         "GITHUB_ACTIONS": "true",
-        "GITHUB_EVENT_NAME": "workflow_dispatch",
+        "GITHUB_EVENT_NAME": "push",
         "GITHUB_REF_TYPE": "branch",
         "GITHUB_REF_NAME": "main",
+        "GITHUB_REF": "refs/heads/main",
+        "GITHUB_SHA": after,
         "GITHUB_ACTOR": "github-actions[bot]",
         "GITHUB_WORKFLOW_REF": (
             "openstudio2022/quwoquan/.github/workflows/"
+            "delivery-gate.yml@refs/heads/main"
+        ),
+        "QWQ_SYSTEM_BACKSYNC_WORKFLOW_REF": (
+            "openstudio2022/quwoquan/.github/workflows/"
             "system-backsync.yml@refs/heads/main"
         ),
+        "QWQ_MANAGED_SYSTEM_BACKSYNC": "system-fast-forward-cas-v1",
         "GITHUB_REPOSITORY": "openstudio2022/quwoquan",
     }
 
@@ -553,7 +539,9 @@ def test_pre_push_accepts_provable_managed_system_fast_forward_backsync(
     assert calls == [(before, after)]
 
 
-def test_pre_push_system_identity_still_requires_matching_main_source() -> None:
+def test_pre_push_system_identity_does_not_replace_matching_integration_source(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     environment = {
         "GITHUB_ACTIONS": "true",
         "GITHUB_EVENT_NAME": "workflow_dispatch",
@@ -566,26 +554,17 @@ def test_pre_push_system_identity_still_requires_matching_main_source() -> None:
         ),
     }
 
-    # 即便带上受管 backsync 环境，integration 同名推送仍走 matching FF 路径，不冒充 backsync。
-    assert (
-        pre_push_issues(
-            policy=_repository_policy(),
-            current_branch="dev1.0",
-            update_lines=[_update(local_branch="dev1.0", remote_branch="dev1.0")],
-            environment=environment,
-            is_ancestor=lambda _ancestor, _descendant: True,
-        )
-        == []
+    monkeypatch.setattr(
+        "quwoquan_ops.gate.verify_git_branch_policy._git_is_ancestor",
+        lambda _before, _after: True,
     )
-    # 非 main 源即使有受管身份也不能走 backsync；lane→dev1.0 仍拒绝。
-    issues = pre_push_issues(
+
+    assert pre_push_issues(
         policy=_repository_policy(),
-        current_branch="lane/ops",
-        update_lines=[_update(local_branch="lane/ops", remote_branch="dev1.0")],
+        current_branch="dev1.0",
+        update_lines=[_update(local_branch="dev1.0", remote_branch="dev1.0")],
         environment=environment,
-    )
-    assert len(issues) == 1
-    assert issues[0].startswith("OPS.BRANCH.DIRECT_PUSH_NOT_ALLOWED:")
+    ) == []
 
 
 @pytest.mark.parametrize(
@@ -675,6 +654,21 @@ def test_system_backsync_decision_table_is_pure_and_fail_closed(
     assert decision.reason_code == reason_code
     if reason_code is not None:
         assert decision.recovery_action is not None
+
+
+def test_pre_push_blocks_unknown_remote_ref() -> None:
+    issues = pre_push_issues(
+        policy=_repository_policy(),
+        current_branch="dev1.0",
+        update_lines=[
+            f"refs/heads/dev1.0 {'a' * 40} refs/tags/v1.0.0 {'b' * 40}\n"
+        ],
+        environment={},
+    )
+
+    assert len(issues) == 1
+    assert issues[0].startswith("OPS.BRANCH.REF_NOT_ALLOWED:")
+    assert "undeclared remote ref 'refs/tags/v1.0.0'" in issues[0]
 
 
 @pytest.mark.parametrize(

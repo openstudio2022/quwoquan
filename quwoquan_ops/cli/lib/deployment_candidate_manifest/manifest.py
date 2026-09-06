@@ -107,7 +107,7 @@ def _prod_hosted_release_package_identity(
                 "manifest",
                 "evidenceFileDigest",
                 "artifactDigest",
-                "releaseCompositionId",
+                "candidateId",
                 "verifiedConfigDigest",
             }
         ):
@@ -135,14 +135,14 @@ def _prod_hosted_release_package_identity(
         current_release_identity = {
             "manifestDigest": str(release_evidence.get("evidenceFileDigest") or ""),
             "artifactDigest": str(release_evidence.get("artifactDigest") or ""),
-            "releaseCompositionId": str(release_evidence.get("releaseCompositionId") or ""),
+            "candidateId": str(release_evidence.get("candidateId") or ""),
             "sourceRevision": expected_source_revision,
         }
         if (
             not str(release_evidence.get("manifest") or "").strip()
             or any(
                 _DIGEST.fullmatch(current_release_identity[field]) is None
-                for field in ("manifestDigest", "artifactDigest", "releaseCompositionId")
+                for field in ("manifestDigest", "artifactDigest", "candidateId")
             )
         ):
             raise ValueError(
@@ -209,13 +209,14 @@ def _materialize_prod_hosted_oci_manifest(
         ) from exc
     if not isinstance(release_manifest, dict):
         raise ValueError("prod-hosted release artifact manifest must be an object")
-    _stackctl.finalize_mainline_release_artifact.validate_manifest(
-        release_manifest,
-        allowed_statuses={"main-admitted", "released"},
+    from quwoquan_ops.ci.release_evidence_reader import (
+        validate_frozen_diagnostic_snapshot,
     )
-    _stackctl.finalize_mainline_release_artifact.validate_manifest_files(
-        artifact_root,
+
+    validate_frozen_diagnostic_snapshot(
         release_manifest,
+        artifact_dir=artifact_root,
+        allowed_statuses={"deployable", "released"},
     )
 
     source = release_manifest.get("source")
@@ -228,7 +229,7 @@ def _materialize_prod_hosted_oci_manifest(
             "prod-hosted release evidence source revision differs from package inputs"
         )
     release_identity = {
-        "releaseCompositionId": str(release_manifest.get("releaseCompositionId") or ""),
+        "candidateId": str(release_manifest.get("candidateId") or ""),
         "artifactDigest": str(release_manifest.get("artifactDigest") or ""),
         "sourceGitSha": release_source_revision,
         "sourceTreeDigest": (
@@ -292,7 +293,7 @@ def _materialize_prod_hosted_oci_manifest(
     if expected_hosted_release != {
         "manifestDigest": release_manifest_digest,
         "artifactDigest": release_identity["artifactDigest"],
-        "releaseCompositionId": release_identity["releaseCompositionId"],
+        "candidateId": release_identity["candidateId"],
         "sourceRevision": source_revision,
     }:
         raise ValueError("prod-hosted packaged release evidence identity drifted")
@@ -472,13 +473,14 @@ def _validate_prod_hosted_release_evidence_currentness(
         ) from exc
     if not isinstance(release_manifest, dict):
         raise ValueError("prod-hosted release artifact manifest must be an object")
-    _stackctl.finalize_mainline_release_artifact.validate_manifest(
-        release_manifest,
-        allowed_statuses={"main-admitted", "released"},
+    from quwoquan_ops.ci.release_evidence_reader import (
+        validate_frozen_diagnostic_snapshot,
     )
-    _stackctl.finalize_mainline_release_artifact.validate_manifest_files(
-        artifact_root,
+
+    validate_frozen_diagnostic_snapshot(
         release_manifest,
+        artifact_dir=artifact_root,
+        allowed_statuses={"deployable", "released"},
     )
     source = release_manifest.get("source")
     release_source_revision = (
@@ -488,7 +490,7 @@ def _validate_prod_hosted_release_evidence_currentness(
         "manifestDigest": "sha256:"
         + hashlib.sha256(release_manifest_path.read_bytes()).hexdigest(),
         "artifactDigest": str(release_manifest.get("artifactDigest") or ""),
-        "releaseCompositionId": str(release_manifest.get("releaseCompositionId") or ""),
+        "candidateId": str(release_manifest.get("candidateId") or ""),
         "sourceRevision": release_source_revision,
     }
     if current_identity != packaged_identity:

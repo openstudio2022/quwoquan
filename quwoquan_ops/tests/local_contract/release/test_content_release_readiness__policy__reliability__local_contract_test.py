@@ -299,6 +299,7 @@ def test_content_consumer_nonempty_feed_probe_skips_commercial_checks__local_con
     ):
         captured["only_checks"] = only_checks
         captured["require_non_empty_content_feed"] = require_non_empty_content_feed
+        captured["research_anonymous_convergence"] = research_anonymous_convergence
         return (
             {"name": probe_name, "ok": True, "scope": "content-consumer"},
             "ok",
@@ -317,6 +318,7 @@ def test_content_consumer_nonempty_feed_probe_skips_commercial_checks__local_con
     assert findings == []
     assert statuses
     assert captured["require_non_empty_content_feed"] is True
+    assert captured["research_anonymous_convergence"] is False
     assert captured["only_checks"] == (
         "content_feed",
         "video_book_feed",

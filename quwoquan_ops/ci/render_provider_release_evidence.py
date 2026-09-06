@@ -17,9 +17,9 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from quwoquan_ops.cli.prod.finalize_mainline_release_artifact import (
+from quwoquan_ops.ci.release_evidence_reader import (
     DIGEST_PATTERN,
-    validate_manifest,
+    validate_historical_release_snapshot,
 )
 from quwoquan_ops.ci.render_provider_conformance_source import validate_source
 
@@ -51,8 +51,8 @@ def render(
     conformance: dict[str, Any],
     generated_at: str,
 ) -> dict[str, Any]:
-    validate_manifest(manifest, allowed_statuses={"component-ready"})
-    if manifest.get("releaseCompositionId") is not None:
+    validate_historical_release_snapshot(manifest, allowed_statuses={"component-ready"})
+    if manifest.get("candidateId") is not None:
         raise ValueError("Provider qualification must precede candidate sealing")
     if DIGEST_PATTERN.fullmatch(contract_graph_digest) is None:
         raise ValueError("ContractGraph digest is not immutable")

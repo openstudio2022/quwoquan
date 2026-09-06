@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import json
+import math
 import subprocess
 import sys
 import time
@@ -23,7 +24,7 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from quwoquan_ops.ci.render_release_lifecycle_receipts import (
+from quwoquan_ops.ci.release_evidence_reader import (
     _validate_receipt_readback,
     _window_seconds,
 )
@@ -166,9 +167,99 @@ def collect(
         deadline_epoch=deadline_epoch,
         window_override=soak_window,
     )
+    _validate_slo_observation(
+        slo,
+        soak_window=soak_window,
+        required_seconds=required_seconds,
+        policy=policy,
+    )
     alerts = _read_alertmanager(alertmanager_url)
+    if set(alerts) != {
+        "schema",
+        "source",
+        "queriedAt",
+        "status",
+        "activeFiring",
+    }:
+        raise RuntimeError("Alertmanager soak observation shape is not canonical")
     _write_json(slo_output, slo)
     _write_json(alerts_output, alerts)
+
+
+def _finite_ratio(value: object, field: str) -> float:
+    if not isinstance(value, (int, float)) or isinstance(value, bool):
+        raise RuntimeError(f"{field} is not numeric")
+    result = float(value)
+    if not math.isfinite(result) or result < 0 or result > 1:
+        raise RuntimeError(f"{field} is not a failure ratio in [0,1]")
+    return result
+
+
+def _finite_non_negative(value: object, field: str) -> float:
+    if not isinstance(value, (int, float)) or isinstance(value, bool):
+        raise RuntimeError(f"{field} is not numeric")
+    result = float(value)
+    if not math.isfinite(result) or result < 0:
+        raise RuntimeError(f"{field} is not finite and non-negative")
+    return result
+
+
+def _validate_slo_observation(
+    slo: dict[str, Any],
+    *,
+    soak_window: str,
+    required_seconds: int,
+    policy: dict[str, Any],
+) -> None:
+    readback = policy.get("readback")
+    thresholds = policy.get("thresholds")
+    values = slo.get("values")
+    if (
+        not isinstance(readback, dict)
+        or not isinstance(thresholds, dict)
+        or set(slo) < {"source", "queriedAt", "window", "minimumSamples", "values"}
+        or slo.get("source") != "prometheus"
+        or slo.get("window") != soak_window
+        or _window_seconds(slo.get("window")) != required_seconds
+        or not isinstance(values, dict)
+        or set(values) < {"errorRate", "p95Ms", "redisErrorRate", "sampleCount"}
+    ):
+        raise RuntimeError("Prometheus soak observation shape/window is incomplete")
+    minimum_samples = readback.get("minimum_samples")
+    if (
+        not isinstance(minimum_samples, int)
+        or isinstance(minimum_samples, bool)
+        or minimum_samples < 1
+        or slo.get("minimumSamples") != minimum_samples
+    ):
+        raise RuntimeError("Prometheus soak minimum sample policy drifted")
+    sample_count = _finite_non_negative(values.get("sampleCount"), "sampleCount")
+    if sample_count < minimum_samples:
+        raise RuntimeError("Prometheus soak observation has insufficient samples")
+    normalized = {
+        "errorRate": _finite_ratio(values.get("errorRate"), "errorRate"),
+        "redisErrorRate": _finite_ratio(
+            values.get("redisErrorRate"), "redisErrorRate"
+        ),
+        "p95Ms": _finite_non_negative(values.get("p95Ms"), "p95Ms"),
+    }
+    bindings = {
+        "errorRate": "error_rate",
+        "p95Ms": "p95_ms",
+        "redisErrorRate": "redis_error_rate",
+    }
+    for field, policy_field in bindings.items():
+        threshold = thresholds.get(policy_field)
+        limit = threshold.get("warn") if isinstance(threshold, dict) else None
+        if (
+            not isinstance(limit, (int, float))
+            or isinstance(limit, bool)
+            or normalized[field] >= float(limit)
+        ):
+            raise RuntimeError(
+                f"Prometheus soak {field} failure/latency threshold breached"
+            )
+
 
 
 def _parser() -> argparse.ArgumentParser:

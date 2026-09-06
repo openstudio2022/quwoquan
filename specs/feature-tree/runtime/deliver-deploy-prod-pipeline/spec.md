@@ -6,13 +6,13 @@
 
 ## 1. 能力目标
 
-以 `alpha-local`、`beta-local`、`gamma` 本地镜像和 `prod-hosted` 为环境边界，由 `stackctl` 与 GitHub Actions 统一完成打包、启动、健康检查、端云验证、灰度发布与回滚。
+以本地环境生产质量、托管控制面生产信任：worktree 候选完成 Alpha/Beta，integration 对精确 `dev1.0` head 完成 Gamma，GitHub 只验真并将可用源码晋级到 `main`；有发布意图的 main 提交经不可变 RC 资格验证后，才可由正式 SemVer 标签选择并按精确 OCI digest 灰度发布。
 
 ## 2. 范围与非目标
 
 ### In Scope
 
-- `dev1.0 -> main` 单一受控 promotion 主链、`dev1.0` 直接集成、OCI `ReleaseEvidenceManifest` 归档与不可提升预验证
+- `dev1.0 -> main` 五分钟源码 promotion、受信 publisher CAS、integration worktree non-force fast-forward 源码提交、不可变环境/资格/标签证据与 OCI digest-only 发布
 - prod-hosted ssh-hosted + rootless Podman 单一执行面，modular-monolith-first 工作负载图谱，托管数据面
 - 同一 `prod-hosted` 内 `cluster member × deployment instance × replica` 可重复部署与聚合 CAS
 - Strangler split-ready 拆分与契约不变
@@ -33,9 +33,9 @@
 
 
 
-- [`daily-merge-release-strategy`](./daily-merge-release-strategy/spec.md)：仓库只保留 `dev1.0`、`main` 与六条声明的长期 lane；日常开发只经 `lane/* -> dev1.0` PR 合入唯一集成主干，`main` 是唯一发布主干且只接受 promotion PR。
+- [`daily-merge-release-strategy`](./daily-merge-release-strategy/spec.md)：lane 与 integration 都可构造 exact candidate；`dev1.0` 可由受信 publisher 在 Alpha/Beta 准入后 CAS 更新，也可由匹配 integration worktree 执行 non-force fast-forward 源码 push；`main` 只接收 `dev1.0 -> main` 可用源码 promotion。
 - [`gray-release-to-prod`](./gray-release-to-prod/spec.md)：**统一入口**：workflow 与人工命令最终都收敛到 `stackctl deploy --target prod-hosted ...`。
-- [`local-gamma-mirror`](./local-gamma-mirror/spec.md)：gamma-local 是开发与提交前的主验证链，统一本机模拟器/浏览器接入同一组域级入口。
+- [`local-gamma-mirror`](./local-gamma-mirror/spec.md)：Gamma 只对精确 current `dev1.0` head 生产 IntegrationQualificationFact；不由 GitHub 执行，也不被 Alpha/Beta 或历史回执替代。
 - [`multi-environment-instance-isolation`](./multi-environment-instance-isolation/spec.md)：beta 云侧本地集成栈始终只允许**一套**，启动新实例前必须先停止旧实例再重启。
 - [`multi-environment-wave-deployment`](./multi-environment-wave-deployment/spec.md)：同一 source release train 预先封存 nonprod/prod 组件与四环境配置 composition，按 alpha、beta、gamma、prod 的准入顺序验证，任一波次失败即停止晋级。
 - [`service-core-composition`](./service-core-composition/spec.md)：以同一 Go host 组合 11 个核心服务而不改变领域契约、数据归属或独立实时/模型故障域。
@@ -44,15 +44,19 @@
 ## 5. 能力要求
 
 <a id="req-001"></a>
-### REQ-001 deliver deploy prod pipeline 能力 SIT
+### REQ-001 本地质量、托管验真与标签驱动发布
 
-- 合法 `dev1.0 -> main` promotion 入库后自动启动候选 DAG，生成带 canonical candidate digest 的 OCI `ReleaseEvidenceManifest` 并完成 Alpha/Beta/Gamma 阻断验证；`dev1.0` push 只生成集成证据，`main` push 不得静默执行正式 Prod apply。
-- 第一方容器预验证由显式 `stackctl deploy --mode prevalidate` 在独立 namespace 执行，不属于正式 rollout。
-- 正式 Prod apply 只能由人工 dispatch 绑定可达 main 的精确 Git SHA、显式关闭 dry-run 并通过 production environment approval；`workflow_dispatch dry_run=false` 必须先运行轻量 `formal_prod_authority_preflight`，并在任何 Service/App/Delivery/candidate、Alpha/Beta/Gamma/preprod 重型 job 前由专用、repository-scoped 且仅授予 Actions/Administration/Contents/Vulnerability alerts 读取权限的 GitHub App token 从 GitHub API 动态回读 repository/default branch、Actions 默认只读权限与 action SHA pin、secret/dependency security、`dev1.0/main` 适用 ruleset、无 bypass、required check 的 GitHub Actions integration identity，以及 `production/release-signing/device-matrix` Environment 的 admin bypass、reviewer 与允许 ref 闭集（device-matrix 显式包含 promotion PR 的 `refs/pull/*/merge`）。任一 API、schema、策略或精确 producer 漂移都必须以 `OPS.BRANCH.AUTHORITY_UNAVAILABLE: terminal=blocked` 和稳定 `recovery=restore_git_authority_then_retry` fail closed。`dry_run=true` 与非 dispatch 运行返回 typed `applicability=not_applicable / decision=pass` 并继续只读验证链；`prod_rollout` 在任何 mutation 前使用 preflight digest 再次执行同一动态 readback，防止 TOCTOU。`production` 是全事务唯一人工审批面；在第二位真实 principal 可用前，prevent-self-review 必须继续阻断正式 apply，不得降级。通过 authority 后，同一候选摘要进入 `alpha-local / beta-local / gamma-local` 隔离 fanout，准入聚合严格按 `alpha -> beta -> gamma` 判定，全部通过后才能进入 `prod-hosted(canary -> 5 -> 20 -> 50 -> 100)`。
-- `stackctl`、workflow、runbook 与环境矩阵口径一致，不再维护第二套自动推进或回滚逻辑。
-- `canary -> 5 -> 20 -> 50 -> 100` 各阶段的健康检查、只读集成探针、SLO gate 与 rollback 可验证；Provider、SFU、真实数据、观测和灾备证据未齐时不得启动正式 apply。
-- canonical `quwoquan_app/run.sh` 在真实 compile/install/configure/launch 与 safe-terminal 完成后，只从同一 attempt 目录的 canonical launch report、launch attempt 和 installed runtime-config readback 创建 `LaunchReadyFact`；普通 `test_live` 永远 `nonPromotable=true`，不得由 preflight/health 或输入 mode 直接签发 `ContentReadyFact` / `ReleaseReadyFact`。
-- readiness facts 是闭集、create-once、exact-byte 摘要链：`LaunchReadyFact -> ContentReadyFact -> ReleaseReadyFact` 不得越级或逆向。`ContentReadyFact` 必须直接绑定已完成的 App 原始用户验收旅程，完整覆盖 OTP 登录、匿名隔离、Feed、内容图、作者头像、视频/详情终态及 persona/release/cache/grant 隔离；服务 health/preflight 不能替代。`ReleaseReadyFact` 只接受 promotable predecessor，并绑定 immutable `releaseCompositionId`/artifact、EAF、Android+iOS 登记物理设备、真实 Provider、migration、rollback、performance、reliability 与 cleanup exact evidence。
+- Source writer 只生产绑定 exact candidate 的源码事实；worktree 或 integration 中不重叠文件可并行编辑，但 Git index、commit/ref、共享生成物、环境、设备、package 与外部 mutation 必须由单一受信执行者串行提交。
+- Environment Ops 必须在尚未移动 `dev1.0` 的 detached exact candidate 上执行 Alpha，并仅对 typed 高风险影响执行 Beta；两者通过后，trusted integration publisher 可按既有通道以 expected-old 的非 force fast-forward CAS 更新 `dev1.0`。此外，匹配 `integration/dev1.0` 可用 update line 的 before/after OID 经 ancestry 证明执行普通认证 non-force fast-forward 源码 push；缺 OID、authority 不可用、非快进、force/delete 或来源不匹配均 fail closed。direct push 不签发 `integrationEligibility`、Alpha/Beta/Gamma、`IntegrationQualificationFact`、promotion、release 或 Prod authority；需要晋级/发布时仍须 exact candidate + Alpha/Beta、current dev head Gamma 与既有后续资格链。
+- integration scheduler 只对 current exact `dev1.0` head 执行 Gamma，封存 `IntegrationQualificationFact`；Gamma 必须绑定同一 candidate/tree 和 Alpha/Beta exact-byte predecessor，不得无差别重跑相同 CaseResult。新 head 使旧事实不再适用于当前 promotion。
+- `dev1.0 -> main` 的唯一 required context 只验证 branch/head/base/merge tree、审批、ruleset、IntegrationQualificationFact、签名、时效、policy/workflow pin 与 secret/generated 边界；不得安装语言工具链、构建、运行源码测试、ABG、Provider live、设备或环境命令。合入后 `MainSourceSeal` 只授予 `source-admitted`，不授予发布资格。
+- `main` 永久表示最新可用源码。普通 main push 不构建、不签名、不打标签、不进入 production；临时验证仅产生绑定 commit/tree 与 OCI digest 的短时 dev artifact identity。
+- 只有 annotated `vMAJOR.MINOR.PATCH-rc.N` 可启动一次性 build/sign/SBOM/provenance 与最终包/Provider/UAT/物理设备资格验证。`service_factory_material` 与 `app_factory_material` 必须先作为不可变 OCI 物料落地；资格归约者须物化实际 payload 并验证 canonical bytes、`materialDigest`、source/tree/request/RC、签名与 attestation，且 Service 物料须绑定 Prod runtime config/deployment bundle 的 exact digest 闭包，之后才可生成 `CandidateMaterialManifest`。workflow scalar 只可定位物料，不具备事实权威。
+- 唯一正式发布链固定为 `service_factory_material` / `app_factory_material` → `CandidateMaterialManifest` → `QualificationFact` → stable `ReleaseTagAdmissionFact` → `ProdActivationAdmissionFact` → `ProdStageAttemptFact*` → `ProdReleasedFact` → `PostReleaseSoakFact`；所有后继均以 canonical bytes digest 引用 create-once 前驱，Actions Artifact 只作诊断。
+- 产品选择已 qualified RC 后，唯一 controller 才能创建与该 RC 指向同一 commit、复用同一 build number、`CandidateMaterialManifest` 与 OCI digests 的 annotated `vMAJOR.MINOR.PATCH`；正式标签不得移动、删除、重建或指向 tag object。App official distribution 只从 stable `ReleaseTagAdmissionFact`、`QualificationFact`、`CandidateMaterialManifest` 与 `app_factory_material` 的 exact-byte 闭包读取正式包。
+- Prod 唯一入口是 stable `ReleaseTagAdmissionFact`，并须在首个 stage 前物化一个 `ProdActivationAdmissionFact`；生产事务只消费其中已经 exact-byte 验证的 `CandidateMaterialManifest`、factory material 与 OCI/config bundle 闭包，在一次 approval/物化后由 `stackctl` 完成 `canary -> 5 -> 20 -> 50 -> 100`。
+- 正式 Prod 不得消费或生成 `ReleaseEvidenceManifest`、`releaseEvidenceRef`、`--release-manifest`、public release-manifest writer 或任何 lifecycle status transition。previous/rollback 只引用 hosted ledger 中 exact `ProdReleasedFact` 及其 rollback readiness；soak 只引用当前 exact `ProdReleasedFact`，不得读取 `main HEAD`、裸 SHA、mutable tag、repository variable 或“最新 qualified”。
+- 运行时不得保留旧新 schema 双读、dual-write、warn-only fallback 或第二套发布入口。
 
 <a id="req-002"></a>
 ### REQ-002 prod-hosted ssh-hosted 部署形态（modular-monolith-first + split-ready）SIT
@@ -68,44 +72,16 @@
 - `gamma-local` 与 `prod-hosted` 工作负载图谱（含数据面 Service 名/DSN 变量）同构；`stackctl` / workflow / topology resolver 对同一 workload 图谱解释一致。
 
 <a id="req-003"></a>
-### REQ-003 统一验证 profile：`quwoquan_ops/environments/gamma/validation_suites.json` 统一定义 `pr_light / manual_full / nightly_full / release_candidate / mainline_auto_prod`
+### REQ-003 验证执行面与证据分层
 
-- **统一验证 profile**：`quwoquan_ops/environments/gamma/validation_suites.json` 统一定义 `pr_light / manual_full / nightly_full / release_candidate / mainline_auto_prod`。
-- `pr_light` 不要求 active content release 或视频 canary，只执行 content-free `assistant + environment-smoke` 双平台基线；`manual_full / nightly_full / release_candidate` 必须继续执行绑定 exact immutable release 与视频 canary 的 `app-core-readback`，不得用 PR-light 结果替代内容体验验收。
-- `nightly_full` 只对 `gamma-local` 的同一 released nonprod candidate 执行 Simulator/Emulator 诊断；不得轮转 Alpha/Beta/Gamma 或把 nightly 诊断提升为正式三环境 Green/Prod 回执。
-- **统一证据归档**：每个 promotion 阶段必须落 `.qwq_output/env/<env>/runs/<run-id>/report.json` 与 `summary.md`；发布输入为 GHCR OCI `ReleaseEvidenceManifest` 的 candidate digest，Actions Artifact 只保留短期失败诊断且不得作为阶段传递。
-- **定时与 Provider 单引用消费**：Nightly schedule 与 Provider producer 只能接收或经
-  `RELEASED_RELEASE_EVIDENCE_REF` 发现一个 exact immutable `ReleaseEvidenceManifest`
-  OCI digest ref；消费端必须验证 status、完整文件闭包、BuildKit SBOM/provenance 和
-  GitHub OIDC signer，再从 manifest 导出 candidate、artifact、source/producer、
-  pilot/rollback、lifecycle/Green Matrix。禁止 `NIGHTLY_*` / `PROVIDER_*` 字段回填、
-  mutable tag 与调用方重复声明派生身份。
-- 仓库不定义 `gamma-hosted` 环境；`gamma-local` 的 release-fast 验证是正式主链阻断阶段，云侧真实复验仍由 prod `canary` rollout stage 承接。
-- `03/04/05` 名称与 required-check 语义必须保持稳定。
-- 单一 PR Admission 只验证 GitHub 生成的 exact synthetic merge candidate。`lane/* -> dev1.0` 普通 PR 在 GitHub-hosted runner 直接执行受影响 App static 与并行测试、Service core、Data/Portal 与窄 integration；不得消费 lane push 的外部 App 证据，也不得进入 persistent self-hosted、正式 packaging、canonical full coverage、serial/visual、设备、真实 Provider、签名或 Prod secret。`dev1.0 -> main` promotion 与默认分支 nightly/release workflow 才执行这些候选级重证据。
-- Admission 在一个 DAG 内只计算一次 versioned `ImpactPlan`，绑定 base/head/synthetic merge SHA、source tree digest、R0–R4、integration depth、required test/API/Journey IDs、candidate products 与 planner digest。所有 sibling 只消费同一 digest；unknown、planner/selector/ContractGraph、workflow/签名/EAF/Prod/供应链变更自动升 R3/R4，第一次 promotion 固定 R4。
-- `R0` 为 non-runtime，`R1` 为单业务 scope，`R2` 为跨 scope 或 device-sensitive，`R3` 为环境/治理/未知路径，`R4` 为 planner/selector/发布工作流/供应链权威或 promotion。required IDs 必须全部存在于 `ci_test_ownership.json` 且 owner 属于 lane vocabulary；计划校验器会从 changed paths 与 execution profile 重新推导全部字段，不能通过重算 `plan_digest` 伪造降级。
-- `03. Delivery Gate` 是 `dev1.0` 唯一 required summary，显式区分 `required/not_required/source_failed/infra_failed`。确定性失败不得通过 rerun 消红；仅已分类 infra/transport/device bridge 可保留 attempt-1 后 fresh retry 一次。普通 PR 新 head 取消同 PR 旧 run，公共治理失败后重任务不可达；lane push 不再运行候选重活或充当 admission producer。
-- flaky policy 使用测试 ID 对应的 lane owner；隔离记录必须绑定 issue、分类和起止时间，最长 7 天，promotion-critical 测试禁止隔离。Flutter guard 的 transient marker 最多形成一次 fresh retry。反馈 hard SLO 由 exact OCI clean-run refs 计数，少于 20 个唯一完整 clean runs 时保持 `learning`，禁止硬阻断。
-- Delivery CI/latency 切片统一由版本化 `delivery-impact-plan` artifact 驱动：同一 workflow 只计算一次 changed paths，artifact 必须绑定 `schema_version`、`source_sha`、canonical `changed_paths_digest`、planner identity 与 plan digest；所有 shard/coverage/device 消费前验证，不得各自重新推导。App Device Matrix 的普通 PR 只在 runtime/bootstrap、platform/plugin、permissions/entitlements、device scripts/workflows 或 environment/topology 路径命中时执行，普通 UI/domain Dart 改动产出 typed `not_required`/`skipped`；promotion/release/manual/nightly profile 与显式 `force_device_matrix` 仍强制执行。
-- `pr_light` 目标为 120 秒、job 硬边界 180 秒；只保留 changed candidate secret/PII/generated boundary 与 canonical impact plan，不再重复运行 detect/timing 三份 pytest 治理测试。`manual_full/mainline_auto_prod` 的 live `/search` admission 不降级，merge admission full profile 不受该切片影响。
-- timing telemetry 对 job 分为 `attempted/runnable/skipped/infra`，预算显式区分 `release_sla` 与 `telemetry_advisory`。`release_sla` 的完整 telemetry 超过 hard budget 投影 `GATE_BLOCK`；`telemetry_advisory` 的缺失或超预算在功能 PASS 时仅投影 `PR_WARN`。功能 job 自身 timeout/失败仍 FAIL，不得用 timing warning 覆盖。当前 Delivery PR 与普通 device PR timing 均为 advisory；`mainline_auto_prod` device profile 使用 7800 秒 release SLA，覆盖 beta stack 1200 秒、双平台最长 5400 秒与聚合 1200 秒的完整 machine path，不宣称 8 分钟。
-- canonical coverage 只在对应业务域 impact 时执行；coverage baseline/schema/planner/governance contract 路径触发 App+Service coverage 契约闭包。
-- `03. Delivery Gate` 在 hosted runner 上将 Service core 与完整 packaging 作为同一 topology 前置后的并行 sibling。本地默认 `GATE_SERVICE_PHASE=all` 仍按 core-before → packaging → core-after 完整顺序执行；packaging 的 prepare、逐环境 package、contract、isolation 与 isomorphism 必须输出阶段耗时，并保留首个 typed blocker。
-- `03. Delivery Gate` 的 data 段由 `GATE_DATA_PHASE` 拆成静态门与契约判据两个 sibling job，后者以四片矩阵承接本域判据全量。片归属由判据文件仓内相对路径的摘要取模决定（`quwoquan_ops/gate/delivery_gate_data_shard.py`），不维护分片清单——清单外的新判据文件会落在所有片之外，每片都判它不属于自己，于是四片全绿而它一次没跑。matrix 片数、传给 gate 的分片总数与权威计时的 require-count 必须同值，否则少跑一片不会被任何判据发现。
-- commit gate 的 data 段按影响面选判据，横切实现面（`quwoquan_data/scripts/verify/`、`cli.py`、`content/review/`、`content/templates/`）的影响面就是全域，必须显式登记延后项交给上述四片，不得选一批判据冒充全域覆盖：commit gate 硬顶 15 分钟而本域判据全量约 21 分钟，本地无论怎么选都不构成全域证据。超出选择上限的部分同样进延后项而不是丢弃。
-- 原生依赖安装最多两次、每次命令 80 秒且强制终止宽限 10 秒，两次之间仅间隔 10 秒，完整最坏墙钟为 190 秒；耗尽后输出 typed blocker，并要求从当前 attempt 日志修复 runner、镜像源、dpkg 锁或包声明后重跑同一 Job，不得用无界 apt、skip 或 `continue-on-error` 消红。
-- `prod` 灰度是 `prod` 语义下的 rollout stage，不得再引入独立环境枚举。
-- `alpha-local` 阶段必须完成环境包、启动与 `stackctl health --scope full`，并落证据产物。
-- `beta-local` 阶段必须完成 `stackctl up/health/inspect` 与 self-hosted beta 设备矩阵，通过后才能进入 gamma。
-- `gamma-local` 阶段必须完成 package、up、full health、release verify 与 inspect，并以同一候选摘要回执阻断 Prod。
-- Prod 在一个保留 production approval 的事务 job 内只拉取、验签、解包一次，再执行 `canary -> 5 -> 20 -> 50 -> 100`；任一阶段失败由 `stackctl` 自动回滚到上一稳定候选并恢复 ready 状态。
-- dry-run 保持只读：formal Prod authority 前置门返回 typed `applicability=not_applicable / decision=pass`，随后只验证 `canary` 及全部适用前置门禁；不得伪造 `5/20/50/100` ledger 状态，也不得形成正式发布成功事实。
-- `CiTimingSummary` 的 600/1800 秒预算只读取 GitHub workflow `created_at -> candidate/prod completed_at` 的官方日历时长。job DAG 仅保留为 `machineCriticalPath` 诊断。App matrix 必须计入 Android nonprod/prod、iOS nonprod/prod 与 Web shared 五个 shard 的真实最长时长，不允许用静态或串行阶段近似。
-- mainline `CiTimingSummary` 必须作为 `ghcr.io/.../ci-timing-summary@sha256:...` 精确 OCI 证据发布，并按 candidate digest 与 workflow run 写入独立、append-only 的 hosted timing authority；写后必须从 hosted 索引查询并逐字段匹配。未初始化、不可达、写入失败或回读漂移均保持 `GATE_BLOCK`，Actions Artifact 只允许作为可丢失诊断副本。
-- production approval 的请求、批准与等待时长只能来自绑定 repository、workflow run、head SHA 与 `production` environment 的显式 durable review event。Deployment/Deployment Status 的 `pending/queued/in_progress` 只表示部署或作业状态，不能替代 reviewer decision，也不得与 runner/concurrency queue 混算。
-- 任一 job `created_at`、queue、候选、Prod 回执或显式 review event 证据缺失时状态必须为 `historical_incomplete` 并保持 `GATE_BLOCK`，不得用 `started_at` 替代、填零或进入 10/30 分钟 SLO 达成统计。
-- 主链软目标为 600 秒、硬门为 1800 秒；从 workflow 创建起达到 1500 秒时停止后续晋级，为自动回滚与 ready 恢复预留 300 秒。
+- Alpha/Beta/Gamma 的正式 producer 必须位于受控本地 Environment Ops 执行面；GitHub-hosted 与 GitHub self-hosted workflow 均不得执行 ABG、Data mutation、设备 Journey 或环境 cleanup。
+- Alpha 是默认真实依赖最小闭包；Beta 仅由 typed 高风险 impact 启用；Gamma 只对 exact current `dev1.0` head执行。`no_live` 必须生成绑定 candidate 与 ImpactPlan 的 `not_required` fact，不能从 skipped 推导。
+- 环境 PASS 仅在 package identity、startup、full health、受影响 CaseResult、readback、inspect/doctor、finally teardown、lease revoke 与端口释放全部闭合后封存为唯一 `EnvironmentAcceptanceFact`；Beta/Gamma 分别引用前驱 exact bytes。
+- 模拟器或仿真器只支持本地集成事实并显式 `nonPromotable`；最终签名包的 Android/iOS 物理设备接受属于 RC qualification，不进入五分钟 promotion，也不重跑 ABG 业务矩阵。
+- GitHub 只验证不可变证据并承担 RC build/sign/attest、资格归约、正式 tag admission 和 Prod approval/transaction。普通 source push、lane PR、promotion PR 不得触发 packaging、coverage 全量、设备矩阵、Provider live 或 environment workflow。
+- Nightly 只运行 fingerprint-aware 的深度回归、性能与可靠性，不轮转环境、不替代任何 candidate/head/RC 的 required fact，也不改变资格、标签或生产状态。
+- `prevalidate` / `prod-sim` 历史 snapshot 仅允许显式 `non-promotable` / history reader 只读；它们不得产生 admission 或 verdict，也不得进入正式发布链。
+- promotion 的固定 SLI 为 `promotionReadyAt -> mainReadbackAt`，包含 queue、验真、merge 与 ref readback，不包含 ABG、产品等待、qualification、tag、Prod 或 soak。目标 p95 为 300 秒；当前 enforcement budget 只可按固定窗口的完整全样本算法单调收紧，不得分阶段、success-only、重置计时或放宽。
 
 ## 6. 契约与依赖
 
@@ -117,20 +93,16 @@
 ## 7. 集成验收
 
 <a id="sit-001"></a>
-### SIT-001 deliver deploy prod pipeline 能力 SIT
+### SIT-001 本地质量、五分钟源码晋级与标签发布
 
-- GIVEN 执行“deliver deploy prod pipeline 能力”所需的身份、输入与上游事实均有效。
-- WHEN 参与者发起“deliver deploy prod pipeline 能力”对应动作。
-- THEN `dev1.0` 直接 push 绑定该精确 SHA 的 `03/04/05` hosted check evidence，但不生成正式 candidate 或 Prod apply。
-- THEN 普通 lane PR 的 `03` 在同一 synthetic merge candidate 上自洽执行受影响快速检查，且不会启动 self-hosted、正式 packaging/full coverage、设备、Provider、签名或 Prod secret；promotion/nightly 才执行候选重证据。
-- THEN 只有具备治理回执的合法 `dev1.0 -> main` promotion 入库后才自动生成可验证 OCI `ReleaseEvidenceManifest` 并执行三个前置环境；人工 `workflow_dispatch dry_run=false` 在这些 Service/App/Delivery/Alpha/Beta/Gamma/preprod 重型阶段前先运行 `formal_prod_authority_preflight`，Hosted 动态 readback 任一项不可证明时立即返回 `OPS.BRANCH.AUTHORITY_UNAVAILABLE: terminal=blocked; recovery=restore_git_authority_then_retry`，而 dry-run 返回 typed `not_applicable/pass` 且不被阻断。
-- THEN promotion 成功后系统仅以 compare-and-swap fast-forward 将 `main` backsync 到 `dev1.0`，分叉或 ref 漂移时停止且不得 force；缺 promotion receipt、可信 `main` ancestry 或 durable Prod approval 时在 candidate eligibility、Prod credential 与 canary 前阻断，正式 Prod apply 还必须由精确 SHA 的人工 dispatch 显式关闭 dry-run。
-- THEN 第一方 prevalidate 不写正式 rollout、ledger 或 receipt。
-- THEN 同一候选在隔离运行面并行执行 Alpha、Beta、Gamma，按 `alpha -> beta -> gamma` 聚合准入后，才执行 `prod-hosted(canary -> 5 -> 20 -> 50 -> 100)`；即使前置 authority 已通过，`prod_rollout` 仍在首个 mutation 前防御性复核，不得删除硬门或把 OPEN 标记为关闭。
-- THEN `stackctl`、workflow、runbook 与环境矩阵口径一致，不再维护第二套自动推进或回滚逻辑。
-- THEN canonical launcher 成功时在当前 attempt 目录追加且只追加 `LaunchReadyFact`；失败、degraded runtime、缺 consumer lease/transport/config readback 或 stale/symlink evidence 时 typed `APP.READINESS.*` 阻断。后续 UAT aggregator 只有在 11 类 raw journey 全部 `passed` 后才能追加 `ContentReadyFact`，可信 promotion aggregator 只有在双物理/EAF/Provider/migration/rollback/performance/reliability/cleanup 闭合后才能追加 `ReleaseReadyFact`。
-- THEN Prod 五个 rollout stage 在一个受审批事务中复用一次制品物化与治理校验，健康检查、只读集成探针、SLO gate 与 auto rollback 可验证。
-- THEN 权威计时包含 runner 排队与矩阵长尾，600 秒软目标、1800 秒硬门和 1500 秒晋级截止均可验证。
+- GIVEN exact candidate、当前 refs、ImpactPlan、产品版本目标及其 owner evidence 均有效。
+- WHEN writer 请求集成、promotion、RC qualification、正式标签选择或 Prod 发布。
+- THEN Alpha/Beta 只在受信 publisher CAS 通道移动 branch ref 前对同一 detached candidate 执行，publisher 只在 required facts 通过后 CAS 更新 `dev1.0`；匹配 integration worktree 的 direct fast-forward push 只移动源码 ref且不产生这些事实，Gamma 仍只对 current exact dev head 封存资格。
+- THEN promotion workflow 只验不可变事实并在预算内生成 `MainSourceSeal`；main 前移既不启动资格构建，也不改变既有 RC、stable tag 或 Prod active digest。
+- THEN RC 对精确 main 提交只构建和签名一次；资格归约者物化并验证实际 `service_factory_material` / `app_factory_material` canonical bytes 及 Service Prod runtime config/deployment bundle 闭包，生成唯一 `CandidateMaterialManifest` 后，才以最终包/Provider/UAT/物理设备事实生成 `QualificationFact`。
+- THEN stable tag 与选中 RC 指向同一 commit 并复用同一 `CandidateMaterialManifest`；App official distribution 沿 stable/Qualification/CandidateMaterialManifest/app factory exact-byte 闭包取包，Prod 沿 `ReleaseTagAdmissionFact → ProdActivationAdmissionFact → ProdStageAttemptFact* → ProdReleasedFact → PostReleaseSoakFact` 在一个受审批事务中完成灰度与 readback。
+- THEN 正式 Prod 不接受 `ReleaseEvidenceManifest`、`releaseEvidenceRef`、`--release-manifest`、public release-manifest writer 或 lifecycle status transition；失败回滚只引用 exact previous `ProdReleasedFact` 与 rollback readiness，soak 只引用 exact current `ProdReleasedFact`。
+- THEN 任一正式前驱或后继的 exact bytes 漂移均在 mutation 前 fail closed；`prevalidate` / `prod-sim` 历史 snapshot 不能进入正式链，且不存在 GitHub ABG、重复 build、mutable-latest 输入、双读双写或伪成功事实。
 
 <a id="sit-002"></a>
 ### SIT-002 prod-hosted ssh-hosted 部署形态（modular-monolith-first + split-ready）SIT
@@ -153,9 +125,9 @@
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`track`
-- 影响或价值：尚缺实现或直接 `spec_ref`。
-- 目标：`main` 入库后由单一受控 promotion workflow 执行，Gamma-local 作为阻断阶段，远端复验由 prod `canary` 承接。
-- 完成判定：`SIT-001` 对应行为满足且真实测试 `spec_ref` 有效
+- 影响或价值：正式 Prod 仍残留 `ReleaseEvidenceManifest` / `releaseEvidenceRef` / `--release-manifest` 读写与 lifecycle status 语义，factory material actual-byte 校验和 terminal fact 单轨尚未完成原子切换。
+- 目标：本地 Alpha/Beta、dev head Gamma、五分钟 evidence-only promotion，以及从实际 factory material 到 `PostReleaseSoakFact` 的唯一正式链闭合；删除正式 Prod 的 release-manifest 与生命周期状态第二轨。
+- 完成判定：`SIT-001` 全部结果子句由职责匹配的 current local_contract/api_integration/user_acceptance 直接绑定并通过，且门禁证明正式入口不存在被禁止的 release-manifest surface
 
 <a id="open-002"></a>
 ### OPEN-002 prod-hosted 多 member 真实远端放量
@@ -165,7 +137,7 @@
 - 准出影响：`track`
 - 影响或价值：仓内已具备多 host/replica plan、渲染 identity、部署迭代与聚合 CAS 合同；真实第二台 ECS、平面 SSH 凭据与一次完整 `canary → 5 → 20 → 50 → 100` 仍缺。
 - 目标：在声明 ≥2 个 `management.hosts` 与匹配 replica placement 的前提下，用真实 SSH 完成多 member 发布、逐 host receipt 与 ledger 聚合 CAS。
-- 完成判定：`SIT-002` 对应 live 行为满足且真实测试 `spec_ref` 有效
+- 完成判定：`SIT-002` 对应 live 行为满足，且 `SIT-001` 的正式链、terminal fact、rollback/soak exact predecessor 与 mutation-before-block 结果由同一次真实 rollout 证实并有有效 `spec_ref`
 
 <a id="open-004"></a>
 ### OPEN-004 正式 Android 身份外部登记同步
@@ -210,23 +182,3 @@
 - 影响或价值：尚缺一次带计时 receipt 的真实演练验收证据，无法证明三条止损路径各自在 300 秒内完成。三条工具链实现均已存在且不触发重打包：内容 active pointer 回上一 immutable release（`quwoquan_data ship rollback`）、Web current pointer 回上一 artifact（`stackctl deploy --artifact-kind web --expected-current` CAS 切换）、远端配置关闭不兼容能力（`GetAppConfig` kill_switches `immediate`）；演练仍依赖运行中的环境和可回切的上一 release/artifact。
 - 目标：在 `gamma-local` 对三条止损路径各执行一次演练，产出含开始/结束时间戳与恢复验证的机器 receipt，全程无打包/编译步骤。
 - 完成判定：`SIT-001` 的 auto rollback 可验证子句满足，且演练 receipt 证明三条路径耗时 ≤300 秒并有真实 `spec_ref` 绑定
-
-<a id="open-007"></a>
-### OPEN-007 ContentReadyFact 与 ReleaseReadyFact 生产聚合链未接线
-
-- 类型：`capability_gap`
-- 优先级：`P0`
-- 准出影响：`block`
-- 影响或价值：仓库已有 readiness fact 的闭集模型、校验与 local contract，但尚无生产 App UAT aggregator 从 11 类真实 raw journey 生成并持久化 `ContentReadyFact`，也无可信 Hosted promotion aggregator 消费 promotable predecessor 与完整 qualification evidence 生成并持久化 `ReleaseReadyFact`；当前代码存在不能证明 runtime、UAT 或 Prod readiness 闭环。
-- 完成判定：`SIT-001` 中两个后继 fact 的行为由生产 producer 接线，并由独立 consumer 对同一 attempt 的 exact ref/digest 完成 readback；`api_integration` 证明 producer→create-once store→consumer 的真实边界，Android+iOS 登记物理设备的 `user_acceptance` 证明 raw journey 与 release qualification 均来自真实执行，缺项、stale 或篡改均 fail closed。
-- 依赖：App UAT 原始 Journey producer、Hosted promotion authority、immutable ReleaseEvidenceManifest 与 qualification evidence。
-
-<a id="open-008"></a>
-### OPEN-008 main-tree seal 与 OCI release planner 真实主链接线未闭合
-
-- 类型：`capability_gap`
-- 优先级：`P0`
-- 准出影响：`block`
-- 影响或价值：main-tree seal 与 OCI artifact planning 目前只有生产模块、workflow 声明或 contract-level 约束，尚无足以证明受保护 main promotion 中真实 producer、下游 consumer 与 hosted readback 绑定同一 qualified composition、synthetic tree、main merge tree 及不可变 OCI digest 的闭环证据；不得据此声称 main admission 或 Prod 准出已闭合。
-- 完成判定：`SIT-001` 由受保护 promotion 的真实 producer 生成 create-once main-tree seal 与 canonical OCI plan，下游 candidate publisher/consumer exact-byte 消费且 hosted registry/GitHub authority readback 返回同一 tree、composition、artifact 与 OCI digest；`api_integration` 覆盖 producer→consumer→readback，真实 promotion `user_acceptance` 证明漂移或缺失时在发布前 fail closed。
-- 依赖：受保护 `dev1.0 -> main` promotion authority、canonical release artifact planner、immutable OCI registry readback。

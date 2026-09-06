@@ -11,8 +11,8 @@ from typing import Any
 
 import yaml
 
-from quwoquan_ops.ci import render_release_lifecycle_receipts as lifecycle
-from quwoquan_ops.cli.prod.finalize_mainline_release_artifact import (
+from quwoquan_ops.ci import release_evidence_reader as lifecycle
+from quwoquan_ops.ci.release_evidence_reader import (
     DIGEST_PATTERN,
     sha256_file,
 )

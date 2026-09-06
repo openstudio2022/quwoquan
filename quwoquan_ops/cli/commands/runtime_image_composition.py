@@ -627,7 +627,7 @@ def _load_package_bound_local_image_composition(
         expected_target=target_name,
     )
     return {
-        "releaseCompositionId": str(candidate["baselineId"]),
+        "candidateId": str(candidate["baselineId"]),
         "imageVersion": _stackctl.immutable_image_digest(first_party_runtime_refs),
         "startupImageCompositionFile": str(manifest_path),
         "startupImageTransportTag": str(
@@ -698,66 +698,6 @@ def _bind_gamma_packaged_configuration_digest(
     return digest
 
 
-def _resolve_gamma_release_image_composition(
-    manifest_path: Path,
-    environment_name: str,
-) -> dict[str, Any]:
-    """Resolve one validated candidate manifest without mutating or pulling."""
-    import quwoquan_ops.cli.stackctl as _stackctl
-
-
-    try:
-        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as error:
-        raise ValueError(f"formal release manifest is unreadable: {error}") from error
-    if not isinstance(manifest, dict):
-        raise ValueError("formal release manifest must be an object")
-    _stackctl.finalize_mainline_release_artifact.validate_manifest(
-        manifest,
-        allowed_statuses={"qualified", "main-admitted", "released"},
-    )
-    _stackctl.finalize_mainline_release_artifact.validate_manifest_files(
-        manifest_path.parent,
-        manifest,
-    )
-    if environment_name not in {"alpha", "beta", "gamma", "prod"}:
-        raise ValueError("formal release environment is invalid")
-    artifacts = manifest.get("environmentArtifacts")
-    artifact = (
-        artifacts.get(environment_name) if isinstance(artifacts, dict) else None
-    )
-    images = artifact.get("images") if isinstance(artifact, dict) else None
-    if not isinstance(images, dict):
-        raise ValueError(
-            f"formal release manifest has no {environment_name} artifact images"
-        )
-    bound: dict[str, dict[str, str]] = {}
-    for service, _ in _stackctl.GAMMA_PACKAGED_SERVICE_IMAGE_ENVIRONMENTS:
-        descriptor = images.get(service)
-        if not isinstance(descriptor, dict):
-            raise ValueError(f"formal release image is missing: {service}")
-        digest = str(descriptor.get("digest") or "")
-        ref = str(descriptor.get("ref") or "")
-        repository = str(descriptor.get("repository") or "")
-        if (
-            re.fullmatch(r"sha256:[0-9a-f]{64}", digest) is None
-            or ref != f"{repository}@{digest}"
-        ):
-            raise ValueError(f"formal release image is not exact: {service}")
-        bound[service] = {"ref": ref, "digest": digest}
-    composition_version = _stackctl.immutable_image_digest(
-        {service: descriptor["ref"] for service, descriptor in bound.items()}
-    )
-    return {
-        "releaseCompositionId": str(manifest["releaseCompositionId"]),
-        "artifactDigest": str(manifest["artifactDigest"]),
-        "environmentArtifactDigest": str(artifact["environmentArtifactDigest"]),
-        "contractGraphDigest": str(manifest["contractGraphDigest"]),
-        "imageVersion": composition_version,
-        "images": bound,
-    }
-
-
 def _apply_gamma_image_composition(
     composition: dict[str, Any],
     environment: dict[str, str],
@@ -789,93 +729,12 @@ def _apply_gamma_image_composition(
     environment["LOCAL_GAMMA_IMAGE_VERSION"] = actual_version
     environment["QWQ_COMPOSE_IMAGE_VERSION"] = actual_version
     environment["QWQ_COMPOSE_IMAGE_TAG"] = actual_version.removeprefix("sha256:")
-    candidate_id = str(composition.get("releaseCompositionId") or "")
+    candidate_id = str(composition.get("candidateId") or "")
     artifact_digest = str(composition.get("artifactDigest") or "")
     if candidate_id:
         environment["QWQ_RELEASE_CANDIDATE_DIGEST"] = candidate_id
     if artifact_digest:
         environment["QWQ_RELEASE_ARTIFACT_DIGEST"] = artifact_digest
-
-
-def _bind_gamma_release_image_refs(
-    manifest_path: Path,
-    environment: dict[str, str],
-    *,
-    release_input_classification: str,
-    contract_graph_digest: str,
-) -> dict[str, Any]:
-    """Pull and bind exact candidate OCI refs for a formal local release."""
-    import quwoquan_ops.cli.stackctl as _stackctl
-
-
-    environment_name = str(environment.get("QWQ_LOCAL_RELEASE_ENV") or "")
-    composition = _stackctl._resolve_gamma_release_image_composition(
-        manifest_path,
-        environment_name,
-    )
-    if release_input_classification != "commercial_inputs":
-        raise ValueError("formal release requires commercial release inputs")
-    if composition.get("contractGraphDigest") != contract_graph_digest:
-        raise ValueError("formal release ContractGraph differs from the package")
-    planned: list[tuple[str, str, str, str]] = []
-    for service, environment_key in _stackctl.GAMMA_PACKAGED_SERVICE_IMAGE_ENVIRONMENTS:
-        descriptor = composition["images"][service]
-        digest = descriptor["digest"]
-        ref = descriptor["ref"]
-        planned.append((service, environment_key, ref, digest))
-
-    def pull_exact_image(
-        item: tuple[str, str, str, str],
-    ) -> tuple[tuple[str, str, str, str], subprocess.CompletedProcess[str]]:
-        return item, _stackctl.run(["docker", "pull", "--platform", "linux/amd64", item[2]])
-
-    failures: list[str] = []
-    with concurrent.futures.ThreadPoolExecutor(
-        max_workers=min(8, len(planned))
-    ) as executor:
-        futures = [executor.submit(pull_exact_image, item) for item in planned]
-        for future in concurrent.futures.as_completed(futures):
-            item, pull = future.result()
-            if pull.returncode != 0:
-                failures.append(
-                    f"{item[0]}: "
-                    + (pull.stderr.strip() or pull.stdout.strip() or "pull failed")
-                )
-    if failures:
-        raise ValueError(
-            "formal release exact OCI pull failed: " + "; ".join(sorted(failures))
-        )
-
-    _stackctl._bind_gamma_packaged_configuration_digest(
-        str(environment.get("QWQ_LOCAL_RELEASE_ENV") or ""),
-        environment,
-        composition,
-    )
-    _stackctl._apply_gamma_image_composition(composition, environment)
-    _stackctl._bind_artifact_identity_mount_material(environment)
-    return composition
-
-
-def _bind_gamma_release_teardown_image_refs(
-    manifest_path: Path,
-    environment: dict[str, str],
-) -> dict[str, Any]:
-    """Bind the exact candidate identity for teardown without pulling images."""
-    import quwoquan_ops.cli.stackctl as _stackctl
-
-
-    environment_name = str(environment.get("QWQ_LOCAL_RELEASE_ENV") or "")
-    composition = _stackctl._resolve_gamma_release_image_composition(
-        manifest_path,
-        environment_name,
-    )
-    _stackctl._bind_gamma_packaged_configuration_digest(
-        environment_name,
-        environment,
-        composition,
-    )
-    _stackctl._apply_gamma_image_composition(composition, environment)
-    return composition
 
 
 def _load_gamma_runtime_image_composition(

@@ -17,10 +17,10 @@ import sys
 
 sys.dont_write_bytecode = True
 
-from quwoquan_ops.cli.prod.finalize_mainline_release_artifact import (
-    canonical_release_composition_id,
+from quwoquan_ops.ci.release_evidence_reader import (
+    canonical_candidate_digest,
     canonical_manifest_digest,
-    validate_manifest,
+    validate_historical_release_snapshot,
 )
 
 DIGEST_PATTERN = re.compile(r"sha256:[0-9a-f]{64}")
@@ -35,7 +35,7 @@ CASE_FIELDS = frozenset(
         "schema",
         "caseId",
         "status",
-        "releaseCompositionId",
+        "candidateId",
         "commit",
         "releaseId",
         "releaseDigest",
@@ -127,12 +127,12 @@ def _reject_local_authority(value: Mapping[str, Any], *, label: str) -> None:
 
 def _manifest(path: Path) -> tuple[Path, dict[str, Any]]:
     root = path.resolve().parent
-    manifest = validate_manifest(
+    manifest = validate_historical_release_snapshot(
         _read_object(path, label="ReleaseEvidenceManifest"),
-        allowed_statuses={"qualified", "main-admitted", "released"},
+        allowed_statuses={"candidate-ready", "deployable", "released"},
     )
     if (
-        manifest.get("releaseCompositionId") != canonical_release_composition_id(manifest)
+        manifest.get("candidateId") != canonical_candidate_digest(manifest)
         or manifest.get("artifactDigest") != canonical_manifest_digest(manifest)
     ):
         raise ValueError("ReleaseEvidenceManifest canonical identity drifted")
@@ -225,16 +225,16 @@ def _identity(
     expected_source_sha: str,
 ) -> dict[str, str]:
     root, manifest = _manifest(manifest_path)
-    candidate = str(manifest.get("releaseCompositionId") or "")
+    candidate = str(manifest.get("candidateId") or "")
     artifact = str(manifest.get("artifactDigest") or "")
     commit = str((manifest.get("source") or {}).get("gitSha") or "")
     expected = {
-        "releaseCompositionId": expected_candidate,
+        "candidateId": expected_candidate,
         "artifactDigest": expected_artifact_digest,
         "commit": expected_source_sha,
     }
     actual = {
-        "releaseCompositionId": candidate,
+        "candidateId": candidate,
         "artifactDigest": artifact,
         "commit": commit,
     }
@@ -314,7 +314,7 @@ def _case_payload(
         "schema": "quwoquan.test.case-result",
         "caseId": CASE_IDS[kind],
         "status": "passed",
-        "releaseCompositionId": identity["releaseCompositionId"],
+        "candidateId": identity["candidateId"],
         "commit": identity["commit"],
         "releaseId": identity["releaseId"],
         "releaseDigest": identity["releaseDigest"],
@@ -335,7 +335,7 @@ def _validate_case(payload: Mapping[str, Any], *, kind: str) -> dict[str, Any]:
         or payload.get("schema") != "quwoquan.test.case-result"
         or payload.get("caseId") != CASE_IDS[kind]
         or payload.get("status") != "passed"
-        or DIGEST_PATTERN.fullmatch(str(payload.get("releaseCompositionId") or "")) is None
+        or DIGEST_PATTERN.fullmatch(str(payload.get("candidateId") or "")) is None
         or DIGEST_PATTERN.fullmatch(str(payload.get("releaseDigest") or "")) is None
         or DIGEST_PATTERN.fullmatch(str(payload.get("artifactDigest") or "")) is None
         or GIT_SHA_PATTERN.fullmatch(str(payload.get("commit") or "")) is None
@@ -369,7 +369,7 @@ def _validate_prod_sim(payload: Mapping[str, Any]) -> dict[str, Any]:
         and eligibility.get("receiptWritten") is False
         and payload.get("issues") == []
         and isinstance(release, Mapping)
-        and DIGEST_PATTERN.fullmatch(str(release.get("releaseCompositionId") or "")) is not None
+        and DIGEST_PATTERN.fullmatch(str(release.get("candidateId") or "")) is not None
         and DIGEST_PATTERN.fullmatch(str(release.get("artifactDigest") or "")) is not None
         and GIT_SHA_PATTERN.fullmatch(
             str((release.get("source") or {}).get("gitSha") or "")
@@ -430,7 +430,7 @@ def _aggregate_nightly(args: argparse.Namespace) -> None:
         kind="recovery.android",
     )
     identity_fields = (
-        "releaseCompositionId",
+        "candidateId",
         "commit",
         "releaseId",
         "releaseDigest",
@@ -468,7 +468,7 @@ def _bind_prod_sim(args: argparse.Namespace) -> None:
     release = report.get("releaseEvidence")
     if (
         not isinstance(release, Mapping)
-        or release.get("releaseCompositionId") != identity["releaseCompositionId"]
+        or release.get("candidateId") != identity["candidateId"]
         or release.get("artifactDigest") != identity["artifactDigest"]
         or (release.get("source") or {}).get("gitSha") != identity["commit"]
     ):

@@ -15,18 +15,51 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from quwoquan_ops.ci.render_release_lifecycle_receipts import (
+from quwoquan_ops.ci.release_evidence_reader import (
     HOSTED_AUTHORITY,
     STAGES,
-    _validate_receipt_readback,
-)
-from quwoquan_ops.cli.prod.finalize_mainline_release_artifact import (
-    validate_manifest,
+    validate_historical_release_snapshot,
 )
 from quwoquan_ops.cli.prod import hosted_release_ledger
 
 
 ROLLBACK_BUDGET_MS = 300_000
+
+
+def _validate_receipt_readback(
+    payload: dict[str, Any], *, service: str
+) -> dict[str, Any]:
+    if (
+        set(payload) != {"schema", "authority", "receipt", "receiptRef"}
+        or payload.get("schema") != hosted_release_ledger.RECEIPT_READBACK_SCHEMA
+        or payload.get("authority") != HOSTED_AUTHORITY
+        or not isinstance(payload.get("receipt"), dict)
+    ):
+        raise ValueError("hosted receipt readback shape is invalid")
+    receipt = payload["receipt"]
+    if (
+        set(receipt) != hosted_release_ledger.RECEIPT_FIELDS
+        or receipt.get("schema") != hosted_release_ledger.RECEIPT_SCHEMA
+        or receipt.get("authority") != HOSTED_AUTHORITY
+        or receipt.get("service") != service
+        or receipt.get("receiptId") != hosted_release_ledger._receipt_id(receipt)
+        or payload.get("receiptRef")
+        != f"receipt:hosted:{receipt.get('receiptId')}"
+    ):
+        raise ValueError("hosted release receipt identity is invalid")
+    request = {
+        field: receipt[field]
+        for field in hosted_release_ledger.REQUEST_FIELDS
+        if field != "schema"
+    }
+    request["schema"] = hosted_release_ledger.REQUEST_SCHEMA
+    try:
+        hosted_release_ledger._validate_request(request)
+    except (KeyError, TypeError, ValueError) as error:
+        raise ValueError("hosted release receipt payload is not canonical") from error
+    if receipt.get("committedGeneration") != receipt.get("expectedGeneration") + 1:
+        raise ValueError("hosted release receipt generation is invalid")
+    return receipt
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -53,14 +86,15 @@ def render(
     stage: str,
     service: str,
 ) -> dict[str, Any]:
-    validate_manifest(manifest, allowed_statuses={"main-admitted"})
+    validate_historical_release_snapshot(manifest, allowed_statuses={"deployable"})
     if stage not in STAGES:
         raise ValueError("hosted release stage is invalid")
     if not service.strip():
         raise ValueError("hosted release service is missing")
     receipt = _validate_receipt_readback(stage_readback, service=service)
-    candidate = str(manifest.get("releaseCompositionId") or "")
+    candidate = str(manifest.get("candidateId") or "")
     artifact = str(manifest.get("artifactDigest") or "")
+    candidate_material_id = str(receipt.get("candidateMaterialId") or "")
     post_checks = receipt.get("postChecks")
     rollback_outcome = receipt.get("rollbackOutcome")
     rollback_evidence = hosted_release_ledger.validate_rollback_evidence(
@@ -70,7 +104,7 @@ def render(
         verified_at=receipt.get("verifiedAt"),
     )
     if (
-        receipt.get("artifactDigest") != artifact
+        not candidate_material_id
         or receipt.get("triggerStage") != stage
         or not isinstance(post_checks, list)
     ):
@@ -149,7 +183,8 @@ def render(
         "terminalStage": receipt["stage"],
         "rolloutDecision": rollout_decision,
         "artifactDigest": artifact,
-        "releaseCompositionId": candidate,
+        "candidateId": candidate,
+        "candidateMaterialId": candidate_material_id,
         "releaseReceiptId": receipt_id,
         "releaseReceiptRef": receipt_ref,
         "releaseReceiptAuthority": HOSTED_AUTHORITY,

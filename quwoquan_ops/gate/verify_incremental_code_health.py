@@ -13,6 +13,19 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from quwoquan_ops.gate.code_health_delta.engine import analyze_delta
+from quwoquan_ops.gate.code_health_delta.git_delta import (
+    commit_parents, in_progress_merge_parents,
+)
+
+
+def resolve_merge_parents(
+    repo: Path, *, base: str, head: str, working_tree: bool
+) -> list[str]:
+    """Other parents whose bytes this candidate inherits rather than authors."""
+    if working_tree:
+        return in_progress_merge_parents(repo)
+    parents = commit_parents(repo, head)
+    return parents[1:] if len(parents) > 1 else []
 
 
 def parser() -> argparse.ArgumentParser:
@@ -36,6 +49,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.index_only and not args.working_tree:
             raise ValueError("--index-only requires --working-tree")
         explicit_range = args.base is not None
+        working_tree = args.working_tree or not explicit_range
         report = analyze_delta(
             ROOT,
             base=args.base or "HEAD",
@@ -43,8 +57,14 @@ def main(argv: list[str] | None = None) -> int:
             policy_path=args.policy,
             mode=args.mode,
             explicit_paths=args.changed_file or None,
-            working_tree=args.working_tree or not explicit_range,
+            working_tree=working_tree,
             index_only=args.index_only,
+            merge_parents=resolve_merge_parents(
+                ROOT,
+                base=args.base or "HEAD",
+                head=args.head or "HEAD",
+                working_tree=working_tree,
+            ),
         )
     except Exception as exc:  # fail closed at the public boundary
         print(f"verify_incremental_code_health: GATE_BLOCK: {exc}", file=sys.stderr)

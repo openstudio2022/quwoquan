@@ -79,11 +79,13 @@ def _repo() -> tempfile.TemporaryDirectory[str]:
     return tempfile.TemporaryDirectory()
 
 
-def _init(path: Path) -> None:
+def _init(path: Path, *, relative: str = "source.txt") -> None:
     subprocess.run(["git", "init", "-q"], cwd=path, check=True)
     subprocess.run(["git", "checkout", "-qb", "dev1.0"], cwd=path, check=True)
-    (path / "source.txt").write_text("one\n", encoding="utf-8")
-    subprocess.run(["git", "add", "source.txt"], cwd=path, check=True)
+    source = path / relative
+    source.parent.mkdir(parents=True, exist_ok=True)
+    source.write_text("one\n", encoding="utf-8")
+    subprocess.run(["git", "add", relative], cwd=path, check=True)
     subprocess.run(
         ["git", "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "commit", "-qm", "base"],
         cwd=path,
@@ -166,6 +168,42 @@ def test_spec_contract_is_only_a_local_projection() -> None:
     assert canonical["local_scopes"]["spec_contract"] is True
     assert "spec_contract" in classify_scopes([path])
     assert "spec_contract" not in classify_hosted([path])
+
+
+def test_local_readiness_contract_declares_five_independent_fact_dimensions() -> None:
+    contract = __import__("yaml").safe_load((ROOT / "quwoquan_ops/policies/local_readiness_contract.yaml").read_text(encoding="utf-8"))
+    assert contract["schema_version"] == 2
+    assert list(contract["fact_dimensions"]) == [
+        "sourceReadiness", "environmentReadiness", "deviceReadiness",
+        "integrationEligibility", "promotionEligibility",
+    ]
+    assert contract["independence"] == {
+        "source_pass_implies": [],
+        "cross_dimension_inference": "denied",
+        "local_readiness_writes": ["sourceReadiness"],
+        "non_source_default": "not_evaluated",
+    }
+
+
+def test_source_pass_keeps_all_other_readiness_dimensions_unevaluated() -> None:
+    # 已知 docs 路径：未知路径按 unknown_path_fail_closed 升到 R3 并要求全 scope，
+    # 那条判罚由 impact planner 的风险合同单独证明，不该混进就绪维度断言。
+    with _repo() as directory:
+        repo = Path(directory)
+        _init(repo, relative="docs/source.md")
+        state = repo / "state"
+        plan = plan_readiness(level="fast", paths=["docs/source.md"], repo_root=repo, mode="workspace")
+        receipt = run_readiness(plan, repo_root=repo, state_root=state)
+        assert receipt["schema"] == "local-readiness-receipt-v2"
+        assert "readiness" not in receipt
+        assert receipt["facts"] == {
+            "sourceReadiness": {"status": "fast_green", "producer": "local_readiness"},
+            "environmentReadiness": {"status": "not_evaluated", "producer": "environment_ops"},
+            "deviceReadiness": {"status": "not_evaluated", "producer": "package_acceptance"},
+            "integrationEligibility": {"status": "not_evaluated", "producer": "trusted_integration_publisher"},
+            "promotionEligibility": {"status": "not_evaluated", "producer": "integration_qualification"},
+        }
+        verify_receipt(level="fast", paths=["docs/source.md"], repo_root=repo, mode="workspace", state_root=state)
 
 
 def test_impact_plan_exposes_canonical_source_identity_and_version() -> None:

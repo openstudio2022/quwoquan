@@ -14,9 +14,6 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[4]
 SUITES_PATH = ROOT / "quwoquan_ops/environments/gamma/validation_suites.json"
-WORKFLOW_PATH = (
-    ROOT / ".github/workflows/app-env-device-matrix-self-hosted.yml"
-)
 MATRIX_RUNNER_PATH = ROOT / "quwoquan_ops/ci/run_mobile_platform_matrix.sh"
 
 
@@ -48,26 +45,26 @@ class UserProfileGammaPatrolMatrixContractTest(unittest.TestCase):
                 f"{profile_name} 必须在设备矩阵实际调度用户主页 UAT",
             )
 
-    def test_self_hosted_workflow_uses_registered_target(self) -> None:
+    def test_local_environment_runner_uses_registered_target(self) -> None:
         workflow = "\n".join(
             path.read_text(encoding="utf-8")
-            for path in (WORKFLOW_PATH, MATRIX_RUNNER_PATH)
+            for path in (MATRIX_RUNNER_PATH,)
         )
 
         self.assertIn(
             '[[ "$matrix_kind" == "user-profile" ]]',
             workflow,
-            "self-hosted workflow 必须识别 user-profile matrix kind",
+            "local Environment Ops runner 必须识别 user-profile matrix kind",
         )
         self.assertIn(
             "resolve_patrol_target user_profile_journey_patrol",
             workflow,
-            "workflow 必须从 gamma registry 解析用户主页 Patrol target",
+            "runner 必须从 gamma registry 解析用户主页 Patrol target",
         )
         self.assertIn(
             "run_local_gamma_device_uat.sh",
             workflow,
-            "workflow 必须经统一 Gamma Patrol runner 记录设备证据",
+            "runner 必须经统一 Gamma Patrol runner 记录设备证据",
         )
 
 

@@ -92,6 +92,9 @@ _LEGACY_APP_BUILD_ARGUMENTS = (
 _REPO_BUILD_TARGET = "app-build-products"
 _CAPSULE_ROOTS = app_source_capsule_roots()
 _DIGEST = re.compile(r"^sha256:[0-9a-f]{64}$")
+_IMMUTABLE_GHCR_REF = re.compile(
+    r"^ghcr\.io/[a-z0-9._/-]+@sha256:[0-9a-f]{64}$"
+)
 _EMPTY_STATUS_DIGEST = (
     "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
 )
@@ -299,9 +302,22 @@ def _copy_artifact(source: Path, destination: Path) -> Path:
 def _ios_unsigned_release_command(
     *,
     build_profile: str,
+    product_version: str,
+    artifact_build_number: str,
     entrypoint: str = "lib/main_prod.dart",
     flutter_executable: str = "flutter",
 ) -> list[str]:
+    if (
+        re.fullmatch(
+            r"(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)",
+            product_version,
+        )
+        is None
+        or re.fullmatch(r"[1-9][0-9]*", artifact_build_number) is None
+    ):
+        raise AppArtifactBuildError(
+            "APP.PACKAGE.ios_version_identity_missing: exact product version and build number are required"
+        )
     return [
         flutter_executable,
         "build",
@@ -312,6 +328,10 @@ def _ios_unsigned_release_command(
         build_profile,
         "--target",
         entrypoint,
+        "--build-name",
+        product_version,
+        "--build-number",
+        artifact_build_number,
         "--no-pub",
     ]
 
@@ -324,6 +344,8 @@ def _build_from_capsule(
     build_mode: str,
     artifact_format: str,
     application_id: str,
+    product_version: str,
+    artifact_build_number: str,
     attempt_dir: Path,
 ) -> dict[str, Any]:
     flutter_identity = _resolve_flutter_identity()
@@ -367,6 +389,8 @@ def _build_from_capsule(
                 "QWQ_APP_BUILD_CONTEXT": "package-only",
                 "QWQ_APP_BUILD_PROFILE": build_profile,
                 "QWQ_REAL_FLUTTER": flutter_executable,
+                "QWQ_PRODUCT_VERSION": product_version,
+                "QWQ_ARTIFACT_BUILD_NUMBER": artifact_build_number,
             }
         )
         pod: str | None = None
@@ -452,6 +476,10 @@ def _build_from_capsule(
                     build_profile,
                     "--target",
                     entrypoint,
+                    "--build-name",
+                    command_env["QWQ_PRODUCT_VERSION"],
+                    "--build-number",
+                    command_env["QWQ_ARTIFACT_BUILD_NUMBER"],
                     "--no-pub",
                 ],
                 context=dependency_cas,
@@ -492,6 +520,10 @@ def _build_from_capsule(
                         build_profile,
                         "--target",
                         entrypoint,
+                        "--build-name",
+                        command_env["QWQ_PRODUCT_VERSION"],
+                        "--build-number",
+                        command_env["QWQ_ARTIFACT_BUILD_NUMBER"],
                         "--no-pub",
                         "--export-options-plist",
                         export_options,
@@ -508,6 +540,8 @@ def _build_from_capsule(
                 dependency_evidence = _run_build_with_dependency_cas(
                     _ios_unsigned_release_command(
                         build_profile=build_profile,
+                        product_version=command_env["QWQ_PRODUCT_VERSION"],
+                        artifact_build_number=command_env["QWQ_ARTIFACT_BUILD_NUMBER"],
                         entrypoint=entrypoint,
                         flutter_executable=flutter_executable,
                     ),
@@ -553,6 +587,10 @@ def _build_from_capsule(
                     f"--output={web_output}",
                     "--target",
                     entrypoint,
+                    "--build-name",
+                    command_env["QWQ_PRODUCT_VERSION"],
+                    "--build-number",
+                    command_env["QWQ_ARTIFACT_BUILD_NUMBER"],
                     "--no-pub",
                 ],
                 context=dependency_cas,
@@ -622,11 +660,115 @@ def _build_from_capsule(
         temporary_workspace.cleanup()
 
 
-def _version() -> tuple[str, str]:
-    value = yaml.safe_load((_ROOT / "quwoquan_app/pubspec.yaml").read_text())
-    version = str(value.get("version") or "")
-    display, separator, build = version.partition("+")
-    return display, build if separator else "1"
+def _version(
+    *,
+    require_hosted_build_number: bool,
+    manifest_path: Path | None = None,
+    pubspec_path: Path | None = None,
+) -> tuple[str, str]:
+    raw_build_number = os.environ.get("QWQ_ARTIFACT_BUILD_NUMBER", "").strip()
+    if require_hosted_build_number:
+        manifest_path = manifest_path or (
+            _ROOT / "quwoquan_ops/policies/product_version.yaml"
+        )
+        try:
+            manifest = yaml.safe_load(manifest_path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, yaml.YAMLError) as error:
+            raise AppArtifactBuildError(
+                f"APP.PACKAGE.product_version_manifest_invalid: {error}"
+            ) from error
+        train = manifest.get("releaseTrain") if isinstance(manifest, dict) else None
+        if (
+            not isinstance(manifest, dict)
+            or manifest.get("schema")
+            != "quwoquan_ops.product_version_manifest.v1"
+            or not isinstance(train, dict)
+            or train.get("state") != "active"
+            or not isinstance(train.get("targetVersion"), str)
+            or re.fullmatch(
+                r"(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)",
+                train["targetVersion"],
+            )
+            is None
+        ):
+            raise AppArtifactBuildError(
+                "APP.PACKAGE.product_version_manifest_inactive: active "
+                "ProductVersionManifest is required for hosted RC bytes"
+            )
+        if re.fullmatch(r"[1-9][0-9]*", raw_build_number) is None:
+            raise AppArtifactBuildError(
+                "APP.PACKAGE.artifact_build_number_missing: hosted monotonic "
+                "QWQ_ARTIFACT_BUILD_NUMBER is required for promotable bytes"
+            )
+        return str(train["targetVersion"]), raw_build_number
+
+    pubspec_path = pubspec_path or (_ROOT / "quwoquan_app/pubspec.yaml")
+    try:
+        pubspec = yaml.safe_load(pubspec_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, yaml.YAMLError) as error:
+        raise AppArtifactBuildError(
+            f"APP.PACKAGE.diagnostic_version_invalid: {error}"
+        ) from error
+    version = str(pubspec.get("version") or "") if isinstance(pubspec, dict) else ""
+    display, separator, build_number = version.partition("+")
+    if (
+        re.fullmatch(
+            r"(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)",
+            display,
+        )
+        is None
+        or (separator and re.fullmatch(r"[1-9][0-9]*", build_number) is None)
+    ):
+        raise AppArtifactBuildError(
+            "APP.PACKAGE.diagnostic_version_invalid: pubspec version is not canonical"
+        )
+    return display, build_number if separator else "1"
+
+
+def _rc_build_authority() -> dict[str, str]:
+    """Require one exact RC request and allocator fact for promotable bytes."""
+
+    values = {
+        "qualificationRequestRef": os.environ.get(
+            "QWQ_QUALIFICATION_REQUEST_REF", ""
+        ).strip(),
+        "qualificationRequestDigest": os.environ.get(
+            "QWQ_QUALIFICATION_REQUEST_DIGEST", ""
+        ).strip(),
+        "rcTagAdmissionRef": os.environ.get("QWQ_RC_TAG_ADMISSION_REF", "").strip(),
+        "artifactBuildNumberAllocationRef": os.environ.get(
+            "QWQ_ARTIFACT_BUILD_NUMBER_ALLOCATION_REF", ""
+        ).strip(),
+        "artifactBuildNumberAllocationDigest": os.environ.get(
+            "QWQ_ARTIFACT_BUILD_NUMBER_ALLOCATION_DIGEST", ""
+        ).strip(),
+    }
+    for field in (
+        "qualificationRequestRef",
+        "rcTagAdmissionRef",
+        "artifactBuildNumberAllocationRef",
+    ):
+        if _IMMUTABLE_GHCR_REF.fullmatch(values[field]) is None:
+            raise AppArtifactBuildError(
+                "APP.PACKAGE.rc_authority_invalid: "
+                f"{field} must be an exact GHCR digest ref"
+            )
+    for ref_field, digest_field in (
+        ("qualificationRequestRef", "qualificationRequestDigest"),
+        (
+            "artifactBuildNumberAllocationRef",
+            "artifactBuildNumberAllocationDigest",
+        ),
+    ):
+        digest = values[digest_field]
+        if (
+            _DIGEST.fullmatch(digest) is None
+            or values[ref_field].rsplit("@", 1)[1] != digest
+        ):
+            raise AppArtifactBuildError(
+                f"APP.PACKAGE.rc_authority_invalid: {digest_field} does not bind {ref_field}"
+            )
+    return values
 
 
 def _git_identity() -> tuple[str, str]:
@@ -751,7 +893,17 @@ def command_package_app_artifact(args: argparse.Namespace) -> dict[str, Any]:
     try:
         source_start = workspace_snapshot(deployment_roots=_CAPSULE_ROOTS)
         source_git_sha, source_tree_digest = _git_identity()
-        display_version, build_number = _version()
+        hosted_build_number = bool(
+            os.environ.get("QWQ_ARTIFACT_BUILD_NUMBER", "").strip()
+        )
+        display_version, build_number = _version(
+            require_hosted_build_number=promotable or hosted_build_number
+        )
+        rc_authority = (
+            _rc_build_authority()
+            if promotable or hosted_build_number
+            else None
+        )
         package_dir = _stackctl.deployment_target_path(
             _REPO_BUILD_TARGET,
             "packages",
@@ -770,6 +922,8 @@ def command_package_app_artifact(args: argparse.Namespace) -> dict[str, Any]:
             build_mode=build_mode,
             artifact_format=artifact_format,
             application_id=application_id,
+            product_version=display_version,
+            artifact_build_number=build_number,
             attempt_dir=attempt_dir,
         )
         source_end = workspace_snapshot(deployment_roots=_CAPSULE_ROOTS)
@@ -835,6 +989,10 @@ def command_package_app_artifact(args: argparse.Namespace) -> dict[str, Any]:
             "artifactDigest": observed_artifact_digest,
             "promotable": promotable,
         }
+        if promotable:
+            if rc_authority is None:
+                raise AppArtifactBuildError("APP.PACKAGE.rc_authority_missing")
+            manifest.update(rc_authority)
         if platform in {"android", "ios"}:
             if _DIGEST.fullmatch(observed_trust_digest) is None:
                 raise AppArtifactBuildError(

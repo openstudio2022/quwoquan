@@ -17,11 +17,30 @@ from quwoquan_ops.ci.render_provider_conformance_source import (
 from quwoquan_ops.cli.lib import provider_conformance
 from quwoquan_ops.cli.prod import collect_mainline_image_descriptors as image_collector
 from quwoquan_ops.cli.prod import collect_release_artifact_descriptors as evidence_collector
-from quwoquan_ops.cli.prod import finalize_mainline_release_artifact as finalizer
+from quwoquan_ops.ci import release_evidence_reader as finalizer
 from quwoquan_ops.cli.lib.app_identity import resolve_build_product
 from quwoquan_ops.tests.support.app_artifact_manifest_test_support import (
     app_artifact_manifest,
 )
+
+def _seal_snapshot(payload: dict[str, object]) -> dict[str, object]:
+    payload["releaseTrainId"] = finalizer.canonical_release_train_digest(payload)
+    for environment in finalizer.ENVIRONMENTS:
+        artifact = payload["environmentArtifacts"][environment]
+        if all("digest" in descriptor for descriptor in artifact["images"].values()):
+            artifact["environmentArtifactDigest"] = (
+                finalizer.canonical_environment_artifact_digest(payload, environment)
+            )
+    try:
+        payload["candidateId"] = finalizer.canonical_candidate_digest(payload)
+    except ValueError:
+        payload["candidateId"] = None
+    payload["blockers"], payload["missingEvidence"] = finalizer._expected_gaps(
+        payload, str(payload["status"])
+    )
+    payload["artifactDigest"] = finalizer.canonical_manifest_digest(payload)
+    return payload
+
 
 DIGEST = "sha256:" + ("a" * 64)
 APP_EVIDENCE_REF = "oci://ghcr.io/owner/repo/app-candidate@" + DIGEST
@@ -63,7 +82,7 @@ class ReleaseEvidenceManifestFixtureMixin:
                     "digest": finalizer.sha256_file(config),
                 }
             }
-        manifest = finalizer.seal_manifest(
+        manifest = _seal_snapshot(
             {
                 "schema": finalizer.SCHEMA,
                 "releaseTrainId": None,
@@ -134,12 +153,12 @@ class ReleaseEvidenceManifestFixtureMixin:
                 ],
                 "missingEvidence": [
                     *(
-                        f"environmentArtifacts.{environment}.images.content-service.digest"
-                        for environment in finalizer.ENVIRONMENTS
-                    ),
-                    *(
                         f"applicationPackages.{build_product_id}"
                         for build_product_id in finalizer.APPLICATION_PACKAGES
+                    ),
+                    *(
+                        f"environmentArtifacts.{environment}.images.content-service.digest"
+                        for environment in finalizer.ENVIRONMENTS
                     ),
                     "publicWeb",
                     "androidOfficialRelease",
@@ -154,7 +173,9 @@ class ReleaseEvidenceManifestFixtureMixin:
                 ],
             }
         )
-        finalizer.validate_manifest(manifest, allowed_statuses={"build-input"})
+        finalizer.validate_frozen_diagnostic_snapshot(
+            manifest, artifact_dir=artifact, allowed_statuses={"build-input"}
+        )
         self._write_json(artifact / "manifest.json", manifest)
         return artifact
 

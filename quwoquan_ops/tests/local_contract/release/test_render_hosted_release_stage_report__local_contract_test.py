@@ -9,7 +9,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from quwoquan_ops.ci import render_hosted_release_stage_report as stage_report
-from quwoquan_ops.ci import render_release_lifecycle_receipts as lifecycle
+from quwoquan_ops.ci import release_evidence_reader as lifecycle
 
 
 class HostedReleaseStageReportTest(unittest.TestCase):
@@ -20,8 +20,8 @@ class HostedReleaseStageReportTest(unittest.TestCase):
 
     def _manifest(self) -> dict:
         return {
-            "status": "main-admitted",
-            "releaseCompositionId": self.candidate,
+            "status": "deployable",
+            "candidateId": self.candidate,
             "artifactDigest": self.artifact,
             "source": {
                 "gitSha": "a" * 40,
@@ -45,17 +45,13 @@ class HostedReleaseStageReportTest(unittest.TestCase):
             "service": self.service,
             "fromCandidateDigest": self.from_candidate,
             "toCandidateDigest": candidate or self.candidate,
-            "step": {"canary": 0, "5": 5, "20": 20, "50": 50, "100": 100}[stage],
+            "step": {"canary": "0", "5": "5", "20": "20", "50": "50", "100": "100"}[stage],
             "stage": stage,
             "triggerStage": trigger_stage or stage,
-            "fromReleaseEvidenceRef": (
-                "ghcr.io/owner/repo/release-evidence@" + self.from_candidate
-            ),
-            "toReleaseEvidenceRef": (
-                "ghcr.io/owner/repo/release-evidence@" + self.candidate
-            ),
-            "fromImageTransportTag": "sha-from",
-            "toImageTransportTag": "sha-to",
+            "fromServiceFactoryOciDigest": self.from_candidate,
+            "toServiceFactoryOciDigest": candidate or self.candidate,
+            "fromAppFactoryOciDigest": "sha256:" + "0" * 64,
+            "toAppFactoryOciDigest": "sha256:" + "1" * 64,
             "decision": decision,
             "rollbackOutcome": rollback_outcome,
             "rollbackEvidence": (
@@ -79,16 +75,22 @@ class HostedReleaseStageReportTest(unittest.TestCase):
                 if rollback_outcome in {"rolled_back", "rollback_failed"}
                 else {"triggered": False}
             ),
-            "artifactDigest": artifact or self.artifact,
-            "environmentAcceptanceRef": "eaf/prod.json",
-            "environmentAcceptanceDigest": "sha256:" + "6" * 64,
-            "environmentAcceptanceFactId": "sha256:" + "7" * 64,
-            "gammaPredecessorFactId": "sha256:" + "8" * 64,
-            "gammaPredecessorDigest": "sha256:" + "9" * 64,
-            "engineeringEligibilityRef": "eligibility/prod.json",
-            "engineeringEligibilityDigest": "sha256:" + "a" * 64,
-            "durableApprovalRef": "approval/prod.json",
-            "durableApprovalDigest": "sha256:" + "b" * 64,
+            "candidateMaterialId": artifact or self.artifact,
+            "prodActivationAdmissionRef": (
+                "ghcr.io/owner/prod-admission@sha256:" + "6" * 64
+            ),
+            "prodActivationAdmissionOciDigest": "sha256:" + "6" * 64,
+            "prodActivationAdmissionPayloadDigest": "sha256:" + "6" * 64,
+            "prodActivationAdmissionId": "sha256:" + "6" * 64,
+            "candidateMaterialManifestRef": (
+                "ghcr.io/owner/candidate-material@sha256:" + "7" * 64
+            ),
+            "candidateMaterialManifestOciDigest": "sha256:" + "7" * 64,
+            "candidateMaterialManifestPayloadDigest": "sha256:" + "7" * 64,
+            "previousReleasedRef": "ghcr.io/owner/released@sha256:" + "b" * 64,
+            "previousReleasedOciDigest": "sha256:" + "b" * 64,
+            "previousReleasedPayloadDigest": "sha256:" + "b" * 64,
+            "previousReleasedId": "sha256:" + "e" * 64,
             "imageDigest": "sha256:" + "1" * 64,
             "configDigest": "sha256:" + "2" * 64,
             "contractGraphDigest": "sha256:" + "3" * 64,
@@ -139,13 +141,8 @@ class HostedReleaseStageReportTest(unittest.TestCase):
                 {
                     "fromCandidateDigest": self.candidate,
                     "toCandidateDigest": self.from_candidate,
-                    "fromReleaseEvidenceRef": (
-                        "ghcr.io/owner/repo/release-evidence@" + self.candidate
-                    ),
-                    "toReleaseEvidenceRef": (
-                        "ghcr.io/owner/repo/release-evidence@"
-                        + self.from_candidate
-                    ),
+                    "fromServiceFactoryOciDigest": self.candidate,
+                    "toServiceFactoryOciDigest": self.from_candidate,
                     "lastGoodCandidateDigest": self.from_candidate,
                 }
             )
@@ -156,12 +153,12 @@ class HostedReleaseStageReportTest(unittest.TestCase):
         path.write_text(json.dumps(payload, sort_keys=True) + "\n", encoding="utf-8")
         return path
 
-    def test_replayed_stage_reports_can_seal_the_existing_prod_outcome(self) -> None:
+    def test_replayed_stage_reports_preserve_hosted_terminal_identity(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             reports = {}
             readbacks = {}
-            with patch.object(stage_report, "validate_manifest"):
+            with patch.object(stage_report, "validate_historical_release_snapshot"):
                 for stage in lifecycle.STAGES:
                     readback = self._readback(self._receipt(stage))
                     report = stage_report.render(
@@ -178,31 +175,13 @@ class HostedReleaseStageReportTest(unittest.TestCase):
                         self._write(root / f"{stage}-readback.json", readback),
                         readback,
                     )
-            with patch.object(lifecycle, "validate_manifest"):
-                sealed = lifecycle.render_prod_outcome(
-                    manifest=self._manifest(),
-                    service=self.service,
-                    from_candidate_digest=self.from_candidate,
-                    reports=reports,
-                    readbacks=readbacks,
-                    archive_prefix="evidence/raw/prod/outcome",
-                    hard_deadline_epoch=int(
-                        lifecycle.dt.datetime(
-                            2026,
-                            7,
-                            28,
-                            0,
-                            30,
-                            tzinfo=lifecycle.dt.timezone.utc,
-                        ).timestamp()
-                    ),
-                    rollback_budget_seconds=300,
-                )
 
-        self.assertEqual(sealed["environment"]["status"], "passed")
-        self.assertEqual(sealed["rollout"]["status"], "passed")
-        self.assertEqual(sealed["rollback"]["status"], "not_triggered")
+        self.assertEqual(list(reports), list(lifecycle.STAGES))
+        self.assertEqual(list(readbacks), list(lifecycle.STAGES))
         self.assertTrue(reports["100"][1]["replayed"])
+        self.assertEqual(
+            reports["100"][1]["candidateMaterialId"], self.artifact
+        )
         self.assertEqual(
             reports["100"][1]["projectionPurpose"], "terminal-sealing-only"
         )
@@ -217,7 +196,7 @@ class HostedReleaseStageReportTest(unittest.TestCase):
             rollback_receipt = self._rollback_receipt("5")
             reports = {}
             readbacks = {}
-            with patch.object(stage_report, "validate_manifest"):
+            with patch.object(stage_report, "validate_historical_release_snapshot"):
                 for stage, receipt in (
                     ("canary", gray_receipt),
                     ("5", rollback_receipt),
@@ -237,38 +216,30 @@ class HostedReleaseStageReportTest(unittest.TestCase):
                         self._write(root / f"{stage}-readback.json", readback),
                         readback,
                     )
-            with patch.object(lifecycle, "validate_manifest"):
-                sealed = lifecycle.render_prod_outcome(
-                    manifest=self._manifest(),
-                    service=self.service,
-                    from_candidate_digest=self.from_candidate,
-                    reports=reports,
-                    readbacks=readbacks,
-                    archive_prefix="evidence/raw/prod/outcome",
-                    hard_deadline_epoch=int(
-                        lifecycle.dt.datetime(
-                            2026,
-                            7,
-                            28,
-                            0,
-                            30,
-                            tzinfo=lifecycle.dt.timezone.utc,
-                        ).timestamp()
-                    ),
-                    rollback_budget_seconds=300,
-                )
 
         replay = reports["5"][1]
         self.assertEqual(replay["terminalStage"], "100")
         self.assertEqual(replay["rolloutDecision"], "rollback")
         self.assertEqual(replay["rollback"]["durationMs"], 60_000)
         self.assertEqual(replay["rollbackPostChecks"][0]["exitCode"], 0)
-        self.assertEqual(sealed["rollout"]["status"], "failed")
-        self.assertEqual(sealed["rollback"]["status"], "rolled_back")
+        self.assertEqual(replay["sourceAuthority"], lifecycle.HOSTED_AUTHORITY)
+
+    def test_candidate_material_drift_does_not_masquerade_as_manifest_artifact(self) -> None:
+        receipt = self._receipt("canary", artifact="sha256:" + "7" * 64)
+        with patch.object(stage_report, "validate_historical_release_snapshot"):
+            report = stage_report.render(
+                manifest=self._manifest(),
+                stage_readback=self._readback(receipt),
+                stage="canary",
+                service=self.service,
+            )
+
+        self.assertEqual(report["artifactDigest"], self.artifact)
+        self.assertEqual(report["candidateMaterialId"], "sha256:" + "7" * 64)
 
     def test_hosted_rollback_failure_projects_its_real_terminal_evidence(self) -> None:
         receipt = self._rollback_receipt("5", failed=True)
-        with patch.object(stage_report, "validate_manifest"):
+        with patch.object(stage_report, "validate_historical_release_snapshot"):
             report = stage_report.render(
                 manifest=self._manifest(),
                 stage_readback=self._readback(receipt),
@@ -289,7 +260,7 @@ class HostedReleaseStageReportTest(unittest.TestCase):
         stable_drift["lastGoodCandidateDigest"] = "sha256:" + "9" * 64
         stable_drift["receiptId"] = lifecycle._receipt_id(stable_drift)
 
-        with patch.object(stage_report, "validate_manifest"):
+        with patch.object(stage_report, "validate_historical_release_snapshot"):
             for receipt in (over_budget, stable_drift):
                 with self.subTest(receipt=receipt["receiptId"]), self.assertRaises(
                     ValueError
@@ -309,7 +280,7 @@ class HostedReleaseStageReportTest(unittest.TestCase):
         )
         cases[2]["postChecks"][0]["status"] = "failed"
         cases[2]["receiptId"] = lifecycle._receipt_id(cases[2])
-        with patch.object(stage_report, "validate_manifest"):
+        with patch.object(stage_report, "validate_historical_release_snapshot"):
             for receipt in cases:
                 with self.subTest(
                     decision=receipt["decision"],
@@ -322,14 +293,13 @@ class HostedReleaseStageReportTest(unittest.TestCase):
                         service=self.service,
                     )
 
-    def test_candidate_artifact_stage_and_trigger_drift_are_rejected(self) -> None:
+    def test_candidate_stage_and_trigger_drift_are_rejected(self) -> None:
         mismatches = (
             self._receipt("canary", candidate="sha256:" + "6" * 64),
-            self._receipt("canary", artifact="sha256:" + "7" * 64),
             self._receipt("5"),
             self._receipt("canary", trigger_stage="100"),
         )
-        with patch.object(stage_report, "validate_manifest"):
+        with patch.object(stage_report, "validate_historical_release_snapshot"):
             for receipt in mismatches:
                 with self.subTest(
                     stage=receipt["stage"], trigger=receipt["triggerStage"]
@@ -345,7 +315,7 @@ class HostedReleaseStageReportTest(unittest.TestCase):
         receipt = self._receipt("canary")
         readback = self._readback(receipt)
         readback["authority"] = "runner-local"
-        with patch.object(stage_report, "validate_manifest"), self.assertRaisesRegex(
+        with patch.object(stage_report, "validate_historical_release_snapshot"), self.assertRaisesRegex(
             ValueError, "readback shape"
         ):
             stage_report.render(
@@ -377,7 +347,7 @@ class HostedReleaseStageReportTest(unittest.TestCase):
                 "--output",
                 str(output),
             ]
-            with patch.object(stage_report, "validate_manifest"), patch.object(
+            with patch.object(stage_report, "validate_historical_release_snapshot"), patch.object(
                 sys, "argv", argv
             ), patch("builtins.print"):
                 result = stage_report.main()

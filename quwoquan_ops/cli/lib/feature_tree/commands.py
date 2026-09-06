@@ -32,7 +32,7 @@ from .evidence import extract_spec_refs, test_spec_refs
 from .nodes import Node, discover_nodes, node_for_spec, parent_chain
 from .ownership import TargetResolution, owners_for_path, resolve_target_details
 from .parsing import block_open_items, open_item_details, title
-from .patterns import PATH_RE, VALID_LEVELS
+from .patterns import PATH_RE, SPEC_REF_CODE_SPAN_RE, VALID_LEVELS
 from ..evidence_fingerprint import canonical_json_bytes
 from ..candidate_evidence import CandidateEvidenceError, build_candidate_evidence
 from ..feature_context_fingerprint import (
@@ -51,10 +51,6 @@ _MARKDOWN_INLINE_LINK_RE = re.compile(
     r"(?:\s+(?:\"[^\"\n]*\"|'[^'\n]*'|\([^()\n]*\)))?\s*\)"
 )
 _CODE_SPAN_RE = re.compile(r"`([^`\n]+)`")
-_SPEC_REF_CODE_SPAN_RE = re.compile(
-    r"^\s*spec_ref\s*:\s*(?P<reference>.+?)\s*$",
-    re.IGNORECASE,
-)
 _BRACED_DIRECT_REFERENCE_RE = re.compile(
     r"^(?P<prefix>[^{}]*)\{(?P<options>[^{}]+)\}(?P<suffix>[^{}]*)$"
 )
@@ -240,7 +236,7 @@ def _direct_canonical_references(
         code_span = match.group(1)
         if code_span in explicit_spec_refs or extract_spec_refs(code_span):
             continue
-        marked_ref = _SPEC_REF_CODE_SPAN_RE.fullmatch(code_span)
+        marked_ref = SPEC_REF_CODE_SPAN_RE.fullmatch(code_span)
         references.append(
             marked_ref.group("reference") if marked_ref is not None else code_span
         )

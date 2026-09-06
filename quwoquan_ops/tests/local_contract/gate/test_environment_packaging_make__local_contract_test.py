@@ -253,59 +253,42 @@ def test_env_selection_refuses_anything_outside_the_three_envs(tmp_path: Path) -
     assert not invocation_log.exists()
 
 
-def test_delivery_gate_packages_the_three_envs_as_parallel_siblings() -> None:
+def test_source_promotion_excludes_environment_packaging() -> None:
+    workflow_path = ROOT / ".github/workflows/delivery-gate.yml"
+    workflow = workflow_path.read_text(encoding="utf-8")
+
+    assert "quwoquan_service_packaging:" not in workflow
+    assert "make verify-env-packaging" not in workflow
+    assert "stackctl.py" not in workflow
+    assert "self-hosted" not in workflow
+    assert "runs-on: macOS" not in workflow
+
+
+def test_release_qualification_delegates_packaging_to_factories() -> None:
+    workflow = (
+        ROOT / ".github/workflows/release-qualification.yml"
+    ).read_text(encoding="utf-8")
+
+    assert "uses: ./.github/workflows/service_pipeline.yml" in workflow
+    assert "uses: ./.github/workflows/app_pipeline.yml" in workflow
+    assert "Reduce exact factory outputs" in workflow
+
+
+def test_delivery_gate_concurrency_is_bound_to_exact_promotion_event() -> None:
     workflow = (ROOT / ".github/workflows/delivery-gate.yml").read_text(encoding="utf-8")
-    job_start = workflow.index("  quwoquan_service_packaging:")
-    job_end = workflow.index("\n  search_contract_smoke:", job_start)
-    job = workflow[job_start:job_end]
+    concurrency = workflow[workflow.index("concurrency:") : workflow.index("\njobs:")]
 
-    assert "name: Delivery Gate — Service Packaging (${{ matrix.packaging_env }})" in job
-    assert "fail-fast: false" in job
-    assert "max-parallel: 1" in job
-    assert "packaging_env: [alpha, beta, gamma]" in job
-    assert "QWQ_PACKAGING_ENVS: ${{ matrix.packaging_env }}" in job
-    assert "runs-on: [self-hosted, macOS, ARM64, quwoquan-release-authority]" in job
-    assert "id: strict_inputs" in job
-    assert "prepare_app_pipeline_inputs.py" in job
-    assert "--build-product-id android-nonprod-apk" in job
-    assert '--environment "${{ matrix.packaging_env }}"' in job
-    assert '--target "${{ matrix.packaging_env }}-local"' in job
     assert (
-        "QWQ_OUTPUT_ROOT: ${{ steps.strict_inputs.outputs.qwq_output_root }}" in job
+        "group: source-promotion-${{ github.event_name }}-"
+        "${{ github.event.pull_request.number || github.event.after }}"
+        in concurrency
     )
-    assert (
-        "QWQ_COCOAPODS_EXECUTABLE: "
-        "${{ steps.strict_inputs.outputs.cocoapods_executable }}" in job
-    )
-    assert (
-        '${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.packaging_env }}'
-        in job
-    )
-    assert job.index("id: strict_inputs") < job.index("Gate (quwoquan_service packaging)")
-    assert "app-dependency-sync/cache" not in job
-    assert "ln -s" not in job
-    # 三格并行后时长与结果都按兄弟作业收口：少跑一格必须算证据不齐，而不是默认通过。
-    assert '--require-count "service_packaging=3"' in workflow
-    assert '--phase-prefix "service_packaging=Delivery Gate — Service Packaging"' in workflow
-
-
-def test_delivery_gate_cancels_superseded_runs_without_merging_the_two_ranges() -> None:
-    workflow = (ROOT / ".github/workflows/delivery-gate.yml").read_text(encoding="utf-8")
-    concurrency = workflow[workflow.index("concurrency:") : workflow.index("\non:")]
-
-    assert "group: delivery-gate-${{ github.event.pull_request.number || github.ref }}" in concurrency
     assert "cancel-in-progress: true" in concurrency
-    # push 对上一个 tip、pull_request 对 main，两段区间不同；按 head SHA 归一会丢区间。
-    assert "head.sha" not in concurrency
 
 
 def test_prod_packaging_contract_and_runtime_readiness_are_separate_and_wired() -> None:
     makefile = MAKEFILE.read_text(encoding="utf-8")
     gate = GATE_REPO.read_text(encoding="utf-8")
-    prod_workflow = (
-        ROOT / ".github/workflows/deploy-prod-auto.yml"
-    ).read_text(encoding="utf-8")
-
     contract_start = makefile.index("verify-prod-packaging-contract:")
     contract_end = makefile.index("\n\n", contract_start)
     contract_recipe = makefile[contract_start:contract_end]
@@ -328,11 +311,11 @@ def test_prod_packaging_contract_and_runtime_readiness_are_separate_and_wired() 
     assert "stackctl.py --output-format json doctor --target prod-hosted" in runtime_recipe
     assert "packaging" not in runtime_recipe
 
-    package_step = prod_workflow.index("Materialize canonical configuration packages once")
-    verify_step = prod_workflow.index("Verify exact Prod packaging candidate")
-    assert package_step < verify_step
-    assert "--kind packaging" in prod_workflow[verify_step:]
-    assert "--profile smoke" in prod_workflow[verify_step:]
+    release_qualification = (
+        ROOT / ".github/workflows/release-qualification.yml"
+    ).read_text(encoding="utf-8")
+    assert "uses: ./.github/workflows/service_pipeline.yml" in release_qualification
+    assert "uses: ./.github/workflows/app_pipeline.yml" in release_qualification
 
 
 

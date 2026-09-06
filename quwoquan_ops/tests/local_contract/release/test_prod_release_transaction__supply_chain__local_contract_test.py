@@ -13,257 +13,28 @@ from pathlib import Path
 from unittest.mock import patch
 
 from quwoquan_ops.cli import stackctl
-from quwoquan_ops.cli.prod import collect_release_artifact_descriptors as evidence_collector
-from quwoquan_ops.cli.prod import finalize_mainline_release_artifact as finalizer
-from quwoquan_ops.cli.prod import generate_mainline_release_artifact as generator
 from quwoquan_ops.cli.prod import hosted_release_ledger
 from quwoquan_ops.tests.support.rollout_stage_promotion_evidence_test_support import (
     promotion_evidence,
 )
-from quwoquan_ops.tests.support.prod_release_evidence_sources_test_support import (
-    _application_package_payloads,
-    _application_package_sources,
-    _evidence_sources,
-    _provider_raw_dir,
-)
 
-ROOT = Path(__file__).resolve().parents[4]
-APP_EVIDENCE_REF = "oci://ghcr.io/example/quwoquan/app-candidate@sha256:" + ("a" * 64)
 
-def _git_head() -> str:
-    return subprocess.run(
-        ["git", "rev-parse", "HEAD"],
-        cwd=ROOT,
-        check=True,
-        capture_output=True,
-        text=True,
-    ).stdout.strip()
-
-def _write_build_input(
-    artifact: Path,
-    *,
-    services: tuple[str, ...],
+def candidate_material_promotion_evidence(
+    *, candidate_id: str, candidate_material_id: str, stage: str
 ) -> dict[str, object]:
-    configuration_packages: dict[str, dict[str, dict[str, str]]] = {
-        environment: {} for environment in finalizer.ENVIRONMENTS
-    }
-    transport_tag = "sha-" + _git_head()
-    for environment in finalizer.ENVIRONMENTS:
-        for service in generator.RELEASE_SERVICES:
-            relative = (
-                Path("packages/environments")
-                / environment
-                / "services"
-                / service
-                / "config/config.yaml"
-            )
-            path = artifact / relative
-            generator.write_release_snapshot(
-                path,
-                generator.render_release_snapshot(service, environment),
-            )
-            configuration_packages[environment][service] = {
-                "path": relative.as_posix(),
-                "digest": generator.sha256_file(path),
-            }
-    environment_artifacts = {
-        environment: {
-            "environment": environment,
-            "environmentArtifactDigest": None,
-            "images": {
-                service: {
-                    "repository": (
-                        "ghcr.io/example/quwoquan/"
-                        f"{service}-{'prod' if environment == 'prod' else 'nonprod'}"
-                    ),
-                    "transportRef": (
-                        "ghcr.io/example/quwoquan/"
-                        f"{service}-{'prod' if environment == 'prod' else 'nonprod'}:"
-                        f"{transport_tag}"
-                    ),
-                }
-                for service in services
-            },
-            "configurationPackages": configuration_packages[environment],
-        }
-        for environment in finalizer.ENVIRONMENTS
-    }
-    manifest = finalizer.seal_manifest(
-        {
-            "schema": finalizer.SCHEMA,
-            "releaseTrainId": None,
-            "releaseCompositionId": None,
-            "status": "build-input",
-            "generatedAt": "2026-07-28T00:00:00Z",
-            "source": {
-                "gitSha": _git_head(),
-                "treeDigest": generator.resolve_tree_digest(_git_head()),
-                "repository": "example/quwoquan",
-                "workflowRunId": "1",
-                "sourceArchiveDigest": None,
-            },
-            "artifactDigest": None,
-            "environmentArtifacts": environment_artifacts,
-            "applicationPackages": {},
-            "publicWeb": None,
-            "androidOfficialRelease": None,
-            "opsPortal": None,
-            "contractGraphDigest": None,
-            "requiredEvidence": {
-                "environmentArtifacts": {
-                    environment: list(services)
-                    for environment in finalizer.ENVIRONMENTS
-                },
-                "configurationPackages": {
-                    environment: list(generator.RELEASE_SERVICES)
-                    for environment in finalizer.ENVIRONMENTS
-                },
-                "applicationPackages": list(finalizer.APPLICATION_PACKAGES),
-                "opsPortal": True,
-                "contractGraphDigest": True,
-                "providerEvidence": True,
-                "testEvidence": list(finalizer.TEST_LAYERS),
-                "environmentReceipts": list(finalizer.ENVIRONMENTS),
-                "rolloutReceipt": True,
-                "rollbackReceipt": True,
-            },
-            "testEvidence": {},
-            "providerEvidence": {},
-            "environmentReceipts": {},
-            "rolloutReceipt": None,
-            "rollbackReceipt": None,
-            "blockers": [
-                "immutable-image-evidence-pending",
-                "whole-application-evidence-pending",
-            ],
-            "missingEvidence": [
-                *(
-                    f"environmentArtifacts.{environment}.images.{service}.digest"
-                    for environment in finalizer.ENVIRONMENTS
-                    for service in services
-                ),
-                *(
-                    f"applicationPackages.{build_product_id}"
-                    for build_product_id in finalizer.APPLICATION_PACKAGES
-                ),
-                "publicWeb",
-                "androidOfficialRelease",
-                "opsPortal",
-                "contractGraphDigest",
-                "providerEvidence",
-                "testEvidence",
-                *(f"environmentReceipts.{environment}" for environment in finalizer.ENVIRONMENTS),
-                "rollbackReceipt.ready",
-                "rolloutReceipt",
-                "rollbackReceipt.outcome",
-            ],
-        }
+    value = promotion_evidence(
+        candidate_id=candidate_id,
+        artifact_digest=candidate_material_id,
+        stage=stage,
     )
-    generator.write_json(artifact / "manifest.json", manifest)
-    return manifest
-
-def _write_image_descriptors(
-    directory: Path,
-    manifest: dict[str, object],
-) -> None:
-    for environment, artifact_value in manifest["environmentArtifacts"].items():
-        artifact = dict(artifact_value)
-        trust_domain = "prod" if environment == "prod" else "nonprod"
-        for service, image_value in artifact["images"].items():
-            image = dict(image_value)
-            repository = str(image["repository"])
-            digest = "sha256:" + hashlib.sha256(
-                f"{service}:{trust_domain}".encode("utf-8")
-            ).hexdigest()
-            ref = f"{repository}@{digest}"
-            generator.write_json(
-                directory / environment / f"{service}.json",
-                {
-                    "environment": environment,
-                    "runtimeImageOwner": service,
-                    "repository": repository,
-                    "transportRef": image["transportRef"],
-                    "digest": digest,
-                    "ref": ref,
-                    "attestations": {
-                        "spdxSbom": f"oci://{ref}#spdxSbom",
-                        "slsaProvenance": f"oci://{ref}#slsaProvenance",
-                    },
-                },
-            )
-
-def _write_receipt(
-    path: Path,
-    manifest: dict[str, object],
-    *,
-    kind: str,
-    environment: str,
-    status: str,
-) -> Path:
-    source = manifest["source"]
-    assert isinstance(source, dict)
-    fixture_root = (
-        path.parent.parent if path.parent.name == "preprod-receipts" else path.parent
-    )
-    raw = fixture_root / "artifact/evidence/raw/release-proof.json"
-    generator.write_json(raw, {"status": "passed"})
-    evidence = {
-        "files": {
-            "releaseProof": {
-                "path": raw.relative_to(fixture_root / "artifact").as_posix(),
-                "digest": finalizer.sha256_file(raw),
-            }
-        }
-    }
-    evidence_digest = "sha256:" + hashlib.sha256(
-        json.dumps(evidence, separators=(",", ":"), sort_keys=True).encode("utf-8")
+    value["candidateMaterialId"] = value.pop("artifactDigest")
+    unsigned = dict(value)
+    unsigned.pop("evidenceDigest")
+    value["evidenceDigest"] = "sha256:" + hashlib.sha256(
+        hosted_release_ledger._canonical_bytes(unsigned)
     ).hexdigest()
-    generator.write_json(
-        path,
-        {
-            "schema": {
-                "environment": finalizer.ENVIRONMENT_RECEIPT_SCHEMA,
-                "rollback": finalizer.ROLLBACK_RECEIPT_SCHEMA,
-            }[kind],
-            "environment": environment,
-            "status": status,
-            "releaseCompositionId": manifest["releaseCompositionId"],
-            "sourceGitSha": source["gitSha"],
-            "sourceTreeDigest": source["treeDigest"],
-            "evidenceDigest": evidence_digest,
-            "evidence": evidence,
-            "verifiedAt": "2026-07-28T00:05:00Z",
-        },
-    )
-    return path
+    return value
 
-def _qualify_for_prod(
-    root: Path,
-    artifact: Path,
-    candidate: dict[str, object],
-) -> dict[str, object]:
-    receipts = root / "preprod-receipts"
-    for environment in finalizer.PRE_PROD_ENVIRONMENTS:
-        _write_receipt(
-            receipts / f"{environment}.json",
-            candidate,
-            kind="environment",
-            environment=environment,
-            status="passed",
-        )
-    rollback_ready = _write_receipt(
-        root / "rollback-ready.json",
-        candidate,
-        kind="rollback",
-        environment="prod",
-        status="ready",
-    )
-    return finalizer.finalize(
-        artifact,
-        None,
-        environment_receipts_dir=receipts,
-        rollback_receipt_path=rollback_ready,
-    )
 
 class ProdReleaseTransactionContractTest(unittest.TestCase):
     def test_prod_registry_attestations_are_verified_concurrently(self) -> None:
@@ -304,80 +75,19 @@ class ProdReleaseTransactionContractTest(unittest.TestCase):
 
         self.assertEqual(verify_mock.call_count, 2)
 
-    def test_manifest_requires_every_digest_and_attestation(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
-            artifact = root / "artifact"
-            descriptors = root / "descriptors"
-            artifact_descriptors = root / "artifact-descriptors"
-            artifact.mkdir()
-            descriptors.mkdir()
-            artifact_descriptors.mkdir()
-            manifest = _write_build_input(
-                artifact,
-                services=generator.DEPLOYED_SERVICES,
+    def test_formal_rollout_has_no_release_evidence_manifest_loader(self) -> None:
+        self.assertFalse(hasattr(stackctl, "_deployable_release_manifest"))
+        parser = stackctl.build_parser()
+        with self.assertRaises(SystemExit):
+            parser.parse_args(
+                [
+                    "deploy",
+                    "--target",
+                    "prod-hosted",
+                    "--release-manifest",
+                    "/tmp/legacy.json",
+                ]
             )
-            _write_image_descriptors(descriptors, manifest)
-            component = finalizer.finalize(artifact, descriptors)
-            self.assertEqual(component["status"], "component-ready")
-            evidence_collector.collect(
-                artifact_dir=artifact,
-                descriptors_dir=artifact_descriptors,
-                sources=_evidence_sources(root, component),
-                application_package_sources=_application_package_sources(
-                    root, component
-                ),
-                application_package_payloads=evidence_collector.load_application_package_payloads(
-                    _application_package_payloads(root)
-                ),
-                application_evidence_ref=APP_EVIDENCE_REF,
-                provider_raw_dir=_provider_raw_dir(root),
-            )
-            candidate = finalizer.finalize(artifact, None, artifact_descriptors)
-            self.assertEqual(candidate["status"], "qualified")
-            finalized = _qualify_for_prod(root, artifact, candidate)
-            self.assertEqual(finalized["status"], "main-admitted")
-            self.assertEqual(
-                set(finalized["applicationPackages"]),
-                set(finalizer.APPLICATION_PACKAGES),
-            )
-            self.assertIn("opsPortal", finalized)
-            self.assertNotIn("opsPortal", finalized["applicationPackages"])
-            generator.write_json(
-                artifact / "governance-receipt.json",
-                {
-                    "schema": "prod-release-governance-receipt",
-                    "repository": "example/quwoquan",
-                    "gitSha": _git_head(),
-                    "artifactDigest": finalized["artifactDigest"],
-                    "approvers": ["reviewer"],
-                    "distinctPrincipals": ["author", "reviewer"],
-                },
-            )
-            path, digest, loaded = stackctl._deployable_release_manifest(
-                str(artifact / "manifest.json"),
-                candidate_digest=finalized["releaseCompositionId"],
-            )
-            self.assertEqual(path, (artifact / "manifest.json").resolve())
-            self.assertEqual(digest, finalized["artifactDigest"])
-            self.assertEqual(
-                set(loaded["environmentArtifacts"]["prod"]["images"]),
-                set(generator.DEPLOYED_SERVICES),
-            )
-
-            first_config = artifact / next(
-                iter(
-                    finalized["environmentArtifacts"]["prod"][
-                        "configurationPackages"
-                    ].values()
-                )
-            )["path"]
-            first_config.write_text("tampered: true\n", encoding="utf-8")
-            with self.assertRaisesRegex(RuntimeError, "config digest mismatch"):
-                stackctl._deployable_release_manifest(
-                    str(artifact / "manifest.json"),
-                    candidate_digest=finalized["releaseCompositionId"],
-                )
 
     def test_release_ledger_is_cas_ordered_and_receipted(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -386,33 +96,35 @@ class ProdReleaseTransactionContractTest(unittest.TestCase):
             to_digest = "sha256:" + ("b" * 64)
             request = {
                 "schema": hosted_release_ledger.REQUEST_SCHEMA,
-                "environmentAcceptanceRef": "prod/fact.json",
-                "environmentAcceptanceDigest": "sha256:" + ("6" * 64),
-                "environmentAcceptanceFactId": "sha256:" + ("7" * 64),
-                "gammaPredecessorFactId": "sha256:" + ("8" * 64),
-                "gammaPredecessorDigest": "sha256:" + ("9" * 64),
-                "engineeringEligibilityRef": "prod/engineering.json",
-                "engineeringEligibilityDigest": "sha256:" + ("d" * 64),
-                "durableApprovalRef": "prod/approval.json",
-                "durableApprovalDigest": "sha256:" + ("e" * 64),
+                "prodActivationAdmissionRef": "ghcr.io/owner/prod-admission@sha256:" + ("6" * 64),
+                "prodActivationAdmissionOciDigest": "sha256:" + ("6" * 64),
+                "prodActivationAdmissionPayloadDigest": "sha256:" + ("6" * 64),
+                "prodActivationAdmissionId": "sha256:" + ("6" * 64),
+                "candidateMaterialManifestRef": "ghcr.io/owner/release-tag@sha256:" + ("7" * 64),
+                "candidateMaterialManifestOciDigest": "sha256:" + ("7" * 64),
+                "candidateMaterialManifestPayloadDigest": "sha256:" + ("7" * 64),
+                                "previousReleasedRef": "ghcr.io/owner/released@sha256:" + ("e" * 64),
+                                "previousReleasedOciDigest": "sha256:" + ("e" * 64),
+                "previousReleasedPayloadDigest": "sha256:" + ("e" * 64),
+                "previousReleasedId": "sha256:" + ("f" * 64),
                 "service": "prod-stack",
                 "fromCandidateDigest": from_digest,
                 "toCandidateDigest": to_digest,
                 "step": "0",
                 "stage": "canary",
                 "triggerStage": "canary",
-                "fromReleaseEvidenceRef": (
-                    f"ghcr.io/owner/repo/release-artifact@{from_digest}"
+                "fromServiceFactoryOciDigest": (
+                    from_digest
                 ),
-                "toReleaseEvidenceRef": (
-                    f"ghcr.io/owner/repo/release-artifact@{to_digest}"
+                "toServiceFactoryOciDigest": (
+                    to_digest
                 ),
-                "fromImageTransportTag": "sha-source",
-                "toImageTransportTag": "sha-target",
+                "fromAppFactoryOciDigest": "sha256:" + "1" * 64,
+                "toAppFactoryOciDigest": "sha256:" + "1" * 64,
                 "decision": "continue",
                 "rollbackOutcome": "not_triggered",
                 "rollbackEvidence": {"triggered": False},
-                "artifactDigest": to_digest,
+                "candidateMaterialId": to_digest,
                 "imageDigest": to_digest,
                 "configDigest": to_digest,
                 "contractGraphDigest": to_digest,
@@ -420,9 +132,9 @@ class ProdReleaseTransactionContractTest(unittest.TestCase):
                 "expectedGeneration": 0,
                 "sloReadback": {
                     "source": "prometheus",
-                    "promotionEvidence": promotion_evidence(
+                    "promotionEvidence": candidate_material_promotion_evidence(
                         candidate_id=to_digest,
-                        artifact_digest=to_digest,
+                        candidate_material_id=to_digest,
                         stage="canary",
                     ),
                 },
@@ -472,29 +184,31 @@ class ProdReleaseTransactionContractTest(unittest.TestCase):
             }
             initial = {
                 "schema": hosted_release_ledger.REQUEST_SCHEMA,
-                "environmentAcceptanceRef": "prod/fact.json",
-                "environmentAcceptanceDigest": "sha256:" + ("6" * 64),
-                "environmentAcceptanceFactId": "sha256:" + ("7" * 64),
-                "gammaPredecessorFactId": "sha256:" + ("8" * 64),
-                "gammaPredecessorDigest": "sha256:" + ("9" * 64),
-                "engineeringEligibilityRef": "prod/engineering.json",
-                "engineeringEligibilityDigest": "sha256:" + ("d" * 64),
-                "durableApprovalRef": "prod/approval.json",
-                "durableApprovalDigest": "sha256:" + ("e" * 64),
+                "prodActivationAdmissionRef": "ghcr.io/owner/prod-admission@sha256:" + ("6" * 64),
+                "prodActivationAdmissionOciDigest": "sha256:" + ("6" * 64),
+                "prodActivationAdmissionPayloadDigest": "sha256:" + ("6" * 64),
+                "prodActivationAdmissionId": "sha256:" + ("6" * 64),
+                "candidateMaterialManifestRef": "ghcr.io/owner/release-tag@sha256:" + ("7" * 64),
+                "candidateMaterialManifestOciDigest": "sha256:" + ("7" * 64),
+                "candidateMaterialManifestPayloadDigest": "sha256:" + ("7" * 64),
+                                "previousReleasedRef": "ghcr.io/owner/released@sha256:" + ("e" * 64),
+                                "previousReleasedOciDigest": "sha256:" + ("e" * 64),
+                "previousReleasedPayloadDigest": "sha256:" + ("e" * 64),
+                "previousReleasedId": "sha256:" + ("f" * 64),
                 "service": "prod-stack",
                 "fromCandidateDigest": source,
                 "toCandidateDigest": candidate,
                 "step": "0",
                 "stage": "canary",
                 "triggerStage": "canary",
-                "fromReleaseEvidenceRef": f"ghcr.io/owner/release@{source}",
-                "toReleaseEvidenceRef": f"ghcr.io/owner/release@{candidate}",
-                "fromImageTransportTag": "sha-source",
-                "toImageTransportTag": "sha-candidate",
+                "fromServiceFactoryOciDigest": source,
+                "toServiceFactoryOciDigest": candidate,
+                "fromAppFactoryOciDigest": "sha256:" + "1" * 64,
+                "toAppFactoryOciDigest": "sha256:" + "1" * 64,
                 "decision": "continue",
                 "rollbackOutcome": "not_triggered",
                 "rollbackEvidence": {"triggered": False},
-                "artifactDigest": candidate,
+                "candidateMaterialId": candidate,
                 "imageDigest": candidate,
                 "configDigest": candidate,
                 "contractGraphDigest": candidate,
@@ -502,9 +216,9 @@ class ProdReleaseTransactionContractTest(unittest.TestCase):
                 "expectedGeneration": 0,
                 "sloReadback": {
                     "source": "prometheus",
-                    "promotionEvidence": promotion_evidence(
+                    "promotionEvidence": candidate_material_promotion_evidence(
                         candidate_id=candidate,
-                        artifact_digest=candidate,
+                        candidate_material_id=candidate,
                         stage="canary",
                     ),
                 },
@@ -524,11 +238,11 @@ class ProdReleaseTransactionContractTest(unittest.TestCase):
                     "verifiedAt": "2026-07-26T00:00:01+00:00",
                     "sloReadback": {
                         "source": "prometheus",
-                        "promotionEvidence": promotion_evidence(
-                            candidate_id=candidate,
-                            artifact_digest=candidate,
-                            stage="5",
-                        ),
+                        "promotionEvidence": candidate_material_promotion_evidence(
+                        candidate_id=candidate,
+                        candidate_material_id=candidate,
+                        stage="5",
+                    ),
                     },
                 }
             )
@@ -540,10 +254,10 @@ class ProdReleaseTransactionContractTest(unittest.TestCase):
                     "step": "100",
                     "stage": "100",
                     "triggerStage": "canary",
-                    "fromReleaseEvidenceRef": f"ghcr.io/owner/release@{candidate}",
-                    "toReleaseEvidenceRef": f"ghcr.io/owner/release@{source}",
-                    "fromImageTransportTag": "sha-candidate",
-                    "toImageTransportTag": "sha-source",
+                    "fromServiceFactoryOciDigest": candidate,
+                    "toServiceFactoryOciDigest": source,
+                    "fromAppFactoryOciDigest": "sha256:" + "1" * 64,
+                    "toAppFactoryOciDigest": "sha256:" + "1" * 64,
                     "decision": "rolled_back",
                     "rollbackOutcome": "rolled_back",
                     "rollbackEvidence": {
@@ -613,15 +327,17 @@ class ProdReleaseTransactionContractTest(unittest.TestCase):
         digest = "sha256:" + ("b" * 64)
         receipt = {
             "schema": hosted_release_ledger.RECEIPT_SCHEMA,
-            "environmentAcceptanceRef": "prod/fact.json",
-            "environmentAcceptanceDigest": "sha256:" + ("6" * 64),
-            "environmentAcceptanceFactId": "sha256:" + ("7" * 64),
-            "gammaPredecessorFactId": "sha256:" + ("8" * 64),
-            "gammaPredecessorDigest": "sha256:" + ("9" * 64),
-            "engineeringEligibilityRef": "prod/engineering.json",
-            "engineeringEligibilityDigest": "sha256:" + ("d" * 64),
-            "durableApprovalRef": "prod/approval.json",
-            "durableApprovalDigest": "sha256:" + ("e" * 64),
+            "prodActivationAdmissionRef": "ghcr.io/owner/prod-admission@sha256:" + ("6" * 64),
+            "prodActivationAdmissionOciDigest": "sha256:" + ("6" * 64),
+            "prodActivationAdmissionPayloadDigest": "sha256:" + ("6" * 64),
+            "prodActivationAdmissionId": "sha256:" + ("6" * 64),
+            "candidateMaterialManifestRef": "ghcr.io/owner/release-tag@sha256:" + ("7" * 64),
+            "candidateMaterialManifestOciDigest": "sha256:" + ("7" * 64),
+            "candidateMaterialManifestPayloadDigest": "sha256:" + ("7" * 64),
+            "previousReleasedRef": "ghcr.io/owner/released@sha256:" + ("e" * 64),
+            "previousReleasedOciDigest": "sha256:" + ("e" * 64),
+            "previousReleasedPayloadDigest": "sha256:" + ("e" * 64),
+            "previousReleasedId": "sha256:" + ("f" * 64),
             "authority": hosted_release_ledger.AUTHORITY,
             "service": "prod-stack",
             "fromCandidateDigest": from_digest,
@@ -629,18 +345,18 @@ class ProdReleaseTransactionContractTest(unittest.TestCase):
             "step": "100",
             "stage": "100",
             "triggerStage": "100",
-            "fromReleaseEvidenceRef": (
-                f"ghcr.io/owner/repo/release-artifact@{from_digest}"
+            "fromServiceFactoryOciDigest": (
+                from_digest
             ),
-            "toReleaseEvidenceRef": (
-                f"ghcr.io/owner/repo/release-artifact@{digest}"
+            "toServiceFactoryOciDigest": (
+                digest
             ),
-            "fromImageTransportTag": "sha-source",
-            "toImageTransportTag": "sha-target",
+            "fromAppFactoryOciDigest": "sha256:" + "1" * 64,
+            "toAppFactoryOciDigest": "sha256:" + "1" * 64,
             "decision": "continue",
             "rollbackOutcome": "not_triggered",
             "rollbackEvidence": {"triggered": False},
-            "artifactDigest": digest,
+            "candidateMaterialId": digest,
             "imageDigest": digest,
             "configDigest": digest,
             "contractGraphDigest": digest,
@@ -648,11 +364,11 @@ class ProdReleaseTransactionContractTest(unittest.TestCase):
             "expectedGeneration": 2,
             "committedGeneration": 3,
             "sloReadback": {
-                "promotionEvidence": promotion_evidence(
-                    candidate_id=digest,
-                    artifact_digest=digest,
-                    stage="100",
-                )
+                "promotionEvidence": candidate_material_promotion_evidence(
+                        candidate_id=digest,
+                        candidate_material_id=digest,
+                        stage="100",
+                    )
             },
             "postChecks": [],
             "lastGoodCandidateDigest": digest,

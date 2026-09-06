@@ -16,10 +16,14 @@ from pathlib import Path
 from unittest import mock
 
 from quwoquan_ops.ci import generate_release_bound_environment_identity as renderer
+from quwoquan_ops.ci.release_bound_environment_acceptance import (
+    validate_environment_acceptance_authority,
+)
 from quwoquan_ops.ci import release_bound_data_evidence as data_validator
-from quwoquan_ops.cli.prod.finalize_mainline_release_artifact import (
-    canonical_release_composition_id,
+from quwoquan_ops.ci.release_evidence_reader import (
+    canonical_candidate_digest,
     canonical_manifest_digest,
+    validate_historical_release_snapshot as validate_release_snapshot,
 )
 from quwoquan_ops.tests.support.release_bound_environment_identity_test_support import (
     BASELINE_ID,
@@ -31,10 +35,17 @@ from quwoquan_ops.tests.support.release_bound_environment_identity_test_support 
     SOURCE_DIGEST,
     SOURCE_REVISION,
     SUBJECT_HASH,
+    TEST_ENVIRONMENT_ACCEPTANCE_SIGNING_KEY,
+    TEST_ENVIRONMENT_ACCEPTANCE_SIGNING_KEY_ENV,
+    ENVIRONMENT_ACCEPTANCE_SCHEMA,
     Fixture,
+    verify_environment_acceptance_signature,
     _checksum,
     _document_digest,
+    _sha,
+    _sign_environment_acceptance,
     _write,
+    _write_canonical,
 )
 
 
@@ -42,7 +53,7 @@ class ReleaseBoundEnvironmentIdentityContractTest(unittest.TestCase):
     def setUp(self) -> None:
         self.manifest_files = mock.patch.object(
             renderer,
-            "validate_manifest_files",
+            "validate_historical_release_snapshot",
         ).start()
         self.data_evidence = mock.patch.object(
             renderer,
@@ -60,22 +71,6 @@ class ReleaseBoundEnvironmentIdentityContractTest(unittest.TestCase):
                 "mediaAuditEventId": "audit-media-001",
             },
         ).start()
-        self.acceptance_authority = mock.patch.object(
-            renderer,
-            "_validate_environment_acceptance_authority",
-            return_value={
-                "factId": DIGEST_A,
-                "ref": "environment-acceptance.json",
-                "digest": DIGEST_B,
-                "requiredRawResults": [
-                    {
-                        "ref": "env/alpha/raw/readiness-case.json",
-                        "digest": DIGEST_A,
-                        "slotId": DIGEST_B,
-                    }
-                ],
-            },
-        ).start()
         self.app_readback_patcher = mock.patch.object(
             renderer,
             "_validate_app_readback_receipts",
@@ -86,7 +81,33 @@ class ReleaseBoundEnvironmentIdentityContractTest(unittest.TestCase):
             "_validate_telemetry_backend_receipt",
         )
         self.telemetry_backend = self.telemetry_backend_patcher.start()
+        mock.patch.dict(
+            "os.environ",
+            {
+                TEST_ENVIRONMENT_ACCEPTANCE_SIGNING_KEY_ENV:
+                    TEST_ENVIRONMENT_ACCEPTANCE_SIGNING_KEY,
+            },
+            clear=False,
+        ).start()
         self.addCleanup(mock.patch.stopall)
+
+    @staticmethod
+    def _validate_fixture_acceptance(
+        fixture: Fixture,
+        *,
+        acceptance_path: Path | None = None,
+        evidence_root: Path | None = None,
+    ) -> dict[str, object]:
+        manifest = json.loads(fixture.paths["manifest"].read_text(encoding="utf-8"))
+        return validate_environment_acceptance_authority(
+            acceptance_path or fixture.paths["acceptance"],
+            evidence_root=evidence_root or fixture.authority_root,
+            environment=fixture.environment,
+            candidate_id=str(manifest["candidateId"]),
+            commit=str(manifest["source"]["gitSha"]),
+            tree=str(manifest["source"]["treeDigest"]).removeprefix("sha1:"),
+            signature_verifier=verify_environment_acceptance_signature,
+        )
 
     def test_projection_writes_identity_when_owner_validators_are_stubbed(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -118,10 +139,32 @@ class ReleaseBoundEnvironmentIdentityContractTest(unittest.TestCase):
                 "appUatEnvelopeDigest", payload["identity"]["activationEnvelope"]
             )
             authority = payload["identity"]["environmentAcceptanceFact"]
-            self.assertEqual(authority["factId"], DIGEST_A)
+            acceptance_payload = json.loads(
+                fixture.paths["acceptance"].read_text(encoding="utf-8")
+            )
+            self.assertEqual(authority["factId"], acceptance_payload["factId"])
             self.assertEqual(
-                authority["requiredRawResults"][0]["ref"],
-                "env/alpha/raw/readiness-case.json",
+                authority["ref"],
+                fixture.paths["acceptance"]
+                .relative_to(fixture.authority_root)
+                .as_posix(),
+            )
+            self.assertEqual(authority["digest"], _sha(fixture.paths["acceptance"]))
+            self.assertEqual(
+                authority["caseResultRefs"], acceptance_payload["caseResultRefs"]
+            )
+            self.assertEqual(
+                set(authority["namedEvidenceRefs"]),
+                {
+                    "runtimeIdentity",
+                    "dataLifecycle",
+                    "providerReadiness",
+                    "observabilityReadiness",
+                    "inspectEvidence",
+                    "doctorEvidence",
+                    "cleanupEvidence",
+                    "leaseClosureEvidence",
+                },
             )
             self.assertEqual(
                 set(payload["identity"]["appArtifacts"]),
@@ -141,7 +184,14 @@ class ReleaseBoundEnvironmentIdentityContractTest(unittest.TestCase):
                 "private_signed",
             )
             self.assertNotIn("publicUrl", payload["identity"]["mediaReadback"])
-            self.manifest_files.assert_called_once()
+            self.assertEqual(self.manifest_files.call_count, 2)
+            self.assertNotIn(
+                "artifact_dir", self.manifest_files.call_args_list[0].kwargs
+            )
+            self.assertEqual(
+                self.manifest_files.call_args_list[1].kwargs["artifact_dir"],
+                fixture.paths["manifest"].resolve().parent,
+            )
             self.data_evidence.assert_called_once()
             self.app_readback.assert_called_once()
             self.assertTrue(
@@ -151,6 +201,122 @@ class ReleaseBoundEnvironmentIdentityContractTest(unittest.TestCase):
                     if key != "appArtifactReceipts"
                 )
             )
+
+    def test_canonical_acceptance_rejects_v1_candidate_drift_and_source_drift(self) -> None:
+        for mutation in ("v1", "candidate", "source"):
+            with (
+                self.subTest(mutation=mutation),
+                tempfile.TemporaryDirectory() as directory,
+            ):
+                fixture = Fixture(Path(directory))
+                acceptance = json.loads(
+                    fixture.paths["acceptance"].read_text(encoding="utf-8")
+                )
+                manifest = json.loads(
+                    fixture.paths["manifest"].read_text(encoding="utf-8")
+                )
+                expected_candidate_id = str(manifest["candidateId"])
+                expected_commit = str(manifest["source"]["gitSha"])
+                expected_tree = str(manifest["source"]["treeDigest"]).removeprefix(
+                    "sha1:"
+                )
+                if mutation == "v1":
+                    acceptance = {
+                        "schema": ENVIRONMENT_ACCEPTANCE_SCHEMA.removesuffix("2") + "1",
+                        "environment": "alpha",
+                        "factId": DIGEST_A,
+                    }
+                    _write_canonical(fixture.paths["acceptance"], acceptance)
+                elif mutation == "candidate":
+                    expected_candidate_id = DIGEST_B
+                else:
+                    expected_commit = "f" * 40
+                with self.assertRaisesRegex(ValueError, "EnvironmentAcceptanceFact"):
+                    validate_environment_acceptance_authority(
+                        fixture.paths["acceptance"],
+                        evidence_root=fixture.authority_root,
+                        environment="alpha",
+                        candidate_id=expected_candidate_id,
+                        commit=expected_commit,
+                        tree=expected_tree,
+                        signature_verifier=verify_environment_acceptance_signature,
+                    )
+
+    def test_acceptance_rejects_tamper_path_escape_and_symlink_refs(self) -> None:
+        for mutation in ("tamper", "path-escape", "symlink"):
+            with (
+                self.subTest(mutation=mutation),
+                tempfile.TemporaryDirectory() as directory,
+            ):
+                fixture = Fixture(Path(directory))
+                acceptance = json.loads(
+                    fixture.paths["acceptance"].read_text(encoding="utf-8")
+                )
+                runtime_ref = str(acceptance["runtimeIdentity"]["ref"])
+                runtime_path = fixture.authority_root / runtime_ref
+                if mutation == "tamper":
+                    runtime_path.write_bytes(runtime_path.read_bytes() + b" ")
+                elif mutation == "path-escape":
+                    outside = fixture.root / "outside-runtime-identity.json"
+                    outside.write_bytes(runtime_path.read_bytes())
+                    acceptance["runtimeIdentity"] = {
+                        "ref": "../outside-runtime-identity.json",
+                        "digest": _sha(outside),
+                    }
+                    _write_canonical(
+                        fixture.paths["acceptance"],
+                        _sign_environment_acceptance(acceptance),
+                    )
+                else:
+                    outside = fixture.root / "outside-runtime-identity.json"
+                    outside.write_bytes(runtime_path.read_bytes())
+                    runtime_path.unlink()
+                    runtime_path.symlink_to(outside)
+                with self.assertRaisesRegex(
+                    ValueError, "EnvironmentAcceptanceFact authority is invalid"
+                ):
+                    self._validate_fixture_acceptance(fixture)
+
+    def test_acceptance_rejects_missing_symlink_or_external_authority_root(
+        self,
+    ) -> None:
+        for mutation in ("missing-root", "symlink-root", "external-fact"):
+            with (
+                self.subTest(mutation=mutation),
+                tempfile.TemporaryDirectory() as directory,
+            ):
+                fixture = Fixture(Path(directory))
+                acceptance_path = fixture.paths["acceptance"]
+                evidence_root = fixture.authority_root
+                if mutation == "missing-root":
+                    evidence_root = fixture.root / "missing-authority"
+                    acceptance_path = evidence_root / "environment-acceptance.json"
+                elif mutation == "symlink-root":
+                    evidence_root = fixture.root / "linked-authority"
+                    evidence_root.symlink_to(
+                        fixture.authority_root, target_is_directory=True
+                    )
+                    acceptance_path = evidence_root / acceptance_path.name
+                else:
+                    acceptance_path = fixture.root / "external-acceptance.json"
+                    acceptance_path.write_bytes(
+                        fixture.paths["acceptance"].read_bytes()
+                    )
+                with self.assertRaises(ValueError):
+                    self._validate_fixture_acceptance(
+                        fixture,
+                        acceptance_path=acceptance_path,
+                        evidence_root=evidence_root,
+                    )
+
+    def test_prod_rejects_environment_acceptance_before_other_validation(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = Fixture(Path(directory), environment="prod")
+            output = Path(directory) / "identity.json"
+            self.assertEqual(renderer.main(fixture.argv(output)), 2)
+            self.assertFalse(output.exists())
+            self.manifest_files.assert_not_called()
+            self.data_evidence.assert_not_called()
 
     def test_research_media_validation_never_enters_public_video_path(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -343,6 +509,7 @@ class ReleaseBoundEnvironmentIdentityContractTest(unittest.TestCase):
                 self.subTest(mutation=mutation),
                 tempfile.TemporaryDirectory() as directory,
             ):
+                self.manifest_files.side_effect = None
                 fixture = Fixture(
                     Path(directory),
                     environment="prod" if mutation == "prod-run-count" else "alpha",
@@ -350,9 +517,10 @@ class ReleaseBoundEnvironmentIdentityContractTest(unittest.TestCase):
                 if mutation == "manifest-shape":
                     payload = json.loads(fixture.paths["manifest"].read_text())
                     payload["secondTruth"] = True
-                    payload["releaseCompositionId"] = canonical_release_composition_id(payload)
+                    payload["candidateId"] = canonical_candidate_digest(payload)
                     payload["artifactDigest"] = canonical_manifest_digest(payload)
                     _write(fixture.paths["manifest"], payload)
+                    self.manifest_files.side_effect = validate_release_snapshot
                 elif mutation == "object-closure":
                     payload = json.loads(fixture.paths["readiness"].read_text())
                     payload.pop("verificationChecksum")

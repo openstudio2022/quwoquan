@@ -65,6 +65,12 @@ def test_contract_owns_real_sources_required_evidence_and_zero_mutation() -> Non
     assert contract["human_calibration_policy"]["owner_contract_version"] == 2
     assert contract["human_calibration_policy"]["governance_may_recompute_human_semantics"] is False
     assert contract["layer_admission"]["human_calibration"]["provider_id"] == "human_calibration_readback_v2"
+    environment = contract["layer_admission"]["environment"]
+    assert environment["provider_id"] == "environment_acceptance_fact_v2"
+    assert environment["verifier_id"] == "governance.environment_acceptance_fact.v2"
+    assert contract["current_repository_evidence"]["external_provider_interfaces"]["environment"] == "environment_acceptance_fact_v2"
+    assert "environment_acceptance_v1" not in serialized
+    assert "governance.environment.v1" not in serialized
     assert contract["admission_policy"]["external_effects"]["unknown_outcome"] == "pending"
     assert contract["admission_policy"]["external_effects"]["retry_unknown"] is False
     assert "production_ready_claim: false" in serialized

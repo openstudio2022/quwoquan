@@ -22,35 +22,25 @@ pull_request_branch_prefixes:
   - lane/
 
 integration_branch: dev1.0
-integration_branch_activation:
-  state: active
-  transition_command: python3 -B quwoquan_ops/gate/verify_git_branch_policy.py --activation-transition --evidence-path .qwq_output/env/repo/runs/branch-policy/dev1.0-activation.json
-  evidence_kind: integration_branch_activation_v1
-  bootstrap:
-    remote_before_oid: absent
-    remote_after_oid: exact_local_integration_head
-    source_branch: dev1.0
-    target_branch: dev1.0
-    release_eligibility: false
-  active:
-    accepted_updates:
-      - lane_pull_request_merge
-      - system_fast_forward_backsync
-      - integration_matching_fast_forward_push
-    # matching_integration_or_lane_only：integration 与 lane 一样只允许推同名远端；
-    # integration→origin/dev1.0 另强制 expected-old 快进；main 仍禁止直推。
-    direct_push: matching_integration_or_lane_only
+integration_branch_updates:
+  accepted:
+    - trusted_integration_publisher_cas
+    - integration_worktree_fast_forward
+    - system_fast_forward_backsync
+  ordinary_direct_push: matching_integration_fast_forward_only
 release_branch: main
-production_source_branch: main
+source_admission_branch: main
+production_selector:
+  source: ReleaseTagAdmissionFact
+  acceptedTagKind: stable
+  exactOciDigestsRequired: true
+  mainHeadDenied: true
+  mutablePointerDenied: true
 production_workflow: .github/workflows/deploy-prod-auto.yml
 
 required_promotion_checks:
   - name: 03. Delivery Gate
     workflow: .github/workflows/delivery-gate.yml
-  - name: 04. Pre-Release Gate
-    workflow: .github/workflows/pre-release-gate.yml
-  - name: 05. App Env Device Matrix
-    workflow: .github/workflows/app-env-device-matrix-self-hosted.yml
 
 allowed_pull_request_edges:
   - head: dev1.0

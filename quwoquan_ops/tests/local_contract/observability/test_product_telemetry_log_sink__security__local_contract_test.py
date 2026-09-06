@@ -171,6 +171,16 @@ class ProductTelemetryLogSinkSecurityLocalContractTest(unittest.TestCase):
                 mock.patch.object(stackctl, "resolve_report_dir", return_value=report_dir),
                 mock.patch.object(
                     stackctl,
+                    "validate_up_report_dir",
+                    side_effect=lambda path, **_kwargs: Path(path),
+                ),
+                mock.patch.object(
+                    stackctl,
+                    "local_runtime_capacity_evidence",
+                    return_value={"issues": []},
+                ),
+                mock.patch.object(
+                    stackctl,
                     "active_deployment_candidate_snapshot",
                     return_value=_candidate_snapshot("gamma-local"),
                 ),

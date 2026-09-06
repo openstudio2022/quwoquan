@@ -65,27 +65,9 @@ def _command_up_impl(args: argparse.Namespace) -> dict[str, Any]:
             requested_target = _stackctl.app_target_for_env(args.env)
 
     build_only = bool(getattr(args, "build_only", False))
-    formal_release = bool(getattr(args, "formal_release", False))
     release_composition: dict[str, Any] = {}
     runtime_images: dict[str, dict[str, str]] = {}
     destructive_actions: list[str] = []
-    if formal_release and (
-        requested_target not in {"alpha-local", "beta-local", "gamma-local"}
-        or not getattr(args, "skip_build", False)
-        or not getattr(args, "skip_app", False)
-        or args.workload != "full"
-        or not str(getattr(args, "release_manifest", "") or "").strip()
-    ):
-        timing = _stackctl._finish_timing(started_monotonic, started_at)
-        return {
-            "exitCode": 2,
-            "summary": "stackctl up formal release is GATE_BLOCK",
-            "details": [
-                "formal release requires alpha/beta/gamma, --workload full, "
-                "--skip-build, --skip-app and a canonical --release-manifest"
-            ],
-            **timing,
-        }
     build_services = str(getattr(args, "build_services", "")).strip()
     if build_services and not build_only:
         timing = _stackctl._finish_timing(started_monotonic, started_at)
@@ -298,7 +280,7 @@ def _command_up_impl(args: argparse.Namespace) -> dict[str, Any]:
                 report_dir=report_dir,
                 report_target=report_target,
                 resolved_target=requested_target,
-                formal_release=formal_release,
+                formal_release=False,
                 release_input_classification=release_input_classification,
                 contract_graph_digest=contract_graph_digest,
                 timing=timing,
@@ -471,145 +453,6 @@ def _command_up_impl(args: argparse.Namespace) -> dict[str, Any]:
 
     if result is not None:
         pass
-    elif formal_release:
-        env = _stackctl._gamma_env_from_port_manifest(topology, requested_target)
-        env[_stackctl.PACKAGE_ROOT_OVERRIDE_ENV] = ""
-        env[_stackctl.RUNTIME_CANDIDATE_ROOT_ENV] = str(
-            (fixed_candidate_snapshot or {}).get("candidateDir") or ""
-        )
-        # Skill package trust must come from the capsule that this candidate
-        # sealed; re-issuing keys at up time would rebind a frozen release.
-        env["QWQ_FIXED_CANDIDATE_ROOT"] = env[_stackctl.RUNTIME_CANDIDATE_ROOT_ENV]
-        env["QWQ_RUN_ROOT"] = str(report_dir.resolve())
-        env["QWQ_OBSERVABILITY_RUN_ROOT"] = str(
-            _stackctl.env_observability_run_dir(env_name, report_dir.name).resolve()
-        )
-        env["QWQ_WORKLOAD"] = "full"
-        env["LOCAL_GAMMA_COMPOSE_UP_TIMEOUT_SECONDS"] = "420"
-        telemetry_env, telemetry_advisory = _stackctl._optional_product_telemetry_environment(
-            env_name,
-            requested_target,
-            candidate_snapshot=fixed_candidate_snapshot,
-        )
-        env.update(telemetry_env)
-        if telemetry_advisory:
-            steps.append(
-                {
-                    "kind": "observability-prerequisite",
-                    "exitCode": 2,
-                    "blocking": True,
-                    "stdout": "",
-                    "stderr": telemetry_advisory,
-                }
-            )
-        cmd = _stackctl._gamma_start_command(args)
-        syntax_cmd = [
-            "bash",
-            "-n",
-            "quwoquan_app/scripts/gamma/start_local_gamma_mirror.sh",
-        ]
-        syntax_result = _stackctl.run(syntax_cmd, env=env)
-        provider_error = None
-        if syntax_result.returncode == 0:
-            try:
-                if fixed_candidate_snapshot is None:
-                    raise ValueError("fixed immutable candidate snapshot is missing")
-                (
-                    provider_runtime_binding,
-                    observability_runtime_binding,
-                ) = _stackctl._candidate_bindings_from_snapshot(
-                    fixed_candidate_snapshot,
-                    environment_name=env_name,
-                    target_name=requested_target,
-                )
-                env.update(
-                    _stackctl._provider_runtime_launch_environment(
-                        provider_runtime_binding["providerRuntime"],
-                        candidate_root=provider_runtime_binding["candidateRoot"],
-                        workload=args.workload,
-                    )
-                )
-                env.update(
-                    _stackctl._observability_log_sink_launch_environment(
-                        observability_runtime_binding["composition"],
-                        environment_name=env_name,
-                        target_name=requested_target,
-                        candidate_root=observability_runtime_binding[
-                            "candidateRoot"
-                        ],
-                        workload=args.workload,
-                    )
-                )
-            except (OSError, TypeError, ValueError) as exc:
-                provider_error = (
-                    f"{requested_target} package-bound Provider runtime failed: {exc}"
-                )
-            else:
-                provider_error = _stackctl._bind_formal_local_release_provider_environment(
-                    env,
-                    environment_name=env_name,
-                    target_name=requested_target,
-                    workload=args.workload,
-                    runtime_composition=provider_runtime_binding["composition"],
-                )
-                if provider_error is None:
-                    provider_error = (
-                        "formal local release is GATE_BLOCK until its release artifact "
-                        "owns one complete first-party and Provider OCI composition; "
-                        "the active candidate OCI cannot be substituted for the formal runtime"
-                    )
-        steps.append(
-            {
-                "name": "formal-local-release-script-syntax",
-                "argv": syntax_cmd,
-                "exitCode": syntax_result.returncode,
-                "stdout": syntax_result.stdout,
-                "stderr": syntax_result.stderr,
-            }
-        )
-        if provider_error is not None or telemetry_advisory or syntax_result.returncode:
-            result = subprocess.CompletedProcess(
-                cmd,
-                2,
-                stdout="",
-                stderr=provider_error or telemetry_advisory or syntax_result.stderr,
-            )
-        else:
-            try:
-                assert_fixed_candidate_selected()
-                release_composition = _stackctl._bind_gamma_release_image_refs(
-                    Path(str(args.release_manifest)).expanduser().resolve(),
-                    env,
-                    release_input_classification=release_input_classification,
-                    contract_graph_digest=contract_graph_digest,
-                )
-            except (OSError, ValueError, json.JSONDecodeError) as exc:
-                result = subprocess.CompletedProcess(
-                    cmd,
-                    2,
-                    stdout="",
-                    stderr=str(exc),
-                )
-            else:
-                result = run_stage(
-                    requested_target,
-                    cmd,
-                    env=env,
-                    live_prefix=f"[{requested_target}] ",
-                )
-                if result.returncode == 0:
-                    try:
-                        runtime_images = _stackctl._inspect_gamma_release_runtime(
-                            release_composition,
-                            env,
-                        )
-                    except ValueError as exc:
-                        result = subprocess.CompletedProcess(
-                            cmd,
-                            2,
-                            stdout=result.stdout,
-                            stderr=str(exc),
-                        )
     elif requested_target in {"alpha-local", "beta-local", "gamma-local"}:
         # Every supported local workload consumes the same packaged OCI
         # composition.  content-release only narrows runtime probes; it never
@@ -918,15 +761,10 @@ def _command_up_impl(args: argparse.Namespace) -> dict[str, Any]:
             "target": report_target,
             "resolvedTarget": requested_target,
             "workload": args.workload,
-            "formalRelease": formal_release,
             **release_input_report,
             "releaseComposition": release_composition,
-            "runtimeMode": "immutable-oci" if formal_release else "",
-            "runtimeCandidateDigest": (
-                str(release_composition.get("releaseCompositionId") or "")
-                if formal_release
-                else ""
-            ),
+            "runtimeMode": "immutable-local" if release_composition else "",
+            "runtimeCandidateDigest": "",
             "runtimeImages": runtime_images,
             "destructiveRepairPerformed": bool(destructive_actions),
             "destructiveActions": destructive_actions,
@@ -955,15 +793,10 @@ def _command_up_impl(args: argparse.Namespace) -> dict[str, Any]:
         details=_stackctl._command_details(result),
         extra={
             "workload": args.workload,
-            "formalRelease": formal_release,
             **release_input_report,
             "releaseComposition": release_composition,
-            "runtimeMode": "immutable-oci" if formal_release else "",
-            "runtimeCandidateDigest": (
-                str(release_composition.get("releaseCompositionId") or "")
-                if formal_release
-                else ""
-            ),
+            "runtimeMode": "immutable-local" if release_composition else "",
+            "runtimeCandidateDigest": "",
             "runtimeImages": runtime_images,
             "destructiveRepairPerformed": bool(destructive_actions),
             "destructiveActions": destructive_actions,

@@ -59,9 +59,9 @@ class ServiceReleaseImagePlanTest(unittest.TestCase):
                 {
                     "schema": "release-evidence-manifest",
                     "releaseTrainId": DIGEST,
-                    "releaseCompositionId": DIGEST,
+                    "candidateId": DIGEST,
                     "artifactDigest": ARTIFACT_DIGEST,
-                    "status": "qualified",
+                    "status": "candidate-ready",
                     "environmentArtifacts": environment_artifacts,
                 }
             ),
@@ -193,9 +193,9 @@ class ServiceReleaseImagePlanTest(unittest.TestCase):
                     {
                         "schema": "release-evidence-manifest",
                         "releaseTrainId": DIGEST,
-                        "releaseCompositionId": DIGEST,
+                        "candidateId": DIGEST,
                         "artifactDigest": ARTIFACT_DIGEST,
-                        "status": "qualified",
+                        "status": "candidate-ready",
                         "images": {},
                     }
                 ),
@@ -243,7 +243,7 @@ class ServiceReleaseImagePlanTest(unittest.TestCase):
 class WorkflowCandidateBindingTest(unittest.TestCase):
     def _validate(self, args: argparse.Namespace) -> None:
         with patch(
-            "quwoquan_ops.ci.verify_workflow_release_candidate.validate_manifest"
+            "quwoquan_ops.ci.verify_workflow_release_candidate.validate_historical_release_snapshot"
         ):
             validate(args)
 
@@ -266,9 +266,9 @@ class WorkflowCandidateBindingTest(unittest.TestCase):
     def _manifest(self, root: Path, *, deployable: bool = False) -> Path:
         payload = {
             "schema": "release-evidence-manifest",
-            "releaseCompositionId": DIGEST,
+            "candidateId": DIGEST,
             "artifactDigest": ARTIFACT_DIGEST,
-            "status": "main-admitted" if deployable else "qualified",
+            "status": "deployable" if deployable else "candidate-ready",
             "source": {
                 "gitSha": SOURCE_SHA,
                 "treeDigest": "sha256:" + hashlib.sha256(b"tree").hexdigest(),
@@ -312,7 +312,7 @@ class WorkflowCandidateBindingTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             path = self._manifest(Path(directory))
             payload = json.loads(path.read_text(encoding="utf-8"))
-            payload["releaseCompositionId"] = None
+            payload["candidateId"] = None
             payload["status"] = "component-ready"
             path.write_text(json.dumps(payload), encoding="utf-8")
             args = self._args(
@@ -322,17 +322,20 @@ class WorkflowCandidateBindingTest(unittest.TestCase):
             )
             self._validate(args)
 
-    def test_real_prod_invokes_canonical_validator_as_deployable(self) -> None:
+    def test_real_prod_invokes_historical_snapshot_validator_as_deployable(self) -> None:
         with tempfile.TemporaryDirectory() as directory, patch(
-            "quwoquan_ops.ci.verify_workflow_release_candidate.validate_manifest"
-        ) as canonical:
+            "quwoquan_ops.ci.verify_workflow_release_candidate.validate_historical_release_snapshot"
+        ) as historical_snapshot_validator:
             args = self._args(
                 self._manifest(Path(directory), deployable=True),
                 require_deployable=True,
             )
             validate(args)
-        canonical.assert_called_once()
-        self.assertEqual(canonical.call_args.kwargs["allowed_statuses"], {"main-admitted"})
+        historical_snapshot_validator.assert_called_once()
+        self.assertEqual(
+            historical_snapshot_validator.call_args.kwargs["allowed_statuses"],
+            {"deployable"},
+        )
 
 
 if __name__ == "__main__":

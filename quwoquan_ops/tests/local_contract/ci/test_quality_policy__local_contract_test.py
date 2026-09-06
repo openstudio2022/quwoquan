@@ -9,7 +9,7 @@ from unittest.mock import patch
 
 import pytest
 
-from quwoquan_ops.ci import validate_quality_policy as policy
+from quwoquan_ops.ci import verify_quality_policy as policy
 
 
 def _files() -> dict[str, dict]:

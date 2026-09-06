@@ -22,8 +22,12 @@ from quwoquan_ops.tests.support.environment_stability_final_acceptance_test_supp
     sha256_file,
     sys,
     tempfile,
-    validate_manifest_files,
 )
+
+from quwoquan_ops.ci.release_evidence_reader import (
+    validate_historical_release_snapshot,
+)
+
 
 def test_cli_empty_inputs_exit_one_with_typed_receipt() -> None:
     with tempfile.TemporaryDirectory() as temporary:
@@ -40,31 +44,54 @@ def test_cli_empty_inputs_exit_one_with_typed_receipt() -> None:
     assert "MISSING_INPUT" in _codes(payload)
 
 
-def test_trusted_producer_verifiers_accept_compiled_cells_and_closed_artifact() -> None:
+def test_frozen_final_acceptance_is_diagnostic_only_after_qualification_cutover() -> None:
     with tempfile.TemporaryDirectory() as temporary:
         fixture = FinalAcceptanceFixture(Path(temporary))
-        validate_manifest_files(fixture.artifact, fixture.manifest)
+        validate_historical_release_snapshot(
+            fixture.manifest,
+            artifact_dir=fixture.artifact,
+            allowed_statuses={"released"},
+        )
         payload = _evaluate(fixture, trusted=True)
 
-    assert payload["verdict"] == "PROMOTABLE"
-    assert payload["blockers"] == []
-    assert payload["artifactClosure"]["releaseCompositionId"] == fixture.manifest["releaseCompositionId"]
-    assert payload["inputs"]["recoveryUat"]["ios"]["authority"]["kind"] == (
+    assert payload["verdict"] == "GATE_BLOCK"
+    assert payload["artifactClosure"]["candidateId"] == fixture.manifest["candidateId"]
+    assert payload["inputs"]["recoveryUat"] == {"ios": None, "android": None}
+    assert payload["inputs"]["nightlyArtifact"] is None
+    assert payload["inputs"]["prodSim"]["role"] == "diagnostic_only"
+    assert payload["inputs"]["prodSim"]["authority"]["kind"] == (
         "github-actions-oidc"
+    )
+    assert {
+        "code": "NON_PROMOTABLE",
+        "input": "final_acceptance",
+        "message": (
+            "frozen diagnostic final acceptance cannot qualify a release; use "
+            "QualificationFact and qualified_prod admission"
+        ),
+    } in payload["blockers"]
+    assert not any(
+        blocker["input"] in {"recovery.ios", "recovery.android", "nightly"}
+        for blocker in payload["blockers"]
     )
 
 
-def test_immutable_release_attestations_do_not_expire_with_runtime_evidence() -> None:
+def test_immutable_release_attestations_still_do_not_expire_in_diagnostics() -> None:
     with tempfile.TemporaryDirectory() as temporary:
         fixture = FinalAcceptanceFixture(
             Path(temporary),
             pilot_recorded_at="2025-01-01T00:00:00Z",
         )
-        validate_manifest_files(fixture.artifact, fixture.manifest)
+        validate_historical_release_snapshot(
+            fixture.manifest,
+            artifact_dir=fixture.artifact,
+            allowed_statuses={"released"},
+        )
         payload = _evaluate(fixture, trusted=True)
 
-    assert payload["verdict"] == "PROMOTABLE"
-    assert payload["blockers"] == []
+    assert payload["verdict"] == "GATE_BLOCK"
+    assert "NON_PROMOTABLE" in _codes(payload)
+    assert "STALE_EVIDENCE" not in _codes(payload)
 
 
 def test_immutable_release_attestations_cannot_be_future_dated() -> None:
@@ -147,6 +174,7 @@ def test_forged_source_authority_does_not_establish_trust() -> None:
             fixture,
             trusted=False,
             attestation_verifier=_reject_attestation,
+            nightly_artifact=fixture.paths["nightly"],
         )
 
     assert payload["verdict"] == "GATE_BLOCK"
@@ -343,7 +371,7 @@ def test_attestation_verifier_failure_is_gate_block() -> None:
     assert "UNVERIFIABLE_AUTHORITY" in _codes(payload)
 
 
-def test_missing_canonical_soak_producer_remains_gate_block() -> None:
+def test_missing_canonical_soak_cannot_restore_snapshot_promotability() -> None:
     with tempfile.TemporaryDirectory() as temporary:
         fixture = FinalAcceptanceFixture(Path(temporary))
         payload = _evaluate(
@@ -354,8 +382,8 @@ def test_missing_canonical_soak_producer_remains_gate_block() -> None:
 
     assert payload["verdict"] == "GATE_BLOCK"
     assert any(
-        blocker["code"] == "UNVERIFIABLE_AUTHORITY"
-        and blocker["input"] == "prod.soak_readback"
+        blocker["code"] == "NON_PROMOTABLE"
+        and blocker["input"] == "final_acceptance"
         for blocker in payload["blockers"]
     )
 
@@ -369,20 +397,38 @@ def test_missing_alpha_is_typed_gate_block() -> None:
     assert "MISSING_INPUT" in _codes(payload)
 
 
-def test_stale_commit_is_rejected_even_with_trusted_verifier() -> None:
+def test_retired_recovery_input_is_unsupported_and_non_promotable() -> None:
+    calls: list[str] = []
+
+    def verifier(
+        path: Path,
+        kind: str,
+        manifest: dict[str, Any],
+    ) -> VerifiedAuthority:
+        calls.append(kind)
+        return _trusted_attestation(path, kind, manifest)
+
     with tempfile.TemporaryDirectory() as temporary:
         fixture = FinalAcceptanceFixture(Path(temporary))
-        fixture.rewrite(
-            "recovery_ios",
-            lambda value: value.__setitem__("commit", "f" * 40),
+        payload = _evaluate(
+            fixture,
+            attestation_verifier=verifier,
+            ios_recovery_uat=fixture.paths["recovery_ios"],
         )
-        payload = _evaluate(fixture)
 
     assert payload["verdict"] == "GATE_BLOCK"
-    assert "IDENTITY_MISMATCH" in _codes(payload)
+    assert calls == ["prod_sim"]
+    recovery = payload["inputs"]["recoveryUat"]["ios"]
+    assert recovery["role"] == "diagnostic_only"
+    assert recovery["authority"] is None
+    assert {
+        blocker["code"]
+        for blocker in payload["blockers"]
+        if blocker["input"] == "recovery.ios"
+    } == {"UNSUPPORTED_INPUT", "NON_PROMOTABLE"}
 
 
-def test_ci_artifact_digest_must_match_hosted_deployment() -> None:
+def test_retired_android_recovery_cannot_rejoin_through_digest_binding() -> None:
     with tempfile.TemporaryDirectory() as temporary:
         fixture = FinalAcceptanceFixture(Path(temporary))
         fixture.rewrite(
@@ -392,10 +438,22 @@ def test_ci_artifact_digest_must_match_hosted_deployment() -> None:
                 "sha256:" + "f" * 64,
             ),
         )
-        payload = _evaluate(fixture)
+        payload = _evaluate(
+            fixture,
+            android_recovery_uat=fixture.paths["recovery_android"],
+        )
 
     assert payload["verdict"] == "GATE_BLOCK"
-    assert "DIGEST_MISMATCH" in _codes(payload)
+    assert {
+        blocker["code"]
+        for blocker in payload["blockers"]
+        if blocker["input"] == "recovery.android"
+    } == {"UNSUPPORTED_INPUT", "NON_PROMOTABLE"}
+    assert not any(
+        blocker["code"] == "DIGEST_MISMATCH"
+        and blocker["input"] == "recovery.android"
+        for blocker in payload["blockers"]
+    )
 
 
 def test_prod_sim_release_binding_must_match_pilot() -> None:
@@ -414,20 +472,23 @@ def test_prod_sim_release_binding_must_match_pilot() -> None:
     assert "DIGEST_MISMATCH" in _codes(payload)
 
 
-def test_prod_sim_artifact_digest_must_match_hosted_deployment() -> None:
+def test_prod_sim_must_remain_explicitly_non_promotable() -> None:
     with tempfile.TemporaryDirectory() as temporary:
         fixture = FinalAcceptanceFixture(Path(temporary))
-        fixture.rewrite(
-            "prod_sim",
-            lambda value: value["releaseEvidence"].__setitem__(
-                "artifactDigest",
-                "sha256:" + "f" * 64,
-            ),
-        )
+
+        def make_promotable(value: dict[str, Any]) -> None:
+            value["releaseEligibility"]["status"] = "PASSED"
+            value["releaseEligibility"]["promotable"] = True
+
+        fixture.rewrite("prod_sim", make_promotable)
         payload = _evaluate(fixture)
 
     assert payload["verdict"] == "GATE_BLOCK"
-    assert "DIGEST_MISMATCH" in _codes(payload)
+    assert any(
+        blocker["code"] == "STATUS_NOT_PASSED"
+        and blocker["input"] == "prod_sim"
+        for blocker in payload["blockers"]
+    )
 
 
 def test_mixed_release_digest_is_rejected() -> None:
@@ -456,10 +517,18 @@ def test_local_hmac_evidence_is_rejected() -> None:
                 "hmac-sha256:" + "0" * 64,
             ),
         )
-        payload = _evaluate(fixture)
+        payload = _evaluate(
+            fixture,
+            nightly_artifact=fixture.paths["nightly"],
+        )
 
     assert payload["verdict"] == "GATE_BLOCK"
     assert "LOCAL_ATTESTATION" in _codes(payload)
+    assert {
+        blocker["code"]
+        for blocker in payload["blockers"]
+        if blocker["input"] == "nightly"
+    } == {"LOCAL_ATTESTATION", "UNSUPPORTED_INPUT", "NON_PROMOTABLE"}
 
 
 def test_workflow_text_cannot_supply_typed_evidence() -> None:

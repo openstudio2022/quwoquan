@@ -8,9 +8,9 @@
 - 对象阶段闭包：工作包的 target_set 与 AI 直写产物是否机械闭合；
 - Ops 能力探针（`content.release.environment.readiness.ShipReadinessPhase`）：含 `import`
   一值，是 stackctl 适配层，不是本收据谓词；
-- Ops CI 身份校验（`quwoquan_ops/ci/generate_release_bound_environment_identity.py`）：
+- Ops legacy 只读聚合校验（`quwoquan_ops/ci/generate_release_bound_environment_identity.py`）：
   跨仓以 wire schema 为锚验证收据身份（schema/来源/checksum/passed 一体），
-  是已登记消费方，不重复定义 phase 闭集或对齐规则。
+  不作为 active release workflow，也不重复定义 phase 闭集或对齐规则。
 
 凡判定「这份环境 readiness 收据是否表示可发布」，一律 import 本模块；
 禁止再写 phase 闭集、phase↔lifecycle 对齐或 passed 判定的第二份实现。

@@ -1,9 +1,9 @@
 """Authority-backed final environment-stability receipt aggregation.
 
-The aggregator calculates a verdict only.  Authority comes from the canonical
-ReleaseEvidenceManifest artifact closure, GitHub artifact-attestation
-verification, and canonical hosted-ledger readbacks.  Fields inside an input
-JSON document never establish their own authority.
+The frozen aggregator is diagnostic-only and always non-promotable. Release
+qualification belongs to QualificationFact and qualified_prod admission. The
+remaining prod-sim check may verify hosted OIDC exact bytes, but local evidence
+and fields inside an input JSON document never establish hosted authority.
 
 本包由原单文件 ``environment_stability_final_acceptance.py`` 拆分而来，
 按职责切分为：
@@ -13,7 +13,7 @@ JSON document never establish their own authority.
 - ``provider_readiness``：Provider readiness 的 canonical 重推导与绑定校验。
 - ``artifact_closure``：ReleaseEvidenceManifest 闭包与 manifest 绑定输入校验。
 - ``pilot_content``：pilot 发布身份、内容生命周期与 Green Matrix 校验。
-- ``attested_evidence``：GitHub OIDC attestation 与 CI / prod-sim 证据校验。
+- ``attested_evidence``：剩余 prod-sim OIDC 诊断校验与退役输入拒绝。
 - ``hosted_prod``：prod hosted readback 与 hosted soak authority 校验。
 - ``verdict``：聚合评估、终局 verdict 计算与原子写出。
 
@@ -27,7 +27,7 @@ import subprocess  # noqa: F401
 
 import yaml  # noqa: F401
 
-from quwoquan_ops.ci import render_release_lifecycle_receipts as lifecycle  # noqa: F401
+from quwoquan_ops.ci import release_evidence_reader as lifecycle  # noqa: F401
 from quwoquan_ops.cli.lib import (  # noqa: F401
     external_provider_governance,
     provider_conformance,
@@ -36,13 +36,12 @@ from quwoquan_ops.cli.lib.deployment_candidate_manifest import (  # noqa: F401
     validate_release_attestations,
 )
 from quwoquan_ops.cli.prod import oci_supply_chain  # noqa: F401
-from quwoquan_ops.cli.prod.finalize_mainline_release_artifact import (  # noqa: F401
+from quwoquan_ops.ci.release_evidence_reader import (  # noqa: F401
     DIGEST_PATTERN,
     canonical_release_composition_id,
     canonical_manifest_digest,
     sha256_file,
-    validate_manifest,
-    validate_manifest_files,
+    validate_historical_release_snapshot,
 )
 
 from quwoquan_ops.cli.lib.environment_stability_final_acceptance.artifact_closure import (  # noqa: F401
@@ -53,7 +52,7 @@ from quwoquan_ops.cli.lib.environment_stability_final_acceptance.artifact_closur
 )
 from quwoquan_ops.cli.lib.environment_stability_final_acceptance.attested_evidence import (  # noqa: F401
     _attestation_has_subject_digest,
-    _validate_ci_evidence,
+    _reject_retired_ci_evidence,
     _validate_prod_sim,
     _verify_authority,
     verify_github_actions_receipt,
@@ -69,11 +68,10 @@ from quwoquan_ops.cli.lib.environment_stability_final_acceptance.hosted_prod imp
 from quwoquan_ops.cli.lib.environment_stability_final_acceptance.model import (  # noqa: F401
     BLOCKED_VERDICT,
     BLOCKER_CODES,
-    DEVICE_WORKFLOW,
     ENVIRONMENTS,
     GITHUB_ATTESTED_WORKFLOW_BY_KIND,
+    RETIRED_GITHUB_ATTESTED_EVIDENCE_KINDS,
     MAX_FUTURE_SKEW_SECONDS,
-    PROMOTABLE_VERDICT,
     PROVIDER_NONPROD_ENVIRONMENTS,
     REQUIRED_SOAK_CLAIMS,
     SCHEMA,

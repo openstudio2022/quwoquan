@@ -15,7 +15,7 @@
 ### In Scope
 
 - 显式 readiness 命令、持久 advisory 队列、可选择的 focused check，以及保留作未来/显式 producer 的 after-edit 脚本。
-- `fast_green`、`scope_ready`、`release_ready` 三种逐级就绪状态。
+- 五个互不推导的事实维度：`sourceReadiness`、`environmentReadiness`、`deviceReadiness`、`integrationEligibility`、`promotionEligibility`；本 Story 只生产 `sourceReadiness`，其内部状态为 `fast_green`、`scope_ready`、`release_ready`。
 - 基于 canonical EvidenceFingerprint 的精确输入缓存、回执新鲜度与资源互斥。
 - Go、Python、Dart、Portal 与 spec/contract 的本地影响规划和执行。
 - 仓库级 workflow lint 配置由本 Story 唯一拥有，作为 canonical workflow 静态检查的受版本控制输入。
@@ -35,7 +35,8 @@
 - L-1 编辑反馈必须短时完成入队，并可同步执行安全的 focused check；异常时不得生成 PASS。
 - L0 空闲增量可生成允许带 deferred 的 `fast_green`，但不得升级为 `scope_ready`。
 - L1 只有全部范围检查和 compile/build（含 required `code-health-delta`）成功且 `deferred=[]` 时生成 `scope_ready`。
-- L2 只有全部 release profile 成功且 `deferred=[]` 时生成 `release_ready`；本地回执不得声称环境或正式发布已就绪。
+- L2 只有全部 release profile 成功且 `deferred=[]` 时令 `sourceReadiness.status=release_ready`；本地回执必须同时把 `environmentReadiness`、`deviceReadiness`、`integrationEligibility` 与 `promotionEligibility` 明确记为 `not_evaluated`，不得声称其他维度已就绪。
+- 五个维度均有独立 producer 与证据身份；任何 `sourceReadiness` PASS 都不得推导、填充或替代另四个事实。旧的顶层单轴 `readiness` 字段不再有 reader 或 writer。
 
 <a id="req-002"></a>
 ### REQ-002 精确输入身份、缓存和互斥
@@ -48,10 +49,10 @@
 <a id="req-003"></a>
 ### REQ-003 Git hook 只做边界检查，回执在准出消费
 
-- 硬门只在准出（lane→`dev1.0` PR、交接、发布）。本地 git hooks 不消费 `scope_ready`/`release_ready` 回执，也不自动运行全面测试：pre-commit 只运行 staged boundary（secret/PII、generated/cache 边界，以及 `--local-commit` 当前 HEAD 分支检查），失败时只给出唯一恢复命令；pre-push 只运行 branch policy：普通 lane 与 `integration/` 都只校验同名远端，不要求同时推送全部 lane；`integration/` → `origin/dev1.0` 另强制 expected-old 快进；canonical activation 为 `active` 时阻断直推 `main`，并只放行可证明的受管 system fast-forward backsync。
-- `--local-commit` 必须只校验当前 HEAD 非 detached、Git authority 可读且分支属于 `allowed_local_branches`，不得枚举或治理其他 local/remote-tracking refs；无参数默认模式继续执行全 ref 治理，`--pre-push` 必须消费 canonical activation state。L0 `commit_gate.sh` 的提交前 branch 检查也必须使用 `--local-commit`。
-- `scope_ready`/`release_ready` 仍由显式 CLI 产出并绑定精确输入 fingerprint，供 Skill 报告、交接单与 lane→`dev1.0` PR 说明消费；PR 准出由 CI Delivery Gate 在独立并行 job 重新执行 required `code-health-delta`，不信任本地回执。
-- L0 的 code-health 快判不得网络安装工具且以 p95 30 秒为目标；L1 执行完整 candidate delta；scheduled 全仓热点只 report-only。指标与阈值唯一引用系统架构能力的 `REQ-008` 与 `DEC-031`，本 Story 不复制。
+- 硬门只在准出（lane→`dev1.0` PR、交接、发布）。本地 git hooks 不消费 `scope_ready`/`release_ready` 回执，也不自动运行全面测试：pre-commit 只运行 staged boundary（secret/PII、generated/cache 边界，以及 `--local-commit` 当前 HEAD 分支检查），失败时只给出唯一恢复命令；pre-push 只运行 branch policy：普通 lane push 只校验同名远端，不要求同时推送全部 lane；匹配 `integration/dev1.0` 的普通认证 direct push 仅在 local/remote 均为 `dev1.0`、update line before/after OID 存在且 Git ancestry 证明 non-force fast-forward 时放行，相等幂等；缺 OID、authority 不可用、非快进、force/delete、来源不匹配、lane→dev、`main` direct push 或未知 ref 全部阻断。trusted publisher CAS 与可证明的受管 system fast-forward backsync 继续放行。
+- `--local-commit` 必须只校验当前 HEAD 非 detached、Git authority 可读且分支属于 `allowed_local_branches`，不得枚举或治理其他 local/remote-tracking refs；无参数默认模式继续执行全 ref 治理，`--pre-push` 必须消费 canonical integration update contract。L0 `commit_gate.sh` 的提交前 branch 检查也必须使用 `--local-commit`。
+- `sourceReadiness.status=scope_ready|release_ready` 仍由显式 CLI 产出并绑定精确输入 fingerprint，供 Skill 报告与交接消费；integration worktree direct fast-forward push 不生产 readiness 或资格事实，`integrationEligibility` 只能由 exact candidate + Alpha/Beta admission 建立，`promotionEligibility` 只能由 current dev head 的 IntegrationQualificationFact 建立，GitHub Delivery Gate 只验后者的不可变身份。
+- L0 的 code-health 快判不得网络安装工具且以 p95 30 秒为目标；L1 执行完整 candidate delta；scheduled 全仓热点只 report-only。指标与阈值唯一引用系统架构能力的 `REQ-008` 与 `DEC-031`，本 Story 不复制。当前交付拓扑下 `lane/* -> dev1.0` 没有 hosted required check，`code-health-delta` 的 hosted 复算入口见 `OPEN-003`；在该入口建立前不得声称本地 PASS 等于集成准出。
 - staged 中某个已修改文件继续改变内容时，即使 `git status` 文本不变，也必须判定旧回执失效。
 
 ## 4. 契约引用
@@ -76,16 +77,17 @@
 
 - GIVEN planner 产生本地 focused、compile/build 或 release 工作。
 - WHEN 任一 required check 或 Review admission 失败。
-- THEN 不生成 `scope_ready` 或 `release_ready` PASS 回执。
+- THEN 不生成 `sourceReadiness.status=scope_ready|release_ready` 的 PASS 回执。
 - AND queue backlog（包括 exact candidate pending）仅作为 receipt/inspect advisory 可见；显式 worker 失败不生成 PASS，但 backlog 本身不阻断 scope/release。
 - AND Portal 范围必须真实执行 `npm test` 与 `npm run build` 后才能范围就绪。
+- AND 即使 `sourceReadiness.status=release_ready`，另外四个事实仍为 `not_evaluated`，消费者若把它解释成环境、设备、集成或晋级资格必须失败。
 
 <a id="gwt-003"></a>
 ### GWT-003 Git hooks 只做边界检查
 
 - GIVEN 开发者在 lane worktree 上暂存改动并提交或推送。
 - WHEN pre-commit 或 pre-push 运行。
-- THEN pre-commit 只运行 staged boundary（secret/PII、generated/cache 边界，以及 `--local-commit` 当前 HEAD 分支检查），pre-push 只运行既有 `--pre-push` branch policy；普通 lane 与 integration 同名 push 不要求 all lanes，`main` direct push 被拒绝，integration matching expected-old 快进与可证明的 system fast-forward backsync 可通过；两者都不读取 readiness 回执，秒级完成。
+- THEN pre-commit 只运行 staged boundary（secret/PII、generated/cache 边界，以及 `--local-commit` 当前 HEAD 分支检查），pre-push 只运行既有 `--pre-push` branch policy；普通 lane push 不要求 all lanes，匹配 integration worktree 的 `dev1.0 -> dev1.0` non-force fast-forward direct push 与可证明的 system fast-forward backsync 可通过，非快进/delete/force、lane→dev和main direct push被拒绝；两者都不读取 readiness 回执，秒级完成。
 - AND 合法 current lane 即使存在非法陈旧 local/remote-tracking refs 也通过 `--local-commit`；非法当前分支、detached HEAD 或 Git authority 不可读必须失败；无参数默认模式仍拒绝额外 refs。
 - AND 任一边界检查失败都阻断并只返回一个稳定 recovery。hook 不读取 readiness receipt、也不输出 readiness PASS，缺少 `scope_ready`/`release_ready` 不构成 lane 提交或推送的阻断理由。
 
@@ -117,3 +119,13 @@
 - 影响或价值：当前 exact candidate-bound Code Health report 将 `quwoquan_ops/ci/local_readiness_planner.py` 的 `build_impact_plan` 标为 `CODE_HEALTH.COMPLEXITY_ADVISORY`；该 calibration `PR_WARN` 不阻断 candidate，但继续增长会降低 planner 分支与降级语义的可审计性。
 - 完成判定：`GWT-001` 与 `GWT-002` 对应行为继续满足；在独立 owner increment 中保留现有 impact-plan 合同并收敛该函数；fresh clean-range Code Health 不再为该 symbol 产生复杂度 advisory，且不得新增 allowlist、baseline 或改变 fail-closed terminal。
 - 依赖：current Code Health named evidence与 planner focused contracts。
+
+<a id="open-003"></a>
+### OPEN-003 code-health-delta 的 hosted 复算入口缺失
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：当前 `lane/* -> dev1.0` 缺少任何 hosted required check —— `03. Delivery Gate` 只在 `dev1.0 -> main` promotion PR 上触发，因此 `code-health-delta` 尚未建立绑定 exact candidate range 的 hosted 复算入口，只剩 L0/L1 本地执行与 scheduled report-only 两条通道。本地 PASS 不能替代集成准出证据，新增或恶化的代码健康债可能拖到 promotion 阶段才暴露。
+- 完成判定：`GWT-002` 继续证明 required check 失败时不产生 `scope_ready`/`release_ready` PASS；并为 `code-health-delta` 建立一个绑定 exact candidate range 的 hosted 复算入口（promotion gate 内的独立并行 job，或 integration admission 的等价通道），由新增 `GWT` 子句证明它在 `GATE_BLOCK` 时确实阻断；不得以本地回执、warn-only 或降低阈值替代。
+- 依赖：`deliver-deploy-prod-pipeline` 的当前交付拓扑与 `quwoquan_ops/gate/code_health_delta` 现有实现。

@@ -3,13 +3,13 @@
 从 stackctl.py 逐字迁出仅被 package 域消费的实现:
 
 - 非 runtime 子 kind 命令:`_command_package_legal_static` /
-  `_command_package_ops_portal` / `_command_package_release_manifest`
+  `_command_package_ops_portal`
   (由 `commands/package_runtime.py` 的 `_command_package_unlocked` 分发);
 - runtime 打包物料 helper:`_build_runtime_shared_package` /
   `_build_package_bound_local_images`(仅被 `_command_package_unlocked`
   与测试消费)。
 
-`_command_package_ops_portal` / `_command_package_release_manifest` 受
+`_command_package_ops_portal` 受
 `quwoquan_ops/gate/verify_ci_cd_evidence_contracts.py` 的 SCOPED_FUNCTIONS
 按 AST 定义位置锁定,该映射已随本次迁移指向本文件。
 
@@ -578,140 +578,6 @@ def _command_package_ops_portal(args: argparse.Namespace) -> dict[str, Any]:
             f"stackctl ops-portal package completed for {env_name}"
             if status == "ok"
             else f"stackctl ops-portal package failed for {env_name}"
-        ),
-        "details": details,
-        "reportDir": _stackctl.relpath(report_dir),
-        **timing,
-    }
-
-
-def _command_package_release_manifest(args: argparse.Namespace) -> dict[str, Any]:
-    """Seal the canonical release evidence into the existing service manifest."""
-    import quwoquan_ops.cli.stackctl as _stackctl
-
-    env_name = args.env
-    target_name = args.target or _stackctl.DEFAULT_TARGET_BY_ENV[env_name]
-    report_dir = _stackctl.resolve_report_dir(args, env_name, target_name)
-    started_monotonic, started_at = _stackctl._start_timing()
-    if env_name != "prod" or target_name != "prod-hosted":
-        issues = ["release-manifest assembly requires prod/prod-hosted"]
-    else:
-        issues = []
-    artifact_dir_value = str(getattr(args, "release_artifact_dir", "") or "").strip()
-    source_values = {
-        "publicWeb": str(getattr(args, "public_web_manifest", "") or "").strip(),
-        "androidOfficialRelease": str(
-            getattr(args, "android_release_manifest", "") or ""
-        ).strip(),
-        "opsPortal": str(getattr(args, "ops_portal_provenance", "") or "").strip(),
-        "contractGraph": str(getattr(args, "contract_graph", "") or "").strip(),
-        "providerEvidence": str(
-            getattr(args, "provider_evidence", "") or ""
-        ).strip(),
-        "testEvidence": str(getattr(args, "test_evidence", "") or "").strip(),
-    }
-    application_packages_dir_value = str(
-        getattr(args, "application_packages_dir", "") or ""
-    ).strip()
-    application_package_payloads_dir_value = str(
-        getattr(args, "application_package_payloads_dir", "") or ""
-    ).strip()
-    application_evidence_ref = str(
-        getattr(args, "application_evidence_ref", "") or ""
-    ).strip()
-    provider_raw_dir_value = str(
-        getattr(args, "provider_raw_dir", "") or ""
-    ).strip()
-    if not artifact_dir_value:
-        issues.append("release-manifest assembly requires --release-artifact-dir")
-    if not application_packages_dir_value:
-        issues.append("release-manifest assembly requires --application-packages-dir")
-    if not application_package_payloads_dir_value:
-        issues.append(
-            "release-manifest assembly requires --application-package-payloads-dir"
-        )
-    if not application_evidence_ref:
-        issues.append("release-manifest assembly requires --application-evidence-ref")
-    if not provider_raw_dir_value:
-        issues.append("release-manifest assembly requires --provider-raw-dir")
-    for artifact_id, value in source_values.items():
-        if not value:
-            issues.append(f"release-manifest assembly requires {artifact_id}")
-    manifest: dict[str, Any] = {}
-    if not issues:
-        artifact_dir = Path(artifact_dir_value).expanduser().resolve()
-        descriptors_dir = artifact_dir / "artifact-descriptors"
-        try:
-            _stackctl.collect_release_artifact_descriptors.collect(
-                artifact_dir=artifact_dir,
-                descriptors_dir=descriptors_dir,
-                sources={key: Path(value) for key, value in source_values.items()},
-                application_package_sources=(
-                    _stackctl.collect_release_artifact_descriptors.load_application_package_sources(
-                        Path(application_packages_dir_value).expanduser().resolve()
-                    )
-                ),
-                application_package_payloads=(
-                    _stackctl.collect_release_artifact_descriptors.load_application_package_payloads(
-                        Path(application_package_payloads_dir_value)
-                        .expanduser()
-                        .resolve()
-                    )
-                ),
-                application_evidence_ref=application_evidence_ref,
-                provider_raw_dir=Path(provider_raw_dir_value).expanduser().resolve(),
-            )
-            manifest = _stackctl.finalize_mainline_release_artifact.finalize(
-                artifact_dir,
-                None,
-                descriptors_dir,
-            )
-        except (OSError, RuntimeError, ValueError) as error:
-            issues.append(str(error))
-    timing = _stackctl._finish_timing(started_monotonic, started_at)
-    status = "ok" if not issues else _stackctl.ProbeOutcome.GATE_BLOCK.value
-    details = issues or [
-        f"releaseCompositionId={manifest.get('releaseCompositionId')}",
-        f"artifactDigest={manifest.get('artifactDigest')}",
-        "evidence="
-        + ",".join(
-            sorted(_stackctl.finalize_mainline_release_artifact.REQUIRED_RELEASE_EVIDENCE)
-        ),
-    ]
-    _stackctl._write_summary_bundle(
-        report_dir,
-        command="package",
-        target=target_name,
-        status=status,
-        summary=(
-            "stackctl whole-app release manifest assembled"
-            if not issues
-            else "stackctl whole-app release manifest is GATE_BLOCK"
-        ),
-        details=details,
-        extra={"env": env_name, "kind": "release-manifest"},
-        timing=timing,
-    )
-    _stackctl.write_json(
-        report_dir / "report.json",
-        {
-            "command": "package",
-            "kind": "release-manifest",
-            "env": env_name,
-            "target": target_name,
-            "status": status,
-            "releaseCompositionId": manifest.get("releaseCompositionId"),
-            "artifactDigest": manifest.get("artifactDigest"),
-            "issues": issues,
-            **timing,
-        },
-    )
-    return {
-        "exitCode": 0 if not issues else 2,
-        "summary": (
-            "stackctl whole-app release manifest assembled"
-            if not issues
-            else "stackctl whole-app release manifest is GATE_BLOCK"
         ),
         "details": details,
         "reportDir": _stackctl.relpath(report_dir),

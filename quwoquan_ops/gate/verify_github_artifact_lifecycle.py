@@ -28,31 +28,35 @@ WEEKLY_REPORT_FORBIDDEN_TOKENS = (
     "promotion",
     "mutation",
 )
-UPLOAD_PATTERN = re.compile(
-    r"^(?P<indent>\s*)uses:\s*actions/upload-artifact@[0-9a-f]{40}\s*$",
-    re.MULTILINE,
-)
-DOWNLOAD_PATTERN = re.compile(
-    r"^\s*uses:\s*actions/download-artifact@[0-9a-f]{40}\s*$",
-    re.MULTILINE,
-)
-CACHE_PATTERN = re.compile(
-    r"^(?P<indent>\s*)uses:\s*actions/cache@[0-9a-f]{40}\s*$",
-    re.MULTILINE,
-)
-SETUP_GO_PATTERN = re.compile(
-    r"^(?P<indent>\s*)uses:\s*actions/setup-go@[0-9a-f]{40}\s*$",
-    re.MULTILINE,
-)
+
+
+def _uses_pattern(action: str) -> re.Pattern[str]:
+    return re.compile(
+        rf"^(?P<indent>[ \t]*)(?P<list_marker>-\s+)?uses:\s*"
+        rf"(?P<quote>[\"']?)actions/{re.escape(action)}@[0-9a-f]{{40}}"
+        rf"(?P=quote)(?:\s+with:\s*.*)?(?:\s+#.*)?$",
+        re.MULTILINE,
+    )
+
+
+UPLOAD_PATTERN = _uses_pattern("upload-artifact")
+DOWNLOAD_PATTERN = _uses_pattern("download-artifact")
+CACHE_PATTERN = _uses_pattern("cache")
+SETUP_GO_PATTERN = _uses_pattern("setup-go")
 FAILURE_ONLY_CONDITION = "failure() && !cancelled()"
 
 
-def _upload_block(text: str, match: re.Match[str]) -> str:
-    # ``uses`` is indented two spaces below the YAML list marker. Include the
-    # complete owning step so an ``if`` placed before ``uses`` is checked too.
-    step_prefix = match.group("indent")[:-2] + "- "
-    start = text.rfind("\n" + step_prefix, 0, match.start())
-    start = 0 if start < 0 else start + 1
+def _step_block(text: str, match: re.Match[str]) -> str:
+    indent = match.group("indent")
+    if match.group("list_marker"):
+        step_prefix = indent + "- "
+        start = match.start()
+    else:
+        if len(indent) < 2:
+            return text[match.start() : match.end()]
+        step_prefix = indent[:-2] + "- "
+        start = text.rfind("\n" + step_prefix, 0, match.start())
+        start = 0 if start < 0 else start + 1
     following = re.search(
         rf"^{re.escape(step_prefix)}",
         text[match.end() :],
@@ -94,13 +98,11 @@ def verify() -> list[str]:
     issues: list[str] = []
     for workflow in sorted([*WORKFLOWS.glob("*.yml"), *WORKFLOWS.glob("*.yaml")]):
         text = workflow.read_text(encoding="utf-8")
-        name_match = re.search(r"^name:\s*(.+?)\s*$", text, re.MULTILINE)
-        workflow_name = name_match.group(1).strip().strip("\"'") if name_match else ""
         upload_matches = list(UPLOAD_PATTERN.finditer(text))
         bounded_weekly_uploads = [
             match
             for match in upload_matches
-            if _is_bounded_weekly_report_upload(workflow, _upload_block(text, match))
+            if _is_bounded_weekly_report_upload(workflow, _step_block(text, match))
         ]
         weekly_report_only = _weekly_report_workflow_is_report_only(text)
         allow_bounded_weekly_upload = (
@@ -109,7 +111,7 @@ def verify() -> list[str]:
             and weekly_report_only
         )
         for match in upload_matches:
-            block = _upload_block(text, match)
+            block = _step_block(text, match)
             line = text.count("\n", 0, match.start()) + 1
             prefix = f"{workflow.relative_to(ROOT)}:{line}"
             if "retention-days:" not in block:
@@ -138,7 +140,7 @@ def verify() -> list[str]:
                 "use OCI, canonical runtime evidence, or the producing job directly"
             )
         for match in CACHE_PATTERN.finditer(text):
-            block = _upload_block(text, match)
+            block = _step_block(text, match)
             if "steps.flutter.outputs.cache_path" in block or "RUNNER_TOOL_CACHE" in block:
                 line = text.count("\n", 0, match.start()) + 1
                 issues.append(
@@ -146,7 +148,7 @@ def verify() -> list[str]:
                     "an SDK/toolchain tree; install the checksum-verified toolchain on the runner"
                 )
         for match in SETUP_GO_PATTERN.finditer(text):
-            block = _upload_block(text, match)
+            block = _step_block(text, match)
             if "cache: false" not in block:
                 line = text.count("\n", 0, match.start()) + 1
                 issues.append(
@@ -175,8 +177,6 @@ def verify() -> list[str]:
         ):
             if token not in lifecycle:
                 issues.append(f"artifact lifecycle workflow missing {token!r}")
-        if "workflow_run:" in lifecycle:
-            issues.append("artifact lifecycle workflow must not fan out on workflow_run")
         lifecycle_runners = re.findall(
             r"^\s*runs-on:\s*(.+?)\s*$", lifecycle, re.MULTILINE
         )
@@ -187,6 +187,9 @@ def verify() -> list[str]:
             issues.append(
                 "artifact lifecycle workflow must not use a self-hosted macOS ARM64 runner"
             )
+        # GC is periodic and PR-close driven; per-workflow completion fan-out is forbidden.
+        if "workflow_run:" in lifecycle or "github.event.workflow_run" in lifecycle:
+            issues.append("artifact lifecycle workflow must not fan out on workflow_run")
     if not SERVICE_PIPELINE.is_file():
         issues.append("missing .github/workflows/service_pipeline.yml")
     else:

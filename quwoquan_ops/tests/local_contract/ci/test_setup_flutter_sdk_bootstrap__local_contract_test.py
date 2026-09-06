@@ -23,21 +23,15 @@ def _load_setup_module():
     return module
 
 
-def test_delivery_gate_bootstrap_uses_pinned_cache_and_portal_lockfile() -> None:
-    workflow = (ROOT / ".github/workflows/delivery-gate.yml").read_text(
-        encoding="utf-8"
-    )
-
-    assert "subosito/flutter-action@" not in workflow
-    assert "actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830" in workflow
-    assert "python3 quwoquan_ops/ci/setup_flutter_sdk.py resolve" in workflow
-    assert "quwoquan_app/.flutter-version" in workflow
-    assert "PUB_HOSTED_URL: https://pub.flutter-io.cn" in workflow
-    assert "FLUTTER_STORAGE_BASE_URL: https://storage.flutter-io.cn" in workflow
-    assert "flutter pub get --enforce-lockfile" in workflow
-    assert "cache-dependency-path: quwoquan_ops/portal/package-lock.json" in workflow
-    assert 'echo "QWQ_DEPLOY_WORK_ROOT=$RUNNER_TEMP/quwoquan-deploy"' in workflow
-
+def test_delivery_gate_does_not_bootstrap_flutter_node_or_dependency_caches() -> None:
+    workflow = (ROOT / ".github/workflows/delivery-gate.yml").read_text(encoding="utf-8")
+    for token in (
+        "subosito/flutter-action@", "actions/cache@", "setup_flutter_sdk.py",
+        "quwoquan_app/.flutter-version", "PUB_HOSTED_URL", "FLUTTER_STORAGE_BASE_URL",
+        "flutter pub get", "cache-dependency-path", "QWQ_DEPLOY_WORK_ROOT",
+    ):
+        assert token not in workflow
+    assert "promotion_verify:" in workflow
 
 def test_contract_metadata_bootstrap_creates_cache_parent_before_mktemp() -> None:
     script = (
@@ -204,75 +198,14 @@ def test_flutter_release_resolution_honors_repository_pinned_version() -> None:
     }
 
 
-def test_app_test_shards_materialize_sealed_wrappers_after_sdk_install() -> None:
-    workflow = (ROOT / ".github/workflows/delivery-gate.yml").read_text(
-        encoding="utf-8"
-    )
-    start = workflow.index("  quwoquan_app_tests:\n")
-    end = workflow.index("\n  quwoquan_app_serial:\n", start)
-    app_tests = workflow[start:end]
-    materialize = (
-        "python3 quwoquan_ops/ci/setup_flutter_sdk.py "
-        "materialize-gradle-wrappers"
-    )
-
-    assert app_tests.count(materialize) == 1
-    assert (
-        app_tests.index("Install verified Flutter SDK")
-        < app_tests.index(materialize)
-    )
-    assert app_tests.index(materialize) < app_tests.index(
-        "Resolve locked App dependencies"
-    )
-    resolve_android = "Materialize App shared contract Android dependencies"
-    assert app_tests.count(resolve_android) == 1
-    android_step = app_tests[
-        app_tests.index(resolve_android) : app_tests.index(
-            "Install repository test native dependencies"
-        )
-    ]
-    assert "if: ${{ matrix.shard_index == 0 }}" in android_step
-    assert "working-directory: quwoquan_app/android" in android_step
-    assert ":app:testNonprodDebugUnitTest" in android_step
-    assert "--tests com.quwoquan.quwoquan_app.RuntimeConfigPackageStoreTest" in android_step
-    assert ":app:dependencies" not in android_step
-    resolve_patrol = "Resolve locked Patrol test host dependencies"
-    materialize_patrol = "Materialize Patrol Android Kotlin dependencies"
-    assert app_tests.count(resolve_patrol) == 1
-    assert app_tests.count(materialize_patrol) == 1
-    patrol_step = app_tests[
-        app_tests.index(resolve_patrol) : app_tests.index(
-            "Install repository test native dependencies"
-        )
-    ]
-    assert "if: ${{ matrix.shard_index == 0 }}" in patrol_step
-    assert "working-directory: quwoquan_app/test_host/patrol" in patrol_step
-    assert "flutter pub get --enforce-lockfile" in patrol_step
-    trust_step = "Materialize nonprod Android runtime trust for Patrol compile"
-    assert app_tests.count(trust_step) == 1
-    assert 'TRUST_ROOT="$RUNNER_TEMP/quwoquan-patrol-runtime-config"' in patrol_step
-    assert "prepare_local_app_runtime_config_signing(Path.cwd())" in patrol_step
-    assert 'build_runtime_config_trust_envelope(' in patrol_step
-    assert '"nonprod",' in patrol_step
-    assert "decode_keyring(signing.trusted_public_keys_path.read_bytes())" in patrol_step
-    assert "materialize_runtime_config_trust_envelope(" in patrol_step
-    assert "load_launch_manifest_contract()" in patrol_step
-    assert 'QWQ_ANDROID_RUNTIME_CONFIG_ASSET_ROOT=$TRUST_ROOT' in patrol_step
-    assert 'QWQ_APP_BUILD_PROFILE=nonprod' in patrol_step
-    assert "working-directory: quwoquan_app/test_host/patrol/android" in patrol_step
-    assert "./gradlew --no-daemon :app:compileDebugKotlin" in patrol_step
-    settings = (ROOT / "quwoquan_app/test_host/patrol/android/settings.gradle.kts").read_text(encoding="utf-8")
-    assert 'id("org.jetbrains.kotlin.android") version "2.4.0" apply false' in settings
-    assert ":app:dependencies" not in patrol_step
-    assert "quwoquan_app/test_host/patrol/pubspec.lock" in app_tests
-    assert app_tests.index(materialize) < app_tests.index(resolve_android)
-    assert app_tests.index(resolve_android) < app_tests.index(resolve_patrol)
-    assert app_tests.index(resolve_patrol) < app_tests.index(trust_step)
-    assert app_tests.index(trust_step) < app_tests.index(materialize_patrol)
-    assert app_tests.index(materialize_patrol) < app_tests.index(
-        "Gate (quwoquan_app tests shard)"
-    )
-
+def test_promotion_gate_has_no_app_test_shards_or_gradle_materialization() -> None:
+    workflow = (ROOT / ".github/workflows/delivery-gate.yml").read_text(encoding="utf-8")
+    for token in (
+        "quwoquan_app_tests:", "quwoquan_app_serial:",
+        "materialize-gradle-wrappers", "Install verified Flutter SDK",
+        "Resolve locked App dependencies", "Gate (quwoquan_app tests shard)",
+    ):
+        assert token not in workflow
 
 def test_gradle_wrapper_bootstrap_delegates_to_pinned_sealed_materializer(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch

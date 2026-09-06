@@ -19,11 +19,6 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from quwoquan_ops.cli.prod.registry_transport import run_with_bounded_retry
-from quwoquan_ops.cli.prod.finalize_mainline_release_artifact import (
-    canonical_manifest_digest,
-    validate_manifest,
-    validate_manifest_files,
-)
 from quwoquan_ops.cli.lib.prod_management_access import prod_management_ssh_host
 
 ACCESS_MANIFEST = ROOT / "quwoquan_ops/environments/prod/access-isolation.yaml"
@@ -60,12 +55,13 @@ def _plane_spec(plane_name: str) -> PlaneSpec:
 def _compose_image_refs(
     services: list[str],
     *,
-    image_transport_tag: str = "",
+    candidate_digest: str,
 ) -> dict[str, str]:
-    if not image_transport_tag or image_transport_tag == "latest":
-        raise SystemExit("FAIL: fixed image transport tag required for production images")
+    if OCI_DIGEST_PATTERN.fullmatch(candidate_digest) is None:
+        raise SystemExit("FAIL: exact candidate digest required for production images")
+    local_tag = candidate_digest.removeprefix("sha256:")
     return {
-        service: f"localhost/quwoquan_service_{service}:{image_transport_tag}"
+        service: f"localhost/quwoquan_service_{service}:{local_tag}"
         for service in services
     }
 
@@ -97,56 +93,75 @@ def _local_image_digest(image_ref: str) -> str | None:
     return digest if re.fullmatch(r"sha256:[0-9a-f]{64}", digest) else None
 
 
-def _canonical_manifest_digest(payload: dict[str, Any]) -> str:
-    return canonical_manifest_digest(payload)
-
-
-def _release_image_sources(
+def _service_factory_image_sources(
     manifest_path: Path,
     *,
     services: list[str],
-    image_transport_tag: str,
 ) -> tuple[str, dict[str, str]]:
     try:
-        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as error:
-        raise SystemExit(f"FAIL: cannot read release manifest: {error}") from error
-    if not isinstance(manifest, dict):
-        raise SystemExit("FAIL: release manifest must be an object")
-    try:
-        validate_manifest(manifest, allowed_statuses={"main-admitted"})
-        validate_manifest_files(manifest_path.parent, manifest)
-    except ValueError as error:
-        raise SystemExit(f"FAIL: release evidence manifest is invalid: {error}") from error
-    release_evidence_digest = str(manifest["artifactDigest"])
-    artifacts = manifest.get("environmentArtifacts")
-    prod_artifact = artifacts.get("prod") if isinstance(artifacts, dict) else None
-    images = prod_artifact.get("images") if isinstance(prod_artifact, dict) else None
-    if not isinstance(images, dict):
-        raise SystemExit("FAIL: release manifest Prod artifact images must be an object")
-    sources: dict[str, str] = {}
-    for service in services:
-        image = images.get(service)
-        if not isinstance(image, dict):
-            raise SystemExit(f"FAIL: release manifest missing image for {service}")
+        raw = manifest_path.read_bytes()
+        manifest = json.loads(raw.decode("utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        raise SystemExit(f"FAIL: cannot read service factory material: {error}") from error
+    canonical = json.dumps(
+        manifest, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False
+    ).encode("utf-8") + b"\n"
+    if not isinstance(manifest, dict) or raw != canonical:
+        raise SystemExit("FAIL: service factory material must be canonical JSON bytes")
+    if manifest.get("schema") != "quwoquan_ops.service_factory_material":
+        raise SystemExit("FAIL: service factory material schema is invalid")
+    unsigned = dict(manifest)
+    material_digest = str(unsigned.pop("materialDigest", ""))
+    actual_digest = "sha256:" + __import__("hashlib").sha256(
+        json.dumps(unsigned, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False).encode("utf-8")
+    ).hexdigest()
+    if material_digest != actual_digest:
+        raise SystemExit("FAIL: service factory material digest drifted")
+    images = manifest.get("images")
+    if not isinstance(images, list):
+        raise SystemExit("FAIL: service factory material images must be an array")
+    selected: dict[str, str] = {}
+    for index, image in enumerate(images):
+        if not isinstance(image, dict) or set(image) != {
+            "trustDomain", "runtimeImageOwner", "ociRef", "digest",
+            "signature", "attestations",
+        }:
+            raise SystemExit(f"FAIL: service factory image[{index}] shape drifted")
+        if image.get("trustDomain") != "prod":
+            continue
+        owner = str(image.get("runtimeImageOwner") or "")
+        ref = str(image.get("ociRef") or "")
         digest = str(image.get("digest") or "")
-        repository = str(image.get("repository") or "")
-        transport_ref = str(image.get("transportRef") or "")
-        ref = str(image.get("ref") or "")
-        if OCI_DIGEST_PATTERN.fullmatch(digest) is None or ref != f"{repository}@{digest}":
-            raise SystemExit(f"FAIL: release manifest has invalid digest ref for {service}")
-        if image_transport_tag and transport_ref != f"{repository}:{image_transport_tag}":
-            raise SystemExit(
-                f"FAIL: release manifest transport ref mismatch for {service}"
-            )
+        signature = image.get("signature")
         attestations = image.get("attestations")
-        if not isinstance(attestations, dict) or not all(
-            str(attestations.get(kind) or "") == f"oci://{ref}#{kind}"
-            for kind in ("spdxSbom", "slsaProvenance")
+        if (
+            owner in selected
+            or OCI_DIGEST_PATTERN.fullmatch(digest) is None
+            or ref.rpartition("@")[2] != digest
+            or not isinstance(signature, dict)
+            or set(signature) != {"issuer", "signerWorkflow", "verificationDigest"}
+            or any(not str(signature.get(field) or "").strip() for field in ("issuer", "signerWorkflow"))
+            or OCI_DIGEST_PATTERN.fullmatch(str(signature.get("verificationDigest") or "")) is None
+            or not isinstance(attestations, dict)
+            or set(attestations) != {"spdxSbom", "slsaProvenance"}
         ):
-            raise SystemExit(f"FAIL: release manifest missing attestations for {service}")
-        sources[service] = ref
-    return release_evidence_digest, sources
+            raise SystemExit(f"FAIL: service factory image identity is invalid: {owner or index}")
+        for name, attestation in attestations.items():
+            if (
+                not isinstance(attestation, dict)
+                or set(attestation) != {"predicateType", "verificationDigest"}
+                or not str(attestation.get("predicateType") or "").strip()
+                or OCI_DIGEST_PATTERN.fullmatch(str(attestation.get("verificationDigest") or "")) is None
+            ):
+                raise SystemExit(f"FAIL: service factory image attestation is invalid: {owner}/{name}")
+        selected[owner] = ref
+    if set(selected) != set(services):
+        missing = sorted(set(services) - set(selected))
+        extra = sorted(set(selected) - set(services))
+        raise SystemExit(
+            f"FAIL: service factory Prod image owner closure drifted: missing={missing}, extra={extra}"
+        )
+    return material_digest, selected
 
 
 def _pull_and_tag_release_image(
@@ -278,13 +293,17 @@ def parse_args() -> argparse.Namespace:
         default="linux/amd64",
     )
     parser.add_argument(
-        "--image-transport-tag",
-        default=os.environ.get("IMAGE_TRANSPORT_TAG", ""),
+        "--candidate-digest",
+        default=os.environ.get("CANDIDATE_DIGEST", ""),
     )
     parser.add_argument(
-        "--release-manifest",
+        "--service-factory-material",
         type=Path,
-        default=Path(os.environ["RELEASE_MANIFEST"]) if os.environ.get("RELEASE_MANIFEST") else None,
+        default=(
+            Path(os.environ["SERVICE_FACTORY_MATERIAL"])
+            if os.environ.get("SERVICE_FACTORY_MATERIAL")
+            else None
+        ),
     )
     parser.add_argument("--dry-run", action="store_true")
     return parser.parse_args()
@@ -304,18 +323,19 @@ def main() -> int:
         raise SystemExit(f"FAIL: missing key file: {key_file}")
     image_refs = _compose_image_refs(
         governed,
-        image_transport_tag=args.image_transport_tag,
+        candidate_digest=args.candidate_digest,
     )
-    release_evidence_digest = ""
+    candidate_material_digest = ""
     source_refs: dict[str, str] = {}
-    if args.release_manifest is not None:
-        release_evidence_digest, source_refs = _release_image_sources(
-            args.release_manifest,
+    if args.service_factory_material is not None:
+        candidate_material_digest, source_refs = _service_factory_image_sources(
+            args.service_factory_material,
             services=governed,
-            image_transport_tag=args.image_transport_tag,
         )
     elif not args.dry_run:
-        raise SystemExit("FAIL: --release-manifest is required for production image delivery")
+        raise SystemExit(
+            "FAIL: --service-factory-material is required for production image delivery"
+        )
     if not args.dry_run:
         for service, source_ref in source_refs.items():
             target_ref = image_refs.get(service)
@@ -352,7 +372,7 @@ def main() -> int:
         "services": governed,
         "images": image_refs,
         "sourceImages": source_refs,
-        "releaseEvidenceDigest": release_evidence_digest,
+        "candidateMaterialDigest": candidate_material_digest,
         "imageContentDigests": local_digests,
         "platform": args.platform,
         "rebuildServices": rebuild_services,

@@ -19,10 +19,11 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from quwoquan_ops.ci.render_environment_release_receipt import _passed, _timestamp
-from quwoquan_ops.cli.prod.finalize_mainline_release_artifact import (
+from quwoquan_ops.ci.release_evidence_reader import (
     DIGEST_PATTERN,
-    validate_manifest,
+    _passed,
+    _timestamp,
+    validate_historical_release_snapshot,
 )
 
 
@@ -104,8 +105,8 @@ def _parse_named_paths(items: list[str]) -> dict[str, Path]:
 def _validate_manifest_identity(
     manifest: dict[str, Any],
 ) -> tuple[str, str, str, str]:
-    validate_manifest(manifest, allowed_statuses={"qualified", "main-admitted"})
-    candidate = str(manifest.get("releaseCompositionId") or "")
+    validate_historical_release_snapshot(manifest, allowed_statuses={"candidate-ready", "deployable"})
+    candidate = str(manifest.get("candidateId") or "")
     source = manifest.get("source")
     if DIGEST_PATTERN.fullmatch(candidate) is None or not isinstance(source, dict):
         raise ValueError("Beta device evidence requires one sealed candidate")
@@ -130,7 +131,7 @@ def _require_direct_binding(
     tree_digest: str,
 ) -> None:
     expected = {
-        "releaseCompositionId": candidate,
+        "candidateId": candidate,
         "sourceGitSha": git_sha,
         "sourceTreeDigest": tree_digest,
     }
@@ -271,7 +272,7 @@ def render_stack_bundle(
         "environment": "beta",
         "target": "beta-local",
         "status": "passed",
-        "releaseCompositionId": candidate,
+        "candidateId": candidate,
         "sourceGitSha": git_sha,
         "sourceTreeDigest": tree_digest,
         "artifactDigest": artifact_digest,
@@ -370,7 +371,7 @@ def render_platform_bundle(
         "target": "beta-local",
         "platform": platform,
         "status": "passed",
-        "releaseCompositionId": candidate,
+        "candidateId": candidate,
         "sourceGitSha": git_sha,
         "sourceTreeDigest": tree_digest,
         "artifactDigest": artifact_digest,
@@ -597,7 +598,7 @@ def merge_platform_bundles(
         "environment": "beta",
         "target": "beta-local",
         "status": "passed",
-        "releaseCompositionId": candidate,
+        "candidateId": candidate,
         "sourceGitSha": git_sha,
         "sourceTreeDigest": tree_digest,
         "artifactDigest": artifact_digests.pop(),

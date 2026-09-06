@@ -122,16 +122,37 @@ class GammaValidationProfilesCanonicalContractTest(unittest.TestCase):
         self.assertIn("OK: gamma validation suites", output.getvalue())
         self.assertNotIn("validation_suites.json v", output.getvalue())
 
-    def test_story_requires_candidate_bound_gamma_receipt(self) -> None:
+    def test_story_requires_current_candidate_and_tree_bound_gamma_receipt(self) -> None:
         source = GAMMA_SPEC_PATH.read_text(encoding="utf-8")
+        req_start = source.index("### REQ-001")
+        req_end = source.index('<a id="req-002">', req_start)
+        requirement = source[req_start:req_end]
+        blocking_lines = [
+            line for line in requirement.splitlines() if "`GATE_BLOCK`" in line
+        ]
 
-        self.assertIn("main 正式阻断回执", source)
-        self.assertIn("candidate digest 不一致时必须 `GATE_BLOCK`", source)
-        self.assertIn("仓库不定义 hosted gamma 环境", source)
-        self.assertNotIn(
-            "gamma-local 通过仅证明提交前左移质量，不替代也不成为 main required check",
-            source,
+        for semantic_anchor in (
+            "exact dev head",
+            "current exact head",
+            "IntegrationQualificationFact",
+            "main promotion",
+        ):
+            self.assertIn(semantic_anchor, requirement)
+        self.assertTrue(
+            any(
+                all(
+                    semantic_anchor in line
+                    for semantic_anchor in (
+                        "current dev head",
+                        "candidate/tree/predecessor",
+                        "`GATE_BLOCK`",
+                    )
+                )
+                for line in blocking_lines
+            ),
+            "current dev head、candidate/tree/predecessor mismatch 必须同轨 GATE_BLOCK",
         )
+        self.assertIn("仓库不定义 hosted gamma 环境", source)
 
 
 if __name__ == "__main__":

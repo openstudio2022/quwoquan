@@ -10,12 +10,26 @@ from unittest import mock
 
 from quwoquan_ops.cli import stackctl
 from quwoquan_ops.cli.lib.app_identity import resolve_build_product
-from quwoquan_ops.cli.prod import finalize_mainline_release_artifact as finalizer
+from quwoquan_ops.ci import release_evidence_reader as historical_reader
 from quwoquan_ops.cli.prod import inspect_prod_plane_runtime as inspect_runtime
 from quwoquan_ops.cli.prod import prevalidate_prod_hosted as prevalidate
 from quwoquan_ops.tests.support.app_artifact_manifest_test_support import (
     app_artifact_manifest,
 )
+
+
+def _seal_snapshot(payload: dict[str, object]) -> dict[str, object]:
+    payload["releaseTrainId"] = historical_reader.canonical_release_train_digest(payload)
+    for environment in historical_reader.ENVIRONMENTS:
+        payload["environmentArtifacts"][environment]["environmentArtifactDigest"] = (
+            historical_reader.canonical_environment_artifact_digest(payload, environment)
+        )
+    try:
+        payload["candidateId"] = historical_reader.canonical_candidate_digest(payload)
+    except ValueError:
+        payload["candidateId"] = None
+    payload["artifactDigest"] = historical_reader.canonical_manifest_digest(payload)
+    return payload
 
 
 APP_EVIDENCE_REF = (
@@ -42,9 +56,9 @@ class ProdHostedPrevalidationContractTest(unittest.TestCase):
             }
         )
         configuration_packages: dict[str, dict[str, dict[str, str]]] = {
-            environment: {} for environment in finalizer.ENVIRONMENTS
+            environment: {} for environment in historical_reader.ENVIRONMENTS
         }
-        for environment in finalizer.ENVIRONMENTS:
+        for environment in historical_reader.ENVIRONMENTS:
             for service in services:
                 relative = (
                     f"packages/environments/{environment}/services/"
@@ -63,7 +77,7 @@ class ProdHostedPrevalidationContractTest(unittest.TestCase):
         # DEC-005：alpha/beta/gamma 共享 nonprod 镜像，prod 使用独立信任域。
         # 环境差异只存在于 configurationPackages。
         environment_images: dict[str, dict[str, dict[str, object]]] = {}
-        for environment in finalizer.ENVIRONMENTS:
+        for environment in historical_reader.ENVIRONMENTS:
             trust_domain = "prod" if environment == "prod" else "nonprod"
             digest = (
                 "sha256:"
@@ -93,13 +107,13 @@ class ProdHostedPrevalidationContractTest(unittest.TestCase):
         # App 包按 canonical build product 编址，四环境共用同一批产品；
         # opsPortal 不是 build product，它是 ReleaseEvidence 的独立顶层证据。
         application_packages: dict[str, dict[str, str]] = {}
-        for build_product_id in finalizer.APPLICATION_PACKAGES:
+        for build_product_id in historical_reader.APPLICATION_PACKAGES:
             relative = f"packages/applications/{build_product_id}/manifest.json"
             package_path = root / relative
             package_path.parent.mkdir(parents=True, exist_ok=True)
             product = resolve_build_product(build_product_id)
             package_payload = {
-                "schema": finalizer.APPLICATION_PACKAGE_SCHEMA,
+                "schema": historical_reader.APPLICATION_PACKAGE_SCHEMA,
                 "buildProductId": product.build_product_id,
                 "buildProfile": product.build_profile,
                 "platform": product.platform,
@@ -128,7 +142,7 @@ class ProdHostedPrevalidationContractTest(unittest.TestCase):
         ops_portal_path.write_text(
             json.dumps(
                 {
-                    "schema": finalizer.OPS_PORTAL_SCHEMA,
+                    "schema": historical_reader.OPS_PORTAL_SCHEMA,
                     "sourceGitSha": "a" * 40,
                     "sourceTreeDigest": "sha1:" + ("b" * 40),
                     "packageDigest": "sha256:" + ("d" * 64),
@@ -154,10 +168,10 @@ class ProdHostedPrevalidationContractTest(unittest.TestCase):
                     "capability_ready": True,
                 }
             }
-            for environment in finalizer.ENVIRONMENTS
+            for environment in historical_reader.ENVIRONMENTS
         }
         provider_evidence_count = (
-            finalizer.expected_required_cell_count_from_readiness(provider_readiness)
+            historical_reader.expected_required_cell_count_from_readiness(provider_readiness)
         )
         provider_raw_files: dict[str, str] = {}
         for index in range(provider_evidence_count):
@@ -192,7 +206,7 @@ class ProdHostedPrevalidationContractTest(unittest.TestCase):
             encoding="utf-8",
         )
         test_evidence_files: dict[str, dict[str, str]] = {}
-        for label, relative in finalizer.RELEASE_CLOSURE_PATHS.items():
+        for label, relative in historical_reader.RELEASE_CLOSURE_PATHS.items():
             source = root / relative
             source.parent.mkdir(parents=True, exist_ok=True)
             source.write_text(
@@ -209,7 +223,7 @@ class ProdHostedPrevalidationContractTest(unittest.TestCase):
             "status": "passed",
             "layers": {
                 layer: {"status": "passed", "artifactDigest": evidence_layer_digest}
-                for layer in finalizer.TEST_LAYERS
+                for layer in historical_reader.TEST_LAYERS
             },
             "evidence": {"files": test_evidence_files},
         }
@@ -220,7 +234,7 @@ class ProdHostedPrevalidationContractTest(unittest.TestCase):
             "publicWeb": "client-app.web.official-release",
             "androidOfficialRelease": "client-app.android.official-release",
         }
-        for evidence_key, relative in finalizer.DISTRIBUTION_EVIDENCE_PATHS.items():
+        for evidence_key, relative in historical_reader.DISTRIBUTION_EVIDENCE_PATHS.items():
             distribution_path = root / relative
             distribution_path.parent.mkdir(parents=True, exist_ok=True)
             distribution_path.write_text(
@@ -238,8 +252,8 @@ class ProdHostedPrevalidationContractTest(unittest.TestCase):
                 "digest": "sha256:"
                 + hashlib.sha256(distribution_path.read_bytes()).hexdigest(),
             }
-        payload = finalizer.seal_manifest({
-            "schema": finalizer.SCHEMA,
+        payload = _seal_snapshot({
+            "schema": historical_reader.SCHEMA,
             "releaseTrainId": None,
             "releaseCompositionId": None,
             "status": "qualified",
@@ -259,7 +273,7 @@ class ProdHostedPrevalidationContractTest(unittest.TestCase):
                     "images": environment_images[environment],
                     "configurationPackages": configuration_packages[environment],
                 }
-                for environment in finalizer.ENVIRONMENTS
+                for environment in historical_reader.ENVIRONMENTS
             },
             "applicationPackages": application_packages,
             "publicWeb": distribution_descriptors["publicWeb"],
@@ -271,17 +285,17 @@ class ProdHostedPrevalidationContractTest(unittest.TestCase):
             + hashlib.sha256(contract_graph.read_bytes()).hexdigest(),
             "requiredEvidence": {
                 "environmentArtifacts": {
-                    environment: services for environment in finalizer.ENVIRONMENTS
+                    environment: services for environment in historical_reader.ENVIRONMENTS
                 },
                 "configurationPackages": {
-                    environment: services for environment in finalizer.ENVIRONMENTS
+                    environment: services for environment in historical_reader.ENVIRONMENTS
                 },
-                "applicationPackages": list(finalizer.APPLICATION_PACKAGES),
+                "applicationPackages": list(historical_reader.APPLICATION_PACKAGES),
                 "opsPortal": True,
                 "contractGraphDigest": True,
                 "providerEvidence": True,
-                "testEvidence": list(finalizer.TEST_LAYERS),
-                "environmentReceipts": list(finalizer.ENVIRONMENTS),
+                "testEvidence": list(historical_reader.TEST_LAYERS),
+                "environmentReceipts": list(historical_reader.ENVIRONMENTS),
                 "rolloutReceipt": True,
                 "rollbackReceipt": True,
             },
@@ -291,7 +305,7 @@ class ProdHostedPrevalidationContractTest(unittest.TestCase):
                 "status": "passed",
                 "layers": {
                     layer: {"status": "passed", "artifactDigest": evidence_layer_digest}
-                    for layer in finalizer.TEST_LAYERS
+                    for layer in historical_reader.TEST_LAYERS
                 },
                 "evidence": test_evidence["evidence"],
             },
@@ -307,7 +321,7 @@ class ProdHostedPrevalidationContractTest(unittest.TestCase):
             "rollbackReceipt": None,
             "blockers": ["environment-qualification-evidence-pending"],
             "missingEvidence": [
-                *(f"environmentReceipts.{environment}" for environment in finalizer.ENVIRONMENTS),
+                *(f"environmentReceipts.{environment}" for environment in historical_reader.ENVIRONMENTS),
                 "rollbackReceipt.ready",
                 "rolloutReceipt",
                 "rollbackReceipt.outcome",
@@ -329,9 +343,9 @@ class ProdHostedPrevalidationContractTest(unittest.TestCase):
             json.dumps(evidence, separators=(",", ":"), sort_keys=True).encode("utf-8")
         ).hexdigest()
         receipts: dict[str, dict[str, object]] = {}
-        for environment in finalizer.PRE_PROD_ENVIRONMENTS:
+        for environment in historical_reader.PRE_PROD_ENVIRONMENTS:
             receipt_payload = {
-                "schema": finalizer.ENVIRONMENT_RECEIPT_SCHEMA,
+                "schema": historical_reader.ENVIRONMENT_RECEIPT_SCHEMA,
                 "environment": environment,
                 "status": "passed",
                 "releaseCompositionId": payload["releaseCompositionId"],
@@ -351,7 +365,7 @@ class ProdHostedPrevalidationContractTest(unittest.TestCase):
                 + hashlib.sha256(receipt_path.read_bytes()).hexdigest(),
             }
         rollback_payload = {
-            "schema": finalizer.ROLLBACK_RECEIPT_SCHEMA,
+            "schema": historical_reader.ROLLBACK_RECEIPT_SCHEMA,
             "environment": "prod",
             "status": "ready",
             "releaseCompositionId": payload["releaseCompositionId"],
@@ -378,7 +392,7 @@ class ProdHostedPrevalidationContractTest(unittest.TestCase):
             "rolloutReceipt",
             "rollbackReceipt.outcome",
         ]
-        payload = finalizer.seal_manifest(payload)
+        payload = _seal_snapshot(payload)
         manifest = root / "manifest.json"
         manifest.write_text(json.dumps(payload), encoding="utf-8")
         return manifest
@@ -520,13 +534,13 @@ class ProdHostedPrevalidationContractTest(unittest.TestCase):
             ),
             mock.patch.object(stackctl, "run", return_value=completed) as invoked,
         ):
-            manifest = stackctl._materialize_prevalidation_release_manifest(
+            manifest = stackctl._materialize_frozen_diagnostic_snapshot(
                 "oci://ghcr.io/owner/repo/release-artifact@sha256:" + digest
             )
         self.assertEqual(manifest, expected / "manifest.json")
         self.assertIn("--ref", invoked.call_args.args[0])
         with self.assertRaisesRegex(RuntimeError, "GHCR digest ref"):
-            stackctl._materialize_prevalidation_release_manifest(
+            stackctl._materialize_frozen_diagnostic_snapshot(
                 "oci://ghcr.io/owner/repo/release-artifact:latest"
             )
 
@@ -565,7 +579,7 @@ class ProdHostedPrevalidationContractTest(unittest.TestCase):
                 subprocess.CompletedProcess(["git"], 0, stdout="", stderr=""),
             ]
             with mock.patch.object(stackctl, "run", side_effect=git_results):
-                resolved = stackctl._prevalidation_release_manifest(str(manifest))
+                resolved = stackctl._frozen_diagnostic_snapshot(str(manifest))
             self.assertEqual(resolved[3], "1.20260726.42")
             self.assertEqual(resolved[4], resolved[2]["releaseCompositionId"])
 
@@ -575,13 +589,13 @@ class ProdHostedPrevalidationContractTest(unittest.TestCase):
             ]
             with mock.patch.object(stackctl, "run", side_effect=dirty_results):
                 with self.assertRaisesRegex(RuntimeError, "uncommitted worktree"):
-                    stackctl._prevalidation_release_manifest(str(manifest))
+                    stackctl._frozen_diagnostic_snapshot(str(manifest))
 
     def test_latest_manifest_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             manifest = self._artifact(Path(tmp), image_version="latest")
             with self.assertRaisesRegex(RuntimeError, "must not use latest"):
-                stackctl._prevalidation_release_manifest(str(manifest))
+                stackctl._frozen_diagnostic_snapshot(str(manifest))
 
     def test_missing_manifest_never_enters_release_ledger(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

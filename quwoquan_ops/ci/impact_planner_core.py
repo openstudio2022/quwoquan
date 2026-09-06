@@ -55,8 +55,8 @@ _DEVICE_IMPACT_PREFIXES = (
     "quwoquan_ops/cli/lib/environment_topology.py",
     "quwoquan_ops/cli/lib/runtime_topology_package.py",
     "quwoquan_ops/environments/",
-    ".github/workflows/app-env-device-matrix-self-hosted.yml",
-    ".github/workflows/beta-device-platform.yml",
+    "quwoquan_ops/ci/environment_scheduler.py",
+    "quwoquan_ops/ci/run_mobile_platform_matrix.sh",
 )
 _COVERAGE_GOVERNANCE_PREFIXES = (
     "quwoquan_ops/gate/verify_canonical_coverage.py",

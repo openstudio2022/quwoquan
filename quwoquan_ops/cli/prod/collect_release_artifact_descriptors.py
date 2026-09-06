@@ -18,7 +18,7 @@ ROOT = Path(__file__).resolve().parents[3]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from quwoquan_ops.cli.prod.finalize_mainline_release_artifact import (
+from quwoquan_ops.ci.release_evidence_reader import (
     APPLICATION_PACKAGES,
     DISTRIBUTION_EVIDENCE_PATHS,
     OCI_DIGEST_REF_PATTERN,
@@ -29,8 +29,7 @@ from quwoquan_ops.cli.prod.finalize_mainline_release_artifact import (
     sha256_ops_portal_tree,
     sha256_tree,
     validate_application_package_payload,
-    validate_manifest,
-    validate_manifest_files,
+    validate_historical_release_snapshot,
 )
 from quwoquan_ops.ci.render_provider_conformance_source import (
     expected_required_cell_count_from_readiness,
@@ -453,8 +452,11 @@ def collect(
             f"App build product payload set mismatch: missing={missing}, extra={extra}"
         )
     manifest = _load_json(artifact_dir / "manifest.json", "service component manifest")
-    validate_manifest(manifest, allowed_statuses={"component-ready"})
-    validate_manifest_files(artifact_dir, manifest)
+    validate_historical_release_snapshot(
+        manifest,
+        artifact_dir=artifact_dir,
+        allowed_statuses={"component-ready"},
+    )
     if OCI_DIGEST_REF_PATTERN.fullmatch(application_evidence_ref) is None:
         raise ValueError("application evidence ref is not an immutable OCI digest ref")
 

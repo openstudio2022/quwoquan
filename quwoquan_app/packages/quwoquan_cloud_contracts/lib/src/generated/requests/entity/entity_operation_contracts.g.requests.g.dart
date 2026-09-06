@@ -1,5 +1,5 @@
 // Code generated from the accepted ContractGraph. DO NOT EDIT.
-// ContractGraph SHA256: 61883364fbc653db81f2f46852da1712df817a5112c014bb9f33a17d3042edff
+// ContractGraph SHA256: 18fd7d043e20a4ab1216391ebdab42763cc1ab2b653c806c04ea02d7b9aa9ba2
 
 part of '../../../entity/entity_operation_contracts.g.dart';
 

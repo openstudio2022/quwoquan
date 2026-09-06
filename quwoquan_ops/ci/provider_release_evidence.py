@@ -21,18 +21,16 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from quwoquan_ops.ci.render_environment_release_receipt import (
+from quwoquan_ops.ci.release_evidence_reader import (
     RELEASE_CLOSURE_PATHS,
     archive_exact_files,
+    sha256_file,
+    validate_historical_release_snapshot,
     validate_release_closure_sources,
 )
 from quwoquan_ops.cli.lib import external_provider_governance as governance
 from quwoquan_ops.cli.lib import provider_conformance
 from quwoquan_ops.cli.lib.output_paths import output_root
-from quwoquan_ops.cli.prod.finalize_mainline_release_artifact import (
-    sha256_file,
-    validate_manifest,
-)
 
 DIGEST = re.compile(r"sha256:[0-9a-f]{64}")
 IMMUTABLE_REF = re.compile(r"ghcr\.io/[a-z0-9._/-]+@sha256:[0-9a-f]{64}")
@@ -61,10 +59,10 @@ def _release_identity(
     release_evidence_ref: str,
 ) -> tuple[dict[str, Any], str]:
     manifest = _load(manifest_path)
-    validate_manifest(manifest, allowed_statuses={"released"})
-    candidate = str(manifest.get("releaseCompositionId") or "")
+    validate_historical_release_snapshot(manifest, allowed_statuses={"candidate-ready", "deployable"})
+    candidate = str(manifest.get("candidateId") or "")
     if DIGEST.fullmatch(candidate) is None:
-        raise ValueError("Provider qualification requires a released releaseCompositionId")
+        raise ValueError("Provider qualification requires a current-source candidateId")
     if (
         IMMUTABLE_REF.fullmatch(release_evidence_ref) is None
         or "/release-artifact@" not in release_evidence_ref
@@ -111,7 +109,7 @@ def _write_github_output(path: str, values: Mapping[str, str]) -> None:
 
 def command_identity(args: argparse.Namespace) -> int:
     manifest, image_digest = _release_identity(
-        args.release_manifest,
+        args.historical_release_snapshot,
         args.release_evidence_ref,
     )
     source = manifest["source"]
@@ -120,7 +118,7 @@ def command_identity(args: argparse.Namespace) -> int:
         "producerWorkflowRunId": source["workflowRunId"],
         "releaseEvidenceRef": args.release_evidence_ref,
         "releaseEvidenceDigest": args.release_evidence_ref.rsplit("@", 1)[1],
-        "releaseCompositionId": manifest["releaseCompositionId"],
+        "candidateId": manifest["candidateId"],
         "artifactDigest": manifest["artifactDigest"],
         "expectedImageDigest": image_digest,
     }
@@ -131,7 +129,7 @@ def command_identity(args: argparse.Namespace) -> int:
 
 def command_execute_prod(args: argparse.Namespace) -> int:
     _, expected_image_digest = _release_identity(
-        args.release_manifest,
+        args.historical_release_snapshot,
         args.release_evidence_ref,
     )
     compiled, issues = governance.load_and_compile()
@@ -197,7 +195,7 @@ def command_execute_prod(args: argparse.Namespace) -> int:
 
 def command_execute_nonprod(args: argparse.Namespace) -> int:
     _, expected_image_digest = _release_identity(
-        args.release_manifest,
+        args.historical_release_snapshot,
         args.release_evidence_ref,
     )
     compiled, issues = governance.load_and_compile()
@@ -247,7 +245,7 @@ def command_execute_nonprod(args: argparse.Namespace) -> int:
 
 def command_package(args: argparse.Namespace) -> int:
     manifest, expected_image_digest = _release_identity(
-        args.release_manifest,
+        args.historical_release_snapshot,
         args.release_evidence_ref,
     )
     previous = os.environ.get("QWQ_PROVIDER_CONFORMANCE_EXPECTED_IMAGE_DIGEST")
@@ -306,7 +304,7 @@ def command_package(args: argparse.Namespace) -> int:
         relative = run_dir.relative_to(evidence_root.resolve())
         shutil.copytree(run_dir, output_dir / relative, dirs_exist_ok=True)
     release_root = args.release_root.resolve(strict=True)
-    if args.release_manifest.resolve(strict=True) != release_root / "manifest.json":
+    if args.historical_release_snapshot.resolve(strict=True) != release_root / "manifest.json":
         raise ValueError(
             "release manifest must be the canonical file under release root"
         )
@@ -320,7 +318,7 @@ def command_package(args: argparse.Namespace) -> int:
     if not isinstance(closure_descriptors, Mapping) or set(closure_descriptors) != set(
         RELEASE_CLOSURE_PATHS
     ):
-        raise ValueError("released manifest closure is incomplete")
+        raise ValueError("qualification manifest closure is incomplete")
     closure_sources: dict[str, Path] = {}
     for label, expected_path in RELEASE_CLOSURE_PATHS.items():
         descriptor = closure_descriptors.get(label)
@@ -330,7 +328,7 @@ def command_package(args: argparse.Namespace) -> int:
             or DIGEST.fullmatch(str(descriptor.get("digest") or "")) is None
         ):
             raise ValueError(
-                f"released manifest closure descriptor is invalid: {label}"
+                f"qualification manifest closure descriptor is invalid: {label}"
             )
         source_path = release_root / expected_path
         if (
@@ -338,7 +336,7 @@ def command_package(args: argparse.Namespace) -> int:
             or not source_path.is_file()
             or sha256_file(source_path) != descriptor["digest"]
         ):
-            raise ValueError(f"released manifest closure digest mismatch: {label}")
+            raise ValueError(f"qualification manifest closure digest mismatch: {label}")
         closure_sources[label] = source_path
     lifecycle_sources = {
         environment: closure_sources[f"content-lifecycle-{environment}"]
@@ -364,7 +362,7 @@ def command_package(args: argparse.Namespace) -> int:
         "producerWorkflowRunId": source["workflowRunId"],
         "releaseEvidenceRef": args.release_evidence_ref,
         "releaseEvidenceDigest": args.release_evidence_ref.rsplit("@", 1)[1],
-        "releaseCompositionId": manifest["releaseCompositionId"],
+        "candidateId": manifest["candidateId"],
         "artifactDigest": manifest["artifactDigest"],
         "expectedImageDigest": expected_image_digest,
         "evidenceCount": len(evidence_paths),
@@ -391,7 +389,7 @@ def parse_args() -> argparse.Namespace:
     subparsers = parser.add_subparsers(dest="command", required=True)
     for command in ("identity", "execute-nonprod", "execute-prod", "package"):
         subparser = subparsers.add_parser(command)
-        subparser.add_argument("--release-manifest", required=True, type=Path)
+        subparser.add_argument("--historical-release-snapshot", required=True, type=Path)
         subparser.add_argument("--release-evidence-ref", required=True)
         if command == "identity":
             subparser.add_argument("--github-output", default="")

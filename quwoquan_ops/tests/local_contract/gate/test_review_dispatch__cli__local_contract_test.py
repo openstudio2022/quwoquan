@@ -464,6 +464,50 @@ class ReviewDispatchBoundedAssemblyTest(unittest.TestCase):
         )
         self.assertNotIn("test-governance-pipeline-admission", commit_fast_path)
 
+    def test_environment_release_required_evidence_is_contract_only(self) -> None:
+        legacy_command = "make verify-environment-stability-final-acceptance"
+        legacy_non_promotable_root = (
+            "quwoquan_ops/cli/lib/environment_stability_final_acceptance"
+        )
+        evidence_id = "environment-release-evidence"
+        command = (
+            "python3 -B quwoquan_ops/gate/verify_ci_cd_evidence_contracts.py"
+            " && "
+            "python3 -B quwoquan_ops/gate/verify_prod_rollout_stackctl_contract.py"
+        )
+
+        serialized_registry = yaml.safe_dump(_registry, sort_keys=True)
+        self.assertNotIn(legacy_command, serialized_registry)
+        self.assertNotIn(legacy_non_promotable_root, serialized_registry)
+        self.assertNotIn("NON_PROMOTABLE", serialized_registry)
+
+        registered = _registry["evidence"][evidence_id]
+        self.assertTrue(registered["required"])
+        self.assertEqual(command, registered["command"])
+        for script in (
+            "quwoquan_ops/gate/verify_ci_cd_evidence_contracts.py",
+            "quwoquan_ops/gate/verify_prod_rollout_stackctl_contract.py",
+        ):
+            with self.subTest(script=script):
+                self.assertTrue((_REPO_ROOT / script).is_file())
+
+        with mock.patch.object(
+            _cli, "_checklist_evidence", return_value=[evidence_id]
+        ):
+            plan = _plan(
+                "environment-ops",
+                "POST",
+                ["quwoquan_ops/environments/prod/runtime.yaml"],
+            )
+        self.assertEqual(
+            ["review-baseline", evidence_id],
+            [item["id"] for item in plan["evidence"]],
+        )
+        self.assertEqual(command, plan["evidence"][1]["command"])
+        self.assertNotIn(legacy_command, " ".join(
+            item["command"] for item in plan["evidence"]
+        ))
+
     def test_named_evidence_is_deduplicated_by_id(self) -> None:
         # GWT-004.t1: product and UX both reference feature-tree.
         plan = _plan("prd", "POST", ["README.md"], deliverable="page")

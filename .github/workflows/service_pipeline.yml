@@ -1,7 +1,7 @@
 # =============================================================================
 # Service Pipeline — quwoquan_service CI/CD
 # =============================================================================
-# 触发条件：由 mainline 编排复用 / 手动诊断
+# 触发条件：仅由 RC qualification 以 exact admission/request 复用
 # 流程：Go 构建 + Python (recommendation-service) Docker 镜像 → kustomize/prod 部署清单校验
 # 当前职责：构建服务镜像并校验发布清单；prod-hosted 发布由 prod rollout workflow 负责。
 #
@@ -18,40 +18,55 @@ on:
   workflow_call:
     inputs:
       source_sha:
-        description: Exact main commit SHA
+        description: Exact RC peeled main commit SHA
         required: true
         type: string
-      base_sha:
-        description: Exact diff base SHA
-        required: false
+      rc_tag_admission_ref:
+        description: Exact immutable RC tag AdmissionFact OCI @sha256 ref
+        required: true
         type: string
-        default: ''
+      qualification_request_ref:
+        description: Exact immutable RC QualificationRequest OCI @sha256 ref
+        required: true
+        type: string
+      qualification_request_digest:
+        description: Exact immutable OCI digest suffix of qualification_request_ref
+        required: true
+        type: string
+      artifact_build_number:
+        description: Hosted monotonic build number shared by both factories
+        required: true
+        type: number
+      artifact_build_number_allocation_ref:
+        description: Exact immutable hosted build allocation OCI @sha256 ref
+        required: true
+        type: string
+      artifact_build_number_allocation_digest:
+        description: Exact immutable OCI digest suffix of the allocation ref
+        required: true
+        type: string
     outputs:
       component_evidence_ref:
-        description: Immutable GHCR component-ready ReleaseEvidenceManifest OCI ref
+        description: Exact immutable GHCR service factory material OCI ref
         value: ${{ jobs.service_pipeline_summary.outputs.component_evidence_ref }}
       component_artifact_digest:
-        description: Component-ready ReleaseEvidenceManifest artifactDigest
+        description: Exact canonical aggregate service digest
         value: ${{ jobs.service_pipeline_summary.outputs.component_artifact_digest }}
-      producer_workflow_run_id:
-        description: Workflow run bound by ReleaseEvidenceManifest.source.workflowRunId
-        value: ${{ jobs.service_pipeline_summary.outputs.producer_workflow_run_id }}
       source_git_sha:
-        description: Exact source Git SHA
+        description: Exact main source Git SHA bound by the service material
         value: ${{ jobs.service_pipeline_summary.outputs.source_git_sha }}
-      machine_critical_path_seconds:
-        description: Diagnostic GitHub job DAG execution path; never the end-to-end budget clock
-        value: ${{ jobs.service_pipeline_summary.outputs.machine_critical_path_seconds }}
-  workflow_dispatch:
-    inputs:
-      source_sha:
-        description: Exact main commit SHA; defaults to the dispatch ref SHA
-        required: false
-        default: ''
-      base_sha:
-        description: Exact diff base SHA; defaults to source parent
-        required: false
-        default: ''
+      source_tree_digest:
+        description: Exact Git tree object bound by the service material
+        value: ${{ jobs.service_pipeline_summary.outputs.source_tree_digest }}
+      qualification_request_ref:
+        description: Exact immutable QualificationRequest OCI ref bound by the service material
+        value: ${{ jobs.service_pipeline_summary.outputs.qualification_request_ref }}
+      qualification_request_digest:
+        description: Exact immutable QualificationRequest OCI digest
+        value: ${{ jobs.service_pipeline_summary.outputs.qualification_request_digest }}
+      service_material_digest:
+        description: Exact canonical digest of the complete service factory material
+        value: ${{ jobs.service_pipeline_summary.outputs.service_material_digest }}
 
 env:
   REGISTRY: ghcr.io
@@ -62,17 +77,23 @@ env:
 jobs:
   prepare-release:
     name: Prepare canonical release transport
-    runs-on: [self-hosted, macOS, ARM64, quwoquan-release-authority]
+    runs-on: [self-hosted, macOS, ARM64]
     timeout-minutes: 10
     permissions:
       contents: read
-      actions: read
       packages: read
     outputs:
       image_transport_tag: ${{ steps.coordinates.outputs.image_transport_tag }}
       source_git_sha: ${{ steps.source.outputs.source_git_sha }}
-      base_sha: ${{ steps.source.outputs.base_sha }}
+      source_tree_digest: ${{ steps.source.outputs.source_tree_digest }}
       producer_workflow_run_id: ${{ steps.source.outputs.producer_workflow_run_id }}
+      qualification_request_fact_digest: ${{ steps.source.outputs.qualification_request_fact_digest }}
+      qualification_request_id: ${{ steps.source.outputs.qualification_request_id }}
+      artifact_build_number_allocation_fact_digest: ${{ steps.source.outputs.artifact_build_number_allocation_fact_digest }}
+      artifact_build_number_allocation_id: ${{ steps.source.outputs.artifact_build_number_allocation_id }}
+      rc_tag_admission_fact_digest: ${{ steps.source.outputs.rc_tag_admission_fact_digest }}
+      rc_tag_admission_id: ${{ steps.source.outputs.rc_tag_admission_id }}
+      rc_tag_name: ${{ steps.source.outputs.rc_tag_name }}
       image_matrix: ${{ steps.plan.outputs.image_matrix }}
       build_count: ${{ steps.plan.outputs.build_count }}
       reuse_count: ${{ steps.plan.outputs.reuse_count }}
@@ -84,62 +105,196 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
           fetch-depth: 0
-          ref: ${{ inputs.source_sha || github.sha }}
+          ref: ${{ inputs.source_sha }}
+          persist-credentials: false
+      - uses: oras-project/setup-oras@1d808f7d7f6995cc68b7bf507bfe5c5446e1dc9d
+        with: {version: 1.3.3}
       - id: source
-        name: Resolve exact source and diff range
+        name: Consume exact RC source and qualification authorities
         env:
-          REQUESTED_SOURCE_SHA: ${{ inputs.source_sha || github.sha }}
-          REQUESTED_BASE_SHA: ${{ inputs.base_sha || '' }}
+          REQUESTED_SOURCE_SHA: ${{ inputs.source_sha }}
+          RC_TAG_ADMISSION_REF: ${{ inputs.rc_tag_admission_ref }}
+          QUALIFICATION_REQUEST_REF: ${{ inputs.qualification_request_ref }}
+          QUALIFICATION_REQUEST_DIGEST: ${{ inputs.qualification_request_digest }}
+          ARTIFACT_BUILD_NUMBER: ${{ inputs.artifact_build_number }}
+          ARTIFACT_BUILD_NUMBER_ALLOCATION_REF: ${{ inputs.artifact_build_number_allocation_ref }}
+          ARTIFACT_BUILD_NUMBER_ALLOCATION_DIGEST: ${{ inputs.artifact_build_number_allocation_digest }}
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
-          SOURCE_SHA="$(git rev-parse "$REQUESTED_SOURCE_SHA")"
-          BASE_SHA="$REQUESTED_BASE_SHA"
-          if [[ -z "$BASE_SHA" ]]; then
-            BASE_SHA="$(git rev-parse "${SOURCE_SHA}^" 2>/dev/null || true)"
-          fi
-          if [[ ! "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]] || [[ -z "$BASE_SHA" ]] || [[ ! "$BASE_SHA" =~ ^[0-9a-f]{40}$ ]]; then
-            echo "::error::GATE_BLOCK: Service Pipeline requires exact source/base Git SHAs"
-            exit 2
-          fi
-          {
-            echo "source_git_sha=$SOURCE_SHA"
-            echo "base_sha=$BASE_SHA"
-            echo "producer_workflow_run_id=${GITHUB_RUN_ID}"
-          } >> "$GITHUB_OUTPUT"
-      - name: Login GHCR for canonical prior evidence discovery
-        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      - id: prior
-        name: Discover previous canonical evidence for verified reuse
-        env:
-          BASE_SHA: ${{ steps.source.outputs.base_sha }}
-        run: |
-          PRIOR_ROOT="$QWQ_OUTPUT_ROOT/env/repo/local/ci-packages/process/service/prior-release-evidence"
-          if python3 quwoquan_ops/cli/prod/fetch_mainline_release_artifact.py \
-            --source-sha "$BASE_SHA" \
-            --repository "${{ github.repository }}" \
-            --output-dir "$PRIOR_ROOT"; then
-            echo "manifest=$PRIOR_ROOT/manifest.json" >> "$GITHUB_OUTPUT"
-          else
-            echo "::notice::No sealed prior canonical evidence for $BASE_SHA; rebuilding every image."
-            echo "manifest=" >> "$GITHUB_OUTPUT"
-          fi
+          set -euo pipefail
+          [[ "$REQUESTED_SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          test "$(git rev-parse HEAD)" = "$REQUESTED_SOURCE_SHA"
+          test -z "$(git status --porcelain --untracked-files=all)"
+          [[ "$RC_TAG_ADMISSION_REF" =~ ^ghcr\.io/[a-z0-9._/-]+@sha256:[0-9a-f]{64}$ ]]
+          [[ "$QUALIFICATION_REQUEST_REF" =~ ^ghcr\.io/[a-z0-9._/-]+@sha256:[0-9a-f]{64}$ ]]
+          [[ "$QUALIFICATION_REQUEST_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]
+          [[ "$ARTIFACT_BUILD_NUMBER" =~ ^[1-9][0-9]*$ ]]
+          [[ "$ARTIFACT_BUILD_NUMBER_ALLOCATION_REF" =~ ^ghcr\.io/[a-z0-9._/-]+@sha256:[0-9a-f]{64}$ ]]
+          [[ "$ARTIFACT_BUILD_NUMBER_ALLOCATION_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]
+          test "${QUALIFICATION_REQUEST_REF##*@}" = "$QUALIFICATION_REQUEST_DIGEST"
+          test "${ARTIFACT_BUILD_NUMBER_ALLOCATION_REF##*@}" = "$ARTIFACT_BUILD_NUMBER_ALLOCATION_DIGEST"
+
+          AUTHORITY_ROOT="$RUNNER_TEMP/service-factory-authority"
+          rm -rf "$AUTHORITY_ROOT"
+          mkdir -p "$AUTHORITY_ROOT"
+          printf '%s' "$GITHUB_TOKEN" | oras login ghcr.io --username "${{ github.actor }}" --password-stdin
+          trap 'oras logout ghcr.io >/dev/null 2>&1 || true' EXIT
+          python3 quwoquan_ops/ci/promotion_evidence.py materialize-oci \
+            --ref "$QUALIFICATION_REQUEST_REF" \
+            --output-file "$AUTHORITY_ROOT/qualification-request.json" >/dev/null
+          python3 quwoquan_ops/ci/promotion_evidence.py materialize-oci \
+            --ref "$RC_TAG_ADMISSION_REF" \
+            --output-file "$AUTHORITY_ROOT/rc-tag-admission.json" >/dev/null
+          python3 quwoquan_ops/ci/promotion_evidence.py materialize-oci \
+            --ref "$ARTIFACT_BUILD_NUMBER_ALLOCATION_REF" \
+            --output-file "$AUTHORITY_ROOT/artifact-build-number-allocation.json" >/dev/null
+
+          python3 - "$AUTHORITY_ROOT/qualification-request.json" \
+            "$AUTHORITY_ROOT/rc-tag-admission.json" \
+            "$AUTHORITY_ROOT/artifact-build-number-allocation.json" \
+            "$REQUESTED_SOURCE_SHA" "$(git rev-parse 'HEAD^{tree}')" <<'PY_AUTHORITY' >> "$GITHUB_OUTPUT"
+          import hashlib
+          import json
+          import os
+          import re
+          import sys
+          from pathlib import Path, PurePosixPath
+
+          digest_pattern = re.compile(r"sha256:[0-9a-f]{64}")
+          sha_pattern = re.compile(r"[0-9a-f]{40}")
+
+          def canonical_digest(value):
+              canonical = json.dumps(
+                  value,
+                  ensure_ascii=False,
+                  sort_keys=True,
+                  separators=(",", ":"),
+                  allow_nan=False,
+              ).encode("utf-8")
+              return "sha256:" + hashlib.sha256(canonical).hexdigest()
+
+          def exact_ref(value, field):
+              if not isinstance(value, dict) or set(value) != {"ref", "digest"}:
+                  raise SystemExit(f"GATE_BLOCK: {field} exact identity is incomplete")
+              ref = value.get("ref")
+              digest = value.get("digest")
+              if (
+                  not isinstance(ref, str)
+                  or not ref
+                  or ref != ref.strip()
+                  or "\\" in ref
+                  or any(part in {"", ".", "..", "latest", "current"} for part in PurePosixPath(ref).parts)
+                  or not isinstance(digest, str)
+                  or digest_pattern.fullmatch(digest) is None
+              ):
+                  raise SystemExit(f"GATE_BLOCK: {field} exact identity is mutable or invalid")
+              return {"ref": ref, "digest": digest}
+
+          request_path = Path(sys.argv[1])
+          admission_path = Path(sys.argv[2])
+          allocation_path = Path(sys.argv[3])
+          source = sys.argv[4]
+          source_tree = sys.argv[5]
+          request_raw = request_path.read_bytes()
+          admission_raw = admission_path.read_bytes()
+          allocation_raw = allocation_path.read_bytes()
+          request = json.loads(request_raw)
+          admission = json.loads(admission_raw)
+          allocation = json.loads(allocation_raw)
+          request_keys = {
+              "schema", "rcTagAdmission", "mainSourceSeal",
+              "integrationQualification", "requestAuthority", "tagName",
+              "sourceGitSha", "sourceTree", "requestedAt", "requestId",
+          }
+          admission_keys = {
+              "schema", "admissionId", "decision", "tagKind", "tagName",
+              "tagObjectOid", "peeledCommit", "sourceTree", "productVersion",
+              "rcSequence", "selectionFact", "productVersionManifestDigest",
+              "releaseSelectionPolicyDigest", "creatorReadback",
+              "rulesetReadback", "admittedAt",
+          }
+          allocation_keys = {
+              "schema", "allocationId", "requestId", "qualificationRequest",
+              "artifactBuildNumber", "predecessor", "hostedAuthority",
+          }
+          request_body = dict(request)
+          request_id = request_body.pop("requestId", None)
+          admission_body = dict(admission)
+          admission_id = admission_body.pop("admissionId", None)
+          allocation_body = dict(allocation)
+          allocation_id = allocation_body.pop("allocationId", None)
+          request_fact_digest = "sha256:" + hashlib.sha256(request_raw).hexdigest()
+          admission_fact_digest = "sha256:" + hashlib.sha256(admission_raw).hexdigest()
+          allocation_fact_digest = "sha256:" + hashlib.sha256(allocation_raw).hexdigest()
+          request_admission = exact_ref(request.get("rcTagAdmission"), "request.rcTagAdmission")
+          for field in ("mainSourceSeal", "integrationQualification", "requestAuthority"):
+              exact_ref(request.get(field), f"request.{field}")
+          if (
+              not isinstance(request, dict)
+              or request_raw
+              != json.dumps(
+                  request, ensure_ascii=False, sort_keys=True,
+                  separators=(",", ":"), allow_nan=False,
+              ).encode("utf-8") + b"\n"
+              or admission_raw
+              != json.dumps(
+                  admission, ensure_ascii=False, sort_keys=True,
+                  separators=(",", ":"), allow_nan=False,
+              ).encode("utf-8") + b"\n"
+              or allocation_raw
+              != json.dumps(
+                  allocation, ensure_ascii=False, sort_keys=True,
+                  separators=(",", ":"), allow_nan=False,
+              ).encode("utf-8") + b"\n"
+              or set(request) != request_keys
+              or request.get("schema") != "quwoquan_ops.release_qualification_request.v1"
+              or request_id != canonical_digest(request_body)
+              or not isinstance(allocation, dict)
+              or set(allocation) != allocation_keys
+              or allocation.get("schema") != "quwoquan_ops.artifact_build_number_allocation.v1"
+              or allocation_id != canonical_digest(allocation_body)
+              or allocation.get("requestId") != request_id
+              or allocation.get("qualificationRequest")
+              != {"ref": os.environ["QUALIFICATION_REQUEST_REF"], "digest": request_fact_digest}
+              or allocation.get("artifactBuildNumber") != int(os.environ["ARTIFACT_BUILD_NUMBER"])
+              or allocation.get("predecessor") is not None
+              or not isinstance(allocation.get("hostedAuthority"), dict)
+              or allocation["hostedAuthority"].get("provider") != "github_actions_workflow_run_number"
+              or allocation["hostedAuthority"].get("runNumber") != int(os.environ["ARTIFACT_BUILD_NUMBER"])
+              or not isinstance(admission, dict)
+              or set(admission) != admission_keys
+              or admission.get("schema") != "quwoquan_ops.release_candidate_tag_admission_fact.v1"
+              or admission.get("decision") != "admitted"
+              or admission.get("tagKind") != "rc"
+              or admission_id != canonical_digest(admission_body)
+              or request_admission
+              != {"ref": os.environ["RC_TAG_ADMISSION_REF"], "digest": admission_fact_digest}
+              or request.get("sourceGitSha") != source
+              or admission.get("peeledCommit") != source
+              or request.get("sourceTree") != source_tree
+              or admission.get("sourceTree") != source_tree
+              or request.get("tagName") != admission.get("tagName")
+              or sha_pattern.fullmatch(source_tree) is None
+          ):
+              raise SystemExit("GATE_BLOCK: QualificationRequest/RC admission identity drifted")
+          print(f"source_git_sha={source}")
+          print(f"source_tree_digest={source_tree}")
+          print(f"producer_workflow_run_id={os.environ['GITHUB_RUN_ID']}")
+          print(f"qualification_request_fact_digest={request_fact_digest}")
+          print(f"qualification_request_id={request_id}")
+          print(f"artifact_build_number_allocation_fact_digest={allocation_fact_digest}")
+          print(f"artifact_build_number_allocation_id={allocation_id}")
+          print(f"rc_tag_admission_fact_digest={admission_fact_digest}")
+          print(f"rc_tag_admission_id={admission_id}")
+          print(f"rc_tag_name={admission['tagName']}")
+          PY_AUTHORITY
       - id: plan
-        name: Select affected services from diff, feature-tree and ContractGraph
-        env:
-          PRIOR_MANIFEST: ${{ steps.prior.outputs.manifest }}
+        name: Build the complete RC service material set
         run: |
-          ARGS=(
-            --base-sha "${{ steps.source.outputs.base_sha }}"
-            --head-sha "${{ steps.source.outputs.source_git_sha }}"
+          python3 quwoquan_ops/ci/plan_service_release_images.py \
+            --head-sha "${{ steps.source.outputs.source_git_sha }}" \
+            --changed-file .github/workflows/service_pipeline.yml \
             --github-output "$GITHUB_OUTPUT"
-          )
-          if [[ -n "$PRIOR_MANIFEST" ]]; then
-            ARGS+=(--previous-manifest "$PRIOR_MANIFEST")
-          fi
-          python3 quwoquan_ops/ci/plan_service_release_images.py "${ARGS[@]}"
       - name: Generate immutable transport coordinate
         id: coordinates
         env:
@@ -157,7 +312,7 @@ jobs:
 
   build-go:
     name: Go 构建与测试
-    runs-on: [self-hosted, macOS, ARM64, quwoquan-release-authority]
+    runs-on: [self-hosted, macOS, ARM64]
     timeout-minutes: 10
     needs: [prepare-release]
     outputs:
@@ -169,6 +324,7 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
           ref: ${{ needs.prepare-release.outputs.source_git_sha }}
+          persist-credentials: false
       - id: start
         name: Start timer
         run: echo "started_at=$(date +%s)" >> "$GITHUB_OUTPUT"
@@ -208,7 +364,7 @@ jobs:
 
   build-release-images:
     name: 构建 ${{ matrix.trust_domain }}/${{ matrix.runtime_image_owner }} 不可变镜像
-    runs-on: [self-hosted, macOS, ARM64, quwoquan-release-authority]
+    runs-on: [self-hosted, macOS, ARM64]
     timeout-minutes: 10
     needs: [prepare-release]
     permissions:
@@ -226,6 +382,7 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
           ref: ${{ needs.prepare-release.outputs.source_git_sha }}
+          persist-credentials: false
       - id: base_images
         name: Resolve governed build images
         if: ${{ matrix.action == 'build' }}
@@ -285,17 +442,11 @@ jobs:
             --provenance=mode=max \
             --push \
             "${{ matrix.context }}"
-      - name: Reuse verified immutable digest without rebuilding
+      - name: Reject image reuse in RC factory
         if: ${{ matrix.action == 'reuse' }}
         run: |
-          SOURCE_REF="${{ matrix.source_ref }}"
-          TARGET_REF="${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/${{ matrix.image_name }}:${{ needs.prepare-release.outputs.image_transport_tag }}"
-          if [[ ! "$SOURCE_REF" =~ ^ghcr\.io/[a-z0-9._/-]+@sha256:[0-9a-f]{64}$ ]]; then
-            echo "::error::GATE_BLOCK: unchanged service has no verified immutable GHCR digest"
-            exit 2
-          fi
-          docker buildx imagetools inspect "$SOURCE_REF" >/dev/null
-          docker buildx imagetools create --tag "$TARGET_REF" "$SOURCE_REF"
+          echo "::error::GATE_BLOCK: RC service factory must build every source-bound image; prior-digest reuse is diagnostic-only"
+          exit 2
       - id: exact_image
         name: Resolve exact image digest
         run: |
@@ -342,9 +493,11 @@ jobs:
             --repository "${{ github.repository }}"
             --signer-workflow "${{ github.repository }}/.github/workflows/service_pipeline.yml"
           )
-          if [[ "$MATRIX_ACTION" == "build" ]]; then
-            ARGS+=(--source-digest "${{ needs.prepare-release.outputs.source_git_sha }}")
+          if [[ "$MATRIX_ACTION" != "build" ]]; then
+            echo "::error::GATE_BLOCK: RC service image escaped source-bound build policy"
+            exit 2
           fi
+          ARGS+=(--source-digest "${{ needs.prepare-release.outputs.source_git_sha }}")
           python3 quwoquan_ops/cli/prod/oci_supply_chain.py "${ARGS[@]}"
 
   validate-deploy:
@@ -353,18 +506,21 @@ jobs:
       - prepare-release
       - build-go
       - build-release-images
-    runs-on: [self-hosted, macOS, ARM64, quwoquan-release-authority]
+    runs-on: [self-hosted, macOS, ARM64]
     timeout-minutes: 10
     permissions:
       contents: read
-      attestations: read
       packages: write
     outputs:
       duration_seconds: ${{ steps.finish.outputs.duration_seconds }}
       component_evidence_ref: ${{ steps.release_bundle_ref.outputs.ref }}
-      component_artifact_digest: ${{ steps.evidence_identity.outputs.artifact_digest }}
-      producer_workflow_run_id: ${{ steps.evidence_identity.outputs.producer_workflow_run_id }}
-      source_git_sha: ${{ steps.evidence_identity.outputs.source_git_sha }}
+      component_artifact_digest: ${{ steps.published_identity.outputs.service_digest }}
+      producer_workflow_run_id: ${{ steps.published_identity.outputs.producer_workflow_run_id }}
+      source_git_sha: ${{ steps.published_identity.outputs.source_git_sha }}
+      source_tree_digest: ${{ steps.published_identity.outputs.source_tree_digest }}
+      qualification_request_ref: ${{ inputs.qualification_request_ref }}
+      qualification_request_digest: ${{ inputs.qualification_request_digest }}
+      service_material_digest: ${{ steps.published_identity.outputs.material_digest }}
     steps:
       - id: start
         name: Start timer
@@ -372,6 +528,7 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
           ref: ${{ needs.prepare-release.outputs.source_git_sha }}
+          persist-credentials: false
       - name: 设置 QEMU
         uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130
         with:
@@ -413,96 +570,500 @@ jobs:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Generate mainline release inputs
+      - id: component_manifest
+        name: Build canonical signed service factory material
+        env:
+          SOURCE_GIT_SHA: ${{ needs.prepare-release.outputs.source_git_sha }}
+          SOURCE_TREE_DIGEST: ${{ needs.prepare-release.outputs.source_tree_digest }}
+          QUALIFICATION_REQUEST_REF: ${{ inputs.qualification_request_ref }}
+          QUALIFICATION_REQUEST_DIGEST: ${{ inputs.qualification_request_digest }}
+          QUALIFICATION_REQUEST_FACT_DIGEST: ${{ needs.prepare-release.outputs.qualification_request_fact_digest }}
+          QUALIFICATION_REQUEST_ID: ${{ needs.prepare-release.outputs.qualification_request_id }}
+          ARTIFACT_BUILD_NUMBER: ${{ inputs.artifact_build_number }}
+          ARTIFACT_BUILD_NUMBER_ALLOCATION_REF: ${{ inputs.artifact_build_number_allocation_ref }}
+          ARTIFACT_BUILD_NUMBER_ALLOCATION_DIGEST: ${{ inputs.artifact_build_number_allocation_digest }}
+          ARTIFACT_BUILD_NUMBER_ALLOCATION_FACT_DIGEST: ${{ needs.prepare-release.outputs.artifact_build_number_allocation_fact_digest }}
+          ARTIFACT_BUILD_NUMBER_ALLOCATION_ID: ${{ needs.prepare-release.outputs.artifact_build_number_allocation_id }}
+          RC_TAG_ADMISSION_REF: ${{ inputs.rc_tag_admission_ref }}
+          RC_TAG_ADMISSION_FACT_DIGEST: ${{ needs.prepare-release.outputs.rc_tag_admission_fact_digest }}
+          RC_TAG_ADMISSION_ID: ${{ needs.prepare-release.outputs.rc_tag_admission_id }}
+          RC_TAG_NAME: ${{ needs.prepare-release.outputs.rc_tag_name }}
+          IMAGE_TRANSPORT_TAG: ${{ needs.prepare-release.outputs.image_transport_tag }}
         run: |
-          rm -rf "$QWQ_OUTPUT_ROOT/env/repo/local/ci-packages/process/service/mainline"
-          rm -rf "$QWQ_OUTPUT_ROOT/env/repo/local/ci-packages/process/service/image-descriptors"
-          python3 quwoquan_ops/cli/prod/generate_mainline_release_artifact.py \
-            --output-dir "$QWQ_OUTPUT_ROOT/env/repo/local/ci-packages/process/service/mainline" \
-            --git-sha "${{ needs.prepare-release.outputs.source_git_sha }}" \
-            --run-number "${{ github.run_number }}" \
-            --repository "${{ github.repository }}" \
-            --registry "${{ env.REGISTRY }}" \
-            --image-transport-tag "${{ needs.prepare-release.outputs.image_transport_tag }}"
-      - name: Resolve immutable image descriptors from GHCR
+          set -euo pipefail
+          rm -rf "$RUNNER_TEMP/service-factory-material"
+          mkdir -p "$RUNNER_TEMP/service-factory-material"
+          python3 - <<'PY_MATERIAL' >> "$GITHUB_OUTPUT"
+          import hashlib
+          import json
+          import os
+          import re
+          import subprocess
+          from pathlib import Path
+
+          from quwoquan_ops.ci.plan_service_release_images import (
+              RUNTIME_IMAGE_OWNERS,
+              TRUST_DOMAINS,
+          )
+          from quwoquan_ops.cli.prod.oci_supply_chain import OIDC_ISSUER, PREDICATES
+
+          digest_pattern = re.compile(r"sha256:[0-9a-f]{64}")
+          oci_pattern = re.compile(r"ghcr\.io/[a-z0-9._/-]+@sha256:[0-9a-f]{64}")
+          source_pattern = re.compile(r"[0-9a-f]{40}")
+
+          def canonical_digest(value):
+              canonical = json.dumps(
+                  value,
+                  ensure_ascii=False,
+                  sort_keys=True,
+                  separators=(",", ":"),
+                  allow_nan=False,
+              ).encode("utf-8")
+              return "sha256:" + hashlib.sha256(canonical).hexdigest()
+
+          source = os.environ["SOURCE_GIT_SHA"]
+          tree = os.environ["SOURCE_TREE_DIGEST"]
+          request_ref = os.environ["QUALIFICATION_REQUEST_REF"]
+          request_digest = os.environ["QUALIFICATION_REQUEST_DIGEST"]
+          admission_ref = os.environ["RC_TAG_ADMISSION_REF"]
+          if (
+              source_pattern.fullmatch(source) is None
+              or source_pattern.fullmatch(tree) is None
+              or oci_pattern.fullmatch(request_ref) is None
+              or not request_ref.endswith("@" + request_digest)
+              or oci_pattern.fullmatch(admission_ref) is None
+          ):
+              raise SystemExit("GATE_BLOCK: service factory authority identity is invalid")
+
+          signer_workflow = (
+              f"{os.environ['GITHUB_REPOSITORY']}/"
+              ".github/workflows/service_pipeline.yml"
+          )
+          images = []
+          digests_by_owner = {}
+          for trust_domain in TRUST_DOMAINS:
+              for owner in RUNTIME_IMAGE_OWNERS:
+                  repository = (
+                      f"ghcr.io/{os.environ['GITHUB_REPOSITORY']}/"
+                      f"{owner}-{trust_domain}"
+                  )
+                  transport_ref = (
+                      f"{repository}:{os.environ['IMAGE_TRANSPORT_TAG']}"
+                  )
+                  inspected = subprocess.run(
+                      [
+                          "docker", "buildx", "imagetools", "inspect",
+                          transport_ref, "--format", "{{json .Manifest.Digest}}",
+                      ],
+                      check=True,
+                      capture_output=True,
+                      text=True,
+                  )
+                  image_digest = json.loads(inspected.stdout)
+                  if not isinstance(image_digest, str) or digest_pattern.fullmatch(image_digest) is None:
+                      raise SystemExit(
+                          f"GATE_BLOCK: immutable image digest missing for {trust_domain}/{owner}"
+                      )
+                  exact_ref = f"{repository}@{image_digest}"
+                  verified = subprocess.run(
+                      [
+                          "python3",
+                          "quwoquan_ops/cli/prod/oci_supply_chain.py",
+                          "verify",
+                          "--ref", exact_ref,
+                          "--repository", os.environ["GITHUB_REPOSITORY"],
+                          "--signer-workflow", signer_workflow,
+                          "--source-digest", source,
+                      ],
+                      check=True,
+                      capture_output=True,
+                      text=True,
+                  )
+                  verification = json.loads(verified.stdout)
+                  signed_attestations = verification.get("attestations")
+                  if (
+                      verification.get("status") != "passed"
+                      or not isinstance(signed_attestations, dict)
+                      or set(signed_attestations) != set(PREDICATES)
+                      or any(
+                          not isinstance(value, str)
+                          or digest_pattern.fullmatch(value) is None
+                          for value in signed_attestations.values()
+                      )
+                  ):
+                      raise SystemExit(
+                          f"GATE_BLOCK: signed attestations incomplete for {trust_domain}/{owner}"
+                      )
+                  signature_identity = {
+                      "subject": exact_ref,
+                      "issuer": OIDC_ISSUER,
+                      "signerWorkflow": signer_workflow,
+                      "attestations": signed_attestations,
+                  }
+                  digests_by_owner[(trust_domain, owner)] = image_digest
+                  images.append(
+                      {
+                          "trustDomain": trust_domain,
+                          "runtimeImageOwner": owner,
+                          "ociRef": exact_ref,
+                          "digest": image_digest,
+                          "signature": {
+                              "issuer": OIDC_ISSUER,
+                              "signerWorkflow": signer_workflow,
+                              "verificationDigest": canonical_digest(signature_identity),
+                          },
+                          "attestations": {
+                              name: {
+                                  "predicateType": PREDICATES[name],
+                                  "verificationDigest": signed_attestations[name],
+                              }
+                              for name in sorted(PREDICATES)
+                          },
+                      }
+                  )
+          for owner in RUNTIME_IMAGE_OWNERS:
+              if digests_by_owner[("nonprod", owner)] == digests_by_owner[("prod", owner)]:
+                  raise SystemExit(
+                      f"GATE_BLOCK: prod image did not fork nonprod trust domain: {owner}"
+                  )
+
+          service_subjects = [
+              {
+                  "trustDomain": image["trustDomain"],
+                  "runtimeImageOwner": image["runtimeImageOwner"],
+                  "digest": image["digest"],
+              }
+              for image in images
+          ]
+          service_digest = canonical_digest({"images": service_subjects})
+          bundle_paths = (
+              "quwoquan_ops/environments/prod",
+              "quwoquan_ops/external/coturn/base",
+              "quwoquan_ops/external/coturn/environments/prod",
+              "quwoquan_ops/external/livekit/base",
+              "quwoquan_ops/external/livekit/environments/prod",
+              "quwoquan_ops/observability/monitoring/docker-compose.prod.yml",
+              "quwoquan_ops/cli/prod/render_prod_plane_stack.py",
+              "quwoquan_ops/cli/prod/render_prod_plane_stack_lib",
+              ":(glob)quwoquan_service/services/*/config/schema.yaml",
+              ":(glob)quwoquan_service/services/*/environments/prod/config.yaml",
+              ":(glob)quwoquan_service/services/*/deploy/**",
+              ":(glob)quwoquan_service/services/*/environments/prod/deploy/**",
+              "quwoquan_service/control-plane/platform-ops/deploy/base",
+              "quwoquan_service/control-plane/platform-ops/environments/prod/deploy",
+          )
+          listed = subprocess.run(
+              ["git", "ls-files", "-z", "--", *bundle_paths],
+              check=True, capture_output=True,
+          ).stdout
+          bundle_files = []
+          for relative in sorted(item.decode("utf-8") for item in listed.split(b"\0") if item):
+              path = Path(relative)
+              if not path.is_file() or path.is_symlink():
+                  raise SystemExit(
+                      f"GATE_BLOCK: Prod runtime config/deployment bundle input invalid: {relative}"
+                  )
+              bundle_files.append(
+                  {
+                      "path": relative,
+                      "digest": "sha256:" + hashlib.sha256(path.read_bytes()).hexdigest(),
+                  }
+              )
+          if not bundle_files:
+              raise SystemExit(
+                  "GATE_BLOCK: Prod runtime config/deployment bundle closure is empty"
+              )
+          prod_bundle = {
+              "schema": "quwoquan_ops.prod_runtime_config_deployment_bundle.v1",
+              "algorithm": "sha256_sorted_tracked_path_bytes_v1",
+              "files": bundle_files,
+          }
+          prod_bundle["digest"] = canonical_digest(prod_bundle)
+          material = {
+              "schema": "quwoquan_ops.service_factory_material",
+              "sourceGitSha": source,
+              "sourceTree": tree,
+              "qualificationRequest": {
+                  "ref": request_ref,
+                  "digest": request_digest,
+                  "factDigest": os.environ["QUALIFICATION_REQUEST_FACT_DIGEST"],
+                  "requestId": os.environ["QUALIFICATION_REQUEST_ID"],
+              },
+              "rcTagAdmission": {
+                  "ref": admission_ref,
+                  "digest": admission_ref.rsplit("@", 1)[1],
+                  "factDigest": os.environ["RC_TAG_ADMISSION_FACT_DIGEST"],
+                  "admissionId": os.environ["RC_TAG_ADMISSION_ID"],
+                  "tagName": os.environ["RC_TAG_NAME"],
+              },
+              "artifactBuildNumber": int(os.environ["ARTIFACT_BUILD_NUMBER"]),
+              "artifactBuildNumberAllocation": {
+                  "ref": os.environ["ARTIFACT_BUILD_NUMBER_ALLOCATION_REF"],
+                  "digest": os.environ["ARTIFACT_BUILD_NUMBER_ALLOCATION_DIGEST"],
+                  "factDigest": os.environ["ARTIFACT_BUILD_NUMBER_ALLOCATION_FACT_DIGEST"],
+                  "allocationId": os.environ["ARTIFACT_BUILD_NUMBER_ALLOCATION_ID"],
+              },
+              "serviceDigest": service_digest,
+              "images": images,
+              "prodRuntimeConfigDeploymentBundle": prod_bundle,
+              "producer": {
+                  "repository": os.environ["GITHUB_REPOSITORY"],
+                  "signerWorkflow": signer_workflow,
+                  "workflowRunId": os.environ["GITHUB_RUN_ID"],
+              },
+              "buildPolicy": "build_sign_attest_once",
+          }
+          material["materialDigest"] = canonical_digest(material)
+          output = Path(os.environ["RUNNER_TEMP"]) / "service-factory-material/manifest.json"
+          output.write_bytes(
+              json.dumps(
+                  material, ensure_ascii=False, sort_keys=True,
+                  separators=(",", ":"), allow_nan=False,
+              ).encode("utf-8")
+              + b"\n"
+          )
+          print(f"service_digest={service_digest}")
+          print(f"material_digest={material['materialDigest']}")
+          PY_MATERIAL
+      - name: Require canonical service factory material
         run: |
-          python3 quwoquan_ops/cli/prod/collect_mainline_image_descriptors.py \
-            --manifest "$QWQ_OUTPUT_ROOT/env/repo/local/ci-packages/process/service/mainline/manifest.json" \
-            --output-dir "$QWQ_OUTPUT_ROOT/env/repo/local/ci-packages/process/service/image-descriptors"
-      - name: Finalize immutable service component candidate
-        run: |
-          python3 quwoquan_ops/cli/prod/finalize_mainline_release_artifact.py \
-            --artifact-dir "$QWQ_OUTPUT_ROOT/env/repo/local/ci-packages/process/service/mainline" \
-            --image-descriptors-dir "$QWQ_OUTPUT_ROOT/env/repo/local/ci-packages/process/service/image-descriptors"
-      - name: Require canonical service component evidence
-        run: |
-          test -s "$QWQ_OUTPUT_ROOT/env/repo/local/ci-packages/process/service/mainline/manifest.json" || {
-            echo "::error::release evidence manifest is required; local regeneration is forbidden"
-            exit 1
+          test -s "$RUNNER_TEMP/service-factory-material/manifest.json" || {
+            echo "::error::canonical service factory material is required; discovery fallback is forbidden"
+            exit 2
           }
       - id: evidence_identity
-        name: Record canonical component candidate
+        name: Read back exact service factory material
+        env:
+          EXPECTED_SERVICE_DIGEST: ${{ steps.component_manifest.outputs.service_digest }}
+          EXPECTED_MATERIAL_DIGEST: ${{ steps.component_manifest.outputs.material_digest }}
+          EXPECTED_SOURCE_GIT_SHA: ${{ needs.prepare-release.outputs.source_git_sha }}
+          EXPECTED_SOURCE_TREE: ${{ needs.prepare-release.outputs.source_tree_digest }}
+          EXPECTED_QUALIFICATION_REQUEST_REF: ${{ inputs.qualification_request_ref }}
+          EXPECTED_QUALIFICATION_REQUEST_DIGEST: ${{ inputs.qualification_request_digest }}
+          EXPECTED_QUALIFICATION_REQUEST_FACT_DIGEST: ${{ needs.prepare-release.outputs.qualification_request_fact_digest }}
+          EXPECTED_QUALIFICATION_REQUEST_ID: ${{ needs.prepare-release.outputs.qualification_request_id }}
+          EXPECTED_ARTIFACT_BUILD_NUMBER: ${{ inputs.artifact_build_number }}
+          EXPECTED_ALLOCATION_REF: ${{ inputs.artifact_build_number_allocation_ref }}
+          EXPECTED_ALLOCATION_DIGEST: ${{ inputs.artifact_build_number_allocation_digest }}
+          EXPECTED_ALLOCATION_FACT_DIGEST: ${{ needs.prepare-release.outputs.artifact_build_number_allocation_fact_digest }}
+          EXPECTED_ALLOCATION_ID: ${{ needs.prepare-release.outputs.artifact_build_number_allocation_id }}
+          EXPECTED_RC_TAG_ADMISSION_REF: ${{ inputs.rc_tag_admission_ref }}
+          EXPECTED_RC_TAG_ADMISSION_FACT_DIGEST: ${{ needs.prepare-release.outputs.rc_tag_admission_fact_digest }}
+          EXPECTED_RC_TAG_ADMISSION_ID: ${{ needs.prepare-release.outputs.rc_tag_admission_id }}
+          EXPECTED_RC_TAG_NAME: ${{ needs.prepare-release.outputs.rc_tag_name }}
         run: |
-          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          set -euo pipefail
+          python3 - <<'PY_READBACK' >> "$GITHUB_OUTPUT"
+          import hashlib
           import json
           import os
+          import re
+          import subprocess
           from pathlib import Path
 
-          path = Path(os.environ["QWQ_OUTPUT_ROOT"]) / "env/repo/local/ci-packages/process/service/mainline/manifest.json"
-          manifest = json.loads(path.read_text(encoding="utf-8"))
-          if manifest.get("schema") != "release-evidence-manifest":
-              raise SystemExit("release evidence schema mismatch")
-          artifact = str(manifest.get("artifactDigest") or "")
-          source = manifest.get("source") or {}
-          if manifest.get("status") != "component-ready" or manifest.get("releaseCompositionId") is not None:
-              raise SystemExit("Service Pipeline must stop at component-ready without releaseCompositionId")
-          if not artifact.startswith("sha256:"):
-              raise SystemExit("component evidence artifactDigest is missing")
-          if source.get("workflowRunId") != os.environ["GITHUB_RUN_ID"]:
-              raise SystemExit("release evidence workflowRunId mismatch")
-          if source.get("gitSha") != "${{ needs.prepare-release.outputs.source_git_sha }}":
-              raise SystemExit("release evidence source Git SHA mismatch")
-          print(f"artifact_digest={artifact}")
-          print(f"producer_workflow_run_id={source['workflowRunId']}")
-          print(f"source_git_sha={source['gitSha']}")
-          PY
-      - name: Unpack service package config evidence
-        run: |
-          python3 - <<'PY'
-          import json
-          import os
-          import shutil
-          from pathlib import Path
+          from quwoquan_ops.ci.plan_service_release_images import (
+              RUNTIME_IMAGE_OWNERS,
+              TRUST_DOMAINS,
+          )
+          from quwoquan_ops.cli.prod.oci_supply_chain import OIDC_ISSUER, PREDICATES
 
-          root = Path(os.environ["QWQ_OUTPUT_ROOT"]) / "env/repo/local/ci-packages/process/service/mainline"
-          manifest = json.loads((root / "manifest.json").read_text(encoding="utf-8"))
-          environments = manifest.get("environmentArtifacts")
-          if not isinstance(environments, dict) or set(environments) != {"alpha", "beta", "gamma", "prod"}:
-              raise SystemExit("component environment artifact evidence is not four-environment")
-          for environment, artifact in environments.items():
-              packages = artifact.get("configurationPackages") if isinstance(artifact, dict) else None
-              if not isinstance(packages, dict) or not packages:
-                  raise SystemExit(f"component configuration package evidence is missing for {environment}")
-              for service, descriptor in packages.items():
-                  if not isinstance(descriptor, dict):
-                      raise SystemExit(f"component configuration descriptor is invalid: {environment}/{service}")
-                  rel_path = descriptor.get("path")
-                  if not isinstance(rel_path, str) or not rel_path.startswith(
-                      f"packages/environments/{environment}/services/{service}/"
+          digest_pattern = re.compile(r"sha256:[0-9a-f]{64}")
+          oci_pattern = re.compile(r"ghcr\.io/[a-z0-9._/-]+@sha256:[0-9a-f]{64}")
+
+          def canonical_bytes(value):
+              return json.dumps(
+                  value, ensure_ascii=False, sort_keys=True,
+                  separators=(",", ":"), allow_nan=False,
+              ).encode("utf-8")
+
+          def canonical_digest(value):
+              return "sha256:" + hashlib.sha256(canonical_bytes(value)).hexdigest()
+
+          path = Path(os.environ["RUNNER_TEMP"]) / "service-factory-material/manifest.json"
+          raw = path.read_bytes()
+          manifest = json.loads(raw)
+          if raw != canonical_bytes(manifest) + b"\n":
+              raise SystemExit("GATE_BLOCK: service factory material bytes are not canonical")
+          expected_keys = {
+              "schema", "sourceGitSha", "sourceTree", "qualificationRequest",
+              "rcTagAdmission", "artifactBuildNumber",
+              "artifactBuildNumberAllocation", "serviceDigest", "images",
+              "prodRuntimeConfigDeploymentBundle", "producer",
+              "buildPolicy", "materialDigest",
+          }
+          unsigned = dict(manifest)
+          claimed_material_digest = unsigned.pop("materialDigest", None)
+          expected_request = {
+              "ref": os.environ["EXPECTED_QUALIFICATION_REQUEST_REF"],
+              "digest": os.environ["EXPECTED_QUALIFICATION_REQUEST_DIGEST"],
+              "factDigest": os.environ["EXPECTED_QUALIFICATION_REQUEST_FACT_DIGEST"],
+              "requestId": os.environ["EXPECTED_QUALIFICATION_REQUEST_ID"],
+          }
+          admission_ref = os.environ["EXPECTED_RC_TAG_ADMISSION_REF"]
+          expected_admission = {
+              "ref": admission_ref,
+              "digest": admission_ref.rsplit("@", 1)[1],
+              "factDigest": os.environ["EXPECTED_RC_TAG_ADMISSION_FACT_DIGEST"],
+              "admissionId": os.environ["EXPECTED_RC_TAG_ADMISSION_ID"],
+              "tagName": os.environ["EXPECTED_RC_TAG_NAME"],
+          }
+          signer_workflow = (
+              f"{os.environ['GITHUB_REPOSITORY']}/"
+              ".github/workflows/service_pipeline.yml"
+          )
+          expected_allocation = {
+              "ref": os.environ["EXPECTED_ALLOCATION_REF"],
+              "digest": os.environ["EXPECTED_ALLOCATION_DIGEST"],
+              "factDigest": os.environ["EXPECTED_ALLOCATION_FACT_DIGEST"],
+              "allocationId": os.environ["EXPECTED_ALLOCATION_ID"],
+          }
+          expected_producer = {
+              "repository": os.environ["GITHUB_REPOSITORY"],
+              "signerWorkflow": signer_workflow,
+              "workflowRunId": os.environ["GITHUB_RUN_ID"],
+          }
+          bundle = manifest.get("prodRuntimeConfigDeploymentBundle")
+          bundle_unsigned = dict(bundle) if isinstance(bundle, dict) else {}
+          bundle_digest = bundle_unsigned.pop("digest", None)
+          bundle_files = bundle.get("files") if isinstance(bundle, dict) else None
+          expected_paths = subprocess.run(
+              [
+                  "git", "ls-files", "-z", "--",
+                  "quwoquan_ops/environments/prod",
+                  "quwoquan_ops/external/coturn/base",
+                  "quwoquan_ops/external/coturn/environments/prod",
+                  "quwoquan_ops/external/livekit/base",
+                  "quwoquan_ops/external/livekit/environments/prod",
+                  "quwoquan_ops/observability/monitoring/docker-compose.prod.yml",
+                  "quwoquan_ops/cli/prod/render_prod_plane_stack.py",
+                  "quwoquan_ops/cli/prod/render_prod_plane_stack_lib",
+                  ":(glob)quwoquan_service/services/*/config/schema.yaml",
+                  ":(glob)quwoquan_service/services/*/environments/prod/config.yaml",
+                  ":(glob)quwoquan_service/services/*/deploy/**",
+                  ":(glob)quwoquan_service/services/*/environments/prod/deploy/**",
+                  "quwoquan_service/control-plane/platform-ops/deploy/base",
+                  "quwoquan_service/control-plane/platform-ops/environments/prod/deploy",
+              ],
+              check=True, capture_output=True,
+          ).stdout
+          expected_files = [
+              {
+                  "path": relative,
+                  "digest": "sha256:" + hashlib.sha256(Path(relative).read_bytes()).hexdigest(),
+              }
+              for relative in sorted(
+                  item.decode("utf-8") for item in expected_paths.split(b"\0") if item
+              )
+          ]
+          if (
+              not isinstance(manifest, dict)
+              or set(manifest) != expected_keys
+              or manifest.get("schema") != "quwoquan_ops.service_factory_material"
+              or manifest.get("buildPolicy") != "build_sign_attest_once"
+              or manifest.get("sourceGitSha") != os.environ["EXPECTED_SOURCE_GIT_SHA"]
+              or manifest.get("sourceTree") != os.environ["EXPECTED_SOURCE_TREE"]
+              or manifest.get("qualificationRequest") != expected_request
+              or manifest.get("rcTagAdmission") != expected_admission
+              or manifest.get("artifactBuildNumber") != int(os.environ["EXPECTED_ARTIFACT_BUILD_NUMBER"])
+              or manifest.get("artifactBuildNumberAllocation") != expected_allocation
+              or not isinstance(bundle, dict)
+              or set(bundle) != {"schema", "algorithm", "files", "digest"}
+              or bundle.get("schema") != "quwoquan_ops.prod_runtime_config_deployment_bundle.v1"
+              or bundle.get("algorithm") != "sha256_sorted_tracked_path_bytes_v1"
+              or not expected_files
+              or bundle_files != expected_files
+              or bundle_digest != canonical_digest(bundle_unsigned)
+              or manifest.get("producer") != expected_producer
+              or claimed_material_digest != canonical_digest(unsigned)
+              or claimed_material_digest != os.environ["EXPECTED_MATERIAL_DIGEST"]
+          ):
+              raise SystemExit("GATE_BLOCK: service factory material identity drifted")
+
+          images = manifest.get("images")
+          expected_subject_order = [
+              (trust_domain, owner)
+              for trust_domain in TRUST_DOMAINS
+              for owner in RUNTIME_IMAGE_OWNERS
+          ]
+          expected_subjects = set(expected_subject_order)
+          observed_subjects = set()
+          observed_subject_order = []
+          service_subjects = []
+          if not isinstance(images, list):
+              raise SystemExit("GATE_BLOCK: service image material is incomplete")
+          for image in images:
+              if not isinstance(image, dict) or set(image) != {
+                  "trustDomain", "runtimeImageOwner", "ociRef", "digest",
+                  "signature", "attestations",
+              }:
+                  raise SystemExit("GATE_BLOCK: service image material shape drifted")
+              subject = (image.get("trustDomain"), image.get("runtimeImageOwner"))
+              exact_ref = image.get("ociRef")
+              image_digest = image.get("digest")
+              signature = image.get("signature")
+              attestations = image.get("attestations")
+              if (
+                  subject in observed_subjects
+                  or subject not in expected_subjects
+                  or not isinstance(exact_ref, str)
+                  or oci_pattern.fullmatch(exact_ref) is None
+                  or not isinstance(image_digest, str)
+                  or digest_pattern.fullmatch(image_digest) is None
+                  or not exact_ref.endswith("@" + image_digest)
+                  or not isinstance(signature, dict)
+                  or set(signature) != {"issuer", "signerWorkflow", "verificationDigest"}
+                  or signature.get("issuer") != OIDC_ISSUER
+                  or signature.get("signerWorkflow") != signer_workflow
+                  or not isinstance(attestations, dict)
+                  or set(attestations) != set(PREDICATES)
+              ):
+                  raise SystemExit("GATE_BLOCK: service image exact identity drifted")
+              verification_digests = {}
+              for name, predicate_type in PREDICATES.items():
+                  attestation = attestations.get(name)
+                  if (
+                      not isinstance(attestation, dict)
+                      or set(attestation) != {"predicateType", "verificationDigest"}
+                      or attestation.get("predicateType") != predicate_type
+                      or not isinstance(attestation.get("verificationDigest"), str)
+                      or digest_pattern.fullmatch(attestation["verificationDigest"]) is None
                   ):
-                      raise SystemExit(f"component configuration path escapes its owner: {environment}/{service}")
-                  src = (root / rel_path).resolve()
-                  try:
-                      src.relative_to(root.resolve())
-                  except ValueError as error:
-                      raise SystemExit(f"component configuration source escapes package: {rel_path}") from error
-                  if not src.is_file():
-                      raise SystemExit(f"component configuration source is missing: {rel_path}")
-                  dst = Path(rel_path)
-                  dst.parent.mkdir(parents=True, exist_ok=True)
-                  shutil.copy2(src, dst)
-          PY
-
+                      raise SystemExit("GATE_BLOCK: signed service attestation drifted")
+                  verification_digests[name] = attestation["verificationDigest"]
+              signature_identity = {
+                  "subject": exact_ref,
+                  "issuer": OIDC_ISSUER,
+                  "signerWorkflow": signer_workflow,
+                  "attestations": verification_digests,
+              }
+              if signature.get("verificationDigest") != canonical_digest(signature_identity):
+                  raise SystemExit("GATE_BLOCK: service signature verification identity drifted")
+              observed_subjects.add(subject)
+              observed_subject_order.append(subject)
+              service_subjects.append(
+                  {
+                      "trustDomain": subject[0],
+                      "runtimeImageOwner": subject[1],
+                      "digest": image_digest,
+                  }
+              )
+          if (
+              observed_subjects != expected_subjects
+              or observed_subject_order != expected_subject_order
+          ):
+              raise SystemExit("GATE_BLOCK: canonical service image order/set drifted")
+          service_digest = canonical_digest({"images": service_subjects})
+          if (
+              manifest.get("serviceDigest") != service_digest
+              or service_digest != os.environ["EXPECTED_SERVICE_DIGEST"]
+          ):
+              raise SystemExit("GATE_BLOCK: aggregate service digest drifted")
+          print(f"service_digest={service_digest}")
+          print(f"material_digest={claimed_material_digest}")
+          print(f"producer_workflow_run_id={expected_producer['workflowRunId']}")
+          print(f"source_git_sha={manifest['sourceGitSha']}")
+          print(f"source_tree_digest={manifest['sourceTree']}")
+          PY_READBACK
       - name: 安装 kustomize
         run: bash quwoquan_ops/cli/shared/install_kustomize.sh
 
@@ -519,61 +1080,131 @@ jobs:
             echo "$env autonomous assembly OK"
           done
       - id: release_bundle_attempt_1
-        name: Publish immutable service component artifact (attempt 1)
+        name: Publish immutable service factory material (attempt 1)
         continue-on-error: true
         uses: docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25
         with:
-          context: ${{ env.QWQ_OUTPUT_ROOT }}/env/repo/local/ci-packages/process/service/mainline
-          file: quwoquan_ops/cli/prod/release_artifact.Dockerfile
+          context: ${{ runner.temp }}/service-factory-material
+          file: quwoquan_ops/ci/app_candidate_evidence.Dockerfile
           platforms: linux/amd64
           push: true
           tags: |
-            ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/release-artifact:${{ needs.prepare-release.outputs.image_transport_tag }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/service-factory-material:run-${{ github.run_id }}-${{ github.run_attempt }}
           sbom: true
           provenance: mode=max
       - if: ${{ steps.release_bundle_attempt_1.outcome == 'failure' }}
         run: sleep 15
       - id: release_bundle_attempt_2
-        name: Publish immutable service component artifact (attempt 2)
+        name: Publish immutable service factory material (attempt 2)
         if: ${{ steps.release_bundle_attempt_1.outcome == 'failure' }}
         continue-on-error: true
         uses: docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25
         with:
-          context: ${{ env.QWQ_OUTPUT_ROOT }}/env/repo/local/ci-packages/process/service/mainline
-          file: quwoquan_ops/cli/prod/release_artifact.Dockerfile
+          context: ${{ runner.temp }}/service-factory-material
+          file: quwoquan_ops/ci/app_candidate_evidence.Dockerfile
           platforms: linux/amd64
           push: true
           tags: |
-            ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/release-artifact:${{ needs.prepare-release.outputs.image_transport_tag }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/service-factory-material:run-${{ github.run_id }}-${{ github.run_attempt }}
           sbom: true
           provenance: mode=max
       - if: ${{ steps.release_bundle_attempt_2.outcome == 'failure' }}
         run: sleep 15
       - id: release_bundle_attempt_3
-        name: Publish immutable service component artifact (attempt 3)
+        name: Publish immutable service factory material (attempt 3)
         if: ${{ steps.release_bundle_attempt_1.outcome == 'failure' && steps.release_bundle_attempt_2.outcome == 'failure' }}
         uses: docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25
         with:
-          context: ${{ env.QWQ_OUTPUT_ROOT }}/env/repo/local/ci-packages/process/service/mainline
-          file: quwoquan_ops/cli/prod/release_artifact.Dockerfile
+          context: ${{ runner.temp }}/service-factory-material
+          file: quwoquan_ops/ci/app_candidate_evidence.Dockerfile
           platforms: linux/amd64
           push: true
           tags: |
-            ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/release-artifact:${{ needs.prepare-release.outputs.image_transport_tag }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/service-factory-material:run-${{ github.run_id }}-${{ github.run_attempt }}
           sbom: true
           provenance: mode=max
       - id: release_bundle_ref
-        name: Record immutable OCI release artifact
+        name: Record exact immutable service factory material OCI
         run: |
+          set -euo pipefail
           DIGEST="${{ steps.release_bundle_attempt_1.outputs.digest || steps.release_bundle_attempt_2.outputs.digest || steps.release_bundle_attempt_3.outputs.digest }}"
-          if [[ -z "$DIGEST" ]]; then
-            echo "::error::release artifact push failed after 3 bounded attempts"
+          if [[ ! "$DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+            echo "::error::service factory material push failed after 3 bounded attempts"
             exit 2
           fi
-          REF="${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/release-artifact@${DIGEST}"
+          SUBJECT_NAME="${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/service-factory-material"
+          REF="$SUBJECT_NAME@$DIGEST"
           echo "ref=$REF" >> "$GITHUB_OUTPUT"
-          echo "component_evidence_ref=$REF"
-          echo "- OCI release evidence: \`$REF\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "digest=$DIGEST" >> "$GITHUB_OUTPUT"
+          echo "- Immutable service factory material: \`$REF\`" >> "$GITHUB_STEP_SUMMARY"
+      - id: published_identity
+        name: Read back exact published service factory material
+        env:
+          SERVICE_MATERIAL_REF: ${{ steps.release_bundle_ref.outputs.ref }}
+          SERVICE_MATERIAL_OCI_DIGEST: ${{ steps.release_bundle_ref.outputs.digest }}
+          EXPECTED_SERVICE_DIGEST: ${{ steps.evidence_identity.outputs.service_digest }}
+          EXPECTED_MATERIAL_DIGEST: ${{ steps.evidence_identity.outputs.material_digest }}
+          EXPECTED_SOURCE_GIT_SHA: ${{ steps.evidence_identity.outputs.source_git_sha }}
+          EXPECTED_SOURCE_TREE: ${{ steps.evidence_identity.outputs.source_tree_digest }}
+          EXPECTED_PRODUCER_RUN_ID: ${{ steps.evidence_identity.outputs.producer_workflow_run_id }}
+        run: |
+          set -euo pipefail
+          python3 quwoquan_ops/ci/materialize_evidence_oci.py \
+            --ref "$SERVICE_MATERIAL_REF" \
+            --expected-digest "$SERVICE_MATERIAL_OCI_DIGEST" \
+            --output-dir "$RUNNER_TEMP/service-factory-material-readback" \
+            --require-file manifest.json
+          cmp "$RUNNER_TEMP/service-factory-material/manifest.json" \
+            "$RUNNER_TEMP/service-factory-material-readback/manifest.json"
+          python3 - "$RUNNER_TEMP/service-factory-material-readback/manifest.json" <<'PY_PUBLISHED' >> "$GITHUB_OUTPUT"
+          import hashlib
+          import json
+          import os
+          import sys
+          from pathlib import Path
+
+          def canonical_bytes(value):
+              return json.dumps(
+                  value,
+                  ensure_ascii=False,
+                  sort_keys=True,
+                  separators=(",", ":"),
+                  allow_nan=False,
+              ).encode("utf-8")
+
+          path = Path(sys.argv[1])
+          raw = path.read_bytes()
+          material = json.loads(raw)
+          unsigned = dict(material)
+          material_digest = unsigned.pop("materialDigest", None)
+          observed = "sha256:" + hashlib.sha256(canonical_bytes(unsigned)).hexdigest()
+          producer = material.get("producer")
+          bundle = material.get("prodRuntimeConfigDeploymentBundle")
+          bundle_unsigned = dict(bundle) if isinstance(bundle, dict) else {}
+          bundle_digest = bundle_unsigned.pop("digest", None)
+          if (
+              raw != canonical_bytes(material) + b"\n"
+              or material.get("schema") != "quwoquan_ops.service_factory_material"
+              or material_digest != observed
+              or material_digest != os.environ["EXPECTED_MATERIAL_DIGEST"]
+              or material.get("serviceDigest") != os.environ["EXPECTED_SERVICE_DIGEST"]
+              or material.get("sourceGitSha") != os.environ["EXPECTED_SOURCE_GIT_SHA"]
+              or material.get("sourceTree") != os.environ["EXPECTED_SOURCE_TREE"]
+              or not isinstance(bundle, dict)
+              or bundle.get("schema") != "quwoquan_ops.prod_runtime_config_deployment_bundle.v1"
+              or not isinstance(bundle.get("files"), list)
+              or not bundle["files"]
+              or bundle_digest != "sha256:" + hashlib.sha256(canonical_bytes(bundle_unsigned)).hexdigest()
+              or not isinstance(producer, dict)
+              or producer.get("workflowRunId") != os.environ["EXPECTED_PRODUCER_RUN_ID"]
+          ):
+              raise SystemExit("GATE_BLOCK: published service factory material drifted")
+          print(f"service_digest={material['serviceDigest']}")
+          print(f"material_digest={material_digest}")
+          print(f"producer_workflow_run_id={producer['workflowRunId']}")
+          print(f"source_git_sha={material['sourceGitSha']}")
+          print(f"source_tree_digest={material['sourceTree']}")
+          PY_PUBLISHED
       - id: finish
         if: always()
         name: Finish timer
@@ -588,21 +1219,24 @@ jobs:
       - build-release-images
       - validate-deploy
     if: always()
-    runs-on: [self-hosted, macOS, ARM64, quwoquan-release-authority]
+    runs-on: [self-hosted, macOS, ARM64]
     timeout-minutes: 5
     permissions:
       contents: read
       actions: read
     outputs:
-      machine_critical_path_seconds: ${{ steps.timing.outputs.machine_critical_path_seconds }}
       component_evidence_ref: ${{ needs.validate-deploy.outputs.component_evidence_ref }}
       component_artifact_digest: ${{ needs.validate-deploy.outputs.component_artifact_digest }}
-      producer_workflow_run_id: ${{ needs.validate-deploy.outputs.producer_workflow_run_id }}
       source_git_sha: ${{ needs.validate-deploy.outputs.source_git_sha }}
+      source_tree_digest: ${{ needs.validate-deploy.outputs.source_tree_digest }}
+      qualification_request_ref: ${{ needs.validate-deploy.outputs.qualification_request_ref }}
+      qualification_request_digest: ${{ needs.validate-deploy.outputs.qualification_request_digest }}
+      service_material_digest: ${{ needs.validate-deploy.outputs.service_material_digest }}
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
           ref: ${{ needs.validate-deploy.outputs.source_git_sha }}
+          persist-credentials: false
       - name: Enforce service pipeline results
         env:
           PREPARE_RESULT: ${{ needs.prepare-release.result }}
@@ -708,7 +1342,7 @@ jobs:
             --phase "build_release_images=${BUILD_IMAGES_SECONDS}" \
             --phase "validate_deploy=${VALIDATE}" \
             --critical-path-source github_run_calendar \
-            --note "GitHub Jobs API records the longest governed-service matrix node; unchanged services reuse a sealed digest and changed services use isolated registry BuildKit caches." \
+            --note "GitHub Jobs API records the longest governed-service matrix node; the RC factory freshly builds every source-bound trust-domain image with isolated registry BuildKit caches." \
             --write-json "$QWQ_OUTPUT_ROOT/env/repo/runs/ci-timing/service-pipeline-summary.json" \
             --write-step-summary
           echo "machine_critical_path_seconds=${MACHINE_CRITICAL_PATH_SECONDS}" >> "$GITHUB_OUTPUT"

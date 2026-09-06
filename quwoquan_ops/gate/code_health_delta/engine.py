@@ -13,7 +13,10 @@ from quwoquan_ops.ci.impact_planner_core import canonical_digest as impact_diges
 from quwoquan_ops.cli.lib.evidence_fingerprint import build_evidence_fingerprint, canonical_digest
 
 from .classification import classify_path
-from .git_delta import Change, blob, blobs, changes, index_blob, resolve_sha, working_tree_blob, working_tree_changes
+from .git_delta import (
+    Change, blob, blobs, changes, index_blob, resolve_sha, working_tree_blob,
+    working_tree_changes,
+)
 from .metrics import (
     changed_complexity_findings, duplicate_window_index, duplicate_windows, executable_magic,
     has_repository_entry, line_count, reuse_scope_key, tracked_paths,
@@ -69,6 +72,48 @@ def _workspace_identity(repo: Path, head: str, delta: list[Change], *, working_t
     }
 
 
+def _candidate_bytes(
+    repo: Path, path: str, *, working_tree: bool, index_only: bool,
+    commit_blobs: dict[str, bytes],
+) -> bytes | None:
+    if working_tree:
+        return index_blob(repo, path) if index_only else working_tree_blob(repo, path)
+    return commit_blobs.get(path)
+
+
+def _drop_merge_inherited(
+    repo: Path, delta: list[Change], parents: list[str], *, working_tree: bool,
+    index_only: bool, commit_blobs: dict[str, bytes],
+) -> list[Change]:
+    """Drop paths a merge candidate inherits verbatim from another parent.
+
+    A merge does not author bytes that already exist in one of its parents. Without
+    this, every merge would re-report the whole other branch as its own delta and
+    block on debt it did not introduce.
+    """
+    if not parents:
+        return delta
+    live = sorted({item.path for item in delta if item.status != "D"})
+    dead = sorted({item.path for item in delta if item.status == "D"})
+    parent_blobs = {parent: blobs(repo, parent, live) for parent in parents}
+    parent_dead = {parent: blobs(repo, parent, dead) for parent in parents}
+    kept: list[Change] = []
+    for item in delta:
+        if item.status == "D":
+            inherited = any(item.path not in parent_dead[parent] for parent in parents)
+        else:
+            candidate = _candidate_bytes(
+                repo, item.path, working_tree=working_tree,
+                index_only=index_only, commit_blobs=commit_blobs,
+            )
+            inherited = candidate is not None and any(
+                parent_blobs[parent].get(item.path) == candidate for parent in parents
+            )
+        if not inherited:
+            kept.append(item)
+    return kept
+
+
 def _category_summary(policy: dict[str, Any], delta: list[Change]) -> dict[str, dict[str, int]]:
     result = {name: {"files": 0, "added": 0, "deleted": 0, "churn": 0} for name in policy["source_categories"]}
     for item in delta:
@@ -78,7 +123,7 @@ def _category_summary(policy: dict[str, Any], delta: list[Change]) -> dict[str, 
     return result
 
 
-def analyze_delta(repo: Path, *, base: str, head: str, policy_path: Path, mode: str = "full", explicit_paths: list[str] | None = None, working_tree: bool = False, index_only: bool = False) -> dict[str, Any]:
+def analyze_delta(repo: Path, *, base: str, head: str, policy_path: Path, mode: str = "full", explicit_paths: list[str] | None = None, working_tree: bool = False, index_only: bool = False, merge_parents: list[str] | None = None) -> dict[str, Any]:
     if mode not in {"fast", "full"}:
         raise ValueError("code health mode 必须为 fast/full")
     if index_only and not working_tree:
@@ -87,14 +132,21 @@ def analyze_delta(repo: Path, *, base: str, head: str, policy_path: Path, mode: 
     policy = load_policy(policy_path)
     base_sha = resolve_sha(repo, base); head_sha = resolve_sha(repo, head)
     delta = working_tree_changes(repo, base_sha, explicit_paths, index_only=index_only) if working_tree else changes(repo, base_sha, head_sha, explicit_paths)
+    resolved_parents = sorted({
+        resolve_sha(repo, parent) for parent in (merge_parents or [])
+    } - {base_sha})
+    commit_current_blobs = {} if working_tree else blobs(
+        repo, head_sha, [item.path for item in delta if item.status != "D"]
+    )
+    delta = _drop_merge_inherited(
+        repo, delta, resolved_parents, working_tree=working_tree,
+        index_only=index_only, commit_blobs=commit_current_blobs,
+    )
     paths = [item.path for item in delta]
     impact = classify_impacts(paths)
     findings: list[dict[str, object]] = []
     thresholds = policy["thresholds"]
     categories = {item.path: classify_path(item.path if item.status != "D" else (item.old_path or item.path), policy) for item in delta}
-    commit_current_blobs = {} if working_tree else blobs(
-        repo, head_sha, [item.path for item in delta if item.status != "D"]
-    )
 
     # Executable build artifacts are a source-tree invariant, independent of the
     # suffix-based source category. Suffixless ELF/Mach-O/PE files otherwise land
@@ -198,7 +250,7 @@ def analyze_delta(repo: Path, *, base: str, head: str, policy_path: Path, mode: 
     findings.sort(key=lambda item: (-_SEVERITY[str(item["terminal"])], str(item["path"]), str(item["code"])))
     terminal = max((str(item["terminal"]) for item in findings), key=_SEVERITY.get, default="PASS")
     policy_bytes = policy_path.read_bytes(); policy_digest = _sha256_bytes(policy_bytes)
-    commands = {"mode": mode, "base": base_sha, "head": head_sha, "paths": paths, "workingTree": working_tree, "indexOnly": index_only}
+    commands = {"mode": mode, "base": base_sha, "head": head_sha, "paths": paths, "workingTree": working_tree, "indexOnly": index_only, "mergeParents": resolved_parents}
     implementation_digest = _implementation_digest()
     toolchain = {"python": list(sys.version_info[:3]), "builtin": 1, "configured": policy["tools"]}
     fingerprint = build_evidence_fingerprint({
@@ -210,7 +262,7 @@ def analyze_delta(repo: Path, *, base: str, head: str, policy_path: Path, mode: 
     category_summary = _category_summary(policy, delta)
     return {
         "schema": REPORT_SCHEMA, "terminal": terminal,
-        "baseSha": base_sha, "headSha": head_sha, "changedPaths": paths,
+        "baseSha": base_sha, "headSha": head_sha, "mergeParents": resolved_parents, "changedPaths": paths,
         "changedPathsDigest": impact_digest(paths), "impactPlanner": impact["source"],
         "policyId": policy["policy_id"], "policyDigest": policy_digest, "implementationDigest": implementation_digest,
         "mode": mode, "candidateSource": ("index" if index_only else "working-tree") if working_tree else "commit", "categorySummary": category_summary,

@@ -1,10 +1,10 @@
-"""stackctl deploy 发布输入与 SLO 读数域: release manifest 校验、
-prevalidation manifest、rollout contract 与 Prometheus SLO 读取。
+"""stackctl deploy 发布输入与 SLO 读数域：frozen diagnostic snapshot 读侧、
+prevalidation、rollout contract 与 Prometheus SLO 读取。
 
 从 stackctl.py 逐字迁出（改写规则与 down_domain 相同）:
-- manifest/attestation: `_validate_release_artifacts` / `_release_transport_tag` /
-  `_deployable_release_manifest` / `_materialize_prevalidation_release_manifest` /
-  `_prevalidation_release_manifest` / `_verify_release_registry_attestations`;
+- diagnostic prevalidation: `_release_transport_tag` /
+  `_materialize_frozen_diagnostic_snapshot` /
+  `_frozen_diagnostic_snapshot` / `_verify_release_registry_attestations`;
 - rollout: `_prod_rollout_contract` / `_emit_prod_rollout_canary_traffic` /
   `_resolve_prod_rollout_stage` / `_prod_rollout_workloads`;
 - SLO: `_prometheus_query_value` / `_read_prometheus_slo` / `_slo_settle_seconds` /
@@ -33,121 +33,373 @@ from pathlib import Path
 from typing import Any
 
 
-def _load_prod_environment_acceptance(
-    ref: str,
+def _canonical_fact_bytes(value: dict[str, Any]) -> bytes:
+    return json.dumps(
+        value,
+        ensure_ascii=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode("utf-8")
+
+
+def _sha256_bytes(value: bytes) -> str:
+    return "sha256:" + hashlib.sha256(value).hexdigest()
+
+
+def _require_sha256(value: object, *, field: str) -> str:
+    normalized = str(value or "").strip()
+    if re.fullmatch(r"sha256:[0-9a-f]{64}", normalized) is None:
+        raise RuntimeError(f"{field} must be an exact sha256 identity")
+    return normalized
+
+
+def _require_git_identity(value: object, *, field: str) -> str:
+    normalized = str(value or "").strip()
+    if re.fullmatch(r"[0-9a-f]{40}|[0-9a-f]{64}", normalized) is None:
+        raise RuntimeError(f"{field} must be an exact Git identity")
+    return normalized
+
+
+def _load_materialized_exact_fact(
+    root: Path,
+    value: object,
     *,
-    expected_digest: str,
-    evidence_root: Path,
-    release_id: str,
-    release_digest: str,
-    candidate_digest: str,
-) -> dict[str, Any]:
-    """Load the one canonical Prod acceptance fact used by rollout.
+    field: str,
+) -> tuple[dict[str, Any], dict[str, str]]:
+    from pathlib import PurePosixPath
 
-    The fact validator follows every exact-byte authority, including the exact
-    Gamma predecessor and the durable J0/J1/J2 source facts.  This adapter adds
-    the deployment-specific release/candidate tuple checks; no bundle or
-    workflow verdict can enter this path.
-    """
-    from quwoquan_ops.cli.lib import environment_acceptance_fact
-
-    normalized_ref = str(ref or "").strip()
-    normalized_digest = str(expected_digest or "").strip()
-    if not normalized_ref or re.fullmatch(r"sha256:[0-9a-f]{64}", normalized_digest) is None:
-        raise RuntimeError(
-            "prod rollout requires --environment-acceptance-ref and exact "
-            "--environment-acceptance-sha256"
-        )
-    try:
-        fact, actual_digest = environment_acceptance_fact.load_environment_acceptance_fact(
-            normalized_ref,
-            evidence_root=evidence_root,
-            verify_references=True,
-        )
-    except (
-        environment_acceptance_fact.EnvironmentAcceptanceFactError,
-        OSError,
-    ) as error:
-        raise RuntimeError(
-            f"canonical EnvironmentAcceptanceFact validation failed: {error}"
-        ) from error
-    if actual_digest != normalized_digest:
-        raise RuntimeError(
-            "canonical EnvironmentAcceptanceFact exact-byte digest drifted"
-        )
-    expected = {
-        "schema": environment_acceptance_fact.SCHEMA,
-        "environment": "prod",
-        "target": "prod-hosted",
-        "releaseId": release_id,
-        "releaseDigest": release_digest,
-    }
-    for field, value in expected.items():
-        if fact.get(field) != value:
-            raise RuntimeError(
-                f"canonical EnvironmentAcceptanceFact deployment binding drifted at {field}"
-            )
-    if candidate_digest != release_id:
-        raise RuntimeError(
-            "deployment candidate does not match the canonical acceptance releaseId"
-        )
-    predecessor = fact.get("predecessorAcceptance")
+    if not isinstance(value, dict) or set(value) != {"ref", "digest"}:
+        raise RuntimeError(f"{field} must contain only exact ref and digest")
+    ref = str(value.get("ref") or "").strip()
+    digest = _require_sha256(value.get("digest"), field=f"{field}.digest")
     if (
-        not isinstance(predecessor, dict)
-        or predecessor.get("environment") != "gamma"
-        or re.fullmatch(r"sha256:[0-9a-f]{64}", str(predecessor.get("factId") or "")) is None
-        or re.fullmatch(r"sha256:[0-9a-f]{64}", str(predecessor.get("digest") or "")) is None
+        re.fullmatch(r"ghcr\.io/[a-z0-9._/-]+@sha256:[0-9a-f]{64}", ref)
+        is None
+        or ref.rsplit("@", 1)[-1] != digest
     ):
-        raise RuntimeError(
-            "canonical Prod acceptance lacks exact Gamma predecessor binding"
-        )
-    prod_facts = fact.get("prodReleaseFacts")
-    if not isinstance(prod_facts, dict):
-        raise RuntimeError(
-            "canonical Prod acceptance lacks J0/J1/J2 source facts"
-        )
-    stages = prod_facts.get("rolloutStages")
+        raise RuntimeError(f"{field}.ref must be an exact immutable GHCR OCI ref")
+    relative = PurePosixPath(ref)
     if (
-        not isinstance(stages, list)
-        or [item.get("stage") for item in stages if isinstance(item, dict)]
-        != list(environment_acceptance_fact.PROD_ROLLOUT_STAGES)
+        relative.is_absolute()
+        or relative.as_posix() != ref
+        or "\\" in ref
+        or any(part in {"", ".", "..", "latest", "main"} for part in relative.parts)
     ):
-        raise RuntimeError(
-            "canonical Prod acceptance rollout facts are not canary/5/20/50/100"
-        )
-    return {
-        "ref": normalized_ref,
-        "digest": actual_digest,
-        "factId": str(fact["factId"]),
-        "releaseId": str(fact["releaseId"]),
-        "releaseDigest": str(fact["releaseDigest"]),
-        "gammaPredecessorFactId": str(predecessor["factId"]),
-        "gammaPredecessorDigest": str(predecessor["digest"]),
-        "engineeringEligibilityRef": str(prod_facts["engineeringEligibility"]["ref"]),
-        "engineeringEligibilityDigest": str(prod_facts["engineeringEligibility"]["digest"]),
-        "durableApprovalRef": str(prod_facts["durableApproval"]["ref"]),
-        "durableApprovalDigest": str(prod_facts["durableApproval"]["digest"]),
-    }
-
-
-def _validate_release_artifacts(
-    manifest: dict[str, Any],
-    *,
-    artifact_root: Path,
-) -> None:
-    import quwoquan_ops.cli.stackctl as _stackctl
-
-    if set(_stackctl.finalize_mainline_release_artifact.REQUIRED_RELEASE_EVIDENCE) != (
-        _stackctl._REQUIRED_RELEASE_EVIDENCE
-    ):
-        raise RuntimeError("release evidence set differs from the canonical contract")
+        raise RuntimeError(f"{field}.ref is unsafe or mutable")
+    current = root
+    for part in relative.parts:
+        current = current / part
+        if current.is_symlink():
+            raise RuntimeError(f"{field}.ref traverses a symbolic link")
+    if not current.is_file():
+        raise RuntimeError(f"{field}.ref was not materialized by the controller")
+    raw = current.read_bytes()
+    if _sha256_bytes(raw) != digest:
+        raise RuntimeError(f"{field} exact bytes drifted")
     try:
-        _stackctl.finalize_mainline_release_artifact.validate_manifest_files(
-            artifact_root,
-            manifest,
+        payload = json.loads(raw.decode("utf-8"))
+    except (UnicodeError, json.JSONDecodeError) as error:
+        raise RuntimeError(f"{field} is not canonical JSON") from error
+    if not isinstance(payload, dict):
+        raise RuntimeError(f"{field} must contain a JSON object")
+    if raw != _canonical_fact_bytes(payload) + b"\n":
+        raise RuntimeError(f"{field} is not canonical JSON bytes")
+    return payload, {"ref": ref, "digest": digest}
+
+
+def _require_exact_artifacts(value: object, *, field: str) -> list[dict[str, str]]:
+    if not isinstance(value, list) or not value:
+        raise RuntimeError(f"{field} must contain exact OCI artifacts")
+    artifacts: list[dict[str, str]] = []
+    seen: set[str] = set()
+    for index, item in enumerate(value):
+        if not isinstance(item, dict) or set(item) != {"platform", "ociRef", "digest"}:
+            raise RuntimeError(f"{field}[{index}] shape is invalid")
+        platform = str(item.get("platform") or "").strip()
+        oci_ref = str(item.get("ociRef") or "").strip()
+        digest = _require_sha256(item.get("digest"), field=f"{field}[{index}].digest")
+        if (
+            not platform
+            or platform in seen
+            or re.fullmatch(r"ghcr\.io/[a-z0-9._/-]+@sha256:[0-9a-f]{64}", oci_ref)
+            is None
+            or not oci_ref.endswith("@" + digest)
+        ):
+            raise RuntimeError(f"{field}[{index}] is not one unique exact OCI artifact")
+        seen.add(platform)
+        artifacts.append({"platform": platform, "ociRef": oci_ref, "digest": digest})
+    return sorted(artifacts, key=lambda item: item["platform"])
+
+
+def _fact_identity(value: dict[str, Any], field: str) -> str:
+    actual = _require_sha256(value.get(field), field=field)
+    unsigned = dict(value)
+    unsigned.pop(field, None)
+    expected = _sha256_bytes(_canonical_fact_bytes(unsigned))
+    if actual != expected:
+        raise RuntimeError(f"{field} self-id drifted")
+    return actual
+
+
+def _normalized_tree_identity(value: object, *, field: str) -> str:
+    normalized = str(value or "").strip()
+    match = re.fullmatch(r"(?:sha1:)?([0-9a-f]{40})|(?:sha256:)?([0-9a-f]{64})", normalized)
+    if match is None:
+        raise RuntimeError(f"{field} must be an exact tree identity")
+    return match.group(1) or match.group(2)
+
+
+def _load_prod_activation_admission(
+    input_path_value: str,
+) -> tuple[dict[str, str], Path, str, dict[str, Any]]:
+    """Load the sole formal Prod authority and its two actual factory manifests."""
+    from quwoquan_ops.ci.qualified_prod import (
+        QualifiedProdError,
+        _factory_outputs,
+        _factory_refs,
+        _validated_factory_actual_materials,
+    )
+
+    input_path = Path(str(input_path_value or "").strip()).expanduser()
+    if not str(input_path_value or "").strip():
+        raise RuntimeError("prod rollout requires --prod-activation-admission")
+    if input_path.is_symlink() or not input_path.is_file():
+        raise RuntimeError("Prod activation admission envelope is not a regular file")
+    input_path = input_path.resolve()
+    raw_input = input_path.read_bytes()
+    try:
+        envelope = json.loads(raw_input.decode("utf-8"))
+    except (UnicodeError, json.JSONDecodeError) as error:
+        raise RuntimeError("Prod activation admission envelope is not canonical JSON") from error
+    envelope_fields = {
+        "schema", "prodActivationAdmission", "releaseTagAdmission",
+        "qualification", "candidateMaterialManifest",
+        "serviceFactoryMaterial", "appFactoryMaterial", "previousReleased",
+        "rollbackReadiness", "stableTag", "sourceGitSha", "sourceTree",
+        "controlPlaneGitSha", "candidateMaterialId", "previousReleasedId",
+        "candidateDigest", "previousCandidateDigest",
+        "serviceMaterialDigest", "appMaterialDigest",
+        "ociDigests", "previousOciDigests",
+    }
+    if (
+        not isinstance(envelope, dict)
+        or set(envelope) != envelope_fields
+        or envelope.get("schema") != "quwoquan_ops.prod_activation_input.v1"
+        or raw_input != _canonical_fact_bytes(envelope) + b"\n"
+    ):
+        raise RuntimeError("Prod activation admission envelope shape or canonical bytes drifted")
+
+    root = input_path.parent
+    admission, admission_exact = _load_materialized_exact_fact(
+        root, envelope.get("prodActivationAdmission"), field="prodActivationAdmission"
+    )
+    admission_fields = {
+        "schema", "admissionId", "decision", "stableTag", "tagObjectOid",
+        "sourceGitSha", "sourceTree", "controlPlaneGitSha",
+        "releaseTagAdmission", "qualification", "candidateMaterialManifest",
+        "factoryMaterials", "previousActiveReleasedLedger", "rollbackReadiness",
+        "artifacts", "ociDigests", "previousOciDigests",
+        "createdBeforeStage", "admittedAt",
+    }
+    unsigned_admission = dict(admission)
+    admission_id = str(unsigned_admission.pop("admissionId", ""))
+    if (
+        set(admission) != admission_fields
+        or admission.get("schema") != "quwoquan_ops.prod_activation_admission_fact.v1"
+        or admission.get("decision") != "admitted"
+        or admission.get("createdBeforeStage") != "canary"
+        or admission_id != _sha256_bytes(_canonical_fact_bytes(unsigned_admission))
+    ):
+        raise RuntimeError("ProdActivationAdmissionFact schema, decision, or self-id is invalid")
+
+    tag, tag_exact = _load_materialized_exact_fact(
+        root, admission.get("releaseTagAdmission"), field="releaseTagAdmission"
+    )
+    qualification, qualification_exact = _load_materialized_exact_fact(
+        root, admission.get("qualification"), field="qualification"
+    )
+    material, material_exact = _load_materialized_exact_fact(
+        root, admission.get("candidateMaterialManifest"), field="candidateMaterialManifest"
+    )
+    previous, previous_exact = _load_materialized_exact_fact(
+        root, admission.get("previousActiveReleasedLedger"), field="previousReleased"
+    )
+    rollback, rollback_exact = _load_materialized_exact_fact(
+        root, admission.get("rollbackReadiness"), field="rollbackReadiness"
+    )
+    stable_tag = str(admission.get("stableTag") or "")
+    source_git_sha = _require_git_identity(admission.get("sourceGitSha"), field="sourceGitSha")
+    source_tree = _normalized_tree_identity(admission.get("sourceTree"), field="sourceTree")
+    control_plane_git_sha = _require_git_identity(
+        admission.get("controlPlaneGitSha"), field="controlPlaneGitSha"
+    )
+    release_tag_admission_id = _fact_identity(tag, "admissionId")
+    qualification_id = _fact_identity(qualification, "qualificationId")
+    candidate_material_id = _fact_identity(material, "materialId")
+    previous_released_id = _fact_identity(previous, "releaseId")
+    candidate_digest = _require_sha256(
+        tag.get("candidateIdentity"), field="releaseTagAdmission.candidateIdentity"
+    )
+    previous_candidate = _require_sha256(
+        previous.get("candidateMaterialId") or previous.get("candidateId"),
+        field="previousReleased.candidateMaterialId",
+    )
+    if (
+        re.fullmatch(r"v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)", stable_tag) is None
+        or tag.get("schema") != "quwoquan_ops.release_tag_admission_fact.v1"
+        or tag.get("decision") != "admitted"
+        or tag.get("tagKind") != "stable"
+        or tag.get("tagName") != stable_tag
+        or tag.get("tagObjectOid") != admission.get("tagObjectOid")
+        or tag.get("peeledCommit") != source_git_sha
+        or _normalized_tree_identity(tag.get("sourceTree"), field="releaseTagAdmission.sourceTree") != source_tree
+        or tag.get("qualificationFact") != qualification_exact
+        or tag.get("qualificationId") != qualification_id
+        or tag.get("candidateMaterialManifest") != material_exact
+        or tag.get("candidateMaterialId") != candidate_material_id
+        or qualification.get("schema") != "quwoquan_ops.qualification_fact.v1"
+        or qualification.get("decision") != "qualified"
+        or qualification.get("sourceGitSha") != source_git_sha
+        or _normalized_tree_identity(qualification.get("sourceTree"), field="qualification.sourceTree") != source_tree
+        or qualification.get("candidateMaterialManifest") != material_exact
+        or material.get("sourceGitSha") != source_git_sha
+        or _normalized_tree_identity(material.get("sourceTree"), field="candidateMaterialManifest.sourceTree") != source_tree
+        or previous.get("schema") != "quwoquan_ops.prod_released_fact.v1"
+        or previous.get("terminal") != "released"
+        or previous.get("active") is not True
+        or previous.get("revoked") is not False
+        or previous.get("digestsExist") is not True
+        or previous.get("compatible") is not True
+        or rollback.get("schema") != "quwoquan_ops.rollback_readiness_fact.v1"
+        or rollback.get("status") != "ready"
+        or rollback.get("previousActiveReleasedLedger") != previous_exact
+        or rollback.get("digestsExist") is not True
+        or rollback.get("compatible") is not True
+    ):
+        raise RuntimeError("Prod activation exact authority graph drifted")
+
+    try:
+        outputs = _factory_outputs(material.get("factoryOutputs"))
+        factory_refs = _factory_refs(outputs)
+        service_binding = envelope.get("serviceFactoryMaterial")
+        app_binding = envelope.get("appFactoryMaterial")
+        if not isinstance(service_binding, dict) or not isinstance(app_binding, dict):
+            raise RuntimeError("Prod activation factory material bindings are missing")
+        expected_binding_fields = {"ociRef", "ociDigest", "payloadDigest", "materialDigest", "materializedManifest"}
+        if set(service_binding) != expected_binding_fields or set(app_binding) != expected_binding_fields:
+            raise RuntimeError("Prod activation factory material binding shape drifted")
+        if (
+            {key: service_binding[key] for key in expected_binding_fields - {"materializedManifest"}} != factory_refs["service"]
+            or {key: app_binding[key] for key in expected_binding_fields - {"materializedManifest"}} != factory_refs["app"]
+            or admission.get("factoryMaterials") != factory_refs
+        ):
+            raise RuntimeError("Prod activation factory locator closure drifted")
+        service_material, app_material, service_exact, app_exact = _validated_factory_actual_materials(
+            root=root,
+            material=material,
+            service_material_ref=service_binding["materializedManifest"],
+            app_material_ref=app_binding["materializedManifest"],
+            repository_root=Path(__file__).resolve().parents[3],
         )
-    except ValueError as error:
-        raise RuntimeError(f"release evidence files are invalid: {error}") from error
+    except QualifiedProdError as error:
+        raise RuntimeError(str(error)) from error
+    if (
+        service_binding["materializedManifest"] != service_exact
+        or app_binding["materializedManifest"] != app_exact
+        or envelope.get("serviceMaterialDigest") != service_material.get("materialDigest")
+        or envelope.get("appMaterialDigest") != app_material.get("materialDigest")
+    ):
+        raise RuntimeError("Prod activation actual factory material closure drifted")
+
+    artifacts = _require_exact_artifacts(admission.get("artifacts"), field="admission.artifacts")
+    if (
+        artifacts != _require_exact_artifacts(tag.get("artifacts"), field="releaseTagAdmission.artifacts")
+        or artifacts != _require_exact_artifacts(qualification.get("artifacts"), field="qualification.artifacts")
+        or artifacts != _require_exact_artifacts(material.get("artifacts"), field="candidateMaterialManifest.artifacts")
+    ):
+        raise RuntimeError("Prod activation exact OCI artifacts drifted across predecessors")
+    oci_digests = sorted(
+        {item["digest"] for item in artifacts}
+        | {factory_refs[kind]["ociDigest"] for kind in factory_refs}
+        | {factory_refs[kind]["materialDigest"] for kind in factory_refs}
+    )
+    previous_oci_digests = sorted(
+        _require_sha256(value, field="previousReleased.ociDigests")
+        for value in previous.get("ociDigests", [])
+    )
+    expected_envelope = {
+        "prodActivationAdmission": admission_exact,
+        "releaseTagAdmission": tag_exact,
+        "qualification": qualification_exact,
+        "candidateMaterialManifest": material_exact,
+        "previousReleased": previous_exact,
+        "rollbackReadiness": rollback_exact,
+        "stableTag": stable_tag,
+        "sourceGitSha": source_git_sha,
+        "sourceTree": admission["sourceTree"],
+        "controlPlaneGitSha": control_plane_git_sha,
+        "candidateMaterialId": candidate_material_id,
+        "previousReleasedId": previous_released_id,
+        "candidateDigest": candidate_digest,
+        "previousCandidateDigest": previous_candidate,
+        "ociDigests": oci_digests,
+        "previousOciDigests": previous_oci_digests,
+    }
+    if not previous_oci_digests or any(envelope.get(field) != expected for field, expected in expected_envelope.items()):
+        raise RuntimeError("Prod activation envelope exact authority binding drifted")
+    if (
+        sorted(admission.get("ociDigests") or []) != oci_digests
+        or sorted(admission.get("previousOciDigests") or []) != previous_oci_digests
+        or sorted(rollback.get("ociDigests") or []) != previous_oci_digests
+    ):
+        raise RuntimeError("Prod activation current or rollback OCI digest set drifted")
+
+    service_manifest_path = root / service_exact["ref"]
+    deploy_material = {
+        "schema": "quwoquan_ops.prod_deploy_material.v1",
+        "candidateId": candidate_digest,
+        "candidateMaterialId": candidate_material_id,
+        "source": {"gitSha": source_git_sha, "treeDigest": admission["sourceTree"]},
+        "serviceFactoryMaterial": service_binding,
+        "appFactoryMaterial": app_binding,
+        "images": service_material["images"],
+        "prodRuntimeConfigDeploymentBundle": service_material["prodRuntimeConfigDeploymentBundle"],
+        "factoryOciDigests": {kind: factory_refs[kind]["ociDigest"] for kind in ("service", "app")},
+        "factoryMaterialDigests": {kind: factory_refs[kind]["materialDigest"] for kind in ("service", "app")},
+    }
+    identity = {
+        "prodActivationAdmissionRef": admission_exact["ref"],
+        "prodActivationAdmissionOciDigest": admission_exact["ref"].rsplit("@", 1)[-1],
+        "prodActivationAdmissionPayloadDigest": admission_exact["digest"],
+        "prodActivationAdmissionId": admission_id,
+        "releaseTagAdmissionRef": tag_exact["ref"],
+        "releaseTagAdmissionDigest": tag_exact["digest"],
+        "releaseTagAdmissionId": release_tag_admission_id,
+        "qualificationRef": qualification_exact["ref"],
+        "qualificationDigest": qualification_exact["digest"],
+        "qualificationId": qualification_id,
+        "candidateMaterialManifestRef": material_exact["ref"],
+        "candidateMaterialManifestOciDigest": material_exact["ref"].rsplit("@", 1)[-1],
+        "candidateMaterialManifestPayloadDigest": material_exact["digest"],
+        "candidateMaterialId": candidate_material_id,
+        "serviceFactoryOciRef": factory_refs["service"]["ociRef"],
+        "serviceFactoryOciDigest": factory_refs["service"]["ociDigest"],
+        "appFactoryOciRef": factory_refs["app"]["ociRef"],
+        "appFactoryOciDigest": factory_refs["app"]["ociDigest"],
+        "previousReleasedRef": previous_exact["ref"],
+        "previousReleasedOciDigest": previous_exact["ref"].rsplit("@", 1)[-1],
+        "previousReleasedPayloadDigest": previous_exact["digest"],
+        "previousReleasedId": previous_released_id,
+        "rollbackReadinessRef": rollback_exact["ref"],
+        "rollbackReadinessDigest": rollback_exact["digest"],
+        "stableTag": stable_tag,
+        "sourceGitSha": source_git_sha,
+        "sourceTree": admission["sourceTree"],
+        "controlPlaneGitSha": control_plane_git_sha,
+        "candidateDigest": candidate_digest,
+        "previousCandidateDigest": previous_candidate,
+    }
+    return identity, service_manifest_path, candidate_material_id, deploy_material
 
 
 def _release_transport_tag(manifest: dict[str, Any]) -> str:
@@ -174,57 +426,7 @@ def _release_transport_tag(manifest: dict[str, Any]) -> str:
     return next(iter(tags))
 
 
-def _deployable_release_manifest(
-    path_value: str,
-    *,
-    candidate_digest: str,
-) -> tuple[Path, str, dict[str, Any]]:
-    import quwoquan_ops.cli.stackctl as _stackctl
-
-    path = Path(path_value).expanduser().resolve()
-    try:
-        manifest = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as error:
-        raise RuntimeError(f"release manifest unreadable: {error}") from error
-    if not isinstance(manifest, dict):
-        raise RuntimeError("release manifest must be an object")
-    try:
-        _stackctl.finalize_mainline_release_artifact.validate_manifest(
-            manifest,
-            allowed_statuses={"main-admitted"},
-        )
-    except ValueError as error:
-        raise RuntimeError(f"release evidence manifest is not deployable: {error}") from error
-    declared_digest = str(manifest["artifactDigest"])
-    if candidate_digest != str(manifest["releaseCompositionId"]):
-        raise RuntimeError("release candidate digest does not match reviewed evidence")
-    source = manifest.get("source")
-    source_sha = str(source.get("gitSha") or "") if isinstance(source, dict) else ""
-    head = _stackctl.run(["git", "rev-parse", "HEAD"])
-    if head.returncode != 0 or source_sha != head.stdout.strip():
-        raise RuntimeError(
-            "release manifest source SHA does not match checked-out deployment code"
-        )
-    governance_path = path.parent / "governance-receipt.json"
-    try:
-        governance = json.loads(governance_path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as error:
-        raise RuntimeError(f"release governance receipt is missing or invalid: {error}") from error
-    if (
-        not isinstance(governance, dict)
-        or governance.get("schema") != "prod-release-governance-receipt"
-        or governance.get("repository") != (manifest.get("source") or {}).get("repository")
-        or governance.get("gitSha") != source_sha
-        or governance.get("artifactDigest") != declared_digest
-        or not governance.get("approvers")
-        or len(set(governance.get("distinctPrincipals") or [])) < 2
-    ):
-        raise RuntimeError("release governance receipt does not bind this reviewed artifact")
-    _stackctl._validate_release_artifacts(manifest, artifact_root=path.parent)
-    return path, declared_digest, manifest
-
-
-def _materialize_prevalidation_release_manifest(path_value: str) -> Path:
+def _materialize_frozen_diagnostic_snapshot(path_value: str) -> Path:
     import quwoquan_ops.cli.stackctl as _stackctl
 
     if not path_value.startswith("oci://"):
@@ -259,7 +461,7 @@ def _materialize_prevalidation_release_manifest(path_value: str) -> Path:
     return destination / "manifest.json"
 
 
-def _prevalidation_release_manifest(
+def _frozen_diagnostic_snapshot(
     path_value: str,
 ) -> tuple[Path, str, dict[str, Any], str, str]:
     """Validate a Service Pipeline artifact without entering release governance.
@@ -271,21 +473,22 @@ def _prevalidation_release_manifest(
     """
     import quwoquan_ops.cli.stackctl as _stackctl
 
-    path = _stackctl._materialize_prevalidation_release_manifest(path_value)
+    path = _stackctl._materialize_frozen_diagnostic_snapshot(path_value)
     try:
         manifest = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as error:
-        raise RuntimeError(f"release manifest unreadable: {error}") from error
+        raise RuntimeError(f"frozen diagnostic snapshot unreadable: {error}") from error
     if not isinstance(manifest, dict):
-        raise RuntimeError("release manifest must be an object")
+        raise RuntimeError("frozen diagnostic snapshot must be an object")
     try:
-        _stackctl.finalize_mainline_release_artifact.validate_manifest(
-            manifest,
-            allowed_statuses={"main-admitted"},
+        from quwoquan_ops.ci.release_evidence_reader import (
+            validate_frozen_diagnostic_snapshot,
         )
-        _stackctl.finalize_mainline_release_artifact.validate_manifest_files(
-            path.parent,
+
+        validate_frozen_diagnostic_snapshot(
             manifest,
+            artifact_dir=path.parent,
+            allowed_statuses={"deployable"},
         )
     except ValueError as error:
         raise RuntimeError(
@@ -305,7 +508,7 @@ def _prevalidation_release_manifest(
     ):
         raise RuntimeError("release manifest source is not a Service Pipeline commit")
     image_transport_tag = _stackctl._release_transport_tag(manifest)
-    candidate_digest = str(manifest["releaseCompositionId"])
+    candidate_digest = str(manifest["candidateId"])
     required_artifacts = manifest["requiredEvidence"]["environmentArtifacts"]
     artifacts = manifest.get("environmentArtifacts")
     prod_artifact = artifacts.get("prod") if isinstance(artifacts, dict) else None

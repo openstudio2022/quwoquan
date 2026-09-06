@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -219,17 +220,32 @@ class RootLayoutGateTest(unittest.TestCase):
             _materialize_allowed_root(root, module)
             self.assertEqual(module.root_layout_issues(root), [])
 
-    def test_real_repository_source_tree_layout_holds(self) -> None:
-        """真实仓库的受版本控制部分必须当场满足判据。
+    def test_real_repository_tracked_source_tree_layout_holds(self) -> None:
+        """版本控制输入必须合规，且不消费共享工作树的并行测试缓存。
 
-        刻意不走 `root_layout_issues()`：它会下钻 `.qwq_output`，而那里是并行会话
-        随时写入的可弃输出，把它纳进来会让本用例按别人的运行时残留随机报红——持续
-        假红最终只会被绕过，比没有这条断言更糟。`.qwq_output` 的形状由
-        `verify_output_layout` 自己的配套测试承担。
+        全量 pytest/ruff 可在根或源码域短暂生成未跟踪缓存；真实磁盘扫描属于独立
+        gate 的职责。本用例在临时根物化当前 Git index 的受控顶层与源码目录，既保留
+        对被跟踪布局回归的阻断，也不因另一会话的运行时残留产生随机假红。
         """
         module = _load_module()
-        self.assertEqual(module.top_level_issues(), [])
-        self.assertEqual(module.source_cache_issues(), [])
+        tracked = subprocess.run(
+            ["git", "ls-files", "-z"],
+            cwd=ROOT,
+            check=True,
+            capture_output=True,
+        ).stdout.decode("utf-8").split("\0")
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            for relative in tracked:
+                if not relative:
+                    continue
+                source = ROOT / relative
+                target = root / relative
+                if source.is_file():
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    target.touch()
+            self.assertEqual(module.top_level_issues(root), [])
+            self.assertEqual(module.source_cache_issues(root), [])
 
 
 if __name__ == "__main__":

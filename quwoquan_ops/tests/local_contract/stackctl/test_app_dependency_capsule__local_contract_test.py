@@ -355,11 +355,18 @@ def test_global_pub_cache_is_never_a_fallback(
     monkeypatch.setattr(package_reuse, "ROOT", repo)
     monkeypatch.setenv("PUB_CACHE", str(tmp_path / "untrusted-global-cache"))
 
-    with pytest.raises(ValueError, match="managed dependency bundle root"):
+    with pytest.raises(
+        dependency_bundle.AppDependencyBundleMissingError,
+        match=r"managedDependencyBundle\.root",
+    ) as raised:
         package_reuse.materialize_package_input_capsule(
             ["quwoquan_app"],
             capsule_root=tmp_path / "candidate/input-capsule",
         )
+
+    assert raised.value.code == dependency_bundle.APP_DEPENDENCY_BUNDLE_MISSING_CODE
+    assert raised.value.resource == "managedDependencyBundle"
+    assert raised.value.field == "root"
 
 
 def test_dependency_manifest_digest_is_bound_into_capsule_identity(

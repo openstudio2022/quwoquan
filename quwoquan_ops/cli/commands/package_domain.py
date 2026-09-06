@@ -151,7 +151,6 @@ def register_parser(
             "app-release",
             "app-artifact",
             "web",
-            "release-manifest",
         ],
         default="runtime",
     )
@@ -285,8 +284,6 @@ def command_package(args: argparse.Namespace) -> dict[str, Any]:
 
     package_kind = str(getattr(args, "kind", "runtime") or "runtime")
     if package_kind != "runtime":
-        if package_kind == "release-manifest":
-            return _stackctl._command_package_unlocked(args, package_snapshot=None)
         env_name = str(getattr(args, "env", "") or "").strip()
         target_name = str(getattr(args, "target", "") or "").strip()
         if package_kind == "app-artifact":

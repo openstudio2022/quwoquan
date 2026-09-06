@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
-"""Bind and query CiTimingSummary records through the hosted SSH authority."""
-
+"""Append/query promotion timing evidence through the hosted SSH authority."""
 from __future__ import annotations
 
 import argparse
@@ -25,7 +24,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from quwoquan_ops.ci import hosted_ci_timing_ledger as authority
-
+from quwoquan_ops.ci import promotion_timing_ratchet as ratchet
 
 ACCESS_MANIFEST = ROOT / "quwoquan_ops/environments/prod/access-isolation.yaml"
 HOST_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9.:-]{0,254}$")
@@ -59,7 +58,7 @@ def _access() -> tuple[str, str, str, str]:
         raise RuntimeError("Prod hosted timing authority account is invalid")
     if not compose_root.startswith("/") or ".." in Path(compose_root).parts:
         raise RuntimeError("Prod hosted timing authority root is invalid")
-    return host, account, secret_name, compose_root.rstrip("/") + "/ci-timing-ledger"
+    return host, account, secret_name, compose_root.rstrip("/") + "/promotion-timing-ledger"
 
 
 @contextlib.contextmanager
@@ -99,25 +98,43 @@ def _ssh_key(secret_name: str, account: str) -> Iterator[Path]:
 
 
 def _remote_action(
-    *, action: str, candidate_digest: str = "", workflow_run_id: str = "", request: str = ""
+    *,
+    action: str,
+    candidate_digest: str = "",
+    workflow_run_id: str = "",
+    observation_id: str = "",
+    event_id: str = "",
+    start_at: str = "",
+    end_at: str = "",
+    request: str = "",
 ) -> dict[str, Any]:
     host, account, secret_name, remote_root = _access()
-    command = [
-        "python3",
-        "-",
-        "--root",
-        remote_root,
-        "--action",
-        action,
-    ]
-    if request:
-        command.extend(("--request-base64", request))
-    if candidate_digest:
-        command.extend(("--candidate-digest", candidate_digest))
-    if workflow_run_id:
-        command.extend(("--workflow-run-id", workflow_run_id))
+    command = ["python3", "-", "--root", remote_root, "--action", action]
+    for option, value in (
+        ("--request-base64", request),
+        ("--candidate-digest", candidate_digest),
+        ("--workflow-run-id", workflow_run_id),
+        ("--observation-id", observation_id),
+        ("--event-id", event_id),
+        ("--start-at", start_at),
+        ("--end-at", end_at),
+    ):
+        if value:
+            command.extend((option, value))
     remote_command = " ".join(shlex.quote(value) for value in command)
-    source = Path(authority.__file__).read_text(encoding="utf-8")
+    authority_source = Path(authority.__file__).read_text(encoding="utf-8")
+    ratchet_source = Path(ratchet.__file__).read_bytes()
+    embedded = base64.b64encode(ratchet_source).decode("ascii")
+    import_line = "from quwoquan_ops.ci import promotion_timing_ratchet as ratchet"
+    bootstrap = (
+        "import base64 as _ratchet_base64, types as _ratchet_types\n"
+        "ratchet = _ratchet_types.ModuleType('promotion_timing_ratchet')\n"
+        "ratchet.__file__ = '<embedded-promotion-timing-ratchet>'\n"
+        f"exec(compile(_ratchet_base64.b64decode({embedded!r}), ratchet.__file__, 'exec'), ratchet.__dict__)"
+    )
+    if authority_source.count(import_line) != 1:
+        raise RuntimeError("hosted timing authority embedding anchor drifted")
+    source = authority_source.replace(import_line, bootstrap, 1)
     with _ssh_key(secret_name, account) as key_path:
         try:
             completed = subprocess.run(
@@ -145,9 +162,7 @@ def _remote_action(
                 timeout=60,
             )
         except subprocess.TimeoutExpired as error:
-            raise RuntimeError(
-                f"hosted timing authority {action} timed out"
-            ) from error
+            raise RuntimeError(f"hosted timing authority {action} timed out") from error
     if completed.returncode != 0:
         detail = completed.stderr.strip() or completed.stdout.strip()
         raise RuntimeError(f"hosted timing authority {action} failed: {detail}")
@@ -160,33 +175,66 @@ def _remote_action(
     return payload
 
 
+def _bind_request(
+    record_kind: str, raw_payload: bytes, evidence_ref: str, evidence_digest: str
+) -> str:
+    request = {
+        "recordKind": record_kind,
+        "payloadBase64": base64.b64encode(raw_payload).decode("ascii"),
+        "evidenceRef": evidence_ref,
+        "evidenceDigest": evidence_digest,
+    }
+    return base64.b64encode(
+        json.dumps(
+            request, ensure_ascii=False, separators=(",", ":"), sort_keys=True
+        ).encode("utf-8")
+    ).decode("ascii")
+
+
+def bind_sample_and_readback(
+    sample_path: Path, evidence_ref: str, evidence_digest: str
+) -> dict[str, Any]:
+    sample, raw_sample = authority._read_sample(sample_path)
+    expected = authority.build_sample_record(
+        sample, raw_sample, evidence_ref, evidence_digest
+    )
+    committed = _remote_action(
+        action="bind",
+        request=_bind_request(
+            "promotion_sample", raw_sample, evidence_ref, evidence_digest
+        ),
+    )
+    if committed != expected:
+        raise RuntimeError("hosted timing authority sample bind readback does not match request")
+    queried = _remote_action(
+        action="query-sample", observation_id=str(sample["observationId"])
+    )
+    if queried != expected:
+        raise RuntimeError("hosted timing authority sample query does not match exact OCI binding")
+    return queried
+
+
 def bind_and_readback(
     summary_path: Path, evidence_ref: str, evidence_digest: str
 ) -> dict[str, Any]:
+    """Archive a generic diagnostic summary; it is never ratchet authority."""
     summary, raw_summary = authority._read_summary(summary_path)
     expected = authority.build_record(summary, raw_summary, evidence_ref, evidence_digest)
-    request = base64.b64encode(
-        json.dumps(
-            {
-                "summaryBase64": base64.b64encode(raw_summary).decode("ascii"),
-                "timingEvidenceRef": evidence_ref,
-                "timingEvidenceDigest": evidence_digest,
-            },
-            ensure_ascii=False,
-            separators=(",", ":"),
-            sort_keys=True,
-        ).encode("utf-8")
-    ).decode("ascii")
-    committed = _remote_action(action="bind", request=request)
+    committed = _remote_action(
+        action="bind",
+        request=_bind_request(
+            "diagnostic_summary", raw_summary, evidence_ref, evidence_digest
+        ),
+    )
     if committed != expected:
-        raise RuntimeError("hosted timing authority bind readback does not match request")
+        raise RuntimeError("hosted timing diagnostic bind readback does not match request")
     queried = _remote_action(
         action="query",
         candidate_digest=str(summary["candidateDigest"]),
         workflow_run_id=str(summary["workflowRunId"]),
     )
     if queried != expected:
-        raise RuntimeError("hosted timing authority query does not match exact OCI binding")
+        raise RuntimeError("hosted timing diagnostic query does not match exact OCI binding")
     return queried
 
 
@@ -198,43 +246,105 @@ def query(candidate_digest: str, workflow_run_id: str) -> dict[str, Any]:
             workflow_run_id=workflow_run_id,
         )
     )
-    summary = authority.validate_summary(record.get("timingSummary"))
-    authority._validate_exact_oci(
-        str(record.get("timingEvidenceRef") or ""),
-        str(record.get("timingEvidenceDigest") or ""),
-    )
+    if record["recordKind"] != "diagnostic_summary":
+        raise RuntimeError("hosted timing query returned a non-diagnostic record")
+    payload = authority.validate_summary(record.get("payload"))
     if (
-        summary["candidateDigest"] != candidate_digest
-        or str(summary["workflowRunId"]) != workflow_run_id
+        payload["candidateDigest"] != candidate_digest
+        or str(payload["workflowRunId"]) != workflow_run_id
     ):
-        raise RuntimeError("hosted timing query returned a different release identity")
+        raise RuntimeError("hosted timing query returned a different diagnostic identity")
     return record
+
+
+def query_sample(observation_id: str) -> dict[str, Any]:
+    record = authority.validate_record(
+        _remote_action(action="query-sample", observation_id=observation_id)
+    )
+    if record["recordKind"] != "promotion_sample" or record["observationId"] != observation_id:
+        raise RuntimeError("hosted timing query returned a different sample identity")
+    return record
+
+
+def query_event(event_id: str) -> dict[str, Any]:
+    payload = _remote_action(action="query-event", event_id=event_id)
+    if payload.get("authority") != authority.AUTHORITY or payload.get("eventId") != event_id:
+        raise RuntimeError("hosted timing event query returned a different identity")
+    records = payload.get("records")
+    if not isinstance(records, list):
+        raise RuntimeError("hosted timing event query returned invalid records")
+    for record in records:
+        validated = authority.validate_record(record)
+        if validated.get("eventId") != event_id:
+            raise RuntimeError("hosted timing event query returned a foreign sample")
+    return payload
+
+
+def query_range(start_at: str, end_at: str) -> dict[str, Any]:
+    payload = _remote_action(action="query-range", start_at=start_at, end_at=end_at)
+    if payload.get("authority") != authority.AUTHORITY:
+        raise RuntimeError("hosted timing range query returned a foreign authority")
+    samples = payload.get("samples")
+    if not isinstance(samples, list):
+        raise RuntimeError("hosted timing range query returned invalid samples")
+    for sample in samples:
+        authority.validate_promotion_sample(sample)
+    return payload
 
 
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     subparsers = parser.add_subparsers(dest="action", required=True)
-    bind_parser = subparsers.add_parser("bind")
-    bind_parser.add_argument("--summary", required=True, type=Path)
-    bind_parser.add_argument("--timing-evidence-ref", required=True)
-    bind_parser.add_argument("--timing-evidence-digest", required=True)
-    bind_parser.add_argument("--output", required=True, type=Path)
-    query_parser = subparsers.add_parser("query")
-    query_parser.add_argument("--candidate-digest", required=True)
-    query_parser.add_argument("--workflow-run-id", required=True)
-    query_parser.add_argument("--output", required=True, type=Path)
+
+    bind_sample = subparsers.add_parser("append-sample")
+    bind_sample.add_argument("--sample", required=True, type=Path)
+    bind_sample.add_argument("--evidence-ref", required=True)
+    bind_sample.add_argument("--evidence-digest", required=True)
+    bind_sample.add_argument("--output", required=True, type=Path)
+
+    bind_diagnostic = subparsers.add_parser("archive-diagnostic")
+    bind_diagnostic.add_argument("--summary", required=True, type=Path)
+    bind_diagnostic.add_argument("--evidence-ref", required=True)
+    bind_diagnostic.add_argument("--evidence-digest", required=True)
+    bind_diagnostic.add_argument("--output", required=True, type=Path)
+
+    query_sample_parser = subparsers.add_parser("query-sample")
+    query_sample_parser.add_argument("--observation-id", required=True)
+    query_sample_parser.add_argument("--output", required=True, type=Path)
+
+    query_event_parser = subparsers.add_parser("query-event")
+    query_event_parser.add_argument("--event-id", required=True)
+    query_event_parser.add_argument("--output", required=True, type=Path)
+
+    query_range_parser = subparsers.add_parser("query-range")
+    query_range_parser.add_argument("--start-at", required=True)
+    query_range_parser.add_argument("--end-at", required=True)
+    query_range_parser.add_argument("--output", required=True, type=Path)
+
+    diagnostic_query = subparsers.add_parser("query-diagnostic")
+    diagnostic_query.add_argument("--candidate-digest", required=True)
+    diagnostic_query.add_argument("--workflow-run-id", required=True)
+    diagnostic_query.add_argument("--output", required=True, type=Path)
     return parser
 
 
 def main() -> int:
     args = _parser().parse_args()
     try:
-        if args.action == "bind":
-            result = bind_and_readback(
-                args.summary,
-                args.timing_evidence_ref,
-                args.timing_evidence_digest,
+        if args.action == "append-sample":
+            result = bind_sample_and_readback(
+                args.sample, args.evidence_ref, args.evidence_digest
             )
+        elif args.action == "archive-diagnostic":
+            result = bind_and_readback(
+                args.summary, args.evidence_ref, args.evidence_digest
+            )
+        elif args.action == "query-sample":
+            result = query_sample(args.observation_id)
+        elif args.action == "query-event":
+            result = query_event(args.event_id)
+        elif args.action == "query-range":
+            result = query_range(args.start_at, args.end_at)
         else:
             result = query(args.candidate_digest, args.workflow_run_id)
         args.output.parent.mkdir(parents=True, exist_ok=True)

@@ -253,60 +253,78 @@ def test_weekly_success_report_contract_requires_report_only_workflow(
     assert any("exactly one bounded successful weekly report" in issue for issue in issues)
 
 
-def test_pr_workflows_use_lock_bound_shared_dependency_caches() -> None:
+def test_gate_covers_mapping_list_inline_and_multiline_artifact_uses(
+    tmp_path: Path, monkeypatch: object
+) -> None:
+    workflows = tmp_path / "workflows"
+    workflows.mkdir()
+    digest = "a" * 40
+    workflows.joinpath("forms.yml").write_text(
+        f"""name: Fixture\njobs:
+  mapping:
+    steps:
+      - name: Mapping upload
+        if: ${{{{ failure() && !cancelled() }}}}
+        uses: actions/upload-artifact@{digest}
+        with:
+          name: mapping
+          path: mapping.log
+          retention-days: 3
+      - uses: actions/upload-artifact@{digest}
+        if: ${{{{ failure() && !cancelled() }}}}
+        with: {{name: inline, path: inline.log, retention-days: 3}}
+      - name: Invalid list upload
+        uses: actions/upload-artifact@{digest}
+        with:
+          name: invalid
+          path: invalid.log
+      - name: Forbidden download
+        uses: actions/download-artifact@{digest}
+        with:
+          name: exchange
+""",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(  # type: ignore[attr-defined]
+        "quwoquan_ops.gate.verify_github_artifact_lifecycle.ROOT", tmp_path
+    )
+    monkeypatch.setattr(  # type: ignore[attr-defined]
+        "quwoquan_ops.gate.verify_github_artifact_lifecycle.WORKFLOWS", workflows
+    )
+
+    issues = verify()
+
+    assert sum(
+        "artifact uploads require explicit retention-days" in issue
+        for issue in issues
+    ) == 1
+    assert sum(
+        "Actions artifacts are failure diagnostics only" in issue for issue in issues
+    ) == 1
+    assert any(
+        "Actions Artifact job exchange is forbidden" in issue for issue in issues
+    )
+
+
+def test_promotion_gate_has_no_dependency_cache_or_toolchain_bootstrap() -> None:
     recommendation = (
         ROOT / ".github/workflows/recommendation_api_integration.yml"
     ).read_text(encoding="utf-8")
-    delivery = (ROOT / ".github/workflows/delivery-gate.yml").read_text(
-        encoding="utf-8"
-    )
+    delivery = (ROOT / ".github/workflows/delivery-gate.yml").read_text(encoding="utf-8")
 
     assert "lookup-only: ${{ github.event_name == 'pull_request' }}" in recommendation
-    assert "cache-dependency-path: quwoquan_ops/portal/package-lock.json" in delivery
-    assert "python3 quwoquan_ops/ci/setup_flutter_sdk.py resolve" in delivery
-    assert "subosito/flutter-action@" not in delivery
-    assert "quwoquan_app/.flutter-version" in delivery
+    for token in ("actions/cache@", "cache-dependency-path:", "setup_flutter_sdk.py", ".flutter-version", "setup-node", "setup-go"):
+        assert token not in delivery
 
 
-def test_lifecycle_uses_github_hosted_linux_without_changing_trigger_filter() -> None:
-    lifecycle = (ROOT / ".github/workflows/artifact-lifecycle.yml").read_text(
-        encoding="utf-8"
-    )
+def test_lifecycle_is_periodic_or_pr_close_without_workflow_run_fanout() -> None:
+    lifecycle = (ROOT / ".github/workflows/artifact-lifecycle.yml").read_text(encoding="utf-8")
 
     assert "runs-on: ubuntu-latest" in lifecycle
-    assert "runs-on: [self-hosted, macOS, ARM64, quwoquan-release-authority]" not in lifecycle
+    assert "runs-on: [self-hosted, macOS, ARM64]" not in lifecycle
     assert "workflow_run:" not in lifecycle
     assert "schedule:" in lifecycle
-    assert "workflow_dispatch:" in lifecycle
-
-
-def test_lifecycle_schedule_is_report_only() -> None:
-    lifecycle = (ROOT / ".github/workflows/artifact-lifecycle.yml").read_text(
-        encoding="utf-8"
-    )
-
-    assert lifecycle.count("args+=(--apply)") == 1
-    assert 'github.event_name }}" != "workflow_dispatch"' not in lifecycle
-    assert (
-        'github.event_name }}" == "workflow_dispatch" '
-        '&& "${{ inputs.apply }}" == "true"'
-    ) in lifecycle
-
-
-def test_lifecycle_manual_apply_defaults_false_and_requires_explicit_true() -> None:
-    lifecycle = (ROOT / ".github/workflows/artifact-lifecycle.yml").read_text(
-        encoding="utf-8"
-    )
-    dispatch = lifecycle.split("  workflow_dispatch:\n", 1)[1].split(
-        "  pull_request:\n", 1
-    )[0]
-
-    assert "default: false" in dispatch
-    assert "default: true" not in dispatch
-    assert (
-        'if [[ "${{ github.event_name }}" == "workflow_dispatch" '
-        '&& "${{ inputs.apply }}" == "true" ]]; then'
-    ) in lifecycle
+    assert "pull_request:" in lifecycle and "closed" in lifecycle
 
 
 def test_gate_rejects_self_hosted_macos_arm64_lifecycle_runner(

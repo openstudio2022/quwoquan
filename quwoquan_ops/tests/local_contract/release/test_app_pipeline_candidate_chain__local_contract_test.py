@@ -24,12 +24,6 @@ from quwoquan_ops.tests.support.app_pipeline_web_artifact_test_support import (
 
 ROOT = Path(__file__).resolve().parents[4]
 WORKFLOW = ROOT / ".github/workflows/app_pipeline.yml"
-DEVICE_WORKFLOW = ROOT / ".github/workflows/app-env-device-matrix-self-hosted.yml"
-PLATFORM_WORKFLOW = ROOT / ".github/workflows/beta-device-platform.yml"
-DEVICE_EVIDENCE = ROOT / "quwoquan_ops/ci/render_beta_device_evidence.py"
-DEVICE_LEASE = ROOT / "quwoquan_ops/ci/device_runner_lease.py"
-PLATFORM_RUNNER = ROOT / "quwoquan_ops/ci/run_mobile_platform_matrix.sh"
-TIMING_BUDGETS = ROOT / "quwoquan_ops/environments/pr_gate_timing_budgets.json"
 EVIDENCE_DOCKERFILE = ROOT / "quwoquan_ops/ci/app_candidate_evidence.Dockerfile"
 SPEC_REF = "specs/feature-tree/runtime/deliver-deploy-prod-pipeline/spec.md#sit-001"
 BUILD_PRODUCTS = (
@@ -39,6 +33,36 @@ BUILD_PRODUCTS = (
     "ios-prod-app",
     "web-shared",
 )
+RC_AUTHORITY_ENVIRONMENT = {
+    "QWQ_ARTIFACT_BUILD_NUMBER": "1",
+    "QWQ_QUALIFICATION_REQUEST_REF": (
+        "ghcr.io/example/quwoquan/release-qualification-request@sha256:" + "8" * 64
+    ),
+    "QWQ_QUALIFICATION_REQUEST_DIGEST": "sha256:" + "8" * 64,
+    "QWQ_RC_TAG_ADMISSION_REF": (
+        "ghcr.io/example/quwoquan/rc-tag-admission@sha256:" + "9" * 64
+    ),
+    "QWQ_ARTIFACT_BUILD_NUMBER_ALLOCATION_REF": (
+        "ghcr.io/example/quwoquan/artifact-build-number-allocation@sha256:"
+        + "a" * 64
+    ),
+    "QWQ_ARTIFACT_BUILD_NUMBER_ALLOCATION_DIGEST": "sha256:" + "a" * 64,
+}
+RC_AUTHORITY_MANIFEST = {
+    "qualificationRequestRef": RC_AUTHORITY_ENVIRONMENT[
+        "QWQ_QUALIFICATION_REQUEST_REF"
+    ],
+    "qualificationRequestDigest": RC_AUTHORITY_ENVIRONMENT[
+        "QWQ_QUALIFICATION_REQUEST_DIGEST"
+    ],
+    "rcTagAdmissionRef": RC_AUTHORITY_ENVIRONMENT["QWQ_RC_TAG_ADMISSION_REF"],
+    "artifactBuildNumberAllocationRef": RC_AUTHORITY_ENVIRONMENT[
+        "QWQ_ARTIFACT_BUILD_NUMBER_ALLOCATION_REF"
+    ],
+    "artifactBuildNumberAllocationDigest": RC_AUTHORITY_ENVIRONMENT[
+        "QWQ_ARTIFACT_BUILD_NUMBER_ALLOCATION_DIGEST"
+    ],
+}
 
 
 @pytest.fixture(autouse=True)
@@ -229,7 +253,15 @@ def _stackctl_result(
     with pytest.MonkeyPatch.context() as patcher:
         patcher.setattr(artifact_producer, "_build_from_capsule", fake_build)
         patcher.setattr(artifact_producer, "_git_identity", lambda: (revision, tree))
-        patcher.setattr(artifact_producer, "_version", lambda: ("1.0.0", "1"))
+
+        def fake_version(*, require_hosted_build_number: bool, **_: object) -> tuple[str, str]:
+            assert require_hosted_build_number is True
+            return "1.0.0", "1"
+
+        patcher.setattr(artifact_producer, "_version", fake_version)
+        patcher.setenv("QWQ_ARTIFACT_BUILD_NUMBER", "1")
+        for name, value in RC_AUTHORITY_ENVIRONMENT.items():
+            patcher.setenv(name, value)
         patcher.setattr(
             artifact_producer,
             "workspace_snapshot",
@@ -276,6 +308,8 @@ def _stackctl_result(
 
 def _web_release_manifest(root: Path, result: Path) -> Path:
     manifest = json.loads(result.read_text(encoding="utf-8"))["manifest"]
+    for field in RC_AUTHORITY_MANIFEST:
+        manifest.pop(field, None)
     content_digest = manifest["artifactDigest"].removeprefix("sha256:")
     payload = {
         "schema": "client-app.web.official-release",
@@ -308,7 +342,18 @@ def test_app_pipeline_is_reusable_only_and_publishes_immutable_oci() -> None:
     assert set(outputs) == {
         "app_evidence_ref",
         "app_evidence_digest",
+        "app_oci_digest",
         "source_git_sha",
+        "source_tree_digest",
+        "qualification_request_ref",
+        "qualification_request_digest",
+        "artifact_build_number",
+        "artifact_build_number_allocation_ref",
+        "artifact_build_number_allocation_digest",
+        "android_artifact_digest",
+        "ios_artifact_digest",
+        "web_artifact_digest",
+        "app_material_digest",
         "machine_critical_path_seconds",
     }
     assert "refs/tags" not in text
@@ -366,11 +411,91 @@ def test_app_pipeline_is_reusable_only_and_publishes_immutable_oci() -> None:
     assert text.count("--web-release-manifest") == 1
     assert "--kind app-release" in text
     assert "--kind ops-portal" in text
-    assert "payloads/opsPortal" in text
+    assert "app-candidate-evidence/ops-portal/payload" in text
+    assert "payloads/opsPortal" not in text
     assert "payloads/prod/opsPortal" not in text
     assert "render_release_application_package.py bind-special" not in text
     assert "flutter build" not in text
     assert "working-directory: quwoquan_app" not in text
+
+
+def test_app_pipeline_embeds_one_hosted_build_number_in_all_five_products() -> None:
+    text = WORKFLOW.read_text(encoding="utf-8")
+    assert "QWQ_ARTIFACT_BUILD_NUMBER: ${{ inputs.artifact_build_number }}" in text
+    assert text.count("--build-number") == 0
+    assert text.count("--kind app-artifact") == 1
+    assert 'manifest.get("buildNumber") != os.environ["ARTIFACT_BUILD_NUMBER"]' in text
+
+
+def test_app_pipeline_promotable_factory_requires_exact_rc_and_allocator_bindings() -> None:
+    payload = yaml.load(WORKFLOW.read_text(encoding="utf-8"), Loader=yaml.BaseLoader)
+    call = payload["on"]["workflow_call"]
+    assert set(call["inputs"]) == {
+        "source_git_sha",
+        "qualification_request_ref",
+        "qualification_request_digest",
+        "rc_tag_admission_ref",
+        "artifact_build_number",
+        "artifact_build_number_allocation_ref",
+        "artifact_build_number_allocation_digest",
+    }
+    assert all(value["required"] == "true" for value in call["inputs"].values())
+    text = WORKFLOW.read_text(encoding="utf-8")
+    assert "QWQ_ARTIFACT_BUILD_NUMBER: ${{ inputs.artifact_build_number }}" in text
+    assert "QWQ_ARTIFACT_BUILD_NUMBER_ALLOCATION_REF" in text
+    assert "QWQ_ARTIFACT_BUILD_NUMBER_ALLOCATION_DIGEST" in text
+    assert "QWQ_QUALIFICATION_REQUEST_REF" in text
+    assert "QWQ_QUALIFICATION_REQUEST_DIGEST" in text
+    assert "QWQ_RC_TAG_ADMISSION_REF" in text
+    assert text.count("RC_TAG_ADMISSION_REF: ${{ inputs.rc_tag_admission_ref }}") == 3
+    assert '"rcTagAdmissionRef": os.environ["RC_TAG_ADMISSION_REF"]' in text
+    assert "iOS production identity remains externally unregistered" in text
+    assert '"schema": "quwoquan_ops.app_factory_material"' in text
+    assert '"materialDigest"' in text
+    assert '"artifacts": manifests' in text
+    assert 'output = root / "manifest.json"' in text
+    assert 'output.write_bytes(canonical_bytes(material) + b"\\n")' in text
+    assert "\"appEvidenceDigest\":" not in text
+    assert "quwoquan_ops.app_factory_material.v" not in text
+    assert "workflow_dispatch" not in text
+
+
+def test_app_factory_manifest_is_written_before_publish_and_only_read_afterward() -> None:
+    payload = yaml.load(WORKFLOW.read_text(encoding="utf-8"), Loader=yaml.BaseLoader)
+    steps = payload["jobs"]["aggregate"]["steps"]
+    material_index = next(
+        index
+        for index, step in enumerate(steps)
+        if step.get("name") == "Write canonical App factory material"
+    )
+    publish_index = next(
+        index
+        for index, step in enumerate(steps)
+        if str(step.get("uses") or "").startswith("docker/build-push-action@")
+    )
+    readback_index = next(
+        index
+        for index, step in enumerate(steps)
+        if step.get("name") == "Read back published App factory OCI payload"
+    )
+    identity_index = next(
+        index for index, step in enumerate(steps) if step.get("id") == "identity"
+    )
+    assert material_index < publish_index < readback_index < identity_index
+    material_step = steps[material_index]
+    assert "APP_EVIDENCE_DIGEST" not in material_step.get("env", {})
+    assert 'root / "manifest.json"' in material_step["run"]
+    assert 'output.write_bytes(canonical_bytes(material) + b"\\n")' in material_step["run"]
+    identity_run = steps[identity_index]["run"]
+    assert 'manifest_path = root / "manifest.json"' in identity_run
+    assert 'published_manifest_path = published_root / "manifest.json"' in identity_run
+    assert "raw = manifest_path.read_bytes()" in identity_run
+    assert "published_manifest_path.read_bytes() != raw" in identity_run
+    assert "material = {" not in identity_run
+    assert "write_bytes(" not in identity_run
+    assert steps[publish_index]["with"]["context"] == (
+        "${{ runner.temp }}/app-candidate-evidence"
+    )
 
 
 def test_app_pipeline_requires_exactly_five_build_products_without_environment_compilation() -> (
@@ -584,6 +709,47 @@ def test_collector_rejects_postbuild_dependency_identity_drift(
         shard_collector.collect(result, tmp_path / "bundle")
 
 
+def test_promotable_manifest_and_receipt_bind_exact_rc_authority(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.chdir(ROOT)
+    artifact = tmp_path / "shared-web"
+    write_valid_web_artifact(artifact)
+    result_path = _stackctl_result(
+        tmp_path,
+        build_product_id="web-shared",
+        artifact=artifact,
+    )
+    result = json.loads(result_path.read_text(encoding="utf-8"))
+    attempt = Path(result["attemptDir"])
+    manifest_path = attempt / "manifest.json"
+    receipt_path = attempt / "build-receipt.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+
+    assert {
+        field: manifest[field] for field in RC_AUTHORITY_MANIFEST
+    } == RC_AUTHORITY_MANIFEST
+    assert result["manifest"] == manifest
+    assert receipt["manifestDigest"] == artifact_digest(manifest_path)
+
+    manifest["rcTagAdmissionRef"] = (
+        "ghcr.io/example/quwoquan/rc-tag-admission@sha256:" + "b" * 64
+    )
+    manifest_path.write_text(
+        json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    result["manifest"] = manifest
+    result_path.write_text(
+        json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="manifestDigest does not bind"):
+        shard_collector.collect(result_path, tmp_path / "tampered")
+
+
 def test_collector_retains_web_special_without_replacing_baseline_product(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -697,6 +863,8 @@ def test_collector_retains_android_special_without_replacing_baseline_product(
         artifact=artifact,
     )
     manifest = json.loads(result.read_text())["manifest"]
+    for field in RC_AUTHORITY_MANIFEST:
+        manifest.pop(field, None)
     official = tmp_path / "official.json"
     official.write_text(
         json.dumps(
@@ -759,242 +927,6 @@ def test_app_release_evidence_identity_has_no_contract_number_suffix() -> None:
         assert forbidden not in combined
 
 
-def test_beta_device_receipt_binds_candidate_directly_without_identity_shim() -> None:
-    assert SPEC_REF
-    workflow = DEVICE_WORKFLOW.read_text(encoding="utf-8")
-    evidence = DEVICE_EVIDENCE.read_text(encoding="utf-8")
-    text = workflow + evidence
-
-    assert "--identity-evidence" not in text
-    assert "release-bound-environment-identity" not in text
-    assert '"releaseCompositionId": candidate' in evidence
-    assert '"sourceGitSha": git_sha' in evidence
-    assert '"sourceTreeDigest": tree_digest' in evidence
-    assert '--evidence "devices=$RAW/devices.json"' in workflow
-
-
-def test_device_matrix_nightly_schedule_selects_full_profile() -> None:
-    assert SPEC_REF
-    text = DEVICE_WORKFLOW.read_text(encoding="utf-8")
-    payload = yaml.load(text, Loader=yaml.BaseLoader)
-
-    assert payload["on"]["schedule"] == [{"cron": "0 18 * * *"}]
-    assert 'if [ "$EVENT_NAME" = "schedule" ]; then PROFILE="nightly_full"; fi' in text
-    assert "vars.RELEASED_RELEASE_EVIDENCE_REF" in text
-    assert "consume_released_release_evidence.py" in text
-    assert "NIGHTLY_" not in text
-    assert "stackctl.py dev-session" in text
-    assert "--env gamma" in text
-    assert "managed_runtime_started" in text
-    assert "Inspect and doctor the managed Gamma runtime before soak" in text
-    assert "Inspect and doctor the managed Gamma runtime after soak" in text
-    assert text.count("stackctl.py inspect") >= 2
-    assert text.count("stackctl.py doctor") >= 2
-    assert '--budget-profile "$VALIDATION_PROFILE"' in text
-    assert "canonical App device timing status" in text
-
-
-def test_beta_android_and_ios_run_in_parallel_before_one_receipt_aggregation() -> None:
-    assert SPEC_REF
-    text = DEVICE_WORKFLOW.read_text(encoding="utf-8")
-    platform_text = PLATFORM_WORKFLOW.read_text(encoding="utf-8")
-    lease_text = DEVICE_LEASE.read_text(encoding="utf-8")
-    runner_text = PLATFORM_RUNNER.read_text(encoding="utf-8")
-    payload = yaml.load(text, Loader=yaml.BaseLoader)
-    jobs = payload["jobs"]
-    outputs = payload["on"]["workflow_call"]["outputs"]
-    aggregate_job = jobs["mobile_matrix"]
-
-    assert set(outputs) == {
-        "discover_duration_seconds",
-        "mobile_duration_seconds",
-        "android_result",
-        "ios_result",
-        "allow_missing_platforms",
-        "has_android",
-        "has_ios",
-        "machine_critical_path_seconds",
-        "summary_result",
-        "receipt_ref",
-        "receipt_digest",
-    }
-    assert (
-        outputs["receipt_ref"]["value"]
-        == "${{ jobs.mobile_matrix.outputs.receipt_ref }}"
-    )
-    assert (
-        outputs["receipt_digest"]["value"]
-        == "${{ jobs.mobile_matrix.outputs.receipt_digest }}"
-    )
-    assert set(aggregate_job["needs"]) == {
-        "beta_stack",
-        "android_device_matrix",
-        "ios_device_matrix",
-    }
-    assert aggregate_job["name"] == "Aggregate mobile matrix evidence"
-    assert aggregate_job["runs-on"] == "ubuntu-latest"
-    canonical_mobile_runner = ["self-hosted", "macOS", "ARM64", "quwoquan-release-authority"]
-    assert jobs["beta_stack"]["runs-on"] == canonical_mobile_runner
-    assert jobs["beta_teardown"]["runs-on"] == canonical_mobile_runner
-    assert (
-        jobs["android_device_matrix"]["uses"]
-        == "./.github/workflows/beta-device-platform.yml"
-    )
-    assert (
-        jobs["ios_device_matrix"]["uses"]
-        == "./.github/workflows/beta-device-platform.yml"
-    )
-    assert jobs["android_device_matrix"]["needs"] == "beta_stack"
-    assert jobs["ios_device_matrix"]["needs"] == "beta_stack"
-    assert jobs["android_device_matrix"]["with"]["platform"] == "android"
-    assert jobs["ios_device_matrix"]["with"]["platform"] == "ios"
-    for job_name in ("android_device_matrix", "ios_device_matrix"):
-        inputs = jobs[job_name]["with"]
-        assert (
-            inputs["account_closure_disposable_ack"]
-            == "${{ inputs.account_closure_disposable_ack == true }}"
-        )
-        assert (
-            inputs["account_closure_prod_platform"]
-            == "${{ inputs.account_closure_prod_platform || 'ios' }}"
-        )
-    assert jobs["beta_teardown"]["needs"][-1] == "mobile_matrix"
-    assert "runs-on: [self-hosted, macOS, ARM64, quwoquan-release-authority]" in platform_text
-    assert "PUB_HOSTED_URL: https://pub.flutter-io.cn" in platform_text
-    assert "FLUTTER_STORAGE_BASE_URL: https://storage.flutter-io.cn" in platform_text
-    assert "flutter pub get --enforce-lockfile" in platform_text
-    assert "run: flutter pub get\n" not in platform_text
-    assert "MOBILE_MATRIX_ENV_JSON: ${{ inputs.env_json }}" in platform_text
-    assert 'MATRIX_ENV_ARGS+=(--environment "$environment")' in platform_text
-    assert '"${MATRIX_ENV_ARGS[@]}"' in platform_text
-    assert (
-        'runs-on: [self-hosted, macOS, ARM64, "mobile-${{ inputs.platform }}"]'
-        not in platform_text
-    )
-    assert '--runner-label "mobile-${{ inputs.platform }}"' in platform_text
-    assert "device_runner_lease.py acquire" in platform_text
-    assert "device_runner_lease.py release" in platform_text
-    assert "expected-host-digest" in platform_text
-    assert "execution-started-at" in platform_text
-    assert "execution-ended-at" in platform_text
-    assert "did not overlap" in DEVICE_EVIDENCE.read_text(encoding="utf-8")
-    assert "MOBILE_DEVICE_ID" in runner_text
-    assert '--device-id "$MOBILE_DEVICE_ID"' in runner_text
-    assert "Beta receipt requires one immutable stack" in text
-    assert "render_beta_device_evidence.py merge" in text
-    assert "render_beta_device_evidence.py stack" in text
-    assert '--android-ref "$ANDROID_REF"' in text
-    assert '--ios-ref "$IOS_REF"' in text
-    assert "materialize_evidence_oci.py" in text
-    assert "@${{ steps.receipt_bundle.outputs.digest }}" in text
-    combined = f"{text}\n{platform_text}\n{lease_text}\n{runner_text}"
-    assert 'export PYTHONPATH="$ROOT${PYTHONPATH:+:$PYTHONPATH}"' in runner_text
-    assert 'cd "$ROOT"' in runner_text
-    impact_job_text = text.split("  impact:\n", 1)[1].split("\n  branch_policy:\n", 1)[0]
-    device_evidence_transport = combined.replace(impact_job_text, "")
-    assert "Upload typed device impact plan" in impact_job_text
-    assert "actions/upload-artifact@" not in device_evidence_transport
-    assert "actions/download-artifact@" not in device_evidence_transport
-    assert "rm -rf" not in combined
-    assert "git clean" not in combined
-    assert "ASSISTANT_MODEL_PROVIDER: deterministic" not in combined
-    assert "docker pull" not in text
-    assert "RepoDigests" not in text
-    assert "timeout-minutes: 120" not in combined
-    assert "timeout-minutes: 30" not in combined
-    assert jobs["beta_stack"]["timeout-minutes"] == "20"
-    assert "mainline_auto_prod" in aggregate_job["timeout-minutes"]
-    assert "20" in aggregate_job["timeout-minutes"]
-    assert "|| 2" in aggregate_job["timeout-minutes"]
-    aggregate_checkout = next(
-        step
-        for step in aggregate_job["steps"]
-        if step.get("uses", "").startswith("actions/checkout@")
-    )
-    assert aggregate_checkout["if"] == (
-        "${{ needs.beta_stack.outputs.profile == 'mainline_auto_prod' }}"
-    )
-    assert "10 || 1" in jobs["beta_teardown"]["timeout-minutes"]
-    platform_payload = yaml.load(platform_text, Loader=yaml.BaseLoader)
-    platform_timeout = platform_payload["jobs"]["device"]["timeout-minutes"]
-    assert "nightly_full" in platform_timeout
-    assert "120" in platform_timeout
-    assert "release_candidate" in platform_timeout
-    assert "manual_full" in platform_timeout
-    assert "mainline_auto_prod" in platform_timeout
-    assert "90" in platform_timeout
-    assert "|| 60" in platform_timeout
-    assert re.search(r"\|\|\s+4(?:\D|$)", platform_timeout) is None
-    timing_gate = json.loads(TIMING_BUDGETS.read_text(encoding="utf-8"))["gates"][
-        "05.app_env_device_matrix_pr"
-    ]
-    assert timing_gate["profileTiming"]["mainline_auto_prod"] == {
-        "policy": "release_sla",
-        "hardFailSeconds": 7800,
-    }
-    assert timing_gate["profileTiming"]["nightly_full"] == {
-        "policy": "telemetry_advisory",
-        "hardFailSeconds": 7200,
-    }
-    assert '--budget-profile "$VALIDATION_PROFILE"' in text
-    assert "canonical App device timing status=${timing_status}" in text
-    assert "TIMING_PR_WARN" in text
-    assert "GATE_BLOCK: canonical App device release SLA exceeded" in text
-    assert '"$calendar_lead_time_seconds" -gt "$profile_hard_fail_seconds"' not in text
-    assert 'if [ "$calendar_lead_time_seconds" -gt 480 ]' not in text
-    assert 'STACKCTL_AUTO_WIPE_MIGRATION_DRIFT: "0"' in text
-    assert "stackctl.py up" in text
-    assert "--formal-release" in text
-    assert '--release-manifest "$QWQ_PROD_RELEASE_ARTIFACT_ROOT/manifest.json"' in text
-    assert "--skip-build" in text
-    assert "--skip-app" in text
-    formal_teardown = next(
-        step
-        for step in jobs["beta_teardown"]["steps"]
-        if step.get("name") == "Teardown only the recorded formal Beta runtime"
-    )
-    assert formal_teardown["if"] == (
-        "${{ needs.beta_stack.outputs.formal_runtime_started == 'true' }}"
-    )
-    formal_teardown_run = formal_teardown["run"]
-    assert "stackctl.py down" in formal_teardown_run
-    assert "--target beta-local" in formal_teardown_run
-    assert "--formal-release" in formal_teardown_run
-    assert (
-        '--release-manifest "$QWQ_OUTPUT_ROOT/env/repo/runs/beta-stack/'
-        'release-evidence-manifest/manifest.json"'
-    ) in formal_teardown_run
-    assert text.count("Require exact clean candidate checkout") == 1
-    assert platform_text.count("Require exact clean candidate checkout") == 1
-    assert text.count('[[ "$EXPECTED_SOURCE" =~ ^[0-9a-f]{40}$ ]]') == 1
-    assert platform_text.count('[[ "$EXPECTED_SOURCE" =~ ^[0-9a-f]{40}$ ]]') == 1
-    assert 'test -z "$(git status --porcelain --untracked-files=all)"' in text
-    assert 'test -z "$(git status --porcelain --untracked-files=all)"' in platform_text
-    assert "docker compose up --build" not in text
-    assert "source-built or destructive Beta formal runtime" not in text
-    assert "steps.formal_runtime.outputs.started" in text
-    assert "destructiveActions" in DEVICE_EVIDENCE.read_text(encoding="utf-8")
-    assert combined.count("persist-credentials: false") == 11
-    assert "config --local http.https://github.com/.extraheader" not in combined
-    checkout_steps = [
-        step
-        for job in jobs.values()
-        for step in job.get("steps", [])
-        if str(step.get("uses") or "").startswith("actions/checkout@")
-    ]
-    called_checkout_steps = [
-        step
-        for job in platform_payload["jobs"].values()
-        for step in job.get("steps", [])
-        if str(step.get("uses") or "").startswith("actions/checkout@")
-    ]
-    assert len(checkout_steps) == 10
-    assert len(called_checkout_steps) == 1
-    assert sum(step["with"].get("clean") == "false" for step in checkout_steps) == 7
-    assert all(step["with"]["clean"] == "false" for step in called_checkout_steps)
-    assert all(
-        step["with"]["persist-credentials"] == "false" for step in checkout_steps
-    )
-    assert all(
-        step["with"]["persist-credentials"] == "false" for step in called_checkout_steps
-    )
+def test_hosted_device_workflow_has_no_remaining_entry() -> None:
+    assert not (ROOT / ".github/workflows/app-env-device-matrix-self-hosted.yml").exists()
+    assert not (ROOT / ".github/workflows/beta-device-platform.yml").exists()

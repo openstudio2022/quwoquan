@@ -15,7 +15,7 @@ import sys
 
 sys.dont_write_bytecode = True
 
-from quwoquan_ops.ci.render_environment_release_receipt import (
+from quwoquan_ops.ci.release_evidence_reader import (
     RELEASE_CLOSURE_PATHS,
     TEST_RELEASE_CLOSURE_LABELS,
     archive_exact_files,

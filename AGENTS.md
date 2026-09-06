@@ -37,18 +37,18 @@ Feature Tree 与 owner 算法见 [`specs/feature-tree/README.md`](specs/feature-
 
 ## 共享工作树与安全
 
-- 脏工作树是常态。修改前检查 HEAD/status、目标路径 diff、untracked 与活跃 writer；只编辑本任务所有的字节，禁止回滚、覆盖、清理、kill 或隔离其他 owner 的成果。
+- 脏工作树是常态。写入前声明不重叠的整文件exact path scope并与活跃claim对齐；同一worktree可并行写不同scope，path相等/父子/rename/delete/generated冲突只允许一个winner。只编辑本scope字节，禁止回滚、覆盖、清理、kill或隔离其他owner成果。
 - 一 worktree 一 Cursor 工作区。工作区根必须是当前固定 lane 目录或唯一 `integration/`；禁止把项目容器根、bare `quwoquan.git/` 或多个 worktree 作为单个/多根 workspace 打开。
 - `lane/engineering` 拥有开发→发布态工程面（Agent/Skill、review/handoff、Feature Tree、CI/CD、gate/hook、branch/worktree/lane governance、local readiness）；`lane/ops` 只拥有发布后运行态（stackctl、环境 manifests、observability、runbook、migration、Portal、hosted authority/provider conformance）。路径判定只读 `lane_ownership.yaml`。
-- 并行执行独立读取、测试与不同 owner 的修改；同一环境变更、共享生成物和共享锁串行。
+- 并行执行独立读取、测试与不重叠scope修改；candidate使用私有`GIT_INDEX_FILE`且scope外tree继承parent。默认index/HEAD/ref、同一环境、设备、共享生成物与共享锁串行。
 - `.qwq_output/` 只放可删除且可从版本控制真相源重建的运行输出。源码树禁止 `__pycache__/`、`*.pyc`、`*.pyo`、`.pytest_cache/`；缓存重定向到 `.qwq_output/env/repo/local/**`。
 - 不泄露 secret/PII；不执行超出用户范围的删除、发布、外部写入或不可逆动作。
 
 ## Git 不变量
 
-- 本地与远端只允许 `dev1.0`、`main` 与六条声明的长期 `lane/*` 分支；日常开发主要在 `lane/*`，经 PR 或 `integration/` 同名 expected-old 快进合入 `dev1.0`；唯一发布 PR 边为 `dev1.0 -> main`。Prod source 必须是可达 `main` 的精确 SHA。
+- 本地与远端只允许`dev1.0`、`main`与六条长期`lane/*`；lane或integration可构造scoped candidate。`dev1.0`可由trusted publisher在Alpha/Beta准入后CAS更新、由`integration/`从匹配本地`dev1.0`普通认证push执行non-force fast-forward，或由managed system fast-forward backsync更新；lane仍只推同名lane。唯一源码promotion边为`dev1.0 -> main`；Prod只消费main-reachable stable tag AdmissionFact绑定的exact OCI digests。
 - 新建 linked worktree 或再次 clone 每次都须先取得用户明确授权，并以 `QWQ_WORKTREE_AUTHZ="<授权理由>" <command>` 执行。clone 后先运行 `make install-hooks`。
-- `main` 是本地只读分支，不得本地提交；`integration/`（`dev1.0`）与六条 lane 一视同仁：可本地合入并推送同名远端，integration 另强制 expected-old 快进。日常功能开发优先同名 lane worktree，路径与分支由 `worktree_policy.yaml` 交叉验证。
+- `main`本地只读且禁止direct push。`integration/`允许直接编辑、创建提交并把匹配本地`dev1.0`以non-force fast-forward普通push更新到远端同名分支；before/after OID缺失、ancestry不可证、非快进、force/delete或来源不匹配一律阻断。该push只提交源码，不签发`integrationEligibility`、Alpha/Beta/Gamma、`IntegrationQualificationFact`、promotion或release/Prod authority；需要main promotion或发布时仍走exact candidate + Alpha/Beta、current dev head Gamma及既有资格链。lane仍可按同一candidate协议交付，路径与分支由`worktree_policy.yaml`交叉验证。
 - 只有用户明确要求时才创建提交；提交按 `commit` Skill 执行，不用 `--no-verify` 作为常规通道。
 
 ## 沟通

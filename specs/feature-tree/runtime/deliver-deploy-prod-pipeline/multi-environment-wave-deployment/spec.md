@@ -25,17 +25,14 @@
 ## 3. 行为要求
 
 <a id="req-001"></a>
-### REQ-001 多环境波次部署
+### REQ-001 exact candidate环境链与RC包接受
 
-- 同一 `releaseTrainId` 必须贯穿 Alpha、Beta、Gamma-local 与 Prod，并绑定同一 source capsule、ContractGraph 和 toolchain。每个环境拥有独立 `environmentArtifactDigest`，其投影由兼容信任域的组件 digest 与本环境 configuration、Provider binding、endpoint authority、runtime topology 摘要组成。
-- `qualified` 必须在环境验证前一次性封存 Android nonprod/prod、iOS nonprod/prod、单一 Web bundle 与 Cloud nonprod/prod 组件、四环境配置 composition、ContractGraph、真实 Provider readiness 与完整资格证据。Alpha、Beta、Gamma 必须引用同一 nonprod App bytes 及同一 owner 的 nonprod Cloud digest，Prod 引用 prod digest。进入波次后不得重新构建、codegen 或替换其中任一输入。
-- Alpha、Beta、Gamma-local 可以在隔离 runner 并行执行配置 package、镜像预取与静态校验。任何 Data mutation、activation、App UAT 或 passed acceptance receipt 必须严格按 `alpha -> beta -> gamma -> prod` 执行，任一失败即停止下一环境首个 mutation。
-- Gamma-local 是正式阻断阶段，不由旧 nightly 或其他候选摘要的证据替代；仓库不新增 `gamma-hosted`。
-- 三个前置环境全部通过后，Prod 才能进入同一个受审批事务 job，并按 `canary -> 5 -> 20 -> 50 -> 100` 晋级。
-- 每个环境 acceptance receipt 必须同时绑定 Data release tuple、runtime candidate tuple、实际 target-scoped App CaseResult、lifecycle Exit、Provider、观测、inspect/doctor 与 cleanup。Beta、Gamma、Prod receipt 必须额外绑定前一环境 acceptance receipt 的 exact-byte digest；`appUatEnvelopeDigest`、workflow job success 或并行运行后的排序拼接均不能替代。
-- 四环境回执从各自 raw package/up/health/verify/import/readback/UAT/cleanup 生成并发布为不可变 OCI；Actions Artifact 只能保留诊断副本，不能作为环境间晋级输入。
-- 主链软目标为 600 秒、硬门为 1800 秒；workflow 创建后达到 1500 秒时禁止开始下一波次，为恢复预留 300 秒。
-- `CiTimingSummary` 必须从 GitHub job DAG 采集真实矩阵长尾和排队时间；证据缺失时返回 `historical_incomplete`，不得填零或假绿。
+- 同一 integration candidate 必须绑定 source capsule、commit/tree、ContractGraph、ImpactPlan 与 toolchain；Alpha/Beta 在 ref 更新前消费该身份，Gamma 在 `dev1.0` 更新后只接受完全相同的 current head。
+- Alpha必须先完成；Beta仅在typed高风险impact要求时执行，并在首个mutation前验证Alpha exact bytes。trusted publisher只消费Alpha/Beta，通过CAS后Gamma在首个mutation前验证dev CAS receipt与前驱事实。
+- 三环境可并行进行无副作用的package预取与静态校验；任何Data mutation、activation、App UAT与passed fact必须按`alpha -> beta -> dev CAS -> gamma`执行。任一失败或superseded均安全teardown且不产生后继资格。
+- 每个环境只写统一`EnvironmentAcceptanceFact`，绑定实际target CaseResult、runtime identity、Data lifecycle、Provider、observability、inspect/doctor、cleanup和lease closure；`workflow success`、App envelope、旧green matrix或并行后排序均不能替代。
+- 只有RC tag才封存nonprod/prod App与Cloud组件、Web bundle及四环境配置composition并build/sign once；RC package acceptance只验证最终包特有风险和物理设备，不重跑Alpha/Beta/Gamma业务矩阵。
+- Prod只消费stable tag AdmissionFact绑定的同一qualified RC digests，并在一次事务中完成rollout；stage推进不改变组件、配置composition、ContractGraph或release composition identity。
 
 ## 4. 契约引用
 
@@ -49,17 +46,13 @@
 ## 5. 验收场景
 
 <a id="gwt-001"></a>
-### GWT-001 多环境波次部署
+### GWT-001 exact candidate环境链与包复用
 
-- GIVEN 开发、测试或运维角色具备有效身份，且父能力声明的输入与上游事实成立。
-- WHEN 参与者执行“多环境波次部署”对应的公开行为。
-- THEN 按 alpha、beta、gamma、prod 的准入顺序验证同一 release train 下的环境 composition，任一波次失败即停止晋级。
-- AND 配置 package、镜像预取与静态校验可并行，但环境 mutation、App UAT 和 passed receipt 严格串行。每个回执同时绑定共同 `releaseTrainId`、自身 `environmentArtifactDigest`、组件 build profile 与配置摘要。
-- AND Alpha、Beta、Gamma 回执引用相同 nonprod App bytes digest 与同一 owner 的 nonprod Cloud digest，Prod 引用独立 prod digest。交换 profile、配置或 binding 必须在 mutation 前 fail closed。
-- AND 四份 acceptance receipt 绑定同一 release train 与同一 Data release 身份，Beta、Gamma、Prod 分别绑定前一环境 receipt 的 exact-byte digest。
-- AND App 五个真实 build-profile shard 的实际最长 job 时长进入 Delivery Gate 关键路径，四环境 UAT 不触发重复 App 编译。
-- AND 达到 1500 秒后不会开始下一阶段，超过 1800 秒时发布门禁失败。
-- AND 失败时返回 canonical failure，且不产生伪成功事实。
+- GIVEN 一个尚未发布到dev的exact candidate及其typed ImpactPlan。
+- WHEN 执行环境准入、dev CAS、Gamma、RC资格与Prod发布。
+- THEN mutation与passed facts严格按Alpha、conditional Beta、dev CAS、Gamma推进，且每个后继验证前驱exact bytes；失败、漂移或superseded不会产生后继资格。
+- AND RC只构建签名一次，最终包/物理设备接受与ABG不重复同一CaseResult；stable与Prod复用选中RC完全相同的build number和digests。
+- AND 任一环境fact缺CaseResult、lifecycle、Provider、inspect/doctor、cleanup、lease closure或正确predecessor时fail closed，且不存在旧green matrix或workflow success替代。
 
 ## 6. 依赖
 
