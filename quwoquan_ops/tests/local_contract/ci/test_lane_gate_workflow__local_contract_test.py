@@ -117,7 +117,7 @@ def test_lane_gate_shards_ops_local_contract_through_the_canonical_selector() ->
     assert job["strategy"] == {"fail-fast": False, "matrix": {"shard_index": [0, 1, 2, 3]}}
     run = job["steps"][-1]["run"]
     assert "quwoquan_ops/gate/delivery_gate_data_shard.py" in run
-    assert "--scope ops --total-shards 4 --shard-index" in run
+    assert "--scope ops --lane-gate --total-shards 4 --shard-index" in run
     assert 'test "${#test_files[@]}" -gt 0' in run
     assert "-p no:cacheprovider" in run
 

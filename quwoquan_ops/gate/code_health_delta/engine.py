@@ -144,12 +144,8 @@ def _file_size_finding(path: str, before_lines: int, after_lines: int, file_line
     return None
 
 
-def _duplication_findings(
-    repo: Path, base_sha: str, policy: dict[str, Any], production: list[Change],
-    live_candidates: list[tuple[str, bytes, frozenset[int]]],
-) -> tuple[list[dict[str, object]], dict[str, float]]:
-    """Changed-line duplication against the base corpus of the same reuse scopes and within the candidate."""
-    duplication = policy["thresholds"]["duplication"]
+def _baseline_duplicate_index(repo: Path, base_sha: str, policy: dict[str, Any], production: list[Change]) -> dict[str, str]:
+    """Window index over the base commit's handwritten files in the same reuse scopes, excluding the changed ones."""
     changed_old = {item.old_path or item.path for item in production}
     reuse_scopes = {reuse_scope_key(item.path) for item in production}
     baseline_paths = [
@@ -158,10 +154,36 @@ def _duplication_findings(
         and classify_path(path, policy) == "handwritten-production"
     ]
     baseline_blobs = blobs(repo, base_sha, baseline_paths)
-    baseline_index = duplicate_window_index(
+    return duplicate_window_index(
         [(path, baseline_blobs[path]) for path in baseline_paths if path in baseline_blobs],
-        block_lines=duplication["block_lines"],
+        block_lines=policy["thresholds"]["duplication"]["block_lines"],
     )
+
+
+def _duplicate_candidate_finding(
+    path: str, covered_by_baseline: frozenset[int], source: str | None,
+    covered_by_candidate: frozenset[int], candidate_source: str | None,
+) -> dict[str, object] | None:
+    covered = covered_by_baseline | covered_by_candidate
+    if not covered:
+        return None
+    origin = source if source is not None else candidate_source
+    return _finding(
+        "CODE_HEALTH.DUPLICATION_CANDIDATE", path, "PASS",
+        f"changed production lines duplicate {origin}",
+        sourcePath=origin, duplicatedLines=len(covered),
+        baselineDuplicatedLines=len(covered_by_baseline),
+        candidateDuplicatedLines=len(covered_by_candidate),
+    )
+
+
+def _duplication_findings(
+    repo: Path, base_sha: str, policy: dict[str, Any], production: list[Change],
+    live_candidates: list[tuple[str, bytes, frozenset[int]]],
+) -> tuple[list[dict[str, object]], dict[str, float]]:
+    """Changed-line duplication against the base corpus of the same reuse scopes and within the candidate."""
+    duplication = policy["thresholds"]["duplication"]
+    baseline_index = _baseline_duplicate_index(repo, base_sha, policy, production)
     # Agent 复制粘贴最常见的形态是同一 candidate 内互相复制：这些片段在基线里不存在，
     # 只查「新行 vs 基线」会全部漏掉，所以对 candidate 自身再做一次窗口匹配。
     intra_candidate = candidate_duplicate_windows(live_candidates, block_lines=duplication["block_lines"])
@@ -170,24 +192,18 @@ def _duplication_findings(
     duplicate_lines = 0
     measured_added = 0
     for path, new, changed_lines in live_candidates:
+        # 纯删除的候选没有新增行：既不计入 measured，也不能贡献任何“重复的新行”。
+        if added_by_path[path] == 0 or not changed_lines:
+            continue
         measured_added += added_by_path[path]
         covered_by_baseline, source = duplicate_windows(
-            new, block_lines=duplication["block_lines"], baseline_index=baseline_index,
-            changed_lines=changed_lines, return_lines=True,
+            new, block_lines=duplication["block_lines"], baseline_index=baseline_index, changed_lines=changed_lines,
         )
         covered_by_candidate, candidate_source = intra_candidate.get(path, (frozenset(), None))
-        covered = set(covered_by_baseline) | set(covered_by_candidate)
-        if not covered:
-            continue
-        duplicate_lines += len(covered)
-        origin = source if source is not None else candidate_source
-        findings.append(_finding(
-            "CODE_HEALTH.DUPLICATION_CANDIDATE", path, "PASS",
-            f"changed production lines duplicate {origin}",
-            sourcePath=origin, duplicatedLines=len(covered),
-            baselineDuplicatedLines=len(covered_by_baseline),
-            candidateDuplicatedLines=len(covered_by_candidate),
-        ))
+        finding = _duplicate_candidate_finding(path, covered_by_baseline, source, covered_by_candidate, candidate_source)
+        if finding is not None:
+            duplicate_lines += int(finding["duplicatedLines"])
+            findings.append(finding)
     minimum = duplication["minimum_measured_new_lines"]
     percent = 0.0 if measured_added < minimum else 100.0 * duplicate_lines / measured_added
     advisory_percent = float(duplication["advisory_percent"])

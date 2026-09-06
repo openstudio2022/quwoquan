@@ -6,6 +6,7 @@ spec_ref: specs/feature-tree/runtime/system-architecture-and-engineering-guide/i
 """
 from __future__ import annotations
 
+import re
 import sys
 from pathlib import Path
 
@@ -15,16 +16,25 @@ _REPO_ROOT = Path(__file__).resolve().parents[4]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
+from quwoquan_ops.gate import verify_incremental_code_health
 from quwoquan_ops.gate.code_health_delta.base_ref import BaseResolutionError, resolve_auto_base
 from quwoquan_ops.gate.code_health_delta.classification import classify_path
 from quwoquan_ops.gate.code_health_delta.engine import analyze_delta
 from quwoquan_ops.gate.code_health_delta.metrics import (
-    candidate_duplicate_windows, function_metrics, has_repository_entry, strip_code_noise,
+    candidate_duplicate_windows, duplicate_window_index, duplicate_windows, function_metrics,
+    has_repository_entry, strip_code_noise,
 )
 from quwoquan_ops.gate.code_health_delta.policy import load_policy
 from quwoquan_ops.tests.support.code_health_delta_test_support import (
     POLICY, commit, git, init_repo, policy_path, write,
 )
+
+_DELTA_SOURCES = (
+    _REPO_ROOT / "quwoquan_ops/gate/code_health_delta/engine.py",
+    _REPO_ROOT / "quwoquan_ops/gate/code_health_delta/metrics.py",
+)
+#: 只作信息、terminal 恒为 PASS 的 code，不属于 advisory/blocking 任一清单。
+_INFORMATIONAL_CODES = {"CODE_HEALTH.DUPLICATION_CANDIDATE"}
 
 
 def test_l10n_and_native_test_directories_are_not_handwritten_production() -> None:
@@ -91,6 +101,62 @@ def test_intra_candidate_duplication_reaches_candidate_report(tmp_path: Path) ->
     assert {item["path"] for item in candidates} == {"quwoquan_ops/ci/left.py", "quwoquan_ops/ci/right.py"}
     assert all(item["candidateDuplicatedLines"] == 12 and item["baselineDuplicatedLines"] == 0 for item in candidates)
     assert any(item["code"] == "CODE_HEALTH.DUPLICATION_ADVISORY" for item in report["findings"])
+
+
+def test_deletion_only_file_contributes_no_duplication(tmp_path: Path) -> None:
+    repo, _base = init_repo(tmp_path)
+    shared = "\n".join(f"setting_{index} = load({index})" for index in range(25)) + "\n"
+    write(repo, "quwoquan_ops/ci/constants.py", "HEADER = 1\n" + shared + "TRAILER = 2\n")
+    write(repo, "quwoquan_ops/ci/sibling.py", shared)
+    base = commit(repo, "baseline with existing clone")
+    # 只删一行、不新增：窗口在基线里确实重复，但没有任何“新行”可归责。
+    write(repo, "quwoquan_ops/ci/constants.py", "HEADER = 1\n" + shared)
+    write(repo, "quwoquan_ops/ci/fresh.py", "\n".join(f"fresh_{index} = {index}" for index in range(30)) + "\n")
+    head = commit(repo, "delete trailer")
+    report = analyze_delta(repo, base=base, head=head, policy_path=policy_path(repo), mode="full")
+    assert not [item for item in report["findings"] if item["code"] == "CODE_HEALTH.DUPLICATION_CANDIDATE"]
+    assert report["summary"]["duplicatedLines"] == 0
+    assert report["summary"]["measuredNewLines"] == 30
+
+    index = duplicate_window_index([("quwoquan_ops/ci/sibling.py", shared.encode())], block_lines=6)
+    covered, source = duplicate_windows(shared.encode(), block_lines=6, baseline_index=index, changed_lines=frozenset())
+    assert (covered, source) == (frozenset(), None)
+
+
+def test_notes_code_lists_match_engine_terminals() -> None:
+    notes = load_policy(POLICY)["notes"]
+    source = "\n".join(path.read_text(encoding="utf-8") for path in _DELTA_SOURCES)
+    emitted = set(re.findall(r'"(CODE_HEALTH\.[A-Z_]+)"', source)) - _INFORMATIONAL_CODES
+    assert emitted == set(notes["advisory_only_codes"]) | set(notes["blocking_codes"])
+    for code in notes["blocking_codes"]:
+        assert re.search(rf'"{re.escape(code)}",\s*[^,]+,\s*"GATE_BLOCK"', source), code
+    for code in notes["advisory_only_codes"]:
+        assert re.search(
+            rf'"{re.escape(code)}",\s*[^,]+,\s*"PR_WARN"|"code": "{re.escape(code)}"[\s\S]{{0,200}}?"terminal": "PR_WARN"',
+            source,
+        ), code
+
+
+def test_size_observation_tiers_cover_advisory_and_block() -> None:
+    policy = load_policy(POLICY)
+    tiers = policy["report"]["size_observation_tiers"]
+    assert policy["thresholds"]["file_lines"]["advisory"] in tiers
+    assert policy["thresholds"]["file_lines"]["block"] in tiers
+
+
+def test_cli_stdout_leads_with_blockers_and_debt_delta(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+    repo, _base = init_repo(tmp_path)
+    block = load_policy(policy_path(repo))["thresholds"]["file_lines"]["block"]
+    write(repo, "quwoquan_ops/ci/huge.py", "value = 1\n" * (block + 1))
+    monkeypatch.setattr(verify_incremental_code_health, "ROOT", repo)
+    summary = tmp_path / "summary.md"
+    code = verify_incremental_code_health.main(["--mode", "fast", "--output", str(tmp_path / "report.json"), "--summary-markdown", str(summary)])
+    out = capsys.readouterr().out
+    assert code == 1
+    assert out.startswith("# Code Health Delta — GATE_BLOCK")
+    assert "recovery: `split_or_reduce_new_file_below_block_threshold`" in out
+    assert "## 债务 delta" in out and "- 新越过 block 的文件: +1" in out
+    assert summary.read_text(encoding="utf-8") == out.split("verify_incremental_code_health:")[0]
 
 
 def test_split_analysis_requires_multiple_owner_scopes(tmp_path: Path) -> None:

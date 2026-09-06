@@ -383,6 +383,70 @@ def owner_scope_weak_points(
     return ranked[:limit]
 
 
+def _score_hotspots(
+    production: dict[str, bytes],
+    churn: dict[str, dict[str, int]],
+    clone_lines: dict[str, int],
+    policy: dict[str, Any],
+) -> tuple[dict[str, dict[str, int]], list[dict[str, Any]]]:
+    """Per-file complexity facts plus `churn × change-frequency × health` hotspot scores."""
+    thresholds = policy["thresholds"]
+    complexity: dict[str, dict[str, int]] = {}
+    hotspots = []
+    for path, body in production.items():
+        functions = function_metrics(path, body)
+        maximum_cyclomatic = max((item.cyclomatic for item in functions), default=0)
+        maximum_cognitive = max((item.cognitive for item in functions), default=0)
+        lines = line_count(body)
+        complexity[path] = {"functions": len(functions), "maxCyclomatic": maximum_cyclomatic, "maxCognitive": maximum_cognitive}
+        activity = churn.get(path, {"added": 0, "deleted": 0, "churn": 0, "changeFrequency": 0})
+        health = max(
+            1.0,
+            lines / thresholds["file_lines"]["advisory"],
+            maximum_cyclomatic / thresholds["complexity"]["cyclomatic_advisory"],
+            maximum_cognitive / thresholds["complexity"]["cognitive_advisory"],
+            1.0 + clone_lines.get(path, 0) / max(1, lines),
+        )
+        score = activity["churn"] * (1.0 + math.log2(1 + activity["changeFrequency"])) * health
+        if score:
+            hotspots.append({
+                "path": path, "ownerScope": reuse_scope_key(path), "score": round(score, 3),
+                "healthFactor": round(health, 4), "lines": lines, "cloneLines": clone_lines.get(path, 0),
+                **activity, **complexity[path],
+            })
+    return complexity, hotspots
+
+
+def _report_identity(
+    *, head_sha: str, window: dict[str, Any], policy: dict[str, Any], delivery_run_pages: object, tools: dict[str, Any],
+) -> dict[str, str]:
+    """身份只绑定输入（head、窗口、policy、实现、delivery 数据、工具），不绑定观测时刻。"""
+    policy_digest = canonical_digest(policy)
+    implementation_digest = canonical_digest({
+        f"quwoquan_ops/gate/code_health_delta/{name}": "sha256:" + hashlib.sha256(
+            Path(__file__).with_name(name).read_bytes()
+        ).hexdigest()
+        for name in ("weekly.py", "metrics.py", "classification.py")
+    })
+    delivery_outcomes_digest = canonical_digest(delivery_run_pages)
+    identity = canonical_digest({
+        "headSha": head_sha, "window": window, "policyDigest": policy_digest,
+        "implementationDigest": implementation_digest, "deliveryOutcomesDigest": delivery_outcomes_digest,
+        "tools": tools,
+    })
+    return {
+        "identityDigest": identity, "policyDigest": policy_digest,
+        "implementationDigest": implementation_digest, "deliveryOutcomesDigest": delivery_outcomes_digest,
+    }
+
+
+def _observed_value(observed_at: datetime | None) -> str:
+    observed = observed_at or datetime.now(timezone.utc)
+    if observed.tzinfo is None or observed.utcoffset() is None:
+        raise ValueError("observed_at must include timezone")
+    return observed.astimezone(timezone.utc).isoformat(timespec="microseconds")
+
+
 def analyze_weekly(
     repo: Path,
     *,
@@ -399,85 +463,32 @@ def analyze_weekly(
     start = end - timedelta(days=90)
     paths = _tracked_paths(repo, head_sha)
     all_blobs = _clean_current_blobs(repo, head_sha, paths)
-    production = {path: body for path, body in all_blobs.items() if classify_path(path, policy) == "handwritten-production"}
+    classified = {path: classify_path(path, policy) for path in all_blobs}
+    production = {path: body for path, body in all_blobs.items() if classified[path] == "handwritten-production"}
+    test_blobs = {path: body for path, body in all_blobs.items() if classified[path] == "test"}
     categories: dict[str, dict[str, int]] = {name: {"files": 0, "lines": 0} for name in policy["source_categories"]}
     for path, body in all_blobs.items():
-        category = classify_path(path, policy)
-        categories[category]["files"] += 1
-        categories[category]["lines"] += line_count(body)
+        categories[classified[path]]["files"] += 1
+        categories[classified[path]]["lines"] += line_count(body)
     history = [
         {"ageWeeks": age, "committerDate": _commit_time(repo, sha).isoformat(timespec="seconds"), **_cloc(repo, sha, cloc_executable)}
         for age, sha in _historical_commits(repo, head_sha, end, (13, 4, 1, 0))
     ]
-    churn = _churn(repo, head_sha, start)
     clone_lines, clone_groups = _clone_facts(production, policy["thresholds"]["duplication"]["block_lines"])
-    complexity: dict[str, dict[str, int]] = {}
-    hotspots = []
-    for path, body in production.items():
-        functions = function_metrics(path, body)
-        maximum_cyclomatic = max((item.cyclomatic for item in functions), default=0)
-        maximum_cognitive = max((item.cognitive for item in functions), default=0)
-        lines = line_count(body)
-        complexity[path] = {"functions": len(functions), "maxCyclomatic": maximum_cyclomatic, "maxCognitive": maximum_cognitive}
-        activity = churn.get(path, {"added": 0, "deleted": 0, "churn": 0, "changeFrequency": 0})
-        health = max(
-            1.0,
-            lines / policy["thresholds"]["file_lines"]["advisory"],
-            maximum_cyclomatic / policy["thresholds"]["complexity"]["cyclomatic_advisory"],
-            maximum_cognitive / policy["thresholds"]["complexity"]["cognitive_advisory"],
-            1.0 + clone_lines.get(path, 0) / max(1, lines),
-        )
-        score = activity["churn"] * (1.0 + math.log2(1 + activity["changeFrequency"])) * health
-        if score:
-            hotspots.append({
-                "path": path, "ownerScope": reuse_scope_key(path), "score": round(score, 3),
-                "healthFactor": round(health, 4), "lines": lines, "cloneLines": clone_lines.get(path, 0),
-                **activity, **complexity[path],
-            })
+    complexity, hotspots = _score_hotspots(production, _churn(repo, head_sha, start), clone_lines, policy)
     top = sorted(hotspots, key=lambda item: (-item["score"], item["path"]))[: policy["report"]["weekly_top_hotspots"]]
     tools = {"cloc": history[-1]["clocVersion"] if history else "unavailable", "builtinMetrics": 1}
     dead_candidates = _dead_candidates(repo)
-    outcome = delivery_outcomes(
-        delivery_run_pages,
-        end=end,
-        regression_percent=policy["performance"]["delivery_outcome_regression_percent"],
-    )
-    observed = observed_at or datetime.now(timezone.utc)
-    if observed.tzinfo is None or observed.utcoffset() is None:
-        raise ValueError("observed_at must include timezone")
-    observed_value = observed.astimezone(timezone.utc).isoformat(timespec="microseconds")
-    window = {
-        "start": start.isoformat(timespec="seconds"),
-        "end": end.isoformat(timespec="seconds"),
-        "days": 90,
-    }
-    policy_digest = canonical_digest(policy)
-    implementation_digest = canonical_digest({
-        f"quwoquan_ops/gate/code_health_delta/{name}": "sha256:" + hashlib.sha256(
-            Path(__file__).with_name(name).read_bytes()
-        ).hexdigest()
-        for name in ("weekly.py", "metrics.py", "classification.py")
-    })
-    delivery_outcomes_digest = canonical_digest(delivery_run_pages)
-    # 身份只绑定输入（head、窗口、policy、实现、delivery 数据、工具），不绑定观测时刻：
-    # 同一输入重复运行得到同一报告身份，历史序列才能去重与对比。
-    identity = canonical_digest({
-        "headSha": head_sha,
-        "window": window,
-        "policyDigest": policy_digest,
-        "implementationDigest": implementation_digest,
-        "deliveryOutcomesDigest": delivery_outcomes_digest,
-        "tools": tools,
-    })
+    window = {"start": start.isoformat(timespec="seconds"), "end": end.isoformat(timespec="seconds"), "days": 90}
+    observed_value = _observed_value(observed_at)
     tiers = list(policy["report"]["size_observation_tiers"])
-    test_blobs = {path: body for path, body in all_blobs.items() if classify_path(path, policy) == "test"}
     previous = _ordered_previous(previous_reports, head_sha)
+    complexity_thresholds = policy["thresholds"]["complexity"]
     report = {
         "schema": WEEKLY_SCHEMA, "terminal": "REPORT_ONLY",
         "headSha": head_sha, "window": window,
-        "identityDigest": identity, "policyId": policy["policy_id"],
-        "policyDigest": policy_digest, "implementationDigest": implementation_digest,
-        "deliveryOutcomesDigest": delivery_outcomes_digest, "observedAt": observed_value,
+        **_report_identity(head_sha=head_sha, window=window, policy=policy, delivery_run_pages=delivery_run_pages, tools=tools),
+        "policyId": policy["policy_id"], "observedAt": observed_value,
         "tools": tools,
         "growthHistory": history, "categories": categories,
         "summary": {"trackedFiles": len(paths), "handwrittenProductionFiles": len(production), "cloneGroupCount": clone_groups, "deadCandidateCount": len(dead_candidates)},
@@ -488,12 +499,15 @@ def analyze_weekly(
         },
         "complexitySummary": {
             "functionCount": sum(item["functions"] for item in complexity.values()),
-            "overCyclomaticAdvisory": sum(item["maxCyclomatic"] > policy["thresholds"]["complexity"]["cyclomatic_advisory"] for item in complexity.values()),
-            "overCognitiveAdvisory": sum(item["maxCognitive"] > policy["thresholds"]["complexity"]["cognitive_advisory"] for item in complexity.values()),
+            "overCyclomaticAdvisory": sum(item["maxCyclomatic"] > complexity_thresholds["cyclomatic_advisory"] for item in complexity.values()),
+            "overCognitiveAdvisory": sum(item["maxCognitive"] > complexity_thresholds["cognitive_advisory"] for item in complexity.values()),
         },
         "topHotspots": top, "deadCodeCandidates": dead_candidates,
         "ownerScopeWeakPoints": owner_scope_weak_points(production, complexity, clone_lines, dead_candidates, policy),
-        "deliveryOutcomes": outcome,
+        "deliveryOutcomes": delivery_outcomes(
+            delivery_run_pages, end=end,
+            regression_percent=policy["performance"]["delivery_outcome_regression_percent"],
+        ),
         "generatedAt": observed_value,
         "authority": {"blocksPullRequests": False, "createsOwnerOpen": False, "automaticRemediation": False},
     }

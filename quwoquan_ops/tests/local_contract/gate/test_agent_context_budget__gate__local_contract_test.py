@@ -37,8 +37,16 @@ class AgentContextBudgetPlacementTest(unittest.TestCase):
         self.assertIn("make verify-agent-context-budget", governance)
 
     def test_data_shard_selector_never_selects_ops_context_budget_test(self) -> None:
+        sys.path.insert(0, str(_REPO_ROOT))
+        from quwoquan_ops.gate import delivery_gate_data_shard as shard
+
+        # 默认 data scope 只覆盖 quwoquan_data 的树；本测试属于 ops 树，只有显式
+        # --scope ops 才会选中它，data 分片永远不会把它当作自己的判据。
+        self.assertEqual(shard.TEST_ROOT_PARTS, ("quwoquan_data", "tests", "local_contract"))
+        own_path = Path(__file__).resolve().relative_to(_REPO_ROOT).as_posix()
+        self.assertNotIn(own_path, shard.local_contract_test_files(_REPO_ROOT))
+        self.assertIn(own_path, shard.local_contract_test_files(_REPO_ROOT, "ops"))
         selector = (_REPO_ROOT / "quwoquan_ops/gate/delivery_gate_data_shard.py").read_text(encoding="utf-8")
-        self.assertIn('TEST_ROOT_PARTS = ("quwoquan_data", "tests", "local_contract")', selector)
         self.assertNotIn("verify_agent_context_budget", selector)
 
 

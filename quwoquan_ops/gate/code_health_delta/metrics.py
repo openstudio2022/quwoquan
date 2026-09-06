@@ -222,29 +222,25 @@ def _candidate_windows(candidate: bytes, *, block_lines: int) -> list[tuple[str,
 
 def duplicate_windows(
     candidate: bytes,
-    corpus: Iterable[tuple[str, bytes]] = (),
     *,
     block_lines: int,
-    baseline_index: dict[str, str] | None = None,
-    changed_lines: frozenset[int] | None = None,
-    return_lines: bool = False,
-) -> tuple[int, str | None] | tuple[frozenset[int], str | None]:
-    """Candidate lines covered by changed windows that already exist in the baseline corpus."""
-    indexed = baseline_index if baseline_index is not None else duplicate_window_index(corpus, block_lines=block_lines)
-    changed = changed_lines or frozenset()
+    baseline_index: dict[str, str],
+    changed_lines: frozenset[int],
+) -> tuple[frozenset[int], str | None]:
+    """Changed candidate lines whose window already exists in the baseline corpus.
+
+    只度量 ``changed_lines``：没有新增行的候选（纯删除）得到空集合，绝不退化为整文件，
+    否则只删几行的文件会把全部旧内容当作“新重复”计入。
+    """
     covered: set[int] = set()
     sources: set[str] = set()
     for digest, line_numbers in _candidate_windows(candidate, block_lines=block_lines):
-        if changed and not line_numbers.intersection(changed):
-            continue
-        source = indexed.get(digest)
+        touched = line_numbers.intersection(changed_lines)
+        source = baseline_index.get(digest) if touched else None
         if source is not None:
-            covered.update(line_numbers.intersection(changed) if changed else line_numbers)
+            covered.update(touched)
             sources.add(source)
-    origin = min(sources) if sources else None
-    if return_lines:
-        return frozenset(covered), origin
-    return len(covered), origin
+    return frozenset(covered), (min(sources) if sources else None)
 
 
 def candidate_duplicate_windows(
@@ -253,7 +249,8 @@ def candidate_duplicate_windows(
     """Changed lines whose window also appears elsewhere inside the same candidate.
 
     A window counts when it recurs in another changed file or at a second offset of the same
-    file. Only changed lines are attributed so untouched context never inflates the ratio.
+    file. Only changed lines are attributed so untouched context never inflates the ratio;
+    a candidate with no new lines contributes nothing.
     """
     per_path = {path: _candidate_windows(body, block_lines=block_lines) for path, body, _ in candidates}
     occurrences: dict[str, list[tuple[str, set[int]]]] = {}
@@ -265,7 +262,7 @@ def candidate_duplicate_windows(
         covered: set[int] = set()
         sources: set[str] = set()
         for digest, line_numbers in per_path[path]:
-            touched = line_numbers.intersection(changed) if changed else line_numbers
+            touched = line_numbers.intersection(changed)
             others = {
                 other_path for other_path, other_lines in occurrences[digest]
                 if other_path != path or other_lines.isdisjoint(line_numbers)

@@ -180,7 +180,7 @@ jobs:
           while IFS= read -r test_file; do
             [[ -n "$test_file" ]] && test_files+=("$test_file")
           done < <(python3 -B quwoquan_ops/gate/delivery_gate_data_shard.py \
-            --scope ops --total-shards 4 --shard-index "$SHARD_INDEX")
+            --scope ops --lane-gate --total-shards 4 --shard-index "$SHARD_INDEX")
           test "${#test_files[@]}" -gt 0
           python3 -B -m pytest -q -p no:cacheprovider "${test_files[@]}"
 

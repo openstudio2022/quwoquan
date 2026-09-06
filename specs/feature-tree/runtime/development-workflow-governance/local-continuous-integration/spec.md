@@ -149,3 +149,13 @@
 - 影响或价值：`lane/* -> dev1.0` 的 PR 前阻断已由 `04. Lane Gate`（`GWT-005`）承担，`10. Code Health Integration Recompute` 对每次 `dev1.0` 快进复算 exact before/after 并发布 typed fact（`GWT-004`）；但两者之间仍缺一环：`integration/` 工作区的 direct fast-forward push 不经 PR，此时只有 push 后的 report-only fact，而 `03. Delivery Gate` 的 `required_evidence_refs` 尚未要求该 fact，于是经该通道进入 `dev1.0` 的新增或恶化代码健康债在 promotion 前仍不阻断。
 - 完成判定：`GWT-005` 持续证明 lane PR 的 hosted required check fail-closed；`GWT-004.t3` 继续成立（fact report-only、不冒充准出）；交付链 owner 把 dev1.0 head 对应的 code-health fact 纳入 promotion `required_evidence_refs` 并由其自身规格证明 `GATE_BLOCK` fact 使 promotion admission 失败；不得以本地回执、warn-only 或降低阈值替代。
 - 依赖：`deliver-deploy-prod-pipeline` 的 promotion admission 契约与 `quwoquan_ops/ci/verify_code_health_integration.py`。
+
+<a id="open-004"></a>
+### OPEN-004 lane 门禁的 ops 合同覆盖面缺 macOS 与完整工具链
+
+- 类型：`capability_gap`
+- 优先级：`P2`
+- 准出影响：`track`
+- 影响或价值：`04. Lane Gate` 在 `ubuntu-latest` 上执行 ops local_contract 四分片（首跑 5269 通过 / 23 失败）。23 个失败全部来自 10 个把开发机事实写成前提的合同：macOS `sandbox-exec`、APFS `cp -c`、Flutter/Go/Dart 二进制、本机受管根证书、设备矩阵 preflight。它们已在 `quwoquan_ops/policies/gates/lane_gate_ops_contract_exclusions.yaml` 逐条声明缺失的宿主能力并从 lane 分片排除，`gate_repo.sh` 全量执行不受影响；但这意味着 lane PR 对这 10 个合同缺少 hosted 复算，仍依赖开发机或 self-hosted macOS。
+- 完成判定：`GWT-005` 持续证明剩余 593 个合同在 hosted 上 fail-closed；排除清单只减不增，每条被删除的前提是该合同改为按宿主能力 `skipif`（并让 skip 可见于回执）或 lane 门禁获得 hosted macOS runner；`test_lane_gate_exclusions_are_declared_real_ops_files_and_only_narrow_ops` 持续证明清单指向真实文件且不影响 data/全量。
+- 依赖：hosted macOS runner 预算，或 10 个合同的 owner 为其补 `skipif` 与 skip 可见性。

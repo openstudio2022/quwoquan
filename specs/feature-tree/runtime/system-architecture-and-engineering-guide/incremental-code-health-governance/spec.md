@@ -53,7 +53,10 @@
 - canonical policy：`quwoquan_ops/policies/code_health_policy.yaml`
 - canonical impact：`quwoquan_ops/ci/impact_planner_core.py`
 - canonical evidence：`quwoquan_ops/cli/lib/evidence_fingerprint.py`
-- canonical entry：`make verify-code-health-delta`
+- canonical entry：`make verify-code-health-delta`（本地 L1/L2，base 为 HEAD 与 dev1.0 的 merge-base）
+- hosted 复算：`.github/workflows/lane-gate.yml`（lane PR required check，经 `verify_code_health_delivery.py`）与 `.github/workflows/code-health-integration.yml`（dev1.0 快进后 report-only fact，经 `quwoquan_ops/ci/verify_code_health_integration.py`）
+- weekly 观测：`make report-code-health-weekly` / `.github/workflows/code-health-weekly.yml`，历史以 OCI fact 保存
+- owner 热点视图：`make code-health-hotspots OWNER=<owner-scope>`
 
 ## 5. 验收场景
 

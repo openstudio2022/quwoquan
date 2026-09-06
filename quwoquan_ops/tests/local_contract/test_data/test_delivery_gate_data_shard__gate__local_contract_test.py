@@ -153,6 +153,38 @@ def test_ops_scope_shards_its_own_tree_with_the_same_discipline() -> None:
     assert listed.stdout.split() == shard.sharded_test_files(ROOT, 4, 2, "ops")
 
 
+def test_lane_gate_exclusions_are_declared_real_ops_files_and_only_narrow_ops(tmp_path: Path) -> None:
+    """lane 门禁排除清单是声明式、文件级、指向真实 ops 合同，且不影响 data 与全量。"""
+    excluded = shard.lane_gate_excluded_files(ROOT)
+    assert excluded
+    full = shard.local_contract_test_files(ROOT, "ops")
+    narrowed = shard.local_contract_test_files(ROOT, "ops", lane_gate=True)
+    assert excluded <= set(full)
+    assert sorted(set(full) - excluded) == narrowed
+    assert shard.local_contract_test_files(ROOT, "data") == shard.local_contract_test_files(ROOT)
+    with pytest.raises(ValueError, match="只适用于 ops"):
+        shard.local_contract_test_files(ROOT, "data", lane_gate=True)
+    selected = [
+        path for index in range(4)
+        for path in shard.sharded_test_files(ROOT, 4, index, "ops", lane_gate=True)
+    ]
+    assert sorted(selected) == narrowed
+
+    # 排除清单只能指向真实文件：指向不存在的路径必须 fail closed。
+    policy = ROOT / shard.LANE_GATE_OPS_EXCLUSIONS
+    forged_root = tmp_path / "repo"
+    (forged_root / policy.parent.relative_to(ROOT)).mkdir(parents=True)
+    (forged_root / "quwoquan_ops/tests/local_contract").mkdir(parents=True)
+    (forged_root / policy.relative_to(ROOT)).write_text(
+        "exclusions:\n"
+        "  - path: quwoquan_ops/tests/local_contract/absent__local_contract_test.py\n"
+        "    missing_host_capability: nothing\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="不存在"):
+        shard.lane_gate_excluded_files(forged_root)
+
+
 def test_shard_discovery_covers_every_test_file_on_disk() -> None:
     on_disk = sorted(
         path.relative_to(ROOT).as_posix()

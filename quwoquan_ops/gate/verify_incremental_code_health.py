@@ -85,7 +85,7 @@ def main(argv: list[str] | None = None) -> int:
         args.summary_markdown.parent.mkdir(parents=True, exist_ok=True)
         args.summary_markdown.write_text(render_candidate(report), encoding="utf-8")
     # 开发者直接在 stdout 看到 blocker 与 recovery，不必打开 JSON。
-    print(render_candidate(report))
+    print(render_candidate(report), end="")
     print(f"verify_incremental_code_health: {report['terminal']} findings={report['summary']['findingCount']} output={output}")
     if report["terminal"] in {"PASS", "PR_WARN"}:
         return 0
