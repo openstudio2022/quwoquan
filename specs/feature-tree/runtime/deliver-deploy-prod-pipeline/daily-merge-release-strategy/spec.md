@@ -145,3 +145,14 @@
 - 影响或价值：`06. RC Qualification Factory` 尚缺 package acceptance、provider、UAT、supply-chain 四类事实生产者与 Android keystore，因此不得签发 `QualificationFact` 或 stable tag。`deploy-prod-auto.yml` 的 job timeout 小于内部 deadline；soak 占用自托管 runner；ARM 上 QEMU 编 amd64；`validate-deploy` 重复 verify；`app_pipeline` 五个 macOS job 无缓存且 nonprod 产物不进 CMM；多次 Environment 审批串行。`promotion_timing_ratchet.yaml` 的窗口与最低 eligible 次数尚未满足，不得收紧阈值。
 - 完成判定：`GWT-004.t1` 的四类事实与 keystore 各有真实生产者与 hosted 回执；`GWT-004.t2` 的 ratchet 达到 `promotion_timing_ratchet.yaml` 声明的窗口与最低 eligible 次数后单调收紧一次，且 CI 超时/缓存/soak 占用不再用假样本或放宽例外。
 - 依赖：[`OPEN-004`](#open-004)、GHCR `write:packages`。
+
+<a id="open-006"></a>
+### OPEN-006 本机没有满足当前 Data release 合同的 immutable release，模式二 Alpha 在 ship apply 处阻断
+
+- 类型：`external_blocker`
+- 优先级：`P1`
+- 准出影响：`block`
+- 阻断边界：只阻断 Alpha/Beta `EnvironmentAcceptanceFact` 的真实签发与其后的 publish admission；不阻断 L1 readiness、exact candidate、打包（`sourceRevision == candidate` 已证明）、`up`/`down` 与 Ed25519 keyring 验签本身。
+- 影响或价值：`make integrate` 已真实跑到 `alpha.data-release`：`qwq-data ship apply` 以 `release_header … source identity set requires a pool selection` 拒绝 `release-20260906-intersection-flywheel-001`；本机全部 30 份 immutable release（product-mainline 与 data-engineering 产出）的 `selectionScope` 仍是硬切前的 `all_publishable`，无一满足 dev1.0 当前 `content.release.canonical.release_header` 合同。health 的 `release_active` 层依赖该导入回执，因此 Alpha 不能在没有合同兼容 release 的情况下签发 passed 事实；不得放宽合同或伪造回执。
+- 完成判定：`GWT-001.t3` 由 Data lane 以 `content-production` Skill 在当前合同下产出一对（candidate、rollback）immutable research release 并附 attestation 后，`make integrate PUBLISH=0` 对 exact candidate 完整产出 Alpha（及条件 Beta）`EnvironmentAcceptanceFact`，summary 各分段耗时齐全。
+- 依赖：Data lane 的合同兼容 release 交付；`quwoquan_data/scripts/content/release/canonical/release_header.py` 的 `selectionScope ∈ {target_environment, explicit_cohort}`。
