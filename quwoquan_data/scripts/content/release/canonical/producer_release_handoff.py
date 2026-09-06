@@ -769,11 +769,10 @@ def _validate_query_against_sealed(
         # Sealed release objects intentionally remove private CAS objectKey.
         # Rebind that one delivery-private field from the sealed MediaAsset
         # authority before projecting the producer content-library identity.
-        media_manifest = _read_sealed_identity_file(
-            sealed_root,
-            "media_manifest.json",
-            object_ref=object_ref,
+        media_manifest, _ = _read_json_file(
+            sealed_root.parent / "media_manifest.json",
             label="release MediaAsset authority",
+            canonical=False,
         )
         media_by_id = {
             str(asset.get("assetId") or ""): asset
