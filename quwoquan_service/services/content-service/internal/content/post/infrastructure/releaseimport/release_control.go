@@ -451,23 +451,29 @@ func ParseReleaseControlCommand(args []string) (ReleaseControlCommand, error) {
 // ContentFencedReadbackReceipt proves Content's own active pointer sits on the
 // exact tuple and revision and that the verified candidate for that tuple is
 // still readable. It is the Content leg of the four-owner fenced readback.
+//
+// The candidate keeps the staging projection version it was verified at, while
+// the pointer carries the activation version allocated by the CAS; the two are
+// distinct by construction and neither is part of the release tuple identity,
+// so the fence reports both instead of requiring them to agree.
 type ContentFencedReadbackReceipt struct {
-	Schema             string                                  `json:"schema"`
-	Status             string                                  `json:"status"`
-	Owner              string                                  `json:"owner"`
-	Environment        string                                  `json:"environment"`
-	SourceOwner        string                                  `json:"sourceOwner"`
-	ReleaseID          string                                  `json:"releaseId"`
-	ManifestDigest     string                                  `json:"manifestDigest"`
-	Revision           int64                                   `json:"revision"`
-	Reason             string                                  `json:"reason,omitempty"`
-	ContentActivatedAt *time.Time                              `json:"contentActivatedAt,omitempty"`
-	ReleaseClass       string                                  `json:"releaseClass,omitempty"`
-	ProjectionVersion  int64                                   `json:"projectionVersion,omitempty"`
-	VerifiedAt         *time.Time                              `json:"verifiedAt,omitempty"`
-	ClosureDigests     *ImportedReleaseCandidateClosureDigests `json:"closureDigests,omitempty"`
-	Counts             *ImportedReleaseCandidateCounts         `json:"counts,omitempty"`
-	GeneratedAt        time.Time                               `json:"generatedAt"`
+	Schema                     string                                  `json:"schema"`
+	Status                     string                                  `json:"status"`
+	Owner                      string                                  `json:"owner"`
+	Environment                string                                  `json:"environment"`
+	SourceOwner                string                                  `json:"sourceOwner"`
+	ReleaseID                  string                                  `json:"releaseId"`
+	ManifestDigest             string                                  `json:"manifestDigest"`
+	Revision                   int64                                   `json:"revision"`
+	Reason                     string                                  `json:"reason,omitempty"`
+	ContentActivatedAt         *time.Time                              `json:"contentActivatedAt,omitempty"`
+	ReleaseClass               string                                  `json:"releaseClass,omitempty"`
+	ProjectionVersion          int64                                   `json:"projectionVersion,omitempty"`
+	CandidateProjectionVersion int64                                   `json:"candidateProjectionVersion,omitempty"`
+	VerifiedAt                 *time.Time                              `json:"verifiedAt,omitempty"`
+	ClosureDigests             *ImportedReleaseCandidateClosureDigests `json:"closureDigests,omitempty"`
+	Counts                     *ImportedReleaseCandidateCounts         `json:"counts,omitempty"`
+	GeneratedAt                time.Time                               `json:"generatedAt"`
 }
 
 func BuildContentFencedReadbackReceipt(
@@ -493,15 +499,18 @@ func BuildContentFencedReadbackReceipt(
 		receipt.Reason = "Content active pointer differs from the requested fence"
 	case !candidate.Found:
 		receipt.Reason = "Content verified candidate is absent for the fence tuple"
-	case candidate.ProjectionVersion != active.ProjectionVersion || candidate.ReleaseClass != active.ReleaseClass:
-		receipt.Reason = "Content verified candidate disagrees with the active pointer"
+	case candidate.ReleaseClass != active.ReleaseClass:
+		receipt.Reason = "Content verified candidate releaseClass disagrees with the active pointer"
+	case candidate.ProjectionVersion <= 0 || active.ProjectionVersion <= 0:
+		receipt.Reason = "Content candidate or active pointer projection version is not positive"
 	default:
 		activatedAt, verifiedAt := active.ActivatedAt.UTC(), candidate.VerifiedAt.UTC()
 		closure, counts := candidate.ClosureDigests, candidate.Counts
 		receipt.Status = "passed"
 		receipt.ContentActivatedAt = &activatedAt
 		receipt.ReleaseClass = active.ReleaseClass
-		receipt.ProjectionVersion = candidate.ProjectionVersion
+		receipt.ProjectionVersion = active.ProjectionVersion
+		receipt.CandidateProjectionVersion = candidate.ProjectionVersion
 		receipt.VerifiedAt = &verifiedAt
 		receipt.ClosureDigests = &closure
 		receipt.Counts = &counts

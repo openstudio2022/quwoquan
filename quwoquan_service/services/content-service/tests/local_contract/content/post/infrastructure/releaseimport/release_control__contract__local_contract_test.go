@@ -180,6 +180,119 @@ func TestReleaseControlNotFoundReportsOmitFoundOnlyFields(t *testing.T) {
 	}
 }
 
+func TestContentFencedReadbackAcceptsActivationVersionDistinctFromCandidate(t *testing.T) {
+	digest := "sha256:" + strings.Repeat("e", 64)
+	closure := "sha256:" + strings.Repeat("f", 64)
+	verifiedAt := time.Date(2026, 9, 6, 14, 45, 21, 0, time.UTC)
+	activatedAt := verifiedAt.Add(55 * time.Minute)
+	generatedAt := activatedAt.Add(2 * time.Second)
+	command, err := releaseimport.ParseReleaseControlCommand(append(
+		releaseControlBaseArgs("fence.json"),
+		"--operation", "readback-at-content-fence",
+		"--release-id", "release-a", "--manifest-digest", digest,
+		"--content-revision", "1",
+	))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// 与 ActivateImportedPostRelease 一致：candidate 保留 staging 版本，pointer 记录
+	// CAS 时新分配的 activation 版本，两者按构造不同。
+	candidate := releaseimport.VerifiedImportedPostReleaseCandidate{
+		Found: true, Environment: "alpha", SourceOwner: "qwq_data",
+		ReleaseID: "release-a", ManifestDigest: digest,
+		ReleaseClass: "research", ReleaseKind: "content", Mode: "sync",
+		DeletePolicy: "tombstone", ProjectionVersion: 2, VerifiedAt: verifiedAt,
+		ClosureDigests: releaseimport.ImportedReleaseCandidateClosureDigests{
+			Posts: closure, Facts: closure, Media: closure,
+		},
+		Counts: releaseimport.ImportedReleaseCandidateCounts{
+			PostsExpected: 3, PostsProjected: 3, OutboxExpected: 3,
+			OutboxProjected: 3, MediaExpected: 6, MediaProjected: 6,
+		},
+	}
+	active := releaseimport.ActiveReleaseBinding{
+		Found: true, Environment: "alpha", SourceOwner: "qwq_data",
+		ReleaseID: "release-a", ManifestDigest: digest, ReleaseClass: "research",
+		ProjectionVersion: 3, Revision: 1, ActivatedAt: activatedAt,
+	}
+
+	receipt, err := releaseimport.BuildContentFencedReadbackReceipt(command, active, candidate, generatedAt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if receipt.Status != "passed" || receipt.Reason != "" || receipt.Owner != "content" ||
+		receipt.Revision != 1 || receipt.ProjectionVersion != 3 ||
+		receipt.CandidateProjectionVersion != 2 || receipt.ReleaseClass != "research" ||
+		receipt.Counts == nil || receipt.Counts.PostsProjected != 3 ||
+		receipt.ClosureDigests == nil || receipt.VerifiedAt == nil || receipt.ContentActivatedAt == nil {
+		t.Fatalf("fenced readback receipt=%+v", receipt)
+	}
+	raw, err := json.Marshal(receipt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var wire map[string]any
+	if err := json.Unmarshal(raw, &wire); err != nil {
+		t.Fatal(err)
+	}
+	if wire["schema"] != "quwoquan.content_fenced_readback_receipt" ||
+		wire["projectionVersion"] != float64(3) || wire["candidateProjectionVersion"] != float64(2) {
+		t.Fatalf("fenced readback wire=%s", raw)
+	}
+
+	failures := []struct {
+		name      string
+		active    releaseimport.ActiveReleaseBinding
+		candidate releaseimport.VerifiedImportedPostReleaseCandidate
+		reason    string
+	}{
+		{
+			name:      "pointer absent",
+			active:    releaseimport.ActiveReleaseBinding{Environment: "alpha", SourceOwner: "qwq_data"},
+			candidate: candidate, reason: "Content active pointer is absent",
+		},
+		{
+			name: "pointer revision differs from fence",
+			active: func() releaseimport.ActiveReleaseBinding {
+				stale := active
+				stale.Revision = 2
+				return stale
+			}(),
+			candidate: candidate, reason: "Content active pointer differs from the requested fence",
+		},
+		{
+			name:   "candidate absent",
+			active: active,
+			candidate: releaseimport.VerifiedImportedPostReleaseCandidate{
+				Environment: "alpha", SourceOwner: "qwq_data", ReleaseID: "release-a", ManifestDigest: digest,
+			},
+			reason: "Content verified candidate is absent for the fence tuple",
+		},
+		{
+			name:   "release class differs",
+			active: active,
+			candidate: func() releaseimport.VerifiedImportedPostReleaseCandidate {
+				other := candidate
+				other.ReleaseClass = "commercial"
+				return other
+			}(),
+			reason: "Content verified candidate releaseClass disagrees with the active pointer",
+		},
+	}
+	for _, failure := range failures {
+		t.Run(failure.name, func(t *testing.T) {
+			failed, err := releaseimport.BuildContentFencedReadbackReceipt(command, failure.active, failure.candidate, generatedAt)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if failed.Status != "failed" || failed.Reason != failure.reason ||
+				failed.Counts != nil || failed.ClosureDigests != nil || failed.ProjectionVersion != 0 {
+				t.Fatalf("fenced readback should fail closed: %+v", failed)
+			}
+		})
+	}
+}
+
 func TestExpectedActiveReportMappingPreservesExactTuple(t *testing.T) {
 	digest := "sha256:" + strings.Repeat("8", 64)
 	empty, err := releaseimport.ContentReleaseExpectedActiveFromExpectation(

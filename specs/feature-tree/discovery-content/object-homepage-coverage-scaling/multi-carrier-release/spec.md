@@ -522,3 +522,15 @@
 - 尚缺验收证据：`成都熊猫基地西门` 由 producer 会话按现役六步重发或从 cohort 及其 posts 引用闭包中显式剔除，并封含修正后实体的新 release/handoff；6 个 legacy 实体由 producer 决定重发或永不入 cohort，任何一条进入 cohort 前必须先满足 schema。
 - 完成判定：[`GWT-036.t3`](#gwt-036) 的 schema 判据对 `quwoquan_data/publish/entities/**/_entity.json` 全量成立（或不合规实体被显式排除在所有 cohort 之外并留证），且含修正实体的 release 在 Alpha `homepage_import` 形成完整 closure；不得手改 canonical 字节、放宽 schema 或在导入器加 fallback 关闭本 OPEN。
 - 依赖：producer 会话（生产字节唯一 writer）；Data ship 与 homepage 导入器不参与修正。
+
+<a id="open-022"></a>
+### OPEN-022 Content CAS 之后 fenced readback 失败且无 previous release 时 Data ship 缺少收敛路径
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：`ship activate` 在 Content CAS 已返回、四域 fenced readback 任一失败时按设计进入 `ambiguous`，但 Data 侧只有两条后续操作且都无法收敛首个 release 的失败：重跑 `ship activate` 以 fresh pre-query 作 expected-current，pointer 已在目标 tuple 时 Content 端按 predecessor 语义判 CAS conflict 而不是 exact replay；`ship rollback` 要求一个 distinct 的 `--from` tuple 与 prepared 目标，pointer 之前为空时不存在可回退的 previous release。Alpha 首次真实 activate 即命中此路径：Content CAS 成功（revision 1、3 posts/6 media/3 outbox），Tag/Creator/Homepage fenced readback 通过，Content 自身 fenced readback 因评估器把 candidate staging `projectionVersion` 与 pointer activation `projectionVersion` 当作同一值而失败（typed 证据为该 activate run 的 `result.json`，`failedStage=owner_fenced_readback`）；评估器已修正，但环境只能靠 alpha-local 可重建状态整体重置来恢复，Beta/Gamma/Prod 没有等价手段。
+- 尚缺实现：`ambiguous` 之后的显式收敛操作，二选一由 runtime-data-engineering `DEC-003` owner 裁定：以原 activate run 的 pre receipt 作 exact predecessor 的 replay-only fenced readback，或允许 rollback 到 empty predecessor 并生成新 revision；两者都必须只消费显式 receipt ref+digest，不猜测、不自动重试 CAS。
+- 尚缺验收证据：local_contract 注入"CAS 成功、任一域 fenced readback 失败、pointer 之前为空"的序列，证明收敛操作只在 exact predecessor 证据在场时执行且 owner bytes 不变；api_integration 覆盖收敛后四域 readback 同 tuple。
+- 完成判定：[`GWT-035`](#gwt-035) 的 Data ship 交付面下，上述序列在 Alpha 真实运行一次并得到 `completed` 的 activate 或 rollback 结果，且 `ship verify` 可消费该结果；不得以重置环境状态、手改 pointer 或放宽 fenced readback 判据关闭本 OPEN。
+- 依赖：runtime-data-engineering `DEC-003`（fence 与 rollback 语义 owner）；content-service release-control 的 replay/rollback 契约。
