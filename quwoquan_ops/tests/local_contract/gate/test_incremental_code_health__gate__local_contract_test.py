@@ -26,8 +26,8 @@ import pytest
 
 from quwoquan_ops.gate import verify_incremental_code_health
 from quwoquan_ops.gate.code_health_delta.classification import classify_path
+from quwoquan_ops.gate.code_health_delta import engine, git_delta
 from quwoquan_ops.gate.code_health_delta.engine import REPORT_SCHEMA, analyze_delta
-from quwoquan_ops.gate.code_health_delta import git_delta
 from quwoquan_ops.gate.code_health_delta.metrics import reuse_scope_key
 from quwoquan_ops.gate.code_health_delta.policy import PolicyError, load_policy
 
@@ -121,6 +121,17 @@ def test_policy_rejects_unknown_nested_field_and_false_active_tool(tmp_path: Pat
     )
     with pytest.raises(PolicyError, match="active 时必须声明 exact version"):
         load_policy(invalid)
+
+
+def test_gate_block_finding_requires_nonempty_recovery() -> None:
+    with pytest.raises(ValueError, match="GATE_BLOCK finding 缺 recovery"):
+        engine._finding("CODE_HEALTH.FIXTURE", "fixture.py", "GATE_BLOCK", "blocked")
+
+    finding = engine._finding(
+        "CODE_HEALTH.FIXTURE", "fixture.py", "GATE_BLOCK", "blocked",
+        recovery="repair_fixture",
+    )
+    assert finding["recovery"] == "repair_fixture"
 
 
 def test_suffixless_tracked_executable_blocks_before_source_classification(tmp_path: Path) -> None:
