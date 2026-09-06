@@ -390,6 +390,26 @@ def _health_runtime(*, health: StackctlResult, environment: str, candidate: Mapp
     return runtime
 
 
+def _package_with_dependency_recovery(*, environment: str, args: argparse.Namespace, log_dir: Path, phases: Phases) -> StackctlResult:
+    """打包；App 依赖 bundle 缺失/过期时执行一次有界 canonical `app-dependency-sync` 再重试，其余失败原样阻断。"""
+
+    def package() -> StackctlResult:
+        return _stackctl(
+            "package", "--env", environment, "--include-services",
+            "--release-attestation", str(args.release_attestation),
+            "--rollback-release-attestation", str(args.rollback_release_attestation), log_dir=log_dir,
+        )
+
+    result = package()
+    details = " ".join(str(item) for item in (result.payload.get("details") or []))
+    if result.exit_code != 0 and "App dependency bundle" in details:
+        phases.run(f"{environment}.app-dependency-sync", lambda: _require_ok(
+            _stackctl("app-dependency-sync", log_dir=log_dir / "app-dependency-sync"), "INTEGRATION_RUN.APP_DEPENDENCY_SYNC_FAILED",
+        ))
+        result = package()
+    return _require_ok(result, "INTEGRATION_RUN.PACKAGE_FAILED")
+
+
 def _run_environment(*, environment: str, profile: str, candidate: Mapping[str, str], impact_plan_digest: str,
                      args: argparse.Namespace, run_dir: Path, phases: Phases, summary: dict[str, Any],
                      previous_readiness: Path | None = None) -> dict[str, Any]:
@@ -401,11 +421,9 @@ def _run_environment(*, environment: str, profile: str, candidate: Mapping[str, 
     summary["environments"][environment] = env_summary
     started_up = False
     try:
-        package = phases.run(f"{environment}.package", lambda: _require_ok(_stackctl(
-            "package", "--env", environment, "--include-services",
-            "--release-attestation", str(args.release_attestation),
-            "--rollback-release-attestation", str(args.rollback_release_attestation), log_dir=log_dir,
-        ), "INTEGRATION_RUN.PACKAGE_FAILED"))
+        package = phases.run(f"{environment}.package", lambda: _package_with_dependency_recovery(
+            environment=environment, args=args, log_dir=log_dir, phases=phases,
+        ))
         env_summary["reports"]["package"] = _report_source(package)
         active_path = Path(os.environ.get("QWQ_DEPLOY_WORK_ROOT", str(Path.home() / ".cache/quwoquan/deploy"))) / target / "active-runtime-candidate.json"
         active = json.loads(active_path.read_text(encoding="utf-8"))
