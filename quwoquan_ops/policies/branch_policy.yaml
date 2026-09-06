@@ -42,6 +42,12 @@ required_promotion_checks:
   - name: 03. Delivery Gate
     workflow: .github/workflows/delivery-gate.yml
 
+# lane/* -> dev1.0 的 hosted required check。与 promotion checks 是独立集合：
+# 前者由 hosted release authority 展开为 main ruleset 期望值，不能混入 lane check。
+required_integration_checks:
+  - name: 04. Lane Gate
+    workflow: .github/workflows/lane-gate.yml
+
 allowed_pull_request_edges:
   - head: dev1.0
     base: main

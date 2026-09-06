@@ -160,10 +160,13 @@ def classify(paths: list[str]) -> dict[str, bool]:
         "has_data_scripts": False,
         "has_service_probes": False,
         "has_app_uat_widget_keys": False,
+        "has_workflows": False,
     }
     for path in paths:
         if path in NON_COMMIT_GATE_DOCUMENTS:
             continue
+        if path.startswith(".github/workflows/") and path.endswith((".yml", ".yaml")):
+            flags["has_workflows"] = True
         if path.startswith("quwoquan_service/"):
             flags["has_service"] = True
             if "/contracts/" in path or path.startswith(
@@ -211,6 +214,8 @@ def classify(paths: list[str]) -> dict[str, bool]:
 
 def static_checks(flags: dict[str, bool], paths: list[str] | None = None) -> list[str]:
     checks = ["branch_policy", "entrypoint_script_paths"]
+    if flags["has_workflows"]:
+        checks.append("workflow_cli_arguments")
     source_changed = (
         any(
             path.startswith(("quwoquan_app/", "quwoquan_service/", "quwoquan_data/", "quwoquan_ops/"))
@@ -368,6 +373,12 @@ def _select_pytest_targets(paths: list[str]) -> dict[str, object]:
             (
                 "quwoquan_ops/tests/local_contract/gate/"
                 "test_incremental_code_health__gate__local_contract_test.py",
+                "quwoquan_ops/tests/local_contract/gate/"
+                "test_code_health_file_size__gate__local_contract_test.py",
+                "quwoquan_ops/tests/local_contract/gate/"
+                "test_code_health_precision__gate__local_contract_test.py",
+                "quwoquan_ops/tests/local_contract/gate/"
+                "test_code_health_render_and_history__gate__local_contract_test.py",
             ),
         ),
         (
@@ -375,6 +386,34 @@ def _select_pytest_targets(paths: list[str]) -> dict[str, object]:
             (
                 "quwoquan_ops/tests/local_contract/gate/"
                 "test_incremental_code_health__gate__local_contract_test.py",
+            ),
+        ),
+        (
+            "quwoquan_ops/gate/report_code_health_weekly.py",
+            (
+                "quwoquan_ops/tests/local_contract/gate/"
+                "test_code_health_render_and_history__gate__local_contract_test.py",
+            ),
+        ),
+        (
+            "quwoquan_ops/gate/report_code_health_hotspots.py",
+            (
+                "quwoquan_ops/tests/local_contract/gate/"
+                "test_code_health_hotspots__gate__local_contract_test.py",
+            ),
+        ),
+        (
+            "quwoquan_ops/ci/verify_code_health_integration.py",
+            (
+                "quwoquan_ops/tests/local_contract/ci/"
+                "test_code_health_integration__local_contract_test.py",
+            ),
+        ),
+        (
+            "quwoquan_ops/ci/code_health_evidence.py",
+            (
+                "quwoquan_ops/tests/local_contract/ci/"
+                "test_code_health_integration__local_contract_test.py",
             ),
         ),
         (

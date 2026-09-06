@@ -14,13 +14,18 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-TEST_ROOT_PARTS = ("quwoquan_data", "tests", "local_contract")
+#: 每个受管测试树的 local_contract 根；默认 data 保持既有 gate_repo.sh 调用不变。
+TEST_ROOTS = {
+    "data": ("quwoquan_data", "tests", "local_contract"),
+    "ops": ("quwoquan_ops", "tests", "local_contract"),
+}
+TEST_ROOT_PARTS = TEST_ROOTS["data"]
 TEST_FILE_SUFFIX = "_local_contract_test.py"
 
 
-def local_contract_test_files(repo_root: Path) -> list[str]:
-    """data `local_contract` 全部测试文件的仓内相对路径，字典序。"""
-    test_root = repo_root.joinpath(*TEST_ROOT_PARTS)
+def local_contract_test_files(repo_root: Path, scope: str = "data") -> list[str]:
+    """指定 scope 下 `local_contract` 全部测试文件的仓内相对路径，字典序。"""
+    test_root = repo_root.joinpath(*TEST_ROOTS[scope])
     return sorted(
         path.relative_to(repo_root).as_posix()
         for path in test_root.rglob("*" + TEST_FILE_SUFFIX)
@@ -33,8 +38,10 @@ def shard_of(relative_path: str, total_shards: int) -> int:
     return int.from_bytes(digest[:8], "big") % total_shards
 
 
-def sharded_test_files(repo_root: Path, total_shards: int, shard_index: int) -> list[str]:
-    files = local_contract_test_files(repo_root)
+def sharded_test_files(
+    repo_root: Path, total_shards: int, shard_index: int, scope: str = "data",
+) -> list[str]:
+    files = local_contract_test_files(repo_root, scope)
     if total_shards == 1:
         return files
     return [path for path in files if shard_of(path, total_shards) == shard_index]
@@ -42,7 +49,11 @@ def sharded_test_files(repo_root: Path, total_shards: int, shard_index: int) -> 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        description="列出属于指定分片的 data local_contract 测试文件",
+        description="列出属于指定分片的 local_contract 测试文件",
+    )
+    parser.add_argument(
+        "--scope", choices=sorted(TEST_ROOTS), default="data",
+        help="受管测试树；默认 data 保持既有调用不变",
     )
     parser.add_argument(
         "--total-shards",
@@ -67,10 +78,10 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 2
 
-    selected = sharded_test_files(ROOT, args.total_shards, args.shard_index)
+    selected = sharded_test_files(ROOT, args.total_shards, args.shard_index, args.scope)
     if not selected:
         print(
-            f"[data-shard] FAIL: 分片 {args.shard_index}/{args.total_shards} 为空——"
+            f"[{args.scope}-shard] FAIL: 分片 {args.shard_index}/{args.total_shards} 为空——"
             "分片数超过测试文件数时该片没有任何判据可跑",
             file=sys.stderr,
         )

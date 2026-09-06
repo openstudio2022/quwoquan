@@ -9,10 +9,9 @@ from typing import Sequence
 
 from .bootstrap import DEFAULT_ROOT
 from .bytecode_guard import bytecode_guard_issues
-from .constants import PYTHON_LINE_BUDGET_ENFORCEMENT, SCOPES
+from .constants import SCOPES
 from .hygiene import naming_issues, source_hygiene_issues, tool_owner_issues
 from .inventory import enumerate_scripts, python_file_records
-from .line_budget import line_budget_issues
 from .models import Issue, Warning
 from .references import import_references, path_references
 from .roles import role_records
@@ -88,19 +87,6 @@ def derive_report(root: Path, scopes: Sequence[str]) -> dict[str, object]:
         if record.boundary == "unknown"
     )
 
-    budget_findings = line_budget_issues(normalized_root, file_records)
-    if PYTHON_LINE_BUDGET_ENFORCEMENT == "block":
-        issues.extend(budget_findings)
-    else:
-        warnings.extend(
-            Warning(
-                code=finding.code,
-                path=finding.path,
-                message=finding.message,
-            )
-            for finding in budget_findings
-        )
-
     unique_issues = sorted(
         {issue for issue in issues},
         key=lambda issue: (issue.code, issue.path, issue.message),
@@ -130,7 +116,6 @@ def derive_report(root: Path, scopes: Sequence[str]) -> dict[str, object]:
             },
             "issueCount": len(unique_issues),
             "warningCount": len(unique_warnings),
-            "lineBudgetExceededCount": len(budget_findings),
             "orphanCandidateCount": sum(
                 1 for record in sorted_records if record.orphanCandidate
             ),
@@ -155,8 +140,8 @@ def _report_bytes(report: dict[str, object]) -> bytes:
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
-            "派生全 Python 治理边界及 Python/Shell 脚本 owner、角色、结构、"
-            "行数预算与卫生违规。"
+            "派生全 Python 治理边界及 Python/Shell 脚本 owner、角色、结构与卫生违规；"
+            "文件规模由 canonical Code Health Delta 单轨拥有。"
         )
     )
     parser.add_argument("--scope", choices=(*SCOPES, "all"), default="all")

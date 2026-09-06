@@ -124,6 +124,14 @@ def test_repository_policy_declares_dev_integration_main_release_and_six_lanes()
             workflow=".github/workflows/delivery-gate.yml",
         ),
     )
+    assert policy.required_integration_checks == (
+        RequiredPromotionCheck(
+            name="04. Lane Gate",
+            workflow=".github/workflows/lane-gate.yml",
+        ),
+    )
+    for row in policy.required_integration_checks:
+        assert (ROOT / row.workflow).is_file(), row.workflow
     assert policy.allowed_pull_request_edges == (
         PullRequestEdge(base="main", head="dev1.0"),
         PullRequestEdge(base="dev1.0", head="lane/*"),
@@ -774,6 +782,33 @@ def test_policy_byte_loader_rejects_unknown_or_missing_root_fields() -> None:
         load_policy_bytes(raw + b"unexpected_policy_field: true\n")
     with pytest.raises(ValueError, match="root fields drifted"):
         load_policy_bytes(raw.replace(b"production_workflow:", b"removed_workflow:", 1))
+    with pytest.raises(ValueError, match="root fields drifted"):
+        load_policy_bytes(raw.replace(b"required_integration_checks:", b"lane_checks:", 1))
+
+
+def test_integration_and_promotion_required_checks_are_independent_sets() -> None:
+    """lane PR 与 main promotion 的 required check 不能共享 workflow 或名字。
+
+    `required_promotion_checks` 被 hosted release authority 展开成 main ruleset 期望值；
+    把 lane check 混进去会让 ruleset readback 失配，把 promotion check 混进 lane 会让
+    lane PR 去等一个永远不会为它触发的 workflow。
+    """
+    raw = (ROOT / "quwoquan_ops/policies/branch_policy.yaml").read_text(encoding="utf-8")
+    shared_workflow = raw.replace(
+        "workflow: .github/workflows/lane-gate.yml",
+        "workflow: .github/workflows/delivery-gate.yml",
+    )
+    with pytest.raises(ValueError, match="must not share a workflow"):
+        load_policy_bytes(shared_workflow.encode("utf-8"))
+    shared_name = raw.replace("name: 04. Lane Gate", "name: 03. Delivery Gate")
+    with pytest.raises(ValueError, match="must not share a check name"):
+        load_policy_bytes(shared_name.encode("utf-8"))
+    empty = raw.replace(
+        "required_integration_checks:\n  - name: 04. Lane Gate\n    workflow: .github/workflows/lane-gate.yml\n",
+        "required_integration_checks: []\n",
+    )
+    with pytest.raises(ValueError, match="required_integration_checks must be non-empty"):
+        load_policy_bytes(empty.encode("utf-8"))
 
 
 def test_persistent_lane_admission_schema_is_exact_and_closed() -> None:

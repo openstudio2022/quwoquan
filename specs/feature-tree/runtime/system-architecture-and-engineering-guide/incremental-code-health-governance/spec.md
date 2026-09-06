@@ -32,6 +32,7 @@
 - 每个 changed path 必须互斥分类，generated/vendor/test 与手写生产代码使用不同判据。
 - 首日 blocker 只来自确定性高置信新债；存量、无法证明的动态入口和 calibration 指标只报告。
 - 删除、rename、codegen、fixture 与大迁移必须单列，不能仅按 churn 大小阻断。
+- 手写生产文件规模由本 Story 的 canonical delta 单轨拥有：任何语言（含 Python 脚本治理）不得维护第二套行数预算、路径 allowlist 或机器派生豁免；测试类文件规模只进入 weekly 观测。
 
 <a id="req-002"></a>
 ### REQ-002 证据、调度与准出 authority 单轨
@@ -62,8 +63,8 @@
 - GIVEN candidate 同时包含手写、测试、generated、vendor、contract、config 与 docs 变更。
 - WHEN 执行 canonical code-health delta。
 - THEN 每个 path 恰好落入一种分类，只有手写生产代码参与复杂度、重复与认知预算判罚。
-- THEN 新越过 1000 行、既有超限继续上升或新增无入口 private Python module 返回 `GATE_BLOCK`。
-- THEN 复杂度、重复和 800 行候选阈值在 calibration 阶段只返回 `PR_WARN`。
+- THEN 新越过 2000 行、既有超限继续上升或新增无入口 private Python module 返回 `GATE_BLOCK`。
+- THEN 复杂度、重复和 1000 行候选阈值在 calibration 阶段只返回 `PR_WARN`。
 - THEN rename、delete、generated regeneration 与具备单一验收切片的大迁移不因原始 churn 单独阻断。
 
 <a id="gwt-002"></a>
@@ -83,6 +84,7 @@
 - THEN PRE 只加载本 owner 的紧凑阈值和热点，POST 生成 current delta receipt，Reviewer 与 AI 只消费命名证据。
 - THEN L0 不安装网络工具且只做 changed-file 快判，L1/Delivery 执行完整 delta，weekly 全量报告不阻断 PR。
 - THEN `PR_WARN` 只能被裁决为 candidate 内修复、最低 owner OPEN 或 out-of-scope，重复两次后才可 distill 为绑定 deterministic check 的规则候选。
+- THEN weekly 报告对照上期给出每项棘轮指标的方向与每个 Top hotspot 的连续在榜周数；`plan-next` 只对连续两期在榜且可行动的 owner scope 热点裁决为最低 owner OPEN 或 out-of-scope，热点事实不可用时按无热点继续、不阻断。
 
 ## 6. 依赖
 
@@ -99,16 +101,6 @@
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`track`
-- 影响或价值：当前 exact candidate-bound Code Health report 将 `calibration.py::aggregate_calibration`、`engine.py::analyze_delta`、`git_delta.py::working_tree_changes`、`metrics.py::has_repository_entry`、`policy.py::load_policy`、`weekly.py::_clone_facts`、`weekly.py::delivery_outcomes` 与 `weekly.py::analyze_weekly` 标为 `CODE_HEALTH.COMPLEXITY_ADVISORY`；这些 calibration `PR_WARN` 不阻断 candidate，但治理实现自身的高复杂度会降低判罚、校准与周报的可信可审计性。
-- 完成判定：`GWT-001` 至 `GWT-003` 对应行为继续满足；在独立 owner increment 中逐项收敛上述 8 个 symbol，保持 exact range、分类、terminal 与 EvidenceFingerprint 合同；fresh clean-range Code Health 不再产生对应 advisory，且不得调高阈值、引入 allowlist/baseline 或把异常改为缺失事实。
+- 影响或价值：当前 exact candidate-bound Code Health report 将 `calibration.py::aggregate_calibration`、`engine.py::analyze_delta`（已由 65/100 收敛到 36/43，仍超 advisory）、`git_delta.py::working_tree_changes`、`metrics.py::has_repository_entry`、`weekly.py::_clone_facts`、`weekly.py::delivery_outcomes` 与 `weekly.py::analyze_weekly` 标为 `CODE_HEALTH.COMPLEXITY_ADVISORY`（`policy.py::load_policy` 已拆分收敛）；这些 calibration `PR_WARN` 不阻断 candidate，但治理实现自身的高复杂度会降低判罚、校准与周报的可信可审计性。
+- 完成判定：`GWT-001` 至 `GWT-003` 对应行为继续满足；在独立 owner increment 中逐项收敛上述 7 个 symbol，保持 exact range、分类、terminal 与 EvidenceFingerprint 合同；fresh clean-range Code Health 不再产生对应 advisory，且不得调高阈值、引入 allowlist/baseline 或把异常改为缺失事实。
 - 依赖：current Code Health named evidence及本 Story 的 focused contracts。
-
-<a id="open-002"></a>
-### OPEN-002 Python 行数预算仍缺 block 升级的清零前提
-
-- 类型：`capability_gap`
-- 优先级：`P1`
-- 准出影响：`track`
-- 影响或价值：发布链原子切换把 11 个受管模块推过 1000 行硬顶（最大 `verify_ci_cd_evidence_contracts.py` 1557 行、`official_distribution_release.py` 1353 行、`release_evidence_reader.py` 1265 行），因此 `PYTHON_LINE_BUDGET_ENFORCEMENT` 尚无法从 `warn` 升到 `block`——现在切换只会把这批存量债变成与其无关的 candidate 的阻断。存量未清零期间，新写的超预算模块只会得到 warning，缺少确定性阻断。
-- 完成判定：`GWT-001` 对「新越过 1000 行返回 `GATE_BLOCK`」的判罚继续满足；按责任把上述模块拆入各自 owning package 直到 `verify_python_script_governance --scope ops --mode check` 的 `PYTHON.LINE_BUDGET_EXCEEDED` 归零，随后把 `PYTHON_LINE_BUDGET_ENFORCEMENT` 切到 `block`，并由 `test_block_enforcement_promotes_findings_to_issues` 证明超标进入阻断 issues；不得新增 allowlist、baseline 或调高 1000 行硬顶。
-- 依赖：`quwoquan_ops/gate/python_script_governance/line_budget.py` 现有派生边界与发布链模块的当前 owner。

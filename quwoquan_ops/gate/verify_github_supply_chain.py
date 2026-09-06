@@ -25,6 +25,11 @@ RELEASE_WORKFLOWS = {
     "production": WORKFLOWS / "deploy-prod-auto.yml",
 }
 ATTEST_ACTION = "actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6"
+#: GitHub Actions `job` 上下文的全部合法属性。引用其他属性（如 job.workflow_ref）
+#: 会让 workflow 在解析期失效：run 产生 0 个 job，且经 workflow_call 的 caller 一并
+#: 启动失败，本地只能靠静态合同拦截。
+JOB_CONTEXT_PROPERTIES = frozenset({"container", "services", "status"})
+JOB_CONTEXT_PATTERN = re.compile(r"\$\{\{[^}]*?\bjob\.([A-Za-z_][A-Za-z0-9_]*)")
 
 
 def _read_workflow(name: str) -> tuple[Path, str] | None:
@@ -137,6 +142,16 @@ def verify_action_pins() -> list[str]:
                     f"{path.relative_to(ROOT)}:{line}: third-party action must use a full "
                     f"40-character commit SHA: {reference}"
                 )
+        for match in JOB_CONTEXT_PATTERN.finditer(text):
+            attribute = match.group(1)
+            if attribute in JOB_CONTEXT_PROPERTIES:
+                continue
+            line = text.count("\n", 0, match.start()) + 1
+            failures.append(
+                f"{path.relative_to(ROOT)}:{line}: job.{attribute} is not a GitHub Actions "
+                f"job context property; the workflow fails to start "
+                f"(allowed: {', '.join(sorted(JOB_CONTEXT_PROPERTIES))})"
+            )
     return failures
 
 

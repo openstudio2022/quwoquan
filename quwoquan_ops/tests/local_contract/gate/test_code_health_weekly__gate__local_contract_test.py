@@ -111,6 +111,7 @@ def test_weekly_report_is_clean_candidate_report_only(tmp_path: Path) -> None:
     assert _sha256(report["deliveryOutcomesDigest"])
     assert report["deliveryOutcomesDigest"] == canonical_digest(run_pages)
 
+    # 身份只绑定输入：同 head/policy/实现/delivery 数据的再次观测得到同一身份，历史序列才能去重。
     later_report = analyze_weekly(
         repo,
         head=head,
@@ -119,7 +120,23 @@ def test_weekly_report_is_clean_candidate_report_only(tmp_path: Path) -> None:
         delivery_run_pages=run_pages,
         observed_at=observed_at.replace(microsecond=123457),
     )
-    assert later_report["identityDigest"] != report["identityDigest"]
+    assert later_report["identityDigest"] == report["identityDigest"]
+    assert later_report["observedAt"] != report["observedAt"]
+    assert report["ratchet"]["comparisonStatus"] == "insufficient-history"
+    assert report["hotspotPersistence"] == {"historyReports": 0, "topN": 20, "items": []}
+    assert report["sizeDistribution"]["tiers"] == [800, 1000, 2000]
+    assert report["sizeDistribution"]["production"]["files"] == 1
+    assert report["ownerScopeWeakPoints"][0]["ownerScope"] == "quwoquan_ops/ci"
+
+    changed_delivery = analyze_weekly(
+        repo,
+        head=head,
+        policy=load_policy(policy_path),
+        cloc_executable=str(fake_cloc),
+        delivery_run_pages=run_pages[:1],
+        observed_at=observed_at,
+    )
+    assert changed_delivery["identityDigest"] != report["identityDigest"]
 
 
 def test_delivery_outcomes_marks_missing_window_as_insufficient_history() -> None:
@@ -159,9 +176,15 @@ def test_weekly_workflow_slurps_pages_and_preserves_report_only_artifact_contrac
     workflow = (ROOT / ".github/workflows/code-health-weekly.yml").read_text(encoding="utf-8")
 
     assert "gh api --paginate --slurp" in workflow
-    assert "Delivery completed runs (current / previous)" in workflow
-    assert "Delivery comparison status" in workflow
-    assert "Delivery regression flags" in workflow
+    assert "code-health-integration.yml app_pipeline.yml service_pipeline.yml" in workflow
+    assert "delivery-gate.yml/runs" not in workflow
+    assert "code_health_evidence.py pull-weekly-history" in workflow
+    assert "code_health_evidence.py publish" in workflow
+    assert "--transport-tag \"week-$(date -u +%G-W%V)\"" in workflow
+    assert "--summary-markdown" in workflow
+    assert "weekly-summary.md\" >> \"$GITHUB_STEP_SUMMARY\"" in workflow
+    for forbidden in ("promotion", "mutation", "download-artifact"):
+        assert forbidden not in workflow.casefold()
     assert workflow.count("actions/upload-artifact@") == 2
     successful_upload = workflow[workflow.index("- name: Upload successful weekly report"):workflow.index("- name: Upload failed weekly diagnostic")]
     assert "if: success()" in successful_upload

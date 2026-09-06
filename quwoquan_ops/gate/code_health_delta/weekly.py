@@ -254,6 +254,135 @@ def _percentile(values: list[float], fraction: float) -> float | None:
     return round(ordered[max(0, math.ceil(len(ordered) * fraction) - 1)], 3)
 
 
+WEEKLY_SCHEMA = "quwoquan.code-health-weekly.v1"
+
+#: 棘轮指标：值越小越好。方向判断只看这些字段，不读 hotspot 排名。
+RATCHET_METRICS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("overCyclomaticAdvisory", ("complexitySummary", "overCyclomaticAdvisory")),
+    ("overCognitiveAdvisory", ("complexitySummary", "overCognitiveAdvisory")),
+    ("cloneGroupCount", ("summary", "cloneGroupCount")),
+    ("deadCandidateCount", ("summary", "deadCandidateCount")),
+)
+
+
+def _size_distribution(blobs: dict[str, bytes], tiers: list[int]) -> dict[str, int]:
+    counts = {f"over{tier}": 0 for tier in tiers}
+    lines_over = {f"linesOver{tier}": 0 for tier in tiers}
+    for body in blobs.values():
+        lines = line_count(body)
+        for tier in tiers:
+            if lines > tier:
+                counts[f"over{tier}"] += 1
+                lines_over[f"linesOver{tier}"] += lines - tier
+    return {"files": len(blobs), **counts, **lines_over}
+
+
+def _lookup(report: dict[str, Any], path: tuple[str, ...]) -> int | None:
+    value: Any = report
+    for key in path:
+        if not isinstance(value, dict) or key not in value:
+            return None
+        value = value[key]
+    return value if isinstance(value, int) and not isinstance(value, bool) else None
+
+
+def _ordered_previous(previous_reports: Iterable[dict[str, Any]], current_head: str) -> list[dict[str, Any]]:
+    ordered = []
+    for report in previous_reports:
+        if not isinstance(report, dict) or report.get("schema") != WEEKLY_SCHEMA:
+            raise ValueError("previous weekly report schema 非法")
+        if report.get("headSha") == current_head:
+            continue
+        ordered.append(report)
+    return sorted(ordered, key=lambda item: str(item["window"]["end"]), reverse=True)
+
+
+def ratchet_trend(current: dict[str, Any], previous: list[dict[str, Any]], tiers: list[int]) -> dict[str, Any]:
+    """Week-over-week direction for every ratchet metric; ``n/a`` when no history exists."""
+    last = previous[0] if previous else None
+    metrics: dict[str, dict[str, Any]] = {}
+    paths: list[tuple[str, tuple[str, ...]]] = list(RATCHET_METRICS)
+    for category in ("production", "test"):
+        for tier in tiers:
+            paths.append((f"{category}.over{tier}", ("sizeDistribution", category, f"over{tier}")))
+            paths.append((f"{category}.linesOver{tier}", ("sizeDistribution", category, f"linesOver{tier}")))
+    for name, path in paths:
+        now = _lookup(current, path)
+        before = None if last is None else _lookup(last, path)
+        if now is None or before is None:
+            direction = "n/a"
+        elif now < before:
+            direction = "improved"
+        elif now > before:
+            direction = "worsened"
+        else:
+            direction = "flat"
+        metrics[name] = {"previous": before, "current": now, "direction": direction}
+    return {
+        "comparisonStatus": "comparable" if last is not None else "insufficient-history",
+        "previousHeadSha": None if last is None else last["headSha"],
+        "previousWindowEnd": None if last is None else last["window"]["end"],
+        "metrics": metrics,
+    }
+
+
+def hotspot_persistence(top: list[dict[str, Any]], previous: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Consecutive weeks each current hotspot has stayed in the Top-N, most recent first."""
+    history = [{item["path"] for item in report.get("topHotspots", [])} for report in previous]
+    result = []
+    for item in top:
+        streak = 1
+        for paths in history:
+            if item["path"] in paths:
+                streak += 1
+            else:
+                break
+        result.append({"path": item["path"], "ownerScope": item["ownerScope"], "consecutiveWeeksInTopN": streak})
+    return result
+
+
+def owner_scope_weak_points(
+    production: dict[str, bytes],
+    complexity: dict[str, dict[str, int]],
+    clone_lines: dict[str, int],
+    dead_candidates: list[dict[str, str]],
+    policy: dict[str, Any],
+    *,
+    limit: int = 5,
+) -> list[dict[str, Any]]:
+    """Aggregate weak points per owner scope so reviewers see where debt concentrates."""
+    advisory = policy["thresholds"]["file_lines"]["advisory"]
+    block = policy["thresholds"]["file_lines"]["block"]
+    cyclomatic = policy["thresholds"]["complexity"]["cyclomatic_advisory"]
+    cognitive = policy["thresholds"]["complexity"]["cognitive_advisory"]
+    scopes: dict[str, dict[str, int]] = defaultdict(lambda: {
+        "files": 0, "overAdvisory": 0, "overBlock": 0, "overComplexity": 0, "cloneLines": 0, "deadCandidates": 0,
+    })
+    for path, body in production.items():
+        scope = scopes[reuse_scope_key(path)]
+        lines = line_count(body)
+        scope["files"] += 1
+        scope["overAdvisory"] += lines > advisory
+        scope["overBlock"] += lines > block
+        metric = complexity.get(path, {})
+        scope["overComplexity"] += (
+            metric.get("maxCyclomatic", 0) > cyclomatic or metric.get("maxCognitive", 0) > cognitive
+        )
+        scope["cloneLines"] += clone_lines.get(path, 0)
+    for item in dead_candidates:
+        if item["path"].startswith("<"):
+            continue
+        scopes[reuse_scope_key(item["path"])]["deadCandidates"] += 1
+    ranked = sorted(
+        ({"ownerScope": scope, **values} for scope, values in scopes.items()),
+        key=lambda item: (
+            -item["overBlock"], -item["overAdvisory"], -item["overComplexity"], -item["cloneLines"],
+            -item["deadCandidates"], item["ownerScope"],
+        ),
+    )
+    return ranked[:limit]
+
+
 def analyze_weekly(
     repo: Path,
     *,
@@ -262,6 +391,7 @@ def analyze_weekly(
     cloc_executable: str = "cloc",
     delivery_run_pages: object = None,
     observed_at: datetime | None = None,
+    previous_reports: Iterable[dict[str, Any]] = (),
 ) -> dict[str, Any]:
     repo = repo.resolve()
     head_sha = _git(repo, "rev-parse", "--verify", f"{head}^{{commit}}").strip()
@@ -329,17 +459,21 @@ def analyze_weekly(
         for name in ("weekly.py", "metrics.py", "classification.py")
     })
     delivery_outcomes_digest = canonical_digest(delivery_run_pages)
+    # 身份只绑定输入（head、窗口、policy、实现、delivery 数据、工具），不绑定观测时刻：
+    # 同一输入重复运行得到同一报告身份，历史序列才能去重与对比。
     identity = canonical_digest({
         "headSha": head_sha,
         "window": window,
         "policyDigest": policy_digest,
         "implementationDigest": implementation_digest,
         "deliveryOutcomesDigest": delivery_outcomes_digest,
-        "observedAt": observed_value,
         "tools": tools,
     })
-    return {
-        "schema": "quwoquan.code-health-weekly.v1", "terminal": "REPORT_ONLY",
+    tiers = list(policy["report"]["size_observation_tiers"])
+    test_blobs = {path: body for path, body in all_blobs.items() if classify_path(path, policy) == "test"}
+    previous = _ordered_previous(previous_reports, head_sha)
+    report = {
+        "schema": WEEKLY_SCHEMA, "terminal": "REPORT_ONLY",
         "headSha": head_sha, "window": window,
         "identityDigest": identity, "policyId": policy["policy_id"],
         "policyDigest": policy_digest, "implementationDigest": implementation_digest,
@@ -347,13 +481,26 @@ def analyze_weekly(
         "tools": tools,
         "growthHistory": history, "categories": categories,
         "summary": {"trackedFiles": len(paths), "handwrittenProductionFiles": len(production), "cloneGroupCount": clone_groups, "deadCandidateCount": len(dead_candidates)},
+        "sizeDistribution": {
+            "tiers": tiers,
+            "production": _size_distribution(production, tiers),
+            "test": _size_distribution(test_blobs, tiers),
+        },
         "complexitySummary": {
             "functionCount": sum(item["functions"] for item in complexity.values()),
             "overCyclomaticAdvisory": sum(item["maxCyclomatic"] > policy["thresholds"]["complexity"]["cyclomatic_advisory"] for item in complexity.values()),
             "overCognitiveAdvisory": sum(item["maxCognitive"] > policy["thresholds"]["complexity"]["cognitive_advisory"] for item in complexity.values()),
         },
         "topHotspots": top, "deadCodeCandidates": dead_candidates,
+        "ownerScopeWeakPoints": owner_scope_weak_points(production, complexity, clone_lines, dead_candidates, policy),
         "deliveryOutcomes": outcome,
         "generatedAt": observed_value,
         "authority": {"blocksPullRequests": False, "createsOwnerOpen": False, "automaticRemediation": False},
     }
+    report["ratchet"] = ratchet_trend(report, previous, tiers)
+    report["hotspotPersistence"] = {
+        "historyReports": len(previous),
+        "topN": policy["report"]["weekly_top_hotspots"],
+        "items": hotspot_persistence(top, previous),
+    }
+    return report

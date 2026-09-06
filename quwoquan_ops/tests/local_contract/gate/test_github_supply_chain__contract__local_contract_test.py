@@ -429,6 +429,38 @@ class GithubSupplyChainContractTest(unittest.TestCase):
             failures,
         )
 
+    def test_invalid_job_context_property_fails_closed(self) -> None:
+        backsync = WORKFLOWS / "system-backsync.yml"
+        canonical = backsync.read_text(encoding="utf-8")
+        needle = (
+            "${{ github.repository }}/.github/workflows/system-backsync.yml"
+            "@${{ github.ref }}"
+        )
+        self.assertIn(needle, canonical)
+        forged = canonical.replace(needle, "${{ job.workflow_ref }}")
+
+        with _patched_workflow(backsync, forged):
+            failures = verify_github_supply_chain.verify_action_pins()
+
+        self.assertTrue(
+            any(
+                ".github/workflows/system-backsync.yml:" in failure
+                and "job.workflow_ref is not a GitHub Actions job context property" in failure
+                for failure in failures
+            ),
+            failures,
+        )
+        legal = canonical.replace(needle, "${{ job.status }}")
+        with _patched_workflow(backsync, legal):
+            self.assertEqual(
+                [
+                    failure
+                    for failure in verify_github_supply_chain.verify_action_pins()
+                    if "job context property" in failure
+                ],
+                [],
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

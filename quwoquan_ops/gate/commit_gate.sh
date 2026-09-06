@@ -141,6 +141,18 @@ run_static_check() {
     entrypoint_script_paths)
       python3 -B quwoquan_ops/gate/verify_entrypoint_script_paths.py
       ;;
+    workflow_cli_arguments)
+      # L0 只对本次 staged 触及的 workflow 判定；全量在 gate_repo.sh。
+      workflow_args=()
+      while IFS= read -r changed; do
+        [[ -n "$changed" ]] && workflow_args+=(--workflow "$changed")
+      done < <(git diff --cached --name-only -- '.github/workflows/*.yml' '.github/workflows/*.yaml')
+      if [[ ${#workflow_args[@]} -eq 0 ]]; then
+        log "FAIL: workflow_cli_arguments selected without staged workflow files"
+        return 2
+      fi
+      python3 -B quwoquan_ops/gate/verify_workflow_cli_arguments.py "${workflow_args[@]}"
+      ;;
     code_health_delta_fast)
       changed_args=()
       while IFS= read -r changed; do

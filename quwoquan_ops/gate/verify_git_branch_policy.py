@@ -291,7 +291,10 @@ def system_backsync_workflow_issues(
     job = jobs.get("backsync")
     expected_env = {
         "QWQ_MANAGED_SYSTEM_BACKSYNC": "system-fast-forward-cas-v1",
-        "QWQ_SYSTEM_BACKSYNC_WORKFLOW_REF": "${{ job.workflow_ref }}",
+        "QWQ_SYSTEM_BACKSYNC_WORKFLOW_REF": (
+            "${{ github.repository }}/.github/workflows/system-backsync.yml"
+            "@${{ github.ref }}"
+        ),
         "QWQ_PROMOTION_RECORDER_APP_SLUG": "${{ vars.QWQ_PROMOTION_RECORDER_APP_SLUG }}",
         "QWQ_PROMOTION_RECORDER_APP_ID": "${{ vars.QWQ_PROMOTION_RECORDER_APP_ID }}",
         "GITHUB_EVENT_BEFORE": "${{ github.event.before }}",
@@ -311,7 +314,7 @@ def system_backsync_workflow_issues(
     required_tokens = (
         "persist-credentials: false",
         "SYSTEM_BACKSYNC_DEPLOY_KEY",
-        "job.workflow_ref",
+        "system-backsync.yml@${{ github.ref }}",
         "QWQ_PROMOTION_RECORDER_APP_SLUG",
         "QWQ_PROMOTION_RECORDER_APP_ID",
         "/commits/${SOURCE_SHA}/check-runs",

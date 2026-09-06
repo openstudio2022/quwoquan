@@ -32,7 +32,7 @@ class ProdDeployContractTest(unittest.TestCase):
         payload = {
             "schema": "release-evidence-manifest",
             "status": "main-admitted",
-            "releaseCompositionId": "sha256:" + "b" * 64,
+            "candidateId": "sha256:" + "b" * 64,
             "artifactDigest": "sha256:" + "c" * 64,
         }
         path.write_text(

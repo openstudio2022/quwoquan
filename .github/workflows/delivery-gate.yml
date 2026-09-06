@@ -210,6 +210,7 @@ jobs:
             --expected-dev-head "$HEAD_SHA" --expected-dev-tree "$HEAD_TREE" \
             --verified-at "$PROMOTION_READY_AT"
       - name: Verify branch, secret, PII and generated boundaries
+        id: impact
         env:
           BASE_SHA: ${{ steps.inputs.outputs.base_sha }}
           HEAD_SHA: ${{ steps.inputs.outputs.head_sha }}
@@ -218,11 +219,26 @@ jobs:
           python3 quwoquan_ops/gate/verify_git_branch_policy.py
           ROOT="$RUNNER_TEMP/promotion-impact"
           mkdir -p "$ROOT"
+          TREE_DIGEST="sha1:$(git rev-parse "${HEAD_SHA}^{tree}")"
+          # detect 会整体覆盖 --github-output 文件，所以先写 IMPACT_OUTPUT 再回读 digest。
+          IMPACT_OUTPUT="$ROOT/impact-outputs"
           python3 quwoquan_ops/ci/detect_ci_impacted_scopes.py \
             --base-sha "$BASE_SHA" --head-sha "$HEAD_SHA" \
-            --impact-plan "$ROOT/impact-plan.json" --github-output "$GITHUB_OUTPUT"
+            --source-tree-digest "$TREE_DIGEST" \
+            --execution-profile promotion \
+            --impact-plan "$ROOT/impact-plan.json" --github-output "$IMPACT_OUTPUT"
+          PLAN_DIGEST="$(awk -F= '$1 == "plan_digest" {print $2}' "$IMPACT_OUTPUT" | tail -n 1)"
+          python3 quwoquan_ops/ci/detect_ci_impacted_scopes.py \
+            --validate-impact-plan "$ROOT/impact-plan.json" \
+            --expected-source-sha "$HEAD_SHA" \
+            --expected-tree-digest "$TREE_DIGEST" \
+            --expected-plan-digest "$PLAN_DIGEST"
           python3 quwoquan_ops/ci/verify_ci_changed_boundary.py \
-            --impact-plan "$ROOT/impact-plan.json" --expected-source-sha "$HEAD_SHA"
+            --impact-plan "$ROOT/impact-plan.json" \
+            --expected-source-sha "$HEAD_SHA" \
+            --expected-tree-digest "$TREE_DIGEST" \
+            --expected-plan-digest "$PLAN_DIGEST"
+          cat "$IMPACT_OUTPUT" >> "$GITHUB_OUTPUT"
       - name: Validate exact facts and issue PromotionAdmissionReceipt
         id: admission
         env:

@@ -19,7 +19,7 @@ def completed(stdout: str = "", *, returncode: int = 0) -> subprocess.CompletedP
 class GammaFormalReleaseRuntimeTest(unittest.TestCase):
     def _composition(self) -> dict[str, object]:
         return {
-            "releaseCompositionId": "sha256:" + "b" * 64,
+            "candidateId": "sha256:" + "b" * 64,
             "artifactDigest": "sha256:" + "c" * 64,
             "images": {
                 "content-service": {

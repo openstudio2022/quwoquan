@@ -98,7 +98,7 @@ class RolloutStagePromotionEvidenceTest(unittest.TestCase):
         return {
             "schema": evidence.SCHEMA,
             "authority": evidence.AUTHORITY,
-            "releaseCompositionId": DIGEST_A,
+            "candidateId": DIGEST_A,
             "artifactDigest": DIGEST_B,
             "campaignId": "release-test-campaign",
             "routingPolicyDigest": DIGEST_B,

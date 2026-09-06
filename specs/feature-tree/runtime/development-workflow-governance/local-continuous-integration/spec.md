@@ -52,7 +52,8 @@
 - 硬门只在准出（lane→`dev1.0` PR、交接、发布）。本地 git hooks 不消费 `scope_ready`/`release_ready` 回执，也不自动运行全面测试：pre-commit 只运行 staged boundary（secret/PII、generated/cache 边界，以及 `--local-commit` 当前 HEAD 分支检查），失败时只给出唯一恢复命令；pre-push 只运行 branch policy：普通 lane push 只校验同名远端，不要求同时推送全部 lane；匹配 `integration/dev1.0` 的普通认证 direct push 仅在 local/remote 均为 `dev1.0`、update line before/after OID 存在且 Git ancestry 证明 non-force fast-forward 时放行，相等幂等；缺 OID、authority 不可用、非快进、force/delete、来源不匹配、lane→dev、`main` direct push 或未知 ref 全部阻断。trusted publisher CAS 与可证明的受管 system fast-forward backsync 继续放行。
 - `--local-commit` 必须只校验当前 HEAD 非 detached、Git authority 可读且分支属于 `allowed_local_branches`，不得枚举或治理其他 local/remote-tracking refs；无参数默认模式继续执行全 ref 治理，`--pre-push` 必须消费 canonical integration update contract。L0 `commit_gate.sh` 的提交前 branch 检查也必须使用 `--local-commit`。
 - `sourceReadiness.status=scope_ready|release_ready` 仍由显式 CLI 产出并绑定精确输入 fingerprint，供 Skill 报告与交接消费；integration worktree direct fast-forward push 不生产 readiness 或资格事实，`integrationEligibility` 只能由 exact candidate + Alpha/Beta admission 建立，`promotionEligibility` 只能由 current dev head 的 IntegrationQualificationFact 建立，GitHub Delivery Gate 只验后者的不可变身份。
-- L0 的 code-health 快判不得网络安装工具且以 p95 30 秒为目标；L1 执行完整 candidate delta；scheduled 全仓热点只 report-only。指标与阈值唯一引用系统架构能力的 `REQ-008` 与 `DEC-031`，本 Story 不复制。当前交付拓扑下 `lane/* -> dev1.0` 没有 hosted required check，`code-health-delta` 的 hosted 复算入口见 `OPEN-003`；在该入口建立前不得声称本地 PASS 等于集成准出。
+- L0 的 code-health 快判不得网络安装工具且以 p95 30 秒为目标；L1 执行完整 candidate delta；scheduled 全仓热点只 report-only。指标与阈值唯一引用系统架构能力的 `REQ-008` 与 `DEC-031`，本 Story 不复制。`lane/* -> dev1.0` 的 hosted 复算由 `.github/workflows/lane-gate.yml`（`04. Lane Gate`）承担：它在 exact PR head 上重建 ImpactPlan、校验 changed boundary、以 `verify_code_health_delivery.py` 绑定同一 `changed_paths_digest`/`impact_plan_digest` 复算 `code-health-delta`，并分片执行 `quwoquan_ops/tests/local_contract/**`；该 check 名称由 `branch_policy.yaml#required_integration_checks` 唯一声明，与 `required_promotion_checks` 互斥。本地 PASS 不替代该 hosted 复算。
+- 影响分类的边界：`classify_impacts` 只把 changed paths 分类成"触及了哪些运行时 scope"的事实，未知根级路径的运行时触及为零；把它升到 `R3` 并要求全 scope 是 Delivery 的 fail-closed 决策，只在 `build_delivery_impact_plan` 施加。本地 L-1/L0 复用同一分类做秒级 focused 反馈，不得为陌生根文件扇出全部 scope。
 - staged 中某个已修改文件继续改变内容时，即使 `git status` 文本不变，也必须判定旧回执失效。
 
 ## 4. 契约引用
@@ -91,6 +92,25 @@
 - AND 合法 current lane 即使存在非法陈旧 local/remote-tracking refs 也通过 `--local-commit`；非法当前分支、detached HEAD 或 Git authority 不可读必须失败；无参数默认模式仍拒绝额外 refs。
 - AND 任一边界检查失败都阻断并只返回一个稳定 recovery。hook 不读取 readiness receipt、也不输出 readiness PASS，缺少 `scope_ready`/`release_ready` 不构成 lane 提交或推送的阻断理由。
 
+<a id="gwt-004"></a>
+### GWT-004 hosted 复算只对 exact dev1.0 快进范围发布 typed fact
+
+- GIVEN `dev1.0` 收到一次 push，hosted `code-health-integration` workflow 以事件提供的 exact before/after OID 运行。
+- WHEN 驱动对 before..after 复算 canonical code-health delta。
+- THEN before 为零 SHA、与 after 相同或不是 after 的祖先时不复算，返回 typed `GATE_BLOCK` 并只发布携带 blocker code 的 typed fact。
+- THEN 复算 terminal 为 `GATE_BLOCK` 时 run 失败且 fact terminal 为 `GATE_BLOCK`，不产生任何 PASS fact；terminal 为 `PASS`/`PR_WARN` 时 run 成功且 fact 绑定 exact before/after 与完整 candidate report。
+- THEN fact 只是 report-only 事实（`blocksPush=false`），不拦截已发生的 push；是否进入 promotion `required_evidence_refs` 由交付链 owner 单独裁决，本 Story 不据此声称集成准出。
+
+<a id="gwt-005"></a>
+### GWT-005 lane PR 的 hosted 复算是 fail-closed 的 required check
+
+- GIVEN 一个 `lane/* -> dev1.0` 的 Pull Request，其 exact head 与 merge-base 可从 Hosted 事件精确读回。
+- WHEN `04. Lane Gate` 在该 PR 上执行。
+- THEN 它只由 `pull_request: branches: [dev1.0]` 触发，在 exact PR head 的 clean checkout 上重跑 branch/supply-chain/workflow/artifact/脚本治理与 Feature Tree；ImpactPlan 由 `detect_ci_impacted_scopes.py` 以 `--execution-profile pr` 生成并经 `--validate-impact-plan` 与 `verify_ci_changed_boundary.py` 四个 required 参数校验；`code-health-delta` 以 `verify_code_health_delivery.py` 绑定同一 `changed_paths_digest` 与 `impact_plan_digest` 复算；`quwoquan_ops/tests/local_contract/**` 经 `delivery_gate_data_shard.py --scope ops` 取模分片执行。
+- AND `lane_gate_summary` 以 `always()` 汇总且对全部三个 job 只接受 `success`；任一 job 失败、`code-health-delta` 返回 `GATE_BLOCK`、或分片为空时该 check 失败，PR 不可合入。GWT-004 的 push 后复算是 report-only 事实，不替代本 check。
+- AND 该 check 名称与 `branch_policy.yaml#required_integration_checks` 唯一声明一致，与 `required_promotion_checks` 不共享 workflow 或名字；job 间不通过 Actions artifact 交换结果，digest 在需要处就地重算。
+- AND workflow 对仓内 Python CLI 的每次直接调用都必须覆盖该脚本全部常量 required 选项；`verify_workflow_cli_arguments.py` 在 L0 只对本次 staged 的 workflow 判定、在 `gate_repo.sh` 全量判定，漏传即 `GATE_BLOCK`。
+
 ## 6. 依赖
 
 - 前置要求：canonical EvidenceFingerprint 可用，Git 可读取 staged 与 push update identity。
@@ -121,11 +141,11 @@
 - 依赖：current Code Health named evidence与 planner focused contracts。
 
 <a id="open-003"></a>
-### OPEN-003 code-health-delta 的 hosted 复算入口缺失
+### OPEN-003 hosted code-health fact 尚未成为 promotion required evidence
 
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`track`
-- 影响或价值：当前 `lane/* -> dev1.0` 缺少任何 hosted required check —— `03. Delivery Gate` 只在 `dev1.0 -> main` promotion PR 上触发，因此 `code-health-delta` 尚未建立绑定 exact candidate range 的 hosted 复算入口，只剩 L0/L1 本地执行与 scheduled report-only 两条通道。本地 PASS 不能替代集成准出证据，新增或恶化的代码健康债可能拖到 promotion 阶段才暴露。
-- 完成判定：`GWT-002` 继续证明 required check 失败时不产生 `scope_ready`/`release_ready` PASS；并为 `code-health-delta` 建立一个绑定 exact candidate range 的 hosted 复算入口（promotion gate 内的独立并行 job，或 integration admission 的等价通道），由新增 `GWT` 子句证明它在 `GATE_BLOCK` 时确实阻断；不得以本地回执、warn-only 或降低阈值替代。
-- 依赖：`deliver-deploy-prod-pipeline` 的当前交付拓扑与 `quwoquan_ops/gate/code_health_delta` 现有实现。
+- 影响或价值：`lane/* -> dev1.0` 的 PR 前阻断已由 `04. Lane Gate`（`GWT-005`）承担，`10. Code Health Integration Recompute` 对每次 `dev1.0` 快进复算 exact before/after 并发布 typed fact（`GWT-004`）；但两者之间仍缺一环：`integration/` 工作区的 direct fast-forward push 不经 PR，此时只有 push 后的 report-only fact，而 `03. Delivery Gate` 的 `required_evidence_refs` 尚未要求该 fact，于是经该通道进入 `dev1.0` 的新增或恶化代码健康债在 promotion 前仍不阻断。
+- 完成判定：`GWT-005` 持续证明 lane PR 的 hosted required check fail-closed；`GWT-004.t3` 继续成立（fact report-only、不冒充准出）；交付链 owner 把 dev1.0 head 对应的 code-health fact 纳入 promotion `required_evidence_refs` 并由其自身规格证明 `GATE_BLOCK` fact 使 promotion admission 失败；不得以本地回执、warn-only 或降低阈值替代。
+- 依赖：`deliver-deploy-prod-pipeline` 的 promotion admission 契约与 `quwoquan_ops/ci/verify_code_health_integration.py`。

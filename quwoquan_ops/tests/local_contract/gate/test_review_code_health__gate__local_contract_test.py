@@ -57,9 +57,10 @@ def test_review_adapter_requires_runner_exact_range_and_writes_create_once_descr
     original_root = review_code_health.ROOT
     monkeypatch.setattr(review_code_health, "ROOT", tmp_path)
 
-    payload = review_code_health.verify()
+    payload, verified_report = review_code_health.verify()
     assert payload["head_sha"] == plan["head_sha"]
     assert payload["base_sha"] == plan["merge_base_sha"]
+    assert verified_report == report
     assert json.loads(descriptor.read_text(encoding="utf-8")) == payload
     with pytest.raises(review_code_health.ReviewCodeHealthError, match="create-once"):
         review_code_health.verify()

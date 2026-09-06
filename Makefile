@@ -65,7 +65,7 @@
 .PHONY: verify-local-port-manifest
 .PHONY: verify-public-vs-upstream-url-contract
 .PHONY: verify-domain-governance
-.PHONY: verify-python-script-governance verify-code-health-delta test-code-health-delta calibrate-code-health report-code-health-weekly verify-service-probe-homology
+.PHONY: verify-python-script-governance verify-code-health-delta test-code-health-delta calibrate-code-health report-code-health-weekly code-health-hotspots verify-service-probe-homology
 .PHONY: verify-vertical-architecture-ratchet
 .PHONY: test-vertical-architecture-ratchet-local-contract
 .PHONY: sync-page-object-source-paths verify-page-object-source-paths
@@ -493,11 +493,22 @@ verify-domain-governance:
 verify-python-script-governance:
 	@PYTHONDONTWRITEBYTECODE=1 python3 quwoquan_ops/gate/verify_python_script_governance.py --scope all --mode check
 
+# base=auto 解析为 HEAD 与 dev1.0 的 merge-base：干净 lane 树上也能看到已提交的整条 lane 分歧；
+# 缺 dev1.0 引用时 typed 失败并给出恢复命令，不静默退回 HEAD。
 verify-code-health-delta:
-	@PYTHONDONTWRITEBYTECODE=1 python3 -B quwoquan_ops/gate/verify_incremental_code_health.py --base HEAD --head HEAD --working-tree --mode full
+	@PYTHONDONTWRITEBYTECODE=1 python3 -B quwoquan_ops/gate/verify_incremental_code_health.py --base auto --head HEAD --working-tree --mode full
 
 test-code-health-delta:
-	@$(PYTEST_RUNNER) $(PYTEST_INTERPRETER_FLAGS) -m pytest $(PYTEST_FLAGS) -p no:cacheprovider quwoquan_ops/tests/local_contract/gate/test_incremental_code_health__gate__local_contract_test.py quwoquan_ops/tests/local_contract/gate/test_code_health_calibration__gate__local_contract_test.py quwoquan_ops/tests/local_contract/gate/test_code_health_weekly__gate__local_contract_test.py quwoquan_ops/tests/local_contract/ci/test_code_health_delivery__local_contract_test.py -q
+	@$(PYTEST_RUNNER) $(PYTEST_INTERPRETER_FLAGS) -m pytest $(PYTEST_FLAGS) -p no:cacheprovider \
+		quwoquan_ops/tests/local_contract/gate/test_incremental_code_health__gate__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/gate/test_code_health_file_size__gate__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/gate/test_code_health_precision__gate__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/gate/test_code_health_render_and_history__gate__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/gate/test_code_health_hotspots__gate__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/gate/test_code_health_calibration__gate__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/gate/test_code_health_weekly__gate__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/ci/test_code_health_delivery__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/ci/test_code_health_integration__local_contract_test.py -q
 
 calibrate-code-health:
 	@test -n "$(SAMPLES)" || (echo "usage: make calibrate-code-health SAMPLES='--sample <pr>=<merge-sha> ...'" >&2; exit 2)
@@ -505,6 +516,11 @@ calibrate-code-health:
 
 report-code-health-weekly:
 	@PYTHONDONTWRITEBYTECODE=1 python3 -B quwoquan_ops/gate/report_code_health_weekly.py
+
+# Agent PRE / plan-next 的紧凑热点视图：本地最新 weekly report → OCI weekly fact → typed unavailable。
+code-health-hotspots:
+	@test -n "$(OWNER)" || (echo "usage: make code-health-hotspots OWNER=<owner-scope-prefix>" >&2; exit 2)
+	@PYTHONDONTWRITEBYTECODE=1 python3 -B quwoquan_ops/gate/report_code_health_hotspots.py --owner "$(OWNER)"
 
 # 服务端就绪路由与 deploy readinessProbe 同源：探针错配会让依赖断裂报绿。
 verify-service-probe-homology:

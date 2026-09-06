@@ -1,0 +1,219 @@
+# lane/* -> dev1.0 的唯一 hosted required check。
+#
+# 03. Delivery Gate 只为 dev1.0 -> main promotion 触发；本 workflow 为 lane PR 复算
+# 本地 L0/L1 能做的全部静态治理与 candidate-bound Code Health，并把 ops local_contract
+# 分片跑完。它不打包、不签名、不触碰设备或环境——那些属于 RC qualification。
+name: 04. Lane Gate
+
+permissions:
+  contents: read
+
+on:
+  pull_request:
+    branches: [dev1.0]
+
+concurrency:
+  group: lane-gate-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+env:
+  QWQ_OUTPUT_ROOT: ${{ github.workspace }}/.qwq_output
+  PYTHONDONTWRITEBYTECODE: "1"
+
+jobs:
+  governance:
+    name: Lane Gate — Governance
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - name: Require exact clean PR head checkout
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          [[ "$HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]
+          test "$HEAD_REPOSITORY" = "$REPOSITORY"
+          test "$(git rev-parse HEAD)" = "$HEAD_SHA"
+          test -z "$(git status --porcelain --untracked-files=all)"
+      - name: Install pinned governance dependencies
+        run: python3 -m pip install --disable-pip-version-check PyYAML==6.0.3 pytest==8.4.2
+      - name: Branch, supply chain, workflow and artifact governance
+        run: |
+          set -euo pipefail
+          python3 quwoquan_ops/gate/verify_git_branch_policy.py
+          python3 quwoquan_ops/gate/verify_github_supply_chain.py
+          python3 quwoquan_ops/gate/verify_github_artifact_lifecycle.py
+          python3 quwoquan_ops/gate/verify_workflow_cli_arguments.py
+          python3 quwoquan_ops/gate/verify_entrypoint_script_paths.py
+          python3 quwoquan_ops/ci/verify_quality_policy.py
+      - name: Python script governance
+        run: |
+          set -euo pipefail
+          for scope in app service ops data; do
+            python3 -B quwoquan_ops/gate/verify_python_script_governance.py --scope "$scope" --mode check
+          done
+      - name: Feature Tree
+        run: make verify-feature-tree
+
+  impact_and_code_health:
+    name: Lane Gate — Impact Plan and Code Health Delta
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      service: ${{ steps.detect.outputs.service }}
+      app: ${{ steps.detect.outputs.app }}
+      portal: ${{ steps.detect.outputs.portal }}
+      topology: ${{ steps.detect.outputs.topology }}
+      data: ${{ steps.detect.outputs.data }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - name: Install pinned governance dependencies
+        run: python3 -m pip install --disable-pip-version-check PyYAML==6.0.3
+      - name: Resolve exact PR range
+        id: range
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          [[ "$BASE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]
+          test "$(git rev-parse HEAD)" = "$HEAD_SHA"
+          git cat-file -e "${BASE_SHA}^{commit}"
+          MERGE_BASE="$(git merge-base "$BASE_SHA" "$HEAD_SHA")"
+          TREE_DIGEST="sha1:$(git rev-parse "${HEAD_SHA}^{tree}")"
+          {
+            echo "base_sha=$MERGE_BASE"
+            echo "head_sha=$HEAD_SHA"
+            echo "tree_digest=$TREE_DIGEST"
+          } >> "$GITHUB_OUTPUT"
+      - name: Build, validate and boundary-check the exact ImpactPlan
+        id: detect
+        env:
+          BASE_SHA: ${{ steps.range.outputs.base_sha }}
+          HEAD_SHA: ${{ steps.range.outputs.head_sha }}
+          TREE_DIGEST: ${{ steps.range.outputs.tree_digest }}
+        run: |
+          set -euo pipefail
+          IMPACT_ROOT="$RUNNER_TEMP/lane-impact"
+          mkdir -p "$IMPACT_ROOT"
+          # detect 会整体覆盖 --github-output 文件，先写独立文件再回读 digest。
+          IMPACT_OUTPUT="$IMPACT_ROOT/impact-outputs"
+          python3 quwoquan_ops/ci/detect_ci_impacted_scopes.py \
+            --base-sha "$BASE_SHA" --head-sha "$HEAD_SHA" \
+            --source-tree-digest "$TREE_DIGEST" \
+            --execution-profile pr \
+            --impact-plan "$IMPACT_ROOT/impact-plan.json" --github-output "$IMPACT_OUTPUT"
+          PLAN_DIGEST="$(awk -F= '$1 == "plan_digest" {print $2}' "$IMPACT_OUTPUT" | tail -n 1)"
+          PATH_DIGEST="$(awk -F= '$1 == "changed_paths_digest" {print $2}' "$IMPACT_OUTPUT" | tail -n 1)"
+          python3 quwoquan_ops/ci/detect_ci_impacted_scopes.py \
+            --validate-impact-plan "$IMPACT_ROOT/impact-plan.json" \
+            --expected-source-sha "$HEAD_SHA" \
+            --expected-tree-digest "$TREE_DIGEST" \
+            --expected-plan-digest "$PLAN_DIGEST"
+          python3 quwoquan_ops/ci/verify_ci_changed_boundary.py \
+            --impact-plan "$IMPACT_ROOT/impact-plan.json" \
+            --expected-source-sha "$HEAD_SHA" \
+            --expected-tree-digest "$TREE_DIGEST" \
+            --expected-plan-digest "$PLAN_DIGEST"
+          cat "$IMPACT_OUTPUT" >> "$GITHUB_OUTPUT"
+          echo "path_digest=$PATH_DIGEST" >> "$GITHUB_OUTPUT"
+      - name: Verify exact clean-candidate Code Health Delta
+        env:
+          BASE_SHA: ${{ steps.range.outputs.base_sha }}
+          HEAD_SHA: ${{ steps.range.outputs.head_sha }}
+          EXPECTED_PATH_DIGEST: ${{ steps.detect.outputs.path_digest }}
+          EXPECTED_PLAN_DIGEST: ${{ steps.detect.outputs.plan_digest }}
+        run: |
+          set -euo pipefail
+          git diff --quiet && git diff --cached --quiet
+          python3 quwoquan_ops/ci/verify_code_health_delivery.py \
+            --base-sha "$BASE_SHA" \
+            --head-sha "$HEAD_SHA" \
+            --expected-path-digest "$EXPECTED_PATH_DIGEST" \
+            --expected-impact-plan-digest "$EXPECTED_PLAN_DIGEST"
+      - name: Upload failed Code Health Delta diagnostic
+        if: ${{ failure() && !cancelled() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: lane-code-health-delta-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ env.QWQ_OUTPUT_ROOT }}/env/repo/runs/code-health/**/report.json
+          if-no-files-found: error
+          retention-days: 3
+
+  ops_local_contract:
+    name: Lane Gate — Ops Local Contract Shard ${{ matrix.shard_index }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        shard_index: [0, 1, 2, 3]
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: "3.12"
+      - name: Install repository test requirements
+        run: python3 -m pip install --disable-pip-version-check -r quwoquan_data/requirements.txt
+      - name: Run ops local_contract shard
+        env:
+          SHARD_INDEX: ${{ matrix.shard_index }}
+        run: |
+          set -euo pipefail
+          test_files=()
+          while IFS= read -r test_file; do
+            [[ -n "$test_file" ]] && test_files+=("$test_file")
+          done < <(python3 -B quwoquan_ops/gate/delivery_gate_data_shard.py \
+            --scope ops --total-shards 4 --shard-index "$SHARD_INDEX")
+          test "${#test_files[@]}" -gt 0
+          python3 -B -m pytest -q -p no:cacheprovider "${test_files[@]}"
+
+  lane_gate_summary:
+    name: 04. Lane Gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    if: ${{ always() }}
+    needs:
+      - governance
+      - impact_and_code_health
+      - ops_local_contract
+    steps:
+      - name: Require every lane gate job to succeed
+        env:
+          GOVERNANCE: ${{ needs.governance.result }}
+          IMPACT_AND_CODE_HEALTH: ${{ needs.impact_and_code_health.result }}
+          OPS_LOCAL_CONTRACT: ${{ needs.ops_local_contract.result }}
+        run: |
+          set -euo pipefail
+          fail=0
+          expect_success() {
+            local name="$1" val="$2" hint="$3"
+            if [ "${val}" != "success" ]; then
+              echo "::error::${name} expected success, got ${val}. ${hint}"
+              fail=1
+            fi
+          }
+          expect_success "governance" "${GOVERNANCE}" "检查 branch、supply-chain、workflow、artifact、脚本治理与 Feature Tree"
+          expect_success "impact_and_code_health" "${IMPACT_AND_CODE_HEALTH}" "检查 exact ImpactPlan 边界与 clean candidate 的代码健康债"
+          expect_success "ops_local_contract" "${OPS_LOCAL_CONTRACT}" "检查 quwoquan_ops local_contract 四分片"
+          if [ "$fail" -ne 0 ]; then
+            echo "result=failure" >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
+          echo "result=success" >> "$GITHUB_OUTPUT"

@@ -8,7 +8,7 @@ import java.util.List;
 import java.util.Map;
 
 public final class AppLaunchContract {
-  public static final String SOURCE_DIGEST = "sha256:6ddd851ec155c5b829b4c0beba57f8fd641403d474d79e3a69d40f704989f9c5";
+  public static final String SOURCE_DIGEST = "sha256:b38964bc4c020536fc1f6bd31b35746f416128faa63bbed34b3e2676f6a4460d";
   public static final List<String> ENVIRONMENTS = Collections.unmodifiableList(Arrays.asList(
       "alpha",
       "beta",

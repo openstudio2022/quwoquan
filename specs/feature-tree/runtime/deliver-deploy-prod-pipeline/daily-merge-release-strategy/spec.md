@@ -66,6 +66,7 @@
 - GIVEN current dev head已有匹配的IntegrationQualificationFact且main base稳定。
 - WHEN 创建`dev1.0 -> main` promotion并完成merge。
 - THEN 唯一required context只验branch/tree/evidence/approval/ruleset并生成MainSourceSeal，随后system actor以expected-before无forceCAS回同步dev；equal幂等，分叉或漂移零写阻断。
+- AND `dev1.0 -> main` 与 `lane/* -> dev1.0` 各有独立的 required check：前者由 `required_promotion_checks` 唯一声明并展开为 main ruleset 期望值，后者由 `required_integration_checks` 唯一声明（`04. Lane Gate`，见 `local-continuous-integration#gwt-005`）；两者不共享 workflow 或名字。reusable `system-backsync.yml` 只引用 GitHub Actions 合法上下文，其 `QWQ_SYSTEM_BACKSYNC_WORKFLOW_REF` 由 caller 的 `github.repository`/`github.ref` 拼装，静态门禁拒绝任何非 `container|services|status` 的 `job.*` 属性。
 
 <a id="gwt-003"></a>
 ### GWT-003 main可用源码与Prod版本选择分离
@@ -89,8 +90,8 @@
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`block`
-- 影响或价值：仓内 decision-table 已覆盖普通 lane 同名 push、匹配 integration worktree 的 direct fast-forward push，以及可证明 system fast-forward backsync；尚缺真实 scoped candidate、trusted publisher CAS、`dev1.0 -> main` PR/check、promotion 后 system CAS backsync，以及 hosted 八条分支权威清单与干净 clone 复现回执。Hosted 仍需证明 non-fast-forward、delete/force 与 `main` direct push 保护，但 direct fast-forward dev push 不再定义为非法。
-- 完成判定：`GWT-001.t1..t2` 与 `GWT-002.t1..t2` 具备 decision-table local contract；当前最终 SHA 的 hosted readback 证明 lane PR/check、promotion PR/check、system actor、八条 refs 闭集以及 dev non-FF/force/delete 与 main direct-push 保护，真实 system backsync 证明 CAS 与 ref before/after。
+- 影响或价值：仓内 decision-table 已覆盖普通 lane 同名 push、匹配 integration worktree 的 direct fast-forward push，以及可证明 system fast-forward backsync；尚缺真实 scoped candidate、trusted publisher CAS、`dev1.0 -> main` PR/check、promotion 后 system CAS backsync，以及 hosted 八条分支权威清单与干净 clone 复现回执。Hosted 仍需证明 non-fast-forward、delete/force 与 `main` direct push 保护，但 direct fast-forward dev push 不再定义为非法。此外 `promotion_verify` 调用 `integration_qualification.py` 时仍缺 `--qualification-verification-key-env`、`--environment-verification-key-env` 与 `--expected-{qualification,alpha,beta,gamma}-signer-identity`：workflow 只注入一把 `QWQ_INTEGRATION_QUALIFICATION_SIGNING_KEY`，而合同要求两把互异 verification key 与四个 SPIFFE signer identity，且仓内尚无这些 identity 与 key env 名的 canonical 真相源（生产侧 `environment_execution.py` / `integration_candidate.py` 同样只以 required 参数接收、无默认值）。该脚本含 f-string 命名的 required 选项，`verify_workflow_cli_arguments.py` 对它整体判为不可静态判定而非放行；在真相源建立并接线前，promotion 门禁在该 step 必以 argparse exit 2 结束。
+- 完成判定：`GWT-001.t1..t2` 与 `GWT-002.t1..t2` 具备 decision-table local contract；signer identity 与两把 verification key env 名进入版本化 policy 并由 `promotion_verify` 逐一传入，`integration_qualification.py` 的合同测试覆盖 workflow 调用形态；当前最终 SHA 的 hosted readback 证明 lane PR/check、promotion PR/check、system actor、八条 refs 闭集以及 dev non-FF/force/delete 与 main direct-push 保护，真实 system backsync 证明 CAS 与 ref before/after。
 
 <a id="open-002"></a>
 ### OPEN-002 private-free GitHub 托管分支保护

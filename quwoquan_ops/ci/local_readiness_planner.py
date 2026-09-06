@@ -44,6 +44,7 @@ STATIC_COMMANDS: dict[str, tuple[list[str], str, list[str]]] = {
     "branch_policy": (["python3", "-B", "quwoquan_ops/gate/verify_git_branch_policy.py", "--local-commit"], ".", ["git-index"]),
     "feature_tree": (["make", "verify-feature-tree"], ".", ["feature-tree"]),
     "entrypoint_script_paths": (["python3", "-B", "quwoquan_ops/gate/verify_entrypoint_script_paths.py"], ".", ["ops-static"]),
+    "workflow_cli_arguments": (["python3", "-B", "quwoquan_ops/gate/verify_workflow_cli_arguments.py"], ".", ["ops-static"]),
     "local_worktree_lifecycle": (["python3", "-B", "quwoquan_ops/gate/verify_local_worktree_lifecycle.py"], ".", ["git-worktree"]),
     "service_architecture": (["make", "verify-service-architecture"], ".", ["service-static"]),
     "service_probe_homology": (["make", "verify-service-probe-homology"], ".", ["service-static"]),
@@ -249,9 +250,11 @@ def build_impact_plan(
     ]
     if level != "fast" and source_paths:
         checks = [check for check in checks if check["id"] != "static:code_health_delta_fast"]
+        # L1/L2 看整条 lane 相对 dev1.0 的分歧（merge-base），而不是只看未提交改动；
+        # L0 fast 仍只判本次 staged 内容。
         code_health_command = [
             "python3", "-B", "quwoquan_ops/gate/verify_incremental_code_health.py",
-            "--base", "HEAD", "--head", "HEAD", "--working-tree", "--mode", "full",
+            "--base", "auto", "--head", "HEAD", "--working-tree", "--mode", "full",
         ]
         for path in source_paths:
             code_health_command.extend(["--changed-file", path])
