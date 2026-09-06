@@ -16,7 +16,7 @@
 </constraints>
 
 <output_format>
-唯一产物写到当前对象的 `5.review/content_review.json`。只写一个合法 JSON object，顶层只包含：
+唯一产物写到当前对象的 `5.review/content_review.json`。必须直接按 UTF-8 canonical compact JSON 写盘：键名排序、分隔符为 `,`/`:`、不缩进，文件末尾恰好一个换行；不要先写 pretty JSON 再改写。只写一个合法 JSON object，顶层只包含：
 - decision：approved 或 rejected；
 - dimensions：对目标/质量、claims/证据、assets/rights 的简短判断；
 - blockingIssues：具体阻断问题数组，无则为空数组；
