@@ -534,3 +534,15 @@
 - 尚缺验收证据：local_contract 注入"CAS 成功、任一域 fenced readback 失败、pointer 之前为空"的序列，证明收敛操作只在 exact predecessor 证据在场时执行且 owner bytes 不变；api_integration 覆盖收敛后四域 readback 同 tuple。
 - 完成判定：[`GWT-035`](#gwt-035) 的 Data ship 交付面下，上述序列在 Alpha 真实运行一次并得到 `completed` 的 activate 或 rollback 结果，且 `ship verify` 可消费该结果；不得以重置环境状态、手改 pointer 或放宽 fenced readback 判据关闭本 OPEN。
 - 依赖：runtime-data-engineering `DEC-003`（fence 与 rollback 语义 owner）；content-service release-control 的 replay/rollback 契约。
+
+<a id="open-023"></a>
+### OPEN-023 `ReleaseUatSamplePlan` 无 owner 产出，下游 verify/精选池/bind/UAT 对现役 release 全部不可达
+
+- 类型：`capability_gap`
+- 优先级：`P0`
+- 准出影响：`block`
+- 影响或价值：producer cutover 把 `ReleaseUatSamplePlan` 从 release build 移除（`aggregate_release_uat.py` 已无调用者），[`REQ-013`](#req-013) 注明该 sample plan 为 downstream-owned；但下游没有任何 owner 创建它，而 Ops 消费面仍要求 immutable release 头携带 `samplePlanRef=uat/sample_plan.json` 与 `samplePlanDigest` 并从 payload 内读取 exact bytes：`stackctl premium-pool --launch-policy release-import`（空池首次激活）、`stackctl dev-session bind-content`（test-live content binding）与 `app-content-uat`/managed preflight 均在此 fail closed。`ship verify` 对全部 readiness phase 要求 `premium_stream` release-bound 非空读回，而精选池只能经 release-import 自举，于是任何现役六步 release（M1/M10/M100）都无法取得 `release-readiness.json`，`bind-content`、受管 `flutter run` 与 App UAT 随之不可达。Alpha 真实证据：M1 `ship activate` 已 `completed`（Content CAS revision 1，四域 fenced readback 通过，discovery/typed/homepage_recommend feed 均读回 release posts），`ship verify --readiness-phase research` 在 `post_api_verification` 以 "premium_stream feed does not expose any release-bound postId" 阻断；`premium-pool release-import` 以 "release UAT sample plan binding is invalid" 阻断；managed prepare 以 `release_active` 无 research readiness receipt 阻断。immutable payload 由 producer 封存，下游按定义不能再向其中写入 `uat/sample_plan.json`，因此现有消费契约与 REQ-013 的 owner 声明互斥。
+- 尚缺实现：由 design 裁定 sample plan 的唯一 owner 与落点（downstream-owned artifact 以 `releaseId+manifestDigest` 绑定、置于环境 run evidence 或 candidate 私有 projection，而非 immutable payload），并按契约→codegen→实现顺序改 `app_content_uat_plan.load_release_uat_sample_plan` 及其三处消费者；或反向裁定 producer 重新携带 sample plan 并回退 REQ-013 注记。两者都不得以放宽 `premium_stream` 判据、跳过 sample plan 校验或手写 header 字段实现。
+- 尚缺验收证据：同一现役 release 在 Alpha 真实取得 `premium-pool` 首次激活收据、`ship verify` 的 `release-readiness.json`、`bind-content` 成功与受管 `flutter run` 到达 attach；local_contract 证明 sample plan 缺失、digest 漂移与跨 release 搬运均 fail closed。
+- 完成判定：[`GWT-035`](#gwt-035) 的 Data ship 交付面下，上述 Alpha 证据链在同一 alpha-local generation 内闭合，且 `health`/`content-readiness` 的 `release_active` 通过；不得以环境重置、fixture sample plan 或旧 release 的 receipt 关闭本 OPEN。
+- 依赖：runtime-config `environment-topology-and-packaging` GWT-004（精选池首次激活与 UAT sample plan 消费 owner）；`OPEN-019`/`OPEN-020` 的 producer 复合验收重建。

@@ -453,8 +453,14 @@ def _managed_inspect_running_full_runtime(
     )
     if not isinstance(expected_descriptors, Mapping) or not expected_descriptors:
         raise RuntimeError("running immutable full runtime image identity is incomplete")
+    # startupImageComposition 除 first-party 服务外还带本地 Provider substitute
+    # 镜像（runtime_image_composition 的 provider_images）；first-party 闭包只按
+    # canonical owner 集合比对，substitute 镜像随后逐容器按 exact image id 校验。
     canonical_services = set(_stackctl.runtime_image_owner_names(_stackctl.ROOT))
-    if set(str(service) for service in expected_descriptors) != canonical_services:
+    first_party_descriptors = {
+        str(service) for service in expected_descriptors
+    } & canonical_services
+    if first_party_descriptors != canonical_services:
         raise RuntimeError(
             "running immutable full runtime first-party image closure drifted"
         )

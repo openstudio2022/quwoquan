@@ -199,7 +199,14 @@ class ManagedRuntimeReadyTest(unittest.TestCase):
         *,
         actual_image: str = "sha256:" + "5" * 64,
         project_label: str = "quwoquan_alpha_release",
+        canonical_owner_names: tuple[str, ...] = ("service-core",),
+        substitute_image: str | None = None,
     ) -> tuple[dict[str, Any], list[list[str]], mock.Mock, mock.Mock, mock.Mock]:
+        images: dict[str, dict[str, str]] = {
+            "service-core": {"ref": "sha256:" + "5" * 64}
+        }
+        if substitute_image is not None:
+            images["sms-provider-substitute"] = {"ref": substitute_image}
         immutable = {
             "attemptId": "immutable-full-1",
             "status": "running",
@@ -209,9 +216,7 @@ class ManagedRuntimeReadyTest(unittest.TestCase):
             "configurationDigest": "sha256:" + "2" * 64,
             "providerRuntimeDigest": "sha256:" + "3" * 64,
             "observabilityLogSinkDigest": "sha256:" + "4" * 64,
-            "imageComposition": {
-                "images": {"service-core": {"ref": "sha256:" + "5" * 64}}
-            },
+            "imageComposition": {"images": images},
         }
         expected = {
             key: immutable[key]
@@ -225,31 +230,44 @@ class ManagedRuntimeReadyTest(unittest.TestCase):
         }
         commands: list[list[str]] = []
 
+        containers = [
+            {
+                "Id": "container-1-full-id",
+                "Config": {
+                    "Labels": {
+                        "com.docker.compose.project": project_label,
+                        "com.docker.compose.service": "service-core",
+                    }
+                },
+                "Image": actual_image,
+            }
+        ]
+        if substitute_image is not None:
+            containers.append(
+                {
+                    "Id": "container-2-full-id",
+                    "Config": {
+                        "Labels": {
+                            "com.docker.compose.project": project_label,
+                            "com.docker.compose.service": "sms-provider-substitute",
+                        }
+                    },
+                    "Image": substitute_image,
+                }
+            )
+        container_ids = "".join(
+            f"container-{index}\n" for index in range(1, len(containers) + 1)
+        )
+
         def docker_run(command: list[str], **_kwargs: Any) -> Any:
             commands.append(command)
             if command[:2] == ["docker", "ps"]:
                 return __import__("subprocess").CompletedProcess(
-                    command, 0, "container-1\n", ""
+                    command, 0, container_ids, ""
                 )
             if command[:2] == ["docker", "inspect"]:
                 return __import__("subprocess").CompletedProcess(
-                    command,
-                    0,
-                    json.dumps(
-                        [
-                            {
-                                "Id": "container-1-full-id",
-                                "Config": {
-                                    "Labels": {
-                                        "com.docker.compose.project": project_label,
-                                        "com.docker.compose.service": "service-core",
-                                    }
-                                },
-                                "Image": actual_image,
-                            }
-                        ]
-                    ),
-                    "",
+                    command, 0, json.dumps(containers), ""
                 )
             raise AssertionError(f"unexpected Docker command: {command}")
 
@@ -305,7 +323,7 @@ class ManagedRuntimeReadyTest(unittest.TestCase):
                 mock.patch.object(
                     stackctl,
                     "runtime_image_owner_names",
-                    return_value=("service-core",),
+                    return_value=canonical_owner_names,
                 )
             )
             assert_snapshot = patches.enter_context(
@@ -384,6 +402,33 @@ class ManagedRuntimeReadyTest(unittest.TestCase):
             self._immutable_runtime_readback(project_label="quwoquan_other_release")
         self.assertTrue(
             any("project label drifted" in detail for detail in raised.exception.details)
+        )
+
+    def test_immutable_running_full_accepts_provider_substitute_images(self) -> None:
+        """startupImageComposition 携带本地 Provider substitute 镜像时，first-party
+        闭包仍按 canonical owner 集合比对，substitute 按 exact image id 逐容器校验。"""
+        substitute = "sha256:" + "7" * 64
+        payload, _commands, _snapshot, _inspect, start_runtime = (
+            self._immutable_runtime_readback(substitute_image=substitute)
+        )
+        self.assertTrue(payload["reused"])
+        self.assertEqual(
+            payload["runtime"]["images"]["sms-provider-substitute"]["runtimeImageId"],
+            substitute,
+        )
+        start_runtime.assert_not_called()
+
+    def test_immutable_running_full_missing_first_party_owner_blocks_reuse(self) -> None:
+        with self.assertRaises(stackctl.ManagedPreparationBlocked) as raised:
+            self._immutable_runtime_readback(
+                canonical_owner_names=("service-core", "recommendation-service"),
+                substitute_image="sha256:" + "7" * 64,
+            )
+        self.assertTrue(
+            any(
+                "first-party image closure drifted" in detail
+                for detail in raised.exception.details
+            )
         )
 
 
