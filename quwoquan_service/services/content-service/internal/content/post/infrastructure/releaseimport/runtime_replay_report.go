@@ -75,7 +75,7 @@ func LoadImportedPostReplayBindings(
 		return nil, fmt.Errorf("GATE_BLOCK: replay source import report contains trailing JSON")
 	}
 	if report.Schema != "quwoquan.content_import_report" ||
-		report.Status != "imported" ||
+		report.Status != "staged" ||
 		report.Environment != strings.TrimSpace(environment) ||
 		report.ReleaseID != strings.TrimSpace(releaseID) ||
 		report.ManifestDigest != strings.TrimSpace(manifestDigest) ||

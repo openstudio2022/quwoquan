@@ -59,8 +59,8 @@ func TestReleaseBindingIncludesSourceOwnerTuple(t *testing.T) {
 
 func TestImportReportStatusCannotClaimActivation(t *testing.T) {
 	for mode, want := range map[string]string{
-		"stage-only":    "imported",
-		"activate":      "imported",
+		"stage-only":    "staged",
+		"activate":      "staged",
 		"repair-active": "replay_validated",
 	} {
 		if got := releaseimport.ImportReportStatus(mode); got != want {

@@ -251,7 +251,9 @@ func main() {
 		)
 	}
 
-	status := "staged"
+	// stage-only 回执与 tag_import_report.schema.json 及 Creator 导入器对齐：
+	// 候选已作为 verified candidate 入库，报告 status 即 verified。
+	status := "verified"
 	if *activationMode == "stage-only" {
 		verifiedAt := time.Now().UTC()
 		candidate, err := contentCandidateStore.BuildContentCandidate(

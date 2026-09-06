@@ -21,6 +21,7 @@ const (
 	ContentReleaseCandidateReceiptSchema  = "quwoquan.content_release_candidate_receipt"
 	ContentReleaseActiveReceiptSchema     = "quwoquan.content_release_active_receipt"
 	ContentReleaseActivationReceiptSchema = "quwoquan.content_release_activation_receipt"
+	ContentFencedReadbackReceiptSchema    = "quwoquan.content_fenced_readback_receipt"
 )
 
 // ImportedReleaseCandidateClosureDigests is an immutable copy of the three
@@ -324,15 +325,16 @@ func requireCanonicalReleaseIndexes(
 // ReleaseControlCommand is the validated command input. All strings are
 // trimmed and expected-current input is represented in one typed value.
 type ReleaseControlCommand struct {
-	Operation      string
-	MongoURI       string
-	PostsDB        string
-	Environment    string
-	SourceOwner    string
-	ReportPath     string
-	ReleaseID      string
-	ManifestDigest string
-	Expected       ExpectedActiveRelease
+	Operation       string
+	MongoURI        string
+	PostsDB         string
+	Environment     string
+	SourceOwner     string
+	ReportPath      string
+	ReleaseID       string
+	ManifestDigest  string
+	ContentRevision int64
+	Expected        ExpectedActiveRelease
 }
 
 // ParseReleaseControlCommand rejects mixed, incomplete, and operation-foreign
@@ -345,7 +347,7 @@ func ParseReleaseControlCommand(args []string) (ReleaseControlCommand, error) {
 	var expectedReleaseID string
 	var expectedManifestDigest string
 	var expectedRevision int64
-	set.StringVar(&command.Operation, "operation", "", "query-candidate|query-active|activate")
+	set.StringVar(&command.Operation, "operation", "", "query-candidate|query-active|activate|readback-at-content-fence")
 	set.StringVar(&command.MongoURI, "mongo-uri", "", "MongoDB connection URI")
 	set.StringVar(&command.PostsDB, "posts-db", "quwoquan_content", "Content posts database")
 	set.StringVar(&command.Environment, "env", "", "exact environment")
@@ -353,6 +355,7 @@ func ParseReleaseControlCommand(args []string) (ReleaseControlCommand, error) {
 	set.StringVar(&command.ReportPath, "report", "", "create-once canonical JSON report")
 	set.StringVar(&command.ReleaseID, "release-id", "", "exact target release id")
 	set.StringVar(&command.ManifestDigest, "manifest-digest", "", "exact target manifest digest")
+	set.Int64Var(&command.ContentRevision, "content-revision", 0, "exact active pointer revision for readback-at-content-fence")
 	set.BoolVar(&expectedEmpty, "expected-active-empty", false, "expect no active release")
 	set.StringVar(&expectedReleaseID, "expected-active-release-id", "", "expected active release id")
 	set.StringVar(&expectedManifestDigest, "expected-active-manifest-digest", "", "expected active manifest digest")
@@ -392,10 +395,20 @@ func ParseReleaseControlCommand(args []string) (ReleaseControlCommand, error) {
 		hasAnyExpectedTupleFlag = hasAnyExpectedTupleFlag || provided[name]
 		hasCompleteExpectedTupleFlags = hasCompleteExpectedTupleFlags && provided[name]
 	}
+	if provided["content-revision"] && command.Operation != "readback-at-content-fence" {
+		return ReleaseControlCommand{}, fmt.Errorf("--content-revision is valid only for readback-at-content-fence")
+	}
 	switch command.Operation {
 	case "query-candidate":
 		if command.ReleaseID == "" || !sha256Pattern.MatchString(command.ManifestDigest) {
 			return ReleaseControlCommand{}, fmt.Errorf("query-candidate requires --release-id and canonical --manifest-digest")
+		}
+		if hasExpectedEmptyFlag || hasAnyExpectedTupleFlag {
+			return ReleaseControlCommand{}, fmt.Errorf("expected-current flags are valid only for activate")
+		}
+	case "readback-at-content-fence":
+		if command.ReleaseID == "" || !sha256Pattern.MatchString(command.ManifestDigest) || command.ContentRevision <= 0 {
+			return ReleaseControlCommand{}, fmt.Errorf("readback-at-content-fence requires --release-id, canonical --manifest-digest and positive --content-revision")
 		}
 		if hasExpectedEmptyFlag || hasAnyExpectedTupleFlag {
 			return ReleaseControlCommand{}, fmt.Errorf("expected-current flags are valid only for activate")
@@ -430,9 +443,70 @@ func ParseReleaseControlCommand(args []string) (ReleaseControlCommand, error) {
 			return ReleaseControlCommand{}, fmt.Errorf("expected active manifest digest must be canonical sha256")
 		}
 	default:
-		return ReleaseControlCommand{}, fmt.Errorf("--operation must be query-candidate, query-active, or activate")
+		return ReleaseControlCommand{}, fmt.Errorf("--operation must be query-candidate, query-active, activate, or readback-at-content-fence")
 	}
 	return command, nil
+}
+
+// ContentFencedReadbackReceipt proves Content's own active pointer sits on the
+// exact tuple and revision and that the verified candidate for that tuple is
+// still readable. It is the Content leg of the four-owner fenced readback.
+type ContentFencedReadbackReceipt struct {
+	Schema             string                                  `json:"schema"`
+	Status             string                                  `json:"status"`
+	Owner              string                                  `json:"owner"`
+	Environment        string                                  `json:"environment"`
+	SourceOwner        string                                  `json:"sourceOwner"`
+	ReleaseID          string                                  `json:"releaseId"`
+	ManifestDigest     string                                  `json:"manifestDigest"`
+	Revision           int64                                   `json:"revision"`
+	Reason             string                                  `json:"reason,omitempty"`
+	ContentActivatedAt *time.Time                              `json:"contentActivatedAt,omitempty"`
+	ReleaseClass       string                                  `json:"releaseClass,omitempty"`
+	ProjectionVersion  int64                                   `json:"projectionVersion,omitempty"`
+	VerifiedAt         *time.Time                              `json:"verifiedAt,omitempty"`
+	ClosureDigests     *ImportedReleaseCandidateClosureDigests `json:"closureDigests,omitempty"`
+	Counts             *ImportedReleaseCandidateCounts         `json:"counts,omitempty"`
+	GeneratedAt        time.Time                               `json:"generatedAt"`
+}
+
+func BuildContentFencedReadbackReceipt(
+	command ReleaseControlCommand,
+	active ActiveReleaseBinding,
+	candidate VerifiedImportedPostReleaseCandidate,
+	generatedAt time.Time,
+) (ContentFencedReadbackReceipt, error) {
+	generatedAt, err := canonicalReleaseControlTime(generatedAt, "fenced readback generatedAt")
+	if err != nil {
+		return ContentFencedReadbackReceipt{}, err
+	}
+	receipt := ContentFencedReadbackReceipt{
+		Schema: ContentFencedReadbackReceiptSchema, Status: "failed", Owner: "content",
+		Environment: command.Environment, SourceOwner: command.SourceOwner,
+		ReleaseID: command.ReleaseID, ManifestDigest: command.ManifestDigest,
+		Revision: command.ContentRevision, GeneratedAt: generatedAt,
+	}
+	switch {
+	case !active.Found:
+		receipt.Reason = "Content active pointer is absent"
+	case active.ReleaseID != command.ReleaseID || active.ManifestDigest != command.ManifestDigest || active.Revision != command.ContentRevision:
+		receipt.Reason = "Content active pointer differs from the requested fence"
+	case !candidate.Found:
+		receipt.Reason = "Content verified candidate is absent for the fence tuple"
+	case candidate.ProjectionVersion != active.ProjectionVersion || candidate.ReleaseClass != active.ReleaseClass:
+		receipt.Reason = "Content verified candidate disagrees with the active pointer"
+	default:
+		activatedAt, verifiedAt := active.ActivatedAt.UTC(), candidate.VerifiedAt.UTC()
+		closure, counts := candidate.ClosureDigests, candidate.Counts
+		receipt.Status = "passed"
+		receipt.ContentActivatedAt = &activatedAt
+		receipt.ReleaseClass = active.ReleaseClass
+		receipt.ProjectionVersion = candidate.ProjectionVersion
+		receipt.VerifiedAt = &verifiedAt
+		receipt.ClosureDigests = &closure
+		receipt.Counts = &counts
+	}
+	return receipt, nil
 }
 
 type ContentReleaseCandidateReceipt struct {
@@ -834,6 +908,31 @@ func RunReleaseControl(ctx context.Context, args []string) error {
 			return err
 		}
 		return WriteReleaseControlReport(command.ReportPath, receipt)
+	case "readback-at-content-fence":
+		active, err := ReadActiveImportedPostRelease(
+			ctx, database, command.Environment, command.SourceOwner,
+		)
+		if err != nil {
+			return fmt.Errorf("read Content active pointer: %w", err)
+		}
+		candidate, err := ReadVerifiedImportedPostReleaseCandidate(
+			ctx, database, command.Environment, command.SourceOwner,
+			command.ReleaseID, command.ManifestDigest,
+		)
+		if err != nil {
+			return fmt.Errorf("query verified Content release candidate: %w", err)
+		}
+		receipt, err := BuildContentFencedReadbackReceipt(command, active, candidate, generatedAt)
+		if err != nil {
+			return err
+		}
+		if err := WriteReleaseControlReport(command.ReportPath, receipt); err != nil {
+			return err
+		}
+		if receipt.Status != "passed" {
+			return fmt.Errorf("GATE_BLOCK: Content fenced readback failed: %s", receipt.Reason)
+		}
+		return nil
 	case "activate":
 		target := ImportedReleaseBinding{
 			SourceOwner: command.SourceOwner, ReleaseID: command.ReleaseID,

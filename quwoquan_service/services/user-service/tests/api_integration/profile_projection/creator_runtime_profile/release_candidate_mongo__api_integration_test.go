@@ -32,6 +32,15 @@ func TestCreatorReleaseCandidatesCoexistAndReadByExactFence(t *testing.T) {
 		if replayed, err := store.Stage(ctx, firstState, []model.CreatorReleaseProjection{firstProjection}); err != nil || !replayed {
 			t.Fatalf("exact replay replayed=%v err=%v", replayed, err)
 		}
+		// 同一 tuple 的二次导入必然带新的 verifiedAt 与派生 closureDigest；
+		// 载荷未变即为精确重放，不得判为 drift。
+		laterState, laterProjection := candidateFixtureAt(t, firstIdentity, "Creator A", time.Date(2026, 9, 6, 6, 0, 0, 0, time.UTC))
+		if replayed, err := store.Stage(ctx, laterState, []model.CreatorReleaseProjection{laterProjection}); err != nil || !replayed {
+			t.Fatalf("replay with a later verification clock replayed=%v err=%v", replayed, err)
+		}
+		if readback, found, err := store.ReadVerifiedCandidate(ctx, firstIdentity); err != nil || !found || !readback.VerifiedAt.Equal(firstState.VerifiedAt) {
+			t.Fatalf("replay must keep the first stored attestation: found=%v verifiedAt=%v err=%v", found, readback.VerifiedAt, err)
+		}
 		mutatedReplay := firstProjection
 		mutatedReplay.Profile.DisplayName = "Replay Drift"
 		mutatedDigest, digestErr := creatorpersistence.DocumentDigest(mutatedReplay, "documentDigest")
@@ -81,7 +90,11 @@ func TestCreatorReleaseCandidateClosureDriftFailsClosed(t *testing.T) {
 
 func candidateFixture(t *testing.T, identity model.ReleaseIdentity, displayName string) (model.CreatorReleaseCandidateState, model.CreatorReleaseProjection) {
 	t.Helper()
-	verifiedAt := time.Date(2026, 9, 6, 5, 0, 0, 0, time.UTC)
+	return candidateFixtureAt(t, identity, displayName, time.Date(2026, 9, 6, 5, 0, 0, 0, time.UTC))
+}
+
+func candidateFixtureAt(t *testing.T, identity model.ReleaseIdentity, displayName string, verifiedAt time.Time) (model.CreatorReleaseCandidateState, model.CreatorReleaseProjection) {
+	t.Helper()
 	profileDigest := candidateDigest("e")
 	profile := model.CreatorRuntimeProfile{CreatorID: "creator-shared", PersonaID: "author-shared", DisplayName: displayName, PackageDigest: identity.ManifestDigest, ReleaseID: identity.ReleaseID, Status: "candidate", ManagedBy: "qwq_data", ImportedAt: verifiedAt, UpdatedAt: verifiedAt}
 	projection := model.CreatorReleaseProjection{ReleaseIdentity: identity, CreatorID: profile.CreatorID, PersonaID: profile.PersonaID, Profile: profile, AuthorID: "author-shared", ProfileDigest: profileDigest, ProjectionVersion: 1, VerifiedAt: verifiedAt}

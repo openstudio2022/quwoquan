@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"time"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
@@ -75,7 +76,7 @@ func (s *CreatorReleaseCandidateStore) Stage(ctx context.Context, state model.Cr
 	var current model.CreatorReleaseCandidateState
 	err := s.states.FindOne(ctx, filter).Decode(&current)
 	if err == nil {
-		if err := s.validateStoredCandidate(ctx, state, current); err != nil {
+		if err := s.validateExactReplay(ctx, state, projections, current); err != nil {
 			return false, err
 		}
 		return true, nil
@@ -120,7 +121,7 @@ func (s *CreatorReleaseCandidateStore) Stage(ctx context.Context, state model.Cr
 			if readErr := s.states.FindOne(ctx, filter).Decode(&current); readErr != nil {
 				return false, err
 			}
-			if readErr := s.validateStoredCandidate(ctx, state, current); readErr != nil {
+			if readErr := s.validateExactReplay(ctx, state, projections, current); readErr != nil {
 				return false, readErr
 			}
 			return true, nil
@@ -191,6 +192,64 @@ func (s *CreatorReleaseCandidateStore) FindByExactContentFence(ctx context.Conte
 	}
 	profile := document.Profile
 	return &profile, true, nil
+}
+
+// validateExactReplay admits a second Stage of the same tuple only when the
+// immutable intent and the timestamp-free projection payload equal what is
+// stored. verifiedAt and the closure digest derived from it belong to the
+// stored attestation, so they are validated against storage rather than
+// against the replaying run's own clock.
+func (s *CreatorReleaseCandidateStore) validateExactReplay(ctx context.Context, requested model.CreatorReleaseCandidateState, projections []model.CreatorReleaseProjection, stored model.CreatorReleaseCandidateState) error {
+	if !sameCandidateIntent(requested, stored) {
+		return fmt.Errorf("GATE_BLOCK: Creator release candidate state drift for exact tuple")
+	}
+	if err := s.validateStoredCandidate(ctx, stored, stored); err != nil {
+		return err
+	}
+	cursor, err := s.projections.Find(ctx, releaseIdentityFilter(stored.ReleaseIdentity), options.Find().SetSort(bson.D{{Key: "creatorId", Value: 1}}))
+	if err != nil {
+		return err
+	}
+	defer cursor.Close(ctx)
+	storedPayloads := make(map[string]string, stored.ProjectedCount)
+	for cursor.Next(ctx) {
+		var document model.CreatorReleaseProjection
+		if err := cursor.Decode(&document); err != nil {
+			return err
+		}
+		digest, err := replayPayloadDigest(document)
+		if err != nil {
+			return err
+		}
+		storedPayloads[document.CreatorID] = digest
+	}
+	if err := cursor.Err(); err != nil {
+		return err
+	}
+	if len(storedPayloads) != len(projections) {
+		return fmt.Errorf("GATE_BLOCK: Creator release candidate payload drift for exact tuple")
+	}
+	for _, projection := range projections {
+		digest, err := replayPayloadDigest(projection)
+		if err != nil {
+			return err
+		}
+		if storedPayloads[projection.CreatorID] != digest {
+			return fmt.Errorf("GATE_BLOCK: Creator release candidate payload drift for exact tuple")
+		}
+	}
+	return nil
+}
+
+// replayPayloadDigest hashes one projection with its verification clock and
+// derived document digest cleared, so two stagings of the same immutable
+// payload compare equal regardless of when they ran.
+func replayPayloadDigest(projection model.CreatorReleaseProjection) (string, error) {
+	projection.VerifiedAt = time.Time{}
+	projection.Profile.ImportedAt = time.Time{}
+	projection.Profile.UpdatedAt = time.Time{}
+	projection.DocumentDigest = ""
+	return DocumentDigest(projection, "documentDigest")
 }
 
 func (s *CreatorReleaseCandidateStore) validateStoredCandidate(ctx context.Context, expected, actual model.CreatorReleaseCandidateState) error {
@@ -289,6 +348,12 @@ func validateReleaseIdentity(identity model.ReleaseIdentity) error {
 
 func releaseIdentityFilter(identity model.ReleaseIdentity) bson.M {
 	return bson.M{"environment": identity.Environment, "sourceOwner": identity.SourceOwner, "releaseId": identity.ReleaseID, "manifestDigest": identity.ManifestDigest}
+}
+
+// sameCandidateIntent compares the timestamp-independent immutable intent of
+// a candidate; verifiedAt and closureDigest are attested per staging run.
+func sameCandidateIntent(left, right model.CreatorReleaseCandidateState) bool {
+	return left.ReleaseIdentity == right.ReleaseIdentity && left.Status == right.Status && left.ProjectionVersion == right.ProjectionVersion && left.ExpectedCount == right.ExpectedCount && left.ProjectedCount == right.ProjectedCount && left.PostgreSQLWrites == right.PostgreSQLWrites && equalStrings(left.AuthorIDs, right.AuthorIDs) && equalProfileDigests(left.ProfileDigests, right.ProfileDigests)
 }
 
 func sameCandidateState(left, right model.CreatorReleaseCandidateState) bool {

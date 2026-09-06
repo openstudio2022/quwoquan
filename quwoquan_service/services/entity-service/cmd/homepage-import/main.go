@@ -20,6 +20,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -39,6 +40,21 @@ type releaseDesiredState struct {
 	DesiredRefs struct {
 		Entities []string `json:"entities"`
 	} `json:"desiredRefs"`
+}
+
+func missingDesiredEntities(filter map[string]bool, inputs []application.ImportedHomepageInput) []string {
+	projected := make(map[string]bool, len(inputs))
+	for _, input := range inputs {
+		projected[input.EntityRef] = true
+	}
+	missing := make([]string, 0)
+	for ref := range filter {
+		if !projected[ref] {
+			missing = append(missing, ref)
+		}
+	}
+	sort.Strings(missing)
+	return missing
 }
 
 func main() {
@@ -136,6 +152,11 @@ func main() {
 		log.Printf("[homepage-import] WARN %s", issue)
 	}
 	log.Printf("[homepage-import] env=%s projected homepages=%d issues=%d", *env, len(inputs), len(issues))
+	// verified 候选是 exact tuple 的不可变闭包：desired 实体有任何一个未投影，
+	// 就不能 stage，否则残留的候选会让修复后的重放永远触发 drift。
+	if missing := missingDesiredEntities(filter, inputs); len(missing) > 0 {
+		log.Fatalf("[homepage-import] desired homepage closure incomplete: missing=%s", strings.Join(missing, ","))
+	}
 
 	report := application.HomepageReleaseStageReport{
 		Identity: application.HomepageReleaseIdentity{

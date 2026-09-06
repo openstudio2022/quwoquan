@@ -145,7 +145,7 @@ func TestReplaySourceImportReportIsStrictAndCountBound(t *testing.T) {
 	}
 	digest := "sha256:" + strings.Repeat("a", 64)
 	report := map[string]any{
-		"schema": "quwoquan.content_import_report", "status": "imported",
+		"schema": "quwoquan.content_import_report", "status": "staged",
 		"environment": "alpha", "releaseId": "legacy-release",
 		"sourceOwner": "qwq_data", "manifestDigest": digest,
 		"mode": "sync", "deletePolicy": "tombstone",

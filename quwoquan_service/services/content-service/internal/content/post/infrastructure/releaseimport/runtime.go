@@ -191,7 +191,7 @@ func Run() {
 		if strings.TrimSpace(*creatorReceipt) == "" {
 			log.Fatalf("--creator-receipt is required when the release has creators")
 		}
-		if err := ValidateCreatorImportReceipt(*creatorReceipt, desired.ReleaseID, creatorAuthors); err != nil {
+		if err := ValidateCreatorImportReceipt(*creatorReceipt, releaseBinding, *env, *dryRun, creatorAuthors); err != nil {
 			log.Fatalf("validate creator import receipt: %v", err)
 		}
 	}
@@ -422,7 +422,7 @@ func ImportReportStatus(activationMode string) string {
 	if strings.TrimSpace(activationMode) == "repair-active" {
 		return "replay_validated"
 	}
-	return "imported"
+	return "staged"
 }
 
 // ImportReportActivationMode keeps the Data-reachable import report on the
