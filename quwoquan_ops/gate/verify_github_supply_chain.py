@@ -284,29 +284,28 @@ def verify_release_tag_selection_controls() -> list[str]:
             "group: release-tag-controller",
             "cancel-in-progress: false",
             "environment: release-selection",
-            "actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1",
-            "RELEASE_CONTROLLER_APP_ID",
-            "RELEASE_CONTROLLER_APP_PRIVATE_KEY",
-            "RELEASE_CONTROLLER_INSTALLATION_ID",
-            "RELEASE_CONTROLLER_APP_SLUG",
-            "RELEASE_CONTROLLER_READBACK_URL",
-            "RELEASE_CONTROLLER_READBACK_TOKEN",
-            "APP_TOKEN: ${{ steps.app-token.outputs.token }}",
-            "CONTROLLER_INSTALLATION_ID: ${{ steps.app-token.outputs.installation-id }}",
-            "CONTROLLER_APP_SLUG: ${{ steps.app-token.outputs.app-slug }}",
-            'git remote set-url origin "https://x-access-token:${APP_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"',
+            # controller 即 hosted deploy key（DEC-009）：私钥只在 mutation step 短时物化，
+            # 指纹与 REST /keys 读回比对，tagger 身份即 controller title。
+            "CONTROLLER_TITLE: release-controller",
+            "RELEASE_CONTROLLER_DEPLOY_KEY: ${{ secrets.RELEASE_CONTROLLER_DEPLOY_KEY }}",
+            "ssh-keygen -lf",
+            'test "$LOCAL_FINGERPRINT" = "$HOSTED_FINGERPRINT"',
+            'export GIT_SSH_COMMAND="ssh -i $KEY_FILE -o IdentitiesOnly=yes',
+            'git remote set-url origin "ssh://git@${GITHUB_SERVER_URL#https://}/${GITHUB_REPOSITORY}.git"',
             'git remote set-url origin "https://github.com/${GITHUB_REPOSITORY}.git"',
+            'rm -f "$KEY_FILE"',
             "persist-credentials: false",
-            "hosted_readback pre_mutation",
-            "quwoquan_ops.creator_readback_fact.v1",
-            "quwoquan_ops.ruleset_readback_fact.v1",
+            "quwoquan_ops/ci/release_tag_readback.py",
+            "--phase pre_mutation",
+            "--phase post_mutation",
             "tag-admit-rc-intent",
             "tag-admit-stable-intent",
             "tag-admission-intent-check",
             "git merge-base --is-ancestor",
             "! git ls-remote --exit-code --tags origin",
-            'test "$REMOTE_STATUS" = 404',
+            "already exists before mutation",
             'git tag -a "$TAG" "$SOURCE_SHA"',
+            "release-tag-intent: $INTENT_ID",
             'test "$(git cat-file -t "refs/tags/$TAG")" = tag',
             'git push origin "refs/tags/$TAG:refs/tags/$TAG"',
             "/git/ref/tags/${TAG}",
@@ -314,9 +313,6 @@ def verify_release_tag_selection_controls() -> list[str]:
             'test "$TAG_OBJECT_OID" = "$REMOTE_OBJECT_OID"',
             'test "$(git rev-parse "refs/tags/$TAG^{}")" = "$SOURCE_SHA"',
             "tag-mutation-outcome",
-            '"name": "release-tag-creation"',
-            "$GITHUB_API_URL/repos/${GITHUB_REPOSITORY}/check-runs",
-            "post_readback post_mutation",
             '"tag-admit-$KIND-finalize"',
         ),
         "trusted two-phase release tag controller control",
@@ -327,11 +323,20 @@ def verify_release_tag_selection_controls() -> list[str]:
         (
             "pull-requests: read",
             "attestations: write",
+            "checks: write",
             "runs-on: [self-hosted",
             "environment: production",
             "build_sign_attest_once",
             "stackctl.py deploy",
-            "RELEASE_CONTROLLER_DEPLOY_KEY",
+            # 旧 controller App / 外部 readback 服务已退役：唯一 controller 是 hosted deploy key。
+            "actions/create-github-app-token@",
+            "RELEASE_CONTROLLER_APP_ID",
+            "RELEASE_CONTROLLER_APP_PRIVATE_KEY",
+            "RELEASE_CONTROLLER_INSTALLATION_ID",
+            "RELEASE_CONTROLLER_APP_SLUG",
+            "RELEASE_CONTROLLER_READBACK_URL",
+            "RELEASE_CONTROLLER_READBACK_TOKEN",
+            "x-access-token:",
             "creator_readback_ref",
             "ruleset_readback_ref",
             "git fetch --force",
@@ -355,23 +360,14 @@ def verify_release_tag_selection_controls() -> list[str]:
         "release tag authority",
     )
 
-    pre_creator = _executable_token_index(
-        text, 'hosted_readback pre_mutation "$PRE_CREATOR_FILE"',
-    )
-    pre_ruleset = _executable_token_index(
-        text, 'hosted_readback pre_mutation "$PRE_RULESET_FILE"',
-    )
-    app_token = _executable_token_index(
-        text,
-        "actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1",
-    )
+    pre_readback = _executable_token_index(text, "--phase pre_mutation")
     admit_rc = _executable_token_index(text, "tag-admit-rc-intent")
     admit_stable = _executable_token_index(text, "tag-admit-stable-intent")
     intent_check = _executable_token_index(text, "tag-admission-intent-check")
-    remote_absent = _executable_token_index(text, 'test "$REMOTE_STATUS" = 404')
-    token_remote = _executable_token_index(
-        text,
-        'git remote set-url origin "https://x-access-token:${APP_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"',
+    remote_absent = _executable_token_index(text, "already exists before mutation", intent_check + 1)
+    key_match = _executable_token_index(text, 'test "$LOCAL_FINGERPRINT" = "$HOSTED_FINGERPRINT"')
+    ssh_remote = _executable_token_index(
+        text, 'git remote set-url origin "ssh://git@${GITHUB_SERVER_URL#https://}/${GITHUB_REPOSITORY}.git"',
     )
     create = _executable_token_index(text, 'git tag -a "$TAG" "$SOURCE_SHA"')
     push = _executable_token_index(text, 'git push origin "refs/tags/$TAG:refs/tags/$TAG"')
@@ -383,59 +379,47 @@ def verify_release_tag_selection_controls() -> list[str]:
     ref_readback = _executable_token_index(text, "/git/ref/tags/${TAG}", push + 1)
     object_readback = _executable_token_index(text, "/git/tags/${REMOTE_OBJECT_OID}", ref_readback + 1)
     outcome = _executable_token_index(text, "tag-mutation-outcome", object_readback + 1)
-    check_run = _executable_token_index(
-        text, "$GITHUB_API_URL/repos/${GITHUB_REPOSITORY}/check-runs", outcome + 1,
-    )
-    post_creator = _executable_token_index(
-        text, 'post_readback post_mutation "$CREATOR_FILE"', check_run + 1,
-    )
-    post_ruleset = _executable_token_index(
-        text, 'post_readback post_mutation "$RULESET_FILE"', check_run + 1,
-    )
+    post_readback = _executable_token_index(text, "--phase post_mutation", outcome + 1)
+    key_removed = _executable_token_index(text, 'rm -f "$KEY_FILE"', post_readback + 1)
     finalization = _executable_token_index(text, '"tag-admit-$KIND-finalize"')
     if (
         min(
-            pre_creator,
-            pre_ruleset,
-            app_token,
+            pre_readback,
             admit_rc,
             admit_stable,
             intent_check,
             remote_absent,
-            token_remote,
+            key_match,
+            ssh_remote,
             create,
             push,
             restored_remote,
             ref_readback,
             object_readback,
             outcome,
-            check_run,
-            post_creator,
-            post_ruleset,
+            post_readback,
+            key_removed,
             finalization,
         ) < 0
         or not (
-            max(pre_creator, pre_ruleset) < admit_rc
-            and max(pre_creator, pre_ruleset) < admit_stable
-            and max(admit_rc, admit_stable) < app_token < intent_check
-            and intent_check < remote_absent < token_remote < create <= push
+            pre_readback < admit_rc
+            and pre_readback < admit_stable
+            and max(admit_rc, admit_stable) < intent_check
+            and intent_check < remote_absent < key_match < ssh_remote < create <= push
             and push < restored_remote < ref_readback
-            and ref_readback < object_readback < outcome < check_run
-            and check_run < min(post_creator, post_ruleset)
-            and max(post_creator, post_ruleset) < finalization
+            and ref_readback < object_readback < outcome < post_readback
+            and post_readback < finalization < key_removed
         )
         or text.count("uses: actions/checkout@")
         != text.count("persist-credentials: false")
-        or text.count("READBACK_URL: ${{ vars.RELEASE_CONTROLLER_READBACK_URL }}") < 2
-        or text.count("READBACK_TOKEN: ${{ secrets.RELEASE_CONTROLLER_READBACK_TOKEN }}") < 2
         or "verified-pre-push-local-admission" in text
         or "release_control.py --help" in text
     ):
         failures.append(
             f"{path.relative_to(ROOT)} is still a tag-controller placeholder: "
-            "trusted pre-readback and both intents must precede create-only mutation; "
-            "REST ref/object, mutation outcome, App check-run, hosted post-readbacks, "
-            "and finalization must then remain ordered"
+            "hosted pre-readback and both intents must precede the deploy-key create-only "
+            "mutation; REST ref/object readback, mutation outcome, hosted post-readbacks "
+            "and finalization must then remain ordered before the key is removed"
         )
     return failures
 

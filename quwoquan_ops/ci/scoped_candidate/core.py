@@ -6,17 +6,16 @@ import hashlib
 import json
 import os
 import re
-import secrets
 import stat
 import subprocess
 import tempfile
 import urllib.error
 import urllib.request
-from collections.abc import Callable, Iterable, Mapping, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
-from typing import Any, Iterator
+from typing import Any
 
 import yaml
 
@@ -155,11 +154,21 @@ def _claim_root(repository: Path, policy_path: Path) -> Path:
     root = repository / _text(root_text, "claim.storage_root")
     root.mkdir(parents=True, exist_ok=True, mode=0o700)
     os.chmod(root, 0o700)
-    for name in ("claims", "releases", "candidates", "admissions", "publish-results", "private-index"):
+    for name in ("claims", "releases", "candidates", "source-facts", "admissions", "publish-results", "private-index"):
         child = root / name
         child.mkdir(exist_ok=True, mode=0o700)
         os.chmod(child, 0o700)
     return root
+
+
+def store_root(*, repository: Path, policy_path: Path) -> Path:
+    """本地 exact candidate 证据链的唯一 store root；链内所有 ref 都相对它解析。"""
+    return _claim_root(_repo_root(repository), policy_path)
+
+
+def store_ref(*, repository: Path, policy_path: Path, path: Path) -> dict[str, str]:
+    root = store_root(repository=repository, policy_path=policy_path)
+    return {"ref": path.resolve().relative_to(root).as_posix(), "digest": exact_digest(path)}
 
 
 @contextmanager
@@ -334,12 +343,96 @@ def build_candidate(
     return _write_create_once(root / "candidates" / f"{body['candidateId']}.json", body)
 
 
-def _load_exact_ref(repository: Path, value: Mapping[str, str], label: str) -> tuple[dict[str, Any], str]:
+def build_head_candidate(
+    *, repository: Path, policy_path: Path, commit: str, expected_parent: str,
+    owner_identity_ref: str, impact_plan_digest: str, writer_id: str, expires_at: str,
+) -> Path:
+    """把一个已存在的 exact commit（integration HEAD 或 lane head）构造为 exact candidate。
+
+    candidate 的 scope 就是相对 expected parent 的全部 changed paths；claim 仍经同一
+    append-only generation 取得，因此与并行 scoped writer 的路径冲突照常被拒绝。
+    commit 必须以 expected parent 为祖先，否则不是 fast-forward 候选。
+    """
+    repository = _repo_root(repository)
+    root = _claim_root(repository, policy_path)
+    commit = _sha(_git(repository, "rev-parse", f"{_sha(commit, 'commit')}^{{commit}}").stdout.strip(), "commit")
+    parent = _sha(_git(repository, "rev-parse", f"{_sha(expected_parent, 'expectedParent')}^{{commit}}").stdout.strip(), "expectedParent")
+    if commit == parent:
+        raise ScopedCandidateError("SCOPED_CANDIDATE.INVALID", "candidate commit equals expected parent")
+    ancestry = subprocess.run(
+        ["git", "merge-base", "--is-ancestor", parent, commit], cwd=repository, text=True, capture_output=True, check=False,
+    )
+    if ancestry.returncode != 0:
+        raise ScopedCandidateError("SCOPED_CANDIDATE.CAS_CONFLICT", "expected parent is not an ancestor of the candidate commit")
+    tree = _sha(_git(repository, "show", "-s", "--format=%T", commit).stdout.strip(), "tree")
+    changed = _changed_paths(repository, parent, tree)
+    if not changed:
+        raise ScopedCandidateError("SCOPED_CANDIDATE.INVALID", "candidate has no changed paths relative to expected parent")
+    impact_plan_digest = _digest(impact_plan_digest, "impactPlanDigest")
+    claim_path = acquire_claim(
+        repository=repository, policy_path=policy_path, writer_id=writer_id,
+        owner_identity_ref=owner_identity_ref, expected_parent=parent, paths=list(changed), expires_at=expires_at,
+    )
+    body: dict[str, Any] = {
+        "schema": _SCHEMA, "claimRef": claim_path.relative_to(root).as_posix(),
+        "claimDigest": exact_digest(claim_path), "ownerIdentityRef": _text(owner_identity_ref, "ownerIdentityRef"),
+        "expectedParent": parent, "commit": commit, "tree": tree,
+        "paths": list(changed), "pathsDigest": exact_digest({"paths": list(changed)}),
+        "impactPlanDigest": impact_plan_digest, "createdAt": _utc_now(),
+    }
+    body["candidateId"] = exact_digest(body)
+    return _write_create_once(root / "candidates" / f"{body['candidateId']}.json", body)
+
+
+_SOURCE_FACT_SCHEMA = "quwoquan_ops.integration_source_fact.v1"
+_SOURCE_FACT_KINDS = ("local_readiness_fast", "local_readiness_scope", "commit_gate")
+
+
+def create_source_fact(
+    *, repository: Path, policy_path: Path, candidate_ref: Mapping[str, str], kind: str,
+    receipt_path: Path, status: str,
+) -> Path:
+    """把一份本地 readiness/gate 回执绑定到 candidateId，形成 publisher 需要的 source fact。
+
+    status 只能是回执自身的终态；这里不解释、不放宽回执结论。
+    """
+    repository = _repo_root(repository)
+    root = _claim_root(repository, policy_path)
+    candidate, candidate_digest = _load_exact_ref(root, candidate_ref, "candidate")
+    if candidate.get("schema") != _SCHEMA:
+        raise ScopedCandidateError("SCOPED_CANDIDATE.INVALID", "candidate schema is invalid")
+    if kind not in _SOURCE_FACT_KINDS:
+        raise ScopedCandidateError("SCOPED_CANDIDATE.INVALID", f"source fact kind must be one of {_SOURCE_FACT_KINDS}")
+    if status not in {"passed", "failed"}:
+        raise ScopedCandidateError("SCOPED_CANDIDATE.INVALID", "source fact status must be passed or failed")
+    receipt = receipt_path.resolve()
+    if not receipt.is_file() or receipt.is_symlink():
+        raise ScopedCandidateError("SCOPED_CANDIDATE.INVALID", "source receipt must be a regular file")
+    try:
+        receipt_ref = receipt.relative_to(repository).as_posix()
+    except ValueError as exc:
+        raise ScopedCandidateError("SCOPED_CANDIDATE.INVALID", "source receipt must live inside the repository output root") from exc
+    body: dict[str, Any] = {
+        "schema": _SOURCE_FACT_SCHEMA, "kind": kind, "status": status,
+        "candidateId": _digest(candidate.get("candidateId"), "candidateId"),
+        "candidate": {"ref": candidate_ref["ref"], "digest": candidate_digest},
+        "commit": candidate["commit"], "tree": candidate["tree"],
+        "receipt": {"ref": receipt_ref, "digest": exact_digest(receipt)},
+        "createdAt": _utc_now(),
+    }
+    body["sourceFactId"] = exact_digest(body)
+    return _write_create_once(root / "source-facts" / f"{body['sourceFactId']}.json", body)
+
+
+def _load_exact_ref(root: Path, value: Mapping[str, str], label: str) -> tuple[dict[str, Any], str]:
+    """在唯一 store root 下解析 exact ref；ref 一律相对 store root，不相对 worktree。"""
     if not isinstance(value, Mapping) or set(value) != {"ref", "digest"}:
         raise ScopedCandidateError("SCOPED_CANDIDATE.INVALID", f"{label} must contain ref and digest")
-    ref = _normalize_path(repository, value.get("ref"))
+    ref = _normalize_path(root, value.get("ref"))
     expected = _digest(value.get("digest"), f"{label}.digest")
-    path = repository / ref
+    path = root / ref
+    if not path.is_file():
+        raise ScopedCandidateError("SCOPED_CANDIDATE.STALE", f"{label} is not present in the candidate store")
     actual = exact_digest(path)
     if actual != expected:
         raise ScopedCandidateError("SCOPED_CANDIDATE.STALE", f"{label} exact bytes drifted")
@@ -353,7 +446,7 @@ def create_publish_admission(
 ) -> Path:
     repository = _repo_root(repository)
     root = _claim_root(repository, policy_path)
-    candidate, candidate_digest = _load_exact_ref(repository, candidate_ref, "candidate")
+    candidate, candidate_digest = _load_exact_ref(root, candidate_ref, "candidate")
     if candidate.get("schema") != _SCHEMA:
         raise ScopedCandidateError("SCOPED_CANDIDATE.INVALID", "candidate schema is invalid")
     candidate_id = _digest(candidate.get("candidateId"), "candidateId")
@@ -365,7 +458,7 @@ def create_publish_admission(
         raise ScopedCandidateError("SCOPED_CANDIDATE.INVALID", "at least one source fact is required")
     now = datetime.now(timezone.utc)
     for index, exact_ref in enumerate(source_fact_refs):
-        fact, digest = _load_exact_ref(repository, exact_ref, f"sourceFacts[{index}]")
+        fact, digest = _load_exact_ref(root, exact_ref, f"sourceFacts[{index}]")
         if fact.get("status") != "passed" or fact.get("candidateId") != candidate_id:
             raise ScopedCandidateError("SCOPED_CANDIDATE.STALE", "source fact is not passed for this candidate")
         normalized_sources.append({"ref": exact_ref["ref"], "digest": digest})
@@ -374,7 +467,7 @@ def create_publish_admission(
         ("alpha", alpha_fact_ref, {"passed"}),
         ("beta", beta_fact_ref, {"passed", "not_required"}),
     ):
-        fact, digest = _load_exact_ref(repository, exact_ref, environment)
+        fact, digest = _load_exact_ref(root, exact_ref, environment)
         expires_at = fact.get("expiresAt")
         signer = fact.get("signer")
         candidate_binding = fact.get("candidate")
@@ -489,10 +582,11 @@ def hosted_broker_cas_publish(
     if not token:
         raise ScopedCandidateError("SCOPED_CANDIDATE.PUBLISHER_UNAVAILABLE", "publisher token is missing")
     admission_digest = exact_digest(admission_ref)
+    admission_store_ref = admission_ref.resolve().relative_to(root).as_posix()
     request_body = canonical_bytes(
         {
             "schema": _ADMISSION_SCHEMA,
-            "admission": {"ref": str(admission_ref.relative_to(repository)), "digest": admission_digest},
+            "admission": {"ref": admission_store_ref, "digest": admission_digest},
             "payload": admission,
         }
     )
@@ -542,13 +636,100 @@ def hosted_broker_cas_publish(
         raise ScopedCandidateError("SCOPED_CANDIDATE.PUBLISHER_UNAVAILABLE", "publisher mutation response drifted")
     result: dict[str, Any] = {
         "schema": _PUBLISH_RESULT_SCHEMA,
-        "admission": {"ref": str(admission_ref.relative_to(repository)), "digest": admission_digest},
+        "admission": {"ref": admission_store_ref, "digest": admission_digest},
         "admissionId": admission["admissionId"],
         "targetRef": admission["targetRef"],
         "beforeOid": before,
         "afterOid": after,
         "readbackOid": observed,
         "publisherReceipt": readback_payload,
+        "terminal": "published",
+        "createdAt": _utc_now(),
+    }
+    result["publishResultId"] = exact_digest(result)
+    return _write_create_once(root / "publish-results" / f"{result['publishResultId']}.json", result)
+
+
+def _remote_ref_oid(repository: Path, remote: str, ref: str) -> str | None:
+    """`git ls-remote` 精确读回一个远端 ref；不存在时返回 None。"""
+    completed = subprocess.run(
+        ["git", "ls-remote", "--exit-code", remote, ref], cwd=repository,
+        text=True, capture_output=True, check=False,
+    )
+    if completed.returncode == 2:
+        return None
+    if completed.returncode != 0:
+        raise ScopedCandidateError(
+            "SCOPED_CANDIDATE.PUBLISHER_UNAVAILABLE",
+            f"remote readback failed: {' '.join((completed.stderr or completed.stdout).split())}",
+        )
+    for line in completed.stdout.splitlines():
+        parts = line.split()
+        if len(parts) == 2 and parts[1] == ref:
+            return _sha(parts[0], "readbackOid")
+    raise ScopedCandidateError("SCOPED_CANDIDATE.PUBLISHER_UNAVAILABLE", "remote readback did not return the target ref")
+
+
+def local_git_cas_publish(
+    *, repository: Path, policy_path: Path, admission_ref: Path, remote: str = "origin",
+    ref: str = "refs/heads/dev1.0",
+) -> Path:
+    """integration 工作区通道：本地 ff-only 跟到候选，再以 expected-old lease 做一次 non-force fast-forward push。
+
+    前置：当前工作区 HEAD 就在目标分支上且工作树干净；本地分支 == expectedRemoteOid 或已等于候选。
+    CAS：`--force-with-lease=<ref>:<before>` 只在远端仍为 before 时更新；pre-push hook 与
+    hosted ruleset 继续独立保证 fast-forward。终态按 ls-remote 读回 before|after|other 收口。
+    """
+    repository = _repo_root(repository)
+    root = _claim_root(repository, policy_path)
+    admission = _validated_admission(repository, admission_ref)
+    if admission["targetRef"] != ref:
+        raise ScopedCandidateError("SCOPED_CANDIDATE.INVALID", "publish ref drifted")
+    before = str(admission["expectedRemoteOid"])
+    after = str(admission["commit"])
+    branch = ref.removeprefix("refs/heads/")
+    current_branch = _git(repository, "symbolic-ref", "--quiet", "HEAD").stdout.strip()
+    if current_branch != ref:
+        raise ScopedCandidateError("SCOPED_CANDIDATE.INVALID", f"worktree HEAD must be on {ref} for the integration channel")
+    if _git(repository, "status", "--porcelain", "--untracked-files=no").stdout.strip():
+        raise ScopedCandidateError("SCOPED_CANDIDATE.INVALID", "worktree must be clean before publish")
+    remote_before = _remote_ref_oid(repository, remote, ref)
+    if remote_before != before:
+        state = _terminal_readback(before=before, after=after, readback=remote_before or "")
+        code = "SCOPED_CANDIDATE.STALE" if state == "after" else "SCOPED_CANDIDATE.CAS_CONFLICT"
+        raise ScopedCandidateError(code, f"remote readback before publish is {state}")
+    local = _git(repository, "rev-parse", ref).stdout.strip()
+    if local == before:
+        _git(repository, "merge", "--ff-only", after)
+    elif local != after:
+        raise ScopedCandidateError("SCOPED_CANDIDATE.CAS_CONFLICT", "local integration branch is neither expected parent nor candidate")
+    if _git(repository, "rev-parse", ref).stdout.strip() != after:
+        raise ScopedCandidateError("SCOPED_CANDIDATE.CAS_CONFLICT", "local fast-forward did not land on the candidate")
+    push = subprocess.run(
+        ["git", "push", f"--force-with-lease={ref}:{before}", remote, f"{ref}:{ref}"],
+        cwd=repository, text=True, capture_output=True, check=False,
+    )
+    observed = _remote_ref_oid(repository, remote, ref)
+    state = _terminal_readback(before=before, after=after, readback=observed or "")
+    if state != "after":
+        detail = " ".join((push.stderr or push.stdout).split())[:400]
+        code = "SCOPED_CANDIDATE.CAS_CONFLICT" if state == "other" else "SCOPED_CANDIDATE.PUBLISHER_UNAVAILABLE"
+        raise ScopedCandidateError(code, f"publish terminal readback is {state}: {detail}")
+    result: dict[str, Any] = {
+        "schema": _PUBLISH_RESULT_SCHEMA,
+        "admission": {"ref": admission_ref.resolve().relative_to(root).as_posix(), "digest": exact_digest(admission_ref)},
+        "admissionId": admission["admissionId"],
+        "targetRef": ref,
+        "beforeOid": before,
+        "afterOid": after,
+        "readbackOid": observed,
+        "publisherReceipt": {
+            "channel": "integration_worktree_fast_forward",
+            "remote": remote,
+            "branch": branch,
+            "pushExitCode": push.returncode,
+            "worktree": str(repository),
+        },
         "terminal": "published",
         "createdAt": _utc_now(),
     }

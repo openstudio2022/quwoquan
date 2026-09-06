@@ -36,7 +36,8 @@ on:
       artifact_build_number:
         description: Hosted monotonic build number shared by both factories
         required: true
-        type: number
+        # 与 app_pipeline.yml 同型：job output 恒为字符串，声明 number 会让 caller 侧 actionlint 类型校验失败。
+        type: string
       artifact_build_number_allocation_ref:
         description: Exact immutable hosted build allocation OCI @sha256 ref
         required: true

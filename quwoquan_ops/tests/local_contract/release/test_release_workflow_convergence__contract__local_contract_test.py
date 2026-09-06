@@ -108,18 +108,14 @@ def function_source(path: Path, name: str) -> str:
 
 def test_delivery_gate_is_verify_only_and_excludes_heavy_execution() -> None:
     source, workflow = load_workflow(DELIVERY)
-    assert set(workflow["jobs"]) == {"promotion_verify", "main_source_seal", "system_backsync"}
-    assert set(trigger(workflow)) == {"pull_request", "push"}
+    assert set(workflow["jobs"]) == {"promotion_verify", "main_source_seal"}
+    assert set(trigger(workflow)) == {"pull_request", "pull_request_review", "push"}
     assert trigger(workflow)["pull_request"]["branches"] == ["main"]
     assert trigger(workflow)["push"]["branches"] == ["main"]
-    assert workflow["jobs"]["promotion_verify"]["if"] == "${{ github.event_name == 'pull_request' }}"
+    assert workflow["jobs"]["promotion_verify"]["if"] == "${{ github.event_name == 'pull_request' || github.event_name == 'pull_request_review' }}"
     assert workflow["jobs"]["main_source_seal"]["if"] == "${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}"
-    caller = workflow["jobs"]["system_backsync"]
-    assert caller["needs"] == "main_source_seal"
-    assert caller["if"] == "${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}"
-    assert caller["uses"] == "./.github/workflows/system-backsync.yml"
-    assert "steps" not in caller
-    assert "secrets" not in caller
+    # main→dev1.0 回同步改由 integration 工作区 FF 通道（make promotion-backsync）执行，不在 hosted 侧调用 reusable backsync。
+    assert "system_backsync" not in workflow["jobs"]
     assert "promotion-admit" in source
     assert "promotion_evidence.py main-seal" in source
     assert "validate-hosted-handoff" in source
@@ -181,14 +177,11 @@ def test_release_workflows_are_dispatch_only_and_single_responsibility() -> None
 
 def test_main_push_only_creates_source_seal_not_build_tag_or_prod() -> None:
     delivery_source, delivery = load_workflow(DELIVERY)
-    assert set(trigger(delivery)) == {"pull_request", "push"}
+    assert set(trigger(delivery)) == {"pull_request", "pull_request_review", "push"}
     assert trigger(delivery)["push"] == {"branches": ["main"]}
     post_commands = commands(delivery["jobs"]["main_source_seal"])
-    caller = delivery["jobs"]["system_backsync"]
     assert "promotion_evidence.py main-seal" in post_commands
-    assert caller["needs"] == "main_source_seal"
-    assert caller["with"]["expected_dev_before"] == "${{ needs.main_source_seal.outputs.source_sha }}"
-    assert caller["with"]["source_sha"] == "${{ needs.main_source_seal.outputs.source_sha }}"
+    assert "system_backsync" not in delivery["jobs"]
     for forbidden in ("git tag -a", "stackctl.py deploy", "build_sign_attest_once"):
         assert forbidden not in post_commands
     for path in (QUALIFICATION, TAG_SELECTION, PROD):
@@ -274,7 +267,7 @@ def test_stable_reuses_qualified_rc_material_and_admits_after_readback() -> None
     push = selection_source.index('git push origin "refs/tags/$TAG:refs/tags/$TAG"')
     tag_readback = selection_source.index('/git/ref/tags/${TAG}', push)
     outcome = selection_source.index("OUTCOME_RESULT=", tag_readback)
-    hosted_readback = selection_source.index("post_readback post_mutation", outcome)
+    hosted_readback = selection_source.index("--phase post_mutation", outcome)
     finalize = selection_source.index('"tag-admit-$KIND-finalize"', hosted_readback)
     assert admit_rc < create_local < push < tag_readback < outcome < hosted_readback < finalize
     assert admit_stable < create_local < push < tag_readback < outcome < hosted_readback < finalize
@@ -396,11 +389,11 @@ def test_stable_reuses_qualified_rc_material_and_admits_after_readback() -> None
         creator_ref=creator_readback_ref, ruleset_ref=ruleset_readback_ref,
         admitted_at=admitted_at,
     )""" in final_admission
-    assert """outcome_id = _digest(outcome.get("outcomeId"), "mutationOutcome.outcomeId")
+    assert """_digest(outcome.get("outcomeId"), "mutationOutcome.outcomeId")
     creator, creator_at = _creator_readback(
         root, creator_ref, phase="post_mutation", tag_name=tag["tagName"],
         tag=tag, producer=producer, repository=repository,
-        outcome_id=outcome_id,
+        intent_id=_digest(intent.get("intentId"), "intent.intentId"),
     )
     ruleset, ruleset_at, post_ruleset_identity = _ruleset_readback(
         root, ruleset_ref, phase="post_mutation", tag_name=tag["tagName"],

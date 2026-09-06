@@ -14,7 +14,6 @@ from __future__ import annotations
 
 import argparse
 import hashlib
-import hmac
 import json
 import os
 import re
@@ -36,6 +35,7 @@ from quwoquan_ops.cli.lib.app_identity import (
     build_profile_for_environment,
     supported_build_products,
 )
+from quwoquan_ops.cli.lib.evidence_signing import DEFAULT_KEYRING_PATH, EvidenceSigningError, ed25519_verifier, load_keyring
 from quwoquan_ops.ci.release_bound_environment_acceptance import (
     acceptance_relative_ref as _acceptance_relative_ref_impl,
     validate_environment_acceptance_authority as _validate_environment_acceptance_authority_impl,
@@ -159,7 +159,8 @@ def _parser() -> argparse.ArgumentParser:
         "--app-artifact-receipt", required=True, action="append", type=Path
     )
     parser.add_argument("--environment-acceptance-fact", required=True, type=Path)
-    parser.add_argument("--environment-acceptance-verification-key-env", required=True)
+    # 仓内 Ed25519 公钥 keyring；EAF 只按 expected signer identity 的 active 公钥验签。
+    parser.add_argument("--signing-keyring", type=Path, default=DEFAULT_KEYRING_PATH)
     parser.add_argument(
         "--expected-environment-acceptance-signer-identity", required=True
     )
@@ -714,25 +715,16 @@ def _acceptance_relative_ref(path: Path, *, evidence_root: Path) -> str:
 
 
 def _environment_acceptance_signature_verifier(
-    key_env: str, expected_signer_identity: str
+    keyring_path: Path, expected_signer_identity: str
 ) -> Callable[[str, bytes, str], bool]:
-    variable = _text(key_env, label="environment acceptance signing key env")
-    secret = os.environ.get(variable, "").strip()
-    if not secret:
-        raise IdentityEvidenceError(
-            "EnvironmentAcceptanceFact DSSE verifier is unavailable"
-        )
-    key = secret.encode("utf-8")
-    expected_identity = _text(
-        expected_signer_identity,
-        label="expected environment acceptance signer identity",
-    )
+    expected_identity = _text(expected_signer_identity, label="expected environment acceptance signer identity")
+    try:
+        verifier = ed25519_verifier(load_keyring(keyring_path), expected_identity)
+    except EvidenceSigningError as exc:
+        raise IdentityEvidenceError(f"EnvironmentAcceptanceFact DSSE verifier is unavailable: {exc.detail}") from exc
 
     def verify(signer_identity: str, pae: bytes, signature: str) -> bool:
-        expected = "hmac-sha256:" + hmac.new(key, pae, hashlib.sha256).hexdigest()
-        return signer_identity == expected_identity and hmac.compare_digest(
-            expected, signature
-        )
+        return signer_identity == expected_identity and verifier(pae, signature) is True
 
     return verify
 
@@ -773,7 +765,7 @@ def render(args: argparse.Namespace) -> dict[str, Any]:
             "production uses RC qualification and activation admission"
         )
     acceptance_signature_verifier = _environment_acceptance_signature_verifier(
-        args.environment_acceptance_verification_key_env,
+        args.signing_keyring,
         args.expected_environment_acceptance_signer_identity,
     )
     paths = [

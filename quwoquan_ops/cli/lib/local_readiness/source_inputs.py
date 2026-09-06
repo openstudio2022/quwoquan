@@ -423,22 +423,31 @@ def source_execution_root(
             if fd >= 0:
                 os.close(fd)
 
+        # capsule 通过 gitfile（capsule/.git → git_dir）按 cwd 发现仓库，而不是把 GIT_DIR/GIT_WORK_TREE
+        # 导出给检查进程：那两个变量会把测试自建的临时仓库、Flutter SDK 自身的 `git describe` 等
+        # 一切 git 调用都劫持到 capsule（"a branch named 'dev1.0' already exists"、Flutter 版本 0.0.0-unknown）。
+        setup_env = {"GIT_DIR": str(git_dir), "GIT_WORK_TREE": str(capsule), "GIT_OPTIONAL_LOCKS": "0"}
         execution_env = {
-            "GIT_DIR": str(git_dir),
-            "GIT_WORK_TREE": str(capsule),
             "GIT_OPTIONAL_LOCKS": "0",
             "QWQ_OUTPUT_ROOT": str(capsule / ".qwq_output"),
             "QWQ_LOCAL_READINESS_SOURCE_MODE": mode,
             "QWQ_LOCAL_READINESS_SOURCE_SHA": source_sha,
+            # 只供检查借用源工作树的安装产物（如 portal node_modules），不是源码读取入口。
+            "QWQ_LOCAL_READINESS_REPO_ROOT": str(repo_root),
         }
         for command in (
+            ["git", "config", "core.bare", "false"],
+            ["git", "config", "core.worktree", str(capsule)],
             ["git", "symbolic-ref", "HEAD", "refs/heads/dev1.0"],
             ["git", "update-ref", "refs/heads/dev1.0", source_sha],
             ["git", "read-tree", "--empty"],
         ):
-            proc = subprocess.run(command, cwd=capsule, env={**os.environ, **execution_env}, capture_output=True, check=False)
+            proc = subprocess.run(command, cwd=capsule, env={**os.environ, **setup_env}, capture_output=True, check=False)
             if proc.returncode != 0:
                 raise _core.LocalReadinessError(proc.stderr.decode("utf-8", errors="replace").strip() or f"capsule Git identity 初始化失败: {' '.join(command)}")
+        gitfile_fd = os.open(capsule / ".git", os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0), 0o600)
+        with os.fdopen(gitfile_fd, "w", encoding="utf-8") as handle:
+            handle.write(f"gitdir: {git_dir}\n")
         index_info = b"".join(
             f"{entry['mode']} {entry['blob']}\t{entry['path']}".encode("utf-8") + b"\0"
             for entry in entries
@@ -446,7 +455,7 @@ def source_execution_root(
         indexed = subprocess.run(
             ["git", "update-index", "-z", "--index-info"],
             cwd=capsule,
-            env={**os.environ, **execution_env},
+            env={**os.environ, **setup_env},
             input=index_info,
             capture_output=True,
             check=False,

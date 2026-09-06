@@ -166,6 +166,8 @@ bootstrap_canonical_runtime_root() {
 bash quwoquan_ops/gate/scaffold/verify_global_increment_constraints.sh
 python3 quwoquan_ops/gate/verify_git_branch_policy.py
 python3 quwoquan_ops/gate/verify_github_supply_chain.py
+# workflow 解析期即失效的上下文/属性/类型错误（如 job.workflow_ref、runner.temp 于 job 级 env）只有 actionlint 能在本地拦住。
+bash quwoquan_ops/gate/verify_workflow_actionlint.sh
 bootstrap_canonical_runtime_root
 python3 -B quwoquan_ops/gate/verify_human_agent_delivery_eval.py
 python3 -B quwoquan_ops/gate/verify_objective_execution.py

@@ -161,6 +161,7 @@ def classify(paths: list[str]) -> dict[str, bool]:
         "has_service_probes": False,
         "has_app_uat_widget_keys": False,
         "has_workflows": False,
+        "has_workflow_actionlint": False,
     }
     for path in paths:
         if path in NON_COMMIT_GATE_DOCUMENTS:
@@ -199,6 +200,9 @@ def classify(paths: list[str]) -> dict[str, bool]:
             flags["has_ops_scripts"] = True
         if path.startswith("specs/"):
             flags["has_specs"] = True
+        # workflow 文件一动就在 L0 跑 actionlint：解析期即失效的上下文/属性/类型错误只有它能在提交前拦住。
+        if path.startswith(".github/workflows/") and path.endswith((".yml", ".yaml")):
+            flags["has_workflow_actionlint"] = True
         if path.startswith("quwoquan_ops/portal/"):
             flags["has_portal"] = True
         if any(path.startswith(prefix) for prefix in PAGEFLIP_PREFIXES):
@@ -249,6 +253,8 @@ def static_checks(flags: dict[str, bool], paths: list[str] | None = None) -> lis
         checks.append("pageflip_backward_mainline")
     if flags["has_data"]:
         checks.append("data_verify")
+    if flags["has_workflow_actionlint"]:
+        checks.append("workflow_actionlint")
     # de-dupe preserving order
     seen: set[str] = set()
     ordered: list[str] = []
@@ -578,6 +584,13 @@ def _select_pytest_targets(paths: list[str]) -> dict[str, object]:
             "quwoquan_ops/tests/local_contract",
         ):
             if path.startswith(root + "/") and path.endswith(".py"):
+                # conftest.py / 支撑模块本身不含用例，交给 pytest 会以 "no tests ran" 失败；
+                # 它们影响整个目录，按目录 suite 显式 defer。
+                if not Path(path).name.startswith("test_"):
+                    directory = str(Path(path).parent)
+                    if directory not in deferred:
+                        deferred.append(directory)
+                    continue
                 # A staged deletion still shows up as a changed path; handing it to
                 # pytest aborts the whole run with "file or directory not found".
                 if path not in seen and (ROOT / path).exists():

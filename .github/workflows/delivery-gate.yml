@@ -1,4 +1,5 @@
 # dev1.0 -> main 唯一 required context：PR 只验 pre-merge admission；main push 才封印合入结果。
+# Gate 自己从 hosted readback 生产 approval/threads/ruleset/boundary 事实；PR body 只带 IQF 证据 bundle 与 promotion_ready_at。
 name: 03. Delivery Gate
 
 permissions:
@@ -7,6 +8,8 @@ permissions:
 on:
   pull_request:
     branches: [main]
+  pull_request_review:
+    types: [submitted, dismissed]
   push:
     branches: [main]
 
@@ -17,16 +20,18 @@ concurrency:
 jobs:
   promotion_verify:
     name: 03. Delivery Gate
-    if: ${{ github.event_name == 'pull_request' }}
+    if: ${{ github.event_name == 'pull_request' || github.event_name == 'pull_request_review' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
       contents: read
       packages: write
+      checks: write
+      pull-requests: read
     env:
-      # job 级 env 不能引用 runner 上下文（解析期即失效，run 产生 0 个 job）。
-      EVIDENCE_ROOT: ${{ github.workspace }}/.qwq_output/env/repo/runs/promotion-evidence
       CONTROL_ROOT: ${{ github.workspace }}/.qwq_output/env/repo/runs/release-control
+      QUALIFICATION_SIGNER_IDENTITY: quwoquan-integration-scheduler-local
+      ENVIRONMENT_SIGNER_IDENTITY: quwoquan-environment-ops-local
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
@@ -61,26 +66,16 @@ jobs:
               supplied = json.loads(os.environ["PR_INPUTS_JSON"])
           except json.JSONDecodeError as error:
               raise SystemExit("GATE_BLOCK: promotion PR body must be one exact JSON object") from error
-          required_keys = {
-              "qualification_ref", "approval_ref", "thread_ref", "ruleset_ref",
-              "boundary_ref", "required_evidence_refs", "promotion_ready_at",
-          }
+          required_keys = {"qualification_bundle_ref", "promotion_ready_at"}
           if not isinstance(supplied, dict) or set(supplied) != required_keys:
-              raise SystemExit("GATE_BLOCK: promotion PR body keys are incomplete or unexpected")
+              raise SystemExit("GATE_BLOCK: promotion PR body keys must be exactly qualification_bundle_ref and promotion_ready_at")
           values = {
               "HEAD_REF": os.environ["PR_HEAD_REF"],
               "BASE_REF": os.environ["PR_BASE_REF"],
               "HEAD_SHA": os.environ["PR_HEAD_SHA"],
               "BASE_SHA": os.environ["PR_BASE_SHA"],
               "MERGE_SHA": os.environ["PR_MERGE_SHA"],
-              "QUALIFICATION_REF": supplied["qualification_ref"],
-              "APPROVAL_REF": supplied["approval_ref"],
-              "THREAD_REF": supplied["thread_ref"],
-              "RULESET_REF": supplied["ruleset_ref"],
-              "BOUNDARY_REF": supplied["boundary_ref"],
-              "REQUIRED_EVIDENCE_REFS": json.dumps(
-                  supplied["required_evidence_refs"], separators=(",", ":")
-              ),
+              "QUALIFICATION_BUNDLE_REF": supplied["qualification_bundle_ref"],
               "PROMOTION_READY_AT": supplied["promotion_ready_at"],
           }
           if values["HEAD_REF"] != "dev1.0" or values["BASE_REF"] != "main":
@@ -92,21 +87,10 @@ jobs:
                   raise SystemExit(f"GATE_BLOCK: {name} must be an exact Git object id")
           if values["MERGE_SHA"] in {values["HEAD_SHA"], values["BASE_SHA"]}:
               raise SystemExit("GATE_BLOCK: MERGE_SHA must identify a distinct synthetic merge")
-          for name in (
-              "QUALIFICATION_REF", "APPROVAL_REF", "THREAD_REF", "RULESET_REF",
-              "BOUNDARY_REF",
-          ):
-              if exact_oci.fullmatch(values[name]) is None:
-                  raise SystemExit(f"GATE_BLOCK: {name} must be a real immutable OCI ref")
-          required = supplied["required_evidence_refs"]
-          if (
-              not isinstance(required, list)
-              or not required
-              or any(not isinstance(item, str) or exact_oci.fullmatch(item) is None for item in required)
-          ):
-              raise SystemExit(
-                  "GATE_BLOCK: REQUIRED_EVIDENCE_REFS must be a non-empty exact OCI ref array"
-              )
+          if exact_oci.fullmatch(values["QUALIFICATION_BUNDLE_REF"]) is None:
+              raise SystemExit("GATE_BLOCK: QUALIFICATION_BUNDLE_REF must be a real immutable OCI ref")
+          if not re.fullmatch(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z", values["PROMOTION_READY_AT"]):
+              raise SystemExit("GATE_BLOCK: PROMOTION_READY_AT must be an exact UTC timestamp")
           output = Path(os.environ["GITHUB_OUTPUT"])
           with output.open("a", encoding="utf-8") as handle:
               for name, value in values.items():
@@ -131,115 +115,142 @@ jobs:
           test "$(git cat-file -t "$MERGE_SHA")" = commit
           test "$(git show -s --format=%P "$MERGE_SHA")" = "$BASE_SHA $HEAD_SHA"
           test -n "$(git show -s --format=%T "$MERGE_SHA")"
-      - name: Materialize immutable promotion facts
+          git branch --force dev1.0 "$HEAD_SHA"
+          git branch --force main "$BASE_SHA"
+      - name: Materialize exact IntegrationQualificationFact evidence bundle
+        id: bundle
         env:
           GHCR_TOKEN: ${{ github.token }}
-          QUALIFICATION_REF: ${{ steps.inputs.outputs.qualification_ref }}
-          APPROVAL_REF: ${{ steps.inputs.outputs.approval_ref }}
-          THREAD_REF: ${{ steps.inputs.outputs.thread_ref }}
-          RULESET_REF: ${{ steps.inputs.outputs.ruleset_ref }}
-          BOUNDARY_REF: ${{ steps.inputs.outputs.boundary_ref }}
-          REQUIRED_EVIDENCE_REFS: ${{ steps.inputs.outputs.required_evidence_refs }}
+          QUALIFICATION_BUNDLE_REF: ${{ steps.inputs.outputs.qualification_bundle_ref }}
+          HEAD_SHA: ${{ steps.inputs.outputs.head_sha }}
         run: |
           set -euo pipefail
           printf '%s' "$GHCR_TOKEN" | oras login ghcr.io --username "${{ github.actor }}" --password-stdin
           trap 'oras logout ghcr.io >/dev/null 2>&1 || true' EXIT
-          rm -rf "$EVIDENCE_ROOT" "$CONTROL_ROOT"
-          python3 - <<'PY'
+          rm -rf "$CONTROL_ROOT"
+          mkdir -p "$CONTROL_ROOT"
+          python3 quwoquan_ops/ci/promotion_hosted.py materialize-oci-bundle \
+            --ref "$QUALIFICATION_BUNDLE_REF" --output-dir "$CONTROL_ROOT/qualification-bundle" \
+            > "$RUNNER_TEMP/qualification-bundle.json"
+          python3 - "$CONTROL_ROOT/qualification-bundle" "$HEAD_SHA" <<'PY'
           import hashlib
           import json
           import os
-          import subprocess
+          import sys
           from pathlib import Path
 
-          source = Path(os.environ["EVIDENCE_ROOT"])
-          store = Path(os.environ["CONTROL_ROOT"])
-          entries = {
-              "qualification": os.environ["QUALIFICATION_REF"],
-              "approval": os.environ["APPROVAL_REF"],
-              "threads": os.environ["THREAD_REF"],
-              "ruleset": os.environ["RULESET_REF"],
-              "boundary": os.environ["BOUNDARY_REF"],
-          }
-          entries.update({
-              f"required-{index}": ref
-              for index, ref in enumerate(json.loads(os.environ["REQUIRED_EVIDENCE_REFS"]))
-          })
-          manifest = {}
-          for name, oci_ref in entries.items():
-              pulled = source / name / "fact.json"
-              subprocess.run([
-                  "python3", "quwoquan_ops/ci/promotion_evidence.py", "materialize-oci",
-                  "--ref", oci_ref, "--output-file", str(pulled),
-              ], check=True)
-              local = store / name / "fact.json"
-              local.parent.mkdir(parents=True, exist_ok=True)
-              local.write_bytes(pulled.read_bytes())
-              manifest[name] = {
-                  "ref": local.relative_to(store).as_posix(),
-                  "digest": "sha256:" + hashlib.sha256(local.read_bytes()).hexdigest(),
-                  "ociRef": oci_ref,
-              }
-          store.mkdir(parents=True, exist_ok=True)
-          (store / "manifest.json").write_text(
-              json.dumps(manifest, sort_keys=True, separators=(",", ":")) + "\n",
-              encoding="utf-8",
-          )
+          bundle = Path(sys.argv[1])
+          head = sys.argv[2]
+          candidates = sorted((bundle / "integration-qualification" / head).glob("*.json"))
+          if len(candidates) != 1:
+              raise SystemExit("GATE_BLOCK: bundle must carry exactly one IntegrationQualificationFact for the current dev head")
+          fact = candidates[0]
+          digest = "sha256:" + hashlib.sha256(fact.read_bytes()).hexdigest()
+          with Path(os.environ["GITHUB_OUTPUT"]).open("a", encoding="utf-8") as handle:
+              handle.write(f"qualification_bundle_relative={fact.relative_to(bundle).as_posix()}\n")
+              handle.write(f"qualification_control_relative={fact.relative_to(bundle.parent).as_posix()}\n")
+              handle.write(f"qualification_digest={digest}\n")
           PY
-      - name: Bind exact local refs for admission verification
-        env:
-          HEAD_SHA: ${{ steps.inputs.outputs.head_sha }}
-          BASE_SHA: ${{ steps.inputs.outputs.base_sha }}
-        run: |
-          set -euo pipefail
-          git branch --force dev1.0 "$HEAD_SHA"
-          git branch --force main "$BASE_SHA"
-      - name: Verify IntegrationQualificationFact signature and lifetime
+      - name: Verify IntegrationQualificationFact signature, lifetime and A/B/G chain
         env:
           HEAD_SHA: ${{ steps.inputs.outputs.head_sha }}
           PROMOTION_READY_AT: ${{ steps.inputs.outputs.promotion_ready_at }}
-          QWQ_INTEGRATION_QUALIFICATION_SIGNING_KEY: ${{ secrets.QWQ_INTEGRATION_QUALIFICATION_SIGNING_KEY }}
+          QUALIFICATION_REF: ${{ steps.bundle.outputs.qualification_bundle_relative }}
+          QUALIFICATION_DIGEST: ${{ steps.bundle.outputs.qualification_digest }}
         run: |
           set -euo pipefail
+          # 验签只用仓内 Ed25519 公钥 keyring（PR head 的 exact bytes）；Gate 不持有任何可签名材料，无 repository secret。
           HEAD_TREE="$(git show -s --format=%T "$HEAD_SHA")"
-          QUALIFICATION_LOCAL_REF="$(python3 -c 'import json,os; from pathlib import Path; print(json.loads(Path(os.environ["CONTROL_ROOT"]).joinpath("manifest.json").read_text())["qualification"]["ref"])')"
-          QUALIFICATION_LOCAL_DIGEST="$(python3 -c 'import json,os; from pathlib import Path; print(json.loads(Path(os.environ["CONTROL_ROOT"]).joinpath("manifest.json").read_text())["qualification"]["digest"])')"
           python3 quwoquan_ops/ci/integration_qualification.py \
-            --repository "$GITHUB_WORKSPACE" --store-root "$CONTROL_ROOT" \
-            --qualification-ref "$QUALIFICATION_LOCAL_REF" \
-            --qualification-digest "$QUALIFICATION_LOCAL_DIGEST" \
+            --repository "$GITHUB_WORKSPACE" --store-root "$CONTROL_ROOT/qualification-bundle" \
+            --qualification-ref "$QUALIFICATION_REF" \
+            --qualification-digest "$QUALIFICATION_DIGEST" \
             --expected-dev-head "$HEAD_SHA" --expected-dev-tree "$HEAD_TREE" \
-            --verified-at "$PROMOTION_READY_AT"
-      - name: Verify branch, secret, PII and generated boundaries
-        id: impact
+            --verified-at "$PROMOTION_READY_AT" \
+            --signing-keyring quwoquan_ops/policies/evidence_signing_keyring.yaml \
+            --expected-qualification-signer-identity "$QUALIFICATION_SIGNER_IDENTITY" \
+            --expected-alpha-signer-identity "$ENVIRONMENT_SIGNER_IDENTITY" \
+            --expected-beta-signer-identity "$ENVIRONMENT_SIGNER_IDENTITY" \
+            --expected-gamma-signer-identity "$ENVIRONMENT_SIGNER_IDENTITY"
+      - name: Produce hosted authority facts from approval, threads, ruleset and boundary readback
+        id: authority
         env:
-          BASE_SHA: ${{ steps.inputs.outputs.base_sha }}
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
           HEAD_SHA: ${{ steps.inputs.outputs.head_sha }}
+          BASE_SHA: ${{ steps.inputs.outputs.base_sha }}
+          QUALIFICATION_REF: ${{ steps.bundle.outputs.qualification_control_relative }}
+          QUALIFICATION_DIGEST: ${{ steps.bundle.outputs.qualification_digest }}
         run: |
           set -euo pipefail
+          READBACK="$RUNNER_TEMP/hosted-readback"
+          mkdir -p "$READBACK"
+          gh api --paginate --slurp "/repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/reviews" --jq '[.[][]]' > "$READBACK/reviews.json"
+          gh api graphql -f query='query($owner:String!,$name:String!,$number:Int!){repository(owner:$owner,name:$name){pullRequest(number:$number){reviewThreads(first:100){nodes{isResolved isOutdated}}}}}' \
+            -f owner="${GITHUB_REPOSITORY_OWNER}" -f name="${GITHUB_REPOSITORY#*/}" -F number="$PR_NUMBER" \
+            --jq '.data.repository.pullRequest.reviewThreads.nodes' > "$READBACK/threads.json"
+          gh api "/repos/${GITHUB_REPOSITORY}/rulesets" --jq '[.[] | .id]' > "$READBACK/ruleset-ids.json"
+          python3 - "$READBACK" <<'PY'
+          import json
+          import subprocess
+          import sys
+          from pathlib import Path
+
+          root = Path(sys.argv[1])
+          ids = json.loads((root / "ruleset-ids.json").read_text(encoding="utf-8"))
+          rulesets = []
+          for ruleset_id in ids:
+              detail = subprocess.run(
+                  ["gh", "api", f"/repos/{__import__('os').environ['GITHUB_REPOSITORY']}/rulesets/{ruleset_id}"],
+                  check=True, text=True, capture_output=True,
+              ).stdout
+              rulesets.append(json.loads(detail))
+          (root / "rulesets.json").write_text(json.dumps(rulesets, sort_keys=True) + "\n", encoding="utf-8")
+          PY
+          HEAD_TREE="$(git show -s --format=%T "$HEAD_SHA")"
+          set +e
           python3 quwoquan_ops/gate/verify_git_branch_policy.py
-          ROOT="$RUNNER_TEMP/promotion-impact"
-          mkdir -p "$ROOT"
-          TREE_DIGEST="sha1:$(git rev-parse "${HEAD_SHA}^{tree}")"
-          # detect 会整体覆盖 --github-output 文件，所以先写 IMPACT_OUTPUT 再回读 digest。
-          IMPACT_OUTPUT="$ROOT/impact-outputs"
+          BRANCH_POLICY_EXIT=$?
+          set -e
+          IMPACT_ROOT="$RUNNER_TEMP/promotion-impact"
+          mkdir -p "$IMPACT_ROOT"
           python3 quwoquan_ops/ci/detect_ci_impacted_scopes.py \
-            --base-sha "$BASE_SHA" --head-sha "$HEAD_SHA" \
-            --source-tree-digest "$TREE_DIGEST" \
+            --base-sha "$BASE_SHA" --head-sha "$HEAD_SHA" --source-tree-digest "sha1:${HEAD_TREE}" \
             --execution-profile promotion \
-            --impact-plan "$ROOT/impact-plan.json" --github-output "$IMPACT_OUTPUT"
-          PLAN_DIGEST="$(awk -F= '$1 == "plan_digest" {print $2}' "$IMPACT_OUTPUT" | tail -n 1)"
-          python3 quwoquan_ops/ci/detect_ci_impacted_scopes.py \
-            --validate-impact-plan "$ROOT/impact-plan.json" \
-            --expected-source-sha "$HEAD_SHA" \
-            --expected-tree-digest "$TREE_DIGEST" \
-            --expected-plan-digest "$PLAN_DIGEST"
+            --impact-plan "$IMPACT_ROOT/impact-plan.json" --github-output "$IMPACT_ROOT/outputs.env" \
+            --validate-impact-plan "$IMPACT_ROOT/impact-plan.json"
+          PLAN_DIGEST="$(sed -n 's/^plan_digest=//p' "$IMPACT_ROOT/outputs.env")"
+          CHANGED_PATHS_DIGEST="$(sed -n 's/^changed_paths_digest=//p' "$IMPACT_ROOT/outputs.env")"
+          set +e
           python3 quwoquan_ops/ci/verify_ci_changed_boundary.py \
-            --impact-plan "$ROOT/impact-plan.json" \
-            --expected-source-sha "$HEAD_SHA" \
-            --expected-tree-digest "$TREE_DIGEST" \
-            --expected-plan-digest "$PLAN_DIGEST"
-          cat "$IMPACT_OUTPUT" >> "$GITHUB_OUTPUT"
+            --impact-plan "$IMPACT_ROOT/impact-plan.json" --expected-source-sha "$HEAD_SHA" \
+            --expected-tree-digest "sha1:${HEAD_TREE}" --expected-plan-digest "$PLAN_DIGEST"
+          BOUNDARY_EXIT=$?
+          set -e
+          python3 quwoquan_ops/ci/promotion_hosted.py hosted-authority \
+            --evidence-root "$CONTROL_ROOT" --head-sha "$HEAD_SHA" --base-sha "$BASE_SHA" \
+            --reviews-file "$READBACK/reviews.json" --threads-file "$READBACK/threads.json" \
+            --rulesets-file "$READBACK/rulesets.json" --author-login "$PR_AUTHOR" \
+            --branch-policy-exit "$BRANCH_POLICY_EXIT" --changed-boundary-exit "$BOUNDARY_EXIT" \
+            --impact-plan-digest "$PLAN_DIGEST" --changed-paths-digest "$CHANGED_PATHS_DIGEST" \
+            --required-evidence "${QUALIFICATION_REF}=${QUALIFICATION_DIGEST}" \
+            > "$RUNNER_TEMP/hosted-authority.json"
+          python3 - "$RUNNER_TEMP/hosted-authority.json" <<'PY'
+          import json
+          import os
+          import sys
+          from pathlib import Path
+
+          facts = json.load(open(sys.argv[1], encoding="utf-8"))
+          failed = sorted(name for name, fact in facts.items() if fact["status"] != "passed")
+          with Path(os.environ["GITHUB_OUTPUT"]).open("a", encoding="utf-8") as handle:
+              for name, fact in facts.items():
+                  handle.write(f"{name.replace('-', '_')}_ref={fact['ref']}\n")
+                  handle.write(f"{name.replace('-', '_')}_digest={fact['digest']}\n")
+          if failed:
+              raise SystemExit(f"GATE_BLOCK: hosted authority facts not passed: {', '.join(failed)}")
+          PY
       - name: Validate exact facts and issue PromotionAdmissionReceipt
         id: admission
         env:
@@ -248,47 +259,35 @@ jobs:
           BASE_SHA: ${{ steps.inputs.outputs.base_sha }}
           MERGE_SHA: ${{ steps.inputs.outputs.merge_sha }}
           PROMOTION_READY_AT: ${{ steps.inputs.outputs.promotion_ready_at }}
+          QUALIFICATION_REF: ${{ steps.bundle.outputs.qualification_control_relative }}
+          QUALIFICATION_DIGEST: ${{ steps.bundle.outputs.qualification_digest }}
+          APPROVAL: ${{ steps.authority.outputs.approval_ref }}=${{ steps.authority.outputs.approval_digest }}
+          THREADS: ${{ steps.authority.outputs.threads_ref }}=${{ steps.authority.outputs.threads_digest }}
+          RULESET: ${{ steps.authority.outputs.ruleset_ref }}=${{ steps.authority.outputs.ruleset_digest }}
+          BOUNDARY: ${{ steps.authority.outputs.boundary_ref }}=${{ steps.authority.outputs.boundary_digest }}
+          REQUIRED_EVIDENCE: ${{ steps.authority.outputs.required_evidence_ref }}=${{ steps.authority.outputs.required_evidence_digest }}
         run: |
           set -euo pipefail
-          python3 - <<'PY'
-          import json
-          import os
-          import subprocess
-          from pathlib import Path
-
-          root = Path(os.environ["CONTROL_ROOT"])
-          refs = json.loads((root / "manifest.json").read_text(encoding="utf-8"))
-          args = [
-              "python3", "quwoquan_ops/ci/release_control.py",
-              "--store-root", str(root), "promotion-admit",
-              "--qualification", f"{refs['qualification']['ref']}={refs['qualification']['digest']}",
-              "--approval", f"{refs['approval']['ref']}={refs['approval']['digest']}",
-              "--threads", f"{refs['threads']['ref']}={refs['threads']['digest']}",
-              "--ruleset", f"{refs['ruleset']['ref']}={refs['ruleset']['digest']}",
-              "--boundary", f"{refs['boundary']['ref']}={refs['boundary']['digest']}",
-              "--head-sha", os.environ["HEAD_SHA"], "--base-sha", os.environ["BASE_SHA"],
-              "--synthetic-merge-sha", os.environ["MERGE_SHA"],
-              "--promotion-ready-at", os.environ["PROMOTION_READY_AT"],
-          ]
-          for name in sorted(key for key in refs if key.startswith("required-")):
-              exact = refs[name]
-              args.extend(["--required-evidence", f"{exact['ref']}={exact['digest']}"])
-          result = json.loads(
-              subprocess.run(args, check=True, text=True, capture_output=True).stdout
-          )
-          path = root / result["ref"]
-          with Path(os.environ["GITHUB_OUTPUT"]).open("a", encoding="utf-8") as output:
-              output.write(f"path={path.as_posix()}\n")
-              output.write(f"digest={result['digest']}\n")
-          PY
+          RESULT="$(python3 quwoquan_ops/ci/release_control.py --store-root "$CONTROL_ROOT" promotion-admit \
+            --qualification "${QUALIFICATION_REF}=${QUALIFICATION_DIGEST}" \
+            --approval "$APPROVAL" --threads "$THREADS" --ruleset "$RULESET" --boundary "$BOUNDARY" \
+            --required-evidence "$REQUIRED_EVIDENCE" \
+            --head-sha "$HEAD_SHA" --base-sha "$BASE_SHA" --synthetic-merge-sha "$MERGE_SHA" \
+            --promotion-ready-at "$PROMOTION_READY_AT")"
+          ADMISSION_PATH="$CONTROL_ROOT/$(printf '%s' "$RESULT" | python3 -c 'import json,sys; print(json.load(sys.stdin)["ref"])')"
+          ADMISSION_DIGEST="$(printf '%s' "$RESULT" | python3 -c 'import json,sys; print(json.load(sys.stdin)["digest"])')"
           printf '%s' "$GHCR_TOKEN" | oras login ghcr.io --username "${{ github.actor }}" --password-stdin
           trap 'oras logout ghcr.io >/dev/null 2>&1 || true' EXIT
           python3 quwoquan_ops/ci/promotion_evidence.py publish-oci \
-            --fact-file "${{ steps.admission.outputs.path }}" \
+            --fact-file "$ADMISSION_PATH" \
             --repository "ghcr.io/${{ github.repository }}/promotion-admission" \
             --transport-tag "base-${BASE_SHA}-head-${HEAD_SHA}" > "$RUNNER_TEMP/promotion-admission-oci.json"
           ADMISSION_REF="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["exactRef"])' < "$RUNNER_TEMP/promotion-admission-oci.json")"
-          echo "admission_ref=$ADMISSION_REF" >> "$GITHUB_OUTPUT"
+          {
+            echo "path=$ADMISSION_PATH"
+            echo "digest=$ADMISSION_DIGEST"
+            echo "admission_ref=$ADMISSION_REF"
+          } >> "$GITHUB_OUTPUT"
           echo "PromotionAdmissionReceipt exact OCI: $ADMISSION_REF" >> "$GITHUB_STEP_SUMMARY"
       - name: Create exact promotion handoff payload
         id: handoff
@@ -309,7 +308,7 @@ jobs:
             --head-sha "$HEAD_SHA" --base-sha "$BASE_SHA" \
             --synthetic-merge-sha "$MERGE_SHA" --synthetic-merge-tree "$MERGE_TREE" \
             --workflow-run-id "$GITHUB_RUN_ID" --workflow-run-attempt "$GITHUB_RUN_ATTEMPT" \
-            --workflow-repository "$GITHUB_WORKFLOW_REPOSITORY" --workflow-head-sha "$HEAD_SHA" \
+            --workflow-repository "$GITHUB_REPOSITORY" --workflow-head-sha "$HEAD_SHA" \
             --workflow-actor-login "$GITHUB_ACTOR" --workflow-actor-id "$ACTOR_ID" \
             --promotion-admission-ref "$ADMISSION_REF" \
             --admission-bytes-digest "${{ steps.admission.outputs.digest }}" \
@@ -319,27 +318,14 @@ jobs:
             echo "created_at=$CREATED_AT"
             echo "record_id=$(python3 -c 'import json,sys; print(json.load(sys.stdin)["recordId"])' < "$RUNNER_TEMP/promotion-admission-handoff.json")"
           } >> "$GITHUB_OUTPUT"
-      - name: Mint trusted promotion recorder token
-        id: recorder
-        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
-        with:
-          client-id: ${{ vars.QWQ_PROMOTION_RECORDER_CLIENT_ID }}
-          private-key: ${{ secrets.QWQ_PROMOTION_RECORDER_PRIVATE_KEY }}
-          permission-checks: write
-      - name: Persist create-once hosted promotion handoff
+      - name: Persist create-once hosted promotion handoff as a GitHub Actions check-run
         env:
-          GH_TOKEN: ${{ steps.recorder.outputs.token }}
-          RECORDER_APP_SLUG: ${{ steps.recorder.outputs.app-slug }}
-          RECORDER_INSTALLATION_ID: ${{ steps.recorder.outputs.installation-id }}
+          GH_TOKEN: ${{ github.token }}
           HEAD_SHA: ${{ steps.inputs.outputs.head_sha }}
           HANDOFF_CREATED_AT: ${{ steps.handoff.outputs.created_at }}
           HANDOFF_RECORD_ID: ${{ steps.handoff.outputs.record_id }}
         run: |
           set -euo pipefail
-          test -n "$RECORDER_APP_SLUG" && test -n "$RECORDER_INSTALLATION_ID" || {
-            echo 'GATE_BLOCK: trusted promotion recorder App identity is unavailable' >&2
-            exit 1
-          }
           CHECKS_API="/repos/${GITHUB_REPOSITORY}/commits/${HEAD_SHA}/check-runs"
           gh api --method GET --paginate --slurp "$CHECKS_API" \
             -f check_name='quwoquan/promotion-admission-handoff/v1' \
@@ -380,12 +366,15 @@ jobs:
           fields = ("id", "node_id", "name", "head_sha", "status", "conclusion", "external_id", "started_at", "completed_at", "details_url", "output")
           if any(created.get(field) != readback.get(field) for field in fields):
               raise SystemExit("GATE_BLOCK: hosted promotion handoff readback changed after create")
+          app = readback.get("app") or {}
+          if app.get("id") != 15368 or app.get("slug") != "github-actions":
+              raise SystemExit("GATE_BLOCK: handoff check-run must be owned by the GitHub Actions integration")
           PY
       - name: Record hosted promotion readiness boundary
         run: |
           {
             echo '### Source promotion pre-merge qualification'
-            echo '- scope: exact dev1.0 identity and immutable promotion admission only'
+            echo '- scope: exact dev1.0 identity, IQF evidence bundle and Gate-produced hosted authority facts'
             echo '- post-merge MainSourceSeal: not issued on pull_request'
             echo "- exact dev head: \`${{ steps.inputs.outputs.head_sha }}\`"
             echo "- PromotionAdmissionReceipt digest: \`${{ steps.admission.outputs.digest }}\`"
@@ -424,8 +413,8 @@ jobs:
           PUSH_REF: ${{ github.ref }}
           PUSH_BEFORE_SHA: ${{ github.event.before }}
           PUSH_AFTER_SHA: ${{ github.event.after }}
-          TRUSTED_RECORDER_APP_SLUG: ${{ vars.QWQ_PROMOTION_RECORDER_APP_SLUG }}
-          TRUSTED_RECORDER_APP_ID: ${{ vars.QWQ_PROMOTION_RECORDER_APP_ID }}
+          TRUSTED_RECORDER_APP_SLUG: github-actions
+          TRUSTED_RECORDER_APP_ID: "15368"
         run: |
           set -euo pipefail
           SHA_PATTERN='^[0-9a-f]{40}$'
@@ -465,9 +454,8 @@ jobs:
 
           printf '%s' "$GHCR_TOKEN" | oras login ghcr.io --username "${{ github.actor }}" --password-stdin
           trap 'oras logout ghcr.io >/dev/null 2>&1 || true' EXIT
-          test -n "$TRUSTED_RECORDER_APP_SLUG" \
-            && [[ "$TRUSTED_RECORDER_APP_ID" =~ ^[1-9][0-9]*$ ]] || {
-            echo 'GATE_BLOCK: trusted promotion recorder App identity is not configured' >&2
+          test "$TRUSTED_RECORDER_APP_SLUG" = github-actions && test "$TRUSTED_RECORDER_APP_ID" = 15368 || {
+            echo 'GATE_BLOCK: promotion handoff must be verified against the GitHub Actions integration' >&2
             exit 1
           }
           PRS="$(gh api "/repos/${GITHUB_REPOSITORY}/commits/${MAIN_SHA}/pulls")"
@@ -680,19 +668,3 @@ jobs:
             echo '- MainSourceSeal OCI bytes: published and read back before timing submission'
             echo '- source status: source-admitted; release status: not_selected'
           } >> "$GITHUB_STEP_SUMMARY"
-
-  system_backsync:
-    name: Managed system backsync
-    needs: main_source_seal
-    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
-    permissions:
-      actions: read
-      checks: read
-      contents: read
-      packages: read
-    uses: ./.github/workflows/system-backsync.yml
-    with:
-      expected_dev_before: ${{ needs.main_source_seal.outputs.source_sha }}
-      source_sha: ${{ needs.main_source_seal.outputs.source_sha }}
-      main_source_seal_ref: ${{ needs.main_source_seal.outputs.main_source_seal_ref }}
-      main_source_seal_digest: ${{ needs.main_source_seal.outputs.main_source_seal_digest }}

@@ -589,7 +589,8 @@ def local_commit_issues(
             _issue(
                 policy,
                 "integration_read_only",
-                f"local commits on read-only branch '{current_branch}' are blocked",
+                f"local commits on read-only release branch '{current_branch}' are blocked; "
+                "main only advances through the dev1.0 -> main promotion PR",
             )
         ]
     return []

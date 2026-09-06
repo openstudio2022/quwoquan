@@ -45,6 +45,7 @@ STATIC_COMMANDS: dict[str, tuple[list[str], str, list[str]]] = {
     "feature_tree": (["make", "verify-feature-tree"], ".", ["feature-tree"]),
     "entrypoint_script_paths": (["python3", "-B", "quwoquan_ops/gate/verify_entrypoint_script_paths.py"], ".", ["ops-static"]),
     "workflow_cli_arguments": (["python3", "-B", "quwoquan_ops/gate/verify_workflow_cli_arguments.py"], ".", ["ops-static"]),
+    "workflow_actionlint": (["bash", "quwoquan_ops/gate/verify_workflow_actionlint.sh"], ".", ["ops-static"]),
     "local_worktree_lifecycle": (["python3", "-B", "quwoquan_ops/gate/verify_local_worktree_lifecycle.py"], ".", ["git-worktree"]),
     "service_architecture": (["make", "verify-service-architecture"], ".", ["service-static"]),
     "service_probe_homology": (["make", "verify-service-probe-homology"], ".", ["service-static"]),

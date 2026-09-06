@@ -9,13 +9,20 @@ from __future__ import annotations
 
 import base64
 import hashlib
-import hmac
 import json
+import tempfile
 from pathlib import Path
 from typing import Any
 
 from quwoquan_ops.ci import generate_release_bound_environment_identity as renderer
 from quwoquan_ops.ci.environment_scheduler import dsse_pae
+from quwoquan_ops.cli.lib.evidence_signing import (
+    ENVIRONMENT_OPS_IDENTITY,
+    KEY_ROOT_ENV,
+)
+from quwoquan_ops.tests.support.evidence_signing_test_support import (
+    create_temporary_signing,
+)
 from quwoquan_ops.cli.lib.environment_acceptance_fact_contract import (
     DSSE_PAYLOAD_TYPE,
     SCHEMA as ENVIRONMENT_ACCEPTANCE_SCHEMA,
@@ -52,13 +59,13 @@ ENTITY_CATALOG_DIGEST = "sha256:" + "5" * 64
 ISOLATION_DIGEST = "sha256:" + "6" * 64
 SUBJECT_HASH = "sha256:" + "7" * 64
 IMPACT_PLAN_DIGEST = "sha256:" + "8" * 64
-TEST_ENVIRONMENT_ACCEPTANCE_SIGNING_KEY_ENV = (
-    "TEST_RELEASE_BOUND_ENVIRONMENT_ACCEPTANCE_SIGNING_KEY"
+# 模块级临时 Ed25519 信任根（仓外 tmp），与生产同一编码；identity 必须是 keyring 声明的 canonical signer。
+TEST_SIGNING = create_temporary_signing(
+    Path(tempfile.mkdtemp(prefix="qwq-release-bound-eaf-signing-")),
+    identities=(ENVIRONMENT_OPS_IDENTITY,),
 )
-TEST_ENVIRONMENT_ACCEPTANCE_SIGNING_KEY = "release-bound-eaf-v2-test-key"
-TEST_ENVIRONMENT_ACCEPTANCE_SIGNER = (
-    "spiffe://quwoquan.local/test/release-bound-environment-identity"
-)
+TEST_ENVIRONMENT_ACCEPTANCE_SIGNER = ENVIRONMENT_OPS_IDENTITY
+TEST_SIGNING_ENVIRONMENT = {KEY_ROOT_ENV: str(TEST_SIGNING.key_root)}
 
 
 def _write(path: Path, payload: dict[str, Any]) -> Path:
@@ -91,14 +98,11 @@ def _write_canonical(path: Path, payload: dict[str, Any]) -> Path:
 
 
 def verify_environment_acceptance_signature(
-    _: str, pae: bytes, signature: str
+    identity: str, pae: bytes, signature: str
 ) -> bool:
-    expected = "hmac-sha256:" + hmac.new(
-        TEST_ENVIRONMENT_ACCEPTANCE_SIGNING_KEY.encode("utf-8"),
-        pae,
-        hashlib.sha256,
-    ).hexdigest()
-    return hmac.compare_digest(expected, signature)
+    return TEST_SIGNING.environment_verifier((TEST_ENVIRONMENT_ACCEPTANCE_SIGNER,))(
+        identity, pae, signature
+    )
 
 
 def _sign_environment_acceptance(payload: dict[str, Any]) -> dict[str, Any]:
@@ -113,12 +117,7 @@ def _sign_environment_acceptance(payload: dict[str, Any]) -> dict[str, Any]:
             "identity": TEST_ENVIRONMENT_ACCEPTANCE_SIGNER,
             "payloadType": DSSE_PAYLOAD_TYPE,
             "payload": base64.b64encode(signed_payload).decode("ascii"),
-            "signature": "hmac-sha256:"
-            + hmac.new(
-                TEST_ENVIRONMENT_ACCEPTANCE_SIGNING_KEY.encode("utf-8"),
-                pae,
-                hashlib.sha256,
-            ).hexdigest(),
+            "signature": TEST_SIGNING.signer(TEST_ENVIRONMENT_ACCEPTANCE_SIGNER)(pae),
         },
     }
     signed["factId"] = _document_digest(signed)
@@ -196,10 +195,7 @@ class Fixture:
         self.target = renderer.ENVIRONMENT_TARGETS[environment]
         self.paths: dict[str, Path] = {}
         self.app_paths: list[Path] = []
-        self.environment_variables = {
-            TEST_ENVIRONMENT_ACCEPTANCE_SIGNING_KEY_ENV:
-                TEST_ENVIRONMENT_ACCEPTANCE_SIGNING_KEY,
-        }
+        self.environment_variables = dict(TEST_SIGNING_ENVIRONMENT)
         self._build()
 
     def _build(self) -> None:
@@ -947,8 +943,8 @@ class Fixture:
             str(self.paths["launch"]),
             "--environment-acceptance-fact",
             str(self.paths["acceptance"]),
-            "--environment-acceptance-verification-key-env",
-            TEST_ENVIRONMENT_ACCEPTANCE_SIGNING_KEY_ENV,
+            "--signing-keyring",
+            str(TEST_SIGNING.keyring_path),
             "--expected-environment-acceptance-signer-identity",
             TEST_ENVIRONMENT_ACCEPTANCE_SIGNER,
         ]

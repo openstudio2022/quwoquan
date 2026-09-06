@@ -1,5 +1,8 @@
 # Canonical post-promotion source convergence. The caller must pass the exact
 # MainSourceSeal emitted for this main merge; no release or Prod fact is involved.
+# 现状：dev1.0 的回同步由 integration 工作区 `make promotion-backsync`（FF 通道）执行；
+# 本 reusable workflow 暂无 caller，待 dedicated deploy key 与 Environment 到位后再接回
+# （见 daily-merge-release-strategy OPEN）。
 name: 08. Managed System Backsync
 
 permissions:

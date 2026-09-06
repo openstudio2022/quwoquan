@@ -1772,7 +1772,55 @@ gate-release:
 # Usage: make deploy-beta-k8s [CLOUD_PROVIDER=volcengine]
 .PHONY: deploy-beta-k8s
 deploy-beta-k8s:
-	@python3 quwoquan_ops/cli/stackctl.py deploy --env beta --mode environment-assembly
+	@python3 quwoquan_ops/cli/stackctl.py deploy --env beta --mode environment-assembly \
+		$(if $(CLOUD_PROVIDER),--cloud-provider "$(CLOUD_PROVIDER)",)
+
+# 证据签名信任根：为 EAF / IQF 两个 signer identity 生成仓外 Ed25519 私钥（0600），公钥登记进
+# quwoquan_ops/policies/evidence_signing_keyring.yaml。幂等；换 key 用 ROTATE=1。keyring 改动需随提交进入 dev1.0。
+.PHONY: evidence-signing-bootstrap
+evidence-signing-bootstrap:
+	@PYTHONDONTWRITEBYTECODE=1 python3 -B quwoquan_ops/cli/evidence_signing_bootstrap.py \
+		$$( [ "$${ROTATE:-0}" = "1" ] && printf -- '--rotate' ) $(EVIDENCE_SIGNING_ARGS)
+
+# integration 工作区模式二：对 exact candidate 做本地 readiness + Alpha（条件 Beta）真实验证，
+# 签发 EnvironmentAcceptanceFact 并（PUBLISH=1 时）以 expected-old CAS fast-forward 发布到远端 dev1.0。
+# 必填：RELEASE_ATTESTATION / ROLLBACK_RELEASE_ATTESTATION 指向两份不同的 immutable Data release attestation；
+# 签名私钥来自仓外 QWQ_EVIDENCE_SIGNING_KEY_ROOT（先 make evidence-signing-bootstrap）。可选：CANDIDATE=<sha>（默认 HEAD）、
+# OWNER_IDENTITY=<ref>、READINESS_LEVEL=fast|scope、PROFILE=integration|smoke、INTEGRATE_ARGS 透传。
+.PHONY: integrate
+integrate:
+	@if [ -z "$(RELEASE_ATTESTATION)" ] || [ -z "$(ROLLBACK_RELEASE_ATTESTATION)" ]; then \
+		echo "[integrate] GATE_BLOCK: RELEASE_ATTESTATION 与 ROLLBACK_RELEASE_ATTESTATION 必填（两份不同的 immutable Data release attestation）" >&2; exit 2; fi
+	@PYTHONDONTWRITEBYTECODE=1 python3 -B quwoquan_ops/cli/integration_run.py \
+		--candidate "$${CANDIDATE:-HEAD}" \
+		--release-attestation "$(RELEASE_ATTESTATION)" \
+		--rollback-release-attestation "$(ROLLBACK_RELEASE_ATTESTATION)" \
+		--readiness-level "$${READINESS_LEVEL:-fast}" \
+		--profile "$${PROFILE:-integration}" \
+		$$( [ -n "$(OWNER_IDENTITY)" ] && printf -- '--owner-identity %s' "$(OWNER_IDENTITY)" ) \
+		$$( [ "$${PUBLISH:-0}" = "1" ] && printf -- '--publish' ) \
+		$(INTEGRATE_ARGS)
+
+# dev1.0 -> main 合入后的源码回同步（integration 工作区 FF 通道）：
+# 校验远端 main 头是恰好一次两父 merge、其第二父就是本地 dev1.0 头，再 --ff-only 并按既有 pre-push FF 通道推送 dev1.0。
+# dev1.0 已前移（非 FF）时不 reset、不自动 merge，直接阻断交人工判断。
+.PHONY: promotion-backsync
+promotion-backsync:
+	@set -eu; \
+	git fetch --no-tags origin "+refs/heads/main:refs/remotes/origin/main" "+refs/heads/dev1.0:refs/remotes/origin/dev1.0"; \
+	test "$$(git symbolic-ref --quiet HEAD)" = refs/heads/dev1.0 || { echo "[promotion-backsync] GATE_BLOCK: 当前 HEAD 必须在 dev1.0" >&2; exit 2; }; \
+	test -z "$$(git status --porcelain --untracked-files=no)" || { echo "[promotion-backsync] GATE_BLOCK: 工作树必须干净" >&2; exit 2; }; \
+	local_dev="$$(git rev-parse refs/heads/dev1.0)"; remote_dev="$$(git rev-parse refs/remotes/origin/dev1.0)"; main_sha="$$(git rev-parse refs/remotes/origin/main)"; \
+	test "$$local_dev" = "$$remote_dev" || { echo "[promotion-backsync] GATE_BLOCK: 本地 dev1.0 $$local_dev != 远端 $$remote_dev" >&2; exit 2; }; \
+	if [ "$$local_dev" = "$$main_sha" ]; then echo "[promotion-backsync] dev1.0 已等于 main $$main_sha（幂等）"; exit 0; fi; \
+	parents="$$(git show -s --format=%P "$$main_sha")"; set -- $$parents; \
+	test "$$#" -eq 2 || { echo "[promotion-backsync] GATE_BLOCK: main 头 $$main_sha 不是两父 merge" >&2; exit 2; }; \
+	test "$$2" = "$$local_dev" || { echo "[promotion-backsync] GATE_BLOCK: main 头第二父 $$2 不是当前 dev1.0 $$local_dev；dev1.0 已前移，需人工 merge" >&2; exit 2; }; \
+	git merge --ff-only "$$main_sha"; \
+	git push origin refs/heads/dev1.0:refs/heads/dev1.0; \
+	readback="$$(git ls-remote origin refs/heads/dev1.0 | cut -f1)"; \
+	test "$$readback" = "$$main_sha" || { echo "[promotion-backsync] GATE_BLOCK: 远端读回 $$readback != $$main_sha" >&2; exit 2; }; \
+	echo "[promotion-backsync] dev1.0 $$local_dev -> $$main_sha readback ok"
 
 # 本地优先 CI/readiness：显式 producer，不在 pre-commit 内自动跑全面测试。
 local-readiness-plan:
