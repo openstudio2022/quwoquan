@@ -858,10 +858,8 @@ def _homepage_surface(
     page_path = _regular(object_dir / "4.draft/page.md", label="homepage draft")
     creator = _creator_fields(compose, carrier="homepage")
     attribution = _text_attribution(source_rows, creator)
-    homepage_compose = {
-        "assets": list(compose.get("assets") or []),
-        "title": str(target.get("name") or ""),
-    }
+    name = str(target.get("name") or "")
+    homepage_compose = {"assets": list(compose.get("assets") or []), "title": name}
     assets, media = _project_assets(
         execution_root=execution_root,
         object_dir=object_dir,
@@ -874,28 +872,28 @@ def _homepage_surface(
     entity_ref = "/entity/" + target_ref.removeprefix("entities/")
     domain, type_name = str(target.get("entityType") or "").split("/", 1)
     region = str(target.get("region") or "").strip("/")
-    geo_tag_ref = f"Topic/地理/行政区/{region}" if region else ""
-    tag_refs = sorted({*_target_tag_refs(target), *(str(v) for v in compose.get("tagRefs") or []), *([geo_tag_ref] if geo_tag_ref else [])})
-    catalog = _source_catalog(source_rows, entity_name=str(target.get("name") or ""))
-    primary_source = {
-        key: value
-        for key, value in catalog["primarySource"].items()
-        if key not in {"schema", "sourceUnitId", "evidenceRef"}
-    }
+    if not region:
+        # geoTagRef 是 publish/entity schema 的必填单值主归属；缺 region 的目标不得投影成实体。
+        raise ObjectTransactionError(f"homepage target {target_ref} lacks region for geoTagRef")
+    geo_tag_ref = f"Topic/地理/行政区/{region}"
+    catalog = _source_catalog(source_rows, entity_name=name)
+    hidden = {"schema", "sourceUnitId", "evidenceRef"}
     entity = {
-        "label": str(target.get("name") or ""),
+        "label": name,
         "domain": domain,
         "type": type_name,
         "executionId": execution_root.name,
         "entityRef": entity_ref,
         "sourceRefs": [str(row["sourceRef"]) for row in source_rows],
         "sourceUrls": [str(row["sourceUrl"]) for row in source_rows],
-        "primarySource": primary_source,
+        "primarySource": {k: v for k, v in catalog["primarySource"].items() if k not in hidden},
         "sourceAttribution": attribution,
-        "tagRefs": tag_refs,
-        **({"geoTagRef": geo_tag_ref} if geo_tag_ref else {}),
+        "tagRefs": sorted({*_target_tag_refs(target), *(str(v) for v in compose.get("tagRefs") or []), geo_tag_ref}),
+        "geoTagRef": geo_tag_ref,
         **creator,
     }
+    # 与下游 homepage 导入器同一判据（百科闭集 + encyclopedia-primary）在 publish 截面 fail-closed。
+    assert_valid(entity, "publish", "entity", label=f"homepage entity {entity_ref}")
     manifest = {
         "vertical": "travel",
         "sourceAttribution": attribution,

@@ -108,6 +108,7 @@
 - homepage 走 receipt 协议 publish 的同一条链：`003-5.review` seal receipt pass、布局可发布、对象唯一 `content_review.json` 为 approved，之后经实体事务进入 canonical `entities/`。禁止为 homepage 建立第二套准入判据或 attestation。
 - homepage 的对象身份是实体路径 `domain/type/name`，没有 `publishAngle`/`publishTitle`/`publishSeq` 这组发表坐标，因此目标集来自 execution 工作包内实际存在的实体对象，而不是 frozen target set 的投影；实体类型冲突是结构化错误而非静默去重。
 - homepage 缺位会让 article 永久卡在引用闭包：article 可以先进池，但其 publishable 要求 `entityRefs` 指向的 homepage 已 admitted。因此 homepage 必须先行或与 article 同批。
+- homepage 实体头 `_entity.json` 的唯一结构判据是 `quwoquan_data/schema/publish/entity.schema.json`：`geoTagRef` 为必填单值主归属，`primarySource` 必须落在百科闭集且 `policyRevision` 为 `encyclopedia-primary`。实体事务在写盘前按该 schema fail closed，不把不合规实体留给下游 homepage 导入器在 ship 阶段发现。
 - apply 模式下零对象晋级必须报错，不得以「promoted=0」的成功报告收尾。
 
 <a id="req-011"></a>
@@ -392,6 +393,15 @@
 - THEN Data result refs 不含 EAF；Environment Ops scheduler 独占签发完整 v2 EAF，canonical profile 只为 `smoke|integration|release`，前驱只按 Alpha→Beta→Gamma exact EAF 链闭合。`m1_api_consumer` intent 不冒充 EAF profile，也不省略任何 named closure。
 - THEN Prod 不创建 EAF；Prod acceptance 只消费 RC Qualification 的 package/provider/UAT/supply-chain `QualificationFact`、stable `ReleaseTagAdmissionFact`、`ProdActivationAdmissionFact` 与 hosted rollout/readback/soak facts。任何 acceptance 都不得回授 legacy 删除 authority或引入 sequence-017/旧控制面兼容。
 
+<a id="gwt-036"></a>
+### GWT-036 homepage 实体头在 publish 截面按 publish entity schema fail closed
+
+- GIVEN 一个 review approved 的 homepage 对象，实体事务准备从冻结目标、来源行与 compose 投影 `_entity.json`。
+- WHEN canonical 单对象事务执行 homepage 最终面投影。
+- THEN 目标缺 region、无法派生 `geoTagRef` 时该对象结构化失败，不写出缺 `geoTagRef` 的实体头。
+- THEN 主来源不在百科闭集或 `policyRevision` 不是 `encyclopedia-primary` 时该对象结构化失败，不留给下游 homepage 导入器在 ship 阶段发现。
+- THEN 合规实体头按 `quwoquan_data/schema/publish/entity.schema.json` 校验通过后才落盘，schema 是实体头结构的唯一判据来源。
+
 ## 6. 依赖
 
 - 前置要求：父能力的 execution、review 与 release 契约。
@@ -500,3 +510,15 @@
 - 尚缺验收证据：[`GWT-029.t1`](#gwt-029) 至 [`GWT-029.t7`](#gwt-029) 尚无任何子句级 local_contract 或 api_integration；[`GWT-031.t1`](#gwt-031) 至 [`GWT-031.t7`](#gwt-031) 尚无任何子句级 local_contract、四入口 release identity api_integration 或 rollback/replay user_acceptance。
 - 完成判定：[`GWT-029.t1`](#gwt-029) 至 [`GWT-029.t7`](#gwt-029) 逐条由有效 contracts 的 local_contract/api_integration 绑定，且 projection 删除重建不改 owner bytes；[`GWT-031.t1`](#gwt-031) 至 [`GWT-031.t7`](#gwt-031) 逐条由同一 release identity 的 local_contract/api_integration/user_acceptance 绑定，且四入口 rollback/replay 后 previous release identity 一致率为 100%。
 - 依赖：Runtime/Data/Service owner 冻结并实现字段与 query 事实；Testing/Ops owner 提供四入口真实 runner。不得以 projection cache、counts、旧 receipt 或页面文案关闭本 OPEN。
+
+<a id="open-021"></a>
+### OPEN-021 存量 canonical 实体头不满足 publish entity schema
+
+- 类型：`capability_gap`
+- 优先级：`P0`
+- 准出影响：`block`
+- 影响或价值：publish 截面的实体 schema 门（[`GWT-036`](#gwt-036)）只拦新投影，门落地前已发布的 canonical 实体仍缺合规处置，存量 7 个不合规：`地点/景区/成都熊猫基地西门` 的 `primarySource` 为 `sourceKind: encyclopedia_primary`，缺少 `policyRevision/canonicalUrl/snapshotHash/entityName/extractor/title/sourceUseMode` 与 `geoTagRef`，它被 M10/M100 cohort 的 5 篇 posts 以 `entityRefs` 引用，导致这两级 release 在 Alpha `homepage_import` fail closed（typed 证据为该 apply run 的 `result.json`，`failedStage=homepage_import`）；另 6 个门前 legacy 实体 `乐山大佛`、`峨眉山`、`成都大熊猫繁育研究基地`、`泸沽湖`、`海螺沟`、`青城山` 的 `sourceAttribution` 缺少 `derivedModifications` 且多出 `riskAcceptanceId`，当前不在任何 cohort。
+- 尚缺实现：无；门已在实体事务写盘前生效，本项只跟踪存量字节的处置。
+- 尚缺验收证据：`成都熊猫基地西门` 由 producer 会话按现役六步重发或从 cohort 及其 posts 引用闭包中显式剔除，并封含修正后实体的新 release/handoff；6 个 legacy 实体由 producer 决定重发或永不入 cohort，任何一条进入 cohort 前必须先满足 schema。
+- 完成判定：[`GWT-036.t3`](#gwt-036) 的 schema 判据对 `quwoquan_data/publish/entities/**/_entity.json` 全量成立（或不合规实体被显式排除在所有 cohort 之外并留证），且含修正实体的 release 在 Alpha `homepage_import` 形成完整 closure；不得手改 canonical 字节、放宽 schema 或在导入器加 fallback 关闭本 OPEN。
+- 依赖：producer 会话（生产字节唯一 writer）；Data ship 与 homepage 导入器不参与修正。
