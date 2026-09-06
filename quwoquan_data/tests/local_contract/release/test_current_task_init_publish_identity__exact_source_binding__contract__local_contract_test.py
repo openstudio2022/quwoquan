@@ -319,6 +319,50 @@ def test_current_task_init_identity_rejects_exact_document_byte_drift(
         )
 
 
+def test_current_task_init_identity_accepts_retry_demand_execution_id(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    execution, _package, _publish, _transaction_id = _current_execution(
+        tmp_path, monkeypatch
+    )
+    predecessor_id = "20260902--travel-image-current-publish--test-region-a--pilot-999"
+    receipt = tmp_path / "current-output/data/tasks" / predecessor_id / "_shared/receipts/007-5.review.json"
+    _write(receipt, {"verdict": "blocked"})
+    retry_binding = {
+        "executionId": predecessor_id,
+        "terminalReceipt": {
+            "scope": "output",
+            "ref": receipt.relative_to(tmp_path / "current-output").as_posix(),
+            "digest": "sha256:" + hashlib.sha256(receipt.read_bytes()).hexdigest(),
+        },
+    }
+    request_path = execution / "0.plan/request.json"
+    request = json.loads(request_path.read_text(encoding="utf-8"))
+    request["retryOf"] = retry_binding
+    request["submittedInputs"]["carrierDemand"]["retryOf"] = predecessor_id
+    demand_digest = object_source_identity._canonical_file_digest(
+        request["submittedInputs"]["carrierDemand"]
+    )
+    request["carrierDemand"]["digest"] = demand_digest
+    _write(request_path, request)
+    manifest_path = execution / "execution_manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["retryOf"] = retry_binding
+    manifest["submittedInputs"]["carrierDemand"]["retryOf"] = predecessor_id
+    manifest["initInputs"]["carrierDemand"]["digest"] = demand_digest
+    manifest["request"]["digest"] = object_source_identity._canonical_file_digest(request)
+    _write(manifest_path, manifest)
+
+    identity = freeze_execution_source_identity(
+        execution_root=execution,
+        execution_manifest=manifest,
+        target_ref=f"posts/{CURRENT_POST_REF}",
+    )
+
+    assert identity["executionId"] == EXECUTION_ID
+
+
 def test_current_task_init_identity_rejects_target_drift_even_with_rebound_digest(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

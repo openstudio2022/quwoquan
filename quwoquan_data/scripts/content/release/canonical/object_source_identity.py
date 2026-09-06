@@ -306,7 +306,12 @@ def freeze_execution_source_identity(
         or submitted_demand.get("carrier") != carrier
         or submitted_demand.get("familyRef") != family["ref"]
         or submitted_demand.get("quota") != request.get("quota")
-        or submitted_demand.get("retryOf") != request.get("retryOf")
+        or submitted_demand.get("retryOf")
+        != (
+            request.get("retryOf", {}).get("executionId")
+            if isinstance(request.get("retryOf"), Mapping)
+            else request.get("retryOf")
+        )
         or submitted_candidates.get("executionId") != execution_id
         or submitted_candidates.get("carrier") != carrier
         or submitted_candidates.get("entityCatalogDigest")
