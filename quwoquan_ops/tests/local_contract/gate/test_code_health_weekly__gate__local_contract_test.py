@@ -123,7 +123,7 @@ def test_weekly_report_is_clean_candidate_report_only(tmp_path: Path) -> None:
     assert later_report["identityDigest"] == report["identityDigest"]
     assert later_report["observedAt"] != report["observedAt"]
     assert report["ratchet"]["comparisonStatus"] == "insufficient-history"
-    assert report["hotspotPersistence"] == {"historyReports": 0, "topN": 20, "items": []}
+    assert report["hotspotPersistence"] == {"historyReports": 0, "historyWeeks": 0, "topN": 20, "items": []}
     assert report["sizeDistribution"]["tiers"] == [800, 1000, 2000]
     assert report["sizeDistribution"]["production"]["files"] == 1
     assert report["ownerScopeWeakPoints"][0]["ownerScope"] == "quwoquan_ops/ci"

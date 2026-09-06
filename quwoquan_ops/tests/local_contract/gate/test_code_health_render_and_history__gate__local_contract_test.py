@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import json
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
@@ -62,12 +62,19 @@ def test_weekly_history_derives_ratchet_direction_and_hotspot_streak(tmp_path: P
 
     write(repo, "quwoquan_ops/ci/hot.py", _complex_source(3))
     second_head = commit(repo, "simplify")
-    second = _weekly(repo, second_head, cloc, previous=[first])
-    metrics = second["ratchet"]["metrics"]
-    assert second["ratchet"]["comparisonStatus"] == "comparable"
-    assert second["ratchet"]["previousHeadSha"] == first_head
+    same_week = _weekly(repo, second_head, cloc, previous=[first])
+    metrics = same_week["ratchet"]["metrics"]
+    assert same_week["ratchet"]["comparisonStatus"] == "comparable"
+    assert same_week["ratchet"]["previousHeadSha"] == first_head
     assert metrics["overCyclomaticAdvisory"] == {"previous": 1, "current": 0, "direction": "improved"}
     assert metrics["cloneGroupCount"]["direction"] == "flat"
+    # 同一 ISO 周内的重跑不算多期：连续在榜周数仍为 1，避免本地反复运行虚增热点。
+    assert same_week["hotspotPersistence"]["historyWeeks"] == 0
+    assert {item["consecutiveWeeksInTopN"] for item in same_week["hotspotPersistence"]["items"]} == {1}
+
+    last_week = _shift_window_end(first, weeks=1)
+    second = _weekly(repo, second_head, cloc, previous=[last_week])
+    assert second["hotspotPersistence"]["historyWeeks"] == 1
     streak = {item["path"]: item["consecutiveWeeksInTopN"] for item in second["hotspotPersistence"]["items"]}
     assert streak["quwoquan_ops/ci/hot.py"] == 2
 
@@ -79,15 +86,30 @@ def test_weekly_history_derives_ratchet_direction_and_hotspot_streak(tmp_path: P
         _weekly(repo, second_head, cloc, previous=[{"schema": "other", "window": {"end": "x"}}])
 
 
-def test_hotspot_persistence_counts_only_consecutive_weeks() -> None:
-    top = [{"path": "a.py", "ownerScope": "s"}, {"path": "b.py", "ownerScope": "s"}]
+def _shift_window_end(report: dict, *, weeks: int) -> dict:
+    shifted = json.loads(json.dumps(report))
+    end = datetime.fromisoformat(report["window"]["end"]) - timedelta(weeks=weeks)
+    shifted["window"]["end"] = end.isoformat(timespec="seconds")
+    return shifted
+
+
+def test_hotspot_persistence_counts_only_consecutive_iso_weeks() -> None:
+    top = [{"path": "a.py", "ownerScope": "s"}, {"path": "b.py", "ownerScope": "s"}, {"path": "c.py", "ownerScope": "s"}]
+    current = "2026-09-21T00:00:00+00:00"
+
+    def report(weeks_ago: int, *paths: str) -> dict:
+        end = (datetime.fromisoformat(current) - timedelta(weeks=weeks_ago)).isoformat(timespec="seconds")
+        return {"schema": WEEKLY_SCHEMA, "window": {"end": end}, "topHotspots": [{"path": path} for path in paths]}
+
     history = [
-        {"schema": WEEKLY_SCHEMA, "topHotspots": [{"path": "a.py"}]},
-        {"schema": WEEKLY_SCHEMA, "topHotspots": [{"path": "b.py"}]},
-        {"schema": WEEKLY_SCHEMA, "topHotspots": [{"path": "a.py"}]},
+        report(1, "a.py"), report(1, "a.py", "c.py"),   # 同一周两次观测只算一期
+        report(2, "b.py", "a.py"),                       # b 在两周前出现但上周缺席：不连续
+        report(3, "a.py"),
     ]
-    items = {item["path"]: item["consecutiveWeeksInTopN"] for item in hotspot_persistence(top, history)}
-    assert items == {"a.py": 2, "b.py": 1}
+    items = {item["path"]: item["consecutiveWeeksInTopN"] for item in hotspot_persistence(top, history, current_window_end=current)}
+    assert items == {"a.py": 4, "b.py": 1, "c.py": 2}
+    # 同周或未来的报告不进入历史。
+    assert hotspot_persistence(top, [report(0, "a.py")], current_window_end=current)[0]["consecutiveWeeksInTopN"] == 1
 
 
 def test_candidate_markdown_leads_with_blockers_and_debt_delta(tmp_path: Path) -> None:
@@ -122,8 +144,11 @@ def test_cli_discovers_local_history_by_default(tmp_path: Path, monkeypatch: pyt
     write(repo, "quwoquan_ops/ci/hot.py", _complex_source(20))
     first_head = commit(repo, "hot module")
     assert report_code_health_weekly.main(["--head", first_head, "--policy", str(policy_path(repo)), "--cloc", str(cloc)]) == 0
-    first = json.loads(next(weekly_root.glob("*/report.json")).read_text(encoding="utf-8"))
+    first_path = next(weekly_root.glob("*/report.json"))
+    first = json.loads(first_path.read_text(encoding="utf-8"))
     assert first["ratchet"]["comparisonStatus"] == "insufficient-history"
+    # 把首期报告的窗口推到上一周，模拟真实的周度节律。
+    first_path.write_text(json.dumps(_shift_window_end(first, weeks=1)), encoding="utf-8")
 
     write(repo, "quwoquan_ops/ci/hot.py", _complex_source(2))
     second_head = commit(repo, "simplify")

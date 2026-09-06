@@ -317,17 +317,45 @@ def ratchet_trend(current: dict[str, Any], previous: list[dict[str, Any]], tiers
     }
 
 
-def hotspot_persistence(top: list[dict[str, Any]], previous: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Consecutive weeks each current hotspot has stayed in the Top-N, most recent first."""
-    history = [{item["path"] for item in report.get("topHotspots", [])} for report in previous]
+def _iso_week(window_end: str) -> tuple[int, int]:
+    calendar = datetime.fromisoformat(window_end).isocalendar()
+    return calendar[0], calendar[1]
+
+
+def _week_index(week: tuple[int, int]) -> int:
+    """Monotonic week counter so adjacency survives year boundaries."""
+    year, number = week
+    return datetime.fromisocalendar(year, number, 1).toordinal() // 7
+
+
+def _weekly_top_paths(previous: list[dict[str, Any]], current_week: tuple[int, int]) -> list[tuple[int, set[str]]]:
+    """Per ISO week (most recent first) the union of Top-N paths; the current week is excluded.
+
+    同一周内多次本地重跑不算多期，否则连续在榜周数会被重复观测虚增，plan-next 会据此
+    对噪声开 OPEN。
+    """
+    by_week: dict[int, set[str]] = defaultdict(set)
+    current_index = _week_index(current_week)
+    for report in previous:
+        index = _week_index(_iso_week(str(report["window"]["end"])))
+        if index < current_index:
+            by_week[index].update(item["path"] for item in report.get("topHotspots", []))
+    return sorted(by_week.items(), reverse=True)
+
+
+def hotspot_persistence(top: list[dict[str, Any]], previous: list[dict[str, Any]], *, current_window_end: str) -> list[dict[str, Any]]:
+    """Consecutive ISO weeks each current hotspot has stayed in the Top-N, counting the current week as 1."""
+    current_index = _week_index(_iso_week(current_window_end))
+    history = _weekly_top_paths(previous, _iso_week(current_window_end))
     result = []
     for item in top:
         streak = 1
-        for paths in history:
-            if item["path"] in paths:
-                streak += 1
-            else:
+        expected = current_index - 1
+        for index, paths in history:
+            if index != expected or item["path"] not in paths:
                 break
+            streak += 1
+            expected -= 1
         result.append({"path": item["path"], "ownerScope": item["ownerScope"], "consecutiveWeeksInTopN": streak})
     return result
 
@@ -505,7 +533,8 @@ def analyze_weekly(
     report["ratchet"] = ratchet_trend(report, previous, tiers)
     report["hotspotPersistence"] = {
         "historyReports": len(previous),
+        "historyWeeks": len(_weekly_top_paths(previous, _iso_week(window["end"]))),
         "topN": policy["report"]["weekly_top_hotspots"],
-        "items": hotspot_persistence(top, previous),
+        "items": hotspot_persistence(top, previous, current_window_end=window["end"]),
     }
     return report

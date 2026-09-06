@@ -84,9 +84,12 @@ def project(report: dict[str, Any], owner: str) -> dict[str, Any]:
     tiers = (report.get("sizeDistribution") or {}).get("tiers") or []
     if len(tiers) >= 2:
         thresholds = {"fileLinesAdvisory": tiers[-2], "fileLinesBlock": tiers[-1]}
+    persistence_meta = report.get("hotspotPersistence") or {}
     return {
         "status": "available", "owner": prefix, "headSha": report["headSha"],
-        "windowEnd": report["window"]["end"], "historyReports": (report.get("hotspotPersistence") or {}).get("historyReports", 0),
+        "windowEnd": report["window"]["end"],
+        "historyReports": persistence_meta.get("historyReports", 0),
+        "historyWeeks": persistence_meta.get("historyWeeks", 0),
         "thresholds": thresholds,
         "hotspots": hotspots, "ownerScopeWeakPoints": weak_points,
         "actionableCount": sum(item["actionable"] for item in hotspots),
@@ -102,8 +105,8 @@ def render(projection: dict[str, Any]) -> str:
         return f"code-health-hotspots: unavailable owner={projection['owner']} reason={projection['reason']}\n"
     lines = [
         f"code-health-hotspots: owner={projection['owner']} head={projection['headSha'][:12]} "
-        f"window_end={projection['windowEnd'][:10]} history={projection['historyReports']} "
-        f"actionable={projection['actionableCount']}",
+        f"window_end={projection['windowEnd'][:10]} history_weeks={projection['historyWeeks']} "
+        f"history_reports={projection['historyReports']} actionable={projection['actionableCount']}",
     ]
     for item in projection["hotspots"]:
         flag = "ACTIONABLE" if item["actionable"] else "observe"
