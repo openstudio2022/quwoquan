@@ -81,7 +81,7 @@ def load_timeout_policy(path: Path | None = None) -> tuple[dict[str, Any], dict[
         contract = yaml.safe_load(selected.read_text(encoding="utf-8"))
     except (OSError, UnicodeError, yaml.YAMLError) as exc:
         raise ValueError(f"local readiness timeout policy 无法读取: {exc}") from exc
-    if not isinstance(contract, dict) or contract.get("schema_version") != 1:
+    if not isinstance(contract, dict) or contract.get("schema_version") != 2:
         raise ValueError("local readiness contract schema_version 非法")
     policy = contract.get("timeouts")
     expected = {

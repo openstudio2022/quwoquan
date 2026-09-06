@@ -1,0 +1,276 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://quwoquan.local/quwoquan_ops/environments/evidence/release_tag_admission_fact.schema.json",
+  "title": "Create-once RC and stable release tag admission facts v1",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/rcAdmission"
+    },
+    {
+      "$ref": "#/$defs/stableAdmission"
+    }
+  ],
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "git": {
+      "type": "string",
+      "pattern": "^(?:[a-f0-9]{40}|[a-f0-9]{64})$"
+    },
+    "exactRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ref",
+        "digest"
+      ],
+      "properties": {
+        "ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "digest": {
+          "$ref": "#/$defs/digest"
+        }
+      }
+    },
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "platform",
+        "ociRef",
+        "digest"
+      ],
+      "properties": {
+        "platform": {
+          "type": "string",
+          "minLength": 1
+        },
+        "ociRef": {
+          "type": "string",
+          "pattern": "^.+@sha256:[a-f0-9]{64}$"
+        },
+        "digest": {
+          "$ref": "#/$defs/digest"
+        }
+      }
+    },
+    "rcAdmission": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema",
+        "admissionId",
+        "decision",
+        "tagKind",
+        "tagName",
+        "tagObjectOid",
+        "peeledCommit",
+        "sourceTree",
+        "productVersion",
+        "rcSequence",
+        "selectionFact",
+        "productVersionManifestDigest",
+        "releaseSelectionPolicyDigest",
+        "admissionIntent",
+        "mutationOutcome",
+        "creatorReadback",
+        "rulesetReadback",
+        "admittedAt"
+      ],
+      "properties": {
+        "schema": {
+          "const": "quwoquan_ops.release_candidate_tag_admission_fact.v1"
+        },
+        "admissionId": {
+          "$ref": "#/$defs/digest"
+        },
+        "decision": {
+          "const": "admitted"
+        },
+        "tagKind": {
+          "const": "rc"
+        },
+        "tagName": {
+          "type": "string",
+          "pattern": "^v(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)-rc\\.([1-9][0-9]*)$"
+        },
+        "tagObjectOid": {
+          "$ref": "#/$defs/git"
+        },
+        "peeledCommit": {
+          "$ref": "#/$defs/git"
+        },
+        "sourceTree": {
+          "$ref": "#/$defs/git"
+        },
+        "productVersion": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$"
+        },
+        "rcSequence": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "selectionFact": {
+          "$ref": "#/$defs/exactRef"
+        },
+        "productVersionManifestDigest": {
+          "$ref": "#/$defs/digest"
+        },
+        "releaseSelectionPolicyDigest": {
+          "$ref": "#/$defs/digest"
+        },
+        "creatorReadback": {
+          "$ref": "#/$defs/exactRef"
+        },
+        "rulesetReadback": {
+          "$ref": "#/$defs/exactRef"
+        },
+        "admittedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "admissionIntent": {
+          "$ref": "#/$defs/exactRef"
+        },
+        "mutationOutcome": {
+          "$ref": "#/$defs/exactRef"
+        }
+      }
+    },
+    "stableAdmission": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema",
+        "admissionId",
+        "decision",
+        "tagKind",
+        "tagName",
+        "tagObjectOid",
+        "peeledCommit",
+        "sourceTree",
+        "productVersion",
+        "selectedRcAdmission",
+        "selectedRcTagName",
+        "selectedRcTagObjectOid",
+        "qualificationFact",
+        "qualificationId",
+        "candidateMaterialManifest",
+        "candidateMaterialId",
+        "candidateIdentity",
+        "artifactBuildNumber",
+        "artifacts",
+        "productVersionManifestDigest",
+        "releaseSelectionPolicyDigest",
+        "productAuthorityFact",
+        "releaseAuthorityFact",
+        "admissionIntent",
+        "mutationOutcome",
+        "creatorReadback",
+        "rulesetReadback",
+        "admittedAt"
+      ],
+      "properties": {
+        "schema": {
+          "const": "quwoquan_ops.release_tag_admission_fact.v1"
+        },
+        "admissionId": {
+          "$ref": "#/$defs/digest"
+        },
+        "decision": {
+          "const": "admitted"
+        },
+        "tagKind": {
+          "const": "stable"
+        },
+        "tagName": {
+          "type": "string",
+          "pattern": "^v(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$"
+        },
+        "tagObjectOid": {
+          "$ref": "#/$defs/git"
+        },
+        "peeledCommit": {
+          "$ref": "#/$defs/git"
+        },
+        "sourceTree": {
+          "$ref": "#/$defs/git"
+        },
+        "productVersion": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$"
+        },
+        "selectedRcAdmission": {
+          "$ref": "#/$defs/exactRef"
+        },
+        "selectedRcTagName": {
+          "type": "string",
+          "pattern": "^v(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)-rc\\.([1-9][0-9]*)$"
+        },
+        "selectedRcTagObjectOid": {
+          "$ref": "#/$defs/git"
+        },
+        "qualificationFact": {
+          "$ref": "#/$defs/exactRef"
+        },
+        "qualificationId": {
+          "$ref": "#/$defs/digest"
+        },
+        "candidateMaterialManifest": {
+          "$ref": "#/$defs/exactRef"
+        },
+        "candidateMaterialId": {
+          "$ref": "#/$defs/digest"
+        },
+        "candidateIdentity": {
+          "$ref": "#/$defs/digest"
+        },
+        "artifactBuildNumber": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "artifacts": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/artifact"
+          }
+        },
+        "productVersionManifestDigest": {
+          "$ref": "#/$defs/digest"
+        },
+        "releaseSelectionPolicyDigest": {
+          "$ref": "#/$defs/digest"
+        },
+        "productAuthorityFact": {
+          "$ref": "#/$defs/exactRef"
+        },
+        "releaseAuthorityFact": {
+          "$ref": "#/$defs/exactRef"
+        },
+        "creatorReadback": {
+          "$ref": "#/$defs/exactRef"
+        },
+        "rulesetReadback": {
+          "$ref": "#/$defs/exactRef"
+        },
+        "admittedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "admissionIntent": {
+          "$ref": "#/$defs/exactRef"
+        },
+        "mutationOutcome": {
+          "$ref": "#/$defs/exactRef"
+        }
+      }
+    }
+  }
+}

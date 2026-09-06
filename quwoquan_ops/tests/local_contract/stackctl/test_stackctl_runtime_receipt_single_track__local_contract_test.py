@@ -107,6 +107,7 @@ def _gamma_candidate(
     )
     candidate = {
         "baselineId": startup["candidateDigest"],
+        "sourceRevision": "c" * 40,
         "packageDigest": "sha256:" + "7" * 64,
         "configurationDigest": startup["configurationDigest"],
         "runtimeConfigDigest": "sha256:" + "8" * 64,
@@ -130,29 +131,51 @@ def _gamma_candidate(
     return active, candidate
 
 
-def _gamma_case(
-    phase: str,
+TARGET_BINDING_DIGEST = "sha256:" + "9" * 64
+TARGET_BINDING = {"provider": {"identity": "gamma-first-party-https"}}
+
+
+def _gamma_result_bundle(
     startup: dict[str, object],
     candidate: dict[str, object],
+    *,
+    status: str = "passed",
 ) -> dict[str, object]:
     return {
-        "schema": verify_local_gamma_mirror.CASE_RESULT_SCHEMA,
-        "caseId": verify_local_gamma_mirror.CASE_IDS[phase],
-        "status": "passed",
-        "environment": "gamma",
-        "target": "gamma-local",
-        "baselineId": startup["candidateDigest"],
-        "attemptId": startup["attemptId"],
-        "packageDigest": candidate["packageDigest"],
-        "configurationDigest": startup["configurationDigest"],
-        "providerRuntimeDigest": startup["providerRuntimeDigest"],
-        "observabilityLogSinkDigest": startup["observabilityLogSinkDigest"],
-        "imageDigest": candidate["imageDigest"],
-        "executed": 1,
-        "skipped": 0,
-        "failed": 0,
-        "executedAt": "2026-08-05T00:00:02Z",
-        "specRefs": list(verify_local_gamma_mirror.CASE_SPEC_REFS),
+        "generatedAt": "2026-08-05T00:00:03Z",
+        "results": [
+            {
+                "objectId": "video-1",
+                "specRef": "specs/feature-tree/runtime/deliver-deploy-prod-pipeline/local-gamma-mirror/spec.md#gwt-003",
+                "caseId": "gamma-device-uat",
+                "producer": "app",
+                "layer": "user_acceptance",
+                "status": status,
+                "target": {"kind": "page", "id": "content.feed"},
+                "commitSha": candidate["sourceRevision"],
+                "contractGraphSourceHash": "a" * 64,
+                "deploymentTarget": "gamma-local",
+                "baselineId": startup["candidateDigest"],
+                "packageDigest": candidate["packageDigest"],
+                "configurationDigest": startup["configurationDigest"],
+                "candidateManifestSha256": "b" * 64,
+                "candidateDigest": startup["candidateDigest"],
+                "releaseDigest": "sha256:" + "c" * 64,
+                "releaseId": "release-gamma",
+                "targetUatBindingDigest": TARGET_BINDING_DIGEST,
+                "entrySurface": "feed",
+                "carrier": "video",
+                "environment": "gamma",
+                "platform": "android",
+                "deviceClass": "physical",
+                "provider": TARGET_BINDING["provider"]["identity"],
+                "startedAt": "2026-08-05T00:00:01Z",
+                "completedAt": "2026-08-05T00:00:02Z",
+                "runnerIdentity": "gamma-device-runner",
+                "artifactSha256": "d" * 64,
+                "artifactPath": "artifacts/gamma-device.json",
+            }
+        ],
     }
 
 
@@ -412,12 +435,15 @@ class StackctlRuntimeReceiptSingleTrackContractTest(unittest.TestCase):
             startup["configurationDigest"] = configuration_digest
             active, candidate = _gamma_candidate(root, startup)
             startup_path.write_text(json.dumps(startup), encoding="utf-8")
+            (root / "target-uat-binding.json").write_text(
+                "{}", encoding="utf-8"
+            )
             t3_path.write_text(
-                json.dumps(_gamma_case("release_consumer", startup, candidate)),
+                json.dumps({"status": "passed"}),
                 encoding="utf-8",
             )
             t4_path.write_text(
-                json.dumps(_gamma_case("device_uat", startup, candidate)),
+                json.dumps(_gamma_result_bundle(startup, candidate)),
                 encoding="utf-8",
             )
             argv = [
@@ -432,6 +458,8 @@ class StackctlRuntimeReceiptSingleTrackContractTest(unittest.TestCase):
                 str(t4_path),
                 "--configuration-digest",
                 configuration_digest,
+                "--target-uat-binding",
+                str(root / "target-uat-binding.json"),
             ]
             with (
                 mock.patch.object(sys, "argv", argv),
@@ -445,14 +473,25 @@ class StackctlRuntimeReceiptSingleTrackContractTest(unittest.TestCase):
                     "load_candidate_manifest",
                     return_value=candidate,
                 ),
+                mock.patch.object(
+                    verify_local_gamma_mirror,
+                    "read_target_uat_binding",
+                    return_value=TARGET_BINDING,
+                ),
+                mock.patch.object(
+                    verify_local_gamma_mirror,
+                    "target_uat_binding_digest",
+                    return_value=TARGET_BINDING_DIGEST,
+                ),
             ):
                 exit_code = verify_local_gamma_mirror.main()
 
             report = json.loads(report_path.read_text(encoding="utf-8"))
 
-        self.assertEqual(exit_code, 0)
-        self.assertEqual(report["status"], "passed")
-        self.assertEqual(report["startupAttempt"]["target"], "gamma-local")
+        self.assertEqual(exit_code, 0, report)
+        self.assertEqual(report["missing"], [])
+        self.assertEqual(report["nonPassed"], [])
+        self.assertGreater(report["coverage"]["observed"], 0)
         self.assertNotIn("stack", report)
 
     def test_gamma_verifier_rejects_provider_runtime_drift(self) -> None:
@@ -466,11 +505,17 @@ class StackctlRuntimeReceiptSingleTrackContractTest(unittest.TestCase):
             )
             startup_path = root / "startup.json"
             startup_path.write_text(json.dumps(startup), encoding="utf-8")
-            for phase, name in (("release_consumer", "release_consumer.json"), ("device_uat", "device_uat.json")):
-                (root / name).write_text(
-                    json.dumps(_gamma_case(phase, startup, candidate)),
-                    encoding="utf-8",
-                )
+            (root / "target-uat-binding.json").write_text(
+                "{}", encoding="utf-8"
+            )
+            (root / "release_consumer.json").write_text(
+                json.dumps({"status": "passed"}),
+                encoding="utf-8",
+            )
+            (root / "device_uat.json").write_text(
+                json.dumps(_gamma_result_bundle(startup, candidate)),
+                encoding="utf-8",
+            )
             argv = [
                 "verify_local_gamma_mirror.py",
                 "--report",
@@ -483,6 +528,8 @@ class StackctlRuntimeReceiptSingleTrackContractTest(unittest.TestCase):
                 str(root / "device_uat.json"),
                 "--configuration-digest",
                 str(startup["configurationDigest"]),
+                "--target-uat-binding",
+                str(root / "target-uat-binding.json"),
             ]
             with (
                 mock.patch.object(sys, "argv", argv),
@@ -496,13 +543,27 @@ class StackctlRuntimeReceiptSingleTrackContractTest(unittest.TestCase):
                     "load_candidate_manifest",
                     return_value=candidate,
                 ),
+                mock.patch.object(
+                    verify_local_gamma_mirror,
+                    "read_target_uat_binding",
+                    return_value=TARGET_BINDING,
+                ),
+                mock.patch.object(
+                    verify_local_gamma_mirror,
+                    "target_uat_binding_digest",
+                    return_value=TARGET_BINDING_DIGEST,
+                ),
             ):
                 exit_code = verify_local_gamma_mirror.main()
             report = json.loads((root / "report.json").read_text(encoding="utf-8"))
 
         self.assertEqual(exit_code, 2)
-        self.assertEqual(report["status"], "gate_block")
-        self.assertIn("Provider runtime differs", report["startupIssue"])
+        startup_missing = next(
+            item["missing"]
+            for item in report["missing"]
+            if item["label"] == "startup"
+        )
+        self.assertIn("Provider runtime differs", startup_missing)
 
     def test_gamma_verifier_rejects_bounded_startup_for_green(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_dir:
@@ -511,11 +572,17 @@ class StackctlRuntimeReceiptSingleTrackContractTest(unittest.TestCase):
             active, candidate = _gamma_candidate(root, startup)
             startup_path = root / "startup.json"
             startup_path.write_text(json.dumps(startup), encoding="utf-8")
-            for phase, name in (("release_consumer", "release_consumer.json"), ("device_uat", "device_uat.json")):
-                (root / name).write_text(
-                    json.dumps(_gamma_case(phase, startup, candidate)),
-                    encoding="utf-8",
-                )
+            (root / "target-uat-binding.json").write_text(
+                "{}", encoding="utf-8"
+            )
+            (root / "release_consumer.json").write_text(
+                json.dumps({"status": "passed"}),
+                encoding="utf-8",
+            )
+            (root / "device_uat.json").write_text(
+                json.dumps(_gamma_result_bundle(startup, candidate)),
+                encoding="utf-8",
+            )
             argv = [
                 "verify_local_gamma_mirror.py",
                 "--report",
@@ -528,6 +595,8 @@ class StackctlRuntimeReceiptSingleTrackContractTest(unittest.TestCase):
                 str(root / "device_uat.json"),
                 "--configuration-digest",
                 str(startup["configurationDigest"]),
+                "--target-uat-binding",
+                str(root / "target-uat-binding.json"),
             ]
             with (
                 mock.patch.object(sys, "argv", argv),
@@ -541,67 +610,75 @@ class StackctlRuntimeReceiptSingleTrackContractTest(unittest.TestCase):
                     "load_candidate_manifest",
                     return_value=candidate,
                 ),
+                mock.patch.object(
+                    verify_local_gamma_mirror,
+                    "read_target_uat_binding",
+                    return_value=TARGET_BINDING,
+                ),
+                mock.patch.object(
+                    verify_local_gamma_mirror,
+                    "target_uat_binding_digest",
+                    return_value=TARGET_BINDING_DIGEST,
+                ),
             ):
                 exit_code = verify_local_gamma_mirror.main()
             report = json.loads((root / "report.json").read_text(encoding="utf-8"))
 
         self.assertEqual(exit_code, 2)
-        self.assertEqual(report["status"], "gate_block")
-        self.assertIn("workload=full", report["startupIssue"])
+        startup_missing = next(
+            item["missing"]
+            for item in report["missing"]
+            if item["label"] == "startup"
+        )
+        self.assertIn("workload=full", startup_missing)
 
-    def test_gamma_case_result_requires_bound_non_skipped_execution(self) -> None:
+    def test_gamma_result_bundle_requires_exact_target_binding(self) -> None:
         startup = _canonical_running_attempt("gamma-local", "full")
         candidate = {
+            "sourceRevision": "c" * 40,
             "packageDigest": "sha256:" + "7" * 64,
             "imageDigest": "sha256:" + "8" * 64,
         }
         identity = {
-            field: str(value)
-            for field, value in _gamma_case("release_consumer", startup, candidate).items()
-            if field
-            in {
-                "environment",
-                "target",
-                "baselineId",
-                "attemptId",
-                "packageDigest",
-                "configurationDigest",
-                "providerRuntimeDigest",
-                "observabilityLogSinkDigest",
-                "imageDigest",
-            }
+            "sourceRevision": candidate["sourceRevision"],
+            "packageDigest": candidate["packageDigest"],
         }
-        baseline = _gamma_case("release_consumer", startup, candidate)
-        self.assertEqual(
-            verify_local_gamma_mirror.validate_gamma_case_result(
-                baseline,
-                phase="release_consumer",
-                identity=identity,
-            ),
+        baseline = _gamma_result_bundle(startup, candidate)
+        rows, issues = verify_local_gamma_mirror.validate_gamma_result_bundle(
             baseline,
+            identity=identity,
+            target_binding=TARGET_BINDING,
+            target_binding_digest=TARGET_BINDING_DIGEST,
         )
+        self.assertEqual(rows, baseline["results"])
+        self.assertEqual(issues, [])
 
         mutations = {
-            "baselineId": "sha256:" + "9" * 64,
-            "attemptId": "other-attempt",
+            "commitSha": "d" * 40,
             "packageDigest": "sha256:" + "9" * 64,
-            "configurationDigest": "sha256:" + "9" * 64,
-            "providerRuntimeDigest": "sha256:" + "9" * 64,
-            "observabilityLogSinkDigest": "sha256:" + "9" * 64,
-            "imageDigest": "sha256:" + "9" * 64,
-            "executed": 0,
-            "skipped": 1,
+            "targetUatBindingDigest": "sha256:" + "8" * 64,
+            "provider": "unbound-provider",
         }
         for field, value in mutations.items():
             with self.subTest(field=field):
-                forged = dict(baseline)
-                forged[field] = value
+                forged = _gamma_result_bundle(startup, candidate)
+                forged["results"][0][field] = value
                 with self.assertRaises(ValueError):
-                    verify_local_gamma_mirror.validate_gamma_case_result(
+                    verify_local_gamma_mirror.validate_gamma_result_bundle(
                         forged,
-                        phase="release_consumer",
                         identity=identity,
+                        target_binding=TARGET_BINDING,
+                        target_binding_digest=TARGET_BINDING_DIGEST,
                     )
+
+        failed = _gamma_result_bundle(startup, candidate, status="failed")
+        _rows, failed_issues = verify_local_gamma_mirror.validate_gamma_result_bundle(
+            failed,
+            identity=identity,
+            target_binding=TARGET_BINDING,
+            target_binding_digest=TARGET_BINDING_DIGEST,
+        )
+        self.assertEqual(len(failed_issues), 1)
 
     def test_gamma_dry_run_is_contract_only_gate_block(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_dir:
@@ -612,6 +689,8 @@ class StackctlRuntimeReceiptSingleTrackContractTest(unittest.TestCase):
                 str(report_path),
                 "--configuration-digest",
                 "sha256:" + "1" * 64,
+                "--target-uat-binding",
+                str(Path(temporary_dir) / "unused-target-uat-binding.json"),
                 "--dry-run",
             ]
             with mock.patch.object(sys, "argv", argv):
@@ -619,11 +698,12 @@ class StackctlRuntimeReceiptSingleTrackContractTest(unittest.TestCase):
             report = json.loads(report_path.read_text(encoding="utf-8"))
 
         self.assertEqual(exit_code, 2)
-        self.assertEqual(report["status"], "gate_block")
-        self.assertTrue(report["contractOnly"])
-        self.assertNotIn(
-            "passed",
-            {section["status"] for section in report["tests"].values()},
+        self.assertTrue(report["dryRun"])
+        self.assertFalse(report["promotionAuthority"])
+        self.assertEqual(report["coverage"]["observed"], 0)
+        self.assertEqual(
+            report["missing"],
+            [{"label": "device_uat", "missing": "dry-run has no raw results"}],
         )
 
     def test_gamma_runtime_sources_contain_no_retired_receipt_identity(self) -> None:

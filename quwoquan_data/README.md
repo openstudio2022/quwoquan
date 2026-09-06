@@ -50,14 +50,14 @@ python3 quwoquan_data/scripts/cli.py task acquire-images --help
 python3 quwoquan_data/scripts/cli.py task acquire-videos --help
 ```
 
-通过独立 review 的对象在 `publish` 阶段逐个提交；每个 approved object package 单独执行 create-once canonical transaction，不做 execution 级批量发布。`release` 只消费 AI 显式给出的 exact cohort，生成环境无关的 immutable release；不得隐式选择“全部可发布对象”。`ship` 只消费该 release 的精确身份，显式执行目标环境 apply、import/readback、health 与环境 acceptance。
+通过独立 review 的对象在 `publish` 阶段逐个提交；每个 approved object package 单独执行 create-once canonical transaction，不做 execution 级批量发布。`release` 只消费 AI 显式给出的 exact cohort，生成环境无关的 immutable release；不得隐式选择“全部可发布对象”。`ship` 只消费该 release 的精确身份，显式执行目标环境 apply、import/readback、health 与所需 API consumer raw CaseResult；Data 不创建环境 acceptance。
 
 ```bash
 python3 quwoquan_data/scripts/cli.py release --help
 python3 quwoquan_data/scripts/cli.py ship --help
 ```
 
-`acceptanceProfile=m1_api_consumer` 保留环境生命周期、Service API consumer fresh facts 与同 identity 的环境 acceptance，不要求 App/设备证据。`acceptanceProfile=environment_promotion` 才额外要求对应 App UAT 与 target binding。Service API integration 和环境 acceptance 是交付证据，不是内容编排入口。
+`m1_api_consumer` 仅可作为内容 execution 选择 Alpha Service/API consumer fresh raw CaseResult 的 intent，不是 `EnvironmentAcceptanceFact` profile、字段或 writer。Data 交付证据止于 ship apply/import/readback/health 与 raw CaseResult；若下游需要 EAF，必须把同一 exact integration candidate request 交给 Environment Ops scheduler，由其以 canonical `smoke|integration|release` profile 和完整 v2 named closure 签发。Prod 接受 `ReleaseTagAdmissionFact -> ProdActivationAdmissionFact -> hosted rollout/readback facts`，不使用 EAF。
 
 ## 可复用输入与输出边界
 

@@ -2,8 +2,6 @@
 from __future__ import annotations
 
 import argparse
-import hashlib
-import json
 import os
 import subprocess
 import sys
@@ -20,14 +18,21 @@ if str(ROOT) not in sys.path:
 POLICY_PATH = ROOT / "quwoquan_ops/policies/branch_policy.yaml"
 POLICY_INVALID_RECOVERY = "repair_canonical_branch_policy"
 AUTHORITY_UNAVAILABLE_RECOVERY = "restore_git_authority_then_retry"
-ACTIVATION_EVIDENCE_SCHEMA_VERSION = 1
+SYSTEM_BACKSYNC_WORKFLOW = ROOT / ".github/workflows/system-backsync.yml"
 SYSTEM_BACKSYNC_WORKFLOW_REF_SUFFIX = (
     "/.github/workflows/system-backsync.yml@refs/heads/main"
 )
+SYSTEM_BACKSYNC_WORKFLOW_INPUTS = frozenset(
+    {
+        "expected_dev_before",
+        "source_sha",
+        "main_source_seal_ref",
+        "main_source_seal_digest",
+    }
+)
+
 
 from quwoquan_ops.gate.git_branch_policy.policy import (
-    ACTIVATION_STATES,
-    ACTIVATION_TRANSITION_COMMAND,
     BRANCH_POLICY_FIELDS,
     FAILURE_CODE_KEYS,
     FAILURE_CODE_PATTERN,
@@ -37,8 +42,9 @@ from quwoquan_ops.gate.git_branch_policy.policy import (
     BranchDecision,
     BranchPolicy,
     BranchTransition,
-    IntegrationBranchActivation,
+    IntegrationBranchUpdates,
     PersistentLaneAdmission,
+    ProductionSelector,
     PullRequestEdge,
     RequiredPromotionCheck,
     SystemBacksync,
@@ -241,86 +247,140 @@ def _git_is_ancestor(ancestor: str, descendant: str) -> bool:
     raise OSError(_safe_error_detail(RuntimeError(completed.stderr)))
 
 
+def system_backsync_workflow_issues(
+    path: Path = SYSTEM_BACKSYNC_WORKFLOW,
+) -> list[str]:
+    if not path.is_file() or path.is_symlink():
+        return [
+            "managed system backsync workflow is missing; restore "
+            ".github/workflows/system-backsync.yml"
+        ]
+    try:
+        text = path.read_text(encoding="utf-8")
+        raw = yaml.safe_load(text)
+    except (OSError, UnicodeError, yaml.YAMLError) as error:
+        return [f"managed system backsync workflow is invalid: {_safe_error_detail(error)}"]
+    if not isinstance(raw, Mapping):
+        return ["managed system backsync workflow root must be a mapping"]
+    triggers = raw.get(True)
+    jobs = raw.get("jobs")
+    permissions = raw.get("permissions")
+    concurrency = raw.get("concurrency")
+    if not isinstance(triggers, Mapping) or set(triggers) != {"workflow_call"}:
+        return ["managed system backsync workflow must expose only workflow_call"]
+    called = triggers.get("workflow_call")
+    inputs = called.get("inputs") if isinstance(called, Mapping) else None
+    if not isinstance(inputs, Mapping) or set(inputs) != SYSTEM_BACKSYNC_WORKFLOW_INPUTS:
+        return ["managed system backsync workflow inputs are not canonical"]
+    if any(
+        not isinstance(descriptor, Mapping)
+        or descriptor.get("required") is not True
+        or descriptor.get("type") != "string"
+        for descriptor in inputs.values()
+    ):
+        return ["managed system backsync workflow inputs must all be required strings"]
+    if permissions != {"contents": "read"}:
+        return ["managed system backsync top-level permissions must be contents: read"]
+    if concurrency != {
+        "group": "${{ github.repository }}-managed-system-backsync",
+        "cancel-in-progress": False,
+    }:
+        return ["managed system backsync concurrency must serialize all attempts"]
+    if not isinstance(jobs, Mapping) or set(jobs) != {"backsync"}:
+        return ["managed system backsync workflow must contain exactly one backsync job"]
+    job = jobs.get("backsync")
+    expected_env = {
+        "QWQ_MANAGED_SYSTEM_BACKSYNC": "system-fast-forward-cas-v1",
+        "QWQ_SYSTEM_BACKSYNC_WORKFLOW_REF": "${{ job.workflow_ref }}",
+        "QWQ_PROMOTION_RECORDER_APP_SLUG": "${{ vars.QWQ_PROMOTION_RECORDER_APP_SLUG }}",
+        "QWQ_PROMOTION_RECORDER_APP_ID": "${{ vars.QWQ_PROMOTION_RECORDER_APP_ID }}",
+        "GITHUB_EVENT_BEFORE": "${{ github.event.before }}",
+        "GITHUB_EVENT_AFTER": "${{ github.event.after }}",
+    }
+    if (
+        not isinstance(job, Mapping)
+        or job.get("runs-on") != "ubuntu-latest"
+        or job.get("timeout-minutes") != 5
+        or job.get("environment") != "system-backsync"
+        or job.get("permissions") != {
+            "actions": "read", "checks": "read", "contents": "read", "packages": "read",
+        }
+        or job.get("env") != expected_env
+    ):
+        return ["managed system backsync job identity, timeout, environment, or permissions drifted"]
+    required_tokens = (
+        "persist-credentials: false",
+        "SYSTEM_BACKSYNC_DEPLOY_KEY",
+        "job.workflow_ref",
+        "QWQ_PROMOTION_RECORDER_APP_SLUG",
+        "QWQ_PROMOTION_RECORDER_APP_ID",
+        "/commits/${SOURCE_SHA}/check-runs",
+        "validate_hosted_promotion_handoff",
+        "/actions/runs/${WORKFLOW_RUN_ID}",
+        "check_run=check",
+        "workflow_run=run",
+        "GITHUB_EVENT_BEFORE",
+        "GITHUB_EVENT_AFTER",
+        "--expected-dev-before",
+        "--source-sha",
+        "--main-source-seal-ref",
+        "--main-source-seal-digest",
+        "--promotion-admission-path",
+        "--hosted-handoff-path",
+        "promotionAdmissionOciRef",
+        "quwoquan_ops/ci/system_backsync.py",
+        "OPS.BRANCH.AUTHORITY_UNAVAILABLE",
+    )
+    missing = [token for token in required_tokens if token not in text]
+    forbidden = [
+        token
+        for token in (
+            "workflow_dispatch:", "workflow_run:", "push:", "schedule:",
+            ":latest", "latestQualified", "released_fact", "released-fact",
+            "soak_fact", "soak-fact", "release-ledger", "PROD_SERVICE_SSH_KEY",
+            "git merge", "git push --force ", "git push -f ",
+            "/statuses?", "statusId", "statusNodeId", '"creator"',
+            "QWQ_PROMOTION_RECORDER_LOGIN", "QWQ_PROMOTION_RECORDER_USER_ID",
+        )
+        if token in text
+    ]
+    if missing or forbidden:
+        return [
+            "managed system backsync source authority/CAS controls drifted; "
+            f"missing={missing}, forbidden={forbidden}"
+        ]
+    return []
+
+
 def _is_managed_system_backsync_environment(
     environment: Mapping[str, str],
 ) -> bool:
-    workflow_ref = environment.get("GITHUB_WORKFLOW_REF", "")
+    caller_ref = environment.get("GITHUB_WORKFLOW_REF", "")
+    workflow_ref = environment.get("QWQ_SYSTEM_BACKSYNC_WORKFLOW_REF", "")
+    repository = environment.get("GITHUB_REPOSITORY", "")
+    managed_actor = (
+        environment.get("GITHUB_ACTOR") == "github-actions[bot]"
+        or environment.get("QWQ_MANAGED_SYSTEM_BACKSYNC")
+        == "system-fast-forward-cas-v1"
+    )
     return (
         environment.get("GITHUB_ACTIONS") == "true"
-        and environment.get("GITHUB_EVENT_NAME") == "workflow_dispatch"
+        and environment.get("GITHUB_EVENT_NAME") == "push"
         and environment.get("GITHUB_REF_TYPE") == "branch"
         and environment.get("GITHUB_REF_NAME") == "main"
-        and environment.get("GITHUB_ACTOR") == "github-actions[bot]"
-        and workflow_ref.endswith(SYSTEM_BACKSYNC_WORKFLOW_REF_SUFFIX)
-    )
-
-
-def activation_readback(policy: BranchPolicy) -> dict[str, object]:
-    activation = policy.integration_branch_activation
-    return {
-        "schema_version": ACTIVATION_EVIDENCE_SCHEMA_VERSION,
-        "kind": activation.evidence_kind,
-        "integration_branch": policy.integration_branch,
-        "state": activation.state,
-        "transition_command": activation.transition_command,
-        "tracked_policy_mutated": False,
-    }
-
-
-def _activation_evidence_path(path_text: str) -> Path:
-    path = Path(path_text)
-    candidate = (ROOT / path).resolve() if not path.is_absolute() else path.resolve()
-    output_root = (ROOT / ".qwq_output").resolve()
-    if candidate == output_root or output_root not in candidate.parents:
-        raise ValueError("activation evidence path must be below .qwq_output")
-    return candidate
-
-
-def write_activation_transition_evidence(
-    *, policy: BranchPolicy, evidence_path: str
-) -> dict[str, object]:
-    activation = policy.integration_branch_activation
-    if activation.state != "bootstrap":
-        raise ValueError(
-            "integration branch activation transition requires current state 'bootstrap'"
+        and environment.get("GITHUB_REF") == "refs/heads/main"
+        and managed_actor
+        and caller_ref.endswith(
+            "/.github/workflows/delivery-gate.yml@refs/heads/main"
         )
-    path = _activation_evidence_path(evidence_path)
-    payload = {
-        "schema_version": ACTIVATION_EVIDENCE_SCHEMA_VERSION,
-        "kind": activation.evidence_kind,
-        "integration_branch": policy.integration_branch,
-        "from_state": "bootstrap",
-        "proposed_state": "active",
-        "policy_sha256": "sha256:" + hashlib.sha256(POLICY_PATH.read_bytes()).hexdigest(),
-        "tracked_policy_mutated": False,
-        "proposal": {
-            "path": str(POLICY_PATH.relative_to(ROOT)),
-            "field": "integration_branch_activation.state",
-            "current": "bootstrap",
-            "replacement": "active",
-        },
-        "instructions": [
-            f"review evidence at {path.relative_to(ROOT)}",
-            "change integration_branch_activation.state from bootstrap to active",
-            "commit the tracked policy change through the normal human-controlled workflow",
-            "run --activation-readback after the active policy is checked out",
-        ],
-    }
-    encoded = (
-        json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
-    ).encode("utf-8")
-    path.parent.mkdir(parents=True, exist_ok=True)
-    try:
-        descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-    except FileExistsError as error:
-        raise ValueError("activation evidence already exists; create-once transition refused") from error
-    with os.fdopen(descriptor, "wb") as handle:
-        handle.write(encoded)
-    return payload
-
-
-def _emit_json(payload: Mapping[str, object]) -> None:
-    print(json.dumps(payload, ensure_ascii=False, sort_keys=True))
+        and workflow_ref.startswith(
+            f"{repository}/.github/workflows/system-backsync.yml@"
+        )
+        and workflow_ref.rsplit("@", 1)[1] in {
+            "refs/heads/main", environment.get("GITHUB_SHA", "")
+        }
+        and not system_backsync_workflow_issues()
+    )
 
 
 def pre_push_issues(
@@ -367,6 +427,13 @@ def pre_push_issues(
 
     for local_ref, local_sha, remote_ref, remote_sha in parsed_updates:
         if not remote_ref.startswith("refs/heads/"):
+            issues.append(
+                _issue(
+                    policy,
+                    "ref_not_allowed",
+                    f"push to undeclared remote ref '{remote_ref}' is blocked",
+                )
+            )
             continue
         remote_branch = remote_ref.removeprefix("refs/heads/")
         if local_sha == ZERO_SHA:
@@ -402,26 +469,11 @@ def pre_push_issues(
                 )
             continue
         if remote_branch == policy.integration_branch:
-            activation = policy.integration_branch_activation
-            matching_integration_source = (
-                current_branch == policy.integration_branch
-                and local_ref == f"refs/heads/{policy.integration_branch}"
-            )
             matching_backsync_source = (
                 current_branch == policy.release_branch
                 and local_ref == f"refs/heads/{policy.release_branch}"
             )
-            if activation.state == "bootstrap":
-                if not matching_integration_source or remote_sha != ZERO_SHA:
-                    issues.append(
-                        _issue(
-                            policy,
-                            "direct_push_not_allowed",
-                            f"bootstrap update of '{remote_branch}' is create-only from the "
-                            f"matching local {policy.integration_branch} branch",
-                        )
-                    )
-            elif matching_backsync_source and _is_managed_system_backsync_environment(
+            if matching_backsync_source and _is_managed_system_backsync_environment(
                 environment
             ):
                 decision = evaluate_transition(
@@ -448,13 +500,43 @@ def pre_push_issues(
                             f"managed system backsync to '{remote_branch}' was rejected",
                         )
                     )
+            elif (
+                current_branch == policy.integration_branch
+                and local_ref == f"refs/heads/{policy.integration_branch}"
+            ):
+                decision = evaluate_transition(
+                    policy=policy,
+                    transition=BranchTransition(
+                        event="direct_push",
+                        actor_kind="integration_worktree",
+                        repository=environment.get("GITHUB_REPOSITORY", "local"),
+                        head=policy.integration_branch,
+                        base=policy.integration_branch,
+                        before_oid=remote_sha,
+                        after_oid=local_sha,
+                    ),
+                    is_ancestor=lambda ancestor, descendant: _git_is_ancestor(
+                        ancestor, descendant
+                    ),
+                )
+                if not decision.allowed:
+                    failure_key = _failure_key_for_code(policy, decision.reason_code)
+                    issues.append(
+                        _issue(
+                            policy,
+                            failure_key,
+                            f"integration worktree fast-forward update to '{remote_branch}' was rejected",
+                        )
+                    )
             else:
                 issues.append(
                     _issue(
                         policy,
                         "direct_push_not_allowed",
                         f"direct update of active integration branch '{remote_branch}' is blocked; "
-                        "use a lane pull request or managed system fast-forward backsync",
+                        "push only from its matching integration worktree branch, use the "
+                        "canonical trusted integration publisher, or use managed system "
+                        "fast-forward backsync",
                     )
                 )
             continue
@@ -499,7 +581,7 @@ def local_commit_issues(
                 f"{sorted(policy.allowed_local)}",
             )
         ]
-    if current_branch in {policy.integration_branch, policy.release_branch}:
+    if current_branch == policy.release_branch:
         return [
             _issue(
                 policy,
@@ -545,25 +627,9 @@ def main(argv: list[str] | None = None) -> int:
     mode.add_argument(
         "--local-commit",
         action="store_true",
-        help="reject local commits from read-only dev1.0/main worktrees",
-    )
-    mode.add_argument(
-        "--activation-readback",
-        action="store_true",
-        help="print the canonical integration branch activation state",
-    )
-    mode.add_argument(
-        "--activation-transition",
-        action="store_true",
-        help="create transition evidence and print the tracked-policy proposal",
-    )
-    parser.add_argument(
-        "--evidence-path",
-        help="create-once evidence path below .qwq_output for --activation-transition",
+        help="reject local commits outside writable lane/integration worktrees",
     )
     args = parser.parse_args(argv)
-    if bool(args.evidence_path) != bool(args.activation_transition):
-        parser.error("--evidence-path is required exactly with --activation-transition")
     try:
         policy = load_policy()
     except (OSError, UnicodeError, TypeError, ValueError, yaml.YAMLError) as error:
@@ -573,16 +639,6 @@ def main(argv: list[str] | None = None) -> int:
             recovery=POLICY_INVALID_RECOVERY,
         )
     try:
-        if args.activation_readback:
-            _emit_json(activation_readback(policy))
-            return 0
-        if args.activation_transition:
-            _emit_json(
-                write_activation_transition_evidence(
-                    policy=policy, evidence_path=args.evidence_path
-                )
-            )
-            return 0
         if args.pre_push:
             issues = pre_push_issues(
                 policy=policy,
@@ -597,6 +653,10 @@ def main(argv: list[str] | None = None) -> int:
             )
         else:
             issues = current_repo_issues(policy)
+            issues.extend(
+                _issue(policy, "policy_invalid", issue)
+                for issue in system_backsync_workflow_issues()
+            )
     except (OSError, UnicodeError, subprocess.SubprocessError) as error:
         return _emit_terminal_failure(
             code=policy.failure_code("authority_unavailable"),

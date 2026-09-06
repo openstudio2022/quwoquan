@@ -1,0 +1,230 @@
+# Canonical post-promotion source convergence. The caller must pass the exact
+# MainSourceSeal emitted for this main merge; no release or Prod fact is involved.
+name: 08. Managed System Backsync
+
+permissions:
+  contents: read
+
+on:
+  workflow_call:
+    inputs:
+      expected_dev_before:
+        description: Exact expected origin/dev1.0 OID before source convergence
+        required: true
+        type: string
+      source_sha:
+        description: Exact promoted dev1.0 source SHA bound by MainSourceSeal
+        required: true
+        type: string
+      main_source_seal_ref:
+        description: Exact immutable MainSourceSeal OCI @sha256 ref
+        required: true
+        type: string
+      main_source_seal_digest:
+        description: Exact OCI manifest digest suffix of MainSourceSeal ref
+        required: true
+        type: string
+
+concurrency:
+  group: ${{ github.repository }}-managed-system-backsync
+  cancel-in-progress: false
+
+jobs:
+  backsync:
+    name: Validate source seal and CAS dev1.0
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: system-backsync
+    permissions:
+      actions: read
+      checks: read
+      contents: read
+      packages: read
+    env:
+      QWQ_MANAGED_SYSTEM_BACKSYNC: system-fast-forward-cas-v1
+      QWQ_SYSTEM_BACKSYNC_WORKFLOW_REF: ${{ job.workflow_ref }}
+      QWQ_PROMOTION_RECORDER_APP_SLUG: ${{ vars.QWQ_PROMOTION_RECORDER_APP_SLUG }}
+      QWQ_PROMOTION_RECORDER_APP_ID: ${{ vars.QWQ_PROMOTION_RECORDER_APP_ID }}
+      GITHUB_EVENT_BEFORE: ${{ github.event.before }}
+      GITHUB_EVENT_AFTER: ${{ github.event.after }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          fetch-depth: 0
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: oras-project/setup-oras@1d808f7d7f6995cc68b7bf507bfe5c5446e1dc9d
+        with:
+          version: 1.3.3
+      - name: Materialize and validate exact source authority
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MAIN_SOURCE_SEAL_REF: ${{ inputs.main_source_seal_ref }}
+          MAIN_SOURCE_SEAL_DIGEST: ${{ inputs.main_source_seal_digest }}
+          SOURCE_SHA: ${{ inputs.source_sha }}
+        run: |
+          set -euo pipefail
+          HANDOFF_CONTEXT='quwoquan/promotion-admission-handoff/v1'
+          [[ "$QWQ_PROMOTION_RECORDER_APP_ID" =~ ^[1-9][0-9]*$ ]] \
+            && test -n "$QWQ_PROMOTION_RECORDER_APP_SLUG" || {
+            echo '::error::OPS.BRANCH.AUTHORITY_UNAVAILABLE: trusted promotion recorder App identity is unavailable'
+            exit 2
+          }
+          test "${MAIN_SOURCE_SEAL_REF##*@}" = "$MAIN_SOURCE_SEAL_DIGEST" || {
+            echo '::error::OPS.BRANCH.AUTHORITY_UNAVAILABLE: MainSourceSeal ref/digest differ'
+            exit 2
+          }
+          printf '%s' "$GH_TOKEN" | oras login ghcr.io --username "${{ github.actor }}" --password-stdin
+          trap 'oras logout ghcr.io >/dev/null 2>&1 || true' EXIT
+          mkdir -p "$RUNNER_TEMP/system-backsync/promotion-admission" \
+            "$RUNNER_TEMP/system-backsync/promotion-handoff"
+          python3 -B quwoquan_ops/ci/promotion_evidence.py materialize-oci \
+            --ref "$MAIN_SOURCE_SEAL_REF" \
+            --output-file "$RUNNER_TEMP/system-backsync/main-source-seal.json"
+          PROMOTION_ADMISSION_REF="$(python3 - "$RUNNER_TEMP/system-backsync/main-source-seal.json" <<'PY'
+          import json
+          import re
+          import sys
+          value = json.load(open(sys.argv[1], encoding="utf-8")).get("promotionAdmissionOciRef")
+          if not isinstance(value, str) or re.fullmatch(r"ghcr\.io/[a-z0-9._/-]+@sha256:[0-9a-f]{64}", value) is None:
+              raise SystemExit("OPS.BRANCH.AUTHORITY_UNAVAILABLE: seal lacks exact PromotionAdmissionReceipt OCI ref")
+          print(value)
+          PY
+          )"
+          python3 -B quwoquan_ops/ci/promotion_evidence.py materialize-oci \
+            --ref "$PROMOTION_ADMISSION_REF" \
+            --output-file "$RUNNER_TEMP/system-backsync/promotion-admission/fact.json"
+
+          gh api --method GET --paginate --slurp \
+            "/repos/${GITHUB_REPOSITORY}/commits/${SOURCE_SHA}/check-runs" \
+            -f check_name="$HANDOFF_CONTEXT" -f filter=all -f per_page=100 \
+            --jq '[.[].check_runs[]]' \
+            > "$RUNNER_TEMP/system-backsync/promotion-handoff/check-runs.json"
+          python3 - "$RUNNER_TEMP/system-backsync/promotion-handoff/check-runs.json" \
+            "$RUNNER_TEMP/system-backsync/promotion-handoff/check-run.json" \
+            "$RUNNER_TEMP/system-backsync/promotion-handoff/workflow-run-id" \
+            "$GITHUB_REPOSITORY" <<'PY'
+          import json
+          import re
+          import sys
+          from pathlib import Path
+
+          rows = json.loads(Path(sys.argv[1]).read_bytes())
+          matches = [
+              row for row in rows
+              if row.get("name") == "quwoquan/promotion-admission-handoff/v1"
+          ] if isinstance(rows, list) else []
+          if len(matches) != 1:
+              raise SystemExit("OPS.BRANCH.AUTHORITY_UNAVAILABLE: exact promotion Check Run is missing or duplicated")
+          check = matches[0]
+          details = check.get("details_url")
+          expected = rf"https://github\.com/{re.escape(sys.argv[4])}/actions/runs/([1-9][0-9]*)/attempts/[1-9][0-9]*"
+          matched = re.fullmatch(expected, details) if isinstance(details, str) else None
+          if matched is None:
+              raise SystemExit("OPS.BRANCH.AUTHORITY_UNAVAILABLE: Check Run workflow URL is invalid")
+          Path(sys.argv[2]).write_text(
+              json.dumps(check, sort_keys=True, separators=(",", ":")) + "\n",
+              encoding="utf-8",
+          )
+          Path(sys.argv[3]).write_text(matched.group(1) + "\n", encoding="utf-8")
+          PY
+          WORKFLOW_RUN_ID="$(cat "$RUNNER_TEMP/system-backsync/promotion-handoff/workflow-run-id")"
+          gh api "/repos/${GITHUB_REPOSITORY}/actions/runs/${WORKFLOW_RUN_ID}" \
+            > "$RUNNER_TEMP/system-backsync/promotion-handoff/workflow-run.json"
+          python3 -B - "$RUNNER_TEMP/system-backsync/promotion-handoff/check-run.json" \
+            "$RUNNER_TEMP/system-backsync/promotion-handoff/workflow-run.json" \
+            "$RUNNER_TEMP/system-backsync/promotion-admission/fact.json" \
+            "$RUNNER_TEMP/system-backsync/main-source-seal.json" \
+            "$RUNNER_TEMP/system-backsync/promotion-handoff/record.json" \
+            "$GITHUB_REPOSITORY" "$SOURCE_SHA" \
+            "$QWQ_PROMOTION_RECORDER_APP_SLUG" "$QWQ_PROMOTION_RECORDER_APP_ID" \
+            > "$RUNNER_TEMP/system-backsync/promotion-handoff/validation-result.json" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          from quwoquan_ops.ci.promotion_evidence import (
+              HANDOFF_CONTEXT,
+              _write_once,
+              validate_hosted_promotion_handoff,
+          )
+
+          check = json.loads(Path(sys.argv[1]).read_bytes())
+          run = json.loads(Path(sys.argv[2]).read_bytes())
+          admission = json.loads(Path(sys.argv[3]).read_bytes())
+          seal = json.loads(Path(sys.argv[4]).read_bytes())
+          pull_requests = run.get("pull_requests")
+          pull_numbers = [
+              item.get("number") for item in pull_requests
+              if isinstance(item, dict)
+              and isinstance(item.get("number"), int)
+              and not isinstance(item.get("number"), bool)
+              and item["number"] > 0
+          ] if isinstance(pull_requests, list) else []
+          if len(pull_numbers) != 1:
+              raise SystemExit("OPS.BRANCH.AUTHORITY_UNAVAILABLE: workflow run does not bind one promotion PR")
+          try:
+              hosted = validate_hosted_promotion_handoff(
+                  check_run=check,
+                  workflow_run=run,
+                  repository=sys.argv[6],
+                  pull_request_number=pull_numbers[0],
+                  head_sha=sys.argv[7],
+                  base_sha=admission["baseSha"],
+                  synthetic_merge_tree=admission["syntheticMergeTree"],
+                  expected_context=HANDOFF_CONTEXT,
+                  expected_app_slug=sys.argv[8],
+                  expected_app_id=int(sys.argv[9]),
+                  expected_workflow_repository=sys.argv[6],
+                  verified_at=seal["mainReadbackAt"],
+              )
+              output = _write_once(Path(sys.argv[5]), hosted)
+          except (KeyError, TypeError, ValueError) as error:
+              raise SystemExit(f"OPS.BRANCH.AUTHORITY_UNAVAILABLE: canonical hosted handoff validation failed: {error}")
+          print(json.dumps({
+              "path": str(output),
+              "exactRef": hosted["promotionAdmissionRef"],
+              "admissionBytesDigest": hosted["admissionBytesDigest"],
+          }, sort_keys=True))
+          PY
+      - name: Validate authority and perform nonforce CAS
+        env:
+          EXPECTED_DEV_BEFORE: ${{ inputs.expected_dev_before }}
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          MAIN_SOURCE_SEAL_REF: ${{ inputs.main_source_seal_ref }}
+          MAIN_SOURCE_SEAL_DIGEST: ${{ inputs.main_source_seal_digest }}
+          SYSTEM_BACKSYNC_DEPLOY_KEY: ${{ secrets.SYSTEM_BACKSYNC_DEPLOY_KEY }}
+        run: |
+          set -euo pipefail
+          [[ "$SYSTEM_BACKSYNC_DEPLOY_KEY" == *"PRIVATE KEY"* ]] || {
+            echo '::error::OPS.BRANCH.AUTHORITY_UNAVAILABLE: dedicated system backsync key is unavailable'
+            exit 2
+          }
+          KEY_FILE="$RUNNER_TEMP/system-backsync-deploy-key"
+          (umask 077 && printf '%s\n' "$SYSTEM_BACKSYNC_DEPLOY_KEY" > "$KEY_FILE")
+          export GIT_SSH_COMMAND="ssh -i $KEY_FILE -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes"
+          SSH_USER=git
+          SSH_HOST=github.com
+          git remote set-url origin "ssh://${SSH_USER}@${SSH_HOST}/${GITHUB_REPOSITORY}.git"
+          EVIDENCE="$RUNNER_TEMP/system-backsync/backsync-fact.json"
+          python3 -B quwoquan_ops/ci/system_backsync.py \
+            --remote origin \
+            --expected-dev-before "$EXPECTED_DEV_BEFORE" \
+            --source-sha "$SOURCE_SHA" \
+            --github-repository "${{ github.repository }}" \
+            --main-source-seal-path "$RUNNER_TEMP/system-backsync/main-source-seal.json" \
+            --main-source-seal-ref "$MAIN_SOURCE_SEAL_REF" \
+            --main-source-seal-digest "$MAIN_SOURCE_SEAL_DIGEST" \
+            --promotion-admission-path "$RUNNER_TEMP/system-backsync/promotion-admission/fact.json" \
+            --hosted-handoff-path "$RUNNER_TEMP/system-backsync/promotion-handoff/record.json" \
+            --evidence-path "$EVIDENCE" \
+            --recorded-at "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          python3 - "$EVIDENCE" >> "$GITHUB_STEP_SUMMARY" <<'PY'
+          import json
+          import sys
+          fact = json.load(open(sys.argv[1], encoding="utf-8"))
+          print("### Managed source convergence")
+          print(f"- terminal: `{fact['terminal']}`")
+          print(f"- dev1.0: `{fact['observedBeforeOid']}` -> `{fact['observedAfterOid']}`")
+          print(f"- sealed main: `{fact['requestedAfterOid']}`")
+          PY

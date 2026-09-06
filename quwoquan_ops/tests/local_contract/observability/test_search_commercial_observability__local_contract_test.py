@@ -87,28 +87,13 @@ class SearchCommercialObservabilityContractTest(unittest.TestCase):
         self.assertIn("effectiveActionRequestCount / nonEmptyResultCount", rendered)
         self.assertIn("firstActionableHistogram", rendered)
 
-    def test_delivery_and_pre_release_gates_keep_search_smoke_explicit(self) -> None:
+    def test_search_smoke_is_left_of_promotion(self) -> None:
         delivery = (ROOT / ".github/workflows/delivery-gate.yml").read_text(
             encoding="utf-8"
         )
-        self.assertIn("search_contract_smoke:", delivery)
-        self.assertIn(
-            "go test ./services/search-service/tests/api_integration/search/search_index_view -count=1",
-            delivery,
-        )
-        self.assertIn(
-            'expect_success_or_skipped "search_contract_smoke"',
-            delivery,
-        )
-
-        pre_release = (ROOT / ".github/workflows/pre-release-gate.yml").read_text(
-            encoding="utf-8"
-        )
-        self.assertIn("Pre-Release — PR Light Governance", pre_release)
-        self.assertIn("search_runtime_smoke:", pre_release)
-        self.assertIn("--only-check global_search", pre_release)
-        self.assertIn("requires search_base_url", pre_release)
-        self.assertIn('if [[ "$PROFILE" != pr_light ]]; then test "$SEARCH_RESULT" = success; fi', pre_release)
+        self.assertNotIn("search_contract_smoke:", delivery)
+        self.assertNotIn("search_runtime_smoke:", delivery)
+        self.assertFalse((ROOT / ".github/workflows/pre-release-gate.yml").exists())
 
 
 if __name__ == "__main__":

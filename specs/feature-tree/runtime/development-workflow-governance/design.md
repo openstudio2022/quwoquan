@@ -167,13 +167,13 @@
 
 <a id="dec-011"></a>
 ### DEC-011 Local CI 只调度 canonical checks 并输出可删除 readiness 投影
-- 决策：Local CI 的 planner/runner 只根据 changed paths、owner manifest 与 canonical profile 调度仓库既有 checks；queue、cache、receipt 与 inspect 输出均是绑定 EvidenceFingerprint 的可删除投影，不登记 check 真相、完成状态或 release 状态。当前无宿主自动 edit readiness 接线，queue 在真实 producer/consumer SLO 闭合前按版本化 contract 仅作 advisory；Git hooks 保留 staged/branch boundary，不消费 readiness receipt，也不自行复制全面测试编排。
+- 决策：Local CI 的 planner/runner 只根据 changed paths、owner manifest 与 canonical profile 调度仓库既有 checks；queue、cache、receipt 与 inspect 输出均是绑定 EvidenceFingerprint 的可删除投影，不登记 check 真相、完成状态或 release 状态。当前无宿主自动 edit readiness 接线，queue 在真实 producer/consumer SLO 闭合前按版本化 contract 仅作 advisory；Git hooks 保留 staged/branch boundary，不消费 readiness receipt，也不自行复制全面测试编排。pre-push 对唯一 integration 工作区只允许匹配 `dev1.0 -> dev1.0` 的普通认证 non-force fast-forward，并用 update line before/after OID调用Git ancestry authority；缺OID/authority、非快进、force/delete、来源不匹配、lane→dev与main direct push均fail closed。该push不签发`integrationEligibility`、Alpha/Beta/Gamma、`IntegrationQualificationFact`、promotion、release或Prod authority。
 - 决策：公开 `verify-local-readiness` 使用受管 pytest runner 执行 focused local contracts，再只读 inspect 当前 readiness；`gate_repo.sh` 只调用该 canonical target 一次。
 - 适用工程根：`quwoquan_ops/policies/local_readiness_contract.yaml`、`quwoquan_ops/cli/local_readiness.py`、`quwoquan_ops/ci/local_readiness_planner.py`、`quwoquan_ops/hooks/local_readiness_after_edit.py`、`quwoquan_ops/gate/commit_gate.sh`、`quwoquan_ops/tests/local_contract/ci/test_local_readiness__core__local_contract_test.py`
 - L1 归属：Local CI 工程根由 runtime L1 `Agent` 根认领，本 DEC 将其唯一收窄到 `local-continuous-integration`；`quwoquan_ops` 项目级 App 根不拥有这些精确路径。
 - 理由：调度器复制 check 清单或维护中央 readiness ledger 会制造第二 CI 事实源；精确输入投影让本地反馈可复用且不越权。
 - 被否决方案：不建立常驻 CI daemon、中央 readiness ledger、独立 check registry，也不由 pre-commit 自动运行全面测试。
-- 约束与影响：本地 `scope_ready`/`release_ready` 只证明绑定的源码与测试范围，不声称环境、设备、UAT 或发布就绪。
+- 约束与影响：本地回执采用 `sourceReadiness`、`environmentReadiness`、`deviceReadiness`、`integrationEligibility`、`promotionEligibility` 五维闭集；本地执行只生产 `sourceReadiness`，另外四维显式为 `not_evaluated`，不得跨维推导。
 - 关联要求：`local-continuous-integration/REQ-001` 至 `REQ-003`
 - 影响 Story：[`local-continuous-integration`](./local-continuous-integration/spec.md)（本地就绪调度与回执）
 - 关联验收：`local-continuous-integration/GWT-001` 至 `local-continuous-integration/GWT-003`
@@ -190,6 +190,18 @@
 - 关联要求：`governance-pipeline-observe-only/REQ-001` 至 `REQ-003`
 - 影响 Story：[`governance-pipeline-observe-only`](./governance-pipeline-observe-only/spec.md)（observe-only 治理准入）
 - 关联验收：`governance-pipeline-observe-only/GWT-001` 至 `governance-pipeline-observe-only/GWT-003`
+
+<a id="dec-014"></a>
+### DEC-014 共享worktree采用exact path claim、私有index与commit-object隔离
+- 决策：lane与integration writer共用`ScopedCandidateCoordinator`。claim以normalized repository-relative整文件path为最小粒度，祖先/后代、rename两端、delete和generated output按同一conflict set处理；append-only generation与expiry只支持显式reconcile，不以PID存活猜测所有权。
+- 决策：每个writer从expected parent创建独立`GIT_INDEX_FILE`，只stage claimed paths并用`write-tree/commit-tree`创建commit object；实现比较parent tree与candidate tree，scope外entry任一变化即阻断。HEAD、当前index和branch ref全程不变。
+- 决策：candidate request是canonical create-once事实，绑定claim、owner identity、parent/commit/tree、paths、ImpactPlan和source evidence。trusted publisher先验证Alpha/Beta及remote-before，再调用受限ref port执行一次CAS；本地Git adapter只用于local contract，不授予Hosted authority。
+- 决策：同worktree多个不重叠writer可并行；同一index/ref、ContractGraph accept/codegen、环境、设备、package与外部mutation仍走exclusive lease。CAS失败或parent漂移使candidate和环境事实失效，从新parent重建，不做自动merge、stash/reset或force。
+- 理由：Git worktree只有一个默认index与HEAD；只靠“注意不要覆盖”无法阻止混入foreign dirty。私有index和tree closure把并行边界变为可机械证明的commit identity，同时不需要为每个任务创建额外worktree。
+- 被否决方案：同文件行级claim、无claim乐观写后再拆diff、共享index部分暂存、临时分支、自动stash/restore、candidate post-hoc过滤或CAS失败后改写receipt。
+- 关联要求：`REQ-004`、`REQ-008`
+- 影响 Story：[`shared-worktree-scoped-candidate`](./shared-worktree-scoped-candidate/spec.md)
+- 关联验收：`SIT-003`、`SIT-006`
 
 ## 5. 失败与恢复
 
@@ -247,7 +259,7 @@
 | BOUNDARY:shell | shell 命令请求 | Cursor beforeShell hooks[D]；Codex PreToolUse[D]，均无真实宿主 smoke | 当前 Skill + command；hook 只看最小命令形状 | 识别 CLI-first/worktree 创建提示与用户授权 | 始终 allow/附上下文；命令自身权限与 Skill 规则独立 | 记录必要提示，不生成 PASS/admission | observe-only hook 非安全边界；命令内显式 gate 可 hard block | 无自动 Review | 人决定授权边界；Agent 不把 hook allow 当授权 | 改用 canonical CLI/命令，策略不可读时显式诊断 | 每条 shell 启进程、YAML/git 探测会放大延迟；未命中应最早短路 |
 | BOUNDARY:edit | Write/Edit/ApplyPatch 后事件 | Cursor after-edit[U]；Codex PostToolUse[U/not_wired]，真实 smoke[OPEN] | 当前 Skill/target；宿主不自动 enqueue，脚本仅显式/未来 producer | 写前由 Skill 校验 owner/ref/授权，POST 不能补 PRE | 编辑已发生；Agent 按需显式运行 readiness/enqueue | receipt/inspect 返回 advisory，不生成隐式 scope_ready | required checks/Review admission 在显式 readiness/准出阻断；queue backlog 不阻断 scope/release | 开发期零；显式/准出才 Review | Agent 保持 scope；Human 只处理范围/风险漂移 | 显式运行 `local_readiness.py enqueue|worker --once|inspect` 或 readiness | 无自动 consumer；exact-pending/foreign-pending 均 advisory，待真实宿主与消费 SLO 验证后再升级 |
 | BOUNDARY:commit | Git commit 边界（通常经 commit Skill） | Git hook[V(repo)]；Cursor/Codex 只负责发起命令 | commit Skill + staged path identity；不加载完整 Review | 精确 staging、secret/PII/generated/cache/branch 检查 | pre-commit staged boundary；成功后原子 commit | post-commit 仅轻量 mark-due/fail-open；回读 SHA | pre-commit 是本地 hard boundary，但不消费 Review/readiness/本矩阵 gate | 零；lane PR 再审 | 明确用户提交意图；Agent 不混入他会话字节 | 修复 staged boundary 后重试，不 clean/reset | 秒级目标；不得运行全仓 context gate、全量 inventory 或普通 commit Review |
-| BOUNDARY:push | lane 同名 push / 禁止直推集成发布分支 | Git pre-push[V(repo)]；宿主能力不参与判定 | branch policy + exact push updates | 回读 local/remote ref 与 actor/update | 只允许 policy 声明更新；不消费 local readiness receipt | 报告 push/readback；不产生 release eligibility | pre-push branch policy hard block；网络失败保持未知 | 普通 lane push 零；创建 lane PR 后触发 | 用户授权外部 push；Agent 不把 push 当 integration/release | 修复 ref/remote/branch，必要时转合法 PR 边 | 只做 branch policy；禁止全仓测试、旧 refs 污染与重复 readiness |
+| BOUNDARY:push | lane 同名 push / integration 同名快进 push | Git pre-push[V(repo)]；宿主能力不参与判定 | branch policy + exact push updates | 回读 local/remote ref、actor/update 与 before/after ancestry | 只允许 policy 声明更新；integration 仅匹配 dev ref 的 ordinary non-force fast-forward；不消费 local readiness receipt | 报告 push/readback；不产生 integration/promotion/release eligibility | pre-push branch policy hard block；缺OID/authority、非快进、force/delete、lane→dev、main direct push与未知ref阻断 | 普通 lane 与 integration FF push 零；创建 lane PR 后触发 | 用户授权外部 push；Agent 不把源码 push 当 integration/release | 修复 ref/remote/branch/ancestry，需资格时转 publisher/合法 PR 边 | 只做 branch policy；禁止全仓测试、旧 refs 污染与重复 readiness |
 | BOUNDARY:lane-pr | `lane/* → dev1.0` exact candidate | Hosted PR/CI[D]；lane PR ready/exact merge candidate gate 尚有 OPEN | owner/candidate refs、impact checks、branch policy、Review artifacts | 验 head/base、candidate SHA、owner/scope、required checks 可达 | CI 重跑 required checks；不得信任本地 PASS 或开发机 worktree 状态 | 合入 readback；retained lane 随后 fast-forward resync | 这是集成 hard gate；当前未实现部分保持 OPEN，不宣称已自动准出 | 必触发 current candidate Review；primary + 最多一专审 + 人工签收 | 工程/质量接受；正式 hosted authority 缺失时对应声明 fail-closed | 修复 candidate/evidence，更新同一 lane PR；合入后 resync | 避免每 shard 重跑 common governance；Hosted 不探测本机六 worktree |
 | BOUNDARY:handoff | 跨会话/人/host、环境发布、外部阻断或证据复用 | producer/consumer[V(repo)]；自动宿主触发桥[U] | current owner/candidate、named evidence、Review consolidation、OPEN | 仅 canonical 触发时创建；普通闭环使用 `no_persistent_handoff` | create-once manifest，exact refs/fingerprint，不转抄结论 | consumer 重验 freshness 并回读接手结果 | triggered handoff 是 hard boundary；stale/missing refs fail-closed | 触发准出 Review；范围为 handoff exact candidate | Agent 生产/验签；人工签收接手；正式决定仍需 H-P/H-R | 重跑 stale evidence、重建 current handoff，不能改写旧 manifest | 防止每轮都持久化、重复 evidence 和大日志；仅存 refs/摘要 |
 | BOUNDARY:dev1.0-main | `dev1.0 → main` promotion PR | branch/source gate[V(repo)]；Hosted protection/live authority[D] | promotion SHA、required checks、Review/release evidence、main reachability | 确认唯一合法 promotion 边与 exact candidate | Hosted checks/人工签收；不执行正式 Prod apply | merge 后 main 为发布来源，system backsync 需 CAS readback | promotion 是 release-source hard gate；main direct push 永远拒绝 | 必触发 release 范围 Review；不复用 lane PR 的 stale结论 | release/engineering/quality 分责；PR approval 不等于 Prod H-R | 修复 checks/evidence 或新 candidate；禁止 force/自动 merge | promotion 全量但应去重 common checks；Hosted API 不可读即 fail-closed |

@@ -122,6 +122,99 @@ def test_repository_artifact_policy_rejects_implicit_go_cache() -> None:
     assert verify() == []
 
 
+def test_gate_covers_mapping_list_inline_and_multiline_artifact_uses(
+    tmp_path: Path, monkeypatch: object
+) -> None:
+    workflows = tmp_path / "workflows"
+    workflows.mkdir()
+    digest = "a" * 40
+    workflows.joinpath("forms.yml").write_text(
+        f"""name: Fixture\njobs:
+  mapping:
+    steps:
+      - name: Mapping upload
+        if: ${{{{ failure() && !cancelled() }}}}
+        uses: actions/upload-artifact@{digest}
+        with:
+          name: mapping
+          path: mapping.log
+          retention-days: 3
+      - uses: actions/upload-artifact@{digest}
+        if: ${{{{ failure() && !cancelled() }}}}
+        with: {{name: inline, path: inline.log, retention-days: 3}}
+      - name: Invalid list upload
+        uses: actions/upload-artifact@{digest}
+        with:
+          name: invalid
+          path: invalid.log
+      - name: Forbidden download
+        uses: actions/download-artifact@{digest}
+        with:
+          name: exchange
+""",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(  # type: ignore[attr-defined]
+        "quwoquan_ops.gate.verify_github_artifact_lifecycle.ROOT", tmp_path
+    )
+    monkeypatch.setattr(  # type: ignore[attr-defined]
+        "quwoquan_ops.gate.verify_github_artifact_lifecycle.WORKFLOWS", workflows
+    )
+
+    issues = verify()
+
+    assert sum(
+        "artifact uploads require explicit retention-days" in issue
+        for issue in issues
+    ) == 1
+    assert sum(
+        "Actions artifacts are failure diagnostics only" in issue for issue in issues
+    ) == 1
+    assert any(
+        "Actions Artifact job exchange is forbidden" in issue for issue in issues
+    )
+
+
+def test_domain_governance_rejects_secret_or_deployment_payload_uploads() -> None:
+    workflow = (ROOT / ".github/workflows/domain-governance.yml").read_text(
+        encoding="utf-8"
+    )
+    marker = "uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02"
+    upload_steps = [
+        "      - " + block
+        for block in workflow.split("\n      - ")
+        if marker in block
+    ]
+
+    assert len(upload_steps) == 2
+    expected_paths = (
+        ".qwq_output/env/repo/runs/domain/dns-failure-diagnostic.json",
+        ".qwq_output/env/repo/runs/domain/${{ matrix.target }}-tls-failure-diagnostic.json",
+    )
+    for block, expected_path in zip(upload_steps, expected_paths, strict=True):
+        assert "if: ${{ failure() && !cancelled() }}" in block
+        assert "retention-days: 3" in block
+        assert f"path: {expected_path}" in block
+        assert "path: |" not in block
+        for forbidden in (
+            "${{ env.QWQ_TLS_BUNDLE_PATH }}",
+            "tls-bundle.tar.age",
+            "tls-evidence.json",
+            "dns-*.json",
+            "dns-plan.json",
+            "dns-apply-receipt.json",
+            "dns-live-evidence.json",
+            "privkey.pem",
+            "fullchain.pem",
+            "QWQ_DEPLOY_WORK_ROOT",
+            "QWQ_PUBLIC_TLS_BUNDLE_DIR",
+        ):
+            assert forbidden not in block
+
+    assert workflow.count("quwoquan.domain-governance-failure-diagnostic") == 1
+    assert workflow.count("quwoquan.domain-governance-tls-failure-diagnostic") == 1
+
+
 def test_pr_workflows_use_lock_bound_shared_dependency_caches() -> None:
     recommendation = (
         ROOT / ".github/workflows/recommendation_api_integration.yml"
@@ -131,10 +224,10 @@ def test_pr_workflows_use_lock_bound_shared_dependency_caches() -> None:
     )
 
     assert "lookup-only: ${{ github.event_name == 'pull_request' }}" in recommendation
-    assert "cache-dependency-path: quwoquan_ops/portal/package-lock.json" in delivery
-    assert "python3 quwoquan_ops/ci/setup_flutter_sdk.py resolve" in delivery
+    assert "cache-dependency-path: quwoquan_ops/portal/package-lock.json" not in delivery
+    assert "setup_flutter_sdk.py" not in delivery
     assert "subosito/flutter-action@" not in delivery
-    assert "quwoquan_app/.flutter-version" in delivery
+    assert "flutter test" not in delivery
 
 
 def test_lifecycle_uses_github_hosted_linux_without_changing_trigger_filter() -> None:
@@ -144,8 +237,9 @@ def test_lifecycle_uses_github_hosted_linux_without_changing_trigger_filter() ->
 
     assert "runs-on: ubuntu-latest" in lifecycle
     assert "runs-on: [self-hosted, macOS, ARM64]" not in lifecycle
-    assert "github.event.workflow_run.name == '02. Service Pipeline'" in lifecycle
-    assert "github.event.workflow_run.conclusion != 'success'" in lifecycle
+    assert "workflow_run:" not in lifecycle
+    assert "github.event.workflow_run" not in lifecycle
+    assert "schedule:" in lifecycle
 
 
 def test_gate_rejects_self_hosted_macos_arm64_lifecycle_runner(

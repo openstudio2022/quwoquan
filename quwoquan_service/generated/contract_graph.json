@@ -129557,7 +129557,7 @@
     },
     {
       "path": "_shared/app_artifact_manifest.yaml",
-      "sha256": "0fca2fecf5d9cd03ee1a7a6cf133bc789b1bab2e556f69f09fe40ce2ce46d949"
+      "sha256": "248fb394df0712071c15a508ec3067164183a9a90292ae711658418fba7ee49b"
     },
     {
       "path": "_shared/app_launch_manifest.yaml",
@@ -134859,7 +134859,7 @@
     },
     {
       "path": "_shared/app_artifact_manifest.yaml",
-      "sha256": "0fca2fecf5d9cd03ee1a7a6cf133bc789b1bab2e556f69f09fe40ce2ce46d949",
+      "sha256": "248fb394df0712071c15a508ec3067164183a9a90292ae711658418fba7ee49b",
       "mediaType": "application/yaml",
       "content": {
         "application_identity": {
@@ -135194,7 +135194,7 @@
               "artifactFormat 由打包请求显式声明或按平台默认（android→apk、ios→设备类 ipa/其余 app、web→web）；不得由 distributionClass 推导，官网与全部 APK 市场引用同一 release APK source digest。",
               "aab 仅允许 android × release，且仅当已启用渠道 capability 硬性要求 AAB 时构建一次；渠道 upload_format 只声明渠道接受能力，不驱动构建。",
               "simulator 的 platform_build_modes 是平台特有硬边界；iOS 仅允许 Debug，iOS Release 必须生成 iphoneos AOT 制品且不得以 Debug simulator 冒充。",
-              "promotable 必须等于 distribution_classes 中该 class 的 promotability 且 buildMode 为 release。",
+              "promotable 必须等于 distribution_classes 中该 class 的 promotability 且 buildMode 为 release；promotable=true 时必须携带 qualificationRequestRef/Digest、rcTagAdmissionRef 与 artifactBuildNumberAllocationRef/Digest，两个 ref/digest 对必须精确绑定同一 OCI `@sha256` 身份，non-promotable 时禁止携带这些发布资格字段。",
               "本清单不携带 environment、target、endpoint、runtimeConfigDigest、launchManifestDigest 或内容 release 身份；这些事实只属于签名 runtime config package、launch handoff 或服务端运行时响应。",
               "Android/iOS AppArtifact 必须携带 runtimeConfigTrustEnvelopeDigest，且等于制品内 build-profile trust envelope 的 canonical 摘要；Web AppArtifact 禁止携带该字段，Web trust envelope 只由各环境 hosting composition 同源提供。",
               "本清单不携带 channelId、灰度阶段或分发回执字段；渠道与灰度只出现在部署/分发与激活期对象（DEC-006/DEC-007）。",
@@ -135202,6 +135202,14 @@
             ],
             "fields": {
               "applicationId": {
+                "min_length": 1,
+                "type": "string"
+              },
+              "artifactBuildNumberAllocationDigest": {
+                "format": "sha256_identity",
+                "type": "string"
+              },
+              "artifactBuildNumberAllocationRef": {
                 "min_length": 1,
                 "type": "string"
               },
@@ -135272,6 +135280,18 @@
               },
               "promotable": {
                 "type": "boolean"
+              },
+              "qualificationRequestDigest": {
+                "format": "sha256_identity",
+                "type": "string"
+              },
+              "qualificationRequestRef": {
+                "min_length": 1,
+                "type": "string"
+              },
+              "rcTagAdmissionRef": {
+                "min_length": 1,
+                "type": "string"
               },
               "runtimeConfigTrustEnvelopeDigest": {
                 "format": "sha256_identity",

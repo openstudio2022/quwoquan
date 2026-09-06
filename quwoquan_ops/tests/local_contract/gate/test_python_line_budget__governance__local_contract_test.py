@@ -44,8 +44,8 @@ class PythonLineBudgetContractTest(unittest.TestCase):
             if entry["code"] == "PYTHON.LINE_BUDGET_EXCEEDED"
         }
 
-    def test_over_budget_script_and_test_block_by_default(self) -> None:
-        """存量清零后行数硬顶默认 block：实现与测试超标一律进入阻断 issues。"""
+    def test_over_budget_script_and_test_follow_current_warn_policy(self) -> None:
+        """当前冻结基线仍超预算，默认 warn 但必须完整报告实现与测试。"""
         self._write(
             "quwoquan_ops/gate/verify_oversized_example.py",
             _OVER_BUDGET_BODY,
@@ -68,16 +68,16 @@ class PythonLineBudgetContractTest(unittest.TestCase):
                 "quwoquan_ops/tests/local_contract/gate/"
                 "test_oversized__gate__local_contract_test.py",
             },
-            self._budget_entries(report, "issues"),
+            self._budget_entries(report, "warnings"),
         )
-        self.assertEqual(set(), self._budget_entries(report, "warnings"))
+        self.assertEqual(set(), self._budget_entries(report, "issues"))
         self.assertEqual(
             2,
             report["summary"]["lineBudgetExceededCount"],  # type: ignore[index]
         )
 
-    def test_warn_enforcement_keeps_findings_advisory(self) -> None:
-        """enforcement 回退 warn 时超标只进 warnings，保留分阶段接入的可切换性。"""
+    def test_block_enforcement_promotes_findings_to_issues(self) -> None:
+        """存量清零并切到 block 后，超标必须进入阻断 issues。"""
         self._write(
             "quwoquan_ops/gate/verify_oversized_example.py",
             _OVER_BUDGET_BODY,
@@ -86,15 +86,15 @@ class PythonLineBudgetContractTest(unittest.TestCase):
         with mock.patch.object(
             governance_report,
             "PYTHON_LINE_BUDGET_ENFORCEMENT",
-            "warn",
+            "block",
         ):
             report = derive_report(self.root, ("ops",))
 
         self.assertEqual(
             {"quwoquan_ops/gate/verify_oversized_example.py"},
-            self._budget_entries(report, "warnings"),
+            self._budget_entries(report, "issues"),
         )
-        self.assertEqual(set(), self._budget_entries(report, "issues"))
+        self.assertEqual(set(), self._budget_entries(report, "warnings"))
 
     def test_generated_vendor_and_data_scripts_are_exempt(self) -> None:
         records = [

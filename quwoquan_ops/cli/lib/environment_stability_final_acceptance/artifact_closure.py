@@ -2,16 +2,16 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from quwoquan_ops.cli.prod.finalize_mainline_release_artifact import (
+from quwoquan_ops.ci.release_evidence_reader import (
     canonical_candidate_digest,
     canonical_manifest_digest,
     sha256_file,
-    validate_manifest,
+    validate_historical_release_snapshot,
 )
 
 from quwoquan_ops.cli.lib.environment_stability_final_acceptance.model import (
@@ -28,6 +28,21 @@ from quwoquan_ops.cli.lib.environment_stability_final_acceptance.receipt_io impo
     _timestamp,
     _walk,
 )
+
+
+def validate_historical_artifact_closure(
+    manifest: dict[str, Any],
+    *,
+    artifact_dir: Path | None = None,
+    allowed_statuses: Iterable[str] | None = None,
+) -> dict[str, Any]:
+    """Compatibility name for the explicit historical read-only contract."""
+
+    return validate_historical_release_snapshot(
+        manifest,
+        artifact_dir=artifact_dir,
+        allowed_statuses=allowed_statuses,
+    )
 
 
 def _artifact_closure(
@@ -50,11 +65,11 @@ def _artifact_closure(
         )
         return None, None
     try:
-        manifest = validate_manifest(
+        manifest = verifier(
             manifest_receipt.payload,
+            artifact_dir=artifact_root,
             allowed_statuses={"released"},
         )
-        verifier(artifact_root, manifest)
     except (OSError, RuntimeError, ValueError) as exc:
         evaluation.block(
             "ARTIFACT_CLOSURE_INVALID",

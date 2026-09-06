@@ -75,12 +75,12 @@
 <a id="req-004"></a>
 ### REQ-004 M100 Gamma E2E acceptance 与 M1000 零副作用 start gate
 
-- Research activation 继续服从 Alpha→Beta→Gamma→Prod authority：每个环境独立 create-once activation/readiness/acceptance facts，后继环境在首个 mutation 前绑定前驱 `EnvironmentAcceptanceFact` exact bytes。Commercial 是另一个显式授权 release，不由环境名推导。
+- Research 的 EAF authority 只覆盖 Alpha→Beta→Gamma：每个环境的 canonical `EnvironmentAcceptanceFact` v2 由 Environment Ops scheduler 基于同一 exact integration candidate request 独占签发，Beta/Gamma 在首个 mutation 前绑定前驱 EAF exact bytes。Prod 不在 EAF 环境闭集；Commercial 是另一个显式授权 release，不由环境名推导。
 - 目标增量 M100 exact release 的 carrier profile 固定为 homepage/article/image/video=`100/100/100/10`。release owner 从 eligible pool 按冻结排序 exact 选择 deterministic cohort；累计 overshoot 保持入池但不扩大该 release。四载体 exact count、对象 identity/version、pool digest 与 source identity set 全部进入 release digest。
-- M100 目标增量硬终点是：完成必要 Alpha/Beta 前序后，同一 Research release 在 Gamma 完成 import、API/media readback、private isolation、activation，Ops 将 candidate/package/config/provider 与已注册真实物理设备写入 `TargetUatBinding`，entry surface × carrier required cells 各自产生 fresh raw `ReadinessCaseResult`，最终 append Gamma `EnvironmentAcceptanceFact`。Prod activation、Commercial transition 与商业验收均 out of scope，不得替代或阻断该终点。
+- M100 目标增量硬终点是：完成必要 Alpha/Beta 前序后，同一 Research release 在 Gamma 完成 import、API/media readback、private isolation、activation，entry surface × carrier required cells 各自产生绑定同一 candidate 的 fresh raw `ReadinessCaseResult`，Environment Ops scheduler 再以 `profile=release`、同一 `candidate`/`impactPlanDigest`/`caseResultRefs`、8 个 named closure refs、Beta predecessor exact ref、有效期、`nonPromotable` 与 DSSE signer 签发 Gamma `EnvironmentAcceptanceFact` v2。Prod activation、Commercial transition 与商业验收均 out of scope，不得替代或阻断该终点。
 - 在 Gamma acceptance exact-byte closure 成立前，M1000 的 source discovery、acquisition、semantic、review、work package init、pool append 与其它生产副作用增量必须为 0；只允许 `ContentPoolHandoffQuery`/gap/candidate readiness 等只读查询。不得让 M1000 与 M100 acceptance 并行。
 - gate 通过后，目标增量 M1000 只允许选择第一个 immutable candidate-backed slot，经中性 `task init` 后由宿主 Agent 推进到 `0.plan` pass、`next=sources` 即停止；不要求开始 sources，更不要求 M1000 全量 production/release/UAT。
-- `ReleaseUatSamplePlan` 环境无关地冻结 M100 release 的 required cells 与 sample；`TargetUatBinding` 逐 target 绑定真实运行 tuple；raw `ReadinessCaseResult` 是唯一 UAT 结果事实；`EnvironmentAcceptanceFact` 直接绑定全部 required raw exact bytes。bundle、counts、旧 receipt、workflow success 或 projection verdict 均无晋级权。
+- `ReleaseUatSamplePlan` 环境无关地冻结 M100 release 的 required cells 与 sample；raw `ReadinessCaseResult` 是唯一 UAT 结果事实；EAF v2 的 `caseResultRefs` 直接绑定全部 required raw exact bytes，并与 `runtimeIdentity`、`dataLifecycle`、`providerReadiness`、`observabilityReadiness`、`inspectEvidence`、`doctorEvidence`、`cleanupEvidence`、`leaseClosureEvidence` 共同闭合。EAF v2 不复制 Data release identity、consumer sample/binding 或 raw-result 聚合字段；bundle、counts、旧 receipt、workflow success 或 projection verdict 均无晋级权。
 - 任一 Gamma import/readback/UAT/device binding/acceptance 失败都保持 previous active，并按 environment owner 追加 rollback/readback facts；M1000 继续零副作用。M1000 首 slot init/0.plan 失败只保留自身 typed blocker，不改写 M100 acceptance。
 
 
@@ -103,7 +103,7 @@
 <a id="req-007"></a>
 ### REQ-007 confirmed demand 沿宿主十阶段推进到 Gamma acceptance
 
-- 完整路径固定为 `confirmed carrier demand -> candidate-backed task init -> 宿主 Agent 十阶段 -> reviewed delivery -> canonical object package + pool record -> immutable M100 release -> Alpha/Beta 前序 -> Gamma import/readback/activate -> registered physical-device raw ReadinessCaseResult -> Gamma EnvironmentAcceptanceFact`；旧 handoff/WorkRequest execution schema 不在现役闭包。
+- 完整路径固定为 `confirmed carrier demand -> candidate-backed task init -> 宿主 Agent 十阶段 -> reviewed delivery -> canonical object package + pool record -> immutable M100 release -> Data ship apply/import/readback/health -> Environment Ops 同 candidate scheduler request -> Alpha/Beta 前序 -> Gamma import/readback/activate -> fresh raw ReadinessCaseResult -> Gamma EnvironmentAcceptanceFact v2`；Data 不写 EAF，旧 handoff/WorkRequest execution schema 不在现役闭包。
 - `task init` 的 deterministic 三文件原子初始化已实现并由 local contract 锁定；尚缺的是同一 confirmed demand 的真实宿主消费证据，由 [`work-request-compilation` OPEN-001](../work-request-compilation/spec.md#open-001) 跟踪。不得回退 `task execute`、pool-dispatch/campaign 或手写工作包；每一步只消费前一步 immutable ref/digest，失败不得跳阶或用旧 receipt 冒充当前完成。
 - ship pass 仍是 execution `succeeded` 的唯一 writer；Gamma acceptance 与 M1000 start gate 是 release/environment 事实，均不得回写或重开 execution terminal。
 
@@ -155,7 +155,7 @@
 ### REQ-013 运营读模型只作 projection/query view
 
 - `ContentProductionTaskView`、`ContentItemVersionView`、`EnvironmentReleaseOrderView`、`ReviewDecisionTimeline`、`ReleaseSelectionView` 与 `TargetAcceptanceView` 均为无写权限的 projection/query view，不拥有 command、Repository、checkpoint、独立 ledger 或生命周期终态。
-- `ContentProductionTaskView` 只投影现役 carrier demand/execution manifest/stage receipts；旧 WorkRequest schema 不构成依赖。`ContentItemVersionView` 只投影 canonical object transaction/pool record。`ReviewDecisionTimeline` 只投影上述 owner 已绑定的 review facts。`ReleaseSelectionView` 只投影 `ContentRelease` 及其 selection evidence。`TargetAcceptanceView` 只投影 per-environment operation/acceptance facts。`EnvironmentReleaseOrderView` 只读 Alpha/Beta/Gamma/Prod 四环境事实并排序，不推导、补写或推进任何环境状态。
+- `ContentProductionTaskView` 只投影现役 carrier demand/execution manifest/stage receipts；旧 WorkRequest schema 不构成依赖。`ContentItemVersionView` 只投影 canonical object transaction/pool record。`ReviewDecisionTimeline` 只投影上述 owner 已绑定的 review facts。`ReleaseSelectionView` 只投影 `ContentRelease` 及其 selection evidence。`TargetAcceptanceView` 只投影 Alpha/Beta/Gamma operation/EAF v2 与 Prod activation/hosted facts。`EnvironmentReleaseOrderView` 只读 Alpha/Beta/Gamma EAF v2 和 Prod `ReleaseTagAdmissionFact`/`ProdActivationAdmissionFact`/hosted lifecycle facts并排序，不推导、补写或推进任何环境状态。
 - projection 缺失、延迟或重建不得改变 owner facts；query 发现 ref/digest 漂移时返回 typed blocked，不以本地 checkpoint、缓存行或最后一次成功值修复 owner。
 
 <a id="req-014"></a>
@@ -163,7 +163,7 @@
 
 - App 验收矩阵的 entry surface 轴固定为 `feed|search|recommendation|direct_or_object_route`，carrier 轴固定为 `homepage|article|image|video`。每个 cell 必须显式声明 `required|not_applicable`，并在 required 时给出 repo-relative 验收锚点引用与 runner；两轴不得合并或统称“四 surface”。
 - raw canonical `ReadinessCaseResult` 是唯一 UAT 结果事实，逐 cell 绑定 target、release identity、runner、输入与真实观察。允许建立只读完整性 projection 检查 required cell 是否齐全，但该 projection 不得生成 verdict、promotion、write-back 或独立 UAT ledger。
-- `EnvironmentAcceptanceFact` 直接绑定全部 required raw result refs 与 exact-byte digests，并验证它们属于同一 `TargetUatBinding` 与 release identity；缺失、重复、跨 release、digest 漂移或 `not_applicable` 无验收锚点引用均 fail closed，不由 counts 或完整性 projection 代填。
+- Environment Ops scheduler 签发的 `EnvironmentAcceptanceFact` v2 以 `caseResultRefs` 直接绑定全部 required raw result refs 与 exact-byte digests，并验证其 environment、candidate 与 canonical profile 一致；缺失、重复、跨 candidate、digest 漂移或 `not_applicable` 无验收锚点引用均 fail closed，不由 counts 或完整性 projection 代填。Data-owned sample plan 与 CaseResult 可保留 release identity，但 EAF v2 自身不复制 Data release identity或 consumer binding。
 
 <a id="req-015"></a>
 ### REQ-015 入口面缺席、治理与回滚语义互不代偿
@@ -221,7 +221,7 @@
 - GIVEN 四载体对象共享同一 source revision/digest/entity catalog digest，研究素材已取得且完整记录来源与权利缺口。
 - WHEN 生成并请求激活 `releaseClass=research` 的 immutable release。
 - THEN unverified/unknown 可记为 `research_allowed`，restricted/未取得/生成/缺字段素材与不可播放视频被阻断；文章批次配图率只写入统计，单篇 illustrated 声明的同源封面/正文图闭包仍是对象硬门。
-- THEN Data-owned `ReleaseUatSamplePlan` 绑定同一 `releaseId+manifestDigest+sourceIdentitySetDigest+releaseClass+productLifecycleState`；四环境各自的 activation/readiness 与 Ops `TargetUatBinding` exact-byte 绑定该 plan，本环境 `EnvironmentAcceptanceFact` 直接绑定 required raw `ReadinessCaseResult` refs/exact-byte digests、独立 import/readback 与 research isolation policy/proof，并按 Alpha→Beta→Gamma→Prod 绑定前一环境 fact 的 exact bytes；匿名身份、公开媒体 URL、分享、导出或索引任一可用均 `GATE_BLOCK`。
+- THEN Data-owned `ReleaseUatSamplePlan` 绑定同一 `releaseId+manifestDigest+sourceIdentitySetDigest+releaseClass+productLifecycleState` 并供 raw CaseResult runner 消费；Alpha/Beta/Gamma 各自的 Environment Ops scheduler request 绑定同一 exact integration candidate，本环境 EAF v2 以 `caseResultRefs` 与 8 个 named closure refs 闭合独立 import/readback、research isolation、runtime/provider/observability、inspect/doctor/cleanup/lease，并按 Alpha→Beta→Gamma 绑定前一环境 EAF exact bytes；匿名身份、公开媒体 URL、分享、导出或索引任一可用均 `GATE_BLOCK`。Prod acceptance 另走 RC Qualification package acceptance、`ReleaseTagAdmissionFact`、`ProdActivationAdmissionFact` 与 hosted facts，不生成 Prod EAF。
 - THEN commercial readiness 不存在，且任何未授权 asset ID 不得进入 `commercialAcceptedCount`。
 
 
@@ -239,7 +239,7 @@
 - GIVEN canonical pool 已具 homepage/article/image/video 至少 `100/100/100/10` 个 eligible 对象，且同一 Research release 的 exact deterministic cohort 已冻结。
 - WHEN 该 release 按 Alpha→Beta→Gamma 的必要前序推进，并尝试在不同时间点启动 M1000。
 - THEN M100 release 精确包含 `100/100/100/10`，overshoot 不进入 cohort；content library binding、pool record、manifest 与 distribution bytes exact closure。
-- THEN Gamma 前必须完成 import、API/media readback、private isolation 与 activation；`TargetUatBinding` 绑定 registered physical device、candidate/package/config/provider，entry surface × carrier required cells 各自产生 fresh raw `ReadinessCaseResult`，Gamma `EnvironmentAcceptanceFact` 直接绑定 exact bytes。
+- THEN Gamma 前必须完成 import、API/media readback、private isolation 与 activation；entry surface × carrier required cells 各自产生绑定同一 exact integration candidate 的 fresh raw `ReadinessCaseResult`，Gamma EAF v2 的 `caseResultRefs` 直接绑定这些 exact bytes，并同时闭合 8 个 named refs、Beta predecessor、有效期、`nonPromotable` 与 DSSE signer。
 - THEN Gamma acceptance 之前，对 M1000 source/acquisition/semantic/review/task-init/pool 的生产副作用计数均为 0，只读 query 可以返回 gap/candidate readiness。
 - THEN Gamma acceptance 之后，只选择第一个 candidate-backed M1000 slot，`task init` 原子建立工作包，宿主 Agent 只推进到 `0.plan` pass 且 `next=sources` 后停止；未开始 sources，未产生 M1000 reviewed delivery、pool record 或 release。
 - THEN 任一 Gamma required evidence 失败或漂移时 previous active 保持不变、M1000 仍零副作用；Prod/Commercial evidence 缺失不阻断目标增量 Gamma 终点，也不得冒充目标增量完成。
@@ -305,8 +305,8 @@
 - THEN 不存在 stage-gate registry、semantic prepare/record、runner/fleet/lane claim、自动恢复、execution-state reducer 或代码派生 next；pass 后继只按 Skill 固定顺序，blocked 后新建 execution，OPEN 无 CLOSE重做同 stage。
 - THEN `sources` 只写逐 target source plan；`1.download` 才生成 source units/source refs/CAS；`3.compose` 由 AI 选材；`4.draft` 具正文或 `video_script`、draft meta、self-check、agent envelope；`5.review` 独立 AI 逐对象写 rubric/reviewer/media/rights/attestation。
 - THEN `5.review` reviewer 以不同 session/actor/runId 与真实 invocation 禁止作者自评；作者与 reviewer 同一实际 model family 不阻断，schema/verifier/rubric judge 不得把模型族差异设为业务准出条件。
-- THEN publish AI 对 approved 对象逐个调用单对象事务；release 消费显式 cohort 且禁止 all-publishable；ship AI 显式 apply、readback/health 与 EAF。
-- THEN `m1_api_consumer` 只闭合 API consumer raw facts，`environment_promotion` 才要求 App UAT；任一分支都不得伪造另一分支证据。
+- THEN publish AI 对 approved 对象逐个调用单对象事务；release 消费显式 cohort 且禁止 all-publishable；ship AI 显式 apply、readback/health 与所需 API consumer raw CaseResult，且不得创建 EAF。
+- THEN `m1_api_consumer` 若保留，只是内容 execution 的 API consumer CaseResult 选择意图，不是 EAF profile/字段/writer；需要 EAF 时必须 HANDOFF 同 candidate request 给 Environment Ops scheduler，并完整满足 canonical `smoke|integration|release` v2 closure。
 
 <a id="gwt-021"></a>
 ### GWT-021 只读预检与 pool-build 的选中集一致且不写任何产物
@@ -400,23 +400,23 @@
 <a id="gwt-029"></a>
 ### GWT-029 六个运营视图只投影真实 owner facts
 
-- GIVEN carrier demand/execution manifest/stage receipts、canonical object transaction/pool record、ContentRelease 与四环境 operation/acceptance facts 均已有 create-once evidence。
+- GIVEN carrier demand/execution manifest/stage receipts、canonical object transaction/pool record、ContentRelease、Alpha/Beta/Gamma operation/EAF v2 与 Prod admission/hosted lifecycle facts 均已有 create-once evidence。
 - WHEN 查询 `ContentProductionTaskView`、`ContentItemVersionView`、`EnvironmentReleaseOrderView`、`ReviewDecisionTimeline`、`ReleaseSelectionView` 与 `TargetAcceptanceView`，并重建 projection。
 - THEN 六个 view 只由各自 owner refs/digests 确定性投影。
 - THEN 六个 view 没有 command、Repository、checkpoint、独立 ledger 或 terminal writer。
 - THEN 删除 projection 后重建结果逐字段相同且 owner bytes 不变。
-- THEN `EnvironmentReleaseOrderView` 只读 Alpha/Beta/Gamma/Prod 四环境事实。
+- THEN `EnvironmentReleaseOrderView` 只读 Alpha/Beta/Gamma EAF v2 与 Prod `ReleaseTagAdmissionFact`、`ProdActivationAdmissionFact` 和 hosted lifecycle facts，不把四者投影成同一种 acceptance。
 - THEN 缺环境、顺序冲突或 digest 漂移时返回 typed blocked。
 - THEN typed blocked 不补写 acceptance，也不从环境名猜状态。
 - THEN query 不以 projection cache 或最后一次成功值替代 owner refs/digests。
 
 <a id="gwt-030"></a>
-### GWT-030 EnvironmentAcceptanceFact 直接绑定 required raw UAT 结果
+### GWT-030 EnvironmentAcceptanceFact v2 由 scheduler 绑定完整 closure
 
-- GIVEN Data-owned `ReleaseUatSamplePlan` 已声明同一 release 的所有 required/not_applicable cell，Ops 已为该 target 的 required slots create-once `TargetUatBinding`，required runner 已分别产生 raw canonical `ReadinessCaseResult`。
-- WHEN 构建该 target 的 `EnvironmentAcceptanceFact` 并执行完整性查询。
-- THEN `EnvironmentAcceptanceFact` 直接列出全部 required raw refs 与 exact-byte digests；完整性查询只报告缺失、重复、跨 release 或漂移，不产生 verdict、promotion、write-back 或独立结果行。
-- THEN 任一 required raw result 缺失/失败、digest 漂移、runner/验收锚点引用不匹配或 identity 不同，acceptance fail closed；counts、旧 receipt 与 projection cache 都不能代填。
+- GIVEN Data-owned `ReleaseUatSamplePlan` 已声明同一 release 的所有 required/not_applicable cell，required runner 已分别产生绑定同一 exact integration candidate 的 raw canonical `ReadinessCaseResult`，且 Environment Ops 为同 candidate 建立 target scheduler request。
+- WHEN Environment Ops scheduler 请求签发该 Alpha/Beta/Gamma target 的 `EnvironmentAcceptanceFact` v2 并执行完整性查询。
+- THEN EAF 的 `caseResultRefs` 直接列出全部 required raw refs 与 exact-byte digests，并同时精确绑定 `candidate`、`impactPlanDigest`、`runtimeIdentity`、`dataLifecycle`、`providerReadiness`、`observabilityReadiness`、`inspectEvidence`、`doctorEvidence`、`cleanupEvidence`、`leaseClosureEvidence`、环境 predecessor、有效期、`nonPromotable` 与 DSSE signer；profile 只允许 `smoke|integration|release`。
+- THEN 任一 required raw result 或 named closure 缺失/失败、digest 漂移、runner/验收锚点引用不匹配、candidate/profile/predecessor 不同或签名无效时 acceptance fail closed；counts、旧 receipt 与 projection cache 都不能代填。Data 不调用 EAF writer；retired EAF profile、Data release identity、raw-result 聚合、consumer binding 与 Prod 属性均不在 v2 字段闭集中。
 
 <a id="gwt-031"></a>
 ### GWT-031 四入口对 deleted/offline/no-active 与 rollback 保持单义
@@ -452,18 +452,19 @@
 ### GWT-034 删除后全新四载体 M1→Alpha 验收新架构
 
 - GIVEN 旧 Data orchestration 已无 shim/dual-read 地物理删除，public CLI/package/runtime/reference inventory 对旧 agent/controller/queue/campaign/recovery/runner/fleet/claim/stage-gate/semantic wrapper/execution-state reducer 与 sequence-017 均为零引用。
-- WHEN 使用删除后的新架构新建 homepage/article/image/video 各一个 M1 execution，并由宿主 AI 完成十阶段、逐对象 publish、显式 `1/1/1/1` Research cohort release 与 Alpha import/readback/activation。
+- WHEN 使用删除后的新架构新建 homepage/article/image/video 各一个 M1 execution，并由宿主 AI 完成十阶段、逐对象 publish、显式 `1/1/1/1` Research cohort release 与 Alpha import/readback/activation，且 `m1_api_consumer` intent 选择 16-cell API consumer runner。
 - THEN 四个 execution 的 OPEN/CLOSE receipts、业务 result refs 与 verifier facts完整，且无旧 proof、旧 receipt 或 fixture 被迁移为通过证据。
-- THEN Alpha 的 `acceptanceProfile=m1_api_consumer` EAF 同时携带且分别验证 sample plan `releaseDigest` 与 immutable payload/Data readiness `manifestDigest`（不要求相等），直接绑定同一 release/import/verify identity 的 entry surface × carrier 16-cell fresh API consumer raw facts，并从每个 raw 的 `artifactPath` exact bytes 重验真实 2xx HTTP observation；raw `objectId` 保持 plan source identity，`runtimeObjectId` 仅在 observation，禁止添加 `observedObjectId`；runner create-once 的 `consumer-health.json` 只机械绑定原始 health，M1 仅要求 build/runtime/release/exact-query layers，且 sourceFingerprint 从 plan/readiness/health/raw authorities 机械重算；`recommendation × homepage` 以推荐 item 的 `primaryHomepageId` 精确等于导入 homepageId 证明可达，不要求扩大 `objectCards` 数量或改写推荐插卡策略；不得要求或伪造 App UAT、device/platform、`TargetUatBinding` 或 promotion predecessor。
+- THEN Data ship 只交付同一 release/import/verify identity 的 entry surface × carrier 16-cell fresh API consumer raw `ReadinessCaseResult`，并从每个 raw 的 `artifactPath` exact bytes 重验真实 2xx HTTP observation；raw `objectId` 保持 plan source identity，`runtimeObjectId` 仅在 observation，禁止添加 `observedObjectId`；runner create-once 的 `consumer-health.json` 只机械绑定原始 health，M1 仅要求 build/runtime/release/exact-query layers，且 sourceFingerprint 从 plan/readiness/health/raw authorities 机械重算；`recommendation × homepage` 以推荐 item 的 `primaryHomepageId` 精确等于导入 homepageId 证明可达，不要求扩大 `objectCards` 数量或改写推荐插卡策略。
+- THEN 若 Alpha completion 还要求 EAF，必须由 Environment Ops scheduler 以同 exact integration candidate request、`profile=integration` 或调用方冻结的 canonical profile，绑定上述 `caseResultRefs` 与全部 8 个 named closure refs，令 Alpha `predecessor=null`，闭合有效期、`nonPromotable` 与 DSSE signer 后签发 EAF v2；Data 不写 EAF，也不得因 `m1_api_consumer` intent 省略 runtime/provider/observability/inspect/doctor/cleanup/lease closure。任一 scheduler 完整证据缺失时本 GWT 保持 `GATE_BLOCK`。
 - THEN 此 GWT 是删除后新架构验收，不是删除授权，不允许把失败解释为恢复 legacy。失败只形成新架构 typed blockers。
 
 <a id="gwt-035"></a>
-### GWT-035 environment promotion 与 API consumer 分支保持独立
+### GWT-035 Data ship 与 Environment Ops acceptance 单向交接
 
-- GIVEN 同一新架构后续需要 environment promotion。
-- WHEN 使用 `acceptanceProfile=environment_promotion` ship。
-- THEN target-bound App UAT raw facts、target binding、predecessor/promotion closure 按该分支显式闭合；`m1_api_consumer` 的 API facts 不冒充 App UAT，反之亦然。
-- THEN promotion/规模验收不得回授 legacy 删除 authority，也不得引入 sequence-017 或旧控制面兼容。
+- GIVEN 同一新架构需要在 Data ship 交付后形成 Alpha/Beta/Gamma acceptance。
+- WHEN Data 产出 apply/import/readback/health 与 raw CaseResult，并把同 candidate scheduler request 交给 Environment Ops。
+- THEN Data result refs 不含 EAF；Environment Ops scheduler 独占签发完整 v2 EAF，canonical profile 只为 `smoke|integration|release`，前驱只按 Alpha→Beta→Gamma exact EAF 链闭合。`m1_api_consumer` intent 不冒充 EAF profile，也不省略任何 named closure。
+- THEN Prod 不创建 EAF；Prod acceptance 只消费 RC Qualification 的 package/provider/UAT/supply-chain `QualificationFact`、stable `ReleaseTagAdmissionFact`、`ProdActivationAdmissionFact` 与 hosted rollout/readback/soak facts。任何 acceptance 都不得回授 legacy 删除 authority或引入 sequence-017/旧控制面兼容。
 
 ## 6. 依赖
 
@@ -480,9 +481,9 @@
 - 类型：`external_blocker`
 - 优先级：`P0`
 - 准出影响：`block`
-- 影响或价值：仍缺同一 current M100 exact `100/100/100/10` Research release 的 Gamma import/readback、registered physical device required raw UAT 与 Gamma acceptance，也缺 gate 通过后 M1000 首个 candidate-backed slot 到 `0.plan pass -> sources` 的新鲜证据，因此目标增量闭环保持 `GATE_BLOCK`。capacity soak、固定并发、SDK/provider preflight 与 Prod/Commercial 均不属于完成条件。
-- 完成判定：[`GWT-001`](#gwt-001)、[`GWT-002`](#gwt-002)、[`GWT-009`](#gwt-009)、[`GWT-010`](#gwt-010)、[`GWT-011`](#gwt-011) 与 [`GWT-019`](#gwt-019) 的尚未直接绑定子句均保留为本次迁移 evidence gap；`GWT-004` 直接绑定 M100 exact release、必要 Alpha/Beta predecessor、Gamma import/readback/private isolation/activation、registered physical device required raw `ReadinessCaseResult`、Gamma `EnvironmentAcceptanceFact` 与 M1000 pre-gate mutation=0；gate 后首 slot 只到 `0.plan pass -> sources`。
-- 依赖：上游需补足真实 M100 pool；Testing/Ops 负责必要 Alpha/Beta 前序、Gamma environment/device evidence；`task init` 已实现，真实 confirmed-demand 消费证据由 [`work-request-compilation` OPEN-001](../work-request-compilation/spec.md#open-001) 跟踪。Prod/Commercial out of scope。
+- 影响或价值：仍缺同一 current M100 exact `100/100/100/10` Research release 的 Gamma import/readback、registered physical device required raw UAT 与 Environment Ops scheduler 的 Gamma EAF v2 完整 closure，也缺 gate 通过后 M1000 首个 candidate-backed slot 到 `0.plan pass -> sources` 的新鲜证据，因此目标增量闭环保持 `GATE_BLOCK`。capacity soak、固定并发、SDK/provider preflight 与 Prod/Commercial 均不属于完成条件。
+- 完成判定：[`GWT-001`](#gwt-001)、[`GWT-002`](#gwt-002)、[`GWT-009`](#gwt-009)、[`GWT-010`](#gwt-010)、[`GWT-011`](#gwt-011) 与 [`GWT-019`](#gwt-019) 的尚未直接绑定子句均保留为本次迁移 evidence gap；`GWT-004` 直接绑定 M100 exact release、必要 Alpha/Beta predecessor、Gamma import/readback/private isolation/activation、registered physical device required raw `ReadinessCaseResult`、Environment Ops scheduler 的 Gamma EAF v2 完整 closure 与 M1000 pre-gate mutation=0；gate 后首 slot 只到 `0.plan pass -> sources`。
+- 依赖：上游需补足真实 M100 pool；Testing/Ops 负责必要 Alpha/Beta EAF v2 前序、Gamma environment/device raw evidence 与 scheduler 完整 named closure；`task init` 已实现，真实 confirmed-demand 消费证据由 [`work-request-compilation` OPEN-001](../work-request-compilation/spec.md#open-001) 跟踪。Prod/Commercial out of scope。
 
 <a id="open-002"></a>
 ### OPEN-002 acquisition receipt 永久缺席使回收计划仍不可执行
@@ -502,9 +503,9 @@
 - 类型：`capability_gap`
 - 优先级：`P0`
 - 准出影响：`block`
-- 影响或价值：当前阶段为 `post_delete_e2e_pending`。旧 Data orchestration 已物理删除，post-delete architecture 与 public CLI live-import gates 已锁定零旧路径/加载；尚未取得全新四载体 M1→Alpha 16-cell `m1_api_consumer` E2E，因此不得宣称新架构闭环。
+- 影响或价值：当前阶段为 `post_delete_e2e_pending`。旧 Data orchestration 已物理删除，post-delete architecture 与 public CLI live-import gates 已锁定零旧路径/加载；尚未取得全新四载体 M1→Alpha 16-cell API consumer E2E，也未取得可关闭 Alpha acceptance 的 Environment Ops scheduler 完整 v2 closure，因此不得宣称新架构闭环。
 - 保持禁令：stable-production proof、legacy-retirement-precheck、旧三份 proof、physical-device UAT、terminal retry evidence 与 sequence-017 均无删除或新 execution authority；不得恢复旧 agent/controller/queue/campaign/recovery/runner/fleet、shim、dual-read、兼容 CLI/schema/test/doc reference。
-- 尚缺验收证据：用全新 homepage/article/image/video 各一个 M1 execution 完成宿主十阶段、逐对象 publish、显式 `1/1/1/1` Research cohort 与 Alpha `m1_api_consumer` 16-cell raw facts/EAF。旧 proof、旧 receipt、fixture、静态 inventory 或 gate PASS 均不得代填。App UAT 只属于 `environment_promotion` 分支。
+- 尚缺验收证据：用全新 homepage/article/image/video 各一个 M1 execution 完成宿主十阶段、逐对象 publish、显式 `1/1/1/1` Research cohort 与 Alpha `m1_api_consumer` intent 选择的 16-cell raw CaseResult；若以 Alpha EAF 作为完成条件，还缺 Environment Ops scheduler 同 candidate request 的完整 v2 evidence：canonical profile、candidate/impactPlanDigest/caseResultRefs、8 个 named closure refs、`predecessor=null`、有效期、`nonPromotable` 与 DSSE signer。旧 proof、旧 receipt、fixture、静态 inventory 或 gate PASS 均不得代填。
 - 完成判定：post-delete 零旧路径与 public CLI live-import gates 持续通过，且 [`GWT-020`](#gwt-020)、[`GWT-023`](#gwt-023)、[`GWT-034`](#gwt-034) 与 [`GWT-035`](#gwt-035) 由同一组全新四载体 M1 输入取得完整通过证据；现有局部 local_contract 只证明对应子句，不关闭这些复合验收。后验 E2E 只证明新架构可运行，不回授删除授权。
 - 依赖：无 pre-delete proof、precheck、eligible 状态或旧运行证据依赖；当前只依赖全新 M1 输入与 Alpha API consumer 环境。
 - 遗留数据：旧 proof 或运行证据若因审计要求在仓外保留，只能离线只读，不得迁移为新 receipt、删除 authority、兼容接口或仓内正向引用。
@@ -528,9 +529,9 @@
 - 准出影响：`block`
 - 影响或价值：只缺同一 runtime generation 的 fresh production Remote App UAT。Research 私有媒体的设计与实现已就位。progressive private MP4、图片/头像/对象主页/文章资产的 typed `accessMode` 分流、单飞短签、稳定资产缓存身份、Range 边缘逐请求复验，以及首次 401/403 强制换签最多一次并保持播放位置均已实现。二次失败 typed terminal 且不回退公开 URL。private HLS 不属于本 OPEN 的未完成实现，保持 unsupported/fail closed，并由 [`OPEN-017`](#open-017) 单独承接。
 - 尚缺实现：无。有效 Research/private projection 的 `accessMode` 与稳定资产标识为必填；仅明确 previous-version public contract version 可把 null/absent 解释为 public，Research/private 缺失保持 fail closed。
-- 尚缺验收证据：缺一轮绑定同一 Gamma `ReleaseUatSamplePlan`、registered physical-device `TargetUatBinding`、target/release/runtime generation 的 fresh `user_acceptance`：entry surface × carrier 矩阵全部 required cells 产生 raw `ReadinessCaseResult`，progressive private MP4 覆盖 Range 续播与一次 401/403 换签恢复，`EnvironmentAcceptanceFact` 直接绑定 required raw refs/exact-byte digests；旧公开 URL 断言、旧 receipt 或完整性 projection 不能替代。
+- 尚缺验收证据：缺一轮绑定同一 Gamma target/release/runtime generation 的 fresh `user_acceptance`：entry surface × carrier 矩阵全部 required cells 产生 raw `ReadinessCaseResult`，progressive private MP4 覆盖 Range 续播与一次 401/403 换签恢复；随后 Environment Ops scheduler 的 Gamma EAF v2 `caseResultRefs` 直接绑定 required raw refs/exact-byte digests，并闭合全部 8 个 named refs、Beta predecessor、有效期、`nonPromotable` 与 DSSE signer。旧公开 URL 断言、旧 receipt 或完整性 projection 不能替代。
 - 完成判定：[`GWT-016`](#gwt-016)、[`GWT-030`](#gwt-030)、[`GWT-032`](#gwt-032) 的 local_contract/api_integration 前置证据均通过，并由 production Remote runner 取得上述 fresh raw UAT facts；除 fresh UAT 外不得再把已实现能力列为本 OPEN 的实现缺口。
-- 依赖：Testing/Ops owner 负责 fresh runner、`TargetUatBinding` 与 `EnvironmentAcceptanceFact` 绑定；App/Service/Runtime owner 只需保持现有 `accessMode`、资产标识、Range 验签和单次换签字段/行为不漂移。private HLS 能力不阻断 progressive private MP4 验收。
+- 依赖：Testing/Ops owner 负责 fresh runner、同 candidate Environment Ops scheduler request 与完整 `EnvironmentAcceptanceFact` v2 closure；App/Service/Runtime owner 只需保持现有 `accessMode`、资产标识、Range 验签和单次换签字段/行为不漂移。private HLS 能力不阻断 progressive private MP4 验收。
 
 <a id="open-016"></a>
 ### OPEN-016 超尺寸资产的 provider 无关性尚缺真实 provider 证据

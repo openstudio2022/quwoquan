@@ -7,9 +7,7 @@ from pathlib import Path
 from unittest import mock
 
 from quwoquan_ops.ci import consume_released_release_evidence as consumer
-from quwoquan_ops.cli.prod.finalize_mainline_release_artifact import (
-    RELEASE_CLOSURE_PATHS,
-)
+from quwoquan_ops.ci.release_evidence_reader import RELEASE_CLOSURE_PATHS
 
 DIGEST = "sha256:" + ("a" * 64)
 OTHER_DIGEST = "sha256:" + ("b" * 64)
@@ -67,8 +65,8 @@ class ConsumeReleasedReleaseEvidenceTest(unittest.TestCase):
             root = Path(temporary)
             write_fixture(root)
             with (
-                mock.patch.object(consumer, "validate_manifest"),
-                mock.patch.object(consumer, "validate_manifest_files"),
+                mock.patch.object(consumer, "validate_historical_release_snapshot"),
+                mock.patch.object(consumer, "validate_historical_release_snapshot"),
             ):
                 outputs = consumer.derive(
                     artifact_root=root,
@@ -109,10 +107,10 @@ class ConsumeReleasedReleaseEvidenceTest(unittest.TestCase):
             root = Path(temporary)
             write_fixture(root)
             with (
-                mock.patch.object(consumer, "validate_manifest"),
+                mock.patch.object(consumer, "validate_historical_release_snapshot"),
                 mock.patch.object(
                     consumer,
-                    "validate_manifest_files",
+                    "validate_historical_release_snapshot",
                     side_effect=ValueError("pilot-release digest mismatch"),
                 ),
                 self.assertRaisesRegex(ValueError, "digest mismatch"),
@@ -129,8 +127,8 @@ class ConsumeReleasedReleaseEvidenceTest(unittest.TestCase):
             root = Path(temporary)
             write_fixture(root)
             with (
-                mock.patch.object(consumer, "validate_manifest"),
-                mock.patch.object(consumer, "validate_manifest_files"),
+                mock.patch.object(consumer, "validate_historical_release_snapshot"),
+                mock.patch.object(consumer, "validate_historical_release_snapshot"),
             ):
                 for field, expected in (
                     ("expected_candidate", OTHER_DIGEST),
@@ -155,8 +153,8 @@ class ConsumeReleasedReleaseEvidenceTest(unittest.TestCase):
 
             with (
                 mock.patch.object(consumer, "fetch", side_effect=materialize),
-                mock.patch.object(consumer, "validate_manifest"),
-                mock.patch.object(consumer, "validate_manifest_files"),
+                mock.patch.object(consumer, "validate_historical_release_snapshot"),
+                mock.patch.object(consumer, "validate_historical_release_snapshot"),
                 mock.patch.object(
                     consumer,
                     "verify_oci_supply_chain",

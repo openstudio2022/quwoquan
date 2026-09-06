@@ -276,6 +276,49 @@ class PythonScriptGovernanceDerivationTest(unittest.TestCase):
         self.assertEqual("lib", helper["role"])
         self.assertFalse(helper["orphanCandidate"])
 
+    def test_render_and_collect_names_are_generators_without_hiding_orphans(
+        self,
+    ) -> None:
+        render = self._write(
+            "quwoquan_ops/ci/render_provider_release_evidence.py",
+            "def render() -> None:\n    pass\n",
+        )
+        collect = self._write(
+            "quwoquan_ops/cli/prod/collect_mainline_image_descriptors.py",
+            "def collect() -> None:\n    pass\n",
+        )
+        orphan = self._write(
+            "quwoquan_ops/ci/render_detached_release_evidence.py",
+            "def render() -> None:\n    pass\n",
+        )
+        importer = self._write(
+            "quwoquan_ops/ci/verify_generator_consumers.py",
+            "from quwoquan_ops.ci import render_provider_release_evidence\n"
+            "from quwoquan_ops.cli.prod import collect_mainline_image_descriptors\n",
+        )
+
+        report = derive_report(self.root, ("ops",))
+        records = {
+            record["path"]: record  # type: ignore[index]
+            for record in report["scripts"]  # type: ignore[index]
+        }
+
+        for path in (render, collect):
+            record = records[str(path.relative_to(self.root))]
+            self.assertEqual("generator", record["role"])
+            self.assertIn(
+                str(importer.relative_to(self.root)),
+                record["importedBy"],
+            )
+            self.assertFalse(record["orphanCandidate"])
+
+        orphan_record = records[str(orphan.relative_to(self.root))]
+        self.assertEqual("generator", orphan_record["role"])
+        self.assertEqual((), orphan_record["referencedBy"])
+        self.assertEqual((), orphan_record["importedBy"])
+        self.assertTrue(orphan_record["orphanCandidate"])
+        self.assertNotIn("SCRIPT.ROLE_UNCLASSIFIED", self._issue_codes(report))
+
     def test_explicit_lib_path_is_library_without_managed_importer(self) -> None:
         self._write(
             "quwoquan_service/scripts/runtime/packaging/lib/image_inputs.py",

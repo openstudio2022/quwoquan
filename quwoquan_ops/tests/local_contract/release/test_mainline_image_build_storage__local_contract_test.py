@@ -22,24 +22,31 @@ def test_prod_environment_binding_distinguishes_dry_run_from_real_apply() -> Non
     ) == []
 
 
-def test_prod_environment_binding_rejects_unprotected_or_unauthorized_jobs() -> None:
+def test_prod_environment_binding_rejects_nonexact_mutation_and_allows_dry_run() -> None:
     with tempfile.TemporaryDirectory() as temporary:
         workflow = Path(temporary) / "deploy-prod-auto.yml"
         _write_prod_environment_workflow(
             workflow,
             {
-                "prod_rollout": {"environment": "release-validation"},
-                "prod_soak_acceptance": {"environment": "production"},
+                "prod_activation_admission": {"environment": "production"},
+                "prod_rollout": {
+                    "environment": {
+                        "name": "${{ true && 'production' || 'release-validation' }}"
+                    }
+                },
+                "post_release_soak": {"environment": "production"},
                 "unreviewed": {
                     "environment": {"name": "${{ true && 'production' || 'dev' }}"}
                 },
+                "nonproduction_dry_run": {"environment": "release-validation"},
             },
         )
 
         issues = gate.prod_environment_job_issues(workflow)
 
-    assert any("unreviewed" in issue for issue in issues)
-    assert any("exact dry-run release-validation" in issue for issue in issues)
+    assert any("prod_rollout" in issue and "exact environment: production" in issue for issue in issues)
+    assert any("unreviewed" in issue and "exact environment: production" in issue for issue in issues)
+    assert not any("nonproduction_dry_run" in issue for issue in issues)
 
 
 def test_mainline_image_build_uses_governed_context_and_base_images() -> None:
@@ -157,7 +164,7 @@ def test_mainline_image_build_fails_closed_with_signed_attestations() -> None:
     )[0]
 
 
-def test_mainline_release_delivery_uses_bounded_same_input_retries() -> None:
+def test_service_factory_material_publish_uses_three_same_input_retries() -> None:
     workflow = (ROOT / ".github/workflows/service_pipeline.yml").read_text(
         encoding="utf-8"
     )
@@ -174,12 +181,30 @@ def test_mainline_release_delivery_uses_bounded_same_input_retries() -> None:
     ]
 
     assert image_job["strategy"]["fail-fast"] is False
+    assert sorted(
+        step_id
+        for step_id in release_steps
+        if step_id.startswith("release_bundle_attempt_")
+    ) == [
+        "release_bundle_attempt_1",
+        "release_bundle_attempt_2",
+        "release_bundle_attempt_3",
+    ]
+    first_publish_inputs = release_steps["release_bundle_attempt_1"]["with"]
+    assert first_publish_inputs["context"] == "${{ runner.temp }}/service-factory-material"
+    assert first_publish_inputs["tags"] == (
+        "${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/service-factory-material:"
+        "run-${{ github.run_id }}-${{ github.run_attempt }}\n"
+    )
     for attempt in (1, 2, 3):
         release_login = release_steps[f"release_registry_login_attempt_{attempt}"]
         assert release_login["uses"].startswith("docker/login-action@")
         release = release_steps[f"release_bundle_attempt_{attempt}"]
+        assert release["name"] == (
+            f"Publish immutable service factory material (attempt {attempt})"
+        )
         assert release["uses"].startswith("docker/build-push-action@")
-        assert release["with"] == release_steps["release_bundle_attempt_1"]["with"]
+        assert release["with"] == first_publish_inputs
 
     assert release_steps["release_registry_login_attempt_1"]["continue-on-error"] is True
     assert release_steps["release_registry_login_attempt_2"]["continue-on-error"] is True
@@ -187,7 +212,8 @@ def test_mainline_release_delivery_uses_bounded_same_input_retries() -> None:
     assert release_steps["release_bundle_attempt_2"]["continue-on-error"] is True
     assert release_runs.count("sleep 5") == 2
     assert release_runs.count("sleep 15") == 2
-    assert "release artifact push failed after 3 bounded attempts" in workflow
+    assert "service factory material push failed after 3 bounded attempts" in workflow
+    assert "release artifact push failed" not in workflow
     assert ":latest" not in workflow
 
 

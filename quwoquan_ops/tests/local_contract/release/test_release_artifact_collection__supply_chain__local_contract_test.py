@@ -11,12 +11,31 @@ from quwoquan_ops.ci.render_provider_conformance_source import (
 )
 from quwoquan_ops.cli.lib import provider_conformance
 from quwoquan_ops.cli.prod import collect_release_artifact_descriptors as collector
-from quwoquan_ops.cli.prod import finalize_mainline_release_artifact as finalizer
+from quwoquan_ops.ci import release_evidence_reader as finalizer
 from quwoquan_ops.cli import stackctl
 from quwoquan_ops.cli.lib.app_identity import resolve_build_product
 from quwoquan_ops.tests.support.app_artifact_manifest_test_support import (
     app_artifact_manifest,
 )
+
+
+def _seal_snapshot(payload: dict[str, object]) -> dict[str, object]:
+    payload["releaseTrainId"] = finalizer.canonical_release_train_digest(payload)
+    for environment in finalizer.ENVIRONMENTS:
+        artifact = payload["environmentArtifacts"][environment]
+        if all("digest" in descriptor for descriptor in artifact["images"].values()):
+            artifact["environmentArtifactDigest"] = (
+                finalizer.canonical_environment_artifact_digest(payload, environment)
+            )
+    try:
+        payload["candidateId"] = finalizer.canonical_candidate_digest(payload)
+    except ValueError:
+        payload["candidateId"] = None
+    payload["blockers"], payload["missingEvidence"] = finalizer._expected_gaps(
+        payload, str(payload["status"])
+    )
+    payload["artifactDigest"] = finalizer.canonical_manifest_digest(payload)
+    return payload
 
 
 DIGEST = "sha256:" + ("a" * 64)
@@ -54,7 +73,7 @@ class ReleaseArtifactCollectionContractTest(unittest.TestCase):
             }
         repository = "ghcr.io/owner/repo/content-service"
         ref = f"{repository}@{DIGEST}"
-        manifest = finalizer.seal_manifest(
+        manifest = _seal_snapshot(
             {
                 "schema": finalizer.SCHEMA,
                 "releaseTrainId": None,
@@ -475,23 +494,8 @@ class ReleaseArtifactCollectionContractTest(unittest.TestCase):
                         descriptor["packageDigest"], r"^sha256:[0-9a-f]{64}$"
                     )
                 self.assertRegex(descriptor["digest"], r"^sha256:[0-9a-f]{64}$")
-            finalized = finalizer.finalize(artifact, None, descriptors)
-            self.assertEqual(finalized["status"], "candidate-ready")
-            self.assertEqual(
-                set(finalized["applicationPackages"]),
-                set(finalizer.APPLICATION_PACKAGES),
-            )
-            self.assertNotIn("opsPortal", finalized["applicationPackages"])
-            self.assertIn("opsPortal", finalized)
-            green_matrix = (
-                artifact / collector.RELEASE_CLOSURE_PATHS["green-matrix"]
-            )
-            green_matrix.write_bytes(green_matrix.read_bytes() + b"tampered")
-            with self.assertRaisesRegex(
-                ValueError,
-                "test evidence.*raw evidence digest mismatch",
-            ):
-                finalizer.validate_manifest_files(artifact, finalized)
+            # Historical descriptor collection cannot transition lifecycle status.
+            self.assertFalse(hasattr(finalizer, "finalize"))
 
     def test_rejects_mutable_application_evidence_locator(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -577,12 +581,9 @@ class ReleaseArtifactCollectionContractTest(unittest.TestCase):
                     provider_raw_dir=root / "provider-raw",
                 )
 
-    def test_stackctl_is_the_whole_app_assembly_entrypoint(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
-            artifact, sources = self._fixture(root)
-            self._application_package_sources(root, artifact)
-            args = stackctl.build_parser().parse_args(
+    def test_stackctl_rejects_retired_release_manifest_package_kind(self) -> None:
+        with self.assertRaises(SystemExit):
+            stackctl.build_parser().parse_args(
                 [
                     "package",
                     "--env",
@@ -591,42 +592,9 @@ class ReleaseArtifactCollectionContractTest(unittest.TestCase):
                     "prod-hosted",
                     "--kind",
                     "release-manifest",
-                    "--release-artifact-dir",
-                    str(artifact),
-                    "--application-packages-dir",
-                    str(root / "application-sources"),
-                    "--application-package-payloads-dir",
-                    str(root / "application-payloads"),
-                    "--public-web-manifest",
-                    str(sources["publicWeb"]),
-                    "--android-release-manifest",
-                    str(sources["androidOfficialRelease"]),
-                    "--ops-portal-provenance",
-                    str(sources["opsPortal"]),
-                    "--contract-graph",
-                    str(sources["contractGraph"]),
-                    "--provider-evidence",
-                    str(sources["providerEvidence"]),
-                    "--provider-raw-dir",
-                    str(root / "provider-raw"),
-                    "--application-evidence-ref",
-                    APP_EVIDENCE_REF,
-                    "--test-evidence",
-                    str(sources["testEvidence"]),
-                    "--report-dir",
-                    str(root / "report"),
                 ]
             )
-            result = stackctl.command_package(args)
-            self.assertEqual(result["exitCode"], 0, result)
-            manifest = json.loads(
-                (artifact / "manifest.json").read_text(encoding="utf-8")
-            )
-            self.assertEqual(manifest["status"], "candidate-ready")
-            self.assertIn(
-                "environment-qualification-evidence-pending",
-                manifest["blockers"],
-            )
+
 
     def test_rejects_schema_drift_and_non_component_input(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

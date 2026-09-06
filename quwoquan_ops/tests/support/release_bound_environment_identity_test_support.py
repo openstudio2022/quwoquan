@@ -7,12 +7,19 @@ helper 与构造完整环境证据树的 Fixture。常量、helper 与 Fixture �
 
 from __future__ import annotations
 
+import base64
 import hashlib
+import hmac
 import json
 from pathlib import Path
 from typing import Any
 
 from quwoquan_ops.ci import generate_release_bound_environment_identity as renderer
+from quwoquan_ops.ci.environment_scheduler import dsse_pae
+from quwoquan_ops.cli.lib.environment_acceptance_fact_contract import (
+    DSSE_PAYLOAD_TYPE,
+    SCHEMA as ENVIRONMENT_ACCEPTANCE_SCHEMA,
+)
 from quwoquan_ops.cli.lib.app_identity import (
     build_profile_for_environment,
     resolve_build_product,
@@ -21,7 +28,7 @@ from quwoquan_ops.cli.lib.app_identity import (
 from quwoquan_ops.tests.support.app_artifact_manifest_test_support import (
     app_artifact_manifest,
 )
-from quwoquan_ops.cli.prod.finalize_mainline_release_artifact import (
+from quwoquan_ops.ci.release_evidence_reader import (
     APPLICATION_PACKAGES,
     DISTRIBUTION_EVIDENCE_PATHS,
     ENVIRONMENTS,
@@ -44,6 +51,14 @@ SOURCE_DIGEST = "sha256:" + "4" * 64
 ENTITY_CATALOG_DIGEST = "sha256:" + "5" * 64
 ISOLATION_DIGEST = "sha256:" + "6" * 64
 SUBJECT_HASH = "sha256:" + "7" * 64
+IMPACT_PLAN_DIGEST = "sha256:" + "8" * 64
+TEST_ENVIRONMENT_ACCEPTANCE_SIGNING_KEY_ENV = (
+    "TEST_RELEASE_BOUND_ENVIRONMENT_ACCEPTANCE_SIGNING_KEY"
+)
+TEST_ENVIRONMENT_ACCEPTANCE_SIGNING_KEY = "release-bound-eaf-v2-test-key"
+TEST_ENVIRONMENT_ACCEPTANCE_SIGNER = (
+    "spiffe://quwoquan.local/test/release-bound-environment-identity"
+)
 
 
 def _write(path: Path, payload: dict[str, Any]) -> Path:
@@ -57,6 +72,57 @@ def _write(path: Path, payload: dict[str, Any]) -> Path:
 
 def _sha(path: Path) -> str:
     return "sha256:" + hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def _canonical_bytes(payload: dict[str, Any]) -> bytes:
+    return json.dumps(
+        payload,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+        allow_nan=False,
+    ).encode("utf-8")
+
+
+def _write_canonical(path: Path, payload: dict[str, Any]) -> Path:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(_canonical_bytes(payload) + b"\n")
+    return path
+
+
+def verify_environment_acceptance_signature(
+    _: str, pae: bytes, signature: str
+) -> bool:
+    expected = "hmac-sha256:" + hmac.new(
+        TEST_ENVIRONMENT_ACCEPTANCE_SIGNING_KEY.encode("utf-8"),
+        pae,
+        hashlib.sha256,
+    ).hexdigest()
+    return hmac.compare_digest(expected, signature)
+
+
+def _sign_environment_acceptance(payload: dict[str, Any]) -> dict[str, Any]:
+    unsigned = dict(payload)
+    unsigned.pop("factId", None)
+    unsigned.pop("signer", None)
+    signed_payload = _canonical_bytes(unsigned)
+    pae = dsse_pae(DSSE_PAYLOAD_TYPE, signed_payload)
+    signed = {
+        **unsigned,
+        "signer": {
+            "identity": TEST_ENVIRONMENT_ACCEPTANCE_SIGNER,
+            "payloadType": DSSE_PAYLOAD_TYPE,
+            "payload": base64.b64encode(signed_payload).decode("ascii"),
+            "signature": "hmac-sha256:"
+            + hmac.new(
+                TEST_ENVIRONMENT_ACCEPTANCE_SIGNING_KEY.encode("utf-8"),
+                pae,
+                hashlib.sha256,
+            ).hexdigest(),
+        },
+    }
+    signed["factId"] = _document_digest(signed)
+    return signed
 
 
 def _document_digest(payload: dict[str, Any]) -> str:
@@ -119,11 +185,21 @@ def _research_activation_fields(environment: str) -> dict[str, Any]:
 
 class Fixture:
     def __init__(self, root: Path, *, environment: str = "alpha") -> None:
-        self.root = root
+        supplied_root = root.expanduser()
+        if supplied_root.is_symlink():
+            raise ValueError("fixture root must not be a symlink")
+        self.root = supplied_root.resolve()
+        self.root.mkdir(parents=True, exist_ok=True)
+        self.authority_root = self.root / "environment-acceptance-authority"
+        self.authority_root.mkdir(mode=0o700)
         self.environment = environment
         self.target = renderer.ENVIRONMENT_TARGETS[environment]
         self.paths: dict[str, Path] = {}
         self.app_paths: list[Path] = []
+        self.environment_variables = {
+            TEST_ENVIRONMENT_ACCEPTANCE_SIGNING_KEY_ENV:
+                TEST_ENVIRONMENT_ACCEPTANCE_SIGNING_KEY,
+        }
         self._build()
 
     def _build(self) -> None:
@@ -366,25 +442,102 @@ class Fixture:
         manifest["artifactDigest"] = canonical_manifest_digest(manifest)
         self.paths["manifest"] = _write(self.root / "manifest.json", manifest)
 
-        self.paths["acceptance"] = _write(
-            self.root / "environment-acceptance.json",
-            {
-                "schema": "quwoquan_ops.environment_acceptance_fact.v1",
-                "acceptanceProfile": "environment_promotion",
-                "factId": DIGEST_A,
-                "environment": self.environment,
-                "target": self.target,
-                "releaseId": RELEASE_ID,
-                "releaseDigest": RELEASE_DIGEST,
-                "requiredRawResults": [
-                    {
-                        "ref": f"env/{self.environment}/raw/readiness-case.json",
-                        "digest": DIGEST_B,
-                        "slotId": DIGEST_A,
-                        "status": "passed",
-                    }
-                ],
+        acceptance_candidate = {
+            "candidateId": str(manifest["candidateId"]),
+            "commit": GIT_SHA,
+            "tree": TREE_DIGEST.removeprefix("sha1:"),
+        }
+        case_ref = f"environment-acceptance/{self.environment}/release-case.json"
+        case_result = {
+            "objectId": "release-bound-environment-identity",
+            "specRef": (
+                "specs/feature-tree/discovery-content/"
+                "object-homepage-coverage-scaling/multi-carrier-release/"
+                "spec.md#gwt-002.t2"
+            ),
+            "caseId": "release-bound-environment-identity",
+            "producer": "app",
+            "layer": "user_acceptance",
+            "status": "passed",
+            "target": {
+                "kind": "operation",
+                "id": "release-bound-environment-identity",
             },
+            "commitSha": GIT_SHA,
+            "contractGraphSourceHash": "9" * 64,
+            "deploymentTarget": self.target,
+            "baselineId": BASELINE_ID,
+            "packageDigest": DIGEST_A,
+            "configurationDigest": DIGEST_B,
+            "candidateManifestSha256": "a" * 64,
+            "candidateDigest": manifest["candidateId"],
+            "environment": self.environment,
+            "provider": "first-party-https",
+            "startedAt": "2026-07-28T21:00:00Z",
+            "completedAt": "2026-07-28T21:01:00Z",
+            "runnerIdentity": "release-bound-environment-identity-test",
+            "artifactSha256": "b" * 64,
+            "receiptRef": f"environment/{self.environment}/release-case",
+            "releaseDigest": RELEASE_DIGEST,
+            "releaseId": RELEASE_ID,
+            "targetUatBindingDigest": DIGEST_A,
+            "entrySurface": "feed",
+            "carrier": "article",
+            "platform": "android",
+            "deviceClass": "physical",
+            "deviceIdentity": f"device-{self.environment}-physical",
+            "deviceRegistered": True,
+            "uatProfile": "promotable",
+            "nonPromotable": False,
+            "artifactClass": "production_behavior",
+            "physicalDevice": True,
+        }
+        case_path = _write_canonical(self.authority_root / case_ref, case_result)
+        exact_case_ref = {"ref": case_ref, "digest": _sha(case_path)}
+        named_roles = {
+            "runtimeIdentity": ("runtime-identity", "ready"),
+            "dataLifecycle": ("data-lifecycle", "closed"),
+            "providerReadiness": ("provider-readiness", "ready"),
+            "observabilityReadiness": ("observability-readiness", "ready"),
+            "inspectEvidence": ("inspect", "passed"),
+            "doctorEvidence": ("doctor", "passed"),
+            "cleanupEvidence": ("cleanup", "closed"),
+            "leaseClosureEvidence": ("lease-closure", "released"),
+        }
+        named_refs: dict[str, dict[str, str]] = {}
+        for field, (role, status) in named_roles.items():
+            ref = f"environment-acceptance/{self.environment}/{field}.json"
+            evidence_path = _write_canonical(
+                self.authority_root / ref,
+                {
+                    "schema": f"quwoquan_ops.environment_{role}.v1",
+                    "role": role,
+                    "status": status,
+                    "environment": self.environment,
+                    "profile": "release",
+                    **acceptance_candidate,
+                    "impactPlanDigest": IMPACT_PLAN_DIGEST,
+                },
+            )
+            named_refs[field] = {"ref": ref, "digest": _sha(evidence_path)}
+        acceptance = _sign_environment_acceptance(
+            {
+                "schema": ENVIRONMENT_ACCEPTANCE_SCHEMA,
+                "environment": self.environment,
+                "profile": "release",
+                "status": "passed",
+                "candidate": acceptance_candidate,
+                "impactPlanDigest": IMPACT_PLAN_DIGEST,
+                "caseResultRefs": [exact_case_ref],
+                **named_refs,
+                "predecessor": None,
+                "expiresAt": "2099-07-28T22:00:00Z",
+                "nonPromotable": False,
+                "issuedAt": "2026-07-28T21:00:00Z",
+            }
+        )
+        self.paths["acceptance"] = _write_canonical(
+            self.authority_root / "environment-acceptance.json", acceptance
         )
         self.paths["readiness"] = _write(
             self.root / "release-readiness.json",
@@ -783,7 +936,7 @@ class Fixture:
             "--release-evidence-manifest",
             str(self.paths["manifest"]),
             "--data-output-root",
-            str(self.root),
+            str(self.authority_root),
             "--release-readiness",
             str(self.paths["readiness"]),
             "--import-receipt",
@@ -794,6 +947,10 @@ class Fixture:
             str(self.paths["launch"]),
             "--environment-acceptance-fact",
             str(self.paths["acceptance"]),
+            "--environment-acceptance-verification-key-env",
+            TEST_ENVIRONMENT_ACCEPTANCE_SIGNING_KEY_ENV,
+            "--expected-environment-acceptance-signer-identity",
+            TEST_ENVIRONMENT_ACCEPTANCE_SIGNER,
         ]
         for path in self.app_paths:
             values.extend(["--app-artifact-receipt", str(path)])

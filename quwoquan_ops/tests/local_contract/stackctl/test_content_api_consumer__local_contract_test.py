@@ -14,7 +14,11 @@ from typing import Any
 import pytest
 
 from quwoquan_ops.cli.lib import content_api_consumer as subject
-from quwoquan_ops.cli.lib import environment_acceptance_fact as acceptance
+from quwoquan_ops.cli.lib.content_api_consumer_authority import (
+    SOURCE_FINGERPRINT_SCHEMA,
+    content_consumer_raw_slot_id,
+    derive_content_consumer_source_fingerprint,
+)
 from quwoquan_ops.cli.lib.readiness_case_result import validate_readiness_case_result
 
 RELEASE_ID = "release-m1"
@@ -626,14 +630,76 @@ def test_explicit_manifest_digest_must_match_data_readiness(
         )
 
 
-def test_runner_outputs_build_a_real_m1_eaf_chain(
+def test_content_authority_helpers_fail_with_typed_consumer_error() -> None:
+    with pytest.raises(subject.ContentApiConsumerError, match="sampleId"):
+        content_consumer_raw_slot_id(
+            sample_id="",
+            entry_surface="feed",
+            carrier="article",
+            spec_ref=SPEC_REF,
+            runner_identity="qwq.content_consumer.feed.article.v1",
+        )
+
+    exact = {"ref": "content/evidence.json", "digest": RELEASE_DIGEST}
+    with pytest.raises(subject.ContentApiConsumerError, match="requiredRawResults"):
+        derive_content_consumer_source_fingerprint(
+            schema=SOURCE_FINGERPRINT_SCHEMA,
+            environment="alpha",
+            target="alpha-local",
+            release_id=RELEASE_ID,
+            release_digest=RELEASE_DIGEST,
+            manifest_digest=MANIFEST_DIGEST,
+            import_run_id=IMPORT_RUN_ID,
+            verify_run_id=VERIFY_RUN_ID,
+            sample_plan=exact,
+            data_readiness=exact,
+            consumer_health=exact,
+            required_raw_results=[],
+        )
+
+
+def test_content_source_fingerprint_rejects_retired_versioned_schema() -> None:
+    exact = {"ref": "content/evidence.json", "digest": RELEASE_DIGEST}
+    raw = {
+        **exact,
+        "slotId": RELEASE_DIGEST,
+        "status": "passed",
+    }
+    with pytest.raises(
+        subject.ContentApiConsumerError, match="sourceFingerprint.schema"
+    ):
+        derive_content_consumer_source_fingerprint(
+            schema=SOURCE_FINGERPRINT_SCHEMA + ".v" + str(1),
+            environment="alpha",
+            target="alpha-local",
+            release_id=RELEASE_ID,
+            release_digest=RELEASE_DIGEST,
+            manifest_digest=MANIFEST_DIGEST,
+            import_run_id=IMPORT_RUN_ID,
+            verify_run_id=VERIFY_RUN_ID,
+            sample_plan=exact,
+            data_readiness=exact,
+            consumer_health=exact,
+            required_raw_results=[raw],
+        )
+
+
+def test_runner_outputs_exact_raw_authorities_without_writing_an_eaf(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    from quwoquan_ops.cli.lib import environment_acceptance_fact as eaf
+
     result, report_dir, refs = _run(tmp_path, monkeypatch)
     root = tmp_path / "output"
-    fact = acceptance.build_environment_acceptance_fact(
-        evidence_root=root,
-        acceptance_profile="m1_api_consumer",
+    report = json.loads((report_dir / "report.json").read_text(encoding="utf-8"))
+
+    assert not hasattr(eaf, "build_environment_acceptance_fact")
+    assert result["exitCode"] == 0
+    assert result["requiredRawResults"] == report["requiredRawResults"]
+    assert result["consumerHealth"] == report["consumerHealth"]
+    assert result["sourceFingerprint"] == report["sourceFingerprint"]
+    assert result["sourceFingerprint"] == derive_content_consumer_source_fingerprint(
+        schema=SOURCE_FINGERPRINT_SCHEMA,
         environment="alpha",
         target="alpha-local",
         release_id=RELEASE_ID,
@@ -641,30 +707,63 @@ def test_runner_outputs_build_a_real_m1_eaf_chain(
         manifest_digest=MANIFEST_DIGEST,
         import_run_id=IMPORT_RUN_ID,
         verify_run_id=VERIFY_RUN_ID,
-        sample_plan_ref=refs["sample_plan_ref"],
-        sample_plan_digest=refs["sample_plan_digest"],
-        target_binding_refs=[],
-        required_raw_results=result["requiredRawResults"],
-        required_target_profiles=[],
+        sample_plan={
+            "ref": refs["sample_plan_ref"],
+            "digest": refs["sample_plan_digest"],
+        },
         data_readiness={
             "ref": refs["data_readiness_ref"],
             "digest": refs["data_readiness_digest"],
         },
         consumer_health=result["consumerHealth"],
-        created_at="2026-09-03T01:10:00Z",
-        source_fingerprint=result["sourceFingerprint"],
+        required_raw_results=result["requiredRawResults"],
     )
-    assert fact["sourceFingerprint"] == result["sourceFingerprint"]
-    assert fact["consumerHealth"] == result["consumerHealth"]
-    assert fact["releaseDigest"] == RELEASE_DIGEST
-    assert fact["manifestDigest"] == MANIFEST_DIGEST
-    store = root / "environment-acceptance-facts"
-    store.mkdir()
-    written = acceptance.write_environment_acceptance_fact(
-        root=store,
-        fact=fact,
-        evidence_root=root,
-        required_target_profiles=[],
-    )
-    assert written.is_file()
+
+    exact_results = result["requiredRawResults"]
+    assert len(exact_results) == 16
+    assert len({item["slotId"] for item in exact_results}) == 16
+    observed_cells: set[tuple[str, str]] = set()
+    for exact in exact_results:
+        raw_path = root / exact["ref"]
+        raw_bytes = raw_path.read_bytes()
+        raw = json.loads(raw_bytes)
+        cell = (raw["entrySurface"], raw["carrier"])
+        observed_cells.add(cell)
+
+        assert raw_path == report_dir / "raw" / cell[0] / f"{cell[1]}.json"
+        assert exact["digest"] == subject._digest_bytes(raw_bytes)
+        assert exact["status"] == raw["status"] == "passed"
+        assert exact["slotId"] == content_consumer_raw_slot_id(
+            sample_id=f"baseline-{cell[1]}-001",
+            entry_surface=cell[0],
+            carrier=cell[1],
+            spec_ref=raw["specRef"],
+            runner_identity=raw["runnerIdentity"],
+        )
+        assert validate_readiness_case_result(
+            raw, generated_at=raw["completedAt"]
+        ) == raw
+        assert raw_bytes == subject.canonical_json_bytes(raw)
+        assert raw["producer"] == "service"
+        assert raw["layer"] == "api_integration"
+        assert raw["deploymentTarget"] == "alpha-local"
+        assert raw["environment"] == "alpha"
+        assert raw["releaseId"] == RELEASE_ID
+        assert raw["releaseDigest"] == RELEASE_DIGEST
+        assert raw["importRunId"] == IMPORT_RUN_ID
+        assert raw["verifyRunId"] == VERIFY_RUN_ID
+        assert raw["artifactPath"].startswith(
+            report_dir.relative_to(root).as_posix() + "/observations/"
+        )
+        observation_path = root / raw["artifactPath"]
+        assert raw["artifactSha256"] == subject._digest_bytes(
+            observation_path.read_bytes()
+        ).removeprefix("sha256:")
+
+    assert observed_cells == {
+        (entry, carrier)
+        for entry in subject.ENTRY_SURFACES
+        for carrier in subject.CARRIERS
+    }
     assert (report_dir / "consumer-health.json").is_file()
+    assert not (root / "environment-acceptance-facts").exists()

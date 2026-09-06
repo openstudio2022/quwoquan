@@ -43,10 +43,13 @@ from pathlib import Path
 sys.dont_write_bytecode = True
 
 ROOT = Path(__file__).resolve().parents[2]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
 #: 棘轮基线的物理位置。新增基线必须落在这里，否则不受治理约束。
 BASELINE_PATHS = (
     "quwoquan_ops/policies/gates",
+    "quwoquan_ops/policies",
     "quwoquan_app/scripts/runtime/page",
     "quwoquan_app/scripts/runtime/observability",
     "quwoquan_service/scripts/verify/structure",
@@ -183,6 +186,11 @@ def debt_entries(document: object) -> dict[str, int]:
             ):
                 entries[f"{path}::{fingerprint}"] = count
         return entries
+    # Promotion timing is a permanent semantic policy, not a generic path-keyed
+    # debt file.  Its complete partial order is validated by the canonical
+    # evaluator so lower-bound weakening and measure drift cannot hide here.
+    if document.get("contract_id") == "promotion-timing-ratchet-v1":
+        return entries
     for key, value in document.items():
         if key == "_governance" or not isinstance(key, str) or "/" not in key:
             continue
@@ -200,12 +208,19 @@ def debt_entries(document: object) -> dict[str, int]:
 def debt_growth(path: Path, relative: str) -> list[str]:
     """相对 HEAD 变大或新增的债务条目。文件在 HEAD 不存在时无从比较。"""
     body = head_revision(relative)
-    if body is None or path.suffix != ".json":
+    if body is None:
         return []
     try:
-        before = debt_entries(json.loads(body))
-        after = debt_entries(json.loads(path.read_text(encoding="utf-8")))
-    except (json.JSONDecodeError, UnicodeError):
+        if path.suffix == ".json":
+            before_document = json.loads(body)
+            after_document = json.loads(path.read_text(encoding="utf-8"))
+        else:
+            import yaml
+            before_document = yaml.safe_load(body)
+            after_document = yaml.safe_load(path.read_text(encoding="utf-8"))
+        before = debt_entries(before_document)
+        after = debt_entries(after_document)
+    except (json.JSONDecodeError, UnicodeError, ValueError, TypeError):
         return []
     if not before and not after:
         return []
@@ -215,6 +230,30 @@ def debt_growth(path: Path, relative: str) -> list[str]:
         if after[identity] > was:
             growth.append(f"{identity}: {was} -> {after[identity]}")
     return growth
+
+
+def promotion_timing_policy_failure(path: Path, relative: str) -> str | None:
+    """Validate the permanent timing policy and compare its full monotonic order."""
+    try:
+        import yaml
+        from quwoquan_ops.ci.promotion_timing_ratchet import (
+            PromotionTimingError,
+            validate_policy,
+            verify_monotonic,
+        )
+
+        candidate = yaml.safe_load(path.read_text(encoding="utf-8"))
+        if not isinstance(candidate, dict) or candidate.get("contract_id") != "promotion-timing-ratchet-v1":
+            return None
+        validate_policy(candidate)
+        previous_body = head_revision(relative)
+        if previous_body is not None:
+            previous = yaml.safe_load(previous_body)
+            if isinstance(previous, dict) and previous.get("contract_id") == "promotion-timing-ratchet-v1":
+                verify_monotonic(previous, candidate)
+    except (OSError, ImportError, TypeError, ValueError) as error:
+        return str(error)
+    return None
 
 
 def measure_of_head(path: Path, relative: str) -> str | None:
@@ -265,6 +304,13 @@ def main() -> int:
                 f"{relative}: owner {owner!r} 既不是 specs/feature-tree 下的节点，"
                 "也不在 GOVERNANCE_FUNCTIONS 里；无法追责的 owner 等于没有 owner"
             )
+
+        timing_failure = promotion_timing_policy_failure(path, relative)
+        if timing_failure:
+            failures.append(
+                f"{relative}: permanent promotion timing policy invalid — {timing_failure}"
+            )
+            continue
 
         previous = measure_of_head(path, relative)
         if previous is not None and previous != block["measure"]:

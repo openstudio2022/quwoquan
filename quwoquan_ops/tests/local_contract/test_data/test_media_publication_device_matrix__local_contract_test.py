@@ -26,7 +26,6 @@ SCRIPT = (
     / "run_media_publication_device_matrix_ci.py"
 )
 SUITES_PATH = ROOT / "quwoquan_ops/environments/gamma/validation_suites.json"
-WORKFLOW_PATH = ROOT / ".github/workflows/app-env-device-matrix-self-hosted.yml"
 MATRIX_RUNNER_PATH = ROOT / "quwoquan_ops/ci/run_mobile_platform_matrix.sh"
 BETA_STARTUP_PATH = ROOT / "quwoquan_app/scripts/tools/device/beta_manual_app.sh"
 SPEC = importlib.util.spec_from_file_location(
@@ -170,10 +169,10 @@ class MediaPublicationDeviceMatrixContractTest(unittest.TestCase):
         self.assertTrue(mainline["requireAllPlatforms"])
         self.assertIn("media-publication", mainline["matrixKinds"])
 
-    def test_self_hosted_workflow_uses_dedicated_media_runner(self) -> None:
+    def test_local_environment_runner_uses_dedicated_media_runner(self) -> None:
         workflow = "\n".join(
             path.read_text(encoding="utf-8")
-            for path in (WORKFLOW_PATH, MATRIX_RUNNER_PATH)
+            for path in (MATRIX_RUNNER_PATH,)
         )
         self.assertIn('[[ "$matrix_kind" == "media-publication" ]]', workflow)
         self.assertIn(

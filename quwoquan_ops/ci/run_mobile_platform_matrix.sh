@@ -170,8 +170,8 @@ while IFS= read -r env_name; do
           matrix_exit_code=0
         else
           prod_closure_selected_platform_seen=1
-          if [[ "${EVENT_NAME:-}" != "workflow_dispatch" || "${ACCOUNT_CLOSURE_DISPOSABLE_ACK:-}" != "true" ]]; then
-            echo "::error::Prod account closure requires workflow_dispatch and account_closure_disposable_ack=true"
+          if [[ "${ACCOUNT_CLOSURE_PROD_AUTHORITY_STATUS:-}" != "approved" || "${ACCOUNT_CLOSURE_DISPOSABLE_ACK:-}" != "true" ]]; then
+            echo "::error::Prod account closure requires approved Environment Ops authority and account_closure_disposable_ack=true"
             matrix_exit_code=2
           elif [[ -z "${ACCOUNT_CLOSURE_PROD_DEVICE_ID:-}" ]]; then
             echo "::error::Prod account closure requires one explicit account_closure_prod_device_id"

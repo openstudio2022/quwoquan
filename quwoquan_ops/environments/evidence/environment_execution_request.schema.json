@@ -1,0 +1,92 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://quwoquan.local/quwoquan_ops/environments/evidence/environment_execution_request.schema.json",
+  "title": "Hermetic detached EnvironmentExecutionRequest v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "requestId",
+    "candidate",
+    "environment",
+    "impactPlanDigest",
+    "priority",
+    "executionMode",
+    "resourceGroup",
+    "createdAt"
+  ],
+  "properties": {
+    "schema": {
+      "const": "quwoquan_ops.environment_execution_request.v1"
+    },
+    "requestId": {
+      "$ref": "#/$defs/digest"
+    },
+    "candidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "candidateId",
+        "commit",
+        "tree",
+        "ref",
+        "digest"
+      ],
+      "properties": {
+        "candidateId": {
+          "$ref": "#/$defs/digest"
+        },
+        "commit": {
+          "$ref": "#/$defs/gitObjectId"
+        },
+        "tree": {
+          "$ref": "#/$defs/gitObjectId"
+        },
+        "ref": {
+          "$ref": "#/$defs/immutableRef"
+        },
+        "digest": {
+          "$ref": "#/$defs/digest"
+        }
+      }
+    },
+    "environment": {
+      "enum": [
+        "alpha",
+        "beta",
+        "gamma"
+      ]
+    },
+    "impactPlanDigest": {
+      "$ref": "#/$defs/digest"
+    },
+    "priority": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "executionMode": {
+      "const": "hermetic_detached_exact_candidate"
+    },
+    "resourceGroup": {
+      "const": "workstation-commercial-runtime"
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "gitObjectId": {
+      "type": "string",
+      "pattern": "^(?:[a-f0-9]{40}|[a-f0-9]{64})$"
+    },
+    "immutableRef": {
+      "type": "string",
+      "pattern": "^(?!/)(?!.*(?:^|/)\\.{1,2}(?:/|$))(?!.*//)(?!.*\\\\)(?!.*(?:^|/)latest(?:[./]|$)).+$"
+    }
+  }
+}

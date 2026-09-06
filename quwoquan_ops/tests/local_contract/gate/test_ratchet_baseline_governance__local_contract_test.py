@@ -281,3 +281,93 @@ def test_timing_budget_keys_are_not_treated_as_debt(
     )
 
     assert gate.main() == 0
+
+
+def promotion_policy() -> dict[str, object]:
+    return {
+        "schema_version": 1,
+        "contract_id": "promotion-timing-ratchet-v1",
+        "governance": {
+            "owner": "delivery-gate",
+            "reason": "all eligible events",
+            "expires_when": "never",
+            "measure": "immutable promotionReadyAt to mainReadbackAt measure",
+        },
+        "metricId": "dev1-main-promotion-ready-to-main-readback",
+        "attemptClock": "first_attempt",
+        "denominator": "all_eligible_promotion_events",
+        "windowAnchorUtc": "1970-01-01T00:00:00Z",
+        "windowDays": 14,
+        "quantile": "nearest_rank",
+        "quantilePercent": 95,
+        "roundingSeconds": 60,
+        "targetP95Seconds": 300,
+        "enforcementBudgetSeconds": 1800,
+        "minimumEligibleEvents": 30,
+        "consecutiveQualifiedWindows": 2,
+        "requiredTimingCompleteness": 1.0,
+        "allowedUnclassifiedCancellations": 0,
+        "allowedDuplicateEvents": 0,
+        "allowedMissingEvidence": 0,
+        "classifications": [
+            "success", "failure", "infra", "superseded", "unclassified", "incomplete"
+        ],
+        "monotonic": {
+            "upperBoundFields": [
+                "enforcementBudgetSeconds", "targetP95Seconds",
+                "allowedUnclassifiedCancellations", "allowedDuplicateEvents",
+                "allowedMissingEvidence",
+            ],
+            "lowerBoundFields": [
+                "minimumEligibleEvents", "consecutiveQualifiedWindows",
+                "requiredTimingCompleteness",
+            ],
+            "requiredSetFields": ["classifications"],
+        },
+    }
+
+
+def write_promotion_policy(path: Path, value: dict[str, object]) -> None:
+    import yaml
+    path.write_text(yaml.safe_dump(value, sort_keys=False), encoding="utf-8")
+
+
+def test_promotion_timing_policy_is_validated_by_full_partial_order(
+    gate_root: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    path = gate_root / "promotion_timing_ratchet.yaml"
+    write_promotion_policy(path, promotion_policy())
+    monkeypatch.setattr(gate, "head_revision", lambda _: None)
+
+    assert gate.debt_entries(promotion_policy()) == {}
+    assert gate.main() == 0
+
+
+def test_promotion_timing_budget_raise_blocks(
+    gate_root: Path, monkeypatch: pytest.MonkeyPatch, capsys
+) -> None:
+    path = gate_root / "promotion_timing_ratchet.yaml"
+    candidate = promotion_policy()
+    candidate["enforcementBudgetSeconds"] = 1801
+    write_promotion_policy(path, candidate)
+    import yaml
+    monkeypatch.setattr(gate, "head_revision", lambda _: yaml.safe_dump(promotion_policy(), sort_keys=False))
+
+    assert gate.main() == 1
+    assert "upper-bound field widened" in capsys.readouterr().out
+
+
+def test_promotion_minimum_events_and_measure_cannot_weaken(
+    gate_root: Path, monkeypatch: pytest.MonkeyPatch, capsys
+) -> None:
+    import yaml
+    for field, value, expected in (
+        ("minimumEligibleEvents", 29, "at least 30"),
+        ("governance", {**promotion_policy()["governance"], "measure": "changed"}, "measure drifted"),
+    ):
+        candidate = promotion_policy()
+        candidate[field] = value
+        write_promotion_policy(gate_root / "promotion_timing_ratchet.yaml", candidate)
+        monkeypatch.setattr(gate, "head_revision", lambda _: yaml.safe_dump(promotion_policy(), sort_keys=False))
+        assert gate.main() == 1
+        assert expected in capsys.readouterr().out

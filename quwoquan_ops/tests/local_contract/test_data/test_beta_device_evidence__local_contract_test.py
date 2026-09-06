@@ -13,10 +13,6 @@ from quwoquan_ops.ci.render_beta_device_evidence import (
     render_platform_bundle,
     render_stack_bundle,
 )
-from quwoquan_ops.ci.render_environment_release_receipt import (
-    _canonical_digest,
-    render as render_environment_receipt,
-)
 
 
 ROOT = Path(__file__).resolve().parents[4]
@@ -121,7 +117,7 @@ def _stack_reports(root: Path) -> dict[str, Path]:
 
 def _stack_bundle(root: Path) -> tuple[Path, dict]:
     bundle = root / "bundle-stack"
-    with patch("quwoquan_ops.ci.render_beta_device_evidence.validate_manifest"):
+    with patch("quwoquan_ops.ci.render_beta_device_evidence.validate_historical_release_snapshot"):
         payload = render_stack_bundle(
             manifest=_manifest(),
             host_digest=HOST_DIGEST,
@@ -176,7 +172,7 @@ def _platform_bundle(
     execution_start = started_at or f"2026-07-28T00:00:{16 + index:02d}Z"
     execution_end = ended_at or f"2026-07-28T00:00:{25 + index:02d}Z"
     bundle = root / f"bundle-{platform}"
-    with patch("quwoquan_ops.ci.render_beta_device_evidence.validate_manifest"):
+    with patch("quwoquan_ops.ci.render_beta_device_evidence.validate_historical_release_snapshot"):
         payload = render_platform_bundle(
             manifest=_manifest(),
             platform=platform,
@@ -210,7 +206,7 @@ def _merge(
             else "2026-07-28T00:00:20Z"
         ),
     )
-    with patch("quwoquan_ops.ci.render_beta_device_evidence.validate_manifest"):
+    with patch("quwoquan_ops.ci.render_beta_device_evidence.validate_historical_release_snapshot"):
         return merge_platform_bundles(
             manifest=_manifest(),
             expected_host_digest=HOST_DIGEST,
@@ -252,7 +248,7 @@ def test_stack_bundle_rejects_source_built_or_destructively_repaired_runtime() -
         up["destructiveActions"] = ["wipe"]
         reports["up"].write_text(json.dumps(up), encoding="utf-8")
         with patch(
-            "quwoquan_ops.ci.render_beta_device_evidence.validate_manifest"
+            "quwoquan_ops.ci.render_beta_device_evidence.validate_historical_release_snapshot"
         ), pytest.raises(ValueError, match="immutable candidate runtime"):
             render_stack_bundle(
                 manifest=_manifest(),
@@ -276,7 +272,7 @@ def test_stack_bundle_rejects_noncommercial_release_inputs(
         up["releaseInputClassification"] = classification
         reports["up"].write_text(json.dumps(up), encoding="utf-8")
         with patch(
-            "quwoquan_ops.ci.render_beta_device_evidence.validate_manifest"
+            "quwoquan_ops.ci.render_beta_device_evidence.validate_historical_release_snapshot"
         ), pytest.raises(ValueError, match="commercial release inputs"):
             render_stack_bundle(
                 manifest=_manifest(),
@@ -295,7 +291,7 @@ def test_stack_bundle_rejects_contract_graph_drift(label: str) -> None:
         payload["contractGraphDigest"] = "sha256:" + "8" * 64
         reports[label].write_text(json.dumps(payload), encoding="utf-8")
         with patch(
-            "quwoquan_ops.ci.render_beta_device_evidence.validate_manifest"
+            "quwoquan_ops.ci.render_beta_device_evidence.validate_historical_release_snapshot"
         ), pytest.raises(ValueError, match="ContractGraph"):
             render_stack_bundle(
                 manifest=_manifest(),
@@ -322,98 +318,6 @@ def test_merge_requires_exact_oci_refs_one_host_and_parallel_device_leases() -> 
     assert executions[1]["startedAt"] < executions[0]["endedAt"]
 
 
-def test_merged_matrix_seals_one_canonical_beta_environment_receipt() -> None:
-    with tempfile.TemporaryDirectory() as temporary:
-        root = Path(temporary)
-        stack, _ = _stack_bundle(root)
-        android, _ = _platform_bundle(root, "android")
-        ios, _ = _platform_bundle(root, "ios")
-        with patch("quwoquan_ops.ci.render_beta_device_evidence.validate_manifest"):
-            devices = merge_platform_bundles(
-                manifest=_manifest(),
-                expected_host_digest=HOST_DIGEST,
-                stack_bundle=stack,
-                stack_ref="ghcr.io/owner/repo/beta-stack@" + STACK_DIGEST,
-                stack_digest=STACK_DIGEST,
-                bundles={"android": android, "ios": ios},
-                refs={
-                    "android": "ghcr.io/owner/repo/beta-android@" + ANDROID_DIGEST,
-                    "ios": "ghcr.io/owner/repo/beta-ios@" + IOS_DIGEST,
-                },
-                digests={"android": ANDROID_DIGEST, "ios": IOS_DIGEST},
-            )
-        devices_path = root / "devices.json"
-        devices_path.write_text(json.dumps(devices), encoding="utf-8")
-        evidence: dict[str, tuple[Path, dict]] = {}
-        for name in ("package", "up", "health", "verify"):
-            path = stack / "raw" / f"{name}.json"
-            evidence[name] = (path, json.loads(path.read_text(encoding="utf-8")))
-        evidence.update(
-            {
-                "android-platform": (
-                    android / "platform.json",
-                    json.loads((android / "platform.json").read_text(encoding="utf-8")),
-                ),
-                "ios-platform": (
-                    ios / "platform.json",
-                    json.loads((ios / "platform.json").read_text(encoding="utf-8")),
-                ),
-                "devices": (devices_path, devices),
-            }
-        )
-        candidate_attestation = {
-            "schema": "quwoquan_data.release_attestation",
-            "releaseId": "pilot-003",
-            "releaseClass": "commercial",
-            "productLifecycleState": "commercial",
-            "payloadSha256": "sha256:" + "6" * 64,
-            "recordedAt": "2026-07-28T00:00:15Z",
-        }
-        rollback_attestation = {
-            "schema": "quwoquan_data.release_attestation",
-            "releaseId": "pilot-002",
-            "releaseClass": "commercial",
-            "productLifecycleState": "commercial",
-            "payloadSha256": "sha256:" + "7" * 64,
-            "recordedAt": "2026-07-28T00:00:14Z",
-        }
-        lifecycle_exit = {
-            "schema": "quwoquan_data.environment_release_lifecycle_exit",
-            "environment": "beta",
-            "passed": True,
-            "sourceOwner": "qwq_data",
-            "originalReleaseId": candidate_attestation["releaseId"],
-            "originalManifestDigest": candidate_attestation["payloadSha256"],
-            "replayManifestDigest": candidate_attestation["payloadSha256"],
-            "rollbackToReleaseId": rollback_attestation["releaseId"],
-            "rollbackToManifestDigest": rollback_attestation["payloadSha256"],
-            "recordedAt": "2026-07-28T00:00:16Z",
-        }
-        lifecycle_exit["verificationChecksum"] = _canonical_digest(lifecycle_exit)
-        for label, payload in {
-            "pilot-release": candidate_attestation,
-            "pilot-rollback": rollback_attestation,
-            "content-lifecycle": lifecycle_exit,
-        }.items():
-            path = root / f"{label}.json"
-            path.write_text(json.dumps(payload), encoding="utf-8")
-            evidence[label] = (path, payload)
-        with patch(
-            "quwoquan_ops.ci.render_environment_release_receipt.validate_manifest"
-        ):
-            receipt = render_environment_receipt(
-                manifest=_manifest(),
-                environment="beta",
-                evidence=evidence,
-                required_evidence=list(evidence),
-                archive_prefix="evidence/raw/environments/beta/raw",
-            )
-
-    assert receipt["schema"] == "release-environment-receipt"
-    assert receipt["environment"] == "beta"
-    assert receipt["status"] == "passed"
-
-
 def test_merge_rejects_tampered_platform_payload() -> None:
     with tempfile.TemporaryDirectory() as temporary:
         root = Path(temporary)
@@ -423,7 +327,7 @@ def test_merge_rejects_tampered_platform_payload() -> None:
         (ios / "raw" / "device-lease.json").write_text("{}", encoding="utf-8")
 
         with patch(
-            "quwoquan_ops.ci.render_beta_device_evidence.validate_manifest"
+            "quwoquan_ops.ci.render_beta_device_evidence.validate_historical_release_snapshot"
         ), pytest.raises(ValueError, match="digest mismatch"):
             merge_platform_bundles(
                 manifest=_manifest(),
@@ -465,7 +369,7 @@ def test_merge_rejects_a_second_platform_schema_identity() -> None:
         (ios / "platform.json").write_text(json.dumps(payload), encoding="utf-8")
 
         with patch(
-            "quwoquan_ops.ci.render_beta_device_evidence.validate_manifest"
+            "quwoquan_ops.ci.render_beta_device_evidence.validate_historical_release_snapshot"
         ), pytest.raises(ValueError, match="second schema identity"):
             merge_platform_bundles(
                 manifest=_manifest(),

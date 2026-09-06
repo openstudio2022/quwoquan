@@ -7,7 +7,7 @@ from datetime import datetime
 from quwoquan_ops.cli.lib.deployment_candidate_manifest import (
     validate_release_attestations,
 )
-from quwoquan_ops.cli.prod.finalize_mainline_release_artifact import DIGEST_PATTERN
+from quwoquan_ops.ci.release_evidence_reader import DIGEST_PATTERN
 
 from quwoquan_ops.cli.lib.environment_stability_final_acceptance.model import (
     LoadedReceipt,

@@ -168,6 +168,40 @@ def test_spec_contract_is_only_a_local_projection() -> None:
     assert "spec_contract" not in classify_hosted([path])
 
 
+def test_local_readiness_contract_declares_five_independent_fact_dimensions() -> None:
+    contract = __import__("yaml").safe_load((ROOT / "quwoquan_ops/policies/local_readiness_contract.yaml").read_text(encoding="utf-8"))
+    assert contract["schema_version"] == 2
+    assert list(contract["fact_dimensions"]) == [
+        "sourceReadiness", "environmentReadiness", "deviceReadiness",
+        "integrationEligibility", "promotionEligibility",
+    ]
+    assert contract["independence"] == {
+        "source_pass_implies": [],
+        "cross_dimension_inference": "denied",
+        "local_readiness_writes": ["sourceReadiness"],
+        "non_source_default": "not_evaluated",
+    }
+
+
+def test_source_pass_keeps_all_other_readiness_dimensions_unevaluated() -> None:
+    with _repo() as directory:
+        repo = Path(directory)
+        _init(repo)
+        state = repo / "state"
+        plan = plan_readiness(level="fast", paths=["source.txt"], repo_root=repo, mode="workspace")
+        receipt = run_readiness(plan, repo_root=repo, state_root=state)
+        assert receipt["schema"] == "local-readiness-receipt-v2"
+        assert "readiness" not in receipt
+        assert receipt["facts"] == {
+            "sourceReadiness": {"status": "fast_green", "producer": "local_readiness"},
+            "environmentReadiness": {"status": "not_evaluated", "producer": "environment_ops"},
+            "deviceReadiness": {"status": "not_evaluated", "producer": "package_acceptance"},
+            "integrationEligibility": {"status": "not_evaluated", "producer": "trusted_integration_publisher"},
+            "promotionEligibility": {"status": "not_evaluated", "producer": "integration_qualification"},
+        }
+        verify_receipt(level="fast", paths=["source.txt"], repo_root=repo, mode="workspace", state_root=state)
+
+
 def test_impact_plan_exposes_canonical_source_identity_and_version() -> None:
     plan = build_impact_plan(["quwoquan_app/lib/runtime/bootstrap.dart"], level="scope")
     canonical_identity = planner_identity()

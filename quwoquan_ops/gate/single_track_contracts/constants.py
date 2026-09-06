@@ -24,15 +24,248 @@ VERSIONED_SCHEMA_VALUE = re.compile(
     r"(?:/v?[0-9]+|[._-]v[0-9]+|\.m[0-9]+)$",
     re.I,
 )
-# 已知契约身份前缀 + 版本后缀（/N .vN .mN）
+# CI/CD create-once / append-only evidence 的 schema 后缀是持久字节的一部分，
+# 不是 runtime/local/control 协议信封。这里复制 canonical evidence gate 及其
+# 同一 release chain 的 exact identities，并把每个 identity 绑定到唯一生产或
+# fixture path；闭集外的 quwoquan_ops.*.vN、同值异路径及 factory material
+# 仍由通用扫描器阻断。
+IMMUTABLE_EVIDENCE_SCHEMA_PATHS = {
+    "quwoquan_ops.exact_integration_candidate.v1": frozenset(
+        {
+            "quwoquan_ops/ci/scoped_candidate/core.py",
+            "quwoquan_ops/tests/local_contract/ci/test_integration_qualification__local_contract_test.py",
+            "quwoquan_ops/tests/local_contract/ci/test_scoped_integration_candidate__local_contract_test.py",
+            "quwoquan_ops/tests/local_contract/environment/test_environment_execution_cli__local_contract_test.py",
+            "quwoquan_ops/tests/local_contract/environment/test_environment_scheduler__local_contract_test.py",
+        }
+    ),
+    "quwoquan_ops.integration_publish_admission.v1": frozenset(
+        {
+            "quwoquan_ops/ci/integration_qualification.py",
+            "quwoquan_ops/ci/scoped_candidate/core.py",
+            "quwoquan_ops/tests/local_contract/ci/test_integration_qualification__local_contract_test.py",
+            "quwoquan_ops/tests/local_contract/environment/test_environment_execution_cli__local_contract_test.py",
+        }
+    ),
+    "quwoquan_ops.integration_publish_result.v1": frozenset(
+        {
+            "quwoquan_ops/ci/integration_qualification.py",
+            "quwoquan_ops/ci/scoped_candidate/core.py",
+            "quwoquan_ops/tests/local_contract/ci/test_integration_qualification__local_contract_test.py",
+            "quwoquan_ops/tests/local_contract/environment/test_environment_execution_cli__local_contract_test.py",
+        }
+    ),
+    "quwoquan_ops.artifact_build_number_allocation.v1": frozenset(
+        {
+            "quwoquan_ops/ci/artifact_build_number.py",
+            "quwoquan_ops/ci/release_qualification.py",
+            "quwoquan_ops/ci/release_tag_admission.py",
+            "quwoquan_ops/tests/local_contract/release/test_release_qualification__local_contract_test.py",
+            "quwoquan_ops/tests/local_contract/release/test_release_tag_admission__local_contract_test.py",
+            "quwoquan_ops/tests/local_contract/release/test_official_distribution_release__supply_chain__local_contract_test.py",
+        }
+    ),
+    "quwoquan_ops.candidate_material_manifest.v1": frozenset(
+        {
+            "quwoquan_ops/ci/release_qualification.py",
+            "quwoquan_ops/ci/release_tag_admission.py",
+            "quwoquan_ops/tests/local_contract/release/test_prod_acceptance_rollout_binding__local_contract_test.py",
+            "quwoquan_ops/tests/local_contract/release/test_qualified_prod__local_contract_test.py",
+            "quwoquan_ops/tests/local_contract/release/test_release_tag_admission__local_contract_test.py",
+            "quwoquan_ops/tests/local_contract/release/test_official_distribution_release__supply_chain__local_contract_test.py",
+        }
+    ),
+    "quwoquan_ops.initial_release_authority_fact.v1": frozenset(
+        {
+            "quwoquan_ops/ci/release_tag_admission.py",
+            "quwoquan_ops/tests/local_contract/release/test_release_tag_admission__local_contract_test.py",
+        }
+    ),
+    "quwoquan_ops.release_candidate_selection_fact.v1": frozenset(
+        {
+            "quwoquan_ops/ci/release_tag_admission.py",
+            "quwoquan_ops/tests/local_contract/release/test_release_tag_admission__local_contract_test.py",
+        }
+    ),
+    "quwoquan_ops.release_qualification_request.v1": frozenset(
+        {
+            "quwoquan_ops/ci/artifact_build_number.py",
+            "quwoquan_ops/ci/release_qualification.py",
+            "quwoquan_ops/ci/release_tag_admission.py",
+            "quwoquan_ops/tests/local_contract/release/test_release_tag_admission__local_contract_test.py",
+            "quwoquan_ops/tests/local_contract/release/test_official_distribution_release__supply_chain__local_contract_test.py",
+            "quwoquan_ops/tests/local_contract/release/test_release_qualification__local_contract_test.py",
+        }
+    ),
+    "quwoquan_ops.release_tag_reservation_fact.v1": frozenset(
+        {
+            "quwoquan_ops/ci/release_tag_admission.py",
+            "quwoquan_ops/tests/local_contract/release/test_release_tag_admission__local_contract_test.py",
+        }
+    ),
+    "quwoquan_ops.prod_deploy_material.v1": frozenset(
+        {
+            "quwoquan_ops/cli/commands/deploy_release_inputs.py",
+        }
+    ),
+    "quwoquan_ops.prod_runtime_config_deployment_bundle.v1": frozenset(
+        {
+            "quwoquan_ops/tests/local_contract/release/test_qualified_prod__local_contract_test.py",
+        }
+    ),
+    "quwoquan_ops.prod_activation_input.v1": frozenset(
+        {
+            "quwoquan_ops/ci/qualified_prod.py",
+            "quwoquan_ops/cli/commands/deploy_release_inputs.py",
+            "quwoquan_ops/tests/local_contract/release/test_prod_acceptance_rollout_binding__local_contract_test.py",
+        }
+    ),
+    "quwoquan_ops.prod_released_fact.v1": frozenset(
+        {
+            "quwoquan_ops/ci/qualified_prod.py",
+            "quwoquan_ops/ci/system_backsync.py",
+            "quwoquan_ops/cli/commands/deploy_release_inputs.py",
+            "quwoquan_ops/environments/evidence/prod_released_fact.schema.json",
+            "quwoquan_ops/tests/local_contract/ci/test_system_backsync__local_contract_test.py",
+            "quwoquan_ops/tests/local_contract/release/test_prod_acceptance_rollout_binding__local_contract_test.py",
+            "quwoquan_ops/tests/local_contract/release/test_qualified_prod__local_contract_test.py",
+        }
+    ),
+    "quwoquan_ops.rollback_readiness_fact.v1": frozenset(
+        {
+            "quwoquan_ops/ci/qualified_prod.py",
+            "quwoquan_ops/cli/commands/deploy_release_inputs.py",
+            "quwoquan_ops/tests/local_contract/release/test_prod_acceptance_rollout_binding__local_contract_test.py",
+            "quwoquan_ops/tests/local_contract/release/test_qualified_prod__local_contract_test.py",
+        }
+    ),
+    "quwoquan_ops.post_release_soak_fact.v1": frozenset(
+        {
+            "quwoquan_ops/ci/qualified_prod.py",
+            "quwoquan_ops/ci/system_backsync.py",
+            "quwoquan_ops/environments/evidence/post_release_soak_fact.schema.json",
+            "quwoquan_ops/tests/local_contract/ci/test_system_backsync__local_contract_test.py",
+        }
+    ),
+    "quwoquan_ops.environment_acceptance_fact.v2": frozenset(
+        {
+            "quwoquan_ops/cli/lib/environment_acceptance_fact_contract.py",
+            "quwoquan_ops/environments/evidence/environment_acceptance_fact.schema.json",
+            "quwoquan_ops/tests/local_contract/ci/test_scoped_integration_candidate__local_contract_test.py",
+            "quwoquan_ops/tests/local_contract/environment/test_environment_scheduler__local_contract_test.py",
+            "quwoquan_ops/tests/local_contract/release/test_prod_acceptance_rollout_binding__local_contract_test.py",
+            "quwoquan_ops/tests/local_contract/stackctl/test_environment_acceptance_fact__local_contract_test.py",
+        }
+    ),
+    "quwoquan_ops.environment_execution_request.v1": frozenset(
+        {
+            "quwoquan_ops/ci/environment_scheduler.py",
+            "quwoquan_ops/environments/evidence/environment_execution_request.schema.json",
+        }
+    ),
+    "quwoquan_ops.integration_qualification_fact.v1": frozenset(
+        {
+            "quwoquan_ops/ci/integration_qualification.py",
+            "quwoquan_ops/ci/promotion_evidence.py",
+            "quwoquan_ops/ci/release_qualification.py",
+            "quwoquan_ops/environments/evidence/integration_qualification_fact.schema.json",
+            "quwoquan_ops/tests/local_contract/ci/test_promotion_evidence__local_contract_test.py",
+            "quwoquan_ops/tests/local_contract/release/test_release_qualification__local_contract_test.py",
+        }
+    ),
+    "quwoquan_ops.promotion_admission_receipt.v1": frozenset(
+        {
+            "quwoquan_ops/ci/promotion_evidence.py",
+            "quwoquan_ops/tests/local_contract/ci/test_system_backsync__local_contract_test.py",
+        }
+    ),
+    "quwoquan_ops.main_source_seal.v1": frozenset(
+        {
+            "quwoquan_ops/ci/promotion_evidence.py",
+            "quwoquan_ops/ci/release_qualification.py",
+            "quwoquan_ops/tests/local_contract/ci/test_system_backsync__local_contract_test.py",
+            "quwoquan_ops/tests/local_contract/release/test_release_qualification__local_contract_test.py",
+        }
+    ),
+    "quwoquan_ops.promotion_admission_handoff.v1": frozenset(
+        {
+            "quwoquan_ops/ci/promotion_evidence.py",
+            "quwoquan_ops/tests/local_contract/ci/test_promotion_evidence__local_contract_test.py",
+            "quwoquan_ops/tests/local_contract/ci/test_system_backsync__local_contract_test.py",
+        }
+    ),
+    "quwoquan_ops.release_candidate_tag_admission_fact.v1": frozenset(
+        {
+            "quwoquan_ops/ci/release_tag_admission.py",
+            "quwoquan_ops/environments/evidence/release_tag_admission_fact.schema.json",
+            "quwoquan_ops/tests/local_contract/release/test_release_tag_admission__local_contract_test.py",
+        }
+    ),
+    "quwoquan_ops.release_tag_admission_fact.v1": frozenset(
+        {
+            "quwoquan_ops/ci/qualified_prod.py",
+            "quwoquan_ops/ci/release_tag_admission.py",
+            "quwoquan_ops/cli/commands/deploy_release_inputs.py",
+            "quwoquan_ops/environments/evidence/release_tag_admission_fact.schema.json",
+            "quwoquan_ops/tests/local_contract/release/test_prod_acceptance_rollout_binding__local_contract_test.py",
+            "quwoquan_ops/tests/local_contract/release/test_qualified_prod__local_contract_test.py",
+            "quwoquan_ops/tests/local_contract/release/test_release_tag_admission__local_contract_test.py",
+            "quwoquan_ops/tests/local_contract/release/test_release_workflow_convergence__contract__local_contract_test.py",
+            "quwoquan_ops/tests/local_contract/release/test_official_distribution_release__supply_chain__local_contract_test.py",
+        }
+    ),
+    "quwoquan_ops.prod_activation_admission_fact.v1": frozenset(
+        {
+            "quwoquan_ops/ci/qualified_prod.py",
+            "quwoquan_ops/cli/commands/deploy_release_inputs.py",
+            "quwoquan_ops/environments/evidence/prod_activation_admission_fact.schema.json",
+            "quwoquan_ops/tests/local_contract/release/test_prod_acceptance_rollout_binding__local_contract_test.py",
+        }
+    ),
+    "quwoquan_ops.qualification_fact.v1": frozenset(
+        {
+            "quwoquan_ops/ci/qualified_prod.py",
+            "quwoquan_ops/ci/release_qualification.py",
+            "quwoquan_ops/ci/release_tag_admission.py",
+            "quwoquan_ops/cli/commands/deploy_release_inputs.py",
+            "quwoquan_ops/tests/local_contract/release/test_prod_acceptance_rollout_binding__local_contract_test.py",
+            "quwoquan_ops/tests/local_contract/release/test_qualified_prod__local_contract_test.py",
+            "quwoquan_ops/tests/local_contract/release/test_release_tag_admission__local_contract_test.py",
+            "quwoquan_ops/tests/local_contract/release/test_official_distribution_release__supply_chain__local_contract_test.py",
+        }
+    ),
+    "application/vnd.quwoquan.environment-acceptance-fact.v2+json": frozenset(
+        {
+            "quwoquan_ops/cli/lib/environment_acceptance_fact_contract.py",
+            "quwoquan_ops/environments/evidence/environment_acceptance_fact.schema.json",
+            "quwoquan_ops/gate/verify_ci_cd_evidence_contracts.py",
+        }
+    ),
+    "application/vnd.quwoquan.integration-qualification-fact.v1+json": frozenset(
+        {
+            "quwoquan_ops/ci/integration_qualification.py",
+            "quwoquan_ops/ci/promotion_evidence.py",
+            "quwoquan_ops/environments/evidence/integration_qualification_fact.schema.json",
+            "quwoquan_ops/tests/local_contract/ci/test_promotion_evidence__local_contract_test.py",
+        }
+    ),
+}
+# 已知契约身份前缀 + 版本后缀（/N .vN .mN）。已登记 DSSE payloadType
+# 从完整 media type 起始处优先匹配，避免把签名协议降格为内嵌 schema 片段。
+_IMMUTABLE_DSSE_PAYLOAD_TYPE_PATTERN = "|".join(
+    re.sub(r"\\\.v[0-9]+", r"\\.v[0-9]+", re.escape(value))
+    for value in IMMUTABLE_EVIDENCE_SCHEMA_PATHS
+    if value.startswith("application/vnd.")
+)
 VERSIONED_INLINE = re.compile(
-    r"\b(?:quwoquan_(?:data|service)|quwoquan\.[A-Za-z0-9_.-]+|"
+    rf"\b(?:{_IMMUTABLE_DSSE_PAYLOAD_TYPE_PATTERN}|"
+    r"(?:quwoquan_(?:data|service)|quwoquan\.[A-Za-z0-9_.-]+|"
     r"environment-topology|media-delivery-manifest|local-env-port-manifest|"
     r"prod-plane-access-isolation|legal-static|qwq\.runtime_shared_package|"
     r"app_remote_config|feed_patch|assistant_stream_event|"
     r"qwq-rich-md|release_desired_state|"
     r"content_import_report|homepage_import_report)"
-    r"[A-Za-z0-9_.-]*(?:/v?[0-9]+|\.v[0-9]+|\.m[0-9]+)\b"
+    r"[A-Za-z0-9_.-]*(?:/v?[0-9]+|\.v[0-9]+|\.m[0-9]+))\b"
 )
 # schema 字段值带版本后缀（assets / json / yaml）；同一 schema 身份只允许一个稳定名。
 SCHEMA_VALUE_V_SUFFIX = re.compile(

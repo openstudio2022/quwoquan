@@ -66,6 +66,7 @@ def _deploy_args(report_dir: Path) -> argparse.Namespace:
         dry_run="true",
         reuse_package=False,
         release_manifest="/tmp/release-manifest.json",
+        prod_activation_admission="/tmp/prod-activation-admission.json",
         prometheus_url="",
         promotion_deadline_epoch=0,
         hard_deadline_epoch=0,
@@ -549,7 +550,6 @@ class StackctlProviderReadinessContractTest(unittest.TestCase):
     def test_gray_initial_provider_preflight_precedes_fixed_package_validation(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             report_dir = Path(temporary) / "report"
-            release_manifest = Path(temporary) / "release-manifest.json"
             invocations: list[list[str]] = []
 
             def run_preflight_then_package(
@@ -584,25 +584,8 @@ class StackctlProviderReadinessContractTest(unittest.TestCase):
                 mock.patch.object(stackctl, "run", side_effect=run_preflight_then_package),
                 mock.patch.object(
                     stackctl,
-                    "_deployable_release_manifest",
-                    return_value=(
-                        release_manifest,
-                        f"sha256:{'4' * 64}",
-                        {
-                            "environmentArtifacts": {
-                                "prod": {
-                                    "images": {
-                                        "content-service": {
-                                            "repository": "ghcr.io/quwoquan/content-service",
-                                            "transportRef": (
-                                                "ghcr.io/quwoquan/content-service:release-test"
-                                            ),
-                                        }
-                                    }
-                                }
-                            }
-                        },
-                    ),
+                    "_load_prod_activation_admission",
+                    side_effect=RuntimeError("fixed prod package unavailable"),
                 ),
                 mock.patch.object(
                     stackctl,
@@ -623,11 +606,6 @@ class StackctlProviderReadinessContractTest(unittest.TestCase):
                     stackctl,
                     "_validate_release_transition",
                     return_value=("advance", 0),
-                ),
-                mock.patch.object(
-                    stackctl,
-                    "_materialize_release_evidence_configuration",
-                    side_effect=ValueError("fixed prod package unavailable"),
                 ),
                 mock.patch.object(stackctl, "_write_summary_bundle"),
             ):

@@ -2,10 +2,8 @@ from __future__ import annotations
 
 import unittest
 
+from quwoquan_ops.ci.release_evidence_reader import RELEASE_CLOSURE_PATHS
 from quwoquan_ops.ci.render_delivery_release_evidence import canonical_digest, render
-from quwoquan_ops.ci.render_environment_release_receipt import (
-    RELEASE_CLOSURE_PATHS,
-)
 
 
 class DeliveryReleaseEvidenceTest(unittest.TestCase):

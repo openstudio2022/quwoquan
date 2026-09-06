@@ -94,7 +94,7 @@ evidence:
     timeout_seconds: 300
     covers: []
   environment-release-evidence:
-    command: make verify-environment-stability-final-acceptance
+    command: python3 -B quwoquan_ops/gate/verify_ci_cd_evidence_contracts.py && python3 -B quwoquan_ops/gate/verify_prod_rollout_stackctl_contract.py
     segment: POST
     required: true
     timeout_seconds: 900

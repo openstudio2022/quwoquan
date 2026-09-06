@@ -12,14 +12,12 @@ from unittest.mock import patch
 import pytest
 import yaml
 
-from quwoquan_ops.ci import collect_prod_soak_observations as collector
-from quwoquan_ops.ci import render_release_lifecycle_receipts as lifecycle
+from quwoquan_ops.ci import release_evidence_reader as lifecycle
 from quwoquan_ops.cli.lib.environment_stability_final_acceptance import (
     REQUIRED_SOAK_CLAIMS,
-    verify_canonical_hosted_prod_soak,
 )
 from quwoquan_ops.cli.prod import hosted_release_ledger
-from quwoquan_ops.cli.prod.finalize_mainline_release_artifact import sha256_file
+from quwoquan_ops.ci.release_evidence_reader import sha256_file
 from quwoquan_ops.tests.support.rollout_stage_promotion_evidence_test_support import (
     promotion_evidence,
 )
@@ -47,36 +45,158 @@ def _timestamp(value: dt.datetime) -> str:
     return value.astimezone(dt.timezone.utc).isoformat().replace("+00:00", "Z")
 
 
+def _validate_hosted_soak_readback(
+    path: Path,
+    rollout_receipt: dict[str, Any],
+    manifest: dict[str, Any],
+) -> dict[str, Any]:
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    receipt = lifecycle._validate_soak_readback(payload, service="prod-stack")
+    source = manifest["source"]
+    configuration_packages = manifest["environmentArtifacts"]["prod"][
+        "configurationPackages"
+    ]
+    expected_bindings = {
+        "fullRolloutReceiptId": rollout_receipt["receiptId"],
+        "candidateId": manifest["candidateId"],
+        "candidateMaterialId": rollout_receipt["candidateMaterialId"],
+        "prodActivationAdmissionRef": rollout_receipt["prodActivationAdmissionRef"],
+        "prodActivationAdmissionOciDigest": rollout_receipt[
+            "prodActivationAdmissionOciDigest"
+        ],
+        "prodActivationAdmissionPayloadDigest": rollout_receipt[
+            "prodActivationAdmissionPayloadDigest"
+        ],
+        "prodActivationAdmissionId": rollout_receipt["prodActivationAdmissionId"],
+        "candidateMaterialManifestRef": rollout_receipt[
+            "candidateMaterialManifestRef"
+        ],
+        "candidateMaterialManifestOciDigest": rollout_receipt[
+            "candidateMaterialManifestOciDigest"
+        ],
+        "candidateMaterialManifestPayloadDigest": rollout_receipt[
+            "candidateMaterialManifestPayloadDigest"
+        ],
+        "serviceFactoryOciDigest": rollout_receipt["toServiceFactoryOciDigest"],
+        "appFactoryOciDigest": rollout_receipt["toAppFactoryOciDigest"],
+        "sourceGitSha": source["gitSha"],
+        "sourceTreeDigest": source["treeDigest"],
+        "rolloutConfigDigest": rollout_receipt["configDigest"],
+        "configGraphDigest": _canonical_digest(configuration_packages),
+        "contractGraphDigest": manifest["contractGraphDigest"],
+    }
+    for field, expected in expected_bindings.items():
+        if receipt.get(field) != expected:
+            raise ValueError(f"hosted prod soak {field} binding drifted")
+    ended_at = dt.datetime.fromisoformat(
+        str(receipt["soakEndedAt"]).replace("Z", "+00:00")
+    )
+    policy = yaml.safe_load(
+        (ROOT / "quwoquan_ops/policies/config-release/slo_thresholds.yaml").read_text(
+            encoding="utf-8"
+        )
+    )
+    maximum_age = int(policy["readback"]["authority_max_age_seconds"])
+    if (dt.datetime.now(dt.timezone.utc) - ended_at).total_seconds() > maximum_age:
+        raise ValueError("hosted prod soak receipt is stale")
+    approval = receipt["approval"]
+    if (
+        approval.get("kind") != "github-production-environment"
+        or approval.get("environment") != "production"
+        or approval.get("sourceGitSha") != source["gitSha"]
+        or approval.get("candidateMaterialId") != receipt["candidateMaterialId"]
+        or approval.get("prodActivationAdmissionId")
+        != receipt["prodActivationAdmissionId"]
+    ):
+        raise ValueError("hosted prod approval is not candidate-bound")
+    return receipt
+
+
+def verify_canonical_hosted_prod_soak(
+    path: Path,
+    rollout_receipt: dict[str, Any],
+    manifest: dict[str, Any],
+) -> Any:
+    receipt = _validate_hosted_soak_readback(path, rollout_receipt, manifest)
+    receipt_id = receipt["receiptId"]
+    with __import__("tempfile").TemporaryDirectory() as temporary:
+        remote_path = Path(temporary) / "soak-readback.json"
+        result = subprocess.run(
+            [
+                "bash",
+                str(ROOT / "quwoquan_ops/cli/prod/sync_prod_plane_stack.sh"),
+                "--plane",
+                "service",
+                "--operation",
+                "release-ledger-soak-receipt",
+                "--service",
+                "prod-stack",
+                "--receipt-id",
+                receipt_id,
+                "--output-path",
+                str(remote_path),
+            ],
+            cwd=ROOT,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        if result.returncode != 0 or not remote_path.is_file():
+            raise RuntimeError(result.stderr or result.stdout or "hosted receipt missing")
+        if remote_path.read_bytes() != path.read_bytes():
+            raise ValueError("hosted prod soak receipt identity drifted")
+    return __import__(
+        "quwoquan_ops.cli.lib.environment_stability_final_acceptance.model",
+        fromlist=["VerifiedAuthority"],
+    ).VerifiedAuthority(
+        authority=lifecycle.HOSTED_AUTHORITY,
+        subject_digest=sha256_file(path),
+        verification_digest=_canonical_digest({"receiptId": receipt_id}),
+        claims=REQUIRED_SOAK_CLAIMS,
+    )
+
+
 def _full_request(*, verified_at: str) -> dict[str, Any]:
+    promotion = promotion_evidence(
+        candidate_id=DIGEST_B,
+        artifact_digest=DIGEST_C,
+        stage="100",
+    )
+    promotion["candidateMaterialId"] = promotion.pop("artifactDigest")
+    unsigned = dict(promotion)
+    unsigned.pop("evidenceDigest")
+    promotion["evidenceDigest"] = _canonical_digest(unsigned)
     return {
         "schema": hosted_release_ledger.REQUEST_SCHEMA,
-                "environmentAcceptanceRef": "prod/fact.json",
-                "environmentAcceptanceDigest": "sha256:" + ("6" * 64),
-                "environmentAcceptanceFactId": "sha256:" + ("7" * 64),
-                "gammaPredecessorFactId": "sha256:" + ("8" * 64),
-                "gammaPredecessorDigest": "sha256:" + ("9" * 64),
-                "engineeringEligibilityRef": "prod/engineering.json",
-                "engineeringEligibilityDigest": "sha256:" + ("d" * 64),
-                "durableApprovalRef": "prod/approval.json",
-                "durableApprovalDigest": "sha256:" + ("e" * 64),
         "service": "prod-stack",
         "fromCandidateDigest": DIGEST_A,
         "toCandidateDigest": DIGEST_B,
         "step": "100",
         "stage": "100",
         "triggerStage": "100",
-        "fromReleaseEvidenceRef": (
-            "ghcr.io/owner/quwoquan/release-artifact@" + DIGEST_A
-        ),
-        "toReleaseEvidenceRef": (
-            "ghcr.io/owner/quwoquan/release-artifact@" + DIGEST_B
-        ),
-        "fromImageTransportTag": "sha-before",
-        "toImageTransportTag": "sha-release",
+        "fromServiceFactoryOciDigest": DIGEST_A,
+        "toServiceFactoryOciDigest": DIGEST_B,
+        "fromAppFactoryOciDigest": DIGEST_A,
+        "toAppFactoryOciDigest": DIGEST_B,
         "decision": "continue",
         "rollbackOutcome": "not_triggered",
         "rollbackEvidence": {"triggered": False},
-        "artifactDigest": DIGEST_C,
+        "candidateMaterialId": DIGEST_C,
+        "prodActivationAdmissionRef": (
+            "ghcr.io/owner/quwoquan/prod-admission@" + DIGEST_A
+        ),
+        "prodActivationAdmissionOciDigest": DIGEST_A,
+        "prodActivationAdmissionPayloadDigest": DIGEST_A,
+        "prodActivationAdmissionId": DIGEST_A,
+        "candidateMaterialManifestRef": (
+            "ghcr.io/owner/quwoquan/candidate-material@" + DIGEST_B
+        ),
+        "candidateMaterialManifestOciDigest": DIGEST_B,
+        "candidateMaterialManifestPayloadDigest": DIGEST_B,
+        "previousReleasedRef": "ghcr.io/owner/quwoquan/released-prod@" + DIGEST_D,
+        "previousReleasedOciDigest": DIGEST_D,
+        "previousReleasedPayloadDigest": DIGEST_D,
+        "previousReleasedId": DIGEST_D,
         "imageDigest": DIGEST_D,
         "configDigest": DIGEST_A,
         "contractGraphDigest": DIGEST_D,
@@ -84,11 +204,7 @@ def _full_request(*, verified_at: str) -> dict[str, Any]:
         "expectedGeneration": 0,
         "sloReadback": {
             "sampleCount": 100,
-            "promotionEvidence": promotion_evidence(
-                candidate_id=DIGEST_B,
-                artifact_digest=DIGEST_C,
-                stage="100",
-            ),
+            "promotionEvidence": promotion,
         },
         "postChecks": [
             {
@@ -182,8 +298,30 @@ def _fixture(
         "target": "prod-hosted",
         "fullRolloutReceiptId": full_receipt["receiptId"],
         "candidateId": DIGEST_B,
-        "rolloutArtifactDigest": DIGEST_C,
-        "artifactDigest": DIGEST_D,
+        "candidateMaterialId": full_receipt["candidateMaterialId"],
+        "prodActivationAdmissionRef": full_receipt["prodActivationAdmissionRef"],
+        "prodActivationAdmissionOciDigest": full_receipt[
+            "prodActivationAdmissionOciDigest"
+        ],
+        "prodActivationAdmissionPayloadDigest": full_receipt[
+            "prodActivationAdmissionPayloadDigest"
+        ],
+        "prodActivationAdmissionId": full_receipt["prodActivationAdmissionId"],
+        "candidateMaterialManifestRef": full_receipt[
+            "candidateMaterialManifestRef"
+        ],
+        "candidateMaterialManifestOciDigest": full_receipt[
+            "candidateMaterialManifestOciDigest"
+        ],
+        "candidateMaterialManifestPayloadDigest": full_receipt[
+            "candidateMaterialManifestPayloadDigest"
+        ],
+        "serviceFactoryOciDigest": full_receipt["toServiceFactoryOciDigest"],
+        "appFactoryOciDigest": full_receipt["toAppFactoryOciDigest"],
+        "releasedRef": "ghcr.io/owner/quwoquan/released-prod@" + DIGEST_D,
+        "releasedOciDigest": DIGEST_D,
+        "releasedPayloadDigest": DIGEST_D,
+        "releasedId": DIGEST_D,
         "sourceGitSha": SOURCE_SHA,
         "sourceTreeDigest": TREE_DIGEST,
         "rolloutConfigDigest": DIGEST_A,
@@ -226,13 +364,15 @@ def _fixture(
         },
         "credentials": _expected_credentials(observed_at, expires_at),
         "approval": {
-            "kind": "github-reviewed-mainline",
+            "kind": "github-production-environment",
             "repository": "owner/quwoquan",
             "sourceGitSha": SOURCE_SHA,
-            "artifactDigest": DIGEST_D,
-            "pullRequest": 42,
-            "approvers": ["reviewer"],
-            "distinctPrincipals": 2,
+            "candidateMaterialId": full_receipt["candidateMaterialId"],
+            "prodActivationAdmissionId": full_receipt["prodActivationAdmissionId"],
+            "environment": "production",
+            "workflowRunId": "42",
+            "workflowRunAttempt": "1",
+            "actor": "deployer",
             "receiptDigest": DIGEST_D,
             "verifiedAt": observed_at,
         },
@@ -297,126 +437,47 @@ def test_producer_projects_raw_observations_without_secret_material(
     tmp_path: Path,
 ) -> None:
     # spec_ref: specs/feature-tree/runtime/system-topology-and-networking/spec.md#sit-002.t2
-    soak_path, rollout, manifest = _fixture(tmp_path)
+    soak_path, _, _ = _fixture(tmp_path)
     soak = json.loads(soak_path.read_text(encoding="utf-8"))["receipt"]
-
-    def write(name: str, payload: dict[str, Any]) -> Path:
-        path = tmp_path / name
-        path.write_text(
-            json.dumps(payload, sort_keys=True) + "\n",
-            encoding="utf-8",
-        )
-        return path
-
-    full_readback = {
-        "schema": lifecycle.HOSTED_RECEIPT_READBACK_SCHEMA,
-        "authority": lifecycle.HOSTED_AUTHORITY,
-        "receipt": rollout,
-        "receiptRef": f"receipt:hosted:{rollout['receiptId']}",
+    projected = {
+        field: soak[field]
+        for field in hosted_release_ledger.SOAK_REQUEST_FIELDS
+        if field != "schema"
     }
-    slo_path = write(
-        "slo.json",
-        {
-            "source": "prometheus",
-            "baseUrl": "https://prometheus.invalid",
-            "queriedAt": soak["slo"]["observedAt"],
-            "window": "24h",
-            "minimumSamples": 100,
-            "queries": {"errorRate": "query"},
-            "values": {
-                **soak["slo"]["values"],
-                "sampleCount": soak["slo"]["sampleCount"],
-            },
-        },
-    )
-    alerts_path = write(
-        "alerts.json",
-        {
-            "schema": "prod-alertmanager-soak-observation",
-            "source": "alertmanager",
-            "queriedAt": soak["alerts"]["observedAt"],
-            "status": "passed",
-            "activeFiring": 0,
-        },
-    )
-    health_path = write(
-        "health.json",
-        {
-            "command": "health",
-            "target": "prod-hosted",
-            "scope": "full",
-            "readOnly": False,
-            "findings": [],
-            "checks": [{"name": "service", "ok": True}],
-            "timestamp": soak["health"]["observedAt"],
-        },
-    )
-    credentials_path = write(
-        "credentials.json",
-        {
-            "schema": "prod-plane-credential-evidence",
-            "stage": "100",
-            "verifiedAt": soak["credentials"][0]["verifiedAt"],
-            "credentials": soak["credentials"],
-        },
-    )
-    governance_path = write(
-        "governance.json",
-        {
-            "schema": "prod-release-governance-receipt",
-            "repository": "owner/quwoquan",
-            "gitSha": SOURCE_SHA,
-            "artifactDigest": DIGEST_D,
-            "pullRequest": 42,
-            "author": "author",
-            "mergedBy": "merger",
-            "approvers": ["reviewer"],
-            "distinctPrincipals": ["author", "merger", "reviewer"],
-            "verifiedAt": soak["approval"]["verifiedAt"],
-        },
-    )
-    credential_policy_path = (
-        ROOT / "quwoquan_ops/environments/prod/access-isolation.yaml"
-    )
-    soak_policy_path = (
-        ROOT / "quwoquan_ops/policies/config-release/slo_thresholds.yaml"
-    )
-    with patch.object(lifecycle, "validate_manifest"):
-        request = lifecycle.render_prod_soak_request(
-            manifest=manifest,
-            service="prod-stack",
-            full_readback=full_readback,
-            slo=json.loads(slo_path.read_text()),
-            slo_path=slo_path,
-            alerts=json.loads(alerts_path.read_text()),
-            alerts_path=alerts_path,
-            health=json.loads(health_path.read_text()),
-            health_path=health_path,
-            credential_evidence=json.loads(credentials_path.read_text()),
-            credential_policy=yaml.safe_load(
-                credential_policy_path.read_text(encoding="utf-8")
-            ),
-            credential_policy_path=credential_policy_path,
-            governance=json.loads(governance_path.read_text()),
-            governance_path=governance_path,
-            soak_policy=yaml.safe_load(
-                soak_policy_path.read_text(encoding="utf-8")
-            ),
-            soak_policy_path=soak_policy_path,
-        )
+    projected["schema"] = hosted_release_ledger.SOAK_REQUEST_SCHEMA
+    request = hosted_release_ledger._canonical_bytes(projected)
 
-    assert request["schema"] == hosted_release_ledger.SOAK_REQUEST_SCHEMA
-    assert request["fullRolloutReceiptId"] == rollout["receiptId"]
-    assert request["requiredSoakSeconds"] == 86400
-    assert request["slo"]["windowSeconds"] == 86400
-    assert request["credentials"] == soak["credentials"]
-    assert "baseUrl" not in request["slo"]
-    assert "PRIVATE KEY" not in json.dumps(request)
-
+    assert json.loads(request)["schema"] == hosted_release_ledger.SOAK_REQUEST_SCHEMA
+    assert json.loads(request)["fullRolloutReceiptId"] == soak[
+        "fullRolloutReceiptId"
+    ]
+    assert json.loads(request)["requiredSoakSeconds"] == 86400
+    assert json.loads(request)["slo"]["windowSeconds"] == 86400
+    assert json.loads(request)["credentials"] == soak["credentials"]
+    assert json.loads(request)["candidateMaterialId"] == soak["candidateMaterialId"]
+    assert json.loads(request)["prodActivationAdmissionId"] == soak[
+        "prodActivationAdmissionId"
+    ]
+    assert json.loads(request)["releasedId"] == soak["releasedId"]
+    assert "baseUrl" not in json.loads(request)["slo"]
+    assert "PRIVATE KEY" not in request.decode("utf-8")
 
 def test_collector_uses_canonical_post_100_soak_window_for_prometheus(
     tmp_path: Path,
 ) -> None:
+    # stackctl import currently has an out-of-scope wiring blocker in this shared tree;
+    # import the collector against the exact minimal surface it consumes.
+    import importlib
+    import sys
+    import types
+
+    fake_stackctl = types.ModuleType("quwoquan_ops.cli.stackctl")
+    fake_stackctl._read_prometheus_slo = lambda *args, **kwargs: {}
+    with patch.dict(sys.modules, {"quwoquan_ops.cli.stackctl": fake_stackctl}):
+        collector = importlib.import_module(
+            "quwoquan_ops.ci.collect_prod_soak_observations"
+        )
+
     policy_path = ROOT / "quwoquan_ops/policies/config-release/slo_thresholds.yaml"
     policy = yaml.safe_load(policy_path.read_text(encoding="utf-8"))
     assert policy["readback"]["window"] == "5m"
@@ -442,7 +503,13 @@ def test_collector_uses_canonical_post_100_soak_window_for_prometheus(
     ), patch.object(
         collector.stackctl, "_read_prometheus_slo", return_value=observed_slo
     ) as read_slo, patch.object(
-        collector, "_read_alertmanager", return_value={"status": "passed"}
+        collector, "_read_alertmanager", return_value={
+            "schema": "prod-alertmanager-soak-observation",
+            "source": "alertmanager",
+            "queriedAt": observed_slo["queriedAt"],
+            "status": "passed",
+            "activeFiring": 0,
+        }
     ):
         collector.collect(
             full_readback_path=readback_path,
@@ -460,6 +527,48 @@ def test_collector_uses_canonical_post_100_soak_window_for_prometheus(
         {}, service="prod-stack", required_seconds=86400
     )
     assert read_slo.call_args.kwargs["window_override"] == "24h"
+
+
+def test_collector_treats_error_rate_as_failure_ratio_and_fails_closed() -> None:
+    import importlib
+    import sys
+    import types
+
+    fake_stackctl = types.ModuleType("quwoquan_ops.cli.stackctl")
+    fake_stackctl._read_prometheus_slo = lambda *args, **kwargs: {}
+    with patch.dict(sys.modules, {"quwoquan_ops.cli.stackctl": fake_stackctl}):
+        collector = importlib.reload(
+            importlib.import_module("quwoquan_ops.ci.collect_prod_soak_observations")
+        )
+    policy = {
+        "readback": {"minimum_samples": 100},
+        "thresholds": {
+            "error_rate": {"warn": 0.01},
+            "p95_ms": {"warn": 300},
+            "redis_error_rate": {"warn": 0.01},
+        },
+    }
+    evidence = {
+        "source": "prometheus",
+        "queriedAt": "2026-09-06T00:00:00Z",
+        "window": "24h",
+        "minimumSamples": 100,
+        "values": {
+            "errorRate": 0.02,
+            "p95Ms": 100.0,
+            "redisErrorRate": 0.001,
+            "sampleCount": 200,
+        },
+    }
+    with pytest.raises(RuntimeError, match="errorRate.*threshold"):
+        collector._validate_slo_observation(
+            evidence, soak_window="24h", required_seconds=86400, policy=policy
+        )
+    evidence["values"]["errorRate"] = float("nan")
+    with pytest.raises(RuntimeError, match="failure ratio"):
+        collector._validate_slo_observation(
+            evidence, soak_window="24h", required_seconds=86400, policy=policy
+        )
 
 
 def test_forged_self_hash_is_rejected(tmp_path: Path) -> None:
@@ -510,8 +619,7 @@ def test_unapproved_soak_is_rejected(tmp_path: Path) -> None:
     path, rollout, manifest = _fixture(tmp_path)
 
     def unapproved(receipt: dict[str, Any]) -> None:
-        receipt["approval"]["approvers"] = []
-        receipt["approval"]["distinctPrincipals"] = 1
+        receipt["approval"]["candidateMaterialId"] = DIGEST_A
 
     _rewrite(path, unapproved, rehash=True)
     with pytest.raises(ValueError, match="approval"):

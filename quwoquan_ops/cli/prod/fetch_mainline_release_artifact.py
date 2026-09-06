@@ -18,10 +18,9 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from quwoquan_ops.cli.prod.registry_transport import run_with_bounded_retry
-from quwoquan_ops.cli.prod.finalize_mainline_release_artifact import (
+from quwoquan_ops.ci.release_evidence_reader import (
     STATUSES,
-    validate_manifest,
-    validate_manifest_files,
+    validate_historical_release_snapshot,
 )
 
 
@@ -30,11 +29,13 @@ FETCHABLE_STATUSES = STATUSES - {"build-input"}
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser()
-    source = parser.add_mutually_exclusive_group(required=True)
-    source.add_argument("--ref")
-    source.add_argument("--source-sha")
-    parser.add_argument("--repository", default="")
+    parser = argparse.ArgumentParser(
+        description=(
+            "Materialize an exact release-artifact digest for non-promotable "
+            "prevalidation or historical inspection"
+        )
+    )
+    parser.add_argument("--ref", required=True)
     parser.add_argument("--output-dir", required=True, type=Path)
     parser.add_argument(
         "--platform",
@@ -101,11 +102,11 @@ def fetch(
                 manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
                 if not isinstance(manifest, dict):
                     raise ValueError("manifest root must be an object")
-                validate_manifest(
+                validate_historical_release_snapshot(
                     manifest,
+                    artifact_dir=staged,
                     allowed_statuses=FETCHABLE_STATUSES,
                 )
-                validate_manifest_files(staged, manifest)
             except (OSError, ValueError, json.JSONDecodeError) as error:
                 raise RuntimeError(
                     f"release artifact contains invalid canonical evidence: {error}"
@@ -124,63 +125,14 @@ def fetch(
     }
 
 
-def discover(
-    repository: str,
-    source_sha: str,
-    *,
-    platform: str = "linux/amd64",
-) -> str:
-    if re.fullmatch(r"[0-9a-f]{40}", source_sha) is None:
-        raise ValueError("release artifact source SHA is invalid")
-    normalized = repository.strip("/").lower()
-    if re.fullmatch(r"[a-z0-9._-]+/[a-z0-9._-]+", normalized) is None:
-        raise ValueError("release artifact repository is invalid")
-    tag_ref = f"ghcr.io/{normalized}/release-artifact:sha-{source_sha}"
-    if platform != "linux/amd64":
-        raise ValueError("release artifact platform must be linux/amd64")
-    pull_result = pull(["docker", "pull", "--platform", platform, tag_ref])
-    if pull_result.returncode != 0:
-        raise RuntimeError(
-            "release artifact discovery pull failed after 3 bounded attempts: "
-            f"{pull_result.stderr.strip() or pull_result.stdout.strip()}"
-        )
-    inspect = run(
-        ["docker", "image", "inspect", "--format", "{{json .RepoDigests}}", tag_ref]
-    )
-    if inspect.returncode != 0:
-        raise RuntimeError("release artifact discovery digest inspection failed")
-    for item in json.loads(inspect.stdout):
-        if IMMUTABLE_REF.fullmatch(str(item)) and "/release-artifact@" in item:
-            return str(item)
-    raise RuntimeError("release artifact discovery returned no immutable digest")
-
-
 def main() -> int:
     args = parse_args()
     try:
-        ref = (
-            args.ref.strip()
-            if args.ref
-            else discover(
-                args.repository,
-                args.source_sha.strip(),
-                platform=args.platform,
-            )
-        )
         report = fetch(
-            ref,
+            args.ref.strip(),
             args.output_dir.resolve(),
             platform=args.platform,
         )
-        if args.source_sha:
-            manifest = json.loads(
-                Path(report["manifest"]).read_text(encoding="utf-8")
-            )
-            source = manifest.get("source") or {}
-            if source.get("gitSha") != args.source_sha:
-                raise RuntimeError(
-                    "release artifact source SHA does not match discovery tag"
-                )
     except (OSError, ValueError, RuntimeError, json.JSONDecodeError) as error:
         print(f"FAIL: {error}")
         return 1

@@ -1,51 +1,36 @@
-"""Workflow scans distinguish stackctl verify from deploy command blocks.
+"""Promotion and production workflows keep stackctl responsibilities separate.
 
-spec_ref: specs/feature-tree/platform-ops-governance/commercial-readiness-risk-closure/spec.md#sit-003
+spec_ref: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/spec.md#sit-001
 """
-
-from __future__ import annotations
-
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[4]
-WORKFLOWS = (
-    ROOT / ".github/workflows/app-env-device-matrix-self-hosted.yml",
-    ROOT / ".github/workflows/deploy-prod-auto.yml",
-)
+PROMOTION = ROOT / ".github/workflows/delivery-gate.yml"
+PROD = ROOT / ".github/workflows/deploy-prod-auto.yml"
 
 
-def _stackctl_blocks(text: str, command: str) -> list[str]:
-    lines = text.splitlines()
-    blocks: list[str] = []
-    marker = f"python3 quwoquan_ops/cli/stackctl.py {command} \\"
-    for index, line in enumerate(lines):
-        if marker not in line:
-            continue
-        block = [line]
-        cursor = index + 1
-        while cursor < len(lines):
-            continuation = lines[cursor]
-            block.append(continuation)
-            if not continuation.rstrip().endswith("\\"):
-                break
-            cursor += 1
-        blocks.append("\n".join(block))
-    return blocks
+def test_promotion_workflow_executes_no_stackctl() -> None:
+    text = PROMOTION.read_text(encoding="utf-8")
+    assert "python3 quwoquan_ops/cli/stackctl.py" not in text
+    assert "--reuse-package" not in text
 
 
-def test_verify_blocks_never_use_retired_reuse_package() -> None:
-    verify_blocks = [
-        block
-        for workflow in WORKFLOWS
-        for block in _stackctl_blocks(workflow.read_text(encoding="utf-8"), "verify")
-    ]
-    assert verify_blocks, "workflow scan must discover stackctl verify command blocks"
-    assert all("--reuse-package" not in block for block in verify_blocks)
-
-
-def test_deploy_blocks_keep_legitimate_reuse_package() -> None:
-    workflow = WORKFLOWS[1].read_text(encoding="utf-8")
-    deploy_blocks = _stackctl_blocks(workflow, "deploy")
-    reuse_blocks = [block for block in deploy_blocks if "--reuse-package" in block]
-    assert len(reuse_blocks) == 5
-    assert all("--target prod-hosted" in block for block in reuse_blocks)
+def test_prod_executes_only_the_permanent_five_rollout_stages() -> None:
+    text = PROD.read_text(encoding="utf-8")
+    assert "for stage in canary 5 20 50 100" in text
+    assert text.count("python3 quwoquan_ops/cli/stackctl.py deploy") == 1
+    assert "--target prod-hosted" in text
+    assert '--stage "$stage"' in text
+    assert 'case "$stage" in canary) step=0 ;; 5|20|50|100) step="$stage" ;; esac' in text
+    assert "--reuse-package" not in text
+    assert "stackctl.py verify" not in text
+    assert "--service prod-stack" in text
+    assert "--from-candidate-digest" in text
+    assert "--to-candidate-digest" in text
+    assert "--release-evidence-ref" not in text
+    assert "--release-manifest" not in text
+    assert '--prod-activation-admission "$STORE/$ADMISSION_LOCAL_REF"' in text
+    assert '--promotion-evidence "$EVIDENCE"' in text
+    assert "--promotion-deadline-epoch" in text
+    assert "--hard-deadline-epoch" in text
+    assert "--rollback-budget-seconds 300" in text

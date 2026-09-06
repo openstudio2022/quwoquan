@@ -1,18 +1,21 @@
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import secrets
 import subprocess
 import sys
 import tempfile
-from urllib.parse import urlparse
 from pathlib import Path
+from unittest import mock
+from urllib.parse import urlparse
+
+from quwoquan_ops.cli import stackctl
 
 
 # spec_ref: specs/feature-tree/runtime/runtime-config/environment-topology-and-packaging/spec.md#gwt-001
 ROOT = Path(__file__).resolve().parents[4]
-STACKCTL = ROOT / "quwoquan_ops" / "cli" / "stackctl.py"
 PREPARE_INPUTS = ROOT / "quwoquan_ops/gate/prepare_environment_packaging_contract_inputs.py"
 CLEANUP_WORKSPACE = ROOT / "quwoquan_ops/gate/cleanup_deployment_test_workspace.py"
 PROD_APP_SOURCE = ROOT / "quwoquan_app" / "configs" / "prod" / "app_runtime.yaml"
@@ -54,10 +57,9 @@ def test_prod_app_packages_block_on_unapproved_legal_identity_without_mutating_s
 
     try:
         for target in ("prod-sim", "prod-hosted"):
-            result = subprocess.run(
+            report_dir = output_root / "env/prod/runs" / f"legal-identity-{target}"
+            args = stackctl.build_parser().parse_args(
                 [
-                    sys.executable,
-                    str(STACKCTL),
                     "package",
                     "--env",
                     "prod",
@@ -68,18 +70,37 @@ def test_prod_app_packages_block_on_unapproved_legal_identity_without_mutating_s
                     "--rollback-release-attestation",
                     str(rollback_release_attestation),
                     "--report-dir",
-                    str(tmp_path / f"report-{target}"),
-                ],
-                cwd=ROOT,
-                env=environment,
-                capture_output=True,
-                text=True,
-                check=False,
+                    str(report_dir),
+                ]
             )
+            with (
+                mock.patch.dict(os.environ, environment, clear=True),
+                mock.patch.object(
+                    stackctl,
+                    "local_runtime_capacity_evidence",
+                    return_value={"issues": []},
+                ),
+                mock.patch.object(
+                    stackctl,
+                    "materialize_package_input_capsule",
+                    return_value=None,
+                ),
+                mock.patch.object(
+                    stackctl,
+                    "_run_runtime_compile_preflight",
+                    return_value=([], ""),
+                ),
+                mock.patch.object(
+                    stackctl,
+                    "_target_package_lock",
+                    return_value=contextlib.nullcontext(),
+                ),
+            ):
+                result = stackctl.command_package(args)
 
-            assert result.returncode == 1, result.stdout + result.stderr
-            assert "legal-static/prod" in result.stdout
-            assert "placeholder text" in result.stdout
+            assert result["exitCode"] == 1, result
+            assert result["summary"] == "stackctl package failed for legal-static/prod"
+            assert "placeholder text" in "\n".join(result["details"])
             assert not (deploy_root / target / "active-candidate.json").exists()
 
         assert PROD_APP_SOURCE.read_bytes() == source_before

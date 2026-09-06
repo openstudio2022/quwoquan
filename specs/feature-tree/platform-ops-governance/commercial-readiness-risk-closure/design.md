@@ -50,15 +50,15 @@
 <a id="dec-003"></a>
 ### DEC-003 第一方容器预验证与正式 release transaction 物理分轨
 
-- 决策：预验证只使用独立 Compose project、远端目录和 rootless user systemd unit。
-- 决策补充：只消费 Service Pipeline 发布到 GHCR 的 OCI digest 制品，不进入 rollout lock、SLO、正式 release ledger 或 receipt。
+- 决策：正式生产 authority 只沿 artifact factory OCI exact bytes → `CandidateMaterialManifest` → `QualificationFact` → stable `ReleaseTagAdmissionFact` → `ProdActivationAdmissionFact` → stage attempts → `ProdReleasedFact` → soak 的 canonical exact-byte predecessor 单轨推进；prevalidation 是链外失败诊断，不是该链的输入、前驱或旁路 authority。
+- 决策补充：prevalidation 只在独立 Compose project、远端目录和 rootless user systemd unit 中，消费显式 legacy history/rehearsal-only 的 `non-promotable snapshot` 与 factory OCI 实际 bytes；不得生成或写入 authority、ledger、receipt、qualification、admission、tag、stage 或 released fact。
 - 决策补充：受限单机使用声明式容器内存/PID 上限，空间门同时校验当前可用量、可回收量与回收后实测量。
 - 理由：在 Provider、SFU、真实数据和公网入口尚未就绪时，仍需验证第一方容器可部署性，但该结果不能被误用为生产准出。
-- 被否决方案：使用 `latest`、远端临时构建、旧容器、裸 IP public base，或把容器启动成功写成正式发布成功。
-- 约束与影响：隔离数据使用重新摘要的不可提升配置投影和独立随机认证材料，unit 不得继承正式 credentials；Actions Artifact 只可作为非必需兼容输出，ReleaseManifest 配置包和镜像均以 GHCR digest 消费。旧运行面回收仅允许匹配声明前缀且处于 `Created/Exited` 的容器和未使用镜像，禁止删除任何 volume 或恢复容器。报告必须并列输出 container runtime、Provider readiness 与 release eligibility，后两者在完整生产证据前固定为 `GATE_BLOCK`。
+- 被否决方案：使用 `latest`、远端临时构建、旧容器、裸 IP public base，把 Actions Artifact 当正式阶段传递，或把容器启动成功写成正式发布成功。
+- 约束与影响：Actions Artifact 只能保存失败诊断；正式消费者必须从 factory OCI 与 hosted authority 按 exact digest 回读。任何 legacy generic validate alias、公开 writer 或 formal caller 均禁止存在。隔离数据使用重新摘要的不可提升配置投影和独立随机认证材料，unit 不得继承正式 credentials；旧运行面回收仅允许匹配声明前缀且处于 `Created/Exited` 的容器和未使用镜像，禁止删除任何 volume 或恢复容器。报告必须分轴输出 container runtime、Provider readiness 与 release eligibility；Provider 不可用必须显式为 unavailable，正式 release eligibility 在完整生产事实链成立前始终为 `GATE_BLOCK`。
 - 关联要求：`REQ-009`
 - 影响 Story：在 [`zero-risk-production-readiness`](./zero-risk-production-readiness/spec.md) 中约束预验证与正式准出分轨。
-- 关联验收：`SIT-008`、`GWT-003`
+- 关联验收：`SIT-003`、`SIT-008`
 
 <a id="dec-004"></a>
 ### DEC-004 发布执行面唯一，Portal 仅观察且 Config ACK 是发布前置条件
@@ -66,24 +66,25 @@
 - 决策：唯一可变发布执行面为受保护的 CI/CD 调用 `stackctl`。
 - Portal 只能读取由控制面、Prometheus、Elasticsearch 或业务投影返回的状态，不能 apply、扩量或回滚。
 - 发布页仅呈现当前候选摘要下按服务聚合的实例 ACK，不得从本地 release 文件推导阶段、生成 workflow/rollback token 或把默认值显示为成功。
-- 决策补充：每个受管实例以 service principal 调用 generated ConfigSnapshot resolve/report operation；其 service/environment/instance 身份、ReleaseManifest digest、configVersion 和 desired/effective hash 由控制面验证。`stackctl` 在 hosted rollout 中只接受所有必需实例在有效期内对候选摘要 `in-sync` 的 config-convergence readiness。
+- 决策补充：每个受管实例以 service principal 调用 generated ConfigSnapshot resolve/report operation；ACK 必须绑定当前 `ProdActivationAdmissionFact` exact ref，并由该 activation 追溯同一 `CandidateMaterialManifest` exact digest、factory material exact digest、config deployment bundle exact digest 与 activation revision。`stackctl` 在 hosted rollout 中只接受所有必需实例对当前 activation 新鲜、`in-sync` 的 config-convergence readiness。
 - 理由：由 Portal、容器内脚本或调用方参数分别驱动发布会形成第二执行面，且匿名或未绑定的 ACK 无法证明当前候选已实际加载。
-- 被否决方案：Portal 提供 release mutation、服务匿名 POST ACK、客户端自报 province/carrier 参与分流，或仅凭单一容器存活继续 rollout。
-- 约束与影响：灰度只使用 appVersion/userId。province/carrier 仅在可信边缘证明链和 hosted UAT 同时完成后才可启用，IaC 在满足该条件前保持显式禁用。缺少任何 ACK、实例过期、摘要不匹配或未可信维度时均 fail-closed，且不得用本地状态、旧报告或页面显示替代。无真实 query/mutation 契约的全局搜索、通知计数和工作台入口不得渲染为可操作能力。
+- 被否决方案：Portal 提供 release mutation、服务匿名 POST ACK、ACK 绑定部署期本地 manifest 或候选文件、客户端自报 province/carrier 参与分流，或仅凭单一容器存活继续 rollout。
+- 约束与影响：Portal 保持只读投影，不能补写 ACK 或改变 activation revision。灰度只使用 appVersion/userId；province/carrier 仅在可信边缘证明链和 hosted UAT 同时完成后才可启用，IaC 在满足该条件前保持显式禁用。缺少任何 ACK、实例过期、activation exact ref 缺失、CandidateMaterialManifest/factory material/config deployment bundle exact digest 不匹配或使用未可信维度时均 fail-closed，且不得用本地状态、旧报告或页面显示替代。无真实 query/mutation 契约的全局搜索、通知计数和工作台入口不得渲染为可操作能力。
 - 关联要求：`REQ-006`
-- 影响 Story：同 DEC-001，约束 `SIT-004` 与 `SIT-006`。
+- 影响 Story：同 DEC-001，约束 [`zero-risk-production-readiness`](./zero-risk-production-readiness/spec.md) 的发布执行与配置收敛边界。
 - 关联验收：`SIT-002`、`SIT-004`、`SIT-006`
 
 ## 5. 失败与恢复
 
-- 失败类型：权限拒绝、依赖超时、版本冲突或持久化失败。
-- 可见结果：调用方收到可区分的 canonical failure 或规格明确允许的降级结果；任何失败均不写入成功事实。
-- 恢复动作：调用方按 canonical recovery action 重试、刷新或停止；不得自行合成成功结果。
-- 禁止 fallback：不得回退到 Mock、旧 wire、双读双写或页面本地写副本。
+- prevalidation 无法读取显式 `non-promotable snapshot`、factory OCI 实际 bytes 或隔离运行依赖时，返回可区分的诊断失败并保持零正式 mutation；Provider 等被排除能力不可用时必须显式 unavailable，release eligibility 仍为 `GATE_BLOCK`。
+- ConfigSnapshot ACK 缺失、过期、drift，或与当前 `ProdActivationAdmissionFact` exact ref、其 `CandidateMaterialManifest`/factory material/config deployment bundle exact digest、activation revision 任一不一致时，发布停在 config-convergence readiness，且不得创建下一 stage attempt。
+- 正式 predecessor 的 stage/terminal exact ref 无法从 hosted authority 回读、canonical bytes 摘要不匹配、CAS 冲突或 authority 不可用时，统一 fail-closed 为 `GATE_BLOCK`；不得写下一阶段、`ProdReleasedFact` 或 soak 成功事实。
+- 恢复只允许修复原依赖后按同一当前 activation 与 exact predecessor ref 幂等重试；stage CAS 只推进唯一下一阶段。正式回滚由唯一执行面绑定失败 stage exact ref 与 last-good `ProdReleasedFact` 执行，prevalidation 不得触发或模拟回滚。
+- 禁止 fallback：不得回退到 Mock、旧 wire、legacy generic validate alias/writer、双读双写、页面本地副本或由 workflow success 合成 authority。
 
 ## 6. 质量与观测
 
-- 准出结果必须同时绑定主体、危险动作审批、供应链摘要、配置 revision、验收证据和受影响范围。
-- 外部前置缺失以 `external_blocker` OPEN 表达并阻断对应 production workflow；不得用豁免或合成证据放行。
-- 证据至少包含最后一份 SLO snapshot、approval receipt 与 rollback receipt，且只保存引用、摘要和脱敏状态。
-- 生产观测通过 Prometheus、Alertmanager、OTel 及声明的节点、容器和数据存储 exporter 提供真实数据。
+- 正式发布观测必须为每个 stage attempt 与 terminal 结果暴露可回读的 exact ref，并证明其当前 activation、同一 CandidateMaterialManifest/factory digest 闭包及唯一前驱关系；不可用、缺失或不一致均告警并保持 `GATE_BLOCK`，不得以 workflow/job success 代替。
+- prevalidation 观测只报告诊断 run ref、container runtime、Provider readiness、release eligibility 与零正式 mutation；该 run ref 不得出现在正式 stage/terminal predecessor 链内。
+- ConfigSnapshot 收敛观测按当前 activation revision 聚合 ACK 新鲜度与 drift；Portal 仅查询该 hosted 投影。无法取得真实投影时显示不可用，不生成默认成功值。
+- 外部前置缺失以 `external_blocker` OPEN 表达并阻断对应 production workflow；不得用豁免或合成证据放行。生产 SLO、告警和 exporter 的字段级约束继续由 runtime L2 与 canonical contracts 拥有，本设计只约束其 exact ref、失败终态和 authority 边界。

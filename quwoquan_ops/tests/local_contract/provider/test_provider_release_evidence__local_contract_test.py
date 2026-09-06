@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 from quwoquan_ops.ci.render_provider_conformance_source import (
@@ -99,7 +100,7 @@ class ProviderReleaseEvidenceTest(unittest.TestCase):
             "readiness": readiness,
         }
         with patch(
-            "quwoquan_ops.ci.render_provider_release_evidence.validate_manifest"
+            "quwoquan_ops.ci.render_provider_release_evidence.validate_historical_release_snapshot"
         ):
             payload = render(
                 manifest=self._manifest(),
@@ -122,7 +123,7 @@ class ProviderReleaseEvidenceTest(unittest.TestCase):
             "readiness": readiness,
         }
         with patch(
-            "quwoquan_ops.ci.render_provider_release_evidence.validate_manifest"
+            "quwoquan_ops.ci.render_provider_release_evidence.validate_historical_release_snapshot"
         ):
             payload = render(
                 manifest=self._manifest(),
@@ -135,7 +136,7 @@ class ProviderReleaseEvidenceTest(unittest.TestCase):
         conformance["evidenceCount"] = evidence_count + 1
         conformance["sourceEvidence"] = self._source_evidence(evidence_count + 1)
         with patch(
-            "quwoquan_ops.ci.render_provider_release_evidence.validate_manifest"
+            "quwoquan_ops.ci.render_provider_release_evidence.validate_historical_release_snapshot"
         ), self.assertRaisesRegex(ValueError, "readiness-derived required cell count"):
             render(
                 manifest=self._manifest(),
@@ -168,7 +169,7 @@ class ProviderReleaseEvidenceTest(unittest.TestCase):
             "capability_ready"
         ] = False
         with patch(
-            "quwoquan_ops.ci.render_provider_release_evidence.validate_manifest"
+            "quwoquan_ops.ci.render_provider_release_evidence.validate_historical_release_snapshot"
         ), self.assertRaisesRegex(ValueError, "required ready"):
             render(
                 manifest=self._manifest(),
@@ -187,7 +188,7 @@ class ProviderReleaseEvidenceTest(unittest.TestCase):
             "readiness": {"prod": {}},
         }
         with patch(
-            "quwoquan_ops.ci.render_provider_release_evidence.validate_manifest"
+            "quwoquan_ops.ci.render_provider_release_evidence.validate_historical_release_snapshot"
         ), self.assertRaisesRegex(ValueError, "fields are not canonical"):
             render(
                 manifest=self._manifest(),
@@ -223,11 +224,11 @@ class ProviderReleaseEvidenceTest(unittest.TestCase):
 
 
 class ProviderReleaseEvidenceProducerTest(unittest.TestCase):
-    def _released_manifest(self, *, candidate_id: object = None) -> dict:
+    def _qualification_manifest(self, *, candidate_id: object = None) -> dict:
         return {
             "candidateId": candidate_id or "sha256:" + "d" * 64,
             "artifactDigest": "sha256:" + "f" * 64,
-            "status": "released",
+            "status": "candidate-ready",
             "source": {
                 "gitSha": "a" * 40,
                 "treeDigest": "sha1:" + "b" * 40,
@@ -237,44 +238,18 @@ class ProviderReleaseEvidenceProducerTest(unittest.TestCase):
             "environmentArtifacts": _environment_artifacts(),
         }
 
-    def test_workflow_delegates_exact_cell_ownership_to_canonical_python(self) -> None:
-        from pathlib import Path
-
+    def test_hosted_provider_workflow_is_deleted_after_local_cutover(self) -> None:
         root = Path(__file__).resolve().parents[4]
-        workflow = (
-            root / ".github/workflows/provider-release-evidence.yml"
-        ).read_text(encoding="utf-8")
-        producer = (
-            root / "quwoquan_ops/ci/provider_release_evidence.py"
-        ).read_text(encoding="utf-8")
-        self.assertIn("git status --porcelain --untracked-files=all", workflow)
-        self.assertIn("QWQ_PROVIDER_CONFORMANCE_REVIEWED_COMMIT", workflow)
-        self.assertIn("secrets.QWQ_PROVIDER_CONFORMANCE_ATTESTATION_KEY", workflow)
-        self.assertIn("consume_released_release_evidence.py", workflow)
-        self.assertIn("vars.RELEASED_RELEASE_EVIDENCE_REF", workflow)
-        self.assertIn("execute-nonprod", workflow)
-        self.assertIn("--environment-matrix", producer)
-        self.assertIn(
-            "Execute all compiled required nonprod Provider cells",
-            workflow,
+        assert not (root / ".github/workflows/provider-release-evidence.yml").exists()
+        producer = (root / "quwoquan_ops/ci/provider_release_evidence.py").read_text(
+            encoding="utf-8"
         )
-        self.assertIn(
-            "provider_conformance.expected_required_cell_keys(compiled)",
-            producer,
-        )
-        self.assertIn("exact_required_cell_issues", producer)
-        for fixed_count_token in (
-            "126 nonprod",
-            "140-cell",
-            '!= "140"',
-            "exactly 140",
-        ):
-            self.assertNotIn(fixed_count_token, workflow)
-        self.assertIn("QWQ_OUTPUT_ROOT=$RUNNER_TEMP/", workflow)
-        self.assertNotIn("local-sha256", workflow)
-        self.assertNotIn("QWQ_PROVIDER_CONFORMANCE_ATTESTATION_AUTHORITY: local", workflow)
+        self.assertIn('allowed_statuses={"candidate-ready", "deployable"}', producer)
+        self.assertNotIn('allowed_statuses={"released"}', producer)
+        self.assertIn("command_execute_nonprod", producer)
+        self.assertIn("command_execute_prod", producer)
 
-    def test_identity_requires_released_candidate_and_writes_derived_outputs(
+    def test_identity_requires_current_source_candidate_and_writes_derived_outputs(
         self,
     ) -> None:
         import argparse
@@ -289,12 +264,12 @@ class ProviderReleaseEvidenceProducerTest(unittest.TestCase):
             root = Path(directory)
             manifest_path = root / "manifest.json"
             github_output = root / "github_output"
-            missing_candidate = self._released_manifest(candidate_id="")
+            missing_candidate = self._qualification_manifest(candidate_id="")
             missing_candidate["candidateId"] = None
             manifest_path.write_text(json.dumps(missing_candidate), encoding="utf-8")
             with patch.object(
                 producer,
-                "validate_manifest",
+                "validate_historical_release_snapshot",
                 side_effect=lambda payload, allowed_statuses=None: None,
             ), patch.object(
                 producer.subprocess,
@@ -306,19 +281,19 @@ class ProviderReleaseEvidenceProducerTest(unittest.TestCase):
                 )(),
             ), self.assertRaisesRegex(
                 ValueError,
-                "released candidateId",
+                "current-source candidateId",
             ):
                 producer._release_identity(
                     manifest_path,
                     "ghcr.io/owner/repo/release-artifact@sha256:" + "e" * 64,
                 )
 
-            released_manifest = self._released_manifest()
-            manifest_path.write_text(json.dumps(released_manifest), encoding="utf-8")
+            qualification_manifest = self._qualification_manifest()
+            manifest_path.write_text(json.dumps(qualification_manifest), encoding="utf-8")
             github_output.write_text("", encoding="utf-8")
             with patch.object(
                 producer,
-                "validate_manifest",
+                "validate_historical_release_snapshot",
                 side_effect=lambda payload, allowed_statuses=None: None,
             ), patch.object(
                 producer.subprocess,
@@ -331,7 +306,7 @@ class ProviderReleaseEvidenceProducerTest(unittest.TestCase):
             ):
                 code = producer.command_identity(
                     argparse.Namespace(
-                        release_manifest=manifest_path,
+                        historical_release_snapshot=manifest_path,
                         release_evidence_ref=(
                             "ghcr.io/owner/repo/release-artifact@sha256:" + "e" * 64
                         ),
@@ -362,7 +337,7 @@ class ProviderReleaseEvidenceProducerTest(unittest.TestCase):
             manifest_path = root / "manifest.json"
             report_dir = root / "reports"
             manifest_path.write_text(
-                json.dumps(self._released_manifest()),
+                json.dumps(self._qualification_manifest()),
                 encoding="utf-8",
             )
             commands: list[list[str]] = []
@@ -375,7 +350,7 @@ class ProviderReleaseEvidenceProducerTest(unittest.TestCase):
 
             with patch.object(
                 producer,
-                "validate_manifest",
+                "validate_historical_release_snapshot",
                 side_effect=lambda payload, allowed_statuses=None: None,
             ), patch.object(
                 producer.governance,
@@ -411,7 +386,7 @@ class ProviderReleaseEvidenceProducerTest(unittest.TestCase):
             ), patch.object(producer.subprocess, "run", side_effect=_run):
                 code = producer.command_execute_prod(
                     argparse.Namespace(
-                        release_manifest=manifest_path,
+                        historical_release_snapshot=manifest_path,
                         release_evidence_ref=(
                             "ghcr.io/owner/repo/release-artifact@sha256:" + "e" * 64
                         ),
@@ -448,7 +423,7 @@ class ProviderReleaseEvidenceProducerTest(unittest.TestCase):
             root = Path(directory)
             manifest_path = root / "manifest.json"
             manifest_path.write_text(
-                json.dumps(self._released_manifest()),
+                json.dumps(self._qualification_manifest()),
                 encoding="utf-8",
             )
             commands: list[list[str]] = []
@@ -464,7 +439,7 @@ class ProviderReleaseEvidenceProducerTest(unittest.TestCase):
             ]
             with patch.object(
                 producer,
-                "validate_manifest",
+                "validate_historical_release_snapshot",
                 side_effect=lambda payload, allowed_statuses=None: None,
             ), patch.object(
                 producer.governance,
@@ -476,7 +451,7 @@ class ProviderReleaseEvidenceProducerTest(unittest.TestCase):
             ), patch.object(producer.subprocess, "run", side_effect=_run):
                 code = producer.command_execute_nonprod(
                     argparse.Namespace(
-                        release_manifest=manifest_path,
+                        historical_release_snapshot=manifest_path,
                         release_evidence_ref=(
                             "ghcr.io/owner/repo/release-artifact@sha256:" + "e" * 64
                         ),
@@ -507,12 +482,12 @@ class ProviderReleaseEvidenceProducerTest(unittest.TestCase):
             manifest_path = root / "manifest.json"
             output_dir = root / "oci"
             manifest_path.write_text(
-                json.dumps(self._released_manifest()),
+                json.dumps(self._qualification_manifest()),
                 encoding="utf-8",
             )
             with patch.object(
                 producer,
-                "validate_manifest",
+                "validate_historical_release_snapshot",
                 side_effect=lambda payload, allowed_statuses=None: None,
             ), patch.object(
                 producer.subprocess,
@@ -549,7 +524,7 @@ class ProviderReleaseEvidenceProducerTest(unittest.TestCase):
             ), self.assertRaisesRegex(ValueError, "defines no capabilities"):
                 producer.command_package(
                     argparse.Namespace(
-                        release_manifest=manifest_path,
+                        historical_release_snapshot=manifest_path,
                         release_evidence_ref=(
                             "ghcr.io/owner/repo/release-artifact@sha256:" + "e" * 64
                         ),
@@ -567,7 +542,7 @@ class ProviderReleaseEvidenceProducerTest(unittest.TestCase):
             root / "quwoquan_ops/ci/provider_release_evidence.py"
         ).read_text(encoding="utf-8")
         self.assertIn("RELEASE_CLOSURE_PATHS", producer)
-        self.assertIn("released manifest closure digest mismatch", producer)
+        self.assertIn("qualification manifest closure digest mismatch", producer)
         self.assertIn("sha256_file(source_path)", producer)
         self.assertNotIn("_matrix_lifecycle_sources", producer)
 

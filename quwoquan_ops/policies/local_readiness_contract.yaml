@@ -1,11 +1,31 @@
-schema_version: 1
-contract_id: local-readiness-v1
+schema_version: 2
+contract_id: local-readiness-v2
+fact_dimensions:
+  sourceReadiness:
+    producer: local_readiness
+    statuses: [not_ready, fast_green, scope_ready, release_ready]
+  environmentReadiness:
+    producer: environment_ops
+    statuses: [not_evaluated, passed, not_required, failed]
+  deviceReadiness:
+    producer: package_acceptance
+    statuses: [not_evaluated, passed, failed]
+  integrationEligibility:
+    producer: trusted_integration_publisher
+    statuses: [not_evaluated, eligible, blocked]
+  promotionEligibility:
+    producer: integration_qualification
+    statuses: [not_evaluated, eligible, blocked]
+independence:
+  source_pass_implies: []
+  cross_dimension_inference: denied
+  local_readiness_writes: [sourceReadiness]
+  non_source_default: not_evaluated
 levels:
   edit_feedback: L-1
   fast_green: L0
   scope_ready: L1
   release_ready: L2
-readiness_states: [not_ready, fast_green, scope_ready, release_ready]
 fingerprint:
   canonical_implementation: quwoquan_ops/cli/lib/evidence_fingerprint.py
   exact_input_groups: [git, workspace, assets, execution]

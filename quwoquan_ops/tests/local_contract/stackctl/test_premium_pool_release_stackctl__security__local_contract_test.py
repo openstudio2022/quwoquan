@@ -400,7 +400,15 @@ class PremiumPoolReleaseStackctlSecurityLocalContractTest(unittest.TestCase):
                         "entityRefs": ["homepage-1"],
                         "postIds": ["article-1", "image-1", "video-1"],
                         "feedQueries": [
-                            {"name": "typed_video", "matchedPostIds": ["video-1"]}
+                            {
+                                "name": "homepage_recommend",
+                                "matchedPostIds": ["article-1"],
+                            },
+                            {"name": "typed_video", "matchedPostIds": ["video-1"]},
+                            {
+                                "name": "premium_stream",
+                                "matchedPostIds": ["video-1"],
+                            },
                         ],
                         "passed": True,
                     }

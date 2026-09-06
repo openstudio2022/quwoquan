@@ -38,7 +38,8 @@
 - [`human-agent-delivery-interaction`](./human-agent-delivery-interaction/spec.md)：Agent 在冻结授权内主导完整交付，人类按业务 authority 角色提供独立输入、裁决硬门和价值取舍、授权外部动作并接受商用与 outcome 结果。
 - [`objective-execution`](./objective-execution/spec.md)：Objective 与 Increment 通过 append-only TransitionEvent、deterministic reducer、authenticated authority readback 和 effect readback 可恢复推进；S4 准入直接消费 branch policy。
 - [`hotl-expansion-control`](./hotl-expansion-control/spec.md)：S6 只读评估固定 cohort 人工瓶颈、checkpoint delta、紧急控制 proof 与 capability admission；当前 fail-closed 为 manual/单写者且不授予 mutation。
-- [`local-continuous-integration`](./local-continuous-integration/spec.md)：按编辑、空闲、提交范围与推送范围调度 canonical checks，并以精确输入回执区分 `fast_green`、`scope_ready` 与 `release_ready`。
+- [`local-continuous-integration`](./local-continuous-integration/spec.md)：按编辑、空闲、提交范围与推送范围调度 canonical checks，并以精确输入回执生产独立 `sourceReadiness`；`environmentReadiness`、`deviceReadiness`、`integrationEligibility` 与 `promotionEligibility` 由各自 producer 负责且不得由 source PASS 推导。
+- [`shared-worktree-scoped-candidate`](./shared-worktree-scoped-candidate/spec.md)：同一worktree以整文件path claim和私有Git index并行构造exact candidate，越界或父提交漂移fail closed。
 - [`governance-pipeline-observe-only`](./governance-pipeline-observe-only/spec.md)：只读聚合全链独立证据并给出 observe-only 准入解释，任何终态都不授予生产、商用或 HOTL mutation。
 - 运行投影：[`场景化 HOTL 运行矩阵`](./design.md#hotl-runtime-matrix) 统一展示 12 个 Skill 与 session 至 release 边界；只引用各 owner，不建立 resolver、第二正文或状态台账。
 
@@ -74,13 +75,13 @@
 - 常驻 AGENTS、默认 owner manifest 与单 Reviewer 上下文必须遵守 canonical contract、registry 和门禁绑定的预算，任一超限都阻断。
 
 <a id="req-004"></a>
-### REQ-004 并行会话合法合入协议
+### REQ-004 共享worktree scoped candidate协议
 
-- 合法合入态唯一定义为「scope-green + foreign-red 登记」：本会话 scope（当前计划与本会话 changed_paths）内影响面门禁全绿，且域外已知红以带归因与泛化判定的条目登记进该轮次交接单缺口段后，允许提交并推送 `dev1.0`。
-- 不得以工作树整体全绿为合入前提——并行脏树是常态；也不得以域外红为由使用 `--no-verify` 绕过门禁。
-- 混合文件（本会话与并行会话改动同文件）采用部分暂存提交，只提交本会话语义行。
-- 归因或取证用的 stash/restore 操作必须以 pathspec 显式限定在本会话 scope 内文件，禁止无差别 `git stash`/`git checkout --` 触碰并行会话未提交增量——无差别恢复会把他会话未提交的 spec 增量静默还原回 HEAD 态。
-- ContractGraph 静止窗口：contract view 构建与 accept 期间持有静止窗口，其他会话不得并发修改 canonical contracts；builder 对构建期漂移 fail-closed。遇 Graph 红先判定是否为窗口冲突（等待后复跑），再做失败归因。
+- 同一worktree允许多个writer并行修改，但每个writer必须在首写前声明非空整文件exact path claim与expected parent；claim的owner、generation、状态与冲突查询由受管本地coordinator append-only维护，运行投影不进入Git。
+- path相等、祖先/后代重叠、rename source/destination、delete与generate output必须视为冲突；共享Git index、HEAD/ref、ContractGraph accept/codegen、环境、设备、package和外部mutation保持exclusive lease。
+- 每个candidate必须使用私有`GIT_INDEX_FILE`，scope外tree entry与expected parent逐字一致，scope内字节来自明确staged paths；未声明dirty、symlink逃逸、submodule、intent-to-add、越界tree变化、owner/ref stale或claim generation漂移全部阻断。
+- candidate只创建commit object和不可变request，不移动HEAD或branch。publisher以expected remote OID执行一次CAS；loser释放事实并从新parent重建，不使用stash/reset/force/自动merge吸收其他writer。
+- scope-green只证明本candidate；foreign changes继续留在共享worktree。handoff/准出引用claim、candidate与named evidence exact refs，不以工作树整体clean或另一writer失败替代本scope判定。
 
 <a id="req-005"></a>
 ### REQ-005 知识资产七类职责与动态 facets
@@ -104,16 +105,16 @@
 <a id="req-007"></a>
 ### REQ-007 本地反馈与治理准入保持单轨
 
-- Local CI 只规划和调度 canonical checks，readiness queue、exact-input cache 与 receipt 都是可删除投影，不得形成第二事实台账；本地 `scope_ready`/`release_ready` 只证明所绑定的源码与测试范围。
+- Local CI 只规划和调度 canonical checks，readiness queue、exact-input cache 与 receipt 都是可删除投影，不得形成第二事实台账；本地 `sourceReadiness.status=scope_ready|release_ready` 只证明所绑定的源码与测试范围；其余四个正交事实保持 `not_evaluated`。
 - 治理流水线 admission 从 owner manifest immutable exact ref 开始，只消费各 owner 的 exact readback 并执行 observe-only 评估，不消费 workflow route evidence，也不得从 Review、本地 readiness 或调用方自报推导 Human、Commercial、Prod、channel、outcome 或 HOTL authority；任一终态的 Prod/HOTL mutation 均为 `false`。
 
 <a id="req-008"></a>
 ### REQ-008 多车道并行交付准入
 
-- 日常开发的物理隔离单元是六条长期 lane 分支各自的专属 worktree；`dev1.0` worktree 只承担集成、验收与过渡期收敛。分支角色与 PR 边由 [`daily-merge-release-strategy` REQ-001/REQ-002](../deliver-deploy-prod-pipeline/daily-merge-release-strategy/spec.md#req-001) 拥有，写并发由 [`objective-execution` REQ-003](./objective-execution/spec.md#req-003) 拥有，worktree 授权与身份由 [`local-worktree-lifecycle-governance` REQ-001](../system-architecture-and-engineering-guide/local-worktree-lifecycle-governance/spec.md#req-001) 拥有，端云闭环证据由 [`three-layer-evidence` REQ-005](../runtime-test-pyramid/three-layer-evidence/spec.md#req-005) 拥有；本 REQ 只声明工作流准入语义，不复制其值。
-- 一个 Increment 只有一个 lead lane、一个 writer 与一个原子 PR；跨 owner 变更按 owner manifest 选定唯一 lead lane，不拆成多个并行 writer；`small-fix`/`refactor` lane 不降低影响面验证义务。简单只读问答不创建 Increment、lane 或 writer lease。
-- Skill 显式入口与自然语言入口按 `REQ-002` 同轨进入同一生命周期后，PRE 必须校验当前 worktree 与 lead lane 一致；不一致时在任何 mutation 前 fail-closed，恢复动作限定为切换到正确 worktree、整体转移 lead lane、收窄 Increment 三种，禁止跨 worktree 隐式写入。
-- 六条固定长期 lane 已由用户裁决立即开放，最多允许六个不同 lane writer 并发；启用后观察用于补齐真实证据，不作为渐进扩容或阻断当前准入的前置门。共享 host 资源（环境 cell、真机/模拟器、ContractGraph accept/codegen、可晋级 package、Docker prune）仍维持单 writer 租约与唯一 host coordination root；lane worktree 不得直接写共享 Alpha/Beta/Gamma，环境操作一律经 environment-ops 工作流进入。
+- 日常开发可在六条长期lane或integration worktree进行；integration承担跨模块集成修复、验收与trusted publish请求，不再是本地只读。分支角色与 PR 边由 [`daily-merge-release-strategy` REQ-001/REQ-002](../deliver-deploy-prod-pipeline/daily-merge-release-strategy/spec.md#req-001) 拥有，写并发由 [`objective-execution` REQ-003](./objective-execution/spec.md#req-003) 拥有，worktree 授权与身份由 [`local-worktree-lifecycle-governance` REQ-001](../system-architecture-and-engineering-guide/local-worktree-lifecycle-governance/spec.md#req-001) 拥有，端云闭环证据由 [`three-layer-evidence` REQ-005](../runtime-test-pyramid/three-layer-evidence/spec.md#req-005) 拥有；本 REQ 只声明工作流准入语义，不复制其值。
+- 一个Increment只有一个candidate owner与一个原子scope，但同一worktree可有多个不重叠scope writer；跨owner改动由owner manifest和claim闭包约束，`small-fix`/`refactor`或integration都不降低证据义务。简单只读问答不创建claim。
+- Skill显式入口与自然语言入口按`REQ-002`同轨；mutation前必须取得current owner ref并登记scoped claim，当前worktree可为对应lane或integration。未声明scope、与活跃claim冲突或跨worktree隐式写入时fail closed。
+- 六条固定lane与integration writer已开放；每个worktree可有多个不重叠scope writer，Git ref与共享host资源仍只有一个winner。环境操作一律经environment-ops进入host coordination root，源码writer只提交exact执行请求。
 
 ## 6. 契约与依赖
 
@@ -142,12 +143,12 @@
 - AND 完成证据由对应 Skill 就地声明，证据指纹过期时下游复跑而非转抄结论。
 
 <a id="sit-003"></a>
-### SIT-003 教训沉淀与并行会话合法合入
+### SIT-003 教训沉淀与scoped candidate合法合入
 
 - GIVEN 交接单出现跨轮重复缺口或评审同类 finding 复发，且存在多个并行会话共用工作树。
 - WHEN 触发 distill 沉淀提议并有会话申请合入。
 - THEN 规则候选带触发场景、根因层、建议落点与 gate/check 绑定，经人确认后走 prd/dev 正常工作流落地。
-- AND 合入按「scope-green + foreign-red 登记」裁定：本会话 scope 内门禁全绿、域外已知红已登记进交接单缺口段。
+- AND 合入按exact claim与candidate裁定：私有index只含本scope、scope外tree继承parent、required evidence全绿；foreign bytes既不暂存也不被清理。
 
 <a id="sit-004"></a>
 ### SIT-004 知识资产唯一 owner 与分类回潮由结构门禁裁定
@@ -166,12 +167,12 @@
 - AND 本地 PASS 只证明当前 contract、实现与 fixture 自洽，不关闭外部身份、六角色 calibration、activation、环境、生产、渠道或 outcome 证据。
 
 <a id="sit-006"></a>
-### SIT-006 多车道 lead lane 与双入口准入
+### SIT-006 多worktree多writer与双入口准入
 
-- GIVEN 六条 lane 分支与 `dev1.0` 各自的专属 worktree，以及一个已确定 lead lane 的 Increment。
-- WHEN 会话经 Skill 显式入口或自然语言进入工作流并请求 mutation，或第二个会话在同一 lane worktree 上并行工作。
-- THEN 当前 worktree 与 lead lane 一致时才允许 mutation；不一致时在任何 mutation 前 fail-closed，并给出切换 worktree、转移 lead lane、收窄 Increment 三种恢复动作；同一 lane 内的并行会话按根 `AGENTS.md` 共享工作树条款合作（检查活跃 writer、只编辑本任务字节），不由 hook 或 claim 文件互斥，冲突在 lane→`dev1.0` PR 准出时由 Delivery Gate 暴露。
-- AND 两种入口在同一 lane 上进入同一生命周期并承担等价证据义务，不存在按入口差异化的旁路或降档。
+- GIVEN 六条lane与integration worktree，以及多个声明exact path scope的writer。
+- WHEN 会话经Skill显式入口或自然语言请求mutation并构造candidate。
+- THEN 不重叠scope可并行；重叠path、rename/delete、共享index/ref/generated/environment竞争只允许一个winner，candidate越界或parent漂移零ref mutation阻断。
+- AND lane与integration入口进入同一claim/candidate/evidence生命周期，不存在入口差异化旁路或降档。
 
 ## 8. 开放事项
 
@@ -191,7 +192,7 @@
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`track`
-- 影响或价值：尚缺可执行 gate/check 与直接测试 `spec_ref`——协议语义已冻结为 `REQ-004`（scope-green + foreign-red 登记、部分暂存、scope 内 pathspec、ContractGraph 静止窗口），但语义只靠自觉时，并行脏树互锁仍可能逼出 `--no-verify`（出处：调研转录 `0c4c608c-7219-47c2-bcda-5c66dcf93294`）。
+- 影响或价值：尚缺可执行 gate/check 与直接测试 `spec_ref`——协议语义已冻结为 `REQ-004`（exact path claim、private index、scope tree closure、ContractGraph静止窗口），但语义只靠自觉时，并行脏树互锁仍可能逼出 `--no-verify`（出处：调研转录 `0c4c608c-7219-47c2-bcda-5c66dcf93294`）。
 - 完成判定：`SIT-003` 的合入子句（`.t2`）由真实 gate/check 覆盖——`REQ-004` 的合法合入态有可执行校验（如提交前 scope-green 自动判定、交接单 foreign-red 登记联动检查），ContractGraph 静止窗口约定有门禁化表达，且对应测试带 `spec_ref` 绑定。
 - 依赖：commit gate、handoff manifest 与 ContractGraph 静止窗口门禁。
 
@@ -201,6 +202,6 @@
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`track`
-- 影响或价值：六条 lane 已立即开放；同 lane 并行会话不再由 hook/claim 互斥（该机制在实践中自锁、误导执行体绕道整仓 clone，已拆除），改为根 `AGENTS.md` 合作条款 + 准出时暴露冲突。lane PR ready 与 exact merge candidate 两级准出 gate 仍未实现，Skill 显式入口与自然语言入口在同一 canonical Skill 生命周期上的真实等价证据也未产生。启用后观察不阻断六车道。
+- 影响或价值：六条 lane 已立即开放；同一worktree需要由exact path claim在首写前暴露冲突；lane PR ready、integration publish与exact candidate gate仍未完整实现，Skill 显式入口与自然语言入口在同一 canonical Skill 生命周期上的真实等价证据也未产生。启用后观察不阻断六车道。
 - 完成判定：lane PR ready / exact merge candidate gate 闭合并覆盖 `SIT-006.t1`、`SIT-006.t2` 的 lead lane 一致性子句，且 `SIT-006.t3` 由至少一次 Skill 显式入口和一次自然语言入口在不同 lane 上完成等价 PRE、PR、evidence 与 retained-worktree resync readback 后删除。
 - 依赖：[`daily-merge-release-strategy` OPEN-003](../deliver-deploy-prod-pipeline/daily-merge-release-strategy/spec.md#open-003)、[`objective-execution` OPEN-002](./objective-execution/spec.md#open-002)、[`three-layer-evidence` OPEN-002](../runtime-test-pyramid/three-layer-evidence/spec.md#open-002)。

@@ -59,7 +59,14 @@ def verify_explicit_receipt_read_only(
         raise ContractError("local readiness receipt must be an object")
     if receipt.get("schema") != RECEIPT_SCHEMA or receipt.get("level") != level or receipt.get("status") != "PASS":
         raise ContractError("local readiness receipt is not the required PASS level")
-    if receipt.get("readiness") != LEVEL_TO_STATE[level] or receipt.get("input_stable") is not True:
+    expected_facts = {
+        "sourceReadiness": {"status": LEVEL_TO_STATE[level], "producer": "local_readiness"},
+        "environmentReadiness": {"status": "not_evaluated", "producer": "environment_ops"},
+        "deviceReadiness": {"status": "not_evaluated", "producer": "package_acceptance"},
+        "integrationEligibility": {"status": "not_evaluated", "producer": "trusted_integration_publisher"},
+        "promotionEligibility": {"status": "not_evaluated", "producer": "integration_qualification"},
+    }
+    if receipt.get("facts") != expected_facts or "readiness" in receipt or receipt.get("input_stable") is not True:
         raise ContractError("local readiness PASS identity/stability invalid")
     plan = receipt.get("plan")
     if not isinstance(plan, dict):

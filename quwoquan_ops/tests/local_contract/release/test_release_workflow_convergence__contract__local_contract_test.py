@@ -1,625 +1,588 @@
-"""Canonical four-environment release workflow contracts."""
+"""Permanent atomic release-chain workflow convergence contracts.
 
+spec_ref: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/spec.md#sit-001.t2
+spec_ref: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/spec.md#sit-001.t3
+spec_ref: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/spec.md#sit-001.t4
+spec_ref: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/spec.md#sit-001.t5
+spec_ref: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/daily-merge-release-strategy/spec.md#gwt-002.t1
+spec_ref: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/daily-merge-release-strategy/spec.md#gwt-003.t1
+spec_ref: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/daily-merge-release-strategy/spec.md#gwt-003.t2
+spec_ref: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/multi-environment-wave-deployment/spec.md#gwt-001.t2
+spec_ref: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/gray-release-to-prod/spec.md#gwt-001.t1
+spec_ref: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/gray-release-to-prod/spec.md#gwt-001.t2
+spec_ref: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/gray-release-to-prod/spec.md#gwt-001.t3
+"""
 from __future__ import annotations
 
+import ast
 import json
-import os
-import subprocess
-import tempfile
-import unittest
 from pathlib import Path
+from typing import Any
+
+import yaml
 
 ROOT = Path(__file__).resolve().parents[4]
-DELIVERY = ROOT / ".github/workflows/delivery-gate.yml"
-CONTROLLED_PROD = ROOT / ".github/workflows/deploy-prod-auto.yml"
-GITHUB_TIMING = ROOT / "quwoquan_ops/ci/github_actions_timing.py"
-GITHUB_ACTIONS_API = ROOT / "quwoquan_ops/ci/lib/github_actions_api.py"
-AI_ADVISORY = ROOT / "quwoquan_ops/ci/ai_ci_advisory.py"
-EVIDENCE_GATE = ROOT / "quwoquan_ops/gate/verify_ci_cd_evidence_contracts.py"
-BUDGETS = ROOT / "quwoquan_ops/environments/pr_gate_timing_budgets.json"
-VALIDATION = ROOT / "quwoquan_ops/environments/gamma/validation_suites.json"
-PIPELINE_SPEC = (
-    ROOT / "specs/feature-tree/runtime/deliver-deploy-prod-pipeline/spec.md"
+WORKFLOWS = ROOT / ".github/workflows"
+DELIVERY = WORKFLOWS / "delivery-gate.yml"
+QUALIFICATION = WORKFLOWS / "release-qualification.yml"
+TAG_SELECTION = WORKFLOWS / "release-tag-selection.yml"
+PROD = WORKFLOWS / "deploy-prod-auto.yml"
+TIMING_BUDGETS = ROOT / "quwoquan_ops/environments/pr_gate_timing_budgets.json"
+PROMOTION_RATCHET = ROOT / "quwoquan_ops/policies/promotion_timing_ratchet.yaml"
+RELEASE_POLICY = ROOT / "quwoquan_ops/policies/release_selection_policy.yaml"
+RELEASE_QUALIFICATION = ROOT / "quwoquan_ops/ci/release_qualification.py"
+RELEASE_TAG_ADMISSION = ROOT / "quwoquan_ops/ci/release_tag_admission.py"
+QUALIFIED_PROD = ROOT / "quwoquan_ops/ci/qualified_prod.py"
+RELEASE_CONTROL = ROOT / "quwoquan_ops/ci/release_control.py"
+
+LEGACY_WORKFLOWS = (
+    "pre-release-gate.yml",
+    "app-env-device-matrix-self-hosted.yml",
+    "beta-device-platform.yml",
+    "provider-release-evidence.yml",
 )
-SOURCE_ADMISSION_SPEC_REFS = (
-    "spec_ref: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/spec.md#sit-001.t1",
-    "spec_ref: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/daily-merge-release-strategy/spec.md#gwt-001.t2",
-    "spec_ref: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/daily-merge-release-strategy/spec.md#gwt-003.t1",
-    "spec_ref: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/daily-merge-release-strategy/spec.md#gwt-003.t2",
+PERMANENT_WORKFLOWS = (
+    "delivery-gate.yml",
+    "release-qualification.yml",
+    "release-tag-selection.yml",
+    "deploy-prod-auto.yml",
+)
+FORBIDDEN_RELEASE_TOKENS = (
+    "latestQualified",
+    "latest-qualified",
+    "RELEASED_RELEASE_EVIDENCE_REF",
+    "RELEASED_TAG",
+    "RELEASED_VERSION",
+    "vars.RELEASED",
+    "dry_run",
+    "dry-run",
+)
+PLACEHOLDER_TOKENS = (
+    "python3 -B -m py_compile",
+    "pending-controller-output",
+    "verified-pre-push-local-admission",
+    "The existing pinned service/app factories",
+    "must now publish creator/ruleset readback facts",
+    "unreachable until",
+    "transport must expose",
 )
 
 
-class ReleaseWorkflowConvergenceContractTest(unittest.TestCase):
-    def test_formal_prod_authority_preflight_fails_before_heavy_release_jobs(
-        self,
-    ) -> None:
-        import yaml
-
-        source = CONTROLLED_PROD.read_text(encoding="utf-8")
-        jobs = yaml.safe_load(source)["jobs"]
-        preflight = jobs["formal_prod_authority_preflight"]
-        preflight_commands = "\n".join(
-            str(step.get("run") or "") for step in preflight["steps"]
-        )
-
-        self.assertEqual(preflight["timeout-minutes"], 1)
-        self.assertEqual(preflight["permissions"], {"contents": "read"})
-        self.assertIn('EVENT_NAME" != "workflow_dispatch"', preflight_commands)
-        self.assertIn('DRY_RUN" == "true"', preflight_commands)
-        self.assertIn("applicability=not_applicable", preflight_commands)
-        self.assertIn("decision=pass", preflight_commands)
-        self.assertIn("OPS.BRANCH.AUTHORITY_UNAVAILABLE", preflight_commands)
-        self.assertIn("terminal=blocked", preflight_commands)
-        self.assertIn(
-            "recovery=restore_git_authority_then_retry", preflight_commands
-        )
-        self.assertNotIn("hostedProtectionVerified=true", preflight_commands)
-        self.assertNotIn("formalProd=true", preflight_commands)
-
-        def run_preflight(dry_run: str) -> tuple[subprocess.CompletedProcess[str], str]:
-            with tempfile.TemporaryDirectory() as temporary:
-                output_path = Path(temporary) / "github-output"
-                result = subprocess.run(
-                    ["bash", "-c", preflight_commands],
-                    cwd=ROOT,
-                    env={
-                        **os.environ,
-                        "EVENT_NAME": "workflow_dispatch",
-                        "DRY_RUN": dry_run,
-                        "GITHUB_OUTPUT": str(output_path),
-                    },
-                    text=True,
-                    capture_output=True,
-                    check=False,
-                )
-                output = (
-                    output_path.read_text(encoding="utf-8")
-                    if output_path.exists()
-                    else ""
-                )
-                return result, output
-
-        dry_run_result, dry_run_output = run_preflight("true")
-        self.assertEqual(dry_run_result.returncode, 0)
-        self.assertEqual(
-            dry_run_output.splitlines(),
-            ["applicability=not_applicable", "decision=pass"],
-        )
-        self.assertNotIn(
-            "OPS.BRANCH.AUTHORITY_UNAVAILABLE", dry_run_result.stdout
-        )
-
-        formal_result, formal_output = run_preflight("false")
-        self.assertEqual(formal_result.returncode, 2)
-        self.assertEqual(
-            formal_output.splitlines(),
-            ["applicability=required", "decision=blocked"],
-        )
-        self.assertIn("OPS.BRANCH.AUTHORITY_UNAVAILABLE", formal_result.stdout)
-        self.assertIn("terminal=blocked", formal_result.stdout)
-        self.assertIn(
-            "recovery=restore_git_authority_then_retry", formal_result.stdout
-        )
-
-        heavy_jobs = (
-            "source_context",
-            "service_pipeline",
-            "app_pipeline",
-            "delivery_gate",
-            "prepare",
-            "alpha_local",
-            "beta_device_matrix",
-            "gamma_local",
-            "preprod_evidence",
-            "prod_rollout",
-            "prod_soak_acceptance",
-        )
-        for job_name in heavy_jobs:
-            needs = jobs[job_name].get("needs", [])
-            if isinstance(needs, str):
-                needs = [needs]
-            self.assertIn(
-                "formal_prod_authority_preflight",
-                needs,
-                f"{job_name} can start before formal Prod authority preflight",
-            )
-
-        preflight_offset = source.index("  formal_prod_authority_preflight:\n")
-        for job_name in heavy_jobs:
-            self.assertLess(preflight_offset, source.index(f"  {job_name}:\n"))
-
-        prod_steps = jobs["prod_rollout"]["steps"]
-        defensive = next(
-            step
-            for step in prod_steps
-            if step.get("name")
-            == "Defensively recheck formal Prod hosted authority before mutation"
-        )
-        defensive_commands = str(defensive["run"])
-        self.assertEqual(
-            defensive["if"],
-            "${{ needs.prepare.outputs.dry_run != 'true' }}",
-        )
-        self.assertIn("OPS.BRANCH.AUTHORITY_UNAVAILABLE", defensive_commands)
-        self.assertIn("terminal=blocked", defensive_commands)
-        self.assertIn(
-            "recovery=restore_git_authority_then_retry", defensive_commands
-        )
-        mutation_names = (
-            "Deploy Prod canary",
-            "Deploy Prod 5%",
-            "Deploy Prod 20%",
-            "Deploy Prod 50%",
-            "Deploy Prod 100%",
-        )
-        step_names = [str(step.get("name") or "") for step in prod_steps]
-        defensive_index = step_names.index(str(defensive["name"]))
-        for mutation_name in mutation_names:
-            self.assertLess(defensive_index, step_names.index(mutation_name))
-
-    def test_source_promotion_admission_precedes_candidate_and_prod_credentials(
-        self,
-    ) -> None:
-        for spec_ref in SOURCE_ADMISSION_SPEC_REFS:
-            self.assertTrue(spec_ref.startswith("spec_ref: "))
-
-        import yaml
-
-        source = CONTROLLED_PROD.read_text(encoding="utf-8")
-        jobs = yaml.safe_load(source)["jobs"]
-        source_context = jobs["source_context"]
-        admission_step = next(
-            step
-            for step in source_context["steps"]
-            if step.get("name")
-            == "Admit the unique reviewed dev1.0 to main promotion"
-        )
-        source_commands = "\n".join(
-            str(step.get("run") or "") for step in source_context["steps"]
-        )
-
-        self.assertEqual(source_context["permissions"]["contents"], "read")
-        self.assertEqual(source_context["permissions"]["actions"], "read")
-        self.assertEqual(source_context["permissions"]["checks"], "read")
-        self.assertEqual(
-            source_context["permissions"]["pull-requests"], "read"
-        )
-        self.assertNotIn("git merge-base --is-ancestor", source_commands)
-        self.assertNotIn("EXPECTED_WORKFLOW_REF", source_commands)
-        self.assertIn("verify_release_governance.py", source_commands)
-        self.assertIn("PyYAML==6.0.3", source_commands)
-        self.assertIn('--git-sha "$SOURCE_SHA"', source_commands)
-        self.assertNotIn("ADMISSION_DIGEST", source_commands)
-        self.assertIn('--minimum-approvals 1', source_commands)
-        self.assertIn("$RUNNER_TEMP/source-promotion-admission.json", source_commands)
-        self.assertNotIn("--release-manifest", source_commands)
-        self.assertIn("OPS.BRANCH.SOURCE_NOT_MAIN_REACHABLE", source_commands)
-        self.assertNotIn("if", admission_step)
-        self.assertNotIn("continue-on-error", admission_step)
-        self.assertEqual(
-            admission_step["env"]["SOURCE_SHA"],
-            "${{ steps.source.outputs.source_git_sha }}",
-        )
-        self.assertIn('"schema": "prod-source-governance-receipt"', source_commands)
-
-        for producer in ("service_pipeline", "app_pipeline", "delivery_gate"):
-            needs = jobs[producer]["needs"]
-            if isinstance(needs, str):
-                needs = [needs]
-            self.assertIn("source_context", needs)
-
-        def depends_on_source_context(job_name: str) -> bool:
-            needs = jobs[job_name].get("needs", [])
-            if isinstance(needs, str):
-                needs = [needs]
-            return "source_context" in needs or any(
-                depends_on_source_context(dependency) for dependency in needs
-            )
-
-        for protected_job in (
-            "service_pipeline",
-            "app_pipeline",
-            "delivery_gate",
-            "prepare",
-            "alpha_local",
-            "beta_device_matrix",
-            "gamma_local",
-            "preprod_evidence",
-            "prod_rollout",
-            "prod_soak_acceptance",
-        ):
-            self.assertTrue(
-                depends_on_source_context(protected_job),
-                f"{protected_job} could run after rejected direct/non-dev promotion",
-            )
-
-        self.assertEqual(
-            jobs["mainline_summary"]["if"],
-            "${{ always() && needs.source_context.result == 'success' }}",
-        )
-        early_admission = source.index(
-            "Admit the unique reviewed dev1.0 to main promotion"
-        )
-        for protected_operation in (
-            "Service Pipeline (same mainline DAG)",
-            "App package evidence (same mainline DAG)",
-            "Delivery Gate (mainline)",
-            "Publish sealed candidate evidence",
-            "Materialize hosted service-plane SSH credential",
-            "Materialize hosted rollout SSH credentials",
-            "Deploy Prod canary",
-        ):
-            self.assertLess(early_admission, source.index(protected_operation))
-
-        formal_block = source.index(
-            "Defensively recheck formal Prod hosted authority before mutation"
-        )
-        self.assertLess(
-            formal_block,
-            source.index("Materialize hosted rollout SSH credentials"),
-        )
-        self.assertIn("OPS.BRANCH.AUTHORITY_UNAVAILABLE", source[formal_block:])
-
-    def test_release_budgets_have_one_unversioned_10_30_contract(self) -> None:
-        payload = json.loads(BUDGETS.read_text(encoding="utf-8"))
-        self.assertNotIn("version", payload)
-        self.assertEqual(payload["softBudgetSeconds"], 600)
-        self.assertEqual(payload["hardFailSeconds"], 1800)
-        self.assertEqual(payload["promotionCutoffSeconds"], 1500)
-        gate = payload["gates"]["07.mainline_auto_prod"]
-        self.assertEqual(gate["budgetSeconds"], 600)
-        self.assertEqual(gate["hardFailSeconds"], 1800)
-        self.assertEqual(gate["promotionCutoffSeconds"], 1500)
-        self.assertNotIn("07.main_commit_to_prod", payload["gates"])
-        self.assertIn("workflow run created_at", gate["criticalPath"])
-        self.assertIn("official approval waits", gate["criticalPath"])
-        self.assertIn(
-            "max(service_pipeline, app_pipeline, delivery_gate)",
-            gate["machinePath"],
-        )
-        self.assertIn(
-            "max(alpha_stage, beta_device_matrix, gamma_local)",
-            gate["machinePath"],
-        )
-
-    def test_mainline_profile_is_unversioned_and_keeps_beta_device_scope(self) -> None:
-        payload = json.loads(VALIDATION.read_text(encoding="utf-8"))
-        self.assertNotIn("version", payload)
-        profile = payload["profiles"]["mainline_auto_prod"]
-        self.assertEqual(profile["deviceMatrix"]["envs"], ["beta"])
-        self.assertIn("Gamma-local release-fast", profile["description"])
-        self.assertIn("600", profile["description"])
-        self.assertIn("1800", profile["description"])
-        self.assertIn("1500", profile["description"])
-
-    def test_delivery_gate_measures_every_app_shard_from_jobs_api(self) -> None:
-        source = DELIVERY.read_text(encoding="utf-8")
-        helper = GITHUB_TIMING.read_text(encoding="utf-8")
-        actions_api = GITHUB_ACTIONS_API.read_text(encoding="utf-8")
-        self.assertIn("github_actions_timing.py", source)
-        self.assertIn('--require-count "app_tests=4"', source)
-        self.assertIn('shard_index: [0, 1, 2, 3]', source)
-        self.assertIn("run, jobs, _ = load_run_and_jobs(", helper)
-        self.assertNotIn("/actions/runs/", helper)
-        self.assertNotIn('"filter": "latest"', helper)
-        self.assertIn("/actions/runs/", actions_api)
-        self.assertIn('f"{run_url}/jobs"', actions_api)
-        self.assertIn('query={"filter": "latest"}', actions_api)
-        self.assertIn("--critical-path-source github_run_calendar", source)
-        self.assertIn("--machine-critical-path-seconds", source)
-        self.assertIn("CALENDAR_SECONDS", source)
-        self.assertIn("outputs.machine_critical_path_seconds", source)
-        self.assertNotIn("outputs.critical_path_seconds", source)
-        self.assertNotIn("approximate wall", source)
-        self.assertNotIn("wall≈", source)
-
-    def test_controlled_workflow_has_four_environment_blocking_chain(self) -> None:
-        source = CONTROLLED_PROD.read_text(encoding="utf-8")
-        import yaml
-
-        jobs = yaml.safe_load(source)["jobs"]
-        self.assertEqual(jobs["source_context"]["timeout-minutes"], 2)
-        self.assertEqual(jobs["prepare"]["timeout-minutes"], 10)
-        self.assertEqual(jobs["alpha_local"]["timeout-minutes"], 8)
-        self.assertEqual(jobs["gamma_local"]["timeout-minutes"], 8)
-        self.assertEqual(jobs["preprod_evidence"]["timeout-minutes"], 2)
-        self.assertEqual(jobs["prod_rollout"]["timeout-minutes"], 30)
-        self.assertIn("--critical-path-source github_run_calendar", source)
-        self.assertIn("--machine-critical-path-seconds", source)
-        self.assertIn(
-            "needs.service_pipeline.outputs.machine_critical_path_seconds",
-            source,
-        )
-        self.assertIn(
-            "needs.app_pipeline.outputs.machine_critical_path_seconds",
-            source,
-        )
-        self.assertIn(
-            "needs.delivery_gate.outputs.machine_critical_path_seconds",
-            source,
-        )
-        self.assertIn(
-            "needs.beta_device_matrix.outputs.machine_critical_path_seconds",
-            source,
-        )
-        self.assertNotIn("outputs.critical_path_seconds", source)
-        self.assertIn(
-            "APPROVAL_EVIDENCE_REASON",
-            source,
-        )
-        self.assertIn("Canonical summary remains historical_incomplete", source)
-        self.assertIn("  gamma_local:\n", source)
-        self.assertIn("--target gamma-local", source)
-        self.assertIn("--profile release", source)
-        for job_name, target_name in (
-            ("alpha_local", "alpha-local"),
-            ("gamma_local", "gamma-local"),
-        ):
-            job_commands = "\n".join(
-                str(step.get("run") or "") for step in jobs[job_name]["steps"]
-            )
-            self.assertIn(f"--target {target_name}", job_commands)
-            self.assertIn("--formal-release", job_commands)
-            self.assertIn(
-                '--release-manifest "$QWQ_PROD_RELEASE_ARTIFACT_ROOT/manifest.json"',
-                job_commands,
-            )
-            self.assertIn("--skip-build", job_commands)
-            self.assertIn("--skip-app", job_commands)
-        self.assertIn("  prod_rollout:\n", source)
-        self.assertNotIn("  prod_initial:\n", source)
-        self.assertNotIn("  prod_carry_on:\n", source)
-        self.assertNotIn("  prod_full:\n", source)
-        self.assertEqual(source.count("environment: production"), 1)
-        self.assertIn("'production' || 'release-validation'", source)
-        self.assertIn("  prod_soak_acceptance:\n", source)
-        self.assertEqual(
-            jobs["prod_soak_acceptance"]["environment"],
-            "production",
-        )
-        self.assertGreaterEqual(
-            jobs["prod_soak_acceptance"]["timeout-minutes"],
-            1500,
-        )
-        self.assertIn("- alpha_local\n      - beta_device_matrix\n      - gamma_local", source)
-
-    def test_mainline_timing_uses_exact_oci_and_hosted_append_only_authority(
-        self,
-    ) -> None:
-        source = CONTROLLED_PROD.read_text(encoding="utf-8")
-        mainline = source[source.index("  mainline_summary:\n") :]
-        publish = mainline.index("Publish canonical CiTimingSummary to immutable OCI")
-        bind = mainline.index("Bind exact timing OCI into hosted append-only authority")
-        query = mainline.index("Query hosted timing authority and verify readback")
-        diagnostic = mainline.index("Upload diagnostic timing copy (non-authoritative)")
-
-        self.assertIn("packages: write", mainline)
-        self.assertIn("ci_timing_summary.Dockerfile", mainline)
-        self.assertIn(
-            "ghcr.io/${{ github.repository }}/ci-timing-summary@${TIMING_EVIDENCE_DIGEST}",
-            mainline,
-        )
-        self.assertIn("sync_hosted_ci_timing_ledger.py bind", mainline)
-        self.assertIn("sync_hosted_ci_timing_ledger.py query", mainline)
-        self.assertIn("hosted-bind-readback.json", mainline)
-        self.assertIn("hosted-query-readback.json", mainline)
-        self.assertIn("cmp -s", mainline)
-        self.assertLess(publish, bind)
-        self.assertLess(bind, query)
-        self.assertLess(query, diagnostic)
-        self.assertNotIn("continue-on-error: true", mainline[bind:diagnostic])
-
-    def test_actions_artifact_is_only_a_short_lived_diagnostic_copy(self) -> None:
-        source = CONTROLLED_PROD.read_text(encoding="utf-8")
-        mainline = source[source.index("  mainline_summary:\n") :]
-        artifact = mainline.index("Upload diagnostic timing copy (non-authoritative)")
-        authority = mainline.index("Query hosted timing authority and verify readback")
-
-        self.assertGreater(artifact, authority)
-        self.assertIn("retention-days: 3", mainline[artifact:])
-        self.assertIn("continue-on-error: true", mainline[artifact:])
-
-    def test_job_created_at_gap_is_rendered_then_fails_closed(self) -> None:
-        source = CONTROLLED_PROD.read_text(encoding="utf-8")
-        mainline = source[source.index("  mainline_summary:\n") :]
-        helper = GITHUB_TIMING.read_text(encoding="utf-8")
-
-        self.assertIn('result["missing_evidence"] = "githubJobs.createdAt"', helper)
-        self.assertIn("UPSTREAM_MISSING_EVIDENCE", mainline)
-        self.assertIn('--missing-evidence "$UPSTREAM_MISSING_EVIDENCE"', mainline)
-        self.assertIn("timing is historical_incomplete", mainline)
-        self.assertNotIn('--queue-seconds "0"', mainline)
-
-    def test_mainline_failure_path_publishes_incomplete_summary_without_fabrication(
-        self,
-    ) -> None:
-        source = CONTROLLED_PROD.read_text(encoding="utf-8")
-        mainline = source[source.index("  mainline_summary:\n") :]
-        fallback = mainline.index(
-            "Preserve canonical failure-path timing without fabrication"
-        )
-        publish = mainline.index("Publish canonical CiTimingSummary to immutable OCI")
-
-        self.assertIn(
-            "ref: ${{ needs.source_context.outputs.source_git_sha || github.sha }}",
-            mainline,
-        )
-        self.assertIn("if: ${{ steps.workflow_timing.outcome == 'success' }}", mainline)
-        self.assertIn('if [[ -s "$SUMMARY" ]]', mainline[fallback:publish])
-        self.assertIn('--workflow-run-id "${{ github.run_id }}"', mainline[fallback:publish])
-        self.assertIn('--source-git-sha "${{ github.sha }}"', mainline[fallback:publish])
-        self.assertIn(
-            '--missing-evidence "workflowTiming.authoritativeDAG"',
-            mainline[fallback:publish],
-        )
-        self.assertIn('CANDIDATE_ARGS+=(--candidate-digest "$CANDIDATE_DIGEST")', mainline[fallback:publish])
-        self.assertNotIn("--machine-critical-path-seconds", mainline[fallback:publish])
-        self.assertLess(fallback, publish)
-        self.assertIn("Bind exact timing OCI into hosted append-only authority", mainline[publish:])
-
-    def test_ai_and_evidence_gate_have_no_hosted_timing_write_path(self) -> None:
-        for path in (AI_ADVISORY, EVIDENCE_GATE):
-            source = path.read_text(encoding="utf-8")
-            self.assertNotIn("sync_hosted_ci_timing_ledger.py bind", source)
-            self.assertNotIn("_remote_action(action=\"bind\"", source)
-
-    def test_prod_transaction_materializes_once_and_uses_candidate_identity(self) -> None:
-        source = CONTROLLED_PROD.read_text(encoding="utf-8")
-        prod = source[
-            source.index("  prod_rollout:\n") :
-            source.index("  prod_soak_acceptance:\n")
-        ]
-        soak = source[
-            source.index("  prod_soak_acceptance:\n") :
-            source.index("  mainline_summary:\n")
-        ]
-        self.assertEqual(prod.count("fetch_mainline_release_artifact.py"), 1)
-        self.assertEqual(soak.count("fetch_mainline_release_artifact.py"), 1)
-        self.assertEqual(prod.count("verify_release_governance.py"), 1)
-        self.assertEqual(prod.count("Materialize canonical configuration packages once"), 1)
-        self.assertEqual(prod.count("QWQ_PROD_RELEASE_ARTIFACT_ROOT"), 1)
-        self.assertEqual(prod.count("docker/login-action@"), 1)
-        for stage in ("canary", "5", "20", "50", "100"):
-            self.assertEqual(prod.count(f"--stage {stage} \\"), 1)
-        self.assertGreaterEqual(prod.count("--from-candidate-digest"), 5)
-        self.assertEqual(prod.count("--to-candidate-digest"), 5)
-        self.assertEqual(prod.count("--release-evidence-ref"), 5)
-        self.assertNotIn("--from-image", prod)
-        self.assertNotIn("--to-image", prod)
-        self.assertNotIn("--from-config", prod)
-        self.assertNotIn("--to-config", prod)
-        self.assertIn("needs.prepare.outputs.resume_stage", prod)
-        self.assertEqual(prod.count("--promotion-deadline-epoch"), 5)
-        self.assertEqual(prod.count("--hard-deadline-epoch"), 6)
-        self.assertIn("'production' || 'release-validation'", prod)
-        self.assertIn("timeout-minutes: 30", prod)
-        self.assertIn("--readback-output", source)
-        self.assertIn("existing_release_evidence_ref", source)
-        for field in (
-            "canary_receipt_id",
-            "percent_5_receipt_id",
-            "percent_20_receipt_id",
-            "percent_50_receipt_id",
-            "percent_100_receipt_id",
-        ):
-            self.assertIn(field, prod)
-        for legacy in (
-            "gray-initial",
-            "carry-on",
-            "gray_initial_receipt_id",
-            "carry_on_receipt_id",
-            "full_receipt_id",
-        ):
-            self.assertNotIn(legacy, prod)
-        self.assertIn("render_hosted_release_stage_report.py", prod)
-        self.assertIn('decision == "rolled_back"', prod)
-        self.assertNotIn('decision in {"rolled_back", "rollback_failed"}', prod)
-        self.assertIn("PROD_SSH_HOST: ${{ secrets.PROD_SSH_HOST }}", prod)
-        self.assertIn(
-            "QWQ_PROD_ROLLOUT_EVIDENCE_ROOT: ${{ secrets.PROD_ROLLOUT_STAGE_EVIDENCE_ROOT }}",
-            prod,
-        )
-        self.assertNotIn("vars.PROD_ROLLOUT_STAGE_EVIDENCE_ROOT", prod)
-        validation = prod.index("Validate protected rollout promotion evidence root")
-        initial_apply = prod.index("Deploy Prod canary")
-        self.assertLess(validation, initial_apply)
-        validation_source = prod[validation:initial_apply]
-        for guard in (
-            "root.is_absolute()",
-            "os.lstat(root)",
-            "stat.S_ISLNK(metadata.st_mode)",
-            "stat.S_ISDIR(metadata.st_mode)",
-            "metadata.st_uid != os.getuid()",
-            "stat.S_IWGRP | stat.S_IWOTH",
-        ):
-            self.assertIn(guard, validation_source)
-        self.assertIn("needs.prepare.outputs.dry_run != 'true'", validation_source)
-        for stage in ("canary", "5", "20", "50", "100"):
-            self.assertEqual(
-                prod.count(
-                    f'--promotion-evidence "$QWQ_PROD_ROLLOUT_EVIDENCE_ROOT/{stage}.json"'
-                ),
-                1,
-            )
-        self.assertIn("PROD_EDGE_SSH_KEY_FILE=$EDGE_KEY_FILE", prod)
-        self.assertIn("PROD_SERVICE_SSH_KEY_FILE=$KEY_FILE", prod)
-        self.assertNotIn("PROD_SERVICE_SSH_KEY: ${{ secrets.PROD_SERVICE_SSH_KEY }}", prod)
-
-    def test_dry_run_does_not_fabricate_later_ledger_stages(self) -> None:
-        source = CONTROLLED_PROD.read_text(encoding="utf-8")
-        self.assertIn("default: true", source)
-        self.assertIn("real Prod apply requires explicit workflow_dispatch", source)
-        self.assertIn("'production' || 'release-validation'", source)
-        self.assertIn("Dry-run remained read-only after canary validation", source)
-        for stage in (
-            "Deploy Prod 5%",
-            "Deploy Prod 20%",
-            "Deploy Prod 50%",
-            "Deploy Prod 100%",
-        ):
-            offset = source.index(stage)
-            guarded = source[offset : offset + 300]
-            self.assertIn(
-                "needs.prepare.outputs.dry_run != 'true'", guarded
-            )
-        terminal = source[source.index("Seal terminal Prod outcome") :]
-        self.assertIn("needs.prepare.outputs.dry_run != 'true'", terminal)
-        summary = source[source.index("  mainline_summary:\n") :]
-        self.assertIn('if [[ "$DRY_RUN" != "true" ]]; then', summary)
-        self.assertIn("automatic dry-run must not execute Prod soak", summary)
-        self.assertIn("rollback-readiness", source)
-
-    def test_prod_lifecycle_is_sealed_before_and_after_apply(self) -> None:
-        source = CONTROLLED_PROD.read_text(encoding="utf-8")
-        prod = source[source.index("  prod_rollout:\n") : source.index("  mainline_summary:\n")]
-        readiness = prod.index("render_release_lifecycle_receipts.py rollback-readiness")
-        require_deployable = prod.index("--require-deployable")
-        initial_apply = prod.index("Deploy Prod canary")
-        outcome = prod.index("render_release_lifecycle_receipts.py prod-outcome")
-        terminal_publish = prod.index("Publish immutable terminal ReleaseEvidenceManifest")
-        self.assertLess(readiness, require_deployable)
-        self.assertLess(require_deployable, initial_apply)
-        self.assertLess(initial_apply, outcome)
-        self.assertLess(outcome, terminal_publish)
-        self.assertIn("PROD_ROLLBACK_DRILL_RECEIPT_ID", prod)
-        self.assertIn("release-ledger-fetch", prod)
-        self.assertIn("release-ledger-receipt", prod)
-        self.assertIn("--environment-receipts-dir", prod)
-        self.assertIn("--rollout-receipt", prod)
-        self.assertIn("--rollback-receipt", prod)
-        self.assertNotIn("release-artifact:sha-", source)
-        self.assertIn('--release-outcome "$RELEASE_OUTCOME"', source)
-        self.assertIn('PROD_RELEASE_STATUS: ${{ needs.prod_rollout.outputs.release_status }}', source)
-        self.assertIn('PROD_RELEASE_STATUS}" != "released', source)
-
-    def test_workflow_rejects_legacy_release_evidence_envelopes(self) -> None:
-        source = CONTROLLED_PROD.read_text(encoding="utf-8")
-        self.assertIn("release_evidence_ref", source)
-        self.assertIn("verify_workflow_release_candidate.py", source)
-        self.assertIn("--require-deployable", source)
-        self.assertNotIn(
-            'manifest.get("candidateId") != manifest.get("artifactDigest")', source
-        )
-        for forbidden in (
-            "release_artifact_ref",
-            "mainline-release-artifact",
-            "manifestDigest",
-            'manifest["versions"]',
-            "releaseFiles",
-            "schemaVersion",
-            "contractVersion",
-            "registryRevision",
-        ):
-            self.assertNotIn(forbidden, source)
-
-    def test_feature_spec_declares_honest_10_30_gate(self) -> None:
-        source = PIPELINE_SPEC.read_text(encoding="utf-8")
-        self.assertIn("alpha -> beta -> gamma", source)
-        self.assertIn("600 秒", source)
-        self.assertIn("1800 秒", source)
-        self.assertIn("1500 秒", source)
-        self.assertIn("historical_incomplete", source)
+def load_workflow(path: Path) -> tuple[str, dict[str, Any]]:
+    source = path.read_text(encoding="utf-8")
+    workflow = yaml.safe_load(source)
+    assert isinstance(workflow, dict)
+    return source, workflow
 
 
-if __name__ == "__main__":
-    unittest.main()
+def trigger(workflow: dict[str, Any]) -> dict[str, Any]:
+    value = workflow[True]
+    assert isinstance(value, dict)
+    return value
+
+
+def commands(job: dict[str, Any]) -> str:
+    return "\n".join(str(step.get("run") or "") for step in job.get("steps", []))
+
+
+def function_names(path: Path) -> set[str]:
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    return {
+        node.name
+        for node in tree.body
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+    }
+
+
+def function_source(path: Path, name: str) -> str:
+    source = path.read_text(encoding="utf-8")
+    tree = ast.parse(source, filename=str(path))
+    node = next(
+        item
+        for item in tree.body
+        if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef))
+        and item.name == name
+    )
+    return ast.get_source_segment(source, node) or ""
+
+
+def test_delivery_gate_is_verify_only_and_excludes_heavy_execution() -> None:
+    source, workflow = load_workflow(DELIVERY)
+    assert set(workflow["jobs"]) == {"promotion_verify", "main_source_seal", "system_backsync"}
+    assert set(trigger(workflow)) == {"pull_request", "push"}
+    assert trigger(workflow)["pull_request"]["branches"] == ["main"]
+    assert trigger(workflow)["push"]["branches"] == ["main"]
+    assert workflow["jobs"]["promotion_verify"]["if"] == "${{ github.event_name == 'pull_request' }}"
+    assert workflow["jobs"]["main_source_seal"]["if"] == "${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}"
+    caller = workflow["jobs"]["system_backsync"]
+    assert caller["needs"] == "main_source_seal"
+    assert caller["if"] == "${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}"
+    assert caller["uses"] == "./.github/workflows/system-backsync.yml"
+    assert "steps" not in caller
+    assert "secrets" not in caller
+    assert "promotion-admit" in source
+    assert "promotion_evidence.py main-seal" in source
+    assert "validate-hosted-handoff" in source
+    assert "oras resolve" not in source
+    assert '"promotion_admission_ref"' not in source
+
+    executable = "\n".join(
+        line.strip()
+        for job in workflow["jobs"].values()
+        for line in commands(job).splitlines()
+        if not line.strip().startswith("echo")
+    ).casefold()
+    forbidden = (
+        "build_", "stackctl", "flutter", "gradle", "xcode",
+        "app_tests", "service_pipeline", "provider live", "device matrix",
+        "self-hosted", "runs-on: macos", "environment: production",
+        "python3 -b -m py_compile",
+    )
+    for token in forbidden:
+        assert token not in executable, f"delivery-gate regained heavy operation: {token}"
+
+
+def test_release_workflows_are_dispatch_only_and_single_responsibility() -> None:
+    qualification_source, qualification = load_workflow(QUALIFICATION)
+    selection_source, selection = load_workflow(TAG_SELECTION)
+    prod_source, prod = load_workflow(PROD)
+
+    for workflow in (qualification, selection, prod):
+        assert set(trigger(workflow)) == {"workflow_dispatch"}
+    assert set(qualification["jobs"]) == {
+        "allocate_build_number", "service_factory", "app_factory",
+        "materialize_candidate",
+    }
+    assert set(selection["jobs"]) == {"pre_admission", "create_and_readback"}
+    assert set(prod["jobs"]) == {
+        "prod_activation_admission", "prod_rollout", "post_release_soak",
+    }
+
+    assert "git tag -a" not in qualification_source
+    assert "stackctl.py deploy" not in qualification_source
+    assert "build, sign and attest once" in qualification_source.casefold()
+    assert "git tag -a" in selection_source
+    assert "stackctl.py deploy" not in selection_source
+    assert "build_sign_attest_once" not in selection_source
+    assert "git tag -a" not in prod_source
+    assert "stackctl.py deploy --target prod-hosted" in prod_source
+    assert "build_sign_attest_once" not in prod_source
+    for command in (
+        "prod-admit", "prod-stage-append", "prod-terminal-release",
+        "prod-rollback", "prod-soak",
+    ):
+        assert command in prod_source
+    permanent_source = "\n".join(
+        (qualification_source, selection_source, prod_source)
+    )
+    for token in PLACEHOLDER_TOKENS:
+        assert token not in permanent_source, f"placeholder release path remains: {token}"
+
+
+def test_main_push_only_creates_source_seal_not_build_tag_or_prod() -> None:
+    delivery_source, delivery = load_workflow(DELIVERY)
+    assert set(trigger(delivery)) == {"pull_request", "push"}
+    assert trigger(delivery)["push"] == {"branches": ["main"]}
+    post_commands = commands(delivery["jobs"]["main_source_seal"])
+    caller = delivery["jobs"]["system_backsync"]
+    assert "promotion_evidence.py main-seal" in post_commands
+    assert caller["needs"] == "main_source_seal"
+    assert caller["with"]["expected_dev_before"] == "${{ needs.main_source_seal.outputs.source_sha }}"
+    assert caller["with"]["source_sha"] == "${{ needs.main_source_seal.outputs.source_sha }}"
+    for forbidden in ("git tag -a", "stackctl.py deploy", "build_sign_attest_once"):
+        assert forbidden not in post_commands
+    for path in (QUALIFICATION, TAG_SELECTION, PROD):
+        source, workflow = load_workflow(path)
+        assert "push" not in trigger(workflow), f"{path.name} must not react to main push"
+        assert "github.event_name == 'push'" not in source
+    assert set(trigger(load_workflow(QUALIFICATION)[1])) == {"workflow_dispatch"}
+    assert set(trigger(load_workflow(TAG_SELECTION)[1])) == {"workflow_dispatch"}
+    assert set(trigger(load_workflow(PROD)[1])) == {"workflow_dispatch"}
+
+
+def test_rc_factory_builds_once_and_finalizes_exact_qualification_facts() -> None:
+    source, workflow = load_workflow(QUALIFICATION)
+    inputs = trigger(workflow)["workflow_dispatch"]["inputs"]
+    assert set(inputs) == {
+        "rc_tag_admission_ref", "qualification_request_ref",
+        "source_git_sha", "product_version_manifest_ref",
+        "package_acceptance_fact_ref", "provider_fact_ref",
+        "uat_fact_ref", "supply_chain_fact_ref",
+    }
+    assert all(value["required"] is True for value in inputs.values())
+    assert "@sha256" in inputs["rc_tag_admission_ref"]["description"]
+    assert "release_control.py" in source
+    assert "qualification-material" in source
+    assert "qualification-finalize" in source
+    assert workflow["jobs"]["allocate_build_number"]["environment"] == "release-qualification"
+    assert workflow["jobs"]["materialize_candidate"]["environment"] == "release-qualification"
+    assert workflow["jobs"]["service_factory"]["uses"] == "./.github/workflows/service_pipeline.yml"
+    assert workflow["jobs"]["app_factory"]["uses"] == "./.github/workflows/app_pipeline.yml"
+    for fact in ("package acceptance", "provider", "uat", "supply-chain"):
+        assert fact.casefold() in source.casefold()
+    assert "materialize_evidence_oci.py" in source
+    assert '--service-material "$SERVICE_MATERIAL_EXACT"' in source
+    assert '--app-material "$APP_MATERIAL_EXACT"' in source
+    assert "actual OCI payload lacks canonical manifest.json" in source
+
+    definitions = function_names(RELEASE_QUALIFICATION)
+    assert {
+        "create_qualification_request",
+        "create_candidate_material_from_factory_outputs",
+        "create_qualification_fact",
+    } <= definitions
+    material = function_source(
+        RELEASE_QUALIFICATION, "create_candidate_material_from_factory_outputs"
+    )
+    finalized = function_source(RELEASE_QUALIFICATION, "create_qualification_fact")
+    for token in (
+        '_canonical_material(',
+        '_validate_service_factory_material(',
+        '_validate_app_factory_material(',
+        '"reusable factory scalar drifted from actual material bytes"',
+        '"buildPolicy": "build_sign_attest_once"',
+        '"artifactBuildNumber": build_number',
+        '"factoryOutputs": factory_outputs',
+        '"supplyChainSubjects": [app_locator, service_locator]',
+        '"artifactByteDigests": exact_artifact_digests',
+    ):
+        assert token in material
+    for token in (
+        '"packageAcceptance"',
+        '"provider"',
+        '"uat"',
+        '"supplyChain"',
+        '["android", "ios"]',
+        '"decision": "qualified"',
+    ):
+        assert token in finalized
+
+
+def test_stable_reuses_qualified_rc_material_and_admits_after_readback() -> None:
+    selection_source, workflow = load_workflow(TAG_SELECTION)
+    inputs = trigger(workflow)["workflow_dispatch"]["inputs"]
+    assert set(inputs) == {
+        "tag_kind", "tag_name", "source_git_sha", "selection_fact_ref",
+        "initial_release_authority_ref", "selected_rc_admission_ref",
+        "qualification_fact_ref", "release_authority_fact_ref",
+    }
+    assert inputs["tag_kind"]["options"] == ["rc", "stable"]
+    assert "! git ls-remote --exit-code --tags" in selection_source
+    admit_rc = selection_source.index("tag-admit-rc-intent")
+    admit_stable = selection_source.index("tag-admit-stable-intent")
+    create_local = selection_source.index('git tag -a "$TAG" "$SOURCE_SHA"')
+    push = selection_source.index('git push origin "refs/tags/$TAG:refs/tags/$TAG"')
+    tag_readback = selection_source.index('/git/ref/tags/${TAG}', push)
+    outcome = selection_source.index("OUTCOME_RESULT=", tag_readback)
+    hosted_readback = selection_source.index("post_readback post_mutation", outcome)
+    finalize = selection_source.index('"tag-admit-$KIND-finalize"', hosted_readback)
+    assert admit_rc < create_local < push < tag_readback < outcome < hosted_readback < finalize
+    assert admit_stable < create_local < push < tag_readback < outcome < hosted_readback < finalize
+    assert "tag-mutation-outcome" in selection_source[outcome:hosted_readback]
+
+    policy = yaml.safe_load(RELEASE_POLICY.read_text(encoding="utf-8"))
+    assert policy["stableSelection"]["source"] == "one_exact_qualified_rc"
+    assert policy["stableSelection"]["rebuild"] == "denied"
+    assert policy["stableSelection"]["requiredExactBindings"] == [
+        "peeledCommit",
+        "sourceTree",
+        "candidateMaterialManifest",
+        "artifactBuildNumber",
+        "artifactDigests",
+        "qualificationFact",
+        "productVersionManifestDigest",
+        "productAuthorityFact",
+        "releaseAuthorityFact",
+    ]
+
+    definitions = function_names(RELEASE_TAG_ADMISSION)
+    assert "admit_release_tag" not in definitions
+    for callable_name in (
+        "create_release_tag_intent",
+        "record_tag_mutation_outcome",
+        "finalize_release_tag_admission",
+    ):
+        assert callable_name in definitions
+
+    stable_intent = function_source(RELEASE_TAG_ADMISSION, "create_release_tag_intent")
+    qualified_material = function_source(RELEASE_TAG_ADMISSION, "_validate_stable_authorities")
+    mutation_outcome = function_source(RELEASE_TAG_ADMISSION, "record_tag_mutation_outcome")
+    created_outcome = function_source(RELEASE_TAG_ADMISSION, "_created_outcome")
+    final_readbacks = function_source(RELEASE_TAG_ADMISSION, "_final_readbacks")
+    final_admission = function_source(RELEASE_TAG_ADMISSION, "finalize_release_tag_admission")
+
+    assert """authorities = _validate_stable_authorities(
+        root=root, tag_name=tag_name, source=source, version=version,
+        manifest_digest=manifest_digest, selected_rc_admission_ref=selected_rc_admission_ref,
+        qualification_fact_ref=qualification_fact_ref,
+        product_authority_fact_ref=product_authority_fact_ref,
+        release_authority_fact_ref=release_authority_fact_ref,
+    )""" in stable_intent
+    assert """if (
+        rc.get("schema") != RC_SCHEMA or rc.get("decision") != "admitted"
+        or rc.get("productVersion") != version
+        or rc.get("peeledCommit") != source["peeledCommit"]
+        or rc.get("sourceTree") != source["sourceTree"]
+        or rc.get("productVersionManifestDigest") != manifest_digest
+    )""" in qualified_material
+    assert """if (
+        qualification.get("schema") != QUALIFICATION_SCHEMA
+        or qualification.get("decision") != "qualified"
+        or material.get("schema") != MATERIAL_SCHEMA
+        or qualification.get("tagName") != rc.get("tagName")
+        or qualification.get("sourceGitSha") != source["peeledCommit"]
+        or qualification.get("sourceTree") != source["sourceTree"]
+        or qualification.get("artifactBuildNumber") != material.get("artifactBuildNumber")
+        or qualified_artifacts != material_artifacts
+        or qualification.get("candidateMaterialManifest") != material_exact
+        or material.get("sourceGitSha") != source["peeledCommit"]
+        or material.get("sourceTree") != source["sourceTree"]
+        or material.get("tagName") != rc.get("tagName")
+        or material.get("productVersionManifest", {}).get("digest") != manifest_digest
+    )""" in qualified_material
+    assert """candidate_identity = digest({
+        "peeledCommit": source["peeledCommit"], "sourceTree": source["sourceTree"],
+        "artifactBuildNumber": material["artifactBuildNumber"], "artifacts": material_artifacts,
+    })""" in qualified_material
+    assert """return {
+        "selectedRcAdmission": rc_exact, "selectedRcTagName": rc["tagName"],
+        "selectedRcTagObjectOid": rc["tagObjectOid"],
+        "qualificationFact": qualification_exact, "qualificationId": qualification_id,
+        "candidateMaterialManifest": material_exact, "candidateMaterialId": material_id,
+        "candidateIdentity": candidate_identity,
+        "artifactBuildNumber": material["artifactBuildNumber"], "artifacts": material_artifacts,
+        "productAuthorityFact": product_exact, "releaseAuthorityFact": release_exact,
+    }""" in qualified_material
+    assert """body: dict[str, Any] = {
+        "schema": INTENT_SCHEMA, "decision": "mutation_admitted",
+        **tag, "productVersion": version, "reservation": reservation,
+        **authorities, "productVersionManifestDigest": manifest_digest,
+        "releaseSelectionPolicyDigest": policy_digest,
+        "repository": repository_identity, "controllerProducer": producer,
+        "preCreatorReadback": creator, "preRulesetReadback": ruleset,
+        "admittedAt": _timestamp(admitted_at, "admittedAt"),
+    }""" in stable_intent
+    assert 'return _write_once(_intent_path(root, "stable", tag_name), body)' in stable_intent
+
+    assert 'if status == "created" and commit != intent.get("peeledCommit"):' in mutation_outcome
+    assert """body: dict[str, Any] = {
+        "schema": MUTATION_SCHEMA, "intent": intent_exact,
+        "intentId": intent["intentId"], "tagKind": tag_kind,
+        "tagName": tag_name, "status": status,
+        "tagObjectOid": object_oid, "peeledCommit": commit,
+        "recordedAt": _timestamp(recorded_at, "recordedAt"),
+    }""" in mutation_outcome
+    assert 'return _write_once(_outcome_path(root, intent["intentId"]), body)' in mutation_outcome
+    assert """if (
+        set(outcome) != {
+            "schema", "outcomeId", "intent", "intentId", "tagKind",
+            "tagName", "status", "tagObjectOid", "peeledCommit", "recordedAt",
+        }
+        or outcome.get("schema") != MUTATION_SCHEMA
+        or outcome.get("intent") != dict(intent_exact)
+        or outcome.get("intentId") != intent.get("intentId")
+        or outcome.get("tagKind") != intent.get("tagKind")
+        or outcome.get("tagName") != tag["tagName"]
+        or outcome.get("status") != "created"
+        or outcome.get("tagObjectOid") != tag["tagObjectOid"]
+        or outcome.get("peeledCommit") != tag["peeledCommit"]
+    )""" in created_outcome
+
+    assert """outcome_fact, outcome = _created_outcome(
+        root, intent, intent_exact, mutation_outcome_ref, tag=tag,
+    )""" in final_admission
+    assert """creator, ruleset = _final_readbacks(
+        root, intent=intent, tag=tag, outcome=outcome_fact,
+        creator_ref=creator_readback_ref, ruleset_ref=ruleset_readback_ref,
+        admitted_at=admitted_at,
+    )""" in final_admission
+    assert """outcome_id = _digest(outcome.get("outcomeId"), "mutationOutcome.outcomeId")
+    creator, creator_at = _creator_readback(
+        root, creator_ref, phase="post_mutation", tag_name=tag["tagName"],
+        tag=tag, producer=producer, repository=repository,
+        outcome_id=outcome_id,
+    )
+    ruleset, ruleset_at, post_ruleset_identity = _ruleset_readback(
+        root, ruleset_ref, phase="post_mutation", tag_name=tag["tagName"],
+        tag=tag, producer=producer, repository=repository,
+    )""" in final_readbacks
+    assert """if pre_ruleset_identity != post_ruleset_identity:
+        _fail(
+            "RELEASE_TAG.READBACK_INVALID",
+            "ruleset id or version drifted during mutation",
+        )""" in final_readbacks
+    assert """if (
+        max(pre_creator_at, pre_ruleset_at) > intent_at
+        or not (intent_at <= outcome_at <= min(creator_at, ruleset_at))
+        or max(creator_at, ruleset_at) > final_at
+    )""" in final_readbacks
+    assert """carried = {key: intent[key] for key in (
+        "selectedRcAdmission", "selectedRcTagName", "selectedRcTagObjectOid",
+        "qualificationFact", "qualificationId", "candidateMaterialManifest",
+        "candidateMaterialId", "candidateIdentity", "artifactBuildNumber", "artifacts",
+        "productAuthorityFact", "releaseAuthorityFact",
+    )}""" in final_admission
+    assert """"admissionIntent": intent_exact, "mutationOutcome": outcome,
+        "creatorReadback": creator, "rulesetReadback": ruleset,""" in final_admission
+    assert 'return _write_once(root / "release-tags" / "stable" / tag_name / "admission.json", body)' in final_admission
+
+
+def test_prod_accepts_only_stable_admission_exact_oci_and_orders_rollout() -> None:
+    source, workflow = load_workflow(PROD)
+    inputs = trigger(workflow)["workflow_dispatch"]["inputs"]
+    assert set(inputs) == {
+        "release_tag_admission_ref",
+        "previous_active_released_ledger_ref",
+        "rollback_readiness_ref",
+    }
+    assert inputs["release_tag_admission_ref"]["required"] is True
+    assert "stable ReleaseTagAdmissionFact" in inputs["release_tag_admission_ref"]["description"]
+    assert "@sha256" in inputs["release_tag_admission_ref"]["description"]
+    assert "release_control.py" in source
+    assert "prod-admit" in source
+    assert "pending-controller-output" not in source
+    assert "python3 -B -m py_compile" not in source
+
+    jobs = workflow["jobs"]
+    assert jobs["prod_rollout"]["needs"] == "prod_activation_admission"
+    assert jobs["post_release_soak"]["needs"] == "prod_rollout"
+    assert jobs["prod_activation_admission"]["environment"] == "production"
+    assert jobs["prod_rollout"]["environment"] == "production"
+    assert jobs["post_release_soak"]["environment"] == "production"
+    assert "ProdActivationAdmissionFact" in source
+    assert source.index("prod_activation_admission:") < source.index("prod_rollout:")
+    assert "for stage in canary 5 20 50 100" in source
+    assert source.count("stackctl.py deploy --target prod-hosted") == 1
+
+    admission = function_source(QUALIFIED_PROD, "create_prod_activation_admission")
+    for token in (
+        "releaseTagAdmission",
+        'tag.get("schema") != "quwoquan_ops.release_tag_admission_fact.v1"',
+        "Prod requires admitted stable SemVer tag",
+        "tag and qualification exact OCI artifacts drifted",
+        '"createdBeforeStage": "canary"',
+    ):
+        assert token in admission
+
+
+def test_prod_materialized_input_is_consumed_inside_rollout_store() -> None:
+    source, workflow = load_workflow(PROD)
+    activation_steps = [
+        step
+        for step in workflow["jobs"]["prod_rollout"]["steps"]
+        if step.get("id") == "activation_input"
+    ]
+    assert len(activation_steps) == 1
+    activation = str(activation_steps[0]["run"])
+    rollout = commands(workflow["jobs"]["prod_rollout"])
+
+    canonical_output = "$STORE/$ADMISSION_LOCAL_REF"
+    assert activation.count("prod-materialize-input") == 1
+    assert source.count("prod-materialize-input") == 1
+    assert 'STORE="$RUNNER_TEMP/release-control"' in activation
+    assert 'ADMISSION_LOCAL_REF="activation-input.json"' in activation
+    assert f'--output "{canonical_output}"' in activation
+    assert '--github-output "$GITHUB_OUTPUT"' in activation
+    assert 'envelope.get("prodActivationAdmission") != {"ref": admission_ref, "digest": admission_digest}' in activation
+    assert rollout.count("--prod-activation-admission") == 1
+    assert '--prod-activation-admission "$STORE/$ADMISSION_LOCAL_REF"' in rollout
+    assert "$RUNNER_TEMP/prod-activation-input.json" not in source
+    for retired in (
+        "QWQ_ENVIRONMENT_ACCEPTANCE_ROOT",
+        "PROD_ENVIRONMENT_ACCEPTANCE_REF",
+        "PROD_ENVIRONMENT_ACCEPTANCE_DIGEST",
+        "PROD_ENVIRONMENT_ACCEPTANCE_ROOT",
+        "--environment-acceptance-ref",
+        "--environment-acceptance-sha256",
+        "--environment-acceptance-root",
+    ):
+        assert retired not in source
+
+    release_control_main = function_source(RELEASE_CONTROL, "main")
+    assert "except (OSError, TypeError, ValueError, json.JSONDecodeError) as error:" in release_control_main
+    assert '"terminal": "GATE_BLOCK"' in release_control_main
+    assert "return 1" in release_control_main
+
+
+def test_prod_rollback_targets_previous_released_and_soak_is_independent() -> None:
+    admission = function_source(QUALIFIED_PROD, "create_prod_activation_admission")
+    rollback = function_source(QUALIFIED_PROD, "create_prod_rollback_fact")
+    soak = function_source(QUALIFIED_PROD, "create_post_release_soak_fact")
+
+    for token in (
+        "previous_active_released_ledger_ref",
+        'previous.get("terminal") != "released"',
+        'previous.get("active") is not True',
+        'previous.get("revoked") is not False',
+        '"previousActiveReleasedLedger": previous_exact',
+    ):
+        assert token in admission
+    for token in (
+        '"terminal": "rolled_back"',
+        '"rollbackTarget": previous_exact',
+        '"builderInvocationCount": 0',
+        '"tagMutation": False',
+    ):
+        assert token in rollback
+    for token in (
+        '"schema": "quwoquan_ops.post_release_soak_fact.v1"',
+        '"readOnly": True',
+        'root / "prod" / "soak"',
+    ):
+        assert token in soak
+    prod_jobs = load_workflow(PROD)[1]["jobs"]
+    assert "create_post_release_soak_fact" not in commands(prod_jobs["prod_rollout"])
+    assert "create_post_release_soak_fact" in commands(prod_jobs["post_release_soak"])
+
+
+def test_timing_contracts_separate_promotion_rc_and_prod() -> None:
+    budgets = json.loads(TIMING_BUDGETS.read_text(encoding="utf-8"))
+    promotion = budgets["gates"]["03.delivery_gate"]
+    rc = budgets["gates"]["06.rc_qualification"]
+    prod = budgets["gates"]["07.stable_tag_prod"]
+
+    assert budgets["softBudgetSeconds"] == 300
+    assert budgets["promotionCutoffSeconds"] == 300
+    assert promotion["budgetSeconds"] == 300
+    assert promotion["timingPolicy"] == "promotion_timing_ratchet"
+    assert promotion["criticalPath"].startswith("promotionReadyAt -> mainReadbackAt")
+    assert "promotion_verify only" in promotion["machinePath"]
+    assert rc["budgetSeconds"] == 3600
+    assert rc["hardFailSeconds"] == 7200
+    assert prod["budgetSeconds"] == 1800
+    assert prod["hardFailSeconds"] == 3600
+    assert prod["rollbackBudgetSeconds"] == 300
+    assert "06.rc_qualification" != "07.stable_tag_prod"
+
+    ratchet = yaml.safe_load(PROMOTION_RATCHET.read_text(encoding="utf-8"))
+    assert ratchet["contract_id"] == "promotion-timing-ratchet-v1"
+    assert ratchet["targetP95Seconds"] == 300
+    assert ratchet["governance"]["expires_when"].startswith("never")
+    assert ratchet["requiredTimingCompleteness"] == 1.0
+    assert ratchet["allowedUnclassifiedCancellations"] == 0
+    assert ratchet["allowedDuplicateEvents"] == 0
+    assert ratchet["allowedMissingEvidence"] == 0
+
+
+def test_legacy_workflows_mutable_selectors_and_dry_run_are_gone() -> None:
+    for name in LEGACY_WORKFLOWS:
+        assert not (WORKFLOWS / name).exists(), f"legacy workflow returned: {name}"
+
+    permanent_source = "\n".join(
+        (WORKFLOWS / name).read_text(encoding="utf-8")
+        for name in PERMANENT_WORKFLOWS
+    )
+    for token in FORBIDDEN_RELEASE_TOKENS:
+        assert token not in permanent_source, f"forbidden release entry returned: {token}"
+    prod_source = PROD.read_text(encoding="utf-8")
+    for token in ("refs/heads/main", "github.sha }}", "source_git_sha:"):
+        assert token not in prod_source, f"bare source selector returned to Prod: {token}"
+
+    policy = yaml.safe_load(RELEASE_POLICY.read_text(encoding="utf-8"))
+    assert policy["production"] == {
+        "selector": "ReleaseTagAdmissionFact",
+        "acceptedTagKind": "stable",
+        "rcDenied": True,
+        "mainHeadDenied": True,
+        "mutablePointerDenied": True,
+    }

@@ -65,10 +65,20 @@ def test_make_and_data_cli_use_the_single_verification_entrypoint() -> None:
         ROOT / "quwoquan_data/scripts/verify/handler.py"
     ).read_text(encoding="utf-8")
     for gate_name in (
-        "verify_prompt_templates",
+        "verify_cli_first",
+        "verify_public_cli_live_import_zero",
+        "verify_data_layout",
+        "verify_script_architecture",
+        "verify_python_symbols",
         "verify_no_flat_roots",
-        "verify_no_runtime_draft_kit",
         "verify_tag_tree",
+        "verify_source_digest",
+        "verify_content_execution_layout",
+        "verify_runtime_input_ownership",
+        "verify_output_root_isolation",
+        "verify_object_size_budget",
+        "verify_publish_purity",
+        "verify_publish_closure",
     ):
         assert gate_name in verify_handler
 

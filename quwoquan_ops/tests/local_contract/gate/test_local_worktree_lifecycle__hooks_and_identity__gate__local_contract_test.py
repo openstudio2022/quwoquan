@@ -432,8 +432,8 @@ def test_require_all_lanes_checks_clean_and_canonical_head(monkeypatch, policy) 
         (
             lambda raw: raw,
             lambda raw: raw.replace(
-                b"  state: active\n",
-                b"  state: pending\n",
+                b"  mainHeadDenied: true\n",
+                b"  mainHeadDenied: false\n",
                 1,
             ),
         ),

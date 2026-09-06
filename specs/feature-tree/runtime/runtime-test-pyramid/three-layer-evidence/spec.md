@@ -56,9 +56,9 @@
 <a id="req-005"></a>
 ### REQ-005 App 端云真实启动闭环证据
 
-- 影响 App 或 app↔cloud 边界（App 源码、App contract/generated、App 消费的服务 API 或其 wire schema）的合入候选，在更新 `dev1.0` 前必须产生三项结果证据，且全部绑定同一 exact merge candidate：受管 canonical launcher 的真实 Flutter 启动回执（launched、runtime health healthy、configuration complete）；App 连接真实 Service 进程执行的受影响 `api_integration` CaseResult；调用方显式声明的全部受影响 Journey 的 App→Service→readback 闭环结果，原始 readback 的 Journey 身份必须先全量唯一，再与 verified readback 身份及 required Journey 身份三个集合完全相等，无关、未验证或候选漂移的 Journey 均不得混入或替代。
+- 影响 App 或 app↔cloud 边界的exact candidate，在更新`dev1.0`前必须由Alpha及conditional Beta产生真实启动、Service `api_integration` CaseResult和受影响Journey readback，全部绑定同一candidate；更新后Gamma必须对完全相同的current dev head验证跨增量组合并形成IntegrationQualificationFact。
 - analyzer、widget test、进程内替身 API、编译或打包成功均属结构或本地证据，不得替代上述结果证据；受影响 required case 身份必须由 current ContractGraph 的 App `api_integration` readiness case 选择结果派生并与 CaseResult 精确闭合，CaseResult 必须唯一、`status=passed`、`executed>0`、`failed=0`、`skipped=0`，缺选择身份、缺 raw result、失败或重复均保持 GATE_BLOCK。
-- 模拟器/仿真器上的启动与闭环证据可支撑集成合入，但必须标记 `nonPromotable`；`dev1.0 → main` promotion 只认真实设备证据。
+- 模拟器/仿真器可支撑Alpha/Beta/Gamma源码集成事实但必须标记`nonPromotable`；`dev1.0 -> main`不把它升级为包发布证据。真实Android/iOS物理设备只验证RC最终签名包，并进入QualificationFact而非五分钟promotion。
 - 候选的三档集成深度定义保持为 `no_live`（runtime-neutral 免真启）、`alpha_integration`（默认 Alpha 集成）、`abg_release_sensitive`（release-sensitive 全 ABG），只能由 typed impact 派生，不得人工改档或降档。
 
 ## 4. 契约引用
@@ -86,9 +86,9 @@
 <a id="gwt-003"></a>
 ### GWT-003 端云真启闭环证据缺一即阻断
 
-- GIVEN 一个影响 App 或 app↔cloud 边界的 exact merge candidate 请求更新 `dev1.0`。
-- WHEN 集成门禁核对该候选的结果证据。
-- THEN 受管真实启动回执、真实 Service `api_integration` CaseResult 与 Journey readback 三项齐备且绑定同一候选摘要时放行；模拟器证据放行但标记 `nonPromotable`，不进入 promotion。
+- GIVEN 一个影响App或app↔cloud边界的exact candidate请求更新dev，并在更新后请求main promotion。
+- WHEN 集成准入与promotion核对分层结果证据。
+- THEN Alpha/Beta三项真实结果齐备且绑定candidate时才允许trusted publisher CAS；Gamma绑定同一current dev head时才允许promotion。模拟器事实保持`nonPromotable`，真实物理设备事实只在RC qualification产生。
 - AND 缺任一项、缺受影响 required case/Journey 身份、CaseResult 或任意状态/候选摘要的 Journey readback 重复、`status=failed|error`、`failed>0`、`executed=0`、`skipped>0`、原始/verified/required Journey 身份集合不完全相等、证据绑定到其他候选摘要，或以 analyzer/widget/编译/替身 API/无关 Journey 结果冒充时，保持 GATE_BLOCK。
 
 ## 6. 依赖

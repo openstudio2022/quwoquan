@@ -18,8 +18,8 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import re
+import shutil
 import subprocess
 import tempfile
 import urllib
@@ -27,8 +27,10 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-from pathlib import Path
+from collections.abc import Mapping
+from pathlib import Path, PurePosixPath
 from typing import Any
+from uuid import uuid4
 
 
 def _command_deploy_service_environment(args: argparse.Namespace) -> dict[str, Any]:
@@ -66,7 +68,7 @@ def _command_deploy_service_environment(args: argparse.Namespace) -> dict[str, A
         return {
             "exitCode": 2,
             "summary": "stackctl service deploy blocked: prod requires the rollout transaction command",
-            "details": ["use --target prod-hosted with release manifest and SLO readback"],
+            "details": ["use --target prod-hosted with ProdActivationAdmission and SLO readback"],
             **timing,
         }
     apply_command = ["kubectl", "apply", "-f", str(manifest)]
@@ -178,7 +180,7 @@ def _prod_prevalidation_executor(
     argv = [
         "python3",
         "quwoquan_ops/cli/prod/prevalidate_prod_hosted.py",
-        "--release-manifest",
+        "--frozen-diagnostic-snapshot",
         str(manifest_path),
         "--image-transport-tag",
         image_transport_tag,
@@ -252,16 +254,13 @@ def _command_prod_prevalidate(args: argparse.Namespace) -> dict[str, Any]:
             "service",
             "from_candidate_digest",
             "to_candidate_digest",
-            "release_evidence_ref",
             "step",
             "prometheus_url",
             "release_image_digest",
             "release_config_digest",
             "contract_graph_digest",
             "adapter_digest",
-            "environment_acceptance_ref",
-            "environment_acceptance_sha256",
-            "environment_acceptance_root",
+            "prod_activation_admission",
         )
     }
     if args.target != "prod-hosted" or args.env:
@@ -287,8 +286,7 @@ def _command_prod_prevalidate(args: argparse.Namespace) -> dict[str, Any]:
         request_issues.append(str(error))
 
     manifest_value = str(
-        getattr(args, "release_manifest", "")
-        or os.environ.get("RELEASE_MANIFEST", "")
+        getattr(args, "frozen_diagnostic_snapshot", "") or ""
     ).strip()
     manifest_path = (
         Path(manifest_value).expanduser().resolve()
@@ -300,7 +298,7 @@ def _command_prod_prevalidate(args: argparse.Namespace) -> dict[str, Any]:
     image_transport_tag = "unresolved"
     candidate_digest = "unresolved"
     if not manifest_value:
-        request_issues.append("immutable Service Pipeline --release-manifest is required")
+        request_issues.append("immutable Service Pipeline --frozen-diagnostic-snapshot is required")
     else:
         try:
             (
@@ -309,7 +307,7 @@ def _command_prod_prevalidate(args: argparse.Namespace) -> dict[str, Any]:
                 manifest_payload,
                 image_transport_tag,
                 candidate_digest,
-            ) = _stackctl._prevalidation_release_manifest(manifest_value)
+            ) = _stackctl._frozen_diagnostic_snapshot(manifest_value)
         except RuntimeError as error:
             request_issues.append(str(error))
 
@@ -481,8 +479,135 @@ def _command_prod_prevalidate(args: argparse.Namespace) -> dict[str, Any]:
     }
 
 
+def _controlled_distribution_input_root(value: str, *, option: str) -> Path:
+    raw = str(value or "").strip()
+    if not raw:
+        raise ValueError(f"{option} is required")
+    candidate = Path(raw).expanduser()
+    if not candidate.is_absolute() or ".." in candidate.parts:
+        raise ValueError(f"{option} must be an absolute controlled path")
+    if candidate.is_symlink():
+        raise ValueError(f"{option} must not be a symbolic link")
+    try:
+        resolved = candidate.resolve(strict=True)
+    except OSError as error:
+        raise ValueError(f"{option} must be an existing controlled directory") from error
+    if resolved != candidate or not resolved.is_dir():
+        raise ValueError(f"{option} must be one canonical symlink-free controlled directory")
+    return resolved
+
+
+def _official_distribution_graph_root_argument(value: str) -> Path:
+    try:
+        return _controlled_distribution_input_root(
+            value,
+            option="--official-distribution-graph-root",
+        )
+    except ValueError as error:
+        raise argparse.ArgumentTypeError(str(error)) from error
+
+
+def _app_factory_root_argument(value: str) -> Path:
+    try:
+        return _controlled_distribution_input_root(
+            value,
+            option="--app-factory-root",
+        )
+    except ValueError as error:
+        raise argparse.ArgumentTypeError(str(error)) from error
+
+
+def _stable_tag_admission_argument(value: str) -> dict[str, str]:
+    raw = str(value or "").strip()
+    if raw.count("=") != 1:
+        raise argparse.ArgumentTypeError(
+            "--stable-tag-admission must use exact ref=sha256:<64 lowercase hex>"
+        )
+    ref, digest = (part.strip() for part in raw.split("=", 1))
+    relative = PurePosixPath(ref)
+    if (
+        not ref
+        or relative.is_absolute()
+        or relative.as_posix() != ref
+        or "\\" in ref
+        or any(part in {"", ".", "..", "latest", "current"} for part in relative.parts)
+    ):
+        raise argparse.ArgumentTypeError(
+            "--stable-tag-admission ref must be one immutable safe relative path"
+        )
+    if re.fullmatch(r"sha256:[0-9a-f]{64}", digest) is None:
+        raise argparse.ArgumentTypeError(
+            "--stable-tag-admission digest must be sha256:<64 lowercase hex>"
+        )
+    return {"ref": ref, "digest": digest}
+
+
+def _official_distribution_cli_inputs(
+    args: argparse.Namespace,
+) -> tuple[Path, dict[str, str], Path]:
+    retired = [
+        option
+        for attribute, option in (
+            ("artifact_manifest", "--artifact-manifest"),
+            ("release_manifest", "--release-manifest"),
+        )
+        if str(getattr(args, attribute, "") or "").strip()
+    ]
+    if retired:
+        raise ValueError(
+            "formal distribution rejects retired inputs: " + ", ".join(retired)
+        )
+
+    graph_root = getattr(args, "official_distribution_graph_root", None)
+    stable_ref = getattr(args, "stable_tag_admission", None)
+    app_factory_root = getattr(args, "app_factory_root", None)
+    missing = [
+        option
+        for value, option in (
+            (graph_root, "--official-distribution-graph-root"),
+            (stable_ref, "--stable-tag-admission"),
+            (app_factory_root, "--app-factory-root"),
+        )
+        if value is None or value == ""
+    ]
+    if missing:
+        raise ValueError(
+            "formal distribution requires exact inputs: " + ", ".join(missing)
+        )
+    if not isinstance(stable_ref, Mapping) or set(stable_ref) != {"ref", "digest"}:
+        raise ValueError(
+            "--stable-tag-admission must be parsed from exact ref=sha256:<digest>"
+        )
+    try:
+        graph_root = _controlled_distribution_input_root(
+            str(graph_root),
+            option="--official-distribution-graph-root",
+        )
+        app_factory_root = _controlled_distribution_input_root(
+            str(app_factory_root),
+            option="--app-factory-root",
+        )
+        normalized_stable_ref = _stable_tag_admission_argument(
+            f"{stable_ref.get('ref', '')}={stable_ref.get('digest', '')}"
+        )
+    except (ValueError, argparse.ArgumentTypeError) as error:
+        raise ValueError(str(error)) from error
+    return graph_root, normalized_stable_ref, app_factory_root
+
+
 def _command_deploy_distribution(args: argparse.Namespace) -> dict[str, Any]:
     import quwoquan_ops.cli.stackctl as _stackctl
+
+    try:
+        graph_root, stable_tag_admission_ref, app_factory_root = (
+            _official_distribution_cli_inputs(args)
+        )
+    except ValueError as error:
+        return {
+            "exitCode": 2,
+            "summary": "stackctl distribution deploy is GATE_BLOCK",
+            "details": [str(error)],
+        }
 
     env_name = str(getattr(args, "env", "") or "").strip()
     target_name = str(getattr(args, "target", "") or "").strip()
@@ -504,17 +629,7 @@ def _command_deploy_distribution(args: argparse.Namespace) -> dict[str, Any]:
             "summary": "stackctl distribution deploy is GATE_BLOCK",
             "details": ["distribution deploy requires --env or --target"],
         }
-    artifact_manifest = str(getattr(args, "artifact_manifest", "") or "").strip()
-    release_manifest = str(getattr(args, "release_manifest", "") or "").strip()
-    if not artifact_manifest or not release_manifest:
-        return {
-            "exitCode": 2,
-            "summary": "stackctl distribution deploy is GATE_BLOCK",
-            "details": [
-                "--artifact-manifest and --release-manifest are both required; "
-                "a package cannot be deployed outside its candidate ReleaseManifest"
-            ],
-        }
+
     dry_run = str(getattr(args, "dry_run", "false")).lower() == "true"
     distribution_root, explicitly_configured = _stackctl._official_distribution_root(
         args,
@@ -529,51 +644,51 @@ def _command_deploy_distribution(args: argparse.Namespace) -> dict[str, Any]:
                 "mounted to the official CDN/origin publishing root"
             ],
         }
-    if target_name == "prod-hosted" and not dry_run:
-        try:
-            release_payload = json.loads(Path(release_manifest).read_text(encoding="utf-8"))
-            candidate_digest = (
-                str(release_payload.get("candidateId") or "")
-                if isinstance(release_payload, dict)
-                else ""
-            )
-            _stackctl._deployable_release_manifest(
-                release_manifest,
-                candidate_digest=candidate_digest,
-            )
-        except (OSError, ValueError, json.JSONDecodeError, RuntimeError) as error:
-            return {
-                "exitCode": 2,
-                "summary": "stackctl production distribution deploy is GATE_BLOCK",
-                "details": [f"governed ReleaseManifest validation failed: {error}"],
-            }
-    report_dir = _stackctl.resolve_report_dir(args, env_name, target_name)
+
     started_monotonic, started_at = _stackctl._start_timing()
     try:
         if dry_run:
-            with tempfile.TemporaryDirectory(prefix="qwq-distribution-dry-run-") as root:
+            dry_run_root = Path(tempfile.gettempdir()).resolve() / (
+                f"qwq-distribution-dry-run-{uuid4().hex}"
+            )
+            try:
                 receipt = _stackctl.deploy_official_distribution(
                     kind=str(args.artifact_kind),
-                    package_manifest_path=Path(artifact_manifest),
-                    release_manifest_path=Path(release_manifest),
-                    distribution_root=Path(root),
+                    graph_root=graph_root,
+                    stable_tag_admission_ref=stable_tag_admission_ref,
+                    app_factory_root=app_factory_root,
+                    distribution_root=dry_run_root,
                 )
+            finally:
+                if dry_run_root.exists():
+                    shutil.rmtree(dry_run_root)
             receipt["status"] = "validated"
             receipt["dryRun"] = True
             receipt.pop("receiptPath", None)
         else:
             receipt = _stackctl.deploy_official_distribution(
                 kind=str(args.artifact_kind),
-                package_manifest_path=Path(artifact_manifest),
-                release_manifest_path=Path(release_manifest),
+                graph_root=graph_root,
+                stable_tag_admission_ref=stable_tag_admission_ref,
+                app_factory_root=app_factory_root,
                 distribution_root=distribution_root,
                 expected_current=str(getattr(args, "expected_current", "") or ""),
             )
             receipt["status"] = "deployed"
             receipt["dryRun"] = False
-        issues: list[str] = []
-        hosted_inspection: dict[str, Any] = {}
-        if bool(getattr(args, "verify_hosted", False)) and not dry_run:
+    except (OSError, ValueError, _stackctl.OfficialDistributionReleaseError) as error:
+        timing = _stackctl._finish_timing(started_monotonic, started_at)
+        return {
+            "exitCode": 2,
+            "summary": f"stackctl {args.artifact_kind} distribution is GATE_BLOCK",
+            "details": [str(error)],
+            **timing,
+        }
+
+    issues: list[str] = []
+    hosted_inspection: dict[str, Any] = {}
+    if bool(getattr(args, "verify_hosted", False)) and not dry_run:
+        try:
             target = _stackctl.get_target(topology, target_name)
             public_bases = target.get("publicBases") or {}
             hosted_inspection = _stackctl.inspect_official_distribution(
@@ -583,11 +698,11 @@ def _command_deploy_distribution(args: argparse.Namespace) -> dict[str, Any]:
                 verify_hosted=True,
             )
             issues.extend(hosted_inspection.get("issues") or [])
-    except (OSError, ValueError, _stackctl.OfficialDistributionReleaseError) as error:
-        receipt = {}
-        hosted_inspection = {}
-        issues = [str(error)]
+        except (OSError, ValueError, _stackctl.OfficialDistributionReleaseError) as error:
+            issues.append(str(error))
+
     timing = _stackctl._finish_timing(started_monotonic, started_at)
+    report_dir = _stackctl.resolve_report_dir(args, env_name, target_name)
     payload = {
         "schema": "stackctl-official-distribution-deploy-report",
         "command": "deploy",
@@ -612,8 +727,9 @@ def _command_deploy_distribution(args: argparse.Namespace) -> dict[str, Any]:
             else f"stackctl {args.artifact_kind} distribution is GATE_BLOCK"
         ),
         "details": issues or [
-            f"artifactDigest={receipt.get('artifactDigest')}",
-            f"candidateId={receipt.get('candidateId')}",
+            f"candidateMaterialId={receipt.get('candidateMaterialId')}",
+            f"selectedAppArtifactDigest={receipt.get('selectedAppArtifactDigest')}",
+            f"stableTag={receipt.get('stableTag')}",
             f"receiptSHA256={receipt.get('receiptSHA256')}",
         ],
         "reportDir": _stackctl.relpath(report_dir),
@@ -686,12 +802,7 @@ def register_parser(subparsers: "argparse._SubParsersAction") -> None:
     deploy_parser.add_argument(
         "--to-candidate-digest",
         default="",
-        help="ReleaseEvidenceManifest candidateId；只用于发布 CAS",
-    )
-    deploy_parser.add_argument(
-        "--release-evidence-ref",
-        default="",
-        help="Prod apply/resume 使用的精确 ReleaseEvidenceManifest OCI 引用",
+        help="ProdActivationAdmission 绑定的候选 identity；formal rollout 时由 envelope 覆盖",
     )
     deploy_parser.add_argument("--step", default="")
     deploy_parser.add_argument("--cloud-provider", choices=["aliyun", "volcengine", "huaweicloud"], default="aliyun")
@@ -700,12 +811,28 @@ def register_parser(subparsers: "argparse._SubParsersAction") -> None:
         "--artifact-kind",
         choices=("web", "app-release"),
         default="",
-        help="部署同一 ReleaseManifest 绑定的官方 Web 或 Android 分发物",
+        help="沿 stable admission exact graph 部署官方 Web 或 Android 分发物",
     )
     deploy_parser.add_argument(
-        "--artifact-manifest",
-        default="",
-        help="stackctl package 生成的 Web/APK 子清单",
+        "--official-distribution-graph-root",
+        type=_official_distribution_graph_root_argument,
+        default=None,
+        help=(
+            "controller 已物化的 stable/Qualification/CMM/request/allocation exact graph 根"
+        ),
+    )
+    deploy_parser.add_argument(
+        "--stable-tag-admission",
+        type=_stable_tag_admission_argument,
+        default=None,
+        metavar="REF=SHA256",
+        help="stable ReleaseTagAdmissionFact 的 exact REF=SHA256 locator；SHA256 为 64 位小写十六进制摘要",
+    )
+    deploy_parser.add_argument(
+        "--app-factory-root",
+        type=_app_factory_root_argument,
+        default=None,
+        help="controller 已物化并验证来源的 actual app factory OCI 根",
     )
     deploy_parser.add_argument(
         "--distribution-root",
@@ -719,11 +846,10 @@ def register_parser(subparsers: "argparse._SubParsersAction") -> None:
     )
     deploy_parser.add_argument("--verify-hosted", action="store_true")
     deploy_parser.add_argument(
-        "--release-manifest",
+        "--frozen-diagnostic-snapshot",
         default="",
         help=(
-            "Service Pipeline 产出的 deployable manifest.json，或 "
-            "oci://ghcr.io/.../release-artifact@sha256:...；真实生产发布必须提供"
+            "仅 prevalidate 可消费的 frozen diagnostic-only Service 快照；不可进入 formal Prod rollout"
         ),
     )
     deploy_parser.add_argument(
@@ -732,24 +858,11 @@ def register_parser(subparsers: "argparse._SubParsersAction") -> None:
         help="生产 SLO readback 的 Prometheus base URL；非 dry-run 必须提供",
     )
     deploy_parser.add_argument(
-        "--environment-acceptance-ref",
+        "--prod-activation-admission",
         default="",
         help=(
-            "canonical Prod EnvironmentAcceptanceFact 相对 evidence root 的精确引用；"
-            "正式 rollout 必填，dry-run 可选校验"
-        ),
-    )
-    deploy_parser.add_argument(
-        "--environment-acceptance-sha256",
-        default="",
-        help="EnvironmentAcceptanceFact exact-byte sha256；与 ref 成对提供",
-    )
-    deploy_parser.add_argument(
-        "--environment-acceptance-root",
-        default="",
-        help=(
-            "EnvironmentAcceptanceFact 及其直接证据的受保护根；"
-            "默认读取 QWQ_ENVIRONMENT_ACCEPTANCE_ROOT"
+            "controller 已物化的 canonical prod_activation_input.v1 JSON；正式 "
+            "Prod rollout 必填，stackctl 只验证其中选定的 exact admission graph"
         ),
     )
     deploy_parser.add_argument(

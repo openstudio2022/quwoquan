@@ -580,20 +580,6 @@ def main() -> int:
                 "instead of the canonical topology projection"
             )
 
-    device_matrix_workflow = (
-        ROOT / ".github/workflows/app-env-device-matrix-self-hosted.yml"
-    ).read_text(encoding="utf-8")
-    for retired in (
-        "gamma_base_url:",
-        "media_base_url:",
-        "http://127.0.0.1",
-        "10.0.2.2",
-    ):
-        if retired in device_matrix_workflow:
-            issues.append(
-                "App device matrix must not expose manual/private endpoint "
-                f"override {retired}"
-            )
     assistant_matrix = (
         ROOT
         / "quwoquan_ops/tests/acceptance/user_acceptance/service_ops/"

@@ -120,7 +120,7 @@ layer_admission:
   portal_build: {provider_id: review_named_evidence_v1, provider_kinds: [local_runtime], release_evidence_eligible: false, max_age_seconds: 7200, verifier_id: governance.named_evidence.v1, interface: local}
   portal_uat: {provider_id: portal_uat_v1, provider_kinds: [authenticated_external], release_evidence_eligible: true, max_age_seconds: 3600, verifier_id: governance.portal_uat.v1, interface: external}
   hosted_ci_clean_sha: {provider_id: hosted_ci_clean_sha_v1, provider_kinds: [authenticated_external], release_evidence_eligible: true, max_age_seconds: 3600, verifier_id: governance.hosted_ci.v1, interface: external}
-  environment: {provider_id: environment_acceptance_v1, provider_kinds: [authenticated_external], release_evidence_eligible: true, max_age_seconds: 1800, verifier_id: governance.environment.v1, interface: external}
+  environment: {provider_id: environment_acceptance_fact_v2, provider_kinds: [authenticated_external], release_evidence_eligible: true, max_age_seconds: 1800, verifier_id: governance.environment_acceptance_fact.v2, interface: external}
   device: {provider_id: device_acceptance_v1, provider_kinds: [authenticated_external], release_evidence_eligible: true, max_age_seconds: 1800, verifier_id: governance.device.v1, interface: external}
   uat: {provider_id: uat_acceptance_v1, provider_kinds: [authenticated_external], release_evidence_eligible: true, max_age_seconds: 1800, verifier_id: governance.uat.v1, interface: external}
   commercial: {provider_id: human_commercial_readback_v1, provider_kinds: [authenticated_external], release_evidence_eligible: true, max_age_seconds: 3600, verifier_id: governance.commercial.v1, interface: external}
@@ -188,7 +188,7 @@ current_repository_evidence:
     effect_readback: governance_effect_readback_v1
     portal_uat: portal_uat_v1
     hosted_ci_clean_sha: hosted_ci_clean_sha_v1
-    environment: environment_acceptance_v1
+    environment: environment_acceptance_fact_v2
     device: device_acceptance_v1
     uat: uat_acceptance_v1
     commercial: human_commercial_readback_v1

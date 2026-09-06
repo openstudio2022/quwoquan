@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import contextlib
+import io
 import json
+import os
 import subprocess
 import tempfile
 import unittest
@@ -8,8 +11,13 @@ from pathlib import Path
 from unittest import mock
 
 from quwoquan_app.scripts.gamma import run_local_gamma_release_consumer_api as local_gamma_release_consumer
-from quwoquan_app.scripts.gamma import verify_local_gamma_mirror
 from quwoquan_ops.cli import stackctl
+from quwoquan_ops.cli.lib.target_uat_binding import (
+    TARGET_UAT_BINDING_SCHEMA,
+    canonical_target_uat_binding_bytes,
+    target_uat_binding_digest,
+    target_uat_binding_id,
+)
 
 
 def gamma_release_identity() -> dict[str, object]:
@@ -38,7 +46,95 @@ def gamma_candidate_identity() -> dict[str, str]:
         "providerRuntimeDigest": "sha256:" + ("6" * 64),
         "observabilityLogSinkDigest": "sha256:" + ("7" * 64),
         "imageDigest": "sha256:" + ("8" * 64),
+        "runtimeConfigDigest": "sha256:" + ("9" * 64),
+        "sourceRevision": "a" * 40,
+        "contractGraphSourceHash": "b" * 64,
+        "candidateManifestSha256": "c" * 64,
     }
+
+
+def _digest(marker: str) -> str:
+    return "sha256:" + marker * 64
+
+
+def target_uat_binding() -> dict[str, object]:
+    provider = {
+        "identity": "gamma-first-party-https",
+        "class": "first_party",
+        "type": "https",
+        "registered": False,
+        "conformanceEvidence": {
+            "ref": "env/gamma/provider/conformance.json",
+            "digest": _digest("d"),
+        },
+    }
+    runner = {
+        "identity": "gamma-patrol-release-homepage",
+        "sourcePath": (
+            "quwoquan_app/test/user_acceptance/service/entity_service/entity_homepage/"
+            "homepage/release_homepage__consumer_render__functional__user_acceptance_test.dart"
+        ),
+        "digest": _digest("e"),
+        "registered": False,
+    }
+    binding_id = target_uat_binding_id(
+        target="gamma-local",
+        release_id="release-gamma-a",
+        release_digest=_digest("1"),
+        platform="android",
+        provider=provider,
+        device_identity="emulator-5554",
+        profile="rehearsal",
+        runner=runner,
+    )
+    return {
+        "schema": TARGET_UAT_BINDING_SCHEMA,
+        "bindingId": binding_id,
+        "releaseId": "release-gamma-a",
+        "releaseDigest": _digest("1"),
+        "releaseUatSamplePlanRef": "data/releases/release-gamma-a/uat/sample-plan.json",
+        "releaseUatSamplePlanDigest": _digest("f"),
+        "environment": "gamma",
+        "target": "gamma-local",
+        "candidateDigest": _digest("3"),
+        "packageDigest": _digest("4"),
+        "configurationDigest": _digest("5"),
+        "runtimeConfigDigest": _digest("9"),
+        "environmentRuntimeDigest": _digest("a"),
+        "activeCas": {
+            "ref": "env/gamma/runs/activation/active-cas.json",
+            "digest": _digest("b"),
+        },
+        "readback": {
+            "ref": "env/gamma/runs/activation/readback.json",
+            "digest": _digest("c"),
+        },
+        "artifact": {
+            "class": "production_behavior",
+            "digest": _digest("d"),
+            "applicationId": "com.leadwise.quwoquan.nonprod.debug",
+            "buildMode": "debug",
+            "buildProfile": "nonprod",
+        },
+        "platform": "android",
+        "provider": provider,
+        "device": {
+            "identity": "emulator-5554",
+            "class": "emulator",
+            "registered": False,
+        },
+        "runner": runner,
+        "profile": "rehearsal",
+        "nonPromotable": True,
+        "createdAt": "2026-09-06T00:00:00Z",
+    }
+
+
+def write_target_uat_binding(root: Path) -> Path:
+    binding_path = root / "env/gamma/runs/release-consumer/target-uat-binding.json"
+    binding_path.parent.mkdir(parents=True)
+    binding_path.write_bytes(canonical_target_uat_binding_bytes(target_uat_binding()))
+    return binding_path
 
 
 class LocalGammaCommentSeedContractTest(unittest.TestCase):
@@ -56,7 +152,18 @@ class LocalGammaCommentSeedContractTest(unittest.TestCase):
             self.assertNotIn(retired, source)
         self.assertIn("load_release_content_identity", source)
         self.assertIn("load_gamma_execution_identity", source)
-        self.assertIn("write_passed_case_result", source)
+        self.assertIn("load_target_uat_binding", source)
+        self.assertIn("target_uat_binding_digest", source)
+        self.assertIn('parser.add_argument("--target-uat-binding", required=True)', source)
+        diagnostic_schema = "quwoquan.gamma-release-consumer-diagnostic" + ".v" + str(1)
+        self.assertIn(diagnostic_schema, source)
+        for raw_result_authority in (
+            "write_passed_case_result",
+            "write_result_bundle",
+            "ReadinessCaseResult",
+            "CASE_RESULT_FIELDS",
+        ):
+            self.assertNotIn(raw_result_authority, source)
 
     def test_release_consumer_command_is_bound_to_receipt_identity(self) -> None:
         completed = subprocess.CompletedProcess(
@@ -87,10 +194,14 @@ class LocalGammaCommentSeedContractTest(unittest.TestCase):
         self.assertEqual(command[command.index("--run-id") + 1], "verify-gamma-a")
         self.assertNotIn("fixture", " ".join(command))
 
-    def test_release_consumer_success_report_is_read_only_and_release_bound(self) -> None:
+    def test_release_consumer_success_report_is_diagnostic_and_target_uat_bound(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
-            report_path = Path(tmp_dir) / "release_consumer.json"
+            output_root = Path(tmp_dir)
+            report_path = output_root / "release_consumer.json"
+            binding_path = write_target_uat_binding(output_root)
+            binding_digest = target_uat_binding_digest(binding_path.read_bytes())
             with (
+                mock.patch.dict(os.environ, {"QWQ_OUTPUT_ROOT": str(output_root)}),
                 mock.patch.object(
                     local_gamma_release_consumer,
                     "resolve_release_consumer_report_path",
@@ -133,6 +244,8 @@ class LocalGammaCommentSeedContractTest(unittest.TestCase):
                         "--release-readiness",
                         "env/gamma/runs/data-release/release-gamma-a/"
                         "verify-gamma-a/release-readiness.json",
+                        "--target-uat-binding",
+                        str(binding_path),
                         "--report",
                         str(report_path),
                     ],
@@ -146,20 +259,42 @@ class LocalGammaCommentSeedContractTest(unittest.TestCase):
             Path("/tmp/release-readiness.json"),
             expected_environment="gamma",
         )
-        self.assertEqual(set(report), verify_local_gamma_mirror.CASE_RESULT_FIELDS)
-        self.assertEqual(report["status"], "passed")
-        self.assertEqual(report["baselineId"], gamma_candidate_identity()["baselineId"])
-        self.assertEqual(report["attemptId"], gamma_candidate_identity()["attemptId"])
-        self.assertEqual(report["executed"], 1)
-        self.assertEqual(report["skipped"], 0)
-        self.assertEqual(report["failed"], 0)
-        self.assertNotIn("release", report)
-        self.assertNotIn("domainSeeds", report)
+        self.assertEqual(
+            set(report),
+            {
+                "schema",
+                "mutationPolicy",
+                "exitCode",
+                "releaseId",
+                "targetUatBindingDigest",
+                "providerIdentity",
+            },
+        )
+        diagnostic_schema = "quwoquan.gamma-release-consumer-diagnostic" + ".v" + str(1)
+        self.assertEqual(report["schema"], diagnostic_schema)
+        self.assertEqual(report["mutationPolicy"], "read_only")
+        self.assertEqual(report["exitCode"], 0)
+        self.assertEqual(report["releaseId"], "release-gamma-a")
+        self.assertEqual(report["targetUatBindingDigest"], binding_digest)
+        self.assertEqual(report["providerIdentity"], "gamma-first-party-https")
+        for raw_result_field in (
+            "status",
+            "executed",
+            "skipped",
+            "failed",
+            "caseId",
+            "results",
+        ):
+            self.assertNotIn(raw_result_field, report)
 
     def test_release_consumer_missing_readiness_fails_closed_without_consumer(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
-            report_path = Path(tmp_dir) / "release_consumer.json"
+            output_root = Path(tmp_dir)
+            report_path = output_root / "release_consumer.json"
+            binding_path = write_target_uat_binding(output_root)
+            stderr = io.StringIO()
             with (
+                mock.patch.dict(os.environ, {"QWQ_OUTPUT_ROOT": str(output_root)}),
                 mock.patch.object(
                     local_gamma_release_consumer,
                     "resolve_release_consumer_report_path",
@@ -177,25 +312,38 @@ class LocalGammaCommentSeedContractTest(unittest.TestCase):
                     "load_gamma_execution_identity",
                     return_value=gamma_candidate_identity(),
                 ),
-                mock.patch.object(local_gamma_release_consumer, "run_release_consumer") as consumer,
+                mock.patch.object(
+                    local_gamma_release_consumer, "run_release_consumer"
+                ) as consumer,
                 mock.patch.object(
                     local_gamma_release_consumer.sys,
                     "argv",
-                    ["run_local_gamma_release_consumer_api.py", "--report", str(report_path)],
+                    [
+                        "run_local_gamma_release_consumer_api.py",
+                        "--target-uat-binding",
+                        str(binding_path),
+                        "--report",
+                        str(report_path),
+                    ],
                 ),
+                contextlib.redirect_stderr(stderr),
             ):
                 self.assertEqual(local_gamma_release_consumer.main(), 2)
 
-            report = json.loads(report_path.read_text(encoding="utf-8"))
+            self.assertFalse(report_path.exists())
 
         consumer.assert_not_called()
-        self.assertEqual(report["status"], "gate_block")
-        self.assertIn("DATA_RELEASE_READINESS_RECEIPT is required", report["reason"])
+        self.assertIn("GATE_BLOCK", stderr.getvalue())
+        self.assertIn("DATA_RELEASE_READINESS_RECEIPT is required", stderr.getvalue())
 
     def test_release_consumer_rejects_environment_identity_drift(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
-            report_path = Path(tmp_dir) / "release_consumer.json"
+            output_root = Path(tmp_dir)
+            report_path = output_root / "release_consumer.json"
+            binding_path = write_target_uat_binding(output_root)
+            stderr = io.StringIO()
             with (
+                mock.patch.dict(os.environ, {"QWQ_OUTPUT_ROOT": str(output_root)}),
                 mock.patch.object(
                     local_gamma_release_consumer,
                     "resolve_release_consumer_report_path",
@@ -218,16 +366,29 @@ class LocalGammaCommentSeedContractTest(unittest.TestCase):
                         "Data readiness environment='beta', expected 'gamma'"
                     ),
                 ),
-                mock.patch.object(local_gamma_release_consumer, "run_release_consumer") as consumer,
+                mock.patch.object(
+                    local_gamma_release_consumer, "run_release_consumer"
+                ) as consumer,
                 mock.patch.object(
                     local_gamma_release_consumer.sys,
                     "argv",
-                    ["run_local_gamma_release_consumer_api.py", "--report", str(report_path)],
+                    [
+                        "run_local_gamma_release_consumer_api.py",
+                        "--target-uat-binding",
+                        str(binding_path),
+                        "--report",
+                        str(report_path),
+                    ],
                 ),
+                contextlib.redirect_stderr(stderr),
             ):
                 self.assertEqual(local_gamma_release_consumer.main(), 2)
 
+            self.assertFalse(report_path.exists())
+
         consumer.assert_not_called()
+        self.assertIn("GATE_BLOCK", stderr.getvalue())
+        self.assertIn("expected 'gamma'", stderr.getvalue())
 
     def test_release_consumer_failure_is_not_downgraded(self) -> None:
         failed = subprocess.CompletedProcess(

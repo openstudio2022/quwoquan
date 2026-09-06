@@ -14,11 +14,12 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import hmac
 import json
 import os
 import re
 import tempfile
-from collections.abc import Iterable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from pathlib import Path
 from typing import Any
 
@@ -39,11 +40,10 @@ from quwoquan_ops.ci.release_bound_environment_acceptance import (
     acceptance_relative_ref as _acceptance_relative_ref_impl,
     validate_environment_acceptance_authority as _validate_environment_acceptance_authority_impl,
 )
-from quwoquan_ops.cli.prod.finalize_mainline_release_artifact import (
+from quwoquan_ops.ci.release_evidence_reader import (
     canonical_candidate_digest,
     canonical_manifest_digest,
-    validate_manifest,
-    validate_manifest_files,
+    validate_historical_release_snapshot,
 )
 
 SCHEMA = "qwq.release-bound-environment-identity"
@@ -159,6 +159,10 @@ def _parser() -> argparse.ArgumentParser:
         "--app-artifact-receipt", required=True, action="append", type=Path
     )
     parser.add_argument("--environment-acceptance-fact", required=True, type=Path)
+    parser.add_argument("--environment-acceptance-verification-key-env", required=True)
+    parser.add_argument(
+        "--expected-environment-acceptance-signer-identity", required=True
+    )
     parser.add_argument("--startup-device-case-result", required=True, type=Path)
     parser.add_argument("--telemetry-readback", required=True, type=Path)
     parser.add_argument("--rollback-receipt", required=True, type=Path)
@@ -215,11 +219,11 @@ def _verify_checksum(value: Mapping[str, Any], *, label: str) -> None:
         raise IdentityEvidenceError(f"{label}.verificationChecksum drift")
 
 
-def _validate_manifest(
+def _validate_historical_release_snapshot(
     value: dict[str, Any], *, environment: str
 ) -> tuple[str, str, str]:
     try:
-        validate_manifest(
+        validate_historical_release_snapshot(
             value, allowed_statuses={"candidate-ready", "deployable", "released"}
         )
     except ValueError as exc:
@@ -709,14 +713,49 @@ def _acceptance_relative_ref(path: Path, *, evidence_root: Path) -> str:
         raise IdentityEvidenceError(str(exc)) from exc
 
 
+def _environment_acceptance_signature_verifier(
+    key_env: str, expected_signer_identity: str
+) -> Callable[[str, bytes, str], bool]:
+    variable = _text(key_env, label="environment acceptance signing key env")
+    secret = os.environ.get(variable, "").strip()
+    if not secret:
+        raise IdentityEvidenceError(
+            "EnvironmentAcceptanceFact DSSE verifier is unavailable"
+        )
+    key = secret.encode("utf-8")
+    expected_identity = _text(
+        expected_signer_identity,
+        label="expected environment acceptance signer identity",
+    )
+
+    def verify(signer_identity: str, pae: bytes, signature: str) -> bool:
+        expected = "hmac-sha256:" + hmac.new(key, pae, hashlib.sha256).hexdigest()
+        return signer_identity == expected_identity and hmac.compare_digest(
+            expected, signature
+        )
+
+    return verify
+
+
 def _validate_environment_acceptance_authority(
-    path: Path, *, evidence_root: Path, environment: str, target: str,
-    release_id: str, release_digest: str,
+    path: Path,
+    *,
+    evidence_root: Path,
+    environment: str,
+    candidate_id: str,
+    commit: str,
+    tree: str,
+    signature_verifier: Callable[[str, bytes, str], bool],
 ) -> dict[str, Any]:
     try:
         return _validate_environment_acceptance_authority_impl(
-            path, evidence_root=evidence_root, environment=environment, target=target,
-            release_id=release_id, release_digest=release_digest,
+            path,
+            evidence_root=evidence_root,
+            environment=environment,
+            candidate_id=candidate_id,
+            commit=commit,
+            tree=tree,
+            signature_verifier=signature_verifier,
         )
     except ValueError as exc:
         raise IdentityEvidenceError(str(exc)) from exc
@@ -728,6 +767,15 @@ def render(args: argparse.Namespace) -> dict[str, Any]:
     target = str(args.target)
     if ENVIRONMENT_TARGETS[environment] != target:
         raise IdentityEvidenceError("environment/target mismatch")
+    if environment == "prod":
+        raise IdentityEvidenceError(
+            "release-bound environment identity does not accept prod; "
+            "production uses RC qualification and activation admission"
+        )
+    acceptance_signature_verifier = _environment_acceptance_signature_verifier(
+        args.environment_acceptance_verification_key_env,
+        args.expected_environment_acceptance_signer_identity,
+    )
     paths = [
         args.release_evidence_manifest,
         args.release_readiness,
@@ -757,12 +805,14 @@ def render(args: argparse.Namespace) -> dict[str, Any]:
     rollback = _read(args.rollback_receipt, label="rollback-receipt")
     _read(args.release_media_readback, label="release-media-readback")
 
-    candidate_id, git_sha, tree_digest = _validate_manifest(
+    candidate_id, git_sha, tree_digest = _validate_historical_release_snapshot(
         manifest, environment=environment
     )
     try:
-        validate_manifest_files(
-            args.release_evidence_manifest.resolve().parent, manifest
+        validate_historical_release_snapshot(
+            manifest,
+            artifact_dir=args.release_evidence_manifest.resolve().parent,
+            allowed_statuses={"candidate-ready", "deployable", "released"},
         )
     except ValueError as exc:
         raise IdentityEvidenceError(
@@ -773,9 +823,10 @@ def render(args: argparse.Namespace) -> dict[str, Any]:
         args.environment_acceptance_fact,
         evidence_root=args.data_output_root,
         environment=environment,
-        target=target,
-        release_id=str(release["releaseId"]),
-        release_digest=str(release["releaseDigest"]),
+        candidate_id=candidate_id,
+        commit=git_sha,
+        tree=tree_digest.removeprefix("sha1:").removeprefix("sha256:"),
+        signature_verifier=acceptance_signature_verifier,
     )
     import_run = _validate_run(
         import_receipt,

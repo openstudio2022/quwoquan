@@ -1,0 +1,350 @@
+# RC tag qualification: request -> hosted build number -> Build, sign and attest once.
+# Canonical release_qualification.py logic is invoked through release_control.py.
+name: 06. RC Qualification Factory
+
+permissions:
+  contents: read
+
+on:
+  workflow_dispatch:
+    inputs:
+      rc_tag_admission_ref:
+        description: Exact immutable RC tag AdmissionFact OCI @sha256 ref
+        required: true
+        type: string
+      qualification_request_ref:
+        description: Exact immutable QualificationRequest OCI @sha256 ref
+        required: true
+        type: string
+      source_git_sha:
+        description: Exact RC peeled commit
+        required: true
+        type: string
+      product_version_manifest_ref:
+        description: Exact product version manifest fact OCI @sha256 ref
+        required: true
+        type: string
+      package_acceptance_fact_ref:
+        description: Exact physical Android/iOS package acceptance OCI @sha256 ref
+        required: true
+        type: string
+      provider_fact_ref:
+        description: Exact Provider qualification fact OCI @sha256 ref
+        required: true
+        type: string
+      uat_fact_ref:
+        description: Exact current-source UAT fact OCI @sha256 ref
+        required: true
+        type: string
+      supply_chain_fact_ref:
+        description: Exact supply-chain qualification fact OCI @sha256 ref
+        required: true
+        type: string
+
+concurrency:
+  group: rc-qualification-${{ inputs.rc_tag_admission_ref }}
+  cancel-in-progress: false
+
+jobs:
+  allocate_build_number:
+    name: Allocate hosted monotonic build number
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: release-qualification
+    permissions: {contents: read, packages: write, id-token: write}
+    outputs:
+      artifact_build_number: ${{ steps.allocation.outputs.artifact_build_number }}
+      allocation_ref: ${{ steps.publish.outputs.allocation_ref }}
+      allocation_digest: ${{ steps.publish.outputs.allocation_digest }}
+      request_fact_ref: ${{ steps.request.outputs.request_fact_ref }}
+      request_fact_digest: ${{ steps.request.outputs.request_fact_digest }}
+      request_digest: ${{ steps.request.outputs.request_oci_digest }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          fetch-depth: 0
+          ref: ${{ inputs.source_git_sha }}
+          persist-credentials: false
+      - uses: oras-project/setup-oras@1d808f7d7f6995cc68b7bf507bfe5c5446e1dc9d
+        with: {version: 1.3.3}
+      - id: request
+        name: Materialize exact qualification request
+        env:
+          REQUEST_REF: ${{ inputs.qualification_request_ref }}
+          RC_ADMISSION_REF: ${{ inputs.rc_tag_admission_ref }}
+          SOURCE_SHA: ${{ inputs.source_git_sha }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          [[ "$REQUEST_REF" =~ ^ghcr\.io/[a-z0-9._/-]+@sha256:[0-9a-f]{64}$ ]]
+          [[ "$RC_ADMISSION_REF" =~ ^ghcr\.io/[a-z0-9._/-]+@sha256:[0-9a-f]{64}$ ]]
+          [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          printf '%s' "$GITHUB_TOKEN" | oras login ghcr.io --username "${{ github.actor }}" --password-stdin
+          trap 'oras logout ghcr.io >/dev/null 2>&1 || true' EXIT
+          mkdir -p "$RUNNER_TEMP/release-control"
+          oras pull --output "$RUNNER_TEMP/release-control/request" "$REQUEST_REF"
+          test -f "$RUNNER_TEMP/release-control/request/fact.json" || {
+            echo '::error::GATE_BLOCK: QualificationRequest OCI must contain fact.json'
+            exit 2
+          }
+          cp "$RUNNER_TEMP/release-control/request/fact.json" "$RUNNER_TEMP/release-control/request.json"
+          python3 - "$RUNNER_TEMP/release-control/request.json" "$SOURCE_SHA" "$RC_ADMISSION_REF" <<'PY'
+          import json, sys
+          request = json.load(open(sys.argv[1], encoding="utf-8"))
+          if (request.get("schema") != "quwoquan_ops.release_qualification_request.v1"
+                  or request.get("sourceGitSha") != sys.argv[2]
+                  or (request.get("rcTagAdmission") or {}).get("ref") != sys.argv[3]):
+              raise SystemExit("GATE_BLOCK: QualificationRequest identity drifted")
+          PY
+          DIGEST="sha256:$(python3 -c 'import hashlib,sys; print(hashlib.sha256(open(sys.argv[1], "rb").read()).hexdigest())' "$RUNNER_TEMP/release-control/request.json")"
+          {
+            echo "request_fact_ref=$REQUEST_REF"
+            echo "request_fact_digest=$DIGEST"
+            echo "request_oci_digest=${REQUEST_REF##*@}"
+          } >> "$GITHUB_OUTPUT"
+      - id: allocation
+        name: Bind repository-hosted monotonic sequence
+        env:
+          REQUEST_REF: ${{ steps.request.outputs.request_fact_ref }}
+          REQUEST_DIGEST: ${{ steps.request.outputs.request_fact_digest }}
+        run: |
+          set -euo pipefail
+          REQUEST_PATH="$RUNNER_TEMP/release-control/$REQUEST_REF"
+          mkdir -p "$(dirname "$REQUEST_PATH")"
+          cp "$RUNNER_TEMP/release-control/request.json" "$REQUEST_PATH"
+          python3 -B quwoquan_ops/ci/artifact_build_number.py \
+            --store-root "$RUNNER_TEMP/release-control" \
+            --request "$REQUEST_REF=$REQUEST_DIGEST" \
+            --hosted-run-number "${{ github.run_number }}" \
+            --hosted-run-id "${{ github.run_id }}" \
+            --github-output "$GITHUB_OUTPUT"
+      - id: publish
+        name: Publish exact allocation fact
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          FACT="$RUNNER_TEMP/release-control/${{ steps.allocation.outputs.allocation_ref }}"
+          mkdir -p "$RUNNER_TEMP/allocation-oci"
+          cp "$FACT" "$RUNNER_TEMP/allocation-oci/fact.json"
+          printf '%s' "$GITHUB_TOKEN" | oras login ghcr.io --username "${{ github.actor }}" --password-stdin
+          trap 'oras logout ghcr.io >/dev/null 2>&1 || true' EXIT
+          RESULT="$(oras push --no-tty --format json \
+            --artifact-type application/vnd.quwoquan.artifact-build-number-allocation.v1+json \
+            "ghcr.io/${{ github.repository }}/artifact-build-number-allocation:run-${{ github.run_id }}-${{ github.run_attempt }}" \
+            "$RUNNER_TEMP/allocation-oci/fact.json:application/json")"
+          REF="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["reference"])' <<<"$RESULT")"
+          [[ "$REF" =~ ^ghcr\.io/[a-z0-9._/-]+@sha256:[0-9a-f]{64}$ ]]
+          {
+            echo "allocation_ref=$REF"
+            echo "allocation_digest=${REF##*@}"
+          } >> "$GITHUB_OUTPUT"
+
+  service_factory:
+    name: Canonical service material factory
+    needs: [allocate_build_number]
+    uses: ./.github/workflows/service_pipeline.yml
+    with:
+      source_sha: ${{ inputs.source_git_sha }}
+      rc_tag_admission_ref: ${{ inputs.rc_tag_admission_ref }}
+      qualification_request_ref: ${{ inputs.qualification_request_ref }}
+      qualification_request_digest: ${{ needs.allocate_build_number.outputs.request_digest }}
+      artifact_build_number: ${{ needs.allocate_build_number.outputs.artifact_build_number }}
+      artifact_build_number_allocation_ref: ${{ needs.allocate_build_number.outputs.allocation_ref }}
+      artifact_build_number_allocation_digest: ${{ needs.allocate_build_number.outputs.allocation_digest }}
+    secrets: inherit
+
+  app_factory:
+    name: Canonical App material factory
+    needs: [allocate_build_number]
+    uses: ./.github/workflows/app_pipeline.yml
+    with:
+      source_git_sha: ${{ inputs.source_git_sha }}
+      qualification_request_ref: ${{ inputs.qualification_request_ref }}
+      qualification_request_digest: ${{ needs.allocate_build_number.outputs.request_digest }}
+      rc_tag_admission_ref: ${{ inputs.rc_tag_admission_ref }}
+      artifact_build_number: ${{ needs.allocate_build_number.outputs.artifact_build_number }}
+      artifact_build_number_allocation_ref: ${{ needs.allocate_build_number.outputs.allocation_ref }}
+      artifact_build_number_allocation_digest: ${{ needs.allocate_build_number.outputs.allocation_digest }}
+    secrets: inherit
+
+  materialize_candidate:
+    name: Reduce exact factory outputs
+    needs: [allocate_build_number, service_factory, app_factory]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions: {contents: read, packages: write, id-token: write}
+    environment: release-qualification
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          ref: ${{ inputs.source_git_sha }}
+          persist-credentials: false
+      - name: Require complete exact reusable-factory outputs
+        env:
+          REQUEST_REF: ${{ inputs.qualification_request_ref }}
+          REQUEST_DIGEST: ${{ needs.allocate_build_number.outputs.request_digest }}
+          ALLOCATION_REF: ${{ needs.allocate_build_number.outputs.allocation_ref }}
+          ALLOCATION_DIGEST: ${{ needs.allocate_build_number.outputs.allocation_digest }}
+          SERVICE_REF: ${{ needs.service_factory.outputs.component_evidence_ref }}
+          SERVICE_SHA: ${{ needs.service_factory.outputs.source_git_sha }}
+          SERVICE_TREE: ${{ needs.service_factory.outputs.source_tree_digest }}
+          SERVICE_REQUEST_REF: ${{ needs.service_factory.outputs.qualification_request_ref }}
+          SERVICE_REQUEST_DIGEST: ${{ needs.service_factory.outputs.qualification_request_digest }}
+          SERVICE_MATERIAL: ${{ needs.service_factory.outputs.service_material_digest }}
+          APP_REF: ${{ needs.app_factory.outputs.app_evidence_ref }}
+          APP_SHA: ${{ needs.app_factory.outputs.source_git_sha }}
+          APP_TREE: ${{ needs.app_factory.outputs.source_tree_digest }}
+          APP_REQUEST_REF: ${{ needs.app_factory.outputs.qualification_request_ref }}
+          APP_REQUEST_DIGEST: ${{ needs.app_factory.outputs.qualification_request_digest }}
+          APP_BUILD_NUMBER: ${{ needs.app_factory.outputs.artifact_build_number }}
+          APP_ALLOCATION_REF: ${{ needs.app_factory.outputs.artifact_build_number_allocation_ref }}
+          APP_ALLOCATION_DIGEST: ${{ needs.app_factory.outputs.artifact_build_number_allocation_digest }}
+          APP_MATERIAL: ${{ needs.app_factory.outputs.app_material_digest }}
+        run: |
+          set -euo pipefail
+          for value in "$REQUEST_REF" "$ALLOCATION_REF" "$SERVICE_REF" "$APP_REF"; do
+            [[ "$value" =~ ^ghcr\.io/[a-z0-9._/-]+@sha256:[0-9a-f]{64}$ ]] || {
+              echo '::error::GATE_BLOCK: reusable factory omitted an exact OCI manifest'
+              exit 2
+            }
+          done
+          for value in "$REQUEST_DIGEST" "$ALLOCATION_DIGEST" "$SERVICE_REQUEST_DIGEST" "$SERVICE_MATERIAL" "$APP_REQUEST_DIGEST" "$APP_ALLOCATION_DIGEST" "$APP_MATERIAL"; do
+            [[ "$value" =~ ^sha256:[0-9a-f]{64}$ ]] || {
+              echo '::error::GATE_BLOCK: reusable factory omitted exact material identity'
+              exit 2
+            }
+          done
+          test "$SERVICE_SHA" = "${{ inputs.source_git_sha }}"
+          test "$APP_SHA" = "${{ inputs.source_git_sha }}"
+          test "$APP_TREE" = "sha1:$SERVICE_TREE"
+          test "$SERVICE_REQUEST_REF" = "$REQUEST_REF"
+          test "$APP_REQUEST_REF" = "$REQUEST_REF"
+          test "$SERVICE_REQUEST_DIGEST" = "$REQUEST_DIGEST"
+          test "$APP_REQUEST_DIGEST" = "$REQUEST_DIGEST"
+          test "$APP_BUILD_NUMBER" = "${{ needs.allocate_build_number.outputs.artifact_build_number }}"
+          test "$APP_ALLOCATION_REF" = "$ALLOCATION_REF"
+          test "$APP_ALLOCATION_DIGEST" = "$ALLOCATION_DIGEST"
+      - uses: oras-project/setup-oras@1d808f7d7f6995cc68b7bf507bfe5c5446e1dc9d
+        with: {version: 1.3.3}
+      - name: Require external final package acceptance
+        env:
+          PACKAGE_ACCEPTANCE_REF: ${{ inputs.package_acceptance_fact_ref }}
+        run: |
+          set -euo pipefail
+          [[ "$PACKAGE_ACCEPTANCE_REF" =~ ^ghcr\.io/[a-z0-9._/-]+@sha256:[0-9a-f]{64}$ ]]
+          echo 'Android and iOS physical-device package acceptance must bind the same materialId.' >> "$GITHUB_STEP_SUMMARY"
+      - id: finalize
+        name: Materialize CandidateMaterialManifest and QualificationFact
+        env:
+          STORE: ${{ runner.temp }}/release-control
+          GITHUB_TOKEN: ${{ github.token }}
+          REQUEST_OCI_REF: ${{ inputs.qualification_request_ref }}
+          REQUEST_OCI_DIGEST: ${{ needs.allocate_build_number.outputs.request_digest }}
+          REQUEST_FACT_DIGEST: ${{ needs.allocate_build_number.outputs.request_fact_digest }}
+          ALLOCATION_OCI_REF: ${{ needs.allocate_build_number.outputs.allocation_ref }}
+          ALLOCATION_OCI_DIGEST: ${{ needs.allocate_build_number.outputs.allocation_digest }}
+          SERVICE_EVIDENCE_REF: ${{ needs.service_factory.outputs.component_evidence_ref }}
+          SERVICE_ARTIFACT_DIGEST: ${{ needs.service_factory.outputs.component_artifact_digest }}
+          SERVICE_SOURCE_SHA: ${{ needs.service_factory.outputs.source_git_sha }}
+          SERVICE_SOURCE_TREE: ${{ needs.service_factory.outputs.source_tree_digest }}
+          SERVICE_REQUEST_REF: ${{ needs.service_factory.outputs.qualification_request_ref }}
+          SERVICE_REQUEST_DIGEST: ${{ needs.service_factory.outputs.qualification_request_digest }}
+          SERVICE_MATERIAL_DIGEST: ${{ needs.service_factory.outputs.service_material_digest }}
+          APP_EVIDENCE_REF: ${{ needs.app_factory.outputs.app_evidence_ref }}
+          APP_SOURCE_SHA: ${{ needs.app_factory.outputs.source_git_sha }}
+          APP_SOURCE_TREE: ${{ needs.app_factory.outputs.source_tree_digest }}
+          APP_REQUEST_REF: ${{ needs.app_factory.outputs.qualification_request_ref }}
+          APP_REQUEST_DIGEST: ${{ needs.app_factory.outputs.qualification_request_digest }}
+          APP_BUILD_NUMBER: ${{ needs.app_factory.outputs.artifact_build_number }}
+          APP_ALLOCATION_REF: ${{ needs.app_factory.outputs.artifact_build_number_allocation_ref }}
+          APP_ALLOCATION_DIGEST: ${{ needs.app_factory.outputs.artifact_build_number_allocation_digest }}
+          APP_MATERIAL_DIGEST: ${{ needs.app_factory.outputs.app_material_digest }}
+          APP_ANDROID_DIGEST: ${{ needs.app_factory.outputs.android_artifact_digest }}
+          APP_IOS_DIGEST: ${{ needs.app_factory.outputs.ios_artifact_digest }}
+          APP_WEB_DIGEST: ${{ needs.app_factory.outputs.web_artifact_digest }}
+          PRODUCT_VERSION_MANIFEST_REF: ${{ inputs.product_version_manifest_ref }}
+          PACKAGE_ACCEPTANCE_REF: ${{ inputs.package_acceptance_fact_ref }}
+          PROVIDER_REF: ${{ inputs.provider_fact_ref }}
+          UAT_REF: ${{ inputs.uat_fact_ref }}
+          SUPPLY_CHAIN_REF: ${{ inputs.supply_chain_fact_ref }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$GITHUB_TOKEN" | oras login ghcr.io --username "${{ github.actor }}" --password-stdin
+          trap 'oras logout ghcr.io >/dev/null 2>&1 || true' EXIT
+          materialize_fact() {
+            name="$1"; exact_ref="$2"
+            [[ "$exact_ref" =~ ^ghcr\.io/[a-z0-9._/-]+@sha256:[0-9a-f]{64}$ ]]
+            python3 quwoquan_ops/ci/promotion_evidence.py materialize-oci \
+              --ref "$exact_ref" --output-file "$STORE/$exact_ref" >/dev/null
+            local_digest="sha256:$(python3 -c 'import hashlib,sys; print(hashlib.sha256(open(sys.argv[1], "rb").read()).hexdigest())' "$STORE/$exact_ref")"
+            printf '%s=%s\n' "$exact_ref" "$local_digest"
+          }
+          REQUEST_EXACT="$(materialize_fact qualification-request "$REQUEST_OCI_REF")"
+          test "$REQUEST_EXACT" = "$REQUEST_OCI_REF=$REQUEST_FACT_DIGEST"
+          ALLOCATION_EXACT="$(materialize_fact build-number-allocation "$ALLOCATION_OCI_REF")"
+          PRODUCT_EXACT="$(materialize_fact product-version "$PRODUCT_VERSION_MANIFEST_REF")"
+          PACKAGE_EXACT="$(materialize_fact package-acceptance "$PACKAGE_ACCEPTANCE_REF")"
+          PROVIDER_EXACT="$(materialize_fact provider "$PROVIDER_REF")"
+          UAT_EXACT="$(materialize_fact uat "$UAT_REF")"
+          SUPPLY_EXACT="$(materialize_fact supply-chain "$SUPPLY_CHAIN_REF")"
+
+          materialize_factory() {
+            name="$1"; exact_ref="$2"; expected_digest="${exact_ref##*@}"
+            output_dir="$RUNNER_TEMP/factory-material/$name"
+            python3 quwoquan_ops/ci/materialize_evidence_oci.py \
+              --ref "$exact_ref" --expected-digest "$expected_digest" \
+              --output-dir "$output_dir"
+            manifest="$output_dir/manifest.json"
+            if [[ ! -f "$manifest" ]]; then
+              echo "::error::GATE_BLOCK: $name factory actual OCI payload lacks canonical manifest.json"
+              return 2
+            fi
+            local_ref="factory-material/$name/manifest.json"
+            mkdir -p "$(dirname "$STORE/$local_ref")"
+            cp "$manifest" "$STORE/$local_ref"
+            payload_digest="sha256:$(python3 -c 'import hashlib,sys; print(hashlib.sha256(open(sys.argv[1], "rb").read()).hexdigest())' "$STORE/$local_ref")"
+            printf '%s=%s\n' "$local_ref" "$payload_digest"
+          }
+          SERVICE_MATERIAL_EXACT="$(materialize_factory service "$SERVICE_EVIDENCE_REF")"
+          APP_MATERIAL_EXACT="$(materialize_factory app "$APP_EVIDENCE_REF")"
+
+          MATERIAL_RESULT="$(python3 -B quwoquan_ops/ci/release_control.py --store-root "$STORE" qualification-material \
+            --request "$REQUEST_EXACT" --request-oci-ref "$REQUEST_OCI_REF" \
+            --allocation "$ALLOCATION_EXACT" --allocation-oci-ref "$ALLOCATION_OCI_REF" \
+            --product-version-manifest "$PRODUCT_EXACT" \
+            --service-material "$SERVICE_MATERIAL_EXACT" \
+            --service-evidence-ref "$SERVICE_EVIDENCE_REF" --service-source-git-sha "$SERVICE_SOURCE_SHA" \
+            --service-source-tree "$SERVICE_SOURCE_TREE" --service-qualification-request-ref "$SERVICE_REQUEST_REF" \
+            --service-qualification-request-digest "$SERVICE_REQUEST_DIGEST" --service-material-digest "$SERVICE_MATERIAL_DIGEST" \
+            --service-artifact-digest "$SERVICE_ARTIFACT_DIGEST" \
+            --app-material "$APP_MATERIAL_EXACT" \
+            --app-evidence-ref "$APP_EVIDENCE_REF" --app-source-git-sha "$APP_SOURCE_SHA" --app-source-tree "$APP_SOURCE_TREE" \
+            --app-qualification-request-ref "$APP_REQUEST_REF" --app-qualification-request-digest "$APP_REQUEST_DIGEST" \
+            --app-artifact-build-number "$APP_BUILD_NUMBER" --app-allocation-ref "$APP_ALLOCATION_REF" \
+            --app-allocation-digest "$APP_ALLOCATION_DIGEST" --app-material-digest "$APP_MATERIAL_DIGEST" \
+            --app-android-artifact-digest "$APP_ANDROID_DIGEST" --app-ios-artifact-digest "$APP_IOS_DIGEST" \
+            --app-web-artifact-digest "$APP_WEB_DIGEST" --created-at "${{ github.run_started_at }}")"
+          MATERIAL_REF="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["ref"])' <<<"$MATERIAL_RESULT")"
+          MATERIAL_DIGEST="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["digest"])' <<<"$MATERIAL_RESULT")"
+          python3 quwoquan_ops/ci/promotion_evidence.py publish-oci \
+            --fact-file "$STORE/$MATERIAL_REF" --repository "ghcr.io/${{ github.repository }}/candidate-material" \
+            --transport-tag "run-${{ github.run_id }}-${{ github.run_attempt }}" > "$RUNNER_TEMP/material-oci.json"
+          MATERIAL_OCI="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["exactRef"])' < "$RUNNER_TEMP/material-oci.json")"
+          mkdir -p "$(dirname "$STORE/$MATERIAL_OCI")"
+          cp "$STORE/$MATERIAL_REF" "$STORE/$MATERIAL_OCI"
+          QUALIFICATION_RESULT="$(python3 -B quwoquan_ops/ci/release_control.py --store-root "$STORE" qualification-finalize \
+            --request "$REQUEST_EXACT" --material "$MATERIAL_OCI=$MATERIAL_DIGEST" \
+            --package-acceptance "$PACKAGE_EXACT" --provider "$PROVIDER_EXACT" --uat "$UAT_EXACT" \
+            --supply-chain "$SUPPLY_EXACT" --qualified-at "${{ github.run_started_at }}")"
+          QUALIFICATION_REF="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["ref"])' <<<"$QUALIFICATION_RESULT")"
+          python3 quwoquan_ops/ci/promotion_evidence.py publish-oci \
+            --fact-file "$STORE/$QUALIFICATION_REF" --repository "ghcr.io/${{ github.repository }}/qualification-fact" \
+            --transport-tag "run-${{ github.run_id }}-${{ github.run_attempt }}" > "$RUNNER_TEMP/qualification-oci.json"
+          QUALIFICATION_OCI="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["exactRef"])' < "$RUNNER_TEMP/qualification-oci.json")"
+          {
+            echo "candidate_material_ref=$MATERIAL_OCI"
+            echo "qualification_fact_ref=$QUALIFICATION_OCI"
+          } >> "$GITHUB_OUTPUT"
+          echo "QualificationFact issued: \`$QUALIFICATION_OCI\`" >> "$GITHUB_STEP_SUMMARY"

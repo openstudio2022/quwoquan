@@ -20,10 +20,9 @@ if str(ROOT) not in sys.path:
 
 from quwoquan_ops.cli.prod.registry_transport import run_with_bounded_retry
 from quwoquan_ops.cli.prod.oci_supply_chain import verify_oci_supply_chain
-from quwoquan_ops.cli.prod.finalize_mainline_release_artifact import (
+from quwoquan_ops.ci.release_evidence_reader import (
     ENVIRONMENTS,
-    validate_manifest,
-    validate_manifest_files,
+    validate_historical_release_snapshot,
 )
 
 
@@ -41,8 +40,11 @@ def load_manifest(path: Path) -> dict[str, Any]:
     payload = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(payload, dict):
         raise ValueError("release input manifest must be an object")
-    manifest = validate_manifest(payload, allowed_statuses={"build-input"})
-    validate_manifest_files(path.parent, manifest)
+    manifest = validate_historical_release_snapshot(
+        payload,
+        artifact_dir=path.parent,
+        allowed_statuses={"build-input"},
+    )
     return manifest
 
 
@@ -73,7 +75,7 @@ def resolve_registry_digest(ref: str) -> str:
 def collect(
     manifest: dict[str, Any], output_dir: Path
 ) -> dict[str, dict[str, dict[str, Any]]]:
-    validate_manifest(manifest, allowed_statuses={"build-input"})
+    validate_historical_release_snapshot(manifest, allowed_statuses={"build-input"})
     artifacts = manifest["environmentArtifacts"]
     required = manifest["requiredEvidence"]["environmentArtifacts"]
 

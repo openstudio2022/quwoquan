@@ -12,9 +12,28 @@ from unittest import mock
 
 from quwoquan_ops.cli.prod import collect_mainline_image_descriptors as collector
 from quwoquan_ops.cli.prod import fetch_mainline_release_artifact as fetcher
-from quwoquan_ops.cli.prod import finalize_mainline_release_artifact as finalizer
+from quwoquan_ops.ci import release_evidence_reader as finalizer
 from quwoquan_ops.cli.prod import load_prod_plane_images as image_loader
 from quwoquan_ops.cli.prod import registry_transport
+
+
+def _seal_snapshot(payload: dict[str, object]) -> dict[str, object]:
+    payload["releaseTrainId"] = finalizer.canonical_release_train_digest(payload)
+    for environment in finalizer.ENVIRONMENTS:
+        artifact = payload["environmentArtifacts"][environment]
+        if all("digest" in descriptor for descriptor in artifact["images"].values()):
+            artifact["environmentArtifactDigest"] = (
+                finalizer.canonical_environment_artifact_digest(payload, environment)
+            )
+    try:
+        payload["candidateId"] = finalizer.canonical_candidate_digest(payload)
+    except ValueError:
+        payload["candidateId"] = None
+    payload["blockers"], payload["missingEvidence"] = finalizer._expected_gaps(
+        payload, str(payload["status"])
+    )
+    payload["artifactDigest"] = finalizer.canonical_manifest_digest(payload)
+    return payload
 
 
 def _build_input_manifest(
@@ -22,7 +41,7 @@ def _build_input_manifest(
     repository: str = "ghcr.io/owner/repo/content-service",
     transport_ref: str = "ghcr.io/owner/repo/content-service:sha-candidate",
 ) -> dict[str, object]:
-    return finalizer.seal_manifest(
+    return _seal_snapshot(
         {
             "schema": finalizer.SCHEMA,
             "releaseTrainId": None,
@@ -174,7 +193,7 @@ def _component_manifest(config_bytes: bytes) -> dict[str, object]:
         "rolloutReceipt",
         "rollbackReceipt.outcome",
     ]
-    return finalizer.seal_manifest(manifest)
+    return _seal_snapshot(manifest)
 
 
 class MainlineReleaseOCITransportContractTest(unittest.TestCase):
@@ -314,22 +333,52 @@ class MainlineReleaseOCITransportContractTest(unittest.TestCase):
                 Path("/tmp/not-used"),
             )
 
-    def test_discovery_resolves_source_sha_tag_to_digest(self) -> None:
-        digest_ref = (
-            "ghcr.io/owner/repo/release-artifact@sha256:" + ("b" * 64)
+    def test_fetcher_cli_rejects_mutable_discovery_arguments(self) -> None:
+        root = Path(__file__).resolve().parents[4]
+        for retired_argument in ("--source-sha", "--repository"):
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(
+                        root
+                        / "quwoquan_ops/cli/prod/fetch_mainline_release_artifact.py"
+                    ),
+                    "--ref",
+                    "ghcr.io/owner/repo/release-artifact@sha256:" + "b" * 64,
+                    "--output-dir",
+                    "/tmp/not-used",
+                    retired_argument,
+                    "c" * 40 if retired_argument == "--source-sha" else "owner/repo",
+                ],
+                cwd=root,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(result.returncode, 2)
+            self.assertIn("unrecognized arguments", result.stderr)
+            self.assertIn(retired_argument, result.stderr)
+        self.assertFalse(hasattr(fetcher, "discover"))
+
+    def test_fetcher_help_describes_non_promotable_exact_digest_reader(self) -> None:
+        root = Path(__file__).resolve().parents[4]
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(root / "quwoquan_ops/cli/prod/fetch_mainline_release_artifact.py"),
+                "--help",
+            ],
+            cwd=root,
+            text=True,
+            capture_output=True,
+            check=False,
         )
-        results = [
-            subprocess.CompletedProcess(["docker", "pull"], 0, stdout="ok", stderr=""),
-            subprocess.CompletedProcess(
-                ["docker", "inspect"],
-                0,
-                stdout=json.dumps([digest_ref]),
-                stderr="",
-            ),
-        ]
-        with mock.patch.object(fetcher, "run", side_effect=results):
-            resolved = fetcher.discover("owner/repo", "c" * 40)
-        self.assertEqual(resolved, digest_ref)
+        self.assertEqual(result.returncode, 0)
+        self.assertIn("--ref REF", result.stdout)
+        self.assertIn("non-promotable prevalidation", result.stdout)
+        self.assertIn("or historical inspection", result.stdout)
+        self.assertNotIn("--source-sha", result.stdout)
+        self.assertNotIn("--repository", result.stdout)
 
     def test_release_transport_pins_linux_amd64_on_arm_hosts(self) -> None:
         digest_ref = (

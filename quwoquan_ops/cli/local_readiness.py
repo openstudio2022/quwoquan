@@ -173,7 +173,7 @@ def command_verify(args: argparse.Namespace) -> int:
         push_updates=updates,
         receipt_path=Path(args.receipt) if args.receipt else None,
     )
-    _json({"status": "PASS", "readiness": receipt["readiness"], "fingerprint": receipt["fingerprint"]["ref"]})
+    _json({"status": "PASS", "facts": receipt["facts"], "fingerprint": receipt["fingerprint"]["ref"]})
     return 0
 
 

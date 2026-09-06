@@ -226,16 +226,18 @@ def _validate_stage_receipt_history(
             or committed_generation <= 0
             or committed_generation > current_generation
             or not _history_receipt_matches_transaction(state, receipt)
-            or receipt.get("artifactDigest") != state.get("artifact_digest")
-            or receipt.get("environmentAcceptanceRef") != state.get("environment_acceptance_ref")
-            or receipt.get("environmentAcceptanceDigest") != state.get("environment_acceptance_digest")
-            or receipt.get("environmentAcceptanceFactId") != state.get("environment_acceptance_fact_id")
-            or receipt.get("gammaPredecessorFactId") != state.get("gamma_predecessor_fact_id")
-            or receipt.get("gammaPredecessorDigest") != state.get("gamma_predecessor_digest")
-            or receipt.get("engineeringEligibilityRef") != state.get("engineering_eligibility_ref")
-            or receipt.get("engineeringEligibilityDigest") != state.get("engineering_eligibility_digest")
-            or receipt.get("durableApprovalRef") != state.get("durable_approval_ref")
-            or receipt.get("durableApprovalDigest") != state.get("durable_approval_digest")
+            or receipt.get("candidateMaterialId") != state.get("candidate_material_id")
+            or receipt.get("prodActivationAdmissionRef") != state.get("prod_activation_admission_ref")
+            or receipt.get("prodActivationAdmissionOciDigest") != state.get("prod_activation_admission_oci_digest")
+            or receipt.get("prodActivationAdmissionPayloadDigest") != state.get("prod_activation_admission_payload_digest")
+            or receipt.get("prodActivationAdmissionId") != state.get("prod_activation_admission_id")
+            or receipt.get("candidateMaterialManifestRef") != state.get("candidate_material_manifest_ref")
+            or receipt.get("candidateMaterialManifestOciDigest") != state.get("candidate_material_manifest_oci_digest")
+            or receipt.get("candidateMaterialManifestPayloadDigest") != state.get("candidate_material_manifest_payload_digest")
+            or receipt.get("previousReleasedRef") != state.get("previous_released_ref")
+            or receipt.get("previousReleasedOciDigest") != state.get("previous_released_oci_digest")
+            or receipt.get("previousReleasedPayloadDigest") != state.get("previous_released_payload_digest")
+            or receipt.get("previousReleasedId") != state.get("previous_released_id")
             or receipt.get("imageDigest") != state.get("image_digest")
             or receipt.get("configDigest") != state.get("config_digest")
             or receipt.get("contractGraphDigest")
@@ -277,16 +279,18 @@ def _next_stage_receipt_history(
         )
         if same_transaction or rollback_transaction:
             for state_field, request_field in (
-                ("artifact_digest", "artifactDigest"),
-                ("environment_acceptance_ref", "environmentAcceptanceRef"),
-                ("environment_acceptance_digest", "environmentAcceptanceDigest"),
-                ("environment_acceptance_fact_id", "environmentAcceptanceFactId"),
-                ("gamma_predecessor_fact_id", "gammaPredecessorFactId"),
-                ("gamma_predecessor_digest", "gammaPredecessorDigest"),
-                ("engineering_eligibility_ref", "engineeringEligibilityRef"),
-                ("engineering_eligibility_digest", "engineeringEligibilityDigest"),
-                ("durable_approval_ref", "durableApprovalRef"),
-                ("durable_approval_digest", "durableApprovalDigest"),
+                ("candidate_material_id", "candidateMaterialId"),
+                ("prod_activation_admission_ref", "prodActivationAdmissionRef"),
+                ("prod_activation_admission_oci_digest", "prodActivationAdmissionOciDigest"),
+                ("prod_activation_admission_payload_digest", "prodActivationAdmissionPayloadDigest"),
+                ("prod_activation_admission_id", "prodActivationAdmissionId"),
+                ("candidate_material_manifest_ref", "candidateMaterialManifestRef"),
+                ("candidate_material_manifest_oci_digest", "candidateMaterialManifestOciDigest"),
+                ("candidate_material_manifest_payload_digest", "candidateMaterialManifestPayloadDigest"),
+                ("previous_released_ref", "previousReleasedRef"),
+                ("previous_released_oci_digest", "previousReleasedOciDigest"),
+                ("previous_released_payload_digest", "previousReleasedPayloadDigest"),
+                ("previous_released_id", "previousReleasedId"),
                 ("image_digest", "imageDigest"),
                 ("config_digest", "configDigest"),
                 ("contract_graph_digest", "contractGraphDigest"),
@@ -296,44 +300,23 @@ def _next_stage_receipt_history(
                     raise RuntimeError(
                         "hosted release candidate transaction evidence drifted"
                     )
-            transport_bindings = (
-                (
-                    "from_release_evidence_ref",
-                    "fromReleaseEvidenceRef",
-                    "to_release_evidence_ref",
-                    "toReleaseEvidenceRef",
-                ),
-                (
-                    "from_image_transport_tag",
-                    "fromImageTransportTag",
-                    "to_image_transport_tag",
-                    "toImageTransportTag",
-                ),
+            factory_bindings = (
+                ("from_service_factory_oci_digest", "fromServiceFactoryOciDigest", "to_service_factory_oci_digest", "toServiceFactoryOciDigest"),
+                ("from_app_factory_oci_digest", "fromAppFactoryOciDigest", "to_app_factory_oci_digest", "toAppFactoryOciDigest"),
             )
-            for (
-                current_from_field,
-                request_from_field,
-                current_to_field,
-                request_to_field,
-            ) in transport_bindings:
+            for current_from_field, request_from_field, current_to_field, request_to_field in factory_bindings:
                 if same_transaction:
-                    transport_matches = (
-                        current.get(current_from_field)
-                        == payload.get(request_from_field)
-                        and current.get(current_to_field)
-                        == payload.get(request_to_field)
+                    closure_matches = (
+                        current.get(current_from_field) == payload.get(request_from_field)
+                        and current.get(current_to_field) == payload.get(request_to_field)
                     )
                 else:
-                    transport_matches = (
-                        current.get(current_from_field)
-                        == payload.get(request_to_field)
-                        and current.get(current_to_field)
-                        == payload.get(request_from_field)
+                    closure_matches = (
+                        current.get(current_from_field) == payload.get(request_to_field)
+                        and current.get(current_to_field) == payload.get(request_from_field)
                     )
-                if not transport_matches:
-                    raise RuntimeError(
-                        "hosted release candidate transaction transport drifted"
-                    )
+                if not closure_matches:
+                    raise RuntimeError("hosted release candidate factory closure drifted")
             history = {
                 field: current.get(field, "")
                 for field in STAGE_RECEIPT_ID_FIELDS.values()
@@ -362,16 +345,18 @@ def _validated_readback(root: Path, service: str) -> dict[str, Any]:
         state.get("authority") != AUTHORITY
         or state.get("service") != service
         or str(receipt.get("committedGeneration")) != state.get("generation")
-        or receipt.get("artifactDigest") != state.get("artifact_digest")
-        or receipt.get("environmentAcceptanceRef") != state.get("environment_acceptance_ref")
-        or receipt.get("environmentAcceptanceDigest") != state.get("environment_acceptance_digest")
-        or receipt.get("environmentAcceptanceFactId") != state.get("environment_acceptance_fact_id")
-        or receipt.get("gammaPredecessorFactId") != state.get("gamma_predecessor_fact_id")
-        or receipt.get("gammaPredecessorDigest") != state.get("gamma_predecessor_digest")
-        or receipt.get("engineeringEligibilityRef") != state.get("engineering_eligibility_ref")
-        or receipt.get("engineeringEligibilityDigest") != state.get("engineering_eligibility_digest")
-        or receipt.get("durableApprovalRef") != state.get("durable_approval_ref")
-        or receipt.get("durableApprovalDigest") != state.get("durable_approval_digest")
+        or receipt.get("candidateMaterialId") != state.get("candidate_material_id")
+        or receipt.get("prodActivationAdmissionRef") != state.get("prod_activation_admission_ref")
+            or receipt.get("prodActivationAdmissionOciDigest") != state.get("prod_activation_admission_oci_digest")
+        or receipt.get("prodActivationAdmissionPayloadDigest") != state.get("prod_activation_admission_payload_digest")
+        or receipt.get("prodActivationAdmissionId") != state.get("prod_activation_admission_id")
+        or receipt.get("candidateMaterialManifestRef") != state.get("candidate_material_manifest_ref")
+            or receipt.get("candidateMaterialManifestOciDigest") != state.get("candidate_material_manifest_oci_digest")
+        or receipt.get("candidateMaterialManifestPayloadDigest") != state.get("candidate_material_manifest_payload_digest")
+        or receipt.get("previousReleasedRef") != state.get("previous_released_ref")
+            or receipt.get("previousReleasedOciDigest") != state.get("previous_released_oci_digest")
+        or receipt.get("previousReleasedPayloadDigest") != state.get("previous_released_payload_digest")
+        or receipt.get("previousReleasedId") != state.get("previous_released_id")
         or receipt.get("fromCandidateDigest")
         != state.get("from_candidate_digest")
         or receipt.get("toCandidateDigest") != state.get("to_candidate_digest")
@@ -384,14 +369,14 @@ def _validated_readback(root: Path, service: str) -> dict[str, Any]:
         or receipt.get("adapterDigest") != state.get("adapter_digest")
         or receipt.get("rollbackOutcome") != state.get("rollback_outcome")
         or receipt.get("triggerStage") != state.get("trigger_stage")
-        or receipt.get("fromReleaseEvidenceRef")
-        != state.get("from_release_evidence_ref")
-        or receipt.get("toReleaseEvidenceRef")
-        != state.get("to_release_evidence_ref")
-        or receipt.get("fromImageTransportTag")
-        != state.get("from_image_transport_tag")
-        or receipt.get("toImageTransportTag")
-        != state.get("to_image_transport_tag")
+        or receipt.get("fromServiceFactoryOciDigest")
+        != state.get("from_service_factory_oci_digest")
+        or receipt.get("toServiceFactoryOciDigest")
+        != state.get("to_service_factory_oci_digest")
+        or receipt.get("fromAppFactoryOciDigest")
+        != state.get("from_app_factory_oci_digest")
+        or receipt.get("toAppFactoryOciDigest")
+        != state.get("to_app_factory_oci_digest")
         or receipt.get("lastGoodCandidateDigest")
         != state.get("last_good_candidate_digest")
         or receipt.get("verifiedAt") != state.get("updated_at")

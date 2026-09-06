@@ -1,2356 +1,552 @@
-# mainline 端到端编排：main 合入自动启动，Prod 仍由 production environment 审批。
-# 当前阶段 main 只生成 GHCR OCI digest；第一方容器预验证由 stackctl 的
-# mode=prevalidate 独立执行，不能写入正式 rollout、ledger 或 receipt。
-# 设计见 specs/feature-tree/runtime/deliver-deploy-prod-pipeline/design.md
-name: 07. Deploy To Prod (Controlled)
+# Stable-tag admitted ProdActivationAdmissionFact transaction.
+# Canonical qualified_prod.py logic is invoked through release_control.py.
+name: 07. Deploy Qualified Stable Tag
 
 permissions:
   contents: read
-  actions: read
-  packages: read
-
-env:
-  QWQ_OUTPUT_ROOT: .qwq_output
 
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - '.github/workflows/**'
-      - 'quwoquan_app/**'
-      - 'quwoquan_data/**'
-      - 'quwoquan_ops/**'
-      - 'quwoquan_service/**'
-      - 'specs/feature-tree/**'
   workflow_dispatch:
     inputs:
-      source_sha:
-        description: 'Exact main commit SHA; defaults to dispatch ref SHA'
-        required: false
-        default: ''
-      cloud_provider:
-        description: 'Cloud provider'
-        required: false
-        default: 'aliyun'
-      dry_run:
-        description: 'Formal rollout dry run; set false only after all release gates and approvals are valid'
-        required: false
-        default: true
-        type: boolean
-      provider_evidence_ref:
-        description: 'Exact executed Provider evidence OCI ref; defaults to controlled repository variable'
-        required: false
-        default: ''
-      provider_evidence_digest:
-        description: 'Executed Provider evidence OCI transport digest'
-        required: false
-        default: ''
-      provider_candidate_image_digest:
-        description: 'Candidate image-set digest executed by Provider evidence'
-        required: false
-        default: ''
+      release_tag_admission_ref:
+        description: Exact immutable stable ReleaseTagAdmissionFact OCI @sha256 ref
+        required: true
+        type: string
+      previous_active_released_ledger_ref:
+        description: Exact immutable previous active released ledger OCI @sha256 ref
+        required: true
+        type: string
+      rollback_readiness_ref:
+        description: Exact immutable rollback readiness OCI @sha256 ref
+        required: true
+        type: string
 
 concurrency:
-  group: prod-hosted-release
+  group: prod-stable-${{ inputs.release_tag_admission_ref }}
   cancel-in-progress: false
 
 jobs:
-  formal_prod_authority_preflight:
-    name: Formal Prod authority preflight
-    runs-on: ubuntu-latest
-    timeout-minutes: 1
-    permissions:
-      contents: read
-    outputs:
-      applicability: ${{ steps.authority.outputs.applicability }}
-      decision: ${{ steps.authority.outputs.decision }}
-    steps:
-      - id: authority
-        name: Fail fast until hosted branch authority is available
-        env:
-          EVENT_NAME: ${{ github.event_name }}
-          DRY_RUN: ${{ github.event.inputs.dry_run || 'true' }}
-        run: |
-          set -euo pipefail
-          if [[ "$EVENT_NAME" != "workflow_dispatch" || "$DRY_RUN" == "true" ]]; then
-            echo "applicability=not_applicable" >> "$GITHUB_OUTPUT"
-            echo "decision=pass" >> "$GITHUB_OUTPUT"
-            echo "Formal Prod authority preflight: applicability=not_applicable decision=pass"
-            exit 0
-          fi
-          echo "applicability=required" >> "$GITHUB_OUTPUT"
-          echo "decision=blocked" >> "$GITHUB_OUTPUT"
-          echo "::error::OPS.BRANCH.AUTHORITY_UNAVAILABLE: terminal=blocked; formal Prod requires hosted branch protection/ruleset authority readback; recovery=restore_git_authority_then_retry"
-          exit 2
-
-  source_context:
-    name: Resolve exact mainline source
-    needs: [formal_prod_authority_preflight]
-    runs-on: ubuntu-latest
-    timeout-minutes: 2
-    permissions:
-      actions: read
-      checks: read
-      contents: read
-      pull-requests: read
-    outputs:
-      source_git_sha: ${{ steps.source.outputs.source_git_sha }}
-      base_sha: ${{ steps.source.outputs.base_sha }}
-    steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
-        with:
-          fetch-depth: 0
-          ref: ${{ github.event.inputs.source_sha || github.sha }}
-      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
-        with:
-          python-version: '3.14'
-          cache: false
-      - name: Install canonical branch-policy parser dependency
-        run: python3 -m pip install --disable-pip-version-check PyYAML==6.0.3
-      - id: source
-        name: Require an exact commit reachable from main
-        env:
-          REQUESTED_SOURCE_SHA: ${{ github.event.inputs.source_sha || github.sha }}
-          EVENT_BASE_SHA: ${{ github.event.before || '' }}
-        run: |
-          if [[ ! "$REQUESTED_SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]] || ! git cat-file -e "${REQUESTED_SOURCE_SHA}^{commit}"; then
-            echo "::error::OPS.BRANCH.SOURCE_NOT_MAIN_REACHABLE: source must be an exact commit object"
-            exit 2
-          fi
-          SOURCE_SHA="$REQUESTED_SOURCE_SHA"
-          BASE_SHA="$EVENT_BASE_SHA"
-          if [[ -z "$BASE_SHA" || "$BASE_SHA" =~ ^0+$ ]]; then
-            BASE_SHA="$(git rev-parse "${SOURCE_SHA}^")"
-          fi
-          if [[ ! "$BASE_SHA" =~ ^[0-9a-f]{40}$ ]]; then
-            echo "::error::GATE_BLOCK: diff base must be an exact Git SHA"
-            exit 2
-          fi
-          echo "source_git_sha=$SOURCE_SHA" >> "$GITHUB_OUTPUT"
-          echo "base_sha=$BASE_SHA" >> "$GITHUB_OUTPUT"
-      - name: Admit the unique reviewed dev1.0 to main promotion
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-          SOURCE_SHA: ${{ steps.source.outputs.source_git_sha }}
-        run: |
-          set -euo pipefail
-          ADMISSION_RECEIPT="$RUNNER_TEMP/source-promotion-admission.json"
-          python3 quwoquan_ops/ci/verify_release_governance.py \
-            --repository "${{ github.repository }}" \
-            --git-sha "$SOURCE_SHA" \
-            --minimum-approvals 1 \
-            --output "$ADMISSION_RECEIPT"
-          python3 - "$ADMISSION_RECEIPT" "$SOURCE_SHA" <<'PY'
-          import json
-          import sys
-          from pathlib import Path
-
-          receipt = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
-          expected = {
-              "schema": "prod-source-governance-receipt",
-              "gitSha": sys.argv[2],
-          }
-          observed = {key: receipt.get(key) for key in expected}
-          if observed != expected:
-              raise SystemExit(
-                  f"OPS.BRANCH.POLICY_INVALID: early promotion admission drift: {observed}"
-              )
-          PY
-
-  service_pipeline:
-    name: Service Pipeline (same mainline DAG)
-    needs: [formal_prod_authority_preflight, source_context]
-    permissions:
-      contents: read
-      actions: read
-      packages: write
-    uses: ./.github/workflows/service_pipeline.yml
-    with:
-      source_sha: ${{ needs.source_context.outputs.source_git_sha }}
-      base_sha: ${{ needs.source_context.outputs.base_sha }}
-    secrets: inherit
-
-  app_pipeline:
-    name: App package evidence (same mainline DAG)
-    needs: [formal_prod_authority_preflight, source_context]
-    permissions:
-      contents: read
-      actions: read
-      packages: write
-    uses: ./.github/workflows/app_pipeline.yml
-    with:
-      source_git_sha: ${{ needs.source_context.outputs.source_git_sha }}
-      base_git_sha: ${{ needs.source_context.outputs.base_sha }}
-    secrets: inherit
-
-  prepare:
-    name: Seal canonical candidate and prepare promotion
-    needs: [formal_prod_authority_preflight, source_context, service_pipeline, app_pipeline, delivery_gate]
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    permissions:
-      contents: read
-      actions: read
-      attestations: write
-      id-token: write
-      packages: write
-      pull-requests: read
-    env:
-      PROD_SSH_HOST: ${{ secrets.PROD_SSH_HOST }}
-    outputs:
-      canary_step: ${{ steps.stages.outputs.canary_step }}
-      percent_5_step: ${{ steps.stages.outputs.percent_5_step }}
-      percent_20_step: ${{ steps.stages.outputs.percent_20_step }}
-      percent_50_step: ${{ steps.stages.outputs.percent_50_step }}
-      percent_100_step: ${{ steps.stages.outputs.percent_100_step }}
-      from_candidate_digest: ${{ steps.inputs.outputs.from_candidate_digest }}
-      resume_stage: ${{ steps.inputs.outputs.resume_stage }}
-      existing_release_evidence_ref: ${{ steps.inputs.outputs.existing_release_evidence_ref }}
-      cloud_provider: ${{ steps.inputs.outputs.cloud_provider }}
-      dry_run: ${{ steps.inputs.outputs.dry_run }}
-      checkout_ref: ${{ needs.service_pipeline.outputs.source_git_sha }}
-      base_sha: ${{ needs.source_context.outputs.base_sha }}
-      head_sha: ${{ needs.service_pipeline.outputs.source_git_sha }}
-      has_release_evidence: ${{ steps.evidence.outputs.has_release_evidence }}
-      release_evidence_ref: ${{ steps.candidate_bundle_ref.outputs.ref }}
-      component_evidence_ref: ${{ needs.service_pipeline.outputs.component_evidence_ref }}
-      service_pipeline_run_id: ${{ needs.service_pipeline.outputs.producer_workflow_run_id }}
-      service_pipeline_machine_seconds: ${{ needs.service_pipeline.outputs.machine_critical_path_seconds }}
-      workflow_created_at: ${{ steps.workflow_clock.outputs.created_at }}
-      workflow_started_epoch: ${{ steps.workflow_clock.outputs.started_epoch }}
-      candidate_digest: ${{ steps.candidate_identity.outputs.candidate_digest }}
-      artifact_digest: ${{ steps.candidate_identity.outputs.artifact_digest }}
-      duration_seconds: ${{ steps.finish.outputs.duration_seconds }}
-      soft_budget_seconds: ${{ steps.release_budget.outputs.soft_budget_seconds }}
-      hard_fail_seconds: ${{ steps.release_budget.outputs.hard_fail_seconds }}
-      promotion_cutoff_seconds: ${{ steps.release_budget.outputs.promotion_cutoff_seconds }}
-      rollback_budget_seconds: ${{ steps.release_budget.outputs.rollback_budget_seconds }}
-      rollback_drill_max_age_seconds: ${{ steps.release_budget.outputs.rollback_drill_max_age_seconds }}
-    steps:
-      - id: start
-        name: Start prepare timer
-        run: echo "started_at=$(date +%s)" >> "$GITHUB_OUTPUT"
-      - id: workflow_clock
-        name: Resolve authoritative workflow clock
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-        run: |
-          python3 - <<'PY' >> "$GITHUB_OUTPUT"
-          import json
-          import os
-          import urllib.request
-          from datetime import datetime
-
-          request = urllib.request.Request(
-              "https://api.github.com/repos/${{ github.repository }}/actions/runs/${{ github.run_id }}",
-              headers={
-                  "Accept": "application/vnd.github+json",
-                  "Authorization": f"Bearer {os.environ['GITHUB_TOKEN']}",
-                  "X-GitHub-Api-Version": "2022-11-28",
-              },
-          )
-          with urllib.request.urlopen(request, timeout=30) as response:
-              payload = json.load(response)
-          created_at = payload.get("created_at")
-          if not isinstance(created_at, str):
-              raise SystemExit("workflow run has no authoritative created_at")
-          created = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
-          print(f"created_at={created_at}")
-          print(f"started_epoch={int(created.timestamp())}")
-          PY
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
-        with:
-          fetch-depth: 2
-          ref: ${{ needs.service_pipeline.outputs.source_git_sha }}
-      - id: release_budget
-        name: Resolve canonical 10/30 release budget
-        run: |
-          python3 - <<'PY' >> "$GITHUB_OUTPUT"
-          import json
-          from pathlib import Path
-
-          payload = json.loads(
-              Path("quwoquan_ops/environments/pr_gate_timing_budgets.json").read_text(
-                  encoding="utf-8"
-              )
-          )
-          gate = payload["gates"]["07.mainline_auto_prod"]
-          values = {
-              "soft_budget_seconds": int(gate["budgetSeconds"]),
-              "hard_fail_seconds": int(gate["hardFailSeconds"]),
-              "promotion_cutoff_seconds": int(gate["promotionCutoffSeconds"]),
-              "rollback_budget_seconds": int(gate["rollbackBudgetSeconds"]),
-              "rollback_drill_max_age_seconds": int(gate["rollbackDrillMaxAgeSeconds"]),
-          }
-          if values != {
-              "soft_budget_seconds": 600,
-              "hard_fail_seconds": 1800,
-              "promotion_cutoff_seconds": 1500,
-              "rollback_budget_seconds": 300,
-              "rollback_drill_max_age_seconds": 2592000,
-          }:
-              raise SystemExit(f"canonical release budget drift: {values}")
-          for key, value in values.items():
-              print(f"{key}={value}")
-          PY
-      - name: Login OCI release evidence registry
-        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      - id: evidence
-        name: Discover source tag and bind the exact Service Pipeline OCI candidate
-        env:
-          SOURCE_SHA: ${{ needs.service_pipeline.outputs.source_git_sha }}
-          EXPECTED_RELEASE_REF: ${{ needs.service_pipeline.outputs.component_evidence_ref }}
-          EXPECTED_ARTIFACT_DIGEST: ${{ needs.service_pipeline.outputs.component_artifact_digest }}
-          EXPECTED_WORKFLOW_RUN_ID: ${{ needs.service_pipeline.outputs.producer_workflow_run_id }}
-        run: |
-          REPORT="$QWQ_OUTPUT_ROOT/env/repo/local/ci/process/release-evidence-fetch.json"
-          ROOT="$QWQ_OUTPUT_ROOT/env/repo/local/ci-packages/process/service/release-evidence-manifest"
-          mkdir -p "$(dirname "$REPORT")"
-          python3 quwoquan_ops/cli/prod/fetch_mainline_release_artifact.py \
-            --source-sha "$SOURCE_SHA" \
-            --repository "${{ github.repository }}" \
-            --output-dir "$ROOT" \
-            > "$REPORT"
-          DISCOVERED_REF="$(python3 - <<'PY'
-          import json
-          import os
-          from pathlib import Path
-          report = Path(os.environ["QWQ_OUTPUT_ROOT"]) / "env/repo/local/ci/process/release-evidence-fetch.json"
-          payload = json.loads(report.read_text(encoding="utf-8"))
-          print(payload["ref"])
-          PY
-          )"
-          python3 quwoquan_ops/ci/verify_workflow_release_candidate.py \
-            --manifest "$ROOT/manifest.json" \
-            --expected-artifact-digest "$EXPECTED_ARTIFACT_DIGEST" \
-            --expected-workflow-run-id "$EXPECTED_WORKFLOW_RUN_ID" \
-            --expected-source-sha "$SOURCE_SHA" \
-            --expected-repository "${{ github.repository }}" \
-            --expected-release-ref "$EXPECTED_RELEASE_REF" \
-            --discovered-release-ref "$DISCOVERED_REF" \
-            --expect-component-ready
-          echo "has_release_evidence=true" >> "$GITHUB_OUTPUT"
-          echo "release_evidence_ref=$DISCOVERED_REF" >> "$GITHUB_OUTPUT"
-      - name: Require canonical release evidence
-        run: |
-          test -s "$QWQ_OUTPUT_ROOT/env/repo/local/ci-packages/process/service/release-evidence-manifest/manifest.json" || {
-            echo "::error::02. Service Pipeline release evidence is required; local regeneration is forbidden"
-            exit 1
-          }
-      - name: Materialize immutable App evidence OCI by exact digest
-        env:
-          APP_EVIDENCE_REF: ${{ needs.app_pipeline.outputs.app_evidence_ref }}
-          APP_EVIDENCE_DIGEST: ${{ needs.app_pipeline.outputs.app_evidence_digest }}
-          APP_SOURCE_SHA: ${{ needs.app_pipeline.outputs.source_git_sha }}
-          EXPECTED_SOURCE_SHA: ${{ needs.service_pipeline.outputs.source_git_sha }}
-        run: |
-          if [[ ! "$APP_EVIDENCE_REF" =~ ^ghcr\.io/[a-z0-9._/-]+@sha256:[0-9a-f]{64}$ ]] || \
-             [[ "${APP_EVIDENCE_REF##*@}" != "$APP_EVIDENCE_DIGEST" ]]; then
-            echo "::error::GATE_BLOCK: App evidence is not an exact immutable OCI ref"
-            exit 2
-          fi
-          if [[ -z "$APP_SOURCE_SHA" || "$APP_SOURCE_SHA" != "$EXPECTED_SOURCE_SHA" ]]; then
-            echo "::error::GATE_BLOCK: App evidence source Git SHA differs from Service evidence"
-            exit 2
-          fi
-          DEST="$QWQ_OUTPUT_ROOT/env/repo/local/ci-packages/process/service/whole-candidate-sources/app"
-          mkdir -p "$DEST"
-          docker pull --platform linux/amd64 "$APP_EVIDENCE_REF"
-          CID="$(docker create --platform linux/amd64 "$APP_EVIDENCE_REF")"
-          cleanup() { docker rm -f "$CID" >/dev/null 2>&1 || true; }
-          trap cleanup EXIT
-          docker cp "$CID:/evidence/." "$DEST"
-          SOURCE_TREE_DIGEST="$(python3 - <<'PY'
-          import json
-          import os
-          from pathlib import Path
-          manifest = json.loads(
-              (Path(os.environ["QWQ_OUTPUT_ROOT"]) / "env/repo/local/ci-packages/process/service/release-evidence-manifest/manifest.json").read_text(encoding="utf-8")
-          )
-          print(manifest["source"]["treeDigest"])
-          PY
-          )"
-          python3 quwoquan_ops/ci/render_release_application_package.py validate-bundle \
-            --bundle-dir "$DEST" \
-            --source-git-sha "$EXPECTED_SOURCE_SHA" \
-            --source-tree-digest "$SOURCE_TREE_DIGEST"
-      - name: Materialize immutable Delivery evidence OCI by exact digest
-        env:
-          DELIVERY_EVIDENCE_REF: ${{ needs.delivery_gate.outputs.delivery_evidence_ref }}
-          DELIVERY_EVIDENCE_DIGEST: ${{ needs.delivery_gate.outputs.delivery_evidence_digest }}
-          DELIVERY_SOURCE_SHA: ${{ needs.delivery_gate.outputs.source_git_sha }}
-          EXPECTED_SOURCE_SHA: ${{ needs.service_pipeline.outputs.source_git_sha }}
-        run: |
-          if [[ ! "$DELIVERY_EVIDENCE_REF" =~ ^ghcr\.io/[a-z0-9._/-]+@sha256:[0-9a-f]{64}$ ]] || \
-             [[ "${DELIVERY_EVIDENCE_REF##*@}" != "$DELIVERY_EVIDENCE_DIGEST" ]]; then
-            echo "::error::GATE_BLOCK: Delivery evidence is not an exact immutable OCI ref"
-            exit 2
-          fi
-          if [[ "$DELIVERY_SOURCE_SHA" != "$EXPECTED_SOURCE_SHA" ]]; then
-            echo "::error::GATE_BLOCK: Delivery evidence source Git SHA differs from Service evidence"
-            exit 2
-          fi
-          DEST="$QWQ_OUTPUT_ROOT/env/repo/local/ci-packages/process/service/whole-candidate-sources/delivery"
-          mkdir -p "$DEST"
-          docker pull --platform linux/amd64 "$DELIVERY_EVIDENCE_REF"
-          CID="$(docker create --platform linux/amd64 "$DELIVERY_EVIDENCE_REF")"
-          cleanup() { docker rm -f "$CID" >/dev/null 2>&1 || true; }
-          trap cleanup EXIT
-          docker cp "$CID:/evidence/." "$DEST"
-      - name: Fail closed when whole-candidate producers are incomplete
-        run: |
-          SOURCES="$QWQ_OUTPUT_ROOT/env/repo/local/ci-packages/process/service/whole-candidate-sources"
-          REQUIRED_SOURCES=(
-            app/public-web-manifest.json
-            app/android-release-manifest.json
-            app/ops-portal-provenance.json
-            delivery/provider-conformance-source.json
-            delivery/test-evidence.json
-          )
-          for file in "${REQUIRED_SOURCES[@]}"; do
-            if [[ ! -s "$SOURCES/$file" ]]; then
-              echo "::error::GATE_BLOCK: real whole-candidate evidence is missing: $file"
-              exit 2
-            fi
-          done
-          if [[ ! -d "$SOURCES/app/application-packages" ]]; then
-            echo "::error::GATE_BLOCK: four-environment application package evidence directory is missing"
-            exit 2
-          fi
-          if [[ ! -d "$SOURCES/delivery/provider-raw" ]]; then
-            echo "::error::GATE_BLOCK: raw Provider evidence archive is missing"
-            exit 2
-          fi
-      - name: Seal candidate from component plus six real evidence classes
-        env:
-          APP_EVIDENCE_REF: ${{ needs.app_pipeline.outputs.app_evidence_ref }}
-        run: |
-          ROOT="$QWQ_OUTPUT_ROOT/env/repo/local/ci-packages/process/service/release-evidence-manifest"
-          SOURCES="$QWQ_OUTPUT_ROOT/env/repo/local/ci-packages/process/service/whole-candidate-sources"
-          python3 quwoquan_ops/ci/render_provider_release_evidence.py \
-            --component-manifest "$ROOT/manifest.json" \
-            --contract-graph quwoquan_service/generated/contract_graph.json \
-            --conformance-report "$SOURCES/delivery/provider-conformance-source.json" \
-            --output "$SOURCES/delivery/provider-readiness.json"
-          python3 quwoquan_ops/cli/stackctl.py package \
-            --env prod \
-            --target prod-hosted \
-            --kind release-manifest \
-            --release-artifact-dir "$ROOT" \
-            --application-packages-dir "$SOURCES/app/application-packages" \
-            --application-package-payloads-dir "$SOURCES/app/payloads" \
-            --application-evidence-ref "oci://$APP_EVIDENCE_REF" \
-            --public-web-manifest "$SOURCES/app/public-web-manifest.json" \
-            --android-release-manifest "$SOURCES/app/android-release-manifest.json" \
-            --ops-portal-provenance "$SOURCES/app/ops-portal-provenance.json" \
-            --contract-graph quwoquan_service/generated/contract_graph.json \
-            --provider-evidence "$SOURCES/delivery/provider-readiness.json" \
-            --provider-raw-dir "$SOURCES/delivery/provider-raw" \
-            --test-evidence "$SOURCES/delivery/test-evidence.json" \
-            --report-dir "$QWQ_OUTPUT_ROOT/env/prod/runs/mainline-seal-candidate"
-      - id: candidate_identity
-        name: Record sealed candidate and evidence snapshot separately
-        env:
-          EXPECTED_WORKFLOW_RUN_ID: ${{ needs.service_pipeline.outputs.producer_workflow_run_id }}
-          EXPECTED_SOURCE_SHA: ${{ needs.service_pipeline.outputs.source_git_sha }}
-        run: |
-          python3 - <<'PY' >> "$GITHUB_OUTPUT"
-          import json
-          import os
-          import re
-          from pathlib import Path
-
-          manifest = json.loads(
-              (Path(os.environ["QWQ_OUTPUT_ROOT"]) / "env/repo/local/ci-packages/process/service/release-evidence-manifest/manifest.json").read_text(encoding="utf-8")
-          )
-          digest = re.compile(r"sha256:[0-9a-f]{64}")
-          candidate = str(manifest.get("candidateId") or "")
-          artifact = str(manifest.get("artifactDigest") or "")
-          source = manifest.get("source") or {}
-          if manifest.get("status") != "candidate-ready":
-              raise SystemExit("GATE_BLOCK: whole-candidate evidence did not seal candidate-ready")
-          if digest.fullmatch(candidate) is None or digest.fullmatch(artifact) is None:
-              raise SystemExit("GATE_BLOCK: candidateId/artifactDigest are not immutable")
-          if source.get("workflowRunId") != os.environ["EXPECTED_WORKFLOW_RUN_ID"]:
-              raise SystemExit("GATE_BLOCK: sealed candidate workflowRunId drift")
-          if source.get("gitSha") != os.environ["EXPECTED_SOURCE_SHA"]:
-              raise SystemExit("GATE_BLOCK: sealed candidate source Git SHA drift")
-          print(f"candidate_digest={candidate}")
-          print(f"artifact_digest={artifact}")
-          PY
-      - name: Setup Buildx for immutable candidate publication
-        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
-        with:
-          version: v0.35.0
-          cache-binary: false
-          clean: false
-      - id: candidate_bundle
-        name: Publish sealed candidate evidence without moving the source discovery tag
-        uses: docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25
-        with:
-          context: ${{ env.QWQ_OUTPUT_ROOT }}/env/repo/local/ci-packages/process/service/release-evidence-manifest
-          file: quwoquan_ops/cli/prod/release_artifact.Dockerfile
-          platforms: linux/amd64
-          push: true
-          tags: ghcr.io/${{ github.repository }}/release-artifact:candidate-${{ github.run_id }}
-          sbom: true
-          provenance: mode=max
-      - id: candidate_bundle_ref
-        name: Record exact immutable candidate OCI ref
-        run: |
-          REF="ghcr.io/${{ github.repository }}/release-artifact@${{ steps.candidate_bundle.outputs.digest }}"
-          echo "ref=$REF" >> "$GITHUB_OUTPUT"
-      - name: Extract candidate release artifact SPDX SBOM
-        run: |
-          python3 quwoquan_ops/cli/prod/oci_supply_chain.py extract-sbom \
-            --ref "${{ steps.candidate_bundle_ref.outputs.ref }}" \
-            --output "$RUNNER_TEMP/candidate-release-artifact.spdx.json"
-      - name: Sign candidate release artifact provenance with GitHub OIDC
-        uses: actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6
-        with:
-          subject-name: ghcr.io/${{ github.repository }}/release-artifact
-          subject-digest: ${{ steps.candidate_bundle.outputs.digest }}
-          push-to-registry: true
-      - name: Sign candidate release artifact SBOM with GitHub OIDC
-        uses: actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6
-        with:
-          subject-name: ghcr.io/${{ github.repository }}/release-artifact
-          subject-digest: ${{ steps.candidate_bundle.outputs.digest }}
-          sbom-path: ${{ runner.temp }}/candidate-release-artifact.spdx.json
-          push-to-registry: true
-      - name: Verify candidate release artifact OIDC identity and closure
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          python3 quwoquan_ops/cli/prod/oci_supply_chain.py verify \
-            --ref "${{ steps.candidate_bundle_ref.outputs.ref }}" \
-            --repository "${{ github.repository }}" \
-            --signer-workflow "${{ github.repository }}/.github/workflows/deploy-prod-auto.yml" \
-            --source-digest "${{ needs.service_pipeline.outputs.source_git_sha }}"
-      - name: Require reviewed PR release governance
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          python3 quwoquan_ops/ci/verify_release_governance.py \
-            --repository "${{ github.repository }}" \
-            --release-manifest "$QWQ_OUTPUT_ROOT/env/repo/local/ci-packages/process/service/release-evidence-manifest/manifest.json" \
-            --minimum-approvals 1 \
-            --output "$QWQ_OUTPUT_ROOT/env/repo/local/ci-packages/process/service/release-evidence-manifest/governance-receipt.json"
-      - name: Materialize hosted service-plane SSH credential
-        env:
-          KEY_MATERIAL: ${{ secrets.PROD_SERVICE_SSH_KEY }}
-        run: |
-          set -euo pipefail
-          if [[ -z "$KEY_MATERIAL" || "$KEY_MATERIAL" != *"PRIVATE KEY"* ]]; then
-            echo "::error::GATE_BLOCK: PROD_SERVICE_SSH_KEY is missing or is not private-key material"
-            exit 2
-          fi
-          KEY_FILE="$RUNNER_TEMP/prod-service-ssh-key"
-          (umask 077 && printf '%s\n' "$KEY_MATERIAL" > "$KEY_FILE")
-          chmod 600 "$KEY_FILE"
-          echo "PROD_SERVICE_SSH_KEY_FILE=$KEY_FILE" >> "$GITHUB_ENV"
-      - name: Resolve rollout inputs
-        id: inputs
-        run: |
-          CLOUD_PROVIDER="${{ github.event.inputs.cloud_provider }}"
-          DRY_RUN="${{ github.event.inputs.dry_run }}"
-          if [[ -z "$CLOUD_PROVIDER" ]]; then CLOUD_PROVIDER="aliyun"; fi
-          if [[ -z "$DRY_RUN" ]]; then DRY_RUN="true"; fi
-          if [[ "$DRY_RUN" != "true" && "${{ github.event_name }}" != "workflow_dispatch" ]]; then
-            echo "::error::GATE_BLOCK: real Prod apply requires explicit workflow_dispatch"
-            exit 2
-          fi
-          CANDIDATE_DIGEST="$(python3 - <<'PY'
-          import json
-          import os
-          from pathlib import Path
-          manifest_path = Path(os.environ["QWQ_OUTPUT_ROOT"]) / "env/repo/local/ci-packages/process/service/release-evidence-manifest/manifest.json"
-          manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-          candidate = str(manifest["candidateId"])
-          print(candidate)
-          PY
-          )"
-          HOSTED_READBACK="$RUNNER_TEMP/prod-hosted-release-readback.json"
-          eval "$(python3 quwoquan_ops/cli/prod/resolve_prod_release_state.py \
-            --to-candidate-digest "$CANDIDATE_DIGEST" \
-            --readback-output "$HOSTED_READBACK" \
-            --output-format shell)"
-          FROM_CANDIDATE_DIGEST="$RESOLVED_FROM_CANDIDATE_DIGEST"
-          if [[ -z "$FROM_CANDIDATE_DIGEST" ]] || \
-             [[ "$RESOLVED_HOSTED_AUTHORITY" != "prod-hosted-service-plane" ]] || \
-             [[ ! "$RESOLVED_RESUME_STAGE" =~ ^(canary|5|20|50|100|complete)$ ]]; then
-            echo "::error::GATE_BLOCK: hosted ledger did not resolve canonical candidate recovery state"
-            exit 2
-          fi
-          EXISTING_RELEASE_EVIDENCE_REF="$(python3 - "$HOSTED_READBACK" "$CANDIDATE_DIGEST" <<'PY'
-          import json
-          import re
-          import sys
-
-          payload = json.load(open(sys.argv[1], encoding="utf-8"))
-          state = payload["state"]
-          candidate = sys.argv[2]
-          if state["to_candidate_digest"] == candidate:
-              ref = str(state["to_release_evidence_ref"])
-          elif (
-              state["decision"] == "rolled_back"
-              and state["from_candidate_digest"] == candidate
-          ):
-              ref = str(state["from_release_evidence_ref"])
-          else:
-              print("")
-              raise SystemExit(0)
-          if re.fullmatch(r"ghcr\.io/[a-z0-9._/-]+@sha256:[0-9a-f]{64}", ref) is None:
-              raise SystemExit("GATE_BLOCK: hosted target release evidence ref is invalid")
-          print(ref)
-          PY
-          )"
-          {
-            echo "from_candidate_digest=$FROM_CANDIDATE_DIGEST"
-            echo "resume_stage=$RESOLVED_RESUME_STAGE"
-            echo "existing_release_evidence_ref=$EXISTING_RELEASE_EVIDENCE_REF"
-            echo "cloud_provider=$CLOUD_PROVIDER"
-            echo "dry_run=$DRY_RUN"
-          } >> "$GITHUB_OUTPUT"
-      - name: Parse canonical rollout stages
-        id: stages
-        run: |
-          python3 - <<'PY' >> "$GITHUB_OUTPUT"
-          import yaml
-          from pathlib import Path
-          payload = yaml.safe_load(
-              Path("quwoquan_ops/environments/prod/rollout/stages.yaml").read_text(
-                  encoding="utf-8"
-              )
-          )
-          stages = {item["name"]: int(item["step"]) for item in payload["stages"]}
-          if stages != {"canary": 0, "5": 5, "20": 20, "50": 50, "100": 100}:
-              raise SystemExit(f"invalid canonical rollout stages: {stages}")
-          print(f"canary_step={stages['canary']}")
-          print(f"percent_5_step={stages['5']}")
-          print(f"percent_20_step={stages['20']}")
-          print(f"percent_50_step={stages['50']}")
-          print(f"percent_100_step={stages['100']}")
-          PY
-      - id: finish
-        if: always()
-        name: Finish prepare timer
-        run: |
-          echo "duration_seconds=$(( $(date +%s) - ${{ steps.start.outputs.started_at }} ))" >> "$GITHUB_OUTPUT"
-
-  delivery_gate:
-    name: Delivery Gate (mainline)
-    needs: [formal_prod_authority_preflight, source_context, service_pipeline]
-    permissions:
-      contents: read
-      actions: read
-      packages: write
-    uses: ./.github/workflows/delivery-gate.yml
-    with:
-      checkout_ref: ${{ needs.source_context.outputs.source_git_sha }}
-      base_sha: ${{ needs.source_context.outputs.base_sha }}
-      head_sha: ${{ needs.source_context.outputs.source_git_sha }}
-      produce_release_evidence: true
-      provider_evidence_ref: ${{ inputs.provider_evidence_ref || vars.PROD_PROVIDER_EVIDENCE_REF }}
-      provider_evidence_digest: ${{ inputs.provider_evidence_digest || vars.PROD_PROVIDER_EVIDENCE_DIGEST }}
-      provider_candidate_image_digest: ${{ inputs.provider_candidate_image_digest || vars.PROD_PROVIDER_CANDIDATE_IMAGE_DIGEST }}
-      provider_component_evidence_ref: ${{ needs.service_pipeline.outputs.component_evidence_ref }}
-      user_acceptance_evidence_ref: ${{ vars.RELEASE_USER_ACCEPTANCE_EVIDENCE_REF }}
-      user_acceptance_evidence_digest: ${{ vars.RELEASE_USER_ACCEPTANCE_EVIDENCE_DIGEST }}
-    secrets: inherit
-
-  ai_ci_shadow:
-    name: AI CI shadow advisory (read-only)
-    needs: [source_context, service_pipeline, app_pipeline, delivery_gate]
-    if: ${{ always() && needs.source_context.result == 'success' && vars.AI_CI_SHADOW_ENDPOINT != '' }}
-    continue-on-error: true
-    runs-on: ubuntu-latest
-    timeout-minutes: 2
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
-        with:
-          ref: ${{ needs.source_context.outputs.source_git_sha }}
-      - name: Materialize structured upstream evidence without credentials
-        env:
-          SERVICE_RESULT: ${{ needs.service_pipeline.result }}
-          SERVICE_SECONDS: ${{ needs.service_pipeline.outputs.machine_critical_path_seconds }}
-          APP_RESULT: ${{ needs.app_pipeline.result }}
-          APP_SECONDS: ${{ needs.app_pipeline.outputs.machine_critical_path_seconds }}
-          DELIVERY_RESULT: ${{ needs.delivery_gate.result }}
-          DELIVERY_SECONDS: ${{ needs.delivery_gate.outputs.machine_critical_path_seconds }}
-        run: |
-          mkdir -p "$QWQ_OUTPUT_ROOT/env/repo/runs/ai-ci-shadow"
-          python3 - <<'PY'
-          import json
-          import os
-          from pathlib import Path
-
-          jobs = []
-          for name, result_key, seconds_key in (
-              ("service_pipeline", "SERVICE_RESULT", "SERVICE_SECONDS"),
-              ("app_pipeline", "APP_RESULT", "APP_SECONDS"),
-              ("delivery_gate", "DELIVERY_RESULT", "DELIVERY_SECONDS"),
-          ):
-              raw_seconds = os.environ.get(seconds_key, "").strip()
-              jobs.append(
-                  {
-                      "job": name,
-                      "status": os.environ.get(result_key, "").strip(),
-                      "machineCriticalPathSeconds": (
-                          int(raw_seconds) if raw_seconds.isdigit() else None
-                      ),
-                  }
-              )
-          path = Path(os.environ["QWQ_OUTPUT_ROOT"]) / "env/repo/runs/ai-ci-shadow/source.json"
-          path.write_text(
-              json.dumps({"jobs": jobs}, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
-              encoding="utf-8",
-          )
-          PY
-      - name: Run isolated AI advisory shadow
-        env:
-          AI_CI_SHADOW_ENDPOINT: ${{ vars.AI_CI_SHADOW_ENDPOINT }}
-          AI_CI_SHADOW_TOKEN: ${{ secrets.AI_CI_SHADOW_TOKEN }}
-        run: |
-          python3 quwoquan_ops/ci/run_ai_ci_shadow.py \
-            --source "$QWQ_OUTPUT_ROOT/env/repo/runs/ai-ci-shadow/source.json" \
-            --source-ref-prefix "github-actions://${{ github.repository }}/runs/${{ github.run_id }}/jobs/mainline-upstream" \
-            --source-git-sha "${{ needs.source_context.outputs.source_git_sha }}" \
-            --workflow-run-id "${{ github.run_id }}" \
-            --endpoint "$AI_CI_SHADOW_ENDPOINT" \
-            --output "$QWQ_OUTPUT_ROOT/env/repo/runs/ai-ci-shadow/ai-ci-advisory.json"
-      - name: Upload read-only advisory evidence
-        if: ${{ failure() && !cancelled() }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: ai-ci-advisory-${{ github.run_id }}-${{ github.run_attempt }}
-          path: ${{ env.QWQ_OUTPUT_ROOT }}/env/repo/runs/ai-ci-shadow/ai-ci-advisory.json
-          if-no-files-found: warn
-          compression-level: 0
-          retention-days: 7
-
-  alpha_local:
-    name: Alpha local stage
-    needs: [formal_prod_authority_preflight, prepare, delivery_gate]
-    runs-on: ubuntu-latest
-    timeout-minutes: 8
-    permissions:
-      contents: read
-      packages: write
-    outputs:
-      duration_seconds: ${{ steps.finish.outputs.duration_seconds }}
-      receipt_ref: ${{ steps.receipt_bundle_ref.outputs.ref }}
-      receipt_digest: ${{ steps.receipt_bundle.outputs.digest }}
-    steps:
-      - id: start
-        name: Start timer
-        run: echo "started_at=$(date +%s)" >> "$GITHUB_OUTPUT"
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
-        with:
-          ref: ${{ needs.prepare.outputs.checkout_ref }}
-      - name: Login immutable candidate registry
-        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Materialize and bind exact Alpha candidate
-        env:
-          EXPECTED_RELEASE_REF: ${{ needs.prepare.outputs.release_evidence_ref }}
-          EXPECTED_CANDIDATE: ${{ needs.prepare.outputs.candidate_digest }}
-          EXPECTED_ARTIFACT_DIGEST: ${{ needs.prepare.outputs.artifact_digest }}
-          EXPECTED_WORKFLOW_RUN_ID: ${{ needs.prepare.outputs.service_pipeline_run_id }}
-          EXPECTED_SOURCE_SHA: ${{ needs.prepare.outputs.head_sha }}
-        run: |
-          ROOT="$QWQ_OUTPUT_ROOT/env/repo/local/mainline-alpha/process/release-evidence-manifest"
-          python3 quwoquan_ops/cli/prod/fetch_mainline_release_artifact.py \
-            --ref "$EXPECTED_RELEASE_REF" \
-            --output-dir "$ROOT"
-          python3 quwoquan_ops/ci/verify_workflow_release_candidate.py \
-            --manifest "$ROOT/manifest.json" \
-            --expected-candidate "$EXPECTED_CANDIDATE" \
-            --expected-artifact-digest "$EXPECTED_ARTIFACT_DIGEST" \
-            --expected-workflow-run-id "$EXPECTED_WORKFLOW_RUN_ID" \
-            --expected-source-sha "$EXPECTED_SOURCE_SHA" \
-            --expected-repository "${{ github.repository }}" \
-            --expected-release-ref "$EXPECTED_RELEASE_REF"
-          echo "QWQ_PROD_RELEASE_ARTIFACT_ROOT=$ROOT" >> "$GITHUB_ENV"
-      - name: Package alpha environment
-        run: |
-          python3 quwoquan_ops/cli/stackctl.py package \
-            --env alpha \
-            --include-services \
-            --report-dir "$QWQ_OUTPUT_ROOT/env/alpha/runs/mainline-package"
-      - name: Bring up alpha-local
-        run: |
-          python3 quwoquan_ops/cli/stackctl.py up \
-            --target alpha-local \
-            --formal-release \
-            --release-manifest "$QWQ_PROD_RELEASE_ARTIFACT_ROOT/manifest.json" \
-            --skip-build \
-            --skip-app \
-            --report-dir "$QWQ_OUTPUT_ROOT/env/alpha/runs/mainline-up"
-      - name: Alpha full health
-        run: |
-          python3 quwoquan_ops/cli/stackctl.py health \
-            --target alpha-local \
-            --scope full \
-            --report-dir "$QWQ_OUTPUT_ROOT/env/alpha/runs/mainline-health"
-      - name: Verify alpha release-fast contracts
-        run: |
-          python3 quwoquan_ops/cli/stackctl.py verify \
-            --env alpha \
-            --target alpha-local \
-            --kind all \
-            --profile smoke \
-            --report-dir "$QWQ_OUTPUT_ROOT/env/alpha/runs/mainline-verify"
-      - id: receipt
-        name: Seal Alpha environment receipt from raw stackctl evidence
-        run: |
-          RECEIPT="$QWQ_OUTPUT_ROOT/env/alpha/runs/mainline-receipt"
-          mkdir -p "$RECEIPT"
-          python3 quwoquan_ops/ci/render_environment_release_receipt.py \
-            --manifest "$QWQ_PROD_RELEASE_ARTIFACT_ROOT/manifest.json" \
-            --environment alpha \
-            --evidence "package=$QWQ_OUTPUT_ROOT/env/alpha/runs/mainline-package/report.json" \
-            --evidence "up=$QWQ_OUTPUT_ROOT/env/alpha/runs/mainline-up/report.json" \
-            --evidence "health=$QWQ_OUTPUT_ROOT/env/alpha/runs/mainline-health/report.json" \
-            --evidence "verify=$QWQ_OUTPUT_ROOT/env/alpha/runs/mainline-verify/report.json" \
-            --evidence "pilot-release=$QWQ_PROD_RELEASE_ARTIFACT_ROOT/evidence/release/pilot-release-attestation.json" \
-            --evidence "pilot-rollback=$QWQ_PROD_RELEASE_ARTIFACT_ROOT/evidence/release/pilot-rollback-attestation.json" \
-            --evidence "content-lifecycle=$QWQ_PROD_RELEASE_ARTIFACT_ROOT/evidence/release/lifecycle-exit-alpha.json" \
-            --require-evidence package \
-            --require-evidence up \
-            --require-evidence health \
-            --require-evidence verify \
-            --require-evidence pilot-release \
-            --require-evidence pilot-rollback \
-            --require-evidence content-lifecycle \
-            --archive-prefix evidence/raw/environments/alpha/raw \
-            --output "$RECEIPT/alpha.json"
-      - name: Setup Buildx for Alpha evidence
-        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
-        with:
-          version: v0.35.0
-          cache-binary: false
-          clean: false
-      - id: receipt_bundle
-        name: Publish immutable Alpha environment evidence OCI
-        uses: docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25
-        with:
-          context: ${{ env.QWQ_OUTPUT_ROOT }}/env/alpha/runs/mainline-receipt
-          file: quwoquan_ops/ci/app_candidate_evidence.Dockerfile
-          platforms: linux/amd64
-          push: true
-          tags: ghcr.io/${{ github.repository }}/environment-evidence:alpha-${{ github.run_id }}
-          sbom: true
-          provenance: mode=max
-      - id: receipt_bundle_ref
-        name: Record exact Alpha environment evidence ref
-        run: |
-          echo "ref=ghcr.io/${{ github.repository }}/environment-evidence@${{ steps.receipt_bundle.outputs.digest }}" >> "$GITHUB_OUTPUT"
-      - name: Alpha inspect
-        if: always()
-        run: |
-          python3 quwoquan_ops/cli/stackctl.py inspect \
-            --target alpha-local \
-            --scope all \
-            --report-dir "$QWQ_OUTPUT_ROOT/env/alpha/runs/mainline-inspect"
-      - name: Upload alpha stackctl artifacts
-        if: ${{ failure() && !cancelled() }}
-        continue-on-error: true
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: mainline-auto-prod-alpha
-          path: |
-            ${{ env.QWQ_OUTPUT_ROOT }}/env/alpha/runs/**/summary.json
-            ${{ env.QWQ_OUTPUT_ROOT }}/env/alpha/runs/**/report.json
-          if-no-files-found: ignore
-          compression-level: 0
-          retention-days: 3
-      - id: finish
-        if: always()
-        name: Finish timer
-        run: |
-          echo "duration_seconds=$(( $(date +%s) - ${{ steps.start.outputs.started_at }} ))" >> "$GITHUB_OUTPUT"
-
-  beta_device_matrix:
-    name: Beta local stage
-    needs: [formal_prod_authority_preflight, prepare, delivery_gate]
-    permissions:
-      contents: read
-      actions: read
-      attestations: read
-      packages: write
-    uses: ./.github/workflows/app-env-device-matrix-self-hosted.yml
-    with:
-      checkout_ref: ${{ needs.prepare.outputs.checkout_ref }}
-      validation_profile: mainline_auto_prod
-      release_evidence_ref: ${{ needs.prepare.outputs.release_evidence_ref }}
-    secrets: inherit
-
-  gamma_local:
-    name: Gamma-local release-fast stage
-    needs: [formal_prod_authority_preflight, prepare, delivery_gate]
-    runs-on: [self-hosted, macOS, ARM64]
-    timeout-minutes: 8
-    permissions:
-      contents: read
-      packages: write
-    outputs:
-      duration_seconds: ${{ steps.finish.outputs.duration_seconds }}
-      receipt_ref: ${{ steps.receipt_bundle_ref.outputs.ref }}
-      receipt_digest: ${{ steps.receipt_bundle.outputs.digest }}
-    steps:
-      - id: start
-        name: Start timer
-        run: echo "started_at=$(date +%s)" >> "$GITHUB_OUTPUT"
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
-        with:
-          ref: ${{ needs.prepare.outputs.checkout_ref }}
-      - name: Login immutable candidate registry
-        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Materialize and bind exact Gamma candidate
-        env:
-          EXPECTED_RELEASE_REF: ${{ needs.prepare.outputs.release_evidence_ref }}
-          EXPECTED_CANDIDATE: ${{ needs.prepare.outputs.candidate_digest }}
-          EXPECTED_ARTIFACT_DIGEST: ${{ needs.prepare.outputs.artifact_digest }}
-          EXPECTED_WORKFLOW_RUN_ID: ${{ needs.prepare.outputs.service_pipeline_run_id }}
-          EXPECTED_SOURCE_SHA: ${{ needs.prepare.outputs.head_sha }}
-        run: |
-          ROOT="$QWQ_OUTPUT_ROOT/env/repo/local/mainline-gamma/process/release-evidence-manifest"
-          python3 quwoquan_ops/cli/prod/fetch_mainline_release_artifact.py \
-            --ref "$EXPECTED_RELEASE_REF" \
-            --output-dir "$ROOT"
-          python3 quwoquan_ops/ci/verify_workflow_release_candidate.py \
-            --manifest "$ROOT/manifest.json" \
-            --expected-candidate "$EXPECTED_CANDIDATE" \
-            --expected-artifact-digest "$EXPECTED_ARTIFACT_DIGEST" \
-            --expected-workflow-run-id "$EXPECTED_WORKFLOW_RUN_ID" \
-            --expected-source-sha "$EXPECTED_SOURCE_SHA" \
-            --expected-repository "${{ github.repository }}" \
-            --expected-release-ref "$EXPECTED_RELEASE_REF"
-          echo "QWQ_PROD_RELEASE_ARTIFACT_ROOT=$ROOT" >> "$GITHUB_ENV"
-      - name: Package gamma environment
-        run: |
-          python3 quwoquan_ops/cli/stackctl.py package \
-            --env gamma \
-            --include-services \
-            --report-dir "$QWQ_OUTPUT_ROOT/env/gamma/runs/mainline-package"
-      - name: Bring up gamma-local with canonical warm-image reuse
-        run: |
-          python3 quwoquan_ops/cli/stackctl.py up \
-            --target gamma-local \
-            --formal-release \
-            --release-manifest "$QWQ_PROD_RELEASE_ARTIFACT_ROOT/manifest.json" \
-            --skip-build \
-            --skip-app \
-            --report-dir "$QWQ_OUTPUT_ROOT/env/gamma/runs/mainline-up"
-      - name: Gamma full health
-        run: |
-          python3 quwoquan_ops/cli/stackctl.py health \
-            --target gamma-local \
-            --scope full \
-            --report-dir "$QWQ_OUTPUT_ROOT/env/gamma/runs/mainline-health"
-      - name: Verify gamma release-fast contracts
-        run: |
-          python3 quwoquan_ops/cli/stackctl.py verify \
-            --env gamma \
-            --target gamma-local \
-            --kind all \
-            --profile release \
-            --report-dir "$QWQ_OUTPUT_ROOT/env/gamma/runs/mainline-verify"
-      - id: receipt
-        name: Seal Gamma environment receipt from raw stackctl evidence
-        run: |
-          RECEIPT="$QWQ_OUTPUT_ROOT/env/gamma/runs/mainline-receipt"
-          mkdir -p "$RECEIPT"
-          python3 quwoquan_ops/ci/render_environment_release_receipt.py \
-            --manifest "$QWQ_PROD_RELEASE_ARTIFACT_ROOT/manifest.json" \
-            --environment gamma \
-            --evidence "package=$QWQ_OUTPUT_ROOT/env/gamma/runs/mainline-package/report.json" \
-            --evidence "up=$QWQ_OUTPUT_ROOT/env/gamma/runs/mainline-up/report.json" \
-            --evidence "health=$QWQ_OUTPUT_ROOT/env/gamma/runs/mainline-health/report.json" \
-            --evidence "verify=$QWQ_OUTPUT_ROOT/env/gamma/runs/mainline-verify/report.json" \
-            --evidence "pilot-release=$QWQ_PROD_RELEASE_ARTIFACT_ROOT/evidence/release/pilot-release-attestation.json" \
-            --evidence "pilot-rollback=$QWQ_PROD_RELEASE_ARTIFACT_ROOT/evidence/release/pilot-rollback-attestation.json" \
-            --evidence "content-lifecycle=$QWQ_PROD_RELEASE_ARTIFACT_ROOT/evidence/release/lifecycle-exit-gamma.json" \
-            --require-evidence package \
-            --require-evidence up \
-            --require-evidence health \
-            --require-evidence verify \
-            --require-evidence pilot-release \
-            --require-evidence pilot-rollback \
-            --require-evidence content-lifecycle \
-            --archive-prefix evidence/raw/environments/gamma/raw \
-            --output "$RECEIPT/gamma.json"
-      - name: Setup Buildx for Gamma evidence
-        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
-        with:
-          version: v0.35.0
-          cache-binary: false
-          clean: false
-      - id: receipt_bundle
-        name: Publish immutable Gamma environment evidence OCI
-        uses: docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25
-        with:
-          context: ${{ env.QWQ_OUTPUT_ROOT }}/env/gamma/runs/mainline-receipt
-          file: quwoquan_ops/ci/app_candidate_evidence.Dockerfile
-          platforms: linux/amd64
-          push: true
-          tags: ghcr.io/${{ github.repository }}/environment-evidence:gamma-${{ github.run_id }}
-          sbom: true
-          provenance: mode=max
-      - id: receipt_bundle_ref
-        name: Record exact Gamma environment evidence ref
-        run: |
-          echo "ref=ghcr.io/${{ github.repository }}/environment-evidence@${{ steps.receipt_bundle.outputs.digest }}" >> "$GITHUB_OUTPUT"
-      - name: Gamma inspect
-        if: always()
-        run: |
-          python3 quwoquan_ops/cli/stackctl.py inspect \
-            --target gamma-local \
-            --scope all \
-            --report-dir "$QWQ_OUTPUT_ROOT/env/gamma/runs/mainline-inspect"
-      - name: Upload gamma stackctl artifacts
-        if: ${{ failure() && !cancelled() }}
-        continue-on-error: true
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: controlled-prod-gamma
-          path: |
-            ${{ env.QWQ_OUTPUT_ROOT }}/env/gamma/runs/**/summary.json
-            ${{ env.QWQ_OUTPUT_ROOT }}/env/gamma/runs/**/report.json
-          if-no-files-found: ignore
-          compression-level: 0
-          retention-days: 3
-      - id: finish
-        if: always()
-        name: Finish timer
-        run: |
-          echo "duration_seconds=$(( $(date +%s) - ${{ steps.start.outputs.started_at }} ))" >> "$GITHUB_OUTPUT"
-
-  preprod_evidence:
-    name: Accept Alpha then Beta then Gamma receipts
-    needs:
-      - formal_prod_authority_preflight
-      - prepare
-      - alpha_local
-      - beta_device_matrix
-      - gamma_local
-    runs-on: ubuntu-latest
-    timeout-minutes: 2
-    permissions:
-      contents: read
-      actions: read
-      packages: write
-    outputs:
-      release_evidence_ref: ${{ steps.bundle_ref.outputs.ref }}
-      candidate_digest: ${{ steps.identity.outputs.candidate_digest }}
-      artifact_digest: ${{ steps.identity.outputs.artifact_digest }}
-      status: ${{ steps.identity.outputs.status }}
-    steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
-        with:
-          ref: ${{ needs.prepare.outputs.checkout_ref }}
-      - name: Login immutable release registry
-        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Materialize sealed candidate once
-        run: |
-          python3 quwoquan_ops/cli/prod/fetch_mainline_release_artifact.py \
-            --ref "${{ needs.prepare.outputs.release_evidence_ref }}" \
-            --output-dir "$QWQ_OUTPUT_ROOT/env/repo/local/mainline-preprod/process/release-evidence-manifest"
-      - name: Materialize exact Alpha, Beta and Gamma evidence OCI bundles
-        run: |
-          INCOMING="$QWQ_OUTPUT_ROOT/env/repo/local/mainline-preprod/process/incoming"
-          python3 quwoquan_ops/ci/materialize_evidence_oci.py \
-            --ref "${{ needs.alpha_local.outputs.receipt_ref }}" \
-            --expected-digest "${{ needs.alpha_local.outputs.receipt_digest }}" \
-            --output-dir "$INCOMING/alpha" \
-            --require-file alpha.json
-          python3 quwoquan_ops/ci/materialize_evidence_oci.py \
-            --ref "${{ needs.beta_device_matrix.outputs.receipt_ref }}" \
-            --expected-digest "${{ needs.beta_device_matrix.outputs.receipt_digest }}" \
-            --output-dir "$INCOMING/beta" \
-            --require-file beta.json
-          python3 quwoquan_ops/ci/materialize_evidence_oci.py \
-            --ref "${{ needs.gamma_local.outputs.receipt_ref }}" \
-            --expected-digest "${{ needs.gamma_local.outputs.receipt_digest }}" \
-            --output-dir "$INCOMING/gamma" \
-            --require-file gamma.json
-      - name: Accept environment receipts in canonical order
-        run: |
-          ROOT="$QWQ_OUTPUT_ROOT/env/repo/local/mainline-preprod/process/release-evidence-manifest"
-          INCOMING="$QWQ_OUTPUT_ROOT/env/repo/local/mainline-preprod/process/incoming"
-          CURRENT="$QWQ_OUTPUT_ROOT/env/repo/local/mainline-preprod/process/current-receipt"
-          ARCHIVE="$ROOT/evidence/raw/environments"
-          mkdir -p "$CURRENT" "$ARCHIVE"
-          for environment in alpha beta gamma; do
-            test -s "$INCOMING/$environment/$environment.json" || {
-              echo "::error::GATE_BLOCK: ${environment} receipt is missing"
-              exit 2
-            }
-            cp -R "$INCOMING/$environment" "$ARCHIVE/$environment"
-            cp "$ARCHIVE/$environment/$environment.json" "$CURRENT/$environment.json"
-            python3 quwoquan_ops/cli/prod/finalize_mainline_release_artifact.py \
-              --artifact-dir "$ROOT" \
-              --environment-receipts-dir "$CURRENT"
-            rm "$CURRENT/$environment.json"
-            echo "Accepted ${environment} receipt for candidate ${{ needs.prepare.outputs.candidate_digest }}"
-          done
-      - id: identity
-        name: Preserve candidate identity and record new evidence snapshot
-        env:
-          EXPECTED_CANDIDATE: ${{ needs.prepare.outputs.candidate_digest }}
-        run: |
-          python3 - <<'PY' >> "$GITHUB_OUTPUT"
-          import json
-          import os
-          import re
-          from pathlib import Path
-
-          manifest = json.loads(
-              (Path(os.environ["QWQ_OUTPUT_ROOT"]) / "env/repo/local/mainline-preprod/process/release-evidence-manifest/manifest.json").read_text(encoding="utf-8")
-          )
-          candidate = str(manifest.get("candidateId") or "")
-          artifact = str(manifest.get("artifactDigest") or "")
-          if candidate != os.environ["EXPECTED_CANDIDATE"]:
-              raise SystemExit("GATE_BLOCK: candidateId changed while appending environment receipts")
-          if set(manifest.get("environmentReceipts") or {}) != {"alpha", "beta", "gamma"}:
-              raise SystemExit("GATE_BLOCK: pre-Prod environment receipt set is incomplete")
-          if re.fullmatch(r"sha256:[0-9a-f]{64}", artifact) is None:
-              raise SystemExit("GATE_BLOCK: qualified evidence artifactDigest is invalid")
-          print(f"candidate_digest={candidate}")
-          print(f"artifact_digest={artifact}")
-          print(f"status={manifest['status']}")
-          PY
-      - name: Setup Buildx for pre-Prod evidence
-        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
-        with:
-          version: v0.35.0
-          cache-binary: false
-          clean: false
-      - id: bundle
-        name: Publish pre-Prod evidence snapshot
-        uses: docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25
-        with:
-          context: ${{ env.QWQ_OUTPUT_ROOT }}/env/repo/local/mainline-preprod/process/release-evidence-manifest
-          file: quwoquan_ops/cli/prod/release_artifact.Dockerfile
-          platforms: linux/amd64
-          push: true
-          tags: ghcr.io/${{ github.repository }}/release-artifact:preprod-${{ github.run_id }}
-          sbom: true
-          provenance: mode=max
-      - id: bundle_ref
-        name: Record exact pre-Prod evidence OCI ref
-        run: |
-          echo "ref=ghcr.io/${{ github.repository }}/release-artifact@${{ steps.bundle.outputs.digest }}" >> "$GITHUB_OUTPUT"
-
-  prod_rollout:
-    name: Prod rollout transaction
-    needs:
-      - formal_prod_authority_preflight
-      - prepare
-      - alpha_local
-      - beta_device_matrix
-      - gamma_local
-      - preprod_evidence
-    runs-on: [self-hosted, macOS, ARM64]
-    environment:
-      name: ${{ needs.prepare.outputs.dry_run != 'true' && 'production' || 'release-validation' }}
-    timeout-minutes: 30
-    permissions:
-      contents: read
-      actions: read
-      attestations: write
-      id-token: write
-      packages: write
-    outputs:
-      duration_seconds: ${{ steps.finish.outputs.duration_seconds }}
-      release_evidence_ref: ${{ steps.terminal_bundle_ref.outputs.ref }}
-      release_status: ${{ steps.terminal_receipts.outputs.status }}
-      artifact_digest: ${{ steps.terminal_receipts.outputs.artifact_digest }}
-      fully_verified_at: ${{ steps.terminal_receipts.outputs.fully_verified_at }}
-    env:
-      PROD_SSH_HOST: ${{ secrets.PROD_SSH_HOST }}
-      PROMETHEUS_URL: ${{ vars.PROD_PROMETHEUS_URL }}
-      QWQ_PROD_ROLLOUT_EVIDENCE_ROOT: ${{ secrets.PROD_ROLLOUT_STAGE_EVIDENCE_ROOT }}
-      QWQ_PROD_RELEASE_STATE_DIR: ${{ vars.PROD_RELEASE_STATE_DIR }}
-      QWQ_PROD_BACKUP_RECOVERY_RECEIPT: ${{ vars.PROD_BACKUP_RECOVERY_RECEIPT }}
-      QWQ_PROD_ROLLBACK_DRILL_RECEIPT_ID: ${{ vars.PROD_ROLLBACK_DRILL_RECEIPT_ID }}
-    steps:
-      - id: start
-        name: Start prod transaction timer
-        run: echo "started_at=$(date +%s)" >> "$GITHUB_OUTPUT"
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
-        with:
-          ref: ${{ needs.prepare.outputs.checkout_ref }}
-      - name: Defensively recheck formal Prod hosted authority before mutation
-        if: ${{ needs.prepare.outputs.dry_run != 'true' }}
-        run: |
-          echo "::error::OPS.BRANCH.AUTHORITY_UNAVAILABLE: terminal=blocked; formal Prod requires hosted branch protection/ruleset authority readback before mutation; recovery=restore_git_authority_then_retry"
-          exit 2
-      - name: Validate protected rollout promotion evidence root
-        if: ${{ needs.prepare.outputs.dry_run != 'true' }}
-        run: |
-          python3 - <<'PY'
-          import os
-          import stat
-          from pathlib import Path
-
-          raw = os.environ.get("QWQ_PROD_ROLLOUT_EVIDENCE_ROOT", "").strip()
-          root = Path(raw)
-          if not raw or not root.is_absolute():
-              raise SystemExit("GATE_BLOCK: protected rollout evidence root must be an absolute directory")
-          try:
-              metadata = os.lstat(root)
-          except OSError as error:
-              raise SystemExit(f"GATE_BLOCK: protected rollout evidence root is unavailable: {error}") from error
-          if stat.S_ISLNK(metadata.st_mode) or not stat.S_ISDIR(metadata.st_mode):
-              raise SystemExit("GATE_BLOCK: protected rollout evidence root must be a non-symlink directory")
-          if metadata.st_uid != os.getuid():
-              raise SystemExit("GATE_BLOCK: protected rollout evidence root must be owned by the current uid")
-          if metadata.st_mode & (stat.S_IWGRP | stat.S_IWOTH):
-              raise SystemExit("GATE_BLOCK: protected rollout evidence root must not be group/world writable")
-          PY
-      - name: Materialize hosted rollout SSH credentials
-        env:
-          EDGE_KEY_MATERIAL: ${{ secrets.PROD_EDGE_SSH_KEY }}
-          KEY_MATERIAL: ${{ secrets.PROD_SERVICE_SSH_KEY }}
-        run: |
-          set -euo pipefail
-          if [[ -z "$EDGE_KEY_MATERIAL" || "$EDGE_KEY_MATERIAL" != *"PRIVATE KEY"* ]]; then
-            echo "::error::GATE_BLOCK: PROD_EDGE_SSH_KEY is missing or is not private-key material"
-            exit 2
-          fi
-          if [[ -z "$KEY_MATERIAL" || "$KEY_MATERIAL" != *"PRIVATE KEY"* ]]; then
-            echo "::error::GATE_BLOCK: PROD_SERVICE_SSH_KEY is missing or is not private-key material"
-            exit 2
-          fi
-          EDGE_KEY_FILE="$RUNNER_TEMP/prod-edge-ssh-key"
-          KEY_FILE="$RUNNER_TEMP/prod-service-ssh-key"
-          (umask 077 && printf '%s\n' "$EDGE_KEY_MATERIAL" > "$EDGE_KEY_FILE")
-          (umask 077 && printf '%s\n' "$KEY_MATERIAL" > "$KEY_FILE")
-          chmod 600 "$EDGE_KEY_FILE"
-          chmod 600 "$KEY_FILE"
-          echo "PROD_EDGE_SSH_KEY_FILE=$EDGE_KEY_FILE" >> "$GITHUB_ENV"
-          echo "PROD_SERVICE_SSH_KEY_FILE=$KEY_FILE" >> "$GITHUB_ENV"
-      - name: Validate every prod plane SSH credential once
-        run: |
-          for stage in canary 5 20 50 100; do
-            python3 quwoquan_ops/cli/prod/validate_prod_plane_credentials.py \
-              --stage "$stage"
-          done
-      - name: Login immutable release registry once
-        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      - id: materialized_release
-        name: Materialize immutable release evidence once
-        env:
-          NEW_RELEASE_EVIDENCE_REF: ${{ needs.preprod_evidence.outputs.release_evidence_ref }}
-          EXISTING_RELEASE_EVIDENCE_REF: ${{ needs.prepare.outputs.existing_release_evidence_ref }}
-        run: |
-          ACTIVE_REF="${EXISTING_RELEASE_EVIDENCE_REF:-$NEW_RELEASE_EVIDENCE_REF}"
-          python3 quwoquan_ops/cli/prod/fetch_mainline_release_artifact.py \
-            --ref "$ACTIVE_REF" \
-            --output-dir "$QWQ_OUTPUT_ROOT/env/repo/local/ci-packages/process/service/release-evidence-manifest"
-          python3 - "$ACTIVE_REF" <<'PY' >> "$GITHUB_OUTPUT"
-          import json
-          import os
-          import sys
-          from pathlib import Path
-
-          manifest = json.loads(
-              (Path(os.environ["QWQ_OUTPUT_ROOT"]) / "env/repo/local/ci-packages/process/service/release-evidence-manifest/manifest.json").read_text(encoding="utf-8")
-          )
-          print(f"release_evidence_ref={sys.argv[1]}")
-          print(f"artifact_digest={manifest['artifactDigest']}")
-          PY
-      - name: Require the reviewed canonical candidate
-        env:
-          EXPECTED_CANDIDATE_DIGEST: ${{ needs.preprod_evidence.outputs.candidate_digest }}
-          EXPECTED_ARTIFACT_DIGEST: ${{ steps.materialized_release.outputs.artifact_digest }}
-          EXPECTED_WORKFLOW_RUN_ID: ${{ needs.prepare.outputs.service_pipeline_run_id }}
-          EXPECTED_SOURCE_SHA: ${{ needs.prepare.outputs.head_sha }}
-          EXPECTED_RELEASE_REF: ${{ steps.materialized_release.outputs.release_evidence_ref }}
-        run: |
-          python3 quwoquan_ops/ci/verify_workflow_release_candidate.py \
-            --manifest "$QWQ_OUTPUT_ROOT/env/repo/local/ci-packages/process/service/release-evidence-manifest/manifest.json" \
-            --expected-candidate "$EXPECTED_CANDIDATE_DIGEST" \
-            --expected-artifact-digest "$EXPECTED_ARTIFACT_DIGEST" \
-            --expected-workflow-run-id "$EXPECTED_WORKFLOW_RUN_ID" \
-            --expected-source-sha "$EXPECTED_SOURCE_SHA" \
-            --expected-repository "${{ github.repository }}" \
-            --expected-release-ref "$EXPECTED_RELEASE_REF"
-      - name: Rebind reviewed PR governance once
-        if: ${{ needs.prepare.outputs.existing_release_evidence_ref == '' }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          python3 quwoquan_ops/ci/verify_release_governance.py \
-            --repository "${{ github.repository }}" \
-            --release-manifest "$QWQ_OUTPUT_ROOT/env/repo/local/ci-packages/process/service/release-evidence-manifest/manifest.json" \
-            --minimum-approvals 1 \
-            --output "$QWQ_OUTPUT_ROOT/env/repo/local/ci-packages/process/service/release-evidence-manifest/governance-receipt.json"
-      - name: Require fresh hosted backup and recovery receipt
-        if: ${{ needs.prepare.outputs.existing_release_evidence_ref == '' }}
-        run: |
-          python3 quwoquan_ops/cli/stackctl.py verify \
-            --env prod \
-            --target prod-hosted \
-            --kind all \
-            --profile release \
-            --backup-recovery-receipt "$QWQ_PROD_BACKUP_RECOVERY_RECEIPT" \
-            --report-dir "$QWQ_OUTPUT_ROOT/env/prod/runs/mainline-backup-recovery-preflight"
-      - name: Seal rollback readiness from hosted ledger, real drill and backup recovery
-        if: ${{ needs.prepare.outputs.existing_release_evidence_ref == '' }}
-        env:
-          FROM_CANDIDATE_DIGEST: ${{ needs.prepare.outputs.from_candidate_digest }}
-        run: |
-          ROOT="$QWQ_OUTPUT_ROOT/env/repo/local/ci-packages/process/service/release-evidence-manifest"
-          READINESS="$QWQ_OUTPUT_ROOT/env/prod/runs/mainline-rollback-readiness"
-          ARCHIVE="$ROOT/evidence/raw/prod/readiness"
-          mkdir -p "$READINESS" "$ARCHIVE"
-          if [[ ! "$QWQ_PROD_ROLLBACK_DRILL_RECEIPT_ID" =~ ^[0-9a-f]{64}$ ]]; then
-            echo "::error::GATE_BLOCK: PROD_ROLLBACK_DRILL_RECEIPT_ID must identify a real hosted rollback receipt"
-            exit 2
-          fi
-          bash quwoquan_ops/cli/prod/sync_prod_plane_stack.sh \
-            --plane service \
-            --operation release-ledger-fetch \
-            --service prod-stack \
-            --output-path "$READINESS/current-ledger.json"
-          bash quwoquan_ops/cli/prod/sync_prod_plane_stack.sh \
-            --plane service \
-            --operation release-ledger-receipt \
-            --service prod-stack \
-            --receipt-id "$QWQ_PROD_ROLLBACK_DRILL_RECEIPT_ID" \
-            --output-path "$READINESS/rollback-drill.json"
-          cp "$READINESS/current-ledger.json" "$ARCHIVE/current-ledger.json"
-          cp "$READINESS/rollback-drill.json" "$ARCHIVE/rollback-drill.json"
-          cp "$QWQ_OUTPUT_ROOT/env/prod/runs/mainline-backup-recovery-preflight/backup-recovery.json" "$ARCHIVE/backup-validation.json"
-          python3 quwoquan_ops/ci/render_release_lifecycle_receipts.py rollback-readiness \
-            --manifest "$ROOT/manifest.json" \
-            --service prod-stack \
-            --from-candidate-digest "$FROM_CANDIDATE_DIGEST" \
-            --current-ledger-readback "$ARCHIVE/current-ledger.json" \
-            --rollback-drill-readback "$ARCHIVE/rollback-drill.json" \
-            --backup-validation "$ARCHIVE/backup-validation.json" \
-            --archive-prefix evidence/raw/prod/readiness \
-            --rollback-drill-max-age-seconds "${{ needs.prepare.outputs.rollback_drill_max_age_seconds }}" \
-            --output "$READINESS/rollback.json"
-          python3 quwoquan_ops/cli/prod/finalize_mainline_release_artifact.py \
-            --artifact-dir "$ROOT" \
-            --rollback-receipt "$READINESS/rollback.json"
-          DEPLOYABLE_ARTIFACT_DIGEST="$(python3 - <<'PY'
-          import json
-          import os
-          from pathlib import Path
-
-          manifest = json.loads(
-              (Path(os.environ["QWQ_OUTPUT_ROOT"]) / "env/repo/local/ci-packages/process/service/release-evidence-manifest/manifest.json").read_text(encoding="utf-8")
-          )
-          print(manifest["artifactDigest"])
-          PY
-          )"
-          python3 quwoquan_ops/ci/verify_workflow_release_candidate.py \
-            --manifest "$ROOT/manifest.json" \
-            --expected-candidate "${{ needs.preprod_evidence.outputs.candidate_digest }}" \
-            --expected-artifact-digest "$DEPLOYABLE_ARTIFACT_DIGEST" \
-            --expected-workflow-run-id "${{ needs.prepare.outputs.service_pipeline_run_id }}" \
-            --expected-source-sha "${{ needs.prepare.outputs.head_sha }}" \
-            --expected-repository "${{ github.repository }}" \
-            --require-deployable
-          echo "DEPLOYABLE_ARTIFACT_DIGEST=$DEPLOYABLE_ARTIFACT_DIGEST" >> "$GITHUB_ENV"
-      - name: Setup Buildx for immutable Prod lifecycle evidence
-        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
-        with:
-          version: v0.35.0
-          cache-binary: false
-          clean: false
-      - id: deployable_bundle
-        name: Publish exact deployable evidence snapshot before apply
-        if: ${{ needs.prepare.outputs.existing_release_evidence_ref == '' }}
-        uses: docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25
-        with:
-          context: ${{ env.QWQ_OUTPUT_ROOT }}/env/repo/local/ci-packages/process/service/release-evidence-manifest
-          file: quwoquan_ops/cli/prod/release_artifact.Dockerfile
-          platforms: linux/amd64
-          push: true
-          tags: ghcr.io/${{ github.repository }}/release-artifact:deployable-${{ github.run_id }}
-          sbom: true
-          provenance: mode=max
-      - id: deployable_ref
-        name: Resolve exact deployable ReleaseEvidenceManifest OCI ref
-        env:
-          EXISTING_RELEASE_EVIDENCE_REF: ${{ needs.prepare.outputs.existing_release_evidence_ref }}
-        run: |
-          if [[ -n "$EXISTING_RELEASE_EVIDENCE_REF" ]]; then
-            REF="$EXISTING_RELEASE_EVIDENCE_REF"
-          else
-            REF="ghcr.io/${{ github.repository }}/release-artifact@${{ steps.deployable_bundle.outputs.digest }}"
-          fi
-          if [[ ! "$REF" =~ ^ghcr\.io/[a-z0-9._/-]+@sha256:[0-9a-f]{64}$ ]]; then
-            echo "::error::GATE_BLOCK: active deployable evidence ref is not exact OCI"
-            exit 2
-          fi
-          echo "ref=$REF" >> "$GITHUB_OUTPUT"
-      - name: Require exact active deployable candidate
-        env:
-          ACTIVE_RELEASE_REF: ${{ steps.deployable_ref.outputs.ref }}
-        run: |
-          ROOT="$QWQ_OUTPUT_ROOT/env/repo/local/ci-packages/process/service/release-evidence-manifest"
-          ARTIFACT_DIGEST="$(python3 - <<'PY'
-          import json
-          import os
-          from pathlib import Path
-          manifest = json.loads(
-              (Path(os.environ["QWQ_OUTPUT_ROOT"]) / "env/repo/local/ci-packages/process/service/release-evidence-manifest/manifest.json").read_text(encoding="utf-8")
-          )
-          print(manifest["artifactDigest"])
-          PY
-          )"
-          python3 quwoquan_ops/ci/verify_workflow_release_candidate.py \
-            --manifest "$ROOT/manifest.json" \
-            --expected-candidate "${{ needs.preprod_evidence.outputs.candidate_digest }}" \
-            --expected-artifact-digest "$ARTIFACT_DIGEST" \
-            --expected-workflow-run-id "${{ needs.prepare.outputs.service_pipeline_run_id }}" \
-            --expected-source-sha "${{ needs.prepare.outputs.head_sha }}" \
-            --expected-repository "${{ github.repository }}" \
-            --expected-release-ref "$ACTIVE_RELEASE_REF" \
-            --require-deployable
-      - name: Materialize canonical configuration packages once
-        env:
-          QWQ_PROD_RELEASE_ARTIFACT_ROOT: ${{ env.QWQ_OUTPUT_ROOT }}/env/repo/local/ci-packages/process/service/release-evidence-manifest
-        run: |
-          python3 quwoquan_ops/cli/stackctl.py package \
-            --env prod \
-            --target prod-hosted \
-            --include-services \
-            --report-dir "$QWQ_OUTPUT_ROOT/env/prod/runs/mainline-package"
-      - name: Verify exact Prod packaging candidate
-        run: |
-          python3 quwoquan_ops/cli/stackctl.py verify \
-            --env prod \
-            --target prod-hosted \
-            --kind packaging \
-            --profile smoke \
-            --report-dir "$QWQ_OUTPUT_ROOT/env/prod/runs/mainline-package-verify"
-      - name: Require the prebuilt immutable Ops Portal package
-        run: |
-          python3 - <<'PY'
-          import json
-          import os
-          from pathlib import Path
-
-          manifest = json.loads(
-              (Path(os.environ["QWQ_OUTPUT_ROOT"]) / "env/repo/local/ci-packages/process/service/release-evidence-manifest/manifest.json").read_text(encoding="utf-8")
-          )
-          descriptor = (manifest.get("applicationPackages") or {}).get("prod", {}).get("opsPortal")
-          if not isinstance(descriptor, dict) or not str(descriptor.get("digest") or "").startswith("sha256:"):
-              raise SystemExit("GATE_BLOCK: prebuilt Prod Ops Portal package evidence is missing")
-          PY
-      - name: Deploy Prod canary
-        if: ${{ needs.prepare.outputs.resume_stage == 'canary' }}
-        env:
-          PROD_TEST_AUTH_TOKEN: ${{ secrets.PROD_TEST_AUTH_TOKEN }}
-          WORKFLOW_STARTED_EPOCH: ${{ needs.prepare.outputs.workflow_started_epoch }}
-          PROMOTION_CUTOFF_SECONDS: ${{ needs.prepare.outputs.promotion_cutoff_seconds }}
-          HARD_FAIL_SECONDS: ${{ needs.prepare.outputs.hard_fail_seconds }}
-          ROLLBACK_BUDGET_SECONDS: ${{ needs.prepare.outputs.rollback_budget_seconds }}
-        run: |
-          python3 quwoquan_ops/cli/stackctl.py deploy \
-            --target prod-hosted \
-            --cloud-provider "${{ needs.prepare.outputs.cloud_provider }}" \
-            --service prod-stack \
-            --from-candidate-digest "${{ needs.prepare.outputs.from_candidate_digest }}" \
-            --to-candidate-digest "${{ needs.prepare.outputs.candidate_digest }}" \
-            --release-evidence-ref "${{ steps.deployable_ref.outputs.ref }}" \
-            --stage canary \
-            --step "${{ needs.prepare.outputs.canary_step }}" \
-            --promotion-evidence "$QWQ_PROD_ROLLOUT_EVIDENCE_ROOT/canary.json" \
-            --dry-run "${{ needs.prepare.outputs.dry_run }}" \
-            --release-manifest "$QWQ_OUTPUT_ROOT/env/repo/local/ci-packages/process/service/release-evidence-manifest/manifest.json" \
-            --promotion-deadline-epoch "$(( WORKFLOW_STARTED_EPOCH + PROMOTION_CUTOFF_SECONDS ))" \
-            --hard-deadline-epoch "$(( WORKFLOW_STARTED_EPOCH + HARD_FAIL_SECONDS ))" \
-            --rollback-budget-seconds "$ROLLBACK_BUDGET_SECONDS" \
-            --reuse-package \
-            --report-dir "$QWQ_OUTPUT_ROOT/env/prod/runs/mainline-canary"
-      - name: Explain dry-run boundary
-        if: ${{ needs.prepare.outputs.dry_run == 'true' }}
-        run: |
-          echo "::notice::Dry-run remained read-only after canary validation. The 5/20/50/100 stages require committed hosted ledger transitions and are intentionally not fabricated."
-      - name: Deploy Prod 5%
-        if: ${{ needs.prepare.outputs.dry_run != 'true' && (needs.prepare.outputs.resume_stage == 'canary' || needs.prepare.outputs.resume_stage == '5') }}
-        env:
-          PROD_TEST_AUTH_TOKEN: ${{ secrets.PROD_TEST_AUTH_TOKEN }}
-          WORKFLOW_STARTED_EPOCH: ${{ needs.prepare.outputs.workflow_started_epoch }}
-          PROMOTION_CUTOFF_SECONDS: ${{ needs.prepare.outputs.promotion_cutoff_seconds }}
-          HARD_FAIL_SECONDS: ${{ needs.prepare.outputs.hard_fail_seconds }}
-          ROLLBACK_BUDGET_SECONDS: ${{ needs.prepare.outputs.rollback_budget_seconds }}
-        run: |
-          python3 quwoquan_ops/cli/stackctl.py deploy \
-            --target prod-hosted \
-            --cloud-provider "${{ needs.prepare.outputs.cloud_provider }}" \
-            --service prod-stack \
-            --from-candidate-digest "${{ needs.prepare.outputs.from_candidate_digest }}" \
-            --to-candidate-digest "${{ needs.prepare.outputs.candidate_digest }}" \
-            --release-evidence-ref "${{ steps.deployable_ref.outputs.ref }}" \
-            --stage 5 \
-            --step "${{ needs.prepare.outputs.percent_5_step }}" \
-            --promotion-evidence "$QWQ_PROD_ROLLOUT_EVIDENCE_ROOT/5.json" \
-            --dry-run false \
-            --release-manifest "$QWQ_OUTPUT_ROOT/env/repo/local/ci-packages/process/service/release-evidence-manifest/manifest.json" \
-            --promotion-deadline-epoch "$(( WORKFLOW_STARTED_EPOCH + PROMOTION_CUTOFF_SECONDS ))" \
-            --hard-deadline-epoch "$(( WORKFLOW_STARTED_EPOCH + HARD_FAIL_SECONDS ))" \
-            --rollback-budget-seconds "$ROLLBACK_BUDGET_SECONDS" \
-            --reuse-package \
-            --report-dir "$QWQ_OUTPUT_ROOT/env/prod/runs/mainline-5"
-      - name: Deploy Prod 20%
-        if: ${{ needs.prepare.outputs.dry_run != 'true' && (needs.prepare.outputs.resume_stage == 'canary' || needs.prepare.outputs.resume_stage == '5' || needs.prepare.outputs.resume_stage == '20') }}
-        env:
-          PROD_TEST_AUTH_TOKEN: ${{ secrets.PROD_TEST_AUTH_TOKEN }}
-          WORKFLOW_STARTED_EPOCH: ${{ needs.prepare.outputs.workflow_started_epoch }}
-          PROMOTION_CUTOFF_SECONDS: ${{ needs.prepare.outputs.promotion_cutoff_seconds }}
-          HARD_FAIL_SECONDS: ${{ needs.prepare.outputs.hard_fail_seconds }}
-          ROLLBACK_BUDGET_SECONDS: ${{ needs.prepare.outputs.rollback_budget_seconds }}
-        run: |
-          python3 quwoquan_ops/cli/stackctl.py deploy \
-            --target prod-hosted \
-            --cloud-provider "${{ needs.prepare.outputs.cloud_provider }}" \
-            --service prod-stack \
-            --from-candidate-digest "${{ needs.prepare.outputs.from_candidate_digest }}" \
-            --to-candidate-digest "${{ needs.prepare.outputs.candidate_digest }}" \
-            --release-evidence-ref "${{ steps.deployable_ref.outputs.ref }}" \
-            --stage 20 \
-            --step "${{ needs.prepare.outputs.percent_20_step }}" \
-            --promotion-evidence "$QWQ_PROD_ROLLOUT_EVIDENCE_ROOT/20.json" \
-            --dry-run false \
-            --release-manifest "$QWQ_OUTPUT_ROOT/env/repo/local/ci-packages/process/service/release-evidence-manifest/manifest.json" \
-            --promotion-deadline-epoch "$(( WORKFLOW_STARTED_EPOCH + PROMOTION_CUTOFF_SECONDS ))" \
-            --hard-deadline-epoch "$(( WORKFLOW_STARTED_EPOCH + HARD_FAIL_SECONDS ))" \
-            --rollback-budget-seconds "$ROLLBACK_BUDGET_SECONDS" \
-            --reuse-package \
-            --report-dir "$QWQ_OUTPUT_ROOT/env/prod/runs/mainline-20"
-      - name: Deploy Prod 50%
-        if: ${{ needs.prepare.outputs.dry_run != 'true' && (needs.prepare.outputs.resume_stage == 'canary' || needs.prepare.outputs.resume_stage == '5' || needs.prepare.outputs.resume_stage == '20' || needs.prepare.outputs.resume_stage == '50') }}
-        env:
-          PROD_TEST_AUTH_TOKEN: ${{ secrets.PROD_TEST_AUTH_TOKEN }}
-          WORKFLOW_STARTED_EPOCH: ${{ needs.prepare.outputs.workflow_started_epoch }}
-          PROMOTION_CUTOFF_SECONDS: ${{ needs.prepare.outputs.promotion_cutoff_seconds }}
-          HARD_FAIL_SECONDS: ${{ needs.prepare.outputs.hard_fail_seconds }}
-          ROLLBACK_BUDGET_SECONDS: ${{ needs.prepare.outputs.rollback_budget_seconds }}
-        run: |
-          python3 quwoquan_ops/cli/stackctl.py deploy \
-            --target prod-hosted \
-            --cloud-provider "${{ needs.prepare.outputs.cloud_provider }}" \
-            --service prod-stack \
-            --from-candidate-digest "${{ needs.prepare.outputs.from_candidate_digest }}" \
-            --to-candidate-digest "${{ needs.prepare.outputs.candidate_digest }}" \
-            --release-evidence-ref "${{ steps.deployable_ref.outputs.ref }}" \
-            --stage 50 \
-            --step "${{ needs.prepare.outputs.percent_50_step }}" \
-            --promotion-evidence "$QWQ_PROD_ROLLOUT_EVIDENCE_ROOT/50.json" \
-            --dry-run false \
-            --release-manifest "$QWQ_OUTPUT_ROOT/env/repo/local/ci-packages/process/service/release-evidence-manifest/manifest.json" \
-            --promotion-deadline-epoch "$(( WORKFLOW_STARTED_EPOCH + PROMOTION_CUTOFF_SECONDS ))" \
-            --hard-deadline-epoch "$(( WORKFLOW_STARTED_EPOCH + HARD_FAIL_SECONDS ))" \
-            --rollback-budget-seconds "$ROLLBACK_BUDGET_SECONDS" \
-            --reuse-package \
-            --report-dir "$QWQ_OUTPUT_ROOT/env/prod/runs/mainline-50"
-      - name: Deploy Prod 100%
-        if: ${{ needs.prepare.outputs.dry_run != 'true' && needs.prepare.outputs.resume_stage != 'complete' }}
-        env:
-          PROD_TEST_AUTH_TOKEN: ${{ secrets.PROD_TEST_AUTH_TOKEN }}
-          WORKFLOW_STARTED_EPOCH: ${{ needs.prepare.outputs.workflow_started_epoch }}
-          PROMOTION_CUTOFF_SECONDS: ${{ needs.prepare.outputs.promotion_cutoff_seconds }}
-          HARD_FAIL_SECONDS: ${{ needs.prepare.outputs.hard_fail_seconds }}
-          ROLLBACK_BUDGET_SECONDS: ${{ needs.prepare.outputs.rollback_budget_seconds }}
-        run: |
-          python3 quwoquan_ops/cli/stackctl.py deploy \
-            --target prod-hosted \
-            --cloud-provider "${{ needs.prepare.outputs.cloud_provider }}" \
-            --service prod-stack \
-            --from-candidate-digest "${{ needs.prepare.outputs.from_candidate_digest }}" \
-            --to-candidate-digest "${{ needs.prepare.outputs.candidate_digest }}" \
-            --release-evidence-ref "${{ steps.deployable_ref.outputs.ref }}" \
-            --stage 100 \
-            --step "${{ needs.prepare.outputs.percent_100_step }}" \
-            --promotion-evidence "$QWQ_PROD_ROLLOUT_EVIDENCE_ROOT/100.json" \
-            --dry-run false \
-            --release-manifest "$QWQ_OUTPUT_ROOT/env/repo/local/ci-packages/process/service/release-evidence-manifest/manifest.json" \
-            --promotion-deadline-epoch "$(( WORKFLOW_STARTED_EPOCH + PROMOTION_CUTOFF_SECONDS ))" \
-            --hard-deadline-epoch "$(( WORKFLOW_STARTED_EPOCH + HARD_FAIL_SECONDS ))" \
-            --rollback-budget-seconds "$ROLLBACK_BUDGET_SECONDS" \
-            --reuse-package \
-            --report-dir "$QWQ_OUTPUT_ROOT/env/prod/runs/mainline-100"
-      - id: terminal_receipts
-        name: Seal terminal Prod outcome from hosted receipt readbacks
-        if: ${{ always() && needs.prepare.outputs.dry_run != 'true' }}
-        env:
-          FROM_CANDIDATE_DIGEST: ${{ needs.prepare.outputs.from_candidate_digest }}
-          WORKFLOW_STARTED_EPOCH: ${{ needs.prepare.outputs.workflow_started_epoch }}
-          HARD_FAIL_SECONDS: ${{ needs.prepare.outputs.hard_fail_seconds }}
-          ROLLBACK_BUDGET_SECONDS: ${{ needs.prepare.outputs.rollback_budget_seconds }}
-        run: |
-          ROOT="$QWQ_OUTPUT_ROOT/env/repo/local/ci-packages/process/service/release-evidence-manifest"
-          INPUTS="$QWQ_OUTPUT_ROOT/env/prod/runs/mainline-terminal-inputs"
-          OUTCOME="$QWQ_OUTPUT_ROOT/env/prod/runs/mainline-terminal-receipts"
-          ARCHIVE="$ROOT/evidence/raw/prod/outcome"
-          mkdir -p "$INPUTS" "$OUTCOME/environment" "$ARCHIVE"
-          LEDGER="$INPUTS/current-ledger.json"
-          bash quwoquan_ops/cli/prod/sync_prod_plane_stack.sh \
-            --plane service \
-            --operation release-ledger-fetch \
-            --service prod-stack \
-            --output-path "$LEDGER"
-          ARGS=()
-          while IFS='=' read -r stage receipt_id; do
-            [[ -n "$stage" && -n "$receipt_id" ]] || continue
-            case "$stage" in
-              canary) report="$QWQ_OUTPUT_ROOT/env/prod/runs/mainline-canary/report.json" ;;
-              5) report="$QWQ_OUTPUT_ROOT/env/prod/runs/mainline-5/report.json" ;;
-              20) report="$QWQ_OUTPUT_ROOT/env/prod/runs/mainline-20/report.json" ;;
-              50) report="$QWQ_OUTPUT_ROOT/env/prod/runs/mainline-50/report.json" ;;
-              100) report="$QWQ_OUTPUT_ROOT/env/prod/runs/mainline-100/report.json" ;;
-              *) echo "::error::GATE_BLOCK: hosted ledger contains an unknown stage"; exit 2 ;;
-            esac
-            readback="$INPUTS/${stage}-readback.json"
-            bash quwoquan_ops/cli/prod/sync_prod_plane_stack.sh \
-              --plane service \
-              --operation release-ledger-receipt \
-              --service prod-stack \
-              --receipt-id "$receipt_id" \
-              --output-path "$readback"
-            if [[ -s "$report" ]]; then
-              python3 - "$report" "$receipt_id" <<'PY'
-          import json
-          import sys
-
-          payload = json.load(open(sys.argv[1], encoding="utf-8"))
-          if payload.get("releaseReceiptId") != sys.argv[2]:
-              raise SystemExit("GATE_BLOCK: local stage report differs from hosted history")
-          PY
-            else
-              python3 quwoquan_ops/ci/render_hosted_release_stage_report.py \
-                --manifest "$ROOT/manifest.json" \
-                --stage-readback "$readback" \
-                --stage "$stage" \
-                --service prod-stack \
-                --output "$report"
-            fi
-            cp "$report" "$ARCHIVE/${stage}-report.json"
-            cp "$readback" "$ARCHIVE/${stage}-readback.json"
-            ARGS+=(
-              --stage-report "$stage=$ARCHIVE/${stage}-report.json"
-              --stage-readback "$stage=$ARCHIVE/${stage}-readback.json"
-            )
-          done < <(python3 - "$LEDGER" "$ROOT/manifest.json" "$FROM_CANDIDATE_DIGEST" <<'PY'
-          import json
-          import re
-          import sys
-
-          ledger = json.load(open(sys.argv[1], encoding="utf-8"))
-          manifest = json.load(open(sys.argv[2], encoding="utf-8"))
-          state = ledger.get("state") or {}
-          candidate = manifest.get("candidateId")
-          artifact = manifest.get("artifactDigest")
-          source = sys.argv[3]
-          decision = state.get("decision")
-          normal = (
-              state.get("from_candidate_digest") == source
-              and state.get("to_candidate_digest") == candidate
-          )
-          rollback = (
-              decision == "rolled_back"
-              and state.get("from_candidate_digest") == candidate
-              and state.get("to_candidate_digest") == source
-          )
-          if not (normal or rollback) or state.get("artifact_digest") != artifact:
-              raise SystemExit("GATE_BLOCK: hosted stage history is not bound to this candidate transaction")
-          fields = (
-              ("canary", "canary_receipt_id"),
-              ("5", "percent_5_receipt_id"),
-              ("20", "percent_20_receipt_id"),
-              ("50", "percent_50_receipt_id"),
-              ("100", "percent_100_receipt_id"),
-          )
-          for stage, field in fields:
-              receipt_id = str(state.get(field) or "")
-              if receipt_id:
-                  if re.fullmatch(r"[0-9a-f]{64}", receipt_id) is None:
-                      raise SystemExit(f"GATE_BLOCK: hosted {stage} receipt id is invalid")
-                  print(f"{stage}={receipt_id}")
-          PY
-          )
-          if [[ "${#ARGS[@]}" -eq 0 ]]; then
-            echo "::error::GATE_BLOCK: no immutable hosted Prod transition receipt exists"
-            exit 2
-          fi
-          python3 quwoquan_ops/ci/render_release_lifecycle_receipts.py prod-outcome \
-            --manifest "$ROOT/manifest.json" \
-            --service prod-stack \
-            --from-candidate-digest "$FROM_CANDIDATE_DIGEST" \
-            "${ARGS[@]}" \
-            --archive-prefix evidence/raw/prod/outcome \
-            --hard-deadline-epoch "$(( WORKFLOW_STARTED_EPOCH + HARD_FAIL_SECONDS ))" \
-            --rollback-budget-seconds "$ROLLBACK_BUDGET_SECONDS" \
-            --output-dir "$OUTCOME"
-          mv "$OUTCOME/prod.json" "$OUTCOME/environment/prod.json"
-          python3 quwoquan_ops/cli/prod/finalize_mainline_release_artifact.py \
-            --artifact-dir "$ROOT" \
-            --environment-receipts-dir "$OUTCOME/environment" \
-            --rollout-receipt "$OUTCOME/rollout.json" \
-            --rollback-receipt "$OUTCOME/rollback.json"
-          python3 - <<'PY' >> "$GITHUB_OUTPUT"
-          import json
-          import os
-          import re
-          from pathlib import Path
-
-          manifest = json.loads(
-              (Path(os.environ["QWQ_OUTPUT_ROOT"]) / "env/repo/local/ci-packages/process/service/release-evidence-manifest/manifest.json").read_text(encoding="utf-8")
-          )
-          status = str(manifest.get("status") or "")
-          artifact = str(manifest.get("artifactDigest") or "")
-          if status not in {"released", "rolled-back", "rollback-failed"}:
-              raise SystemExit(f"GATE_BLOCK: terminal release status is invalid: {status}")
-          if re.fullmatch(r"sha256:[0-9a-f]{64}", artifact) is None:
-              raise SystemExit("GATE_BLOCK: terminal release evidence digest is invalid")
-          print(f"status={status}")
-          print(f"artifact_digest={artifact}")
-          prod_receipt = (manifest.get("environmentReceipts") or {}).get("prod") or {}
-          verified_at = str(prod_receipt.get("verifiedAt") or "")
-          if not verified_at:
-              raise SystemExit("GATE_BLOCK: terminal Prod receipt has no hosted verification timestamp")
-          print(f"fully_verified_at={verified_at}")
-          PY
-      - id: terminal_bundle
-        name: Publish immutable terminal ReleaseEvidenceManifest
-        if: ${{ always() && needs.prepare.outputs.dry_run != 'true' && steps.terminal_receipts.outcome == 'success' }}
-        uses: docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25
-        with:
-          context: ${{ env.QWQ_OUTPUT_ROOT }}/env/repo/local/ci-packages/process/service/release-evidence-manifest
-          file: quwoquan_ops/cli/prod/release_artifact.Dockerfile
-          platforms: linux/amd64
-          push: true
-          tags: ghcr.io/${{ github.repository }}/release-artifact:terminal-${{ github.run_id }}
-          sbom: true
-          provenance: mode=max
-      - id: terminal_bundle_ref
-        name: Record exact terminal ReleaseEvidenceManifest OCI ref
-        if: ${{ always() && needs.prepare.outputs.dry_run != 'true' && steps.terminal_bundle.outcome == 'success' }}
-        run: |
-          echo "ref=ghcr.io/${{ github.repository }}/release-artifact@${{ steps.terminal_bundle.outputs.digest }}" >> "$GITHUB_OUTPUT"
-      - name: Extract released terminal SPDX SBOM
-        if: ${{ always() && steps.terminal_bundle.outcome == 'success' && steps.terminal_receipts.outputs.status == 'released' }}
-        run: |
-          python3 quwoquan_ops/cli/prod/oci_supply_chain.py extract-sbom \
-            --ref "${{ steps.terminal_bundle_ref.outputs.ref }}" \
-            --output "$RUNNER_TEMP/terminal-release-artifact.spdx.json"
-      - name: Sign released terminal provenance with GitHub OIDC
-        if: ${{ always() && steps.terminal_bundle.outcome == 'success' && steps.terminal_receipts.outputs.status == 'released' }}
-        uses: actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6
-        with:
-          subject-name: ghcr.io/${{ github.repository }}/release-artifact
-          subject-digest: ${{ steps.terminal_bundle.outputs.digest }}
-          push-to-registry: true
-      - name: Sign released terminal SBOM with GitHub OIDC
-        if: ${{ always() && steps.terminal_bundle.outcome == 'success' && steps.terminal_receipts.outputs.status == 'released' }}
-        uses: actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6
-        with:
-          subject-name: ghcr.io/${{ github.repository }}/release-artifact
-          subject-digest: ${{ steps.terminal_bundle.outputs.digest }}
-          sbom-path: ${{ runner.temp }}/terminal-release-artifact.spdx.json
-          push-to-registry: true
-      - name: Verify released terminal OIDC identity and closure
-        if: ${{ always() && steps.terminal_bundle.outcome == 'success' && steps.terminal_receipts.outputs.status == 'released' }}
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          python3 quwoquan_ops/cli/prod/oci_supply_chain.py verify \
-            --ref "${{ steps.terminal_bundle_ref.outputs.ref }}" \
-            --repository "${{ github.repository }}" \
-            --signer-workflow "${{ github.repository }}/.github/workflows/deploy-prod-auto.yml" \
-            --source-digest "${{ needs.prepare.outputs.head_sha }}"
-      - name: Preserve terminal evidence but fail a non-release outcome
-        if: ${{ always() && needs.prepare.outputs.dry_run != 'true' && steps.terminal_bundle.outcome == 'success' && steps.terminal_receipts.outputs.status != 'released' }}
-        run: |
-          echo "::error::Prod terminal evidence is ${{ steps.terminal_receipts.outputs.status }}; rollback evidence is preserved but promotion remains failed."
-          exit 1
-      - name: Upload prod transaction artifacts
-        if: ${{ failure() && !cancelled() }}
-        continue-on-error: true
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: controlled-prod-rollout
-          path: |
-            ${{ env.QWQ_OUTPUT_ROOT }}/env/prod/runs/**/summary.json
-            ${{ env.QWQ_OUTPUT_ROOT }}/env/prod/runs/**/report.json
-          if-no-files-found: ignore
-          compression-level: 0
-          retention-days: 3
-      - id: finish
-        if: always()
-        name: Finish prod transaction timer
-        run: |
-          echo "duration_seconds=$(( $(date +%s) - ${{ steps.start.outputs.started_at }} ))" >> "$GITHUB_OUTPUT"
-
-  prod_soak_acceptance:
-    name: Prod hosted soak authority
-    needs: [formal_prod_authority_preflight, prepare, prod_rollout]
-    if: ${{ needs.prepare.outputs.dry_run != 'true' && needs.prod_rollout.result == 'success' && needs.prod_rollout.outputs.release_status == 'released' }}
-    runs-on: [self-hosted, macOS, ARM64]
-    environment: production
-    timeout-minutes: 1500
-    permissions:
-      contents: read
-      packages: read
-    outputs:
-      receipt_id: ${{ steps.commit.outputs.receipt_id }}
-      readback_digest: ${{ steps.commit.outputs.readback_digest }}
-    env:
-      PROD_SSH_HOST: ${{ secrets.PROD_SSH_HOST }}
-      PROMETHEUS_URL: ${{ vars.PROD_PROMETHEUS_URL }}
-      ALERTMANAGER_URL: ${{ vars.PROD_ALERTMANAGER_URL }}
-      PROD_EDGE_SSH_KEY_REFERENCE: ${{ vars.PROD_EDGE_SSH_KEY_REFERENCE }}
-      PROD_EDGE_SSH_KEY_PUBLIC_DIGEST: ${{ vars.PROD_EDGE_SSH_KEY_PUBLIC_DIGEST }}
-      PROD_EDGE_SSH_KEY_ISSUER: ${{ vars.PROD_EDGE_SSH_KEY_ISSUER }}
-      PROD_EDGE_SSH_KEY_EXPIRES_AT: ${{ vars.PROD_EDGE_SSH_KEY_EXPIRES_AT }}
-      PROD_SERVICE_SSH_KEY_REFERENCE: ${{ vars.PROD_SERVICE_SSH_KEY_REFERENCE }}
-      PROD_SERVICE_SSH_KEY_PUBLIC_DIGEST: ${{ vars.PROD_SERVICE_SSH_KEY_PUBLIC_DIGEST }}
-      PROD_SERVICE_SSH_KEY_ISSUER: ${{ vars.PROD_SERVICE_SSH_KEY_ISSUER }}
-      PROD_SERVICE_SSH_KEY_EXPIRES_AT: ${{ vars.PROD_SERVICE_SSH_KEY_EXPIRES_AT }}
-    steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
-        with:
-          ref: ${{ needs.prepare.outputs.checkout_ref }}
-      - name: Materialize hosted soak SSH credentials
-        env:
-          EDGE_KEY_MATERIAL: ${{ secrets.PROD_EDGE_SSH_KEY }}
-          SERVICE_KEY_MATERIAL: ${{ secrets.PROD_SERVICE_SSH_KEY }}
-        run: |
-          set -euo pipefail
-          for binding in EDGE SERVICE; do
-            variable="${binding}_KEY_MATERIAL"
-            material="${!variable}"
-            if [[ -z "$material" || "$material" != *"PRIVATE KEY"* ]]; then
-              echo "::error::GATE_BLOCK: PROD_${binding}_SSH_KEY is missing or invalid"
-              exit 2
-            fi
-            if [[ "$binding" == "EDGE" ]]; then
-              key_file="$RUNNER_TEMP/prod-edge-ssh-key"
-            else
-              key_file="$RUNNER_TEMP/prod-service-ssh-key"
-            fi
-            (umask 077 && printf '%s\n' "$material" > "$key_file")
-            chmod 600 "$key_file"
-            echo "PROD_${binding}_SSH_KEY_FILE=$key_file" >> "$GITHUB_ENV"
-          done
-      - name: Login immutable release registry
-        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Materialize released terminal evidence
-        run: |
-          python3 quwoquan_ops/cli/prod/fetch_mainline_release_artifact.py \
-            --ref "${{ needs.prod_rollout.outputs.release_evidence_ref }}" \
-            --output-dir "$QWQ_OUTPUT_ROOT/env/repo/local/prod-soak/release-evidence"
-      - name: Fetch exact 100% stage hosted receipt
-        run: |
-          ROOT="$QWQ_OUTPUT_ROOT/env/repo/local/prod-soak/release-evidence"
-          RECEIPT_ID="$(python3 - "$ROOT/manifest.json" <<'PY'
-          import json
-          import sys
-          from pathlib import Path
-
-          manifest = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
-          if manifest.get("status") != "released":
-              raise SystemExit("GATE_BLOCK: prod soak requires released terminal evidence")
-          stage = (((manifest.get("rolloutReceipt") or {}).get("evidence") or {}).get("stages") or {}).get("100") or {}
-          receipt_id = str(stage.get("receiptId") or "")
-          if len(receipt_id) != 64:
-              raise SystemExit("GATE_BLOCK: released manifest lacks 100% hosted receipt")
-          print(receipt_id)
-          PY
-          )"
-          bash quwoquan_ops/cli/prod/sync_prod_plane_stack.sh \
-            --plane service \
-            --operation release-ledger-receipt \
-            --service prod-stack \
-            --receipt-id "$RECEIPT_ID" \
-            --output-path "$QWQ_OUTPUT_ROOT/env/repo/local/prod-soak/100-readback.json"
-      - name: Observe authoritative soak window
-        run: |
-          python3 quwoquan_ops/ci/collect_prod_soak_observations.py \
-            --full-readback "$QWQ_OUTPUT_ROOT/env/repo/local/prod-soak/100-readback.json" \
-            --service prod-stack \
-            --prometheus-url "$PROMETHEUS_URL" \
-            --alertmanager-url "$ALERTMANAGER_URL" \
-            --soak-policy quwoquan_ops/policies/config-release/slo_thresholds.yaml \
-            --health-report-dir "$QWQ_OUTPUT_ROOT/env/prod/runs/hosted-soak-health" \
-            --slo-output "$QWQ_OUTPUT_ROOT/env/repo/local/prod-soak/slo.json" \
-            --alerts-output "$QWQ_OUTPUT_ROOT/env/repo/local/prod-soak/alerts.json"
-      - name: Verify expiring credential references without secret material
-        run: |
-          python3 quwoquan_ops/cli/prod/validate_prod_plane_credentials.py \
-            --stage 100 \
-            --evidence-output "$QWQ_OUTPUT_ROOT/env/repo/local/prod-soak/credentials.json"
-      - name: Bind reviewed mainline approval to released artifact
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          ROOT="$QWQ_OUTPUT_ROOT/env/repo/local/prod-soak/release-evidence"
-          python3 quwoquan_ops/ci/verify_release_governance.py \
-            --repository "${{ github.repository }}" \
-            --release-manifest "$ROOT/manifest.json" \
-            --minimum-approvals 1 \
-            --output "$ROOT/governance-receipt.json"
-      - name: Render canonical hosted soak request
-        run: |
-          ROOT="$QWQ_OUTPUT_ROOT/env/repo/local/prod-soak/release-evidence"
-          python3 quwoquan_ops/ci/render_release_lifecycle_receipts.py prod-soak-request \
-            --manifest "$ROOT/manifest.json" \
-            --service prod-stack \
-            --full-readback "$QWQ_OUTPUT_ROOT/env/repo/local/prod-soak/100-readback.json" \
-            --slo-observation "$QWQ_OUTPUT_ROOT/env/repo/local/prod-soak/slo.json" \
-            --alerts-observation "$QWQ_OUTPUT_ROOT/env/repo/local/prod-soak/alerts.json" \
-            --health-report "$QWQ_OUTPUT_ROOT/env/prod/runs/hosted-soak-health/report.json" \
-            --credential-evidence "$QWQ_OUTPUT_ROOT/env/repo/local/prod-soak/credentials.json" \
-            --credential-policy quwoquan_ops/environments/prod/access-isolation.yaml \
-            --governance-receipt "$ROOT/governance-receipt.json" \
-            --soak-policy quwoquan_ops/policies/config-release/slo_thresholds.yaml \
-            --output "$QWQ_OUTPUT_ROOT/env/repo/local/prod-soak/request.json"
-      - id: commit
-        name: Commit and read back immutable hosted soak receipt
-        run: |
-          REQUEST="$QWQ_OUTPUT_ROOT/env/repo/local/prod-soak/request.json"
-          COMMITTED="$QWQ_OUTPUT_ROOT/env/repo/local/prod-soak/committed-readback.json"
-          READBACK="$QWQ_OUTPUT_ROOT/env/repo/local/prod-soak/remote-readback.json"
-          bash quwoquan_ops/cli/prod/sync_prod_plane_stack.sh \
-            --plane service \
-            --operation release-ledger-soak-commit \
-            --service prod-stack \
-            --request-path "$REQUEST" \
-            --output-path "$COMMITTED"
-          RECEIPT_ID="$(python3 - "$COMMITTED" <<'PY'
-          import json
-          import sys
-          from pathlib import Path
-          print(json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))["receipt"]["receiptId"])
-          PY
-          )"
-          bash quwoquan_ops/cli/prod/sync_prod_plane_stack.sh \
-            --plane service \
-            --operation release-ledger-soak-receipt \
-            --service prod-stack \
-            --receipt-id "$RECEIPT_ID" \
-            --output-path "$READBACK"
-          cmp "$COMMITTED" "$READBACK"
-          python3 - "$READBACK" <<'PY' >> "$GITHUB_OUTPUT"
-          import hashlib
-          import json
-          import sys
-          from pathlib import Path
-
-          raw = Path(sys.argv[1]).read_bytes()
-          payload = json.loads(raw)
-          print(f"receipt_id={payload['receipt']['receiptId']}")
-          print(f"readback_digest=sha256:{hashlib.sha256(raw).hexdigest()}")
-          PY
-
-  mainline_summary:
-    name: 07. Deploy To Prod (Controlled)
-    needs:
-      - formal_prod_authority_preflight
-      - source_context
-      - service_pipeline
-      - app_pipeline
-      - prepare
-      - delivery_gate
-      - alpha_local
-      - beta_device_matrix
-      - gamma_local
-      - preprod_evidence
-      - prod_rollout
-      - prod_soak_acceptance
-    if: ${{ always() && needs.source_context.result == 'success' }}
+  prod_activation_admission:
+    name: Admit stable tag and exact OCI material
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    environment: production
     permissions:
       contents: read
-      actions: read
       packages: write
+      id-token: write
+      attestations: read
+    outputs:
+      admission_ref: ${{ steps.publish.outputs.admission_ref }}
+      admission_digest: ${{ steps.admit.outputs.admission_digest }}
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
-          ref: ${{ needs.source_context.outputs.source_git_sha || github.sha }}
-      - id: workflow_timing
-        name: Read authoritative workflow timing
+          ref: ${{ github.workflow_sha }}
+          persist-credentials: false
+      - uses: oras-project/setup-oras@1d808f7d7f6995cc68b7bf507bfe5c5446e1dc9d
+        with: {version: 1.3.3}
+      - id: admit
+        name: Materialize exact stable AdmissionFact graph and admit Prod
         env:
+          STORE: ${{ runner.temp }}/release-control
+          TAG_FACT: ${{ inputs.release_tag_admission_ref }}
+          PREVIOUS_FACT: ${{ inputs.previous_active_released_ledger_ref }}
+          ROLLBACK_FACT: ${{ inputs.rollback_readiness_ref }}
           GITHUB_TOKEN: ${{ github.token }}
-          SERVICE_PIPELINE_MACHINE_SECONDS: ${{ needs.service_pipeline.outputs.machine_critical_path_seconds }}
-          APP_PIPELINE_MACHINE_SECONDS: ${{ needs.app_pipeline.outputs.machine_critical_path_seconds }}
-          DELIVERY_GATE_MACHINE_SECONDS: ${{ needs.delivery_gate.outputs.machine_critical_path_seconds }}
-          BETA_MATRIX_MACHINE_SECONDS: ${{ needs.beta_device_matrix.outputs.machine_critical_path_seconds }}
-        run: |
-          REQUIRED=(SERVICE_PIPELINE_MACHINE_SECONDS APP_PIPELINE_MACHINE_SECONDS DELIVERY_GATE_MACHINE_SECONDS BETA_MATRIX_MACHINE_SECONDS)
-          for name in "${REQUIRED[@]}"; do
-            if [[ ! "${!name}" =~ ^[0-9]+$ ]]; then
-              echo "::error::GATE_BLOCK: reusable workflow timing is missing or invalid: ${name}"
-              exit 2
-            fi
-          done
-          python3 quwoquan_ops/ci/github_actions_timing.py \
-            --repository "${{ github.repository }}" \
-            --run-id "${{ github.run_id }}" \
-            --phase "source_context=Resolve exact mainline source" \
-            --phase "prepare=Seal canonical candidate and prepare promotion" \
-            --phase "alpha_stage=Alpha local stage" \
-            --phase "gamma_local=Gamma-local release-fast stage" \
-            --phase "preprod_evidence=Accept Alpha then Beta then Gamma receipts" \
-            --phase "prod_rollout_transaction=Prod rollout transaction" \
-            --external-phase "service_pipeline=${SERVICE_PIPELINE_MACHINE_SECONDS}" \
-            --external-phase "app_pipeline=${APP_PIPELINE_MACHINE_SECONDS}" \
-            --external-phase "delivery_gate=${DELIVERY_GATE_MACHINE_SECONDS}" \
-            --external-phase "beta_device_matrix=${BETA_MATRIX_MACHINE_SECONDS}" \
-            --require-count "source_context=1" \
-            --require-count "prepare=1" \
-            --require-count "alpha_stage=1" \
-            --require-count "gamma_local=1" \
-            --require-count "preprod_evidence=1" \
-            --require-count "prod_rollout_transaction=1" \
-            --dag-layer "source_context" \
-            --dag-layer "service_pipeline,app_pipeline,delivery_gate" \
-            --dag-layer "prepare" \
-            --dag-layer "alpha_stage,beta_device_matrix,gamma_local" \
-            --dag-layer "preprod_evidence" \
-            --dag-layer "prod_rollout_transaction" \
-            --candidate-job "Seal canonical candidate and prepare promotion" \
-            --prod-job "Prod rollout transaction" \
-            --critical-start run \
-            --github-output "$GITHUB_OUTPUT"
-      - name: Render canonical release timing summary
-        if: ${{ steps.workflow_timing.outcome == 'success' }}
-        env:
-          SOURCE_CONTEXT_SECONDS: ${{ steps.workflow_timing.outputs.phase_source_context }}
-          SERVICE_PIPELINE_SECONDS: ${{ steps.workflow_timing.outputs.phase_service_pipeline }}
-          APP_PIPELINE_SECONDS: ${{ steps.workflow_timing.outputs.phase_app_pipeline }}
-          DELIVERY_GATE_SECONDS: ${{ steps.workflow_timing.outputs.phase_delivery_gate }}
-          PREPARE_SECONDS: ${{ steps.workflow_timing.outputs.phase_prepare }}
-          ALPHA_SECONDS: ${{ steps.workflow_timing.outputs.phase_alpha_stage }}
-          BETA_SECONDS: ${{ steps.workflow_timing.outputs.phase_beta_device_matrix }}
-          GAMMA_SECONDS: ${{ steps.workflow_timing.outputs.phase_gamma_local }}
-          PREPROD_SECONDS: ${{ steps.workflow_timing.outputs.phase_preprod_evidence }}
-          PROD_SECONDS: ${{ steps.workflow_timing.outputs.phase_prod_rollout_transaction }}
-          MACHINE_CRITICAL_PATH_SECONDS: ${{ steps.workflow_timing.outputs.machine_critical_path_seconds }}
-          RUN_CREATED_AT: ${{ steps.workflow_timing.outputs.run_created_at }}
-          CANDIDATE_READY_AT: ${{ steps.workflow_timing.outputs.candidate_ready_at }}
-          APPROVAL_REQUESTED_AT: ${{ steps.workflow_timing.outputs.approval_requested_at }}
-          APPROVAL_APPROVED_AT: ${{ steps.workflow_timing.outputs.approval_approved_at }}
-          PROD_COMPLETED_AT: ${{ steps.workflow_timing.outputs.prod_completed_at }}
-          PROD_FULLY_VERIFIED_AT: ${{ needs.prod_rollout.outputs.fully_verified_at }}
-          QUEUE_SECONDS: ${{ steps.workflow_timing.outputs.queue_seconds }}
-          UPSTREAM_MISSING_EVIDENCE: ${{ steps.workflow_timing.outputs.missing_evidence }}
-          SETUP_SECONDS: ${{ steps.workflow_timing.outputs.setup_seconds }}
-          EXECUTION_SECONDS: ${{ steps.workflow_timing.outputs.execution_seconds }}
-          HUMAN_DECISION_WAIT_SECONDS: ${{ steps.workflow_timing.outputs.human_decision_wait_seconds }}
-          APPROVAL_WAIT_SECONDS: ${{ steps.workflow_timing.outputs.approval_wait_seconds }}
-          APPROVAL_EVIDENCE_REASON: ${{ steps.workflow_timing.outputs.approval_evidence_reason }}
-          CALENDAR_SECONDS: ${{ steps.workflow_timing.outputs.calendar_lead_time_seconds }}
-          CANDIDATE_DIGEST: ${{ needs.prepare.outputs.candidate_digest }}
-          DRY_RUN: ${{ needs.prepare.outputs.dry_run }}
-          RELEASE_STATUS: ${{ needs.prod_rollout.outputs.release_status }}
-          SOFT_BUDGET_SECONDS: ${{ needs.prepare.outputs.soft_budget_seconds }}
-          HARD_FAIL_SECONDS: ${{ needs.prepare.outputs.hard_fail_seconds }}
-          SOURCE_CONTEXT_RESULT: ${{ needs.source_context.result }}
-          SERVICE_PIPELINE_RESULT: ${{ needs.service_pipeline.result }}
-          APP_PIPELINE_RESULT: ${{ needs.app_pipeline.result }}
-          PREPARE_RESULT: ${{ needs.prepare.result }}
-          DELIVERY_GATE_RESULT: ${{ needs.delivery_gate.result }}
-          ALPHA_RESULT: ${{ needs.alpha_local.result }}
-          BETA_RESULT: ${{ needs.beta_device_matrix.result }}
-          GAMMA_RESULT: ${{ needs.gamma_local.result }}
-          PREPROD_RESULT: ${{ needs.preprod_evidence.result }}
-          PROD_RESULT: ${{ needs.prod_rollout.result }}
-        run: |
-          REQUIRED_UPSTREAM_RESULTS=(
-            SOURCE_CONTEXT_RESULT SERVICE_PIPELINE_RESULT APP_PIPELINE_RESULT
-            PREPARE_RESULT DELIVERY_GATE_RESULT ALPHA_RESULT BETA_RESULT
-            GAMMA_RESULT PREPROD_RESULT
-          )
-          for name in "${REQUIRED_UPSTREAM_RESULTS[@]}"; do
-            if [[ "${!name}" != "success" ]]; then
-              echo "::error::GATE_BLOCK: canonical complete timing requires successful upstream job ${name}; got ${!name}"
-              exit 2
-            fi
-          done
-          if [[ "$PROD_RESULT" != "success" && ! "$RELEASE_STATUS" =~ ^(rolled-back|rollback-failed)$ ]]; then
-            echo "::error::GATE_BLOCK: failed Prod job has no canonical terminal release outcome"
-            exit 2
-          fi
-          REQUIRED=(
-            SOURCE_CONTEXT_SECONDS SERVICE_PIPELINE_SECONDS APP_PIPELINE_SECONDS
-            DELIVERY_GATE_SECONDS PREPARE_SECONDS ALPHA_SECONDS BETA_SECONDS
-            GAMMA_SECONDS PREPROD_SECONDS PROD_SECONDS MACHINE_CRITICAL_PATH_SECONDS
-            RUN_CREATED_AT CANDIDATE_READY_AT PROD_COMPLETED_AT
-            CALENDAR_SECONDS CANDIDATE_DIGEST APPROVAL_EVIDENCE_REASON
-          )
-          for name in "${REQUIRED[@]}"; do
-            if [[ -z "${!name}" ]]; then
-              echo "::error::GATE_BLOCK: canonical mainline timing is missing ${name}"
-              exit 2
-            fi
-          done
-          PROD_TIMESTAMP_ARGS=()
-          if [ "${DRY_RUN}" != "true" ]; then
-            if [[ -z "$PROD_FULLY_VERIFIED_AT" ]]; then
-              echo "::error::GATE_BLOCK: hosted terminal Prod verification timestamp is missing"
-              exit 2
-            fi
-            if [[ ! "$RELEASE_STATUS" =~ ^(released|rolled-back|rollback-failed)$ ]]; then
-              echo "::error::GATE_BLOCK: hosted terminal release status is missing or invalid"
-              exit 2
-            fi
-            PROD_TIMESTAMP_ARGS+=(--prod-fully-verified-at "${PROD_FULLY_VERIFIED_AT}")
-            RELEASE_OUTCOME="$RELEASE_STATUS"
-          else
-            RELEASE_OUTCOME="dry-run"
-          fi
-          APPROVAL_TIMESTAMP_ARGS=()
-          if [[ -n "$APPROVAL_REQUESTED_AT" ]]; then
-            APPROVAL_TIMESTAMP_ARGS+=(--approval-requested-at "$APPROVAL_REQUESTED_AT")
-          fi
-          if [[ -n "$APPROVAL_APPROVED_AT" ]]; then
-            APPROVAL_TIMESTAMP_ARGS+=(--approval-approved-at "$APPROVAL_APPROVED_AT")
-          fi
-          DURATION_ARGS=(--calendar-lead-time-seconds "$CALENDAR_SECONDS")
-          EVIDENCE_ARGS=()
-          NOTE_ARGS=()
-          if [[ -n "$QUEUE_SECONDS" ]]; then DURATION_ARGS+=(--queue-seconds "$QUEUE_SECONDS"); fi
-          if [[ -n "$UPSTREAM_MISSING_EVIDENCE" ]]; then
-            EVIDENCE_ARGS+=(--missing-evidence "$UPSTREAM_MISSING_EVIDENCE")
-            NOTE_ARGS+=(--note "GitHub Jobs API omitted created_at for one or more matched jobs; queue duration is absent and no zero or substitute timestamp was used.")
-          fi
-          if [[ -n "$SETUP_SECONDS" ]]; then DURATION_ARGS+=(--setup-seconds "$SETUP_SECONDS"); fi
-          if [[ -n "$EXECUTION_SECONDS" ]]; then DURATION_ARGS+=(--execution-seconds "$EXECUTION_SECONDS"); fi
-          if [[ -n "$HUMAN_DECISION_WAIT_SECONDS" ]]; then DURATION_ARGS+=(--human-decision-wait-seconds "$HUMAN_DECISION_WAIT_SECONDS"); fi
-          if [[ -n "$APPROVAL_WAIT_SECONDS" ]]; then DURATION_ARGS+=(--approval-wait-seconds "$APPROVAL_WAIT_SECONDS"); fi
-          python3 quwoquan_ops/ci/render_ci_timing_summary.py \
-            --gate-key 07.mainline_auto_prod \
-            --title "07. Deploy To Prod (Controlled)" \
-            --source-git-sha "${{ needs.prepare.outputs.head_sha }}" \
-            --candidate-digest "${CANDIDATE_DIGEST}" \
-            --machine-critical-path-seconds "${MACHINE_CRITICAL_PATH_SECONDS}" \
-            --critical-path-source github_run_calendar \
-            --release-outcome "$RELEASE_OUTCOME" \
-            --run-created-at "${RUN_CREATED_AT}" \
-            --candidate-ready-at "${CANDIDATE_READY_AT}" \
-            "${APPROVAL_TIMESTAMP_ARGS[@]}" \
-            "${PROD_TIMESTAMP_ARGS[@]}" \
-            "${DURATION_ARGS[@]}" \
-            "${EVIDENCE_ARGS[@]}" \
-            "${NOTE_ARGS[@]}" \
-            --phase "source_context=${SOURCE_CONTEXT_SECONDS}" \
-            --phase "service_pipeline=${SERVICE_PIPELINE_SECONDS}" \
-            --phase "app_pipeline=${APP_PIPELINE_SECONDS}" \
-            --phase "delivery_gate=${DELIVERY_GATE_SECONDS}" \
-            --phase "prepare=${PREPARE_SECONDS}" \
-            --phase "alpha_stage=${ALPHA_SECONDS}" \
-            --phase "beta_device_matrix=${BETA_SECONDS}" \
-            --phase "gamma_local=${GAMMA_SECONDS}" \
-            --phase "preprod_evidence=${PREPROD_SECONDS}" \
-            --phase "prod_rollout_transaction=${PROD_SECONDS}" \
-            --note "Alpha/Beta/Gamma run in isolated fanout; Prod is one approved canary/5/20/50/100 transaction. Dry-run validates canary only and does not fabricate later ledger state." \
-            --note "${APPROVAL_EVIDENCE_REASON}" \
-            --write-json "$QWQ_OUTPUT_ROOT/env/repo/runs/ci-timing/ci-timing-summary.json" \
-            --write-step-summary
-          if [ "${CALENDAR_SECONDS}" -gt "${HARD_FAIL_SECONDS}" ]; then
-            echo "::error::mainline end-to-end time ${CALENDAR_SECONDS}s exceeds the ${HARD_FAIL_SECONDS}s hard gate"
-            exit 1
-          elif [ "${CALENDAR_SECONDS}" -gt "${SOFT_BUDGET_SECONDS}" ]; then
-            echo "::warning::RELEASED_OVER_SOFT_BUDGET: mainline end-to-end time ${CALENDAR_SECONDS}s exceeds ${SOFT_BUDGET_SECONDS}s"
-          fi
-          if [[ "$DRY_RUN" != "true" ]]; then
-            if [[ -z "$APPROVAL_REQUESTED_AT" || -z "$APPROVAL_APPROVED_AT" || -z "$APPROVAL_WAIT_SECONDS" || -z "$HUMAN_DECISION_WAIT_SECONDS" ]]; then
-              echo "::error::GATE_BLOCK: ${APPROVAL_EVIDENCE_REASON} Canonical summary remains historical_incomplete."
-              exit 2
-            fi
-          fi
-          if [[ -n "$UPSTREAM_MISSING_EVIDENCE" ]]; then
-            echo "::error::GATE_BLOCK: canonical mainline timing is historical_incomplete: ${UPSTREAM_MISSING_EVIDENCE}"
-            exit 2
-          fi
-      - name: Preserve canonical failure-path timing without fabrication
-        if: ${{ always() && !cancelled() }}
-        env:
-          CANDIDATE_DIGEST: ${{ needs.prepare.outputs.candidate_digest }}
-          SOURCE_CONTEXT_RESULT: ${{ needs.source_context.result }}
-          SERVICE_PIPELINE_RESULT: ${{ needs.service_pipeline.result }}
-          APP_PIPELINE_RESULT: ${{ needs.app_pipeline.result }}
-          PREPARE_RESULT: ${{ needs.prepare.result }}
-          DELIVERY_GATE_RESULT: ${{ needs.delivery_gate.result }}
-          ALPHA_RESULT: ${{ needs.alpha_local.result }}
-          BETA_RESULT: ${{ needs.beta_device_matrix.result }}
-          GAMMA_RESULT: ${{ needs.gamma_local.result }}
-          PREPROD_RESULT: ${{ needs.preprod_evidence.result }}
-          PROD_RESULT: ${{ needs.prod_rollout.result }}
-        run: |
-          SUMMARY="$QWQ_OUTPUT_ROOT/env/repo/runs/ci-timing/ci-timing-summary.json"
-          if [[ -s "$SUMMARY" ]]; then
-            echo "::notice::Canonical CiTimingSummary already exists; failure-path fallback will not overwrite it."
-            exit 0
-          fi
-          CANDIDATE_ARGS=()
-          if [[ "$CANDIDATE_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]; then
-            CANDIDATE_ARGS+=(--candidate-digest "$CANDIDATE_DIGEST")
-          fi
-          python3 quwoquan_ops/ci/render_ci_timing_summary.py \
-            --gate-key 07.mainline_auto_prod \
-            --title "07. Deploy To Prod (Controlled)" \
-            --workflow "${{ github.workflow }}" \
-            --workflow-run-id "${{ github.run_id }}" \
-            --source-git-sha "${{ github.sha }}" \
-            "${CANDIDATE_ARGS[@]}" \
-            --missing-evidence "workflowTiming.authoritativeDAG" \
-            --missing-evidence "upstreamJobs=${SOURCE_CONTEXT_RESULT},${SERVICE_PIPELINE_RESULT},${APP_PIPELINE_RESULT},${PREPARE_RESULT},${DELIVERY_GATE_RESULT},${ALPHA_RESULT},${BETA_RESULT},${GAMMA_RESULT},${PREPROD_RESULT},${PROD_RESULT}" \
-            --note "Failure-path evidence records only immutable GitHub run identity; unavailable timing, phase, candidate, approval, and Prod facts remain null or missing." \
-            --write-json "$SUMMARY" \
-            --write-step-summary
-      - name: Setup Buildx for canonical timing OCI
-        if: ${{ always() && !cancelled() }}
-        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
-        with:
-          version: v0.35.0
-          cache-binary: false
-          clean: false
-      - name: Login canonical timing registry
-        if: ${{ always() && !cancelled() }}
-        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      - id: timing_bundle
-        name: Publish canonical CiTimingSummary to immutable OCI
-        if: ${{ always() && !cancelled() }}
-        uses: docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25
-        with:
-          context: ${{ env.QWQ_OUTPUT_ROOT }}/env/repo/runs/ci-timing
-          file: quwoquan_ops/ci/ci_timing_summary.Dockerfile
-          platforms: linux/amd64
-          push: true
-          tags: ghcr.io/${{ github.repository }}/ci-timing-summary:run-${{ github.run_id }}-${{ github.run_attempt }}
-          sbom: true
-          provenance: mode=max
-      - id: timing_bundle_ref
-        name: Record exact CiTimingSummary OCI digest ref
-        if: ${{ always() && !cancelled() }}
-        env:
-          TIMING_EVIDENCE_DIGEST: ${{ steps.timing_bundle.outputs.digest }}
-        run: |
-          if [[ ! "$TIMING_EVIDENCE_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]; then
-            echo "::error::GATE_BLOCK: canonical timing OCI transport digest is missing or invalid"
-            exit 2
-          fi
-          TIMING_EVIDENCE_REF="ghcr.io/${{ github.repository }}/ci-timing-summary@${TIMING_EVIDENCE_DIGEST}"
-          echo "ref=$TIMING_EVIDENCE_REF" >> "$GITHUB_OUTPUT"
-          echo "digest=$TIMING_EVIDENCE_DIGEST" >> "$GITHUB_OUTPUT"
-      - name: Bind exact timing OCI into hosted append-only authority
-        if: ${{ always() && !cancelled() }}
-        env:
-          PROD_SSH_HOST: ${{ secrets.PROD_SSH_HOST }}
-          PROD_SERVICE_SSH_KEY: ${{ secrets.PROD_SERVICE_SSH_KEY }}
-          TIMING_EVIDENCE_REF: ${{ steps.timing_bundle_ref.outputs.ref }}
-          TIMING_EVIDENCE_DIGEST: ${{ steps.timing_bundle_ref.outputs.digest }}
-        run: |
-          python3 quwoquan_ops/ci/sync_hosted_ci_timing_ledger.py bind \
-            --summary "$QWQ_OUTPUT_ROOT/env/repo/runs/ci-timing/ci-timing-summary.json" \
-            --timing-evidence-ref "$TIMING_EVIDENCE_REF" \
-            --timing-evidence-digest "$TIMING_EVIDENCE_DIGEST" \
-            --output "$QWQ_OUTPUT_ROOT/env/repo/runs/ci-timing/hosted-bind-readback.json"
-      - name: Query hosted timing authority and verify readback
-        if: ${{ always() && !cancelled() }}
-        env:
-          PROD_SSH_HOST: ${{ secrets.PROD_SSH_HOST }}
-          PROD_SERVICE_SSH_KEY: ${{ secrets.PROD_SERVICE_SSH_KEY }}
-        run: |
-          python3 quwoquan_ops/ci/sync_hosted_ci_timing_ledger.py query \
-            --candidate-digest "${{ needs.prepare.outputs.candidate_digest }}" \
-            --workflow-run-id "${{ github.run_id }}" \
-            --output "$QWQ_OUTPUT_ROOT/env/repo/runs/ci-timing/hosted-query-readback.json"
-          if ! cmp -s \
-            "$QWQ_OUTPUT_ROOT/env/repo/runs/ci-timing/hosted-bind-readback.json" \
-            "$QWQ_OUTPUT_ROOT/env/repo/runs/ci-timing/hosted-query-readback.json"; then
-            echo "::error::GATE_BLOCK: hosted timing authority query differs from committed exact OCI binding"
-            exit 2
-          fi
-      - name: Upload diagnostic timing copy (non-authoritative)
-        if: ${{ failure() && !cancelled() }}
-        continue-on-error: true
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: controlled-prod-timing-summaries
-          path: |
-            ${{ env.QWQ_OUTPUT_ROOT }}/env/repo/runs/ci-timing/*.json
-          if-no-files-found: error
-          compression-level: 0
-          retention-days: 3
-      - name: Assert four-environment promotion chain
-        env:
-          DRY_RUN: ${{ needs.prepare.outputs.dry_run }}
-          DELIVERY_RESULT: ${{ needs.delivery_gate.outputs.summary_result }}
-          ALPHA_RESULT: ${{ needs.alpha_local.result }}
-          BETA_RESULT: ${{ needs.beta_device_matrix.outputs.summary_result }}
-          GAMMA_RESULT: ${{ needs.gamma_local.result }}
-          PROD_RESULT: ${{ needs.prod_rollout.result }}
-          PROD_RELEASE_STATUS: ${{ needs.prod_rollout.outputs.release_status }}
-          PROD_SOAK_RESULT: ${{ needs.prod_soak_acceptance.result }}
         run: |
           set -euo pipefail
-          fail=0
-          expect_success() {
-            local name="$1" value="$2" hint="$3"
-            if [ "${value}" != "success" ]; then
-              echo "::error::${name} expected success, got ${value}. ${hint}"
-              fail=1
-            fi
+          printf '%s' "$GITHUB_TOKEN" | oras login ghcr.io --username "${{ github.actor }}" --password-stdin
+          trap 'oras logout ghcr.io >/dev/null 2>&1 || true' EXIT
+          materialize_fact() {
+            name="$1"; exact_ref="$2"
+            [[ "$exact_ref" =~ ^ghcr\.io/[a-z0-9._/-]+@sha256:[0-9a-f]{64}$ ]]
+            python3 quwoquan_ops/ci/promotion_evidence.py materialize-oci \
+              --ref "$exact_ref" --output-file "$STORE/$exact_ref" >/dev/null
+            local_digest="sha256:$(python3 -c 'import hashlib,sys; print(hashlib.sha256(open(sys.argv[1], "rb").read()).hexdigest())' "$STORE/$exact_ref")"
+            printf '%s=%s\n' "$exact_ref" "$local_digest"
           }
-          expect_success "delivery_gate" "${DELIVERY_RESULT}" "检查 03 Delivery Gate"
-          expect_success "alpha_local" "${ALPHA_RESULT}" "检查 alpha-local package/up/health/verify"
-          expect_success "beta_device_matrix" "${BETA_RESULT}" "检查 beta-local self-hosted device matrix"
-          expect_success "gamma_local" "${GAMMA_RESULT}" "检查 gamma-local release-fast package/up/health/verify"
-          expect_success "prod_rollout" "${PROD_RESULT}" "检查单一 Prod 事务及真实 GATE_BLOCK"
-          if [[ "$DRY_RUN" != "true" ]]; then
-            expect_success "prod_soak_acceptance" "${PROD_SOAK_RESULT}" "检查真实 soak、告警、健康、凭据与审批 hosted readback"
-            if [[ "${PROD_RELEASE_STATUS}" != "released" ]]; then
-              echo "::error::prod_rollout terminal status expected released, got ${PROD_RELEASE_STATUS:-missing}. Rolled-back or rollback-failed evidence is preserved but cannot be promoted as green."
-              fail=1
+          TAG_EXACT="$(materialize_fact release-tag "$TAG_FACT")"
+          PREVIOUS_EXACT="$(materialize_fact previous-released "$PREVIOUS_FACT")"
+          ROLLBACK_EXACT="$(materialize_fact rollback-readiness "$ROLLBACK_FACT")"
+          python3 - "$STORE" "$TAG_FACT" <<'PY'
+          import hashlib, json, subprocess, sys
+          from pathlib import Path
+          store, tag_ref = Path(sys.argv[1]), sys.argv[2]
+          tag = json.loads((store / tag_ref).read_text(encoding="utf-8"))
+          original_tag_bytes = (store / tag_ref).read_bytes()
+          for field in ("qualificationFact", "candidateMaterialManifest"):
+              exact = tag.get(field)
+              ref = exact.get("ref") if isinstance(exact, dict) else None
+              digest = exact.get("digest") if isinstance(exact, dict) else None
+              if not isinstance(ref, str) or not ref.startswith("ghcr.io/") or not isinstance(digest, str):
+                  raise SystemExit(f"GATE_BLOCK: stable tag AdmissionFact {field} must be an exact OCI ref/digest")
+              if ref.rsplit("@", 1)[-1] != digest:
+                  raise SystemExit(f"GATE_BLOCK: stable tag AdmissionFact {field} OCI digest drifted")
+              destination = store / ref
+              destination.parent.mkdir(parents=True, exist_ok=True)
+              subprocess.run([
+                  "python3", "quwoquan_ops/ci/promotion_evidence.py", "materialize-oci",
+                  "--ref", ref, "--output-file", str(destination),
+              ], check=True)
+              if "sha256:" + hashlib.sha256(destination.read_bytes()).hexdigest() != digest:
+                  raise SystemExit(f"GATE_BLOCK: stable tag AdmissionFact {field} payload digest drifted")
+          if (store / tag_ref).read_bytes() != original_tag_bytes:
+              raise SystemExit("GATE_BLOCK: release tag AdmissionFact bytes mutated during materialization")
+          PY
+          RESULT="$(python3 -B quwoquan_ops/ci/release_control.py --store-root "$STORE" prod-admit \
+            --release-tag-admission "$TAG_EXACT" \
+            --previous-active-released-ledger "$PREVIOUS_EXACT" --rollback-readiness "$ROLLBACK_EXACT" \
+            --control-plane-git-sha "${{ github.workflow_sha }}" --admitted-at "${{ github.run_started_at }}")"
+          ADMISSION_LOCAL_REF="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["ref"])' <<<"$RESULT")"
+          ADMISSION_DIGEST="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["digest"])' <<<"$RESULT")"
+          {
+            echo "admission_local_ref=$ADMISSION_LOCAL_REF"
+            echo "admission_digest=$ADMISSION_DIGEST"
+          } >> "$GITHUB_OUTPUT"
+      - id: publish
+        name: Publish create-once ProdActivationAdmissionFact before canary
+        env:
+          STORE: ${{ runner.temp }}/release-control
+          ADMISSION_LOCAL_REF: ${{ steps.admit.outputs.admission_local_ref }}
+          ADMISSION_DIGEST: ${{ steps.admit.outputs.admission_digest }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test "sha256:$(python3 -c 'import hashlib,sys; print(hashlib.sha256(open(sys.argv[1], "rb").read()).hexdigest())' "$STORE/$ADMISSION_LOCAL_REF")" = "$ADMISSION_DIGEST"
+          printf '%s' "$GITHUB_TOKEN" | oras login ghcr.io --username "${{ github.actor }}" --password-stdin
+          trap 'oras logout ghcr.io >/dev/null 2>&1 || true' EXIT
+          python3 quwoquan_ops/ci/promotion_evidence.py publish-oci \
+            --fact-file "$STORE/$ADMISSION_LOCAL_REF" \
+            --repository "ghcr.io/${{ github.repository }}/prod-activation-admission" \
+            --transport-tag "run-${{ github.run_id }}-${{ github.run_attempt }}" > "$RUNNER_TEMP/prod-admission-oci.json"
+          EXACT_REF="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["exactRef"])' < "$RUNNER_TEMP/prod-admission-oci.json")"
+          [[ "$EXACT_REF" =~ ^ghcr\.io/[a-z0-9._/-]+@sha256:[0-9a-f]{64}$ ]]
+          echo "admission_ref=$EXACT_REF" >> "$GITHUB_OUTPUT"
+
+  prod_rollout:
+    name: Canary to 100 percent
+    needs: prod_activation_admission
+    runs-on: [self-hosted, macOS, ARM64]
+    timeout-minutes: 30
+    environment: production
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      released_fact_ref: ${{ steps.rollout.outputs.released_fact_ref }}
+      released_fact_digest: ${{ steps.rollout.outputs.released_fact_digest }}
+      full_stage_receipt_id: ${{ steps.rollout.outputs.full_stage_receipt_id }}
+    env:
+      QWQ_PROD_ROLLOUT_EVIDENCE_ROOT: ${{ vars.PROD_ROLLOUT_EVIDENCE_ROOT }}
+      PROMETHEUS_URL: ${{ vars.PROD_PROMETHEUS_URL }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          ref: ${{ github.workflow_sha }}
+          persist-credentials: false
+      - uses: oras-project/setup-oras@1d808f7d7f6995cc68b7bf507bfe5c5446e1dc9d
+        with: {version: 1.3.3}
+      - id: activation_input
+        name: Materialize exact activation graph and factory actual bytes
+        env:
+          ADMISSION_OCI_REF: ${{ needs.prod_activation_admission.outputs.admission_ref }}
+          ADMISSION_DIGEST: ${{ needs.prod_activation_admission.outputs.admission_digest }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          STORE="$RUNNER_TEMP/release-control"
+          ADMISSION_LOCAL_REF="activation-input.json"
+          [[ "$ADMISSION_OCI_REF" =~ ^ghcr\.io/[a-z0-9._/-]+@sha256:[0-9a-f]{64}$ ]]
+          [[ "$ADMISSION_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]
+          printf '%s' "$GITHUB_TOKEN" | oras login ghcr.io --username "${{ github.actor }}" --password-stdin
+          trap 'oras logout ghcr.io >/dev/null 2>&1 || true' EXIT
+          mkdir -p "$STORE/$(dirname "$ADMISSION_OCI_REF")"
+          python3 quwoquan_ops/ci/promotion_evidence.py materialize-oci \
+            --ref "$ADMISSION_OCI_REF" --output-file "$STORE/$ADMISSION_OCI_REF" >/dev/null
+          test "sha256:$(shasum -a 256 "$STORE/$ADMISSION_OCI_REF" | awk '{print $1}')" = "$ADMISSION_DIGEST"
+          while IFS=$'\t' read -r kind ref digest; do
+            test -n "$kind" && test -n "$ref" && test -n "$digest"
+            case "$kind" in
+              authority)
+                mkdir -p "$STORE/$(dirname "$ref")"
+                python3 quwoquan_ops/ci/promotion_evidence.py materialize-oci \
+                  --ref "$ref" --output-file "$STORE/$ref" >/dev/null
+                test "sha256:$(shasum -a 256 "$STORE/$ref" | awk '{print $1}')" = "$digest"
+                ;;
+              factory)
+                output_dir="$RUNNER_TEMP/prod-factory-material/${ref##*/}"
+                python3 quwoquan_ops/ci/materialize_evidence_oci.py \
+                  --ref "$ref" --expected-digest "$digest" --output-dir "$output_dir" \
+                  --require-file manifest.json
+                local_ref="factory-material/${ref##*/}/manifest.json"
+                mkdir -p "$STORE/$(dirname "$local_ref")"
+                cp "$output_dir/manifest.json" "$STORE/$local_ref"
+                local_digest="sha256:$(shasum -a 256 "$STORE/$local_ref" | awk '{print $1}')"
+                case "$ref" in
+                  */service-factory-material@*) factory_name="service" ;;
+                  */app-candidate-artifact@*) factory_name="app" ;;
+                  *) echo "::error::GATE_BLOCK: unknown factory OCI repository $ref"; exit 2 ;;
+                esac
+                printf '%s=%s\n' "$local_ref" "$local_digest" > "$RUNNER_TEMP/$factory_name-factory.exact"
+                ;;
+              *) echo "::error::GATE_BLOCK: unknown activation predecessor kind $kind"; exit 2 ;;
+            esac
+          done < <(python3 - "$STORE/$ADMISSION_OCI_REF" <<'PY'
+          import json, re, sys
+          fact = json.load(open(sys.argv[1], encoding="utf-8"))
+          exact_ref = re.compile(r"^ghcr\.io/[a-z0-9._/-]+@sha256:[0-9a-f]{64}$")
+          exact_digest = re.compile(r"^sha256:[0-9a-f]{64}$")
+          for field in ("releaseTagAdmission", "qualification", "candidateMaterialManifest", "previousActiveReleasedLedger", "rollbackReadiness"):
+              value = fact.get(field)
+              if not isinstance(value, dict) or set(value) != {"ref", "digest"} or exact_ref.fullmatch(str(value.get("ref", ""))) is None or exact_digest.fullmatch(str(value.get("digest", ""))) is None or value["ref"].rsplit("@", 1)[-1] != value["digest"]:
+                  raise SystemExit(f"GATE_BLOCK: ProdActivationAdmissionFact {field} is not exact OCI-bound evidence")
+              print("authority", value["ref"], value["digest"], sep="\t")
+          factories = fact.get("factoryMaterials")
+          if not isinstance(factories, dict) or set(factories) != {"service", "app"}:
+              raise SystemExit("GATE_BLOCK: ProdActivationAdmissionFact factory closure is incomplete")
+          for kind in ("service", "app"):
+              value = factories[kind]
+              if not isinstance(value, dict) or set(value) != {"ociRef", "ociDigest", "payloadDigest", "materialDigest"} or exact_ref.fullmatch(str(value.get("ociRef", ""))) is None or value["ociRef"].rsplit("@", 1)[-1] != value.get("ociDigest"):
+                  raise SystemExit(f"GATE_BLOCK: {kind} factory material locator drifted")
+              print("factory", value["ociRef"], value["ociDigest"], sep="\t")
+          PY
+          )
+          SERVICE_FACTORY_EXACT="$(cat "$RUNNER_TEMP/service-factory.exact")"
+          APP_FACTORY_EXACT="$(cat "$RUNNER_TEMP/app-factory.exact")"
+          python3 -B quwoquan_ops/ci/release_control.py --store-root "$STORE" prod-materialize-input \
+            --admission "$ADMISSION_OCI_REF=$ADMISSION_DIGEST" \
+            --service-factory-material "$SERVICE_FACTORY_EXACT" \
+            --app-factory-material "$APP_FACTORY_EXACT" \
+            --output "$STORE/$ADMISSION_LOCAL_REF" --github-output "$GITHUB_OUTPUT"
+          test -s "$STORE/$ADMISSION_LOCAL_REF"
+          python3 - "$STORE/$ADMISSION_LOCAL_REF" "$ADMISSION_OCI_REF" "$ADMISSION_DIGEST" "$GITHUB_OUTPUT" <<'PY'
+          import json, sys
+          path, admission_ref, admission_digest, github_output = sys.argv[1:]
+          envelope = json.load(open(path, encoding="utf-8"))
+          if envelope.get("prodActivationAdmission") != {"ref": admission_ref, "digest": admission_digest}:
+              raise SystemExit("GATE_BLOCK: materialized activation envelope admission binding drifted")
+          with open(github_output, "a", encoding="utf-8") as output:
+              output.write(f"admission_local_ref={path.rsplit('/', 1)[-1]}\n")
+          PY
+      # release_control prod-stage-append invokes append_prod_stage_attempt;
+      # prod-terminal-release invokes create_terminal_released_fact; a failed
+      # stackctl stage invokes prod-rollback/create_prod_rollback_fact.
+      - id: rollout
+        name: Execute canonical permanent rollout transaction
+        env:
+          FROM_CANDIDATE_DIGEST: ${{ steps.activation_input.outputs.from_candidate_digest }}
+          TO_CANDIDATE_DIGEST: ${{ steps.activation_input.outputs.candidate_digest }}
+          ADMISSION_LOCAL_REF: ${{ steps.activation_input.outputs.admission_local_ref }}
+          QWQ_PROD_ROLLOUT_EVIDENCE_ROOT: ${{ vars.PROD_ROLLOUT_EVIDENCE_ROOT }}
+        run: |
+          set -euo pipefail
+          STORE="$RUNNER_TEMP/release-control"
+          ADMISSION="${{ needs.prod_activation_admission.outputs.admission_ref }}"
+          ADMISSION_DIGEST="${{ needs.prod_activation_admission.outputs.admission_digest }}"
+          test -s "$STORE/$ADMISSION_LOCAL_REF"
+          printf '%s' "${{ github.token }}" | oras login ghcr.io --username "${{ github.actor }}" --password-stdin
+          trap 'oras logout ghcr.io >/dev/null 2>&1 || true' EXIT
+          PREDECESSOR=""
+          FULL_STAGE_RECEIPT_ID=""
+          PROMOTION_DEADLINE_EPOCH="$(( $(date +%s) + 1800 ))"
+          HARD_DEADLINE_EPOCH="$(( PROMOTION_DEADLINE_EPOCH + 300 ))"
+          for stage in canary 5 20 50 100; do
+            case "$stage" in canary) step=0 ;; 5|20|50|100) step="$stage" ;; esac
+            EVIDENCE="$QWQ_PROD_ROLLOUT_EVIDENCE_ROOT/$stage.json"
+            test -s "$EVIDENCE" || {
+              echo "::error::GATE_BLOCK: protected stage evidence is absent for $stage"
+              exit 2
+            }
+            REPORT_DIR="$RUNNER_TEMP/prod-stage-$stage"
+            set +e
+            python3 quwoquan_ops/cli/stackctl.py deploy --target prod-hosted \
+              --service prod-stack --stage "$stage" --step "$step" \
+              --from-candidate-digest "$FROM_CANDIDATE_DIGEST" \
+              --to-candidate-digest "$TO_CANDIDATE_DIGEST" \
+              --prod-activation-admission "$STORE/$ADMISSION_LOCAL_REF" \
+              --promotion-evidence "$EVIDENCE" \
+              --promotion-deadline-epoch "$PROMOTION_DEADLINE_EPOCH" \
+              --hard-deadline-epoch "$HARD_DEADLINE_EPOCH" \
+              --rollback-budget-seconds 300 \
+              --report-dir "$REPORT_DIR"
+            STACKCTL_STATUS="$?"
+            set -e
+            if [[ "$STACKCTL_STATUS" -ne 0 ]]; then
+              ROLLBACK_ARGS=()
+              while IFS= read -r arg; do ROLLBACK_ARGS+=("$arg"); done < <(python3 - "$REPORT_DIR/report.json" "$STORE" "$ADMISSION" "$stage" <<'PY'
+          import hashlib, json, sys
+          from pathlib import Path
+          report_path, store, admission_ref, stage = Path(sys.argv[1]), Path(sys.argv[2]), sys.argv[3], sys.argv[4]
+          report = json.loads(report_path.read_text(encoding="utf-8"))
+          exact_admission = {"ref": admission_ref, "digest": "sha256:" + hashlib.sha256((store / admission_ref).read_bytes()).hexdigest()}
+          sources = {"activation": report.get("releaseState") or {}, "health": report.get("rollbackPostChecks") or [], "readback": report.get("rollback") or {}}
+          for kind, source in sources.items():
+              body = {"schema": f"quwoquan_ops.prod_rollback_{kind}_evidence.v1", "admission": exact_admission, "stage": stage, "status": "passed", "rollbackTarget": json.loads((store / admission_ref).read_text())["previousActiveReleasedLedger"], "ociDigests": json.loads((store / admission_ref).read_text())["previousOciDigests"], "source": source}
+              encoded = json.dumps(body, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode() + b"\n"
+              path = store / "prod" / "rollback-evidence" / stage / f"{kind}.json"
+              path.parent.mkdir(parents=True, exist_ok=True); path.write_bytes(encoded)
+              print(f"--{kind}"); print(f"{path.relative_to(store).as_posix()}=sha256:{hashlib.sha256(encoded).hexdigest()}")
+          PY
+              )
+              FAILED_ARGS=()
+              while IFS= read -r arg; do FAILED_ARGS+=("$arg"); done < <(python3 - "$REPORT_DIR/report.json" "$STORE" "$ADMISSION" "$stage" <<'PY'
+          import hashlib, json, sys
+          from pathlib import Path
+          report_path, store, admission_ref, stage = Path(sys.argv[1]), Path(sys.argv[2]), sys.argv[3], sys.argv[4]
+          report = json.loads(report_path.read_text(encoding="utf-8"))
+          exact_admission = {"ref": admission_ref, "digest": "sha256:" + hashlib.sha256((store / admission_ref).read_bytes()).hexdigest()}
+          root = store / "prod" / "runtime-evidence" / stage
+          receipt_id = str(report.get("releaseReceiptId") or "")
+          hosted_payload = {"schema": "prod-hosted-release-receipt-readback", "authority": str(report.get("releaseReceiptAuthority") or ""), "receipt": report.get("hostedReceipt") or {}, "receiptRef": str(report.get("releaseReceiptRef") or "")}
+          if hosted_payload["authority"] != "prod-hosted-service-plane" or hosted_payload["receiptRef"] != f"receipt:hosted:{receipt_id}" or not hosted_payload["receipt"]:
+              raise SystemExit(f"GATE_BLOCK: failed stage {stage} lacks hosted receipt bytes")
+          hosted_encoded = json.dumps(hosted_payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode() + b"\n"
+          hosted_path = root / "failed-hosted-receipt-readback.json"; hosted_path.parent.mkdir(parents=True, exist_ok=True); hosted_path.write_bytes(hosted_encoded)
+          print(f"--hosted-receipt-readback"); print(f"{hosted_path.relative_to(store).as_posix()}=sha256:{hashlib.sha256(hosted_encoded).hexdigest()}")
+          for kind, source in {"activation": report.get("releaseState") or {}, "health": report.get("postDeployChecks") or [], "slo": report.get("sloReadback") or {}, "placement": report.get("wiredWorkloads") or [], "readback": report}.items():
+              body = {"schema": f"quwoquan_ops.prod_{kind}_evidence.v1", "admission": exact_admission, "stage": stage, "status": "failed", "source": source}
+              encoded = json.dumps(body, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode() + b"\n"
+              path = root / f"failed-{kind}.json"; path.parent.mkdir(parents=True, exist_ok=True); path.write_bytes(encoded)
+              print(f"--{kind}"); print(f"{path.relative_to(store).as_posix()}=sha256:{hashlib.sha256(encoded).hexdigest()}")
+          PY
+              )
+              PREDECESSOR_ARGS=(); if [[ -n "$PREDECESSOR" ]]; then PREDECESSOR_ARGS=(--predecessor "$PREDECESSOR"); fi
+              FAILED_HOSTED_READBACK="${FAILED_ARGS[1]}"
+              FAILED_EVIDENCE_ARGS=("${FAILED_ARGS[@]:2}")
+              FAILED_RESULT="$(python3 -B quwoquan_ops/ci/release_control.py --store-root "$STORE" prod-stage-append \
+                --admission "$ADMISSION=$ADMISSION_DIGEST" --stage "$stage" --status failed \
+                "${FAILED_EVIDENCE_ARGS[@]}" --hosted-receipt-readback "$FAILED_HOSTED_READBACK" \
+                "${PREDECESSOR_ARGS[@]}" --recorded-at "$(date -u +%Y-%m-%dT%H:%M:%SZ)")"
+              FAILED_REF="$(python3 -c 'import json,sys; v=json.load(sys.stdin); print(v["ref"]+"="+v["digest"])' <<<"$FAILED_RESULT")"
+              python3 -B quwoquan_ops/ci/release_control.py --store-root "$STORE" prod-rollback \
+                --admission "$ADMISSION=$ADMISSION_DIGEST" --failed-attempt "$FAILED_REF" \
+                "${ROLLBACK_ARGS[@]}" --hosted-receipt-readback "$FAILED_HOSTED_READBACK" \
+                --rolled-back-at "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+              exit "$STACKCTL_STATUS"
             fi
-          elif [[ "$PROD_SOAK_RESULT" != "skipped" ]]; then
-            echo "::error::automatic dry-run must not execute Prod soak; got ${PROD_SOAK_RESULT}"
-            fail=1
-          fi
-          if [ "${fail}" -ne 0 ]; then
-            exit 1
-          fi
+            ARGS=()
+            while IFS= read -r arg; do ARGS+=("$arg"); done < <(python3 - "$REPORT_DIR/report.json" "$STORE" "$ADMISSION" "$stage" <<'PY'
+          import hashlib, json, sys
+          from pathlib import Path
+
+          report_path, store, admission_ref, stage = Path(sys.argv[1]), Path(sys.argv[2]), sys.argv[3], sys.argv[4]
+          report = json.loads(report_path.read_text(encoding="utf-8"))
+          if report.get("exitCode") != 0 or report.get("rolloutDecision") != "continue":
+              raise SystemExit(f"GATE_BLOCK: stage {stage} did not produce a successful hosted transition")
+          exact_admission = {"ref": admission_ref, "digest": "sha256:" + hashlib.sha256((store / admission_ref).read_bytes()).hexdigest()}
+          evidence_root = store / "prod" / "runtime-evidence" / stage
+          hosted_ref = str(report.get("releaseReceiptRef") or "")
+          receipt_id = str(report.get("releaseReceiptId") or "")
+          if hosted_ref != f"receipt:hosted:{receipt_id}" or len(receipt_id) != 64:
+              raise SystemExit(f"GATE_BLOCK: stage {stage} lacks exact hosted receipt identity")
+          hosted_payload = {
+              "schema": "prod-hosted-release-receipt-readback",
+              "authority": str(report.get("releaseReceiptAuthority") or ""),
+              "receipt": report.get("hostedReceipt") or {},
+              "receiptRef": hosted_ref,
+          }
+          if hosted_payload["authority"] != "prod-hosted-service-plane" or not hosted_payload["receipt"]:
+              raise SystemExit(f"GATE_BLOCK: stage {stage} lacks hosted receipt bytes")
+          hosted_encoded = json.dumps(hosted_payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode() + b"\n"
+          hosted_path = evidence_root / "hosted-receipt-readback.json"
+          hosted_path.parent.mkdir(parents=True, exist_ok=True); hosted_path.write_bytes(hosted_encoded)
+          sources = {
+              "activation": report.get("releaseState") or {},
+              "health": report.get("postDeployChecks") or [],
+              "slo": report.get("sloReadback") or {},
+              "placement": report.get("wiredWorkloads") or [],
+              "readback": hosted_payload,
+          }
+          for kind, source in sources.items():
+              body = {"schema": f"quwoquan_ops.prod_{kind}_evidence.v1", "admission": exact_admission, "stage": stage, "status": "passed", "source": source}
+              encoded = json.dumps(body, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode() + b"\n"
+              path = evidence_root / f"{kind}.json"
+              path.parent.mkdir(parents=True, exist_ok=True); path.write_bytes(encoded)
+              print(f"--{kind}")
+              print(f"{path.relative_to(store).as_posix()}=sha256:{hashlib.sha256(encoded).hexdigest()}")
+          PY
+            )
+            HOSTED_READBACK_EXACT="$(python3 - "$REPORT_DIR/report.json" "$STORE/prod/runtime-evidence/$stage/hosted-receipt-readback.json" <<'PY'
+          import hashlib, json, sys
+          from pathlib import Path
+          report, path = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8")), Path(sys.argv[2])
+          payload = json.loads(path.read_text(encoding="utf-8"))
+          if payload.get("receipt", {}).get("receiptId") != report.get("releaseReceiptId"):
+              raise SystemExit("GATE_BLOCK: materialized hosted stage receipt drifted")
+          print(f"{path.relative_to(Path(sys.argv[2]).parents[3]).as_posix()}=sha256:{hashlib.sha256(path.read_bytes()).hexdigest()}")
+          PY
+            )"
+            PREDECESSOR_ARGS=()
+            if [[ -n "$PREDECESSOR" ]]; then PREDECESSOR_ARGS=(--predecessor "$PREDECESSOR"); fi
+            STAGE_RESULT="$(python3 -B quwoquan_ops/ci/release_control.py --store-root "$STORE" prod-stage-append \
+              --admission "$ADMISSION=$ADMISSION_DIGEST" --stage "$stage" \
+              --status passed "${ARGS[@]}" --hosted-receipt-readback "$HOSTED_READBACK_EXACT" \
+              "${PREDECESSOR_ARGS[@]}" --recorded-at "$(date -u +%Y-%m-%dT%H:%M:%SZ)")"
+            PREDECESSOR="$(python3 -c 'import json,sys; v=json.load(sys.stdin); print(v["ref"]+"="+v["digest"])' <<<"$STAGE_RESULT")"
+            if [[ "$stage" == 100 ]]; then
+              FULL_STAGE_RECEIPT_ID="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["releaseReceiptId"])' "$REPORT_DIR/report.json")"
+              [[ "$FULL_STAGE_RECEIPT_ID" =~ ^[0-9a-f]{64}$ ]]
+            fi
+          done
+          TERMINAL="$(python3 -B quwoquan_ops/ci/release_control.py --store-root "$STORE" prod-terminal-release \
+            --admission "$ADMISSION=$ADMISSION_DIGEST" --final-attempt "$PREDECESSOR" \
+            --hosted-receipt-readback "$HOSTED_READBACK_EXACT" \
+            --released-at "$(date -u +%Y-%m-%dT%H:%M:%SZ)")"
+          TERMINAL_REF="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["ref"])' <<<"$TERMINAL")"
+          TERMINAL_DIGEST="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["digest"])' <<<"$TERMINAL")"
+          python3 quwoquan_ops/ci/promotion_evidence.py publish-oci \
+            --fact-file "$STORE/$TERMINAL_REF" \
+            --repository "ghcr.io/${{ github.repository }}/released-prod" \
+            --transport-tag "run-${{ github.run_id }}-${{ github.run_attempt }}" > "$RUNNER_TEMP/released-prod-oci.json"
+          TERMINAL_OCI_REF="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["exactRef"])' < "$RUNNER_TEMP/released-prod-oci.json")"
+          {
+            echo "released_fact_ref=$TERMINAL_OCI_REF"
+            echo "released_fact_digest=$TERMINAL_DIGEST"
+            echo "full_stage_receipt_id=$FULL_STAGE_RECEIPT_ID"
+          } >> "$GITHUB_OUTPUT"
+
+  post_release_soak:
+    name: Independent post-release soak
+    needs: prod_rollout
+    runs-on: [self-hosted, macOS, ARM64]
+    timeout-minutes: 1440
+    environment: production
+    permissions:
+      contents: read
+      packages: write
+    env:
+      PROMETHEUS_URL: ${{ vars.PROD_PROMETHEUS_URL }}
+      ALERTMANAGER_URL: ${{ vars.PROD_ALERTMANAGER_URL }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          ref: ${{ github.workflow_sha }}
+          persist-credentials: false
+      - uses: oras-project/setup-oras@1d808f7d7f6995cc68b7bf507bfe5c5446e1dc9d
+        with: {version: 1.3.3}
+      - name: Materialize hosted service-plane readback credential
+        env:
+          KEY_MATERIAL: ${{ secrets.PROD_SERVICE_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          [[ "$KEY_MATERIAL" == *"PRIVATE KEY"* ]]
+          KEY_FILE="$RUNNER_TEMP/prod-service-ssh-key"
+          (umask 077 && printf '%s\n' "$KEY_MATERIAL" > "$KEY_FILE")
+          echo "PROD_SERVICE_SSH_KEY_FILE=$KEY_FILE" >> "$GITHUB_ENV"
+      - id: soak
+        name: Observe and append PostReleaseSoakFact
+        env:
+          RELEASED_REF: ${{ needs.prod_rollout.outputs.released_fact_ref }}
+          RELEASED_DIGEST: ${{ needs.prod_rollout.outputs.released_fact_digest }}
+          FULL_STAGE_RECEIPT_ID: ${{ needs.prod_rollout.outputs.full_stage_receipt_id }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          STORE="$RUNNER_TEMP/release-control"
+          RELEASED_OCI_REF="$RELEASED_REF"
+          RELEASED_LOCAL_REF="prod/released/released.json"
+          mkdir -p "$STORE/$(dirname "$RELEASED_LOCAL_REF")" "$RUNNER_TEMP/prod-soak"
+          printf '%s' "$GITHUB_TOKEN" | oras login ghcr.io --username "${{ github.actor }}" --password-stdin
+          trap 'oras logout ghcr.io >/dev/null 2>&1 || true' EXIT
+          python3 quwoquan_ops/ci/promotion_evidence.py materialize-oci \
+            --ref "$RELEASED_OCI_REF" --output-file "$STORE/$RELEASED_LOCAL_REF" >/dev/null
+          test "sha256:$(shasum -a 256 "$STORE/$RELEASED_LOCAL_REF" | awk '{print $1}')" = "$RELEASED_DIGEST"
+          while IFS=$'\t' read -r ref payload_digest; do
+            [[ "$ref" =~ ^ghcr\.io/[a-z0-9._/-]+@sha256:[0-9a-f]{64}$ ]]
+            mkdir -p "$STORE/$(dirname "$ref")"
+            python3 quwoquan_ops/ci/promotion_evidence.py materialize-oci \
+              --ref "$ref" --output-file "$STORE/$ref" >/dev/null
+            test "sha256:$(shasum -a 256 "$STORE/$ref" | awk '{print $1}')" = "$payload_digest"
+          done < <(python3 - "$STORE/$RELEASED_LOCAL_REF" <<'PY'
+          import json, sys
+          released = json.load(open(sys.argv[1], encoding="utf-8"))
+          value = released.get("admission")
+          if not isinstance(value, dict) or set(value) != {"ref", "digest"}:
+              raise SystemExit("GATE_BLOCK: ProdReleasedFact admission predecessor is invalid")
+          print(value["ref"], value["digest"], sep="\t")
+          PY
+          )
+          RELEASED_REF="$RELEASED_LOCAL_REF"
+          FULL_STAGE_READBACK="$RUNNER_TEMP/prod-soak/full-stage-readback.json"
+          CREDENTIAL_EVIDENCE="$RUNNER_TEMP/prod-soak/credentials.json"
+          SOAK_REQUEST="$RUNNER_TEMP/prod-soak/request.json"
+          SOAK_COMMITTED="$RUNNER_TEMP/prod-soak/committed-readback.json"
+          SOAK_READBACK="$RUNNER_TEMP/prod-soak/remote-readback.json"
+          bash quwoquan_ops/cli/prod/sync_prod_plane_stack.sh \
+            --plane service --operation release-ledger-receipt --service prod-stack \
+            --receipt-id "$FULL_STAGE_RECEIPT_ID" --output-path "$FULL_STAGE_READBACK"
+          test -s "$FULL_STAGE_READBACK"
+          python3 - "$FULL_STAGE_READBACK" "$STORE" "$RELEASED_REF" "$FULL_STAGE_RECEIPT_ID" <<'PY'
+          import json, sys
+          from pathlib import Path
+          readback, store, released_ref, expected_receipt_id = Path(sys.argv[1]), Path(sys.argv[2]), sys.argv[3], sys.argv[4]
+          payload = json.loads(readback.read_text(encoding="utf-8"))
+          receipt = payload.get("receipt") or {}
+          released = json.loads((store / released_ref).read_text(encoding="utf-8"))
+          hosted_exact = released.get("hostedReceiptReadback")
+          if not isinstance(hosted_exact, dict) or set(hosted_exact) != {"ref", "digest"}:
+              raise SystemExit("GATE_BLOCK: released fact lacks exact hosted receipt readback")
+          hosted_payload = json.loads((store / hosted_exact["ref"]).read_text(encoding="utf-8"))
+          hosted_receipt = hosted_payload.get("receipt") or {}
+          if receipt.get("receiptId") != expected_receipt_id or hosted_receipt.get("receiptId") != expected_receipt_id or receipt.get("toCandidateDigest") != released.get("candidateId"):
+              raise SystemExit("GATE_BLOCK: full hosted receipt does not bind released candidate")
+          PY
+          python3 quwoquan_ops/ci/collect_prod_soak_observations.py \
+            --full-readback "$FULL_STAGE_READBACK" --service prod-stack \
+            --prometheus-service prod-stack --prometheus-url "$PROMETHEUS_URL" \
+            --alertmanager-url "$ALERTMANAGER_URL" \
+            --soak-policy quwoquan_ops/policies/config-release/slo_thresholds.yaml \
+            --health-report-dir "$RUNNER_TEMP/prod-soak/health" \
+            --slo-output "$RUNNER_TEMP/prod-soak/slo-source.json" \
+            --alerts-output "$RUNNER_TEMP/prod-soak/alerts-source.json"
+          python3 quwoquan_ops/cli/prod/validate_prod_plane_credentials.py \
+            --stage 100 --evidence-output "$CREDENTIAL_EVIDENCE"
+          OBS=()
+          while IFS= read -r observation; do OBS+=("$observation"); done < <(python3 - "$STORE" "$RELEASED_REF" "$RELEASED_DIGEST" "$RUNNER_TEMP/prod-soak" <<'PY'
+          import hashlib, json, sys
+          from pathlib import Path
+          store, released_ref, released_digest, root = Path(sys.argv[1]), sys.argv[2], sys.argv[3], Path(sys.argv[4])
+          released = {"ref": released_ref, "digest": released_digest}
+          source_paths = {"health": root / "health/report.json", "slo": root / "slo-source.json", "alerts": root / "alerts-source.json"}
+          for kind, source_path in source_paths.items():
+              source_raw = source_path.read_bytes(); source = json.loads(source_raw)
+              observed_at = source.get("timestamp") if kind == "health" else source.get("queriedAt")
+              if not isinstance(observed_at, str) or not observed_at:
+                  raise SystemExit(f"GATE_BLOCK: soak {kind} observation timestamp is missing")
+              body = {"schema": f"quwoquan_ops.prod_soak_{kind}_observation.v1", "release": released, "status": "passed", "readOnly": True, "observedAt": observed_at, "sourceDigest": "sha256:" + hashlib.sha256(source_raw).hexdigest(), "source": source}
+              encoded = json.dumps(body, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode() + b"\n"
+              path = store / "prod" / "soak-observations" / f"{kind}.json"
+              path.parent.mkdir(parents=True, exist_ok=True); path.write_bytes(encoded)
+              print(f"--{kind}")
+              print(f"{path.relative_to(store).as_posix()}=sha256:{hashlib.sha256(encoded).hexdigest()}")
+          PY
+          )
+          python3 -B quwoquan_ops/ci/release_control.py --store-root "$STORE" prod-soak-request \
+            --released-fact "$RELEASED_REF=$RELEASED_DIGEST" --released-oci-ref "$RELEASED_OCI_REF" \
+            --full-stage-readback "$FULL_STAGE_READBACK" "${OBS[@]}" \
+            --credential-evidence "$CREDENTIAL_EVIDENCE" \
+            --repository "${{ github.repository }}" \
+            --workflow-run-id "${{ github.run_id }}" --workflow-run-attempt "${{ github.run_attempt }}" \
+            --actor "${{ github.actor }}" --verified-at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --output "$SOAK_REQUEST"
+          bash quwoquan_ops/cli/prod/sync_prod_plane_stack.sh \
+            --plane service --operation release-ledger-soak-commit --service prod-stack \
+            --request-path "$SOAK_REQUEST" --output-path "$SOAK_COMMITTED"
+          SOAK_RECEIPT_ID="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["receipt"]["receiptId"])' "$SOAK_COMMITTED")"
+          bash quwoquan_ops/cli/prod/sync_prod_plane_stack.sh \
+            --plane service --operation release-ledger-soak-receipt --service prod-stack \
+            --receipt-id "$SOAK_RECEIPT_ID" --output-path "$SOAK_READBACK"
+          cmp "$SOAK_COMMITTED" "$SOAK_READBACK"
+          HOSTED_SOAK_LOCAL_REF="prod/soak/hosted-readback.json"
+          cp "$SOAK_READBACK" "$STORE/$HOSTED_SOAK_LOCAL_REF"
+          HOSTED_SOAK_DIGEST="sha256:$(shasum -a 256 "$STORE/$HOSTED_SOAK_LOCAL_REF" | awk '{print $1}')"
+          SOAK="$(python3 -B quwoquan_ops/ci/release_control.py --store-root "$STORE" prod-soak \
+            --released-fact "$RELEASED_REF=$RELEASED_DIGEST" "${OBS[@]}" \
+            --hosted-soak-readback "$HOSTED_SOAK_LOCAL_REF=$HOSTED_SOAK_DIGEST" --status passed \
+            --observed-at "$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["receipt"]["verifiedAt"])' "$SOAK_READBACK")")"
+          SOAK_REF="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["ref"])' <<<"$SOAK")"
+          # release_control prod-soak invokes create_post_release_soak_fact.
+          python3 quwoquan_ops/ci/promotion_evidence.py publish-oci \
+            --fact-file "$STORE/$SOAK_REF" \
+            --repository "ghcr.io/${{ github.repository }}/post-release-soak" \
+            --transport-tag "run-${{ github.run_id }}-${{ github.run_attempt }}"

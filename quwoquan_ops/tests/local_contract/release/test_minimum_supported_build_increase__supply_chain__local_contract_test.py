@@ -8,20 +8,20 @@ import unittest
 from pathlib import Path
 from typing import Any
 
-from quwoquan_ops.cli.lib.official_distribution_release import (
-    OfficialDistributionReleaseError,
-    deploy_official_distribution,
-    inspect_official_distribution,
-)
 from quwoquan_ops.cli.lib.android_official_release import (
     package_android_official_release,
+)
+from quwoquan_ops.cli.lib.official_distribution_release import (
+    OfficialDistributionReleaseError,
+    inspect_official_distribution,
 )
 from quwoquan_ops.tests.local_contract.release.test_android_official_release__supply_chain__local_contract_test import (
     _executable,
 )
 from quwoquan_ops.tests.local_contract.release.test_official_distribution_release__supply_chain__local_contract_test import (
     _android_package,
-    _release_manifest,
+    _deploy,
+    _official_graph,
     _web_package,
     _write_json,
 )
@@ -87,17 +87,17 @@ echo 'Signer #1 certificate SHA-256 digest: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
                 minimum_build="18000",
                 evidence=_valid_evidence(),
             )
-            release = _release_manifest(
+            web = _web_package(root / "web-18301", build="18301")
+            authority = _official_graph(
                 root / "candidate-2",
                 web_manifest=web,
                 android_manifest=android,
             )
 
-            receipt = deploy_official_distribution(
-                kind="app-release",
-                package_manifest_path=android,
-                release_manifest_path=release,
-                distribution_root=distribution,
+            receipt = _deploy(
+                "app-release",
+                authority,
+                distribution,
                 expected_current="18201",
             )
 
@@ -168,7 +168,8 @@ echo 'Signer #1 certificate SHA-256 digest: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
                     minimum_build="18000",
                     evidence=evidence,
                 )
-                release = _release_manifest(
+                web = _web_package(root / "web-18301", build="18301")
+                authority = _official_graph(
                     root / "candidate-2",
                     web_manifest=web,
                     android_manifest=android,
@@ -178,11 +179,10 @@ echo 'Signer #1 certificate SHA-256 digest: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
                     OfficialDistributionReleaseError,
                     expected_error,
                 ):
-                    deploy_official_distribution(
-                        kind="app-release",
-                        package_manifest_path=android,
-                        release_manifest_path=release,
-                        distribution_root=distribution,
+                    _deploy(
+                        "app-release",
+                        authority,
+                        distribution,
                         expected_current="18201",
                     )
                 latest = json.loads(
@@ -191,7 +191,7 @@ echo 'Signer #1 certificate SHA-256 digest: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
                 self.assertEqual(latest["buildNumber"], "18201")
                 self.assertEqual(latest["minimumSupportedBuild"], "17000")
 
-    def test_high_risk_exception_requires_candidate_bound_audited_approval(
+    def test_high_risk_exception_fails_closed_without_graph_approval_authority(
         self,
     ) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -212,76 +212,37 @@ echo 'Signer #1 certificate SHA-256 digest: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
                 minimum_build="18000",
                 evidence=evidence,
             )
-            release = _release_manifest(
+            web = _web_package(root / "web-18301", build="18301")
+            authority = _official_graph(
                 root / "candidate-2",
                 web_manifest=web,
                 android_manifest=android,
             )
-
-            with self.assertRaisesRegex(
-                OfficialDistributionReleaseError,
-                "approval receipt is missing",
-            ):
-                deploy_official_distribution(
-                    kind="app-release",
-                    package_manifest_path=android,
-                    release_manifest_path=release,
-                    distribution_root=distribution,
-                    expected_current="18201",
-                )
-
-            manifest = json.loads(release.read_text(encoding="utf-8"))
-            governance_path = release.parent / "governance-receipt.json"
+            governance_path = authority["graph_root"] / "governance-receipt.json"
             _write_json(
                 governance_path,
                 {
                     "schema": "prod-release-governance-receipt",
-                    "repository": manifest["source"]["repository"],
-                    "gitSha": manifest["source"]["gitSha"],
-                    "artifactDigest": "sha256:" + ("0" * 64),
-                    "pullRequest": 42,
-                    "author": "release-author",
-                    "mergedBy": "release-approver",
-                    "approvers": ["release-approver"],
-                    "distinctPrincipals": ["release-author", "release-approver"],
-                    "verifiedAt": "2026-08-11T00:00:00Z",
+                    "approved": True,
+                    "artifactDigest": "sha256:" + "a" * 64,
                 },
             )
+
             with self.assertRaisesRegex(
                 OfficialDistributionReleaseError,
-                "does not bind the reviewed release",
+                "no canonical security exception approval authority",
             ):
-                deploy_official_distribution(
-                    kind="app-release",
-                    package_manifest_path=android,
-                    release_manifest_path=release,
-                    distribution_root=distribution,
+                _deploy(
+                    "app-release",
+                    authority,
+                    distribution,
                     expected_current="18201",
                 )
-
-            _write_json(
-                governance_path,
-                {
-                    "schema": "prod-release-governance-receipt",
-                    "repository": manifest["source"]["repository"],
-                    "gitSha": manifest["source"]["gitSha"],
-                    "artifactDigest": manifest["artifactDigest"],
-                    "pullRequest": 42,
-                    "author": "release-author",
-                    "mergedBy": "release-approver",
-                    "approvers": ["release-approver"],
-                    "distinctPrincipals": ["release-author", "release-approver"],
-                    "verifiedAt": "2026-08-11T00:00:00Z",
-                },
+            latest = json.loads(
+                (distribution / "download/android/latest.json").read_text()
             )
-            receipt = deploy_official_distribution(
-                kind="app-release",
-                package_manifest_path=android,
-                release_manifest_path=release,
-                distribution_root=distribution,
-                expected_current="18201",
-            )
-            self.assertTrue(receipt["minimumSupportedBuildRaised"])
+            self.assertEqual(latest["buildNumber"], "18201")
+            self.assertEqual(latest["minimumSupportedBuild"], "17000")
 
     def test_unchanged_or_lower_minimum_does_not_require_raise_evidence(self) -> None:
         for minimum_build in ("17000", "16000"):
@@ -295,16 +256,16 @@ echo 'Signer #1 certificate SHA-256 digest: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
                     minimum_build=minimum_build,
                     evidence=None,
                 )
-                release = _release_manifest(
+                web = _web_package(root / "web-18301", build="18301")
+                authority = _official_graph(
                     root / "candidate-2",
                     web_manifest=web,
                     android_manifest=android,
                 )
-                receipt = deploy_official_distribution(
-                    kind="app-release",
-                    package_manifest_path=android,
-                    release_manifest_path=release,
-                    distribution_root=distribution,
+                receipt = _deploy(
+                    "app-release",
+                    authority,
+                    distribution,
                     expected_current="18201",
                 )
                 self.assertFalse(receipt["minimumSupportedBuildRaised"])
@@ -319,24 +280,14 @@ def _deploy_baseline(root: Path) -> tuple[Path, Path]:
         minimum_build="17000",
         evidence=None,
     )
-    release = _release_manifest(
+    authority = _official_graph(
         root / "candidate-1",
         web_manifest=web,
         android_manifest=android,
     )
     distribution = root / "origin"
-    deploy_official_distribution(
-        kind="web",
-        package_manifest_path=web,
-        release_manifest_path=release,
-        distribution_root=distribution,
-    )
-    deploy_official_distribution(
-        kind="app-release",
-        package_manifest_path=android,
-        release_manifest_path=release,
-        distribution_root=distribution,
-    )
+    _deploy("web", authority, distribution)
+    _deploy("app-release", authority, distribution)
     return distribution, web
 
 

@@ -1,0 +1,194 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://quwoquan.local/quwoquan_ops/environments/evidence/prod_activation_admission_fact.schema.json",
+  "title": "ProdActivationAdmissionFact v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "admissionId",
+    "decision",
+    "stableTag",
+    "tagObjectOid",
+    "sourceGitSha",
+    "sourceTree",
+    "controlPlaneGitSha",
+    "releaseTagAdmission",
+    "qualification",
+    "candidateMaterialManifest",
+    "factoryMaterials",
+    "previousActiveReleasedLedger",
+    "rollbackReadiness",
+    "artifacts",
+    "ociDigests",
+    "previousOciDigests",
+    "createdBeforeStage",
+    "admittedAt"
+  ],
+  "properties": {
+    "schema": {
+      "const": "quwoquan_ops.prod_activation_admission_fact.v1"
+    },
+    "admissionId": {
+      "$ref": "#/$defs/digest"
+    },
+    "decision": {
+      "const": "admitted"
+    },
+    "stableTag": {
+      "type": "string",
+      "pattern": "^v(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$"
+    },
+    "tagObjectOid": {
+      "$ref": "#/$defs/git"
+    },
+    "sourceGitSha": {
+      "$ref": "#/$defs/git"
+    },
+    "controlPlaneGitSha": {
+      "$ref": "#/$defs/git"
+    },
+    "releaseTagAdmission": {
+      "$ref": "#/$defs/exactRef"
+    },
+    "qualification": {
+      "$ref": "#/$defs/exactRef"
+    },
+    "candidateMaterialManifest": {
+      "$ref": "#/$defs/exactRef"
+    },
+    "previousActiveReleasedLedger": {
+      "$ref": "#/$defs/exactRef"
+    },
+    "rollbackReadiness": {
+      "$ref": "#/$defs/exactRef"
+    },
+    "artifacts": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/artifact"
+      }
+    },
+    "ociDigests": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/digest"
+      }
+    },
+    "previousOciDigests": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/digest"
+      }
+    },
+    "createdBeforeStage": {
+      "const": "canary"
+    },
+    "admittedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "sourceTree": {
+      "$ref": "#/$defs/tree"
+    },
+    "factoryMaterials": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "service",
+        "app"
+      ],
+      "properties": {
+        "service": {
+          "$ref": "#/$defs/factoryMaterial"
+        },
+        "app": {
+          "$ref": "#/$defs/factoryMaterial"
+        }
+      }
+    }
+  },
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "git": {
+      "type": "string",
+      "pattern": "^(?:[0-9a-f]{40}|[0-9a-f]{64})$"
+    },
+    "exactRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ref",
+        "digest"
+      ],
+      "properties": {
+        "ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "digest": {
+          "$ref": "#/$defs/digest"
+        }
+      }
+    },
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "platform",
+        "ociRef",
+        "digest"
+      ],
+      "properties": {
+        "platform": {
+          "type": "string",
+          "minLength": 1
+        },
+        "ociRef": {
+          "type": "string",
+          "pattern": "^.+@sha256:[0-9a-f]{64}$"
+        },
+        "digest": {
+          "$ref": "#/$defs/digest"
+        }
+      }
+    },
+    "tree": {
+      "type": "string",
+      "pattern": "^(?:sha1:)?[0-9a-f]{40}$|^(?:sha256:)?[0-9a-f]{64}$"
+    },
+    "factoryMaterial": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ociRef",
+        "ociDigest",
+        "payloadDigest",
+        "materialDigest"
+      ],
+      "properties": {
+        "ociRef": {
+          "type": "string",
+          "pattern": "^.+@sha256:[0-9a-f]{64}$"
+        },
+        "ociDigest": {
+          "$ref": "#/$defs/digest"
+        },
+        "payloadDigest": {
+          "$ref": "#/$defs/digest"
+        },
+        "materialDigest": {
+          "$ref": "#/$defs/digest"
+        }
+      }
+    }
+  }
+}

@@ -67,7 +67,7 @@
 ### REQ-006 配置 ACK、可信灰度维度与真实 Portal 数据
 
 - 所有 governed workload 必须以 service/environment/instance 绑定的机器主体 ACK
-  当前 ReleaseManifest、configVersion 与 effectiveHash；发布编排只接受全实例的新鲜零
+  当前 `CandidateMaterialManifest` 所引用的配置物料、configVersion 与 effectiveHash；发布编排只接受全实例的新鲜零
   drift 收敛，不得把 liveness 当作配置已生效。
 - appVersion/userId 是当前唯一可用的灰度维度；province/carrier 只有在可信边缘
   attestation 已部署并有 hosted UAT 后才能启用，客户端自报头一律不得参与分流。
@@ -88,16 +88,14 @@
 - 测试中的 `spec_ref` 必须指向现存规格与验收锚点。
 
 <a id="req-009"></a>
-### REQ-009 第一方容器预验证不得提升生产资格
+### REQ-009 正式生产发布只接受工厂物料事实链
 
-- prod-hosted 第一方容器预验证只消费 reviewed main 的不可变 Service Pipeline 制品，并在镜像传输前执行主机硬门禁。
-- Service Pipeline 只把已固定 OCI/config/SBOM/provenance 的 `component-ready` 服务组件包作为 GHCR OCI 制品交付，不得提前声称它是整应用可部署清单。
-- `stackctl package --env prod --target prod-hosted --kind release-manifest` 必须在该组件包上原位绑定 Alpha/Beta/Gamma/Prod 四环境 App 包及其真实 payload、ContractGraph、真实 Provider readiness 与三层测试证据；全部 schema、内容摘要和不可变 OCI 来源通过后，同一 `ReleaseEvidenceManifest`（`schema=release-evidence-manifest`）才转为 `candidate-ready`。
-- Alpha、Beta、Gamma 的 package/up/health/verify 可在隔离 runner 并行执行，但三份环境回执必须按顺序聚合并绑定同一 `candidateId`；全部通过且 rollback readiness 有效后才转为 `deployable`。Prod 的 `canary、5、20、50、100` 回执全部完成后才转为 `released`，自动回滚则转为 `rolled-back` 或 `rollback-failed`。
-- Actions Artifact 只允许保存短期诊断，不得承担 App 包、Provider、测试或环境回执的阶段传递；正式证据必须由不可变 OCI 或 hosted ledger 回读，也不得通过占位文件或本地重生服务清单绕过。
-- 受限单机可把声明允许的旧 `Created/Exited` 容器和未使用镜像计入可回收空间，但必须在镜像传输前完成精确回收和二次实测；数据恢复容器与全部 volume 必须保留。
-- 预验证与正式 rollout transaction、ledger/receipt 和 Provider readiness 分轨；容器验证通过不能改变 release `GATE_BLOCK`。
-- 隔离数据模式使用重新摘要的不可提升配置投影与独立随机认证材料；不得继承正式 credentials 文件。Provider 绑定只能返回 unavailable，禁止切到 fixture/Mock。
+- RC artifact factory 以 reviewed main 可达源码只构建一次并发布不可变 OCI exact bytes；`CandidateMaterialManifest` 只能从该 factory 输出封存 source commit、build number、OCI/config/App/Web/ContractGraph、SBOM、provenance 与 signing digest，不得由部署期重新打包或重建。
+- `QualificationFact` 必须 exact-byte 引用同一 `CandidateMaterialManifest`，并绑定最终签名包、真实 Provider、UAT、供应链与 Android/iOS 物理设备资格；qualified RC 被选中后，stable tag 复用同一 source commit、build number 与 factory OCI digest 闭包，不得再次构建或改写物料。
+- Prod 唯一入口为 stable tag 对应的 `ReleaseTagAdmissionFact`，经 durable production approval 形成 `ProdActivationAdmissionFact` 后，才可在同一事务依次推进 `canary -> 5 -> 20 -> 50 -> 100`；全部阶段 exact 绑定同一 `CandidateMaterialManifest`/factory digest 闭包，终态写 `ProdReleasedFact`，随后 soak 只读该事实及其阶段前驱。
+- Actions Artifact 只允许保存短期诊断，不承担正式阶段传递；正式后继事实必须按 canonical bytes digest 回读前驱，禁止占位文件、mutable tag、`latest`、部署期重生、并行 REM 状态机或从 workflow success 推导发布资格。
+- prod-hosted 第一方容器预验证不属于上述正式事实链。若迁移尚未完成，只允许受限 legacy `non-promotable snapshot` reader 消费历史物料做只读 history/rehearsal；不得调用公开 REM writer，不得写 ledger、receipt、admission、qualification、tag、stage 或 `ProdReleasedFact`，其遗留缺口继续由现有 `OPEN-010` 跟踪。
+- 受限单机可把声明允许的旧 `Created/Exited` 容器和未使用镜像计入可回收空间，但必须在镜像传输前完成精确回收和二次实测；数据恢复容器与全部 volume 必须保留。隔离数据模式使用重新摘要的不可提升配置投影与独立随机认证材料，不得继承正式 credentials；Provider 绑定只能返回 unavailable，禁止切到 fixture/Mock。
 
 ## 6. 契约与依赖
 
@@ -134,22 +132,22 @@
 ### SIT-003 构建一次与不可变制品
 
 - GIVEN CI action 固定 commit SHA，工作流最小权限和 CODEOWNERS 已声明。
-- WHEN service/app/portal/config 进入 pre-release 与生产 rollout。
-- THEN `ReleaseEvidenceManifest` 绑定 Git commit、OCI 镜像、四环境配置包与 App 包、ContractGraph、Provider、测试、环境回执、rollout 和 rollback evidence digest。
-- THEN canary/5/20/50/100 只消费同一 manifest，禁止 latest 与部署时重建。
-- THEN Service Pipeline 的 `component-ready` 包与四环境 App payload、ContractGraph、真实 Provider readiness、三层测试完成原位总装后形成 `candidate-ready`；Alpha/Beta/Gamma 回执与 rollback readiness 齐备后形成 `deployable`，Prod 回执完成后形成 `released`，每一状态都以新的 GHCR OCI digest 或 hosted ledger 事实交付。
-- THEN Actions Artifact 无容量时仍 fail-closed 地消费不可变 OCI/ledger 内容，不允许在部署 job 重建服务组件、App payload、Provider 或测试证据。
+- WHEN reviewed main 可达 RC 进入 artifact factory、资格归约、stable tag 选择与生产 rollout。
+- THEN artifact factory 只构建一次并发布不可变 OCI exact bytes，`CandidateMaterialManifest` 完整绑定 source commit、build number、OCI/config/App/Web/ContractGraph、SBOM、provenance 与 signing digest。
+- THEN `QualificationFact`、stable `ReleaseTagAdmissionFact`、`ProdActivationAdmissionFact`、五个 stage facts 与 `ProdReleasedFact` 按 canonical exact-byte predecessor 串联，并始终引用同一 `CandidateMaterialManifest`/factory digest 闭包；部署 job 与后四阶段 builder invocation 为零。
+- THEN Actions Artifact 无容量时仍 fail-closed 地消费不可变 OCI/hosted facts，不允许部署 job 重建任何服务组件、App/Web payload、Provider、测试或配置物料。
+- THEN 仓库内公开 REM writer、正式 caller 与其 static gate 已全部删除；任何 legacy generic validate API 均已重命名为显式 history/rehearsal-only、`non-promotable snapshot` reader，且无法产生正式 qualification、admission、ledger、receipt、stage 或 released 事实。
 
 <a id="sit-004"></a>
 ### SIT-004 灰度发布串行、真实 SLO 回读并可回滚
 
-- GIVEN ReleaseManifest 与上一稳定 digest 已验证。
+- GIVEN stable `ReleaseTagAdmissionFact`、`ProdActivationAdmissionFact` 与上一稳定 `ProdReleasedFact` 的 exact digest 已验证。
 - GIVEN 全局 lock 和 CAS release ledger 可用。
 - WHEN 执行 canary、5、20、50、100 或自动回滚。
 - THEN 并发发布被拒绝，stage 只能按 CAS 顺序推进。
 - THEN SLO 只从 Prometheus 读取且满足最小样本/窗口。
 - THEN 超阈值自动回滚并生成不可变 receipt。
-- THEN release receipt 在托管 service-plane 内以 generation CAS 原子提交，绑定 manifest、RTC image、Provider binding config、ContractGraph、adapter、post-check 与 last-good target；CI 必须按 receipt ID 从 hosted authority 回读并重算 digest。
+- THEN stage fact 在托管 service-plane 内以 generation CAS 原子提交，绑定 `ProdActivationAdmissionFact`、同一 `CandidateMaterialManifest`/factory digest 闭包、RTC image、Provider binding config、ContractGraph、adapter、post-check 与 last-good `ProdReleasedFact`；CI 必须按 fact identity 从 hosted authority 回读并重算 digest。
 
 <a id="sit-005"></a>
 ### SIT-005 观测、灾备和容量闭环
@@ -167,7 +165,7 @@
 - GIVEN province/carrier 尚未取得可信边缘 attestation 时，IaC 策略显式禁用这两个维度。
 - WHEN 发布高版本并按 appVersion/userId 分流。
 - THEN 所有实例 ACK 收敛，drift 为零。
-- THEN 每份 ACK 与 service/environment/instance、ReleaseManifest digest、configVersion、
+- THEN 每份 ACK 与 service/environment/instance、`CandidateMaterialManifest` 中的配置物料 digest、configVersion、
   desired/effective hash 绑定；过期、disk fallback、缺实例或候选不一致时 hosted rollout
   必须停在 config-convergence readiness。
 - THEN 服务有效配置缺失、摘要不匹配或无法解析时 beta/gamma/prod 不能启动；不得回退旧分层路径、空配置或第二套默认配置。
@@ -186,12 +184,12 @@
 <a id="sit-008"></a>
 ### SIT-008 不可提升的 prod-hosted 第一方容器预验证
 
-- GIVEN deployable ReleaseManifest、GHCR digest、隔离 SSH key 与受控主机。
-- WHEN stackctl 在唯一 prevalidate namespace 执行 first-party scope。
-- THEN host 资源/端口、隔离空数据、integration image-only、service/edge systemd 和容器 digest 均可机读复验。
+- GIVEN reviewed main 的历史物料可由受限 legacy `non-promotable snapshot` reader 读取，且隔离 SSH key 与受控主机可用。
+- WHEN prevalidation 在唯一 prevalidate namespace 执行 first-party history/rehearsal scope。
+- THEN host 资源/端口、隔离空数据、integration image-only、service/edge systemd 和容器 digest 均可机读复验，报告只标记 `non-promotable` 并且不授予任何正式生产资格。
 - THEN 受限单机的当前可用空间与可回收空间分别报告；只可删除声明匹配且未运行的旧容器、清理未使用镜像，禁止删除 volume，并在任何镜像传输前复验回收后的实际空间。
 - THEN 容器进程存活与 Provider readiness 分开判定；Elasticsearch 等被排除能力可使对应服务 readiness 保持阻断，但不得伪装为容器未部署或正式健康。
-- THEN 报告分别给出容器部署与正式发布资格；不写 ledger/receipt，正式发布仍为 `GATE_BLOCK`。
+- THEN reader 与报告均为 `non-promotable`，零 ledger、零 receipt、零 qualification、零 admission、零 tag/stage/`ProdReleasedFact` 写入；正式发布仍为 `GATE_BLOCK`。
 
 ## 8. 开放事项
 
@@ -282,8 +280,8 @@
 - 类型：`risk`
 - 优先级：`P1`
 - 准出影响：`track`
-- 影响或价值：构建与部署不是同一不可变制品
-- 完成判定：`SIT-003` 的可观察验收通过，canary/5/20/50/100 只消费同一 `ReleaseEvidenceManifest`，部署不重建制品。
+- 影响或价值：正式链尚未完全证明 artifact factory 的 OCI exact bytes 经 `CandidateMaterialManifest -> QualificationFact -> stable ReleaseTagAdmissionFact -> ProdActivationAdmissionFact -> stage facts -> ProdReleasedFact -> soak` 原子单轨复用；现存 REM writer/formal caller/static gate 或可提升的 generic validate API 会形成第二 authority。
+- 完成判定：`SIT-003` 的可观察验收通过——canary/5/20/50/100 与 soak exact 绑定同一 `CandidateMaterialManifest`/factory digest 闭包，部署不重建制品；仓库内 public REM writer、formal caller、static gate 全部删除；legacy generic validate API 已重命名且只允许 history/rehearsal 的 `non-promotable snapshot` 读取，不能写任何 ledger、receipt、qualification、admission、tag、stage 或 released 事实。
 
 <a id="open-011"></a>
 ### OPEN-011 缺少获批 Prod 发布与真实灰度回滚回执

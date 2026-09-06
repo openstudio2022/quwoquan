@@ -3,8 +3,7 @@
 从 stackctl.py 逐字迁出仅被 package 域消费的 runtime 打包实现:
 
 - `_command_package_unlocked`:锁内的全量 runtime 打包执行体,同时向
-  非 runtime 子 kind(legal-static / ops-portal / web / app-release /
-  release-manifest)分发;
+  非 runtime 子 kind(legal-static / ops-portal / web / app-release )分发;
 - `_validate_runtime_package_identity_readback` /
   `_runtime_package_report_path`:package report / fingerprint /
   candidate manifest 三件套的身份回读校验;
@@ -105,8 +104,6 @@ def _command_package_unlocked(
     import quwoquan_ops.cli.stackctl as _stackctl
     from quwoquan_ops.cli.lib.deployment_candidate_manifest import manifest
 
-    if getattr(args, "kind", "runtime") == "release-manifest":
-        return _stackctl._command_package_release_manifest(args)
     if getattr(args, "kind", "runtime") == "app-artifact":
         from quwoquan_ops.cli.commands.package_app_artifact import (
             command_package_app_artifact,

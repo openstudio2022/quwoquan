@@ -80,7 +80,9 @@ def derive_role(
     if stem.startswith("verify_"):
         reasons.append("verify_ naming")
         return "gate", tuple(reasons)
-    if stem.startswith(("generate_", "sync_", "build_", "gen_")):
+    if stem.startswith(
+        ("generate_", "render_", "collect_", "sync_", "build_", "gen_")
+    ):
         reasons.append("generator naming")
         return "generator", tuple(reasons)
     if stem.startswith("run_"):

@@ -339,7 +339,7 @@ class DetectCiImpactedScopesTest(unittest.TestCase):
             "quwoquan_app/ios/Runner/Runner.entitlements",
             "quwoquan_app/vendor/plugins/flutter_webrtc/pubspec.yaml",
             "quwoquan_app/scripts/device/dev_launch.sh",
-            ".github/workflows/beta-device-platform.yml",
+            "quwoquan_ops/ci/run_mobile_platform_matrix.sh",
             "quwoquan_ops/environments/beta/runtime.yaml",
         )
         for changed_path in not_required_paths:

@@ -1,6 +1,6 @@
 ---
 name: content-production
-description: Run the canonical ten-stage Data content workflow from frozen demand to immutable release and environment acceptance, or continue an execution from create-once receipts.
+description: Run the canonical ten-stage Data content workflow from frozen demand to immutable release and target delivery evidence, or continue an execution from create-once receipts.
 metadata:
   kind: workflow
 ---
@@ -45,10 +45,9 @@ Review 交互只引用 `quwoquan_ops/policies/human_agent_delivery_contract.yaml
 
 产生 `content-release` 时，POST 必须把 PRE owner identity ref 原样作为 `--owner-identity`，并把 current candidate evidence ref 作为 `--candidate-evidence` 传给 Review（workflow=`content-production`、segment=`POST`、deliverable=`content-release`、scope=`<exact-path>`）；先按 plan 去重执行命名 evidence，再派 registry 主审与至多一名专审。manifest ref 缺失、与 PRE 不同或 stale，required evidence/Reviewer 未完成，均不得完成。
 
-内容生产完成证据必须同时包含：十阶段 create-once receipt 链、immutable release exact identity、目标环境 import/readback/health 与同 identity 的 `EnvironmentAcceptanceFact`。
+Data 内容交付完成证据必须同时包含：十阶段 create-once receipt 链、immutable release exact identity、目标环境 ship apply/import/readback/health exact refs，以及本次内容验收要求的 API consumer raw `ReadinessCaseResult` refs。上述内容是 Data ship 的交付证据；Data 不创建、补写或把 `EnvironmentAcceptanceFact` 作为本 Skill 的 terminal writer 结果。
 
-- `acceptanceProfile=m1_api_consumer`：完成证据是环境生命周期、服务/API consumer 的 16-cell fresh raw facts 与 EAF；不得要求或伪造 App、设备、platform、`TargetUatBinding` 或 promotion predecessor。
-- `acceptanceProfile=environment_promotion`：除环境生命周期外，必须闭合该分支声明的 App UAT raw facts、target binding 与 EAF。只有这个分支要求 App UAT。
+`m1_api_consumer` 仅可保留为内容 execution 选择 API consumer CaseResult 的 intent；它不是 EAF profile、EAF 字段或独立 writer。若下游要求 EAF，HANDOFF 必须把同一 exact integration candidate 的 Environment Ops scheduler request 与 current CaseResult refs 交给 Environment Ops；scheduler 只使用 canonical `profile=smoke|integration|release`，并在 `candidate`、`impactPlanDigest`、`caseResultRefs`、`runtimeIdentity`、`dataLifecycle`、`providerReadiness`、`observabilityReadiness`、`inspectEvidence`、`doctorEvidence`、`cleanupEvidence`、`leaseClosureEvidence`、`predecessor`、有效期、`nonPromotable` 与 DSSE signer 全部闭合后签发 EAF v2。不得从内容 intent 省略 named closure，也不得由 Data 调用 EAF writer。
 
 ## 失败与停止
 

@@ -41,8 +41,9 @@ from quwoquan_ops.ci.local_readiness_planner import (  # noqa: E402
 
 CONTRACT_PATH = ROOT / "quwoquan_ops/policies/local_readiness_contract.yaml"
 DEFAULT_STATE_ROOT = ROOT / ".qwq_output/env/repo/local/local-readiness"
-RECEIPT_SCHEMA = "local-readiness-receipt-v1"
+RECEIPT_SCHEMA = "local-readiness-receipt-v2"
 LEVEL_TO_STATE = {"fast": "fast_green", "scope": "scope_ready", "release": "release_ready"}
+ORTHOGONAL_DIMENSIONS = ("sourceReadiness", "environmentReadiness", "deviceReadiness", "integrationEligibility", "promotionEligibility")
 PLAN_FIELDS = ("schema", "impact_planner", "timeout_policy", "level", "paths", "scopes", "lockfiles", "checks", "deferred", "mode")
 _ZERO_SHA = "0" * 40
 _SHA_RE = re.compile(r"^[0-9a-f]{40}$")
@@ -143,10 +144,20 @@ def _regular_file_exists(path: Path, *, label: str) -> bool:
 
 def _load_contract() -> dict[str, Any]:
     value = yaml.safe_load(CONTRACT_PATH.read_text(encoding="utf-8"))
-    if not isinstance(value, dict) or value.get("schema_version") != 1:
+    if not isinstance(value, dict) or value.get("schema_version") != 2:
         raise LocalReadinessError("local readiness contract schema_version 非法")
     if value.get("fingerprint", {}).get("canonical_implementation") != "quwoquan_ops/cli/lib/evidence_fingerprint.py":
         raise LocalReadinessError("local readiness 必须复用 canonical EvidenceFingerprint")
+    dimensions = value.get("fact_dimensions")
+    if not isinstance(dimensions, dict) or tuple(dimensions) != ORTHOGONAL_DIMENSIONS:
+        raise LocalReadinessError("local readiness 五维事实闭集漂移")
+    if value.get("independence") != {
+        "source_pass_implies": [],
+        "cross_dimension_inference": "denied",
+        "local_readiness_writes": ["sourceReadiness"],
+        "non_source_default": "not_evaluated",
+    }:
+        raise LocalReadinessError("local readiness 跨维推导边界漂移")
     try:
         load_timeout_policy(CONTRACT_PATH)
     except ValueError as exc:
@@ -828,7 +839,16 @@ def run_readiness(
         receipt = {
             "schema": RECEIPT_SCHEMA,
             "level": level,
-            "readiness": LEVEL_TO_STATE[level] if status == "PASS" else "not_ready",
+            "facts": {
+                "sourceReadiness": {
+                    "status": LEVEL_TO_STATE[level] if status == "PASS" else "not_ready",
+                    "producer": "local_readiness",
+                },
+                "environmentReadiness": {"status": "not_evaluated", "producer": "environment_ops"},
+                "deviceReadiness": {"status": "not_evaluated", "producer": "package_acceptance"},
+                "integrationEligibility": {"status": "not_evaluated", "producer": "trusted_integration_publisher"},
+                "promotionEligibility": {"status": "not_evaluated", "producer": "integration_qualification"},
+            },
             "status": status,
             "mode": mode,
             "evidence_layer": "local_source_readiness_only",
@@ -894,6 +914,15 @@ def verify_receipt(
         raise LocalReadinessError("readiness receipt 必须为 object")
     if receipt.get("schema") != RECEIPT_SCHEMA or receipt.get("level") != level or receipt.get("status") != "PASS":
         raise LocalReadinessError("readiness receipt 不是所需等级的 PASS")
+    expected_facts = {
+        "sourceReadiness": {"status": LEVEL_TO_STATE[level], "producer": "local_readiness"},
+        "environmentReadiness": {"status": "not_evaluated", "producer": "environment_ops"},
+        "deviceReadiness": {"status": "not_evaluated", "producer": "package_acceptance"},
+        "integrationEligibility": {"status": "not_evaluated", "producer": "trusted_integration_publisher"},
+        "promotionEligibility": {"status": "not_evaluated", "producer": "integration_qualification"},
+    }
+    if receipt.get("facts") != expected_facts or "readiness" in receipt:
+        raise LocalReadinessError("readiness receipt 五维事实边界漂移")
     if receipt.get("plan") != canonical:
         raise LocalReadinessError("readiness receipt exact canonical plan mismatch")
     if sorted(receipt.get("paths", [])) != canonical["paths"] or receipt.get("mode") != mode:

@@ -17,10 +17,10 @@ import sys
 
 sys.dont_write_bytecode = True
 
-from quwoquan_ops.cli.prod.finalize_mainline_release_artifact import (
+from quwoquan_ops.ci.release_evidence_reader import (
     canonical_candidate_digest,
     canonical_manifest_digest,
-    validate_manifest,
+    validate_historical_release_snapshot,
 )
 
 DIGEST_PATTERN = re.compile(r"sha256:[0-9a-f]{64}")
@@ -127,7 +127,7 @@ def _reject_local_authority(value: Mapping[str, Any], *, label: str) -> None:
 
 def _manifest(path: Path) -> tuple[Path, dict[str, Any]]:
     root = path.resolve().parent
-    manifest = validate_manifest(
+    manifest = validate_historical_release_snapshot(
         _read_object(path, label="ReleaseEvidenceManifest"),
         allowed_statuses={"candidate-ready", "deployable", "released"},
     )

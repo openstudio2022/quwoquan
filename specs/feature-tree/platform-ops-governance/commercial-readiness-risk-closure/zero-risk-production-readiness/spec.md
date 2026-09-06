@@ -31,25 +31,25 @@
 <a id="req-002"></a>
 ### REQ-002 全部风险关闭后完成不可变灰度与恢复验证
 
-- stackctl release report、health/inspect/doctor、rollback/restore receipt 均可复验。
+- artifact factory OCI、`CandidateMaterialManifest`、`QualificationFact`、stable tag、`ProdActivationAdmissionFact`、stage facts、`ProdReleasedFact`、soak 与 health/inspect/doctor、rollback/restore 证据均可按 exact bytes 复验。
 
 <a id="req-003"></a>
 ### REQ-003 第一方容器预验证不可提升为生产发布证据
 
-- `prod-hosted` 可在独立 namespace 消费 reviewed main 的 Service Pipeline digest 制品，验证第一方容器、隔离空数据栈和 rootless user systemd 持久运行。
-- ReleaseManifest 配置包必须从 GHCR OCI digest 解包；Actions Artifact 配额不足不得诱发部署时重生、`latest` 或跳过制品门。
+- `prod-hosted` 只允许受限 legacy `non-promotable snapshot` reader 在独立 namespace 消费 reviewed main 的历史物料，验证第一方容器、隔离空数据栈和 rootless user systemd 持久运行；若迁移尚未完成，其遗留由父能力现有 `OPEN-010` 跟踪，不得把 reader 纳入正式 authority。
+- reader 必须重命名为显式 history/rehearsal-only API；不得保留 generic validate 名称，不得调用 public REM writer 或 formal caller，也不得创建 `CandidateMaterialManifest`、`QualificationFact`、stable tag、`ProdActivationAdmissionFact`、stage fact、`ProdReleasedFact`、ledger、receipt 或 admission。
+- snapshot 中的不可变物料只能按 exact digest 解包；Actions Artifact 配额不足不得诱发部署时重生、`latest` 或跳过制品门。
 - 受限单机只能按清单回收未运行旧容器和未使用镜像；Buildah external working container 仅在 `storage`、`PID=0`、名称与最小年龄全部命中时可回收。必须保留恢复容器与所有 volume，并在镜像传输前重新证明真实可用空间。
-- 预验证不得接受 rollout/SLO/rollback 参数，不得读取或写入正式 release ledger/receipt；容器部署结果与正式发布资格必须分别报告。
-- 隔离投影不得继承正式 credentials；商业登录、Push、模型、Elasticsearch Log sink 与 RTC Provider 只能明确 unavailable，禁止切到非生产 fixture 或 Mock。
+- 预验证不得接受 rollout/SLO/rollback 参数；容器部署结果与正式发布资格必须分别报告。隔离投影不得继承正式 credentials；商业登录、Push、模型、Elasticsearch Log sink 与 RTC Provider 只能明确 unavailable，禁止切到非生产 fixture 或 Mock。
 - 缺 Provider、SFU/TURN、正式数据、观测、灾备、DNS/TLS 或灰度回滚证据时，正式发布资格始终保持 `GATE_BLOCK`。
 
 <a id="req-004"></a>
 ### REQ-004 最终稳定性只接受 hosted soak authority
 
-- full rollout 的 hosted receipt `receiptId`、candidate、rollout artifact、source commit、配置图与契约图摘要必须由同一 hosted release ledger 绑定。
-- soak 起点取 full hosted receipt 的 `verifiedAt`，终点取 hosted ledger commit 时间；真实 Prometheus 窗口、Alertmanager 无 firing、full health、未过期凭据引用与 reviewed-main approval 任一缺失均 `GATE_BLOCK`。
-- 凭据证据只持久化安全引用、公钥摘要、issuer、expiry 与校验时间，禁止私钥、token 或本地路径进入 receipt。
-- 最终聚合器必须按 receipt identity 远程回读并比较 exact bytes；本地 fixture、自算 hash、任意 `fresh` 或字符串 approval ref 不建立 authority。
+- soak 必须 exact-byte 绑定 `ProdReleasedFact`；该事实已引用同一 `ProdActivationAdmissionFact`、全部 stage facts 与 `CandidateMaterialManifest`/factory digest 闭包，并绑定 source commit、配置图与契约图摘要。
+- soak 起点取 `ProdReleasedFact.verifiedAt`，终点取 hosted authority commit 时间；真实 Prometheus 窗口、Alertmanager 无 firing、full health、未过期凭据引用与 reviewed-main approval 任一缺失均 `GATE_BLOCK`。
+- 凭据证据只持久化安全引用、公钥摘要、issuer、expiry 与校验时间，禁止私钥、token 或本地路径进入事实。
+- 最终聚合器必须按 `ProdReleasedFact` identity 远程回读并比较 exact bytes；本地 fixture、自算 hash、任意 `fresh` 或字符串 approval ref 不建立 authority。
 
 ## 4. 契约引用
 
@@ -72,34 +72,32 @@
 <a id="gwt-002"></a>
 ### GWT-002 全部风险关闭后完成不可变灰度与恢复验证
 
-- GIVEN RP1-RP7 全部完成，外部前置条件真实可用。
-- WHEN 运行 canary、5、20、50、100、告警闭环和隔离恢复演练。
-- THEN 五个发布阶段使用同一 ReleaseManifest digest。
+- GIVEN RP1-RP7 全部完成，外部前置条件真实可用，且 artifact factory OCI 已封存为 `CandidateMaterialManifest` 并取得 `QualificationFact` 与 stable tag admission。
+- WHEN `ProdActivationAdmissionFact` 准入后运行 canary、5、20、50、100、告警闭环和隔离恢复演练。
+- THEN 五个发布阶段、`ProdReleasedFact` 与后续 soak 只消费同一 `CandidateMaterialManifest`/factory digest 闭包，source commit、build number 与 exact bytes 均不漂移且 builder invocation 为零。
 - THEN 真实 Prometheus SLO、锁/CAS、双签、config ACK、告警与恢复证据完整。
 - THEN 本 Story 范围内所有阻断级 `OPEN` 均达到完成判定，且不存在未归属风险。
 
 <a id="gwt-003"></a>
 ### GWT-003 不可提升的第一方容器预验证
 
-- GIVEN reviewed main 的 deployable ReleaseManifest、GHCR digest、用于 `first-party`
-  预演范围的 edge/service SSH key 与满足阈值的 prod-hosted 主机；正式发布仍按
-  edge/media/service/data 四平面凭据分别准入。
-- WHEN 执行 `stackctl deploy --target prod-hosted --mode prevalidate --prevalidate-scope first-party`。
+- GIVEN reviewed main 的历史物料只能由受限 legacy history/rehearsal `non-promotable snapshot` reader 读取，且用于 `first-party` 预演范围的 edge/service SSH key 与满足阈值的 prod-hosted 主机可用。
+- WHEN 执行显式 history/rehearsal-only prevalidation。
 - THEN 镜像传输前硬校验账号隔离、CPU、内存、容器空间、架构与端口，任一不足即 `GATE_BLOCK`。
 - THEN 当前可用空间、可回收空间和回收后实测空间分别可见；Buildah external working container 只有在 `storage`、`PID=0`、名称与最小年龄全部匹配时才进入回收范围，任何 volume、恢复容器或运行中容器都不进入回收范围。
 - THEN `integration-service` 只校验镜像和配置而不启动，LiveKit SFU、Coturn 与外部 Provider 不进入运行投影。
-- THEN service/edge user systemd unit 为 enabled/active，运行容器 digest 与 manifest 交付内容一致；隔离数据无 seed、无正式数据且不构成发布证据。
+- THEN service/edge user systemd unit 为 enabled/active，运行容器 digest 与 snapshot 物料一致；隔离数据无 seed、无正式数据且不构成发布证据。
 - THEN container runtime 与 Provider readiness 分轴输出；被排除的 Elasticsearch Log sink 等 readiness 保持 `GATE_BLOCK`，不得污染第一方镜像/进程部署结论。
-- THEN 报告可将第一方容器部署标为 passed，但正式发布资格仍为 `GATE_BLOCK`，且 hosted release ledger/receipt 均未写入。
+- THEN 报告可将第一方容器部署标为 passed，但正式发布资格仍为 `GATE_BLOCK`；public REM writer、formal caller、static gate 不可达且不得写入 ledger、receipt、qualification、admission、tag/stage 或 `ProdReleasedFact`。
 
 <a id="gwt-004"></a>
 ### GWT-004 hosted soak、凭据与审批闭环
 
 - GIVEN production protected environment 已配置 required reviewers、Alertmanager URL，以及 edge/service SSH 凭据的 reference/public digest/issuer/expiry metadata。
-- WHEN released full receipt 满足 canonical soak 窗口并提交 hosted soak request。
-- THEN hosted ledger 以权威 start/end 生成 immutable receipt，随后独立 receipt readback 与提交返回 exact-byte 一致。
-- THEN final acceptance 重新远程回读并只在 candidate、artifact、source、config/contract、SLO、alerts、health、credentials、approval 全部复验后返回 `soak/fresh/credentials/approval` claims。
-- THEN forged self-hash、stale soak、missing credential、unapproved、candidate drift 与 local synthetic receipt 全部 fail-closed。
+- WHEN exact `ProdReleasedFact` 满足 canonical soak 窗口并提交 hosted soak request。
+- THEN hosted authority 以该 `ProdReleasedFact.verifiedAt` 为 start、权威 commit 时间为 end 生成 immutable soak fact，随后独立 readback 与提交返回 exact-byte 一致。
+- THEN final acceptance 重新远程回读 `ProdReleasedFact`，只在其 `CandidateMaterialManifest`/factory digest、source、config/contract、全部 stage、SLO、alerts、health、credentials、approval 均完整复验后返回完整验收 claims。
+- THEN forged self-hash、stale soak、missing credential、unapproved、candidate drift、released-fact drift 与 local synthetic receipt 全部 fail-closed。
 
 ## 6. 依赖
 
@@ -124,7 +122,7 @@
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`track`
-- 影响或价值：尚缺实现或直接 `spec_ref`；目标：stackctl release report、health/inspect/doctor、rollback/restore receipt 均可复验。
+- 影响或价值：尚缺实现或直接 `spec_ref`；目标：artifact factory OCI 到 `CandidateMaterialManifest -> QualificationFact -> stable tag -> ProdActivationAdmissionFact -> stages -> ProdReleasedFact -> soak` 的同一 exact bytes 链，以及 health/inspect/doctor、rollback/restore 证据均可复验。
 - 完成判定：`GWT-002` 对应行为满足且真实测试 `spec_ref` 有效
 
 <a id="open-003"></a>

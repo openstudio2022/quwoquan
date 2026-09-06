@@ -12,10 +12,29 @@ on:
         description: Full Git SHA owned by the mainline candidate run
         required: true
         type: string
-      base_git_sha:
-        description: Optional affected-scope comparison SHA
-        required: false
-        default: ''
+      qualification_request_ref:
+        description: Exact immutable RC QualificationRequest OCI @sha256 ref
+        required: true
+        type: string
+      qualification_request_digest:
+        description: Exact digest suffix of qualification_request_ref
+        required: true
+        type: string
+      rc_tag_admission_ref:
+        description: Exact immutable RC tag AdmissionFact OCI @sha256 ref
+        required: true
+        type: string
+      artifact_build_number:
+        description: Hosted allocator result bound by the exact allocation fact
+        required: true
+        type: string
+      artifact_build_number_allocation_ref:
+        description: Exact immutable hosted build-number allocation fact OCI @sha256 ref
+        required: true
+        type: string
+      artifact_build_number_allocation_digest:
+        description: Exact digest suffix of the allocation fact ref
+        required: true
         type: string
     secrets:
       QWQ_ANDROID_RELEASE_STORE_PASSWORD: {required: true}
@@ -33,9 +52,42 @@ on:
       app_evidence_digest:
         description: OCI transport manifest digest; never a release candidate identity
         value: ${{ jobs.aggregate.outputs.app_evidence_digest }}
+      app_oci_digest:
+        description: Exact OCI transport digest for CandidateMaterialManifest artifacts
+        value: ${{ jobs.aggregate.outputs.app_oci_digest }}
       source_git_sha:
         description: Source SHA verified by every App build product
         value: ${{ jobs.aggregate.outputs.source_git_sha }}
+      source_tree_digest:
+        description: Exact source tree verified by every App build product
+        value: ${{ jobs.aggregate.outputs.source_tree_digest }}
+      qualification_request_ref:
+        description: Exact RC request that authorized this promotable factory run
+        value: ${{ jobs.aggregate.outputs.qualification_request_ref }}
+      qualification_request_digest:
+        description: Exact digest of the RC request authority
+        value: ${{ jobs.aggregate.outputs.qualification_request_digest }}
+      artifact_build_number:
+        description: Hosted monotonic build number embedded in every App product
+        value: ${{ jobs.aggregate.outputs.artifact_build_number }}
+      artifact_build_number_allocation_ref:
+        description: Exact hosted allocation fact bound by every App product
+        value: ${{ jobs.aggregate.outputs.artifact_build_number_allocation_ref }}
+      artifact_build_number_allocation_digest:
+        description: Exact digest of the hosted allocation fact
+        value: ${{ jobs.aggregate.outputs.artifact_build_number_allocation_digest }}
+      android_artifact_digest:
+        description: Exact Android prod artifact byte digest
+        value: ${{ jobs.aggregate.outputs.android_artifact_digest }}
+      ios_artifact_digest:
+        description: Exact iOS prod artifact byte digest
+        value: ${{ jobs.aggregate.outputs.ios_artifact_digest }}
+      web_artifact_digest:
+        description: Exact Web artifact byte digest
+        value: ${{ jobs.aggregate.outputs.web_artifact_digest }}
+      app_material_digest:
+        description: Canonical digest over the exact App material identity
+        value: ${{ jobs.aggregate.outputs.app_material_digest }}
       machine_critical_path_seconds:
         description: Diagnostic Jobs API execution path across five build products
         value: ${{ jobs.aggregate.outputs.machine_critical_path_seconds }}
@@ -102,6 +154,131 @@ jobs:
           [[ "$EXPECTED_SOURCE" =~ ^[0-9a-f]{40}$ ]]
           test "$(git rev-parse HEAD)" = "$EXPECTED_SOURCE"
           test -z "$(git status --porcelain --untracked-files=all)"
+      - id: rc_authority
+        name: Require exact RC request and hosted build-number allocation
+        env:
+          SOURCE_GIT_SHA: ${{ inputs.source_git_sha }}
+          QUALIFICATION_REQUEST_REF: ${{ inputs.qualification_request_ref }}
+          QUALIFICATION_REQUEST_DIGEST: ${{ inputs.qualification_request_digest }}
+          RC_TAG_ADMISSION_REF: ${{ inputs.rc_tag_admission_ref }}
+          ARTIFACT_BUILD_NUMBER: ${{ inputs.artifact_build_number }}
+          ARTIFACT_BUILD_NUMBER_ALLOCATION_REF: ${{ inputs.artifact_build_number_allocation_ref }}
+          ARTIFACT_BUILD_NUMBER_ALLOCATION_DIGEST: ${{ inputs.artifact_build_number_allocation_digest }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          [[ "$SOURCE_GIT_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$QUALIFICATION_REQUEST_REF" =~ ^ghcr\.io/[a-z0-9._/-]+@sha256:[0-9a-f]{64}$ ]]
+          [[ "$QUALIFICATION_REQUEST_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]
+          test "${QUALIFICATION_REQUEST_REF##*@}" = "$QUALIFICATION_REQUEST_DIGEST"
+          [[ "$RC_TAG_ADMISSION_REF" =~ ^ghcr\.io/[a-z0-9._/-]+@sha256:[0-9a-f]{64}$ ]]
+          [[ "$ARTIFACT_BUILD_NUMBER" =~ ^[1-9][0-9]*$ ]]
+          [[ "$ARTIFACT_BUILD_NUMBER_ALLOCATION_REF" =~ ^ghcr\.io/[a-z0-9._/-]+@sha256:[0-9a-f]{64}$ ]]
+          [[ "$ARTIFACT_BUILD_NUMBER_ALLOCATION_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]
+          test "${ARTIFACT_BUILD_NUMBER_ALLOCATION_REF##*@}" = "$ARTIFACT_BUILD_NUMBER_ALLOCATION_DIGEST"
+          AUTHORITY_ROOT="$RUNNER_TEMP/app-factory-authority"
+          mkdir -p "$AUTHORITY_ROOT"
+          printf '%s' "$GITHUB_TOKEN" | oras login "$REGISTRY" --username "${{ github.actor }}" --password-stdin
+          trap 'oras logout "$REGISTRY" >/dev/null 2>&1 || true' EXIT
+          python3 quwoquan_ops/ci/promotion_evidence.py materialize-oci \
+            --ref "$QUALIFICATION_REQUEST_REF" \
+            --output-file "$AUTHORITY_ROOT/qualification-request.json" >/dev/null
+          python3 quwoquan_ops/ci/promotion_evidence.py materialize-oci \
+            --ref "$RC_TAG_ADMISSION_REF" \
+            --output-file "$AUTHORITY_ROOT/rc-tag-admission.json" >/dev/null
+          python3 quwoquan_ops/ci/promotion_evidence.py materialize-oci \
+            --ref "$ARTIFACT_BUILD_NUMBER_ALLOCATION_REF" \
+            --output-file "$AUTHORITY_ROOT/artifact-build-number-allocation.json" >/dev/null
+          python3 - "$AUTHORITY_ROOT/qualification-request.json" \
+            "$AUTHORITY_ROOT/rc-tag-admission.json" \
+            "$AUTHORITY_ROOT/artifact-build-number-allocation.json" <<'PY'
+          import hashlib
+          import json
+          import os
+          import re
+          import sys
+
+          def canonical_bytes(value):
+              return json.dumps(
+                  value, ensure_ascii=False, sort_keys=True,
+                  separators=(",", ":"), allow_nan=False,
+              ).encode("utf-8")
+
+          def read_canonical(path):
+              raw = open(path, "rb").read()
+              value = json.loads(raw)
+              if not isinstance(value, dict) or raw != canonical_bytes(value) + b"\n":
+                  raise SystemExit("GATE_BLOCK: App factory authority bytes are not canonical")
+              return value, "sha256:" + hashlib.sha256(raw).hexdigest()
+
+          request, request_fact_digest = read_canonical(sys.argv[1])
+          admission, admission_fact_digest = read_canonical(sys.argv[2])
+          allocation, _ = read_canonical(sys.argv[3])
+          request_keys = {
+              "schema", "rcTagAdmission", "mainSourceSeal",
+              "integrationQualification", "requestAuthority", "tagName",
+              "sourceGitSha", "sourceTree", "requestedAt", "requestId",
+          }
+          admission_keys = {
+              "schema", "admissionId", "decision", "tagKind", "tagName",
+              "tagObjectOid", "peeledCommit", "sourceTree", "productVersion",
+              "rcSequence", "selectionFact", "productVersionManifestDigest",
+              "releaseSelectionPolicyDigest", "admissionIntent", "mutationOutcome",
+              "creatorReadback", "rulesetReadback", "admittedAt",
+          }
+          allocation_keys = {
+              "schema", "allocationId", "requestId", "qualificationRequest",
+              "artifactBuildNumber", "predecessor", "hostedAuthority",
+          }
+          request_body = dict(request)
+          request_id = request_body.pop("requestId", None)
+          admission_body = dict(admission)
+          admission_id = admission_body.pop("admissionId", None)
+          allocation_body = dict(allocation)
+          allocation_id = allocation_body.pop("allocationId", None)
+          canonical_digest = lambda value: "sha256:" + hashlib.sha256(canonical_bytes(value)).hexdigest()
+          request_authority = request.get("rcTagAdmission")
+          allocation_request = allocation.get("qualificationRequest")
+          hosted = allocation.get("hostedAuthority")
+          if (
+              set(request) != request_keys
+              or request.get("schema") != "quwoquan_ops.release_qualification_request.v1"
+              or request_id != canonical_digest(request_body)
+              or request.get("sourceGitSha") != os.environ["SOURCE_GIT_SHA"]
+              or not re.fullmatch(r"[0-9a-f]{40}", str(request.get("sourceTree") or ""))
+              or not isinstance(request_authority, dict)
+              or request_authority
+              != {"ref": os.environ["RC_TAG_ADMISSION_REF"], "digest": admission_fact_digest}
+              or set(admission) != admission_keys
+              or admission.get("schema") != "quwoquan_ops.release_candidate_tag_admission_fact.v1"
+              or admission.get("decision") != "admitted"
+              or admission.get("tagKind") != "rc"
+              or admission_id != canonical_digest(admission_body)
+              or admission.get("peeledCommit") != request.get("sourceGitSha")
+              or admission.get("sourceTree") != request.get("sourceTree")
+              or admission.get("tagName") != request.get("tagName")
+              or request.get("tagName")
+              != f"v{admission.get('productVersion')}-rc.{admission.get('rcSequence')}"
+          ):
+              raise SystemExit("GATE_BLOCK: qualification request/RC authority drifted")
+          if (
+              set(allocation) != allocation_keys
+              or allocation.get("schema")
+              != "quwoquan_ops.artifact_build_number_allocation.v1"
+              or allocation_id != canonical_digest(allocation_body)
+              or allocation.get("artifactBuildNumber")
+              != int(os.environ["ARTIFACT_BUILD_NUMBER"])
+              or allocation.get("requestId") != request_id
+              or allocation_request
+              != {"ref": os.environ["QUALIFICATION_REQUEST_REF"], "digest": request_fact_digest}
+              or allocation.get("predecessor") is not None
+              or not isinstance(hosted, dict)
+              or set(hosted) != {"provider", "runId", "runNumber"}
+              or hosted.get("provider") != "github_actions_workflow_run_number"
+              or hosted.get("runNumber") != int(os.environ["ARTIFACT_BUILD_NUMBER"])
+          ):
+              raise SystemExit("GATE_BLOCK: build-number allocation authority drifted")
+          PY
       - id: strict_inputs
         name: Prepare fresh source-bound package inputs
         env:
@@ -128,6 +305,7 @@ jobs:
           QWQ_DEPLOY_WORK_ROOT: ${{ runner.temp }}/quwoquan-deploy
           QWQ_APP_RUNTIME_CONFIG_TRUST_PATH: ${{ steps.strict_inputs.outputs.runtime_config_trust_path }}
           QWQ_COCOAPODS_EXECUTABLE: ${{ steps.strict_inputs.outputs.cocoapods_executable }}
+          QWQ_ARTIFACT_BUILD_NUMBER: ${{ inputs.artifact_build_number }}
           QWQ_ANDROID_RELEASE_STORE_PASSWORD: ${{ secrets.QWQ_ANDROID_RELEASE_STORE_PASSWORD }}
           QWQ_ANDROID_RELEASE_KEY_ALIAS: ${{ secrets.QWQ_ANDROID_RELEASE_KEY_ALIAS }}
           QWQ_ANDROID_RELEASE_KEY_PASSWORD: ${{ secrets.QWQ_ANDROID_RELEASE_KEY_PASSWORD }}
@@ -141,6 +319,11 @@ jobs:
           PROD_OPS_OIDC_SCOPE: ${{ vars.PROD_OPS_OIDC_SCOPE }}
         run: |
           set -euo pipefail
+          export QWQ_ARTIFACT_BUILD_NUMBER_ALLOCATION_REF='${{ inputs.artifact_build_number_allocation_ref }}'
+          export QWQ_ARTIFACT_BUILD_NUMBER_ALLOCATION_DIGEST='${{ inputs.artifact_build_number_allocation_digest }}'
+          export QWQ_QUALIFICATION_REQUEST_REF='${{ inputs.qualification_request_ref }}'
+          export QWQ_QUALIFICATION_REQUEST_DIGEST='${{ inputs.qualification_request_digest }}'
+          export QWQ_RC_TAG_ADMISSION_REF='${{ inputs.rc_tag_admission_ref }}'
           if [ "${{ matrix.format }}" = apk ]; then
             FIREBASE_INPUT=QWQ_ANDROID_NONPROD_GOOGLE_SERVICES_JSON
             if [ "${{ matrix.profile }}" = prod ]; then
@@ -208,13 +391,13 @@ jobs:
           print(current.resolve())
           PY
             )"
-            mkdir -p "$RUNNER_TEMP/app-candidate-evidence/payloads/opsPortal"
+            mkdir -p "$RUNNER_TEMP/app-candidate-evidence/ops-portal/payload"
             cp "$PORTAL_DIR/manifest.json" \
-              "$RUNNER_TEMP/app-candidate-evidence/payloads/opsPortal/manifest.json"
+              "$RUNNER_TEMP/app-candidate-evidence/ops-portal/payload/manifest.json"
             cp -R "$PORTAL_DIR/dist" \
-              "$RUNNER_TEMP/app-candidate-evidence/payloads/opsPortal/dist"
+              "$RUNNER_TEMP/app-candidate-evidence/ops-portal/payload/dist"
             cp "$PORTAL_DIR/provenance.json" \
-              "$RUNNER_TEMP/app-candidate-evidence/ops-portal-provenance.json"
+              "$RUNNER_TEMP/app-candidate-evidence/ops-portal/provenance.json"
           fi
       - name: Publish build-product shard to immutable OCI transport
         env: {GITHUB_TOKEN: '${{ github.token }}'}
@@ -236,7 +419,18 @@ jobs:
     outputs:
       app_evidence_ref: ${{ steps.identity.outputs.app_evidence_ref }}
       app_evidence_digest: ${{ steps.identity.outputs.app_evidence_digest }}
+      app_oci_digest: ${{ steps.identity.outputs.app_oci_digest }}
       source_git_sha: ${{ steps.identity.outputs.source_git_sha }}
+      source_tree_digest: ${{ steps.identity.outputs.source_tree_digest }}
+      qualification_request_ref: ${{ steps.identity.outputs.qualification_request_ref }}
+      qualification_request_digest: ${{ steps.identity.outputs.qualification_request_digest }}
+      artifact_build_number: ${{ steps.identity.outputs.artifact_build_number }}
+      artifact_build_number_allocation_ref: ${{ steps.identity.outputs.artifact_build_number_allocation_ref }}
+      artifact_build_number_allocation_digest: ${{ steps.identity.outputs.artifact_build_number_allocation_digest }}
+      android_artifact_digest: ${{ steps.identity.outputs.android_artifact_digest }}
+      ios_artifact_digest: ${{ steps.identity.outputs.ios_artifact_digest }}
+      web_artifact_digest: ${{ steps.identity.outputs.web_artifact_digest }}
+      app_material_digest: ${{ steps.identity.outputs.app_material_digest }}
       machine_critical_path_seconds: ${{ steps.timing.outputs.machine_critical_path_seconds }}
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
@@ -263,6 +457,240 @@ jobs:
           python3 quwoquan_ops/ci/render_release_application_package.py validate-bundle \
             --bundle-dir "$RUNNER_TEMP/app-candidate-evidence" \
             --source-git-sha "$SOURCE_GIT_SHA" --source-tree-digest "$SOURCE_TREE_DIGEST"
+      - name: Write canonical App factory material
+        env:
+          SOURCE_GIT_SHA: ${{ inputs.source_git_sha }}
+          QUALIFICATION_REQUEST_REF: ${{ inputs.qualification_request_ref }}
+          QUALIFICATION_REQUEST_DIGEST: ${{ inputs.qualification_request_digest }}
+          RC_TAG_ADMISSION_REF: ${{ inputs.rc_tag_admission_ref }}
+          ARTIFACT_BUILD_NUMBER: ${{ inputs.artifact_build_number }}
+          ARTIFACT_BUILD_NUMBER_ALLOCATION_REF: ${{ inputs.artifact_build_number_allocation_ref }}
+          ARTIFACT_BUILD_NUMBER_ALLOCATION_DIGEST: ${{ inputs.artifact_build_number_allocation_digest }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          AUTHORITY_ROOT="$RUNNER_TEMP/app-factory-authority"
+          mkdir -p "$AUTHORITY_ROOT"
+          printf '%s' "$GITHUB_TOKEN" | oras login "$REGISTRY" --username "${{ github.actor }}" --password-stdin
+          trap 'oras logout "$REGISTRY" >/dev/null 2>&1 || true' EXIT
+          python3 quwoquan_ops/ci/promotion_evidence.py materialize-oci \
+            --ref "$QUALIFICATION_REQUEST_REF" \
+            --output-file "$AUTHORITY_ROOT/qualification-request.json" >/dev/null
+          python3 quwoquan_ops/ci/promotion_evidence.py materialize-oci \
+            --ref "$RC_TAG_ADMISSION_REF" \
+            --output-file "$AUTHORITY_ROOT/rc-tag-admission.json" >/dev/null
+          python3 quwoquan_ops/ci/promotion_evidence.py materialize-oci \
+            --ref "$ARTIFACT_BUILD_NUMBER_ALLOCATION_REF" \
+            --output-file "$AUTHORITY_ROOT/artifact-build-number-allocation.json" >/dev/null
+          python3 - "$RUNNER_TEMP/app-candidate-evidence" \
+            "$AUTHORITY_ROOT/qualification-request.json" \
+            "$AUTHORITY_ROOT/rc-tag-admission.json" \
+            "$AUTHORITY_ROOT/artifact-build-number-allocation.json" <<'PY'
+          import hashlib
+          import json
+          import os
+          import re
+          import subprocess
+          import sys
+          from pathlib import Path
+
+          from quwoquan_ops.ci.render_release_application_package import (
+              ARTIFACT_REQUIRED_FIELDS,
+              _validate_artifact_manifest,
+          )
+
+          def canonical_bytes(value):
+              return json.dumps(
+                  value, ensure_ascii=False, sort_keys=True,
+                  separators=(",", ":"), allow_nan=False,
+              ).encode("utf-8")
+
+          def canonical_digest(value):
+              return "sha256:" + hashlib.sha256(canonical_bytes(value)).hexdigest()
+
+          def read_canonical(path):
+              raw = Path(path).read_bytes()
+              value = json.loads(raw)
+              if not isinstance(value, dict) or raw != canonical_bytes(value) + b"\n":
+                  raise SystemExit("GATE_BLOCK: App factory authority bytes are not canonical")
+              return value, "sha256:" + hashlib.sha256(raw).hexdigest()
+
+          root = Path(sys.argv[1])
+          request, request_fact_digest = read_canonical(sys.argv[2])
+          admission, admission_fact_digest = read_canonical(sys.argv[3])
+          allocation, _ = read_canonical(sys.argv[4])
+          immutable_ref = re.compile(r"ghcr\.io/[a-z0-9._/-]+@sha256:[0-9a-f]{64}")
+          digest_pattern = re.compile(r"sha256:[0-9a-f]{64}")
+          if (
+              immutable_ref.fullmatch(os.environ["QUALIFICATION_REQUEST_REF"]) is None
+              or os.environ["QUALIFICATION_REQUEST_REF"].rsplit("@", 1)[1]
+              != os.environ["QUALIFICATION_REQUEST_DIGEST"]
+              or immutable_ref.fullmatch(os.environ["RC_TAG_ADMISSION_REF"]) is None
+              or immutable_ref.fullmatch(os.environ["ARTIFACT_BUILD_NUMBER_ALLOCATION_REF"])
+              is None
+              or os.environ["ARTIFACT_BUILD_NUMBER_ALLOCATION_REF"].rsplit("@", 1)[1]
+              != os.environ["ARTIFACT_BUILD_NUMBER_ALLOCATION_DIGEST"]
+              or re.fullmatch(r"[1-9][0-9]*", os.environ["ARTIFACT_BUILD_NUMBER"])
+              is None
+          ):
+              raise SystemExit("GATE_BLOCK: App authority locator is invalid")
+
+          request_keys = {
+              "schema", "rcTagAdmission", "mainSourceSeal",
+              "integrationQualification", "requestAuthority", "tagName",
+              "sourceGitSha", "sourceTree", "requestedAt", "requestId",
+          }
+          admission_keys = {
+              "schema", "admissionId", "decision", "tagKind", "tagName",
+              "tagObjectOid", "peeledCommit", "sourceTree", "productVersion",
+              "rcSequence", "selectionFact", "productVersionManifestDigest",
+              "releaseSelectionPolicyDigest", "admissionIntent", "mutationOutcome",
+              "creatorReadback", "rulesetReadback", "admittedAt",
+          }
+          allocation_keys = {
+              "schema", "allocationId", "requestId", "qualificationRequest",
+              "artifactBuildNumber", "predecessor", "hostedAuthority",
+          }
+          request_body = dict(request)
+          request_id = request_body.pop("requestId", None)
+          admission_body = dict(admission)
+          admission_id = admission_body.pop("admissionId", None)
+          allocation_body = dict(allocation)
+          allocation_id = allocation_body.pop("allocationId", None)
+          request_authority = request.get("rcTagAdmission")
+          hosted = allocation.get("hostedAuthority")
+          expected_source_tree = "sha1:" + str(request.get("sourceTree") or "")
+          if (
+              set(request) != request_keys
+              or request.get("schema") != "quwoquan_ops.release_qualification_request.v1"
+              or request_id != canonical_digest(request_body)
+              or request.get("sourceGitSha") != os.environ["SOURCE_GIT_SHA"]
+              or expected_source_tree
+              != "sha1:" + subprocess.check_output(
+                  ["git", "rev-parse", "HEAD^{tree}"], text=True
+              ).strip()
+              or not isinstance(request_authority, dict)
+              or request_authority
+              != {"ref": os.environ["RC_TAG_ADMISSION_REF"], "digest": admission_fact_digest}
+              or set(admission) != admission_keys
+              or admission.get("schema") != "quwoquan_ops.release_candidate_tag_admission_fact.v1"
+              or admission.get("decision") != "admitted"
+              or admission.get("tagKind") != "rc"
+              or admission_id != canonical_digest(admission_body)
+              or admission.get("peeledCommit") != request.get("sourceGitSha")
+              or admission.get("sourceTree") != request.get("sourceTree")
+              or admission.get("tagName") != request.get("tagName")
+              or request.get("tagName")
+              != f"v{admission.get('productVersion')}-rc.{admission.get('rcSequence')}"
+              or set(allocation) != allocation_keys
+              or allocation.get("schema")
+              != "quwoquan_ops.artifact_build_number_allocation.v1"
+              or allocation_id != canonical_digest(allocation_body)
+              or allocation.get("requestId") != request_id
+              or allocation.get("qualificationRequest")
+              != {"ref": os.environ["QUALIFICATION_REQUEST_REF"], "digest": request_fact_digest}
+              or allocation.get("artifactBuildNumber")
+              != int(os.environ["ARTIFACT_BUILD_NUMBER"])
+              or allocation.get("predecessor") is not None
+              or not isinstance(hosted, dict)
+              or set(hosted) != {"provider", "runId", "runNumber"}
+              or hosted.get("provider") != "github_actions_workflow_run_number"
+              or hosted.get("runNumber") != int(os.environ["ARTIFACT_BUILD_NUMBER"])
+          ):
+              raise SystemExit("GATE_BLOCK: App request/RC/allocation authority drifted")
+
+          authority_fields = {
+              "qualificationRequestRef",
+              "qualificationRequestDigest",
+              "rcTagAdmissionRef",
+              "artifactBuildNumberAllocationRef",
+              "artifactBuildNumberAllocationDigest",
+          }
+          product_ids = {
+              "android": "android-prod-apk",
+              "ios": "ios-prod-app",
+              "web": "web-shared",
+          }
+          manifests = {}
+          for platform, product_id in product_ids.items():
+              package = json.loads(
+                  (root / "application-packages" / f"{product_id}.json").read_text(
+                      encoding="utf-8"
+                  )
+              )
+              candidate = package.get("artifactManifest")
+              expected_fields = set(ARTIFACT_REQUIRED_FIELDS) | authority_fields
+              if platform in {"android", "ios"}:
+                  expected_fields.add("runtimeConfigTrustEnvelopeDigest")
+              if not isinstance(candidate, dict) or set(candidate) != expected_fields:
+                  raise SystemExit(
+                      f"GATE_BLOCK: {platform} AppArtifactManifest shape drifted"
+                  )
+              try:
+                  manifest = _validate_artifact_manifest(
+                      candidate,
+                      build_product_id=product_id,
+                      source_git_sha=os.environ["SOURCE_GIT_SHA"],
+                      source_tree_digest=expected_source_tree,
+                  )
+              except ValueError as error:
+                  raise SystemExit(
+                      f"GATE_BLOCK: {platform} AppArtifactManifest identity drifted: {error}"
+                  ) from error
+              if (
+                  manifest.get("displayVersion") != admission.get("productVersion")
+                  or manifest.get("buildNumber") != os.environ["ARTIFACT_BUILD_NUMBER"]
+                  or manifest.get("qualificationRequestRef")
+                  != os.environ["QUALIFICATION_REQUEST_REF"]
+                  or manifest.get("qualificationRequestDigest")
+                  != os.environ["QUALIFICATION_REQUEST_DIGEST"]
+                  or manifest.get("rcTagAdmissionRef")
+                  != os.environ["RC_TAG_ADMISSION_REF"]
+                  or manifest.get("artifactBuildNumberAllocationRef")
+                  != os.environ["ARTIFACT_BUILD_NUMBER_ALLOCATION_REF"]
+                  or manifest.get("artifactBuildNumberAllocationDigest")
+                  != os.environ["ARTIFACT_BUILD_NUMBER_ALLOCATION_DIGEST"]
+                  or manifest.get("promotable") is not True
+              ):
+                  raise SystemExit(
+                      f"GATE_BLOCK: {platform} AppArtifactManifest authority drifted"
+                  )
+              for field in (
+                  "artifactDigest", "signingIdentityDigest", "buildProvenanceDigest"
+              ):
+                  if digest_pattern.fullmatch(str(manifest.get(field) or "")) is None:
+                      raise SystemExit(
+                          f"GATE_BLOCK: {platform} AppArtifactManifest {field} is invalid"
+                      )
+              if platform in {"android", "ios"} and digest_pattern.fullmatch(
+                  str(manifest.get("runtimeConfigTrustEnvelopeDigest") or "")
+              ) is None:
+                  raise SystemExit(
+                      f"GATE_BLOCK: {platform} AppArtifactManifest runtime trust is invalid"
+                  )
+              manifests[platform] = manifest
+          material = {
+              "schema": "quwoquan_ops.app_factory_material",
+              "sourceGitSha": os.environ["SOURCE_GIT_SHA"],
+              "sourceTreeDigest": expected_source_tree,
+              "qualificationRequest": {
+                  "ref": os.environ["QUALIFICATION_REQUEST_REF"],
+                  "digest": os.environ["QUALIFICATION_REQUEST_DIGEST"],
+              },
+              "rcTagAdmissionRef": os.environ["RC_TAG_ADMISSION_REF"],
+              "artifactBuildNumber": int(os.environ["ARTIFACT_BUILD_NUMBER"]),
+              "artifactBuildNumberAllocation": {
+                  "ref": os.environ["ARTIFACT_BUILD_NUMBER_ALLOCATION_REF"],
+                  "digest": os.environ["ARTIFACT_BUILD_NUMBER_ALLOCATION_DIGEST"],
+              },
+              "artifacts": manifests,
+          }
+          material["materialDigest"] = canonical_digest(material)
+          output = root / "manifest.json"
+          if output.exists() or output.is_symlink():
+              raise SystemExit("GATE_BLOCK: App factory manifest already exists")
+          output.write_bytes(canonical_bytes(material) + b"\n")
+          PY
       - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
       - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9
         with: {registry: '${{ env.REGISTRY }}', username: '${{ github.actor }}', password: '${{ secrets.GITHUB_TOKEN }}'}
@@ -276,18 +704,181 @@ jobs:
           tags: ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/app-candidate-artifact:run-${{ github.run_id }}-${{ github.run_attempt }}
           sbom: true
           provenance: mode=max
-      - id: identity
-        name: Expose immutable App OCI identity
+      - name: Read back published App factory OCI payload
         env:
-          SOURCE_GIT_SHA: ${{ inputs.source_git_sha }}
           APP_EVIDENCE_DIGEST: ${{ steps.publish.outputs.digest }}
         run: |
           set -euo pipefail
           [[ "$APP_EVIDENCE_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]
           APP_EVIDENCE_REF="$REGISTRY/$IMAGE_PREFIX/app-candidate-artifact@$APP_EVIDENCE_DIGEST"
+          python3 quwoquan_ops/ci/materialize_evidence_oci.py \
+            --ref "$APP_EVIDENCE_REF" \
+            --expected-digest "$APP_EVIDENCE_DIGEST" \
+            --output-dir "$RUNNER_TEMP/published-app-factory-evidence" \
+            --require-file manifest.json
+      - id: identity
+        name: Expose exact App OCI and material identity
+        env:
+          SOURCE_GIT_SHA: ${{ inputs.source_git_sha }}
+          APP_EVIDENCE_DIGEST: ${{ steps.publish.outputs.digest }}
+          QUALIFICATION_REQUEST_REF: ${{ inputs.qualification_request_ref }}
+          QUALIFICATION_REQUEST_DIGEST: ${{ inputs.qualification_request_digest }}
+          ARTIFACT_BUILD_NUMBER: ${{ inputs.artifact_build_number }}
+          ARTIFACT_BUILD_NUMBER_ALLOCATION_REF: ${{ inputs.artifact_build_number_allocation_ref }}
+          ARTIFACT_BUILD_NUMBER_ALLOCATION_DIGEST: ${{ inputs.artifact_build_number_allocation_digest }}
+          RC_TAG_ADMISSION_REF: ${{ inputs.rc_tag_admission_ref }}
+        run: |
+          set -euo pipefail
+          [[ "$APP_EVIDENCE_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]
+          python3 - "$RUNNER_TEMP/app-candidate-evidence" \
+            "$RUNNER_TEMP/published-app-factory-evidence" <<'PY' >> "$GITHUB_OUTPUT"
+          import hashlib
+          import json
+          import os
+          import re
+          import subprocess
+          import sys
+          from pathlib import Path
+
+          from quwoquan_ops.ci.render_release_application_package import (
+              ARTIFACT_REQUIRED_FIELDS,
+              _validate_artifact_manifest,
+          )
+
+          def canonical_bytes(value):
+              return json.dumps(
+                  value, ensure_ascii=False, sort_keys=True,
+                  separators=(",", ":"), allow_nan=False,
+              ).encode("utf-8")
+
+          root = Path(sys.argv[1])
+          published_root = Path(sys.argv[2])
+          manifest_path = root / "manifest.json"
+          published_manifest_path = published_root / "manifest.json"
+          raw = manifest_path.read_bytes()
+          if published_manifest_path.read_bytes() != raw:
+              raise SystemExit(
+                  "GATE_BLOCK: published App factory manifest differs from build context"
+              )
+          manifest = json.loads(raw)
+          if not isinstance(manifest, dict) or raw != canonical_bytes(manifest) + b"\n":
+              raise SystemExit("GATE_BLOCK: App factory material bytes are not canonical")
+          if "appEvidenceDigest" in manifest:
+              raise SystemExit(
+                  "GATE_BLOCK: App factory material contains self-referential appEvidenceDigest"
+              )
+          expected_keys = {
+              "schema", "sourceGitSha", "sourceTreeDigest", "qualificationRequest",
+              "rcTagAdmissionRef", "artifactBuildNumber",
+              "artifactBuildNumberAllocation", "artifacts", "materialDigest",
+          }
+          unsigned = dict(manifest)
+          claimed_material_digest = unsigned.pop("materialDigest", None)
+          calculated_material_digest = "sha256:" + hashlib.sha256(
+              canonical_bytes(unsigned)
+          ).hexdigest()
+          request = {
+              "ref": os.environ["QUALIFICATION_REQUEST_REF"],
+              "digest": os.environ["QUALIFICATION_REQUEST_DIGEST"],
+          }
+          allocation = {
+              "ref": os.environ["ARTIFACT_BUILD_NUMBER_ALLOCATION_REF"],
+              "digest": os.environ["ARTIFACT_BUILD_NUMBER_ALLOCATION_DIGEST"],
+          }
+          artifacts = manifest.get("artifacts")
+          if (
+              set(manifest) != expected_keys
+              or manifest.get("schema") != "quwoquan_ops.app_factory_material"
+              or manifest.get("sourceGitSha") != os.environ["SOURCE_GIT_SHA"]
+              or manifest.get("sourceTreeDigest")
+              != "sha1:" + subprocess.check_output(
+                  ["git", "rev-parse", "HEAD^{tree}"], text=True
+              ).strip()
+              or manifest.get("qualificationRequest") != request
+              or manifest.get("rcTagAdmissionRef")
+              != os.environ["RC_TAG_ADMISSION_REF"]
+              or manifest.get("artifactBuildNumber")
+              != int(os.environ["ARTIFACT_BUILD_NUMBER"])
+              or manifest.get("artifactBuildNumberAllocation") != allocation
+              or claimed_material_digest != calculated_material_digest
+              or not isinstance(artifacts, dict)
+              or set(artifacts) != {"android", "ios", "web"}
+          ):
+              raise SystemExit("GATE_BLOCK: App factory material identity drifted")
+          authority_fields = {
+              "qualificationRequestRef",
+              "qualificationRequestDigest",
+              "rcTagAdmissionRef",
+              "artifactBuildNumberAllocationRef",
+              "artifactBuildNumberAllocationDigest",
+          }
+          product_ids = {
+              "android": "android-prod-apk",
+              "ios": "ios-prod-app",
+              "web": "web-shared",
+          }
+          digests = {}
+          for platform, product_id in product_ids.items():
+              candidate = artifacts.get(platform)
+              expected_fields = set(ARTIFACT_REQUIRED_FIELDS) | authority_fields
+              if platform in {"android", "ios"}:
+                  expected_fields.add("runtimeConfigTrustEnvelopeDigest")
+              if not isinstance(candidate, dict) or set(candidate) != expected_fields:
+                  raise SystemExit(
+                      f"GATE_BLOCK: {platform} AppArtifactManifest shape drifted"
+                  )
+              try:
+                  normalized = _validate_artifact_manifest(
+                      candidate,
+                      build_product_id=product_id,
+                      source_git_sha=os.environ["SOURCE_GIT_SHA"],
+                      source_tree_digest=str(manifest["sourceTreeDigest"]),
+                  )
+              except ValueError as error:
+                  raise SystemExit(
+                      f"GATE_BLOCK: {platform} AppArtifactManifest identity drifted: {error}"
+                  ) from error
+              if (
+                  normalized.get("buildNumber") != os.environ["ARTIFACT_BUILD_NUMBER"]
+                  or normalized.get("qualificationRequestRef") != request["ref"]
+                  or normalized.get("qualificationRequestDigest") != request["digest"]
+                  or normalized.get("rcTagAdmissionRef")
+                  != os.environ["RC_TAG_ADMISSION_REF"]
+                  or normalized.get("artifactBuildNumberAllocationRef")
+                  != allocation["ref"]
+                  or normalized.get("artifactBuildNumberAllocationDigest")
+                  != allocation["digest"]
+                  or normalized.get("promotable") is not True
+              ):
+                  raise SystemExit(
+                      f"GATE_BLOCK: {platform} AppArtifactManifest authority drifted"
+                  )
+              artifact_digest = str(normalized.get("artifactDigest") or "")
+              if re.fullmatch(r"sha256:[0-9a-f]{64}", artifact_digest) is None:
+                  raise SystemExit(
+                      f"GATE_BLOCK: {platform} AppArtifactManifest artifact digest is invalid"
+                  )
+              digests[platform] = artifact_digest
+          if artifacts["ios"].get("applicationId") == "com.example.quwoquanApp":
+              raise SystemExit(
+                  "GATE_BLOCK: iOS production identity remains externally unregistered"
+              )
+          print(f"source_tree_digest={manifest['sourceTreeDigest']}")
+          print(f"qualification_request_ref={request['ref']}")
+          print(f"qualification_request_digest={request['digest']}")
+          print(f"artifact_build_number={manifest['artifactBuildNumber']}")
+          print(f"artifact_build_number_allocation_ref={allocation['ref']}")
+          print(f"artifact_build_number_allocation_digest={allocation['digest']}")
+          print(f"android_artifact_digest={digests['android']}")
+          print(f"ios_artifact_digest={digests['ios']}")
+          print(f"web_artifact_digest={digests['web']}")
+          print(f"app_material_digest={claimed_material_digest}")
+          PY
+          APP_EVIDENCE_REF="$REGISTRY/$IMAGE_PREFIX/app-candidate-artifact@$APP_EVIDENCE_DIGEST"
           {
             echo "app_evidence_ref=$APP_EVIDENCE_REF"
             echo "app_evidence_digest=$APP_EVIDENCE_DIGEST"
+            echo "app_oci_digest=$APP_EVIDENCE_DIGEST"
             echo "source_git_sha=$SOURCE_GIT_SHA"
           } >> "$GITHUB_OUTPUT"
       - id: timing
