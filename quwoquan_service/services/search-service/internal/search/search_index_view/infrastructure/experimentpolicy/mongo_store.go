@@ -80,8 +80,26 @@ func (s *MongoStore) Apply(
 	if loadErr != nil || !found {
 		return application.ExperimentPolicy{}, false, errors.Join(err, loadErr)
 	}
-	if current.Revision > canonical.Revision || current.Revision == canonical.Revision && current.Digest == canonical.Digest {
+	if current.Revision > canonical.Revision {
 		return current, false, nil
+	}
+	if current.Revision == canonical.Revision {
+		// 存量 digest 字段只是 canonical 函数的缓存；以重算结果为准，
+		// 语义内容相同时把落库的 digest/updatedAt 对齐到当前 canonical。
+		recomputed, recomputeErr := application.CanonicalExperimentPolicy(current)
+		if recomputeErr != nil {
+			return application.ExperimentPolicy{}, false, recomputeErr
+		}
+		if recomputed.Digest == canonical.Digest {
+			if _, alignErr := s.collection.UpdateOne(
+				ctx,
+				bson.M{"_id": canonical.ID, "revision": canonical.Revision},
+				bson.M{"$set": bson.M{"updatedAt": canonical.UpdatedAt, "digest": canonical.Digest}},
+			); alignErr != nil {
+				return application.ExperimentPolicy{}, false, alignErr
+			}
+			return canonical, true, nil
+		}
 	}
 	return application.ExperimentPolicy{}, false, fmt.Errorf("search Experiment policy revision %d has conflicting content", canonical.Revision)
 }
