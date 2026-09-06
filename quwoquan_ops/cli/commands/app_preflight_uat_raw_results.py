@@ -15,7 +15,9 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path, PurePosixPath
 from typing import Any
 
-from quwoquan_ops.cli.lib.environment_acceptance_fact import required_raw_slot_id
+from quwoquan_ops.cli.lib.content_api_consumer_authority import (
+    content_consumer_raw_slot_id,
+)
 from quwoquan_ops.cli.lib.readiness_case_result import (
     ReadinessCaseResultError,
     canonical_json_bytes,
@@ -282,7 +284,7 @@ def _required_slots(plan: Mapping[str, Any]) -> tuple[str, list[dict[str, str]]]
 
 
 def _slot_id(binding_digest: str, slot: Mapping[str, str]) -> str:
-    return required_raw_slot_id(
+    return content_consumer_raw_slot_id(
         target_uat_binding_digest=binding_digest,
         sample_id=slot["sampleId"],
         entry_surface=slot["entrySurface"],

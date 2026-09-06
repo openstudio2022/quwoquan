@@ -259,7 +259,7 @@ def _verified_package_config(
     release_evidence = provenance.get("releaseEvidence")
     if not isinstance(release_evidence, dict):
         raise SystemExit(f"FAIL: package release evidence provenance missing: {report_path}")
-    if release_evidence.get("candidateId") != release_id:
+    if release_evidence.get("releaseCompositionId") != release_id:
         raise SystemExit(f"FAIL: package candidate ID mismatch: {report_path}")
     if release_evidence.get("verifiedConfigDigest") != file_digest:
         raise SystemExit(f"FAIL: package release config evidence mismatch: {report_path}")

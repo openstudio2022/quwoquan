@@ -16,7 +16,7 @@ metadata:
 
 1. PRE 从用户目标、plan/diff 与已知路径确定本轮 exact target；读取最近子树 `AGENTS.md`，best-effort 运行默认 compact `make feature-context TARGET=<exact-path>`。唯一 owner 解析成功时保存 stdout 的 immutable exact ref；无 owner、多 owner或解析失败时记录 typed 结果，并基于当前 Git 快照继续只读收口，不因此 `GATE_BLOCK` 整个 plan-next。
 2. 逐项比对计划与当前文件、契约、生成物、测试、runtime/release/UAT 证据，不信任完成标记。
-3. 每个 gap 只能裁决为 fix-now、最低可关闭节点 `OPEN-###` 或 Out of Scope；scope 内 required blocker 未闭合时不生成虚假下一轮。
+3. 每个 gap 只能裁决为 fix-now、最低可关闭节点 `OPEN-###` 或 Out of Scope；code-health `PR_WARN` 同样只允许这三种去向。scope 内 required blocker 未闭合时不生成虚假下一轮。
 4. 已收口时按依赖与用户价值生成可验收的下一轮；默认不自动派 Reviewer。
 
 ## 完成证据

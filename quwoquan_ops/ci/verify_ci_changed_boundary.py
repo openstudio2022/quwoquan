@@ -34,10 +34,12 @@ def _candidate_blob(source_sha: str, changed_path: str) -> bytes | None:
     return proc.stdout
 
 
-def verify(plan_path: Path, *, expected_source_sha: str, expected_plan_digest: str) -> None:
+def verify(plan_path: Path, *, expected_source_sha: str, expected_tree_digest: str, expected_plan_digest: str) -> None:
     payload = json.loads(plan_path.read_text(encoding="utf-8"))
     plan = validate_delivery_impact_plan(
-        payload, expected_source_sha=expected_source_sha
+        payload,
+        expected_source_sha=expected_source_sha,
+        expected_tree_digest=expected_tree_digest,
     )
     if plan["plan_digest"] != expected_plan_digest:
         raise ValueError("impact plan digest differs from producer output")
@@ -73,12 +75,14 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--impact-plan", required=True, type=Path)
     parser.add_argument("--expected-source-sha", required=True)
+    parser.add_argument("--expected-tree-digest", required=True)
     parser.add_argument("--expected-plan-digest", required=True)
     args = parser.parse_args()
     try:
         verify(
             args.impact_plan,
             expected_source_sha=args.expected_source_sha,
+            expected_tree_digest=args.expected_tree_digest,
             expected_plan_digest=args.expected_plan_digest,
         )
     except (OSError, ValueError, json.JSONDecodeError, LocalReadinessError) as error:

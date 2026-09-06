@@ -276,6 +276,68 @@ class PythonScriptGovernanceDerivationTest(unittest.TestCase):
         self.assertEqual("lib", helper["role"])
         self.assertFalse(helper["orphanCandidate"])
 
+    def test_plan_named_script_derives_planner_role_and_requires_live_reference(
+        self,
+    ) -> None:
+        planner = self._write(
+            "quwoquan_ops/ci/plan_release_artifacts.py",
+            "def main() -> None:\n    pass\n",
+        )
+
+        report = derive_report(self.root, ("ops",))
+        records = {
+            record["path"]: record  # type: ignore[index]
+            for record in report["scripts"]  # type: ignore[index]
+        }
+        record = records[str(planner.relative_to(self.root))]
+
+        self.assertEqual("planner", record["role"])
+        self.assertTrue(record["orphanCandidate"])
+        self.assertNotIn("SCRIPT.ROLE_UNCLASSIFIED", self._issue_codes(report))
+
+    def test_render_and_collect_names_are_generators_without_hiding_orphans(
+        self,
+    ) -> None:
+        render = self._write(
+            "quwoquan_ops/ci/render_provider_release_evidence.py",
+            "def render() -> None:\n    pass\n",
+        )
+        collect = self._write(
+            "quwoquan_ops/cli/prod/collect_mainline_image_descriptors.py",
+            "def collect() -> None:\n    pass\n",
+        )
+        orphan = self._write(
+            "quwoquan_ops/ci/render_detached_release_evidence.py",
+            "def render() -> None:\n    pass\n",
+        )
+        importer = self._write(
+            "quwoquan_ops/ci/verify_generator_consumers.py",
+            "from quwoquan_ops.ci import render_provider_release_evidence\n"
+            "from quwoquan_ops.cli.prod import collect_mainline_image_descriptors\n",
+        )
+
+        report = derive_report(self.root, ("ops",))
+        records = {
+            record["path"]: record  # type: ignore[index]
+            for record in report["scripts"]  # type: ignore[index]
+        }
+
+        for path in (render, collect):
+            record = records[str(path.relative_to(self.root))]
+            self.assertEqual("generator", record["role"])
+            self.assertIn(
+                str(importer.relative_to(self.root)),
+                record["importedBy"],
+            )
+            self.assertFalse(record["orphanCandidate"])
+
+        orphan_record = records[str(orphan.relative_to(self.root))]
+        self.assertEqual("generator", orphan_record["role"])
+        self.assertEqual((), orphan_record["referencedBy"])
+        self.assertEqual((), orphan_record["importedBy"])
+        self.assertTrue(orphan_record["orphanCandidate"])
+        self.assertNotIn("SCRIPT.ROLE_UNCLASSIFIED", self._issue_codes(report))
+
     def test_explicit_lib_path_is_library_without_managed_importer(self) -> None:
         self._write(
             "quwoquan_service/scripts/runtime/packaging/lib/image_inputs.py",
@@ -621,13 +683,14 @@ class PythonScriptGovernanceDerivationTest(unittest.TestCase):
         self.assertEqual("lib", library["role"])
         self.assertEqual((), library["importedBy"])
         self.assertEqual((), library["referencedBy"])
-        self.assertFalse(library["orphanCandidate"])
+        self.assertTrue(library["orphanCandidate"])
 
         namespace_library = records[
             "quwoquan_data/scripts/content/review/quality/dirty_data.py"
         ]
         self.assertEqual("lib", namespace_library["role"])
         self.assertEqual((), namespace_library["importedBy"])
+        self.assertTrue(namespace_library["orphanCandidate"])
 
         detached = records[
             "quwoquan_data/scripts/content/execution/detached_task.py"

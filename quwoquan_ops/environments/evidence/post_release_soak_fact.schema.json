@@ -1,0 +1,180 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://quwoquan.local/quwoquan_ops/environments/evidence/post_release_soak_fact.schema.json",
+  "title": "PostReleaseSoakFact v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "soakId",
+    "releasedFact",
+    "status",
+    "readOnly",
+    "hostedSoakReadback",
+    "observations",
+    "aggregate",
+    "observedAt"
+  ],
+  "properties": {
+    "schema": {
+      "const": "quwoquan_ops.post_release_soak_fact.v1"
+    },
+    "soakId": {
+      "$ref": "#/$defs/digest"
+    },
+    "releasedFact": {
+      "$ref": "#/$defs/exactRef"
+    },
+    "status": {
+      "const": "passed"
+    },
+    "readOnly": {
+      "const": true
+    },
+    "hostedSoakReadback": {
+      "$ref": "#/$defs/exactRef"
+    },
+    "observations": {
+      "$ref": "#/$defs/observations"
+    },
+    "aggregate": {
+      "$ref": "#/$defs/aggregate"
+    },
+    "observedAt": {
+      "$ref": "#/$defs/timestamp"
+    }
+  },
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "git": {
+      "type": "string",
+      "pattern": "^(?:[0-9a-f]{40}|[0-9a-f]{64})$"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "exactRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ref",
+        "digest"
+      ],
+      "properties": {
+        "ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "digest": {
+          "$ref": "#/$defs/digest"
+        }
+      }
+    },
+    "window": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "startedAt",
+        "endedAt",
+        "requiredSeconds",
+        "observedSeconds",
+        "complete"
+      ],
+      "properties": {
+        "startedAt": {
+          "$ref": "#/$defs/timestamp"
+        },
+        "endedAt": {
+          "$ref": "#/$defs/timestamp"
+        },
+        "requiredSeconds": {
+          "type": "integer",
+          "minimum": 60
+        },
+        "observedSeconds": {
+          "type": "integer",
+          "minimum": 60
+        },
+        "complete": {
+          "const": true
+        }
+      }
+    },
+    "aggregate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "complete",
+        "observationCount",
+        "passedCount",
+        "failedCount",
+        "successRatio",
+        "failureRatio",
+        "requestSuccessRatio",
+        "requestFailureRatio",
+        "window"
+      ],
+      "properties": {
+        "status": {
+          "const": "passed"
+        },
+        "complete": {
+          "const": true
+        },
+        "observationCount": {
+          "const": 3
+        },
+        "passedCount": {
+          "const": 3
+        },
+        "failedCount": {
+          "const": 0
+        },
+        "successRatio": {
+          "const": 1.0
+        },
+        "failureRatio": {
+          "const": 0.0
+        },
+        "requestSuccessRatio": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "requestFailureRatio": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "window": {
+          "$ref": "#/$defs/window"
+        }
+      }
+    },
+    "observations": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "health",
+        "slo",
+        "alerts"
+      ],
+      "properties": {
+        "health": {
+          "$ref": "#/$defs/exactRef"
+        },
+        "slo": {
+          "$ref": "#/$defs/exactRef"
+        },
+        "alerts": {
+          "$ref": "#/$defs/exactRef"
+        }
+      }
+    }
+  }
+}

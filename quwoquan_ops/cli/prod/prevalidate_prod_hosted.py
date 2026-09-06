@@ -61,7 +61,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--host", default="")
     parser.add_argument("--host-id", action="append", default=[])
-    parser.add_argument("--release-manifest", required=True, type=Path)
+    parser.add_argument("--frozen-diagnostic-snapshot", required=True, type=Path)
     parser.add_argument("--image-transport-tag", required=True)
     parser.add_argument("--candidate-digest", required=True)
     parser.add_argument("--data-mode", choices=("isolated", "external"), required=True)
@@ -678,8 +678,8 @@ def execute_deployment(
                 services,
                 "--image-transport-tag",
                 args.image_transport_tag,
-                "--release-manifest",
-                str(args.release_manifest),
+                "--frozen-diagnostic-snapshot",
+                str(args.frozen_diagnostic_snapshot),
                 "--platform",
                 "linux/amd64",
             ]

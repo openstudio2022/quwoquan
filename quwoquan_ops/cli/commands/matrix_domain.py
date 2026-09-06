@@ -108,6 +108,9 @@ def command_matrix(args: argparse.Namespace) -> dict[str, Any]:
         android_physical_device=str(
             getattr(args, "android_physical_device", "") or ""
         ),
+        ios_physical_device=str(
+            getattr(args, "ios_physical_device", "") or ""
+        ),
         device_profile=str(
             getattr(args, "device_profile", _stackctl.LOCAL_GATE_DEVICE_PROFILE_FULL)
             or _stackctl.LOCAL_GATE_DEVICE_PROFILE_FULL
@@ -169,9 +172,10 @@ def register_parser(subparsers: "argparse._SubParsersAction") -> None:
         choices=_stackctl.LOCAL_GATE_DEVICE_PROFILES,
         default=_stackctl.LOCAL_GATE_DEVICE_PROFILE_FULL,
         help=(
-            "full 要求 Android 真机并可形成正式 Green claim；"
+            "promotion_physical 要求 Android+iOS 双登记真机并可形成正式 Green claim；"
             "emulator_only 只做 Simulator/Emulator non-promotable 功能验收"
         ),
     )
     matrix_parser.add_argument("--android-physical-device", default="")
+    matrix_parser.add_argument("--ios-physical-device", default="")
 

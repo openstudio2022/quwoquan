@@ -209,13 +209,14 @@ def _materialize_prod_hosted_oci_manifest(
         ) from exc
     if not isinstance(release_manifest, dict):
         raise ValueError("prod-hosted release artifact manifest must be an object")
-    _stackctl.finalize_mainline_release_artifact.validate_manifest(
-        release_manifest,
-        allowed_statuses={"deployable", "released"},
+    from quwoquan_ops.ci.release_evidence_reader import (
+        validate_frozen_diagnostic_snapshot,
     )
-    _stackctl.finalize_mainline_release_artifact.validate_manifest_files(
-        artifact_root,
+
+    validate_frozen_diagnostic_snapshot(
         release_manifest,
+        artifact_dir=artifact_root,
+        allowed_statuses={"deployable", "released"},
     )
 
     source = release_manifest.get("source")
@@ -472,13 +473,14 @@ def _validate_prod_hosted_release_evidence_currentness(
         ) from exc
     if not isinstance(release_manifest, dict):
         raise ValueError("prod-hosted release artifact manifest must be an object")
-    _stackctl.finalize_mainline_release_artifact.validate_manifest(
-        release_manifest,
-        allowed_statuses={"deployable", "released"},
+    from quwoquan_ops.ci.release_evidence_reader import (
+        validate_frozen_diagnostic_snapshot,
     )
-    _stackctl.finalize_mainline_release_artifact.validate_manifest_files(
-        artifact_root,
+
+    validate_frozen_diagnostic_snapshot(
         release_manifest,
+        artifact_dir=artifact_root,
+        allowed_statuses={"deployable", "released"},
     )
     source = release_manifest.get("source")
     release_source_revision = (

@@ -1,0 +1,115 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://quwoquan.local/quwoquan_ops/environments/evidence/prod_rollback_fact.schema.json",
+  "title": "ProdRollbackFact v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "rollbackId",
+    "terminal",
+    "admission",
+    "failedAttempt",
+    "rollbackTarget",
+    "ociDigests",
+    "evidence",
+    "hostedReceiptReadback",
+    "builderInvocationCount",
+    "tagMutation",
+    "rolledBackAt"
+  ],
+  "properties": {
+    "schema": {
+      "const": "quwoquan_ops.prod_rollback_fact.v1"
+    },
+    "rollbackId": {
+      "$ref": "#/$defs/digest"
+    },
+    "terminal": {
+      "const": "rolled_back"
+    },
+    "admission": {
+      "$ref": "#/$defs/exactRef"
+    },
+    "failedAttempt": {
+      "$ref": "#/$defs/exactRef"
+    },
+    "rollbackTarget": {
+      "$ref": "#/$defs/exactRef"
+    },
+    "ociDigests": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/digest"
+      }
+    },
+    "evidence": {
+      "$ref": "#/$defs/rollbackEvidence"
+    },
+    "hostedReceiptReadback": {
+      "$ref": "#/$defs/exactRef"
+    },
+    "builderInvocationCount": {
+      "const": 0
+    },
+    "tagMutation": {
+      "const": false
+    },
+    "rolledBackAt": {
+      "$ref": "#/$defs/timestamp"
+    }
+  },
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "git": {
+      "type": "string",
+      "pattern": "^(?:[0-9a-f]{40}|[0-9a-f]{64})$"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "exactRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ref",
+        "digest"
+      ],
+      "properties": {
+        "ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "digest": {
+          "$ref": "#/$defs/digest"
+        }
+      }
+    },
+    "rollbackEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "activation",
+        "health",
+        "readback"
+      ],
+      "properties": {
+        "activation": {
+          "$ref": "#/$defs/exactRef"
+        },
+        "health": {
+          "$ref": "#/$defs/exactRef"
+        },
+        "readback": {
+          "$ref": "#/$defs/exactRef"
+        }
+      }
+    }
+  }
+}

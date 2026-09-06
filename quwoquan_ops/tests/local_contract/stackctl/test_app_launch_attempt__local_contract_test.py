@@ -482,6 +482,19 @@ def test_run_sh_projects_platform_artifact_identity_into_receipts_and_report() -
     assert '"artifactDigest": artifact_digest' in source
 
 
+def test_run_sh_seals_only_launch_ready_fact_from_completed_canonical_report() -> None:
+    source = CANONICAL_LAUNCHER.read_text(encoding="utf-8")
+
+    report_write = source.index("write_app_content_launch_report")
+    launch_fact = source.index("create_launch_ready_fact_from_report")
+    assert report_write < launch_fact
+    assert 'TEST_LIVE_REPORT_DIR="$(dirname "$LAUNCH_RECEIPT")"' in source
+    assert "if exit_code == 0:" in source
+    assert "build_content_ready_fact" not in source
+    assert "build_release_ready_fact" not in source
+    assert "launch_ready_report_fields(handoff=handoff, receipt=receipt)" in source
+
+
 def test_run_sh_requires_same_attempt_safe_terminal_for_every_test_live_launch() -> None:
     source = CANONICAL_LAUNCHER.read_text(encoding="utf-8")
 

@@ -1,0 +1,25 @@
+schema: quwoquan_ops.product_version_manifest.v1
+kind: ProductVersionManifest
+authoringSource: quwoquan_ops/policies/product_version.yaml
+semverVersion: 2.0.0
+activeTrainLimit: 1
+releaseTrain:
+  state: inactive
+  targetVersion: null
+  bump: null
+  bumpReason: null
+  compatibilityBoundary: null
+previousStable:
+  status: not_imported
+  tagName: null
+  tagObjectOid: null
+  peeledCommit: null
+  admissionFact: null
+  reasonCode: PRODUCT_VERSION.PREVIOUS_STABLE_NOT_IMPORTED
+initialReleaseAuthority:
+  status: absent
+  authorityFact: null
+activation:
+  decision: blocked
+  basis: none
+  reasonCode: PRODUCT_VERSION.ACTIVATION_AUTHORITY_MISSING

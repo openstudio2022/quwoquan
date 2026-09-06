@@ -12,7 +12,6 @@ PROBE_PATH = (
     / "quwoquan_ops/tests/acceptance/user_acceptance/service_ops/chat-service/smoke"
     / "run_chat_group_lifecycle_probe.py"
 )
-WORKFLOW_PATH = ROOT / ".github/workflows/app-env-device-matrix-self-hosted.yml"
 SPEC = importlib.util.spec_from_file_location("chat_group_lifecycle_probe", PROBE_PATH)
 if SPEC is None or SPEC.loader is None:
     raise RuntimeError("cannot load chat group lifecycle probe")
@@ -141,23 +140,9 @@ class ChatGroupLifecycleProbeLocalContractTest(unittest.TestCase):
         self.assertIn('default="PROD_TEST_AUTH_TOKEN"', source)
         self.assertNotIn("_create_unverified_context", source)
 
-    def test_mainline_beta_bootstrap_runs_stackctl_release_profile(self) -> None:
-        workflow = WORKFLOW_PATH.read_text(encoding="utf-8")
-        bootstrap_start = workflow.index("Run immutable Beta formal runtime")
-        bootstrap_end = workflow.index(
-            "Seal immutable Beta stack evidence", bootstrap_start
-        )
-        bootstrap = workflow[bootstrap_start:bootstrap_end]
-
-        self.assertIn(
-            "stackctl.py verify \\\n            --env beta",
-            bootstrap,
-        )
-        self.assertIn("--kind all", bootstrap)
-        self.assertIn("--profile release", bootstrap)
-        self.assertIn(
-            '--report-dir "$ROOT/verify"',
-            bootstrap,
+    def test_hosted_beta_bootstrap_entry_is_deleted(self) -> None:
+        self.assertFalse(
+            (ROOT / ".github/workflows/app-env-device-matrix-self-hosted.yml").exists()
         )
 
 

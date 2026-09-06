@@ -14,6 +14,7 @@
 - [`app-cloud-business-object-commercial-closure`](./app-cloud-business-object-commercial-closure/spec.md)：ContractGraph validate/generate/check 可在 clean checkout 幂等重生。
 - [`domain-service-directory-ownership`](./domain-service-directory-ownership/spec.md)：服务根和共享 metadata 的 L1 owner 均由当前目录与 spec 直接反推。
 - [`repository-layout-hygiene-and-retirement`](./repository-layout-hygiene-and-retirement/spec.md)：报告包含固定九类分类、WIP 清单、候选引用证据和最小验证命令。
+- [`incremental-code-health-governance`](./incremental-code-health-governance/spec.md)：candidate delta 阻断新债，全仓历史只输出热点观测。
 
 ## 3. 端云与数据流
 
@@ -480,6 +481,24 @@
 - 影响 Story：[`model-attribute-semantics`](./model-attribute-semantics/spec.md) 承接类型化传播、四形态独立判定、单一可写载体、写侧默认物化与收缩路径终态。
 - 关联要求：`REQ-001`、`REQ-002`
 - 关联验收：`SIT-001`、`SIT-002`
+
+<a id="dec-031"></a>
+### DEC-031 代码健康只阻断增量新债，存量按热点收敛，AI 不拥有准出
+
+- 决策：代码健康事实由 `quwoquan_ops/policies/code_health_policy.yaml` 与 `make verify-code-health-delta` 单轨拥有。delta 复用 canonical impact planner 的 exact base/head 与 changed paths，并以 EvidenceFingerprint 绑定 candidate 字节、policy、命令和 toolchain；不得建立第二 impact registry、扫描结果台账或路径 allowlist。
+- 决策：source path 必须互斥落入 `handwritten-production`、`test`、`generated`、`vendor`、`contract-metadata`、`config-data`、`docs` 七类之一。总代码量只作容量与趋势观测；generated/vendor 由重生成与供应链门负责，不进入复杂度、重复和认知预算判罚；测试独立报告且模板式重复默认不阻断。
+- 决策：首日只阻断可机械证明的新增/恶化项：手写生产文件新越过 1000 行、既有超限继续上升、明确新增且无语言或仓库入口的 private Python module，以及 tracked 源码树可执行构建产物。复杂度、片段重复与 800 行 advisory 在至少 14 天或 20 个 PR、confirmed false-positive 不高于 10% 前保持 `PR_WARN`；策略不得自动升格。
+- 决策：L0 只运行无需安装且 p95 不超过 30 秒的 changed-file 快判；L1 与独立 Delivery job 在 clean candidate 上执行完整 delta，硬边界分别为本地 30 秒目标与 hosted 5 分钟超时；每周任务执行全仓 report-only 增长与 `change-frequency × health` 热点，不阻断 PR、不提交 snapshot。
+- 决策：确定性检查唯一拥有 `PASS / PR_WARN / GATE_BLOCK`。Agent PRE 只加载目标 owner 的阈值、复用候选和热点，POST 产出 current receipt；Reviewer 与 AI advisory 只消费脱敏命名证据，不重跑、不改写 terminal、不自动改 baseline。重复坏味道只有在存在第二个独立实例时才进入 distill。
+- 理由：当前 351 万 source LOC 中测试、generated 与 vendor 超过一半，总代码量与原始 churn 会把可再生和验证资产误判为维护债；同时单次大规模 sync 已超出人和 Agent 的认知窗口。增量判罚把成本放到引入问题的 candidate，热点排序使存量治理集中在高变更且低健康的代码。
+- 被否决方案：部署 SonarQube/CodeScene 常驻平台、全仓存量门一次阻断、以 LOC 或 commit 数评价 Agent、为误报增加 per-file waiver，以及让模型输出 gateStatus。它们分别引入额外状态源、使无关 PR 陪葬、激励错误行为或把准出交给不可复现判断。
+- 约束与影响：大迁移只有在混入无关 owner/目的、无法绑定唯一验收切片或无法独立测试时才以 `CANDIDATE.SPLIT_REQUIRED` 阻断；纯删除、codegen、fixture regeneration 与机械 rename 单列。误报只能修分类器/规则并以 `superseded_measure` 留下旧口径实测，不能豁免路径。
+- 失败与恢复：policy、Git range、工具身份或 candidate 字节不完整时 fail-closed 且不写 PASS；外部分析器缺失时只将对应 advisory 指标标记 unavailable，不得吞掉首日 blocker。误报率、耗时或交付失败率超标时回退该规则的 enforcement 到 advisory，但保留观测。
+- 观测：记录 delta p95、confirmed false-positive、Agent 修复轮次、手写 churn、Top 20 hotspot、Delivery calendar critical path、change failure/recovery/rework；Delivery 关键路径增长超过 5% 或 60 秒、交付 lead time/失败率恶化超过 10% 时触发 rollout 回退。
+- 适用工程根：`quwoquan_ops/policies/code_health_policy.yaml`、`quwoquan_ops/gate/code_health_delta`、`quwoquan_ops/gate/verify_incremental_code_health.py`、`quwoquan_ops/tests/local_contract/gate/test_incremental_code_health__gate__local_contract_test.py`、`quwoquan_ops/gate/run_code_health_calibration.py`、`quwoquan_ops/gate/report_code_health_weekly.py`
+- 关联要求：`REQ-001`、`REQ-002`、`REQ-003`
+- 影响 Story：[`incremental-code-health-governance`](./incremental-code-health-governance/spec.md)
+- 关联验收：`GWT-001`、`GWT-002`、`GWT-003`
 
 ## 5. 失败与恢复
 

@@ -326,16 +326,6 @@ def register_parser(
     up_parser.add_argument("--skip-app", action="store_true")
     up_parser.add_argument("--skip-build", action="store_true")
     up_parser.add_argument(
-        "--formal-release",
-        action="store_true",
-        help="Fail-closed release mode: exact candidate images, no automatic repair or cleanup.",
-    )
-    up_parser.add_argument(
-        "--release-manifest",
-        default="",
-        help="Canonical ReleaseEvidenceManifest required by --formal-release.",
-    )
-    up_parser.add_argument(
         "--build-only",
         action="store_true",
         help="仅构建 Gamma 本地服务镜像，不启动 Compose 或 App。",

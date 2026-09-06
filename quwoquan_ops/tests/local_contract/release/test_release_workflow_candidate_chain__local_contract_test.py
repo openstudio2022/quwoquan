@@ -243,7 +243,7 @@ class ServiceReleaseImagePlanTest(unittest.TestCase):
 class WorkflowCandidateBindingTest(unittest.TestCase):
     def _validate(self, args: argparse.Namespace) -> None:
         with patch(
-            "quwoquan_ops.ci.verify_workflow_release_candidate.validate_manifest"
+            "quwoquan_ops.ci.verify_workflow_release_candidate.validate_historical_release_snapshot"
         ):
             validate(args)
 
@@ -322,17 +322,20 @@ class WorkflowCandidateBindingTest(unittest.TestCase):
             )
             self._validate(args)
 
-    def test_real_prod_invokes_canonical_validator_as_deployable(self) -> None:
+    def test_real_prod_invokes_historical_snapshot_validator_as_deployable(self) -> None:
         with tempfile.TemporaryDirectory() as directory, patch(
-            "quwoquan_ops.ci.verify_workflow_release_candidate.validate_manifest"
-        ) as canonical:
+            "quwoquan_ops.ci.verify_workflow_release_candidate.validate_historical_release_snapshot"
+        ) as historical_snapshot_validator:
             args = self._args(
                 self._manifest(Path(directory), deployable=True),
                 require_deployable=True,
             )
             validate(args)
-        canonical.assert_called_once()
-        self.assertEqual(canonical.call_args.kwargs["allowed_statuses"], {"deployable"})
+        historical_snapshot_validator.assert_called_once()
+        self.assertEqual(
+            historical_snapshot_validator.call_args.kwargs["allowed_statuses"],
+            {"deployable"},
+        )
 
 
 if __name__ == "__main__":

@@ -409,6 +409,175 @@ class SingleTrackContractsContractTest(unittest.TestCase):
             module.SCHEMA_VALUE_V_SUFFIX.search('schema: assistant_turn')
         )
 
+    def test_allows_only_exact_immutable_evidence_schema_path_pairs(self) -> None:
+        module = _load_verifier()
+        cases = (
+            (
+                "application/vnd.quwoquan."
+                "environment-acceptance-fact.v2+json",
+                "quwoquan_ops/cli/lib/environment_acceptance_fact_contract.py",
+            ),
+            (
+                "application/vnd.quwoquan."
+                "integration-qualification-fact.v1+json",
+                "quwoquan_ops/tests/local_contract/ci/"
+                "test_promotion_evidence__local_contract_test.py",
+            ),
+            (
+                "quwoquan_ops.prod_deploy_material.v1",
+                "quwoquan_ops/cli/commands/deploy_release_inputs.py",
+            ),
+            (
+                "quwoquan_ops.artifact_build_number_allocation.v1",
+                "quwoquan_ops/tests/local_contract/release/"
+                "test_official_distribution_release__supply_chain__local_contract_test.py",
+            ),
+            (
+                "quwoquan_ops.candidate_material_manifest.v1",
+                "quwoquan_ops/tests/local_contract/release/"
+                "test_official_distribution_release__supply_chain__local_contract_test.py",
+            ),
+            (
+                "quwoquan_ops.qualification_fact.v1",
+                "quwoquan_ops/tests/local_contract/release/"
+                "test_official_distribution_release__supply_chain__local_contract_test.py",
+            ),
+            (
+                "quwoquan_ops.release_qualification_request.v1",
+                "quwoquan_ops/tests/local_contract/release/"
+                "test_official_distribution_release__supply_chain__local_contract_test.py",
+            ),
+            (
+                "quwoquan_ops.release_tag_admission_fact.v1",
+                "quwoquan_ops/tests/local_contract/release/"
+                "test_official_distribution_release__supply_chain__local_contract_test.py",
+            ),
+            (
+                "quwoquan_ops.prod_runtime_config_deployment_bundle.v1",
+                "quwoquan_ops/tests/local_contract/release/"
+                "test_qualified_prod__local_contract_test.py",
+            ),
+            (
+                "quwoquan_ops.release_qualification_request.v1",
+                "quwoquan_ops/tests/local_contract/release/"
+                "test_release_qualification__local_contract_test.py",
+            ),
+        )
+
+        for canonical, canonical_path in cases:
+            with self.subTest(canonical=canonical):
+                field = (
+                    "PAYLOAD_TYPE"
+                    if canonical.startswith("application/vnd.")
+                    else '"schema"'
+                )
+                allowed = _scan_fixture(
+                    module,
+                    canonical_path,
+                    f'{field}: "{canonical}"\n',
+                )
+                self.assertEqual(allowed.findings, [])
+
+                if canonical.startswith("application/vnd."):
+                    prefix, suffix = canonical.rsplit(".v", 1)
+                    mutated_value = f"{prefix}.v9+{suffix.split('+', 1)[1]}"
+                else:
+                    mutated_value = canonical.removesuffix(".v1") + ".v9"
+                mutated = _scan_fixture(
+                    module,
+                    canonical_path,
+                    f'{field}: "{mutated_value}"\n',
+                )
+                self.assertEqual(
+                    mutated.counts.get("T1_versioned_schema_identity"),
+                    1,
+                )
+
+                wrong_path = _scan_fixture(
+                    module,
+                    "quwoquan_ops/cli/lib/unrelated_runtime.py",
+                    f'{field}: "{canonical}"\n',
+                )
+                self.assertEqual(
+                    wrong_path.counts.get("T1_versioned_schema_identity"),
+                    1,
+                )
+
+    def test_allows_canonical_promotion_evidence_only_at_exact_paths(
+        self,
+    ) -> None:
+        module = _load_verifier()
+        fixture_path = (
+            "quwoquan_ops/tests/local_contract/ci/"
+            "test_system_backsync__local_contract_test.py"
+        )
+        canonical_schemas = (
+            "quwoquan_ops.promotion_admission_receipt.v1",
+            "quwoquan_ops.main_source_seal.v1",
+            "quwoquan_ops.promotion_admission_handoff.v1",
+        )
+
+        for canonical in canonical_schemas:
+            with self.subTest(canonical=canonical):
+                allowed = _scan_fixture(
+                    module,
+                    fixture_path,
+                    f'"schema": "{canonical}"\n',
+                )
+                self.assertEqual(allowed.findings, [])
+
+                wrong_path = _scan_fixture(
+                    module,
+                    "quwoquan_ops/tests/local_contract/ci/"
+                    "test_unrelated__local_contract_test.py",
+                    f'"schema": "{canonical}"\n',
+                )
+                self.assertEqual(
+                    wrong_path.counts.get("T1_versioned_schema_identity"),
+                    1,
+                )
+
+                mutated = canonical.removesuffix(".v1") + ".v2"
+                variant = _scan_fixture(
+                    module,
+                    fixture_path,
+                    f'"schema": "{mutated}"\n',
+                )
+                self.assertEqual(
+                    variant.counts.get("T1_versioned_schema_identity"),
+                    1,
+                )
+
+        factory = _scan_fixture(
+            module,
+            "quwoquan_ops/cli/lib/app_factory.py",
+            '"schema": "quwoquan_ops.app_factory_material.v1"\n',
+        )
+        self.assertEqual(
+            factory.counts.get("T1_versioned_schema_identity"),
+            1,
+        )
+
+        service_factory = _scan_fixture(
+            module,
+            "quwoquan_ops/cli/lib/service_factory.py",
+            '"schema": "quwoquan_ops.service_factory_material.v1"\n',
+        )
+        self.assertEqual(
+            service_factory.counts.get("T1_versioned_schema_identity"),
+            1,
+        )
+
+        runtime = _scan_fixture(
+            module,
+            "quwoquan_ops/cli/lib/runtime_contract.py",
+            '"schema": "quwoquan_ops.runtime_state.v1"\n',
+        )
+        self.assertEqual(
+            runtime.counts.get("T1_versioned_schema_identity"),
+            1,
+        )
+
     def test_detects_versioned_local_identity_literals(self) -> None:
         module = _load_verifier()
         for source in (

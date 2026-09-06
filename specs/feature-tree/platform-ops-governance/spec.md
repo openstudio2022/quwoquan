@@ -184,3 +184,13 @@
 - 准出影响：`track`
 - 影响或价值：同步事务的公开规格与设计决定（单一 sync lock、五组件同 attempt、online→offline replay→seal→readback、receipt-first/active-last、ambiguous commit 阻断、source drift 阻断、不更新 lock、只消费 committed readback）刚冻结；既有实现与 local_contract 尚未以 `spec_ref` 直接绑定本节点锚点，canonical launcher 侧的交互式 stale 恢复消费面也尚未闭环。
 - 完成判定：`DOM-004` 对应行为满足且真实测试以 `spec_ref` 直接绑定 `DOM-004`。
+
+<a id="open-004"></a>
+### OPEN-004 PR #74 platform ops 代码健康热点收敛
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：当前 exact candidate-bound Code Health report 在本 owner 下给出 33 项 `CODE_HEALTH.COMPLEXITY_ADVISORY` 与 `generate_release_bound_environment_identity.py` 1 项 `CODE_HEALTH.FILE_LINES_ADVISORY`；它们是 calibration `PR_WARN`，不改变 candidate 确定性 terminal，但继续修改会抬高维护、复核与恢复成本。热点精确身份以该 PR 的 current named-evidence artifact digest 为准，覆盖 `quwoquan_ops/ci`、`quwoquan_ops/cli` 与 `quwoquan_ops/gate` 中 report 列出的 path/symbol，不为其新增 allowlist 或 baseline。
+- 完成判定：`DOM-001` 对应行为继续满足；在独立 owner increment 中按 report identity 逐项收敛上述 34 个 path/symbol，保留对应合同和失败分支；fresh clean-range Code Health 不再为这些 identity 产生复杂度/文件规模 advisory，且不得通过调高阈值、allowlist、baseline 或拆散原子状态转换消红。
+- 依赖：current Code Health named evidence、`incremental-code-health-governance` 的 calibration 语义与各 path 的 focused contracts。

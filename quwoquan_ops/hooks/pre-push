@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# 本地 pre-push 只做 branch policy：普通 lane 仅推同名远端；active 的 dev1.0/main
-# 禁止直推，可证明的受管 system fast-forward backsync 依 contract 放行。发布就绪回执
-# 不在这里消费；lane→dev1.0 的合入由 PR 上的 CI Delivery Gate 承担。
+# 本地 pre-push 只做 branch policy：lane 与 integration 均只推同名远端；integration→
+# origin/dev1.0 另强制 expected-old 快进；main 禁止直推；可证明的受管 system
+# fast-forward backsync 依 contract 放行。发布就绪回执不在这里消费。
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT"
 export QWQ_OUTPUT_ROOT="$ROOT/.qwq_output"

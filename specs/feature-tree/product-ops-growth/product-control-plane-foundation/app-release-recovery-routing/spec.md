@@ -66,7 +66,7 @@
 - 所有页面、接口和 APK 地址必须使用 HTTPS；iOS PWA 和 Android 下载页只允许趣我圈官方 Web 域名，Android APK 仅允许趣我圈官方 CDN 白名单。
 - 版本查询和下载重定向使用 `no-store`；APK CDN 对不可变对象使用长期 immutable cache。
 - 非法远程配置必须使服务启动失败或该平台发布事实不可用，不得回退第三方地址。
-- Web、Android、Portal、ContractGraph、Provider evidence 与三层 CaseResult 摘要必须被同一 canonical `ReleaseEvidenceManifest` candidate digest 引用；缺少任一引用时正式 deploy 与 prevalidate 均返回 `GATE_BLOCK`。
+- Web、Android、Portal、ContractGraph、Provider evidence 与三层 tests/CaseResult 摘要必须由同一 stable `ReleaseTagAdmissionFact` 沿 `QualificationFact` → `CandidateMaterialManifest` → `app_factory_material` exact-bytes 闭包绑定；缺少任一引用或 exact bytes 漂移时 formal deploy 返回 `GATE_BLOCK`。official distribution 必须校验闭包内的 `AppArtifactManifest`、package digest、source/tree identity 与 channel receipt，不得依赖 `ReleaseEvidenceManifest`。prevalidate只产生不可提升、不可满足formal admission的诊断证据，不写authority/ledger/receipt，不与formal deploy混轨。
 
 <a id="req-005"></a>
 ### REQ-005 最低支持 Build 与可完成恢复路径

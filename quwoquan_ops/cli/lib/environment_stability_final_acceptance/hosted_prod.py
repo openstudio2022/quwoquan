@@ -11,8 +11,8 @@ from typing import Any
 
 import yaml
 
-from quwoquan_ops.ci import render_release_lifecycle_receipts as lifecycle
-from quwoquan_ops.cli.prod.finalize_mainline_release_artifact import (
+from quwoquan_ops.ci import release_evidence_reader as lifecycle
+from quwoquan_ops.ci.release_evidence_reader import (
     DIGEST_PATTERN,
     sha256_file,
 )
@@ -114,8 +114,8 @@ def _validate_hosted_readbacks(
         or rollout_receipt.get("triggerStage") != "100"
         or rollout_receipt.get("decision") != "continue"
         or rollout_receipt.get("rollbackOutcome") != "not_triggered"
-        or rollout_receipt.get("toCandidateDigest") != manifest["candidateId"]
-        or rollout_receipt.get("lastGoodCandidateDigest") != manifest["candidateId"]
+        or rollout_receipt.get("toCandidateDigest") != manifest["releaseCompositionId"]
+        or rollout_receipt.get("lastGoodCandidateDigest") != manifest["releaseCompositionId"]
         or not _manifest_contains_receipt_id(manifest["rolloutReceipt"], receipt_id)
         or not _manifest_contains_receipt_id(manifest["rollbackReceipt"], receipt_id)
     ):
@@ -239,7 +239,7 @@ def verify_canonical_hosted_prod_soak(
     config_graph_digest = _canonical_digest(configuration_packages)
     expected_bindings = {
         "fullRolloutReceiptId": rollout_receipt.get("receiptId"),
-        "candidateId": manifest.get("candidateId"),
+        "releaseCompositionId": manifest.get("releaseCompositionId"),
         "rolloutArtifactDigest": rollout_receipt.get("artifactDigest"),
         "artifactDigest": manifest.get("artifactDigest"),
         "sourceGitSha": source.get("gitSha"),

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
@@ -402,11 +403,13 @@ def validate_feature_context_manifest(payload: dict[str, Any]) -> None:
 
 
 def validate_candidate_evidence_manifest(payload: dict[str, Any]) -> None:
-    """Validate exact candidate evidence at every producer/consumer boundary."""
+    """Validate exact candidate evidence v2 at every boundary."""
 
     validate_schema_version(payload, "candidate_evidence_manifest")
     validate_required_fields(payload, "candidate_evidence_manifest")
-    for field, declaration in (("owner_chain", "owner_chain_fields"), ("context_snapshots", "context_snapshot_fields")):
+    for field, declaration in (
+        ("context_snapshots", "context_snapshot_fields"),
+    ):
         values = payload[field]
         if not isinstance(values, list):
             raise TypeError(f"candidate_evidence_manifest.{field} 必须为列表")
@@ -414,19 +417,71 @@ def validate_candidate_evidence_manifest(payload: dict[str, Any]) -> None:
             if not isinstance(value, dict):
                 raise TypeError(f"candidate_evidence_manifest.{field} 项必须为映射")
             validate_declared_fields(value, "candidate_evidence_manifest", declaration)
-    paths = payload["changed_paths"]
-    if not isinstance(paths, list) or not paths or not all(isinstance(item, str) and item for item in paths):
-        raise TypeError("candidate_evidence_manifest.changed_paths 必须为非空字符串列表")
-    if paths != sorted(set(paths), key=lambda item: item.encode("utf-8")):
-        raise ValueError("candidate_evidence_manifest.changed_paths 必须规范排序且无重复")
-    for field in ("owner_identity_ref", "owner_identity_canonical_bytes_sha256", "target", "resolved_owner", "impact_plan_identity"):
-        if field != "impact_plan_identity" and (not isinstance(payload[field], str) or not payload[field]):
+    for field in (
+        "owner_identity_ref", "owner_identity_canonical_bytes_sha256", "delivery_owner",
+        "lead_lane", "target", "resolved_owner",
+    ):
+        if not isinstance(payload[field], str) or not payload[field]:
             raise TypeError(f"candidate_evidence_manifest.{field} 必须为非空字符串")
-    if not isinstance(payload["workspace_digests"], dict) or not isinstance(payload["impact_plan"], dict):
-        raise TypeError("candidate evidence workspace_digests/impact_plan 必须为映射")
+    if not payload["delivery_owner"].startswith("lane/") or not payload["lead_lane"].startswith("lane/"):
+        raise ValueError("candidate delivery_owner/lead_lane 必须为逻辑 lane")
+    policy_digests = payload["delivery_policy_digests"]
+    if not isinstance(policy_digests, dict):
+        raise TypeError("candidate delivery_policy_digests 必须为映射")
+    validate_declared_fields(
+        policy_digests, "candidate_evidence_manifest", "delivery_policy_digest_fields"
+    )
+    workspace = payload["workspace_digests"]
+    if not isinstance(workspace, dict):
+        raise TypeError("candidate workspace_digests 必须为映射")
+    validate_declared_fields(
+        workspace, "candidate_evidence_manifest", "workspace_digest_fields"
+    )
+    groups = payload["impacted_owner_groups"]
+    if not isinstance(groups, list) or not groups:
+        raise TypeError("candidate impacted_owner_groups 必须为非空列表")
+    group_keys: list[str] = []
+    grouped_paths: list[str] = []
+    for group in groups:
+        if not isinstance(group, dict):
+            raise TypeError("candidate impacted_owner_groups 项必须为映射")
+        validate_declared_fields(
+            group, "candidate_evidence_manifest", "impacted_owner_group_fields"
+        )
+        identity = group["owner_identity"]
+        if not isinstance(identity, dict):
+            raise TypeError("candidate impacted owner identity 必须为映射")
+        validate_declared_fields(
+            identity, "candidate_evidence_manifest", "impacted_owner_identity_fields"
+        )
+        owner = identity["resolved_owner"]
+        if not isinstance(owner, str) or not owner:
+            raise TypeError("candidate impacted resolved_owner 必须为非空字符串")
+        chain_digest = identity["owner_chain_digest"]
+        if (
+            not isinstance(chain_digest, str)
+            or re.fullmatch(r"sha256:[0-9a-f]{64}", chain_digest) is None
+        ):
+            raise ValueError("candidate impacted owner_chain_digest 必须为 sha256")
+        group_paths = group["paths"]
+        if (
+            not isinstance(group_paths, list)
+            or not group_paths
+            or not all(isinstance(item, str) and item for item in group_paths)
+            or group_paths != sorted(set(group_paths), key=lambda item: item.encode("utf-8"))
+        ):
+            raise ValueError("candidate impacted owner paths 必须非空、稳定排序且无重复")
+        group_keys.append(owner)
+        grouped_paths.extend(group_paths)
+    if group_keys != sorted(set(group_keys), key=lambda item: item.encode("utf-8")):
+        raise ValueError("candidate impacted owner groups 必须按 owner 稳定排序且无重复")
+    if len(grouped_paths) != len(set(grouped_paths)):
+        raise ValueError("candidate impacted owner groups 必须无重复覆盖 exact changed paths")
+    if payload["resolved_owner"] not in set(group_keys):
+        raise ValueError("candidate primary resolved_owner 必须出现在 impacted owner groups")
     identity = payload["impact_plan_identity"]
     if not isinstance(identity, dict):
-        raise TypeError("candidate evidence impact_plan_identity 必须为映射")
+        raise TypeError("candidate impact_plan_identity 必须为映射")
     validate_declared_fields(identity, "candidate_evidence_manifest", "impact_plan_identity_fields")
     if not isinstance(payload["evidence_fingerprint"], dict):
         raise TypeError("candidate evidence fingerprint 必须为映射")

@@ -62,6 +62,7 @@ ALLOWED_OPS_ENVIRONMENT_ROOT_FILES = {
     # 不构成配置键的第二真相源。
     "config-defaults.yaml",
     "domain_governance.yaml",
+    "feedback_slo_activation.json",
     "local_env_port_manifest.yaml",
     "local_runtime_capacity.yaml",
     "output_layout_manifest.yaml",

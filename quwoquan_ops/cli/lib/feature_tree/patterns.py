@@ -30,6 +30,10 @@ SPEC_REF_BLOCK_MARKER_RE = re.compile(
     r"^\s*(?:[#*/]+\s*)?spec_ref\s*:\s*$", re.IGNORECASE
 )
 SPEC_REF_BLOCK_ITEM_RE = re.compile(r"^\s*(?:[#*/]+\s*)?-\s+")
+SPEC_REF_CODE_SPAN_RE = re.compile(
+    r"^\s*spec_ref\s*:\s*(?P<reference>.+?)\s*$",
+    re.IGNORECASE,
+)
 REPO_SPEC_PATH_RE = re.compile(r"`(specs/[A-Za-z0-9_./-]+\.md)(?:#[^`]*)?`")
 # 复合验收的结果子句：结果角色的顶层 bullet 是子句的载体。角色只由行首关键字决定，
 # `GIVEN`/`WHEN`/`条件：` 是前置条件，`AND` 不表达独立性、只继承最近一条角色 bullet 的角色，

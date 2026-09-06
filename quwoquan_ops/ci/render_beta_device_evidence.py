@@ -19,10 +19,11 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from quwoquan_ops.ci.render_environment_release_receipt import _passed, _timestamp
-from quwoquan_ops.cli.prod.finalize_mainline_release_artifact import (
+from quwoquan_ops.ci.release_evidence_reader import (
     DIGEST_PATTERN,
-    validate_manifest,
+    _passed,
+    _timestamp,
+    validate_historical_release_snapshot,
 )
 
 
@@ -104,7 +105,7 @@ def _parse_named_paths(items: list[str]) -> dict[str, Path]:
 def _validate_manifest_identity(
     manifest: dict[str, Any],
 ) -> tuple[str, str, str, str]:
-    validate_manifest(manifest, allowed_statuses={"candidate-ready", "deployable"})
+    validate_historical_release_snapshot(manifest, allowed_statuses={"candidate-ready", "deployable"})
     candidate = str(manifest.get("candidateId") or "")
     source = manifest.get("source")
     if DIGEST_PATTERN.fullmatch(candidate) is None or not isinstance(source, dict):

@@ -1,0 +1,64 @@
+schema_version: 1
+policy_id: incremental-code-health-v1
+owner: incremental-code-health-governance
+terminals: [PASS, PR_WARN, GATE_BLOCK]
+source_categories:
+  - handwritten-production
+  - test
+  - generated
+  - vendor
+  - contract-metadata
+  - config-data
+  - docs
+classification:
+  source_extensions: [.py, .go, .dart, .ts, .tsx, .js, .jsx, .swift, .java, .kt, .kts, .sh]
+  generated_markers: [/generated/, _generated.go, .g.dart, .g.go, .freezed.dart, /gen/]
+  vendor_markers: [/vendor/, /Pods/, /node_modules/, /.dart_tool/]
+  test_markers: [/test/, /tests/, _test.go, _test.dart, _test.py, __local_contract_test.py, __api_integration_test.py, __user_acceptance_test.py]
+  contract_markers: [/contracts/, /schema/, /schemas/, /metadata/]
+  docs_prefixes: [docs/, specs/, .agents/]
+  config_extensions: [.json, .yaml, .yml, .toml, .xml, .arb]
+thresholds:
+  file_lines:
+    advisory: 800
+    block: 1000
+  complexity:
+    cyclomatic_advisory: 15
+    cognitive_advisory: 20
+  duplication:
+    advisory_percent: 3.0
+    minimum_measured_new_lines: 20
+    block_lines: 6
+  change_size:
+    warn_handwritten_churn: 400
+    warn_handwritten_files: 20
+    split_analysis_churn: 1000
+    split_analysis_files: 40
+rollout:
+  advisory_metrics: [complexity, duplication, file-lines-advisory, change-size]
+  first_day_blockers: [new-file-over-block, oversized-file-growth, new-private-python-module-without-entry, tracked-source-executable]
+  automatic_promotion: false
+  calibration:
+    started_at: '2026-09-05T00:00:00+08:00'
+    minimum_days: 14
+    minimum_pull_requests: 20
+    maximum_confirmed_false_positive_rate: 0.10
+performance:
+  local_p95_seconds: 30
+  ci_p95_seconds: 180
+  ci_hard_timeout_seconds: 300
+  delivery_critical_path_max_growth_percent: 5
+  delivery_critical_path_max_growth_seconds: 60
+  delivery_outcome_regression_percent: 10
+tools:
+  python: {provider: ruff, rules: [C901, PLR0912, PLR0915], version: unavailable, status: advisory-unavailable}
+  go: {provider: golangci-lint, rules: [gocognit, gocyclo, dupl, staticcheck, ineffassign, unused], version: unavailable, status: advisory-unavailable}
+  clone: {provider: builtin-exact-window, version: 1, status: active}
+  dart: {provider: dart-code-linter, rules: [complexity, unused-files], version: unavailable, status: advisory-unavailable}
+  builtin: {provider: python-stdlib-and-git, version: 1, status: active}
+report:
+  root: .qwq_output/env/repo/runs/code-health
+  weekly_top_hotspots: 20
+  history_first_parent: true
+  history_date: committer
+  cloc_count_duplicate_paths: true

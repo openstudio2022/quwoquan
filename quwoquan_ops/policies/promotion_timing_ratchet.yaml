@@ -1,0 +1,28 @@
+schema_version: 1
+contract_id: promotion-timing-ratchet-v1
+governance:
+  owner: delivery-gate
+  reason: dev1.0 到 main 的源码晋级必须以全部 eligible event 单调逼近固定五分钟 p95，失败、基础设施异常、替代、未分类与不完整事件均不得从 denominator 消失。
+  expires_when: never; this is the permanent promotion SLI contract
+  measure: 固定 UTC epoch 锚定的非重叠 14 日窗口；每个 eligible event 使用首次 attempt 的 promotionReadyAt 到 mainReadbackAt，边界自然包含 queue、dependency、checkout、merge 与 readback；nearest-rank ceil(0.95*n)，每窗至少 30 个 eligible event，全部分类先进入 denominator；重复 event/head SHA、缺失或未分类、policy/workflow epoch 漂移均不 qualified，连续 K 个同 current epoch 的 qualified closed windows 才可收紧。
+metricId: dev1-main-promotion-ready-to-main-readback
+attemptClock: first_attempt
+denominator: all_eligible_promotion_events
+windowAnchorUtc: "1970-01-01T00:00:00Z"
+windowDays: 14
+quantile: nearest_rank
+quantilePercent: 95
+roundingSeconds: 60
+targetP95Seconds: 300
+enforcementBudgetSeconds: 1800
+minimumEligibleEvents: 30
+consecutiveQualifiedWindows: 2
+requiredTimingCompleteness: 1.0
+allowedUnclassifiedCancellations: 0
+allowedDuplicateEvents: 0
+allowedMissingEvidence: 0
+classifications: [success, failure, infra, superseded, unclassified, incomplete]
+monotonic:
+  upperBoundFields: [enforcementBudgetSeconds, targetP95Seconds, allowedUnclassifiedCancellations, allowedDuplicateEvents, allowedMissingEvidence]
+  lowerBoundFields: [minimumEligibleEvents, consecutiveQualifiedWindows, requiredTimingCompleteness]
+  requiredSetFields: [classifications]

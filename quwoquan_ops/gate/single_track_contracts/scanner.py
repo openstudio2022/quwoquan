@@ -34,6 +34,7 @@ from .constants import (
     GO_JSON_ID_TAG,
     GO_MAP_ID_KEY,
     ID_COMPAT_TEACHING,
+    IMMUTABLE_EVIDENCE_SCHEMA_PATHS,
     MULTI_KEY_DECODE,
     MULTI_KEY_GO_TEMPLATE,
     MULTI_KEY_HELPER_ID,
@@ -199,6 +200,11 @@ def is_contract_yaml(path: Path) -> bool:
     return rel.startswith("quwoquan_service/contracts/") or (
         rel.startswith("quwoquan_service/") and "/contracts/" in rel
     )
+
+
+def _is_immutable_evidence_schema(rel: str, value: str) -> bool:
+    """只允许 canonical persisted evidence 在登记的 exact path 使用。"""
+    return rel in IMMUTABLE_EVIDENCE_SCHEMA_PATHS.get(value, ())
 
 
 def scan_file(path: Path, inv: Inventory) -> None:
@@ -559,6 +565,8 @@ def scan_file(path: Path, inv: Inventory) -> None:
         value = match.group(0)
         if "/posts/" in value or "posts/article" in value:
             continue
+        if _is_immutable_evidence_schema(rel, value):
+            continue
         line_number = text.count("\n", 0, match.start()) + 1
         if _is_rejection_context(lines, line_number):
             continue
@@ -570,6 +578,8 @@ def scan_file(path: Path, inv: Inventory) -> None:
             continue
         value = match.group("value")
         if not VERSIONED_SCHEMA_VALUE.search(value):
+            continue
+        if _is_immutable_evidence_schema(rel, value):
             continue
         inv.add("T1_versioned_schema_identity", path, value)
 

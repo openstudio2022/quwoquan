@@ -51,11 +51,54 @@ jobs:
           python3 quwoquan_ops/cli/domain_governance.py verify \
             --skip-tls \
             --report .qwq_output/env/repo/runs/domain/dns-live-evidence.json
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      - name: Prepare redacted DNS failure diagnostic
+        if: ${{ failure() && !cancelled() }}
+        env:
+          JOB_STATUS: ${{ job.status }}
+        run: |
+          python3 -B - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          root = Path(".qwq_output/env/repo/runs/domain")
+          sources = []
+          for source in (
+              root / "dns-plan.json",
+              root / "dns-apply-receipt.json",
+              root / "dns-live-evidence.json",
+          ):
+              summary = {"name": source.name, "present": source.is_file()}
+              if source.is_file():
+                  try:
+                      payload = json.loads(source.read_text(encoding="utf-8"))
+                  except (OSError, UnicodeError, json.JSONDecodeError):
+                      summary["validJson"] = False
+                  else:
+                      summary["validJson"] = isinstance(payload, dict)
+                      if isinstance(payload, dict):
+                          summary["schema"] = str(payload.get("schema") or "unknown")
+                          summary["status"] = str(payload.get("status") or "unknown")
+              sources.append(summary)
+          root.mkdir(parents=True, exist_ok=True)
+          diagnostic = {
+              "schema": "quwoquan.domain-governance-failure-diagnostic",
+              "job": "dns",
+              "status": os.environ.get("JOB_STATUS", "failure"),
+              "sources": sources,
+          }
+          (root / "dns-failure-diagnostic.json").write_text(
+              json.dumps(diagnostic, ensure_ascii=False, indent=2) + "\n",
+              encoding="utf-8",
+          )
+          PY
+      - name: Upload redacted DNS failure diagnostic
+        if: ${{ failure() && !cancelled() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: domain-dns-evidence
-          path: .qwq_output/env/repo/runs/domain/dns-*.json
-          retention-days: 30
+          name: domain-dns-failure-diagnostic
+          path: .qwq_output/env/repo/runs/domain/dns-failure-diagnostic.json
+          retention-days: 3
 
   certificate:
     needs: dns
@@ -102,10 +145,49 @@ jobs:
             -cf - fullchain.pem privkey.pem \
             | age -r "$QWQ_TLS_AGE_RECIPIENT" -o "$bundle"
           echo "QWQ_TLS_BUNDLE_PATH=$bundle" >> "$GITHUB_ENV"
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      - name: Prepare redacted TLS failure diagnostic
+        if: ${{ failure() && !cancelled() }}
+        env:
+          JOB_STATUS: ${{ job.status }}
+          TARGET: ${{ matrix.target }}
+        run: |
+          python3 -B - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          root = Path(".qwq_output/env/repo/runs/domain")
+          target = os.environ["TARGET"]
+          source = root / f"{target}-tls-evidence.json"
+          source_summary = {"present": source.is_file()}
+          if source.is_file():
+              try:
+                  payload = json.loads(source.read_text(encoding="utf-8"))
+              except (OSError, UnicodeError, json.JSONDecodeError):
+                  source_summary["validJson"] = False
+              else:
+                  source_summary["validJson"] = isinstance(payload, dict)
+                  if isinstance(payload, dict):
+                      for key in ("schema", "profile", "kind", "status", "renewBeforeDays"):
+                          if key in payload:
+                              source_summary[key] = payload[key]
+          root.mkdir(parents=True, exist_ok=True)
+          diagnostic = {
+              "schema": "quwoquan.domain-governance-tls-failure-diagnostic",
+              "job": "certificate",
+              "target": target,
+              "status": os.environ.get("JOB_STATUS", "failure"),
+              "source": source_summary,
+          }
+          (root / f"{target}-tls-failure-diagnostic.json").write_text(
+              json.dumps(diagnostic, ensure_ascii=False, indent=2) + "\n",
+              encoding="utf-8",
+          )
+          PY
+      - name: Upload redacted TLS failure diagnostic
+        if: ${{ failure() && !cancelled() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: domain-tls-${{ matrix.target }}
-          path: |
-            .qwq_output/env/repo/runs/domain/${{ matrix.target }}-tls-evidence.json
-            ${{ env.QWQ_TLS_BUNDLE_PATH }}
-          retention-days: 7
+          name: domain-tls-failure-diagnostic-${{ matrix.target }}
+          path: .qwq_output/env/repo/runs/domain/${{ matrix.target }}-tls-failure-diagnostic.json
+          retention-days: 3

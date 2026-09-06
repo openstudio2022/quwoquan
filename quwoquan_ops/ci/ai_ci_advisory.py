@@ -18,6 +18,7 @@ from typing import Any, Mapping
 
 
 CANONICAL_SCHEMA = "ai-ci-advisory"
+CODE_HEALTH_SOURCE_KIND = "code-health-delta"
 SHA256 = re.compile(r"^sha256:[0-9a-f]{64}$")
 GIT_SHA = re.compile(r"^[0-9a-f]{40}$")
 WORKFLOW_RUN_ID = re.compile(r"^[1-9][0-9]{0,19}$")
@@ -232,6 +233,9 @@ def _canonical_source_evidence(value: Any) -> list[dict[str, str]]:
                 "workflowRunId": workflow_run_id,
             }
         )
+    code_health = [item for item in canonical if item["kind"] == CODE_HEALTH_SOURCE_KIND]
+    if len(code_health) > 1:
+        raise AdvisoryContractError("code-health-delta sourceEvidence may appear at most once")
     return canonical
 
 

@@ -197,6 +197,25 @@ def test_advisory_rejects_unbound_or_mutable_source_evidence(
         canonical_advisory(payload)
 
 
+def test_advisory_accepts_one_digest_bound_code_health_summary() -> None:
+    payload = draft()
+    payload["sourceEvidence"][0]["kind"] = "code-health-delta"
+    result = canonical_advisory(payload)
+    assert result["sourceEvidence"][0]["kind"] == "code-health-delta"
+    assert "gateStatus" not in json.dumps(result)
+
+
+def test_advisory_rejects_duplicate_code_health_sources() -> None:
+    payload = draft()
+    first = dict(payload["sourceEvidence"][0])
+    first["kind"] = "code-health-delta"
+    second = {**first, "sourceRef": "repo://quwoquan/code-health.json@sha256:" + "6" * 64, "sourceDigest": "sha256:" + "6" * 64, "modelInputDigest": "sha256:" + "7" * 64}
+    payload["sourceEvidence"] = [first, second]
+    payload["redactions"] = [redaction_receipt(), redaction_receipt(source_digest="sha256:" + "6" * 64, model_input_digest="sha256:" + "7" * 64)]
+    with pytest.raises(AdvisoryContractError, match="at most once"):
+        canonical_advisory(payload)
+
+
 def test_advisory_rejects_source_evidence_from_different_runs() -> None:
     payload = draft()
     second = dict(payload["sourceEvidence"][0])

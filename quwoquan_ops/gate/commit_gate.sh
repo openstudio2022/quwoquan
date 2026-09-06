@@ -141,6 +141,13 @@ run_static_check() {
     entrypoint_script_paths)
       python3 -B quwoquan_ops/gate/verify_entrypoint_script_paths.py
       ;;
+    code_health_delta_fast)
+      changed_args=()
+      while IFS= read -r changed; do
+        [[ -n "$changed" ]] && changed_args+=(--changed-file "$changed")
+      done < <(git diff --cached --name-only)
+      python3 -B quwoquan_ops/gate/verify_incremental_code_health.py         --base HEAD --head HEAD --working-tree --index-only --mode fast "${changed_args[@]}"
+      ;;
     local_worktree_lifecycle)
       log "FAIL: local_worktree_lifecycle is forbidden in commit-gate static checks"
       return 2

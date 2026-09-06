@@ -407,66 +407,56 @@ def test_release_binding_rejects_invalid_lifecycle_identity(
 
 
 @pytest.mark.parametrize(
-    ("candidate_class", "rollback_class", "rollback_kind"),
-    (
-        ("research", "commercial", "standard"),
-        ("commercial", "research", "empty_baseline"),
-    ),
+    ("candidate_class", "rollback_class"),
+    (("research", "research"), ("research", "commercial"),
+     ("commercial", "research"), ("commercial", "commercial")),
 )
-def test_matrix_rejects_research_release_before_any_mutation(
-    tmp_path: Path,
-    candidate_class: str,
-    rollback_class: str,
-    rollback_kind: str,
+def test_research_and_commercial_branches_are_explicit_and_supported(
+    tmp_path: Path, candidate_class: str, rollback_class: str,
 ) -> None:
-    candidate = tmp_path / "candidate.json"
-    rollback = tmp_path / "rollback.json"
-    candidate.write_text(
-        json.dumps(
-            _release_attestation(
-                release_id="candidate-release",
-                digest_char="1",
-                release_class=candidate_class,
-            )
-        ),
-        encoding="utf-8",
+    candidate = tmp_path / f"{candidate_class}-candidate.json"
+    rollback = tmp_path / f"{candidate_class}-{rollback_class}-rollback.json"
+    candidate.write_text(json.dumps(_release_attestation(
+        release_id=f"{candidate_class}-candidate", digest_char="1", release_class=candidate_class,
+        contains_unverified_assets=candidate_class == "research",
+    )), encoding="utf-8")
+    rollback.write_text(json.dumps(_release_attestation(
+        release_id=f"{rollback_class}-rollback", digest_char="2", release_class=rollback_class,
+        contains_unverified_assets=rollback_class == "research",
+    )), encoding="utf-8")
+    bindings = matrix_mod._resolve_matrix_inputs(
+        release_attestation=str(candidate), rollback_release_attestation=str(rollback),
+        test_data_request=None, test_data_evidence=None, test_data_handoff=None,
+        telemetry_fn=None, provider_fn=None, app_uat_fn=None,
+        ios_simulator_device="", android_emulator_device="", android_physical_device="", ios_physical_device="",
+        device_profile=matrix_mod.DEVICE_PROFILE_EMULATOR_ONLY, execution_class="contract-simulation",
     )
-    rollback.write_text(
-        json.dumps(
-            _release_attestation(
-                release_id="rollback-release",
-                digest_char="2",
-                release_class=rollback_class,
-                release_kind=rollback_kind,
-            )
-        ),
-        encoding="utf-8",
-    )
-    package = mock.Mock(return_value={"exitCode": 0})
-    runtime = mock.Mock(return_value={"exitCode": 0})
-    down = mock.Mock(return_value={"exitCode": 0})
-    data = mock.Mock(return_value={"exitCode": 0})
+    assert bindings.candidate_release["releaseClass"] == candidate_class
+    assert bindings.rollback_release["releaseClass"] == rollback_class
 
-    result = orchestrator._run_local_env_gate_matrix(
-        package_fn=package,
-        up_fn=runtime,
-        health_fn=runtime,
-        verify_fn=runtime,
-        down_fn=down,
-        data_fn=data,
-        include_l0=False,
-        release_attestation=str(candidate),
-        rollback_release_attestation=str(rollback),
-        execution_class="contract-simulation",
-        matrix_run_id="matrix-research-must-fail-fast",
-    )
 
-    assert result["exitCode"] == 2
-    assert result["claim"] == "GATE_BLOCK"
-    assert result["failureCategory"] == "research_lifecycle_unsupported"
-    assert "matrix is commercial-only" in result["details"][0]
-    assert "canonical Research lifecycle" in result["details"][0]
-    package.assert_not_called()
-    runtime.assert_not_called()
-    down.assert_not_called()
-    data.assert_not_called()
+def test_promotion_device_profile_requires_android_and_ios_physical_bindings(monkeypatch) -> None:
+    calls = []
+    def run(argv, **_kwargs):
+        calls.append(argv)
+        if argv[1:3] == ["simctl", "list"]:
+            return mock.Mock(returncode=0, stdout=json.dumps({"devices": {"runtime": [{"udid": "sim-1", "isAvailable": True}]}}))
+        if argv[1:3] == ["devicectl", "list"]:
+            return mock.Mock(returncode=0, stdout=json.dumps({"devices": [{"identifier": "ios-physical-1"}]}))
+        if "get-state" in argv:
+            return mock.Mock(returncode=0, stdout="device\n")
+        if "ro.kernel.qemu" in argv:
+            return mock.Mock(returncode=0, stdout="1\n" if "emulator-1" in argv else "0\n")
+        return mock.Mock(returncode=0, stdout="0\n")
+    monkeypatch.setattr(matrix_mod.subprocess, "run", run)
+    assert matrix_mod._device_binding_errors(
+        device_profile=matrix_mod.DEVICE_PROFILE_FULL, ios_simulator_device="sim-1",
+        android_emulator_device="emulator-1", android_physical_device="android-physical-1",
+        ios_physical_device="ios-physical-1",
+    ) == []
+    bindings = matrix_mod._device_uat_bindings(
+        device_profile=matrix_mod.DEVICE_PROFILE_FULL, ios_simulator_device="sim-1",
+        android_emulator_device="emulator-1", android_physical_device="android-physical-1",
+        ios_physical_device="ios-physical-1",
+    )
+    assert ("iosPhysicalUAT", "ios-physical", "ios-physical-1") in bindings

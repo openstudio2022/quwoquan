@@ -1,8 +1,7 @@
-"""stackctl Ops UAT authority-chain command wiring.
+"""stackctl App UAT evidence projection command wiring.
 
-All inputs are explicit evidence-root-relative refs plus exact-byte digests.
-The module never discovers ``latest`` and performs no environment or device
-mutation.  Handler failures are returned as typed ``GATE_BLOCK`` payloads.
+The canonical EnvironmentAcceptanceFact v2 producer is the hermetic scheduler;
+the retired ``environment-acceptance-append`` command is intentionally absent.
 """
 
 from __future__ import annotations
@@ -17,21 +16,11 @@ from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path, PurePosixPath
 from typing import Any
 
-from quwoquan_ops.cli.commands.environment_acceptance_predecessor import (
-    validate_predecessor_acceptance,
-)
 from quwoquan_ops.cli.lib.app_uat_result_bundle import (
     AppUatResultBundleError,
     build_app_uat_result_bundle,
     document_digest,
     write_projection,
-)
-from quwoquan_ops.cli.lib.environment_acceptance_fact import (
-    ACCEPTANCE_PROFILES,
-    EnvironmentAcceptanceFactError,
-    build_environment_acceptance_fact,
-    exact_byte_digest,
-    write_environment_acceptance_fact,
 )
 from quwoquan_ops.cli.lib.target_uat_binding import (
     TargetUatBindingError,
@@ -225,93 +214,6 @@ def _source_argument(raw: Sequence[str] | None, *, label: str) -> list[dict[str,
     if not sources:
         _block("OPS.APP_UAT_EVIDENCE.invalid_argument", f"{label} must be non-empty")
     return sources
-
-
-def _profile_argument(raw: Sequence[str] | None) -> list[dict[str, str]]:
-    profiles: list[dict[str, str]] = []
-    for index, value in enumerate(raw or ()):
-        parts = value.split("=", 1)
-        if len(parts) != 2 or not all(part for part in parts):
-            _block(
-                "OPS.APP_UAT_EVIDENCE.invalid_argument",
-                f"requiredProfile[{index}] must be PLATFORM=DEVICE_PROFILE",
-            )
-        profiles.append({"platform": parts[0], "deviceProfile": parts[1]})
-    if not profiles:
-        _block(
-            "OPS.APP_UAT_EVIDENCE.invalid_argument",
-            "requiredProfile must be non-empty",
-        )
-    return profiles
-
-
-def _target_binding_argument(raw: Sequence[str] | None) -> list[dict[str, str]]:
-    bindings: list[dict[str, str]] = []
-    for index, value in enumerate(raw or ()):
-        parts = value.split("=", 3)
-        if len(parts) != 4:
-            _block(
-                "OPS.APP_UAT_EVIDENCE.invalid_argument",
-                "targetBinding["
-                f"{index}] must be PLATFORM=DEVICE_PROFILE=REF=sha256:<64 lowercase hex>",
-            )
-        platform, profile, ref, digest = parts
-        source = _source(ref, digest, label=f"targetBinding[{index}]")
-        bindings.append(
-            {
-                **source,
-                "platform": platform,
-                "deviceProfile": profile,
-            }
-        )
-    if not bindings:
-        _block(
-            "OPS.APP_UAT_EVIDENCE.invalid_argument",
-            "targetBinding must be non-empty",
-        )
-    return bindings
-
-
-def _required_raw_argument(raw: Sequence[str] | None) -> list[dict[str, str]]:
-    results: list[dict[str, str]] = []
-    for index, value in enumerate(raw or ()):
-        parts = value.split("=", 3)
-        if len(parts) != 4:
-            _block(
-                "OPS.APP_UAT_EVIDENCE.invalid_argument",
-                "requiredRaw["
-                f"{index}] must be SLOT_ID=STATUS=REF=sha256:<64 lowercase hex>",
-            )
-        slot_id, status, ref, digest = parts
-        source = _source(ref, digest, label=f"requiredRaw[{index}]")
-        results.append(
-            {
-                **source,
-                "slotId": _digest(slot_id, field=f"requiredRaw[{index}].slotId"),
-                "status": status,
-            }
-        )
-    if not results:
-        _block("OPS.APP_UAT_EVIDENCE.invalid_argument", "requiredRaw must be non-empty")
-    return results
-
-
-def _prod_release_facts(raw: str) -> dict[str, Any] | None:
-    if not raw:
-        return None
-    try:
-        value = json.loads(raw)
-    except json.JSONDecodeError as error:
-        raise AppUatEvidenceCommandError(
-            "OPS.APP_UAT_EVIDENCE.invalid_argument",
-            "prodReleaseFacts must be one JSON object",
-        ) from error
-    if not isinstance(value, dict):
-        _block(
-            "OPS.APP_UAT_EVIDENCE.invalid_argument",
-            "prodReleaseFacts must be one JSON object",
-        )
-    return value
 
 
 def _status(payload: Mapping[str, Any]) -> str:
@@ -540,215 +442,6 @@ def build_app_uat_bundle_command(
     }
 
 
-def build_environment_acceptance_append_command(
-    *,
-    evidence_root: Path,
-    acceptance_root: Path,
-    acceptance_profile: str,
-    environment: str,
-    target: str,
-    release_id: str,
-    release_digest: str,
-    import_run_id: str,
-    verify_run_id: str,
-    sample_plan_ref: str,
-    sample_plan_digest: str,
-    target_binding_refs: Sequence[Mapping[str, Any]],
-    required_raw_results: Sequence[Mapping[str, Any]],
-    required_target_profiles: Sequence[Mapping[str, str]],
-    data_readiness: Mapping[str, str],
-    manifest_digest: str | None = None,
-    consumer_health: Mapping[str, str] | None = None,
-    active_cas: Mapping[str, str] | None = None,
-    lifecycle_exit: Mapping[str, str] | None = None,
-    provider_readiness: Mapping[str, str] | None = None,
-    observability_readiness: Mapping[str, str] | None = None,
-    rollback_readiness: Mapping[str, str] | None = None,
-    predecessor_ref: str | None,
-    predecessor_digest: str | None,
-    predecessor_fact_id: str | None,
-    resource_finalization: Mapping[str, Sequence[Mapping[str, str]]] | None = None,
-    prod_release_facts: Mapping[str, Any] | None = None,
-    created_at: str,
-    source_fingerprint: str,
-) -> dict[str, Any]:
-    """Pure append handler; predecessor validation always precedes fact building."""
-
-    root = _root(evidence_root, field="evidenceRoot")
-    acceptance_store = _root(acceptance_root, field="acceptanceRoot")
-    try:
-        acceptance_store.relative_to(root)
-    except ValueError as error:
-        raise AppUatEvidenceCommandError(
-            "OPS.APP_UAT_EVIDENCE.path_blocked",
-            "acceptanceRoot must be contained by evidenceRoot",
-        ) from error
-    if acceptance_profile not in ACCEPTANCE_PROFILES:
-        _block(
-            "OPS.APP_UAT_EVIDENCE.invalid_argument",
-            "acceptanceProfile must be explicitly selected from the canonical profiles",
-        )
-    if not required_raw_results:
-        _block(
-            "OPS.APP_UAT_EVIDENCE.invalid_argument",
-            "requiredRawResults must be non-empty",
-        )
-    if acceptance_profile == "environment_promotion":
-        if manifest_digest is not None:
-            _block(
-                "OPS.APP_UAT_EVIDENCE.invalid_argument",
-                "environment_promotion must not provide manifestDigest",
-            )
-        if consumer_health is not None:
-            _block(
-                "OPS.APP_UAT_EVIDENCE.invalid_argument",
-                "environment_promotion must not provide consumerHealth",
-            )
-        if not target_binding_refs:
-            _block(
-                "OPS.APP_UAT_EVIDENCE.invalid_argument",
-                "environment_promotion requires targetBinding",
-            )
-        if not required_target_profiles:
-            _block(
-                "OPS.APP_UAT_EVIDENCE.invalid_argument",
-                "environment_promotion requires requiredProfile",
-            )
-        predecessor = validate_predecessor_acceptance(
-            environment=environment,
-            release_id=release_id,
-            release_digest=release_digest,
-            predecessor_ref=predecessor_ref,
-            predecessor_digest=predecessor_digest,
-            predecessor_fact_id=predecessor_fact_id,
-            evidence_root=root,
-        )
-    else:
-        if environment != "alpha" or target != "alpha-local":
-            _block(
-                "OPS.APP_UAT_EVIDENCE.invalid_argument",
-                "m1_api_consumer requires environment=alpha,target=alpha-local",
-            )
-        if target_binding_refs:
-            _block(
-                "OPS.APP_UAT_EVIDENCE.invalid_argument",
-                "m1_api_consumer must not provide targetBinding",
-            )
-        if required_target_profiles:
-            _block(
-                "OPS.APP_UAT_EVIDENCE.invalid_argument",
-                "m1_api_consumer must not provide requiredProfile",
-            )
-        if any((predecessor_ref, predecessor_digest, predecessor_fact_id)):
-            _block(
-                "OPS.APP_UAT_EVIDENCE.invalid_argument",
-                "m1_api_consumer must not provide predecessor",
-            )
-        if prod_release_facts is not None:
-            _block(
-                "OPS.APP_UAT_EVIDENCE.invalid_argument",
-                "m1_api_consumer must not provide prodReleaseFacts",
-            )
-        promotion_arguments = {
-            "activeCas": active_cas,
-            "lifecycleExit": lifecycle_exit,
-            "providerReadiness": provider_readiness,
-            "observabilityReadiness": observability_readiness,
-            "rollbackReadiness": rollback_readiness,
-            "resourceFinalization": resource_finalization,
-        }
-        present_promotion = sorted(
-            field for field, value in promotion_arguments.items() if value is not None
-        )
-        if present_promotion:
-            _block(
-                "OPS.APP_UAT_EVIDENCE.invalid_argument",
-                f"m1_api_consumer must not provide promotion-only fields: {present_promotion}",
-            )
-        if consumer_health is None:
-            _block(
-                "OPS.APP_UAT_EVIDENCE.invalid_argument",
-                "m1_api_consumer requires consumerHealth",
-            )
-        if manifest_digest is None:
-            _block(
-                "OPS.APP_UAT_EVIDENCE.invalid_argument",
-                "m1_api_consumer requires manifestDigest",
-            )
-        if len(required_raw_results) != 16:
-            _block(
-                "OPS.APP_UAT_EVIDENCE.invalid_argument",
-                "m1_api_consumer requires exactly 16 requiredRaw results",
-            )
-        predecessor = None
-    if acceptance_profile == "m1_api_consumer":
-        from quwoquan_ops.cli.lib.environment_acceptance_fact import (
-            derive_m1_source_fingerprint,
-        )
-
-        if manifest_digest is not None and consumer_health is not None:
-            derived_fingerprint = derive_m1_source_fingerprint(
-                environment=environment,
-                target=target,
-                release_id=release_id,
-                release_digest=release_digest,
-                manifest_digest=manifest_digest,
-                import_run_id=import_run_id,
-                verify_run_id=verify_run_id,
-                sample_plan={"ref": sample_plan_ref, "digest": sample_plan_digest},
-                data_readiness=data_readiness,
-                consumer_health=consumer_health,
-                required_raw_results=required_raw_results,
-            )
-            if source_fingerprint != derived_fingerprint:
-                _block(
-                    "OPS.APP_UAT_EVIDENCE.invalid_argument",
-                    "m1_api_consumer sourceFingerprint drifted from exact authorities",
-                )
-    fact = build_environment_acceptance_fact(
-        evidence_root=root,
-        acceptance_profile=acceptance_profile,
-        environment=environment,
-        target=target,
-        release_id=release_id,
-        release_digest=release_digest,
-        import_run_id=import_run_id,
-        verify_run_id=verify_run_id,
-        sample_plan_ref=sample_plan_ref,
-        sample_plan_digest=sample_plan_digest,
-        target_binding_refs=target_binding_refs,
-        required_raw_results=required_raw_results,
-        required_target_profiles=required_target_profiles,
-        data_readiness=data_readiness,
-        manifest_digest=manifest_digest,
-        consumer_health=consumer_health,
-        active_cas=active_cas,
-        lifecycle_exit=lifecycle_exit,
-        provider_readiness=provider_readiness,
-        observability_readiness=observability_readiness,
-        rollback_readiness=rollback_readiness,
-        predecessor_acceptance=predecessor,
-        resource_finalization=resource_finalization,
-        prod_release_facts=prod_release_facts,
-        created_at=created_at,
-        source_fingerprint=source_fingerprint,
-    )
-    output = write_environment_acceptance_fact(
-        root=acceptance_store,
-        fact=fact,
-        evidence_root=root,
-        required_target_profiles=required_target_profiles,
-    )
-    return {
-        "exitCode": 0,
-        "summary": "EnvironmentAcceptanceFact appended or exact replay verified",
-        "details": [f"fact: {output}"],
-        "factId": fact["factId"],
-        "factRef": output.relative_to(root).as_posix(),
-        "factDigest": exact_byte_digest(output),
-    }
-
-
 def _gate_block(error: Exception) -> dict[str, Any]:
     code = str(getattr(error, "code", "OPS.APP_UAT_EVIDENCE.gate_block"))
     return {
@@ -829,130 +522,6 @@ def command_app_uat_bundle(args: argparse.Namespace) -> dict[str, Any]:
         return _gate_block(error)
 
 
-def command_environment_acceptance_append(args: argparse.Namespace) -> dict[str, Any]:
-    try:
-        return build_environment_acceptance_append_command(
-            evidence_root=Path(args.evidence_root),
-            acceptance_root=Path(args.acceptance_root),
-            acceptance_profile=args.acceptance_profile,
-            environment=args.environment,
-            target=args.target,
-            release_id=args.release_id,
-            release_digest=args.release_digest,
-            manifest_digest=(args.manifest_digest or None),
-            import_run_id=args.import_run_id,
-            verify_run_id=args.verify_run_id,
-            sample_plan_ref=args.sample_plan_ref,
-            sample_plan_digest=args.sample_plan_digest,
-            target_binding_refs=(
-                _target_binding_argument(args.target_binding)
-                if args.target_binding
-                else []
-            ),
-            required_raw_results=_required_raw_argument(args.required_raw),
-            required_target_profiles=(
-                _profile_argument(args.required_profile)
-                if args.required_profile
-                else []
-            ),
-            data_readiness=_source(
-                args.data_readiness_ref,
-                args.data_readiness_digest,
-                label="dataReadiness",
-            ),
-            consumer_health=(
-                _source(
-                    args.consumer_health_ref,
-                    args.consumer_health_digest,
-                    label="consumerHealth",
-                )
-                if args.consumer_health_ref or args.consumer_health_digest
-                else None
-            ),
-            active_cas=(
-                {
-                    "ref": args.active_cas_ref,
-                    "digest": args.active_cas_digest,
-                    "readbackRef": args.active_cas_readback_ref,
-                    "readbackDigest": args.active_cas_readback_digest,
-                    "releaseId": args.release_id,
-                    "releaseDigest": args.release_digest,
-                }
-                if args.active_cas_ref
-                or args.active_cas_digest
-                or args.active_cas_readback_ref
-                or args.active_cas_readback_digest
-                else None
-            ),
-            lifecycle_exit=(
-                _source(
-                    args.lifecycle_exit_ref,
-                    args.lifecycle_exit_digest,
-                    label="lifecycleExit",
-                )
-                if args.lifecycle_exit_ref or args.lifecycle_exit_digest
-                else None
-            ),
-            provider_readiness=(
-                _source(
-                    args.provider_readiness_ref,
-                    args.provider_readiness_digest,
-                    label="providerReadiness",
-                )
-                if args.provider_readiness_ref or args.provider_readiness_digest
-                else None
-            ),
-            observability_readiness=(
-                _source(
-                    args.observability_readiness_ref,
-                    args.observability_readiness_digest,
-                    label="observabilityReadiness",
-                )
-                if args.observability_readiness_ref
-                or args.observability_readiness_digest
-                else None
-            ),
-            rollback_readiness=(
-                _source(
-                    args.rollback_readiness_ref,
-                    args.rollback_readiness_digest,
-                    label="rollbackReadiness",
-                )
-                if args.rollback_readiness_ref or args.rollback_readiness_digest
-                else None
-            ),
-            predecessor_ref=args.predecessor_ref or None,
-            predecessor_digest=args.predecessor_digest or None,
-            predecessor_fact_id=args.predecessor_fact_id or None,
-            resource_finalization=(
-                {
-                    "leaseRevocationRefs": _source_argument(
-                        args.lease_revocation, label="leaseRevocation"
-                    ),
-                    "lockReleaseRefs": _source_argument(
-                        args.lock_release, label="lockRelease"
-                    ),
-                    "gcProtectionRefs": _source_argument(
-                        args.gc_protection, label="gcProtection"
-                    ),
-                }
-                if args.lease_revocation or args.lock_release or args.gc_protection
-                else None
-            ),
-            prod_release_facts=_prod_release_facts(args.prod_release_facts),
-            created_at=args.created_at,
-            source_fingerprint=args.source_fingerprint,
-        )
-    except (
-        AppUatEvidenceCommandError,
-        EnvironmentAcceptanceFactError,
-        OSError,
-        TypeError,
-        ValueError,
-    ) as error:
-        return _gate_block(error)
-
-
 from quwoquan_ops.cli.commands.app_uat_evidence_parser import (
     register_parser,
 )
@@ -961,17 +530,14 @@ from quwoquan_ops.cli.commands.app_uat_evidence_parser import (
 COMMAND_HANDLERS: dict[str, Callable[[argparse.Namespace], dict[str, Any]]] = {
     "app-uat-target-bind": command_app_uat_target_bind,
     "app-uat-bundle": command_app_uat_bundle,
-    "environment-acceptance-append": command_environment_acceptance_append,
 }
 
 __all__ = [
     "COMMAND_HANDLERS",
     "AppUatEvidenceCommandError",
     "build_app_uat_bundle_command",
-    "build_environment_acceptance_append_command",
     "build_target_uat_binding_command",
     "command_app_uat_bundle",
     "command_app_uat_target_bind",
-    "command_environment_acceptance_append",
     "register_parser",
 ]

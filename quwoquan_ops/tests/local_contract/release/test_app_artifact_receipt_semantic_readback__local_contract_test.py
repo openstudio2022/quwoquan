@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 # spec_ref: specs/feature-tree/platform-ops-governance/security-privacy-audit/spec.md#sit-001
-
 import json
 import shutil
 from pathlib import Path
@@ -16,9 +15,6 @@ from quwoquan_ops.cli.commands.package_app_artifact_helpers import (
     artifact_digest,
     build_provenance_digest,
 )
-from quwoquan_ops.cli.lib.official_distribution_release import (
-    deploy_official_distribution,
-)
 from quwoquan_ops.cli.lib.web_official_release import web_official_content_digest
 from quwoquan_ops.tests.local_contract.release.test_app_pipeline_candidate_chain__local_contract_test import (
     ROOT,
@@ -27,7 +23,8 @@ from quwoquan_ops.tests.local_contract.release.test_app_pipeline_candidate_chain
 )
 from quwoquan_ops.tests.local_contract.release.test_official_distribution_release__supply_chain__local_contract_test import (
     _android_package,
-    _release_manifest,
+    _deploy,
+    _official_graph,
 )
 from quwoquan_ops.tests.support.app_pipeline_web_artifact_test_support import (
     write_valid_web_artifact,
@@ -152,38 +149,57 @@ def test_producer_collector_web_digest_survives_official_deploy(
         web_release_manifest=materialized_manifest,
     )
 
-    deploy_package = tmp_path / "official-web-package"
-    shutil.copytree(
-        bundle / "payloads/web-shared/public-web", deploy_package / "public"
-    )
-    shutil.copy2(bundle / "public-web-manifest.json", deploy_package / "manifest.json")
     web_release = json.loads(
-        (deploy_package / "manifest.json").read_text(encoding="utf-8")
+        (bundle / "public-web-manifest.json").read_text(encoding="utf-8")
     )
     source_git_sha = str(web_release["artifactManifest"]["sourceGitSha"])
     source_tree_digest = str(web_release["artifactManifest"]["sourceTreeDigest"])
+    web_release["artifactManifest"]["buildNumber"] = "17"
+    web_release["artifactManifest"]["qualificationRequestRef"] = (
+        "ghcr.io/owner/repo/qualification-request@sha256:" + "1" * 64
+    )
+    web_release["artifactManifest"]["qualificationRequestDigest"] = "sha256:" + "1" * 64
+    web_release["artifactManifest"]["rcTagAdmissionRef"] = (
+        "ghcr.io/owner/repo/rc-admission@sha256:" + "3" * 64
+    )
+    web_release["artifactManifest"]["artifactBuildNumberAllocationRef"] = (
+        "ghcr.io/owner/repo/build-number-allocation@sha256:" + "2" * 64
+    )
+    web_release["artifactManifest"]["artifactBuildNumberAllocationDigest"] = "sha256:" + "2" * 64
+    (bundle / "public-web-manifest.json").write_text(
+        json.dumps(web_release, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
     android_manifest = _android_package(
         tmp_path / "android-package",
-        build="18201",
+        build="17",
         source_git_sha=source_git_sha,
         source_tree_digest=source_tree_digest,
     )
-    release_manifest = _release_manifest(
-        tmp_path / "candidate",
-        web_manifest=deploy_package / "manifest.json",
-        android_manifest=android_manifest,
-        application_package_sources={
-            "web-shared": bundle / "application-packages/web-shared.json"
-        },
+    deploy_web = tmp_path / "factory-web"
+    deploy_web.mkdir()
+    (deploy_web / "manifest.json").write_bytes(
+        (bundle / "public-web-manifest.json").read_bytes()
     )
-    receipt = deploy_official_distribution(
-        kind="web",
-        package_manifest_path=deploy_package / "manifest.json",
-        release_manifest_path=release_manifest,
-        distribution_root=tmp_path / "official-origin",
+    shutil.copytree(
+        bundle / "payloads/web-shared/public-web", deploy_web / "public"
+    )
+    authority = _official_graph(
+        tmp_path / "authority",
+        web_manifest=deploy_web / "manifest.json",
+        android_manifest=android_manifest,
+    )
+    receipt = _deploy(
+        "web",
+        authority,
+        tmp_path / "official-origin",
     )
 
-    expected = web_official_content_digest(deploy_package / "public")
+    expected = web_official_content_digest(
+        bundle / "payloads/web-shared/public-web"
+    )
     assert materialized["contentSHA256"] == expected
     assert receipt["contentSHA256"] == expected
+    assert receipt["selectedAppArtifactDigest"] == "sha256:" + expected
+    assert receipt["candidateMaterialId"] == authority["material_id"]
     assert (tmp_path / "official-origin/web/current").is_symlink()

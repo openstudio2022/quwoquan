@@ -135,7 +135,7 @@
 早期消费场景中的 `Data-owned ReleaseUatSamplePlan` 仅表示下游 Data release consumer 契约的历史命名，不表示由 content-production producer 创建、携带或验收；该 sample plan 及其 UAT/EAF facts 均 downstream-owned。
 
 - `ContentProductionTaskView`、`ContentItemVersionView`、`EnvironmentReleaseOrderView`、`ReviewDecisionTimeline`、`ReleaseSelectionView` 与 `TargetAcceptanceView` 均为无写权限的 projection/query view，不拥有 command、Repository、checkpoint、独立 ledger 或生命周期终态。
-- `ContentProductionTaskView` 只投影现役 carrier demand/execution manifest/stage receipts；旧 WorkRequest schema 不构成依赖。`ContentItemVersionView` 只投影 canonical object transaction/pool record。`ReviewDecisionTimeline` 只投影上述 owner 已绑定的 review facts。`ReleaseSelectionView` 只投影 `ContentRelease` 及其 selection evidence。`TargetAcceptanceView` 只投影 per-environment operation/acceptance facts。`EnvironmentReleaseOrderView` 只读 Alpha/Beta/Gamma/Prod 四环境事实并排序，不推导、补写或推进任何环境状态。
+- `ContentProductionTaskView` 只投影现役 carrier demand/execution manifest/stage receipts；旧 WorkRequest schema 不构成依赖。`ContentItemVersionView` 只投影 canonical object transaction/pool record。`ReviewDecisionTimeline` 只投影上述 owner 已绑定的 review facts。`ReleaseSelectionView` 只投影 `ContentRelease` 及其 selection evidence。`TargetAcceptanceView` 只投影 Alpha/Beta/Gamma operation/EAF v2 与 Prod activation/hosted facts。`EnvironmentReleaseOrderView` 只读 Alpha/Beta/Gamma EAF v2 和 Prod `ReleaseTagAdmissionFact`/`ProdActivationAdmissionFact`/hosted lifecycle facts并排序，不推导、补写或推进任何环境状态。
 - projection 缺失、延迟或重建不得改变 owner facts；query 发现 ref/digest 漂移时返回 typed blocked，不以本地 checkpoint、缓存行或最后一次成功值修复 owner。
 
 <a id="req-014"></a>
@@ -143,7 +143,7 @@
 
 - App 验收矩阵的 entry surface 轴固定为 `feed|search|recommendation|direct_or_object_route`，carrier 轴固定为 `homepage|article|image|video`。每个 cell 必须显式声明 `required|not_applicable`，并在 required 时给出 repo-relative 验收锚点引用与 runner；两轴不得合并或统称“四 surface”。
 - raw canonical `ReadinessCaseResult` 是唯一 UAT 结果事实，逐 cell 绑定 target、release identity、runner、输入与真实观察。允许建立只读完整性 projection 检查 required cell 是否齐全，但该 projection 不得生成 verdict、promotion、write-back 或独立 UAT ledger。
-- `EnvironmentAcceptanceFact` 直接绑定全部 required raw result refs 与 exact-byte digests，并验证它们属于同一 `TargetUatBinding` 与 release identity；缺失、重复、跨 release、digest 漂移或 `not_applicable` 无验收锚点引用均 fail closed，不由 counts 或完整性 projection 代填。
+- Environment Ops scheduler 签发的 `EnvironmentAcceptanceFact` v2 以 `caseResultRefs` 直接绑定全部 required raw result refs 与 exact-byte digests，并验证其 environment、candidate 与 canonical profile 一致；缺失、重复、跨 candidate、digest 漂移或 `not_applicable` 无验收锚点引用均 fail closed，不由 counts 或完整性 projection 代填。Data-owned sample plan 与 CaseResult 可保留 release identity，但 EAF v2 自身不复制 Data release identity或 consumer binding。
 
 <a id="req-015"></a>
 ### REQ-015 入口面缺席、治理与回滚语义互不代偿
@@ -198,7 +198,7 @@
 - GIVEN 四载体对象共享同一 source revision/digest/entity catalog digest，研究素材已取得且完整记录来源与权利缺口。
 - WHEN 生成并请求激活 `releaseClass=research` 的 immutable release。
 - THEN unverified/unknown 可记为 `research_allowed`，restricted/未取得/生成/缺字段素材与不可播放视频被阻断；文章批次配图率只写入统计，单篇 illustrated 声明的同源封面/正文图闭包仍是对象硬门。
-- THEN Data-owned `ReleaseUatSamplePlan` 绑定同一 `releaseId+manifestDigest+sourceIdentitySetDigest+releaseClass+productLifecycleState`；四环境各自的 activation/readiness 与 Ops `TargetUatBinding` exact-byte 绑定该 plan，本环境 `EnvironmentAcceptanceFact` 直接绑定 required raw `ReadinessCaseResult` refs/exact-byte digests、独立 import/readback 与 research isolation policy/proof，并按 Alpha→Beta→Gamma→Prod 绑定前一环境 fact 的 exact bytes；匿名身份、公开媒体 URL、分享、导出或索引任一可用均 `GATE_BLOCK`。
+- THEN Data-owned `ReleaseUatSamplePlan` 绑定同一 `releaseId+manifestDigest+sourceIdentitySetDigest+releaseClass+productLifecycleState` 并供 raw CaseResult runner 消费；Alpha/Beta/Gamma 各自的 Environment Ops scheduler request 绑定同一 exact integration candidate，本环境 EAF v2 以 `caseResultRefs` 与 8 个 named closure refs 闭合独立 import/readback、research isolation、runtime/provider/observability、inspect/doctor/cleanup/lease，并按 Alpha→Beta→Gamma 绑定前一环境 EAF exact bytes；匿名身份、公开媒体 URL、分享、导出或索引任一可用均 `GATE_BLOCK`。Prod acceptance 另走 RC Qualification package acceptance、`ReleaseTagAdmissionFact`、`ProdActivationAdmissionFact` 与 hosted facts，不生成 Prod EAF。
 - THEN commercial readiness 不存在，且任何未授权 asset ID 不得进入 `commercialAcceptedCount`。
 
 <a id="gwt-009"></a>
@@ -326,23 +326,23 @@
 <a id="gwt-029"></a>
 ### GWT-029 六个运营视图只投影真实 owner facts
 
-- GIVEN carrier demand/execution manifest/stage receipts、canonical object transaction/pool record、ContentRelease 与四环境 operation/acceptance facts 均已有 create-once evidence。
+- GIVEN carrier demand/execution manifest/stage receipts、canonical object transaction/pool record、ContentRelease、Alpha/Beta/Gamma operation/EAF v2 与 Prod admission/hosted lifecycle facts 均已有 create-once evidence。
 - WHEN 查询 `ContentProductionTaskView`、`ContentItemVersionView`、`EnvironmentReleaseOrderView`、`ReviewDecisionTimeline`、`ReleaseSelectionView` 与 `TargetAcceptanceView`，并重建 projection。
 - THEN 六个 view 只由各自 owner refs/digests 确定性投影。
 - THEN 六个 view 没有 command、Repository、checkpoint、独立 ledger 或 terminal writer。
 - THEN 删除 projection 后重建结果逐字段相同且 owner bytes 不变。
-- THEN `EnvironmentReleaseOrderView` 只读 Alpha/Beta/Gamma/Prod 四环境事实。
+- THEN `EnvironmentReleaseOrderView` 只读 Alpha/Beta/Gamma EAF v2 与 Prod `ReleaseTagAdmissionFact`、`ProdActivationAdmissionFact` 和 hosted lifecycle facts，不把四者投影成同一种 acceptance。
 - THEN 缺环境、顺序冲突或 digest 漂移时返回 typed blocked。
 - THEN typed blocked 不补写 acceptance，也不从环境名猜状态。
 - THEN query 不以 projection cache 或最后一次成功值替代 owner refs/digests。
 
 <a id="gwt-030"></a>
-### GWT-030 EnvironmentAcceptanceFact 直接绑定 required raw UAT 结果
+### GWT-030 EnvironmentAcceptanceFact v2 由 scheduler 绑定完整 closure
 
-- GIVEN Data-owned `ReleaseUatSamplePlan` 已声明同一 release 的所有 required/not_applicable cell，Ops 已为该 target 的 required slots create-once `TargetUatBinding`，required runner 已分别产生 raw canonical `ReadinessCaseResult`。
-- WHEN 构建该 target 的 `EnvironmentAcceptanceFact` 并执行完整性查询。
-- THEN `EnvironmentAcceptanceFact` 直接列出全部 required raw refs 与 exact-byte digests；完整性查询只报告缺失、重复、跨 release 或漂移，不产生 verdict、promotion、write-back 或独立结果行。
-- THEN 任一 required raw result 缺失/失败、digest 漂移、runner/验收锚点引用不匹配或 identity 不同，acceptance fail closed；counts、旧 receipt 与 projection cache 都不能代填。
+- GIVEN Data-owned `ReleaseUatSamplePlan` 已声明同一 release 的所有 required/not_applicable cell，required runner 已分别产生绑定同一 exact integration candidate 的 raw canonical `ReadinessCaseResult`，且 Environment Ops 为同 candidate 建立 target scheduler request。
+- WHEN Environment Ops scheduler 请求签发该 Alpha/Beta/Gamma target 的 `EnvironmentAcceptanceFact` v2 并执行完整性查询。
+- THEN EAF 的 `caseResultRefs` 直接列出全部 required raw refs 与 exact-byte digests，并同时精确绑定 `candidate`、`impactPlanDigest`、`runtimeIdentity`、`dataLifecycle`、`providerReadiness`、`observabilityReadiness`、`inspectEvidence`、`doctorEvidence`、`cleanupEvidence`、`leaseClosureEvidence`、环境 predecessor、有效期、`nonPromotable` 与 DSSE signer；profile 只允许 `smoke|integration|release`。
+- THEN 任一 required raw result 或 named closure 缺失/失败、digest 漂移、runner/验收锚点引用不匹配、candidate/profile/predecessor 不同或签名无效时 acceptance fail closed；counts、旧 receipt 与 projection cache 都不能代填。Data 不调用 EAF writer；retired EAF profile、Data release identity、raw-result 聚合、consumer binding 与 Prod 属性均不在 v2 字段闭集中。
 
 <a id="gwt-031"></a>
 ### GWT-031 四入口对 deleted/offline/no-active 与 rollback 保持单义
@@ -385,12 +385,12 @@
 - THEN 此 GWT 只验收当前 Skill+AI Agent producer 架构；失败形成当前架构 typed blockers，不产生兼容或恢复旧轨的授权。
 
 <a id="gwt-035"></a>
-### GWT-035 environment promotion 与 API consumer 分支保持独立
+### GWT-035 Data ship 与 Environment Ops acceptance 单向交接
 
-- GIVEN 同一新架构后续需要 environment promotion。
-- WHEN 下游环境 owner 使用 `acceptanceProfile=environment_promotion` 执行 ship。
-- THEN target-bound App UAT raw facts、target binding、predecessor/promotion closure 按该分支显式闭合；`m1_api_consumer` 的 API facts 不冒充 App UAT，反之亦然。
-- THEN promotion/规模验收不得回授旧控制面兼容 authority。
+- GIVEN 同一新架构需要在 Data ship 交付后形成 Alpha/Beta/Gamma acceptance。
+- WHEN Data 产出 apply/import/readback/health 与 raw CaseResult，并把同 candidate scheduler request 交给 Environment Ops。
+- THEN Data result refs 不含 EAF；Environment Ops scheduler 独占签发完整 v2 EAF，canonical profile 只为 `smoke|integration|release`，前驱只按 Alpha→Beta→Gamma exact EAF 链闭合。`m1_api_consumer` intent 不冒充 EAF profile，也不省略任何 named closure。
+- THEN Prod 不创建 EAF；Prod acceptance 只消费 RC Qualification 的 package/provider/UAT/supply-chain `QualificationFact`、stable `ReleaseTagAdmissionFact`、`ProdActivationAdmissionFact` 与 hosted rollout/readback/soak facts。任何 acceptance 都不得回授 legacy 删除 authority或引入 sequence-017/旧控制面兼容。
 
 ## 6. 依赖
 
@@ -459,9 +459,9 @@
 - 准出影响：`block`
 - 影响或价值：只缺同一 runtime generation 的 fresh production Remote App UAT。Research 私有媒体的设计与实现已就位。progressive private MP4、图片/头像/对象主页/文章资产的 typed `accessMode` 分流、单飞短签、稳定资产缓存身份、Range 边缘逐请求复验，以及首次 401/403 强制换签最多一次并保持播放位置均已实现。二次失败 typed terminal 且不回退公开 URL。private HLS 不属于本 OPEN 的未完成实现，保持 unsupported/fail closed，并由 [`OPEN-017`](#open-017) 单独承接。
 - 尚缺实现：无。有效 Research/private projection 的 `accessMode` 与稳定资产标识为必填；仅明确 previous-version public contract version 可把 null/absent 解释为 public，Research/private 缺失保持 fail closed。
-- 尚缺验收证据：缺一轮绑定同一 Gamma `ReleaseUatSamplePlan`、registered physical-device `TargetUatBinding`、target/release/runtime generation 的 fresh `user_acceptance`：entry surface × carrier 矩阵全部 required cells 产生 raw `ReadinessCaseResult`，progressive private MP4 覆盖 Range 续播与一次 401/403 换签恢复，`EnvironmentAcceptanceFact` 直接绑定 required raw refs/exact-byte digests；旧公开 URL 断言、旧 receipt 或完整性 projection 不能替代。
+- 尚缺验收证据：缺一轮绑定同一 Gamma target/release/runtime generation 的 fresh `user_acceptance`：entry surface × carrier 矩阵全部 required cells 产生 raw `ReadinessCaseResult`，progressive private MP4 覆盖 Range 续播与一次 401/403 换签恢复；随后 Environment Ops scheduler 的 Gamma EAF v2 `caseResultRefs` 直接绑定 required raw refs/exact-byte digests，并闭合全部 8 个 named refs、Beta predecessor、有效期、`nonPromotable` 与 DSSE signer。旧公开 URL 断言、旧 receipt 或完整性 projection 不能替代。
 - 完成判定：[`GWT-016`](#gwt-016)、[`GWT-030`](#gwt-030)、[`GWT-032`](#gwt-032) 的 local_contract/api_integration 前置证据均通过，并由 production Remote runner 取得上述 fresh raw UAT facts；除 fresh UAT 外不得再把已实现能力列为本 OPEN 的实现缺口。
-- 依赖：Testing/Ops owner 负责 fresh runner、`TargetUatBinding` 与 `EnvironmentAcceptanceFact` 绑定；App/Service/Runtime owner 只需保持现有 `accessMode`、资产标识、Range 验签和单次换签字段/行为不漂移。private HLS 能力不阻断 progressive private MP4 验收。
+- 依赖：Testing/Ops owner 负责 fresh runner、同 candidate Environment Ops scheduler request 与完整 `EnvironmentAcceptanceFact` v2 closure；App/Service/Runtime owner 只需保持现有 `accessMode`、资产标识、Range 验签和单次换签字段/行为不漂移。private HLS 能力不阻断 progressive private MP4 验收。
 
 <a id="open-016"></a>
 ### OPEN-016 超尺寸资产的 provider 无关性尚缺真实 provider 证据

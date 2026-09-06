@@ -253,6 +253,7 @@ def build_report(
     now: datetime,
     failed_retention_days: int,
     success_retention_days: int,
+    referenced_artifact_ids: frozenset[int] = frozenset(),
 ) -> tuple[dict[str, Any], list[CleanupDecision]]:
     artifacts = api.list_artifacts()
     run_ids = {
@@ -275,6 +276,8 @@ def build_report(
             run = runs.get(run_id)
             if run is None:
                 unresolved_runs.append(run_id)
+        if artifact.get("id") in referenced_artifact_ids:
+            continue
         decision = classify_artifact(
             artifact,
             run,
@@ -304,6 +307,7 @@ def build_report(
             "activeArtifacts": sum(1 for item in artifacts if item.get("expired") is not True),
             "activeBytes": active_bytes,
             "unresolvedWorkflowRuns": sorted(set(unresolved_runs)),
+            "protectedByImmutableReference": sorted(referenced_artifact_ids),
         },
         "cleanup": {
             "candidateCount": len(decisions),
@@ -392,6 +396,10 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--now", default="")
     parser.add_argument("--output", type=Path)
+    parser.add_argument(
+        "--immutable-reference-index", type=Path,
+        help="JSON object with referencedActionsArtifactIds; unreadable/malformed input fails closed",
+    )
     parser.add_argument("--apply", action="store_true")
     parser.add_argument(
         "--max-deletions",
@@ -417,6 +425,13 @@ def main() -> int:
         return 2
     try:
         now = parse_timestamp(args.now) if args.now else datetime.now(UTC)
+        referenced_artifact_ids: frozenset[int] = frozenset()
+        if args.immutable_reference_index is not None:
+            index = json.loads(args.immutable_reference_index.read_text(encoding="utf-8"))
+            values = index.get("referencedActionsArtifactIds") if isinstance(index, dict) else None
+            if not isinstance(values, list) or any(not isinstance(value, int) or value <= 0 for value in values):
+                raise ValueError("immutable reference index is invalid")
+            referenced_artifact_ids = frozenset(values)
         api = GitHubApi(args.repository, token)
         if args.run_id:
             report, decisions = build_run_report(
@@ -432,6 +447,7 @@ def main() -> int:
                 now=now,
                 failed_retention_days=args.failed_retention_days,
                 success_retention_days=args.success_retention_days,
+                referenced_artifact_ids=referenced_artifact_ids,
             )
         if args.apply:
             selected = decisions[: args.max_deletions or None]

@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from quwoquan_ops.cli.lib import external_provider_governance, provider_conformance
-from quwoquan_ops.cli.prod.finalize_mainline_release_artifact import (
+from quwoquan_ops.ci.release_evidence_reader import (
     DIGEST_PATTERN,
     sha256_file,
 )

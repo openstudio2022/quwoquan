@@ -27,6 +27,21 @@ class HostedReleaseReceiptContractTest(unittest.TestCase):
             "adapterDigest": self._DIGEST,
         }
 
+    def _admission(self) -> dict[str, str]:
+        return {
+            "prodActivationAdmissionRef": self._DIGEST,
+            "prodActivationAdmissionOciDigest": self._DIGEST,
+            "prodActivationAdmissionPayloadDigest": self._DIGEST,
+            "prodActivationAdmissionId": self._DIGEST,
+            "candidateMaterialManifestRef": self._FROM_CANDIDATE,
+            "candidateMaterialManifestOciDigest": self._FROM_CANDIDATE,
+            "candidateMaterialManifestPayloadDigest": self._FROM_CANDIDATE,
+            "previousReleasedRef": self._NEXT_CANDIDATE,
+            "previousReleasedOciDigest": self._NEXT_CANDIDATE,
+            "previousReleasedPayloadDigest": self._NEXT_CANDIDATE,
+            "previousReleasedId": self._FROM_CANDIDATE,
+        }
+
     def _commit(
         self,
         *,
@@ -49,29 +64,31 @@ class HostedReleaseReceiptContractTest(unittest.TestCase):
             state_dir,
             {
                 "schema": hosted_release_ledger.REQUEST_SCHEMA,
-                "environmentAcceptanceRef": "prod/fact.json",
-                "environmentAcceptanceDigest": "sha256:" + ("6" * 64),
-                "environmentAcceptanceFactId": "sha256:" + ("7" * 64),
-                "gammaPredecessorFactId": "sha256:" + ("8" * 64),
-                "gammaPredecessorDigest": "sha256:" + ("9" * 64),
-                "engineeringEligibilityRef": "prod/engineering.json",
-                "engineeringEligibilityDigest": "sha256:" + ("d" * 64),
-                "durableApprovalRef": "prod/approval.json",
-                "durableApprovalDigest": "sha256:" + ("e" * 64),
+                "prodActivationAdmissionRef": "ghcr.io/owner/prod-admission@sha256:" + ("6" * 64),
+                "prodActivationAdmissionOciDigest": "sha256:" + ("6" * 64),
+                "prodActivationAdmissionPayloadDigest": "sha256:" + ("6" * 64),
+                "prodActivationAdmissionId": "sha256:" + ("6" * 64),
+                "candidateMaterialManifestRef": "ghcr.io/owner/release-tag@sha256:" + ("7" * 64),
+                "candidateMaterialManifestOciDigest": "sha256:" + ("7" * 64),
+                "candidateMaterialManifestPayloadDigest": "sha256:" + ("7" * 64),
+                                "previousReleasedRef": "ghcr.io/owner/released@sha256:" + ("e" * 64),
+                                "previousReleasedOciDigest": "sha256:" + ("e" * 64),
+                "previousReleasedPayloadDigest": "sha256:" + ("e" * 64),
+                "previousReleasedId": "sha256:" + ("f" * 64),
                 "service": self._SERVICE,
                 "fromCandidateDigest": from_candidate,
                 "toCandidateDigest": to_candidate,
                 "step": {"canary": "0", "50": "50", "100": "100"}[stage],
                 "stage": stage,
                 "triggerStage": trigger_stage or stage,
-                "fromReleaseEvidenceRef": (
-                    f"ghcr.io/owner/repo/release-artifact@{from_candidate}"
+                "fromServiceFactoryOciDigest": (
+                    from_candidate
                 ),
-                "toReleaseEvidenceRef": (
-                    f"ghcr.io/owner/repo/release-artifact@{to_candidate}"
+                "toServiceFactoryOciDigest": (
+                    to_candidate
                 ),
-                "fromImageTransportTag": f"transport-{from_candidate[-1]}",
-                "toImageTransportTag": f"transport-{to_candidate[-1]}",
+                "fromAppFactoryOciDigest": f"sha256:" + ("1" * 64),
+                "toAppFactoryOciDigest": f"sha256:" + ("1" * 64),
                 "decision": decision,
                 "rollbackOutcome": (
                     decision
@@ -99,7 +116,7 @@ class HostedReleaseReceiptContractTest(unittest.TestCase):
                     if decision in {"rolled_back", "rollback_failed"}
                     else {"triggered": False}
                 ),
-                "artifactDigest": artifact_digest,
+                "candidateMaterialId": artifact_digest,
                 **self._candidate(),
                 "expectedGeneration": generation,
                 "sloReadback": {"values": {"errorRate": 0.001}},
@@ -374,6 +391,30 @@ class HostedReleaseReceiptContractTest(unittest.TestCase):
             encoding="utf-8",
         )
 
+    def test_transition_rejects_retired_release_evidence_shape_before_write(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            state_dir = Path(temporary)
+            _, receipt = self._commit(
+                state_dir=state_dir,
+                stage="canary",
+                decision="continue",
+                generation=0,
+            )
+            request = {
+                key: receipt[key]
+                for key in hosted_release_ledger.REQUEST_FIELDS
+                if key != "schema"
+            }
+            request["schema"] = hosted_release_ledger.REQUEST_SCHEMA
+            request["fromReleaseEvidenceRef"] = "ghcr.io/owner/release@" + self._FROM_CANDIDATE
+            state_before = (state_dir / f"{self._SERVICE}.state").read_bytes()
+            with self.assertRaisesRegex(ValueError, "invalid shape"):
+                hosted_release_ledger.commit(state_dir, request)
+            self.assertEqual(
+                (state_dir / f"{self._SERVICE}.state").read_bytes(),
+                state_before,
+            )
+
     def test_fetch_rejects_old_state_without_fixed_history_fields(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             state_dir = Path(temporary)
@@ -423,12 +464,9 @@ class HostedReleaseReceiptContractTest(unittest.TestCase):
                     "fromCandidateDigest": self._NEXT_CANDIDATE,
                     "toCandidateDigest": self._DIGEST,
                     "triggerStage": "50",
-                    "fromReleaseEvidenceRef": (
-                        "ghcr.io/owner/repo/release-artifact@"
-                        + self._NEXT_CANDIDATE
-                    ),
-                    "toReleaseEvidenceRef": (
-                        "ghcr.io/owner/repo/release-artifact@" + self._DIGEST
+                    "fromServiceFactoryOciDigest": self._NEXT_CANDIDATE,
+                    "toServiceFactoryOciDigest": (
+                        self._DIGEST
                     ),
                 }
             )
@@ -485,35 +523,31 @@ class HostedReleaseReceiptContractTest(unittest.TestCase):
                 Path(temporary),
                 {
                     "schema": hosted_release_ledger.REQUEST_SCHEMA,
-                "environmentAcceptanceRef": "prod/fact.json",
-                "environmentAcceptanceDigest": "sha256:" + ("6" * 64),
-                "environmentAcceptanceFactId": "sha256:" + ("7" * 64),
-                "gammaPredecessorFactId": "sha256:" + ("8" * 64),
-                "gammaPredecessorDigest": "sha256:" + ("9" * 64),
-                "engineeringEligibilityRef": "prod/engineering.json",
-                "engineeringEligibilityDigest": "sha256:" + ("d" * 64),
-                "durableApprovalRef": "prod/approval.json",
-                "durableApprovalDigest": "sha256:" + ("e" * 64),
+                "prodActivationAdmissionRef": "ghcr.io/owner/prod-admission@sha256:" + ("6" * 64),
+                "prodActivationAdmissionOciDigest": "sha256:" + ("6" * 64),
+                "prodActivationAdmissionPayloadDigest": "sha256:" + ("6" * 64),
+                "prodActivationAdmissionId": "sha256:" + ("6" * 64),
+                "candidateMaterialManifestRef": "ghcr.io/owner/release-tag@sha256:" + ("7" * 64),
+                "candidateMaterialManifestOciDigest": "sha256:" + ("7" * 64),
+                "candidateMaterialManifestPayloadDigest": "sha256:" + ("7" * 64),
+                                "previousReleasedRef": "ghcr.io/owner/released@sha256:" + ("e" * 64),
+                                "previousReleasedOciDigest": "sha256:" + ("e" * 64),
+                "previousReleasedPayloadDigest": "sha256:" + ("e" * 64),
+                "previousReleasedId": "sha256:" + ("f" * 64),
                     "service": self._SERVICE,
                     "fromCandidateDigest": self._FROM_CANDIDATE,
                     "toCandidateDigest": self._TO_CANDIDATE,
                     "step": "0",
                     "stage": "canary",
                     "triggerStage": "canary",
-                    "fromReleaseEvidenceRef": (
-                        "ghcr.io/owner/repo/release-artifact@"
-                        + self._FROM_CANDIDATE
-                    ),
-                    "toReleaseEvidenceRef": (
-                        "ghcr.io/owner/repo/release-artifact@"
-                        + self._TO_CANDIDATE
-                    ),
-                    "fromImageTransportTag": "transport-b",
-                    "toImageTransportTag": "transport-c",
+                    "fromServiceFactoryOciDigest": self._FROM_CANDIDATE,
+                    "toServiceFactoryOciDigest": self._TO_CANDIDATE,
+                    "fromAppFactoryOciDigest": "sha256:" + ("1" * 64),
+                    "toAppFactoryOciDigest": "sha256:" + ("1" * 64),
                     "decision": "continue",
                     "rollbackOutcome": "not_triggered",
                     "rollbackEvidence": {"triggered": False},
-                    "artifactDigest": self._DIGEST,
+                    "candidateMaterialId": self._DIGEST,
                     **self._candidate(),
                     "expectedGeneration": 0,
                     "sloReadback": {"sampleCount": 100},
@@ -567,35 +601,31 @@ class HostedReleaseReceiptContractTest(unittest.TestCase):
                 Path(hosted_temporary),
                 {
                     "schema": hosted_release_ledger.REQUEST_SCHEMA,
-                "environmentAcceptanceRef": "prod/fact.json",
-                "environmentAcceptanceDigest": "sha256:" + ("6" * 64),
-                "environmentAcceptanceFactId": "sha256:" + ("7" * 64),
-                "gammaPredecessorFactId": "sha256:" + ("8" * 64),
-                "gammaPredecessorDigest": "sha256:" + ("9" * 64),
-                "engineeringEligibilityRef": "prod/engineering.json",
-                "engineeringEligibilityDigest": "sha256:" + ("d" * 64),
-                "durableApprovalRef": "prod/approval.json",
-                "durableApprovalDigest": "sha256:" + ("e" * 64),
+                "prodActivationAdmissionRef": "ghcr.io/owner/prod-admission@sha256:" + ("6" * 64),
+                "prodActivationAdmissionOciDigest": "sha256:" + ("6" * 64),
+                "prodActivationAdmissionPayloadDigest": "sha256:" + ("6" * 64),
+                "prodActivationAdmissionId": "sha256:" + ("6" * 64),
+                "candidateMaterialManifestRef": "ghcr.io/owner/release-tag@sha256:" + ("7" * 64),
+                "candidateMaterialManifestOciDigest": "sha256:" + ("7" * 64),
+                "candidateMaterialManifestPayloadDigest": "sha256:" + ("7" * 64),
+                                "previousReleasedRef": "ghcr.io/owner/released@sha256:" + ("e" * 64),
+                                "previousReleasedOciDigest": "sha256:" + ("e" * 64),
+                "previousReleasedPayloadDigest": "sha256:" + ("e" * 64),
+                "previousReleasedId": "sha256:" + ("f" * 64),
                     "service": self._SERVICE,
                     "fromCandidateDigest": self._FROM_CANDIDATE,
                     "toCandidateDigest": self._TO_CANDIDATE,
                     "step": "0",
                     "stage": "canary",
                     "triggerStage": "canary",
-                    "fromReleaseEvidenceRef": (
-                        "ghcr.io/owner/repo/release-artifact@"
-                        + self._FROM_CANDIDATE
-                    ),
-                    "toReleaseEvidenceRef": (
-                        "ghcr.io/owner/repo/release-artifact@"
-                        + self._TO_CANDIDATE
-                    ),
-                    "fromImageTransportTag": "transport-b",
-                    "toImageTransportTag": "transport-c",
+                    "fromServiceFactoryOciDigest": self._FROM_CANDIDATE,
+                    "toServiceFactoryOciDigest": self._TO_CANDIDATE,
+                    "fromAppFactoryOciDigest": "sha256:" + ("1" * 64),
+                    "toAppFactoryOciDigest": "sha256:" + ("1" * 64),
                     "decision": "continue",
                     "rollbackOutcome": "not_triggered",
                     "rollbackEvidence": {"triggered": False},
-                    "artifactDigest": self._DIGEST,
+                    "candidateMaterialId": self._DIGEST,
                     **self._candidate(),
                     "expectedGeneration": 0,
                     "sloReadback": {},
@@ -654,7 +684,7 @@ class HostedReleaseReceiptContractTest(unittest.TestCase):
                 step="5",
                 stage="canary",
                 decision="continue",
-                artifact_digest=self._DIGEST,
+                candidate_material_id=self._DIGEST,
                 expected_generation=0,
                 receipt_id="unused",
                 slo_readback={"sampleCount": 100},
@@ -663,16 +693,11 @@ class HostedReleaseReceiptContractTest(unittest.TestCase):
                 post_deploy_checks=[],
                 rollback_outcome="not_triggered",
                 rollback_evidence={"triggered": False},
-                from_release_evidence_ref=(
-                    "ghcr.io/owner/repo/release-artifact@"
-                    + self._FROM_CANDIDATE
-                ),
-                to_release_evidence_ref=(
-                    "ghcr.io/owner/repo/release-artifact@"
-                    + self._TO_CANDIDATE
-                ),
-                from_image_transport_tag="transport-b",
-                to_image_transport_tag="transport-c",
+                from_service_factory_oci_digest=self._FROM_CANDIDATE,
+                to_service_factory_oci_digest=self._TO_CANDIDATE,
+                from_app_factory_oci_digest=self._FROM_CANDIDATE,
+                to_app_factory_oci_digest=self._TO_CANDIDATE,
+                prod_activation_admission=self._admission(),
             )
 
         self.assertEqual(result, (committed["state"], cached_path))

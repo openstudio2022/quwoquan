@@ -661,8 +661,6 @@ def _gamma_start_command(args: argparse.Namespace) -> list[str]:
     command = ["bash", "quwoquan_app/scripts/gamma/start_local_gamma_mirror.sh"]
     if getattr(args, "skip_build", False):
         command.append("--skip-build")
-    if getattr(args, "formal_release", False):
-        command.append("--formal-release")
     if getattr(args, "build_only", False):
         command.append("--build-only")
         build_services = str(getattr(args, "build_services", "")).strip()
@@ -696,18 +694,20 @@ def _materialize_release_evidence_configuration(
     if not isinstance(manifest, dict):
         raise ValueError(f"invalid release evidence manifest: {manifest_path}")
     allowed_statuses = (
-        {"deployable", "released"}
+        {"main-admitted", "released"}
         if env_name == "prod"
-        else {"candidate-ready", "deployable", "released"}
+        else {"qualified", "main-admitted", "released"}
     )
-    _stackctl.finalize_mainline_release_artifact.validate_manifest(
-        manifest, allowed_statuses=allowed_statuses
+    from quwoquan_ops.ci.release_evidence_reader import (
+        validate_frozen_diagnostic_snapshot,
     )
-    _stackctl.finalize_mainline_release_artifact.validate_manifest_files(
-        artifact_root,
+
+    validate_frozen_diagnostic_snapshot(
         manifest,
+        artifact_dir=artifact_root,
+        allowed_statuses=allowed_statuses,
     )
-    candidate_id = str(manifest["candidateId"])
+    candidate_id = str(manifest["releaseCompositionId"])
     configuration_packages = manifest["environmentArtifacts"][env_name][
         "configurationPackages"
     ]
@@ -745,13 +745,13 @@ def _materialize_release_evidence_configuration(
             "manifest": _stackctl.relpath(manifest_path),
             "evidenceFileDigest": archive_digest,
             "artifactDigest": manifest["artifactDigest"],
-            "candidateId": candidate_id,
+            "releaseCompositionId": candidate_id,
             "verifiedConfigDigest": effective_digest,
         }
         _stackctl.write_json(report_path, provenance)
     source = manifest["source"]
     return {
-        "candidateId": candidate_id,
+        "releaseCompositionId": candidate_id,
         "artifactDigest": str(manifest["artifactDigest"]),
         "sourceGitSha": str(source["gitSha"]),
         "sourceTreeDigest": str(source["treeDigest"]),

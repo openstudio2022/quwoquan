@@ -21,9 +21,11 @@ from quwoquan_ops.cli.lib.local_env_gate_timing import utc_now
 # 原文件位于 lib/ 下用 parents[3]；本模块深一层，用 parents[4] 指向仓库根。
 ROOT = Path(__file__).resolve().parents[4]
 PROFILE_LOCAL_ENV_GATE = "local-env-gate"
-DEVICE_PROFILE_FULL = "full"
+DEVICE_PROFILE_PROMOTION = "promotion_physical"
 DEVICE_PROFILE_EMULATOR_ONLY = "emulator_only"
-DEVICE_PROFILES = (DEVICE_PROFILE_FULL, DEVICE_PROFILE_EMULATOR_ONLY)
+# Compatibility export only; public parsing must use promotion_physical.
+DEVICE_PROFILE_FULL = DEVICE_PROFILE_PROMOTION
+DEVICE_PROFILES = (DEVICE_PROFILE_PROMOTION, DEVICE_PROFILE_EMULATOR_ONLY)
 EMULATOR_ONLY_CLAIM = "ALPHA_BETA_GAMMA_EMULATOR_ONLY_FUNCTIONAL_GREEN"
 CANONICAL_TARGETS = ("alpha-local", "beta-local", "gamma-local")
 TARGET_ENVIRONMENTS = {

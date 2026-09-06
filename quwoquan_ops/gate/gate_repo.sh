@@ -206,7 +206,8 @@ python3 quwoquan_ops/gate/scaffold/verify_test_coverage_map.py
 python3 quwoquan_ops/gate/scaffold/verify_quality_axis_coverage.py
 # 棘轮基线自身的治理留痕：换度量口径必须同批记录旧口径与旧口径实测值，
 # 否则漂移可以靠重建基线无痕销账。
-python3 quwoquan_ops/gate/verify_ratchet_baseline_governance.py
+python3 quwoquan_ops/gate/verify_ratchet_baseline_governance.py \
+  ${gate_change_range_args[@]+"${gate_change_range_args[@]}"}
 python3 quwoquan_ops/gate/verify_local_dependency_purity.py
 python3 quwoquan_ops/gate/verify_observability_layout.py
 python3 quwoquan_ops/gate/verify_observability_envelope.py
@@ -580,9 +581,8 @@ run_app() {
     python3 quwoquan_app/scripts/content_service/verify_content_ui_directory_boundaries.py || exit 1
     python3 quwoquan_ops/cli/gamma/verify_gamma_validation_profiles.py || exit 1
     python3 quwoquan_ops/ci/verify_ci_profile_consistency.py || exit 1
-    # R03 文件行数预算（ratchet 只降不升，含 dart+go；pageflip 已登记豁免）
-    PYTHONDONTWRITEBYTECODE=1 python3 quwoquan_ops/tests/local_contract/gate/test_file_line_budget__source_roots__local_contract_test.py || exit 1
-    python3 quwoquan_app/scripts/runtime/architecture/verify_file_line_budget.py || exit 1
+    # 文件规模与新增/恶化维护债由 canonical Code Health Delta 单轨判定。
+    make verify-code-health-delta || exit 1
     # R02 Repository 接口方法数预算（ratchet；伞组合接口免登记）
     python3 quwoquan_app/scripts/runtime/architecture/verify_repository_interface_method_budget.py || exit 1
     # UI 层 Map<String,dynamic> 字面量零容忍（存量已清零，命中即 FAIL）

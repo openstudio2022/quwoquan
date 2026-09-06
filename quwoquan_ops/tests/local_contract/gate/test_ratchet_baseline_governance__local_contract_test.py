@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import json
+import subprocess
 import sys
 from pathlib import Path
 
@@ -134,6 +135,43 @@ def test_yaml_governance_block_is_parsed(
 
     assert gate.main() == 0
 
+
+def test_yaml_allowance_cannot_raise_or_add_path_debt(
+    gate_root: Path, monkeypatch: pytest.MonkeyPatch, capsys
+) -> None:
+    path = gate_root / "sample_allowlist.yaml"
+    path.write_text(
+        """governance:
+  owner: repository-architecture
+  reason: debt may only decrease
+  expires_when: allow is empty
+  measure: max_lines by path
+allow:
+- path: some/file.dart
+  max_lines: 1002
+- path: another/file.dart
+  max_lines: 1001
+""",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        gate,
+        "head_revision",
+        lambda _: """governance:
+  owner: repository-architecture
+  reason: debt may only decrease
+  expires_when: allow is empty
+  measure: max_lines by path
+allow:
+- path: some/file.dart
+  max_lines: 1001
+""",
+    )
+
+    assert gate.main() == 1
+    output = capsys.readouterr().out
+    assert "some/file.dart::max_lines: 1001 -> 1002" in output
+    assert "another/file.dart::max_lines: 0 -> 1001" in output
 
 def test_manifests_and_policies_are_out_of_scope(
     gate_root: Path, monkeypatch: pytest.MonkeyPatch
@@ -281,3 +319,130 @@ def test_timing_budget_keys_are_not_treated_as_debt(
     )
 
     assert gate.main() == 0
+
+
+def test_exact_range_reads_base_and_candidate_git_trees(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys) -> None:
+    repo = tmp_path / "repo"
+    gate_root = repo / "quwoquan_ops/policies/gates"
+    gate_root.mkdir(parents=True)
+    (repo / "specs/feature-tree/runtime" / COMPLETE["owner"]).mkdir(parents=True)
+    monkeypatch.setattr(gate, "ROOT", repo)
+    monkeypatch.setattr(gate, "BASELINE_PATHS", ("quwoquan_ops/policies/gates",))
+    subprocess.run(["git", "init", "-q"], cwd=repo, check=True)
+    subprocess.run(["git", "config", "user.email", "fixture@example.invalid"], cwd=repo, check=True)
+    subprocess.run(["git", "config", "user.name", "Fixture"], cwd=repo, check=True)
+    write_json_baseline(gate_root / "sample_baseline.json", COMPLETE)
+    subprocess.run(["git", "add", "."], cwd=repo, check=True)
+    subprocess.run(["git", "commit", "-qm", "base"], cwd=repo, check=True)
+    base = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=repo, text=True).strip()
+
+    (gate_root / "sample_baseline.json").write_text(
+        json.dumps({"_governance": COMPLETE, "some/file.dart": 4}, indent=2),
+        encoding="utf-8",
+    )
+    subprocess.run(["git", "add", "."], cwd=repo, check=True)
+    subprocess.run(["git", "commit", "-qm", "candidate"], cwd=repo, check=True)
+    head = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=repo, text=True).strip()
+
+    assert gate.main(["--base-sha", base, "--head-sha", head]) == 1
+    assert "some/file.dart: 3 -> 4" in capsys.readouterr().out
+
+
+def test_recursive_baseline_discovery_includes_policies_baselines(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    baseline = tmp_path / "quwoquan_ops/policies/baselines/nested/sample_baseline.json"
+    baseline.parent.mkdir(parents=True)
+    write_json_baseline(baseline, COMPLETE)
+    monkeypatch.setattr(gate, "ROOT", tmp_path)
+    monkeypatch.setattr(gate, "BASELINE_PATHS", ("quwoquan_ops/policies/baselines",))
+
+    assert gate.baseline_files() == [baseline]
+
+
+def promotion_policy() -> dict[str, object]:
+    return {
+        "schema_version": 1,
+        "contract_id": "promotion-timing-ratchet-v1",
+        "governance": {
+            "owner": "delivery-gate",
+            "reason": "all eligible events",
+            "expires_when": "never",
+            "measure": "immutable promotionReadyAt to mainReadbackAt measure",
+        },
+        "metricId": "dev1-main-promotion-ready-to-main-readback",
+        "attemptClock": "first_attempt",
+        "denominator": "all_eligible_promotion_events",
+        "windowAnchorUtc": "1970-01-01T00:00:00Z",
+        "windowDays": 14,
+        "quantile": "nearest_rank",
+        "quantilePercent": 95,
+        "roundingSeconds": 60,
+        "targetP95Seconds": 300,
+        "enforcementBudgetSeconds": 1800,
+        "minimumEligibleEvents": 30,
+        "consecutiveQualifiedWindows": 2,
+        "requiredTimingCompleteness": 1.0,
+        "allowedUnclassifiedCancellations": 0,
+        "allowedDuplicateEvents": 0,
+        "allowedMissingEvidence": 0,
+        "classifications": [
+            "success", "failure", "infra", "superseded", "unclassified", "incomplete"
+        ],
+        "monotonic": {
+            "upperBoundFields": [
+                "enforcementBudgetSeconds", "targetP95Seconds",
+                "allowedUnclassifiedCancellations", "allowedDuplicateEvents",
+                "allowedMissingEvidence",
+            ],
+            "lowerBoundFields": [
+                "minimumEligibleEvents", "consecutiveQualifiedWindows",
+                "requiredTimingCompleteness",
+            ],
+            "requiredSetFields": ["classifications"],
+        },
+    }
+
+
+def write_promotion_policy(path: Path, value: dict[str, object]) -> None:
+    import yaml
+    path.write_text(yaml.safe_dump(value, sort_keys=False), encoding="utf-8")
+
+
+def test_promotion_timing_policy_is_validated_by_full_partial_order(
+    gate_root: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    path = gate_root / "promotion_timing_ratchet.yaml"
+    write_promotion_policy(path, promotion_policy())
+    monkeypatch.setattr(gate, "head_revision", lambda _: None)
+
+    assert gate.debt_entries(promotion_policy()) == {}
+    assert gate.main() == 0
+
+
+def test_promotion_timing_budget_raise_blocks(
+    gate_root: Path, monkeypatch: pytest.MonkeyPatch, capsys
+) -> None:
+    path = gate_root / "promotion_timing_ratchet.yaml"
+    candidate = promotion_policy()
+    candidate["enforcementBudgetSeconds"] = 1801
+    write_promotion_policy(path, candidate)
+    import yaml
+    monkeypatch.setattr(gate, "head_revision", lambda _: yaml.safe_dump(promotion_policy(), sort_keys=False))
+
+    assert gate.main() == 1
+    assert "upper-bound field widened" in capsys.readouterr().out
+
+
+def test_promotion_minimum_events_and_measure_cannot_weaken(
+    gate_root: Path, monkeypatch: pytest.MonkeyPatch, capsys
+) -> None:
+    import yaml
+    for field, value, expected in (
+        ("minimumEligibleEvents", 29, "at least 30"),
+        ("governance", {**promotion_policy()["governance"], "measure": "changed"}, "measure drifted"),
+    ):
+        candidate = promotion_policy()
+        candidate[field] = value
+        write_promotion_policy(gate_root / "promotion_timing_ratchet.yaml", candidate)
+        monkeypatch.setattr(gate, "head_revision", lambda _: yaml.safe_dump(promotion_policy(), sort_keys=False))
+        assert gate.main() == 1
+        assert expected in capsys.readouterr().out

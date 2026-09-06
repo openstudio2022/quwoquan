@@ -17,6 +17,7 @@ from collections.abc import Mapping, Sequence
 from datetime import datetime
 from pathlib import Path, PurePosixPath
 from typing import Any
+from urllib.parse import unquote, urlparse
 
 from quwoquan_ops.cli.lib.target_uat_binding import validate_target_uat_binding
 
@@ -213,14 +214,67 @@ def _load_schema(path: Path) -> dict[str, Any]:
         raise AppUatResultBundleError(_INVALID, f"schema unavailable: {path}") from error
 
 
+def _schema_refs(value: object) -> list[str]:
+    refs: list[str] = []
+    if isinstance(value, Mapping):
+        ref = value.get("$ref")
+        if isinstance(ref, str):
+            refs.append(ref)
+        for child in value.values():
+            refs.extend(_schema_refs(child))
+    elif isinstance(value, list):
+        for child in value:
+            refs.extend(_schema_refs(child))
+    return refs
+
+
+def _local_schema_registry(schema_path: Path) -> tuple[dict[str, Any], Any]:
+    from referencing import Registry, Resource
+
+    root_path = schema_path.resolve(strict=True)
+    schema_root = root_path.parent
+    pending = [root_path]
+    loaded: dict[str, dict[str, Any]] = {}
+    while pending:
+        current_path = pending.pop()
+        current_uri = current_path.as_uri()
+        if current_uri in loaded:
+            continue
+        current_schema = _load_schema(current_path)
+        current_schema["$id"] = current_uri
+        loaded[current_uri] = current_schema
+        for ref in _schema_refs(current_schema):
+            if ref.startswith("#"):
+                continue
+            parsed = urlparse(ref)
+            if parsed.scheme or parsed.netloc or parsed.path.startswith("/"):
+                _fail(_INVALID, f"schema {current_path} has non-local $ref {ref!r}")
+            try:
+                target = (current_path.parent / unquote(parsed.path)).resolve(strict=True)
+                target.relative_to(schema_root)
+            except (OSError, ValueError) as error:
+                raise AppUatResultBundleError(
+                    _INVALID, f"schema {current_path} has unavailable or escaped $ref {ref!r}"
+                ) from error
+            pending.append(target)
+
+    registry = Registry()
+    for uri, schema in loaded.items():
+        registry = registry.with_resource(uri, Resource.from_contents(schema))
+    return loaded[root_path.as_uri()], registry
+
+
 def _jsonschema_validate(document: Mapping[str, Any], schema_path: Path, *, label: str) -> None:
     try:
         from jsonschema import Draft202012Validator, FormatChecker
+        import referencing  # noqa: F401
     except ImportError:
         return
-    schema = _load_schema(schema_path)
+    schema, registry = _local_schema_registry(schema_path)
     errors = sorted(
-        Draft202012Validator(schema, format_checker=FormatChecker()).iter_errors(document),
+        Draft202012Validator(
+            schema, format_checker=FormatChecker(), registry=registry
+        ).iter_errors(document),
         key=lambda error: tuple(str(part) for part in error.absolute_path),
     )
     if errors:

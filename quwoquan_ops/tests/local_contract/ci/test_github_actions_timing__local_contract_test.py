@@ -150,24 +150,22 @@ class GithubActionsTimingTest(unittest.TestCase):
         self.assertEqual(values["phase_data_tests"], 22)
         self.assertEqual(values["machine_critical_path_seconds"], 22)
 
-    def test_delivery_workflow_declares_exact_main_and_prefix_matrix_selectors(
-        self,
-    ) -> None:
+    def test_delivery_workflow_has_no_retired_execution_phase_selectors(self) -> None:
         workflow = (
             Path(__file__).resolve().parents[4]
             / ".github/workflows/delivery-gate.yml"
         ).read_text(encoding="utf-8")
-
-        self.assertIn(
-            '--phase-exact "data=Delivery Gate — Data"', workflow
-        )
         for selector in (
-            "service_packaging=Delivery Gate — Service Packaging",
-            "data_tests=Delivery Gate — Data Tests Shard ",
-            "app_tests=Delivery Gate — App Tests Shard ",
+            "--phase-exact", "--phase-prefix", "Delivery Gate — Data",
+            "Delivery Gate — Service Packaging", "Delivery Gate — App Tests Shard",
         ):
-            self.assertIn(f'--phase-prefix "{selector}"', workflow)
-        self.assertNotIn('--phase "data=Delivery Gate — Data"', workflow)
+            self.assertNotIn(selector, workflow)
+        self.assertIn("Record hosted promotion readiness boundary", workflow)
+        for required_caller in (
+            "promotion_timing_ratchet.py sample",
+            "sync_hosted_ci_timing_ledger.py append-sample",
+        ):
+            self.assertIn(required_caller, workflow)
 
     def test_official_job_and_step_timestamps_drive_longest_matrix(self) -> None:
         run = {"created_at": "2026-07-28T00:00:00Z"}

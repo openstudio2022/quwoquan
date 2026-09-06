@@ -10,9 +10,9 @@
 #     self-hosted runner 私有目录 / ssh-agent，禁止再把私钥正文注入 GitHub secrets。
 #
 # 用法（dry-run 预览，默认）：
-#   ROLLOUT_STAGE=canary IMAGE_TRANSPORT_TAG=<tag> CANDIDATE_DIGEST=<sha256> quwoquan_ops/cli/prod/deploy_to_prod.sh
+#   ROLLOUT_STAGE=canary CANDIDATE_DIGEST=<sha256> SERVICE_FACTORY_MATERIAL=<path> quwoquan_ops/cli/prod/deploy_to_prod.sh
 # 用法（真实发布）：
-#   DRY_RUN=false ROLLOUT_STAGE=canary IMAGE_TRANSPORT_TAG=<tag> CANDIDATE_DIGEST=<sha256> \
+#   DRY_RUN=false ROLLOUT_STAGE=canary CANDIDATE_DIGEST=<sha256> SERVICE_FACTORY_MATERIAL=<path> \
 #   PROD_SSH_KEY_DIR=~/.ssh/quwoquan-prod quwoquan_ops/cli/prod/deploy_to_prod.sh
 #   或显式指定：
 #   PROD_SERVICE_SSH_KEY_FILE=~/.ssh/quwoquan-prod/prod-service-svc quwoquan_ops/cli/prod/deploy_to_prod.sh
@@ -36,11 +36,11 @@ TOPOLOGY_MANIFEST="quwoquan_ops/environments/prod/runtime.yaml"
 
 DRY_RUN="${DRY_RUN:-true}"
 ROLLOUT_STAGE="${ROLLOUT_STAGE:-canary}"
-IMAGE_TRANSPORT_TAG="${IMAGE_TRANSPORT_TAG:-}"
 CANDIDATE_DIGEST="${CANDIDATE_DIGEST:-}"
-PREVIOUS_IMAGE_TRANSPORT_TAG="${PREVIOUS_IMAGE_TRANSPORT_TAG:-}"
-RELEASE_MANIFEST="${RELEASE_MANIFEST:-}"
-RELEASE_EVIDENCE_DIGEST="${RELEASE_EVIDENCE_DIGEST:-}"
+PREVIOUS_CANDIDATE_DIGEST="${PREVIOUS_CANDIDATE_DIGEST:-}"
+SERVICE_FACTORY_MATERIAL="${SERVICE_FACTORY_MATERIAL:-}"
+CANDIDATE_MATERIAL_ID="${CANDIDATE_MATERIAL_ID:-}"
+PROD_ACTIVATION_ADMISSION_DIGEST="${PROD_ACTIVATION_ADMISSION_DIGEST:-}"
 ROLLOUT_TIMEOUT_SECONDS="${ROLLOUT_TIMEOUT_SECONDS:-300}"
 PROD_SSH_KEY_DIR="${PROD_SSH_KEY_DIR:-$HOME/.ssh/quwoquan-prod}"
 SERVICE_FILTER="${SERVICE:-}"
@@ -64,16 +64,18 @@ if [[ -n "${PROD_KUBECONFIG:-}" ]]; then
   exit 2
 fi
 
-if [[ "$DRY_RUN" != "true" && -z "$PREVIOUS_IMAGE_TRANSPORT_TAG" ]]; then
-  echo "::error::真实发布必须显式提供 PREVIOUS_IMAGE_TRANSPORT_TAG，禁止无旧候选回滚" >&2
+if [[ "$DRY_RUN" != "true" && ! "$PREVIOUS_CANDIDATE_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+  echo "::error::真实发布必须显式提供 previous candidate digest，禁止无旧候选回滚" >&2
   exit 2
 fi
-if [[ "$DRY_RUN" != "true" && ! "$RELEASE_EVIDENCE_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]; then
-  echo "::error::真实发布必须提供 canonical RELEASE_EVIDENCE_DIGEST，配置 ACK 不允许脱离候选清单" >&2
-  exit 2
-fi
-if [[ "$DRY_RUN" != "true" && "$PROD_IMAGE_DELIVERY_MODE" != "skip" && ! -s "$RELEASE_MANIFEST" ]]; then
-  echo "::error::真实发布必须提供可部署的 RELEASE_MANIFEST，禁止按 tag 或本地 latest 发布" >&2
+for identity in "$CANDIDATE_MATERIAL_ID" "$PROD_ACTIVATION_ADMISSION_DIGEST"; do
+  if [[ "$DRY_RUN" != "true" && ! "$identity" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+    echo "::error::真实发布必须绑定 candidate material 与 ProdActivationAdmission exact digest" >&2
+    exit 2
+  fi
+done
+if [[ "$DRY_RUN" != "true" && "$PROD_IMAGE_DELIVERY_MODE" != "skip" && ! -s "$SERVICE_FACTORY_MATERIAL" ]]; then
+  echo "::error::真实发布必须提供已验证的 SERVICE_FACTORY_MATERIAL" >&2
   exit 2
 fi
 if [[ "$DRY_RUN" != "true" ]]; then
@@ -187,7 +189,7 @@ else
   INSTANCE_SUFFIX="prod"
 fi
 
-echo "[deploy] prod-hosted stage=$ROLLOUT_STAGE instance=$INSTANCE_SUFFIX imageTransportTag=$IMAGE_TRANSPORT_TAG candidateDigest=$CANDIDATE_DIGEST DRY_RUN=$DRY_RUN"
+echo "[deploy] prod-hosted stage=$ROLLOUT_STAGE instance=$INSTANCE_SUFFIX candidateDigest=$CANDIDATE_DIGEST DRY_RUN=$DRY_RUN"
 
 # 凭据硬校验（缺失/非法即硬失败，禁止失败放通）。
 # 真实发布（DRY_RUN=false）必须硬失败；dry-run 预览给出告警但仍展示发布计划。
@@ -241,12 +243,12 @@ PY
         --host "$ssh_host"
         --key-dir "$PROD_SSH_KEY_DIR"
         --services "${governed_csv}"
-        --image-transport-tag "$IMAGE_TRANSPORT_TAG"
+        --candidate-digest "$CANDIDATE_DIGEST"
         --platform linux/amd64
         --dry-run
       )
-      if [[ -n "$RELEASE_MANIFEST" ]]; then
-        image_load_args+=(--release-manifest "$RELEASE_MANIFEST")
+      if [[ -n "$SERVICE_FACTORY_MATERIAL" ]]; then
+        image_load_args+=(--service-factory-material "$SERVICE_FACTORY_MATERIAL")
       fi
       python3 -B quwoquan_ops/cli/prod/load_prod_plane_images.py \
         "${image_load_args[@]}"
@@ -258,8 +260,6 @@ PY
         --host-id "$host_id" \
         --rollout-stage "$ROLLOUT_STAGE" \
         --candidate-digest "$CANDIDATE_DIGEST" \
-        --image-transport-tag "$IMAGE_TRANSPORT_TAG" \
-        --release-evidence-digest "$RELEASE_EVIDENCE_DIGEST" \
         --web-runtime-config-trust "$QWQ_WEB_RUNTIME_CONFIG_TRUST_PATH" \
         --web-runtime-config-package "$QWQ_WEB_RUNTIME_CONFIG_PACKAGE_PATH" \
         --output-dir "$render_dir" \
@@ -272,8 +272,8 @@ PY
           --host "$ssh_host" \
           --key-dir "$PROD_SSH_KEY_DIR" \
           --services "${governed_csv}" \
-          --image-transport-tag "$IMAGE_TRANSPORT_TAG" \
-          --release-manifest "$RELEASE_MANIFEST" \
+          --candidate-digest "$CANDIDATE_DIGEST" \
+          --service-factory-material "$SERVICE_FACTORY_MATERIAL" \
           --platform linux/amd64
       else
         echo "::error::PROD_IMAGE_DELIVERY_MODE=${PROD_IMAGE_DELIVERY_MODE} is not allowed; production deploy cannot rebuild images" >&2
@@ -338,7 +338,7 @@ for service in ${governed_services}; do
   repository=\"localhost/quwoquan_service_\${service}\"
   while IFS= read -r image; do
     case \"\$image\" in
-      \"\$repository:${IMAGE_TRANSPORT_TAG}\"|\"\$repository:${PREVIOUS_IMAGE_TRANSPORT_TAG}\") ;;
+      \"\$repository:${CANDIDATE_DIGEST#sha256:}\"|\"\$repository:${PREVIOUS_CANDIDATE_DIGEST#sha256:}\") ;;
       \"\$repository:\"*) podman image rm \"\$image\" ;;
     esac
   done < <(podman images --format '{{.Repository}}:{{.Tag}}')
@@ -599,7 +599,6 @@ PY
     --host "$ssh_host" \
     --rollout-stage "$ROLLOUT_STAGE" \
     --candidate-digest "$CANDIDATE_DIGEST" \
-    --image-transport-tag "$IMAGE_TRANSPORT_TAG" \
     --output-dir "$render_dir" >/dev/null
   bash quwoquan_ops/cli/prod/sync_prod_plane_stack.sh \
     --plane service \

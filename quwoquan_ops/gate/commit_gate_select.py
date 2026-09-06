@@ -22,6 +22,11 @@ PYTEST_ESTIMATE_SCHEMA = "commit-gate-pytest-estimate-v1"
 PYTEST_BUDGET_SECONDS = 120
 PYTEST_CAP = 80  # Defensive last resort; duration is the primary admission rule.
 DEFAULT_PYTEST_FILE_ESTIMATE_SECONDS = 12
+PYTEST_FILE_ESTIMATE_SECONDS_BY_EXACT_PATH = {
+    "quwoquan_ops/tests/local_contract/gate/test_named_evidence_runner__local_contract_test.py": 120,
+    "quwoquan_ops/tests/local_contract/gate/test_review_baseline__gate__local_contract_test.py": 120,
+    "quwoquan_ops/tests/local_contract/gate/test_review_dispatch__cli__local_contract_test.py": 120,
+}
 PYTEST_FILE_ESTIMATE_SECONDS_BY_PREFIX = (
     ("quwoquan_ops/tests/local_contract/ci/", 18),
     ("quwoquan_ops/tests/local_contract/gate/", 18),
@@ -204,8 +209,18 @@ def classify(paths: list[str]) -> dict[str, bool]:
     return flags
 
 
-def static_checks(flags: dict[str, bool]) -> list[str]:
+def static_checks(flags: dict[str, bool], paths: list[str] | None = None) -> list[str]:
     checks = ["branch_policy", "entrypoint_script_paths"]
+    source_changed = (
+        any(
+            path.startswith(("quwoquan_app/", "quwoquan_service/", "quwoquan_data/", "quwoquan_ops/"))
+            for path in paths
+        )
+        if paths is not None
+        else any(flags[f"has_{scope}"] for scope in ("app", "service", "data", "portal"))
+    )
+    if source_changed:
+        checks.append("code_health_delta_fast")
     if flags["has_specs"]:
         checks.append("feature_tree")
     for scope in ("app", "service", "ops", "data"):
@@ -346,6 +361,20 @@ def _select_pytest_targets(paths: list[str]) -> dict[str, object]:
                 "test_commit_gate_fast_path__local_contract_test.py",
                 "quwoquan_ops/tests/local_contract/gate/"
                 "test_process_group_deadline__local_contract_test.py",
+            ),
+        ),
+        (
+            "quwoquan_ops/gate/code_health_delta/",
+            (
+                "quwoquan_ops/tests/local_contract/gate/"
+                "test_incremental_code_health__gate__local_contract_test.py",
+            ),
+        ),
+        (
+            "quwoquan_ops/gate/verify_incremental_code_health.py",
+            (
+                "quwoquan_ops/tests/local_contract/gate/"
+                "test_incremental_code_health__gate__local_contract_test.py",
             ),
         ),
         (
@@ -536,6 +565,9 @@ def _select_pytest_targets(paths: list[str]) -> dict[str, object]:
                         selected.append(test_target)
                 break
     def file_estimate_seconds(target: str) -> int:
+        exact = PYTEST_FILE_ESTIMATE_SECONDS_BY_EXACT_PATH.get(target)
+        if exact is not None:
+            return exact
         for prefix, seconds in PYTEST_FILE_ESTIMATE_SECONDS_BY_PREFIX:
             if target.startswith(prefix):
                 return seconds
@@ -638,7 +670,7 @@ def build_plan(paths: list[str], cap: int) -> dict:
     return {
         "changed_files": paths,
         "flags": flags,
-        "static_checks": static_checks(flags),
+        "static_checks": static_checks(flags, paths),
         "flutter_tests": flutter_tests,
         "deferred_to_ci": combined_deferred,
         "flutter_cap": cap,

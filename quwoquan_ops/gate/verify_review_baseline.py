@@ -206,14 +206,14 @@ def _validate_registry_closure(plan: dict[str, Any], registry: dict[str, Any]) -
     expected_projection = [
         {key: item[key] for key in (
             "id", "command", "segment", "required", "covers", "timeout_seconds",
-            "command_digest", "consumers",
+            "command_digest", "consumers", "result_artifact",
         )}
         for item in expected_evidence
     ]
     actual_projection = [
         {key: item[key] for key in (
             "id", "command", "segment", "required", "covers", "timeout_seconds",
-            "command_digest", "consumers",
+            "command_digest", "consumers", "result_artifact",
         )}
         for item in plan["evidence"]
     ]

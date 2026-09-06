@@ -78,19 +78,10 @@ def _validate_release_transition(
     from_candidate_digest: str,
     to_candidate_digest: str,
     stage: str,
-    acceptance_digest: str = "",
-    engineering_eligibility_digest: str = "",
-    durable_approval_digest: str = "",
+    prod_activation_admission_payload_digest: str = "",
 ) -> tuple[str, int]:
     import quwoquan_ops.cli.stackctl as _stackctl
 
-    requested_authorities = {
-        "environment_acceptance_digest": acceptance_digest,
-        "engineering_eligibility_digest": engineering_eligibility_digest,
-        "durable_approval_digest": durable_approval_digest,
-    }
-    if any(requested_authorities.values()) and not all(requested_authorities.values()):
-        raise RuntimeError("release authority bindings must be complete")
     if not state:
         if stage != "canary":
             raise RuntimeError("release ledger must start at canary")
@@ -98,17 +89,20 @@ def _validate_release_transition(
 
     generation = int(state.get("generation") or 0)
     current_stage = _stackctl._release_stage_from_state(state)
-    if any(requested_authorities.values()):
-        for field, value in requested_authorities.items():
-            if state.get(field) != value:
-                raise RuntimeError(
-                    f"release ledger authority drift: {field} does not match"
-                )
     same_target = (
         state.get("from_candidate_digest") == from_candidate_digest
         and state.get("to_candidate_digest") == to_candidate_digest
     )
     if same_target:
+        if (
+            prod_activation_admission_payload_digest
+            and state.get("prod_activation_admission_payload_digest")
+            != prod_activation_admission_payload_digest
+        ):
+            raise RuntimeError(
+                "release ledger authority drift: "
+                "prod_activation_admission_payload_digest does not match"
+            )
         if current_stage == stage:
             decision = state.get("decision", "continue")
             if decision == "continue":
@@ -135,15 +129,11 @@ def _validate_release_transition(
     if stage != "canary":
         raise RuntimeError("new release target must start at canary")
     if state.get("to_candidate_digest") != from_candidate_digest:
-        raise RuntimeError(
-            "release ledger base CAS conflict: requested source candidate does not "
-            "match the current stable candidate"
-        )
-    if current_stage != "100" or state.get("decision", "continue") not in {
-        "continue",
-        "rolled_back",
-    }:
-        raise RuntimeError("previous release is not in a stable 100 state")
+        raise RuntimeError("new release source must equal current hosted target")
+    if state.get("last_good_candidate_digest") != from_candidate_digest:
+        raise RuntimeError("new release source must equal current last-good candidate")
+    if current_stage != "100" or state.get("decision") != "continue":
+        raise RuntimeError("new release requires a completed current hosted release")
     return "advance", generation
 
 
@@ -385,16 +375,18 @@ def _validate_hosted_release_readback(
         or state.get("receipt_id") != receipt_id
         or payload.get("receiptRef") != f"receipt:hosted:{receipt_id}"
         or str(receipt.get("committedGeneration")) != state.get("generation")
-        or receipt.get("artifactDigest") != state.get("artifact_digest")
-        or receipt.get("environmentAcceptanceRef") != state.get("environment_acceptance_ref")
-        or receipt.get("environmentAcceptanceDigest") != state.get("environment_acceptance_digest")
-        or receipt.get("environmentAcceptanceFactId") != state.get("environment_acceptance_fact_id")
-        or receipt.get("gammaPredecessorFactId") != state.get("gamma_predecessor_fact_id")
-        or receipt.get("gammaPredecessorDigest") != state.get("gamma_predecessor_digest")
-        or receipt.get("engineeringEligibilityRef") != state.get("engineering_eligibility_ref")
-        or receipt.get("engineeringEligibilityDigest") != state.get("engineering_eligibility_digest")
-        or receipt.get("durableApprovalRef") != state.get("durable_approval_ref")
-        or receipt.get("durableApprovalDigest") != state.get("durable_approval_digest")
+        or receipt.get("candidateMaterialId") != state.get("candidate_material_id")
+        or receipt.get("prodActivationAdmissionRef") != state.get("prod_activation_admission_ref")
+        or receipt.get("prodActivationAdmissionOciDigest") != state.get("prod_activation_admission_oci_digest")
+        or receipt.get("prodActivationAdmissionPayloadDigest") != state.get("prod_activation_admission_payload_digest")
+        or receipt.get("prodActivationAdmissionId") != state.get("prod_activation_admission_id")
+        or receipt.get("candidateMaterialManifestRef") != state.get("candidate_material_manifest_ref")
+        or receipt.get("candidateMaterialManifestOciDigest") != state.get("candidate_material_manifest_oci_digest")
+        or receipt.get("candidateMaterialManifestPayloadDigest") != state.get("candidate_material_manifest_payload_digest")
+        or receipt.get("previousReleasedRef") != state.get("previous_released_ref")
+        or receipt.get("previousReleasedOciDigest") != state.get("previous_released_oci_digest")
+        or receipt.get("previousReleasedPayloadDigest") != state.get("previous_released_payload_digest")
+        or receipt.get("previousReleasedId") != state.get("previous_released_id")
         or receipt.get("fromCandidateDigest")
         != state.get("from_candidate_digest")
         or receipt.get("toCandidateDigest") != state.get("to_candidate_digest")
@@ -407,14 +399,14 @@ def _validate_hosted_release_readback(
         or receipt.get("adapterDigest") != state.get("adapter_digest")
         or receipt.get("rollbackOutcome") != state.get("rollback_outcome")
         or receipt.get("triggerStage") != state.get("trigger_stage")
-        or receipt.get("fromReleaseEvidenceRef")
-        != state.get("from_release_evidence_ref")
-        or receipt.get("toReleaseEvidenceRef")
-        != state.get("to_release_evidence_ref")
-        or receipt.get("fromImageTransportTag")
-        != state.get("from_image_transport_tag")
-        or receipt.get("toImageTransportTag")
-        != state.get("to_image_transport_tag")
+        or receipt.get("fromServiceFactoryOciDigest")
+        != state.get("from_service_factory_oci_digest")
+        or receipt.get("toServiceFactoryOciDigest")
+        != state.get("to_service_factory_oci_digest")
+        or receipt.get("fromAppFactoryOciDigest")
+        != state.get("from_app_factory_oci_digest")
+        or receipt.get("toAppFactoryOciDigest")
+        != state.get("to_app_factory_oci_digest")
         or receipt.get("lastGoodCandidateDigest")
         != state.get("last_good_candidate_digest")
         or receipt.get("verifiedAt") != state.get("updated_at")
@@ -425,7 +417,7 @@ def _validate_hosted_release_readback(
             _stackctl.rollout_stage_promotion_evidence.validate_receipt_evidence(
                 (receipt.get("sloReadback") or {}).get("promotionEvidence"),
                 candidate_id=receipt.get("toCandidateDigest"),
-                artifact_digest=receipt.get("artifactDigest"),
+                candidate_material_id=receipt.get("candidateMaterialId"),
                 stage=receipt.get("triggerStage"),
             )
         except (ValueError, RuntimeError) as error:
@@ -511,7 +503,7 @@ def _run_hosted_release_ledger(
                 _stackctl.rollout_stage_promotion_evidence.validate_receipt_evidence(
                     (receipt.get("sloReadback") or {}).get("promotionEvidence"),
                     candidate_id=receipt.get("toCandidateDigest"),
-                    artifact_digest=receipt.get("artifactDigest"),
+                    candidate_material_id=receipt.get("candidateMaterialId"),
                     stage=receipt.get("triggerStage"),
                 )
             except (ValueError, RuntimeError) as error:
@@ -604,7 +596,7 @@ def _commit_hosted_release_transition(
     step: str,
     stage: str,
     decision: str,
-    artifact_digest: str,
+    candidate_material_id: str,
     expected_generation: int,
     receipt_id: str,
     slo_readback: dict[str, Any] | None,
@@ -613,11 +605,11 @@ def _commit_hosted_release_transition(
     post_deploy_checks: list[dict[str, Any]],
     rollback_outcome: str,
     rollback_evidence: dict[str, Any],
-    from_release_evidence_ref: str,
-    to_release_evidence_ref: str,
-    from_image_transport_tag: str,
-    to_image_transport_tag: str,
-    environment_acceptance: dict[str, str] | None = None,
+    from_service_factory_oci_digest: str,
+    to_service_factory_oci_digest: str,
+    from_app_factory_oci_digest: str,
+    to_app_factory_oci_digest: str,
+    prod_activation_admission: dict[str, str] | None = None,
     deadline_epoch: int = 0,
     trigger_stage: str = "",
 ) -> tuple[dict[str, str], Path]:
@@ -632,23 +624,25 @@ def _commit_hosted_release_transition(
         "step": step,
         "stage": stage,
         "triggerStage": trigger_stage or stage,
-        "fromReleaseEvidenceRef": from_release_evidence_ref,
-        "toReleaseEvidenceRef": to_release_evidence_ref,
-        "fromImageTransportTag": from_image_transport_tag,
-        "toImageTransportTag": to_image_transport_tag,
+        "fromServiceFactoryOciDigest": from_service_factory_oci_digest,
+        "toServiceFactoryOciDigest": to_service_factory_oci_digest,
+        "fromAppFactoryOciDigest": from_app_factory_oci_digest,
+        "toAppFactoryOciDigest": to_app_factory_oci_digest,
         "decision": decision,
         "rollbackOutcome": rollback_outcome,
         "rollbackEvidence": rollback_evidence,
-        "artifactDigest": artifact_digest,
-        "environmentAcceptanceRef": (environment_acceptance or {}).get("ref", ""),
-        "environmentAcceptanceDigest": (environment_acceptance or {}).get("digest", ""),
-        "environmentAcceptanceFactId": (environment_acceptance or {}).get("factId", ""),
-        "gammaPredecessorFactId": (environment_acceptance or {}).get("gammaPredecessorFactId", ""),
-        "gammaPredecessorDigest": (environment_acceptance or {}).get("gammaPredecessorDigest", ""),
-        "engineeringEligibilityRef": (environment_acceptance or {}).get("engineeringEligibilityRef", ""),
-        "engineeringEligibilityDigest": (environment_acceptance or {}).get("engineeringEligibilityDigest", ""),
-        "durableApprovalRef": (environment_acceptance or {}).get("durableApprovalRef", ""),
-        "durableApprovalDigest": (environment_acceptance or {}).get("durableApprovalDigest", ""),
+        "candidateMaterialId": candidate_material_id,
+        "prodActivationAdmissionRef": (prod_activation_admission or {}).get("prodActivationAdmissionRef", ""),
+        "prodActivationAdmissionOciDigest": (prod_activation_admission or {}).get("prodActivationAdmissionOciDigest", ""),
+        "prodActivationAdmissionPayloadDigest": (prod_activation_admission or {}).get("prodActivationAdmissionPayloadDigest", ""),
+        "prodActivationAdmissionId": (prod_activation_admission or {}).get("prodActivationAdmissionId", ""),
+        "candidateMaterialManifestRef": (prod_activation_admission or {}).get("candidateMaterialManifestRef", ""),
+        "candidateMaterialManifestOciDigest": (prod_activation_admission or {}).get("candidateMaterialManifestOciDigest", ""),
+        "candidateMaterialManifestPayloadDigest": (prod_activation_admission or {}).get("candidateMaterialManifestPayloadDigest", ""),
+        "previousReleasedRef": (prod_activation_admission or {}).get("previousReleasedRef", ""),
+        "previousReleasedOciDigest": (prod_activation_admission or {}).get("previousReleasedOciDigest", ""),
+        "previousReleasedPayloadDigest": (prod_activation_admission or {}).get("previousReleasedPayloadDigest", ""),
+        "previousReleasedId": (prod_activation_admission or {}).get("previousReleasedId", ""),
         "imageDigest": candidate_digests["imageDigest"],
         "configDigest": candidate_digests["configDigest"],
         "contractGraphDigest": candidate_digests["contractGraphDigest"],

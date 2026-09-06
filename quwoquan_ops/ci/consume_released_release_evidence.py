@@ -18,10 +18,9 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from quwoquan_ops.cli.prod.fetch_mainline_release_artifact import fetch
-from quwoquan_ops.cli.prod.finalize_mainline_release_artifact import (
+from quwoquan_ops.ci.release_evidence_reader import (
     RELEASE_CLOSURE_PATHS,
-    validate_manifest,
-    validate_manifest_files,
+    validate_historical_release_snapshot,
 )
 from quwoquan_ops.cli.prod.oci_supply_chain import verify_oci_supply_chain
 
@@ -31,7 +30,7 @@ IMMUTABLE_RELEASE_REF = re.compile(
 DIGEST = re.compile(r"sha256:[0-9a-f]{64}")
 GIT_SHA = re.compile(r"[0-9a-f]{40}")
 REPOSITORY = re.compile(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+")
-CONSUMABLE_STATUSES = ("candidate-ready", "deployable", "released")
+CONSUMABLE_STATUSES = ("qualified", "main-admitted", "released")
 
 
 def _load_json(path: Path, label: str) -> dict[str, Any]:
@@ -93,10 +92,13 @@ def derive(
 
     manifest_path = artifact_root / "manifest.json"
     manifest = _load_json(manifest_path, "ReleaseEvidenceManifest")
-    validate_manifest(manifest, allowed_statuses={require_status})
-    validate_manifest_files(artifact_root, manifest)
+    validate_historical_release_snapshot(
+        manifest,
+        artifact_dir=artifact_root,
+        allowed_statuses={require_status},
+    )
 
-    candidate = str(manifest.get("candidateId") or "")
+    candidate = str(manifest.get("releaseCompositionId") or "")
     artifact_digest = str(manifest.get("artifactDigest") or "")
     source = manifest.get("source")
     if (
@@ -115,7 +117,7 @@ def derive(
         raise ValueError("released manifest producer identity is invalid")
 
     for label, expected, actual in (
-        ("candidateId", expected_candidate, candidate),
+        ("releaseCompositionId", expected_candidate, candidate),
         ("artifactDigest", expected_artifact_digest, artifact_digest),
         ("source.gitSha", expected_source_sha, source_sha),
     ):

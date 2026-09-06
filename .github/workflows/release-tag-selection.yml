@@ -1,0 +1,396 @@
+# Unique create-only controller. An immutable admission intent must pass before
+# any local tag object or remote ref mutation. Canonical logic: release_tag_admission.py. Final AdmissionFact is issued
+# only after Hosted creator/ruleset readback binds the actual annotated object.
+name: 07. Release Tag Selection
+
+permissions:
+  contents: read
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag_kind:
+        description: rc or stable
+        required: true
+        type: choice
+        options: [rc, stable]
+      tag_name:
+        description: Strict vMAJOR.MINOR.PATCH[-rc.N]
+        required: true
+        type: string
+      source_git_sha:
+        description: Exact main-reachable source commit
+        required: true
+        type: string
+      selection_fact_ref:
+        description: RC selection or stable product authority OCI @sha256 ref
+        required: true
+        type: string
+      initial_release_authority_ref:
+        description: Exact initial-release authority OCI @sha256 ref when required
+        required: false
+        default: ''
+        type: string
+      selected_rc_admission_ref:
+        description: Stable only, exact RC AdmissionFact OCI @sha256 ref
+        required: false
+        default: ''
+        type: string
+      qualification_fact_ref:
+        description: Stable only, exact QualificationFact OCI @sha256 ref
+        required: false
+        default: ''
+        type: string
+      release_authority_fact_ref:
+        description: Stable only, exact release authority OCI @sha256 ref
+        required: false
+        default: ''
+        type: string
+
+concurrency:
+  group: release-tag-controller
+  cancel-in-progress: false
+
+jobs:
+  pre_admission:
+    name: Seal exact admission intent before mutation
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: release-selection
+    permissions: {contents: read, packages: write, id-token: write}
+    outputs:
+      intent_ref: ${{ steps.publish.outputs.intent_ref }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: oras-project/setup-oras@1d808f7d7f6995cc68b7bf507bfe5c5446e1dc9d
+        with: {version: 1.3.3}
+      - id: admit
+        name: Validate all authorities and seal create-once intent
+        env:
+          STORE: ${{ runner.temp }}/release-control
+          KIND: ${{ inputs.tag_kind }}
+          TAG: ${{ inputs.tag_name }}
+          SOURCE_SHA: ${{ inputs.source_git_sha }}
+          SELECTION: ${{ inputs.selection_fact_ref }}
+          RC_ADMISSION: ${{ inputs.selected_rc_admission_ref }}
+          QUALIFICATION: ${{ inputs.qualification_fact_ref }}
+          RELEASE_AUTHORITY: ${{ inputs.release_authority_fact_ref }}
+          INITIAL_AUTHORITY: ${{ inputs.initial_release_authority_ref }}
+          READBACK_URL: ${{ vars.RELEASE_CONTROLLER_READBACK_URL }}
+          READBACK_TOKEN: ${{ secrets.RELEASE_CONTROLLER_READBACK_TOKEN }}
+          CONTROLLER_APP_ID: ${{ secrets.RELEASE_CONTROLLER_APP_ID }}
+          CONTROLLER_INSTALLATION_ID: ${{ vars.RELEASE_CONTROLLER_INSTALLATION_ID }}
+          CONTROLLER_APP_SLUG: ${{ vars.RELEASE_CONTROLLER_APP_SLUG }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          printf '%s' "$GITHUB_TOKEN" | oras login ghcr.io --username "${{ github.actor }}" --password-stdin
+          trap 'oras logout ghcr.io >/dev/null 2>&1 || true' EXIT
+          git fetch --no-tags origin main
+          git merge-base --is-ancestor "$SOURCE_SHA" origin/main
+          ! git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1
+          materialize_fact() {
+            exact_ref="$1"
+            [[ "$exact_ref" =~ ^ghcr\.io/[a-z0-9._/-]+@sha256:[0-9a-f]{64}$ ]]
+            python3 quwoquan_ops/ci/promotion_evidence.py materialize-oci \
+              --ref "$exact_ref" --output-file "$STORE/$exact_ref" >/dev/null
+            local_digest="sha256:$(python3 -c 'import hashlib,sys; print(hashlib.sha256(open(sys.argv[1], "rb").read()).hexdigest())' "$STORE/$exact_ref")"
+            printf '%s=%s\n' "$exact_ref" "$local_digest"
+          }
+          hosted_readback() {
+            phase="$1"
+            output="$2"
+            curl --fail --silent --show-error \
+              --proto '=https' --tlsv1.2 \
+              --header "Authorization: Bearer $READBACK_TOKEN" \
+              --header 'Accept: application/json' \
+              --get "$READBACK_URL/v1/release-tag-readback" \
+              --data-urlencode "repository=$GITHUB_REPOSITORY" \
+              --data-urlencode "tag=$TAG" \
+              --data-urlencode "phase=$phase" \
+              --output "$output"
+          }
+          assert_readback_identity() {
+            file="$1"
+            phase="$2"
+            schema="$3"
+            python3 - "$file" "$phase" "$schema" "$GITHUB_REPOSITORY" "$TAG" \
+              "$CONTROLLER_APP_ID" "$CONTROLLER_INSTALLATION_ID" "$CONTROLLER_APP_SLUG" <<'PY'
+          import json, sys
+          value = json.load(open(sys.argv[1], encoding="utf-8"))
+          producer = value.get("producer", {})
+          if (
+              value.get("schema") != sys.argv[3]
+              or value.get("status") != "verified"
+              or value.get("phase") != sys.argv[2]
+              or value.get("repository") != sys.argv[4]
+              or value.get("tagRef") != f"refs/tags/{sys.argv[5]}"
+              or producer != {
+                  "kind": "github_app_installation", "appId": int(sys.argv[6]),
+                  "installationId": int(sys.argv[7]), "slug": sys.argv[8],
+              }
+          ):
+              raise SystemExit("GATE_BLOCK: Hosted readback identity drifted")
+          PY
+          }
+          test -n "$READBACK_URL$READBACK_TOKEN$CONTROLLER_APP_ID$CONTROLLER_INSTALLATION_ID$CONTROLLER_APP_SLUG"
+          PRE_CREATOR_FILE="$STORE/readback/$TAG-creator-before.json"
+          PRE_RULESET_FILE="$STORE/readback/$TAG-ruleset-before.json"
+          mkdir -p "$(dirname "$PRE_CREATOR_FILE")"
+          hosted_readback pre_mutation "$PRE_CREATOR_FILE"
+          hosted_readback pre_mutation "$PRE_RULESET_FILE"
+          assert_readback_identity "$PRE_CREATOR_FILE" pre_mutation quwoquan_ops.creator_readback_fact.v1
+          assert_readback_identity "$PRE_RULESET_FILE" pre_mutation quwoquan_ops.ruleset_readback_fact.v1
+          PRE_CREATOR_EXACT="readback/$TAG-creator-before.json=sha256:$(python3 -c 'import hashlib,sys; print(hashlib.sha256(open(sys.argv[1], "rb").read()).hexdigest())' "$PRE_CREATOR_FILE")"
+          PRE_RULESET_EXACT="readback/$TAG-ruleset-before.json=sha256:$(python3 -c 'import hashlib,sys; print(hashlib.sha256(open(sys.argv[1], "rb").read()).hexdigest())' "$PRE_RULESET_FILE")"
+          # The single release-selection environment plus this controller's
+          # concurrency lock is the create-once reservation authority. Seal it
+          # as exact local bytes before validating the mutation intent.
+          RESERVATION_FILE="$STORE/reservation/$TAG.json"
+          mkdir -p "$(dirname "$RESERVATION_FILE")"
+          python3 - "$RESERVATION_FILE" "$TAG" "$KIND" "$SOURCE_SHA" <<'PY'
+          import json, pathlib, subprocess, sys
+          tree = subprocess.check_output(
+              ["git", "show", "-s", "--format=%T", sys.argv[4]], text=True,
+          ).strip()
+          pathlib.Path(sys.argv[1]).write_text(json.dumps({
+              "schema": "quwoquan_ops.release_tag_reservation_fact.v1",
+              "status": "reserved", "tagName": sys.argv[2],
+              "tagKind": sys.argv[3], "sourceGitSha": sys.argv[4],
+              "sourceTree": tree,
+          }, sort_keys=True, separators=(",", ":")) + "\n")
+          PY
+          RESERVATION_EXACT="reservation/$TAG.json=sha256:$(python3 -c 'import hashlib,sys; print(hashlib.sha256(open(sys.argv[1], "rb").read()).hexdigest())' "$RESERVATION_FILE")"
+          SELECTION_EXACT="$(materialize_fact "$SELECTION")"
+          INITIAL_ARGS=()
+          if [[ -n "$INITIAL_AUTHORITY" ]]; then
+            INITIAL_EXACT="$(materialize_fact "$INITIAL_AUTHORITY")"
+            INITIAL_ARGS=(--initial-release-authority "$INITIAL_EXACT")
+          fi
+          case "$KIND" in
+            rc)
+              [[ "$TAG" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)-rc\.([1-9][0-9]*)$ ]]
+              test -z "$RC_ADMISSION$QUALIFICATION$RELEASE_AUTHORITY"
+              RESULT="$(python3 -B quwoquan_ops/ci/release_control.py --store-root "$STORE" tag-admit-rc-intent \
+                --tag-name "$TAG" --source-git-sha "$SOURCE_SHA" --reservation "$RESERVATION_EXACT" \
+                --selection "$SELECTION_EXACT" --creator-readback "$PRE_CREATOR_EXACT" \
+                --ruleset-readback "$PRE_RULESET_EXACT" --repository "$GITHUB_REPOSITORY" \
+                --controller-app-id "$CONTROLLER_APP_ID" --controller-installation-id "$CONTROLLER_INSTALLATION_ID" \
+                --controller-app-slug "$CONTROLLER_APP_SLUG" \
+                "${INITIAL_ARGS[@]}" --admitted-at "$(date -u +%Y-%m-%dT%H:%M:%SZ)")"
+              ;;
+            stable)
+              [[ "$TAG" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]
+              RC_EXACT="$(materialize_fact "$RC_ADMISSION")"
+              QUALIFICATION_EXACT="$(materialize_fact "$QUALIFICATION")"
+              RELEASE_EXACT="$(materialize_fact "$RELEASE_AUTHORITY")"
+              RESULT="$(python3 -B quwoquan_ops/ci/release_control.py --store-root "$STORE" tag-admit-stable-intent \
+                --tag-name "$TAG" --source-git-sha "$SOURCE_SHA" --reservation "$RESERVATION_EXACT" \
+                --selected-rc-admission "$RC_EXACT" --qualification "$QUALIFICATION_EXACT" \
+                --product-authority "$SELECTION_EXACT" --release-authority "$RELEASE_EXACT" \
+                --creator-readback "$PRE_CREATOR_EXACT" --ruleset-readback "$PRE_RULESET_EXACT" \
+                --repository "$GITHUB_REPOSITORY" --controller-app-id "$CONTROLLER_APP_ID" \
+                --controller-installation-id "$CONTROLLER_INSTALLATION_ID" --controller-app-slug "$CONTROLLER_APP_SLUG" \
+                "${INITIAL_ARGS[@]}" --admitted-at "$(date -u +%Y-%m-%dT%H:%M:%SZ)")"
+              ;;
+            *) exit 2 ;;
+          esac
+          INTENT_LOCAL_REF="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["ref"])' <<<"$RESULT")"
+          echo "intent_local_ref=$INTENT_LOCAL_REF" >> "$GITHUB_OUTPUT"
+      - id: publish
+        name: Publish exact pre-mutation admission intent
+        env:
+          STORE: ${{ runner.temp }}/release-control
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$GITHUB_TOKEN" | oras login ghcr.io --username "${{ github.actor }}" --password-stdin
+          trap 'oras logout ghcr.io >/dev/null 2>&1 || true' EXIT
+          python3 quwoquan_ops/ci/promotion_evidence.py publish-oci \
+            --fact-file "$STORE/${{ steps.admit.outputs.intent_local_ref }}" \
+            --repository "ghcr.io/${{ github.repository }}/release-tag-intent" \
+            --transport-tag "run-${{ github.run_id }}-${{ github.run_attempt }}" > "$RUNNER_TEMP/tag-intent-oci.json"
+          REF="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["exactRef"])' < "$RUNNER_TEMP/tag-intent-oci.json")"
+          echo "intent_ref=$REF" >> "$GITHUB_OUTPUT"
+
+  create_and_readback:
+    name: Create once and finalize immutable admission
+    needs: [pre_admission]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: release-selection
+    permissions: {contents: read, packages: write, id-token: write}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: oras-project/setup-oras@1d808f7d7f6995cc68b7bf507bfe5c5446e1dc9d
+        with: {version: 1.3.3}
+      - id: app-token
+        name: Mint scoped release-controller App installation token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
+        with:
+          app-id: ${{ secrets.RELEASE_CONTROLLER_APP_ID }}
+          private-key: ${{ secrets.RELEASE_CONTROLLER_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+          permission-contents: write
+          permission-checks: write
+          permission-administration: read
+      - id: transact
+        name: Consume intent, mutate once, read back, finalize
+        env:
+          STORE: ${{ runner.temp }}/release-control
+          KIND: ${{ inputs.tag_kind }}
+          TAG: ${{ inputs.tag_name }}
+          SOURCE_SHA: ${{ inputs.source_git_sha }}
+          INTENT: ${{ needs.pre_admission.outputs.intent_ref }}
+          APP_TOKEN: ${{ steps.app-token.outputs.token }}
+          CONTROLLER_APP_ID: ${{ secrets.RELEASE_CONTROLLER_APP_ID }}
+          CONTROLLER_INSTALLATION_ID: ${{ steps.app-token.outputs.installation-id }}
+          CONTROLLER_APP_SLUG: ${{ steps.app-token.outputs.app-slug }}
+          READBACK_URL: ${{ vars.RELEASE_CONTROLLER_READBACK_URL }}
+          READBACK_TOKEN: ${{ secrets.RELEASE_CONTROLLER_READBACK_TOKEN }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$GITHUB_TOKEN" | oras login ghcr.io --username "${{ github.actor }}" --password-stdin
+          trap 'oras logout ghcr.io >/dev/null 2>&1 || true' EXIT
+          materialize_fact() {
+            exact_ref="$1"
+            [[ "$exact_ref" =~ ^ghcr\.io/[a-z0-9._/-]+@sha256:[0-9a-f]{64}$ ]]
+            python3 quwoquan_ops/ci/promotion_evidence.py materialize-oci \
+              --ref "$exact_ref" --output-file "$STORE/$exact_ref" >/dev/null
+            local_digest="sha256:$(python3 -c 'import hashlib,sys; print(hashlib.sha256(open(sys.argv[1], "rb").read()).hexdigest())' "$STORE/$exact_ref")"
+            printf '%s=%s\n' "$exact_ref" "$local_digest"
+          }
+          INTENT_EXACT="$(materialize_fact "$INTENT")"
+          python3 -B quwoquan_ops/ci/release_control.py --store-root "$STORE" tag-admission-intent-check \
+            --tag-kind "$KIND" --tag-name "$TAG" --intent "$INTENT_EXACT" >/dev/null
+          REMOTE_STATUS="$(curl --silent --show-error --output "$RUNNER_TEMP/tag-ref-before.json" --write-out '%{http_code}' \
+            --header "Authorization: Bearer $APP_TOKEN" --header 'Accept: application/vnd.github+json' \
+            "$GITHUB_API_URL/repos/${GITHUB_REPOSITORY}/git/ref/tags/${TAG}")"
+          test "$REMOTE_STATUS" = 404
+          git config user.name "$CONTROLLER_APP_SLUG[bot]"
+          git config user.email "${CONTROLLER_APP_ID}+${CONTROLLER_APP_SLUG}[bot]@users.noreply.github.com"
+          git remote set-url origin "https://x-access-token:${APP_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          mutation_failed() {
+            set +e
+            FAILURE_RESULT="$(python3 -B quwoquan_ops/ci/release_control.py --store-root "$STORE" tag-mutation-outcome \
+              --tag-kind "$KIND" --tag-name "$TAG" --intent "$INTENT_EXACT" --status failed \
+              --recorded-at "$(date -u +%Y-%m-%dT%H:%M:%SZ)")"
+            if [[ $? -eq 0 ]]; then
+              FAILURE_LOCAL_REF="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["ref"])' <<<"$FAILURE_RESULT")"
+              python3 quwoquan_ops/ci/promotion_evidence.py publish-oci \
+                --fact-file "$STORE/$FAILURE_LOCAL_REF" \
+                --repository "ghcr.io/${GITHUB_REPOSITORY}/release-tag-mutation-outcome" \
+                --transport-tag "failed-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" || true
+            fi
+          }
+          trap mutation_failed ERR
+          # checkout may already contain the exact local tag. Accept only an
+          # annotated object that peels to SOURCE_SHA; never overwrite it.
+          if git show-ref --verify --quiet "refs/tags/$TAG"; then
+            test "$(git cat-file -t "refs/tags/$TAG")" = tag
+            test "$(git rev-parse "refs/tags/$TAG^{}")" = "$SOURCE_SHA"
+          else
+            git tag -a "$TAG" "$SOURCE_SHA" -m "$TAG"
+          fi
+          git push origin "refs/tags/$TAG:refs/tags/$TAG"
+          git remote set-url origin "https://github.com/${GITHUB_REPOSITORY}.git"
+          curl --fail --silent --show-error \
+            --header "Authorization: Bearer $APP_TOKEN" --header 'Accept: application/vnd.github+json' \
+            "$GITHUB_API_URL/repos/${GITHUB_REPOSITORY}/git/ref/tags/${TAG}" \
+            --output "$RUNNER_TEMP/tag-ref-after.json"
+          REMOTE_OBJECT_OID="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["object"]["sha"])' < "$RUNNER_TEMP/tag-ref-after.json")"
+          [[ "$REMOTE_OBJECT_OID" =~ ^[0-9a-f]{40}$ ]]
+          curl --fail --silent --show-error \
+            --header "Authorization: Bearer $APP_TOKEN" --header 'Accept: application/vnd.github+json' \
+            "$GITHUB_API_URL/repos/${GITHUB_REPOSITORY}/git/tags/${REMOTE_OBJECT_OID}" \
+            --output "$RUNNER_TEMP/tag-object-after.json"
+          test "$(python3 -c 'import json,sys; print(json.load(sys.stdin)["object"]["type"])' < "$RUNNER_TEMP/tag-object-after.json")" = commit
+          test "$(python3 -c 'import json,sys; print(json.load(sys.stdin)["object"]["sha"])' < "$RUNNER_TEMP/tag-object-after.json")" = "$SOURCE_SHA"
+          TAG_OBJECT_OID="$(git rev-parse "refs/tags/$TAG")"
+          test "$TAG_OBJECT_OID" = "$REMOTE_OBJECT_OID"
+          test "$(git rev-parse "refs/tags/$TAG^{}")" = "$SOURCE_SHA"
+          test "$(git cat-file -t "refs/tags/$TAG")" = tag
+          OUTCOME_RESULT="$(python3 -B quwoquan_ops/ci/release_control.py --store-root "$STORE" tag-mutation-outcome \
+            --tag-kind "$KIND" --tag-name "$TAG" --intent "$INTENT_EXACT" --status created \
+            --tag-object-oid "$TAG_OBJECT_OID" --peeled-commit "$SOURCE_SHA" \
+            --recorded-at "$(date -u +%Y-%m-%dT%H:%M:%SZ)")"
+          OUTCOME_LOCAL_REF="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["ref"])' <<<"$OUTCOME_RESULT")"
+          OUTCOME_EXACT="$OUTCOME_LOCAL_REF=$(python3 -c 'import json,sys; print(json.load(sys.stdin)["digest"])' <<<"$OUTCOME_RESULT")"
+          # REST ref/object readback cannot prove creator. The trusted App
+          # producer returns an authenticated check-run/audit record plus exact
+          # ruleset API bytes, both bound to this outcome and remote object.
+          OUTCOME_ID="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["outcomeId"])' < "$STORE/$OUTCOME_LOCAL_REF")"
+          CHECK_EXTERNAL_ID="release-tag:${GITHUB_REPOSITORY}:${TAG}:${TAG_OBJECT_OID}:${OUTCOME_ID}"
+          python3 - "$RUNNER_TEMP/check-run-request.json" "$CHECK_EXTERNAL_ID" "$SOURCE_SHA" <<'PY'
+          import json, pathlib, sys
+          pathlib.Path(sys.argv[1]).write_text(json.dumps({
+              "name": "release-tag-creation", "head_sha": sys.argv[3],
+              "external_id": sys.argv[2], "status": "completed",
+              "conclusion": "success", "output": {
+                  "title": "Release tag created by controller App",
+                  "summary": "Exact remote tag object and mutation outcome are bound by external_id.",
+              },
+          }, sort_keys=True, separators=(",", ":")))
+          PY
+          curl --fail --silent --show-error \
+            --request POST --header "Authorization: Bearer $APP_TOKEN" \
+            --header 'Accept: application/vnd.github+json' \
+            --header 'X-GitHub-Api-Version: 2022-11-28' \
+            --data-binary @"$RUNNER_TEMP/check-run-request.json" \
+            "$GITHUB_API_URL/repos/${GITHUB_REPOSITORY}/check-runs" \
+            --output "$RUNNER_TEMP/check-run-response.json"
+          CHECK_RUN_ID="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])' < "$RUNNER_TEMP/check-run-response.json")"
+          [[ "$CHECK_RUN_ID" =~ ^[1-9][0-9]*$ ]]
+          post_readback() {
+            kind="$1"
+            output="$2"
+            curl --fail --silent --show-error \
+              --proto '=https' --tlsv1.2 \
+              --header "Authorization: Bearer $READBACK_TOKEN" \
+              --header 'Accept: application/json' \
+              --get "$READBACK_URL/v1/release-tag-readback" \
+              --data-urlencode "repository=$GITHUB_REPOSITORY" \
+              --data-urlencode "tag=$TAG" \
+              --data-urlencode "phase=$kind" \
+              --data-urlencode "tagObjectOid=$TAG_OBJECT_OID" \
+              --data-urlencode "peeledCommit=$SOURCE_SHA" \
+              --data-urlencode "outcomeId=$OUTCOME_ID" \
+              --data-urlencode "checkRunId=$CHECK_RUN_ID" \
+              --output "$output"
+          }
+          CREATOR_FILE="$STORE/readback/$TAG-creator-after.json"
+          RULESET_FILE="$STORE/readback/$TAG-ruleset-after.json"
+          mkdir -p "$(dirname "$CREATOR_FILE")"
+          post_readback post_mutation "$CREATOR_FILE"
+          post_readback post_mutation "$RULESET_FILE"
+          assert_readback_identity "$CREATOR_FILE" post_mutation quwoquan_ops.creator_readback_fact.v1
+          assert_readback_identity "$RULESET_FILE" post_mutation quwoquan_ops.ruleset_readback_fact.v1
+          CREATOR_EXACT="readback/$TAG-creator-after.json=sha256:$(python3 -c 'import hashlib,sys; print(hashlib.sha256(open(sys.argv[1], "rb").read()).hexdigest())' "$CREATOR_FILE")"
+          RULESET_EXACT="readback/$TAG-ruleset-after.json=sha256:$(python3 -c 'import hashlib,sys; print(hashlib.sha256(open(sys.argv[1], "rb").read()).hexdigest())' "$RULESET_FILE")"
+          FINAL="$(python3 -B quwoquan_ops/ci/release_control.py --store-root "$STORE" "tag-admit-$KIND-finalize" \
+            --tag-name "$TAG" --intent "$INTENT_EXACT" --mutation-outcome "$OUTCOME_EXACT" \
+            --creator-readback "$CREATOR_EXACT" --ruleset-readback "$RULESET_EXACT" \
+            --admitted-at "$(date -u +%Y-%m-%dT%H:%M:%SZ)")"
+          echo "admission_local_ref=$(python3 -c 'import json,sys; print(json.load(sys.stdin)["ref"])' <<<"$FINAL")" >> "$GITHUB_OUTPUT"
+          trap - ERR
+      - name: Publish final immutable ReleaseTagAdmissionFact
+        env:
+          STORE: ${{ runner.temp }}/release-control
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$GITHUB_TOKEN" | oras login ghcr.io --username "${{ github.actor }}" --password-stdin
+          trap 'oras logout ghcr.io >/dev/null 2>&1 || true' EXIT
+          python3 quwoquan_ops/ci/promotion_evidence.py publish-oci \
+            --fact-file "$STORE/${{ steps.transact.outputs.admission_local_ref }}" \
+            --repository "ghcr.io/${{ github.repository }}/release-tag-admission" \
+            --transport-tag "run-${{ github.run_id }}-${{ github.run_attempt }}"

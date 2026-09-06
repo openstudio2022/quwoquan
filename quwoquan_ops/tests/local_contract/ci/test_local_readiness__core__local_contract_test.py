@@ -79,11 +79,13 @@ def _repo() -> tempfile.TemporaryDirectory[str]:
     return tempfile.TemporaryDirectory()
 
 
-def _init(path: Path) -> None:
+def _init(path: Path, *, relative: str = "source.txt") -> None:
     subprocess.run(["git", "init", "-q"], cwd=path, check=True)
     subprocess.run(["git", "checkout", "-qb", "dev1.0"], cwd=path, check=True)
-    (path / "source.txt").write_text("one\n", encoding="utf-8")
-    subprocess.run(["git", "add", "source.txt"], cwd=path, check=True)
+    source = path / relative
+    source.parent.mkdir(parents=True, exist_ok=True)
+    source.write_text("one\n", encoding="utf-8")
+    subprocess.run(["git", "add", relative], cwd=path, check=True)
     subprocess.run(
         ["git", "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "commit", "-qm", "base"],
         cwd=path,
@@ -168,6 +170,42 @@ def test_spec_contract_is_only_a_local_projection() -> None:
     assert "spec_contract" not in classify_hosted([path])
 
 
+def test_local_readiness_contract_declares_five_independent_fact_dimensions() -> None:
+    contract = __import__("yaml").safe_load((ROOT / "quwoquan_ops/policies/local_readiness_contract.yaml").read_text(encoding="utf-8"))
+    assert contract["schema_version"] == 2
+    assert list(contract["fact_dimensions"]) == [
+        "sourceReadiness", "environmentReadiness", "deviceReadiness",
+        "integrationEligibility", "promotionEligibility",
+    ]
+    assert contract["independence"] == {
+        "source_pass_implies": [],
+        "cross_dimension_inference": "denied",
+        "local_readiness_writes": ["sourceReadiness"],
+        "non_source_default": "not_evaluated",
+    }
+
+
+def test_source_pass_keeps_all_other_readiness_dimensions_unevaluated() -> None:
+    # 已知 docs 路径：未知路径按 unknown_path_fail_closed 升到 R3 并要求全 scope，
+    # 那条判罚由 impact planner 的风险合同单独证明，不该混进就绪维度断言。
+    with _repo() as directory:
+        repo = Path(directory)
+        _init(repo, relative="docs/source.md")
+        state = repo / "state"
+        plan = plan_readiness(level="fast", paths=["docs/source.md"], repo_root=repo, mode="workspace")
+        receipt = run_readiness(plan, repo_root=repo, state_root=state)
+        assert receipt["schema"] == "local-readiness-receipt-v2"
+        assert "readiness" not in receipt
+        assert receipt["facts"] == {
+            "sourceReadiness": {"status": "fast_green", "producer": "local_readiness"},
+            "environmentReadiness": {"status": "not_evaluated", "producer": "environment_ops"},
+            "deviceReadiness": {"status": "not_evaluated", "producer": "package_acceptance"},
+            "integrationEligibility": {"status": "not_evaluated", "producer": "trusted_integration_publisher"},
+            "promotionEligibility": {"status": "not_evaluated", "producer": "integration_qualification"},
+        }
+        verify_receipt(level="fast", paths=["docs/source.md"], repo_root=repo, mode="workspace", state_root=state)
+
+
 def test_impact_plan_exposes_canonical_source_identity_and_version() -> None:
     plan = build_impact_plan(["quwoquan_app/lib/runtime/bootstrap.dart"], level="scope")
     canonical_identity = planner_identity()
@@ -175,6 +213,19 @@ def test_impact_plan_exposes_canonical_source_identity_and_version() -> None:
     assert plan["impact_planner"]["source"] == canonical_identity["source"]
     assert plan["impact_planner"]["version"] == canonical_identity["version"]
     assert plan["impact_planner"]["digest"].startswith("sha256:")
+
+
+def test_source_scope_routes_fast_and_full_code_health_with_bounded_timeouts() -> None:
+    path = "quwoquan_ops/ci/value.py"
+    fast = build_impact_plan([path], level="fast")
+    scope = build_impact_plan([path], level="scope")
+    fast_check = next(check for check in fast["checks"] if check["id"] == "static:code_health_delta_fast")
+    full_check = next(check for check in scope["checks"] if check["id"] == "static:code-health-delta")
+    assert fast_check["timeout_seconds"] == 30
+    assert "--mode" in fast_check["command"] and "fast" in fast_check["command"]
+    assert full_check["timeout_seconds"] == 300
+    assert "full" in full_check["command"] and path in full_check["command"]
+    assert not any(check["id"] == "static:code_health_delta_fast" for check in scope["checks"])
 
 
 def test_plan_checks_have_canonical_bounded_timeout_identity() -> None:
@@ -199,6 +250,7 @@ def test_candidate_impact_identity_closes_timeout_policy() -> None:
 
     projection, identity = _impact_plan(["README.md"], repo_root=ROOT)
     assert "timeout_policy" in projection
+    assert "paths" in projection
     assert set(identity) == {
         "schema", "digest", "projection_ref",
         "timeout_policy_ref", "timeout_policy_digest",
@@ -360,8 +412,11 @@ def test_exact_input_pass_cache_hits_then_command_and_toolchain_miss(monkeypatch
     with _repo() as directory:
         repo = Path(directory)
         _init(repo)
+        source_file = repo / "docs/source.txt"
+        source_file.parent.mkdir(parents=True, exist_ok=True)
+        source_file.write_text("one\n", encoding="utf-8")
         state = Path(tempfile.mkdtemp()) / "state"
-        plan = plan_readiness(level="fast", paths=["source.txt"], repo_root=repo, mode="workspace")
+        plan = plan_readiness(level="fast", paths=["docs/source.txt"], repo_root=repo, mode="workspace")
         first = run_readiness(plan, repo_root=repo, state_root=state)
         second = run_readiness(plan, repo_root=repo, state_root=state)
         assert first["status"] == "PASS" and not first["cache_hit"]
@@ -372,7 +427,7 @@ def test_exact_input_pass_cache_hits_then_command_and_toolchain_miss(monkeypatch
         with pytest.raises(LocalReadinessError, match="canonical planner exact plan"):
             run_readiness(changed, repo_root=repo, state_root=state)
         monkeypatch.setattr("lib.local_readiness.core._versions", lambda _commands: {"python": "changed"})
-        toolchain_changed = plan_readiness(level="fast", paths=["source.txt"], repo_root=repo, mode="workspace")
+        toolchain_changed = plan_readiness(level="fast", paths=["docs/source.txt"], repo_root=repo, mode="workspace")
         assert toolchain_changed["fingerprint"]["digest"] != plan["fingerprint"]["digest"]
 
 
@@ -450,20 +505,21 @@ def test_staged_receipt_freshness_is_exact() -> None:
         repo = Path(directory)
         _init(repo)
         state = Path(tempfile.mkdtemp()) / "state"
-        source_file = repo / "source.txt"
+        source_file = repo / "docs/source.txt"
+        source_file.parent.mkdir(parents=True, exist_ok=True)
         source_file.write_text("staged-one\n", encoding="utf-8")
-        subprocess.run(["git", "add", "source.txt"], cwd=repo, check=True)
-        plan = plan_readiness(level="fast", paths=["source.txt"], repo_root=repo, mode="staged")
+        subprocess.run(["git", "add", "docs/source.txt"], cwd=repo, check=True)
+        plan = plan_readiness(level="fast", paths=["docs/source.txt"], repo_root=repo, mode="staged")
         receipt = run_readiness(plan, repo_root=repo, state_root=state)
         assert receipt["status"] == "PASS"
-        verify_receipt(level="fast", paths=["source.txt"], repo_root=repo, mode="staged", state_root=state)
+        verify_receipt(level="fast", paths=["docs/source.txt"], repo_root=repo, mode="staged", state_root=state)
         source_file.write_text("worktree-after-receipt\n", encoding="utf-8")
         # Staged identity is index-only; an unstaged worktree edit must not invalidate it.
-        verify_receipt(level="fast", paths=["source.txt"], repo_root=repo, mode="staged", state_root=state)
+        verify_receipt(level="fast", paths=["docs/source.txt"], repo_root=repo, mode="staged", state_root=state)
         source_file.write_text("staged-two\n", encoding="utf-8")
-        subprocess.run(["git", "add", "source.txt"], cwd=repo, check=True)
+        subprocess.run(["git", "add", "docs/source.txt"], cwd=repo, check=True)
         with pytest.raises(LocalReadinessError, match="stale"):
-            verify_receipt(level="fast", paths=["source.txt"], repo_root=repo, mode="staged", state_root=state)
+            verify_receipt(level="fast", paths=["docs/source.txt"], repo_root=repo, mode="staged", state_root=state)
 
 
 def test_host_hook_configs_do_not_wire_automatic_edit_readiness() -> None:
@@ -601,11 +657,14 @@ def test_cache_hit_recomputes_current_input_and_rejects_stale_plan() -> None:
     with _repo() as directory:
         repo = Path(directory)
         _init(repo)
+        source_file = repo / "docs/source.txt"
+        source_file.parent.mkdir(parents=True, exist_ok=True)
+        source_file.write_text("one\n", encoding="utf-8")
         state = repo / "state"
-        plan = plan_readiness(level="fast", paths=["source.txt"], repo_root=repo, mode="workspace")
+        plan = plan_readiness(level="fast", paths=["docs/source.txt"], repo_root=repo, mode="workspace")
         first = run_readiness(plan, repo_root=repo, state_root=state)
         assert first["status"] == "PASS"
-        (repo / "source.txt").write_text("changed\n", encoding="utf-8")
+        source_file.write_text("changed\n", encoding="utf-8")
         with pytest.raises(LocalReadinessError, match="stale|changed"):
             run_readiness(plan, repo_root=repo, state_root=state)
 
@@ -694,9 +753,12 @@ def test_worker_consumes_exact_item(monkeypatch: pytest.MonkeyPatch) -> None:
     with _repo() as directory:
         repo = Path(directory)
         _init(repo)
+        source_file = repo / "docs/source.txt"
+        source_file.parent.mkdir(parents=True, exist_ok=True)
+        source_file.write_text("one\n", encoding="utf-8")
         state = repo / "state"
         monkeypatch.setattr("lib.local_readiness.core.ROOT", repo)
-        enqueue_paths(["source.txt"], state_root=state)
+        enqueue_paths(["docs/source.txt"], state_root=state)
         result = worker_once(state_root=state, debounce_seconds=0)
         assert result["status"] == "PASS"
         assert json.loads((state / "process/deferred-queue.json").read_text())["items"] == []

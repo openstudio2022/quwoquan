@@ -34,7 +34,7 @@ def validate_promotion_evidence(
     value: object,
     *,
     candidate_id: object,
-    artifact_digest: object,
+    candidate_material_id: object,
     stage: object,
 ) -> dict[str, Any]:
     if not isinstance(value, dict) or set(value) != PROMOTION_EVIDENCE_FIELDS:
@@ -43,7 +43,7 @@ def validate_promotion_evidence(
         value.get("schema") != "prod-rollout-stage-promotion-evidence"
         or value.get("authority") != "protected-prod-runner"
         or value.get("candidateId") != candidate_id
-        or value.get("artifactDigest") != artifact_digest
+        or value.get("candidateMaterialId") != candidate_material_id
         or value.get("stage") != stage
         or not _require_safe_string(value.get("campaignId"), field="campaignId")
         or not isinstance(value.get("routingPolicyDigest"), str)
@@ -296,11 +296,12 @@ def _validate_request(value: object) -> dict[str, Any]:
         raise ValueError("triggerStage is invalid")
     if value.get("step") != STAGE_STEPS[value["stage"]]:
         raise ValueError("step does not match stage")
-    for field in ("fromReleaseEvidenceRef", "toReleaseEvidenceRef"):
-        if not isinstance(value.get(field), str) or OCI_REF_RE.fullmatch(value[field]) is None:
-            raise ValueError(f"{field} must be an exact immutable OCI ref")
-    for field in ("fromImageTransportTag", "toImageTransportTag"):
-        _require_safe_string(value.get(field), field=field)
+    for field in (
+        "fromServiceFactoryOciDigest", "toServiceFactoryOciDigest",
+        "fromAppFactoryOciDigest", "toAppFactoryOciDigest",
+    ):
+        if not isinstance(value.get(field), str) or SHA256_RE.fullmatch(value[field]) is None:
+            raise ValueError(f"{field} must be an exact immutable OCI digest")
     decision = value.get("decision")
     if decision not in DECISIONS:
         raise ValueError("decision is invalid")
@@ -308,15 +309,17 @@ def _validate_request(value: object) -> dict[str, Any]:
     if rollback_outcome not in ROLLBACK_OUTCOMES:
         raise ValueError("rollbackOutcome is invalid")
     for field in (
-        "artifactDigest",
+        "candidateMaterialId",
         "fromCandidateDigest",
         "toCandidateDigest",
-        "environmentAcceptanceDigest",
-        "environmentAcceptanceFactId",
-        "gammaPredecessorFactId",
-        "gammaPredecessorDigest",
-        "engineeringEligibilityDigest",
-        "durableApprovalDigest",
+        "prodActivationAdmissionOciDigest",
+        "prodActivationAdmissionPayloadDigest",
+        "prodActivationAdmissionId",
+        "candidateMaterialManifestOciDigest",
+        "candidateMaterialManifestPayloadDigest",
+        "previousReleasedOciDigest",
+        "previousReleasedPayloadDigest",
+        "previousReleasedId",
         "imageDigest",
         "configDigest",
         "contractGraphDigest",
@@ -324,12 +327,15 @@ def _validate_request(value: object) -> dict[str, Any]:
     ):
         if not isinstance(value.get(field), str) or SHA256_RE.fullmatch(value[field]) is None:
             raise ValueError(f"{field} must be sha256")
-    for field in (
-        "environmentAcceptanceRef",
-        "engineeringEligibilityRef",
-        "durableApprovalRef",
-    ):
-        _require_safe_string(value.get(field), field=field)
+    exact_ref_digests = {
+        "prodActivationAdmissionRef": "prodActivationAdmissionOciDigest",
+        "candidateMaterialManifestRef": "candidateMaterialManifestOciDigest",
+        "previousReleasedRef": "previousReleasedOciDigest",
+    }
+    for field, digest_field in exact_ref_digests.items():
+        ref = _require_safe_string(value.get(field), field=field)
+        if OCI_REF_RE.fullmatch(ref) is None or ref.rsplit("@", 1)[-1] != value[digest_field]:
+            raise ValueError(f"{field} must bind its exact immutable OCI digest")
     generation = value.get("expectedGeneration")
     if (
         not isinstance(generation, int)
@@ -343,7 +349,7 @@ def _validate_request(value: object) -> dict[str, Any]:
         validate_promotion_evidence(
             value["sloReadback"].get("promotionEvidence"),
             candidate_id=value.get("toCandidateDigest"),
-            artifact_digest=value.get("artifactDigest"),
+            candidate_material_id=value.get("candidateMaterialId"),
             stage=value.get("triggerStage"),
         )
     _validate_check_summaries(value.get("postChecks"), field="postChecks")
@@ -378,8 +384,17 @@ def _validate_soak_request(value: object) -> dict[str, Any]:
         raise ValueError("fullRolloutReceiptId is invalid")
     for field in (
         "candidateId",
-        "rolloutArtifactDigest",
-        "artifactDigest",
+        "candidateMaterialId",
+        "prodActivationAdmissionOciDigest",
+        "prodActivationAdmissionPayloadDigest",
+        "prodActivationAdmissionId",
+        "candidateMaterialManifestOciDigest",
+        "candidateMaterialManifestPayloadDigest",
+        "serviceFactoryOciDigest",
+        "appFactoryOciDigest",
+        "releasedOciDigest",
+        "releasedPayloadDigest",
+        "releasedId",
         "rolloutConfigDigest",
         "configGraphDigest",
         "contractGraphDigest",
@@ -391,6 +406,15 @@ def _validate_soak_request(value: object) -> dict[str, Any]:
             or SHA256_RE.fullmatch(value[field]) is None
         ):
             raise ValueError(f"{field} must be sha256")
+    exact_ref_digests = {
+        "prodActivationAdmissionRef": "prodActivationAdmissionOciDigest",
+        "candidateMaterialManifestRef": "candidateMaterialManifestOciDigest",
+        "releasedRef": "releasedOciDigest",
+    }
+    for field, digest_field in exact_ref_digests.items():
+        ref = _require_safe_string(value.get(field), field=field)
+        if OCI_REF_RE.fullmatch(ref) is None or ref.rsplit("@", 1)[-1] != value[digest_field]:
+            raise ValueError(f"{field} must bind its exact immutable OCI digest")
     if (
         not isinstance(value.get("sourceGitSha"), str)
         or re.fullmatch(r"[0-9a-f]{40}", value["sourceGitSha"]) is None
@@ -503,32 +527,23 @@ def _validate_soak_request(value: object) -> dict[str, Any]:
     approval = value.get("approval")
     if not isinstance(approval, dict) or set(approval) != SOAK_APPROVAL_FIELDS:
         raise ValueError("approval evidence has an invalid shape")
-    if approval.get("kind") != "github-reviewed-mainline":
-        raise ValueError("approval must use canonical reviewed-mainline authority")
+    if (
+        approval.get("kind") != "github-production-environment"
+        or approval.get("environment") != "production"
+    ):
+        raise ValueError("approval must use protected production environment authority")
     _require_safe_string(approval.get("repository"), field="approval.repository")
+    _require_safe_string(approval.get("workflowRunId"), field="approval.workflowRunId")
+    _require_safe_string(
+        approval.get("workflowRunAttempt"), field="approval.workflowRunAttempt"
+    )
+    _require_safe_string(approval.get("actor"), field="approval.actor")
     if approval.get("sourceGitSha") != value["sourceGitSha"]:
         raise ValueError("approval sourceGitSha differs from soak source")
-    if approval.get("artifactDigest") != value["artifactDigest"]:
-        raise ValueError("approval artifactDigest differs from soak artifact")
-    if (
-        not isinstance(approval.get("pullRequest"), int)
-        or isinstance(approval.get("pullRequest"), bool)
-        or approval["pullRequest"] < 1
-    ):
-        raise ValueError("approval pullRequest must be positive")
-    approvers = approval.get("approvers")
-    if (
-        not isinstance(approvers, list)
-        or not approvers
-        or any(not isinstance(item, str) or not item.strip() for item in approvers)
-    ):
-        raise ValueError("approval approvers must be non-empty identities")
-    if (
-        not isinstance(approval.get("distinctPrincipals"), int)
-        or isinstance(approval.get("distinctPrincipals"), bool)
-        or approval["distinctPrincipals"] < 2
-    ):
-        raise ValueError("approval lacks author/approver separation")
+    if approval.get("candidateMaterialId") != value["candidateMaterialId"]:
+        raise ValueError("approval candidateMaterialId differs from rollout material")
+    if approval.get("prodActivationAdmissionId") != value["prodActivationAdmissionId"]:
+        raise ValueError("approval ProdActivationAdmission identity drifted")
     if (
         not isinstance(approval.get("receiptDigest"), str)
         or SHA256_RE.fullmatch(approval["receiptDigest"]) is None

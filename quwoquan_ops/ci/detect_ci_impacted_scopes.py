@@ -45,6 +45,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--impact-plan", default="")
     parser.add_argument("--validate-impact-plan", default="")
     parser.add_argument("--expected-source-sha", default="")
+    parser.add_argument("--source-tree-digest", default="")
+    parser.add_argument("--expected-tree-digest", default="")
+    parser.add_argument(
+        "--execution-profile", choices=("pr", "promotion", "nightly", "manual"), default="pr"
+    )
     parser.add_argument("--expected-plan-digest", default="")
     parser.add_argument("--force-device", action="store_true")
     parser.add_argument(
@@ -176,7 +181,9 @@ def main() -> int:
         if args.validate_impact_plan:
             payload = json.loads(Path(args.validate_impact_plan).read_text(encoding="utf-8"))
             validated = validate_delivery_impact_plan(
-                payload, expected_source_sha=args.expected_source_sha
+                payload,
+                expected_source_sha=args.expected_source_sha,
+                expected_tree_digest=args.expected_tree_digest,
             )
             impacted = dict(validated["scopes"])
             if args.expected_plan_digest and validated["plan_digest"] != args.expected_plan_digest:
@@ -185,6 +192,7 @@ def main() -> int:
                 write_github_outputs(args.github_output, impacted)
                 with Path(args.github_output).open("a", encoding="utf-8") as handle:
                     handle.write(f"plan_digest={validated['plan_digest']}\n")
+                    handle.write(f"changed_paths_digest={validated['changed_paths_digest']}\n")
             for key, value in impacted.items():
                 print(f"{key}={'true' if value else 'false'}")
             print(f"plan_digest={validated['plan_digest']}")
@@ -212,15 +220,14 @@ def main() -> int:
                 classified["paths"],
                 source_sha=args.head_sha,
                 base_sha=args.base_sha,
+                head_sha=args.head_sha,
+                synthetic_sha=args.head_sha,
+                source_tree_digest=args.source_tree_digest,
+                execution_profile=args.execution_profile,
                 force_device=args.force_device,
                 fail_closed_empty=True,
+                required_scopes=args.required_scope,
             )
-            for required_scope in args.required_scope:
-                impact_plan["scopes"][required_scope] = True
-                impact_plan["states"][required_scope] = "required"
-            unsigned = dict(impact_plan)
-            unsigned.pop("plan_digest", None)
-            impact_plan["plan_digest"] = canonical_digest(unsigned)
             plan_path = Path(args.impact_plan)
             plan_path.parent.mkdir(parents=True, exist_ok=True)
             plan_path.write_text(
@@ -237,6 +244,7 @@ def main() -> int:
         if impact_plan is not None:
             with Path(args.github_output).open("a", encoding="utf-8") as handle:
                 handle.write(f"plan_digest={impact_plan['plan_digest']}\n")
+                handle.write(f"changed_paths_digest={impact_plan['changed_paths_digest']}\n")
     if args.scope_receipt:
         try:
             write_scope_receipt(

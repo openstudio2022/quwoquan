@@ -1,0 +1,136 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://quwoquan.local/quwoquan_ops/environments/evidence/prod_stage_attempt_fact.schema.json",
+  "title": "ProdStageAttemptFact v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "attemptId",
+    "admission",
+    "stage",
+    "attemptNumber",
+    "status",
+    "predecessor",
+    "evidence",
+    "hostedReceiptReadback",
+    "ociDigests",
+    "recordedAt"
+  ],
+  "properties": {
+    "schema": {
+      "const": "quwoquan_ops.prod_stage_attempt_fact.v1"
+    },
+    "attemptId": {
+      "$ref": "#/$defs/digest"
+    },
+    "admission": {
+      "$ref": "#/$defs/exactRef"
+    },
+    "stage": {
+      "enum": [
+        "canary",
+        "5",
+        "20",
+        "50",
+        "100"
+      ]
+    },
+    "attemptNumber": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "status": {
+      "enum": [
+        "passed",
+        "failed"
+      ]
+    },
+    "predecessor": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "$ref": "#/$defs/exactRef"
+        }
+      ]
+    },
+    "evidence": {
+      "$ref": "#/$defs/stageEvidence"
+    },
+    "hostedReceiptReadback": {
+      "$ref": "#/$defs/exactRef"
+    },
+    "ociDigests": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/digest"
+      }
+    },
+    "recordedAt": {
+      "$ref": "#/$defs/timestamp"
+    }
+  },
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "git": {
+      "type": "string",
+      "pattern": "^(?:[0-9a-f]{40}|[0-9a-f]{64})$"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "exactRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ref",
+        "digest"
+      ],
+      "properties": {
+        "ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "digest": {
+          "$ref": "#/$defs/digest"
+        }
+      }
+    },
+    "stageEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "activation",
+        "health",
+        "slo",
+        "placement",
+        "readback"
+      ],
+      "properties": {
+        "activation": {
+          "$ref": "#/$defs/exactRef"
+        },
+        "health": {
+          "$ref": "#/$defs/exactRef"
+        },
+        "slo": {
+          "$ref": "#/$defs/exactRef"
+        },
+        "placement": {
+          "$ref": "#/$defs/exactRef"
+        },
+        "readback": {
+          "$ref": "#/$defs/exactRef"
+        }
+      }
+    }
+  }
+}

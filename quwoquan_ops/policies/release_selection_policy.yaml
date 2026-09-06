@@ -1,0 +1,56 @@
+schema: quwoquan_ops.release_selection_policy.v1
+contractId: immutable-release-tag-v1
+semver:
+  version: 2.0.0
+  rcTagRegex: '^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)-rc\.([1-9][0-9]*)$'
+  stableTagRegex: '^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'
+  temporaryArtifactRegex: '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)-dev\.([0-9]{14})\.([1-9][0-9]*)\+sha\.([0-9a-f]{12})$'
+  temporaryArtifactCreatesGitRef: false
+releaseTrain:
+  maximumActive: 1
+  activationRequiresAny:
+    - previous_stable_imported
+    - initial_release_authority_approved
+tagObject:
+  representation: annotated
+  target: direct_commit
+  rejectLightweight: true
+  rejectTagOfTag: true
+  requiredReachabilityRef: refs/heads/main
+controller:
+  count: 1
+  identity: release-controller
+references:
+  create:
+    mode: create_only
+    allowedControllers: [release-controller]
+  update:
+    decision: denied
+    bypassActors: []
+  delete:
+    decision: denied
+    bypassActors: []
+releaseCandidate:
+  sequence: monotonically_increasing_positive_integer
+  reuse: denied
+  productionEligible: false
+stableSelection:
+  source: one_exact_qualified_rc
+  rebuild: denied
+  requiredExactBindings:
+    - peeledCommit
+    - sourceTree
+    - candidateMaterialManifest
+    - artifactBuildNumber
+    - artifactDigests
+    - qualificationFact
+    - productVersionManifestDigest
+    - productAuthorityFact
+    - releaseAuthorityFact
+  maximumStableTagsPerMaterial: 1
+production:
+  selector: ReleaseTagAdmissionFact
+  acceptedTagKind: stable
+  rcDenied: true
+  mainHeadDenied: true
+  mutablePointerDenied: true

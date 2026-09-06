@@ -98,7 +98,7 @@ class RolloutStagePromotionEvidenceTest(unittest.TestCase):
         return {
             "schema": evidence.SCHEMA,
             "authority": evidence.AUTHORITY,
-            "candidateId": DIGEST_A,
+            "releaseCompositionId": DIGEST_A,
             "artifactDigest": DIGEST_B,
             "campaignId": "release-test-campaign",
             "routingPolicyDigest": DIGEST_B,
@@ -153,10 +153,19 @@ class RolloutStagePromotionEvidenceTest(unittest.TestCase):
                     artifact_digest=DIGEST_B,
                     stage=stage,
                 )
+                hosted_projection = copy.deepcopy(projection)
+                hosted_projection["candidateMaterialId"] = hosted_projection.pop(
+                    "artifactDigest"
+                )
+                unsigned = dict(hosted_projection)
+                unsigned.pop("evidenceDigest")
+                hosted_projection["evidenceDigest"] = evidence.canonical_digest(
+                    unsigned
+                )
                 hosted_release_ledger.validate_promotion_evidence(
-                    projection,
+                    hosted_projection,
                     candidate_id=DIGEST_A,
-                    artifact_digest=DIGEST_B,
+                    candidate_material_id=DIGEST_B,
                     stage=stage,
                 )
 

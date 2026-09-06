@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://quwoquan.local/quwoquan_ops/environments/evidence/integration_qualification_fact.schema.json",
+  "title": "Exact dev1.0 IntegrationQualificationFact v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "qualificationId", "decision", "devRef", "devHead", "devTree", "candidate", "publishResult", "publishAdmission", "environmentChain", "impactPlanDigest", "issuedAt", "expiresAt", "signer"],
+  "properties": {
+    "schema": {"const": "quwoquan_ops.integration_qualification_fact.v1"},
+    "qualificationId": {"$ref": "#/$defs/digest"},
+    "decision": {"const": "qualified"},
+    "devRef": {"const": "refs/heads/dev1.0"},
+    "devHead": {"$ref": "#/$defs/git"},
+    "devTree": {"$ref": "#/$defs/git"},
+    "candidate": {"$ref": "#/$defs/candidate"},
+    "publishResult": {"$ref": "#/$defs/exactRef"},
+    "publishAdmission": {"$ref": "#/$defs/exactRef"},
+    "environmentChain": {
+      "type": "object", "additionalProperties": false,
+      "required": ["alpha", "beta", "gamma"],
+      "properties": {"alpha": {"$ref": "#/$defs/exactRef"}, "beta": {"$ref": "#/$defs/exactRef"}, "gamma": {"$ref": "#/$defs/exactRef"}}
+    },
+    "impactPlanDigest": {"$ref": "#/$defs/digest"},
+    "issuedAt": {"type": "string", "format": "date-time"},
+    "expiresAt": {"type": "string", "format": "date-time"},
+    "signer": {
+      "type": "object", "additionalProperties": false,
+      "required": ["identity", "payloadType", "payload", "signature"],
+      "properties": {
+        "identity": {"type": "string", "minLength": 1},
+        "payloadType": {"const": "application/vnd.quwoquan.integration-qualification-fact.v1+json"},
+        "payload": {"type": "string", "minLength": 1},
+        "signature": {"type": "string", "minLength": 1}
+      }
+    }
+  },
+  "$defs": {
+    "digest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+    "git": {"type": "string", "pattern": "^(?:[a-f0-9]{40}|[a-f0-9]{64})$"},
+    "exactRef": {"type": "object", "additionalProperties": false, "required": ["ref", "digest"], "properties": {"ref": {"type": "string", "minLength": 1}, "digest": {"$ref": "#/$defs/digest"}}},
+    "candidate": {"type": "object", "additionalProperties": false, "required": ["candidateId", "commit", "tree"], "properties": {"candidateId": {"$ref": "#/$defs/digest"}, "commit": {"$ref": "#/$defs/git"}, "tree": {"$ref": "#/$defs/git"}}}
+  }
+}

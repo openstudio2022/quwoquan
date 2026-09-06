@@ -134,14 +134,14 @@ class CommitGateFastPathTest(unittest.TestCase):
         self.assertIn("_with_shard_flags", source)
         self.assertIn("FLUTTER_TEST_SERIAL_MODE", source)
 
-    def test_delivery_gate_shards_app_tests(self) -> None:
+    def test_delivery_gate_never_runs_app_shards(self) -> None:
         source = DELIVERY_GATE.read_text(encoding="utf-8")
-        self.assertIn("quwoquan_app_tests:", source)
-        self.assertIn("quwoquan_app_serial:", source)
-        self.assertIn("quwoquan_app_static:", source)
-        self.assertIn("FLUTTER_TEST_TOTAL_SHARDS: \"4\"", source)
-        self.assertIn("FLUTTER_TEST_CONCURRENCY: \"8\"", source)
-        self.assertIn("GATE_APP_PHASE: tests", source)
+        for token in (
+            "quwoquan_app_tests:", "quwoquan_app_serial:", "quwoquan_app_static:",
+            "FLUTTER_TEST_TOTAL_SHARDS", "FLUTTER_TEST_CONCURRENCY", "GATE_APP_PHASE",
+        ):
+            self.assertNotIn(token, source)
+        self.assertIn("promotion_verify:", source)
 
     def test_commit_gate_script_has_fingerprint_and_budgets(self) -> None:
         source = COMMIT_GATE.read_text(encoding="utf-8")

@@ -184,7 +184,6 @@ class PublicFixtureSliceIdentityTest(unittest.TestCase):
             gate._validate_runtime_config_authority_parity(
                 issues,
                 ("alpha", "beta", "gamma"),
-                launch_policy="test_live",
             )
         self.assertEqual(issues, [])
 
@@ -220,7 +219,6 @@ class PublicFixtureSliceIdentityTest(unittest.TestCase):
             gate._validate_runtime_config_authority_parity(
                 issues,
                 ("prod",),
-                launch_policy="prod_release",
             )
         self.assertEqual(issues, [])
 

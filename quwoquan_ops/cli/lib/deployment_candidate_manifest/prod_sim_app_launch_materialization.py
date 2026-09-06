@@ -37,13 +37,14 @@ def materialize_prod_sim_app_launch_bundle_impl(
     from quwoquan_ops.cli import stackctl as _stackctl
 
     release_manifest = json.loads(release_manifest_path.read_text(encoding="utf-8"))
-    _stackctl.finalize_mainline_release_artifact.validate_manifest(
-        release_manifest,
-        allowed_statuses={"deployable", "released"},
+    from quwoquan_ops.ci.release_evidence_reader import (
+        validate_frozen_diagnostic_snapshot,
     )
-    _stackctl.finalize_mainline_release_artifact.validate_manifest_files(
-        artifact_root,
+
+    validate_frozen_diagnostic_snapshot(
         release_manifest,
+        artifact_dir=artifact_root,
+        allowed_statuses={"deployable", "released"},
     )
     source = release_manifest.get("source")
     release_source = {

@@ -32,8 +32,9 @@ def _repo() -> tempfile.TemporaryDirectory[str]:
 def _init(path: Path) -> None:
     subprocess.run(["git", "init", "-q"], cwd=path, check=True)
     subprocess.run(["git", "checkout", "-qb", "dev1.0"], cwd=path, check=True)
-    (path / "source.txt").write_text("one\n", encoding="utf-8")
-    subprocess.run(["git", "add", "source.txt"], cwd=path, check=True)
+    (path / "docs").mkdir()
+    (path / "docs/source.txt").write_text("one\n", encoding="utf-8")
+    subprocess.run(["git", "add", "docs/source.txt"], cwd=path, check=True)
     subprocess.run(
         [
             "git", "-c", "user.name=Fixture",
@@ -83,7 +84,7 @@ def test_queue_corruption_symlink_and_extra_fields_fail_closed(monkeypatch: pyte
     monkeypatch.setattr("lib.local_readiness.core.ROOT", repo)
     state = repo / "state"
     queue = state / "process/deferred-queue.json"
-    enqueue_paths(["source.txt"], state_root=state)
+    enqueue_paths(["docs/source.txt"], state_root=state)
 
     corruptions = [
         {"schema": "local-readiness-queue-v2", "items": [], "extra": True},
@@ -93,18 +94,18 @@ def test_queue_corruption_symlink_and_extra_fields_fail_closed(monkeypatch: pyte
     for value in corruptions:
         queue.write_text(json.dumps(value), encoding="utf-8")
         with pytest.raises(LocalReadinessError, match="queue"):
-            enqueue_paths(["source.txt"], state_root=state)
+            enqueue_paths(["docs/source.txt"], state_root=state)
 
     external = repo / "external-queue.json"
     external.write_text('{"schema":"local-readiness-queue-v2","items":[]}', encoding="utf-8")
     queue.unlink()
     queue.symlink_to(external)
     with pytest.raises(LocalReadinessError, match="regular file|symlink"):
-        enqueue_paths(["source.txt"], state_root=state)
+        enqueue_paths(["docs/source.txt"], state_root=state)
     queue.unlink()
     queue.mkdir()
     with pytest.raises(LocalReadinessError, match="regular file"):
-        enqueue_paths(["source.txt"], state_root=state)
+        enqueue_paths(["docs/source.txt"], state_root=state)
 
 
 def test_atomic_write_and_resource_lock_reject_destination_symlinks(tmp_path: Path) -> None:
@@ -143,7 +144,7 @@ def test_cache_read_rejects_symlink_before_reuse(tmp_path: Path) -> None:
         repo = Path(directory)
         _init(repo)
         state = repo / "state"
-        plan = plan_readiness(level="fast", paths=["source.txt"], repo_root=repo, mode="workspace", state_root=state)
+        plan = plan_readiness(level="fast", paths=["docs/source.txt"], repo_root=repo, mode="workspace", state_root=state)
         receipt = run_readiness(plan, repo_root=repo, state_root=state)
         cache = state / "cache/exact-input" / f"{receipt['fingerprint']['digest'].removeprefix('sha256:')}.json"
         external = Path(tempfile.mkdtemp()) / "external-cache.json"
@@ -163,7 +164,7 @@ def test_pointer_receipt_path_is_confined_and_reads_reject_symlinks(tmp_path: Pa
         repo = Path(directory)
         _init(repo)
         state = repo / "state"
-        plan = plan_readiness(level="fast", paths=["source.txt"], repo_root=repo, mode="workspace", state_root=state)
+        plan = plan_readiness(level="fast", paths=["docs/source.txt"], repo_root=repo, mode="workspace", state_root=state)
         receipt = run_readiness(plan, repo_root=repo, state_root=state)
         pointer = next((state / "process/receipts/current").glob("*.json"))
         immutable = state / "process/receipts/by-fingerprint" / f"{receipt['fingerprint']['digest'].removeprefix('sha256:')}.json"
@@ -175,7 +176,7 @@ def test_pointer_receipt_path_is_confined_and_reads_reject_symlinks(tmp_path: Pa
             value["receipt"] = raw
             pointer.write_text(json.dumps(value), encoding="utf-8")
             with pytest.raises(LocalReadinessError, match="canonical|receipt"):
-                verify_receipt(level="fast", paths=["source.txt"], repo_root=repo, mode="workspace", state_root=state)
+                verify_receipt(level="fast", paths=["docs/source.txt"], repo_root=repo, mode="workspace", state_root=state)
 
         value = {"schema": "local-readiness-current-pointer-v1", "receipt": str(immutable), "fingerprint": receipt["fingerprint"]["ref"]}
         pointer.write_text(json.dumps(value), encoding="utf-8")
@@ -183,20 +184,20 @@ def test_pointer_receipt_path_is_confined_and_reads_reject_symlinks(tmp_path: Pa
         pointer.replace(pointer_target)
         pointer.symlink_to(pointer_target)
         with pytest.raises(LocalReadinessError, match="pointer.*regular file|pointer.*symlink"):
-            verify_receipt(level="fast", paths=["source.txt"], repo_root=repo, mode="workspace", state_root=state)
+            verify_receipt(level="fast", paths=["docs/source.txt"], repo_root=repo, mode="workspace", state_root=state)
 
         pointer.unlink()
         pointer.mkdir()
         with pytest.raises(LocalReadinessError, match="pointer.*regular file"):
-            verify_receipt(level="fast", paths=["source.txt"], repo_root=repo, mode="workspace", state_root=state)
+            verify_receipt(level="fast", paths=["docs/source.txt"], repo_root=repo, mode="workspace", state_root=state)
         pointer.rmdir()
         pointer_target.replace(pointer)
         receipt_target = repo / "receipt-target.json"
         immutable.replace(receipt_target)
         immutable.symlink_to(receipt_target)
         with pytest.raises(LocalReadinessError, match="receipt.*regular file|receipt.*symlink"):
-            verify_receipt(level="fast", paths=["source.txt"], repo_root=repo, mode="workspace", state_root=state)
+            verify_receipt(level="fast", paths=["docs/source.txt"], repo_root=repo, mode="workspace", state_root=state)
         immutable.unlink()
         immutable.mkdir()
         with pytest.raises(LocalReadinessError, match="receipt.*regular file"):
-            verify_receipt(level="fast", paths=["source.txt"], repo_root=repo, mode="workspace", state_root=state)
+            verify_receipt(level="fast", paths=["docs/source.txt"], repo_root=repo, mode="workspace", state_root=state)

@@ -9,8 +9,8 @@ on:
       source_sha:
         description: Exact reviewed main commit SHA
         required: true
-      release_evidence_ref:
-        description: Exact deployable ReleaseEvidenceManifest OCI ref
+      legacy_non_promotable_snapshot_ref:
+        description: Exact legacy non-promotable snapshot OCI ref
         required: true
 
 concurrency:
@@ -78,7 +78,7 @@ jobs:
           set -euo pipefail
           ROOT="$QWQ_OUTPUT_ROOT/env/prod/runs/prod-sim-admission/release"
           python3 quwoquan_ops/ci/consume_released_release_evidence.py \
-            --ref "${{ inputs.release_evidence_ref }}" \
+            --ref "${{ inputs.legacy_non_promotable_snapshot_ref }}" \
             --repository "${{ github.repository }}" \
             --require-status deployable \
             --expected-source-sha "${{ inputs.source_sha }}" \
@@ -130,7 +130,7 @@ jobs:
             --ssh-host "$PROD_SIM_SSH_MANAGEMENT_HOST" \
             --data-mode isolated \
             --prevalidate-scope first-party \
-            --release-manifest "$QWQ_OUTPUT_ROOT/env/prod/runs/prod-sim-admission/release/manifest.json" \
+            --legacy-non-promotable-snapshot "$QWQ_OUTPUT_ROOT/env/prod/runs/prod-sim-admission/release/manifest.json" \
             --report-dir "$QWQ_OUTPUT_ROOT/env/prod/runs/prod-sim-admission/prevalidate"
       - name: Prove the rehearsal cannot become release evidence
         run: |

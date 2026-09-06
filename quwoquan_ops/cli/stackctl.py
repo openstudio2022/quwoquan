@@ -89,7 +89,6 @@ from quwoquan_ops.cli.lib.official_distribution_release import (
     OfficialDistributionReleaseError, deploy_official_distribution, inspect_official_distribution,
 )
 from quwoquan_ops.cli.prod import collect_release_artifact_descriptors
-from quwoquan_ops.cli.prod import finalize_mainline_release_artifact
 from quwoquan_ops.cli.prod import hosted_release_ledger
 from quwoquan_ops.cli.prod import oci_supply_chain
 from quwoquan_ops.cli.prod import rollout_stage_promotion_evidence
@@ -506,7 +505,7 @@ from quwoquan_ops.cli.commands.package_runtime import (
 )
 from quwoquan_ops.cli.commands.package_shared import (
     _build_package_bound_local_images, _build_runtime_shared_package,
-    _command_package_legal_static, _command_package_ops_portal, _command_package_release_manifest,
+    _command_package_legal_static, _command_package_ops_portal,
 )
 from quwoquan_ops.cli.commands.premium_pool import command_premium_pool
 from quwoquan_ops.cli.commands.prod_hosted_plan import command_prod_hosted_plan
@@ -574,13 +573,12 @@ from quwoquan_ops.cli.commands.runtime_artifact_identity_mount import (
 from quwoquan_ops.cli.commands.runtime_image_composition import (
     _apply_gamma_image_composition,
     _bind_gamma_build_service_image_refs, _bind_gamma_packaged_configuration_digest,
-    _bind_gamma_packaged_service_image_refs, _bind_gamma_release_image_refs,
-    _bind_gamma_release_teardown_image_refs,
+    _bind_gamma_packaged_service_image_refs,
     _build_missing_runtime_images,
     _build_provider_runtime_images, _load_gamma_runtime_image_composition,
     _load_package_bound_local_image_composition,
     _packaged_service_source_image_ref, _provider_runtime_build_specs,
-    _resolve_gamma_release_image_composition, _runtime_image_build_spec,
+    _runtime_image_build_spec,
     _sha256_file, _sha256_tree,
 )
 from quwoquan_ops.cli.commands.runtime_progress_output import (
@@ -627,12 +625,12 @@ from quwoquan_ops.cli.commands.provider_conformance_domain import (
 )
 from quwoquan_ops.cli.commands.deploy_prod_finalize import _deploy_prod_hosted_finalize
 from quwoquan_ops.cli.commands.deploy_release_inputs import (
-    _decision_from_slo_output, _deployable_release_manifest, _emit_prod_rollout_canary_traffic,
-    _load_prod_environment_acceptance, _materialize_prevalidation_release_manifest,
-    _prevalidation_release_manifest,
+    _decision_from_slo_output, _emit_prod_rollout_canary_traffic,
+    _load_prod_activation_admission, _materialize_frozen_diagnostic_snapshot,
+    _frozen_diagnostic_snapshot,
     _prod_rollout_contract, _prod_rollout_workloads, _prometheus_query_value, _read_prometheus_slo,
     _read_recommendation_slo, _release_transport_tag, _resolve_prod_rollout_stage,
-    _slo_settle_seconds, _validate_release_artifacts, _verify_release_registry_attestations,
+    _slo_settle_seconds, _verify_release_registry_attestations,
 )
 from quwoquan_ops.cli.commands.deploy_rollout import _command_deploy_with_lock
 from quwoquan_ops.cli.commands.deploy_release_state import (
@@ -880,8 +878,7 @@ def print_result(args: argparse.Namespace, payload: dict[str, Any]) -> int:
     return int(payload.get("exitCode", 0))
 
 
-# `_command_package_legal_static` / `_command_package_ops_portal` /
-# `_command_package_release_manifest` 已迁往
+# `_command_package_legal_static` / `_command_package_ops_portal` 已迁往
 # quwoquan_ops/cli/commands/package_shared.py（仅 package 域消费），
 # 顶部 import 再导出保持 stackctl 命名空间与测试 patch 语义;
 # verify_ci_cd_evidence_contracts.py 的 SCOPED_FUNCTIONS 已随定义位置同步。

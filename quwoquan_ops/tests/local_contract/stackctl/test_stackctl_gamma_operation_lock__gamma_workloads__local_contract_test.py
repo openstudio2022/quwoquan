@@ -160,6 +160,16 @@ class StackctlGammaOperationLockContractTest(
                     "resolve_report_dir",
                     return_value=report_dir,
                 ),
+                mock.patch.object(
+                    stackctl,
+                    "validate_up_report_dir",
+                    side_effect=lambda path, **_kwargs: Path(path),
+                ),
+                mock.patch.object(
+                    stackctl,
+                    "local_runtime_capacity_evidence",
+                    return_value={"issues": []},
+                ),
                 mock.patch.object(stackctl, "_gamma_env_from_port_manifest", return_value={}),
                 mock.patch.object(
                     stackctl,
@@ -272,6 +282,16 @@ class StackctlGammaOperationLockContractTest(
                 ),
                 mock.patch.object(
                     stackctl,
+                    "validate_up_report_dir",
+                    side_effect=lambda path, **_kwargs: Path(path),
+                ),
+                mock.patch.object(
+                    stackctl,
+                    "local_runtime_capacity_evidence",
+                    return_value={"issues": []},
+                ),
+                mock.patch.object(
+                    stackctl,
                     "_gamma_env_from_port_manifest",
                     return_value={},
                 ),
@@ -350,6 +370,16 @@ class StackctlGammaOperationLockContractTest(
                     stackctl,
                     "resolve_report_dir",
                     return_value=report_dir,
+                ),
+                mock.patch.object(
+                    stackctl,
+                    "validate_up_report_dir",
+                    side_effect=lambda path, **_kwargs: Path(path),
+                ),
+                mock.patch.object(
+                    stackctl,
+                    "local_runtime_capacity_evidence",
+                    return_value={"issues": []},
                 ),
                 mock.patch.object(stackctl, "_gamma_env_from_port_manifest", return_value={}),
                 mock.patch.object(

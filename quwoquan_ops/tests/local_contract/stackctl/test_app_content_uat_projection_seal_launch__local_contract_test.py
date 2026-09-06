@@ -28,7 +28,11 @@ def test_run_sh_has_no_unmanifested_projection_escape_hatch() -> None:
     assert "reject_unmanifested=False" not in launcher
     assert "seal_app_content_projection_build" in launcher
     assert "prepare_workspace_launch_projection.py" in launcher
-    assert 'exec "$QWQ_WORKSPACE_PROJECTION_ROOT/quwoquan_app/run.sh" "$@"' in launcher
+    assert 'PROJECTED_APP_DIR="$QWQ_WORKSPACE_PROJECTION_ROOT/quwoquan_app"' in launcher
+    assert (
+        'exec "$PROJECTED_APP_DIR/run.sh" "${ORIGINAL_LAUNCH_ARGUMENTS[@]}"'
+        in launcher
+    )
     assert 'EXPECTED_PRIVATE_PUB_CACHE="$APP_DIR/.dart_tool/qwq_pub_cache"' in launcher
     assert "prepare_flutter_dependencies.py" in launcher
     assert "--source-capsule-manifest" in launcher

@@ -17,7 +17,7 @@ from quwoquan_ops.ci import prepare_app_pipeline_inputs as subject
 
 ROOT = Path(__file__).resolve().parents[4]
 WORKFLOW = ROOT / ".github/workflows/app_pipeline.yml"
-DELIVERY_WORKFLOW = ROOT / ".github/workflows/delivery-gate.yml"
+QUALIFICATION_WORKFLOW = ROOT / ".github/workflows/release-qualification.yml"
 SHA256_A = "sha256:" + "a" * 64
 SOURCE = subject.SourceIdentity(
     git_sha="1" * 40,
@@ -307,27 +307,62 @@ def test_web_preparation_has_no_mobile_trust_output_but_keeps_fresh_dependency_s
 def test_hosted_workflow_passes_exact_fresh_outputs_to_every_package() -> None:
     source = WORKFLOW.read_text(encoding="utf-8")
     document = yaml.load(source, Loader=yaml.BaseLoader)
+    workflow_call = document["on"]["workflow_call"]
     product = document["jobs"]["product"]
     steps = product["steps"]
 
-    assert product["runs-on"] == "macos-latest"
-    assert int(product["timeout-minutes"]) == 30
-    delivery_document = yaml.load(
-        DELIVERY_WORKFLOW.read_text(encoding="utf-8"),
+    assert set(workflow_call["inputs"]) == {
+        "source_git_sha",
+        "qualification_request_ref",
+        "qualification_request_digest",
+        "rc_tag_admission_ref",
+        "artifact_build_number",
+        "artifact_build_number_allocation_ref",
+        "artifact_build_number_allocation_digest",
+    }
+    assert all(
+        value["required"] == "true"
+        for value in workflow_call["inputs"].values()
+    )
+    callers = [
+        path
+        for path in sorted((ROOT / ".github/workflows").glob("*.yml"))
+        if "uses: ./.github/workflows/app_pipeline.yml"
+        in path.read_text(encoding="utf-8")
+    ]
+    assert callers == [QUALIFICATION_WORKFLOW]
+    qualification = yaml.load(
+        QUALIFICATION_WORKFLOW.read_text(encoding="utf-8"),
         Loader=yaml.BaseLoader,
     )
-    delivery_packaging = delivery_document["jobs"]["quwoquan_service_packaging"]
-    assert int(delivery_packaging["timeout-minutes"]) == 40
-    strict_inputs = next(
-        step
-        for step in delivery_packaging["steps"]
-        if step.get("id") == "strict_inputs"
-    )
-    assert int(strict_inputs["timeout-minutes"]) == 30
-    assert subject._DEPENDENCY_SYNC_TIMEOUT_SECONDS < min(
-        int(product["timeout-minutes"]),
-        int(delivery_packaging["timeout-minutes"]),
+    app_factory = qualification["jobs"]["app_factory"]
+    assert app_factory["uses"] == "./.github/workflows/app_pipeline.yml"
+    assert app_factory["with"] == {
+        "source_git_sha": "${{ inputs.source_git_sha }}",
+        "qualification_request_ref": "${{ inputs.qualification_request_ref }}",
+        "qualification_request_digest": (
+            "${{ needs.allocate_build_number.outputs.request_digest }}"
+        ),
+        "rc_tag_admission_ref": "${{ inputs.rc_tag_admission_ref }}",
+        "artifact_build_number": (
+            "${{ needs.allocate_build_number.outputs.artifact_build_number }}"
+        ),
+        "artifact_build_number_allocation_ref": (
+            "${{ needs.allocate_build_number.outputs.allocation_ref }}"
+        ),
+        "artifact_build_number_allocation_digest": (
+            "${{ needs.allocate_build_number.outputs.allocation_digest }}"
+        ),
+    }
+
+    assert product["runs-on"] == "macos-latest"
+    assert int(product["timeout-minutes"]) == 30
+    assert subject._DEPENDENCY_SYNC_TIMEOUT_SECONDS < int(
+        product["timeout-minutes"]
     ) * 60
+    authority_index = next(
+        index for index, step in enumerate(steps) if step.get("id") == "rc_authority"
+    )
     prepare_index = next(
         index for index, step in enumerate(steps) if step.get("id") == "strict_inputs"
     )
@@ -336,7 +371,7 @@ def test_hosted_workflow_passes_exact_fresh_outputs_to_every_package() -> None:
         for index, step in enumerate(steps)
         if "stackctl.py --output-format json package" in str(step.get("run", ""))
     )
-    assert prepare_index < package_index
+    assert authority_index < prepare_index < package_index
     prepare_step = steps[prepare_index]
     assert "prepare_app_pipeline_inputs.py" in prepare_step["run"]
     assert "--build-product-id" in prepare_step["run"]
@@ -354,9 +389,21 @@ def test_hosted_workflow_passes_exact_fresh_outputs_to_every_package() -> None:
     assert package_step["env"]["QWQ_COCOAPODS_EXECUTABLE"] == (
         "${{ steps.strict_inputs.outputs.cocoapods_executable }}"
     )
+    assert package_step["env"]["QWQ_ARTIFACT_BUILD_NUMBER"] == (
+        "${{ inputs.artifact_build_number }}"
+    )
+    package_run = package_step["run"]
+    for binding in (
+        "QWQ_ARTIFACT_BUILD_NUMBER_ALLOCATION_REF='${{ inputs.artifact_build_number_allocation_ref }}'",
+        "QWQ_ARTIFACT_BUILD_NUMBER_ALLOCATION_DIGEST='${{ inputs.artifact_build_number_allocation_digest }}'",
+        "QWQ_QUALIFICATION_REQUEST_REF='${{ inputs.qualification_request_ref }}'",
+        "QWQ_QUALIFICATION_REQUEST_DIGEST='${{ inputs.qualification_request_digest }}'",
+        "QWQ_RC_TAG_ADMISSION_REF='${{ inputs.rc_tag_admission_ref }}'",
+    ):
+        assert binding in package_run
     assert (
         "QWQ_APP_RUNTIME_CONFIG_PROD_TRUSTED_PUBLIC_KEYS_JSON"
-        in document["on"]["workflow_call"]["secrets"]
+        in workflow_call["secrets"]
     )
     assert "actions/cache" not in prepare_step["run"]
 

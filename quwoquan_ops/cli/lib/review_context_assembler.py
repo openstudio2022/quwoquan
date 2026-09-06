@@ -117,25 +117,109 @@ def _context_projection(
     return projected, changes
 
 
-def _diff_summary(changed_paths: Sequence[str], *, repo_root: Path) -> dict[str, Any]:
+def _diff_summary(
+    changed_paths: Sequence[str], *, repo_root: Path, projection: str,
+    paths_ref: str,
+) -> dict[str, Any]:
+    digest = sha256_digest(canonical_json_bytes(list(changed_paths)))
+    if projection == "ref":
+        return {
+            "changed_path_count": len(changed_paths),
+            "changed_paths_digest": digest,
+            "paths": [],
+            "paths_projection": {
+                "operation": "candidate_evidence_ref",
+                "ref": paths_ref,
+                "original_count": len(changed_paths),
+                "original_digest": digest,
+            },
+        }
     rows: list[dict[str, Any]] = []
     for relative in changed_paths:
         path = repo_root / relative
         exists = path.is_file() and not path.is_symlink()
-        raw = path.read_bytes() if exists else b""
-        rows.append(
-            {
-                "path": relative,
-                "exists": exists,
-                "byte_count": len(raw),
-                "content_digest": sha256_digest(raw) if exists else None,
-            }
-        )
+        raw = path.read_bytes() if exists and projection == "full" else b""
+        row = {"path": relative, "exists": exists}
+        if projection == "full":
+            row.update(
+                {
+                    "byte_count": len(raw),
+                    "content_digest": sha256_digest(raw) if exists else None,
+                }
+            )
+        rows.append(row)
     return {
         "changed_path_count": len(changed_paths),
-        "changed_paths_digest": sha256_digest(canonical_json_bytes(list(changed_paths))),
+        "changed_paths_digest": digest,
         "paths": rows,
     }
+
+
+def _compact_artifact(
+    artifact: Mapping[str, Any], *, projection: str
+) -> dict[str, Any]:
+    projected = dict(artifact)
+    raw_findings = artifact.get("findings")
+    if projection == "full" or not isinstance(raw_findings, Sequence):
+        return projected
+    projected["findings"] = (
+        []
+        if projection == "ref"
+        else [
+            {
+                key: finding[key]
+                for key in ("code", "path", "terminal", "symbol", "recovery")
+                if key in finding
+            }
+            for finding in raw_findings
+            if isinstance(finding, Mapping) and finding.get("terminal") != "PASS"
+        ]
+    )
+    projected["findings_projection"] = {
+        "operation": (
+            "artifact_report_ref" if projection == "ref" else "terminal_finding_identity"
+        ),
+        "original_count": len(raw_findings),
+        "projected_count": len(projected["findings"]),
+        "original_digest": sha256_digest(canonical_json_bytes(raw_findings)),
+        "report_ref": artifact.get("ref"),
+        "report_digest": artifact.get("canonical_bytes_sha256"),
+        "omitted_fields": (
+            ["all"] if projection == "ref" else ["message", "measure", "sourcePath"]
+        ),
+        "omitted_pass_findings": projection != "ref",
+    }
+    return projected
+
+
+def _evidence_results(
+    raw_results: object, *, artifact_projection: str
+) -> tuple[list[object], list[dict[str, Any]]]:
+    if not isinstance(raw_results, Sequence):
+        return [], []
+    projected: list[object] = []
+    changes: list[dict[str, Any]] = []
+    for index, raw in enumerate(raw_results):
+        if not isinstance(raw, Mapping):
+            projected.append(raw)
+            continue
+        item = dict(raw)
+        artifact = item.get("artifact")
+        if artifact_projection != "full" and isinstance(artifact, Mapping):
+            item["artifact"] = _compact_artifact(
+                artifact, projection=artifact_projection
+            )
+            changes.append(
+                {
+                    "component": f"evidence_summary.results[{index}].artifact.findings",
+                    "operation": item["artifact"]["findings_projection"]["operation"],
+                    "original_byte_count": len(canonical_json_bytes(artifact)),
+                    "assembled_byte_count": len(canonical_json_bytes(item["artifact"])),
+                    "original_digest": sha256_digest(canonical_json_bytes(artifact)),
+                }
+            )
+        projected.append(item)
+    return projected, changes
 
 
 def _assemble_candidate(
@@ -143,6 +227,7 @@ def _assemble_candidate(
     evidence_summary: Mapping[str, Any], system_prompt: str, role_prompt: str,
     checklist_prompt: str, grading_prompt: str, repo_root: Path,
     include_context_content: bool, per_context_bytes: int, finding_summary_bytes: int,
+    path_projection: str, artifact_projection: str,
 ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     contexts, context_changes = _context_projection(
         [item for item in plan.get("contexts", []) if isinstance(item, Mapping)],
@@ -152,6 +237,10 @@ def _assemble_candidate(
     )
     findings, finding_changes = _compact_findings(
         evidence_summary.get("findings") or [], max_summary_bytes=finding_summary_bytes
+    )
+    raw_results = evidence_summary.get("results") or evidence_summary.get("evidence") or []
+    results, result_changes = _evidence_results(
+        raw_results, artifact_projection=artifact_projection
     )
     owner = dict(plan.get("owner_identity") or {})
     candidate = {
@@ -180,17 +269,39 @@ def _assemble_candidate(
             },
         },
         "changed_paths_and_diff_summary": _diff_summary(
-            [str(item) for item in plan.get("changed_paths") or []], repo_root=repo_root
+            [str(item) for item in plan.get("changed_paths") or []],
+            repo_root=repo_root,
+            projection=path_projection,
+            paths_ref=str(
+                (plan.get("candidate_evidence_identity") or {}).get("ref") or ""
+            ),
         ),
         "evidence_summary": {
             "identity": dict(evidence_identity),
             "terminal": evidence_summary.get("terminal"),
-            "results": evidence_summary.get("results") or evidence_summary.get("evidence") or [],
+            "results": results,
             **findings,
         },
         "relevant_contexts": contexts,
     }
-    return candidate, [*context_changes, *finding_changes]
+    if path_projection != "full":
+        changed_paths = [str(item) for item in plan.get("changed_paths") or []]
+        context_changes.append(
+            {
+                "component": "changed_paths_and_diff_summary.paths",
+                "operation": (
+                    "path_identity_only"
+                    if path_projection == "identity"
+                    else "candidate_evidence_ref"
+                ),
+                "original_byte_count": len(canonical_json_bytes(changed_paths)),
+                "assembled_byte_count": len(
+                    canonical_json_bytes(candidate["changed_paths_and_diff_summary"])
+                ),
+                "original_digest": candidate["changed_paths_and_diff_summary"]["changed_paths_digest"],
+            }
+        )
+    return candidate, [*context_changes, *finding_changes, *result_changes]
 
 
 def assemble_reviewer_context(
@@ -200,12 +311,13 @@ def assemble_reviewer_context(
 ) -> dict[str, Any]:
     """Assemble the exact final reviewer payload, structurally compressing before refusal."""
     passes = (
-        ("full", True, 8192, 4096),
-        ("structured_compression", True, 2048, 1024),
-        ("refs_and_marked_truncation", False, 0, 256),
+        ("full", True, 8192, 4096, "full", "full"),
+        ("structured_compression", True, 2048, 1024, "identity", "identity"),
+        ("refs_and_marked_truncation", False, 0, 256, "ref", "identity"),
+        ("refs_only", False, 0, 128, "ref", "ref"),
     )
     attempts: list[dict[str, Any]] = []
-    for mode, include_content, context_bytes, finding_bytes in passes:
+    for mode, include_content, context_bytes, finding_bytes, path_projection, artifact_projection in passes:
         candidate, changes = _assemble_candidate(
             plan=plan,
             reviewer=reviewer,
@@ -219,6 +331,8 @@ def assemble_reviewer_context(
             include_context_content=include_content,
             per_context_bytes=context_bytes,
             finding_summary_bytes=finding_bytes,
+            path_projection=path_projection,
+            artifact_projection=artifact_projection,
         )
         raw = canonical_json_bytes(candidate)
         attempts.append({"mode": mode, "byte_count": len(raw), "digest": sha256_digest(raw)})

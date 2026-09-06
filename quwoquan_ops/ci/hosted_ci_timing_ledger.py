@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
-"""Append-only hosted authority for canonical CI timing evidence."""
-
+"""Append-only hosted authority for promotion samples and diagnostic summaries."""
 from __future__ import annotations
 
 import argparse
@@ -16,15 +15,22 @@ import re
 import sys
 from typing import Any, Mapping
 
+sys.dont_write_bytecode = True
 
-AUTHORITY = "prod-hosted-ci-timing"
-CANONICAL_SCHEMA = "ci-timing-summary"
+ROOT = Path(__file__).resolve().parents[2]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from quwoquan_ops.ci import promotion_timing_ratchet as ratchet
+
+AUTHORITY = "prod-hosted-promotion-timing"
+DIAGNOSTIC_SCHEMA = "ci-timing-summary"
 AUTHORITY_MARKER = ".authority"
 SHA256_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
 GIT_SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 RUN_ID_RE = re.compile(r"^[1-9][0-9]{0,19}$")
 EXACT_OCI_REF_RE = re.compile(
-    r"^ghcr\.io/[a-z0-9._/-]+/ci-timing-summary@(?P<digest>sha256:[0-9a-f]{64})$"
+    r"^ghcr\.io/[a-z0-9._/-]+/(?P<artifact>ci-timing-summary|promotion-timing-sample)@(?P<digest>sha256:[0-9a-f]{64})$"
 )
 SUMMARY_KEYS = frozenset(
     {
@@ -35,6 +41,7 @@ SUMMARY_KEYS = frozenset(
         "sourceGitSha",
         "candidateDigest",
         "status",
+        "outcomePolicy",
         "timestamps",
         "durations",
         "budget",
@@ -44,36 +51,46 @@ SUMMARY_KEYS = frozenset(
         "notes",
     }
 )
-RECORD_KEYS = frozenset(
+DIAGNOSTIC_RECORD_KEYS = frozenset(
     {
         "authority",
+        "recordKind",
         "recordDigest",
         "candidateDigest",
         "workflowRunId",
         "sourceGitSha",
-        "timingEvidenceRef",
-        "timingEvidenceDigest",
-        "timingSummaryDigest",
-        "timingSummary",
+        "evidenceRef",
+        "evidenceDigest",
+        "payloadDigest",
+        "payload",
+    }
+)
+SAMPLE_RECORD_KEYS = frozenset(
+    {
+        "authority",
+        "recordKind",
+        "recordDigest",
+        "observationId",
+        "eventId",
+        "repository",
+        "workflowRunId",
+        "runAttempt",
+        "policyEpoch",
+        "evidenceRef",
+        "evidenceDigest",
+        "payloadDigest",
+        "payload",
     }
 )
 STATUS_VALUES = frozenset(
-    {
-        "within_budget",
-        "released_over_soft_budget",
-        "failed",
-        "historical_incomplete",
-    }
+    {"within_budget", "released_over_soft_budget", "failed", "historical_incomplete"}
 )
-MAX_SUMMARY_BYTES = 1024 * 1024
+MAX_PAYLOAD_BYTES = 1024 * 1024
 
 
 def _canonical_bytes(value: object) -> bytes:
     return json.dumps(
-        value,
-        ensure_ascii=False,
-        separators=(",", ":"),
-        sort_keys=True,
+        value, ensure_ascii=False, separators=(",", ":"), sort_keys=True
     ).encode("utf-8")
 
 
@@ -112,10 +129,11 @@ def _require_timestamp(value: object, *, field: str) -> str:
 
 
 def validate_summary(value: object) -> dict[str, Any]:
+    """Validate the generic per-run diagnostic; it is not ratchet authority."""
     if not isinstance(value, dict) or set(value) != SUMMARY_KEYS:
-        raise ValueError("CiTimingSummary has a non-canonical shape")
+        raise ValueError("CiTimingSummary has a non-canonical diagnostic shape")
     _reject_forbidden_fields(value)
-    if value.get("schema") != CANONICAL_SCHEMA:
+    if value.get("schema") != DIAGNOSTIC_SCHEMA:
         raise ValueError("CiTimingSummary schema is not canonical")
     _require_timestamp(value.get("generatedAt"), field="generatedAt")
     run_id = str(value.get("workflowRunId") or "")
@@ -131,7 +149,7 @@ def validate_summary(value: object) -> dict[str, Any]:
         raise ValueError("CiTimingSummary status is invalid")
     if not isinstance(value.get("workflow"), dict):
         raise ValueError("workflow must be an object")
-    for field in ("timestamps", "durations", "budget", "criticalPath"):
+    for field in ("outcomePolicy", "timestamps", "durations", "budget", "criticalPath"):
         if not isinstance(value.get(field), dict):
             raise ValueError(f"{field} must be an object")
     if not isinstance(value.get("phases"), list):
@@ -145,52 +163,117 @@ def validate_summary(value: object) -> dict[str, Any]:
     return dict(value)
 
 
-def _read_summary(path: Path) -> tuple[dict[str, Any], bytes]:
+def validate_promotion_sample(value: object) -> dict[str, Any]:
+    return ratchet.validate_sample(value)
+
+
+def _read_json(path: Path) -> tuple[object, bytes]:
     if path.is_symlink() or not path.is_file():
-        raise ValueError("CiTimingSummary file is missing or unsafe")
+        raise ValueError("timing evidence file is missing or unsafe")
     raw = path.read_bytes()
-    if not raw or len(raw) > MAX_SUMMARY_BYTES:
-        raise ValueError("CiTimingSummary file size is invalid")
+    if not raw or len(raw) > MAX_PAYLOAD_BYTES:
+        raise ValueError("timing evidence file size is invalid")
     try:
         value = json.loads(raw.decode("utf-8"))
     except (UnicodeDecodeError, json.JSONDecodeError) as error:
-        raise ValueError("CiTimingSummary is not valid UTF-8 JSON") from error
+        raise ValueError("timing evidence is not valid UTF-8 JSON") from error
+    return value, raw
+
+
+def _read_summary(path: Path) -> tuple[dict[str, Any], bytes]:
+    value, raw = _read_json(path)
     return validate_summary(value), raw
 
 
-def _validate_exact_oci(ref: str, digest: str) -> None:
+def _read_sample(path: Path) -> tuple[dict[str, Any], bytes]:
+    value, raw = _read_json(path)
+    return validate_promotion_sample(value), raw
+
+
+def _validate_exact_oci(ref: str, digest: str, *, artifact: str | None = None) -> None:
     match = EXACT_OCI_REF_RE.fullmatch(ref)
     if match is None:
         raise ValueError("timing evidence ref must be an exact GHCR OCI digest ref")
+    if artifact is not None and match.group("artifact") != artifact:
+        raise ValueError("timing evidence OCI artifact kind is invalid")
     if SHA256_RE.fullmatch(digest) is None or match.group("digest") != digest:
         raise ValueError("timing evidence ref and digest do not match")
+
+
+def _build_record(
+    *,
+    record_kind: str,
+    payload: Mapping[str, Any],
+    raw_payload: bytes,
+    evidence_ref: str,
+    evidence_digest: str,
+) -> dict[str, Any]:
+    if not raw_payload or len(raw_payload) > MAX_PAYLOAD_BYTES:
+        raise ValueError("timing evidence source bytes are invalid")
+    try:
+        decoded = json.loads(raw_payload.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise ValueError("timing evidence source bytes are not valid JSON") from error
+    if decoded != dict(payload):
+        raise ValueError("timing evidence source bytes do not match the bound payload")
+    artifact = "promotion-timing-sample" if record_kind == "promotion_sample" else "ci-timing-summary"
+    _validate_exact_oci(evidence_ref, evidence_digest, artifact=artifact)
+    common: dict[str, Any] = {
+        "authority": AUTHORITY,
+        "recordKind": record_kind,
+        "evidenceRef": evidence_ref,
+        "evidenceDigest": evidence_digest,
+        "payloadDigest": _sha256(raw_payload),
+        "payload": dict(payload),
+    }
+    if record_kind == "promotion_sample":
+        common.update(
+            {
+                "observationId": payload["observationId"],
+                "eventId": payload["eventId"],
+                "repository": payload["repository"],
+                "workflowRunId": payload["workflowRunId"],
+                "runAttempt": payload["runAttempt"],
+                "policyEpoch": payload["policyEpoch"],
+            }
+        )
+    else:
+        common.update(
+            {
+                "candidateDigest": payload["candidateDigest"],
+                "workflowRunId": payload["workflowRunId"],
+                "sourceGitSha": payload["sourceGitSha"],
+            }
+        )
+    common["recordDigest"] = _sha256(_canonical_bytes(common))
+    return common
 
 
 def build_record(
     summary: Mapping[str, Any], raw_summary: bytes, evidence_ref: str, evidence_digest: str
 ) -> dict[str, Any]:
+    """Compatibility name for the diagnostic-only CiTimingSummary record builder."""
     canonical = validate_summary(dict(summary))
-    if not raw_summary or len(raw_summary) > MAX_SUMMARY_BYTES:
-        raise ValueError("CiTimingSummary source bytes are invalid")
-    try:
-        decoded_summary = json.loads(raw_summary.decode("utf-8"))
-    except (UnicodeDecodeError, json.JSONDecodeError) as error:
-        raise ValueError("CiTimingSummary source bytes are not valid JSON") from error
-    if decoded_summary != canonical:
-        raise ValueError("CiTimingSummary source bytes do not match the bound summary")
-    _validate_exact_oci(evidence_ref, evidence_digest)
-    record: dict[str, Any] = {
-        "authority": AUTHORITY,
-        "candidateDigest": canonical["candidateDigest"],
-        "workflowRunId": canonical["workflowRunId"],
-        "sourceGitSha": canonical["sourceGitSha"],
-        "timingEvidenceRef": evidence_ref,
-        "timingEvidenceDigest": evidence_digest,
-        "timingSummaryDigest": _sha256(raw_summary),
-        "timingSummary": canonical,
-    }
-    record["recordDigest"] = _sha256(_canonical_bytes(record))
-    return record
+    return _build_record(
+        record_kind="diagnostic_summary",
+        payload=canonical,
+        raw_payload=raw_summary,
+        evidence_ref=evidence_ref,
+        evidence_digest=evidence_digest,
+    )
+
+
+def build_sample_record(
+    sample: Mapping[str, Any], raw_sample: bytes, evidence_ref: str, evidence_digest: str
+) -> dict[str, Any]:
+    canonical = validate_promotion_sample(dict(sample))
+    return _build_record(
+        record_kind="promotion_sample",
+        payload=canonical,
+        raw_payload=raw_sample,
+        evidence_ref=evidence_ref,
+        evidence_digest=evidence_digest,
+    )
 
 
 def _require_authority(root: Path) -> None:
@@ -246,16 +329,33 @@ def _write_exclusive(path: Path, content: bytes) -> None:
         os.close(directory_fd)
 
 
-def _index_path(root: Path, candidate_digest: str, workflow_run_id: str) -> Path:
+def _safe_identity(value: str, field: str) -> str:
+    if not value or len(value) > 512 or "/" in value or "\\" in value or value in {".", ".."}:
+        raise ValueError(f"{field} is invalid")
+    return value
+
+
+def _diagnostic_index_path(root: Path, candidate_digest: str, workflow_run_id: str) -> Path:
     if SHA256_RE.fullmatch(candidate_digest) is None:
         raise ValueError("candidate digest is invalid")
     if RUN_ID_RE.fullmatch(workflow_run_id) is None:
         raise ValueError("workflow run id is invalid")
-    return root / "by-run" / workflow_run_id / f"{candidate_digest.removeprefix('sha256:')}.ref"
+    return root / "diagnostics" / "by-run" / workflow_run_id / f"{candidate_digest.removeprefix('sha256:')}.ref"
 
 
-def validate_record(value: object) -> dict[str, Any]:
-    if not isinstance(value, dict) or set(value) != RECORD_KEYS:
+def _sample_index_path(root: Path, observation_id: str) -> Path:
+    encoded = hashlib.sha256(observation_id.encode("utf-8")).hexdigest()
+    return root / "samples" / "by-observation" / f"{encoded}.ref"
+
+
+def _event_index_path(root: Path, event_id: str, observation_id: str) -> Path:
+    event = hashlib.sha256(event_id.encode("utf-8")).hexdigest()
+    observation = hashlib.sha256(observation_id.encode("utf-8")).hexdigest()
+    return root / "samples" / "by-event" / event / f"{observation}.ref"
+
+
+def _validate_record_fields(value: Mapping[str, Any], expected_keys: frozenset[str]) -> None:
+    if set(value) != expected_keys:
         raise RuntimeError("hosted timing record shape is invalid")
     unsigned = dict(value)
     record_digest = unsigned.pop("recordDigest", None)
@@ -267,16 +367,45 @@ def validate_record(value: object) -> dict[str, Any]:
         raise RuntimeError("hosted timing record digest is invalid")
     if value.get("authority") != AUTHORITY:
         raise RuntimeError("hosted timing record authority is invalid")
-    summary = validate_summary(value.get("timingSummary"))
-    _validate_exact_oci(
-        str(value.get("timingEvidenceRef") or ""),
-        str(value.get("timingEvidenceDigest") or ""),
-    )
-    for field in ("candidateDigest", "workflowRunId", "sourceGitSha"):
-        if value.get(field) != summary.get(field):
-            raise RuntimeError(f"hosted timing record {field} binding is invalid")
-    if SHA256_RE.fullmatch(str(value.get("timingSummaryDigest") or "")) is None:
-        raise RuntimeError("hosted timing summary digest is invalid")
+    if SHA256_RE.fullmatch(str(value.get("payloadDigest") or "")) is None:
+        raise RuntimeError("hosted timing payload digest is invalid")
+
+
+def validate_record(value: object) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        raise RuntimeError("hosted timing record shape is invalid")
+    kind = value.get("recordKind")
+    if kind == "promotion_sample":
+        _validate_record_fields(value, SAMPLE_RECORD_KEYS)
+        payload = validate_promotion_sample(value.get("payload"))
+        _validate_exact_oci(
+            str(value.get("evidenceRef") or ""),
+            str(value.get("evidenceDigest") or ""),
+            artifact="promotion-timing-sample",
+        )
+        for field in (
+            "observationId",
+            "eventId",
+            "repository",
+            "workflowRunId",
+            "runAttempt",
+            "policyEpoch",
+        ):
+            if value.get(field) != payload.get(field):
+                raise RuntimeError(f"hosted timing record {field} binding is invalid")
+    elif kind == "diagnostic_summary":
+        _validate_record_fields(value, DIAGNOSTIC_RECORD_KEYS)
+        payload = validate_summary(value.get("payload"))
+        _validate_exact_oci(
+            str(value.get("evidenceRef") or ""),
+            str(value.get("evidenceDigest") or ""),
+            artifact="ci-timing-summary",
+        )
+        for field in ("candidateDigest", "workflowRunId", "sourceGitSha"):
+            if value.get(field) != payload.get(field):
+                raise RuntimeError(f"hosted timing record {field} binding is invalid")
+    else:
+        raise RuntimeError("hosted timing record kind is invalid")
     return dict(value)
 
 
@@ -296,46 +425,121 @@ def _load_record(root: Path, record_digest: str) -> dict[str, Any]:
     return validated
 
 
+def _bind_paths(root: Path, supplied: Mapping[str, Any]) -> list[Path]:
+    if supplied["recordKind"] == "promotion_sample":
+        return [
+            _sample_index_path(root, str(supplied["observationId"])),
+            _event_index_path(
+                root, str(supplied["eventId"]), str(supplied["observationId"])
+            ),
+        ]
+    return [
+        _diagnostic_index_path(
+            root, str(supplied["candidateDigest"]), str(supplied["workflowRunId"])
+        )
+    ]
+
+
 def bind(root: Path, record: Mapping[str, Any]) -> dict[str, Any]:
     supplied = validate_record(dict(record))
-    record_digest = str(supplied.get("recordDigest") or "")
-    candidate = str(supplied.get("candidateDigest") or "")
-    run_id = str(supplied.get("workflowRunId") or "")
+    record_digest = str(supplied["recordDigest"])
     record_bytes = json.dumps(
         supplied, ensure_ascii=False, indent=2, sort_keys=True
     ).encode("utf-8") + b"\n"
     with _authority_lock(root):
-        index_path = _index_path(root, candidate, run_id)
-        if index_path.exists():
-            if index_path.is_symlink() or not index_path.is_file():
-                raise RuntimeError("hosted timing index is unsafe")
-            existing_digest = index_path.read_text(encoding="utf-8").strip()
-            existing = _load_record(root, existing_digest)
-            if existing != supplied:
-                raise RuntimeError("hosted timing append-only binding conflicts")
-            return existing
+        indexes = _bind_paths(root, supplied)
+        for index_path in indexes:
+            if index_path.exists():
+                if index_path.is_symlink() or not index_path.is_file():
+                    raise RuntimeError("hosted timing index is unsafe")
+                existing = _load_record(root, index_path.read_text(encoding="utf-8").strip())
+                if existing != supplied:
+                    raise RuntimeError("hosted timing append-only binding conflicts")
         record_path = root / "records" / f"{record_digest.removeprefix('sha256:')}.json"
         if record_path.exists():
             if record_path.is_symlink() or record_path.read_bytes() != record_bytes:
                 raise RuntimeError("hosted timing record collision")
         else:
             _write_exclusive(record_path, record_bytes)
-        _write_exclusive(index_path, (record_digest + "\n").encode("utf-8"))
+        for index_path in indexes:
+            if not index_path.exists():
+                _write_exclusive(index_path, (record_digest + "\n").encode("utf-8"))
         return _load_record(root, record_digest)
 
 
 def query(root: Path, candidate_digest: str, workflow_run_id: str) -> dict[str, Any]:
+    """Query a diagnostic summary; diagnostic records never drive the ratchet."""
     with _authority_lock(root):
-        index_path = _index_path(root, candidate_digest, workflow_run_id)
+        index_path = _diagnostic_index_path(root, candidate_digest, workflow_run_id)
         if index_path.is_symlink() or not index_path.is_file():
-            raise RuntimeError("hosted timing index entry is missing")
+            raise RuntimeError("hosted timing diagnostic index entry is missing")
         record = _load_record(root, index_path.read_text(encoding="utf-8").strip())
-        if (
-            record.get("candidateDigest") != candidate_digest
-            or record.get("workflowRunId") != workflow_run_id
-        ):
-            raise RuntimeError("hosted timing index binding is invalid")
+        if record.get("recordKind") != "diagnostic_summary":
+            raise RuntimeError("hosted timing diagnostic index binding is invalid")
         return record
+
+
+def query_sample(root: Path, observation_id: str) -> dict[str, Any]:
+    with _authority_lock(root):
+        index_path = _sample_index_path(root, observation_id)
+        if index_path.is_symlink() or not index_path.is_file():
+            raise RuntimeError("hosted promotion timing sample is missing")
+        record = _load_record(root, index_path.read_text(encoding="utf-8").strip())
+        if record.get("observationId") != observation_id:
+            raise RuntimeError("hosted promotion timing sample index binding is invalid")
+        return record
+
+
+def query_event(root: Path, event_id: str) -> dict[str, Any]:
+    with _authority_lock(root):
+        event_hash = hashlib.sha256(event_id.encode("utf-8")).hexdigest()
+        event_root = root / "samples" / "by-event" / event_hash
+        records: list[dict[str, Any]] = []
+        if event_root.exists():
+            if event_root.is_symlink() or not event_root.is_dir():
+                raise RuntimeError("hosted promotion timing event index is unsafe")
+            for child in event_root.iterdir():
+                if child.is_symlink() or not child.is_file() or child.suffix != ".ref":
+                    raise RuntimeError("hosted promotion timing event index is unsafe")
+            for index_path in sorted(event_root.glob("*.ref")):
+                if index_path.is_symlink() or not index_path.is_file():
+                    raise RuntimeError("hosted promotion timing event index is unsafe")
+                record = _load_record(root, index_path.read_text(encoding="utf-8").strip())
+                if record.get("eventId") != event_id:
+                    raise RuntimeError("hosted promotion timing event binding is invalid")
+                records.append(record)
+        return {"authority": AUTHORITY, "eventId": event_id, "records": records}
+
+
+def query_range(root: Path, start_at: str, end_at: str) -> dict[str, Any]:
+    start = ratchet.parse_time(start_at, "startAt")
+    end = ratchet.parse_time(end_at, "endAt")
+    if end <= start:
+        raise ValueError("query range must be a non-empty [start, end) interval")
+    with _authority_lock(root):
+        samples: list[dict[str, Any]] = []
+        records_root = root / "records"
+        if records_root.exists():
+            if records_root.is_symlink() or not records_root.is_dir():
+                raise RuntimeError("hosted timing records root is unsafe")
+            for child in records_root.iterdir():
+                if child.is_symlink() or not child.is_file() or child.suffix != ".json":
+                    raise RuntimeError("hosted timing records root is unsafe")
+            for record_path in sorted(records_root.glob("*.json")):
+                record = _load_record(root, "sha256:" + record_path.stem)
+                if record["recordKind"] != "promotion_sample":
+                    continue
+                sample = record["payload"]
+                ready = ratchet.parse_time(sample["promotionReadyAt"], "promotionReadyAt")
+                if start <= ready < end:
+                    samples.append(sample)
+        samples.sort(key=lambda item: (item["promotionReadyAt"], item["eventId"], item["observationId"]))
+        return {
+            "authority": AUTHORITY,
+            "startAt": ratchet.format_time(start),
+            "endAt": ratchet.format_time(end),
+            "samples": samples,
+        }
 
 
 def _request_record(encoded: str) -> dict[str, Any]:
@@ -344,36 +548,62 @@ def _request_record(encoded: str) -> dict[str, Any]:
     except (ValueError, UnicodeDecodeError, json.JSONDecodeError) as error:
         raise ValueError("hosted timing bind request is invalid") from error
     if not isinstance(request, dict) or set(request) != {
-        "summaryBase64",
-        "timingEvidenceRef",
-        "timingEvidenceDigest",
+        "recordKind",
+        "payloadBase64",
+        "evidenceRef",
+        "evidenceDigest",
     }:
         raise ValueError("hosted timing bind request shape is invalid")
     try:
-        raw_summary = base64.b64decode(request["summaryBase64"], validate=True)
-        summary = json.loads(raw_summary.decode("utf-8"))
+        raw_payload = base64.b64decode(request["payloadBase64"], validate=True)
+        payload = json.loads(raw_payload.decode("utf-8"))
     except (ValueError, UnicodeDecodeError, json.JSONDecodeError) as error:
-        raise ValueError("hosted timing bind summary is invalid") from error
-    if not raw_summary or len(raw_summary) > MAX_SUMMARY_BYTES:
-        raise ValueError("hosted timing bind summary size is invalid")
-    return build_record(
-        validate_summary(summary),
-        raw_summary,
-        str(request["timingEvidenceRef"]),
-        str(request["timingEvidenceDigest"]),
-    )
+        raise ValueError("hosted timing bind payload is invalid") from error
+    if request["recordKind"] == "promotion_sample":
+        return build_sample_record(
+            validate_promotion_sample(payload),
+            raw_payload,
+            str(request["evidenceRef"]),
+            str(request["evidenceDigest"]),
+        )
+    if request["recordKind"] == "diagnostic_summary":
+        return build_record(
+            validate_summary(payload),
+            raw_payload,
+            str(request["evidenceRef"]),
+            str(request["evidenceDigest"]),
+        )
+    raise ValueError("hosted timing bind record kind is invalid")
 
 
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", required=True, type=Path)
-    parser.add_argument("--action", choices=("initialize", "bind", "query"), required=True)
+    parser.add_argument(
+        "--action",
+        choices=(
+            "initialize",
+            "bind",
+            "query",
+            "query-sample",
+            "query-event",
+            "query-range",
+        ),
+        required=True,
+    )
     parser.add_argument("--summary", type=Path)
+    parser.add_argument("--sample", type=Path)
+    parser.add_argument("--evidence-ref", default="")
+    parser.add_argument("--evidence-digest", default="")
     parser.add_argument("--timing-evidence-ref", default="")
     parser.add_argument("--timing-evidence-digest", default="")
     parser.add_argument("--request-base64", default="")
     parser.add_argument("--candidate-digest", default="")
     parser.add_argument("--workflow-run-id", default="")
+    parser.add_argument("--observation-id", default="")
+    parser.add_argument("--event-id", default="")
+    parser.add_argument("--start-at", default="")
+    parser.add_argument("--end-at", default="")
     return parser
 
 
@@ -387,19 +617,33 @@ def main() -> int:
             result: object = initialize(root)
         elif args.action == "query":
             result = query(root, args.candidate_digest, args.workflow_run_id)
+        elif args.action == "query-sample":
+            result = query_sample(root, args.observation_id)
+        elif args.action == "query-event":
+            result = query_event(root, args.event_id)
+        elif args.action == "query-range":
+            result = query_range(root, args.start_at, args.end_at)
         else:
             if args.request_base64:
                 record = _request_record(args.request_base64)
+            elif args.sample is not None:
+                sample, raw = _read_sample(args.sample)
+                record = build_sample_record(
+                    sample,
+                    raw,
+                    args.evidence_ref or args.timing_evidence_ref,
+                    args.evidence_digest or args.timing_evidence_digest,
+                )
             elif args.summary is not None:
                 summary, raw = _read_summary(args.summary)
                 record = build_record(
                     summary,
                     raw,
-                    args.timing_evidence_ref,
-                    args.timing_evidence_digest,
+                    args.evidence_ref or args.timing_evidence_ref,
+                    args.evidence_digest or args.timing_evidence_digest,
                 )
             else:
-                raise ValueError("hosted timing bind requires a canonical summary")
+                raise ValueError("hosted timing bind requires a promotion sample or diagnostic summary")
             result = bind(root, record)
     except (OSError, RuntimeError, ValueError, json.JSONDecodeError) as error:
         print(f"GATE_BLOCK: {error}", file=sys.stderr)

@@ -1,0 +1,92 @@
+{
+  "apis": {
+    "API-PORTAL-CONTRACT": {
+      "owner": "lane/ops",
+      "selector": "scope:portal"
+    },
+    "API-RECOMMENDATION": {
+      "owner": "lane/product-mainline",
+      "selector": "workflow:recommendation-api-integration"
+    },
+    "API-SEARCH-CONTRACT": {
+      "owner": "lane/product-mainline",
+      "selector": "job:search_contract_smoke"
+    },
+    "API-SERVICE-CONTRACT": {
+      "owner": "lane/product-mainline",
+      "selector": "scope:service"
+    }
+  },
+  "journeys": {
+    "JOURNEY-ABG-READINESS": {
+      "owner": "lane/ops",
+      "selector": "depth:abg_release_sensitive"
+    },
+    "JOURNEY-APP-LOCAL-CONTRACT": {
+      "owner": "lane/product-mainline",
+      "selector": "scope:app"
+    },
+    "JOURNEY-DUAL-PHYSICAL-DEVICE": {
+      "owner": "lane/ops",
+      "selector": "scope:device"
+    }
+  },
+  "ownerVocabulary": [
+    "lane/engineering",
+    "lane/ops",
+    "lane/product-mainline",
+    "lane/data-engineering"
+  ],
+  "schema": "ci-test-ownership-policy",
+  "schemaVersion": 1,
+  "tests": {
+    "TEST-APP-COVERAGE": {
+      "owner": "lane/product-mainline",
+      "selector": "job:quwoquan_app_coverage"
+    },
+    "TEST-APP-LOCAL-CONTRACT": {
+      "owner": "lane/product-mainline",
+      "selector": "job:quwoquan_app_tests"
+    },
+    "TEST-APP-SERIAL": {
+      "owner": "lane/product-mainline",
+      "selector": "job:quwoquan_app_serial"
+    },
+    "TEST-APP-STATIC": {
+      "owner": "lane/product-mainline",
+      "selector": "job:quwoquan_app_static"
+    },
+    "TEST-COMMON-GOVERNANCE": {
+      "owner": "lane/engineering",
+      "selector": "job:common_governance"
+    },
+    "TEST-DATA-LOCAL-CONTRACT": {
+      "owner": "lane/data-engineering",
+      "selector": "job:quwoquan_data_tests"
+    },
+    "TEST-DATA-VERIFY": {
+      "owner": "lane/data-engineering",
+      "selector": "job:quwoquan_data"
+    },
+    "TEST-DEVICE-MATRIX": {
+      "owner": "lane/ops",
+      "selector": "workflow:05.app-env-device-matrix"
+    },
+    "TEST-PORTAL": {
+      "owner": "lane/ops",
+      "selector": "job:ops_portal"
+    },
+    "TEST-SERVICE-CORE": {
+      "owner": "lane/product-mainline",
+      "selector": "job:quwoquan_service"
+    },
+    "TEST-SERVICE-COVERAGE": {
+      "owner": "lane/product-mainline",
+      "selector": "job:quwoquan_service_coverage"
+    },
+    "TEST-TOPOLOGY-REGRESSION": {
+      "owner": "lane/ops",
+      "selector": "job:topology_regression"
+    }
+  }
+}

@@ -32,8 +32,8 @@ def _deploy_prod_hosted_finalize(scope: dict[str, Any]) -> dict[str, Any]:
     expected_generation = scope["expected_generation"]
     final_exit_code = scope["final_exit_code"]
     findings = scope["findings"]
-    from_image_transport_tag = scope["from_image_transport_tag"]
-    from_release_evidence_ref = scope["from_release_evidence_ref"]
+    from_service_factory_oci_digest = scope["from_service_factory_oci_digest"]
+    from_app_factory_oci_digest = scope["from_app_factory_oci_digest"]
     hard_deadline_epoch = scope["hard_deadline_epoch"]
     item = scope["item"]
     last_good_candidate_digest = scope["last_good_candidate_digest"]
@@ -44,9 +44,9 @@ def _deploy_prod_hosted_finalize(scope: dict[str, Any]) -> dict[str, Any]:
     post_deploy_checks = scope["post_deploy_checks"]
     post_deploy_failures = scope["post_deploy_failures"]
     promotion_deadline_epoch = scope["promotion_deadline_epoch"]
-    release_artifact_digest = scope["release_artifact_digest"]
+    candidate_material_id = scope["candidate_material_id"]
     release_candidate_digests = scope["release_candidate_digests"]
-    environment_acceptance = scope["environment_acceptance"]
+    prod_activation_admission = scope["prod_activation_admission"]
     release_receipt_id = scope["release_receipt_id"]
     release_receipt_path = scope["release_receipt_path"]
     report_dir = scope["report_dir"]
@@ -63,8 +63,8 @@ def _deploy_prod_hosted_finalize(scope: dict[str, Any]) -> dict[str, Any]:
     rollout_decision = scope["rollout_decision"]
     rollout_stage = scope["rollout_stage"]
     slo_readback = scope["slo_readback"]
-    to_image_transport_tag = scope["to_image_transport_tag"]
-    to_release_evidence_ref = scope["to_release_evidence_ref"]
+    to_service_factory_oci_digest = scope["to_service_factory_oci_digest"]
+    to_app_factory_oci_digest = scope["to_app_factory_oci_digest"]
 
     stdout_combined = "\n".join(filter(None, [result.stdout, result.stderr]))
     slo_decision, slo_reason = _stackctl._decision_from_slo_output(
@@ -93,9 +93,8 @@ def _deploy_prod_hosted_finalize(scope: dict[str, Any]) -> dict[str, Any]:
             "PROD_SSH_HOST": "",
             "CLOUD_PROVIDER": args.cloud_provider,
             "SERVICE": args.service,
-            "IMAGE_TRANSPORT_TAG": from_image_transport_tag,
             "CANDIDATE_DIGEST": args.from_candidate_digest,
-            "PREVIOUS_IMAGE_TRANSPORT_TAG": to_image_transport_tag,
+            "PREVIOUS_CANDIDATE_DIGEST": args.to_candidate_digest,
             "ROLLOUT_STAGE": "100",
             "DRY_RUN": "false",
             "PROD_IMAGE_DELIVERY_MODE": "skip",
@@ -171,7 +170,7 @@ def _deploy_prod_hosted_finalize(scope: dict[str, Any]) -> dict[str, Any]:
                 step="100" if rollback_succeeded else args.step,
                 stage="100" if rollback_succeeded else rollout_stage,
                 decision=rollback_decision,
-                artifact_digest=release_artifact_digest,
+                candidate_material_id=candidate_material_id,
                 expected_generation=expected_generation,
                 receipt_id=release_receipt_id,
                 slo_readback=slo_readback,
@@ -180,27 +179,27 @@ def _deploy_prod_hosted_finalize(scope: dict[str, Any]) -> dict[str, Any]:
                 post_deploy_checks=post_deploy_checks + rollback_post_checks,
                 rollback_outcome=rollback_decision,
                 rollback_evidence=rollback_evidence,
-                from_release_evidence_ref=(
-                    to_release_evidence_ref
+                from_service_factory_oci_digest=(
+                    to_service_factory_oci_digest
                     if rollback_succeeded
-                    else from_release_evidence_ref
+                    else from_service_factory_oci_digest
                 ),
-                to_release_evidence_ref=(
-                    from_release_evidence_ref
+                to_service_factory_oci_digest=(
+                    from_service_factory_oci_digest
                     if rollback_succeeded
-                    else to_release_evidence_ref
+                    else to_service_factory_oci_digest
                 ),
-                from_image_transport_tag=(
-                    to_image_transport_tag
+                from_app_factory_oci_digest=(
+                    to_app_factory_oci_digest
                     if rollback_succeeded
-                    else from_image_transport_tag
+                    else from_app_factory_oci_digest
                 ),
-                to_image_transport_tag=(
-                    from_image_transport_tag
+                to_app_factory_oci_digest=(
+                    from_app_factory_oci_digest
                     if rollback_succeeded
-                    else to_image_transport_tag
+                    else to_app_factory_oci_digest
                 ),
-                environment_acceptance=environment_acceptance,
+                prod_activation_admission=prod_activation_admission,
                 deadline_epoch=rollback_deadline_epoch,
                 trigger_stage=rollout_stage,
             )
@@ -231,7 +230,7 @@ def _deploy_prod_hosted_finalize(scope: dict[str, Any]) -> dict[str, Any]:
                 step=args.step,
                 stage=rollout_stage,
                 decision="rollback_failed",
-                artifact_digest=release_artifact_digest,
+                candidate_material_id=candidate_material_id,
                 expected_generation=expected_generation,
                 receipt_id=release_receipt_id,
                 slo_readback=slo_readback,
@@ -246,11 +245,11 @@ def _deploy_prod_hosted_finalize(scope: dict[str, Any]) -> dict[str, Any]:
                     "durationMs": rollback_duration_ms,
                     "postChecks": _stackctl._release_check_receipts(rollback_post_checks),
                 },
-                from_release_evidence_ref=from_release_evidence_ref,
-                to_release_evidence_ref=to_release_evidence_ref,
-                from_image_transport_tag=from_image_transport_tag,
-                to_image_transport_tag=to_image_transport_tag,
-                environment_acceptance=environment_acceptance,
+                from_service_factory_oci_digest=from_service_factory_oci_digest,
+                to_service_factory_oci_digest=to_service_factory_oci_digest,
+                from_app_factory_oci_digest=from_app_factory_oci_digest,
+                to_app_factory_oci_digest=to_app_factory_oci_digest,
+                prod_activation_admission=prod_activation_admission,
                 deadline_epoch=rollback_deadline_epoch,
                 trigger_stage=rollout_stage,
             )
@@ -264,7 +263,7 @@ def _deploy_prod_hosted_finalize(scope: dict[str, Any]) -> dict[str, Any]:
                 step=args.step,
                 stage=rollout_stage,
                 decision="pause",
-                artifact_digest=release_artifact_digest,
+                candidate_material_id=candidate_material_id,
                 expected_generation=expected_generation,
                 receipt_id=release_receipt_id,
                 slo_readback=slo_readback,
@@ -273,11 +272,11 @@ def _deploy_prod_hosted_finalize(scope: dict[str, Any]) -> dict[str, Any]:
                 post_deploy_checks=post_deploy_checks,
                 rollback_outcome="not_triggered",
                 rollback_evidence={"triggered": False},
-                from_release_evidence_ref=from_release_evidence_ref,
-                to_release_evidence_ref=to_release_evidence_ref,
-                from_image_transport_tag=from_image_transport_tag,
-                to_image_transport_tag=to_image_transport_tag,
-                environment_acceptance=environment_acceptance,
+                from_service_factory_oci_digest=from_service_factory_oci_digest,
+                to_service_factory_oci_digest=to_service_factory_oci_digest,
+                from_app_factory_oci_digest=from_app_factory_oci_digest,
+                to_app_factory_oci_digest=to_app_factory_oci_digest,
+                prod_activation_admission=prod_activation_admission,
                 deadline_epoch=promotion_deadline_epoch,
             )
     elif final_exit_code == 0 and not dry_run_requested:
@@ -293,7 +292,7 @@ def _deploy_prod_hosted_finalize(scope: dict[str, Any]) -> dict[str, Any]:
             step=args.step,
             stage=rollout_stage,
             decision="continue",
-            artifact_digest=release_artifact_digest,
+            candidate_material_id=candidate_material_id,
             expected_generation=expected_generation,
             receipt_id=release_receipt_id,
             slo_readback=slo_readback,
@@ -302,11 +301,11 @@ def _deploy_prod_hosted_finalize(scope: dict[str, Any]) -> dict[str, Any]:
             post_deploy_checks=post_deploy_checks,
             rollback_outcome="not_triggered",
             rollback_evidence={"triggered": False},
-            from_release_evidence_ref=from_release_evidence_ref,
-            to_release_evidence_ref=to_release_evidence_ref,
-            from_image_transport_tag=from_image_transport_tag,
-            to_image_transport_tag=to_image_transport_tag,
-            environment_acceptance=environment_acceptance,
+            from_service_factory_oci_digest=from_service_factory_oci_digest,
+            to_service_factory_oci_digest=to_service_factory_oci_digest,
+            from_app_factory_oci_digest=from_app_factory_oci_digest,
+            to_app_factory_oci_digest=to_app_factory_oci_digest,
+            prod_activation_admission=prod_activation_admission,
             deadline_epoch=promotion_deadline_epoch,
         )
     if committed_release_state is not None:

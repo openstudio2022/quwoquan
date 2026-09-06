@@ -25,6 +25,7 @@ from quwoquan_ops.cli.lib.content_api_consumer_authority import (
     CARRIERS,
     ENTRY_SURFACES,
     ROOT,
+    SOURCE_FINGERPRINT_SCHEMA,
     SPEC_REF,
     _AuthorityFile,
     _DIGEST_RE,
@@ -49,10 +50,8 @@ from quwoquan_ops.cli.lib.content_api_consumer_authority import (
     _validate_health,
     _validate_sample_plan,
     _write_regular_json,
-)
-from quwoquan_ops.cli.lib.environment_acceptance_fact import (
-    derive_m1_source_fingerprint,
-    required_raw_slot_id,
+    content_consumer_raw_slot_id,
+    derive_content_consumer_source_fingerprint,
 )
 from quwoquan_ops.cli.lib.readiness_case_result import (
     canonical_json_bytes,
@@ -752,7 +751,7 @@ def run_content_api_consumer(
                 {
                     "ref": raw_ref,
                     "digest": _digest_bytes(raw),
-                    "slotId": required_raw_slot_id(
+                    "slotId": content_consumer_raw_slot_id(
                         sample_id=sample.sample_id,
                         entry_surface=entry,
                         carrier=carrier,
@@ -772,7 +771,8 @@ def run_content_api_consumer(
             statuses.append(status)
 
     completed_at = _utc_now()
-    source_fingerprint = derive_m1_source_fingerprint(
+    source_fingerprint = derive_content_consumer_source_fingerprint(
+        schema=SOURCE_FINGERPRINT_SCHEMA,
         environment="alpha",
         target=target,
         release_id=release_id,

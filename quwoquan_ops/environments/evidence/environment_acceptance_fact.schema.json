@@ -1,322 +1,249 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://quwoquan.local/quwoquan_ops/environments/evidence/environment_acceptance_fact.schema.json",
-  "title": "Ops append-only EnvironmentAcceptanceFact v1",
-  "type": "object",
-  "additionalProperties": false,
-  "required": [
-    "schema",
-    "factId",
-    "environment",
-    "acceptanceProfile",
-    "target",
-    "releaseId",
-    "releaseDigest",
-    "importRunId",
-    "verifyRunId",
-    "samplePlanRef",
-    "samplePlanDigest",
-    "requiredRawResults",
-    "dataReadiness",
-    "createdAt",
-    "sourceFingerprint"
-  ],
-  "properties": {
-    "schema": {
-      "const": "quwoquan_ops.environment_acceptance_fact.v1"
-    },
-    "factId": {
-      "$ref": "#/$defs/digest"
-    },
-    "acceptanceProfile": {
-      "enum": [
-        "environment_promotion",
-        "m1_api_consumer"
-      ]
-    },
-    "environment": {
-      "enum": [
-        "alpha",
-        "beta",
-        "gamma",
-        "prod"
-      ]
-    },
-    "target": {
-      "$ref": "#/$defs/identity"
-    },
-    "releaseId": {
-      "$ref": "#/$defs/identity"
-    },
-    "releaseDigest": {
-      "$ref": "#/$defs/digest"
-    },
-    "manifestDigest": {
-      "$ref": "#/$defs/digest"
-    },
-    "importRunId": {
-      "$ref": "#/$defs/identity"
-    },
-    "verifyRunId": {
-      "$ref": "#/$defs/identity"
-    },
-    "samplePlanRef": {
-      "$ref": "#/$defs/ref"
-    },
-    "samplePlanDigest": {
-      "$ref": "#/$defs/digest"
-    },
-    "targetBindingRefs": {
-      "type": "array",
-      "minItems": 0,
-      "items": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": [
-          "ref",
-          "digest",
-          "platform",
-          "deviceProfile"
-        ],
-        "properties": {
-          "ref": {
-            "$ref": "#/$defs/ref"
-          },
-          "digest": {
-            "$ref": "#/$defs/digest"
-          },
-          "platform": {
-            "enum": [
-              "android",
-              "ios"
-            ]
-          },
-          "deviceProfile": {
-            "enum": [
-              "rehearsal",
-              "promotable",
-              "production"
-            ]
-          }
-        }
-      }
-    },
-    "requiredRawResults": {
-      "type": "array",
-      "minItems": 1,
-      "items": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": [
-          "ref",
-          "digest",
-          "slotId",
-          "status"
-        ],
-        "properties": {
-          "ref": {
-            "$ref": "#/$defs/ref"
-          },
-          "digest": {
-            "$ref": "#/$defs/digest"
-          },
-          "slotId": {
-            "$ref": "#/$defs/digest"
-          },
-          "status": {
-            "const": "passed"
-          }
-        }
-      }
-    },
-    "dataReadiness": {
-      "$ref": "#/$defs/exactRef"
-    },
-    "consumerHealth": {
-      "$ref": "#/$defs/exactRef"
-    },
-    "activeCas": {
+  "title": "EnvironmentAcceptanceFact v2",
+  "oneOf": [
+    {
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "ref",
-        "digest",
-        "readbackRef",
-        "readbackDigest",
-        "releaseId",
-        "releaseDigest"
+        "schema",
+        "factId",
+        "environment",
+        "profile",
+        "status",
+        "candidate",
+        "impactPlanDigest",
+        "caseResultRefs",
+        "runtimeIdentity",
+        "dataLifecycle",
+        "providerReadiness",
+        "observabilityReadiness",
+        "inspectEvidence",
+        "doctorEvidence",
+        "cleanupEvidence",
+        "leaseClosureEvidence",
+        "predecessor",
+        "expiresAt",
+        "nonPromotable",
+        "issuedAt",
+        "signer"
       ],
       "properties": {
-        "ref": {
-          "$ref": "#/$defs/ref"
+        "schema": {
+          "const": "quwoquan_ops.environment_acceptance_fact.v2"
         },
-        "digest": {
+        "factId": {
           "$ref": "#/$defs/digest"
         },
-        "readbackRef": {
-          "$ref": "#/$defs/ref"
+        "environment": {
+          "enum": [
+            "alpha",
+            "beta",
+            "gamma"
+          ]
         },
-        "readbackDigest": {
+        "profile": {
+          "enum": [
+            "smoke",
+            "integration",
+            "release"
+          ]
+        },
+        "status": {
+          "const": "passed"
+        },
+        "candidate": {
+          "$ref": "#/$defs/candidate"
+        },
+        "impactPlanDigest": {
           "$ref": "#/$defs/digest"
         },
-        "releaseId": {
-          "$ref": "#/$defs/identity"
+        "caseResultRefs": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/exactRef"
+          }
         },
-        "releaseDigest": {
-          "$ref": "#/$defs/digest"
+        "runtimeIdentity": {
+          "$ref": "#/$defs/exactRef"
+        },
+        "dataLifecycle": {
+          "$ref": "#/$defs/exactRef"
+        },
+        "providerReadiness": {
+          "$ref": "#/$defs/exactRef"
+        },
+        "observabilityReadiness": {
+          "$ref": "#/$defs/exactRef"
+        },
+        "inspectEvidence": {
+          "$ref": "#/$defs/exactRef"
+        },
+        "doctorEvidence": {
+          "$ref": "#/$defs/exactRef"
+        },
+        "cleanupEvidence": {
+          "$ref": "#/$defs/exactRef"
+        },
+        "leaseClosureEvidence": {
+          "$ref": "#/$defs/exactRef"
+        },
+        "predecessor": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/exactRef"
+            }
+          ]
+        },
+        "expiresAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "nonPromotable": {
+          "type": "boolean"
+        },
+        "issuedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "signer": {
+          "$ref": "#/$defs/signer"
         }
       }
     },
-    "lifecycleExit": {
-      "$ref": "#/$defs/exactRef"
-    },
-    "providerReadiness": {
-      "$ref": "#/$defs/exactRef"
-    },
-    "observabilityReadiness": {
-      "$ref": "#/$defs/exactRef"
-    },
-    "rollbackReadiness": {
-      "$ref": "#/$defs/exactRef"
-    },
-    "predecessorAcceptance": {
-      "oneOf": [
-        {
-          "type": "null"
-        },
-        {
-          "type": "object",
-          "additionalProperties": false,
-          "required": [
-            "environment",
-            "factId",
-            "ref",
-            "digest"
-          ],
-          "properties": {
-            "environment": {
-              "enum": [
-                "alpha",
-                "beta",
-                "gamma"
-              ]
-            },
-            "factId": {
-              "$ref": "#/$defs/digest"
-            },
-            "ref": {
-              "$ref": "#/$defs/ref"
-            },
-            "digest": {
-              "$ref": "#/$defs/digest"
-            }
-          }
-        }
-      ]
-    },
-    "resourceFinalization": {
+    {
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "leaseRevocationRefs",
-        "lockReleaseRefs",
-        "gcProtectionRefs"
+        "schema",
+        "factId",
+        "environment",
+        "profile",
+        "status",
+        "candidate",
+        "impactPlanDigest",
+        "caseResultRefs",
+        "runtimeIdentity",
+        "dataLifecycle",
+        "providerReadiness",
+        "observabilityReadiness",
+        "inspectEvidence",
+        "doctorEvidence",
+        "cleanupEvidence",
+        "leaseClosureEvidence",
+        "predecessor",
+        "expiresAt",
+        "nonPromotable",
+        "issuedAt",
+        "signer",
+        "reasonCode"
       ],
       "properties": {
-        "leaseRevocationRefs": {
+        "schema": {
+          "const": "quwoquan_ops.environment_acceptance_fact.v2"
+        },
+        "factId": {
+          "$ref": "#/$defs/digest"
+        },
+        "environment": {
+          "const": "beta"
+        },
+        "profile": {
+          "enum": [
+            "smoke",
+            "integration",
+            "release"
+          ]
+        },
+        "status": {
+          "const": "not_required"
+        },
+        "candidate": {
+          "$ref": "#/$defs/candidate"
+        },
+        "impactPlanDigest": {
+          "$ref": "#/$defs/digest"
+        },
+        "caseResultRefs": {
           "type": "array",
           "minItems": 1,
+          "uniqueItems": true,
           "items": {
             "$ref": "#/$defs/exactRef"
           }
         },
-        "lockReleaseRefs": {
-          "type": "array",
-          "minItems": 1,
-          "items": {
-            "$ref": "#/$defs/exactRef"
-          }
+        "runtimeIdentity": {
+          "$ref": "#/$defs/exactRef"
         },
-        "gcProtectionRefs": {
-          "type": "array",
-          "minItems": 1,
-          "items": {
-            "$ref": "#/$defs/exactRef"
-          }
-        }
-      }
-    },
-    "prodReleaseFacts": {
-      "oneOf": [
-        {
-          "type": "null"
+        "dataLifecycle": {
+          "$ref": "#/$defs/exactRef"
         },
-        {
-          "type": "object",
-          "additionalProperties": false,
-          "required": [
-            "engineeringEligibility",
-            "durableApproval",
-            "rolloutStages",
-            "rollbackReadiness"
-          ],
-          "properties": {
-            "engineeringEligibility": {
-              "$ref": "#/$defs/exactRef"
+        "providerReadiness": {
+          "$ref": "#/$defs/exactRef"
+        },
+        "observabilityReadiness": {
+          "$ref": "#/$defs/exactRef"
+        },
+        "inspectEvidence": {
+          "$ref": "#/$defs/exactRef"
+        },
+        "doctorEvidence": {
+          "$ref": "#/$defs/exactRef"
+        },
+        "cleanupEvidence": {
+          "$ref": "#/$defs/exactRef"
+        },
+        "leaseClosureEvidence": {
+          "$ref": "#/$defs/exactRef"
+        },
+        "predecessor": {
+          "oneOf": [
+            {
+              "type": "null"
             },
-            "durableApproval": {
-              "$ref": "#/$defs/exactRef"
-            },
-            "rolloutStages": {
-              "type": "array",
-              "prefixItems": [
-                {
-                  "$ref": "#/$defs/canaryStage"
-                },
-                {
-                  "$ref": "#/$defs/stage5"
-                },
-                {
-                  "$ref": "#/$defs/stage20"
-                },
-                {
-                  "$ref": "#/$defs/stage50"
-                },
-                {
-                  "$ref": "#/$defs/stage100"
-                }
-              ],
-              "items": false,
-              "minItems": 5,
-              "maxItems": 5
-            },
-            "rollbackReadiness": {
+            {
               "$ref": "#/$defs/exactRef"
             }
-          }
+          ]
+        },
+        "expiresAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "nonPromotable": {
+          "type": "boolean"
+        },
+        "issuedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "signer": {
+          "$ref": "#/$defs/signer"
+        },
+        "reasonCode": {
+          "const": "IMPACT_PLAN.NO_LIVE_ENVIRONMENT_REQUIRED"
         }
-      ]
-    },
-    "createdAt": {
-      "type": "string",
-      "format": "date-time"
-    },
-    "sourceFingerprint": {
-      "$ref": "#/$defs/digest"
+      }
     }
-  },
+  ],
   "$defs": {
     "digest": {
       "type": "string",
-      "pattern": "^sha256:[a-f0-9]{64}$"
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "gitOid": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}([0-9a-f]{24})?$"
     },
     "identity": {
       "type": "string",
-      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,255}$"
-    },
-    "ref": {
-      "type": "string",
-      "pattern": "^(?!/)(?!.*(?:^|/)\\.{1,2}(?:/|$))(?!.*//)(?!.*\\\\).+$"
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]{0,255}$"
     },
     "exactRef": {
       "type": "object",
@@ -327,295 +254,59 @@
       ],
       "properties": {
         "ref": {
-          "$ref": "#/$defs/ref"
+          "type": "string",
+          "pattern": "^(?!/)(?!.*(?:^|/)\\.{1,2}(?:/|$))(?!.*//)(?!.*\\\\)(?!.*(?:^|/)latest(?:[./]|$)).+$"
         },
         "digest": {
           "$ref": "#/$defs/digest"
         }
       }
     },
-    "canaryStage": {
+    "candidate": {
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "stage",
-        "ref",
-        "digest"
+        "candidateId",
+        "commit",
+        "tree"
       ],
       "properties": {
-        "stage": {
-          "const": "canary"
-        },
-        "ref": {
-          "$ref": "#/$defs/ref"
-        },
-        "digest": {
+        "candidateId": {
           "$ref": "#/$defs/digest"
+        },
+        "commit": {
+          "$ref": "#/$defs/gitOid"
+        },
+        "tree": {
+          "$ref": "#/$defs/gitOid"
         }
       }
     },
-    "stage5": {
+    "signer": {
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "stage",
-        "ref",
-        "digest"
+        "identity",
+        "payloadType",
+        "payload",
+        "signature"
       ],
       "properties": {
-        "stage": {
-          "const": "5"
+        "identity": {
+          "$ref": "#/$defs/identity"
         },
-        "ref": {
-          "$ref": "#/$defs/ref"
+        "payloadType": {
+          "const": "application/vnd.quwoquan.environment-acceptance-fact.v2+json"
         },
-        "digest": {
-          "$ref": "#/$defs/digest"
-        }
-      }
-    },
-    "stage20": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "stage",
-        "ref",
-        "digest"
-      ],
-      "properties": {
-        "stage": {
-          "const": "20"
+        "payload": {
+          "type": "string",
+          "minLength": 1
         },
-        "ref": {
-          "$ref": "#/$defs/ref"
-        },
-        "digest": {
-          "$ref": "#/$defs/digest"
-        }
-      }
-    },
-    "stage50": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "stage",
-        "ref",
-        "digest"
-      ],
-      "properties": {
-        "stage": {
-          "const": "50"
-        },
-        "ref": {
-          "$ref": "#/$defs/ref"
-        },
-        "digest": {
-          "$ref": "#/$defs/digest"
-        }
-      }
-    },
-    "stage100": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "stage",
-        "ref",
-        "digest"
-      ],
-      "properties": {
-        "stage": {
-          "const": "100"
-        },
-        "ref": {
-          "$ref": "#/$defs/ref"
-        },
-        "digest": {
-          "$ref": "#/$defs/digest"
+        "signature": {
+          "type": "string",
+          "minLength": 1
         }
       }
     }
-  },
-  "allOf": [
-    {
-      "if": {
-        "properties": {
-          "acceptanceProfile": {
-            "const": "environment_promotion"
-          }
-        },
-        "required": [
-          "acceptanceProfile"
-        ]
-      },
-      "then": {
-        "properties": {
-          "targetBindingRefs": {
-            "minItems": 1
-          }
-        },
-        "required": [
-          "targetBindingRefs",
-          "activeCas",
-          "lifecycleExit",
-          "providerReadiness",
-          "observabilityReadiness",
-          "rollbackReadiness",
-          "predecessorAcceptance",
-          "resourceFinalization",
-          "prodReleaseFacts"
-        ],
-        "not": {
-          "anyOf": [
-            {
-              "required": [
-                "consumerHealth"
-              ]
-            },
-            {
-              "required": [
-                "manifestDigest"
-              ]
-            }
-          ]
-        }
-      }
-    },
-    {
-      "if": {
-        "properties": {
-          "acceptanceProfile": {
-            "const": "m1_api_consumer"
-          }
-        },
-        "required": [
-          "acceptanceProfile"
-        ]
-      },
-      "then": {
-        "properties": {
-          "environment": {
-            "const": "alpha"
-          },
-          "target": {
-            "const": "alpha-local"
-          },
-          "requiredRawResults": {
-            "minItems": 16,
-            "maxItems": 16
-          },
-          "predecessorAcceptance": {
-            "type": "null"
-          },
-          "prodReleaseFacts": {
-            "type": "null"
-          }
-        },
-        "required": [
-          "consumerHealth",
-          "manifestDigest"
-        ],
-        "not": {
-          "anyOf": [
-            {
-              "required": [
-                "targetBindingRefs"
-              ]
-            },
-            {
-              "required": [
-                "activeCas"
-              ]
-            },
-            {
-              "required": [
-                "lifecycleExit"
-              ]
-            },
-            {
-              "required": [
-                "providerReadiness"
-              ]
-            },
-            {
-              "required": [
-                "observabilityReadiness"
-              ]
-            },
-            {
-              "required": [
-                "rollbackReadiness"
-              ]
-            },
-            {
-              "required": [
-                "predecessorAcceptance"
-              ]
-            },
-            {
-              "required": [
-                "resourceFinalization"
-              ]
-            },
-            {
-              "required": [
-                "prodReleaseFacts"
-              ]
-            }
-          ]
-        }
-      }
-    },
-    {
-      "if": {
-        "properties": {
-          "environment": {
-            "const": "alpha"
-          }
-        },
-        "required": [
-          "environment"
-        ]
-      },
-      "then": {
-        "properties": {
-          "predecessorAcceptance": {
-            "type": "null"
-          }
-        }
-      },
-      "else": {
-        "properties": {
-          "predecessorAcceptance": {
-            "type": "object"
-          }
-        }
-      }
-    },
-    {
-      "if": {
-        "properties": {
-          "environment": {
-            "const": "prod"
-          }
-        },
-        "required": [
-          "environment"
-        ]
-      },
-      "then": {
-        "properties": {
-          "prodReleaseFacts": {
-            "type": "object"
-          }
-        }
-      },
-      "else": {
-        "properties": {
-          "prodReleaseFacts": {
-            "type": "null"
-          }
-        }
-      }
-    }
-  ]
+  }
 }

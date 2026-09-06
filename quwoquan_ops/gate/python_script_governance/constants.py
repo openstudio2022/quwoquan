@@ -146,9 +146,10 @@ ACCEPTANCE_ROOT = Path(
     "quwoquan_ops/tests/acceptance/user_acceptance/service_ops"
 )
 
-#: Python 文件行数硬顶。业界通行的模块规模上限（pylint ``max-module-lines``
-#: 默认值）。``quwoquan_data/scripts/**`` 不在本预算内：它由
-#: ``verify_script_architecture.py`` 的 600/500/400 更严硬顶单轨负责。
+#: Python 文件行数硬顶。四棵受管源码树使用同一 1000 行确定性 blocker；
+#: Data 不存在另一套 600/500/400 行门，不得再以该失真假设绕过。
 PYTHON_LINE_BUDGET_MAX_LINES = 1000
-#: sequence-017 基线冻结仍携带超预算模块；在按责任拆分清零前保持 warn。
+#: 存量清零前保持 warn。发布链原子切换带入 11 个超预算模块，在它们按责任拆分前
+#: 切 block 只会把别人的存量债变成本轮阻断；升级条件见
+#: incremental-code-health-governance/spec.md#open-002。
 PYTHON_LINE_BUDGET_ENFORCEMENT = "warn"

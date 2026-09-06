@@ -50,7 +50,7 @@ CORE_READBACK_SUPPORT = (
 )
 SMOKE = OPS / "cli/smoke/run_environment_patrol_smoke.py"
 VALIDATION = OPS / "environments/gamma/validation_suites.json"
-DEVICE_MATRIX = WORKFLOWS / "app-env-device-matrix-self-hosted.yml"
+LOCAL_DEVICE_RUNNER = OPS / "ci/run_mobile_platform_matrix.sh"
 GAMMA_RELEASE_CONSUMER = APP / "scripts/gamma/run_local_gamma_release_consumer_api.py"
 
 def fail(failures: list[str], message: str) -> None:
@@ -70,7 +70,7 @@ def main() -> int:
         CORE_READBACK_SUPPORT,
         SMOKE,
         VALIDATION,
-        DEVICE_MATRIX,
+        LOCAL_DEVICE_RUNNER,
         GAMMA_RELEASE_CONSUMER,
     ):
         if not path.is_file():
@@ -280,16 +280,16 @@ def main() -> int:
                 ),
             )
 
-    workflow = DEVICE_MATRIX.read_text(encoding="utf-8")
-    if "app-core-readback" not in workflow:
+    local_runner = LOCAL_DEVICE_RUNNER.read_text(encoding="utf-8")
+    if "app-core-readback" not in local_runner:
         fail(
             failures,
-            f"{DEVICE_MATRIX.relative_to(ROOT)}: must wire app-core-readback matrix kind",
+            f"{LOCAL_DEVICE_RUNNER.relative_to(ROOT)}: must wire app-core-readback matrix kind",
         )
-    if 'smoke_env_alias="gamma-local"' in workflow:
+    if 'smoke_env_alias="gamma-local"' in local_runner:
         fail(
             failures,
-            f"{DEVICE_MATRIX.relative_to(ROOT)}: gamma Patrol must use local-gamma session alias",
+            f"{LOCAL_DEVICE_RUNNER.relative_to(ROOT)}: gamma Patrol must use local-gamma session alias",
         )
 
     release_consumer = GAMMA_RELEASE_CONSUMER.read_text(encoding="utf-8")

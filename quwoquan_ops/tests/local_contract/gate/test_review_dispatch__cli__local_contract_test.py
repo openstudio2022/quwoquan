@@ -163,7 +163,7 @@ class ReviewDispatchBoundedAssemblyTest(unittest.TestCase):
             set(_governance_contract["review_plan"]["required_fields"]),
             set(plan),
         )
-        self.assertEqual(4, _governance_contract["review_plan"]["schema_version"])
+        self.assertEqual(5, _governance_contract["review_plan"]["schema_version"])
         self.assertNotIn("fingerprint_inputs", _governance_contract["review_plan"])
         self.assertEqual(
             "canonical-evidence-fingerprint-receipt",
@@ -310,16 +310,16 @@ class ReviewDispatchBoundedAssemblyTest(unittest.TestCase):
             ["developer", "ux"], [item["role"] for item in pageflip["reviewers"]]
         )
         self.assertEqual(
-            ["review-baseline", "app-pageflip-back-mainline"],
+            ["review-baseline", "code-health-delta", "app-pageflip-back-mainline"],
             [item["id"] for item in pageflip["evidence"]],
         )
         self.assertEqual(
-            ["python3 -B quwoquan_ops/gate/verify_review_baseline.py", "make verify-app-pageflip-back-mainline"],
+            ["python3 -B quwoquan_ops/gate/verify_review_baseline.py", "python3 -B quwoquan_ops/gate/verify_review_code_health.py", "make verify-app-pageflip-back-mainline"],
             [item["command"] for item in pageflip["evidence"]],
         )
         self.assertEqual(
             ["pageflip-backward-static", "pageflip-backward-tests"],
-            pageflip["evidence"][1]["covers"],
+            pageflip["evidence"][2]["covers"],
         )
 
         python_gate = _plan(
@@ -332,7 +332,7 @@ class ReviewDispatchBoundedAssemblyTest(unittest.TestCase):
             [item["role"] for item in python_gate["reviewers"]],
         )
         self.assertEqual(
-            ["review-baseline", "portal-test", "portal-build"],
+            ["review-baseline", "code-health-delta", "portal-test", "portal-build"],
             [item["id"] for item in python_gate["evidence"]],
         )
         self.assertNotIn(
@@ -347,7 +347,10 @@ class ReviewDispatchBoundedAssemblyTest(unittest.TestCase):
         # GWT-003.t2
         ordinary = _plan("dev", "POST", ["README.md"])
         self.assertEqual(["developer"], [item["role"] for item in ordinary["reviewers"]])
-        self.assertEqual(["review-baseline"], [item["id"] for item in ordinary["evidence"]])
+        self.assertEqual(
+            ["review-baseline", "code-health-delta"],
+            [item["id"] for item in ordinary["evidence"]],
+        )
         for workflow in ("explore", "plan-next", "continue", "review", "commit"):
             with self.subTest(workflow=workflow):
                 plan = _plan(workflow, "POST", ["README.md"])
@@ -405,7 +408,7 @@ class ReviewDispatchBoundedAssemblyTest(unittest.TestCase):
                 )
                 self.assertEqual("gate", plan["reviewers"][1]["profile"])
                 self.assertEqual(
-                    ["review-baseline", "portal-test", "portal-build"],
+                    ["review-baseline", "code-health-delta", "portal-test", "portal-build"],
                     [item["id"] for item in plan["evidence"]],
                 )
                 self.assertLessEqual(len(plan["reviewers"]), 2)
@@ -460,6 +463,50 @@ class ReviewDispatchBoundedAssemblyTest(unittest.TestCase):
             "test-hosted-authority-adapter-local-contract", commit_fast_path
         )
         self.assertNotIn("test-governance-pipeline-admission", commit_fast_path)
+
+    def test_environment_release_required_evidence_is_contract_only(self) -> None:
+        legacy_command = "make verify-environment-stability-final-acceptance"
+        legacy_non_promotable_root = (
+            "quwoquan_ops/cli/lib/environment_stability_final_acceptance"
+        )
+        evidence_id = "environment-release-evidence"
+        command = (
+            "python3 -B quwoquan_ops/gate/verify_ci_cd_evidence_contracts.py"
+            " && "
+            "python3 -B quwoquan_ops/gate/verify_prod_rollout_stackctl_contract.py"
+        )
+
+        serialized_registry = yaml.safe_dump(_registry, sort_keys=True)
+        self.assertNotIn(legacy_command, serialized_registry)
+        self.assertNotIn(legacy_non_promotable_root, serialized_registry)
+        self.assertNotIn("NON_PROMOTABLE", serialized_registry)
+
+        registered = _registry["evidence"][evidence_id]
+        self.assertTrue(registered["required"])
+        self.assertEqual(command, registered["command"])
+        for script in (
+            "quwoquan_ops/gate/verify_ci_cd_evidence_contracts.py",
+            "quwoquan_ops/gate/verify_prod_rollout_stackctl_contract.py",
+        ):
+            with self.subTest(script=script):
+                self.assertTrue((_REPO_ROOT / script).is_file())
+
+        with mock.patch.object(
+            _cli, "_checklist_evidence", return_value=[evidence_id]
+        ):
+            plan = _plan(
+                "environment-ops",
+                "POST",
+                ["quwoquan_ops/environments/prod/runtime.yaml"],
+            )
+        self.assertEqual(
+            ["review-baseline", evidence_id],
+            [item["id"] for item in plan["evidence"]],
+        )
+        self.assertEqual(command, plan["evidence"][1]["command"])
+        self.assertNotIn(legacy_command, " ".join(
+            item["command"] for item in plan["evidence"]
+        ))
 
     def test_named_evidence_is_deduplicated_by_id(self) -> None:
         # GWT-004.t1: product and UX both reference feature-tree.
@@ -539,7 +586,7 @@ class ReviewDispatchBoundedAssemblyTest(unittest.TestCase):
             deliverable="code",
             scope="",
             owner_identity={"ref": None, "canonical_bytes_sha256": None, "target": "", "scope": "", "resolved_owner": "", "fingerprint_ref": None, "fingerprint_digest": None},
-            candidate_evidence_identity={"ref": None, "canonical_bytes_sha256": None, "owner_identity_ref": None, "target": "", "resolved_owner": "", "fingerprint_ref": None, "fingerprint_digest": None, "impact_plan_ref": None, "impact_plan_digest": None},
+            candidate_evidence_identity={"ref": None, "canonical_bytes_sha256": None, "schema_version": None, "owner_identity_ref": None, "delivery_owner": None, "lead_lane": None, "delivery_policy_digests": None, "target": "", "resolved_owner": "", "impacted_owner_groups_digest": None, "changed_paths_digest": None, "workspace_digests": None, "fingerprint_ref": None, "fingerprint_digest": None, "impact_plan_ref": None, "impact_plan_digest": None},
             terminal={"status": "READY", "codes": [], "failed_evidence": []},
             changed_paths=["README.md"],
             profiles=[],
@@ -552,7 +599,7 @@ class ReviewDispatchBoundedAssemblyTest(unittest.TestCase):
             deliverable="code",
             scope="",
             owner_identity={"ref": None, "canonical_bytes_sha256": None, "target": "", "scope": "", "resolved_owner": "", "fingerprint_ref": None, "fingerprint_digest": None},
-            candidate_evidence_identity={"ref": None, "canonical_bytes_sha256": None, "owner_identity_ref": None, "target": "", "resolved_owner": "", "fingerprint_ref": None, "fingerprint_digest": None, "impact_plan_ref": None, "impact_plan_digest": None},
+            candidate_evidence_identity={"ref": None, "canonical_bytes_sha256": None, "schema_version": None, "owner_identity_ref": None, "delivery_owner": None, "lead_lane": None, "delivery_policy_digests": None, "target": "", "resolved_owner": "", "impacted_owner_groups_digest": None, "changed_paths_digest": None, "workspace_digests": None, "fingerprint_ref": None, "fingerprint_digest": None, "impact_plan_ref": None, "impact_plan_digest": None},
             terminal={"status": "READY", "codes": [], "failed_evidence": []},
             changed_paths=["README.md"],
             profiles=[],
@@ -813,7 +860,7 @@ class ReviewDispatchBoundedAssemblyTest(unittest.TestCase):
             check=False,
         )
         self.assertEqual(0, result.returncode, result.stderr)
-        self.assertEqual(4, json.loads(result.stdout)["schema_version"])
+        self.assertEqual(5, json.loads(result.stdout)["schema_version"])
 
     # spec_ref: specs/feature-tree/runtime/development-workflow-governance/agent-skill-review-context-organization/spec.md#gwt-002.t3
     def test_post_requires_current_owner_manifest_and_matches_scope(self) -> None:

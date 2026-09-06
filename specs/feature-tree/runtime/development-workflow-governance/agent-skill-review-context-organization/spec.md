@@ -49,6 +49,9 @@
   精确下钻；同优先级多 owner、无 owner或解析失败必须产生 typed owner 解析结果。
 - `explore`、`plan-next` 及 `continue` 的只读恢复 best-effort 调用 `feature-context`：唯一 owner 成功时保存并消费 immutable exact ref；无 owner、多 owner或解析失败时记录 typed 结果，基于当前 Git 快照继续只读，不 `GATE_BLOCK` 整个控制流程，也不得据此进入 mutation。
 - prd、design、dev 等 mutation workflow 进入写入前必须持有唯一且 current 的 immutable exact ref；用户显式或准出 Review 必须复用该 PRE owner identity ref，并绑定 POST current candidate evidence predecessor。ref 缺失、旧 schema、内容摘要漂移、owner 多义、锚点冲突或 fingerprint stale 必须 fail-closed。控制型零 Reviewer workflow 不得包装送审交付件旁路 owner manifest。
+- candidate evidence v2 以一个版本化 lane policy 允许的逻辑 `delivery_owner` 和 current branch `lead_lane` 代表整次原子交付；PRE `owner_identity_ref` 是该交付 primary target 的唯一 current predecessor。每条 changed path 必须由同一 Feature Tree resolver 唯一解析，在 `impacted_owner_groups` 中只存一次；每个 Feature owner 只保留一次最小 immutable owner identity、由 current resolver 可重建的 owner-chain digest 与 bytewise 稳定排序路径，且 primary target owner 必须出现在分组中。
+- 多个合法 Feature owner 只表示一个 delivery 的影响面，不再要求拆分；同一 candidate 必须绑定 100% changed paths 的 workspace digests、唯一 ImpactPlan identity、current fingerprint，并作为一个 candidate 和一个原子 PR 交付。空路径、无 owner、同优先级多 owner、primary owner 漂移或 current 重算 stale 均以独立 typed terminal fail-closed。
+- delivery/candidate identity 只写版本控制中的逻辑 lane、仓库相对路径、内容摘要和 exact ref；宿主绝对路径及本机 clone/worktree inventory 只能用于本地诊断，不得成为 Hosted admission 硬输入。
 - manifest 不包含 profiles。Review profile 只在显式或准出 Review 中按 current `changed_paths + deliverable` 派生 specialist 与 evidence，不复制 feature owner 或 design 内容。
 - 上下文装配顺序固定为根 AGENTS → 宿主基于 `.agents/skills` metadata 选择 Skill → 唯一 Skill body → Skill PRE 确定 exact target → 最近子树 AGENTS + compact manifest immutable exact ref → exact contexts/tests。已知目标路径时可先读取最近子树 AGENTS，但子树不参与自然语言路由；禁止 manifest-before-skill。自然语言与显式入口必须由真实宿主加载同一 Skill body 并进入同一生命周期。
 
@@ -67,6 +70,7 @@
   `check:`，不得保存命令。
 - board 每个 evidence ID 只执行一次并把结果共享给 Reviewer。Reviewer 缺 evidence 时报告 incomplete，禁止自行补跑命令。Evidence runner 在首条命令前按 plan changed paths、canonical contexts 与 review assets 重算 current EvidenceFingerprint；tracked/untracked/deleted/renamed/symlink/context/registry command 任一变化必须零命令返回 `REVIEW.FINGERPRINT_CHANGED`。
 - 每条命令后与最终收口都必须复核同一输入 identity；运行中受管内容变化使 result stale/GATE_BLOCK。execution/result receipt 必须携带真实 workspace digests，不能以空摘要代替当前工作树。
+- 产出结构化 artifact 的 evidence 必须在 registry 声明唯一 artifact kind，并只通过 runner 注入的 create-once descriptor path 回传；runner 从 exact plan/candidate 校验 artifact regular-file/ref/bytes digest、range、changed-path 与 ImpactPlan identity 后，将 report identity、typed terminal、summary/findings 原样写入 named-evidence receipt。Reviewer 只消费该 receipt 中的 runner-validated artifact 投影，不扫描 latest、不信任 stdout，也不自行重跑 producer。
 - 复用指纹必须消费 canonical contract 声明的全部输入；tracked、untracked、删除、symlink、
   context 或 evidence 定义的变化都不得复用旧结论。
 - re-review 必须引用 initial plan，finding owner 必须来自首次 Reviewer；scope、profile 或路径集合变化时
@@ -123,6 +127,8 @@
 - WHEN 只读控制 Skill、mutation workflow 与显式/准出 Review 分别以默认格式请求 feature context。
 - THEN 唯一 owner 成功时，Skill PRE 产出的 owner identity exact ref 是显式/准出 Review candidate evidence 的稳定 predecessor，均指向相同的 AppRoot/L1/L2/L3、DEC/REQ/GWT 锚点和适用 AGENTS，不含父链全文或 profiles。
 - AND 无 owner、多 owner或解析失败时，只读控制 Skill 记录 typed 结果并基于当前 Git 快照继续只读，不产生 mutation 授权；mutation workflow 与显式/准出 Review 返回 typed `GATE_BLOCK`。
+- AND 一个包含 Review 实现路径与 App 路径的 candidate 仍由单一 delivery owner/lead lane 形成一个 ImpactPlan、candidate 与原子 PR；所有 changed paths 由 resolver 唯一解析为两个稳定排序且路径全覆盖的 impacted Feature-owner groups；路径只在所属 group 存一次，owner chain/contexts 不按 group 复制而以 digest 绑定可重建事实，跨合法 owner 本身不产生 split terminal。
+- AND changed paths 为空、任一路径无 owner或多 owner、primary target owner 未出现在 groups、groups 路径遗漏/重复/篡改、lane policy/owner chain/workspace/ImpactPlan/fingerprint current 重算漂移，或旧 candidate schema 被消费时均 fail-closed；Hosted 校验不依赖宿主绝对路径或本机 worktree inventory。
 - AND ref 摘要漂移、内容寻址 writer 最终读取期间目录项被替换，或 Review profile 未按 `changed_paths + deliverable` 派生时 fail-closed，其中 writer 只有在已验证 fd 与返回 ref 的当前目录项仍指向同一单链接 regular inode 时才可返回。
 
 <a id="gwt-003"></a>
@@ -163,6 +169,7 @@
 - GIVEN 一个 POST plan、canonical named evidence receipt、结构化 reviewer results 与 handoff artifact/ref。
 - WHEN plan 后任一受管工作树字节、context、registry command、review asset 或 artifact 在执行前、命令间或下游消费前变化。
 - THEN 变化在首条命令前导致零命令 `REVIEW.FINGERPRINT_CHANGED`，运行中变化导致 stale/GATE_BLOCK；handoff 拒绝不存在、非 PASS、plan identity 不匹配或 freshness stale 的 evidence ref，并投影真实执行字段。
+- AND candidate-bound Code Health evidence 只接受 runner 注入的 exact plan path/SHA/ref，在 clean `merge-base → plan HEAD` 上产生非空 report；plan/candidate/path/ImpactPlan 任一漂移、descriptor/report 非 regular file 或 report bytes digest 不符均 fail-closed，Reviewer assembled input 只含 runner 已验证并写入 receipt 的 exact report 投影。
 - AND 空 triggers 即使未提供 artifacts/Review/authority 也只返回 `no_persistent_handoff` 且零 projection/store；六类 trigger 任一成立则必须通过 exact owner/candidate/named evidence/Reviewer/consolidation 完整链，格式合法但 byte digest 错误的 foreign ref 返回 `HandoffStoreConflict`。
 - AND 仅 current fresh 输入可被确定性 consolidation；required incomplete 为 `GATE_BLOCK`、optional incomplete 为 `PR_WARN`、finding 去重稳定，downstream 只能来自 canonical workflow registry。
 
@@ -203,3 +210,13 @@
 - 准出影响：`track`
 - 影响或价值：当前 `cross_session_incomplete` 与 `multi_party_parallel` 已是六类正式 durable handoff trigger，必须走完整 Review/handoff 链；普通工作若需要更轻的跨会话 checkpoint，仓库尚无可复用的 canonical owner/schema。
 - 完成判定：由唯一 owner 冻结 checkpoint identity、schema、create-once/freshness/consumer 语义及与正式 handoff 的迁移边界，并以 `GWT-007.t2` 的独立验收证明不会形成第二执行状态源；在此之前不得用临时 JSON、聊天摘要或投影目录冒充 checkpoint authority。
+
+<a id="open-003"></a>
+### OPEN-003 Review evidence 与 schema consumer 结构热点收敛
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：当前 exact candidate-bound Code Health report 将 `evidence_runner.py::run_plan`、`agent_governance_contract.py::validate_candidate_evidence_manifest` 标为 `CODE_HEALTH.COMPLEXITY_ADVISORY`，并将 `review_dispatch.py` 标为 `CODE_HEALTH.FILE_LINES_ADVISORY`；这些 calibration `PR_WARN` 不阻断 candidate，但会增加 exact identity、artifact 与 fail-closed 分支的审计成本。
+- 完成判定：`GWT-003` 与 `GWT-007` 对应行为继续满足；在独立 owner increment 中逐项收敛这 3 个 identity，保持现有 Review schema、create-once、digest 与 terminal 合同；fresh clean-range Code Health 不再产生对应 advisory，且不得新增 allowlist、baseline 或削弱 Reviewer 输入预算。
+- 依赖：current Code Health named evidence与 Review focused contracts。

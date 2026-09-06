@@ -13,8 +13,8 @@ metadata:
 
 ## 执行
 
-1. 去重并引用复发实例，区分现象、根因层和可自动判定输入。
-2. 每个候选声明触发场景、MUST/MUST NOT、唯一 owner 层与 gate/check/evidence 绑定；落点只允许根/子树不变量、Workflow Skill、Feature spec/design/contracts 或 Review checklist。
+1. 去重并引用复发实例，区分现象、根因层和可自动判定输入；同类坏味道必须至少有两个独立实例，单次 finding 只保留 advisory。
+2. 每个候选声明触发场景、MUST/MUST NOT、唯一 owner 层与既有或新增 deterministic gate/check/evidence 绑定；落点只允许根/子树不变量、Workflow Skill、Feature spec/design/contracts 或 Review checklist。
 3. 候选先交人确认，不直接改规则/规格/gate；已确认候选再交 prd/design/dev 落地。
 4. POST 仅在用户要求准出时按 review Skill 执行。
 

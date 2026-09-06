@@ -9,16 +9,15 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from quwoquan_ops.cli.prod.finalize_mainline_release_artifact import (
-    validate_manifest_files,
+from quwoquan_ops.ci.release_evidence_reader import (
+    validate_historical_release_snapshot,
 )
-
 from quwoquan_ops.cli.lib.environment_stability_final_acceptance.artifact_closure import (
     _artifact_closure,
     _validate_manifest_bound_acceptance_inputs,
 )
 from quwoquan_ops.cli.lib.environment_stability_final_acceptance.attested_evidence import (
-    _validate_ci_evidence,
+    _reject_retired_ci_evidence,
     _validate_prod_sim,
     _verify_authority,
     verify_github_actions_receipt,
@@ -35,8 +34,8 @@ from quwoquan_ops.cli.lib.environment_stability_final_acceptance.model import (
     ENVIRONMENTS,
     FinalAcceptanceInputs,
     LoadedReceipt,
-    PROMOTABLE_VERDICT,
     ProviderReadinessVerifier,
+    RETIRED_GITHUB_ATTESTED_EVIDENCE_KINDS,
     SCHEMA,
     SoakAuthorityVerifier,
     _Evaluation,
@@ -103,10 +102,18 @@ def _input_projection(
             role="supporting",
         ),
         "recoveryUat": {
-            platform: _descriptor(loaded[f"recovery.{platform}"], evaluation)
+            platform: _descriptor(
+                loaded[f"recovery.{platform}"],
+                evaluation,
+                role="diagnostic_only",
+            )
             for platform in ("ios", "android")
         },
-        "nightlyArtifact": _descriptor(loaded["nightly"], evaluation),
+        "nightlyArtifact": _descriptor(
+            loaded["nightly"],
+            evaluation,
+            role="diagnostic_only",
+        ),
         "prodSim": _descriptor(
             loaded["prod_sim"],
             evaluation,
@@ -134,22 +141,32 @@ def evaluate_final_acceptance(
     *,
     max_age_seconds: int = 86_400,
     now: datetime | None = None,
-    artifact_closure_verifier: ArtifactClosureVerifier = validate_manifest_files,
+    artifact_closure_verifier: ArtifactClosureVerifier = validate_historical_release_snapshot,
     provider_readiness_verifier: ProviderReadinessVerifier = (
         verify_canonical_provider_readiness
     ),
     attestation_verifier: AttestationVerifier = verify_github_actions_receipt,
     soak_authority_verifier: SoakAuthorityVerifier = verify_canonical_hosted_prod_soak,
 ) -> dict[str, Any]:
-    """Validate authority-backed receipts and calculate one terminal verdict."""
+    """Validate frozen diagnostics without granting release qualification."""
 
     if max_age_seconds <= 0:
         raise ValueError("max_age_seconds must be positive")
     current_time = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
     evaluation = _Evaluation()
+    evaluation.block(
+        "NON_PROMOTABLE",
+        "final_acceptance",
+        "frozen diagnostic final acceptance cannot qualify a release; use QualificationFact "
+        "and qualified_prod admission",
+    )
     artifact_root = _resolve_artifact_root(evaluation, inputs.artifact_root)
     loaded = {
-        label: _load_receipt(evaluation, label=label, path=path)
+        label: (
+            None
+            if label in RETIRED_GITHUB_ATTESTED_EVIDENCE_KINDS and path is None
+            else _load_receipt(evaluation, label=label, path=path)
+        )
         for label, path in inputs.receipt_paths().items()
     }
 
@@ -212,21 +229,11 @@ def evaluate_final_acceptance(
         manifest=manifest,
         loaded=loaded,
     )
-    for kind in ("recovery.ios", "recovery.android", "nightly"):
-        _validate_ci_evidence(
+    for kind in sorted(RETIRED_GITHUB_ATTESTED_EVIDENCE_KINDS):
+        _reject_retired_ci_evidence(
             evaluation,
             loaded[kind],
             kind=kind,
-            manifest=manifest,
-            pilot=pilot,
-            now=current_time,
-            max_age_seconds=max_age_seconds,
-        )
-        _verify_authority(
-            evaluation,
-            loaded[kind],
-            manifest=manifest,
-            verifier=attestation_verifier,
         )
     _validate_prod_sim(
         evaluation,
@@ -253,17 +260,6 @@ def evaluate_final_acceptance(
     )
     if hosted_receipt is not None:
         deployment_artifact = hosted_receipt["artifactDigest"]
-        for kind in ("recovery.ios", "recovery.android", "nightly"):
-            receipt = loaded[kind]
-            if (
-                receipt is not None
-                and receipt.payload.get("artifactDigest") != deployment_artifact
-            ):
-                evaluation.block(
-                    "DIGEST_MISMATCH",
-                    kind,
-                    "signed CI evidence differs from the hosted deployment artifact",
-                )
         prod_sim = loaded["prod_sim"]
         prod_sim_release = (
             prod_sim.payload.get("releaseEvidence")
@@ -294,7 +290,7 @@ def evaluate_final_acceptance(
     payload: dict[str, Any] = {
         "schema": SCHEMA,
         "generatedAt": current_time.isoformat().replace("+00:00", "Z"),
-        "verdict": BLOCKED_VERDICT if blockers else PROMOTABLE_VERDICT,
+        "verdict": BLOCKED_VERDICT,
         "artifactClosure": closure,
         "pilot": pilot,
         "inputs": _input_projection(loaded, evaluation),

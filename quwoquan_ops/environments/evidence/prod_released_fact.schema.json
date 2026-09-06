@@ -1,0 +1,112 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://quwoquan.local/quwoquan_ops/environments/evidence/prod_released_fact.schema.json",
+  "title": "ProdReleasedFact v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "releaseId",
+    "terminal",
+    "active",
+    "revoked",
+    "digestsExist",
+    "compatible",
+    "candidateId",
+    "admission",
+    "stableTag",
+    "sourceGitSha",
+    "controlPlaneGitSha",
+    "ociDigests",
+    "finalAttempt",
+    "hostedReceiptReadback",
+    "releasedAt"
+  ],
+  "properties": {
+    "schema": {
+      "const": "quwoquan_ops.prod_released_fact.v1"
+    },
+    "releaseId": {
+      "$ref": "#/$defs/digest"
+    },
+    "terminal": {
+      "const": "released"
+    },
+    "active": {
+      "const": true
+    },
+    "revoked": {
+      "const": false
+    },
+    "digestsExist": {
+      "const": true
+    },
+    "compatible": {
+      "const": true
+    },
+    "candidateId": {
+      "$ref": "#/$defs/digest"
+    },
+    "admission": {
+      "$ref": "#/$defs/exactRef"
+    },
+    "stableTag": {
+      "type": "string",
+      "pattern": "^v(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$"
+    },
+    "sourceGitSha": {
+      "$ref": "#/$defs/git"
+    },
+    "controlPlaneGitSha": {
+      "$ref": "#/$defs/git"
+    },
+    "ociDigests": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/digest"
+      }
+    },
+    "finalAttempt": {
+      "$ref": "#/$defs/exactRef"
+    },
+    "hostedReceiptReadback": {
+      "$ref": "#/$defs/exactRef"
+    },
+    "releasedAt": {
+      "$ref": "#/$defs/timestamp"
+    }
+  },
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "git": {
+      "type": "string",
+      "pattern": "^(?:[0-9a-f]{40}|[0-9a-f]{64})$"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "exactRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ref",
+        "digest"
+      ],
+      "properties": {
+        "ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "digest": {
+          "$ref": "#/$defs/digest"
+        }
+      }
+    }
+  }
+}

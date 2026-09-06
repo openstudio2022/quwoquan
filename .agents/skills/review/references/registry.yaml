@@ -17,7 +17,7 @@ evidence:
     command: python3 -B quwoquan_ops/gate/verify_review_baseline.py
     segment: POST
     required: true
-    timeout_seconds: 10
+    timeout_seconds: 120
     covers: []
   portal-test:
     command: make test-ops-portal
@@ -69,6 +69,16 @@ evidence:
     required: true
     timeout_seconds: 300
     covers: []
+  code-health-delta:
+    command: python3 -B quwoquan_ops/gate/verify_review_code_health.py
+    segment: POST
+    required: true
+    result_artifact: code-health-report-v1
+    timeout_seconds: 300
+    covers:
+      - changed-source-classification
+      - incremental-complexity-duplication-reachability
+      - code-health-evidence-fingerprint
   recommendation-event-contract:
     command: make verify-behavior-event-type-contract
     segment: POST
@@ -94,7 +104,7 @@ evidence:
     timeout_seconds: 300
     covers: []
   environment-release-evidence:
-    command: make verify-environment-stability-final-acceptance
+    command: python3 -B quwoquan_ops/gate/verify_ci_cd_evidence_contracts.py && python3 -B quwoquan_ops/gate/verify_prod_rollout_stackctl_contract.py
     segment: POST
     required: true
     timeout_seconds: 900

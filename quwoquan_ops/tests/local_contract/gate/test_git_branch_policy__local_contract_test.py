@@ -30,11 +30,11 @@ from quwoquan_ops.gate.verify_git_branch_policy import (
     BranchDecision,
     BranchPolicy,
     BranchTransition,
-    IntegrationBranchActivation,
+    IntegrationBranchUpdates,
+    ProductionSelector,
     PullRequestEdge,
     RequiredPromotionCheck,
     SystemBacksync,
-    activation_readback,
     branch_policy_issues,
     current_repo_issues,
     evaluate_transition,
@@ -44,7 +44,6 @@ from quwoquan_ops.gate.verify_git_branch_policy import (
     pre_push_issues,
     pull_request_context_from_environment,
     repository_branch_context_from_environment,
-    write_activation_transition_evidence,
 )
 
 LANE_BRANCHES = (
@@ -102,39 +101,27 @@ def test_repository_policy_declares_dev_integration_main_release_and_six_lanes()
     assert policy.pull_request_prefixes == {"lane/"}
     assert policy.integration_branch == "dev1.0"
     assert policy.release_branch == "main"
-    assert policy.integration_branch_activation == IntegrationBranchActivation(
-        state="active",
-        transition_command=(
-            "python3 -B quwoquan_ops/gate/verify_git_branch_policy.py "
-            "--activation-transition --evidence-path "
-            ".qwq_output/env/repo/runs/branch-policy/dev1.0-activation.json"
-        ),
-        evidence_kind="integration_branch_activation_v1",
-        bootstrap_remote_before_oid="absent",
-        bootstrap_remote_after_oid="exact_local_integration_head",
-        bootstrap_source_branch="dev1.0",
-        bootstrap_target_branch="dev1.0",
-        bootstrap_release_eligibility=False,
-        active_accepted_updates=(
-            "lane_pull_request_merge",
+    assert policy.integration_branch_updates == IntegrationBranchUpdates(
+        accepted=(
+            "trusted_integration_publisher_cas",
+            "integration_worktree_fast_forward",
             "system_fast_forward_backsync",
         ),
-        active_direct_push="forbidden",
+        ordinary_direct_push="matching_integration_fast_forward_only",
     )
-    assert policy.production_source_branch == "main"
+    assert policy.source_admission_branch == "main"
+    assert policy.production_selector == ProductionSelector(
+        source="ReleaseTagAdmissionFact",
+        accepted_tag_kind="stable",
+        exact_oci_digests_required=True,
+        main_head_denied=True,
+        mutable_pointer_denied=True,
+    )
     assert policy.production_workflow == ".github/workflows/deploy-prod-auto.yml"
     assert policy.required_promotion_checks == (
         RequiredPromotionCheck(
             name="03. Delivery Gate",
             workflow=".github/workflows/delivery-gate.yml",
-        ),
-        RequiredPromotionCheck(
-            name="04. Pre-Release Gate",
-            workflow=".github/workflows/pre-release-gate.yml",
-        ),
-        RequiredPromotionCheck(
-            name="05. App Env Device Matrix",
-            workflow=".github/workflows/app-env-device-matrix-self-hosted.yml",
         ),
     )
     assert policy.allowed_pull_request_edges == (
@@ -164,13 +151,15 @@ def test_repository_policy_declares_dev_integration_main_release_and_six_lanes()
     }
 
 
-@pytest.mark.parametrize("branch", ["dev1.0", "main"])
-def test_local_commit_rejects_integration_and_release(branch: str) -> None:
-    issues = local_commit_issues(policy=_repository_policy(), current_branch=branch)
+def test_local_commit_accepts_integration_candidate_construction() -> None:
+    assert local_commit_issues(policy=_repository_policy(), current_branch="dev1.0") == []
+
+
+def test_local_commit_rejects_release_branch() -> None:
+    issues = local_commit_issues(policy=_repository_policy(), current_branch="main")
     assert len(issues) == 1
     assert issues[0].startswith("OPS.BRANCH.INTEGRATION_READ_ONLY:")
     assert "terminal=blocked" in issues[0]
-    assert "commit_from_a_lane_worktree_then_open_pull_request" in issues[0]
 
 
 @pytest.mark.parametrize("branch", list(LANE_BRANCHES))
@@ -453,8 +442,6 @@ def test_main_only_fixture_still_fails_closed_for_dev_branch(tmp_path: Path) -> 
     payload["allowed_local_branches"] = ["main"]
     payload["allowed_remote_branches"] = ["main"]
     payload["integration_branch"] = "main"
-    payload["integration_branch_activation"]["bootstrap"]["source_branch"] = "main"
-    payload["integration_branch_activation"]["bootstrap"]["target_branch"] = "main"
     payload["allowed_pull_request_edges"] = [{"head": "main", "base": "main"}]
     payload["pull_request_branch_prefixes"] = []
     payload.pop("persistent_lane_admission")
@@ -521,7 +508,7 @@ def test_policy_byte_loader_rejects_top_level_and_nested_duplicate_keys(raw: byt
     [
         (b"integration_branch: dev1.0", b"integration_branch: true"),
         (b"release_branch: main", b"release_branch: 7"),
-        (b"production_source_branch: main", b"production_source_branch: null"),
+        (b"source_admission_branch: main", b"source_admission_branch: null"),
         (b"  - dev1.0\n  - main", b"  - true\n  - main"),
         (b"  policy_invalid: OPS.BRANCH.POLICY_INVALID", b"  true: OPS.BRANCH.POLICY_INVALID"),
         (b"  policy_invalid: OPS.BRANCH.POLICY_INVALID", b"  policy_invalid: 1"),
@@ -535,6 +522,112 @@ def test_policy_byte_loader_rejects_non_string_declared_values(
     assert needle in raw
     with pytest.raises((TypeError, ValueError)):
         load_policy_bytes(raw.replace(needle, replacement, 1))
+
+
+def test_integration_branch_updates_schema_rejects_legacy_direct_push_value() -> None:
+    payload = yaml.safe_load(
+        (ROOT / "quwoquan_ops/policies/branch_policy.yaml").read_text(
+            encoding="utf-8"
+        )
+    )
+    payload["integration_branch_updates"]["ordinary_direct_push"] = "denied"
+
+    with pytest.raises(ValueError, match="matching integration fast-forward only"):
+        load_policy_bytes(
+            yaml.safe_dump(payload, allow_unicode=True, sort_keys=False).encode("utf-8")
+        )
+
+
+@pytest.mark.parametrize(
+    ("field", "invalid_value"),
+    [
+        ("source", "MainSourceSeal"),
+        ("acceptedTagKind", "rc"),
+        ("exactOciDigestsRequired", False),
+        ("mainHeadDenied", False),
+        ("mutablePointerDenied", False),
+    ],
+)
+def test_production_selector_schema_is_exact_and_single_track(
+    field: str, invalid_value: object,
+) -> None:
+    payload = yaml.safe_load(
+        (ROOT / "quwoquan_ops/policies/branch_policy.yaml").read_text(
+            encoding="utf-8"
+        )
+    )
+    payload["production_selector"][field] = invalid_value
+
+    with pytest.raises(ValueError, match="production_selector"):
+        load_policy_bytes(
+            yaml.safe_dump(payload, allow_unicode=True, sort_keys=False).encode("utf-8")
+        )
+
+
+@pytest.mark.parametrize(
+    ("field", "invalid_value"),
+    [
+        ("source", True),
+        ("acceptedTagKind", None),
+        ("exactOciDigestsRequired", 1),
+        ("mainHeadDenied", "true"),
+        ("mutablePointerDenied", None),
+    ],
+)
+def test_production_selector_rejects_non_strict_types(
+    field: str, invalid_value: object,
+) -> None:
+    payload = yaml.safe_load(
+        (ROOT / "quwoquan_ops/policies/branch_policy.yaml").read_text(
+            encoding="utf-8"
+        )
+    )
+    payload["production_selector"][field] = invalid_value
+
+    with pytest.raises(TypeError, match=rf"production_selector\.{field}"):
+        load_policy_bytes(
+            yaml.safe_dump(payload, allow_unicode=True, sort_keys=False).encode("utf-8")
+        )
+
+
+def test_production_selector_rejects_unknown_missing_and_legacy_fields() -> None:
+    canonical = yaml.safe_load(
+        (ROOT / "quwoquan_ops/policies/branch_policy.yaml").read_text(
+            encoding="utf-8"
+        )
+    )
+    broken_payloads = []
+    unknown = yaml.safe_load(yaml.safe_dump(canonical, sort_keys=False))
+    unknown["production_selector"]["fallback"] = "main"
+    broken_payloads.append(unknown)
+    missing = yaml.safe_load(yaml.safe_dump(canonical, sort_keys=False))
+    missing["production_selector"].pop("mainHeadDenied")
+    broken_payloads.append(missing)
+    legacy = yaml.safe_load(yaml.safe_dump(canonical, sort_keys=False))
+    legacy["production_source_branch"] = legacy.pop("source_admission_branch")
+    broken_payloads.append(legacy)
+
+    for broken in broken_payloads:
+        with pytest.raises(ValueError, match="fields drifted"):
+            load_policy_bytes(
+                yaml.safe_dump(broken, allow_unicode=True, sort_keys=False).encode(
+                    "utf-8"
+                )
+            )
+
+
+def test_source_admission_branch_must_equal_release_branch() -> None:
+    payload = yaml.safe_load(
+        (ROOT / "quwoquan_ops/policies/branch_policy.yaml").read_text(
+            encoding="utf-8"
+        )
+    )
+    payload["source_admission_branch"] = "dev1.0"
+
+    with pytest.raises(ValueError, match="source_admission_branch must equal release_branch"):
+        load_policy_bytes(
+            yaml.safe_dump(payload, allow_unicode=True, sort_keys=False).encode("utf-8")
+        )
 
 
 def _run_branch_policy_cli() -> subprocess.CompletedProcess[str]:
@@ -666,15 +759,13 @@ def test_real_cli_passes_without_traceback() -> None:
     assert "Traceback" not in completed.stdout + completed.stderr
 
 
-def test_cli_local_commit_mode_rejects_integration_branch(monkeypatch, capsys) -> None:
+def test_cli_local_commit_mode_accepts_integration_branch(monkeypatch, capsys) -> None:
     import quwoquan_ops.gate.verify_git_branch_policy as module
 
     monkeypatch.setattr(module, "_current_branch", lambda: "dev1.0")
-    assert module.main(["--local-commit"]) == 1
+    assert module.main(["--local-commit"]) == 0
     output = capsys.readouterr().out
-    assert "OPS.BRANCH.INTEGRATION_READ_ONLY" in output
-    assert "terminal=blocked" in output
-    assert "commit_from_a_lane_worktree_then_open_pull_request" in output
+    assert "[verify_git_branch_policy] OK" in output
 
 
 def test_policy_byte_loader_rejects_unknown_or_missing_root_fields() -> None:

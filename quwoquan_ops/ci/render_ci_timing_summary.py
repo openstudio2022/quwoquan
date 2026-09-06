@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
-"""Render the canonical CI timing summary from measured workflow evidence."""
+"""Render a per-run CI timing diagnostic from measured workflow evidence.
+
+This generic summary is deliberately not the promotion timing ratchet authority.
+"""
 
 from __future__ import annotations
 
@@ -16,6 +19,10 @@ DEFAULT_BUDGET_FILE = (
     REPO_ROOT / "quwoquan_ops" / "environments" / "pr_gate_timing_budgets.json"
 )
 CANONICAL_SCHEMA = "ci-timing-summary"
+DIAGNOSTIC_ONLY_NOTE = (
+    "CiTimingSummary is diagnostic only; promotion timing authority is "
+    "quwoquan_ops.promotion_timing_sample"
+)
 OFFICIAL_CRITICAL_PATH_SOURCE = "github_run_calendar"
 
 TIMESTAMP_ARGUMENTS = {
@@ -152,7 +159,11 @@ def timing_policy(
     profile = budget_profile.strip() or None
     gate_hard_seconds = optional_budget_seconds(gate_budget, "hardFailSeconds")
     raw_policy = gate_budget.get("timingPolicy", "release_sla")
-    if raw_policy not in {"release_sla", "telemetry_advisory"}:
+    if raw_policy not in {
+        "release_sla",
+        "telemetry_advisory",
+        "promotion_timing_ratchet",
+    }:
         raise ValueError("canonical timing policy is invalid: {0}".format(raw_policy))
     policy = str(raw_policy)
     if profile is None:
@@ -256,6 +267,8 @@ def build_payload(
     normalized_source_sha = source_git_sha.strip() or None
     normalized_candidate_digest = candidate_digest.strip() or None
     normalized_notes = [note.strip() for note in notes if note.strip()]
+    if timing_policy_class == "promotion_timing_ratchet":
+        normalized_notes.append(DIAGNOSTIC_ONLY_NOTE)
     if release_outcome != "not_applicable":
         normalized_notes.append(f"releaseOutcome={release_outcome}")
 
@@ -304,6 +317,8 @@ def build_payload(
     timing_projection = "PASS"
     if functional_outcome == "fail":
         timing_projection = "FUNCTIONAL_FAIL"
+    elif timing_policy_class == "promotion_timing_ratchet":
+        timing_projection = "DIAGNOSTIC_ONLY"
     elif timing_policy_class == "release_sla" and hard_budget_exceeded:
         timing_projection = "GATE_BLOCK"
     elif status == "historical_incomplete":

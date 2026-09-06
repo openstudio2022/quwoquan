@@ -96,7 +96,51 @@ class HandoffManifestProducerTest(unittest.TestCase):
         if not candidate_existed:
             cls._created_content_refs.append((candidate_path, candidate_bytes))
 
-        def execute(*_args, **_kwargs):
+        setup_artifact_root = CASE_ROOT / ("class-setup-" + uuid.uuid4().hex)
+        setup_artifact_root.mkdir(parents=True)
+        cls._setup_artifact_root = setup_artifact_root
+
+        def execute(*_args, **kwargs):
+            descriptor_raw = kwargs.get("env", {}).get(evidence_runner.RESULT_PATH_ENV)
+            if descriptor_raw and Path(descriptor_raw).name == "code-health-delta.json":
+                candidate_identity = plan["candidate_evidence_identity"]
+                report = {
+                    "schema": "quwoquan.code-health-delta",
+                    "terminal": "PASS",
+                    "baseSha": plan["merge_base_sha"],
+                    "headSha": plan["head_sha"],
+                    "changedPathsDigest": candidate_identity["changed_paths_digest"],
+                    "summary": {"changedFiles": len(plan["changed_paths"])},
+                    "findings": [],
+                    "evidenceFingerprint": {
+                        "ref": "evidence-fingerprint-v1:sha256:" + "c" * 64,
+                        "digest": "sha256:" + "c" * 64,
+                    },
+                }
+                report_path = setup_artifact_root / "code-health-report.json"
+                report_path.write_bytes(canonical_json_bytes(report))
+                descriptor = {
+                    "kind": "code-health-report-v1",
+                    "ref": report_path.relative_to(ROOT).as_posix(),
+                    "canonical_bytes_sha256": "sha256:" + hashlib.sha256(report_path.read_bytes()).hexdigest(),
+                    "schema": report["schema"],
+                    "terminal": report["terminal"],
+                    "report_identity": "sha256:" + "d" * 64,
+                    "evidence_fingerprint_ref": report["evidenceFingerprint"]["ref"],
+                    "evidence_fingerprint_digest": report["evidenceFingerprint"]["digest"],
+                    "base_sha": plan["merge_base_sha"],
+                    "head_sha": plan["head_sha"],
+                    "changed_paths_digest": candidate_identity["changed_paths_digest"],
+                    "impact_plan_ref": candidate_identity["impact_plan_ref"],
+                    "impact_plan_digest": candidate_identity["impact_plan_digest"],
+                    "candidate_evidence_ref": candidate_identity["ref"],
+                    "candidate_evidence_sha256": candidate_identity["canonical_bytes_sha256"],
+                    "plan_ref": kwargs["env"][evidence_runner.BASELINE_PLAN_REF_ENV],
+                    "plan_sha256": kwargs["env"][evidence_runner.BASELINE_PLAN_SHA_ENV],
+                    "summary": report["summary"],
+                    "findings": report["findings"],
+                }
+                Path(descriptor_raw).write_bytes(canonical_json_bytes(descriptor))
             return mock.Mock(
                 returncode=0,
                 stdout=b"fixture",
@@ -140,6 +184,7 @@ class HandoffManifestProducerTest(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls) -> None:
+        shutil.rmtree(cls._setup_artifact_root, ignore_errors=True)
         for path, expected in reversed(cls._created_content_refs):
             try:
                 if path.is_file() and not path.is_symlink() and path.read_bytes() == expected:

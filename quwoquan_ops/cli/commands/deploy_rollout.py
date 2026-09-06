@@ -38,14 +38,21 @@ def _command_deploy_with_lock(args: argparse.Namespace) -> dict[str, Any]:
     rollback_deadline_epoch = 0
     rollback_reason = ""
     rollback_state: dict[str, str] | None = None
+    force_deadline_rollback = False
+    error: Exception | None = None
+    item: dict[str, Any] = {}
+    nested_args: argparse.Namespace | None = None
+    nested_command = ""
+    nested_dir = report_dir
+    nested_scope = ""
     rollout_decision = "continue"
     rollout_stage = ""
     dry_run_requested = str(getattr(args, "dry_run", "false")).strip().lower() == "true"
     slo_readback: dict[str, Any] | None = None
     prometheus_url = ""
-    release_manifest_path: Path | None = None
-    release_artifact_digest = ""
-    release_manifest_payload: dict[str, Any] = {}
+    service_factory_material_path: Path | None = None
+    candidate_material_id = ""
+    deploy_material: dict[str, Any] = {}
     expected_generation = 0
     transition_action = "advance"
     release_receipt_id = ""
@@ -53,11 +60,11 @@ def _command_deploy_with_lock(args: argparse.Namespace) -> dict[str, Any]:
     release_receipt_path: Path | None = None
     release_state_snapshot: dict[str, str] = {}
     release_candidate_digests: dict[str, str] = {}
-    environment_acceptance: dict[str, str] = {}
-    from_release_evidence_ref = ""
-    to_release_evidence_ref = ""
-    from_image_transport_tag = ""
-    to_image_transport_tag = ""
+    prod_activation_admission: dict[str, str] = {}
+    from_service_factory_oci_digest = ""
+    to_service_factory_oci_digest = ""
+    from_app_factory_oci_digest = ""
+    to_app_factory_oci_digest = ""
     last_good_candidate_digest = ""
     rollout_canary_contract: dict[str, Any] | None = None
     rollout_canary_traffic: dict[str, Any] | None = None
@@ -182,97 +189,41 @@ def _command_deploy_with_lock(args: argparse.Namespace) -> dict[str, Any]:
                     "details": [str(error)],
                     **timing,
                 }
-        acceptance_ref = str(
-            getattr(args, "environment_acceptance_ref", "") or ""
+        prod_activation_input = str(
+            getattr(args, "prod_activation_admission", "") or ""
         ).strip()
-        acceptance_digest = str(
-            getattr(args, "environment_acceptance_sha256", "") or ""
-        ).strip()
-        acceptance_root_value = str(
-            getattr(args, "environment_acceptance_root", "")
-            or os.environ.get("QWQ_ENVIRONMENT_ACCEPTANCE_ROOT", "")
-        ).strip()
-        if bool(acceptance_ref) != bool(acceptance_digest):
+        if not dry_run_requested and not prod_activation_input:
             timing = _stackctl._finish_timing(started_monotonic, started_at)
             return {
                 "exitCode": 2,
-                "summary": "stackctl deploy blocked: acceptance ref and digest must be paired",
-                "details": [],
+                "summary": "stackctl deploy blocked: canonical ProdActivationAdmissionFact input is required",
+                "details": ["provide exact materialized --prod-activation-admission envelope"],
                 **timing,
             }
-        if not dry_run_requested and (
-            not acceptance_ref or not acceptance_digest or not acceptance_root_value
-        ):
-            timing = _stackctl._finish_timing(started_monotonic, started_at)
-            return {
-                "exitCode": 2,
-                "summary": "stackctl deploy blocked: canonical Prod EnvironmentAcceptanceFact is required",
-                "details": [
-                    "provide --environment-acceptance-ref, "
-                    "--environment-acceptance-sha256 and a protected acceptance root"
-                ],
-                **timing,
-            }
-        required = [
-            args.service,
-            args.from_candidate_digest,
-            args.to_candidate_digest,
-            args.release_evidence_ref,
-            args.step,
-        ]
+        required = [args.service, args.step, prod_activation_input]
         if not all(required):
             timing = _stackctl._finish_timing(started_monotonic, started_at)
             return {
                 "exitCode": 2,
-                "summary": "stackctl deploy prod-hosted requires candidate digests, exact release evidence and step",
-                "details": [],
-                **timing,
-            }
-        manifest_value = str(
-            getattr(args, "release_manifest", "")
-            or os.environ.get("RELEASE_MANIFEST", "")
-        ).strip()
-        if not manifest_value:
-            timing = _stackctl._finish_timing(started_monotonic, started_at)
-            return {
-                "exitCode": 2,
-                "summary": "stackctl deploy blocked: immutable release manifest is required",
+                "summary": "stackctl deploy prod-hosted requires service, step and exact activation authority",
                 "details": [],
                 **timing,
             }
         try:
             (
-                release_manifest_path,
-                release_artifact_digest,
-                release_manifest_payload,
-            ) = _stackctl._deployable_release_manifest(
-                manifest_value,
-                candidate_digest=args.to_candidate_digest,
-            )
+                prod_activation_admission,
+                service_factory_material_path,
+                candidate_material_id,
+                deploy_material,
+            ) = _stackctl._load_prod_activation_admission(prod_activation_input)
+            args.from_candidate_digest = prod_activation_admission["previousCandidateDigest"]
+            args.to_candidate_digest = prod_activation_admission["candidateDigest"]
             for label, value in (
-                ("from candidate", args.from_candidate_digest),
-                ("to candidate", args.to_candidate_digest),
+                ("previous candidate", args.from_candidate_digest),
+                ("candidate", args.to_candidate_digest),
             ):
                 if re.fullmatch(r"sha256:[0-9a-f]{64}", value) is None:
                     raise RuntimeError(f"{label} digest is invalid")
-            if acceptance_ref:
-                if not acceptance_root_value:
-                    raise RuntimeError(
-                        "explicit EnvironmentAcceptanceFact requires a protected acceptance root"
-                    )
-                release_id = str(
-                    release_manifest_payload.get("releaseTrainId")
-                    or release_manifest_payload.get("candidateId")
-                    or ""
-                )
-                environment_acceptance = _stackctl._load_prod_environment_acceptance(
-                    acceptance_ref,
-                    expected_digest=acceptance_digest,
-                    evidence_root=Path(acceptance_root_value).expanduser(),
-                    release_id=release_id,
-                    release_digest=release_artifact_digest,
-                    candidate_digest=str(args.to_candidate_digest or "").strip(),
-                )
             if not dry_run_requested:
                 evidence_path_value = str(
                     getattr(args, "promotion_evidence", "") or ""
@@ -296,9 +247,9 @@ def _command_deploy_with_lock(args: argparse.Namespace) -> dict[str, Any]:
                     _stackctl.rollout_stage_promotion_evidence.validate_observation(
                         promotion_observation,
                         candidate_id=str(
-                            release_manifest_payload.get("candidateId") or ""
+                            deploy_material.get("candidateId") or ""
                         ),
-                        artifact_digest=release_artifact_digest,
+                        artifact_digest=candidate_material_id,
                         campaign_id=str(rollout_canary_contract["campaignId"]),
                         routing_policy_digest=str(
                             rollout_canary_contract["routingPolicyDigest"]
@@ -313,73 +264,60 @@ def _command_deploy_with_lock(args: argparse.Namespace) -> dict[str, Any]:
             if not dry_run_requested:
                 release_candidate_digests = _stackctl._required_release_candidate_digests(
                     args,
-                    release_manifest_payload,
+                    deploy_material,
                 )
             release_state_snapshot, _ = _stackctl._fetch_hosted_release_ledger_projection(
                 args.service,
                 allow_uninitialized=False,
                 deadline_epoch=promotion_deadline_epoch,
             )
-            to_release_evidence_ref = str(args.release_evidence_ref).strip()
-            if re.fullmatch(
-                r"ghcr\.io/[a-z0-9._/-]+@sha256:[0-9a-f]{64}",
-                to_release_evidence_ref,
-            ) is None:
-                raise RuntimeError("target release evidence ref is not exact OCI")
-            to_image_transport_tag = _stackctl._release_transport_tag(
-                release_manifest_payload
-            )
+            to_service_factory_oci_digest = prod_activation_admission[
+                "serviceFactoryOciDigest"
+            ]
+            to_app_factory_oci_digest = prod_activation_admission[
+                "appFactoryOciDigest"
+            ]
             if release_state_snapshot.get("to_candidate_digest") == args.to_candidate_digest:
                 restored_candidate_noop = (
                     release_state_snapshot.get("decision") == "rolled_back"
                     and args.from_candidate_digest == args.to_candidate_digest
                 )
-                from_release_evidence_ref = release_state_snapshot.get(
-                    (
-                        "to_release_evidence_ref"
-                        if restored_candidate_noop
-                        else "from_release_evidence_ref"
-                    ),
+                from_service_factory_oci_digest = release_state_snapshot.get(
+                    "to_service_factory_oci_digest"
+                    if restored_candidate_noop
+                    else "from_service_factory_oci_digest",
                     "",
                 )
-                from_image_transport_tag = release_state_snapshot.get(
-                    (
-                        "to_image_transport_tag"
-                        if restored_candidate_noop
-                        else "from_image_transport_tag"
-                    ),
+                from_app_factory_oci_digest = release_state_snapshot.get(
+                    "to_app_factory_oci_digest"
+                    if restored_candidate_noop
+                    else "from_app_factory_oci_digest",
                     "",
                 )
                 if (
-                    release_state_snapshot.get("to_release_evidence_ref")
-                    != to_release_evidence_ref
-                    or release_state_snapshot.get("to_image_transport_tag")
-                    != to_image_transport_tag
+                    release_state_snapshot.get("to_service_factory_oci_digest")
+                    != to_service_factory_oci_digest
+                    or release_state_snapshot.get("to_app_factory_oci_digest")
+                    != to_app_factory_oci_digest
                 ):
                     raise RuntimeError(
-                        "hosted ledger target transport does not match resume candidate"
+                        "hosted ledger target factory closure does not match resume candidate"
                     )
             else:
-                from_release_evidence_ref = release_state_snapshot.get(
-                    "to_release_evidence_ref", ""
+                from_service_factory_oci_digest = release_state_snapshot.get(
+                    "to_service_factory_oci_digest", ""
                 )
-                from_image_transport_tag = release_state_snapshot.get(
-                    "to_image_transport_tag", ""
+                from_app_factory_oci_digest = release_state_snapshot.get(
+                    "to_app_factory_oci_digest", ""
                 )
-            if (
-                re.fullmatch(
-                    r"ghcr\.io/[a-z0-9._/-]+@sha256:[0-9a-f]{64}",
-                    from_release_evidence_ref,
-                )
-                is None
-                or not from_image_transport_tag
+            for label, value in (
+                ("source service factory OCI", from_service_factory_oci_digest),
+                ("source app factory OCI", from_app_factory_oci_digest),
             ):
-                raise RuntimeError(
-                    "hosted ledger lacks canonical source transport metadata; historical cutover is required"
-                )
-            # The deployment adapter still needs transport coordinates, but
-            # callers can no longer supply them as release identity. They are
-            # derived exclusively from the two candidate authorities.
+                if re.fullmatch(r"sha256:[0-9a-f]{64}", value) is None:
+                    raise RuntimeError(
+                        f"hosted ledger lacks exact {label} digest; historical cutover is required"
+                    )
             last_good_candidate_digest = release_state_snapshot.get(
                 "last_good_candidate_digest",
                 args.from_candidate_digest,
@@ -389,37 +327,26 @@ def _command_deploy_with_lock(args: argparse.Namespace) -> dict[str, Any]:
                 from_candidate_digest=args.from_candidate_digest,
                 to_candidate_digest=args.to_candidate_digest,
                 stage=rollout_stage,
-                acceptance_digest=environment_acceptance.get("digest", ""),
-                engineering_eligibility_digest=environment_acceptance.get(
-                    "engineeringEligibilityDigest", ""
-                ),
-                durable_approval_digest=environment_acceptance.get(
-                    "durableApprovalDigest", ""
+                prod_activation_admission_payload_digest=prod_activation_admission.get(
+                    "prodActivationAdmissionPayloadDigest", ""
                 ),
             )
-            if not dry_run_requested:
-                _stackctl._verify_release_registry_attestations(
-                    release_manifest_payload,
-                    deadline_epoch=promotion_deadline_epoch,
-                )
-                _stackctl._archive_release_artifact(
-                    release_manifest_path,
-                    release_artifact_digest,
-                )
+
         except RuntimeError as error:
             timing = _stackctl._finish_timing(started_monotonic, started_at)
             return {
                 "exitCode": 2,
-                "summary": "stackctl deploy blocked: release manifest or ledger validation failed",
+                "summary": "stackctl deploy blocked: activation authority or ledger validation failed",
                 "details": [str(error)],
                 **timing,
             }
         release_receipt_id = hashlib.sha256(
             (
-                f"{args.service}\0{release_artifact_digest}\0{rollout_stage}\0"
-                f"{environment_acceptance.get('digest', '')}\0"
-                f"{environment_acceptance.get('engineeringEligibilityDigest', '')}\0"
-                f"{environment_acceptance.get('durableApprovalDigest', '')}\0"
+                f"{args.service}\0{candidate_material_id}\0{rollout_stage}\0"
+                f"{prod_activation_admission.get('prodActivationAdmissionPayloadDigest', '')}\0"
+                f"{prod_activation_admission.get('releaseTagAdmissionDigest', '')}\0"
+                f"{prod_activation_admission.get('qualificationDigest', '')}\0"
+                f"{prod_activation_admission.get('previousReleasedPayloadDigest', '')}\0"
                 f"{expected_generation + (0 if transition_action == 'replay' else 1)}"
             ).encode("utf-8")
         ).hexdigest()
@@ -461,14 +388,19 @@ def _command_deploy_with_lock(args: argparse.Namespace) -> dict[str, Any]:
                 "stderr": "",
                 "rolloutStage": rollout_stage,
                 "rolloutDecision": hosted_receipt.get("decision"),
-                "artifactDigest": release_artifact_digest,
-                "candidateId": release_manifest_payload.get("candidateId"),
+                "candidateMaterialId": candidate_material_id,
+                "candidateId": deploy_material.get("candidateId"),
                 "releaseReceiptId": release_receipt_id,
                 "releaseReceiptRef": f"receipt:hosted:{release_receipt_id}",
                 "releaseReceiptAuthority": "prod-hosted-service-plane",
-                "releaseReceiptPath": str(release_receipt_path),
+                "hostedReceipt": hosted_receipt,
+                "hostedStageReceipt": {
+                    "ref": f"receipt:hosted:{release_receipt_id}",
+                    "receiptId": release_receipt_id,
+                    "authority": "prod-hosted-service-plane",
+                },
                 "releaseState": release_state_snapshot,
-                "environmentAcceptance": environment_acceptance,
+                "prodActivationAdmission": prod_activation_admission,
                 "releaseEligibility": "eligible",
                 "wiredWorkloads": _stackctl._prod_rollout_workloads(),
                 "providerReadiness": provider_readiness,
@@ -570,13 +502,15 @@ def _command_deploy_with_lock(args: argparse.Namespace) -> dict[str, Any]:
                     "PROD_SSH_HOST": "",
                     "CLOUD_PROVIDER": args.cloud_provider,
                     "SERVICE": args.service,
-                    "IMAGE_TRANSPORT_TAG": to_image_transport_tag,
                     "CANDIDATE_DIGEST": args.to_candidate_digest,
-                    "PREVIOUS_IMAGE_TRANSPORT_TAG": from_image_transport_tag,
+                    "PREVIOUS_CANDIDATE_DIGEST": args.from_candidate_digest,
                     "ROLLOUT_STAGE": rollout_stage,
                     "DRY_RUN": args.dry_run,
-                    "RELEASE_MANIFEST": str(release_manifest_path),
-                    "RELEASE_EVIDENCE_DIGEST": release_artifact_digest,
+                    "SERVICE_FACTORY_MATERIAL": str(service_factory_material_path),
+                    "CANDIDATE_MATERIAL_ID": candidate_material_id,
+                    "PROD_ACTIVATION_ADMISSION_DIGEST": prod_activation_admission[
+                        "prodActivationAdmissionPayloadDigest"
+                    ],
                 },
                 timeout_seconds=apply_timeout,
             )
@@ -616,9 +550,9 @@ def _command_deploy_with_lock(args: argparse.Namespace) -> dict[str, Any]:
                         _stackctl.rollout_stage_promotion_evidence.validate_observation(
                             promotion_observation,
                             candidate_id=str(
-                                release_manifest_payload.get("candidateId") or ""
+                                deploy_material.get("candidateId") or ""
                             ),
-                            artifact_digest=release_artifact_digest,
+                            artifact_digest=candidate_material_id,
                             campaign_id=str(rollout_canary_contract["campaignId"]),
                             routing_policy_digest=str(
                                 rollout_canary_contract["routingPolicyDigest"]
@@ -831,8 +765,8 @@ def _command_deploy_with_lock(args: argparse.Namespace) -> dict[str, Any]:
             "expected_generation": expected_generation,
             "final_exit_code": final_exit_code,
             "findings": findings,
-            "from_image_transport_tag": from_image_transport_tag,
-            "from_release_evidence_ref": from_release_evidence_ref,
+            "from_service_factory_oci_digest": from_service_factory_oci_digest,
+            "from_app_factory_oci_digest": from_app_factory_oci_digest,
             "hard_deadline_epoch": hard_deadline_epoch,
             "item": item,
             "last_good_candidate_digest": last_good_candidate_digest,
@@ -843,9 +777,9 @@ def _command_deploy_with_lock(args: argparse.Namespace) -> dict[str, Any]:
             "post_deploy_checks": post_deploy_checks,
             "post_deploy_failures": post_deploy_failures,
             "promotion_deadline_epoch": promotion_deadline_epoch,
-            "release_artifact_digest": release_artifact_digest,
+            "candidate_material_id": candidate_material_id,
             "release_candidate_digests": release_candidate_digests,
-            "environment_acceptance": environment_acceptance,
+            "prod_activation_admission": prod_activation_admission,
             "release_receipt_id": release_receipt_id,
             "release_receipt_path": release_receipt_path,
             "report_dir": report_dir,
@@ -862,8 +796,8 @@ def _command_deploy_with_lock(args: argparse.Namespace) -> dict[str, Any]:
             "rollout_decision": rollout_decision,
             "rollout_stage": rollout_stage,
             "slo_readback": slo_readback,
-            "to_image_transport_tag": to_image_transport_tag,
-            "to_release_evidence_ref": to_release_evidence_ref,
+            "to_service_factory_oci_digest": to_service_factory_oci_digest,
+            "to_app_factory_oci_digest": to_app_factory_oci_digest,
         }
         _finalize_outputs = _stackctl._deploy_prod_hosted_finalize(_finalize_scope)
         committed_release_state = _finalize_outputs["committed_release_state"]
@@ -898,11 +832,10 @@ def _command_deploy_with_lock(args: argparse.Namespace) -> dict[str, Any]:
                 or rollout_stage
             ),
             "rolloutDecision": rollout_decision,
-            "artifactDigest": release_artifact_digest,
-            "releaseEvidenceRef": to_release_evidence_ref,
+            "candidateMaterialId": candidate_material_id,
             "candidateId": (
-                release_manifest_payload.get("candidateId")
-                if release_manifest_payload
+                deploy_material.get("candidateId")
+                if deploy_material
                 else ""
             ),
             "releaseReceiptId": release_receipt_id,
@@ -916,15 +849,26 @@ def _command_deploy_with_lock(args: argparse.Namespace) -> dict[str, Any]:
                 if release_receipt_path is not None
                 else ""
             ),
-            "releaseReceiptPath": (
-                str(release_receipt_path) if release_receipt_path is not None else ""
+            "hostedReceipt": (
+                _stackctl.load_json_yaml(release_receipt_path)
+                if release_receipt_path is not None
+                else {}
+            ),
+            "hostedStageReceipt": (
+                {
+                    "ref": f"receipt:hosted:{release_receipt_id}",
+                    "receiptId": release_receipt_id,
+                    "authority": "prod-hosted-service-plane",
+                }
+                if release_receipt_path is not None and release_receipt_id
+                else {}
             ),
             "releaseState": committed_release_state or {},
-            "environmentAcceptance": environment_acceptance,
+            "prodActivationAdmission": prod_activation_admission,
             "releaseEligibility": (
                 "non-eligible"
                 if dry_run_requested
-                else ("eligible" if environment_acceptance else "blocked")
+                else ("eligible" if prod_activation_admission else "blocked")
             ),
             "wiredWorkloads": _stackctl._prod_rollout_workloads() if args.target == "prod-hosted" else [],
             "providerReadiness": provider_readiness,

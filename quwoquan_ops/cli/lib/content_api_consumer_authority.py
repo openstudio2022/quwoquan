@@ -13,10 +13,10 @@ import os
 import re
 import stat
 import tempfile
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any
 from urllib.parse import urlsplit
 
@@ -33,6 +33,7 @@ SPEC_REF = (
     "specs/feature-tree/discovery-content/object-homepage-coverage-scaling/"
     "multi-carrier-release/spec.md#gwt-034"
 )
+SOURCE_FINGERPRINT_SCHEMA = "qwq.m1_api_consumer.source_fingerprint"
 _DIGEST_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
 _IDENTITY_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,255}$")
 _RUNNER_RE = re.compile(
@@ -73,6 +74,185 @@ def _consumer_error(message: str) -> ValueError:
     from quwoquan_ops.cli.lib.content_api_consumer import ContentApiConsumerError
 
     return ContentApiConsumerError(message)
+
+
+def _content_text(value: object, *, field: str) -> str:
+    if (
+        not isinstance(value, str)
+        or not value
+        or value != value.strip()
+        or any(character in value for character in ("\x00", "\n", "\r"))
+    ):
+        raise _consumer_error(f"{field} must be non-empty canonical text")
+    return value
+
+
+def _content_digest(value: object, *, field: str) -> str:
+    text = _content_text(value, field=field)
+    if _DIGEST_RE.fullmatch(text) is None:
+        raise _consumer_error(f"{field} must be sha256:<64 lowercase hex>")
+    return text
+
+
+def _content_identity(value: object, *, field: str) -> str:
+    text = _content_text(value, field=field)
+    if re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._:/-]{0,255}", text) is None:
+        raise _consumer_error(f"{field} has invalid identity format")
+    return text
+
+
+def _content_relative_ref(value: object, *, field: str) -> str:
+    text = _content_text(value, field=field)
+    ref = PurePosixPath(text)
+    if (
+        ref.is_absolute()
+        or ref.as_posix() != text
+        or any(part in {"", ".", ".."} for part in ref.parts)
+        or "\\" in text
+        or text.endswith("/latest")
+        or "/latest/" in text
+        or ref.name.startswith("latest.")
+    ):
+        raise _consumer_error(f"{field} must be an immutable contained relative ref")
+    return text
+
+
+def _content_canonical_bytes(value: Mapping[str, Any]) -> bytes:
+    try:
+        return json.dumps(
+            dict(value),
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+            allow_nan=False,
+        ).encode("utf-8")
+    except (TypeError, ValueError) as exc:
+        raise _consumer_error("content authority is not canonical JSON") from exc
+
+
+def content_consumer_raw_slot_id(
+    *,
+    target_uat_binding_digest: str | None = None,
+    sample_id: str,
+    entry_surface: str,
+    carrier: str,
+    spec_ref: str,
+    runner_identity: str,
+) -> str:
+    """Derive one deterministic content sample/case raw-result slot ID."""
+
+    material = {
+        "sampleId": _content_identity(sample_id, field="sampleId"),
+        "entrySurface": _content_text(entry_surface, field="entrySurface"),
+        "carrier": _content_text(carrier, field="carrier"),
+        "specRef": _content_text(spec_ref, field="specRef"),
+        "runnerIdentity": _content_identity(
+            runner_identity, field="runnerIdentity"
+        ),
+    }
+    if target_uat_binding_digest is not None:
+        material["targetUatBindingDigest"] = _content_digest(
+            target_uat_binding_digest, field="targetUatBindingDigest"
+        )
+    return _digest_bytes(_content_canonical_bytes(material))
+
+
+def _content_exact_ref(value: object, *, field: str) -> dict[str, str]:
+    if not isinstance(value, Mapping) or set(value) != {"ref", "digest"}:
+        raise _consumer_error(f"{field} must contain exactly ref and digest")
+    return {
+        "ref": _content_relative_ref(value.get("ref"), field=f"{field}.ref"),
+        "digest": _content_digest(value.get("digest"), field=f"{field}.digest"),
+    }
+
+
+def derive_content_consumer_source_fingerprint(
+    *,
+    schema: str,
+    environment: str,
+    target: str,
+    release_id: str,
+    release_digest: str,
+    manifest_digest: str,
+    import_run_id: str,
+    verify_run_id: str,
+    sample_plan: Mapping[str, Any],
+    data_readiness: Mapping[str, Any],
+    consumer_health: Mapping[str, Any],
+    required_raw_results: Sequence[Mapping[str, Any]],
+) -> str:
+    """Derive the content consumer authority fingerprint from exact evidence."""
+
+    source_schema = _content_text(schema, field="sourceFingerprint.schema")
+    if source_schema != SOURCE_FINGERPRINT_SCHEMA:
+        raise _consumer_error(
+            "sourceFingerprint.schema must equal " + SOURCE_FINGERPRINT_SCHEMA
+        )
+    plan = _content_exact_ref(
+        sample_plan, field="sourceFingerprint.samplePlan"
+    )
+    data = _content_exact_ref(
+        data_readiness, field="sourceFingerprint.dataReadiness"
+    )
+    health = _content_exact_ref(
+        consumer_health, field="sourceFingerprint.consumerHealth"
+    )
+    if isinstance(required_raw_results, (str, bytes)) or not required_raw_results:
+        raise _consumer_error("sourceFingerprint.requiredRawResults must be non-empty")
+    raw_results: list[dict[str, str]] = []
+    for index, item in enumerate(required_raw_results):
+        field = f"sourceFingerprint.requiredRawResults[{index}]"
+        if (
+            not isinstance(item, Mapping)
+            or set(item) != {"ref", "digest", "slotId", "status"}
+        ):
+            raise _consumer_error(f"{field} fields are invalid")
+        exact = _content_exact_ref(
+            {"ref": item.get("ref"), "digest": item.get("digest")}, field=field
+        )
+        raw_results.append(
+            {
+                **exact,
+                "slotId": _content_digest(
+                    item.get("slotId"), field=f"{field}.slotId"
+                ),
+                "status": _content_text(
+                    item.get("status"), field=f"{field}.status"
+                ),
+            }
+        )
+    material = {
+        "schema": source_schema,
+        "environment": _content_text(
+            environment, field="sourceFingerprint.environment"
+        ),
+        "target": _content_identity(target, field="sourceFingerprint.target"),
+        "releaseId": _content_identity(
+            release_id, field="sourceFingerprint.releaseId"
+        ),
+        "releaseDigest": _content_digest(
+            release_digest, field="sourceFingerprint.releaseDigest"
+        ),
+        "manifestDigest": _content_digest(
+            manifest_digest, field="sourceFingerprint.manifestDigest"
+        ),
+        "importRunId": _content_identity(
+            import_run_id, field="sourceFingerprint.importRunId"
+        ),
+        "verifyRunId": _content_identity(
+            verify_run_id, field="sourceFingerprint.verifyRunId"
+        ),
+        "samplePlan": plan,
+        "dataReadiness": data,
+        "consumerHealth": health,
+        "requiredRawResults": sorted(
+            raw_results,
+            key=lambda item: (
+                item["slotId"], item["digest"], item["ref"], item["status"]
+            ),
+        ),
+    }
+    return _digest_bytes(_content_canonical_bytes(material))
 
 
 def _utc_now() -> str:

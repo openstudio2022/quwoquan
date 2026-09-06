@@ -12,6 +12,7 @@ import datetime as _dt
 import fnmatch
 import json
 import re
+import subprocess
 import sys
 from pathlib import Path
 from typing import Any
@@ -51,7 +52,6 @@ from lib.human_agent_delivery.runtime_bridge import (  # noqa: E402
 from lib.review_fingerprint import (  # noqa: E402
     build_review_fingerprint,
     head_sha as _review_head_sha,
-    merge_base_sha as _review_merge_base_sha,
     normalize_path as _review_normalize_path,
     sha256_text as _review_sha256_text,
     snapshot as _review_snapshot,
@@ -62,6 +62,10 @@ from lib.review_context_assembler import (  # noqa: E402
 )
 from review_dispatch_terminal import (  # noqa: E402
     classify_terminal as _classify_terminal_impl,
+)
+from review_dispatch_evidence import (  # noqa: E402
+    resolve_evidence as _resolve_evidence_impl,
+    validate_result_artifact_kind,
 )
 
 _EVIDENCE_LINE_RE = re.compile(r"^\s*evidence:\s*(?P<evidence>[a-z0-9][a-z0-9-]*)\s*$")
@@ -333,12 +337,22 @@ def build_plan(
         "invalidations": invalidations,
         "terminal": terminal,
         "head_sha": _head_sha(),
+        "merge_base_sha": _merge_base_sha(),
         "generated_at": _dt.datetime.now(_dt.timezone.utc).isoformat(
             timespec="seconds"
         ),
     }
     _validate_plan_contract(plan)
     return plan
+
+
+def _validate_exact_git_identity(plan: dict[str, Any]) -> None:
+    for field in ("head_sha", "merge_base_sha"):
+        if (
+            not isinstance(plan.get(field), str)
+            or re.fullmatch(r"[0-9a-f]{40,64}", plan[field]) is None
+        ):
+            raise ValueError(f"review_plan.{field} 必须为 exact Git SHA")
 
 
 def _validate_plan_contract(plan: dict[str, Any]) -> None:
@@ -362,6 +376,7 @@ def _validate_plan_contract(plan: dict[str, Any]) -> None:
         raise ValueError(
             "review_plan.fingerprint 必须为 canonical EvidenceFingerprint digest"
         )
+    _validate_exact_git_identity(plan)
     previous_fingerprint = plan.get("previous_fingerprint")
     if previous_fingerprint is not None and (
         not isinstance(previous_fingerprint, str)
@@ -447,6 +462,7 @@ def _validate_registry_header(registry: dict[str, Any]) -> None:
                 "REVIEW.INVALID_EVIDENCE",
                 f"evidence={evidence_id} timeout_seconds 必须为 1..{max_evidence_timeout} 的整数",
             )
+        validate_result_artifact_kind(evidence_id, config, refuse=_refuse)
         command = str(config.get("command") or "")
         if not command:
             _refuse(
@@ -605,45 +621,14 @@ def _resolve_evidence(
     segment: str,
     baseline_evidence: str = "",
 ) -> list[dict[str, Any]]:
-    catalog = registry.get("evidence") or {}
-    resolved: dict[str, dict[str, Any]] = {}
-    evidence_consumers: dict[str, list[str]] = {}
-    for reviewer in reviewers:
-        evidence_ids = list(dict.fromkeys(
-            ([baseline_evidence] if baseline_evidence else [])
-            + _checklist_evidence(reviewer["checklist"])
-        ))
-        reviewer["evidence"] = evidence_ids
-        for evidence_id in evidence_ids:
-            evidence_consumers.setdefault(evidence_id, []).append(reviewer["role"])
-
-    for evidence_id, consumers in evidence_consumers.items():
-            config = catalog.get(evidence_id)
-            if config is None:
-                _refuse(
-                    "REVIEW.UNKNOWN_EVIDENCE",
-                    f"checklist 引用了未注册 evidence={evidence_id}",
-                )
-            if config.get("segment") != segment:
-                continue
-            existing = resolved.get(evidence_id)
-            if existing is None:
-                command = str(config["command"])
-                existing = {
-                    "id": evidence_id,
-                    "command": command,
-                    "segment": segment,
-                    "required": bool(config.get("required", True)),
-                    "covers": list(config.get("covers") or []),
-                    "timeout_seconds": int(config["timeout_seconds"]),
-                    "command_digest": _sha256_text(command),
-                    "consumers": [],
-                }
-                resolved[evidence_id] = existing
-            for role in consumers:
-                if role not in existing["consumers"]:
-                    existing["consumers"].append(role)
-    return list(resolved.values())
+    return _resolve_evidence_impl(
+        registry,
+        reviewers,
+        segment=segment,
+        baseline_evidence=baseline_evidence,
+        checklist_evidence=_checklist_evidence,
+        refuse=_refuse,
+    )
 
 
 def _checklist_evidence(checklist: str) -> list[str]:
@@ -828,6 +813,17 @@ def _validate_current_owner_manifest(plan: dict[str, Any]) -> dict[str, Any]:
         validate_current_fingerprint=validate_current_feature_context_fingerprint,
     )
 
+def _validate_current_git_range(plan: dict[str, Any]) -> None:
+    if (
+        plan["head_sha"] != _head_sha()
+        or plan["merge_base_sha"] != _merge_base_sha()
+    ):
+        _refuse(
+            "REVIEW.FINGERPRINT_CHANGED",
+            "Review plan exact Git range 已 stale，必须重建 plan/candidate/evidence",
+        )
+
+
 def validate_current_review_plan(
     plan: dict[str, Any], registry: dict[str, Any], *, phase: str = "evidence"
 ) -> dict[str, Any]:
@@ -851,6 +847,7 @@ def validate_current_review_plan(
             f"{current_human_projection['terminal']}: human decision 阻止 phase={phase}",
         )
     _validate_current_owner_manifest(plan)
+    _validate_current_git_range(plan)
     expected = validate_evidence_fingerprint(plan.get("fingerprint_receipt"))
     current = recompute_plan_fingerprint(plan, registry)
     for field in ("ref", "digest", "digest_payload"):
@@ -938,7 +935,14 @@ def _repo_relative(raw_path: str) -> str:
 
 
 def _merge_base_sha() -> str:
-    return _review_merge_base_sha()
+    for base in ("origin/dev1.0", "dev1.0", "main"):
+        result = subprocess.run(
+            ["git", "merge-base", "HEAD", base], cwd=REPO_ROOT,
+            capture_output=True, text=True, check=False,
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            return result.stdout.strip()
+    return _head_sha()
 
 
 def _classify_terminal(

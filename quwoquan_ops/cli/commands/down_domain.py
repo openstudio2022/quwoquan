@@ -48,16 +48,6 @@ def register_parser(
         help="只停止匹配的 active workload；bounded workload 复用 full 时为无损 no-op。",
     )
     down_parser.add_argument(
-        "--formal-release",
-        action="store_true",
-        help="Stop only the candidate-scoped immutable Compose project.",
-    )
-    down_parser.add_argument(
-        "--release-manifest",
-        default="",
-        help="Canonical ReleaseEvidenceManifest required by formal teardown.",
-    )
-    down_parser.add_argument(
         "--purge-rebuildable-state",
         action="store_true",
         help=(
@@ -558,7 +548,6 @@ def _command_down_unlocked(args: argparse.Namespace) -> dict[str, Any]:
     target = _stackctl.get_target(topology, args.target)
     env_name = str(target["env"])
     report_dir = _stackctl.resolve_report_dir(args, env_name, args.target)
-    formal_release = bool(getattr(args, "formal_release", False))
     purge_rebuildable_state = bool(
         getattr(args, "purge_rebuildable_state", False)
     )
@@ -569,8 +558,7 @@ def _command_down_unlocked(args: argparse.Namespace) -> dict[str, Any]:
     runtime_owned_port_report: dict[str, Any] | None = None
 
     if (
-        not formal_release
-        and args.target in {"alpha-local", "beta-local", "gamma-local"}
+        args.target in {"alpha-local", "beta-local", "gamma-local"}
     ):
         try:
             mutable_attempt = _stackctl.load_test_live_startup_attempt(args.target)
@@ -649,8 +637,7 @@ def _command_down_unlocked(args: argparse.Namespace) -> dict[str, Any]:
             }
 
     if purge_rebuildable_state and (
-        formal_release
-        or args.target not in {"alpha-local", "beta-local", "gamma-local"}
+        args.target not in {"alpha-local", "beta-local", "gamma-local"}
     ):
         return {
             "exitCode": 2,
@@ -660,32 +647,7 @@ def _command_down_unlocked(args: argparse.Namespace) -> dict[str, Any]:
             ],
         }
 
-    if formal_release:
-        manifest_value = str(getattr(args, "release_manifest", "") or "").strip()
-        if args.target not in {"alpha-local", "beta-local", "gamma-local"}:
-            return {
-                "exitCode": 2,
-                "summary": f"stackctl down is GATE_BLOCK for {args.target}",
-                "details": ["formal teardown supports only Alpha/Beta/Gamma local targets"],
-            }
-        if not manifest_value:
-            return {
-                "exitCode": 2,
-                "summary": f"stackctl down is GATE_BLOCK for {args.target}",
-                "details": ["formal teardown requires --release-manifest"],
-            }
-        return {
-            "exitCode": 2,
-            "summary": f"stackctl down is GATE_BLOCK for {args.target}",
-            "details": [
-                (
-                    "formal local teardown is blocked until the release artifact owns "
-                    "one complete first-party and Provider OCI composition plus the "
-                    "exact startup receipt/Compose project identity"
-                )
-            ],
-        }
-    elif args.target in {"alpha-local", "beta-local", "gamma-local"}:
+    if args.target in {"alpha-local", "beta-local", "gamma-local"}:
         cmd = ["bash", "quwoquan_app/scripts/gamma/start_local_gamma_mirror.sh", "--down"]
         port_manifest = _stackctl.load_port_manifest()
         env = _stackctl._gamma_env_from_port_manifest(
@@ -913,11 +875,8 @@ def _command_down_unlocked(args: argparse.Namespace) -> dict[str, Any]:
             "exitCode": result.returncode,
             "stdout": result.stdout,
             "stderr": result.stderr,
-            "formalRelease": formal_release,
             "releaseComposition": release_composition,
-            "runtimeMode": "immutable-oci" if formal_release else (
-                "immutable-local" if release_composition else ""
-            ),
+            "runtimeMode": "immutable-local" if release_composition else "",
             "runtimeCompositionSource": runtime_composition_source,
             "destructiveRepairPerformed": (
                 purge_rebuildable_state and result.returncode == 0

@@ -176,14 +176,7 @@ def test_capsule_rejects_symlink_escape_and_cleans_process_root() -> None:
         assert not list(materializations.iterdir())
 
 
-def test_data_required_release_plan_and_delivery_closure_require_full_gates() -> None:
-    import yaml
-
-    from quwoquan_ops.gate.local_dependency_purity.shell_commands import (
-        reachable_shell_array_tokens,
-        reachable_shell_command_tokens,
-    )
-
+def test_data_release_readiness_is_local_and_promotion_does_not_repeat_data_gates() -> None:
     plan = build_impact_plan(
         [
             "quwoquan_data/tests/local_contract/execution/"
@@ -194,73 +187,31 @@ def test_data_required_release_plan_and_delivery_closure_require_full_gates() ->
     assert plan["deferred"] == []
     assert any(
         check["id"] == "release:data"
-        and check["command"]
-        == ["bash", "quwoquan_ops/gate/gate_repo.sh", "--scope", "data"]
+        and check["command"] == ["bash", "quwoquan_ops/gate/gate_repo.sh", "--scope", "data"]
         for check in plan["checks"]
     )
 
-    workflow = yaml.safe_load(
+    workflow = __import__("yaml").safe_load(
         (ROOT / ".github/workflows/delivery-gate.yml").read_text(encoding="utf-8")
     )
     jobs = workflow["jobs"]
-    for job_name in ("quwoquan_data", "quwoquan_data_tests"):
-        assert jobs[job_name].get("if") is None
-
-    summary = jobs["delivery_gate_summary"]
-    assert summary.get("if") == "always()"
-    summary_step = next(
-        step
-        for step in summary["steps"]
-        if {"DATA", "DATA_TESTS"} <= set(step.get("env", {}))
+    assert list(jobs) == ["promotion_verify", "main_source_seal", "system_backsync"]
+    assert jobs["promotion_verify"]["if"] == "${{ github.event_name == 'pull_request' }}"
+    assert jobs["main_source_seal"]["if"] == (
+        "${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}"
     )
-    assert summary_step.get("if") == "always()"
-    assert summary_step.get("continue-on-error") in (None, False)
-    assert summary_step["env"]["DATA"] == "${{ needs.quwoquan_data.result }}"
-    assert (
-        summary_step["env"]["DATA_TESTS"]
-        == "${{ needs.quwoquan_data_tests.result }}"
-    )
-    summary_run = summary_step["run"]
-    for job_name, result_variable in (
-        ("quwoquan_data", "${DATA}"),
-        ("quwoquan_data_tests", "${DATA_TESTS}"),
-    ):
-        assert len(
-            reachable_shell_command_tokens(
-                summary_run,
-                command_prefix=("expect_success", job_name, result_variable),
-            )
-        ) == 1
-        assert not reachable_shell_command_tokens(
-            summary_run,
-            command_prefix=(
-                "expect_typed_pending_or_skipped",
-                job_name,
-                result_variable,
-            ),
-        )
-
-    release_evidence = jobs["release_evidence"]
-    aggregate = next(
-        step
-        for step in release_evidence["steps"]
-        if step.get("name") == "Aggregate exact three-layer test results"
-    )
-    evidence_arguments = reachable_shell_array_tokens(
-        aggregate["run"],
-        array_name="ARGS",
-        consumer_prefix=(
-            "python3",
-            "quwoquan_ops/ci/render_delivery_release_evidence.py",
-        ),
-    )
-    for requirement in ("data", "data_tests"):
-        assert any(
-            evidence_arguments[index : index + 2]
-            == ("--local-required", requirement)
-            for index in range(len(evidence_arguments) - 1)
-        )
-
+    assert jobs["system_backsync"]["needs"] == "main_source_seal"
+    assert jobs["system_backsync"]["uses"] == "./.github/workflows/system-backsync.yml"
+    promotion_steps = json.dumps(jobs["promotion_verify"]["steps"], ensure_ascii=False)
+    main_steps = json.dumps(jobs["main_source_seal"]["steps"], ensure_ascii=False)
+    assert "PromotionAdmissionReceipt" in promotion_steps
+    assert "post-merge MainSourceSeal: not issued on pull_request" in promotion_steps
+    assert "main-seal" not in promotion_steps
+    assert "main-seal" in main_steps
+    assert "MainSourceSeal" in main_steps
+    serialized = json.dumps(jobs, ensure_ascii=False)
+    for token in ("quwoquan_data", "gate_repo.sh", "pytest", "stackctl.py package"):
+        assert token not in serialized
 
 def test_failed_queue_item_backs_off_does_not_starve_and_dead_letters(monkeypatch: pytest.MonkeyPatch) -> None:
     with _repo() as directory:

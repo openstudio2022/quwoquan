@@ -34,8 +34,6 @@ _BUDGETED_BOUNDARIES = frozenset(
         "test_evidence",
     }
 )
-_DATA_SCRIPTS_PREFIX = "quwoquan_data/scripts/"
-
 #: 裸 ``python3 -`` stdin 执行形态；``python3 - <<`` 是内联 heredoc，不是把
 #: 某个仓库文件整文件 pipe 出去，因此显式排除。
 _STDIN_PYTHON_RE = re.compile(r"python3\s+-\s*(?!<)", re.MULTILINE)
@@ -121,8 +119,6 @@ def line_budget_issues(
     piped_contract_scripts = stdin_piped_contract_scripts(root)
     for record in python_file_records:
         if record.boundary not in _BUDGETED_BOUNDARIES:
-            continue
-        if record.path.startswith(_DATA_SCRIPTS_PREFIX):
             continue
         if record.path in piped_contract_scripts:
             continue

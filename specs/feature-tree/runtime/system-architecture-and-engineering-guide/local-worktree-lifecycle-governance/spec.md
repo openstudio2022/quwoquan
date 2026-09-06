@@ -28,7 +28,7 @@
 - 远端 GitHub branch protection、ruleset 与托管侧强制，见 [`daily-merge-release-strategy` OPEN-002](../../deliver-deploy-prod-pipeline/daily-merge-release-strategy/spec.md#open-002)。
 - hook 面的任何阻断（deny/ask）。执行面 hook 只注入上下文，判断权留给执行体；hook 运行在开发者本机且执行体有权改写环境变量与仓内文件，本就不构成安全边界。真正的硬门只在准出：lane→`dev1.0` 合入、交接、发布。
 - 工作副本的自动删除、自动合并或自动 stash。提醒只产生可观察告知，处置由人决定。
-- 同一 worktree 内多会话/多子代理的 writer 互斥。共享工作树的合作规则由根 `AGENTS.md` 的行为条款承担，不以 hook、claim 文件或锁实现。
+- 同一worktree内writer的path claim、private index与candidate closure；由[`shared-worktree-scoped-candidate`](../../development-workflow-governance/shared-worktree-scoped-candidate/spec.md)拥有。
 - canonical launcher 接入 device lock 与 `launch-attempt` identity 的启动规范化；该能力仍为本 Story 的 `OPEN-002`，不属于当前工程治理实现。
 
 ## 3. 行为要求
@@ -71,11 +71,11 @@
 ### REQ-004 清单只实时派生，不得留存台账
 
 - worktree 与 clone 清单只能由 `git worktree list` 与策略声明的发现根实时派生；禁止提交或维护工作副本 registry、inventory、已授权 allowlist 与滞留基线。
-- `worktree_policy.yaml` 是物理布局唯一真相源：project root 下必须恰有一个 bare hub `quwoquan.git/`、一个 `integration/ -> dev1.0`，以及六条 `lane/<name> -> <name>/`。分支闭集只读 `branch_policy.yaml`，路径 ownership 只读 `lane_ownership.yaml`，不得复制。
+- `worktree_policy.yaml`是物理布局唯一真相源：project root下必须恰有一个bare hub、一个可编辑、可提交且仅允许把匹配本地`dev1.0` non-force fast-forward普通push到远端同名分支的`integration/ -> dev1.0`，以及六条lane worktree。分支闭集和其余更新通道只读 `branch_policy.yaml`，路径 ownership 只读 `lane_ownership.yaml`，不得复制。
 - `git worktree list --porcelain` 的 `bare` record 只验证 hub 身份，绝不运行 status/probe 或算作脏 worktree；authority 失败、linked worktree probe 失败、detached、非 integration/fixed lane、分支与目录错绑、重复 lane/integration 或路径重复均 fail-closed。
 - 默认门禁验证已发现 lane 的路径身份并单独要求唯一 integration clean；全量身份门必须精确六条 lane 均 clean 且 HEAD 等于优先 `origin/dev1.0`（不存在时回落本地 `dev1.0`）的 canonical SHA，integration 也必须 clean 且同 HEAD。
 - 会话输出必须列出每个 worktree 的 identity/ahead/behind/dirty 与 engineering ownership drift；drift 只观察不阻断，避免跨域小改动把一个 Increment 拆成多个 writer。
-- 设备与 local-runtime 属于同一物理主机上跨 worktree 共享的资源，其互斥锁必须 host-scoped，不得写入任一 worktree 的 `.qwq_output` 冒充隔离；holder evidence 至少包含 `pid`、`worktree`、`lane` 与 `head`。`integration/ -> dev1.0` 是只读集成 worktree；从该目录承载共享 runtime 时，runtime host 身份必须显式声明且不得从 worktree-local pid/receipt 推断。
+- 设备与local-runtime属于跨worktree共享资源，互斥锁必须host-scoped；holder evidence至少包含`pid/worktree/lane/head`。`integration/ -> dev1.0`可编辑、提交并按branch policy从匹配本地ref执行non-force fast-forward普通push；push不得force/delete或写`main`，且只提交源码，不签发`integrationEligibility`、Alpha/Beta/Gamma、`IntegrationQualificationFact`、promotion、release或Prod authority。承载runtime时必须显式声明host身份。
 - 策略参数（固定布局、滞留阈值、提醒最小间隔、发现根、失败码）集中在唯一策略文件，实现不得内联第二份默认值。
 
 
@@ -138,7 +138,7 @@
 - WHEN 准出门禁 `verify_local_worktree_lifecycle.py` 验证已发现 linked worktree，或以全量模式要求六条 lane 全部存在。
 - THEN bare hub 被识别但不算 worktree/dirty；inventory authority 失败、detached/非 integration 或 lane、branch-path 错绑、重复身份、probe error、唯一 integration 缺失/dirty，以及全量 lane 缺失/dirty/HEAD 漂移均返回 typed blocker；默认模式不要求六条 lane 已全部创建。
 - AND 该判定只在显式运行门禁（本地 `make verify-local-worktree-lifecycle`、lane→`dev1.0` PR 的 CI）时生效，不挂在任何执行面 hook 或普通 commit gate 的无条件 static checks 上；改动 worktree 治理实现/策略时，commit gate 只选择 lifecycle focused local_contract。门禁 recovery 要求长期 lane fast-forward resync 并保留 worktree，clone 或额外废弃副本才由人工决定是否删除。
-- AND 设备与 local-runtime 锁在同一 host 跨 worktree 互斥并产出含 `pid/worktree/lane/head` 的 holder evidence，integration 仅以显式 runtime host 身份承载共享 runtime、不能因其存在而获得本地提交权限。
+- AND 设备与local-runtime锁跨worktree互斥并产出holder evidence；integration可按scoped candidate协议编辑，也可从匹配`dev1.0`执行普通认证non-force fast-forward源码push，但不能因承载runtime获得force/delete、写`main`、lane→dev或任何集成/晋级/发布资格。
 
 ## 6. 依赖
 

@@ -4,8 +4,6 @@ from __future__ import annotations
 
 import argparse
 
-from quwoquan_ops.cli.lib.environment_acceptance_fact import ACCEPTANCE_PROFILES
-
 
 def _add_boolean(
     parser: argparse.ArgumentParser, name: str, *, destination: str
@@ -73,56 +71,3 @@ def register_parser(
         bundle.add_argument(f"--{name}", required=True)
     bundle.add_argument("--target-binding", action="append", required=True)
     bundle.add_argument("--raw-result", action="append", required=True)
-
-    append = subparsers.add_parser(
-        "environment-acceptance-append",
-        help="校验全部 direct raw/readiness/predecessor authority 后 create-once 追加 acceptance fact",
-    )
-    for name in (
-        "evidence-root",
-        "acceptance-root",
-        "environment",
-        "target",
-        "release-id",
-        "release-digest",
-        "import-run-id",
-        "verify-run-id",
-        "sample-plan-ref",
-        "sample-plan-digest",
-        "data-readiness-ref",
-        "data-readiness-digest",
-        "created-at",
-        "source-fingerprint",
-    ):
-        append.add_argument(f"--{name}", required=True)
-    append.add_argument("--manifest-digest", default="")
-    append.add_argument(
-        "--acceptance-profile", choices=ACCEPTANCE_PROFILES, required=True
-    )
-    for name in (
-        "consumer-health-ref",
-        "consumer-health-digest",
-        "active-cas-ref",
-        "active-cas-digest",
-        "active-cas-readback-ref",
-        "active-cas-readback-digest",
-        "lifecycle-exit-ref",
-        "lifecycle-exit-digest",
-        "provider-readiness-ref",
-        "provider-readiness-digest",
-        "observability-readiness-ref",
-        "observability-readiness-digest",
-        "rollback-readiness-ref",
-        "rollback-readiness-digest",
-    ):
-        append.add_argument(f"--{name}", default="")
-    append.add_argument("--target-binding", action="append", default=[])
-    append.add_argument("--required-raw", action="append", default=[])
-    append.add_argument("--required-profile", action="append", default=[])
-    append.add_argument("--lease-revocation", action="append", default=[])
-    append.add_argument("--lock-release", action="append", default=[])
-    append.add_argument("--gc-protection", action="append", default=[])
-    append.add_argument("--prod-release-facts", default="")
-    append.add_argument("--predecessor-ref", default="")
-    append.add_argument("--predecessor-digest", default="")
-    append.add_argument("--predecessor-fact-id", default="")

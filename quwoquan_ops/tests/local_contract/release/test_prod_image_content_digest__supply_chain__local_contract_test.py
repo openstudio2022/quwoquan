@@ -9,14 +9,14 @@ from quwoquan_ops.cli.prod import load_prod_plane_images
 
 
 class ProdImageContentDigestContractTest(unittest.TestCase):
-    def test_rtc_source_images_use_explicit_transport_tag(self) -> None:
+    def test_rtc_source_images_use_exact_candidate_digest(self) -> None:
         refs = load_prod_plane_images._compose_image_refs(
             ["realtime-gateway", "rtc-service"],
-            image_transport_tag="d6ccc4c96adb",
+            candidate_digest="sha256:" + "d" * 64,
         )
         self.assertEqual(
             refs["realtime-gateway"],
-            "localhost/quwoquan_service_realtime-gateway:d6ccc4c96adb",
+            "localhost/quwoquan_service_realtime-gateway:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
         )
         self.assertNotIn("latest", refs["rtc-service"])
 

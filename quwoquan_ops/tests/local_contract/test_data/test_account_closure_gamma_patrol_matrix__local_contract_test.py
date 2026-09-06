@@ -8,8 +8,6 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[4]
 SUITES_PATH = ROOT / "quwoquan_ops/environments/gamma/validation_suites.json"
-WORKFLOW_PATH = ROOT / ".github/workflows/app-env-device-matrix-self-hosted.yml"
-PLATFORM_WORKFLOW_PATH = ROOT / ".github/workflows/beta-device-platform.yml"
 MATRIX_RUNNER_PATH = ROOT / "quwoquan_ops/ci/run_mobile_platform_matrix.sh"
 GAMMA_RUNNER_PATH = ROOT / "quwoquan_app/scripts/gamma/run_local_gamma_device_uat.sh"
 UAT_PATH = ROOT / (
@@ -39,12 +37,12 @@ class AccountClosureGammaPatrolMatrixContractTest(unittest.TestCase):
                 profile["deviceMatrix"]["matrixKinds"],
             )
 
-    def test_self_hosted_matrix_uses_unique_disposable_install_identity(
+    def test_local_environment_matrix_uses_unique_disposable_install_identity(
         self,
     ) -> None:
         workflow = "\n".join(
             path.read_text(encoding="utf-8")
-            for path in (WORKFLOW_PATH, PLATFORM_WORKFLOW_PATH, MATRIX_RUNNER_PATH)
+            for path in (MATRIX_RUNNER_PATH,)
         )
         gamma_runner = GAMMA_RUNNER_PATH.read_text(encoding="utf-8")
 
@@ -84,8 +82,8 @@ class AccountClosureGammaPatrolMatrixContractTest(unittest.TestCase):
             workflow,
         )
         self.assertIn("--account-closure-disposable-ack", workflow)
-        self.assertIn("environment:", workflow)
-        self.assertIn("'production'", workflow)
+        self.assertNotIn("workflow_dispatch", workflow)
+        self.assertIn("ACCOUNT_CLOSURE_PROD_AUTHORITY_STATUS", workflow)
         self.assertIn("--patrol-install-id", gamma_runner)
         self.assertIn(
             'cmd+=(--patrol-install-id "$PATROL_INSTALL_ID")',

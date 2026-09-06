@@ -3,10 +3,10 @@ from __future__ import annotations
 
 import re
 import subprocess
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Protocol
 
 SCHEMA = "qwq.environment_stability_final_acceptance"
 # 原文件位于 lib/ 下用 parents[2]；本模块深一层，用 parents[3] 指向 quwoquan_ops。
@@ -15,7 +15,6 @@ SCHEMA_PATH = (
     / "gate"
     / "environment_stability_final_acceptance.schema.json"
 )
-PROMOTABLE_VERDICT = "PROMOTABLE"
 BLOCKED_VERDICT = "GATE_BLOCK"
 MAX_FUTURE_SKEW_SECONDS = 300
 ENVIRONMENTS = ("alpha", "beta", "gamma")
@@ -23,11 +22,10 @@ PROVIDER_NONPROD_ENVIRONMENTS = ("alpha", "beta", "gamma")
 REQUIRED_SOAK_CLAIMS = frozenset(
     {"soak", "fresh", "credentials", "approval"}
 )
-DEVICE_WORKFLOW = ".github/workflows/app-env-device-matrix-self-hosted.yml"
+RETIRED_GITHUB_ATTESTED_EVIDENCE_KINDS = frozenset(
+    {"recovery.ios", "recovery.android", "nightly"}
+)
 GITHUB_ATTESTED_WORKFLOW_BY_KIND = {
-    "recovery.ios": DEVICE_WORKFLOW,
-    "recovery.android": DEVICE_WORKFLOW,
-    "nightly": DEVICE_WORKFLOW,
     "prod_sim": ".github/workflows/prod-sim-manual-admission.yml",
 }
 
@@ -132,7 +130,18 @@ SoakAuthorityVerifier = Callable[
     [Path, Mapping[str, Any], Mapping[str, Any]],
     VerifiedAuthority,
 ]
-ArtifactClosureVerifier = Callable[[Path, dict[str, Any]], None]
+
+
+class ArtifactClosureVerifier(Protocol):
+    def __call__(
+        self,
+        manifest: dict[str, Any],
+        *,
+        artifact_dir: Path | None = None,
+        allowed_statuses: Iterable[str] | None = None,
+    ) -> dict[str, Any]: ...
+
+
 CommandRunner = Callable[..., subprocess.CompletedProcess[str]]
 
 
