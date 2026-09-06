@@ -191,6 +191,59 @@ def _stackctl(*args: str, env: Mapping[str, str] | None = None, log_dir: Path) -
     return StackctlResult(command, payload, completed.stderr)
 
 
+DATA_CLI = ROOT / "quwoquan_data/scripts/cli.py"
+
+
+def _release_id(attestation: Path) -> tuple[str, str]:
+    payload = json.loads(attestation.read_text(encoding="utf-8"))
+    release_id, release_class = str(payload.get("releaseId") or ""), str(payload.get("releaseClass") or "")
+    if not release_id or release_class not in {"research", "commercial"}:
+        raise IntegrationRunError("INTEGRATION_RUN.INPUT_INVALID", f"{attestation} is not a canonical release attestation")
+    local = OUTPUT_ROOT / "data/releases" / release_id / "attestations/release.json"
+    if not local.is_file() or local.read_bytes() != attestation.read_bytes():
+        raise IntegrationRunError(
+            "INTEGRATION_RUN.DATA_RELEASE_UNAVAILABLE",
+            f"immutable release {release_id} is absent from {OUTPUT_ROOT / 'data/releases'} or its attestation differs; "
+            "ship apply only executes releases present in this worktree's Data root",
+        )
+    return release_id, release_class
+
+
+def _data_ship(*args: str, log_dir: Path, label: str) -> None:
+    """Data release 进入环境只经 canonical `qwq-data ship`；失败保留 stdout/stderr 作为 typed blocker。"""
+
+    process_env = {**os.environ, "PYTHONDONTWRITEBYTECODE": "1"}
+    completed = subprocess.run(
+        [sys.executable, "-B", str(DATA_CLI), "ship", *args],
+        cwd=ROOT, env=process_env, text=True, capture_output=True, check=False,
+    )
+    log_dir.mkdir(parents=True, exist_ok=True)
+    (log_dir / f"data-ship-{label}.stdout.log").write_text(completed.stdout, encoding="utf-8")
+    (log_dir / f"data-ship-{label}.stderr.log").write_text(completed.stderr, encoding="utf-8")
+    if completed.returncode != 0:
+        tail = " ".join((completed.stderr or completed.stdout).split())[-400:]
+        raise IntegrationRunError("INTEGRATION_RUN.DATA_RELEASE_FAILED", f"qwq-data ship {label} failed: {tail}")
+
+
+def _apply_data_release(*, environment: str, run_id: str, args: argparse.Namespace, log_dir: Path,
+                        previous_readiness: Path | None) -> Path:
+    """candidate release：apply --import --full-sync → verify（research/commercial 按 attestation）；返回 readiness 回执。"""
+
+    release_id, release_class = _release_id(args.release_attestation)
+    import_run, verify_run = f"{run_id}-import", f"{run_id}-verify"
+    _data_ship("apply", "--release-id", release_id, "--env", environment, "--run-id", import_run,
+               "--import", "--full-sync", log_dir=log_dir, label=f"{environment}-apply")
+    verify_args = ["verify", "--release-id", release_id, "--env", environment, "--import-run-id", import_run,
+                   "--run-id", verify_run, "--readiness-phase", release_class]
+    if previous_readiness is not None:
+        verify_args.extend(["--previous-environment-readiness", _output_ref(previous_readiness)])
+    _data_ship(*verify_args, log_dir=log_dir, label=f"{environment}-verify")
+    readiness = OUTPUT_ROOT / "env" / environment / "runs/data-release" / release_id / verify_run / "release-readiness.json"
+    if not readiness.is_file():
+        raise IntegrationRunError("INTEGRATION_RUN.DATA_RELEASE_FAILED", f"release readiness receipt missing: {readiness}")
+    return readiness
+
+
 def _require_ok(result: StackctlResult, code: str) -> StackctlResult:
     if result.exit_code != 0:
         summary = str(result.payload.get("summary") or "").strip()
@@ -336,7 +389,8 @@ def _health_runtime(*, health: StackctlResult, environment: str, candidate: Mapp
 
 
 def _run_environment(*, environment: str, profile: str, candidate: Mapping[str, str], impact_plan_digest: str,
-                     args: argparse.Namespace, run_dir: Path, phases: Phases, summary: dict[str, Any]) -> dict[str, Any]:
+                     args: argparse.Namespace, run_dir: Path, phases: Phases, summary: dict[str, Any],
+                     previous_readiness: Path | None = None) -> dict[str, Any]:
     target = f"{environment}-local"
     store = _store()
     evidence_dir = store / "environment-evidence" / candidate["candidateId"].removeprefix("sha256:") / environment
@@ -363,6 +417,11 @@ def _run_environment(*, environment: str, profile: str, candidate: Mapping[str, 
         started_up = True
         _require_ok(up, "INTEGRATION_RUN.UP_FAILED")
         env_summary["reports"]["up"] = _report_source(up)
+        # health 的 release_active 层要求该环境已导入并验证 candidate Data release（release-readiness 回执）。
+        readiness = phases.run(f"{environment}.data-release", lambda: _apply_data_release(
+            environment=environment, run_id=summary["runId"], args=args, log_dir=log_dir, previous_readiness=previous_readiness,
+        ))
+        env_summary["dataRelease"] = {"readiness": _output_ref(readiness), "digest": exact_file_digest(readiness)}
         health = phases.run(f"{environment}.health", lambda: _require_ok(_stackctl("health", "--target", target, "--scope", "full", log_dir=log_dir), "INTEGRATION_RUN.HEALTH_FAILED"))
         env_summary["reports"]["health"] = _report_source(health)
         runtime = _health_runtime(health=health, environment=environment, candidate=candidate, expected_baseline=baseline)
@@ -407,7 +466,7 @@ def _run_environment(*, environment: str, profile: str, candidate: Mapping[str, 
     }
     cases = _case_results_from_verify(verify=verify, environment=environment, profile=profile, candidate=candidate, runtime=runtime, evidence_dir=evidence_dir)
     env_summary["caseResults"] = len(cases)
-    return {"named": named, "cases": cases}
+    return {"named": named, "cases": cases, "readiness": readiness}
 
 
 def _provider_ready(health_payload: Mapping[str, Any]) -> bool:
@@ -549,6 +608,10 @@ def main(argv: list[str] | None = None) -> int:
         for label, path in (("release", args.release_attestation), ("rollback", args.rollback_release_attestation)):
             if not path.is_file():
                 raise IntegrationRunError("INTEGRATION_RUN.INPUT_INVALID", f"{label} attestation is not a file: {path}")
+        release_ids = {_release_id(args.release_attestation)[0], _release_id(args.rollback_release_attestation)[0]}
+        if len(release_ids) != 2:
+            raise IntegrationRunError("INTEGRATION_RUN.INPUT_INVALID", "release and rollback attestations must name two different releases")
+        summary["dataReleases"] = sorted(release_ids)
 
         def preflight() -> dict[str, str]:
             if _git("status", "--porcelain", "--untracked-files=no"):
@@ -612,7 +675,8 @@ def main(argv: list[str] | None = None) -> int:
 
         if depth == "abg_release_sensitive":
             beta_evidence = _run_environment(environment="beta", profile=args.profile, candidate=candidate_identity,
-                                             impact_plan_digest=impact_digest, args=args, run_dir=run_dir, phases=phases, summary=summary)
+                                             impact_plan_digest=impact_digest, args=args, run_dir=run_dir, phases=phases, summary=summary,
+                                             previous_readiness=alpha_evidence["readiness"])
             beta_status = "passed"
         else:
             beta_evidence = _not_required_beta(candidate=candidate_identity, impact_plan_digest=impact_digest, impact_plan_path=plan_path, profile=args.profile)
