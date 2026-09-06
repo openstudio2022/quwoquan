@@ -24,6 +24,7 @@ PYTEST_CAP = 80  # Defensive last resort; duration is the primary admission rule
 DEFAULT_PYTEST_FILE_ESTIMATE_SECONDS = 12
 PYTEST_FILE_ESTIMATE_SECONDS_BY_EXACT_PATH = {
     "quwoquan_ops/tests/local_contract/gate/test_named_evidence_runner__local_contract_test.py": 120,
+    "quwoquan_ops/tests/local_contract/gate/test_review_baseline__gate__local_contract_test.py": 120,
     "quwoquan_ops/tests/local_contract/gate/test_review_dispatch__cli__local_contract_test.py": 120,
 }
 PYTEST_FILE_ESTIMATE_SECONDS_BY_PREFIX = (

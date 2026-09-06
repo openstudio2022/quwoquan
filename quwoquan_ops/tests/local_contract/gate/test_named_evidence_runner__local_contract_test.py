@@ -452,7 +452,14 @@ class NamedEvidenceRunnerTest(unittest.TestCase):
             reviewer_role=plan["reviewers"][0]["role"],
         )
         projected = reviewer["assembled_input"]["evidence_summary"]["results"][0]["artifact"]
-        self.assertEqual(artifact, projected)
+        self.assertEqual(artifact["canonical_bytes_sha256"], projected["canonical_bytes_sha256"])
+        self.assertEqual(artifact["summary"], projected["summary"])
+        self.assertEqual(
+            [{key: finding[key] for key in ("code", "path", "terminal")} for finding in artifact["findings"]],
+            projected["findings"],
+        )
+        self.assertEqual("terminal_finding_identity", projected["findings_projection"]["operation"])
+        self.assertEqual(len(artifact["findings"]), projected["findings_projection"]["original_count"])
 
     def test_declared_artifact_identity_drift_and_missing_descriptor_fail_closed(self) -> None:
         plan, registry = self._plan([("artifact", True, "printf artifact")])

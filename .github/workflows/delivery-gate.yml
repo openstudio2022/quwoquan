@@ -901,6 +901,43 @@ jobs:
         if: ${{ matrix.shard_index == 0 }}
         working-directory: quwoquan_app/test_host/patrol
         run: flutter pub get --enforce-lockfile
+      - name: Materialize nonprod Android runtime trust for Patrol compile
+        if: ${{ matrix.shard_index == 0 }}
+        run: |
+          set -euo pipefail
+          TRUST_ROOT="$RUNNER_TEMP/quwoquan-patrol-runtime-config"
+          export TRUST_ROOT
+          python3 -B - <<'PY'
+          import os
+          from pathlib import Path
+
+          from quwoquan_app.scripts.device.build_launcher_handoff import (
+              materialize_runtime_config_trust_envelope,
+          )
+          from quwoquan_ops.cli.lib.app_launch_manifest_contract import (
+              build_runtime_config_trust_envelope,
+              load_launch_manifest_contract,
+          )
+          from quwoquan_ops.cli.lib.app_runtime_config_signing import decode_keyring
+          from quwoquan_ops.cli.lib.local_app_runtime_config_keys import (
+              prepare_local_app_runtime_config_signing,
+          )
+
+          signing = prepare_local_app_runtime_config_signing(Path.cwd())
+          trust = build_runtime_config_trust_envelope(
+              "nonprod",
+              decode_keyring(signing.trusted_public_keys_path.read_bytes()),
+          )
+          output = Path(os.environ["TRUST_ROOT"]) / "qwq_runtime/runtime-config-trust.json"
+          output.parent.mkdir(parents=True, mode=0o700)
+          materialize_runtime_config_trust_envelope(
+              trust,
+              str(output),
+              load_launch_manifest_contract(),
+          )
+          PY
+          echo "QWQ_ANDROID_RUNTIME_CONFIG_ASSET_ROOT=$TRUST_ROOT" >> "$GITHUB_ENV"
+          echo "QWQ_APP_BUILD_PROFILE=nonprod" >> "$GITHUB_ENV"
       - name: Materialize Patrol Android Kotlin dependencies
         if: ${{ matrix.shard_index == 0 }}
         working-directory: quwoquan_app/test_host/patrol/android

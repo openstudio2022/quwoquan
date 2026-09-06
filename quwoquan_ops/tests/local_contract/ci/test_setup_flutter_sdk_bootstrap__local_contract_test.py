@@ -248,6 +248,17 @@ def test_app_test_shards_materialize_sealed_wrappers_after_sdk_install() -> None
     assert "if: ${{ matrix.shard_index == 0 }}" in patrol_step
     assert "working-directory: quwoquan_app/test_host/patrol" in patrol_step
     assert "flutter pub get --enforce-lockfile" in patrol_step
+    trust_step = "Materialize nonprod Android runtime trust for Patrol compile"
+    assert app_tests.count(trust_step) == 1
+    assert 'TRUST_ROOT="$RUNNER_TEMP/quwoquan-patrol-runtime-config"' in patrol_step
+    assert "prepare_local_app_runtime_config_signing(Path.cwd())" in patrol_step
+    assert 'build_runtime_config_trust_envelope(' in patrol_step
+    assert '"nonprod",' in patrol_step
+    assert "decode_keyring(signing.trusted_public_keys_path.read_bytes())" in patrol_step
+    assert "materialize_runtime_config_trust_envelope(" in patrol_step
+    assert "load_launch_manifest_contract()" in patrol_step
+    assert 'QWQ_ANDROID_RUNTIME_CONFIG_ASSET_ROOT=$TRUST_ROOT' in patrol_step
+    assert 'QWQ_APP_BUILD_PROFILE=nonprod' in patrol_step
     assert "working-directory: quwoquan_app/test_host/patrol/android" in patrol_step
     assert "./gradlew --no-daemon :app:compileDebugKotlin" in patrol_step
     settings = (ROOT / "quwoquan_app/test_host/patrol/android/settings.gradle.kts").read_text(encoding="utf-8")
@@ -256,7 +267,8 @@ def test_app_test_shards_materialize_sealed_wrappers_after_sdk_install() -> None
     assert "quwoquan_app/test_host/patrol/pubspec.lock" in app_tests
     assert app_tests.index(materialize) < app_tests.index(resolve_android)
     assert app_tests.index(resolve_android) < app_tests.index(resolve_patrol)
-    assert app_tests.index(resolve_patrol) < app_tests.index(materialize_patrol)
+    assert app_tests.index(resolve_patrol) < app_tests.index(trust_step)
+    assert app_tests.index(trust_step) < app_tests.index(materialize_patrol)
     assert app_tests.index(materialize_patrol) < app_tests.index(
         "Gate (quwoquan_app tests shard)"
     )
