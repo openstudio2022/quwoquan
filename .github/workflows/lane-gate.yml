@@ -53,6 +53,18 @@ jobs:
           python3 quwoquan_ops/gate/verify_workflow_cli_arguments.py
           python3 quwoquan_ops/gate/verify_entrypoint_script_paths.py
           python3 quwoquan_ops/ci/verify_quality_policy.py
+      # branch_policy.yaml#required_integration_checks 只是仓内声明；本 check 是否真被
+      # hosted 强制，只能从 dev1.0 ruleset 读回证明。ruleset 未把 04. Lane Gate 设为
+      # required_status_checks、有 bypass actor 或加了 pull_request 规则都在此 fail closed。
+      - name: Hosted dev1.0 ruleset enforces required_integration_checks
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python3 quwoquan_ops/ci/verify_hosted_release_authority.py \
+            --scope integration-ruleset \
+            --repository "$GITHUB_REPOSITORY" \
+            --output "$QWQ_OUTPUT_ROOT/env/repo/runs/lane-gate/hosted-integration-ruleset.json"
       - name: Python script governance
         run: |
           set -euo pipefail

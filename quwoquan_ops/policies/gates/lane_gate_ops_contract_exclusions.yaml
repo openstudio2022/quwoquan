@@ -2,9 +2,12 @@
 # CocoaPods，也没有 macOS sandbox-exec、APFS `cp -c` 与本机受管根证书。下列合同把这些
 # 开发机事实写成了前提，在 hosted Linux 上必红且与 PR 改动无关。
 #
-# 这不是豁免：它们在 gate_repo.sh（开发机 / self-hosted macOS）仍全量执行；这里只声明
-# lane 门禁的判定边界。每条必须写明缺失的宿主能力，且只能减少。新增条目视为 lane 门禁
-# 覆盖面收缩，需在 local-continuous-integration spec 的 OPEN 中登记。
+# 这里只声明 lane 门禁的判定边界，不是豁免，也不假装别处会补跑：gate_repo.sh 没有 ops
+# local_contract 的整目录 pytest。10 个合同中只有 test_app_generated_manifest 经
+# `make test-gate-companion-local-contract` 进入 gate 链；test_app_dependency_capsule 仅被
+# 手动 target verify-app-dual-platform-usability-baseline 点名；其余 8 个只在 L0 commit-gate
+# 按影响面选中或开发机手动 pytest 时执行。每条必须写明缺失的宿主能力，且只能减少。新增
+# 条目视为 lane 门禁覆盖面收缩，需在 local-continuous-integration spec 的 OPEN 中登记。
 governance:
   owner: local-continuous-integration
   reason: lane gate 是轻量 PR 门禁，不复制 RC qualification 的 macOS/设备/完整工具链

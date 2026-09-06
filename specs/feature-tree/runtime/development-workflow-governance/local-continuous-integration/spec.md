@@ -156,6 +156,6 @@
 - 类型：`capability_gap`
 - 优先级：`P2`
 - 准出影响：`track`
-- 影响或价值：`04. Lane Gate` 在 `ubuntu-latest` 上执行 ops local_contract 四分片（首跑 5269 通过 / 23 失败）。23 个失败全部来自 10 个把开发机事实写成前提的合同：macOS `sandbox-exec`、APFS `cp -c`、Flutter/Go/Dart 二进制、本机受管根证书、设备矩阵 preflight。它们已在 `quwoquan_ops/policies/gates/lane_gate_ops_contract_exclusions.yaml` 逐条声明缺失的宿主能力并从 lane 分片排除，`gate_repo.sh` 全量执行不受影响；但这意味着 lane PR 对这 10 个合同缺少 hosted 复算，仍依赖开发机或 self-hosted macOS。
+- 影响或价值：`04. Lane Gate` 在 `ubuntu-latest` 上执行 ops local_contract 四分片（首跑 5269 通过 / 23 失败）。23 个失败全部来自 10 个把开发机事实写成前提的合同：macOS `sandbox-exec`、APFS `cp -c`、Flutter/Go/Dart 二进制、本机受管根证书、设备矩阵 preflight。它们已在 `quwoquan_ops/policies/gates/lane_gate_ops_contract_exclusions.yaml` 逐条声明缺失的宿主能力并从 lane 分片排除。排除不等于别处会补跑：`gate_repo.sh` 没有 ops local_contract 的整目录 pytest，10 个合同中只有 `test_app_generated_manifest` 经 `make test-gate-companion-local-contract` 进入 gate 链，`test_app_dependency_capsule` 仅被手动 target `verify-app-dual-platform-usability-baseline` 点名，其余 8 个只在 L0 commit-gate 按影响面选中或开发机手动 pytest 时执行。因此 lane PR 对这 10 个合同没有 hosted 复算，其中 9 个在任何门禁链中也没有稳定执行点。
 - 完成判定：`GWT-005` 持续证明剩余 593 个合同在 hosted 上 fail-closed；排除清单只减不增，每条被删除的前提是该合同改为按宿主能力 `skipif`（并让 skip 可见于回执）或 lane 门禁获得 hosted macOS runner；`test_lane_gate_exclusions_are_declared_real_ops_files_and_only_narrow_ops` 持续证明清单指向真实文件且不影响 data/全量。
 - 依赖：hosted macOS runner 预算，或 10 个合同的 owner 为其补 `skipif` 与 skip 可见性。

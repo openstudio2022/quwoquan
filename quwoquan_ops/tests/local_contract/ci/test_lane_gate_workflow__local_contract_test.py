@@ -87,6 +87,22 @@ def test_lane_gate_runs_every_repo_wide_static_gate_and_feature_tree() -> None:
     assert 'test -z "$(git status --porcelain --untracked-files=all)"' in runs
 
 
+def test_lane_gate_reads_back_that_its_own_check_is_hosted_required() -> None:
+    # GWT-005 说 required check fail-closed；仓内 required_integration_checks 声明不能自证，
+    # 必须由 governance job 用只读 token 从 dev1.0 ruleset 读回。
+    _, workflow = _load()
+    steps = [
+        step for step in workflow["jobs"]["governance"]["steps"]
+        if "verify_hosted_release_authority.py" in step.get("run", "")
+    ]
+    assert len(steps) == 1
+    step = steps[0]
+    assert step["env"] == {"GITHUB_TOKEN": "${{ github.token }}"}
+    assert "--scope integration-ruleset" in step["run"]
+    assert '--repository "$GITHUB_REPOSITORY"' in step["run"]
+    assert "--output" in step["run"]
+
+
 def test_lane_gate_binds_code_health_to_the_exact_impact_plan() -> None:
     text, workflow = _load()
     steps = {

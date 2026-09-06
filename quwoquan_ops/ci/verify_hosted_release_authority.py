@@ -1,5 +1,13 @@
 #!/usr/bin/env python3
-"""Fail-closed GitHub ruleset, Environment and Actions authority readback."""
+"""Fail-closed GitHub ruleset, Environment and Actions authority readback.
+
+两个 scope 共用同一套 ruleset 判定：
+- release-authority：dev1.0 + main ruleset、Actions 权限、安全控制、runner 与
+  sensitive Environment 全量读回，签发 hosted-release-authority-receipt。
+- integration-ruleset：只读回 dev1.0 ruleset，证明 branch_policy.yaml 里的
+  required_integration_checks（04. Lane Gate）确实是 hosted required_status_checks、
+  无 bypass actor、且没有会封死 integration fast-forward 通道的 pull_request 规则。
+"""
 from __future__ import annotations
 
 import argparse
@@ -81,18 +89,28 @@ def _rule(ruleset: Mapping[str, Any], rule_type: str) -> dict[str, Any]:
     return matches[0]
 
 
-def _verify_ruleset(
-    *, ruleset: Mapping[str, Any], branch: str,
-    required_checks: tuple[str, ...], minimum_approvals: int,
-) -> dict[str, Any]:
-    if ruleset.get("enforcement") != "active" or ruleset.get("bypass_actors") != []:
-        raise _block(f"{branch} ruleset must be active with no bypass actors")
-    conditions = ruleset.get("conditions") or {}
-    ref_name = conditions.get("ref_name") if isinstance(conditions, dict) else None
-    if ref_name != {"exclude": [], "include": [f"refs/heads/{branch}"]}:
-        raise _block(f"{branch} ruleset ref condition drifted")
-    _rule(ruleset, "deletion")
-    _rule(ruleset, "non_fast_forward")
+def _rules(ruleset: Mapping[str, Any], rule_type: str) -> list[dict[str, Any]]:
+    rules = ruleset.get("rules")
+    return [
+        item
+        for item in (rules if isinstance(rules, list) else [])
+        if isinstance(item, dict) and item.get("type") == rule_type
+    ]
+
+
+def _verify_pull_request_rule(
+    *, ruleset: Mapping[str, Any], branch: str, minimum_approvals: int | None,
+) -> None:
+    # minimum_approvals=None 表示该分支的合入执行者不是 GitHub PR merge（dev1.0 由
+    # integration 工作区 fast-forward push 执行，lane PR 只承载 required check），
+    # 此时 pull_request 规则会封死该通道，出现即视为 hosted 漂移。
+    if minimum_approvals is None:
+        if _rules(ruleset, "pull_request"):
+            raise _block(
+                f"{branch} ruleset must not require pull requests; "
+                "its merge executor is the integration fast-forward push"
+            )
+        return
     pull_request = _rule(ruleset, "pull_request").get("parameters") or {}
     if (
         not isinstance(pull_request, dict)
@@ -104,6 +122,25 @@ def _verify_ruleset(
         or (branch == "main" and pull_request.get("require_last_push_approval") is not True)
     ):
         raise _block(f"{branch} pull-request protection is incomplete")
+
+
+def _verify_ruleset(
+    *, ruleset: Mapping[str, Any], branch: str,
+    required_checks: tuple[str, ...], minimum_approvals: int | None,
+) -> dict[str, Any]:
+    if ruleset.get("enforcement") != "active" or ruleset.get("bypass_actors") != []:
+        raise _block(f"{branch} ruleset must be active with no bypass actors")
+    conditions = ruleset.get("conditions") or {}
+    ref_name = conditions.get("ref_name") if isinstance(conditions, dict) else None
+    if ref_name != {"exclude": [], "include": [f"refs/heads/{branch}"]}:
+        raise _block(f"{branch} ruleset ref condition drifted")
+    _rule(ruleset, "deletion")
+    _rule(ruleset, "non_fast_forward")
+    _verify_pull_request_rule(
+        ruleset=ruleset, branch=branch, minimum_approvals=minimum_approvals,
+    )
+    if not required_checks:
+        raise _block(f"{branch} has no declared required checks in branch policy")
     required = _rule(ruleset, "required_status_checks").get("parameters") or {}
     checks = required.get("required_status_checks") if isinstance(required, dict) else None
     if (
@@ -125,9 +162,89 @@ def _verify_ruleset(
             {"name": name, "integrationId": GITHUB_ACTIONS_APP_ID}
             for name in required_checks
         ],
+        "mergeExecutor": (
+            "integration_fast_forward_push" if minimum_approvals is None
+            else "pull_request_merge"
+        ),
         "minimumApprovals": minimum_approvals,
         "updatedAt": str(ruleset.get("updated_at") or ""),
     }
+
+
+def _branch_rulesets(
+    *, repository: str, token: str, branches: tuple[str, ...],
+) -> dict[str, dict[str, Any]]:
+    summaries = _object_list(_api_get(repository, "/rulesets", token), "rulesets")
+    details = []
+    for summary in summaries:
+        ruleset_id = summary.get("id")
+        if isinstance(ruleset_id, int):
+            details.append(_object(
+                _api_get(repository, f"/rulesets/{ruleset_id}", token),
+                f"ruleset {ruleset_id}",
+            ))
+    by_branch: dict[str, dict[str, Any]] = {}
+    for branch in branches:
+        expected_ref = f"refs/heads/{branch}"
+        matches = []
+        for detail in details:
+            conditions = detail.get("conditions") or {}
+            ref_name = conditions.get("ref_name") if isinstance(conditions, dict) else None
+            if isinstance(ref_name, dict) and expected_ref in (ref_name.get("include") or []):
+                matches.append(detail)
+        if len(matches) != 1:
+            raise _block(f"{branch} must have exactly one applicable branch ruleset")
+        by_branch[branch] = matches[0]
+    return by_branch
+
+
+def _integration_required_checks(branch_policy: BranchPolicy) -> tuple[str, ...]:
+    return tuple(item.name for item in branch_policy.required_integration_checks)
+
+
+def _seal(receipt: dict[str, Any]) -> dict[str, Any]:
+    receipt["observedAt"] = (
+        dt.datetime.now(dt.timezone.utc).isoformat().replace("+00:00", "Z")
+    )
+    digest_payload = {
+        key: value for key, value in receipt.items()
+        if key not in {"observedAt", "evidenceDigest"}
+    }
+    receipt["evidenceDigest"] = "sha256:" + hashlib.sha256(json.dumps(
+        digest_payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+    ).encode("utf-8")).hexdigest()
+    return receipt
+
+
+def verify_hosted_integration_ruleset(
+    *, repository: str, token: str, policy: BranchPolicy | None = None,
+) -> dict[str, Any]:
+    """只 readback dev1.0 ruleset：lane PR 的 required check 必须由 hosted 强制。
+
+    是 `04. Lane Gate` 自证 fail-closed 的依据：`branch_policy.yaml#required_integration_checks`
+    只是仓内声明，若 hosted ruleset 未把同名 check 设为 required_status_checks，
+    lane PR 的复算就只是可见证据而非阻断。该 readback 不查 Actions/Environment/
+    runner，不签发 release authority。
+    """
+    if not repository or "/" not in repository or not token:
+        raise _block("repository and authenticated GitHub token are required")
+    branch_policy = policy or load_policy()
+    branch = branch_policy.integration_branch
+    ruleset = _verify_ruleset(
+        ruleset=_branch_rulesets(
+            repository=repository, token=token, branches=(branch,),
+        )[branch],
+        branch=branch,
+        required_checks=_integration_required_checks(branch_policy),
+        minimum_approvals=None,
+    )
+    return _seal({
+        "schema": "hosted-integration-ruleset-receipt",
+        "repository": repository,
+        "branch": branch,
+        "requiredIntegrationChecksEnforced": True,
+        "ruleset": ruleset,
+    })
 
 
 def _verify_environment(
@@ -254,38 +371,24 @@ def verify_hosted_release_authority(
         "minimumOnlineSatisfied": True,
     }
 
-    summaries = _object_list(_api_get(repository, "/rulesets", token), "rulesets")
-    details = []
-    for summary in summaries:
-        ruleset_id = summary.get("id")
-        if isinstance(ruleset_id, int):
-            details.append(_object(
-                _api_get(repository, f"/rulesets/{ruleset_id}", token),
-                f"ruleset {ruleset_id}",
-            ))
-    by_branch: dict[str, dict[str, Any]] = {}
-    for branch in (branch_policy.integration_branch, branch_policy.release_branch):
-        expected_ref = f"refs/heads/{branch}"
-        matches = []
-        for detail in details:
-            conditions = detail.get("conditions") or {}
-            ref_name = conditions.get("ref_name") if isinstance(conditions, dict) else None
-            if isinstance(ref_name, dict) and expected_ref in (ref_name.get("include") or []):
-                matches.append(detail)
-        if len(matches) != 1:
-            raise _block(f"{branch} must have exactly one applicable branch ruleset")
-        by_branch[branch] = matches[0]
-    expected_checks = tuple(item.name for item in branch_policy.required_promotion_checks)
+    by_branch = _branch_rulesets(
+        repository=repository, token=token,
+        branches=(branch_policy.integration_branch, branch_policy.release_branch),
+    )
     rulesets = [
         _verify_ruleset(
             ruleset=by_branch[branch_policy.integration_branch],
             branch=branch_policy.integration_branch,
-            required_checks=(expected_checks[0],), minimum_approvals=0,
+            required_checks=_integration_required_checks(branch_policy),
+            minimum_approvals=None,
         ),
         _verify_ruleset(
             ruleset=by_branch[branch_policy.release_branch],
             branch=branch_policy.release_branch,
-            required_checks=expected_checks, minimum_approvals=1,
+            required_checks=tuple(
+                item.name for item in branch_policy.required_promotion_checks
+            ),
+            minimum_approvals=1,
         ),
     ]
     environments = []
@@ -319,21 +422,24 @@ def verify_hosted_release_authority(
         },
         "runnerAuthority": runner_authority,
         "rulesets": rulesets, "environments": environments,
-        "observedAt": dt.datetime.now(dt.timezone.utc).isoformat().replace("+00:00", "Z"),
     }
-    digest_payload = {
-        key: value for key, value in receipt.items()
-        if key not in {"observedAt", "evidenceDigest"}
-    }
-    receipt["evidenceDigest"] = "sha256:" + hashlib.sha256(json.dumps(
-        digest_payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")
-    ).encode("utf-8")).hexdigest()
-    return receipt
+    return _seal(receipt)
+
+
+SCOPES = {
+    "release-authority": verify_hosted_release_authority,
+    "integration-ruleset": verify_hosted_integration_ruleset,
+}
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--repository", required=True)
+    parser.add_argument(
+        "--scope", choices=sorted(SCOPES), default="release-authority",
+        help="release-authority 读回全部发布权威；integration-ruleset 只读回 dev1.0 "
+             "ruleset 是否把 required_integration_checks 设为 hosted required check",
+    )
     parser.add_argument("--token-env", default="GITHUB_TOKEN")
     parser.add_argument("--expected-digest", default="")
     parser.add_argument("--output", type=Path, required=True)
@@ -344,7 +450,7 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     try:
-        receipt = verify_hosted_release_authority(
+        receipt = SCOPES[args.scope](
             repository=args.repository,
             token=os.environ.get(args.token_env, "").strip(),
         )
@@ -367,7 +473,7 @@ def main(argv: list[str] | None = None) -> int:
             stream.write("decision=pass\n")
             stream.write(f"authority_digest={receipt['evidenceDigest']}\n")
     print(
-        f"hosted release authority verified repository={args.repository} "
+        f"hosted {args.scope} verified repository={args.repository} "
         f"digest={receipt['evidenceDigest']}"
     )
     return 0
