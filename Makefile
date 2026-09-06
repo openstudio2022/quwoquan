@@ -1429,6 +1429,8 @@ test-gate-companion-local-contract: test-review-dispatch test-review-consolidati
 		quwoquan_ops/tests/local_contract/gate/test_canonical_coverage_app_sharding__gate__local_contract_test.py \
 		quwoquan_ops/tests/local_contract/test_data/test_delivery_gate_data_shard__gate__local_contract_test.py \
 		quwoquan_ops/tests/local_contract/gate/test_python_script_governance__bytecode_guard__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/gate/test_incremental_code_health__gate__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/gate/test_review_code_health__gate__local_contract_test.py \
 		quwoquan_ops/tests/local_contract/gate/test_api_integration_direct_storage__gate__local_contract_test.py \
 		quwoquan_ops/tests/local_contract/gate/test_error_code_assertion_coverage__gate__local_contract_test.py \
 		quwoquan_ops/tests/local_contract/gate/test_ratchet_baseline_governance__local_contract_test.py \
