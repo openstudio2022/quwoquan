@@ -270,8 +270,10 @@ def _impact_plan(*, parent: str, commit: str, run_dir: Path) -> tuple[dict[str, 
 
 
 def _local_readiness(*, level: str, parent: str, commit: str, run_dir: Path, args: argparse.Namespace) -> tuple[Path, dict[str, Any]]:
-    update_line = f"{DEV_REF} {commit} {DEV_REF} {parent}\n"
-    command = [sys.executable, "-B", str(LOCAL_READINESS), "run", "--level", level, "--push-updates", "-"]
+    # `run` 会读取 push updates 两次（plan + run），stdin 只能读一次，所以落成文件再传路径。
+    updates_path = run_dir / f"push-updates-{level}.txt"
+    updates_path.write_text(f"{DEV_REF} {commit} {DEV_REF} {parent}\n", encoding="utf-8")
+    command = [sys.executable, "-B", str(LOCAL_READINESS), "run", "--level", level, "--push-updates", str(updates_path)]
     if args.owner_identity:
         command += ["--owner-identity", args.owner_identity]
     if args.candidate_evidence:
@@ -280,7 +282,7 @@ def _local_readiness(*, level: str, parent: str, commit: str, run_dir: Path, arg
         command += ["--review-consolidation", args.review_consolidation]
     for item in args.required_evidence or []:
         command += ["--required-evidence", item]
-    completed = subprocess.run(command, cwd=ROOT, input=update_line, text=True, capture_output=True, check=False)
+    completed = subprocess.run(command, cwd=ROOT, text=True, capture_output=True, check=False)
     (run_dir / f"local-readiness-{level}.stdout.json").write_text(completed.stdout, encoding="utf-8")
     (run_dir / f"local-readiness-{level}.stderr.log").write_text(completed.stderr, encoding="utf-8")
     try:

@@ -545,6 +545,13 @@ def _select_pytest_targets(paths: list[str]) -> dict[str, object]:
             "quwoquan_ops/tests/local_contract",
         ):
             if path.startswith(root + "/") and path.endswith(".py"):
+                # conftest.py / 支撑模块本身不含用例，交给 pytest 会以 "no tests ran" 失败；
+                # 它们影响整个目录，按目录 suite 显式 defer。
+                if not Path(path).name.startswith("test_"):
+                    directory = str(Path(path).parent)
+                    if directory not in deferred:
+                        deferred.append(directory)
+                    continue
                 # A staged deletion still shows up as a changed path; handing it to
                 # pytest aborts the whole run with "file or directory not found".
                 if path not in seen and (ROOT / path).exists():
