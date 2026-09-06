@@ -268,6 +268,10 @@ def test_cli_accepts_authoritative_handoff_ref_only(command: str) -> None:
             "release-current",
             "--from-manifest-digest",
             "sha256:" + "2" * 64,
+            "--from-revision",
+            "7",
+            "--import-run-id",
+            "apply-rollback-target",
         ]
     parsed = parser.parse_args(argv)
     assert parsed.handoff_ref == _authority_ref()
@@ -550,6 +554,10 @@ def test_cli_accepts_exactly_one_system_attestation_pair(command: str) -> None:
             "release-current",
             "--from-manifest-digest",
             "sha256:" + "2" * 64,
+            "--from-revision",
+            "7",
+            "--import-run-id",
+            "apply-rollback-target",
         ]
     parsed = parser.parse_args(argv)
     assert parsed.system_attestation_ref.endswith("/attestations/release.json")
@@ -578,6 +586,10 @@ def test_cli_rejects_crossed_admission_pairs(command: str) -> None:
             "release-current",
             "--from-manifest-digest",
             "sha256:" + "2" * 64,
+            "--from-revision",
+            "7",
+            "--import-run-id",
+            "apply-rollback-target",
         ]
     parsed = parser.parse_args(argv)
     with pytest.raises(ValueError, match="ADMISSION_PAIR_INVALID"):

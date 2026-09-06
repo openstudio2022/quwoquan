@@ -240,6 +240,16 @@ def _verify_release_consumers(
         "contentPostActiveReceiptDigest": import_result[
             "contentPostActiveReceiptDigest"
         ],
+        **{
+            field: import_result[field]
+            for owner in ("tag", "creator", "homepage", "content")
+            for field in (
+                f"{owner}CandidateReceiptRef",
+                f"{owner}CandidateReceiptDigest",
+                f"{owner}FencedReadbackReceiptRef",
+                f"{owner}FencedReadbackReceiptDigest",
+            )
+        },
     }
     failed_stage = "tag_consumer_verification"
     try:

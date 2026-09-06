@@ -1,0 +1,159 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Tag verified release candidate receipt",
+  "type": "object",
+  "required": [
+    "schema",
+    "status",
+    "environment",
+    "sourceOwner",
+    "releaseId",
+    "manifestDigest",
+    "generatedAt"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "quwoquan.tag_release_candidate_receipt"
+    },
+    "status": {
+      "enum": [
+        "found",
+        "not_found"
+      ]
+    },
+    "environment": {
+      "enum": [
+        "alpha",
+        "beta",
+        "gamma",
+        "prod"
+      ]
+    },
+    "sourceOwner": {
+      "const": "qwq_data"
+    },
+    "releaseId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "manifestDigest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "projectionVersion": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "verifiedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "closureDigest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "generatedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "canonicalDigest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "releaseKind": {
+      "enum": [
+        "content",
+        "empty_baseline"
+      ]
+    },
+    "tagRefsDigest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "counts": {
+      "type": "object",
+      "required": [
+        "expected",
+        "projected"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "expected": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "projected": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "found"
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "then": {
+        "required": [
+          "projectionVersion",
+          "verifiedAt",
+          "closureDigest",
+          "canonicalDigest",
+          "releaseKind",
+          "tagRefsDigest",
+          "counts"
+        ]
+      },
+      "else": {
+        "not": {
+          "anyOf": [
+            {
+              "required": [
+                "projectionVersion"
+              ]
+            },
+            {
+              "required": [
+                "verifiedAt"
+              ]
+            },
+            {
+              "required": [
+                "closureDigest"
+              ]
+            },
+            {
+              "required": [
+                "canonicalDigest"
+              ]
+            },
+            {
+              "required": [
+                "releaseKind"
+              ]
+            },
+            {
+              "required": [
+                "tagRefsDigest"
+              ]
+            },
+            {
+              "required": [
+                "counts"
+              ]
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

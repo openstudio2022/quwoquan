@@ -9,53 +9,109 @@
     "environment",
     "releaseId",
     "sourceOwner",
+    "manifestDigest",
+    "activationMode",
     "canonicalDigest",
     "releaseKind",
-    "previousReleaseId",
     "nodeCount",
     "tagRefs",
     "generatedAt"
   ],
   "additionalProperties": false,
   "properties": {
-    "schema": {"const": "quwoquan.tag_import_report"},
-    "status": {"enum": ["dry-run", "active"]},
-    "environment": {"type": "string", "minLength": 1},
-    "releaseId": {"type": "string", "minLength": 1},
-    "sourceOwner": {"const": "qwq_data"},
-    "canonicalDigest": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
-    "releaseKind": {"enum": ["content", "empty_baseline"]},
-    "previousReleaseId": {"type": "string"},
-    "nodeCount": {"type": "integer", "minimum": 0},
+    "schema": {
+      "const": "quwoquan.tag_import_report"
+    },
+    "status": {
+      "enum": [
+        "dry-run",
+        "verified"
+      ]
+    },
+    "environment": {
+      "type": "string",
+      "minLength": 1
+    },
+    "releaseId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "sourceOwner": {
+      "const": "qwq_data"
+    },
+    "canonicalDigest": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "releaseKind": {
+      "enum": [
+        "content",
+        "empty_baseline"
+      ]
+    },
+    "nodeCount": {
+      "type": "integer",
+      "minimum": 0
+    },
     "tagRefs": {
       "type": "array",
       "uniqueItems": true,
-      "items": {"type": "string", "minLength": 1}
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
     },
-    "generatedAt": {"type": "string", "minLength": 1}
+    "generatedAt": {
+      "type": "string",
+      "minLength": 1
+    },
+    "manifestDigest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "activationMode": {
+      "const": "stage-only"
+    }
   },
   "allOf": [
     {
       "if": {
-        "properties": {"releaseKind": {"const": "content"}}
+        "properties": {
+          "releaseKind": {
+            "const": "content"
+          }
+        }
       },
       "then": {
         "properties": {
-          "nodeCount": {"minimum": 1},
-          "tagRefs": {"minItems": 1}
+          "nodeCount": {
+            "minimum": 1
+          },
+          "tagRefs": {
+            "minItems": 1
+          }
         }
       }
     },
     {
       "if": {
-        "properties": {"releaseKind": {"const": "empty_baseline"}}
+        "properties": {
+          "releaseKind": {
+            "const": "empty_baseline"
+          }
+        }
       },
       "then": {
         "properties": {
-          "nodeCount": {"const": 0},
-          "tagRefs": {"maxItems": 0}
+          "nodeCount": {
+            "const": 0
+          },
+          "tagRefs": {
+            "maxItems": 0
+          }
         }
       }
     }
-  ]
+  ],
+  "description": "Non-authoritative stage-only importer report; candidate query receipt is admission authority."
 }

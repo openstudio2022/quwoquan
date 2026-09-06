@@ -297,6 +297,62 @@
     "contentPostActiveReceiptDigest": {
       "type": "string",
       "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "tagCandidateReceiptRef": {
+      "type": "string",
+      "pattern": "^(|env/(alpha|beta|gamma|prod)/runs/data-release/(?!.*(?:^|/)\\.{1,2}(?:/|$))[^\\\\\\u0000-\\u001f\\u007f]+\\.json)$"
+    },
+    "tagCandidateReceiptDigest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "tagFencedReadbackReceiptRef": {
+      "type": "string",
+      "pattern": "^(|env/(alpha|beta|gamma|prod)/runs/data-release/(?!.*(?:^|/)\\.{1,2}(?:/|$))[^\\\\\\u0000-\\u001f\\u007f]+\\.json)$"
+    },
+    "tagFencedReadbackReceiptDigest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "creatorCandidateReceiptRef": {
+      "type": "string",
+      "pattern": "^(|env/(alpha|beta|gamma|prod)/runs/data-release/(?!.*(?:^|/)\\.{1,2}(?:/|$))[^\\\\\\u0000-\\u001f\\u007f]+\\.json)$"
+    },
+    "creatorCandidateReceiptDigest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "creatorFencedReadbackReceiptRef": {
+      "type": "string",
+      "pattern": "^(|env/(alpha|beta|gamma|prod)/runs/data-release/(?!.*(?:^|/)\\.{1,2}(?:/|$))[^\\\\\\u0000-\\u001f\\u007f]+\\.json)$"
+    },
+    "creatorFencedReadbackReceiptDigest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "homepageCandidateReceiptRef": {
+      "type": "string",
+      "pattern": "^(|env/(alpha|beta|gamma|prod)/runs/data-release/(?!.*(?:^|/)\\.{1,2}(?:/|$))[^\\\\\\u0000-\\u001f\\u007f]+\\.json)$"
+    },
+    "homepageCandidateReceiptDigest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "homepageFencedReadbackReceiptRef": {
+      "type": "string",
+      "pattern": "^(|env/(alpha|beta|gamma|prod)/runs/data-release/(?!.*(?:^|/)\\.{1,2}(?:/|$))[^\\\\\\u0000-\\u001f\\u007f]+\\.json)$"
+    },
+    "homepageFencedReadbackReceiptDigest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "contentFencedReadbackReceiptRef": {
+      "type": "string",
+      "pattern": "^(|env/(alpha|beta|gamma|prod)/runs/data-release/(?!.*(?:^|/)\\.{1,2}(?:/|$))[^\\\\\\u0000-\\u001f\\u007f]+\\.json)$"
+    },
+    "contentFencedReadbackReceiptDigest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
     }
   },
   "allOf": [
@@ -414,10 +470,25 @@
       },
       "then": {
         "required": [
+          "tagCandidateReceiptRef",
+          "tagCandidateReceiptDigest",
+          "creatorCandidateReceiptRef",
+          "creatorCandidateReceiptDigest",
+          "homepageCandidateReceiptRef",
+          "homepageCandidateReceiptDigest",
           "contentCandidateReceiptRef",
           "contentCandidateReceiptDigest"
         ],
         "properties": {
+          "tagCandidateReceiptRef": {
+            "minLength": 1
+          },
+          "creatorCandidateReceiptRef": {
+            "minLength": 1
+          },
+          "homepageCandidateReceiptRef": {
+            "minLength": 1
+          },
           "contentCandidateReceiptRef": {
             "minLength": 1
           }
@@ -429,57 +500,26 @@
         "properties": {
           "status": {
             "const": "completed"
-          }
-        },
-        "required": [
-          "status",
-          "importRunId"
-        ]
-      },
-      "then": {
-        "required": [
-          "contentCandidateReceiptRef",
-          "contentCandidateReceiptDigest",
-          "contentPreActiveReceiptRef",
-          "contentPreActiveReceiptDigest",
-          "contentActivationReceiptRef",
-          "contentActivationReceiptDigest",
-          "contentPostActiveReceiptRef",
-          "contentPostActiveReceiptDigest"
-        ],
-        "properties": {
-          "contentCandidateReceiptRef": {
-            "minLength": 1
-          },
-          "contentPreActiveReceiptRef": {
-            "minLength": 1
           },
           "contentActivationReceiptRef": {
-            "minLength": 1
-          },
-          "contentPostActiveReceiptRef": {
-            "minLength": 1
-          }
-        }
-      }
-    },
-    {
-      "if": {
-        "properties": {
-          "status": {
-            "const": "completed"
-          },
-          "contentImportReportRef": {
+            "type": "string",
             "minLength": 1
           }
         },
         "required": [
           "status",
-          "contentImportReportRef"
+          "importRunId",
+          "contentActivationReceiptRef"
         ]
       },
       "then": {
         "required": [
+          "tagCandidateReceiptRef",
+          "tagCandidateReceiptDigest",
+          "creatorCandidateReceiptRef",
+          "creatorCandidateReceiptDigest",
+          "homepageCandidateReceiptRef",
+          "homepageCandidateReceiptDigest",
           "contentCandidateReceiptRef",
           "contentCandidateReceiptDigest",
           "contentPreActiveReceiptRef",
@@ -487,10 +527,39 @@
           "contentActivationReceiptRef",
           "contentActivationReceiptDigest",
           "contentPostActiveReceiptRef",
-          "contentPostActiveReceiptDigest"
+          "contentPostActiveReceiptDigest",
+          "tagFencedReadbackReceiptRef",
+          "tagFencedReadbackReceiptDigest",
+          "creatorFencedReadbackReceiptRef",
+          "creatorFencedReadbackReceiptDigest",
+          "homepageFencedReadbackReceiptRef",
+          "homepageFencedReadbackReceiptDigest",
+          "contentFencedReadbackReceiptRef",
+          "contentFencedReadbackReceiptDigest"
         ],
         "properties": {
+          "tagCandidateReceiptRef": {
+            "minLength": 1
+          },
+          "creatorCandidateReceiptRef": {
+            "minLength": 1
+          },
+          "homepageCandidateReceiptRef": {
+            "minLength": 1
+          },
           "contentCandidateReceiptRef": {
+            "minLength": 1
+          },
+          "tagFencedReadbackReceiptRef": {
+            "minLength": 1
+          },
+          "creatorFencedReadbackReceiptRef": {
+            "minLength": 1
+          },
+          "homepageFencedReadbackReceiptRef": {
+            "minLength": 1
+          },
+          "contentFencedReadbackReceiptRef": {
             "minLength": 1
           },
           "contentPreActiveReceiptRef": {

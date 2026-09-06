@@ -93,7 +93,18 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
         type=_manifest_digest,
         help="当前 Content active pointer 的 manifest 摘要；仅作为对查询结果的 asserted intent",
     )
+    rollback.add_argument(
+        "--from-revision",
+        required=True,
+        type=int,
+        help="当前 Content active pointer revision；必须与 pre-active query 严格一致",
+    )
     rollback.add_argument("--env", required=True, choices=sorted(VALID_ENVS))
+    rollback.add_argument(
+        "--import-run-id",
+        required=True,
+        help="rollback 目标 release 的 prepared apply run；只从该 result 加载四份候选 ref+digest",
+    )
     rollback.add_argument("--run-id")
     rollback.add_argument("--import", dest="import_to_db", action="store_true")
     rollback.add_argument("--dry-run", action="store_true")

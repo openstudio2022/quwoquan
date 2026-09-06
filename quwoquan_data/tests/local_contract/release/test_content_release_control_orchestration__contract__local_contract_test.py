@@ -66,6 +66,47 @@ def _candidate(release_id: str = "release-a") -> dict[str, object]:
     }
 
 
+def _owner_candidate(owner: str, manifest_digest: str = DIGEST_A) -> dict[str, object]:
+    base: dict[str, object] = {
+        "schema": f"quwoquan.{owner}_release_candidate_receipt",
+        "status": "found",
+        "environment": "alpha",
+        "sourceOwner": "qwq_data",
+        "releaseId": "release-a",
+        "manifestDigest": manifest_digest,
+        "projectionVersion": 7,
+        "verifiedAt": "2026-09-05T00:00:00Z",
+        "closureDigest": DIGEST_A,
+        "generatedAt": "2026-09-05T00:00:01Z",
+    }
+    if owner == "tag":
+        base.update(
+            counts={"expected": 1, "projected": 1},
+            canonicalDigest=DIGEST_A,
+            releaseKind="content",
+            tagRefsDigest=DIGEST_A,
+        )
+    elif owner == "creator":
+        base.update(
+            counts={"expected": 1, "projected": 1},
+            authorIds=["author-a"],
+            profileDigests=[{"creatorId": "creator-a", "authorId": "author-a", "digest": DIGEST_A}],
+        )
+    else:
+        identity = {
+            "environment": base.pop("environment"),
+            "sourceOwner": base.pop("sourceOwner"),
+            "releaseId": base.pop("releaseId"),
+            "manifestDigest": base.pop("manifestDigest"),
+        }
+        base.pop("generatedAt")
+        base.update(
+            identity=identity,
+            counts={"expected": 1, "projected": 1},
+            entityRefMappingDigest=DIGEST_A,
+        )
+    return base
+
 def _active(
     *,
     found: bool,
@@ -382,6 +423,11 @@ def _activate_dependencies(
         document["active"]["manifestDigest"] = admission.manifest_digest
         return _evidence(Path(kwargs["report_path"]), document, root)
 
+    def _fenced_evidence(kwargs: dict[str, object], owner: str) -> importers.OwnerReleaseEvidence:
+        path = Path(kwargs["report_path"])
+        document = {"status": "passed", **dict(kwargs["fence"]), "owner": owner}
+        return _evidence(path, document, root)
+
     return SimpleNamespace(
         output_root=root,
         admit_release=lambda _args: admission,
@@ -400,13 +446,23 @@ def _activate_dependencies(
         assert_environment_release_policy=lambda **_kwargs: None,
         assert_target_action_allowed=lambda **_kwargs: None,
         load_content_release_candidate_receipt=importers.load_content_release_candidate_receipt,
+        load_owner_release_candidate_receipt=importers.load_owner_release_candidate_receipt,
         query_content_active_release=query_active,
         activate_content_release=activate,
         write_verification_result=write_environment_result,
         write_applied_ref=lambda **kwargs: write_json(
             kwargs["run"] / "applied_ref.json", {"releaseId": kwargs["release_id"]}
         ),
-        require_owner_local_staging_admission=lambda **_kwargs: None,
+        require_owner_local_staging_admission=(
+            __import__(
+                "content.release.environment.owner_local_staging_admission",
+                fromlist=["require_owner_local_staging_admission"],
+            ).require_owner_local_staging_admission
+        ),
+        readback_tag_at_content_fence=lambda **kwargs: _fenced_evidence(kwargs, "tag"),
+        readback_creator_at_content_fence=lambda **kwargs: _fenced_evidence(kwargs, "creator"),
+        readback_homepage_at_content_fence=lambda **kwargs: _fenced_evidence(kwargs, "homepage"),
+        readback_content_at_content_fence=lambda **kwargs: _fenced_evidence(kwargs, "content"),
         now_compact=lambda: "20260905T000000Z",
     )
 
@@ -424,6 +480,12 @@ def _prepare_apply(root: Path, admission: ReleaseAdmission) -> None:
     _write_receipt(
         candidate, {**_candidate(), "manifestDigest": admission.manifest_digest}
     )
+    owner_fields: dict[str, str] = {}
+    for owner in ("tag", "creator", "homepage"):
+        path = run / f"{owner}-candidate-receipt.json"
+        _write_receipt(path, _owner_candidate(owner, admission.manifest_digest))
+        owner_fields[f"{owner}CandidateReceiptRef"] = path.relative_to(root).as_posix()
+        owner_fields[f"{owner}CandidateReceiptDigest"] = importers.file_byte_digest(path)
     write_environment_result(
         run / "result.json",
         {
@@ -440,6 +502,7 @@ def _prepare_apply(root: Path, admission: ReleaseAdmission) -> None:
             "contentImportReportRef": "env/alpha/runs/data-release/release-a/apply-1/import.json",
             "contentCandidateReceiptRef": candidate.relative_to(root).as_posix(),
             "contentCandidateReceiptDigest": importers.file_byte_digest(candidate),
+            **owner_fields,
         },
     )
 
@@ -542,7 +605,7 @@ def test_activate_without_cross_owner_staging_contract_gate_blocks_before_cas(
     deps.require_owner_local_staging_admission = None
     deps.query_content_active_release = lambda **_kwargs: observed.append("query")
 
-    with pytest.raises(SystemExit, match="cross-owner live release"):
+    with pytest.raises(SystemExit, match="owner release adapter missing"):
         _ship_operations.activate_release(
             argparse.Namespace(
                 env="alpha",
@@ -562,3 +625,29 @@ def test_activate_without_cross_owner_staging_contract_gate_blocks_before_cas(
     result = read_json(run / "result.json")
     assert result["status"] == "failed"
     assert result["failedStage"] == "owner_local_staging_admission"
+
+
+def test_activate_readback_failure_is_ambiguous_without_applied_ref(
+    tmp_path: Path,
+) -> None:
+    _release_path, admission = _release(tmp_path)
+    _prepare_apply(tmp_path, admission)
+    deps = _activate_dependencies(tmp_path, admission, _active(found=False))
+    deps.readback_homepage_at_content_fence = lambda **_kwargs: (_ for _ in ()).throw(
+        RuntimeError("homepage readback failed after CAS")
+    )
+
+    with pytest.raises(RuntimeError, match="after CAS"):
+        _ship_operations.activate_release(
+            argparse.Namespace(
+                env="alpha", import_run_id="apply-1", run_id="activate-readback-failed",
+                confirm_prod_apply=False, release_admission=admission,
+            ),
+            dependencies=deps,
+        )
+
+    run = tmp_path / "env/alpha/runs/data-release/release-a/activate-readback-failed"
+    result = read_json(run / "result.json")
+    assert result["status"] == "failed"
+    assert result["failedStage"] == "owner_fenced_readback"
+    assert not (run / "applied_ref.json").exists()

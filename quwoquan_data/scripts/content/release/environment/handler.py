@@ -36,9 +36,20 @@ from content.release.environment.homepage_verification_cases import (
 from content.release.environment.importers import (
     activate_content_release as _activate_content_release,
     load_content_release_candidate_receipt as _load_content_release_candidate_receipt,
+    load_owner_release_candidate_receipt as _load_owner_release_candidate_receipt,
     query_content_active_release as _query_content_active_release,
     query_content_release_candidate as _query_content_release_candidate,
+    query_creator_release_candidate as _query_creator_release_candidate,
+    query_homepage_release_candidate as _query_homepage_release_candidate,
+    query_tag_release_candidate as _query_tag_release_candidate,
+    readback_content_at_content_fence as _readback_content_at_content_fence,
+    readback_creator_at_content_fence as _readback_creator_at_content_fence,
+    readback_homepage_at_content_fence as _readback_homepage_at_content_fence,
+    readback_tag_at_content_fence as _readback_tag_at_content_fence,
     run_content_importer as _run_content_importer,
+)
+from content.release.environment.owner_local_staging_admission import (
+    require_owner_local_staging_admission as _require_owner_local_staging_admission,
 )
 from content.release.environment.importers import (
     run_creator_importer as _run_creator_importer,
@@ -233,14 +244,19 @@ def _operation_dependencies() -> ShipOperationDependencies:
         write_research_isolation_verification=(write_research_isolation_verification),
         write_environment_release_readiness=write_environment_release_readiness,
         now_compact=_now_compact,
-        # Tag/User/Entity importers do not yet expose owner-local staged
-        # candidate receipts. Keep live mutation fail-closed until that
-        # cross-owner contract is implemented and injected here.
-        require_owner_local_staging_admission=None,
+        require_owner_local_staging_admission=_require_owner_local_staging_admission,
+        query_tag_release_candidate=_query_tag_release_candidate,
+        query_creator_release_candidate=_query_creator_release_candidate,
+        query_homepage_release_candidate=_query_homepage_release_candidate,
         query_content_release_candidate=_query_content_release_candidate,
+        load_owner_release_candidate_receipt=_load_owner_release_candidate_receipt,
         load_content_release_candidate_receipt=_load_content_release_candidate_receipt,
         query_content_active_release=_query_content_active_release,
         activate_content_release=_activate_content_release,
+        readback_tag_at_content_fence=_readback_tag_at_content_fence,
+        readback_creator_at_content_fence=_readback_creator_at_content_fence,
+        readback_homepage_at_content_fence=_readback_homepage_at_content_fence,
+        readback_content_at_content_fence=_readback_content_at_content_fence,
     )
 
 

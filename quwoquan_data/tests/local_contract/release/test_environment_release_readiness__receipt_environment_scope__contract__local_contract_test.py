@@ -436,7 +436,7 @@ def _fixture(root: Path) -> dict[str, Path]:
         import_run / "import.json",
         {
             "schema": "quwoquan.content_import_report",
-            "status": "imported",
+            "status": "staged",
             "environment": ENVIRONMENT,
             "releaseId": RELEASE_ID,
             "sourceOwner": "qwq_data",
@@ -445,6 +445,16 @@ def _fixture(root: Path) -> dict[str, Path]:
             "mode": "sync",
             "deletePolicy": "tombstone",
             "counts": {"postsLoaded": 3, "entitiesLoaded": 1},
+            "stageResult": {
+                "postsExpected": 3,
+                "postsProjected": 3,
+                "mediaExpected": 0,
+                "mediaProjected": 0,
+                "outboxExpected": 3,
+                "outboxProjected": 3,
+                "projectionVersion": 1,
+                "replayed": False,
+            },
             "postBindings": [
                 {
                     "postRef": post_ref,
@@ -464,20 +474,30 @@ def _fixture(root: Path) -> dict[str, Path]:
         import_run / "creator-import.json",
         {
             "schema": "quwoquan.user_creator_import_report",
-            "status": "active",
+            "status": "verified",
             "environment": ENVIRONMENT,
             "releaseId": RELEASE_ID,
             "sourceOwner": "qwq_data",
-            "mode": "sync",
+            "manifestDigest": payload_digest(release),
+            "activationMode": "stage-only",
             "projectionDatabase": "quwoquan_user",
+            "projectionVersion": 1,
+            "closureDigest": "sha256:" + "b" * 64,
+            "verifiedAt": "2026-07-28T00:01:00Z",
             "counts": {
-                "creatorsLoaded": 1,
-                "usersUpserted": 1,
-                "creatorsUpserted": 1,
-                "usersRemoved": 0,
-                "creatorsRemoved": 0,
+                "creatorsExpected": 1,
+                "creatorsProjected": 1,
+                "usersUpserted": 0,
+                "personasUpserted": 0,
             },
             "authorIds": ["author-a"],
+            "profileDigests": [
+                {
+                    "creatorId": CREATOR_ID,
+                    "authorId": "author-a",
+                    "digest": "sha256:" + "c" * 64,
+                }
+            ],
             "verifiedCreatorIds": [CREATOR_ID],
             "generatedAt": "2026-07-28T00:01:00Z",
         },

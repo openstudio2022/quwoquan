@@ -63,7 +63,7 @@ def test_import_report_stops_at_stage_or_replay_and_cannot_claim_activation() ->
     schema = json.loads(schema_path.read_text(encoding="utf-8"))
     assert schema["properties"]["status"]["enum"] == [
         "dry-run",
-        "imported",
+        "staged",
         "replay_validated",
     ]
     assert schema["properties"]["activationMode"] == {"const": "stage-only"}

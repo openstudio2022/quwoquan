@@ -64,7 +64,7 @@ def test_importers_read_release_payload_without_publish_root(
         media_image_base_url="https://cdn.example.invalid",
         media_video_base_url="https://cdn.example.invalid",
         dry_run=True,
-        creator_receipt=run / "creator-import.json",
+        creator_candidate_receipt=run / "creator-import.json",
     )
     importers.run_creator_importer(
         release=release,
@@ -172,5 +172,5 @@ def _content_importer_kwargs(tmp_path: Path) -> dict[str, object]:
         "media_image_base_url": "https://cdn.example.invalid",
         "media_video_base_url": "https://cdn.example.invalid",
         "dry_run": True,
-        "creator_receipt": tmp_path / "runs/apply-a/creator-import.json",
+        "creator_candidate_receipt": tmp_path / "runs/apply-a/creator-candidate-receipt.json",
     }

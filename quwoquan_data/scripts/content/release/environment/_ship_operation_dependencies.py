@@ -39,8 +39,16 @@ class ShipOperationDependencies:
     write_research_isolation_verification: Callable[..., Path]
     write_environment_release_readiness: Callable[..., Path]
     now_compact: Callable[[], str]
-    require_owner_local_staging_admission: Callable[..., None] | None = None
+    require_owner_local_staging_admission: Callable[..., Any] | None = None
+    query_tag_release_candidate: Callable[..., Any] | None = None
+    query_creator_release_candidate: Callable[..., Any] | None = None
+    query_homepage_release_candidate: Callable[..., Any] | None = None
     query_content_release_candidate: Callable[..., Any] | None = None
+    load_owner_release_candidate_receipt: Callable[..., Any] | None = None
     load_content_release_candidate_receipt: Callable[..., Any] | None = None
     query_content_active_release: Callable[..., Any] | None = None
     activate_content_release: Callable[..., Any] | None = None
+    readback_tag_at_content_fence: Callable[..., Any] | None = None
+    readback_creator_at_content_fence: Callable[..., Any] | None = None
+    readback_homepage_at_content_fence: Callable[..., Any] | None = None
+    readback_content_at_content_fence: Callable[..., Any] | None = None

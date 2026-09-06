@@ -306,7 +306,50 @@ def _dependencies(
             "generatedAt": "2026-09-05T00:00:04Z",
         },
     )
+    owner_fields: dict[str, str] = {}
+    for owner in ("tag", "creator", "homepage"):
+        owner_candidate = apply_run / f"{owner}-candidate-receipt.json"
+        write_json(
+            owner_candidate,
+            {
+                "schema": f"quwoquan.{owner}_release_candidate_receipt",
+                "status": "found",
+                "environment": "gamma",
+                "sourceOwner": "qwq_data",
+                "releaseId": release.name,
+                "manifestDigest": manifest_digest,
+                "generatedAt": "2026-09-05T00:00:01Z",
+            },
+        )
+        owner_fields[f"{owner}CandidateReceiptRef"] = owner_candidate.relative_to(
+            root
+        ).as_posix()
+        owner_fields[f"{owner}CandidateReceiptDigest"] = "sha256:" + __import__(
+            "hashlib"
+        ).sha256(owner_candidate.read_bytes()).hexdigest()
+    for owner in ("tag", "creator", "homepage", "content"):
+        readback = import_run / f"{owner}-fenced-readback-receipt.json"
+        write_json(
+            readback,
+            {
+                "schema": f"quwoquan.{owner}_release_fenced_readback_receipt",
+                "status": "passed",
+                "environment": "gamma",
+                "sourceOwner": "qwq_data",
+                "releaseId": release.name,
+                "manifestDigest": manifest_digest,
+                "revision": 1,
+                "generatedAt": "2026-09-05T00:00:05Z",
+            },
+        )
+        owner_fields[f"{owner}FencedReadbackReceiptRef"] = readback.relative_to(
+            root
+        ).as_posix()
+        owner_fields[f"{owner}FencedReadbackReceiptDigest"] = "sha256:" + __import__(
+            "hashlib"
+        ).sha256(readback.read_bytes()).hexdigest()
     evidence_fields = {
+        **owner_fields,
         "contentCandidateReceiptRef": candidate.relative_to(root).as_posix(),
         "contentCandidateReceiptDigest": "sha256:"
         + __import__("hashlib").sha256(candidate.read_bytes()).hexdigest(),

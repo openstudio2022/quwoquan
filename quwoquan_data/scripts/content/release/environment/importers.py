@@ -28,17 +28,40 @@ _IMPORT_REPORT_SCHEMAS = {
 
 
 @dataclass(frozen=True)
-class ContentReleaseEvidence:
+class OwnerReleaseEvidence:
     document: dict[str, Any]
     path: Path
     ref: str
     digest: str
 
 
-_CONTENT_RELEASE_RECEIPT_SCHEMAS = {
+# Compatibility for existing Content adapter callers and tests.
+ContentReleaseEvidence = OwnerReleaseEvidence
+
+
+_RELEASE_RECEIPT_SCHEMAS = {
     "quwoquan.content_release_candidate_receipt": "content_release_candidate_receipt",
     "quwoquan.content_release_active_receipt": "content_release_active_receipt",
     "quwoquan.content_release_activation_receipt": "content_release_activation_receipt",
+    "quwoquan.tag_release_candidate_receipt": "tag_release_candidate_receipt",
+    "quwoquan.creator_release_candidate_receipt": "creator_release_candidate_receipt",
+    "quwoquan.homepage_release_candidate_receipt": "homepage_release_candidate_receipt",
+}
+
+_OWNER_RELEASE_CONTROL = {
+    "content": ("content-service", "quwoquan.content_release_candidate_receipt"),
+    "tag": ("tag-service", "quwoquan.tag_release_candidate_receipt"),
+    "creator": ("user-service", "quwoquan.creator_release_candidate_receipt"),
+    "homepage": ("entity-service", "quwoquan.homepage_release_candidate_receipt"),
+}
+
+# All release-control commands intentionally share one service-root cwd and one
+# flag surface. Mongo URI remains argv-only and is never included in failures.
+_OWNER_RELEASE_CONTROL_COMMANDS = {
+    "content": "./services/content-service/cmd/release-control",
+    "tag": "./services/tag-service/cmd/release-control",
+    "creator": "./services/user-service/cmd/creator-release-control",
+    "homepage": "./services/entity-service/cmd/homepage-release-control",
 }
 
 
@@ -97,25 +120,21 @@ def _validate_release_control_document(
     label: str = "<memory>",
 ) -> dict[str, Any]:
     document = dict(payload)
-    schema_name = _CONTENT_RELEASE_RECEIPT_SCHEMAS.get(schema)
+    schema_name = _RELEASE_RECEIPT_SCHEMAS.get(schema)
     if not schema_name or document.get("schema") != schema:
         raise RuntimeError(
             "Content release receipt schema 不一致："
             f"expected={schema} actual={document.get('schema')}"
         )
     assert_valid(document, "release", schema_name, label=f"{schema_name}:{label}")
-    if (
-        document.get("environment") != environment
-        or document.get("sourceOwner") != "qwq_data"
-    ):
-        raise RuntimeError("Content release receipt environment/sourceOwner 不一致")
-    if release_id is not None and document.get("releaseId") != release_id:
-        raise RuntimeError("Content release receipt releaseId 不一致")
-    if (
-        manifest_digest is not None
-        and document.get("manifestDigest") != manifest_digest
-    ):
-        raise RuntimeError("Content release receipt manifestDigest 不一致")
+    identity = document.get("identity")
+    bound = identity if isinstance(identity, Mapping) else document
+    if bound.get("environment") != environment or bound.get("sourceOwner") != "qwq_data":
+        raise RuntimeError("Owner release receipt environment/sourceOwner 不一致")
+    if release_id is not None and bound.get("releaseId") != release_id:
+        raise RuntimeError("Owner release receipt releaseId 不一致")
+    if manifest_digest is not None and bound.get("manifestDigest") != manifest_digest:
+        raise RuntimeError("Owner release receipt manifestDigest 不一致")
     return document
 
 
@@ -179,8 +198,170 @@ def _run_release_control(command: list[str]) -> None:
     if result.returncode != 0:
         # Do not include argv: it contains the Mongo URI.
         raise SystemExit(
-            f"[ship] Content release-control failed: exit={result.returncode}"
+            f"[ship] owner release-control failed: exit={result.returncode}"
         )
+
+
+def load_owner_release_candidate_receipt(
+    path: Path,
+    *,
+    owner: str,
+    output_root: Path,
+    environment: str,
+    release_id: str,
+    manifest_digest: str,
+    expected_digest: str,
+) -> OwnerReleaseEvidence:
+    """Load one explicit owner candidate ref and bind its exact bytes."""
+
+    try:
+        _service, schema = _OWNER_RELEASE_CONTROL[owner]
+    except KeyError as exc:
+        raise ValueError(f"未知 release owner：{owner}") from exc
+    evidence = load_content_release_receipt(
+        path,
+        output_root=output_root,
+        schema=schema,
+        environment=environment,
+        release_id=release_id,
+        manifest_digest=manifest_digest,
+        expected_digest=expected_digest,
+    )
+    if evidence.document.get("status") != "found":
+        raise RuntimeError(f"{owner} verified candidate proof 必须是 found")
+    return evidence
+
+
+def query_owner_release_candidate(
+    *,
+    owner: str,
+    env: str,
+    mongo_uri: str,
+    release_id: str,
+    manifest_digest: str,
+    report_path: Path,
+    output_root: Path,
+    postgres_dsn: str = "",
+) -> OwnerReleaseEvidence:
+    """Query one service-owned immutable candidate without reading latest."""
+
+    try:
+        _service, schema = _OWNER_RELEASE_CONTROL[owner]
+        command_path = _OWNER_RELEASE_CONTROL_COMMANDS[owner]
+    except KeyError as exc:
+        raise ValueError(f"未知 release owner：{owner}") from exc
+    release_id = _strict_release_control_identity(release_id, label="releaseId")
+    if _SHA256_DIGEST.fullmatch(manifest_digest) is None:
+        raise ValueError("manifest_digest 必须是规范 sha256 digest")
+    command = [
+        "go", "run", command_path,
+        "--operation", "query-candidate",
+        "--mongo-uri", mongo_uri,
+        "--env", env,
+        "--source-owner", "qwq_data",
+        "--report", str(report_path),
+        "--release-id", release_id,
+        "--manifest-digest", manifest_digest,
+    ]
+    if postgres_dsn:
+        command.extend(["--postgres-dsn", postgres_dsn])
+    _run_release_control(command)
+    ref, digest = _receipt_evidence(report_path, output_root=output_root)
+    document = _validate_release_control_receipt(
+        report_path,
+        schema=schema,
+        environment=env,
+        release_id=release_id,
+        manifest_digest=manifest_digest,
+    )
+    if document.get("status") != "found":
+        raise RuntimeError(f"{owner} verified candidate 未找到")
+    return OwnerReleaseEvidence(document, report_path, ref, digest)
+
+
+def query_tag_release_candidate(**kwargs: Any) -> OwnerReleaseEvidence:
+    return query_owner_release_candidate(owner="tag", **kwargs)
+
+
+def query_creator_release_candidate(**kwargs: Any) -> OwnerReleaseEvidence:
+    return query_owner_release_candidate(owner="creator", **kwargs)
+
+
+def query_homepage_release_candidate(**kwargs: Any) -> OwnerReleaseEvidence:
+    return query_owner_release_candidate(owner="homepage", **kwargs)
+
+
+def readback_owner_at_content_fence(
+    *,
+    owner: str,
+    env: str,
+    mongo_uri: str,
+    fence: Mapping[str, Any],
+    report_path: Path,
+    output_root: Path,
+    postgres_dsn: str = "",
+) -> OwnerReleaseEvidence:
+    """Read one owner projection at an explicit Content visibility fence."""
+
+    try:
+        command_path = _OWNER_RELEASE_CONTROL_COMMANDS[owner]
+    except KeyError as exc:
+        raise ValueError(f"未知 release owner：{owner}") from exc
+    required = {
+        "environment": env,
+        "sourceOwner": "qwq_data",
+        "releaseId": _strict_release_control_identity(fence.get("releaseId"), label="releaseId"),
+        "manifestDigest": str(fence.get("manifestDigest") or ""),
+        "revision": fence.get("revision"),
+    }
+    if (
+        fence.get("environment") != env
+        or fence.get("sourceOwner") != "qwq_data"
+        or _SHA256_DIGEST.fullmatch(required["manifestDigest"]) is None
+        or type(required["revision"]) is not int
+        or required["revision"] <= 0
+    ):
+        raise ValueError("Content fence 必须是完整 environment/sourceOwner/releaseId/manifestDigest/revision tuple")
+    command = [
+        "go", "run", command_path,
+        "--operation", "readback-at-content-fence",
+        "--mongo-uri", mongo_uri,
+        "--env", env,
+        "--source-owner", "qwq_data",
+        "--report", str(report_path),
+        "--release-id", required["releaseId"],
+        "--manifest-digest", required["manifestDigest"],
+        "--content-revision", str(required["revision"]),
+    ]
+    if postgres_dsn:
+        command.extend(["--postgres-dsn", postgres_dsn])
+    _run_release_control(command)
+    ref, digest = _receipt_evidence(report_path, output_root=output_root)
+    payload = read_json(report_path)
+    if not isinstance(payload, Mapping):
+        raise RuntimeError(f"{owner} fenced readback receipt 必须是对象")
+    document = dict(payload)
+    if document.get("status") != "passed" or any(
+        document.get(field) != value for field, value in required.items()
+    ):
+        raise RuntimeError(f"{owner} fenced readback identity 不一致")
+    return OwnerReleaseEvidence(document, report_path, ref, digest)
+
+
+def readback_tag_at_content_fence(**kwargs: Any) -> OwnerReleaseEvidence:
+    return readback_owner_at_content_fence(owner="tag", **kwargs)
+
+
+def readback_creator_at_content_fence(**kwargs: Any) -> OwnerReleaseEvidence:
+    return readback_owner_at_content_fence(owner="creator", **kwargs)
+
+
+def readback_homepage_at_content_fence(**kwargs: Any) -> OwnerReleaseEvidence:
+    return readback_owner_at_content_fence(owner="homepage", **kwargs)
+
+
+def readback_content_at_content_fence(**kwargs: Any) -> OwnerReleaseEvidence:
+    return readback_owner_at_content_fence(owner="content", **kwargs)
 
 
 def query_content_release_candidate(
@@ -191,42 +372,16 @@ def query_content_release_candidate(
     manifest_digest: str,
     report_path: Path,
     output_root: Path,
-) -> ContentReleaseEvidence:
-    release_id = _strict_release_control_identity(release_id, label="releaseId")
-    if _SHA256_DIGEST.fullmatch(manifest_digest) is None:
-        raise ValueError("manifest_digest 必须是规范 sha256 digest")
-    command = [
-        "go",
-        "run",
-        "./services/content-service/cmd/release-control",
-        "--operation",
-        "query-candidate",
-        "--mongo-uri",
-        mongo_uri,
-        "--env",
-        env,
-        "--source-owner",
-        "qwq_data",
-        "--report",
-        str(report_path),
-        "--release-id",
-        release_id,
-        "--manifest-digest",
-        manifest_digest,
-    ]
-    _run_release_control(command)
-    ref, digest = _receipt_evidence(report_path, output_root=output_root)
-    document = _validate_release_control_receipt(
-        report_path,
-        schema="quwoquan.content_release_candidate_receipt",
-        environment=env,
+) -> OwnerReleaseEvidence:
+    return query_owner_release_candidate(
+        owner="content",
+        env=env,
+        mongo_uri=mongo_uri,
         release_id=release_id,
         manifest_digest=manifest_digest,
+        report_path=report_path,
+        output_root=output_root,
     )
-    if document.get("status") != "found":
-        raise RuntimeError("Content verified candidate 未找到")
-    return ContentReleaseEvidence(document, report_path, ref, digest)
-
 
 def load_content_release_candidate_receipt(
     path: Path,
@@ -236,20 +391,16 @@ def load_content_release_candidate_receipt(
     release_id: str,
     manifest_digest: str,
     expected_digest: str,
-) -> ContentReleaseEvidence:
-    evidence = load_content_release_receipt(
+) -> OwnerReleaseEvidence:
+    return load_owner_release_candidate_receipt(
         path,
+        owner="content",
         output_root=output_root,
-        schema="quwoquan.content_release_candidate_receipt",
         environment=environment,
         release_id=release_id,
         manifest_digest=manifest_digest,
         expected_digest=expected_digest,
     )
-    if evidence.document.get("status") != "found":
-        raise RuntimeError("Content verified candidate proof 必须是 found")
-    return evidence
-
 
 def query_content_active_release(
     *,
@@ -430,24 +581,20 @@ def assert_import_report_contract(
             f"import report releaseId 不一致：expected={expected_release_id} "
             f"actual={payload.get('releaseId')}"
         )
-    if schema == "quwoquan.content_import_report":
-        if (
-            expected_manifest_digest is not None
-            and payload.get("manifestDigest") != expected_manifest_digest
-        ):
-            raise RuntimeError(
-                "content import report manifestDigest 不一致："
-                f"expected={expected_manifest_digest} actual={payload.get('manifestDigest')}"
-            )
-        activation_mode = expected_activation_mode or "stage-only"
-        if payload.get("activationMode") != activation_mode:
-            raise RuntimeError(
-                "content import report activationMode 不一致："
-                f"expected={activation_mode} actual={payload.get('activationMode')}"
-            )
-        expected_status = "activated" if activation_mode == "activate" else None
-        if expected_status is not None and payload.get("status") != expected_status:
-            raise RuntimeError("Content activate report 必须为 status=activated")
+    if (
+        expected_manifest_digest is not None
+        and payload.get("manifestDigest") != expected_manifest_digest
+    ):
+        raise RuntimeError(
+            "import report manifestDigest 不一致："
+            f"expected={expected_manifest_digest} actual={payload.get('manifestDigest')}"
+        )
+    activation_mode = expected_activation_mode or "stage-only"
+    if "activationMode" in payload and payload.get("activationMode") != activation_mode:
+        raise RuntimeError(
+            "import report activationMode 不一致："
+            f"expected={activation_mode} actual={payload.get('activationMode')}"
+        )
     return payload
 
 
@@ -463,11 +610,12 @@ def run_content_importer(
     dry_run: bool,
     mode: ImportMode = ImportMode.UPSERT,
     delete_policy: DeletePolicy = DeletePolicy.NONE,
-    creator_receipt: Path,
+    creator_candidate_receipt: Path,
 ) -> Path:
     """Stage exactly one Content candidate; activation uses release-control."""
 
     report_path = run / "import.json"
+    creator_proof = creator_candidate_receipt
     command = [
         "go",
         "run",
@@ -493,7 +641,7 @@ def run_content_importer(
         "--report",
         str(report_path),
         "--creator-receipt",
-        str(creator_receipt),
+        str(creator_proof),
     ]
     if dry_run:
         command.append("--dry-run")
@@ -522,7 +670,7 @@ def run_creator_importer(
     dry_run: bool,
     mode: ImportMode = ImportMode.UPSERT,
 ) -> Path:
-    """Materialize release-owned public creator profiles before content posts."""
+    """Stage one immutable Creator candidate before Content."""
     report_path = run / "creator-import.json"
     command = [
         "go",
@@ -540,6 +688,8 @@ def run_creator_importer(
         env,
         "--run-id",
         run.name,
+        "--activation-mode",
+        "stage-only",
         "--mode",
         mode,
         "--report",
@@ -553,6 +703,8 @@ def run_creator_importer(
     report = assert_import_report_contract(
         report_path,
         expected_release_id=release.name,
+        expected_manifest_digest=payload_digest(release),
+        expected_activation_mode="stage-only",
     )
     desired = read_json(payload_file(release, "desired_state.json"))
     expected = sorted(
@@ -575,7 +727,7 @@ def run_tag_importer(
     mongo_uri: str,
     dry_run: bool,
 ) -> Path:
-    """Activate the exact release-owned tag snapshot before dependent objects."""
+    """Stage the exact immutable Tag candidate before dependent objects."""
 
     report_path = run / "tag-import.json"
     command = [
@@ -586,6 +738,8 @@ def run_tag_importer(
         str(release),
         "--release-id",
         release.name,
+        "--activation-mode",
+        "stage-only",
         "--mongo-uri",
         mongo_uri,
         "--env",
@@ -601,6 +755,8 @@ def run_tag_importer(
     report = assert_import_report_contract(
         report_path,
         expected_release_id=release.name,
+        expected_manifest_digest=payload_digest(release),
+        expected_activation_mode="stage-only",
     )
     desired = read_json(payload_file(release, "desired_state.json"))
     expected = sorted(
@@ -641,8 +797,8 @@ def run_homepage_importer(
         env,
         "--run-id",
         run_id,
-        "--mode",
-        mode,
+        "--manifest-digest",
+        payload_digest(release),
         "--report",
         str(report_path),
     ]
@@ -658,6 +814,8 @@ def run_homepage_importer(
     report = assert_import_report_contract(
         report_path,
         expected_release_id=release.name,
+        expected_manifest_digest=payload_digest(release),
+        expected_activation_mode="stage-only",
     )
     desired = read_json(payload_file(release, "desired_state.json"))
     expected = set(desired.get("desiredRefs", {}).get("entities", []))
@@ -680,14 +838,25 @@ def run_homepage_importer(
 
 __all__ = [
     "ContentReleaseEvidence",
+    "OwnerReleaseEvidence",
     "activate_content_release",
     "assert_content_release_evidence_unchanged",
     "assert_import_report_contract",
     "file_byte_digest",
     "load_content_release_candidate_receipt",
+    "load_owner_release_candidate_receipt",
     "load_content_release_receipt",
     "query_content_active_release",
     "query_content_release_candidate",
+    "query_owner_release_candidate",
+    "query_tag_release_candidate",
+    "query_creator_release_candidate",
+    "query_homepage_release_candidate",
+    "readback_owner_at_content_fence",
+    "readback_tag_at_content_fence",
+    "readback_creator_at_content_fence",
+    "readback_homepage_at_content_fence",
+    "readback_content_at_content_fence",
     "run_tag_importer",
     "run_creator_importer",
     "run_content_importer",

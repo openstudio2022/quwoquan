@@ -58,7 +58,7 @@ def test_import_report_rejects_missing_entities_loaded() -> None:
     assert "$.counts" in str(exc.value)
 
 
-@pytest.mark.parametrize("status", ["dry-run", "imported", "replay_validated"])
+@pytest.mark.parametrize("status", ["dry-run", "staged", "replay_validated"])
 def test_content_import_report_accepts_stage_only_status_contract(status: str) -> None:
     report = _base_report(entities_loaded=0)
     report["status"] = status

@@ -3,30 +3,164 @@
   "$id": "quwoquan_data/schema/release/creator_import_report.schema.json",
   "title": "Creator import report",
   "type": "object",
-  "required": ["schema", "status", "environment", "releaseId", "sourceOwner", "mode", "projectionDatabase", "counts", "authorIds", "verifiedCreatorIds", "generatedAt"],
+  "required": [
+    "schema",
+    "status",
+    "environment",
+    "releaseId",
+    "sourceOwner",
+    "manifestDigest",
+    "activationMode",
+    "projectionDatabase",
+    "projectionVersion",
+    "closureDigest",
+    "verifiedAt",
+    "counts",
+    "authorIds",
+    "profileDigests",
+    "verifiedCreatorIds",
+    "generatedAt"
+  ],
   "additionalProperties": false,
   "properties": {
-    "schema": {"const": "quwoquan.user_creator_import_report"},
-    "status": {"enum": ["dry-run", "active"]},
-    "environment": {"type": "string", "minLength": 1},
-    "releaseId": {"type": "string", "minLength": 1},
-    "sourceOwner": {"const": "qwq_data"},
-    "mode": {"enum": ["upsert", "sync"]},
-    "projectionDatabase": {"const": "quwoquan_user"},
+    "schema": {
+      "const": "quwoquan.user_creator_import_report"
+    },
+    "status": {
+      "enum": [
+        "dry-run",
+        "verified"
+      ]
+    },
+    "environment": {
+      "type": "string",
+      "minLength": 1
+    },
+    "releaseId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "sourceOwner": {
+      "const": "qwq_data"
+    },
+    "manifestDigest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "activationMode": {
+      "const": "stage-only"
+    },
+    "projectionDatabase": {
+      "const": "quwoquan_user"
+    },
+    "projectionVersion": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "closureDigest": {
+      "type": "string"
+    },
+    "verifiedAt": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "date-time"
+    },
     "counts": {
       "type": "object",
-      "required": ["creatorsLoaded", "usersUpserted", "creatorsUpserted", "usersRemoved", "creatorsRemoved"],
+      "required": [
+        "creatorsExpected",
+        "creatorsProjected",
+        "usersUpserted",
+        "personasUpserted"
+      ],
       "additionalProperties": false,
       "properties": {
-        "creatorsLoaded": {"type": "integer", "minimum": 0},
-        "usersUpserted": {"type": "integer", "minimum": 0},
-        "creatorsUpserted": {"type": "integer", "minimum": 0},
-        "usersRemoved": {"type": "integer", "minimum": 0},
-        "creatorsRemoved": {"type": "integer", "minimum": 0}
+        "creatorsExpected": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "creatorsProjected": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "usersUpserted": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "personasUpserted": {
+          "type": "integer",
+          "minimum": 0
+        }
       }
     },
-    "authorIds": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
-    "verifiedCreatorIds": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
-    "generatedAt": {"type": "string", "minLength": 1}
-  }
+    "authorIds": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "profileDigests": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "verifiedCreatorIds": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "generatedAt": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "description": "Non-authoritative stage-only importer report; candidate query receipt is admission authority.",
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "dry-run"
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "then": {
+        "properties": {
+          "projectionVersion": {
+            "const": 0
+          },
+          "closureDigest": {
+            "const": ""
+          },
+          "verifiedAt": {
+            "type": "null"
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "projectionVersion": {
+            "minimum": 1
+          },
+          "closureDigest": {
+            "pattern": "^sha256:[0-9a-f]{64}$"
+          },
+          "verifiedAt": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  ]
 }

@@ -105,7 +105,7 @@ def _assembled_commands(tmp_path: Path) -> list[tuple[list[str], Path]]:
             media_image_base_url="https://cdn.example.invalid",
             media_video_base_url="https://cdn.example.invalid",
             dry_run=True,
-            creator_receipt=run / "creator-import.json",
+            creator_candidate_receipt=run / "creator-import.json",
         )
         importers.run_homepage_importer(
             release=release,

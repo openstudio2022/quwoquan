@@ -228,9 +228,10 @@ def _assert_import_counts(
         raise ReleaseReadinessClosureError(
             "content import counts drift from immutable desiredRefs"
         )
-    if not isinstance(creator_counts, Mapping) or creator_counts.get(
-        "creatorsLoaded"
-    ) != len(desired["creators"]):
+    if not isinstance(creator_counts, Mapping) or (
+        creator_counts.get("creatorsExpected") != len(desired["creators"])
+        or creator_counts.get("creatorsProjected") != len(desired["creators"])
+    ):
         raise ReleaseReadinessClosureError(
             "creator import counts drift from immutable desiredRefs"
         )

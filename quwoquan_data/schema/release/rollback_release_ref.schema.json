@@ -7,6 +7,7 @@
     "authority",
     "rollbackTo",
     "rollbackFromReleaseId",
+    "rollbackFromRevision",
     "releaseRef",
     "rollbackFromManifestDigest",
     "rollbackToManifestDigest"
@@ -18,7 +19,7 @@
     },
     "authority": {
       "const": "asserted_intent",
-      "description": "Operator-provided from identity is an assertion only; Content pre-active query receipt is the revision-bearing CAS authority."
+      "description": "Operator-provided from releaseId/manifestDigest/revision is asserted intent; exact Content pre-active query remains CAS authority."
     },
     "rollbackTo": {
       "type": "string",
@@ -39,6 +40,10 @@
     "rollbackToManifestDigest": {
       "type": "string",
       "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "rollbackFromRevision": {
+      "type": "integer",
+      "minimum": 1
     }
   }
 }
