@@ -163,17 +163,14 @@ def _query_all_owner_candidates(
         if owner in evidence:
             continue
         adapter = _required_adapter(dependencies, f"query_{owner}_release_candidate")
-        kwargs = {
-            "env": environment,
-            "mongo_uri": target.mongo_uri,
-            "release_id": release_id,
-            "manifest_digest": manifest_digest,
-            "report_path": run / f"{owner}-candidate-receipt.json",
-            "output_root": dependencies.output_root,
-        }
-        if owner == "creator":
-            kwargs["postgres_dsn"] = target.user_postgres_dsn
-        evidence[owner] = adapter(**kwargs)
+        evidence[owner] = adapter(
+            env=environment,
+            mongo_uri=target.mongo_uri,
+            release_id=release_id,
+            manifest_digest=manifest_digest,
+            report_path=run / f"{owner}-candidate-receipt.json",
+            output_root=dependencies.output_root,
+        )
     return evidence
 
 
@@ -223,19 +220,6 @@ def _content_fence(active: dict[str, object]) -> dict[str, object]:
 
 
 
-def _invoke_fenced_readback(adapter, *, owner: str, target: object, fence: dict[str, object], report_path: Path, output_root: Path):
-    kwargs = {
-        "env": fence["environment"],
-        "mongo_uri": target.mongo_uri,
-        "fence": fence,
-        "report_path": report_path,
-        "output_root": output_root,
-    }
-    if owner == "creator":
-        kwargs["postgres_dsn"] = getattr(target, "user_postgres_dsn", "")
-    return adapter(**kwargs)
-
-
 def _readback_all_owners(
     *,
     dependencies: ShipOperationDependencies,
@@ -247,10 +231,9 @@ def _readback_all_owners(
     fields: dict[str, str] = {}
     for owner in ("tag", "creator", "homepage", "content"):
         adapter = _required_adapter(dependencies, f"readback_{owner}_at_content_fence")
-        evidence = _invoke_fenced_readback(
-            adapter,
-            owner=owner,
-            target=target,
+        evidence = adapter(
+            env=fence["environment"],
+            mongo_uri=target.mongo_uri,
             fence=fence,
             report_path=run / f"{owner}-fenced-readback-receipt.json",
             output_root=dependencies.output_root,
@@ -398,7 +381,6 @@ def apply_release(
                 )(
                     env=env,
                     mongo_uri=target.mongo_uri,
-                    postgres_dsn=target.user_postgres_dsn,
                     release_id=release_id,
                     manifest_digest=admission.manifest_digest,
                     report_path=run / "creator-candidate-receipt.json",

@@ -182,10 +182,12 @@ def read_post_and_creator_cases(
         raise PostApiVerificationError("release desired state schema is invalid")
     if str(desired.get("releaseId") or "") != release_id:
         raise PostApiVerificationError("release desired state releaseId mismatch")
-    if report.get("status") != "imported":
-        raise PostApiVerificationError("post importer report is not imported")
-    if creator_report.get("status") != "active":
-        raise PostApiVerificationError("creator importer report is not active")
+    # DEC-003 stage-only：Content 报告为 staged、Creator 报告为 verified；
+    # 激活事实由 Content active pointer 与四域 fenced readback 证明，不由报告自证。
+    if report.get("status") != "staged":
+        raise PostApiVerificationError("post importer report is not staged")
+    if creator_report.get("status") != "verified":
+        raise PostApiVerificationError("creator importer report is not verified")
     if str(report.get("environment") or "") != environment.value:
         raise PostApiVerificationError("post importer report environment mismatch")
     desired_refs = _object(desired.get("desiredRefs"), label="release desiredRefs")

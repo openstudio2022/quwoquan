@@ -241,7 +241,6 @@ def query_owner_release_candidate(
     manifest_digest: str,
     report_path: Path,
     output_root: Path,
-    postgres_dsn: str = "",
 ) -> OwnerReleaseEvidence:
     """Query one service-owned immutable candidate without reading latest."""
 
@@ -263,8 +262,6 @@ def query_owner_release_candidate(
         "--release-id", release_id,
         "--manifest-digest", manifest_digest,
     ]
-    if postgres_dsn:
-        command.extend(["--postgres-dsn", postgres_dsn])
     _run_release_control(command)
     ref, digest = _receipt_evidence(report_path, output_root=output_root)
     document = _validate_release_control_receipt(
@@ -299,7 +296,6 @@ def readback_owner_at_content_fence(
     fence: Mapping[str, Any],
     report_path: Path,
     output_root: Path,
-    postgres_dsn: str = "",
 ) -> OwnerReleaseEvidence:
     """Read one owner projection at an explicit Content visibility fence."""
 
@@ -333,8 +329,6 @@ def readback_owner_at_content_fence(
         "--manifest-digest", required["manifestDigest"],
         "--content-revision", str(required["revision"]),
     ]
-    if postgres_dsn:
-        command.extend(["--postgres-dsn", postgres_dsn])
     _run_release_control(command)
     ref, digest = _receipt_evidence(report_path, output_root=output_root)
     payload = read_json(report_path)

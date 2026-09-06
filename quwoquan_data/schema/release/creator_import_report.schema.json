@@ -19,6 +19,7 @@
     "authorIds",
     "profileDigests",
     "verifiedCreatorIds",
+    "postgresqlWrites",
     "generatedAt"
   ],
   "additionalProperties": false,
@@ -115,6 +116,34 @@
       "items": {
         "type": "string",
         "minLength": 1
+      }
+    },
+    "postgresqlWrites": {
+      "type": "object",
+      "required": [
+        "userAccounts",
+        "personas",
+        "personaOutbox",
+        "commandReceipts"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "userAccounts": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "personas": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "personaOutbox": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "commandReceipts": {
+          "type": "integer",
+          "minimum": 0
+        }
       }
     },
     "generatedAt": {

@@ -499,6 +499,12 @@ def _fixture(root: Path) -> dict[str, Path]:
                 }
             ],
             "verifiedCreatorIds": [CREATOR_ID],
+            "postgresqlWrites": {
+                "userAccounts": 0,
+                "personas": 0,
+                "personaOutbox": 0,
+                "commandReceipts": 0,
+            },
             "generatedAt": "2026-07-28T00:01:00Z",
         },
     )
