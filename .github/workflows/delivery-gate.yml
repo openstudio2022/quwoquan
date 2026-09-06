@@ -24,7 +24,8 @@ jobs:
       contents: read
       packages: write
     env:
-      EVIDENCE_ROOT: ${{ runner.temp }}/promotion-evidence
+      # job 级 env 不能引用 runner 上下文（解析期即失效，run 产生 0 个 job）。
+      EVIDENCE_ROOT: ${{ github.workspace }}/.qwq_output/env/repo/runs/promotion-evidence
       CONTROL_ROOT: ${{ github.workspace }}/.qwq_output/env/repo/runs/release-control
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5

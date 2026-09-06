@@ -30,6 +30,12 @@ ATTEST_ACTION = "actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6"
 #: 启动失败，本地只能靠静态合同拦截。
 JOB_CONTEXT_PROPERTIES = frozenset({"container", "services", "status"})
 JOB_CONTEXT_PATTERN = re.compile(r"\$\{\{[^}]*?\bjob\.([A-Za-z_][A-Za-z0-9_]*)")
+#: job 级 `env:` 只能引用 github/inputs/matrix/needs/secrets/strategy/vars；
+#: runner/steps/env/job 在那里尚未存在，引用即解析期失败（GitHub 只记录一个 0-job run，
+#: 名字回退成文件路径）。delivery-gate.yml:27 的 `runner.temp` 曾让整条晋级链在每次
+#: push 上静默死掉。
+JOB_ENV_FORBIDDEN_CONTEXTS = frozenset({"runner", "steps", "env", "job"})
+JOB_ENV_CONTEXT_PATTERN = re.compile(r"\$\{\{[^}]*?\b(runner|steps|env|job)\.")
 
 
 def _read_workflow(name: str) -> tuple[Path, str] | None:
@@ -152,6 +158,33 @@ def verify_action_pins() -> list[str]:
                 f"job context property; the workflow fails to start "
                 f"(allowed: {', '.join(sorted(JOB_CONTEXT_PROPERTIES))})"
             )
+        failures.extend(_job_level_env_context_failures(path, text))
+    return failures
+
+
+def _job_level_env_context_failures(path: Path, text: str) -> list[str]:
+    """job 级 `env:` 块里引用 runner/steps/env/job 上下文即解析期失败。
+
+    只看缩进恰为 4 空格的 `env:`（job 直属键），其条目缩进为 6；step 级 env 缩进为 8/10，
+    不在此列。文本扫描而非 YAML 解析，是为了给出精确行号且不受 YAML 键序影响。
+    """
+    failures: list[str] = []
+    lines = text.splitlines()
+    index = 0
+    while index < len(lines):
+        if lines[index] == "    env:":
+            cursor = index + 1
+            while cursor < len(lines) and (lines[cursor].startswith("      ") or not lines[cursor].strip()):
+                for match in JOB_ENV_CONTEXT_PATTERN.finditer(lines[cursor]):
+                    failures.append(
+                        f"{path.relative_to(ROOT)}:{cursor + 1}: job-level env references the "
+                        f"{match.group(1)} context, which is unavailable there; the workflow fails "
+                        f"to start (allowed: github, inputs, matrix, needs, secrets, strategy, vars)"
+                    )
+                cursor += 1
+            index = cursor
+            continue
+        index += 1
     return failures
 
 
