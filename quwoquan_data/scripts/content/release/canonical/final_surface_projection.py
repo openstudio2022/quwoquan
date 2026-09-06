@@ -1012,11 +1012,10 @@ def project_publish_final_surface(
 ) -> dict[str, Any]:
     """Create or exact-replay one final surface after review approval."""
     source_rows = _source_rows(execution_root, object_dir)
-    asset_index = (
-        source_assets_by_ref(execution_root)
-        if carrier == "homepage"
-        else source_assets(execution_root)
-    )
+    # 只看本对象 source unit 的资产（与 seal 的 _object_source_assets 同作用域），避免同名净化文件跨对象撞名。
+    unit_prefixes = tuple(f"{row['sourceRef'].rsplit('/', 1)[0]}/assets/" for row in source_rows)
+    execution_assets = source_assets_by_ref(execution_root) if carrier == "homepage" else source_assets(execution_root)
+    asset_index = {ref: row for ref, row in execution_assets.items() if ref.startswith(unit_prefixes)}
     compose = _author_intent(
         object_dir=object_dir,
         carrier=carrier,

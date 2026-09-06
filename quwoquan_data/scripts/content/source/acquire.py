@@ -167,6 +167,9 @@ def _commons_imageinfo(title: str) -> dict[str, Any]:
         raise AcquireError(f"DATA.ACQUIRE.COMMONS_IMAGEINFO_MISSING: {title}")
     row = info[0]
     meta = {key: _strip_html((value or {}).get("value")) for key, value in (row.get("extmetadata") or {}).items()}
+    # Commons 对 CC0/PD 常给出 http:// 的许可证链接；creativecommons.org 全站支持 https，统一为 https。
+    if meta.get("LicenseUrl", "").startswith("http://"):
+        meta["LicenseUrl"] = "https://" + meta["LicenseUrl"][len("http://"):]
     return {
         "directUrl": str(row.get("url") or ""),
         "mime": str(row.get("mime") or ""),
