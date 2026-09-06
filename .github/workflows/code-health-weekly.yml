@@ -49,7 +49,7 @@ jobs:
         run: |
           set -euo pipefail
           SINCE="$(date -u -d '56 days ago' +%Y-%m-%d)"
-          for WORKFLOW in code-health-integration.yml app_pipeline.yml service_pipeline.yml; do
+          for WORKFLOW in lane-gate.yml code-health-integration.yml app_pipeline.yml service_pipeline.yml; do
             gh api --paginate --slurp \
               -H "Accept: application/vnd.github+json" \
               "/repos/${{ github.repository }}/actions/workflows/${WORKFLOW}/runs?per_page=100&created=>=${SINCE}" \

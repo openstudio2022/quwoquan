@@ -49,6 +49,8 @@ rollout:
     minimum_days: 14
     minimum_pull_requests: 20
     maximum_confirmed_false_positive_rate: 0.10
+    # 升格资格按 finding code 抽样：每个 advisory code 至少这么多条人工评审即可判定，不要求评审全部 advisory。
+    minimum_reviewed_per_code: 20
 performance:
   local_p95_seconds: 30
   ci_p95_seconds: 180

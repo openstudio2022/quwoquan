@@ -230,60 +230,72 @@ def index_blob(repo: Path, path: str | None) -> bytes | None:
     )
 
 
-def working_tree_changes(repo: Path, base: str, explicit_paths: list[str] | None = None, *, index_only: bool = False) -> list[Change]:
-    base_sha = resolve_sha(repo, base)
-    normalized_paths = normalize_changed_paths(explicit_paths or [])
+def _tracked_working_tree_identities(
+    repo: Path, base_sha: str, normalized_paths: list[str], *, index_only: bool,
+) -> tuple[list[tuple[str, str, str | None]], list[str]]:
+    """Name-status identities of tracked changes plus the exact diff path filter for follow-up diffs."""
     identities = _parse_name_status(
-        _diff_output(
-            repo, base_sha, None, "--name-status", "-z", "--find-renames",
-            index_only=index_only,
-        )
+        _diff_output(repo, base_sha, None, "--name-status", "-z", "--find-renames", index_only=index_only)
     )
     if normalized_paths:
         allowed = set(normalized_paths)
-        identities = [
-            item for item in identities if item[1] in allowed or item[2] in allowed
-        ]
+        identities = [item for item in identities if item[1] in allowed or item[2] in allowed]
     diff_paths = [] if not normalized_paths else sorted({
         candidate
         for _, path, old_path in identities
         for candidate in (path, old_path)
         if candidate is not None
     }, key=lambda candidate: candidate.encode("utf-8"))
-    stats = {} if normalized_paths and not identities else _parse_numstat(
-        _diff_output(
-            repo, base_sha, None, "--numstat", "-z", "--find-renames",
-            index_only=index_only, explicit_paths=diff_paths,
-        )
+    return identities, diff_paths
+
+
+def _tracked_stats_and_lines(
+    repo: Path, base_sha: str, identities: list[tuple[str, str, str | None]], diff_paths: list[str],
+    *, restricted: bool, index_only: bool,
+) -> tuple[dict[tuple[str, str | None], tuple[int, int]], dict[str, frozenset[int]]]:
+    stats = {} if restricted and not identities else _parse_numstat(
+        _diff_output(repo, base_sha, None, "--numstat", "-z", "--find-renames", index_only=index_only, explicit_paths=diff_paths)
     )
     has_changed_candidate = any(status != "D" for status, _, _ in identities)
     line_map = {} if not has_changed_candidate else _parse_changed_lines(
         _diff_output(
-            repo, base_sha, None, "--unified=0", "--find-renames",
-            "--diff-filter=ACMRTUXB", index_only=index_only,
-            explicit_paths=diff_paths,
+            repo, base_sha, None, "--unified=0", "--find-renames", "--diff-filter=ACMRTUXB",
+            index_only=index_only, explicit_paths=diff_paths,
         )
+    )
+    return dict(stats), dict(line_map)
+
+
+def _untracked_additions(repo: Path, normalized_paths: list[str], known: set[str]) -> list[tuple[str, int]]:
+    """Untracked regular files (optionally within the explicit path filter) with their line counts."""
+    untracked_args = ["ls-files", "--others", "--exclude-standard", "-z"]
+    if normalized_paths:
+        untracked_args.extend(["--", *normalized_paths])
+    additions = []
+    for raw_path in _run(repo, *untracked_args).split(b"\0"):
+        path = raw_path.decode("utf-8", "replace")
+        if not raw_path or path in known or not (repo / path).is_file():
+            continue
+        try:
+            added = len((repo / path).read_bytes().decode("utf-8", "replace").splitlines())
+        except OSError as error:
+            raise ValueError(f"candidate bytes unavailable for {path}") from error
+        additions.append((path, added))
+    return additions
+
+
+def working_tree_changes(repo: Path, base: str, explicit_paths: list[str] | None = None, *, index_only: bool = False) -> list[Change]:
+    base_sha = resolve_sha(repo, base)
+    normalized_paths = normalize_changed_paths(explicit_paths or [])
+    identities, diff_paths = _tracked_working_tree_identities(repo, base_sha, normalized_paths, index_only=index_only)
+    stats, line_map = _tracked_stats_and_lines(
+        repo, base_sha, identities, diff_paths, restricted=bool(normalized_paths), index_only=index_only,
     )
     untracked_paths: set[str] = set()
     if not index_only:
-        untracked_args = ["ls-files", "--others", "--exclude-standard", "-z"]
-        if normalized_paths:
-            untracked_args.extend(["--", *normalized_paths])
-        known = {path for _, path, _ in identities}
-        for raw_path in _run(repo, *untracked_args).split(b"\0"):
-            if not raw_path:
-                continue
-            path = raw_path.decode("utf-8", "replace")
-            if path in known or not (repo / path).is_file():
-                continue
+        for path, added in _untracked_additions(repo, normalized_paths, {path for _, path, _ in identities}):
             identities.append(("A", path, None))
             untracked_paths.add(path)
-            try:
-                added = len(
-                    (repo / path).read_bytes().decode("utf-8", "replace").splitlines()
-                )
-            except OSError as error:
-                raise ValueError(f"candidate bytes unavailable for {path}") from error
             stats[(path, None)] = (added, 0)
             line_map[path] = frozenset(range(1, added + 1))
     result = []

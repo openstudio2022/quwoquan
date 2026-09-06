@@ -142,7 +142,18 @@ jobs:
             --base-sha "$BASE_SHA" \
             --head-sha "$HEAD_SHA" \
             --expected-path-digest "$EXPECTED_PATH_DIGEST" \
-            --expected-impact-plan-digest "$EXPECTED_PLAN_DIGEST"
+            --expected-impact-plan-digest "$EXPECTED_PLAN_DIGEST" \
+            --summary-markdown "$RUNNER_TEMP/code-health-summary.md"
+      - name: Render Code Health summary for reviewers
+        # GATE_BLOCK 让上一步失败，但 Reviewer 仍要在 PR 上直接看到 blocker、recovery 与债务 delta。
+        if: ${{ !cancelled() }}
+        run: |
+          set -euo pipefail
+          if [ -f "$RUNNER_TEMP/code-health-summary.md" ]; then
+            cat "$RUNNER_TEMP/code-health-summary.md" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo '# Code Health Delta — 未产生报告（范围/身份校验失败，见步骤日志）' >> "$GITHUB_STEP_SUMMARY"
+          fi
       - name: Upload failed Code Health Delta diagnostic
         if: ${{ failure() && !cancelled() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

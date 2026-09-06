@@ -112,6 +112,35 @@ def test_candidate_markdown_leads_with_blockers_and_debt_delta(tmp_path: Path) -
     assert "```json" in markdown
 
 
+def test_cli_discovers_local_history_by_default(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    repo, _base = init_repo(tmp_path)
+    cloc = _fake_cloc(tmp_path)
+    monkeypatch.setattr(report_code_health_weekly, "ROOT", repo)
+    policy = load_policy(policy_path(repo))
+    weekly_root = repo / policy["report"]["root"] / "weekly"
+
+    write(repo, "quwoquan_ops/ci/hot.py", _complex_source(20))
+    first_head = commit(repo, "hot module")
+    assert report_code_health_weekly.main(["--head", first_head, "--policy", str(policy_path(repo)), "--cloc", str(cloc)]) == 0
+    first = json.loads(next(weekly_root.glob("*/report.json")).read_text(encoding="utf-8"))
+    assert first["ratchet"]["comparisonStatus"] == "insufficient-history"
+
+    write(repo, "quwoquan_ops/ci/hot.py", _complex_source(2))
+    second_head = commit(repo, "simplify")
+    # 不传 --previous：缺省从本地既有报告发现上期（排除同 head），本地也能看到棘轮方向。
+    assert report_code_health_weekly.main(["--head", second_head, "--policy", str(policy_path(repo)), "--cloc", str(cloc)]) == 0
+    reports = [json.loads(path.read_text(encoding="utf-8")) for path in weekly_root.glob("*/report.json")]
+    second = next(item for item in reports if item["headSha"] == second_head)
+    assert second["ratchet"]["comparisonStatus"] == "comparable"
+    assert second["ratchet"]["previousHeadSha"] == first_head
+    assert second["ratchet"]["metrics"]["overCyclomaticAdvisory"]["direction"] == "improved"
+    assert second["hotspotPersistence"]["items"][0]["consecutiveWeeksInTopN"] == 2
+
+    discovered = report_code_health_weekly.discover_local_previous(weekly_root, current_head=second_head)
+    assert [json.loads(path.read_text(encoding="utf-8"))["headSha"] for path in discovered] == [first_head]
+    assert report_code_health_weekly.discover_local_previous(tmp_path / "missing", current_head=second_head) == []
+
+
 def test_weekly_markdown_and_cli_write_summary(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
     repo, _base = init_repo(tmp_path)
     cloc = _fake_cloc(tmp_path)

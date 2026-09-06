@@ -1,6 +1,6 @@
 """Owner-scoped hotspot projection for Agent PRE and plan-next.
 
-spec_ref: specs/feature-tree/runtime/system-architecture-and-engineering-guide/incremental-code-health-governance/spec.md#gwt-003.t4
+spec_ref: specs/feature-tree/runtime/system-architecture-and-engineering-guide/incremental-code-health-governance/spec.md#gwt-003.t5
 """
 from __future__ import annotations
 

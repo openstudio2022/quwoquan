@@ -176,7 +176,8 @@ def test_weekly_workflow_slurps_pages_and_preserves_report_only_artifact_contrac
     workflow = (ROOT / ".github/workflows/code-health-weekly.yml").read_text(encoding="utf-8")
 
     assert "gh api --paginate --slurp" in workflow
-    assert "code-health-integration.yml app_pipeline.yml service_pipeline.yml" in workflow
+    # lane-gate 是 candidate 验证的真正承载者，治理副作用（失败率/重跑/时长）必须以它为对象。
+    assert "lane-gate.yml code-health-integration.yml app_pipeline.yml service_pipeline.yml" in workflow
     assert "delivery-gate.yml/runs" not in workflow
     assert "code_health_evidence.py pull-weekly-history" in workflow
     assert "code_health_evidence.py publish" in workflow

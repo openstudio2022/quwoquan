@@ -44,7 +44,7 @@
 <a id="req-003"></a>
 ### REQ-003 calibration 与热点观测保持轻量
 
-- advisory 指标只有达到最小时间/PR 样本、误报与耗时目标后，才能由显式策略版本人工升格。
+- advisory 指标只有达到最小时间/PR 样本、误报与耗时目标后，才能由显式策略版本人工升格；误报按 finding code 抽样评审判定（每个 code 至少 `minimum_reviewed_per_code` 条人工 verdict 且误报不超过上限），不要求评审全部 advisory。
 - weekly 报告只输出容量趋势、churn、health 与 Top hotspots，不阻断 PR、不提交 snapshot。
 - 连续出现且可行动的热点才进入最低 owner OPEN，不产生中央 backlog。
 
@@ -98,12 +98,4 @@
 
 ## 7. 开放事项
 
-<a id="open-001"></a>
-### OPEN-001 Code Health 实现自身复杂度热点收敛
-
-- 类型：`capability_gap`
-- 优先级：`P1`
-- 准出影响：`track`
-- 影响或价值：当前 exact candidate-bound Code Health report 将 `calibration.py::aggregate_calibration`、`engine.py::analyze_delta`（已由 65/100 收敛到 36/43，仍超 advisory）、`git_delta.py::working_tree_changes`、`metrics.py::has_repository_entry`、`weekly.py::_clone_facts`、`weekly.py::delivery_outcomes` 与 `weekly.py::analyze_weekly` 标为 `CODE_HEALTH.COMPLEXITY_ADVISORY`（`policy.py::load_policy` 已拆分收敛）；这些 calibration `PR_WARN` 不阻断 candidate，但治理实现自身的高复杂度会降低判罚、校准与周报的可信可审计性。
-- 完成判定：`GWT-001` 至 `GWT-003` 对应行为继续满足；在独立 owner increment 中逐项收敛上述 7 个 symbol，保持 exact range、分类、terminal 与 EvidenceFingerprint 合同；fresh clean-range Code Health 不再产生对应 advisory，且不得调高阈值、引入 allowlist/baseline 或把异常改为缺失事实。
-- 依赖：current Code Health named evidence及本 Story 的 focused contracts。
+无。治理实现自身（`quwoquan_ops/gate/code_health_delta/**`）的全部函数均低于 policy 的复杂度 advisory 阈值，由 `GWT-001` 至 `GWT-003` 的 focused contracts 持续锁定；未来若治理代码自身再次越过阈值，按同一 candidate delta 规则以 `PR_WARN` 暴露并在本 Story 内修复，不另建 OPEN。

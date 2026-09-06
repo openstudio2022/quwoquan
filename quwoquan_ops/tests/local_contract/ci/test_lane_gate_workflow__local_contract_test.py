@@ -105,6 +105,11 @@ def test_lane_gate_binds_code_health_to_the_exact_impact_plan() -> None:
     assert code_health["env"]["EXPECTED_PLAN_DIGEST"] == "${{ steps.detect.outputs.plan_digest }}"
     assert "git diff --quiet && git diff --cached --quiet" in code_health["run"]
     assert "quwoquan_ops/ci/verify_code_health_delivery.py" in code_health["run"]
+    assert '--summary-markdown "$RUNNER_TEMP/code-health-summary.md"' in code_health["run"]
+    # Reviewer 在 PR 上直接看到 blocker/recovery/债务 delta；GATE_BLOCK 使上一步失败后本步仍执行。
+    render = steps["Render Code Health summary for reviewers"]
+    assert render["if"] == "${{ !cancelled() }}"
+    assert 'cat "$RUNNER_TEMP/code-health-summary.md" >> "$GITHUB_STEP_SUMMARY"' in render["run"]
     upload = steps["Upload failed Code Health Delta diagnostic"]
     assert upload["if"] == "${{ failure() && !cancelled() }}"
     assert upload["with"]["retention-days"] == 3

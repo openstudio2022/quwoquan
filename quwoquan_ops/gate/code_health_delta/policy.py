@@ -36,7 +36,7 @@ _THRESHOLD_FIELDS = {
 _ROLLOUT_FIELDS = frozenset({"automatic_promotion", "calibration"})
 _CALIBRATION_FIELDS = frozenset({
     "started_at", "minimum_days", "minimum_pull_requests",
-    "maximum_confirmed_false_positive_rate",
+    "maximum_confirmed_false_positive_rate", "minimum_reviewed_per_code",
 })
 _PERFORMANCE_FIELDS = frozenset({
     "local_p95_seconds", "ci_p95_seconds", "ci_hard_timeout_seconds",
@@ -156,6 +156,7 @@ def _validate_rollout(raw: Any) -> None:
     _non_empty_string(calibration["started_at"], "calibration.started_at")
     _positive_int(calibration["minimum_days"], "minimum_days")
     _positive_int(calibration["minimum_pull_requests"], "minimum_pull_requests")
+    _positive_int(calibration["minimum_reviewed_per_code"], "minimum_reviewed_per_code")
     _ratio(calibration["maximum_confirmed_false_positive_rate"], 1, "maximum_confirmed_false_positive_rate")
 
 

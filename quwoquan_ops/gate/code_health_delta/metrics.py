@@ -280,23 +280,30 @@ def tracked_paths(repo: Path, sha: str) -> list[str]:
     return [item.decode("utf-8") for item in result.stdout.split(b"\0") if item]
 
 
-def has_repository_entry(repo: Path, head: str, path: str, *, working_tree: bool = False, index_only: bool = False) -> bool:
-    if path.endswith("/__init__.py") or Path(path).name in {"cli.py", "stackctl.py"}:
-        return True
-    body = (
-        index_blob(repo, path)
-        if index_only
-        else working_tree_blob(repo, path)
-        if working_tree
-        else blob(repo, head, path)
-    ) or b""
-    if b'__name__ == "__main__"' in body or b"__name__ == '__main__'" in body:
-        return True
+_ENTRY_SOURCE_SUFFIXES = (".py", ".sh", ".go", ".dart", ".yaml", ".yml", ".md")
+_ENTRY_GREP_PATHSPECS = ("*.py", "*.sh", "*.go", "*.dart", "*.yaml", "*.yml", "*.md", "Makefile")
+
+
+def _entry_patterns(path: str) -> tuple[str, ...]:
+    """Textual entry edges for one Python module.
+
+    包内相对导入（`from .stem import`、`from ..pkg.stem import`）与 `from . import stem`
+    是 Data package 最常见的入口形态；只查绝对 dotted path 会把它们全部误判为无入口。
+    """
     dotted = path[:-3].replace("/", ".")
     stem = Path(path).stem
-    # 包内相对导入（`from .stem import`、`from ..pkg.stem import`）与 `from . import stem`
-    # 是 Data package 最常见的入口形态；只查绝对 dotted path 会把它们全部误判为无入口。
-    patterns = (dotted, path, f"import {stem}", f"from {stem}", f".{stem} import")
+    return (dotted, path, f"import {stem}", f"from {stem}", f".{stem} import")
+
+
+def _candidate_module_bytes(repo: Path, head: str, path: str, *, working_tree: bool, index_only: bool) -> bytes:
+    if index_only:
+        return index_blob(repo, path) or b""
+    if working_tree:
+        return working_tree_blob(repo, path) or b""
+    return blob(repo, head, path) or b""
+
+
+def _grep_tracked_entry(repo: Path, head: str, patterns: tuple[str, ...], *, working_tree: bool, index_only: bool) -> bool:
     command = ["git", "grep", "-F", "-q"]
     for pattern in patterns:
         command.extend(["-e", pattern])
@@ -304,31 +311,41 @@ def has_repository_entry(repo: Path, head: str, path: str, *, working_tree: bool
         command.append("--cached")
     elif not working_tree:
         command.append(head)
-    command.extend(["--", "*.py", "*.sh", "*.go", "*.dart", "*.yaml", "*.yml", "*.md", "Makefile"])
+    command.extend(["--", *_ENTRY_GREP_PATHSPECS])
     matched = subprocess.run(command, cwd=repo, capture_output=True, check=False)
-    if matched.returncode == 0:
-        return True
-    if matched.returncode not in {1}:
+    if matched.returncode not in {0, 1}:
         raise ValueError(matched.stderr.decode("utf-8", "replace").strip() or "git grep failed")
-    if working_tree and not index_only:
-        # git grep does not see untracked entry files; bound this fallback to untracked files only.
-        untracked = subprocess.run(
-            ["git", "ls-files", "--others", "--exclude-standard", "-z"],
-            cwd=repo, capture_output=True, check=True,
-        ).stdout.split(b"\0")
-        for raw_source in untracked:
-            if not raw_source:
-                continue
-            source = raw_source.decode("utf-8", "replace")
-            if source == path or not source.endswith((".py", ".sh", ".go", ".dart", ".yaml", ".yml", ".md")):
-                continue
-            try:
-                text = (repo / source).read_text(encoding="utf-8", errors="replace")
-            except OSError:
-                continue
-            if any(pattern in text for pattern in patterns):
-                return True
+    return matched.returncode == 0
+
+
+def _grep_untracked_entry(repo: Path, path: str, patterns: tuple[str, ...]) -> bool:
+    """git grep does not see untracked entry files; this fallback is bounded to untracked files only."""
+    untracked = subprocess.run(
+        ["git", "ls-files", "--others", "--exclude-standard", "-z"], cwd=repo, capture_output=True, check=True,
+    ).stdout.split(b"\0")
+    for raw_source in untracked:
+        source = raw_source.decode("utf-8", "replace")
+        if not raw_source or source == path or not source.endswith(_ENTRY_SOURCE_SUFFIXES):
+            continue
+        try:
+            text = (repo / source).read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        if any(pattern in text for pattern in patterns):
+            return True
     return False
+
+
+def has_repository_entry(repo: Path, head: str, path: str, *, working_tree: bool = False, index_only: bool = False) -> bool:
+    if path.endswith("/__init__.py") or Path(path).name in {"cli.py", "stackctl.py"}:
+        return True
+    body = _candidate_module_bytes(repo, head, path, working_tree=working_tree, index_only=index_only)
+    if b'__name__ == "__main__"' in body or b"__name__ == '__main__'" in body:
+        return True
+    patterns = _entry_patterns(path)
+    if _grep_tracked_entry(repo, head, patterns, working_tree=working_tree, index_only=index_only):
+        return True
+    return working_tree and not index_only and _grep_untracked_entry(repo, path, patterns)
 
 
 def executable_magic(body: bytes | None) -> str | None:

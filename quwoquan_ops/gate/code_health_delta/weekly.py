@@ -126,32 +126,28 @@ def _normalized_lines(body: bytes) -> list[str]:
     return values
 
 
+def _window_digests(body: bytes, block_lines: int) -> list[tuple[int, bytes]]:
+    """(start index, digest) for every fully non-blank normalized window of one file."""
+    lines = _normalized_lines(body)
+    digests = []
+    for index in range(max(0, len(lines) - block_lines + 1)):
+        window = lines[index: index + block_lines]
+        if all(window):
+            digests.append((index, hashlib.blake2b("\n".join(window).encode(), digest_size=16).digest()))
+    return digests
+
+
 def _clone_facts(blobs: dict[str, bytes], block_lines: int) -> tuple[dict[str, int], int]:
+    windows = {path: _window_digests(blobs[path], block_lines) for path in sorted(blobs)}
     first_path: dict[bytes, str] = {}
     cloned_digests: set[bytes] = set()
-    for path in sorted(blobs):
-        lines = _normalized_lines(blobs[path])
-        seen_in_file: set[bytes] = set()
-        for index in range(max(0, len(lines) - block_lines + 1)):
-            window = lines[index : index + block_lines]
-            if not all(window):
-                continue
-            digest = hashlib.blake2b("\n".join(window).encode(), digest_size=16).digest()
-            if digest in seen_in_file:
-                continue
-            seen_in_file.add(digest)
-            source = first_path.setdefault(digest, path)
-            if source != path:
+    for path, items in windows.items():
+        for digest in {digest for _, digest in items}:
+            if first_path.setdefault(digest, path) != path:
                 cloned_digests.add(digest)
-
     covered_lines: dict[str, set[int]] = defaultdict(set)
-    for path in sorted(blobs):
-        lines = _normalized_lines(blobs[path])
-        for index in range(max(0, len(lines) - block_lines + 1)):
-            window = lines[index : index + block_lines]
-            if not all(window):
-                continue
-            digest = hashlib.blake2b("\n".join(window).encode(), digest_size=16).digest()
+    for path, items in windows.items():
+        for index, digest in items:
             if digest in cloned_digests:
                 covered_lines[path].update(range(index, index + block_lines))
     return {path: len(lines) for path, lines in covered_lines.items()}, len(cloned_digests)
@@ -170,72 +166,42 @@ def _dead_candidates(repo: Path) -> list[dict[str, str]]:
         return [{"path": "<unavailable>", "reason": f"python-script-governance:{type(exc).__name__}"}]
 
 
-def delivery_outcomes(
-    pages: object,
-    *,
-    end: datetime,
-    days: int = 28,
-    regression_percent: float = 10.0,
-) -> dict[str, Any]:
-    if pages is None:
-        return {
-            "status": "not-provided",
-            "comparisonStatus": "insufficient-history",
-            "regressionFlags": None,
-        }
-    page_list = pages if isinstance(pages, list) else [pages]
+def _workflow_runs(pages: object) -> list[dict[str, Any]]:
     runs: list[dict[str, Any]] = []
-    for page in page_list:
-        if not isinstance(page, dict):
-            continue
-        page_runs = page.get("workflow_runs") or []
+    for page in pages if isinstance(pages, list) else [pages]:
+        page_runs = page.get("workflow_runs") if isinstance(page, dict) else None
         if isinstance(page_runs, list):
             runs.extend(run for run in page_runs if isinstance(run, dict))
-    current_start = end.astimezone(timezone.utc) - timedelta(days=days)
-    previous_start = current_start - timedelta(days=days)
+    return runs
 
-    def summarize(start: datetime, stop: datetime) -> dict[str, Any]:
-        selected = []
-        for run in runs:
-            created_raw = run.get("created_at")
-            if not created_raw:
-                continue
-            created = datetime.fromisoformat(str(created_raw).replace("Z", "+00:00"))
-            if start <= created < stop and run.get("status") == "completed":
-                selected.append((run, created))
-        successes = sum(run.get("conclusion") == "success" for run, _ in selected)
-        failures = sum(run.get("conclusion") not in {"success", "neutral", "skipped"} for run, _ in selected)
-        reruns = sum(int(run.get("run_attempt") or 1) > 1 for run, _ in selected)
-        durations = []
-        for run, created in selected:
-            updated_raw = run.get("updated_at")
-            if updated_raw:
-                updated = datetime.fromisoformat(str(updated_raw).replace("Z", "+00:00"))
-                durations.append(max(0.0, (updated - created).total_seconds()))
-        return {
-            "completedRuns": len(selected), "successRuns": successes, "failedRuns": failures,
-            "failureRate": None if not selected else round(failures / len(selected), 4),
-            "rerunRate": None if not selected else round(reruns / len(selected), 4),
-            "calendarP95Seconds": _percentile(durations, 0.95),
-        }
 
-    current = summarize(current_start, end.astimezone(timezone.utc))
-    previous = summarize(previous_start, current_start)
-    result: dict[str, Any] = {
-        "status": "observed",
-        "windowDays": days,
-        "current": current,
-        "previous": previous,
-        "regressionThresholdPercent": regression_percent,
+def _iso(value: object) -> datetime:
+    return datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+
+
+def _summarize_runs(runs: list[dict[str, Any]], start: datetime, stop: datetime) -> dict[str, Any]:
+    selected = [
+        (run, _iso(run["created_at"])) for run in runs
+        if run.get("created_at") and run.get("status") == "completed" and start <= _iso(run["created_at"]) < stop
+    ]
+    failures = sum(run.get("conclusion") not in {"success", "neutral", "skipped"} for run, _ in selected)
+    reruns = sum(int(run.get("run_attempt") or 1) > 1 for run, _ in selected)
+    durations = [
+        max(0.0, (_iso(run["updated_at"]) - created).total_seconds())
+        for run, created in selected if run.get("updated_at")
+    ]
+    return {
+        "completedRuns": len(selected),
+        "successRuns": sum(run.get("conclusion") == "success" for run, _ in selected),
+        "failedRuns": failures,
+        "failureRate": None if not selected else round(failures / len(selected), 4),
+        "rerunRate": None if not selected else round(reruns / len(selected), 4),
+        "calendarP95Seconds": _percentile(durations, 0.95),
     }
-    if current["completedRuns"] == 0 or previous["completedRuns"] == 0:
-        result["comparisonStatus"] = "insufficient-history"
-        result["regressionFlags"] = None
-        return result
 
-    limit = regression_percent / 100
-    result["comparisonStatus"] = "comparable"
-    result["regressionFlags"] = {
+
+def _regression_flags(current: dict[str, Any], previous: dict[str, Any], limit: float) -> dict[str, bool]:
+    return {
         "failureRate": current["failureRate"] > previous["failureRate"] + limit,
         "rerunRate": current["rerunRate"] > previous["rerunRate"] + limit,
         "calendarP95Seconds": (
@@ -244,7 +210,32 @@ def delivery_outcomes(
             and current["calendarP95Seconds"] > previous["calendarP95Seconds"] * (1 + limit)
         ),
     }
-    return result
+
+
+def delivery_outcomes(
+    pages: object,
+    *,
+    end: datetime,
+    days: int = 28,
+    regression_percent: float = 10.0,
+) -> dict[str, Any]:
+    if pages is None:
+        return {"status": "not-provided", "comparisonStatus": "insufficient-history", "regressionFlags": None}
+    runs = _workflow_runs(pages)
+    end_utc = end.astimezone(timezone.utc)
+    current_start = end_utc - timedelta(days=days)
+    current = _summarize_runs(runs, current_start, end_utc)
+    previous = _summarize_runs(runs, current_start - timedelta(days=days), current_start)
+    comparable = current["completedRuns"] > 0 and previous["completedRuns"] > 0
+    return {
+        "status": "observed",
+        "windowDays": days,
+        "current": current,
+        "previous": previous,
+        "regressionThresholdPercent": regression_percent,
+        "comparisonStatus": "comparable" if comparable else "insufficient-history",
+        "regressionFlags": _regression_flags(current, previous, regression_percent / 100) if comparable else None,
+    }
 
 
 def _percentile(values: list[float], fraction: float) -> float | None:

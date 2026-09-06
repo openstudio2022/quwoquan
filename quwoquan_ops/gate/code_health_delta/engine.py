@@ -232,6 +232,107 @@ def _change_size_finding(production: list[Change], size: dict[str, int]) -> tupl
     return None, summary
 
 
+class _Candidate:
+    """Exact bytes access for one delta, independent of commit / working-tree / index source."""
+
+    def __init__(self, repo: Path, *, working_tree: bool, index_only: bool, commit_blobs: dict[str, bytes]) -> None:
+        self.repo = repo
+        self.working_tree = working_tree
+        self.index_only = index_only
+        self.commit_blobs = commit_blobs
+
+    def bytes_of(self, path: str) -> bytes | None:
+        return _candidate_bytes(self.repo, path, working_tree=self.working_tree, index_only=self.index_only, commit_blobs=self.commit_blobs)
+
+
+def _executable_findings(delta: list[Change], candidate: _Candidate) -> list[dict[str, object]]:
+    # Executable build artifacts are a source-tree invariant, independent of the
+    # suffix-based source category. Suffixless ELF/Mach-O/PE files otherwise land
+    # in config-data and would bypass the production-only metric loop.
+    findings = []
+    for item in delta:
+        magic = None if item.status == "D" else executable_magic(candidate.bytes_of(item.path))
+        if magic:
+            findings.append(_finding(
+                "CODE_HEALTH.TRACKED_SOURCE_EXECUTABLE", item.path, "GATE_BLOCK",
+                f"tracked source path contains {magic} executable build artifact",
+                recovery="remove_executable_artifact_from_source_tree",
+            ))
+    return findings
+
+
+def _production_findings(
+    repo: Path, base_sha: str, head_sha: str, policy: dict[str, Any], production: list[Change],
+    candidate: _Candidate, *, mode: str,
+) -> tuple[list[dict[str, object]], list[tuple[str, bytes, frozenset[int]]]]:
+    """Per-file size, Data entry and complexity findings plus the live candidate corpus."""
+    thresholds = policy["thresholds"]
+    base_changed_blobs = blobs(repo, base_sha, sorted({item.old_path or item.path for item in production}))
+    findings: list[dict[str, object]] = []
+    live_candidates: list[tuple[str, bytes, frozenset[int]]] = []
+    for item in production:
+        if item.status == "D":
+            continue
+        old = base_changed_blobs.get(item.old_path or item.path)
+        new = candidate.bytes_of(item.path)
+        live_candidates.append((item.path, new or b"", item.changed_new_lines))
+        size_finding = _file_size_finding(item.path, line_count(old), line_count(new), thresholds["file_lines"])
+        if size_finding is not None:
+            findings.append(size_finding)
+        if item.status == "A" and item.path.startswith("quwoquan_data/scripts/") and item.path.endswith(".py") and not has_repository_entry(repo, head_sha, item.path, working_tree=candidate.working_tree, index_only=candidate.index_only):
+            findings.append(_finding("CODE_HEALTH.NEW_PRIVATE_PYTHON_WITHOUT_ENTRY", item.path, "GATE_BLOCK", "new Data package module has no language or repository entry edge", recovery="add_canonical_repository_entry_or_remove_private_module"))
+        if mode == "full":
+            findings.extend(changed_complexity_findings(item.path, old, new, item.changed_new_lines, thresholds["complexity"]["cyclomatic_advisory"], thresholds["complexity"]["cognitive_advisory"]))
+    return findings, live_candidates
+
+
+def _evidence(
+    repo: Path, *, policy: dict[str, Any], policy_digest: str, base_sha: str, head_sha: str, delta: list[Change],
+    paths: list[str], impact: dict[str, Any], commands: dict[str, Any], candidate: _Candidate,
+) -> tuple[dict[str, Any], dict[str, Any], str]:
+    implementation_digest = _implementation_digest()
+    toolchain = {"python": list(sys.version_info[:3]), "builtin": 1, "metricsProvider": policy["notes"]["metrics_provider"]}
+    fingerprint = build_evidence_fingerprint({
+        "git": {"head_sha": head_sha, "merge_base_sha": base_sha},
+        "workspace": _workspace_identity(repo, head_sha, delta, working_tree=candidate.working_tree, index_only=candidate.index_only, commit_blobs=candidate.commit_blobs),
+        "assets": {"canonical_assets_digest": policy_digest, "review_assets_digest": str(impact["path_digest"])},
+        "execution": {"commands_digest": canonical_digest(commands), "toolchain_digest": canonical_digest(toolchain), "provider_digest": canonical_digest("incremental-code-health"), "generator_digest": implementation_digest},
+    }, captured_at="code-health-delta-v1", captured_by="verify_incremental_code_health", captured_metadata={"mode": commands["mode"], "changed_paths_digest": impact["path_digest"]})
+    return fingerprint, toolchain, implementation_digest
+
+
+def _load_delta(
+    repo: Path, *, base_sha: str, head_sha: str, explicit_paths: list[str] | None, working_tree: bool,
+    index_only: bool, merge_parents: list[str] | None,
+) -> tuple[list[Change], list[str], _Candidate]:
+    """Authored changes of the candidate (merge-inherited bytes dropped) plus exact byte access."""
+    if working_tree:
+        delta = working_tree_changes(repo, base_sha, explicit_paths, index_only=index_only)
+        commit_blobs: dict[str, bytes] = {}
+    else:
+        delta = changes(repo, base_sha, head_sha, explicit_paths)
+        commit_blobs = blobs(repo, head_sha, [item.path for item in delta if item.status != "D"])
+    resolved_parents = sorted({resolve_sha(repo, parent) for parent in (merge_parents or [])} - {base_sha})
+    delta = _drop_merge_inherited(repo, delta, resolved_parents, working_tree=working_tree, index_only=index_only, commit_blobs=commit_blobs)
+    return delta, resolved_parents, _Candidate(repo, working_tree=working_tree, index_only=index_only, commit_blobs=commit_blobs)
+
+
+def _delta_summary(delta: list[Change], findings: list[dict[str, object]], size_summary: dict[str, Any], duplication_summary: dict[str, float]) -> dict[str, Any]:
+    return {
+        "changedFiles": len(delta),
+        "renamedFiles": sum(item.status == "R" for item in delta),
+        "deletedFiles": sum(item.status == "D" for item in delta),
+        **size_summary, **duplication_summary,
+        "findingCount": len(findings),
+    }
+
+
+def _candidate_source(candidate: _Candidate) -> str:
+    if not candidate.working_tree:
+        return "commit"
+    return "index" if candidate.index_only else "working-tree"
+
+
 def analyze_delta(repo: Path, *, base: str, head: str, policy_path: Path, mode: str = "full", explicit_paths: list[str] | None = None, working_tree: bool = False, index_only: bool = False, merge_parents: list[str] | None = None) -> dict[str, Any]:
     if mode not in {"fast", "full"}:
         raise ValueError("code health mode 必须为 fast/full")
@@ -241,85 +342,41 @@ def analyze_delta(repo: Path, *, base: str, head: str, policy_path: Path, mode: 
     policy = load_policy(policy_path)
     base_sha, base_resolution = _resolve_base(repo, base)
     head_sha = resolve_sha(repo, head)
-    delta = working_tree_changes(repo, base_sha, explicit_paths, index_only=index_only) if working_tree else changes(repo, base_sha, head_sha, explicit_paths)
-    resolved_parents = sorted({
-        resolve_sha(repo, parent) for parent in (merge_parents or [])
-    } - {base_sha})
-    commit_current_blobs = {} if working_tree else blobs(
-        repo, head_sha, [item.path for item in delta if item.status != "D"]
-    )
-    delta = _drop_merge_inherited(
-        repo, delta, resolved_parents, working_tree=working_tree,
-        index_only=index_only, commit_blobs=commit_current_blobs,
+    delta, resolved_parents, candidate = _load_delta(
+        repo, base_sha=base_sha, head_sha=head_sha, explicit_paths=explicit_paths,
+        working_tree=working_tree, index_only=index_only, merge_parents=merge_parents,
     )
     paths = [item.path for item in delta]
     impact = classify_impacts(paths)
-    findings: list[dict[str, object]] = []
-    thresholds = policy["thresholds"]
-    categories = {item.path: classify_path(item.path if item.status != "D" else (item.old_path or item.path), policy) for item in delta}
+    production = [item for item in delta if classify_path(item.old_path or item.path if item.status == "D" else item.path, policy) == "handwritten-production"]
 
-    # Executable build artifacts are a source-tree invariant, independent of the
-    # suffix-based source category. Suffixless ELF/Mach-O/PE files otherwise land
-    # in config-data and would bypass the production-only metric loop.
-    for item in delta:
-        if item.status == "D":
-            continue
-        magic = executable_magic(_candidate_bytes(repo, item.path, working_tree=working_tree, index_only=index_only, commit_blobs=commit_current_blobs))
-        if magic:
-            findings.append(_finding(
-                "CODE_HEALTH.TRACKED_SOURCE_EXECUTABLE", item.path, "GATE_BLOCK",
-                f"tracked source path contains {magic} executable build artifact",
-                recovery="remove_executable_artifact_from_source_tree",
-            ))
-
-    production = [item for item in delta if categories[item.path] == "handwritten-production"]
-    base_production_paths = sorted({item.old_path or item.path for item in production})
-    base_changed_blobs = blobs(repo, base_sha, base_production_paths)
-    live_candidates: list[tuple[str, bytes, frozenset[int]]] = []
-    for item in production:
-        if item.status == "D":
-            continue
-        old = base_changed_blobs.get(item.old_path or item.path)
-        new = _candidate_bytes(repo, item.path, working_tree=working_tree, index_only=index_only, commit_blobs=commit_current_blobs)
-        live_candidates.append((item.path, new or b"", item.changed_new_lines))
-        size_finding = _file_size_finding(item.path, line_count(old), line_count(new), thresholds["file_lines"])
-        if size_finding is not None:
-            findings.append(size_finding)
-        if item.status == "A" and item.path.startswith("quwoquan_data/scripts/") and item.path.endswith(".py") and not has_repository_entry(repo, head_sha, item.path, working_tree=working_tree, index_only=index_only):
-            findings.append(_finding("CODE_HEALTH.NEW_PRIVATE_PYTHON_WITHOUT_ENTRY", item.path, "GATE_BLOCK", "new Data package module has no language or repository entry edge", recovery="add_canonical_repository_entry_or_remove_private_module"))
-        if mode == "full":
-            findings.extend(changed_complexity_findings(item.path, old, new, item.changed_new_lines, thresholds["complexity"]["cyclomatic_advisory"], thresholds["complexity"]["cognitive_advisory"]))
-
+    findings = _executable_findings(delta, candidate)
+    production_findings, live_candidates = _production_findings(repo, base_sha, head_sha, policy, production, candidate, mode=mode)
+    findings.extend(production_findings)
     duplication_summary = {"measuredNewLines": 0, "duplicatedLines": 0, "duplicationPercent": 0.0}
     if mode == "full":
         duplication_findings, duplication_summary = _duplication_findings(repo, base_sha, policy, production, live_candidates)
         findings.extend(duplication_findings)
-
-    size_finding, size_summary = _change_size_finding(production, thresholds["change_size"])
+    size_finding, size_summary = _change_size_finding(production, policy["thresholds"]["change_size"])
     if size_finding is not None:
         findings.append(size_finding)
 
     findings.sort(key=lambda item: (-_SEVERITY[str(item["terminal"])], str(item["path"]), str(item["code"])))
     terminal = max((str(item["terminal"]) for item in findings), key=_SEVERITY.get, default="PASS")
-    policy_bytes = policy_path.read_bytes(); policy_digest = _sha256_bytes(policy_bytes)
+    policy_digest = _sha256_bytes(policy_path.read_bytes())
     commands = {"mode": mode, "base": base_sha, "head": head_sha, "paths": paths, "workingTree": working_tree, "indexOnly": index_only, "mergeParents": resolved_parents}
-    implementation_digest = _implementation_digest()
-    toolchain = {"python": list(sys.version_info[:3]), "builtin": 1, "metricsProvider": policy["notes"]["metrics_provider"]}
-    fingerprint = build_evidence_fingerprint({
-        "git": {"head_sha": head_sha, "merge_base_sha": base_sha},
-        "workspace": _workspace_identity(repo, head_sha, delta, working_tree=working_tree, index_only=index_only, commit_blobs=commit_current_blobs),
-        "assets": {"canonical_assets_digest": policy_digest, "review_assets_digest": str(impact["path_digest"])},
-        "execution": {"commands_digest": canonical_digest(commands), "toolchain_digest": canonical_digest(toolchain), "provider_digest": canonical_digest("incremental-code-health"), "generator_digest": implementation_digest},
-    }, captured_at="code-health-delta-v1", captured_by="verify_incremental_code_health", captured_metadata={"mode": mode, "changed_paths_digest": impact["path_digest"]})
-    category_summary = _category_summary(policy, delta)
+    fingerprint, toolchain, implementation_digest = _evidence(
+        repo, policy=policy, policy_digest=policy_digest, base_sha=base_sha, head_sha=head_sha, delta=delta,
+        paths=paths, impact=impact, commands=commands, candidate=candidate,
+    )
     return {
         "schema": REPORT_SCHEMA, "terminal": terminal,
         "baseSha": base_sha, "headSha": head_sha, "baseResolution": base_resolution,
         "mergeParents": resolved_parents, "changedPaths": paths,
         "changedPathsDigest": impact_digest(paths), "impactPlanner": impact["source"],
         "policyId": policy["policy_id"], "policyDigest": policy_digest, "implementationDigest": implementation_digest,
-        "mode": mode, "candidateSource": ("index" if index_only else "working-tree") if working_tree else "commit", "categorySummary": category_summary,
-        "summary": {"changedFiles": len(delta), "renamedFiles": sum(item.status == "R" for item in delta), "deletedFiles": sum(item.status == "D" for item in delta), **size_summary, **duplication_summary, "findingCount": len(findings)},
+        "mode": mode, "candidateSource": _candidate_source(candidate), "categorySummary": _category_summary(policy, delta),
+        "summary": _delta_summary(delta, findings, size_summary, duplication_summary),
         "findings": findings, "tools": toolchain,
         "rollout": {"automaticPromotion": False, "calibration": policy["rollout"]["calibration"], "advisoryOnlyCodes": policy["notes"]["advisory_only_codes"]},
         "evidenceFingerprint": fingerprint,
