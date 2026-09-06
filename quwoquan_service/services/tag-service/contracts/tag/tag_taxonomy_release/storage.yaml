@@ -5,13 +5,25 @@ collections:
     role: authoritative
     indexes:
     - name: uq_tag_taxonomy_release_single_active
-      keys:
-        status: 1
+      keys: {status: 1}
       unique: true
-      partial_filter:
-        status: active
+      partial_filter: {status: active}
     - name: idx_tag_taxonomy_release_digest
-      keys:
-        canonicalDigest: 1
+      keys: {canonicalDigest: 1}
       unique: false
+  tag_release_candidates:
+    entity: TagTaxonomyRelease
+    role: authoritative
+    description: |-
+      Data content-release rail owner-local immutable verified candidate。身份严格为
+      environment/sourceOwner/releaseId/manifestDigest；保存 projectionVersion、verifiedAt、
+      canonicalDigest、closureDigest、tagRefsDigest、expected/projected counts 和 releaseKind。
+      不保存 Content active pointer，也不修改 legacy taxonomy active。
+    indexes:
+    - name: uq_tag_release_candidate_identity
+      keys: {environment: 1, sourceOwner: 1, releaseId: 1, manifestDigest: 1}
+      unique: true
+    - name: uq_tag_release_candidate_release_fence
+      keys: {environment: 1, sourceOwner: 1, releaseId: 1}
+      unique: true
 role: authoritative

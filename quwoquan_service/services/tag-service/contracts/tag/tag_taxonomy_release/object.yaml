@@ -1,45 +1,26 @@
 kind: aggregate_root
-description: '一次不可变标签分类发布。数据工程 publish/import 是唯一写入口；
-
-  TagNodeView 通过 releaseId 归属该版本投影，在线 tag-service 仅查询激活投影。
-
-  '
+description: |-
+  一次不可变标签分类发布。legacy taxonomy 可保留单 active；Data content rail 只按完整 Content
+  fence stage verified candidate，不创建 Tag 自有 Content active pointer，也不得激活 legacy taxonomy。
 identity:
-  fields:
-  - releaseId
+  fields: [releaseId]
   version_source: store_commit
-access:
-  commands: aggregate_facade
-  cross_context: public_contract_only
-  queries: named_reader
+access: {commands: aggregate_facade, cross_context: public_contract_only, queries: named_reader}
 relationships: []
-search_policy:
-  exposed: none
-  not_exposed_reason: "目录与发布对象由所属域按版本直接读取，不进入统一检索索引。"
+search_policy: {exposed: none, not_exposed_reason: '目录与发布对象由所属域按版本直接读取，不进入统一检索索引。'}
 assistant_access:
-  read:
-    mode: metadata_only
-    scopes:
-    - assistant.tag.tag_taxonomy_release.read
-  cite:
-    mode: none
-    scopes: []
-  write:
-    mode: none
-    scopes: []
+  read: {mode: metadata_only, scopes: [assistant.tag.tag_taxonomy_release.read]}
+  cite: {mode: none, scopes: []}
+  write: {mode: none, scopes: []}
 business_rules:
-- releaseId、contentDigest 和 parent graph 创建后不可变
-- content release 至少包含一个节点；release-bound empty_baseline 是合法的零节点 snapshot
-- taxonomy 必须无环且所有 node path、alias 和 canonical id 唯一
-- 同一 taxonomy 只能有一个 active release
-- retired release 可作为 rollback/replay 目标再次激活，历史 release 与 TagNode snapshot 不物理删除
-- 在线服务不得直接修改 TagNodeView，只能切换已验证 release
+- Data content fence 唯一身份为 environment/sourceOwner/releaseId/manifestDigest；sourceOwner 必须 qwq_data
+- Data candidate 到 verified 为止，绑定 projectionVersion、canonicalDigest、node closure、tagRefsDigest 和 expected/projected counts
+- exact query 每次重验 persisted candidate、节点闭包和 canonical indexes；禁止扫描 latest
+- Data importer 必须显式 stage-only，不调用 legacy Activate，stage B 不改变 active A
+- legacy taxonomy active 只用于非 Data rail 兼容；不得创建 Tag 独立 Content active pointer
+- retired legacy release 可 rollback/replay，历史 release 与 TagNode snapshot 不物理删除
 lifecycle:
   state_field: status
-  states:
-  - staged
-  - active
-  - retired
-  - rejected
+  states: [staged, verified, active, retired, rejected]
   optimistic_concurrency: version
   idempotency: import_receipt

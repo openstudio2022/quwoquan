@@ -461,6 +461,8 @@ func TestMain(m *testing.M) {
 			"kind": "active_pointer", "status": "active",
 			"activeReleaseId": integrationReleaseID,
 			"manifestDigest":  integrationManifestDigest, "releaseClass": "commercial",
+			"projectionVersion": int64(1), "revision": int64(1),
+			"activatedAt": time.Now().UTC().Truncate(time.Millisecond),
 		}},
 		mongoopts.UpdateOne().SetUpsert(true),
 	); err != nil {

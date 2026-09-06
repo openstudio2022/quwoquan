@@ -417,6 +417,9 @@ func (internalGraphQLResearchActiveSupplyReader) ActiveSupplySnapshot(
 		ActiveReleaseID: "rel-internal-graphql-research",
 		ManifestDigest:  "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
 		ReleaseClass:    "research", ReadbackStatus: "passed", Posts: 1,
+		ProjectionVersion: 11,
+		Revision:          3,
+		ActivatedAt:       time.Unix(1_800_000_000, 0).UTC(),
 	}, nil
 }
 

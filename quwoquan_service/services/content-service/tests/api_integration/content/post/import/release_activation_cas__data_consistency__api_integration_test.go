@@ -263,13 +263,27 @@ func TestMongoCandidateStageAndActivationCASLifecycle(t *testing.T) {
 	assertLivePost(t, db, postB, b, "published", "active")
 	assertLivePost(t, db, postA, a, "deleted", "tombstone")
 	var deletion struct {
-		Payload []byte `bson:"payloadJson"`
+		SourceOwner        string `bson:"sourceOwner"`
+		ReleaseID          string `bson:"releaseId"`
+		ManifestDigest     string `bson:"manifestDigest"`
+		ActivationRevision int64  `bson:"activationRevision"`
+		Payload            []byte `bson:"payloadJson"`
 	}
 	if err := db.Collection("content_outbox").FindOne(ctx, bson.M{
 		"eventType": "PostDeleted", "aggregateId": RuntimePostID(postA.ContentID),
 		"aggregateVersion": activatedB.Active.ProjectionVersion,
 	}).Decode(&deletion); err != nil || !bytes.Contains(deletion.Payload, []byte(`"postId":"`+RuntimePostID(postA.ContentID)+`"`)) {
 		t.Fatalf("B deletion event payload=%s err=%v", deletion.Payload, err)
+	}
+	var deletionPayload map[string]any
+	if err := json.Unmarshal(deletion.Payload, &deletionPayload); err != nil ||
+		deletion.SourceOwner != b.SourceOwner || deletion.ReleaseID != b.ReleaseID ||
+		deletion.ManifestDigest != b.ManifestDigest || deletion.ActivationRevision != 2 ||
+		deletionPayload["sourceOwner"] != b.SourceOwner ||
+		deletionPayload["releaseId"] != b.ReleaseID ||
+		deletionPayload["manifestDigest"] != b.ManifestDigest ||
+		deletionPayload["activationRevision"] != float64(2) {
+		t.Fatalf("B deletion event tuple envelope=%+v payload=%#v err=%v", deletion, deletionPayload, err)
 	}
 	outboxAfterB := rawDocumentClosure(t, db.Collection("content_outbox"), bson.M{})
 	outboxCountAfterB := int64(len(outboxAfterB))

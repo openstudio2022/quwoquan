@@ -57,6 +57,8 @@ type config struct {
 	ContentService struct {
 		BaseURL                 string `yaml:"base_url" envAbsolute:"CONTENT_SERVICE_BASE_URL"`
 		ObjectIntersectionsPath string `yaml:"object_intersections_path" envAbsolute:"CONTENT_SERVICE_OBJECT_INTERSECTIONS_PATH"`
+		MongoURI                string `yaml:"mongo_uri" envAbsolute:"CONTENT_MONGO_URI"`
+		MongoDatabase           string `yaml:"mongo_database" envAbsolute:"CONTENT_MONGO_DATABASE"`
 	} `yaml:"content_service"`
 }
 
@@ -215,6 +217,17 @@ func assembleEntityDomain(asm *servicekit.Assembly, cfg *config) error {
 	}
 
 	var serviceOpts []application.HomepageServiceOption
+	if strings.TrimSpace(cfg.ContentService.MongoURI) != "" {
+		contentDatabase, databaseErr := asm.Mongo(servicekit.MongoConfig{
+			URI: cfg.ContentService.MongoURI, Database: nonEmptyContentDatabase(cfg.ContentService.MongoDatabase),
+		})
+		if databaseErr != nil {
+			return fmt.Errorf("Content active release database failed: %w", databaseErr)
+		}
+		serviceOpts = append(serviceOpts, application.WithActiveReleaseLoader(
+			homepagepersistence.NewContentActiveReleaseLoader(contentDatabase, appEnv, "qwq_data"),
+		))
+	}
 	var searchItemProjection application.Projector
 	if searchBuilt.Indexer != nil {
 		searchItemIndex := searchitempersistence.NewESIndex(searchBuilt.Indexer, mongoDatabase)
@@ -396,4 +409,11 @@ func assembleEntityDomain(asm *servicekit.Assembly, cfg *config) error {
 	}
 	asm.Mux.Handle("/", httpHandler.Routes())
 	return nil
+}
+
+func nonEmptyContentDatabase(value string) string {
+	if value = strings.TrimSpace(value); value != "" {
+		return value
+	}
+	return "quwoquan_content"
 }

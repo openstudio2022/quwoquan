@@ -42,6 +42,8 @@ func TestDeclaredEnvKeysCoverRetiredHandwrittenHooks(t *testing.T) {
 		"USER_REDIS_REALTIME_DB",
 		"USER_REDIS_REALTIME_TLS",
 		"INTEGRATION_EXTERNAL_INTERACTION_BASE_URL",
+		"CONTENT_MONGO_URI",
+		"CONTENT_MONGO_DATABASE",
 	}
 	if !reflect.DeepEqual(keys, expected) {
 		t.Fatalf("declared env keys drifted:\n got %v\nwant %v", keys, expected)

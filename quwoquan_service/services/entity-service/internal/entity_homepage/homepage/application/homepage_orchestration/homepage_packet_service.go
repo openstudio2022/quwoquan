@@ -46,6 +46,7 @@ type HomepageDataStore interface {
 	homepageports.FollowerProjectionStore
 	homepageports.OutboxReader
 	homepageports.ProjectionCheckpointStore
+	homepageports.ReleaseProjectionStore
 }
 
 type ObjectIntersectionQuery struct {
@@ -77,6 +78,12 @@ func WithProjector(projector Projector) HomepageServiceOption {
 
 func WithIntersectionReader(reader ObjectIntersectionReader) HomepageServiceOption {
 	return func(service *HomepageService) { service.intersections = reader }
+}
+
+func WithActiveReleaseLoader(loader homepageapp.ActiveReleaseLoader) HomepageServiceOption {
+	return func(service *HomepageService) {
+		service.queries.WithReleaseFence(service.store, loader)
+	}
 }
 
 func NewHomepageServiceWithStore(

@@ -26,6 +26,10 @@ services:
       QWQ_PUSH_TOKEN_ENCRYPTION_KEY: "${QWQ_PUSH_TOKEN_ENCRYPTION_KEY:?QWQ_PUSH_TOKEN_ENCRYPTION_KEY is required}"
       USER_POSTGRES_DSN: postgres://quwoquan:quwoquan@postgres:5432/quwoquan?sslmode=disable
       USER_MONGO_URI: mongodb://mongodb:27017
+      # Creator release candidate 只按 Content owner 的 active release tuple 可见；
+      # 这里只读 Content 库的 data_release_state，User 不落自己的 pointer。
+      CONTENT_MONGO_URI: "${QWQ_COMPOSE_MONGO_URI:-mongodb://mongodb:27017}"
+      CONTENT_MONGO_DATABASE: quwoquan_content
       USER_REDIS_GENERAL_ADDR: redis:6379
       CHAT_SERVICE_BASE_URL: http://chat-service:18081
       CONTENT_SERVICE_BASE_URL: http://content-service:18080

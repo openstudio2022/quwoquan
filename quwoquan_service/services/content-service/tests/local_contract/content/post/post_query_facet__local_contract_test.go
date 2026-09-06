@@ -481,14 +481,17 @@ func (r *fakeQueryActiveSupplyReader) ActiveSupplySnapshot(
 
 func readyQueryActiveSupply(releaseClass string) postports.ActiveSupplySnapshot {
 	return postports.ActiveSupplySnapshot{
-		Environment:     "alpha",
-		SourceOwner:     "qwq_data",
-		Status:          "active",
-		ActiveReleaseID: "rel-query-active",
-		ManifestDigest:  queryFenceManifestDigest,
-		ReleaseClass:    releaseClass,
-		ReadbackStatus:  "passed",
-		Posts:           3,
+		Environment:       "alpha",
+		SourceOwner:       "qwq_data",
+		Status:            "active",
+		ActiveReleaseID:   "rel-query-active",
+		ManifestDigest:    queryFenceManifestDigest,
+		ReleaseClass:      releaseClass,
+		ProjectionVersion: 11,
+		Revision:          3,
+		ActivatedAt:       time.Unix(1_800_000_000, 0).UTC(),
+		ReadbackStatus:    "passed",
+		Posts:             3,
 	}
 }
 

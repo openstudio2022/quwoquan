@@ -9,6 +9,7 @@ import (
 
 	"go.mongodb.org/mongo-driver/v2/bson"
 
+	contentpublic "quwoquan_service/services/content-service/internal/content/post/application/public"
 	postports "quwoquan_service/services/content-service/internal/content/post/domain/ports"
 	"quwoquan_service/services/content-service/internal/content/post/infrastructure/persistence"
 )
@@ -20,6 +21,7 @@ func TestMongoActiveSupplyReaderUsesEnvironmentScopedActiveRelease(t *testing.T)
 	const releaseID = "rel_api_integration_active_supply"
 	const contentID = "active_supply_video_001"
 	const manifestDigest = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	activatedAt := time.Now().UTC().Truncate(time.Millisecond)
 	collection := db.Collection("data_release_state")
 	posts := db.Collection("posts")
 	if _, err := collection.DeleteMany(ctx, bson.M{"environment": environment}); err != nil {
@@ -49,6 +51,7 @@ func TestMongoActiveSupplyReaderUsesEnvironmentScopedActiveRelease(t *testing.T)
 			"environment": environment, "sourceOwner": "qwq_data",
 			"kind": "active_pointer", "status": "active", "activeReleaseId": "rel_empty",
 			"manifestDigest": manifestDigest, "releaseClass": "commercial",
+			"projectionVersion": int64(11), "revision": int64(1), "activatedAt": activatedAt,
 		},
 	}); err != nil {
 		t.Fatalf("insert release states: %v", err)
@@ -90,8 +93,9 @@ func TestMongoActiveSupplyReaderUsesEnvironmentScopedActiveRelease(t *testing.T)
 	}
 	if snapshot.ActiveReleaseID != releaseID || snapshot.SourceOwner != "qwq_data" ||
 		snapshot.Status != "active" || snapshot.ManifestDigest != manifestDigest ||
-		snapshot.ReleaseClass != "commercial" || snapshot.ReadbackStatus != "passed" ||
-		snapshot.Posts != 1 || snapshot.PlayableVideos != 1 {
+		snapshot.ReleaseClass != "commercial" || snapshot.ProjectionVersion != 11 ||
+		snapshot.Revision != 1 || !snapshot.ActivatedAt.Equal(activatedAt) ||
+		snapshot.ReadbackStatus != "passed" || snapshot.Posts != 1 || snapshot.PlayableVideos != 1 {
 		t.Fatalf("active supply snapshot mismatch: %+v", snapshot)
 	}
 
@@ -123,8 +127,8 @@ func TestMongoActiveSupplyReaderIgnoresNonPointerActiveDocuments(t *testing.T) {
 		_, _ = posts.DeleteMany(context.Background(), bson.M{"_id": "pointer-only-post"})
 	})
 	if _, err := state.InsertMany(ctx, []any{
-		bson.M{"kind": "active_pointer", "status": "active", "environment": environment, "sourceOwner": "qwq_data", "activeReleaseId": "pointer-current", "manifestDigest": "sha256:" + strings.Repeat("c", 64), "releaseClass": "commercial", "activatedAt": time.Now().Add(-time.Hour)},
-		bson.M{"kind": "candidate", "status": "active", "environment": environment, "sourceOwner": "qwq_data", "activeReleaseId": "candidate-later", "manifestDigest": "sha256:" + strings.Repeat("d", 64), "releaseClass": "commercial", "activatedAt": time.Now()},
+		bson.M{"kind": "active_pointer", "status": "active", "environment": environment, "sourceOwner": "qwq_data", "activeReleaseId": "pointer-current", "manifestDigest": "sha256:" + strings.Repeat("c", 64), "releaseClass": "commercial", "projectionVersion": int64(21), "revision": int64(1), "activatedAt": time.Now().Add(-time.Hour)},
+		bson.M{"kind": "candidate", "status": "active", "environment": environment, "sourceOwner": "qwq_data", "activeReleaseId": "candidate-later", "manifestDigest": "sha256:" + strings.Repeat("d", 64), "releaseClass": "commercial", "projectionVersion": int64(22), "revision": int64(2), "activatedAt": time.Now()},
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -144,6 +148,70 @@ func TestMongoActiveSupplyReaderIgnoresNonPointerActiveDocuments(t *testing.T) {
 	snapshot, err = persistence.NewMongoActiveSupplyReader(db, environment).ActiveSupplySnapshot(ctx)
 	if err != nil || snapshot.Ready() {
 		t.Fatalf("non-active pointer must be invisible snapshot=%+v err=%v", snapshot, err)
+	}
+}
+
+func TestMongoActiveReleaseFencePortFoundNotFoundAndMalformed(t *testing.T) {
+	ctx := context.Background()
+	db := requireMongoDB(t)
+	const environment = "api-integration-active-fence-port"
+	const owner = "qwq_data"
+	state := db.Collection("data_release_state")
+	t.Cleanup(func() {
+		_, _ = state.DeleteMany(context.Background(), bson.M{"environment": environment})
+	})
+	reader := persistence.NewMongoActiveSupplyReaderForOwner(db, environment, owner)
+	facade := contentpublic.NewActiveReleaseFenceQueryFacade(reader)
+	query := contentpublic.ActiveReleaseFenceQuery{Environment: environment, SourceOwner: owner}
+
+	missing, err := facade.ReadActiveReleaseFence(ctx, query)
+	if err != nil || missing.Found || missing.Environment != environment || missing.SourceOwner != owner {
+		t.Fatalf("missing active fence=%+v err=%v", missing, err)
+	}
+
+	activatedAt := time.Now().UTC().Truncate(time.Millisecond)
+	digest := "sha256:" + strings.Repeat("8", 64)
+	if _, err := state.InsertOne(ctx, bson.M{
+		"kind": "active_pointer", "status": "active", "environment": environment,
+		"sourceOwner": owner, "activeReleaseId": "release-fence-port",
+		"manifestDigest": digest, "releaseClass": "research",
+		"projectionVersion": int64(31), "revision": int64(4), "activatedAt": activatedAt,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	found, err := facade.ReadActiveReleaseFence(ctx, query)
+	if err != nil || !found.Found || found.ReleaseID != "release-fence-port" ||
+		found.ManifestDigest != digest || found.Revision != 4 ||
+		found.ReleaseClass != "research" || found.ProjectionVersion != 31 ||
+		!found.ActivatedAt.Equal(activatedAt) {
+		t.Fatalf("found active fence=%+v err=%v", found, err)
+	}
+
+	if _, err := state.UpdateOne(ctx, bson.M{"environment": environment}, bson.M{
+		"$unset": bson.M{"revision": ""},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := facade.ReadActiveReleaseFence(ctx, query); err == nil {
+		t.Fatal("legacy/incomplete active pointer was exposed")
+	}
+
+	if _, err := reader.ReadActiveReleaseFence(ctx, contentpublic.ActiveReleaseFenceQuery{
+		Environment: environment, SourceOwner: "other_owner",
+	}); !contentpublic.IsActiveReleaseFenceError(err) {
+		t.Fatalf("configured identity drift was not typed: %v", err)
+	}
+	if _, err := state.DeleteMany(ctx, bson.M{"environment": environment}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := state.InsertOne(ctx, bson.M{
+		"environment": environment, "sourceOwner": owner, "status": "active",
+		"activeReleaseId": "legacy", "manifestDigest": digest,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := facade.ReadActiveReleaseFence(ctx, query); !contentpublic.IsActiveReleaseFenceError(err) {
+		t.Fatalf("legacy active state was not typed fail-closed: %v", err)
 	}
 }
 

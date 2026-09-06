@@ -176,9 +176,10 @@ func TestMain(m *testing.M) {
 		panic("flush user-service integration Redis: " + err.Error())
 	}
 
+	rc := integrationRedis
 	redisRouter = platformredis.MustNewRouter(rtredis.RouterConfig{
 		Scenes: map[string]rtredis.SceneConfig{
-			"general": {Mode: "standalone", Addr: integrationRedis.Addr, Password: integrationRedis.Password, DB: 0, TLS: integrationRedis.TLS},
+			"general": {Mode: "standalone", Addr: rc.Addr, Password: rc.Password, DB: 0, TLS: rc.TLS},
 		},
 		DefaultScene: "general",
 	})
@@ -584,6 +585,7 @@ func rebuildTestHandler(ctx context.Context) error {
 			newCreatorRuntimeProfileTestAdapter(
 				creatorpersistence.NewCreatorRuntimeProfileReader(mongoDB),
 			),
+			apiIntegrationContentFenceReader{},
 		),
 	)
 	contactDiscoveryService := contactapp.NewContactDiscoveryService(contactDiscoveryStore, userEventPublisher)

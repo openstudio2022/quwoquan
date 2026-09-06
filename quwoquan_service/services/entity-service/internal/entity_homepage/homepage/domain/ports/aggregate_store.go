@@ -91,6 +91,56 @@ type DetailProjection struct {
 
 // DetailProjectionStore 是 HomepageDetailView 的独立读写端口。写端只暴露
 // 已有事实消费者需要的窄更新，不允许通过详情投影反向修改 Homepage 主档。
+type ReleaseIdentity struct {
+	Environment    string
+	SourceOwner    string
+	ReleaseID      string
+	ManifestDigest string
+}
+
+type ReleaseProjection struct {
+	Identity             ReleaseIdentity
+	HomepageID           string
+	EntityRef            string
+	Title                string
+	HomepageType         string
+	City                 string
+	Location             *homepagemodel.GeoPoint
+	CategoryTags         []string
+	CoverURL             string
+	IntroductionMarkdown string
+	IntroductionAssets   []homepagemodel.IntroductionAsset
+	StructuredFacts      *homepagemodel.StructuredFacts
+	PrimarySource        *homepagemodel.Source
+	SourceURLs           []string
+	ProjectionVersion    int64
+	ClosureDigest        string
+	DocumentDigest       string
+	VerifiedAt           time.Time
+}
+
+type ReleaseCandidateState struct {
+	Identity               ReleaseIdentity
+	ProjectionVersion      int64
+	VerifiedAt             time.Time
+	ClosureDigest          string
+	ExpectedCount          int
+	ProjectedCount         int
+	EntityRefMappingDigest string
+}
+
+// ReleaseProjectionStore owns immutable Homepage release candidates. It does
+// not own an active pointer; the only live fence is supplied by Content.
+type ReleaseProjectionStore interface {
+	StageReleaseCandidate(ctx context.Context, state ReleaseCandidateState, projections []ReleaseProjection) (bool, error)
+	ReadVerifiedReleaseCandidate(ctx context.Context, identity ReleaseIdentity) (ReleaseCandidateState, bool, error)
+	LoadExactReleaseProjection(ctx context.Context, identity ReleaseIdentity, homepageID string) (ReleaseProjection, bool, error)
+}
+
+type ReleaseShellStore interface {
+	EnsureReleaseShells(ctx context.Context, projections []ReleaseProjection) error
+}
+
 type DetailProjectionStore interface {
 	LoadDetailProjection(ctx context.Context, homepageID string) (DetailProjection, bool, error)
 	UpsertReviewSummary(

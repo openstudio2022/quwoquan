@@ -1,6 +1,6 @@
-// Command import 把数据工程 control-plane 路径制 taxonomy 灌入 mongo tag_nodes，
-// 并按 TagTaxonomyRelease 聚合落发布记录：相同 release identity + canonicalDigest
-// 才能幂等 Stage → 单 active CAS Activate；不同 release identity 不得复用快照。
+// Command import projects taxonomy snapshots. Immutable Data content releases
+// require explicit stage-only mode and stop at an owner-local verified candidate;
+// the legacy activate mode remains only for non-Data taxonomy compatibility.
 package main
 
 import (
@@ -97,6 +97,8 @@ func main() {
 	reportPath := flag.String("report", "", "append-only JSON import receipt path")
 	sourceOwner := flag.String("source-owner", "qwq_data", "source owner for imported tag nodes")
 	dryRun := flag.Bool("dry-run", false, "validate the release projection and write a dry-run receipt")
+	activationMode := flag.String("activation-mode", "", "required immutable release action: stage-only|activate (activate is legacy non-Data only)")
+	projectionVersion := flag.Int64("projection-version", taxonomyreleasestore.TagCandidateProjectionVersion, "Tag candidate projection contract version")
 	validateOnly := flag.Bool(
 		"validate-only",
 		false,
@@ -108,22 +110,26 @@ func main() {
 	var (
 		nodes               []taxonomyNode
 		resolvedReleaseID   = strings.TrimSpace(*releaseID)
+		resolvedSourceOwner = strings.TrimSpace(*sourceOwner)
+		manifestDigest      string
 		resolvedReleaseKind = releasemodel.ReleaseKindContent
 		err                 error
 	)
 	if strings.TrimSpace(*releaseRoot) != "" {
-		var releaseIdentity, releaseKind string
-		releaseIdentity, releaseKind, nodes, err = collectReleaseTaxonomyNodes(*releaseRoot)
+		var binding contentReleaseBinding
+		binding, nodes, err = collectReleaseTaxonomyNodes(*releaseRoot)
 		if err == nil {
-			resolvedReleaseKind = releasemodel.ReleaseKind(releaseKind)
+			resolvedReleaseKind = releasemodel.ReleaseKind(binding.ReleaseKind)
+			manifestDigest = binding.ManifestDigest
 			if resolvedReleaseID == "" {
-				resolvedReleaseID = releaseIdentity
-			} else if resolvedReleaseID != releaseIdentity {
-				err = fmt.Errorf(
-					"release-id %s differs from immutable release identity %s",
-					resolvedReleaseID,
-					releaseIdentity,
-				)
+				resolvedReleaseID = binding.ReleaseID
+			} else if resolvedReleaseID != binding.ReleaseID {
+				err = fmt.Errorf("release-id %s differs from immutable release identity %s", resolvedReleaseID, binding.ReleaseID)
+			}
+			if resolvedSourceOwner == "" {
+				resolvedSourceOwner = binding.SourceOwner
+			} else if resolvedSourceOwner != binding.SourceOwner {
+				err = fmt.Errorf("source-owner %s differs from immutable release owner %s", resolvedSourceOwner, binding.SourceOwner)
 			}
 		}
 	} else {
@@ -136,7 +142,7 @@ func main() {
 		log.Fatalf("taxonomy tree %s has no importable nodes", *tagsDir)
 	}
 	digest := canonicalDigest(nodes)
-	if *validateOnly {
+	if strings.TrimSpace(*releaseRoot) == "" && *validateOnly {
 		if err := writeTaxonomyValidationReport(os.Stdout, nodes, digest); err != nil {
 			log.Fatalf("write taxonomy validation report: %v", err)
 		}
@@ -145,13 +151,26 @@ func main() {
 	if resolvedReleaseID == "" {
 		log.Fatal("release-id is required so the staged taxonomy snapshot can bind to its consuming catalog")
 	}
+	if strings.TrimSpace(*releaseRoot) != "" {
+		if *activationMode != "stage-only" {
+			log.Fatal("immutable Data content release import requires --activation-mode=stage-only")
+		}
+		if strings.TrimSpace(*environment) == "" || resolvedSourceOwner != "qwq_data" ||
+			manifestDigest == "" || *projectionVersion <= 0 {
+			log.Fatal("Data stage-only import requires canonical environment/owner/manifest/projection binding")
+		}
+	} else if *activationMode != "activate" {
+		log.Fatal("legacy taxonomy import requires --activation-mode=activate")
+	}
 	if *dryRun {
 		if err := writeTagImportReport(*reportPath, tagImportReport{
 			Schema:          tagImportReportSchema,
 			Status:          "dry-run",
 			Environment:     strings.TrimSpace(*environment),
 			ReleaseID:       resolvedReleaseID,
-			SourceOwner:     strings.TrimSpace(*sourceOwner),
+			SourceOwner:     resolvedSourceOwner,
+			ManifestDigest:  manifestDigest,
+			ActivationMode:  *activationMode,
 			CanonicalDigest: digest,
 			ReleaseKind:     string(resolvedReleaseKind),
 			NodeCount:       len(nodes),
@@ -172,44 +191,44 @@ func main() {
 	db := client.Database(*dbName)
 	coll := db.Collection("tag_nodes")
 	store := persistence.NewMongoTagNodeStore(coll)
+	contentCandidateStore := taxonomyreleasestore.NewContentCandidateStore(db)
 	releaseStore := taxonomyreleasestore.NewStore(db)
-	if err := releaseStore.EnsureIndexes(ctx); err != nil {
-		log.Fatalf("ensure tag_taxonomy_releases indexes: %v", err)
+	if *activationMode == "activate" {
+		if err := releaseStore.EnsureIndexes(ctx); err != nil {
+			log.Fatalf("ensure tag_taxonomy_releases indexes: %v", err)
+		}
 	}
-	if err := releaseStore.BackfillReleaseKind(
-		ctx,
-		resolvedReleaseID,
-		*sourceOwner,
-		digest,
-		len(nodes),
-		resolvedReleaseKind,
-	); err != nil {
-		log.Fatalf("backfill taxonomy release kind: %v", err)
-	}
-	previousReleaseID := ""
-	if previous, found, err := releaseStore.FindActive(ctx); err != nil {
-		log.Fatalf("load active taxonomy release: %v", err)
-	} else if found && previous.ReleaseID != resolvedReleaseID {
-		previousReleaseID = previous.ReleaseID
+	if *activationMode == "activate" {
+		if err := releaseStore.BackfillReleaseKind(ctx, resolvedReleaseID, resolvedSourceOwner, digest, len(nodes), resolvedReleaseKind); err != nil {
+			log.Fatalf("backfill taxonomy release kind: %v", err)
+		}
+		if previous, found, err := releaseStore.FindActive(ctx); err != nil {
+			log.Fatalf("load active taxonomy release: %v", err)
+		} else if found && previous.ReleaseID == "" {
+			log.Fatal("active taxonomy release identity is empty")
+		}
 	}
 	if err := store.MigrateSnapshotIdentity(ctx); err != nil {
 		log.Fatalf("migrate tag_nodes snapshot identity: %v", err)
 	}
-	releaseFacade, err := taxonomyrelease.NewFacade(releaseStore, store)
-	if err != nil {
-		log.Fatalf("taxonomy release facade: %v", err)
+	if err := contentCandidateStore.EnsureIndexes(ctx); err != nil {
+		log.Fatalf("ensure Tag content candidate indexes: %v", err)
 	}
 
-	// Stage：只有相同 release identity 的同 digest 重放可复用既有 release。
-	release, err := releaseFacade.Stage(ctx, taxonomyrelease.StageCommand{
-		ReleaseID:       resolvedReleaseID,
-		SourceOwner:     *sourceOwner,
-		CanonicalDigest: digest,
-		ReleaseKind:     resolvedReleaseKind,
-		NodeCount:       len(nodes),
-	})
-	if err != nil {
-		log.Fatalf("stage taxonomy release: %v", err)
+	release := releasemodel.Release{ReleaseID: resolvedReleaseID, SourceOwner: resolvedSourceOwner, CanonicalDigest: digest, ReleaseKind: resolvedReleaseKind, NodeCount: len(nodes)}
+	var releaseFacade *taxonomyrelease.Facade
+	if *activationMode == "activate" {
+		releaseFacade, err = taxonomyrelease.NewFacade(releaseStore, store)
+		if err != nil {
+			log.Fatalf("taxonomy release facade: %v", err)
+		}
+		release, err = releaseFacade.Stage(ctx, taxonomyrelease.StageCommand{
+			ReleaseID: resolvedReleaseID, SourceOwner: resolvedSourceOwner,
+			CanonicalDigest: digest, ReleaseKind: resolvedReleaseKind, NodeCount: len(nodes),
+		})
+		if err != nil {
+			log.Fatalf("stage taxonomy release: %v", err)
+		}
 	}
 
 	// 第二趟：以 release.ReleaseID（可能是幂等复用的首个 id）写入不可变快照。
@@ -232,29 +251,41 @@ func main() {
 		)
 	}
 
-	// 仅完整 staged snapshot 写入成功后才切换 active；已 active 时 no-op 重放安全。
-	activated, err := releaseFacade.Activate(ctx, release.ReleaseID)
-	if err != nil {
-		log.Fatalf("activate taxonomy release %s: %v", release.ReleaseID, err)
+	status := "staged"
+	if *activationMode == "stage-only" {
+		verifiedAt := time.Now().UTC()
+		candidate, err := contentCandidateStore.BuildContentCandidate(
+			ctx, strings.TrimSpace(*environment), resolvedSourceOwner, release.ReleaseID,
+			manifestDigest, string(resolvedReleaseKind), *projectionVersion, verifiedAt,
+		)
+		if err != nil {
+			log.Fatalf("build verified Tag content candidate: %v", err)
+		}
+		if _, replayed, err := contentCandidateStore.StageVerified(ctx, candidate); err != nil {
+			log.Fatalf("stage verified Tag content candidate: %v", err)
+		} else if replayed {
+			log.Printf("replayed exact verified Tag content candidate %s", release.ReleaseID)
+		}
+	} else {
+		activated, err := releaseFacade.Activate(ctx, release.ReleaseID)
+		if err != nil {
+			log.Fatalf("activate taxonomy release %s: %v", release.ReleaseID, err)
+		}
+		status = string(activated.Status)
 	}
 	if strings.TrimSpace(*reportPath) != "" {
 		if err := writeTagImportReport(*reportPath, tagImportReport{
-			Schema:            tagImportReportSchema,
-			Status:            "active",
-			Environment:       strings.TrimSpace(*environment),
-			ReleaseID:         activated.ReleaseID,
-			SourceOwner:       strings.TrimSpace(*sourceOwner),
-			CanonicalDigest:   digest,
-			ReleaseKind:       string(activated.ReleaseKind),
-			PreviousReleaseID: previousReleaseID,
-			NodeCount:         len(nodes),
-			TagRefs:           tagRefs(nodes),
+			Schema: tagImportReportSchema, Status: status, Environment: strings.TrimSpace(*environment),
+			ReleaseID: release.ReleaseID, SourceOwner: resolvedSourceOwner,
+			ManifestDigest: manifestDigest, ActivationMode: *activationMode,
+			CanonicalDigest: digest, ReleaseKind: string(resolvedReleaseKind),
+			NodeCount: len(nodes), TagRefs: tagRefs(nodes),
 		}); err != nil {
 			log.Fatalf("write tag import report: %v", err)
 		}
 	}
 	log.Printf("OK: imported %d tag nodes into %s.tag_nodes (release=%s digest=%s status=%s)",
-		count, *dbName, activated.ReleaseID, digest[:16], activated.Status)
+		count, *dbName, release.ReleaseID, digest[:16], status)
 }
 
 func writeTaxonomyValidationReport(

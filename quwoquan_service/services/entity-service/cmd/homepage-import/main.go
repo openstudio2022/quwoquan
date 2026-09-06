@@ -1,17 +1,16 @@
-// Command homepage-import 按 immutable release payload把 entity snapshot 投影进 homepages
-// （introductionMarkdown / introductionAssets），与 content-service cmd/import 平级：
-// content importer 负责 posts/entities 运行库，本命令负责主页读模型快照。
-//
-// 幂等语义由 application.ReconcileImportedHomepages 保证。来源身份固定为
-// qwq_data + entityRef；sync 只会下线该来源中未声明的主页，不会碰人工或官方 seed。
-// 持久化走 Homepage 对象 Store，以 sourceOwner+sourceEntityRef 幂等 upsert。
+// Command homepage-import verifies one immutable Data release and stages its
+// Homepage-owned projections under the exact environment/sourceOwner/releaseId/
+// manifestDigest identity. It never publishes release-owned fields into the
+// Homepage aggregate and never offlines the currently visible release. Public
+// reads are selected later by the Content active tuple.
 //
 // Usage:
 //
 //	go run ./services/entity-service/cmd/homepage-import \
-//	  --release-root /path/to/release/<releaseId> \
+//	  --release-root /path/to/release/<releaseId> --env gamma \
 //	  --mongo-uri mongodb://localhost:27017 --entity-db quwoquan_entity \
-//	  --media-image-base-url http://media.local:9080 --env gamma --report import-homepage-gamma.json
+//	  --media-image-base-url http://media.local:9080 --run-id <runId> \
+//	  --report import-homepage-gamma.json
 package main
 
 import (
@@ -27,6 +26,7 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 
+	runtimedatarelease "quwoquan_service/runtime/datarelease"
 	runtimemedia "quwoquan_service/runtime/media"
 	"quwoquan_service/services/entity-service/internal/entity_homepage/homepage/application/homepage_orchestration"
 	"quwoquan_service/services/entity-service/internal/entity_homepage/homepage/infrastructure/homepageimport"
@@ -50,7 +50,7 @@ func main() {
 	runID := flag.String("run-id", "", "environment import run identity (required)")
 	reportPath := flag.String("report", "", "write import report json to this path")
 	metricsTextfile := flag.String("metrics-textfile", "", "write node_exporter textfile metrics to this path (optional)")
-	mode := flag.String("mode", string(application.HomepageImportModeUpsert), "reconciliation mode: upsert|sync")
+	manifestDigest := flag.String("manifest-digest", "", "exact immutable payload sha256 (required)")
 	dryRun := flag.Bool("dry-run", false, "load + project only; do not write mongo")
 	flag.Parse()
 
@@ -60,6 +60,13 @@ func main() {
 	if *runID == "" {
 		log.Fatalf("[homepage-import] --run-id is required")
 	}
+	releaseTuple, err := runtimedatarelease.Load(*releaseRoot)
+	if err != nil {
+		log.Fatalf("[homepage-import] load immutable release tuple: %v", err)
+	}
+	if string(releaseTuple.SourceOwner) != "qwq_data" {
+		log.Fatalf("[homepage-import] source owner must be qwq_data")
+	}
 	raw, err := os.ReadFile(filepath.Join(*releaseRoot, "payload", "desired_state.json"))
 	if err != nil {
 		log.Fatalf("[homepage-import] read desired state: %v", err)
@@ -68,12 +75,18 @@ func main() {
 	if err := json.Unmarshal(raw, &desired); err != nil {
 		log.Fatalf("[homepage-import] parse desired state: %v", err)
 	}
-	if desired.Schema != "quwoquan_data.release_desired_state" || desired.ReleaseID == "" {
+	if desired.Schema != "quwoquan_data.release_desired_state" || desired.ReleaseID == "" || desired.ReleaseID != releaseTuple.ReleaseID {
 		log.Fatalf("[homepage-import] unsupported desired state schema=%q releaseId=%q", desired.Schema, desired.ReleaseID)
 	}
-	importMode := application.HomepageImportMode(*mode)
-	if importMode != application.HomepageImportModeUpsert && importMode != application.HomepageImportModeSync {
-		log.Fatalf("[homepage-import] --mode must be upsert or sync")
+	if strings.TrimSpace(*manifestDigest) != "" && strings.TrimSpace(*manifestDigest) != string(releaseTuple.PayloadSHA256) {
+		log.Fatalf("[homepage-import] --manifest-digest differs from verified immutable release tuple")
+	}
+	*manifestDigest = string(releaseTuple.PayloadSHA256)
+	if _, identityErr := application.NormalizeHomepageReleaseIdentity(application.HomepageReleaseIdentity{
+		Environment: *env, SourceOwner: "qwq_data", ReleaseID: desired.ReleaseID,
+		ManifestDigest: *manifestDigest,
+	}); identityErr != nil {
+		log.Fatalf("[homepage-import] --env and canonical --manifest-digest are required: %v", identityErr)
 	}
 	filter := make(map[string]bool, len(desired.DesiredRefs.Entities))
 	for _, ref := range desired.DesiredRefs.Entities {
@@ -94,6 +107,9 @@ func main() {
 	}
 	if err := json.Unmarshal(headerRaw, &header); err != nil {
 		log.Fatalf("[homepage-import] parse release header: %v", err)
+	}
+	if strings.TrimSpace(header.ReleaseClass) != string(releaseTuple.ReleaseClass) {
+		log.Fatalf("[homepage-import] release class differs from verified immutable release tuple")
 	}
 	releaseAssets, err := runtimemedia.LoadReleaseMediaAssets(
 		*releaseRoot,
@@ -121,13 +137,11 @@ func main() {
 	}
 	log.Printf("[homepage-import] env=%s projected homepages=%d issues=%d", *env, len(inputs), len(issues))
 
-	report := application.HomepageImportReport{
-		Mode:                  importMode,
-		SourceOwner:           "qwq_data",
-		Created:               []string{},
-		Updated:               []string{},
-		Offlined:              []string{},
-		Skipped:               []string{},
+	report := application.HomepageReleaseStageReport{
+		Identity: application.HomepageReleaseIdentity{
+			Environment: *env, SourceOwner: "qwq_data", ReleaseID: desired.ReleaseID,
+			ManifestDigest: *manifestDigest,
+		},
 		EntityRefToHomepageID: map[string]string{},
 	}
 	if *dryRun {
@@ -151,34 +165,36 @@ func main() {
 			log.Fatalf("[homepage-import] ensure homepage indexes: %v", err)
 		}
 		service := application.NewHomepageServiceWithStore(ctx, store)
-		report, err = service.ReconcileImportedHomepages(ctx, application.HomepageImportRequest{
-			Mode:            importMode,
-			SourceOwner:     "qwq_data",
-			SourceReleaseID: desired.ReleaseID,
-			RunID:           *runID,
-			Inputs:          inputs,
-		})
+		report, err = service.StageHomepageReleaseCandidate(ctx, application.HomepageReleaseStageRequest{
+			Identity: application.HomepageReleaseIdentity{
+				Environment: *env, SourceOwner: "qwq_data", ReleaseID: desired.ReleaseID,
+				ManifestDigest: *manifestDigest,
+			},
+			Inputs: inputs,
+		}, time.Now().UTC().Truncate(time.Millisecond))
 		if err != nil {
-			log.Fatalf("[homepage-import] reconcile failed: %v", err)
+			log.Fatalf("[homepage-import] stage release candidate failed: %v", err)
 		}
 	}
 
 	if *reportPath != "" {
 		payload := map[string]any{
-			"schema":                "quwoquan_service.homepage_import_report",
-			"releaseId":             desired.ReleaseID,
-			"env":                   *env,
-			"dryRun":                *dryRun,
-			"mode":                  report.Mode,
-			"sourceOwner":           report.SourceOwner,
-			"projected":             len(inputs),
-			"created":               report.Created,
-			"updated":               report.Updated,
-			"offlined":              report.Offlined,
-			"skipped":               report.Skipped,
-			"entityRefToHomepageId": report.EntityRefToHomepageID,
-			"issues":                issues,
-			"finishedAt":            time.Now().UTC().Format(time.RFC3339),
+			"schema":                 "quwoquan_service.homepage_import_report",
+			"releaseId":              desired.ReleaseID,
+			"env":                    *env,
+			"dryRun":                 *dryRun,
+			"sourceOwner":            report.Identity.SourceOwner,
+			"manifestDigest":         report.Identity.ManifestDigest,
+			"projectionVersion":      report.ProjectionVersion,
+			"closureDigest":          report.ClosureDigest,
+			"expected":               report.ExpectedCount,
+			"projected":              report.ProjectedCount,
+			"entityRefToHomepageId":  report.EntityRefToHomepageID,
+			"entityRefMappingDigest": report.EntityRefMappingDigest,
+			"replayed":               report.Replayed,
+			"verifiedAt":             report.VerifiedAt,
+			"issues":                 issues,
+			"finishedAt":             time.Now().UTC().Format(time.RFC3339),
 		}
 		raw, _ := json.MarshalIndent(payload, "", "  ")
 		if err := os.WriteFile(*reportPath, append(raw, '\n'), 0o644); err != nil {
@@ -189,12 +205,12 @@ func main() {
 		if err := homepageimport.WriteImportMetricsTextfile(
 			*metricsTextfile,
 			*env,
-			len(report.Created), len(report.Updated), len(report.Skipped), len(issues),
+			report.ProjectedCount, 0, 0, len(issues),
 			time.Now().UTC(),
 		); err != nil {
 			log.Fatalf("[homepage-import] write metrics textfile: %v", err)
 		}
 	}
-	log.Printf("[homepage-import] OK env=%s mode=%s created=%d updated=%d offlined=%d skipped=%d issues=%d",
-		*env, report.Mode, len(report.Created), len(report.Updated), len(report.Offlined), len(report.Skipped), len(issues))
+	log.Printf("[homepage-import] OK env=%s release=%s projected=%d replayed=%t issues=%d",
+		*env, desired.ReleaseID, report.ProjectedCount, report.Replayed, len(issues))
 }

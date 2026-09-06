@@ -4,6 +4,7 @@ import (
 	"context"
 	"regexp"
 	"strings"
+	"time"
 )
 
 var canonicalReleaseDigestPattern = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
@@ -20,10 +21,13 @@ type ActiveSupplySnapshot struct {
 	// ReleaseClass 是激活 release 的 release 级类别（research|commercial），
 	// 由 importer 从 release.json 落到 data_release_state。research readback
 	// 用它判定 release 类别；per-post usageScope 只表达对象的最大许可范围。
-	ReleaseClass   string
-	ReadbackStatus string
-	Posts          int64
-	PlayableVideos int64
+	ReleaseClass      string
+	ProjectionVersion int64
+	Revision          int64
+	ActivatedAt       time.Time
+	ReadbackStatus    string
+	Posts             int64
+	PlayableVideos    int64
 }
 
 func (snapshot ActiveSupplySnapshot) ReleaseBoundReadbackReady() bool {
@@ -34,6 +38,9 @@ func (snapshot ActiveSupplySnapshot) ReleaseBoundReadbackReady() bool {
 		strings.TrimSpace(snapshot.ActiveReleaseID) != "" &&
 		canonicalReleaseDigestPattern.MatchString(strings.TrimSpace(snapshot.ManifestDigest)) &&
 		(releaseClass == "research" || releaseClass == "commercial") &&
+		snapshot.ProjectionVersion > 0 &&
+		snapshot.Revision > 0 &&
+		!snapshot.ActivatedAt.IsZero() &&
 		strings.TrimSpace(snapshot.ReadbackStatus) == "passed"
 }
 
@@ -47,6 +54,9 @@ func (snapshot ActiveSupplySnapshot) IsEmpty() bool {
 		strings.TrimSpace(snapshot.ActiveReleaseID) == "" &&
 		strings.TrimSpace(snapshot.ManifestDigest) == "" &&
 		strings.TrimSpace(snapshot.ReleaseClass) == "" &&
+		snapshot.ProjectionVersion == 0 &&
+		snapshot.Revision == 0 &&
+		snapshot.ActivatedAt.IsZero() &&
 		strings.TrimSpace(snapshot.ReadbackStatus) == "" &&
 		snapshot.Posts == 0 &&
 		snapshot.PlayableVideos == 0

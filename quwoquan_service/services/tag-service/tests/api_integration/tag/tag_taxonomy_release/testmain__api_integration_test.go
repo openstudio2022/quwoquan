@@ -14,6 +14,7 @@ import (
 
 var (
 	mongoDB      *mongo.Database
+	testMongoURI string
 	tagNodeStore *persistence.MongoTagNodeStore
 )
 
@@ -28,6 +29,7 @@ func TestMain(m *testing.M) {
 		panic("TagTaxonomyRelease api_integration requires real MongoDB: " + err.Error())
 	}
 	mongoDB = mongoRuntime.Database
+	testMongoURI = "mongodb://" + mongoRuntime.Endpoint + "/?directConnection=true"
 	tagNodeStore = persistence.NewMongoTagNodeStore(mongoDB.Collection("tag_nodes"))
 	if err := tagNodeStore.EnsureIndexes(context.Background()); err != nil {
 		panic("ensure TagNodeView indexes: " + err.Error())

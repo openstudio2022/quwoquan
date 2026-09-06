@@ -24,15 +24,18 @@ type researchFeedActiveSupplyReader struct{}
 
 func (researchFeedActiveSupplyReader) ActiveSupplySnapshot(context.Context) (feedapp.ActiveSupplySnapshot, error) {
 	return feedapp.ActiveSupplySnapshot{
-		Environment:     "local_contract",
-		SourceOwner:     "qwq_data",
-		Status:          "active",
-		ActiveReleaseID: "rel_research_local_contract",
-		ManifestDigest:  researchFeedManifestDigest,
-		ReleaseClass:    "research",
-		ReadbackStatus:  "passed",
-		Posts:           1,
-		PlayableVideos:  1,
+		Environment:       "local_contract",
+		SourceOwner:       "qwq_data",
+		Status:            "active",
+		ActiveReleaseID:   "rel_research_local_contract",
+		ManifestDigest:    researchFeedManifestDigest,
+		ReleaseClass:      "research",
+		ProjectionVersion: 11,
+		Revision:          3,
+		ActivatedAt:       time.Unix(1_800_000_000, 0).UTC(),
+		ReadbackStatus:    "passed",
+		Posts:             1,
+		PlayableVideos:    1,
 	}, nil
 }
 

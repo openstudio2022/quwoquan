@@ -97,6 +97,7 @@ externalDependencies:
     port: MessageTransportPort
     operations: [appendDurable, consumeDurable]
     scenes: [general, realtime]
+runtime_entrypoints: []
 api_routes:
   - method: GET
     path: /content/research/readback

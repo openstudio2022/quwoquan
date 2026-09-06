@@ -2,6 +2,7 @@
 package releaseimport_test
 
 import (
+	"encoding/json"
 	"errors"
 	"strings"
 	"testing"
@@ -121,5 +122,14 @@ func TestBuildActivationEventsBindsRevisionTargetAndPredecessor(t *testing.T) {
 		!strings.Contains(events[0].EventID, "data-release-activation:4:17:release-b:") ||
 		!strings.Contains(events[0].EventID, "release-a") {
 		t.Fatalf("activation event identity mismatch events=%+v err=%v", events, err)
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(events[0].Payload, &payload); err != nil {
+		t.Fatal(err)
+	}
+	if payload["sourceOwner"] != "qwq_data" || payload["releaseId"] != "release-b" ||
+		payload["manifestDigest"] != "sha256:"+strings.Repeat("b", 64) ||
+		payload["activationRevision"] != float64(4) {
+		t.Fatalf("activation event tuple is incomplete: %#v", payload)
 	}
 }

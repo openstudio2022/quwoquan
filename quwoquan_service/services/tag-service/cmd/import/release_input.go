@@ -9,15 +9,17 @@ import (
 	"strings"
 	"time"
 
+	"quwoquan_service/runtime/datarelease"
 	"quwoquan_service/services/tag-service/internal/tag/tag_node_view/domain/lifecycle"
 )
 
 const tagImportReportSchema = "quwoquan.tag_import_report"
 
-type releaseHeader struct {
-	Schema      string `json:"schema"`
-	ReleaseID   string `json:"releaseId"`
-	ReleaseKind string `json:"releaseKind"`
+type contentReleaseBinding struct {
+	ReleaseID      string
+	SourceOwner    string
+	ReleaseKind    string
+	ManifestDigest string
 }
 
 type releaseDesiredState struct {
@@ -29,51 +31,46 @@ type releaseDesiredState struct {
 }
 
 type tagImportReport struct {
-	Schema            string   `json:"schema"`
-	Status            string   `json:"status"`
-	Environment       string   `json:"environment"`
-	ReleaseID         string   `json:"releaseId"`
-	SourceOwner       string   `json:"sourceOwner"`
-	CanonicalDigest   string   `json:"canonicalDigest"`
-	ReleaseKind       string   `json:"releaseKind"`
-	PreviousReleaseID string   `json:"previousReleaseId"`
-	NodeCount         int      `json:"nodeCount"`
-	TagRefs           []string `json:"tagRefs"`
-	GeneratedAt       string   `json:"generatedAt"`
+	Schema          string   `json:"schema"`
+	Status          string   `json:"status"`
+	Environment     string   `json:"environment"`
+	ReleaseID       string   `json:"releaseId"`
+	SourceOwner     string   `json:"sourceOwner"`
+	ManifestDigest  string   `json:"manifestDigest"`
+	ActivationMode  string   `json:"activationMode"`
+	CanonicalDigest string   `json:"canonicalDigest"`
+	ReleaseKind     string   `json:"releaseKind"`
+	NodeCount       int      `json:"nodeCount"`
+	TagRefs         []string `json:"tagRefs"`
+	GeneratedAt     string   `json:"generatedAt"`
 }
 
-func collectReleaseTaxonomyNodes(releaseRoot string) (string, string, []taxonomyNode, error) {
+func collectReleaseTaxonomyNodes(releaseRoot string) (contentReleaseBinding, []taxonomyNode, error) {
+	tuple, err := datarelease.Load(strings.TrimSpace(releaseRoot))
+	if err != nil {
+		return contentReleaseBinding{}, nil, fmt.Errorf("load canonical Data release: %w", err)
+	}
 	root, err := filepath.Abs(strings.TrimSpace(releaseRoot))
 	if err != nil {
-		return "", "", nil, fmt.Errorf("resolve release root: %w", err)
+		return contentReleaseBinding{}, nil, fmt.Errorf("resolve release root: %w", err)
 	}
-	headerPath := filepath.Join(root, "payload", "release.json")
-	headerRaw, err := os.ReadFile(headerPath)
-	if err != nil {
-		return "", "", nil, fmt.Errorf("read release header: %w", err)
-	}
-	var header releaseHeader
-	if err := json.Unmarshal(headerRaw, &header); err != nil {
-		return "", "", nil, fmt.Errorf("parse release header: %w", err)
-	}
-	if header.Schema != "quwoquan_data.release" ||
-		strings.TrimSpace(header.ReleaseID) == "" ||
-		(header.ReleaseKind != "content" && header.ReleaseKind != "empty_baseline") {
-		return "", "", nil, fmt.Errorf("release header contract is invalid")
+	header := contentReleaseBinding{
+		ReleaseID: tuple.ReleaseID, SourceOwner: string(tuple.SourceOwner),
+		ReleaseKind: string(tuple.ReleaseKind), ManifestDigest: string(tuple.PayloadSHA256),
 	}
 	desiredPath := filepath.Join(root, "payload", "desired_state.json")
 	raw, err := os.ReadFile(desiredPath)
 	if err != nil {
-		return "", "", nil, fmt.Errorf("read release desired state: %w", err)
+		return contentReleaseBinding{}, nil, fmt.Errorf("read release desired state: %w", err)
 	}
 	var desired releaseDesiredState
 	if err := json.Unmarshal(raw, &desired); err != nil {
-		return "", "", nil, fmt.Errorf("parse release desired state: %w", err)
+		return contentReleaseBinding{}, nil, fmt.Errorf("parse release desired state: %w", err)
 	}
 	if desired.Schema != "quwoquan_data.release_desired_state" ||
 		strings.TrimSpace(desired.ReleaseID) == "" ||
 		desired.ReleaseID != header.ReleaseID {
-		return "", "", nil, fmt.Errorf("release desired state contract is invalid")
+		return contentReleaseBinding{}, nil, fmt.Errorf("release desired state contract is invalid")
 	}
 	tagsRoot := filepath.Join(root, "payload", "objects", "tags")
 	seen := make(map[string]struct{}, len(desired.DesiredRefs.Tags))
@@ -81,20 +78,20 @@ func collectReleaseTaxonomyNodes(releaseRoot string) (string, string, []taxonomy
 	for _, rawRef := range desired.DesiredRefs.Tags {
 		tagRef := filepath.ToSlash(strings.TrimSpace(rawRef))
 		if err := validateReleaseTagRef(tagRef); err != nil {
-			return "", "", nil, err
+			return contentReleaseBinding{}, nil, err
 		}
 		if _, exists := seen[tagRef]; exists {
-			return "", "", nil, fmt.Errorf("release desired tags contain duplicate %s", tagRef)
+			return contentReleaseBinding{}, nil, fmt.Errorf("release desired tags contain duplicate %s", tagRef)
 		}
 		seen[tagRef] = struct{}{}
 		path := filepath.Join(tagsRoot, filepath.FromSlash(tagRef), "_definition.json")
 		definitionRaw, readErr := os.ReadFile(path)
 		if readErr != nil {
-			return "", "", nil, fmt.Errorf("read release tag snapshot %s: %w", tagRef, readErr)
+			return contentReleaseBinding{}, nil, fmt.Errorf("read release tag snapshot %s: %w", tagRef, readErr)
 		}
 		var def definition
 		if err := json.Unmarshal(definitionRaw, &def); err != nil {
-			return "", "", nil, fmt.Errorf("parse release tag snapshot %s: %w", tagRef, err)
+			return contentReleaseBinding{}, nil, fmt.Errorf("parse release tag snapshot %s: %w", tagRef, err)
 		}
 		segments := strings.Split(tagRef, "/")
 		parentTagRef := ""
@@ -110,7 +107,7 @@ func collectReleaseTaxonomyNodes(releaseRoot string) (string, string, []taxonomy
 			def.HeatWindow,
 		)
 		if lifecycleErr != nil {
-			return "", "", nil, fmt.Errorf(
+			return contentReleaseBinding{}, nil, fmt.Errorf(
 				"release tag snapshot %s: %w",
 				tagRef,
 				lifecycleErr,
@@ -151,24 +148,24 @@ func collectReleaseTaxonomyNodes(releaseRoot string) (string, string, []taxonomy
 			actual = append(actual, filepath.ToSlash(relative))
 			return nil
 		}); err != nil {
-			return "", "", nil, fmt.Errorf("scan release tag snapshots: %w", err)
+			return contentReleaseBinding{}, nil, fmt.Errorf("scan release tag snapshots: %w", err)
 		}
 	} else if statErr != nil && !os.IsNotExist(statErr) {
-		return "", "", nil, fmt.Errorf("stat release tag snapshots: %w", statErr)
+		return contentReleaseBinding{}, nil, fmt.Errorf("stat release tag snapshots: %w", statErr)
 	}
 	sort.Strings(actual)
 	expected := append([]string(nil), desired.DesiredRefs.Tags...)
 	sort.Strings(expected)
 	if strings.Join(actual, "\x00") != strings.Join(expected, "\x00") {
-		return "", "", nil, fmt.Errorf("release tag snapshot closure differs from desired state")
+		return contentReleaseBinding{}, nil, fmt.Errorf("release tag snapshot closure differs from desired state")
 	}
 	sort.Slice(nodes, func(left, right int) bool {
 		return nodes[left].tagRef < nodes[right].tagRef
 	})
 	if err := validateReleaseTaxonomyNodes(header.ReleaseKind, nodes); err != nil {
-		return "", "", nil, err
+		return contentReleaseBinding{}, nil, err
 	}
-	return desired.ReleaseID, header.ReleaseKind, nodes, nil
+	return header, nodes, nil
 }
 
 func validateReleaseTagRef(tagRef string) error {

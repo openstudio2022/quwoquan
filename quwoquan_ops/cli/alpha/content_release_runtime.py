@@ -736,6 +736,10 @@ def up() -> None:
                 "ENTITY_SERVICE_ADDR": f"0.0.0.0:{ports['entity-service']}",
                 "ENTITY_MONGO_URI": f"mongodb://127.0.0.1:{ports['mongodb']}/?directConnection=true",
                 "ENTITY_MONGO_DATABASE": "quwoquan_entity",
+                # Homepage release projection 只按 Content owner 的 active release tuple
+                # 可见；这里只读 Content 库 data_release_state，Entity 不落自己的 pointer。
+                "CONTENT_MONGO_URI": f"mongodb://127.0.0.1:{ports['mongodb']}/?directConnection=true",
+                "CONTENT_MONGO_DATABASE": "quwoquan_content",
                 "ENTITY_REDIS_GENERAL_ADDR": f"127.0.0.1:{ports['redis']}",
                 "ENTITY_USER_ACCOUNT_SECURITY_AUTHORITY_BASE_URL": (
                     f"http://127.0.0.1:{ports['user-service']}"

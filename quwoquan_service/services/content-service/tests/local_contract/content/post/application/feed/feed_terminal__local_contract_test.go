@@ -73,15 +73,18 @@ func (r *terminalActiveSupplyReader) ActiveSupplySnapshot(context.Context) (Acti
 		releaseClass = "commercial"
 	}
 	return ActiveSupplySnapshot{
-		Environment:     "local_contract",
-		SourceOwner:     "qwq_data",
-		Status:          "active",
-		ActiveReleaseID: releaseID,
-		ManifestDigest:  manifestDigest,
-		ReleaseClass:    releaseClass,
-		ReadbackStatus:  "passed",
-		Posts:           1,
-		PlayableVideos:  playableVideos,
+		Environment:       "local_contract",
+		SourceOwner:       "qwq_data",
+		Status:            "active",
+		ActiveReleaseID:   releaseID,
+		ManifestDigest:    manifestDigest,
+		ReleaseClass:      releaseClass,
+		ProjectionVersion: 11,
+		Revision:          3,
+		ActivatedAt:       time.Unix(1_800_000_000, 0).UTC(),
+		ReadbackStatus:    "passed",
+		Posts:             1,
+		PlayableVideos:    playableVideos,
 	}, nil
 }
 

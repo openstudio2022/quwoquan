@@ -116,6 +116,20 @@ configs:
   reload: restart
   rollout: progressive
   sensitive: true
+- key: sys.user-service.content_service.mongo_uri
+  type: string
+  scope: workload
+  reload: restart
+  rollout: progressive
+  sensitive: true
+  default: ''
+- key: sys.user-service.content_service.mongo_database
+  type: string
+  scope: workload
+  reload: restart
+  rollout: progressive
+  sensitive: false
+  default: quwoquan_content
 - key: sys.user-service.postgres.conn_max_lifetime_minutes
   type: int
   scope: workload

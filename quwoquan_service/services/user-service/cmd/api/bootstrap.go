@@ -49,6 +49,7 @@ import (
 	"quwoquan_service/services/user-service/internal/account/user_account/adapters/inbound/mq"
 	useraccountapp "quwoquan_service/services/user-service/internal/account/user_account/application"
 	"quwoquan_service/services/user-service/internal/account/user_account/application/account_orchestration"
+	userrepo "quwoquan_service/services/user-service/internal/account/user_account/domain/user/ports"
 	usertelemetry "quwoquan_service/services/user-service/internal/account/user_account/domain/user/telemetry"
 	"quwoquan_service/services/user-service/internal/account/user_account/infrastructure/cache"
 	useraccountcache "quwoquan_service/services/user-service/internal/account/user_account/infrastructure/cache"
@@ -508,16 +509,33 @@ func assembleUserDomain(asm *servicekit.Assembly, cfg *config) error {
 			log.Printf("ERROR: greeting outbox relay stopped: %v", err)
 		}
 	})
+	var creatorCandidateStore *creatorpersistence.CreatorReleaseCandidateStore
 	var creatorRuntimeStore *creatorpersistence.CreatorRuntimeProfileReader
 	if mongoDB != nil {
+		creatorCandidateStore = creatorpersistence.NewCreatorReleaseCandidateStore(mongoDB)
 		creatorRuntimeStore = creatorpersistence.NewCreatorRuntimeProfileReader(mongoDB)
 	}
 	personaOptions := make([]application.PersonaServiceOption, 0, 1)
-	if creatorRuntimeStore != nil {
+	if creatorCandidateStore != nil {
+		// Creator release candidate 只按 Content active tuple exact fence 可见。未注入
+		// Content 库地址时保持 fail-closed（读不到 fence 即无 release Creator 可读），
+		// 而不是回退到 User 自己的 pointer 或旧 Persona。
+		var contentFenceReader userrepo.ContentReleaseFenceReader = userrepo.UnavailableContentReleaseFenceReader{}
+		if strings.TrimSpace(cfg.ContentService.MongoURI) != "" {
+			contentDatabase, databaseErr := asm.Mongo(servicekit.MongoConfig{
+				URI:      cfg.ContentService.MongoURI,
+				Database: nonEmptyContentDatabase(cfg.ContentService.MongoDatabase),
+			})
+			if databaseErr != nil {
+				return fmt.Errorf("Content active release database failed: %w", databaseErr)
+			}
+			contentFenceReader = creatorpersistence.NewContentReleaseFenceReader(contentDatabase, appEnv, "qwq_data")
+		}
 		personaOptions = append(
 			personaOptions,
 			application.WithCreatorRuntimeProfiles(
-				usercomposition.NewCreatorRuntimeProfileAdapter(creatorRuntimeStore),
+				usercomposition.NewCreatorRuntimeProfileAdapter(creatorCandidateStore),
+				contentFenceReader,
 			),
 		)
 	}
@@ -961,4 +979,11 @@ func assembleUserDomain(asm *servicekit.Assembly, cfg *config) error {
 		})
 	}
 	return nil
+}
+
+func nonEmptyContentDatabase(value string) string {
+	if value = strings.TrimSpace(value); value != "" {
+		return value
+	}
+	return "quwoquan_content"
 }

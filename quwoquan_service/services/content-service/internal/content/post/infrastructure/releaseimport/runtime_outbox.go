@@ -155,10 +155,14 @@ type ImportedReleaseApplyResult struct {
 }
 
 type ImportedReleaseTransitionEvent struct {
-	EventID          string
-	EventType        string
-	AggregateID      string
-	AggregateVersion int64
+	EventID            string
+	EventType          string
+	SourceOwner        string
+	ReleaseID          string
+	ManifestDigest     string
+	ActivationRevision int64
+	AggregateID        string
+	AggregateVersion   int64
 }
 
 type importedReleaseCandidateCounts struct {
@@ -203,31 +207,33 @@ type importedReleasePointerDocument struct {
 }
 
 type importedOutboxDocument struct {
-	ID               string          `bson:"_id"`
-	SourceOwner      string          `bson:"sourceOwner,omitempty"`
-	ReleaseID        string          `bson:"releaseId,omitempty"`
-	ManifestDigest   string          `bson:"manifestDigest,omitempty"`
-	OutboxSequence   int64           `bson:"outboxSequence"`
-	EventType        string          `bson:"eventType"`
-	AggregateType    string          `bson:"aggregateType"`
-	AggregateID      string          `bson:"aggregateId"`
-	AggregateVersion int64           `bson:"aggregateVersion"`
-	PayloadJSON      json.RawMessage `bson:"payloadJson"`
-	OccurredAt       time.Time       `bson:"occurredAt"`
+	ID                 string          `bson:"_id"`
+	SourceOwner        string          `bson:"sourceOwner,omitempty"`
+	ReleaseID          string          `bson:"releaseId,omitempty"`
+	ManifestDigest     string          `bson:"manifestDigest,omitempty"`
+	OutboxSequence     int64           `bson:"outboxSequence"`
+	EventType          string          `bson:"eventType"`
+	AggregateType      string          `bson:"aggregateType"`
+	AggregateID        string          `bson:"aggregateId"`
+	AggregateVersion   int64           `bson:"aggregateVersion"`
+	PayloadJSON        json.RawMessage `bson:"payloadJson"`
+	ActivationRevision int64           `bson:"activationRevision,omitempty"`
+	OccurredAt         time.Time       `bson:"occurredAt"`
 }
 
 // ImportedPostOutboxEventSnapshot is the immutable CAS identity used to
 // repair one legacy Data-release PostDeleted payload without replacing its
 // durable outbox envelope or sequence.
 type ImportedPostOutboxEventSnapshot struct {
-	EventID          string
-	OutboxSequence   int64
-	EventType        string
-	AggregateType    string
-	AggregateID      string
-	AggregateVersion int64
-	PayloadJSON      json.RawMessage
-	OccurredAt       time.Time
+	EventID            string
+	OutboxSequence     int64
+	EventType          string
+	AggregateType      string
+	AggregateID        string
+	AggregateVersion   int64
+	PayloadJSON        json.RawMessage
+	ActivationRevision int64
+	OccurredAt         time.Time
 }
 
 // ImportedPostOutboxRepairAudit is the bounded, payload-free repair receipt.
@@ -804,7 +810,7 @@ func ActivateImportedPostRelease(
 				ReleaseClass: candidate.ReleaseClass, SourceOwner: candidate.SourceOwner,
 				ProjectionVersion: activationVersion,
 			},
-			false,
+			false, current.Revision+1,
 		)
 		if err != nil {
 			return nil, err
@@ -858,7 +864,10 @@ func ActivateImportedPostRelease(
 		for _, event := range allEvents {
 			transitionEvents = append(transitionEvents, ImportedReleaseTransitionEvent{
 				EventID: event.EventID, EventType: event.EventType,
-				AggregateID: event.AggregateID, AggregateVersion: event.AggregateVersion,
+				SourceOwner: candidate.SourceOwner, ReleaseID: candidate.ReleaseID,
+				ManifestDigest:     candidate.ManifestDigest,
+				ActivationRevision: pointer.Revision,
+				AggregateID:        event.AggregateID, AggregateVersion: event.AggregateVersion,
 			})
 		}
 		result = ReleaseActivationResult{
@@ -2122,7 +2131,22 @@ func appendImportedPostOutbox(
 	events []postports.OutboxEvent,
 	opts ImportOptions,
 	replayed bool,
+	activationRevision ...int64,
 ) (importedPostOutboxApplyResult, error) {
+	revision := int64(0)
+	if len(activationRevision) > 0 {
+		revision = activationRevision[0]
+	}
+	if !replayed && len(events) > 0 {
+		if revision <= 0 {
+			return importedPostOutboxApplyResult{}, fmt.Errorf("activation outbox requires positive activationRevision")
+		}
+		if strings.TrimSpace(opts.SourceOwner) == "" ||
+			strings.TrimSpace(opts.ReleaseID) == "" ||
+			!sha256Pattern.MatchString(strings.TrimSpace(opts.ManifestDigest)) {
+			return importedPostOutboxApplyResult{}, fmt.Errorf("activation outbox release tuple is incomplete")
+		}
+	}
 	if replayed {
 		existingDeletions, err := loadImportedPostDeletionReplayEvents(
 			ctx,
@@ -2194,13 +2218,14 @@ func appendImportedPostOutbox(
 		documents = append(documents, importedOutboxDocument{
 			ID: event.EventID, SourceOwner: opts.SourceOwner,
 			ReleaseID: opts.ReleaseID, ManifestDigest: opts.ManifestDigest,
-			OutboxSequence:   firstSequence + int64(index),
-			EventType:        event.EventType,
-			AggregateType:    event.AggregateType,
-			AggregateID:      event.AggregateID,
-			AggregateVersion: event.AggregateVersion,
-			PayloadJSON:      event.Payload,
-			OccurredAt:       event.OccurredAt,
+			OutboxSequence:     firstSequence + int64(index),
+			EventType:          event.EventType,
+			AggregateType:      event.AggregateType,
+			AggregateID:        event.AggregateID,
+			AggregateVersion:   event.AggregateVersion,
+			PayloadJSON:        event.Payload,
+			ActivationRevision: revision,
+			OccurredAt:         event.OccurredAt,
 		})
 	}
 	if _, err := outbox.InsertMany(ctx, documents); err != nil {
@@ -2219,8 +2244,9 @@ func importedPostOutboxEventSnapshot(
 		EventID: document.ID, OutboxSequence: document.OutboxSequence,
 		EventType: document.EventType, AggregateType: document.AggregateType,
 		AggregateID: document.AggregateID, AggregateVersion: document.AggregateVersion,
-		PayloadJSON: append([]byte(nil), document.PayloadJSON...),
-		OccurredAt:  document.OccurredAt,
+		PayloadJSON:        append([]byte(nil), document.PayloadJSON...),
+		ActivationRevision: document.ActivationRevision,
+		OccurredAt:         document.OccurredAt,
 	}
 }
 
@@ -2237,7 +2263,8 @@ func (cas mongoImportedPostOutboxPayloadCAS) CompareAndSwapImportedPostOutboxPay
 		"_id": existing.EventID, "outboxSequence": existing.OutboxSequence,
 		"eventType": existing.EventType, "aggregateType": existing.AggregateType,
 		"aggregateId": existing.AggregateID, "aggregateVersion": existing.AggregateVersion,
-		"occurredAt": existing.OccurredAt, "payloadJson": existing.PayloadJSON,
+		"activationRevision": existing.ActivationRevision,
+		"occurredAt":         existing.OccurredAt, "payloadJson": existing.PayloadJSON,
 	}, bson.M{"$set": bson.M{"payloadJson": replacement}})
 	if err != nil {
 		return false, err
@@ -2524,35 +2551,6 @@ func ValidateImportedPostDeletionReplayClosure(
 		}
 	}
 	return nil
-}
-
-func BuildActivationPostLifecycleEvents(
-	posts []PostDoc,
-	deletedPosts []ImportedPostDeletionSnapshot,
-	opts ImportOptions,
-	occurredAt time.Time,
-	predecessor ActiveReleaseBinding,
-	activationRevision int64,
-) ([]postports.OutboxEvent, error) {
-	events, err := BuildImportedPostLifecycleEvents(posts, deletedPosts, opts, occurredAt)
-	if err != nil {
-		return nil, err
-	}
-	predecessorIdentity := "empty"
-	if predecessor.Found {
-		predecessorIdentity = strings.Join([]string{
-			predecessor.SourceOwner, predecessor.ReleaseID,
-			predecessor.ManifestDigest, fmt.Sprint(predecessor.Revision),
-		}, ":")
-	}
-	for index := range events {
-		events[index].EventID = fmt.Sprintf(
-			"data-release-activation:%d:%d:%s:%s:%s:%s",
-			activationRevision, opts.ProjectionVersion, opts.ReleaseID,
-			predecessorIdentity, events[index].AggregateID, events[index].EventType,
-		)
-	}
-	return events, nil
 }
 
 func validateActivationReplayReceipt(

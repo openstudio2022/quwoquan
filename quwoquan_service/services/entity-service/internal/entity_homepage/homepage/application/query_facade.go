@@ -11,9 +11,11 @@ import (
 )
 
 type QueryFacade struct {
-	reader    homepageports.Reader
-	details   homepageports.DetailProjectionStore
-	followers homepageports.FollowerProjectionStore
+	reader             homepageports.Reader
+	details            homepageports.DetailProjectionStore
+	followers          homepageports.FollowerProjectionStore
+	releaseProjections homepageports.ReleaseProjectionStore
+	activeRelease      ActiveReleaseLoader
 }
 
 func NewQueryFacade(
@@ -30,37 +32,89 @@ func NewQueryFacade(
 	return &QueryFacade{reader: reader, details: details, followers: followers}, nil
 }
 
+// ActiveReleaseLoader is the adaptation seam for the shared runtime/datarelease
+// loader. Entity does not own or persist a second active pointer.
+type ActiveReleaseLoader interface {
+	LoadActiveRelease(ctx context.Context) (homepageports.ReleaseIdentity, bool, error)
+}
+
+func (f *QueryFacade) WithReleaseFence(
+	projections homepageports.ReleaseProjectionStore,
+	active ActiveReleaseLoader,
+) *QueryFacade {
+	f.releaseProjections = projections
+	f.activeRelease = active
+	return f
+}
+
 func (f *QueryFacade) Get(
 	ctx context.Context,
 	rawID string,
 	viewerPersonaID string,
 	includeOffline bool,
 ) (View, error) {
-	snapshot, found, err := f.reader.FindExact(ctx, homepageports.ExactLookup{
+	snapshot, aggregateFound, err := f.reader.FindExact(ctx, homepageports.ExactLookup{
 		ID:          strings.TrimSpace(rawID),
 		LookupAlias: homepagemodel.NormalizeLookupAlias(rawID),
 	})
 	if err != nil {
 		return View{}, unavailable(err)
 	}
-	if !found {
-		return View{}, generated.AppErrorFromHomepageNotFound("homepage not found")
-	}
-	if snapshot.Status == homepagemodel.StatusOffline && !includeOffline {
+	if aggregateFound && snapshot.Status == homepagemodel.StatusOffline && !includeOffline &&
+		(snapshot.SourceOwner != "qwq_data" || f.activeRelease == nil || f.releaseProjections == nil) {
 		return View{}, generated.AppErrorFromHomepageOffline("homepage offline")
 	}
-	view, err := f.detailView(ctx, snapshot)
-	if err != nil {
-		return View{}, err
+
+	var view View
+	if aggregateFound {
+		view, err = f.detailView(ctx, snapshot)
+		if err != nil {
+			return View{}, err
+		}
+	}
+	if f.activeRelease != nil && f.releaseProjections != nil {
+		identity, activeFound, activeErr := f.activeRelease.LoadActiveRelease(ctx)
+		if activeErr != nil {
+			return View{}, unavailable(activeErr)
+		}
+		if !activeFound {
+			return View{}, unavailable(errors.New("Content active release fence is absent"))
+		}
+		if activeFound {
+			identity, activeErr = NormalizeReleaseIdentity(identity)
+			if activeErr != nil {
+				return View{}, unavailable(activeErr)
+			}
+			projection, projectionFound, projectionErr := f.releaseProjections.LoadExactReleaseProjection(
+				ctx, identity, strings.TrimSpace(rawID),
+			)
+			if projectionErr != nil {
+				return View{}, unavailable(projectionErr)
+			}
+			if projectionFound {
+				if !aggregateFound {
+					view = ViewFromReleaseProjection(projection)
+				} else {
+					view = ApplyExactReleaseProjection(view, projection)
+				}
+				aggregateFound = true
+			} else if aggregateFound && snapshot.SourceOwner == "qwq_data" {
+				return View{}, generated.AppErrorFromHomepageNotFound("homepage has no exact active release projection")
+			}
+		} else if aggregateFound && snapshot.SourceOwner == "qwq_data" {
+			return View{}, generated.AppErrorFromHomepageNotFound("Content active release fence is absent")
+		}
+	}
+	if !aggregateFound {
+		return View{}, generated.AppErrorFromHomepageNotFound("homepage not found")
 	}
 	if f.followers != nil {
-		followerView, followerErr := f.followers.ResolveFollowerView(ctx, snapshot.ID, viewerPersonaID)
+		followerView, followerErr := f.followers.ResolveFollowerView(ctx, view.ID, viewerPersonaID)
 		if followerErr != nil {
 			return View{}, unavailable(followerErr)
 		}
 		view.ViewerFollow = ViewerFollowSlice{
-			ViewerFollowsHomepage: followerView.ViewerFollows,
-			FollowerCount:         followerView.Count,
+			ViewerFollowsHomepage: followerView.ViewerFollows, FollowerCount: followerView.Count,
 		}
 	}
 	return view, nil
@@ -91,26 +145,34 @@ func (f *QueryFacade) Search(
 	}
 	result := SearchSlice{NextCursor: page.NextCursor, Items: []SearchItemView{}}
 	for _, snapshot := range page.Items {
+		view := ViewFromSnapshot(snapshot)
+		view, visible, releaseErr := f.applyActiveReleaseProjection(ctx, view)
+		if releaseErr != nil {
+			return SearchSlice{}, unavailable(releaseErr)
+		}
+		if !visible {
+			continue
+		}
 		projection, _, projectionErr := f.details.LoadDetailProjection(ctx, snapshot.ID)
 		if projectionErr != nil {
 			return SearchSlice{}, unavailable(projectionErr)
 		}
 		coverAssetID, coverAccessMode := detailCoverBinding(
-			snapshot.CoverURL,
-			snapshot.IntroductionAssets,
+			view.CoverURL,
+			view.IntroductionAssets,
 		)
 		result.Items = append(result.Items, SearchItemView{
-			HomepageID:        snapshot.ID,
-			CanonicalEntityID: snapshot.CanonicalEntityID,
-			Title:             snapshot.Title,
-			Subtitle:          snapshot.Subtitle,
-			HomepageType:      snapshot.HomepageType,
-			CoverURL:          snapshot.CoverURL,
+			HomepageID:        view.ID,
+			CanonicalEntityID: view.CanonicalEntityID,
+			Title:             view.Title,
+			Subtitle:          view.Subtitle,
+			HomepageType:      view.HomepageType,
+			CoverURL:          view.CoverURL,
 			CoverAssetID:      coverAssetID,
 			CoverAccessMode:   coverAccessMode,
-			City:              snapshot.City,
-			Address:           snapshot.Address,
-			Status:            string(snapshot.Status),
+			City:              view.City,
+			Address:           view.Address,
+			Status:            view.Status,
 			AverageRating:     cloneFloat(projection.AverageRating),
 			RatingCount:       projection.RatingCount,
 		})
@@ -159,4 +221,39 @@ func (f *QueryFacade) Count(ctx context.Context) (int64, error) {
 		return 0, unavailable(err)
 	}
 	return count, nil
+}
+
+func (f *QueryFacade) applyActiveReleaseProjection(ctx context.Context, view View) (View, bool, error) {
+	// No loader means this service instance is still on the pre-release-projection
+	// composition. The seam keeps local/manual Homepage behavior available until
+	// the shared runtime loader lands; once injected, Data-owned reads fail closed.
+	if f.activeRelease == nil || f.releaseProjections == nil {
+		return view, true, nil
+	}
+	// Manual/UGC Homepage rows have no Data identity at all. Legacy Data rows
+	// have sourceOwner=qwq_data; newly stage-only stable shells are recognized
+	// by an exact active projection and never by governance status.
+	dataOwned := view.SourceOwner == "qwq_data"
+	identity, found, err := f.activeRelease.LoadActiveRelease(ctx)
+	if err != nil {
+		return View{}, false, err
+	}
+	if !found {
+		return View{}, false, errors.New("Content active release fence is absent")
+	}
+	identity, err = NormalizeReleaseIdentity(identity)
+	if err != nil {
+		return View{}, false, err
+	}
+	projection, found, err := f.releaseProjections.LoadExactReleaseProjection(ctx, identity, view.ID)
+	if err != nil {
+		return View{}, false, err
+	}
+	if !found {
+		if dataOwned {
+			return View{}, false, nil
+		}
+		return view, true, nil
+	}
+	return ApplyExactReleaseProjection(view, projection), true, nil
 }

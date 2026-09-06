@@ -65,6 +65,10 @@ events:
   - lastActiveAt
   - sourcePostId
   - sourcePostAuthorId
+  - sourceOwner
+  - releaseId
+  - manifestDigest
+  - activationRevision
 - name: PostModerationRejected
   description: 当前 Post revision 被人工审核拒绝；公开读模型必须下架，作者站内信展示结构化原因和复制为新草稿动作。
   delivery_semantics: transactional_outbox
@@ -211,6 +215,10 @@ events:
   - contentIdentity
   - status
   - deletedAt
+  - sourceOwner
+  - releaseId
+  - manifestDigest
+  - activationRevision
 - name: PostPrivacyRedacted
   description: 隐私删除第一阶段完成，个人字段已脱敏
   delivery_semantics: transactional_outbox

@@ -160,15 +160,18 @@ func (reader readyFeedActiveSupplyReader) ActiveSupplySnapshot(
 		releaseClass = "commercial"
 	}
 	return feedapp.ActiveSupplySnapshot{
-		Environment:     "local_contract",
-		SourceOwner:     "qwq_data",
-		Status:          "active",
-		ActiveReleaseID: "rel_local_contract",
-		ManifestDigest:  "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-		ReleaseClass:    releaseClass,
-		ReadbackStatus:  "passed",
-		Posts:           1,
-		PlayableVideos:  1,
+		Environment:       "local_contract",
+		SourceOwner:       "qwq_data",
+		Status:            "active",
+		ActiveReleaseID:   "rel_local_contract",
+		ManifestDigest:    "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+		ReleaseClass:      releaseClass,
+		ProjectionVersion: 11,
+		Revision:          3,
+		ActivatedAt:       time.Unix(1_800_000_000, 0).UTC(),
+		ReadbackStatus:    "passed",
+		Posts:             1,
+		PlayableVideos:    1,
 	}, nil
 }
 

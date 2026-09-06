@@ -352,6 +352,60 @@ fields:
   api_exposure: none
   ops_exposure: read
   role: projection
+- name: environment
+  source: environment
+  type: string
+  constraints:
+  - NOT_NULL
+  classification: INTERNAL
+  log_policy: allow
+  api_exposure: none
+  ops_exposure: read
+  role: projection
+  description: release candidate 身份维度；只在 owner-local candidate collections 中出现
+- name: sourceOwner
+  source: sourceOwner
+  type: string
+  constraints:
+  - NOT_NULL
+  classification: INTERNAL
+  log_policy: allow
+  api_exposure: none
+  ops_exposure: read
+  role: projection
+  description: release candidate 身份维度；固定为 qwq_data
+- name: manifestDigest
+  source: manifestDigest
+  type: string
+  constraints:
+  - NOT_NULL
+  classification: INTERNAL
+  log_policy: hash
+  api_exposure: none
+  ops_exposure: read
+  role: projection
+  description: immutable release payload digest；与 releaseId 一起构成 candidate 的 exact 身份
+- name: projectionVersion
+  source: projectionVersion
+  type: int
+  constraints:
+  - NOT_NULL
+  classification: INTERNAL
+  log_policy: allow
+  api_exposure: none
+  ops_exposure: read
+  role: projection
+- name: verifiedAt
+  source: verifiedAt
+  type: timestamp
+  constraints:
+  - NULLABLE
+  classification: INTERNAL
+  log_policy: allow
+  api_exposure: none
+  ops_exposure: read
+  role: projection
+  description: candidate 通过真实 storage closure 校验的时刻；未 verified 的 candidate 不可被公开读取
 - name: status
   source: status
   type: string
