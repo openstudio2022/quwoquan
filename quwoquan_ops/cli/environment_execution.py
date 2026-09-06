@@ -4,10 +4,7 @@
 from __future__ import annotations
 
 import argparse
-import hashlib
-import hmac
 import json
-import os
 import re
 import subprocess
 import sys
@@ -34,12 +31,19 @@ from quwoquan_ops.ci.environment_scheduler import (  # noqa: E402
 )
 from quwoquan_ops.ci.integration_qualification import (  # noqa: E402
     IntegrationQualificationError,
-    hmac_sha256_environment_verifier,
     issue_integration_qualification,
+)
+from quwoquan_ops.cli.lib.evidence_signing import (  # noqa: E402
+    DEFAULT_KEYRING_PATH,
+    EvidenceSigningError,
+    assert_distinct_active_keys,
+    ed25519_environment_verifier,
+    ed25519_signer,
+    key_root,
+    load_keyring,
 )
 
 _DIGEST_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
-_ENV_NAME_RE = re.compile(r"^[A-Z][A-Z0-9_]*$")
 
 
 class EnvironmentExecutionError(ValueError):
@@ -166,7 +170,8 @@ def _build_parser() -> argparse.ArgumentParser:
         _add_exact(issue, f"--{flag}", required=True)
     _add_exact(issue, "--predecessor")
     issue.add_argument("--signer-identity", required=True)
-    issue.add_argument("--signing-key-env", required=True)
+    # 私钥来自仓外 QWQ_EVIDENCE_SIGNING_KEY_ROOT，公钥必须已登记在 keyring；无 secret env。
+    issue.add_argument("--signing-keyring", type=Path, default=DEFAULT_KEYRING_PATH)
     issue.add_argument("--expires-at", required=True)
     issue.add_argument("--non-promotable", required=True, type=_boolean)
     issue.add_argument("--reason-code")
@@ -178,8 +183,7 @@ def _build_parser() -> argparse.ArgumentParser:
     qualify.add_argument("--expected-dev-head", required=True)
     qualify.add_argument("--expected-dev-tree", required=True)
     qualify.add_argument("--qualification-signer-identity", required=True)
-    qualify.add_argument("--qualification-signing-key-env", required=True)
-    qualify.add_argument("--environment-verification-key-env", required=True)
+    qualify.add_argument("--signing-keyring", type=Path, default=DEFAULT_KEYRING_PATH)
     for environment in ("alpha", "beta", "gamma"):
         qualify.add_argument(f"--expected-{environment}-signer-identity", required=True)
     qualify.add_argument("--issued-at", required=True)
@@ -315,22 +319,11 @@ def _load_json_exact(store_root: Path, exact: Mapping[str, str]) -> dict[str, An
     return value
 
 
-def _signer(environment_name: str, *, unavailable_code: str):
-    if _ENV_NAME_RE.fullmatch(environment_name) is None:
-        raise EnvironmentExecutionError(
-            "ENVIRONMENT_EXECUTION.INVALID_ARGUMENT", "signing key env name is invalid"
-        )
-    key_text = os.environ.get(environment_name, "")
-    if not key_text:
-        raise EnvironmentExecutionError(
-            unavailable_code, f"signing key environment {environment_name} is missing"
-        )
-    key = key_text.encode("utf-8")
-
-    def sign(payload: bytes) -> str:
-        return "hmac-sha256:" + hmac.new(key, payload, hashlib.sha256).hexdigest()
-
-    return sign
+def _signer(identity: str, *, keyring_path: Path, unavailable_code: str):
+    try:
+        return ed25519_signer(identity, root=key_root(), keyring=load_keyring(keyring_path))
+    except EvidenceSigningError as exc:
+        raise EnvironmentExecutionError(unavailable_code, exc.detail) from exc
 
 
 def _handle_request(args: argparse.Namespace) -> dict[str, object]:
@@ -462,7 +455,8 @@ def _handle_issue(args: argparse.Namespace) -> dict[str, object]:
                 "Gamma acceptance request is not current exact dev1.0 identity",
             )
     signer = _signer(
-        args.signing_key_env,
+        args.signer_identity,
+        keyring_path=args.signing_keyring,
         unavailable_code="ENVIRONMENT_EXECUTION.ACCEPTANCE_SIGNER_UNAVAILABLE",
     )
     path = issue_environment_acceptance_fact(
@@ -496,42 +490,29 @@ def _handle_issue(args: argparse.Namespace) -> dict[str, object]:
 def _qualification_crypto(
     args: argparse.Namespace,
 ) -> tuple[object, object, dict[str, str]]:
-    if args.qualification_signing_key_env == args.environment_verification_key_env:
-        raise EnvironmentExecutionError(
-            "ENVIRONMENT_EXECUTION.KEY_PURPOSE_CONFLICT",
-            "qualification signing and environment verification key sources must differ",
-        )
-    qualification_key_text = os.environ.get(args.qualification_signing_key_env, "")
-    if not qualification_key_text:
-        raise EnvironmentExecutionError(
-            "ENVIRONMENT_EXECUTION.QUALIFICATION_SIGNER_UNAVAILABLE",
-            f"signing key environment {args.qualification_signing_key_env} is missing",
-        )
-    environment_key_text = os.environ.get(args.environment_verification_key_env, "")
-    if not environment_key_text:
-        raise EnvironmentExecutionError(
-            "ENVIRONMENT_EXECUTION.ENVIRONMENT_VERIFIER_UNAVAILABLE",
-            f"verification key environment {args.environment_verification_key_env} is missing",
-        )
-    qualification_key = qualification_key_text.encode("utf-8")
-    environment_key = environment_key_text.encode("utf-8")
-    if hmac.compare_digest(qualification_key, environment_key):
-        raise EnvironmentExecutionError(
-            "ENVIRONMENT_EXECUTION.KEY_PURPOSE_CONFLICT",
-            "qualification signing and environment verification keys must differ",
-        )
     expected_signers = {
         environment: getattr(args, f"expected_{environment}_signer_identity")
         for environment in ("alpha", "beta", "gamma")
     }
+    try:
+        keyring = load_keyring(args.signing_keyring)
+        for identity in expected_signers.values():
+            assert_distinct_active_keys(keyring, args.qualification_signer_identity, identity)
+        environment_verifier = ed25519_environment_verifier(keyring, expected_signers.values())
+    except EvidenceSigningError as exc:
+        raise EnvironmentExecutionError(
+            "ENVIRONMENT_EXECUTION.KEY_PURPOSE_CONFLICT"
+            if exc.code == "EVIDENCE_SIGNING.KEY_PURPOSE_CONFLICT"
+            else "ENVIRONMENT_EXECUTION.ENVIRONMENT_VERIFIER_UNAVAILABLE",
+            exc.detail,
+        ) from exc
     return (
         _signer(
-            args.qualification_signing_key_env,
-            unavailable_code=("ENVIRONMENT_EXECUTION.QUALIFICATION_SIGNER_UNAVAILABLE"),
+            args.qualification_signer_identity,
+            keyring_path=args.signing_keyring,
+            unavailable_code="ENVIRONMENT_EXECUTION.QUALIFICATION_SIGNER_UNAVAILABLE",
         ),
-        hmac_sha256_environment_verifier(
-            {identity: environment_key for identity in expected_signers.values()}
-        ),
+        environment_verifier,
         expected_signers,
     )
 

@@ -37,7 +37,7 @@
 - current dev head缺Gamma、fact失败、candidate/tree/predecessor不一致或任务已superseded时必须`GATE_BLOCK`，不得进入main promotion。
 - 不新增运行环境枚举或第二套 seed manifest。
 - gamma-local 从各服务 `deploy/compose.yaml` 与 Ops external/infra Compose 扫描装配，不维护服务名册；recommendation 各环境统一以 `recommendation-service:8000` 调用。
-- edge-media（realtime-gateway/rtc-service/livekit-sfu/coturn）统一在本 compose 以 profile 按需组装；realtime-gateway 实现未就绪以 edge-media-pending 显式占位收敛。
+- edge-media（realtime-gateway/rtc-service/livekit-sfu/coturn）统一在本 compose 以 `edge-media` profile 按需组装，服务来自各自 packaged provenance；不再使用 `edge-media-pending` 占位。
 - full 镜像栈使用唯一的 Caddy 路由真相源与各服务声明的内部监听端口；非生产环境不会因生产 operator OIDC 前提阻塞健康检查。
 - 以已有 package provenance image 启动时必须先验证本地 image 可用，缺镜像为可诊断的 GATE_BLOCK，禁止通过手工重标记、拉取 localhost tag 或旧 Caddyfile 路径绕开。
 - 领域 readback 使用候选绑定的 nonprod acceptance account receipt；账号必须通过正式 OTP 与 `LoginWithPhone` 创建，不得签发无 canonical UserAccount 的验收 JWT，也不得复用 App user_acceptance principal 消耗推荐曝光、改写关系或污染后续自然入口证据。

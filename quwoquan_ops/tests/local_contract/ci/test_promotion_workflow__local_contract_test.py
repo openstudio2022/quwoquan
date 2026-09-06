@@ -39,19 +39,24 @@ def test_promotion_workflow_separates_pre_merge_gate_from_main_push_sealing() ->
     text, workflow = _workflow()
     policy = yaml.safe_load(POLICY.read_text(encoding="utf-8"))
 
+    # 审批事件也重新评估同一 required context，避免"先绿后审批再手动重跑"的二次流程。
     assert workflow[True] == {
         "pull_request": {"branches": ["main"]},
+        "pull_request_review": {"types": ["submitted", "dismissed"]},
         "push": {"branches": ["main"]},
     }
-    assert list(workflow["jobs"]) == [
-        "promotion_verify", "main_source_seal", "system_backsync",
-    ]
+    assert list(workflow["jobs"]) == ["promotion_verify", "main_source_seal"]
     assert workflow["jobs"]["promotion_verify"]["name"] == "03. Delivery Gate"
     assert policy["required_promotion_checks"] == [
         {"name": "03. Delivery Gate", "workflow": ".github/workflows/delivery-gate.yml"}
     ]
     assert "workflow_dispatch" not in workflow[True]
     assert "github.sha" not in text
+    # runner 上下文在 job 级 env 不可用；这正是曾让 workflow 文件校验失败的写法。
+    for job in workflow["jobs"].values():
+        assert not any("runner." in str(value) for value in (job.get("env") or {}).values())
+    assert "create-github-app-token" not in text
+    assert "${{ vars." not in text
 
 
 def test_pull_request_gate_only_qualifies_exact_current_dev_head() -> None:
@@ -59,23 +64,53 @@ def test_pull_request_gate_only_qualifies_exact_current_dev_head() -> None:
     job = workflow["jobs"]["promotion_verify"]
     commands = _commands(job)
 
-    assert job["if"] == "${{ github.event_name == 'pull_request' }}"
+    assert job["if"] == "${{ github.event_name == 'pull_request' || github.event_name == 'pull_request_review' }}"
     assert 'values["HEAD_REF"] != "dev1.0"' in commands
     assert 'values["BASE_REF"] != "main"' in commands
     assert 'os.environ["PR_HEAD_REPOSITORY"] != os.environ["REPOSITORY"]' in commands
-    assert job["permissions"] == {"contents": "read", "packages": "write"}
+    assert 'required_keys = {"qualification_bundle_ref", "promotion_ready_at"}' in commands
+    assert job["permissions"] == {
+        "contents": "read", "packages": "write", "checks": "write", "pull-requests": "read",
+    }
     checkout = next(step for step in job["steps"] if "uses" in step)
     assert checkout["with"]["ref"] == "${{ github.event.pull_request.head.sha }}"
-    assert "refs/remotes/origin/dev1.0" in commands
-    assert "refs/remotes/origin/main" in commands
-    assert "promotion-admit" in commands
-    assert "promotion_evidence.py publish-oci" in commands
+    ordered = (
+        "refs/remotes/origin/dev1.0",
+        "refs/remotes/origin/main",
+        "promotion_hosted.py materialize-oci-bundle",
+        "integration_qualification.py",
+        "--signing-keyring quwoquan_ops/policies/evidence_signing_keyring.yaml",
+        "--expected-qualification-signer-identity",
+        "/reviews",
+        "reviewThreads",
+        "/rulesets",
+        "verify_git_branch_policy.py",
+        "--execution-profile promotion",
+        "verify_ci_changed_boundary.py",
+        "promotion_hosted.py hosted-authority",
+        "promotion-admit",
+        "promotion_evidence.py publish-oci",
+        "promotion_evidence.py create-handoff",
+        "/check-runs",
+        'app.get("id") != 15368 or app.get("slug") != "github-actions"',
+    )
+    positions = [commands.index(token) for token in ordered]
+    assert positions == sorted(positions)
     assert '--transport-tag "base-${BASE_SHA}-head-${HEAD_SHA}"' in commands
     assert "actions/runs/${GITHUB_RUN_ID}/attempts/${GITHUB_RUN_ATTEMPT}" in commands
-    assert "/check-runs" in commands
-    assert "permission-checks: write" in WORKFLOW.read_text(encoding="utf-8")
     assert "PR_INPUTS_JSON" in commands
     assert '"promotion_admission_ref"' not in commands
+    # required 参数缺一即 argparse 失败，此处锁定 IQF 验签的完整接线；验签只靠仓内 keyring，无 secret。
+    assert "secrets.QWQ_" not in commands and "SIGNING_KEY" not in commands
+    for token in (
+        "--expected-qualification-signer-identity",
+        "--expected-alpha-signer-identity",
+        "--expected-beta-signer-identity",
+        "--expected-gamma-signer-identity",
+        "--expected-tree-digest",
+        "--expected-plan-digest",
+    ):
+        assert token in commands
     for forbidden in (
         "main-seal",
         "main-source-seal",
@@ -122,46 +157,18 @@ def test_main_push_consumes_exact_admission_before_issuing_seal_and_timing() -> 
     assert "--hosted-handoff" in commands
     assert '--first-attempt-at "$PROMOTION_READY_AT"' in commands
     assert '--main-readback-at "$MAIN_READBACK_AT" --classification success' in commands
+    readback = next(step for step in job["steps"] if step.get("id") == "readback")
+    assert readback["env"]["TRUSTED_RECORDER_APP_SLUG"] == "github-actions"
+    assert readback["env"]["TRUSTED_RECORDER_APP_ID"] == "15368"
     assert any(
         step.get("env", {}).get("PROMOTION_ADMISSION_REF")
         == "${{ steps.readback.outputs.promotion_admission_ref }}"
         for step in job["steps"]
     )
-
-
-def test_main_source_seal_outputs_feed_unique_managed_backsync() -> None:
-    _, workflow = _workflow()
-    jobs = workflow["jobs"]
-    sealing = jobs["main_source_seal"]
-    assert sealing["outputs"] == {
+    assert job["outputs"] == {
         "source_sha": "${{ steps.readback.outputs.source_sha }}",
         "main_source_seal_ref": "${{ steps.seal.outputs.main_source_seal_ref }}",
         "main_source_seal_digest": "${{ steps.seal.outputs.main_source_seal_digest }}",
-    }
-    seal_step = next(step for step in sealing["steps"] if step.get("id") == "seal")
-    run = seal_step["run"]
-    ordered = (
-        'cmp "$CONTROL_ROOT/$SEAL_PATH" "$RUNNER_TEMP/main-source-seal-readback.json"',
-        'MAIN_SOURCE_SEAL_DIGEST="${MAIN_SOURCE_SEAL_REF##*@}"',
-        'echo "main_source_seal_digest=$MAIN_SOURCE_SEAL_DIGEST"',
-    )
-    assert [run.index(token) for token in ordered] == sorted(run.index(token) for token in ordered)
-
-    caller = jobs["system_backsync"]
-    assert caller == {
-        "name": "Managed system backsync",
-        "needs": "main_source_seal",
-        "if": "${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}",
-        "permissions": {
-            "actions": "read", "checks": "read", "contents": "read", "packages": "read",
-        },
-        "uses": "./.github/workflows/system-backsync.yml",
-        "with": {
-            "expected_dev_before": "${{ needs.main_source_seal.outputs.source_sha }}",
-            "source_sha": "${{ needs.main_source_seal.outputs.source_sha }}",
-            "main_source_seal_ref": "${{ needs.main_source_seal.outputs.main_source_seal_ref }}",
-            "main_source_seal_digest": "${{ needs.main_source_seal.outputs.main_source_seal_digest }}",
-        },
     }
 
 
@@ -184,8 +191,16 @@ def test_static_gate_rejects_missing_or_fabricated_post_merge_evidence() -> None
     input_step["run"] += '\nprint("promotion_admission_ref")'
     assert any("PR body" in detail for detail in _finding_details(text, pr_body_exact_ref))
 
-    missing_trusted_app = text.replace("actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1", "actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5")
-    assert any("trusted hosted handoff producer" in detail for detail in _finding_details(missing_trusted_app, workflow))
+    self_hosted_app = text + "\n# uses: actions/create-github-app-token@x\n"
+    assert any("self-hosted App" in detail for detail in _finding_details(self_hosted_app, workflow))
+
+    runner_in_job_env = deepcopy(workflow)
+    runner_in_job_env["jobs"]["promotion_verify"]["env"]["EVIDENCE_ROOT"] = "${{ runner.temp }}/x"
+    assert any("runner context" in detail for detail in _finding_details(text, runner_in_job_env))
+
+    extra_backsync = deepcopy(workflow)
+    extra_backsync["jobs"]["system_backsync"] = {"uses": "./.github/workflows/system-backsync.yml"}
+    assert any("integration worktree fast-forward" in detail for detail in _finding_details(text, extra_backsync))
 
     fake_readback_workflow = deepcopy(workflow)
     seal_step = next(
@@ -210,21 +225,14 @@ def test_static_gate_rejects_missing_or_fabricated_post_merge_evidence() -> None
 
     premerge_seal = deepcopy(workflow)
     premerge_seal["jobs"]["promotion_verify"]["steps"].append(
-        {"name": "invalid post merge", "run": "python3 release_control.py main-seal"}
+        {"name": "invalid post merge", "run": "python3 promotion_evidence.py main-seal"}
     )
     assert any("pre-merge" in detail for detail in _finding_details(text, premerge_seal))
 
-    missing_caller = deepcopy(workflow)
-    del missing_caller["jobs"]["system_backsync"]
-    assert any("system backsync caller" in detail for detail in _finding_details(text, missing_caller))
-
-    drifted_input = deepcopy(workflow)
-    drifted_input["jobs"]["system_backsync"]["with"]["source_sha"] = "${{ github.event.after }}"
-    assert any("exact sealed outputs" in detail for detail in _finding_details(text, drifted_input))
-
-    inherited_secrets = deepcopy(workflow)
-    inherited_secrets["jobs"]["system_backsync"]["secrets"] = "inherit"
-    assert any("secrets" in detail for detail in _finding_details(text, inherited_secrets))
+    foreign_identity = deepcopy(workflow)
+    readback = next(step for step in foreign_identity["jobs"]["main_source_seal"]["steps"] if step.get("id") == "readback")
+    readback["env"]["TRUSTED_RECORDER_APP_SLUG"] = "some-other-app"
+    assert any("github-actions / 15368" in detail for detail in _finding_details(text, foreign_identity))
 
     early_digest = deepcopy(workflow)
     seal_step = next(

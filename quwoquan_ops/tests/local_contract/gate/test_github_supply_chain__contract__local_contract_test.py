@@ -101,15 +101,19 @@ class GithubSupplyChainContractTest(unittest.TestCase):
         )
 
     def test_tag_controller_uses_trusted_two_phase_order(self) -> None:
+        """controller 即 hosted deploy key（DEC-009）：pre-readback → 双 intent → intent check →
+        远端不存在 → 私钥指纹与 /keys 比对 → ssh remote → create-once → 恢复 https remote →
+        REST ref/object 读回 → outcome → post-readback → finalize → 删私钥。"""
         selection = WORKFLOWS / "release-tag-selection.yml"
         text = selection.read_text(encoding="utf-8")
-        pre_readback = text.index('hosted_readback pre_mutation "$PRE_CREATOR_FILE"')
+        pre_readback = text.index("--phase pre_mutation")
         admit_rc = text.index("tag-admit-rc-intent")
         admit_stable = text.index("tag-admit-stable-intent")
         intent_check = text.index("tag-admission-intent-check")
-        remote_absent = text.index('test "$REMOTE_STATUS" = 404')
-        token_remote = text.index(
-            'git remote set-url origin "https://x-access-token:${APP_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"'
+        remote_absent = text.index("already exists before mutation", intent_check)
+        key_match = text.index('test "$LOCAL_FINGERPRINT" = "$HOSTED_FINGERPRINT"')
+        ssh_remote = text.index(
+            'git remote set-url origin "ssh://git@${GITHUB_SERVER_URL#https://}/${GITHUB_REPOSITORY}.git"'
         )
         create = text.index('git tag -a "$TAG" "$SOURCE_SHA"')
         push = text.index('git push origin "refs/tags/$TAG:refs/tags/$TAG"')
@@ -120,31 +124,27 @@ class GithubSupplyChainContractTest(unittest.TestCase):
         ref_readback = text.index("/git/ref/tags/${TAG}", push)
         object_readback = text.index("/git/tags/${REMOTE_OBJECT_OID}", ref_readback)
         outcome = text.index("tag-mutation-outcome", object_readback)
-        check_run = text.index(
-            "$GITHUB_API_URL/repos/${GITHUB_REPOSITORY}/check-runs", outcome,
-        )
-        post_creator = text.index(
-            'post_readback post_mutation "$CREATOR_FILE"', check_run,
-        )
-        post_ruleset = text.index(
-            'post_readback post_mutation "$RULESET_FILE"', check_run,
-        )
-        finalize = text.index('"tag-admit-$KIND-finalize"', post_ruleset)
+        post_readback = text.index("--phase post_mutation", outcome)
+        finalize = text.index('"tag-admit-$KIND-finalize"', post_readback)
+        key_removed = text.index('rm -f "$KEY_FILE"', finalize)
 
         self.assertLess(pre_readback, admit_rc)
         self.assertLess(pre_readback, admit_stable)
         self.assertLess(max(admit_rc, admit_stable), intent_check)
         self.assertLess(intent_check, remote_absent)
-        self.assertLess(remote_absent, token_remote)
-        self.assertLess(token_remote, create)
+        self.assertLess(remote_absent, key_match)
+        self.assertLess(key_match, ssh_remote)
+        self.assertLess(ssh_remote, create)
         self.assertLessEqual(create, push)
         self.assertLess(push, restored_remote)
         self.assertLess(restored_remote, ref_readback)
         self.assertLess(ref_readback, object_readback)
         self.assertLess(object_readback, outcome)
-        self.assertLess(outcome, check_run)
-        self.assertLess(check_run, min(post_creator, post_ruleset))
-        self.assertLess(max(post_creator, post_ruleset), finalize)
+        self.assertLess(outcome, post_readback)
+        self.assertLess(post_readback, finalize)
+        self.assertLess(finalize, key_removed)
+        self.assertNotIn("actions/create-github-app-token@", text)
+        self.assertNotIn("RELEASE_CONTROLLER_READBACK_URL", text)
         self.assertEqual(
             verify_github_supply_chain.verify_release_tag_selection_controls(),
             [],
@@ -153,24 +153,10 @@ class GithubSupplyChainContractTest(unittest.TestCase):
     def test_tag_controller_forged_controls_fail_closed(self) -> None:
         selection = WORKFLOWS / "release-tag-selection.yml"
         original = selection.read_text(encoding="utf-8")
-        app_token = (
-            "actions/create-github-app-token@"
-            "bcd2ba49218906704ab6c1aa796996da409d3eb1"
-        )
         for label, forged in (
             (
-                "pre-creator-readback",
-                original.replace(
-                    'hosted_readback pre_mutation "$PRE_CREATOR_FILE"',
-                    'echo pre_mutation "$PRE_CREATOR_FILE"',
-                ),
-            ),
-            (
-                "pre-ruleset-readback",
-                original.replace(
-                    'hosted_readback pre_mutation "$PRE_RULESET_FILE"',
-                    'echo pre_mutation "$PRE_RULESET_FILE"',
-                ),
+                "pre-readback",
+                original.replace("--phase pre_mutation", "--phase pre_retired"),
             ),
             (
                 "RC intent",
@@ -182,67 +168,47 @@ class GithubSupplyChainContractTest(unittest.TestCase):
                     "tag-admit-stable-intent", "tag-admit-stable-retired"
                 ),
             ),
-            ("App token", original.replace(app_token, "actions/checkout@" + "0" * 40)),
+            (
+                "controller App token resurrected",
+                original + "\n      - uses: actions/create-github-app-token@" + "0" * 40 + "\n",
+            ),
+            (
+                "external readback service resurrected",
+                original + "\nenv:\n  READBACK_URL: ${{ vars.RELEASE_CONTROLLER_READBACK_URL }}\n",
+            ),
+            (
+                "deploy key fingerprint check",
+                original.replace(
+                    'test "$LOCAL_FINGERPRINT" = "$HOSTED_FINGERPRINT"',
+                    'test -n "$LOCAL_FINGERPRINT"',
+                ),
+            ),
+            (
+                "deploy key secret",
+                original.replace(
+                    "RELEASE_CONTROLLER_DEPLOY_KEY: ${{ secrets.RELEASE_CONTROLLER_DEPLOY_KEY }}",
+                    "RELEASE_CONTROLLER_DEPLOY_KEY: ${{ secrets.RETIRED_DEPLOY_KEY }}",
+                ),
+            ),
             (
                 "REST object readback",
                 original.replace("/git/tags/${REMOTE_OBJECT_OID}", "/git/commits/${REMOTE_OBJECT_OID}"),
             ),
             (
-                "check-run",
-                original.replace('"name": "release-tag-creation"', '"name": "forged-tag-creation"'),
-            ),
-            (
-                "post-creator-readback",
-                original.replace(
-                    'post_readback post_mutation "$CREATOR_FILE"',
-                    'echo post_mutation "$CREATOR_FILE"',
-                ),
-            ),
-            (
-                "post-ruleset-readback",
-                original.replace(
-                    'post_readback post_mutation "$RULESET_FILE"',
-                    'echo post_mutation "$RULESET_FILE"',
-                ),
+                "post-readback",
+                original.replace("--phase post_mutation", "--phase post_retired"),
             ),
             (
                 "finalize",
                 original.replace('"tag-admit-$KIND-finalize"', '"tag-admit-$KIND-retired"'),
             ),
             (
-                "missing App secret",
-                original.replace(
-                    "RELEASE_CONTROLLER_APP_PRIVATE_KEY",
-                    "RELEASE_CONTROLLER_RETIRED_PRIVATE_KEY",
-                ),
+                "intent binding in tag message",
+                original.replace("release-tag-intent: $INTENT_ID", "release-tag: $TAG"),
             ),
             (
-                "missing App installation id",
-                original.replace(
-                    "RELEASE_CONTROLLER_INSTALLATION_ID",
-                    "RELEASE_CONTROLLER_RETIRED_INSTALLATION_ID",
-                ),
-            ),
-            (
-                "missing App slug",
-                original.replace(
-                    "RELEASE_CONTROLLER_APP_SLUG",
-                    "RELEASE_CONTROLLER_RETIRED_APP_SLUG",
-                ),
-            ),
-            (
-                "missing readback URL",
-                original.replace(
-                    "RELEASE_CONTROLLER_READBACK_URL",
-                    "RELEASE_CONTROLLER_RETIRED_READBACK_URL",
-                ),
-            ),
-            (
-                "missing readback token",
-                original.replace(
-                    "RELEASE_CONTROLLER_READBACK_TOKEN",
-                    "RELEASE_CONTROLLER_RETIRED_READBACK_TOKEN",
-                ),
+                "private key left on runner",
+                original.replace('rm -f "$KEY_FILE"', "echo key-retained"),
             ),
             (
                 "checkout credential persistence",
@@ -254,10 +220,6 @@ class GithubSupplyChainContractTest(unittest.TestCase):
                     'git remote set-url origin "https://github.com/${GITHUB_REPOSITORY}.git"',
                     "echo remote-restoration-retired",
                 ),
-            ),
-            (
-                "deploy key",
-                original + "\nenv:\n  RELEASE_CONTROLLER_DEPLOY_KEY: retired\n",
             ),
             (
                 "force fetch",

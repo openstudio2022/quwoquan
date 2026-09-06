@@ -45,7 +45,12 @@ def test_permanent_managed_backsync_has_one_reusable_entry() -> None:
     }
     assert job["env"] == {
         "QWQ_MANAGED_SYSTEM_BACKSYNC": "system-fast-forward-cas-v1",
-        "QWQ_SYSTEM_BACKSYNC_WORKFLOW_REF": "${{ job.workflow_ref }}",
+        # 被调 reusable workflow 内 github.ref 解析为 caller ref；caller 只在 push-to-main
+        # 触发，故取值恒为 refs/heads/main，落入 system_backsync.py 的 revision 允许集。
+        "QWQ_SYSTEM_BACKSYNC_WORKFLOW_REF": (
+            "${{ github.repository }}/.github/workflows/system-backsync.yml"
+            "@${{ github.ref }}"
+        ),
         "QWQ_PROMOTION_RECORDER_APP_SLUG": "${{ vars.QWQ_PROMOTION_RECORDER_APP_SLUG }}",
         "QWQ_PROMOTION_RECORDER_APP_ID": "${{ vars.QWQ_PROMOTION_RECORDER_APP_ID }}",
         "GITHUB_EVENT_BEFORE": "${{ github.event.before }}",
@@ -70,7 +75,7 @@ def test_workflow_consumes_exact_source_seal_before_nonforce_cas() -> None:
         "OPS.BRANCH.AUTHORITY_UNAVAILABLE",
         "persist-credentials: false",
         "SYSTEM_BACKSYNC_DEPLOY_KEY",
-        "job.workflow_ref",
+        "system-backsync.yml@${{ github.ref }}",
         "QWQ_PROMOTION_RECORDER_APP_SLUG",
         "QWQ_PROMOTION_RECORDER_APP_ID",
         "/commits/${SOURCE_SHA}/check-runs",

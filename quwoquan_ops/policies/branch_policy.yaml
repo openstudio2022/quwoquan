@@ -30,6 +30,8 @@ integration_branch_updates:
   ordinary_direct_push: matching_integration_fast_forward_only
 release_branch: main
 source_admission_branch: main
+# Prod 选择语义的 canonical 在 release_selection_policy.yaml#production；此处是分支治理侧投影，
+# 共享字段由 test_production_selector_single_truth 锁定一致。
 production_selector:
   source: ReleaseTagAdmissionFact
   acceptedTagKind: stable
@@ -71,4 +73,5 @@ failure_codes:
   backsync_cas_conflict: OPS.BRANCH.BACKSYNC_CAS_CONFLICT
   authority_unavailable: OPS.BRANCH.AUTHORITY_UNAVAILABLE
   source_not_main_reachable: OPS.BRANCH.SOURCE_NOT_MAIN_REACHABLE
+  # 历史命名：只在 release_branch（main）本地提交时触发；integration 工作区在 dev1.0 上可提交并 fast-forward 发布。
   integration_read_only: OPS.BRANCH.INTEGRATION_READ_ONLY

@@ -6,7 +6,6 @@ from __future__ import annotations
 import argparse
 import base64
 import hashlib
-import hmac
 import json
 import os
 import re
@@ -26,6 +25,14 @@ from quwoquan_ops.ci.environment_scheduler import (  # noqa: E402
     dsse_pae,
     exact_file_digest,
     validate_environment_acceptance_fact,
+)
+from quwoquan_ops.cli.lib.evidence_signing import (  # noqa: E402
+    DEFAULT_KEYRING_PATH,
+    EvidenceSigningError,
+    assert_distinct_active_keys,
+    ed25519_environment_verifier,
+    ed25519_verifier,
+    load_keyring,
 )
 
 SCHEMA = "quwoquan_ops.integration_qualification_fact.v1"
@@ -56,59 +63,6 @@ class IntegrationQualificationError(ValueError):
         super().__init__(f"{code}: {detail}")
         self.code = code
         self.detail = detail
-
-
-def hmac_sha256_signer(key: bytes) -> Callable[[bytes], str]:
-    """Build the repository HMAC signer with an algorithm-bound encoding."""
-
-    if not isinstance(key, bytes) or not key:
-        raise IntegrationQualificationError(
-            "INTEGRATION_QUALIFICATION.SIGNER_UNAVAILABLE",
-            "HMAC signing key is unavailable",
-        )
-    signing_key = bytes(key)
-
-    def sign(payload: bytes) -> str:
-        return (
-            "hmac-sha256:" + hmac.new(signing_key, payload, hashlib.sha256).hexdigest()
-        )
-
-    return sign
-
-
-def hmac_sha256_verifier(key: bytes) -> Callable[[bytes, str], bool]:
-    """Build the repository HMAC verifier using constant-time comparison."""
-
-    signer = hmac_sha256_signer(key)
-
-    def verify(payload: bytes, signature: str) -> bool:
-        if not isinstance(signature, str):
-            return False
-        return hmac.compare_digest(signer(payload), signature)
-
-    return verify
-
-
-def hmac_sha256_environment_verifier(
-    trust_keys: Mapping[str, bytes],
-) -> Callable[[str, bytes, str], bool]:
-    """Build a fail-closed signer-identity trust provider for EAF DSSE."""
-
-    if not isinstance(trust_keys, Mapping) or not trust_keys:
-        raise IntegrationQualificationError(
-            "INTEGRATION_QUALIFICATION.ENVIRONMENT_VERIFIER_UNAVAILABLE",
-            "environment signer trust is unavailable",
-        )
-    verifiers: dict[str, Callable[[bytes, str], bool]] = {}
-    for identity, key in trust_keys.items():
-        normalized_identity = _text(identity, "environmentSignerIdentity")
-        verifiers[normalized_identity] = hmac_sha256_verifier(key)
-
-    def verify(identity: str, payload: bytes, signature: str) -> bool:
-        verifier = verifiers.get(identity)
-        return verifier is not None and verifier(payload, signature) is True
-
-    return verify
 
 
 def _text(value: object, field: str) -> str:
@@ -674,60 +628,40 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--expected-dev-head", required=True)
     parser.add_argument("--expected-dev-tree", required=True)
     parser.add_argument("--verified-at", required=True)
-    parser.add_argument("--qualification-verification-key-env", required=True)
+    # 验签只依赖仓内 Ed25519 公钥 keyring；hosted 不持有任何可签名材料。
+    parser.add_argument("--signing-keyring", type=Path, default=DEFAULT_KEYRING_PATH)
     parser.add_argument("--expected-qualification-signer-identity", required=True)
-    parser.add_argument("--environment-verification-key-env", required=True)
     for environment in _ENVIRONMENTS:
         parser.add_argument(f"--expected-{environment}-signer-identity", required=True)
     return parser
 
 
-def _environment_key(name: str, *, code: str) -> bytes:
-    if not re.fullmatch(r"[A-Z][A-Z0-9_]*", name):
-        raise IntegrationQualificationError(
-            "INTEGRATION_QUALIFICATION.INVALID",
-            "verification key environment name is invalid",
-        )
-    value = os.environ.get(name, "")
-    if not value:
-        raise IntegrationQualificationError(code, f"{name} is missing")
-    return value.encode("utf-8")
-
-
 def main(argv: list[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     try:
-        if (
-            args.qualification_verification_key_env
-            == args.environment_verification_key_env
-        ):
-            raise IntegrationQualificationError(
-                "INTEGRATION_QUALIFICATION.KEY_PURPOSE_CONFLICT",
-                "qualification and environment verification key sources must differ",
-            )
-        qualification_key = _environment_key(
-            args.qualification_verification_key_env,
-            code="INTEGRATION_QUALIFICATION.VERIFIER_UNAVAILABLE",
-        )
-        environment_key = _environment_key(
-            args.environment_verification_key_env,
-            code="INTEGRATION_QUALIFICATION.ENVIRONMENT_VERIFIER_UNAVAILABLE",
-        )
-        if hmac.compare_digest(qualification_key, environment_key):
-            raise IntegrationQualificationError(
-                "INTEGRATION_QUALIFICATION.KEY_PURPOSE_CONFLICT",
-                "qualification and environment verification keys must differ",
-            )
         expected_environment_signers = {
             environment: getattr(args, f"expected_{environment}_signer_identity")
             for environment in _ENVIRONMENTS
         }
-        environment_verifier = hmac_sha256_environment_verifier(
-            {
-                identity: environment_key
-                for identity in expected_environment_signers.values()
-            }
-        )
+        try:
+            keyring = load_keyring(args.signing_keyring)
+            for identity in expected_environment_signers.values():
+                assert_distinct_active_keys(
+                    keyring, args.expected_qualification_signer_identity, identity
+                )
+            qualification_verifier = ed25519_verifier(
+                keyring, args.expected_qualification_signer_identity
+            )
+            environment_verifier = ed25519_environment_verifier(
+                keyring, expected_environment_signers.values()
+            )
+        except EvidenceSigningError as exc:
+            raise IntegrationQualificationError(
+                "INTEGRATION_QUALIFICATION.KEY_PURPOSE_CONFLICT"
+                if exc.code == "EVIDENCE_SIGNING.KEY_PURPOSE_CONFLICT"
+                else "INTEGRATION_QUALIFICATION.VERIFIER_UNAVAILABLE",
+                exc.detail,
+            ) from exc
         fact, exact = validate_integration_qualification(
             repository=args.repository,
             store_root=args.store_root,
@@ -738,7 +672,7 @@ def main(argv: list[str] | None = None) -> int:
             expected_dev_head=args.expected_dev_head,
             expected_dev_tree=args.expected_dev_tree,
             verified_at=args.verified_at,
-            signature_verifier=hmac_sha256_verifier(qualification_key),
+            signature_verifier=qualification_verifier,
             expected_signer_identity=(args.expected_qualification_signer_identity),
             environment_signature_verifier=environment_verifier,
             expected_environment_signer_identities=expected_environment_signers,

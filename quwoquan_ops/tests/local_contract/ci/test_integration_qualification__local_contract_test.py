@@ -2,10 +2,9 @@
 from __future__ import annotations
 
 import base64
-import hashlib
-import hmac
 import json
 import subprocess
+import tempfile
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -28,6 +27,13 @@ from quwoquan_ops.ci.integration_qualification import (
     issue_integration_qualification,
     validate_integration_qualification,
 )
+from quwoquan_ops.cli.lib.evidence_signing import (
+    ENVIRONMENT_OPS_IDENTITY,
+    INTEGRATION_SCHEDULER_IDENTITY,
+)
+from quwoquan_ops.tests.support.evidence_signing_test_support import (
+    create_temporary_signing,
+)
 
 ROOT = Path(__file__).resolve().parents[4]
 SCHEMA = (
@@ -36,35 +42,21 @@ SCHEMA = (
 )
 IMPACT = "sha256:" + "9" * 64
 NOW = datetime.now(timezone.utc)
-ENVIRONMENT_KEY = b"environment-acceptance-key"
-QUALIFICATION_KEY = b"integration-qualification-key"
-ENVIRONMENT_SIGNER = "spiffe://quwoquan.local/environment-ops"
-QUALIFICATION_SIGNER = "spiffe://quwoquan.local/integration"
+ENVIRONMENT_SIGNER = ENVIRONMENT_OPS_IDENTITY
+QUALIFICATION_SIGNER = INTEGRATION_SCHEDULER_IDENTITY
 EXPECTED_ENVIRONMENT_SIGNERS = {
     environment: ENVIRONMENT_SIGNER for environment in ("alpha", "beta", "gamma")
 }
-
-
-def hmac_sign(key: bytes, payload: bytes) -> str:
-    return "hmac-sha256:" + hmac.new(key, payload, hashlib.sha256).hexdigest()
-
-
-def environment_sign(pae: bytes) -> str:
-    return hmac_sign(ENVIRONMENT_KEY, pae)
-
-
-def qualification_sign(pae: bytes) -> str:
-    return hmac_sign(QUALIFICATION_KEY, pae)
-
-
-def environment_verify(identity: str, pae: bytes, signature: str) -> bool:
-    return identity == ENVIRONMENT_SIGNER and hmac.compare_digest(
-        environment_sign(pae), signature
-    )
-
-
-def qualification_verify(pae: bytes, signature: str) -> bool:
-    return hmac.compare_digest(qualification_sign(pae), signature)
+# 模块级临时 Ed25519 信任根：签名/验签都走真实 openssl，与生产同一编码 `ed25519:<base64>`。
+_SIGNING = create_temporary_signing(Path(tempfile.mkdtemp(prefix="qwq-iqf-signing-")))
+# 第二套互不相识的 key，用于“错误 key 验签必失败”用例。
+_WRONG_SIGNING = create_temporary_signing(Path(tempfile.mkdtemp(prefix="qwq-iqf-wrong-signing-")))
+environment_sign = _SIGNING.signer(ENVIRONMENT_SIGNER)
+qualification_sign = _SIGNING.signer(QUALIFICATION_SIGNER)
+environment_verify = _SIGNING.environment_verifier((ENVIRONMENT_SIGNER,))
+qualification_verify = _SIGNING.verifier(QUALIFICATION_SIGNER)
+wrong_environment_verify = _WRONG_SIGNING.environment_verifier((ENVIRONMENT_SIGNER,))
+wrong_qualification_verify = _WRONG_SIGNING.verifier(QUALIFICATION_SIGNER)
 
 
 def git(repo: Path, *args: str) -> str:
@@ -316,7 +308,7 @@ def test_issue_rejects_any_environment_signature_tamper(
     )
     fact_path = store / exact["ref"]
     fact = json.loads(fact_path.read_text())
-    fact["signer"]["signature"] = "hmac-sha256:" + "0" * 64
+    fact["signer"]["signature"] = "ed25519:" + base64.b64encode(b"\0" * 64).decode("ascii")
     fact_path.write_bytes(canonical_json_bytes(fact) + b"\n")
     tampered = {
         "ref": exact["ref"],
@@ -379,11 +371,6 @@ def test_issue_rejects_wrong_environment_signer_and_key(tmp_path: Path) -> None:
     wrong_key_root.mkdir()
     repo, store, publish_result, gamma = fixture(wrong_key_root)
 
-    def wrong_key_verifier(identity: str, pae: bytes, signature: str) -> bool:
-        return identity == ENVIRONMENT_SIGNER and hmac.compare_digest(
-            hmac_sign(b"wrong-environment-key", pae), signature
-        )
-
     with pytest.raises(IntegrationQualificationError, match="ENVIRONMENT_INVALID"):
         issue_integration_qualification(
             repository=repo,
@@ -392,7 +379,7 @@ def test_issue_rejects_wrong_environment_signer_and_key(tmp_path: Path) -> None:
             gamma_acceptance_ref=gamma,
             signer_identity=QUALIFICATION_SIGNER,
             signer=qualification_sign,
-            environment_signature_verifier=wrong_key_verifier,
+            environment_signature_verifier=wrong_environment_verify,
             expected_environment_signer_identities=EXPECTED_ENVIRONMENT_SIGNERS,
             issued_at=NOW.isoformat(),
             expires_at=(NOW + timedelta(hours=1)).isoformat(),
@@ -519,9 +506,7 @@ def test_validate_rejects_wrong_qualification_key_and_missing_environment_trust(
     with pytest.raises(IntegrationQualificationError, match="SIGNATURE_INVALID"):
         validate_integration_qualification(
             **common,
-            signature_verifier=lambda pae, signature: hmac.compare_digest(
-                hmac_sign(b"wrong-qualification-key", pae), signature
-            ),
+            signature_verifier=wrong_qualification_verify,
             environment_signature_verifier=environment_verify,
             expected_environment_signer_identities=EXPECTED_ENVIRONMENT_SIGNERS,
         )
@@ -533,15 +518,10 @@ def test_validate_rejects_wrong_qualification_key_and_missing_environment_trust(
             **common, signature_verifier=qualification_verify
         )
 
-    def wrong_environment_verifier(identity: str, pae: bytes, signature: str) -> bool:
-        return identity == ENVIRONMENT_SIGNER and hmac.compare_digest(
-            hmac_sign(b"wrong-environment-key", pae), signature
-        )
-
     with pytest.raises(IntegrationQualificationError, match="ENVIRONMENT_INVALID"):
         validate_integration_qualification(
             **common,
             signature_verifier=qualification_verify,
-            environment_signature_verifier=wrong_environment_verifier,
+            environment_signature_verifier=wrong_environment_verify,
             expected_environment_signer_identities=EXPECTED_ENVIRONMENT_SIGNERS,
         )

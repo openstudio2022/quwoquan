@@ -160,6 +160,7 @@ def classify(paths: list[str]) -> dict[str, bool]:
         "has_data_scripts": False,
         "has_service_probes": False,
         "has_app_uat_widget_keys": False,
+        "has_workflow_actionlint": False,
     }
     for path in paths:
         if path in NON_COMMIT_GATE_DOCUMENTS:
@@ -196,6 +197,9 @@ def classify(paths: list[str]) -> dict[str, bool]:
             flags["has_ops_scripts"] = True
         if path.startswith("specs/"):
             flags["has_specs"] = True
+        # workflow 文件一动就在 L0 跑 actionlint：解析期即失效的上下文/属性/类型错误只有它能在提交前拦住。
+        if path.startswith(".github/workflows/") and path.endswith((".yml", ".yaml")):
+            flags["has_workflow_actionlint"] = True
         if path.startswith("quwoquan_ops/portal/"):
             flags["has_portal"] = True
         if any(path.startswith(prefix) for prefix in PAGEFLIP_PREFIXES):
@@ -244,6 +248,8 @@ def static_checks(flags: dict[str, bool], paths: list[str] | None = None) -> lis
         checks.append("pageflip_backward_mainline")
     if flags["has_data"]:
         checks.append("data_verify")
+    if flags["has_workflow_actionlint"]:
+        checks.append("workflow_actionlint")
     # de-dupe preserving order
     seen: set[str] = set()
     ordered: list[str] = []

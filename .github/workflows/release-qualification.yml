@@ -325,7 +325,7 @@ jobs:
             --app-artifact-build-number "$APP_BUILD_NUMBER" --app-allocation-ref "$APP_ALLOCATION_REF" \
             --app-allocation-digest "$APP_ALLOCATION_DIGEST" --app-material-digest "$APP_MATERIAL_DIGEST" \
             --app-android-artifact-digest "$APP_ANDROID_DIGEST" --app-ios-artifact-digest "$APP_IOS_DIGEST" \
-            --app-web-artifact-digest "$APP_WEB_DIGEST" --created-at "${{ github.run_started_at }}")"
+            --app-web-artifact-digest "$APP_WEB_DIGEST" --created-at "$(date -u +%Y-%m-%dT%H:%M:%SZ)")"
           MATERIAL_REF="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["ref"])' <<<"$MATERIAL_RESULT")"
           MATERIAL_DIGEST="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["digest"])' <<<"$MATERIAL_RESULT")"
           python3 quwoquan_ops/ci/promotion_evidence.py publish-oci \
@@ -337,7 +337,7 @@ jobs:
           QUALIFICATION_RESULT="$(python3 -B quwoquan_ops/ci/release_control.py --store-root "$STORE" qualification-finalize \
             --request "$REQUEST_EXACT" --material "$MATERIAL_OCI=$MATERIAL_DIGEST" \
             --package-acceptance "$PACKAGE_EXACT" --provider "$PROVIDER_EXACT" --uat "$UAT_EXACT" \
-            --supply-chain "$SUPPLY_EXACT" --qualified-at "${{ github.run_started_at }}")"
+            --supply-chain "$SUPPLY_EXACT" --qualified-at "$(date -u +%Y-%m-%dT%H:%M:%SZ)")"
           QUALIFICATION_REF="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["ref"])' <<<"$QUALIFICATION_RESULT")"
           python3 quwoquan_ops/ci/promotion_evidence.py publish-oci \
             --fact-file "$STORE/$QUALIFICATION_REF" --repository "ghcr.io/${{ github.repository }}/qualification-fact" \

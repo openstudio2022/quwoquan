@@ -10,23 +10,21 @@ WORKFLOW = ROOT / ".github/workflows/delivery-gate.yml"
 def test_promotion_jobs_are_hosted_and_use_exact_event_checkouts() -> None:
     text = WORKFLOW.read_text(encoding="utf-8")
     workflow = yaml.safe_load(text)
+    # 回同步由 integration FF 通道执行（make promotion-backsync），Gate 不再挂 caller job；
+    # 受管 system backsync 保留 reusable 合同但无 caller（daily-merge OPEN-004）。
+    assert list(workflow["jobs"]) == ["promotion_verify", "main_source_seal"]
     promotion = workflow["jobs"]["promotion_verify"]
     sealing = workflow["jobs"]["main_source_seal"]
-    caller = workflow["jobs"]["system_backsync"]
 
     assert promotion["runs-on"] == "ubuntu-latest"
     assert sealing["runs-on"] == "ubuntu-latest"
     assert "runs-on: [self-hosted" not in text
     assert next(step for step in promotion["steps"] if "uses" in step)["with"]["ref"] == "${{ github.event.pull_request.head.sha }}"
     assert next(step for step in sealing["steps"] if "uses" in step)["with"]["ref"] == "${{ github.event.after }}"
-    assert caller["uses"] == "./.github/workflows/system-backsync.yml"
-    assert caller["needs"] == "main_source_seal"
-    assert "runs-on" not in caller
-    assert "steps" not in caller
-    assert "secrets" not in caller
     assert text.count("oras-project/setup-oras@") == 2
-    assert text.count("actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1") == 1
-    assert "permission-checks: write" in text
+    # 原生 GITHUB_TOKEN 的 checks: write 直接创建 check-run，不再依赖 GitHub App token。
+    assert "actions/create-github-app-token@" not in text
+    assert "checks: write" in text
 
 
 def test_shell_commands_remain_compatible_with_macos_bash_tools() -> None:

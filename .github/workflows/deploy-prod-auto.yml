@@ -97,7 +97,7 @@ jobs:
           RESULT="$(python3 -B quwoquan_ops/ci/release_control.py --store-root "$STORE" prod-admit \
             --release-tag-admission "$TAG_EXACT" \
             --previous-active-released-ledger "$PREVIOUS_EXACT" --rollback-readiness "$ROLLBACK_EXACT" \
-            --control-plane-git-sha "${{ github.workflow_sha }}" --admitted-at "${{ github.run_started_at }}")"
+            --control-plane-git-sha "${{ github.workflow_sha }}" --admitted-at "$(date -u +%Y-%m-%dT%H:%M:%SZ)")"
           ADMISSION_LOCAL_REF="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["ref"])' <<<"$RESULT")"
           ADMISSION_DIGEST="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["digest"])' <<<"$RESULT")"
           {

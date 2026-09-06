@@ -195,13 +195,14 @@ def test_data_release_readiness_is_local_and_promotion_does_not_repeat_data_gate
         (ROOT / ".github/workflows/delivery-gate.yml").read_text(encoding="utf-8")
     )
     jobs = workflow["jobs"]
-    assert list(jobs) == ["promotion_verify", "main_source_seal", "system_backsync"]
-    assert jobs["promotion_verify"]["if"] == "${{ github.event_name == 'pull_request' }}"
+    # 回同步走 integration FF 通道（make promotion-backsync），Gate 只剩两 job。
+    assert list(jobs) == ["promotion_verify", "main_source_seal"]
+    assert jobs["promotion_verify"]["if"] == (
+        "${{ github.event_name == 'pull_request' || github.event_name == 'pull_request_review' }}"
+    )
     assert jobs["main_source_seal"]["if"] == (
         "${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}"
     )
-    assert jobs["system_backsync"]["needs"] == "main_source_seal"
-    assert jobs["system_backsync"]["uses"] == "./.github/workflows/system-backsync.yml"
     promotion_steps = json.dumps(jobs["promotion_verify"]["steps"], ensure_ascii=False)
     main_steps = json.dumps(jobs["main_source_seal"]["steps"], ensure_ascii=False)
     assert "PromotionAdmissionReceipt" in promotion_steps
