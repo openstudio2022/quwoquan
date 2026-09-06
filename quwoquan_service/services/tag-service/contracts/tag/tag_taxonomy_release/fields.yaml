@@ -36,8 +36,7 @@ types:
     - {name: projectionVersion, type: int64, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read}
     - {name: verifiedAt, type: timestamp, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read}
     - {name: closureDigest, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read}
-    - {name: expectedNodeCount, type: int, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read}
-    - {name: projectedNodeCount, type: int, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read}
+    - {name: counts, type: object, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read, description: "与 creator/homepage 候选回执同形的 expected/projected 节点计数对象；found 时必填且两者相等。"}
     - {name: canonicalDigest, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read}
     - {name: releaseKind, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read}
     - {name: tagRefsDigest, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read}

@@ -185,22 +185,28 @@ func BuildFencedReadbackReceipt(
 	return receipt
 }
 
+// CandidateReceiptCounts mirrors the creator/homepage candidate receipts so the
+// Data four-owner admission reads one `counts.{expected,projected}` shape.
+type CandidateReceiptCounts struct {
+	Expected  int `json:"expected"`
+	Projected int `json:"projected"`
+}
+
 type CandidateReceipt struct {
-	Schema             string     `json:"schema"`
-	Status             string     `json:"status"`
-	Environment        string     `json:"environment"`
-	SourceOwner        string     `json:"sourceOwner"`
-	ReleaseID          string     `json:"releaseId"`
-	ManifestDigest     string     `json:"manifestDigest"`
-	ProjectionVersion  int64      `json:"projectionVersion,omitempty"`
-	VerifiedAt         *time.Time `json:"verifiedAt,omitempty"`
-	ClosureDigest      string     `json:"closureDigest,omitempty"`
-	ExpectedNodeCount  *int       `json:"expectedNodeCount,omitempty"`
-	ProjectedNodeCount *int       `json:"projectedNodeCount,omitempty"`
-	CanonicalDigest    string     `json:"canonicalDigest,omitempty"`
-	ReleaseKind        string     `json:"releaseKind,omitempty"`
-	TagRefsDigest      string     `json:"tagRefsDigest,omitempty"`
-	GeneratedAt        time.Time  `json:"generatedAt"`
+	Schema            string                  `json:"schema"`
+	Status            string                  `json:"status"`
+	Environment       string                  `json:"environment"`
+	SourceOwner       string                  `json:"sourceOwner"`
+	ReleaseID         string                  `json:"releaseId"`
+	ManifestDigest    string                  `json:"manifestDigest"`
+	ProjectionVersion int64                   `json:"projectionVersion,omitempty"`
+	VerifiedAt        *time.Time              `json:"verifiedAt,omitempty"`
+	ClosureDigest     string                  `json:"closureDigest,omitempty"`
+	Counts            *CandidateReceiptCounts `json:"counts,omitempty"`
+	CanonicalDigest   string                  `json:"canonicalDigest,omitempty"`
+	ReleaseKind       string                  `json:"releaseKind,omitempty"`
+	TagRefsDigest     string                  `json:"tagRefsDigest,omitempty"`
+	GeneratedAt       time.Time               `json:"generatedAt"`
 }
 
 func BuildCandidateReceipt(
@@ -233,10 +239,9 @@ func BuildCandidateReceipt(
 	receipt.ProjectionVersion = identity.ProjectionVersion
 	receipt.VerifiedAt = &verifiedAt
 	receipt.ClosureDigest = identity.ClosureDigest
-	expected := identity.ExpectedNodeCount
-	projected := identity.ProjectedNodeCount
-	receipt.ExpectedNodeCount = &expected
-	receipt.ProjectedNodeCount = &projected
+	receipt.Counts = &CandidateReceiptCounts{
+		Expected: identity.ExpectedNodeCount, Projected: identity.ProjectedNodeCount,
+	}
 	receipt.CanonicalDigest = identity.CanonicalDigest
 	receipt.ReleaseKind = identity.ReleaseKind
 	receipt.TagRefsDigest = identity.TagRefsDigest

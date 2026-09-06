@@ -54,9 +54,14 @@ func TestTagCandidateReceiptFoundAndNotFoundAreExact(t *testing.T) {
 	if err := json.Unmarshal(raw, &object); err != nil {
 		t.Fatal(err)
 	}
-	for _, field := range []string{"projectionVersion", "verifiedAt", "closureDigest", "expectedNodeCount", "projectedNodeCount", "canonicalDigest", "releaseKind", "tagRefsDigest"} {
+	for _, field := range []string{"projectionVersion", "verifiedAt", "closureDigest", "counts", "canonicalDigest", "releaseKind", "tagRefsDigest"} {
 		if _, exists := object[field]; exists {
 			t.Fatalf("not_found exposed found-only field %q: %s", field, raw)
+		}
+	}
+	for _, legacy := range []string{"expectedNodeCount", "projectedNodeCount"} {
+		if strings.Contains(string(raw), legacy) {
+			t.Fatalf("receipt still exposes flat legacy field %q: %s", legacy, raw)
 		}
 	}
 	identity.Status = "verified"
@@ -70,9 +75,21 @@ func TestTagCandidateReceiptFoundAndNotFoundAreExact(t *testing.T) {
 	identity.TagRefsDigest = closure
 	found, err := tagreleasecontrol.BuildCandidateReceipt(identity, true, now)
 	if err != nil || found.Status != "found" || found.ProjectionVersion != 1 ||
-		found.ExpectedNodeCount == nil || *found.ExpectedNodeCount != 2 ||
-		found.ProjectedNodeCount == nil || *found.ProjectedNodeCount != 2 || found.VerifiedAt == nil {
+		found.Counts == nil || found.Counts.Expected != 2 || found.Counts.Projected != 2 || found.VerifiedAt == nil {
 		t.Fatalf("found receipt=%+v err=%v", found, err)
+	}
+	foundRaw, err := json.Marshal(found)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var foundObject map[string]any
+	if err := json.Unmarshal(foundRaw, &foundObject); err != nil {
+		t.Fatal(err)
+	}
+	// Data 四域 admission 只读 counts.{expected,projected}，与 creator/homepage 回执同形。
+	counts, ok := foundObject["counts"].(map[string]any)
+	if !ok || counts["expected"] != float64(2) || counts["projected"] != float64(2) || len(counts) != 2 {
+		t.Fatalf("found receipt counts wire shape drifted: %s", foundRaw)
 	}
 }
 

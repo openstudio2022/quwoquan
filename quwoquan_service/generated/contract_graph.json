@@ -113051,7 +113051,7 @@
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/post/infrastructure/releaseimport/loader.go",
-            "sha256": "0a07e5772079bc5c8e409bc16918a19928e9b762c9f7829a2ecb0a9455074e72"
+            "sha256": "138f74b3cc921ab17907423f7b5ff47848d9045de57d8155c6f3cc0dae1b0594"
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/post/infrastructure/releaseimport/post_manifest_validation.go",
@@ -113059,7 +113059,7 @@
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/post/infrastructure/releaseimport/release_control.go",
-            "sha256": "a3b133c2d4a59cbcd383af3ae5f9ecef0f5a0fb4c83e8eef170c0e85af5d9ad0"
+            "sha256": "5ee73c99650d56c9f9fc664f01cf156b7cc8add7259213338640a09ef8f60c24"
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/post/infrastructure/releaseimport/release_stage_receipts.go",
@@ -113067,7 +113067,7 @@
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/post/infrastructure/releaseimport/runtime.go",
-            "sha256": "fc046597ff8401f3191fd0de08e80ee2a5f233d8a9a0f56fba8389f05e251baa"
+            "sha256": "e96b58954b30fc8141fa4d0959256e2974bebd8ef93a92c9a5c2cc91087be9c5"
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/post/infrastructure/releaseimport/runtime_discovery_feed.go",
@@ -113087,7 +113087,7 @@
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/post/infrastructure/releaseimport/runtime_replay_report.go",
-            "sha256": "1309649c890231991a5aac4a91297c8407cd7bd475400c63ef319664b408fe3c"
+            "sha256": "deeffe78ab8f04632e2098719eb729c2cb194bfde43a1aaaced0d6683b2051a4"
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/post/infrastructure/releaseimport/runtime_replay_validation.go",
@@ -113646,7 +113646,7 @@
           },
           {
             "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/import/loader__local_contract_test.go",
-            "sha256": "38df7fe63ba433e8a3bffafc489d4a3bcbd45a3d22d76237f84a9976f48b2552"
+            "sha256": "d45586d8560160741401b43143646f84b41fca0df3b1a89c38d937783fde0276"
           },
           {
             "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/import/media_delivery_binding__local_contract_test.go",
@@ -113782,7 +113782,7 @@
           },
           {
             "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/infrastructure/releaseimport/release_activation_contract__local_contract_test.go",
-            "sha256": "576ad54bb6e7c861492b282d3234e1bc20e54cf7c3645d67d46fdb9eb088a724"
+            "sha256": "67fa76fd3618bc435eb1fc2556c6173d7f04ccc3271283d3beb99e0873949685"
           },
           {
             "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/infrastructure/releaseimport/release_binding__contract__local_contract_test.go",
@@ -113794,7 +113794,7 @@
           },
           {
             "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/infrastructure/releaseimport/runtime_projection__local_contract_test.go",
-            "sha256": "e8c5a31c9b3a30335e21d7aaf0d85f89c80e87392775363c93560bd701b83716"
+            "sha256": "fb1a8bbb88834f5f017bdf1cfdddb6fe9bf0d676086488a9ed7dee269997e9c2"
           },
           {
             "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/infrastructure/searchindex/backfill__local_contract_test.go",
@@ -115963,7 +115963,7 @@
           },
           {
             "path": "quwoquan_service/services/entity-service/internal/entity_homepage/homepage/infrastructure/homepageimport/loader.go",
-            "sha256": "71283b24a8973cdffc1d6d58cf4eddc2a014ce09aa29e62fd9b05ad0b9889daf"
+            "sha256": "2208d972ce8ea9e1d28bd06926320e00ae02768f927fe75ef93c26444f7d435f"
           },
           {
             "path": "quwoquan_service/services/entity-service/internal/entity_homepage/homepage/infrastructure/homepageimport/metrics.go",
@@ -115971,7 +115971,7 @@
           },
           {
             "path": "quwoquan_service/services/entity-service/internal/entity_homepage/homepage/infrastructure/homepageimport/release_control.go",
-            "sha256": "60a84512df7955b60176eab20035871e03349686e51d0d0d3f2ab31afbe16d63"
+            "sha256": "e6031ec9f3aba5fe58e95d7b90b1f3262562fdb1634e8fde7692251973a5187f"
           },
           {
             "path": "quwoquan_service/services/entity-service/internal/entity_homepage/homepage/infrastructure/messaging/durable_stream_transport.go",
@@ -116110,7 +116110,7 @@
           },
           {
             "path": "quwoquan_service/services/entity-service/tests/local_contract/entity_homepage/homepage/cmd/homepage-import/loader__local_contract_test.go",
-            "sha256": "9c725a184f419d8f04f0c18703351b90138fab82b832e875e071df01a7225224"
+            "sha256": "b8f01847e5cd4800f867e77d3381619718b5f8d04dcd774552a04fc19ee5efd9"
           },
           {
             "path": "quwoquan_service/services/entity-service/tests/local_contract/entity_homepage/homepage/cmd/homepage-import/loader_coordinates__local_contract_test.go",
@@ -123299,7 +123299,7 @@
           },
           {
             "path": "quwoquan_service/services/search-service/internal/search/search_index_view/infrastructure/experimentpolicy/mongo_store.go",
-            "sha256": "f430b6cd0470bd9429937845f0f383ffe0c39efcac1b415d54362ef46b1ac89b"
+            "sha256": "cddf57ff25936a5688813d5367cbf86eabcd10461dcb505accdc273f86fdf8fa"
           },
           {
             "path": "quwoquan_service/services/search-service/internal/search/search_index_view/infrastructure/intersectionclient/client.go",
@@ -123338,7 +123338,7 @@
           },
           {
             "path": "quwoquan_service/services/search-service/internal/search/search_index_view/application/experiments.go",
-            "sha256": "a2e4bdc45cdbf2b3dfacc56616398b2b80e2cff0f2444afec0dfbdca54456aec"
+            "sha256": "43bfcfba2a9cbc2ff30b002d43f513031bd6dbc30524e1a10b744b40bb626f16"
           },
           {
             "path": "quwoquan_service/services/search-service/internal/search/search_index_view/application/intersection_attach.go",
@@ -123426,7 +123426,7 @@
           },
           {
             "path": "quwoquan_service/services/search-service/tests/local_contract/search/search_index_view/experiment_policy_single_track__local_contract_test.go",
-            "sha256": "a95e3968cb5af0bbd6ce06b0ac26b9fbe6171da8f5156d3e978211c8a7b4265c"
+            "sha256": "9d66836b4acc7d92e7ef07f0d6e3b566e733b4902fbd745c43ce16c866c57cd3"
           },
           {
             "path": "quwoquan_service/services/search-service/tests/local_contract/search/search_index_view/health_probe_split__local_contract_test.go",
@@ -124314,7 +124314,7 @@
         "reader": [
           {
             "path": "quwoquan_service/services/tag-service/internal/tag/tag_taxonomy_release/application/tagreleasecontrol/release_control.go",
-            "sha256": "13e176e74b4086ff43b1d9f1c154129fbb5fa2efa68e2538d1dc8998bfc1e4ca"
+            "sha256": "02262f35b306e619b1b2c6e95bae75cc1d72fe9a0b2dd7cec4c5f01f37fbb6a5"
           },
           {
             "path": "quwoquan_service/services/tag-service/internal/tag/tag_taxonomy_release/application/taxonomyrelease/facade.go",
@@ -124334,7 +124334,7 @@
         "localContract": [
           {
             "path": "quwoquan_service/services/tag-service/tests/local_contract/tag/tag_taxonomy_release/content_candidate_release_control__local_contract_test.go",
-            "sha256": "bcf703b4c679046d55c16ba82d55a1186b2dae17daa4bfe8bf50e638ff024e87"
+            "sha256": "60237c4ed7d8f5a326a989839be580e2908acabd454932ce9fcfd7a2a411be28"
           },
           {
             "path": "quwoquan_service/services/tag-service/tests/local_contract/tag/tag_taxonomy_release/error_behavior_negative__local_contract_test.go",
@@ -125034,11 +125034,11 @@
           },
           {
             "path": "quwoquan_service/services/user-service/internal/profile_projection/creator_runtime_profile/infrastructure/persistence/release_candidate_store.go",
-            "sha256": "35bb27ea7959f6c91238c5ef13c3137daa8c72ee4b7855ec92084cb12144c2b3"
+            "sha256": "0be85d33d32bfe0b441af98b0eb44192e01cc2396ba797220a51d4914d2088f0"
           },
           {
             "path": "quwoquan_service/services/user-service/internal/profile_projection/creator_runtime_profile/infrastructure/releaseimport/release_control.go",
-            "sha256": "622d0ce68d9fa1aa9fe5979cf466124835c90dd16b6c58550e70b898a67323fc"
+            "sha256": "b8f513dff5ca603eb5253a652b98b4c79ac447ae837374ad6bbb5b53f8c3f5ed"
           },
           {
             "path": "quwoquan_service/services/user-service/internal/profile_projection/creator_runtime_profile/infrastructure/releaseimport/runtime.go",
@@ -125095,7 +125095,7 @@
           },
           {
             "path": "quwoquan_service/services/user-service/tests/api_integration/profile_projection/creator_runtime_profile/release_candidate_mongo__api_integration_test.go",
-            "sha256": "ded38f9a08b2e12193a5c488c24759de2eeb8cb0b31d4d315ec2f8e0631e633a"
+            "sha256": "4fbf76cc93187cf41deea8d96c3d10dafe36f0fc23ce3445c18538c92756378f"
           }
         ]
       },
@@ -133112,7 +133112,7 @@
     },
     {
       "path": "tag/tag/tag_taxonomy_release/fields.yaml",
-      "sha256": "554e43441c5d5b6842f191c29fbcec58fd01578b24bcd8cd4372aa8c0d5e5c8e"
+      "sha256": "6d9c870292151c8642d9283a06aeda8689c8e1b341b94ca1bfbc8d6c40ffbf2d"
     },
     {
       "path": "tag/tag/tag_taxonomy_release/object.yaml",
@@ -395528,7 +395528,7 @@
     },
     {
       "path": "tag/tag/tag_taxonomy_release/fields.yaml",
-      "sha256": "554e43441c5d5b6842f191c29fbcec58fd01578b24bcd8cd4372aa8c0d5e5c8e",
+      "sha256": "6d9c870292151c8642d9283a06aeda8689c8e1b341b94ca1bfbc8d6c40ffbf2d",
       "mediaType": "application/yaml",
       "content": {
         "description": "数据工程 taxonomy 的 legacy 发布批次及 Data content-release owner-local verified candidate",
@@ -395860,21 +395860,11 @@
                 "constraints": [
                   "NULLABLE"
                 ],
+                "description": "与 creator/homepage 候选回执同形的 expected/projected 节点计数对象；found 时必填且两者相等。",
                 "log_policy": "allow",
-                "name": "expectedNodeCount",
+                "name": "counts",
                 "ops_exposure": "read",
-                "type": "int"
-              },
-              {
-                "api_exposure": "drop",
-                "classification": "INTERNAL",
-                "constraints": [
-                  "NULLABLE"
-                ],
-                "log_policy": "allow",
-                "name": "projectedNodeCount",
-                "ops_exposure": "read",
-                "type": "int"
+                "type": "object"
               },
               {
                 "api_exposure": "drop",
