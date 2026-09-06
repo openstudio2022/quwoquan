@@ -9,6 +9,7 @@ import shutil
 import tempfile
 import urllib.error
 import urllib.request
+import mimetypes
 from collections.abc import Mapping
 from datetime import datetime, timezone
 from pathlib import Path
@@ -16,6 +17,8 @@ from typing import Any
 
 from core.content_library import library_root_for_output, link_bytes_from_library
 from core.io import read_json
+from core.image_variants import derive_budget_compliant_variant
+from core.object_storage_budget import source_unit_asset_budget_bytes
 from core.paths import execution_root, execution_source_unit_dir
 from core.schema import assert_valid
 from content.execution.identity import parse_execution_id
@@ -257,10 +260,80 @@ def _source_unit_id(
     return f"{_safe_source_id(candidate['sourceId'])}__{hashlib.sha256(seed.encode()).hexdigest()[:16]}"
 
 
+def _budget_media_body(
+    body: bytes,
+    *,
+    acquisition_kind: str,
+    research_lane: str,
+) -> tuple[bytes, dict[str, Any] | None]:
+    """Apply only policy-declared deterministic image renditions at download."""
+    if not acquisition_kind:
+        return body, None
+    try:
+        budget = source_unit_asset_budget_bytes(research_lane)
+    except ValueError as exc:
+        raise ValueError(f"DATA.MEDIA.ASSET_OVER_BUDGET: {exc}") from exc
+    if len(body) <= budget:
+        return body, None
+    if acquisition_kind != "image":
+        raise ValueError(
+            "DATA.MEDIA.ASSET_OVER_BUDGET: "
+            f"carrier={research_lane} bytes={len(body)} budget={budget}"
+        )
+    variant = derive_budget_compliant_variant(body, budget_bytes=budget)
+    if variant is None or len(variant["bytes"]) > budget:
+        raise ValueError(
+            "DATA.MEDIA.ASSET_OVER_BUDGET: "
+            f"carrier={research_lane} bytes={len(body)} budget={budget}"
+        )
+    return bytes(variant["bytes"]), {
+        "operation": "policy_declared_image_rendition",
+        "sourceSha256": _sha256(body),
+        "sourceBytes": len(body),
+        "resultSha256": _sha256(bytes(variant["bytes"])),
+        "resultBytes": len(variant["bytes"]),
+        "width": int(variant["width"]),
+        "height": int(variant["height"]),
+        "mimeType": str(variant["mimeType"]),
+        "budgetBytes": budget,
+    }
+
+
 def _render_source_markdown(candidate: Mapping[str, Any], body: bytes, *, acquisition_kind: str) -> str:
     if acquisition_kind:
         return f"# {candidate['title']}\n\nBinary media is bound through the acquisition receipt; semantic description is AI-owned.\n"
     return body.decode("utf-8", errors="replace")
+
+
+def _receipt_media_identity_fields(
+    receipt_row: Mapping[str, Any],
+    *,
+    acquisition_kind: str,
+) -> dict[str, Any]:
+    if acquisition_kind == "image":
+        source_attribution = receipt_row["sourceAttribution"]
+        return {
+            "creator": receipt_row["creator"],
+            "platform": receipt_row["platform"],
+            "collectionPageUrl": source_attribution["sourcePostUrl"],
+            "originalAssetUrl": source_attribution["originalAssetUrl"],
+            "capturedAt": receipt_row["capturedAt"],
+            "licenseSnapshot": receipt_row["licenseSnapshot"],
+            "usageScope": receipt_row["usageScope"],
+            "modelReleaseStatus": receipt_row["modelReleaseStatus"],
+            "propertyReleaseStatus": source_attribution["propertyReleaseStatus"],
+            "sourceAttribution": dict(source_attribution),
+        }
+    plan_spec = receipt_row["planVideoSpec"]
+    return {
+        "creator": receipt_row["creator"],
+        "platform": receipt_row["platform"],
+        "collectionPageUrl": plan_spec["sourcePostUrl"],
+        "originalAssetUrl": plan_spec["originalAssetUrl"],
+        "capturedAt": receipt_row["capturedAt"],
+        "modelReleaseStatus": receipt_row["modelReleaseStatus"],
+        "propertyReleaseStatus": receipt_row["propertyReleaseStatus"],
+    }
 
 
 def _build_meta(
@@ -277,12 +350,16 @@ def _build_meta(
     asset_ref: str,
 ) -> dict[str, Any]:
     identity = parse_execution_id(execution_id)
+    candidate = {**candidate, "chosenCandidateDigest": _sha256(_stable_bytes(candidate))}
     fetched_at = str(candidate.get("fetchedAt") or "").strip() or datetime.now(timezone.utc).isoformat()
     meta: dict[str, Any] = {
         "schema": "quwoquan_data.atomic_source_unit",
         "stage": "1.download",
         **stage_execution_context(execution_id),
         "sourceUnitId": source_unit_id,
+        "sourcePlanRef": str(candidate["sourcePlanRef"]),
+        "sourcePlanDigest": str(candidate["sourcePlanDigest"]),
+        "chosenCandidateDigest": str(candidate["chosenCandidateDigest"]),
         "sourceId": str(candidate["sourceId"]),
         "targetRef": target_ref,
         "carrier": identity.content_type.value,
@@ -302,7 +379,11 @@ def _build_meta(
             "assetId": str(receipt_row["assetId"]),
             "assetRef": asset_ref,
             "contentSha256": str(receipt_row["contentSha256"]),
+            "bytes": int(receipt_row.get("bytes") or 0),
+            "mimeType": str(receipt_row.get("mimeType") or ""),
         }
+        if receipt_row.get("derivativeBinding"):
+            meta["acquisition"]["derivativeBinding"] = dict(receipt_row["derivativeBinding"])
         if receipt_row.get("posterAssetRef"):
             safe_asset_id = _safe_source_id(str(receipt_row["assetId"]))
             meta["acquisition"].update({
@@ -327,6 +408,31 @@ def materialize_source_candidate(
     if not isinstance(candidate, dict):
         raise TypeError("source candidate must be an object")
     assert_valid(candidate, "source", "source_candidate", label=str(candidate_path))
+    root = execution_root(execution_id)
+    source_plan_ref = str(candidate["sourcePlanRef"])
+    source_plan_path = root / source_plan_ref
+    if source_plan_path.is_symlink() or not source_plan_path.is_file():
+        raise ValueError("sourcePlanRef must resolve to a regular execution file")
+    source_plan_raw = source_plan_path.read_bytes()
+    source_plan_digest = _sha256(source_plan_raw)
+    if source_plan_digest != candidate["sourcePlanDigest"]:
+        raise ValueError("source candidate sourcePlanDigest drift")
+    source_plan = read_json(source_plan_path)
+    assert_valid(source_plan, "source", "source_plan", label=source_plan_ref)
+    if source_plan.get("executionId") != execution_id or source_plan.get("targetRef") != target_ref:
+        raise ValueError("source candidate source plan identity drift")
+    candidate_identity = {
+        key: value
+        for key, value in candidate.items()
+        if key not in {"schema", "sourcePlanRef", "sourcePlanDigest", "fetchedAt"}
+    }
+    matching = [
+        item for item in source_plan.get("candidates", [])
+        if isinstance(item, dict) and item == candidate_identity
+    ]
+    if len(matching) != 1:
+        raise ValueError("chosen source candidate is not exactly one source plan candidate")
+    chosen_candidate_digest = _sha256(_stable_bytes(candidate))
     if receipt_path is not None and not receipt_asset_id:
         raise ValueError("--receipt-asset-id is required with --acquisition-receipt")
     if receipt_path is None and receipt_asset_id:
@@ -340,6 +446,12 @@ def materialize_source_candidate(
     )
     if canonical_url and not canonical_url.startswith("https://"):
         raise ValueError("source canonical URL must use HTTPS")
+    research_lane = parse_execution_id(execution_id).content_type.value
+    body, budget_derivation = _budget_media_body(
+        body,
+        acquisition_kind=acquisition_kind,
+        research_lane=research_lane,
+    )
     source_md = _render_source_markdown(candidate, body, acquisition_kind=acquisition_kind)
     raw_sha = _sha256(body)
     source_sha = _sha256(source_md.encode("utf-8"))
@@ -369,31 +481,65 @@ def materialize_source_candidate(
             if acquisition_kind:
                 assert receipt_row is not None
                 safe_asset_id = _safe_source_id(str(receipt_row["assetId"]))
-                suffix = Path(str(receipt_row.get("assetRef") or "")).suffix
+                materialized_mime = (
+                    str(budget_derivation["mimeType"])
+                    if budget_derivation is not None
+                    else str(receipt_row.get("mimeType") or "")
+                )
+                suffix = mimetypes.guess_extension(materialized_mime, strict=False) or Path(
+                    str(receipt_row.get("assetRef") or "")
+                ).suffix
+                if not suffix:
+                    suffix = ".bin"
                 asset_path = temporary / "assets" / f"001_{safe_asset_id}{suffix}"
                 asset_path.parent.mkdir(parents=True, exist_ok=True)
                 link_bytes_from_library(body, asset_path, kind="media", library_root=library_root)
                 asset_ref = f"assets/{asset_path.name}"
                 rights_fields = {
-                    "sourceUrl": str(receipt_row["sourceUrl"]),
-                    "license": str(receipt_row["license"]),
-                    "termsUrl": str(receipt_row["termsUrl"]),
-                    "authorizationProof": str(receipt_row["authorizationProof"]),
-                    "rightsStatus": str(receipt_row["rightsStatus"]),
-                    "authorizationRequired": receipt_row["authorizationRequired"],
-                    "distributionDecision": str(receipt_row["distributionDecision"]),
-                    "rightsIssues": list(receipt_row["rightsIssues"]),
+                    key: receipt_row[key]
+                    for key in (
+                        "sourceUrl",
+                        "license",
+                        "termsUrl",
+                        "authorizationProof",
+                        "rightsStatus",
+                        "authorizationRequired",
+                        "distributionDecision",
+                        "rightsIssues",
+                    )
                 }
+                media_identity_fields = _receipt_media_identity_fields(
+                    receipt_row,
+                    acquisition_kind=acquisition_kind,
+                )
+                if budget_derivation is not None:
+                    if (
+                        budget_derivation.get("sourceSha256") != receipt_row.get("contentSha256")
+                        or budget_derivation.get("sourceBytes") != receipt_row.get("bytes")
+                    ):
+                        raise ValueError("derived image does not bind acquisition receipt identity")
                 materialized_assets.append({
                     "sourceAssetId": f"{safe_asset_id}:video" if acquisition_kind == "video" else safe_asset_id,
                     "fileName": asset_path.name,
                     "assetRole": "video" if acquisition_kind == "video" else "image",
-                    "mimeType": str(receipt_row.get("mimeType") or ""),
+                    "mimeType": materialized_mime,
                     "bytes": len(body),
-                    "sha256": str(receipt_row["contentSha256"]),
-                    "contentSha256": str(receipt_row["contentSha256"]),
+                    "sha256": _sha256(body),
+                    "contentSha256": _sha256(body),
                     "acquisitionReceiptRef": str(receipt_row.get("_receiptRef") or ""),
                     "professionalAssetId": str(receipt_row["assetId"]),
+                    **({"derivativeBinding": {
+                        "originalSha256": str(receipt_row["contentSha256"]),
+                        "originalBytes": int(receipt_row["bytes"]),
+                        "originalMimeType": str(receipt_row["mimeType"]),
+                        "policy": "source_unit_asset_budget",
+                        "profile": research_lane,
+                        "derivedSha256": _sha256(body),
+                        "derivedBytes": len(body),
+                        "derivedMimeType": materialized_mime,
+                        "derivedExtension": suffix,
+                    }} if budget_derivation is not None else {}),
+                    **media_identity_fields,
                     **rights_fields,
                 })
                 if acquisition_kind == "video":
@@ -417,6 +563,9 @@ def materialize_source_candidate(
                         "acquisitionReceiptRef": str(receipt_row.get("_receiptRef") or ""),
                         "professionalAssetId": str(receipt_row["assetId"]),
                         "derivedFromSourceAssetId": f"{safe_asset_id}:video",
+                        "derivation": poster_rights["derivation"],
+                        "posterRights": dict(poster_rights),
+                        **media_identity_fields,
                         **{
                             key: poster_rights[key]
                             for key in (
@@ -435,6 +584,9 @@ def materialize_source_candidate(
                 _stable_bytes({"assets": materialized_assets})
             )
             receipt_ref = str(receipt_row.get("_receiptRef") or "") if receipt_row else ""
+            meta_receipt_row = receipt_row
+            if receipt_row is not None and budget_derivation is not None:
+                meta_receipt_row = {**receipt_row, "derivativeBinding": materialized_assets[0]["derivativeBinding"]}
             meta = _build_meta(
                 execution_id=execution_id,
                 target_ref=target_ref,
@@ -443,7 +595,7 @@ def materialize_source_candidate(
                 raw_sha=raw_sha,
                 source_sha=source_sha,
                 canonical_url=canonical_url,
-                receipt_row=receipt_row,
+                receipt_row=meta_receipt_row,
                 receipt_ref=receipt_ref,
                 asset_ref=asset_ref,
             )
@@ -469,8 +621,15 @@ def materialize_source_candidate(
                     and meta.get("acquisition") != {
                         "receiptRef": str(receipt_row.get("_receiptRef") or ""),
                         "assetId": str(receipt_row["assetId"]),
-                        "assetRef": f"assets/001_{_safe_source_id(str(receipt_row['assetId']))}{Path(str(receipt_row.get('assetRef') or '')).suffix}",
+                        "assetRef": str(meta.get("acquisition", {}).get("assetRef") or ""),
                         "contentSha256": str(receipt_row["contentSha256"]),
+                        "bytes": int(receipt_row["bytes"]),
+                        "mimeType": str(receipt_row["mimeType"]),
+                        **(
+                            {"derivativeBinding": meta["acquisition"]["derivativeBinding"]}
+                            if meta.get("acquisition", {}).get("derivativeBinding")
+                            else {}
+                        ),
                         **(
                             {
                                 "posterAssetRef": f"assets/002_{_safe_source_id(str(receipt_row['assetId']))}_poster.png",
@@ -490,6 +649,9 @@ def materialize_source_candidate(
             "sourceUnitId": unit_id,
             "sourceRef": source_ref,
             "metaRef": meta_ref,
+            "sourcePlanRef": str(meta["sourcePlanRef"]),
+            "sourcePlanDigest": str(meta["sourcePlanDigest"]),
+            "chosenCandidateDigest": str(meta["chosenCandidateDigest"]),
             "sourceId": str(candidate["sourceId"]),
             "sourceClass": str(candidate["sourceClass"]),
             "targetRefs": [target_ref],

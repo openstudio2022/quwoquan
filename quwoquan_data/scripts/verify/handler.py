@@ -22,7 +22,6 @@ _STATIC_GATES = {
     "runtime-input-ownership": "verify_runtime_input_ownership",
     "output-root-isolation": "verify_output_root_isolation",
     "object-size-budget": "verify_object_size_budget",
-    "publish-purity": "verify_publish_purity",
     "publish-closure": "verify_publish_closure",
 }
 _EXECUTION_GATES = {

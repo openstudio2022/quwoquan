@@ -4,17 +4,13 @@ from __future__ import annotations
 
 import shutil
 import tempfile
-from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
 from content.release.canonical.aggregate_release_closure import (
     OBJECT_KINDS,
     copy_release_tag_snapshot,
-    copy_tag_snapshot,
-    execution_publish_closure,
     object_root,
-    reference_closure,
 )
 from content.release.canonical.aggregate_release_documents import (
     release_attestation_document,
@@ -36,21 +32,6 @@ from content.release.canonical.aggregate_release_pool import (
 from content.release.canonical.aggregate_release_result import (
     aggregate_release_result,
 )
-from content.release.canonical.aggregate_release_uat import (
-    UAT_SAMPLE_PLAN_REF,
-    build_release_uat_sample_plan_artifact,
-    derive_release_sample_source_identity_set_digest,
-)
-from content.release.canonical.creator_avatar_quality import (
-    creator_avatar_quality_issues,
-)
-from content.release.canonical.environment_release_selection import (
-    EnvironmentReleaseSelection,
-    select_environment_release_posts,
-)
-from content.release.canonical.object_transaction_audit import (
-    validate_publish_invariants,
-)
 from content.release.canonical.object_transaction_contract import (
     ObjectTransactionError,
     _copy_tree,
@@ -65,8 +46,7 @@ from content.release.canonical.object_transaction_lock import (
 from content.release.canonical.release_admission import (
     build_release_asset_admission,
 )
-from content.release.environment.consistency import scan_release_contract
-from content.release.model import DataSourceOwner
+from content.release.canonical.release_consistency import scan_release_contract
 from core.media_asset_url import (
     build_release_media_manifest,
     copy_release_media_objects,
@@ -80,11 +60,6 @@ from core.release_layout import (
 )
 from core.release_media_binding import bind_release_object_media_assets
 from core.schema import assert_valid
-from core.source_digest import (
-    SourceDigestError,
-    content_source_revision,
-)
-
 
 @canonical_publish_serialized
 def _build_aggregate_release(
@@ -92,173 +67,57 @@ def _build_aggregate_release(
     publish_root: Path,
     release_root: Path,
     release_id: str,
-    execution_ids: list[str],
-    source_revision: str | None,
-    entity_catalog_digest: str | None,
-    reviewed_closure_adoption: Mapping[str, Any] | None = None,
-    adoption_output_root: Path | None = None,
-    target_environment: str | None = None,
     release_class: str,
-    cohort: dict[str, object] | None = None,
-    pool_wide: bool = False,
-    sampling_authority_artifact_root: Path | None = None,
-    sampling_authority_binding: Mapping[str, str] | None = None,
+    cohort: dict[str, object],
 ) -> dict[str, Any]:
     """Create one immutable release from canonical objects bound to execution IDs."""
     release_id = _safe_id(release_id, label="releaseId")
-    release_mode = str(release_class or "").strip()
-    if release_mode not in {"research", "commercial"}:
-        raise ObjectTransactionError(f"DATA.RELEASE.CLASS_INVALID: {release_mode!r}")
-    environment_selection: EnvironmentReleaseSelection | None = None
-    source_identities: tuple[dict[str, object], ...] = ()
-    source_identity_set_digest: str | None = None
-    pool_excluded: tuple[dict[str, str], ...] = ()
-    if pool_wide:
-        if reviewed_closure_adoption is not None:
-            raise ObjectTransactionError(
-                "pool release cannot be combined with reviewed-closure adoption"
-            )
-        if cohort is None:
-            raise ObjectTransactionError(
-                "DATA.RELEASE.COHORT_REQUIRED: pool release requires --cohort-file"
-            )
-        if target_environment is not None:
-            raise ObjectTransactionError(
-                "DATA.RELEASE.SELECTION_INVALID: cohort release is environment-neutral"
-            )
-        pool_preparation = prepare_pool_release(
-            publish_root=publish_root,
-            cohort=cohort,
-            release_class=release_class,
+    normalized_release_class = str(release_class or "").strip()
+    if normalized_release_class not in {"research", "commercial"}:
+        raise ObjectTransactionError(f"DATA.RELEASE.CLASS_INVALID: {normalized_release_class!r}")
+    if not cohort:
+        raise ObjectTransactionError(
+            "DATA.RELEASE.COHORT_REQUIRED: pool release requires --cohort-file"
         )
-        pool_excluded = pool_preparation.excluded
-        environment_selection = pool_preparation.environment_selection
-        execution_ids = pool_preparation.execution_ids
-        source_digests = pool_preparation.source_digests
-        source_identities = pool_preparation.source_identities
-        source_identity_set_digest = pool_preparation.source_identity_set_digest
-        entity_catalog_digest = pool_preparation.entity_catalog_digest
-        source_revision = pool_preparation.source_revision
-        desired = pool_preparation.desired
-        object_source_root = publish_root
-    elif reviewed_closure_adoption is not None:
-        raise ObjectTransactionError("reviewed-closure adoption is retired")
-    else:
-        closures = tuple(
-            execution_publish_closure(execution_id, publish_root=publish_root)
-            for execution_id in execution_ids
-        )
-        execution_ids = sorted({closure.execution_id for closure in closures})
-        if len(execution_ids) != len(closures):
-            raise ObjectTransactionError("aggregate execution IDs are duplicated")
-        source_digests = tuple(
-            sorted(
-                {closure.source_digest for closure in closures},
-                key=lambda source_digest: source_digest.digest,
-            )
-        )
-        entity_refs = {ref for closure in closures for ref in closure.entity_refs}
-        post_refs = {ref for closure in closures for ref in closure.post_refs}
-        if not entity_refs and not post_refs:
-            raise ObjectTransactionError("aggregate release has no canonical object")
-        canonical_closure = validate_publish_invariants(publish_root)
-        if canonical_closure["status"] != "passed":
-            raise ObjectTransactionError(
-                "aggregate release canonical closure invalid: "
-                + "; ".join(
-                    f"{item['code']}:{item['ref']}"
-                    for item in canonical_closure["issues"][:5]
-                )
-            )
-        if target_environment is not None:
-            environment_selection = select_environment_release_posts(
-                publish_root=publish_root,
-                post_refs=sorted(post_refs),
-                environment=target_environment,
-                release_class=release_mode,
-            )
-            post_refs = set(environment_selection.post_refs)
-        creator_refs, tag_refs = reference_closure(
-            publish_root,
-            entity_refs=entity_refs,
-            post_refs=post_refs,
-        )
-        creator_issues = creator_avatar_quality_issues(
-            publish_root,
-            creator_refs=creator_refs,
-        )
-        if creator_issues:
-            raise ObjectTransactionError(
-                "aggregate release creator avatar quality closure invalid: "
-                + "; ".join(
-                    f"{item['code']}:{item['ref']}" for item in creator_issues[:5]
-                )
-            )
-        desired = {
-            "creators": creator_refs,
-            "entities": sorted(entity_refs),
-            "posts": sorted(post_refs),
-            "tags": tag_refs,
-        }
-        object_source_root = publish_root
+    pool_preparation = prepare_pool_release(
+        publish_root=publish_root,
+        cohort=cohort,
+        release_class=release_class,
+    )
+    pool_excluded = pool_preparation.excluded
+    cohort_selection = pool_preparation.cohort_selection
+    execution_ids = pool_preparation.execution_ids
+    source_digests = pool_preparation.source_digests
+    source_identities = pool_preparation.source_identities
+    source_identity_set_digest = pool_preparation.source_identity_set_digest
+    entity_catalog_digest = pool_preparation.entity_catalog_digest
+    source_revision = pool_preparation.source_revision
+    desired = pool_preparation.desired
+    object_source_root = publish_root
 
-    source_identity_set_mode = bool(pool_wide)
-    if source_identity_set_mode:
-        if (
-            environment_selection is None
-            or not source_identities
-            or source_identity_set_digest is None
-        ):
-            raise ObjectTransactionError(
-                "DATA.POOL.SOURCE_IDENTITY_MISSING: pool release"
-            )
-        source_digest: str | None = None
-    else:
-        if len(source_digests) != 1:
-            raise ObjectTransactionError(
-                "aggregate release requires one frozen sourceDigest across all lanes"
-            )
-        source_digest = source_digests[0].digest
-        try:
-            expected_source_revision = content_source_revision(
-                source_digest=source_digest,
-                entity_catalog_digest=entity_catalog_digest,
-            )
-        except (SourceDigestError, TypeError) as exc:
-            raise ObjectTransactionError(str(exc)) from exc
-        if source_revision != expected_source_revision:
-            raise ObjectTransactionError(
-                "aggregate release sourceRevision drift from "
-                "sourceDigest/entityCatalogDigest"
-            )
+
+    source_digest: str | None = None
     source_digest_documents = [
         source_digest.to_document() for source_digest in source_digests
     ]
     entity_refs = set(desired["entities"])
     post_refs = set(desired["posts"])
+    carrier_counts = {
+        "homepage": len(entity_refs),
+        "article": sum(ref.startswith("article/") for ref in post_refs),
+        "image": sum(ref.startswith("image/") for ref in post_refs),
+        "video": sum(ref.startswith("video/") for ref in post_refs),
+    }
+    carrier_counts["total"] = sum(carrier_counts.values())
     if not entity_refs and not post_refs:
         raise ObjectTransactionError("aggregate release has no canonical object")
     creator_refs = list(desired["creators"])
     tag_refs = list(desired["tags"])
-    release_contents = build_release_contents(environment_selection)
-    release_authors = (
-        build_release_authors(
-            object_source_root,
-            creator_refs=creator_refs,
-            strict_admission=pool_wide,
-        )
-        if environment_selection is not None
-        else None
-    )
-    sample_source_identity_set_digest = (
-        derive_release_sample_source_identity_set_digest(
-            environment_selection=environment_selection,
-            source_identity_set_digest=source_identity_set_digest,
-            execution_ids=execution_ids,
-            source_revision=source_revision,
-            source_digest=source_digest,
-            entity_catalog_digest=entity_catalog_digest,
-        )
+    release_contents = build_release_contents(cohort_selection)
+    release_authors = build_release_authors(
+        object_source_root,
+        creator_refs=creator_refs,
+        strict_admission=True,
     )
     final_root = release_root / release_id
     if final_root.exists():
@@ -273,35 +132,20 @@ def _build_aggregate_release(
             source_digest_documents=source_digest_documents,
             source_digests=source_digests,
             desired=desired,
-            release_class=release_mode,
-            reviewed_closure_adoption=reviewed_closure_adoption,
-            adoption_output_root=adoption_output_root,
-            reviewed_selection=None,
-            environment_selection=environment_selection,
+            release_class=normalized_release_class,
+            cohort_selection=cohort_selection,
             release_contents=release_contents,
             release_authors=release_authors,
-            milestone=(
-                environment_selection.milestone
-                if environment_selection is not None
-                else None
-            ),
-            milestone_targets=(
-                environment_selection.milestone_targets
-                if environment_selection is not None
-                else None
-            ),
+            milestone=cohort_selection.milestone,
+            milestone_targets=cohort_selection.milestone_targets,
             source_identities=source_identities,
             source_identity_set_digest=source_identity_set_digest,
-            sample_source_identity_set_digest=sample_source_identity_set_digest,
             build_release_asset_admission_fn=build_release_asset_admission,
             build_release_media_manifest_fn=build_release_media_manifest,
             scan_release_contract_fn=scan_release_contract,
-            sampling_authority_artifact_root=sampling_authority_artifact_root,
-            sampling_authority_binding=sampling_authority_binding,
         )
-        if pool_wide:
-            existing["excluded"] = list(pool_excluded)
-            existing["excludedCount"] = len(pool_excluded)
+        existing["excluded"] = list(pool_excluded)
+        existing["excludedCount"] = len(pool_excluded)
         return existing
 
     final_root.parent.mkdir(parents=True, exist_ok=True)
@@ -313,15 +157,12 @@ def _build_aggregate_release(
                 source = object_root(object_source_root, kind, ref)
                 target = payload / "objects" / kind / ref
                 if kind == "tags":
-                    if pool_wide:
-                        copy_release_tag_snapshot(
-                            publish_root,
-                            tag_ref=ref,
-                            target=target,
-                            control_plane_taxonomy_root=(CONTROL_PLANE_TAXONOMY_ROOT),
-                        )
-                    else:
-                        copy_tag_snapshot(source, target)
+                    copy_release_tag_snapshot(
+                        publish_root,
+                        tag_ref=ref,
+                        target=target,
+                        control_plane_taxonomy_root=CONTROL_PLANE_TAXONOMY_ROOT,
+                    )
                 else:
                     _copy_tree(source, target)
         media_manifest = build_release_media_manifest(
@@ -330,7 +171,7 @@ def _build_aggregate_release(
             entity_refs=desired["entities"],
             creator_refs=desired["creators"],
             publish_root=publish_root,
-            release_class=release_mode,
+            release_class=normalized_release_class,
         )
         if media_manifest["issues"]:
             raise ObjectTransactionError(
@@ -345,7 +186,7 @@ def _build_aggregate_release(
             release_id=release_id,
             objects_root=payload / "objects",
             desired=desired,
-            release_class=release_mode,
+            release_class=normalized_release_class,
         )
         assert_valid(
             asset_admission,
@@ -355,23 +196,6 @@ def _build_aggregate_release(
         )
         _write_json(payload / "asset_admission.json", asset_admission)
         selected_merkle = objects_merkle(staging, create=True)
-        uat_sample_plan, sample_plan_digest = (
-            build_release_uat_sample_plan_artifact(
-                payload=payload,
-                release_id=release_id,
-                environment_selection=environment_selection,
-                sample_source_identity_set_digest=(
-                    sample_source_identity_set_digest
-                ),
-                selected_merkle=selected_merkle,
-                release_contents=release_contents,
-                entity_refs=desired["entities"],
-                sampling_authority_artifact_root=(
-                    sampling_authority_artifact_root
-                ),
-                sampling_authority_binding=sampling_authority_binding,
-            )
-        )
         release_header = release_header_document(
             release_id=release_id,
             execution_ids=execution_ids,
@@ -381,56 +205,16 @@ def _build_aggregate_release(
             source_digest_documents=source_digest_documents,
             asset_admission=asset_admission,
             canonical_merkle=selected_merkle,
-            release_class=release_mode,
-            product_lifecycle_state=release_mode,
-            reviewed_closure_adoption=reviewed_closure_adoption,
-            selection_scope=(
-                environment_selection.selection_scope
-                if environment_selection is not None
-                else None
-            ),
-            target_environment=(
-                environment_selection.environment
-                if environment_selection is not None
-                else None
-            ),
-            release_mode=(
-                environment_selection.release_mode
-                if environment_selection is not None
-                else None
-            ),
-            pool_digest=(
-                environment_selection.pool_digest
-                if environment_selection is not None
-                else None
-            ),
-            counts=(
-                environment_selection.counts
-                if environment_selection is not None
-                else None
-            ),
+            release_class=normalized_release_class,
+            product_lifecycle_state=normalized_release_class,
+            pool_digest=cohort_selection.pool_digest,
+            counts=carrier_counts,
             contents=release_contents,
             authors=release_authors,
-            milestone=(
-                environment_selection.milestone
-                if environment_selection is not None
-                else None
-            ),
-            milestone_targets=(
-                environment_selection.milestone_targets
-                if environment_selection is not None
-                else None
-            ),
-            sample_plan_ref=(
-                UAT_SAMPLE_PLAN_REF if uat_sample_plan is not None else None
-            ),
-            sample_plan_digest=sample_plan_digest,
-            source_identities=(
-                list(source_identities) if source_identity_set_mode else None
-            ),
-            source_identity_set_digest=(
-                source_identity_set_digest if source_identity_set_mode else None
-            ),
+            milestone=cohort_selection.milestone,
+            milestone_targets=cohort_selection.milestone_targets,
+            source_identities=list(source_identities),
+            source_identity_set_digest=source_identity_set_digest,
         )
         desired_state = release_desired_state_document(
             release_id=release_id,
@@ -446,11 +230,10 @@ def _build_aggregate_release(
             payload / "sample_bundle.json",
             {"schema": "quwoquan_data.release_sample_bundle", **desired},
         )
-        if True:
-            copy_release_media_objects(
-                manifest=media_manifest,
-                release_root=staging,
-            )
+        copy_release_media_objects(
+            manifest=media_manifest,
+            release_root=staging,
+        )
         _write_json(payload / "media_manifest.json", media_manifest)
         consistency = scan_release_contract(
             {
@@ -478,16 +261,17 @@ def _build_aggregate_release(
             source_digests=source_digests,
             asset_admission=asset_admission,
             canonical_merkle=selected_merkle,
+            carrier_counts=carrier_counts,
             entity_count=len(entity_refs),
             post_count=len(post_refs),
             creator_count=len(creator_refs),
             tag_count=len(tag_refs),
             payload_sha256=payload_digest(staging),
             recorded_at=_now(),
-            release_class=release_mode,
-            source_identities=(source_identities if source_identity_set_mode else ()),
+            release_class=normalized_release_class,
+            source_identities=source_identities,
             source_identity_set_digest=(
-                source_identity_set_digest if source_identity_set_mode else None
+                source_identity_set_digest
             ),
         )
         assert_valid(
@@ -506,15 +290,11 @@ def _build_aggregate_release(
             entity_count=len(entity_refs),
             post_count=len(post_refs),
             creator_count=len(creator_refs),
+            carrier_counts=carrier_counts,
             canonical_merkle=selected_merkle,
             manifest_digest=payload_digest(final_root),
-            environment_selection=environment_selection,
+            cohort_selection=cohort_selection,
             excluded=pool_excluded,
-            pool_wide=pool_wide,
-            sample_plan_ref=(
-                UAT_SAMPLE_PLAN_REF if uat_sample_plan is not None else None
-            ),
-            sample_plan_digest=sample_plan_digest,
         )
     except Exception:
         shutil.rmtree(staging, ignore_errors=True)

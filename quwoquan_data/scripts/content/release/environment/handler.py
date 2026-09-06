@@ -20,6 +20,7 @@ from content.release.environment.coverage_receipt import (
 )
 from content.release.environment._ship_operations import (
     ShipOperationDependencies,
+    activate_release,
     apply_release,
     rollback_release,
     verify_release_consumers,
@@ -33,6 +34,10 @@ from content.release.environment.homepage_verification_cases import (
     write_homepage_verification_case_manifest,
 )
 from content.release.environment.importers import (
+    activate_content_release as _activate_content_release,
+    load_content_release_candidate_receipt as _load_content_release_candidate_receipt,
+    query_content_active_release as _query_content_active_release,
+    query_content_release_candidate as _query_content_release_candidate,
     run_content_importer as _run_content_importer,
 )
 from content.release.environment.importers import (
@@ -56,7 +61,9 @@ from content.release.environment.release_readiness import (
     EnvironmentReleaseReadinessError,
     write_environment_release_readiness,
 )
-from content.release.environment.release_only_report import write_release_only_ship_report
+from content.release.environment.release_only_report import (
+    write_release_only_ship_report,
+)
 from content.release.environment.ship_dispatch import dispatch_ship
 from content.release.environment.release_runtime import (
     assert_target_action_allowed as _assert_environment_action_allowed,
@@ -65,7 +72,7 @@ from content.release.environment.release_runtime import (
     assert_environment_release_policy,
 )
 from content.release.environment.release_runtime import (
-    load_release,
+    admit_environment_release,
     release_has_posts,
     release_requires_full_sync,
     sync_media,
@@ -97,6 +104,7 @@ from core.control_types import ReleaseRunKind
 from core.paths import (
     OUTPUT_ROOT,
     RELEASE_ROOT,
+    REPO_ROOT,
     env_data_release_run_root,
     release_ref,
 )
@@ -109,7 +117,14 @@ def _now_compact() -> str:
 
 
 def _write_tag_consumer_verification(
-    *, environment: str, release_id: str, release_kind: ReleaseKind, run_id: str, release_contract: Mapping[str, Any], import_report_path: Path, output_path: Path
+    *,
+    environment: str,
+    release_id: str,
+    release_kind: ReleaseKind,
+    run_id: str,
+    release_contract: Mapping[str, Any],
+    import_report_path: Path,
+    output_path: Path,
 ) -> Path:
     return write_tag_consumer_verification(
         output_root=OUTPUT_ROOT,
@@ -127,8 +142,13 @@ def _run_root(env: str, release_id: str, run_id: str) -> Path:
     return env_data_release_run_root(env, release_id, run_id, output_root=OUTPUT_ROOT)
 
 
-def _load_release(release_id: str) -> tuple[Path, dict[str, Any]]:
-    return load_release(RELEASE_ROOT, release_id)
+def _admit_release(args: argparse.Namespace):
+    return admit_environment_release(
+        args,
+        repo_root=REPO_ROOT,
+        output_root=OUTPUT_ROOT,
+        release_root=RELEASE_ROOT,
+    )
 
 
 def _release_requires_full_sync(release: Path) -> bool:
@@ -140,7 +160,9 @@ def _release_has_posts(contract: Mapping[str, Any]) -> bool:
     return release_has_posts(contract)
 
 
-def _create_run(env: str, release_id: str, run_id: str, *, kind: ReleaseRunKind) -> Path:
+def _create_run(
+    env: str, release_id: str, run_id: str, *, kind: ReleaseRunKind
+) -> Path:
     return _create_environment_run(
         output_root=OUTPUT_ROOT,
         environment=env,
@@ -165,28 +187,6 @@ def _write_applied_ref(*, run: Path, env: str, release_id: str) -> None:
     )
 
 
-def _restore_previous_release(
-    *,
-    environment: str,
-    failed_release_id: str,
-    previous_release_id: str,
-) -> None:
-    """Replay a verified previous release through the formal importers."""
-
-    rollback_release(
-        argparse.Namespace(
-            to_release=previous_release_id,
-            from_release_id=failed_release_id,
-            env=environment,
-            run_id=f"restore-{_now_compact()}",
-            import_to_db=True,
-            dry_run=False,
-            confirm_prod_apply=False,
-        ),
-        dependencies=_operation_dependencies(),
-    )
-
-
 def _assert_target_action_allowed(
     *,
     target: EnvironmentReleaseTarget,
@@ -205,14 +205,13 @@ def _assert_target_action_allowed(
 def _operation_dependencies() -> ShipOperationDependencies:
     return ShipOperationDependencies(
         output_root=OUTPUT_ROOT,
-        load_release=_load_release,
+        admit_release=_admit_release,
         release_requires_full_sync=_release_requires_full_sync,
         release_has_posts=_release_has_posts,
         create_run=_create_run,
         run_root=_run_root,
         sync_media=_sync_media,
         write_applied_ref=_write_applied_ref,
-        restore_previous_release=_restore_previous_release,
         assert_target_action_allowed=_assert_target_action_allowed,
         assert_environment_release_policy=assert_environment_release_policy,
         resolve_environment_release_target=resolve_environment_release_target,
@@ -221,9 +220,7 @@ def _operation_dependencies() -> ShipOperationDependencies:
         run_creator_importer=_run_creator_importer,
         run_content_importer=_run_content_importer,
         run_homepage_importer=_run_homepage_importer,
-        write_environment_coverage_receipt=(
-            write_environment_coverage_receipt
-        ),
+        write_environment_coverage_receipt=(write_environment_coverage_receipt),
         write_release_evidence=_write_release_evidence,
         write_verification_result=_write_verification_result,
         write_tag_consumer_verification=_write_tag_consumer_verification,
@@ -233,16 +230,26 @@ def _operation_dependencies() -> ShipOperationDependencies:
         write_baseline_api_verification=write_baseline_api_verification,
         write_post_api_verification=write_post_api_verification,
         write_homepage_api_verification=write_homepage_api_verification,
-        write_research_isolation_verification=(
-            write_research_isolation_verification
-        ),
+        write_research_isolation_verification=(write_research_isolation_verification),
         write_environment_release_readiness=write_environment_release_readiness,
         now_compact=_now_compact,
+        # Tag/User/Entity importers do not yet expose owner-local staged
+        # candidate receipts. Keep live mutation fail-closed until that
+        # cross-owner contract is implemented and injected here.
+        require_owner_local_staging_admission=None,
+        query_content_release_candidate=_query_content_release_candidate,
+        load_content_release_candidate_receipt=_load_content_release_candidate_receipt,
+        query_content_active_release=_query_content_active_release,
+        activate_content_release=_activate_content_release,
     )
 
 
 def _apply_release(args: argparse.Namespace) -> None:
     apply_release(args, dependencies=_operation_dependencies())
+
+
+def _activate_release(args: argparse.Namespace) -> None:
+    activate_release(args, dependencies=_operation_dependencies())
 
 
 def _rollback_release(args: argparse.Namespace) -> None:
@@ -257,7 +264,10 @@ def handle_ship(args: argparse.Namespace) -> None:
     dispatch_ship(
         args,
         release_root=RELEASE_ROOT,
+        repo_root=REPO_ROOT,
+        output_root=OUTPUT_ROOT,
         apply=_apply_release,
+        activate=_activate_release,
         rollback=_rollback_release,
         verify=_verify_release_consumers,
     )

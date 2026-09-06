@@ -4,7 +4,7 @@
 >
 > Journey / Scenario：[`JNY-014 / SCN-035`](../../../spec.md#scn-035)
 >
-> 设计归属：[L2 DEC-020](../design.md#dec-020)、[L2 DEC-024](../design.md#dec-024)、[L2 DEC-025](../design.md#dec-025)
+> 设计归属：[L2 DEC-001](../design.md#dec-001)
 
 ## 1. 用户价值
 
@@ -22,9 +22,9 @@
 ### Out of Scope
 
 - 来源发现执行、载体生产、review 与 canonical 池准入（归 [`on-demand-content-pool-admission`](../on-demand-content-pool-admission/spec.md)）。
-- immutable release、环境导入与 App 消费（归 [`multi-carrier-release`](../multi-carrier-release/spec.md)）。
+- immutable release producer handoff（归 [`multi-carrier-release`](../multi-carrier-release/spec.md)）；环境导入与 App 消费由下游环境 owner 独立拥有。
 - 由自然语言静默猜测缺失数量、未知区域、载体、lifecycle、provider、来源策略或 retry 依据；resolver 可以在 preview 中提出显式默认建议，但确认前不得写 carrier demand 或执行。
-- 新建或调用 Campaign、仓内 Agent/controller/queue/runner/fleet/recovery、managed SDK/provider 路径、第二套 Execution/发布台账或运行生命周期；意图请求只编译 confirmed carrier demand，执行由宿主 Agent 进入十阶段。
+- 新建或调用 Campaign、仓内 Agent/controller/queue/runner/fleet/recovery、managed SDK/provider 路径、第二套 Execution/发布台账或运行生命周期；意图请求只编译 confirmed carrier demand，执行由宿主 Agent 进入 producer 九阶段。
 
 ## 3. 行为要求
 
@@ -36,7 +36,7 @@
 - 内容运营者可以确认、修改或取消 preview。修改回到新的 preview。取消不写 carrier demand。只有确认才进入编译。宿主 Agent 不运行仓内 Cursor key/model/SDK semantic preflight；来源访问与素材 rights 分别在 source admission 与对象 admission 返回 typed 失败，不得塌陷为空结果。
 - 同一已确认输入、resolver policy/catalog digest 与全部依赖 ref/digest 必须生成相同 confirmed-demand digest 与每 carrier demand digest。每个 active carrier 恰好生成一个 demand record；编译器不得直写 execution work package、Campaign plan/report、reconciliation receipt、SourcePool 或 pool record。
 - 多 carrier 编译采用全有或全无语义：任一 carrier 无法形成合法 carrier demand 时，本次不发布任何新 carrier demand，已存在的 create-once artifact 保持不变并回到可修改 preview。同 ID 同 bytes 重放幂等；同 ID 不同 bytes、policy/receipt/source digest 漂移必须在写前失败。
-- `fresh` 不得携带 `retryOf`。`retry` 必须绑定 exact predecessor terminal receipt。网络、来源访问、rights、候选为空、执行中断或批次截止分别保留自身 typed 终态和下一动作。修复输入后回到 preview；已经产生 execution 事实的恢复只能创建新的 `executionId + retryOf` 并由宿主 Agent进入同一十阶段。
+- `fresh` 不得携带 `retryOf`。`retry` 必须绑定 exact predecessor terminal receipt。网络、来源访问、rights、候选为空、执行中断或批次截止分别保留自身 typed 终态和下一动作。修复输入后回到 preview；已经产生 execution 事实的恢复只能创建新的 `executionId + retryOf` 并由宿主 Agent 进入同一 producer 九阶段。
 
 <a id="req-002"></a>
 ### REQ-002 confirmed demand 输入不静默默认
@@ -48,11 +48,11 @@
 - carrier demand 的 source intent 只是已确认 `sourceSelection` 的逐载体确定性投影；编译输入不接受额外 provider 列表。旧 SourcePool、execution/campaign/provider/model 生产身份均不得进入 consumer identity、eligibility、release handoff 或 App DTO。
 
 <a id="req-003"></a>
-### REQ-003 数量三轴单义与 candidate-backed `task init`
+### REQ-003 candidate-backed `task init` 原子初始化
 
-- 三个数量各自单义且不得互相派生或反推：用户 `workload/quota` 是不可下调的对象下限，候选查询的 `candidateCount` 由 source policy 与实际候选决定，工作包 `workUnitCount` 只由 accepted candidates 派生。编译不得以 quota 冒充候选数。
+- 用户 quota 与 immutable candidate 数量分别来自 confirmed demand 与 candidate bindings；二者不互相推导。
 - 新任务初始化的目标契约为中性 `task init`：输入 confirmed carrier demand 与 immutable candidate bindings，只原子物化 `execution_manifest.json`、`0.plan/request.json`、`0.plan/target_set.json`，不运行 semantic preflight、不推进 `0.plan` 或任何后继 stage，也不创建 pool/release/environment 事实。
-- 当前 `task init --carrier-demand <path> --candidate-bindings <path>` 已符合该边界；`task execute`（含 `--stage plan-only`）、pool-dispatch/campaign 与人工手写三文件仍不是合法入口。真实宿主消费证据由 `OPEN-001` 追踪。
+- 当前 `task init --carrier-demand <path> --candidate-bindings <path>` 是唯一合法初始化入口；真实宿主消费证据由 `OPEN-001` 追踪。
 - 同 identity 同 bytes 初始化幂等；candidate ref/digest 缺失、accepted count 与 target set 不一致、同 identity 异 bytes 或任一 schema 失败时零工作包可见。
 
 ## 4. 契约引用
@@ -74,8 +74,7 @@
 - THEN 只有确认生成稳定 confirmed-demand digest，并为每个 active carrier 恰好生成一个 carrier demand；相同输入、policy/catalog digest 与依赖 ref/digest 重放得到相同摘要，同 ID 异字节在写前失败。
 - THEN 编译结果可读出 resolver policy/catalog、全部 dependency 与 carrier demand ref/digest；execution work package、Campaign plan/report、reconciliation receipt、SourcePool 与 pool record 均未由编译器写入。
 - THEN 任一 carrier 编译失败时全批零发布，已存在的 create-once artifact 不变；修复输入后回到 preview。
-- THEN 已实现的 candidate-backed `task init` 之后，confirmed demand 只由宿主 Agent 十阶段消费；source access、rights、空候选、中断或截止失败保留真实 stage 终态。恢复只能由新 `executionId + retryOf` 消费精确 receipt，且其它 carrier 的既有合格对象不被撤销。
-- THEN 同一 immutable candidate 对 1-carrier 与 4-carrier 的 success、blocked、collision 各形成可重放 benchmark；成功场景满足 preview/confirm p95 预算，blocked/collision 新 carrier demand 数为零，样本不足或超预算不得形成性能达标结论。
+- THEN 已实现的 candidate-backed `task init` 之后，confirmed demand 只由宿主 Agent 按 producer 九阶段消费；source access、rights、空候选、中断或截止失败保留真实 stage 终态。恢复只能由新 `executionId + retryOf` 消费精确 receipt，且其它 carrier 的既有合格对象不被撤销。
 
 <a id="gwt-002"></a>
 ### GWT-002 confirmed demand 承载四类 scope 且输入缺口不静默
@@ -104,15 +103,5 @@
 - 优先级：`P0`
 - 准出影响：`block`
 - 影响或价值：旧 canonical WorkRequest/`compile-intent` 实现与 schema 已删除；当前只保留上游产品语义与现役 carrier demand/task-init 边界。真实 confirmed demand 尚未通过中性 `task init` 形成 candidate-backed 工作包并由宿主 Agent 走到真实 stage terminal，因此不能证明一份意图沿目标单轨推进。
-- 完成判定：[`GWT-001`](#gwt-001) 的 confirmed demand 原子性与 [`GWT-002`](#gwt-002) 的只读输入边界保持成立；api_integration 以真实 confirmed demand 调用已实现的 `task init`，由宿主 Agent 产生真实 stage terminal，并证明新 `retryOf` 精确消费 predecessor receipt、其它 carrier 既有合格对象不被撤销。专项性能仍归 [`OPEN-002`](#open-002)。
+- 完成判定：[`GWT-001`](#gwt-001) 的 confirmed demand 原子性与 [`GWT-002`](#gwt-002) 的只读输入边界保持成立；api_integration 以真实 confirmed demand 调用已实现的 `task init`，由宿主 Agent 产生真实 stage terminal，并证明新 `retryOf` 精确消费 predecessor receipt、其它 carrier 既有合格对象不被撤销。性能观测不构成 execution authority。
 - 依赖：deterministic `task init` 已实现；尚缺真实宿主消费。入池与环境后缀分别由 [`on-demand-content-pool-admission`](../on-demand-content-pool-admission/spec.md) 与 [`multi-carrier-release`](../multi-carrier-release/spec.md) 的 OPEN 承接。
-
-<a id="open-002"></a>
-### OPEN-002 confirmed-demand preview/confirm 专项性能与成本实测缺失
-
-- 类型：`capability_gap`
-- 优先级：`P1`
-- 准出影响：`track`
-- 影响或价值：当前 2 秒 preview、5 秒 confirm 的 p95 仍是设计 SLO，通用性能门禁没有覆盖 confirmed-demand 上游；每日 1,000 次确认、平均每份 artifact 16 KiB 与 180 天保留也是容量基线而非实测，不能据此宣称编译面已稳定或成本已闭合。
-- 完成判定：`GWT-001.t13..t14` 由同一 immutable candidate 的专项 benchmark 直接覆盖。1-carrier 与 4-carrier 每个成功场景至少 20 个样本并证明 preview/confirm p95 分别不超过 2,000/5,000 ms，blocked/collision 全部零 carrier demand 发布。报告同时给出现役 confirmed-demand/carrier-demand artifacts 的 p50/p95 bytes、每日 1,000 请求的 30/180 天未压缩投影。
-- 依赖：Data owner 在编译面契约收敛后补 benchmark runner 与 canonical report；缺样本、候选 SHA/源摘要漂移或任一场景失败均保持本 OPEN，不得用通用 App/feed 性能门禁替代。

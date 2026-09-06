@@ -18,7 +18,7 @@
 - canonical identity 去重结果到 environment consumer 的无损投影
 - request-bound importer/rollback/replay readback
 
-> 图片 execution、pool、milestone、release build/promotion 与 UAT/acceptance 业务 owner 已迁至 discovery `multi-carrier-release`；本 Story 保留既有 GWT 锚点作为 consumer 合同与测试绑定，不再拥有规模完成结论。
+> 图片 execution、pool、release build/promotion 与 UAT/acceptance 业务 owner 已迁至 discovery `multi-carrier-release`；本 Story 只保留 consumer contract，不拥有运行调度、规模里程碑或环境完成结论。
 
 ### Out of Scope
 
@@ -37,14 +37,6 @@
 
 - 同一视觉资产不能通过改 URL、尺寸或文件名成为第二对象。
 
-<a id="req-003"></a>
-### REQ-003 image release and capacity evidence are request-derived
-
-- M100/M1000 的 image workload target 分别为 100/1000；quota/count 只表达请求负载与里程碑目标，不是发布门。
-- 每个 hard-qualified 图片对象均须发布；shortfall 和带 typed issues 的 discard 不否决其余对象。
-- active image workloads 按可用容量独立调度，可串行或重叠执行；固定并发、固定 worker、workspace smoke、capacity soak 与 resource samples 不作为 dispatch/promotion 前置。每个实际启动的 task 逐项记录 typed 终态，诊断 sample 不得冒充 task 结果。
-- receipt 必须记录 target/selected/qualified/finalized/discarded/shortfall，以及 object pass、first-pass、discard 与 quota attainment 的清晰分子、分母和 rate。任何 dry-run、缺对象硬门或缺环境 receipt 的估算值都不能作为放量完成，target/rate 未命中仅形成统计。
-
 <a id="req-004"></a>
 ### REQ-004 image Post 交付 generator 只有 `agent`
 
@@ -58,7 +50,6 @@
 - canonical：`quwoquan_data/schema/release/asset_rights_closure.schema.json`
 - canonical：`quwoquan_data/scripts/content/source/image_payload.py`
 - canonical：`quwoquan_data/scripts/content/release`
-- canonical：`quwoquan_data/scripts/governance/coverage/benchmark.py`
 
 ## 5. 验收场景
 
@@ -76,16 +67,6 @@
 - WHEN 图片完成下载、安全检测、Agent 配文、独立 review 和对象事务。
 - THEN hash、perceptual similarity 和 source identity 阻止重复发布。
 - THEN 归因和用户可见 copy 与 canonical 对象一致。
-
-<a id="gwt-003"></a>
-### GWT-003 image release and capacity evidence are request-derived
-
-- GIVEN request 冻结 target set、runtime policy、source digest 和模型绑定。
-- WHEN execution 形成 immutable release 并进入 integration 环境。
-- THEN import、API、consumer、rollback/replay 和成本吞吐 evidence 都绑定同一 release digest。
-- THEN 每个 qualified 图片均 finalize；target shortfall 与 typed discard 只进入 receipt，不阻断其它合格图片。
-- THEN 后续容量评估只读取真实 receipt，并按明确分子/分母报告 object pass、first-pass、discard 与 quota attainment；统计值不参与对象发布或结构性 promotion 判定。
-- THEN soak/workspace/resource samples 的缺失或失败只影响容量结论，不影响 task dispatch；canonical publish 保持对象事务单写者，最终 release 仍对被选对象及引用做 exact closure。
 
 <a id="gwt-004"></a>
 ### GWT-004 image Post generator 与 authoring evidence 单轨
@@ -121,15 +102,6 @@
 - 准出影响：`track`
 - 影响或价值：尚缺实现或直接 `spec_ref`；目标：同一视觉资产不能通过改 URL、尺寸或文件名成为第二对象。
 - 完成判定：`GWT-002` 对应行为满足且真实测试 `spec_ref` 有效
-
-<a id="open-003"></a>
-### OPEN-003 image release and capacity evidence are request-derived
-
-- 类型：`capability_gap`
-- 优先级：`P1`
-- 准出影响：`track`
-- 影响或价值：尚缺实现或直接 `spec_ref`；目标：任何 dry-run、缺对象硬门、缺环境 receipt 或估算值都不能作为放量完成，同时 target/rate shortfall 只统计而不阻断合格对象。
-- 完成判定：`GWT-003` 对应行为满足且真实测试 `spec_ref` 有效
 
 <a id="open-004"></a>
 ### OPEN-004 image Post generator 与 authoring evidence 单轨

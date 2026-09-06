@@ -10,14 +10,14 @@ creatorPersona:
   archetype: travel_blogger
   preferredCreatorIds: [qwq_creator_travel_blogger_001]
   requiredProfileTagRefs: [Format/内容角度/探店/餐厅探店]
-  allowedPerspective: [评测员, 第一人称经验]
+  allowedPerspective: [评测员, 中性事实叙事]
   mustNotClaim: [商业合作, 官方推荐]
-editorialIntent: 用真实探店结构说明是否值得专程去、适合谁、怎么点。
+editorialIntent: 依据可核验证据说明餐厅特色、适合人群与点单信息；不伪造到店经历。
 render: { articleTemplate: gentle, fontPreset: clean }
 structure:
   required: [到店场景, 招牌与点单, 味道与服务, 价格与排队, 适合人群]
   optional: [替代选择, 周边串联]
-mustIncludeFacts: [价格, 地址或片区, 招牌菜, 适合人群]
+evidenceConditionedFacts: [价格, 地址或片区, 招牌菜, 适合人群]
 forbiddenPhrases: [冷启动, 批次, 角色：, 占位, contract_fixture, 恰饭]
 wordCount: { min: 600, max: 1400 }
 imagePlan:
@@ -27,5 +27,5 @@ crossRefs: { minEntity: 1, minTag: 3 }
 recommendation:
   authorBinding: { required: true, source: creator_profile_catalog }
   exposeStyleTags: true
-  qualitySignals: [bodyLength, requiredFactsCovered, imageSlotCoverage, entityRefCount]
+  qualitySignals: [bodyLength, evidenceSupportedFactCoverage, imageSlotCoverage, entityRefCount]
   bodyForbiddenFields: [qualityScore, templateId, routingReason, coldStartBoost, isSystemBuiltin]

@@ -30,7 +30,14 @@
     "resultRefs": {
       "type": "array",
       "items": {
-        "$ref": "#/$defs/refInput"
+        "oneOf": [
+          {
+            "$ref": "#/$defs/refInput"
+          },
+          {
+            "$ref": "#/$defs/actorResultRef"
+          }
+        ]
       }
     },
     "verifierFacts": {
@@ -56,8 +63,7 @@
       "then": {
         "properties": {
           "typedIssues": {
-            "type": "array",
-            "maxItems": 0
+            "type": "array"
           },
           "resultRefs": {
             "type": "array",
@@ -190,8 +196,7 @@
       "additionalProperties": false,
       "required": [
         "code",
-        "message",
-        "recoveryStage"
+        "message"
       ],
       "properties": {
         "code": {
@@ -201,20 +206,6 @@
         "message": {
           "type": "string",
           "minLength": 1
-        },
-        "recoveryStage": {
-          "enum": [
-            "0.plan",
-            "sources",
-            "1.download",
-            "2.quality",
-            "3.compose",
-            "4.draft",
-            "5.review",
-            "publish",
-            "release",
-            "ship"
-          ]
         },
         "ref": {
           "type": "string",
@@ -297,6 +288,28 @@
           }
         }
       ]
+    },
+    "actorResultRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "scope",
+        "ref",
+        "actor"
+      ],
+      "properties": {
+        "scope": {
+          "const": "execution"
+        },
+        "ref": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))[^\\u0000]+$"
+        },
+        "actor": {
+          "$ref": "#/$defs/actor"
+        }
+      }
     }
   }
 }

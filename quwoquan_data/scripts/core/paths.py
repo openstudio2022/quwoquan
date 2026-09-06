@@ -82,7 +82,7 @@ LIBRARY_ROOT = Path(
 ).expanduser()
 # 媒体字节：source 阶段下载一次入库，成品与 publish 只引用同一条目。
 LIBRARY_MEDIA_CAS_ROOT = LIBRARY_ROOT / "_media_cas"
-# 受治理代码/输入字节：campaign capsule 与 execution bundle 共享同一份入库字节。
+# 受治理代码/输入字节：source capsule 与 execution bundle 共享同一份入库字节。
 LIBRARY_SOURCE_CAS_ROOT = LIBRARY_ROOT / "_source_cas"
 LIBRARY_CAS_ROOT_BY_KIND = {
     "media": LIBRARY_MEDIA_CAS_ROOT,
@@ -194,25 +194,6 @@ def execution_shared_entry_role(name: str) -> str:
         return "reclaimable"
     return "unknown"
 
-WORKSPACE_ROOT_BY_COMMAND = {
-    "source": "source",
-    "homepage": "homepage",
-    "post": "post",
-    "release": "release",
-}
-
-
-def normalize_execution_workspace_command(command: str) -> str:
-    """Return the only accepted execution workspace identity.
-
-    Execution reports are partitioned by a small, stable ownership set.  Stage
-    names and controller implementation names must never become a workspace
-    axis, otherwise writers and readers silently diverge.
-    """
-    normalized = str(command or "").strip()
-    if normalized not in WORKSPACE_ROOT_BY_COMMAND:
-        raise ValueError(f"unsupported execution workspace: {command}")
-    return normalized
 
 
 # ─── executionId ↔ work package ───────────────────────────────────
@@ -381,29 +362,23 @@ OBJECT_STAGES = tuple(stage.value for stage in OBJECT_STAGE_SEQUENCE)
 
 # ─── layout helpers ───────────────────────────────────────────────
 from core.execution_paths import (  # noqa: F401
-    ensure_execution_command_layout,
     ensure_execution_layout,
     ensure_object_stages,
     env_data_release_evidence_ref,
     env_data_release_run_root,
-    execution_assistant_task,
-    execution_command_root,
     execution_data,
     execution_entity_object_dir,
     execution_entity_page_input_path,
     execution_entity_stage_dir,
     execution_id_from_dir,
-    execution_inputs_dir,
     execution_manifest_path,
     execution_post_object_dir,
     execution_post_roots,
     execution_post_stage_dir,
     execution_posts_root,
-    execution_results_dir,
     execution_root_entry,
     execution_shared_dir,
     execution_source_unit_dir,
-    execution_sources_dir,
     execution_sources_root,
     executions_root,
     iter_all_execution_dirs,

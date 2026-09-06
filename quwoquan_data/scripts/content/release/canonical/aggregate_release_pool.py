@@ -26,14 +26,10 @@ from content.release.canonical.content_pool_record import (
 from content.release.canonical.effective_admission import (
     effective_admission_record as _effective_record,
 )
-from content.release.canonical.environment_release_selection import (
-    EnvironmentReleaseSelection,
-    PoolExclusion,
-    discover_pool_candidates,
-    pool_candidate_digest,
-)
-from content.release.canonical.environment_release_support import (
-    pool_gate_for_code,
+from content.release.canonical.aggregate_release_selection import (
+    ExplicitCohortSelection,
+    discover_explicit_cohort_candidates,
+    explicit_cohort_digest,
 )
 from content.release.canonical.object_source_identity import (
     source_identity_set,
@@ -45,11 +41,12 @@ from content.release.canonical.object_transaction_contract import (
 )
 from core.paths import CONTROL_PLANE_TAXONOMY_ROOT
 from core.source_digest import SourceDefinitionSnapshot
+from governance.coverage.distribution import load_content_distribution_policy
 
 
 @dataclass(frozen=True)
 class PoolReleasePreparation:
-    environment_selection: EnvironmentReleaseSelection
+    cohort_selection: ExplicitCohortSelection
     execution_ids: list[str]
     source_digests: tuple[SourceDefinitionSnapshot, ...]
     entity_catalog_digest: str | None
@@ -165,10 +162,8 @@ def pool_audit_provenance(
 
 
 def release_contents(
-    selection: EnvironmentReleaseSelection | None,
-) -> list[dict[str, object]] | None:
-    if selection is None:
-        return None
+    selection: ExplicitCohortSelection,
+) -> list[dict[str, object]]:
     return [
         {
             "contentId": candidate.content_id,
@@ -202,30 +197,6 @@ def admitted_pool_author_refs(publish_root: Path) -> list[str]:
             refs.append(root.name)
     return refs
 
-
-def _exclusion(post_ref: str, exc: Exception) -> dict[str, str]:
-    message = str(exc).strip() or exc.__class__.__name__
-    prefix, separator, _detail = message.partition(":")
-    code = (
-        prefix
-        if separator and prefix.startswith("DATA.")
-        else "DATA.POOL.OBJECT_INVALID"
-    )
-    return {
-        "postRef": post_ref,
-        "category": pool_gate_for_code(code),
-        "code": code,
-        "message": message,
-    }
-
-
-def _selection_exclusion(exclusion: PoolExclusion) -> dict[str, str]:
-    return {
-        "postRef": exclusion.post_ref,
-        "category": exclusion.gate,
-        "code": exclusion.code,
-        "message": f"{exclusion.code}: postRef={exclusion.post_ref}",
-    }
 
 
 def _pool_snapshot_digest(
@@ -280,19 +251,27 @@ def prepare_pool_release(
             raise ObjectTransactionError(f"DATA.RELEASE.COHORT_REF_INVALID: {raw_ref}")
     if len(entity_refs) + len(post_refs) != len(object_refs):
         raise ObjectTransactionError("DATA.RELEASE.COHORT_REF_DUPLICATE")
-    candidates, exclusions = discover_pool_candidates(
+    candidates, exclusions = discover_explicit_cohort_candidates(
         publish_root=publish_root,
         post_refs=sorted(post_refs),
-        strict_admission=True,
     )
     if exclusions or {row.post_ref for row in candidates} != post_refs:
         raise ObjectTransactionError("DATA.RELEASE.COHORT_POST_NOT_PUBLISHABLE")
+    if normalized_release_class == "commercial":
+        noncommercial_posts = sorted(
+            row.post_ref for row in candidates if row.usage_scope != "commercial"
+        )
+        if noncommercial_posts:
+            raise ObjectTransactionError(
+                "DATA.POOL.COMMERCIAL_RIGHTS_REQUIRED: "
+                f"posts/{noncommercial_posts[0]}"
+            )
     closure_cache: dict[
         str, tuple[set[str], list[str], list[str], list[dict[str, object]]]
     ] = {}
     for post_ref in sorted(post_refs):
         closure_cache[post_ref] = candidate_closure(
-            publish_root, post_ref=post_ref, release_mode=normalized_release_class
+            publish_root, post_ref=post_ref, release_class=normalized_release_class
         )
     entity_closure_cache: dict[str, tuple[list[str], list[str]]] = {}
     for entity_ref in sorted(entity_refs):
@@ -312,7 +291,7 @@ def prepare_pool_release(
                 f"DATA.RELEASE.COHORT_ENTITY_NOT_PUBLISHABLE: {entity_ref}"
             )
         entity_closure_cache[entity_ref] = entity_candidate_closure(
-            publish_root, entity_ref=entity_ref, release_mode=normalized_release_class
+            publish_root, entity_ref=entity_ref, release_class=normalized_release_class
         )
     required_entities = {
         ref for post_ref in post_refs for ref in closure_cache[post_ref][0]
@@ -329,6 +308,22 @@ def prepare_pool_release(
         raise ObjectTransactionError(
             f"DATA.RELEASE.COHORT_COUNT_DRIFT: expected={expected_counts} actual={counts}"
         )
+    raw_milestone = cohort.get("milestone")
+    milestone = str(raw_milestone).strip() if raw_milestone is not None else None
+    milestone_targets = None
+    if milestone is not None:
+        milestone_targets = load_content_distribution_policy().milestone_targets().get(
+            milestone
+        )
+        if milestone_targets is None:
+            raise ObjectTransactionError(
+                f"DATA.RELEASE.COHORT_MILESTONE_INVALID: {milestone!r}"
+            )
+        if counts != milestone_targets:
+            raise ObjectTransactionError(
+                "DATA.RELEASE.COHORT_MILESTONE_COUNT_DRIFT: "
+                f"milestone={milestone} expected={milestone_targets} actual={counts}"
+            )
     execution_ids, source_digests, source_identities, source_identity_set_digest = (
         pool_audit_provenance(
             publish_root, entity_refs=entity_refs, post_refs=post_refs
@@ -358,25 +353,18 @@ def prepare_pool_release(
         )
     )
     selected_candidates = tuple(sorted(candidates, key=lambda row: row.post_ref))
-    selection = EnvironmentReleaseSelection(
-        environment=None,
-        release_mode=normalized_release_class,
-        post_refs=tuple(row.post_ref for row in selected_candidates),
+    selection = ExplicitCohortSelection(
         candidates=selected_candidates,
-        pool_digest=pool_candidate_digest(selected_candidates),
-        eligible_count=len(selected_candidates),
-        eligible_counts={key: counts[key] for key in ("article", "image", "video")},
-        counts={
-            **{key: counts[key] for key in ("article", "image", "video")},
-            "total": len(selected_candidates),
-        },
-        excluded=(),
-        selection_scope="explicit_cohort",
-        milestone=None,
-        milestone_targets=None,
+        pool_digest=explicit_cohort_digest(selected_candidates),
+        eligible_count=sum(counts.values()),
+        counts={**counts, "total": sum(counts.values())},
+        milestone=milestone,
+        milestone_targets=(
+            dict(milestone_targets) if milestone_targets is not None else None
+        ),
     )
     return PoolReleasePreparation(
-        environment_selection=selection,
+        cohort_selection=selection,
         execution_ids=execution_ids,
         source_digests=source_digests,
         entity_catalog_digest=None,

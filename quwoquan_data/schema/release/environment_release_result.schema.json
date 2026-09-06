@@ -3,47 +3,169 @@
   "title": "Environment release run result",
   "type": "object",
   "required": [
-    "schema", "environment", "releaseId", "releaseClass",
-    "productLifecycleState", "containsUnverifiedAssets", "manifestDigest",
-    "runId", "status"
+    "schema",
+    "environment",
+    "releaseId",
+    "releaseClass",
+    "productLifecycleState",
+    "containsUnverifiedAssets",
+    "manifestDigest",
+    "admissionKind",
+    "runId",
+    "status",
+    "startedAt",
+    "endedAt",
+    "durationMs",
+    "verificationChecksum"
   ],
   "additionalProperties": false,
   "properties": {
-    "schema": {"const": "quwoquan_data.environment_release_result"},
-    "environment": {"enum": ["alpha", "beta", "gamma", "prod"]},
-    "releaseId": {"type": "string", "minLength": 1},
-    "releaseClass": {"enum": ["research", "commercial"]},
-    "productLifecycleState": {"enum": ["research", "commercial"]},
-    "containsUnverifiedAssets": {"type": "boolean"},
-    "manifestDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
-    "runId": {"type": "string", "minLength": 1},
-    "importRunId": {"type": "string", "minLength": 1},
-    "readinessPhase": {"enum": ["research", "consumer", "commercial"]},
+    "schema": {
+      "const": "quwoquan_data.environment_release_result"
+    },
+    "environment": {
+      "enum": [
+        "alpha",
+        "beta",
+        "gamma",
+        "prod"
+      ]
+    },
+    "releaseId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "releaseClass": {
+      "enum": [
+        "research",
+        "commercial"
+      ]
+    },
+    "productLifecycleState": {
+      "enum": [
+        "research",
+        "commercial"
+      ]
+    },
+    "containsUnverifiedAssets": {
+      "type": "boolean"
+    },
+    "manifestDigest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "admissionKind": {
+      "enum": [
+        "producer_handoff",
+        "empty_baseline_attestation"
+      ]
+    },
+    "handoffRef": {
+      "type": "string",
+      "pattern": "^handoff-ref-v1:sha256:[0-9a-f]{64}:sha256:[0-9a-f]{64}$"
+    },
+    "handoffArtifactRef": {
+      "type": "string",
+      "pattern": "^(?!/)(?!.*(?:^|/)\\.{1,2}(?:/|$))(?!.*\\\\)(?!.*[\\u0000-\\u001f\\u007f]).+/producer_release_handoff\\.json$"
+    },
+    "handoffArtifactDigest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "systemAttestationRef": {
+      "type": "string",
+      "pattern": "^data/releases/(?!\\.{1,2}/)[^/\\\\\\u0000-\\u001f\\u007f]+/attestations/release\\.json$"
+    },
+    "systemAttestationDigest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "runId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "importRunId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "readinessPhase": {
+      "enum": [
+        "research",
+        "consumer",
+        "commercial"
+      ]
+    },
     "lifecycleExitRef": {
       "type": "string",
-      "pattern": "^env/(alpha|beta|gamma|prod)/runs/release-lifecycle-exit/.+/lifecycle-exit\\.json$"
+      "pattern": "^(|env/(alpha|beta|gamma|prod)/runs/release-lifecycle-exit/.+/lifecycle-exit\\.json)$"
     },
-    "status": {"enum": ["completed", "dry_run", "prepared", "failed"]},
-    "homepageVerificationCasesRef": {"type": "string"},
-    "tagImportReportRef": {"type": "string"},
-    "creatorImportReportRef": {"type": "string"},
-    "contentImportReportRef": {"type": "string"},
-    "homepageImportReportRef": {"type": "string"},
+    "status": {
+      "enum": [
+        "completed",
+        "dry_run",
+        "prepared",
+        "failed"
+      ]
+    },
+    "startedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "endedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "durationMs": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "homepageVerificationCasesRef": {
+      "type": "string"
+    },
+    "tagImportReportRef": {
+      "type": "string"
+    },
+    "creatorImportReportRef": {
+      "type": "string"
+    },
+    "contentImportReportRef": {
+      "type": "string"
+    },
+    "homepageImportReportRef": {
+      "type": "string"
+    },
     "coverageReceiptRef": {
       "type": "string",
-      "pattern": "^env/(alpha|beta|gamma|prod)/runs/data-release/.+/coverage-receipt\\.json$"
+      "pattern": "^(|env/(alpha|beta|gamma|prod)/runs/data-release/.+/coverage-receipt\\.json)$"
     },
-    "postApiVerificationRef": {"type": "string"},
-    "releaseReadinessRef": {"type": "string", "pattern": "^env/(alpha|beta|gamma|prod)/runs/data-release/"},
+    "postApiVerificationRef": {
+      "type": "string"
+    },
+    "releaseReadinessRef": {
+      "type": "string",
+      "pattern": "^(|env/(alpha|beta|gamma|prod)/runs/data-release/.+)$"
+    },
     "researchIsolationVerificationRef": {
       "type": "string",
-      "pattern": "^env/(alpha|beta|gamma|prod)/runs/data-release/.+/research-isolation-verification\\.json$"
+      "pattern": "^(|env/(alpha|beta|gamma|prod)/runs/data-release/.+/research-isolation-verification\\.json)$"
     },
-    "tagConsumerVerificationRef": {"type": "string"},
-    "homepageApiVerificationRef": {"type": "string"},
-    "baselineApiVerificationRef": {"type": "string"},
-    "failedStage": {"type": "string", "minLength": 1},
-    "error": {"type": "string", "minLength": 1},
+    "tagConsumerVerificationRef": {
+      "type": "string"
+    },
+    "homepageApiVerificationRef": {
+      "type": "string"
+    },
+    "baselineApiVerificationRef": {
+      "type": "string"
+    },
+    "failedStage": {
+      "type": "string",
+      "minLength": 1
+    },
+    "error": {
+      "type": "string",
+      "minLength": 1
+    },
     "operationAttempts": {
       "type": "array",
       "minItems": 1,
@@ -52,17 +174,33 @@
         "type": "object",
         "additionalProperties": false,
         "required": [
-          "attempt", "canonicalErrorCode", "recoveryAction",
-          "recoveryAfterSeconds", "retryAfterSeconds", "operation"
+          "attempt",
+          "canonicalErrorCode",
+          "recoveryAction",
+          "recoveryAfterSeconds",
+          "retryAfterSeconds",
+          "operation"
         ],
         "properties": {
-          "attempt": {"type": "integer", "minimum": 1, "maximum": 2},
+          "attempt": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 2
+          },
           "canonicalErrorCode": {
             "type": "string",
             "pattern": "^(none|[A-Z][A-Z0-9_]*\\.[A-Z][A-Z0-9_]*\\.[a-z][a-z0-9_]*)$"
           },
           "recoveryAction": {
-            "enum": ["none", "retry", "surface", "absorb", "fallback", "escalate", "compensate"]
+            "enum": [
+              "none",
+              "retry",
+              "surface",
+              "absorb",
+              "fallback",
+              "escalate",
+              "compensate"
+            ]
           },
           "recoveryAfterSeconds": {
             "type": "integer",
@@ -78,18 +216,47 @@
             "type": "object",
             "additionalProperties": false,
             "required": [
-              "path", "pageId", "status", "requestId", "traceId",
-              "startedAt", "endedAt", "durationMs"
+              "path",
+              "pageId",
+              "status",
+              "requestId",
+              "traceId",
+              "startedAt",
+              "endedAt",
+              "durationMs"
             ],
             "properties": {
-              "path": {"const": "/search"},
-              "pageId": {"const": "search.global"},
-              "status": {"type": "integer", "minimum": 100, "maximum": 599},
-              "requestId": {"type": "string", "minLength": 1},
-              "traceId": {"type": "string", "minLength": 1},
-              "startedAt": {"type": "string", "format": "date-time"},
-              "endedAt": {"type": "string", "format": "date-time"},
-              "durationMs": {"type": "integer", "minimum": 0}
+              "path": {
+                "const": "/search"
+              },
+              "pageId": {
+                "const": "search.global"
+              },
+              "status": {
+                "type": "integer",
+                "minimum": 100,
+                "maximum": 599
+              },
+              "requestId": {
+                "type": "string",
+                "minLength": 1
+              },
+              "traceId": {
+                "type": "string",
+                "minLength": 1
+              },
+              "startedAt": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "endedAt": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "durationMs": {
+                "type": "integer",
+                "minimum": 0
+              }
             }
           }
         }
@@ -98,6 +265,245 @@
     "verificationChecksum": {
       "type": "string",
       "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "contentCandidateReceiptRef": {
+      "type": "string",
+      "pattern": "^(|env/(alpha|beta|gamma|prod)/runs/data-release/(?!.*(?:^|/)\\.{1,2}(?:/|$))[^\\\\\\u0000-\\u001f\\u007f]+\\.json)$"
+    },
+    "contentPreActiveReceiptRef": {
+      "type": "string",
+      "pattern": "^(|env/(alpha|beta|gamma|prod)/runs/data-release/(?!.*(?:^|/)\\.{1,2}(?:/|$))[^\\\\\\u0000-\\u001f\\u007f]+\\.json)$"
+    },
+    "contentActivationReceiptRef": {
+      "type": "string",
+      "pattern": "^(|env/(alpha|beta|gamma|prod)/runs/data-release/(?!.*(?:^|/)\\.{1,2}(?:/|$))[^\\\\\\u0000-\\u001f\\u007f]+\\.json)$"
+    },
+    "contentPostActiveReceiptRef": {
+      "type": "string",
+      "pattern": "^(|env/(alpha|beta|gamma|prod)/runs/data-release/(?!.*(?:^|/)\\.{1,2}(?:/|$))[^\\\\\\u0000-\\u001f\\u007f]+\\.json)$"
+    },
+    "contentCandidateReceiptDigest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "contentPreActiveReceiptDigest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "contentActivationReceiptDigest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "contentPostActiveReceiptDigest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
     }
-  }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "admissionKind": {
+            "const": "producer_handoff"
+          }
+        },
+        "required": [
+          "admissionKind"
+        ]
+      },
+      "then": {
+        "required": [
+          "handoffRef",
+          "handoffArtifactRef",
+          "handoffArtifactDigest"
+        ],
+        "not": {
+          "anyOf": [
+            {
+              "required": [
+                "systemAttestationRef"
+              ]
+            },
+            {
+              "required": [
+                "systemAttestationDigest"
+              ]
+            }
+          ]
+        }
+      },
+      "else": {
+        "required": [
+          "systemAttestationRef",
+          "systemAttestationDigest"
+        ],
+        "not": {
+          "anyOf": [
+            {
+              "required": [
+                "handoffRef"
+              ]
+            },
+            {
+              "required": [
+                "handoffArtifactRef"
+              ]
+            },
+            {
+              "required": [
+                "handoffArtifactDigest"
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "failed"
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "then": {
+        "required": [
+          "failedStage",
+          "error"
+        ]
+      },
+      "else": {
+        "not": {
+          "anyOf": [
+            {
+              "required": [
+                "failedStage"
+              ]
+            },
+            {
+              "required": [
+                "error"
+              ]
+            },
+            {
+              "required": [
+                "operationAttempts"
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "prepared"
+          },
+          "contentImportReportRef": {
+            "minLength": 1
+          }
+        },
+        "required": [
+          "status",
+          "contentImportReportRef"
+        ]
+      },
+      "then": {
+        "required": [
+          "contentCandidateReceiptRef",
+          "contentCandidateReceiptDigest"
+        ],
+        "properties": {
+          "contentCandidateReceiptRef": {
+            "minLength": 1
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "completed"
+          }
+        },
+        "required": [
+          "status",
+          "importRunId"
+        ]
+      },
+      "then": {
+        "required": [
+          "contentCandidateReceiptRef",
+          "contentCandidateReceiptDigest",
+          "contentPreActiveReceiptRef",
+          "contentPreActiveReceiptDigest",
+          "contentActivationReceiptRef",
+          "contentActivationReceiptDigest",
+          "contentPostActiveReceiptRef",
+          "contentPostActiveReceiptDigest"
+        ],
+        "properties": {
+          "contentCandidateReceiptRef": {
+            "minLength": 1
+          },
+          "contentPreActiveReceiptRef": {
+            "minLength": 1
+          },
+          "contentActivationReceiptRef": {
+            "minLength": 1
+          },
+          "contentPostActiveReceiptRef": {
+            "minLength": 1
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "completed"
+          },
+          "contentImportReportRef": {
+            "minLength": 1
+          }
+        },
+        "required": [
+          "status",
+          "contentImportReportRef"
+        ]
+      },
+      "then": {
+        "required": [
+          "contentCandidateReceiptRef",
+          "contentCandidateReceiptDigest",
+          "contentPreActiveReceiptRef",
+          "contentPreActiveReceiptDigest",
+          "contentActivationReceiptRef",
+          "contentActivationReceiptDigest",
+          "contentPostActiveReceiptRef",
+          "contentPostActiveReceiptDigest"
+        ],
+        "properties": {
+          "contentCandidateReceiptRef": {
+            "minLength": 1
+          },
+          "contentPreActiveReceiptRef": {
+            "minLength": 1
+          },
+          "contentActivationReceiptRef": {
+            "minLength": 1
+          },
+          "contentPostActiveReceiptRef": {
+            "minLength": 1
+          }
+        }
+      }
+    }
+  ]
 }

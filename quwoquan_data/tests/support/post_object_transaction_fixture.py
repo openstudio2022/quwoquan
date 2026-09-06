@@ -15,6 +15,7 @@ from dataclasses import replace
 from pathlib import Path
 
 import pytest
+from content.release.canonical.object_transaction_contract import canonical_transaction_id
 from content.release.canonical.post_transaction import (
     build_post_object_transaction_package as _build_post_object_transaction_package,
 )
@@ -76,6 +77,10 @@ def make_text_only_article(execution_root: Path) -> None:
         assets=[],
     )
     _write_json(manifest_path, manifest)
+    review_path = post / "5.review/content_review.json"
+    review = json.loads(review_path.read_text(encoding="utf-8"))
+    review["assetRights"] = []
+    _write_json(review_path, review)
     (post / "article.md").write_text(
         "# 西湖光影\n\n文本 post 的正文，不依赖任何媒体字节。\n",
         encoding="utf-8",
@@ -182,9 +187,10 @@ def _fixture(
     source_asset.parent.mkdir(parents=True, exist_ok=True)
     Image.new("RGB", (1280, 720), color=(30, 80, 140)).save(source_asset)
     digest = "sha256:" + hashlib.sha256(source_asset.read_bytes()).hexdigest()
-    transaction_id = (
-        f"{EXECUTION_ID}--post-"
-        f"{hashlib.sha256(POST_REF.encode('utf-8')).hexdigest()[:12]}"
+    transaction_id = canonical_transaction_id(
+        execution_id=EXECUTION_ID,
+        object_kind="posts",
+        object_ref=POST_REF,
     )
     output_root = tmp_path / "output"
     demand_path = output_root / "inputs/demand.json"
@@ -298,6 +304,7 @@ def _fixture(
                     "collectionPageUrl": "https://commons.wikimedia.org/wiki/File:Example.jpg",
                     "authorizationProof": "https://commons.wikimedia.org/wiki/File:Example.jpg",
                     "termsUrl": "https://creativecommons.org/licenses/by/4.0/",
+                    "acquisitionReceiptRef": "receipts/fixture-image-acquisition.json",
                     "creator": "Fixture Photographer",
                     "license": "CC BY 4.0",
                     "platform": "Wikimedia Commons",
@@ -325,6 +332,7 @@ def _fixture(
             "contentIdentity": "work",
             "contentId": "qwq_data_west_lake_image_fixture",
             "version": 1,
+            "variantPurpose": "original",
             "contentType": "image",
             "carrier": "image",
             "title": "西湖光影",
@@ -367,20 +375,30 @@ def _fixture(
         },
     )
     _write_json(
-        post / "5.review/attestation.json",
+        post / "5.review/content_review.json",
         {
+            "schema": "quwoquan_data.content_review",
+            "stage": "5.review",
+            "executionId": EXECUTION_ID,
+            "objectRef": f"posts/{POST_REF}",
             "decision": "approved",
-            "deterministicGate": {"status": "passed"},
-            "independentReviewer": {"status": "passed"},
-            "mediaRefReview": {"status": "passed"},
+            "draft": {"ref": "4.draft/image_work.json", "digest": "sha256:" + "1" * 64},
+            "dimensions": [{"name": "content", "decision": "approved", "issues": []}],
+            "blockingIssues": [],
+            "assetRights": [
+                {
+                    "assetRef": "sources/commons/assets/cover.jpg",
+                    "sourceUrl": "https://upload.wikimedia.org/wikipedia/commons/example.jpg",
+                    "license": "CC BY 4.0",
+                    "termsUrl": "https://creativecommons.org/licenses/by/4.0/",
+                    "authorizationProof": "https://commons.wikimedia.org/wiki/File:Example.jpg",
+                    "usageScope": "commercial",
+                    "decision": "approved",
+                    "issues": [],
+                }
+            ],
         },
     )
-    for review_name in (
-        "rubric_review.json",
-        "reviewer_result.json",
-        "media_ref_review.json",
-    ):
-        _write_json(post / "5.review" / review_name, {})
     _write_json(post / "5.review/evidence_index.json", {"evidence": []})
     publish = tmp_path / "publish"
     for relative in ("creators", "entities", "posts", "tags"):

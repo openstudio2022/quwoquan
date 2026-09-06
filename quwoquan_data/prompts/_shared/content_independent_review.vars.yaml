@@ -1,0 +1,10 @@
+template: content_independent_review
+system:
+  required: []
+  optional: []
+task:
+  required:
+    - draft
+    - claim_evidence_refs
+    - assets_rights_packet
+  optional: []

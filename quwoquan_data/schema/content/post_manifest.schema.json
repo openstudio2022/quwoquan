@@ -66,11 +66,10 @@
         "rightsBasis": { "type": "string", "minLength": 1 },
         "commercialAuthorizationStatus": { "enum": ["verified", "unverified"] },
         "publicationAdmission": {
-          "enum": ["research_release", "commercial_release", "risk_accepted_attribution_only"]
+          "enum": ["research_release", "commercial_release"]
         },
         "authorizationProofUrl": { "type": ["string", "null"] },
         "termsUrl": { "type": ["string", "null"] },
-        "riskAcceptanceId": { "type": ["string", "null"] },
         "watermarkStatus": { "const": "absent" },
         "audioRightsStatus": {
           "enum": [
@@ -238,7 +237,7 @@
     "template": { "type": "string", "description": "使用的模板名称" },
     "carrier": { "type": "string", "enum": ["article", "image", "video", "review"] },
     "generator": { "type": "string", "enum": ["agent"], "description": "正文创作来源；交付面仅允许 agent（会话模型创作），脚本拼接/占位被门禁拒绝" },
-    "generatorModel": { "type": ["string", "null"], "description": "创作所用模型标识（draft_meta.model）" },
+    "generatorModel": { "type": ["string", "null"], "description": "历史生成记录；新 producer 的 actor/model 只由 receipt 冻结" },
     "citedSourceRefs": { "type": "array", "items": { "type": "string" }, "description": "正文创作时引用的 source 证据路径" },
     "reviewDecision": { "type": "string", "enum": ["approved", "revision_needed", "rejected"] },
     "markdownDialect": { "const": "qwq-rich-md" },
@@ -248,8 +247,8 @@
     "articleCategory": {"const": "photography"},
     "publishTitle": { "type": "string" },
     "publishSeq": { "type": "integer" },
-    "createdAt": { "type": "string", "format": "date-time", "description": "内容首次创建时间（来自 draft_meta 事实）" },
-    "updatedAt": { "type": "string", "format": "date-time", "description": "内容最后编辑时间（来自 draft_meta 事实）" },
+    "createdAt": { "type": "string", "format": "date-time", "description": "内容首次创建时间" },
+    "updatedAt": { "type": "string", "format": "date-time", "description": "内容最后编辑时间" },
     "publishedAt": { "type": "string", "format": "date-time", "description": "首次公开可见时间（由 promote 注入并保留）" },
     "executionId": { "type": ["string", "null"], "description": "生成此内容的 execution id" },
     "writingIntent": {
@@ -345,13 +344,14 @@
               "required": [
                 "assetId", "fileName", "kind", "sha256", "mimeType",
                 "durationMs", "width", "height", "container", "codec",
-                "pixelFormat", "posterFileName", "subtitlesFileName",
-                "posterAssetId", "posterSha256", "subtitlesSha256", "provenanceRef",
+                "pixelFormat", "posterFileName", "posterAssetId", "posterSha256",
                 "sourceAssetRefs", "rightsRefs"
               ],
               "properties": {
                 "kind": { "const": "video" },
-                "mimeType": { "const": "video/mp4" },
+                "mimeType": {
+                  "enum": ["video/mp4", "video/webm", "video/ogg", "video/quicktime"]
+                },
                 "sha256": { "$ref": "#/$defs/sha256Digest" },
                 "posterAssetId": { "type": "string", "minLength": 1 },
                 "posterSha256": { "$ref": "#/$defs/sha256Digest" },

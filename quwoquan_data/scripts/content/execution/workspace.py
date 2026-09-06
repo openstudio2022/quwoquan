@@ -59,13 +59,6 @@ def execution_target_set_path(execution_id: str) -> Path:
     return execution_root(execution_id) / TARGET_SET_REF
 
 
-def execution_command_root(execution_id: str, command: str) -> Path:
-    normalized = str(command or "").strip()
-    if not normalized or "/" in normalized or normalized in {".", ".."}:
-        raise ValueError(f"invalid transaction workspace command: {command!r}")
-    return transaction_workspace_root() / validate_execution_id(execution_id) / normalized
-
-
 def ensure_execution_work_package_layout(execution_id: str) -> Path:
     root = execution_root(execution_id)
     root.mkdir(parents=True, exist_ok=True)
@@ -203,7 +196,6 @@ __all__ = [
     "TARGET_SET_REF",
     "entity_catalog_digest",
     "ensure_execution_work_package_layout",
-    "execution_command_root",
     "execution_manifest_path",
     "execution_request_path",
     "execution_root",

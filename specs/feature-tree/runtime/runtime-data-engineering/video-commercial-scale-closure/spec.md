@@ -16,9 +16,8 @@
 
 - asset rights、attribution、poster/subtitle/checksum/provenance 的 consumer contract
 - immutable release 到 playback、rollback/replay 的跨域同 identity readback
-- 既有运行观测 receipt 的只读消费
 
-> 视频 execution、pool、M100/M1000、release build/promotion 与 UAT/acceptance 业务 owner 已迁至 discovery `multi-carrier-release`；本 Story 保留既有锚点以承接已绑定 consumer 测试。
+> 视频 execution、pool 与 release build/promotion 业务 owner 已迁至 discovery `multi-carrier-release`；本 Story 保留既有锚点以承接已绑定 consumer 测试。
 
 ### Out of Scope
 
@@ -38,15 +37,6 @@
 ### REQ-002 media package and attribution reach consumers unchanged
 
 - 数据、服务、App 不维护第二套 attribution 字段。
-
-<a id="req-003"></a>
-### REQ-003 video release and capacity conclusions use immutable receipts
-
-- 容量与预算结论只读取真实 receipt，未执行不冒充完成。
-- M100/M1000 的 video workload target 分别为 10/100；quota/count 只表达请求负载与里程碑目标，不是发布门。每个 hard-qualified 视频均须发布，shortfall 和带 typed issues 的 discard 不否决其它合格视频。
-- receipt 必须记录 target/selected/qualified/finalized/discarded/shortfall，以及 object pass、automatic recovery、first-pass、discard 与 quota attainment 的清晰分子、分母和 rate；这些统计不参与对象发布或 `m1000Eligible`。
-- active video workloads 按可用容量独立调度，可串行或重叠执行；固定并发、固定 worker、workspace smoke、capacity soak 与 resource samples 不作为 dispatch/promotion 前置。每个实际启动的 task 逐项记录 typed 终态，诊断 sample 不得冒充 task 结果。
-- 本 Story 不拥有 M100/M1000 start/promotion。M1000 在 discovery owner 所声明的 M100 Gamma acceptance 前不得产生 source/semantic/review 或工作包副作用；runtime 只在上游 release 已形成后验证 playback consumer closure。
 
 ## 4. 契约引用
 
@@ -76,17 +66,6 @@
 - THEN H.264、poster、字幕、checksum、provenance 与 attribution 通过 metadata 同源进入服务和 App。
 - THEN 播放、错误恢复、投诉和下架链路都能关联同一媒体对象。
 
-<a id="gwt-003"></a>
-### GWT-003 video release and capacity conclusions use immutable receipts
-
-- GIVEN execution request、runtime policy、source digest 和对象存储能力已冻结。
-- WHEN execution 形成 release 并通过对应 environment profile。
-- THEN import、API、播放、rollback/replay、成本与 QoE 证据绑定同一 release digest。
-- THEN 缺 commercial profile 依赖时返回 GATE_BLOCK，不影响 baseline 或 integration 数据面验证。
-- THEN 每个 qualified 视频均 finalize；target shortfall 与 typed discard 只进入 receipt，各 rate 明确分子/分母且不参与 promotion 判定。
-- THEN soak/workspace/resource samples 的缺失或失败只影响容量结论，不影响 task dispatch；canonical publish 保持对象事务单写者，最终 release 仍对被选对象及引用做 exact closure。
-- THEN 本 Story 不请求 M1000 wave；上游缺同一 M100 Research release 的 Gamma acceptance 时，M1000 source/semantic/review 与工作包副作用均为零。consumer 只验证上游已形成 release 的 review/rights/provenance/安全/可播放与 source identity closure。
-
 ## 6. 依赖
 
 - 前置要求：[`runtime-data-engineering`](../spec.md) 的范围、要求与 SIT。
@@ -112,12 +91,3 @@
 - 准出影响：`track`
 - 影响或价值：尚缺实现或直接 `spec_ref`；目标：数据、服务、App 不维护第二套 attribution 字段。
 - 完成判定：`GWT-002` 对应行为满足且真实测试 `spec_ref` 有效
-
-<a id="open-003"></a>
-### OPEN-003 video release and capacity conclusions use immutable receipts
-
-- 类型：`capability_gap`
-- 优先级：`P1`
-- 准出影响：`track`
-- 影响或价值：尚缺实现或直接 `spec_ref`；目标：容量与预算结论只读取真实 receipt，未执行不冒充完成。
-- 完成判定：`GWT-003` 对应行为满足且真实测试 `spec_ref` 有效

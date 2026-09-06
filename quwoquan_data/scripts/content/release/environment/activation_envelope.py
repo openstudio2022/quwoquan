@@ -143,7 +143,7 @@ def build_environment_activation_envelope(
         )
     if milestone is not None:
         if (
-            milestone not in {"M100", "M1000", "M10000"}
+            milestone not in {"M1", "M10", "M100", "M1000", "M10000"}
             or readiness_phase != "research"
             or release_class != "research"
             or product_lifecycle_state != "research"

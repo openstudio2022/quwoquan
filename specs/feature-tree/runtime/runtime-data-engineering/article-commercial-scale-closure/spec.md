@@ -8,7 +8,7 @@
 
 ## 1. 用户价值
 
-作为开发、测试或运维角色，我希望通用文章 provider onboarding、单 execution 生产与基于真实回执的发布容量验收，从而让调用方获得稳定结果，并让维护者能够定位和恢复失败。
+作为开发、测试或运维角色，我希望通用文章 provider onboarding、单 execution 生产与 immutable release consumer 验收，从而让调用方获得稳定结果，并让维护者能够定位和恢复失败。
 
 ## 2. 范围与非目标
 
@@ -18,12 +18,11 @@
 - immutable release 到 importer/API/consumer/rollback/replay 的跨域同 identity 证据
 - 既有 `GWT-004` 的文章 media-mode consumer 判据
 
-> execution、reviewed delivery、pool、M100/M1000、release build/promotion 与 UAT/acceptance 业务 owner 已迁至 discovery `multi-carrier-release`；本 Story 保留既有锚点以承接已绑定测试，不再据此拥有里程碑或环境完成结论。
+> execution、reviewed delivery、pool、release build/promotion 与 UAT/acceptance 业务 owner 已迁至 discovery `multi-carrier-release`；本 Story 只保留 consumer contract，不拥有运行调度、规模里程碑或环境完成结论。
 
 ### Out of Scope
 
 - 静态区域、目标对象、数量或阶段清单
-- 未经真实 receipt 支撑的生产容量结论
 
 ## 3. 行为要求
 
@@ -40,14 +39,6 @@
 - empty baseline 是 release-bound、零 execution、零对象/creator/tag 的 immutable snapshot；Tag taxonomy 允许激活该零节点 snapshot，并允许 retired snapshot rollback/replay，历史 snapshot 不物理删除。
 - Alpha/Beta/Gamma 必须分别以真实 importer receipt、`applied_ref` 和 post/homepage（或 baseline）API report 证明激活；Prod `prepared` / `dry-run` 只能证明准备或演练，不得生成或冒充激活证据。
 - entity 的 `creatorProfileId` 必须进入 creator object closure；avatar 仅在 creator profile 绑定可校验 CAS bytes、摘要与 schema-bound commercial rights snapshot 时投影，禁止合成 URL。rights 必须明确 `depictsIdentifiablePerson`：可识别人物只能使用 `modelReleaseStatus=obtained`，非人物资产才可在权利审计通过时使用 `not_required`。
-
-<a id="req-003"></a>
-### REQ-003 capacity conclusions use only measured execution receipts
-
-- M100/M1000 的 article workload target 分别为 100/1000；quota/count 只表达请求负载与里程碑目标，不是发布门。
-- receipt 分别记录 target、selected、qualified、finalized、discarded、shortfall，以及 object pass、illustrated、first-pass、discard 与 quota attainment 的分子、分母和 rate；任何目标缺口或比率值都不阻断已闭合对象。
-- active article executions 由宿主 AI 原生串行或并发推进；固定并发、固定 worker、workspace smoke、capacity soak 与 resource samples 不作为初始化、publish 或 promotion 前置。每个实际启动的 execution/stage 逐项形成 typed 终态，宿主诊断 sample 不得冒充业务结果。
-- 容量评估可重算且不被当作生产完成；对象级 review、source/rights/provenance、同源图片闭包、去重与 canonical 引用仍是硬门。
 
 <a id="req-004"></a>
 ### REQ-004 开放式旅行/摄影文章来源站点统一 onboarding 合同与 shared commercial pool
@@ -72,7 +63,6 @@
 - canonical：`quwoquan_data/scripts/content/source`
 - canonical：`quwoquan_data/scripts/content/execution`
 - canonical：`quwoquan_data/scripts/content/release`
-- canonical：`quwoquan_data/scripts/governance/coverage/benchmark.py`
 - stage receipt：`quwoquan_data/schema/execution/stage_receipt.schema.json`
 - 历史 failed-only retry feedback execution schema 已删除；现役重试只通过新 execution 的 `retryOf` 与 predecessor stage receipt typed issues/ref 绑定。
 
@@ -100,16 +90,6 @@
 - THEN rollback receipt 明确绑定 `rollbackFromReleaseId`；empty baseline 由 baseline API readback 证明隔离下线，历史内容由后续 replay 的 importer/API readback 证明恢复。
 - THEN 生命周期 gate 不读取测试专用 activation smoke，也不把 Prod prepared/dry-run 报告计为 activated。
 
-<a id="gwt-003"></a>
-### GWT-003 capacity conclusions use only measured execution receipts
-
-- GIVEN 至少一个完成闭包的文章 execution 已产生不可变 receipt。
-- WHEN 运营评估后续规模与预算。
-- THEN object pass、illustrated、first-pass、discard 与 quota attainment 来自业务 receipts，并为每个 rate 标明分子与分母；宿主吞吐、成本与 source capacity 只作外部诊断，不记录或推导 Data queue lag。
-- THEN 未命中 workload target 或统计 rate 只形成 shortfall/趋势结论，不否决至少一个 hard-qualified 对象的发布与结构性 promotion。
-- THEN active workloads 可串行或重叠执行；每个实际 task 分别终态，soak/workspace/resource samples 的缺失或失败只影响容量结论，不影响 dispatch。canonical publish 保持对象事务单写者，最终 release 仍要求 exact closure。
-- THEN 缺失对象级硬门或 receipt 身份证据时结论为 GATE_BLOCK，不能写入静态 policy 或 acceptance 数字。
-
 <a id="gwt-004"></a>
 ### GWT-004 `illustrated` 来源缺可发布图片时的准入结论单义且可对账
 
@@ -134,7 +114,7 @@
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`track`
-- 影响或价值：尚缺真实 M100 article workload execution 对 source/rights closure 与 target/qualified/shortfall 统计的完整 receipt；frontier 的本地合同与单站 probe 不能替代规模证据。
+- 影响或价值：尚缺 fresh article execution 对 source/rights closure 与 target-level typed outcomes 的完整 receipt；frontier 的本地合同与单站 probe 不能替代业务证据。
 - 完成判定：`GWT-001` 对应行为满足且真实测试 `spec_ref` 有效
 
 <a id="open-002"></a>
@@ -145,15 +125,6 @@
 - 准出影响：`track`
 - 影响或价值：尚缺实现与验收证据，包括 article 对 canonical entity identity 的独立闭包、Alpha/Beta/Gamma 真实激活、baseline rollback 和历史 replay 环境 receipts；当前 immutable pilot-001 不得原地补写 creator closure。
 - 完成判定：`GWT-002` 对应行为满足且真实测试 `spec_ref` 有效
-
-<a id="open-003"></a>
-### OPEN-003 capacity conclusions use only measured execution receipts
-
-- 类型：`capability_gap`
-- 优先级：`P1`
-- 准出影响：`track`
-- 影响或价值：尚无真实 M100 execution receipt；容量评估不得依据 frontier probe、fixture 或估算结论关闭，也不得把 target/rate 未命中提升为对象发布门。
-- 完成判定：`GWT-003` 对应行为满足且真实测试 `spec_ref` 有效
 
 <a id="open-004"></a>
 ### OPEN-004 article illustrated→text_only 准入在硬切后无直接证据

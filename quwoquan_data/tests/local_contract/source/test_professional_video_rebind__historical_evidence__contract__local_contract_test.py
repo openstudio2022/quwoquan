@@ -1,4 +1,4 @@
-# spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-003
+# spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-020.t2
 """历史专业视频证据只能以「精确身份 + 原字节」被采纳，不得被就地改写。
 
 `GWT-003`：「adoption ref 与 receipt 同时绑定精确 source release tuple……任一

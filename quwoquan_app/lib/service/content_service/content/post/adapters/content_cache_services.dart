@@ -42,20 +42,30 @@ class PostObjectCacheService {
 
   final ObjectCacheStore<ContentPostDetailPayload> _detailStore;
   final ObjectCacheStore<ContentPostViewData> _projectionStore;
+  String _namespace = '';
+
+  void adoptNamespace(ContentCacheIsolationIdentity identity) {
+    _namespace = identity.cacheKeyPrefix;
+  }
+
+  void clearNamespace() {
+    clearAllRebuildable();
+    _namespace = '';
+  }
 
   CacheReadResult<ContentPostDetailPayload>? getDetail(String postId) {
-    return _detailStore.get(postId);
+    return _detailStore.get(_objectKey(postId));
   }
 
   CacheReadResult<ContentPostViewData>? getProjection(String postId) {
-    return _projectionStore.get(postId);
+    return _projectionStore.get(_objectKey(postId));
   }
 
   void putDetail(ContentPostDetailPayload payload) {
     final post = payload.post;
     final version = _resolvePostVersion(post);
     _detailStore.put(
-      post.id,
+      _objectKey(post.id),
       payload,
       objectVersion: version,
       cacheClass: CacheClass.recent,
@@ -68,7 +78,7 @@ class PostObjectCacheService {
       return;
     }
     _projectionStore.put(
-      post.id,
+      _objectKey(post.id),
       post,
       objectVersion: _resolvePostVersion(post),
       cacheClass: CacheClass.recent,
@@ -86,8 +96,8 @@ class PostObjectCacheService {
     if (normalized.isEmpty) {
       return;
     }
-    _detailStore.remove(normalized);
-    _projectionStore.remove(normalized);
+    _detailStore.remove(_objectKey(normalized));
+    _projectionStore.remove(_objectKey(normalized));
   }
 
   int clearRecentDetails() {
@@ -102,6 +112,11 @@ class PostObjectCacheService {
   int get detailCount => _detailStore.count;
 
   int get projectionCount => _projectionStore.count;
+
+  String _objectKey(String postId) {
+    final normalized = postId.trim();
+    return _namespace.isEmpty ? normalized : '$_namespace&postId=$normalized';
+  }
 }
 
 class ContentQuerySnapshot {
@@ -574,25 +589,49 @@ class ContentQuerySnapshotStore {
   int _hydrationGeneration = 0;
   Future<void>? _persistenceDrain;
   bool _persistenceDirty = false;
-  ContentActivationIdentity? _activationIdentity;
-  bool _activationIdentityAdopted = false;
+  ContentCacheIsolationIdentity? _isolationIdentity;
+  bool _principalIdentityAdopted = false;
 
-  /// 采纳远端权威下发的运行时内容激活身份。
+  /// 采纳当前 production query/cache 的完整隔离身份。
   ///
-  /// 身份切换只改变「哪一批 release-bound 快照可回放」，不删除快照：服务端回滚
-  /// 到旧 release 时同一次采纳即原子恢复。采纳 `null`（`no_active_release`）后
-  /// 任何绑定 release 的快照都不得回放；不绑定 release 的快照不受影响。
-  void adoptContentActivationIdentity(ContentActivationIdentity? identity) {
-    _activationIdentity = identity;
-    _activationIdentityAdopted = true;
+  /// Research principal 在服务端确认 active release 前传 `null`，因此任何持久
+  /// 快照都不可回放；权威首刷返回 tuple 后再传完整 identity。切换到不同的
+  /// environment/audience/account/persona/sourceOwner/release tuple 时，由调用方
+  /// 先清理可重建缓存，再采纳新身份。
+  void adoptContentCacheIsolationIdentity(
+    ContentCacheIsolationIdentity? identity,
+  ) {
+    _isolationIdentity = identity;
+    _principalIdentityAdopted = true;
   }
 
   bool _isReplayable(ContentQuerySnapshot snapshot) {
-    final bound = snapshot.activationIdentity;
-    if (bound == null || !_activationIdentityAdopted) {
+    if (!_principalIdentityAdopted) {
       return true;
     }
-    return bound == _activationIdentity;
+    final identity = _isolationIdentity;
+    if (identity == null) {
+      return false;
+    }
+    return snapshot.activationIdentity == identity.activationIdentity &&
+        snapshot.key.startsWith('${identity.cacheKeyPrefix}&');
+  }
+
+  String? isolateQueryKey(
+    String queryKey, {
+    ContentCacheIsolationIdentity? identity,
+  }) {
+    final normalized = queryKey.trim();
+    if (normalized.isEmpty) {
+      throw const FormatException(
+        'content cache query key must be a non-empty canonical value',
+      );
+    }
+    final effectiveIdentity = identity ?? _isolationIdentity;
+    if (effectiveIdentity == null) {
+      return null;
+    }
+    return effectiveIdentity.isolateQueryKey(normalized);
   }
 
   Future<void> ensureHydrated() async {
@@ -715,6 +754,8 @@ class ContentQuerySnapshotStore {
     final count = _snapshots.length;
     _snapshots.clear();
     _diskBackedKeys.clear();
+    _hydrationGeneration += 1;
+    _hydration = null;
     _schedulePersist();
     return count;
   }

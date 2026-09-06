@@ -6,14 +6,12 @@
     "schema",
     "stage",
     "executionId",
-    "executionBinding",
-    "sourcePolicyRevision",
-    "sourceRevision",
-    "promptBundleRevision",
-    "executionId",
     "step",
     "ref",
+    "qualityRef",
+    "qualityDigest",
     "selectedSourceUrls",
+    "selectedSourceRefs",
     "payload"
   ],
   "properties": {
@@ -31,7 +29,8 @@
       ]
     },
     "sourcePolicyRevision": {
-      "const": "encyclopedia-primary"
+      "type": "string",
+      "minLength": 1
     },
     "sourceRevision": {
       "type": "string",
@@ -47,6 +46,13 @@
     "ref": {
       "type": "string",
       "minLength": 1
+    },
+    "qualityRef": {
+      "const": "2.quality/quality_analysis.json"
+    },
+    "qualityDigest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
     },
     "selectedSourceUrls": {
       "type": "array",
@@ -154,6 +160,16 @@
     },
     "schema": {
       "const": "quwoquan_data.stage_envelope"
+    },
+    "selectedSourceRefs": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^sources/[^/]+/source\\.md$"
+      }
     }
-  }
+  },
+  "additionalProperties": false
 }

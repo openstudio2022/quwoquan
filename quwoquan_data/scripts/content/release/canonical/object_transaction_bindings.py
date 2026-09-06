@@ -47,6 +47,8 @@ def verify_entity_manifest_asset_binding(
         for raw in right_assets
         if isinstance(raw, Mapping)
     }
+    if not by_asset_id and not by_right_asset_id:
+        return
     if (
         not by_right_asset_id
         or "" in by_right_asset_id

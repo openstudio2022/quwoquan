@@ -28,9 +28,6 @@ from content.release.canonical.object_transaction_contract import (
     _tag_exists,
     _tree_digest,
 )
-from content.release.canonical.post_metadata_adoption_contract import (
-    metadata_adoption_binding,
-)
 from core.schema import assert_valid
 
 
@@ -104,9 +101,14 @@ def verify_package(
             raise ObjectTransactionError(
                 "publishMediaMode 与 packaged post manifest 漂移"
             )
+    elif object_kind == "entities":
+        manifest_mode = str(object_manifest.get("publishMediaMode") or "").strip()
+        expected_mode = "text_only" if manifest_mode == "text_only" else "not_applicable"
+        if media_mode != expected_mode:
+            raise ObjectTransactionError("publishMediaMode 与 packaged entity manifest 漂移")
     elif media_mode != "not_applicable":
         raise ObjectTransactionError(
-            "non-post object transaction publishMediaMode 必须为 not_applicable"
+            "non-content object transaction publishMediaMode 必须为 not_applicable"
         )
     review = _review_binding(object_root, package)
     closure = package.get("closure")
@@ -239,11 +241,6 @@ def verify_package(
             "对象 asset closure 与事务包 CAS 不一致："
             f"object={sorted(referenced_keys)} package={sorted(seen_keys)}"
         )
-    metadata_adoption = metadata_adoption_binding(
-        package_root=package_root,
-        object_root=object_root,
-        package=package,
-    )
     closure_digest = _closure_digest(
         object_root=object_root,
         object_kind=object_kind,
@@ -253,7 +250,6 @@ def verify_package(
         closure=closure,
         cas_rows=cas_rows,
         review=review,
-        metadata_adoption=metadata_adoption,
     )
     if closure_digest != str(package.get("objectClosureDigest") or ""):
         raise ObjectTransactionError(

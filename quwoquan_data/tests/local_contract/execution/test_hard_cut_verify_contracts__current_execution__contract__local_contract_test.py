@@ -29,6 +29,10 @@ def _write(path: Path, value: object) -> None:
     path.write_bytes(_canonical_bytes(value))
 
 
+def _digest(path: Path) -> str:
+    return "sha256:" + hashlib.sha256(path.read_bytes()).hexdigest()
+
+
 @pytest.fixture
 def initialized(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[Path, Path]:
     output = tmp_path / ".qwq_output"
@@ -84,6 +88,56 @@ def initialized(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[Path, 
     return tasks / EXECUTION_ID, candidate_path
 
 
+def _freeze_retry_package(root: Path, candidate_path: Path) -> dict[str, object]:
+    predecessor_id = "20260902--travel-video-hard-cut--test-region-a--pilot-999"
+    output = candidate_path.parent.parent
+    terminal_path = (
+        output
+        / "data/tasks"
+        / predecessor_id
+        / "_shared/receipts/001-0.plan.json"
+    )
+    _write(terminal_path, {"verdict": "blocked"})
+    retry_binding = {
+        "executionId": predecessor_id,
+        "terminalReceipt": {
+            "scope": "output",
+            "ref": terminal_path.relative_to(output).as_posix(),
+            "digest": _digest(terminal_path),
+        },
+    }
+
+    demand_path = candidate_path.with_name("demand.json")
+    demand = json.loads(demand_path.read_text(encoding="utf-8"))
+    demand["retryOf"] = predecessor_id
+    _write(demand_path, demand)
+
+    request_path = root / "0.plan/request.json"
+    request = json.loads(request_path.read_text(encoding="utf-8"))
+    request["retryOf"] = retry_binding
+    request["carrierDemand"]["digest"] = _digest(demand_path)
+    request["submittedInputs"]["carrierDemand"] = demand
+    _write(request_path, request)
+
+    manifest_path = root / "execution_manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["retryOf"] = retry_binding
+    manifest["initInputs"]["carrierDemand"] = request["carrierDemand"]
+    manifest["submittedInputs"]["carrierDemand"] = demand
+    manifest["request"]["digest"] = _digest(request_path)
+    _write(manifest_path, manifest)
+    return retry_binding
+
+
+def _rewrite_request(root: Path, request: dict[str, object]) -> None:
+    request_path = root / "0.plan/request.json"
+    _write(request_path, request)
+    manifest_path = root / "execution_manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["request"]["digest"] = _digest(request_path)
+    _write(manifest_path, manifest)
+
+
 def test_task_init_contract_validates_current_three_file_bytes(initialized: tuple[Path, Path]) -> None:
     root, candidate_path = initialized
     assert verify_task_init_contract.issues(EXECUTION_ID) == []
@@ -99,6 +153,32 @@ def test_task_init_contract_validates_current_three_file_bytes(initialized: tupl
     manifest["targetSet"]["digest"] = "sha256:" + "b" * 64
     _write(root / "execution_manifest.json", manifest)
     assert any("targetSet exact digest drift" in item for item in verify_task_init_contract.issues(EXECUTION_ID))
+
+
+def test_task_init_contract_projects_frozen_retry_execution_id(
+    initialized: tuple[Path, Path],
+) -> None:
+    root, candidate_path = initialized
+    retry_binding = _freeze_retry_package(root, candidate_path)
+
+    assert verify_task_init_contract.issues(EXECUTION_ID) == []
+
+    request = json.loads((root / "0.plan/request.json").read_text(encoding="utf-8"))
+    request["retryOf"] = {
+        **retry_binding,
+        "executionId": "20260901--travel-video-drift--test-region-a--pilot-998",
+    }
+    _rewrite_request(root, request)
+    assert "task-init carrier demand projection drift" in verify_task_init_contract.issues(
+        EXECUTION_ID
+    )
+
+    request["retryOf"] = {}
+    _rewrite_request(root, request)
+    assert any(
+        "0.plan/request.json is invalid" in failure
+        for failure in verify_task_init_contract.issues(EXECUTION_ID)
+    )
 
 
 def _source_plan() -> dict[str, object]:
@@ -265,74 +345,141 @@ def test_video_script_schema_and_stage_gate_require_execution_identity(
     assert any("video_script.json: executionId drift" in item for item in report["issues"])
 
 
-# spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-020.t12
-def test_review_identity_gate_allows_same_model_family(tmp_path: Path) -> None:
-    actor = {
-        "host": "cursor",
-        "sessionId": "review-session",
-        "modelFamily": "gpt",
-        "invocation": {"provider": "host", "model": "gpt-5.6", "runId": "review-run"},
-    }
-    author = {
-        "actor": {
-            "host": "cursor",
-            "sessionId": "author-session",
-            "modelFamily": "gpt",
-            "invocation": {"provider": "host", "model": "gpt-5.6", "runId": "author-run"},
-        }
-    }
-    _write(tmp_path / "_shared/receipts/006-4.draft.json", author)
-    assert stage_artifacts._review_identity_issues(
-        tmp_path,
-        object_ref=TARGET_REF,
-        reviewer_result={"objectRef": TARGET_REF, "actor": actor},
-        attestation={"objectRef": TARGET_REF, "independentReviewer": {"actor": actor}},
-    ) == []
+def test_quality_and_compose_hard_gates_bind_selected_source_anchors(
+    initialized: tuple[Path, Path], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root, _ = initialized
+    object_root = root / TARGET_REF
+    source_ref = "sources/source-a/source.md"
+    source_path = root / source_ref
+    source_path.parent.mkdir(parents=True, exist_ok=True)
+    source_path.write_text("source facts\n", encoding="utf-8")
+    _write(object_root / "1.download/source_refs.json", {
+        "schema": "quwoquan_data.object_source_refs",
+        "executionId": EXECUTION_ID,
+        "objectRef": TARGET_REF,
+        "sources": [{
+            "sourceUnitId": "source-a",
+            "sourceRef": source_ref,
+            "metaRef": "sources/source-a/meta.json",
+            "sourcePlanRef": "sources/plans/" + "a" * 64 + ".json",
+            "sourcePlanDigest": "sha256:" + "b" * 64,
+            "chosenCandidateDigest": "sha256:" + "c" * 64,
+            "sourceId": "source-a",
+            "sourceClass": "official",
+            "targetRefs": [TARGET_REF],
+        }],
+    })
+    quality_path = object_root / "2.quality/quality_analysis.json"
+    _write(quality_path, {
+        "schema": "quwoquan_data.quality_analysis",
+        "stage": "2.quality",
+        "executionId": EXECUTION_ID,
+        "executionBinding": "frozen",
+        "recommendation": "proceed",
+        "sourceRefs": {
+            "ref": "1.download/source_refs.json",
+            "digest": _digest(object_root / "1.download/source_refs.json"),
+        },
+        "sourcePaths": [source_ref],
+        "sourceAdmissions": [{
+            "sourceRef": source_ref,
+            "decision": "selected",
+            "evidenceHash": _digest(source_path),
+        }],
+        "rejectionReasons": [],
+        "evidenceHashes": [_digest(source_path)],
+    })
+    compose_path = object_root / "3.compose/writing_pack.json"
+    _write(compose_path, {
+        "schema": "quwoquan_data.writing_pack",
+        "stage": "3.compose",
+        "executionId": EXECUTION_ID,
+        "executionBinding": "frozen",
+        "qualityRef": "2.quality/quality_analysis.json",
+        "qualityDigest": _digest(quality_path),
+        "selectedSourceUrls": ["https://example.com/source"],
+        "selectedSourceRefs": [source_ref],
+        "ref": TARGET_REF,
+        "kind": "post",
+        "title": "西湖秋色",
+        "carrier": "video",
+    })
+    monkeypatch.setattr(stage_artifacts, "execution_root", lambda _execution_id: root)
 
-
-# spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-020.t13
-def test_review_identity_gate_rejects_author_self_review(tmp_path: Path) -> None:
-    actor = {
-        "host": "cursor",
-        "sessionId": "same-session",
-        "modelFamily": "gpt",
-        "invocation": {"provider": "host", "model": "gpt-5.6", "runId": "same-run"},
-    }
-    _write(tmp_path / "_shared/receipts/006-4.draft.json", {"actor": actor})
-    issues = stage_artifacts._review_identity_issues(
-        tmp_path,
-        object_ref=TARGET_REF,
-        reviewer_result={"objectRef": TARGET_REF, "actor": actor},
-        attestation={"objectRef": TARGET_REF, "independentReviewer": {"actor": actor}},
+    quality_report = stage_artifacts.verify_stage_artifacts(
+        execution_id=EXECUTION_ID,
+        publish_root=root / "publish",
+        release_root=root / "release",
+        through="2.quality",
     )
-    assert any("同一 host/sessionId" in issue for issue in issues)
-    assert any("runId 相同" in issue for issue in issues)
+    compose_report = stage_artifacts.verify_stage_artifacts(
+        execution_id=EXECUTION_ID,
+        publish_root=root / "publish",
+        release_root=root / "release",
+        through="3.compose",
+    )
+    assert quality_report["passed"], quality_report["issues"]
+    assert compose_report["passed"], compose_report["issues"]
+
+    quality = json.loads(quality_path.read_text(encoding="utf-8"))
+    quality["sourceAdmissions"][0]["decision"] = "rejected"
+    _write(quality_path, quality)
+    compose = json.loads(compose_path.read_text(encoding="utf-8"))
+    compose["qualityDigest"] = _digest(quality_path)
+    _write(compose_path, compose)
+    report = stage_artifacts.verify_stage_artifacts(
+        execution_id=EXECUTION_ID,
+        publish_root=root / "publish",
+        release_root=root / "release",
+        through="3.compose",
+    )
+    assert any("non-retained source IDs" in issue for issue in report["issues"])
 
 
-def test_media_review_schema_owns_rights_fields() -> None:
+# spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-020.t12
+def test_content_review_schema_owns_one_decision_and_asset_rights() -> None:
     document = {
-        "schema": "quwoquan_data.media_ref_review",
+        "schema": "quwoquan_data.content_review",
         "stage": "5.review",
         "executionId": EXECUTION_ID,
         "objectRef": TARGET_REF,
-        "passed": True,
-        "mediaIssues": [],
-        "referenceIssues": [],
-        "rightsReviews": [{
+        "decision": "approved",
+        "draft": {"ref": "4.draft/video_script.json", "digest": "sha256:" + "1" * 64},
+        "dimensions": [{"name": "content", "decision": "approved", "issues": []}],
+        "blockingIssues": [],
+        "assetRights": [{
             "assetRef": "sources/unit-1/video.mp4",
             "sourceUrl": "https://example.com/video",
             "license": "licensed",
             "termsUrl": "https://example.com/terms",
             "authorizationProof": None,
             "usageScope": "research",
-            "passed": True,
+            "decision": "approved",
             "issues": [],
         }],
     }
-    assert_valid(document, "content", "media_ref_review")
-    document.pop("rightsReviews")
-    with pytest.raises(ValueError, match="rightsReviews"):
-        assert_valid(document, "content", "media_ref_review")
+    assert_valid(document, "content", "content_review")
+    for retired in ("actor", "model", "score", "repair", "verdict"):
+        invalid = dict(document, **{retired: "forbidden"})
+        with pytest.raises(ValueError):
+            assert_valid(invalid, "content", "content_review")
+
+
+def test_rejected_content_review_is_schema_valid() -> None:
+    document = {
+        "schema": "quwoquan_data.content_review",
+        "stage": "5.review",
+        "executionId": EXECUTION_ID,
+        "objectRef": TARGET_REF,
+        "decision": "rejected",
+        "draft": {"ref": "4.draft/video_script.json", "digest": "sha256:" + "1" * 64},
+        "dimensions": [{"name": "content", "decision": "rejected", "issues": ["weak"]}],
+        "blockingIssues": ["weak"],
+        "assetRights": [],
+    }
+    assert_valid(document, "content", "content_review")
+
 
 
 @pytest.mark.parametrize("command", ["task-init-contract", "source-plan"])
@@ -399,37 +546,394 @@ def test_stage_artifact_help_declares_final_closure_default() -> None:
     assert "省略表示 publish 后 final closure" in result.stdout
 
 
-def test_review_stage_cut_does_not_require_publish_final_artifacts(
+def test_stage_contract_has_single_draft_and_review_artifacts() -> None:
+    retired = {
+        "source.clean.md", "source.layout.json", "source.quality.json",
+        "draft_meta.json", "author_self_check.json", "agent_result_envelope.json",
+        "rubric_review.json", "reviewer_result.json", "media_ref_review.json", "attestation.json",
+    }
+    for lane in ("homepage", "article", "image", "video"):
+        required = stage_artifacts.required_stage_artifacts(lane)
+        assert len(required["4.draft"]) == 1
+        assert required["5.review"] == ("content_review.json",)
+        assert retired.isdisjoint({name for names in required.values() for name in names})
+
+
+
+
+def _set_review_target(root: Path, *, target_ref: str, carrier: str) -> Path:
+    target_set_path = root / "0.plan/target_set.json"
+    target_set = json.loads(target_set_path.read_text(encoding="utf-8"))
+    target_set.update({
+        "carrier": carrier,
+        "targetCount": 1,
+        "targetRefs": [target_ref],
+        "targets": [{
+            "name": "西湖",
+            "entityType": "地点/景区",
+            "publishAngle": "风光",
+            "publishTitle": "西湖秋色",
+            "publishSeq": 1,
+        }],
+    })
+    _write(target_set_path, target_set)
+    return root / target_ref
+
+
+def _write_source_assets(
+    root: Path,
+    *,
+    object_ref: str,
+    rows: list[dict[str, object]],
+) -> None:
+    unit_ref = "sources/review-source"
+    meta: dict[str, object] = {}
+    poster_rows = [row for row in rows if row.get("assetRole") == "poster"]
+    if len(poster_rows) == 1:
+        meta = {"acquisition": {"posterAssetRef": f"assets/{poster_rows[0]['fileName']}"}}
+    _write(root / f"{unit_ref}/meta.json", meta)
+    _write(root / f"{unit_ref}/assets/index.json", {"assets": rows})
+    for row in rows:
+        asset_path = root / unit_ref / "assets" / str(row["fileName"])
+        asset_path.parent.mkdir(parents=True, exist_ok=True)
+        asset_path.write_bytes(str(row["fileName"]).encode())
+    _write(root / object_ref / "1.download/source_refs.json", {
+        "schema": "quwoquan_data.object_source_refs",
+        "executionId": EXECUTION_ID,
+        "objectRef": object_ref,
+        "sources": [{
+            "sourceUnitId": "review-source",
+            "sourceRef": f"{unit_ref}/source.md",
+            "metaRef": f"{unit_ref}/meta.json",
+            "sourcePlanRef": "sources/plans/" + "a" * 64 + ".json",
+            "sourcePlanDigest": "sha256:" + "b" * 64,
+            "chosenCandidateDigest": "sha256:" + "c" * 64,
+            "sourceId": "review-source",
+            "sourceClass": "open_license_media",
+            "targetRefs": [object_ref],
+        }],
+    })
+
+
+_REVIEW_RIGHTS_FACTS = {
+    "sourceUrl": "https://example.com/source",
+    "license": "CC BY 4.0",
+    "termsUrl": "https://creativecommons.org/licenses/by/4.0",
+    "authorizationProof": "https://example.com/proof",
+}
+
+
+def _review_rights_row(asset_ref: str) -> dict[str, object]:
+    return {
+        "assetRef": asset_ref,
+        **_REVIEW_RIGHTS_FACTS,
+        "usageScope": "research",
+        "decision": "approved",
+        "issues": [],
+    }
+
+
+def _write_content_review(
+    object_root: Path,
+    *,
+    object_ref: str,
+    draft_name: str,
+    asset_refs: list[str],
+    decision: str = "approved",
+) -> Path:
+    draft = object_root / "4.draft" / draft_name
+    review_path = object_root / "5.review/content_review.json"
+    _write(review_path, {
+        "schema": "quwoquan_data.content_review",
+        "stage": "5.review",
+        "executionId": EXECUTION_ID,
+        "objectRef": object_ref,
+        "decision": decision,
+        "draft": {"ref": f"4.draft/{draft_name}", "digest": _digest(draft)},
+        "dimensions": [{
+            "name": "content",
+            "decision": decision,
+            "issues": [] if decision == "approved" else ["weak"],
+        }],
+        "blockingIssues": [] if decision == "approved" else ["weak"],
+        "assetRights": [_review_rights_row(ref) for ref in asset_refs],
+    })
+    return review_path
+
+
+def _verify_review(root: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str, object]:
+    monkeypatch.setattr(stage_artifacts, "execution_root", lambda _execution_id: root)
+    return stage_artifacts.verify_stage_artifacts(
+        execution_id=EXECUTION_ID,
+        publish_root=root / "publish",
+        release_root=root / "release",
+        through="5.review",
+    )
+
+
+# spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-020.t12
+def test_review_stage_uses_image_draft_asset_set_without_manifest(
+    initialized: tuple[Path, Path], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root, _ = initialized
+    object_ref = "posts/image/风光/西湖秋色/1"
+    object_root = _set_review_target(root, target_ref=object_ref, carrier="image")
+    selected_ref = "sources/review-source/assets/selected.jpg"
+    unselected_ref = "sources/review-source/assets/unselected.jpg"
+    source_rows = [
+        {"fileName": "selected.jpg", "assetRole": "image", **_REVIEW_RIGHTS_FACTS},
+        {"fileName": "unselected.jpg", "assetRole": "image", **_REVIEW_RIGHTS_FACTS},
+    ]
+    _write_source_assets(root, object_ref=object_ref, rows=source_rows)
+    _write(object_root / "3.compose/writing_pack.json", {"carrier": "image"})
+    _write(object_root / "4.draft/image_work.json", {
+        "schema": "quwoquan_data.image_work",
+        "executionId": EXECUTION_ID,
+        "objectRef": object_ref,
+        "assetRefs": [selected_ref],
+        "caption": "西湖秋色",
+    })
+    _write_content_review(
+        object_root,
+        object_ref=object_ref,
+        draft_name="image_work.json",
+        asset_refs=[selected_ref],
+    )
+
+    report = _verify_review(root, monkeypatch)
+
+    assert report["passed"], report["issues"]
+    assert not (object_root / "manifest.json").exists()
+    assert unselected_ref not in json.dumps(report, ensure_ascii=False)
+
+
+@pytest.mark.parametrize("failure", ["missing", "extra", "rights-drift"])
+def test_review_stage_rejects_asset_rights_set_or_fact_drift(
+    initialized: tuple[Path, Path],
+    monkeypatch: pytest.MonkeyPatch,
+    failure: str,
+) -> None:
+    root, _ = initialized
+    object_ref = "posts/image/风光/西湖秋色/1"
+    object_root = _set_review_target(root, target_ref=object_ref, carrier="image")
+    selected_ref = "sources/review-source/assets/selected.jpg"
+    extra_ref = "sources/review-source/assets/extra.jpg"
+    _write_source_assets(root, object_ref=object_ref, rows=[
+        {"fileName": "selected.jpg", "assetRole": "image", **_REVIEW_RIGHTS_FACTS},
+        {"fileName": "extra.jpg", "assetRole": "image", **_REVIEW_RIGHTS_FACTS},
+    ])
+    _write(object_root / "3.compose/writing_pack.json", {"carrier": "image"})
+    _write(object_root / "4.draft/image_work.json", {
+        "schema": "quwoquan_data.image_work",
+        "executionId": EXECUTION_ID,
+        "objectRef": object_ref,
+        "assetRefs": [selected_ref],
+        "caption": "西湖秋色",
+    })
+    review_path = _write_content_review(
+        object_root,
+        object_ref=object_ref,
+        draft_name="image_work.json",
+        asset_refs=([] if failure == "missing" else [selected_ref, extra_ref] if failure == "extra" else [selected_ref]),
+    )
+    if failure == "rights-drift":
+        review = json.loads(review_path.read_text(encoding="utf-8"))
+        review["assetRights"][0]["license"] = "drifted"
+        _write(review_path, review)
+
+    report = _verify_review(root, monkeypatch)
+
+    assert not report["passed"]
+    expected = "asset set differs" if failure != "rights-drift" else "source rights facts drift"
+    assert any(expected in issue for issue in report["issues"])
+
+
+def test_review_stage_rejects_selected_asset_outside_object_source_refs(
+    initialized: tuple[Path, Path], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root, _ = initialized
+    object_ref = "posts/image/风光/西湖秋色/1"
+    object_root = _set_review_target(root, target_ref=object_ref, carrier="image")
+    selected_ref = "sources/review-source/assets/selected.jpg"
+    other_ref = "sources/other-source/assets/other.jpg"
+    _write_source_assets(root, object_ref=object_ref, rows=[
+        {"fileName": "selected.jpg", "assetRole": "image", **_REVIEW_RIGHTS_FACTS},
+    ])
+    _write(root / "sources/other-source/assets/index.json", {"assets": [
+        {"fileName": "other.jpg", "assetRole": "image", **_REVIEW_RIGHTS_FACTS},
+    ]})
+    other_path = root / other_ref
+    other_path.parent.mkdir(parents=True, exist_ok=True)
+    other_path.write_bytes(b"other")
+    _write(object_root / "3.compose/writing_pack.json", {"carrier": "image"})
+    _write(object_root / "4.draft/image_work.json", {
+        "schema": "quwoquan_data.image_work",
+        "executionId": EXECUTION_ID,
+        "objectRef": object_ref,
+        "assetRefs": [other_ref],
+        "caption": "西湖秋色",
+    })
+    _write_content_review(
+        object_root,
+        object_ref=object_ref,
+        draft_name="image_work.json",
+        asset_refs=[other_ref],
+    )
+
+    report = _verify_review(root, monkeypatch)
+
+    assert not report["passed"]
+    assert any("outside object source units" in issue for issue in report["issues"])
+    assert selected_ref not in json.dumps(report, ensure_ascii=False)
+
+
+def test_review_stage_derives_exact_video_and_poster_refs_from_compose(
+    initialized: tuple[Path, Path], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root, _ = initialized
+    object_root = _set_review_target(root, target_ref=TARGET_REF, carrier="video")
+    video_ref = "sources/review-source/assets/video.mp4"
+    poster_ref = "sources/review-source/assets/poster.png"
+    _write_source_assets(root, object_ref=TARGET_REF, rows=[
+        {
+            "fileName": "video.mp4",
+            "assetRole": "video",
+            "sourceAssetId": "source-video:video",
+            **_REVIEW_RIGHTS_FACTS,
+        },
+        {
+            "fileName": "poster.png",
+            "assetRole": "poster",
+            "sourceAssetId": "source-video:poster",
+            "derivedFromSourceAssetId": "source-video:video",
+            **_REVIEW_RIGHTS_FACTS,
+        },
+    ])
+    _write(object_root / "3.compose/writing_pack.json", {
+        "carrier": "video",
+        "sourceVideo": {"assetRef": video_ref},
+    })
+    _write(object_root / "4.draft/video_script.json", {
+        "schema": "quwoquan_data.video_script",
+        "executionId": EXECUTION_ID,
+        "objectRef": TARGET_REF,
+        "title": "西湖",
+        "caption": "西湖",
+        "scriptLines": ["西湖"],
+    })
+    review_path = _write_content_review(
+        object_root,
+        object_ref=TARGET_REF,
+        draft_name="video_script.json",
+        asset_refs=[video_ref, poster_ref],
+    )
+
+    report = _verify_review(root, monkeypatch)
+    assert report["passed"], report["issues"]
+
+    review = json.loads(review_path.read_text(encoding="utf-8"))
+    review["assetRights"] = review["assetRights"][:1]
+    _write(review_path, review)
+    report = _verify_review(root, monkeypatch)
+    assert any("asset set differs" in issue for issue in report["issues"])
+
+
+@pytest.mark.parametrize(
+    ("carrier", "object_ref", "compose_name", "compose", "draft_name", "draft"),
+    [
+        (
+            "article",
+            "posts/article/攻略/西湖一日游/1",
+            "writing_pack.json",
+            {"carrier": "article", "assets": []},
+            "draft.article.md",
+            "# 西湖一日游\n",
+        ),
+        (
+            "homepage",
+            "entities/地点/景区/西湖",
+            "entity_page_input.json",
+            {"payload": {"imagePlaceholderBindings": []}},
+            "page.md",
+            "# 西湖\n",
+        ),
+    ],
+)
+def test_review_stage_allows_explicit_text_only_object_without_manifest(
+    initialized: tuple[Path, Path],
+    monkeypatch: pytest.MonkeyPatch,
+    carrier: str,
+    object_ref: str,
+    compose_name: str,
+    compose: dict[str, object],
+    draft_name: str,
+    draft: str,
+) -> None:
+    root, _ = initialized
+    object_root = _set_review_target(root, target_ref=object_ref, carrier=carrier)
+    _write(object_root / f"3.compose/{compose_name}", compose)
+    draft_path = object_root / "4.draft" / draft_name
+    draft_path.parent.mkdir(parents=True, exist_ok=True)
+    draft_path.write_text(draft, encoding="utf-8")
+    _write_content_review(
+        object_root,
+        object_ref=object_ref,
+        draft_name=draft_name,
+        asset_refs=[],
+    )
+
+    report = _verify_review(root, monkeypatch)
+
+    assert report["passed"], report["issues"]
+    assert not (object_root / "manifest.json").exists()
+
+
+def test_final_artifact_closure_still_requires_manifest(
+    initialized: tuple[Path, Path], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root, _ = initialized
+    object_ref = "posts/article/攻略/西湖一日游/1"
+    object_root = _set_review_target(root, target_ref=object_ref, carrier="article")
+    _write(object_root / "3.compose/writing_pack.json", {"carrier": "article", "assets": []})
+    draft = object_root / "4.draft/draft.article.md"
+    draft.parent.mkdir(parents=True, exist_ok=True)
+    draft.write_text("# 西湖一日游\n", encoding="utf-8")
+    monkeypatch.setattr(stage_artifacts, "execution_root", lambda _execution_id: root)
+
+    report = stage_artifacts.verify_stage_artifacts(
+        execution_id=EXECUTION_ID,
+        publish_root=root / "publish",
+        release_root=root / "release",
+    )
+
+    assert not report["passed"]
+    assert any("missing final/manifest.json" in issue for issue in report["issues"])
+
+
+def test_rejected_review_does_not_fail_stage_artifacts_for_semantic_decision(
     initialized: tuple[Path, Path], monkeypatch: pytest.MonkeyPatch
 ) -> None:
     root, _ = initialized
     object_root = root / TARGET_REF
-    required = stage_artifacts.required_stage_artifacts("video")
-    for stage in paths.OBJECT_STAGES:
-        for name in required[stage]:
-            path = object_root / stage / name
-            if path.suffix == ".json":
-                _write(path, {})
-            else:
-                path.parent.mkdir(parents=True, exist_ok=True)
-                path.write_text("draft\n", encoding="utf-8")
-
+    draft = object_root / "4.draft/video_script.json"
+    _write(draft, {
+        "schema": "quwoquan_data.video_script", "executionId": EXECUTION_ID,
+        "objectRef": TARGET_REF, "title": "西湖", "caption": "西湖",
+        "scriptLines": ["西湖"],
+    })
+    _write(object_root / "manifest.json", {
+        "contentType": "article", "publishMediaMode": "text_only", "assets": [],
+    })
+    _write(object_root / "5.review/content_review.json", {
+        "schema": "quwoquan_data.content_review", "stage": "5.review",
+        "executionId": EXECUTION_ID, "objectRef": TARGET_REF, "decision": "rejected",
+        "draft": {"ref": "4.draft/video_script.json", "digest": _digest(draft)},
+        "dimensions": [{"name": "content", "decision": "rejected", "issues": ["weak"]}],
+        "blockingIssues": ["weak"], "assetRights": [],
+    })
     monkeypatch.setattr(stage_artifacts, "execution_root", lambda _execution_id: root)
-    review_report = stage_artifacts.verify_stage_artifacts(
-        execution_id=EXECUTION_ID,
-        publish_root=root / "publish",
-        release_root=root / "release",
-        commercial=False,
-        through="5.review",
+    report = stage_artifacts.verify_stage_artifacts(
+        execution_id=EXECUTION_ID, publish_root=root / "publish",
+        release_root=root / "release", through="5.review",
     )
-    final_report = stage_artifacts.verify_stage_artifacts(
-        execution_id=EXECUTION_ID,
-        publish_root=root / "publish",
-        release_root=root / "release",
-        commercial=False,
-    )
-
-    assert not any("missing final/" in issue for issue in review_report["issues"])
-    assert any("missing final/" in issue for issue in final_report["issues"])
-    assert review_report["through"] == "5.review"
-    assert final_report["through"] is None
+    assert not any("review decision" in issue or "not approved" in issue for issue in report["issues"])

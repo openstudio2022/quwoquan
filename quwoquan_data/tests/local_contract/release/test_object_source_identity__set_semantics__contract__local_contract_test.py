@@ -13,7 +13,7 @@ from content.release.canonical.object_transaction_contract import (
 def test_identity_set_rejects_retired_migration_identity_shape() -> None:
     retired_shape = {
         "identityKind": "retired_migration_kind",
-        "executionId": "sequence-017-article",
+        "executionId": "20260905--travel-article-identity--test-region-a--pilot-001",
         "sourceDigest": "sha256:" + "1" * 64,
         "canonicalObjectDigest": "sha256:" + "2" * 64,
         "migrationEvidenceDigest": "sha256:" + "3" * 64,
@@ -24,7 +24,7 @@ def test_identity_set_rejects_retired_migration_identity_shape() -> None:
 
 
 def test_modern_identity_set_still_rejects_one_execution_with_drift() -> None:
-    execution_id = "sequence-017-article"
+    execution_id = "20260905--travel-article-identity--test-region-a--pilot-001"
     first = {
         "executionId": execution_id,
         "sourceRevision": "sha256:" + "6" * 64,

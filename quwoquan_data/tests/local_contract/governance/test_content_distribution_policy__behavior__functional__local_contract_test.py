@@ -41,9 +41,6 @@ def test_research_policy_is_explicit_and_disables_media_generation() -> None:
     assert policy.image_provider_priority[:2] == ("pinterest", "tuchong")
     assert policy.illustrated_rate_target == 0.9
     assert policy.text_only_rate_target == 0.1
-    assert policy.automatic_recovery_rate_target == 0.95
-    assert policy.automatic_recovery_statistical is True
-    assert policy.automatic_recovery_non_blocking is True
     assert policy.video_popularity_signals == (
         "play",
         "like",
@@ -53,6 +50,18 @@ def test_research_policy_is_explicit_and_disables_media_generation() -> None:
     )
     assert policy.video_popularity_statistical is True
     assert policy.video_popularity_non_blocking is True
+    assert dict(policy.m1_targets) == {
+        "homepage": 1,
+        "article": 1,
+        "image": 1,
+        "video": 1,
+    }
+    assert dict(policy.m10_targets) == {
+        "homepage": 10,
+        "article": 10,
+        "image": 10,
+        "video": 2,
+    }
     assert dict(policy.m100_targets) == {
         "homepage": 100,
         "article": 100,
@@ -80,6 +89,8 @@ def test_research_policy_is_explicit_and_disables_media_generation() -> None:
 def test_scale_target_supports_every_governed_milestone() -> None:
     policy = load_content_distribution_policy()
 
+    assert policy.scale_target("M1", "video") == 1
+    assert policy.scale_target("M10", "video") == 2
     assert policy.scale_target("M100", "video") == 10
     assert policy.scale_target("M1000", "video") == 100
     assert policy.scale_target("M10000", "video") == 1000

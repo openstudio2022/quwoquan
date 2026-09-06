@@ -18,6 +18,7 @@ from content.release.canonical.lifecycle_exit import (
 )
 from core.source_digest import SourceDefinitionSnapshot, content_source_revision
 from verify import release_lifecycle_exit as exit_verify
+from verify import verify_release_lifecycle as lifecycle_verify
 
 ORIGINAL = "20260728--android-homepage--pilot-002"
 ROLLBACK = "20260728--android-homepage--empty-baseline-001"
@@ -69,6 +70,13 @@ def _attestation(path: Path, release_id: str, digest: str, *, baseline: bool) ->
             **lifecycle,
             **source_identity,
             "executionIds": [] if baseline else ["execution-001"],
+            "carrierCounts": {
+                "homepage": 0 if baseline else 1,
+                "article": 0,
+                "image": 0,
+                "video": 0,
+                "total": 0 if baseline else 1,
+            },
             "entityCount": 0 if baseline else 1,
             "postCount": 0,
             "creatorCount": 0,
@@ -191,3 +199,109 @@ def test_lifecycle_exit__rejects_replay_digest_drift_and_overwrite__local_contra
     )
     with pytest.raises(ReleaseLifecycleExitError, match="append-only Exit run"):
         _write(releases, output)
+
+
+def test_environment_lifecycle__activation_uses_prepared_apply_receipts(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    release_id = "release-a"
+    output = tmp_path / "output"
+    captured: dict[str, object] = {}
+    monkeypatch.setattr(
+        lifecycle_verify,
+        "release_lifecycle_issues",
+        lambda *_args, **_kwargs: [],
+    )
+
+    def _read_object(path: Path, **_kwargs: object) -> dict:
+        if path.name == "desired_state.json":
+            return {
+                "desiredRefs": {
+                    "entities": [],
+                    "posts": [],
+                    "creators": [],
+                    "tags": [],
+                }
+            }
+        if path.parent.name == "attestations":
+            return {"payloadSha256": DIGEST}
+        return {"releaseKind": "content"}
+
+    def _run_document(
+        run: Path, name: str, _schema: str, **_kwargs: object
+    ) -> dict:
+        run_id = run.name
+        if name == "applied_ref.json":
+            return {"environment": "gamma", "releaseId": release_id}
+        if run_id == "activate-001":
+            if name == "run.json":
+                return {
+                    "environment": "gamma",
+                    "releaseId": release_id,
+                    "runId": run_id,
+                    "kind": "activate",
+                }
+            return {
+                "environment": "gamma",
+                "releaseId": release_id,
+                "runId": run_id,
+                "importRunId": "apply-001",
+                "status": "completed",
+            }
+        if run_id == "apply-001":
+            if name == "run.json":
+                return {
+                    "environment": "gamma",
+                    "releaseId": release_id,
+                    "runId": run_id,
+                    "kind": "apply",
+                }
+            return {
+                "environment": "gamma",
+                "releaseId": release_id,
+                "runId": run_id,
+                "status": "prepared",
+            }
+        if name == "run.json":
+            return {
+                "environment": "gamma",
+                "releaseId": release_id,
+                "runId": run_id,
+                "kind": "verify",
+            }
+        return {
+            "environment": "gamma",
+            "releaseId": release_id,
+            "runId": run_id,
+            "importRunId": "activate-001",
+            "status": "completed",
+        }
+
+    def _import_issues(**kwargs: object) -> list[str]:
+        captured["run"] = kwargs["run"]
+        captured["result"] = kwargs["result"]
+        return []
+
+    monkeypatch.setattr(lifecycle_verify, "_read_object", _read_object)
+    monkeypatch.setattr(lifecycle_verify, "_run_document", _run_document)
+    monkeypatch.setattr(lifecycle_verify, "_rollback_issues", lambda **_kwargs: [])
+    monkeypatch.setattr(lifecycle_verify, "_import_receipt_issues", _import_issues)
+    monkeypatch.setattr(
+        lifecycle_verify,
+        "_bound_report",
+        lambda **_kwargs: {"environment": "gamma", "releaseId": release_id},
+    )
+
+    issues = lifecycle_verify.environment_lifecycle_issues(
+        release_id,
+        environment="gamma",
+        import_run_id="activate-001",
+        verify_run_id="verify-001",
+        release_root=tmp_path / "releases",
+        output_root=output,
+    )
+
+    assert issues == []
+    assert Path(captured["run"]).name == "apply-001"
+    assert captured["result"]["status"] == "prepared"

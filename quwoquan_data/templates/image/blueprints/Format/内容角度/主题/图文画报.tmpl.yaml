@@ -12,23 +12,21 @@ creatorPersona:
   requiredProfileTagRefs: [Topic/旅行/玩法/摄影旅拍, Format/内容载体/图文/图集]
   allowedPerspective: [摄影师, 编辑部]
   mustNotClaim: [商业图库授权, 无限制航拍]
-editorialIntent: 用图集、图注和少量文字做出精美画报，而不是把照片当普通配图。
+editorialIntent: 从已授权图片中选择、分组和排序，并写一条简短画报配文，不创作长文。
 render: { articleTemplate: journal, fontPreset: clean }
 structure:
-  required: [封面主图, 地理线索, 图集分组, 拍摄提示, 图注说明]
-  optional: [器材与焦段, 季节光线]
-mustIncludeFacts: [拍摄地点, 季节, 光线时段, 图片来源, 授权状态]
+  required: [封面选择, 图集分组, 展示顺序, 简短配文]
+  optional: [画面节奏]
+evidenceConditionedFacts: [拍摄地点, 季节, 光线时段]
 forbiddenPhrases: [冷启动, 批次, 角色：, 占位, contract_fixture, 国家地理]
-wordCount: { min: 500, max: 1200 }
-imagePolicy: { minImages: 4, captionMaxChars: 20, galleryLayout: masonry }
+wordCount: { min: 1, max: 120 }
+imagePolicy: { minImages: 4, captionMaxChars: 120, galleryLayout: masonry }
 imagePlan:
-  - { slot: 封面大片, imageLayout: fullWidth, visualStyle: 电影感 }
-  - { slot: 跨页主图, imageLayout: fullWidth }
-  - { slot: 细节特写, gallery: masonry }
-  - { slot: 地图信息图, imageLayout: wrapLeft }
+  - { slot: 封面选择, imageLayout: fullWidth }
+  - { slot: 图集分组, gallery: masonry }
 crossRefs: { minEntity: 2, minTag: 4 }
 recommendation:
   authorBinding: { required: true, source: creator_profile_catalog }
   exposeStyleTags: true
-  qualitySignals: [bodyLength, requiredFactsCovered, imageSlotCoverage, entityRefCount]
+  qualitySignals: [evidenceSupportedFactCoverage, imageSlotCoverage, entityRefCount]
   bodyForbiddenFields: [qualityScore, templateId, routingReason, coldStartBoost, isSystemBuiltin]

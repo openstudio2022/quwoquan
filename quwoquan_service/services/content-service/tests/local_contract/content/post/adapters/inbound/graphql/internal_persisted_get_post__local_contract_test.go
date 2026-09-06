@@ -406,3 +406,36 @@ func mutatePayload(payload map[string]any, mutate func(map[string]any)) map[stri
 func persistedDescriptor(payload map[string]any) map[string]any {
 	return payload["extensions"].(map[string]any)["persistedQuery"].(map[string]any)
 }
+
+type internalGraphQLResearchActiveSupplyReader struct{}
+
+func (internalGraphQLResearchActiveSupplyReader) ActiveSupplySnapshot(
+	context.Context,
+) (postports.ActiveSupplySnapshot, error) {
+	return postports.ActiveSupplySnapshot{
+		Environment: "alpha", SourceOwner: "qwq_data", Status: "active",
+		ActiveReleaseID: "rel-internal-graphql-research",
+		ManifestDigest:  "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+		ReleaseClass:    "research", ReadbackStatus: "passed", Posts: 1,
+	}, nil
+}
+
+func TestInternalPersistedGetPostFailsClosedWithoutDelegatedResearchPrincipal(t *testing.T) {
+	reader := &recordingPostDetailReader{detail: visibleDetail(postports.PostDetailSlice{PostID: "post-1"})}
+	facade := postapp.NewPostQueryFacade(postapp.PostQueryDependencies{
+		Detail: reader, ActiveSupply: internalGraphQLResearchActiveSupplyReader{},
+	})
+	handler, err := postgraphql.NewInternalPersistedHandler(facade, testContractGraphDigest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := trustedInternalGraphQLRequest(t, validInternalGraphQLPayload())
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusNotFound {
+		t.Fatalf("service-only principal status=%d body=%s", recorder.Code, recorder.Body.String())
+	}
+	if reader.calls != 0 {
+		t.Fatalf("service-only principal reached research detail reader: calls=%d", reader.calls)
+	}
+}

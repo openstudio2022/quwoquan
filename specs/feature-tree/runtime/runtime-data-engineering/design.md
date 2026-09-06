@@ -18,7 +18,7 @@
 - [`image-commercial-scale-closure`](./image-commercial-scale-closure/spec.md)：图片 asset disposition/generator 在 consumer wire 的 fail-closed。
 - [`video-commercial-scale-closure`](./video-commercial-scale-closure/spec.md)：视频 attribution/media package 到 service/App 的无损投影。
 
-execution、reviewed delivery、canonical pool、milestone、release build/promotion 与 UAT/acceptance 业务规格统一归 [`discovery-content/object-homepage-coverage-scaling`](../../discovery-content/object-homepage-coverage-scaling/spec.md)。
+execution、reviewed delivery、canonical pool、milestone 与 release build/handoff 业务规格归 [`discovery-content/object-homepage-coverage-scaling`](../../discovery-content/object-homepage-coverage-scaling/spec.md) 的 producer owner；promotion 与 UAT/acceptance 归下游环境 owner。
 
 ## 3. 端云与数据流
 
@@ -30,9 +30,9 @@ execution、reviewed delivery、canonical pool、milestone、release build/promo
 
 <a id="dec-001"></a>
 ### DEC-001 runtime-data-engineering 只拥有 immutable release consumer 边界
-- 决策：本节点不再拥有数据任务 execution、pool、milestone、release build/promotion 或 UAT/acceptance；这些业务事实统一由 discovery owner。runtime-data-engineering 只拥有 importer/outbox、Search/Recommendation/Homepage 与 App media projection 对公开 immutable release ref/digest 的消费边界。
-- 理由：同一 M100/M1000 与 release/UAT 事实存在两个 owner 会产生冲突 gate；runtime 的唯一跨域价值是确保消费者不改写、不猜测且同 identity readback。
-- 被否决方案：在四个 carrier Story 重复 workload target、环境晋级、容量或 acceptance OPEN；由 runtime integration PASS 代替 discovery 的 fresh Gamma/device evidence。
+- 决策：本节点不拥有数据任务 execution、pool、milestone、release build/handoff，也不拥有环境 promotion 或 UAT/acceptance；前者归 discovery producer owner，后者归下游环境 owner。runtime-data-engineering 只拥有 importer/outbox、Search/Recommendation/Homepage 与 App media projection 对公开 immutable release ref/digest 的消费边界。
+- 理由：同一 release/UAT 事实存在两个 owner 会产生冲突 gate；runtime 的唯一跨域价值是确保消费者不改写、不猜测且同 identity readback。
+- 被否决方案：在四个 carrier Story 重复环境晋级或 acceptance OPEN；由 runtime integration PASS 代替 discovery 的 fresh Gamma/device evidence。
 - 失败恢复：上游 ref/digest 缺失或漂移时 consumer fail closed；恢复只在上游 owner 修复后重放 importer/query，不在本域补造 release/UAT。
 - 可测试面：api_integration 绑定同一 immutable release 的 importer/outbox/query/readback；静态测试断言本节点无 execution/pool/milestone/release/UAT command owner。
 - 关联要求：`REQ-001`、`REQ-002`
@@ -74,7 +74,7 @@ execution、reviewed delivery、canonical pool、milestone、release build/promo
 
 <a id="dec-005"></a>
 ### DEC-005 宿主 execution 只作为 discovery owner 的只读上游
-- 决策：宿主 AI 十阶段、OPEN/CLOSE receipts、逐对象 publish、显式 cohort release 与 ship facts 归 discovery owner。本节点不定义 Skill、stage control、recovery 或执行状态投影，只允许 consumer diagnosis 通过公开 release/receipt ref 追溯。
+- 决策：宿主 AI producer 九阶段、OPEN/CLOSE receipts、逐对象 publish 与显式 cohort release handoff 归 discovery producer owner；ship/environment facts 归下游环境 owner。本节点不定义 Skill、stage control、recovery 或执行状态投影，只允许 consumer diagnosis 通过公开 release/handoff/环境 operation ref 追溯。
 - 理由：执行推进方式不是 runtime consumer 的业务事实；在本域再拥有一套会与 discovery 单轨分叉。
 - 被否决方案：仓内 managed SDK/controller/campaign/runner/fleet/claim、stage-gate/semantic wrapper/reducer、runtime view 回写 execution，或由 importer/UAT 写业务 verdict。
 - 失败恢复：execution 问题返回上游 typed ref；本域只能重跑自己的 importer/query，不创建 `retryOf` 内容 execution。
@@ -98,7 +98,7 @@ execution、reviewed delivery、canonical pool、milestone、release build/promo
 ### DEC-007 UAT runner 只消费 runtime readback，不拥有 acceptance
 - 决策：sample plan、target binding、raw `ReadinessCaseResult` 与 `EnvironmentAcceptanceFact` 的 authority 继续由 discovery/metadata/Ops owner；runtime 只提供被 required runner 调用的 release-bound readback。
 - 理由：readback producer 与 UAT result/acceptance writer 是不同 owner；本域 PASS 不能代替 registered physical device raw facts 或 Gamma acceptance。
-- 被否决方案：把 verdict 写进 Data readiness、由 bundle/counts 推导 acceptance、从 runtime integration 触发 M1000。
+- 被否决方案：把 verdict 写进 Data readiness、由 bundle/counts 推导 acceptance、从 runtime integration 触发上游内容生产。
 - 失败恢复：readback 缺失或漂移只返回 typed blocker，不写 raw result/acceptance；由外层 runner 保留真实结果。
 - 可测试面：local_contract 锁定 port 只读，api_integration 提供同 release/candidate readback。
 - 关联要求：`REQ-006`
@@ -118,5 +118,5 @@ execution、reviewed delivery、canonical pool、milestone、release build/promo
 
 - 成本影响保持同量级：reset 只处理 canonical publish/inventory 元数据，replay 成本与被选 terminal execution 数量线性相关；release materialization 可重建，不引入 content library 之外的长期 media holder。
 - reset 写阶段在取得锁后 60 秒内完成或 fail closed；环境从 empty baseline 恢复原 release 的目标为 5 分钟内完成。超时只产生失败 receipt，不放宽锁、holder protection 或 closure。
-- SLI 直接读取 create-once reset/stage/ship receipt、empty/replay lifecycle、pool inspection、raw readiness result、target binding 与 acceptance fact 的完成状态和耗时；View 与 bundle 只做查询，不新增第二份状态台账。
-- rollout、Gamma acceptance 与 M1000 start gate 归 discovery/Ops owner。本域只在 active pointer 改变后按 same digest 重放 consumer projection；未完成消费证据保留在 `OPEN-004`、`OPEN-005`、`OPEN-008`。
+- SLI 直接读取 create-once reset/producer-stage receipt 与下游 ship receipt、empty/replay lifecycle、canonical identity state query、raw readiness result、target binding 与 acceptance fact 的完成状态和耗时；View 与 bundle 只做查询，不新增第二份状态台账。
+- 内容生产启动不由 Runtime 决定。本域只在 active pointer 改变后按 same digest 重放 consumer projection；未完成消费证据保留在 `OPEN-004`、`OPEN-005`、`OPEN-008`。

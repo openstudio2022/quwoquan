@@ -107,30 +107,6 @@
         "region": {
           "type": "string"
         },
-        "sourceName": {
-          "type": "string"
-        },
-        "geoTagRef": {
-          "type": "string"
-        },
-        "geoTagRefs": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "typeTagRefs": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "aliases": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
         "publishAngle": {
           "type": "string",
           "minLength": 1,
@@ -144,34 +120,62 @@
         "publishSeq": {
           "type": "integer",
           "minimum": 1
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "carrier": {
+            "const": "homepage"
+          }
         },
-        "qualifiedHomepageSource": {
-          "type": "object",
-          "required": [
-            "provider",
-            "title",
-            "url"
-          ],
-          "additionalProperties": false,
-          "properties": {
-            "provider": {
-              "enum": [
-                "wikipedia",
-                "baidu_baike",
-                "toutiao_baike"
+        "required": [
+          "carrier"
+        ]
+      },
+      "then": {
+        "properties": {
+          "targets": {
+            "items": {
+              "not": {
+                "anyOf": [
+                  {
+                    "required": [
+                      "publishAngle"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "publishTitle"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "publishSeq"
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "targets": {
+            "items": {
+              "required": [
+                "publishAngle",
+                "publishTitle",
+                "publishSeq"
               ]
-            },
-            "title": {
-              "type": "string",
-              "minLength": 1
-            },
-            "url": {
-              "type": "string",
-              "pattern": "^https://"
             }
           }
         }
       }
     }
-  }
+  ]
 }

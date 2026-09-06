@@ -1,0 +1,303 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/release/producer_release_handoff.schema.json",
+  "title": "Terminal immutable Data producer release handoff",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "handoffId",
+    "releaseId",
+    "executionIds",
+    "milestone",
+    "carrierCounts",
+    "release",
+    "producerReleaseReceipts",
+    "explicitCohort",
+    "receiptChains",
+    "frozenReferences",
+    "contentPoolObjects",
+    "producerBaselineRevision"
+  ],
+  "properties": {
+    "schema": {
+      "const": "quwoquan_data.producer_release_handoff"
+    },
+    "handoffId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$"
+    },
+    "releaseId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "executionIds": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/executionId"
+      }
+    },
+    "milestone": {
+      "enum": [
+        "M1",
+        "M10",
+        "M100",
+        "M1000",
+        "M10000"
+      ]
+    },
+    "carrierCounts": {
+      "$ref": "#/$defs/counts"
+    },
+    "release": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "scope",
+        "ref",
+        "payloadDigest",
+        "headerRef",
+        "headerDigest"
+      ],
+      "properties": {
+        "scope": {
+          "const": "output"
+        },
+        "ref": {
+          "$ref": "#/$defs/ref"
+        },
+        "payloadDigest": {
+          "$ref": "#/$defs/digest"
+        },
+        "headerRef": {
+          "$ref": "#/$defs/ref"
+        },
+        "headerDigest": {
+          "$ref": "#/$defs/digest"
+        }
+      }
+    },
+    "producerReleaseReceipts": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "executionId",
+          "receipt"
+        ],
+        "properties": {
+          "executionId": {
+            "$ref": "#/$defs/executionId"
+          },
+          "receipt": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "scope",
+              "ref",
+              "digest"
+            ],
+            "properties": {
+              "scope": {
+                "const": "output"
+              },
+              "ref": {
+                "$ref": "#/$defs/ref"
+              },
+              "digest": {
+                "$ref": "#/$defs/digest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "explicitCohort": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "scope",
+        "ref",
+        "digest",
+        "document"
+      ],
+      "properties": {
+        "scope": {
+          "enum": [
+            "output",
+            "repo"
+          ]
+        },
+        "ref": {
+          "$ref": "#/$defs/ref"
+        },
+        "digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "document": {
+          "$ref": "release_cohort.schema.json"
+        }
+      }
+    },
+    "receiptChains": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "executionId",
+          "openRequests",
+          "receipts"
+        ],
+        "properties": {
+          "executionId": {
+            "$ref": "#/$defs/executionId"
+          },
+          "openRequests": {
+            "type": "array",
+            "minItems": 9,
+            "maxItems": 9,
+            "items": {
+              "$ref": "../execution/stage_open_request.schema.json"
+            }
+          },
+          "receipts": {
+            "type": "array",
+            "minItems": 9,
+            "maxItems": 9,
+            "items": {
+              "$ref": "../execution/stage_receipt.schema.json"
+            }
+          }
+        }
+      }
+    },
+    "producerBaselineRevision": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "contentPoolObjects": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "objectRef",
+          "carrier",
+          "queryDocument",
+          "queryDigest"
+        ],
+        "properties": {
+          "objectRef": {
+            "$ref": "#/$defs/ref"
+          },
+          "carrier": {
+            "enum": [
+              "homepage",
+              "article",
+              "image",
+              "video"
+            ]
+          },
+          "queryDocument": {
+            "$ref": "content_pool_handoff_query.schema.json"
+          },
+          "queryDigest": {
+            "$ref": "#/$defs/digest"
+          }
+        }
+      }
+    },
+    "frozenReferences": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/sealedReference"
+      }
+    }
+  },
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "ref": {
+      "type": "string",
+      "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))[^\\u0000]+$"
+    },
+    "executionId": {
+      "type": "string",
+      "pattern": "^20[0-9]{6}--[a-z][a-z0-9-]*-(homepage|article|image|video)-[a-z][a-z0-9-]*--[a-z0-9][a-z0-9-]*--(pilot|scale|full)-[0-9]{3,}$"
+    },
+    "sealedReference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "scope",
+        "ref",
+        "digest",
+        "contentBase64"
+      ],
+      "properties": {
+        "scope": {
+          "enum": [
+            "execution",
+            "output",
+            "repo"
+          ]
+        },
+        "ref": {
+          "$ref": "#/$defs/ref"
+        },
+        "digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "contentBase64": {
+          "type": "string"
+        }
+      }
+    },
+    "counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "homepage",
+        "article",
+        "image",
+        "video",
+        "total"
+      ],
+      "properties": {
+        "homepage": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "article": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "image": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "video": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "total": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    }
+  }
+}

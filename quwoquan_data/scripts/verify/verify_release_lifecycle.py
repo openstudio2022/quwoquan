@@ -118,8 +118,70 @@ def environment_lifecycle_issues(
         )
         if document.get("runId") != import_run_id:
             issues.append(f"{import_run / filename}: runId does not match directory")
-    if run.get("kind") not in {"apply", "rollback"}:
-        issues.append(f"{import_run / 'run.json'}: import run kind must be apply or rollback")
+    run_kind = str(run.get("kind") or "")
+    receipt_run = import_run
+    receipt_result = result
+    if prod_mode == "activated" and run_kind == "activate":
+        prepared_run_id = str(result.get("importRunId") or "")
+        if not prepared_run_id:
+            issues.append(
+                f"{import_run / 'result.json'}: activation must bind prepared apply run"
+            )
+        else:
+            prepared_run = _run_root(
+                output_root=outputs,
+                environment=environment,
+                release_id=release_id,
+                run_id=prepared_run_id,
+            )
+            prepared_identity = _run_document(
+                prepared_run,
+                "run.json",
+                "environment_release_run",
+                issues=issues,
+            )
+            prepared_result = _run_document(
+                prepared_run,
+                "result.json",
+                "environment_release_result",
+                issues=issues,
+            )
+            for document, filename in (
+                (prepared_identity, "run.json"),
+                (prepared_result, "result.json"),
+            ):
+                if not document:
+                    continue
+                issues += _identity_issues(
+                    document,
+                    path=prepared_run / filename,
+                    environment_field="environment",
+                    environment=environment,
+                    release_id=release_id,
+                )
+                if document.get("runId") != prepared_run_id:
+                    issues.append(
+                        f"{prepared_run / filename}: runId does not match directory"
+                    )
+            if prepared_identity and prepared_identity.get("kind") != "apply":
+                issues.append(
+                    f"{prepared_run / 'run.json'}: activation predecessor must be apply"
+                )
+            if prepared_result and prepared_result.get("status") != "prepared":
+                issues.append(
+                    f"{prepared_run / 'result.json'}: activation predecessor is not prepared"
+                )
+            if prepared_identity and prepared_result:
+                receipt_run = prepared_run
+                receipt_result = prepared_result
+    elif prod_mode == "activated" and run_kind != "rollback":
+        issues.append(
+            f"{import_run / 'run.json'}: activated run kind must be activate or rollback"
+        )
+    elif prod_mode != "activated" and run_kind not in {"apply", "rollback"}:
+        issues.append(
+            f"{import_run / 'run.json'}: prepared/dry-run kind must be apply or rollback"
+        )
     issues.extend(
         _rollback_issues(
             run=run,
@@ -158,8 +220,8 @@ def environment_lifecycle_issues(
     if prod_mode in {"activated", "dry-run"}:
         issues.extend(
             _import_receipt_issues(
-                run=import_run,
-                result=result,
+                run=receipt_run,
+                result=receipt_result,
                 output_root=outputs,
                 environment=environment,
                 release_id=release_id,

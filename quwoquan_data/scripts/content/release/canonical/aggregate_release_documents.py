@@ -65,18 +65,12 @@ def release_header_document(
     canonical_merkle: str,
     release_class: str,
     product_lifecycle_state: str,
-    reviewed_closure_adoption: Mapping[str, Any] | None,
-    selection_scope: str | None = None,
-    target_environment: str | None = None,
-    release_mode: str | None = None,
     pool_digest: str | None = None,
     counts: Mapping[str, int] | None = None,
     contents: list[dict[str, object]] | None = None,
     authors: list[dict[str, object]] | None = None,
     milestone: str | None = None,
     milestone_targets: Mapping[str, int] | None = None,
-    sample_plan_ref: str | None = None,
-    sample_plan_digest: str | None = None,
     source_identities: list[dict[str, object]] | None = None,
     source_identity_set_digest: str | None = None,
 ) -> dict[str, Any]:
@@ -118,17 +112,6 @@ def release_header_document(
         "executionIds": execution_ids,
         "sourceDigests": source_digest_documents,
     }
-    sample_binding = (sample_plan_ref, sample_plan_digest)
-    if any(value is not None for value in sample_binding) and not all(
-        value is not None for value in sample_binding
-    ):
-        raise ObjectTransactionError(
-            "DATA.RELEASE.UAT_SAMPLE_BINDING_INCOMPLETE"
-        )
-    if milestone is not None and sample_plan_ref is None:
-        raise ObjectTransactionError(
-            "DATA.RELEASE.UAT_SAMPLE_BINDING_REQUIRED"
-        )
     if scalar_mode:
         document.update(
             {
@@ -141,13 +124,9 @@ def release_header_document(
         assert source_identities is not None
         document["sourceIdentities"] = list(source_identities)
         document["sourceIdentitySetDigest"] = source_identity_set_digest
-    if reviewed_closure_adoption is not None:
-        document["reviewedClosureAdoption"] = dict(reviewed_closure_adoption)
     if pool_digest is not None:
         document.update(
             {
-                "selectionScope": selection_scope,
-                "releaseMode": release_mode,
                 "poolDigest": pool_digest,
                 "counts": dict(counts or {}),
                 "contents": list(contents or []),
@@ -155,14 +134,9 @@ def release_header_document(
                 "buildResult": "completed",
             }
         )
-        if target_environment is not None:
-            document["targetEnvironment"] = target_environment
         if milestone is not None:
             document["milestone"] = milestone
             document["milestoneTargets"] = dict(milestone_targets or {})
-        if sample_plan_ref is not None:
-            document["samplePlanRef"] = sample_plan_ref
-            document["samplePlanDigest"] = sample_plan_digest
     validate_release_header(document, label=f"release_header:{release_id}")
     return document
 
@@ -177,6 +151,7 @@ def release_attestation_document(
     source_digests: tuple[SourceDefinitionSnapshot, ...],
     asset_admission: Mapping[str, Any],
     canonical_merkle: str,
+    carrier_counts: Mapping[str, int],
     entity_count: int,
     post_count: int,
     creator_count: int,
@@ -203,6 +178,7 @@ def release_attestation_document(
         research_accepted_count=int(asset_admission["researchAcceptedCount"]),
         commercial_accepted_count=int(asset_admission["commercialAcceptedCount"]),
         execution_ids=tuple(execution_ids),
+        carrier_counts=dict(carrier_counts),
         entity_count=entity_count,
         post_count=post_count,
         creator_count=creator_count,

@@ -46,8 +46,14 @@ func Run() {
 	postsDB := flag.String("posts-db", "quwoquan_content", "target db for posts")
 	env := flag.String("env", "", "environment label (for logging)")
 	dryRun := flag.Bool("dry-run", false, "load + report only, do not write mongo")
-	mode := flag.String("mode", "upsert", "apply mode: upsert|sync|reset-source")
-	deletePolicy := flag.String("delete-policy", "none", "missing object policy: none|tombstone|hard-delete")
+	activationMode := flag.String("activation-mode", "", "required release action: stage-only|activate")
+	expectedActiveReleaseID := flag.String("expected-active-release-id", "", "activate CAS expected current release id; empty only with --expected-active-empty")
+	expectedActiveManifestDigest := flag.String("expected-active-manifest-digest", "", "activate CAS expected current manifest digest")
+	expectedActiveRevision := flag.Int64("expected-active-revision", -1, "activate CAS expected current pointer revision; use 0 with --expected-active-empty")
+	expectedActiveEmpty := flag.Bool("expected-active-empty", false, "activate only when no active pointer exists")
+	readActiveReport := flag.String("read-active-report", "", "read current Content active pointer as a typed JSON report and exit")
+	mode := flag.String("mode", "upsert", "apply mode: upsert|sync")
+	deletePolicy := flag.String("delete-policy", "none", "missing object policy: none|tombstone (deferred during candidate stage)")
 	sourceOwner := flag.String("source-owner", "qwq_data", "source owner for imported documents")
 	reportPath := flag.String("report", "", "optional machine-readable import report path")
 	requireReplay := flag.Bool(
@@ -66,6 +72,27 @@ func Run() {
 		"exact replay repair count; requires --require-replay",
 	)
 	flag.Parse()
+	if strings.TrimSpace(*readActiveReport) != "" {
+		if strings.TrimSpace(*env) == "" {
+			log.Fatal("--read-active-report requires --env")
+		}
+		ctx := context.Background()
+		client, err := mongo.Connect(options.Client().ApplyURI(*mongoURI))
+		if err != nil {
+			log.Fatalf("mongo connect for active pointer read: %v", err)
+		}
+		defer client.Disconnect(ctx)
+		active, err := ReadActiveImportedPostRelease(
+			ctx, client.Database(*postsDB), *env, strings.TrimSpace(*sourceOwner),
+		)
+		if err != nil {
+			log.Fatalf("read active Content release pointer: %v", err)
+		}
+		if err := WriteActiveReleaseReport(*readActiveReport, active); err != nil {
+			log.Fatalf("write active Content release report: %v", err)
+		}
+		return
+	}
 	if err := ValidateReplayRepairOptions(
 		*requireReplay,
 		*expectedOutboxRepairCount,
@@ -77,6 +104,39 @@ func Run() {
 		*replaySourceImportReport,
 	); err != nil {
 		log.Fatal(err)
+	}
+	if *activationMode != "stage-only" && *activationMode != "activate" {
+		log.Fatal("--activation-mode is required and must be stage-only or activate")
+	}
+	if *mode != "upsert" && *mode != "sync" {
+		log.Fatal("--mode must be upsert or sync; reset-source is not supported")
+	}
+	if *deletePolicy != "none" && *deletePolicy != "tombstone" {
+		log.Fatal("--delete-policy must be none or tombstone")
+	}
+	if *mode != "sync" && *deletePolicy != "none" {
+		log.Fatal("--delete-policy=tombstone requires --mode=sync")
+	}
+	if *activationMode == "stage-only" &&
+		(*expectedActiveEmpty || *expectedActiveRevision >= 0 ||
+			strings.TrimSpace(*expectedActiveReleaseID) != "" ||
+			strings.TrimSpace(*expectedActiveManifestDigest) != "") {
+		log.Fatal("expected-current flags require --activation-mode=activate")
+	}
+	if *activationMode == "activate" {
+		hasExpectedTuple := strings.TrimSpace(*expectedActiveReleaseID) != "" ||
+			strings.TrimSpace(*expectedActiveManifestDigest) != "" || *expectedActiveRevision >= 0
+		if *expectedActiveEmpty == hasExpectedTuple {
+			log.Fatal("activate requires exactly one of --expected-active-empty or the complete expected-active tuple")
+		}
+		if !*expectedActiveEmpty &&
+			(strings.TrimSpace(*expectedActiveReleaseID) == "" ||
+				strings.TrimSpace(*expectedActiveManifestDigest) == "" || *expectedActiveRevision <= 0) {
+			log.Fatal("activate expected-active tuple requires release id, manifest digest, and positive revision")
+		}
+		if *expectedActiveEmpty && *expectedActiveRevision != -1 {
+			log.Fatal("--expected-active-empty cannot be combined with --expected-active-revision")
+		}
 	}
 
 	if strings.TrimSpace(*releaseRoot) == "" {
@@ -181,6 +241,7 @@ func Run() {
 		reportPostBindings = replayPostBindings
 	}
 	log.Printf("[import] env=%s loaded posts=%d", *env, len(posts))
+	reportActivationMode := ImportReportActivationMode(*activationMode, *requireReplay)
 
 	if *dryRun {
 		log.Printf("[import] dry-run: not writing mongo")
@@ -193,9 +254,11 @@ func Run() {
 			"manifestDigest": releaseBinding.ManifestDigest,
 			"mode":           *mode,
 			"deletePolicy":   *deletePolicy,
+			"activationMode": reportActivationMode,
 			"counts":         ImportPoolCounts(posts, len(desired.DesiredRefs.Entities)),
 			"postBindings":   reportPostBindings,
 			"auditEvents":    []string{"DataReleasePrepared"},
+			"stageResult":    ImportStageResultDocument(ImportedReleaseApplyResult{}),
 		})
 		return
 	}
@@ -216,6 +279,8 @@ func Run() {
 		ReleaseID:                 desired.ReleaseID,
 		ManifestDigest:            releaseBinding.ManifestDigest,
 		ReleaseClass:              releaseBinding.ReleaseClass,
+		ReleaseKind:               releaseBinding.ReleaseKind,
+		ActivationMode:            *activationMode,
 		Mode:                      *mode,
 		DeletePolicy:              *deletePolicy,
 		SourceOwner:               *sourceOwner,
@@ -224,64 +289,117 @@ func Run() {
 		ExpectedOutboxRepairCount: expectedRepairCount,
 		ReplayPostBindings:        replayPostBindings,
 	})
-	applyResult, err := ApplyImportedPostRelease(
+	stageOpts := opts
+	stageOpts.ActivationMode = "stage-only"
+	if opts.RequireReplay {
+		stageOpts.ActivationMode = "repair-active"
+	}
+	database := client.Database(*postsDB)
+	applyResult, err := StageImportedPostRelease(
 		ctx,
-		client.Database(*postsDB),
+		database,
 		*env,
 		posts,
-		now,
-		opts,
-	)
-	if err != nil {
-		log.Fatalf("apply Content-owned Data release: %v", err)
-	}
-	mediaAssetsProjected, err := UpsertReleaseMediaAssetProjections(
-		ctx,
-		client.Database(*postsDB).Collection("media_assets"),
 		releaseMediaAssets,
-		releaseBinding.SourceOwner,
-		opts.ReleaseID,
 		now,
+		stageOpts,
 	)
 	if err != nil {
-		log.Fatalf("project release media assets: %v", err)
+		log.Fatalf("stage Content-owned Data release: %v", err)
 	}
+	activationResult := ReleaseActivationResult{}
+	if *activationMode == "activate" {
+		expectedRevision := *expectedActiveRevision
+		if *expectedActiveEmpty {
+			expectedRevision = 0
+		}
+		expected := ExpectedActiveRelease{
+			Empty:          *expectedActiveEmpty,
+			SourceOwner:    opts.SourceOwner,
+			ReleaseID:      *expectedActiveReleaseID,
+			ManifestDigest: *expectedActiveManifestDigest,
+			Revision:       expectedRevision,
+		}
+		activationResult, err = ActivateImportedPostRelease(
+			ctx,
+			database,
+			*env,
+			ReleaseBindingFromImportOptions(opts),
+			expected,
+			now,
+		)
+		if err != nil {
+			log.Fatalf("activate Content-owned Data release: %v", err)
+		}
+	}
+	mediaAssetsProjected := applyResult.MediaAssetsProjected
 	activeCounts := ImportPoolCounts(posts, len(desired.DesiredRefs.Entities))
 	activeCounts["mediaAssetsProjected"] = mediaAssetsProjected
 	activeCounts["postsUpserted"] = applyResult.PostsUpserted
 	activeCounts["postsRemoved"] = applyResult.PostsRemoved
 	activeCounts["outboxEventsReady"] = applyResult.OutboxEventsReady
 	activeCounts["outboxEventsAppended"] = applyResult.OutboxEventsAppended
-	auditEvents := ImportAuditEvents(
-		applyResult.PreviousReleaseID,
-		applyResult.PreviousManifestDigest,
-		applyResult.OutboxRepairAudits...,
-	)
+	if *activationMode == "activate" {
+		activeCounts["postsUpserted"] = activationResult.PostsMaterialized
+		activeCounts["postsRemoved"] = activationResult.PostsRemoved
+		activeCounts["mediaAssetsProjected"] = activationResult.MediaAssetsMaterialized
+		activeCounts["outboxEventsReady"] = activationResult.OutboxEventsReady
+		activeCounts["outboxEventsAppended"] = activationResult.OutboxEventsAppended
+	}
+	auditEvents := ImportStageAuditEvents(applyResult.OutboxRepairAudits...)
+	if *activationMode == "activate" {
+		auditEvents = ImportAuditEvents(
+			activationResult.Previous.ReleaseID,
+			activationResult.Previous.ManifestDigest,
+			applyResult.OutboxRepairAudits...,
+		)
+	}
 	if opts.RequireReplay {
 		auditEvents = ImportReplayRepairAuditEvents(
 			applyResult.OutboxRepairAudits...,
 		)
 	}
-	if err := WriteImportReport(*reportPath, bson.M{
+	reportMode := *activationMode
+	if opts.RequireReplay {
+		reportMode = "repair-active"
+	}
+	report := bson.M{
 		"schema":         "quwoquan.content_import_report",
-		"status":         "imported",
+		"status":         ImportReportStatus(reportMode),
 		"environment":    *env,
 		"releaseId":      opts.ReleaseID,
 		"sourceOwner":    opts.SourceOwner,
 		"manifestDigest": opts.ManifestDigest,
 		"mode":           opts.Mode,
 		"deletePolicy":   opts.DeletePolicy,
+		"activationMode": reportActivationMode,
 		"counts":         activeCounts,
 		"postBindings":   reportPostBindings,
 		"auditEvents":    auditEvents,
 		"generatedAt":    now,
-	}); err != nil {
+		"stageResult":    ImportStageResultDocument(applyResult),
+	}
+	if *activationMode == "activate" {
+		readback, readErr := ReadActiveImportedPostRelease(ctx, database, *env, opts.SourceOwner)
+		if readErr != nil {
+			log.Fatalf("read back activated Content release pointer: %v", readErr)
+		}
+		if !readback.Found || readback.ReleaseID != activationResult.Active.ReleaseID ||
+			readback.ManifestDigest != activationResult.Active.ManifestDigest ||
+			readback.Revision != activationResult.Active.Revision {
+			log.Fatal("GATE_BLOCK: activated Content release readback differs from CAS result")
+		}
+		report["activationResult"] = ActivationResultDocument(activationResult, readback)
+	}
+	if err := WriteImportReport(*reportPath, report); err != nil {
 		log.Fatalf("write import report: %v", err)
 	}
-	log.Printf("[import] OK env=%s release=%s mode=%s deletePolicy=%s upserted posts=%d outboxEvents=%d appended=%d repaired=%d removed posts=%d replayed=%t",
-		*env, opts.ReleaseID, opts.Mode, opts.DeletePolicy, applyResult.PostsUpserted,
-		applyResult.OutboxEventsReady, applyResult.OutboxEventsAppended,
-		applyResult.OutboxEventsRepaired, applyResult.PostsRemoved, applyResult.Replayed)
+	log.Printf("[import] OK env=%s release=%s status=%s mode=%s deletePolicy=%s materializedPosts=%d materializedMedia=%d outboxEvents=%d appended=%d removedPosts=%d replayed=%t",
+		*env, opts.ReleaseID, ImportReportStatus(reportMode), opts.Mode, opts.DeletePolicy,
+		activeCounts["postsUpserted"], activeCounts["mediaAssetsProjected"],
+		activeCounts["outboxEventsReady"], activeCounts["outboxEventsAppended"],
+		activeCounts["postsRemoved"], applyResult.Replayed || activationResult.Replayed)
+
 }
 
 // ValidateReplayRepairOptions keeps the bounded repair mode explicit. Normal
@@ -295,6 +413,33 @@ func ValidateReplayRepairOptions(requireReplay bool, expectedRepairCount int) er
 		return fmt.Errorf("--expected-outbox-repair-count requires --require-replay")
 	}
 	return nil
+}
+
+// ImportReportStatus reports importer-owned staging facts only. Activation
+// is recorded by the independent content release activation receipt, while a
+// bounded replay repair retains its explicit validation status.
+func ImportReportStatus(activationMode string) string {
+	if strings.TrimSpace(activationMode) == "repair-active" {
+		return "replay_validated"
+	}
+	return "imported"
+}
+
+// ImportReportActivationMode keeps the Data-reachable import report on the
+// stage-only rail; activation is not an importer-owned report fact.
+func ImportReportActivationMode(_ string, _ bool) string {
+	return "stage-only"
+}
+
+// ImportStageAuditEvents reports only facts established by candidate staging.
+func ImportStageAuditEvents(repairs ...ImportedPostOutboxRepairAudit) []string {
+	events := []string{"DataReleasePrepared", "DataReleaseVerified"}
+	sortedRepairs := append([]ImportedPostOutboxRepairAudit(nil), repairs...)
+	sort.Slice(sortedRepairs, func(left, right int) bool {
+		return sortedRepairs[left].EventID < sortedRepairs[right].EventID
+	})
+	events = append(events, fmt.Sprintf("DataReleaseOutboxRepair|count=%d", len(sortedRepairs)))
+	return events
 }
 
 // ImportAuditEvents records the previous active pointer and bounded outbox
@@ -371,9 +516,13 @@ func UpsertPosts(ctx context.Context, coll *mongo.Collection, posts []PostDoc, n
 type ImportOptions struct {
 	ReleaseID      string
 	ManifestDigest string
+	// ActivationMode 由 CLI importer 显式选择 stage-only 或 activate；
+	// StageImportedPostRelease 只执行 stage，激活必须另调 CAS 命令。
+	ActivationMode string
 	// ReleaseClass 是 release.json 声明的 release 级类别（research|commercial），
 	// 随导入落进 data_release_state，供 research readback 判定 release 类别。
 	ReleaseClass              string
+	ReleaseKind               string
 	Mode                      string
 	DeletePolicy              string
 	SourceOwner               string
@@ -395,9 +544,6 @@ func NormalizeImportOptions(opts ImportOptions) ImportOptions {
 	}
 	if opts.SourceOwner == "" {
 		opts.SourceOwner = "qwq_data"
-	}
-	if opts.ProjectionVersion <= 0 {
-		opts.ProjectionVersion = time.Now().UTC().UnixMilli()
 	}
 	return opts
 }
@@ -641,88 +787,86 @@ func desiredEntityRefs(entities []EntityDoc) []string {
 	return refs
 }
 
+func BuildCanonicalImportedPostDocument(
+	post PostDoc,
+	now time.Time,
+	opts ImportOptions,
+	lifecycleStatus string,
+) (bson.M, error) {
+	opts = NormalizeImportOptions(opts)
+	contentIdentity, err := canonicalImportedContentIdentity(post.ContentIdentity)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", post.PostRef, err)
+	}
+	postID := RuntimePostID(post.ContentID)
+	if postID == "" {
+		return nil, fmt.Errorf("contentId is required to derive runtime postId")
+	}
+	runtimeEntityRefs := post.NormalizedEntityRefs
+	if len(runtimeEntityRefs) == 0 {
+		runtimeEntityRefs = post.EntityRefs
+	}
+	accessMode := MediaDeliveryAccessModeForReleaseClass(opts.ReleaseClass)
+	media := ImportedMediaFields(importedPostAssets(post), accessMode)
+	body := post.ArticleMarkdown
+	summary := ProjectImportedArticleSummary(post.ArticleMarkdown)
+	if post.ContentType == "image" {
+		body = post.Body
+		summary = post.Body
+	}
+	document := bson.M{
+		"_id": postID, "postRef": post.PostRef, "postId": postID,
+		"contentType": post.ContentType, "contentId": post.ContentID,
+		"contentVersion": post.ContentVersion, "poolSourceType": post.PoolSourceType,
+		"variantPurpose": post.VariantPurpose, "admission": post.Admission,
+		"poolStatus": post.PoolStatus, "contentIdentity": contentIdentity,
+		"title": post.Title, "angle": post.Angle, "seq": post.Seq,
+		"entityRefs": runtimeEntityRefs, "tagRefs": post.TagRefs,
+		"intersectionHints": post.IntersectionHints, "semanticMentions": post.SemanticMentions,
+		"authorId": post.AuthorID, "authorDisplayNameSnapshot": post.AuthorDisplayName,
+		"authorAvatarUrlSnapshot": post.AuthorAvatarURL,
+		"creatorProfileId":        post.CreatorProfileID, "creatorArchetype": post.CreatorArchetype,
+		"creatorProfileVersion": post.CreatorProfileVersion,
+		"creatorDisclosure":     post.CreatorDisclosure, "experienceClaimMode": post.ExperienceClaimMode,
+		"authorQualitySignals": post.AuthorQualitySignals,
+		"sourceCollectionId":   post.SourceCollectionID, "sourcePlatform": post.SourcePlatform,
+		"sourceAttribution": post.SourceAttribution, "creator": post.Creator,
+		"page": post.Page, "licenseProof": post.LicenseProof,
+		"template": post.Template, "articleTemplate": post.Template,
+		"body": body, "summary": summary, "mediaUrls": media.MediaURLs,
+		"mediaItems": media.MediaItems, "coverUrl": media.CoverURL,
+		"mediaAssetIds": media.MediaAssetIDs, "articleMarkdown": post.ArticleMarkdown,
+		"articleDigest": post.ArticleDigest, "articleMarkdownDigest": post.ArticleDigest,
+		"articleAssetManifest": ImportedArticleAssetManifest(post.ArticleAssetManifest, accessMode),
+		"createdAt":            post.CreatedAt, "updatedAt": post.UpdatedAt,
+		"publishedAt": post.PublishedAt, "version": opts.ProjectionVersion,
+		"status": "published", "visibility": "public",
+		"moderationStatus": importedModerationStatus, "sourceHash": sourceHash(post),
+	}
+	applyImportedVideoFields(document, media)
+	ApplyImportedAuthorAvatarDeliveryFields(document, post, accessMode)
+	for key, value := range releaseFields(opts, now, lifecycleStatus) {
+		document[key] = value
+	}
+	return document, nil
+}
+
 func UpsertPostsWithOptions(ctx context.Context, coll *mongo.Collection, posts []PostDoc, now time.Time, opts ImportOptions) (int, error) {
 	opts = NormalizeImportOptions(opts)
 	n := 0
-	for _, p := range posts {
-		contentIdentity, err := canonicalImportedContentIdentity(p.ContentIdentity)
+	for _, post := range posts {
+		document, err := BuildCanonicalImportedPostDocument(post, now, opts, "active")
 		if err != nil {
-			return n, fmt.Errorf("%s: %w", p.PostRef, err)
-		}
-		postID := RuntimePostID(p.ContentID)
-		if postID == "" {
-			return n, fmt.Errorf("contentId is required to derive runtime postId")
-		}
-		newHash := sourceHash(p)
-		runtimeEntityRefs := p.NormalizedEntityRefs
-		if len(runtimeEntityRefs) == 0 {
-			runtimeEntityRefs = p.EntityRefs
-		}
-		accessMode := MediaDeliveryAccessModeForReleaseClass(opts.ReleaseClass)
-		media := ImportedMediaFields(importedPostAssets(p), accessMode)
-		body := p.ArticleMarkdown
-		summary := ProjectImportedArticleSummary(p.ArticleMarkdown)
-		if p.ContentType == "image" {
-			body = p.Body
-			summary = p.Body
-		}
-		doc := bson.M{
-			"postRef": p.PostRef, "postId": postID, "contentType": p.ContentType,
-			"contentId": p.ContentID, "contentVersion": p.ContentVersion,
-			"poolSourceType": p.PoolSourceType, "variantPurpose": p.VariantPurpose,
-			"admission": p.Admission, "poolStatus": p.PoolStatus,
-			"contentIdentity": contentIdentity, "title": p.Title,
-			"angle": p.Angle, "seq": p.Seq, "entityRefs": runtimeEntityRefs, "tagRefs": p.TagRefs,
-			"intersectionHints":         p.IntersectionHints,
-			"semanticMentions":          p.SemanticMentions,
-			"authorId":                  p.AuthorID,
-			"authorDisplayNameSnapshot": p.AuthorDisplayName,
-			"authorAvatarUrlSnapshot":   p.AuthorAvatarURL,
-			"creatorProfileId":          p.CreatorProfileID,
-			"creatorArchetype":          p.CreatorArchetype,
-			"creatorProfileVersion":     p.CreatorProfileVersion,
-			"creatorDisclosure":         p.CreatorDisclosure,
-			"experienceClaimMode":       p.ExperienceClaimMode,
-			"authorQualitySignals":      p.AuthorQualitySignals,
-			"sourceCollectionId":        p.SourceCollectionID,
-			"sourcePlatform":            p.SourcePlatform,
-			"sourceAttribution":         p.SourceAttribution,
-			"creator":                   p.Creator,
-			"page":                      p.Page,
-			"licenseProof":              p.LicenseProof,
-			"template":                  p.Template, "articleTemplate": p.Template,
-			"body": body, "summary": summary,
-			"mediaUrls": media.MediaURLs, "mediaItems": media.MediaItems, "coverUrl": media.CoverURL,
-			"mediaAssetIds":   media.MediaAssetIDs,
-			"articleMarkdown": p.ArticleMarkdown, "articleDigest": p.ArticleDigest, "articleMarkdownDigest": p.ArticleDigest,
-			"articleAssetManifest": ImportedArticleAssetManifest(
-				p.ArticleAssetManifest,
-				accessMode,
-			),
-			"createdAt":   p.CreatedAt,
-			"updatedAt":   p.UpdatedAt,
-			"publishedAt": p.PublishedAt,
-			"version":     opts.ProjectionVersion,
-			// Path A 导入的 publish 主线文章默认视为已公开发布，保证
-			// 在线 search/feed 与 rm_discovery_feed 的 discoverability 口径一致。
-			"status":           "published",
-			"visibility":       "public",
-			"moderationStatus": importedModerationStatus,
-			"sourceHash":       newHash,
-		}
-		applyImportedVideoFields(doc, media)
-		ApplyImportedAuthorAvatarDeliveryFields(doc, p, accessMode)
-		for k, v := range releaseFields(opts, now, "active") {
-			doc[k] = v
-		}
-		if err := migrateImportedPostIdentity(
-			ctx, coll, p.ContentID, p.PostRef, postID, opts,
-		); err != nil {
 			return n, err
 		}
+		postID := document["_id"].(string)
+		if err := migrateImportedPostIdentity(ctx, coll, post.ContentID, post.PostRef, postID, opts); err != nil {
+			return n, err
+		}
+		delete(document, "_id")
 		if _, err := coll.UpdateOne(ctx,
 			bson.M{"_id": postID},
-			bson.M{"$set": doc, "$setOnInsert": bson.M{"_id": postID}},
+			bson.M{"$set": document, "$setOnInsert": bson.M{"_id": postID}},
 			options.UpdateOne().SetUpsert(true),
 		); err != nil {
 			return n, err
@@ -802,7 +946,7 @@ func UpsertEntitiesWithOptions(ctx context.Context, coll *mongo.Collection, enti
 			"conditionProfile": e.ConditionProfile,
 			"updatedAt":        now, "sourceHash": sourceHash(e),
 		}
-		for k, v := range releaseFields(opts, now, "active") {
+		for k, v := range releaseFields(opts, now, "candidate") {
 			doc[k] = v
 		}
 		if _, err := coll.UpdateOne(ctx,
@@ -818,7 +962,7 @@ func UpsertEntitiesWithOptions(ctx context.Context, coll *mongo.Collection, enti
 }
 
 func missingPolicyEnabled(opts ImportOptions) bool {
-	return opts.Mode == "sync" || opts.Mode == "reset-source"
+	return opts.Mode == "sync" && opts.DeletePolicy == "tombstone"
 }
 
 func ApplyMissingPostPolicy(ctx context.Context, coll *mongo.Collection, posts []PostDoc, now time.Time, opts ImportOptions) (int64, error) {
@@ -880,31 +1024,21 @@ func ApplyMissingEntityPolicy(ctx context.Context, coll *mongo.Collection, entit
 	return res.ModifiedCount, nil
 }
 
-func UpsertReleaseState(ctx context.Context, coll *mongo.Collection, env string, opts ImportOptions, now time.Time, counts bson.M) error {
-	opts = NormalizeImportOptions(opts)
-	_, err := coll.UpdateOne(ctx,
-		bson.M{"environment": env, "sourceOwner": opts.SourceOwner},
-		bson.M{"$set": bson.M{
-			"environment": env, "sourceOwner": opts.SourceOwner,
-			"releaseId": opts.ReleaseID, "activeReleaseId": opts.ReleaseID, "status": "active",
-			"manifestDigest":    opts.ManifestDigest,
-			"releaseClass":      opts.ReleaseClass,
-			"projectionVersion": opts.ProjectionVersion,
-			"activatedAt":       now,
-			"readback": bson.M{
-				"status": "content_imported",
-				"counts": bson.M{
-					"posts":          counts["postsUpserted"],
-					"discoveryPosts": counts["feedUpserted"],
-				},
-				"checkedAt": now,
-			},
-			"mode": opts.Mode, "deletePolicy": opts.DeletePolicy,
-			"counts": counts, "updatedAt": now,
-		}, "$setOnInsert": bson.M{"createdAt": now}},
-		options.UpdateOne().SetUpsert(true),
-	)
-	return err
+func UpsertReleaseState(
+	ctx context.Context,
+	coll *mongo.Collection,
+	env string,
+	opts ImportOptions,
+	now time.Time,
+	counts bson.M,
+) error {
+	_ = ctx
+	_ = coll
+	_ = env
+	_ = opts
+	_ = now
+	_ = counts
+	return fmt.Errorf("UpsertReleaseState is disabled; use StageImportedPostRelease then ActivateImportedPostRelease with expected-current CAS")
 }
 
 // ImportLoadedCounts always emits schema-required loaded counters, including
@@ -942,6 +1076,50 @@ func ImportPoolCounts(posts []PostDoc, entitiesLoaded int) bson.M {
 		}
 	}
 	return counts
+}
+
+func ActiveReleaseBindingDocument(binding ActiveReleaseBinding) bson.M {
+	document := bson.M{
+		"found": binding.Found, "environment": binding.Environment,
+		"sourceOwner": binding.SourceOwner, "releaseId": binding.ReleaseID,
+		"manifestDigest": binding.ManifestDigest, "releaseClass": binding.ReleaseClass,
+		"projectionVersion": binding.ProjectionVersion, "revision": binding.Revision,
+	}
+	if !binding.ActivatedAt.IsZero() {
+		document["activatedAt"] = binding.ActivatedAt.UTC().Format(time.RFC3339Nano)
+	}
+	return document
+}
+
+func ImportStageResultDocument(result ImportedReleaseApplyResult) bson.M {
+	return bson.M{
+		"postsExpected": result.PostsExpected, "postsProjected": result.PostsUpserted,
+		"mediaExpected": result.MediaAssetsExpected, "mediaProjected": result.MediaAssetsProjected,
+		"outboxExpected": result.OutboxEventsReady, "outboxProjected": result.OutboxEventsAppended,
+		"projectionVersion": result.ProjectionVersion, "replayed": result.Replayed,
+	}
+}
+
+func ActivationResultDocument(result ReleaseActivationResult, readback ActiveReleaseBinding) bson.M {
+	return bson.M{
+		"before": ActiveReleaseBindingDocument(ActiveReleaseBinding{
+			Found: !result.Previous.Empty(), SourceOwner: result.Previous.SourceOwner,
+			ReleaseID: result.Previous.ReleaseID, ManifestDigest: result.Previous.ManifestDigest,
+		}),
+		"after":    ActiveReleaseBindingDocument(result.Active),
+		"readback": ActiveReleaseBindingDocument(readback),
+		"replayed": result.Replayed,
+	}
+}
+
+func WriteActiveReleaseReport(path string, binding ActiveReleaseBinding) error {
+	if strings.TrimSpace(path) == "" {
+		return fmt.Errorf("active release report path is required")
+	}
+	return WriteImportReport(path, bson.M{
+		"schema": "quwoquan.content_active_release",
+		"active": ActiveReleaseBindingDocument(binding),
+	})
 }
 
 func WriteImportReport(path string, report bson.M) error {

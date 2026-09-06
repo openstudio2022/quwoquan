@@ -2,16 +2,13 @@
 
 from __future__ import annotations
 
-import hashlib
+import json
 import shutil
 import tempfile
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
-from content.release.canonical.asset_review_adoption import (
-    adopt_independent_asset_review,
-)
 from content.release.canonical.content_pool_record import (
     append_pool_record,
     build_canonical_pool_record,
@@ -23,12 +20,14 @@ from content.release.canonical.object_source_identity import (
     freeze_execution_source_identity,
 )
 from content.release.canonical.object_transaction_contract import (
+    CANONICAL_CONTENT_REVIEW_REF,
     EXPECTED_OBJECT_SCHEMAS,
     LAYOUT_SCHEMA,
     PACKAGE_SCHEMA,
     ObjectTransactionError,
     _closure_digest,
     _digest_file,
+    canonical_transaction_id,
     _execution_id,
     _read_json,
     _review_binding,
@@ -40,6 +39,7 @@ from content.release.canonical.object_transaction_contract import (
 from content.release.canonical.post_asset_identity import (
     freeze_canonical_video_poster_identities,
 )
+from content.release.canonical.review_rights_binding import validate_review_authority
 from content.release.canonical.post_transaction_assets import (
     asset_sources as _asset_sources,
 )
@@ -101,24 +101,21 @@ def build_post_object_transaction_package(
     # contract.  The transaction must consume that exact digest instead of
     # deriving a second, transaction-private tree identity.
     input_payload_digest = str(tree_integrity_stats(source)["merkleRoot"])
-    attestation_source = source / "5.review/attestation.json"
-    attestation = _read_json(attestation_source)
-    for review_name in (
-        "rubric_review.json",
-        "reviewer_result.json",
-        "media_ref_review.json",
-    ):
-        if not (attestation_source.parent / review_name).is_file():
-            raise ObjectTransactionError(f"对象缺 AI 直写 review 产物：{review_name}")
-    if attestation.get("decision") != "approved":
-        raise ObjectTransactionError("post 未 review-approved")
-    for key in ("deterministicGate", "independentReviewer", "mediaRefReview"):
-        if str((attestation.get(key) or {}).get("status") or "") != "passed":
-            raise ObjectTransactionError(f"post review 前置未通过：{key}")
+    content_review_source = source / "5.review/content_review.json"
+    source_assets = _source_assets(execution_root)
+    review_authority = validate_review_authority(
+        review_root=content_review_source.parent,
+        manifest=source_manifest,
+        object_kind="posts",
+        execution_id=execution_id,
+        object_ref=canonical_target_ref,
+        source_assets=source_assets,
+    )
 
-    expected_transaction_id = (
-        f"{execution_id}--post-"
-        f"{hashlib.sha256(canonical_ref.encode('utf-8')).hexdigest()[:12]}"
+    expected_transaction_id = canonical_transaction_id(
+        execution_id=execution_id,
+        object_kind="posts",
+        object_ref=canonical_ref,
     )
     transaction_id = _safe_id(transaction_id, label="transactionId")
     if transaction_id != expected_transaction_id:
@@ -159,11 +156,13 @@ def build_post_object_transaction_package(
         object_root = staging / "object"
         object_root.mkdir(parents=True)
         _copy_post_surface(source, object_root)
-        shutil.copy2(attestation_source, object_root / "attestation.json")
+        shutil.copy2(
+            content_review_source,
+            object_root / CANONICAL_CONTENT_REVIEW_REF,
+        )
         source_catalog = _source_catalog(execution_root, source, source_manifest)
         _write_json(object_root / "source_catalog.json", source_catalog)
 
-        source_assets = _source_assets(execution_root)
         cas_rows: list[dict[str, Any]] = []
         asset_refs: list[dict[str, Any]] = []
         rights_rows: list[dict[str, Any]] = []
@@ -193,17 +192,6 @@ def build_post_object_transaction_package(
             related_sources = _asset_sources(raw, source_assets)
             primary_source = related_sources[0] if related_sources else {}
             asset_id = str(raw.get("assetId") or f"asset-{index + 1}").strip()
-            independent_review = adopt_independent_asset_review(
-                raw_asset=raw,
-                related_sources=related_sources,
-                asset_kind="video" if mime.startswith("video/") else "image",
-                asset_id=asset_id,
-                content_sha256=digest,
-                object_ref=str(source_manifest.get("topicId") or "").strip(),
-                execution_root=execution_root,
-                source_identity=source_identity,
-                object_root=object_root,
-            )
             source_url = _https(
                 raw.get("authorizationProof"),
                 raw.get("collectionPageUrl"),
@@ -253,13 +241,11 @@ def build_post_object_transaction_package(
                 if str(issue).strip()
             ]
             if (
-                source_use_mode == "rights_audit_only"
-                and rights_audit_status is RightsAuditStatus.VERIFIED
+                rights_audit_status is RightsAuditStatus.VERIFIED
                 and not authorization_proof
             ):
-                rights_audit_status = RightsAuditStatus.UNVERIFIED
-                rights_audit_issues.append(
-                    "authorizationProof: not independently verified for research distribution"
+                raise ObjectTransactionError(
+                    f"post asset verified rights lack authorizationProof：{asset_id}"
                 )
             if not all((source_url, fetched_at)):
                 raise ObjectTransactionError(
@@ -323,24 +309,32 @@ def build_post_object_transaction_package(
                 )
             if distribution_decision == "commercial_allowed" and (
                 rights_audit_status is not RightsAuditStatus.VERIFIED
+                or rights_audit_issues
                 or not authorization_proof.startswith("https://")
                 or not license_url.startswith("https://")
                 or not author
                 or not license_name
             ):
-                distribution_decision = "research_allowed"
-                rights_audit_issues.append(
-                    "commercial distribution proof incomplete; retained for research"
+                raise ObjectTransactionError(
+                    f"asset {asset_id} commercial rights proof is incomplete"
                 )
-            # Independent review may close an audit without changing the shared
-            # pool or selecting a release class.
-            if (
-                rights_audit_status is RightsAuditStatus.VERIFIED
-                and source_use_mode == "rights_audit_only"
-            ):
-                source_use_mode = "licensed_adaptation"
+            if source_use_mode == "rights_audit_only":
+                raise ObjectTransactionError(
+                    f"post asset unresolved sourceUseMode is not publishable：{asset_id}"
+                )
             if usage_scope == "internal_reference":
-                usage_scope = "editorial"
+                raise ObjectTransactionError(
+                    f"post asset internal_reference scope is not publishable：{asset_id}"
+                )
+            if (
+                rights_audit_status is not RightsAuditStatus.VERIFIED
+                or rights_audit_issues
+                or not authorization_proof.startswith("https://")
+                or not license_url.startswith("https://")
+            ):
+                raise ObjectTransactionError(
+                    f"post asset unresolved rights are not publishable：{asset_id}"
+                )
             rights_row = {
                 "assetId": asset_id,
                 "sourceKind": str(primary_source.get("platform") or "source_catalog"),
@@ -390,11 +384,6 @@ def build_post_object_transaction_package(
                 "rightsAuditIssues": rights_audit_issues,
                 "modelReleaseStatus": model_release_status,
             }
-            if independent_review is not None:
-                rights_row.update(
-                    acquisitionReceiptRef=independent_review["acquisitionReceiptRef"],
-                    independentAssetReview=independent_review,
-                )
             rights_rows.append(rights_row)
             cas_rows.append(
                 {
@@ -404,14 +393,59 @@ def build_post_object_transaction_package(
                     "bytes": asset_source.stat().st_size,
                 }
             )
-            asset_refs.append(
+            source_asset_refs = sorted(
                 {
-                    "assetId": asset_id,
-                    "objectKey": object_key,
-                    "sha256": digest,
-                    "bytes": asset_source.stat().st_size,
+                    str(raw.get("sourceAssetRef") or "").strip(),
+                    *(
+                        str(ref or "").strip()
+                        for ref in raw.get("sourceAssetRefs") or []
+                    ),
                 }
+                - {""}
             )
+            related_receipt_refs = [
+                str(source.get("acquisitionReceiptRef") or "").strip()
+                for source in related_sources
+            ]
+            if any(not ref for ref in related_receipt_refs):
+                raise ObjectTransactionError(
+                    f"post asset source lacks acquisitionReceiptRef：{asset_id}"
+                )
+            acquisition_receipt_refs = sorted(set(related_receipt_refs))
+            derivative_bindings = {
+                json.dumps(source["derivativeBinding"], ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+                for source in related_sources
+                if isinstance(source.get("derivativeBinding"), Mapping)
+            }
+            if len(derivative_bindings) > 1:
+                raise ObjectTransactionError(
+                    f"post asset source derivativeBinding 不唯一：{asset_id}"
+                )
+            derivative_binding = (
+                json.loads(next(iter(derivative_bindings)))
+                if derivative_bindings
+                else None
+            )
+            if derivative_binding is not None and (
+                derivative_binding.get("derivedSha256") != digest
+                or derivative_binding.get("derivedBytes") != asset_source.stat().st_size
+                or derivative_binding.get("derivedMimeType") != mime
+                or derivative_binding.get("derivedExtension") != asset_source.suffix.lower()
+            ):
+                raise ObjectTransactionError(
+                    f"post asset source derivativeBinding 与发布字节不一致：{asset_id}"
+                )
+            asset_binding = {
+                "assetId": asset_id,
+                "objectKey": object_key,
+                "sha256": digest,
+                "bytes": asset_source.stat().st_size,
+                "sourceAssetRefs": source_asset_refs,
+                "acquisitionReceiptRefs": acquisition_receipt_refs,
+            }
+            if derivative_binding is not None:
+                asset_binding["derivativeBinding"] = derivative_binding
+            asset_refs.append(asset_binding)
             canonical_assets.append(
                 canonical_asset_manifest_row(
                     raw,
@@ -469,7 +503,8 @@ def build_post_object_transaction_package(
             source_manifest=effective_source_manifest,
             canonical_ref=canonical_ref,
             source_task_id=execution_id,
-            attestation_path=attestation_source,
+            content_review_path=content_review_source,
+            rights_authority=review_authority,
             publish_root=PUBLISH_ROOT,
             rights_rows=rights_rows,
             reserved_identity={
@@ -512,7 +547,7 @@ def build_post_object_transaction_package(
             "rightsRef": "rights.json",
             "casRefs": cas_rows,
         }
-        review = {"attestationRef": "attestation.json"}
+        review = {"contentReviewRef": CANONICAL_CONTENT_REVIEW_REF}
         review_binding = _review_binding(object_root, {"review": review})
         source_policy = SourcePolicyRevision.RIGHTS_CLEARED_CONTENT.value
         closure_digest = _closure_digest(

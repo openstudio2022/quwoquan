@@ -559,6 +559,7 @@ func (h *ContentHandler) handleGetPost(w http.ResponseWriter, r *http.Request) {
 		postports.NewPostDetailQuery(
 			postports.NewPostID(postID),
 			postports.NewViewerContext(postports.NewPersonaID(viewerPersonaID)),
+			requestHasResearchRole(r),
 		),
 	)
 	if err != nil {
@@ -760,7 +761,11 @@ func (h *ContentHandler) handleGetCounters(w http.ResponseWriter, r *http.Reques
 
 func (h *ContentHandler) handleGetHelperRead(w http.ResponseWriter, r *http.Request) {
 	contentID := pathParamAfter(r.URL.Path, "/content/helper-read/", "")
-	result, err := h.postQueryService.GetHelperRead(r.Context(), contentID)
+	result, err := h.postQueryService.GetHelperRead(
+		r.Context(),
+		contentID,
+		requestHasResearchRole(r),
+	)
 	if err != nil {
 		writeHTTPError(w, r, err)
 		return
@@ -804,6 +809,7 @@ func (h *ContentHandler) handleListUserPosts(w http.ResponseWriter, r *http.Requ
 			postports.PostVisibility(visibility),
 			cursor,
 			limit,
+			requestHasResearchRole(r),
 		),
 	)
 	if err != nil {
@@ -863,7 +869,12 @@ func (h *ContentHandler) handleListPostsByGathering(
 	}
 	page, err := h.postQueryService.ListPostsByGathering(
 		r.Context(),
-		postports.NewGatheringPostPageQuery(gatheringID, cursor, limit),
+		postports.NewGatheringPostPageQuery(
+			gatheringID,
+			cursor,
+			limit,
+			requestHasResearchRole(r),
+		),
 	)
 	if err != nil {
 		writeHTTPError(w, r, err)

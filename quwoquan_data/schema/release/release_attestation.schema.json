@@ -1,53 +1,695 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
-  "required": ["schema", "releaseId", "sourceOwner", "releaseKind", "releaseClass", "productLifecycleState", "containsUnverifiedAssets", "rightsStatusCounts", "authorizationRequiredAssetIds", "researchAcceptedCount", "commercialAcceptedCount", "executionIds", "entityCount", "postCount", "creatorCount", "tagCount", "canonicalMerkle", "sourceDigests", "payloadSha256", "recordedAt"],
+  "required": [
+    "schema",
+    "releaseId",
+    "sourceOwner",
+    "releaseKind",
+    "releaseClass",
+    "productLifecycleState",
+    "containsUnverifiedAssets",
+    "rightsStatusCounts",
+    "authorizationRequiredAssetIds",
+    "researchAcceptedCount",
+    "commercialAcceptedCount",
+    "executionIds",
+    "carrierCounts",
+    "entityCount",
+    "postCount",
+    "creatorCount",
+    "tagCount",
+    "canonicalMerkle",
+    "sourceDigests",
+    "payloadSha256",
+    "recordedAt"
+  ],
   "additionalProperties": false,
   "properties": {
-    "schema": {"const": "quwoquan_data.release_attestation"},
-    "releaseId": {"type": "string", "minLength": 1},
-    "sourceOwner": {"const": "qwq_data"},
-    "releaseKind": {"enum": ["content", "empty_baseline"]},
-    "releaseClass": {"enum": ["research", "commercial"]},
-    "productLifecycleState": {"enum": ["research", "commercial"]},
-    "containsUnverifiedAssets": {"type": "boolean"},
-    "rightsStatusCounts": {"type": "object", "required": ["verified", "unverified", "restricted", "unknown"], "additionalProperties": false, "properties": {"verified": {"type": "integer", "minimum": 0}, "unverified": {"type": "integer", "minimum": 0}, "restricted": {"type": "integer", "minimum": 0}, "unknown": {"type": "integer", "minimum": 0}}},
-    "authorizationRequiredAssetIds": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
-    "researchAcceptedCount": {"type": "integer", "minimum": 0},
-    "commercialAcceptedCount": {"type": "integer", "minimum": 0},
-    "executionIds": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
-    "entityCount": {"type": "integer", "minimum": 0},
-    "postCount": {"type": "integer", "minimum": 0},
-    "creatorCount": {"type": "integer", "minimum": 0},
-    "tagCount": {"type": "integer", "minimum": 0},
-    "canonicalMerkle": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
-    "sourceRevision": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
-    "sourceDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
-    "entityCatalogDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
-    "sourceIdentities": {
-      "type": "array", "minItems": 1, "uniqueItems": true,
-      "items": {"$ref": "#/$defs/sourceIdentity"}
+    "schema": {
+      "const": "quwoquan_data.release_attestation"
     },
-    "sourceIdentitySetDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
-    "sourceDigests": {"type": "array", "minItems": 1, "items": {"type": "object", "required": ["algorithm", "digest", "inputs"], "additionalProperties": false, "properties": {"algorithm": {"const": "sha256"}, "digest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"}, "inputs": {"const": ["quwoquan_data/schema", "quwoquan_data/control_plane", "quwoquan_data/prompts", "quwoquan_data/templates", "quwoquan_data/verticals/travel", "quwoquan_data/reference", "quwoquan_data/requirements.txt", "quwoquan_service/services/content-service/contracts/media/media_asset", "quwoquan_service/services/content-service/contracts/content/post/ui_config.yaml", "quwoquan_service/services/recommendation-service/contracts/recommendation/recommendation_feature_profile_view/projections/intersection_reason.yaml"]}}}},
-    "payloadSha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
-    "recordedAt": {"type": "string", "minLength": 1}
+    "releaseId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "sourceOwner": {
+      "const": "qwq_data"
+    },
+    "releaseKind": {
+      "enum": [
+        "content",
+        "empty_baseline"
+      ]
+    },
+    "releaseClass": {
+      "enum": [
+        "research",
+        "commercial"
+      ]
+    },
+    "productLifecycleState": {
+      "enum": [
+        "research",
+        "commercial"
+      ]
+    },
+    "containsUnverifiedAssets": {
+      "type": "boolean"
+    },
+    "rightsStatusCounts": {
+      "type": "object",
+      "required": [
+        "verified",
+        "unverified",
+        "restricted",
+        "unknown"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "verified": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "unverified": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "restricted": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "unknown": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "authorizationRequiredAssetIds": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "researchAcceptedCount": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "commercialAcceptedCount": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "executionIds": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "entityCount": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "postCount": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "creatorCount": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "tagCount": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "canonicalMerkle": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "sourceRevision": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "sourceDigest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "entityCatalogDigest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "sourceIdentities": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/sourceIdentity"
+      }
+    },
+    "sourceIdentitySetDigest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "sourceDigests": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": [
+          "algorithm",
+          "digest",
+          "inputs"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "algorithm": {
+            "const": "sha256"
+          },
+          "digest": {
+            "type": "string",
+            "pattern": "^sha256:[a-f0-9]{64}$"
+          },
+          "inputs": {
+            "const": [
+              ".agents/skills/content-production/SKILL.md",
+              ".agents/skills/content-production/references/boundary.md",
+              ".agents/skills/content-production/references/execution-layout.md",
+              ".agents/skills/content-production/references/handoff-protocol.md",
+              ".agents/skills/content-production/references/orchestration.md",
+              ".agents/skills/content-production/references/recovery.md",
+              ".agents/skills/content-production/references/stage-contracts/0.plan.md",
+              ".agents/skills/content-production/references/stage-contracts/sources.md",
+              ".agents/skills/content-production/references/stage-contracts/1.download.md",
+              ".agents/skills/content-production/references/stage-contracts/2.quality.md",
+              ".agents/skills/content-production/references/stage-contracts/3.compose.md",
+              ".agents/skills/content-production/references/stage-contracts/4.draft.md",
+              ".agents/skills/content-production/references/stage-contracts/5.review.md",
+              ".agents/skills/content-production/references/stage-contracts/publish.md",
+              ".agents/skills/content-production/references/stage-contracts/release.md",
+              "quwoquan_data/schema/_common/data_issue.schema.json",
+              "quwoquan_data/schema/content/content_review.schema.json",
+              "quwoquan_data/schema/content/entity_page_input.schema.json",
+              "quwoquan_data/schema/content/image_work.schema.json",
+              "quwoquan_data/schema/content/post_manifest.schema.json",
+              "quwoquan_data/schema/content/quality_analysis.schema.json",
+              "quwoquan_data/schema/content/video_script.schema.json",
+              "quwoquan_data/schema/content/writing_pack.schema.json",
+              "quwoquan_data/schema/execution/carrier_demand.schema.json",
+              "quwoquan_data/schema/execution/content_execution_manifest.schema.json",
+              "quwoquan_data/schema/execution/immutable_candidate_bindings.schema.json",
+              "quwoquan_data/schema/execution/publish_ref.schema.json",
+              "quwoquan_data/schema/execution/stage_close_input.schema.json",
+              "quwoquan_data/schema/execution/stage_open_request.schema.json",
+              "quwoquan_data/schema/execution/stage_receipt.schema.json",
+              "quwoquan_data/schema/execution/target_set.schema.json",
+              "quwoquan_data/schema/execution/task_init_request.schema.json",
+              "quwoquan_data/schema/source/atomic_source_unit_meta.schema.json",
+              "quwoquan_data/schema/source/object_source_refs.schema.json",
+              "quwoquan_data/schema/source/source_candidate.schema.json",
+              "quwoquan_data/schema/source/source_plan.schema.json",
+              "quwoquan_data/schema/publish/entity.schema.json",
+              "quwoquan_data/schema/release/asset_rights_closure.schema.json",
+              "quwoquan_data/schema/release/content_pool_handoff_query.schema.json",
+              "quwoquan_data/schema/release/media_manifest.schema.json",
+              "quwoquan_data/schema/release/object_transaction_package.schema.json",
+              "quwoquan_data/schema/release/pool_object_record.schema.json",
+              "quwoquan_data/schema/release/producer_release_handoff.schema.json",
+              "quwoquan_data/schema/release/release_asset_admission.schema.json",
+              "quwoquan_data/schema/release/release_attestation.schema.json",
+              "quwoquan_data/schema/release/release_cohort.schema.json",
+              "quwoquan_data/schema/release/release_desired_state.schema.json",
+              "quwoquan_data/schema/release/release_header.schema.json",
+              "quwoquan_data/schema/governance/_definition.schema.json",
+              "quwoquan_data/schema/governance/content_distribution_policy.schema.json",
+              "quwoquan_data/control_plane/_shared/content_distribution.policy.yaml",
+              "quwoquan_data/control_plane/_shared/media_processing.policy.yaml",
+              "quwoquan_data/control_plane/_shared/catalogs/content_source_registry.yaml",
+              "quwoquan_data/prompts/README.md",
+              "quwoquan_data/prompts/_shared/content_independent_review.system.md",
+              "quwoquan_data/prompts/_shared/content_independent_review.task.md",
+              "quwoquan_data/prompts/_shared/content_independent_review.vars.yaml",
+              "quwoquan_data/prompts/_shared/partials/author_source_factual.md",
+              "quwoquan_data/prompts/_shared/partials/constraints_fidelity.md",
+              "quwoquan_data/prompts/_shared/partials/figure_group_contract.md",
+              "quwoquan_data/prompts/_shared/partials/image_placeholder_contract.md",
+              "quwoquan_data/prompts/_shared/partials/output_format_article.md",
+              "quwoquan_data/prompts/_shared/partials/output_format_homepage.md",
+              "quwoquan_data/prompts/_shared/partials/output_format_image.md",
+              "quwoquan_data/prompts/article/article_author.system.md",
+              "quwoquan_data/prompts/article/article_author.task.md",
+              "quwoquan_data/prompts/article/article_author.vars.yaml",
+              "quwoquan_data/prompts/homepage/entity_homepage.system.md",
+              "quwoquan_data/prompts/homepage/entity_homepage.task.md",
+              "quwoquan_data/prompts/homepage/entity_homepage.vars.yaml",
+              "quwoquan_data/prompts/homepage/homepage_source_judge.system.md",
+              "quwoquan_data/prompts/homepage/homepage_source_judge.task.md",
+              "quwoquan_data/prompts/homepage/homepage_source_judge.vars.yaml",
+              "quwoquan_data/prompts/image/image_curation.system.md",
+              "quwoquan_data/prompts/image/image_curation.task.md",
+              "quwoquan_data/prompts/image/image_curation.vars.yaml",
+              "quwoquan_data/prompts/video/video_author.system.md",
+              "quwoquan_data/prompts/video/video_author.task.md",
+              "quwoquan_data/prompts/video/video_author.vars.yaml",
+              "quwoquan_data/templates/article/blueprints/Entity/地点/博物馆/体验.tmpl.yaml",
+              "quwoquan_data/templates/article/blueprints/Entity/地点/博物馆/科普.tmpl.yaml",
+              "quwoquan_data/templates/article/blueprints/Entity/地点/古镇/叙事.tmpl.yaml",
+              "quwoquan_data/templates/article/blueprints/Entity/地点/古镇/攻略.tmpl.yaml",
+              "quwoquan_data/templates/article/blueprints/Entity/地点/景区/专业导览.tmpl.yaml",
+              "quwoquan_data/templates/article/blueprints/Entity/地点/景区/体验.tmpl.yaml",
+              "quwoquan_data/templates/article/blueprints/Entity/地点/景区/攻略.tmpl.yaml",
+              "quwoquan_data/templates/article/blueprints/Entity/地点/景区/文化.tmpl.yaml",
+              "quwoquan_data/templates/article/blueprints/Entity/地点/民宿/点评.tmpl.yaml",
+              "quwoquan_data/templates/article/blueprints/Entity/地点/遗址/文化.tmpl.yaml",
+              "quwoquan_data/templates/article/blueprints/Entity/地点/餐厅/探店.tmpl.yaml",
+              "quwoquan_data/templates/article/blueprints/Entity/机构/学校/家长择校.tmpl.yaml",
+              "quwoquan_data/templates/article/blueprints/Entity/机构/学校/新生攻略.tmpl.yaml",
+              "quwoquan_data/templates/article/blueprints/Entity/机构/学校/校园日记.tmpl.yaml",
+              "quwoquan_data/templates/article/blueprints/Entity/机构/学校/校园评测.tmpl.yaml",
+              "quwoquan_data/templates/article/blueprints/Entity/机构/学校/校招就业.tmpl.yaml",
+              "quwoquan_data/templates/article/blueprints/Entity/机构/学校/考研经验.tmpl.yaml",
+              "quwoquan_data/templates/article/blueprints/Entity/机构/学校/选课攻略.tmpl.yaml",
+              "quwoquan_data/templates/article/blueprints/Format/内容角度/主题/个人游记.tmpl.yaml",
+              "quwoquan_data/templates/article/blueprints/Format/内容角度/主题/地理深读.tmpl.yaml",
+              "quwoquan_data/templates/article/blueprints/Format/内容角度/主题/城市漫步.tmpl.yaml",
+              "quwoquan_data/templates/article/blueprints/Format/内容角度/主题/摄影机位.tmpl.yaml",
+              "quwoquan_data/templates/article/blueprints/Format/内容角度/主题/风物美食.tmpl.yaml",
+              "quwoquan_data/templates/article/blueprints/Format/内容角度/合辑/主题合辑.tmpl.yaml",
+              "quwoquan_data/templates/article/blueprints/Format/内容角度/榜单/Top榜单.tmpl.yaml",
+              "quwoquan_data/templates/article/blueprints/Format/内容角度/线路/周末短途.tmpl.yaml",
+              "quwoquan_data/templates/article/blueprints/Format/内容角度/线路/枢纽到达.tmpl.yaml",
+              "quwoquan_data/templates/article/blueprints/Format/内容角度/线路/深度探险.tmpl.yaml",
+              "quwoquan_data/templates/article/blueprints/Format/内容角度/线路/环线攻略.tmpl.yaml",
+              "quwoquan_data/templates/article/blueprints/Format/内容角度/线路/省钱攻略.tmpl.yaml",
+              "quwoquan_data/templates/article/blueprints/Format/内容角度/线路/自驾路书.tmpl.yaml",
+              "quwoquan_data/templates/article/blueprints/Format/内容角度/线路/补给避险.tmpl.yaml",
+              "quwoquan_data/templates/article/blueprints/Format/内容角度/线路/跟团攻略.tmpl.yaml",
+              "quwoquan_data/templates/article/blueprints/Format/内容角度/线路/银发慢游.tmpl.yaml",
+              "quwoquan_data/templates/image/blueprints/Entity/地点/打卡地/美图.tmpl.yaml",
+              "quwoquan_data/templates/image/blueprints/Format/内容角度/主题/图文画报.tmpl.yaml",
+              "quwoquan_data/verticals/travel/content_policy.yaml",
+              "quwoquan_data/verticals/travel/providers.yaml",
+              "quwoquan_data/verticals/travel/rights/license_policy.yaml",
+              "quwoquan_data/requirements.txt",
+              "quwoquan_data/scripts/content/execution/__init__.py",
+              "quwoquan_data/scripts/content/execution/handler.py",
+              "quwoquan_data/scripts/content/execution/identity.py",
+              "quwoquan_data/scripts/content/execution/production_contracts.py",
+              "quwoquan_data/scripts/content/execution/receipt_chain.py",
+              "quwoquan_data/scripts/content/execution/runtime_contract.py",
+              "quwoquan_data/scripts/content/execution/stage_receipt.py",
+              "quwoquan_data/scripts/content/execution/stage_receipt_cli.py",
+              "quwoquan_data/scripts/content/execution/task_init.py",
+              "quwoquan_data/scripts/content/execution/task_init_cli.py",
+              "quwoquan_data/scripts/content/execution/workspace.py",
+              "quwoquan_data/scripts/content/source/__init__.py",
+              "quwoquan_data/scripts/content/source/acquisition_body_state.py",
+              "quwoquan_data/scripts/content/source/atomic_source_cli.py",
+              "quwoquan_data/scripts/content/source/atomic_source_io.py",
+              "quwoquan_data/scripts/content/source/baike_layout.py",
+              "quwoquan_data/scripts/content/source/contracts.py",
+              "quwoquan_data/scripts/content/source/fetch_text.py",
+              "quwoquan_data/scripts/content/source/host_source_review.py",
+              "quwoquan_data/scripts/content/source/html_text.py",
+              "quwoquan_data/scripts/content/source/image_payload.py",
+              "quwoquan_data/scripts/content/source/media/__init__.py",
+              "quwoquan_data/scripts/content/source/media/acquire_images_cli.py",
+              "quwoquan_data/scripts/content/source/media/acquire_videos_cli.py",
+              "quwoquan_data/scripts/content/source/media_source_admission_contract.py",
+              "quwoquan_data/scripts/content/source/mediawiki_page.py",
+              "quwoquan_data/scripts/content/source/professional_commons_video_input_evidence.py",
+              "quwoquan_data/scripts/content/source/professional_image_acquisition.py",
+              "quwoquan_data/scripts/content/source/professional_image_acquisition_binding.py",
+              "quwoquan_data/scripts/content/source/professional_image_acquisition_item.py",
+              "quwoquan_data/scripts/content/source/professional_image_admission.py",
+              "quwoquan_data/scripts/content/source/professional_image_discovery_binding.py",
+              "quwoquan_data/scripts/content/source/professional_image_network_admission.py",
+              "quwoquan_data/scripts/content/source/professional_image_openverse_contract.py",
+              "quwoquan_data/scripts/content/source/professional_image_receipt_counts.py",
+              "quwoquan_data/scripts/content/source/professional_image_receipt_validation.py",
+              "quwoquan_data/scripts/content/source/professional_image_source_attribution.py",
+              "quwoquan_data/scripts/content/source/professional_image_supported_api_contract.py",
+              "quwoquan_data/scripts/content/source/professional_image_transport.py",
+              "quwoquan_data/scripts/content/source/professional_safety_evidence.py",
+              "quwoquan_data/scripts/content/source/professional_video_acquisition.py",
+              "quwoquan_data/scripts/content/source/professional_video_asset_acquisition.py",
+              "quwoquan_data/scripts/content/source/professional_video_catalog_binding.py",
+              "quwoquan_data/scripts/content/source/professional_video_deduplication.py",
+              "quwoquan_data/scripts/content/source/professional_video_frozen_asset.py",
+              "quwoquan_data/scripts/content/source/professional_video_manual_input_media.py",
+              "quwoquan_data/scripts/content/source/professional_video_plan_spec.py",
+              "quwoquan_data/scripts/content/source/professional_video_popular_catalog.py",
+              "quwoquan_data/scripts/content/source/professional_video_popularity.py",
+              "quwoquan_data/scripts/content/source/professional_video_probe.py",
+              "quwoquan_data/scripts/content/source/professional_video_provider_batch.py",
+              "quwoquan_data/scripts/content/source/professional_video_rebind_historical.py",
+              "quwoquan_data/scripts/content/source/professional_video_receipt.py",
+              "quwoquan_data/scripts/content/source/professional_video_spec_index.py",
+              "quwoquan_data/scripts/content/source/professional_video_store.py",
+              "quwoquan_data/scripts/content/source/professional_video_transport.py",
+              "quwoquan_data/scripts/content/source/research/__init__.py",
+              "quwoquan_data/scripts/content/source/research/baidu_baike.py",
+              "quwoquan_data/scripts/content/source/research/baike_com.py",
+              "quwoquan_data/scripts/content/source/research/homepage_article_source_attribution.py",
+              "quwoquan_data/scripts/content/source/research/image_provider_compliance.py",
+              "quwoquan_data/scripts/content/source/research/network_io.py",
+              "quwoquan_data/scripts/content/source/research/text_match.py",
+              "quwoquan_data/scripts/content/source/rights_decision_projection.py",
+              "quwoquan_data/scripts/content/source/source_asset_identity.py",
+              "quwoquan_data/scripts/content/source/source_assets.py",
+              "quwoquan_data/scripts/content/source/source_snapshot_redaction.py",
+              "quwoquan_data/scripts/content/source/source_unit.py",
+              "quwoquan_data/scripts/content/source/source_unit_asset_entry.py",
+              "quwoquan_data/scripts/content/source/source_unit_attribution.py",
+              "quwoquan_data/scripts/content/source/source_unit_manifest_media.py",
+              "quwoquan_data/scripts/content/source/source_unit_writer.py",
+              "quwoquan_data/scripts/content/source/video_media_probe.py",
+              "quwoquan_data/scripts/content/source/video_source_unit_contract.py",
+              "quwoquan_data/scripts/content/release/canonical/aggregate_release.py",
+              "quwoquan_data/scripts/content/release/canonical/aggregate_release_builder.py",
+              "quwoquan_data/scripts/content/release/canonical/aggregate_release_closure.py",
+              "quwoquan_data/scripts/content/release/canonical/aggregate_release_documents.py",
+              "quwoquan_data/scripts/content/release/canonical/aggregate_release_existing.py",
+              "quwoquan_data/scripts/content/release/canonical/aggregate_release_pool.py",
+              "quwoquan_data/scripts/content/release/canonical/aggregate_release_pool_closure.py",
+              "quwoquan_data/scripts/content/release/canonical/aggregate_release_result.py",
+              "quwoquan_data/scripts/content/release/canonical/aggregate_release_selection.py",
+              "quwoquan_data/scripts/content/release/canonical/content_pool_handoff.py",
+              "quwoquan_data/scripts/content/release/canonical/content_pool_record.py",
+              "quwoquan_data/scripts/content/release/canonical/creator_avatar_quality.py",
+              "quwoquan_data/scripts/content/release/canonical/effective_admission.py",
+              "quwoquan_data/scripts/content/release/canonical/handler.py",
+              "quwoquan_data/scripts/content/release/canonical/handler_pool.py",
+              "quwoquan_data/scripts/content/release/canonical/image_identity.py",
+              "quwoquan_data/scripts/content/release/canonical/media_holding_closure.py",
+              "quwoquan_data/scripts/content/release/canonical/media_library_holding.py",
+              "quwoquan_data/scripts/content/release/canonical/object_source_identity.py",
+              "quwoquan_data/scripts/content/release/canonical/object_transaction_bindings.py",
+              "quwoquan_data/scripts/content/release/canonical/object_transaction_contract.py",
+              "quwoquan_data/scripts/content/release/canonical/object_transaction_environment.py",
+              "quwoquan_data/scripts/content/release/canonical/object_transaction_lock.py",
+              "quwoquan_data/scripts/content/release/canonical/pool_record_history.py",
+              "quwoquan_data/scripts/content/release/canonical/pool_source_attribution.py",
+              "quwoquan_data/scripts/content/release/canonical/producer_release_handoff.py",
+              "quwoquan_data/scripts/content/release/canonical/publish_homepage_object.py",
+              "quwoquan_data/scripts/content/release/canonical/publish_object.py",
+              "quwoquan_data/scripts/content/release/canonical/release_admission.py",
+              "quwoquan_data/scripts/content/release/canonical/release_attestation.py",
+              "quwoquan_data/scripts/content/release/canonical/release_consistency.py",
+              "quwoquan_data/scripts/content/release/canonical/release_consistency_report.py",
+              "quwoquan_data/scripts/content/release/canonical/release_header.py",
+              "quwoquan_data/scripts/content/release/canonical/release_media_consistency.py",
+              "quwoquan_data/scripts/content/release/canonical/review_rights_binding.py",
+              "quwoquan_data/scripts/content/release/canonical/sealed_release_facts.py",
+              "quwoquan_data/scripts/core/asset_identity.py",
+              "quwoquan_data/scripts/core/content_library.py",
+              "quwoquan_data/scripts/core/content_source_registry.py",
+              "quwoquan_data/scripts/core/control_types.py",
+              "quwoquan_data/scripts/core/image_decode.py",
+              "quwoquan_data/scripts/core/image_rules.py",
+              "quwoquan_data/scripts/core/image_variants.py",
+              "quwoquan_data/scripts/core/io.py",
+              "quwoquan_data/scripts/core/media_asset_url.py",
+              "quwoquan_data/scripts/core/media_processing_policy.py",
+              "quwoquan_data/scripts/core/object_storage_budget.py",
+              "quwoquan_data/scripts/core/paths.py",
+              "quwoquan_data/scripts/core/release_layout.py",
+              "quwoquan_data/scripts/core/release_media_binding.py",
+              "quwoquan_data/scripts/core/schema.py",
+              "quwoquan_data/scripts/core/source_attribution.py",
+              "quwoquan_data/scripts/core/source_digest.py",
+              "quwoquan_data/scripts/core/tree_integrity.py",
+              "quwoquan_data/scripts/governance/coverage/distribution.py",
+              "quwoquan_data/scripts/governance/coverage/license.py",
+              "quwoquan_service/services/content-service/contracts/media/media_asset/image_variant_policy.yaml"
+            ]
+          }
+        }
+      }
+    },
+    "payloadSha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "recordedAt": {
+      "type": "string",
+      "minLength": 1
+    },
+    "carrierCounts": {
+      "type": "object",
+      "required": [
+        "homepage",
+        "article",
+        "image",
+        "video",
+        "total"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "homepage": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "article": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "image": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "video": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "total": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    }
   },
   "$defs": {
     "sourceIdentity": {
-      "type": "object", "additionalProperties": false,
-      "required": ["sourceRevision", "sourceDigest", "entityCatalogDigest", "executionIds"],
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sourceRevision",
+        "sourceDigest",
+        "entityCatalogDigest",
+        "executionIds"
+      ],
       "properties": {
-        "sourceRevision": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
-        "sourceDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
-        "entityCatalogDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
-        "executionIds": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}}
+        "sourceRevision": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "sourceDigest": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "entityCatalogDigest": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "executionIds": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
       }
     }
   },
   "allOf": [
-    {"if": {"properties": {"releaseKind": {"const": "content"}}}, "then": {"properties": {"executionIds": {"minItems": 1}}, "allOf": [{"oneOf": [{"required": ["sourceRevision", "sourceDigest", "entityCatalogDigest"], "not": {"anyOf": [{"required": ["sourceIdentities"]}, {"required": ["sourceIdentitySetDigest"]}]}}, {"required": ["sourceIdentities", "sourceIdentitySetDigest"], "not": {"anyOf": [{"required": ["sourceRevision"]}, {"required": ["sourceDigest"]}, {"required": ["entityCatalogDigest"]}]}}]}, {"anyOf": [{"properties": {"entityCount": {"minimum": 1}}}, {"properties": {"postCount": {"minimum": 1}}}]}]}},
-    {"if": {"properties": {"releaseKind": {"const": "empty_baseline"}}}, "then": {"not": {"anyOf": [{"required": ["sourceRevision"]}, {"required": ["sourceDigest"]}, {"required": ["entityCatalogDigest"]}, {"required": ["sourceIdentities"]}, {"required": ["sourceIdentitySetDigest"]}]}, "properties": {"executionIds": {"maxItems": 0}, "entityCount": {"const": 0}, "postCount": {"const": 0}, "creatorCount": {"const": 0}, "tagCount": {"const": 0}, "containsUnverifiedAssets": {"const": false}, "authorizationRequiredAssetIds": {"maxItems": 0}, "researchAcceptedCount": {"const": 0}, "commercialAcceptedCount": {"const": 0}}}},
-    {"if": {"properties": {"releaseClass": {"const": "commercial"}}}, "then": {"properties": {"productLifecycleState": {"const": "commercial"}, "containsUnverifiedAssets": {"const": false}, "authorizationRequiredAssetIds": {"maxItems": 0}}}, "else": {"properties": {"productLifecycleState": {"const": "research"}}}}
+    {
+      "if": {
+        "properties": {
+          "releaseKind": {
+            "const": "content"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "executionIds": {
+            "minItems": 1
+          }
+        },
+        "allOf": [
+          {
+            "oneOf": [
+              {
+                "required": [
+                  "sourceRevision",
+                  "sourceDigest",
+                  "entityCatalogDigest"
+                ],
+                "not": {
+                  "anyOf": [
+                    {
+                      "required": [
+                        "sourceIdentities"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "sourceIdentitySetDigest"
+                      ]
+                    }
+                  ]
+                }
+              },
+              {
+                "required": [
+                  "sourceIdentities",
+                  "sourceIdentitySetDigest"
+                ],
+                "not": {
+                  "anyOf": [
+                    {
+                      "required": [
+                        "sourceRevision"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "sourceDigest"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "entityCatalogDigest"
+                      ]
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "anyOf": [
+              {
+                "properties": {
+                  "entityCount": {
+                    "minimum": 1
+                  }
+                }
+              },
+              {
+                "properties": {
+                  "postCount": {
+                    "minimum": 1
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "releaseKind": {
+            "const": "empty_baseline"
+          }
+        }
+      },
+      "then": {
+        "not": {
+          "anyOf": [
+            {
+              "required": [
+                "sourceRevision"
+              ]
+            },
+            {
+              "required": [
+                "sourceDigest"
+              ]
+            },
+            {
+              "required": [
+                "entityCatalogDigest"
+              ]
+            },
+            {
+              "required": [
+                "sourceIdentities"
+              ]
+            },
+            {
+              "required": [
+                "sourceIdentitySetDigest"
+              ]
+            }
+          ]
+        },
+        "properties": {
+          "executionIds": {
+            "maxItems": 0
+          },
+          "entityCount": {
+            "const": 0
+          },
+          "postCount": {
+            "const": 0
+          },
+          "creatorCount": {
+            "const": 0
+          },
+          "tagCount": {
+            "const": 0
+          },
+          "containsUnverifiedAssets": {
+            "const": false
+          },
+          "authorizationRequiredAssetIds": {
+            "maxItems": 0
+          },
+          "researchAcceptedCount": {
+            "const": 0
+          },
+          "commercialAcceptedCount": {
+            "const": 0
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "releaseClass": {
+            "const": "commercial"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "productLifecycleState": {
+            "const": "commercial"
+          },
+          "containsUnverifiedAssets": {
+            "const": false
+          },
+          "authorizationRequiredAssetIds": {
+            "maxItems": 0
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "productLifecycleState": {
+            "const": "research"
+          }
+        }
+      }
+    }
   ]
 }

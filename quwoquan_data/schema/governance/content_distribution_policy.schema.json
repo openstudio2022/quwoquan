@@ -17,92 +17,180 @@
   ],
   "additionalProperties": false,
   "properties": {
-    "schema": {"const": "quwoquan.content_distribution_policy"},
-    "policyId": {"type": "string", "minLength": 1},
-    "productLifecycleState": {"enum": ["research", "commercial"]},
-    "releaseClass": {"enum": ["research", "commercial"]},
+    "schema": {
+      "const": "quwoquan.content_distribution_policy"
+    },
+    "policyId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "productLifecycleState": {
+      "enum": [
+        "research",
+        "commercial"
+      ]
+    },
+    "releaseClass": {
+      "enum": [
+        "research",
+        "commercial"
+      ]
+    },
     "mediaGeneration": {
       "type": "object",
-      "required": ["imageAllowed", "videoAllowed"],
+      "required": [
+        "imageAllowed",
+        "videoAllowed"
+      ],
       "additionalProperties": false,
       "properties": {
-        "imageAllowed": {"type": "boolean"},
-        "videoAllowed": {"type": "boolean"}
+        "imageAllowed": {
+          "type": "boolean"
+        },
+        "videoAllowed": {
+          "type": "boolean"
+        }
       }
     },
     "acquisition": {
       "type": "object",
-      "required": ["bypassLogin", "bypassPaywall", "bypassCaptcha", "bypassAccessControl"],
+      "required": [
+        "bypassLogin",
+        "bypassPaywall",
+        "bypassCaptcha",
+        "bypassAccessControl"
+      ],
       "additionalProperties": false,
       "properties": {
-        "bypassLogin": {"const": false},
-        "bypassPaywall": {"const": false},
-        "bypassCaptcha": {"const": false},
-        "bypassAccessControl": {"const": false}
+        "bypassLogin": {
+          "const": false
+        },
+        "bypassPaywall": {
+          "const": false
+        },
+        "bypassCaptcha": {
+          "const": false
+        },
+        "bypassAccessControl": {
+          "const": false
+        }
       }
     },
     "researchDiscovery": {
       "type": "object",
       "required": [
-        "catalogRevision", "imageProviderPriority", "imageSearchAxes",
+        "catalogRevision",
+        "imageProviderPriority",
+        "imageSearchAxes",
         "videoPopularity"
       ],
       "additionalProperties": false,
       "properties": {
-        "catalogRevision": {"type": "string", "minLength": 1},
+        "catalogRevision": {
+          "type": "string",
+          "minLength": 1
+        },
         "imageProviderPriority": {
           "type": "array",
           "minItems": 2,
-          "items": {"type": "string", "minLength": 1}
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
         },
         "imageSearchAxes": {
           "type": "array",
-          "const": ["category", "entity", "season", "style", "viewpoint", "popularity"]
+          "const": [
+            "category",
+            "entity",
+            "season",
+            "style",
+            "viewpoint",
+            "popularity"
+          ]
         },
         "videoPopularity": {
           "type": "object",
           "description": "Observed popularity details are optional statistics and never decide object admission or Research release eligibility.",
-          "required": ["signals", "normalization", "statistical", "nonBlocking"],
+          "required": [
+            "signals",
+            "normalization",
+            "statistical",
+            "nonBlocking"
+          ],
           "additionalProperties": false,
           "properties": {
             "signals": {
               "type": "array",
-              "const": ["play", "like", "comment", "share", "favorite"]
+              "const": [
+                "play",
+                "like",
+                "comment",
+                "share",
+                "favorite"
+              ]
             },
             "normalization": {
               "const": "same_platform_topic_time_bucket_percentile"
             },
-            "statistical": {"const": true},
-            "nonBlocking": {"const": true}
+            "statistical": {
+              "const": true
+            },
+            "nonBlocking": {
+              "const": true
+            }
           }
         }
       }
     },
     "researchDistribution": {
       "type": "object",
-      "required": ["allowedRightsStatuses", "requireInternalAccessIsolation"],
+      "required": [
+        "allowedRightsStatuses",
+        "requireInternalAccessIsolation"
+      ],
       "additionalProperties": false,
       "properties": {
         "allowedRightsStatuses": {
           "type": "array",
-          "const": ["verified", "unverified", "unknown"]
+          "const": [
+            "verified",
+            "unverified",
+            "unknown"
+          ]
         },
-        "requireInternalAccessIsolation": {"const": true}
+        "requireInternalAccessIsolation": {
+          "const": true
+        }
       }
     },
     "commercialDistribution": {
       "type": "object",
-      "required": ["allowedRightsStatuses", "requireAuthorizationProof"],
+      "required": [
+        "allowedRightsStatuses",
+        "requireAuthorizationProof"
+      ],
       "additionalProperties": false,
       "properties": {
-        "allowedRightsStatuses": {"type": "array", "const": ["verified"]},
-        "requireAuthorizationProof": {"const": true}
+        "allowedRightsStatuses": {
+          "type": "array",
+          "const": [
+            "verified"
+          ]
+        },
+        "requireAuthorizationProof": {
+          "const": true
+        }
       }
     },
     "articleMedia": {
       "type": "object",
       "description": "Article media rate targets are receipt statistics; only per-object declared media closure is an admission gate.",
-      "required": ["illustratedRateTarget", "textOnlyRateTarget", "requireCoverAndBodyImage"],
+      "required": [
+        "illustratedRateTarget",
+        "textOnlyRateTarget",
+        "requireCoverAndBodyImage"
+      ],
       "additionalProperties": false,
       "properties": {
         "illustratedRateTarget": {
@@ -117,91 +205,83 @@
           "minimum": 0,
           "maximum": 1
         },
-        "requireCoverAndBodyImage": {"const": false}
+        "requireCoverAndBodyImage": {
+          "const": false
+        }
       }
     },
     "scaleMilestones": {
       "type": "object",
       "description": "Cumulative unique admitted-object targets; predecessor identity and operational measurements are statistical and do not block Research publication.",
       "required": [
+        "m1Targets",
+        "m10Targets",
         "m100Targets",
         "m1000Targets",
         "m10000Targets",
         "requireM100PromotionBeforeM1000",
         "requireM1000PromotionBeforeM10000",
         "milestoneAttainmentRequired",
-        "attainmentCountingMode",
-        "automaticRecovery"
+        "attainmentCountingMode"
       ],
       "additionalProperties": false,
       "properties": {
-        "m100Targets": {"$ref": "#/$defs/m100Targets"},
-        "m1000Targets": {"$ref": "#/$defs/m1000Targets"},
-        "m10000Targets": {"$ref": "#/$defs/m10000Targets"},
-        "requireM100PromotionBeforeM1000": {"const": false},
-        "requireM1000PromotionBeforeM10000": {"const": false},
-        "milestoneAttainmentRequired": {"const": true},
+        "m1Targets": {"$ref": "#/$defs/milestoneTargets"},
+        "m10Targets": {"$ref": "#/$defs/milestoneTargets"},
+        "m100Targets": {"$ref": "#/$defs/milestoneTargets"},
+        "m1000Targets": {"$ref": "#/$defs/milestoneTargets"},
+        "m10000Targets": {"$ref": "#/$defs/milestoneTargets"},
+        "requireM100PromotionBeforeM1000": {
+          "const": false
+        },
+        "requireM1000PromotionBeforeM10000": {
+          "const": false
+        },
+        "milestoneAttainmentRequired": {
+          "const": true
+        },
         "attainmentCountingMode": {
           "const": "cumulative_unique_finalized_objects"
-        },
-        "automaticRecovery": {
-          "type": "object",
-          "description": "Automatic recovery detail is statistical evidence and never decides object admission or Research release eligibility.",
-          "required": ["targetRate", "statistical", "nonBlocking"],
-          "additionalProperties": false,
-          "properties": {
-            "targetRate": {
-              "type": "number",
-              "minimum": 0,
-              "maximum": 1
-            },
-            "statistical": {"const": true},
-            "nonBlocking": {"const": true}
-          }
         }
       }
     }
   },
   "$defs": {
-    "m100Targets": {
+    "milestoneTargets": {
       "type": "object",
       "required": ["homepage", "article", "image", "video"],
       "additionalProperties": false,
       "properties": {
-        "homepage": {"const": 100},
-        "article": {"const": 100},
-        "image": {"const": 100},
-        "video": {"const": 10}
-      }
-    },
-    "m1000Targets": {
-      "type": "object",
-      "required": ["homepage", "article", "image", "video"],
-      "additionalProperties": false,
-      "properties": {
-        "homepage": {"const": 1000},
-        "article": {"const": 1000},
-        "image": {"const": 1000},
-        "video": {"const": 100}
-      }
-    },
-    "m10000Targets": {
-      "type": "object",
-      "required": ["homepage", "article", "image", "video"],
-      "additionalProperties": false,
-      "properties": {
-        "homepage": {"const": 10000},
-        "article": {"const": 10000},
-        "image": {"const": 10000},
-        "video": {"const": 1000}
+        "homepage": {"type": "integer", "minimum": 1},
+        "article": {"type": "integer", "minimum": 1},
+        "image": {"type": "integer", "minimum": 1},
+        "video": {"type": "integer", "minimum": 1}
       }
     }
   },
   "allOf": [
     {
-      "if": {"properties": {"productLifecycleState": {"const": "research"}}},
-      "then": {"properties": {"releaseClass": {"const": "research"}}},
-      "else": {"properties": {"releaseClass": {"const": "commercial"}}}
+      "if": {
+        "properties": {
+          "productLifecycleState": {
+            "const": "research"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "releaseClass": {
+            "const": "research"
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "releaseClass": {
+            "const": "commercial"
+          }
+        }
+      }
     }
   ]
 }

@@ -10,14 +10,14 @@ creatorPersona:
   archetype: landscape_photographer
   preferredCreatorIds: [qwq_creator_landscape_photographer_001]
   requiredProfileTagRefs: [Topic/旅行/旅行主题/城市漫步, Topic/旅行/玩法/摄影旅拍]
-  allowedPerspective: [摄影师, 第一人称经验]
+  allowedPerspective: [摄影师, 中性事实叙事]
   mustNotClaim: [商业图库授权, 官方摄影师身份]
 editorialIntent: 用一条可步行的城市动线串联街区、光线和细节，兼顾观感与可走性。
 render: { articleTemplate: journal, fontPreset: clean }
 structure:
   required: [漫步主线, 街区节点, 拍摄机位, 步行与休息, 周边串联]
   optional: [咖啡与小店, 夜景延伸]
-mustIncludeFacts: [步行动线, 节点顺序, 光线时段, 步行时长, 休息点]
+evidenceConditionedFacts: [步行动线, 节点顺序, 光线时段, 步行时长, 休息点]
 forbiddenPhrases: [冷启动, 批次, 角色：, 占位, contract_fixture]
 wordCount: { min: 1000, max: 2000 }
 imagePlan:
@@ -29,5 +29,5 @@ crossRefs: { minEntity: 3, minTag: 4 }
 recommendation:
   authorBinding: { required: true, source: creator_profile_catalog }
   exposeStyleTags: true
-  qualitySignals: [bodyLength, requiredFactsCovered, imageSlotCoverage, entityRefCount]
+  qualitySignals: [bodyLength, evidenceSupportedFactCoverage, imageSlotCoverage, entityRefCount]
   bodyForbiddenFields: [qualityScore, templateId, routingReason, coldStartBoost, isSystemBuiltin]

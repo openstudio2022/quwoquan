@@ -7,9 +7,6 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
-from content.release.canonical.asset_review_adoption import (
-    validate_frozen_asset_review_binding,
-)
 from content.release.canonical.object_transaction_contract import (
     ObjectTransactionError,
     _read_json,
@@ -23,22 +20,15 @@ from governance.coverage.distribution import (
 _CARRIERS = ("homepage", "article", "image", "video")
 
 
-def _review_attestation_passed(root: Path) -> bool:
-    path = root / "attestation.json"
+def _content_review_approved(root: Path) -> bool:
+    path = root / "content_review.json"
     if not path.is_file():
         return False
-    attestation = _read_json(path)
+    review = _read_json(path)
     return bool(
-        attestation.get("schema") == "quwoquan_data.review_attestation"
-        and attestation.get("decision") == "approved"
-        and isinstance(attestation.get("deterministicGate"), Mapping)
-        and attestation["deterministicGate"].get("status") == "passed"
-        and isinstance(attestation.get("independentReviewer"), Mapping)
-        and attestation["independentReviewer"].get("status") == "passed"
-        and isinstance(attestation.get("mediaRefReview"), Mapping)
-        and attestation["mediaRefReview"].get("status") == "passed"
+        review.get("schema") == "quwoquan_data.content_review"
+        and review.get("decision") == "approved"
     )
-
 
 def _object_rows(
     objects_root: Path,
@@ -63,11 +53,6 @@ def _object_rows(
                 raise ObjectTransactionError(
                     f"release object carrier is invalid: {kind}/{ref}:{carrier}"
                 )
-            source_identity = manifest.get("sourceIdentity")
-            source_identity = (
-                source_identity if isinstance(source_identity, Mapping) else {}
-            )
-            source_digest = str(source_identity.get("sourceDigest") or "").strip()
             rights_path = root / "rights.json"
             rights = (
                 _read_json(rights_path) if rights_path.is_file() else {"assets": []}
@@ -78,31 +63,15 @@ def _object_rows(
                     f"release object rights assets must be an array: {kind}/{ref}"
                 )
             object_ref = f"{kind}/{ref}"
-            review_object_ref = (
-                f"/entity/{ref}"
-                if kind == "entities"
-                else str(manifest.get("topicId") or ref).strip()
-            )
             assets: list[dict[str, Any]] = []
-            reviewed_asset_kinds: dict[str, str] = {}
             for raw in raw_assets:
                 if not isinstance(raw, Mapping):
                     raise ObjectTransactionError(
                         f"release rights asset must be an object: {object_ref}"
                     )
                 try:
-                    review_binding = validate_frozen_asset_review_binding(
-                        output_root=output_root,
-                        object_ref=review_object_ref,
-                        rights_asset=raw,
-                        source_digest=source_digest,
-                    )
                     projected = project_asset_admission(raw, object_ref=object_ref)
                     assets.append(projected)
-                    if review_binding is not None:
-                        reviewed_asset_kinds[str(projected["assetId"])] = str(
-                            review_binding["assetKind"]
-                        )
                 except (TypeError, ValueError) as exc:
                     raise ObjectTransactionError(str(exc)) from exc
             rows.append(
@@ -111,8 +80,7 @@ def _object_rows(
                     "carrier": carrier,
                     "manifest": manifest,
                     "assets": assets,
-                    "reviewedAssetKinds": reviewed_asset_kinds,
-                    "reviewAttestationPassed": _review_attestation_passed(root),
+                    "contentReviewApproved": _content_review_approved(root),
                 }
             )
     return rows
@@ -225,16 +193,18 @@ def _object_media_is_admissible(row: Mapping[str, Any]) -> bool:
     if carrier == "article":
         text_only = str(manifest.get("publishMediaMode") or "").strip() == "text_only"
         return not manifest_assets if text_only else bool(manifest_assets)
-    if carrier in {"homepage", "image"}:
+    if carrier == "homepage":
+        text_only = str(manifest.get("publishMediaMode") or "").strip() == "text_only"
+        return not manifest_assets if text_only else any(
+            str(asset.get("kind") or "image").strip() == "image"
+            for asset in manifest_assets
+        )
+    if carrier == "image":
         return any(
             str(asset.get("kind") or "image").strip() == "image"
             for asset in manifest_assets
         )
     if carrier == "video":
-        reviewed_asset_kinds = row.get("reviewedAssetKinds")
-        reviewed_asset_kinds = (
-            reviewed_asset_kinds if isinstance(reviewed_asset_kinds, Mapping) else {}
-        )
         by_id = {
             str(asset.get("assetId") or "").strip(): asset for asset in manifest_assets
         }
@@ -247,11 +217,7 @@ def _object_media_is_admissible(row: Mapping[str, Any]) -> bool:
             if (
                 mime_type.startswith("video/")
                 and sha256.startswith("sha256:")
-                and (
-                    reviewed_asset_kinds.get(str(asset.get("assetId") or "").strip())
-                    == "video"
-                    or bool(row.get("reviewAttestationPassed"))
-                )
+                and bool(row.get("contentReviewApproved"))
                 and isinstance(poster, Mapping)
                 and str(poster.get("kind") or "").strip() == "image"
                 and str(poster.get("role") or "").strip() == "cover"

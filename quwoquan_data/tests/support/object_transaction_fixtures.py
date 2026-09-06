@@ -65,25 +65,26 @@ def build_canonical(root: Path) -> Path:
     return canonical
 
 
-def _review_attestation() -> dict:
+def _content_review() -> dict:
     return {
-        "schema": "quwoquan_data.review_attestation",
+        "schema": "quwoquan_data.content_review",
+        "stage": "5.review",
+        "executionId": "20260711--travel-homepage-coverage--cn-test--pilot-001",
+        "objectRef": f"entities/{OBJECT_REF}",
         "decision": "approved",
-        "deterministicGate": {"status": "passed", "issues": []},
-        "independentReviewer": {
-            "status": "passed",
-            "actor": {
-                "host": "cursor",
-                "sessionId": "review-session",
-                "modelFamily": "composer",
-                "invocation": {
-                    "provider": "host",
-                    "model": "composer-2.5",
-                    "runId": "review-run",
-                },
-            },
-        },
-        "mediaRefReview": {"status": "passed", "issues": []},
+        "draft": {"ref": "4.draft/page.md", "digest": "sha256:" + "1" * 64},
+        "dimensions": [{"name": "content", "decision": "approved", "issues": []}],
+        "blockingIssues": [],
+        "assetRights": [{
+            "assetRef": "sources/fixture/assets/cover.jpg",
+            "sourceUrl": "https://upload.wikimedia.org/example.jpg",
+            "license": "CC BY-SA 4.0",
+            "termsUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+            "authorizationProof": "https://commons.wikimedia.org/wiki/File:Example.jpg",
+            "usageScope": "commercial",
+            "decision": "approved",
+            "issues": [],
+        }],
     }
 
 
@@ -247,7 +248,7 @@ def build_package(
             ]
         },
     )
-    write_json(object_root / "attestation.json", _review_attestation())
+    write_json(object_root / "content_review.json", _content_review())
     write_json(
         object_root / "evidence_index.json",
         {"schema": "quwoquan_data.release_evidence_index", "refs": []},
@@ -276,7 +277,7 @@ def build_package(
             }
         ],
     }
-    review = {"attestationRef": "attestation.json"}
+    review = {"contentReviewRef": "content_review.json"}
     review_binding = transaction._review_binding(object_root, {"review": review})
     closure_digest = transaction._closure_digest(
         object_root=object_root,

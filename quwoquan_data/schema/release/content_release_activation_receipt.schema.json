@@ -1,0 +1,223 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Content release activation receipt",
+  "type": "object",
+  "required": [
+    "schema",
+    "status",
+    "environment",
+    "sourceOwner",
+    "target",
+    "expectedActive",
+    "previousActive",
+    "active",
+    "counts",
+    "generatedAt"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "quwoquan.content_release_activation_receipt"
+    },
+    "status": {
+      "enum": [
+        "activated",
+        "replayed"
+      ]
+    },
+    "environment": {
+      "enum": [
+        "alpha",
+        "beta",
+        "gamma",
+        "prod"
+      ]
+    },
+    "sourceOwner": {
+      "const": "qwq_data"
+    },
+    "target": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "releaseId",
+        "manifestDigest"
+      ],
+      "properties": {
+        "releaseId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "manifestDigest": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      }
+    },
+    "expectedActive": {
+      "$ref": "#/$defs/activeExpectation"
+    },
+    "previousActive": {
+      "$ref": "#/$defs/activeExpectation"
+    },
+    "active": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "releaseId",
+        "manifestDigest",
+        "releaseClass",
+        "projectionVersion",
+        "revision",
+        "activatedAt"
+      ],
+      "properties": {
+        "releaseId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "manifestDigest": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "releaseClass": {
+          "enum": [
+            "research",
+            "commercial"
+          ]
+        },
+        "projectionVersion": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "activatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "postsMaterialized",
+        "postsRemoved",
+        "mediaAssetsMaterialized",
+        "mediaAssetsRemoved",
+        "outboxEventsReady",
+        "outboxEventsAppended"
+      ],
+      "properties": {
+        "postsMaterialized": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "postsRemoved": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "mediaAssetsMaterialized": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "mediaAssetsRemoved": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "outboxEventsReady": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "outboxEventsAppended": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "generatedAt": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "$defs": {
+    "activeExpectation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "found",
+        "sourceOwner",
+        "revision"
+      ],
+      "properties": {
+        "found": {
+          "type": "boolean"
+        },
+        "sourceOwner": {
+          "const": "qwq_data"
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "releaseId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "manifestDigest": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "found": {
+                "const": true
+              }
+            },
+            "required": [
+              "found"
+            ]
+          },
+          "then": {
+            "required": [
+              "releaseId",
+              "manifestDigest"
+            ],
+            "properties": {
+              "revision": {
+                "minimum": 1
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "revision": {
+                "const": 0
+              }
+            },
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "releaseId"
+                  ]
+                },
+                {
+                  "required": [
+                    "manifestDigest"
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
+}

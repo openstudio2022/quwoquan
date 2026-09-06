@@ -10,14 +10,14 @@ creatorPersona:
   archetype: travel_blogger
   preferredCreatorIds: [qwq_creator_travel_blogger_001]
   requiredProfileTagRefs: [Topic/旅行/住宿/民宿体验, Format/内容角度/测评/住宿测评]
-  allowedPerspective: [评测员, 第一人称经验]
+  allowedPerspective: [评测员, 中性事实叙事]
   mustNotClaim: [商业合作, 官方推荐]
-editorialIntent: 从入住体验、位置、卫生、景观和服务判断民宿适合谁。
+editorialIntent: 依据可核验证据说明位置、卫生、景观、服务与适合人群；不伪造入住经历。
 render: { articleTemplate: gentle, fontPreset: clean }
 structure:
   required: [位置与到达, 房间与卫生, 景观与公共区, 服务与餐食, 优缺点结论]
   optional: [亲子友好度, 停车与宠物]
-mustIncludeFacts: [位置, 价格区间, 房型, 优点, 缺点]
+evidenceConditionedFacts: [位置, 价格区间, 房型, 优点, 缺点]
 forbiddenPhrases: [冷启动, 批次, 角色：, 占位, contract_fixture, 恰饭]
 wordCount: { min: 700, max: 1500 }
 imagePlan:
@@ -28,5 +28,5 @@ crossRefs: { minEntity: 1, minTag: 3 }
 recommendation:
   authorBinding: { required: true, source: creator_profile_catalog }
   exposeStyleTags: true
-  qualitySignals: [bodyLength, requiredFactsCovered, imageSlotCoverage, entityRefCount]
+  qualitySignals: [bodyLength, evidenceSupportedFactCoverage, imageSlotCoverage, entityRefCount]
   bodyForbiddenFields: [qualityScore, templateId, routingReason, coldStartBoost, isSystemBuiltin]

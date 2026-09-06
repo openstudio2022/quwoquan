@@ -54,6 +54,7 @@ def _receipt() -> ReleaseAttestation:
             "20260718--travel-homepage-coverage--test-region-a--pilot-001",
             "20260718--travel-homepage-coverage--test-region-b--pilot-001",
         ),
+        carrier_counts={"homepage": 3, "article": 9, "image": 0, "video": 0, "total": 12},
         entity_count=3,
         post_count=9,
         creator_count=3,
@@ -85,6 +86,7 @@ def test_release_attestation__allows_post_only_lane_release__contract__local_con
             "executionIds": [
                 "20260718--travel-article-supply--test-region-a--scale-001"
             ],
+            "carrierCounts": {"homepage": 0, "article": 100, "image": 0, "video": 0, "total": 100},
             "entityCount": 0,
             "postCount": 100,
         }
@@ -208,6 +210,7 @@ def test_release_attestation__rejects_mixed_execution_source_digests__contract()
 
 def test_release_attestation__rejects_content_without_objects__contract__local_contract() -> None:
     document = _receipt().to_document()
+    document["carrierCounts"] = {"homepage": 0, "article": 0, "image": 0, "video": 0, "total": 0}
     document["entityCount"] = 0
     document["postCount"] = 0
 

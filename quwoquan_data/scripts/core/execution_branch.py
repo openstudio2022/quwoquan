@@ -8,14 +8,12 @@ branch/commit 冻结进 spec/证据（可重放审计），但校验对象是 br
 """
 from __future__ import annotations
 
-import os
 import subprocess
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
 _BRANCH_POLICY_RELPATH = Path("quwoquan_ops") / "policies" / "branch_policy.yaml"
-_CAPSULE_MANIFEST = ".qwq_campaign_capsule.json"
 
 
 def _repo_root() -> Path:
@@ -67,22 +65,6 @@ def current_git_branch(*, cwd: str | Path | None = None) -> str:
     )
     if branch:
         return branch
-    # Campaign lanes execute from an immutable v2 source capsule without Git
-    # metadata.  The captured branch inside that capsule is the execution
-    # authority; environment values are only checked for exact transit drift.
-    manifest_path = resolved_root / _CAPSULE_MANIFEST
-    if str(os.environ.get("QWQ_CAMPAIGN_ROOT_EXECUTION_ID") or "").strip() and manifest_path.is_file():
-        from core.io import read_json
-
-        manifest = read_json(manifest_path)
-        if (
-            not isinstance(manifest, Mapping)
-            or manifest.get("format") != "source-capsule-v2"
-        ):
-            return ""
-        captured = str(manifest.get("gitBranch") or "").strip()
-        transit = str(os.environ.get("QWQ_FROZEN_MAIN_BRANCH") or "").strip()
-        return captured if captured and (not transit or transit == captured) else ""
     return ""
 
 
@@ -101,19 +83,6 @@ def current_git_commit(*, cwd: str | Path | None = None) -> str:
         return ""
     if result.returncode == 0 and str(result.stdout or "").strip():
         return str(result.stdout or "").strip()
-    manifest_path = resolved_root / _CAPSULE_MANIFEST
-    if str(os.environ.get("QWQ_CAMPAIGN_ROOT_EXECUTION_ID") or "").strip() and manifest_path.is_file():
-        from core.io import read_json
-
-        manifest = read_json(manifest_path)
-        if (
-            not isinstance(manifest, Mapping)
-            or manifest.get("format") != "source-capsule-v2"
-        ):
-            return ""
-        captured = str(manifest.get("gitCommitSha") or "").strip()
-        transit = str(os.environ.get("QWQ_FROZEN_MAIN_COMMIT") or "").strip()
-        return captured if captured and (not transit or transit == captured) else ""
     return ""
 
 

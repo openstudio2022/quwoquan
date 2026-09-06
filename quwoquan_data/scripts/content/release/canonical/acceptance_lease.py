@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Mapping
 from uuid import uuid4
@@ -130,6 +130,7 @@ def active_acceptance_lease_refs(
     output_root: Path,
     release_id: str = "",
     environment: str = "",
+    now: datetime | None = None,
 ) -> tuple[Path, ...]:
     """Return active leases in the requested release/environment conflict domain.
 
@@ -211,7 +212,17 @@ def active_acceptance_lease_refs(
                         f"acceptance lease contains duplicate revoke events: {lease_root}"
                     )
                 if not revokes:
-                    active.append(acquire_path)
+                    try:
+                        expires_at = datetime.fromisoformat(str(acquire["expiresAt"]))
+                    except (KeyError, TypeError, ValueError) as exc:
+                        raise AcceptanceLeaseError(
+                            f"acceptance lease expiresAt is invalid: {acquire_path}"
+                        ) from exc
+                    current = now or datetime.now(timezone.utc)
+                    if expires_at.tzinfo is None:
+                        expires_at = expires_at.replace(tzinfo=timezone.utc)
+                    if expires_at > current.astimezone(timezone.utc):
+                        active.append(acquire_path)
     return tuple(active)
 
 
@@ -312,6 +323,7 @@ def acquire_acceptance_lease(
     import_run_id: str,
     verify_run_id: str,
     lease_id: str,
+    ttl_seconds: int = 3600,
     event_id: str = "",
     release_root: Path = RELEASE_ROOT,
     output_root: Path = OUTPUT_ROOT,
@@ -323,6 +335,8 @@ def acquire_acceptance_lease(
     import_run_id = _safe_segment(import_run_id, label="importRunId")
     verify_run_id = _safe_segment(verify_run_id, label="verifyRunId")
     lease_id = _safe_segment(lease_id, label="leaseId")
+    if type(ttl_seconds) is not int or ttl_seconds < 60 or ttl_seconds > 86400:
+        raise AcceptanceLeaseError("ttlSeconds must be an integer from 60 to 86400")
     with release_operation_guard(
         lock_root=release_operation_lock_root(release_root),
         release_ids=(release_id,),
@@ -367,6 +381,9 @@ def acquire_acceptance_lease(
             "sourceOwner": "qwq_data",
             "manifestDigest": digest,
             "leaseId": lease_id,
+            "generation": 1,
+            "fencingToken": f"{environment}:{release_id}:{lease_id}:1:{digest}",
+            "expiresAt": (datetime.now(timezone.utc) + timedelta(seconds=ttl_seconds)).isoformat(),
             "eventId": _safe_segment(
                 event_id or _new_event_id("acquire"), label="eventId"
             ),
@@ -474,6 +491,9 @@ def revoke_acceptance_lease(
                     "sourceOwner",
                     "manifestDigest",
                     "leaseId",
+                    "generation",
+                    "fencingToken",
+                    "expiresAt",
                     "holder",
                     "purpose",
                     "importRunId",
@@ -501,6 +521,7 @@ def handle_acceptance_lease(args: Any) -> None:
                 import_run_id=str(args.import_run_id),
                 verify_run_id=str(args.verify_run_id),
                 lease_id=str(args.lease_id),
+                ttl_seconds=int(args.ttl_seconds),
                 event_id=str(args.event_id or ""),
             )
         elif args.acceptance_lease_action == "revoke":

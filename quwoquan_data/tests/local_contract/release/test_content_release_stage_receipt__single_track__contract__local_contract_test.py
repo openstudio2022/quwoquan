@@ -56,9 +56,14 @@ def test_success_count_cannot_exceed_attempted_count() -> None:
         assert_valid(receipt, "release", "content_release_stage_receipt")
 
 
-def test_import_report_stops_at_imported_and_cannot_claim_active() -> None:
+def test_import_report_stops_at_stage_or_replay_and_cannot_claim_activation() -> None:
     schema_path = (
         Path(__file__).resolve().parents[3] / "schema" / "release" / "import_report.schema.json"
     )
     schema = json.loads(schema_path.read_text(encoding="utf-8"))
-    assert schema["properties"]["status"]["enum"] == ["dry-run", "imported"]
+    assert schema["properties"]["status"]["enum"] == [
+        "dry-run",
+        "imported",
+        "replay_validated",
+    ]
+    assert schema["properties"]["activationMode"] == {"const": "stage-only"}

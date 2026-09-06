@@ -10,67 +10,6 @@ from core.image_rules import image_caption_quality_issue, relevance_issue
 from content.source.research.text_match import _normalized_title
 
 
-def admit_independently_reviewed_image(
-    asset: Mapping[str, Any],
-    review_receipt: Mapping[str, Any],
-) -> dict[str, Any]:
-    """Admit one exact image only through its independent frozen receipt.
-
-    ``pre_acquisition_block`` remains an acquisition-stage quality filter.  It
-    cannot promote an image to release admission.  This seam requires the later
-    reviewer receipt and cross-checks every source/rights/CAS field so the
-    acquisition writer cannot self-report a second role.
-    """
-
-    from content.source.independent_asset_review import (
-        IndependentAssetReviewError,
-        assert_asset_review_accepted,
-    )
-
-    snapshot = review_receipt.get("assetSnapshot")
-    if not isinstance(snapshot, Mapping):
-        raise IndependentAssetReviewError(
-            "professional image independent review lacks assetSnapshot"
-        )
-    expected = {
-        "assetId": str(asset.get("assetId") or "").strip(),
-        "entityId": str(asset.get("entityId") or "").strip(),
-        "observedEntityId": str(asset.get("observedEntityId") or "").strip(),
-        "contentSha256": str(asset.get("contentSha256") or "").strip(),
-        "casRef": str(asset.get("assetRef") or "").strip(),
-        "sourceUrl": str(asset.get("sourceUrl") or "").strip(),
-        "platform": str(asset.get("platform") or "").strip(),
-        "creator": str(asset.get("creator") or "").strip(),
-        "capturedAt": str(asset.get("capturedAt") or "").strip(),
-        "license": str(asset.get("license") or "").strip(),
-        "licenseSnapshot": str(asset.get("licenseSnapshot") or "").strip(),
-        "usageScope": str(asset.get("usageScope") or "").strip(),
-        "modelReleaseStatus": str(asset.get("modelReleaseStatus") or "").strip(),
-        "termsUrl": str(asset.get("termsUrl") or "").strip(),
-        "authorizationProof": str(asset.get("authorizationProof") or "").strip(),
-        "rightsIssues": [
-            str(item).strip()
-            for item in (asset.get("rightsIssues") or [])
-            if str(item).strip()
-        ],
-        "acquisitionStatus": str(asset.get("acquisitionStatus") or "").strip(),
-        "rightsStatus": str(asset.get("rightsStatus") or "").strip(),
-        "authorizationRequired": asset.get("authorizationRequired"),
-        "distributionDecision": str(asset.get("distributionDecision") or "").strip(),
-    }
-    if dict(snapshot) != expected:
-        raise IndependentAssetReviewError(
-            "professional image acquisition/reviewer asset snapshot drift"
-        )
-    assert_asset_review_accepted(
-        review_receipt,
-        content_sha256=expected["contentSha256"],
-        source_digest=str(review_receipt.get("sourceDigest") or ""),
-        asset_id=expected["assetId"],
-    )
-    return {**dict(asset), "independentAssetReviewId": review_receipt["reviewId"]}
-
-
 def pre_acquisition_block(item: Mapping[str, Any]) -> tuple[str, str]:
     """Return one typed safety/entity/relevance blocker before acceptance."""
 
@@ -142,4 +81,4 @@ def pre_acquisition_block(item: Mapping[str, Any]) -> tuple[str, str]:
     return "", ""
 
 
-__all__ = ["admit_independently_reviewed_image", "pre_acquisition_block"]
+__all__ = ["pre_acquisition_block"]

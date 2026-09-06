@@ -54,7 +54,6 @@ def encyclopedia_source_attribution(
             if wikipedia
             else None
         ),
-        "riskAcceptanceId": None,
         "watermarkStatus": "absent",
         "audioRightsStatus": "no_audio",
         "modelReleaseStatus": "not_required",

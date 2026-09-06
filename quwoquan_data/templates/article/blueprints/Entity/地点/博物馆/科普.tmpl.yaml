@@ -17,7 +17,7 @@ render: { articleTemplate: ritual, fontPreset: classic }
 structure:
   required: [馆舍概况, 镇馆之宝, 展陈动线, 关键展品, 参观建议]
   optional: [亲子讲解点, 周边串联]
-mustIncludeFacts: [开放时间, 镇馆之宝, 展陈主题, 参观动线]
+evidenceConditionedFacts: [开放时间, 镇馆之宝, 展陈主题, 参观动线]
 forbiddenPhrases: [冷启动, 批次, 角色：, 占位, contract_fixture]
 wordCount: { min: 900, max: 2000 }
 imagePlan:
@@ -28,5 +28,5 @@ crossRefs: { minEntity: 1, minTag: 3 }
 recommendation:
   authorBinding: { required: true, source: creator_profile_catalog }
   exposeStyleTags: true
-  qualitySignals: [bodyLength, requiredFactsCovered, imageSlotCoverage, entityRefCount]
+  qualitySignals: [bodyLength, evidenceSupportedFactCoverage, imageSlotCoverage, entityRefCount]
   bodyForbiddenFields: [qualityScore, templateId, routingReason, coldStartBoost, isSystemBuiltin]

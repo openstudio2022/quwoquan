@@ -10,7 +10,7 @@ creatorPersona:
   archetype: travel_blogger
   preferredCreatorIds: [qwq_creator_travel_blogger_001]
   requiredProfileTagRefs: [Topic/旅行/出行方式/高铁铁路, Topic/旅行/行程形态/自由行, Format/内容角度/攻略]
-  allowedPerspective: [第一人称经验, 编辑部]
+  allowedPerspective: [中性事实叙事, 编辑部]
   mustNotClaim: [官方交通承诺, 最低价机票]
 editorialIntent: 为外地游客规划大交通到成都、市内休整与再出发川西段，把枢纽段与后续环线/深度段衔接清楚。
 render: { articleTemplate: journal, fontPreset: clean }
@@ -40,7 +40,7 @@ routeCoverageExpectations:
 structure:
   required: [大交通方案, 到达成都, 休整与补给, 再出发衔接, 时间与费用, 风险提醒]
   optional: [转机/转高铁, 成都半日安排]
-mustIncludeFacts: [大交通方式, 耗时与费用, 成都到达站, 休整安排, 后续川西段衔接]
+evidenceConditionedFacts: [大交通方式, 耗时与费用, 成都到达站, 休整安排, 后续川西段衔接]
 forbiddenPhrases: [冷启动, 批次, 角色：, 占位, contract_fixture]
 wordCount: { min: 1400, max: 2600 }
 imagePlan:
@@ -51,7 +51,7 @@ crossRefs: { minEntity: 2, minTag: 5 }
 recommendation:
   authorBinding: { required: true, source: creator_profile_catalog }
   exposeStyleTags: true
-  qualitySignals: [bodyLength, requiredFactsCovered, imageSlotCoverage, entityRefCount]
+  qualitySignals: [bodyLength, evidenceSupportedFactCoverage, imageSlotCoverage, entityRefCount]
   bodyForbiddenFields: [qualityScore, templateId, routingReason, coldStartBoost, isSystemBuiltin, recommendationWeight]
 openingTension: { required: true, focus: 出发动机与犹豫 }
 explicitFeelings: { requireLike: true, requireDislike: true }

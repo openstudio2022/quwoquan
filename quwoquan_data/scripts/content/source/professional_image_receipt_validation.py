@@ -62,6 +62,17 @@ def _resolved_cas_asset(
         raise ValueError(
             f"professional image acquisition CAS identity mismatch: {asset_id}"
         )
+    recorded_mime = str(row.get("mimeType") or "").strip().casefold()
+    expected_ext_by_mime = {
+        "image/gif": ".gif",
+        "image/jpeg": ".jpg",
+        "image/png": ".png",
+        "image/webp": ".webp",
+    }
+    if expected_ext_by_mime.get(recorded_mime) != relative.suffix:
+        raise ValueError(
+            f"professional image acquisition MIME/extension drift: {asset_ref}"
+        )
     unresolved_path = resolved_root / relative
     asset_path = unresolved_path.resolve()
     # A symlink or an escaping path is never a reclamation outcome: the collector
@@ -94,14 +105,22 @@ def _resolved_cas_asset(
         raise ValueError(
             f"professional image acquisition CAS byte count mismatch: {asset_ref}"
         )
-    if sniff_image_ext(body, "") != relative.suffix:
+    body_ext = sniff_image_ext(body, "")
+    if body_ext != relative.suffix:
         raise ValueError(
             f"professional image acquisition CAS extension mismatch: {asset_ref}"
         )
     probe = probe_image_bytes(body)
+    if not probe.succeeded:
+        raise ValueError(
+            f"professional image acquisition CAS quality drift: {asset_ref}"
+        )
+    if recorded_mime != probe.mime_type:
+        raise ValueError(
+            f"professional image acquisition CAS MIME drift: {asset_ref}"
+        )
     if (
-        not probe.succeeded
-        or probe.width != int(row.get("width") or 0)
+        probe.width != int(row.get("width") or 0)
         or probe.height != int(row.get("height") or 0)
     ):
         raise ValueError(
@@ -289,6 +308,7 @@ def validate_image_receipt_inventory(
             (
                 row["assetRef"],
                 row["contentSha256"],
+                row["mimeType"],
                 row["width"],
                 row["height"],
             )

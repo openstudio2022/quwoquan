@@ -253,16 +253,16 @@ lanePolicies:
       - { sourceId: youtube, sourceKind: tourism_video_site, publicationAdmissions: [] }
       - { sourceId: vimeo, sourceKind: tourism_video_site, publicationAdmissions: [] }
       - { sourceId: bilibili, sourceKind: tourism_video_site, publicationAdmissions: [] }
-      - { sourceId: douyin, sourceKind: douyin, publicationAdmissions: [research_release, risk_accepted_attribution_only, commercial_release] }
-      - { sourceId: tiktok, sourceKind: tiktok, publicationAdmissions: [research_release, risk_accepted_attribution_only, commercial_release] }
-      - { sourceId: weibo, sourceKind: weibo, publicationAdmissions: [research_release, risk_accepted_attribution_only, commercial_release] }
-      - { sourceId: toutiao_video, sourceKind: toutiao, publicationAdmissions: [research_release, risk_accepted_attribution_only, commercial_release] }
+      - { sourceId: douyin, sourceKind: douyin, publicationAdmissions: [research_release, commercial_release] }
+      - { sourceId: tiktok, sourceKind: tiktok, publicationAdmissions: [research_release, commercial_release] }
+      - { sourceId: weibo, sourceKind: weibo, publicationAdmissions: [research_release, commercial_release] }
+      - { sourceId: toutiao_video, sourceKind: toutiao, publicationAdmissions: [research_release, commercial_release] }
       - { sourceId: pexels_videos, sourceKind: tourism_video_site, publicationAdmissions: [research_release, commercial_release] }
       - { sourceId: pixabay_videos, sourceKind: tourism_video_site, publicationAdmissions: [research_release, commercial_release] }
       - { sourceId: pond5, sourceKind: tourism_video_site, publicationAdmissions: [research_release, commercial_release] }
       - { sourceId: storyblocks, sourceKind: tourism_video_site, publicationAdmissions: [research_release, commercial_release] }
-      - { sourceId: travel_vlog, sourceKind: tourism_video_site, publicationAdmissions: [research_release, risk_accepted_attribution_only, commercial_release] }
-      - { sourceId: chinese_tourism_vertical, sourceKind: tourism_video_site, publicationAdmissions: [research_release, risk_accepted_attribution_only, commercial_release] }
+      - { sourceId: travel_vlog, sourceKind: tourism_video_site, publicationAdmissions: [research_release, commercial_release] }
+      - { sourceId: chinese_tourism_vertical, sourceKind: tourism_video_site, publicationAdmissions: [research_release, commercial_release] }
       - { sourceId: cctv_video, sourceKind: tourism_video_site, publicationAdmissions: [research_release] }
     rankingSignals:
       - visual_relevance

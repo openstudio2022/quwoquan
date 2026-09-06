@@ -58,6 +58,8 @@ class ContentDistributionPolicy:
     video_generation_allowed: bool
     illustrated_rate_target: float
     text_only_rate_target: float
+    m1_targets: tuple[tuple[str, int], ...]
+    m10_targets: tuple[tuple[str, int], ...]
     m100_targets: tuple[tuple[str, int], ...]
     m1000_targets: tuple[tuple[str, int], ...]
     m10000_targets: tuple[tuple[str, int], ...]
@@ -65,9 +67,6 @@ class ContentDistributionPolicy:
     require_m1000_promotion_before_m10000: bool
     milestone_attainment_required: bool
     attainment_counting_mode: str
-    automatic_recovery_rate_target: float
-    automatic_recovery_statistical: bool
-    automatic_recovery_non_blocking: bool
     image_provider_priority: tuple[str, ...]
     video_popularity_signals: tuple[str, ...]
     video_popularity_statistical: bool
@@ -90,14 +89,11 @@ class ContentDistributionPolicy:
             )
         if self.attainment_counting_mode != "cumulative_unique_finalized_objects":
             raise ValueError("milestone attainment must count cumulative unique finalized objects")
-        if (
-            not self.automatic_recovery_statistical
-            or not self.automatic_recovery_non_blocking
-        ):
-            raise ValueError("automatic recovery must remain non-blocking statistics")
         if not self.video_popularity_non_blocking or not self.video_popularity_statistical:
             raise ValueError("video popularity must remain non-blocking statistics")
         target_rows = (
+            dict(self.m1_targets),
+            dict(self.m10_targets),
             dict(self.m100_targets),
             dict(self.m1000_targets),
             dict(self.m10000_targets),
@@ -107,6 +103,8 @@ class ContentDistributionPolicy:
                 target_rows[0][carrier]
                 < target_rows[1][carrier]
                 < target_rows[2][carrier]
+                < target_rows[3][carrier]
+                < target_rows[4][carrier]
             ):
                 raise ValueError(f"scale targets must increase monotonically: {carrier}")
 
@@ -118,6 +116,8 @@ class ContentDistributionPolicy:
         so raising a milestone stays a control-plane edit.
         """
         return {
+            "M1": dict(self.m1_targets),
+            "M10": dict(self.m10_targets),
             "M100": dict(self.m100_targets),
             "M1000": dict(self.m1000_targets),
             "M10000": dict(self.m10000_targets),
@@ -159,7 +159,6 @@ def load_content_distribution_policy(
     research_discovery = raw["researchDiscovery"]
     article_media = raw["articleMedia"]
     scale_milestones = raw["scaleMilestones"]
-    automatic_recovery = scale_milestones["automaticRecovery"]
     video_popularity = research_discovery["videoPopularity"]
     return ContentDistributionPolicy(
         policy_id=str(raw["policyId"]),
@@ -169,6 +168,14 @@ def load_content_distribution_policy(
         video_generation_allowed=bool(media_generation["videoAllowed"]),
         illustrated_rate_target=float(article_media["illustratedRateTarget"]),
         text_only_rate_target=float(article_media["textOnlyRateTarget"]),
+        m1_targets=tuple(
+            (carrier, int(scale_milestones["m1Targets"][carrier]))
+            for carrier in ("homepage", "article", "image", "video")
+        ),
+        m10_targets=tuple(
+            (carrier, int(scale_milestones["m10Targets"][carrier]))
+            for carrier in ("homepage", "article", "image", "video")
+        ),
         m100_targets=tuple(
             (carrier, int(scale_milestones["m100Targets"][carrier]))
             for carrier in ("homepage", "article", "image", "video")
@@ -191,9 +198,6 @@ def load_content_distribution_policy(
             scale_milestones["milestoneAttainmentRequired"]
         ),
         attainment_counting_mode=str(scale_milestones["attainmentCountingMode"]),
-        automatic_recovery_rate_target=float(automatic_recovery["targetRate"]),
-        automatic_recovery_statistical=bool(automatic_recovery["statistical"]),
-        automatic_recovery_non_blocking=bool(automatic_recovery["nonBlocking"]),
         image_provider_priority=tuple(research_discovery["imageProviderPriority"]),
         video_popularity_signals=tuple(video_popularity["signals"]),
         video_popularity_statistical=bool(video_popularity["statistical"]),

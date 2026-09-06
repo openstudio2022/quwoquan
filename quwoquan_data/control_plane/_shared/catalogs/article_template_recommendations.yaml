@@ -1,0 +1,26 @@
+schema: quwoquan_data.article_template_recommendations
+article_template_recommendations:
+- category_id: humanity
+  recommended_article_templates:
+  - journal
+  - ritual
+- category_id: tech
+  recommended_article_templates:
+  - tech
+  - diffuse
+- category_id: travel
+  recommended_article_templates:
+  - journal
+  - gentle
+- category_id: food
+  recommended_article_templates:
+  - gentle
+  - journal
+- category_id: life
+  recommended_article_templates:
+  - gentle
+  - diffuse
+- category_id: photography
+  recommended_article_templates:
+  - journal
+  - ritual

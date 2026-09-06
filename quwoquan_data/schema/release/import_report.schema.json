@@ -11,11 +11,13 @@
     "releaseId",
     "sourceOwner",
     "manifestDigest",
+    "activationMode",
     "mode",
     "deletePolicy",
     "counts",
     "postBindings",
-    "auditEvents"
+    "auditEvents",
+    "stageResult"
   ],
   "additionalProperties": false,
   "properties": {
@@ -23,7 +25,8 @@
       "type": "string",
       "enum": [
         "dry-run",
-        "imported"
+        "imported",
+        "replay_validated"
       ]
     },
     "environment": {
@@ -42,11 +45,20 @@
       "type": "string",
       "pattern": "^sha256:[0-9a-f]{64}$"
     },
+    "activationMode": {
+      "const": "stage-only"
+    },
     "mode": {
-      "enum": ["upsert", "sync"]
+      "enum": [
+        "upsert",
+        "sync"
+      ]
     },
     "deletePolicy": {
-      "enum": ["none", "tombstone"]
+      "enum": [
+        "none",
+        "tombstone"
+      ]
     },
     "counts": {
       "type": "object",
@@ -64,11 +76,26 @@
           "type": "integer",
           "minimum": 0
         },
-        "articleLoaded": {"type": "integer", "minimum": 0},
-        "imageLoaded": {"type": "integer", "minimum": 0},
-        "videoLoaded": {"type": "integer", "minimum": 0},
-        "researchLoaded": {"type": "integer", "minimum": 0},
-        "commercialLoaded": {"type": "integer", "minimum": 0},
+        "articleLoaded": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "imageLoaded": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "videoLoaded": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "researchLoaded": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "commercialLoaded": {
+          "type": "integer",
+          "minimum": 0
+        },
         "postsUpserted": {
           "type": "integer",
           "minimum": 0
@@ -125,13 +152,39 @@
         ],
         "additionalProperties": false,
         "properties": {
-          "postRef": {"type": "string", "pattern": "^(article|image|video)/[^/].*$"},
-          "postId": {"type": "string", "minLength": 1},
-          "contentId": {"type": "string", "minLength": 1},
-          "contentVersion": {"type": "integer", "minimum": 1},
-          "usageScope": {"enum": ["research", "commercial"]},
-          "contentType": {"enum": ["article", "image", "video"]},
-          "authorId": {"type": "string", "minLength": 1}
+          "postRef": {
+            "type": "string",
+            "pattern": "^(article|image|video)/[^/].*$"
+          },
+          "postId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "contentId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "contentVersion": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "usageScope": {
+            "enum": [
+              "research",
+              "commercial"
+            ]
+          },
+          "contentType": {
+            "enum": [
+              "article",
+              "image",
+              "video"
+            ]
+          },
+          "authorId": {
+            "type": "string",
+            "minLength": 1
+          }
         }
       }
     },
@@ -149,6 +202,54 @@
     },
     "schema": {
       "const": "quwoquan.content_import_report"
+    },
+    "stageResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "postsExpected",
+        "postsProjected",
+        "mediaExpected",
+        "mediaProjected",
+        "outboxExpected",
+        "outboxProjected",
+        "projectionVersion",
+        "replayed"
+      ],
+      "properties": {
+        "postsExpected": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "postsProjected": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "mediaExpected": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "mediaProjected": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "outboxExpected": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "outboxProjected": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "projectionVersion": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "replayed": {
+          "type": "boolean"
+        }
+      }
     }
-  }
+  },
+  "allOf": []
 }

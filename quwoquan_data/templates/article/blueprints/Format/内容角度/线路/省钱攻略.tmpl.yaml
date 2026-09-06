@@ -10,7 +10,7 @@ creatorPersona:
   archetype: travel_blogger
   preferredCreatorIds: [qwq_creator_travel_blogger_001]
   requiredProfileTagRefs: [Format/内容角度/攻略/省钱攻略, Topic/旅行/住宿/青旅住宿]
-  allowedPerspective: [第一人称经验, 编辑部]
+  allowedPerspective: [中性事实叙事, 编辑部]
   mustNotClaim: [最低价承诺, 商业合作]
 editorialIntent: 给预算敏感的学生和年轻旅行者拆解交通、住宿和取舍。
 render: { articleTemplate: journal, fontPreset: clean }
@@ -40,7 +40,7 @@ routeCoverageExpectations:
 structure:
   required: [预算总览, 交通省钱, 住宿取舍, 必花与可省, 风险提醒]
   optional: [公共交通替代, 拼车建议]
-mustIncludeFacts: [预算区间, 交通成本, 住宿选择, 必花项]
+evidenceConditionedFacts: [预算区间, 交通成本, 住宿选择, 必花项]
 forbiddenPhrases: [冷启动, 批次, 角色：, 占位, contract_fixture, 最低价]
 wordCount: { min: 900, max: 1800 }
 imagePlan:
@@ -51,7 +51,7 @@ crossRefs: { minEntity: 3, minTag: 4 }
 recommendation:
   authorBinding: { required: true, source: creator_profile_catalog }
   exposeStyleTags: true
-  qualitySignals: [bodyLength, requiredFactsCovered, imageSlotCoverage, entityRefCount]
+  qualitySignals: [bodyLength, evidenceSupportedFactCoverage, imageSlotCoverage, entityRefCount]
   bodyForbiddenFields: [qualityScore, templateId, routingReason, coldStartBoost, isSystemBuiltin]
 openingTension: { required: true, focus: 出发动机与犹豫 }
 explicitFeelings: { requireLike: true, requireDislike: true }
