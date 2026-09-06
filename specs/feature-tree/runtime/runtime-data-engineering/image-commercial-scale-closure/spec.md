@@ -48,7 +48,7 @@
 
 - canonical：`quwoquan_data/verticals/<vertical>/providers.yaml`
 - canonical：`quwoquan_data/schema/release/asset_rights_closure.schema.json`
-- canonical：`quwoquan_data/scripts/content/source/image_payload.py`
+- canonical：`quwoquan_data/scripts/content/source/acquire.py`（Commons 图片取得与字节预算降采样）
 - canonical：`quwoquan_data/scripts/content/release`
 
 ## 5. 验收场景

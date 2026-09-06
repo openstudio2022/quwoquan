@@ -165,8 +165,8 @@ def now_iso() -> str:
 
 NOW_ISO = now_iso()
 EXECUTION_ROOT_DIRECTORIES = (
-    ReceiptStage.PLAN.value,
-    ReceiptStage.SOURCES.value,
+    "0.plan",
+    "sources",
     "entities",
     "posts",
     "_shared",
@@ -303,8 +303,6 @@ _INTENT_LABEL_MAX = 64
 # 内容对象 = tasks/{executionId}/posts/{contentType}/{angle}/{title}/{seq}/
 # 对象目录下过程阶段统一编号；成品落对象根（promote 时与 publish 同名直拷）。
 STAGE_DOWNLOAD = ReceiptStage.DOWNLOAD.value
-STAGE_QUALITY = ReceiptStage.QUALITY.value
-STAGE_COMPOSE = ReceiptStage.COMPOSE.value
 STAGE_DRAFT = ReceiptStage.DRAFT.value
 STAGE_REVIEW = ReceiptStage.REVIEW.value
 # 实体/内容共享同一阶段骨架，差异只体现在阶段产物内容；阶段名来自 receipt 协议闭集。
@@ -368,7 +366,6 @@ from core.execution_paths import (  # noqa: F401
     env_data_release_run_root,
     execution_data,
     execution_entity_object_dir,
-    execution_entity_page_input_path,
     execution_entity_stage_dir,
     execution_id_from_dir,
     execution_manifest_path,

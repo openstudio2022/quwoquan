@@ -10,36 +10,29 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     parser = subparsers.add_parser("release", help="构建不可变的通用内容发布包")
     commands = parser.add_subparsers(dest="release_command", required=True)
 
-    pool_build = commands.add_parser(
-        "pool-build",
-        help="从显式 immutable cohort 构建 Research/Commercial release",
+    finalize = commands.add_parser(
+        "finalize",
+        help="一次完成 pool-build、release-integrity 与 create-once producer handoff",
     )
-    pool_build.add_argument("--release-id", required=True)
-    pool_build.add_argument("--cohort-file", required=True)
-    pool_build.add_argument(
-        "--release-class",
-        choices=("research", "commercial"),
-        required=True,
-    )
-    pool_build.add_argument("--publish-root")
-    pool_build.add_argument("--release-root")
-    pool_build.set_defaults(handler=owner.handle_pool_release_build)
-
-    handoff = commands.add_parser(
-        "handoff",
-        help="在 release CLOSE 后 create-once 物化 producer terminal handoff",
-    )
-    handoff.add_argument("--release-id", required=True)
-    handoff.add_argument("--cohort-file", required=True)
-    handoff.add_argument(
+    finalize.add_argument("--release-id", required=True)
+    finalize.add_argument("--cohort-file", required=True)
+    finalize.add_argument(
         "--milestone",
         choices=("M1", "M10", "M100", "M1000", "M10000"),
         required=True,
     )
-    handoff.add_argument("--producer-baseline-revision", required=True)
-    handoff.add_argument("--publish-root")
-    handoff.add_argument("--release-root")
-    handoff.set_defaults(handler=owner.handle_producer_release_handoff)
+    finalize.add_argument("--producer-baseline-revision", required=True)
+    finalize.add_argument("--publish-root")
+    finalize.add_argument("--release-root")
+    finalize.set_defaults(handler=owner.handle_release_finalize)
+
+    handoff_verify = commands.add_parser(
+        "handoff-verify",
+        help="只读重放 producer handoff 内嵌事实并逐项比对 sealed release",
+    )
+    handoff_verify.add_argument("--release-id", required=True)
+    handoff_verify.add_argument("--release-root")
+    handoff_verify.set_defaults(handler=owner.handle_handoff_verify)
 
     acceptance_lease = commands.add_parser(
         "acceptance-lease",
@@ -84,11 +77,10 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
 
     publish_object = commands.add_parser(
         "publish-object",
-        help="校验并原子发布 target_set 中一个明确对象",
+        help="对一个 approved 对象执行唯一一次原子 canonical 事务（已发布则 exact replay）",
     )
     publish_object.add_argument("--execution-id", required=True)
     publish_object.add_argument("--target-ref", required=True)
-    publish_object.add_argument("--apply", action="store_true")
     publish_object.set_defaults(handler=owner.handle_publish_object)
 
     object_transaction = commands.add_parser(

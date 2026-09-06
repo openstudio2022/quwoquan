@@ -235,7 +235,7 @@
     "rightsAuditStatus": { "enum": ["verified", "unverified", "restricted", "unknown"] },
     "rightsAuditIssues": { "type": "array", "items": { "type": "string" } },
     "template": { "type": "string", "description": "使用的模板名称" },
-    "carrier": { "type": "string", "enum": ["article", "image", "video", "review"] },
+    "carrier": { "type": "string", "enum": ["article", "image", "video"] },
     "generator": { "type": "string", "enum": ["agent"], "description": "正文创作来源；交付面仅允许 agent（会话模型创作），脚本拼接/占位被门禁拒绝" },
     "generatorModel": { "type": ["string", "null"], "description": "历史生成记录；新 producer 的 actor/model 只由 receipt 冻结" },
     "citedSourceRefs": { "type": "array", "items": { "type": "string" }, "description": "正文创作时引用的 source 证据路径" },

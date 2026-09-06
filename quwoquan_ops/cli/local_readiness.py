@@ -337,6 +337,9 @@ def command_staged_boundary(_args: argparse.Namespace) -> int:
             continue
         if any(pattern.search(blob.stdout) for pattern in _SECRET_PATTERNS):
             raise LocalReadinessError(f"staged secret material detected: {path}")
+        if b"\x00" in blob.stdout[:8192]:
+            # 二进制媒体（图片/视频/字体）里的数字与 @ 只是字节巧合，不是手机号或邮箱。
+            continue
         pii_matches = [match.group(0).decode("utf-8", errors="replace") for pattern in _PII_PATTERNS for match in pattern.finditer(blob.stdout)]
         pii_matches = [value for value in pii_matches if not value.lower().endswith(("@example.invalid", "@example.com", "@example.org"))]
         if pii_matches:

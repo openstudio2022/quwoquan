@@ -90,7 +90,7 @@ def test_typed_header_rejects_execution_bundle_inputs_as_source_identity() -> No
     document = _header(release_id="content-typed-execution-inputs-001")
     document["sourceDigests"][0]["inputs"] = ["quwoquan_data/scripts"]
 
-    with pytest.raises(ReleaseHeaderError, match="source-definition inputs|必须等于"):
+    with pytest.raises(ReleaseHeaderError, match="source-definition inputs|必须等于|content source identity is invalid"):
         validate_release_header(document)
 
 

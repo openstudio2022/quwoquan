@@ -1,62 +1,45 @@
 ---
 name: content-production
-description: Run or resume the canonical nine-stage Data producer workflow from frozen demand to an immutable release handoff.
+description: Run or resume the six-step Data producer workflow - init, acquire, author, review, publish, release - from a topic to canonical 趣我圈 objects and an immutable milestone handoff.
 metadata:
   kind: workflow
 ---
 
 # content-production
 
-本 Skill 是 Travel Research 内容生产 producer 九阶段的唯一流程真相源。宿主 Cursor/Codex Agent 是唯一语义主体：直接读取冻结上下文、选择来源与素材、写业务产物、自检、独立 review，并显式决定 `pass|blocked`、typed issues、approved 对象、release cohort 与 milestone；仓库代码不选择来源、不创作、不评审、不推进阶段，也不派生业务结论。
-
-固定顺序只有：
+目标只有一句：找到主题相关的公开原文（实体条目、文章、图片、视频），适度润色，加工成可在趣我圈展示的对象。宿主 Cursor/Codex Agent 是唯一语义主体；仓库脚本只做机械动作（抓取字节、算摘要、校 schema、原子写入、create-once 封存）。脚本不选来源、不判相关性、不创作、不评审、不推进步骤。
 
 ```text
-0.plan -> sources -> 1.download -> 2.quality -> 3.compose -> 4.draft -> 5.review
--> publish -> release -> END
+init -> acquire -> author -> review -> publish -> release
 ```
 
-`release` 业务 pass 先 create-once 关闭 sequence 009 receipt；随后 `release handoff` 只读该 receipt 与 release/cohort/pool/baseline/original producer proof facts，create-once 物化 immutable handoff，producer 才固定到 `END`。环境 import/activate/readback、环境 health、App/API UAT、EAF、sampling authority、promotion/rollback/replay 全部 out of scope；它们不是本 Skill 的阶段、receipt、handoff 字段、恢复条件或完成条件。既有下游能力可独立只读 handoff，但本 Skill 不拥有或调度它。
-
-每次只加载当前 `references/stage-contracts/<stage>.md`、[handoff-protocol.md](references/handoff-protocol.md) 与必要载体差异。不同 execution 可由宿主原生并行；同一 execution 的 `4.draft` 必须由一个真实 author actor 会话负责全部对象，`5.review` 必须由另一个真实 reviewer actor 会话负责全部对象。批量并发、限流、会话派发、重启与排队属于宿主 runtime，不写入仓内状态。
+每步的 AI 产出、脚本动作与唯一硬门见 [references/steps.md](references/steps.md)；四载体差异见 [references/carriers.md](references/carriers.md)；里程碑 handoff 见 [references/handoff.md](references/handoff.md)。
 
 ## 触发与输入
 
-本轮若产生、更新或恢复送审交付件 `content-release`，PRE 必须从 current execution/release owner facts 唯一解析 repository-relative exact target；缺失、多 owner 或漂移时 typed `GATE_BLOCK`。随后运行 `make feature-context TARGET=<exact-path>`，保存 content-addressed immutable owner manifest exact ref，PRE 后不得替换。纯只读且无送审交付只允许 `report-only/no-review-deliverable`。
-
-Review 交互只引用 `quwoquan_ops/policies/human_agent_delivery_contract.yaml#workflow_interaction_binding.bindings.content-production`，由 canonical projector 生成可见输出；准出 deliverable 与 registry 名称保持为 `content-release`。
-
-1. 新任务只允许用 `python3 quwoquan_data/scripts/cli.py task init --carrier-demand <path> --candidate-bindings <path>` 原子创建工作包；candidate bindings 只冻结目标对象身份，不要求 source/media admission。命令只写 `execution_manifest.json`、`0.plan/request.json`、`0.plan/target_set.json`。
-2. 已有 execution 只读 producer create-once receipts 判断：最后一份 `pass` receipt 后进入本 Skill 固定的后继；`release` pass 后只交 immutable handoff 并结束。最后一份 `blocked` receipt 必须创建新 execution，从 `0.plan` 重来；某阶段已有 OPEN 而无 CLOSE 时，在同一冻结输入上重做该阶段。
-3. 调用 `task stage-open --execution-id <id> --stage <stage> --input <stage-open-input.json>`，由 AI 在 `inputRefs[]` 精确点名本阶段全部输入；内核只检查路径/摘要/schema 并冻结 exact bytes。缺失、跨 execution 或摘要漂移即 blocked。
-4. 禁止读取、调用或新增 resolver/projector/runner/controller/queue/registry、stage-gate、semantic prepare/record wrapper、fleet/lane claim、自动恢复、execution state reducer、managed provider/SDK 或旧 sequence-017。
+- 新任务：AI 按来源单一类型判定决定载体——可命名的地点/机构/景区/博物馆条目 → homepage（最优先）；非单一实体的主题、线路、事件、文化现象条目 → article；Commons 图片文件页 → image；Commons 视频文件页（webm/ogv）→ video。一个来源只产一个对象，不做数量推断、不做刻意剔重。随后写 `carrier_demand.json` 与 `candidate_bindings.json`，调用 `task init`。同一 execution 可批量承载多个 target；不同 execution 可并行。
+- 恢复：只读 `_shared/receipts/` 找首个未闭合步骤继续；任一 receipt `blocked` 则新建 execution，不在原 execution 回退。已有 receipt 或 reviewer 产物的工作单元不得再次派发。
+- 产生 `content-release` 时，PRE 运行 `make feature-context TARGET=<exact-path>` 保存 content-addressed immutable owner manifest exact ref；纯只读且无送审交付只允许 `report-only/no-review-deliverable`。
 
 ## 执行
 
-宿主 Agent 严格按当前阶段契约直接工作：只读 OPEN 冻结输入，作出语义选择并写业务产物。`sources` 选来源，`1.download` 取得 bytes/source refs/CAS 与机械 hard facts，`2.quality` 判断语义与保留，`3.compose` 组织结构，`4.draft` 创作，`5.review` 独立裁决。`4.draft` 每对象只写 `page.md|draft.article.md|image_work.json|video_script.json` 之一；author actor/invocation、自检和 prompt/compose/draft digests 只在 sequence-006 CLOSE receipt 冻结。`5.review` 每对象只写 `content_review.json`，包含 `approved|rejected`、简短 dimensions/blockingIssues 与逐资产 rights 结论；reviewer actor/invocation 与 exact review digest 只在 sequence-007 CLOSE receipt 冻结。
+两个 actor，不再多：
 
-代码只可承担 `task init`、stage-open/close、atomic download/CAS、schema/digest/ref/media hard facts、`publish-object` 与显式 cohort `pool-build`。不得让脚本合成正文、caption、video script、review、typed issue、verdict、approved 对象、cohort、milestone、后继或恢复动作；不得建立第二份流程文档、中央 registry、resolver/projector/runner/controller/queue、对象级 actor projection 或状态机。
+- **主会话**：直接完成 init、acquire、author、publish、release 与全部机械命令，不把任何步骤委托给通用子 Agent。
+- **唯一 reviewer**：`review` 步骤由另一个真实会话执行，与 author 的 `host/sessionId` 与 `invocation.runId` 必须不同。全局同一时刻至多一个 reviewer 调用，始终前台，一次调用负责该 execution 全部对象；reviewer 只写 `content_review.json` 的判断字段，不派发子 Agent、不改产物、不 seal、不 publish。`starting up` 不是进度也不是失败，不得据此补发相同或替代调用；definitive failure 保留首个 typed blocker，由主会话停止重试。
+
+机械命令闭集：`task init`、`task acquire`、`task seal`、`release publish-object`、`release finalize`、`release handoff-verify`。正文、caption、video script、评审、typed issue、verdict、cohort、milestone、来源是否切题、素材是否值得用、文章结构与作者人设一律由 AI 决定。
 
 ## 完成证据
 
-1. 宿主逐条运行当前 stage contract 点名且当前真实存在的机械 verifier；不得用组合 registry 代跑。verifier 只验证 schema、引用闭包、摘要、媒体硬事实与原子 I/O 结果，不作业务语义判断。
-2. 宿主读取真实 verifier 结果并完成 AI self-check，形成 `actor`、`verdict=pass|blocked`、`typedIssues[]`、`resultRefs[]`、`verifierFacts[]`。approved/rejected 可混合，shortfall 写 stage result/typed issue，不给 receipt 新增 `partial`；只有零 approved 或 stage-wide identity/integrity failure 才 blocked。不得伪造退出码、来源、权利、review 或 release 证据。
-3. 调用 `task stage-close --execution-id <id> --stage <stage> --input <agent-result.json>`。内核只重验 OPEN exact bytes、结果 schema、verifier facts 与 result refs，然后 create-once 写 receipt；内核不派生 verdict、typed issues 或后继。`release` CLOSE 的 resultRefs 必须绑定当前 release header/payload 事实；receipt 创建后才允许 `release handoff` terminal materialization，避免 digest 循环。
-4. `pass` 的后继只查本 Skill 固定顺序；`blocked` 不在原 execution rewind，必须创建新 execution。
-5. 显式或准出 Review 必须把 PRE 保存并在 POST 原样复用的 ref 作为 `--context-manifest` 传入；缺 ref、摘要漂移或 required evidence 未完成均不得声称 `content-release` 完成。
+硬门只有六条：来源 `https://` 可检索；bytes 与 sha256 精确；license 在白名单且权利六字段（`sourceUrl/license/termsUrl/authorizationProof/usageScope/rightsStatus`）在场；author 与 reviewer 是不同 session/runId；对象身份唯一且 create-once；显式 cohort 与里程碑计数。其余检查只写 advisory，不阻断。
 
-产生 `content-release` 时，POST 必须把 PRE owner identity ref 原样作为 `--owner-identity`，并把 current candidate evidence ref 作为 `--candidate-evidence` 传给 Review（workflow=`content-production`、segment=`POST`、deliverable=`content-release`、scope=`<exact-path>`）；先按 plan 去重执行命名 evidence，再派 registry 主审与至多一名专审。manifest ref 缺失、与 PRE 不同或 stale，required evidence/Reviewer 未完成，均不得完成。
-
-内容生产完成证据只包括九阶段连续 create-once receipt 链，以及 `release` HANDOFF 要求的 immutable Travel Research producer facts。M1/M10/M100/M1000 按 `cumulative_unique_finalized_objects` 累计，每级形成自己的 full explicit cohort/release/handoff；复用对象必须原样绑定其 canonical identity 与原 execution/publish proof，不伪造新九阶段 receipts。下游消费结果不得进入 handoff、回授、覆盖或重开 producer terminal。
+producer 完成 = 三份 seal receipt 连续闭合 + 逐对象 publish 事务 + `release finalize` 产生的 immutable handoff（含 `producerBaselineRevision` 与 `producerContractDigest`）。M1/M10/M100/M1000 按累计唯一 finalized 对象计数，凡已完成 canonical publish 且 review approved 的对象都可进入 cohort。
 
 ## 失败与停止
 
-任一输入、producer receipt、引用摘要、owner manifest 或 release handoff 必填事实不闭合即停止并报告首个 typed blocker；不得手改门禁、伪造证据、回写旧 receipt 或绕过新 execution 重试规则。
-
-未闭合项必须明确报告为未完成。不得用环境成功、旧 proof、sequence-017、fixture、counts 或历史 receipt 代替当前 producer/release 证据；也不得要求 import/activate/readback、App/API UAT、EAF、sampling authority、promotion 或 rollback 来完成已经闭合的 producer handoff。
+任一硬门不闭合即停止并报告首个 typed blocker；不手改门禁、不伪造证据、不回写旧 receipt。环境 import/activate/readback、App/API UAT、EAF、promotion/rollback 全部 out of scope；下游 owner 是 Environment Ops scheduler（profile 闭集 `smoke|integration|release`），本 Skill 不调度也不记录任何 consumer facts。
 
 ## 条件性交接
 
-普通阶段 HANDOFF 只报告 receipt ref/digest、业务 result refs、typed issues，以及本 Skill 固定后继。`release` CLOSE 后由统一 CLI create-once 物化 HANDOFF，交付 release ref/digest、producer release receipt ref/digest、explicit cohort ref/digest、milestone、四载体 counts（含 total）、逐对象 content-pool query identity/digest、原 producer proof 与 producer baseline revision，然后固定到 `END`；handoff 不含任何 consumer/environment facts。
-
-源码/spec mutation 只交 Feature workflow；跨宿主接手、下游环境消费、外部阻断或证据复用满足 canonical 触发时生成 handoff。送审交付的 handoff 必须携带 PRE owner identity ref 与 POST candidate evidence predecessor；纯只读无送审交付不生成替代 manifest。
+产生 `content-release` 时，POST 把 PRE owner identity ref 原样作为 `--owner-identity`、current candidate evidence 作为 `--candidate-evidence` 调用 Review（workflow=`content-production`、deliverable=`content-release`），registry 只派一名 reviewer。`release finalize` 成功即 producer `END`，handoff 只含 release/cohort/canonical identity facts。源码/spec 变更走 Feature workflow。

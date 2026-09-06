@@ -1,5 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "video 载体 author 产物。AI 写 title/caption/scriptLines/creatorProfileId；schema/executionId/objectRef 由 task seal 补齐；sourceVideoAssetRef 缺省时取对象唯一 source video。",
   "type": "object",
   "additionalProperties": false,
   "required": ["schema", "executionId", "objectRef", "title", "caption", "scriptLines"],
@@ -7,12 +8,15 @@
     "schema": {"const": "quwoquan_data.video_script"},
     "executionId": {"type": "string", "minLength": 1},
     "objectRef": {"type": "string", "minLength": 1},
-    "title": {"type": "string", "minLength": 1, "maxLength": 80},
-    "caption": {"type": "string", "minLength": 1, "maxLength": 300},
+    "title": {"type": "string", "minLength": 1},
+    "caption": {"type": "string", "minLength": 1},
     "scriptLines": {
       "type": "array",
       "minItems": 1,
-      "items": {"type": "string", "minLength": 1, "maxLength": 120}
-    }
+      "items": {"type": "string", "minLength": 1}
+    },
+    "sourceVideoAssetRef": {"type": "string", "minLength": 1},
+    "creatorProfileId": {"type": "string", "minLength": 1},
+    "tagRefs": {"type": "array", "items": {"type": "string", "minLength": 1}}
   }
 }

@@ -1,5 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "image 载体 author 产物。AI 写 title/caption/assetRefs/creatorProfileId；schema/executionId/objectRef 由 task seal 补齐。",
   "type": "object",
   "additionalProperties": false,
   "required": ["schema", "executionId", "objectRef", "assetRefs", "caption"],
@@ -7,12 +8,15 @@
     "schema": {"const": "quwoquan_data.image_work"},
     "executionId": {"type": "string", "minLength": 1},
     "objectRef": {"type": "string", "minLength": 1},
+    "title": {"type": "string", "minLength": 1},
     "assetRefs": {
       "type": "array",
       "minItems": 1,
       "uniqueItems": true,
       "items": {"type": "string", "minLength": 1}
     },
-    "caption": {"type": "string", "minLength": 1}
+    "caption": {"type": "string", "minLength": 1},
+    "creatorProfileId": {"type": "string", "minLength": 1},
+    "tagRefs": {"type": "array", "items": {"type": "string", "minLength": 1}}
   }
 }

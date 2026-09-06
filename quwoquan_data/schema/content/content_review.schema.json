@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "quwoquan_data/schema/content/content_review.schema.json",
-  "description": "5.review 每对象唯一内容与逐资产权利裁决；actor/digest 只由 sequence-007 receipt 冻结。",
+  "description": "review 每对象唯一内容与逐资产权利裁决。AI 只写 decision/dimensions/blockingIssues/assetRights[].{assetRef,decision,issues,usageScope}/safety/advisories；schema/stage/executionId/objectRef/draft 与 assetRights 权利转录字段由 task seal 从 execution 与 source meta 补齐。",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -39,7 +39,6 @@
     "dimensions": {
       "type": "array",
       "minItems": 1,
-      "maxItems": 12,
       "items": {
         "type": "object",
         "additionalProperties": false,
@@ -51,8 +50,7 @@
         "properties": {
           "name": {
             "type": "string",
-            "minLength": 1,
-            "maxLength": 80
+            "minLength": 1
           },
           "decision": {
             "enum": [
@@ -62,11 +60,9 @@
           },
           "issues": {
             "type": "array",
-            "maxItems": 12,
             "items": {
               "type": "string",
-              "minLength": 1,
-              "maxLength": 500
+              "minLength": 1
             }
           }
         }
@@ -74,11 +70,22 @@
     },
     "blockingIssues": {
       "type": "array",
-      "maxItems": 50,
       "items": {
         "type": "string",
-        "minLength": 1,
-        "maxLength": 1000
+        "minLength": 1
+      }
+    },
+    "safety": {
+      "enum": [
+        "ok",
+        "concern"
+      ]
+    },
+    "advisories": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
       }
     },
     "assetRights": {
@@ -136,8 +143,7 @@
             "type": "array",
             "items": {
               "type": "string",
-              "minLength": 1,
-              "maxLength": 1000
+              "minLength": 1
             }
           }
         }

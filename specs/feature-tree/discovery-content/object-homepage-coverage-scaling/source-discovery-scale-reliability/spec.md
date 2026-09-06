@@ -46,7 +46,7 @@
 - source unit：`quwoquan_data/schema/source/atomic_source_unit_meta.schema.json`
 - source ref：`quwoquan_data/schema/source/object_source_refs.schema.json`
 - stage receipt：`quwoquan_data/schema/execution/stage_receipt.schema.json`
-- source plan verifier：`quwoquan_data/scripts/verify/verify_source_plan.py`
+- acquire（来源点名 → 机械取得字节、license、作者与探测事实）：`quwoquan_data/scripts/content/source/acquire.py`
 
 ## 5. 验收场景
 

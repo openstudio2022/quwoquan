@@ -8,16 +8,13 @@
     "schema",
     "handoffId",
     "releaseId",
-    "executionIds",
     "milestone",
     "carrierCounts",
     "release",
-    "producerReleaseReceipts",
     "explicitCohort",
-    "receiptChains",
-    "frozenReferences",
     "contentPoolObjects",
-    "producerBaselineRevision"
+    "producerBaselineRevision",
+    "producerContractDigest"
   ],
   "properties": {
     "schema": {
@@ -30,14 +27,6 @@
     "releaseId": {
       "type": "string",
       "minLength": 1
-    },
-    "executionIds": {
-      "type": "array",
-      "minItems": 1,
-      "uniqueItems": true,
-      "items": {
-        "$ref": "#/$defs/executionId"
-      }
     },
     "milestone": {
       "enum": [
@@ -79,44 +68,6 @@
         }
       }
     },
-    "producerReleaseReceipts": {
-      "type": "array",
-      "minItems": 1,
-      "uniqueItems": true,
-      "items": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": [
-          "executionId",
-          "receipt"
-        ],
-        "properties": {
-          "executionId": {
-            "$ref": "#/$defs/executionId"
-          },
-          "receipt": {
-            "type": "object",
-            "additionalProperties": false,
-            "required": [
-              "scope",
-              "ref",
-              "digest"
-            ],
-            "properties": {
-              "scope": {
-                "const": "output"
-              },
-              "ref": {
-                "$ref": "#/$defs/ref"
-              },
-              "digest": {
-                "$ref": "#/$defs/digest"
-              }
-            }
-          }
-        }
-      }
-    },
     "explicitCohort": {
       "type": "object",
       "additionalProperties": false,
@@ -141,41 +92,6 @@
         },
         "document": {
           "$ref": "release_cohort.schema.json"
-        }
-      }
-    },
-    "receiptChains": {
-      "type": "array",
-      "minItems": 1,
-      "uniqueItems": true,
-      "items": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": [
-          "executionId",
-          "openRequests",
-          "receipts"
-        ],
-        "properties": {
-          "executionId": {
-            "$ref": "#/$defs/executionId"
-          },
-          "openRequests": {
-            "type": "array",
-            "minItems": 9,
-            "maxItems": 9,
-            "items": {
-              "$ref": "../execution/stage_open_request.schema.json"
-            }
-          },
-          "receipts": {
-            "type": "array",
-            "minItems": 9,
-            "maxItems": 9,
-            "items": {
-              "$ref": "../execution/stage_receipt.schema.json"
-            }
-          }
         }
       }
     },
@@ -217,12 +133,10 @@
         }
       }
     },
-    "frozenReferences": {
-      "type": "array",
-      "uniqueItems": true,
-      "items": {
-        "$ref": "#/$defs/sealedReference"
-      }
+    "producerContractDigest": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$",
+      "description": "handoff 创建时实际消费的 producer 契约文件 merkle；替代对工作树的 git drift 扫描。"
     }
   },
   "$defs": {
@@ -299,5 +213,6 @@
         }
       }
     }
-  }
+  },
+  "description": "producer terminal handoff：以 canonical publish proof 与 immutable release 事实为凭，不内嵌 execution receipt 链。"
 }

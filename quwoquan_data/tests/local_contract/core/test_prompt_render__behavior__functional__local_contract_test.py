@@ -66,9 +66,11 @@ def test_review_prompt_has_unified_content_review_contract():
     out = pr.render(name, system_vars=system_vars, task_vars=task_vars)
     schema = pr.load_vars_schema(name)
     assert schema[pr.TASK_KEY]["required"] == [
+        "execution_id",
+        "object_ref",
         "draft",
-        "claim_evidence_refs",
-        "assets_rights_packet",
+        "sources",
+        "assets",
     ]
     assert schema[pr.TASK_KEY]["optional"] == []
     assert "content_review.json" in out
@@ -76,8 +78,10 @@ def test_review_prompt_has_unified_content_review_contract():
     assert "dimensions" in out
     assert "blockingIssues" in out
     assert "assetRights" in out
-    assert "不修改" in out and "不运行任何命令" in out
-    for stale in ("final manifest", "provenance", "objectDir", "executionId"):
+    assert "advisories" in out and "safety" in out
+    assert "不修改任何文件" in out and "不运行命令" in out and "不派发子 Agent" in out
+    # reviewer 只写判断字段；机械字段由 seal 补齐，prompt 不得要求 reviewer 转录
+    for stale in ("final manifest", "provenance", "objectDir", "sourceUrl", "termsUrl", "authorizationProof", "credit"):
         assert stale not in out
 
 

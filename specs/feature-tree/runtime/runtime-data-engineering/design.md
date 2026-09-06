@@ -51,15 +51,16 @@ execution、reviewed delivery、canonical pool、milestone 与 release build/han
 - 关联验收：`SIT-001`
 
 <a id="dec-003"></a>
-### DEC-003 consumer rollback/replay 跟随上游 active pointer
-- 决策：本域不拥有 empty release、canonical reset 或 release lifecycle command；只在上游 active pointer/operation fact 变化后，原子 full-sync Post/outbox/Search/Recommendation/Homepage/media projection 到同一 release identity。
-- 理由：rollback command 与 consumer readback 是不同 owner；合并会让 runtime 可越权改变发布状态。
-- 被否决方案：runtime 直写 canonical/pool、按 counts 推断回滚成功、以缓存 last-known-good 覆盖上游 identity。
-- 失败恢复：任一 consumer 混合 identity、悬挂引用或 digest drift fail closed，previous fully verified projection 保持可读。
-- 可测试面：api_integration 覆盖 original→candidate→previous 的同 identity readback与部分同步故障。
-- 关联要求：`REQ-004`
+### DEC-003 Content active pointer 是跨域唯一可见性 fence
+- 决策与 owner：activation 与 rollback operation 仍由下游环境 owner 发起（`REQ-002` 的 environment operation 语义不变）；Content 不选择 release，只在环境 owner 的 operation 内执行 owner-bound expected-current CAS 写 active pointer。immutable release tuple 固定为 `(environment, sourceOwner, releaseId, manifestDigest)`，是 Tag、Creator、Homepage、Content 四域 candidate 的唯一身份；pointer 在该 tuple 之上附带 CAS 成功时产生的单调 `revision`，`revision` 只标识 pointer 世代，不参与 candidate 身份，回滚到 previous release tuple 会产生新的更大 revision 而不复用旧值。上游 discovery owner 只交付 immutable release，Tag/Creator/Homepage 各自只 stage 与 release tuple 绑定的 immutable verified candidate，并返回 exact query receipt；stage、校验或 receipt 创建均不改变旧 live。Content 只在自身 Post/outbox candidate 与三份 receipt 全部 exact 一致后 CAS pointer；四域公开 query 必须先读取该 pointer，再只解析同 tuple candidate，禁止独立 active flag、counts 推断或缓存覆盖。Search、Recommendation 与 App media projection 不参与 CAS 前 stage，而是消费携带完整 tuple 与 `activationRevision` 的 Content activation lifecycle 事件追平；公开读取以一次读取的 pointer tuple pin 全部下游查询，尚未追平到该 tuple 的域对该请求 typed fail closed，不回退旧 release、不混合两个 release。
+- 理由：四域若分别切换 live，即使对象数相等也会暴露混合 release；单一 pointer 把可见性裁决压缩为一次可比较的 Content CAS，同时保留各域对 candidate bytes 与 query receipt 的单写 ownership，且环境 owner 与 Content 之间维持 operation 发起者与 CAS 执行者的单向关系。
+- 被否决方案：Tag/Creator/Homepage 各自 activation；stage 顺带覆盖 live；runtime 直写 canonical/pool；按 counts、最新 revision 或 last-known-good 猜测 active；把 revision 纳入 candidate 身份；Content 自行选择或发起 release 切换；把下游 readback 写回 producer handoff。
+- 失败恢复与回滚：CAS 前任一 stage/校验/receipt 失败或 CAS conflict 均保持 previous pointer 与旧 live，candidate 可保留供诊断但不可见。Content CAS 已返回后，任一 fenced readback 超时、不可达或身份不一致都返回 typed `ambiguous`，不得自动重试 CAS、猜测成功或选择某域结果；环境 owner 必须先 query exact pointer（含当前 revision），再发起显式 rollback operation，由 Content 以 asserted current tuple+revision 作 expected-current CAS 回 previous fully verified release tuple 并生成新 revision，随后重做四域 fenced readback。rollback 冲突或 readback 失败继续 fail closed，不改 canonical、pool、content-library 或 producer bytes。
+- SLI/SLO 与告警：记录三域 stage/query receipt 耗时、Content CAS conflict、pointer revision、四域 fenced readback identity、`ambiguous` 时长与 rollback outcome；CAS 后 60 秒内必须取得四域 exact fenced readback，否则立即告警并进入 `ambiguous`，显式 rollback 后 5 分钟内恢复 previous tuple 的四域 readback，否则持续阻断环境准出。
+- 可测试 seam：local_contract 注入 stale/missing receipt、CAS race 与 readback timeout，证明 candidate immutable、stage 零 live mutation、CAS 只接受 release tuple 与 asserted revision 且 post-CAS failure 不会自动猜测或重试；api_integration 覆盖 previous→candidate→previous，断言 CAS 前旧 live 持续可读、CAS 后四域只见同 tuple、rollback 后 revision 单调递增，ambiguous 经显式 rollback 收敛且 owner bytes 不变。
+- 关联要求：`REQ-002`、`REQ-004`
 - 影响 Story：[`geo-content-trinity`](./geo-content-trinity/spec.md)
-- 关联验收：`SIT-002`
+- 关联验收：`SIT-001`、`SIT-002`
 
 <a id="dec-004"></a>
 ### DEC-004 image generator 由 Post manifest schema 单轨拥有

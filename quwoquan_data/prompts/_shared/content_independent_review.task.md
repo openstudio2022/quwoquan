@@ -1,13 +1,16 @@
 <task>
+<execution_id>{{execution_id}}</execution_id>
+<object_ref>{{object_ref}}</object_ref>
+
 <draft>
 {{draft}}
 </draft>
 
-<claim_evidence_refs>
-{{claim_evidence_refs}}
-</claim_evidence_refs>
+<sources>
+{{sources}}
+</sources>
 
-<assets_rights_packet>
-{{assets_rights_packet}}
-</assets_rights_packet>
+<assets>
+{{assets}}
+</assets>
 </task>

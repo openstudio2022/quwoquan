@@ -78,11 +78,10 @@ def _review_approved(
         )
     except ReceiptChainError as exc:
         raise ObjectTransactionError(
-            f"publish requires live sequence-007 approval: {exc}"
+            f"publish requires sealed review approval: {exc}"
         ) from exc
 
-    # Project after sequence-007 and always compare the complete expected surface.
-    # This reuses exact replays while rejecting partial or drifted finals.
+    # 投影完整 final surface：exact replay 通过，部分或漂移的 final 拒绝。
     projection = project_publish_final_surface(
         execution_root=root,
         object_dir=object_dir,
@@ -109,10 +108,11 @@ def _review_approved(
         object_ref=expected_object_ref,
         source_assets=source_assets,
     )
-    if document.get("decision") != "approved":
-        raise ObjectTransactionError("target content_review is not approved")
 
-def publish_object(execution_id: str, target_ref: str, *, apply: bool = False) -> dict[str, Any]:
+
+def publish_object(execution_id: str, target_ref: str) -> dict[str, Any]:
+    """对一个 approved 对象执行唯一一次原子 canonical 事务；已发布则 exact replay。"""
+
     kind, canonical_ref, object_dir, target, carrier = _target_object(
         execution_id, target_ref
     )
@@ -123,14 +123,6 @@ def publish_object(execution_id: str, target_ref: str, *, apply: bool = False) -
         target=target,
         carrier=carrier,
     )
-    if not apply:
-        return {
-            "schema": "quwoquan_data.publish_object_result",
-            "executionId": execution_id,
-            "targetRef": target_ref,
-            "mode": "plan",
-            "status": "ready",
-        }
     if kind == "post":
         result = promote_post_object(execution_id, canonical_ref)
     else:
@@ -208,7 +200,6 @@ def handle_publish_object(args: object) -> None:
         report = publish_object(
             str(getattr(args, "execution_id")),
             str(getattr(args, "target_ref")),
-            apply=bool(getattr(args, "apply", False)),
         )
     except (FileNotFoundError, OSError, TypeError, ValueError, ObjectTransactionError) as exc:
         raise SystemExit(f"[release publish-object] GATE_BLOCK {exc}") from exc

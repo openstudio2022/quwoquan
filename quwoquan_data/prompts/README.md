@@ -23,9 +23,10 @@ partial、校验变量与渲染；不决定内容、不投影输出，也不承�
 
 统一 reviewer 每对象只接收：
 
+- `execution_id`、`object_ref`；
 - `draft`；
-- `claim_evidence_refs`；
-- `assets_rights_packet`。
+- `sources`（对象目录内 `source.md` 摘录）；
+- `assets`（`assets/index.json` 中 fileName/license/creator 列）。
 
 prompt 不接收全量 registry、template/style catalog、producer 阶段协议或尚未产生的发布态对象。
 运行 actor、invocation 与摘要由 stage receipt 冻结，不抄写进业务产物。
@@ -41,9 +42,11 @@ rights packet，供统一 reviewer 逐资产判断。
 ## 单产物
 
 - `4.draft` 每对象只写 `page.md`、`draft.article.md`、`image_work.json`、`video_script.json` 之一。
-- `5.review` 每对象只写 `content_review.json`，最小顶层字段为 `decision`、`dimensions`、
-  `blockingIssues`、`assetRights`。
-- reviewer 只审不改，只读输入 refs，不运行命令。
+- `5.review` 每对象只写 `content_review.json`，AI 只写 `decision`、`dimensions`、`blockingIssues`、
+  `assetRights[].{assetRef,decision,issues,usageScope}`、`safety`、`advisories`；`schema/stage/executionId/objectRef/draft`
+  与 assetRights 的 `sourceUrl/license/termsUrl/authorizationProof` 由 `task seal` 从 execution 与 source meta 补齐。
+- reviewer 只审不改，只读对象目录，不运行命令，不派发子 Agent。只在四类情形 reject：关键论断缺证据、安全/隐私、
+  素材不相关或不可播放、权利不允许研究用途；文风/结构/长度写 `advisories`。
 
 ## 渲染与 lint
 

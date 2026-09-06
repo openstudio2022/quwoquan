@@ -20,6 +20,7 @@
 - 只读控制 Skill 对 `feature-context` 的 best-effort 解析，以及 mutation workflow 与显式/准出 Review 对内容寻址 compact manifest immutable exact ref 的强制消费和复用。
 - Review 的主审、唯一专审、命名 evidence、脏工作树指纹、定向复审和角色调用预算。
 - Cursor/Codex 两个真实宿主对显式入口与自然语言 metadata discovery 的 smoke，以及 Reviewer 生成物一致性。
+- Workflow Skill 对必须使用独立语义 actor 的有界派发：主会话保持 execution owner、启动前按 canonical artifact 去重、禁止嵌套派发、自动补发和以 `starting up` 冒充计划推进。
 
 ### Out of Scope
 
@@ -37,6 +38,7 @@
 - `.agents/skills/*/SKILL.md` metadata 是唯一宿主发现面，body 是唯一 Workflow Skill 正文，只拥有触发与输入、执行、完成证据、失败停止、条件性交接五段；完成判据就地声明，不再经共享 completion/interaction 文档二次跳转。
 - Feature spec/design/contracts 拥有功能行为、设计约束与验收；Review role 只拥有职责和盲区，checklist 只拥有分级判定并引用命名 evidence。
 - `.cursor/commands` 只是一行式显式入口；`.cursor/agents` 与 `.codex/agents` 只允许 Reviewer projection。宿主专属目录不得承载 Workflow Skill stub、发现副本或规范正文。
+- Workflow Skill 只有在业务语义明确要求独立 actor 时才可派发子 Agent；主会话必须直接拥有流程推进与机械命令，派发前读取 canonical artifact/receipt 判断该工作单元尚未完成，默认同一时刻只启动一个前台语义 actor。被派发 actor 只写边界内语义产物，不得再派发子 Agent、关闭阶段、创建替代 execution 或执行发布；`starting up`、超时或调用失败不得触发自动补发，只有 definitively failed 的 typed blocker 才可由主会话决定人工恢复。
 
 <a id="req-002"></a>
 ### REQ-002 开发与 Review 共用 PRE owner identity 和 POST candidate predecessor
@@ -112,6 +114,7 @@
 - WHEN 运行 Agent 上下文治理门禁，并对含长 wrapper、长 finding 与长 relevant context 的 Reviewer input 执行 canonical final assembly。
 - THEN 根加最近子树 AGENTS 不超过 16KiB，单 Reviewer 最终 assembled input 不超过 24KiB，默认 manifest 不超过 8KiB；压缩必须可审计，无法压入时 typed `REVIEW.CONTEXT_BUDGET_EXCEEDED`。
 - AND 角色 reference、规范性 Cursor rule、共享 completion/interaction 跳转或 harness 规范副本出现时门禁判否并指出唯一迁移层。
+- AND 需要独立语义 actor 的 Workflow Skill 必须声明主会话 owner、canonical artifact 启动去重、单一前台调用、被派发 actor 禁止嵌套派发/阶段推进/发布，以及 `starting up` 或失败不自动补发；缺任一边界时治理合同测试判否。
 
 <a id="gwt-002"></a>
 ### GWT-002 Owner manifest 精确且开发与 Review 同源

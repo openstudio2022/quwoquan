@@ -13,18 +13,18 @@ class ContentType(StrEnum):
 
 
 class ContentGenerator(StrEnum):
-    """Canonical provenance state at the content generation boundary."""
+    """Canonical provenance state at the content generation boundary.
+
+    四载体统一由宿主 Agent 创作（含图片策展与 caption）；不存在脚本装配的载体。
+    """
 
     AGENT = "agent"
-    IMAGE_EVIDENCE_PACK = "image_evidence_pack"
     PENDING = "pending"
 
 
 def expected_content_generator(content_type: ContentType) -> ContentGenerator:
-    """Return the only valid publication generator for one carrier."""
+    """Return the only valid publication generator for any carrier."""
 
-    if content_type is ContentType.IMAGE:
-        return ContentGenerator.IMAGE_EVIDENCE_PACK
     return ContentGenerator.AGENT
 
 
@@ -120,45 +120,50 @@ class SourcePolicyRevision(StrEnum):
 
 
 class ReceiptStage(StrEnum):
-    """producer 九阶段 receipt 协议的阶段闭集（DEC-005）。
+    """六步 producer 协议中三份 seal receipt 的阶段闭集。
 
-    对象目录下的过程阶段是本闭集的一个连续子段，不是另一份枚举。receipt CLI、
-    工作包目录契约与 layout 门禁都从这里取值——同一个阶段名在三处各写一遍时，
-    改名只改了其中一处不会被任何判据发现。
+    init 由 `task init` 原子落盘，publish 是单对象事务，release 是 `release finalize`
+    的 immutable handoff；只有 acquire/author/review 三步以 create-once receipt 封存。
+    物理目录名沿用 `1.download`/`4.draft`/`5.review`，使历史 canonical 包无需迁移。
     """
 
-    PLAN = "0.plan"
-    SOURCES = "sources"
     DOWNLOAD = "1.download"
-    QUALITY = "2.quality"
-    COMPOSE = "3.compose"
     DRAFT = "4.draft"
     REVIEW = "5.review"
-    PUBLISH = "publish"
-    RELEASE = "release"
 
 
 RECEIPT_STAGE_SEQUENCE: tuple[ReceiptStage, ...] = (
-    ReceiptStage.PLAN,
-    ReceiptStage.SOURCES,
     ReceiptStage.DOWNLOAD,
-    ReceiptStage.QUALITY,
-    ReceiptStage.COMPOSE,
     ReceiptStage.DRAFT,
     ReceiptStage.REVIEW,
-    ReceiptStage.PUBLISH,
-    ReceiptStage.RELEASE,
 )
 
-# 逐对象推进、在对象目录下留痕的阶段。显式列出而不是对上面的序列切片：切片会让
-# 「哪几个阶段落在对象目录下」变成一个要靠索引数出来的事实。
-OBJECT_STAGE_SEQUENCE: tuple[ReceiptStage, ...] = (
-    ReceiptStage.DOWNLOAD,
-    ReceiptStage.QUALITY,
-    ReceiptStage.COMPOSE,
-    ReceiptStage.DRAFT,
-    ReceiptStage.REVIEW,
-)
+# 逐对象推进、在对象目录下留痕的阶段与 receipt 阶段是同一闭集。
+OBJECT_STAGE_SEQUENCE: tuple[ReceiptStage, ...] = RECEIPT_STAGE_SEQUENCE
+
+# 每个载体在 author 步骤唯一的主产物文件名。
+AUTHOR_ARTIFACT_BY_CARRIER: dict[str, str] = {
+    ContentType.HOMEPAGE.value: "page.md",
+    ContentType.ARTICLE.value: "draft.article.md",
+    ContentType.IMAGE.value: "image_work.json",
+    ContentType.VIDEO.value: "video_script.json",
+}
+
+
+def carrier_of_target_ref(target_ref: str) -> str:
+    """从对象目录引用推出载体：entities/** 是 homepage，posts/<carrier>/** 是其余三种。"""
+
+    normalized = str(target_ref or "").strip().strip("/")
+    if normalized.startswith("entities/"):
+        return ContentType.HOMEPAGE.value
+    parts = normalized.split("/")
+    if len(parts) >= 2 and parts[0] == "posts" and parts[1] in {
+        ContentType.ARTICLE.value,
+        ContentType.IMAGE.value,
+        ContentType.VIDEO.value,
+    }:
+        return parts[1]
+    raise ValueError(f"target ref 不是合法对象目录：{target_ref!r}")
 
 
 class MediaHoldingState(StrEnum):
@@ -217,9 +222,11 @@ class MediaHoldingRecoveryAction(StrEnum):
 
 
 __all__ = [
+    "AUTHOR_ARTIFACT_BY_CARRIER",
     "AppUatDataSource",
     "AppUatStatus",
     "ContentGenerator",
+    "carrier_of_target_ref",
     "ContentImportStatus",
     "ContentType",
     "DeploymentEnvironment",

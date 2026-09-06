@@ -1,8 +1,14 @@
-"""Project reviewed hard-cut artifacts into execution-local final surfaces."""
+"""Project reviewed six-step artifacts into execution-local final surfaces.
+
+投影输入只有：`0.plan/target_set.json` 的 target、`1.download/source_refs.json` 与 source unit、
+author 产物（page.md / draft.article.md / image_work.json / video_script.json）与 review 结论。
+author 产物的 frontmatter / 字段直接声明 title、tagRefs、creatorProfileId 与选用资产；没有 compose 文件。
+"""
 from __future__ import annotations
 
 import hashlib
 import json
+import re
 import shutil
 import subprocess
 import tempfile
@@ -23,8 +29,104 @@ from content.release.canonical.post_transaction_assets import source_assets
 from content.source.research.homepage_article_source_attribution import (
     encyclopedia_source_attribution,
 )
+from core.control_types import AUTHOR_ARTIFACT_BY_CARRIER
 from core.schema import assert_valid
 from governance.creators.assignment import creator_from_payload
+
+_DEFAULT_CREATOR = {
+    "homepage": "qwq_creator_geo_editor_001",
+    "article": "qwq_creator_travel_blogger_001",
+    "image": "qwq_creator_landscape_photographer_001",
+    "video": "qwq_creator_travel_blogger_001",
+}
+_FRONTMATTER_RE = re.compile(r"\A---\n(.*?)\n---\n", re.S)
+_MARKDOWN_IMAGE_RE = re.compile(r"!\[[^\]]*\]\(([^)\s]+)(?:\s+\"[^\"]*\")?\)")
+
+
+def _parse_frontmatter(text: str) -> dict[str, Any]:
+    """读取 Markdown 顶部 YAML frontmatter；只支持 key: scalar 与 key: [a, b] 两种形态。"""
+
+    match = _FRONTMATTER_RE.match(text)
+    if not match:
+        return {}
+    result: dict[str, Any] = {}
+    for line in match.group(1).splitlines():
+        if ":" not in line or line.startswith((" ", "\t", "#")):
+            continue
+        key, _sep, raw = line.partition(":")
+        value = raw.strip()
+        if value.startswith("[") and value.endswith("]"):
+            result[key.strip()] = [item.strip().strip("'\"") for item in value[1:-1].split(",") if item.strip()]
+        else:
+            result[key.strip()] = value.strip("'\"")
+    return result
+
+
+def _resolve_asset_ref(raw: str, index: Mapping[str, Mapping[str, Any]], *, label: str) -> str:
+    """接受 fileName / assets/<fileName> / 完整 sources 路径，归一为 execution 相对资产路径。"""
+
+    value = str(raw or "").strip().strip("/")
+    if value in index:
+        return value
+    tail = value.removeprefix("assets/")
+    matches = [ref for ref in index if ref.endswith(f"/assets/{tail}")]
+    if len(matches) != 1:
+        raise ObjectTransactionError(f"{label} asset ref 无法唯一解析：{raw!r}")
+    return matches[0]
+
+
+def _author_intent(
+    *,
+    object_dir: Path,
+    carrier: str,
+    target: Mapping[str, Any],
+    source_rows: Sequence[Mapping[str, Any]],
+    asset_index: Mapping[str, Mapping[str, Any]],
+) -> dict[str, Any]:
+    """从 author 产物直接读出发布意图，替代已删除的 compose 文件。"""
+
+    draft_path = _regular(object_dir / "4.draft" / AUTHOR_ARTIFACT_BY_CARRIER[carrier], label=f"{carrier} draft")
+    intent: dict[str, Any] = {
+        "vertical": "travel",
+        "publishLayout": carrier,
+        "selectedSourceRefs": [str(row["sourceRef"]) for row in source_rows],
+        "assets": [],
+    }
+    if draft_path.suffix == ".json":
+        document = _read_json(draft_path)
+        intent["title"] = str(document.get("title") or target.get("publishTitle") or target.get("name") or "")
+        intent["caption"] = str(document.get("caption") or "")
+        intent["tagRefs"] = [str(value) for value in document.get("tagRefs") or []]
+        intent["creatorProfileRef"] = str(document.get("creatorProfileId") or _DEFAULT_CREATOR[carrier])
+        if carrier == "image":
+            refs = [_resolve_asset_ref(str(value), asset_index, label="image_work.assetRefs") for value in document.get("assetRefs") or []]
+            intent["assets"] = [{"assetRef": ref, "caption": intent["caption"]} for ref in refs]
+        else:
+            explicit = str(document.get("sourceVideoAssetRef") or "").strip()
+            videos = [ref for ref, row in asset_index.items() if str(row.get("assetRole") or "") == "video"]
+            video_ref = _resolve_asset_ref(explicit, asset_index, label="video_script.sourceVideoAssetRef") if explicit else (videos[0] if len(videos) == 1 else "")
+            if not video_ref:
+                raise ObjectTransactionError("video author artifact must select exactly one source video")
+            intent["sourceVideo"] = {"assetRef": video_ref}
+        intent["draft"] = document
+        return intent
+    text = draft_path.read_text(encoding="utf-8")
+    frontmatter = _parse_frontmatter(text)
+    heading = next((line.lstrip("# ").strip() for line in text.splitlines() if line.startswith("# ")), "")
+    intent["title"] = str(frontmatter.get("title") or heading or target.get("publishTitle") or target.get("name") or "")
+    tag_refs = frontmatter.get("tagRefs")
+    intent["tagRefs"] = [str(value) for value in tag_refs] if isinstance(tag_refs, list) else []
+    intent["creatorProfileRef"] = str(frontmatter.get("creatorProfileId") or _DEFAULT_CREATOR[carrier])
+    seen: list[str] = []
+    for raw in _MARKDOWN_IMAGE_RE.findall(text):
+        if raw.startswith(("http://", "https://")):
+            raise ObjectTransactionError("正文只允许引用本对象 assets/ 内的已取得图片，不得外链")
+        ref = _resolve_asset_ref(raw, asset_index, label=f"{carrier} 正文图片")
+        if ref not in seen:
+            seen.append(ref)
+    intent["assets"] = [{"assetRef": ref, "caption": ""} for ref in seen]
+    intent["draft"] = {"title": intent["title"]}
+    return intent
 
 
 def _json_bytes(value: object) -> bytes:
@@ -103,7 +205,8 @@ def _homepage_source_kind(raw: Mapping[str, Any]) -> tuple[str, str, str]:
         return "toutiao_baike", "toutiao_baike_html", "encyclopedia-primary"
     if any(marker in identity for marker in ("media", "image", "commons")):
         return "image_collection", "image_collection_download", "image-collection-attribution"
-    raise ObjectTransactionError("homepage source catalog source kind is unsupported")
+    # 非百科的公开网页也可作事实参考；catalog 以 web_page 登记，不阻断。
+    return "web_page", "html_text", ""
 
 
 def _source_catalog(
@@ -142,12 +245,10 @@ def _source_catalog(
         sources.append(row)
     primaries = [
         row for row in sources if row["policyRevision"] == "encyclopedia-primary"
-    ]
-    if not primaries:
-        raise ObjectTransactionError("homepage source catalog requires encyclopedia primary")
+    ] or [row for row in sources if row["sourceKind"] not in {"image_collection"}] or sources
     catalog = {
         "schema": "quwoquan_data.object_source_catalog",
-        "policyRevision": "encyclopedia-primary",
+        "policyRevision": "encyclopedia-primary" if primaries[0]["policyRevision"] == "encyclopedia-primary" else "factual-reference",
         "primaryEvidenceRef": primaries[0]["evidenceRef"],
         "primarySource": primaries[0],
         "sources": sources,
@@ -314,8 +415,8 @@ def _created_at(rows: Sequence[Mapping[str, Any]]) -> str:
 def _author_model(execution_root: Path) -> str | None:
     receipt = _read_json(
         _regular(
-            execution_root / "_shared/receipts/006-4.draft.json",
-            label="sequence-006 receipt",
+            execution_root / "_shared/receipts/002-4.draft.json",
+            label="author receipt",
         )
     )
     invocation = receipt.get("actor", {}).get("invocation", {})
@@ -377,7 +478,7 @@ def _post_manifest(
         manifest["writingIntent"] = compose["writingIntent"]
     if carrier == "article":
         manifest.update(
-            publishMediaMode="text_only",
+            publishMediaMode="illustrated" if assets else "text_only",
             markdownDialect="qwq-rich-md",
             articleRenderProfile={
                 "template": "guide",
@@ -444,8 +545,8 @@ def _probe_video(path: Path) -> dict[str, Any]:
     payload = json.loads(completed.stdout)
     streams = payload.get("streams") or []
     fmt = payload.get("format") or {}
-    if len(streams) != 1:
-        raise ObjectTransactionError("selected source video must have one primary stream")
+    if not streams:
+        raise ObjectTransactionError("selected source video has no video stream")
     stream = streams[0]
     facts = {
         "width": int(stream.get("width") or 0),
@@ -455,9 +556,10 @@ def _probe_video(path: Path) -> dict[str, Any]:
         "container": str(fmt.get("format_name") or "").split(",")[-1],
         "durationMs": round(float(fmt.get("duration") or 0) * 1000),
     }
-    if any(not facts[key] for key in facts):
-        raise ObjectTransactionError("selected source video probe is incomplete")
-    return facts
+    # 唯一硬门：可探测且有时长；其余探测字段缺失只作为事实缺省，不阻断。
+    if facts["durationMs"] <= 0:
+        raise ObjectTransactionError("selected source video has no playable duration")
+    return {key: value for key, value in facts.items() if value}
 
 
 def _source_unit_meta(execution_root: Path, source_ref: str) -> dict[str, Any]:
@@ -495,21 +597,12 @@ def _selected_asset_refs(
     *,
     execution_root: Path,
 ) -> list[str]:
-    if carrier == "article":
-        rows = compose.get("assets") or []
-        refs = [
+    if carrier in {"article", "image"}:
+        return [
             str(raw.get("sourceAssetRef") or raw.get("assetRef") or "").strip()
-            for raw in rows
+            for raw in compose.get("assets") or []
             if isinstance(raw, Mapping)
         ]
-        if refs:
-            raise ObjectTransactionError(
-                "fresh article final projection supports text_only only"
-            )
-        return []
-    if carrier == "image":
-        values = draft.get("assetRefs")
-        return [str(value).strip() for value in values or []]
     if carrier == "video":
         source_video = compose.get("sourceVideo")
         if isinstance(source_video, Mapping):
@@ -702,7 +795,7 @@ def _project_assets(
     refs = _selected_asset_refs(
         carrier, compose, draft, execution_root=execution_root
     )
-    if carrier == "article":
+    if carrier == "article" and not refs:
         return [], {}
     if not refs or any(not ref for ref in refs) or len(refs) != len(set(refs)):
         raise ObjectTransactionError(
@@ -746,6 +839,11 @@ def _project_assets(
         _bind_video_surface(
             refs=refs, index=index, assets=assets, files=files
         )
+    if carrier == "article" and assets:
+        # 首图作封面，其余为正文图；配图数量不设门。
+        assets[0]["role"] = "cover"
+        for row in assets[1:]:
+            row["role"] = "detail"
     return assets, files
 
 def _homepage_surface(
@@ -758,21 +856,10 @@ def _homepage_surface(
     source_rows: Sequence[Mapping[str, Any]],
 ) -> dict[Path, bytes | Path]:
     page_path = _regular(object_dir / "4.draft/page.md", label="homepage draft")
-    creator = _creator_fields(
-        {"creatorProfileRef": "qwq_creator_geo_editor_001"}, carrier="homepage"
-    )
+    creator = _creator_fields(compose, carrier="homepage")
     attribution = _text_attribution(source_rows, creator)
-    payload = compose.get("payload") if isinstance(compose.get("payload"), Mapping) else {}
-    bindings = payload.get("imagePlaceholderBindings") or []
     homepage_compose = {
-        "assets": [
-            {
-                **dict(raw),
-                "caption": str(raw.get("captionIntent") or ""),
-            }
-            for raw in bindings
-            if isinstance(raw, Mapping)
-        ],
+        "assets": list(compose.get("assets") or []),
         "title": str(target.get("name") or ""),
     }
     assets, media = _project_assets(
@@ -786,10 +873,9 @@ def _homepage_surface(
         asset["fileName"] = Path(str(asset["fileName"])).name
     entity_ref = "/entity/" + target_ref.removeprefix("entities/")
     domain, type_name = str(target.get("entityType") or "").split("/", 1)
-    geo_tag_ref = "Topic/地理/行政区/" + str(target.get("region") or "").strip("/")
-    if geo_tag_ref.endswith("/"):
-        raise ObjectTransactionError("homepage target lacks geo region")
-    tag_refs = sorted({*_target_tag_refs(target), geo_tag_ref})
+    region = str(target.get("region") or "").strip("/")
+    geo_tag_ref = f"Topic/地理/行政区/{region}" if region else ""
+    tag_refs = sorted({*_target_tag_refs(target), *(str(v) for v in compose.get("tagRefs") or []), *([geo_tag_ref] if geo_tag_ref else [])})
     catalog = _source_catalog(source_rows, entity_name=str(target.get("name") or ""))
     primary_source = {
         key: value
@@ -807,7 +893,7 @@ def _homepage_surface(
         "primarySource": primary_source,
         "sourceAttribution": attribution,
         "tagRefs": tag_refs,
-        "geoTagRef": geo_tag_ref,
+        **({"geoTagRef": geo_tag_ref} if geo_tag_ref else {}),
         **creator,
     }
     manifest = {
@@ -836,16 +922,8 @@ def _post_surface(
     compose: Mapping[str, Any],
     source_rows: Sequence[Mapping[str, Any]],
 ) -> dict[Path, bytes | Path]:
-    draft_path = object_dir / "4.draft" / {
-        "article": "draft.article.md",
-        "image": "image_work.json",
-        "video": "video_script.json",
-    }[carrier]
-    draft = (
-        {}
-        if carrier == "article"
-        else _read_json(_regular(draft_path, label=f"{carrier} draft"))
-    )
+    draft_path = object_dir / "4.draft" / AUTHOR_ARTIFACT_BY_CARRIER[carrier]
+    draft = dict(compose.get("draft") or {})
     assets, media = _project_assets(
         execution_root=execution_root,
         object_dir=object_dir,
@@ -932,14 +1010,20 @@ def project_publish_final_surface(
     target: Mapping[str, Any],
     carrier: str,
 ) -> dict[str, Any]:
-    """Create or exact-replay one final surface after sequence-007 approval."""
-    compose_name = (
-        "entity_page_input.json" if carrier == "homepage" else "writing_pack.json"
-    )
-    compose = _read_json(
-        _regular(object_dir / "3.compose" / compose_name, label="compose input")
-    )
+    """Create or exact-replay one final surface after review approval."""
     source_rows = _source_rows(execution_root, object_dir)
+    asset_index = (
+        source_assets_by_ref(execution_root)
+        if carrier == "homepage"
+        else source_assets(execution_root)
+    )
+    compose = _author_intent(
+        object_dir=object_dir,
+        carrier=carrier,
+        target=target,
+        source_rows=source_rows,
+        asset_index=asset_index,
+    )
     if carrier == "homepage":
         surface = _homepage_surface(
             execution_root=execution_root,

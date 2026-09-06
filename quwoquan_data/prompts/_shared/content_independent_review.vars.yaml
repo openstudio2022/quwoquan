@@ -4,7 +4,9 @@ system:
   optional: []
 task:
   required:
+    - execution_id
+    - object_ref
     - draft
-    - claim_evidence_refs
-    - assets_rights_packet
+    - sources
+    - assets
   optional: []

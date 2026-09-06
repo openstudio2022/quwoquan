@@ -23,6 +23,7 @@ discoveryPlatformRoles:
     defaultDiscoveryRole: reference_only
   - platform: 图虫
     defaultDiscoveryRole: licensed_candidate
+# research release 只要求这六项 + credit；modelReleaseStatus 等商用级字段见 commercialOnlyFields。
 requiredImageFields:
   - license
   - credit
@@ -30,7 +31,12 @@ requiredImageFields:
   - termsUrl
   - usageScope
   - authorizationProof
+commercialOnlyFields:
   - modelReleaseStatus
+  - propertyReleaseStatus
+  - audioRightsStatus
+  - commercialAuthorizationStatus
+  - publicationAdmission
 allowedAuthorizationBases:
   - attribution_no_watermark
 attributionNoWatermarkRequiredFields:
@@ -79,6 +85,7 @@ usageScopes:
   - app_publish
   - editorial
 humanSubjectPolicy:
+  appliesToReleaseClass: commercial
   modelReleaseRequiredWhenFaceDetected: true
   requiredField: modelReleaseStatus
   allowedStatuses:

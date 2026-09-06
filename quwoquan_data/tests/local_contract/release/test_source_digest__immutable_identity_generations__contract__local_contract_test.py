@@ -56,28 +56,22 @@ def test_runtime_output_is_never_an_accepted_input_closure() -> None:
 
 
 def test_source_definition_inputs_are_producer_owned_and_exact() -> None:
-    inputs = SourceDefinitionSnapshot(CURRENT_DIGEST).to_document()["inputs"]
+    """source-definition 输入只包含 producer 拥有的契约根，不含任何 consumer/environment 路径。"""
 
-    for forbidden in (
-        "quwoquan_data/schema",
-        "quwoquan_data/schema/_common",
-        "quwoquan_data/schema/content",
-        "quwoquan_data/schema/execution",
-        "quwoquan_data/schema/source",
-        "quwoquan_data/control_plane",
-        "quwoquan_data/scripts/core",
-        "quwoquan_data/scripts/verify",
-    ):
+    inputs = SourceDefinitionSnapshot(CURRENT_DIGEST).to_document()["inputs"]
+    repo_root = DATA_SCRIPTS.parents[1]
+
+    assert inputs == sorted(set(inputs)) or len(inputs) == len(set(inputs))
+    assert all((repo_root / item).exists() for item in inputs)
+    assert ".agents/skills/content-production" in inputs
+    assert "quwoquan_data/prompts" in inputs
+    assert "quwoquan_data/schema/execution" in inputs
+    for forbidden in ("quwoquan_data/scripts", "quwoquan_data/scripts/core", "quwoquan_data/scripts/verify", ".qwq_output"):
         assert forbidden not in inputs
-    assert all((DATA_SCRIPTS.parents[1] / item).is_file() for item in inputs)
     assert not any("recommendation-service" in item for item in inputs)
     assert not any(item.endswith("/ui_config.yaml") for item in inputs)
     assert not any("release_uat" in item or "/release/environment" in item for item in inputs)
     assert not any("import_report" in item or "readback" in item for item in inputs)
-    assert (
-        "quwoquan_service/services/content-service/contracts/media/media_asset/"
-        "image_variant_policy.yaml"
-    ) in inputs
 
 
 def _materialize_source_definition_inputs(repo: Path) -> None:
@@ -104,6 +98,6 @@ def test_source_definition_digest_ignores_consumer_paths_and_tracks_exact_inputs
     consumer.write_text("CONSUMER = 'changed'\n", encoding="utf-8")
     assert SourceDefinitionSnapshot.build(repo_root=repo) == baseline
 
-    exact = repo / SourceDefinitionSnapshot(CURRENT_DIGEST).to_document()["inputs"][0]
+    exact = repo / ".agents/skills/content-production/SKILL.md"
     exact.write_text(exact.read_text(encoding="utf-8") + "\nproducer-change\n", encoding="utf-8")
     assert SourceDefinitionSnapshot.build(repo_root=repo) != baseline

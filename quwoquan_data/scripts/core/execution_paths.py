@@ -8,7 +8,7 @@ from pathlib import Path
 from core import paths as _paths
 from core.data_root import DataRoot
 from core.paths import (
-    OBJECT_STAGES, STAGE_COMPOSE, STAGE_DOWNLOAD,
+    OBJECT_STAGES, STAGE_DOWNLOAD,
     _INTENT_LABEL_MAX, _LABEL_STRIP_RE, execution_root, is_execution_id,
     normalize_execution_id,
 )
@@ -103,9 +103,6 @@ def relative_execution_ref(target: Path, execution_id: str) -> str:
 
 def object_index_path(object_dir: Path) -> Path:
     return object_dir / "_object.json"
-
-def execution_entity_page_input_path(execution_id: str, domain: str, etype: str, name: str) -> Path:
-    return execution_entity_stage_dir(execution_id, domain, etype, name, STAGE_COMPOSE) / "entity_page_input.json"
 
 def ensure_execution_layout(execution_id: str) -> Path:
     root = execution_root(execution_id)

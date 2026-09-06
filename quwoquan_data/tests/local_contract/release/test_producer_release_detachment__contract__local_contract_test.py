@@ -141,7 +141,6 @@ def test_producer_forward_import_graph_has_no_environment_edge() -> None:
         "content.release.canonical.aggregate_release_pool_closure",
         "content.release.canonical.aggregate_release_result",
         "content.release.canonical.aggregate_release_selection",
-        "content.release.canonical.handler_pool",
         "content.release.canonical.producer_release_handoff",
         "content.release.canonical.integrity",
         "content.release.canonical.release_consistency",
@@ -303,3 +302,78 @@ def test_milestone_build_writes_no_uat_artifact_or_consumer_fields(
     assert not (release_dir / "payload/uat/sample_plan.json").exists()
     assert captured_header.keys().isdisjoint(_FORBIDDEN_HEADER_FIELDS)
     assert result.keys().isdisjoint(_FORBIDDEN_HEADER_FIELDS)
+
+
+def test_release_asset_admission_allows_identical_asset_reuse_across_objects(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from content.release.canonical import release_admission
+
+    shared = {
+        "assetId": "shared-cover",
+        "contentSha256": "sha256:" + "1" * 64,
+        "sourceUrl": "https://example.com/shared.jpg",
+        "license": "CC BY 4.0",
+        "termsUrl": "https://creativecommons.org/licenses/by/4.0/",
+        "authorizationProof": "https://example.com/proof",
+        "creator": "Fixture Creator",
+        "platform": "Fixture",
+        "capturedAt": "2026-09-06T00:00:00Z",
+        "acquisitionStatus": "acquired",
+        "rightsStatus": "verified",
+        "authorizationRequired": False,
+        "distributionDecision": "commercial_allowed",
+        "rightsIssues": [],
+        "generated": False,
+    }
+    objects = [
+        {"objectRef": "entities/fixture", "carrier": "homepage", "assets": [{**shared, "objectRef": "entities/fixture"}], "manifest": {"assets": [{"assetId": "shared-cover", "kind": "image"}], "publishMediaMode": "not_applicable"}, "contentReviewApproved": True},
+        {"objectRef": "posts/image/fixture/1", "carrier": "image", "assets": [{**shared, "objectRef": "posts/image/fixture/1"}], "manifest": {"assets": [{"assetId": "shared-cover", "kind": "image"}]}, "contentReviewApproved": True},
+    ]
+    monkeypatch.setattr(release_admission, "_object_rows", lambda *_args, **_kwargs: objects)
+
+    document = release_admission.build_release_asset_admission(
+        release_id="reuse-001",
+        objects_root=tmp_path,
+        desired={"entities": ["fixture"], "posts": ["image/fixture/1"]},
+        release_class="research",
+    )
+
+    assert len(document["assets"]) == 2
+
+
+def test_release_asset_admission_rejects_reused_id_with_identity_drift(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from content.release.canonical import release_admission
+
+    base = {
+        "assetId": "shared-cover",
+        "contentSha256": "sha256:" + "1" * 64,
+        "sourceUrl": "https://example.com/shared.jpg",
+        "license": "CC BY 4.0",
+        "termsUrl": "https://creativecommons.org/licenses/by/4.0/",
+        "authorizationProof": "https://example.com/proof",
+        "creator": "Fixture Creator",
+        "platform": "Fixture",
+        "capturedAt": "2026-09-06T00:00:00Z",
+        "acquisitionStatus": "acquired",
+        "rightsStatus": "verified",
+        "authorizationRequired": False,
+        "distributionDecision": "commercial_allowed",
+        "rightsIssues": [],
+        "generated": False,
+    }
+    objects = [
+        {"objectRef": "entities/fixture", "carrier": "homepage", "assets": [{**base, "objectRef": "entities/fixture"}], "manifest": {"assets": [{"assetId": "shared-cover", "kind": "image"}], "publishMediaMode": "not_applicable"}, "contentReviewApproved": True},
+        {"objectRef": "posts/image/fixture/1", "carrier": "image", "assets": [{**base, "objectRef": "posts/image/fixture/1", "contentSha256": "sha256:" + "2" * 64}], "manifest": {"assets": [{"assetId": "shared-cover", "kind": "image"}]}, "contentReviewApproved": True},
+    ]
+    monkeypatch.setattr(release_admission, "_object_rows", lambda *_args, **_kwargs: objects)
+
+    with pytest.raises(Exception, match="asset ID identity conflict"):
+        release_admission.build_release_asset_admission(
+            release_id="reuse-drift-001",
+            objects_root=tmp_path,
+            desired={"entities": ["fixture"], "posts": ["image/fixture/1"]},
+            release_class="research",
+        )

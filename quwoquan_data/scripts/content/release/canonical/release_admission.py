@@ -245,12 +245,25 @@ def build_release_asset_admission(
     objects = _object_rows(objects_root, desired, output_root=output_root)
     assets = [asset for row in objects for asset in row["assets"]]
     asset_ids = [str(asset["assetId"]) for asset in assets]
-    if any(not asset_id for asset_id in asset_ids) or len(asset_ids) != len(
-        set(asset_ids)
-    ):
-        raise ObjectTransactionError(
-            "release asset IDs must be globally unique and non-empty"
-        )
+    if any(not asset_id for asset_id in asset_ids):
+        raise ObjectTransactionError("release asset IDs must be non-empty")
+    identity_fields = (
+        "contentSha256",
+        "sourceUrl",
+        "license",
+        "termsUrl",
+        "authorizationProof",
+        "creator",
+    )
+    asset_identities: dict[str, tuple[str, ...]] = {}
+    for asset in assets:
+        asset_id = str(asset["assetId"])
+        identity = tuple(str(asset[field]) for field in identity_fields)
+        previous = asset_identities.setdefault(asset_id, identity)
+        if previous != identity:
+            raise ObjectTransactionError(
+                f"release asset ID identity conflict: {asset_id}"
+            )
     if any(asset["generated"] for asset in assets):
         generated = [asset["assetId"] for asset in assets if asset["generated"]]
         raise ObjectTransactionError(

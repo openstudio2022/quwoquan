@@ -44,9 +44,10 @@
 - 决策：根 AGENTS 只放全仓不变量；最近子树 AGENTS 只放该子树每次变更都成立的不变量，不参与自然语言工作流路由。`.agents/skills/*/SKILL.md` 的 metadata 是唯一宿主发现面，body 是唯一 Workflow Skill 正文，并只保留触发与输入、执行、完成证据、失败停止、条件性交接五段。Feature 行为与设计只落 spec/design/contracts；角色只保留职责/盲区，checklist 只保留判定。
 - 决策：删除共享 interaction/completion 跳转、强制 brief-back、checklist copy-in 与普通任务的持久交接。只有跨会话未完成、多人并行、环境/发布、外部阻断、证据需复用或用户显式要求交接时生成交接单。
 - 决策：有显式 Cursor 入口的 Workflow Skill 与 `.cursor/commands` 双向一一对应；命令文件只是一行式入口，并指向同一 Skill body。`prd` 拥有可测试规格，`design` 仅在达到门槛时拥有 DEC，简单规格可直达 `dev`。
+- 决策：必须由独立语义 actor 完成的工作采用主会话有界派发：主会话持有 execution 与阶段推进，按 canonical artifact/receipt 启动去重，默认一次只等待一个前台 actor；子 Agent 只产出授权范围内语义文件且禁止嵌套派发、关闭阶段、替代 execution 或发布。`starting up` 不算完成也不触发补发，调用超时/失败收敛为 typed blocker。
 - 适用工程根：`.agents/README.md`、`.agents/skills`、`.cursor/commands`、`.cursor/hooks.json`、`.codex/hooks.json`
-- 理由：常驻规则与递归 reference 会在任务开始前吃掉上下文；把功能事实放进角色或 harness 文件又会让开发与 Review 加载不同版本。稳定作用域分层让同一事实只有一个 owner，并让加载触发可判定。
-- 被否决方案：继续以八段模板和共享完成表追求形式一致。也不保留功能角色 reference 再由 Cursor rule 指向，或提交 workflow manifest/规则 inventory 作为第二真相源。
+- 理由：常驻规则与递归 reference 会在任务开始前吃掉上下文；把功能事实放进角色或 harness 文件又会让开发与 Review 加载不同版本。稳定作用域分层让同一事实只有一个 owner，并让加载触发可判定。目标内容生产会话曾把完整流程交给通用子 Agent，再由其递归启动审核 Agent；缺少 artifact 去重与前台预算使大量调用停在 `starting up`，重复建立 execution 且没有增加 canonical receipt，因此派发必须保持扁平和有界。
+- 被否决方案：继续以八段模板和共享完成表追求形式一致。也不保留功能角色 reference 再由 Cursor rule 指向，或提交 workflow manifest/规则 inventory 作为第二真相源；不把完整 Workflow 委托给通用子 Agent，不允许递归派发、后台启动风暴或失败后投机创建替代 execution。
 - 关联要求：`REQ-001`
 - 影响 Story：[`agent-skill-review-context-organization`](./agent-skill-review-context-organization/spec.md)（规则与 Skill 分层）
 - 关联验收：`GWT-001`

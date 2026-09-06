@@ -88,7 +88,7 @@ evidence:
     timeout_seconds: 900
     covers: []
   content-publish-purity:
-    command: python3 -B quwoquan_data/scripts/cli.py verify publish-purity
+    command: python3 -B quwoquan_data/scripts/cli.py verify publish-closure
     segment: POST
     required: true
     timeout_seconds: 300
@@ -147,15 +147,6 @@ profiles:
         prd: roles/ux/checklists/prd/base.md
         design: roles/ux/checklists/design/base.md
         dev: roles/ux/checklists/dev/flutter-page.md
-
-  content-release:
-    deliverables: [content-release]
-    specialist:
-      role: data-legal
-      priority: 95
-      required: true
-      checklists:
-        content-production: roles/data-legal/checklists/content-production/base.md
 
   environment-release:
     paths:

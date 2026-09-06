@@ -11,7 +11,10 @@
   ],
   "properties": {
     "policyRevision": {
-      "const": "encyclopedia-primary"
+      "enum": [
+        "encyclopedia-primary",
+        "factual-reference"
+      ]
     },
     "primaryEvidenceRef": {
       "type": "string",
@@ -19,16 +22,33 @@
     },
     "primarySource": {
       "allOf": [
-        { "$ref": "#/$defs/source" },
+        {
+          "$ref": "#/$defs/source"
+        },
         {
           "properties": {
             "sourceKind": {
-              "enum": ["wikipedia", "baidu_baike", "toutiao_baike"]
+              "enum": [
+                "wikipedia",
+                "baidu_baike",
+                "toutiao_baike",
+                "web_page"
+              ]
             },
             "extractor": {
-              "enum": ["wikipedia_api", "baidu_baike_html", "toutiao_baike_html"]
+              "enum": [
+                "wikipedia_api",
+                "baidu_baike_html",
+                "toutiao_baike_html",
+                "html_text"
+              ]
             },
-            "policyRevision": { "const": "encyclopedia-primary" }
+            "policyRevision": {
+              "enum": [
+                "encyclopedia-primary",
+                ""
+              ]
+            }
           }
         }
       ]
@@ -75,7 +95,8 @@
             "wikipedia",
             "baidu_baike",
             "toutiao_baike",
-            "image_collection"
+            "image_collection",
+            "web_page"
           ]
         },
         "extractor": {
@@ -84,6 +105,7 @@
             "baidu_baike_html",
             "toutiao_baike_html",
             "image_collection_download",
+            "html_text",
             ""
           ]
         },
