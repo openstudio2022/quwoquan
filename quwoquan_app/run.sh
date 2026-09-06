@@ -37,6 +37,7 @@ done
 # 开发默认直连当前 live worktree；--hermetic 与 app-content-uat 保留发布级流水线。
 if [[ "$QWQ_DEV_LAUNCH_HERMETIC" == "0" \
    && "${QWQ_CANONICAL_LAUNCH_ACTOR:-}" != "app-content-uat" \
+   && "${QWQ_MANAGED_FLUTTER_ENTRY:-}" != "1" \
    && -z "${QWQ_WORKSPACE_SOURCE_CAPSULE_MANIFEST:-}" \
    && ( -e "$ROOT_DIR/.git" || -L "$ROOT_DIR/.git" ) ]]; then
   exec "$APP_DIR/scripts/device/dev_launch.sh" "${ORIGINAL_LAUNCH_ARGUMENTS[@]}"

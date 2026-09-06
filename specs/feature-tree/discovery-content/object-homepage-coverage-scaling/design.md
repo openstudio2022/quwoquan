@@ -7,7 +7,7 @@
 ## 1. 背景、目标与非目标
 
 - 设计目标：可复用实体主页与多载体内容供给、发布和环境消费闭环。
-- 设计目标：宿主 AI 原生串行或并发执行 producer 九阶段，跨会话只以 create-once receipts 与业务产物交接。
+- 设计目标：宿主 AI 原生串行或并发执行 producer 六步（init → acquire → author → review → publish → release），跨会话只以三份 create-once seal receipts 与业务产物交接。
 - 设计目标：内容运营者的 typed intent 在写入 execution 事实前经过 preview 与显式确认，并只编译到现有 carrier demand。
 - 非目标：复制字段 schema、实现任务、测试排列组合或执行历史。
 
@@ -28,11 +28,11 @@
 ## 4. 关键决策
 
 <a id="dec-001"></a>
-### DEC-001 四载体共享实体目录并由宿主 AI 执行唯一九阶段 Skill
-- 决策：homepage、article、image、video 从同一 canonical entity catalog 形成彼此独立的 immutable execution；唯一 producer 流程是宿主 AI 直接执行 `.agents/skills/content-production/SKILL.md` 的九阶段，并在 `release -> END`。已退役编排与兼容读写必须在生产源码、schema、control plane、正向测试与 active specs 中物理归零，具体 token 只由反向门禁维护。
-- 边界：producer 代码仅做 task init、stage-open exact input freeze、stage-close receipt create-once、下载/CAS、schema/digest/ref/media hard facts、单对象 publish 与 explicit cohort immutable release I/O。来源、选材、创作、review、verdict、typed issues、approved 对象、cohort/milestone 与后继均由宿主 AI 显式决定；后继只来自 Skill 固定顺序。既有 ship I/O 属下游环境 owner，不是 producer stage。
-- 失败恢复：OPEN 无 CLOSE 时重做同一冻结阶段；CLOSE blocked 后新建 execution，不在原 execution rewind 或迁移旧状态。
-- 可测试面：local_contract 锁定零旧 import/CLI/schema/reference、OPEN/CLOSE create-once、AI 显式结果与单对象原子 IO；api_integration 证明四载体可由宿主直接执行。
+### DEC-001 四载体共享实体目录并由宿主 AI 执行唯一六步 Skill
+- 决策：homepage、article、image、video 从同一 canonical entity catalog 形成彼此独立的 immutable execution；唯一 producer 流程是宿主 AI 直接执行 `.agents/skills/content-production/SKILL.md` 的六步，并在 `release finalize -> END`。已退役编排与兼容读写必须在生产源码、schema、control plane、正向测试与 active specs 中物理归零，具体 token 只由反向门禁维护。
+- 边界：producer 代码仅做 `task init`、`task acquire`（按 AI 点名的 URL 机械取得字节/license/作者/probe/poster）、`task seal`（自行校验硬事实并 create-once 写三份 receipt，review seal 补齐 content_review 机械字段）、单对象 publish 与 `release finalize`。来源是否切题、选材、创作、review 判断、verdict、typed issues、approved 对象、cohort/milestone、文章结构与作者人设均由宿主 AI 显式决定；后继只来自 Skill 固定顺序。既有 ship I/O 属下游环境 owner，不是 producer stage。
+- 失败恢复：按 receipt 找首个未闭合步骤继续；receipt blocked 后新建 execution，不在原 execution rewind 或迁移旧状态。
+- 可测试面：local_contract 锁定零旧 import/CLI/schema/reference、seal receipt create-once、AI 显式结果与单对象原子 IO；api_integration 证明四载体可由宿主直接执行。
 - 关联要求：`REQ-001`
 - 影响 Story：[`multi-carrier-release`](./multi-carrier-release/spec.md)
 - 关联验收：`GWT-020`
@@ -40,12 +40,12 @@
 <a id="dec-022"></a>
 ### DEC-022 candidate 只冻结对象身份，source 与 review 在 execution 内单轨形成
 
-- 对象边界：immutable candidate binding 只冻结目标对象身份、carrier、canonical coverage target 与 candidate identity；它不携带或要求 task-init 前 source/media admission、acquisition、rights 或 semantic verdict。`sources` 由宿主 Cursor/Codex Agent 选择来源，`1.download` 才取得 bytes、登记 source refs 与媒体 CAS/hard facts，`2.quality` 作语义保留/淘汰，`3.compose` 组织创作输入。
-- 单一产物：`4.draft` 每对象只有载体主产物 `page.md|draft.article.md|image_work.json|video_script.json`；author actor/invocation、自检以及 prompt/compose/draft exact ref/digest 只由 sequence-006 CLOSE receipt 冻结，不再写 `draft_meta.json`、`author_self_check.json` 或 `agent_result_envelope.json`。`5.review` 每对象只有 `content_review.json`，统一承载 `approved|rejected`、简短 dimensions/blockingIssues 与逐资产 rights 结论；reviewer actor/invocation 及该文件 exact ref/digest 只由 sequence-007 CLOSE receipt 冻结，不再建立独立 review receipt 或镜像 verdict。
-- 固定时序：唯一顺序为 `identity-only candidate binding -> task init -> sources -> 1.download -> 2.quality -> 3.compose -> 4.draft -> 5.review -> canonical publish/release`。acquisition/probe/digest/MIME 是 `1.download` 的机械硬事实；semantic 保留属于 `2.quality`；rights hard facts在下载时保留，逐资产使用裁决只在独立 `content_review.json` 单写。
-- 语义主体：来源选择、质量判断、compose、创作、自检与 review 的唯一主体是直接执行 Skill 的宿主 Cursor/Codex Agent。仓内只做 deterministic init、OPEN/CLOSE、atomic download/CAS、hard-fact verify 与原子 publish/release；不得新增 resolver、projector、runner、controller、queue、registry、SDK、自动恢复或 actor projection。
-- 失败恢复：source/ref/digest 或 stage-wide identity/integrity 漂移时当前 stage blocked；逐对象 approved/rejected 可混合，短缺写入 stage result artifact/typed issue，通用 receipt 仍只有 `pass|blocked`，只有零 approved 或 stage-wide identity/integrity failure 才 blocked。blocked 后用新 execution 重试，不改写旧 receipt。
-- 可测试面：local_contract 证明 candidate binding 不要求 source admission，sequence-006/007 receipts 各自冻结真实 actor 与唯一业务产物 exact refs，publish 只消费 `content_review.json` 的 approved 对象；api_integration 从 identity-only Image/Video candidate 跑通 download→review→publish 并覆盖 identity/digest drift。
+- 对象边界：immutable candidate binding 只冻结目标对象身份、carrier、canonical coverage target 与 candidate identity；它不携带或要求 task-init 前 source/media admission、acquisition、rights 或 semantic verdict。`acquire` 由宿主 Cursor/Codex Agent 点名来源 URL 与相关性理由，脚本取得 bytes、登记 source refs 与媒体 CAS/hard facts；语义保留与结构组织由 AI 在 author 时直接完成，不存在 2.quality/3.compose 产物。
+- 单一产物：`4.draft` 每对象只有载体主产物 `page.md|draft.article.md|image_work.json|video_script.json`；author actor/invocation 与产物 exact ref/digest 只由 `002-4.draft` seal receipt 冻结，不再写 `draft_meta.json`、`author_self_check.json` 或 `agent_result_envelope.json`。`5.review` 每对象只有 `content_review.json`，统一承载 `approved|rejected`、简短 dimensions/blockingIssues 与逐资产 rights 结论；reviewer actor/invocation 及该文件 exact ref/digest 只由 `003-5.review` seal receipt 冻结，机械字段由 seal 补齐，不再建立独立 review receipt 或镜像 verdict。
+- 固定时序：唯一顺序为 `identity-only candidate binding -> task init -> acquire(1.download/) -> author(4.draft/) -> review(5.review/) -> publish -> release finalize`。acquisition/probe/digest/MIME/license 是 acquire 的机械硬事实；rights hard facts 在取得时保留，逐资产使用裁决只在独立 `content_review.json` 单写。
+- 语义主体：来源选择与相关性、创作、结构、作者人设与 review 的唯一主体是直接执行 Skill 的宿主 Cursor/Codex Agent。仓内只做 deterministic init、acquire、seal、原子 publish 与 release finalize；不得新增 resolver、projector、runner、controller、queue、registry、SDK、自动恢复或 actor projection。
+- 失败恢复：source/ref/digest 或 step-wide identity/integrity 漂移时当前步骤 blocked；逐对象 approved/rejected 可混合，短缺写入 stage result artifact/typed issue，通用 receipt 仍只有 `pass|blocked`，只有零 approved 或 stage-wide identity/integrity failure 才 blocked。blocked 后用新 execution 重试，不改写旧 receipt。
+- 可测试面：local_contract 证明 candidate binding 不要求 source admission，`002-4.draft`/`003-5.review` receipts 各自冻结真实 actor 与唯一业务产物 exact refs，publish 只消费 `content_review.json` 的 approved 对象；api_integration 从 identity-only Image/Video candidate 跑通 download→review→publish 并覆盖 identity/digest drift。
 - 被否决方案：task-init 前 media admission；source-scoped semantic review；独立 review receipt 作为第二 authority；三份 draft 元数据镜像；四份 review/attestation 镜像；对象级 actor projection；仓内语义执行器或自动恢复。
 - 关联要求：[`multi-carrier-release`](./multi-carrier-release/spec.md) 的 `REQ-001`、`REQ-002` 与 [`work-request-compilation`](./work-request-compilation/spec.md) 的 `REQ-001`
 - 影响 Story：[`on-demand-content-pool-admission`](./on-demand-content-pool-admission/spec.md) 的 identity-only candidate binding 与发布准入
@@ -90,10 +90,10 @@
 <a id="dec-028"></a>
 ### DEC-028 execution 内 author/reviewer 单会话，跨 execution 由宿主原生并行
 - 决策：一个 execution 的 `4.draft` 全部对象由一个真实 author actor 会话负责，一个 execution 的 `5.review` 全部对象由另一个真实 reviewer actor 会话负责；二者必须是不同 session/runId，可为同一 model family。不同 execution 可由宿主原生并行，仓库不提供 runner、fleet、claim、模型路由、worker queue、actor projection 或自动恢复。
-- actor 真相源：sequence-006 receipt 的 actor/invocation 就是该 execution 的真实 author，sequence-007 receipt 的 actor/invocation 就是其真实 reviewer；对象业务产物不复制 actor，代码也不从对象投影、聚合或补写 actor。
-- 交接：producer 跨会话只读 stage OPEN/CLOSE receipts、业务 result refs 与 immutable release handoff。后继由 Skill 固定，代码不得解释 receipt 推进流程；环境 facts 属下游 owner，不参与 producer 恢复。
-- 失败恢复：OPEN 无 CLOSE 时由同一 stage 的一个真实 actor 会话基于冻结输入完整重做；CLOSE blocked 新建 execution。任何旧 sequence、checkpoint 或 execution-state projection 均不迁移。
-- 可测试面：静态检查锁定零旧控制面与 actor projection，行为测试锁定 sequence-006/007 actor 不同、各 stage 每 execution 单一 actor、create-once receipts 与并发单对象原子 IO。
+- actor 真相源：`002-4.draft` receipt 的 actor/invocation 就是该 execution 的真实 author，`003-5.review` receipt 的 actor/invocation 就是其真实 reviewer；对象业务产物不复制 actor，代码也不从对象投影、聚合或补写 actor。
+- 交接：producer 跨会话只读三份 seal receipts、业务 result refs 与 immutable release handoff。后继由 Skill 固定，代码不得解释 receipt 推进流程；环境 facts 属下游 owner，不参与 producer 恢复。
+- 失败恢复：未 seal 的步骤由一个真实 actor 会话完整重做；receipt blocked 新建 execution。任何旧 sequence、checkpoint 或 execution-state projection 均不迁移。
+- 可测试面：静态检查锁定零旧控制面与 actor projection，行为测试锁定 author/reviewer actor 不同、各步骤每 execution 单一 actor、create-once receipts 与并发单对象原子 IO。
 - 关联要求：[`multi-carrier-release`](./multi-carrier-release/spec.md) 的 `REQ-006`、`REQ-007`
 - 影响 Story：[`multi-carrier-release`](./multi-carrier-release/spec.md)
 - 关联验收：[`multi-carrier-release`](./multi-carrier-release/spec.md) 的 `GWT-020`
@@ -208,4 +208,4 @@
 
 - 记录 operation、终态、延迟与 canonical error；特有阈值由 spec 和运行配置约束。
 - 宿主可在仓外记录会话数、并行重叠、elapsed 与成本等诊断；这些诊断不进入 Data receipt、准入、publish、milestone 或下一次 execution authority。
-- Data 只保留逐 target source result、stage OPEN/CLOSE 与业务 result refs；不生成宿主调度、容量、heartbeat、截止或自动 calibration 报告。
+- Data 只保留逐 target source result、三份 seal receipts 与业务 result refs；不生成宿主调度、容量、heartbeat、截止或自动 calibration 报告。
