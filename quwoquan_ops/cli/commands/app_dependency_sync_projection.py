@@ -46,6 +46,12 @@ _IGNORED_FILES = {
     "Generated.xcconfig",
     "flutter_export_environment.sh",
     "local.properties",
+    # Android wrapper executables are injected from the pinned Flutter SDK
+    # after projection. Copying live wrapper bytes makes the fresh-host
+    # bootstrap impossible and mixes repository bytes with toolchain authority.
+    "gradlew",
+    "gradlew.bat",
+    "gradle-wrapper.jar",
 }
 
 
