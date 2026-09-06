@@ -353,14 +353,18 @@ def load_premium_pool_bootstrap_binding(
         report = json.loads(report_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
         raise PremiumPoolReleaseError("import report is unreadable") from exc
+    # Data 四域 apply 只允许 stage-only 导入，canonical 导入报告的通过态是
+    # `staged`（quwoquan_data/schema/release/import_report.schema.json）；可见性
+    # 由随后的 Content CAS 决定，报告本身不再出现 `imported`。
     if (
         not isinstance(report, dict)
         or report.get("schema") != "quwoquan.content_import_report"
         or report.get("environment") != environment
-        or report.get("status") != "imported"
+        or report.get("status") != "staged"
+        or report.get("activationMode") != "stage-only"
     ):
         raise PremiumPoolReleaseError(
-            "import report is not a passed canonical content import report"
+            "import report is not a passed canonical stage-only content import report"
         )
     release_binding = manifest.get("release")
     candidate_release = (
