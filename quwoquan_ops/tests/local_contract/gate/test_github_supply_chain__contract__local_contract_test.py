@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import subprocess
+import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -10,6 +11,7 @@ from quwoquan_ops.gate import verify_github_supply_chain
 
 # spec_ref: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/spec.md#sit-001.t4
 # spec_ref: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/spec.md#sit-001.t5
+# spec_ref: specs/feature-tree/runtime/development-workflow-governance/local-continuous-integration/spec.md#gwt-005
 ROOT = Path(__file__).resolve().parents[4]
 WORKFLOWS = ROOT / ".github" / "workflows"
 
@@ -466,6 +468,107 @@ class GithubSupplyChainContractTest(unittest.TestCase):
                 ],
                 [],
             )
+
+
+#: 最小 workflow 骨架：顶层 permissions 满足既有规则，只留 step 自引用这一条待验证的规则。
+_STEP_SELF_OUTPUT_WORKFLOW_HEAD = (
+    "name: forged\n"
+    "on: push\n"
+    "permissions:\n"
+    "  contents: read\n"
+    "jobs:\n"
+    "  forged:\n"
+    "    runs-on: ubuntu-latest\n"
+    "    steps:\n"
+)
+
+
+class StepSelfOutputReferenceContractTest(unittest.TestCase):
+    """9f2ee2093 的 delivery-gate.yml `id: admission` step 先在 run 里把 `path=...` 写进
+    GITHUB_OUTPUT，几行后同一个 run 又用 `${{ steps.admission.outputs.path }}` 传给
+    `--fact-file`。该表达式在 step 开始前求值，永远是空串，实际执行 `--fact-file ""`。
+    """
+
+    def _failures(self, steps: str) -> list[str]:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            workflows = root / ".github" / "workflows"
+            workflows.mkdir(parents=True)
+            (workflows / "forged.yml").write_text(
+                _STEP_SELF_OUTPUT_WORKFLOW_HEAD + steps, encoding="utf-8",
+            )
+            with mock.patch.object(verify_github_supply_chain, "ROOT", root), mock.patch.object(
+                verify_github_supply_chain, "WORKFLOWS", workflows,
+            ):
+                return [
+                    failure
+                    for failure in verify_github_supply_chain.verify_action_pins()
+                    if "references its own steps." in failure
+                ]
+
+    def test_step_referencing_its_own_outputs_in_run_fails_closed(self) -> None:
+        failures = self._failures(
+            "      - name: Validate exact facts and issue PromotionAdmissionReceipt\n"
+            "        id: admission\n"
+            "        run: |\n"
+            "          set -euo pipefail\n"
+            "          echo \"path=$RUNNER_TEMP/admission.json\" >> \"$GITHUB_OUTPUT\"\n"
+            "          python3 quwoquan_ops/ci/promotion_evidence.py publish-oci \\\n"
+            "            --fact-file \"${{ steps.admission.outputs.path }}\"\n"
+        )
+
+        self.assertEqual(len(failures), 1, failures)
+        self.assertIn(
+            ".github/workflows/forged.yml:15: step 'admission' references its own "
+            "steps.admission.outputs",
+            failures[0],
+        )
+        self.assertIn("evaluated before the step runs and is always empty", failures[0])
+
+    def test_later_step_referencing_previous_step_outputs_is_legal(self) -> None:
+        failures = self._failures(
+            "      - name: Validate exact facts and issue PromotionAdmissionReceipt\n"
+            "        id: admission\n"
+            "        run: |\n"
+            "          echo \"digest=sha256:0\" >> \"$GITHUB_OUTPUT\"\n"
+            "      - name: Create exact promotion handoff payload\n"
+            "        id: handoff\n"
+            "        env:\n"
+            "          ADMISSION_DIGEST: ${{ steps.admission.outputs.digest }}\n"
+            "        run: echo \"$ADMISSION_DIGEST\"\n"
+        )
+
+        self.assertEqual(failures, [])
+
+    def test_steps_referencing_each_other_outputs_are_legal(self) -> None:
+        failures = self._failures(
+            "      - id: first\n"
+            "        env:\n"
+            "          PEER: ${{ steps.second.outputs.value }}\n"
+            "        run: echo \"value=1\" >> \"$GITHUB_OUTPUT\"\n"
+            "      - id: second\n"
+            "        env:\n"
+            "          PEER: ${{ steps.first.outputs.value }}\n"
+            "        run: echo \"value=2\" >> \"$GITHUB_OUTPUT\"\n"
+        )
+
+        self.assertEqual(failures, [])
+
+    def test_quoted_step_id_is_still_recognized(self) -> None:
+        failures = self._failures(
+            "      - name: quoted id\n"
+            "        id: \"admission\"\n"
+            "        run: |\n"
+            "          echo \"path=x\" >> \"$GITHUB_OUTPUT\"\n"
+            "          echo \"${{ steps.admission.outputs.path }}\"\n"
+        )
+
+        self.assertEqual(len(failures), 1, failures)
+        self.assertIn(
+            ".github/workflows/forged.yml:13: step 'admission' references its own "
+            "steps.admission.outputs",
+            failures[0],
+        )
 
 
 if __name__ == "__main__":

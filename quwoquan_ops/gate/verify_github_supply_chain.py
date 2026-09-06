@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-"""阻断浮动 Action、越权权限和 GitHub 发布供应链静态合同漂移。"""
+"""阻断浮动 Action、越权权限和 GitHub 发布供应链静态合同漂移。
+
+同时阻断 step 在自身 run/env/with 里引用 `steps.<自己的 id>.outputs.*`：该表达式在 step
+开始前求值，读到的永远是空串（9f2ee2093 的 delivery-gate.yml admission step 曾因此把
+`--fact-file ""` 传给 publish-oci）。
+"""
 
 from __future__ import annotations
 
@@ -159,6 +164,7 @@ def verify_action_pins() -> list[str]:
                 f"(allowed: {', '.join(sorted(JOB_CONTEXT_PROPERTIES))})"
             )
         failures.extend(_job_level_env_context_failures(path, text))
+        failures.extend(_step_self_output_reference_failures(path, text))
     return failures
 
 
@@ -185,6 +191,48 @@ def _job_level_env_context_failures(path: Path, text: str) -> list[str]:
             index = cursor
             continue
         index += 1
+    return failures
+
+
+def _step_self_output_reference_failures(path: Path, text: str) -> list[str]:
+    """step 在自己的 run/env/with 里引用 `steps.<自己的 id>.outputs.*` 即运行期必现空串。
+
+    `${{ steps.<id>.outputs.* }}` 在 step 开始执行前求值，此时该 step 尚未写入 GITHUB_OUTPUT，
+    表达式永远展开为空串。9f2ee2093 的 delivery-gate.yml `id: admission` step 先在 run 里
+    写 `path=...` 到 GITHUB_OUTPUT，几行后同一个 run 又用 `${{ steps.admission.outputs.path }}`
+    传给 `--fact-file`，实际执行的是 `--fact-file ""`。
+
+    step 块以缩进 6 的 `      - ` 行开始，到下一个缩进 6 的 `      - ` 行或缩进小于 6 的非空行
+    结束；块内缩进 8 的 `id:` 给出自身 id（值可能带引号）。文本扫描而非 YAML 解析，是为了给出
+    精确行号且不受 `id:` 与 `run:` 的键序影响。
+    """
+    failures: list[str] = []
+    lines = text.splitlines()
+    step_starts = [index for index, line in enumerate(lines) if line.startswith("      - ")]
+    for position, start in enumerate(step_starts):
+        end = step_starts[position + 1] if position + 1 < len(step_starts) else len(lines)
+        for cursor in range(start + 1, end):
+            line = lines[cursor]
+            if line.strip() and not line.startswith("      "):
+                end = cursor
+                break
+        block = lines[start:end]
+        step_id: str | None = None
+        for line in block:
+            match = re.fullmatch(r"        id:\s*(\S.*?)\s*(?:#.*)?", line)
+            if match is not None:
+                step_id = match.group(1).strip().strip("\"'")
+                break
+        if not step_id:
+            continue
+        self_reference = re.compile(rf"steps\.{re.escape(step_id)}\.outputs")
+        for offset, line in enumerate(block):
+            for _ in self_reference.finditer(line):
+                failures.append(
+                    f"{path.relative_to(ROOT)}:{start + offset + 1}: step '{step_id}' references "
+                    f"its own steps.{step_id}.outputs inside the same step; the expression is "
+                    f"evaluated before the step runs and is always empty"
+                )
     return failures
 
 
