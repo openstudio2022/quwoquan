@@ -112,8 +112,16 @@ def test_staged_capsule_materializes_exact_add_delete_rename_mode_and_symlink() 
             assert os.access(capsule / "source.txt", os.X_OK)
             assert (capsule / "link.txt").is_symlink()
             assert os.readlink(capsule / "link.txt") == "target.txt"
-            assert Path(env["GIT_DIR"]).parent.parent == _state_root(state) / "process/materializations"
-            assert Path(env["GIT_DIR"]).is_dir()
+            # capsule 以 gitfile 按 cwd 发现仓库；GIT_DIR/GIT_WORK_TREE 不导出给检查进程，
+            # 否则测试自建仓库与 Flutter SDK 的 git 调用都会被劫持到 capsule。
+            gitfile = (capsule / ".git").read_text(encoding="utf-8")
+            assert gitfile.startswith("gitdir: ")
+            git_dir = Path(gitfile.removeprefix("gitdir: ").strip())
+            assert git_dir.parent.parent == _state_root(state) / "process/materializations"
+            assert git_dir.is_dir()
+            assert "GIT_DIR" not in env and "GIT_WORK_TREE" not in env
+            head = subprocess.run(["git", "rev-parse", "--abbrev-ref", "HEAD"], cwd=capsule, text=True, capture_output=True, check=True).stdout.strip()
+            assert head == "dev1.0"
             assert any(entry["path"] == "added.txt" for entry in entries)
         assert not list((state / "process/materializations").glob("*-*"))
 
