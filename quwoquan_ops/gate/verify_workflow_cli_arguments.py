@@ -7,9 +7,13 @@
 
 判定范围刻意收窄为可静态确定的部分：只看 `run:` 块中以 `python3`（可带 `-B`）直接
 执行 `quwoquan_*/**.py` 的命令；required 集合按 argparse parser 变量追踪，子命令按
-`add_parser("name")` 的名字归属到调用行的第一个位置参数。以下形态无法静态判定，
-一律跳过且不伪装成已检查：`$(...)` / 反引号捕获、heredoc、`"${arr[@]}"` 数组展开、
-`$VAR` 位置透传、mutually exclusive group、通过函数或 `main(argv)` 间接构造的 parser。
+`add_parser("name")` 的名字归属到调用行的第一个位置参数。`for x in (<字符串常量元组>)`
+或 `for x in <模块级字符串常量元组>` 包裹的 `add_argument(f"--...{x}...", required=True)`
+按常量展开为确定的选项名集合——仓内 signer identity、release_control 等脚本都用这一
+形态声明成组 required，整体跳过它们会漏掉真实缺参。以下形态无法静态判定，一律跳过
+且不伪装成已检查：`$(...)` / 反引号捕获、heredoc、`"${arr[@]}"` 数组展开、`$VAR` 位置
+透传、mutually exclusive group、通过函数或 `main(argv)` 间接构造的 parser、迭代源或
+f-string 插值不是上述常量的 required。
 """
 
 from __future__ import annotations
@@ -37,8 +41,9 @@ OPAQUE_TOKEN = re.compile(r"^\"?\$\{?[A-Za-z_][A-Za-z0-9_]*(?:\[@\]|\[\*\])?\}?\
 class ParserSpec:
     """一个脚本的 argparse 形状：顶层 required 与各子命令 required。
 
-    `dynamic_required` 表示存在名字由运行期表达式（f-string、变量）决定的 required
-    选项；这类选项无法静态比对，此时只能对已知常量名做检查，且缺失判定不再宣称完整。
+    `dynamic_required` 表示存在名字真正由运行期决定的 required 选项（f-string 插值
+    不是常量循环变量、或直接传变量）；常量循环内的 f-string 已被展开进 required 集合，
+    不计入此项。含 dynamic_required 的脚本整体不可判定。
     """
 
     top_level: frozenset[str] = frozenset()
@@ -55,6 +60,90 @@ def _name_of(node: ast.AST) -> str | None:
     return node.id if isinstance(node, ast.Name) else None
 
 
+def _const_str_sequence(node: ast.AST) -> tuple[str, ...] | None:
+    if not isinstance(node, (ast.Tuple, ast.List)):
+        return None
+    values = [_const_str(item) for item in node.elts]
+    if not values or any(value is None for value in values):
+        return None
+    return tuple(value for value in values if value is not None)
+
+
+def _module_const_sequences(tree: ast.Module) -> dict[str, tuple[str, ...]]:
+    """模块顶层 `NAME = ("a", "b")` 形式的字符串常量序列。"""
+    sequences: dict[str, tuple[str, ...]] = {}
+    for node in tree.body:
+        if isinstance(node, ast.Assign) and len(node.targets) == 1:
+            name = _name_of(node.targets[0])
+            values = _const_str_sequence(node.value)
+            if name and values is not None:
+                sequences[name] = values
+    return sequences
+
+
+def _render_fstring(node: ast.JoinedStr, bindings: dict[str, str]) -> str | None:
+    """只允许插值为已绑定的循环变量；其他任何表达式都视为运行期命名。"""
+    rendered = ""
+    for part in node.values:
+        if isinstance(part, ast.Constant) and isinstance(part.value, str):
+            rendered += part.value
+        elif (
+            isinstance(part, ast.FormattedValue)
+            and part.conversion == -1 and part.format_spec is None
+            and _name_of(part.value) in bindings
+        ):
+            rendered += bindings[_name_of(part.value) or ""]
+        else:
+            return None
+    return rendered
+
+
+def _is_required_call(node: ast.Call) -> bool:
+    return any(
+        keyword.arg == "required"
+        and isinstance(keyword.value, ast.Constant)
+        and keyword.value.value is True
+        for keyword in node.keywords
+    )
+
+
+def _constant_loop_required(tree: ast.Module) -> dict[int, tuple[str, list[str]]]:
+    """展开常量循环内的 f-string required。
+
+    返回 add_argument Call 节点 id -> (parser 变量名, 展开后的选项名列表)。展开失败的
+    节点不在返回值中，走 parser_spec 的默认路径被判为 dynamic_required。
+    """
+    sequences = _module_const_sequences(tree)
+    rendered: dict[int, tuple[str, list[str]]] = {}
+    for loop in ast.walk(tree):
+        if not isinstance(loop, ast.For) or loop.orelse:
+            continue
+        variable = _name_of(loop.target)
+        values = _const_str_sequence(loop.iter)
+        if values is None and _name_of(loop.iter) in sequences:
+            values = sequences[_name_of(loop.iter) or ""]
+        if variable is None or values is None:
+            continue
+        for node in ast.walk(ast.Module(body=loop.body, type_ignores=[])):
+            if not (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Attribute)
+                and node.func.attr == "add_argument"
+                and _is_required_call(node)
+                and node.args
+                and isinstance(node.args[0], ast.JoinedStr)
+            ):
+                continue
+            owner = _name_of(node.func.value)
+            if owner is None:
+                continue
+            names = [_render_fstring(node.args[0], {variable: value}) for value in values]
+            if any(name is None or not name.startswith("--") for name in names):
+                continue
+            rendered[id(node)] = (owner, [name for name in names if name is not None])
+    return rendered
+
+
 def parser_spec(script: Path) -> ParserSpec | None:
     """从源码静态还原 argparse 形状；脚本不用 argparse 或无法解析时返回 None。"""
     try:
@@ -69,6 +158,7 @@ def parser_spec(script: Path) -> ParserSpec | None:
     root_parsers: set[str] = set()
     uses_argparse = False
     dynamic_required = False
+    loop_required = _constant_loop_required(tree)
 
     for node in ast.walk(tree):
         if isinstance(node, ast.Assign) and isinstance(node.value, ast.Call):
@@ -103,13 +193,11 @@ def parser_spec(script: Path) -> ParserSpec | None:
             if owner is None:
                 continue
             uses_argparse = True
-            is_required = any(
-                keyword.arg == "required"
-                and isinstance(keyword.value, ast.Constant)
-                and keyword.value.value is True
-                for keyword in node.keywords
-            )
-            if not is_required:
+            if not _is_required_call(node):
+                continue
+            if id(node) in loop_required:
+                loop_owner, names = loop_required[id(node)]
+                required_by_parser.setdefault(loop_owner, set()).update(names)
                 continue
             for arg in node.args:
                 value = _const_str(arg)
