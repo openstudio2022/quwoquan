@@ -201,3 +201,50 @@ func TestAssemblyMongoWithReadinessTimeoutDefaultsInvalidBudget(t *testing.T) {
 		})
 	}
 }
+
+// 第二条 Mongo 连接（如跨服务只读 fence 库）必须以独立检查名登记；复用 "mongodb"
+// 会被 health registry 记为永久失败，服务永远不 ready（alpha 冷启动实测）。
+func TestAssemblyMongoNamedRegistersDistinctHealthCheckBesidePrimary(t *testing.T) {
+	primary := &mongoClientDouble{}
+	fence := &mongoClientDouble{}
+	calls := 0
+	assembly := mongoTestAssembly(func(_ context.Context, cfg rtmongo.ConnectConfig) (rtmongo.Handle, error) {
+		calls++
+		if strings.Contains(cfg.URI, "content") {
+			return fence, nil
+		}
+		return primary, nil
+	})
+
+	if _, err := assembly.Mongo(MongoConfig{URI: "mongodb://user:27017", Database: "quwoquan_user"}); err != nil {
+		t.Fatalf("primary mongo: %v", err)
+	}
+	if _, err := assembly.MongoNamed("content_release_fence_mongodb", MongoConfig{
+		URI: "mongodb://content:27017", Database: "quwoquan_content",
+	}); err != nil {
+		t.Fatalf("named mongo: %v", err)
+	}
+	if calls != 2 {
+		t.Fatalf("expected two connections, got %d", calls)
+	}
+
+	result := assembly.Health.Check(context.Background())
+	if result.Status != "ok" {
+		t.Fatalf("two distinct mongo checks must both pass, got %v", result.Checks)
+	}
+	for _, name := range []string{"mongodb", "content_release_fence_mongodb"} {
+		if _, registered := result.Checks[name]; !registered {
+			t.Fatalf("expected %s health check registration, got %v", name, result.Checks)
+		}
+	}
+	if primary.pings == 0 || fence.pings == 0 {
+		t.Fatalf("both clients must be pinged: primary=%d fence=%d", primary.pings, fence.pings)
+	}
+
+	if _, err := assembly.MongoNamed("mongodb", MongoConfig{URI: "mongodb://x:27017", Database: "x"}); err == nil {
+		t.Fatal("MongoNamed must refuse the primary check name")
+	}
+	if _, err := assembly.MongoNamed(" ", MongoConfig{URI: "mongodb://x:27017", Database: "x"}); err == nil {
+		t.Fatal("MongoNamed must refuse an empty check name")
+	}
+}

@@ -28,7 +28,7 @@ services:
       USER_MONGO_URI: mongodb://mongodb:27017
       # Creator release candidate 只按 Content owner 的 active release tuple 可见；
       # 这里只读 Content 库的 data_release_state，User 不落自己的 pointer。
-      CONTENT_MONGO_URI: "${QWQ_COMPOSE_MONGO_URI:-mongodb://mongodb:27017}"
+      CONTENT_MONGO_URI: "${QWQ_COMPOSE_MONGO_URI:-mongodb://mongodb:27017/?directConnection=true}"
       CONTENT_MONGO_DATABASE: quwoquan_content
       USER_REDIS_GENERAL_ADDR: redis:6379
       CHAT_SERVICE_BASE_URL: http://chat-service:18081

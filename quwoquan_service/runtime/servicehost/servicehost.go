@@ -453,9 +453,24 @@ func NewSupervisor(modules ...Module) (*Supervisor, error) {
 		phase:             PhaseNew,
 		status:            status,
 		owned:             slices.Clone(modules),
-		readinessTimeout:  180 * time.Second,
+		readinessTimeout:  readinessBudget(len(modules)),
 		readinessInterval: time.Second,
 	}, nil
+}
+
+const (
+	// 单模块进程的就绪预算；多模块 single-stack 主机按模块数线性追加，
+	// 因为就绪探测按组合顺序逐模块串行，且冷启动时各模块同时争抢同一批
+	// 基础设施（索引建立、ES 模板、Mongo 首连），180s 在 11 模块下实测不够。
+	baseReadinessBudget      = 180 * time.Second
+	perModuleReadinessBudget = 45 * time.Second
+)
+
+func readinessBudget(moduleCount int) time.Duration {
+	if moduleCount <= 1 {
+		return baseReadinessBudget
+	}
+	return baseReadinessBudget + time.Duration(moduleCount-1)*perModuleReadinessBudget
 }
 
 // Start validates every module before migrations, binds every listener before

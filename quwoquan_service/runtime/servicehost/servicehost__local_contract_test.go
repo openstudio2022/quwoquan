@@ -352,3 +352,16 @@ func TestWaitForReadinessFailsClosedAtDeadline(t *testing.T) {
 		t.Fatalf("WaitForReadiness() error = %v", err)
 	}
 }
+
+// 就绪预算随模块数线性追加：单模块 180s；11 模块的 single-stack 主机 630s。
+func TestReadinessBudgetScalesWithModuleCount(t *testing.T) {
+	if got := readinessBudget(1); got != 180*time.Second {
+		t.Fatalf("single module budget = %v, want 180s", got)
+	}
+	if got := readinessBudget(0); got != 180*time.Second {
+		t.Fatalf("zero module budget = %v, want 180s", got)
+	}
+	if got := readinessBudget(11); got != 630*time.Second {
+		t.Fatalf("eleven module budget = %v, want 630s", got)
+	}
+}

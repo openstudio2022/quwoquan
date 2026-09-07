@@ -515,7 +515,9 @@ func assembleUserDomain(asm *servicekit.Assembly, cfg *config) error {
 		// 而不是回退到 User 自己的 pointer 或旧 Persona。
 		var contentFenceReader userrepo.ContentReleaseFenceReader = userrepo.UnavailableContentReleaseFenceReader{}
 		if strings.TrimSpace(cfg.ContentService.MongoURI) != "" {
-			contentDatabase, databaseErr := asm.Mongo(servicekit.MongoConfig{
+			// 第二条 Mongo 连接不得复用 "mongodb" 检查名：health registry 对重名登记
+			// 记永久失败，会让 user-service 永远不 ready（alpha 冷启动实测）。
+			contentDatabase, databaseErr := asm.MongoNamed("content_release_fence_mongodb", servicekit.MongoConfig{
 				URI:      cfg.ContentService.MongoURI,
 				Database: nonEmptyContentDatabase(cfg.ContentService.MongoDatabase),
 			})

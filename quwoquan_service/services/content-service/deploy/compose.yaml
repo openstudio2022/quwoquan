@@ -17,7 +17,7 @@ services:
       CONFIG_VERSION: "${QWQ_COMPOSE_CONTENT_SERVICE_CONFIG_VERSION:?QWQ_COMPOSE_CONTENT_SERVICE_CONFIG_VERSION is required}"
       IMAGE_VERSION: "${QWQ_COMPOSE_IMAGE_VERSION:?immutable image version is required}"
       QWQ_WORKLOAD: "${QWQ_WORKLOAD:-full}"
-      CONTENT_MONGO_URI: "${QWQ_COMPOSE_MONGO_URI:-mongodb://mongodb:27017}"
+      CONTENT_MONGO_URI: "${QWQ_COMPOSE_MONGO_URI:-mongodb://mongodb:27017/?directConnection=true}"
       CONTENT_POSTGRES_REPORT_DSN: postgres://quwoquan:quwoquan@postgres:5432/quwoquan?sslmode=disable
       CONTENT_REDIS_REC_ADDR: redis:6379
       CONTENT_REDIS_GENERAL_ADDR: redis:6379

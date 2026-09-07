@@ -30,7 +30,18 @@ var defaultMongoConnect mongoConnectFunc = rtmongo.Open
 // 返回目标 database 句柄。物理组网只来自渲染配置与部署面 env 覆盖，缺失即
 // fail-closed。
 func (assembly *Assembly) Mongo(config MongoConfig) (MongoDatabase, error) {
-	return assembly.mongo(config, 0)
+	return assembly.mongo(config, 0, mongoHealthCheckName)
+}
+
+// MongoNamed 装配第二个（非本服务权威）Mongo 库句柄，健康检查以调用方给定的
+// 名字登记。health registry 拒绝重复名，因此同一服务内的第二条 Mongo 连接
+// （如只读的跨服务 fence 库）不能再占用默认的 "mongodb" 检查名。
+func (assembly *Assembly) MongoNamed(healthCheckName string, config MongoConfig) (MongoDatabase, error) {
+	name := strings.TrimSpace(healthCheckName)
+	if name == "" || name == mongoHealthCheckName {
+		return nil, fmt.Errorf("%s mongo health check name must be a distinct non-empty name", assembly.Identity.ServiceName)
+	}
+	return assembly.mongo(config, 0, name)
 }
 
 // MongoWithReadinessTimeout 与 Mongo 使用同一装配路径，但允许调用方把 mongodb
@@ -40,12 +51,15 @@ func (assembly *Assembly) MongoWithReadinessTimeout(
 	config MongoConfig,
 	readinessTimeout time.Duration,
 ) (MongoDatabase, error) {
-	return assembly.mongo(config, readinessTimeout)
+	return assembly.mongo(config, readinessTimeout, mongoHealthCheckName)
 }
+
+const mongoHealthCheckName = "mongodb"
 
 func (assembly *Assembly) mongo(
 	config MongoConfig,
 	readinessTimeout time.Duration,
+	healthCheckName string,
 ) (MongoDatabase, error) {
 	serviceName := assembly.Identity.ServiceName
 	if strings.TrimSpace(config.URI) == "" {
@@ -63,9 +77,9 @@ func (assembly *Assembly) mongo(
 		return client.Disconnect(cleanupCtx)
 	})
 	if readinessTimeout > 0 {
-		assembly.Health.RegisterWithTimeout("mongodb", readinessTimeout, client.Ping)
+		assembly.Health.RegisterWithTimeout(healthCheckName, readinessTimeout, client.Ping)
 	} else {
-		assembly.Health.Register("mongodb", client.Ping)
+		assembly.Health.Register(healthCheckName, client.Ping)
 	}
 	return client.Database(config.Database), nil
 }

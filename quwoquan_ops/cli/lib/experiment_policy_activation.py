@@ -222,9 +222,14 @@ def activate_search_experiment_policy(
     environment: str,
     target: str,
     product_ops_base_url: str,
-    timeout_seconds: float = 45.0,
+    timeout_seconds: float = 300.0,
 ) -> dict[str, Any]:
-    """Create or precisely reuse package-bound nonprod Search/Recommendation policies."""
+    """Create or precisely reuse package-bound nonprod Search/Recommendation policies.
+
+    预算覆盖 single-stack 冷启动：product-ops 的 admission 要等 service-core 全部
+    模块就绪（account_security_authority），期间只会收到 servicekit 的 typed 503；
+    45s 在 11 模块冷启动下实测不够，300s 仍是有界等待而不是无限重试。
+    """
 
     _require_nonprod_target(environment, target)
     active = active_deployment_candidate(target)
