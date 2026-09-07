@@ -192,6 +192,14 @@ def register_parser(
         help="Canonical rollback Data release attestation bound into a full package.",
     )
     package_parser.add_argument("--target", choices=_stackctl.TARGETS, default="")
+    # prod-hosted 镜像物料来源：factory = GHCR 工厂物料（正式）；local-build = integration
+    # 工作树 exact dev candidate 的本机 linux/amd64 build-once 物料，只能进入 prevalidate
+    # rehearsal，候选与报告固定 nonPromotable（deliver-deploy-prod-pipeline DEC-013）。
+    package_parser.add_argument(
+        "--material-source",
+        choices=["factory", "local-build"],
+        default="factory",
+    )
     package_parser.add_argument("--ops-base-url", default="")
     package_parser.add_argument("--content-base-url", default="")
     package_parser.add_argument("--entity-base-url", default="")

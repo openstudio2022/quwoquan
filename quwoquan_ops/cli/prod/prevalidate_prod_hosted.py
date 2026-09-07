@@ -66,7 +66,11 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--host", default="")
     parser.add_argument("--host-id", action="append", default=[])
-    parser.add_argument("--frozen-diagnostic-snapshot", required=True, type=Path)
+    # 两类互斥的不可提升输入：reviewed main 的 GHCR frozen snapshot，或 integration
+    # exact dev candidate 的本机 local-build rehearsal 物料（DEC-013）。
+    material = parser.add_mutually_exclusive_group(required=True)
+    material.add_argument("--frozen-diagnostic-snapshot", type=Path, default=None)
+    material.add_argument("--exact-candidate", default="")
     parser.add_argument("--image-transport-tag", required=True)
     parser.add_argument("--candidate-digest", required=True)
     parser.add_argument("--data-mode", choices=("isolated", "external"), required=True)
@@ -76,6 +80,51 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--dry-run", action="store_true")
     return parser.parse_args()
 
+
+
+def validate_rehearsal_candidate(args: argparse.Namespace) -> dict[str, Any]:
+    """`--exact-candidate` 只接受已封存的 local-build rehearsal 候选（SIT-003 t1/t3）。"""
+
+    if not args.exact_candidate:
+        return {"materialSource": "factory"}
+    if args.exact_candidate != args.candidate_digest:
+        raise PrevalidationError("rehearsal exact candidate must equal --candidate-digest")
+    if args.image_transport_tag != args.candidate_digest.removeprefix("sha256:"):
+        raise PrevalidationError(
+            "rehearsal image transport tag must be the candidate digest hex"
+        )
+    from quwoquan_ops.cli.lib.deployment_candidate_manifest import (
+        prod_hosted_rehearsal as rehearsal,
+    )
+
+    candidate_root = deployment_candidate_dir("prod-hosted", args.exact_candidate)
+    oci_path = candidate_root / "packages/runtime-shared/oci-images.json"
+    try:
+        oci = json.loads(oci_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        raise PrevalidationError(f"rehearsal candidate OCI manifest unreadable: {error}") from error
+    if not rehearsal.is_rehearsal_oci_manifest(oci):
+        raise PrevalidationError("rehearsal candidate must be local-build material")
+    candidate = load_candidate_manifest(
+        "prod",
+        "prod-hosted",
+        args.exact_candidate,
+        require_full=True,
+        purpose="self_verify",
+    )
+    try:
+        source = rehearsal.rehearsal_candidate_source_gate(candidate, repo_root=ROOT)
+        rehearsal.verify_local_rehearsal_images(oci)
+    except rehearsal.RehearsalError as error:
+        raise PrevalidationError(str(error)) from error
+    return {
+        "materialSource": rehearsal.REHEARSAL_MATERIAL_SOURCE,
+        "platform": rehearsal.REHEARSAL_PLATFORM,
+        "nonPromotable": True,
+        "legalStaticPlaceholder": bool(oci.get("legalStaticPlaceholder")),
+        "publicEntry": str(oci.get("publicEntry") or ""),
+        "sourceRevision": source["sourceRevision"],
+    }
 
 
 def validate_external_data_plane_candidate(args: argparse.Namespace) -> Path | None:
@@ -703,6 +752,23 @@ def execute_deployment(
         services = ",".join(
             projection.startup_services + projection.image_only_services
         )
+        if args.exact_candidate:
+            image_source_argv = [
+                "--image-source",
+                "local",
+                "--candidate-oci-manifest",
+                str(
+                    deployment_candidate_dir("prod-hosted", args.exact_candidate)
+                    / "packages/runtime-shared/oci-images.json"
+                ),
+            ]
+        else:
+            image_source_argv = [
+                "--image-source",
+                "factory",
+                "--frozen-diagnostic-snapshot",
+                str(args.frozen_diagnostic_snapshot),
+            ]
         image_step = _run(
             [
                 "python3",
@@ -715,10 +781,11 @@ def execute_deployment(
                 str(args.key_dir),
                 "--services",
                 services,
+                "--candidate-digest",
+                args.candidate_digest,
                 "--image-transport-tag",
                 args.image_transport_tag,
-                "--frozen-diagnostic-snapshot",
-                str(args.frozen_diagnostic_snapshot),
+                *image_source_argv,
                 "--platform",
                 "linux/amd64",
             ]
@@ -904,6 +971,7 @@ def main() -> int:
             raise PrevalidationError(f"scope is not allowed: {args.scope}")
         if args.data_mode not in (spec.get("allowedDataModes") or []):
             raise PrevalidationError(f"data mode is not allowed: {args.data_mode}")
+        result["material"] = validate_rehearsal_candidate(args)
         validate_external_data_plane_candidate(args)
         plan = resolve_plan(
             load_access_manifest(),

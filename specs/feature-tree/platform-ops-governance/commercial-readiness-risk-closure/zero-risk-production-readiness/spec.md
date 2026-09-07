@@ -36,7 +36,8 @@
 <a id="req-003"></a>
 ### REQ-003 第一方容器预验证不可提升为生产发布证据
 
-- `prod-hosted` 只允许受限 legacy `non-promotable snapshot` reader 在独立 namespace 消费 reviewed main 的历史物料，验证第一方容器、隔离空数据栈和 rootless user systemd 持久运行；若迁移尚未完成，其遗留由父能力现有 `OPEN-010` 跟踪，不得把 reader 纳入正式 authority。
+- `prod-hosted` 只允许两类不可提升物料在独立 namespace 做 history/rehearsal：受限 legacy `non-promotable snapshot` reader 消费的 reviewed main 历史物料，以及 integration 工作区 exact dev candidate 的 rehearsal 物料（来源、校验与非准出边界由 [`deliver-deploy-prod-pipeline` REQ-003](../../../runtime/deliver-deploy-prod-pipeline/spec.md#req-003) 拥有）。两者都只验证第一方容器、隔离数据栈和 rootless user systemd 持久运行；若迁移尚未完成，legacy reader 的遗留由父能力现有 `OPEN-010` 跟踪，任何一类都不得纳入正式 authority。
+- 隔离数据栈可接受 canonical immutable content release 的 hosted-import 与 activation，用于 rehearsal 内容可见性诊断；它既不是 seed 也不是正式生产数据，其 readback 不构成发布证据。
 - reader 必须重命名为显式 history/rehearsal-only API；不得保留 generic validate 名称，不得调用 public REM writer 或 formal caller，也不得创建 `CandidateMaterialManifest`、`QualificationFact`、stable tag、`ProdActivationAdmissionFact`、stage fact、`ProdReleasedFact`、ledger、receipt 或 admission。
 - snapshot 中的不可变物料只能按 exact digest 解包；Actions Artifact 配额不足不得诱发部署时重生、`latest` 或跳过制品门。
 - 受限单机只能按清单回收未运行旧容器和未使用镜像；Buildah external working container 仅在 `storage`、`PID=0`、名称与最小年龄全部命中时可回收。必须保留恢复容器与所有 volume，并在镜像传输前重新证明真实可用空间。
@@ -99,6 +100,15 @@
 - THEN final acceptance 重新远程回读 `ProdReleasedFact`，只在其 `CandidateMaterialManifest`/factory digest、source、config/contract、全部 stage、SLO、alerts、health、credentials、approval 均完整复验后返回完整验收 claims。
 - THEN forged self-hash、stale soak、missing credential、unapproved、candidate drift、released-fact drift 与 local synthetic receipt 全部 fail-closed。
 
+<a id="gwt-005"></a>
+### GWT-005 exact dev candidate rehearsal 不可提升且不污染正式链
+
+- GIVEN integration 工作树干净、HEAD 等于本地 `refs/heads/dev1.0`，候选由 canonical prod-hosted 打包入口生成，`prod-hosted` 平面账号与 rootless user systemd 可用。
+- WHEN 以该候选执行 `prevalidate` rehearsal 并在隔离数据栈导入 canonical immutable content release。
+- THEN 候选来源、架构与 content digest 任一不一致均在远端传输前 `GATE_BLOCK`，legacy snapshot reader 与 rehearsal 输入互斥且不能相互替代。
+- THEN 报告分轴给出 container runtime、Provider readiness 与 release eligibility，`releaseEligibility` 恒为 `GATE_BLOCK`、`nonPromotable=true`，零 ledger、receipt、qualification、admission、tag/stage 或 `ProdReleasedFact` 写入。
+- THEN legal-static 占位、宿主共享 edge TLS 承接与隔离数据栈的 release readback 都被显式标记为 rehearsal 诊断，任何正式发布资格判定不得读取它们。
+
 ## 6. 依赖
 
 - 前置要求：[`commercial-readiness-risk-closure`](../spec.md) 的范围、要求与 SIT。
@@ -133,3 +143,13 @@
 - 准出影响：`block`
 - 影响或价值：仓库无法证明 GitHub `production` environment 的 required reviewers，也无法创建 `PROD_ALERTMANAGER_URL` 与 `PROD_{EDGE,SERVICE}_SSH_KEY_{REFERENCE,PUBLIC_DIGEST,ISSUER,EXPIRES_AT}` variables；缺任一值时 producer 必须 `GATE_BLOCK`。
 - 完成判定：仓外管理员配置并审计上述 protection/variables，真实 `prod_soak_acceptance` job 产出 hosted exact-byte readback，且 `GWT-004` user_acceptance 证据有效。
+
+<a id="open-004"></a>
+### OPEN-004 exact dev candidate rehearsal 的非提升边界尚无直接证据
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：`REQ-003` 已把 integration exact dev candidate 列为第二类不可提升 rehearsal 物料，但当前 prevalidation 执行器只接受 reviewed main 的 GHCR frozen snapshot，隔离数据栈也没有 canonical release import 的 rehearsal 诊断路径；rehearsal 与 legacy reader 的互斥、非准出标记与零正式写入尚无实现或直接测试。
+- 完成判定：`GWT-005` 的 `t1`、`t2`、`t3` 分别由 current `local_contract` 直接绑定并通过，且真实 `prod-hosted` rehearsal 报告的 `releaseEligibility` 为 `GATE_BLOCK`。
+- 依赖：[`deliver-deploy-prod-pipeline` OPEN-010](../../../runtime/deliver-deploy-prod-pipeline/spec.md#open-010) 的实现增量。

@@ -236,6 +236,30 @@ def _require_external_deployment_root(output_root: Path) -> None:
     )
 
 
+def _is_rehearsal_candidate_package(package_dir: Path, *, release_id: str) -> bool:
+    """服务包所属候选是否为 local-build rehearsal 候选（oci-images.json 为唯一判据）。"""
+
+    from quwoquan_ops.cli.lib.deployment_candidate_manifest import (
+        prod_hosted_rehearsal as rehearsal,
+    )
+
+    candidate_root = package_dir.resolve().parents[2]
+    oci_path = candidate_root / "packages" / "runtime-shared" / "oci-images.json"
+    manifest_path = candidate_root / "manifest.json"
+    if oci_path.is_symlink() or not oci_path.is_file() or not manifest_path.is_file():
+        return False
+    try:
+        oci = json.loads(oci_path.read_text(encoding="utf-8"))
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        return False
+    return (
+        rehearsal.is_rehearsal_oci_manifest(oci)
+        and isinstance(manifest, dict)
+        and manifest.get("baselineId") == release_id
+    )
+
+
 def _verified_package_config(
     package_dir: Path,
     *,
@@ -263,6 +287,10 @@ def _verified_package_config(
         raise SystemExit(f"FAIL: package CONFIG_VERSION differs from effective config: {report_path}")
     release_evidence = provenance.get("releaseEvidence")
     if not isinstance(release_evidence, dict):
+        if _is_rehearsal_candidate_package(package_dir, release_id=release_id):
+            # DEC-013：rehearsal 候选没有 GHCR release evidence；配置身份已由候选
+            # oci-images.json 的 configurationDigest 与 provenance digest 双向绑定。
+            return config_path
         raise SystemExit(f"FAIL: package release evidence provenance missing: {report_path}")
     if release_evidence.get("candidateId") != release_id:
         raise SystemExit(f"FAIL: package candidate ID mismatch: {report_path}")

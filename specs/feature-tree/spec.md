@@ -123,9 +123,9 @@
 - 每条 Journey 至少跨两个真实业务对象，并验证权限、错误恢复、幂等、副作用、投影收敛和推荐/运营回流。
 - 所有页面通过 light/dark、多屏、无障碍、语义 token、性能、弱网和 capability 降级检查。
 - alpha/beta/gamma/prod 均使用同一个 production Remote composition。Alpha/Beta/Gamma test-live 允许在无 active content release 时编译启动并只呈现 canonical `no_active_release`/typed unavailable，不注入 Mock、fixture 或 seed。凡宣称内容、Creator、实体或发布媒体可用的验收仍必须来自 canonical immutable release。Prod 只接受 immutable release、真实用户或正式运营行为。
-- 环境名不再隐含内容分发成熟度；acquisition、semantic、review 与 canonical pool 不读取全局 `productLifecycleState/releaseClass`。两字段只由显式 immutable release selection 冻结，并由 release header、activation receipt 与 App readback 同源声明。
-- `research` 可在内部四环境消费权利尚未验证但可合法取得的素材，前提是身份白名单、匿名访问关闭、私有短签媒体、禁止分享/导出/索引与审计日志全部有证据。
-- `commercial` 只接受逐资产商业分发授权闭合的独立新 release。
+- 内容分发不再区分 `research` 与 `commercial` 两类 release：四环境统一消费同一类 canonical immutable release，环境名不隐含任何内容成熟度，acquisition、semantic、review 与 canonical pool 不读取任何全局 lifecycle/class 字段。
+- 内容访问控制只由白名单灰度 cohort 表达：release 只对当前 cohort 开放，首批 cohort 是内部白名单账号，cohort 由 User 领域的白名单身份拥有并可逐批扩大直至公开；未进入 cohort 的账号与匿名访问只得到 canonical `no_active_release`/typed unavailable。cohort 未全量公开前，匿名媒体关闭、私有短签媒体、禁止分享/导出/索引与访问审计保持有效；资产的商业分发授权仍按逐资产 `rightsStatus/distributionDecision` 在 release 构建期裁决，不再以 release 分类表达。
+- release header、activation receipt 与 App readback 同源声明同一 release 的 `releaseId/manifestDigest` 与当前 cohort 策略；历史 `releaseClass/productLifecycleState` 字段、环境级 `researchContentIsolation` 声明与按环境名读取 lifecycle 的消费者全部退役，退役进度由 `OPEN-015` 跟踪。
 - Alpha/Beta/Gamma required 验收绑定受管非生产租户的非内存 Provider，Prod 完成正式 Provider、实时 SLO、灰度和回滚验证；任何环境 App 均不含 seed/Mock/Memory/Noop 或运行时数据源切换。
 - local_contract、api_integration、user_acceptance 均有真实断言和 CaseResult；禁止路径存在、动态 skip 或 Memory 假集成充当证据。
 
@@ -745,7 +745,7 @@
 - THEN 每条 Journey 至少跨两个真实业务对象，并验证权限、错误恢复、幂等、副作用、投影收敛和推荐/运营回流。
 - THEN 所有页面通过 light/dark、多屏、无障碍、语义 token、性能、弱网和 capability 降级检查。
 - THEN alpha/beta/gamma/prod 均使用同一个 production Remote composition，内容、Creator、实体与发布媒体只来自对应环境已激活的 canonical immutable release。
-- AND 环境名与 `productLifecycleState` 解耦；research release 只对受白名单保护的内部 App 开放，commercial release 不得复用 research receipt，App readback 必须回传同一 release 的 `releaseClass/productLifecycleState/releaseId/manifestDigest`。
+- AND 环境名不隐含内容成熟度；release 只对白名单灰度 cohort 开放，未入 cohort 的账号与匿名访问只得到 canonical `no_active_release`/typed unavailable，App readback 必须回传同一 release 的 `releaseId/manifestDigest` 与当前 cohort 策略。
 - AND 用户、评论、圈子、会话与消息只经所属领域公开 command/event 生效，Alpha/Beta/Gamma 验收数据绑定候选并可受控清理，Prod 不创建测试业务对象。
 - AND Alpha/Beta/Gamma required 验收绑定受管非生产租户的非内存 Provider，Prod 完成正式 Provider、实时 SLO、灰度和回滚验证；任何环境 App 均不含 seed/Mock/Memory/Noop 或运行时数据源切换。
 - THEN local_contract、api_integration、user_acceptance 均有真实断言和 CaseResult；禁止路径存在、动态 skip 或 Memory 假集成充当证据。
@@ -955,3 +955,13 @@
 - 影响或价值：当前各 Journey 的局部源码、测试与历史回执分属不同 source、candidate、package、环境轮次和设备层，尚无一份 create-once ResultBundle 能证明当前全部跨对象 Journey 同轮成立。Simulator/Emulator 可证明的功能子集也不能替代双真实账号、双物理设备和正式 Provider 单元。
 - 完成判定：[`UAT-009`](#uat-009) 的全部结果子句由同一 `sourceRevision + sourceTreeDigest + releaseTrainId`、同一 Android/iOS `packageDigests` 集合和同一 release identity 的 ResultBundle 逐项直接 `spec_ref`。Alpha/Beta/Gamma 的 target package 独立，逐 target 的全部子结果必须与 `runtimeBindings[target].candidateDigest` 及 `launchBindings[target].candidatePackageDigest/runtimeConfigPackageDigest` 完全一致，不要求跨 target 摘要相等。其中 `UAT-001/UAT-003/UAT-007/UAT-010/UAT-014` 不得跨轮或复用旧 receipt 拼接，物理设备与真实 Provider 单元只能由 Android 物理设备和 iPhone 的当前 ResultBundle 机器回执关闭。
 - 依赖：各 AppRoot Journey 的最低节点 block OPEN、runtime 候选/启动矩阵、双真实账号与双物理设备，以及目标环境正式 Provider/rollout 授权。
+
+<a id="open-015"></a>
+### OPEN-015 research/commercial 分类退役为白名单灰度 cohort 单轨
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：`REQ-009` 已把内容访问控制收敛为"四环境统一 release + 白名单灰度 cohort"，但尚缺对应实现与验收证据：四份 `quwoquan_ops/environments/<env>/runtime.yaml` 顶层仍保留环境级 `productLifecycleState/researchContentIsolation` 声明并被 `research_content_isolation.py`、`research_isolation_policy.py` 按环境名强制；Data release attestation 与 candidate release binding 仍以 `releaseClass/productLifecycleState` 分类；App 启动契约把 readiness 相位写死为 `research`；user-service 的白名单身份仍以 `research_identity` 命名且 prod 环境未启用，导致 prod 上任何账号都无法进入首批 cohort。分类字段在 Data、Ops、Service 与 App 四侧交叉引用，尚无一次切完而不打断 Gamma/Prod 验证的实现路径。
+- 完成判定：[`UAT-009`](#uat-009) 第 6 条结果子句由 current `api_integration`/`user_acceptance` 直接 `spec_ref`——prod 与 gamma 上首批 cohort 账号能读取当前 release，非 cohort 账号与匿名访问只得到 canonical `no_active_release`/typed unavailable，且 App readback 不再回传 `releaseClass/productLifecycleState`；同时四份 `runtime.yaml` 不再声明环境级 lifecycle/isolation 块，两个按环境名读取 lifecycle 的消费者已删除。
+- 依赖：User 领域把白名单身份从 `research_identity` 收敛为 cohort 身份并在 prod 启用；Data 领域退役 attestation `releaseClass`；App 启动契约退役 `readinessPhase=research`；platform-ops-governance 删除环境级声明与消费者。分批顺序固定为先在 prod 启用白名单身份并导入当前 release，再退役 Data/App/Ops 字段。

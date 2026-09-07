@@ -174,14 +174,18 @@ def _prod_prevalidation_executor(
     image_transport_tag: str,
     candidate_digest: str,
     dry_run: bool,
+    material_source: str = "factory",
 ) -> tuple[subprocess.CompletedProcess[str], dict[str, Any]]:
     import quwoquan_ops.cli.stackctl as _stackctl
 
+    if material_source == "local-build":
+        source_argv = ["--exact-candidate", candidate_digest]
+    else:
+        source_argv = ["--frozen-diagnostic-snapshot", str(manifest_path)]
     argv = [
         "python3",
         "quwoquan_ops/cli/prod/prevalidate_prod_hosted.py",
-        "--frozen-diagnostic-snapshot",
-        str(manifest_path),
+        *source_argv,
         "--image-transport-tag",
         image_transport_tag,
         "--candidate-digest",
@@ -298,6 +302,8 @@ def _command_prod_prevalidate(args: argparse.Namespace) -> dict[str, Any]:
     manifest_value = str(
         getattr(args, "frozen_diagnostic_snapshot", "") or ""
     ).strip()
+    exact_candidate_value = str(getattr(args, "exact_candidate", "") or "").strip()
+    material_source = "local-build" if exact_candidate_value else "factory"
     manifest_path = (
         Path(manifest_value).expanduser().resolve()
         if manifest_value and not manifest_value.startswith("oci://")
@@ -307,8 +313,27 @@ def _command_prod_prevalidate(args: argparse.Namespace) -> dict[str, Any]:
     manifest_payload: dict[str, Any] = {}
     image_transport_tag = "unresolved"
     candidate_digest = "unresolved"
-    if not manifest_value:
-        request_issues.append("immutable Service Pipeline --frozen-diagnostic-snapshot is required")
+    if manifest_value and exact_candidate_value:
+        # DEC-013：两类不可提升输入互斥，不存在从 rehearsal 到 snapshot 的转换面。
+        request_issues.append(
+            "prevalidate accepts either --frozen-diagnostic-snapshot or --exact-candidate, not both"
+        )
+    elif exact_candidate_value:
+        try:
+            (
+                manifest_path,
+                artifact_digest,
+                manifest_payload,
+                image_transport_tag,
+                candidate_digest,
+            ) = _stackctl._exact_candidate_rehearsal_inputs(exact_candidate_value)
+        except RuntimeError as error:
+            request_issues.append(str(error))
+    elif not manifest_value:
+        request_issues.append(
+            "prevalidate requires an immutable Service Pipeline --frozen-diagnostic-snapshot "
+            "or an integration exact dev candidate via --exact-candidate"
+        )
     else:
         try:
             (
@@ -329,6 +354,7 @@ def _command_prod_prevalidate(args: argparse.Namespace) -> dict[str, Any]:
             manifest_path=manifest_path,
             image_transport_tag=image_transport_tag,
             candidate_digest=candidate_digest,
+            material_source=material_source,
             dry_run=True,
         )
         host_issues = (
@@ -346,25 +372,35 @@ def _command_prod_prevalidate(args: argparse.Namespace) -> dict[str, Any]:
     dry_run = str(getattr(args, "dry_run", "false")).strip().lower() == "true"
     exit_code = 2 if request_issues else 0
     if not request_issues:
-        package_result = _stackctl.run(
-            [
-                "python3",
-                "quwoquan_ops/cli/stackctl.py",
-                "package",
-                "--env",
-                "prod",
-                "--target",
-                "prod-hosted",
-                "--include-services",
-            ],
-            env={"QWQ_PROD_RELEASE_ARTIFACT_ROOT": str(manifest_path.parent)},
-        )
-        package_step = {
-            "exitCode": package_result.returncode,
-            "stdout": package_result.stdout,
-            "stderr": package_result.stderr,
-        }
-        if package_result.returncode != 0:
+        if material_source == "local-build":
+            # rehearsal 候选已由 canonical package 入口生成并通过来源门；不在 deploy 期重打包。
+            package_step = {
+                "exitCode": 0,
+                "stdout": "",
+                "stderr": "",
+                "skipped": "exact-candidate rehearsal consumes the sealed local-build candidate",
+            }
+            package_result = None
+        else:
+            package_result = _stackctl.run(
+                [
+                    "python3",
+                    "quwoquan_ops/cli/stackctl.py",
+                    "package",
+                    "--env",
+                    "prod",
+                    "--target",
+                    "prod-hosted",
+                    "--include-services",
+                ],
+                env={"QWQ_PROD_RELEASE_ARTIFACT_ROOT": str(manifest_path.parent)},
+            )
+            package_step = {
+                "exitCode": package_result.returncode,
+                "stdout": package_result.stdout,
+                "stderr": package_result.stderr,
+            }
+        if package_result is not None and package_result.returncode != 0:
             exit_code = package_result.returncode or 2
             request_issues.append(
                 package_result.stderr.strip()
@@ -381,6 +417,7 @@ def _command_prod_prevalidate(args: argparse.Namespace) -> dict[str, Any]:
                 manifest_path=manifest_path,
                 image_transport_tag=image_transport_tag,
                 candidate_digest=candidate_digest,
+                material_source=material_source,
                 dry_run=False,
             )
             executor_step = {
@@ -431,12 +468,30 @@ def _command_prod_prevalidate(args: argparse.Namespace) -> dict[str, Any]:
         "dataMode": str(args.data_mode),
         "scope": str(args.prevalidate_scope),
         "dryRun": dry_run,
+        "materialSource": material_source,
         "releaseEvidence": {
-            "path": str(manifest_path) if manifest_value else "",
+            "path": str(manifest_path) if (manifest_value or exact_candidate_value) else "",
             "artifactDigest": artifact_digest,
-            "candidateId": manifest_payload.get("candidateId") or "",
+            "candidateId": (
+                candidate_digest
+                if material_source == "local-build" and candidate_digest != "unresolved"
+                else manifest_payload.get("candidateId") or ""
+            ),
             "source": manifest_payload.get("source") or {},
         },
+        # SIT-003 t4：rehearsal 的 legal 占位与宿主共享 edge TLS 承接都只是诊断标记，
+        # 不进入任何 DNS/TLS、法务或发布资格判定。
+        "rehearsal": (
+            {
+                "nonPromotable": True,
+                "legalStaticPlaceholder": bool(manifest_payload.get("legalStaticPlaceholder")),
+                "publicEntry": manifest_payload.get("publicEntry") or "",
+                "platform": manifest_payload.get("platform") or "",
+                "evidenceClass": "rehearsal-diagnostic",
+            }
+            if material_source == "local-build"
+            else None
+        ),
         "hostPreflight": host_payload.get("hostPreflight") or {},
         "containerDeployment": deployment_payload,
         "providerReadiness": provider_readiness,
@@ -860,6 +915,15 @@ def register_parser(subparsers: "argparse._SubParsersAction") -> None:
         default="",
         help=(
             "仅 prevalidate 可消费的 frozen diagnostic-only Service 快照；不可进入 formal Prod rollout"
+        ),
+    )
+    deploy_parser.add_argument(
+        "--exact-candidate",
+        default="",
+        help=(
+            "仅 prevalidate 可消费的 integration exact dev candidate（本机 local-build "
+            "linux/amd64 rehearsal 物料）的 sha256 digest；与 --frozen-diagnostic-snapshot 互斥，"
+            "不可进入 formal Prod rollout"
         ),
     )
     deploy_parser.add_argument(

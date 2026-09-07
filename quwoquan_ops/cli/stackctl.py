@@ -630,7 +630,7 @@ from quwoquan_ops.cli.commands.deploy_prod_finalize import _deploy_prod_hosted_f
 from quwoquan_ops.cli.commands.deploy_release_inputs import (
     _decision_from_slo_output, _emit_prod_rollout_canary_traffic,
     _load_prod_activation_admission, _materialize_frozen_diagnostic_snapshot,
-    _frozen_diagnostic_snapshot,
+    _frozen_diagnostic_snapshot, _exact_candidate_rehearsal_inputs,
     _prod_rollout_contract, _prod_rollout_workloads, _prometheus_query_value, _read_prometheus_slo,
     _read_recommendation_slo, _release_transport_tag, _resolve_prod_rollout_stage,
     _slo_settle_seconds, _verify_release_registry_attestations,

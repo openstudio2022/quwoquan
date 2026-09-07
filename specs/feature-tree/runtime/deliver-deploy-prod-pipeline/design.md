@@ -187,6 +187,20 @@
 - 影响 Story：[`local-gamma-mirror`](./local-gamma-mirror/spec.md)、[`service-core-composition`](./service-core-composition/spec.md)、[`multi-environment-wave-deployment`](./multi-environment-wave-deployment/spec.md)
 - 关联验收：`SIT-002`
 
+<a id="dec-013"></a>
+### DEC-013 exact dev candidate rehearsal 是 prevalidate 的第二类不可提升输入，与 legacy snapshot 互斥且零正式写入
+- 对象与 owner：rehearsal 候选就是 `stackctl package --env prod --target prod-hosted` 在 integration 工作树生成的 runtime-full candidate（owner：deployment control plane），其 manifest 额外声明 `materialSource=local-build`、`nonPromotable=true`、`legalStaticPlaceholder`；镜像 owner 集合与 prod 运行时镜像 owner 完全一致，每个镜像只以本机 buildx `linux/amd64` 构建一次并以 content digest 绑定进候选。legacy frozen diagnostic snapshot 与 rehearsal 候选是 `deploy --mode prevalidate` 的两个互斥输入，不存在从 rehearsal 到 formal、或从 rehearsal 到 snapshot 的转换面。
+- Command/query 分流：写侧只有 `deploy --mode prevalidate --exact-candidate <digest>`，它在任何远端传输前按顺序校验：工作树干净、HEAD 等于候选 `sourceRevision`、候选等于本地 `refs/heads/dev1.0` head、候选目录位于 prod-hosted candidates 根、每个镜像本地存在且架构为 `amd64`、content digest 与候选一致；随后复用 render → local image delivery（`docker save | podman load` 并按远端 digest 读回）→ sync → user systemd → inspect 的既有 prevalidation 执行器。读侧只有 `inspect/doctor --deployment-instance prevalidate` 与 rehearsal 报告；formal rollout、`--frozen-diagnostic-snapshot`、tag/admission/ledger 路径对 `materialSource=local-build` 候选一律拒绝。
+- 一致性与幂等：同一候选重复 rehearsal 只重放同一 digest；候选 digest 排除 legal 占位标记与宿主 edge 事实，因此占位状态变化不伪造新候选。隔离数据栈对 canonical immutable release 的 hosted-import/activation 只写 rehearsal 诊断，不写任何 release evidence、EAF 或 admission。
+- 失败与恢复：来源/架构/digest 任一不一致返回 typed `GATE_BLOCK` 且零远端 mutation；远端交付或 unit 未 ready 时保留 prevalidation 现有失败语义与 stale runtime 回收白名单，不引入新的 repair 动作。回滚就是用上一 rehearsal 候选重放同一命令。
+- 观测与非准出标记：报告分轴 `containerDeployment` / `providerReadiness` / `releaseEligibility`，后者恒 `GATE_BLOCK`；`legalStaticPlaceholder=true` 与 `publicEntry=host-shared-edge` 必须出现在候选 manifest 与报告中，供 verify/doctor 显式排除出 DNS/TLS、法务与发布资格判定。
+- 测试 seam：local contract 覆盖 dirty tree、HEAD 漂移、非 dev1.0 head、arm64 镜像、digest 漂移、rehearsal 候选被 formal/snapshot 路径消费、legal 占位在 prevalidate 降级而在 formal 仍阻断、报告分轴与标记字段；真实单机 rehearsal 回执关闭 [`OPEN-010`](./spec.md#open-010)。
+- 理由：现有 prevalidation 执行器已经具备平面隔离、rootless、digest 读回与非提升报告，缺的只是「候选来源」这一输入面；把 exact dev candidate 作为第二类不可提升输入，既能让当前候选在正式链前置（stable tag、GHCR、approval、多 member）齐备前上真实单机做端到端内部验证，又不给正式链增加任何 authority。
+- 被否决方案：放宽 `_frozen_diagnostic_snapshot` 的 main 祖先校验（会让未评审源码进入正式 snapshot 语义）；在宿主用 root docker 手工 compose（第二执行面）；为 rehearsal 新建 fact schema（rehearsal 不是 authority，报告即足够）；把 rehearsal 候选直接送入 canary（违反 REQ-001）。
+- 关联要求：[`REQ-003`](./spec.md#req-003)、[`zero-risk-production-readiness` REQ-003](../../platform-ops-governance/commercial-readiness-risk-closure/zero-risk-production-readiness/spec.md#req-003)
+- 影响 Story：[`gray-release-to-prod`](./gray-release-to-prod/spec.md)、[`local-gamma-mirror`](./local-gamma-mirror/spec.md)
+- 关联验收：[`SIT-003`](./spec.md#sit-003)、[`zero-risk-production-readiness` GWT-005](../../platform-ops-governance/commercial-readiness-risk-closure/zero-risk-production-readiness/spec.md#gwt-005)
+
 ## 5. 失败与恢复
 
 - 失败类型：分支 policy 无效、PR/ref 非法、`main` direct push、integration push 缺 before/after OID或 ancestry authority、integration/backsync 非 fast-forward、force/delete、ref compare-and-swap 冲突、Prod source 不可达 main、权限拒绝、依赖超时、候选摘要冲突、证据缺失或持久化失败。

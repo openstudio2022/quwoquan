@@ -11,6 +11,8 @@
 - ``log_sink_package``：observability log-sink（Elasticsearch）package。
 - ``provider_binding_overlay``：单环境 Provider Go source overlay 物化与校验。
 - ``provider_runtime_package``：Provider runtime package 物化/封版/校验。
+- ``prod_hosted_rehearsal``：prod-hosted exact dev candidate rehearsal 物料的
+  来源门、本地 amd64 镜像 digest 校验与非提升标记（DEC-013）。
 - ``manifest``：candidate manifest 写入、加载与全量校验。
 
 测试通过 ``mock.patch.object(本包, "<符号>")`` 拦截内部依赖，因此子模块对这些
@@ -126,6 +128,16 @@ from .provider_runtime_package import (  # noqa: F401
     provider_runtime_image_environment_key,
     seal_provider_runtime_package_images,
     validate_packaged_provider_runtime,
+)
+from .prod_hosted_rehearsal import (  # noqa: F401
+    REHEARSAL_MATERIAL_SOURCE,
+    REHEARSAL_PLATFORM,
+    RehearsalError,
+    compose_service_image_owner,
+    is_rehearsal_oci_manifest,
+    rehearsal_candidate_source_gate,
+    validate_rehearsal_oci_manifest,
+    verify_local_rehearsal_images,
 )
 from .manifest import (  # noqa: F401
     _validate_candidate_app_runtime_binding,

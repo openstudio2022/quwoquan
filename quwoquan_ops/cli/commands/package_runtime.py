@@ -289,14 +289,34 @@ def _command_package_unlocked(
             **timing,
         }
 
+    rehearsal_material = (
+        str(getattr(args, "material_source", "factory") or "factory") == "local-build"
+    )
+    if rehearsal_material and (env_name, target_name) != ("prod", "prod-hosted"):
+        timing = _stackctl._finish_timing(started_monotonic, started_at)
+        return {
+            "exitCode": 2,
+            "summary": f"stackctl package material source blocked for {env_name}",
+            "details": [
+                "--material-source local-build is only valid for --env prod --target prod-hosted rehearsal"
+            ],
+            "reportDir": _stackctl.relpath(report_dir),
+            **timing,
+        }
+    legal_static_placeholder = False
     if not args.service:
+        legal_environment = dict(package_environment)
+        if rehearsal_material:
+            # rehearsal 只做内部验证：法务占位字段记入候选，不阻断打包，也不构成证据。
+            legal_environment["QWQ_LEGAL_STATIC_PLACEHOLDER_POLICY"] = "mark"
         legal_result, legal_payload = _stackctl._legal_static_command(
             "package",
             env_name,
             target=target_name,
             source_root=package_source_root,
-            environment=package_environment,
+            environment=legal_environment,
         )
+        legal_static_placeholder = bool(legal_payload.get("placeholderFields"))
         reports.append(
             _receipt_safe_step({
                 "name": "legal-static-package",
@@ -710,6 +730,63 @@ def _command_package_unlocked(
                 f"OCI image manifest ready: {_stackctl.relpath(image_manifest_path)}",
                 f"buildInputDigest: {image_manifest['buildInputDigest']}",
                 f"imageDigest: {image_manifest['imageDigest']}",
+            ]
+        )
+    elif (
+        bool(args.include_services)
+        and not args.service
+        and target_name == "prod-hosted"
+        and rehearsal_material
+    ):
+        if (
+            provider_runtime_package is None
+            or provider_binding_overlay_package is None
+            or package_snapshot is None
+        ):
+            raise RuntimeError("prod-hosted rehearsal package inputs were not materialized")
+        try:
+            image_manifest_path, image_manifest = (
+                manifest._rehearsal.materialize_prod_hosted_rehearsal_oci_manifest(
+                    env_name,
+                    target_name,
+                    report_dir=report_dir,
+                    provider_runtime=provider_runtime_package,
+                    provider_binding_overlay=provider_binding_overlay_package,
+                    candidate_root=shared_package_dir.parent.parent,
+                    package_snapshot=package_snapshot,
+                    legal_static_placeholder=legal_static_placeholder,
+                    source_root=package_source_root,
+                )
+            )
+        except (OSError, RuntimeError, TypeError, ValueError) as exc:
+            timing = _stackctl._finish_timing(started_monotonic, started_at)
+            detail = _receipt_safe_text(str(exc))
+            _stackctl.write_json(
+                report_dir / "report.json",
+                {
+                    "status": "GATE_BLOCK",
+                    "command": "package",
+                    "env": env_name,
+                    "target": target_name,
+                    "details": [detail],
+                    "steps": reports,
+                    **timing,
+                },
+            )
+            return {
+                "exitCode": 2,
+                "summary": f"stackctl package rehearsal OCI build blocked for {env_name}",
+                "details": [detail],
+                "reportDir": _stackctl.relpath(report_dir),
+                **timing,
+            }
+        details.extend(
+            [
+                "rehearsal OCI image manifest ready (nonPromotable, local-build linux/amd64): "
+                + _stackctl.relpath(image_manifest_path),
+                f"buildInputDigest: {image_manifest['buildInputDigest']}",
+                f"imageDigest: {image_manifest['imageDigest']}",
+                f"legalStaticPlaceholder: {image_manifest['legalStaticPlaceholder']}",
             ]
         )
     elif (
