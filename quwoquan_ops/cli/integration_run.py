@@ -229,12 +229,21 @@ def _apply_data_release(*, environment: str, run_id: str, args: argparse.Namespa
                         previous_readiness: Path | None) -> Path:
     """candidate release：apply --import --full-sync → verify（research/commercial 按 attestation）；返回 readiness 回执。"""
 
-    release_id, release_class = _release_id(args.release_attestation)
-    import_run, verify_run = f"{run_id}-import", f"{run_id}-verify"
-    _data_ship("apply", "--release-id", release_id, "--env", environment, "--run-id", import_run,
+    release_id, _release_class = _release_id(args.release_attestation)
+    handoff_ref = str(args.release_handoff_ref or "").strip()
+    if not handoff_ref:
+        raise IntegrationRunError(
+            "INTEGRATION_RUN.DATA_RELEASE_HANDOFF_REQUIRED",
+            "qwq-data ship 只接受 authoritative handoff-ref-v1 admission；请传 --release-handoff-ref（content-release Review handoff 的输出）",
+        )
+    import_run, activate_run, verify_run = f"{run_id}-import", f"{run_id}-activate", f"{run_id}-verify"
+    # Data ship 现为 stage-only apply → owner CAS activate → 公开消费 verify 三步；readiness 相位只剩 production。
+    _data_ship("apply", "--handoff-ref", handoff_ref, "--env", environment, "--run-id", import_run,
                "--import", "--full-sync", log_dir=log_dir, label=f"{environment}-apply")
-    verify_args = ["verify", "--release-id", release_id, "--env", environment, "--import-run-id", import_run,
-                   "--run-id", verify_run, "--readiness-phase", release_class]
+    _data_ship("activate", "--handoff-ref", handoff_ref, "--env", environment, "--import-run-id", import_run,
+               "--run-id", activate_run, log_dir=log_dir, label=f"{environment}-activate")
+    verify_args = ["verify", "--handoff-ref", handoff_ref, "--env", environment, "--import-run-id", import_run,
+                   "--run-id", verify_run, "--readiness-phase", "production"]
     if previous_readiness is not None:
         verify_args.extend(["--previous-environment-readiness", _output_ref(previous_readiness)])
     _data_ship(*verify_args, log_dir=log_dir, label=f"{environment}-verify")
@@ -592,6 +601,8 @@ def _parser() -> argparse.ArgumentParser:
                         help="fast=exact delta 静态+聚焦（deferred 允许，L2 在 Gamma 前补齐）；scope 需 Review consolidation 输入")
     parser.add_argument("--release-attestation", type=Path, required=True)
     parser.add_argument("--rollback-release-attestation", type=Path, required=True)
+    parser.add_argument("--release-handoff-ref", default="",
+                        help="candidate release 的 authoritative handoff-ref-v1（content-release Review handoff 输出）；ship apply/activate/verify 唯一 admission")
     parser.add_argument("--workload", default="full", choices=("content-release", "content-commercial", "full"))
     parser.add_argument("--profile", default="integration", choices=("smoke", "integration"))
     parser.add_argument("--signer-identity", default=DEFAULT_SIGNER)
