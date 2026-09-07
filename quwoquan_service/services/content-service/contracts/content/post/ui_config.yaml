@@ -39,19 +39,6 @@ home_channels:
   mood_copy_key: home_mood_recommend
   order: 1
   runtime_overridable: true
-- id: featured
-  label_key: home_tab_featured
-  template: premium_immersive
-  layout_template: immersivePremiumStream
-  phone_columns: 1
-  supports_full_span_modules: true
-  intersection_module_policy: inlineOnly
-  content_card_policy: premiumImmersive
-  feed_query:
-    channel: premium
-  mood_copy_key: home_mood_recommend
-  order: 2
-  runtime_overridable: true
 - id: campus
   label_key: home_tab_campus
   template: single_column_multiform
@@ -63,7 +50,7 @@ home_channels:
   feed_query:
     channel: campus
   mood_copy_key: home_mood_campus
-  order: 3
+  order: 2
   runtime_overridable: true
 - id: travel
   label_key: home_tab_travel
@@ -71,15 +58,13 @@ home_channels:
   layout_template: singleColumnMultiForm
   phone_columns: 1
   supports_full_span_modules: false
-  # 旅游是首批上线垂类，也是交集事实供给最密的频道（同地到访 / 同期出行 /
-  # 同兴趣地点），因此 spotlight 横滑模块只在这里开：其他频道保持 inlineOnly，
-  # 由卡片内联句承载。runtime_overridable 为 true，供给不足时可远程回退到 inlineOnly。
-  intersection_module_policy: spotlightSegment
+  # 交集只随内容卡自然出现，避免顶部 spotlight 与卡内主句形成双模块。
+  intersection_module_policy: inlineOnly
   content_card_policy: richMultiForm
   feed_query:
     channel: travel
   mood_copy_key: home_mood_travel
-  order: 4
+  order: 3
   runtime_overridable: true
 - id: photography
   label_key: home_tab_photography
@@ -92,7 +77,7 @@ home_channels:
   feed_query:
     channel: photography
   mood_copy_key: home_mood_photography
-  order: 5
+  order: 4
   runtime_overridable: true
 - id: tech
   label_key: home_tab_tech
@@ -105,7 +90,7 @@ home_channels:
   feed_query:
     channel: tech
   mood_copy_key: home_mood_tech
-  order: 6
+  order: 5
   runtime_overridable: true
 - id: car
   label_key: home_tab_car
@@ -118,7 +103,7 @@ home_channels:
   feed_query:
     channel: car
   mood_copy_key: home_mood_car
-  order: 7
+  order: 6
   runtime_overridable: true
 feed_request_type_by_category:
   recommended: micro

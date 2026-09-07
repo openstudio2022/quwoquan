@@ -1,3 +1,4 @@
+// spec_ref: specs/feature-tree/object-homepage-network/intersection-unified-experience/spec.md#sit-004.t3
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:quwoquan_app/service/content_service/content/content_behavior_fact/adapters/content_behavior_event_codec.dart';
@@ -168,36 +169,106 @@ void main() {
     },
   );
 
-  group('交集负反馈归因（F 推荐差异化 · UAT-7）', () {
-    test(
-      '合法 feedbackKind：上报 intersection_feedback 携带 subjectId + feedbackKind + 漏斗归因',
-      () async {
-        tracker.trackIntersectionFeedback(
-          'u_lin',
-          feedbackKind: 'notInterested',
-          intersectionId: 'ix_rel_a',
-          intersectionDimension: 'relationship',
-          intersectionClass: 'affinity',
-          intersectionSourceRef: 'sharedFollowees',
-        );
-        await tracker.flush();
-
-        expect(repo.recorded, hasLength(1));
-        final event = repo.recorded.single;
-        expect(event.action, BehaviorEventType.intersectionFeedback);
-        expect(event.action.wireName, 'intersection_feedback');
-        final json = event.toDurableStorageJson();
-        // 不绑定 post：subjectId 承载对象。
-        expect(json['subjectId'], 'u_lin');
-        expect(json['feedbackKind'], 'notInterested');
-        expect(json['state'], 'negative');
-        // 与曝光/点击同一漏斗归因键，负反馈可按维度 / kind / 类别下钻。
-        expect(json['intersectionId'], 'ix_rel_a');
-        expect(json['intersectionDimension'], 'relationship');
-        expect(json['intersectionClass'], 'affinity');
-        expect(json['intersectionSourceRef'], 'sharedFollowees');
-      },
+  test('策略身份 cohort 随曝光→点击→展开→转化→负反馈全链原样回传（SIT-004.t3）', () async {
+    const cohort = 'sha256:policy-digest-fixture';
+    tracker.trackImpression(
+      'object_a',
+      intersectionId: 'ix_rel_a',
+      intersectionDimension: 'relationship',
+      intersectionClass: 'fact',
+      intersectionSourceRef: 'sharedFollowees',
+      intersectionCohort: cohort,
     );
+    tracker.trackClick(
+      'object_a',
+      intersectionId: 'ix_rel_a',
+      intersectionDimension: 'relationship',
+      intersectionClass: 'fact',
+      intersectionSourceRef: 'sharedFollowees',
+      intersectionCohort: cohort,
+    );
+    tracker.trackIntersectionExpand(
+      contentId: 'object_a',
+      intersectionId: 'ix_rel_a',
+      intersectionDimension: 'relationship',
+      intersectionClass: 'fact',
+      intersectionSourceRef: 'sharedFollowees',
+      intersectionCohort: cohort,
+    );
+    tracker.trackFollow(
+      'u_lin',
+      intersectionDimension: 'relationship',
+      intersectionSourceRef: 'sharedFollowees',
+      intersectionId: 'ix_rel_a',
+      intersectionCohort: cohort,
+    );
+    tracker.trackIntersectionFeedback(
+      'u_lin',
+      feedbackKind: 'notInterested',
+      intersectionId: 'ix_rel_a',
+      intersectionDimension: 'relationship',
+      intersectionClass: 'fact',
+      intersectionSourceRef: 'sharedFollowees',
+      intersectionCohort: cohort,
+    );
+    // 无交集的普通内容曝光不得凭空携带 cohort。
+    tracker.trackImpression('object_plain');
+    await tracker.flush();
+
+    final byAction = {
+      for (final e in repo.recorded)
+        if (e.contentId != 'object_plain') e.action: e,
+    };
+    for (final action in <BehaviorEventType>[
+      BehaviorEventType.impression,
+      BehaviorEventType.click,
+      BehaviorEventType.intersectionExpand,
+      BehaviorEventType.follow,
+      BehaviorEventType.intersectionFeedback,
+    ]) {
+      final json = byAction[action]!.toDurableStorageJson();
+      expect(json['intersectionCohort'], cohort, reason: '$action 缺少 cohort');
+      expect(
+        json['intersectionId'],
+        'ix_rel_a',
+        reason: '$action 缺少 intersectionId',
+      );
+    }
+    final plain = repo.recorded
+        .where((e) => e.contentId == 'object_plain')
+        .single
+        .toDurableStorageJson();
+    expect(plain.containsKey('intersectionCohort'), isFalse);
+    expect(plain.containsKey('intersectionId'), isFalse);
+  });
+
+  group('交集负反馈归因（F 推荐差异化 · UAT-7）', () {
+    test('合法 feedbackKind：上报 intersection_feedback 携带 subjectId + feedbackKind + 漏斗归因', () async {
+      tracker.trackIntersectionFeedback(
+        'u_lin',
+        feedbackKind: 'notInterested',
+        intersectionId: 'ix_rel_a',
+        intersectionDimension: 'relationship',
+        intersectionClass: 'affinity',
+        intersectionSourceRef: 'sharedFollowees',
+      );
+      await tracker.flush();
+
+      expect(repo.recorded, hasLength(1));
+      final event = repo.recorded.single;
+      expect(event.action, BehaviorEventType.intersectionFeedback);
+      expect(event.action.wireName, 'intersection_feedback');
+      final json = event.toDurableStorageJson();
+      // 不绑定 post：subjectId 承载对象。
+      expect(json['subjectId'], 'u_lin');
+      expect(json['feedbackKind'], 'notInterested');
+      expect(json['state'], 'negative');
+      // 与曝光/点击同一漏斗归因键，负反馈可按维度 / kind / 类别下钻。
+      expect(json['intersectionId'], 'ix_rel_a');
+      expect(json['intersectionDimension'], 'relationship');
+      expect(json['intersectionClass'], 'affinity');
+      expect(json['intersectionSourceRef'], 'sharedFollowees');
+    });
 
     test('端云同源闭集：registry.feedbackKinds 全部可上报', () async {
       for (final kind in intersectionFeedbackKinds) {

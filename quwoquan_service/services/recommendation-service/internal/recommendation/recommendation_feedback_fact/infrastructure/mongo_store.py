@@ -92,9 +92,16 @@ class MongoRecommendationFeedbackFactStore:
         except DuplicateKeyError as error:
             raise RuntimeError("recommendation feedback source event conflict") from error
         existing = self._facts.find_one({"_id": fact.feedback_id})
-        if existing is None or self._document(self._fact(existing)) != document:
+        if existing is None:
+            raise RuntimeError("recommendation feedback fact disappeared after append")
+        persisted = self._fact(existing)
+        persisted_identity = self._document(persisted)
+        persisted_identity.pop("recordedAt")
+        contender_identity = dict(document)
+        contender_identity.pop("recordedAt")
+        if persisted_identity != contender_identity:
             raise RuntimeError("recommendation feedback identity conflicts with another payload")
-        return self._fact(existing), result.upserted_id is not None
+        return persisted, result.upserted_id is not None
 
     def record_failure(self, stream_id: str, event_id: str, error: Exception) -> int:
         now = datetime.now(timezone.utc)

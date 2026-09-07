@@ -17,8 +17,10 @@ func validOccurredAt() string {
 }
 
 type fakeIntersectionFeedbackSink struct {
-	calls []intersectionFeedbackCall
-	err   error
+	calls     []intersectionFeedbackCall
+	exposures []exposureCall
+	clears    []exposureCall
+	err       error
 }
 
 type intersectionFeedbackCall struct {
@@ -30,6 +32,21 @@ type intersectionFeedbackCall struct {
 func (f *fakeIntersectionFeedbackSink) ReportNegativeFeedback(_ context.Context, userID, subjectID, feedbackKind string) error {
 	f.calls = append(f.calls, intersectionFeedbackCall{userID: userID, subjectID: subjectID, feedbackKind: feedbackKind})
 	return f.err
+}
+
+func (f *fakeIntersectionFeedbackSink) ReportExposure(_ context.Context, userID string, intersectionIDs []string) error {
+	f.exposures = append(f.exposures, exposureCall{userID: userID, intersectionIDs: intersectionIDs})
+	return f.err
+}
+
+func (f *fakeIntersectionFeedbackSink) ClearExposure(_ context.Context, userID string, intersectionIDs []string) error {
+	f.clears = append(f.clears, exposureCall{userID: userID, intersectionIDs: intersectionIDs})
+	return f.err
+}
+
+type exposureCall struct {
+	userID          string
+	intersectionIDs []string
 }
 
 type fakeSignalProcessor struct {
@@ -87,6 +104,70 @@ func TestProcessBatchRoutesIntersectionFeedbackToSink(t *testing.T) {
 	got := sink.calls[0]
 	if got.userID != "user-300" || got.subjectID != "subj-1" || got.feedbackKind != "notInterested" {
 		t.Fatalf("unexpected sink call: %+v", got)
+	}
+}
+
+// spec_ref: specs/feature-tree/object-homepage-network/intersection-unified-experience/spec.md#sit-004.t1
+// spec_ref: specs/feature-tree/object-homepage-network/intersection-unified-experience/spec.md#sit-004.t3
+// 曝光→点击→转化→清零全链：真实曝光（impression/impressed + intersectionId）写曝光冷却，
+// 点击 / 展开 / 转化清零；无 intersectionId 的普通内容事件与 visible 弱曝光都不触达冷却集。
+func TestProcessBatchRoutesIntersectionExposureAndClearToSink(t *testing.T) {
+	sink := &fakeIntersectionFeedbackSink{}
+	svc := newFeedbackRoutingService(sink)
+	base := func(id, action string) behavior.BehaviorEventInput {
+		return behavior.BehaviorEventInput{
+			ClientEventID:         id,
+			OccurredAt:            validOccurredAt(),
+			UserID:                "user-310",
+			Action:                action,
+			ContentID:             "post-ix-1",
+			IntersectionID:        "ix-310",
+			IntersectionDimension: "relationship",
+			IntersectionClass:     "fact",
+			IntersectionSourceRef: "sharedFollowees",
+			IntersectionCohort:    "sha256:policy-cohort",
+		}
+	}
+	impressed := base("evt-ix-impressed", "impression")
+	impressed.State = "impressed"
+	visible := base("evt-ix-visible", "impression")
+	visible.State = "visible"
+	plainImpression := behavior.BehaviorEventInput{
+		ClientEventID: "evt-plain-impressed",
+		OccurredAt:    validOccurredAt(),
+		UserID:        "user-310",
+		Action:        "impression",
+		State:         "impressed",
+		ContentID:     "post-plain",
+	}
+	clicked := base("evt-ix-click", "click")
+	expanded := base("evt-ix-expand", "intersection_expand")
+	followed := base("evt-ix-follow", "follow")
+	followed.AuthorID = "author-1"
+
+	receipt, err := svc.ProcessBatch(context.Background(), []behavior.BehaviorEventInput{
+		impressed, visible, plainImpression, clicked, expanded, followed,
+	})
+	if err != nil {
+		t.Fatalf("ProcessBatch: %v", err)
+	}
+	if receipt.AcceptedCount != 6 {
+		t.Fatalf("want 6 accepted, got %+v", receipt)
+	}
+	if len(sink.exposures) != 1 || sink.exposures[0].userID != "user-310" ||
+		len(sink.exposures[0].intersectionIDs) != 1 || sink.exposures[0].intersectionIDs[0] != "ix-310" {
+		t.Fatalf("only the impressed intersection exposure may enter cooldown, got %+v", sink.exposures)
+	}
+	if len(sink.clears) != 3 {
+		t.Fatalf("click/expand/follow must each clear the exposure, got %+v", sink.clears)
+	}
+	for _, clear := range sink.clears {
+		if clear.userID != "user-310" || len(clear.intersectionIDs) != 1 || clear.intersectionIDs[0] != "ix-310" {
+			t.Fatalf("clear must target the same intersectionId, got %+v", clear)
+		}
+	}
+	if len(sink.calls) != 0 {
+		t.Fatalf("funnel steps must not be mistaken for negative feedback, got %+v", sink.calls)
 	}
 }
 

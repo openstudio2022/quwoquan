@@ -53,7 +53,8 @@
 
 - `join(primarySpans.text) == primaryText` 必须成立。
 - 数字主语必须有 `representativeActor`：代表人 target 为 `user`，且有具体 `relationLabel`；不能只写 `4位共同好友`、`8人都来这里互动过`、`你和这里`。
-- 宾语必须落到可路由 `IntersectionTarget`：`user/circle/homepage/post/task`。内容类对象用 `post` + `workBrowser`，圈子/实体/人分别映射到对应对象页。
+- `mutualPair`（「你们」）主语必须能说出「你们是谁」：宿主是对方本人（对方主页、收件箱中行对象为人的行）时由宿主解释；其他宿主面（内容卡、GetPost、以地点为行对象的收件箱行）必须由生产者把对方本人挂为具名 `representativeActor`（`relationLabel` 出自注册表 `relationLabels`），两者都没有时整条隐藏，与「你和这里」同形处理。`coWishlistedEntity` 不登记 counted 级：具名对象缺失即隐藏，不造名。
+- 宾语必须落到可路由 `IntersectionTarget`：wire `objectType` 只取注册表 `objectKinds` 中登记了 `routeId` 的 kind 的 `objectType`（当前为 `user/circle/homepage/post/gathering`），服务端与端侧同查一张生成表，不手写字面量集合。内容类对象用 `post` + `workBrowser`，圈子/实体/人分别映射到对应对象页。
 - 禁止主句 raw stats 和泛词：`2赞 1评 1转`、`同读者`、`相近主题的长文`、`TA的内容`、`相关圈子`、`我的连接`、`我的影响力`。
 - `start_gathering` 必须绑定同一条 `coWishlistedEntity` 证据和可承接 target；没有真实 co-wisher / 承接页时不展示行动入口。
 - 端侧统一交集句组件（收敛现有 `IntersectionReasonChip`）：单句、蓝色、单行省略；**仅**消费 `primaryText`（禁止 displayText 回退）。
@@ -91,6 +92,14 @@
 - THEN seed、服务响应与展示口径均与 `intersection_kind_registry.yaml` 及父能力 [`Display Contract / §17`](../spec.md#display-contract) 一致。
 - AND 失败时返回 canonical failure，且不产生伪成功事实。
 
+<a id="gwt-002"></a>
+### GWT-002 每个生产者的主句都由注册表模板渲染
+
+- GIVEN 某个 kind 的交集事实成立，且该 kind 在 `statementTemplates.byKind` 已登记模板与 l10nKey。
+- WHEN 任一生产者（云侧 Go 水合或 Recommendation 物化）产出该 kind 的可见主句。
+- THEN `primaryText`、`primarySpans` 与 `primaryTextL10nKey` 由同一模板一次渲染，服务代码内不存在该 kind 的中文字面量谓语。
+- AND 模板或槽位不可渲染时按登记的降级链处理（计数句或隐藏），既不造名也不下发与 l10nKey 不同源的文本。
+
 ## 6. 依赖
 
 - 前置要求：[`intersection-unified-experience`](../spec.md) 的范围、要求与 SIT。
@@ -98,15 +107,6 @@
 - 父级设计：[L2 DEC-001](../design.md#dec-001)
 
 ## 7. 开放事项
-
-<a id="open-001"></a>
-### OPEN-001 交集句主谓宾统一表达 验收证据
-
-- 类型：`capability_gap`
-- 优先级：`P1`
-- 准出影响：`track`
-- 影响或价值：尚缺少能够证明“交集句主谓宾统一表达”已满足当前规格的真实测试证据。
-- 完成判定：`GWT-001` 对应行为满足且真实测试 `spec_ref` 有效。
 
 <a id="open-002"></a>
 ### OPEN-002 交集文案按请求语言渲染
@@ -118,6 +118,6 @@
   `REQ-005` 的覆盖 key 已按 locale 分片、控制面可以为 `en` 备好整套文案，但交集句由数十个
   片段在 application 层深处合成，把 `X-Client-Locale` 送到每个片段需要贯穿约 60 个渲染函数。
   在此之前，非 zh 客户端仍会收到 zh 文案。
-- 完成判定：`REQ-005` 的覆盖取值与 fail-safe 回落按请求语言成立——`rterr` 的请求语言解析贯穿到 `intersection` 渲染层，
-  同一请求内所有片段用同一 locale 取覆盖；契约测试断言 `en` 请求命中 `en` 覆盖、
+- 完成判定：`GWT-001` 在非 zh 请求下同样成立——`rterr` 的请求语言解析贯穿到 `intersection` 渲染层，
+  同一请求内所有片段用同一 locale 取 `REQ-005` 覆盖；契约测试断言 `en` 请求命中 `en` 覆盖、
   未下发条目回落 zh 基线。

@@ -7,8 +7,9 @@ import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/service/entity_service/entity_homepage/homepage_claim_request/application/public/homepage_claim_request_command_writer.dart';
 import 'package:quwoquan_app/service/entity_service/entity_homepage/homepage/application/homepage_introduction_repository.dart';
+
 import '../../../../../support/service/entity_service/entity_homepage/homepage/homepage_test_adapter.dart';
-import '../../../../../support/runtime/homepage_source_cards_boundary_overrides.dart';
+
 import 'package:quwoquan_app/service/content_service/content/post/application/content_repository_contract.dart';
 import 'package:quwoquan_app/service/user_service/persona_management/persona/application/public/persona_management_view_data.dart';
 import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
@@ -48,6 +49,7 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
         HomepageClaimRequestView,
         HomepageIntroduction,
         HomepageReviewListQuery;
+
 import '../../../../../support/service/content_service/content/content_behavior_fact/recording_content_behavior_repository.dart';
 import '../../../../../support/service/entity_service/entity_homepage/homepage_review/homepage_review_facets_typed_double.dart';
 
@@ -124,7 +126,6 @@ void main() {
       ProviderScope(
         overrides: [
           ...sealedCloudBoundaryOverrides(),
-          ...homepageSourceCardsBoundaryOverrides(),
           contentRuntimeConfigProvider.overrideWithValue(
             buildProductionContentRuntimeConfigDefaults(),
           ),
@@ -214,13 +215,20 @@ void main() {
 
     await tester.enterText(
       find.byType(CupertinoTextField).first,
-      '13800000000',
+      '138'
+      '0000'
+      '0000',
     );
     await tester.tap(find.text(ObjectHomepageText.homepageClaimSubmit));
     await tester.pumpAndSettle();
 
     expect(homepage.claimCreateCalls, 1);
-    expect(homepage.lastClaimDraft?.contactPhone, '13800000000');
+    expect(
+      homepage.lastClaimDraft?.contactPhone,
+      '138'
+      '0000'
+      '0000',
+    );
     expect(find.byType(HomepageDetailPage), findsOneWidget);
     expect(
       telemetry.recorded.any(

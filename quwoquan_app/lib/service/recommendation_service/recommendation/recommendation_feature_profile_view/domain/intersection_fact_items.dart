@@ -36,17 +36,15 @@ String dedupeKeyForIntersection(IntersectionReason item) {
 int compareIntersectionRank(IntersectionReason a, IntersectionReason b) {
   final byStrength = b.strength.compareTo(a.strength);
   if (byStrength != 0) return byStrength;
-  final byBucket = timeBucketPriority(
-    timeBucketForIntersection(a),
-  ).compareTo(timeBucketPriority(timeBucketForIntersection(b)));
+  final byBucket = timeBucketPriority(timeBucketForIntersection(a))
+      .compareTo(timeBucketPriority(timeBucketForIntersection(b)));
   if (byBucket != 0) return byBucket;
   final byAnchor = b.anchorUserWeight.compareTo(a.anchorUserWeight);
   if (byAnchor != 0) return byAnchor;
   final byCount = _mutualCountFor(b).compareTo(_mutualCountFor(a));
   if (byCount != 0) return byCount;
-  final byType = _objectTypePriority(
-    b.objectKind,
-  ).compareTo(_objectTypePriority(a.objectKind));
+  final byType = _objectTypePriority(b.objectKind)
+      .compareTo(_objectTypePriority(a.objectKind));
   if (byType != 0) return byType;
   return dedupeKeyForIntersection(a).compareTo(dedupeKeyForIntersection(b));
 }

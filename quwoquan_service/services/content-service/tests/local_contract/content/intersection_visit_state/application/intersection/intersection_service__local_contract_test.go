@@ -278,11 +278,14 @@ func TestIntersectionService_SummaryNewCountAndVisitClears(t *testing.T) {
 	}
 }
 
-func TestIntersectionService_ExposureRetainsButDemotesSeen(t *testing.T) {
+// spec_ref: specs/feature-tree/object-homepage-network/intersection-unified-experience/spec.md#sit-004.t1
+// 曝光未转化的交集在配置窗口内不再重复推荐：曝光按 intersectionId 写入 rec:icool，
+// Feed 合并时命中即过滤；点击/展开/转化清零后立即恢复；窗口到期后自然恢复。
+func TestIntersectionService_ExposureCooldownFiltersUntilClearedOrExpired(t *testing.T) {
 	now := time.Date(2026, 6, 2, 12, 0, 0, 0, time.UTC)
 	src := stubSource{facts: []IntersectionReasonView{
-		displayReadyFactReason("a", "identity", "sharedFollowees", "u1", "person", "陆衡", 8, 0.9),
-		displayReadyFactReason("b", "content", "coCommented", "p1", "content", "摄影路线", 2, 0.8),
+		displayReadyFactReason("ix_a", "identity", "sharedFollowees", "u1", "person", "陆衡", 8, 0.9),
+		displayReadyFactReason("ix_b", "content", "coCommented", "p1", "content", "摄影路线", 2, 0.8),
 	}}
 	svc := NewIntersectionService(newTestRouter(t), WithIntersectionSource(src))
 	fixedNow(svc, now)
@@ -296,22 +299,49 @@ func TestIntersectionService_ExposureRetainsButDemotesSeen(t *testing.T) {
 		t.Fatalf("want 2 before exposure, got %d", len(feed))
 	}
 
-	// 曝光 u1 未转化 → 后续仍保留，但按 seen penalty 排到未看对象后。
-	if err := svc.ReportExposure(ctx, "viewer1", []string{"u1"}); err != nil {
+	// 曝光 ix_a 未转化 → 冷却窗口内不再下发，只剩未曝光的 ix_b。
+	if err := svc.ReportExposure(ctx, "viewer1", []string{"ix_a"}); err != nil {
 		t.Fatalf("exposure: %v", err)
 	}
 	feed2, err := svc.Feed(ctx, "viewer1", "recommend", 10)
 	if err != nil {
 		t.Fatalf("feed2: %v", err)
 	}
-	if len(feed2) != 2 {
-		t.Fatalf("want both objects retained after exposure, got %+v", feed2)
+	if len(feed2) != 1 || feed2[0].IntersectionID != "ix_b" {
+		t.Fatalf("exposed-unconverted ix_a must be suppressed inside cooldown window, got %+v", feed2)
 	}
-	if feed2[0].ActionTargetID != "p1" || feed2[1].ActionTargetID != "u1" {
-		t.Fatalf("want unseen p1 before seen u1, got %+v", feed2)
+
+	// 用户对 ix_a 点击/展开（转化）→ 清零，立即恢复可推荐。
+	if err := svc.ClearExposure(ctx, "viewer1", []string{"ix_a"}); err != nil {
+		t.Fatalf("clear exposure: %v", err)
 	}
-	if feed2[1].RankState != "seen" || feed2[1].SeenAt == "" {
-		t.Fatalf("seen item should carry rankState/seenAt, got %+v", feed2[1])
+	feed3, err := svc.Feed(ctx, "viewer1", "recommend", 10)
+	if err != nil {
+		t.Fatalf("feed3: %v", err)
+	}
+	if len(feed3) != 2 {
+		t.Fatalf("cleared exposure must restore candidate, got %+v", feed3)
+	}
+
+	// 再次曝光后未清零：默认 14 天窗口到期前仍被过滤，到期后自然恢复。
+	if err := svc.ReportExposure(ctx, "viewer1", []string{"ix_a"}); err != nil {
+		t.Fatalf("re-exposure: %v", err)
+	}
+	fixedNow(svc, now.Add(13*24*time.Hour))
+	feed4, err := svc.Feed(ctx, "viewer1", "recommend", 10)
+	if err != nil {
+		t.Fatalf("feed4: %v", err)
+	}
+	if len(feed4) != 1 {
+		t.Fatalf("cooldown must still hold on day 13, got %+v", feed4)
+	}
+	fixedNow(svc, now.Add(15*24*time.Hour))
+	feed5, err := svc.Feed(ctx, "viewer1", "recommend", 10)
+	if err != nil {
+		t.Fatalf("feed5: %v", err)
+	}
+	if len(feed5) != 2 {
+		t.Fatalf("cooldown must expire after the configured window, got %+v", feed5)
 	}
 }
 
@@ -1466,5 +1496,55 @@ func TestIntersectionService_AffinityChannelLabeled(t *testing.T) {
 	}
 	if _, ok := byID["aff"]; ok {
 		t.Fatalf("generic affinity text without typed SVO must fail closed, got %v", feed)
+	}
+}
+
+// spec_ref: specs/feature-tree/object-homepage-network/intersection-unified-experience/spec.md#sit-005
+// spec_ref: specs/feature-tree/object-homepage-network/intersection-unified-experience/spec.md#sit-003.t5
+// spec_ref: specs/feature-tree/object-homepage-network/intersection-unified-experience/home-recommend-intersection-redesign/spec.md#gwt-001.t2
+// 收件箱没有页面宿主：宿主绑定句（host_implicit / host_plain）在输出口以 reason 自身对象充当宿主
+// 显式套用展示合同。带可点击自指对象 span 的 host_implicit 句在 Summary 与 List 两侧同时淘汰
+// （计数与可见条目同源），无自指 span 的宿主绑定句正常下发。
+func TestIntersectionService_InboxAppliesHostBoundDisplayContractAtOutput(t *testing.T) {
+	now := time.Date(2026, 6, 2, 12, 0, 0, 0, time.UTC)
+	fresh := func(r IntersectionReasonView) IntersectionReasonView {
+		r.FreshAt = now.Add(-time.Hour).Format(time.RFC3339)
+		return r
+	}
+	peer := &IntersectionTargetView{ObjectType: "user", ObjectID: "u_peer", ObjectKind: "person", RouteID: "userProfile"}
+	hostBound := func(id string, spans []IntersectionTextSpanView) IntersectionReasonView {
+		r := displayReadyFactReason(id, "relationship", "sharedCircle", "u_peer", "person", "林清越", 2, 0.9)
+		r.RelationObjectID = "u_peer"
+		r.ActionTargetID = "u_peer"
+		r.DisplayBinding = DisplayBindingHostImplicit
+		r.PrimarySpans = spans
+		r.PrimaryText = JoinedSpanText(spans)
+		return fresh(r)
+	}
+	// 生产者形态：宿主绑定 + 纯文本 spans（宿主由 reason 对象自证）。
+	plain := hostBound("inbox_host_plain_ok", []IntersectionTextSpanView{{Text: "你们有2个共同圈子", Role: "plain"}})
+	// 违约形态：host_implicit 却带可点击自指对象 span，必须在输出口淘汰。
+	selfLink := hostBound("inbox_host_self_link", []IntersectionTextSpanView{
+		{Text: "你们都加入了", Role: "plain"},
+		{Text: "林清越", Role: "object", Target: peer},
+	})
+	src := stubSource{facts: []IntersectionReasonView{plain, selfLink}}
+	svc := NewIntersectionService(newTestRouter(t), WithIntersectionSource(src))
+	fixedNow(svc, now)
+	ctx := context.Background()
+
+	sum, err := svc.Summary(ctx, "viewer1")
+	if err != nil {
+		t.Fatalf("summary: %v", err)
+	}
+	items, _, _, err := svc.List(ctx, "viewer1", IntersectionListQuery{})
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	if sum.TotalCount != 1 || len(items) != 1 {
+		t.Fatalf("host-bound self-link reason must be dropped on both surfaces: summary=%d list=%+v", sum.TotalCount, items)
+	}
+	if items[0].IntersectionID != "inbox_host_plain_ok" || items[0].DisplayBinding != DisplayBindingHostImplicit {
+		t.Fatalf("host-bound plain reason must survive with its binding, got %+v", items[0])
 	}
 }

@@ -203,8 +203,7 @@ func (service *Service) Reserve(ctx context.Context, command Command) (Result, e
 		if !foundActive {
 			return deny("research_release_membership", "no active research release is present")
 		}
-		if strings.TrimSpace(asset.SourceReleaseID) == "" ||
-			asset.SourceReleaseID != activeReleaseID {
+		if !asset.BelongsToRelease(activeReleaseID) {
 			return deny("research_release_membership", "asset does not belong to the active research release closure")
 		}
 	} else {

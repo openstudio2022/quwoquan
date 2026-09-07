@@ -32,7 +32,9 @@
 <a id="req-001"></a>
 ### REQ-001 首页推荐交集重做
 
-- spotlight 文案口径与 `intersection_kind_registry.yaml` 登记的 kind / dimension / actionHint 口径一致。
+- feed 卡片（双列/单列）每个 Post 至多附着一条 display-ready 交集主句；主句只读云侧 `primaryText/primarySpans/displayBinding`，卡面不显示行动按钮、行动徽标或 `secondaryText`。
+- 点击主句打开证据半屏：证据行只消费云侧下发的 typed 字段闭集，端不按本地优先级合并 `intersectionPoints`/`connectionSummary` 等异构字段拼装证据；半屏只显示共享 resolver 选出的一个可兑现 typed 下一步。
+- 交集主句与回顾溯源标互斥占位；二者都没有时不占位。
 
 <a id="req-002"></a>
 ### REQ-002 spotlight 文案口径与 `intersection_kind_registry.yaml` 登记的 kind / dimension / actionHint 口径一致
@@ -49,9 +51,11 @@
 <a id="gwt-001"></a>
 ### GWT-001 首页推荐交集重做
 
-- GIVEN 浏览对象主页的用户具备有效身份，且父能力声明的输入与上游事实成立。
-- WHEN 参与者执行“首页推荐交集重做”对应的公开行为。
-- THEN spotlight 文案口径与 `intersection_kind_registry.yaml` 登记的 kind / dimension / actionHint 口径一致。
+- GIVEN 已登录用户打开首页 feed，且 Recommendation 为其物化了与当前 Post 锚点相关的交集 reason。
+- WHEN feed 与 GetPost 投影该 Post。
+- THEN 该 Post 至多附着一条通过展示合同的交集主句，feed 与详情页投影同源；不满足展示合同的候选不占用槽位。
+- AND 点击主句打开的证据半屏只渲染云侧 typed 证据字段，行动只显示一个可兑现 typed 下一步。
+- AND spotlight 文案口径与 `intersection_kind_registry.yaml` 登记的 kind / dimension / actionHint 口径一致。
 - AND 失败时返回 canonical failure，且不产生伪成功事实。
 
 ## 6. 依赖
@@ -62,11 +66,4 @@
 
 ## 7. 开放事项
 
-<a id="open-001"></a>
-### OPEN-001 首页推荐交集重做 验收证据
-
-- 类型：`capability_gap`
-- 优先级：`P1`
-- 准出影响：`track`
-- 影响或价值：尚缺少能够证明“首页推荐交集重做”已满足当前规格的真实测试证据。
-- 完成判定：`GWT-001` 对应行为满足且真实测试 `spec_ref` 有效。
+（当前无开放事项：证据行闭集 `evidenceRows`（`IntersectionEvidenceRow`）由 Content 水合出口按契约顺序实例化，端只按序渲染；spotlight 口径与证据半屏均已由 `GWT-001` 子句级测试绑定。）

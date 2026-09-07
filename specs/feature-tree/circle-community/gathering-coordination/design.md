@@ -19,11 +19,11 @@
 
 ## 3. 端云与数据流
 
-- App 责任：C 位首层并列发内容/发起活动/发起群聊；所有活动入口复用同一 composer、公开详情、动态主动作、活动群聊/Board 与 Host console。游客选择具体动作才登录并通过 continuation 续接。
+- App 责任：首页与视频书在内容中只展示一条交集主句；用户主动展开事实依据后才由唯一 canonical actionHint 进入同一 composer。C 位不直接提供无上下文发起活动；创建/详情、动态主动作、活动群聊/Board、Host console 与我的行动继续作为任务承接页。游客选择具体 typed 下一步才登录并通过 continuation 恢复完整请求。
 - Metadata/contract：字段、operation、route、surface、event、error、metric 与 recovery 只在 owner contracts/metadata 定义；本设计不复制 DTO。
 - Service/Data/Ops 责任：Circle 提交 owner 聚合与 outbox，Chat 幂等确保唯一 contextual room 并投影访问，Content 提供来源/回顾，Recommendation 只排序，User/Entity/Circle owner 提供 authority，Ops 提供风险处置和回滚。
 - 缓存或投影：PublicCard、Detail、Roster、Board、Timeline/Map 与 AvailabilityWatch 通知均可从 owner 事实重建；snapshot 必须携带 source version/digest，不成为写真相源。
-- 主流：`source ref -> draft -> ensure room -> binding ready -> publish -> public projection -> admission/Participation -> room access -> chat+board -> Outcome -> user-confirmed Content recap`。
+- 主流：`content -> intersection primary sentence -> user-expanded evidence -> one canonical actionHint -> source refs -> draft -> ensure room -> binding ready -> publish -> admission/Participation -> room access -> chat+board -> Outcome -> user-confirmed Content recap -> provenance/content`。
 
 ## 4. 关键决策
 
@@ -72,7 +72,7 @@
 - 关联验收：`SIT-003`
 
 <a id="dec-005"></a>
-### DEC-005 公开发现与内容回流只传 canonical reference
+### DEC-005 来源投影与内容回流只传 canonical reference
 
 - 决策：Circle 签发 Gathering 公开投影；Recommendation 只排序，Surface wrapper 只保存 reference/placement/reason。完成后 Circle 输出 Outcome/Experience reference，用户确认后 Content owner 创建 Post/Media，Report 仍归 Content Trust Safety。
 - 理由：发现和回流需要连接活动与内容，但 Feed 或 Content 若保存可写活动状态会与 Circle 漂移，Circle 若复制 Post/Report 又会破坏内容与安全治理。
@@ -109,11 +109,11 @@
 - 风控：发起/邀请频控、Host authority、risk obligations、Block/Report、移除审计与申诉必须可用；能力不足时拒绝发布，不按活动名硬编码禁令。
 - SLI/SLO：与 L2 spec 的公开详情、准入、room access、Board freshness、超员、撤权、Outcome 和回流目标同源；生命周期/安全/写操作 100% 审计，普通读取按受治理策略采样。
 - 告警：任何超员或未授权访问立即告警；10 分钟窗口成功率低于 99% 或投影/撤权 P95 超过 60 秒通知 Circle/Chat 值班。
-- flags/rollback：创建、发现、准入、room/board、Outcome/回流独立开关；Circle 为总 rollback owner，Chat/Content 为子链 owner。回滚关闭新写与曝光但保留既有对象的读取、退出、安全处置和完成。
+- flags/rollback：创建、交集后置曝光、准入、room/board、Outcome/回流独立开关；Circle 为总 rollback owner，Chat/Content 为子链 owner。回滚关闭新写与曝光但保留既有对象的读取、退出、安全处置和完成。
 
 ## 7. 迁移与回滚
 
-- 切换顺序：先 contracts/codegen 与 owner runtime，再唯一 room+membership projection，再公开详情/发现与 App composer，最后 Outcome/内容回流和可选能力；前一门未通过不得打开后一 flag。
+- 切换顺序：先 contracts/codegen 与 owner runtime，再唯一 room+membership projection，再公开详情/交集后置曝光与 App composer，最后 Outcome/内容回流和可选能力；前一门未通过不得打开后一 flag。
 - 数据处理：旧 Gathering 按 target contract 一次性升级；已退役 travel-service 的历史对象逐对象导入 Gathering/Plan/Experience 目标，环境内一次 target-only 切流，不保留旧值别名、双读或双写，也不为导入恢复源服务。
 - 删除的实现：发起结伴落到裸建群、Workspace/第二消息流、自动 mutual 与 Trip 公共根路径在目标能力落地时删除，不作为降级。
-- 回滚条件：出现超员、半加入、未授权 room access、Outcome 误计或隐私泄露时立即关闭新创建/发现/准入；回滚到上一验证 artifact/config，但不把切流后增量写回旧源。
+- 回滚条件：出现超员、半加入、未授权 room access、Outcome 误计或隐私泄露时立即关闭新创建/交集后置曝光/准入；回滚到上一验证 artifact/config，但不把切流后增量写回旧源。

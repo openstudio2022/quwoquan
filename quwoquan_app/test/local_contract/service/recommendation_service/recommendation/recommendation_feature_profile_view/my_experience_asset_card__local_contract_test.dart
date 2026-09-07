@@ -1,5 +1,8 @@
 // spec_ref: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/spec.md#req-008
 // spec_ref: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/spec.md#sit-008
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
@@ -19,7 +22,8 @@ import '../../../../../support/service/recommendation_service/recommendation/rec
 
 /// 经历交集事实替身：只回放 `sourceRef=coExperiencedGathering` 的查询，
 /// 校验消费方按 REQ-008 携带正确的服务端收窄参数。
-final class _ExperienceIntersectionRepository implements IntersectionRepository {
+final class _ExperienceIntersectionRepository
+    implements IntersectionRepository {
   _ExperienceIntersectionRepository({
     this.items = const <IntersectionReason>[],
     this.failure,
@@ -62,50 +66,33 @@ final class _ExperienceIntersectionRepository implements IntersectionRepository 
   }) async => const <IntersectionReason>[];
 }
 
-IntersectionReason _experienceReason({
-  String id = 'ix_exp',
-  String gatheringId = 'gathering_huanglong',
-  int count = 1,
-}) {
-  return intersectionReasonFixture(
-    kind: 'coExperiencedGathering',
-    dimension: 'relationship',
-    intersectionClass: 'fact',
-    intersectionId: id,
-    objectKind: 'person',
-    relationObjectId: 'peer_user',
-    actionTargetId: gatheringId,
-    source: 'gathering_shared_experience_events',
-    primaryText: '你们一起参加过 $count 次行动',
-    primarySpans: <IntersectionTextSpan>[
-      intersectionTextSpanFixture(text: '你们一起参加过 $count 次行动', role: 'plain'),
-    ],
-    iconKey: 'experience',
-    intersectionPoints: <IntersectionPoint>[
-      intersectionPointFixture(
-        pointId: 'p_exp',
-        pointClass: 'fact',
-        dimension: 'relationship',
-        sourceRef: 'coExperiencedGathering',
-        count: count,
-      ),
-    ],
-    actionHints: <IntersectionActionHint>[
-      intersectionActionHintFixture(
-        actionKey: 'start_gathering',
-        label: '再约一次',
-        isPrimary: true,
-        priority: 1,
-        dispatch: 'gathering',
-        target: intersectionTargetFixture(
-          objectType: 'gathering',
-          objectId: gatheringId,
-          objectKind: 'gathering',
-          routeId: 'gatheringDetail',
-        ),
-      ),
-    ],
+File _canonicalExperienceFixtureFile() {
+  final candidates = <File>[
+    File(
+      '../quwoquan_service/contracts/metadata/_shared/test_fixtures/recommendation/intersection/co_experienced_gathering_reason.json',
+    ),
+    File(
+      'quwoquan_service/contracts/metadata/_shared/test_fixtures/recommendation/intersection/co_experienced_gathering_reason.json',
+    ),
+  ];
+  for (final candidate in candidates) {
+    if (candidate.existsSync()) return candidate;
+  }
+  throw StateError(
+    'co_experienced_gathering_reason.json not found (cwd=${Directory.current.path})',
   );
+}
+
+/// 经历交集只消费真实 materializer 产出的跨层 golden（DEC-003 形状：主对象是对方本人，
+/// 共同行动经 subjectContext 下发，主句由 counted 模板 + mutualPair 渲染），不手写 wire。
+IntersectionReason _experienceReason({String? gatheringId}) {
+  final decoded = jsonDecode(
+    _canonicalExperienceFixtureFile().readAsStringSync(),
+  ) as Map<String, Object?>;
+  if (gatheringId != null) {
+    decoded['subjectContext'] = 'gathering:$gatheringId';
+  }
+  return IntersectionReason.fromWire(decoded);
 }
 
 List<Override> _boundaryOverrides(
@@ -151,9 +138,8 @@ Future<void> _pumpCard(
             ),
             GoRoute(
               path: '/profile/intersections',
-              builder: (_, state) => Text(
-                'LIST:${state.uri.queryParameters['sourceRef'] ?? ''}',
-              ),
+              builder: (_, state) =>
+                  Text('LIST:${state.uri.queryParameters['sourceRef'] ?? ''}'),
             ),
           ],
         ),
@@ -167,8 +153,9 @@ Future<void> _pumpCard(
 
 void main() {
   testWidgets('有经历交集时渲染资产卡：云侧主句直出 + 再约一次 pill', (tester) async {
+    final reason = _experienceReason();
     final repo = _ExperienceIntersectionRepository(
-      items: <IntersectionReason>[_experienceReason(count: 2)],
+      items: <IntersectionReason>[reason],
     );
     await _pumpCard(tester, repo);
 
@@ -178,13 +165,21 @@ void main() {
 
     expect(find.byKey(MyExperienceAssetCard.cardKey), findsOneWidget);
     expect(find.text(DiscoveryFeedText.myExperienceTitle), findsOneWidget);
-    expect(find.textContaining('你们一起参加过 2 次行动'), findsOneWidget);
-    // 行尾主行动 pill：label 云侧直出（再约一次 = 飞轮复利环）。
+    // 主句直出云侧 counted 模板渲染结果（golden 由生产者锁定）。
+    expect(reason.objectKind, 'person');
+    expect(find.textContaining(reason.primaryText), findsOneWidget);
+    // 行尾主行动 pill：label 云侧直出（注册表 actionLabelByKey.start_gathering，飞轮复利环）；
+    // 端不自造「再约一次」等文案。
+    final primaryHint = reason.actionHints
+        .where((hint) => hint.isPrimary)
+        .single;
+    expect(primaryHint.actionKey, 'start_gathering');
+    expect(primaryHint.target?.objectType, 'user');
     expect(find.byType(IntersectionActionablePill), findsOneWidget);
-    expect(find.text('再约一次'), findsOneWidget);
+    expect(find.text(primaryHint.label), findsOneWidget);
   });
 
-  testWidgets('整行点击回看行动详情（actionTargetId 直通 gathering）', (tester) async {
+  testWidgets('整行点击回看行动详情（gathering 经 subjectContext 锚点下发）', (tester) async {
     final repo = _ExperienceIntersectionRepository(
       items: <IntersectionReason>[
         _experienceReason(gatheringId: 'gathering_x'),
@@ -211,10 +206,7 @@ void main() {
     await _pumpCard(tester, repo);
 
     expect(find.byKey(MyExperienceAssetCard.cardKey), findsOneWidget);
-    expect(
-      find.text(DiscoveryFeedText.myExperienceLoadFailed),
-      findsOneWidget,
-    );
+    expect(find.text(DiscoveryFeedText.myExperienceLoadFailed), findsOneWidget);
     expect(find.byKey(MyExperienceAssetCard.retryKey), findsOneWidget);
     expect(repo.listCalls, 1);
   });

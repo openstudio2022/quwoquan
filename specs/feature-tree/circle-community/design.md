@@ -22,7 +22,7 @@
 - [`JNY-007 / SCN-013`](../spec.md#scn-013) — 在“私建群、圈子群、组织节点群与主页相关群入口”中，维护 Circle、CircleGroup、Membership 与内容放置关系，并公开加入、协作和群绑定结果。
 - [`JNY-008 / SCN-014`](../spec.md#scn-014) — 在“实体主页到圈子、组织节点、群单元与会话协作”中，维护 Circle、CircleGroup、Membership 与内容放置关系，并公开加入、协作和群绑定结果。
 - [`JNY-010 / SCN-023`](../spec.md#scn-023) — 在“对象对外分享分发”中，维护 Circle、CircleGroup、Membership 与内容放置关系，并公开加入、协作和群绑定结果。
-- [`JNY-011 / SCN-027`](../spec.md#scn-027) — 从内容、C 位、主页或会话来源创建并发布 room-ready Gathering，维护 Host、Participation、Revision、Outcome 与准入/容量，向 Chat 投影 room access，向 Content 提供回顾引用；Participation 不自动改变关系。
+- [`JNY-011 / SCN-027`](../spec.md#scn-027) — 从内容交集主动展开后的 typed 来源创建并发布 room-ready Gathering，已有对象由邀请卡、通知、我的行动、活动群聊、Board、再约一次与合法深链承接；维护 Host、Participation、Revision、Outcome 与准入/容量，向 Chat 投影 room access，向 Content 提供回顾引用；Participation 不自动改变关系。
 
 ## 4. 架构与数据流
 
@@ -33,7 +33,7 @@
 - [`circle-management-and-stats`](./circle-management-and-stats/spec.md)：为圈子治理与运营提供权限受控的处置、固定口径指标和可下钻运营视图。
 - [`gathering-coordination`](./gathering-coordination/spec.md)：以单一 Gathering 组合 lifecycle、Participation、Host、room+board、Outcome 与安全边界。
 - [`in-circle-recommendation-loop`](./in-circle-recommendation-loop/spec.md)：把圈内行为事实转为权限受控的候选排序，并将曝光与反馈归因回评估链路。
-- Gathering 主数据流为 `Content source ref -> Circle draft -> Chat ensure contextual room -> Circle publish/public projection -> Circle admission/Participation -> Chat membership -> Board projection -> Circle Outcome -> Content confirmed recap`；每一步只提交 owner 事实并以 receipt/outbox 收敛。
+- Gathering 主数据流为 `Content -> intersection sentence -> user-expanded evidence -> one canonical actionHint -> source refs -> Circle draft -> Chat ensure contextual room -> Circle publish -> Circle admission/Participation -> Chat membership -> Board projection -> Circle Outcome -> Content confirmed recap/provenance`；每一步只提交 owner 事实并以 receipt/outbox 收敛。
 - 工程边界由 spec 的“工程归属”声明；设计不复制具体实现文件。
 
 ## 5. 关键决策
@@ -84,7 +84,7 @@
 - 30 天窗口内公开详情成功率目标不低于 99.9%，响应成功到 room access 与撤权收敛 P95 不超过 10 秒，Board 新鲜度 P95 不超过 60 秒，并发超员和未授权 room access 必须为零。
 - 生命周期、安全、准入写与撤权 100% 审计；普通读 trace 按受治理采样，默认在线 trace 保留 30 天、聚合漏斗保留 13 个月，安全证据遵循 owner retention。
 - 10 分钟窗口成功率低于 99%、projection lag 或撤权 P95 超过 60 秒、任何超员/未授权访问立即告警。
-- 创建、公开发现、准入、room/board、Outcome/回流分别受独立 feature flag 控制；Circle 值班负责人是总 rollback owner，Chat 与 Content 值班负责人分别负责投影与回流子链。回滚关闭新写/曝光，不删除既有对象、不启用双读或 Mock。
+- 创建、交集后置曝光、准入、room/board、Outcome/回流分别受独立 feature flag 控制；Circle 值班负责人是总 rollback owner，Chat 与 Content 值班负责人分别负责投影与回流子链。回滚关闭新写/曝光，不删除既有对象、不启用双读或 Mock。
 - 具体事物主档、采集、口碑模板和展示配置由共享主页与内容领域拥有，不在本领域复制。
 
 ## 7. 失败与恢复

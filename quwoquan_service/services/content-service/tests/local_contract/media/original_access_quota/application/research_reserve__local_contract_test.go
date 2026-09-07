@@ -102,7 +102,13 @@ func (reader fakeActiveResearchRelease) ActiveResearchReleaseID(
 	return reader.releaseID, reader.found, nil
 }
 
-func releaseAsset(mediaType string, sourceReleaseID string) mediaassetports.OriginalAccessSlice {
+func releaseAsset(mediaType string, sourceReleaseIDs ...string) mediaassetports.OriginalAccessSlice {
+	memberships := make([]string, 0, len(sourceReleaseIDs))
+	for _, releaseID := range sourceReleaseIDs {
+		if releaseID != "" {
+			memberships = append(memberships, releaseID)
+		}
+	}
 	return mediaassetports.OriginalAccessSlice{
 		AssetID:          "asset-research-1",
 		OwnerID:          "data-release-owner",
@@ -112,7 +118,7 @@ func releaseAsset(mediaType string, sourceReleaseID string) mediaassetports.Orig
 		FileSize:         1024,
 		ProcessingStatus: "ready",
 		AccessPolicy:     "referenced_post",
-		SourceReleaseID:  sourceReleaseID,
+		SourceReleaseIDs: memberships,
 	}
 }
 
@@ -176,6 +182,27 @@ func TestResearchPrincipalReservesActiveReleaseAssetsForView(t *testing.T) {
 	}
 }
 
+// 同一 CAS 资产同时属于 previous active 与 candidate 时，candidate 导入不得
+// 覆盖 active membership；导入失败或回滚后图片/头像仍可换签。
+func TestResearchPrincipalAcceptsSharedAssetAcrossReleases(t *testing.T) {
+	service := newResearchQuotaService(
+		t,
+		releaseAsset("avatar", "release-research-1", "release-research-2"),
+		&fakeVisibilityReader{visible: false},
+		&recordingAuditAppender{},
+		quotaapp.WithActiveResearchReleaseReader(
+			fakeActiveResearchRelease{releaseID: "release-research-1", found: true},
+		),
+	)
+	result, err := service.Reserve(reserveContext(), quotaapp.Command{
+		AssetID: "asset-research-1", ViewerID: "viewer-research",
+		Purpose: "view", ResearchPrincipal: true,
+	})
+	if err != nil || result.Status != "granted" {
+		t.Fatalf("shared release asset result=%+v err=%v", result, err)
+	}
+}
+
 func TestResearchPrincipalDenialsFailClosed(t *testing.T) {
 	activeRelease := quotaapp.WithActiveResearchReleaseReader(
 		fakeActiveResearchRelease{releaseID: "release-research-1", found: true},
@@ -204,6 +231,13 @@ func TestResearchPrincipalDenialsFailClosed(t *testing.T) {
 		{
 			name:       "foreign release membership is denied",
 			asset:      releaseAsset("image", "release-other"),
+			purpose:    "view",
+			options:    []quotaapp.Option{activeRelease},
+			wantReason: "research_release_membership",
+		},
+		{
+			name:       "empty release membership is denied",
+			asset:      releaseAsset("image"),
 			purpose:    "view",
 			options:    []quotaapp.Option{activeRelease},
 			wantReason: "research_release_membership",

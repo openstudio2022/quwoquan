@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
-from typing import Any, Mapping, Protocol
+from datetime import datetime, timezone
+from typing import Any, Callable, Mapping, Protocol
 
 
 ALLOWED_INTERSECTION_CLASSES = frozenset({"fact", "affinity"})
@@ -78,12 +78,52 @@ class Reader:
         store: IntersectionProjectionStore,
         materializer=None,
         subject_closures: SubjectClosureReader | None = None,
+        now: Callable[[], datetime] | None = None,
     ) -> None:
         if store is None or materializer is None or subject_closures is None:
             raise ValueError("RecommendationFeatureProfileView intersection store is required")
         self._store = store
         self._materializer = materializer
         self._subject_closures = subject_closures
+        self._now = now or (lambda: datetime.now(timezone.utc))
+
+    def _expiry_refresh_marker(self, reasons: tuple[Mapping[str, Any], ...]) -> str:
+        """过期触发重算（REQ-004 / SIT-004.t2）的 receipt 标记。
+
+        物化收据按 (source_event_id, digest) create-once：evidence 不变时快照不会重写，
+        过期的 expiresAt 会一直留在快照里。这里在当前快照存在任一 `expiresAt <= now` 的
+        reason 时，把最早过期的 expiresAt 拼进 source_event_id，使 projector 产生新的
+        收据并真正重物化；同一份过期快照在重物化前得到同一个标记（幂等，不会重复写），
+        重物化后 expiresAt 前移、标记为空，回到纯 evidence digest 的 create-once 路径。
+        """
+        now = self._now()
+        if now.tzinfo is None:
+            now = now.replace(tzinfo=timezone.utc)
+        expired: list[str] = []
+        for reason in reasons:
+            if not isinstance(reason, Mapping):
+                continue
+            raw = str(reason.get("expiresAt") or "").strip()
+            if not raw:
+                continue
+            try:
+                expires_at = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+            except ValueError:
+                continue
+            if expires_at.tzinfo is None:
+                expires_at = expires_at.replace(tzinfo=timezone.utc)
+            if expires_at <= now:
+                expired.append(raw)
+        if not expired:
+            return ""
+        return f":refresh:{min(expired)}"
+
+    def _current_reasons(self, read) -> tuple[Mapping[str, Any], ...]:
+        """重物化前窥视当前快照；投影尚未物化（首读）时没有可过期的 reason。"""
+        try:
+            return tuple(read().reasons)
+        except RuntimeError:
+            return ()
 
     def _require_open_subject(self, subject_id: str) -> None:
         if self._subject_closures.exists(subject_id):
@@ -109,8 +149,17 @@ class Reader:
             raise ValueError("subject intersection query is invalid")
         self._require_open_subject(normalized_subject)
         digest = self._store.subject_intersection_evidence_digest(normalized_subject)
+        refresh = self._expiry_refresh_marker(
+            self._current_reasons(
+                lambda: self._store.read_subject_intersections(
+                    normalized_subject,
+                    normalized_class,
+                    normalized_channel,
+                )
+            )
+        )
         self._materializer.rebuild_subject(
-            source_event_id=f"intersection-subject-evidence:{digest}",
+            source_event_id=f"intersection-subject-evidence:{digest}{refresh}",
             source_event_digest=digest,
             subject_id=normalized_subject,
             channel=None,
@@ -146,8 +195,17 @@ class Reader:
             normalized_type,
             normalized_object,
         )
+        refresh = self._expiry_refresh_marker(
+            self._current_reasons(
+                lambda: self._store.read_object_intersections(
+                    normalized_subject,
+                    normalized_type,
+                    normalized_object,
+                )
+            )
+        )
         self._materializer.rebuild_object(
-            source_event_id=f"intersection-object-evidence:{digest}",
+            source_event_id=f"intersection-object-evidence:{digest}{refresh}",
             source_event_digest=digest,
             subject_id=normalized_subject,
             object_type=normalized_type,

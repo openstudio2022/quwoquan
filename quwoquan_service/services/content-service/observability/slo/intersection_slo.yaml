@@ -21,12 +21,12 @@ metrics:
   http_requests_total: http_server_requests_total            # labels: service, route, method, status
   http_duration_seconds: http_server_duration_seconds        # labels: service, route, method
   http_error_codes_total: http_server_error_codes_total      # labels: service, error_code, module, kind
-  feed_candidates_total: intersection_feed_candidates_total  # labels: channel, class(fact|affinity), rank_state(fresh|seen)
-  feed_filtered_total: intersection_feed_filtered_total      # labels: channel, reason(stale|display_incomplete)
+  feed_candidates_total: intersection_feed_candidates_total  # labels: channel, class(fact|affinity), rank_state（读模型下发，通常 fresh）
+  feed_filtered_total: intersection_feed_filtered_total      # labels: channel, reason(negative|seen|stale|display_incomplete|cold_start_supply|supply_probe_unavailable)
   cooldown_exposure_total: intersection_cooldown_exposure_reported_total
   inbox_visit_total: intersection_inbox_visit_total          # labels: dimension
   inbox_filtered_total: intersection_inbox_filtered_total    # labels: reason(stale)
-  redis_degraded_total: intersection_redis_degraded_total    # labels: op(exposure_write|watermark_write|watermark_read)
+  redis_degraded_total: intersection_redis_degraded_total    # labels: op(exposure_write|exposure_clear|negative_feedback_write|watermark_write|watermark_read)
 
 slis:
   # ---- HTTP 边界（用户感知延迟与可用性）----
@@ -43,8 +43,8 @@ slis:
 
   # ---- 业务漏斗（推荐质量与新鲜度）----
   - id: repeat_exposure_rate
-    description: spotlight 候选窗中命中跨会话冷却记忆窗（rank_state=seen）的占比；过高说明换新不足
-    sli: sum(rate(intersection_feed_candidates_total{rank_state="seen"}[30m])) / sum(rate(intersection_feed_candidates_total[30m]))
+    description: Feed 候选因命中曝光冷却窗口（reason=seen，曝光未转化且未清零）被过滤的占比；过高说明供给换新不足，冷却窗把大部分候选挡在窗外
+    sli: sum(rate(intersection_feed_filtered_total{reason="seen"}[30m])) / (sum(rate(intersection_feed_candidates_total[30m])) + sum(rate(intersection_feed_filtered_total[30m])))
     objective_max: 0.20
   - id: freshness_filter_rate
     description: Feed 候选因过保鲜（stale）被过滤的占比；过高说明读模型 freshness TTL 或重算滞后

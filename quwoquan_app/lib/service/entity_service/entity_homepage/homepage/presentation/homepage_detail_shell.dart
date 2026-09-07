@@ -75,8 +75,6 @@ class HomepageDetailShell extends StatefulWidget {
     required this.onOpenIntroduction,
     required this.onOpenRecord,
     required this.onAttach,
-    this.onStartGathering,
-    this.buildRecentGatherings,
     this.onReviewsChanged,
     this.requireReviewAuth,
     this.reviewContinuationResumeToken = 0,
@@ -108,14 +106,6 @@ class HomepageDetailShell extends StatefulWidget {
   final VoidCallback onOpenIntroduction;
   final ValueChanged<HomepageContentPreview> onOpenRecord;
   final ValueChanged<HomepageCanonicalReference> onAttach;
-
-  /// 「在这里发起」：以本实体为来源引用进入 Gathering 创建（persona host）。
-  /// null 表示该主页类型不提供发起入口（非地点类）。
-  final VoidCallback? onStartGathering;
-
-  /// 「近期行动」L0 区块（Circle participant，由 runtime/di 绑定）。
-  /// null 表示不渲染；区块自身独立加载独立降级。
-  final Widget Function({required bool isDark})? buildRecentGatherings;
 
   /// 评价写/改/删成功后回调（宿主刷新评分摘要）。
   final VoidCallback? onReviewsChanged;

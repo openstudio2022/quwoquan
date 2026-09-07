@@ -20,6 +20,7 @@ from ..application.intersection_reader import (
 from ..application.intersection_materializer import (
     BehaviorSnapshot,
     PersonaProfileSnapshot,
+    WishlistEntitySnapshot,
 )
 from ..application.intersection_rebuild import (
     IntersectionProjectionInventory,
@@ -382,13 +383,18 @@ class MongoIntersectionReadOps:
             "truncated": truncated,
         }
 
-    def list_wishlisted_entities(self, persona_id: str, limit: int) -> tuple[str, ...]:
+    def list_wishlisted_entities(
+        self, persona_id: str, limit: int
+    ) -> tuple[WishlistEntitySnapshot, ...]:
         documents = self._intersection_wishlist.find(
             {"subjectId": persona_id.strip(), "active": True},
-            {"entityId": 1},
+            {"entityId": 1, "displayName": 1},
         ).sort("entityId", ASCENDING).limit(limit)
         return tuple(
-            str(document.get("entityId") or "")
+            WishlistEntitySnapshot(
+                entity_id=str(document.get("entityId") or ""),
+                display_name=str(document.get("displayName") or ""),
+            )
             for document in documents
             if str(document.get("entityId") or "").strip()
         )
@@ -419,6 +425,29 @@ class MongoIntersectionReadOps:
             if len(experienced) >= limit:
                 break
         return tuple(experienced)
+
+    def list_gathering_experiencers(self, gathering_id: str, limit: int) -> tuple[str, ...]:
+        """某 Gathering 的经历者 = 同时持有 active Participation 与 active 公开回顾的 persona
+        （与 list_experienced_gatherings 同一口径，方向相反）。"""
+        gathering = gathering_id.strip()
+        recap_documents = self._intersection_gathering_recaps.find(
+            {"gatheringId": gathering, "active": True},
+            {"personaId": 1},
+        ).sort("personaId", ASCENDING)
+        experiencers: list[str] = []
+        for document in recap_documents:
+            persona = str(document.get("personaId") or "").strip()
+            if not persona or persona in experiencers:
+                continue
+            participation = self._intersection_gathering_participations.find_one(
+                {"_id": f"{gathering}\x1f{persona}", "active": True},
+                {"_id": 1},
+            )
+            if participation is not None:
+                experiencers.append(persona)
+            if len(experiencers) >= limit:
+                break
+        return tuple(experiencers)
 
     def list_following(self, persona_id: str, limit: int) -> tuple[str, ...]:
         documents = self._intersection_relationships.find(
@@ -559,8 +588,16 @@ class MongoIntersectionReadOps:
                     ],
                 }
             )
+        # 经历事实进入 subject 快照：任一方回顾/参与变化都必须让快照重算。
+        experienced = [
+            {
+                "gatheringId": gathering_id,
+                "experiencers": list(self.list_gathering_experiencers(gathering_id, 200)),
+            }
+            for gathering_id in self.list_experienced_gatherings(subject, 200)
+        ]
         return self._intersection_evidence_digest(
-            {"subjectId": subject, "followingActors": actors}
+            {"subjectId": subject, "followingActors": actors, "experienced": experienced}
         )
 
     def object_intersection_evidence_digest(

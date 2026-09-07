@@ -15,6 +15,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "assistant",
       "errorCodes": [
         "ASSISTANT.USER.entry_unauthorized",
@@ -105,6 +106,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "assistant",
       "errorCodes": [
         "ASSISTANT.USER.learning_fact_invalid",
@@ -191,6 +193,7 @@
         "targetStory": "session-preference-memory-control"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "assistant",
       "errorCodes": [
         "ASSISTANT.USER.preference_invalid_argument",
@@ -292,6 +295,7 @@
         "targetStory": "session-preference-memory-control"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "assistant",
       "errorCodes": [
         "ASSISTANT.USER.preference_not_found",
@@ -381,6 +385,7 @@
         "targetStory": "session-preference-memory-control"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "assistant",
       "errorCodes": [
         "ASSISTANT.USER.preference_not_found",
@@ -469,6 +474,7 @@
         "targetStory": "session-preference-memory-control"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "assistant",
       "errorCodes": [
         "ASSISTANT.USER.preference_invalid_argument",
@@ -553,6 +559,7 @@
         "targetStory": "adaptive-presentation-runtime"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "assistant",
       "errorCodes": [
         "ASSISTANT.USER.run_not_found",
@@ -650,6 +657,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "assistant",
       "errorCodes": [
         "ASSISTANT.USER.run_not_found",
@@ -739,6 +747,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "assistant",
       "errorCodes": [
         "ASSISTANT.USER.run_not_found",
@@ -826,6 +835,7 @@
         "targetStory": "durable-agent-run-orchestration"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "assistant",
       "errorCodes": [
         "ASSISTANT.USER.run_not_found",
@@ -920,6 +930,7 @@
         "targetStory": "durable-agent-run-orchestration"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "assistant",
       "errorCodes": [
         "ASSISTANT.USER.run_not_found",
@@ -1014,11 +1025,16 @@
         "targetStory": "app-cloud-business-object-commercial-closure"
       },
       "concurrency": {},
+      "consistency": {
+        "arbitration": "unique_winner",
+        "atomicCommit": true
+      },
       "domain": "assistant",
       "errorCodes": [
         "ASSISTANT.USER.run_invalid_argument",
         "ASSISTANT.USER.session_not_found",
         "ASSISTANT.USER.run_idempotency_conflict",
+        "ASSISTANT.USER.run_active_conflict",
         "ASSISTANT.USER.skill_consent_required",
         "ASSISTANT.USER.intersection_evidence_not_found",
         "ASSISTANT.USER.run_unauthorized",
@@ -1113,6 +1129,7 @@
         "targetStory": "durable-agent-run-orchestration"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "assistant",
       "errorCodes": [
         "ASSISTANT.USER.run_not_found",
@@ -1208,6 +1225,7 @@
         "targetStory": "app-cloud-business-object-commercial-closure"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "assistant",
       "errorCodes": [
         "ASSISTANT.USER.run_not_found",
@@ -1321,6 +1339,7 @@
         "targetStory": "adaptive-presentation-runtime"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "assistant",
       "errorCodes": [
         "ASSISTANT.USER.run_not_found",
@@ -1420,6 +1439,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "assistant",
       "errorCodes": [
         "ASSISTANT.USER.session_invalid_argument",
@@ -1499,6 +1519,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "assistant",
       "errorCodes": [
         "ASSISTANT.USER.session_not_found",
@@ -1582,6 +1603,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "assistant",
       "errorCodes": [
         "ASSISTANT.USER.session_invalid_argument",
@@ -1674,6 +1696,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "assistant",
       "errorCodes": [
         "ASSISTANT.USER.task_unauthorized",
@@ -1766,6 +1789,7 @@
         "targetStory": "app-cloud-business-object-commercial-closure"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "assistant",
       "errorCodes": [
         "ASSISTANT.USER.run_invalid_argument",
@@ -1863,6 +1887,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "assistant",
       "errorCodes": [
         "ASSISTANT.USER.page_context_invalid_argument",
@@ -1940,6 +1965,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "assistant",
       "errorCodes": [
         "ASSISTANT.USER.skill_activity_invalid_argument",
@@ -2036,6 +2062,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "assistant",
       "errorCodes": [
         "ASSISTANT.USER.skill_catalog_unauthorized",
@@ -2127,6 +2154,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "assistant",
       "errorCodes": [
         "ASSISTANT.USER.skill_catalog_unauthorized",
@@ -2220,6 +2248,10 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": {
+        "arbitration": "unique_winner",
+        "atomicCommit": true
+      },
       "domain": "assistant",
       "errorCodes": [
         "ASSISTANT.USER.consent_invalid_argument",
@@ -2315,6 +2347,10 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": {
+        "source": "authority",
+        "staleResult": "fail_closed"
+      },
       "domain": "assistant",
       "errorCodes": [
         "ASSISTANT.USER.consent_unauthorized",
@@ -2393,6 +2429,10 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": {
+        "arbitration": "conditional_admission",
+        "atomicCommit": true
+      },
       "domain": "assistant",
       "errorCodes": [
         "ASSISTANT.USER.consent_invalid_argument",
@@ -2487,6 +2527,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "assistant",
       "errorCodes": [
         "ASSISTANT.USER.skill_data_control_invalid_argument",
@@ -2580,6 +2621,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "assistant",
       "errorCodes": [
         "ASSISTANT.USER.skill_data_control_invalid_argument",
@@ -2671,6 +2713,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "assistant",
       "errorCodes": [
         "ASSISTANT.USER.skill_data_control_not_found",
@@ -2754,6 +2797,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "assistant",
       "errorCodes": [
         "ASSISTANT.USER.subscription_invalid_argument",
@@ -2835,6 +2879,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "assistant",
       "errorCodes": [
         "ASSISTANT.USER.subscription_not_found",
@@ -2918,6 +2963,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "assistant",
       "errorCodes": [
         "ASSISTANT.USER.subscription_unauthorized",
@@ -3009,6 +3055,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "assistant",
       "errorCodes": [
         "ASSISTANT.USER.subscription_not_found",
@@ -3100,6 +3147,7 @@
         "targetStory": "shared-surface-skill-placement"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "assistant",
       "errorCodes": [
         "ASSISTANT.USER.skill_placement_unauthorized",
@@ -3193,6 +3241,7 @@
         "targetStory": "shared-surface-skill-placement"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "assistant",
       "errorCodes": [
         "ASSISTANT.USER.skill_placement_unauthorized",
@@ -3288,6 +3337,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "assistant",
       "errorCodes": [
         "ASSISTANT.USER.skill_setting_unauthorized",
@@ -3371,6 +3421,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "assistant",
       "errorCodes": [
         "ASSISTANT.USER.skill_setting_unauthorized",
@@ -3454,6 +3505,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "assistant",
       "errorCodes": [
         "ASSISTANT.USER.skill_setting_unauthorized",
@@ -3542,6 +3594,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "chat",
       "errorCodes": [
         "CHAT.USER.unauthorized",
@@ -3630,6 +3683,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "chat",
       "errorCodes": [
         "CHAT.USER.unauthorized",
@@ -3704,6 +3758,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "chat",
       "errorCodes": [
         "CHAT.USER.unauthorized",
@@ -3794,6 +3849,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "chat",
       "errorCodes": [
         "CHAT.USER.unauthorized",
@@ -3884,6 +3940,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "chat",
       "errorCodes": [
         "CHAT.USER.unauthorized",
@@ -3971,6 +4028,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "chat",
       "errorCodes": [
         "CHAT.USER.unauthorized",
@@ -4054,6 +4112,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "chat",
       "errorCodes": [
         "CHAT.USER.unauthorized",
@@ -4136,6 +4195,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "chat",
       "errorCodes": [
         "CHAT.USER.unauthorized",
@@ -4221,6 +4281,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "chat",
       "errorCodes": [
         "CHAT.USER.unauthorized",
@@ -4311,6 +4372,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "chat",
       "errorCodes": [
         "CHAT.USER.unauthorized",
@@ -4385,6 +4447,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "chat",
       "errorCodes": [
         "CHAT.USER.unauthorized",
@@ -4473,6 +4536,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "chat",
       "errorCodes": [
         "CHAT.USER.unauthorized",
@@ -4562,6 +4626,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "chat",
       "errorCodes": [
         "CHAT.USER.unauthorized",
@@ -4652,6 +4717,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "chat",
       "errorCodes": [
         "CHAT.USER.unauthorized",
@@ -4753,6 +4819,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "chat",
       "errorCodes": [
         "CHAT.USER.unauthorized",
@@ -4853,6 +4920,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "chat",
       "errorCodes": [
         "CHAT.USER.unauthorized",
@@ -4946,6 +5014,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "chat",
       "errorCodes": [
         "CHAT.USER.unauthorized",
@@ -5037,6 +5106,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "chat",
       "errorCodes": [
         "CHAT.USER.unauthorized",
@@ -5128,6 +5198,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "chat",
       "errorCodes": [
         "CHAT.USER.unauthorized",
@@ -5222,6 +5293,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "chat",
       "errorCodes": [
         "CHAT.USER.unauthorized",
@@ -5311,6 +5383,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "chat",
       "errorCodes": [
         "CHAT.USER.unauthorized",
@@ -5402,6 +5475,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "chat",
       "errorCodes": [
         "CHAT.USER.unauthorized",
@@ -5518,6 +5592,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "chat",
       "errorCodes": [
         "CHAT.USER.unauthorized",
@@ -5607,6 +5682,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "chat",
       "errorCodes": [
         "CHAT.USER.unauthorized",
@@ -5702,6 +5778,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "chat",
       "errorCodes": [
         "CHAT.USER.unauthorized",
@@ -5792,6 +5869,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "chat",
       "errorCodes": [
         "CHAT.USER.unauthorized",
@@ -5882,6 +5960,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "chat",
       "errorCodes": [
         "CHAT.USER.unauthorized",
@@ -5976,6 +6055,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "chat",
       "errorCodes": [
         "CHAT.USER.unauthorized",
@@ -6064,6 +6144,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "chat",
       "errorCodes": [
         "CHAT.USER.unauthorized",
@@ -6166,6 +6247,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "chat",
       "errorCodes": [
         "CHAT.USER.unauthorized",
@@ -6264,6 +6346,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "chat",
       "errorCodes": [
         "CHAT.USER.unauthorized",
@@ -6359,6 +6442,10 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": {
+        "arbitration": "unique_winner",
+        "atomicCommit": true
+      },
       "domain": "chat",
       "errorCodes": [
         "CHAT.USER.unauthorized",
@@ -6447,6 +6534,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "chat",
       "errorCodes": [
         "CHAT.USER.unauthorized",
@@ -6531,6 +6619,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "chat",
       "errorCodes": [
         "CHAT.USER.unauthorized",
@@ -6617,6 +6706,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "circle",
       "errorCodes": [
         "CIRCLE.USER.invalid_argument",
@@ -6701,6 +6791,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "circle",
       "errorCodes": [
         "CIRCLE.USER.invalid_argument",
@@ -6776,6 +6867,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "circle",
       "errorCodes": [
         "CIRCLE.USER.not_found",
@@ -6856,6 +6948,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "circle",
       "errorCodes": [
         "CIRCLE.USER.invalid_argument",
@@ -6964,6 +7057,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "circle",
       "errorCodes": [
         "CIRCLE.USER.not_found",
@@ -7044,6 +7138,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "circle",
       "errorCodes": [
         "CIRCLE.USER.not_found",
@@ -7124,6 +7219,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "circle",
       "errorCodes": [
         "CIRCLE.USER.invalid_argument",
@@ -7233,6 +7329,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "circle",
       "errorCodes": [
         "CIRCLE.USER.invalid_argument",
@@ -7338,6 +7435,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "circle",
       "errorCodes": [
         "CIRCLE.USER.invalid_argument",
@@ -7438,6 +7536,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "circle",
       "errorCodes": [
         "CIRCLE.USER.invalid_argument",
@@ -7523,6 +7622,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "circle",
       "errorCodes": [
         "CIRCLE.USER.invalid_argument",
@@ -7608,6 +7708,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "circle",
       "errorCodes": [
         "CIRCLE.USER.invalid_argument",
@@ -7684,6 +7785,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "circle",
       "errorCodes": [
         "CIRCLE.USER.invalid_argument",
@@ -7770,6 +7872,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "circle",
       "errorCodes": [
         "CIRCLE.USER.invalid_argument",
@@ -7859,6 +7962,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "circle",
       "errorCodes": [
         "CIRCLE.USER.invalid_argument",
@@ -7945,6 +8049,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "circle",
       "errorCodes": [
         "CIRCLE.USER.invalid_argument",
@@ -8052,6 +8157,7 @@
       "concurrency": {
         "versionPrecondition": "if_match"
       },
+      "consistency": null,
       "domain": "circle",
       "errorCodes": [
         "CIRCLE.USER.invalid_argument",
@@ -8148,6 +8254,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "circle",
       "errorCodes": [
         "CIRCLE.USER.invalid_argument",
@@ -8237,6 +8344,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "circle",
       "errorCodes": [
         "CIRCLE.USER.invalid_argument",
@@ -8323,6 +8431,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "circle",
       "errorCodes": [
         "CIRCLE.USER.invalid_argument",
@@ -8409,6 +8518,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "circle",
       "errorCodes": [
         "CIRCLE.USER.invalid_argument",
@@ -8525,6 +8635,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "circle",
       "errorCodes": [
         "CIRCLE.USER.invalid_argument",
@@ -8637,6 +8748,7 @@
       "concurrency": {
         "versionPrecondition": "if_match"
       },
+      "consistency": null,
       "domain": "circle",
       "errorCodes": [
         "CIRCLE.USER.invalid_argument",
@@ -8733,6 +8845,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "circle",
       "errorCodes": [
         "CIRCLE.USER.invalid_argument",
@@ -8824,6 +8937,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "circle",
       "errorCodes": [
         "CIRCLE.USER.invalid_argument",
@@ -8918,6 +9032,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "circle",
       "errorCodes": [
         "CIRCLE.USER.invalid_argument",
@@ -9004,6 +9119,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "circle",
       "errorCodes": [
         "CIRCLE.USER.invalid_argument",
@@ -9093,6 +9209,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "circle",
       "errorCodes": [
         "CIRCLE.USER.invalid_argument",
@@ -9200,6 +9317,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "circle",
       "errorCodes": [
         "CIRCLE.USER.invalid_argument",
@@ -9293,6 +9411,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "circle",
       "errorCodes": [
         "CIRCLE.USER.invalid_argument",
@@ -9387,6 +9506,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "circle",
       "errorCodes": [
         "CIRCLE.USER.invalid_argument",
@@ -9482,6 +9602,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "circle",
       "errorCodes": [
         "CIRCLE.USER.invalid_argument",
@@ -9571,6 +9692,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "circle",
       "errorCodes": [
         "CIRCLE.USER.invalid_argument",
@@ -9653,6 +9775,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "circle",
       "errorCodes": [
         "CIRCLE.USER.invalid_argument",
@@ -9737,6 +9860,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "circle",
       "errorCodes": [
         "CIRCLE.USER.invalid_argument",
@@ -9822,6 +9946,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "circle",
       "errorCodes": [
         "CIRCLE.USER.invalid_argument",
@@ -9918,6 +10043,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "circle",
       "errorCodes": [
         "CIRCLE.USER.invalid_argument",
@@ -10014,6 +10140,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "circle",
       "errorCodes": [
         "CIRCLE.USER.invalid_argument",
@@ -10118,6 +10245,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "circle",
       "errorCodes": [
         "CIRCLE.USER.invalid_argument",
@@ -10207,6 +10335,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "circle",
       "errorCodes": [
         "CIRCLE.USER.invalid_argument",
@@ -10297,6 +10426,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "circle",
       "errorCodes": [
         "CIRCLE.USER.placement_not_found",
@@ -10384,6 +10514,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "circle",
       "errorCodes": [
         "CIRCLE.USER.placement_not_found",
@@ -10471,6 +10602,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "circle",
       "errorCodes": [
         "CIRCLE.USER.invalid_argument",
@@ -10556,6 +10688,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "circle",
       "errorCodes": [
         "CIRCLE.USER.placement_not_found",
@@ -10644,6 +10777,10 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": {
+        "arbitration": "conditional_admission",
+        "atomicCommit": true
+      },
       "domain": "circle",
       "errorCodes": [
         "CIRCLE.USER.gathering_not_found",
@@ -10736,6 +10873,10 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": {
+        "arbitration": "conditional_admission",
+        "atomicCommit": true
+      },
       "domain": "circle",
       "errorCodes": [
         "CIRCLE.USER.gathering_not_found",
@@ -10825,6 +10966,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "circle",
       "errorCodes": [
         "CIRCLE.USER.gathering_not_found",
@@ -10911,6 +11053,10 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": {
+        "arbitration": "conditional_admission",
+        "atomicCommit": true
+      },
       "domain": "circle",
       "errorCodes": [
         "CIRCLE.USER.gathering_not_found",
@@ -10997,6 +11143,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "circle",
       "errorCodes": [
         "CIRCLE.USER.gathering_not_found",
@@ -11087,6 +11234,7 @@
         "targetStory": "circle-community-gathering-coordination"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "circle",
       "errorCodes": [
         "CIRCLE.USER.gathering_not_found",
@@ -11172,6 +11320,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "circle",
       "errorCodes": [
         "CIRCLE.USER.gathering_host_authority_invalid",
@@ -11248,6 +11397,10 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": {
+        "arbitration": "version_cas",
+        "atomicCommit": true
+      },
       "domain": "circle",
       "errorCodes": [
         "CIRCLE.USER.gathering_not_found",
@@ -11336,6 +11489,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "circle",
       "errorCodes": [
         "CIRCLE.USER.gathering_not_found",
@@ -11421,6 +11575,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "circle",
       "errorCodes": [
         "CIRCLE.USER.gathering_not_found",
@@ -11505,6 +11660,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "circle",
       "errorCodes": [
         "CIRCLE.USER.gathering_not_found",
@@ -11587,6 +11743,10 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": {
+        "arbitration": "conditional_admission",
+        "atomicCommit": true
+      },
       "domain": "circle",
       "errorCodes": [
         "CIRCLE.USER.gathering_not_found",
@@ -11676,6 +11836,10 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": {
+        "arbitration": "conditional_admission",
+        "atomicCommit": true
+      },
       "domain": "circle",
       "errorCodes": [
         "CIRCLE.USER.gathering_not_found",
@@ -11765,6 +11929,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "circle",
       "errorCodes": [
         "CIRCLE.USER.gathering_host_authority_invalid",
@@ -11862,6 +12027,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "circle",
       "errorCodes": [
         "CIRCLE.DEPENDENCY.gathering_target_unavailable",
@@ -11959,6 +12125,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "circle",
       "errorCodes": [
         "CIRCLE.USER.invalid_argument",
@@ -12021,7 +12188,6 @@
       "streaming": null,
       "successStatus": null,
       "surfaceIds": [
-        "homeActionsDiscovery",
         "myGatherings"
       ],
       "telemetry": {
@@ -12048,6 +12214,10 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": {
+        "arbitration": "version_cas",
+        "atomicCommit": true
+      },
       "domain": "circle",
       "errorCodes": [
         "CIRCLE.USER.gathering_not_found",
@@ -12132,6 +12302,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "circle",
       "errorCodes": [
         "CIRCLE.USER.gathering_not_found",
@@ -12224,6 +12395,10 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": {
+        "arbitration": "version_cas",
+        "atomicCommit": true
+      },
       "domain": "circle",
       "errorCodes": [
         "CIRCLE.USER.gathering_not_found",
@@ -12310,6 +12485,10 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": {
+        "arbitration": "conditional_admission",
+        "atomicCommit": true
+      },
       "domain": "circle",
       "errorCodes": [
         "CIRCLE.USER.gathering_not_found",
@@ -12395,6 +12574,10 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": {
+        "arbitration": "conditional_admission",
+        "atomicCommit": true
+      },
       "domain": "circle",
       "errorCodes": [
         "CIRCLE.USER.gathering_not_found",
@@ -12483,6 +12666,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "circle",
       "errorCodes": [
         "CIRCLE.USER.gathering_not_found",
@@ -12572,6 +12756,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "circle",
       "errorCodes": [
         "CIRCLE.USER.gathering_not_found",
@@ -12660,6 +12845,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "circle",
       "errorCodes": [
         "CIRCLE.USER.gathering_not_found",
@@ -12746,6 +12932,7 @@
         "targetStory": "circle-community-gathering-plan-collaboration"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "circle",
       "errorCodes": [
         "CIRCLE.USER.gathering_plan_not_found",
@@ -12833,6 +13020,7 @@
         "targetStory": "circle-community-gathering-plan-collaboration"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "circle",
       "errorCodes": [
         "CIRCLE.USER.gathering_plan_not_found",
@@ -12930,6 +13118,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "content",
       "errorCodes": [
         "CONTENT.USER.unauthorized",
@@ -13018,6 +13207,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "content",
       "errorCodes": [
         "CONTENT.USER.unauthorized",
@@ -13110,6 +13300,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "content",
       "errorCodes": [
         "CONTENT.USER.unauthorized",
@@ -13202,6 +13393,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "content",
       "errorCodes": [
         "CONTENT.SYSTEM.storage_read_failed"
@@ -13301,6 +13493,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "content",
       "errorCodes": [
         "CONTENT.USER.comment_sort_invalid",
@@ -13402,6 +13595,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "content",
       "errorCodes": [
         "CONTENT.USER.unauthorized",
@@ -13490,6 +13684,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "content",
       "errorCodes": [
         "CONTENT.USER.unauthorized",
@@ -13578,6 +13773,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "content",
       "errorCodes": [
         "CONTENT.USER.unauthorized",
@@ -13669,6 +13865,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "content",
       "errorCodes": [
         "CONTENT.USER.unauthorized",
@@ -13760,6 +13957,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "content",
       "errorCodes": [
         "CONTENT.USER.unauthorized",
@@ -13810,7 +14008,8 @@
       "streaming": null,
       "successStatus": null,
       "surfaceIds": [
-        "interestOnboarding"
+        "interestOnboarding",
+        "videoBook"
       ],
       "telemetry": {
         "attributes": [
@@ -13838,6 +14037,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "content",
       "errorCodes": [
         "CONTENT.USER.unauthorized",
@@ -13922,6 +14122,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "content",
       "errorCodes": [
         "CONTENT.USER.unauthorized",
@@ -14008,6 +14209,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "content",
       "errorCodes": [
         "CONTENT.USER.unauthorized",
@@ -14095,6 +14297,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "content",
       "errorCodes": [
         "CONTENT.USER.unauthorized",
@@ -14181,6 +14384,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "content",
       "errorCodes": [
         "CONTENT.SYSTEM.filter_catalog_unavailable",
@@ -14255,6 +14459,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "content",
       "errorCodes": [
         "CONTENT.USER.unauthorized",
@@ -14303,7 +14508,6 @@
       "streaming": null,
       "successStatus": null,
       "surfaceIds": [
-        "homeActionsDiscovery",
         "myIntersections"
       ],
       "telemetry": {
@@ -14331,6 +14535,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "content",
       "errorCodes": [
         "CONTENT.USER.unauthorized",
@@ -14426,6 +14631,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "content",
       "errorCodes": [
         "CONTENT.USER.unauthorized",
@@ -14511,7 +14717,6 @@
       "streaming": null,
       "successStatus": null,
       "surfaceIds": [
-        "homeActionsDiscovery",
         "myIntersections"
       ],
       "telemetry": {
@@ -14541,6 +14746,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "content",
       "errorCodes": [
         "CONTENT.USER.unauthorized",
@@ -14616,6 +14822,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "content",
       "errorCodes": [
         "CONTENT.USER.unauthorized",
@@ -14704,6 +14911,7 @@
         "targetStory": "app-cloud-business-object-commercial-closure"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "content",
       "errorCodes": [
         "CONTENT.USER.media_not_found",
@@ -14787,6 +14995,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "content",
       "errorCodes": [
         "CONTENT.USER.unauthorized",
@@ -14873,6 +15082,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "content",
       "errorCodes": [
         "CONTENT.USER.unauthorized",
@@ -14959,6 +15169,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "content",
       "errorCodes": [
         "CONTENT.USER.unauthorized",
@@ -15048,6 +15259,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "content",
       "errorCodes": [
         "CONTENT.USER.unauthorized",
@@ -15139,6 +15351,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "content",
       "errorCodes": [
         "CONTENT.USER.unauthorized",
@@ -15220,6 +15433,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "content",
       "errorCodes": [
         "CONTENT.USER.unauthorized",
@@ -15303,6 +15517,10 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": {
+        "arbitration": "conditional_admission",
+        "atomicCommit": true
+      },
       "domain": "content",
       "errorCodes": [
         "CONTENT.USER.unauthorized",
@@ -15393,6 +15611,7 @@
         "targetStory": "app-cloud-business-object-commercial-closure"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "content",
       "errorCodes": [
         "CONTENT.USER.unauthorized",
@@ -15487,6 +15706,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "content",
       "errorCodes": [
         "CONTENT.USER.unauthorized",
@@ -15572,6 +15792,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "content",
       "errorCodes": [
         "CONTENT.SYSTEM.storage_read_failed",
@@ -15646,6 +15867,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "content",
       "errorCodes": [
         "CONTENT.USER.unauthorized",
@@ -15739,6 +15961,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "content",
       "errorCodes": [
         "CONTENT.USER.unauthorized",
@@ -15800,6 +16023,7 @@
       "successStatus": null,
       "surfaceIds": [
         "homepageDetail",
+        "videoBook",
         "workBrowser"
       ],
       "telemetry": {
@@ -15827,6 +16051,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "content",
       "errorCodes": [
         "CONTENT.USER.unauthorized",
@@ -15938,7 +16163,8 @@
       "streaming": null,
       "successStatus": null,
       "surfaceIds": [
-        "homeFeed"
+        "homeFeed",
+        "videoBook"
       ],
       "telemetry": {
         "attributes": [
@@ -15967,6 +16193,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "content",
       "errorCodes": [
         "CONTENT.USER.invalid_argument",
@@ -16028,6 +16255,7 @@
       "surfaceIds": [
         "gatheringDetail",
         "homepageDetail",
+        "videoBook",
         "workBrowser"
       ],
       "telemetry": {
@@ -16054,6 +16282,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "content",
       "errorCodes": [
         "CONTENT.USER.unauthorized",
@@ -16150,6 +16379,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "content",
       "errorCodes": [
         "CONTENT.USER.post_not_found",
@@ -16237,6 +16467,7 @@
         "targetStory": "multi-carrier-release"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "content",
       "errorCodes": [
         "CONTENT.USER.unauthorized",
@@ -16323,6 +16554,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "content",
       "errorCodes": [
         "CONTENT.USER.unauthorized",
@@ -16430,6 +16662,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "content",
       "errorCodes": [
         "CONTENT.USER.invalid_argument",
@@ -16525,6 +16758,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "content",
       "errorCodes": [
         "CONTENT.USER.invalid_argument",
@@ -16637,6 +16871,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "content",
       "errorCodes": [
         "CONTENT.USER.unauthorized",
@@ -16729,6 +16964,7 @@
         "targetStory": "app-cloud-business-object-commercial-closure"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "content",
       "errorCodes": [
         "CONTENT.USER.unauthorized",
@@ -16836,6 +17072,7 @@
         "targetStory": "app-cloud-business-object-commercial-closure"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "content",
       "errorCodes": [
         "CONTENT.USER.unauthorized",
@@ -16943,6 +17180,7 @@
         "targetStory": "app-cloud-business-object-commercial-closure"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "content",
       "errorCodes": [
         "CONTENT.USER.unauthorized",
@@ -17032,6 +17270,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "content",
       "errorCodes": [
         "CONTENT.USER.unauthorized",
@@ -17110,6 +17349,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "content",
       "errorCodes": [
         "CONTENT.USER.unauthorized",
@@ -17199,6 +17439,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "entity",
       "errorCodes": [
         "ENTITY.USER.homepage_not_found",
@@ -17281,6 +17522,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "entity",
       "errorCodes": [
         "ENTITY.USER.homepage_not_found",
@@ -17366,6 +17608,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "entity",
       "errorCodes": [
         "ENTITY.USER.homepage_not_found",
@@ -17448,6 +17691,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "entity",
       "errorCodes": [
         "ENTITY.USER.homepage_not_found",
@@ -17530,6 +17774,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "entity",
       "errorCodes": [
         "ENTITY.USER.homepage_not_found",
@@ -17612,6 +17857,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "entity",
       "errorCodes": [
         "ENTITY.USER.homepage_not_found",
@@ -17694,6 +17940,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "entity",
       "errorCodes": [
         "ENTITY.USER.homepage_not_found",
@@ -17803,6 +18050,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "entity",
       "errorCodes": [
         "ENTITY.USER.invalid_argument",
@@ -17911,6 +18159,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "entity",
       "errorCodes": [
         "ENTITY.USER.invalid_argument",
@@ -17988,6 +18237,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "entity",
       "errorCodes": [
         "ENTITY.USER.homepage_not_found",
@@ -18073,6 +18323,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "entity",
       "errorCodes": [
         "ENTITY.USER.homepage_not_found",
@@ -18163,6 +18414,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "entity",
       "errorCodes": [
         "ENTITY.USER.claim_not_found",
@@ -18246,6 +18498,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "entity",
       "errorCodes": [
         "ENTITY.USER.homepage_not_found",
@@ -18332,6 +18585,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "entity",
       "errorCodes": [
         "ENTITY.USER.review_not_found",
@@ -18417,6 +18671,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "entity",
       "errorCodes": [
         "ENTITY.USER.review_not_found",
@@ -18499,6 +18754,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "entity",
       "errorCodes": [
         "ENTITY.USER.homepage_not_found",
@@ -18595,6 +18851,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "entity",
       "errorCodes": [
         "ENTITY.USER.review_not_found",
@@ -18680,6 +18937,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "entity",
       "errorCodes": [
         "ENTITY.USER.homepage_not_found",
@@ -18766,6 +19024,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "entity",
       "errorCodes": [
         "ENTITY.USER.status_report_not_found",
@@ -18857,6 +19116,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "gateway",
       "errorCodes": [
         "GATEWAY.USER.graphql_request_invalid",
@@ -18936,6 +19196,7 @@
         "targetStory": "user-connector-capability-gateway"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "integration",
       "errorCodes": [
         "INTEGRATION.USER.connector_connection_unauthorized",
@@ -19020,6 +19281,7 @@
         "targetStory": "user-connector-capability-gateway"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "integration",
       "errorCodes": [
         "INTEGRATION.USER.connector_connection_unauthorized",
@@ -19106,6 +19368,7 @@
         "targetStory": "user-connector-capability-gateway"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "integration",
       "errorCodes": [
         "INTEGRATION.USER.connector_connection_unauthorized",
@@ -19192,6 +19455,10 @@
         "targetStory": "user-connector-capability-gateway"
       },
       "concurrency": {},
+      "consistency": {
+        "arbitration": "version_cas",
+        "atomicCommit": true
+      },
       "domain": "integration",
       "errorCodes": [
         "INTEGRATION.USER.connector_connection_unauthorized",
@@ -19281,6 +19548,7 @@
         "targetStory": "user-connector-capability-gateway"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "integration",
       "errorCodes": [
         "INTEGRATION.USER.connector_unauthorized",
@@ -19367,6 +19635,7 @@
         "targetStory": "user-connector-capability-gateway"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "integration",
       "errorCodes": [
         "INTEGRATION.USER.connector_unauthorized",
@@ -19457,6 +19726,7 @@
         "targetStory": "user-connector-capability-gateway"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "integration",
       "errorCodes": [
         "INTEGRATION.USER.connector_invocation_unauthorized",
@@ -19543,6 +19813,7 @@
         "targetStory": "user-connector-capability-gateway"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "integration",
       "errorCodes": [
         "INTEGRATION.USER.connector_invocation_unauthorized",
@@ -19630,6 +19901,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "integration",
       "errorCodes": [
         "INTEGRATION.USER.location_permission_required",
@@ -19728,6 +20000,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "integration",
       "errorCodes": [
         "INTEGRATION.USER.invalid_argument",
@@ -19832,6 +20105,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "notification",
       "errorCodes": [
         "NOTIFICATION.USER.unauthorized",
@@ -19916,6 +20190,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "notification",
       "errorCodes": [
         "NOTIFICATION.USER.unauthorized",
@@ -20000,6 +20275,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "notification",
       "errorCodes": [
         "NOTIFICATION.USER.unauthorized",
@@ -20075,6 +20351,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "notification",
       "errorCodes": [
         "NOTIFICATION.USER.unauthorized",
@@ -20177,6 +20454,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "notification",
       "errorCodes": [
         "NOTIFICATION.USER.unauthorized",
@@ -20261,6 +20539,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "notification",
       "errorCodes": [
         "NOTIFICATION.USER.delivery_job_unauthorized",
@@ -20339,6 +20618,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "ops",
       "errorCodes": [
         "OPS.USER.app_release_query_invalid",
@@ -20431,6 +20711,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "ops",
       "errorCodes": [
         "OPS.USER.event_batch_invalid",
@@ -20507,6 +20788,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "ops",
       "errorCodes": [
         "OPS.USER.runtime_log_batch_invalid",
@@ -20582,6 +20864,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "ops",
       "errorCodes": [
         "OPS.USER.startup_event_invalid",
@@ -20668,6 +20951,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "ops",
       "errorCodes": [
         "OPS.USER.recovery_failure_invalid",
@@ -20743,6 +21027,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "ops",
       "errorCodes": [
         "OPS.USER.visit_invalid_argument",
@@ -20829,6 +21114,9 @@
         "targetStory": "app-cloud-business-object-commercial-closure"
       },
       "concurrency": {},
+      "consistency": {
+        "arbitration": "fence"
+      },
       "domain": "realtime",
       "errorCodes": [
         "REALTIME.USER.unauthorized",
@@ -20923,6 +21211,7 @@
         "targetStory": "app-cloud-business-object-commercial-closure"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "realtime",
       "errorCodes": [
         "REALTIME.USER.invalid_argument",
@@ -21017,6 +21306,9 @@
         "targetStory": "app-cloud-business-object-commercial-closure"
       },
       "concurrency": {},
+      "consistency": {
+        "arbitration": "fence"
+      },
       "domain": "realtime",
       "errorCodes": [
         "REALTIME.USER.ticket_invalid",
@@ -21108,6 +21400,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "rtc",
       "errorCodes": [
         "RTC.USER.unauthorized",
@@ -21199,6 +21492,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "rtc",
       "errorCodes": [
         "RTC.USER.unauthorized",
@@ -21288,6 +21582,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "rtc",
       "errorCodes": [
         "RTC.USER.call_not_found",
@@ -21376,6 +21671,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "rtc",
       "errorCodes": [
         "RTC.USER.unauthorized",
@@ -21466,6 +21762,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "rtc",
       "errorCodes": [
         "RTC.USER.invalid_argument",
@@ -21551,6 +21848,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "rtc",
       "errorCodes": [
         "RTC.USER.invalid_argument",
@@ -21642,6 +21940,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "rtc",
       "errorCodes": [
         "RTC.USER.unauthorized",
@@ -21735,6 +22034,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "rtc",
       "errorCodes": [
         "RTC.USER.unauthorized",
@@ -21825,6 +22125,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "rtc",
       "errorCodes": [
         "RTC.USER.account_security_denied",
@@ -21926,6 +22227,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "rtc",
       "errorCodes": [
         "RTC.USER.unauthorized",
@@ -22015,6 +22317,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "rtc",
       "errorCodes": [
         "RTC.USER.unauthorized",
@@ -22105,6 +22408,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "rtc",
       "errorCodes": [
         "RTC.USER.unauthorized",
@@ -22196,6 +22500,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "rtc",
       "errorCodes": [
         "RTC.USER.unauthorized",
@@ -22287,6 +22592,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "rtc",
       "errorCodes": [
         "RTC.USER.invalid_argument",
@@ -22378,6 +22684,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "rtc",
       "errorCodes": [
         "RTC.USER.invalid_argument",
@@ -22469,6 +22776,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "search",
       "errorCodes": [
         "SEARCH.USER.recent_version_conflict",
@@ -22553,6 +22861,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "search",
       "errorCodes": [
         "SEARCH.USER.recent_version_conflict",
@@ -22635,6 +22944,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "search",
       "errorCodes": [
         "SEARCH.SYSTEM.recent_storage_failed"
@@ -22716,6 +23026,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "search",
       "errorCodes": [
         "SEARCH.USER.recent_invalid_argument",
@@ -22795,6 +23106,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "search",
       "errorCodes": [
         "SEARCH.USER.feedback_invalid_argument",
@@ -22871,6 +23183,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "search",
       "errorCodes": [
         "SEARCH.USER.invalid_argument",
@@ -22955,6 +23268,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "search",
       "errorCodes": [
         "SEARCH.USER.hot_query_invalid_argument",
@@ -23039,6 +23353,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "tag",
       "errorCodes": [
         "TAG.USER.invalid_argument",
@@ -23117,6 +23432,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "tag",
       "errorCodes": [
         "TAG.USER.invalid_argument",
@@ -23203,6 +23519,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "tag",
       "errorCodes": [
         "TAG.USER.invalid_argument",
@@ -23284,6 +23601,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "tag",
       "errorCodes": [
         "TAG.USER.invalid_argument",
@@ -23361,6 +23679,7 @@
         "targetStory": "multi-carrier-release"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "user",
       "errorCodes": [
         "USER.USER.unauthorized",
@@ -23445,6 +23764,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "user",
       "errorCodes": [
         "USER.USER.invalid_argument",
@@ -23522,6 +23842,7 @@
         "targetStory": "four-environment-commercial-login-maturity"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "user",
       "errorCodes": [
         "USER.USER.invalid_argument",
@@ -23609,6 +23930,7 @@
         "targetStory": "four-environment-commercial-login-maturity"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "user",
       "errorCodes": [
         "USER.USER.invalid_argument",
@@ -23692,6 +24014,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "user",
       "errorCodes": [
         "USER.USER.invalid_argument",
@@ -23778,6 +24101,7 @@
         "targetStory": "four-environment-commercial-login-maturity"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "user",
       "errorCodes": [
         "USER.USER.invalid_argument",
@@ -23864,6 +24188,7 @@
         "targetStory": "four-environment-commercial-login-maturity"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "user",
       "errorCodes": [
         "USER.USER.invalid_argument",
@@ -23947,6 +24272,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "user",
       "errorCodes": [
         "USER.USER.invalid_argument",
@@ -24027,6 +24353,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "user",
       "errorCodes": [
         "USER.USER.invalid_argument",
@@ -24106,6 +24433,7 @@
         "targetStory": "four-environment-commercial-login-maturity"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "user",
       "errorCodes": [
         "USER.USER.invalid_argument",
@@ -24184,6 +24512,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "user",
       "errorCodes": [
         "USER.SYSTEM.internal_error"
@@ -24260,6 +24589,7 @@
         "targetStory": "four-environment-commercial-login-maturity"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "user",
       "errorCodes": [
         "USER.USER.invalid_argument",
@@ -24342,6 +24672,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "user",
       "errorCodes": [
         "USER.USER.invalid_argument",
@@ -24423,6 +24754,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "user",
       "errorCodes": [
         "USER.USER.unauthorized",
@@ -24510,6 +24842,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "user",
       "errorCodes": [
         "USER.USER.unauthorized",
@@ -24590,6 +24923,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "user",
       "errorCodes": [
         "USER.USER.unauthorized",
@@ -24672,6 +25006,10 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": {
+        "arbitration": "unique_winner",
+        "atomicCommit": true
+      },
       "domain": "user",
       "errorCodes": [
         "USER.USER.invalid_argument",
@@ -24756,6 +25094,10 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": {
+        "arbitration": "unique_winner",
+        "atomicCommit": true
+      },
       "domain": "user",
       "errorCodes": [
         "USER.USER.invalid_argument",
@@ -24844,6 +25186,10 @@
         "targetStory": "four-environment-commercial-login-maturity"
       },
       "concurrency": {},
+      "consistency": {
+        "arbitration": "unique_winner",
+        "atomicCommit": true
+      },
       "domain": "user",
       "errorCodes": [
         "USER.USER.invalid_argument",
@@ -24929,6 +25275,10 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": {
+        "source": "authority",
+        "staleResult": "fail_closed"
+      },
       "domain": "user",
       "errorCodes": [
         "USER.USER.unauthorized",
@@ -25008,6 +25358,10 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": {
+        "arbitration": "version_cas",
+        "atomicCommit": true
+      },
       "domain": "user",
       "errorCodes": [
         "USER.USER.invalid_argument",
@@ -25097,6 +25451,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "user",
       "errorCodes": [
         "USER.USER.unauthorized",
@@ -25192,6 +25547,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "user",
       "errorCodes": [
         "USER.USER.unauthorized",
@@ -25289,6 +25645,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "user",
       "errorCodes": [
         "USER.USER.unauthorized",
@@ -25381,6 +25738,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "user",
       "errorCodes": [
         "USER.USER.unauthorized",
@@ -25481,6 +25839,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "user",
       "errorCodes": [
         "USER.USER.unauthorized",
@@ -25570,6 +25929,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "user",
       "errorCodes": [
         "USER.USER.unauthorized",
@@ -25659,6 +26019,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "user",
       "errorCodes": [
         "USER.USER.unauthorized",
@@ -25756,6 +26117,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "user",
       "errorCodes": [
         "USER.USER.unauthorized",
@@ -25853,6 +26215,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "user",
       "errorCodes": [
         "USER.USER.unauthorized",
@@ -25942,6 +26305,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "user",
       "errorCodes": [
         "USER.USER.unauthorized",
@@ -26026,6 +26390,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "user",
       "errorCodes": [
         "USER.USER.invalid_argument",
@@ -26114,6 +26479,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "user",
       "errorCodes": [
         "USER.USER.invalid_argument",
@@ -26202,6 +26568,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "user",
       "errorCodes": [
         "USER.USER.invalid_argument",
@@ -26283,6 +26650,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "user",
       "errorCodes": [
         "USER.USER.invalid_argument",
@@ -26373,6 +26741,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "user",
       "errorCodes": [
         "USER.USER.invalid_argument",
@@ -26463,6 +26832,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "user",
       "errorCodes": [
         "USER.USER.invalid_argument",
@@ -26549,6 +26919,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "user",
       "errorCodes": [
         "USER.USER.unauthorized",
@@ -26640,6 +27011,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "user",
       "errorCodes": [
         "USER.USER.unauthorized",
@@ -26738,6 +27110,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "user",
       "errorCodes": [
         "USER.USER.unauthorized",
@@ -26828,6 +27201,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "user",
       "errorCodes": [
         "USER.USER.unauthorized",
@@ -26922,6 +27296,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "user",
       "errorCodes": [
         "USER.USER.unauthorized",
@@ -27028,6 +27403,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "user",
       "errorCodes": [
         "USER.USER.unauthorized",
@@ -27137,6 +27513,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "user",
       "errorCodes": [
         "USER.USER.unauthorized",
@@ -27227,6 +27604,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "user",
       "errorCodes": [
         "USER.USER.unauthorized",
@@ -27320,6 +27698,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "user",
       "errorCodes": [
         "USER.PROFILE_PROPOSAL.not_found",
@@ -27411,6 +27790,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "user",
       "errorCodes": [
         "USER.PROFILE_PROPOSAL.not_found",
@@ -27502,6 +27882,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "user",
       "errorCodes": [
         "USER.PROFILE_PROPOSAL.not_found",
@@ -27593,6 +27974,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "user",
       "errorCodes": [
         "USER.PROFILE_PROPOSAL.not_found",
@@ -27683,6 +28065,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "user",
       "errorCodes": [
         "USER.PROFILE_PROPOSAL.not_found",
@@ -27787,6 +28170,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "user",
       "errorCodes": [
         "USER.PROFILE_PROPOSAL.not_found",
@@ -27878,6 +28262,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "user",
       "errorCodes": [
         "USER.PROFILE_PROPOSAL.not_found",
@@ -27970,6 +28355,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "user",
       "errorCodes": [
         "USER.USER.unauthorized",
@@ -28064,6 +28450,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "user",
       "errorCodes": [
         "USER.USER.unauthorized",
@@ -28158,6 +28545,9 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": {
+        "atomicCommit": true
+      },
       "domain": "user",
       "errorCodes": [
         "USER.USER.unauthorized",
@@ -28237,6 +28627,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "user",
       "errorCodes": [
         "USER.USER.unauthorized",
@@ -28315,6 +28706,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "user",
       "errorCodes": [
         "USER.USER.unauthorized",
@@ -28394,6 +28786,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "user",
       "errorCodes": [
         "USER.USER.unauthorized",
@@ -28480,6 +28873,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "user",
       "errorCodes": [
         "USER.USER.unauthorized",
@@ -28558,6 +28952,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "user",
       "errorCodes": [
         "USER.PERSONA.not_found",
@@ -28645,6 +29040,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "user",
       "errorCodes": [
         "USER.USER.unauthorized",
@@ -28724,6 +29120,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "user",
       "errorCodes": [
         "USER.USER.unauthorized",
@@ -28805,6 +29202,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "user",
       "errorCodes": [
         "USER.PERSONA.not_found",
@@ -28892,6 +29290,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "user",
       "errorCodes": [
         "USER.USER.unauthorized",
@@ -28970,6 +29369,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "user",
       "errorCodes": [
         "USER.USER.invalid_argument",
@@ -29049,6 +29449,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "user",
       "errorCodes": [
         "USER.PROFILE.qr_token_invalid",
@@ -29140,6 +29541,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "user",
       "errorCodes": [
         "USER.USER.unauthorized",
@@ -29240,6 +29642,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "user",
       "errorCodes": [
         "USER.USER.unauthorized",
@@ -29318,6 +29721,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "user",
       "errorCodes": [
         "USER.USER.unauthorized",
@@ -29397,6 +29801,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "user",
       "errorCodes": [
         "USER.USER.unauthorized",
@@ -29476,6 +29881,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "user",
       "errorCodes": [
         "USER.USER.unauthorized",
@@ -29556,6 +29962,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "user",
       "errorCodes": [
         "USER.USER.invalid_argument",
@@ -29637,6 +30044,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "user",
       "errorCodes": [
         "USER.USER.invalid_argument",
@@ -29719,6 +30127,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "user",
       "errorCodes": [
         "USER.USER.invalid_argument",
@@ -29800,6 +30209,7 @@
         "status": "ready"
       },
       "concurrency": {},
+      "consistency": null,
       "domain": "user",
       "errorCodes": [
         "USER.USER.invalid_argument",
@@ -29870,13 +30280,13 @@
   ],
   "breakingReport": {
     "path": "quwoquan_app/tool/cloud_codegen/contract_graph.breaking.json",
-    "sha256": "c089237fcea1f61e38289b8cac52a02bf36a30ed4f16d2a9de8d343b39428208"
+    "sha256": "f7b8376eeabd5306d36ba2f3f797f682216cbb5d7dafd1cc8e19b90d681070c4"
   },
   "contractGraph": {
-    "compilerHash": "sha256:ed5e58456d0358f3bc0edfa28dcfbcba3b3f883ccc039bfb771e6b7ef1e6757c",
+    "compilerHash": "sha256:00961c84edb8af2a126a096ba81cfc605747324f0e738365b2cca8276c2dbad9",
     "path": "quwoquan_service/generated/contract_graph.json",
-    "sha256": "157736ecc8566df93f4bf80645e3060c065d845c9dd2af2b8186447883b0206f",
-    "sourceDigestSetSha256": "192305c80b7a7a7e81510418191b88327bcadafa631438c678b99bac36a4d81c"
+    "sha256": "d70d6bc25b5d23c07ea3c5bf7711e373c3fed4effca19b91a9a6c405307a3864",
+    "sourceDigestSetSha256": "6dde714939fb9c27a3021f9cc00198145c25fabd6d32ccd96da8c91bcc0fa9a2"
   },
   "generator": "app-cloud-handoff"
 }

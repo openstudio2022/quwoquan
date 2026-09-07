@@ -28,9 +28,8 @@ void main() {
     description: 'sheet drag handle',
   );
 
-  testWidgets('加号入口首层仅三项，发内容二级仅照片视频文字', (tester) async {
+  testWidgets('加号入口首层内容优先，更多不包含活动', (tester) async {
     EditorStartAction? selected;
-    var gatheringTapped = false;
     var groupChatTapped = false;
 
     await tester.pumpWidget(
@@ -43,7 +42,6 @@ void main() {
                 isOpen: true,
                 onClose: () {},
                 onSelect: (action) => selected = action,
-                onStartGathering: () => gatheringTapped = true,
                 onStartGroupChat: () => groupChatTapped = true,
               ),
             ),
@@ -53,18 +51,17 @@ void main() {
     );
     await tester.pump();
 
-    expect(find.byKey(TestKeys.createActionPublishContent), findsOneWidget);
-    expect(find.byKey(TestKeys.createActionStartGathering), findsOneWidget);
-    expect(find.byKey(TestKeys.createActionStartGroupChat), findsOneWidget);
-    expect(find.byKey(TestKeys.createActionGallery), findsNothing);
-    expect(find.byKey(TestKeys.createActionCapture), findsNothing);
-    expect(find.byKey(TestKeys.createActionWrite), findsNothing);
+    expect(find.byKey(TestKeys.createActionGallery), findsOneWidget);
+    expect(find.byKey(TestKeys.createActionCapture), findsOneWidget);
+    expect(find.byKey(TestKeys.createActionWrite), findsOneWidget);
+    expect(find.byKey(TestKeys.createActionMore), findsOneWidget);
+    expect(find.text('发起活动'), findsNothing);
+    expect(find.byKey(TestKeys.createActionStartGroupChat), findsNothing);
+
     expect(find.text(CreationText.createActionAddContactShort), findsNothing);
     expect(find.text(CreationText.createActionCreateCircleShort), findsNothing);
-    expect(
-      find.text(CreationText.createActionInterestMatchShort),
-      findsNothing,
-    );
+    // 「交集配对」launcher 与「发起活动」直达入口均已退役（intersection-unified-experience REQ-005）。
+    expect(find.text('交集配对'), findsNothing);
     expect(find.text(FoundationText.cancel), findsOneWidget);
     expect(find.byType(ConversationSheetListCard), findsOneWidget);
     expect(find.byIcon(CupertinoIcons.chevron_forward), findsNothing);
@@ -83,29 +80,17 @@ void main() {
       greaterThan(0),
     );
 
-    await tester.tap(find.byKey(TestKeys.createActionStartGathering));
+    await tester.tap(find.byKey(TestKeys.createActionCapture));
     await tester.pump();
-    expect(gatheringTapped, isTrue);
-    expect(groupChatTapped, isFalse);
+    expect(selected, EditorStartAction.video);
 
+    await tester.tap(find.byKey(TestKeys.createActionMore));
+    await tester.pump();
+    expect(find.text('发起活动'), findsNothing);
+    expect(find.byKey(TestKeys.createActionStartGroupChat), findsOneWidget);
     await tester.tap(find.byKey(TestKeys.createActionStartGroupChat));
     await tester.pump();
     expect(groupChatTapped, isTrue);
-
-    await tester.tap(find.byKey(TestKeys.createActionPublishContent));
-    await tester.pump();
-
-    expect(find.byKey(TestKeys.createActionPublishContent), findsNothing);
-    expect(find.byKey(TestKeys.createActionStartGathering), findsNothing);
-    expect(find.byKey(TestKeys.createActionStartGroupChat), findsNothing);
-    expect(find.byKey(TestKeys.createActionGallery), findsOneWidget);
-    expect(find.byKey(TestKeys.createActionCapture), findsOneWidget);
-    expect(find.byKey(TestKeys.createActionWrite), findsOneWidget);
-
-    await tester.tap(find.byKey(TestKeys.createActionCapture));
-    await tester.pump();
-
-    expect(selected, EditorStartAction.video);
   });
 
   testWidgets('Android 与 iOS 均渲染同一套列表式加号面板', (tester) async {
@@ -126,7 +111,6 @@ void main() {
                     isOpen: true,
                     onClose: () {},
                     onSelect: (_) {},
-                    onStartGathering: () {},
                     onStartGroupChat: () {},
                   ),
                 ),
@@ -136,12 +120,12 @@ void main() {
         );
         await tester.pump();
 
-        expect(find.byKey(TestKeys.createActionPublishContent), findsOneWidget);
-        expect(find.byKey(TestKeys.createActionStartGathering), findsOneWidget);
-        expect(find.byKey(TestKeys.createActionStartGroupChat), findsOneWidget);
-        expect(find.byKey(TestKeys.createActionGallery), findsNothing);
-        expect(find.byKey(TestKeys.createActionCapture), findsNothing);
-        expect(find.byKey(TestKeys.createActionWrite), findsNothing);
+        expect(find.byKey(TestKeys.createActionGallery), findsOneWidget);
+        expect(find.byKey(TestKeys.createActionCapture), findsOneWidget);
+        expect(find.byKey(TestKeys.createActionWrite), findsOneWidget);
+        expect(find.byKey(TestKeys.createActionMore), findsOneWidget);
+        expect(find.text('发起活动'), findsNothing);
+        expect(find.byKey(TestKeys.createActionStartGroupChat), findsNothing);
         expect(
           find.descendant(
             of: find.byKey(TestKeys.modalBottomSheetPanel),
@@ -172,7 +156,6 @@ void main() {
                   isOpen: true,
                   onClose: () {},
                   onSelect: (_) {},
-                  onStartGathering: () {},
                   onStartGroupChat: () {},
                 ),
               ),
@@ -192,7 +175,7 @@ void main() {
     );
   });
 
-  testWidgets('发内容二级固定为照片视频文字顺序', (tester) async {
+  testWidgets('内容创作固定为照片视频文字顺序', (tester) async {
     await tester.pumpWidget(
       ProviderScope(
         child: ScreenUtilInit(
@@ -203,7 +186,6 @@ void main() {
                 isOpen: true,
                 onClose: () {},
                 onSelect: (_) {},
-                onStartGathering: () {},
                 onStartGroupChat: () {},
               ),
             ),
@@ -211,9 +193,6 @@ void main() {
         ),
       ),
     );
-    await tester.pump();
-
-    await tester.tap(find.byKey(TestKeys.createActionPublishContent));
     await tester.pump();
 
     final galleryY = tester
@@ -227,8 +206,7 @@ void main() {
     expect(cameraY, lessThan(writeY));
   });
 
-  testWidgets('移动端首层活动与普通群聊保持两个独立动作', (tester) async {
-    var gatheringTapped = false;
+  testWidgets('移动端更多仅承接普通群聊，不暴露无上下文活动', (tester) async {
     var groupChatTapped = false;
 
     await tester.pumpWidget(
@@ -239,7 +217,6 @@ void main() {
             home: Scaffold(
               body: CreateActionSheet(
                 onCreateAction: (_) {},
-                onStartGathering: () => gatheringTapped = true,
                 onStartGroupChat: () => groupChatTapped = true,
                 onCancel: () {},
               ),
@@ -250,26 +227,14 @@ void main() {
     );
     await tester.pump();
 
-    expect(find.byKey(TestKeys.createActionStartGathering), findsOneWidget);
-    expect(find.byKey(TestKeys.createActionStartGroupChat), findsOneWidget);
-    expect(find.byType(ConversationSheetListCard), findsOneWidget);
-    expect(
-      find.descendant(
-        of: find.byKey(TestKeys.modalBottomSheetPanel),
-        matching: find.byType(Icon),
-      ),
-      findsNothing,
-    );
-
-    await tester.tap(find.byKey(TestKeys.createActionStartGathering));
+    expect(find.text('发起活动'), findsNothing);
+    expect(find.byKey(TestKeys.createActionStartGroupChat), findsNothing);
+    await tester.tap(find.byKey(TestKeys.createActionMore));
     await tester.pump();
-
-    expect(gatheringTapped, isTrue);
-    expect(groupChatTapped, isFalse);
-
+    expect(find.text('发起活动'), findsNothing);
+    expect(find.byKey(TestKeys.createActionStartGroupChat), findsOneWidget);
     await tester.tap(find.byKey(TestKeys.createActionStartGroupChat));
     await tester.pump();
-
     expect(groupChatTapped, isTrue);
   });
 
@@ -287,7 +252,6 @@ void main() {
             home: Scaffold(
               body: CreateActionSheet(
                 onCreateAction: (_) {},
-                onStartGathering: () {},
                 onStartGroupChat: () {},
                 onCancel: () {},
               ),
@@ -316,7 +280,6 @@ void main() {
                 isOpen: true,
                 onClose: () => closed = true,
                 onSelect: (_) {},
-                onStartGathering: () {},
                 onStartGroupChat: () {},
               ),
             ),

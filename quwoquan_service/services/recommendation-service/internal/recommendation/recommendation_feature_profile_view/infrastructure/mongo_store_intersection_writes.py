@@ -421,18 +421,21 @@ class MongoIntersectionWriteOps:
                     if normalized_action in {"wishlist_add", "wishlist_remove"}:
                         for entity_id in normalized_refs:
                             identity = f"{subject}\x1f{entity_id}"
+                            wishlist_fields = {
+                                "subjectId": subject,
+                                "entityId": entity_id,
+                                "active": normalized_action == "wishlist_add",
+                                "sourceEventId": normalized_event,
+                                "sourceEventDigest": digest,
+                                "updatedAt": occurred_at.astimezone(timezone.utc),
+                            }
+                            # 事件级 displayName 描述的是行为目标本身；其余 entityRef
+                            # 不得借用目标的名字，否则实体 X 会顶着 Y 的名字进主句。
+                            if entity_id == target and display_name.strip():
+                                wishlist_fields["displayName"] = display_name.strip()
                             self._intersection_wishlist.update_one(
                                 {"_id": identity},
-                                {
-                                    "$set": {
-                                        "subjectId": subject,
-                                        "entityId": entity_id,
-                                        "active": normalized_action == "wishlist_add",
-                                        "sourceEventId": normalized_event,
-                                        "sourceEventDigest": digest,
-                                        "updatedAt": occurred_at.astimezone(timezone.utc),
-                                    }
-                                },
+                                {"$set": wishlist_fields},
                                 upsert=True,
                                 session=session,
                             )

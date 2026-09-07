@@ -1,5 +1,12 @@
+// spec_ref: specs/feature-tree/object-homepage-network/intersection-unified-experience/home-recommend-intersection-redesign/spec.md#gwt-001
+// spec_ref: specs/feature-tree/object-homepage-network/intersection-unified-experience/spec.md#sit-003.t4
+// spec_ref: specs/feature-tree/object-homepage-network/intersection-unified-experience/spec.md#sit-003.t5
+// spec_ref: specs/feature-tree/object-homepage-network/intersection-unified-experience/home-recommend-intersection-redesign/spec.md#gwt-001.t4
+// spec_ref: specs/feature-tree/object-homepage-network/intersection-unified-experience/home-recommend-intersection-redesign/spec.md#gwt-001.t6
 import 'package:flutter/cupertino.dart';
+
 import '../../../../../support/service/recommendation_service/recommendation/recommendation_feature_profile_view/intersection_fixtures.dart';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/service/content_service/content/intersection_visit_state/adapters/intersection_repository.dart';
@@ -7,6 +14,7 @@ import 'package:quwoquan_app/service/recommendation_service/recommendation/recom
 import 'package:quwoquan_app/l10n/copy/discovery_feed_text_constants.dart';
 import 'package:quwoquan_app/runtime/di/app_providers.dart';
 import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/presentation/home_intersection_spotlight_rail.dart';
+import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/presentation/generated/intersection_display_metadata.g.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 /// 首页交集 spotlight 落地面契约：
@@ -77,6 +85,52 @@ void main() {
         (i) => _factReason(id: 'ix_$i', name: '对象$i', text: '你们都去过对象$i'),
       );
       expect(HomeIntersectionSpotlightRail.displayable(many).length, 8);
+    });
+
+    test('spotlight 只收注册表登记的 kind：未登记 kind 无口径可对齐，整条不进', () {
+      final registered = _factReason(id: 'ix_ok', name: '西湖', text: '你们都去过西湖');
+      final unregistered = copyIntersectionReasonFixture(
+        _factReason(id: 'ix_bad', name: '西湖', text: '你们都去过西湖'),
+        kind: 'legacyHandRolledKind',
+      );
+      expect(IntersectionKindDisplayMetadata.of(registered.kind), isNotNull);
+      expect(IntersectionKindDisplayMetadata.of(unregistered.kind), isNull);
+      final shown = HomeIntersectionSpotlightRail.displayable(
+        <IntersectionReason>[registered, unregistered],
+      );
+      expect(shown.map((r) => r.intersectionId), <String>['ix_ok']);
+    });
+
+    testWidgets('spotlight 卡口径：主句直出云侧文本，维度弱标只认云侧按注册表渲染的 label，行动提示不上卡面', (
+      tester,
+    ) async {
+      const dimensionLabel = '地点';
+      final reason = copyIntersectionReasonFixture(
+        _factReason(id: 'ix_1', name: '西湖', text: '你们都去过西湖'),
+        dimensionPointSummary: <IntersectionDimensionTally>[
+          intersectionDimensionTallyFixture(
+            dimension: 'location',
+            label: dimensionLabel,
+            count: 1,
+          ),
+        ],
+        actionHints: <IntersectionActionHint>[
+          intersectionActionHintFixture(
+            actionKey: 'start_gathering',
+            label: '发起聚集',
+            isPrimary: true,
+          ),
+        ],
+      );
+      await _pumpRail(
+        tester,
+        reasons: <IntersectionReason>[reason],
+        channelId: 'travel',
+      );
+      expect(find.text('你们都去过西湖'), findsOneWidget);
+      expect(find.text(dimensionLabel), findsOneWidget);
+      // 紧凑面严格单句：不渲染行动按钮 / 行动标签 / 副句。
+      expect(find.text('发起聚集'), findsNothing);
     });
 
     test('频道标题来自频道 id 闭集，不做拼接', () {

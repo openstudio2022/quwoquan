@@ -2,8 +2,9 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 /// Pure application seam for deriving a durable idempotency key from the
 /// canonical storage payload. The hashing implementation belongs to adapters.
-typedef ContentBehaviorClientEventIdDeriver =
-    String Function(Map<String, dynamic> canonicalPayload);
+typedef ContentBehaviorClientEventIdDeriver = String Function(
+  Map<String, dynamic> canonicalPayload,
+);
 
 /// Referral source indicating how the user arrived at the content.
 enum ReferralSource {
@@ -104,6 +105,7 @@ class BehaviorEvent {
     this.intersectionId,
     this.intersectionClass,
     this.intersectionEvidenceId,
+    this.intersectionCohort,
     this.subjectId,
     this.feedbackKind,
     this.taxonomyReleaseId,
@@ -225,6 +227,9 @@ class BehaviorEvent {
   /// 交集漏斗归因：被点击/曝光的事实证据项标识（intersectionEvidenceId）。
   final String? intersectionEvidenceId;
 
+  /// 交集策略身份（cohort）：云侧随 reason 下发的注册表摘要，端原样回传、不展示。
+  final String? intersectionCohort;
+
   /// 交集负反馈主体对象 id（intersection_feedback 专属，F 推荐差异化）：
   /// 与 reason.subjectId / actionTargetId 同源（person/circle/place…）。
   /// 不绑定具体 post，云侧据此写 rec:ineg 交集负反馈冷却集。
@@ -301,6 +306,8 @@ class BehaviorEvent {
         'intersectionClass': intersectionClass,
       if (intersectionEvidenceId != null && intersectionEvidenceId!.isNotEmpty)
         'intersectionEvidenceId': intersectionEvidenceId,
+      if (intersectionCohort != null && intersectionCohort!.isNotEmpty)
+        'intersectionCohort': intersectionCohort,
       if (subjectId != null && subjectId!.isNotEmpty) 'subjectId': subjectId,
       if (feedbackKind != null && feedbackKind!.isNotEmpty)
         'feedbackKind': feedbackKind,
@@ -377,6 +384,7 @@ class BehaviorEvent {
       intersectionId: intersectionId,
       intersectionClass: intersectionClass,
       intersectionEvidenceId: intersectionEvidenceId,
+      intersectionCohort: intersectionCohort,
       subjectId: subjectId,
       feedbackKind: feedbackKind,
       taxonomyReleaseId: taxonomyReleaseId,
@@ -441,6 +449,7 @@ class BehaviorEvent {
       intersectionId: intersectionId,
       intersectionClass: intersectionClass,
       intersectionEvidenceId: intersectionEvidenceId,
+      intersectionCohort: intersectionCohort,
       subjectId: subjectId,
       feedbackKind: feedbackKind,
       taxonomyReleaseId: taxonomyReleaseId,

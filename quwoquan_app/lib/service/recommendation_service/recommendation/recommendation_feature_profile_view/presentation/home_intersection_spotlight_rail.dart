@@ -13,6 +13,7 @@ import 'package:quwoquan_app/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/runtime/di/my_intersection_inbox_provider.dart';
+import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/presentation/generated/intersection_display_metadata.g.dart';
 
 /// 首页/频道交集横滑模块（`intersectionModulePolicy == 'spotlightSegment'` 时出现）。
 ///
@@ -44,6 +45,8 @@ class HomeIntersectionSpotlightRail extends ConsumerStatefulWidget {
 
   /// 进 spotlight 的事实交集：必须有云侧句子与可跳转对象，否则不展示。
   /// 句子由云侧 hydrate，端只做「可展示性」判断，不补句、不猜对象。
+  /// kind 必须是 `intersection_kind_registry.yaml` 登记的闭集成员
+  /// （生成表 [intersectionKindDisplayMetadata]）：未登记 kind 的文案口径无从对齐，整条不进 spotlight。
   static List<IntersectionReason> displayable(
     List<IntersectionReason> reasons, {
     int limit = 8,
@@ -51,6 +54,7 @@ class HomeIntersectionSpotlightRail extends ConsumerStatefulWidget {
     final out = <IntersectionReason>[];
     for (final reason in reasons) {
       if (reason.intersectionClass == 'affinity') continue;
+      if (IntersectionKindDisplayMetadata.of(reason.kind) == null) continue;
       if (reason.primaryText.trim().isEmpty &&
           reason.connectionSummary.trim().isEmpty) {
         continue;
@@ -155,6 +159,7 @@ class _HomeIntersectionSpotlightRailState
               intersectionSourceRef: attribution.sourceRef,
               intersectionTagRefs: attribution.tagRefs,
               intersectionEvidenceId: attribution.evidenceId,
+              intersectionCohort: attribution.cohort,
             );
       },
     );
@@ -168,6 +173,7 @@ class _HomeIntersectionSpotlightRailState
         sourceRef: profileIntersectionSourceRef(reason),
         tagRefs: reason.tagRefs,
         evidenceId: reason.pointSummarySnapshotId,
+        cohort: reason.cohort,
       ),
     );
   }

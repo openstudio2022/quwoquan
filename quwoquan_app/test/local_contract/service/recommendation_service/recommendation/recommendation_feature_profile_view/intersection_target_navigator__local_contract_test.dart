@@ -1,7 +1,10 @@
+// spec_ref: specs/feature-tree/object-homepage-network/intersection-unified-experience/intersection-algorithm-closure/spec.md#gwt-002.t1
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/application/generated/intersection_client_policy.g.dart';
+
 import '../../../../../support/service/recommendation_service/recommendation/recommendation_feature_profile_view/intersection_fixtures.dart';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_route_paths.g.dart';
@@ -11,6 +14,8 @@ import 'package:quwoquan_app/service/recommendation_service/recommendation/recom
 import 'package:quwoquan_app/runtime/di/navigation/intersection_target_navigator.dart';
 import 'package:quwoquan_app/service/assistant_service/assistant/page_context/application/public/assistant_open_context.dart';
 import 'package:quwoquan_app/runtime/di/global_surface_action_dependencies.dart';
+import 'package:quwoquan_app/runtime/auth/auth_session.dart';
+import 'package:quwoquan_app/runtime/auth/auth_continuation.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 void main() {
@@ -259,6 +264,7 @@ void main() {
       void Function(Object? extra)? onAssistantExtra,
       GatheringCreateNavigationBinding? gatheringBinding,
       bool disableGatheringBinding = false,
+      bool authenticated = true,
     }) {
       final router = GoRouter(
         initialLocation: '/',
@@ -297,6 +303,11 @@ void main() {
       );
       return ProviderScope(
         overrides: [
+          authSessionControllerProvider.overrideWith(
+            authenticated
+                ? _AuthenticatedIntersectionSession.new
+                : _GuestIntersectionSession.new,
+          ),
           if (disableGatheringBinding)
             startGatheringNavigationBindingProvider.overrideWithValue(null)
           else if (gatheringBinding != null)
@@ -463,6 +474,13 @@ void main() {
           evidenceId: 'ev_wishlist_1',
         ),
         // 对象名只能取自云侧主句 span：承接页要用它命名约伴群。
+        contextObjectTarget: intersectionTargetFixture(
+          objectId: 'post-seed-west-lake',
+          objectKind: 'content',
+          routeId: 'workBrowser',
+        ),
+        // 来源归因由展示面显式声明，navigator 不从上下文 routeId 反推。
+        referralSource: ReferralSource.organicFeed,
         evidenceReason: intersectionReasonFixture(
           intersectionId: 'ix_wishlist',
           kind: 'coWishlistedEntity',
@@ -500,9 +518,13 @@ void main() {
       expect(createRequest!.targetObject.objectName, '西湖');
       expect(createRequest!.intersection.intersectionId, 'ix_wishlist');
       expect(createRequest!.intersection.dimension, 'location');
-      expect(createRequest!.sourceRefs.single.sourceRef, 'coWishlistedEntity');
+      expect(createRequest!.sourceRefs, hasLength(2));
+      expect(createRequest!.sourceRefs.first.sourceRef, 'content_context');
+      expect(createRequest!.sourceRefs.first.objectId, 'post-seed-west-lake');
+      expect(createRequest!.sourceRefs.first.objectKind, 'content');
+      expect(createRequest!.sourceRefs.last.sourceRef, 'coWishlistedEntity');
       expect(createRequest!.evidence.evidenceId, 'ev_wishlist_1');
-      expect(createRequest!.referralSource, ReferralSource.myIntersections);
+      expect(createRequest!.referralSource, ReferralSource.organicFeed);
     });
 
     testWidgets('gathering dispatch + 人上下文 → 双人邀约携带受邀者', (tester) async {
@@ -540,6 +562,9 @@ void main() {
       expect(createRequest, isNotNull);
       expect(createRequest!.inviteePersonaId, 'persona-xiaoya');
       expect(createRequest!.isDuoInvitation, isTrue);
+      // 未显式声明来源的触点（收件箱等）归因为 myIntersections，不因上下文是人
+      // 而被推断成 authorProfile。
+      expect(createRequest!.referralSource, ReferralSource.myIntersections);
     });
 
     testWidgets('gathering dispatch + 实体上下文 → 不携带受邀者（多人预设）', (tester) async {
@@ -575,6 +600,94 @@ void main() {
       expect(createRequest, isNotNull);
       expect(createRequest!.inviteePersonaId, isEmpty);
       expect(createRequest!.isDuoInvitation, isFalse);
+    });
+
+    testWidgets('游客 gathering dispatch 保存完整 typed request 且占用槽位时 fail-closed', (
+      tester,
+    ) async {
+      late BuildContext homeContext;
+      await tester.pumpWidget(
+        hostWith(
+          (c) => homeContext = c,
+          authenticated: false,
+          gatheringBinding: (context, [request]) async {},
+        ),
+      );
+      await tester.pumpAndSettle();
+      final container = ProviderScope.containerOf(homeContext, listen: false);
+
+      final first = const IntersectionTargetNavigator().openActionHint(
+        homeContext,
+        intersectionActionHintFixture(
+          actionKey: 'start_gathering',
+          dispatch: 'gathering',
+          target: intersectionTargetFixture(
+            objectId: 'homepage-west-lake',
+            objectKind: 'place',
+            routeId: 'homepageDetail',
+          ),
+        ),
+        attribution: const IntersectionNavAttribution(
+          intersectionId: 'ix_guest',
+          dimension: 'location',
+          intersectionClass: 'fact',
+          sourceRef: 'coWishlistedEntity',
+          evidenceId: 'ev_guest',
+        ),
+        evidenceReason: intersectionReasonFixture(
+          kind: 'coWishlistedEntity',
+          pointSummarySnapshotId: 'ev_guest',
+        ),
+        contextObjectTarget: intersectionTargetFixture(
+          objectId: 'post-guest-source',
+          objectKind: 'content',
+          routeId: 'workBrowser',
+        ),
+      );
+
+      expect(first.status, IntersectionActionDispatchStatus.opened);
+      final pending = container.read(authContinuationProvider);
+      expect(pending, isA<StartGatheringContinuation>());
+      final request =
+          (pending!
+                  as StartGatheringContinuation<
+                    GatheringCreateNavigationRequest
+                  >)
+              .request;
+      expect(request.targetObject.objectId, 'homepage-west-lake');
+      expect(request.intersection.intersectionId, 'ix_guest');
+      expect(request.evidence.evidenceId, 'ev_guest');
+      expect(request.sourceRefs.first.objectId, 'post-guest-source');
+      expect(
+        container.read(authContinuationProvider.notifier).ownerToken,
+        contains('intersection:start_gathering:place:homepage-west-lake'),
+      );
+
+      final second = const IntersectionTargetNavigator().openActionHint(
+        homeContext,
+        intersectionActionHintFixture(
+          actionKey: 'start_gathering',
+          dispatch: 'gathering',
+          target: intersectionTargetFixture(
+            objectId: 'homepage-another',
+            objectKind: 'place',
+            routeId: 'homepageDetail',
+          ),
+        ),
+      );
+      expect(second.status, IntersectionActionDispatchStatus.unavailable);
+      expect(
+        second.unavailableReason,
+        IntersectionActionUnavailableReason.authContinuationOccupied,
+      );
+      expect(
+        (container.read(authContinuationProvider)!
+                as StartGatheringContinuation<GatheringCreateNavigationRequest>)
+            .request
+            .targetObject
+            .objectId,
+        'homepage-west-lake',
+      );
     });
 
     testWidgets('gathering dispatch + 无 target → 不调用 typed binding', (
@@ -710,4 +823,21 @@ void main() {
       expect(find.text('USER:u_lin'), findsNothing);
     });
   });
+}
+
+class _GuestIntersectionSession extends AuthSessionController {
+  @override
+  AuthSessionState build() =>
+      const AuthSessionState(status: AuthSessionStatus.guest);
+}
+
+class _AuthenticatedIntersectionSession extends AuthSessionController {
+  @override
+  AuthSessionState build() => const AuthSessionState(
+    status: AuthSessionStatus.authenticated,
+    accessToken: 'intersection-test-token',
+    refreshToken: 'intersection-test-refresh-token',
+    ownerId: 'intersection-test-user',
+    activePersonaId: 'intersection-test-persona',
+  );
 }

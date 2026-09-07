@@ -12,6 +12,10 @@
 // spec_ref: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/spec.md#sit-004.t8
 // spec_ref: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/follow-relationship/spec.md#gwt-003
 // spec_ref: specs/feature-tree/chat-conversation/realtime-call/spec.md#sit-001.t4
+// spec_ref: specs/feature-tree/object-homepage-network/intersection-unified-experience/spec.md#sit-002.t1
+// spec_ref: specs/feature-tree/object-homepage-network/intersection-unified-experience/spec.md#sit-002.t2
+// spec_ref: specs/feature-tree/object-homepage-network/intersection-unified-experience/user-profile-intersection-redesign/spec.md#gwt-001.t2
+// spec_ref: specs/feature-tree/object-homepage-network/intersection-unified-experience/user-profile-intersection-redesign/spec.md#gwt-001.t3
 import 'dart:async';
 import 'dart:io';
 
@@ -47,6 +51,7 @@ import 'package:quwoquan_app/runtime/auth/auth_continuation.dart';
 import 'package:quwoquan_app/runtime/auth/auth_gate.dart';
 import 'package:quwoquan_app/runtime/auth/auth_session.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_route_paths.g.dart';
+import 'package:quwoquan_app/l10n/copy/assistant_text_constants.dart';
 import 'package:quwoquan_app/l10n/copy/chat_text_constants.dart';
 import 'package:quwoquan_app/design_system/semantics/navigation_semantic_constants.dart';
 import 'package:quwoquan_app/design_system/semantics/settings_semantic_constants.dart';
@@ -1064,6 +1069,31 @@ void main() {
       expect(find.byKey(AuthorImpactCard.cardKey), findsOneWidget);
       expect(find.byKey(AuthorImpactCard.emptyKey), findsOneWidget);
       expect(find.text(ContentText.profileImpactEmptyOther), findsOneWidget);
+    });
+
+    testWidgets('other 模式不再挂问小趣 demo dock，交集只经统一交集卡承载', (tester) async {
+      _setPhoneSize(tester);
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await tester.pumpWidget(
+        _scopedApp(
+          mode: ProfileMode.other,
+          capabilityRepository: _StaticCapabilityRepository(),
+          overrides: [
+            currentUserIdProvider.overrideWithValue('viewer-profile'),
+            objectSharedReasonsProvider.overrideWith(
+              (ref, query) async => const <IntersectionReason>[],
+            ),
+          ],
+        ),
+      );
+      await _pumpFrames(tester);
+
+      expect(find.byKey(OtherProfileIntersectionCard.cardKey), findsOneWidget);
+      expect(find.text(AssistantText.assistantEntryAsk), findsNothing);
+      expect(find.textContaining('demo'), findsNothing);
+      expect(find.textContaining('Demo'), findsNothing);
     });
 
     testWidgets('打动摘要读取失败展示可重试终态，重试后恢复数据', (tester) async {

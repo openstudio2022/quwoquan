@@ -841,7 +841,7 @@ const Map<String, String> _fixturePrimaryActionKeys = <String, String>{
   'sharedFollowees': 'follow_person',
   'commonFollower': 'follow_person',
   'sameIndustry': 'message_person',
-  'sharedCircle': 'join_circle',
+  'sharedCircle': 'greet_person',
   'coCommented': 'open_content',
   'coSharedContent': 'open_content',
   'coLiked': 'open_content',

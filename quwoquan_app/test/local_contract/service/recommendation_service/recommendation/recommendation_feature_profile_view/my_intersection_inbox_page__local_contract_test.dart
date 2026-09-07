@@ -1,6 +1,11 @@
 // spec_ref: specs/feature-tree/object-homepage-network/intersection-unified-experience/user-profile-intersection-redesign/spec.md#gwt-001
 // spec_ref: specs/feature-tree/object-homepage-network/intersection-unified-experience/user-profile-intersection-redesign/spec.md#gwt-004
+// spec_ref: specs/feature-tree/object-homepage-network/intersection-unified-experience/user-profile-intersection-redesign/spec.md#gwt-001.t1
+// spec_ref: specs/feature-tree/object-homepage-network/intersection-unified-experience/user-profile-intersection-redesign/spec.md#gwt-001.t2
 import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
+
 import '../../../../../support/service/recommendation_service/recommendation/recommendation_feature_profile_view/intersection_fixtures.dart';
 
 import 'package:flutter/cupertino.dart';
@@ -16,6 +21,7 @@ import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
 import 'package:quwoquan_app/l10n/copy/discovery_feed_text_constants.dart';
 import 'package:quwoquan_app/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/runtime/errors/ui_error_semantics.dart';
+import 'package:quwoquan_app/runtime/auth/auth_continuation.dart';
 import 'package:quwoquan_app/runtime/di/app_providers.dart';
 import 'package:quwoquan_app/runtime/di/my_intersection_inbox_provider.dart';
 import 'package:quwoquan_app/service/content_service/content/content_behavior_fact/application/content_behavior_tracker.dart';
@@ -32,6 +38,7 @@ import 'package:quwoquan_app/service/recommendation_service/recommendation/recom
 
 import '../../../../../support/service/content_service/content/content_behavior_fact/recording_content_behavior_repository.dart';
 import '../../../../../support/runtime/cloud_boundary_test_scope.dart';
+
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 final class _NoopIntersectionVisitWriter implements IntersectionVisitWriter {
@@ -356,6 +363,30 @@ void main() {
     expect(find.text('你和小航等2位校友都看过「西湖」'), findsNothing);
   });
 
+  testWidgets('经历交集（host_implicit，无页面宿主）在收件箱以 reason 自身对象作宿主渲染', (
+    tester,
+  ) async {
+    // DEC-003：收件箱没有页面宿主，展示合同以行对象（对方本人）作宿主套用；
+    // 否则真实 materializer 产出的 coExperiencedGathering 会被端侧静默隐藏。
+    final repo = _GoldenIntersectionRepository(<IntersectionReason>[
+      _coExperiencedGatheringGolden(),
+    ]);
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [intersectionRepositoryProvider.overrideWithValue(repo)],
+        child: CupertinoApp.router(
+          routerConfig: _router(page: MyIntersectionInboxPage()),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+
+    final golden = _coExperiencedGatheringGolden();
+    expect(golden.displayBinding, 'host_implicit');
+    expect(find.textContaining(golden.primaryText), findsOneWidget);
+  });
+
   testWidgets('筛选胶囊走云侧 dimension 轴：identity 维度可达且 filter 恒为 fact', (
     tester,
   ) async {
@@ -525,9 +556,7 @@ void main() {
     );
   });
 
-  testWidgets('我的交集：lifecycle 弱标 + 可行动交集置顶可约分组并渲染主行动 pill', (
-    tester,
-  ) async {
+  testWidgets('我的交集：lifecycle 弱标 + 可行动交集置顶可约分组并渲染主行动 pill', (tester) async {
     final repo = _LifecycleIntersectionRepository();
     await tester.pumpWidget(
       ProviderScope(
@@ -553,13 +582,13 @@ void main() {
       findsOneWidget,
     );
     // REQ-008 可约分层：该 fixture 带未过期 actionHints，因此从时间桶抽出置顶到
-    // 「可约」分组，行尾渲染主行动 pill（label 云侧直出，不进结论句）。
+    // 「可约」分组；行动在主动展开共享证据半屏后才出现。
     expect(
       find.byKey(IntersectionActionableGroupSection.sectionKey),
       findsOneWidget,
     );
-    expect(find.byType(IntersectionActionablePill), findsOneWidget);
-    expect(find.text('进入讨论'), findsOneWidget);
+    expect(find.byType(IntersectionActionablePill), findsNothing);
+    expect(find.text('进入讨论'), findsNothing);
     expect(find.byType(Image), findsNothing);
     final rowSize = tester.getSize(find.byType(IntersectionCompactTimelineRow));
     expect(rowSize.height, inInclusiveRange(60, 64));
@@ -576,14 +605,14 @@ void main() {
     final countSpan = _spanByText(richText, '8');
     (countSpan.recognizer! as TapGestureRecognizer).onTap!();
     await tester.pumpAndSettle();
-    expect(repo.requestedDimension, 'content');
-    expect(repo.requestedSourceRef, 'coCommented');
-    expect(find.textContaining('王然'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey<String>('my-intersection-evidence-sheet')),
+      findsOneWidget,
+    );
+    expect(find.text('进入讨论'), findsOneWidget);
   });
 
-  testWidgets('可约主行动：人对人交集从收件箱发起结伴携带受邀者（duo 入口一致性）', (
-    tester,
-  ) async {
+  testWidgets('可约主行动：人对人交集从收件箱发起结伴携带受邀者（duo 入口一致性）', (tester) async {
     // 与他人主页 ObjectIntersectionSection 同轨：收件箱人对人交集点「一起去」
     // 必须携带对方 persona 进入双人邀约预设，不得退化为多人公开行动。
     GatheringCreateNavigationRequest? createRequest;
@@ -616,10 +645,27 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 50));
 
-    expect(find.byType(IntersectionActionablePill), findsOneWidget);
+    expect(find.byType(IntersectionActionablePill), findsNothing);
+    await tester.tap(find.textContaining('林清越'));
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey<String>('my-intersection-evidence-sheet')),
+      findsOneWidget,
+    );
+    expect(find.text('一起去'), findsOneWidget);
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(MyIntersectionInboxPage)),
+      listen: false,
+    );
     await tester.tap(find.text('一起去'));
+    await tester.pump(const Duration(milliseconds: 400));
     await tester.pumpAndSettle();
 
+    // 已登录：typed binding 必须被直接调用，不允许落入登录续接槽。
+    expect(
+      container.read(authContinuationProvider),
+      isNot(isA<StartGatheringContinuation>()),
+    );
     expect(createRequest, isNotNull);
     expect(createRequest!.inviteePersonaId, 'fixture_user_partner');
     expect(createRequest!.isDuoInvitation, isTrue);
@@ -724,9 +770,12 @@ GoRouter _router({Widget? page}) {
 class _AuthenticatedSession extends AuthSessionController {
   @override
   AuthSessionState build() {
+    // 可信会话需要 access + refresh token；缺 refreshToken 时 isAuthenticated 为 false，
+    // 行动会落入登录续接槽而不是直接调用 typed binding。
     return const AuthSessionState(
       status: AuthSessionStatus.authenticated,
       accessToken: 'test-token',
+      refreshToken: 'test-refresh-token',
       ownerId: 'test-user',
       activePersonaId: 'test-persona',
       accountState: 'active',
@@ -839,6 +888,54 @@ class _DimensionAxisIntersectionRepository implements IntersectionRepository {
     if (want.isEmpty) return all;
     return all.where((item) => item.dimension == want).toList();
   }
+
+  @override
+  Future<List<IntersectionReason>> getObjectIntersections({
+    required String objectId,
+    required String objectType,
+    int limit = 8,
+  }) async => const <IntersectionReason>[];
+}
+
+IntersectionReason _coExperiencedGatheringGolden() {
+  final candidates = <File>[
+    File(
+      '../quwoquan_service/contracts/metadata/_shared/test_fixtures/recommendation/intersection/co_experienced_gathering_reason.json',
+    ),
+    File(
+      'quwoquan_service/contracts/metadata/_shared/test_fixtures/recommendation/intersection/co_experienced_gathering_reason.json',
+    ),
+  ];
+  final file = candidates.firstWhere(
+    (candidate) => candidate.existsSync(),
+    orElse: () => throw StateError(
+      'co_experienced_gathering_reason.json not found (cwd=${Directory.current.path})',
+    ),
+  );
+  return IntersectionReason.fromWire(
+    jsonDecode(file.readAsStringSync()) as Map<String, Object?>,
+  );
+}
+
+class _GoldenIntersectionRepository implements IntersectionRepository {
+  _GoldenIntersectionRepository(this.items);
+
+  final List<IntersectionReason> items;
+
+  @override
+  Future<IntersectionInboxSummary> getMyIntersectionSummary() async {
+    return intersectionInboxSummaryFixture(totalCount: items.length);
+  }
+
+  @override
+  Future<List<IntersectionReason>> listMyIntersections({
+    String? dimension,
+    String? filter,
+    String? sourceRef,
+    String? timeBucket,
+    String? cursor,
+    int limit = 50,
+  }) async => items;
 
   @override
   Future<List<IntersectionReason>> getObjectIntersections({
@@ -1044,6 +1141,13 @@ class _LifecycleIntersectionRepository implements IntersectionRepository {
             label: '进入讨论',
             isPrimary: true,
             priority: 1,
+            dispatch: 'navigate',
+            target: intersectionTargetFixture(
+              objectType: 'circle',
+              objectId: 'fixture_circle_gold_invest',
+              objectKind: 'circle',
+              routeId: 'circleDetail',
+            ),
           ),
         ],
         representativeName: '王然',
@@ -1062,7 +1166,8 @@ class _LifecycleIntersectionRepository implements IntersectionRepository {
 
 /// 人对人可约交集 fixture：objectKind=person + start_gathering 主行动，
 /// 复现「我的交集 → 一起去」双人邀约入口。
-class _PersonActionableIntersectionRepository implements IntersectionRepository {
+class _PersonActionableIntersectionRepository
+    implements IntersectionRepository {
   @override
   Future<IntersectionInboxSummary> getMyIntersectionSummary() async {
     return intersectionInboxSummaryFixture(totalCount: 1);
@@ -1103,6 +1208,7 @@ class _PersonActionableIntersectionRepository implements IntersectionRepository 
             isPrimary: true,
             priority: 1,
             target: intersectionTargetFixture(
+              objectType: 'homepage',
               objectId: 'fixture_homepage_peak_park',
               objectKind: 'place',
               routeId: 'homepageDetail',

@@ -5,6 +5,7 @@
 // spec_ref: specs/feature-tree/shared-homepage-network/homepage-review-and-content/homepage-review-read-and-score-summary/spec.md#gwt-001
 // spec_ref: specs/feature-tree/shared-homepage-network/homepage-discovery-and-attach/missing-homepage-suggestion-and-review/spec.md#gwt-001
 // spec_ref: specs/feature-tree/shared-homepage-network/homepage-claim-maintain-and-offline/claimed-homepage-basic-maintenance/spec.md#gwt-001
+// spec_ref: specs/feature-tree/object-homepage-network/intersection-unified-experience/object-homepage-gamma-real-data-closure/spec.md#gwt-002.t1
 // readiness_case: homepage_get_entity_impact_app_local
 // readiness_case: homepage_get_homepage_detail_app_local
 // readiness_case: homepage_get_homepage_introduction_app_local

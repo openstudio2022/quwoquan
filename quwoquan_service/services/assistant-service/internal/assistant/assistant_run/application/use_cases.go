@@ -357,6 +357,8 @@ func mapRunError(err error) error {
 		return runerrors.AppErrorFromRunPolicyUnavailable(err.Error())
 	case errors.Is(err, runruntime.ErrRunIdempotencyConflict):
 		return runerrors.AppErrorFromRunIdempotencyConflict(err.Error())
+	case errors.Is(err, runruntime.ErrActiveRunConflict):
+		return runerrors.AppErrorFromRunActiveConflict(err.Error())
 	case errors.Is(err, runruntime.ErrDeviceActionPermitInvalid):
 		return runerrors.AppErrorFromDeviceActionPermitInvalid(err.Error())
 	case errors.Is(err, runruntime.ErrDeviceActionPermitExpired):

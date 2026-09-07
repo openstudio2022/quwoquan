@@ -240,6 +240,8 @@ IntersectionReason intersectionReasonFixture({
   String actorEvidenceCompleteness = '',
   List<IntersectionActorEvidence> actorEvidence =
       const <IntersectionActorEvidence>[],
+  List<IntersectionEvidenceRow> evidenceRows =
+      const <IntersectionEvidenceRow>[],
   int factPointCount = 0,
   int recommendedPointCount = 0,
   int totalPointCount = 0,
@@ -269,6 +271,7 @@ IntersectionReason intersectionReasonFixture({
   String moment = '',
   String subjectId = '',
   String subjectContext = '',
+  String cohort = 'sha256:fixture-policy',
 }) {
   return IntersectionReason(
     kind: kind,
@@ -313,6 +316,7 @@ IntersectionReason intersectionReasonFixture({
     sampleVisuals: sampleVisuals,
     representativeActor: representativeActor,
     actionHints: actionHints,
+    evidenceRows: evidenceRows,
     lifecycleState: lifecycleState,
     previousStrength: previousStrength,
     strengthDelta: strengthDelta,
@@ -328,11 +332,13 @@ IntersectionReason intersectionReasonFixture({
     moment: moment,
     subjectId: subjectId,
     subjectContext: subjectContext,
+    cohort: cohort,
   );
 }
 
 IntersectionReason copyIntersectionReasonFixture(
   IntersectionReason source, {
+  String? kind,
   String? actionTargetId,
   String? displayBinding,
   String? freshAt,
@@ -348,7 +354,7 @@ IntersectionReason copyIntersectionReasonFixture(
   String? rankState,
 }) {
   return intersectionReasonFixture(
-    kind: source.kind,
+    kind: kind ?? source.kind,
     vertical: source.vertical,
     dimension: source.dimension,
     tagRefs: source.tagRefs,
@@ -393,6 +399,7 @@ IntersectionReason copyIntersectionReasonFixture(
     sampleVisuals: source.sampleVisuals,
     representativeActor: source.representativeActor,
     actionHints: actionHints ?? source.actionHints,
+    evidenceRows: source.evidenceRows,
     lifecycleState: source.lifecycleState,
     previousStrength: source.previousStrength,
     strengthDelta: source.strengthDelta,
@@ -408,5 +415,6 @@ IntersectionReason copyIntersectionReasonFixture(
     moment: source.moment,
     subjectId: source.subjectId,
     subjectContext: source.subjectContext,
+    cohort: source.cohort,
   );
 }

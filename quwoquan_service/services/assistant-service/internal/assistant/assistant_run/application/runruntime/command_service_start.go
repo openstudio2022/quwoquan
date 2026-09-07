@@ -164,6 +164,24 @@ func (s *CommandService) Start(
 	if !errors.Is(err, ErrRunNotFound) {
 		return Run{}, err
 	}
+	if active, activeErr := s.repository.LoadActiveBySession(
+		ctx,
+		command.UserID,
+		command.SessionID,
+	); activeErr == nil {
+		// The exact request may have committed between LoadByRequest and this
+		// active-winner read. Preserve idempotent replay before classifying a
+		// different command identity as an active conflict.
+		if active.ClientRequestID == command.ClientRequestID {
+			if active.ExecutionInputDigest != inputDigest {
+				return Run{}, ErrRunIdempotencyConflict
+			}
+			return active, nil
+		}
+		return Run{}, ErrActiveRunConflict
+	} else if !errors.Is(activeErr, ErrRunNotFound) {
+		return Run{}, activeErr
+	}
 	skillPackageID, skillPackageReleaseDigest, err :=
 		s.skillPackages.ResolveActiveSkillPackage(ctx)
 	if err != nil || strings.TrimSpace(skillPackageID) == "" ||
@@ -348,7 +366,11 @@ func (s *CommandService) Start(
 		[]JournalEvent{event},
 		nil,
 	); err != nil {
-		if errors.Is(err, ErrRevisionConflict) {
+		if errors.Is(err, ErrRevisionConflict) ||
+			errors.Is(err, ErrActiveRunConflict) {
+			// The exact command identity always gets first claim on a duplicate
+			// commit: a same-request concurrent retry is a replay, never an
+			// active-winner conflict.
 			replayed, replayErr := s.repository.LoadByRequest(
 				ctx,
 				command.UserID,
@@ -360,6 +382,21 @@ func (s *CommandService) Start(
 					return Run{}, ErrRunIdempotencyConflict
 				}
 				return replayed, nil
+			}
+			if !errors.Is(replayErr, ErrRunNotFound) {
+				return Run{}, replayErr
+			}
+			if _, activeErr := s.repository.LoadActiveBySession(
+				ctx,
+				command.UserID,
+				command.SessionID,
+			); activeErr == nil {
+				return Run{}, ErrActiveRunConflict
+			} else if !errors.Is(activeErr, ErrRunNotFound) {
+				return Run{}, activeErr
+			}
+			if errors.Is(err, ErrActiveRunConflict) {
+				return Run{}, ErrActiveRunConflict
 			}
 		}
 		return Run{}, err

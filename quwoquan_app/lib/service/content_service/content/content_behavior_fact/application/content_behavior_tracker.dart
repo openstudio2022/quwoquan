@@ -95,6 +95,7 @@ class ContentBehaviorTracker implements ContentBehaviorTrackerPort {
     List<String>? intersectionTagRefs,
     String? intersectionClass,
     String? intersectionEvidenceId,
+    String? intersectionCohort,
   }) {
     trackQualifiedImpression(
       contentId,
@@ -115,6 +116,7 @@ class ContentBehaviorTracker implements ContentBehaviorTrackerPort {
       intersectionTagRefs: intersectionTagRefs,
       intersectionClass: intersectionClass,
       intersectionEvidenceId: intersectionEvidenceId,
+      intersectionCohort: intersectionCohort,
     );
   }
 
@@ -171,6 +173,7 @@ class ContentBehaviorTracker implements ContentBehaviorTrackerPort {
     List<String>? intersectionTagRefs,
     String? intersectionClass,
     String? intersectionEvidenceId,
+    String? intersectionCohort,
   }) {
     if (visibleFraction < 0.5 ||
         visibleDuration < const Duration(milliseconds: 1000)) {
@@ -209,6 +212,7 @@ class ContentBehaviorTracker implements ContentBehaviorTrackerPort {
         intersectionTagRefs: intersectionTagRefs,
         intersectionClass: intersectionClass,
         intersectionEvidenceId: intersectionEvidenceId,
+        intersectionCohort: intersectionCohort,
       ),
     );
   }
@@ -267,6 +271,7 @@ class ContentBehaviorTracker implements ContentBehaviorTrackerPort {
     List<String>? intersectionTagRefs,
     String? intersectionClass,
     String? intersectionEvidenceId,
+    String? intersectionCohort,
   }) {
     _add(
       BehaviorEvent(
@@ -288,6 +293,7 @@ class ContentBehaviorTracker implements ContentBehaviorTrackerPort {
         intersectionTagRefs: intersectionTagRefs,
         intersectionClass: intersectionClass,
         intersectionEvidenceId: intersectionEvidenceId,
+        intersectionCohort: intersectionCohort,
       ),
     );
   }
@@ -318,6 +324,7 @@ class ContentBehaviorTracker implements ContentBehaviorTrackerPort {
     List<String>? intersectionTagRefs,
     String? intersectionClass,
     String? intersectionEvidenceId,
+    String? intersectionCohort,
   }) {
     _add(
       BehaviorEvent(
@@ -340,6 +347,7 @@ class ContentBehaviorTracker implements ContentBehaviorTrackerPort {
         intersectionTagRefs: intersectionTagRefs,
         intersectionClass: intersectionClass,
         intersectionEvidenceId: intersectionEvidenceId,
+        intersectionCohort: intersectionCohort,
       ),
     );
   }
@@ -357,6 +365,7 @@ class ContentBehaviorTracker implements ContentBehaviorTrackerPort {
     String? intersectionDimension,
     String? intersectionClass,
     String? intersectionSourceRef,
+    String? intersectionCohort,
     String? surfaceId,
     ReferralSource? referralSource,
   }) {
@@ -371,6 +380,7 @@ class ContentBehaviorTracker implements ContentBehaviorTrackerPort {
         intersectionDimension: intersectionDimension,
         intersectionClass: intersectionClass,
         intersectionSourceRef: intersectionSourceRef,
+        intersectionCohort: intersectionCohort,
       ),
     );
   }
@@ -593,6 +603,8 @@ class ContentBehaviorTracker implements ContentBehaviorTrackerPort {
     String? intersectionDimension,
     String? intersectionSourceRef,
     List<String>? intersectionTagRefs,
+    String? intersectionId,
+    String? intersectionCohort,
   }) {
     _add(
       BehaviorEvent(
@@ -607,6 +619,8 @@ class ContentBehaviorTracker implements ContentBehaviorTrackerPort {
         intersectionDimension: intersectionDimension,
         intersectionSourceRef: intersectionSourceRef,
         intersectionTagRefs: intersectionTagRefs,
+        intersectionId: intersectionId,
+        intersectionCohort: intersectionCohort,
       ),
     );
   }
@@ -622,6 +636,8 @@ class ContentBehaviorTracker implements ContentBehaviorTrackerPort {
     String? intersectionDimension,
     String? intersectionSourceRef,
     List<String>? intersectionTagRefs,
+    String? intersectionId,
+    String? intersectionCohort,
   }) {
     _add(
       BehaviorEvent(
@@ -635,6 +651,8 @@ class ContentBehaviorTracker implements ContentBehaviorTrackerPort {
         intersectionDimension: intersectionDimension,
         intersectionSourceRef: intersectionSourceRef,
         intersectionTagRefs: intersectionTagRefs,
+        intersectionId: intersectionId,
+        intersectionCohort: intersectionCohort,
       ),
     );
   }
@@ -650,6 +668,8 @@ class ContentBehaviorTracker implements ContentBehaviorTrackerPort {
     String? intersectionDimension,
     String? intersectionSourceRef,
     List<String>? intersectionTagRefs,
+    String? intersectionId,
+    String? intersectionCohort,
   }) {
     _add(
       BehaviorEvent(
@@ -664,6 +684,8 @@ class ContentBehaviorTracker implements ContentBehaviorTrackerPort {
         intersectionDimension: intersectionDimension,
         intersectionSourceRef: intersectionSourceRef,
         intersectionTagRefs: intersectionTagRefs,
+        intersectionId: intersectionId,
+        intersectionCohort: intersectionCohort,
       ),
     );
   }
@@ -705,6 +727,7 @@ class ContentBehaviorTracker implements ContentBehaviorTrackerPort {
     String? intersectionDimension,
     String? intersectionClass,
     String? intersectionSourceRef,
+    String? intersectionCohort,
   }) {
     final normalizedSubject = subjectId.trim();
     final normalizedKind = feedbackKind.trim();
@@ -723,6 +746,7 @@ class ContentBehaviorTracker implements ContentBehaviorTrackerPort {
         intersectionDimension: intersectionDimension,
         intersectionClass: intersectionClass,
         intersectionSourceRef: intersectionSourceRef,
+        intersectionCohort: intersectionCohort,
       ),
     );
   }

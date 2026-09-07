@@ -1,4 +1,6 @@
 import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/application/generated/intersection_client_policy.g.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
+    show IntersectionActionKey, IntersectionObjectKind;
 
 /// 交集动作 `actionKey` 端侧闭集常量与路由分类。
 ///
@@ -53,3 +55,18 @@ abstract final class IntersectionActionKeys {
     return null;
   }
 }
+
+/// application/public seam 只经 domain 访问 codegen policy（R4：public 文件不得直接
+/// import 本对象 application/generated/**）；这里不复制任何表，只是转发同一份生成物。
+IntersectionActionPolicy? intersectionActionPolicyFor(
+  IntersectionActionKey key,
+) => intersectionActionPolicies[key];
+
+/// objectKind → canonical routeId（注册表 objectKinds[].routeId 的生成表）。
+String canonicalIntersectionRouteIdForObjectKind(IntersectionObjectKind kind) =>
+    intersectionRouteIdForObjectKind(kind);
+
+/// objectKind → wire objectType（注册表 objectKinds[].wireObjectType 的生成表）。
+String canonicalIntersectionWireObjectTypeForObjectKind(
+  IntersectionObjectKind kind,
+) => intersectionWireObjectTypeForObjectKind(kind);

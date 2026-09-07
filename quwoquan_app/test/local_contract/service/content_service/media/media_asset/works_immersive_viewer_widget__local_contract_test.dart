@@ -1,3 +1,5 @@
+// spec_ref: specs/feature-tree/object-homepage-network/intersection-unified-experience/spec.md#sit-003
+// spec_ref: specs/feature-tree/object-homepage-network/intersection-unified-experience/spec.md#sit-005
 // spec_ref: specs/feature-tree/runtime/native-edge-gesture-navigation/spec.md#sit-001
 // spec_ref: specs/feature-tree/runtime/native-edge-gesture-navigation/immersive-media-edge-swipe-back/spec.md#gwt-001
 // spec_ref: specs/feature-tree/discovery-content/dual-rail-discovery-redesign/works-immersive-viewer/spec.md#gwt-012
@@ -10,8 +12,13 @@
 // spec_ref: specs/feature-tree/discovery-content/dual-rail-discovery-redesign/works-immersive-viewer/spec.md#gwt-018
 // spec_ref: specs/feature-tree/discovery-content/dual-rail-discovery-redesign/works-immersive-viewer/spec.md#gwt-018.t1
 // spec_ref: specs/feature-tree/discovery-content/dual-rail-discovery-redesign/works-immersive-viewer/spec.md#gwt-020
+// spec_ref: specs/feature-tree/discovery-content/feed-orchestration-recommendation/premium-stream-recommendation/spec.md#gwt-001.t1
+// spec_ref: specs/feature-tree/object-homepage-network/intersection-unified-experience/spec.md#sit-003.t1
+// spec_ref: specs/feature-tree/object-homepage-network/intersection-unified-experience/spec.md#sit-003.t2
+// spec_ref: specs/feature-tree/object-homepage-network/intersection-unified-experience/spec.md#sit-003.t4
 
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/cupertino.dart';
@@ -70,6 +77,7 @@ import 'package:quwoquan_app/runtime/auth/auth_session.dart';
 import 'package:quwoquan_app/runtime/errors/ui_error_semantics.dart';
 import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
 import 'package:quwoquan_app/l10n/copy/discovery_feed_text_constants.dart';
+import 'package:quwoquan_app/l10n/copy/gathering_text_constants.dart';
 import 'package:quwoquan_app/design_system/semantics/settings_semantic_constants.dart';
 import 'package:quwoquan_app/service/content_service/content/content_behavior_fact/application/content_behavior_tracker.dart';
 import 'package:quwoquan_app/service/content_service/content/content_behavior_fact/application/public/content_engagement_tracker.dart';
@@ -120,6 +128,47 @@ Map<String, dynamic> _canonicalPostWire(ContentPostViewData post) =>
 
 const String _canonicalTestSha256 =
     'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+
+File _canonicalCoWishlistedReasonFixtureFile() {
+  final candidates = <File>[
+    File(
+      '../quwoquan_service/contracts/metadata/_shared/test_fixtures/recommendation/intersection/co_wishlisted_entity_reason.json',
+    ),
+    File(
+      'quwoquan_service/contracts/metadata/_shared/test_fixtures/recommendation/intersection/co_wishlisted_entity_reason.json',
+    ),
+  ];
+  for (final candidate in candidates) {
+    if (candidate.existsSync()) return candidate;
+  }
+  throw StateError(
+    'co_wishlisted_entity_reason.json not found (cwd=${Directory.current.path})',
+  );
+}
+
+IntersectionReason _canonicalCoWishlistedReasonForViewer() {
+  final decoded = jsonDecode(
+    _canonicalCoWishlistedReasonFixtureFile().readAsStringSync(),
+  );
+  if (decoded is! Map) {
+    throw const FormatException(
+      'canonical coWishlistedEntity fixture must be an object',
+    );
+  }
+  final wire = Map<String, Object?>.from(decoded);
+  // Widget 展示路径使用 wall clock；只刷新易逝生命周期字段，其他全部字节仍来自
+  // Recommendation materializer 共享 fixture，避免测试永久绑定历史 expiresAt。
+  wire['expiresAt'] = DateTime.now()
+      .toUtc()
+      .add(const Duration(days: 1))
+      .toIso8601String();
+  // 证据行由 Content 水合出口按 IntersectionEvidenceRow 契约实例化（物化侧只留空列表）；
+  // 这里补上与该 golden 同形的水合结果（intersectionPoints[0].sampleText → point_sample）。
+  wire['evidenceRows'] = <Object?>[
+    <String, Object?>{'text': '西湖', 'source': 'point_sample'},
+  ];
+  return IntersectionReason.fromWire(wire);
+}
 
 ContentPostDetailSlice _contentPostDetailSliceFromTestMap(
   Map<String, dynamic> raw, {
@@ -241,6 +290,10 @@ IntersectionReason _displayableIntersectionReason({
   String objectKind = '',
   String actionTargetId = '',
   String displayBinding = 'host_implicit',
+  List<IntersectionPoint> intersectionPoints = const <IntersectionPoint>[],
+  List<IntersectionActionHint> actionHints = const <IntersectionActionHint>[],
+  List<IntersectionEvidenceRow> evidenceRows =
+      const <IntersectionEvidenceRow>[],
 }) {
   final text = primaryText.trim();
   final resolvedObjectKind = objectKind.trim().isEmpty
@@ -266,6 +319,9 @@ IntersectionReason _displayableIntersectionReason({
     displayBinding: displayBinding,
     actionType: 'open',
     primarySpans: primarySpans ?? _defaultDisplaySpans(text),
+    intersectionPoints: intersectionPoints,
+    actionHints: actionHints,
+    evidenceRows: evidenceRows,
     totalPointCount: totalPointCount,
     source: source,
     tagRefs: tagRefs,
@@ -896,10 +952,14 @@ ContentPostViewData _videoPost({
       mediaItems: <PostMediaItem>[
         PostMediaItem(
           kind: 'video',
-          url: videoUrl,
+          mediaAssetId: 'video-content-0001',
+          mediaAssetVersion: 1,
           accessMode: MediaDeliveryAccessMode.public,
-          coverUrl: coverUrl.isEmpty ? null : coverUrl,
+          url: videoUrl,
+          coverUrl: coverUrl,
           durationMs: 125000,
+          width: width,
+          height: height,
         ),
       ],
       likeCount: 0,
@@ -1560,7 +1620,7 @@ void main() {
     );
     expect(
       viewerSource,
-      contains('isVisible: index == _currentPage'),
+      contains('isVisible: widget.isActive && index == _currentPage'),
       reason: '外层 PageView 预建相邻帖子时，非可见视频帖子不得初始化 decoder。',
     );
     expect(
@@ -2706,10 +2766,12 @@ void main() {
           for (var episode = 1; episode <= 3; episode += 1)
             <String, dynamic>{
               'kind': 'video',
+              'mediaAssetId': 'video-series-001-episode-$episode',
+              'mediaAssetVersion': 1,
+              'accessMode': 'public',
               'url':
                   'media/video/s/video-series-001/post/video-1/'
                   'v1/episode-$episode.mp4',
-              'accessMode': 'public',
               'durationMs': 125000,
             },
         ],
@@ -2886,14 +2948,18 @@ void main() {
         'mediaItems': <Map<String, dynamic>>[
           <String, dynamic>{
             'kind': 'video',
-            'url': duplicateUrl,
+            'mediaAssetId': 'video-series-duplicate-1',
+            'mediaAssetVersion': 1,
             'accessMode': 'public',
+            'url': duplicateUrl,
             'durationMs': 125000,
           },
           <String, dynamic>{
             'kind': 'video',
-            'url': duplicateUrl,
+            'mediaAssetId': 'video-series-duplicate-2',
+            'mediaAssetVersion': 1,
             'accessMode': 'public',
+            'url': duplicateUrl,
             'durationMs': 125000,
           },
         ],
@@ -2963,16 +3029,20 @@ void main() {
         'mediaItems': <Map<String, dynamic>>[
           <String, dynamic>{
             'kind': 'video',
+            'mediaAssetId': 'video-series-test-asset',
+            'mediaAssetVersion': 1,
+            'accessMode': 'public',
             'url':
                 'media/video/s/video-series-001/post/video-1/v1/episode-1.mp4',
-            'accessMode': 'public',
             'durationMs': 125000,
           },
           <String, dynamic>{
             'kind': 'video',
+            'mediaAssetId': 'video-series-test-asset',
+            'mediaAssetVersion': 1,
+            'accessMode': 'public',
             'url':
                 'media/video/s/video-series-001/post/video-1/v1/episode-2.mp4',
-            'accessMode': 'public',
             'durationMs': 125000,
           },
         ],
@@ -3092,14 +3162,18 @@ void main() {
       final episodes = <Map<String, dynamic>>[
         <String, dynamic>{
           'kind': 'video',
-          'url': 'media/video/s/video-series-001/post/video-1/v1/episode-1.mp4',
+          'mediaAssetId': 'video-series-reorder-1',
+          'mediaAssetVersion': 1,
           'accessMode': 'public',
+          'url': 'media/video/s/video-series-001/post/video-1/v1/episode-1.mp4',
           'durationMs': 125000,
         },
         <String, dynamic>{
           'kind': 'video',
-          'url': 'media/video/s/video-series-001/post/video-1/v1/episode-2.mp4',
+          'mediaAssetId': 'video-series-reorder-2',
+          'mediaAssetVersion': 1,
           'accessMode': 'public',
+          'url': 'media/video/s/video-series-001/post/video-1/v1/episode-2.mp4',
           'durationMs': 125000,
         },
       ];
@@ -3456,6 +3530,25 @@ void main() {
           primaryText: '联系人林清越赞过和评论过',
           totalPointCount: 2,
           source: 'identity',
+          intersectionPoints: <IntersectionPoint>[
+            intersectionPointFixture(
+              pointId: 'ix-detail-1',
+              pointClass: 'fact',
+              dimension: 'identity',
+              label: '共同互动',
+              displayText: '你们都赞过并评论过这条内容',
+              sourceRef: 'coCommented',
+              visibility: 'public',
+              count: 2,
+            ),
+          ],
+          // 证据行是云侧 typed 闭集：端不再从 intersectionPoints 本地拼装。
+          evidenceRows: const <IntersectionEvidenceRow>[
+            IntersectionEvidenceRow(
+              text: '你们都赞过并评论过这条内容',
+              source: 'point_display',
+            ),
+          ],
         ),
       ],
     );
@@ -3532,12 +3625,113 @@ void main() {
       findsOneWidget,
     );
     expect(
-      find.byKey(const ValueKey<String>('works-intersection-check')),
+      find.byKey(const ValueKey<String>('intersection-evidence-item-0')),
       findsOneWidget,
     );
   });
 
-  testWidgets('视频书交集代表人 span 点击进入用户并透传 feedRequestId 归因', (tester) async {
+  testWidgets('交集主句与回顾溯源轻标互斥：同屏只保留交集句', (tester) async {
+    final post = _textMoment(
+      intersectionReasons: <IntersectionReason>[
+        _displayableIntersectionReason(
+          dimension: 'identity',
+          primaryText: '联系人林清越赞过和评论过',
+          source: 'identity',
+        ),
+      ],
+    );
+    await tester.pumpWidget(
+      _wrap(
+        WorksImmersiveViewer(
+          showWorksToolbar: true,
+          showTopNavigation: false,
+          externalPosts: [post],
+          externalPostViews: [ContentSurfaceViewMapper.fromDto(post)],
+          rawPostsById: _viewerRawByPostId({
+            post.id: <String, dynamic>{
+              'postId': post.id,
+              'type': 'micro',
+              'contentType': 'micro',
+              'authorId': post.authorId,
+              'authorDisplayName': post.displayName,
+              'authorAvatarUrl': post.avatarUrl,
+              'title': '临时改地点提醒',
+              'body': post.body,
+              // 同一条内容同时是回顾内容（gatheringRef）且带 display-ready 交集：
+              // 溯源轻标必须让位，不得与交集句并存占用同一交集类模块位。
+              'gatheringRef': 'gathering-recap-1',
+            },
+          }),
+          onUserTap: (_, {avatarUrl, displayName, backgroundUrl}) {},
+          onAssistantTap: () {},
+        ),
+      ),
+    );
+    await _pumpSettledFrames(tester);
+
+    expect(
+      find.byKey(const ValueKey<String>('works-caption-intersection-reason')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('works-provenance-badge')),
+      findsNothing,
+    );
+    expect(find.text(GatheringText.provenanceRecapBadge), findsNothing);
+  });
+
+  testWidgets('坏 reason 在视频书 fail-closed 且不暴露证据入口', (tester) async {
+    final post = _textMoment(
+      intersectionReasons: <IntersectionReason>[
+        _displayableIntersectionReason(
+          dimension: 'location',
+          primaryText: '你和林清越都想去剑门关',
+          displayBinding: 'explicit_link',
+          primarySpans: <IntersectionTextSpan>[_plain('你和林清越都想去剑门关')],
+          source: 'coWishlistedEntity',
+          objectKind: 'place',
+          actionTargetId: 'hp_jianmen',
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      _wrap(
+        WorksImmersiveViewer(
+          showWorksToolbar: true,
+          showTopNavigation: false,
+          externalPosts: [post],
+          externalPostViews: [ContentSurfaceViewMapper.fromDto(post)],
+          rawPostsById: _viewerRawByPostId({
+            post.id: <String, dynamic>{
+              'postId': post.id,
+              'type': 'micro',
+              'contentType': 'micro',
+              'authorId': post.authorId,
+              'authorDisplayName': post.displayName,
+              'authorAvatarUrl': post.avatarUrl,
+              'title': '临时改地点提醒',
+              'body': post.body,
+            },
+          }),
+          onUserTap: (_, {avatarUrl, displayName, backgroundUrl}) {},
+          onAssistantTap: () {},
+        ),
+      ),
+    );
+    await _pumpSettledFrames(tester);
+
+    expect(
+      find.byKey(const ValueKey<String>('works-caption-intersection-reason')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('works-intersection-detail-sheet')),
+      findsNothing,
+    );
+  });
+
+  testWidgets('视频书交集代表人 span 先打开证据面板且不直接导航', (tester) async {
     final behaviorRepo = RecordingContentBehaviorRepository();
     final tracker = ContentBehaviorTracker(
       reporter: behaviorRepo,
@@ -3613,24 +3807,23 @@ void main() {
     await _pumpSettledFrames(tester);
     await tracker.flush();
 
-    final clicks = behaviorRepo.recorded
-        .where((event) => event.action == BehaviorEventType.tagClick)
-        .toList(growable: false);
-    expect(clicks, hasLength(1));
-    final click = clicks.single;
-    expect(click.feedRequestId, 'feed-request-works-span');
-    expect(click.referralSource, ReferralSource.organicFeed);
-    expect(click.intersectionId, 'ix_works_span');
-    expect(click.intersectionSourceRef, 'sharedFollowees');
-    expect(click.intersectionEvidenceId, 'ev_works_span');
-    expect(click.intersectionClass, 'fact');
     expect(
-      AppRoutePaths.userProfile(userHandle: 'u_lin'),
-      startsWith('/user/u_lin'),
+      find.byKey(const ValueKey<String>('works-intersection-detail-sheet')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('user-profile-probe')),
+      findsNothing,
+    );
+    expect(
+      behaviorRepo.recorded.where(
+        (event) => event.action == BehaviorEventType.tagClick,
+      ),
+      isEmpty,
     );
   });
 
-  testWidgets('视频书交集显式对象 span 点击进入主页并透传归因', (tester) async {
+  testWidgets('视频书显式对象 span 先打开证据面板且不直接导航', (tester) async {
     final behaviorRepo = RecordingContentBehaviorRepository();
     final tracker = ContentBehaviorTracker(
       reporter: behaviorRepo,
@@ -3729,22 +3922,23 @@ void main() {
     await _pumpSettledFrames(tester);
     await tracker.flush();
 
-    final clicks = behaviorRepo.recorded
-        .where((event) => event.action == BehaviorEventType.tagClick)
-        .toList(growable: false);
-    expect(clicks, hasLength(1));
-    final click = clicks.single;
-    expect(click.feedRequestId, 'feed-request-works-object');
-    expect(click.intersectionSourceRef, 'coLikedEntity');
-    expect(click.intersectionEvidenceId, 'ev_works_fallback');
-    expect(click.intersectionDimension, 'place');
     expect(
-      AppRoutePaths.homepageDetail(id: 'hp_jianmen'),
-      startsWith('/homepages/hp_jianmen'),
+      find.byKey(const ValueKey<String>('works-intersection-detail-sheet')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('homepage-detail-probe')),
+      findsNothing,
+    );
+    expect(
+      behaviorRepo.recorded.where(
+        (event) => event.action == BehaviorEventType.tagClick,
+      ),
+      isEmpty,
     );
   });
 
-  testWidgets('视频书交集显式行动对象 span 点击进入对象并透传归因', (tester) async {
+  testWidgets('真实 coWishlistedEntity 物化输出在视频书先开证据且只显示唯一 CTA', (tester) async {
     final behaviorRepo = RecordingContentBehaviorRepository();
     final tracker = ContentBehaviorTracker(
       reporter: behaviorRepo,
@@ -3752,44 +3946,9 @@ void main() {
       enablePeriodicFlush: false,
     );
     addTearDown(tracker.dispose);
-
+    final canonicalReason = _canonicalCoWishlistedReasonForViewer();
     final post = _textMoment(
-      intersectionReasons: <IntersectionReason>[
-        _displayableIntersectionReason(
-          intersectionId: 'ix_works_action_target',
-          dimension: 'location',
-          primaryText: '联系人林清越也想去「滇池路线」',
-          displayBinding: 'explicit_link',
-          primarySpans: <IntersectionTextSpan>[
-            _plain('联系人'),
-            IntersectionTextSpan(
-              text: '林清越',
-              role: 'object',
-              target: _intersectionTargetFor(
-                objectKind: 'person',
-                objectId: 'u_lin',
-              ),
-            ),
-            _plain('也想去「'),
-            IntersectionTextSpan(
-              text: '滇池路线',
-              role: 'object',
-              target: _intersectionTargetFor(
-                objectKind: 'route',
-                objectId: 'hp_route_dianchi',
-              ),
-            ),
-            _plain('」'),
-          ],
-          totalPointCount: 3,
-          source: 'coWishlistedEntity',
-          tagRefs: const <String>['location/wishlist'],
-          intersectionClass: 'fact',
-          pointSummarySnapshotId: 'ev_works_action_target',
-          objectKind: 'route',
-          actionTargetId: 'hp_route_dianchi',
-        ),
-      ],
+      intersectionReasons: <IntersectionReason>[canonicalReason],
     );
 
     await tester.pumpWidget(
@@ -3820,30 +3979,56 @@ void main() {
     );
     await _pumpSettledFrames(tester);
 
+    expect(find.text('你们都想去西湖'), findsOneWidget);
     final richTextFinder = find.descendant(
       of: find.byKey(
         const ValueKey<String>('works-caption-intersection-reason'),
       ),
       matching: find.byType(RichText),
     );
-    await _tapRichTextSubstring(tester, richTextFinder, '滇池路线');
+    await _tapRichTextSubstring(tester, richTextFinder, '西湖');
     await _pumpSettledFrames(tester);
     await tracker.flush();
 
-    final clicks = behaviorRepo.recorded
-        .where((event) => event.action == BehaviorEventType.tagClick)
-        .toList(growable: false);
-    expect(clicks, hasLength(1));
-    final click = clicks.single;
-    expect(click.contentId, 'hp_route_dianchi');
-    expect(click.contentType, 'route');
-    expect(click.feedRequestId, 'feed-request-works-action');
-    expect(click.intersectionId, 'ix_works_action_target');
-    expect(click.intersectionSourceRef, 'coWishlistedEntity');
-    expect(click.intersectionEvidenceId, 'ev_works_action_target');
     expect(
-      AppRoutePaths.homepageDetail(id: 'hp_route_dianchi'),
-      startsWith('/homepages/hp_route_dianchi'),
+      find.byKey(const ValueKey<String>('works-intersection-detail-sheet')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('intersection-evidence-item-0')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('works-intersection-primary-action')),
+      findsOneWidget,
+    );
+    expect(find.text('发起聚集'), findsOneWidget);
+    expect(find.text('查看对象'), findsNothing);
+    expect(
+      find.byKey(const ValueKey<String>('homepage-detail-probe')),
+      findsNothing,
+    );
+    expect(
+      behaviorRepo.recorded.where(
+        (event) => event.action == BehaviorEventType.tagClick,
+      ),
+      isEmpty,
+    );
+    expect(
+      canonicalReason.primarySpans.last.target?.objectId,
+      'homepage-west-lake',
+    );
+    // 云侧按注册表下发整条行动阶梯（唯一 primary），端只渲染 resolver 选出的那一个。
+    expect(
+      canonicalReason.actionHints
+          .where((hint) => hint.isPrimary)
+          .single
+          .actionKey,
+      'start_gathering',
+    );
+    expect(
+      canonicalReason.actionHints.map((hint) => hint.target?.objectId).toSet(),
+      {'homepage-west-lake'},
     );
   });
 
@@ -5816,8 +6001,9 @@ void main() {
           'assets': <Map<String, dynamic>>[
             <String, dynamic>{
               'assetId': 'article-image',
-              'publicSliceKey': articleObjectKey,
+              'kind': 'image',
               'accessMode': 'public',
+              'publicSliceKey': articleObjectKey,
               'role': 'inline',
               'width': 1200,
               'height': 900,
@@ -5879,6 +6065,7 @@ void main() {
       await _pumpSettledFrames(tester);
       articleImages = tappableArticleImages();
     }
+    if (articleImages.evaluate().isEmpty) debugDumpApp();
     expect(articleImages, findsWidgets);
 
     Finder articleGesture() => tappableArticleImages().first;

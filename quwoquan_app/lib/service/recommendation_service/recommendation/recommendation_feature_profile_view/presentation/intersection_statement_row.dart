@@ -1,6 +1,8 @@
 import 'package:flutter/cupertino.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/presentation/interactive_intersection_text.dart';
+import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/application/public/intersection_reason_selection.dart'
+    as selection;
 import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/presentation/intersection_icon_resolver.dart';
 import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/presentation/intersection_lifecycle_badge.dart';
 import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/presentation/intersection_object_cover.dart';
@@ -59,6 +61,8 @@ class IntersectionStatementItem {
     this.propagationPath,
     this.onPropagationTap,
     this.showAuxiliaryLine = true,
+    this.contextObjectTarget,
+    this.evidenceReason,
   });
 
   final String primaryText;
@@ -122,6 +126,12 @@ class IntersectionStatementItem {
   /// 是否显示主句下方辅助层；主页高保行只展示一行主文案时关闭。
   final bool showAuxiliaryLine;
 
+  /// 宿主对象（对象页 / 内容详情）；用于对指向宿主自身的行动 fail-closed。
+  final IntersectionTarget? contextObjectTarget;
+
+  /// 行动所属的 canonical reason；assistant 行动的可展示性依赖其证据快照。
+  final IntersectionReason? evidenceReason;
+
   bool get _hasTypeIcon =>
       iconKey.trim().isNotEmpty ||
       sourceRef.trim().isNotEmpty ||
@@ -165,9 +175,12 @@ class IntersectionStatementRow extends StatelessWidget {
     // 头像已由槽②（句内头像）/槽③（对象封面）/传播节点承载时不再渲染 leading 视觉簇，
     // 避免重复；否则继续渲染 leading 簇服务通用消费者。
     final hasVisuals = item.visuals.isNotEmpty && !item._suppressLeadingCluster;
-    final primaryActionHint = primaryDisplayableIntersectionActionHint(
-      item.actionHints,
-    );
+    final primaryActionHint = selection
+        .primaryDisplayableIntersectionActionHint(
+          item.actionHints,
+          contextObjectTarget: item.contextObjectTarget,
+          evidenceReason: item.evidenceReason,
+        );
     final Widget primaryLineContent = hasSpans
         ? InteractiveIntersectionText(
             spans: item.spans,
@@ -317,63 +330,6 @@ class IntersectionStatementRow extends StatelessWidget {
         child: content,
       ),
     );
-  }
-}
-
-/// 判定 actionHint 是否应渲染成可执行 pill。
-///
-/// 与 `IntersectionTargetNavigator.openActionHint` 分发口径保持单一真相源：
-/// - `assistant`：展示（打开小艺）；
-/// - `navigate`：有真实可导航 target 才展示（关注 / 加入 / 进入讨论 / 看共同来源等）。
-///   `login` 等 requiredGates 由承接页承接续接（§15），不在本层隐藏，否则已登录用户
-///   也会失去行动入口；
-/// - `gathering`：结伴同行类有真实承接（进发起群聊页，见
-///   `IntersectionTargetNavigator._openGathering`），有对象上下文（target 非空）时
-///   展示成可点「发起结伴」pill，兑现「共同想去→约伴」北极星闭环（C0）；target 空则不展示，
-///   避免无对象上下文的空发起；
-/// - `message`：打招呼 / 私信有真实承接（对方主页的破冰状态机，见
-///   `IntersectionTargetNavigator._openMessage`），target 是真实 person 时展示；
-///   非 person target 不展示，避免「打招呼」退化成对象下钻；
-/// - 未登记 dispatch：fail-closed，不渲染。
-/// 从云侧 actionHints 中选出唯一主行动：isPrimary 优先，其次 priority 最小；
-/// 全部不可渲染时返回 null。七触点（收件箱行 / 对象页卡 / 沉浸单句等）共用此
-/// 单一选择口径，禁止各触点自写第二份 fold（UX 总纲：一句主句 + 一个主动作）。
-IntersectionActionHint? primaryDisplayableIntersectionActionHint(
-  List<IntersectionActionHint> hints,
-) {
-  return hints
-      .where(isDisplayableIntersectionActionHint)
-      .fold<IntersectionActionHint?>(
-        null,
-        (best, hint) =>
-            best == null ||
-                (hint.isPrimary && !best.isPrimary) ||
-                hint.priority < best.priority
-            ? hint
-            : best,
-      );
-}
-
-bool isDisplayableIntersectionActionHint(IntersectionActionHint hint) {
-  if (hint.label.trim().isEmpty) {
-    return false;
-  }
-  switch (hint.dispatch.trim()) {
-    case 'assistant':
-      return true;
-    case 'navigate':
-    case 'gathering':
-      return hint.target?.objectId.trim().isNotEmpty ?? false;
-    case 'message':
-      final target = hint.target;
-      if (target == null || target.objectId.trim().isEmpty) {
-        return false;
-      }
-      return target.objectKind.trim() == 'person' ||
-          target.objectType.trim() == 'user' ||
-          target.routeId.trim() == 'userProfile';
-    default:
-      return false;
   }
 }
 

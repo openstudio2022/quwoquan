@@ -8,10 +8,11 @@ import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/service/content_service/content/content_behavior_fact/application/public/content_behavior_repository.dart';
 import 'package:quwoquan_app/service/entity_service/entity_homepage/homepage/application/homepage_introduction_repository.dart';
+
 import '../../../../../support/service/content_service/content/content_behavior_fact/recording_content_behavior_repository.dart';
 import '../../../../../support/service/recommendation_service/recommendation/recommendation_feature_profile_view/intersection_repository_typed_double.dart';
 import '../../../../../support/service/entity_service/entity_homepage/homepage/homepage_test_adapter.dart';
-import '../../../../../support/runtime/homepage_source_cards_boundary_overrides.dart';
+
 import 'package:quwoquan_app/service/content_service/media/media_asset/application/public/media_viewer_extra.dart';
 import 'package:quwoquan_app/service/content_service/content/content_behavior_fact/application/content_behavior_tracker.dart';
 import 'package:quwoquan_app/service/entity_service/entity_homepage/homepage/presentation/homepage_detail_page.dart';
@@ -101,7 +102,6 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
-          ...homepageSourceCardsBoundaryOverrides(),
           authSessionControllerProvider.overrideWith(_GuestHomepageSession.new),
           behaviorRepositoryProvider.overrideWithValue(
             RecordingContentBehaviorRepository(),

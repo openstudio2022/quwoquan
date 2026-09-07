@@ -64,11 +64,10 @@ class IntersectionReasonChip extends ConsumerWidget {
     String contextObjectName = '',
     IntersectionTarget? contextObjectTarget,
   }) {
-    if (reasons == null || reasons.isEmpty) return null;
-    final first = displayReadyIntersectionReason(
-      reasons.first,
+    final first = resolveIntersectionDisplay(
+      reasons,
       contextObjectTarget: contextObjectTarget,
-    );
+    )?.reason;
     if (first == null) return null;
     final primary = first.primaryText.trim();
     if (primary.isNotEmpty) return primary;
@@ -102,12 +101,10 @@ class IntersectionReasonChip extends ConsumerWidget {
       contextObjectTarget: contextObjectTarget,
     );
     if (text == null) return null;
-    final first = reasons?.isNotEmpty == true
-        ? displayReadyIntersectionReason(
-            reasons!.first,
-            contextObjectTarget: contextObjectTarget,
-          )
-        : null;
+    final first = resolveIntersectionDisplay(
+      reasons,
+      contextObjectTarget: contextObjectTarget,
+    )?.reason;
     if (first == null) return null;
     return IntersectionReasonChip(
       key: key,
@@ -201,6 +198,7 @@ class IntersectionReasonChip extends ConsumerWidget {
       sourceRef: current.source,
       tagRefs: current.tagRefs,
       evidenceId: current.pointSummarySnapshotId,
+      cohort: current.cohort,
     );
     final navigator = IntersectionTargetNavigator(
       onTrack: (navTarget, attr) => ref
@@ -215,6 +213,7 @@ class IntersectionReasonChip extends ConsumerWidget {
             intersectionTagRefs: attr.tagRefs,
             intersectionClass: attr.intersectionClass,
             intersectionEvidenceId: attr.evidenceId,
+            intersectionCohort: attr.cohort,
           ),
     );
     navigator.open(context, target, attribution: attribution);

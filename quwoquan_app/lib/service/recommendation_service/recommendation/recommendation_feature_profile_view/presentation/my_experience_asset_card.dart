@@ -11,9 +11,12 @@ import 'package:quwoquan_app/runtime/di/my_intersection_inbox_provider.dart';
 import 'package:quwoquan_app/runtime/di/navigation/intersection_target_navigator.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/service/content_service/content/content_behavior_fact/application/public/content_behavior_repository.dart';
-import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/domain/intersection_actionable_reasons.dart';
+import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/application/public/intersection_reason_selection.dart';
 import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/domain/intersection_statement_synthesizer.dart'
-    show resolvedIntersectionReasonKind;
+    show
+        inboxDisplayHostForReason,
+        targetForReasonObject,
+        targetForSubjectContext;
 import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/presentation/my_intersection_inbox_timeline.dart';
 import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/presentation/object_insight_primitives.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
@@ -86,33 +89,20 @@ class MyExperienceAssetCard extends ConsumerWidget {
     );
   }
 
-  /// 资产行可渲染判定：数据源已按 `sourceRef=coExperiencedGathering` 单 kind
-  /// 收窄（无混排、无宿主上下文），不套用为多 kind 混排设计的展示合同闸
-  /// （`displayReadyIntersectionReason` 会因缺宿主对象淘汰 host_implicit 形态）；
-  /// 只守事实类别与 G2 不变量（join(spans.text)==primaryText），主句直出不改写。
-  static bool _renderableExperience(IntersectionReason reason) {
-    if (reason.intersectionClass != 'fact') {
-      return false;
-    }
-    final primary = reason.primaryText.trim();
-    if (primary.isEmpty) {
-      return false;
-    }
-    final spans = reason.primarySpans;
-    if (spans.isNotEmpty &&
-        spans.map((span) => span.text).join() != primary) {
-      return false;
-    }
-    return true;
-  }
-
   Widget _buildCard(
     BuildContext context,
     WidgetRef ref,
     List<IntersectionReason> items,
   ) {
+    // 经历资产行与收件箱同源：宿主由 inboxDisplayHostForReason 决定，主行动由唯一
+    // resolver 选出（dispatch 闭集 / target 身份 / 过期 全部在 resolver 内判定）。
     final visible = items
-        .where(_renderableExperience)
+        .map(
+          (reason) => resolveIntersectionDisplay(<IntersectionReason>[
+            reason,
+          ], contextObjectTarget: inboxDisplayHostForReason(reason)),
+        )
+        .whereType<IntersectionDisplayResolution>()
         .take(_maxPreviewRows)
         .toList(growable: false);
     if (visible.isEmpty) {
@@ -140,14 +130,16 @@ class MyExperienceAssetCard extends ConsumerWidget {
   Widget _buildExperienceRow(
     BuildContext context,
     WidgetRef ref,
-    IntersectionReason reason,
+    IntersectionDisplayResolution resolution,
   ) {
-    final primaryHint = primaryIntersectionActionHint(reason);
+    final reason = resolution.reason;
+    // 经历资产卡本身就是展开后的证据面（每行即一条经历事实），主行动随行直出。
+    final primaryHint = resolution.primaryHint;
     return IntersectionCompactTimelineRow(
       primaryText: reason.primaryText,
       spans: reason.primarySpans,
       iconKey: reason.iconKey,
-      sourceRef: resolvedIntersectionReasonKind(reason),
+      sourceRef: sourceRefForReason(reason),
       dimension: reason.dimension,
       tone: reason.tone,
       typeIconUrl: reason.typeVisual?.imageUrl ?? '',
@@ -182,6 +174,7 @@ class MyExperienceAssetCard extends ConsumerWidget {
                 intersectionClass: attribution.intersectionClass,
                 intersectionTagRefs: attribution.tagRefs,
                 intersectionEvidenceId: attribution.evidenceId,
+                intersectionCohort: attribution.cohort,
               );
         },
       );
@@ -191,31 +184,25 @@ class MyExperienceAssetCard extends ConsumerWidget {
       intersectionId: reason.intersectionId,
       dimension: reason.dimension,
       intersectionClass: reason.intersectionClass,
-      sourceRef: resolvedIntersectionReasonKind(reason),
+      sourceRef: sourceRefForReason(reason),
       tagRefs: reason.tagRefs,
       evidenceId: reason.pointSummarySnapshotId,
+      cohort: reason.cohort,
     );
   }
 
-  /// 整行点击 = 回看行动详情（`actionTargetId` 即最近一次共同行动）。
+  /// 整行点击 = 回看行动详情。经历交集的主对象是对方本人（DEC-003），最近一次共同行动
+  /// 只经 `subjectContext: gathering:<id>` 锚点下发；锚点缺失或不可路由时回落到经历列表。
   void _openGatheringDetail(
     BuildContext context,
     WidgetRef ref,
     IntersectionReason reason,
   ) {
-    final target = IntersectionTarget(
-      objectType: 'gathering',
-      objectId: reason.actionTargetId,
-      objectKind: 'gathering',
-      routeId: IntersectionTargetNavigator.routeIdForObjectKindWire(
-        'gathering',
-      ),
-    );
-    final opened = _navigator(ref).open(
-      context,
-      target,
-      attribution: _attributionFor(reason),
-    );
+    final target = targetForSubjectContext(reason);
+    final opened =
+        target != null &&
+        _navigator(ref)
+            .open(context, target, attribution: _attributionFor(reason));
     if (!opened) {
       _openFullList(context);
     }
@@ -228,12 +215,19 @@ class MyExperienceAssetCard extends ConsumerWidget {
     IntersectionReason reason,
     IntersectionActionHint hint,
   ) {
+    // 「再约一次」的受邀者就是这条经历的对方本人：上下文对象取 reason 自身对象。
     final result = _navigator(ref).openActionHint(
       context,
       hint,
-      sourceRef: resolvedIntersectionReasonKind(reason),
+      sourceRef: sourceRefForReason(reason),
       attribution: _attributionFor(reason),
       evidenceReason: reason,
+      contextObjectTarget: targetForReasonObject(reason),
+      referralSource: ReferralSource.myIntersections,
+    );
+    assert(
+      !result.isConfigurationFailure,
+      'startGatheringNavigationBinding 未注入：约伴行动被静默降级',
     );
     if (!result.didOpen) {
       _openGatheringDetail(context, ref, reason);

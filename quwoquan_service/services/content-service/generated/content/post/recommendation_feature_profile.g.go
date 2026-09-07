@@ -114,6 +114,11 @@ type IntersectionActionHint struct {
 	Dispatch      string              `json:"dispatch"`
 }
 
+type IntersectionEvidenceRow struct {
+	Text   string `json:"text"`
+	Source string `json:"source"`
+}
+
 type IntersectionPropagationPath struct {
 	PathKind             string               `json:"pathKind"`
 	HopCount             int                  `json:"hopCount"`
@@ -150,6 +155,7 @@ type IntersectionReason struct {
 	ExpiresAt                 string                           `json:"expiresAt"`
 	IntersectionPoints        []IntersectionPoint              `json:"intersectionPoints"`
 	PointSummarySnapshotId    string                           `json:"pointSummarySnapshotId"`
+	Cohort                    string                           `json:"cohort"`
 	ActorEvidenceTotalCount   int                              `json:"actorEvidenceTotalCount"`
 	ActorEvidenceCompleteness string                           `json:"actorEvidenceCompleteness"`
 	ActorEvidence             []IntersectionActorEvidence      `json:"actorEvidence"`
@@ -166,6 +172,7 @@ type IntersectionReason struct {
 	SampleVisuals             []IntersectionVisual             `json:"sampleVisuals"`
 	RepresentativeActor       *IntersectionRepresentativeActor `json:"representativeActor,omitempty"`
 	ActionHints               []IntersectionActionHint         `json:"actionHints"`
+	EvidenceRows              []IntersectionEvidenceRow        `json:"evidenceRows"`
 	LifecycleState            string                           `json:"lifecycleState"`
 	PreviousStrength          float64                          `json:"previousStrength"`
 	StrengthDelta             float64                          `json:"strengthDelta"`

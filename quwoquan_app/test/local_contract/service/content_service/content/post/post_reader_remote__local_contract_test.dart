@@ -1,4 +1,6 @@
+// spec_ref: specs/feature-tree/object-homepage-network/intersection-unified-experience/spec.md#sit-005
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -13,6 +15,35 @@ import 'package:quwoquan_app/runtime/transport/http/cloud_http_client.dart';
 import 'package:quwoquan_app/runtime/observability/cloud_operation_telemetry.dart';
 import 'package:quwoquan_app/service/content_service/content/post/adapters/post_reader_remote.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
+
+File _canonicalCoWishlistedReasonFixtureFile() {
+  final candidates = <File>[
+    File(
+      '../quwoquan_service/contracts/metadata/_shared/test_fixtures/recommendation/intersection/co_wishlisted_entity_reason.json',
+    ),
+    File(
+      'quwoquan_service/contracts/metadata/_shared/test_fixtures/recommendation/intersection/co_wishlisted_entity_reason.json',
+    ),
+  ];
+  for (final candidate in candidates) {
+    if (candidate.existsSync()) return candidate;
+  }
+  throw StateError(
+    'co_wishlisted_entity_reason.json not found (cwd=${Directory.current.path})',
+  );
+}
+
+Map<String, Object?> _canonicalCoWishlistedReasonWire() {
+  final decoded = jsonDecode(
+    _canonicalCoWishlistedReasonFixtureFile().readAsStringSync(),
+  );
+  if (decoded is! Map) {
+    throw const FormatException(
+      'canonical coWishlistedEntity fixture must be an object',
+    );
+  }
+  return Map<String, Object?>.from(decoded);
+}
 
 void main() {
   group('RemoteContentPostReaderAdapter local contract', () {
@@ -52,6 +83,15 @@ void main() {
             'contentType': 'article',
             'authorDisplayName': '内容作者',
             'authorAvatarUrl': 'media/avatar/s/author/v1/avatar.png',
+            'authorAvatarAssetId': 'avatar-author-1',
+            'authorAvatarAccessMode': 'public',
+            'viewerLiked': true,
+            'primaryHomepageId': 'homepage-west-lake',
+            'primaryHomepageType': 'place',
+            'gatheringRef': 'gathering-west-lake',
+            'intersectionReasons': <Object?>[
+              _canonicalCoWishlistedReasonWire(),
+            ],
             'title': '正文标题',
             'body': '正文',
             'articleMarkdown': '# 正文标题',
@@ -81,6 +121,37 @@ void main() {
       expect(result.post.id, 'post-1');
       expect(result.post.displayName, '内容作者');
       expect(result.post.avatarUrl, 'media/avatar/s/author/v1/avatar.png');
+      expect(result.post.authorAvatarAssetId, 'avatar-author-1');
+      expect(result.post.authorAvatarAccessMode?.wireName, 'public');
+      expect(result.post.viewerLiked, isTrue);
+      expect(result.post.primaryHomepageId, 'homepage-west-lake');
+      expect(result.post.primaryHomepageType, 'place');
+      expect(result.post.gatheringRef, 'gathering-west-lake');
+      expect(result.post.intersectionReasons, hasLength(1));
+      expect(
+        result.post.intersectionReasons!.single.kind,
+        'coWishlistedEntity',
+      );
+      final reason = result.post.intersectionReasons!.single;
+      expect(reason.subjectContext, 'homepage:homepage-west-lake');
+      expect(reason.objectKind, 'place');
+      expect(reason.displayBinding, 'explicit_link');
+      expect(reason.primaryText, '你们都想去西湖');
+      expect(
+        reason.primarySpans.map((span) => span.text).join(),
+        reason.primaryText,
+      );
+      expect(reason.primarySpans.last.role, 'object');
+      expect(reason.primarySpans.last.target?.objectType, 'homepage');
+      expect(reason.primarySpans.last.target?.objectId, 'homepage-west-lake');
+      expect(reason.primarySpans.last.target?.objectKind, 'place');
+      expect(reason.primarySpans.last.target?.routeId, 'homepageDetail');
+      final primaryHint = reason.actionHints
+          .where((hint) => hint.isPrimary)
+          .single;
+      expect(primaryHint.actionKey, 'start_gathering');
+      expect(primaryHint.dispatch, 'gathering');
+      expect(primaryHint.target?.objectId, 'homepage-west-lake');
       expect(result.detailWire.articleMarkdown, '# 正文标题');
       expect(result.mergedArticleWireMap, isNot(contains('contentVertical')));
       expect(
@@ -99,32 +170,26 @@ void main() {
             'contentIdentity': 'work',
             'authorId': 'fixture_user_travel',
             'authorDisplayName': '契约旅行家',
-            'authorAvatarUrl':
-                'media/avatar/s/archived-avatar/user/fixture_user_travel/v1/avatar.png',
+            'authorAvatarUrl': 'media/avatar/s/archived-avatar/user/fixture_user_travel/v1/avatar.png',
             'mediaUrls': <String>[
               'media/image/s/archived-image/post/fixture_video_001/v1/cover.png',
             ],
-            'coverUrl':
-                'media/image/s/archived-image/post/fixture_video_001/v1/cover.png',
-            'thumbnailUrl':
-                'media/image/s/archived-image/post/fixture_video_001/v1/cover.png',
-            'videoUrl':
-                'media/video/s/video-primary-0001/post/video-content-0001/v1/source.mp4',
+            'coverUrl': 'media/image/s/archived-image/post/fixture_video_001/v1/cover.png',
+            'thumbnailUrl': 'media/image/s/archived-image/post/fixture_video_001/v1/cover.png',
+            'videoUrl': 'media/video/s/video-primary-0001/post/video-content-0001/v1/source.mp4',
             'width': 1280,
             'height': 720,
             'durationMs': 45000,
             'mediaItems': <Object?>[
               <String, Object?>{
                 'kind': 'video',
-                'url':
-                    'media/video/s/video-primary-0001/post/video-content-0001/v1/source.mp4',
+                'url': 'media/video/s/video-primary-0001/post/video-content-0001/v1/source.mp4',
                 'mediaAssetId': 'video-primary-0001',
                 'mediaAssetVersion': 6,
                 'hlsCmafMasterManifestUrl':
                     'media/video/s/asset/video-primary-0001/v6/hls/master.m3u8',
                 'hlsCmafDescriptorVersion': 1,
-                'coverUrl':
-                    'media/image/s/archived-image/post/fixture_video_001/v1/cover.png',
+                'coverUrl': 'media/image/s/archived-image/post/fixture_video_001/v1/cover.png',
                 'durationMs': 45000,
                 'width': 1280,
                 'height': 720,
@@ -148,15 +213,13 @@ void main() {
       expect(result.mergedArticleWireMap['mediaItems'], <Object?>[
         <String, dynamic>{
           'kind': 'video',
-          'url':
-              'media/video/s/video-primary-0001/post/video-content-0001/v1/source.mp4',
+          'url': 'media/video/s/video-primary-0001/post/video-content-0001/v1/source.mp4',
           'mediaAssetId': 'video-primary-0001',
           'mediaAssetVersion': 6,
           'hlsCmafMasterManifestUrl':
               'media/video/s/asset/video-primary-0001/v6/hls/master.m3u8',
           'hlsCmafDescriptorVersion': 1,
-          'coverUrl':
-              'media/image/s/archived-image/post/fixture_video_001/v1/cover.png',
+          'coverUrl': 'media/image/s/archived-image/post/fixture_video_001/v1/cover.png',
           'durationMs': 45000,
           'width': 1280,
           'height': 720,

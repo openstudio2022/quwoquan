@@ -16,6 +16,8 @@ import 'package:quwoquan_app/service/recommendation_service/recommendation/recom
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:quwoquan_app/service/content_service/content/content_behavior_fact/application/public/content_behavior_repository.dart';
 import 'package:quwoquan_app/runtime/di/navigation/intersection_target_navigator.dart';
+import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/application/public/intersection_reason_selection.dart'
+    show sourceRefForReason;
 import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/presentation/object_intersection_card.dart';
 import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/presentation/object_intersection_card_skeleton.dart';
 import 'package:quwoquan_app/runtime/di/object_intersection_provider.dart';
@@ -72,7 +74,8 @@ class ObjectIntersectionSection extends ConsumerWidget {
           ),
         ),
         margin: EdgeInsets.zero,
-        onAction: (_) async => ref.invalidate(objectSharedReasonsProvider(query)),
+        onAction: (_) async =>
+            ref.invalidate(objectSharedReasonsProvider(query)),
       ),
       data: (reasons) => _buildCard(
         context,
@@ -135,6 +138,8 @@ class ObjectIntersectionSection extends ConsumerWidget {
               intersectionDimension: firstReason.dimension,
               intersectionClass: firstReason.intersectionClass,
               intersectionSourceRef: firstReason.source,
+
+              intersectionCohort: firstReason.cohort,
               referralSource: referralSourceForObjectType(query.objectBType),
             );
       },
@@ -286,7 +291,7 @@ class ObjectIntersectionSection extends ConsumerWidget {
     const IntersectionTargetNavigator().open(
       context,
       target,
-      sourceRef: reason.source,
+      sourceRef: sourceRefForReason(reason),
       attribution: _attributionFor(reason),
     );
   }
@@ -299,7 +304,7 @@ class ObjectIntersectionSection extends ConsumerWidget {
     return const IntersectionTargetNavigator().open(
       context,
       span.target,
-      sourceRef: reason.source,
+      sourceRef: sourceRefForReason(reason),
       attribution: _attributionFor(reason),
     );
   }
@@ -312,7 +317,7 @@ class ObjectIntersectionSection extends ConsumerWidget {
     return const IntersectionTargetNavigator().open(
       context,
       visual.target,
-      sourceRef: reason.source,
+      sourceRef: sourceRefForReason(reason),
       attribution: _attributionFor(reason),
     );
   }
@@ -326,10 +331,11 @@ class ObjectIntersectionSection extends ConsumerWidget {
         .openActionHint(
           context,
           hint,
-          sourceRef: reason.source,
+          sourceRef: sourceRefForReason(reason),
           attribution: _attributionFor(reason),
           evidenceReason: reason,
           contextObjectTarget: _contextObjectTarget,
+          referralSource: referralSourceForObjectType(query.objectBType),
         )
         .didOpen;
   }
@@ -339,8 +345,9 @@ class ObjectIntersectionSection extends ConsumerWidget {
       intersectionId: reason.intersectionId,
       dimension: reason.dimension,
       intersectionClass: reason.intersectionClass,
-      sourceRef: reason.source,
+      sourceRef: sourceRefForReason(reason),
       tagRefs: reason.tagRefs,
+      cohort: reason.cohort,
     );
   }
 
@@ -358,7 +365,8 @@ class ObjectIntersectionSection extends ConsumerWidget {
           tags: reason.tagRefs,
           intersectionId: reason.intersectionId,
           intersectionDimension: reason.dimension,
-          intersectionSourceRef: reason.source,
+          intersectionSourceRef: sourceRefForReason(reason),
+          intersectionCohort: reason.cohort,
           intersectionTagRefs: reason.tagRefs,
           intersectionClass: reason.intersectionClass,
         );

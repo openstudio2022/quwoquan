@@ -42,7 +42,7 @@ extension _WorksImmersiveViewerBuild on _WorksImmersiveViewerState {
         force: isOnLoadMoreSentinel,
       );
     }
-    if (_awaitingPrefetchedReveal && currentPost != null) {
+    if (widget.isActive && _awaitingPrefetchedReveal && currentPost != null) {
       final revealedPost = currentPost;
       final revealedIndex = _currentPage;
       _awaitingPrefetchedReveal = false;
@@ -162,29 +162,12 @@ extension _WorksImmersiveViewerBuild on _WorksImmersiveViewerState {
                 contextObjectName: currentPost.normalizedTitle.trim().isNotEmpty
                     ? currentPost.normalizedTitle.trim()
                     : currentPost.normalizedBody.trim(),
-                contextObjectTarget: IntersectionTarget(
-                  objectType: 'post',
-                  objectId: currentPost.id,
-                  objectKind: 'content',
-                  routeId: 'workBrowser',
-                ),
-                onSpanTap: (span) => _openIntersectionSpan(
-                  context,
+                contextObjectTarget: _postIntersectionContextTarget(
                   currentPost,
-                  intersectionReason,
-                  span,
                 ),
-                onFallbackTap: () => _openIntersectionFallback(
-                  context,
-                  currentPost,
-                  intersectionReason,
-                ),
-                onActionHintTap: (hint) => _openIntersectionActionHint(
-                  context,
-                  currentPost,
-                  intersectionReason,
-                  hint,
-                ),
+                onSpanTap: (_) => _showIntersectionDetail(context, currentPost),
+                onFallbackTap: () =>
+                    _showIntersectionDetail(context, currentPost),
               );
         videoBottomChrome = _WorksVideoBottomChrome(
           key: ValueKey<String>(
@@ -348,7 +331,7 @@ extension _WorksImmersiveViewerBuild on _WorksImmersiveViewerState {
                           child: _buildPostCanvas(
                             post,
                             enableArticlePageCurl: enableArticlePageCurl,
-                            isVisible: index == _currentPage,
+                            isVisible: widget.isActive && index == _currentPage,
                             videoViewportEpoch: _videoViewportEpoch,
                           ),
                         ),
@@ -504,30 +487,13 @@ extension _WorksImmersiveViewerBuild on _WorksImmersiveViewerState {
                                 currentPost.normalizedTitle.trim().isNotEmpty
                                 ? currentPost.normalizedTitle.trim()
                                 : currentPost.normalizedBody.trim(),
-                            contextObjectTarget: IntersectionTarget(
-                              objectType: 'post',
-                              objectId: currentPost.id,
-                              objectKind: 'content',
-                              routeId: 'workBrowser',
-                            ),
-                            onSpanTap: (span) => _openIntersectionSpan(
-                              context,
+                            contextObjectTarget: _postIntersectionContextTarget(
                               currentPost,
-                              intersectionReason,
-                              span,
                             ),
-                            onFallbackTap: () => _openIntersectionFallback(
-                              context,
-                              currentPost,
-                              intersectionReason,
-                            ),
-                            onActionHintTap: (hint) =>
-                                _openIntersectionActionHint(
-                                  context,
-                                  currentPost,
-                                  intersectionReason,
-                                  hint,
-                                ),
+                            onSpanTap: (_) =>
+                                _showIntersectionDetail(context, currentPost),
+                            onFallbackTap: () =>
+                                _showIntersectionDetail(context, currentPost),
                           ),
                     ),
                   ),

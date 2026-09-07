@@ -1,11 +1,25 @@
 // spec_ref: specs/feature-tree/discovery-content/feed-orchestration-recommendation/spec.md#sit-001
 // spec_ref: specs/feature-tree/product-ops-growth/experiment-bucketing-and-rollout/spec.md#sit-001.t2
+// spec_ref: specs/feature-tree/object-homepage-network/intersection-unified-experience/spec.md#sit-003
+// spec_ref: specs/feature-tree/object-homepage-network/intersection-unified-experience/spec.md#sit-005
+// spec_ref: specs/feature-tree/object-homepage-network/intersection-unified-experience/intersection-sentence-unification/spec.md#gwt-001
+// spec_ref: specs/feature-tree/object-homepage-network/intersection-unified-experience/intersection-algorithm-closure/spec.md#gwt-002
+// spec_ref: specs/feature-tree/object-homepage-network/intersection-unified-experience/home-recommend-intersection-redesign/spec.md#gwt-001
+// spec_ref: specs/feature-tree/object-homepage-network/intersection-unified-experience/home-recommend-intersection-redesign/spec.md#gwt-001.t1
+// spec_ref: specs/feature-tree/object-homepage-network/intersection-unified-experience/home-recommend-intersection-redesign/spec.md#gwt-001.t2
+// spec_ref: specs/feature-tree/object-homepage-network/intersection-unified-experience/home-recommend-intersection-redesign/spec.md#gwt-001.t6
+// spec_ref: specs/feature-tree/object-homepage-network/intersection-unified-experience/intersection-algorithm-closure/spec.md#gwt-002.t1
+// spec_ref: specs/feature-tree/object-homepage-network/intersection-unified-experience/intersection-algorithm-closure/spec.md#gwt-002.t2
 package feed_test
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 	. "quwoquan_service/services/content-service/internal/content/post/application/feed"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -232,6 +246,73 @@ func (s *captureRecallSource) Recall(_ context.Context, req rtrec.RecallRequest)
 	return out, nil
 }
 
+func canonicalCoWishlistedReason(t *testing.T) intersection.IntersectionReasonView {
+	t.Helper()
+	path := filepath.Join(
+		testsupport.RepositoryRoot(),
+		"quwoquan_service/contracts/metadata/_shared/test_fixtures/recommendation/intersection/co_wishlisted_entity_reason.json",
+	)
+	encoded, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read canonical coWishlistedEntity materializer fixture: %v", err)
+	}
+	var reason intersection.IntersectionReasonView
+	if err := json.Unmarshal(encoded, &reason); err != nil {
+		t.Fatalf("decode canonical coWishlistedEntity materializer fixture: %v", err)
+	}
+	return reason
+}
+
+func TestCanonicalCoWishlistedReasonCrossesFeedAndDetailDecoration(t *testing.T) {
+	reason := canonicalCoWishlistedReason(t)
+	if reason.Kind != "coWishlistedEntity" ||
+		reason.ObjectKind != "place" ||
+		reason.DisplayBinding != intersection.DisplayBindingExplicitLink ||
+		reason.SubjectContext != "homepage:homepage-west-lake" {
+		t.Fatalf("Recommendation materializer fixture drifted: %+v", reason)
+	}
+	if len(reason.PrimarySpans) != 2 ||
+		reason.PrimarySpans[1].Target == nil ||
+		reason.PrimarySpans[1].Target.ObjectID != "homepage-west-lake" ||
+		len(reason.ActionHints) < 1 || !reason.ActionHints[0].IsPrimary ||
+		reason.ActionHints[0].Target == nil ||
+		reason.ActionHints[0].Target.ObjectID != "homepage-west-lake" {
+		t.Fatalf("canonical place span/action target drifted: %+v", reason)
+	}
+
+	userID := "viewer_canonical_co_wishlist"
+	postID := firstFeedPostIDForBucket(
+		userID,
+		"post_canonical_co_wishlist",
+		FeedIntersectionHeavyPercent,
+	)
+	feedViews := []FeedItemView{{
+		PostID: postID, PrimaryHomepageID: "homepage-west-lake",
+		PrimaryHomepageType: "place", GatheringRef: "gathering-west-lake",
+	}}
+	AttachFeedIntersections(feedViews, []intersection.IntersectionReasonView{reason}, userID)
+	if len(feedViews[0].IntersectionReasons) != 1 {
+		t.Fatalf("canonical Recommendation reason must attach to matching feed post: %+v", feedViews[0])
+	}
+	feedReason := feedViews[0].IntersectionReasons[0]
+	detailReasons := IntersectionsForPost(feedViews[0], []intersection.IntersectionReasonView{reason})
+	if len(detailReasons) != 1 {
+		t.Fatalf("canonical Recommendation reason must decorate matching GetPost: %+v", detailReasons)
+	}
+	if !reflect.DeepEqual(feedReason, detailReasons[0]) {
+		t.Fatalf("feed/GetPost decoration drifted:\nfeed=%+v\ndetail=%+v", feedReason, detailReasons[0])
+	}
+	if feedReason.DisplayBinding != intersection.DisplayBindingExplicitLink ||
+		feedReason.ActionTargetID != "homepage-west-lake" ||
+		feedReason.ActionHints[0].ActionKey != "start_gathering" ||
+		feedReason.ActionHints[0].Dispatch != "gathering" ||
+		feedReason.ActionHints[0].Target.ObjectType != "homepage" ||
+		feedReason.ActionHints[0].Target.ObjectKind != "place" ||
+		feedReason.ActionHints[0].Target.RouteID != "homepageDetail" {
+		t.Fatalf("content decoration rewrote canonical place/gathering contract: %+v", feedReason)
+	}
+}
+
 func TestAttachFeedIntersectionsRequiresCurrentPostTarget(t *testing.T) {
 	userID := "viewer_feed_binding"
 	matchedPostID := firstFeedPostIDForBucket(userID, "post_bound", FeedIntersectionHeavyPercent+FeedIntersectionLightPercent)
@@ -267,6 +348,208 @@ func TestAttachFeedIntersectionsRequiresCurrentPostTarget(t *testing.T) {
 	}
 }
 
+func TestAttachFeedIntersectionsKeepsNonContentActionTargetWhenContextNamesPost(t *testing.T) {
+	userID := "viewer_location_binding"
+	postID := firstFeedPostIDForBucket(userID, "post_location", FeedIntersectionHeavyPercent+FeedIntersectionLightPercent)
+	views := []FeedItemView{{PostID: postID}}
+	reason := feedDisplayReadyReason("reason_location", "homepage-west-lake", "light")
+	reason.ObjectKind = "place"
+	reason.ActionTargetID = "homepage-west-lake"
+	reason.RelationObjectID = "persona-companion"
+	reason.SubjectContext = "post:" + postID
+	placeTarget := &intersection.IntersectionTargetView{
+		ObjectType: "homepage", ObjectID: "homepage-west-lake",
+		ObjectKind: "place", RouteID: "homepageDetail",
+	}
+	reason.PrimaryText = "你和林清越都想去西湖"
+	reason.PrimarySpans = []intersection.IntersectionTextSpanView{
+		{Text: "你和林清越都想去", Role: "plain"},
+		{Text: "西湖", Role: "object", Target: placeTarget},
+	}
+	reason.ActionHints = []intersection.IntersectionActionHintView{{
+		ActionKey: "start_gathering",
+		Label:     "一起去看看",
+		Target:    placeTarget,
+		IsPrimary: true, Priority: 1, ActionTier: "heavy", Dispatch: "gathering",
+	}}
+
+	AttachFeedIntersections(views, []intersection.IntersectionReasonView{reason}, userID)
+
+	if len(views[0].IntersectionReasons) != 1 {
+		t.Fatalf("post context should attach place-target reason: %+v", views[0].IntersectionReasons)
+	}
+	got := views[0].IntersectionReasons[0]
+	if got.ActionTargetID != "homepage-west-lake" || got.ActionHints[0].Target.ObjectID != "homepage-west-lake" {
+		t.Fatalf("feed attachment rewrote typed action target: %+v", got)
+	}
+	if got.DisplayBinding != intersection.DisplayBindingExplicitLink {
+		t.Fatalf("feed binding = %q, want explicit_link for related place", got.DisplayBinding)
+	}
+}
+
+func TestAttachFeedIntersectionsMatchesCanonicalHomepageAndGatheringAnchors(t *testing.T) {
+	userID := "viewer_typed_anchor_binding"
+	postID := firstFeedPostIDForBucket(userID, "post_anchor", FeedIntersectionHeavyPercent+FeedIntersectionLightPercent)
+	views := []FeedItemView{{
+		PostID: postID, PrimaryHomepageID: "homepage-west-lake", GatheringRef: "gathering-alumni-trip",
+	}}
+	placeTarget := &intersection.IntersectionTargetView{
+		ObjectType: "homepage", ObjectID: "homepage-west-lake",
+		ObjectKind: "place", RouteID: "homepageDetail",
+	}
+	peerTarget := &intersection.IntersectionTargetView{
+		ObjectType: "user", ObjectID: "u_peer",
+		ObjectKind: "person", RouteID: "userProfile",
+	}
+	place := feedDisplayReadyReason("reason_place_anchor", "homepage-west-lake", "light")
+	place.ObjectKind = "place"
+	place.ActionTargetID = "homepage-west-lake"
+	place.SubjectContext = "homepage:homepage-west-lake"
+	place.PrimaryText = "你们都想去西湖"
+	place.PrimarySpans = []intersection.IntersectionTextSpanView{
+		{Text: "你们都想去", Role: "plain"},
+		{Text: "西湖", Role: "object", Target: placeTarget},
+	}
+	// 与生产者同形（DEC-003）：coExperiencedGathering 主对象是对方本人（objectKind=person、
+	// actionTargetId=对方），共同行动只作 subjectContext 锚点；跨层 golden 见
+	// co_experienced_gathering_reason.json 与 infrastructure/recommendation 读面测试。
+	gathering := feedDisplayReadyReason("reason_gathering_anchor", "gathering-alumni-trip", "light")
+	gathering.ObjectKind = "person"
+	gathering.ActionTargetID = "u_peer"
+	gathering.RelationObjectID = "u_peer"
+	gathering.SubjectContext = "gathering:gathering-alumni-trip"
+	gathering.PrimaryText = "你和林清越一起参加过这次行动"
+	gathering.PrimarySpans = []intersection.IntersectionTextSpanView{
+		{Text: "你和", Role: "plain"},
+		{Text: "林清越", Role: "object", Target: peerTarget},
+		{Text: "一起参加过这次行动", Role: "plain"},
+	}
+
+	light, heavy := ReasonPoolsForPost([]intersection.IntersectionReasonView{place, gathering}, views[0])
+	if len(light) != 2 || len(heavy) != 0 {
+		t.Fatalf("typed anchors should keep both related reasons, light=%+v heavy=%+v", light, heavy)
+	}
+	// GetPost 不再使用 Feed 的 70/20/10 槽位，但必须保持 Recommendation
+	// 既有排序，只投影第一条与当前 Post canonical 锚点相关的 reason。
+	detailReasons := IntersectionsForPost(views[0], []intersection.IntersectionReasonView{gathering, place})
+	if len(detailReasons) != 1 || detailReasons[0].IntersectionID != "reason_gathering_anchor" {
+		t.Fatalf("detail projection must keep first ranked matching reason: %+v", detailReasons)
+	}
+
+	place.SubjectContext = "homepage:homepage-elsewhere"
+	gathering.SubjectContext = "gathering:gathering-elsewhere"
+	light, _ = ReasonPoolsForPost([]intersection.IntersectionReasonView{place, gathering}, views[0])
+	if len(light) != 0 {
+		t.Fatalf("unrelated typed anchors must fail closed: %+v", light)
+	}
+	if got := IntersectionsForPost(views[0], []intersection.IntersectionReasonView{place, gathering}); len(got) != 0 {
+		t.Fatalf("detail projection must also fail closed for unrelated anchors: %+v", got)
+	}
+}
+
+// 宿主锚点前缀只经注册表 objectTypeBindings 翻译：已登记的任一 homepage 路由对象类型
+// （school/enterprise/city…）都能绑到 PrimaryHomepageID；未登记前缀与无 typed prefix
+// 一律 fail-closed，不按「有无冒号」反推成 post。
+func TestFeedReasonHostAnchorResolvesThroughRegistryAndFailsClosed(t *testing.T) {
+	postID := "post_anchor_registry"
+	view := FeedItemView{
+		PostID: postID, PrimaryHomepageID: "homepage-alma-mater", GatheringRef: "gathering-reunion",
+	}
+	base := feedDisplayReadyReason("reason_anchor", "homepage-alma-mater", "light")
+	base.ObjectKind = "place"
+	base.ActionTargetID = "homepage-alma-mater"
+
+	registered := []string{"school:homepage-alma-mater", "enterprise:homepage-alma-mater", "city:homepage-alma-mater"}
+	for _, anchor := range registered {
+		reason := base
+		reason.SubjectContext = anchor
+		if light, heavy := ReasonPoolsForPost(
+			[]intersection.IntersectionReasonView{reason}, view,
+		); len(light)+len(heavy) != 1 {
+			t.Fatalf("已登记 homepage 路由前缀 %q 必须绑到 PrimaryHomepageID: light=%+v heavy=%+v", anchor, light, heavy)
+		}
+	}
+
+	gathering := base
+	gathering.SubjectContext = "gathering:gathering-reunion"
+	if light, heavy := ReasonPoolsForPost(
+		[]intersection.IntersectionReasonView{gathering}, view,
+	); len(light)+len(heavy) != 1 {
+		t.Fatalf("gathering 前缀必须绑到 GatheringRef: light=%+v heavy=%+v", light, heavy)
+	}
+
+	failClosed := map[string]string{
+		"未登记前缀":          "spaceship:homepage-alma-mater",
+		"无 typed prefix": postID,
+		"空 id":           "school:",
+		"人对象前缀":          "user:homepage-alma-mater",
+	}
+	for name, anchor := range failClosed {
+		reason := base
+		reason.SubjectContext = anchor
+		if light, heavy := ReasonPoolsForPost(
+			[]intersection.IntersectionReasonView{reason}, view,
+		); len(light)+len(heavy) != 0 {
+			t.Fatalf("%s(%q) 必须 fail-closed: light=%+v heavy=%+v", name, anchor, light, heavy)
+		}
+	}
+
+	// 无 subjectContext 的内容型 reason 仍可由 target identity 直证当前 Post。
+	contentReason := feedDisplayReadyReason("reason_content_identity", postID, "light")
+	contentReason.SubjectContext = ""
+	if light, _ := ReasonPoolsForPost(
+		[]intersection.IntersectionReasonView{contentReason}, view,
+	); len(light) != 1 {
+		t.Fatalf("内容型 reason 的 target identity 直证被误拒: %+v", light)
+	}
+}
+
+// GetPost 只有一个交集槽位：首条与当前 Post 锚点相关的候选若在宿主上下文投影后
+// 被降级成 hidden，必须继续向后找，不能让落选候选占满该槽位并让详情页丢掉合格主句。
+func TestIntersectionsForPostSkipsAnchoredCandidateThatFailsDisplayContract(t *testing.T) {
+	view := FeedItemView{
+		PostID: "post_display_contract", PrimaryHomepageID: "homepage-west-lake",
+	}
+	placeTarget := &intersection.IntersectionTargetView{
+		ObjectType: "homepage", ObjectID: "homepage-west-lake",
+		ObjectKind: "place", RouteID: "homepageDetail",
+	}
+	// 锚点命中但 explicit_link 缺 typed object span：展示合同不成立。
+	unqualified := feedDisplayReadyReason("reason_unqualified", "homepage-west-lake", "light")
+	unqualified.ObjectKind = "place"
+	unqualified.ActionTargetID = "homepage-west-lake"
+	unqualified.SubjectContext = "homepage:homepage-west-lake"
+	unqualified.PrimaryText = "你们都想去西湖"
+	unqualified.PrimarySpans = []intersection.IntersectionTextSpanView{
+		{Text: "你们都想去西湖", Role: "plain"},
+	}
+	if decorated := IntersectionsForPost(
+		view, []intersection.IntersectionReasonView{unqualified},
+	); len(decorated) != 0 {
+		t.Fatalf("display-contract 落选候选不得占用 GetPost 槽位: %+v", decorated)
+	}
+
+	qualified := feedDisplayReadyReason("reason_qualified", "homepage-west-lake", "light")
+	qualified.ObjectKind = "place"
+	qualified.ActionTargetID = "homepage-west-lake"
+	qualified.SubjectContext = "homepage:homepage-west-lake"
+	qualified.PrimaryText = "你们都想去西湖"
+	qualified.PrimarySpans = []intersection.IntersectionTextSpanView{
+		{Text: "你们都想去", Role: "plain"},
+		{Text: "西湖", Role: "object", Target: placeTarget},
+	}
+
+	got := IntersectionsForPost(
+		view, []intersection.IntersectionReasonView{unqualified, qualified},
+	)
+	if len(got) != 1 || got[0].IntersectionID != "reason_qualified" {
+		t.Fatalf("GetPost 必须跳过落选候选并投影下一条合格 reason: %+v", got)
+	}
+	if got[0].DisplayBinding != intersection.DisplayBindingExplicitLink {
+		t.Fatalf("合格候选的展示绑定漂移: %+v", got[0])
+	}
+}
+
 func firstFeedPostIDForBucket(userID, prefix string, maxExclusive int) string {
 	for i := 0; i < 1000; i++ {
 		postID := prefix + "_" + time.Unix(int64(i), 0).UTC().Format("150405")
@@ -288,7 +571,7 @@ func feedDisplayReadyReason(id, postID, weightTier string) intersection.Intersec
 		ObjectType: "post",
 		ObjectID:   postID,
 		ObjectKind: "content",
-		RouteID:    "contentDetail",
+		RouteID:    "workBrowser",
 	}
 	countTarget := &intersection.IntersectionTargetView{
 		ObjectType: "dimension",
@@ -330,6 +613,45 @@ func feedDisplayReadyReason(id, postID, weightTier string) intersection.Intersec
 // TestListFeed_PostReaderQueryDoesNotOwnRecommendationExclusions 守护对象边界：
 // 显式 Post 查询只执行 Content 权限/可见性规则；强负反馈由 Recommendation
 // 在 RankedRecommendationWindow 评分前唯一应用，Content 不保留第二份状态。
+func TestListFeed_NamedUGCQueryDoesNotInheritActiveDataReleaseBinding(t *testing.T) {
+	ctx := context.Background()
+	reader := &capturingPostFeedReader{fixtureFeedReader: fixtureFeedReader{posts: []postmodel.Post{{
+		ID: "ugc-photo", ContentType: "image", ContentIdentity: "work",
+		AuthorId: "author-ugc", Status: "published", Visibility: "public",
+	}}}}
+	service := NewFeedService(reader, readyActiveSupplyOption(), feedDeliveryPageStoreOption())
+
+	response, err := service.ListFeed(ctx, ListFeedRequest{
+		UserID: "user-ugc", SessionID: "session-ugc", Identity: "work", Type: "image", Limit: 20,
+	})
+	if err != nil {
+		t.Fatalf("ListFeed named UGC query: %v", err)
+	}
+	if len(response.Items) != 1 || response.Items[0].PostID != "ugc-photo" {
+		t.Fatalf("named UGC query response: %+v", response.Items)
+	}
+	if reader.lastListRequest.ActiveReleaseID() != "" || reader.lastListRequest.ManifestDigest() != "" {
+		t.Fatalf(
+			"named UGC query inherited Data release binding: release=%q digest=%q",
+			reader.lastListRequest.ActiveReleaseID(),
+			reader.lastListRequest.ManifestDigest(),
+		)
+	}
+}
+
+type capturingPostFeedReader struct {
+	fixtureFeedReader
+	lastListRequest postports.PostFeedReadRequest
+}
+
+func (reader *capturingPostFeedReader) ListPublishedFeedPosts(
+	ctx context.Context,
+	request postports.PostFeedReadRequest,
+) (postports.PostFeedSlice, error) {
+	reader.lastListRequest = request
+	return reader.fixtureFeedReader.ListPublishedFeedPosts(ctx, request)
+}
+
 func TestListFeed_PostReaderQueryDoesNotOwnRecommendationExclusions(t *testing.T) {
 	ctx := context.Background()
 	reader := fixtureFeedReader{posts: []postmodel.Post{
@@ -709,5 +1031,75 @@ func TestPostReaderFeedCursorHasOneOpaqueWireFormat(t *testing.T) {
 		if got := DecodePostReaderFeedCursor(forbidden); got != "" {
 			t.Fatalf("non-canonical cursor %q decoded as %q", forbidden, got)
 		}
+	}
+}
+
+// spec_ref: specs/feature-tree/object-homepage-network/intersection-unified-experience/spec.md#sit-003
+// Feed 唯一槽位只能被 display-ready 候选占用：宿主投影后落成 hidden 的候选（例如生产者声明
+// host_implicit 却无对象 span 的非内容 reason）必须出池，让排在其后的可见候选顶上，而不是
+// 让该 Post 的交集位空着。
+func TestAttachFeedIntersectionsSkipsCandidatesHiddenByHostProjection(t *testing.T) {
+	userID := "viewer_hidden_candidate"
+	postID := firstFeedPostIDForBucket(userID, "post_hidden", FeedIntersectionHeavyPercent+FeedIntersectionLightPercent)
+	views := []FeedItemView{{PostID: postID, PrimaryHomepageID: "homepage-west-lake"}}
+
+	// 候选 1：宿主投影后必然 hidden —— 非内容 reason、host_implicit、无对象 span。
+	hiddenAfterProjection := feedDisplayReadyReason("reason_hidden_after_projection", postID, "light")
+	hiddenAfterProjection.ObjectKind = "place"
+	hiddenAfterProjection.ActionTargetID = "homepage-west-lake"
+	hiddenAfterProjection.SubjectContext = "homepage:homepage-west-lake"
+	hiddenAfterProjection.DisplayBinding = intersection.DisplayBindingHostImplicit
+	hiddenAfterProjection.PrimaryText = "你们都想去这里"
+	hiddenAfterProjection.PrimarySpans = []intersection.IntersectionTextSpanView{{Text: "你们都想去这里", Role: "plain"}}
+	// 候选 2：display-ready 的内容 reason。
+	visible := feedDisplayReadyReason("reason_visible", postID, "light")
+
+	light, _ := ReasonPoolsForPost([]intersection.IntersectionReasonView{hiddenAfterProjection, visible}, views[0])
+	if len(light) != 2 {
+		t.Fatalf("anchor matching alone keeps both candidates in the pool: %+v", light)
+	}
+	AttachFeedIntersections(views, []intersection.IntersectionReasonView{hiddenAfterProjection, visible}, userID)
+	got := views[0].IntersectionReasons
+	if len(got) != 1 || got[0].IntersectionID != "reason_visible" {
+		t.Fatalf("feed slot must be filled by the display-ready candidate, got %+v", got)
+	}
+	if strings.TrimSpace(got[0].DisplayBinding) == intersection.DisplayBindingHidden {
+		t.Fatalf("attached reason must never be hidden: %+v", got[0])
+	}
+}
+
+// REQ-004 对 mutualPair（「你们」）主语的结论：非人宿主面（内容卡 / GetPost）只有在句子自带
+// 具名代表人（生产者挂上的对方本人）时才成句；对方主页（宿主即对方）无需代表人；两者都没有
+// 时整条隐藏，不与「你和这里」同形。
+func TestMutualPairStatementNeedsPeerHostOrNamedRepresentative(t *testing.T) {
+	canonical := canonicalCoWishlistedReason(t)
+	if canonical.RepresentativeActor == nil || strings.TrimSpace(canonical.RepresentativeActor.DisplayName) == "" {
+		t.Fatalf("canonical coWishlistedEntity golden must carry the peer as representativeActor: %+v", canonical.RepresentativeActor)
+	}
+	postHost := &intersection.IntersectionTargetView{ObjectType: "post", ObjectID: "post_1", ObjectKind: "content", RouteID: "contentDetail"}
+	peerHost := &intersection.IntersectionTargetView{ObjectType: "user", ObjectID: "profile-target", ObjectKind: "person", RouteID: "userProfile"}
+
+	onPost := intersection.ApplyDisplayContext(canonical, intersection.DisplayContext{
+		Surface: intersection.DisplaySurfaceFeed, HostTarget: postHost, Binding: intersection.DisplayBindingExplicitLink,
+	})
+	if onPost.DisplayBinding == intersection.DisplayBindingHidden {
+		t.Fatalf("named representative must keep the mutualPair statement on a post host: %+v", onPost)
+	}
+
+	anonymous := canonical
+	anonymous.RepresentativeActor = nil
+	anonymous.ActorEvidence = nil
+	anonymous.ActorEvidenceTotalCount = 0
+	hiddenOnPost := intersection.ApplyDisplayContext(anonymous, intersection.DisplayContext{
+		Surface: intersection.DisplaySurfaceFeed, HostTarget: postHost, Binding: intersection.DisplayBindingExplicitLink,
+	})
+	if hiddenOnPost.DisplayBinding != intersection.DisplayBindingHidden {
+		t.Fatalf("mutualPair statement without representative must hide on a post host, got %+v", hiddenOnPost)
+	}
+	onPeer := intersection.ApplyDisplayContext(anonymous, intersection.DisplayContext{
+		Surface: intersection.DisplaySurfaceObjectPage, HostTarget: peerHost, Binding: intersection.DisplayBindingExplicitLink,
+	})
+	if onPeer.DisplayBinding == intersection.DisplayBindingHidden {
+		t.Fatalf("peer host explains 「你们」 by itself; statement must stay visible: %+v", onPeer)
 	}
 }

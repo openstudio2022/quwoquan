@@ -1,5 +1,5 @@
 // Code generated from canonical domain contracts. DO NOT EDIT.
-// ContractGraph SHA256: 157736ecc8566df93f4bf80645e3060c065d845c9dd2af2b8186447883b0206f
+// ContractGraph SHA256: d70d6bc25b5d23c07ea3c5bf7711e373c3fed4effca19b91a9a6c405307a3864
 
 library;
 
@@ -2636,6 +2636,7 @@ final class ContentPostDetailSlice {
     required this.shareCount,
     required this.viewCount,
     this.viewerLiked,
+    this.intersectionReasons,
     required this.createdAt,
     required this.updatedAt,
     this.publishedAt,
@@ -2693,6 +2694,7 @@ final class ContentPostDetailSlice {
   final int shareCount;
   final int viewCount;
   final bool? viewerLiked;
+  final List<IntersectionReason>? intersectionReasons;
   final DateTime createdAt;
   final DateTime updatedAt;
   final DateTime? publishedAt;
@@ -2754,6 +2756,7 @@ final class ContentPostDetailSlice {
       "shareCount",
       "viewCount",
       "viewerLiked",
+      "intersectionReasons",
       "createdAt",
       "updatedAt",
       "publishedAt",
@@ -3032,6 +3035,22 @@ final class ContentPostDetailSlice {
       viewerLiked: map["viewerLiked"] == null
           ? null
           : _requiredBool(map["viewerLiked"], '$path.viewerLiked'),
+      intersectionReasons: map["intersectionReasons"] == null
+          ? null
+          : List<IntersectionReason>.unmodifiable(
+              _requiredList(
+                map["intersectionReasons"],
+                '$path.intersectionReasons',
+              ).asMap().entries.map(
+                (entry) => IntersectionReason.fromWire(
+                  _requiredObject(
+                    entry.value,
+                    '$path.intersectionReasons' + '[${entry.key}]',
+                  ),
+                  '$path.intersectionReasons' + '[${entry.key}]',
+                ),
+              ),
+            ),
       createdAt: _requiredTimestamp(map["createdAt"], '$path.createdAt'),
       updatedAt: _requiredTimestamp(map["updatedAt"], '$path.updatedAt'),
       publishedAt: map["publishedAt"] == null
@@ -3117,6 +3136,10 @@ final class ContentPostDetailSlice {
     "shareCount": shareCount,
     "viewCount": viewCount,
     if (viewerLiked != null) "viewerLiked": viewerLiked!,
+    if (intersectionReasons != null)
+      "intersectionReasons": intersectionReasons!
+          .map((value) => value.toWire())
+          .toList(growable: false),
     "createdAt": createdAt.toUtc().toIso8601String(),
     "updatedAt": updatedAt.toUtc().toIso8601String(),
     if (publishedAt != null)

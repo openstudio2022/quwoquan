@@ -1,4 +1,10 @@
+// spec_ref: specs/feature-tree/object-homepage-network/intersection-unified-experience/spec.md#sit-002.t2
+// spec_ref: specs/feature-tree/object-homepage-network/intersection-unified-experience/entity-homepage-intersection-redesign/spec.md#gwt-001.t1
+// spec_ref: specs/feature-tree/object-homepage-network/intersection-unified-experience/entity-homepage-intersection-redesign/spec.md#gwt-001.t2
+// spec_ref: specs/feature-tree/object-homepage-network/intersection-unified-experience/entity-homepage-intersection-redesign/spec.md#gwt-001.t3
+// spec_ref: specs/feature-tree/object-homepage-network/intersection-unified-experience/user-profile-intersection-redesign/spec.md#gwt-001.t3
 import 'dart:async';
+
 import '../../../../../support/service/recommendation_service/recommendation/recommendation_feature_profile_view/intersection_fixtures.dart';
 
 import 'package:flutter/cupertino.dart';
@@ -12,7 +18,9 @@ import 'package:quwoquan_app/runtime/di/object_intersection_provider.dart';
 import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/application/public/object_intersection_query.dart';
 import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/presentation/object_intersection_section.dart';
 import 'package:quwoquan_app/runtime/di/app_providers.dart';
+import 'package:quwoquan_app/runtime/auth/auth_session.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_route_paths.g.dart';
+import 'package:quwoquan_app/l10n/copy/discovery_feed_text_constants.dart';
 import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/application/public/gathering_create_navigation_request.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
@@ -247,6 +255,9 @@ Widget _companionHost({required List<IntersectionReason> reasons}) {
   return ProviderScope(
     overrides: [
       ..._intersectionBoundaryOverrides(),
+      authSessionControllerProvider.overrideWith(
+        _AuthenticatedObjectIntersectionSession.new,
+      ),
       behaviorReporterProvider.overrideWithValue(
         RecordingContentBehaviorRepository(),
       ),
@@ -472,8 +483,10 @@ void main() {
                 dispatch: 'gathering',
                 isPrimary: true,
                 target: intersectionTargetFixture(
+                  objectType: 'homepage',
                   objectId: 'p_west_lake',
                   objectKind: 'place',
+                  routeId: 'homepageDetail',
                 ),
               ),
             ],
@@ -483,7 +496,10 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    // 约伴入口在真实 UI 可见可达（可点 pill），而非仅展示型「有人同行」徽标。
+    // 重行动不会在对象页首屏提前暴露；用户主动展开证据后才出现唯一 CTA。
+    expect(find.text('发起结伴'), findsNothing);
+    await tester.tap(find.text(DiscoveryFeedText.intersectionExpandMore));
+    await tester.pumpAndSettle();
     expect(find.text('发起结伴'), findsOneWidget);
 
     await tester.tap(find.text('发起结伴'));
@@ -514,8 +530,10 @@ void main() {
                 dispatch: 'message',
                 isPrimary: true,
                 target: intersectionTargetFixture(
+                  objectType: 'user',
                   objectId: 'u_zhou',
                   objectKind: 'person',
+                  routeId: 'userProfile',
                 ),
               ),
             ],
@@ -525,7 +543,10 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    // 私信 / 打招呼有真实承接（对方主页的 greeting 破冰状态机）→ 渲染可点 pill。
+    // message_person 是重行动，同样只在主动展开后揭示。
+    expect(find.text('私信'), findsNothing);
+    await tester.tap(find.text(DiscoveryFeedText.intersectionExpandMore));
+    await tester.pumpAndSettle();
     expect(find.text('私信'), findsOneWidget);
 
     // 点击 pill → navigator._openMessage → 对方主页承接页（不 fallback 成普通下钻）。
@@ -552,8 +573,10 @@ void main() {
                 dispatch: 'message',
                 isPrimary: true,
                 target: intersectionTargetFixture(
+                  objectType: 'circle',
                   objectId: 'fixture_circle_photo',
                   objectKind: 'circle',
+                  routeId: 'circleDetail',
                 ),
               ),
             ],
@@ -566,4 +589,15 @@ void main() {
     // 无真实 person 承接对象时不渲染「私信」，避免退化成对象下钻（§24.10 诚实红线）。
     expect(find.text('私信'), findsNothing);
   });
+}
+
+class _AuthenticatedObjectIntersectionSession extends AuthSessionController {
+  @override
+  AuthSessionState build() => const AuthSessionState(
+    status: AuthSessionStatus.authenticated,
+    accessToken: 'ois-test-token',
+    refreshToken: 'object-intersection-test-refresh',
+    ownerId: 'object-intersection-test-user',
+    activePersonaId: 'object-intersection-test-persona',
+  );
 }

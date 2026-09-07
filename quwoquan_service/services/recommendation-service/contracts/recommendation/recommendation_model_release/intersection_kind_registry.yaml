@@ -145,13 +145,15 @@ verticalExtensionContract:
         - "Topic/摄影/光线条件"
       newKinds: []
 # 垂类事实生产者的唯一 shape 合同。这里只登记已有生产链；outputKinds 只允许引用下方既有通用 kind，
+# outputObjectKinds 必须与 outputKinds 各自登记的 objectKind 一致（verify 交叉校验），
 # recommendation_only 不得输出交集 kind，object_derivation 不得直接伪造交集事实。
 factProducerShapes:
   post_declared_visit:
     visibility: intersection
     inputRefs: [content.post.visitedAt, content.post.geoTagRef]
     outputKinds: [coVisitedEntity, followeeVisited]
-    outputObjectKinds: [place]
+    # coVisitedEntity 的主对象是地点；followeeVisited 的主对象是来过的人（地点是宿主）。
+    outputObjectKinds: [place, person]
     outputTaxonomyRoots: []
   entity_wishlist:
     visibility: intersection
@@ -162,11 +164,13 @@ factProducerShapes:
   # 共同经历生产者（交集飞轮回流环）：双方在同一 Gathering 均持有 active Participation，
   # 且各自主动发布了关联该 Gathering（content.post.gatheringRef）的公开内容后才产出
   # coExperiencedGathering。时间到达、聊天频率、位置或单方声明均不得触发（诚实红线延伸）。
+  # outputObjectKinds 是产出 reason 的主对象 kind：经历交集的主对象是对方本人（DEC-003），
+  # gathering 只作 subjectContext 锚点与被计数对象。
   gathering_shared_experience:
     visibility: intersection
     inputRefs: [circle.gathering.participation, content.post.gatheringRef]
     outputKinds: [coExperiencedGathering]
-    outputObjectKinds: [gathering]
+    outputObjectKinds: [person]
     outputTaxonomyRoots: []
 moments:
   # 意图时态闭集。moment 表达交集的「时态意图」，与 lifecycleState（边生命周期强弱）正交：
@@ -224,36 +228,43 @@ objectKinds:
   # §23.3 B 统一对象类型闭集（合并 objectKind + countObjectKind，可计数子集靠 roles 标注，不再两套集合）。
   # roles: object = 主对象品牌角标（端 UnifiedObjectKind 枚举 + 可导航）；count = 被计数对象（数字下钻列表对象类型）。
   # routeId 为端路由逻辑名（与 ui_config / app_routes 对齐，空=不可导航纯文本）；assetKind 为对象视觉资产类型。
+  # objectType 为该 objectKind 的 canonical wire objectType（IntersectionTarget.objectType）：端云 target 归一化
+  # 只查这张表，服务端不得再按 routeId / kind 手写 switch 或从 objectId 前缀反推。
   # dimension / label 是共享标签 reason 的交集维度与兜底称谓：两者由 objectKind 决定而不是
   # 由 objectType 决定，因为「同游」成立的理由是对象是地点，与它是博物馆还是温泉无关。
   # objectType 到 objectKind 的收口写在 objectTypeBindings，服务端不得再手写 switch。
   - kind: person
     roles: [object, count]
     routeId: userProfile
+    objectType: user
     assetKind: avatar
     dimension: interest
     label: 同好
   - kind: circle
     roles: [object, count]
     routeId: circleDetail
+    objectType: circle
     assetKind: circleAvatar
     dimension: relationship
     label: 同圈
   - kind: school
     roles: [object]
     routeId: homepageDetail
+    objectType: homepage
     assetKind: emblem
     dimension: identity
     label: 同校
   - kind: place
     roles: [object, count]
     routeId: homepageDetail
+    objectType: homepage
     assetKind: coverImage
     dimension: location
     label: 同游
   - kind: enterprise
     roles: [object]
     routeId: homepageDetail
+    objectType: homepage
     assetKind: logo
     dimension: interest
     label: 同好
@@ -261,12 +272,14 @@ objectKinds:
   - kind: route
     roles: [object]
     routeId: homepageDetail
+    objectType: homepage
     assetKind: coverImage
     dimension: location
     label: 同游
   - kind: photo_spot
     roles: [object]
     routeId: homepageDetail
+    objectType: homepage
     assetKind: coverImage
     dimension: location
     label: 同游
@@ -274,6 +287,7 @@ objectKinds:
   - kind: gear
     roles: [object]
     routeId: homepageDetail
+    objectType: homepage
     assetKind: coverImage
     dimension: interest
     label: 同好
@@ -282,17 +296,20 @@ objectKinds:
   - kind: content
     roles: [object, count]
     routeId: workBrowser
+    objectType: post
     assetKind: coverImage
     dimension: interest
     label: 同好
   - kind: entity
     roles: [count]
     routeId: homepageDetail
+    objectType: homepage
     dimension: location
     label: 同游
   - kind: tag
     roles: [count]
     routeId: ""
+    objectType: tag
     dimension: interest
     label: 同好
   # 聚集对象用 startAt + 可空 endAt 一个时间区间同时表达
@@ -301,6 +318,7 @@ objectKinds:
   - kind: gathering
     roles: [object, count]
     routeId: gatheringDetail
+    objectType: gathering
     assetKind: coverImage
     dimension: relationship
     label: 同圈
@@ -317,6 +335,12 @@ objectTypeBindings:
     objectKind: person
   - objectType: circle
     objectKind: circle
+  - objectType: post
+    objectKind: content
+  - objectType: content
+    objectKind: content
+  - objectType: gathering
+    objectKind: gathering
   # 泛化占位：端直连与 search-service 只知道自己在看一个主页/实体，拿不到具体 HomepageType。
   # 它们与具体地点类型同样按地点处理，否则同一个对象会因调用方不同而换一套维度与称谓。
   - objectType: homepage
@@ -546,12 +570,13 @@ actionKeyMeta:
 actionHintsByKind:
   # 共同经历的行动阶梯首位是「再约一次」（交集飞轮的复利环）：经历过一次的双方
   # 再次发起的信任成本最低；其次回看行动详情（共同经历聚合区），最后私信。
-  coExperiencedGathering: [start_gathering, open_object, message_person]
+  # 主对象是对方本人：行动阶梯只到人（再约一次 / 私信），open_object 在对方主页即自指，不登记。
+  coExperiencedGathering: [start_gathering, message_person]
   sharedFollowees: [follow_person, greet_person, view_shared_people]
   commonFollower: [follow_person, message_person, view_shared_people]
   # sameIndustry 的对象是人本身，没有可打开的组织对象，行动阶梯只到人。
   sameIndustry: [message_person, follow_person]
-  sharedCircle: [join_circle, open_discussion]
+  sharedCircle: [greet_person, message_person]
   coCommented: [open_content, open_discussion]
   coSharedContent: [open_content, create_followup]
   coLiked: [open_content, follow_person]
@@ -595,6 +620,11 @@ statementTemplates:
     sharedFollowees:
       l10nKey: intersection.statement.shared_followees
       template: "{subject}也关注了{object}"
+      variants:
+        # 对方主页（宿主即对象）：对象位被 host_implicit 剔除后句子仍须成立。
+        noObject:
+          l10nKey: intersection.statement.shared_followees.no_object
+          template: "{subject}是你们共同关注的人"
     commonFollower:
       l10nKey: intersection.statement.common_follower
       template: "{subject}也关注了{object}"
@@ -604,6 +634,11 @@ statementTemplates:
       counted:
         l10nKey: intersection.statement.shared_circle.counted
         template: "{subject}和你都加入了{count}个共同圈子"
+      variants:
+        # 对方主页：mutualPair 主语 + 计数，宿主即对方本人，不点名任何圈子。
+        noObject:
+          l10nKey: intersection.statement.shared_circle.no_object
+          template: "{subject}有{count}个共同圈子"
     coCommented:
       l10nKey: intersection.statement.co_commented
       template: "{subject}{action}{object}"
@@ -634,12 +669,11 @@ statementTemplates:
         personPlace:
           l10nKey: intersection.statement.co_visited_entity.person_place
           template: "你和{object}都去过{place}"
+    # 意图交集以 mutualPair（「你们」）为主语，不与「具名第三方 + 和你」的 counted 句式组合：
+    # 不登记 counted 即显式声明「无第二级」，缺具名对象时整条隐藏，不造名、不借邻近语义。
     coWishlistedEntity:
       l10nKey: intersection.statement.co_wishlisted_entity
       template: "{subject}都想去{object}"
-      counted:
-        l10nKey: intersection.statement.co_wishlisted_entity.counted
-        template: "{subject}和你都想去{count}个相同的地方"
       variants:
         personPlace:
           l10nKey: intersection.statement.co_wishlisted_entity.person_place
@@ -656,9 +690,19 @@ statementTemplates:
     followeeViewedObject:
       l10nKey: intersection.statement.followee_viewed_object
       template: "{countedSubject}也看过{object}"
+      variants:
+        # 对象页（宿主即对象）：具名代表人主语，「这里」指代宿主。
+        noObject:
+          l10nKey: intersection.statement.followee_viewed_object.no_object
+          template: "{subject}也看过这里"
     followeeInObject:
       l10nKey: intersection.statement.followee_in_object
       template: "{subject}在{object}"
+      variants:
+        # 圈子页（宿主即对象）：「这里」指代宿主圈子。
+        noObject:
+          l10nKey: intersection.statement.followee_in_object.no_object
+          template: "{subject}也在这里"
     followeeViewing:
       l10nKey: intersection.statement.followee_viewing
       template: "{subject}正在看{object}"
@@ -682,9 +726,12 @@ statementTemplates:
     coExperiencedGathering:
       l10nKey: intersection.statement.co_experienced_gathering
       template: "{subject}一起参加过{object}"
+      # 主语取 subjectPatterns.mutualPair（「你们」）：Recommendation 快照没有行动名，
+      # 生产者按 counted 形式渲染「你们一起参加过{count}次行动」；具名形式留给持有
+      # 行动名的读面。
       counted:
         l10nKey: intersection.statement.co_experienced_gathering.counted
-        template: "{subject}和你一起参加过{count}次行动"
+        template: "{subject}一起参加过{count}次行动"
 
 presentationText:
   # §17.2 结论句「谓语」之外的全部用户可见词汇的唯一真相源。
@@ -730,6 +777,9 @@ presentationText:
       sharedCircle: 同圈成员
       coMemberCircle: 同圈成员
       coExperiencedGathering: 同行过的人
+      # 意图交集的代表人就是对方本人：mutualPair 主语在非对方主页的宿主面（内容卡等）
+      # 靠这位具名代表人解释「你们」是谁；没有这一行，「你们」就与「你和这里」同形。
+      coWishlistedEntity: 也想去的人
 
   # 无具名代表人时的匿名主语。与 relationLabels 不同表：并非所有有关系称谓的 kind
   # 都能匿名成句（如 sharedFollowees 匿名后是「一位用户」而非「一位你关注的人」）。
@@ -762,6 +812,10 @@ presentationText:
       relationPrefixedName: "{relation}{name}"
       namedWithMore: "{subject}等{count}人"
       namedWithMoreUnit: "{subject}等{count}{unit}"
+      # 双方共同持有同一意图时的主语（「你们」）：主语本身就是观察者与对方两个人，
+      # 不需要具名代表人。与 viewerSubjects 的「你和这里」不同——后者说不出「和谁」，
+      # 必须整条淘汰；这里的对方是真实 persona，句子成立。
+      mutualPair: 你们
 
   # 宿主对象即观察者自身时的主语（sharedTagSample 在对象页/圈子页的视角）。
   viewerSubjects:
@@ -981,7 +1035,11 @@ kinds:
     level: sharedFact
     intersectionClass: fact
     dimensions: [relationship, interest]
-    objectKind: circle
+    # 与 coExperiencedGathering 同形（DEC-003）：共同圈子是两个人之间的关系事实，reason 主对象是
+    # 对方本人（对方主页 host_implicit 校验要求 reason target == 宿主；快照不持有圈子名，无法走
+    # explicit_link）。共同圈子只经 subjectContext `circle:<id>` 与 intersectionPoints 承载，被计数
+    # 对象仍是 circle。行动阶梯只到人，不再下发指向圈子的 join_circle（双方本就都在圈内）。
+    objectKind: person
     countObjectKind: circle
     valueTier: T1
     computability: R1
@@ -1154,7 +1212,10 @@ kinds:
     level: sharedFact
     intersectionClass: fact
     dimensions: [relationship]
-    objectKind: gathering
+    # 主对象是对方本人（经历是两个人之间的关系事实）：对方主页 host_implicit 校验要求
+    # reason target == 宿主，收件箱以对方为行对象；共同行动经 subjectContext `gathering:<id>`
+    # 与 intersectionPoints 承载，被计数对象仍是 gathering（DEC-003 修订）。
+    objectKind: person
     countObjectKind: gathering
     valueTier: T1
     computability: R2

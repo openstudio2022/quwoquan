@@ -40,6 +40,7 @@ BehaviorEvent normalizeContentBehaviorEvent(BehaviorEvent event) {
     intersectionId: event.intersectionId,
     intersectionClass: event.intersectionClass,
     intersectionEvidenceId: event.intersectionEvidenceId,
+    intersectionCohort: event.intersectionCohort,
     subjectId: event.subjectId,
     feedbackKind: event.feedbackKind,
     motionDirection: event.motionDirection,

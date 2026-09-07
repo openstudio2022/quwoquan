@@ -21,8 +21,7 @@ void main() {
     String id = 'ix',
     String intersectionClass = 'fact',
     String expiresAt = '',
-    List<IntersectionActionHint> actionHints =
-        const <IntersectionActionHint>[],
+    List<IntersectionActionHint> actionHints = const <IntersectionActionHint>[],
   }) {
     return intersectionReasonFixture(
       intersectionId: id,
@@ -124,37 +123,10 @@ void main() {
         ),
       ];
       final actionable = actionableIntersectionReasons(items, now: now);
-      expect(
-        actionable.map((item) => item.intersectionId).toList(),
-        <String>['a', 'c'],
-      );
-    });
-  });
-
-  group('primaryIntersectionActionHint（首个 isPrimary，缺省回落第一个）', () {
-    test('优先返回首个 isPrimary hint', () {
-      final selected = primaryIntersectionActionHint(
-        reason(
-          actionHints: <IntersectionActionHint>[
-            hint(actionKey: 'open_object', label: '进入主页'),
-            hint(actionKey: 'start_gathering', label: '约一次', isPrimary: true),
-          ],
-        ),
-      );
-      expect(selected?.actionKey, 'start_gathering');
-      expect(selected?.label, '约一次');
-    });
-
-    test('无 isPrimary 时回落第一个 hint；空 hints 返回 null', () {
-      final selected = primaryIntersectionActionHint(
-        reason(
-          actionHints: <IntersectionActionHint>[
-            hint(actionKey: 'open_object', label: '进入主页'),
-          ],
-        ),
-      );
-      expect(selected?.actionKey, 'open_object');
-      expect(primaryIntersectionActionHint(reason()), isNull);
+      expect(actionable.map((item) => item.intersectionId).toList(), <String>[
+        'a',
+        'c',
+      ]);
     });
   });
 
@@ -220,9 +192,7 @@ void main() {
         items: <IntersectionReason>[
           previewReason(
             id: 'a',
-            actionHints: <IntersectionActionHint>[
-              hint(isPrimary: true),
-            ],
+            actionHints: <IntersectionActionHint>[hint(isPrimary: true)],
           ),
           previewReason(id: 'b'),
         ],

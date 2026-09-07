@@ -121,6 +121,52 @@ void main() {
       expect(channels, isNull);
     });
 
+    test('单独的已退役 featured 频道使整份覆盖回退', () {
+      final channels = HomeChannelsRemoteOverride.fromAppConfig(
+        _config(const <String, Object?>{
+          'home_channels': <Object?>[
+            <String, Object?>{'id': 'featured', 'order': 0},
+          ],
+        }),
+      );
+      expect(channels, isNull);
+    });
+
+    test('已退役 featured 与合法频道混合时整份覆盖回退', () {
+      final channels = HomeChannelsRemoteOverride.fromAppConfig(
+        _config(const <String, Object?>{
+          'home_channels': <Object?>[
+            <String, Object?>{'id': 'recommend', 'order': 0},
+            <String, Object?>{'id': 'featured', 'order': 1},
+          ],
+        }),
+      );
+      expect(channels, isNull);
+    });
+
+    test('频道 id trim 后为已退役 featured 时整份覆盖回退', () {
+      final channels = HomeChannelsRemoteOverride.fromAppConfig(
+        _config(const <String, Object?>{
+          'home_channels': <Object?>[
+            <String, Object?>{'id': ' featured ', 'order': 0},
+          ],
+        }),
+      );
+      expect(channels, isNull);
+    });
+
+    test('与 featured 相似但不相等的频道 id 不会被误拒绝', () {
+      final channels = HomeChannelsRemoteOverride.fromAppConfig(
+        _config(const <String, Object?>{
+          'home_channels': <Object?>[
+            <String, Object?>{'id': 'featured-travel', 'order': 0},
+          ],
+        }),
+      );
+      expect(channels, hasLength(1));
+      expect(channels!.single.id, 'featured-travel');
+    });
+
     test('generated decoder 拒绝 camelCase 与非法字段类型', () {
       expect(
         () => _config(const <String, Object?>{'homeChannels': <Object?>[]}),

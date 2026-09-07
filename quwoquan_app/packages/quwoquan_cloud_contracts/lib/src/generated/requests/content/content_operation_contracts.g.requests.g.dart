@@ -1,5 +1,5 @@
 // Code generated from the accepted ContractGraph. DO NOT EDIT.
-// ContractGraph SHA256: 157736ecc8566df93f4bf80645e3060c065d845c9dd2af2b8186447883b0206f
+// ContractGraph SHA256: d70d6bc25b5d23c07ea3c5bf7711e373c3fed4effca19b91a9a6c405307a3864
 
 part of '../../../content/content_operation_contracts.g.dart';
 
@@ -439,6 +439,7 @@ final class ContentBehaviorEventWire {
     String? intersectionId,
     String? intersectionClass,
     String? intersectionEvidenceId,
+    String? intersectionCohort,
     String? subjectId,
     String? feedbackKind,
     String? taxonomyReleaseId,
@@ -485,6 +486,7 @@ final class ContentBehaviorEventWire {
        intersectionId = intersectionId,
        intersectionClass = intersectionClass,
        intersectionEvidenceId = intersectionEvidenceId,
+       intersectionCohort = intersectionCohort,
        subjectId = subjectId,
        feedbackKind = feedbackKind,
        taxonomyReleaseId = taxonomyReleaseId,
@@ -580,6 +582,7 @@ final class ContentBehaviorEventWire {
   final String? intersectionId;
   final String? intersectionClass;
   final String? intersectionEvidenceId;
+  final String? intersectionCohort;
   final String? subjectId;
   final String? feedbackKind;
   final String? taxonomyReleaseId;
@@ -630,6 +633,7 @@ final class ContentBehaviorEventWire {
       "intersectionId",
       "intersectionClass",
       "intersectionEvidenceId",
+      "intersectionCohort",
       "subjectId",
       "feedbackKind",
       "taxonomyReleaseId",
@@ -866,6 +870,12 @@ final class ContentBehaviorEventWire {
               map["intersectionEvidenceId"],
               '$path.intersectionEvidenceId',
             ),
+      intersectionCohort: map["intersectionCohort"] == null
+          ? null
+          : _generatedRequestString(
+              map["intersectionCohort"],
+              '$path.intersectionCohort',
+            ),
       subjectId: map["subjectId"] == null
           ? null
           : _generatedRequestString(map["subjectId"], '$path.subjectId'),
@@ -948,6 +958,8 @@ final class ContentBehaviorEventWire {
       "intersectionClass": this.intersectionClass!,
     if (this.intersectionEvidenceId != null)
       "intersectionEvidenceId": this.intersectionEvidenceId!,
+    if (this.intersectionCohort != null)
+      "intersectionCohort": this.intersectionCohort!,
     if (this.subjectId != null) "subjectId": this.subjectId!,
     if (this.feedbackKind != null) "feedbackKind": this.feedbackKind!,
     if (this.taxonomyReleaseId != null)

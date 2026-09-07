@@ -147,6 +147,27 @@ const Map<IntersectionObjectKind, String> intersectionRouteIdByObjectKind =
 String intersectionRouteIdForObjectKind(IntersectionObjectKind kind) =>
     intersectionRouteIdByObjectKind[kind] ?? '';
 
+/// objectKind → canonical wire objectType（registry.objectKinds[].objectType）。
+/// IntersectionTarget.objectType 归一化只查此表，端不再按 routeId / kind 手写 switch。
+const Map<IntersectionObjectKind, String>
+intersectionWireObjectTypeByObjectKind = <IntersectionObjectKind, String>{
+  IntersectionObjectKind.person: "user",
+  IntersectionObjectKind.circle: "circle",
+  IntersectionObjectKind.school: "homepage",
+  IntersectionObjectKind.place: "homepage",
+  IntersectionObjectKind.enterprise: "homepage",
+  IntersectionObjectKind.route: "homepage",
+  IntersectionObjectKind.photoSpot: "homepage",
+  IntersectionObjectKind.gear: "homepage",
+  IntersectionObjectKind.content: "post",
+  IntersectionObjectKind.entity: "homepage",
+  IntersectionObjectKind.tag: "tag",
+  IntersectionObjectKind.gathering: "gathering",
+};
+
+String intersectionWireObjectTypeForObjectKind(IntersectionObjectKind kind) =>
+    intersectionWireObjectTypeByObjectKind[kind] ?? '';
+
 IntersectionObjectKind? intersectionObjectKindForObjectType(
   String? objectType,
 ) {
@@ -157,8 +178,10 @@ IntersectionObjectKind? intersectionObjectKindForObjectType(
     "circle" => IntersectionObjectKind.circle,
     "city" => IntersectionObjectKind.place,
     "company" => IntersectionObjectKind.enterprise,
+    "content" => IntersectionObjectKind.content,
     "enterprise" => IntersectionObjectKind.enterprise,
     "entity" => IntersectionObjectKind.place,
+    "gathering" => IntersectionObjectKind.gathering,
     "gear" => IntersectionObjectKind.gear,
     "heritage_site" => IntersectionObjectKind.place,
     "homepage" => IntersectionObjectKind.place,
@@ -170,6 +193,7 @@ IntersectionObjectKind? intersectionObjectKindForObjectType(
     "person" => IntersectionObjectKind.person,
     "photo_spot" => IntersectionObjectKind.photoSpot,
     "place" => IntersectionObjectKind.place,
+    "post" => IntersectionObjectKind.content,
     "religious_site" => IntersectionObjectKind.place,
     "restaurant" => IntersectionObjectKind.place,
     "route" => IntersectionObjectKind.route,

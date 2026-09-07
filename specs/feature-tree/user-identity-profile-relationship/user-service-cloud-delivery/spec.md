@@ -78,8 +78,8 @@
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`track`
-- 影响或价值：需要持续证明 user-service 真实存储、App Remote 和跨页面 projection 在目标环境一致。
-- 完成判定：`SIT-001` 具有匹配环境的 `api_integration` 和 `user_acceptance` `spec_ref`。
+- 影响或价值：需要持续证明 user-service 真实存储、App Remote 和跨页面 projection 在目标环境一致。现状：`quwoquan_service/services/user-service/tests/api_integration/account/user_account` 在 `dev1.0` 基线（`1f4e09aa2`，干净 integration 工作树）上有 12 例失败——persona/homepage/follower 读面缺 `avatarVersion`/`ownerUserId`、subject follow 的 mark visited 返回 `USER.USER.invalid_argument`、interest profile 查询 401、OTP 限流跨用例串扰、creator release 公开资料读回不匹配；该包不在任何本地或 hosted gate 的执行点内，所以红项长期不可见。product-mainline 交集/存储线只复跑并记录，不改其字节。
+- 完成判定：`SIT-001` 具有匹配环境的 `api_integration` 和 `user_acceptance` `spec_ref`，且该 `api_integration` 包在 dev1.0 基线上全绿并进入 `lane/* -> dev1.0` 的 hosted 或 integration 通道执行点。
 
 <a id="open-002"></a>
 ### OPEN-002 身份与资料 operation 对象化收口

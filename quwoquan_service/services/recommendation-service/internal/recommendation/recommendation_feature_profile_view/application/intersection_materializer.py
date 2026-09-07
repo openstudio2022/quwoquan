@@ -4,13 +4,27 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 import hashlib
 import json
+import re
 from typing import Protocol
+
+from generated.recommendation.recommendation_feature_profile_view.intersection_policy import (
+    ACTION_KEYS_BY_KIND,
+    ACTION_POLICY_BY_KEY,
+    OBJECT_KIND_BY_OBJECT_TYPE,
+    ROUTE_ID_BY_OBJECT_KIND,
+    RELATION_LABEL_BY_KIND,
+    RELATION_LABEL_DEFAULT,
+    STATEMENT_FORM_BY_KIND,
+    SUBJECT_PATTERN_BY_NAME,
+    WIRE_OBJECT_TYPE_BY_OBJECT_KIND,
+)
 
 from .intersection_projector import Projector
 
 
 MAX_INTERSECTION_ACTORS = 200
 MAX_INTERSECTION_SAMPLES = 3
+_STATEMENT_SLOT_PATTERN = re.compile(r"\{([A-Za-z]+)\}")
 
 
 @dataclass(frozen=True, slots=True)
@@ -31,6 +45,12 @@ class BehaviorSnapshot:
     occurred_at: datetime
 
 
+@dataclass(frozen=True, slots=True)
+class WishlistEntitySnapshot:
+    entity_id: str
+    display_name: str
+
+
 class IntersectionEvidenceStore(Protocol):
     def list_following(self, persona_id: str, limit: int) -> tuple[str, ...]: ...
 
@@ -44,9 +64,13 @@ class IntersectionEvidenceStore(Protocol):
 
     def count_intersection_supply(self, supply_key: str) -> int: ...
 
-    def list_wishlisted_entities(self, persona_id: str, limit: int) -> tuple[str, ...]: ...
+    def list_wishlisted_entities(
+        self, persona_id: str, limit: int
+    ) -> tuple[WishlistEntitySnapshot, ...]: ...
 
     def list_experienced_gatherings(self, persona_id: str, limit: int) -> tuple[str, ...]: ...
+
+    def list_gathering_experiencers(self, gathering_id: str, limit: int) -> tuple[str, ...]: ...
 
 
 class Materializer:
@@ -80,38 +104,52 @@ class Materializer:
         following = self._evidence.list_following(
             normalized_subject, MAX_INTERSECTION_ACTORS
         )
-        actor_behaviors: list[tuple[PersonaProfileSnapshot, BehaviorSnapshot]] = []
+        grouped_behaviors: dict[
+            tuple[str, str], dict[str, tuple[PersonaProfileSnapshot, BehaviorSnapshot]]
+        ] = {}
         for actor_id in following:
             profile = self._evidence.read_persona_profile(actor_id)
             if profile is None or not profile.display_name.strip():
                 continue
-            behaviors = self._evidence.list_behaviors(actor_id, MAX_INTERSECTION_SAMPLES)
-            for behavior in behaviors:
-                if behavior.target_id.strip():
-                    actor_behaviors.append((profile, behavior))
-                    break
+            for behavior in self._evidence.list_behaviors(
+                actor_id, MAX_INTERSECTION_SAMPLES
+            ):
+                target_id = behavior.target_id.strip()
+                target_type = behavior.target_type.strip()
+                if not target_id or not target_type:
+                    continue
+                grouped_behaviors.setdefault((target_type, target_id), {}).setdefault(
+                    profile.persona_id, (profile, behavior)
+                )
 
-        facts: tuple[dict[str, object], ...] = ()
-        affinities: tuple[dict[str, object], ...] = ()
-        if actor_behaviors:
-            facts = (
-                _actor_behavior_reason(
+        facts = tuple(
+            reason
+            for _, by_actor in sorted(grouped_behaviors.items())
+            if (
+                reason := _actor_behavior_reason(
                     subject_id=normalized_subject,
-                    actor_behaviors=tuple(actor_behaviors),
+                    actor_behaviors=tuple(by_actor.values()),
                     generated_at=generated_at,
                     intersection_class="fact",
                     channel=(channel or "").strip(),
-                ),
+                )
             )
-            affinities = (
-                _actor_behavior_reason(
+            is not None
+        ) + self._co_experienced_subject_reasons(normalized_subject, generated_at)
+        affinities = tuple(
+            reason
+            for _, by_actor in sorted(grouped_behaviors.items())
+            if (
+                reason := _actor_behavior_reason(
                     subject_id=normalized_subject,
-                    actor_behaviors=tuple(actor_behaviors),
+                    actor_behaviors=tuple(by_actor.values()),
                     generated_at=generated_at,
                     intersection_class="affinity",
                     channel=(channel or "").strip(),
-                ),
+                )
             )
+            is not None
+        )
         fact_changed = self._projector.replace_subject_snapshot(
             source_event_id=source_event_id,
             source_event_digest=source_event_digest,
@@ -131,6 +169,39 @@ class Materializer:
             generated_at=generated_at,
         )
         return fact_changed, affinity_changed
+
+    def _co_experienced_subject_reasons(
+        self, subject_id: str, generated_at: datetime
+    ) -> tuple[dict[str, object], ...]:
+        """subject 快照里的经历交集：按对方本人聚合「我们一起经历过的行动」。
+
+        收件箱「双方交集列表」与「我的经历」资产行都读 subject 快照（DEC-003 / REQ-009），
+        经历事实不能只落在对方对象页快照里。口径与对象页一致：双方都在同一 Gathering 持有
+        active Participation 且各自发布了 active 公开回顾；单方不成立。
+        """
+        peers: dict[str, list[str]] = {}
+        for gathering_id in self._evidence.list_experienced_gatherings(
+            subject_id, MAX_INTERSECTION_ACTORS
+        ):
+            for peer_id in self._evidence.list_gathering_experiencers(
+                gathering_id, MAX_INTERSECTION_ACTORS
+            ):
+                peer = peer_id.strip()
+                if not peer or peer == subject_id:
+                    continue
+                peers.setdefault(peer, []).append(gathering_id)
+        reasons: list[dict[str, object]] = []
+        for peer, gathering_ids in sorted(peers.items()):
+            reason = _co_experienced_gathering_reason(
+                subject_id=subject_id,
+                object_id=peer,
+                peer_profile=self._evidence.read_persona_profile(peer),
+                gathering_ids=tuple(sorted(set(gathering_ids))),
+                generated_at=generated_at,
+            )
+            if reason is not None:
+                reasons.append(reason)
+        return tuple(reasons)
 
     def rebuild_object(
         self,
@@ -185,38 +256,51 @@ class Materializer:
                 if reason is not None:
                     reasons.append(reason)
             if shared_circles:
-                reasons.append(
-                    _object_set_reason(
-                        subject_id=normalized_subject,
-                        object_id=normalized_object,
-                        object_type="user",
-                        kind="sharedCircle",
-                        dimension="relationship",
-                        related_ids=tuple(shared_circles),
-                        generated_at=generated_at,
-                    )
+                shared_circle = _object_set_reason(
+                    subject_id=normalized_subject,
+                    object_id=normalized_object,
+                    object_type="user",
+                    kind="sharedCircle",
+                    dimension="relationship",
+                    related_ids=tuple(shared_circles),
+                    generated_at=generated_at,
                 )
+                if shared_circle is not None:
+                    reasons.append(shared_circle)
             # 意图交集（交集飞轮入口环）：双方当前均想去的相同实体。
-            shared_wishlisted = sorted(
-                set(
-                    self._evidence.list_wishlisted_entities(
-                        normalized_subject, MAX_INTERSECTION_ACTORS
-                    )
-                ).intersection(
-                    self._evidence.list_wishlisted_entities(
-                        normalized_object, MAX_INTERSECTION_ACTORS
-                    )
+            # 事实成立只看 entityId：缺展示名是展示层降级问题，不能在读面把
+            # active 想去事实整条丢掉，否则计数与「双方没有共同想去」同形。
+            subject_wishlisted = {
+                item.entity_id.strip(): item
+                for item in self._evidence.list_wishlisted_entities(
+                    normalized_subject, MAX_INTERSECTION_ACTORS
                 )
+                if item.entity_id.strip()
+            }
+            object_wishlisted = {
+                item.entity_id.strip(): item
+                for item in self._evidence.list_wishlisted_entities(
+                    normalized_object, MAX_INTERSECTION_ACTORS
+                )
+                if item.entity_id.strip()
+            }
+            shared_wishlisted_ids = sorted(
+                set(subject_wishlisted).intersection(object_wishlisted)
             )
-            if shared_wishlisted:
-                reasons.append(
-                    _co_wishlisted_reason(
-                        subject_id=normalized_subject,
-                        object_id=normalized_object,
-                        entity_ids=tuple(shared_wishlisted),
-                        generated_at=generated_at,
-                    )
+            if shared_wishlisted_ids:
+                co_wishlisted = _co_wishlisted_reason(
+                    subject_id=normalized_subject,
+                    object_id=normalized_object,
+                    peer_profile=self._evidence.read_persona_profile(normalized_object),
+                    entities=tuple(
+                        subject_wishlisted[entity_id]
+                        for entity_id in shared_wishlisted_ids
+                    ),
+                    generated_at=generated_at,
                 )
+                # 结论句渲染不成立时只隐藏这一条（降级链末级），不让整份读面失败。
+                if co_wishlisted is not None:
+                    reasons.append(co_wishlisted)
             # 经历交集（交集飞轮回流环）：双方在同一 Gathering 均持有 active
             # Participation 且各自主动发布了公开回顾。单方发布不成立。
             shared_experienced = sorted(
@@ -231,14 +315,16 @@ class Materializer:
                 )
             )
             if shared_experienced:
-                reasons.append(
-                    _co_experienced_gathering_reason(
-                        subject_id=normalized_subject,
-                        object_id=normalized_object,
-                        gathering_ids=tuple(shared_experienced),
-                        generated_at=generated_at,
-                    )
+                co_experienced = _co_experienced_gathering_reason(
+                    subject_id=normalized_subject,
+                    object_id=normalized_object,
+                    peer_profile=self._evidence.read_persona_profile(normalized_object),
+                    gathering_ids=tuple(shared_experienced),
+                    generated_at=generated_at,
                 )
+                # 模板不可渲染只隐藏这一条（降级链末级），不让整份读面失败。
+                if co_experienced is not None:
+                    reasons.append(co_experienced)
         else:
             actor_ids: list[str] = []
             for actor_id in sorted(following):
@@ -314,7 +400,7 @@ def _actor_behavior_reason(
     generated_at: datetime,
     intersection_class: str,
     channel: str,
-) -> dict[str, object]:
+) -> dict[str, object] | None:
     samples = actor_behaviors[:MAX_INTERSECTION_SAMPLES]
     first_profile, first_behavior = samples[0]
     actor_evidence = [
@@ -331,12 +417,26 @@ def _actor_behavior_reason(
         object_type=first_behavior.target_type or "post",
         object_id=first_behavior.target_id,
     )
-    object_label = first_behavior.display_name.strip() or "这条内容"
-    primary_prefix = f"{first_profile.display_name} 等 {count} 人互动过"
-    primary_text = primary_prefix + object_label
+    # 主句只由注册表模板产出：对象缺展示名时不造「这条内容」这类泛对象，整条隐藏。
+    object_label = first_behavior.display_name.strip()
+    statement = _render_statement(
+        kind="followeeViewing",
+        slots={
+            "subject": _representative_subject_spans(first_profile, count),
+            "object": (
+                {"text": object_label, "role": "object", "target": target, "visual": None},
+            ),
+        },
+    )
+    if statement is None:
+        return None
+    primary_text, primary_spans, primary_text_l10n_key = statement
     reason = _base_reason(
         subject_id=subject_id,
-        intersection_id=f"{subject_id}:followeeViewing:{intersection_class}:{channel or 'all'}",
+        intersection_id=(
+            f"{subject_id}:followeeViewing:{first_behavior.target_type}:"
+            f"{first_behavior.target_id}:{intersection_class}:{channel or 'all'}"
+        ),
         intersection_class=intersection_class,
         kind="followeeViewing",
         dimension="content",
@@ -350,6 +450,7 @@ def _actor_behavior_reason(
     )
     reason.update(
         {
+            "subjectContext": _subject_context(first_behavior),
             "displayBinding": "explicit_link",
             "confidenceLabel": "推荐内容" if intersection_class == "affinity" else "",
             "intersectionPoints": [
@@ -366,19 +467,19 @@ def _actor_behavior_reason(
                     visuals=[_visual(profile) for profile, _ in samples],
                 )
             ],
-            "primarySpans": [
-                {"text": primary_prefix, "role": "plain", "target": None, "visual": None},
-                {"text": object_label, "role": "object", "target": target, "visual": None},
-            ],
+            "primaryTextL10nKey": primary_text_l10n_key,
+            "primarySpans": list(primary_spans),
             "sampleVisuals": [_visual(profile) for profile, _ in samples],
-            "representativeActor": _representative_actor(first_profile),
+            "representativeActor": _representative_actor(
+                first_profile, kind="followeeViewing"
+            ),
             "actorEvidenceTotalCount": count,
             "actorEvidenceCompleteness": "complete",
             "actorEvidence": actor_evidence,
             "factPointCount": 1 if intersection_class == "fact" else 0,
             "recommendedPointCount": 1 if intersection_class == "affinity" else 0,
             "totalPointCount": 1,
-            "actionHints": [_view_action(target)],
+            "actionHints": _action_hints("followeeViewing", target),
         }
     )
     return reason
@@ -405,10 +506,16 @@ def _actor_set_reason(
     samples = profiles[:MAX_INTERSECTION_SAMPLES]
     count = len(profiles)
     target = _target(object_type=object_type, object_id=object_id)
-    verb = "也在这里" if kind == "followeeInObject" else "也看过这里"
-    if kind == "sharedFollowees":
-        verb = "是你们共同关注的人"
-    primary_text = f"{samples[0].display_name} 等 {count} 人{verb}"
+    # 这些 kind 只在宿主即对象的面（对方主页 / 圈子页 / 实体页）成句，对象位由
+    # host_implicit 剔除，因此取注册表的 noObject 变体；缺模板即隐藏，不拼谓语。
+    statement = _render_statement(
+        kind=kind,
+        variant="noObject",
+        slots={"subject": _representative_subject_spans(samples[0], count)},
+    )
+    if statement is None:
+        return None
+    primary_text, primary_spans, primary_text_l10n_key = statement
     reason = _base_reason(
         subject_id=subject_id,
         intersection_id=f"{subject_id}:{object_type}:{object_id}:{kind}",
@@ -439,11 +546,10 @@ def _actor_set_reason(
                     visuals=[_visual(profile) for profile in samples],
                 )
             ],
-            "primarySpans": [
-                {"text": primary_text, "role": "plain", "target": None, "visual": None}
-            ],
+            "primaryTextL10nKey": primary_text_l10n_key,
+            "primarySpans": list(primary_spans),
             "sampleVisuals": [_visual(profile) for profile in samples],
-            "representativeActor": _representative_actor(samples[0]),
+            "representativeActor": _representative_actor(samples[0], kind=kind),
             "actorEvidenceTotalCount": count,
             "actorEvidenceCompleteness": "complete",
             "actorEvidence": [
@@ -457,7 +563,7 @@ def _actor_set_reason(
             ],
             "factPointCount": 1,
             "totalPointCount": 1,
-            "actionHints": [_view_action(target)],
+            "actionHints": _action_hints(kind, target),
         }
     )
     return reason
@@ -467,18 +573,52 @@ def _co_wishlisted_reason(
     *,
     subject_id: str,
     object_id: str,
-    entity_ids: tuple[str, ...],
+    peer_profile: PersonaProfileSnapshot | None,
+    entities: tuple[WishlistEntitySnapshot, ...],
     generated_at: datetime,
-) -> dict[str, object]:
+) -> dict[str, object] | None:
     """coWishlistedEntity（都想去）：意图交集，行动阶梯首位是发起聚集。
 
-    文案口径对齐 registry counted 模板「{subject}和你都想去{count}个相同的地方」；
-    保鲜窗口对齐 registry timeWindowDays=14。
+    主句由 registry 的 statementTemplates.byKind.coWishlistedEntity 主模板渲染，
+    主语取 subjectPatterns.mutualPair；保鲜窗口对齐 registry timeWindowDays=14。
+
+    模板或槽位不可渲染时返回 None（降级链末级：隐藏该句），不产出半句话，
+    也不把单条展示失败升级成整份读面失败。注册表为本 kind 登记的 counted 模板
+    以「具名第三方主语 + 你」成句，与 mutualPair 主语不可组合，因此本生产者的
+    降级链只有「具名 → 隐藏」两级；缺具名对象时不造名、不借邻近语义。
     """
-    samples = entity_ids[:MAX_INTERSECTION_SAMPLES]
-    count = len(entity_ids)
-    primary_text = f"你们都想去 {count} 个相同的地方"
-    entity_target = _target(object_type="entity", object_id=samples[0])
+    named = next(
+        (item for item in entities if item.display_name.strip()),
+        None,
+    )
+    if named is None:
+        return None
+    samples = tuple(item for item in entities if item.display_name.strip())[
+        :MAX_INTERSECTION_SAMPLES
+    ]
+    count = len(entities)
+    entity_label = named.display_name.strip()
+    entity_id = named.entity_id.strip()
+    # Wishlist 事实锚点是 canonical Entity Homepage；wire target 必须落在
+    # registry 的 place + homepageDetail 绑定，不能用宽泛 person/entity 身份制造漂移。
+    entity_target = _target(object_type="homepage", object_id=entity_id)
+    statement = _render_statement(
+        kind="coWishlistedEntity",
+        slots={
+            "subject": (_plain_span(_subject_pattern_text("mutualPair")),),
+            "object": (
+                {
+                    "text": entity_label,
+                    "role": "object",
+                    "target": entity_target,
+                    "visual": None,
+                },
+            ),
+        },
+    )
+    if statement is None:
+        return None
+    primary_text, primary_spans, primary_text_l10n_key = statement
     reason = _base_reason(
         subject_id=subject_id,
         intersection_id=f"{subject_id}:user:{object_id}:coWishlistedEntity",
@@ -486,16 +626,18 @@ def _co_wishlisted_reason(
         kind="coWishlistedEntity",
         dimension="location",
         source="entity_wishlist_events",
-        object_kind="person",
-        relation_object_id=object_id,
-        action_target_id=samples[0],
+        object_kind="place",
+        relation_object_id=entity_id,
+        action_target_id=entity_id,
         primary_text=primary_text,
         generated_at=generated_at,
         ttl=timedelta(days=14),
     )
     reason.update(
         {
-            "displayBinding": "host_implicit",
+            "primaryTextL10nKey": primary_text_l10n_key,
+            "subjectContext": f"homepage:{entity_id}",
+            "displayBinding": "explicit_link",
             "moment": "prospective",
             "iconKey": "place",
             "tone": "tea",
@@ -507,38 +649,77 @@ def _co_wishlisted_reason(
                     label="共同想去",
                     source_ref="coWishlistedEntity",
                     count=count,
-                    sample_text="、".join(samples),
+                    sample_text="、".join(item.display_name.strip() for item in samples),
                     visuals=[],
                 )
             ],
-            "primarySpans": [
-                {"text": primary_text, "role": "plain", "target": None, "visual": None}
-            ],
+            "primarySpans": list(primary_spans),
             "factPointCount": 1,
             "totalPointCount": 1,
-            "actionHints": [_start_gathering_action(entity_target)],
+            "actionHints": _action_hints("coWishlistedEntity", entity_target),
         }
     )
+    # REQ-004：mutualPair 主语「你们」在非对方主页的宿主面（内容卡等）只能靠具名代表人
+    # ——也就是对方本人——解释；对方缺名则不挂代表人，输出口据此在这些面隐藏该句。
+    reason.update(_mutual_pair_peer_evidence(peer_profile, kind="coWishlistedEntity"))
     return reason
+
+
+def _mutual_pair_peer_evidence(
+    peer_profile: PersonaProfileSnapshot | None, *, kind: str
+) -> dict[str, object]:
+    if peer_profile is None or not peer_profile.display_name.strip():
+        return {}
+    return {
+        "representativeActor": _representative_actor(peer_profile, kind=kind),
+        "actorEvidenceTotalCount": 1,
+        "actorEvidenceCompleteness": "complete",
+        "actorEvidence": [
+            _actor_evidence(
+                peer_profile,
+                source_ref=kind,
+                source_point_id=f"{peer_profile.persona_id}:{kind}",
+                rank=1,
+            )
+        ],
+        "sampleVisuals": [_visual(peer_profile)],
+    }
 
 
 def _co_experienced_gathering_reason(
     *,
     subject_id: str,
     object_id: str,
+    peer_profile: PersonaProfileSnapshot | None,
     gathering_ids: tuple[str, ...],
     generated_at: datetime,
-) -> dict[str, object]:
+) -> dict[str, object] | None:
     """coExperiencedGathering（一起参加过）：经历交集，强度最高的事实交集。
 
-    只由「双方 active Participation + 双方各自公开回顾」触发（诚实红线延伸）；
-    文案口径对齐 registry counted 模板「{subject}和你一起参加过{count}次行动」；
-    保鲜窗口对齐 registry timeWindowDays=30。
+    只由「双方 active Participation + 双方各自公开回顾」触发（诚实红线延伸）。
+    主对象是对方本人（DEC-003）：对方主页 host_implicit 校验要求 reason target 等于宿主，
+    收件箱以对方为行对象；共同行动经 subjectContext `gathering:<id>` 与 intersectionPoints
+    承载，端侧「回看行动详情」据此解析，不用 actionTargetId 冒充。
+
+    主句按 registry counted 模板以 mutualPair 主语渲染（快照不持有行动名）；
+    模板不可渲染时返回 None（降级链末级：隐藏该句）。保鲜窗口对齐 timeWindowDays=30。
     """
     samples = gathering_ids[:MAX_INTERSECTION_SAMPLES]
     count = len(gathering_ids)
-    primary_text = f"你们一起参加过 {count} 次行动"
-    gathering_target = _target(object_type="gathering", object_id=samples[0])
+    statement = _render_statement(
+        kind="coExperiencedGathering",
+        counted=True,
+        slots={
+            "subject": (_plain_span(_subject_pattern_text("mutualPair")),),
+            "count": (
+                {"text": str(count), "role": "count", "target": None, "visual": None},
+            ),
+        },
+    )
+    if statement is None:
+        return None
+    primary_text, primary_spans, primary_text_l10n_key = statement
+    peer_target = _target(object_type="user", object_id=object_id)
     reason = _base_reason(
         subject_id=subject_id,
         intersection_id=f"{subject_id}:user:{object_id}:coExperiencedGathering",
@@ -548,18 +729,21 @@ def _co_experienced_gathering_reason(
         source="gathering_shared_experience_events",
         object_kind="person",
         relation_object_id=object_id,
-        action_target_id=samples[0],
+        action_target_id=object_id,
         primary_text=primary_text,
         generated_at=generated_at,
         ttl=timedelta(days=30),
     )
     reason.update(
         {
+            "primaryTextL10nKey": primary_text_l10n_key,
+            "subjectContext": f"gathering:{samples[0]}",
             "displayBinding": "host_implicit",
             "moment": "retrospective",
             "iconKey": "experience",
             "tone": "sage",
-            "strength": 2.0,
+            # 排序权重不在生产者手写：强度取 _base_reason 的 valueTier 基线，
+            # 「经历最强」由注册表 evidenceRank=5 表达并由 Content 读面消费。
             "intersectionPoints": [
                 _point(
                     point_id=f"{object_id}:coExperiencedGathering",
@@ -568,20 +752,21 @@ def _co_experienced_gathering_reason(
                     label="共同经历",
                     source_ref="coExperiencedGathering",
                     count=count,
-                    sample_text="、".join(samples),
+                    # gathering id 不是展示文本：样本文本留空，行动锚点只经 subjectContext 下发，
+                    # 否则 Content 水合会把 id 当代表人名。
+                    sample_text="",
                     visuals=[],
                 )
             ],
-            "primarySpans": [
-                {"text": primary_text, "role": "plain", "target": None, "visual": None}
-            ],
+            "primarySpans": list(primary_spans),
             "factPointCount": 1,
             "totalPointCount": 1,
-            "actionHints": [
-                _start_gathering_action(gathering_target),
-                _open_object_action(gathering_target),
-            ],
+            "actionHints": _action_hints("coExperiencedGathering", peer_target),
         }
+    )
+    # 对方主页与收件箱行以宿主解释「你们」；内容卡等非人宿主面靠这位具名代表人（对方）解释。
+    reason.update(
+        _mutual_pair_peer_evidence(peer_profile, kind="coExperiencedGathering")
     )
     return reason
 
@@ -595,10 +780,23 @@ def _object_set_reason(
     dimension: str,
     related_ids: tuple[str, ...],
     generated_at: datetime,
-) -> dict[str, object]:
+) -> dict[str, object] | None:
     samples = related_ids[:MAX_INTERSECTION_SAMPLES]
     count = len(related_ids)
-    primary_text = f"你们有 {count} 个共同圈子"
+    # 宿主即对方本人：mutualPair 主语 + 计数，取注册表 noObject 变体；缺模板即隐藏。
+    statement = _render_statement(
+        kind=kind,
+        variant="noObject",
+        slots={
+            "subject": (_plain_span(_subject_pattern_text("mutualPair")),),
+            "count": (
+                {"text": str(count), "role": "count", "target": None, "visual": None},
+            ),
+        },
+    )
+    if statement is None:
+        return None
+    primary_text, primary_spans, primary_text_l10n_key = statement
     reason = _base_reason(
         subject_id=subject_id,
         intersection_id=f"{subject_id}:{object_type}:{object_id}:{kind}",
@@ -616,6 +814,9 @@ def _object_set_reason(
     reason.update(
         {
             "displayBinding": "host_implicit",
+            # 关系事实的主对象是对方本人（DEC-003 同形）；被计数对象只经 subjectContext 锚点
+            # 与 intersectionPoints 样本承载，端侧「回看共同圈子」从 subjectContext 解析。
+            "subjectContext": f"circle:{samples[0]}" if samples else "",
             "intersectionPoints": [
                 _point(
                     point_id=f"{object_id}:{kind}",
@@ -624,15 +825,19 @@ def _object_set_reason(
                     label="共同圈子",
                     source_ref=kind,
                     count=count,
-                    sample_text="、".join(samples),
+                    # 圈子 id 不是展示文本：样本文本留空，共同圈子锚点只经 subjectContext 下发，
+                    # 否则 Content 水合会把 id 当代表名（与 coExperiencedGathering 同一红线）。
+                    sample_text="",
                     visuals=[],
                 )
             ],
-            "primarySpans": [
-                {"text": primary_text, "role": "plain", "target": None, "visual": None}
-            ],
+            "primaryTextL10nKey": primary_text_l10n_key,
+            "primarySpans": list(primary_spans),
             "factPointCount": 1,
             "totalPointCount": 1,
+            "actionHints": _action_hints(
+                kind, _target(object_type=object_type, object_id=object_id)
+            ),
         }
     )
     return reason
@@ -707,6 +912,8 @@ def _base_reason(
         "sampleVisuals": [],
         "representativeActor": None,
         "actionHints": [],
+        # 证据行由 Content 水合出口按契约闭集实例化；物化侧只保证字段存在。
+        "evidenceRows": [],
         "lifecycleState": "active",
         "previousStrength": 0.0,
         "strengthDelta": 1.0,
@@ -721,7 +928,10 @@ def _base_reason(
         "mutualCount": 0,
         "moment": "current",
         "subjectId": subject_id,
-        "subjectContext": "recommendation",
+        "subjectContext": "",
+        # 策略身份（cohort）由 Content 水合出口按生成表 IntersectionPolicyDigest 盖章；
+        # 生产者只保留槽位，不自行签发第二份策略身份。
+        "cohort": "",
     }
 
 
@@ -755,13 +965,133 @@ def _point(
     }
 
 
+def _subject_context(behavior: BehaviorSnapshot) -> str:
+    """宿主锚点 `<objectType>:<objectId>`：前缀就是行为目标的 objectType。
+
+    objectType→objectKind 只由注册表 objectTypeBindings 翻译（消费方查同一张生成表），
+    这里不再维护第二份词汇；未登记 objectType 不产出锚点。
+    """
+    target_type = behavior.target_type.strip()
+    target_id = behavior.target_id.strip()
+    if not target_type or not target_id or not _object_kind(target_type):
+        return ""
+    return f"{target_type}:{target_id}"
+
+
 def _target(*, object_type: str, object_id: str) -> dict[str, object]:
+    """把开放的 objectType 收口为 canonical wire target。
+
+    objectType 先经 objectTypeBindings 收口成 objectKind，再由 objectKinds[].objectType
+    给出 wire objectType（user / circle / homepage / post …），与 Content 水合侧同一张表；
+    未登记的 objectType 三个字段全落空串，由展示合同 fail-closed，而不是把原始词汇透传到端。
+    """
+    object_kind = _object_kind(object_type)
     return {
-        "objectType": object_type,
+        "objectType": WIRE_OBJECT_TYPE_BY_OBJECT_KIND.get(object_kind, ""),
         "objectId": object_id,
-        "objectKind": _object_kind(object_type),
-        "routeId": _route_id(object_type),
+        "objectKind": object_kind,
+        "routeId": ROUTE_ID_BY_OBJECT_KIND.get(object_kind, ""),
     }
+
+
+def _plain_span(text: str) -> dict[str, object]:
+    return {"text": text, "role": "plain", "target": None, "visual": None}
+
+
+def _representative_subject_spans(
+    representative: PersonaProfileSnapshot,
+    count: int,
+) -> tuple[dict[str, object], ...]:
+    """代表人主语：具名代表人是可点击的 object span，人数 > 1 时按
+    subjectPatterns.namedWithMore 追加「等 N 人」尾部（与 Content 水合侧
+    representativeSubjectSpans 同形）。代表人缺名则不可渲染（返回空，由模板判 None）。"""
+    name = representative.display_name.strip()
+    if not name:
+        return ()
+    name_span = {
+        "text": name,
+        "role": "object",
+        "target": _target(object_type="user", object_id=representative.persona_id),
+        "visual": None,
+    }
+    if count <= 1:
+        return (name_span,)
+    pattern = _subject_pattern_text("namedWithMore")
+    if "{subject}" not in pattern:
+        return ()
+    tail = pattern.replace("{subject}", "", 1).replace("{count}", str(count))
+    return (name_span, _plain_span(tail)) if tail else (name_span,)
+
+
+def _subject_pattern_text(name: str) -> str:
+    """取 registry.presentationText.subjectPatterns 的主语短语；未登记返回空串。"""
+    pattern = SUBJECT_PATTERN_BY_NAME.get(name)
+    return str(pattern["text"]).strip() if pattern else ""
+
+
+def _render_statement(
+    *,
+    kind: str,
+    slots: dict[str, tuple[dict[str, object], ...]],
+    counted: bool = False,
+    variant: str | None = None,
+) -> tuple[str, tuple[dict[str, object], ...], str] | None:
+    """按 registry.statementTemplates 渲染结论句：文本与 spans 出自同一模板，
+    join(primarySpans.text) == primaryText 因此是渲染的结构性结果而非手工对齐。
+
+    `counted=True` 取该 kind 登记的 counted 形式（纯计数降级句）；`variant` 取登记的
+    形态变体（personPlace / noObject / circleTag）；未登记即 None。
+    模板引用的槽位缺值时返回 None，由调用方走降级链，不用空串拼出半句话。
+    """
+    form = STATEMENT_FORM_BY_KIND.get(kind)
+    if form and variant:
+        form = (form.get("variants") or {}).get(variant)
+    elif form and counted:
+        form = form.get("counted")
+    if not form:
+        return None
+    template = str(form.get("template") or "")
+    l10n_key = str(form.get("l10n_key") or "")
+    if not template.strip() or not l10n_key.strip():
+        return None
+    spans: list[dict[str, object]] = []
+    cursor = 0
+    for match in _STATEMENT_SLOT_PATTERN.finditer(template):
+        literal = template[cursor : match.start()]
+        if literal:
+            spans.append(_plain_span(literal))
+        filled = slots.get(match.group(1))
+        if not filled or any(not str(span["text"]).strip() for span in filled):
+            return None
+        spans.extend(filled)
+        cursor = match.end()
+    tail = template[cursor:]
+    if tail:
+        spans.append(_plain_span(tail))
+    merged = _merge_plain_spans(spans)
+    text = "".join(str(span["text"]) for span in merged)
+    if not text.strip():
+        return None
+    return text, tuple(merged), l10n_key
+
+
+def _merge_plain_spans(
+    spans: list[dict[str, object]],
+) -> list[dict[str, object]]:
+    """相邻 plain span 合并成一段：模板切片粒度不进 wire，端只看到语义分段。"""
+    merged: list[dict[str, object]] = []
+    for span in spans:
+        if (
+            merged
+            and span["role"] == "plain"
+            and span["target"] is None
+            and merged[-1]["role"] == "plain"
+            and merged[-1]["target"] is None
+        ):
+            merged[-1] = _plain_span(f"{merged[-1]['text']}{span['text']}")
+            continue
+        merged.append(dict(span))
+    return merged
 
 
 def _visual(profile: PersonaProfileSnapshot) -> dict[str, object]:
@@ -773,12 +1103,20 @@ def _visual(profile: PersonaProfileSnapshot) -> dict[str, object]:
     }
 
 
-def _representative_actor(profile: PersonaProfileSnapshot) -> dict[str, object]:
+def _relation_label(kind: str) -> str:
+    """代表人关系称谓只出自 registry.presentationText.relationLabels（未登记取 default）。"""
+    entry = RELATION_LABEL_BY_KIND.get(kind)
+    return str(entry["text"]) if entry else RELATION_LABEL_DEFAULT
+
+
+def _representative_actor(
+    profile: PersonaProfileSnapshot, *, kind: str
+) -> dict[str, object]:
     return {
         "actorId": profile.persona_id,
         "displayName": profile.display_name,
         "avatarUrl": profile.avatar_url,
-        "relationLabel": "你关注的人",
+        "relationLabel": _relation_label(kind),
         "privacyState": "visible",
         "target": _target(object_type="user", object_id=profile.persona_id),
         "evidenceRank": 1,
@@ -797,7 +1135,7 @@ def _actor_evidence(
         "actorId": profile.persona_id,
         "displayName": profile.display_name,
         "avatarUrl": profile.avatar_url,
-        "relationLabel": "你关注的人",
+        "relationLabel": _relation_label(source_ref),
         "relationSourceRef": "persona_relationship",
         "relationObjectId": profile.persona_id,
         "relationObjectName": profile.display_name,
@@ -815,76 +1153,46 @@ def _actor_evidence(
     }
 
 
-def _view_action(target: dict[str, object]) -> dict[str, object]:
+def _action(
+    action_key: str,
+    target: dict[str, object],
+    *,
+    is_primary: bool,
+    priority: int,
+) -> dict[str, object]:
+    policy = ACTION_POLICY_BY_KEY[action_key]
     return {
-        "actionKey": "view_object",
-        "label": "查看",
+        "actionKey": action_key,
+        "label": policy["label"],
         "target": target,
-        "isPrimary": True,
-        "priority": 1,
-        "actionTier": "read",
-        "requiredGates": [],
-        "dispatch": "route",
+        "isPrimary": is_primary,
+        "priority": priority,
+        "actionTier": policy["tier"],
+        "requiredGates": list(policy["required_gates"]),
+        "dispatch": policy["dispatch"],
     }
 
 
-def _start_gathering_action(target: dict[str, object]) -> dict[str, object]:
-    """canonical `start_gathering`：tier/gates/dispatch/label 与
-    intersection_kind_registry.yaml 的 actionKeyMeta / actionLabelByKey 同轨。"""
-    return {
-        "actionKey": "start_gathering",
-        "label": "发起聚集",
-        "target": target,
-        "isPrimary": True,
-        "priority": 1,
-        "actionTier": "heavy",
-        "requiredGates": ["login", "realName", "minorMode", "blocked", "rateLimit"],
-        "dispatch": "gathering",
-    }
+def _action_hints(kind: str, target: dict[str, object]) -> list[dict[str, object]]:
+    """按注册表 actionHintsByKind 生成行动阶梯：首位为 primary，全部指向同一 reason target。
 
+    与云侧 Go `actionHintsForReason` 同源同序；服务代码不再按 kind 手挑 actionKey。
+    未登记 kind 不下发 hint，由消费方按注册表兜底。
+    """
 
-def _open_object_action(target: dict[str, object]) -> dict[str, object]:
-    """canonical `open_object`：与 registry actionKeyMeta 同轨的轻查看行动。"""
-    return {
-        "actionKey": "open_object",
-        "label": "查看对象",
-        "target": target,
-        "isPrimary": False,
-        "priority": 2,
-        "actionTier": "light",
-        "requiredGates": [],
-        "dispatch": "navigate",
-    }
+    return [
+        _action(key, target, is_primary=index == 0, priority=index + 1)
+        for index, key in enumerate(ACTION_KEYS_BY_KIND.get(kind, ()))
+    ]
 
 
 def _object_kind(object_type: str) -> str:
-    return {
-        "user": "person",
-        "persona": "person",
-        "person": "person",
-        "circle": "circle",
-        "post": "content",
-        "content": "content",
-        "entity": "place",
-        "homepage": "place",
-        "place": "place",
-        "gathering": "gathering",
-    }.get(object_type.strip(), "content")
+    return OBJECT_KIND_BY_OBJECT_TYPE.get(object_type.strip(), "")
 
 
 def _route_id(object_type: str) -> str:
-    return {
-        "user": "userProfile",
-        "persona": "userProfile",
-        "person": "userProfile",
-        "circle": "circleDetail",
-        "post": "contentDetail",
-        "content": "contentDetail",
-        "entity": "entityHomepage",
-        "homepage": "entityHomepage",
-        "place": "entityHomepage",
-        "gathering": "gatheringDetail",
-    }.get(object_type.strip(), "workBrowser")
+    object_kind = _object_kind(object_type)
+    return ROUTE_ID_BY_OBJECT_KIND.get(object_kind, "")
 
 
 def _aware_utc(value: datetime) -> datetime:

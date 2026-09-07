@@ -15,11 +15,8 @@ import 'package:quwoquan_app/runtime/di/runtime_package_dependencies.dart'
 import 'package:quwoquan_app/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/design_system/feedback/app_toast.dart';
 import 'package:quwoquan_app/design_system/feedback/error_states/app_error_states.dart';
-import 'package:quwoquan_app/runtime/di/homepage_circle_presentation_slots.dart'
-    show buildHomepageRecentGatheringsSlot;
 import 'package:quwoquan_app/runtime/di/object_intersection_provider.dart'
     show objectSharedReasonsProvider;
-import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/application/public/gathering_create_navigation_request.dart';
 import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/application/public/object_intersection_query.dart';
 import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/application/public/intersection_kind_mapping.dart'
     show intersectionMutualCountOf;
@@ -194,67 +191,9 @@ class _HomepageDetailPageState extends ConsumerState<HomepageDetailPage> {
       onOpenIntroduction: _openIntroduction,
       onOpenRecord: _openRecord,
       onAttach: (reference) => context.pop(reference),
-      onStartGathering: _wishlistIntentApplicable ? _startGatheringHere : null,
-      buildRecentGatherings: _wishlistIntentApplicable
-          ? ({required bool isDark}) => buildHomepageRecentGatheringsSlot(
-              homepageId: widget.homepageId,
-              isDark: isDark,
-            )
-          : null,
       onReviewsChanged: () => unawaited(_load()),
       requireReviewAuth: _requireReviewAuth,
       reviewContinuationResumeToken: _reviewContinuationResumeToken,
-    );
-  }
-
-  /// 在这里发起：persona host 携实体来源引用进入 Gathering 创建。
-  /// 发起不依赖交集存在；游客由创建路由的登录门与续接承接。
-  void _startGatheringHere() {
-    final detail = _detail;
-    if (detail == null) {
-      return;
-    }
-    unawaited(
-      trackHomepageProductAction(
-        ref.read(journeyEventTrackerProvider),
-        action: 'start_gathering_here',
-        pageName: AppUiSurfaces.homepageDetail.id,
-        result: 'success',
-        startedAt: DateTime.now(),
-        homepageId: widget.homepageId,
-      ),
-    );
-    context.push(
-      AppRoutePaths.gatheringCreate,
-      extra: GatheringCreateNavigationRequest(
-        actionKey: 'start_gathering',
-        actionLabel: ObjectHomepageText.entityActionStartGathering,
-        sourceRefs: <GatheringCreateSourceReference>[
-          GatheringCreateSourceReference(
-            sourceRef: 'homepage',
-            objectId: widget.homepageId,
-            objectKind: 'homepage',
-            routeId: 'homepageDetail',
-          ),
-        ],
-        targetObject: GatheringCreateTargetObject(
-          objectId: widget.homepageId,
-          objectKind: 'homepage',
-          objectName: detail.title,
-          routeId: 'homepageDetail',
-        ),
-        intersection: const GatheringCreateIntersectionContext(
-          intersectionId: '',
-          dimension: '',
-          intersectionClass: '',
-        ),
-        evidence: const GatheringCreateEvidenceContext(
-          evidenceId: '',
-          sourceRef: 'homepage',
-          tagRefs: <String>[],
-        ),
-        referralSource: ReferralSource.entityPage,
-      ),
     );
   }
 
@@ -660,12 +599,13 @@ class _HomepageDetailPageState extends ConsumerState<HomepageDetailPage> {
     if (!mounted) {
       return;
     }
-    final wishReason = reasons.isEmpty
-        ? null
-        : reasons.firstWhere(
-            (reason) => reason.kind == 'coWishlistedEntity',
-            orElse: () => reasons.first,
-          );
+    IntersectionReason? wishReason;
+    for (final reason in reasons) {
+      if (reason.kind.trim() == 'coWishlistedEntity') {
+        wishReason = reason;
+        break;
+      }
+    }
     final mutualCount = wishReason == null
         ? 0
         : intersectionMutualCountOf(wishReason);

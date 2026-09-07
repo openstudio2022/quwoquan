@@ -9,6 +9,7 @@ from .request_response import (
     IntersectionRepresentativeActor,
     IntersectionActorEvidence,
     IntersectionActionHint,
+    IntersectionEvidenceRow,
     IntersectionPropagationPath,
     IntersectionReason,
     IntersectionInboxSummary,

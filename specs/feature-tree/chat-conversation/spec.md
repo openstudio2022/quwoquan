@@ -164,11 +164,11 @@
 - 退出、移除、Block、安全终止与权限撤销必须幂等收敛 access；Chat membership 是访问投影，不得反向改变 Participation、容量、Outcome、Follow 或 mutual。
 
 <a id="req-005"></a>
-### REQ-005 发起活动与发起群聊并列不合并
+### REQ-005 普通群聊与交集后置 Gathering 不合并
 
-- 全局“发起群聊”只创建普通 Conversation；“发起活动”由 Circle 创建 Gathering 并自动 provision contextual room。两项同入口并列，但任何一项不得冒充另一项。
-- 已有普通 Conversation 可作为 Gathering 来源并发送活动卡；原会话成员只有成功响应后才能进入活动群聊。capacity=2 仍使用两人活动群聊，不复用普通 direct。
-- Gathering 不因 Chat 成为产品主壳而迁入 Chat；字段、operation、route、surface、event、error 与 metric 只引用所属 canonical contracts。
+- 全局“发起群聊”入口只创建普通 Conversation；Gathering 只能来自用户主动展开内容/交集证据后的 typed action，或已有合法上下文。由 Circle 创建 Gathering 并 provision 唯一 contextual room，C 位不直接发起活动。
+- 已有合法 Conversation 可作为有上下文的 Gathering 来源并发送活动卡；原会话成员只有成功响应后才能进入活动群聊。capacity=2 仍使用两人活动群聊，不复用普通 direct。
+- 普通 Conversation 不得冒充活动群聊，Gathering 也不因 Chat 成为产品主壳而迁入 Chat；字段、operation、route、surface、event、error 与 metric 只引用所属 canonical contracts。
 
 ## 6. 领域验收
 
@@ -238,8 +238,8 @@
 - 类型：`capability_gap`
 - 优先级：`P0`
 - 准出影响：`block`
-- 影响或价值：尚缺 Publish 前唯一 contextual room、Participation/Organizer 双投影、默认消息入口、Board、Announcement/AssetIndex、取消/完成 access mode、退出/Block/安全撤权，以及 C 位发起活动/群聊并列语义的实现与验收；消息离线可靠性仍阻断上层商用。
-- 完成判定：`DOM-003` 与跨域 user_acceptance 在重复事件、杀进程、重连和依赖恢复下通过，并覆盖 [`gathering-conversation-binding`](../circle-community/gathering-coordination/gathering-conversation-binding/spec.md) 的全部 GWT。
+- 影响或价值：尚缺 Publish 前唯一 contextual room、Participation/Organizer 双投影、默认消息入口、Board、Announcement/AssetIndex、取消/完成 access mode、退出/Block/安全撤权，以及内容/交集主动展开或已有合法上下文发起 Gathering 与全局普通群聊保持边界的实现与验收；消息离线可靠性仍阻断上层商用。
+- 完成判定：`DOM-003` 与跨域 user_acceptance 在重复事件、杀进程、重连和依赖恢复下通过，并覆盖 [`gathering-conversation-binding`](../circle-community/gathering-coordination/gathering-conversation-binding/spec.md) 的全部 GWT，证明全局发起群聊只创建普通 Conversation，Gathering 仅由有上下文 typed action 进入 Circle 创建链路。
 - 依赖：`message-reliability-foundation`、Circle target contracts、后续 Board route/surface contracts 与 production Remote App。
 
 <a id="open-004"></a>

@@ -303,7 +303,7 @@ surfaces:
     owner: entity
     route_id: homepageDetail
     path_template: /homepages/{id}
-    description: 实体（共享主页）统一对象页：身份 / 我的交集 / 打动 / Tab 内容（含详情与阅读壳层、口碑评价读写、相关群组）；关注动作归 user.SubjectFollow，近期公开行动读面归 circle.gathering
+    description: 实体（共享主页）统一对象页：身份 / 我的交集 / 打动 / Tab 内容（含详情与阅读壳层、口碑评价读写、相关群组）；关注动作归 user.SubjectFollow；已有行动只从交集证据或社会证明继续进入
     operation_ids:
       - GetObjectPageBundle
       - GetEntityImpact
@@ -536,6 +536,17 @@ surfaces:
       - ReportEventBatch
       - ReportRuntimeLogBatch
 
+  - id: videoBook
+    owner: content
+    route_id: videoBook
+    path_template: /video-book
+    description: 视频书独立内容根入口；复用 premium_stream、Content Post 状态与交集展示合同
+    operation_ids:
+      - GetFeed
+      - GetEntityWishlistState
+      - ReportBehaviors
+      - GetGatheringSocialProof
+
   - id: homeFeed
     owner: content
     route_id: home
@@ -609,12 +620,6 @@ surfaces:
       - GetAuthorImpact
       - ListAuthorImpactEvidence
 
-  - id: interestMatch
-    owner: interest_match
-    route_id: interestMatch
-    path_template: /interest-match
-    description: 找同趣与兴趣配对启动器
-    operation_ids: []
 
   - id: login
     owner: user
@@ -665,7 +670,7 @@ surfaces:
     owner: content
     route_id: createEntry
     path_template: /create-entry
-    description: 全局创作入口动作面板（发内容/发起聚集/发起群聊）；游客可见，具体动作各自触发登录续接
+    description: 全局内容创作入口动作面板（照片/视频/文字）；游客可见，具体内容动作触发登录续接；不提供无上下文 Gathering
     operation_ids: []
 
   - id: createWorkspace
@@ -796,7 +801,7 @@ surfaces:
     owner: circle
     route_id: gatheringCreate
     path_template: /gatherings/create
-    description: 从 C 位、内容或主页进入同一 Gathering 草稿与发布流程
+    description: 从内容/交集 typed 下一步、合法会话来源或已有任务续接进入同一 Gathering 草稿与发布流程
     operation_ids:
       - CreateGatheringDraft
       - PublishGathering
@@ -1026,15 +1031,6 @@ surfaces:
       - ListMyHostedGatherings
       - ListGatheringsByHost
 
-  - id: homeActionsDiscovery
-    owner: circle
-    route_id: home
-    path_template: /
-    description: 底栏「行动」——线下行动与发现（交集收件箱、我的行动、兴趣配对与发起行动入口；视频书已改为首页顶部固定入口）
-    operation_ids:
-      - ListMyHostedGatherings
-      - GetMyIntersectionSummary
-      - ListMyIntersections
 
   - id: rtcOutgoing
     owner: rtc

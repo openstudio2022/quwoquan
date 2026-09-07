@@ -17,7 +17,7 @@ extension _WorksImmersiveViewerEngagementActions on _WorksImmersiveViewerState {
       child: _buildPostCanvas(
         post,
         enableArticlePageCurl: enableArticlePageCurl,
-        isVisible: true,
+        isVisible: widget.isActive,
         videoViewportEpoch: _videoViewportEpoch,
       ),
     );
@@ -957,12 +957,13 @@ extension _WorksImmersiveViewerEngagementActions on _WorksImmersiveViewerState {
     if (!mounted) {
       return;
     }
-    final wishReason = reasons.isEmpty
-        ? null
-        : reasons.firstWhere(
-            (reason) => reason.kind == 'coWishlistedEntity',
-            orElse: () => reasons.first,
-          );
+    IntersectionReason? wishReason;
+    for (final reason in reasons) {
+      if (reason.kind.trim() == 'coWishlistedEntity') {
+        wishReason = reason;
+        break;
+      }
+    }
     final mutualCount = wishReason == null
         ? 0
         : intersectionMutualCountOf(wishReason);

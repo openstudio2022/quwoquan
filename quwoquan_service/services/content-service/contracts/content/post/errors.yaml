@@ -532,3 +532,28 @@ errors:
   user_message:
     zh: 内容服务响应超时，请稍后重试
     en: The content service timed out, please try again later
+
+# Data release stage/verify/activate 是 content-service cmd/import 的受保护
+# 非 HTTP 入口；候选缺失/漂移只在 importer worker 面 fail closed，不暴露给线上 API。
+- code: CONTENT.USER.release_candidate_missing
+  reason: release_candidate_missing
+  emitted_by:
+  - {surface: worker, operation: GetReleaseCandidateReadback}
+  recovery_action: retry
+  disruption_level: inlineCard
+  dart_const: releaseCandidateMissing
+  go_const: ErrReleaseCandidateMissing
+  user_message:
+    zh: 发布候选不存在或不完整，请重新导入
+    en: The release candidate is missing or incomplete
+- code: CONTENT.USER.release_candidate_drift
+  reason: release_candidate_drift
+  emitted_by:
+  - {surface: worker, operation: GetReleaseCandidateReadback}
+  recovery_action: retry
+  disruption_level: inlineCard
+  dart_const: releaseCandidateDrift
+  go_const: ErrReleaseCandidateDrift
+  user_message:
+    zh: 发布候选与不可变清单不一致，请重新导入
+    en: The release candidate differs from the immutable manifest

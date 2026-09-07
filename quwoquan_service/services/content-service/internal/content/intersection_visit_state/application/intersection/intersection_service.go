@@ -223,19 +223,21 @@ func negFeedbackKey(userID string) string { return "rec:ineg:{" + userID + "}" }
 // ix:watermark（hash，hash_tag userId，TTL 90 天，general scene）。
 func WatermarkKey(userID string) string { return "ix:watermark:{" + userID + "}" }
 
-// ReportExposure 记录已曝光对象；Feed 后续保留对象但施加 seen penalty。
+// ReportExposure 记录已曝光的交集（键 = intersectionId，与行为管道 impression /
+// intersection_click / intersection_expand 携带的归因键同源）；曝光未转化的交集在
+// 配置窗口（默认 14 天）内不再重复推荐（REQ-004 / SIT-004.t1），直到 ClearExposure 清零。
 //
 // 跨会话冷却记忆窗是「尽力而为」的 feed 去重信号：Redis 不可用时降级——记录降级指标 +
-// 结构化告警日志，不向上抛错拖垮主请求（最坏只是本轮缺少 seen 降权，不影响首页可用）。
-func (s *IntersectionService) ReportExposure(ctx context.Context, userID string, objectIDs []string) error {
-	if s.redis == nil || strings.TrimSpace(userID) == "" || len(objectIDs) == 0 {
+// 结构化告警日志，不向上抛错拖垮主请求（最坏只是本轮缺少冷却抑制，不影响首页可用）。
+func (s *IntersectionService) ReportExposure(ctx context.Context, userID string, intersectionIDs []string) error {
+	if s.redis == nil || strings.TrimSpace(userID) == "" || len(intersectionIDs) == 0 {
 		return nil
 	}
 	key := cooldownKey(userID)
 	client := s.redis.ForKey(key)
 	expireScore := float64(s.now().Add(time.Duration(s.cooldownDays) * 24 * time.Hour).Unix())
 	written := 0
-	for _, id := range objectIDs {
+	for _, id := range intersectionIDs {
 		id = strings.TrimSpace(id)
 		if id == "" {
 			continue
@@ -255,6 +257,28 @@ func (s *IntersectionService) ReportExposure(ctx context.Context, userID string,
 	return nil
 }
 
+// ClearExposure 是漏斗的「清零」步：用户对该交集发生点击 / 证据展开 / 转化后，
+// 把它从曝光冷却集移除，使「曝光未转化」的判定只对真正未转化的交集成立。
+// 与 ReportExposure 同一 key、同一降级语义。
+func (s *IntersectionService) ClearExposure(ctx context.Context, userID string, intersectionIDs []string) error {
+	if s.redis == nil || strings.TrimSpace(userID) == "" || len(intersectionIDs) == 0 {
+		return nil
+	}
+	key := cooldownKey(userID)
+	client := s.redis.ForKey(key)
+	for _, id := range intersectionIDs {
+		id = strings.TrimSpace(id)
+		if id == "" {
+			continue
+		}
+		if err := client.ZRem(ctx, key, id); err != nil {
+			s.degradeRedis("exposure_clear", err, "userId", userID)
+			return nil
+		}
+	}
+	return nil
+}
+
 // degradeRedis 统一记录一次 Redis 降级：发降级指标 + 结构化 warn 日志（禁止静默吞错）。
 func (s *IntersectionService) degradeRedis(op string, err error, kv ...any) {
 	s.metrics.ObserveRedisDegraded(op)
@@ -263,7 +287,7 @@ func (s *IntersectionService) degradeRedis(op string, err error, kv ...any) {
 	}
 }
 
-// seenKeys 返回仍在记忆窗口内的已曝光对象集合（score = 过期时刻 > now）。
+// seenKeys 返回仍在记忆窗口内、尚未清零的已曝光交集 id 集合（score = 过期时刻 > now）。
 func (s *IntersectionService) seenKeys(ctx context.Context, userID string) map[string]struct{} {
 	out := map[string]struct{}{}
 	if s.redis == nil || strings.TrimSpace(userID) == "" {
@@ -480,7 +504,7 @@ func (s *IntersectionService) Summary(ctx context.Context, userID string) (Inter
 			s.metrics.ObserveInboxFiltered("cold_start_supply")
 			continue
 		}
-		r := HydratePointSummary(gated)
+		r := applyInboxDisplayContext(HydratePointSummary(gated))
 		if !s.isFresh(r) {
 			s.metrics.ObserveInboxFiltered("stale")
 			continue
@@ -566,7 +590,7 @@ func (s *IntersectionService) List(ctx context.Context, userID string, query Int
 			s.metrics.ObserveInboxFiltered("cold_start_supply")
 			continue
 		}
-		r := HydratePointSummary(gated)
+		r := applyInboxDisplayContext(HydratePointSummary(gated))
 		if strings.TrimSpace(r.TimeBucket) == "" {
 			r.TimeBucket = resolveIntersectionListTimeBucket(s.now(), r.FreshAt)
 		}
@@ -651,11 +675,13 @@ func (s *IntersectionService) Feed(ctx context.Context, userID, channel string, 
 			s.metrics.ObserveFeedFiltered(metricChannel, "display_incomplete")
 			continue
 		}
-		r.LastRecommendedAt = now
-		if _, ok := seen[r.coolKey()]; ok {
-			r.RankState = "seen"
-			r.SeenAt = now
+		// 曝光冷却：窗口内曝光且未清零（未点击/展开/转化）的交集不再重复推荐
+		// （REQ-004），与负反馈一样是过滤而不是降权。
+		if _, ok := seen[r.exposureKey()]; ok {
+			s.metrics.ObserveFeedFiltered(metricChannel, "seen")
+			continue
 		}
+		r.LastRecommendedAt = now
 		class := "fact"
 		if r.IntersectionClass == "affinity" {
 			class = "affinity"
@@ -664,11 +690,6 @@ func (s *IntersectionService) Feed(ctx context.Context, userID, channel string, 
 		merged = append(merged, r)
 	}
 	sort.SliceStable(merged, func(i, j int) bool {
-		iSeen := merged[i].RankState == "seen"
-		jSeen := merged[j].RankState == "seen"
-		if iSeen != jSeen {
-			return !iSeen
-		}
 		iFact := merged[i].IntersectionClass != "affinity"
 		jFact := merged[j].IntersectionClass != "affinity"
 		if iFact != jFact {
@@ -782,10 +803,11 @@ func (g *intersectionKindGate) apply(
 	return r, true
 }
 
-// isSpotlightDisplayComplete 候选窗完备性：复用当前交集展示合同，
-// 只有完整 SVO、span 可拼回且对象可导航的 reason 才进入可见候选窗。
+// isSpotlightDisplayComplete 候选窗完备性：复用水合阶段的展示合同，
+// 只有完整 SVO、span 可拼回且对象可导航的 reason 才进入可见候选窗；
+// 宿主绑定句的宿主一致性由 feed mixer 按真实 Post 宿主在输出口校验。
 func isSpotlightDisplayComplete(r IntersectionReasonView) bool {
-	return ValidateDisplayStatement(r)
+	return ValidateHydratedDisplayStatement(r)
 }
 
 // EvidenceKindRank 证据组 kind 的挖掘强度（§9.8）：值越小越靠前；
@@ -816,6 +838,22 @@ func reasonObjectRank(r IntersectionReasonView) int {
 		}
 	}
 	return best
+}
+
+// applyInboxDisplayContext 是收件箱（List / Summary）读面的展示合同输出口。
+// 收件箱没有页面宿主：宿主绑定句（host_implicit / host_plain）的宿主就是 reason 自身对象，
+// 在此显式套用并校验，而不是默认放行——与 Feed（mixer）/ 对象页（ObjectIntersections）
+// 一样在输出口按宿主 fail-closed；explicit_link 保持水合结果。
+func applyInboxDisplayContext(r IntersectionReasonView) IntersectionReasonView {
+	binding := normalizedDisplayBinding(r.DisplayBinding)
+	if binding != DisplayBindingHostImplicit && binding != DisplayBindingHostPlain {
+		return r
+	}
+	return ApplyDisplayContext(r, DisplayContext{
+		Surface:    DisplaySurfaceIntersectionList,
+		HostTarget: IntersectionTargetForReason(r),
+		Binding:    binding,
+	})
 }
 
 // ObjectIntersections 对象页「我与该对象」的关系类交集（§2 闭集 + 三层关系分层）。

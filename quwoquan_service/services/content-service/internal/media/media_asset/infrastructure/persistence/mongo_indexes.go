@@ -20,6 +20,10 @@ func (s *MongoMediaStore) EnsureIndexes(ctx context.Context) error {
 			Options: options.Index().SetName("idx_media_assets_source_session").SetUnique(true),
 		},
 		{
+			Keys:    bson.D{{Key: "sourceReleaseIds", Value: 1}},
+			Options: options.Index().SetName("idx_media_assets_source_release"),
+		},
+		{
 			Keys:    bson.D{{Key: "objectKey", Value: 1}},
 			Options: options.Index().SetName("idx_media_assets_object_key"),
 		},

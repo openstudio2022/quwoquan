@@ -1,0 +1,16 @@
+read_model: IntersectionEvidenceRow
+description: "证据半屏的一行证据（B1 契约，display-ready）。\n云侧（Content 水合出口）按固定闭集与顺序从 reason 的 typed 字段实例化：\n\
+  \  1. secondary_text      IntersectionReason.secondaryText\n  2. connection_summary  IntersectionReason.connectionSummary\n\
+  \  3. actor_action        actorEvidence[].actionSummaryText（按 evidenceRank 顺序）\n  4. point_display       intersectionPoints[].displayText\n\
+  \  5. point_sample        intersectionPoints[].sampleText\n去重口径：与 primaryText 相同或彼此重复的文本只保留首个；上限 4 行（IntersectionReason.evidenceRows 描述）。\n\
+  端只按下发顺序渲染 text，不再本地合并异构字段、不自定优先级、不硬编码上限；行数为 0 时半屏只显示主句与唯一行动。\n\
+  source 为闭集字符串（端按字符串解析，未知值按普通文本渲染）：\n  secondary_text | connection_summary | actor_action | point_display | point_sample\n"
+consumers:
+- app
+- recommendation-service
+- content-service
+fields:
+- name: text
+  type: string
+- name: source
+  type: string

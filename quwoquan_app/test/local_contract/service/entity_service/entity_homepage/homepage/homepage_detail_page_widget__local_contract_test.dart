@@ -1,3 +1,9 @@
+// spec_ref: specs/feature-tree/object-homepage-network/intersection-unified-experience/spec.md#sit-002.t1
+// spec_ref: specs/feature-tree/object-homepage-network/intersection-unified-experience/spec.md#sit-002.t2
+// spec_ref: specs/feature-tree/object-homepage-network/intersection-unified-experience/entity-homepage-intersection-redesign/spec.md#gwt-001.t1
+// spec_ref: specs/feature-tree/object-homepage-network/intersection-unified-experience/entity-homepage-intersection-redesign/spec.md#gwt-001.t2
+// spec_ref: specs/feature-tree/object-homepage-network/intersection-unified-experience/entity-homepage-intersection-redesign/spec.md#gwt-001.t3
+// spec_ref: specs/feature-tree/object-homepage-network/intersection-unified-experience/object-homepage-gamma-real-data-closure/spec.md#gwt-002.t2
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
@@ -14,7 +20,6 @@ import 'package:quwoquan_app/service/content_service/content/post/application/co
 import 'package:quwoquan_app/service/entity_service/entity_homepage/homepage/application/homepage_introduction_repository.dart';
 
 import '../../../../../support/service/entity_service/entity_homepage/homepage/homepage_test_adapter.dart';
-import '../../../../../support/runtime/homepage_source_cards_boundary_overrides.dart';
 
 import 'package:quwoquan_app/design_system/media/content_preview_card.dart';
 import 'package:quwoquan_app/service/entity_service/entity_homepage/homepage/presentation/homepage_detail_text_constants.dart';
@@ -22,6 +27,7 @@ import 'package:quwoquan_app/service/entity_service/entity_homepage/homepage/pre
 import 'package:quwoquan_app/service/user_service/persona_management/persona/application/public/persona_management_view_data.dart';
 import 'package:quwoquan_app/design_system/feedback/error_states/app_error_states.dart'
     show AppPageErrorState;
+import 'package:quwoquan_app/l10n/copy/assistant_text_constants.dart';
 import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart'
     show
         ContentText,
@@ -63,10 +69,7 @@ import '../../../../../support/service/content_service/content/content_behavior_
 import '../../../../../support/service/recommendation_service/recommendation/recommendation_feature_profile_view/intersection_repository_typed_double.dart';
 
 List<Override> _homepageFacetOverrides(MockHomepageRepository repository) =>
-    <Override>[
-      ...homepageSourceCardsBoundaryOverrides(),
-      homepageFacetSetProvider.overrideWithValue(repository),
-    ];
+    <Override>[homepageFacetSetProvider.overrideWithValue(repository)];
 
 void main() {
   late FlutterExceptionHandler? originalOnError;
@@ -167,6 +170,10 @@ void main() {
     expect(find.text('对象页模板'), findsNothing);
     expect(find.text('灰度 cohort'), findsNothing);
     expect(find.text('主页管理'), findsNothing);
+    // 实体主页不再挂问小趣 demo dock：交集只经「我的交集」统一交集卡承载。
+    expect(find.text(AssistantText.assistantEntryAsk), findsNothing);
+    expect(find.textContaining('demo'), findsNothing);
+    expect(find.textContaining('Demo'), findsNothing);
 
     // P3b 高保：记录 tab（默认激活=content）记录卡 footer 展示作者名 + 心形赞数，
     // 与圈子记录卡 footer 统一（作者名来自 HomepageContentPreview.authorName，

@@ -4,12 +4,13 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+
 import '../../../../../support/service/content_service/content/content_behavior_fact/recording_content_behavior_repository.dart';
 import '../../../../../support/service/chat_service/chat/conversation/chat_repository_facet_overrides.dart';
 import '../../../../../support/service/recommendation_service/recommendation/recommendation_feature_profile_view/intersection_repository_typed_double.dart';
 import '../../../../../support/service/entity_service/entity_homepage/homepage/homepage_test_adapter.dart';
-import '../../../../../support/runtime/homepage_source_cards_boundary_overrides.dart';
 import '../../../../../support/runtime/public_content_link_test_scope.dart';
+
 import 'package:quwoquan_app/l10n/copy/chat_text_constants.dart';
 import 'package:quwoquan_app/service/entity_service/entity_homepage/homepage/presentation/homepage_detail_page.dart';
 import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart'
@@ -58,7 +59,6 @@ void main() {
     return ProviderScope(
       overrides: [
         ...publicContentLinkOverrides(),
-        ...homepageSourceCardsBoundaryOverrides(),
         authSessionControllerProvider.overrideWith(_GuestHomepageSession.new),
         behaviorRepositoryProvider.overrideWithValue(
           RecordingContentBehaviorRepository(),

@@ -62,10 +62,10 @@
 - 取消后 access mode、完成后的回顾窗口与最终只读策略由 canonical contracts 决定；Circle lifecycle 不复制 Chat posting 状态。
 
 <a id="req-006"></a>
-### REQ-006 普通群聊与活动群聊并列不合并
+### REQ-006 普通群聊与交集后置 Gathering 不合并
 
-- C 位“发起群聊”只创建普通 Conversation，不创建 Gathering；“发起活动”自动 provision contextual room。已有普通会话可作为活动来源，但原成员必须成功响应后才进入活动群聊。
-- capacity=2 仍使用两人活动群聊，不复用普通 direct；ConversationMembership 不自动建立 mutual。
+- 全局“发起群聊”入口只创建普通 Conversation，不创建 Gathering；Gathering 只能来自用户主动展开内容/交集证据后的 typed action，或已有合法上下文。由 Circle 创建 Gathering 并 provision 唯一 contextual room，C 位不直接发起活动。
+- 已有合法 Conversation 可作为有上下文的 Gathering 来源，但原成员必须成功响应后才进入活动群聊；capacity=2 仍使用两人活动群聊，不复用普通 direct，ConversationMembership 不自动建立 mutual。
 
 <a id="req-007"></a>
 ### REQ-007 服务本地契约引用边界
@@ -100,12 +100,12 @@
 - AND 退出/移除后写权限与敏感访问在 SLO 内撤销，用户回落裁剪详情，仍保留通知/举报/申诉入口。
 
 <a id="gwt-003"></a>
-### GWT-003 发起活动与发起群聊保持并列
+### GWT-003 内容交集后的 Gathering 与普通群聊保持边界
 
-- GIVEN 用户从 C 位或已有普通会话分别选择发起活动和发起群聊。
-- WHEN 两条路径完成。
-- THEN 发起活动创建 Gathering 及其唯一 contextual room，发起群聊只创建普通 Conversation。
-- AND 普通会话成员未响应 Gathering 前不进入活动群聊，capacity=2 也不复用 direct。
+- GIVEN 用户已主动展开内容/交集证据，或位于可作为 Gathering 来源的已有合法 Conversation 上下文，且全局“发起群聊”入口可用。
+- WHEN 用户从展开后的 canonical typed action 发起 Gathering，并另行从全局入口发起群聊。
+- THEN 前一路径仅由 Circle 创建 Gathering 并 provision 唯一 contextual room，后一路径只创建普通 Conversation；C 位不存在无上下文“发起活动”动作。
+- AND 已有 Conversation 的原成员未成功响应 Gathering 前不进入活动群聊，capacity=2 也不复用普通 direct，普通群聊不得冒充活动群聊。
 
 ## 6. 依赖
 
@@ -121,6 +121,6 @@
 - 类型：`capability_gap`
 - 优先级：`P0`
 - 准出影响：`block`
-- 影响或价值：尚缺 CreateGatheringDraft 返回 room readiness 后再 Publish 的 production Remote 页面验收，以及 Participation/Organizer 双投影、默认消息入口、Board typed projection、Announcement/AssetIndex、取消/完成 access mode、退出/Block/安全移除撤权、普通群聊并列语义与 App 消息可靠性验收；不得由 App 伪造 EnsureRoom operation 或在 binding pending 时发布。
-- 完成判定：`GWT-001`、`GWT-002`、`GWT-003` 在 local_contract、真实 api_integration、杀进程/重连/重复事件与跨域 user_acceptance 中通过；未授权 room access、重复 room/membership、Workspace 第二真相和 direct 复用为零。
+- 影响或价值：尚缺 CreateGatheringDraft 返回 room readiness 后再 Publish 的 production Remote 页面验收，以及 Participation/Organizer 双投影、默认消息入口、Board typed projection、Announcement/AssetIndex、取消/完成 access mode、退出/Block/安全移除撤权、普通群聊与有上下文 Gathering 边界及 App 消息可靠性验收；不得由 App 伪造 EnsureRoom operation、从 C 位无上下文发起 Gathering，或在 binding pending 时发布。
+- 完成判定：`GWT-001`、`GWT-002`、`GWT-003` 在 local_contract、真实 api_integration、杀进程/重连/重复事件与跨域 user_acceptance 中通过；全局发起群聊只创建普通 Conversation，内容/交集主动展开或已有合法上下文的 typed action 才进入 Circle Gathering 创建链路，且未授权 room access、重复 room/membership、Workspace 第二真相和 direct 复用为零。
 - 依赖：父 L2 `OPEN-003`、Chat message reliability、后续 route/surface/Board contracts 与 production Remote App。

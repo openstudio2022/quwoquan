@@ -80,6 +80,22 @@
 - THEN ranking-signal-fusion spec 登记 intersection fact/affinity 权重入口。
 - AND 失败时返回 canonical failure，且不产生伪成功事实。
 
+<a id="gwt-002"></a>
+### GWT-002 宿主锚点语法与 objectType 翻译同一真相源
+
+- GIVEN 交集 reason 携带 `subjectContext` 宿主锚点，且注册表已登记该锚点语法与 `objectTypeBindings`。
+- WHEN 生产侧物化 reason、消费侧判定 reason 是否属于当前宿主对象。
+- THEN 两侧都只查 codegen 产出的同一份锚点表，服务端与端侧都不存在第二份 `objectType`/锚点 switch。
+- AND 未登记的锚点前缀 fail-closed 为「不属于当前宿主」，不按取值形态（如是否含冒号）反推类型。
+
+<a id="gwt-003"></a>
+### GWT-003 结果坍缩具备可计算阈值与回滚触发
+
+- GIVEN 离线与在线评估已产出结果坍缩度量（作者重复率、话题熵、覆盖度等）。
+- WHEN 某次候选或策略变更使坍缩度量越过登记阈值。
+- THEN 评估门禁按可计算判据判为失败，并给出对应的回滚触发条件。
+- AND 交集读面在同一 kind 内有 per-kind 上限与坍缩探测，统一排序口径不退化为组键字典序。
+
 ## 6. 依赖
 
 - 前置要求：[`intersection-unified-experience`](../spec.md) 的范围、要求与 SIT。
@@ -88,15 +104,6 @@
 
 ## 7. 开放事项
 
-<a id="open-001"></a>
-### OPEN-001 交集算法闭环（Feature / Ranking / Explain / Event） 验收证据
-
-- 类型：`capability_gap`
-- 优先级：`P1`
-- 准出影响：`track`
-- 影响或价值：尚缺少能够证明“交集算法闭环（Feature / Ranking / Explain / Event）”已满足当前规格的真实测试证据。
-- 完成判定：`GWT-001` 对应行为满足且真实测试 `spec_ref` 有效。
-
 <a id="open-002"></a>
 ### OPEN-002 travel_photography 地点与画面供给尚未形成真实闭环
 
@@ -104,7 +111,16 @@
 - 优先级：`P0`
 - 准出影响：`block`
 - 影响或价值：尚缺的实现与验收证据：生产 App 的地点/时间采集接线、canonical 旅行内容供给与真实非生产主体公开行为。`coVisitedEntity` / `followeeVisited` 已 active，但 `coldStartSupply` 要求 `post_declared_visit` 至少覆盖 5 个不同可导航对象。当前 canonical 三篇内容的 `visitedAt`、`geoTagRef` 与 `locationName` 全为空，真实供给仍为 0。作品画面相似性应进入推荐与内容理解，不为它新增不可导航交集 kind。器材与参数也不得因已有 EXIF 解析能力被提升为可见交集。
-- 完成判定：`REQ-004` 的 travel_photography 零新 kind 实例化在真实供给上成立——至少 5 个不同可导航地点或 photo spot 经 canonical release 和真实非生产主体公开行为形成非零 `post_declared_visit` 供给，画面语义能进入推荐解释，且器材/参数不出现在搜索筛选、Creator chip 或可见交集句中
+- 完成判定：`REQ-004` 的 travel_photography 零新 kind 实例化在真实供给上成立，且父级 L2 的到访同一性验收（`coPresentHere` / `nearbyAffinity`）有真实语料可裁定——至少 5 个不同可导航地点或 photo spot 经 canonical release 和真实非生产主体公开行为形成非零 `post_declared_visit` 供给，画面语义能进入推荐解释，器材/参数不出现在搜索筛选、Creator chip 或可见交集句中。
+
+<a id="open-005"></a>
+### OPEN-005 结果坍缩指标已计算但无可计算阈值与回滚判据
+
+- 类型：`risk`
+- 优先级：`P2`
+- 准出影响：`track`
+- 影响或价值：`diversity_metrics.py` 已计算 `item_coverage` / `author_repeat_rate` / `topic_entropy` / `author_hhi` / `geo_coverage`，但 `evaluate_gate.py` 的 failures 判据只看 AUC/NDCG，在线护栏只看 CTR/engagement：坍缩有度量、无阈值、无回滚触发条件，回滚旋钮 `author_diversity_weight` 没有任何判据会拉动它。交集读面同一形态：单一 kind 可按 subject 快照全量展开，`strength`/`freshAt` 同值使 `REQ-006` 的排序键退化为组键字典序。触发时机是首次真实排序模型发布前；在此之前它是发布护栏缺口，不是当前交集读面的阻断。
+- 完成判定：`GWT-003` 对应行为满足——坍缩度量在评估门禁中具备与 AUC 绝对下限同轨的可计算阈值与回滚触发条件，交集读面具备 per-kind 上限与坍缩探测，且有真实测试 `spec_ref` 覆盖。
 
 <a id="open-003"></a>
 ### OPEN-003 route 与 photo_spot 已有 binding 但无派生来源
@@ -113,4 +129,4 @@
 - 优先级：`P2`
 - 准出影响：`track`
 - 影响或价值：尚缺的实现与验收证据：`route` 与 `photo_spot` 的对象派生来源。二者虽已在 `intersection_kind_registry.yaml` 声明 binding，但路线应由同一用户 `declaredVisit` 的时序串联生成，大众拍照点应由同一实体下高频共现的画面标签与高互动作品聚合产生；两条派生都依赖 `OPEN-002` 的 `post_declared_visit` 供给先非零，在供给为 0 时建对象只会得到空集合。
-- 完成判定：`post_declared_visit` 供给非零后，两类对象具备可复跑的派生任务与非空产出，且仍满足 `REQ-004` 的注册表与可导航性约束——拍照点不引入人工维护的机位库，也不产出器材与参数建议。
+- 完成判定：`GWT-001` 对应行为在 `route` 与 `photo_spot` 两类对象上成立——`post_declared_visit` 供给非零后，两类对象具备可复跑的派生任务与非空产出，且仍满足 `REQ-004` 的注册表与可导航性约束（拍照点不引入人工维护的机位库，也不产出器材与参数建议）。

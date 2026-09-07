@@ -4,7 +4,7 @@
 
 ## 1. 目标与用户价值
 
-让用户以清晰的圈子、组织节点与群组边界完成发现、加入、内容参与和成员协作，并让创作者、Circle、Persona 或具备 authority 的 Entity Host 把内容与兴趣发起为可准入、可协作、可完成的 Gathering；1:1、多人和多日行程共享同一活动根。
+让用户以清晰的圈子、组织节点与群组边界完成发现、加入、内容参与和成员协作，并让创作者、Circle、Persona 或具备 authority 的 Entity Host 从内容交集主动展开后的 typed 下一步发起可准入、可协作、可完成的 Gathering；1:1、多人和多日行程共享同一活动根。
 
 ## 2. 领域边界
 
@@ -68,9 +68,9 @@
   - 交付给下游的结果：维护 Circle、CircleGroup、Membership 与内容放置关系，并公开加入、协作和群绑定结果，供 `shared-homepage-network` 继续处理。
   - 不负责：不拥有聊天消息、内容正文、主页或用户关系事实。
 - [`JNY-011 / SCN-027`](../spec.md#scn-027)
-  - 本领域负责：从内容、C 位、主页或会话来源创建并发布 room-ready Gathering，维护 Host、root-owned Participation、Revision、容量/准入、生命周期、Outcome 与 room binding state，并签发公开详情和 Board 活动投影。
+  - 本领域负责：从内容交集主动展开后的 typed 来源创建并发布 room-ready Gathering，并承接邀请卡、通知、我的行动、活动群聊、Board、再约一次与合法深链；维护 Host、root-owned Participation、Revision、容量/准入、生命周期、Outcome 与 room binding state，并签发公开详情和 Board 活动投影。
   - 进入条件：Host authority、来源引用、披露与风险义务可验证；Recommendation 只交付排序结果，不能直接产生 Participation。
-  - 交付给下游的结果：公开可发现或受邀请的 Gathering、可区分准入结果、有效参与与 room access 投影、证据化 Outcome 及可供 Content 关联的 Experience reference。
+  - 交付给下游的结果：可公开消费或受邀请的 Gathering、可区分准入结果、有效参与与 room access 投影、证据化 Outcome 及可供 Content 关联的 Experience reference。
   - 不负责：不拥有聊天消息/公告、内容正文/媒体/Report、推荐排序或 Persona 关系；加入与完成不自动产生 mutual。
 
 - [`JNY-009 / SCN-034`](../spec.md#scn-034)
@@ -106,7 +106,7 @@
 - [`circle-collaboration-tools`](./circle-collaboration-tools/spec.md)：以圈子或组织主页内的群为协作单元，统一交流、资料与公告
 - [`circle-experience-redesign`](./circle-experience-redesign/spec.md)：按群组类型提供一致的发现、详情与协作入口
 - [`circle-management-and-stats`](./circle-management-and-stats/spec.md)：为圈子治理与运营提供权限受控的处置、固定口径指标和可下钻运营视图。
-- [`gathering-coordination`](./gathering-coordination/spec.md)：让内容或兴趣成为可公开发现、可准入、可在活动群聊与看板协作并形成 Outcome 的单一 Gathering。
+- [`gathering-coordination`](./gathering-coordination/spec.md)：让内容交集后置促成的兴趣成为可准入、可在活动群聊与看板协作并形成 Outcome 的单一 Gathering，同时保留已有任务深链。
 - [`in-circle-recommendation-loop`](./in-circle-recommendation-loop/spec.md)：把圈内行为事实转为权限受控的候选排序，并将曝光与反馈归因回评估链路。
 
 ## 5. 领域要求
@@ -190,7 +190,7 @@
 <a id="dom-003"></a>
 ### DOM-003 Gathering 所有权、生命周期与跨域投影
 
-- 条件：Host 从内容、Circle、Persona、Entity 或 C 位创建并发布 Gathering，参与者经开放加入、申请或邀请响应进入活动协作。
+- 条件：Host 从内容交集证据半屏的 canonical hint 创建并发布 Gathering，或经再约一次/合法任务深链管理已有 Gathering；参与者经开放加入、申请或邀请响应进入活动协作。
 - 可观察结果：Gathering、root-owned Participation、Revision、Outcome 与 room binding state 只由 Circle command 改变；Chat membership 只是访问投影，Recommendation 只排序，Content 只接收 canonical activity reference。
 - 可观察结果：并发准入不超员，Organizer 与 Participation 分离，重大变更逐人确认，取消/提前结束/安全终止/完成可区分，occurred 具有独立证据，退出与撤权最终收敛。
 - 禁止结果：不得用裸建群、ConversationMembership、Feed card、Assistant artifact、旅行 Trip 或 App cache 代替 Gathering 真相；不得因参与自动建立 mutual。

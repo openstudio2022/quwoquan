@@ -1,4 +1,7 @@
 // spec_ref: specs/feature-tree/runtime/runtime-client-foundation/error-permission-display-semantics/spec.md#gwt-009
+// spec_ref: specs/feature-tree/object-homepage-network/intersection-unified-experience/spec.md#sit-003.t1
+// spec_ref: specs/feature-tree/object-homepage-network/intersection-unified-experience/home-recommend-intersection-redesign/spec.md#gwt-001.t5
+// spec_ref: specs/feature-tree/object-homepage-network/intersection-unified-experience/home-recommend-intersection-redesign/spec.md#gwt-001.t6
 import 'dart:io';
 
 import 'package:flutter/cupertino.dart';
@@ -43,6 +46,7 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
         ContentFeedEmptyReason,
         IntersectionActionHint,
         IntersectionActorEvidence,
+        IntersectionEvidenceRow,
         IntersectionInboxSummary,
         IntersectionReason,
         IntersectionRepresentativeActor,
@@ -98,6 +102,8 @@ IntersectionReason _canonicalReason({
       const <IntersectionActorEvidence>[],
   List<IntersectionVisual> sampleVisuals = const <IntersectionVisual>[],
   List<IntersectionActionHint> actionHints = const <IntersectionActionHint>[],
+  List<IntersectionEvidenceRow> evidenceRows =
+      const <IntersectionEvidenceRow>[],
 }) {
   return IntersectionReason(
     kind: 'content',
@@ -142,6 +148,7 @@ IntersectionReason _canonicalReason({
     sampleVisuals: sampleVisuals,
     representativeActor: representativeActor,
     actionHints: actionHints,
+    evidenceRows: evidenceRows,
     lifecycleState: 'active',
     previousStrength: 0,
     strengthDelta: 1,
@@ -155,6 +162,7 @@ IntersectionReason _canonicalReason({
     moment: '',
     subjectId: actionTargetId,
     subjectContext: dimension,
+    cohort: 'sha256:fixture-policy',
   );
 }
 
@@ -342,6 +350,38 @@ IntersectionReason _photoSpotReason() {
   );
 }
 
+List<PostMediaItem> _publicMediaItems({
+  List<String> imageUrls = const <String>[],
+  String? videoUrl,
+  String? coverUrl,
+}) {
+  final normalizedVideo = videoUrl?.trim() ?? '';
+  final normalizedCover = coverUrl?.trim() ?? '';
+  if (normalizedVideo.isNotEmpty) {
+    return <PostMediaItem>[
+      PostMediaItem(
+        kind: 'video',
+        url: normalizedVideo,
+        coverUrl: normalizedCover.isEmpty ? null : normalizedCover,
+        accessMode: MediaDeliveryAccessMode.public,
+      ),
+    ];
+  }
+  final urls = <String>{
+    ...imageUrls.map((url) => url.trim()).where((url) => url.isNotEmpty),
+    if (normalizedCover.isNotEmpty) normalizedCover,
+  };
+  return urls
+      .map(
+        (url) => PostMediaItem(
+          kind: 'image',
+          url: url,
+          accessMode: MediaDeliveryAccessMode.public,
+        ),
+      )
+      .toList(growable: false);
+}
+
 ContentPostViewData _microPost({
   String? id,
   List<String> imageUrls = const <String>[
@@ -385,20 +425,7 @@ ContentPostViewData _microPost({
     body: '川西雪山和校园摄影路线',
     imageUrls: imageUrls,
     videoUrl: videoUrl,
-    mediaItems: <PostMediaItem>[
-      for (final url in imageUrls)
-        PostMediaItem(
-          kind: 'image',
-          url: url,
-          accessMode: MediaDeliveryAccessMode.public,
-        ),
-      if (videoUrl != null && !imageUrls.contains(videoUrl))
-        PostMediaItem(
-          kind: 'video',
-          url: videoUrl,
-          accessMode: MediaDeliveryAccessMode.public,
-        ),
-    ],
+    mediaItems: _publicMediaItems(imageUrls: imageUrls, videoUrl: videoUrl),
     durationMs: null,
     intersectionReasons: <IntersectionReason>[effectiveReason],
   );
@@ -430,14 +457,7 @@ ContentPostViewData _photoPost({
     body: '不同素材宽高比测试',
     coverUrl: imageUrls.first,
     imageUrls: imageUrls,
-    mediaItems: <PostMediaItem>[
-      for (final url in imageUrls)
-        PostMediaItem(
-          kind: 'image',
-          url: url,
-          accessMode: MediaDeliveryAccessMode.public,
-        ),
-    ],
+    mediaItems: _publicMediaItems(imageUrls: imageUrls),
     width: width,
     height: height,
     likeCount: 1,
@@ -471,19 +491,14 @@ ContentPostViewData _videoPost({required int width, required int height}) {
         'media/image/s/archived-image/post/fixture_video_001/v1/cover.png',
     coverUrl:
         'media/image/s/archived-image/post/fixture_video_001/v1/cover.png',
+    mediaItems: _publicMediaItems(
+      videoUrl: 'media/video/s/video-primary-0001/post/video-content-0001/v1/source.mp4',
+      coverUrl:
+          'media/image/s/archived-image/post/fixture_video_001/v1/cover.png',
+    ),
     width: width,
     height: height,
     durationMs: 65000,
-    mediaItems: const <PostMediaItem>[
-      PostMediaItem(
-        kind: 'video',
-        url: 'media/video/s/video-primary-0001/post/video-content-0001/v1/source.mp4',
-        accessMode: MediaDeliveryAccessMode.public,
-        coverUrl:
-            'media/image/s/archived-image/post/fixture_video_001/v1/cover.png',
-        durationMs: 65000,
-      ),
-    ],
     likeCount: 1,
     commentCount: 2,
     shareCount: 3,
@@ -519,6 +534,7 @@ ContentPostViewData _articleLayoutPost({
     body: bodyValue,
     summary: bodyValue,
     coverUrl: coverUrlValue,
+    mediaItems: _publicMediaItems(coverUrl: coverUrlValue),
     likeCount: 1,
     commentCount: 2,
     shareCount: 3,
@@ -1310,41 +1326,74 @@ void main() {
     );
   });
 
-  testWidgets('约伴徽标只由云侧重社交 actionHint 驱动（有 start_gathering 展示有人同行）', (
-    tester,
-  ) async {
+  testWidgets('重社交 action 仅在主动展开交集证据后出现', (tester) async {
     await tester.binding.setSurfaceSize(const Size(390, 844));
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
+    final target = IntersectionTarget(
+      objectType: 'homepage',
+      objectId: 'fixture_homepage_photo_spot_hengshu_studio',
+      objectKind: 'place',
+      routeId: 'homepageDetail',
+    );
     final reason = _canonicalReason(
-      dimension: 'interest',
+      dimension: 'location',
       intersectionId: 'ix_companion_demo',
-      intersectionClass: 'recommended',
-      objectKind: 'person',
+      intersectionClass: 'fact',
+      objectKind: 'place',
       source: 'coWishlistedEntity',
-      actionTargetId: 'fixture_user_companion',
+      actionTargetId: target.objectId,
       pointSummarySnapshotId: 'snap_companion_demo',
-      displayBinding: 'host_implicit',
-      actorEvidenceTotalCount: 0,
+      displayBinding: 'explicit_link',
+      actorEvidenceTotalCount: 1,
       actorEvidenceCompleteness: 'complete',
-      primaryText: '',
-      primarySpans: const <IntersectionTextSpan>[],
+      primaryText: '你和山川手账都想去横竖影像馆取景地',
+      primarySpans: <IntersectionTextSpan>[
+        const IntersectionTextSpan(text: '你和山川手账都想去', role: 'plain'),
+        IntersectionTextSpan(text: '横竖影像馆取景地', role: 'object', target: target),
+      ],
       actionHints: <IntersectionActionHint>[
         IntersectionActionHint(
           actionKey: 'start_gathering',
-          label: '发起结伴',
+          label: '一起去看看',
           isPrimary: true,
           priority: 0,
           actionTier: 'heavy',
-          requiredGates: const <String>[],
+          requiredGates: const <String>[
+            'login',
+            'realName',
+            'minorMode',
+            'blocked',
+            'rateLimit',
+          ],
           dispatch: 'gathering',
+          target: target,
         ),
       ],
     );
     await tester.pumpWidget(_buildFeed(_microPost(reason: reason)));
     await tester.pump();
 
-    expect(find.text(AppConceptConstants.feedBadgeCompanion), findsOneWidget);
+    expect(find.text('一起去看看'), findsNothing);
+    expect(find.text(AppConceptConstants.feedBadgeCompanion), findsNothing);
+    final statement = tester.widget<RichText>(
+      find.descendant(
+        of: find.byKey(const ValueKey('home-relation-card-reason')),
+        matching: find.byType(RichText),
+      ),
+    );
+    final targetSpan = _spanByText(statement, '横竖影像馆取景地');
+    (targetSpan.recognizer! as TapGestureRecognizer).onTap!();
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey<String>('home-intersection-evidence-sheet')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('home-intersection-primary-action')),
+      findsOneWidget,
+    );
+    expect(find.text('一起去看看'), findsOneWidget);
   });
 
   testWidgets('内容含地名但无 actionHint 不伪造约伴徽标（防地名启发式回归）', (tester) async {
@@ -1966,47 +2015,41 @@ void main() {
   });
 
   // ── N6：交集 span 点击埋点带全归因，且保持 tag_click 推荐权重语义 ──
-  testWidgets(
-    '点击交集名字 span → trackTagClick 透传 intersectionSourceRef + evidenceId',
-    (tester) async {
-      await tester.binding.setSurfaceSize(const Size(390, 844));
-      addTearDown(() => tester.binding.setSurfaceSize(null));
+  testWidgets('点击交集名字 span → 只展开证据，不提前伪造 target 点击', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
 
-      final behaviorRepo = RecordingContentBehaviorRepository();
-      final tracker = ContentBehaviorTracker(
-        reporter: behaviorRepo,
-        maxBatchSize: 1,
-        enablePeriodicFlush: false,
-      );
-      addTearDown(tracker.dispose);
+    final behaviorRepo = RecordingContentBehaviorRepository();
+    final tracker = ContentBehaviorTracker(
+      reporter: behaviorRepo,
+      maxBatchSize: 1,
+      enablePeriodicFlush: false,
+    );
+    addTearDown(tracker.dispose);
 
-      await tester.pumpWidget(_routedFeed(_microPost(), tracker: tracker));
-      await tester.pump();
+    await tester.pumpWidget(_routedFeed(_microPost(), tracker: tracker));
+    await tester.pump();
 
-      final richText = tester.widget<RichText>(
-        find.descendant(
-          of: find.byType(InteractiveIntersectionText),
-          matching: find.byType(RichText),
-        ),
-      );
-      final nameSpan = _spanByText(richText, '林清越');
-      (nameSpan.recognizer! as TapGestureRecognizer).onTap!();
-      await tester.pump();
-      await tracker.flush();
+    final richText = tester.widget<RichText>(
+      find.descendant(
+        of: find.byType(InteractiveIntersectionText),
+        matching: find.byType(RichText),
+      ),
+    );
+    final nameSpan = _spanByText(richText, '林清越');
+    (nameSpan.recognizer! as TapGestureRecognizer).onTap!();
+    await tester.pumpAndSettle();
+    await tracker.flush();
 
-      final clicks = behaviorRepo.recorded
-          .where((event) => event.action == BehaviorEventType.tagClick)
-          .toList(growable: false);
-      expect(clicks, hasLength(1));
-      final click = clicks.single;
-      // 关键回归：sourceRef / evidenceId 由 attribution 真正转发到埋点（此前被丢）。
-      expect(click.intersectionSourceRef, equals('coCommented'));
-      expect(click.intersectionEvidenceId, equals('snap_lin'));
-      expect(click.intersectionId, equals('ix_post_lin'));
-      expect(click.intersectionDimension, equals('content'));
-      expect(click.intersectionTagRefs, isNotNull);
-    },
-  );
+    expect(
+      find.byKey(const ValueKey<String>('home-intersection-evidence-sheet')),
+      findsOneWidget,
+    );
+    final clicks = behaviorRepo.recorded
+        .where((event) => event.action == BehaviorEventType.tagClick)
+        .toList(growable: false);
+    expect(clicks, isEmpty);
+  });
 
   // ── 首页卡想去动作（意图环 L0 氛围层，B10 三表面之三）──
   // spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/text-post-commercial-publication/spec.md#gwt-006
@@ -2142,6 +2185,11 @@ ContentPostViewData _wishlistAnchoredPost() {
     imageUrls: const <String>[
       'media/image/s/archived-image/post/fixture_wish_001/v1/cover.png',
     ],
+    mediaItems: _publicMediaItems(
+      imageUrls: const <String>[
+        'media/image/s/archived-image/post/fixture_wish_001/v1/cover.png',
+      ],
+    ),
     likeCount: 3,
     commentCount: 1,
     shareCount: 0,

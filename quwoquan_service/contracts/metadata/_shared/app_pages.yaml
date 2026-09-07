@@ -20,7 +20,9 @@ pages:
 
   - { page_name: home, route_id: circles, collect_page_access: true }
 
-  - { page_name: interest_match, route_id: interestMatch, collect_page_access: true }
+  - { page_name: my_intersections_compat_redirect, route_id: interestMatch, collect_page_access: false }
+
+  - { page_name: video_book, route_id: videoBook, collect_page_access: true }
 
   - { page_name: chat, route_id: chat, collect_page_access: true }
 

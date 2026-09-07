@@ -360,7 +360,10 @@ codegen-api-edge-errors:
 	go run ./tools/codegen_service_errors --metadata-dir "$(CONTRACT_VIEW)" --domain gateway --output-root services/api-edge/generated
 
 codegen-rec-intersection:
-	go run ./tools/codegen_rec_intersection --metadata-dir "$(CONTRACT_VIEW)" --output-dir services/content-service/generated/content/post
+	go run ./tools/codegen_rec_intersection --metadata-dir "$(CONTRACT_VIEW)" --output-dir services/content-service/generated/content/post --python-output services/recommendation-service/generated/recommendation/recommendation_feature_profile_view/intersection_policy.py
+
+codegen-app-intersection: service-contract-view
+	go run ./tools/codegen_app_metadata --metadata-dir "$(CONTRACT_VIEW)" --app-dir ../quwoquan_app --intersection-metadata-only
 
 codegen-impact:
 	go run ./tools/codegen_impact --metadata-dir "$(CONTRACT_VIEW)" --output-dir runtime/impact

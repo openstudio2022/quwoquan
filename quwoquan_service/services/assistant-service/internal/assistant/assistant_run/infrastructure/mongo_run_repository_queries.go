@@ -34,6 +34,17 @@ func (r *MongoRunRepository) LoadByRequest(
 	})
 }
 
+func (r *MongoRunRepository) LoadActiveBySession(
+	ctx context.Context,
+	userID string,
+	sessionID string,
+) (runruntime.Run, error) {
+	return r.load(ctx, bson.M{
+		"userId":           strings.TrimSpace(userID),
+		"activeSessionKey": strings.TrimSpace(sessionID),
+	})
+}
+
 // ListSkillActivityEvents exposes only the redacted current Run lifecycle
 // needed by SkillActivityView. The projection is intentionally owner-scoped
 // and never returns user input, output, ContextSnapshot, Items, or evidence.

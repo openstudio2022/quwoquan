@@ -16,7 +16,7 @@
 - 我的主页「我的交集」聚合入口：总数 + 最多 3 维度红点 + 自上次新增列表 + 打开清零。
 - profile/entity/circle 三类主页移除 demo 问小趣 dock。
 - 全局搜索交集 Tab 与 connectionState 分组消费 intersectionReason 子集。
-- 首页与各频道（含校园、旅行）交集推荐卡重设计：去关注按钮、头像 + 名字 + 红计数。
+- 首页内容卡与视频书的交集渐进展示：首屏只显示一条自然主句，用户主动展开证据后才显示一个 canonical 下一步。
 - 实体主页与圈子主页的 gamma-local 真实 bundle、impact、related groups、object intersections 端云闭环。
 - IntersectionReason 字段收敛、recommendation/intersection 域契约、viewer_object_intersection 读模型。
 - 事实与概率分通道、保鲜期、跨会话推荐冷却窗口、曝光到转化漏斗埋点。
@@ -60,15 +60,15 @@
 
 - profile/entity/circle 三类主页不再出现问小趣 demo dock。
 - 他人用户主页、实体主页、圈子主页展示事实交集卡，每条有可读证据。
-- 圈子主页出现「你认识的人有 N 个在这」交集卡。
+- 圈子主页以「圈子打动的人」社会证明卡（只读云侧 displayText，至多三条）与「我的交集」卡承载交集；「你认识的人有 N 个在这」成员簇收敛进我的交集模块，不再单独出现（[circle-homepage-intersection-redesign](./circle-homepage-intersection-redesign/spec.md)）。
 
 <a id="req-003"></a>
 ### REQ-003 首页与频道交集推荐重设计 SIT
 
-- 首页交集卡去掉关注按钮，使用真实头像 + 名字 + 维度 chip + 安静共同点 chip。
-- 模块头展示「N 位与你有交集」红数字；首页 ≤4 卡、频道 ≤3 卡。
-- 校园、旅行频道出现频道专属交集推荐。
-- travel 频道只消费 content metadata 生成的 `intersectionModulePolicy=spotlightSegment`，端侧不得维护频道专用 override。
+- 首页内容卡与视频书首屏各 Post 至多展示一条 display-ready 交集主句，不显示行动按钮、行动徽标或 secondaryText。
+- 用户点击主句后打开证据半屏：显示事实依据，并只显示共享 resolver 选出的一个可兑现 typed 下一步；无可执行 hint 时只看证据。
+- 交集与回顾溯源标互斥占位；二者都没有时不占位，feed 不逐 Post 查询社会证明。
+- Travel 顶部 spotlight 与卡内交集不得同屏并存；交集只随内容自然出现。
 - 事实交集明确证据，概率交集明确标注推荐，混排后统一排序。
 
 <a id="req-004"></a>
@@ -84,12 +84,12 @@
 - 交集触点统一遵循产品主轴「别人帮你刷内容，我们帮你遇到对的人」；所有可见交集句只读云侧 primaryText/primarySpans/displayBinding，端不拼句，join(spans.text)==primaryText 不变量成立。
 - 上下文 SVO 成立：explicit_link 必须有 typed object span；host_implicit/host_plain 必须由当前内容卡/视频书/搜索 hit/主页宿主对象证明，禁止可点击 self-target 和 reason 池随机附着。
 - 主句禁止 raw stats、泛对象和旧术语：不出现 `2赞1评`、`这条记录`、`TA的内容`、`相关圈子`、`我的连接`。
-- 前台用户维度收敛为「交集 / 打动」两词，入口统一「交集配对」、收件箱统一「我的交集」
+- 前台用户维度收敛为「交集 / 打动」两词，收件箱统一「我的交集」，不建立独立一级“交集配对”入口
 - “今日”只保留为最小时间粒度的次级说明，辐射他人用「打动」
 - 旧「兴趣配对 / 找同趣 / 今日同趣机会 / 影响力」前台退场，机器标识 `interest_match` / `impact` 保留。
-- 七触点（视频书/首页内容卡/用户主页/我的主页/圈子主页/实体主页/交集配对 launcher）密度与行动重心符合 `REQ-006` 的七触点统一矩阵；四主页复用 ObjectIntersectionSection/ObjectIntersectionCard，不新增第四套抽象。
+- 六触点（视频书/首页内容卡/用户主页/我的主页/圈子主页/实体主页）密度与行动重心符合 `REQ-006` 的统一矩阵；四主页复用 ObjectIntersectionSection/ObjectIntersectionCard，不新增第四套抽象；独立“交集配对”一级 launcher 退役。
 - C0 差异化切片「共同想去→约伴」用已有 coWishlistedEntity + 关注 + 交集信号触发 start_gathering；safetyGate 未满足时优雅降级为查看证据/进入对象，无登录死循环。
-- 未同时具备真实 producer、当前契约和可兑现 handler 的候选或行动不得进入 canonical registry、API 响应与正式 UI；交集配对 launcher 不渲染伪候选。
+- 未同时具备真实 producer、当前契约和可兑现 handler 的候选或行动不得进入 canonical registry、API 响应与正式 UI；独立 launcher 不得成为候选或行动旁路。
 - 北极星为可行动交集完成/关系形成（非 DAU），护栏反指标（骚扰率/拒绝率/举报率）与漏斗（曝光→证据展开→行动→完成→关系形成→回流）可观测。
 - 垂类扩展只走 [L2 DEC-002](./design.md#dec-002) 的四件套（`vertical` 值 + `objectKind` + taxonomy 子树 + 事实生产者），禁止新增 kind / dimension / actionKey，禁止端侧垂类分支；同一批端侧断言在换垂类后无需改端侧代码。
 
@@ -97,11 +97,11 @@
 ### REQ-006 合并排序：事实优先（strength + 新鲜度），概率其次（score）；统一经过推荐窗口/冷却过滤
 
 - 合并排序：事实优先（`strength` + 新鲜度），概率其次（`score`）；统一经过推荐窗口/冷却过滤。
-- **七触点统一矩阵**（密度 + 行动重心，本条即唯一口径）：视频书底部单句 / 首页紧凑 chip / 用户主页证据组 / 我的主页收件箱 / 圈子主页证据卡 + 成员簇 / 实体主页证据卡 + 记录单句 / 交集配对 launcher（不产候选）。四主页表达仍复用 `ObjectIntersectionSection` / `ObjectIntersectionCard`，不新增第四套抽象。前台用户维度收敛为「交集 / 打动」、入口统一「交集配对」、收件箱统一「我的交集」；“今日”只作最小时间粒度的次级说明，机器标识 `interest_match` / `impact` 内部保留。
-- 七触点端侧必须消费同一交集表达与对象页行动分发契约；云侧只下发 canonical `actionHint`。
+- **六触点统一矩阵**（密度 + 行动重心，本条即唯一口径）：视频书首屏单句 / 首页内容卡单句 / 用户主页证据组 / 我的主页收件箱 / 圈子主页证据卡 + 成员簇 / 实体主页证据卡 + 记录单句。四主页表达仍复用 `ObjectIntersectionSection` / `ObjectIntersectionCard`，不新增第四套抽象。独立“交集配对”一级 launcher 退役；收件箱统一「我的交集」，“今日”只作最小时间粒度的次级说明，机器标识 `interest_match` / `impact` 内部保留。
+- 六触点端侧必须消费同一 display resolver 与对象页行动分发契约；云侧只下发 canonical `actionHint`。紧凑面只显示 display-ready 主句，用户主动展开证据后 resolver 才选择一个 primary displayable hint。
 - `IntersectionTargetNavigator.openActionHint` 只按当前生成闭集中的 `dispatch` 分发；navigate/assistant 的 login 等门不在交集组件拦截，导航到承接页由承接页复用既有 gate + `AuthContinuation` 续接（口径见 [`post-login-landing`](../../user-identity-profile-relationship/onboarding-and-identity-entry/post-login-landing/spec.md)），关注/加入/进入讨论/看共同来源等 login 门轻行动保持可见可点
 - action dispatch 闭集仅为 `assistant/navigate/message/gathering`；未登记 dispatch 一律 fail-closed，死参数 gateResolver/gated 已移除（R26）
-- `ObjectIntersectionPreviewCard` 只能是 `ObjectIntersectionSection` 的薄包装；`start_gathering` 和 `message_person` 只有在真实承接页与权限门成立时才可展示。
+- `ObjectIntersectionPreviewCard` 只能是 `ObjectIntersectionSection` 的薄包装；`start_gathering` 和 `message_person` 只有在真实承接页、target/binding 与安全门成立，并且用户已主动展开证据时才可展示。primary reason/hint 按 display-ready 与 priority 选择；未知 dispatch、缺 target、过期 hint 和指向当前内容自身的 `open_content` 必须 fail-closed。
 - `safetyGate`、moment 意图时态和行动阶梯以 metadata 模型为准，所有主页和交集入口必须消费同一模型。
 - 端云真实数据准出由 [`object-homepage-gamma-real-data-closure`](./object-homepage-gamma-real-data-closure/spec.md) 负责。
 
@@ -143,6 +143,7 @@
 - 不做对人星级/评分；负面走举报/Block/安全终止通道。
 - 创作者成行力沿溯源链（经历 Post → `gatheringRef` → Gathering `sourceRefs` → 原内容 → 创作者）派生；促成通知只携带计数与公开经历引用，不暴露未公开参与者身份。
 - 产品与助手可行性文案只允许使用模型内可证事实（时限锚点、同城粒度、交集新鲜度）；禁止宣称「对方有空」（个人空闲不在任何模型内，`watch_availability` 是名额监听不是个人日程）。
+- 首页与视频书遵守“内容中一条交集 → 主动展开 → 一个下一步”：想去是意图输入而不是行动；只有 canonical hint 为 `start_gathering` 且 target、displayBinding 与 safetyGate 可承接时，证据半屏才展示“邀 TA 一起去”或“一起去看看”。
 - 牵线搭桥 UX 服从四层出现强度阶梯：L0 氛围（chip/单句/计数，可完全忽略）、L1 时刻（仅用户刚对相关对象做出动作时出现）、L2 目的地（收件箱/对象页全量）、L3 主动（仅助手周度速递一条通道）。任何页面首次呈现 ≤1 行主句 + 1 个主动作，同屏最多一处交集模块；禁止全屏交集弹窗、开屏推人、消息流自动插入与"附近的人"式交集列表。
 - 经历沉淀读面与聚合区（现行）：`content.post.ListPostsByGathering` 只返回 public + published + 审核通过且作者主动写入 `gatheringRef` 的内容，作者删除或转私密即从聚合区消失。App 行动详情共同经历区按三态诚实渲染（≥2 名不同作者 → 共同经历聚合、仅 1 名 → 个人回顾、0 条且行动已结束 → 「行动时间已结束」），行动未结束且无内容不渲染；active 参与者从行动详情/Board 经「发布回顾」入口携带 `gatheringRef` 进入创作流，创作页展示可移除的关联上下文条，移除后 payload 不携带该字段。
 - 想去即时反馈（现行 Aha 1）：详情态想去按钮只在作品锚定到 `wishlistHomepageTypes` 类型的 `primaryHomepageId` 时出现；想去成功后的反馈诚实两态——有对象交集点名共同人数并给查看入口，无交集只确认动作本身，禁止伪造社会证明。未登录点击经 `WishlistHomepageContinuation` 双目标续接。覆盖面（现行）：feed 卡与 works 沉浸统一 engagement bar 承载，文章形态从 feed 点开进同一 works 沉浸消费——想去入口与形态无关由同一锚点门控派生（文章形态有 widget 契约），不为单一形态另造第二入口。
@@ -176,16 +177,16 @@
 - WHEN 参与者发起“对象页交集卡与 demo dock 移除”对应动作。
 - THEN profile/entity/circle 三类主页不再出现问小趣 demo dock。
 - THEN 他人用户主页、实体主页、圈子主页展示事实交集卡，每条有可读证据。
-- THEN 圈子主页出现「你认识的人有 N 个在这」交集卡。
+- THEN 圈子主页以「圈子打动的人」社会证明卡（只读云侧 displayText，至多三条）与「我的交集」卡承载交集，不再单独出现「你认识的人有 N 个在这」成员簇。
 
 <a id="sit-003"></a>
 ### SIT-003 首页与频道交集推荐重设计 SIT
 
 - GIVEN 执行“首页与频道交集推荐重设计”所需的身份、输入与上游事实均有效。
 - WHEN 参与者发起“首页与频道交集推荐重设计”对应动作。
-- THEN 首页交集卡去掉关注按钮，使用真实头像 + 名字 + 维度 chip + 安静共同点 chip。
-- THEN 模块头展示「N 位与你有交集」红数字；首页 ≤4 卡、频道 ≤3 卡。
-- THEN 校园、旅行频道出现频道专属交集推荐。
+- THEN 首页与视频书首屏各 Post 至多显示一条 display-ready 交集主句，不显示行动按钮、行动徽标或 secondaryText。
+- THEN 用户主动点击后打开证据半屏，事实依据可读且至多一个 canonical 下一步；无可执行 hint 时只展示证据。
+- THEN 交集与回顾溯源标互斥，Travel spotlight 不与卡内交集并存，无两者时不占位。
 - THEN 事实交集明确证据，概率交集明确标注推荐，混排后统一排序。
 
 <a id="sit-004"></a>
@@ -205,12 +206,12 @@
 - THEN 交集触点统一遵循产品主轴「别人帮你刷内容，我们帮你遇到对的人」；所有可见交集句只读云侧 primaryText/primarySpans/displayBinding，端不拼句，join(spans.text)==primaryText 不变量成立。
 - THEN 上下文 SVO 成立：explicit_link 必须有 typed object span；host_implicit/host_plain 必须由当前内容卡/视频书/搜索 hit/主页宿主对象证明，禁止可点击 self-target 和 reason 池随机附着。
 - THEN 主句禁止 raw stats、泛对象和旧术语：不出现 `2赞1评`、`这条记录`、`TA的内容`、`相关圈子`、`我的连接`。
-- THEN 前台用户维度收敛为「交集 / 打动」两词，入口统一「交集配对」、收件箱统一「我的交集」
+- THEN 前台用户维度收敛为「交集 / 打动」两词，收件箱统一「我的交集」，不建立独立一级“交集配对”入口
 - AND “今日”只保留为最小时间粒度的次级说明，辐射他人用「打动」
 - AND 旧「兴趣配对 / 找同趣 / 今日同趣机会 / 影响力」前台退场，机器标识 `interest_match` / `impact` 保留。
-- THEN 七触点（视频书/首页内容卡/用户主页/我的主页/圈子主页/实体主页/交集配对 launcher）密度与行动重心符合 `REQ-006` 的七触点统一矩阵；四主页复用 ObjectIntersectionSection/ObjectIntersectionCard，不新增第四套抽象。
+- THEN 六触点（视频书/首页内容卡/用户主页/我的主页/圈子主页/实体主页）密度与行动重心符合 `REQ-006` 的统一矩阵；四主页复用 ObjectIntersectionSection/ObjectIntersectionCard，不新增第四套抽象，独立“交集配对”一级 launcher 不存在。
 - THEN C0 差异化切片「共同想去→约伴」用已有 coWishlistedEntity + 关注 + 交集信号触发 start_gathering；safetyGate 未满足时优雅降级为查看证据/进入对象，无登录死循环。
-- THEN 未同时具备真实 producer、当前契约和可兑现 handler 的候选或行动不进入 canonical registry、API 响应与正式 UI；交集配对 launcher 不渲染伪候选。
+- THEN 未同时具备真实 producer、当前契约和可兑现 handler 的候选或行动不进入 canonical registry、API 响应与正式 UI；独立 launcher 不构成旁路。
 - THEN 北极星为可行动交集完成/关系形成（非 DAU），护栏反指标（骚扰率/拒绝率/举报率）与漏斗（曝光→证据展开→行动→完成→关系形成→回流）可观测。
 - THEN 垂类扩展只走 [L2 DEC-002](./design.md#dec-002) 的四件套，`verticalExtensionContract` 的四条禁令由 `verify_intersection_kind_registry.py` 阻断，同一批端侧断言在换垂类后无需改端侧代码。
 
@@ -244,72 +245,30 @@
 ## 8. 开放事项
 
 <a id="open-001"></a>
-### OPEN-001 同趣匹配后端聚合与重行动风控
+### OPEN-001 重行动路径风控与聚合读面无真实验收证据
 
 - 类型：`risk`
 - 优先级：`P1`
 - 准出影响：`track`
-- 影响或价值：同趣匹配缺少可信后端聚合、对象授权、骚扰防护和可审计重行动门禁。
-- 完成判定：`SIT-005` 的可观察验收通过，且重行动路径具备可信后端聚合、对象授权、骚扰防护与可审计门禁。
+- 影响或价值：`start_gathering` 等重行动在注册表登记了 `requiredGates`（login/realName/minorMode/blocked/rateLimit），但运行时对象授权、骚扰防护与可审计门禁尚无真实测试证据；助手订阅投递消费的聚合读面（`intersection.read_mine`）同样只有本地合同。
+- 完成判定：`SIT-005` 的重行动路径具备对象授权、骚扰防护与可审计门禁的真实测试 `spec_ref`。
 
 <a id="open-002"></a>
-### OPEN-002 我的主页交集聚合入口与清零 SIT
+### OPEN-002 我的主页交集聚合入口与清零缺 L2 集成证据
 
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`track`
-- 影响或价值：尚缺实现或直接 `spec_ref`。
-- 目标：我的主页展示交集总数与最多 3 个维度的变化红点/数字，超 3 维度可展开更多。
-- 交集页（`user.my_intersections`、`intersection.object_list`）的验收数据供给：交集 inbox 是行为事实（`content.content_behavior_fact.ReportBehaviors`）经 recommendation 派生投影（`recommendation_feature_profile_view`）的跨服务异步结果，测试数据控制面不承诺确定性 provision；UAT 验收需在行为上报后按最终一致轮询交集投影，或将首访空态作为合法冷启动验收态。足迹页（`user.my_footprint`）不受此限——其写读闭环（`ReportBehaviors` → `GetMyFootprint`）同步于 content-service，由 typed capability 直接供数。
-- 完成判定：`SIT-001` 对应行为满足且真实测试 `spec_ref` 有效
-
-<a id="open-003"></a>
-### OPEN-003 对象页交集卡与 demo dock 移除 SIT
-
-- 类型：`capability_gap`
-- 优先级：`P1`
-- 准出影响：`track`
-- 影响或价值：尚缺实现或直接 `spec_ref`。
-- 目标：profile/entity/circle 三类主页不再出现问小趣 demo dock。
-- 完成判定：`SIT-002` 对应行为满足且真实测试 `spec_ref` 有效
-
-<a id="open-004"></a>
-### OPEN-004 首页与频道交集推荐重设计 SIT
-
-- 类型：`capability_gap`
-- 优先级：`P1`
-- 准出影响：`track`
-- 影响或价值：尚缺实现或直接 `spec_ref`。
-- 目标：首页交集卡去掉关注按钮，使用真实头像 + 名字 + 维度 chip + 安静共同点 chip。
-- 完成判定：`SIT-003` 对应行为满足且真实测试 `spec_ref` 有效
-
-<a id="open-005"></a>
-### OPEN-005 保鲜冷却与曝光转化漏斗 SIT
-
-- 类型：`capability_gap`
-- 优先级：`P1`
-- 准出影响：`track`
-- 影响或价值：尚缺实现或直接 `spec_ref`。
-- 目标：曝光未转化的交集对象在配置窗口（默认 14 天）内不再重复推荐。
-- 完成判定：`SIT-004` 对应行为满足且真实测试 `spec_ref` 有效
-
-<a id="open-006"></a>
-### OPEN-006 可行动交集与商用主轴 SIT
-
-- 类型：`capability_gap`
-- 优先级：`P1`
-- 准出影响：`track`
-- 影响或价值：尚缺实现或直接 `spec_ref`。
-- 目标：交集触点统一遵循产品主轴「别人帮你刷内容，我们帮你遇到对的人」；所有可见交集句只读云侧 primaryText/primarySpans/displayBinding，端不拼句，join(spans.text)==primaryText 不变量成立。
-- 完成判定：`SIT-005` 对应行为满足且真实测试 `spec_ref` 有效
+- 影响或价值：尚缺的验收证据是 `SIT-001` 的 L2 跨服务集成测试。交集 inbox 是行为事实（`content.content_behavior_fact.ReportBehaviors`）经 recommendation 派生投影（`recommendation_feature_profile_view`）的跨服务异步结果，测试数据控制面不承诺确定性 provision；验收须在行为上报后按最终一致轮询交集投影，或将首访空态作为合法冷启动验收态。足迹页（`user.my_footprint`）不受此限——其写读闭环同步于 content-service。真机 GWT 归 L3 `user-profile-intersection-redesign`。
+- 完成判定：`SIT-001` 对应行为满足且真实测试 `spec_ref` 有效。
 
 <a id="open-008"></a>
-### OPEN-008 经历交集读面消费与端到端证据未闭合
+### OPEN-008 经历交集 user_acceptance 全链证据未闭合
 
 - 类型：`capability_gap`
 - 优先级：`P0`
 - 准出影响：`block`
-- 影响或价值：尚缺 user_acceptance 三环境全链证据——九步旅程 probe（`gathering_flywheel_journey_probe_ops_env`，双隔离 Actor 真实 API 走想去 → 交集 → 发起 → 加入 → 双方回顾 → 经历交集 → 四锚点 +1 → 无内容对照组 → 无关锚点归零）与 readiness case（`producer: ops`、target=object）已就绪，probe 支持双 Actor 来源二选一（`stackctl verify` ActorLease handoff 或 `--self-provision-instance-id` 经受管 OTP 通道幂等自建，均为真实非生产账号且 Prod 被底层拒绝）。probe 并已覆盖 organizer 锚点断言与场景二延伸步（1对1 邀约 invite → decline → 发起方婉拒回执 → 再邀 → accept 成行，经真实 AppMessage inbox 轮询回执）。执行尚缺健康的完整环境栈：本机 stackctl 锁与 Docker 被并行 gamma/alpha 交付连续占用（跨多小时十余次启动尝试均 GATE_BLOCK 或锁排他，run 报告在案）。期间已修复 candidate 快照内 `product_telemetry_alerts.yaml` 被 Docker 挂载残留污染为空目录的启动阻断。最近一次真实执行（20260813T16 UTC，report 在案）：并行 SkillPackage 自举修复后 alpha 栈 healthy，probe 经受管 OTP 自建双隔离 Actor 成功并通过前两步（社会证明基线、想去意图），第三步 person 对象交集读取在 rec 返回非空 200 后于 content 代理链稳定 500（`UNKNOWN.SYSTEM.internal_error`，同链路本地 local_contract 绿）——归因运行候选的 content-service 落后 HEAD（打包早于提交），含全部改动的新候选已重打包就绪（baselineId `aead64d5…`）；执行中还修复了会话库 send-otp 幂等键跨会话固定导致复开无新 OTP 的 probe 健壮性缺陷。窗口随后再次被并行交付占用（beta dev-session 构建、gamma 栈活跃、down 遇 compose 插值变量缺失），收敛后用新候选 up 即跑。北极星度量读面已先行闭合：三比例分子分母经 `GetRecommendationFlywheelFunnel`（时间窗必填 + 来源对象/capacityTier/tagRef 切片、越界 truncated、读时聚合无缓存）有 api_integration 精确正负例。创作者促成通知已闭合：recommendation 在经历级首次达成且溯源链回到创作者内容时经 `events.recommendation.intersections` 发布 `IntersectionFacilitationRecorded`（占位收据幂等、溯源链断/私密回顾不发布，api_integration 正负例），Notification 投影为内容维度通知并回链行动公开详情（Go 正负例），App 通知行按 gathering target 导航。feed 列表卡溯源标已接线：feed/detail 服务端投影输出 `gatheringRef`，feed 卡在无交集主句时渲染「来自一次共同行动」轻标进行动详情。
+- 影响或价值：尚缺的验收证据是 `SIT-008` 在真实环境的全链结果。已就绪并有本地/API 证据：环境探针 `gathering_flywheel_journey_probe_ops_env`、readiness case（`producer: ops`、target=object、三环境槽）、漏斗读面、创作者促成通知及其投影、feed 溯源标 `gatheringRef`。环境层阻断不在本特性代码：Alpha `service-core` 失败于 Search UserProfile writer 绑定缺失（另一 owner 未提交的 data-plane 变更）；本机无双物理设备；ContractGraph 重建被另一 owner 的 `MediaAsset` 引用绑定阻断。
 - 完成判定：`SIT-008` 的 user_acceptance 层在真实环境走完整圈（想去 → 发起 → 成行 → 双方回顾 → 经历交集出现），四锚点计数经历级 +1 且创作者促成通知可见。
 - 依赖：`chat-conversation/intersection-native-messaging` OPEN-001 的 App 展示面。
 

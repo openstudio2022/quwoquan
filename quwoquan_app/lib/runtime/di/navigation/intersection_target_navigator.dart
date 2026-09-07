@@ -9,7 +9,14 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:quwoquan_app/service/content_service/content/content_behavior_fact/application/public/content_behavior_repository.dart'
     show ReferralSource;
 import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/application/public/gathering_create_navigation_request.dart';
+import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/application/public/intersection_reason_selection.dart'
+    show isPersonIntersectionTarget;
+import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/domain/intersection_statement_synthesizer.dart'
+    show targetForReasonObject, wireObjectTypeForTarget;
 import 'package:quwoquan_app/runtime/di/global_surface_action_dependencies.dart';
+import 'package:quwoquan_app/runtime/auth/auth_continuation.dart';
+import 'package:quwoquan_app/runtime/auth/auth_gate.dart';
+import 'package:quwoquan_app/runtime/auth/auth_session.dart';
 import 'package:quwoquan_app/runtime/errors/ui_error_semantics.dart';
 import 'package:quwoquan_app/service/circle_service/circle_management/circle/application/public/circle_detail_page_route_extra.dart';
 import 'package:quwoquan_app/service/user_service/persona_management/persona/application/public/user_profile_route_extra.dart';
@@ -27,6 +34,7 @@ class IntersectionNavAttribution {
     this.sourceRef = '',
     this.tagRefs = const <String>[],
     this.evidenceId = '',
+    this.cohort = '',
   });
 
   final String intersectionId;
@@ -35,14 +43,17 @@ class IntersectionNavAttribution {
   final String sourceRef;
   final List<String> tagRefs;
   final String evidenceId;
+
+  /// 云侧随 reason 下发的交集策略身份（IntersectionReason.cohort）；
+  /// 只在漏斗事件 intersectionCohort 中原样回传，不参与导航与展示。
+  final String cohort;
 }
 
 /// 导航埋点回调：把命中的 [IntersectionTarget] 与归因透传给展示面（通常接 tracker）。
-typedef IntersectionNavTrack =
-    void Function(
-      IntersectionTarget target,
-      IntersectionNavAttribution attribution,
-    );
+typedef IntersectionNavTrack = void Function(
+  IntersectionTarget target,
+  IntersectionNavAttribution attribution,
+);
 
 enum IntersectionActionDispatchStatus {
   opened,
@@ -55,7 +66,7 @@ enum IntersectionActionDispatchStatus {
 enum IntersectionActionUnavailableReason {
   none,
   startGatheringNavigationBindingMissing,
-  startGatheringTypedRequestUnsupported,
+  authContinuationOccupied,
 }
 
 class IntersectionActionDispatchResult {
@@ -68,6 +79,14 @@ class IntersectionActionDispatchResult {
   final IntersectionActionUnavailableReason unavailableReason;
 
   bool get didOpen => status == IntersectionActionDispatchStatus.opened;
+
+  /// DI 未注入约伴承接绑定属于配置错误，不是 REQ-005 授权的安全门降级；调用方回落前
+  /// 以 assert 暴露（与 main_app_shell 的续接口径一致），其余不可分发态照常优雅降级。
+  bool get isConfigurationFailure =>
+      status == IntersectionActionDispatchStatus.unavailable &&
+      unavailableReason ==
+          IntersectionActionUnavailableReason
+              .startGatheringNavigationBindingMissing;
 }
 
 /// Runtime composition for cross-object intersection navigation.
@@ -107,16 +126,8 @@ class IntersectionTargetNavigator {
   /// 共用此方法，端不再各自手写 `switch(kind) → context.push(...)` 复制导航逻辑。
   ///
   /// `actionTargetId` 为空时返回空 objectId 的 target，[resolvePath] 据此判定不可路由（优雅降级）。
-  static IntersectionTarget targetForReason(IntersectionReason reason) {
-    final objectKind = reason.objectKind.trim();
-    final routeId = routeIdForObjectKindWire(objectKind);
-    return IntersectionTarget(
-      objectType: objectTypeForTarget(objectKind: objectKind, routeId: routeId),
-      objectId: reason.actionTargetId.trim(),
-      objectKind: objectKind,
-      routeId: routeId,
-    );
-  }
+  static IntersectionTarget targetForReason(IntersectionReason reason) =>
+      targetForReasonObject(reason);
 
   /// 解析 [target] → codegen 路由 path；不可路由返回 null。
   ///
@@ -167,48 +178,11 @@ class IntersectionTargetNavigator {
   ///
   /// 上游 objectType 是开放词汇（每个垂类主页一个值），这里只回落到路由能区分的
   /// 少数几个桶；新增垂类由注册表 objectTypeBindings 承接，本方法无需改动。
+  /// 见 [wireObjectTypeForTarget]：端侧只保留这一份 objectType 派生。
   static String objectTypeForTarget({
     required String objectKind,
     required String routeId,
-  }) {
-    switch (routeId.trim()) {
-      case 'userProfile':
-        return 'user';
-      case 'circleDetail':
-        return 'circle';
-      case 'homepageDetail':
-        return 'homepage';
-      case 'gatheringDetail':
-        return 'gathering';
-      case 'workBrowser':
-      case 'postDetail':
-      case 'contentDetail':
-        return 'post';
-      case 'myIntersections':
-        return 'dimension';
-    }
-    switch (objectKind.trim()) {
-      case 'person':
-        return 'user';
-      case 'circle':
-        return 'circle';
-      case 'school':
-      case 'place':
-      case 'enterprise':
-      case 'route':
-      case 'photo_spot':
-      case 'gear':
-        return 'homepage';
-      case 'content':
-        return 'post';
-      case 'gathering':
-        return 'gathering';
-      case 'tag':
-        return 'tag';
-      default:
-        return '';
-    }
-  }
+  }) => wireObjectTypeForTarget(objectKind: objectKind, routeId: routeId);
 
   /// [target] 是否可点击跳转（用于 UI 决定是否赋予点击态）。
   bool canNavigate(IntersectionTarget? target, {String sourceRef = ''}) =>
@@ -269,6 +243,9 @@ class IntersectionTargetNavigator {
   /// - `message`：进入对方主页并直接拉起主页既有的「私信 / 打招呼」分流，陌生人
   ///   走 greeting 破冰状态机；target 非 person 时不执行，不退化成普通对象下钻；
   /// - 未登记 dispatch：fail-closed 返回 unsupported。
+  ///
+  /// [referralSource] 由展示面显式声明（首页卡 / 沉浸页 = organicFeed，对象页按宿主
+  /// kind，收件箱 = myIntersections）；navigator 不从 contextObjectTarget 反推来源。
   IntersectionActionDispatchResult openActionHint(
     BuildContext context,
     IntersectionActionHint hint, {
@@ -276,6 +253,7 @@ class IntersectionTargetNavigator {
     IntersectionNavAttribution? attribution,
     IntersectionReason? evidenceReason,
     IntersectionTarget? contextObjectTarget,
+    ReferralSource referralSource = ReferralSource.myIntersections,
   }) {
     switch (hint.dispatch.trim()) {
       case 'assistant':
@@ -307,6 +285,7 @@ class IntersectionTargetNavigator {
           attribution,
           evidenceReason,
           contextObjectTarget,
+          referralSource,
         );
       default:
         return const IntersectionActionDispatchResult(
@@ -381,7 +360,9 @@ class IntersectionTargetNavigator {
   ) {
     final target = hint.target;
     final userId = target?.objectId.trim() ?? '';
-    if (target == null || userId.isEmpty || !_isPersonTarget(target)) {
+    if (target == null ||
+        userId.isEmpty ||
+        !isPersonIntersectionTarget(target)) {
       return const IntersectionActionDispatchResult(
         IntersectionActionDispatchStatus.missingTarget,
       );
@@ -416,16 +397,6 @@ class IntersectionTargetNavigator {
     );
   }
 
-  bool _isPersonTarget(IntersectionTarget target) {
-    if (target.objectKind.trim() == 'person') {
-      return true;
-    }
-    if (target.objectType.trim() == 'user') {
-      return true;
-    }
-    return target.routeId.trim() == 'userProfile';
-  }
-
   /// 从云侧主句里取出该 target 的渲染名（如「老君山」）。
   ///
   /// 结伴承接页要用共同对象命名新群，名字必须与用户刚读到的那句话同源：主句 span
@@ -458,6 +429,7 @@ class IntersectionTargetNavigator {
     IntersectionNavAttribution? attribution,
     IntersectionReason? evidenceReason,
     IntersectionTarget? contextObjectTarget,
+    ReferralSource referralSource,
   ) {
     final target = hint.target;
     if (target == null || target.objectId.trim().isEmpty) {
@@ -468,7 +440,8 @@ class IntersectionTargetNavigator {
     // 双人邀约（1对1）：展示位上下文对象是人（如他人主页交集卡）时，
     // TA 即受邀者——创建预设收紧为容量 2 + 邀请制，发布后自动发出邀请。
     final invitee =
-        contextObjectTarget != null && _isPersonTarget(contextObjectTarget)
+        contextObjectTarget != null &&
+            isPersonIntersectionTarget(contextObjectTarget)
         ? contextObjectTarget.objectId.trim()
         : '';
     GatheringCreateNavigationBinding? rawBinding;
@@ -497,17 +470,15 @@ class IntersectionTargetNavigator {
     final evidenceSourceRef = evidenceReason?.kind.trim().isNotEmpty == true
         ? evidenceReason!.kind.trim()
         : attributedSourceRef;
+    final sourceRefs = _gatheringSourceReferences(
+      target: target,
+      contextObjectTarget: contextObjectTarget,
+      sourceRef: attributedSourceRef,
+    );
     final request = GatheringCreateNavigationRequest(
       actionKey: hint.actionKey.trim(),
       actionLabel: hint.label.trim(),
-      sourceRefs: <GatheringCreateSourceReference>[
-        GatheringCreateSourceReference(
-          sourceRef: attributedSourceRef,
-          objectId: target.objectId.trim(),
-          objectKind: target.objectKind.trim(),
-          routeId: target.routeId.trim(),
-        ),
-      ],
+      sourceRefs: sourceRefs,
       targetObject: GatheringCreateTargetObject(
         objectId: target.objectId.trim(),
         objectKind: target.objectKind.trim(),
@@ -531,7 +502,7 @@ class IntersectionTargetNavigator {
               const <String>[],
         ),
       ),
-      referralSource: ReferralSource.myIntersections,
+      referralSource: referralSource,
       inviteePersonaId: invitee,
       inviteeDisplayName: invitee.isEmpty || contextObjectTarget == null
           ? ''
@@ -540,9 +511,85 @@ class IntersectionTargetNavigator {
     if (attribution != null) {
       onTrack?.call(target, attribution);
     }
+    final container = ProviderScope.containerOf(context, listen: false);
+    if (!container.read(authSessionControllerProvider).isAuthenticated) {
+      final accepted = container
+          .read(authContinuationProvider.notifier)
+          .set(
+            StartGatheringContinuation<GatheringCreateNavigationRequest>(
+              request: request,
+            ),
+            ownerToken: _startGatheringContinuationOwner(request),
+          );
+      if (!accepted) {
+        return const IntersectionActionDispatchResult(
+          IntersectionActionDispatchStatus.unavailable,
+          unavailableReason:
+              IntersectionActionUnavailableReason.authContinuationOccupied,
+        );
+      }
+      unawaited(
+        requireLoginFromContainer(
+          container,
+          context,
+          AuthGateReason.startGathering,
+          dismissFallback: _safeContentFallback(contextObjectTarget),
+          dismissPolicy: LoginDismissPolicy.safeFallback,
+        ),
+      );
+      return const IntersectionActionDispatchResult(
+        IntersectionActionDispatchStatus.opened,
+      );
+    }
     unawaited(rawBinding(context, request));
     return const IntersectionActionDispatchResult(
       IntersectionActionDispatchStatus.opened,
     );
+  }
+
+  List<GatheringCreateSourceReference> _gatheringSourceReferences({
+    required IntersectionTarget target,
+    required IntersectionTarget? contextObjectTarget,
+    required String sourceRef,
+  }) {
+    final refs = <GatheringCreateSourceReference>[];
+    void add(IntersectionTarget value, String ref) {
+      if (value.objectId.trim().isEmpty ||
+          refs.any(
+            (existing) =>
+                existing.objectId == value.objectId.trim() &&
+                existing.objectKind == value.objectKind.trim(),
+          )) {
+        return;
+      }
+      refs.add(
+        GatheringCreateSourceReference(
+          sourceRef: ref,
+          objectId: value.objectId.trim(),
+          objectKind: value.objectKind.trim(),
+          routeId: value.routeId.trim(),
+        ),
+      );
+    }
+
+    if (contextObjectTarget != null) {
+      add(contextObjectTarget, 'content_context');
+    }
+    add(target, sourceRef);
+    return List<GatheringCreateSourceReference>.unmodifiable(refs);
+  }
+
+  String _startGatheringContinuationOwner(
+    GatheringCreateNavigationRequest request,
+  ) {
+    final intersectionId = request.intersection.intersectionId.trim();
+    final evidenceId = request.evidence.evidenceId.trim();
+    return 'intersection:start_gathering:${request.targetObject.objectKind.trim()}:'
+        '${request.targetObject.objectId.trim()}:$intersectionId:$evidenceId';
+  }
+
+  String _safeContentFallback(IntersectionTarget? contextObjectTarget) {
+    final path = resolvePath(contextObjectTarget);
+    return path ?? AppRoutePaths.home;
   }
 }

@@ -1,0 +1,188 @@
+{
+  "kind": "coExperiencedGathering",
+  "vertical": "general",
+  "dimension": "relationship",
+  "tagRefs": [],
+  "relationKind": "bridge",
+  "objectKind": "person",
+  "relationObjectId": "profile-target",
+  "strength": 1.0,
+  "primaryText": "你们一起参加过1次行动",
+  "primaryTextL10nKey": "intersection.statement.co_experienced_gathering.counted",
+  "displayBinding": "host_implicit",
+  "secondaryText": "",
+  "weightTier": "heavy",
+  "actionType": "view_object",
+  "actionTargetId": "profile-target",
+  "source": "gathering_shared_experience_events",
+  "intersectionId": "viewer:user:profile-target:coExperiencedGathering",
+  "intersectionClass": "fact",
+  "avatarUrl": "",
+  "displayName": "",
+  "confidenceLabel": "",
+  "modelReasonBucket": "",
+  "freshAt": "2026-08-12T12:00:00+00:00",
+  "expiresAt": "2026-09-11T12:00:00+00:00",
+  "intersectionPoints": [
+    {
+      "pointId": "profile-target:coExperiencedGathering",
+      "pointClass": "fact",
+      "dimension": "relationship",
+      "label": "共同经历",
+      "displayText": "共同经历",
+      "sourceRef": "coExperiencedGathering",
+      "visibility": "public",
+      "count": 1,
+      "sampleText": "",
+      "sampleAvatarUrls": [],
+      "sampleVisuals": []
+    }
+  ],
+  "pointSummarySnapshotId": "5d19a583a208700b5a6bc78a39cfec02dddadd3a35f8d4e3d24d07d2d25ea0e3",
+  "actorEvidenceTotalCount": 1,
+  "actorEvidenceCompleteness": "complete",
+  "actorEvidence": [
+    {
+      "actorId": "profile-target",
+      "displayName": "林清越",
+      "avatarUrl": "https://img/profile-target",
+      "relationLabel": "同行过的人",
+      "relationSourceRef": "persona_relationship",
+      "relationObjectId": "profile-target",
+      "relationObjectName": "林清越",
+      "sourcePointId": "profile-target:coExperiencedGathering",
+      "sourceRef": "coExperiencedGathering",
+      "actionSummaryText": "",
+      "likeCount": 0,
+      "commentCount": 0,
+      "shareCount": 0,
+      "privacyState": "visible",
+      "target": {
+        "objectType": "user",
+        "objectId": "profile-target",
+        "objectKind": "person",
+        "routeId": "userProfile"
+      },
+      "evidenceRank": 1,
+      "snapshotVersion": "current",
+      "sortKey": 1
+    }
+  ],
+  "factPointCount": 1,
+  "recommendedPointCount": 0,
+  "totalPointCount": 1,
+  "dimensionPointSummary": [],
+  "pointClassLabel": "事实交集",
+  "connectionSummary": "",
+  "lastRecommendedAt": "",
+  "seenAt": "",
+  "rankState": "fresh",
+  "primarySpans": [
+    {
+      "text": "你们一起参加过",
+      "role": "plain",
+      "target": null,
+      "visual": null
+    },
+    {
+      "text": "1",
+      "role": "count",
+      "target": null,
+      "visual": null
+    },
+    {
+      "text": "次行动",
+      "role": "plain",
+      "target": null,
+      "visual": null
+    }
+  ],
+  "sampleVisuals": [
+    {
+      "assetKind": "avatar",
+      "imageUrl": "https://img/profile-target",
+      "displayName": "林清越",
+      "target": {
+        "objectType": "user",
+        "objectId": "profile-target",
+        "objectKind": "person",
+        "routeId": "userProfile"
+      }
+    }
+  ],
+  "representativeActor": {
+    "actorId": "profile-target",
+    "displayName": "林清越",
+    "avatarUrl": "https://img/profile-target",
+    "relationLabel": "同行过的人",
+    "privacyState": "visible",
+    "target": {
+      "objectType": "user",
+      "objectId": "profile-target",
+      "objectKind": "person",
+      "routeId": "userProfile"
+    },
+    "evidenceRank": 1,
+    "snapshotVersion": "current"
+  },
+  "actionHints": [
+    {
+      "actionKey": "start_gathering",
+      "label": "发起聚集",
+      "target": {
+        "objectType": "user",
+        "objectId": "profile-target",
+        "objectKind": "person",
+        "routeId": "userProfile"
+      },
+      "isPrimary": true,
+      "priority": 1,
+      "actionTier": "heavy",
+      "requiredGates": [
+        "login",
+        "realName",
+        "minorMode",
+        "blocked",
+        "rateLimit"
+      ],
+      "dispatch": "gathering"
+    },
+    {
+      "actionKey": "message_person",
+      "label": "私信",
+      "target": {
+        "objectType": "user",
+        "objectId": "profile-target",
+        "objectKind": "person",
+        "routeId": "userProfile"
+      },
+      "isPrimary": false,
+      "priority": 2,
+      "actionTier": "heavy",
+      "requiredGates": [
+        "login",
+        "mutualConsent",
+        "blocked",
+        "rateLimit"
+      ],
+      "dispatch": "message"
+    }
+  ],
+  "evidenceRows": [],
+  "lifecycleState": "active",
+  "previousStrength": 0.0,
+  "strengthDelta": 1.0,
+  "edgeWeight": 1.0,
+  "iconKey": "experience",
+  "tone": "sage",
+  "typeVisual": null,
+  "objectVisual": null,
+  "timeBucket": "current",
+  "dedupeKey": "viewer:user:profile-target:coExperiencedGathering",
+  "anchorUserWeight": 1.0,
+  "mutualCount": 0,
+  "moment": "retrospective",
+  "subjectId": "viewer",
+  "subjectContext": "gathering:gathering-west-lake-walk",
+  "cohort": ""
+}

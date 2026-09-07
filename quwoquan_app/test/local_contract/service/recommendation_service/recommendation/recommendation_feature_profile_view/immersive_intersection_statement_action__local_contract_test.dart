@@ -1,3 +1,5 @@
+// spec_ref: specs/feature-tree/object-homepage-network/intersection-unified-experience/spec.md#sit-003.t1
+// spec_ref: specs/feature-tree/object-homepage-network/intersection-unified-experience/spec.md#sit-003.t3
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/presentation/immersive_intersection_statement.dart';
@@ -5,13 +7,9 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 import '../../../../../support/service/recommendation_service/recommendation/recommendation_feature_profile_view/intersection_fixtures.dart';
 
-/// 交集 CTA 一级化（intersection-unified-experience REQ-009 · 牵线搭桥 UX 总纲）：
-/// 沉浸单句尾部最多渲染一个主行动 pill——
-/// - 主行动选择走七触点共用口径 `primaryDisplayableIntersectionActionHint`
-///   （isPrimary 优先，其次 priority 最小；不可渲染 hint 全部丢弃）；
-/// - pill 文案只用云侧 `hint.label`，端不造行动文案；
-/// - 未提供 onActionHintTap（旧触点）或无可渲染 hint 时不出现 pill，
-///   保持「一句主句 + 一个主动作」上限，禁止第二动作。
+/// 交集行动后置（intersection-unified-experience REQ-009）：
+/// 沉浸首屏只渲染一条交集主句，不论 reason 是否携带 typed action hints。
+/// 行动只能在用户主动展开证据半屏后，由统一 resolver 选择最多一个 CTA。
 Widget _wrap(Widget child) {
   return CupertinoApp(
     home: CupertinoPageScaffold(child: Center(child: child)),
@@ -53,32 +51,7 @@ IntersectionActionHint _gatheringHint({
 }
 
 void main() {
-  testWidgets('gathering 主行动 → 单句尾部渲染一个可点 pill，文案为云侧 label', (
-    tester,
-  ) async {
-    IntersectionActionHint? tapped;
-    await tester.pumpWidget(
-      _wrap(
-        ImmersiveIntersectionStatement(
-          reason: _reason(actionHints: [_gatheringHint()]),
-          onActionHintTap: (hint) => tapped = hint,
-        ),
-      ),
-    );
-    expect(
-      find.byKey(const ValueKey('immersive-intersection-action')),
-      findsOneWidget,
-    );
-    expect(find.text('发起聚集'), findsOneWidget);
-
-    await tester.tap(
-      find.byKey(const ValueKey('immersive-intersection-action')),
-    );
-    expect(tapped, isNotNull);
-    expect(tapped!.actionKey, 'start_gathering');
-  });
-
-  testWidgets('未接 onActionHintTap 的旧触点 → 不渲染 pill', (tester) async {
+  testWidgets('携带 gathering 主行动的 reason 在首屏仍只显示主句', (tester) async {
     await tester.pumpWidget(
       _wrap(
         ImmersiveIntersectionStatement(
@@ -86,11 +59,13 @@ void main() {
         ),
       ),
     );
+
     expect(
       find.byKey(const ValueKey('immersive-intersection-action')),
       findsNothing,
     );
     expect(find.textContaining(_primaryText), findsOneWidget);
+    expect(find.text('发起聚集'), findsNothing);
   });
 
   testWidgets('无可渲染 hint（navigate 缺 target）→ 只有单句，无 pill', (tester) async {
@@ -106,7 +81,6 @@ void main() {
               ),
             ],
           ),
-          onActionHintTap: (_) {},
         ),
       ),
     );
@@ -117,7 +91,7 @@ void main() {
     expect(find.textContaining(_primaryText), findsOneWidget);
   });
 
-  testWidgets('多个可渲染 hint → 只渲染一个主行动（isPrimary 优先）', (tester) async {
+  testWidgets('多个可渲染 hint 也不会在沉浸首屏提前暴露行动', (tester) async {
     await tester.pumpWidget(
       _wrap(
         ImmersiveIntersectionStatement(
@@ -139,15 +113,16 @@ void main() {
               _gatheringHint(),
             ],
           ),
-          onActionHintTap: (_) {},
         ),
       ),
     );
+
     expect(
       find.byKey(const ValueKey('immersive-intersection-action')),
-      findsOneWidget,
+      findsNothing,
     );
-    expect(find.text('发起聚集'), findsOneWidget);
+    expect(find.textContaining(_primaryText), findsOneWidget);
+    expect(find.text('发起聚集'), findsNothing);
     expect(find.text('关注对象'), findsNothing);
   });
 }

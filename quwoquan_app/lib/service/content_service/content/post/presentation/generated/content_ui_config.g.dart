@@ -277,19 +277,6 @@ class ContentUIConfig {
       order: 1,
     ),
     HomeChannelConfig(
-      id: "featured",
-      labelKey: "home_tab_featured",
-      template: "premium_immersive",
-      layoutTemplate: "immersivePremiumStream",
-      phoneColumns: 1,
-      supportsFullSpanModules: true,
-      intersectionModulePolicy: "inlineOnly",
-      contentCardPolicy: "premiumImmersive",
-      feedQuery: <String, String>{"channel": "premium"},
-      moodCopyKey: "home_mood_recommend",
-      order: 2,
-    ),
-    HomeChannelConfig(
       id: "campus",
       labelKey: "home_tab_campus",
       template: "single_column_multiform",
@@ -300,7 +287,7 @@ class ContentUIConfig {
       contentCardPolicy: "richMultiForm",
       feedQuery: <String, String>{"channel": "campus"},
       moodCopyKey: "home_mood_campus",
-      order: 3,
+      order: 2,
     ),
     HomeChannelConfig(
       id: "travel",
@@ -309,11 +296,11 @@ class ContentUIConfig {
       layoutTemplate: "singleColumnMultiForm",
       phoneColumns: 1,
       supportsFullSpanModules: false,
-      intersectionModulePolicy: "spotlightSegment",
+      intersectionModulePolicy: "inlineOnly",
       contentCardPolicy: "richMultiForm",
       feedQuery: <String, String>{"channel": "travel"},
       moodCopyKey: "home_mood_travel",
-      order: 4,
+      order: 3,
     ),
     HomeChannelConfig(
       id: "photography",
@@ -326,7 +313,7 @@ class ContentUIConfig {
       contentCardPolicy: "richMultiForm",
       feedQuery: <String, String>{"channel": "photography"},
       moodCopyKey: "home_mood_photography",
-      order: 5,
+      order: 4,
     ),
     HomeChannelConfig(
       id: "tech",
@@ -339,7 +326,7 @@ class ContentUIConfig {
       contentCardPolicy: "richMultiForm",
       feedQuery: <String, String>{"channel": "tech"},
       moodCopyKey: "home_mood_tech",
-      order: 6,
+      order: 5,
     ),
     HomeChannelConfig(
       id: "car",
@@ -352,7 +339,7 @@ class ContentUIConfig {
       contentCardPolicy: "richMultiForm",
       feedQuery: <String, String>{"channel": "car"},
       moodCopyKey: "home_mood_car",
-      order: 7,
+      order: 6,
     ),
   ];
 

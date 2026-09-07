@@ -48,6 +48,13 @@ enum ContentErrorCode {
   ),
   internalError('CONTENT.SYSTEM.internal_error', 'surface', 0, 500),
   upstreamTimeout('CONTENT.MIDDLEWARE.upstream_timeout', 'retry', 10, 504),
+  releaseCandidateMissing(
+    'CONTENT.USER.release_candidate_missing',
+    'retry',
+    0,
+    0,
+  ),
+  releaseCandidateDrift('CONTENT.USER.release_candidate_drift', 'retry', 0, 0),
   commentNotFound('CONTENT.USER.comment_not_found', 'surface', 0, 404),
   commentForbiddenDelete(
     'CONTENT.USER.comment_forbidden_delete',
@@ -328,6 +335,10 @@ enum ContentErrorCode {
         return ContentErrorCode.internalError;
       case 'CONTENT.MIDDLEWARE.upstream_timeout':
         return ContentErrorCode.upstreamTimeout;
+      case 'CONTENT.USER.release_candidate_missing':
+        return ContentErrorCode.releaseCandidateMissing;
+      case 'CONTENT.USER.release_candidate_drift':
+        return ContentErrorCode.releaseCandidateDrift;
       case 'CONTENT.USER.comment_not_found':
         return ContentErrorCode.commentNotFound;
       case 'CONTENT.USER.comment_forbidden_delete':
@@ -454,6 +465,8 @@ class ContentErrorMessages {
     ContentErrorCode.requiredDependencyUnavailable: '内容服务依赖暂时不可用，请稍后重试',
     ContentErrorCode.internalError: '服务异常，请稍后重试',
     ContentErrorCode.upstreamTimeout: '内容服务响应超时，请稍后重试',
+    ContentErrorCode.releaseCandidateMissing: '发布候选不存在或不完整，请重新导入',
+    ContentErrorCode.releaseCandidateDrift: '发布候选与不可变清单不一致，请重新导入',
     ContentErrorCode.commentNotFound: '评论不存在或已删除',
     ContentErrorCode.commentForbiddenDelete: '无权删除此评论',
     ContentErrorCode.commentPinForbidden: '仅内容作者可置顶评论',
@@ -533,6 +546,10 @@ class ContentErrorMessages {
     ContentErrorCode.internalError: 'Service error, please try again later',
     ContentErrorCode.upstreamTimeout:
         'The content service timed out, please try again later',
+    ContentErrorCode.releaseCandidateMissing:
+        'The release candidate is missing or incomplete',
+    ContentErrorCode.releaseCandidateDrift:
+        'The release candidate differs from the immutable manifest',
     ContentErrorCode.commentNotFound: 'Comment not found or deleted',
     ContentErrorCode.commentForbiddenDelete:
         'Not allowed to delete this comment',

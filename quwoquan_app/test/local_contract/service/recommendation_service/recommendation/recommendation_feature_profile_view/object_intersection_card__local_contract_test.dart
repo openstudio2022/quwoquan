@@ -1,5 +1,15 @@
+// spec_ref: specs/feature-tree/object-homepage-network/intersection-unified-experience/spec.md#sit-008
+// spec_ref: specs/feature-tree/object-homepage-network/intersection-unified-experience/spec.md#sit-002.t2
+// spec_ref: specs/feature-tree/object-homepage-network/intersection-unified-experience/spec.md#sit-003.t3
+// spec_ref: specs/feature-tree/object-homepage-network/intersection-unified-experience/spec.md#sit-003.t5
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:flutter/cupertino.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import '../../../../../support/service/recommendation_service/recommendation/recommendation_feature_profile_view/intersection_fixtures.dart';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/presentation/intersection_visual_cluster.dart';
 import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/presentation/object_intersection_card.dart';
@@ -445,5 +455,61 @@ void main() {
       // 无可执行行动 → auxiliaryLine 回落安静共同证据副句（不留空、不造死 pill）。
       expect(find.text('有可查看的共同证据'), findsOneWidget);
     });
+
+    testWidgets('经历交集跨层 golden 在对方主页宿主下可见且主行动是再约（指向对方）', (tester) async {
+      // 真实 materializer 产出（DEC-003：主对象是对方本人，行动经 subjectContext 下发）；
+      // 宿主 = 对方主页，host_implicit 校验必须成立，重行动展开后只显示唯一 CTA。
+      final reason = IntersectionReason.fromWire(
+        jsonDecode(_canonicalExperienceFixtureFile().readAsStringSync())
+            as Map<String, Object?>,
+      );
+      IntersectionActionHint? tapped;
+      final card = ObjectIntersectionCard.fromReasons(
+        title: ObjectHomepageText.objectMyIntersectionsTitle,
+        reasons: <IntersectionReason>[reason],
+        isDark: false,
+        contextObjectTarget: intersectionTargetFixture(
+          objectType: 'user',
+          objectId: reason.actionTargetId,
+          objectKind: 'person',
+          routeId: 'userProfile',
+        ),
+        onActionHintTap: (_, hint) => tapped = hint,
+      );
+      expect(card, isNotNull);
+      // golden 携带对方本人为具名代表人（头像可见），头像组件依赖 media provider。
+      await tester.pumpWidget(ProviderScope(child: CupertinoApp(home: card!)));
+
+      expect(find.textContaining(reason.primaryText), findsOneWidget);
+      // start_gathering 是重行动：用户主动展开证据后才揭示。
+      await tester.tap(find.text(DiscoveryFeedText.intersectionExpandMore));
+      await tester.pumpAndSettle();
+      final primaryHint = reason.actionHints
+          .where((hint) => hint.isPrimary)
+          .single;
+      expect(find.text(primaryHint.label), findsOneWidget);
+      await tester.tap(find.text(primaryHint.label));
+      await tester.pump();
+      expect(tapped?.actionKey, 'start_gathering');
+      expect(tapped?.target?.objectType, 'user');
+      expect(tapped?.target?.objectId, reason.actionTargetId);
+    });
   });
+}
+
+File _canonicalExperienceFixtureFile() {
+  final candidates = <File>[
+    File(
+      '../quwoquan_service/contracts/metadata/_shared/test_fixtures/recommendation/intersection/co_experienced_gathering_reason.json',
+    ),
+    File(
+      'quwoquan_service/contracts/metadata/_shared/test_fixtures/recommendation/intersection/co_experienced_gathering_reason.json',
+    ),
+  ];
+  for (final candidate in candidates) {
+    if (candidate.existsSync()) return candidate;
+  }
+  throw StateError(
+    'co_experienced_gathering_reason.json not found (cwd=${Directory.current.path})',
+  );
 }

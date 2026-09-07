@@ -436,6 +436,18 @@ func (r *failVerifierPatchRepository) LoadByRequest(
 	return cloneVerifierRepairRun(run)
 }
 
+func (r *failVerifierPatchRepository) LoadActiveBySession(
+	ctx context.Context,
+	userID string,
+	sessionID string,
+) (runruntime.Run, error) {
+	run, err := r.memoryRunRepository.LoadActiveBySession(ctx, userID, sessionID)
+	if err != nil {
+		return runruntime.Run{}, err
+	}
+	return cloneVerifierRepairRun(run)
+}
+
 func (r *failVerifierPatchRepository) Commit(
 	ctx context.Context,
 	expectedRevision int64,

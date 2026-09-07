@@ -512,9 +512,8 @@ class _BucketGroupCard extends StatelessWidget {
                 ),
                 child: Container(
                   height: AppSpacing.hairline,
-                  color: AppColors.iosSeparator(
-                    context,
-                  ).withValues(alpha: 0.30),
+                  color: AppColors.iosSeparator(context)
+                      .withValues(alpha: 0.30),
                 ),
               ),
           ],

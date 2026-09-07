@@ -25,8 +25,11 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	. "quwoquan_service/services/content-service/internal/content/post/adapters/inbound/http"
 	"strconv"
 	"strings"
@@ -40,6 +43,7 @@ import (
 	behaviorapp "quwoquan_service/services/content-service/internal/content/content_behavior_fact/application"
 	behaviormodel "quwoquan_service/services/content-service/internal/content/content_behavior_fact/domain/model"
 	deliveryredis "quwoquan_service/services/content-service/internal/content/feed_delivery_page/infrastructure/redis"
+	intersectionapp "quwoquan_service/services/content-service/internal/content/intersection_visit_state/application/intersection"
 	postapp "quwoquan_service/services/content-service/internal/content/post/application"
 	feedapp "quwoquan_service/services/content-service/internal/content/post/application/feed"
 	postappports "quwoquan_service/services/content-service/internal/content/post/application/ports"
@@ -126,6 +130,58 @@ func (store *localFootprintStore) ListUserFootprint(
 		}
 	}
 	return result, nil
+}
+
+type localCanonicalIntersectionReader struct {
+	reasons []intersectionapp.IntersectionReasonView
+	failure error
+	calls   int
+}
+
+func (reader *localCanonicalIntersectionReader) Feed(
+	context.Context,
+	string,
+	string,
+	int,
+) ([]intersectionapp.IntersectionReasonView, error) {
+	reader.calls++
+	if reader.failure != nil {
+		return nil, reader.failure
+	}
+	return append([]intersectionapp.IntersectionReasonView(nil), reader.reasons...), nil
+}
+
+type localViewerReactionReader struct {
+	liked bool
+}
+
+func (reader localViewerReactionReader) ReadPostLikedFlags(
+	_ context.Context,
+	_ string,
+	postIDs []string,
+) (map[string]bool, error) {
+	flags := make(map[string]bool, len(postIDs))
+	for _, postID := range postIDs {
+		flags[postID] = reader.liked
+	}
+	return flags, nil
+}
+
+func canonicalCoWishlistedReason(t *testing.T) intersectionapp.IntersectionReasonView {
+	t.Helper()
+	path := filepath.Join(
+		feedsupport.RepositoryRoot(),
+		"quwoquan_service/contracts/metadata/_shared/test_fixtures/recommendation/intersection/co_wishlisted_entity_reason.json",
+	)
+	encoded, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read canonical coWishlistedEntity materializer fixture: %v", err)
+	}
+	var reason intersectionapp.IntersectionReasonView
+	if err := json.Unmarshal(encoded, &reason); err != nil {
+		t.Fatalf("decode canonical coWishlistedEntity materializer fixture: %v", err)
+	}
+	return reason
 }
 
 type localWishlistStateReader struct {
@@ -410,6 +466,131 @@ func TestFeedAndPostEndpoints(t *testing.T) {
 	}
 	if _, privateStorageID := postBody["_id"]; privateStorageID {
 		t.Fatalf("GetPost must not expose storage _id as a client wire field: %+v", postBody)
+	}
+}
+
+func TestGetPostDecoratesCanonicalCoWishlistedReasonAndPreservesViewerMediaAnchors(t *testing.T) {
+	now := time.Date(2026, time.August, 12, 12, 0, 0, 0, time.UTC)
+	postID := "post-canonical-co-wishlist"
+	mediaURL := "media/video/s/video-primary-0001/post/post-canonical-co-wishlist/v1/source.mp4"
+	detail := postports.PostDetailSlice{
+		PostID: postports.NewPostID(postID), ContentType: postports.ContentType("video"),
+		ContentIdentity:   postports.ContentIdentity("work"),
+		AuthorPersonaID:   postports.NewPersonaID("author-canonical"),
+		AuthorDisplayName: "内容作者", Title: "西湖同行记录", Body: "从共同想去到一起出发。",
+		MediaAssetIDs: []string{"video-primary-0001"}, MediaURLs: []string{mediaURL},
+		MediaItems: []postports.PostMediaItemSlice{{
+			Kind: "video", MediaAssetID: "video-primary-0001", MediaAssetVersion: 6,
+			URL: mediaURL, CoverURL: "media/image/s/cover/post/post-canonical-co-wishlist/v1/cover.png",
+			DurationMS: 45000, Width: 1280, Height: 720,
+		}},
+		CoverURL:     "media/image/s/cover/post/post-canonical-co-wishlist/v1/cover.png",
+		ThumbnailURL: "media/image/s/cover/post/post-canonical-co-wishlist/v1/cover.png",
+		VideoURL:     mediaURL, Width: 1280, Height: 720, DurationMS: 45000,
+		PrimaryHomepageID: "homepage-west-lake", PrimaryHomepageType: "place",
+		GatheringRef: "gathering-west-lake", Status: postports.PostStatus("published"),
+		Visibility: postports.PostVisibility("public"), ModerationStatus: "approved",
+		LikeCount: 11, CommentCount: 3, ShareCount: 2, ViewCount: 101,
+		CreatedAt: now.Add(-time.Hour), UpdatedAt: now, PublishedAt: now.Add(-time.Hour),
+	}
+	postQueryService := postapp.NewPostQueryFacade(postapp.PostQueryDependencies{
+		Detail: sourceAttributionPostDetailReader{details: map[postports.PostID]postports.PostDetailSlice{
+			postports.NewPostID(postID): detail,
+		}},
+	})
+	handler := NewContentHandler(
+		nil, nil, postQueryService, nil, nil, nil, nil,
+		WithViewerReactionReader(localViewerReactionReader{liked: true}),
+		WithPostIntersectionReader(&localCanonicalIntersectionReader{
+			reasons: []intersectionapp.IntersectionReasonView{canonicalCoWishlistedReason(t)},
+		}),
+	).Routes()
+
+	request := httptest.NewRequest(http.MethodGet, "/content/posts/"+postID, nil)
+	setActorHeaders(request, "account-viewer", "viewer")
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("GetPost status=%d body=%s", recorder.Code, recorder.Body.String())
+	}
+	var wire struct {
+		PostID              string                                   `json:"postId"`
+		ViewerLiked         *bool                                    `json:"viewerLiked"`
+		PrimaryHomepageID   string                                   `json:"primaryHomepageId"`
+		PrimaryHomepageType string                                   `json:"primaryHomepageType"`
+		GatheringRef        string                                   `json:"gatheringRef"`
+		MediaItems          []postports.PostMediaItemSlice           `json:"mediaItems"`
+		IntersectionReasons []intersectionapp.IntersectionReasonView `json:"intersectionReasons"`
+	}
+	if err := json.Unmarshal(recorder.Body.Bytes(), &wire); err != nil {
+		t.Fatalf("decode GetPost response: %v", err)
+	}
+	if wire.PostID != postID || wire.ViewerLiked == nil || !*wire.ViewerLiked ||
+		wire.PrimaryHomepageID != "homepage-west-lake" || wire.PrimaryHomepageType != "place" ||
+		wire.GatheringRef != "gathering-west-lake" {
+		t.Fatalf("GetPost viewer/entity/gathering anchors drifted: %+v", wire)
+	}
+	if len(wire.MediaItems) != 1 || wire.MediaItems[0].MediaAssetID != "video-primary-0001" ||
+		wire.MediaItems[0].URL != mediaURL || wire.MediaItems[0].DurationMS != 45000 {
+		t.Fatalf("GetPost media projection drifted: %+v", wire.MediaItems)
+	}
+	if len(wire.IntersectionReasons) != 1 {
+		t.Fatalf("GetPost must attach one canonical reason: %+v", wire.IntersectionReasons)
+	}
+	reason := wire.IntersectionReasons[0]
+	if reason.Kind != "coWishlistedEntity" || reason.DisplayBinding != intersectionapp.DisplayBindingExplicitLink ||
+		reason.SubjectContext != "homepage:homepage-west-lake" || reason.ActionTargetID != "homepage-west-lake" ||
+		len(reason.PrimarySpans) != 2 || reason.PrimarySpans[1].Target == nil ||
+		reason.PrimarySpans[1].Target.RouteID != "homepageDetail" || len(reason.ActionHints) < 1 || !reason.ActionHints[0].IsPrimary ||
+		reason.ActionHints[0].ActionKey != "start_gathering" || reason.ActionHints[0].Dispatch != "gathering" ||
+		reason.ActionHints[0].Target == nil || reason.ActionHints[0].Target.ObjectID != "homepage-west-lake" {
+		t.Fatalf("GetPost rewrote canonical Recommendation reason: %+v", reason)
+	}
+}
+
+// 交集读面失败仍按既定纪律降级返回 200，但必须真正走过失败分支：
+// 不得把读失败当成「已附着空结果」，也不得让它变成请求级错误。
+func TestGetPostIntersectionReadFailureDegradesWithoutClaimingEmptyAttachment(t *testing.T) {
+	now := time.Date(2026, time.August, 12, 12, 0, 0, 0, time.UTC)
+	postID := "post-intersection-read-failure"
+	detail := postports.PostDetailSlice{
+		PostID: postports.NewPostID(postID), ContentType: postports.ContentType("image"),
+		ContentIdentity:   postports.ContentIdentity("work"),
+		AuthorPersonaID:   postports.NewPersonaID("author-canonical"),
+		AuthorDisplayName: "内容作者", Title: "西湖同行记录",
+		PrimaryHomepageID: "homepage-west-lake", PrimaryHomepageType: "place",
+		Status: postports.PostStatus("published"), Visibility: postports.PostVisibility("public"),
+		ModerationStatus: "approved", CreatedAt: now.Add(-time.Hour), UpdatedAt: now,
+		PublishedAt: now.Add(-time.Hour),
+	}
+	postQueryService := postapp.NewPostQueryFacade(postapp.PostQueryDependencies{
+		Detail: sourceAttributionPostDetailReader{details: map[postports.PostID]postports.PostDetailSlice{
+			postports.NewPostID(postID): detail,
+		}},
+	})
+	reader := &localCanonicalIntersectionReader{failure: errors.New("recommendation intersection read unavailable")}
+	handler := NewContentHandler(
+		nil, nil, postQueryService, nil, nil, nil, nil,
+		WithPostIntersectionReader(reader),
+	).Routes()
+
+	request := httptest.NewRequest(http.MethodGet, "/content/posts/"+postID, nil)
+	setActorHeaders(request, "account-viewer", "viewer")
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("交集读面失败不得升级为请求错误: status=%d body=%s", recorder.Code, recorder.Body.String())
+	}
+	if reader.calls != 1 {
+		t.Fatalf("交集读面失败分支必须被真实执行一次，实际调用 %d 次", reader.calls)
+	}
+	var wire map[string]any
+	if err := json.Unmarshal(recorder.Body.Bytes(), &wire); err != nil {
+		t.Fatalf("decode GetPost response: %v", err)
+	}
+	if _, attached := wire["intersectionReasons"]; attached {
+		t.Fatalf("读面失败时不得下发交集字段: %+v", wire["intersectionReasons"])
 	}
 }
 

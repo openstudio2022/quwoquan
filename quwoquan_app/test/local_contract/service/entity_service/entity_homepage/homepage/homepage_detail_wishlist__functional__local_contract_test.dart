@@ -8,10 +8,11 @@ import 'package:quwoquan_app/runtime/shell/navigation/generated/app_ui_surfaces.
 import 'package:quwoquan_app/service/entity_service/entity_homepage/homepage/application/public/homepage_view_data.dart';
 import 'package:quwoquan_app/service/content_service/content/content_behavior_fact/application/public/content_behavior_repository.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/content_repository_contract.dart';
+
 import '../../../../../support/service/content_service/content/content_behavior_fact/recording_content_behavior_repository.dart';
 import '../../../../../support/service/recommendation_service/recommendation/recommendation_feature_profile_view/intersection_repository_typed_double.dart';
 import '../../../../../support/service/entity_service/entity_homepage/homepage/homepage_test_adapter.dart';
-import '../../../../../support/runtime/homepage_source_cards_boundary_overrides.dart';
+
 import 'package:quwoquan_app/service/user_service/persona_management/persona/application/public/persona_management_view_data.dart';
 import 'package:quwoquan_app/design_system/object_page/profile_ios_components.dart';
 import 'package:quwoquan_app/service/content_service/content/content_behavior_fact/application/content_behavior_tracker.dart';
@@ -72,7 +73,6 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
-          ...homepageSourceCardsBoundaryOverrides(),
           behaviorRepositoryProvider.overrideWithValue(
             RecordingContentBehaviorRepository(),
           ),
@@ -171,7 +171,6 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
-          ...homepageSourceCardsBoundaryOverrides(),
           behaviorRepositoryProvider.overrideWithValue(
             RecordingContentBehaviorRepository(),
           ),
@@ -219,7 +218,6 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
-          ...homepageSourceCardsBoundaryOverrides(),
           behaviorRepositoryProvider.overrideWithValue(
             RecordingContentBehaviorRepository(),
           ),

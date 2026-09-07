@@ -116,6 +116,9 @@ func (r *MongoRunRepository) commit(
 		}
 		if expectedRevision == 0 {
 			if _, insertErr := r.runs.InsertOne(txCtx, document); insertErr != nil {
+				if duplicateIndex(insertErr, "uq_runs_active_session") {
+					return nil, runruntime.ErrActiveRunConflict
+				}
 				if mongo.IsDuplicateKeyError(insertErr) {
 					return nil, runruntime.ErrRevisionConflict
 				}
@@ -128,6 +131,9 @@ func (r *MongoRunRepository) commit(
 				document,
 			)
 			if updateErr != nil {
+				if duplicateIndex(updateErr, "uq_runs_active_session") {
+					return nil, runruntime.ErrActiveRunConflict
+				}
 				return nil, updateErr
 			}
 			if result.MatchedCount != 1 {
@@ -203,6 +209,7 @@ func (r *MongoRunRepository) commit(
 	})
 	if err != nil {
 		if errors.Is(err, runruntime.ErrRevisionConflict) ||
+			errors.Is(err, runruntime.ErrActiveRunConflict) ||
 			errors.Is(err, runruntime.ErrExecutionFenced) {
 			return err
 		}
@@ -281,16 +288,17 @@ func normalizeCommit(
 		return runDocument{}, nil, runruntime.ErrInvalidRun
 	}
 	document := runDocument{
-		ID:              runID,
-		UserID:          run.UserID,
-		PersonaID:       run.PersonaID,
-		SessionID:       run.SessionID,
-		ClientRequestID: run.ClientRequestID,
-		Revision:        run.Revision,
-		State:           run.State.WireName(),
-		Snapshot:        run,
-		CreatedAt:       run.CreatedAt.UTC(),
-		UpdatedAt:       run.UpdatedAt.UTC(),
+		ID:               runID,
+		UserID:           run.UserID,
+		PersonaID:        run.PersonaID,
+		SessionID:        run.SessionID,
+		ActiveSessionKey: activeSessionKey(run),
+		ClientRequestID:  run.ClientRequestID,
+		Revision:         run.Revision,
+		State:            run.State.WireName(),
+		Snapshot:         run,
+		CreatedAt:        run.CreatedAt.UTC(),
+		UpdatedAt:        run.UpdatedAt.UTC(),
 	}
 	normalized := make([]journalDocument, 0, len(events))
 	var previousSequence int64
@@ -356,6 +364,32 @@ func normalizeCommandReceipt(
 		Revision:      receipt.Revision,
 		CreatedAt:     receipt.CreatedAt.UTC(),
 	}, nil
+}
+
+func activeSessionKey(run runruntime.Run) string {
+	if !activeRunState(run.State.WireName()) {
+		return ""
+	}
+	return strings.TrimSpace(run.SessionID)
+}
+
+func activeRunState(state string) bool {
+	switch strings.TrimSpace(state) {
+	case "accepted", "orienting", "planning", "executing", "observing",
+		"reflecting", "checkpointing", "waiting_user", "waiting_approval",
+		"waiting_external", "paused", "synthesizing", "verifying":
+		return true
+	default:
+		return false
+	}
+}
+
+func duplicateIndex(err error, indexName string) bool {
+	if !mongo.IsDuplicateKeyError(err) {
+		return false
+	}
+	var serverError mongo.ServerError
+	return errors.As(err, &serverError) && serverError.HasErrorMessage(indexName)
 }
 
 func queueRunnable(state string) bool {

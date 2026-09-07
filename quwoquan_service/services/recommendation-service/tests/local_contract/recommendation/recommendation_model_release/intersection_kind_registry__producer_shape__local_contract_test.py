@@ -46,6 +46,8 @@ class IntersectionKindRegistryProducerShapeTest(unittest.TestCase):
 
     def valid_shapes(self) -> dict:
         return {
+            # outputObjectKinds 与 outputKinds 各自登记的 objectKind 交叉校验需要 kinds 本体。
+            "kinds": [{"kind": "coVisitedEntity", "objectKind": "place"}],
             "factProducerShapes": {
                 "declared_visit": {
                     "visibility": "intersection",
@@ -71,6 +73,17 @@ class IntersectionKindRegistryProducerShapeTest(unittest.TestCase):
             registered_kinds={"coVisitedEntity"},
         )
         self.assertEqual(set(shapes), {"declared_visit", "capture_facts"})
+
+    def test_intersection_shape_object_kinds_must_match_its_kinds(self) -> None:
+        # 生产者 shape 声明的主对象 kind 与 kind 本体不一致（例如经历交集主对象是人却登记 gathering）时阻断。
+        data = copy.deepcopy(self.valid_shapes())
+        data["factProducerShapes"]["declared_visit"]["outputObjectKinds"] = ["gathering"]
+        with self.assertRaises(SystemExit):
+            self.verifier.validate_fact_producer_shapes(
+                data,
+                object_kinds={"place", "gathering"},
+                registered_kinds={"coVisitedEntity"},
+            )
 
     def test_recommendation_only_shape_cannot_emit_intersection_kind(self) -> None:
         data = copy.deepcopy(self.valid_shapes())

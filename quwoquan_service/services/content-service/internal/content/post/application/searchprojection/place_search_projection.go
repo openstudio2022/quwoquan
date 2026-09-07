@@ -24,11 +24,17 @@ type PlaceRef struct {
 // place id, carrying every post that references it. It is a derived read model
 // over posts (posts remain the write truth source); the place store materializes
 // it and the place projector keeps it + the unified ES index in sync.
+//
+// Version 是 place_snapshots 记录自身的单调版本：每次引用集合变更（增删引用、
+// 全量重建、退休）都由存储原子递增。它是 location.place 搜索文档的
+// sourceVersion（DEC-002）；一个地点即使失去全部引用也只会被标记为已退休而
+// 不会被物理删除，这样版本序列不会在再次被引用时从头开始。
 type PlaceSnapshot struct {
 	PlaceID    string
 	Name       string
 	Geo        *rtsearch.GeoPoint
 	RefPostIDs []string
+	Version    int64
 }
 
 // placeGeohashPrecision is the coarse geohash length (~±2.4km cells) mixed into

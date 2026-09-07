@@ -1,0 +1,199 @@
+{
+  "kind": "coWishlistedEntity",
+  "vertical": "general",
+  "dimension": "location",
+  "tagRefs": [],
+  "relationKind": "bridge",
+  "objectKind": "place",
+  "relationObjectId": "homepage-west-lake",
+  "strength": 1.0,
+  "primaryText": "你们都想去西湖",
+  "primaryTextL10nKey": "intersection.statement.co_wishlisted_entity",
+  "displayBinding": "explicit_link",
+  "secondaryText": "",
+  "weightTier": "heavy",
+  "actionType": "view_object",
+  "actionTargetId": "homepage-west-lake",
+  "source": "entity_wishlist_events",
+  "intersectionId": "viewer:user:profile-target:coWishlistedEntity",
+  "intersectionClass": "fact",
+  "avatarUrl": "",
+  "displayName": "",
+  "confidenceLabel": "",
+  "modelReasonBucket": "",
+  "freshAt": "2026-08-12T12:00:00+00:00",
+  "expiresAt": "2026-08-26T12:00:00+00:00",
+  "intersectionPoints": [
+    {
+      "pointId": "profile-target:coWishlistedEntity",
+      "pointClass": "fact",
+      "dimension": "location",
+      "label": "共同想去",
+      "displayText": "共同想去",
+      "sourceRef": "coWishlistedEntity",
+      "visibility": "public",
+      "count": 1,
+      "sampleText": "西湖",
+      "sampleAvatarUrls": [],
+      "sampleVisuals": []
+    }
+  ],
+  "pointSummarySnapshotId": "2d51c162a277ec1799b7d480d841a72a671d98332dc5fe4bbd47bc8f9e7d2107",
+  "actorEvidenceTotalCount": 1,
+  "actorEvidenceCompleteness": "complete",
+  "actorEvidence": [
+    {
+      "actorId": "profile-target",
+      "displayName": "林清越",
+      "avatarUrl": "https://img/profile-target",
+      "relationLabel": "也想去的人",
+      "relationSourceRef": "persona_relationship",
+      "relationObjectId": "profile-target",
+      "relationObjectName": "林清越",
+      "sourcePointId": "profile-target:coWishlistedEntity",
+      "sourceRef": "coWishlistedEntity",
+      "actionSummaryText": "",
+      "likeCount": 0,
+      "commentCount": 0,
+      "shareCount": 0,
+      "privacyState": "visible",
+      "target": {
+        "objectType": "user",
+        "objectId": "profile-target",
+        "objectKind": "person",
+        "routeId": "userProfile"
+      },
+      "evidenceRank": 1,
+      "snapshotVersion": "current",
+      "sortKey": 1
+    }
+  ],
+  "factPointCount": 1,
+  "recommendedPointCount": 0,
+  "totalPointCount": 1,
+  "dimensionPointSummary": [],
+  "pointClassLabel": "事实交集",
+  "connectionSummary": "",
+  "lastRecommendedAt": "",
+  "seenAt": "",
+  "rankState": "fresh",
+  "primarySpans": [
+    {
+      "text": "你们都想去",
+      "role": "plain",
+      "target": null,
+      "visual": null
+    },
+    {
+      "text": "西湖",
+      "role": "object",
+      "target": {
+        "objectType": "homepage",
+        "objectId": "homepage-west-lake",
+        "objectKind": "place",
+        "routeId": "homepageDetail"
+      },
+      "visual": null
+    }
+  ],
+  "sampleVisuals": [
+    {
+      "assetKind": "avatar",
+      "imageUrl": "https://img/profile-target",
+      "displayName": "林清越",
+      "target": {
+        "objectType": "user",
+        "objectId": "profile-target",
+        "objectKind": "person",
+        "routeId": "userProfile"
+      }
+    }
+  ],
+  "representativeActor": {
+    "actorId": "profile-target",
+    "displayName": "林清越",
+    "avatarUrl": "https://img/profile-target",
+    "relationLabel": "也想去的人",
+    "privacyState": "visible",
+    "target": {
+      "objectType": "user",
+      "objectId": "profile-target",
+      "objectKind": "person",
+      "routeId": "userProfile"
+    },
+    "evidenceRank": 1,
+    "snapshotVersion": "current"
+  },
+  "actionHints": [
+    {
+      "actionKey": "start_gathering",
+      "label": "发起聚集",
+      "target": {
+        "objectType": "homepage",
+        "objectId": "homepage-west-lake",
+        "objectKind": "place",
+        "routeId": "homepageDetail"
+      },
+      "isPrimary": true,
+      "priority": 1,
+      "actionTier": "heavy",
+      "requiredGates": [
+        "login",
+        "realName",
+        "minorMode",
+        "blocked",
+        "rateLimit"
+      ],
+      "dispatch": "gathering"
+    },
+    {
+      "actionKey": "open_route",
+      "label": "查看路线",
+      "target": {
+        "objectType": "homepage",
+        "objectId": "homepage-west-lake",
+        "objectKind": "place",
+        "routeId": "homepageDetail"
+      },
+      "isPrimary": false,
+      "priority": 2,
+      "actionTier": "light",
+      "requiredGates": [],
+      "dispatch": "navigate"
+    },
+    {
+      "actionKey": "follow_object",
+      "label": "关注对象",
+      "target": {
+        "objectType": "homepage",
+        "objectId": "homepage-west-lake",
+        "objectKind": "place",
+        "routeId": "homepageDetail"
+      },
+      "isPrimary": false,
+      "priority": 3,
+      "actionTier": "light",
+      "requiredGates": [
+        "login"
+      ],
+      "dispatch": "navigate"
+    }
+  ],
+  "evidenceRows": [],
+  "lifecycleState": "active",
+  "previousStrength": 0.0,
+  "strengthDelta": 1.0,
+  "edgeWeight": 1.0,
+  "iconKey": "place",
+  "tone": "tea",
+  "typeVisual": null,
+  "objectVisual": null,
+  "timeBucket": "current",
+  "dedupeKey": "viewer:user:profile-target:coWishlistedEntity",
+  "anchorUserWeight": 1.0,
+  "mutualCount": 0,
+  "moment": "prospective",
+  "subjectId": "viewer",
+  "subjectContext": "homepage:homepage-west-lake",
+  "cohort": ""
+}

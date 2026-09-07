@@ -1,4 +1,7 @@
 // spec_ref: specs/feature-tree/object-homepage-network/intersection-unified-experience/spec.md#sit-006
+// spec_ref: specs/feature-tree/object-homepage-network/intersection-unified-experience/intersection-sentence-unification/spec.md#gwt-001
+// spec_ref: specs/feature-tree/object-homepage-network/intersection-unified-experience/intersection-sentence-unification/spec.md#gwt-002.t1
+// spec_ref: specs/feature-tree/object-homepage-network/intersection-unified-experience/intersection-sentence-unification/spec.md#gwt-002.t2
 package intersection_test
 
 import (

@@ -18,6 +18,7 @@ import (
 	contentgenerated "quwoquan_service/services/content-service/generated/content/post"
 	mediaasseterrors "quwoquan_service/services/content-service/generated/media/media_asset"
 	behaviorapp "quwoquan_service/services/content-service/internal/content/content_behavior_fact/application"
+	intersectionapp "quwoquan_service/services/content-service/internal/content/intersection_visit_state/application/intersection"
 	postapp "quwoquan_service/services/content-service/internal/content/post/application"
 	feedapp "quwoquan_service/services/content-service/internal/content/post/application/feed"
 	"quwoquan_service/services/content-service/internal/content/post/application/ports"
@@ -47,6 +48,7 @@ type ContentHandler struct {
 	intersectionVisitHandler     intersectionVisitStateHTTPHandler
 	authorImpactProjectionReader ports.AuthorImpactProjectionReader
 	viewerReactionReader         feedapp.FeedViewerReactionReader
+	postIntersectionReader       feedapp.FeedIntersectionProvider
 	healthChecker                *rthealth.Checker
 }
 
@@ -98,19 +100,20 @@ type postDetailClientWire struct {
 	PrimaryHomepageType     string                                   `json:"primaryHomepageType,omitempty"`
 	PrimaryHomepageSnapshot *postports.PostHomepageSnapshotSlice     `json:"primaryHomepageSnapshot,omitempty"`
 	// GatheringRef 共同经历回流引用：详情态溯源标锚点。
-	GatheringRef string               `json:"gatheringRef,omitempty"`
-	Status       postports.PostStatus `json:"status"`
-	Visibility              postports.PostVisibility                 `json:"visibility"`
-	LikeCount               int64                                    `json:"likeCount"`
-	CommentCount            int64                                    `json:"commentCount"`
-	ShareCount              int64                                    `json:"shareCount"`
-	ViewCount               int64                                    `json:"viewCount"`
+	GatheringRef string                   `json:"gatheringRef,omitempty"`
+	Status       postports.PostStatus     `json:"status"`
+	Visibility   postports.PostVisibility `json:"visibility"`
+	LikeCount    int64                    `json:"likeCount"`
+	CommentCount int64                    `json:"commentCount"`
+	ShareCount   int64                    `json:"shareCount"`
+	ViewCount    int64                    `json:"viewCount"`
 	// ViewerLiked viewer 维度点赞态：nil（wire 省略）表示未附着（匿名请求
 	// 或附着降级），端侧不得据此回滚本地状态。
-	ViewerLiked *bool     `json:"viewerLiked,omitempty"`
-	CreatedAt   time.Time `json:"createdAt"`
-	UpdatedAt   time.Time `json:"updatedAt"`
-	PublishedAt time.Time `json:"publishedAt,omitempty"`
+	ViewerLiked         *bool                                    `json:"viewerLiked,omitempty"`
+	IntersectionReasons []intersectionapp.IntersectionReasonView `json:"intersectionReasons,omitempty"`
+	CreatedAt           time.Time                                `json:"createdAt"`
+	UpdatedAt           time.Time                                `json:"updatedAt"`
+	PublishedAt         time.Time                                `json:"publishedAt,omitempty"`
 }
 
 func ProjectPostDetailForClient(
@@ -341,6 +344,13 @@ func WithViewerReactionReader(
 	return func(handler *ContentHandler) { handler.viewerReactionReader = reader }
 }
 
+// WithPostIntersectionReader 注入与 Feed 同源的 viewer-specific 交集读面。
+func WithPostIntersectionReader(
+	reader feedapp.FeedIntersectionProvider,
+) ContentHandlerOption {
+	return func(handler *ContentHandler) { handler.postIntersectionReader = reader }
+}
+
 func WithContentBehaviorHandler(handler contentBehaviorHTTPHandler) ContentHandlerOption {
 	return func(contentHandler *ContentHandler) { contentHandler.behaviorHandler = handler }
 }
@@ -522,16 +532,16 @@ func (h *ContentHandler) handleGetFeed(w http.ResponseWriter, r *http.Request) {
 	}
 	recommendationActorID := ResolveRecommendationActorID(r)
 	resp, err := h.feedService.ListFeed(r.Context(), feedapp.ListFeedRequest{
-		UserID:          recommendationActorID,
-		ViewerPersonaID: ResolvePersonaID(r),
-		SessionID:       resolveSessionID(r),
-		Identity:        params.Identity,
-		Type:            params.Type,
-		Sort:            params.Sort,
-		ChannelID:       params.ChannelId,
-		SubCategory:     params.SubCategory,
-		Cursor:          params.Cursor,
-		Limit:           params.Limit,
+		UserID:            recommendationActorID,
+		ViewerPersonaID:   ResolvePersonaID(r),
+		SessionID:         resolveSessionID(r),
+		Identity:          params.Identity,
+		Type:              params.Type,
+		Sort:              params.Sort,
+		ChannelID:         params.ChannelId,
+		SubCategory:       params.SubCategory,
+		Cursor:            params.Cursor,
+		Limit:             params.Limit,
 		FeedRequestID:     params.FeedRequestId,
 		BlockedKeywords:   ResolveBlockedKeywords(r),
 		ResearchPrincipal: requestHasResearchRole(r),
@@ -575,6 +585,24 @@ func (h *ContentHandler) handleGetPost(w http.ResponseWriter, r *http.Request) {
 		); likedErr == nil {
 			liked := flags[postID]
 			wire.ViewerLiked = &liked
+		}
+	}
+	// 交集读面的 subject 必须与 feed 用同一个 recommendation actor key，
+	// 否则 device-only principal 在 feed 能读到、在详情页读不到。
+	recommendationActorID := ResolveRecommendationActorID(r)
+	if h.postIntersectionReader != nil && strings.TrimSpace(recommendationActorID) != "" {
+		reasons, reasonErr := h.postIntersectionReader.Feed(
+			r.Context(), recommendationActorID, "", feedapp.IntersectionReasonPoolLimit,
+		)
+		if reasonErr != nil {
+			// 读面失败与「本 Post 确实没有交集」在响应里同形，必须走与 feed 同一观测出口。
+			feedapp.LogIntersectionReadFailure("post_detail", postID, reasonErr)
+		} else {
+			view := feedapp.FeedItemView{
+				PostID: postID, PrimaryHomepageID: detail.PrimaryHomepageID,
+				PrimaryHomepageType: detail.PrimaryHomepageType, GatheringRef: detail.GatheringRef,
+			}
+			wire.IntersectionReasons = feedapp.IntersectionsForPost(view, reasons)
 		}
 	}
 	writeJSON(w, http.StatusOK, wire)

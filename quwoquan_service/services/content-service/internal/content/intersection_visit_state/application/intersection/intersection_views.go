@@ -47,6 +47,7 @@ type IntersectionReasonView struct {
 	ActorEvidenceCompleteness string                               `json:"actorEvidenceCompleteness"`
 	ActorEvidence             []IntersectionActorEvidenceView      `json:"actorEvidence"`
 	ActionHints               []IntersectionActionHintView         `json:"actionHints"`
+	EvidenceRows              []IntersectionEvidenceRowView        `json:"evidenceRows"` // 证据半屏 display-ready 证据行闭集（水合出口实例化，端只按序渲染）
 	TimeBucket                string                               `json:"timeBucket"`
 	DedupeKey                 string                               `json:"dedupeKey"`
 	AnchorUserWeight          float64                              `json:"anchorUserWeight"`
@@ -54,6 +55,9 @@ type IntersectionReasonView struct {
 	Moment                    string                               `json:"moment"`
 	SubjectID                 string                               `json:"subjectId"`
 	SubjectContext            string                               `json:"subjectContext"`
+	// Cohort 是产出该 reason 的交集策略身份（generated.IntersectionPolicyDigest，注册表摘要）；
+	// 水合出口写入，端不得展示，只在漏斗事件 intersectionCohort 中原样回传（REQ-004）。
+	Cohort string `json:"cohort"`
 	// 当前交集图契约（对齐 recommendation/recommendation/recommendation_feature_profile_view/projections/intersection_reason.yaml）：
 	// 边生命周期 / Graph 边权 / 类型图标 / 尾部对象视觉。
 	// lifecycleState/edgeWeight/previousStrength/strengthDelta 由异步投影真算填充（读路径零计算消费）；
@@ -103,6 +107,13 @@ type IntersectionActorEvidenceView struct {
 	EvidenceRank       int                     `json:"evidenceRank"`
 	SnapshotVersion    string                  `json:"snapshotVersion"`
 	SortKey            int                     `json:"sortKey"`
+}
+
+// IntersectionEvidenceRowView 是证据半屏的一行证据（IntersectionEvidenceRow 契约）。
+// Source 为闭集：secondary_text | connection_summary | actor_action | point_display | point_sample。
+type IntersectionEvidenceRowView struct {
+	Text   string `json:"text"`
+	Source string `json:"source"`
 }
 
 // IntersectionActionHintView 是交集/影响力的下一步行动建议。
@@ -161,6 +172,15 @@ func (v IntersectionReasonView) coolKey() string {
 		return v.ActionTargetID
 	}
 	return v.RelationObjectID
+}
+
+// exposureKey 是曝光冷却（rec:icool）的键：与行为管道的 intersectionId 归因键同源，
+// 缺 intersectionId 时退回 coolKey，避免同一 reason 在两处用不同身份记账。
+func (v IntersectionReasonView) exposureKey() string {
+	if id := strings.TrimSpace(v.IntersectionID); id != "" {
+		return id
+	}
+	return v.coolKey()
 }
 
 // IntersectionDimensionTallyView 单维度计数（与 intersection_dimension_tally.yaml 对齐）。

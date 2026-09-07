@@ -58,6 +58,7 @@ type BehaviorFactDocument struct {
 	IntersectionClass      string        `bson:"intersectionClass"`
 	IntersectionSourceRef  string        `bson:"intersectionSourceRef"`
 	IntersectionEvidenceID string        `bson:"intersectionEvidenceId"`
+	IntersectionCohort     string        `bson:"intersectionCohort"`
 	OccurredAt             string        `bson:"occurredAt"`
 	CreatedAt              time.Time     `bson:"createdAt"`
 }
@@ -261,6 +262,7 @@ func BuildStreamValues(row BehaviorFactDocument) (map[string]string, error) {
 		"intersectionClass":      strings.TrimSpace(row.IntersectionClass),
 		"intersectionSourceRef":  strings.TrimSpace(row.IntersectionSourceRef),
 		"intersectionEvidenceId": strings.TrimSpace(row.IntersectionEvidenceID),
+		"intersectionCohort":     strings.TrimSpace(row.IntersectionCohort),
 		"occurredAt":             strings.TrimSpace(row.OccurredAt),
 	})
 	if err != nil {

@@ -18,6 +18,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"sync"
 	"testing"
@@ -195,6 +196,234 @@ func TestAssistantRunCommandServiceOwnsIdempotencyAndJournal(t *testing.T) {
 		events[0].Sequence != 1 ||
 		events[0].Kind != "run_accepted" {
 		t.Fatalf("unexpected initial journal: %#v", events)
+	}
+}
+
+func TestAssistantRunConcurrentSameRequestReplaysWinner(t *testing.T) {
+	t.Parallel()
+
+	repository := newMemoryRunRepository()
+	service := runruntime.NewCommandService(
+		repository,
+		runruntime.SessionResolverFunc(func(
+			context.Context,
+			string,
+			string,
+		) (runruntime.SessionContinuity, error) {
+			return runruntime.SessionContinuity{}, nil
+		}),
+		testSkillPackageIdentityResolver(),
+		runruntime.AllowAllStartAccessPolicy{},
+		func() time.Time { return time.Date(2026, 8, 14, 8, 0, 0, 0, time.UTC) },
+		nil,
+		runruntime.WithPolicyResolver(testPolicyResolver()),
+	)
+	command := runruntime.StartCommand{
+		UserID:          "same-request-owner",
+		PersonaID:       "same-request-persona",
+		SessionID:       "same-request-session",
+		ClientRequestID: "same-request-id",
+		InputText:       "相同请求并发重放",
+	}
+	const writers = 12
+	start := make(chan struct{})
+	results := make(chan struct {
+		run runruntime.Run
+		err error
+	}, writers)
+	var wait sync.WaitGroup
+	for index := 0; index < writers; index++ {
+		wait.Add(1)
+		go func() {
+			defer wait.Done()
+			<-start
+			run, err := service.Start(t.Context(), command)
+			results <- struct {
+				run runruntime.Run
+				err error
+			}{run: run, err: err}
+		}()
+	}
+	close(start)
+	wait.Wait()
+	close(results)
+
+	winnerID := ""
+	for result := range results {
+		if result.err != nil {
+			t.Fatalf("same request replay error=%v", result.err)
+		}
+		if winnerID == "" {
+			winnerID = result.run.RunID
+		}
+		if result.run.RunID != winnerID {
+			t.Fatalf("same request produced runId=%s want=%s", result.run.RunID, winnerID)
+		}
+	}
+	if len(repository.runs) != 1 || len(repository.active) != 1 {
+		t.Fatalf("same request wrote runs=%d active=%d", len(repository.runs), len(repository.active))
+	}
+}
+
+func TestAssistantRunConcurrentStartsChooseOneActiveWinner(t *testing.T) {
+	t.Parallel()
+
+	repository := newMemoryRunRepository()
+	service := runruntime.NewCommandService(
+		repository,
+		runruntime.SessionResolverFunc(func(
+			context.Context,
+			string,
+			string,
+		) (runruntime.SessionContinuity, error) {
+			return runruntime.SessionContinuity{}, nil
+		}),
+		testSkillPackageIdentityResolver(),
+		runruntime.AllowAllStartAccessPolicy{},
+		func() time.Time { return time.Date(2026, 8, 14, 9, 0, 0, 0, time.UTC) },
+		nil,
+		runruntime.WithPolicyResolver(testPolicyResolver()),
+	)
+	const writers = 16
+	start := make(chan struct{})
+	results := make(chan struct {
+		run runruntime.Run
+		err error
+	}, writers)
+	var wait sync.WaitGroup
+	for index := 0; index < writers; index++ {
+		index := index
+		wait.Add(1)
+		go func() {
+			defer wait.Done()
+			<-start
+			run, err := service.Start(t.Context(), runruntime.StartCommand{
+				UserID:          "active-winner-owner",
+				PersonaID:       "active-winner-persona",
+				SessionID:       "active-winner-session",
+				ClientRequestID: fmt.Sprintf("active-winner-request-%02d", index),
+				InputText:       fmt.Sprintf("执行并发意图 %02d", index),
+			})
+			results <- struct {
+				run runruntime.Run
+				err error
+			}{run: run, err: err}
+		}()
+	}
+	close(start)
+	wait.Wait()
+	close(results)
+
+	var winner runruntime.Run
+	successes := 0
+	conflicts := 0
+	for result := range results {
+		switch {
+		case result.err == nil:
+			successes++
+			winner = result.run
+		case errors.Is(result.err, runruntime.ErrActiveRunConflict):
+			conflicts++
+		default:
+			t.Fatalf("concurrent Start error=%v", result.err)
+		}
+	}
+	if successes != 1 || conflicts != writers-1 || len(repository.active) != 1 ||
+		len(repository.runs) != 1 {
+		t.Fatalf(
+			"winner arbitration successes=%d conflicts=%d active=%d runs=%d",
+			successes,
+			conflicts,
+			len(repository.active),
+			len(repository.runs),
+		)
+	}
+	if replayed, err := service.Start(t.Context(), runruntime.StartCommand{
+		UserID:          winner.UserID,
+		PersonaID:       winner.PersonaID,
+		SessionID:       winner.SessionID,
+		ClientRequestID: winner.ClientRequestID,
+		InputText:       winner.InputText,
+	}); err != nil || replayed.RunID != winner.RunID {
+		t.Fatalf("winning identity replay run=%s want=%s err=%v", replayed.RunID, winner.RunID, err)
+	}
+
+	terminal, err := service.Cancel(
+		t.Context(), winner.UserID, winner.RunID, "active-winner-cancel",
+	)
+	if err != nil || terminal.State.WireName() != "cancelled" || len(repository.active) != 0 {
+		t.Fatalf("terminal winner did not release key: run=%+v active=%d err=%v", terminal, len(repository.active), err)
+	}
+	second, err := service.Start(t.Context(), runruntime.StartCommand{
+		UserID:          winner.UserID,
+		PersonaID:       winner.PersonaID,
+		SessionID:       winner.SessionID,
+		ClientRequestID: "active-winner-request-next",
+		InputText:       "终态后启动新意图",
+	})
+	if err != nil || second.RunID == winner.RunID {
+		t.Fatalf("start after terminal run=%+v err=%v", second, err)
+	}
+	if replayed, err := service.Start(t.Context(), runruntime.StartCommand{
+		UserID:          winner.UserID,
+		PersonaID:       winner.PersonaID,
+		SessionID:       winner.SessionID,
+		ClientRequestID: winner.ClientRequestID,
+		InputText:       winner.InputText,
+	}); err != nil || replayed.RunID != winner.RunID {
+		t.Fatalf("old winner replay changed identity: run=%+v err=%v", replayed, err)
+	}
+	if current, err := repository.LoadActiveBySession(
+		t.Context(), winner.UserID, winner.SessionID,
+	); err != nil || current.RunID != second.RunID {
+		t.Fatalf("old replay released new winner: active=%+v second=%s err=%v", current, second.RunID, err)
+	}
+	if replayedTerminal, err := service.Cancel(
+		t.Context(), winner.UserID, winner.RunID, "active-winner-cancel",
+	); err != nil || replayedTerminal.RunID != winner.RunID {
+		t.Fatalf("old terminal replay run=%+v err=%v", replayedTerminal, err)
+	}
+	if current, err := repository.LoadActiveBySession(
+		t.Context(), winner.UserID, winner.SessionID,
+	); err != nil || current.RunID != second.RunID {
+		t.Fatalf("old terminal replay released new winner: active=%+v second=%s err=%v", current, second.RunID, err)
+	}
+}
+
+func TestAssistantRunActiveWinnerIsScopedBySessionIdentity(t *testing.T) {
+	t.Parallel()
+
+	repository := newMemoryRunRepository()
+	service := runruntime.NewCommandService(
+		repository,
+		runruntime.SessionResolverFunc(func(
+			context.Context,
+			string,
+			string,
+		) (runruntime.SessionContinuity, error) {
+			return runruntime.SessionContinuity{}, nil
+		}),
+		testSkillPackageIdentityResolver(),
+		runruntime.AllowAllStartAccessPolicy{},
+		func() time.Time { return time.Date(2026, 8, 14, 11, 0, 0, 0, time.UTC) },
+		nil,
+		runruntime.WithPolicyResolver(testPolicyResolver()),
+	)
+	if _, err := service.Start(t.Context(), runruntime.StartCommand{
+		UserID:          "session-owner-a",
+		SessionID:       "globally-unique-session",
+		ClientRequestID: "session-owner-a-request",
+		InputText:       "第一个账号的会话意图",
+	}); err != nil {
+		t.Fatalf("start first session owner: %v", err)
+	}
+	if _, err := service.Start(t.Context(), runruntime.StartCommand{
+		UserID:          "session-owner-b",
+		SessionID:       "globally-unique-session",
+		ClientRequestID: "session-owner-b-request",
+		InputText:       "伪造相同会话身份",
+	}); !errors.Is(err, runruntime.ErrActiveRunConflict) {
+		t.Fatalf("same session identity across owners error=%v", err)
 	}
 }
 
@@ -456,6 +685,7 @@ func TestAssistantRunFreezesPersonalSessionContinuityAndExcludesSharedSurface(t 
 	}
 
 	sharedCommand := command
+	sharedCommand.SessionID = "session-continuity-shared"
 	sharedCommand.ClientRequestID = "request-continuity-shared"
 	sharedCommand.RequestContext = runruntime.RequestContext{SurfaceKind: "conversation"}
 	shared, err := service.Start(t.Context(), sharedCommand)
@@ -542,6 +772,7 @@ func TestAssistantRunFreezesFeedbackContextBeforeExecutionAndExcludesSharedSurfa
 	}
 
 	shared := command
+	shared.SessionID = "session-feedback-shared"
 	shared.ClientRequestID = "request-feedback-shared"
 	shared.RequestContext.SurfaceKind = "conversation"
 	sharedRun, err := service.Start(t.Context(), shared)
@@ -926,6 +1157,7 @@ type memoryRunRepository struct {
 	mu       sync.Mutex
 	runs     map[string]runruntime.Run
 	requests map[string]string
+	active   map[string]string
 	events   map[string][]runruntime.JournalEvent
 	receipts map[string]runruntime.CommandReceipt
 }
@@ -934,6 +1166,7 @@ func newMemoryRunRepository() *memoryRunRepository {
 	return &memoryRunRepository{
 		runs:     make(map[string]runruntime.Run),
 		requests: make(map[string]string),
+		active:   make(map[string]string),
 		events:   make(map[string][]runruntime.JournalEvent),
 		receipts: make(map[string]runruntime.CommandReceipt),
 	}
@@ -967,6 +1200,20 @@ func (r *memoryRunRepository) LoadByRequest(
 	return r.runs[runID], nil
 }
 
+func (r *memoryRunRepository) LoadActiveBySession(
+	_ context.Context,
+	userID string,
+	sessionID string,
+) (runruntime.Run, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	runID, ok := r.active[sessionID]
+	if !ok || r.runs[runID].UserID != userID {
+		return runruntime.Run{}, runruntime.ErrRunNotFound
+	}
+	return r.runs[runID], nil
+}
+
 func (r *memoryRunRepository) Commit(
 	_ context.Context,
 	expectedRevision int64,
@@ -988,6 +1235,12 @@ func (r *memoryRunRepository) Commit(
 	if existingID, ok := r.requests[requestKey]; ok && existingID != run.RunID {
 		return runruntime.ErrRevisionConflict
 	}
+	activeKey := run.SessionID
+	if !memoryTerminalRunState(run.State.WireName()) {
+		if existingID, ok := r.active[activeKey]; ok && existingID != run.RunID {
+			return runruntime.ErrActiveRunConflict
+		}
+	}
 	journal := r.events[run.RunID]
 	lastSequence := int64(0)
 	if len(journal) > 0 {
@@ -1002,6 +1255,13 @@ func (r *memoryRunRepository) Commit(
 	}
 	r.runs[run.RunID] = run
 	r.requests[requestKey] = run.RunID
+	if memoryTerminalRunState(run.State.WireName()) {
+		if r.active[activeKey] == run.RunID {
+			delete(r.active, activeKey)
+		}
+	} else {
+		r.active[activeKey] = run.RunID
+	}
 	r.events[run.RunID] = journal
 	if receipt != nil {
 		key := receipt.RunID + "\x00" + receipt.CommandID
@@ -1064,6 +1324,15 @@ func (r *memoryRunRepository) EventsAfter(
 		}
 	}
 	return result, nil
+}
+
+func memoryTerminalRunState(state string) bool {
+	switch strings.TrimSpace(state) {
+	case "completed", "failed", "cancelled":
+		return true
+	default:
+		return false
+	}
 }
 
 func (r *memoryRunRepository) LatestSequence(

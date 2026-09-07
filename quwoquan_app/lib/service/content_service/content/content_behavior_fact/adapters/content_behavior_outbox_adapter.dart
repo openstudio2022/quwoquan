@@ -334,6 +334,7 @@ final class DurableContentBehaviorRepository extends BehaviorRepository
       'intersectionId',
       'intersectionClass',
       'intersectionEvidenceId',
+      'intersectionCohort',
       'subjectId',
       'feedbackKind',
       'taxonomyReleaseId',
@@ -356,9 +357,8 @@ final class DurableContentBehaviorRepository extends BehaviorRepository
     }
     final contentId = (json['contentId'] ?? '').toString().trim();
     final clientEventId = (json['clientEventId'] ?? '').toString().trim();
-    final occurredAt = DateTime.tryParse(
-      (json['occurredAt'] ?? '').toString(),
-    )?.toUtc();
+    final occurredAt = DateTime.tryParse((json['occurredAt'] ?? '').toString())
+        ?.toUtc();
     final action = BehaviorEventType.fromWire(
       json['action'],
       'BehaviorEvent.action',
@@ -414,6 +414,7 @@ final class DurableContentBehaviorRepository extends BehaviorRepository
       intersectionId: json['intersectionId'] as String?,
       intersectionClass: json['intersectionClass'] as String?,
       intersectionEvidenceId: json['intersectionEvidenceId'] as String?,
+      intersectionCohort: json['intersectionCohort'] as String?,
       subjectId: json['subjectId'] as String?,
       feedbackKind: json['feedbackKind'] as String?,
       taxonomyReleaseId: json['taxonomyReleaseId'] as String?,

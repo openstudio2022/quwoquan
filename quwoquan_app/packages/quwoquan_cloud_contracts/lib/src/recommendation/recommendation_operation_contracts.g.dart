@@ -1,5 +1,5 @@
 // Code generated from canonical domain contracts. DO NOT EDIT.
-// ContractGraph SHA256: 157736ecc8566df93f4bf80645e3060c065d845c9dd2af2b8186447883b0206f
+// ContractGraph SHA256: d70d6bc25b5d23c07ea3c5bf7711e373c3fed4effca19b91a9a6c405307a3864
 
 library;
 
@@ -334,6 +334,29 @@ final class IntersectionDimensionTally {
   };
 }
 
+final class IntersectionEvidenceRow {
+  const IntersectionEvidenceRow({required this.text, required this.source});
+
+  final String text;
+  final String source;
+
+  factory IntersectionEvidenceRow.fromWire(
+    Map<String, Object?> map, [
+    String path = "IntersectionEvidenceRow",
+  ]) {
+    _rejectUnknownFields(map, const <String>{"text", "source"}, path);
+    return IntersectionEvidenceRow(
+      text: _requiredString(map["text"], '$path.text'),
+      source: _requiredString(map["source"], '$path.source'),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "text": text,
+    "source": source,
+  };
+}
+
 final class IntersectionInboxSummary {
   const IntersectionInboxSummary({
     required this.totalCount,
@@ -594,6 +617,7 @@ final class IntersectionReason {
     required this.expiresAt,
     required this.intersectionPoints,
     required this.pointSummarySnapshotId,
+    required this.cohort,
     required this.actorEvidenceTotalCount,
     required this.actorEvidenceCompleteness,
     required this.actorEvidence,
@@ -610,6 +634,7 @@ final class IntersectionReason {
     required this.sampleVisuals,
     this.representativeActor,
     required this.actionHints,
+    required this.evidenceRows,
     required this.lifecycleState,
     required this.previousStrength,
     required this.strengthDelta,
@@ -653,6 +678,7 @@ final class IntersectionReason {
   final String expiresAt;
   final List<IntersectionPoint> intersectionPoints;
   final String pointSummarySnapshotId;
+  final String cohort;
   final int actorEvidenceTotalCount;
   final String actorEvidenceCompleteness;
   final List<IntersectionActorEvidence> actorEvidence;
@@ -669,6 +695,7 @@ final class IntersectionReason {
   final List<IntersectionVisual> sampleVisuals;
   final IntersectionRepresentativeActor? representativeActor;
   final List<IntersectionActionHint> actionHints;
+  final List<IntersectionEvidenceRow> evidenceRows;
   final String lifecycleState;
   final double previousStrength;
   final double strengthDelta;
@@ -716,6 +743,7 @@ final class IntersectionReason {
       "expiresAt",
       "intersectionPoints",
       "pointSummarySnapshotId",
+      "cohort",
       "actorEvidenceTotalCount",
       "actorEvidenceCompleteness",
       "actorEvidence",
@@ -732,6 +760,7 @@ final class IntersectionReason {
       "sampleVisuals",
       "representativeActor",
       "actionHints",
+      "evidenceRows",
       "lifecycleState",
       "previousStrength",
       "strengthDelta",
@@ -823,6 +852,7 @@ final class IntersectionReason {
         map["pointSummarySnapshotId"],
         '$path.pointSummarySnapshotId',
       ),
+      cohort: _requiredString(map["cohort"], '$path.cohort'),
       actorEvidenceTotalCount: _requiredInt(
         map["actorEvidenceTotalCount"],
         '$path.actorEvidenceTotalCount',
@@ -936,6 +966,20 @@ final class IntersectionReason {
           ),
         ),
       ),
+      evidenceRows: List<IntersectionEvidenceRow>.unmodifiable(
+        _requiredList(
+          map["evidenceRows"],
+          '$path.evidenceRows',
+        ).asMap().entries.map(
+          (entry) => IntersectionEvidenceRow.fromWire(
+            _requiredObject(
+              entry.value,
+              '$path.evidenceRows' + '[${entry.key}]',
+            ),
+            '$path.evidenceRows' + '[${entry.key}]',
+          ),
+        ),
+      ),
       lifecycleState: _requiredString(
         map["lifecycleState"],
         '$path.lifecycleState',
@@ -1008,6 +1052,7 @@ final class IntersectionReason {
         .map((value) => value.toWire())
         .toList(growable: false),
     "pointSummarySnapshotId": pointSummarySnapshotId,
+    "cohort": cohort,
     "actorEvidenceTotalCount": actorEvidenceTotalCount,
     "actorEvidenceCompleteness": actorEvidenceCompleteness,
     "actorEvidence": actorEvidence
@@ -1033,6 +1078,9 @@ final class IntersectionReason {
     if (representativeActor != null)
       "representativeActor": representativeActor!.toWire(),
     "actionHints": actionHints
+        .map((value) => value.toWire())
+        .toList(growable: false),
+    "evidenceRows": evidenceRows
         .map((value) => value.toWire())
         .toList(growable: false),
     "lifecycleState": lifecycleState,

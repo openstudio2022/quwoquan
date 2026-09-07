@@ -11,149 +11,62 @@ extension _WorksImmersiveViewerIntersectionActions
     );
   }
 
-  bool _sameIntersectionTarget(
-    IntersectionTarget? left,
-    IntersectionTarget? right,
-  ) {
-    if (left == null || right == null) {
-      return false;
-    }
-    final leftId = left.objectId.trim();
-    final rightId = right.objectId.trim();
-    if (leftId.isEmpty || rightId.isEmpty || leftId != rightId) {
-      return false;
-    }
-    final leftType = left.objectType.trim();
-    final rightType = right.objectType.trim();
-    if (leftType.isNotEmpty && rightType.isNotEmpty && leftType != rightType) {
-      return false;
-    }
-    return true;
-  }
-
   IntersectionReason? _primaryIntersectionReasonFor(ContentPostViewData post) {
-    final reasons = post.intersectionReasons ?? const <IntersectionReason>[];
-    final contextTarget = _postIntersectionContextTarget(post);
-    for (final reason in reasons) {
-      final displayReason =
-          HomeFeedCrossObjectComposition.displayReadyIntersection(
-            reason,
-            contextObjectTarget: contextTarget,
-          );
-      if (displayReason != null) {
-        return displayReason;
-      }
-    }
-    return null;
+    return resolveIntersectionDisplay(
+      post.intersectionReasons,
+      contextObjectTarget: _postIntersectionContextTarget(post),
+    )?.reason;
   }
 
   void _showIntersectionDetail(BuildContext context, ContentPostViewData post) {
-    final reasons = post.intersectionReasons ?? const <IntersectionReason>[];
-    if (reasons.isEmpty) return;
+    final resolution = resolveIntersectionDisplay(
+      post.intersectionReasons,
+      contextObjectTarget: _postIntersectionContextTarget(post),
+    );
+    if (resolution == null) return;
+    // 漏斗「证据展开」步：与首页卡同一事件类型，携带同一 intersectionId。
+    final reason = resolution.reason;
+    ref
+        .read(contentBehaviorTrackerProvider)
+        .trackIntersectionExpand(
+          contentId: post.id,
+          intersectionId: reason.intersectionId,
+          intersectionDimension: reason.dimension,
+          intersectionClass: reason.intersectionClass,
+          intersectionSourceRef: sourceRefForReason(reason),
+          intersectionCohort: reason.cohort,
+          referralSource: widget.referralSource,
+        );
     showAppBottomModal<void>(
       context: context,
-      builder: (sheetContext) => _WorksIntersectionDetailSheet(
-        reasons: reasons,
-        contextObjectTarget: _postIntersectionContextTarget(post),
-        onAskAssistant: () {
-          unawaited(
-            dismissAppModalAndRun(
-              sheetContext,
-              action: () {
-                if (!context.mounted) {
-                  return;
-                }
-                _openAssistantForIntersectionReason(context, post, reasons);
-              },
-            ),
-          );
-        },
-      ),
-    );
-  }
-
-  void _openAssistantForIntersectionReason(
-    BuildContext context,
-    ContentPostViewData post,
-    List<IntersectionReason> reasons,
-  ) {
-    if (reasons.isEmpty) return;
-    final primary = reasons.first;
-    final target = VisitTarget.page('work_intersection_${post.id}');
-    final openContext = AssistantOpenContext(
-      source: AssistantSource.article,
-      tab: 'work_intersection',
-      dimension: primary.dimension,
-      entityId: post.id,
-      objectType: 'post',
-      intersectionEvidenceRefs: _intersectionEvidenceRefsForReasons(
-        post,
-        reasons,
-      ),
-      experienceLevel: switch (ref
-          .read(visitRecorderServiceProvider)
-          .getExperience(target)) {
-        ExperienceLevel.firstTime => AssistantExperienceLevel.firstTime,
-        ExperienceLevel.returning => AssistantExperienceLevel.returning,
-        ExperienceLevel.frequent => AssistantExperienceLevel.frequent,
-      },
-      hints: <String, dynamic>{
-        'postId': post.id,
-        'contentType': post.type,
-        'primaryText': primary.primaryText,
-        'reasonCount': reasons.length,
-      },
-    );
-    context.push(AppRoutePaths.assistantPersonal, extra: openContext);
-  }
-
-  List<AssistantIntersectionEvidenceRef> _intersectionEvidenceRefsForReasons(
-    ContentPostViewData post,
-    List<IntersectionReason> reasons,
-  ) {
-    final refs = <String, AssistantIntersectionEvidenceRef>{};
-    for (final reason in reasons) {
-      final intersectionId = reason.intersectionId.trim();
-      final evidenceId = reason.pointSummarySnapshotId.trim();
-      final sourceRef = reason.kind.trim();
-      if (intersectionId.isEmpty || evidenceId.isEmpty || sourceRef.isEmpty) {
-        continue;
-      }
-      final ref = AssistantIntersectionEvidenceRef(
-        intersectionId: intersectionId,
-        evidenceId: evidenceId,
-        sourceRef: sourceRef,
-        objectTypeRef: 'post',
-        objectId: post.id,
-      );
-      refs.putIfAbsent(
-        '$intersectionId:$evidenceId:$sourceRef:${post.id}',
-        () => ref,
-      );
-    }
-    return refs.values.toList(growable: false);
-  }
-
-  void _openIntersectionSpan(
-    BuildContext context,
-    ContentPostViewData post,
-    IntersectionReason reason,
-    IntersectionTextSpan span,
-  ) {
-    final navigator = IntersectionTargetNavigator(
-      onTrack: (target, attribution) {
-        _trackIntersectionTargetClick(
-          post: post,
-          target: target,
-          attribution: attribution,
+      builder: (sheetContext) {
+        return HomeFeedCrossObjectComposition.intersectionEvidenceSheet(
+          panelKey: const ValueKey<String>('works-intersection-detail-sheet'),
+          primaryActionKey: const ValueKey<String>(
+            'works-intersection-primary-action',
+          ),
+          resolution: resolution,
+          onDismiss: () => Navigator.of(sheetContext).pop(),
+          onPrimaryAction: resolution.primaryHint == null
+              ? null
+              : () {
+                  unawaited(
+                    dismissAppModalAndRun(
+                      sheetContext,
+                      action: () {
+                        if (!context.mounted) return;
+                        _openIntersectionActionHint(
+                          context,
+                          post,
+                          resolution.reason,
+                          resolution.primaryHint!,
+                        );
+                      },
+                    ),
+                  );
+                },
         );
       },
-    );
-    navigator.open(
-      context,
-      span.target,
-      sourceRef: reason.source,
-      attribution: _intersectionNavAttribution(reason),
     );
   }
 
@@ -174,74 +87,22 @@ extension _WorksImmersiveViewerIntersectionActions
         );
       },
     );
-    final opened = navigator
-        .openActionHint(
-          context,
-          hint,
-          sourceRef: reason.source,
-          attribution: _intersectionNavAttribution(reason),
-          evidenceReason: reason,
-          contextObjectTarget: _postIntersectionContextTarget(post),
-        )
-        .didOpen;
-    if (!opened) {
+    final result = navigator.openActionHint(
+      context,
+      hint,
+      sourceRef: sourceRefForReason(reason),
+      attribution: _intersectionNavAttribution(reason),
+      evidenceReason: reason,
+      contextObjectTarget: _postIntersectionContextTarget(post),
+      referralSource: widget.referralSource,
+    );
+    assert(
+      !result.isConfigurationFailure,
+      'startGatheringNavigationBinding 未注入：约伴行动被静默降级',
+    );
+    if (!result.didOpen) {
       _showIntersectionDetail(context, post);
     }
-  }
-
-  void _openIntersectionFallback(
-    BuildContext context,
-    ContentPostViewData post,
-    IntersectionReason reason,
-  ) {
-    final navigator = IntersectionTargetNavigator(
-      onTrack: (target, attribution) {
-        _trackIntersectionTargetClick(
-          post: post,
-          target: target,
-          attribution: attribution,
-        );
-      },
-    );
-    final reasonTarget = IntersectionTargetNavigator.targetForReason(reason);
-    if (!_sameIntersectionTarget(
-          reasonTarget,
-          _postIntersectionContextTarget(post),
-        ) &&
-        navigator.open(
-          context,
-          reasonTarget,
-          sourceRef: reason.source,
-          attribution: _intersectionNavAttribution(reason),
-        )) {
-      return;
-    }
-    for (final visual in reason.sampleVisuals) {
-      if (navigator.open(
-        context,
-        visual.target,
-        sourceRef: reason.source,
-        attribution: _intersectionNavAttribution(reason),
-      )) {
-        return;
-      }
-    }
-    final dimension = reason.dimension.trim();
-    if (dimension.isNotEmpty &&
-        navigator.open(
-          context,
-          IntersectionTarget(
-            objectType: 'dimension',
-            objectId: dimension,
-            objectKind: 'tag',
-            routeId: AppUiSurfaces.myIntersections.routeId,
-          ),
-          sourceRef: reason.source,
-          attribution: _intersectionNavAttribution(reason),
-        )) {
-      return;
-    }
-    _showIntersectionDetail(context, post);
   }
 
   void _trackIntersectionTargetClick({
@@ -271,6 +132,7 @@ extension _WorksImmersiveViewerIntersectionActions
           intersectionTagRefs: attribution.tagRefs,
           intersectionClass: attribution.intersectionClass,
           intersectionEvidenceId: attribution.evidenceId,
+          intersectionCohort: attribution.cohort,
         );
   }
 
@@ -281,9 +143,10 @@ extension _WorksImmersiveViewerIntersectionActions
       intersectionId: reason.intersectionId,
       dimension: reason.dimension,
       intersectionClass: reason.intersectionClass,
-      sourceRef: reason.source,
+      sourceRef: sourceRefForReason(reason),
       tagRefs: reason.tagRefs,
       evidenceId: reason.pointSummarySnapshotId,
+      cohort: reason.cohort,
     );
   }
 }

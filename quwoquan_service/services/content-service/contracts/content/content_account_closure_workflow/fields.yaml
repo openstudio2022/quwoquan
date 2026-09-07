@@ -211,6 +211,16 @@ types:
       log_policy: hash
       api_exposure: none
       ops_exposure: read
+    - name: sourceVersion
+      source: sourceVersion
+      type: int
+      description: 搜索 tombstone 的版本围栏；在硬删除 Post 的同一事务内取 Post.version + 1，即该聚合的终态版本，保证 tombstone 严格高于任何仍在重放的写时投影。
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: none
+      ops_exposure: read
     - name: createdAt
       source: createdAt
       type: timestamp

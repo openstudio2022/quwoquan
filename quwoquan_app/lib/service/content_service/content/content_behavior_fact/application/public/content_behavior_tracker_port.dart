@@ -22,6 +22,7 @@ abstract interface class ContentBehaviorTrackerPort {
     List<String>? intersectionTagRefs,
     String? intersectionClass,
     String? intersectionEvidenceId,
+    String? intersectionCohort,
   });
 
   void trackVisible(
@@ -56,6 +57,7 @@ abstract interface class ContentBehaviorTrackerPort {
     List<String>? intersectionTagRefs,
     String? intersectionClass,
     String? intersectionEvidenceId,
+    String? intersectionCohort,
   });
 
   void trackDwell(
@@ -89,6 +91,7 @@ abstract interface class ContentBehaviorTrackerPort {
     List<String>? intersectionTagRefs,
     String? intersectionClass,
     String? intersectionEvidenceId,
+    String? intersectionCohort,
   });
 
   void trackTagClick(
@@ -109,6 +112,7 @@ abstract interface class ContentBehaviorTrackerPort {
     List<String>? intersectionTagRefs,
     String? intersectionClass,
     String? intersectionEvidenceId,
+    String? intersectionCohort,
   });
 
   void trackIntersectionExpand({
@@ -117,6 +121,7 @@ abstract interface class ContentBehaviorTrackerPort {
     String? intersectionDimension,
     String? intersectionClass,
     String? intersectionSourceRef,
+    String? intersectionCohort,
     String? surfaceId,
     ReferralSource? referralSource,
   });
@@ -212,6 +217,8 @@ abstract interface class ContentBehaviorTrackerPort {
     String? intersectionDimension,
     String? intersectionSourceRef,
     List<String>? intersectionTagRefs,
+    String? intersectionId,
+    String? intersectionCohort,
   });
 
   void trackJoinCircle(
@@ -223,6 +230,8 @@ abstract interface class ContentBehaviorTrackerPort {
     String? intersectionDimension,
     String? intersectionSourceRef,
     List<String>? intersectionTagRefs,
+    String? intersectionId,
+    String? intersectionCohort,
   });
 
   void trackAddContact(
@@ -234,6 +243,8 @@ abstract interface class ContentBehaviorTrackerPort {
     String? intersectionDimension,
     String? intersectionSourceRef,
     List<String>? intersectionTagRefs,
+    String? intersectionId,
+    String? intersectionCohort,
   });
 
   void trackAssistantInterest(List<String> tagRefs);
@@ -245,6 +256,7 @@ abstract interface class ContentBehaviorTrackerPort {
     String? intersectionDimension,
     String? intersectionClass,
     String? intersectionSourceRef,
+    String? intersectionCohort,
   });
 
   void trackWishlistAdd(

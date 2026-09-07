@@ -115,9 +115,8 @@ extension _HomepageBuilders on _HomepageDetailShellState {
     final toolbarFill = isPinned
         ? AppColors.iosSystemBackground(context)
         : AppColors.transparent;
-    final toolbarBorder = AppColors.iosSeparator(
-      context,
-    ).withValues(alpha: isPinned ? 0.14 : 0);
+    final toolbarBorder = AppColors.iosSeparator(context)
+        .withValues(alpha: isPinned ? 0.14 : 0);
     final buttonForeground = isPinned
         ? AppColors.iosLabel(context)
         : CupertinoColors.white;
@@ -319,9 +318,8 @@ extension _HomepageBuilders on _HomepageDetailShellState {
     final reference = _reference;
     final summarySurface = AppColors.iosProfileSurface(context);
     final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
-    final summaryBorder = AppColors.iosSeparator(
-      context,
-    ).withValues(alpha: isDark ? 0.22 : 0.08);
+    final summaryBorder = AppColors.iosSeparator(context)
+        .withValues(alpha: isDark ? 0.22 : 0.08);
     final summaryShadow = isDark
         ? AppColors.black.withValues(alpha: 0.18)
         : AppColors.black.withValues(alpha: 0.05);
@@ -454,10 +452,6 @@ extension _HomepageBuilders on _HomepageDetailShellState {
           _buildIntersectionCard(isDark),
           SizedBox(height: AppSpacing.containerSm),
           _buildEntityImpactCard(isDark),
-          // 「近期行动」L0 区块：地点锚 → 可加入的公开行动；区块自身
-          // 独立加载独立降级（为空/失败整块不渲染）。
-          if (widget.buildRecentGatherings case final buildRecentGatherings?)
-            buildRecentGatherings(isDark: isDark),
         ],
       ],
     );
@@ -474,9 +468,8 @@ extension _HomepageBuilders on _HomepageDetailShellState {
   /// 实体首屏 CTA：可到访地点主动作=想去，其余主页主动作=关注；次动作=发记录。
   /// 真相源下沉到共享 [ObjectActionBar]，主/次按钮 token 与用户主页 `ProfileActionBar` 同源。
   Widget _buildEntityActionBar(bool isDark) {
-    final separator = AppColors.iosSeparator(
-      context,
-    ).withValues(alpha: isDark ? 0.22 : 0.14);
+    final separator = AppColors.iosSeparator(context)
+        .withValues(alpha: isDark ? 0.22 : 0.14);
     final neutralFill = AppColors.iosProfileSurface(context);
     final neutralForeground = AppColors.iosLabel(context);
     final usesWishlistIntent = widget.wishlistState != null;
@@ -522,18 +515,6 @@ extension _HomepageBuilders on _HomepageDetailShellState {
           foregroundColor: neutralForeground,
           borderColor: separator,
         ),
-        // 在这里发起：地点锚 → 行动（persona host + 实体来源引用）；
-        // 发起不依赖交集存在，交集只是撮合加速器。
-        if (widget.onStartGathering != null)
-          ObjectAction(
-            label: ObjectHomepageText.entityActionStartGathering,
-            icon: CupertinoIcons.calendar_badge_plus,
-            onPressed: widget.onStartGathering,
-            style: ProfileIosActionStyle.outlined,
-            backgroundColor: neutralFill,
-            foregroundColor: neutralForeground,
-            borderColor: separator,
-          ),
         if (_canMessageOwner)
           ObjectAction(
             label: ProfileText.profileDirectMessage,

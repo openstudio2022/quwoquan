@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+
 import 'package:quwoquan_app/runtime/di/media_delivery_composition.dart';
 
 import 'package:quwoquan_app/runtime/transport/media/media_delivery_reference.dart'
@@ -13,6 +14,7 @@ import 'package:quwoquan_app/service/content_service/media/media_asset/presentat
 import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
 import 'package:quwoquan_app/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/design_system/icons/app_custom_icons.dart';
+import 'package:quwoquan_app/design_system/layout/app_terminal_viewport.dart';
 import 'package:quwoquan_app/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/design_system/formatters/compact_count_formatter.dart';
@@ -96,10 +98,16 @@ class ImmersiveEngagementBar extends StatelessWidget {
 
   /// 工具栏总占高（内容区 + 底部安全区 + 垂直抬升，REQ-019）。
   static double reservedHeight(BuildContext context) {
-    final bottomInset = MediaQuery.viewPaddingOf(context).bottom;
     return _contentHeight(context) +
-        bottomInset +
+        _bottomClearance(context) +
         AppSpacing.immersiveBottomChromeLift;
+  }
+
+  static double _bottomClearance(BuildContext context) {
+    return math.max(
+      MediaQuery.viewPaddingOf(context).bottom,
+      AppViewportObstructionScope.of(context).bottom,
+    );
   }
 
   /// 宿主内容位于底栏之上时使用的净空。
@@ -459,7 +467,7 @@ class ImmersiveEngagementBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bottomInset = MediaQuery.viewPaddingOf(context).bottom;
+    final bottomClearance = _bottomClearance(context);
     final singleLineStyle = TextStyle(
       color: AppColors.worksTitle,
       fontSize: AppTypography.sm,
@@ -490,7 +498,7 @@ class ImmersiveEngagementBar extends StatelessWidget {
             // 底部安全区保护只走垂直方向（REQ-019）：内容在 home indicator
             // 之上再抬升 lift，左右不向中间收拢。
             padding: EdgeInsets.only(
-              bottom: bottomInset + AppSpacing.immersiveBottomChromeLift,
+              bottom: bottomClearance + AppSpacing.immersiveBottomChromeLift,
             ),
             color: AppColors.worksBackground.withValues(alpha: 0.88),
             child: SizedBox(

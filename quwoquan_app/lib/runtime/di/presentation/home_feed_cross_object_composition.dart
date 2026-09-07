@@ -9,7 +9,9 @@ import 'package:quwoquan_app/service/content_service/media/media_asset/presentat
 import 'package:quwoquan_app/service/content_service/media/media_asset/presentation/video_player_widget.dart';
 import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/domain/intersection_action_keys.dart';
 import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/domain/intersection_statement_synthesizer.dart';
+import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/application/public/intersection_reason_selection.dart';
 import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/presentation/home_intersection_spotlight_rail.dart';
+import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/presentation/intersection_evidence_sheet.dart';
 import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/presentation/immersive_intersection_statement.dart';
 import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/presentation/interactive_intersection_text.dart';
 import 'package:quwoquan_app/runtime/transport/media/media_delivery_reference.dart';
@@ -67,7 +69,6 @@ abstract final class HomeFeedCrossObjectComposition {
     IntersectionTarget? contextObjectTarget,
     void Function(IntersectionTextSpan span)? onSpanTap,
     VoidCallback? onFallbackTap,
-    void Function(IntersectionActionHint hint)? onActionHintTap,
   }) {
     return ImmersiveIntersectionStatement(
       key: key,
@@ -76,7 +77,24 @@ abstract final class HomeFeedCrossObjectComposition {
       contextObjectTarget: contextObjectTarget,
       onSpanTap: onSpanTap,
       onFallbackTap: onFallbackTap,
-      onActionHintTap: onActionHintTap,
+    );
+  }
+
+  /// 首页内容卡与视频书共用的渐进证据半屏：只按序渲染云侧 evidenceRows 与 resolver
+  /// 选出的唯一行动，宿主对象只提供 key 与回调。
+  static Widget intersectionEvidenceSheet({
+    required Key panelKey,
+    required Key primaryActionKey,
+    required IntersectionDisplayResolution resolution,
+    required VoidCallback onDismiss,
+    VoidCallback? onPrimaryAction,
+  }) {
+    return IntersectionEvidenceSheet(
+      panelKey: panelKey,
+      primaryActionKey: primaryActionKey,
+      resolution: resolution,
+      onDismiss: onDismiss,
+      onPrimaryAction: onPrimaryAction,
     );
   }
 

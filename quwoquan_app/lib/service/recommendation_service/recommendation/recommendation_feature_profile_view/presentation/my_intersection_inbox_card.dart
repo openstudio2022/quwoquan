@@ -62,6 +62,7 @@ class _MyIntersectionInboxCardState
             intersectionClass: attribution.intersectionClass,
             intersectionTagRefs: attribution.tagRefs,
             intersectionEvidenceId: attribution.evidenceId,
+            intersectionCohort: attribution.cohort,
           );
     },
   );
@@ -94,6 +95,7 @@ class _MyIntersectionInboxCardState
         sourceRef: profileIntersectionSourceRef(reason),
         tagRefs: reason.tagRefs,
         evidenceId: reason.pointSummarySnapshotId,
+        cohort: reason.cohort,
       ),
     );
   }

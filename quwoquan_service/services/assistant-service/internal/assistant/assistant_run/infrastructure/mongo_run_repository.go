@@ -15,16 +15,17 @@ import (
 const runJournalRetention = 7 * 24 * time.Hour
 
 type runDocument struct {
-	ID              string         `bson:"_id"`
-	UserID          string         `bson:"userId"`
-	PersonaID       string         `bson:"personaId,omitempty"`
-	SessionID       string         `bson:"sessionId"`
-	ClientRequestID string         `bson:"clientRequestId"`
-	Revision        int64          `bson:"runRevision"`
-	State           string         `bson:"status"`
-	Snapshot        runruntime.Run `bson:"snapshot"`
-	CreatedAt       time.Time      `bson:"createdAt"`
-	UpdatedAt       time.Time      `bson:"updatedAt"`
+	ID               string         `bson:"_id"`
+	UserID           string         `bson:"userId"`
+	PersonaID        string         `bson:"personaId,omitempty"`
+	SessionID        string         `bson:"sessionId"`
+	ActiveSessionKey string         `bson:"activeSessionKey,omitempty"`
+	ClientRequestID  string         `bson:"clientRequestId"`
+	Revision         int64          `bson:"runRevision"`
+	State            string         `bson:"status"`
+	Snapshot         runruntime.Run `bson:"snapshot"`
+	CreatedAt        time.Time      `bson:"createdAt"`
+	UpdatedAt        time.Time      `bson:"updatedAt"`
 }
 
 type journalDocument struct {
@@ -120,7 +121,48 @@ func NewMongoRunRepository(database *mongo.Database) *MongoRunRepository {
 	}
 }
 
+func activeRunStates() bson.A {
+	return bson.A{
+		"accepted",
+		"orienting",
+		"planning",
+		"executing",
+		"observing",
+		"reflecting",
+		"checkpointing",
+		"waiting_user",
+		"waiting_approval",
+		"waiting_external",
+		"paused",
+		"synthesizing",
+		"verifying",
+	}
+}
+
 func (r *MongoRunRepository) EnsureIndexes(ctx context.Context) error {
+	// Backfill the materialized arbitration key before creating the unique
+	// index. Existing duplicate active Runs therefore make CreateMany fail
+	// closed instead of being silently exempted as legacy documents.
+	if _, err := r.runs.UpdateMany(
+		ctx,
+		bson.M{"status": bson.M{"$nin": activeRunStates()}},
+		bson.M{"$unset": bson.M{"activeSessionKey": ""}},
+	); err != nil {
+		return fmt.Errorf("clear terminal assistant run active session keys: %w", err)
+	}
+	if _, err := r.runs.UpdateMany(
+		ctx,
+		bson.M{"status": bson.M{"$in": activeRunStates()}},
+		mongo.Pipeline{bson.D{{
+			Key: "$set",
+			Value: bson.D{{
+				Key:   "activeSessionKey",
+				Value: "$sessionId",
+			}},
+		}}},
+	); err != nil {
+		return fmt.Errorf("backfill assistant run active session keys: %w", err)
+	}
 	if _, err := r.runs.Indexes().CreateMany(ctx, []mongo.IndexModel{
 		{
 			Keys: bson.D{
@@ -132,6 +174,14 @@ func (r *MongoRunRepository) EnsureIndexes(ctx context.Context) error {
 				SetUnique(true).
 				SetPartialFilterExpression(bson.M{
 					"clientRequestId": bson.M{"$type": "string"},
+				}),
+		},
+		{
+			Keys: bson.D{{Key: "activeSessionKey", Value: 1}},
+			Options: options.Index().SetName("uq_runs_active_session").
+				SetUnique(true).
+				SetPartialFilterExpression(bson.M{
+					"activeSessionKey": bson.M{"$type": "string"},
 				}),
 		},
 		{

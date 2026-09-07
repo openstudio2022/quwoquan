@@ -69,7 +69,7 @@ bool isDisplayableIntersectionReason(
   if (spans.map((span) => span.text).join() != primary) {
     return false;
   }
-  final reasonTarget = _targetForReasonObject(reason);
+  final reasonTarget = targetForReasonObject(reason);
   if (!_displayObjectTargetAllowed(reasonTarget)) {
     return false;
   }
@@ -154,14 +154,53 @@ String _normalizedDisplayBinding(String raw) {
   return intersectionDisplayBindingExplicitLink;
 }
 
-IntersectionTarget _targetForReasonObject(IntersectionReason reason) {
+/// 解析 reason 的 `subjectContext` 锚点（`<objectType>:<objectId>`）为可导航 target：
+/// objectType 经注册表 objectTypeBindings 收口成 kind，routeId / wire objectType 查同一注册表；
+/// 无 typed prefix、未登记 objectType 或空 id 一律返回 null（fail-closed），不按取值形态反推。
+IntersectionTarget? targetForSubjectContext(IntersectionReason reason) {
+  final anchor = reason.subjectContext.trim();
+  final separator = anchor.indexOf(':');
+  if (separator <= 0) return null;
+  final objectType = anchor.substring(0, separator).trim();
+  final objectId = anchor.substring(separator + 1).trim();
+  if (objectType.isEmpty || objectId.isEmpty) return null;
+  final kind = intersectionObjectKindForObjectType(objectType);
+  if (kind == null) return null;
+  final routeId = intersectionRouteIdForObjectKind(kind);
+  return IntersectionTarget(
+    objectType: intersectionWireObjectTypeForObjectKind(kind),
+    objectId: objectId,
+    objectKind: kind.wireName,
+    routeId: routeId,
+  );
+}
+
+/// 无页面宿主的触点（收件箱 / 经历资产）套用展示合同时的宿主：与 Go
+/// `applyInboxDisplayContext` 同语义——只有 host_implicit / host_plain 形态以 reason 自身
+/// 对象作宿主（否则「缺宿主」会把经历交集整条隐藏），explicit_link 形态没有宿主，
+/// 不能把自身对象当宿主，否则会被自链接规则误判。
+IntersectionTarget? inboxDisplayHostForReason(IntersectionReason reason) {
+  final binding = _normalizedDisplayBinding(reason.displayBinding);
+  if (binding == intersectionDisplayBindingHostImplicit ||
+      binding == intersectionDisplayBindingHostPlain) {
+    return targetForReasonObject(reason);
+  }
+  return null;
+}
+
+/// reason 自身所指对象（actionTargetId 优先，其次 relationObjectId）；无页面宿主的触点
+/// （收件箱）以它作为行动的上下文对象。
+IntersectionTarget targetForReasonObject(IntersectionReason reason) {
   final objectKind = reason.objectKind.trim();
   final routeId = _routeIdForObjectKindWire(objectKind);
   final objectId = reason.actionTargetId.trim().isNotEmpty
       ? reason.actionTargetId.trim()
       : reason.relationObjectId.trim();
   return IntersectionTarget(
-    objectType: _objectTypeForTarget(objectKind: objectKind, routeId: routeId),
+    objectType: wireObjectTypeForTarget(
+      objectKind: objectKind,
+      routeId: routeId,
+    ),
     objectId: objectId,
     objectKind: objectKind,
     routeId: routeId,
@@ -241,41 +280,19 @@ String _resolvedReasonKind(IntersectionReason reason) {
   return '';
 }
 
-String _objectTypeForTarget({
+/// IntersectionTarget.objectType 的唯一端侧派生：只查注册表生成的
+/// objectKind → wire objectType 表（与 Recommendation / Content 同一张表）；
+/// `myIntersections` 维度页是唯一的非对象路由。未登记 kind 落空串，由展示合同 fail-closed。
+String wireObjectTypeForTarget({
   required String objectKind,
   required String routeId,
 }) {
-  switch (routeId.trim()) {
-    case 'userProfile':
-      return 'user';
-    case 'circleDetail':
-      return 'circle';
-    case 'homepageDetail':
-      return 'homepage';
-    case 'workBrowser':
-    case 'postDetail':
-    case 'contentDetail':
-      return 'post';
-    case 'myIntersections':
-      return 'dimension';
-  }
-  switch (objectKind.trim()) {
-    case 'person':
-      return 'user';
-    case 'circle':
-      return 'circle';
-    case 'school':
-    case 'place':
-    case 'enterprise':
-    case 'route':
-    case 'photo_spot':
-    case 'gear':
-      return 'homepage';
-    case 'content':
-      return 'post';
-    case 'tag':
-      return 'tag';
-    default:
-      return '';
+  if (routeId.trim() == 'myIntersections') return 'dimension';
+  try {
+    return intersectionWireObjectTypeForObjectKind(
+      IntersectionObjectKind.fromWire(objectKind.trim(), 'objectKind'),
+    );
+  } on FormatException {
+    return '';
   }
 }

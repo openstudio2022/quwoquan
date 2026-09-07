@@ -121,16 +121,19 @@ class _HomeRelationPostCardState extends ConsumerState<_HomeRelationPostCard>
         final borderRadius = widget.wideLayout
             ? BorderRadius.circular(AppSpacing.contentPreviewCornerRadius)
             : BorderRadius.zero;
-        final primaryReason =
-            widget.item.intersectionReasons?.isNotEmpty == true
-            ? widget.item.intersectionReasons!.first
-            : null;
         final feedHostTarget = IntersectionTarget(
           objectType: 'post',
           objectId: item.id,
           objectKind: 'content',
-          routeId: 'workBrowser',
+          routeId: IntersectionTargetNavigator.routeIdForObjectKindWire(
+            'content',
+          ),
         );
+        final intersection = resolveIntersectionDisplay(
+          widget.item.intersectionReasons,
+          contextObjectTarget: feedHostTarget,
+        );
+        final primaryReason = intersection?.reason;
         final hasPlayableVideo = resolveContentVideoUrlCandidates(
           item.mediaVideoUrl,
           endpointConfig: ref.watch(mediaEndpointConfigProvider),
@@ -260,15 +263,6 @@ class _HomeRelationPostCardState extends ConsumerState<_HomeRelationPostCard>
                 ),
 
                 const SizedBox(height: _feedCardSectionGap),
-                _HomeConnectionBadgesRow(
-                  primaryReason: primaryReason,
-                  contextObjectTarget: feedHostTarget,
-                ),
-                if (_HomeConnectionBadgesRow.hasAnyBadge(
-                  primaryReason: primaryReason,
-                  contextObjectTarget: feedHostTarget,
-                ))
-                  const SizedBox(height: AppSpacing.intraGroupSm),
                 // 经历溯源轻标（L0）：回顾内容回链共同行动；与交集主句
                 // 互斥占位（同屏最多一处交集类模块），无关联不渲染。
                 if (primaryReason == null &&
@@ -285,16 +279,21 @@ class _HomeRelationPostCardState extends ConsumerState<_HomeRelationPostCard>
                     isDark: isDark,
                     reason: primaryReason,
                     onTap: () => widget.onImageTap(0),
-                    onFallbackTap: primaryReason == null
+                    onFallbackTap: intersection == null
                         ? null
-                        : () =>
-                              _openFallbackIntersection(context, primaryReason),
-                    onSpanTap: primaryReason == null
-                        ? null
-                        : (span) => _openSpanIntersection(
+                        : () => _showIntersectionEvidence(
                             context,
-                            primaryReason,
-                            span,
+                            item,
+                            intersection,
+                            feedHostTarget,
+                          ),
+                    onSpanTap: intersection == null
+                        ? null
+                        : (_) => _showIntersectionEvidence(
+                            context,
+                            item,
+                            intersection,
+                            feedHostTarget,
                           ),
                   )
                 else if (item.isVideoLike && hasPlayableVideo)
@@ -315,18 +314,21 @@ class _HomeRelationPostCardState extends ConsumerState<_HomeRelationPostCard>
                       initialize: playback.initialize,
                       autoPlay: playback.autoPlay,
                       onTap: () => widget.onImageTap(0),
-                      onFallbackTap: primaryReason == null
+                      onFallbackTap: intersection == null
                           ? null
-                          : () => _openFallbackIntersection(
+                          : () => _showIntersectionEvidence(
                               context,
-                              primaryReason,
+                              item,
+                              intersection,
+                              feedHostTarget,
                             ),
-                      onSpanTap: primaryReason == null
+                      onSpanTap: intersection == null
                           ? null
-                          : (span) => _openSpanIntersection(
+                          : (_) => _showIntersectionEvidence(
                               context,
-                              primaryReason,
-                              span,
+                              item,
+                              intersection,
+                              feedHostTarget,
                             ),
                     ),
                   )
@@ -339,16 +341,21 @@ class _HomeRelationPostCardState extends ConsumerState<_HomeRelationPostCard>
                     onToggleExpanded: () =>
                         setState(() => _isExpanded = !_isExpanded),
                     onTap: widget.onImageTap,
-                    onFallbackTap: primaryReason == null
+                    onFallbackTap: intersection == null
                         ? null
-                        : () =>
-                              _openFallbackIntersection(context, primaryReason),
-                    onSpanTap: primaryReason == null
-                        ? null
-                        : (span) => _openSpanIntersection(
+                        : () => _showIntersectionEvidence(
                             context,
-                            primaryReason,
-                            span,
+                            item,
+                            intersection,
+                            feedHostTarget,
+                          ),
+                    onSpanTap: intersection == null
+                        ? null
+                        : (_) => _showIntersectionEvidence(
+                            context,
+                            item,
+                            intersection,
+                            feedHostTarget,
                           ),
                   ),
 
@@ -420,115 +427,113 @@ class _HomeRelationPostCardState extends ConsumerState<_HomeRelationPostCard>
     );
   }
 
-  void _openSpanIntersection(
+  void _showIntersectionEvidence(
     BuildContext context,
-    IntersectionReason reason,
-    IntersectionTextSpan span,
+    ContentPostViewData post,
+    IntersectionDisplayResolution resolution,
+    IntersectionTarget contextObjectTarget,
   ) {
-    final navigator = IntersectionTargetNavigator(
-      onTrack: (target, attribution) {
-        ref
-            .read(contentBehaviorTrackerProvider)
-            .trackTagClick(
-              target.objectId,
-              referralSource: ReferralSource.organicFeed,
-              tags: attribution.tagRefs,
-              intersectionId: attribution.intersectionId,
-              intersectionDimension: attribution.dimension,
-              intersectionSourceRef: attribution.sourceRef,
-              intersectionTagRefs: attribution.tagRefs,
-              intersectionClass: attribution.intersectionClass,
-              intersectionEvidenceId: attribution.evidenceId,
-            );
-      },
-    );
-    final sourceRef = _sourceRefForReason(reason);
-    navigator.open(
-      context,
-      span.target,
-      sourceRef: sourceRef,
-      attribution: IntersectionNavAttribution(
-        intersectionId: reason.intersectionId,
-        dimension: reason.dimension,
-        intersectionClass: reason.intersectionClass,
-        sourceRef: sourceRef,
-        tagRefs: reason.tagRefs,
-        evidenceId: reason.pointSummarySnapshotId,
-      ),
+    // 漏斗「证据展开」步：曝光 → 展开 → 行动全链携带同一 intersectionId。
+    final reason = resolution.reason;
+    ref
+        .read(contentBehaviorTrackerProvider)
+        .trackIntersectionExpand(
+          contentId: post.id,
+          intersectionId: reason.intersectionId,
+          intersectionDimension: reason.dimension,
+          intersectionClass: reason.intersectionClass,
+          intersectionSourceRef: sourceRefForReason(reason),
+          intersectionCohort: reason.cohort,
+          referralSource: ReferralSource.organicFeed,
+        );
+    showAppBottomModal<void>(
+      context: context,
+      builder: (sheetContext) =>
+          HomeFeedCrossObjectComposition.intersectionEvidenceSheet(
+            panelKey: const ValueKey<String>(
+              'home-intersection-evidence-sheet',
+            ),
+            primaryActionKey: const ValueKey<String>(
+              'home-intersection-primary-action',
+            ),
+            resolution: resolution,
+            onDismiss: () => Navigator.of(sheetContext).pop(),
+            onPrimaryAction: resolution.primaryHint == null
+                ? null
+                : () {
+                    Navigator.of(sheetContext).pop();
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                      if (!context.mounted) return;
+                      _openIntersectionAction(
+                        context,
+                        post,
+                        resolution.reason,
+                        resolution.primaryHint!,
+                        contextObjectTarget,
+                      );
+                    });
+                  },
+          ),
     );
   }
 
-  void _openFallbackIntersection(
+  void _openIntersectionAction(
     BuildContext context,
+    ContentPostViewData post,
     IntersectionReason reason,
+    IntersectionActionHint hint,
+    IntersectionTarget contextObjectTarget,
   ) {
-    IntersectionTarget? firstVisualTarget;
-    for (final visual in reason.sampleVisuals) {
-      if (visual.target != null) {
-        firstVisualTarget = visual.target;
-        break;
-      }
-    }
+    final sourceRef = sourceRefForReason(reason);
+    final attribution = IntersectionNavAttribution(
+      intersectionId: reason.intersectionId,
+      dimension: reason.dimension,
+      intersectionClass: reason.intersectionClass,
+      sourceRef: sourceRef,
+      tagRefs: reason.tagRefs,
+      evidenceId: reason.pointSummarySnapshotId,
+      cohort: reason.cohort,
+    );
     final navigator = IntersectionTargetNavigator(
-      onTrack: (target, attribution) {
-        ref
-            .read(contentBehaviorTrackerProvider)
-            .trackTagClick(
-              target.objectId,
-              referralSource: ReferralSource.organicFeed,
-              tags: attribution.tagRefs,
-              intersectionId: attribution.intersectionId,
-              intersectionDimension: attribution.dimension,
-              intersectionSourceRef: attribution.sourceRef,
-              intersectionTagRefs: attribution.tagRefs,
-              intersectionClass: attribution.intersectionClass,
-              intersectionEvidenceId: attribution.evidenceId,
-            );
-      },
+      onTrack: (target, attr) => ref
+          .read(contentBehaviorTrackerProvider)
+          .trackTagClick(
+            target.objectId,
+            referralSource: ReferralSource.organicFeed,
+            tags: attr.tagRefs,
+            recallPath: post.recallPath,
+            supplySource: post.supplySource,
+            intersectionId: attr.intersectionId,
+            intersectionDimension: attr.dimension,
+            intersectionSourceRef: attr.sourceRef,
+            intersectionTagRefs: attr.tagRefs,
+            intersectionClass: attr.intersectionClass,
+            intersectionEvidenceId: attr.evidenceId,
+            intersectionCohort: attr.cohort,
+          ),
     );
-    final sourceRef = _sourceRefForReason(reason);
-    final opened = navigator.open(
+    final result = navigator.openActionHint(
       context,
-      firstVisualTarget,
+      hint,
       sourceRef: sourceRef,
-      attribution: IntersectionNavAttribution(
-        intersectionId: reason.intersectionId,
-        dimension: reason.dimension,
-        intersectionClass: reason.intersectionClass,
-        sourceRef: sourceRef,
-        tagRefs: reason.tagRefs,
-        evidenceId: reason.pointSummarySnapshotId,
-      ),
+      attribution: attribution,
+      evidenceReason: reason,
+      contextObjectTarget: contextObjectTarget,
+      referralSource: ReferralSource.organicFeed,
     );
-    if (opened) return;
-    final dimension = reason.dimension.trim();
-    if (dimension.isEmpty) return;
-    navigator.open(
-      context,
-      IntersectionTarget(
-        objectType: 'dimension',
-        objectId: dimension,
-        objectKind: 'tag',
-        routeId: 'myIntersections',
-      ),
-      sourceRef: sourceRef,
-      attribution: IntersectionNavAttribution(
-        intersectionId: reason.intersectionId,
-        dimension: reason.dimension,
-        intersectionClass: reason.intersectionClass,
-        sourceRef: sourceRef,
-        tagRefs: reason.tagRefs,
-        evidenceId: reason.pointSummarySnapshotId,
-      ),
+    assert(
+      !result.isConfigurationFailure,
+      'startGatheringNavigationBinding 未注入：约伴行动被静默降级',
     );
-  }
-
-  String _sourceRefForReason(IntersectionReason reason) {
-    for (final point in reason.intersectionPoints) {
-      final sourceRef = point.sourceRef.trim();
-      if (sourceRef.isNotEmpty) return sourceRef;
+    if (!result.didOpen) {
+      // 与沉浸页 / 收件箱同轨：行动不可分发时回落打开 reason 所指对象页，不静默。
+      navigator.open(
+        context,
+        IntersectionTargetNavigator.targetForReason(reason),
+        sourceRef: sourceRef,
+        attribution: attribution,
+      );
     }
-    return reason.source.trim();
   }
 
   static String _timeAgo(BuildContext context, DateTime t) {
@@ -681,142 +686,6 @@ class _HomeFeedProvenanceBadge extends StatelessWidget {
               ),
             ),
           ],
-        ),
-      ),
-    );
-  }
-}
-
-class _HomeConnectionBadgesRow extends StatelessWidget {
-  const _HomeConnectionBadgesRow({
-    required this.primaryReason,
-    required this.contextObjectTarget,
-  });
-
-  final IntersectionReason? primaryReason;
-  final IntersectionTarget? contextObjectTarget;
-
-  static bool hasAnyBadge({
-    required IntersectionReason? primaryReason,
-    IntersectionTarget? contextObjectTarget,
-  }) {
-    final hasInlineIntersection = _shouldShowIntersection(
-      primaryReason,
-      contextObjectTarget: contextObjectTarget,
-    );
-    return (!hasInlineIntersection && _entityLabel(primaryReason) != null) ||
-        _showCompanionBadge(primaryReason);
-  }
-
-  static String? _entityLabel(IntersectionReason? reason) {
-    if (reason == null) {
-      return null;
-    }
-    final visualLabel = reason.objectVisual?.displayName.trim() ?? '';
-    if (visualLabel.isNotEmpty) {
-      return visualLabel;
-    }
-    for (final span in reason.primarySpans) {
-      final kind = span.target?.objectKind.trim() ?? '';
-      if (kind == 'homepage' || kind == 'place') {
-        final text = span.text.trim();
-        if (text.isNotEmpty) {
-          return text;
-        }
-      }
-    }
-    return null;
-  }
-
-  static bool _showCompanionBadge(IntersectionReason? reason) {
-    // 「有人同行」徽标只由云侧下发的约伴同行类 actionHint 驱动，判定真相源为 codegen
-    // actionKeyMeta.dispatch==gathering（start_gathering / join_gathering / meet_nearby，M0.7）；
-    // 话题房 / 语音房 / 心动（dispatch==connect）与私信（dispatch==message）不再误标为同行。
-    // 端只读 actionKey → dispatch，绝不按标题/正文地名字符串猜测约伴意图
-    // （守元数据驱动 R06 + §24.10 诚实红线，不伪造行动信号）。
-    if (reason == null) {
-      return false;
-    }
-    for (final hint in reason.actionHints) {
-      if (HomeFeedCrossObjectComposition.isGatheringAction(hint.actionKey)) {
-        return true;
-      }
-    }
-    return false;
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    if (!hasAnyBadge(
-      primaryReason: primaryReason,
-      contextObjectTarget: contextObjectTarget,
-    )) {
-      return const SizedBox.shrink();
-    }
-
-    final accent = AppColors.iosAccent(context);
-    final chips = <Widget>[];
-
-    final entity =
-        _shouldShowIntersection(
-          primaryReason,
-          contextObjectTarget: contextObjectTarget,
-        )
-        ? null
-        : _entityLabel(primaryReason);
-    if (entity != null) {
-      chips.add(
-        _badgeChip(
-          context,
-          label: entity,
-          prefix: AppConceptConstants.feedBadgeEntity,
-          accent: accent,
-        ),
-      );
-    }
-
-    if (_showCompanionBadge(primaryReason)) {
-      chips.add(
-        _badgeChip(
-          context,
-          label: AppConceptConstants.feedBadgeCompanion,
-          accent: accent,
-        ),
-      );
-    }
-
-    return Wrap(
-      key: const ValueKey<String>('home-connection-badges-row'),
-      spacing: AppSpacing.intraGroupSm,
-      runSpacing: AppSpacing.intraGroupXs,
-      children: chips,
-    );
-  }
-
-  Widget _badgeChip(
-    BuildContext context, {
-    required String label,
-    String? prefix,
-    required Color accent,
-  }) {
-    final text = prefix == null || prefix.isEmpty ? label : '$prefix · $label';
-    return Container(
-      padding: EdgeInsets.symmetric(
-        horizontal: AppSpacing.intraGroupSm,
-        vertical: AppSpacing.intraGroupXs,
-      ),
-      decoration: BoxDecoration(
-        color: accent.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(AppSpacing.radiusTen),
-      ),
-      child: Text(
-        text,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: TextStyle(
-          fontSize: AppTypography.iosCaption2,
-          fontWeight: AppTypography.medium,
-          color: accent,
         ),
       ),
     );

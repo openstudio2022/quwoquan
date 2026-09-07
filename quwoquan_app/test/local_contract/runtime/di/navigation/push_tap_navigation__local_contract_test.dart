@@ -6,6 +6,7 @@ library;
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/runtime/di/navigation/push_tap_navigation.dart';
+import 'package:quwoquan_app/runtime/shell/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/runtime/platform/firebase_incoming_call_runtime.dart';
 
 final class _ScriptedPushTapIntentSource implements PushTapIntentSource {
@@ -63,6 +64,34 @@ void main() {
       ),
     );
     expect(pushed, ['/chat/conv_push_1', '/chat/conv_push_2']);
+  });
+
+  test('Gathering 冷启动/后台 tap 统一直达任务详情', () async {
+    final source = _ScriptedPushTapIntentSource(
+      initialIntent: const PushTapIntent(
+        targetType: 'gathering',
+        targetId: 'gathering_initial',
+        callId: '',
+      ),
+    );
+    final pushed = <String>[];
+    final navigator = PushTapNavigator(intentSource: source, push: pushed.add);
+    addTearDown(navigator.dispose);
+
+    await navigator.start();
+    expect(pushed, [AppRoutePaths.gatheringDetail(id: 'gathering_initial')]);
+
+    source.emit(
+      const PushTapIntent(
+        targetType: 'gathering',
+        targetId: 'gathering_opened',
+        callId: '',
+      ),
+    );
+    expect(pushed, [
+      AppRoutePaths.gatheringDetail(id: 'gathering_initial'),
+      AppRoutePaths.gatheringDetail(id: 'gathering_opened'),
+    ]);
   });
 
   test('来电 intent 与未知目标不进入通用分发', () async {

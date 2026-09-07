@@ -176,12 +176,15 @@ func (s *FeedService) replayFeedDeliveryPage(
 	}
 	items := append([]FeedItemView(nil), currentItems()...)
 	if s.intersections != nil && strings.TrimSpace(req.UserID) != "" {
-		if reasons, reasonErr := s.intersections.Feed(
+		reasons, reasonErr := s.intersections.Feed(
 			ctx,
 			req.UserID,
 			route.ChannelID,
-			feedIntersectionPoolLimit,
-		); reasonErr == nil {
+			IntersectionReasonPoolLimit,
+		)
+		if reasonErr != nil {
+			LogIntersectionReadFailure("feed", route.ChannelID, reasonErr)
+		} else {
 			AttachFeedIntersections(items, reasons, req.UserID)
 		}
 	}

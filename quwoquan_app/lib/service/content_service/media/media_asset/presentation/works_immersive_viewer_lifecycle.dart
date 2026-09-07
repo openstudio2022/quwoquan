@@ -16,6 +16,40 @@ extension _WorksImmersiveViewerLifecycle on _WorksImmersiveViewerState {
     _videoDurationWindowRevision += 1;
   }
 
+  void _suspendInactiveSurface() {
+    final activePost = _activeTrackedPost;
+    final activeSession = _activeVideoBinding?.session;
+
+    // 先冻结 typed session，再结算播放证据；否则离屏时间可能落入本轮有效播放。
+    activeSession?.setVisibility(false);
+    if (activePost != null) {
+      _flushDwell(activePost);
+    }
+    _articleHydrationAdmission.retainOnly(null);
+    _prefetchScheduled = false;
+    _invalidateVideoViewport(resetDurationWindow: true);
+    _feedPerformanceObservability.recordActiveVideoControllerCount(
+      surfaceId: 'works_immersive_viewer',
+      activeCount: 0,
+    );
+  }
+
+  void _resumeActiveSurfaceTracking() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !widget.isActive || _activeTrackedPost != null) {
+        return;
+      }
+      final posts = _buildFeed();
+      if (posts.isEmpty || _currentPage >= posts.length) {
+        return;
+      }
+      final currentIndex = _currentPage.clamp(0, posts.length - 1);
+      _retainPostLocalStateAround(posts, currentIndex);
+      _trackImpressionForPost(posts[currentIndex], position: currentIndex);
+      _schedulePrefetch(visibleIndex: currentIndex, postsLength: posts.length);
+    });
+  }
+
   bool get _usesExternalFeed => widget.externalPosts != null;
 
   void _configureExternalEmptyDeadline() {
@@ -238,7 +272,7 @@ extension _WorksImmersiveViewerLifecycle on _WorksImmersiveViewerState {
     required int postsLength,
     bool force = false,
   }) {
-    if (_usesExternalFeed) {
+    if (!widget.isActive || _usesExternalFeed) {
       return;
     }
     final thresholdIndex = max(
@@ -264,7 +298,7 @@ extension _WorksImmersiveViewerLifecycle on _WorksImmersiveViewerState {
     required int postsLength,
     bool force = false,
   }) {
-    if (_usesExternalFeed || _prefetchScheduled) {
+    if (!widget.isActive || _usesExternalFeed || _prefetchScheduled) {
       return;
     }
     _prefetchScheduled = true;
@@ -526,6 +560,9 @@ extension _WorksImmersiveViewerLifecycle on _WorksImmersiveViewerState {
   }
 
   void _trackImpressionForPost(ContentPostViewData post, {int? position}) {
+    if (!widget.isActive) {
+      return;
+    }
     _articleHydrationAdmission.retainOnly(post.id);
     _rememberPostLocalState(post.id);
     final feedAttribution = _feedAttributionForPost(post);

@@ -105,6 +105,91 @@ void main() {
     );
   });
 
+  test(
+    'Gathering invitation and facilitation notifications open canonical detail',
+    () {
+      for (final source in <String>[
+        'gathering_invitation',
+        'intersection_facilitation',
+      ]) {
+        final message = AppMessage(
+          messageId: 'msg_$source',
+          userId: 'persona_1',
+          messageType: NotificationType.circle,
+          source: source,
+          sourceId: 'source_1',
+          destination: const AppMessageDestination(
+            type: 'user',
+            id: 'persona_1',
+          ),
+          title: '行动有新进展',
+          summary: '点击查看行动详情',
+          target: const AppMessageTarget(
+            targetType: 'gathering',
+            targetId: 'gathering_1',
+            query: AppMessageRouteQuery(),
+          ),
+          read: false,
+          createdAt: DateTime.utc(2026, 9, 5),
+        );
+
+        expect(
+          AppMessageNavigationTarget.fromMessage(message)?.location,
+          AppRoutePaths.gatheringDetail(id: 'gathering_1'),
+        );
+      }
+    },
+  );
+
+  test('评论通知定位宿主作品与目标评论，route fallback 仍可用', () {
+    final commentMessage = AppMessage(
+      messageId: 'msg_comment',
+      userId: 'persona_1',
+      messageType: NotificationType.content,
+      source: 'comment_mention',
+      sourceId: 'comment_42',
+      destination: const AppMessageDestination(type: 'user', id: 'persona_1'),
+      title: '有人提到了你',
+      summary: '点击查看评论',
+      target: const AppMessageTarget(
+        targetType: 'post',
+        targetId: 'post_42',
+        query: AppMessageRouteQuery(),
+      ),
+      read: false,
+      createdAt: DateTime.utc(2026, 9, 5),
+    );
+    final commentLocation = AppMessageNavigationTarget.fromMessage(
+      commentMessage,
+    )?.location;
+    expect(commentLocation, contains('/works/browser/post_42'));
+    expect(commentLocation, contains('openComments=true'));
+    expect(commentLocation, contains('targetCommentId=comment_42'));
+
+    final fallbackMessage = AppMessage(
+      messageId: 'msg_fallback',
+      userId: 'persona_1',
+      messageType: NotificationType.content,
+      source: 'generic_route',
+      sourceId: 'source_1',
+      destination: const AppMessageDestination(type: 'user', id: 'persona_1'),
+      title: '查看详情',
+      summary: '点击继续',
+      target: const AppMessageTarget(
+        targetType: 'route',
+        targetId: 'future_route',
+        routePath: '/future/path?source=message',
+        query: AppMessageRouteQuery(),
+      ),
+      read: false,
+      createdAt: DateTime.utc(2026, 9, 5),
+    );
+    expect(
+      AppMessageNavigationTarget.fromMessage(fallbackMessage)?.location,
+      '/future/path?source=message',
+    );
+  });
+
   test('Assistant run notification resumes the canonical personal route', () {
     final message = AppMessage(
       messageId: 'msg_assistant_run',

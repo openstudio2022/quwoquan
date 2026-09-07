@@ -3759,68 +3759,6 @@ _PLATFORM_CONFIG_JSON = r'''{
       "type": "string"
     },
     {
-      "default": "app-product-telemetry-hourly",
-      "key": "sys.product-ops-service.elasticsearch.aggregate_index",
-      "reload": "restart",
-      "rollout": "progressive",
-      "scope": "workload",
-      "sensitive": false,
-      "type": "string"
-    },
-    {
-      "key": "sys.product-ops-service.elasticsearch.api_key",
-      "reload": "restart",
-      "rollout": "progressive",
-      "scope": "workload",
-      "sensitive": true,
-      "type": "string"
-    },
-    {
-      "default": "${PRODUCT_OPS_ELASTICSEARCH_ENDPOINT}",
-      "key": "sys.product-ops-service.elasticsearch.endpoint",
-      "reload": "restart",
-      "rollout": "progressive",
-      "scope": "workload",
-      "sensitive": false,
-      "type": "string"
-    },
-    {
-      "default": "app-product-telemetry-raw",
-      "key": "sys.product-ops-service.elasticsearch.raw_index",
-      "reload": "restart",
-      "rollout": "progressive",
-      "scope": "workload",
-      "sensitive": false,
-      "type": "string"
-    },
-    {
-      "default": "runtime-diagnostics-raw",
-      "key": "sys.product-ops-service.elasticsearch.runtime_log_index",
-      "reload": "restart",
-      "rollout": "progressive",
-      "scope": "workload",
-      "sensitive": false,
-      "type": "string"
-    },
-    {
-      "default": "app-startup-diagnostic-raw",
-      "key": "sys.product-ops-service.elasticsearch.startup_diagnostic_index",
-      "reload": "restart",
-      "rollout": "progressive",
-      "scope": "workload",
-      "sensitive": false,
-      "type": "string"
-    },
-    {
-      "default": 5000,
-      "key": "sys.product-ops-service.elasticsearch.timeout_ms",
-      "reload": "restart",
-      "rollout": "progressive",
-      "scope": "workload",
-      "sensitive": false,
-      "type": "int"
-    },
-    {
       "default": "quwoquan_product_ops",
       "key": "sys.product-ops-service.mongodb.database",
       "reload": "restart",
@@ -4040,6 +3978,50 @@ _PLATFORM_CONFIG_JSON = r'''{
       "type": "bool"
     },
     {
+      "default": "runtime-diagnostics-hourly",
+      "key": "sys.product-ops-service.runtime_log_elasticsearch.aggregate_index",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
+      "key": "sys.product-ops-service.runtime_log_elasticsearch.api_key",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": true,
+      "type": "string"
+    },
+    {
+      "default": "${PRODUCT_OPS_RUNTIME_LOG_ELASTICSEARCH_ENDPOINT}",
+      "key": "sys.product-ops-service.runtime_log_elasticsearch.endpoint",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
+      "default": "runtime-diagnostics-raw",
+      "key": "sys.product-ops-service.runtime_log_elasticsearch.raw_index",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
+      "default": 5000,
+      "key": "sys.product-ops-service.runtime_log_elasticsearch.timeout_ms",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "int"
+    },
+    {
       "default": ":18086",
       "key": "sys.product-ops-service.service.http.addr",
       "reload": "restart",
@@ -4074,6 +4056,59 @@ _PLATFORM_CONFIG_JSON = r'''{
       "scope": "workload",
       "sensitive": false,
       "type": "string"
+    },
+    {
+      "default": "app-product-telemetry-hourly",
+      "key": "sys.product-ops-service.telemetry_elasticsearch.aggregate_index",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
+      "key": "sys.product-ops-service.telemetry_elasticsearch.api_key",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": true,
+      "type": "string"
+    },
+    {
+      "default": "${PRODUCT_OPS_TELEMETRY_ELASTICSEARCH_ENDPOINT}",
+      "key": "sys.product-ops-service.telemetry_elasticsearch.endpoint",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
+      "default": "app-product-telemetry-raw",
+      "key": "sys.product-ops-service.telemetry_elasticsearch.raw_index",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
+      "default": "app-startup-diagnostic-raw",
+      "key": "sys.product-ops-service.telemetry_elasticsearch.startup_diagnostic_index",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
+      "default": 5000,
+      "key": "sys.product-ops-service.telemetry_elasticsearch.timeout_ms",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "int"
     },
     {
       "key": "sys.product-ops-service.user_account_security_authority.base_url",

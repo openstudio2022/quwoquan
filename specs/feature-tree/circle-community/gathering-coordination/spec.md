@@ -6,7 +6,7 @@
 
 ## 1. 能力目标
 
-让任何可信 Host 把内容、地点或兴趣变成可公开发现或定向邀请、可准入、可在活动群聊与看板协作、可形成 Outcome 并回流内容的 Gathering。创作者行动、Circle 活动、普通 Persona 发起、可选 Entity Host、1:1、多人和多日行程只通过来源、政策、要求与可选能力形成体验差异，不建立第二活动根。
+让任何可信 Host 在内容交集的事实依据被用户主动展开后，把地点或兴趣变成可定向邀请或经合法入口公开加入、可准入、可在活动群聊与看板协作、可形成 Outcome 并回流内容的 Gathering。Gathering 的创建/详情/Board/活动群聊/我的行动是用户进入行动后的任务承接页，不因一级发现入口退役而删除。创作者行动、Circle 活动、普通 Persona 发起、可选 Entity Host、1:1、多人和多日行程只通过来源、政策、要求与可选能力形成体验差异，不建立第二活动根。
 
 ## 2. 范围与非目标
 
@@ -15,20 +15,20 @@
 - Gathering 的 Host authority、草稿/发布、Revision、生命周期、时间阶段、准入状态、取消/提前结束/安全终止与 Outcome。
 - root-owned GatheringParticipation 的邀请、申请、公开加入、审批、退出、移除、重大变更确认、出席与容量不变量。
 - 唯一 contextual activity room 的 binding state、有效参与者访问投影，以及由 Circle/Chat/可选能力组合的 Board 读模型。
-- 公开详情、发现投影、名额提醒、Host 管理、安全披露、Report/Block 级联与完成后 Content 回流引用。
+- 公开详情、来源投影、名额提醒、Host 管理、安全披露、Report/Block 级联与完成后 Content 回流引用。
 
 ### Out of Scope
 
 - Conversation、ConversationMembership、Message、Announcement、已读、通话和附件索引，由 [`chat-conversation`](../../chat-conversation/spec.md) 负责。
 - Post、MediaAsset、LocalPostDraft 与 Report，由 Content owner 负责；Gathering 不是第五种 Post。
-- 候选召回与排序由 `recommendation-platform` 负责，但 Recommendation 不拥有候选资格、Participation、准入、容量或 Outcome。
+- 行动不是一级内容池；当前阶段不提供全局公开 Gathering 发现 feed。Recommendation 可投影交集与社会证明，但不拥有候选资格、Participation、准入、容量或 Outcome。
 - Persona Follow/mutual/Block、Entity Homepage authority 与 CircleMembership 由各 owner 负责；Participation 不自动建立关系或 Circle membership。
 - 连续实时位置、票务支付、退款分账、Workspace 产品和活动类型白名单。
 
 ## 3. Journey / Scenario 贡献
 
 - [`JNY-011 / SCN-027`](../../spec.md#scn-027)
-  - 本能力接收：来自内容、C 位、主页、会话或推荐公开卡的发起/响应意图，以及 owner 可验证的来源、Host authority、viewer 与风险/披露结果。
+  - 本能力接收：来自内容交集主动展开后的 typed 发起意图，或来自邀请卡、通知、我的行动、活动群聊、Board、回顾溯源与合法深链的响应/管理意图，以及 owner 可验证的来源、Host authority、viewer 与风险/披露结果。
   - 本能力处理：创建 room-ready Gathering，维护单一 Participation、Revision、容量/准入、生命周期、Outcome 与 room binding state，并向 Chat 投影访问、向 Content 输出回顾引用。
   - 本能力输出：可公开消费或受邀查看的 Gathering、一个状态驱动主动作、有效参与后的活动群聊与 Board、证据化 Outcome 和内容回流入口。
   - 失败时终态：登录取消、满员、待审批、邀请失效、重大变更待确认、room access 未就绪、取消、提前结束或安全终止均可区分；不产生半加入、自动 mutual、裸建群或本地合成成功。
@@ -45,7 +45,6 @@
 - [`gathering-participant-roster`](./gathering-participant-roster/spec.md)：以单一 root-owned Participation 管理邀请、申请、公开加入、容量、名单、重大变更确认与退出/移除。
 - [`gathering-conversation-binding`](./gathering-conversation-binding/spec.md)：在 Publish 前绑定唯一活动群聊，并让有效参与者默认进入消息与活动看板。
 - [`gathering-plan-collaboration`](./gathering-plan-collaboration/spec.md)：以每个 Gathering 至多一个可选 Plan、typed proposal/commit 与不可变 Revision history 管理协作计划。
-- [`offline-actions-discovery-tab`](./offline-actions-discovery-tab/spec.md)：以底栏「行动」和首页视频书入口组合既有读面，并诚实区分游客态与尚未交付的公开行动发现流。
 
 ## 5. 能力要求
 
@@ -111,9 +110,9 @@
 - Participation、ConversationMembership、CircleMembership、Follow 与 mutual 相互独立；加入、到场、完成和共同发布都不自动改变关系。
 
 <a id="req-010"></a>
-### REQ-010 公开发现与内容回流不转移 owner
+### REQ-010 任务承接、来源投影与内容回流不转移 owner
 
-- Circle 签发 Gathering 公开投影；首页、内容、Persona/Circle 主页、Search 与 Chat wrapper 只持 canonical reference/placement/rank reason，Recommendation 只排序，不保存可写活动事实。
+- Circle 签发 Gathering 公开投影；邀请卡、通知、我的行动、活动群聊、Board、回顾溯源与深链 wrapper 只持 canonical reference/placement/reason，Recommendation 不保存可写活动事实。创建/详情/Board/我的行动作为任务承接页继续可达，但不得被包装成独立行动内容池。
 - 未加入者进入公开详情，有效参与者再次打开活动默认进入群聊。完成后用户可创建回顾草稿，只有确认发布后 Content owner 才创建 Post/Media 并以 `content.post.gatheringRef` 关联原 Gathering、Host 与来源内容；Content 写入该关联前必须经 Circle owner 校验作者持有有效 Participation，校验不成立 fail-closed。
 - 回流内容驱动的经历交集（`coExperiencedGathering`）与四锚点社会证明计数由 recommendation 投影消费 Circle/Content 公开事件派生（口径见 [`intersection-unified-experience` REQ-009](../../object-homepage-network/intersection-unified-experience/spec.md#req-009)）；Circle 拥有发起人事实统计（发起 N/成形 M/经历 K）投影进公开详情发起人卡，计数只由「成形」「经历」两级诚实事实派生，不做对人评分。
 - Report 继续由 Content Trust Safety owner 接收和治理；Circle 只保存安全退出、即时撤权与必要证据 reference，不复制 Report 生命周期。
@@ -139,16 +138,16 @@
 - SLO：Board freshness P95 不超过 60 秒，超员和未授权 room access 为零；Outcome 与回流引用完整率不低于 99.99%。
 - 采样与保留：生命周期、安全、准入写、Host authority、撤权与 Outcome 100% 审计；普通读取 trace 依受治理采样，默认在线 trace 保留 30 天、聚合漏斗保留 13 个月，申请答案和安全证据按 owner retention contract 执行。
 - 告警：10 分钟窗口公开详情或准入成功率低于 99%、projection 或撤权 P95 超过 60 秒、任何超员/未授权访问、room binding 不可恢复或 Outcome 证据缺失立即通知 Circle/Chat 值班。
-- feature flag：创建、公开发现、准入、room/board、Outcome/回流分别独立控制；关闭新能力时既有 Gathering 仍可读取、退出、安全处置和完成。
+- feature flag：创建、交集后置曝光、准入、room/board、Outcome/回流分别独立控制；关闭新能力时既有 Gathering 仍可读取、退出、安全处置和完成。
 - rollback owner：Circle 值班负责人拥有总回滚，Chat 值班负责人负责 room/board 投影，Content 值班负责人负责回流入口；回滚不得删除既有对象、恢复裸建群、启用双读双写或 Mock。
 
 ## 7. 集成验收
 
 <a id="sit-001"></a>
-### SIT-001 内容或 C 位发起到 room+board
+### SIT-001 内容交集发起到 room+board
 
-- GIVEN Host 具有可验证 authority，来源内容或 C 位上下文有效，room provision 与风险义务可用。
-- WHEN Host 发布 Gathering，参与者从首页/内容/主页公开详情通过开放加入、申请审批或邀请接受成为有效参与者。
+- GIVEN Host 具有可验证 authority，来源内容与交集上下文有效，room provision 与风险义务可用。
+- WHEN Host 从内容交集证据半屏的 canonical hint 发布 Gathering，参与者从邀请卡、通知、回顾溯源或合法深链公开详情通过开放加入、申请审批或邀请接受成为有效参与者。
 - THEN Publish 前已有唯一 contextual room，有效参与后默认进入同一活动群聊并可打开 Board；待审批或邀请待响应者不能进入。
 - AND Recommendation、Chat、Content 与 App 都不保存第二份 Gathering/Participation 状态，参与不会自动建立 mutual。
 
@@ -187,14 +186,14 @@
 - 类型：`capability_gap`
 - 优先级：`P0`
 - 准出影响：`block`
-- 影响或价值：尚缺内容/主页发起入口全覆盖与真实 UAT，缺 route/surface/operation contract 时不得下发可行动 CTA。发起链生产可用性与最小公开发现面已闭合：实体主页「近期行动」区块经 `ListGatheringsBySource` 渲染公开行动卡并带实体锚点成形计数小字（「N 次行动从这里成行」，零成形与读取失败不渲染）；「附近的行动」仍依赖坐标语料回填（intersection OPEN-007）。以下各点均有生产装配（无 override）widget 与 Go 契约测试。
+- 影响或价值：尚缺“内容单句 → 主动展开证据 → 唯一 typed 下一步”的入口全覆盖与真实 UAT，缺 route/surface/operation contract 时不得下发可行动 CTA。实体主页保留“想去”、交集、成形计数与内容，但不在首屏直接发起或直出行动卡；创建与详情链继续复用下列生产装配（无 override）widget 与 Go 契约测试。
   - `gatheringCreateInitialValueProvider` 真实 composer 落地（persona host 授权用 canonical 自引用 `persona:{id}:self` + 快照版本，交集导航上下文预填标题/公开地点/可导航 sourceRefs）。
   - 创建页产品化（隐藏 host/授权/风控/ISO 内部字段、DateTime picker、安全默认模板）。
   - publish 义务（policyDecisionRef/policyDigest/obligationDigest）由 Circle owner 侧对实际 policy 内容确定性派生（端不再伪造治理证据）。
   - 行动详情/Board 已有「发布回顾」入口。
   - 双人邀约（1对1 同好邀约，DEC-001 同一 Gathering 形态）：人对人交集发起时导航请求携带受邀者，composer 预设收紧为 capacity=2 + audience/admission=invite_only 且不套对象名标题模板，发布成功后经 `InviteToGathering` 自动发出披露安全邀请（失败不阻断发布、可在 Host 控制台重发）。「我的交集」收件箱可约主行动与他人主页同轨携带人对人上下文，duo 预设在两个主入口一致生效。
   - 仍缺：duo 面向未注册用户的外溢邀请（分享深链 / 短信 → 登录续接 → token 化接受）——受邀 UI 当前只经 AppMessage 触达注册用户；外链邀请涉及披露安全与 token 设计，待产品裁决后另立实现，在该裁决落地前 1对1 场景只覆盖站内用户。
-- 完成判定：`SIT-001` 由 local_contract、api_integration、user_acceptance 直接覆盖，游客关闭登录不循环、成功续接原发起/响应动作。
+- 完成判定：`SIT-001` 由 local_contract、api_integration、user_acceptance 直接覆盖：首页与视频书均经交集证据后置发起；游客关闭登录回安全内容页不循环，成功恢复受邀者、Post 来源、地点与证据并只续接一次；任务深链保持可达。
 - 依赖：[`creation-mode-and-surface-ia-unification`](../../discovery-content/content-type-framework/creation-mode-and-surface-ia-unification/spec.md) 及后续 contracts/metadata 准入。
 
 <a id="open-003"></a>

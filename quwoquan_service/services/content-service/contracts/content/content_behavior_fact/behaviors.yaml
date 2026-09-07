@@ -167,6 +167,7 @@ behavior_events:
   - intersectionClass
   - intersectionSourceRef
   - intersectionEvidenceId
+  - intersectionCohort
   ml_signal: weak_positive
   signal_weight: 0.1
   notes: 'state 为该事件的动作级必填字段，只允许 visible / impressed：visible 表示进入
@@ -217,6 +218,7 @@ behavior_events:
   - intersectionClass
   - intersectionSourceRef
   - intersectionEvidenceId
+  - intersectionCohort
   ml_signal: strong_positive
   signal_weight: 0.5
   notes: '交集点击归因：交集卡点击进入对象页时，随点击带 intersectionId/dimension/class/sourceRef(§5.4 kind)/evidenceId，
@@ -235,6 +237,7 @@ behavior_events:
   - intersectionDimension
   - intersectionClass
   - intersectionSourceRef
+  - intersectionCohort
   - surfaceId
   ml_signal: weak_positive
   signal_weight: 0.2
@@ -316,14 +319,15 @@ behavior_events:
   - intersectionDimension
   - intersectionClass
   - intersectionSourceRef
+  - intersectionCohort
   ml_signal: explicit_negative
   signal_weight: -5.0
   notes: "交集负反馈闭环（F 推荐与交集配对差异化）：\n- feedbackKind ∈ intersection_kind_registry.feedbackKinds 闭集\n  （notInterested\
     \ / dismiss / rejectGreeting / leaveCircle），端上报与云侧降权 / 冷却\n  读同一集合（Go generated.IntersectionFeedbackKinds\
     \ / Dart intersectionFeedbackKinds），\n  禁止端各写一份（单一真相源 = registry）。\n- subjectId 为交集主体对象 id（person\
     \ / circle / place 等，与 reason.subjectId /\n  actionTargetId 同源）。云侧 IntersectionService.ReportNegativeFeedback\
-    \ 据此写\n  rec:ineg 交集负反馈冷却集；Feed / ObjectIntersections 合并时对命中 subject 过滤\n  （冷却期内不再推荐），区别于曝光冷却 rec:icool（seen\
-    \ 仅降权保留）。\n- intersectionId / intersectionDimension / intersectionClass(fact|affinity) /\n  intersectionSourceRef\
+    \ 据此写\n  rec:ineg 交集负反馈冷却集；Feed / ObjectIntersections 合并时对命中 subject 过滤\n  （冷却期内不再推荐）；曝光冷却 rec:icool 以 intersectionId 记账，窗口内同样过滤，\
+    \ 点击 / 展开 / 转化清零。\n- intersectionId / intersectionDimension / intersectionClass(fact|affinity) /\n  intersectionSourceRef\
     \ 与曝光 → 点击 → 转化保持同一漏斗归因键，使负反馈可按维度 /\n  标准 kind / 类别下钻。intersection_feedback 与 assistant_interest 同为不需\
     \ contentId\n  的事件（subjectId 承载对象），服务端 contentId 必填校验对其豁免。\n"
 - type: wishlist_add
@@ -478,6 +482,7 @@ behavior_events:
   - intersectionDimension
   - intersectionSourceRef
   - intersectionTagRefs
+  - intersectionCohort
   ml_signal: very_strong_positive
   signal_weight: 4.0
   notes: '交集转化归因（S6）：intersectionDimension（identity/location/content/interest/relationship
@@ -500,6 +505,7 @@ behavior_events:
   - intersectionDimension
   - intersectionSourceRef
   - intersectionTagRefs
+  - intersectionCohort
   ml_signal: very_strong_positive
   signal_weight: 4.0
   notes: '交集转化三类行动（关注人 follow / 进圈子 join_circle / 加联系人 add_contact）独立成
@@ -523,6 +529,7 @@ behavior_events:
   - intersectionDimension
   - intersectionSourceRef
   - intersectionTagRefs
+  - intersectionCohort
   ml_signal: very_strong_positive
   signal_weight: 4.5
 - type: author_view

@@ -5,6 +5,11 @@
 // intersection_hydration.go 一律查本表，禁止手写 kind/objectKind switch 第二份。
 package generated
 
+// IntersectionPolicyDigest 是交集策略身份：注册表 canonical 字节的 sha256。
+// Content 水合出口把它写入 IntersectionReason.cohort，端在曝光→点击→转化→清零
+// 全链原样回传（intersectionCohort），使漏斗可按策略版本（灰度 cohort）下钻；不是用户分桶。
+const IntersectionPolicyDigest = "sha256:090ae530e7f77e8820a33c3bb4114b978845b5b6dc0b77bc6837c7892b0f5871"
+
 // IntersectionEvidenceRank: kind → evidenceKindRank（registry.kinds[].evidenceRank）。
 // pointClass=="recommended" 固定 900、未登记 kind 落 500 由消费方兜底，不入本表。
 var IntersectionEvidenceRank = map[string]int{
@@ -98,6 +103,24 @@ var IntersectionRouteIDByObjectKind = map[string]string{
 	"gathering":  "gatheringDetail",
 }
 
+// IntersectionWireObjectTypeByObjectKind: objectKind → canonical wire objectType
+// （registry.objectKinds[].objectType）。IntersectionTarget.objectType 归一化只查此表，
+// 服务端不再按 routeId / kind 手写 switch，也不从 objectId 前缀反推。
+var IntersectionWireObjectTypeByObjectKind = map[string]string{
+	"person":     "user",
+	"circle":     "circle",
+	"school":     "homepage",
+	"place":      "homepage",
+	"enterprise": "homepage",
+	"route":      "homepage",
+	"photo_spot": "homepage",
+	"gear":       "homepage",
+	"content":    "post",
+	"entity":     "homepage",
+	"tag":        "tag",
+	"gathering":  "gathering",
+}
+
 // IntersectionAssetKindByObjectKind: objectKind → 对象视觉资产类型（registry.objectKinds[].assetKind）。
 // 仅登记声明了 assetKind 的主对象类型；未登记缺省由消费方兜底 "icon"。
 var IntersectionAssetKindByObjectKind = map[string]string{
@@ -157,8 +180,10 @@ var IntersectionObjectKindByObjectType = map[string]string{
 	"circle":            "circle",
 	"city":              "place",
 	"company":           "enterprise",
+	"content":           "content",
 	"enterprise":        "enterprise",
 	"entity":            "place",
+	"gathering":         "gathering",
 	"gear":              "gear",
 	"heritage_site":     "place",
 	"homepage":          "place",
@@ -170,6 +195,7 @@ var IntersectionObjectKindByObjectType = map[string]string{
 	"person":            "person",
 	"photo_spot":        "photo_spot",
 	"place":             "place",
+	"post":              "content",
 	"religious_site":    "place",
 	"restaurant":        "place",
 	"route":             "route",
@@ -187,7 +213,7 @@ var IntersectionObjectKindByObjectType = map[string]string{
 // 未登记 kind 返回 nil，消费方兜底 ["ask_assistant"]。
 var IntersectionActionKeysByKind = map[string][]string{
 	"coCommented":            {"open_content", "open_discussion"},
-	"coExperiencedGathering": {"start_gathering", "open_object", "message_person"},
+	"coExperiencedGathering": {"start_gathering", "message_person"},
 	"coLiked":                {"open_content", "follow_person"},
 	"coSharedContent":        {"open_content", "create_followup"},
 	"coVisitedEntity":        {"open_object", "open_route"},
@@ -199,7 +225,7 @@ var IntersectionActionKeysByKind = map[string][]string{
 	"followeeViewing":        {"open_content", "view_shared_people"},
 	"followeeVisited":        {"open_object", "open_route"},
 	"sameIndustry":           {"message_person", "follow_person"},
-	"sharedCircle":           {"join_circle", "open_discussion"},
+	"sharedCircle":           {"greet_person", "message_person"},
 	"sharedEntityAttention":  {"open_object", "follow_object"},
 	"sharedFollowees":        {"follow_person", "greet_person", "view_shared_people"},
 	"sharedTagSample":        {"open_object", "join_circle"},
@@ -350,7 +376,7 @@ var IntersectionStatementFormByKind = map[string]IntersectionStatementForm{
 	"coExperiencedGathering": {
 		Template: "{subject}一起参加过{object}",
 		L10nKey:  "intersection.statement.co_experienced_gathering",
-		Counted:  IntersectionStatementVariant{Template: "{subject}和你一起参加过{count}次行动", L10nKey: "intersection.statement.co_experienced_gathering.counted"},
+		Counted:  IntersectionStatementVariant{Template: "{subject}一起参加过{count}次行动", L10nKey: "intersection.statement.co_experienced_gathering.counted"},
 	},
 	"coLiked": {
 		Template: "{subject}都点赞过{object}",
@@ -374,7 +400,6 @@ var IntersectionStatementFormByKind = map[string]IntersectionStatementForm{
 	"coWishlistedEntity": {
 		Template: "{subject}都想去{object}",
 		L10nKey:  "intersection.statement.co_wishlisted_entity",
-		Counted:  IntersectionStatementVariant{Template: "{subject}和你都想去{count}个相同的地方", L10nKey: "intersection.statement.co_wishlisted_entity.counted"},
 		Variants: map[string]IntersectionStatementVariant{
 			"personPlace": {Template: "你和{object}都想去{place}", L10nKey: "intersection.statement.co_wishlisted_entity.person_place"},
 		},
@@ -390,10 +415,16 @@ var IntersectionStatementFormByKind = map[string]IntersectionStatementForm{
 	"followeeInObject": {
 		Template: "{subject}在{object}",
 		L10nKey:  "intersection.statement.followee_in_object",
+		Variants: map[string]IntersectionStatementVariant{
+			"noObject": {Template: "{subject}也在这里", L10nKey: "intersection.statement.followee_in_object.no_object"},
+		},
 	},
 	"followeeViewedObject": {
 		Template: "{countedSubject}也看过{object}",
 		L10nKey:  "intersection.statement.followee_viewed_object",
+		Variants: map[string]IntersectionStatementVariant{
+			"noObject": {Template: "{subject}也看过这里", L10nKey: "intersection.statement.followee_viewed_object.no_object"},
+		},
 	},
 	"followeeViewing": {
 		Template: "{subject}正在看{object}",
@@ -411,6 +442,9 @@ var IntersectionStatementFormByKind = map[string]IntersectionStatementForm{
 		Template: "{subject}都加入了{object}",
 		L10nKey:  "intersection.statement.shared_circle",
 		Counted:  IntersectionStatementVariant{Template: "{subject}和你都加入了{count}个共同圈子", L10nKey: "intersection.statement.shared_circle.counted"},
+		Variants: map[string]IntersectionStatementVariant{
+			"noObject": {Template: "{subject}有{count}个共同圈子", L10nKey: "intersection.statement.shared_circle.no_object"},
+		},
 	},
 	"sharedEntityAttention": {
 		Template: "{subject}也看过{object}",
@@ -420,6 +454,9 @@ var IntersectionStatementFormByKind = map[string]IntersectionStatementForm{
 	"sharedFollowees": {
 		Template: "{subject}也关注了{object}",
 		L10nKey:  "intersection.statement.shared_followees",
+		Variants: map[string]IntersectionStatementVariant{
+			"noObject": {Template: "{subject}是你们共同关注的人", L10nKey: "intersection.statement.shared_followees.no_object"},
+		},
 	},
 	"sharedTagSample": {
 		Template: "{subject}都关注{object}",
@@ -443,6 +480,7 @@ var IntersectionRelationLabelByKind = map[string]IntersectionText{
 	"alumniHere":             {Text: "校友", L10nKey: "intersection.relation.alumni_here"},
 	"coExperiencedGathering": {Text: "同行过的人", L10nKey: "intersection.relation.co_experienced_gathering"},
 	"coMemberCircle":         {Text: "同圈成员", L10nKey: "intersection.relation.co_member_circle"},
+	"coWishlistedEntity":     {Text: "也想去的人", L10nKey: "intersection.relation.co_wishlisted_entity"},
 	"colleagueHere":          {Text: "同事", L10nKey: "intersection.relation.colleague_here"},
 	"commonContact":          {Text: "联系人", L10nKey: "intersection.relation.common_contact"},
 	"commonFollower":         {Text: "关注你的人", L10nKey: "intersection.relation.common_follower"},
@@ -489,6 +527,7 @@ var IntersectionSubjectPattern = map[string]IntersectionText{
 	"countedPlain":           {Text: "{count}人", L10nKey: "intersection.subject.counted_plain"},
 	"countedUnknownRelation": {Text: "{count}位用户", L10nKey: "intersection.subject.counted_unknown_relation"},
 	"countedWithRelation":    {Text: "{count}位{relation}", L10nKey: "intersection.subject.counted_with_relation"},
+	"mutualPair":             {Text: "你们", L10nKey: "intersection.subject.mutual_pair"},
 	"namedWithMore":          {Text: "{subject}等{count}人", L10nKey: "intersection.subject.named_with_more"},
 	"namedWithMoreUnit":      {Text: "{subject}等{count}{unit}", L10nKey: "intersection.subject.named_with_more_unit"},
 	"relationPrefixedName":   {Text: "{relation}{name}", L10nKey: "intersection.subject.relation_prefixed_name"},

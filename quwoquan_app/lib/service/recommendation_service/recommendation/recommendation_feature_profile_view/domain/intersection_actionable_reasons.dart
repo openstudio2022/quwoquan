@@ -7,7 +7,10 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 /// 不推断任何云侧未声明的可行动性（诚实红线：可行动 = 云侧已给出可兑现行动）。
 
 /// 单条交集是否可行动。[now] 仅用于测试注入确定性时钟，生产缺省取当前 UTC。
-bool isActionableIntersectionReason(IntersectionReason reason, {DateTime? now}) {
+bool isActionableIntersectionReason(
+  IntersectionReason reason, {
+  DateTime? now,
+}) {
   if (reason.intersectionClass != 'fact') {
     return false;
   }
@@ -35,21 +38,4 @@ List<IntersectionReason> actionableIntersectionReasons(
   return items
       .where((item) => isActionableIntersectionReason(item, now: clock))
       .toList(growable: false);
-}
-
-/// 可行动行的主行动：首个 `isPrimary` hint，缺省回落第一个 hint。
-/// label 与 dispatch 均由云侧下发（actionHint 文案与 dispatch 一致的红线），
-/// 端侧不改写文案、不造第二套行动分类。
-IntersectionActionHint? primaryIntersectionActionHint(
-  IntersectionReason reason,
-) {
-  if (reason.actionHints.isEmpty) {
-    return null;
-  }
-  for (final hint in reason.actionHints) {
-    if (hint.isPrimary) {
-      return hint;
-    }
-  }
-  return reason.actionHints.first;
 }

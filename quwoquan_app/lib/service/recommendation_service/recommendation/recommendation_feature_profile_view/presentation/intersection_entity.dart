@@ -150,9 +150,8 @@ class IntersectionEntity extends StatelessWidget {
 
   Widget _buildSpotlight(BuildContext context) {
     final surface = AppColors.iosProfileSurface(context);
-    final border = AppColors.iosSeparator(
-      context,
-    ).withValues(alpha: isDark ? 0.24 : 0.1);
+    final border = AppColors.iosSeparator(context)
+        .withValues(alpha: isDark ? 0.24 : 0.1);
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: onTap,

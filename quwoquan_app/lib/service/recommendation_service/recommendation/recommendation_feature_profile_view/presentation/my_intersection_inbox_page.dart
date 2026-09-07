@@ -26,6 +26,9 @@ import 'package:quwoquan_app/runtime/di/my_intersection_inbox_provider.dart';
 import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/presentation/my_intersection_inbox_state.dart';
 import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/presentation/my_intersection_impact_timeline.dart';
 import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/presentation/my_intersection_inbox_timeline.dart';
+import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/presentation/intersection_evidence_sheet.dart';
+import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/application/public/intersection_reason_selection.dart';
+import 'package:quwoquan_app/design_system/surfaces/app_modal_presenter.dart';
 import 'package:quwoquan_app/design_system/navigation/secondary_tab_bar.dart';
 import 'package:quwoquan_app/l10n/copy/discovery_feed_text_constants.dart';
 
@@ -154,6 +157,7 @@ class _MyIntersectionInboxPageState
             intersectionSourceRef: attribution.sourceRef,
             intersectionTagRefs: attribution.tagRefs,
             intersectionEvidenceId: attribution.evidenceId,
+            intersectionCohort: attribution.cohort,
           );
     },
   );
@@ -357,36 +361,62 @@ class _MyIntersectionInboxPageState
       IntersectionActionableGroupSection(
         rows: <Widget>[
           for (final reason in actionable)
-            if (displayReadyIntersectionReason(reason)
-                case final displayReason?)
+            if (_displayReady(reason) case final displayReason?)
               IntersectionCompactTimelineRow(
                 primaryText: displayReason.primaryText,
                 spans: displayReason.primarySpans,
                 iconKey: displayReason.iconKey,
-                sourceRef: _sourceRefFor(displayReason),
+                sourceRef: sourceRefForReason(displayReason),
                 dimension: displayReason.dimension,
                 tone: displayReason.tone,
                 typeIconUrl: displayReason.typeVisual?.imageUrl ?? '',
                 lifecycleState: displayReason.lifecycleState,
-                onTap: () => _openReason(displayReason),
-                onSpanTap: (span) => _onSpanTap(displayReason, span),
+                onTap: () => _showReasonEvidence(displayReason),
+                onSpanTap: (_) => _showReasonEvidence(displayReason),
                 onNegativeFeedback: () => _onNegativeFeedback(displayReason),
-                trailing: switch (primaryIntersectionActionHint(
-                  displayReason,
-                )) {
-                  final hint? => IntersectionActionablePill(
-                    label: hint.label,
-                    onPressed: () => _openPrimaryActionHint(
-                      displayReason,
-                      hint,
-                    ),
-                  ),
-                  null => null,
-                },
               ),
         ],
       ),
     ];
+  }
+
+  /// 收件箱没有页面宿主：按 DEC-003 由 [inboxDisplayHostForReason] 决定宿主（只对
+  /// host_implicit / host_plain 以 reason 自身对象作宿主），与 Go 收件箱出口同语义。
+  IntersectionReason? _displayReady(IntersectionReason reason) =>
+      displayReadyIntersectionReason(
+        reason,
+        contextObjectTarget: inboxDisplayHostForReason(reason),
+      );
+
+  void _showReasonEvidence(IntersectionReason reason) {
+    final resolution = resolveIntersectionDisplay(<IntersectionReason>[
+      reason,
+    ], contextObjectTarget: inboxDisplayHostForReason(reason));
+    if (resolution == null) return;
+    final sourceContext = context;
+    showAppBottomModal<void>(
+      context: sourceContext,
+      builder: (sheetContext) => IntersectionEvidenceSheet(
+        panelKey: const ValueKey<String>('my-intersection-evidence-sheet'),
+        primaryActionKey: const ValueKey<String>(
+          'my-intersection-primary-action',
+        ),
+        resolution: resolution,
+        onDismiss: () => Navigator.of(sheetContext).pop(),
+        onPrimaryAction: resolution.primaryHint == null
+            ? null
+            : () {
+                _openPrimaryActionHintFrom(
+                  sourceContext,
+                  resolution.reason,
+                  resolution.primaryHint!,
+                );
+                if (sheetContext.mounted) {
+                  Navigator.of(sheetContext).pop();
+                }
+              },
+      ),
+    );
   }
 
   /// 可约分组主行动：经统一 actionHint 分发（dispatch 闭集，未登记 fail-closed）；
@@ -396,22 +426,23 @@ class _MyIntersectionInboxPageState
   /// （objectKind=person）携带对方 persona，使「一起去」进入双人邀约预设
   /// （容量 2 + 邀请制 + 发布后自动邀请）；人对物交集该 target 非 person，
   /// navigator 按多人公开行动处理，不受影响。
-  void _openPrimaryActionHint(
+  void _openPrimaryActionHintFrom(
+    BuildContext sourceContext,
     IntersectionReason reason,
     IntersectionActionHint hint,
   ) {
     final result = _navigator.openActionHint(
-      context,
+      sourceContext,
       hint,
-      sourceRef: _sourceRefFor(reason),
+      sourceRef: sourceRefForReason(reason),
       attribution: _attributionFor(reason),
       evidenceReason: reason,
-      contextObjectTarget: IntersectionTarget(
-        objectType: reason.objectKind,
-        objectId: reason.actionTargetId,
-        objectKind: reason.objectKind,
-        routeId: _routeIdFor(reason),
-      ),
+      contextObjectTarget: IntersectionTargetNavigator.targetForReason(reason),
+      referralSource: ReferralSource.myIntersections,
+    );
+    assert(
+      !result.isConfigurationFailure,
+      'startGatheringNavigationBinding 未注入：约伴行动被静默降级',
     );
     if (!result.didOpen) {
       _openReason(reason);
@@ -424,7 +455,7 @@ class _MyIntersectionInboxPageState
   ) {
     return <IntersectionTimelineEntry>[
       for (final reason in items)
-        if (displayReadyIntersectionReason(reason) case final displayReason?)
+        if (_displayReady(reason) case final displayReason?)
           IntersectionTimelineEntry(
             bucket: resolveIntersectionTimeBucket(
               displayReason.timeBucket,
@@ -434,7 +465,7 @@ class _MyIntersectionInboxPageState
               primaryText: displayReason.primaryText,
               spans: displayReason.primarySpans,
               iconKey: displayReason.iconKey,
-              sourceRef: _sourceRefFor(displayReason),
+              sourceRef: sourceRefForReason(displayReason),
               dimension: displayReason.dimension,
               tone: displayReason.tone,
               typeIconUrl: displayReason.typeVisual?.imageUrl ?? '',
@@ -485,7 +516,8 @@ class _MyIntersectionInboxPageState
           intersectionId: reason.intersectionId,
           intersectionDimension: reason.dimension,
           intersectionClass: reason.intersectionClass,
-          intersectionSourceRef: _sourceRefFor(reason),
+          intersectionSourceRef: sourceRefForReason(reason),
+          intersectionCohort: reason.cohort,
         );
     if (mounted) {
       AppToast.show(
@@ -499,7 +531,7 @@ class _MyIntersectionInboxPageState
     final factItems = raw.where((item) => item.intersectionClass == 'fact');
     final filtered = factItems
         .where((item) {
-          if (displayReadyIntersectionReason(item) == null) {
+          if (_displayReady(item) == null) {
             return false;
           }
           if (widget.intersectionId.trim().isNotEmpty &&
@@ -535,7 +567,7 @@ class _MyIntersectionInboxPageState
         AppRoutePaths.myIntersections(
           dimension: reason.dimension,
           filter: 'fact',
-          sourceRef: _sourceRefFor(reason),
+          sourceRef: sourceRefForReason(reason),
           intersectionId: reason.intersectionId,
         ),
       );
@@ -545,15 +577,9 @@ class _MyIntersectionInboxPageState
   }
 
   void _openReason(IntersectionReason reason) {
-    final target = IntersectionTarget(
-      objectType: reason.objectKind,
-      objectId: reason.actionTargetId,
-      objectKind: reason.objectKind,
-      routeId: _routeIdFor(reason),
-    );
     final opened = _navigator.open(
       context,
-      target,
+      targetForReasonObject(reason),
       attribution: _attributionFor(reason),
     );
     if (!opened) {
@@ -571,24 +597,12 @@ class _MyIntersectionInboxPageState
       intersectionId: reason.intersectionId,
       dimension: reason.dimension,
       intersectionClass: reason.intersectionClass,
-      sourceRef: _sourceRefFor(reason),
+      sourceRef: sourceRefForReason(reason),
       tagRefs: reason.tagRefs,
       evidenceId: reason.pointSummarySnapshotId,
+      cohort: reason.cohort,
     );
   }
-
-  // objectKind → 端路由逻辑名：codegen intersectionRouteIdForObjectKind 单一真相源
-  // （registry.objectKinds.routeId）；旧 relationKind 对象类型桥接已删除（§23 去桥接）。
-  String _routeIdFor(IntersectionReason reason) =>
-      IntersectionTargetNavigator.routeIdForObjectKindWire(reason.objectKind);
-}
-
-String _sourceRefFor(IntersectionReason reason) {
-  final resolved = resolvedIntersectionReasonKind(reason).trim();
-  if (resolved.isNotEmpty) {
-    return resolved;
-  }
-  return reason.source.trim();
 }
 
 enum _IntersectionDetailTab { intersections, impact }

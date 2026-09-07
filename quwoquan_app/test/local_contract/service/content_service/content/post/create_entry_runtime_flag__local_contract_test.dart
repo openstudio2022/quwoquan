@@ -7,16 +7,15 @@ import 'package:quwoquan_app/runtime/testing/test_keys.dart';
 import 'package:quwoquan_app/service/content_service/content/post/presentation/create_entry_sheet.dart';
 
 void main() {
-  testWidgets('关闭旧 flag 时仍保留统一三项首层入口', (tester) async {
+  testWidgets('关闭旧 flag 时仍保留内容优先首层入口', (tester) async {
     await tester.binding.setSurfaceSize(const Size(390, 844));
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
-          contentFeatureFlagProvider(
-            'enable_create_action_entry',
-          ).overrideWith((ref) => false),
+          contentFeatureFlagProvider('enable_create_action_entry')
+              .overrideWith((ref) => false),
         ],
         child: ScreenUtilInit(
           designSize: const Size(390, 844),
@@ -26,7 +25,6 @@ void main() {
                 isOpen: true,
                 onClose: () {},
                 onSelect: (_) {},
-                onStartGathering: () {},
                 onStartGroupChat: () {},
               ),
             ),
@@ -36,18 +34,11 @@ void main() {
     );
     await tester.pump();
 
-    expect(find.byKey(TestKeys.createActionPublishContent), findsOneWidget);
-    expect(find.byKey(TestKeys.createActionStartGathering), findsOneWidget);
-    expect(find.byKey(TestKeys.createActionStartGroupChat), findsOneWidget);
-    expect(find.byKey(TestKeys.createActionGallery), findsNothing);
-    expect(find.byKey(TestKeys.createActionCapture), findsNothing);
-    expect(find.byKey(TestKeys.createActionWrite), findsNothing);
-
-    await tester.tap(find.byKey(TestKeys.createActionPublishContent));
-    await tester.pump();
-
     expect(find.byKey(TestKeys.createActionGallery), findsOneWidget);
     expect(find.byKey(TestKeys.createActionCapture), findsOneWidget);
     expect(find.byKey(TestKeys.createActionWrite), findsOneWidget);
+    expect(find.byKey(TestKeys.createActionMore), findsOneWidget);
+    expect(find.text('发起活动'), findsNothing);
+    expect(find.byKey(TestKeys.createActionStartGroupChat), findsNothing);
   });
 }

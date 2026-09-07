@@ -831,7 +831,7 @@ pages:
     object_ids: [content.post]
     query_slices: none
     typed_presentation: none
-    data_contract_reason: 全局创作入口动作面板，不加载业务数据；发内容/发起聚集/发起群聊动作由 runtime composition 注入并各自续接。
+    data_contract_reason: 全局内容创作入口不加载业务数据；照片/视频/文字直接进入内容创作，次级社交动作不包含无上下文 Gathering。
     auth_requirement: optional
     capability_requirements: { all_of: [], any_of: [] }
     telemetry_descriptor: { event_namespace: page.content.create_entry, lifecycle: [enter, exit] }
@@ -952,11 +952,11 @@ pages:
     entry_widget: VideoEditorPage
     mount_evidence: [lib/runtime/di/presentation/content_media_creation_composition.dart]
 
-  - page_id: content.home_featured_immersive
+  - page_id: content.video_book
     source_path: lib/service/content_service/content/post/presentation/home_featured_immersive_page.dart
-    page_kind: embedded
-    parent_page_id: app.main_shell
-    surface_ids: [homeFeed]
+    page_kind: routed
+    route_id: videoBook
+    surface_ids: [videoBook]
     experience_owner: content
     data_owners: [content, recommendation]
     object_ids:
@@ -969,9 +969,12 @@ pages:
     typed_presentation: [ContentPostViewData]
     auth_requirement: optional
     capability_requirements: { all_of: [], any_of: [] }
-    telemetry_descriptor: { event_namespace: page.content.home_featured_immersive, lifecycle: [enter, exit, failure] }
+    telemetry_descriptor: { event_namespace: page.content.video_book, lifecycle: [enter, exit, failure] }
     entry_widget: HomeFeaturedImmersivePage
-    mount_evidence: [lib/runtime/di/main_app_shell_dependencies.dart]
+    route_registration_evidence:
+      - lib/runtime/di/navigation/app_router.dart
+      - lib/runtime/shell/main_app_shell.dart
+      - lib/runtime/di/main_app_shell_dependencies.dart
 
   - page_id: content.home
     source_path: lib/service/content_service/content/post/presentation/home_page.dart
@@ -1312,23 +1315,6 @@ pages:
     entry_widget: SuggestHomepagePage
     route_registration_evidence: [lib/runtime/di/navigation/app_router.dart]
 
-  - page_id: interest_match.launcher
-    source_path: lib/runtime/shell/interest_match/interest_match_page.dart
-    page_kind: routed
-    route_id: interestMatch
-    surface_ids: [interestMatch]
-    experience_owner: interest_match
-    data_owners: [app]
-    object_ids: []
-    query_slices: none
-    typed_presentation: none
-    data_contract_reason: 纯导流 launcher，业务查询由搜索、圈子与交集目标页持有。
-    auth_requirement: optional
-    capability_requirements: { all_of: [], any_of: [] }
-    telemetry_descriptor: { event_namespace: page.interest_match.launcher, lifecycle: [enter, exit, target_click] }
-    entry_widget: InterestMatchPage
-    route_registration_evidence: [lib/runtime/di/navigation/app_router.dart]
-
   - page_id: intersection.object_list
     source_path: lib/service/recommendation_service/recommendation/recommendation_feature_profile_view/presentation/object_intersection_list_page.dart
     page_kind: routed
@@ -1567,24 +1553,6 @@ pages:
             - product-action-longtail-failure-rate-high
     entry_widget: GatheringDetailPage
     route_registration_evidence: [lib/runtime/di/navigation/app_router_gathering_routes.dart]
-
-  - page_id: circle.gathering_actions_discovery
-    source_path: lib/service/circle_service/circle_management/gathering/presentation/gathering_actions_discovery_page.dart
-    page_kind: embedded
-    parent_page_id: app.main_shell
-    surface_ids: [homeActionsDiscovery]
-    experience_owner: circle
-    data_owners: [circle, recommendation]
-    object_ids:
-      - circle.gathering
-      - recommendation.recommendation_feature_profile_view
-    query_slices: [circle.gathering]
-    typed_presentation: [GatheringPublicCardSlice]
-    auth_requirement: optional
-    capability_requirements: { all_of: [], any_of: [] }
-    telemetry_descriptor: { event_namespace: page.circle.gathering_actions_discovery, lifecycle: [enter, exit, failure] }
-    entry_widget: GatheringActionsDiscoveryPage
-    mount_evidence: [lib/runtime/di/main_app_shell_dependencies.dart]
 
   - page_id: circle.my_gatherings
     source_path: lib/service/circle_service/circle_management/gathering/presentation/my_gatherings_page.dart

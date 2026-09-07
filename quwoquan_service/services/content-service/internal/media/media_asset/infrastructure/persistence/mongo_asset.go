@@ -33,7 +33,7 @@ type mediaAssetDocument struct {
 	CaptureMetadata               mediamodel.CaptureMetadata           `bson:"captureMetadata,omitempty"`
 	AccessPolicy                  mediamodel.AccessPolicy              `bson:"accessPolicy"`
 	ProcessingStatus              mediamodel.ProcessingStatus          `bson:"processingStatus"`
-	SourceReleaseID               string                               `bson:"sourceReleaseId,omitempty"`
+	SourceReleaseIDs              []string                             `bson:"sourceReleaseIds,omitempty"`
 	ProcessingVersion             int64                                `bson:"processingVersion,omitempty"`
 	ProcessingFailureReason       string                               `bson:"processingFailureReason,omitempty"`
 	ProcessorProfile              string                               `bson:"processorProfile,omitempty"`
@@ -156,7 +156,7 @@ func (s *MongoMediaStore) FindOriginalAccessAsset(
 		AssetID: document.ID, OwnerID: document.OwnerID, ObjectKey: document.ObjectKey,
 		MediaType: document.MediaType, MimeType: document.MimeType, FileSize: document.FileSize,
 		ProcessingStatus: string(document.ProcessingStatus), AccessPolicy: string(document.AccessPolicy),
-		SourceReleaseID: document.SourceReleaseID,
+		SourceReleaseIDs: append([]string(nil), document.SourceReleaseIDs...),
 	}, true, nil
 }
 
@@ -174,7 +174,7 @@ func mediaAssetReadProjection() bson.D {
 		{Key: "captureMetadata", Value: 1},
 		{Key: "accessPolicy", Value: 1},
 		{Key: "processingStatus", Value: 1},
-		{Key: "sourceReleaseId", Value: 1},
+		{Key: "sourceReleaseIds", Value: 1},
 		{Key: "processorProfile", Value: 1},
 		{Key: "imageWidth", Value: 1},
 		{Key: "imageHeight", Value: 1},

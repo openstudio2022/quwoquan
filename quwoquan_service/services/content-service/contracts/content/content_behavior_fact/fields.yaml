@@ -217,6 +217,18 @@ fields:
     api_exposure: write
     ops_exposure: read
     role: append_only_fact
+  - name: intersectionCohort
+    type: string
+    constraints: [NULLABLE]
+    classification: INTERNAL
+    log_policy: allow
+    api_exposure: write
+    ops_exposure: read
+    role: append_only_fact
+    description: >-
+      交集策略身份（cohort）：产出该 reason 的交集注册表/生成表内容摘要（sha256:<hex>），
+      随 reason 由 Content 水合出口下发（IntersectionReason.cohort）并由端在曝光 / 点击 /
+      展开 / 转化 / 负反馈事件中原样回传，使漏斗可按策略版本（灰度 cohort）下钻。端不得展示。
   - {name: intersectionTagRefs, type: '[]string', constraints: [NULLABLE], classification: INTERNAL, log_policy: metadata_only, api_exposure: write, ops_exposure: read, role: append_only_fact}
   - {name: subjectId, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: hash, api_exposure: write, ops_exposure: read, role: append_only_fact}
   - {name: feedbackKind, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: write, ops_exposure: read, role: append_only_fact}
@@ -316,6 +328,7 @@ types:
       - {name: intersectionId, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: hash, api_exposure: write, ops_exposure: read}
       - {name: intersectionClass, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: write, ops_exposure: read}
       - {name: intersectionEvidenceId, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: hash, api_exposure: write, ops_exposure: read}
+      - {name: intersectionCohort, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: write, ops_exposure: read}
       - {name: subjectId, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: hash, api_exposure: write, ops_exposure: read}
       - {name: feedbackKind, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: write, ops_exposure: read}
       - {name: taxonomyReleaseId, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: hash, api_exposure: write, ops_exposure: read}

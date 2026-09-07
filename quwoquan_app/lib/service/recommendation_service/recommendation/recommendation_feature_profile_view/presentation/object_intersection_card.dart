@@ -4,6 +4,7 @@ import 'package:quwoquan_app/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/domain/intersection_statement_synthesizer.dart';
+import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/application/public/intersection_reason_selection.dart';
 import 'package:quwoquan_app/l10n/copy/discovery_feed_text_constants.dart';
 import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/presentation/intersection_statement_row.dart';
 
@@ -132,6 +133,7 @@ class ObjectIntersectionCard extends StatefulWidget {
 
 class _ObjectIntersectionCardState extends State<ObjectIntersectionCard> {
   bool _expanded = false;
+  bool _actionsRevealed = false;
 
   @override
   Widget build(BuildContext context) {
@@ -169,6 +171,9 @@ class _ObjectIntersectionCardState extends State<ObjectIntersectionCard> {
     final expanded = _expanded || highlightHidden;
     final visible = expanded ? rows : rows.take(inline).toList(growable: false);
     final hiddenCount = rows.length - visible.length;
+    final hasDeferredActions = rows.any(
+      (row) => row.reason.actionHints.any(isDeferredIntersectionActionHint),
+    );
 
     return Container(
       decoration: BoxDecoration(
@@ -228,6 +233,7 @@ class _ObjectIntersectionCardState extends State<ObjectIntersectionCard> {
                         ? null
                         : (visual) =>
                               widget.onVisualTap!(visible[i].reason, visual),
+                    revealActions: _actionsRevealed,
                     onActionHintTap: widget.onActionHintTap == null
                         ? null
                         : (hint) =>
@@ -239,13 +245,14 @@ class _ObjectIntersectionCardState extends State<ObjectIntersectionCard> {
           ),
           if (hiddenCount > 0 ||
               (expanded && rows.length > inline) ||
+              hasDeferredActions ||
               (hiddenCount == 0 &&
                   widget.moreLabel != null &&
                   widget.onMoreTap != null))
             _buildMore(
               context,
               expanded: expanded,
-              forceOpenAll: hiddenCount == 0,
+              forceOpenAll: hiddenCount == 0 && !hasDeferredActions,
             ),
         ],
       ),
@@ -256,9 +263,8 @@ class _ObjectIntersectionCardState extends State<ObjectIntersectionCard> {
     return Container(
       height: AppSpacing.hairline,
       margin: EdgeInsets.symmetric(vertical: AppSpacing.intraGroupXs),
-      color: AppColors.iosSeparator(
-        context,
-      ).withValues(alpha: widget.isDark ? 0.18 : 0.08),
+      color: AppColors.iosSeparator(context)
+          .withValues(alpha: widget.isDark ? 0.18 : 0.08),
     );
   }
 
@@ -284,11 +290,15 @@ class _ObjectIntersectionCardState extends State<ObjectIntersectionCard> {
         onTap: opensAll
             ? widget.onMoreTap
             : () {
-                // 折叠→展开时回调归因（intersection_expand 弱正信号，B6）。
+                // 只有用户主动展开证据后才揭示重行动；旅程高亮造成的自动展开
+                // 不能越过该门槛。
                 if (!expanded && widget.reasons.isNotEmpty) {
                   widget.onInlineExpand?.call(widget.reasons.first);
                 }
-                setState(() => _expanded = !expanded);
+                setState(() {
+                  _expanded = !expanded;
+                  _actionsRevealed = _expanded;
+                });
               },
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -363,6 +373,7 @@ class _EvidenceRow extends StatelessWidget {
     this.onTap,
     this.onSpanTap,
     this.onVisualTap,
+    this.revealActions = false,
     this.onActionHintTap,
     this.highlighted = false,
   });
@@ -373,6 +384,7 @@ class _EvidenceRow extends StatelessWidget {
   final VoidCallback? onTap;
   final void Function(IntersectionTextSpan span)? onSpanTap;
   final void Function(IntersectionVisual visual)? onVisualTap;
+  final bool revealActions;
   final void Function(IntersectionActionHint hint)? onActionHintTap;
 
   /// 旅程高亮（§7.3）：从 post 徽标跳入命中的证据组行加弱底色强调。
@@ -388,8 +400,19 @@ class _EvidenceRow extends StatelessWidget {
       return const SizedBox.shrink();
     }
     final auxiliary = row.auxiliaryText;
-    final hasActionHint = reason.actionHints.any(
-      isDisplayableIntersectionActionHint,
+    // 轻行动（open_object 等）随行直出；重行动（start_gathering 等）只在用户主动
+    // 展开证据后揭示。辅助行只在真的有可渲染 pill 时占位。
+    final visibleHints = reason.actionHints
+        .where(
+          (hint) => revealActions || !isDeferredIntersectionActionHint(hint),
+        )
+        .toList(growable: false);
+    final hasActionHint = visibleHints.any(
+      (hint) => isDisplayableIntersectionActionHint(
+        hint,
+        contextObjectTarget: contextObjectTarget,
+        evidenceReason: reason,
+      ),
     );
     final body = IntersectionStatementRow(
       item: IntersectionStatementItem(
@@ -409,11 +432,13 @@ class _EvidenceRow extends StatelessWidget {
         tone: reason.tone,
         typeIconUrl: reason.typeVisual?.imageUrl ?? '',
         objectVisual: reason.objectVisual,
-        actionHints: reason.actionHints,
+        actionHints: visibleHints,
         onActionHintTap: onActionHintTap,
         lifecycleState: reason.lifecycleState,
         strengthDelta: reason.strengthDelta.round(),
         showAuxiliaryLine: auxiliary.isNotEmpty || hasActionHint,
+        contextObjectTarget: contextObjectTarget,
+        evidenceReason: reason,
       ),
     );
     if (!highlighted) return body;

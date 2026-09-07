@@ -40,6 +40,7 @@ type TerminalRunRecord struct {
 type Repository interface {
 	Load(context.Context, string) (Run, error)
 	LoadByRequest(context.Context, string, string, string) (Run, error)
+	LoadActiveBySession(context.Context, string, string) (Run, error)
 	LoadCommandReceipt(context.Context, string, string) (CommandReceipt, error)
 	Commit(context.Context, int64, Run, []JournalEvent, *CommandReceipt) error
 	EventsAfter(context.Context, string, int64, int) ([]JournalEvent, error)

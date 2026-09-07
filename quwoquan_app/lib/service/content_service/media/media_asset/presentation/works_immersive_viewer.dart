@@ -47,6 +47,7 @@ import 'package:quwoquan_app/service/circle_service/circle_management/gathering/
     show GatheringBySourceListQuery;
 import 'package:quwoquan_app/service/entity_service/entity_homepage/homepage/application/public/generated/homepage_ui_config.g.dart';
 import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/application/public/object_intersection_query.dart';
+import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/application/public/intersection_reason_selection.dart';
 import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/application/public/intersection_kind_mapping.dart'
     show intersectionMutualCountOf;
 import 'package:quwoquan_app/runtime/errors/ui_error_semantics.dart';
@@ -56,7 +57,6 @@ import 'package:quwoquan_app/service/content_service/media/media_asset/presentat
 import 'package:quwoquan_app/service/content_service/media/media_asset/presentation/media_viewer_toolbar.dart';
 import 'package:quwoquan_app/service/content_service/media/media_asset/presentation/immersive_viewer_layout.dart';
 import 'package:quwoquan_app/service/content_service/media/media_asset/presentation/media_caption_widgets.dart';
-import 'package:quwoquan_app/design_system/surfaces/app_modal_surface.dart';
 import 'package:quwoquan_app/design_system/surfaces/app_action_sheet.dart';
 import 'package:quwoquan_app/design_system/navigation/tab_swipe_switch_region.dart';
 import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
@@ -64,10 +64,8 @@ import 'package:quwoquan_app/l10n/copy/discovery_feed_text_constants.dart';
 import 'package:quwoquan_app/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/design_system/typography/app_typography.dart';
-import 'package:quwoquan_app/service/assistant_service/assistant/page_context/application/public/assistant_open_context.dart';
 import 'package:quwoquan_app/service/content_service/media/media_asset/application/public/media_viewer_extra.dart';
 import 'package:quwoquan_app/service/content_service/media/media_asset/domain/work_browser_view_data.dart';
-import 'package:quwoquan_app/runtime/models/visit_models.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:quwoquan_app/service/content_service/content/content_behavior_fact/application/public/content_behavior_repository.dart'
     show ReferralSource;
@@ -174,6 +172,7 @@ class WorksImmersiveViewer extends ConsumerStatefulWidget {
     this.onDismissed,
     this.onPostIndexChanged,
     this.topChromeSafeInset = 0,
+    this.isActive = true,
   });
 
   final bool showWorksToolbar;
@@ -206,6 +205,9 @@ class WorksImmersiveViewer extends ConsumerStatefulWidget {
   final ValueChanged<MediaViewerResult>? onDismissed;
   final ValueChanged<int>? onPostIndexChanged;
   final double topChromeSafeInset;
+
+  /// 宿主 surface 是否真实位于前台。默认 active 保持非 shell 调用点兼容。
+  final bool isActive;
 
   @override
   ConsumerState<WorksImmersiveViewer> createState() =>
@@ -387,7 +389,7 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
             _invalidateVideoViewport(resetDurationWindow: false);
           });
         }
-        // Track impression for the first post
+        // Track impression for the first post only while the host surface is active.
         _trackImpressionForPost(posts[initialIndex], position: initialIndex);
       }
     });
@@ -396,6 +398,13 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
   @override
   void didUpdateWidget(covariant WorksImmersiveViewer oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.isActive != widget.isActive) {
+      if (widget.isActive) {
+        _resumeActiveSurfaceTracking();
+      } else {
+        _suspendInactiveSurface();
+      }
+    }
     final presentationChanged =
         !identical(oldWidget.rawPostsById, widget.rawPostsById) ||
         !identical(oldWidget.externalPosts, widget.externalPosts) ||

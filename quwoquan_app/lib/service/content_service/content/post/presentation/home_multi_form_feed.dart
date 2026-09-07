@@ -1,8 +1,10 @@
 // ignore_for_file: unnecessary_non_null_assertion
 import 'dart:async';
+
 import 'package:quwoquan_app/runtime/di/media_delivery_composition.dart';
 import 'package:quwoquan_app/runtime/di/media_delivery_cover_slot.dart';
 import 'package:quwoquan_app/runtime/di/content_post_media_binding.dart';
+
 import 'dart:math' show max, min;
 import 'dart:ui' show ImageFilter;
 
@@ -32,16 +34,17 @@ import 'package:quwoquan_app/runtime/auth/auth_gate.dart';
 import 'package:quwoquan_app/runtime/auth/auth_session.dart';
 import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
 import 'package:quwoquan_app/l10n/copy/discovery_feed_text_constants.dart';
-import 'package:quwoquan_app/l10n/copy/app_concept_constants.dart';
 import 'package:quwoquan_app/design_system/formatters/compact_count_formatter.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/public/content_keyword_suggester.dart';
 import 'package:quwoquan_app/runtime/shell/actions/blocked_keyword_confirmation_sheet.dart';
 import 'package:quwoquan_app/design_system/surfaces/app_action_sheet.dart';
+import 'package:quwoquan_app/design_system/surfaces/app_modal_presenter.dart';
 import 'package:quwoquan_app/runtime/shell/actions/content_report_reason_sheet.dart';
 import 'package:quwoquan_app/l10n/l10n.dart';
 import 'package:quwoquan_app/design_system/avatar/rounded_square_avatar.dart';
 import 'package:quwoquan_app/runtime/di/presentation/home_feed_cross_object_composition.dart';
 import 'package:quwoquan_app/runtime/di/navigation/intersection_target_navigator.dart';
+import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/application/public/intersection_reason_selection.dart';
 import 'package:quwoquan_app/service/content_service/content/post/presentation/more_action_popup/media_post_config.dart';
 import 'package:quwoquan_app/service/content_service/content/post/presentation/more_action_popup/more_action_popup.dart';
 import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
@@ -313,9 +316,8 @@ class HomeMultiFormFeed extends ConsumerWidget {
     final pageBackground =
         SettingsSemanticConstants.conversationSheetCardSurface(isDark);
     final listDividerColor =
-        SettingsSemanticConstants.conversationSheetDividerColor(
-          isDark,
-        ).withValues(alpha: 0.9);
+        SettingsSemanticConstants.conversationSheetDividerColor(isDark)
+            .withValues(alpha: 0.9);
     final channelConfig = _resolveChannelConfig();
     final layoutPolicy = HomeFeedLayoutPolicy.fromChannel(
       channelConfig,

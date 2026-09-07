@@ -33,4 +33,5 @@ events:
   - intersectionClass
   - intersectionSourceRef
   - intersectionEvidenceId
+  - intersectionCohort
   - occurredAt

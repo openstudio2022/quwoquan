@@ -1,3 +1,4 @@
+// spec_ref: specs/feature-tree/object-homepage-network/intersection-unified-experience/object-homepage-gamma-real-data-closure/spec.md#gwt-002.t3
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -135,6 +136,57 @@ void main() {
       ),
     );
     expect(sourceButton.onPressed, isNotNull);
+  });
+
+  testWidgets('非 HTTPS 或内网来源卡不可打开，且不暴露 token 类查询参数', (tester) async {
+    await tester.pumpWidget(
+      _host(
+        HomepageIntroduction(
+          homepageId: 'homepage_sight_west_lake',
+          displayName: '西湖景区',
+          homepageType: 'sight',
+          summary: '西湖景区摘要',
+          sections: <HomepageIntroductionSection>[
+            HomepageIntroductionSection(
+              kind: 'overview',
+              title: '概况',
+              bodyMarkdown: '西湖景区位于杭州。',
+              assets: const [],
+              timelineItems: const [],
+            ),
+          ],
+          primarySource: HomepageSource(
+            sourceKind: 'wikipedia',
+            // 内网 http 抓取地址不是可安全打开的 canonical HTTPS 来源。
+            sourceUrl: 'http://10.0.0.8/wiki/西湖?token=secret',
+            title: '西湖',
+            fetchedAt: '2026-06-12T00:00:00Z',
+            snapshotHash: 'sha256:760672367557300130bdf88db43b01f07917475ae4f60ff0b9be95aa78d7e2f1',
+            policyRevision: 'encyclopedia-primary',
+            sourceUseMode: 'primary_reference',
+          ),
+          relatedObjects: const [],
+          sourceUrls: const <String>['http://10.0.0.8/wiki/西湖?token=secret'],
+          updatedAt: '2026-06-12T00:00:00Z',
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.scrollUntilVisible(
+      find.text('西湖'),
+      AppSpacing.twoHundredTwenty,
+      scrollable: find.byType(Scrollable).first,
+    );
+    final sourceButton = tester.widget<CupertinoButton>(
+      find.ancestor(
+        of: find.text('西湖'),
+        matching: find.byType(CupertinoButton),
+      ),
+    );
+    expect(sourceButton.onPressed, isNull);
+    expect(find.textContaining('token=secret'), findsNothing);
+    expect(find.textContaining('10.0.0.8'), findsNothing);
   });
 
   testWidgets('三段结构：正文块级内嵌图与页尾相关图片按 role 渲染', (tester) async {

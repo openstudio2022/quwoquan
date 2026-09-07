@@ -16,10 +16,19 @@ import hashlib
 from internal.recommendation.recommendation_feature_profile_view.application.intersection_materializer import (
     Materializer,
     PersonaProfileSnapshot,
+    WishlistEntitySnapshot,
 )
 from internal.recommendation.recommendation_feature_profile_view.application.intersection_projector import (
     Projector,
 )
+
+
+def _entity_name(entity_id: str) -> str:
+    return {
+        "homepage-west-lake": "西湖",
+        "hp_huanglong": "黄龙",
+        "hp_jiuzhaigou": "九寨沟",
+    }.get(entity_id, entity_id)
 
 
 class _Writer:
@@ -66,10 +75,22 @@ class _Evidence:
         return 0
 
     def list_wishlisted_entities(self, persona_id: str, limit: int):
-        return tuple(self._wishlisted.get(persona_id, ()))[:limit]
+        return tuple(
+            WishlistEntitySnapshot(entity_id=value, display_name=_entity_name(value))
+            for value in self._wishlisted.get(persona_id, ())
+        )[:limit]
 
     def list_experienced_gatherings(self, persona_id: str, limit: int):
         return tuple(self._experienced.get(persona_id, ()))[:limit]
+
+    def list_gathering_experiencers(self, gathering_id: str, limit: int):
+        return tuple(
+            sorted(
+                persona
+                for persona, gatherings in self._experienced.items()
+                if gathering_id in gatherings
+            )
+        )[:limit]
 
 
 def _rebuild(evidence: _Evidence):
@@ -104,7 +125,12 @@ def test_co_wishlisted_entity_requires_both_sides() -> None:
     assert reason["intersectionClass"] == "fact"
     assert reason["dimension"] == "location"
     assert reason["moment"] == "prospective"
-    assert reason["primaryText"] == "你们都想去 1 个相同的地方"
+    assert reason["primaryText"] == "你们都想去黄龙"
+    assert reason["objectKind"] == "place"
+    assert reason["relationObjectId"] == "hp_huanglong"
+    assert reason["displayBinding"] == "explicit_link"
+    assert "".join(span["text"] for span in reason["primarySpans"]) == reason["primaryText"]
+    assert reason["primarySpans"][-1]["role"] == "object"
     hint = reason["actionHints"][0]
     assert hint["actionKey"] == "start_gathering"
     assert hint["dispatch"] == "gathering"
@@ -116,6 +142,11 @@ def test_co_wishlisted_entity_requires_both_sides() -> None:
         "rateLimit",
     ]
     assert hint["target"]["objectId"] == "hp_huanglong"
+    assert hint["target"]["objectType"] == "homepage"
+    assert hint["target"]["objectKind"] == "place"
+    assert hint["target"]["routeId"] == "homepageDetail"
+    assert reason["subjectContext"] == "homepage:hp_huanglong"
+    assert reason["primarySpans"][-1]["target"] == hint["target"]
 
 
 def test_co_wishlisted_entity_is_not_fabricated_from_one_side() -> None:
@@ -141,14 +172,40 @@ def test_co_experienced_gathering_requires_both_sides() -> None:
     assert reason["dimension"] == "relationship"
     assert reason["moment"] == "retrospective"
     assert reason["iconKey"] == "experience"
-    assert reason["primaryText"] == "你们一起参加过 1 次行动"
-    # 经历是最强事实交集：strength 高于普通 fact 基线。
-    assert reason["strength"] > 1.0
+    # 主句由注册表 counted 模板 + mutualPair 主语渲染，并下发对应 l10nKey；
+    # join(spans) == primaryText 是模板渲染的结构性结果。
+    from generated.recommendation.recommendation_feature_profile_view.intersection_policy import (
+        ACTION_KEYS_BY_KIND,
+        STATEMENT_FORM_BY_KIND,
+        SUBJECT_PATTERN_BY_NAME,
+    )
+
+    counted_form = STATEMENT_FORM_BY_KIND["coExperiencedGathering"]["counted"]
+    expected_text = str(counted_form["template"]).format(
+        subject=SUBJECT_PATTERN_BY_NAME["mutualPair"]["text"], count=1
+    )
+    assert reason["primaryText"] == expected_text == "你们一起参加过1次行动"
+    assert reason["primaryTextL10nKey"] == counted_form["l10n_key"]
+    assert "".join(span["text"] for span in reason["primarySpans"]) == reason["primaryText"]
+    assert [span["role"] for span in reason["primarySpans"]] == ["plain", "count", "plain"]
+    # 排序权重不在生产者手写：强度与其他 fact 同为 valueTier 基线，「经历最强」由注册表
+    # evidenceRank 表达（Content 读面按 EvidenceKindRank 排序）。
+    assert reason["strength"] == 1.0
+    # 主对象是对方本人（DEC-003）：对方主页 host_implicit 校验与收件箱行对象都落在人上；
+    # 共同行动只经 subjectContext 承载。
+    assert reason["objectKind"] == "person"
+    assert reason["actionTargetId"] == "persona-b"
+    assert reason["relationObjectId"] == "persona-b"
+    assert reason["displayBinding"] == "host_implicit"
+    assert reason["subjectContext"] == "gathering:gathering_huanglong_walk"
     hints = reason["actionHints"]
-    assert [hint["actionKey"] for hint in hints] == ["start_gathering", "open_object"]
-    assert hints[1]["dispatch"] == "navigate"
-    assert hints[1]["target"]["routeId"] == "gatheringDetail"
-    assert hints[1]["target"]["objectKind"] == "gathering"
+    # 行动阶梯逐项来自注册表 actionHintsByKind.coExperiencedGathering，不在服务代码里手挑；
+    # 全部指向对方本人。
+    assert [hint["actionKey"] for hint in hints] == list(ACTION_KEYS_BY_KIND["coExperiencedGathering"])
+    assert hints[0]["actionKey"] == "start_gathering" and hints[0]["isPrimary"] is True
+    assert {hint["target"]["objectId"] for hint in hints} == {"persona-b"}
+    assert {hint["target"]["objectType"] for hint in hints} == {"user"}
+    assert {hint["target"]["routeId"] for hint in hints} == {"userProfile"}
 
 
 def test_co_experienced_gathering_is_not_fabricated_from_one_side() -> None:

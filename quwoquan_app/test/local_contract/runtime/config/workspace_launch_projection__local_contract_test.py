@@ -76,16 +76,41 @@ def test_projection_verifier_rejects_source_drift(
 def test_package_and_workspace_share_one_source_root_closure() -> None:
     roots = app_source_capsule_roots()
 
-    assert roots[:4] == (
+    assert roots[:6] == (
         "quwoquan_app",
         "quwoquan_ops",
         "quwoquan_service/contracts/metadata",
         "quwoquan_service/contracts/runtime_errors/packages/dart/quwoquan_runtime_errors",
+        "quwoquan_service/cmd/service-core/composition.yaml",
+        "quwoquan_service/runtime",
     )
     assert "quwoquan_service/services" in roots
     assert "quwoquan_service/control-plane/platform-ops" in roots
     assert "quwoquan_service/cmd/service-core/composition.yaml" in roots
     assert len(roots) == len(set(roots))
+    for module in (
+        "api-edge",
+        "assistant-service",
+        "chat-service",
+        "circle-service",
+        "content-service",
+        "entity-service",
+        "integration-service",
+        "notification-service",
+        "search-service",
+        "tag-service",
+        "user-service",
+    ):
+        assert f"quwoquan_service/services/{module}/contracts" in roots
+        assert f"quwoquan_service/services/{module}/internal" in roots
+        assert f"quwoquan_service/services/{module}/cmd" in roots
+        assert f"quwoquan_service/services/{module}/config" in roots
+        assert f"quwoquan_service/services/{module}/deploy" in roots
+    assert "quwoquan_service/control-plane/platform-ops/contracts" in roots
+    assert "quwoquan_service/control-plane/platform-ops/internal" in roots
+    assert "quwoquan_service/control-plane/platform-ops/cmd" in roots
+    assert "quwoquan_service/control-plane/platform-ops/config" in roots
+    assert "quwoquan_service/control-plane/platform-ops/deploy" in roots
 
 
 def test_attempt_root_accepts_canonicalized_output_alias(tmp_path: Path) -> None:

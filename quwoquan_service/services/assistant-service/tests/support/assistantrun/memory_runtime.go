@@ -15,6 +15,7 @@ type MemoryRuntime struct {
 	mu       sync.Mutex
 	runs     map[string]runruntime.Run
 	requests map[string]string
+	active   map[string]string
 	events   map[string][]runruntime.JournalEvent
 	receipts map[string]runruntime.CommandReceipt
 	ready    []string
@@ -34,6 +35,7 @@ func NewMemoryRuntimeWithClock(now func() time.Time) *MemoryRuntime {
 	return &MemoryRuntime{
 		runs:     map[string]runruntime.Run{},
 		requests: map[string]string{},
+		active:   map[string]string{},
 		events:   map[string][]runruntime.JournalEvent{},
 		receipts: map[string]runruntime.CommandReceipt{},
 		claims:   map[string]runruntime.WorkClaim{},
@@ -64,6 +66,20 @@ func (r *MemoryRuntime) LoadByRequest(
 	defer r.mu.Unlock()
 	runID, ok := r.requests[requestKey(userID, sessionID, clientRequestID)]
 	if !ok {
+		return runruntime.Run{}, runruntime.ErrRunNotFound
+	}
+	return r.runs[runID], nil
+}
+
+func (r *MemoryRuntime) LoadActiveBySession(
+	_ context.Context,
+	userID string,
+	sessionID string,
+) (runruntime.Run, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	runID, ok := r.active[sessionID]
+	if !ok || r.runs[runID].UserID != userID {
 		return runruntime.Run{}, runruntime.ErrRunNotFound
 	}
 	return r.runs[runID], nil
@@ -132,6 +148,12 @@ func (r *MemoryRuntime) commitLocked(
 	if existing, ok := r.requests[key]; ok && existing != run.RunID {
 		return runruntime.ErrRevisionConflict
 	}
+	activeKey := run.SessionID
+	if !terminalRunState(run.State.WireName()) {
+		if existing, ok := r.active[activeKey]; ok && existing != run.RunID {
+			return runruntime.ErrActiveRunConflict
+		}
+	}
 	journal := r.events[run.RunID]
 	lastSequence := int64(len(journal))
 	for _, event := range events {
@@ -143,6 +165,13 @@ func (r *MemoryRuntime) commitLocked(
 	}
 	r.runs[run.RunID] = run
 	r.requests[key] = run.RunID
+	if terminalRunState(run.State.WireName()) {
+		if r.active[activeKey] == run.RunID {
+			delete(r.active, activeKey)
+		}
+	} else {
+		r.active[activeKey] = run.RunID
+	}
 	r.events[run.RunID] = journal
 	if receipt != nil {
 		receiptKey := receipt.RunID + "\x00" + receipt.CommandID
@@ -288,6 +317,15 @@ func (r *MemoryRuntime) removeReadyLocked(runID string) {
 
 func requestKey(userID, sessionID, clientRequestID string) string {
 	return userID + "\x00" + sessionID + "\x00" + clientRequestID
+}
+
+func terminalRunState(state string) bool {
+	switch state {
+	case "completed", "failed", "cancelled":
+		return true
+	default:
+		return false
+	}
 }
 
 func queueRunnable(state string) bool {

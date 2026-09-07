@@ -56,6 +56,11 @@ enum AssistantErrorCode {
     '请求重复提交，请刷新后重试',
     409,
   ),
+  runActiveConflict(
+    'ASSISTANT.USER.run_active_conflict',
+    '当前会话已有任务正在执行，请等待其结束后重试',
+    409,
+  ),
   runStorageUnavailable(
     'ASSISTANT.SYSTEM.run_storage_unavailable',
     '助手执行服务暂不可用，请稍后重试',
@@ -189,6 +194,7 @@ class AssistantErrorMessages {
         AssistantErrorCode.intersectionEvidenceNotFound: '这条交集线索已失效或不可访问',
         AssistantErrorCode.intersectionEvidenceUnavailable: '交集证据暂时无法核验，请稍后重试',
         AssistantErrorCode.runIdempotencyConflict: '请求重复提交，请刷新后重试',
+        AssistantErrorCode.runActiveConflict: '当前会话已有任务正在执行，请等待其结束后重试',
         AssistantErrorCode.runStorageUnavailable: '助手执行服务暂不可用，请稍后重试',
         AssistantErrorCode.runPolicyUnavailable: '助手策略暂不可用，请稍后重试',
         AssistantErrorCode.runReasoningProfileUnavailable: '当前推理配置无法满足本次任务要求',
@@ -240,6 +246,7 @@ class AssistantErrorMessages {
         'Intersection evidence cannot be verified right now',
     AssistantErrorCode.runIdempotencyConflict:
         'Duplicate request, please refresh and retry',
+    AssistantErrorCode.runActiveConflict: 'This session already has an active assistant run; retry after it finishes',
     AssistantErrorCode.runStorageUnavailable:
         'Assistant run service is temporarily unavailable',
     AssistantErrorCode.runPolicyUnavailable:

@@ -6,6 +6,8 @@ import 'package:quwoquan_app/service/content_service/content/content_behavior_fa
     show referralSourceForObjectType;
 import 'package:quwoquan_app/service/content_service/content/content_behavior_fact/application/public/content_behavior_tracker_port.dart';
 import 'package:quwoquan_app/runtime/di/navigation/intersection_target_navigator.dart';
+import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/application/public/intersection_reason_selection.dart'
+    show sourceRefForReason;
 import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/presentation/object_intersection_card.dart';
 import 'package:quwoquan_app/runtime/di/object_intersection_provider.dart';
 import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/application/public/object_intersection_query.dart';
@@ -72,6 +74,8 @@ class ObjectIntersectionListPage extends ConsumerWidget {
           intersectionDimension: attribution.dimension,
           intersectionClass: attribution.intersectionClass,
           intersectionTagRefs: attribution.tagRefs,
+
+          intersectionCohort: attribution.cohort,
         );
       },
     ).open(
@@ -81,8 +85,9 @@ class ObjectIntersectionListPage extends ConsumerWidget {
         intersectionId: reason.intersectionId,
         dimension: reason.dimension,
         intersectionClass: reason.intersectionClass,
-        sourceRef: reason.source,
+        sourceRef: sourceRefForReason(reason),
         tagRefs: reason.tagRefs,
+        cohort: reason.cohort,
       ),
     );
   }
@@ -147,6 +152,8 @@ class ObjectIntersectionListPage extends ConsumerWidget {
                 intersectionDimension: firstReason.dimension,
                 intersectionClass: firstReason.intersectionClass,
                 intersectionSourceRef: firstReason.source,
+
+                intersectionCohort: firstReason.cohort,
                 referralSource: referralSourceForObjectType(objectType),
               );
             },

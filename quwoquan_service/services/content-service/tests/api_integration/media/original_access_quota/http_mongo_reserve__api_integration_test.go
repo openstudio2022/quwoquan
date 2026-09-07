@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -18,6 +19,7 @@ import (
 	rtauth "quwoquan_service/runtime/auth"
 	"quwoquan_service/runtime/commandmeta"
 	rtoperation "quwoquan_service/runtime/operation"
+	quotagenerated "quwoquan_service/services/content-service/generated/media/original_access_quota"
 	mediaassetports "quwoquan_service/services/content-service/internal/media/media_asset/domain/ports"
 	auditadapter "quwoquan_service/services/content-service/internal/media/media_original_access_fact/adapters/inbound/audit"
 	auditapp "quwoquan_service/services/content-service/internal/media/media_original_access_fact/application"
@@ -57,8 +59,8 @@ func TestHTTPReservesOneQuotaSlotAndReplaysTheAbsoluteGrant(t *testing.T) {
 	)
 	handler := quotahttp.NewHandler(service)
 
-	first := executeReserveRequest(t, handler)
-	replayed := executeReserveRequest(t, handler)
+	first := executeReserveRequest(t, handler, "original-access-once")
+	replayed := executeReserveRequest(t, handler, "original-access-once")
 	if first.Code != http.StatusOK || replayed.Code != http.StatusOK {
 		t.Fatalf("grant status first=%d replay=%d bodies=%s / %s", first.Code, replayed.Code, first.Body.String(), replayed.Body.String())
 	}
@@ -84,11 +86,117 @@ func TestHTTPReservesOneQuotaSlotAndReplaysTheAbsoluteGrant(t *testing.T) {
 	}
 }
 
-func executeReserveRequest(t *testing.T, handler *quotahttp.Handler) *httptest.ResponseRecorder {
+// spec_ref: specs/feature-tree/discovery-content/media-processing-helper-read/image-delivery-variants/spec.md#gwt-003
+func TestConcurrentMongoReservationsCannotExceedQuota(t *testing.T) {
+	runtime, err := testinfra.StartRealMongo(
+		context.Background(),
+		"content_original_access_quota_concurrent",
+	)
+	if err != nil {
+		t.Fatalf("start real MongoDB: %v", err)
+	}
+	t.Cleanup(func() {
+		if closeErr := runtime.Close(context.Background()); closeErr != nil {
+			t.Errorf("close real MongoDB: %v", closeErr)
+		}
+	})
+	database := runtime.Database
+	quotaStore := quotapersistence.NewMongoStore(database)
+	if err := quotaStore.EnsureIndexes(context.Background()); err != nil {
+		t.Fatalf("ensure quota indexes: %v", err)
+	}
+	auditStore := auditpersistence.NewMongoStore(database)
+	if err := auditStore.EnsureIndexes(context.Background()); err != nil {
+		t.Fatalf("ensure audit indexes: %v", err)
+	}
+	now := time.Date(2030, time.March, 4, 5, 6, 7, 0, time.UTC)
+	service := quotaapp.NewService(
+		quotaStore,
+		auditadapter.NewAppender(auditapp.NewService(auditStore)),
+		fixedAssetReader{},
+		visiblePostReader{},
+		fixedURLSigner{},
+		quotaapp.WithClock(func() time.Time { return now }),
+	)
+	handler := quotahttp.NewHandler(service)
+	maxGrants := quotagenerated.ContentMediaOriginalAccessRateLimitMaxGrants
+	writers := maxGrants + 4
+
+	start := make(chan struct{})
+	responses := make(chan *httptest.ResponseRecorder, writers)
+	var wait sync.WaitGroup
+	for index := 0; index < writers; index++ {
+		index := index
+		wait.Add(1)
+		go func() {
+			defer wait.Done()
+			<-start
+			responses <- executeReserveRequest(
+				t,
+				handler,
+				fmt.Sprintf("original-access-concurrent-%d", index),
+			)
+		}()
+	}
+	close(start)
+	wait.Wait()
+	close(responses)
+
+	granted := 0
+	rateLimited := 0
+	for response := range responses {
+		switch response.Code {
+		case http.StatusOK:
+			granted++
+		case http.StatusTooManyRequests:
+			rateLimited++
+		default:
+			t.Fatalf(
+				"concurrent quota reservation returned unexpected status=%d body=%s",
+				response.Code,
+				response.Body.String(),
+			)
+		}
+	}
+	var quota struct {
+		GrantCount int `bson:"grantCount"`
+		MaxGrants  int `bson:"maxGrants"`
+	}
+	if err := database.Collection("media_original_access_rate_limits").FindOne(
+		context.Background(),
+		bson.D{},
+	).Decode(&quota); err != nil {
+		t.Fatalf("read final quota window: %v", err)
+	}
+	reservations, err := database.Collection(
+		"media_original_access_quota_reservations",
+	).CountDocuments(context.Background(), bson.D{})
+	if err != nil {
+		t.Fatalf("count quota reservations: %v", err)
+	}
+	if granted != maxGrants || rateLimited != writers-maxGrants ||
+		quota.GrantCount != maxGrants || quota.MaxGrants != maxGrants ||
+		reservations != int64(maxGrants) {
+		t.Fatalf(
+			"Mongo concurrent quota exceeded or lost reservations: granted=%d rateLimited=%d writers=%d quota=%+v reservations=%d",
+			granted,
+			rateLimited,
+			writers,
+			quota,
+			reservations,
+		)
+	}
+}
+
+func executeReserveRequest(
+	t *testing.T,
+	handler *quotahttp.Handler,
+	idempotencyKey string,
+) *httptest.ResponseRecorder {
 	t.Helper()
 	request := httptest.NewRequest(http.MethodPost, "/content/media/media_image/original:access", strings.NewReader(`{"purpose":"save"}`))
 	request.SetPathValue("mediaId", "media_image")
-	ctx := commandmeta.WithIdempotencyKey(request.Context(), "original-access-once")
+	ctx := commandmeta.WithIdempotencyKey(request.Context(), idempotencyKey)
 	ctx = rtauth.WithPrincipal(ctx, rtauth.Principal{
 		Claims: rtauth.Claims{Subject: "account_1", Persona: "persona_owner"},
 		Actor:  rtoperation.ActorContext{AccountID: "account_1", PersonaID: "persona_owner"},

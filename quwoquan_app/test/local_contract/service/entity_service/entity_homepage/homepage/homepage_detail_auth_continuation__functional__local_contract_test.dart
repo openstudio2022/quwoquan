@@ -9,12 +9,13 @@ import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/service/entity_service/entity_homepage/homepage/application/public/homepage_view_data.dart';
 import 'package:quwoquan_app/service/content_service/content/content_behavior_fact/application/public/content_behavior_repository.dart';
-import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/application/public/gathering_create_navigation_request.dart';
 import 'package:quwoquan_app/service/user_service/persona_management/persona/application/public/user_profile_route_extra.dart';
+
 import '../../../../../support/service/content_service/content/content_behavior_fact/recording_content_behavior_repository.dart';
 import '../../../../../support/service/entity_service/entity_homepage/homepage/homepage_test_adapter.dart';
 import '../../../../../support/runtime/cloud_boundary_test_scope.dart';
 import '../../../../../support/service/recommendation_service/recommendation/recommendation_feature_profile_view/intersection_repository_typed_double.dart';
+
 import 'package:quwoquan_app/service/user_service/persona_management/persona/application/public/persona_management_view_data.dart';
 import 'package:quwoquan_app/service/user_service/relationship/subject_follow/application/public/subject_follow_writer.dart';
 import 'package:quwoquan_app/service/content_service/content/content_behavior_fact/application/content_behavior_tracker.dart';
@@ -44,14 +45,13 @@ import 'package:quwoquan_app/runtime/di/app_providers_operations.dart'
 import 'package:quwoquan_app/runtime/di/content_behavior_dependencies.dart'
     show behaviorRepositoryProvider, contentBehaviorTrackerProvider;
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
+
 import '../../../../../support/service/entity_service/entity_homepage/homepage_review/homepage_review_facets_typed_double.dart';
-import '../../../../../support/runtime/homepage_source_cards_boundary_overrides.dart';
 
 const String _homepageId = 'homepage_sight_west_lake';
 
 List<Override> _homepageShellBoundaryOverrides() => <Override>[
   ...sealedCloudBoundaryOverrides(),
-  ...homepageSourceCardsBoundaryOverrides(),
   behaviorRepositoryProvider.overrideWithValue(
     RecordingContentBehaviorRepository(),
   ),
@@ -127,9 +127,9 @@ void main() {
         .read(authContinuationProvider.notifier)
         .set(const FollowHomepageContinuation(homepageId: _homepageId));
 
-    (container.read(authSessionControllerProvider.notifier)
-            as _FlippableHomepageSession)
-        .loginNow();
+    (container.read(
+      authSessionControllerProvider.notifier,
+    ) as _FlippableHomepageSession).loginNow();
     await tester.pumpAndSettle();
 
     expect(followWriter.followCalls, 1);
@@ -181,9 +181,9 @@ void main() {
         .read(authContinuationProvider.notifier)
         .set(const WishlistHomepageContinuation(homepageId: _homepageId));
 
-    (container.read(authSessionControllerProvider.notifier)
-            as _FlippableHomepageSession)
-        .loginNow();
+    (container.read(
+      authSessionControllerProvider.notifier,
+    ) as _FlippableHomepageSession).loginNow();
     await tester.pumpAndSettle();
 
     expect(reporter.events, hasLength(1));
@@ -247,9 +247,9 @@ void main() {
           const OpenHomepageReviewComposerContinuation(homepageId: _homepageId),
         );
 
-    (container.read(authSessionControllerProvider.notifier)
-            as _FlippableHomepageSession)
-        .loginNow();
+    (container.read(
+      authSessionControllerProvider.notifier,
+    ) as _FlippableHomepageSession).loginNow();
     await tester.pumpAndSettle();
 
     expect(
@@ -259,8 +259,7 @@ void main() {
     expect(container.read(authContinuationProvider), isNull);
   });
 
-  testWidgets('在这里发起以实体为来源引用进入行动创建', (tester) async {
-    GatheringCreateNavigationRequest? captured;
+  testWidgets('实体主页不暴露无上下文活动入口', (tester) async {
     final router = GoRouter(
       initialLocation: AppRoutePaths.homepageDetail(id: _homepageId),
       routes: <RouteBase>[
@@ -271,13 +270,6 @@ void main() {
           ),
           builder: (_, state) =>
               HomepageDetailPage(homepageId: state.pathParameters['id'] ?? ''),
-        ),
-        GoRoute(
-          path: AppRoutePaths.gatheringCreate,
-          builder: (_, state) {
-            captured = state.extra as GatheringCreateNavigationRequest?;
-            return const Text('CREATE', textDirection: TextDirection.ltr);
-          },
         ),
       ],
     );
@@ -300,22 +292,9 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(
-      find.text(ObjectHomepageText.entityActionStartGathering),
-      findsOneWidget,
-      reason: '可到访地点类主页提供「在这里发起」（发起不依赖交集存在）',
-    );
-    await tester.tap(find.text(ObjectHomepageText.entityActionStartGathering));
-    await tester.pumpAndSettle();
-
-    expect(find.text('CREATE'), findsOneWidget);
-    expect(captured, isNotNull);
-    expect(captured!.actionKey, 'start_gathering');
-    expect(captured!.sourceRefs, hasLength(1));
-    expect(captured!.sourceRefs.single.objectId, _homepageId);
-    expect(captured!.sourceRefs.single.objectKind, 'homepage');
-    expect(captured!.targetObject.objectId, _homepageId);
-    expect(captured!.targetObject.routeId, 'homepageDetail');
+    // 实体主页「在这里发起」入口已退役（intersection-unified-experience REQ-006），
+    // 文案常量随之删除；行动只从交集证据面的 canonical actionHint 进入。
+    expect(find.text('在这里发起'), findsNothing);
   });
 
   testWidgets('私信认领主体进入 owner 主页并携带私信分流意图', (tester) async {
@@ -407,9 +386,9 @@ void main() {
           builder: (context, state) => TextButton(
             key: const ValueKey<String>('homepage-detail-login-close'),
             onPressed: () {
-              ProviderScope.containerOf(
-                context,
-              ).read(authContinuationProvider.notifier).clear();
+              ProviderScope.containerOf(context)
+                  .read(authContinuationProvider.notifier)
+                  .clear();
               context.go(
                 state.uri.queryParameters[loginDismissFallbackQueryParam] ??
                     AppRoutePaths.home,
@@ -446,9 +425,9 @@ void main() {
       find.byKey(const ValueKey<String>('homepage-detail-login-close')),
     );
     expect(
-      GoRouterState.of(
-        loginContext,
-      ).uri.queryParameters[loginGuestDismissPopQueryParam],
+      GoRouterState.of(loginContext)
+          .uri
+          .queryParameters[loginGuestDismissPopQueryParam],
       LoginDismissPolicy.safeFallback.name,
     );
     await tester.tap(

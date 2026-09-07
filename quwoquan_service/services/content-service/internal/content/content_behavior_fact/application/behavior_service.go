@@ -74,6 +74,7 @@ type BehaviorEventInput struct {
 	IntersectionID         string `json:"intersectionId"`
 	IntersectionClass      string `json:"intersectionClass"`
 	IntersectionEvidenceID string `json:"intersectionEvidenceId"`
+	IntersectionCohort     string `json:"intersectionCohort"`
 	// 交集负反馈闭环（F 推荐差异化）：intersection_feedback 事件专属。
 	//   SubjectID    = 交集主体对象 id（person/circle/place…，与 reason.subjectId/actionTargetId 同源）；
 	//   FeedbackKind = registry.feedbackKinds 闭集（notInterested/dismiss/rejectGreeting/leaveCircle）。
@@ -97,11 +98,38 @@ type BatchReceipt struct {
 	ReplayedCount int `json:"replayedCount"`
 }
 
-// IntersectionFeedbackSink 接收交集负反馈，驱动交集主体（subject）跨会话冷却（rec:ineg）。
+// IntersectionFeedbackSink 是行为管道通向交集冷却状态的端口（REQ-004 漏斗：曝光 → 点击/展开 →
+// 转化 → 清零）：
+//   - ReportNegativeFeedback：负反馈驱动交集主体（subject）跨会话冷却（rec:ineg）；
+//   - ReportExposure：impression 携带 intersectionId 时写曝光冷却（rec:icool），窗口内不再重复推荐；
+//   - ClearExposure：点击 / 证据展开 / 转化事件携带 intersectionId 时清零，解除曝光冷却。
+//
 // 由 content-service IntersectionService 实现；behavior 侧仅依赖该端口（DDD 依赖倒置，
-// 避免 application 直接耦合 intersection application 实现）。
+// 避免 application 直接耦合 intersection application 实现）。三个方法对 Redis 降级都返回
+// nil 不阻断 ingest。
 type IntersectionFeedbackSink interface {
 	ReportNegativeFeedback(ctx context.Context, userID, subjectID, feedbackKind string) error
+	ReportExposure(ctx context.Context, userID string, intersectionIDs []string) error
+	ClearExposure(ctx context.Context, userID string, intersectionIDs []string) error
+}
+
+// intersectionExposureFunnelStep 把行为事件映射到曝光冷却漏斗的步骤：impression（真实曝光，
+// state=impressed）记录曝光；click / intersection_expand 与携带 intersectionId 的正向转化
+// 事件（follow / join_circle / add_contact / like / comment / share / wishlist_add）清零。
+// 事件类型闭集见 contracts/content/content_behavior_fact/behaviors.yaml；无 intersectionId
+// 的普通内容事件不进入冷却集。
+func intersectionExposureFunnelStep(action, state, intersectionID string) (report bool, clear bool) {
+	if strings.TrimSpace(intersectionID) == "" {
+		return false, false
+	}
+	switch action {
+	case "impression":
+		return strings.TrimSpace(state) == "impressed", false
+	case "click", "intersection_expand", "follow", "join_circle", "add_contact",
+		"like", "comment", "share", "wishlist_add":
+		return false, true
+	}
+	return false, false
 }
 
 // OnboardingInterestTaxonomyValidationInput carries one canonicalized
@@ -449,6 +477,7 @@ func (s *BehaviorService) processBatch(
 			IntersectionClass:      strings.TrimSpace(eventInput.IntersectionClass),
 			IntersectionSourceRef:  strings.TrimSpace(eventInput.IntersectionSourceRef),
 			IntersectionEvidenceID: strings.TrimSpace(eventInput.IntersectionEvidenceID),
+			IntersectionCohort:     strings.TrimSpace(eventInput.IntersectionCohort),
 			MotionDirection:        strings.TrimSpace(eventInput.MotionDirection),
 			MotionProfile:          strings.TrimSpace(eventInput.MotionProfile),
 			SettleMS:               eventInput.SettleMS,
@@ -483,6 +512,21 @@ func (s *BehaviorService) processBatch(
 				strings.TrimSpace(eventInput.FeedbackKind),
 			); err != nil {
 				return err
+			}
+		}
+		// 曝光冷却漏斗（REQ-004）：真实曝光写 rec:icool；点击 / 展开 / 转化清零。
+		if s.intersectionFeedback != nil {
+			intersectionID := strings.TrimSpace(eventInput.IntersectionID)
+			report, clear := intersectionExposureFunnelStep(action, eventInput.State, intersectionID)
+			if report {
+				if err := s.intersectionFeedback.ReportExposure(ctx, userID, []string{intersectionID}); err != nil {
+					return err
+				}
+			}
+			if clear {
+				if err := s.intersectionFeedback.ClearExposure(ctx, userID, []string{intersectionID}); err != nil {
+					return err
+				}
 			}
 		}
 		if isWishlistAction(action) && s.wishlistStore != nil {
@@ -554,6 +598,7 @@ func (s *BehaviorService) processBatch(
 				IntersectionClass:      sig.IntersectionClass,
 				IntersectionSourceRef:  strings.TrimSpace(acceptedInputs[i].IntersectionSourceRef),
 				IntersectionEvidenceID: strings.TrimSpace(acceptedInputs[i].IntersectionEvidenceID),
+				IntersectionCohort:     strings.TrimSpace(acceptedInputs[i].IntersectionCohort),
 				SubjectID:              strings.TrimSpace(acceptedInputs[i].SubjectID),
 				FeedbackKind:           strings.TrimSpace(acceptedInputs[i].FeedbackKind),
 				MotionDirection:        sig.MotionDirection,

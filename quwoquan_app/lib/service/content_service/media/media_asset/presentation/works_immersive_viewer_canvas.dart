@@ -198,18 +198,17 @@ class _WorksVideoCanvasState extends State<_WorksVideoCanvas>
       if (identity == null) {
         return;
       }
+      final session = _mountedSessionsByIdentity[identity];
+      session?.setVisibility(true);
       widget.onEpisodeChanged(_currentEpisodeIndex, identity);
-      widget.onActiveSessionChanged(
-        _currentEpisodeIndex,
-        identity,
-        _mountedSessionsByIdentity[identity],
-      );
+      widget.onActiveSessionChanged(_currentEpisodeIndex, identity, session);
       return;
     }
     _forwardPreheatAllowed = false;
     _preheatReadinessGeneration += 1;
     final identity = _currentEpisodeIdentity;
     if (identity != null) {
+      _mountedSessionsByIdentity[identity]?.setVisibility(false);
       widget.onActiveSessionChanged(_currentEpisodeIndex, identity, null);
     }
   }
@@ -377,6 +376,7 @@ class _WorksVideoCanvasState extends State<_WorksVideoCanvas>
     VideoPlaybackSession session,
   ) {
     _mountedSessionsByIdentity[identity] = session;
+    session.setVisibility(widget.isVisible && index == _currentEpisodeIndex);
     if (widget.isVisible && index == _currentEpisodeIndex) {
       widget.onActiveSessionChanged(index, identity, session);
       final generation = ++_preheatReadinessGeneration;
@@ -560,8 +560,7 @@ class _WorksVideoEpisodeStageState extends State<_WorksVideoEpisodeStage> {
           key: ValueKey<String>('works-video-${widget.postId}-${widget.index}'),
           child: mediaDeliveryVideo(
             binding: item.videoBinding,
-            publicBuilder: (context, _) =>
-                item.deliveryReference == null
+            publicBuilder: (context, _) => item.deliveryReference == null
                 ? const SizedBox.shrink()
                 : _immersivePlayer(item: item, signedDelivery: null),
             signedBuilder: (context, signedDelivery) =>
@@ -583,9 +582,7 @@ class _WorksVideoEpisodeStageState extends State<_WorksVideoEpisodeStage> {
       key: ValueKey<String>(
         'works-video-identity-${widget.postId}-${widget.identity}',
       ),
-      deliveryReference: signedDelivery == null
-          ? item.deliveryReference
-          : null,
+      deliveryReference: signedDelivery == null ? item.deliveryReference : null,
       signedDelivery: signedDelivery,
       adaptiveDeliveryReference: signedDelivery == null
           ? item.adaptiveDeliveryReference
@@ -891,6 +888,7 @@ class _WorksVideoDeliveryItem {
   final MediaDeliveryReference? deliveryReference;
   final MediaDeliveryReference? adaptiveDeliveryReference;
   final int adaptiveDescriptorVersion;
+
   /// 封面的 typed 交付绑定：封面是独立资产，其资产身份取 coverAssetId，
   /// 不复用视频自身的 mediaAssetId，也不以 post 标识兜底。
   final MediaDeliveryBinding coverBinding;

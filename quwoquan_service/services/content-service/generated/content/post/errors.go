@@ -24,6 +24,8 @@ var (
 	ErrPostNotFound                    = errors.New("CONTENT.USER.post_not_found")
 	ErrPublicationRejected             = errors.New("CONTENT.USER.publication_rejected")
 	ErrRateLimited                     = errors.New("CONTENT.USER.rate_limited")
+	ErrReleaseCandidateDrift           = errors.New("CONTENT.USER.release_candidate_drift")
+	ErrReleaseCandidateMissing         = errors.New("CONTENT.USER.release_candidate_missing")
 	ErrRequiredDependencyUnavailable   = errors.New("CONTENT.SYSTEM.required_dependency_unavailable")
 	ErrResearchIdentityInvalid         = errors.New("CONTENT.USER.research_identity_invalid")
 	ErrResearchReleaseStateUnavailable = errors.New("CONTENT.SYSTEM.research_release_state_unavailable")
@@ -110,6 +112,18 @@ func AppErrorFromPublicationRejected(debugMessage string) *rterr.AppError {
 func AppErrorFromRateLimited(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("CONTENT.USER.rate_limited")
 	return rterr.NewAppError(code, "操作太频繁，请稍后重试", debugMessage).WithMetadata("rate_limited", 429).WithRecoveryDirective("retry", "snackbar", 60)
+}
+
+// AppErrorFromReleaseCandidateDrift returns *AppError for CONTENT.USER.release_candidate_drift (user_message from errors.yaml).
+func AppErrorFromReleaseCandidateDrift(debugMessage string) *rterr.AppError {
+	code, _ := rterr.ParseCode("CONTENT.USER.release_candidate_drift")
+	return rterr.NewAppError(code, "发布候选与不可变清单不一致，请重新导入", debugMessage).WithMetadata("release_candidate_drift", 0).WithRecoveryDirective("retry", "inlineCard", 0)
+}
+
+// AppErrorFromReleaseCandidateMissing returns *AppError for CONTENT.USER.release_candidate_missing (user_message from errors.yaml).
+func AppErrorFromReleaseCandidateMissing(debugMessage string) *rterr.AppError {
+	code, _ := rterr.ParseCode("CONTENT.USER.release_candidate_missing")
+	return rterr.NewAppError(code, "发布候选不存在或不完整，请重新导入", debugMessage).WithMetadata("release_candidate_missing", 0).WithRecoveryDirective("retry", "inlineCard", 0)
 }
 
 // AppErrorFromRequiredDependencyUnavailable returns *AppError for CONTENT.SYSTEM.required_dependency_unavailable (user_message from errors.yaml).

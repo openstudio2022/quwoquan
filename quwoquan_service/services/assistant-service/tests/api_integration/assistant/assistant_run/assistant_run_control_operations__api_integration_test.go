@@ -19,6 +19,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -497,6 +498,7 @@ func newAssistantRunControlService(
 	repository runruntime.Repository,
 	now *time.Time,
 ) *runruntime.CommandService {
+	var nowMu sync.Mutex
 	return runruntime.NewCommandService(
 		repository,
 		runruntime.SessionResolverFunc(func(
@@ -513,6 +515,8 @@ func newAssistantRunControlService(
 		},
 		runruntime.AllowAllStartAccessPolicy{},
 		func() time.Time {
+			nowMu.Lock()
+			defer nowMu.Unlock()
 			*now = now.Add(time.Second)
 			return *now
 		},

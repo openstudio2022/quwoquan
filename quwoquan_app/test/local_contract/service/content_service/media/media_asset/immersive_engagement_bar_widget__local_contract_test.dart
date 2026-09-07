@@ -6,10 +6,28 @@ import 'package:quwoquan_app/design_system/avatar/rounded_square_avatar.dart';
 import 'package:quwoquan_app/service/content_service/media/media_asset/presentation/immersive_engagement_bar.dart';
 import 'package:quwoquan_app/service/content_service/media/media_asset/presentation/immersive_viewer_layout.dart';
 import 'package:quwoquan_app/design_system/icons/app_custom_icons.dart';
+import 'package:quwoquan_app/design_system/layout/app_terminal_viewport.dart';
 import 'package:quwoquan_app/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/design_system/typography/app_typography.dart';
 
-Widget _wrap(Widget child, {double width = 390, double bottomInset = 0}) {
+Widget _wrap(
+  Widget child, {
+  double width = 390,
+  double bottomInset = 0,
+  double bottomObstruction = 0,
+  bool alignBottom = false,
+}) {
+  Widget content = SizedBox(width: width, child: child);
+  if (alignBottom) {
+    content = Align(alignment: Alignment.bottomCenter, child: content);
+  }
+  if (bottomObstruction > 0) {
+    content = AppViewportObstructionScope(
+      obstruction: EdgeInsets.only(bottom: bottomObstruction),
+      child: content,
+    );
+  }
+
   return MaterialApp(
     home: Scaffold(
       body: MediaQuery(
@@ -18,7 +36,7 @@ Widget _wrap(Widget child, {double width = 390, double bottomInset = 0}) {
           padding: EdgeInsets.only(bottom: bottomInset),
           viewPadding: EdgeInsets.only(bottom: bottomInset),
         ),
-        child: SizedBox(width: width, child: child),
+        child: content,
       ),
     ),
   );
@@ -620,6 +638,82 @@ void main() {
         reason: 'width=$width: 底部安全区保护必须以垂直抬升表达',
       );
     }
+  });
+
+  testWidgets('底部遮挡与系统安全区取较大值，内容整体抬升且 rail 宽度不变', (tester) async {
+    const bottomInset = 34.0;
+    const bottomObstruction = 100.0;
+
+    Future<({Rect root, Rect rail, double reservedHeight})> pumpBar({
+      required double obstruction,
+    }) async {
+      await tester.pumpWidget(
+        _wrap(
+          const ImmersiveEngagementBar(
+            layoutSpec: ImmersiveViewerStageLayoutSpec.mediaStage,
+            avatarUrl: '',
+            displayName: '自然摄影师',
+            likeCount: 1200,
+            shareCount: 18,
+            commentCount: 45,
+            isLiked: false,
+            isFollowing: false,
+            onUserTap: _noop,
+            onFollowTap: _noop,
+            onLikeTap: _noop,
+          ),
+          bottomInset: bottomInset,
+          bottomObstruction: obstruction,
+          alignBottom: true,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final barFinder = find.byType(ImmersiveEngagementBar);
+      return (
+        root: tester.getRect(barFinder),
+        rail: tester.getRect(
+          find.byKey(const ValueKey('immersive-engagement-rail')),
+        ),
+        reservedHeight: ImmersiveEngagementBar.reservedHeight(
+          tester.element(barFinder),
+        ),
+      );
+    }
+
+    final systemInsetOnly = await pumpBar(obstruction: 0);
+    final shellObstruction = await pumpBar(obstruction: bottomObstruction);
+    final expectedLift = bottomObstruction - bottomInset;
+
+    expect(
+      systemInsetOnly.root.height,
+      moreOrLessEquals(systemInsetOnly.reservedHeight, epsilon: 1),
+      reason: '无外层遮挡时仍应保留系统底部安全区',
+    );
+    expect(
+      shellObstruction.root.height,
+      moreOrLessEquals(shellObstruction.reservedHeight, epsilon: 1),
+      reason: 'reservedHeight 与实际 build 必须共用同一净空计算',
+    );
+    expect(
+      shellObstruction.root.height - systemInsetOnly.root.height,
+      moreOrLessEquals(expectedLift, epsilon: 1),
+      reason: '100 obstruction 与 34 viewPadding 应取 max，不能相加',
+    );
+    expect(
+      systemInsetOnly.rail.bottom - shellObstruction.rail.bottom,
+      moreOrLessEquals(expectedLift, epsilon: 1),
+      reason: 'MainAppShell 中互动内容应整体抬到覆盖式底栏之上',
+    );
+    expect(
+      shellObstruction.rail.left,
+      moreOrLessEquals(systemInsetOnly.rail.left, epsilon: 1),
+    );
+    expect(
+      shellObstruction.rail.width,
+      moreOrLessEquals(systemInsetOnly.rail.width, epsilon: 1),
+      reason: 'bottom obstruction 不得收窄左右 rail',
+    );
   });
 
   testWidgets('底栏只承载作者与互动动作，不再渲染内容区交集句', (tester) async {

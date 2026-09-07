@@ -35,13 +35,13 @@
 <a id="dec-002"></a>
 ### DEC-002 跨轨统一漏斗只做读侧 actorHash 天级合并，不建数仓
 - 决策：「曝光 → 消费 → 发布 → 再消费」漏斗横跨产品遥测轨（ES，身份键 sessionId 可派生 actorHash）与行为归因轨（Mongo/Redis 流，身份键 personaId/feedRequestId）。统一视图只在读侧合并：join 键固定为 actorHash（sha256(actorId)，与 growth 投影同派生域）；产品轨由 `GetGrowthOverview` 扩展天级去重段计数，行为轨由 content-service 归因端点扩展 actor 去重数，product-ops 聚合层读侧合并、不复制事实。漏斗每段标注 sourceTrack 与 freshness，缺任一轨显式 unavailable，禁止跨轨数值换算。
-- 理由：两轨物理隔离是既定架构（BehaviorSignal 不得伪装 Ops 事件）；当前规模下天级去重计数由既有 ES/Mongo 聚合承载即可，提前引入数仓（ClickHouse/BigQuery）是无收益的第二存储面。
+- 理由：两轨物理隔离是既定架构（BehaviorSignal 不得伪装 Ops 事件）；天级 actor 去重输入基数、聚合内存和查询延迟未超过既有 ES/Mongo 聚合的容量与 SLO 阈值时，由既有聚合承载即可，引入数仓（ClickHouse/BigQuery）会形成无收益的第二存储面。
 - 被否决方案：以下路线均被否决。
   - 引入独立分析数仓做明细 join。
   - 用户级明细跨轨关联（隐私与基数不允许）。
   - 在任一轨复制另一轨事实形成第二真相源。
   - 分钟级实时跨轨漏斗。
-- 约束与影响：先契约（product-ops `GetGrowthOverview` response_fields 扩展与 content 归因端点扩展）再 verify/codegen 再实现；规模超出单机聚合能力时重评数仓，禁止提前建设。
+- 约束与影响：先契约（product-ops `GetGrowthOverview` response_fields 扩展与 content 归因端点扩展）再 verify/codegen 再实现；只有天级 actor 去重输入基数、聚合内存或查询延迟超过既有 ES/Mongo 聚合已声明的容量或 SLO 阈值，才准入数仓重评，未达到阈值时禁止建设第二存储面。
 - 关联要求：[`analytics-metric-dictionary REQ-003`](./analytics-metric-dictionary/spec.md#req-003)
 - 影响 Story：[`analytics-metric-dictionary`](./analytics-metric-dictionary/spec.md)
 - 关联验收：`SIT-002`
@@ -54,6 +54,20 @@
 - 约束与影响：先改 `rollups.yaml` 与告警契约，再 codegen，再实现，禁止按 rowKind 手写第二套聚合分支；新增告警字段必须先有 rowKind measure 或 evaluator 白名单登记，`verify_ops_event_schema_completeness.py` 的告警字段闭合段命中即 BLOCK。
 - 关联验收：`SIT-002`
 - 遗留：四环境启用收据由 [`OPEN-011`](./spec.md#open-011) 跟踪。
+
+<a id="dec-004"></a>
+### DEC-004 产品遥测事实与运行日志信号按逻辑 owner 和 namespace 隔离
+- 决策：`Product telemetry typed fact` 归 Product Ops 产品遥测 owner，`Runtime logs observability signal` 归 Runtime 可观测性 owner；二者是不同的逻辑 owner 与 namespace。DEC-001 允许它们物理共用 Elasticsearch，但不得因此合并逻辑边界：两轨必须使用互不重叠的 index/data stream，分别配置 ACL、retention/quota、ILM、snapshot membership，并将容量、写入失败、延迟、新鲜度和费用等 metrics 归因到各自 owner。
+- 写入、查询与部署边界：App、Portal 和业务服务只调用 product-ops 公开的写入/查询门面，不得直连产品遥测 Elasticsearch；只有 Product Ops 拥有的 Provider adapter 可消费遥测存储 binding。deployment binding 只解析 endpoint 与 credential；`clusterRef` 仅属于部署编排权威，不得进入应用配置、环境变量、公开合同、日志或错误结果，应用进程不得感知集群身份。
+- 一致性与幂等：`EventRecord` Redis ledger 是带 TTL 的 ingest idempotency runtime resource，只在合同规定的重试窗口内辅助重复 ACK、超时确认和并发去重；它不是长期 authority，不得作为历史事件、审计、聚合或查询事实源。产品遥测事实的长期 authority 仍是所属 Elasticsearch data stream，ledger 过期、丢失或重建不得被解释为权威事实删除或迁移。
+- 失败终态：遥测 ES endpoint、credential、写入或读取不可用时，边界返回 canonical `unavailable` 并 fail-closed，不确认写入成功、不合成查询结果；禁止回退到 PostgreSQL、文件、内存或其他未声明存储，也禁止双写维持伪可用。
+- 物理拆分、恢复与回滚：物理拆分的准入条件是先形成并验证 deployment binding、源 snapshot、目标 restore 和权威 readback，且 readback 覆盖映射、文档计数、canonical digest、时间边界与聚合一致性；全部满足后才允许单轨切换。任一条件不满足均保持原 binding 和原 authority，不切流、不双写；回滚只恢复上一份已验证 binding。独立的 Product Ops telemetry ES 是低耦合拆分候选，但未满足上述准入条件不得创建或切换 Prod 集群。
+- 理由：逻辑 owner 决定数据治理、权限、生命周期、恢复集合与成本归因；物理集群只是可替换的部署资源。把两轨的治理边界绑定到同一集群身份，会使保留、快照、配额、告警和迁移互相耦合，并让 runtime signal 被误当作产品事实。
+- 被否决方案：产品遥测与运行日志共用 index/data stream、角色、ILM、配额或快照通配符；以 Redis ledger 充当长期事件权威；应用或业务服务持有 ES credential/`clusterRef`；ES 故障时回退 PostgreSQL/文件/内存；未完成 snapshot/restore/readback 即切换集群；未满足物理拆分准入条件即新建 Prod 专用 telemetry ES。
+- 可测试观察面：两轨的 index/data stream pattern、角色 ACL、ILM、retention/quota、snapshot membership 互不重叠，容量、写入失败、延迟、新鲜度和费用 metrics 均带可归因的 owner 标签；应用渲染结果只含 endpoint/credential，进程观察面不暴露 `clusterRef`；ledger TTL 内重放返回重复确认，过期或重建后长期事实的文档计数与 canonical digest 保持不变；ES 故障时边界只返回 `unavailable`/fail-closed，且 PG/file/memory 均无新增事实；物理拆分的准入证据必须同时包含 snapshot、restore、权威 readback 和 binding rollback receipt。
+- 关联要求：[`REQ-001`](./spec.md#req-001)、[`REQ-002`](./spec.md#req-002)、[`REQ-003`](./spec.md#req-003)
+- 关联验收：[`SIT-001`](./spec.md#sit-001)、[`SIT-002`](./spec.md#sit-002)、[`SIT-003`](./spec.md#sit-003)
+- 影响 Story：[`analytics-metric-dictionary`](./analytics-metric-dictionary/spec.md)、[`event-schema-governance`](./event-schema-governance/spec.md)
 
 ## 5. 失败与恢复
 

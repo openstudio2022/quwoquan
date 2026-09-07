@@ -23,6 +23,7 @@ var (
 	ErrIntersectionEvidenceUnavailable = errors.New("ASSISTANT.MIDDLEWARE.intersection_evidence_unavailable")
 	ErrModelProviderUnavailable        = errors.New("ASSISTANT.MIDDLEWARE.model_provider_unavailable")
 	ErrPublicSearchProviderUnavailable = errors.New("ASSISTANT.MIDDLEWARE.public_search_provider_unavailable")
+	ErrRunActiveConflict               = errors.New("ASSISTANT.USER.run_active_conflict")
 	ErrRunExecutionFailed              = errors.New("ASSISTANT.SYSTEM.run_execution_failed")
 	ErrRunIdempotencyConflict          = errors.New("ASSISTANT.USER.run_idempotency_conflict")
 	ErrRunInvalidArgument              = errors.New("ASSISTANT.USER.run_invalid_argument")
@@ -128,6 +129,12 @@ func AppErrorFromModelProviderUnavailable(debugMessage string) *rterr.AppError {
 func AppErrorFromPublicSearchProviderUnavailable(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("ASSISTANT.MIDDLEWARE.public_search_provider_unavailable")
 	return rterr.NewAppError(code, "公开信息检索暂不可用，请稍后重试", debugMessage).WithMetadata("unavailable", 0).WithRecoveryDirective("retry", "snackbar", 3)
+}
+
+// AppErrorFromRunActiveConflict returns *AppError for ASSISTANT.USER.run_active_conflict (user_message from errors.yaml).
+func AppErrorFromRunActiveConflict(debugMessage string) *rterr.AppError {
+	code, _ := rterr.ParseCode("ASSISTANT.USER.run_active_conflict")
+	return rterr.NewAppError(code, "当前会话已有任务正在执行，请等待其结束后重试", debugMessage).WithMetadata("run_active_conflict", 409).WithRecoveryDirective("retry", "snackbar", 0)
 }
 
 // AppErrorFromRunExecutionFailed returns *AppError for ASSISTANT.SYSTEM.run_execution_failed (user_message from errors.yaml).

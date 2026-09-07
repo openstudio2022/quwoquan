@@ -821,18 +821,6 @@ double _momentGridAspectRatio(int total) {
   return columns / rows;
 }
 
-bool _shouldShowIntersection(
-  IntersectionReason? reason, {
-  IntersectionTarget? contextObjectTarget,
-}) {
-  if (reason == null) return false;
-  return HomeFeedCrossObjectComposition.displayReadyIntersection(
-        reason,
-        contextObjectTarget: contextObjectTarget,
-      ) !=
-      null;
-}
-
 Widget _mediaPlaceholder(bool isDark) {
   return DecoratedBox(
     decoration: BoxDecoration(

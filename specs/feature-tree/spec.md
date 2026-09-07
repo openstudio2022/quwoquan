@@ -2,7 +2,7 @@
 
 ## 1. 产品目标与用户价值
 
-趣我圈是一套以“遇见同趣，绽放热爱”为品牌表达、以“别人帮你刷内容，我们帮你遇到对的人”为产品主轴的端云一体社交应用。它通过内容、对象主页、交集、关系、圈子、Gathering、活动群聊、搜索和小趣助手，把内容消费转化为可加入、可协作、可完成、可沉淀的同趣行动与共同经历；AppRoot 统一用户旅程、跨领域场景、全局术语、边界和 UAT。
+趣我圈是一套以“遇见同趣，绽放热爱”为品牌表达、以“别人帮你刷内容，我们帮你遇到对的人”为产品主轴的端云一体社交应用。当前阶段的信息架构坚持“内容优先、交集促成、行动后置”：首页负责广度发现，视频书负责沉浸阅读，内容中的一条自然交集由用户主动展开后才给出一个可兑现的下一步；行动不是一级内容池。系统再通过对象主页、关系、圈子、Gathering、活动群聊、搜索和小趣助手，把内容消费转化为可加入、可协作、可完成、可沉淀的同趣行动与共同经历；AppRoot 统一用户旅程、跨领域场景、全局术语、边界和 UAT。
 
 ### 目标受众
 
@@ -21,7 +21,7 @@
 - 覆盖用户从进入、发现、创作、互动、关系、消息、助手到持续运营的完整应用体验。
 - 以旅行摄影为第一垂类建立标签纵深：地理、机位、画面主体、季节与光线构成可组合计算和解释的语义轴；器材与拍摄参数保留为作者可控披露事实，不进入搜索筛选、Creator chip 或可见交集。
 - 以“活的共同旅行时间线”为旅行旗舰体验，覆盖行前吃玩住行共同计划、行中变化提醒和贴身讲解、随拍归档、行程地图，以及行后游记整理和关系沉淀。
-- 以单一 Gathering 承载从内容、C 位或主页发起的 1:1、多人和多日行动，覆盖公开详情、准入、活动群聊与看板、Outcome 及内容回流。
+- 以单一 Gathering 承载从内容交集主动展开后的 typed 下一步发起的 1:1、多人和多日行动，并由邀请卡、通知、我的行动、活动群聊、Board、回顾溯源与合法深链承接已有任务，覆盖公开详情、准入、Outcome 及内容回流。
 - 以官方 Skill 为面向用户的能力封装，统一上下文读取、公网证据、受控外部应用连接、主动触发、长任务与 Adaptive Presentation。
 - 境外目的地覆盖到主流出境目的地的一级行政区与主要城市两层，使境外内容与境内内容获得同等的定位精度。
 
@@ -179,7 +179,7 @@
 <a id="req-013"></a>
 ### REQ-013 内容驱动 Gathering 与活动群聊闭环
 
-- 用户可从首页发现、内容/视频书、Persona/Circle 主页或全局 C 位发起或打开同一 Gathering；Recommendation 只对 Circle 提供的合格公开投影排序，不拥有活动、准入或参与事实。
+- 用户从首页或视频书消费内容，在内容中的交集主句主动展开证据后，才可经 canonical `actionHints` 发起新的 Gathering；已有 Gathering 仍可从通知、邀请卡、我的行动、活动群聊、Board、回顾溯源与合法深链打开。Recommendation 只对 Circle 提供的合格公开投影排序，不拥有活动、准入或参与事实。
 - 未加入者进入公开详情并只看到当前披露策略允许的 Host、时间地点范围、容量、要求、费用/风险说明和一个动态主动作；加入、申请、接受邀请、名额提醒、取消与完成必须遵循所属 canonical contracts。
 - Circle 拥有 Gathering、root-owned GatheringParticipation、GatheringRevision、Outcome 与 room binding state。
 - Chat 拥有 Conversation、ConversationMembership、Message 与 Announcement；Content 拥有 Post、Media 与 Report。
@@ -519,10 +519,10 @@
 - 对应验收：`UAT-006`
 
 <a id="jny-011"></a>
-### JNY-011 内容发现或全局发起到 Gathering 完成回流
+### JNY-011 内容交集促成到 Gathering 完成回流
 
-- 用户目标：用户从首页、内容/视频书、Persona/Circle 主页或 C 位把兴趣变成可加入的 Gathering，经公开详情和 Host 准入进入活动群聊与看板协作，完成行动并把经确认的经历发布为内容。
-- 起点：用户看到 Gathering 公开卡，或从 C 位、内容、主页、会话讨论发起活动。
+- 用户目标：用户从首页或视频书的内容中看到一条自然交集，主动展开事实依据与唯一下一步，把兴趣变成可加入的 Gathering；随后经公开详情和 Host 准入进入活动群聊与看板协作，完成行动并把经确认的经历发布为内容。
+- 起点：用户在内容中主动展开交集证据，或从邀请卡、通知、我的行动、活动群聊、Board、回顾溯源与合法深链打开已有 Gathering。
 - 成功终态：Gathering 具有可验证 Outcome；参与者在活动群聊与看板获得一致协作事实，回顾内容关联原 Gathering、Host 与来源内容，是否关注或互关由用户另行决定。
 - 失败恢复：登录关闭回安全来源且不循环；满员、待审批、邀请失效、room access 未就绪、取消、重大变更、提前结束或安全终止进入可区分终态，不以裸建群、自动 mutual 或本地合成成功降级。
 - 参与领域：
@@ -542,7 +542,7 @@
 <a id="scn-027"></a>
 #### SCN-027 内容驱动 Gathering、活动群聊与 Outcome 回流
 
-- 场景目标：Host 从内容或 C 位发起同一 Gathering，用户从首页或主页进入公开详情，经开放加入、申请审批或邀请接受成为有效参与者，随后默认进入活动群聊并使用看板与可选 Plan 协作；旅行多人多日计划与新生同校兴趣活动仅由 canonical Topic/tag、来源和 ExperiencePackage 配置区分，活动完成后由证据形成 Outcome，参与者确认发布回顾内容，且参与不自动改变关注关系。
+- 场景目标：Host 从首页或视频书内容中的 typed 交集下一步发起同一 Gathering，受邀者或参与者从邀请卡、通知、回顾溯源或合法深链进入公开详情，经开放加入、申请审批或邀请接受成为有效参与者，随后默认进入活动群聊并使用看板与可选 Plan 协作；旅行多人多日计划与新生同校兴趣活动仅由 canonical Topic/tag、来源和 ExperiencePackage 配置区分，活动完成后由证据形成 Outcome，参与者确认发布回顾内容，且参与不自动改变关注关系。
 - 领域交接：circle-community → recommendation-platform → user-identity-profile-relationship → chat-conversation
 - 对应验收：`UAT-001`、`UAT-011`
 
@@ -769,8 +769,8 @@
 ### UAT-011 内容驱动 Gathering 与活动群聊闭环
 
 - GIVEN 真实 Host 和参与者账号具有可见内容或 Circle 上下文，且所属 canonical contracts、风险义务、受治理 feature flag 与真实 Remote composition 均有效。
-- WHEN Host 从内容或 C 位发起 Gathering，参与者从首页或主页公开卡进入详情，经开放加入、申请审批或邀请接受进入活动群聊与看板，并在活动后确认回顾内容。
-- THEN C 位首层的发内容、发起活动、发起群聊并列且互不冒充；游客先看到动作面板，选择具体动作才登录，关闭回安全来源不循环，成功后续接原动作。
+- WHEN Host 从首页或视频书内容中的交集主句主动展开证据，并选择唯一 typed 下一步发起 Gathering；参与者从邀请卡、通知、回顾溯源或合法深链进入详情，经开放加入、申请审批或邀请接受进入活动群聊与看板，并在活动后确认回顾内容。
+- THEN 移动与 Web 均不存在独立“行动”一级入口，C 位不直接提供无上下文发起活动；游客选择交集下一步后才登录，关闭回安全内容来源且不循环，成功后恢复完整 typed 请求并只续接一次。
 - THEN 公开详情只披露有权信息并保持一个状态驱动主动作；Recommendation 只排序 Circle 的合格公开投影，不写 Participation、容量、准入或 Outcome。
 - THEN Circle 的 Gathering、root-owned GatheringParticipation、Revision、Outcome 与 room binding state 是唯一活动真相。
 - THEN Chat 的 Conversation、ConversationMembership、Message 与 Announcement 是唯一会话真相；Board 只组合 owner 投影。
@@ -902,7 +902,7 @@
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`block`
-- 影响或价值：当前已有 Gathering/Chat 目标 contracts 与旅行/校园 metadata 复用证明，但尚缺内容与 C 位发起、公开详情、Host 准入、活动群聊与看板、计划协作、证据化 Outcome、内容回流和不自动 mutual 的同一候选 Remote 闭环；校园 canonical release/import 及真实账号 UAT 尚未执行。
+- 影响或价值：当前已有 Gathering/Chat 目标 contracts 与旅行/校园 metadata 复用证明，但尚缺内容交集主动展开后发起、登录 typed 续接、公开详情、Host 准入、活动群聊与看板、计划协作、证据化 Outcome、内容回流和不自动 mutual 的同一候选 Remote 闭环；校园 canonical release/import 及真实账号 UAT 尚未执行。
 - 完成判定：三层测试以创作者活动、Circle 活动、1:1、多人多日旅行和新生同校兴趣活动复用同一合同，CaseResult 直接引用 `UAT-011`；校园供给绑定 immutable release/import receipt/Remote readback，并证明并发不超员、room/board 撤权、开场后取消失败、安全终止、Outcome 证据、内容确认发布及登录 continuation 无循环。
 - 依赖：[`circle-community`](./circle-community/spec.md) 的 [`gathering-coordination`](./circle-community/gathering-coordination/spec.md)、[`chat-conversation`](./chat-conversation/spec.md)、[`creation-mode-and-surface-ia-unification`](./discovery-content/content-type-framework/creation-mode-and-surface-ia-unification/spec.md) 与所属 contracts/metadata 后续准入。
 

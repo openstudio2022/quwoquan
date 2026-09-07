@@ -401,6 +401,48 @@ void main() {
     );
   });
 
+  testWidgets('非共同想去 kind 不得借用人数作为想去反馈', (tester) async {
+    final tracker = ContentBehaviorTracker(
+      reporter: RecordingContentBehaviorRepository(),
+      maxBatchSize: 1,
+      enablePeriodicFlush: false,
+    );
+    addTearDown(tracker.dispose);
+    final unrelated = intersectionReasonFixture(
+      kind: 'sharedFollowees',
+      dimension: 'relationship',
+      primaryText: '你们有 8 位共同关注',
+      mutualCount: 8,
+      intersectionClass: 'fact',
+    );
+
+    await tester.pumpWidget(
+      _wrap(
+        _viewer(_photoPost(), homepageId: 'homepage-wish-1'),
+        overrides: <Override>[
+          contentBehaviorTrackerProvider.overrideWithValue(tracker),
+          workBrowserEntityWishlistStateReaderProvider.overrideWithValue(
+            _WishlistStateReaderDouble(),
+          ),
+          intersectionRepositoryProvider.overrideWithValue(
+            _ObjectIntersectionRepositoryDouble(
+              reasons: <IntersectionReason>[unrelated],
+            ),
+          ),
+        ],
+      ),
+    );
+    await _pumpFrames(tester);
+    await tester.tap(find.byKey(ImmersiveEngagementBar.wishlistActionKey));
+    await _pumpFrames(tester);
+
+    expect(find.text(ObjectHomepageText.wishlistAddedFeedback), findsOneWidget);
+    expect(
+      find.text(ObjectHomepageText.wishlistSharedFeedback(8)),
+      findsNothing,
+    );
+  });
+
   testWidgets('有锚点时想去成功且有交集 → 点名共同人数并给查看入口', (tester) async {
     final behaviorRepo = RecordingContentBehaviorRepository();
     final tracker = ContentBehaviorTracker(

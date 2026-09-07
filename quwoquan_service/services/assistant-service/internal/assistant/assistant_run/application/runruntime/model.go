@@ -290,18 +290,22 @@ var (
 	// ErrRunIdempotencyConflict is distinct from aggregate CAS contention: the
 	// caller reused one Start identity for a different immutable input.
 	ErrRunIdempotencyConflict = errors.New("assistant run idempotency conflict")
-	ErrInvalidTaskGraph       = errors.New("invalid assistant task graph")
-	ErrTaskNotReady           = errors.New("assistant task is not ready")
-	ErrItemStateConflict      = errors.New("assistant run item state conflict")
-	ErrCompletionRejected     = errors.New("assistant run completion rejected")
-	ErrUnsafePayload          = errors.New("assistant run item contains unsafe reasoning payload")
-	ErrRunNotFound            = errors.New("assistant run not found")
-	ErrLeaseConflict          = errors.New("assistant run worker lease conflict")
-	ErrJournalGap             = errors.New("assistant run journal gap")
-	ErrJournalCorrupt         = errors.New("assistant run journal is corrupt")
-	ErrNoWork                 = errors.New("assistant run queue has no ready work")
-	ErrExecutionFenced        = errors.New("assistant run execution is fenced")
-	ErrExecutionCancelled     = errors.New("assistant run execution was cancelled")
+	// ErrActiveRunConflict means another Start identity won the one-active-run
+	// arbitration for this AssistantSession. It must never replay that other
+	// intent as this command's success.
+	ErrActiveRunConflict  = errors.New("assistant session already has an active run")
+	ErrInvalidTaskGraph   = errors.New("invalid assistant task graph")
+	ErrTaskNotReady       = errors.New("assistant task is not ready")
+	ErrItemStateConflict  = errors.New("assistant run item state conflict")
+	ErrCompletionRejected = errors.New("assistant run completion rejected")
+	ErrUnsafePayload      = errors.New("assistant run item contains unsafe reasoning payload")
+	ErrRunNotFound        = errors.New("assistant run not found")
+	ErrLeaseConflict      = errors.New("assistant run worker lease conflict")
+	ErrJournalGap         = errors.New("assistant run journal gap")
+	ErrJournalCorrupt     = errors.New("assistant run journal is corrupt")
+	ErrNoWork             = errors.New("assistant run queue has no ready work")
+	ErrExecutionFenced    = errors.New("assistant run execution is fenced")
+	ErrExecutionCancelled = errors.New("assistant run execution was cancelled")
 	// ErrExecutionReplanned stops the current in-memory AgentLoop after a
 	// steering instruction crossed a persisted Item boundary. The Run remains
 	// runnable and the next claim receives the revised effective goal.

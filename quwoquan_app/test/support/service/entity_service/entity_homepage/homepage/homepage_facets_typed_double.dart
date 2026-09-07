@@ -777,6 +777,7 @@ wire.IntersectionReason _intersectionReasonFromFixture(
     primarySpans: const <wire.IntersectionTextSpan>[],
     sampleVisuals: const <wire.IntersectionVisual>[],
     actionHints: const <wire.IntersectionActionHint>[],
+    evidenceRows: const <wire.IntersectionEvidenceRow>[],
     lifecycleState: _optionalText(row['lifecycleState']) ?? '',
     previousStrength: _optionalDouble(row['previousStrength']) ?? 0,
     strengthDelta: _optionalDouble(row['strengthDelta']) ?? 0,
@@ -790,6 +791,7 @@ wire.IntersectionReason _intersectionReasonFromFixture(
     moment: _optionalText(row['moment']) ?? 'current',
     subjectId: _optionalText(row['subjectId']) ?? '',
     subjectContext: _optionalText(row['subjectContext']) ?? '',
+    cohort: _optionalText(row['cohort']) ?? '',
   );
 }
 

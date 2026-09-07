@@ -457,7 +457,6 @@ func sharedTagSampleSubject(r IntersectionReasonView, anchor IntersectionPointVi
 		strings.TrimSpace(r.ActionTargetID) == strings.TrimSpace(r.RelationObjectID) {
 		objectType := objectTypeForTarget(
 			strings.TrimSpace(r.ObjectKind),
-			strings.TrimSpace(r.ActionTargetID),
 			RouteIDForObjectKind(strings.TrimSpace(r.ObjectKind)),
 		)
 		if subject := viewerSubjectText(objectType); subject != "" {

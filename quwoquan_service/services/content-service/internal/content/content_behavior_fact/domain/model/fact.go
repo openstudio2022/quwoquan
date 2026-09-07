@@ -52,6 +52,7 @@ type Fact struct {
 	IntersectionClass      string    `bson:"intersectionClass,omitempty"`
 	IntersectionSourceRef  string    `bson:"intersectionSourceRef,omitempty"`
 	IntersectionEvidenceID string    `bson:"intersectionEvidenceId,omitempty"`
+	IntersectionCohort     string    `bson:"intersectionCohort,omitempty"`
 	SubjectID              string    `bson:"subjectId,omitempty"`
 	FeedbackKind           string    `bson:"feedbackKind,omitempty"`
 	MotionDirection        string    `bson:"direction,omitempty"`

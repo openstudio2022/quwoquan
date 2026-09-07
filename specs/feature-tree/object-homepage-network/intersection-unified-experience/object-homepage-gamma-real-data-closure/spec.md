@@ -138,46 +138,10 @@
 ## 7. 开放事项
 
 <a id="open-001"></a>
-### OPEN-001 gamma-local 拓扑、网关与健康检查闭环
+### OPEN-001 gamma 真实数据闭环四段验收尚无直接 spec_ref
 
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`track`
-- 影响或价值：尚缺实现或直接 `spec_ref`；目标：metadata 与 compose 静态契约通过。
-- 完成判定：`GWT-001` 对应行为满足且真实测试 `spec_ref` 有效
-
-<a id="open-002"></a>
-### OPEN-002 实体主页真实 bundle、简介、相关圈子与关注状态闭环
-
-- 类型：`capability_gap`
-- 优先级：`P1`
-- 准出影响：`track`
-- 影响或价值：尚缺实现或直接 `spec_ref`；目标：homepage bundle、introduction、related-groups 均有 populated api_integration 结果。
-- 完成判定：`GWT-002` 对应行为满足且真实测试 `spec_ref` 有效
-
-<a id="open-003"></a>
-### OPEN-003 圈子主页真实 detail、impact、成员、讨论与加入状态闭环
-
-- 类型：`capability_gap`
-- 优先级：`P1`
-- 准出影响：`track`
-- 影响或价值：尚缺实现或直接 `spec_ref`；目标：circle list/detail/impact/feed/members 均有 populated api_integration 结果。
-- 完成判定：`GWT-003` 对应行为满足且真实测试 `spec_ref` 有效
-
-<a id="open-004"></a>
-### OPEN-004 对象交集理由的真实事实行契约
-
-- 类型：`capability_gap`
-- 优先级：`P1`
-- 准出影响：`track`
-- 影响或价值：尚缺实现或直接 `spec_ref`；目标：homepage/circle object intersections 的 api_integration 覆盖鉴权、分页、spans、visuals、action hints 和空结果。
-- 完成判定：`GWT-004` 对应行为满足且真实测试 `spec_ref` 有效
-
-<a id="open-005"></a>
-### OPEN-005 行为归因、错误态、空态与推荐回流闭环
-
-- 类型：`capability_gap`
-- 优先级：`P1`
-- 准出影响：`track`
-- 影响或价值：尚缺实现或直接 `spec_ref`；目标：本地合同覆盖事件属性与禁止普通 click 降级。
-- 完成判定：`GWT-005` 对应行为满足且真实测试 `spec_ref` 有效
+- 影响或价值：实体主页 bundle/introduction/related-groups 已由 `GWT-002` 的 App 与 entity-service 契约测试覆盖；其余四段尚缺直接绑定的真实测试：gamma-local 拓扑、网关与健康检查（metadata 与 compose 静态契约）、圈子主页 list/detail/impact/feed/members 的 populated api_integration、homepage/circle object intersections 的 api_integration（鉴权、分页、spans、visuals、action hints、空结果）、行为归因与错误/空态的本地合同（事件属性与禁止普通 click 降级）。
+- 完成判定：`GWT-001`、`GWT-003`、`GWT-004`、`GWT-005` 对应行为满足且各有真实测试 `spec_ref`。

@@ -8,7 +8,7 @@ import 'package:quwoquan_app/service/content_service/content/post/domain/create_
 import 'package:quwoquan_app/service/content_service/content/post/presentation/create_entry_sheet.dart';
 
 void main() {
-  testWidgets('首层固定发内容活动群聊，发内容后二级固定照片视频文字', (tester) async {
+  testWidgets('首层固定照片视频文字与更多，活动不直接暴露', (tester) async {
     EditorStartAction? selectedAction;
 
     await tester.pumpWidget(
@@ -21,7 +21,6 @@ void main() {
                 isOpen: true,
                 onClose: () {},
                 onSelect: (action) => selectedAction = action,
-                onStartGathering: () {},
                 onStartGroupChat: () {},
               ),
             ),
@@ -31,28 +30,16 @@ void main() {
     );
     await tester.pump();
 
-    expect(find.byKey(TestKeys.createActionPublishContent), findsOneWidget);
-    expect(find.byKey(TestKeys.createActionStartGathering), findsOneWidget);
-    expect(find.byKey(TestKeys.createActionStartGroupChat), findsOneWidget);
-    expect(find.byKey(TestKeys.createActionGallery), findsNothing);
-    expect(find.byKey(TestKeys.createActionCapture), findsNothing);
-    expect(find.byKey(TestKeys.createActionWrite), findsNothing);
-    expect(find.text(CreationText.createActionAddContactShort), findsNothing);
-    expect(find.text(CreationText.createActionCreateCircleShort), findsNothing);
-    expect(
-      find.text(CreationText.createActionInterestMatchShort),
-      findsNothing,
-    );
-
-    await tester.tap(find.byKey(TestKeys.createActionPublishContent));
-    await tester.pump();
-
-    expect(find.byKey(TestKeys.createActionPublishContent), findsNothing);
-    expect(find.byKey(TestKeys.createActionStartGathering), findsNothing);
-    expect(find.byKey(TestKeys.createActionStartGroupChat), findsNothing);
     expect(find.byKey(TestKeys.createActionGallery), findsOneWidget);
     expect(find.byKey(TestKeys.createActionCapture), findsOneWidget);
     expect(find.byKey(TestKeys.createActionWrite), findsOneWidget);
+    expect(find.byKey(TestKeys.createActionMore), findsOneWidget);
+    expect(find.text('发起活动'), findsNothing);
+    expect(find.byKey(TestKeys.createActionStartGroupChat), findsNothing);
+    expect(find.text(CreationText.createActionAddContactShort), findsNothing);
+    expect(find.text(CreationText.createActionCreateCircleShort), findsNothing);
+    // 「交集配对」launcher 已退役（intersection-unified-experience REQ-005），文案常量随之删除。
+    expect(find.text('交集配对'), findsNothing);
 
     await tester.tap(find.byKey(TestKeys.createActionCapture));
     await tester.pump();

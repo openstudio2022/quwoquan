@@ -147,13 +147,17 @@ type GatheringSocialProofProjectionReader interface {
 type WatermarkStore = intersectionports.Store
 
 // ProjectorEvent 是读模型投影器消费的规范化生命周期事件。
+// AggregateVersion 是该事实提交时的 Post 聚合版本（与 outbox 同事务写入的
+// 单调 version）；带版本的投影 sink 在权威对象已不可读时以它作为 tombstone
+// 的 sourceVersion，而不是凭空捏造版本。
 type ProjectorEvent struct {
-	ID            string
-	Type          string
-	AggregateType string
-	AggregateID   string
-	Payload       map[string]any
-	OccurredAt    time.Time
+	ID               string
+	Type             string
+	AggregateType    string
+	AggregateID      string
+	AggregateVersion int64
+	Payload          map[string]any
+	OccurredAt       time.Time
 }
 
 // Projector 将聚合生命周期事件应用到派生读模型。

@@ -50,6 +50,7 @@ def canonical_intersection_reason(
         "sampleVisuals": [],
         "representativeActor": None,
         "actionHints": [],
+        "evidenceRows": [],
         "lifecycleState": "active",
         "previousStrength": 0.0,
         "strengthDelta": 1.0,
@@ -65,4 +66,5 @@ def canonical_intersection_reason(
         "moment": "current",
         "subjectId": subject_id,
         "subjectContext": "feed",
+        "cohort": "",
     }

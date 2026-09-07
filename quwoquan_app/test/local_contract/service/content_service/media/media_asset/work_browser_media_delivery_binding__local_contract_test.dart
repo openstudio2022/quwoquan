@@ -75,6 +75,43 @@ void main() {
       expect(view.mediaItems.single.mediaAssetId, isNot('video1'));
     });
 
+    test('Post 自身 mediaItems 在 detail 缺席时保留 typed public 绑定', () {
+      const url = _videoUrl;
+      final wire = contentPostProjectionFixture(
+        postId: 'video-public',
+        contentType: 'video',
+      );
+      final post = ContentPostViewData.fromWire(
+        ContentPostProjection(
+          postId: wire.postId,
+          contentType: wire.contentType,
+          authorId: wire.authorId,
+          authorDisplayName: wire.authorDisplayName,
+          authorAvatarUrl: wire.authorAvatarUrl,
+          likeCount: wire.likeCount,
+          commentCount: wire.commentCount,
+          shareCount: wire.shareCount,
+          createdAt: wire.createdAt,
+          mediaItems: const <PostMediaItem>[
+            PostMediaItem(
+              kind: 'video',
+              url: url,
+              mediaAssetId: 'asset-video-public',
+              mediaAssetVersion: 1,
+              accessMode: MediaDeliveryAccessMode.public,
+            ),
+          ],
+        ),
+      );
+
+      final view = WorkBrowserViewData.fromPost(post);
+
+      expect(view.mediaItems, hasLength(1));
+      expect(view.mediaItems.single.url, url);
+      expect(view.mediaItems.single.mediaAssetId, 'asset-video-public');
+      expect(view.mediaItems.single.accessMode, MediaDeliveryAccessMode.public);
+    });
+
     test('videoItems 合成回退项时绑定字段保持缺席，不造值', () {
       final post = ContentPostViewData.fromWire(
         contentPostProjectionFixture(

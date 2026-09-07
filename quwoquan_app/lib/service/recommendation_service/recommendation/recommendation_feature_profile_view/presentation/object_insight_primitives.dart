@@ -133,9 +133,8 @@ class ProfileInsightFooterAction extends StatelessWidget {
         ? AppColors.iosSecondaryFill(context)
         : AppColors.iosSystemBackground(context);
     final ink = AppColors.iosLabel(context);
-    final ornament = AppColors.iosSeparator(
-      context,
-    ).withValues(alpha: isDark ? 0.26 : 0.18);
+    final ornament = AppColors.iosSeparator(context)
+        .withValues(alpha: isDark ? 0.26 : 0.18);
     return CupertinoButton(
       padding: EdgeInsets.symmetric(
         horizontal: AppSpacing.containerSm,

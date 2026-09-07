@@ -15,6 +15,7 @@ import 'package:quwoquan_app/service/content_service/media/media_asset/presentat
 /// callbacks; concrete cross-object widgets stay at the composition root.
 abstract final class ContentViewerComposition {
   static Widget featuredWorks({
+    bool isActive = true,
     required double topChromeSafeInset,
     required void Function(
       String userId, {
@@ -29,6 +30,7 @@ abstract final class ContentViewerComposition {
     required VoidCallback onSwitchToCircles,
   }) {
     return WorksImmersiveViewer(
+      isActive: isActive,
       showWorksToolbar: true,
       topChromeSafeInset: topChromeSafeInset,
       onUserTap: onUserTap,

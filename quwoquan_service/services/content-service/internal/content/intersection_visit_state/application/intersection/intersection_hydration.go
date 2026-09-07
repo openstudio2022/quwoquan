@@ -199,6 +199,8 @@ func HydratePointSummary(r IntersectionReasonView) IntersectionReasonView {
 	if r.RankState == "" {
 		r.RankState = "fresh"
 	}
+	// 策略身份（cohort）由水合出口统一盖章：所有下发的 reason 都携带产出它的注册表版本。
+	r.Cohort = generated.IntersectionPolicyDigest
 	return hydrateExplain(r)
 }
 
@@ -278,8 +280,10 @@ func hydrateExplain(r IntersectionReasonView) IntersectionReasonView {
 		r.TypeVisual = typeVisualForIconKey(r.IconKey)
 	}
 	r = HydrateInteractionContract(r)
-	if !ValidateDisplayStatement(r) {
+	if !ValidateHydratedDisplayStatement(r) {
 		r = hideDisplayStatement(r)
+	} else {
+		r.EvidenceRows = evidenceRowsForReason(r)
 	}
 	if r.ObjectVisual == nil {
 		r.ObjectVisual = objectVisualForReason(r)
@@ -368,6 +372,49 @@ func HydrateInteractionContract(r IntersectionReasonView) IntersectionReasonView
 	return r
 }
 
+// MaxIntersectionEvidenceRows 是 IntersectionReason.evidenceRows 契约登记的上限。
+const MaxIntersectionEvidenceRows = 4
+
+// evidenceRowsForReason 按 IntersectionEvidenceRow 契约闭集与顺序实例化证据半屏的证据行：
+// secondaryText → connectionSummary → actorEvidence[].actionSummaryText → intersectionPoints[].displayText
+// → intersectionPoints[].sampleText；与 primaryText 及彼此去重，上限 MaxIntersectionEvidenceRows。
+// 这是证据行的唯一生产点：端只按序渲染，不再本地合并异构字段或自定优先级。
+func evidenceRowsForReason(r IntersectionReasonView) []IntersectionEvidenceRowView {
+	rows := make([]IntersectionEvidenceRowView, 0, MaxIntersectionEvidenceRows)
+	seen := map[string]struct{}{strings.TrimSpace(r.PrimaryText): {}}
+	add := func(source, text string) bool {
+		text = strings.TrimSpace(text)
+		if text == "" {
+			return true
+		}
+		if _, dup := seen[text]; dup {
+			return true
+		}
+		seen[text] = struct{}{}
+		rows = append(rows, IntersectionEvidenceRowView{Text: text, Source: source})
+		return len(rows) < MaxIntersectionEvidenceRows
+	}
+	if !add("secondary_text", r.SecondaryText) || !add("connection_summary", r.ConnectionSummary) {
+		return rows
+	}
+	for _, actor := range r.ActorEvidence {
+		if !add("actor_action", actor.ActionSummaryText) {
+			return rows
+		}
+	}
+	for _, point := range r.IntersectionPoints {
+		if !add("point_display", point.DisplayText) {
+			return rows
+		}
+	}
+	for _, point := range r.IntersectionPoints {
+		if !add("point_sample", point.SampleText) {
+			return rows
+		}
+	}
+	return rows
+}
+
 func HydrateActorEvidenceContract(r IntersectionReasonView) IntersectionReasonView {
 	if len(r.ActorEvidence) > 0 && r.ActorEvidenceTotalCount == 0 {
 		r.ActorEvidenceTotalCount = len(r.ActorEvidence)
@@ -396,7 +443,7 @@ func HydrateActorEvidenceContract(r IntersectionReasonView) IntersectionReasonVi
 		if e.Target == nil && strings.TrimSpace(e.ActorID) != "" {
 			routeID := RouteIDForObjectKind("person")
 			e.Target = &IntersectionTargetView{
-				ObjectType: objectTypeForTarget("person", strings.TrimSpace(e.ActorID), routeID),
+				ObjectType: objectTypeForTarget("person", routeID),
 				ObjectID:   strings.TrimSpace(e.ActorID),
 				ObjectKind: "person",
 				RouteID:    routeID,
@@ -420,7 +467,7 @@ func IntersectionTargetForReason(r IntersectionReasonView) *IntersectionTargetVi
 	}
 	routeID := RouteIDForObjectKind(kind)
 	return &IntersectionTargetView{
-		ObjectType: objectTypeForTarget(kind, id, routeID),
+		ObjectType: objectTypeForTarget(kind, routeID),
 		ObjectID:   id,
 		ObjectKind: kind,
 		RouteID:    routeID,
@@ -434,59 +481,41 @@ func RouteIDForObjectKind(kind string) string {
 	return generated.IntersectionRouteIDByObjectKind[strings.TrimSpace(kind)]
 }
 
-func objectTypeForTarget(kind, objectID, routeID string) string {
-	switch strings.TrimSpace(routeID) {
-	case "userProfile":
-		return "user"
-	case "circleDetail":
-		return "circle"
-	case "homepageDetail":
-		return "homepage"
-	case "workBrowser", "postDetail", "contentDetail":
-		return "post"
-	case "myIntersections":
-		return "dimension"
-	}
-	switch strings.TrimSpace(kind) {
-	case "person":
-		return "user"
-	case "circle":
-		return "circle"
-	case "school", "place", "enterprise", "route", "photo_spot", "gear":
-		return "homepage"
-	case "content":
-		return "post"
-	case "tag":
-		return "tag"
-	}
-	id := strings.TrimSpace(objectID)
-	switch {
-	case strings.HasPrefix(id, "homepage_"):
-		return "homepage"
-	case strings.HasPrefix(id, "circle_"):
-		return "circle"
-	}
-	return ""
+// ObjectKindForObjectType 把开放 objectType 词汇翻成注册表 objectKind 闭集
+// （codegen generated.IntersectionObjectKindByObjectType）。未登记返回空串，
+// 调用方据此 fail-closed，不得再写第二份 objectType switch。
+func ObjectKindForObjectType(objectType string) string {
+	return generated.IntersectionObjectKindByObjectType[strings.TrimSpace(objectType)]
 }
 
+// objectTypeForTarget 是服务端唯一的 wire objectType 派生：只查注册表生成的
+// objectKind → objectType 表（与 Recommendation / App 同一张表）；myIntersections 维度页
+// 是唯一的非对象路由。未登记 kind 落 ""，由展示合同 fail-closed，不从 objectId 前缀反推。
+func objectTypeForTarget(kind, routeID string) string {
+	if strings.TrimSpace(routeID) == "myIntersections" {
+		return "dimension"
+	}
+	return generated.IntersectionWireObjectTypeByObjectKind[strings.TrimSpace(kind)]
+}
+
+// hostTargetForObjectRequest 把请求侧开放的 objectType 收口成宿主 target：
+// objectType → objectKind 查注册表 objectTypeBindings，wire objectType 与 routeId 查同一注册表，
+// 不再手写第二份 objectType switch；未登记 objectType 返回 nil 交由 reason 自证。
 func hostTargetForObjectRequest(objectID, objectType string) *IntersectionTargetView {
 	id := strings.TrimSpace(objectID)
 	if id == "" {
 		return nil
 	}
-	objectType = strings.TrimSpace(objectType)
-	switch objectType {
-	case "user", "person":
-		return &IntersectionTargetView{ObjectType: "user", ObjectID: id, ObjectKind: "person", RouteID: RouteIDForObjectKind("person")}
-	case "circle":
-		return &IntersectionTargetView{ObjectType: "circle", ObjectID: id, ObjectKind: "circle", RouteID: RouteIDForObjectKind("circle")}
-	case "homepage", "entity":
-		return &IntersectionTargetView{ObjectType: "homepage", ObjectID: id, ObjectKind: "place", RouteID: RouteIDForObjectKind("place")}
-	case "post", "content":
-		return &IntersectionTargetView{ObjectType: "post", ObjectID: id, ObjectKind: "content", RouteID: RouteIDForObjectKind("content")}
-	default:
+	kind := ObjectKindForObjectType(strings.TrimSpace(objectType))
+	if kind == "" {
 		return nil
 	}
+	routeID := RouteIDForObjectKind(kind)
+	wireObjectType := objectTypeForTarget(kind, routeID)
+	if wireObjectType == "" {
+		return nil
+	}
+	return &IntersectionTargetView{ObjectType: wireObjectType, ObjectID: id, ObjectKind: kind, RouteID: routeID}
 }
 
 // hostTargetForObjectReasons resolves open request objectType values through the
@@ -612,13 +641,49 @@ func ApplyDisplayContext(r IntersectionReasonView, ctx DisplayContext) Intersect
 	if !ValidateDisplayStatementWithContext(r, ctx) {
 		return hideDisplayStatement(r)
 	}
+	if !mutualPairSubjectExplainable(r, ctx.HostTarget) {
+		return hideDisplayStatement(r)
+	}
 	return r
+}
+
+// mutualPairSubjectExplainable 是 REQ-004 对「你们」主语的结论：mutualPair 句要说得出
+// 「你们是谁」，要么宿主就是对方本人（对方主页、收件箱里对象为人的行），要么句子自带
+// 具名代表人——生产者把对方本人挂为 representativeActor（内容卡等非人宿主面靠它解释）。
+// 两者都没有时「你们」与「你和这里」同形，整条隐藏；主语文案取注册表
+// subjectPatterns.mutualPair，不在代码里写字面量。
+func mutualPairSubjectExplainable(r IntersectionReasonView, host *IntersectionTargetView) bool {
+	pattern := subjectPatternText("mutualPair", nil)
+	if pattern == "" || !strings.HasPrefix(strings.TrimSpace(r.PrimaryText), pattern) {
+		return true
+	}
+	if host != nil && strings.TrimSpace(host.ObjectType) == "user" {
+		return true
+	}
+	return hasMeaningfulRepresentativeActor(r)
 }
 
 // ValidateDisplayStatement 是当前交集展示合同闸：默认严格按 explicit_link 校验，
 // 只有 Reader/Slice 输出口显式传 DisplayContext 时才允许 host_implicit/host_plain。
 func ValidateDisplayStatement(r IntersectionReasonView) bool {
 	return ValidateDisplayStatementWithContext(r, DisplayContext{})
+}
+
+// ValidateHydratedDisplayStatement 是水合阶段（尚无输出口宿主）的合同闸。
+//
+// 生产者声明为 host_implicit / host_plain 的句子，其「宿主一致性」只能在输出口按真实宿主校验
+// （ApplyDisplayContext）；水合阶段以 reason 自身对象充当宿主，只校验与宿主无关的部分
+// （文本红线、spans 可拼回、对象 target 可导航、无可点击自指）。否则对方主页与收件箱的
+// 人对人事实句会因「水合时没有宿主」被整批提前隐藏。explicit_link 仍按严格合同校验。
+func ValidateHydratedDisplayStatement(r IntersectionReasonView) bool {
+	binding := normalizedDisplayBinding(r.DisplayBinding)
+	if binding == DisplayBindingHostImplicit || binding == DisplayBindingHostPlain {
+		return ValidateDisplayStatementWithContext(r, DisplayContext{
+			HostTarget: IntersectionTargetForReason(r),
+			Binding:    binding,
+		})
+	}
+	return ValidateDisplayStatement(r)
 }
 
 func ValidateDisplayStatementWithContext(r IntersectionReasonView, ctx DisplayContext) bool {
@@ -713,6 +778,7 @@ func hideDisplayStatement(r IntersectionReasonView) IntersectionReasonView {
 	r.PrimaryTextL10nKey = ""
 	r.PrimarySpans = nil
 	r.ActionHints = nil
+	r.EvidenceRows = []IntersectionEvidenceRowView{}
 	return r
 }
 
@@ -765,16 +831,23 @@ func plainHostObjectSpan(r IntersectionReasonView, host *IntersectionTargetView)
 	return r
 }
 
+// displayObjectTargetAllowed 判定 target 是否落在可导航对象的 wire objectType 闭集上：
+// 闭集 = 注册表 objectKinds 中登记了 routeId 的 kind 的 objectType（与端侧同一张表），
+// 不再手写字面量集合；不可导航对象（tag）与未登记类型一律拒绝。
 func displayObjectTargetAllowed(target *IntersectionTargetView) bool {
 	if target == nil || strings.TrimSpace(target.ObjectID) == "" {
 		return false
 	}
-	switch strings.TrimSpace(target.ObjectType) {
-	case "user", "circle", "homepage", "post", "task":
-		return true
-	default:
+	objectType := strings.TrimSpace(target.ObjectType)
+	if objectType == "" {
 		return false
 	}
+	for kind := range generated.IntersectionRouteIDByObjectKind {
+		if generated.IntersectionWireObjectTypeByObjectKind[kind] == objectType {
+			return true
+		}
+	}
+	return false
 }
 
 func displayStatementNeedsRepresentative(r IntersectionReasonView, text string) bool {

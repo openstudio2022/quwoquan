@@ -118,12 +118,13 @@ Future<void> showEntityWishlistIntersectionFeedback(
   if (!context.mounted) {
     return;
   }
-  final wishReason = reasons.isEmpty
-      ? null
-      : reasons.firstWhere(
-          (reason) => reason.kind == 'coWishlistedEntity',
-          orElse: () => reasons.first,
-        );
+  IntersectionReason? wishReason;
+  for (final reason in reasons) {
+    if (reason.kind.trim() == 'coWishlistedEntity') {
+      wishReason = reason;
+      break;
+    }
+  }
   final mutualCount = wishReason == null
       ? 0
       : intersectionMutualCountOf(wishReason);

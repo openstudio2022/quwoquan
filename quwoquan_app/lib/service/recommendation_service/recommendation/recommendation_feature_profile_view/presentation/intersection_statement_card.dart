@@ -159,9 +159,8 @@ class _IntersectionStatementCardState extends State<IntersectionStatementCard> {
                       padding: EdgeInsets.only(left: _rowHorizontalPadding * 2),
                       child: Container(
                         height: AppSpacing.hairline,
-                        color: AppColors.iosSeparator(
-                          context,
-                        ).withValues(alpha: 0.12),
+                        color: AppColors.iosSeparator(context)
+                            .withValues(alpha: 0.12),
                       ),
                     ),
                   Padding(
@@ -246,9 +245,8 @@ class _TimelineFooterAction extends StatelessWidget {
         ? AppColors.iosSecondaryFill(context)
         : AppColors.iosSystemBackground(context);
     final ink = AppColors.iosLabel(context);
-    final ornament = AppColors.iosSeparator(
-      context,
-    ).withValues(alpha: isDark ? 0.26 : 0.18);
+    final ornament = AppColors.iosSeparator(context)
+        .withValues(alpha: isDark ? 0.26 : 0.18);
     return CupertinoButton(
       padding: EdgeInsets.symmetric(
         horizontal: AppSpacing.containerSm,
