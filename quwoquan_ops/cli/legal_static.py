@@ -60,6 +60,29 @@ PLACEHOLDER_TOKENS = (
     "{{",
     "}}",
 )
+# prod 占位字段策略：`block`（默认）把占位当作阻断；`mark` 只用于 prod-hosted
+# exact dev candidate rehearsal——占位被记录为 placeholderFields 并进入候选/报告，
+# 该 legal-static 包不构成任何法务、登录商用或发布证据。
+PLACEHOLDER_POLICY_ENV = "QWQ_LEGAL_STATIC_PLACEHOLDER_POLICY"
+PLACEHOLDER_POLICIES = ("block", "mark")
+PLACEHOLDER_ISSUE_SUFFIX = " contains placeholder text"
+
+
+def _placeholder_policy(explicit: str = "") -> str:
+    policy = (explicit or os.environ.get(PLACEHOLDER_POLICY_ENV, "") or "block").strip()
+    if policy not in PLACEHOLDER_POLICIES:
+        raise ValueError(f"legal-static placeholder policy is invalid: {policy}")
+    return policy
+
+
+def _split_placeholder_issues(issues: list[str]) -> tuple[list[str], list[str]]:
+    blocking = [issue for issue in issues if not issue.endswith(PLACEHOLDER_ISSUE_SUFFIX)]
+    placeholders = [
+        issue[: -len(PLACEHOLDER_ISSUE_SUFFIX)]
+        for issue in issues
+        if issue.endswith(PLACEHOLDER_ISSUE_SUFFIX)
+    ]
+    return blocking, placeholders
 
 
 def _resolve_package_root(
@@ -285,8 +308,13 @@ def build_package(
     manifest_path: Path = DEFAULT_MANIFEST,
     output_root: Path | None = None,
     target: str = "",
+    placeholder_policy: str = "",
 ) -> dict[str, Any]:
+    policy = _placeholder_policy(placeholder_policy)
     manifest, issues = validate_manifest(env_name, manifest_path=manifest_path)
+    placeholder_fields: list[str] = []
+    if policy == "mark":
+        issues, placeholder_fields = _split_placeholder_issues(issues)
     if issues:
         return {
             "status": "failed",
@@ -376,6 +404,8 @@ def build_package(
             "prodRequiresGammaProbe": bool(
                 (manifest.get("releasePolicy") or {}).get("prodRequiresGammaProbe")
             ),
+            "placeholderPolicy": policy,
+            "placeholderFields": placeholder_fields,
             "generatedAt": utc_now(),
         }
         write_json(package_dir / "release_metadata.json", release_metadata)
@@ -398,6 +428,8 @@ def build_package(
         "currentPointer": current_pointer,
         "legalBaseUrl": legal_base_url,
         "documents": docs_payload,
+        "placeholderPolicy": policy,
+        "placeholderFields": placeholder_fields,
         "exitCode": 0,
     }
 
@@ -409,8 +441,12 @@ def verify_package(
     output_root: Path | None = None,
     package_root: Path | None = None,
     target: str = "",
+    placeholder_policy: str = "",
 ) -> dict[str, Any]:
+    policy = _placeholder_policy(placeholder_policy)
     manifest, issues = validate_manifest(env_name, manifest_path=manifest_path)
+    if policy == "mark":
+        issues, _ = _split_placeholder_issues(issues)
     version = str(manifest.get("currentVersion") or "")
     resolved_package_root = _resolve_package_root(
         env_name,
@@ -569,6 +605,15 @@ def parse_args() -> argparse.Namespace:
         )
         sub.add_argument("--target", default="")
         sub.add_argument("--package-root", default="")
+        sub.add_argument(
+            "--placeholder-policy",
+            choices=PLACEHOLDER_POLICIES,
+            default="",
+            help=(
+                "prod 占位字段策略；默认 block。mark 只供 prod-hosted exact dev candidate "
+                f"rehearsal 使用，也可由环境变量 {PLACEHOLDER_POLICY_ENV} 提供"
+            ),
+        )
     return parser.parse_args()
 
 
@@ -577,6 +622,7 @@ def main() -> int:
     manifest_path = Path(args.manifest)
     output_root = Path(args.output_root) if args.output_root else None
     package_root = Path(args.package_root) if args.package_root else None
+    policy = _placeholder_policy(args.placeholder_policy)
 
     if args.command == "package":
         payload = build_package(
@@ -584,6 +630,7 @@ def main() -> int:
             manifest_path=manifest_path,
             output_root=output_root,
             target=args.target,
+            placeholder_policy=policy,
         )
     elif args.command == "verify-package":
         payload = verify_package(
@@ -592,14 +639,20 @@ def main() -> int:
             output_root=output_root,
             package_root=package_root,
             target=args.target,
+            placeholder_policy=policy,
         )
     else:
         manifest, issues = validate_manifest(args.env, manifest_path=manifest_path)
+        placeholder_fields: list[str] = []
+        if policy == "mark":
+            issues, placeholder_fields = _split_placeholder_issues(issues)
         payload = {
             "status": "ok" if not issues else "failed",
             "env": args.env,
             "version": manifest.get("currentVersion", ""),
             "issues": issues,
+            "placeholderPolicy": policy,
+            "placeholderFields": placeholder_fields,
             "exitCode": 0 if not issues else 1,
         }
     print(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True))

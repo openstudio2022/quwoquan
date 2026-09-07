@@ -23,6 +23,32 @@ from pathlib import Path
 from typing import Any
 
 
+def _reject_rehearsal_candidate_for_formal_rollout(candidate_digest: str) -> None:
+    """DEC-013：local-build rehearsal 候选不得进入 formal rollout（SIT-003 t3）。"""
+    import quwoquan_ops.cli.stackctl as _stackctl
+    from quwoquan_ops.cli.lib.deployment_candidate_manifest import (
+        prod_hosted_rehearsal as rehearsal,
+    )
+
+    if re.fullmatch(r"sha256:[0-9a-f]{64}", candidate_digest) is None:
+        return
+    oci_path = (
+        _stackctl.deployment_candidate_dir("prod-hosted", candidate_digest)
+        / "packages/runtime-shared/oci-images.json"
+    )
+    if oci_path.is_symlink() or not oci_path.is_file():
+        return
+    try:
+        oci = json.loads(oci_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        return
+    if rehearsal.is_rehearsal_oci_manifest(oci):
+        raise ValueError(
+            "formal prod rollout rejects a local-build rehearsal candidate; "
+            "only GHCR factory material may enter canary/5/20/50/100"
+        )
+
+
 def _command_deploy_with_lock(args: argparse.Namespace) -> dict[str, Any]:
     import quwoquan_ops.cli.stackctl as _stackctl
 
@@ -446,6 +472,9 @@ def _command_deploy_with_lock(args: argparse.Namespace) -> dict[str, Any]:
                         **timing,
                     }
         try:
+            _reject_rehearsal_candidate_for_formal_rollout(
+                str(args.to_candidate_digest or "")
+            )
             package_binding = _stackctl._materialize_release_evidence_configuration(
                 "prod", target=args.target
             )

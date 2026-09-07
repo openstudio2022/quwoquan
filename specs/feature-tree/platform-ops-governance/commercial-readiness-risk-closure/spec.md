@@ -94,7 +94,7 @@
 - `QualificationFact` 必须 exact-byte 引用同一 `CandidateMaterialManifest`，并绑定最终签名包、真实 Provider、UAT、供应链与 Android/iOS 物理设备资格；qualified RC 被选中后，stable tag 复用同一 source commit、build number 与 factory OCI digest 闭包，不得再次构建或改写物料。
 - Prod 唯一入口为 stable tag 对应的 `ReleaseTagAdmissionFact`，经 durable production approval 形成 `ProdActivationAdmissionFact` 后，才可在同一事务依次推进 `canary -> 5 -> 20 -> 50 -> 100`；全部阶段 exact 绑定同一 `CandidateMaterialManifest`/factory digest 闭包，终态写 `ProdReleasedFact`，随后 soak 只读该事实及其阶段前驱。
 - Actions Artifact 只允许保存短期诊断，不承担正式阶段传递；正式后继事实必须按 canonical bytes digest 回读前驱，禁止占位文件、mutable tag、`latest`、部署期重生、并行 REM 状态机或从 workflow success 推导发布资格。
-- prod-hosted 第一方容器预验证不属于上述正式事实链。若迁移尚未完成，只允许受限 legacy `non-promotable snapshot` reader 消费历史物料做只读 history/rehearsal；不得调用公开 REM writer，不得写 ledger、receipt、admission、qualification、tag、stage 或 `ProdReleasedFact`，其遗留缺口继续由现有 `OPEN-010` 跟踪。
+- prod-hosted 第一方容器预验证不属于上述正式事实链。其物料只有两类不可提升来源：受限 legacy `non-promotable snapshot` reader 消费的 reviewed main 历史物料（迁移遗留由现有 `OPEN-010` 跟踪），以及 integration 工作区 exact dev candidate 的 rehearsal 物料（来源校验与边界由 [`deliver-deploy-prod-pipeline` REQ-003](../../runtime/deliver-deploy-prod-pipeline/spec.md#req-003) 拥有）；两者都不得调用公开 REM writer，不得写 ledger、receipt、admission、qualification、tag、stage 或 `ProdReleasedFact`。
 - 受限单机可把声明允许的旧 `Created/Exited` 容器和未使用镜像计入可回收空间，但必须在镜像传输前完成精确回收和二次实测；数据恢复容器与全部 volume 必须保留。隔离数据模式使用重新摘要的不可提升配置投影与独立随机认证材料，不得继承正式 credentials；Provider 绑定只能返回 unavailable，禁止切到 fixture/Mock。
 
 ## 6. 契约与依赖

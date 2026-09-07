@@ -56,10 +56,15 @@ def _compose_image_refs(
     services: list[str],
     *,
     candidate_digest: str,
+    image_transport_tag: str = "",
 ) -> dict[str, str]:
     if OCI_DIGEST_PATTERN.fullmatch(candidate_digest) is None:
         raise SystemExit("FAIL: exact candidate digest required for production images")
-    local_tag = candidate_digest.removeprefix("sha256:")
+    # 渲染面（render_prod_plane_stack）按 image_transport_tag 生成 compose image；
+    # 交付面必须用同一个 tag，否则容器引用的镜像与交付的镜像不是同一份。
+    local_tag = (image_transport_tag or "").strip() or candidate_digest.removeprefix("sha256:")
+    if re.fullmatch(r"[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}", local_tag) is None:
+        raise SystemExit(f"FAIL: image transport tag is not a valid OCI tag: {local_tag}")
     return {
         service: f"localhost/quwoquan_service_{service}:{local_tag}"
         for service in services
@@ -305,8 +310,65 @@ def parse_args() -> argparse.Namespace:
             else None
         ),
     )
+    # 镜像来源：factory = GHCR 工厂物料（pull → tag）；local = integration exact dev
+    # candidate 的本机 local-build linux/amd64 镜像（tag → save）。两者都只经 exact
+    # digest 交付并按远端 digest 读回（DEC-013）。
+    parser.add_argument("--image-source", choices=("factory", "local"), default="factory")
+    parser.add_argument("--candidate-oci-manifest", type=Path, default=None)
+    # 预验证执行器的透传参数：snapshot 路径只用于报告，tag 与渲染面保持一致。
+    parser.add_argument("--frozen-diagnostic-snapshot", type=Path, default=None)
+    parser.add_argument("--image-transport-tag", default="")
     parser.add_argument("--dry-run", action="store_true")
     return parser.parse_args()
+
+
+def _local_rehearsal_image_sources(
+    manifest_path: Path | None,
+    *,
+    services: list[str],
+    candidate_digest: str,
+) -> dict[str, str]:
+    """把 rehearsal 候选的 owner 镜像映射到各 compose 服务的本地源 ref。"""
+
+    from quwoquan_ops.cli.lib.deployment_candidate_manifest import (
+        prod_hosted_rehearsal as rehearsal,
+    )
+
+    if manifest_path is None:
+        raise SystemExit("FAIL: --candidate-oci-manifest is required for local image delivery")
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        raise SystemExit(f"FAIL: cannot read rehearsal OCI manifest: {error}") from error
+    if not rehearsal.is_rehearsal_oci_manifest(manifest):
+        raise SystemExit("FAIL: local image delivery requires a local-build rehearsal manifest")
+    try:
+        owner_refs = rehearsal.validate_rehearsal_oci_manifest(manifest)
+        rehearsal.verify_local_rehearsal_images(manifest)
+    except rehearsal.RehearsalError as error:
+        raise SystemExit(f"FAIL: {error}") from error
+    if OCI_DIGEST_PATTERN.fullmatch(candidate_digest) is None:
+        raise SystemExit("FAIL: exact candidate digest required for rehearsal images")
+    selected: dict[str, str] = {}
+    for service in services:
+        owner = rehearsal.compose_service_image_owner(service)
+        ref = owner_refs.get(owner)
+        if not ref:
+            raise SystemExit(f"FAIL: rehearsal manifest has no image owner for {service} ({owner})")
+        selected[service] = ref
+    return selected
+
+
+def _tag_local_image(source_ref: str, target_ref: str) -> None:
+    tag = subprocess.run(
+        ["docker", "tag", source_ref, target_ref],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        check=False,
+    )
+    if tag.returncode != 0:
+        raise SystemExit(f"FAIL: docker tag failed for {source_ref}: {tag.stdout}")
 
 
 def main() -> int:
@@ -324,10 +386,17 @@ def main() -> int:
     image_refs = _compose_image_refs(
         governed,
         candidate_digest=args.candidate_digest,
+        image_transport_tag=args.image_transport_tag,
     )
     candidate_material_digest = ""
     source_refs: dict[str, str] = {}
-    if args.service_factory_material is not None:
+    if args.image_source == "local":
+        source_refs = _local_rehearsal_image_sources(
+            args.candidate_oci_manifest,
+            services=governed,
+            candidate_digest=args.candidate_digest,
+        )
+    elif args.service_factory_material is not None:
         candidate_material_digest, source_refs = _service_factory_image_sources(
             args.service_factory_material,
             services=governed,
@@ -341,11 +410,14 @@ def main() -> int:
             target_ref = image_refs.get(service)
             if not target_ref:
                 raise SystemExit(f"FAIL: rendered image target missing for {service}")
-            _pull_and_tag_release_image(
-                source_ref,
-                target_ref,
-                platform=args.platform,
-            )
+            if args.image_source == "local":
+                _tag_local_image(source_ref, target_ref)
+            else:
+                _pull_and_tag_release_image(
+                    source_ref,
+                    target_ref,
+                    platform=args.platform,
+                )
     target_arch = _target_arch(args.platform)
     rebuild_services: list[str] = []
     missing: list[str] = []
@@ -371,6 +443,7 @@ def main() -> int:
         "keyFile": str(key_file),
         "services": governed,
         "images": image_refs,
+        "imageSource": args.image_source,
         "sourceImages": source_refs,
         "candidateMaterialDigest": candidate_material_digest,
         "imageContentDigests": local_digests,

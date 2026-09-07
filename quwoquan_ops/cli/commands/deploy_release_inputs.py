@@ -461,6 +461,62 @@ def _materialize_frozen_diagnostic_snapshot(path_value: str) -> Path:
     return destination / "manifest.json"
 
 
+def _exact_candidate_rehearsal_inputs(
+    candidate_value: str,
+) -> tuple[Path, str, dict[str, Any], str, str]:
+    """Resolve an integration exact dev candidate as non-promotable rehearsal material.
+
+    SIT-003 t1 / GWT-005 t1：候选必须是干净工作树上 HEAD == 本地 dev1.0 head 的
+    prod-hosted local-build 候选；本地镜像必须存在、为 linux/amd64 且 content digest
+    与候选一致。任何一项不成立都在远端传输前 fail closed。返回值形状与
+    `_frozen_diagnostic_snapshot` 一致，以便同一 prevalidate 执行器消费：
+    (oci manifest path, candidate digest, oci manifest, image transport tag, candidate digest)。
+    """
+    import quwoquan_ops.cli.stackctl as _stackctl
+    from quwoquan_ops.cli.lib.deployment_candidate_manifest import (
+        prod_hosted_rehearsal as rehearsal,
+    )
+
+    candidate_digest = str(candidate_value or "").strip()
+    if re.fullmatch(r"sha256:[0-9a-f]{64}", candidate_digest) is None:
+        raise RuntimeError("rehearsal --exact-candidate must be a sha256 candidate digest")
+    candidate_root = _stackctl.deployment_candidate_dir("prod-hosted", candidate_digest)
+    if not candidate_root.is_dir():
+        raise RuntimeError(
+            "rehearsal candidate is not materialized under prod-hosted candidates: "
+            f"{candidate_digest}"
+        )
+    try:
+        candidate = _stackctl.load_candidate_manifest(
+            "prod",
+            "prod-hosted",
+            candidate_digest,
+            require_full=True,
+            purpose="self_verify",
+        )
+    except (OSError, ValueError, json.JSONDecodeError) as error:
+        raise RuntimeError(f"rehearsal candidate is not a valid prod-hosted candidate: {error}") from error
+    if candidate.get("baselineId") != candidate_digest:
+        raise RuntimeError("rehearsal candidate identity mismatch")
+    oci_path = candidate_root / "packages/runtime-shared/oci-images.json"
+    try:
+        oci = json.loads(oci_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        raise RuntimeError(f"rehearsal candidate OCI manifest unreadable: {error}") from error
+    if not rehearsal.is_rehearsal_oci_manifest(oci):
+        raise RuntimeError(
+            "rehearsal requires a local-build candidate; GHCR factory candidates must use "
+            "--frozen-diagnostic-snapshot"
+        )
+    try:
+        rehearsal.rehearsal_candidate_source_gate(candidate, repo_root=_stackctl.ROOT)
+        rehearsal.verify_local_rehearsal_images(oci)
+    except rehearsal.RehearsalError as error:
+        raise RuntimeError(str(error)) from error
+    image_transport_tag = candidate_digest.removeprefix("sha256:")
+    return oci_path, candidate_digest, dict(oci), image_transport_tag, candidate_digest
+
+
 def _frozen_diagnostic_snapshot(
     path_value: str,
 ) -> tuple[Path, str, dict[str, Any], str, str]:

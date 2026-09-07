@@ -17,6 +17,9 @@ from pathlib import Path
 from typing import Any
 
 import quwoquan_ops.cli.lib.deployment_candidate_manifest as _pkg
+from quwoquan_ops.cli.lib.deployment_candidate_manifest import (
+    prod_hosted_rehearsal as _rehearsal,
+)
 from quwoquan_ops.cli.lib.immutable_image_composition import immutable_image_digest
 from quwoquan_ops.cli.lib.currentness import CURRENTNESS_TIMEOUT_SECONDS
 
@@ -330,7 +333,7 @@ def _validate_prod_hosted_oci_binding(
     *,
     candidate_root: Path,
 ) -> None:
-    """Bind prod-hosted to Service Pipeline images, never local Docker output."""
+    """Bind prod-hosted to Service Pipeline images, or to a sealed rehearsal build set."""
 
     if candidate.get("target") != "prod-hosted":
         return
@@ -339,6 +342,11 @@ def _validate_prod_hosted_oci_binding(
         "packages/runtime-shared/oci-images.json",
         label="package OCI image manifest",
     )
+    if _rehearsal.is_rehearsal_oci_manifest(oci):
+        _rehearsal.validate_prod_hosted_rehearsal_oci_binding(
+            candidate, oci, candidate_root=candidate_root
+        )
+        return
     images = oci.get("images")
     provider_runtime = candidate.get("providerRuntime")
     provider_images = (
@@ -429,6 +437,19 @@ def _validate_prod_hosted_release_evidence_currentness(
     """Recheck the exact hosted release source when package selects/reuses a candidate."""
 
     if candidate.get("target") != "prod-hosted":
+        return
+    oci = _read_candidate_object(
+        candidate_root,
+        "packages/runtime-shared/oci-images.json",
+        label="package OCI image manifest",
+    )
+    if _rehearsal.is_rehearsal_oci_manifest(oci):
+        # rehearsal 候选没有 GHCR release evidence；它的 currentness 就是
+        # 候选 sourceRevision 仍等于当前 HEAD 与本地 dev1.0（SIT-003 t1）。
+        try:
+            _rehearsal.rehearsal_candidate_source_gate(candidate, repo_root=ROOT)
+        except _rehearsal.RehearsalError as exc:
+            raise ValueError(str(exc)) from exc
         return
     fingerprint = _read_candidate_object(
         candidate_root,

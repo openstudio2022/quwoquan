@@ -82,6 +82,7 @@
 - GitHub 只验证不可变证据并承担 RC build/sign/attest、资格归约、正式 tag admission 和 Prod approval/transaction。普通 source push、lane PR、promotion PR 不得触发 packaging、coverage 全量、设备矩阵、Provider live 或 environment workflow。
 - Nightly 只运行 fingerprint-aware 的深度回归、性能与可靠性，不轮转环境、不替代任何 candidate/head/RC 的 required fact，也不改变资格、标签或生产状态。
 - `prevalidate` / `prod-sim` 历史 snapshot 仅允许显式 `non-promotable` / history reader 只读；它们不得产生 admission 或 verdict，也不得进入正式发布链。
+- `prevalidate` 另接受 integration 工作区的 exact dev candidate rehearsal：候选必须由当前干净工作树以 canonical prod-hosted 打包入口生成并绑定 `sourceRevision`/tree，且 `sourceRevision` 同时等于 HEAD 与本地 `refs/heads/dev1.0`；镜像为本机 build-once 的 `linux/amd64` content digest，只经 exact digest 校验交付到目标平面账号；只进入 `prevalidate` deployment instance、`data-mode isolated` 与独立 namespace，结果固定 `nonPromotable=true`、`releaseEligibility=GATE_BLOCK`，零 ledger/receipt/admission/tag/stage 写入，不得进入正式链，也不得替代 Gamma、RC qualification 或 prod canary 证据。隔离数据面可接受 canonical immutable content release 的 hosted-import 与 activation（既非 seed 也非正式生产数据），其 readback 只构成 rehearsal 诊断。rehearsal 候选允许 legal-static 主体字段仍为占位，但必须在候选与报告中显式标记，且不构成任何法务、登录商用或发布证据；rehearsal 的公网入口由宿主共享 edge 按 Host 分流并以宿主自身 ACME 承接，不属于 `public-ca-prod` 签发自动化，也不构成 DNS/TLS 准出证据。
 - promotion 的固定 SLI 为 `promotionReadyAt -> mainReadbackAt`，包含 queue、验真、merge 与 ref readback，不包含 ABG、产品等待、qualification、tag、Prod 或 soak。目标 p95 为 300 秒；当前 enforcement budget 只可按固定窗口的完整全样本算法单调收紧，不得分阶段、success-only、重置计时或放宽。
 
 ## 6. 契约与依赖
@@ -117,6 +118,17 @@
 - THEN 数据面采用固定小规格存算分离单主（PolarDB PostgreSQL / Tair / MongoDB 单主，不依赖 Serverless）+ 同 VPC 私网 + ExternalName/DSN 抽象 + Secret 注入；每域只连归属存储，无硬编码连接、无跨域直连。
 - THEN Strangler 拆分前后，域级 API / route / Service 名 / 端侧配置 / 数据面归属完全不变。
 - THEN `gamma-local` 与 `prod-hosted` 工作负载图谱（含数据面 Service 名/DSN 变量）同构；`stackctl` / workflow / topology resolver 对同一 workload 图谱解释一致。
+
+<a id="sit-003"></a>
+### SIT-003 exact dev candidate 的不可提升 prod-hosted rehearsal
+
+- GIVEN integration 工作树干净且 HEAD 等于本地 `refs/heads/dev1.0`，候选由 canonical prod-hosted 打包入口生成并绑定该 `sourceRevision`/tree。
+- GIVEN `prod-hosted` 平面账号、rootless Podman 与 user systemd 已就绪，且宿主共享 edge 独占公网 80/443。
+- WHEN 以该 exact dev candidate 执行 `prevalidate` rehearsal。
+- THEN 工作树脏、HEAD 不等于候选 `sourceRevision`、候选不等于本地 `refs/heads/dev1.0` head、镜像架构不是 `linux/amd64`，或本地镜像 content digest 与候选不一致时，在任何远端传输前 fail closed。
+- THEN 候选镜像只经 exact digest 从本机交付到目标平面账号并读回一致，部署只落 `prevalidate` deployment instance 与独立 namespace，service/edge user systemd unit 为 enabled/active。
+- THEN 报告分轴给出 container runtime、Provider readiness 与 release eligibility，其中 `releaseEligibility` 恒为 `GATE_BLOCK` 且 `nonPromotable=true`；该候选不可被 formal rollout、frozen diagnostic snapshot 输入、tag、admission 或 ledger 消费。
+- THEN 隔离数据面对 canonical immutable content release 的 hosted-import 与 activation readback 只记为 rehearsal 诊断；legal-static 占位与宿主共享 edge 的 TLS 承接均在候选与报告中显式标记为非准出证据。
 
 ## 8. 开放事项
 
@@ -217,3 +229,13 @@
 - 目标：以 `quwoquan_service/contracts/metadata/_shared/app_artifact_manifest.yaml` 为唯一 authoring source，把 `app_readiness_facts.py` 与其余读侧收敛到 `candidateId` 与新 status 集，并让 codegen 收敛残余生成物；不保留双读。
 - 完成判定：全仓（生成物除外）`releaseCompositionId` 零命中，`app_readiness_facts` 的 local contract 以新字段名与 status 集通过，`SIT-001` 的 App readiness 事实链在 Alpha 上真实产出一次。
 - 依赖：发布链 owner 对 `artifact-complete/qualified/main-admitted` 与 `candidate-ready/deployable` 状态映射的裁决。
+
+<a id="open-010"></a>
+### OPEN-010 exact dev candidate rehearsal 尚未在真实 prod-hosted 单机闭合
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：正式链在 stable tag、GHCR 工厂物料、production approval 与多 member 冗余前置齐备前无法把任何候选送上 `prod-hosted`；在此之前，唯一能把当前 exact dev candidate 部署到日本单机做端到端内部验证的受治理通道就是 `REQ-003` 新增的 rehearsal。当前 prevalidate 输入只接受 reviewed main 的 GHCR frozen snapshot，`stackctl package --env prod --target prod-hosted` 只接受 GHCR digest manifest 且 legal-static 占位直接阻断，镜像交付只会从 registry 拉取；因此 rehearsal 的候选来源校验、本机 `linux/amd64` build-once 物料、exact digest 本地交付、legal-static 占位标记、隔离数据面 release import 诊断与非准出 TLS 标记均尚无实现或直接测试。
+- 完成判定：`SIT-003` 的 `t1`、`t2`、`t3`、`t4` 分别由 current `local_contract` 直接绑定并通过，且同一 exact dev candidate 在真实 `prod-hosted` 单机上完成一次 rehearsal，报告的 `releaseEligibility` 为 `GATE_BLOCK`、`nonPromotable=true`。
+- 依赖：`prod-hosted` 平面账号、rootless Podman 与 user systemd 已 bootstrap；宿主共享 edge 与公网 DNS 子域记录由仓外运维提供。
