@@ -616,6 +616,12 @@ def _select_pytest_targets(paths: list[str]) -> dict[str, object]:
             "quwoquan_data/scripts/content/filter_catalog/",
             ("quwoquan_data/tests/local_contract/filter_catalog",),
         ),
+        # canonical 内容池对象（content-release 交付件）由 release/publish 合同套件承接：
+        # 纯内容变更没有自己的 Python 用例，但闭包/纯度/schema 门都在 release 套件里。
+        (
+            "quwoquan_data/publish/",
+            ("quwoquan_data/tests/local_contract/release",),
+        ),
     )
     for path in sorted(dict.fromkeys(paths)):
         for root in (

@@ -261,6 +261,16 @@ def test_exact_source_mappings_and_direct_test_changes_stay_file_scoped() -> Non
     assert select_pytest_paths([direct]) == ([direct], [])
 
 
+def test_canonical_publish_objects_select_the_release_contract_suite() -> None:
+    """content-release 只改 publish 对象时，data scope 必须仍有可执行的合同套件。"""
+
+    selected, deferred = select_pytest_paths(
+        ["quwoquan_data/publish/entities/地点/博物馆/示例馆/_entity.json"]
+    )
+    assert selected == []
+    assert "quwoquan_data/tests/local_contract/release" in deferred
+
+
 def test_parent_directory_is_deferred_without_duplicate_child_execution() -> None:
     direct = (
         "quwoquan_ops/tests/local_contract/gate/"
