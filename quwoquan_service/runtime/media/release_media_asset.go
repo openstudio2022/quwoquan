@@ -96,7 +96,7 @@ func LoadReleaseMediaAssets(
 	}
 	expectedReleaseID = strings.TrimSpace(expectedReleaseID)
 	releaseClass = strings.TrimSpace(releaseClass)
-	if releaseClass != "research" && releaseClass != "commercial" {
+	if releaseClass != "research" && releaseClass != "commercial" && releaseClass != "production" {
 		return nil, fmt.Errorf("release class %q is invalid", releaseClass)
 	}
 	privateDelivery := releaseClass == "research"

@@ -22,6 +22,7 @@ const (
 
 var (
 	canonicalSliceSegment     = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*$`)
+	unitRoleAssetIdentity     = regexp.MustCompile(`^([A-Za-z0-9][A-Za-z0-9._-]*):([a-z]+)$`)
 	publicSliceVersionSegment = regexp.MustCompile(`^v([1-9][0-9]*)$`)
 	// Grammar of a Data post asset ID: entity_role_caption_sequence_digest8.
 	// Entity and caption may contain underscores, so role is matched lazily and
@@ -166,6 +167,12 @@ func cleanContentAssetIdentity(raw string) string {
 	}
 	if canonicalSliceSegment.MatchString(value) {
 		return value
+	}
+	// 六步 producer 的视频资产 ID 形如 `<sourceUnit>:video` / `<sourceUnit>:poster`；
+	// 与 Data `_public_asset_segment` 同一派生：角色前缀 + 整个 ID 的 sha256 前 16 字节。
+	if unitRole := unitRoleAssetIdentity.FindStringSubmatch(value); unitRole != nil {
+		sum := sha256.Sum256([]byte(value))
+		return fmt.Sprintf("%s-%x", unitRole[2], sum[:16])
 	}
 	match := postAssetIdentity.FindStringSubmatch(value)
 	if match == nil || !canonicalDecimal.MatchString(match[4]) {

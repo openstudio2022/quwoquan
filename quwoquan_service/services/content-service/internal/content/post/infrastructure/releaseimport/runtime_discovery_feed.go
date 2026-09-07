@@ -47,14 +47,14 @@ const (
 )
 
 // MediaDeliveryAccessModeForReleaseClass 把 release header 的 releaseClass 映射
-// 为逐媒体 accessMode（DEC-033）：research → signed_grant、commercial → public。
+// 为逐媒体 accessMode（DEC-033/DEC-041）：research → signed_grant、commercial/production → public。
 // 其它/未声明类别返回空串作为 invalid sentinel；新 release importer 必须在写入前
 // fail closed。该空串不得进入投影，也不得被消费端当成 public。
 func MediaDeliveryAccessModeForReleaseClass(releaseClass string) string {
 	switch strings.TrimSpace(releaseClass) {
 	case "research":
 		return MediaDeliveryAccessModeSignedGrant
-	case "commercial":
+	case "commercial", "production":
 		return MediaDeliveryAccessModePublic
 	default:
 		return ""

@@ -180,7 +180,7 @@ def _validate_attestation(
             raise ValueError(f"Data release attestation {field} mismatch")
     release_class = str(value.get("releaseClass") or "")
     lifecycle_state = str(value.get("productLifecycleState") or "")
-    if release_class not in {"research", "commercial"} or lifecycle_state != release_class:
+    if release_class not in {"research", "commercial", "production"} or lifecycle_state != release_class:
         raise ValueError("Data release attestation lifecycle identity mismatch")
     source_identity = _source_identity(value, label="attestation")
     return release_class, lifecycle_state, source_identity
@@ -213,7 +213,7 @@ def _validate_readiness(
         if value.get(field) != expected_value:
             raise ValueError(f"Data readiness {field} mismatch")
     phase = str(value.get("readinessPhase") or "")
-    if phase not in {"consumer", "research", "commercial"}:
+    if phase not in {"consumer", "research", "commercial", "production"}:
         raise ValueError(
             "test-live content binding requires consumer, research, or commercial readiness"
         )

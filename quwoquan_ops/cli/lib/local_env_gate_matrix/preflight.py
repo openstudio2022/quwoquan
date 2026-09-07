@@ -218,7 +218,7 @@ def _release_binding(attestation: str, *, label: str) -> dict[str, Any]:
     lifecycle_state = payload.get("productLifecycleState")
     contains_unverified_assets = payload.get("containsUnverifiedAssets")
     if (
-        release_class not in {"research", "commercial"}
+        release_class not in {"research", "commercial", "production"}
         or lifecycle_state != release_class
         or not isinstance(contains_unverified_assets, bool)
         or (

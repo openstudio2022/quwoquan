@@ -33,6 +33,8 @@ class ReadinessPhase(StrEnum):
     RESEARCH = "research"
     CONSUMER = "consumer"
     COMMERCIAL = "commercial"
+    # Data producer 单一 production 类别（DEC-041）的消费相位：guest 证据，无隔离探针。
+    PRODUCTION = "production"
 
 
 class VerificationProfile(StrEnum):

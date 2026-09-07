@@ -1,7 +1,11 @@
 {
   "schema": "content_media_public_slice_derivation_cases",
   "domain": {
-    "kinds": ["avatar", "image", "video"],
+    "kinds": [
+      "avatar",
+      "image",
+      "video"
+    ],
     "contentTypes": [
       "image/gif",
       "image/jpeg",
@@ -132,6 +136,22 @@
       "version": 1,
       "contentType": "image/jpeg",
       "publicSliceKey": ""
+    },
+    {
+      "name": "six_step_video_unit_role_asset_id_hashes_to_role_prefixed_segment",
+      "mediaType": "video",
+      "assetId": "wikimedia_commons_video__341fea6aa4d4c375:video",
+      "version": 1,
+      "contentType": "video/mp4",
+      "publicSliceKey": "media/video/s/asset/video-526fa927efc0c216b68d3d93e04a31e1/v1/source.mp4"
+    },
+    {
+      "name": "six_step_video_poster_unit_role_asset_id_hashes_to_role_prefixed_segment",
+      "mediaType": "image",
+      "assetId": "wikimedia_commons_video__341fea6aa4d4c375:poster",
+      "version": 1,
+      "contentType": "image/png",
+      "publicSliceKey": "media/image/s/asset/poster-1351b26540914c8272f3b877001fd936/v1/source.png"
     }
   ]
 }

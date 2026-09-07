@@ -166,7 +166,7 @@ func validateVerifiedCandidateState(
 		candidate.VerifiedAt.IsZero() {
 		return fmt.Errorf("GATE_BLOCK: candidate state is not completely verified")
 	}
-	if candidate.ReleaseClass != "research" && candidate.ReleaseClass != "commercial" {
+	if candidate.ReleaseClass != "research" && candidate.ReleaseClass != "commercial" && candidate.ReleaseClass != "production" {
 		return fmt.Errorf("GATE_BLOCK: verified candidate releaseClass is invalid")
 	}
 	if !sha256Pattern.MatchString(candidate.ManifestDigest) {
@@ -210,7 +210,7 @@ func validateStoredActivePointer(
 		pointer.Environment != environment || pointer.SourceOwner != sourceOwner ||
 		strings.TrimSpace(pointer.ActiveReleaseID) == "" ||
 		!sha256Pattern.MatchString(pointer.ManifestDigest) ||
-		(pointer.ReleaseClass != "research" && pointer.ReleaseClass != "commercial") ||
+		(pointer.ReleaseClass != "research" && pointer.ReleaseClass != "commercial" && pointer.ReleaseClass != "production") ||
 		pointer.ProjectionVersion <= 0 || pointer.Revision <= 0 || pointer.ActivatedAt.IsZero() {
 		return fmt.Errorf("GATE_BLOCK: active Content release pointer is incomplete or invalid")
 	}

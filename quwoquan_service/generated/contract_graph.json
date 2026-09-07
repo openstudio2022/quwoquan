@@ -111946,7 +111946,7 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/media/media_asset/works_immersive_viewer_widget__local_contract_test.dart",
-            "sha256": "4fb1d20bc3b6b629f49d9bdc4f558988558b370b3a7a25186fcb80229ca0770e"
+            "sha256": "229900f3651d5a1eac2af09851ed236107e470e43bfec33089c94268cbc12288"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/media/media_asset/works_immersive_viewer_wishlist__local_contract_test.dart",
@@ -112849,7 +112849,7 @@
         "domain": [
           {
             "path": "quwoquan_service/services/content-service/internal/content/post/domain/ports/active_supply.go",
-            "sha256": "7011c8b74bc260259c4b3f41a8cc4f1f4f4d0a776b8e0f3f81e719fa7307ca1e"
+            "sha256": "0a407e8992bfb467af0a2b69c2b328f4f641095a4bdf67826353b09b8764e65a"
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/post/domain/ports/aggregate_store.go",
@@ -112947,7 +112947,7 @@
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/post/infrastructure/persistence/mongo_active_supply_reader.go",
-            "sha256": "d2ff8282ab97ab2dd19b4461d5c9f50c751095a4cc81edec9d03548b7228ecef"
+            "sha256": "e1aa25077e8beca505b9d28acf527069cf9cf9b7cfc9808a0d5c4edf9182bfbb"
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/post/infrastructure/persistence/mongo_post_outbox.go",
@@ -113047,19 +113047,19 @@
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/post/infrastructure/releaseimport/legacy_release_state_migration.go",
-            "sha256": "953f61434a36a2607f810acff60b381f5a6bfa99d414d7b7727aef3c102d8cba"
+            "sha256": "165bdde736c39095fed60dcf9b5315f64d60ae54b959e9b639c04f4f5b02e191"
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/post/infrastructure/releaseimport/loader.go",
-            "sha256": "138f74b3cc921ab17907423f7b5ff47848d9045de57d8155c6f3cc0dae1b0594"
+            "sha256": "ee934902bce13afbb247f4f0dae7e0061c3acc2b13ddb1f1111f2964601349e7"
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/post/infrastructure/releaseimport/post_manifest_validation.go",
-            "sha256": "5372a7be8259ecfb3594bc33c6b4c68198192923880114b9506d632ad540cc4c"
+            "sha256": "0fcabbf06e9f0e856e7d5733589c829b026bfe74ded9eb3ce470e3d09e7d4258"
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/post/infrastructure/releaseimport/release_control.go",
-            "sha256": "5ee73c99650d56c9f9fc664f01cf156b7cc8add7259213338640a09ef8f60c24"
+            "sha256": "4c947f756f9e45df916d375223bb878f689124a9810bd17ab31bc016d5338941"
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/post/infrastructure/releaseimport/release_stage_receipts.go",
@@ -113071,7 +113071,7 @@
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/post/infrastructure/releaseimport/runtime_discovery_feed.go",
-            "sha256": "1528ce49395f407a966f6301da28c93acb4c697cfa95b401cb691b7c0c9e759c"
+            "sha256": "3c4a94095ae1e5bb7d23fe981da8613615bdabadaf6e2bce1ef5a7be35da6eb2"
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/post/infrastructure/releaseimport/runtime_media_assets.go",
@@ -113282,7 +113282,7 @@
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/post/application/public/active_release_fence.go",
-            "sha256": "b57d7ae062e0a63fdddebc6b7aeb82f831d7fcd26366ccc055d43f7f33647394"
+            "sha256": "28cc94e01cfa60919d58231898bfb6d293e947c81ac775789db02dc97512cdbf"
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/post/application/query_facade.go",
@@ -113602,7 +113602,7 @@
           },
           {
             "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/domain/active_supply_snapshot__contract__local_contract_test.go",
-            "sha256": "caf9851336a86049173b204422c3613500e66f72a0cf9b56b3d93cf40264d3f4"
+            "sha256": "26692ac59161b4e0a35f840a21102cd5a888507c09b01d5e0fcc856377d3068f"
           },
           {
             "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/domain/media/model/media_capture_metadata__local_contract_test.go",
@@ -113650,7 +113650,7 @@
           },
           {
             "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/import/media_delivery_binding__local_contract_test.go",
-            "sha256": "10369a39db36f43f2b6915322c9424cf8d7ed5fc6cd7e356bcf2aba6c6037ef0"
+            "sha256": "fe83a0575ef96e46058cb8653f4f1c13d55464341881c93599010b4ccca58131"
           },
           {
             "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/import/runtime_content_identity__local_contract_test.go",
@@ -113790,7 +113790,7 @@
           },
           {
             "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/infrastructure/releaseimport/release_control__contract__local_contract_test.go",
-            "sha256": "8bcebc96242217bdaa3c3fe073174653552986aa886402fdf2bb342f270d707d"
+            "sha256": "3bcf312c251726f4333e57739bee2786396a60d0bcf5f4e0c149bb0224737f14"
           },
           {
             "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/infrastructure/releaseimport/runtime_projection__local_contract_test.go",
@@ -113904,7 +113904,7 @@
         "apiIntegration": [
           {
             "path": "quwoquan_service/services/content-service/tests/api_integration/content/post/active_supply_reader__data_consistency__api_integration_test.go",
-            "sha256": "222db97194cf2066bf8f0d312679f4e1ac31a1e2aedbc397e0a27239d0147647"
+            "sha256": "85574ca87f27a0294e23b2b2b45f08a9667186c49f4440bfdc8cb39a51fbc73e"
           },
           {
             "path": "quwoquan_service/services/content-service/tests/api_integration/content/post/app_config__api_integration_test.go",
@@ -115963,7 +115963,7 @@
           },
           {
             "path": "quwoquan_service/services/entity-service/internal/entity_homepage/homepage/infrastructure/homepageimport/loader.go",
-            "sha256": "2208d972ce8ea9e1d28bd06926320e00ae02768f927fe75ef93c26444f7d435f"
+            "sha256": "3a470f3034b0fe04576f2c2ed41098dfde3de308572e1461d0830ca4d0cebd44"
           },
           {
             "path": "quwoquan_service/services/entity-service/internal/entity_homepage/homepage/infrastructure/homepageimport/metrics.go",
@@ -116118,7 +116118,7 @@
           },
           {
             "path": "quwoquan_service/services/entity-service/tests/local_contract/entity_homepage/homepage/cmd/homepage-import/loader_media_access_mode__local_contract_test.go",
-            "sha256": "1ca3dc60484b88c97d8040a50e3d26b540a58086948519fcf8f2e1ce51b95c50"
+            "sha256": "af87a879de8d3468da9eb23884bb43e705cb587982f90cbff99d5ed61ff9aaae"
           },
           {
             "path": "quwoquan_service/services/entity-service/tests/local_contract/entity_homepage/homepage/cmd/homepage-import/metrics__local_contract_test.go",
@@ -131448,7 +131448,7 @@
     },
     {
       "path": "content/media/media_asset/public_slice_derivation_cases.json",
-      "sha256": "1258a08885b20b6935b0983d3f4db1f710febb4b85e0732bcc928ef1f442f735"
+      "sha256": "ed190c54400250c0441e7b3b6c8cad9e6e922ee15c4e87f71b86a3ea0ef11e82"
     },
     {
       "path": "content/media/media_asset/storage.yaml",
@@ -279630,7 +279630,7 @@
     },
     {
       "path": "content/media/media_asset/public_slice_derivation_cases.json",
-      "sha256": "1258a08885b20b6935b0983d3f4db1f710febb4b85e0732bcc928ef1f442f735",
+      "sha256": "ed190c54400250c0441e7b3b6c8cad9e6e922ee15c4e87f71b86a3ea0ef11e82",
       "mediaType": "application/json",
       "content": {
         "cases": [
@@ -279752,6 +279752,22 @@
             "mediaType": "attachment",
             "name": "unsupported_kind_has_no_public_identity",
             "publicSliceKey": "",
+            "version": 1
+          },
+          {
+            "assetId": "wikimedia_commons_video__341fea6aa4d4c375:video",
+            "contentType": "video/mp4",
+            "mediaType": "video",
+            "name": "six_step_video_unit_role_asset_id_hashes_to_role_prefixed_segment",
+            "publicSliceKey": "media/video/s/asset/video-526fa927efc0c216b68d3d93e04a31e1/v1/source.mp4",
+            "version": 1
+          },
+          {
+            "assetId": "wikimedia_commons_video__341fea6aa4d4c375:poster",
+            "contentType": "image/png",
+            "mediaType": "image",
+            "name": "six_step_video_poster_unit_role_asset_id_hashes_to_role_prefixed_segment",
+            "publicSliceKey": "media/image/s/asset/poster-1351b26540914c8272f3b877001fd936/v1/source.png",
             "version": 1
           }
         ],

@@ -12,6 +12,9 @@ from quwoquan_ops.cli.lib.local_env_gate_matrix.identity import (
     ROOT,
     EnvRunner,
 )
+# Data producer 单一 production 类别（DEC-041）与历史 research/commercial 三值闭集。
+_RELEASE_CLASSES = frozenset({"research", "commercial", "production"})
+
 from quwoquan_ops.cli.lib.local_env_gate_matrix.preflight import (
     _device_binding_errors,
     _release_binding,
@@ -66,7 +69,7 @@ def _resolve_matrix_inputs(
     # downstream lifecycle phases consume the two exact attestation identities.
     candidate_class = str(candidate_release["releaseClass"])
     rollback_class = str(rollback_release["releaseClass"])
-    if candidate_class not in {"research", "commercial"} or rollback_class not in {"research", "commercial"}:
+    if candidate_class not in _RELEASE_CLASSES or rollback_class not in _RELEASE_CLASSES:
         raise ValueError("matrix release lifecycle branch is unknown")
 
 

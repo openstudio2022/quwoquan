@@ -259,8 +259,8 @@ func validateLegacyReleaseStateMigrationExpectation(expectation LegacyReleaseSta
 		!sha256Pattern.MatchString(expectation.ManifestDigest) {
 		return LegacyReleaseStateMigrationExpectation{}, fmt.Errorf("legacy release-state expected current identity is incomplete or non-canonical")
 	}
-	if expectation.ReleaseClass != "research" && expectation.ReleaseClass != "commercial" {
-		return LegacyReleaseStateMigrationExpectation{}, fmt.Errorf("legacy release-state expected release class must be research or commercial")
+	if expectation.ReleaseClass != "research" && expectation.ReleaseClass != "commercial" && expectation.ReleaseClass != "production" {
+		return LegacyReleaseStateMigrationExpectation{}, fmt.Errorf("legacy release-state expected release class must be research, commercial or production")
 	}
 	if expectation.ProjectionVersion <= 0 || expectation.ActivatedAt.IsZero() {
 		return LegacyReleaseStateMigrationExpectation{}, fmt.Errorf("legacy release-state expected projection version and activatedAt are required")

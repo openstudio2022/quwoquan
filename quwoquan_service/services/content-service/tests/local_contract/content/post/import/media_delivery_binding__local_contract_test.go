@@ -192,8 +192,11 @@ func TestValidateImportedPostMediaBindingsAcceptsExplicitPublicAndRejectsClassMi
 		!strings.Contains(err.Error(), "differs from releaseClass") {
 		t.Fatalf("releaseClass/accessMode mismatch must fail closed, got %v", err)
 	}
+	if err := ValidateImportedPostMediaBindings([]PostDoc{post}, "production"); err != nil {
+		t.Fatalf("explicit public production binding must pass (DEC-041): %v", err)
+	}
 	if err := ValidateImportedPostMediaBindings([]PostDoc{post}, ""); err == nil ||
-		!strings.Contains(err.Error(), "releaseClass must be research or commercial") {
+		!strings.Contains(err.Error(), "releaseClass must be research, commercial or production") {
 		t.Fatalf("missing releaseClass must fail closed, got %v", err)
 	}
 }

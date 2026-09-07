@@ -26,6 +26,9 @@ type RightsAuditStatus string
 const (
 	RightsAuditStatusVerified   RightsAuditStatus = "verified"
 	RightsAuditStatusUnverified RightsAuditStatus = "unverified"
+	// Data 侧权利只记录（DEC-041）：unknown/restricted 作为记录事实随 production release 进入导入。
+	RightsAuditStatusUnknown    RightsAuditStatus = "unknown"
+	RightsAuditStatusRestricted RightsAuditStatus = "restricted"
 )
 
 var sha256Pattern = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
@@ -575,7 +578,7 @@ func LoadPosts(publishRoot string, filter map[string]bool, releaseClass string) 
 			if len(m.Assets) == 0 || len(m.Assets) > 20 {
 				return fmt.Errorf("%s: video manifest assets must contain 1..20 items", postRef)
 			}
-			if err := validateVideoAssets(m.Assets, postRef); err != nil {
+			if err := validateVideoAssets(m.Assets, postRef, releaseClass); err != nil {
 				return err
 			}
 		}

@@ -174,7 +174,7 @@ def _release_media_authority(
         raise ValueError("App content UAT release media manifest is not release-bound")
     release_class = str(readiness.get("releaseClass") or "").strip()
     raw_assets = media_manifest.get("assets")
-    if release_class not in {"research", "commercial"} or not isinstance(
+    if release_class not in {"research", "commercial", "production"} or not isinstance(
         raw_assets, list
     ):
         raise ValueError("App content UAT release media authority is incomplete")

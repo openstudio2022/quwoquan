@@ -197,7 +197,7 @@ def test_reused_proof_provenance_field_passes_receipt_field_closure(
 ) -> None:
     """DEC-034 复用溯源：reusedFromVerifyRunId 在场时字段闭集不拒绝。
 
-    spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-026
+    spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/design.md#dec-034
     """
     import quwoquan_ops.cli.lib.research_content_isolation as isolation
 

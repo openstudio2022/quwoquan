@@ -373,7 +373,7 @@ def build_candidate_binding(
     ):
         raise ValueError("Data readiness is not bound to the package candidate release")
     readiness_phase = str(readiness.get("readinessPhase") or "").strip()
-    allowed_readiness_phases = {"research", "commercial"}
+    allowed_readiness_phases = {"research", "commercial", "production"}
     if allow_consumer:
         allowed_readiness_phases.add("consumer")
     if readiness_phase not in allowed_readiness_phases:
@@ -385,7 +385,7 @@ def build_candidate_binding(
         release_class if readiness_phase == "consumer" else readiness_phase
     )
     if (
-        expected_release_class not in {"research", "commercial"}
+        expected_release_class not in {"research", "commercial", "production"}
         or release_class != expected_release_class
         or readiness.get("productLifecycleState") != expected_release_class
     ):

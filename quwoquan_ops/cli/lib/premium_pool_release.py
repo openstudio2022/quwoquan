@@ -255,7 +255,7 @@ def load_premium_pool_candidate_binding(
         or readiness.get("schema") != "quwoquan_data.environment_release_readiness"
         or readiness.get("environment") != environment
         or readiness.get("passed") is not True
-        or readiness.get("readinessPhase") not in {"consumer", "commercial"}
+        or readiness.get("readinessPhase") not in {"consumer", "commercial", "production"}
     ):
         raise PremiumPoolReleaseError(
             "readiness receipt is not a passed canonical consumer receipt"
@@ -549,7 +549,7 @@ def load_premium_pool_test_live_binding(
         "passed": True,
     }
     if (
-        readiness_phase not in {"consumer", "commercial"}
+        readiness_phase not in {"consumer", "commercial", "production"}
         or any(readiness.get(field) != value for field, value in expected_readiness.items())
     ):
         raise PremiumPoolReleaseError(
