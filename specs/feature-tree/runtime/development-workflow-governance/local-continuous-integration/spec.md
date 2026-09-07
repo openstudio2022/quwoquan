@@ -160,3 +160,13 @@
 - 影响或价值：`04. Lane Gate` 在 `ubuntu-latest` 上执行 ops local_contract 四分片（首跑 5269 通过 / 23 失败）。23 个失败全部来自 10 个把开发机事实写成前提的合同：macOS `sandbox-exec`、APFS `cp -c`、Flutter/Go/Dart 二进制、本机受管根证书、设备矩阵 preflight。它们已在 `quwoquan_ops/policies/gates/lane_gate_ops_contract_exclusions.yaml` 逐条声明缺失的宿主能力并从 lane 分片排除。排除不等于别处会补跑：`gate_repo.sh` 没有 ops local_contract 的整目录 pytest，10 个合同中只有 `test_app_generated_manifest` 经 `make test-gate-companion-local-contract` 进入 gate 链，`test_app_dependency_capsule` 仅被手动 target `verify-app-dual-platform-usability-baseline` 点名，其余 8 个只在 L0 commit-gate 按影响面选中或开发机手动 pytest 时执行。因此 lane PR 对这 10 个合同没有 hosted 复算，其中 9 个在任何门禁链中也没有稳定执行点。
 - 完成判定：`GWT-005` 持续证明排除清单之外的全部 ops local_contract 文件（当前 607 个文件中的 597 个，首跑对应 5269 个用例）在 hosted 上 fail-closed；排除清单只减不增，每条被删除的前提是该合同改为按宿主能力 `skipif`（并让 skip 可见于回执）或 lane 门禁获得 hosted macOS runner；`test_lane_gate_exclusions_are_declared_real_ops_files_and_only_narrow_ops` 持续证明清单指向真实文件且不影响 data/全量。
 - 依赖：hosted macOS runner 预算，或 10 个合同的 owner 为其补 `skipif` 与 skip 可见性。
+
+<a id="open-005"></a>
+### OPEN-005 `gate_repo.sh` 全量对 `main` 基线的门禁自证仍有 13 个 unproven gate
+
+- 类型：`capability_gap`
+- 优先级：`P2`
+- 准出影响：`track`
+- 影响或价值：`verify_gate_local_contract_execution.py` 在 `gate_repo.sh` 全量（不传变更区间）时以 `origin/main` 为基线判定「改动过的门禁脚本必须有被 gate 链执行的 companion」。`main` 长期落后 `dev1.0`，于是 `dev1.0` 与本 lane 上同样有 13 个 unproven gate 尚未闭合：`quwoquan_data/scripts/verify/` 下 11 个 verify 脚本没有任何同名 companion；`quwoquan_ops/gate/verify_stackctl_args_contract.py` 挂在 `gate_repo.sh` 上但没有 companion；`quwoquan_ops/gate/verify_app_cloud_closure.py` 有 59 例 companion 却在全仓没有任何调用方（死门禁）。该判据不进入 `04. Lane Gate`、L0 或 L1 readiness，因此不阻断 lane→`dev1.0`，但让开发机 `gate_repo.sh` 全量持续红，掩盖真正新增的自证缺口。
+- 完成判定：`GWT-002` 下 `gate_repo.sh` 全量对当前 `main` 基线的 `verify_gate_local_contract_execution.py` 退出 0：Data lane 为 11 个 verify 脚本补 companion 或把它们从 gate 链下线；`verify_stackctl_args_contract.py` 获得 companion 并进入 `test-gate-companion-local-contract`；`verify_app_cloud_closure.py` 要么接入 gate 链要么连同 companion 一并删除，不保留无 caller 的门禁。
+- 依赖：Data lane 对 `quwoquan_data/scripts/verify/**` companion 的产出；`main` 经 promotion 前移后基线自然收窄。
