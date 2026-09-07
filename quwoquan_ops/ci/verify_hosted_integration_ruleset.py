@@ -7,10 +7,14 @@
 进入 gate 链。
 
 阻断条件（任一即 `GATE_BLOCK`，lane PR 的 check 转红）：适用于 `refs/heads/dev1.0` 的
-active ruleset 不唯一；存在 bypass actor；缺 `deletion`/`non_fast_forward`；出现 `pull_request`
-规则（会封死 daily-merge-release-strategy 定义的 integration fast-forward 通道）；
+active ruleset 不唯一；`bypass_actors` 可见且非空；缺 `deletion`/`non_fast_forward`；出现
+`pull_request` 规则（会封死 daily-merge-release-strategy 定义的 integration fast-forward 通道）；
 `required_status_checks` 不恰为 `branch_policy.yaml#required_integration_checks`（GitHub Actions
 producer）、非 strict 或 `do_not_enforce_on_create` 不为 false。
+
+GitHub 只向对 ruleset 有 write 权限的调用者返回 `bypass_actors`；governance job 的只读
+`github.token` 读不到该字段。不可见时本脚本不假装已证明为空，而是在收据
+`ruleset.bypassActorsObservable=false` 如实留痕，bypass 为空的证明由 admin 侧读回承担。
 
 修复方式：每条阻断的 `recovery=` 直接给出要在 GitHub ruleset 上做的改动；本脚本不写任何
 hosted 配置，也不签发 release authority。main ruleset、approval 与 threads 的读回由
@@ -130,10 +134,13 @@ def _verify_ruleset(
 ) -> dict[str, Any]:
     if ruleset.get("enforcement") != "active":
         raise _block(f"{branch} ruleset must be active", recovery=RECOVERY_RULESET)
-    if ruleset.get("bypass_actors") != []:
+    # GitHub 只向对 ruleset 有 write 权限的调用者返回 bypass_actors；只读 token 下该字段缺席或为 null。
+    bypass_actors = ruleset.get("bypass_actors")
+    bypass_observable = isinstance(bypass_actors, list)
+    if bypass_observable and bypass_actors != []:
         raise _block(
             f"{branch} ruleset must have no bypass actors "
-            f"(observed {json.dumps(ruleset.get('bypass_actors'), sort_keys=True)})",
+            f"(observed {json.dumps(bypass_actors, sort_keys=True)})",
             recovery=RECOVERY_RULESET,
         )
     conditions = ruleset.get("conditions") or {}
@@ -181,6 +188,7 @@ def _verify_ruleset(
             for name in required_checks
         ],
         "mergeExecutor": "integration_fast_forward_push",
+        "bypassActorsObservable": bypass_observable,
         "updatedAt": str(ruleset.get("updated_at") or ""),
     }
 
