@@ -16,6 +16,11 @@ from quwoquan_ops.cli import stackctl
 from quwoquan_ops.cli.lib.test_data.capabilities.user_service import (
     AUTHENTICATED_ACTORS,
 )
+from quwoquan_ops.tests.support.derivable_release_payload_test_support import (
+    derive_fixture_release_uat_sample_plan,
+    release_payload_root,
+    write_derivable_release_payload,
+)
 
 
 def _digest(marker: str) -> str:
@@ -66,113 +71,6 @@ class AppContentPreflightUatImmutableBindingTest(unittest.TestCase):
             unsigned
         )
         readiness_path.write_text(json.dumps(readiness), encoding="utf-8")
-        selection_evidence = {
-            "poolDigest": _digest("1"),
-            "sourceIdentitySetDigest": _digest("d"),
-            "canonicalMerkle": _digest("2"),
-            "releaseContentsDigest": _digest("3"),
-            "releaseEntityCohortDigest": _digest("4"),
-        }
-        release_digest = stackctl._canonical_document_checksum(
-            {
-                "schema": "quwoquan_data.release_uat_sample_plan_identity",
-                "releaseId": "release-a",
-                "canonicalMerkle": selection_evidence["canonicalMerkle"],
-                "selectionEvidence": selection_evidence,
-            }
-        )
-        sample_distribution = {
-            "homepage": 1,
-            "article": 1,
-            "image": 1,
-            "video": 1,
-        }
-        entry_carrier_cells = [
-            {
-                "entry": entry,
-                "carrier": carrier,
-                "applicability": "required",
-                "specRef": (
-                    "specs/feature-tree/runtime/runtime-config/"
-                    "environment-topology-and-packaging/spec.md#req-006"
-                ),
-                "runnerClass": f"qwq.content_consumer.{entry}.{carrier}.v1",
-            }
-            for entry in (
-                "feed",
-                "search",
-                "recommendation",
-                "direct_or_object_route",
-            )
-            for carrier in ("homepage", "article", "image", "video")
-        ]
-        samples = [
-            {
-                "sampleId": "canary-homepage-001",
-                "carrier": "homepage",
-                "objectId": "/entity/entity-a",
-                "objectRef": "objects/entities/entity-a",
-                "objectDigest": "sha256:" + "8" * 64,
-            },
-            {
-                "sampleId": "canary-article-001",
-                "carrier": "article",
-                "objectId": "article-a",
-                "objectRef": "objects/posts/article/work-a/1",
-                "objectDigest": "sha256:" + "7" * 64,
-            },
-            {
-                "sampleId": "canary-image-001",
-                "carrier": "image",
-                "objectId": "image-a",
-                "objectRef": "objects/posts/image/work-a/1",
-                "objectDigest": "sha256:" + "5" * 64,
-            },
-            {
-                "sampleId": "canary-video-001",
-                "carrier": "video",
-                "objectId": "video-a",
-                "objectRef": "objects/posts/video/work-a/1",
-                "objectDigest": "sha256:" + "5" * 64,
-            },
-        ]
-        sample_plan = {
-            "schema": "quwoquan_data.release_uat_sample_plan",
-            "releaseId": "release-a",
-            "releaseDigest": release_digest,
-            "milestone": None,
-            "selectionEvidence": selection_evidence,
-            "eligiblePopulationCounts": dict(sample_distribution),
-            "exactCohortCounts": dict(sample_distribution),
-            "entryCarrierCells": entry_carrier_cells,
-            "sampleStrategy": {
-                "name": "baseline_per_required_carrier",
-                "version": 1,
-                "seedDigest": stackctl._canonical_document_checksum(
-                    {
-                        "releaseDigest": release_digest,
-                        "sampleDistribution": sample_distribution,
-                    }
-                ),
-                "carrierOrder": ["homepage", "article", "image", "video"],
-                "sortKey": "identity",
-                "direction": "ascending",
-                "objectDigestAlgorithm": "sha256-path-blob-merkle",
-                "sampleDistribution": sample_distribution,
-            },
-            "sampleCount": 4,
-            "samples": samples,
-        }
-        sample_plan_path = root / "release/payload/uat/sample_plan.json"
-        sample_plan_path.parent.mkdir(parents=True)
-        sample_plan_path.write_text(
-            json.dumps(sample_plan, sort_keys=True, separators=(",", ":")) + "\n",
-            encoding="utf-8",
-        )
-        sample_plan_digest = (
-            "sha256:"
-            + __import__("hashlib").sha256(sample_plan_path.read_bytes()).hexdigest()
-        )
         release_header = {
             "schema": "quwoquan_data.release",
             "releaseId": "release-a",
@@ -180,9 +78,8 @@ class AppContentPreflightUatImmutableBindingTest(unittest.TestCase):
             "releaseKind": "content",
             "releaseClass": "research",
             "productLifecycleState": "research",
-            "selectionScope": "target_environment",
-            "poolDigest": selection_evidence["poolDigest"],
-            "canonicalMerkle": selection_evidence["canonicalMerkle"],
+            "poolDigest": _digest("1"),
+            "canonicalMerkle": _digest("2"),
             "sourceIdentities": readiness["sourceIdentities"],
             "sourceIdentitySetDigest": readiness["sourceIdentitySetDigest"],
             "contents": [
@@ -190,11 +87,22 @@ class AppContentPreflightUatImmutableBindingTest(unittest.TestCase):
                 {"contentId": "image-a", "postRef": "image/work-a/1"},
                 {"contentId": "video-a", "postRef": "video/work-a/1"},
             ],
-            "samplePlanRef": "uat/sample_plan.json",
-            "samplePlanDigest": sample_plan_digest,
         }
-        release_header_path = root / "release/payload/release.json"
-        release_header_path.write_text(json.dumps(release_header), encoding="utf-8")
+        # 下游 sample plan 从真实 payload 派生，fixture 只写可派生的最小 payload。
+        payload_root = release_payload_root(root, "release-a")
+        release_header_path = write_derivable_release_payload(
+            payload_root,
+            release_header=release_header,
+            entity_refs=["entity-a"],
+            header_bytes=json.dumps(release_header).encode("utf-8"),
+        )
+        sample_plan, sample_plan_ref, sample_plan_digest = (
+            derive_fixture_release_uat_sample_plan(
+                payload_root, release_header=release_header
+            )
+        )
+        samples = sample_plan["samples"]
+        entry_carrier_cells = sample_plan["entryCarrierCells"]
         release_header_digest = (
             "sha256:"
             + __import__("hashlib").sha256(release_header_path.read_bytes()).hexdigest()
@@ -211,7 +119,7 @@ class AppContentPreflightUatImmutableBindingTest(unittest.TestCase):
                 "payloadSha256": MANIFEST_DIGEST,
                 "milestone": None,
             },
-            "releaseUatSamplePlanRef": "uat/sample_plan.json",
+            "releaseUatSamplePlanRef": sample_plan_ref,
             "releaseUatSamplePlanDigest": sample_plan_digest,
             "orderedSamples": samples,
             "requiredCasePlan": entry_carrier_cells,
@@ -312,7 +220,7 @@ class AppContentPreflightUatImmutableBindingTest(unittest.TestCase):
             "releaseHeaderRef": str(release_header_path),
             "releaseHeaderDigest": release_header_digest,
             "releaseUatSamplePlan": sample_plan,
-            "releaseUatSamplePlanRef": "uat/sample_plan.json",
+            "releaseUatSamplePlanRef": sample_plan_ref,
             "releaseUatSamplePlanDigest": sample_plan_digest,
             "appUatPlan": plan,
             "appUatPlanDigest": stackctl._canonical_document_checksum(plan),

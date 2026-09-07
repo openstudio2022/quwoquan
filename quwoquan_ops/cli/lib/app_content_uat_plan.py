@@ -1,33 +1,33 @@
 """Build release-bound inputs consumed by App content UAT.
 
-ReleaseUatSamplePlan is owned by Data and frozen in immutable release bytes.
-Ops validates the exact header binding and projects ordered samples/case cells;
-it never reads a readiness-owned UAT envelope or re-samples release objects.
+ReleaseUatSamplePlan is a downstream artifact derived create-once from immutable
+release bytes（`release_uat_sample_plan_derivation`）；producer handoff 不携带它。
+Ops validates the derived plan against the release header and readiness, then
+projects ordered samples/case cells; it never reads a readiness-owned UAT
+envelope or re-samples release objects.
 """
 
 from __future__ import annotations
 
 import copy
-import hashlib
-import json
 import re
 from collections import Counter
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
+from .release_uat_sample_plan_derivation import (
+    ReleaseUatSamplePlanDerivationError,
+    canonical_digest as _canonical_digest,
+    load_or_derive_release_uat_sample_plan,
+    release_uat_sample_plan_ref,
+)
+
 VIDEO_PAGE_SIZE = 20
 _CARRIERS = ("homepage", "article", "image", "video")
 _ENTRIES = ("feed", "search", "recommendation", "direct_or_object_route")
 _DIGEST_PATTERN = re.compile(r"^sha256:[0-9a-f]{64}$")
 _RETIRED_READINESS_FIELDS = frozenset({"appUatEnvelope", "appUatEnvelopeDigest"})
-
-
-def _canonical_digest(value: object) -> str:
-    encoded = json.dumps(
-        value, ensure_ascii=False, sort_keys=True, separators=(",", ":")
-    ).encode("utf-8")
-    return "sha256:" + hashlib.sha256(encoded).hexdigest()
 
 
 def _required_text(value: object, *, label: str) -> str:
@@ -362,9 +362,6 @@ def _release_identity(
         "payloadSha256": payload_sha256,
         "releaseClass": str(release_header["releaseClass"]),
         "productLifecycleState": str(release_header["productLifecycleState"]),
-        "selectionScope": _required_text(
-            release_header.get("selectionScope"), label="release header selectionScope"
-        ),
         "milestone": release_uat_sample_plan.get("milestone"),
         "poolDigest": _required_digest(
             release_header.get("poolDigest"), label="release header poolDigest"
@@ -414,18 +411,11 @@ def _validate_release_uat_sample_plan(
         release_uat_sample_plan=release_uat_sample_plan,
         release_payload_sha256=release_payload_sha256,
     )
+    # 下游派生 plan 不镜像 producer 的 milestone/selectionScope/milestoneTargets：
+    # 这些字段属于 producer header 或已被 detachment 禁止出现在 header 中。
     milestone = release_uat_sample_plan.get("milestone")
     if milestone is not None:
         milestone = _required_text(milestone, label="ReleaseUatSamplePlan milestone")
-    header_milestone = release_header.get("milestone")
-    if release_header.get("selectionScope") not in {
-        "target_environment",
-        "all_publishable",
-        "milestone",
-    }:
-        raise ValueError("App content UAT release header selectionScope is invalid")
-    if milestone != header_milestone:
-        raise ValueError("App content UAT ReleaseUatSamplePlan milestone mismatch")
     exact_counts = _count_map(
         release_uat_sample_plan.get("exactCohortCounts"),
         label="ReleaseUatSamplePlan exactCohortCounts",
@@ -436,10 +426,12 @@ def _validate_release_uat_sample_plan(
     )
     if any(eligible_counts[key] < exact_counts[key] for key in _CARRIERS):
         raise ValueError("App content UAT ReleaseUatSamplePlan eligible population has a shortfall")
-    header_targets = release_header.get("milestoneTargets")
-    if milestone is not None and _count_map(
-        header_targets, label="release header milestoneTargets"
-    ) != exact_counts:
+    header_counts = release_header.get("counts")
+    if isinstance(header_counts, Mapping) and any(
+        header_counts.get(carrier) != exact_counts[carrier]
+        for carrier in _CARRIERS
+        if carrier in header_counts
+    ):
         raise ValueError("App content UAT ReleaseUatSamplePlan exact cohort drifted")
     samples = _sample_rows(
         release_uat_sample_plan,
@@ -481,53 +473,27 @@ def _validate_release_uat_sample_plan(
     return samples, _case_cells(release_uat_sample_plan), release_identity
 
 
-def _release_uat_sample_plan_binding(
-    release_header: Mapping[str, Any],
-) -> tuple[str, str]:
-    return (
-        _required_text(
-            release_header.get("samplePlanRef"),
-            label="release header ReleaseUatSamplePlan ref",
-        ),
-        _required_digest(
-            release_header.get("samplePlanDigest"),
-            label="release header ReleaseUatSamplePlan digest",
-        ),
-    )
-
-
 def load_release_uat_sample_plan(
     *,
     release_root: Path,
     release_header: Mapping[str, Any],
+    manifest_digest: str = "",
 ) -> tuple[dict[str, Any], str, str]:
-    """Load the header-bound exact bytes from one immutable release payload root."""
+    """Load-or-derive the downstream plan for one immutable release payload root.
 
-    ref, expected_digest = _release_uat_sample_plan_binding(release_header)
-    root = release_root.expanduser().resolve(strict=True)
-    if ref != "uat/sample_plan.json":
-        raise ValueError("App content UAT ReleaseUatSamplePlan ref is not canonical")
-    path = root / ref
-    if path.is_symlink():
-        raise ValueError("App content UAT ReleaseUatSamplePlan must not be a symlink")
-    resolved = path.resolve(strict=True)
+    ``release_root`` 是 ``payload/`` 目录（调用方一律传 ``header_path.parent``）。
+    返回 ``(plan, output-root-relative ref, plan digest)``；派生规则、create-once
+    与漂移 fail closed 见 `release_uat_sample_plan_derivation`。
+    """
+
     try:
-        observed_ref = resolved.relative_to(root).as_posix()
-    except ValueError as exc:
-        raise ValueError("App content UAT ReleaseUatSamplePlan escapes release root") from exc
-    if observed_ref != ref:
-        raise ValueError("App content UAT ReleaseUatSamplePlan ref drifted")
-    try:
-        raw = resolved.read_bytes()
-        value = json.loads(raw)
-    except (OSError, json.JSONDecodeError) as exc:
-        raise ValueError("App content UAT ReleaseUatSamplePlan is not readable JSON") from exc
-    digest = "sha256:" + hashlib.sha256(raw).hexdigest()
-    if digest != expected_digest:
-        raise ValueError("App content UAT ReleaseUatSamplePlan digest drifted")
-    if not isinstance(value, dict):
-        raise ValueError("App content UAT ReleaseUatSamplePlan must be an object")
-    return value, ref, digest
+        return load_or_derive_release_uat_sample_plan(
+            payload_root=release_root,
+            release_header=release_header,
+            manifest_digest=manifest_digest,
+        )
+    except ReleaseUatSamplePlanDerivationError as exc:
+        raise ValueError(f"App content UAT ReleaseUatSamplePlan {exc}") from exc
 
 
 def _first_sample_identities(samples: list[dict[str, str]]) -> dict[str, str]:
@@ -603,13 +569,13 @@ def build_app_content_uat_plan(
         release_uat_sample_plan, Mapping
     ):
         raise ValueError("App content UAT ReleaseUatSamplePlan is missing")
-    ref, header_digest = _release_uat_sample_plan_binding(release_header)
     observed_digest = _required_digest(
         release_uat_sample_plan_digest,
         label="loaded ReleaseUatSamplePlan digest",
     )
-    if observed_digest != header_digest:
-        raise ValueError("App content UAT ReleaseUatSamplePlan digest binding drifted")
+    ref = release_uat_sample_plan_ref(
+        _required_text(release_header.get("releaseId"), label="release header releaseId")
+    )
     samples, case_cells, release_identity = _validate_release_uat_sample_plan(
         release_uat_sample_plan,
         release_header=release_header,
@@ -664,7 +630,7 @@ def build_app_content_uat_plan(
     return {
         "releaseIdentity": release_identity,
         "releaseUatSamplePlanRef": ref,
-        "releaseUatSamplePlanDigest": header_digest,
+        "releaseUatSamplePlanDigest": observed_digest,
         "orderedSamples": copy.deepcopy(samples),
         "requiredCasePlan": copy.deepcopy(case_cells),
         "carrierIdentities": selected,

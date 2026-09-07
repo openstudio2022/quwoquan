@@ -136,8 +136,16 @@ _PREMIUM_BOUND_PHASES = frozenset(
         ReadinessPhase.CONSUMER,
         ReadinessPhase.RESEARCH,
         ReadinessPhase.COMMERCIAL,
+        ReadinessPhase.PRODUCTION,
     }
 )
+# 匿名公开 serving 的相位：health 要求匿名 feed 非空，并消费 Data readiness receipt。
+# research 是语义反转（匿名必须空页），import 是 bootstrap 前置，二者都不在此集。
+_PUBLIC_SERVING_PHASES = frozenset(
+    {ReadinessPhase.CONSUMER, ReadinessPhase.COMMERCIAL, ReadinessPhase.PRODUCTION}
+)
+# 媒体以公开 CDN slice 交付的相位（DEC-033/DEC-041）：匿名视频播放 canary 成立。
+_PUBLIC_MEDIA_PHASES = frozenset({ReadinessPhase.COMMERCIAL, ReadinessPhase.PRODUCTION})
 
 
 def _release_feed_post_expectations(
@@ -301,11 +309,7 @@ def command_content_readiness(args: argparse.Namespace) -> dict[str, Any]:
             # research 相位的匿名 feed 正确形态是 no_active_release 空页
             # （DEC-032 收敛）：health 的 content-consumer scope 在 research
             # 下改跑匿名收敛断言，非空断言只对公开 serving 相位成立。
-            require_non_empty_content_feed=phase
-            in {
-                ReadinessPhase.CONSUMER,
-                ReadinessPhase.COMMERCIAL,
-            },
+            require_non_empty_content_feed=phase in _PUBLIC_SERVING_PHASES,
             research_anonymous_convergence=(
                 phase is ReadinessPhase.RESEARCH
                 and bool(str(getattr(args, "verify_run_id", "") or "").strip())
@@ -357,10 +361,7 @@ def command_content_readiness(args: argparse.Namespace) -> dict[str, Any]:
     has_research_verify_receipt = phase is ReadinessPhase.RESEARCH and bool(
         str(getattr(args, "verify_run_id", "") or "").strip()
     )
-    if (
-        phase in {ReadinessPhase.CONSUMER, ReadinessPhase.COMMERCIAL}
-        or has_research_verify_receipt
-    ):
+    if phase in _PUBLIC_SERVING_PHASES or has_research_verify_receipt:
         try:
             data_readiness_receipt, data_readiness_path = (
                 _stackctl._load_data_release_readiness(
@@ -406,9 +407,9 @@ def command_content_readiness(args: argparse.Namespace) -> dict[str, Any]:
                 probes.append("release-bound-feed-readback")
             except ValueError as exc:
                 details.append(f"release-bound feed readback failed: {exc}")
-            if phase is ReadinessPhase.COMMERCIAL:
-                # 匿名视频播放 canary 只对公开 CDN 交付（commercial）成立；
-                # research 私有交付（DEC-031）的视频证据是 Data 侧
+            if phase in _PUBLIC_MEDIA_PHASES:
+                # 匿名视频播放 canary 只对公开 CDN 交付（commercial/production）
+                # 成立；research 私有交付（DEC-031）的视频证据是 Data 侧
                 # researchMediaProbe 的匿名 401/403 拒绝 + isolation probe。
                 try:
                     video_delivery_evidence, video_delivery_path = (

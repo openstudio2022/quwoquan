@@ -125,8 +125,6 @@ def _default_http_request(
     started = time.monotonic_ns()
     headers = {
         "Accept": "application/json",
-        "Authorization": f"Bearer {bearer_token}",
-        "X-Research-Identity-Attestation": attestation_token,
         "X-Client-Page-Id": page_id,
         "X-Client-Session-Id": "content-api-consumer",
         "X-Client-Sent-At": started_at,
@@ -135,6 +133,9 @@ def _default_http_request(
         "X-Request-Id": request_id,
         "X-Trace-Id": trace_id,
     }
+    if bearer_token:
+        headers["Authorization"] = f"Bearer {bearer_token}"
+        headers["X-Research-Identity-Attestation"] = attestation_token
     if encoded is not None:
         headers["Content-Type"] = "application/json"
     request = Request(url, data=encoded, headers=headers, method=method)
@@ -578,32 +579,37 @@ def run_content_api_consumer(
         "digest": _digest_bytes(consumer_health_binding_raw),
     }
     credential_error = ""
-    try:
-        credential = credential_issuer(
-            environment="alpha",
-            release_id=release_id,
-            verify_run_id=verify_run_id,
-        )
-        bearer_token = str(credential.get("bearerToken") or "").strip()
-        attestation_token = str(credential.get("attestationToken") or "").strip()
-        credential_base = str(credential.get("apiBaseUrl") or "").strip().rstrip("/")
-        credential_ca = Path(str(credential.get("sslCaFile") or "")).expanduser()
-        if (
-            not bearer_token
-            or not attestation_token
-            or credential_base != api_base
-            or credential_ca.resolve() != ca_file.resolve()
-        ):
-            raise ContentApiConsumerError(
-                "research_consumer_credential topology/TLS identity drifted"
+    bearer_token = ""
+    attestation_token = ""
+    # 只有 research release 走白名单研究凭证；commercial/production 是公开 serving，
+    # 十六格观测以匿名读者身份进行，与 App 游客一致（DEC-041）。
+    if str(readiness.get("releaseClass") or "") == "research":
+        try:
+            credential = credential_issuer(
+                environment="alpha",
+                release_id=release_id,
+                verify_run_id=verify_run_id,
             )
-    except (OSError, RuntimeError, TypeError, ValueError):
-        # The terminal is retained for every required cell; credential exception
-        # text is intentionally excluded because an upstream client might echo a
-        # secret while failing.
-        bearer_token = ""
-        attestation_token = ""
-        credential_error = "research_consumer_credential is unavailable"
+            bearer_token = str(credential.get("bearerToken") or "").strip()
+            attestation_token = str(credential.get("attestationToken") or "").strip()
+            credential_base = str(credential.get("apiBaseUrl") or "").strip().rstrip("/")
+            credential_ca = Path(str(credential.get("sslCaFile") or "")).expanduser()
+            if (
+                not bearer_token
+                or not attestation_token
+                or credential_base != api_base
+                or credential_ca.resolve() != ca_file.resolve()
+            ):
+                raise ContentApiConsumerError(
+                    "research_consumer_credential topology/TLS identity drifted"
+                )
+        except (OSError, RuntimeError, TypeError, ValueError):
+            # The terminal is retained for every required cell; credential exception
+            # text is intentionally excluded because an upstream client might echo a
+            # secret while failing.
+            bearer_token = ""
+            attestation_token = ""
+            credential_error = "research_consumer_credential is unavailable"
 
     observations: list[dict[str, Any]] = []
     raw_results: list[dict[str, str]] = []

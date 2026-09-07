@@ -134,15 +134,15 @@ def build_app_uat_patrol_authority(
         or not isinstance(target_uat_binding_ref, Mapping)
     ):
         raise ValueError("App UAT Patrol authority inputs are incomplete")
+    # 派生 plan 的 ref 是 output-root 相对路径（data/releases/<id>/uat/sample_plan.json）。
     sample_plan_ref = str(preflight.get("releaseUatSamplePlanRef") or "")
-    header_ref = Path(str(preflight.get("releaseHeaderRef") or "")).expanduser()
     sample_plan_path = (
         Path(sample_plan_ref).expanduser()
         if Path(sample_plan_ref).expanduser().is_absolute()
-        else header_ref.parent / sample_plan_ref
+        else output_root / sample_plan_ref
     )
     if not sample_plan_path.is_file():
-        sample_plan_path = header_ref.parent / "uat" / "sample_plan.json"
+        raise ValueError("App UAT Patrol authority sample plan is missing")
     try:
         sample_plan_authority_ref = (
             sample_plan_path.resolve().relative_to(output_root).as_posix()

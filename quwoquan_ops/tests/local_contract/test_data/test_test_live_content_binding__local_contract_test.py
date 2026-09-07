@@ -17,6 +17,9 @@ from unittest import mock
 
 from quwoquan_ops.cli.lib import test_live_content_binding as subject
 from quwoquan_ops.cli.lib import test_live_startup_attempt_receipt as startup_receipt
+from quwoquan_ops.tests.support.derivable_release_payload_test_support import (
+    write_derivable_release_payload,
+)
 
 _A = "sha256:" + "a" * 64
 _B = "sha256:" + "b" * 64
@@ -207,107 +210,8 @@ class TestLiveContentBindingContract(unittest.TestCase):
                 "sourceIdentityDigest": content_source_identity_digest,
             },
         ]
-        selection_evidence = {
-            "poolDigest": _E,
-            "sourceIdentitySetDigest": source_identity["sourceIdentitySetDigest"],
-            "canonicalMerkle": _F,
-            "releaseContentsDigest": _checksum(contents),
-            "releaseEntityCohortDigest": _checksum(["homepage-harbour"]),
-        }
-        release_digest = _checksum(
-            {
-                "schema": "quwoquan_data.release_uat_sample_plan_identity",
-                "releaseId": release_id,
-                "canonicalMerkle": _F,
-                "selectionEvidence": selection_evidence,
-            }
-        )
-        distribution = {
-            carrier: 1 for carrier in ("homepage", "article", "image", "video")
-        }
-        sample_plan: dict[str, object] = {
-            "schema": "quwoquan_data.release_uat_sample_plan",
-            "releaseId": release_id,
-            "releaseDigest": release_digest,
-            "milestone": None,
-            "selectionEvidence": selection_evidence,
-            "eligiblePopulationCounts": dict(distribution),
-            "exactCohortCounts": dict(distribution),
-            "entryCarrierCells": [
-                {
-                    "entry": entry,
-                    "carrier": carrier,
-                    "applicability": "required",
-                    "specRef": (
-                        "specs/feature-tree/runtime/runtime-config/"
-                        "environment-topology-and-packaging/spec.md#req-006"
-                    ),
-                    "runnerClass": f"qwq.content_consumer.{entry}.{carrier}.v1",
-                }
-                for entry in (
-                    "feed",
-                    "search",
-                    "recommendation",
-                    "direct_or_object_route",
-                )
-                for carrier in ("homepage", "article", "image", "video")
-            ],
-            "sampleStrategy": {
-                "name": "baseline_per_required_carrier",
-                "version": 1,
-                "seedDigest": _checksum(
-                    {
-                        "releaseDigest": release_digest,
-                        "sampleDistribution": distribution,
-                    }
-                ),
-                "carrierOrder": ["homepage", "article", "image", "video"],
-                "sortKey": "identity",
-                "direction": "ascending",
-                "objectDigestAlgorithm": "sha256-path-blob-merkle",
-                "sampleDistribution": distribution,
-            },
-            "sampleCount": 4,
-            "samples": [
-                {
-                    "sampleId": "canary-homepage-001",
-                    "carrier": "homepage",
-                    "objectId": "/entity/homepage-harbour",
-                    "objectRef": "objects/entities/homepage-harbour",
-                    "objectDigest": "sha256:" + "7" * 64,
-                },
-                {
-                    "sampleId": "canary-article-001",
-                    "carrier": "article",
-                    "objectId": "article-a",
-                    "objectRef": "objects/posts/article/article-a/1",
-                    "objectDigest": "sha256:" + "7" * 64,
-                },
-                {
-                    "sampleId": "canary-image-001",
-                    "carrier": "image",
-                    "objectId": "image-a",
-                    "objectRef": "objects/posts/image/image-a/1",
-                    "objectDigest": "sha256:" + "7" * 64,
-                },
-                {
-                    "sampleId": "canary-video-001",
-                    "carrier": "video",
-                    "objectId": "video-a",
-                    "objectRef": "objects/posts/video/video-a/1",
-                    "objectDigest": "sha256:" + "7" * 64,
-                },
-            ],
-        }
-        sample_bytes = (
-            json.dumps(
-                sample_plan,
-                ensure_ascii=False,
-                sort_keys=True,
-                separators=(",", ":"),
-            )
-            + "\n"
-        ).encode("utf-8")
+        # sample plan 由下游从 payload 派生（_write_release 写可派生 payload），
+        # header 不再携带 samplePlanRef/samplePlanDigest。
         header: dict[str, object] = {
             "schema": "quwoquan_data.release",
             "releaseId": release_id,
@@ -321,14 +225,12 @@ class TestLiveContentBindingContract(unittest.TestCase):
             "targetEnvironment": self.environment,
             "poolDigest": _E,
             "canonicalMerkle": _F,
-            "counts": {"article": 1, "image": 1, "video": 1, "total": 3},
+            "counts": {"homepage": 1, "article": 1, "image": 1, "video": 1, "total": 4},
             "contents": contents,
             "authors": [],
             "buildResult": "completed",
-            "samplePlanRef": "uat/sample_plan.json",
-            "samplePlanDigest": "sha256:" + hashlib.sha256(sample_bytes).hexdigest(),
         }
-        return header, sample_bytes
+        return header
 
     def _readiness(
         self,
@@ -402,14 +304,12 @@ class TestLiveContentBindingContract(unittest.TestCase):
         verify_run_id = verify_run_id or self.verify_run_id
         manifest_digest = manifest_digest or self.manifest_digest
         release_class = "commercial" if phase == "commercial" else "research"
-        release_header, sample_plan_bytes = self._release_payload(
+        release_header = self._release_payload(
             release_id=release_id,
             release_class=release_class,
         )
         release_root = self.root / f"data/releases/{release_id}"
         attestation_path = release_root / "attestations/release.json"
-        release_header_path = release_root / "payload/release.json"
-        sample_plan_path = release_root / "payload/uat/sample_plan.json"
         readiness_path = self.runs_root / (
             f"data-release/{release_id}/{verify_run_id}/release-readiness.json"
         )
@@ -421,9 +321,14 @@ class TestLiveContentBindingContract(unittest.TestCase):
                 commercial=phase == "commercial",
             ),
         )
-        _write_json(release_header_path, release_header)
-        sample_plan_path.parent.mkdir(parents=True, exist_ok=True)
-        sample_plan_path.write_bytes(sample_plan_bytes)
+        write_derivable_release_payload(
+            release_root / "payload",
+            release_header=release_header,
+            entity_refs=["homepage-harbour"],
+            header_bytes=(
+                json.dumps(release_header, ensure_ascii=False, indent=2) + "\n"
+            ).encode("utf-8"),
+        )
         _write_json(
             readiness_path,
             self._readiness(
@@ -534,7 +439,15 @@ class TestLiveContentBindingContract(unittest.TestCase):
             ["video-a"],
         )
         self.assertEqual(first["appUatPlan"]["carrierIdentities"]["video"], "video-a")
-        self.assertEqual(first["releaseUatSamplePlanRef"], "uat/sample_plan.json")
+        self.assertEqual(
+            first["releaseUatSamplePlanRef"],
+            "data/releases/release-panda-001/uat/sample_plan.json",
+        )
+        self.assertEqual(
+            first["releaseUatSamplePlanRef"],
+            first["appUatPlan"]["releaseUatSamplePlanRef"],
+        )
+        self.assertTrue((self.root / first["releaseUatSamplePlanRef"]).is_file())
         self.assertEqual(first["appUatPlanDigest"], _checksum(first["appUatPlan"]))
         self.assertNotIn("candidate", json.dumps(first).lower())
         self.assertNotIn("package", json.dumps(first).lower())

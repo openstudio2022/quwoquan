@@ -69,7 +69,7 @@
 - `dev-session --all-nonprod` 在单工作站按 Alpha→Beta→Gamma 串行运行；隔离 runner 可并行执行不同 target，但不得共享端口、Compose project、secret、CA、release 或 runtime receipt。
 - full runtime 是 App 会话的唯一 baseline。bounded content workload 在 full 健康时只复用其能力且不得覆盖 baseline receipt；独立 bounded runtime 必须使用 workload-scoped receipt，并在结束后恢复进入前状态。
 - 四环境内容 consumer/commercial readiness 必须绑定同一份 immutable release 的 `releaseId + manifestDigest + sourceOwner=qwq_data`，并校验 discovery `identity=work`、视频书 `identity=work&type=video` 与 `premium_stream` 的 release-bound 非空读回；缺少 Data readiness receipt 或任一 exact query 为空时不得产生通过回执。
-- Data release owner 必须从同一 release 对象闭包 create-once `ReleaseUatSamplePlan`，冻结 homepage、article、image、video、Creator、Tag、attribution 的 sample identity 与二维 required cells；Ops 只通过 exact-byte `TargetUatBinding` 将该 plan 绑定到 target/runtime/package/config/platform/device/runner slot。App 自动验收不得从手工环境变量、fixture、旧回执或任何 retired envelope 重建计划或 target binding。
+- `ReleaseUatSamplePlan` 是环境消费侧从 immutable release exact bytes（`payload/release.json`、`payload/desired_state.json`、`payload/objects/**`）确定性派生的下游 artifact：每载体按 identity 升序取首个对象，二维 cells 全部 `required`，`milestone` 恒为 `null`；落点固定为 `<releaseRoot>/uat/sample_plan.json`（`payload/` 之外，payload digest 不受影响），派生回执把 plan digest 绑到 `releaseId + manifestDigest`。producer handoff 与 release header 不携带、不引用该 plan；Ops 只通过 exact-byte `TargetUatBinding` 将派生 plan 绑定到 target/runtime/package/config/platform/device/runner slot。App 自动验收不得从手工环境变量、fixture、旧回执或任何 retired envelope 重建计划或 target binding。
 - 应用消费验收必须建模为二维矩阵：`entry ∈ {feed, search, recommendation, direct_or_object_route}`，`carrier ∈ {homepage, article, image, video}`；每个 cell 只能声明 `required` 或 `not_applicable`，后者必须携带 plan-owned reason。entry 是到达内容的入口，carrier 是被消费的内容载体，禁止把二者混称为同一组“四 surface”、以一维列表替代矩阵，或以一个通过 cell 覆盖另一个 required cell。
 
 <a id="req-003"></a>
@@ -157,7 +157,7 @@
 <a id="req-006"></a>
 ### REQ-006 Release UAT 输入与 EnvironmentAcceptanceFact v2 单轨派生
 
-- `ReleaseUatSamplePlan` 由 Data release owner 在 release 层 create-once，环境无关，并冻结 release identity、source identity、二维 `entry × carrier` cell 的 `required/not_applicable`、sample identity 与 raw case expectation；Ops、App runner 与环境不得修改、补写或按 target 分叉该 plan。
+- `ReleaseUatSamplePlan` 由环境消费侧在 release 层 create-once 派生（唯一实现 `quwoquan_ops/cli/lib/release_uat_sample_plan_derivation.py`），环境无关，只依赖 immutable payload 字节；它冻结 release identity、source identity、二维 `entry × carrier` cell 的 `required/not_applicable`、sample identity 与 raw case expectation。同字节重放幂等，已落盘字节漂移、派生回执与 `releaseId + manifestDigest` 不符、release root 不在 `data/releases/<releaseId>` canonical 位置均 fail closed；Ops、App runner 与环境不得手写、补写或按 target 分叉该 plan，producer 不得重新把它封进 payload 或 header。
 - `TargetUatBinding` 仍逐 target/runtime/package/config/platform/device/runner slot create-once，并与 plan 一起约束 raw `ReadinessCaseResult` 的来源；它们不是 EAF v2 字段。父 report 只能只读投影 raw refs、exact-byte digests、coverage 与缺口，不能回写 raw result 或环境事实。
 - canonical `EnvironmentAcceptanceFact` v2 只覆盖 `environment=alpha|beta|gamma` 与 `profile=smoke|integration|release`，由同一 scheduler、schema、validator 和 append-only store 处理。事实必须绑定 `candidate`、`impactPlanDigest`、非空且去重的 `caseResultRefs`、`runtimeIdentity`、`dataLifecycle`、`providerReadiness`、`observabilityReadiness`、`inspectEvidence`、`doctorEvidence`、`cleanupEvidence`、`leaseClosureEvidence`、`predecessor`、`expiresAt`、`nonPromotable`、`issuedAt` 与 DSSE `signer`；`factId` 必须由签名后的 exact fact 机械派生。
 - 每个 `caseResultRefs` 与 named evidence 都必须是不可变 relative ref 加 exact-byte digest，且各 evidence role 引用不同对象。raw result 必须为 canonical `ReadinessCaseResult`、`status=passed`，并与环境、`<environment>-local` target、candidate commit 和 candidate identity 一致；`release` profile 还必须逐项证明 canonical App UAT producer 与 layer identity。任一 required raw slot 缺失、`failed/blocked/skipped`、跨 candidate 或 digest 漂移均不得创建通过事实。
@@ -260,7 +260,7 @@
 <a id="gwt-004"></a>
 ### GWT-004 Alpha/Beta/Gamma rehearsal raw results 保持同一 release
 
-- GIVEN Data 已为同一 immutable release create-once `ReleaseUatSamplePlan`，Alpha、Beta、Gamma 已激活该 release，且 Ops 已为每个 target 的 Android Emulator 与 iOS Simulator required slots create-once `TargetUatBinding`，production Remote composition 可运行。
+- GIVEN 环境消费侧已从同一 immutable release 派生 create-once `ReleaseUatSamplePlan`，Alpha、Beta、Gamma 已激活该 release，且 Ops 已为每个 target 的 Android Emulator 与 iOS Simulator required slots create-once `TargetUatBinding`，production Remote composition 可运行。
 - WHEN 三个 target 的两端按 `entry × carrier` required cells 依次执行正向内容窗口与 suite 内受控 API Edge 5xx 恢复，并另外在 Alpha 执行独立 empty-baseline drill。
 - THEN 三个 target 的两端分别交出绑定同一 release、source capsule、`candidateDigest`、`packageDigest`、真实安装 AppArtifact、launch attempt 与 safe terminal 的 raw `ReadinessCaseResult`。父 report 只读投影 required refs/digests 与缺口，不产生单环境 aggregate、独立 verdict 或 promotion authority，所有 rehearsal 结论均为 `nonPromotable=true`。
 - THEN 页面 runner 逐平台验证自动化实际安装并启动的 `testedAppArtifactBinding` 与同 target canonical launch 的六项身份；缺字段、伪造 comparison、非法 provenance 或任一不一致均输出 `APP.UAT.page_artifact_binding_missing` 并停止，不得以 test host 的自身制品或 canonical launch 的复制字段冒充页面已测试 production-behavior AppArtifact。
@@ -485,3 +485,27 @@
 - 尚缺实现：Data/Ops owner 需裁决 M1 ship 是否消费现役 EAF；若消费，只能把 API `CaseResult` 与匹配 role 的 evidence 接入 canonical scheduler，并按真实用途选择 `smoke|integration|release` 中已有 profile、补齐 v2 全部闭包。若业务无需 EAF，则由 Data owner 改为消费其自身 canonical ship authority；两种路径都不得新增 M1 profile/schema、恢复旧 builder 或保留双写。
 - 尚缺验收证据：负向 `local_contract` 证明旧 writer/profile 不可用且窄 evidence 不能签发 EAF；选择 EAF 路径时，`api_integration` 需用同一 Alpha candidate 的 fresh API results 与全部 named evidence 形成可递归重验的 v2 fact，并证明缺任一 role、predecessor/signature/digest 漂移均 fail closed。
 - 完成判定：[`GWT-006.t9`](#gwt-006) 与 [`GWT-006.t10`](#gwt-006) 由职责匹配的 current local_contract/api_integration 直接绑定并实际通过；Data ship consumer 只接受其已裁决的单一 canonical authority。若该 authority 为 EAF v2，则由 canonical scheduler 生成完整且可验签的 Alpha fact；若不是，则 Data owner 的 current spec 与 consumer 均不再要求 EAF。裁决和 fresh evidence 完成前保持 `GATE_BLOCK/OPEN`。
+
+<a id="open-017"></a>
+### OPEN-017 Prod 内容落地通道缺 hosted 数据面输入与媒体根
+
+- 类型：`external_blocker`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：Alpha/Beta/Gamma 三条 `local-import` 通道同构且共享同一条 Data `ship apply → activate → verify` 链；`prod` 的 `dataReleaseTarget=prod-hosted` 声明 `hosted-import`，但四个 secret 输入 `QWQ_PROD_DATA_RELEASE_MONGO_URI` / `QWQ_PROD_DATA_RELEASE_REDIS_ADDR` / `QWQ_PROD_DATA_RELEASE_USER_POSTGRES_DSN` / `QWQ_PROD_DATA_RELEASE_MEDIA_ROOT` 在仓内没有任何供给来源（workflow、runbook、access-isolation 或受保护变量清单均未登记），hosted 侧也没有与 `start_local_gamma_mirror.sh` `prepare_media_root` 等价的公开切片媒体根准备；`quwoquan_service/services/content-service/resources/policies/content/release_readiness.yaml` 的 `phases.import` 只声明 alpha/beta/gamma，`ship apply --env prod --import` 在 `environment_readiness` 阶段即 `GATE_BLOCK`；输入齐备后 Data ship 仍会在非 dry-run 下以 `missing secret inputs` typed 拒绝。`prod-sim` 现已声明与本地三环境同形的 `local-import` 数据面，但 Data ship 只按 `dataReleaseTarget` 解析目标，`prod` 环境仍只能指向 `prod-hosted`，prod-sim 尚不能作为 prod 内容彩排目标。
+- 尚缺实现：`release_readiness.yaml` 的 `phases.import` 补 `prod: {target: prod-hosted, workload: full, healthScope: content-import}`；`lane/ops` 在 `access-isolation.yaml` 或受保护变量清单登记四个 hosted 输入的供给来源与最小权限，并为 prod-hosted 提供公开切片媒体根准备与只读挂载；Data ship 若要支持 prod-sim 彩排，需在 `--env prod` 下显式选择 target 而不是隐式取 `dataReleaseTarget`。
+- 尚缺验收证据：`ship apply --env prod --import --full-sync --confirm-prod-apply` 在 hosted 输入齐备时到达 `prepared`，`activate` 完成 Content CAS，`content-readiness --phase production --env prod` 通过；prod-sim 彩排以同一 immutable release 取得 `release-readiness.json`。
+- 完成判定：[`GWT-001`](#gwt-001) 的 prod 打包子句与 [`GWT-004`](#gwt-004) 的同 release 语义对 prod-hosted 成立，且不得以 alpha/beta/gamma 证据或 dry-run 结果冒充 prod 内容落地。
+- 依赖：hosted 凭据与媒体根由所有者提供；Prod 激活仍受 `ReleaseTagAdmissionFact` / `ProdActivationAdmissionFact` 约束，本 OPEN 不改变 promotion 边。
+
+<a id="open-018"></a>
+### OPEN-018 `stackctl matrix` 的 Data 生命周期编排与现役 ship CLI 漂移
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：`quwoquan_ops/cli/lib/local_env_gate_matrix/orchestrator.py` 仍按旧契约编排 Data 阶段：`ship apply/verify` 传 `--release-id`（现役 CLI 只接受 `--handoff-ref` 或 `--system-attestation-ref` 准入），`ship rollback` 传 `--to-release`（现役为 `--from-release-id/--from-manifest-digest/--from-revision` 三元组，须与 pre-active query 一致），全程没有 `ship activate` 阶段（Content CAS 从不激活，`release_active` 无从通过），并把 `--readiness-phase` 传为 `consumer`/`commercial`（Data 现役闭集只有 `production`）。矩阵结果是 `ALPHA_BETA_GAMMA_LOCAL_GREEN` release 资格的硬输入，当前任一 target 都不可能绿。beta/gamma 通道本身与 alpha 同构，手工按同一 ship 链重放不受此阻断。
+- 尚缺实现：矩阵输入增加 candidate/rollback 的 handoff ref（或 empty-baseline system attestation）；Data 阶段改为 `apply → activate → verify --readiness-phase production`，rollback 前从 Content active pointer 读取 `manifestDigest/revision` 形成三元组，lifecycle-exit 语义随 Data owner 对 `release lifecycle-exit` 的裁决同步；对应 local_contract 重写 argv 断言。
+- 尚缺验收证据：`stackctl matrix --targets alpha-local,beta-local,gamma-local` 对同一 production release 取得三个 target 的 `release-readiness.json` 与 `release_active` 通过，rollback/replay 回到同一 release identity。
+- 完成判定：[`GWT-004`](#gwt-004) 由矩阵真实运行的 raw results 绑定，而不是手工逐环境重放；不得放宽 Data CLI 准入或恢复 `--release-id` 隐式选择。
+- 依赖：Data producer 单一 production 类别落地后的 ship CLI 终态（multi-carrier-release `DEC-041`）。

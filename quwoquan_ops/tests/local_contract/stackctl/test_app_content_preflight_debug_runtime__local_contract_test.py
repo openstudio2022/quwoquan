@@ -15,6 +15,10 @@ from quwoquan_ops.tests.support.app_content_preflight_test_support import (
     tempfile,
     unittest,
 )
+from quwoquan_ops.tests.support.derivable_release_payload_test_support import (
+    derive_fixture_release_uat_sample_plan,
+    write_derivable_release_payload,
+)
 
 
 class AppContentPreflightDebugRuntimeTest(unittest.TestCase):
@@ -660,32 +664,42 @@ class AppContentPreflightDebugRuntimeTest(unittest.TestCase):
                 resolved[3],
             )
 
-    def test_active_release_uat_contract_rejects_digest_drift_and_escape(self) -> None:
+    def test_active_release_uat_contract_derives_plan_and_rejects_drift(self) -> None:
+        """spec_ref: specs/feature-tree/runtime/runtime-config/environment-topology-and-packaging/spec.md#gwt-004"""
         with tempfile.TemporaryDirectory() as temporary_directory:
-            root = Path(temporary_directory)
-            release_root = root / "release"
-            header_path = release_root / "payload/release.json"
-            sample_path = release_root / "payload/uat/sample_plan.json"
+            root = Path(temporary_directory).resolve()
+            release_root = root / "data/releases/release-a"
             attestation_path = release_root / "attestations/release.json"
-            sample_path.parent.mkdir(parents=True)
             attestation_path.parent.mkdir(parents=True)
-            sample_path.write_text(
-                json.dumps({"schema": "quwoquan_data.release_uat_sample_plan"}),
-                encoding="utf-8",
-            )
-            sample_digest = "sha256:" + hashlib.sha256(sample_path.read_bytes()).hexdigest()
-            header_path.write_text(json.dumps({
+            header = {
+                "schema": "quwoquan_data.release",
                 "releaseId": "release-a",
-                "releaseClass": "research",
-                "productLifecycleState": "research",
-                "samplePlanRef": "uat/sample_plan.json",
-                "samplePlanDigest": sample_digest,
-            }), encoding="utf-8")
+                "sourceOwner": "qwq_data",
+                "releaseKind": "content",
+                "releaseClass": "production",
+                "productLifecycleState": "production",
+                "poolDigest": "sha256:" + "5" * 64,
+                "canonicalMerkle": "sha256:" + "6" * 64,
+                "sourceIdentitySetDigest": "sha256:" + "7" * 64,
+                "counts": {"homepage": 1, "article": 1, "image": 1, "video": 1, "total": 4},
+                "contents": [
+                    {"contentId": "article-a", "version": 1, "postRef": "article/a/1"},
+                    {"contentId": "image-a", "version": 1, "postRef": "image/a/1"},
+                    {"contentId": "video-a", "version": 1, "postRef": "video/a/1"},
+                ],
+            }
+            write_derivable_release_payload(
+                release_root / "payload",
+                release_header=header,
+                entity_refs=["entity-a"],
+                header_bytes=json.dumps(header).encode("utf-8"),
+            )
             attestation_path.write_text(json.dumps({
                 "schema": "quwoquan_data.release_attestation",
                 "releaseId": "release-a",
-                "releaseClass": "research",
-                "productLifecycleState": "research",
+                "releaseClass": "production",
+                "productLifecycleState": "production",
+                "canonicalMerkle": header["canonicalMerkle"],
                 "payloadSha256": "sha256:" + "3" * 64,
             }), encoding="utf-8")
             candidate = {
@@ -697,31 +711,37 @@ class AppContentPreflightDebugRuntimeTest(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "payload digest drifted"):
                 stackctl.app_preflight_commands._load_active_release_uat_contract(candidate)
 
-            with patch(
+            digest_patch = patch(
                 "quwoquan_ops.cli.commands.app_preflight_evidence._payload_tree_digest",
                 return_value=candidate["releaseDigest"],
-            ):
+            )
+            with digest_patch:
                 loaded = stackctl.app_preflight_commands._load_active_release_uat_contract(candidate)
-            self.assertEqual(loaded["releaseUatSamplePlanDigest"], sample_digest)
+            sample_path = release_root / "uat/sample_plan.json"
+            self.assertEqual(
+                loaded["releaseUatSamplePlanRef"],
+                "data/releases/release-a/uat/sample_plan.json",
+            )
+            self.assertEqual(
+                loaded["releaseUatSamplePlanDigest"],
+                "sha256:" + hashlib.sha256(sample_path.read_bytes()).hexdigest(),
+            )
+            self.assertEqual(
+                [row["objectId"] for row in loaded["releaseUatSamplePlan"]["samples"]],
+                ["/entity/entity-a", "article-a", "image-a", "video-a"],
+            )
+            # 派生物落在 payload/ 之外，payload 字节不受影响。
+            self.assertFalse((release_root / "payload/uat").exists())
 
+            # 已落盘派生字节被改写 → fail closed，不静默重派生。
             sample_path.write_text(
-                json.dumps(
-                    {
-                        "schema": "quwoquan_data.release_uat_sample_plan",
-                        "releaseId": "release-drift",
-                    }
-                ),
+                json.dumps({"schema": "quwoquan_data.release_uat_sample_plan", "releaseId": "release-drift"}),
                 encoding="utf-8",
             )
-            with (
-                patch(
-                    "quwoquan_ops.cli.commands.app_preflight_evidence._payload_tree_digest",
-                    return_value=candidate["releaseDigest"],
-                ),
-                self.assertRaisesRegex(ValueError, "digest drifted"),
-            ):
+            with digest_patch, self.assertRaisesRegex(ValueError, "drifted from immutable release bytes"):
                 stackctl.app_preflight_commands._load_active_release_uat_contract(candidate)
 
+            # 派生物被替换为 symlink → unsafe。
             sample_path.unlink()
             outside = root / "outside.json"
             outside.write_text(
@@ -729,54 +749,28 @@ class AppContentPreflightDebugRuntimeTest(unittest.TestCase):
                 encoding="utf-8",
             )
             sample_path.symlink_to(outside)
-            escaped_digest = "sha256:" + hashlib.sha256(outside.read_bytes()).hexdigest()
-            header_path.write_text(json.dumps({
-                "releaseId": "release-a",
-                "releaseClass": "research",
-                "productLifecycleState": "research",
-                "samplePlanRef": "uat/sample_plan.json",
-                "samplePlanDigest": escaped_digest,
-            }), encoding="utf-8")
-            with (
-                patch(
-                    "quwoquan_ops.cli.commands.app_preflight_evidence._payload_tree_digest",
-                    return_value=candidate["releaseDigest"],
-                ),
-                self.assertRaisesRegex(ValueError, "must not be a symlink"),
-            ):
+            with digest_patch, self.assertRaisesRegex(ValueError, "path is unsafe"):
                 stackctl.app_preflight_commands._load_active_release_uat_contract(candidate)
 
     def test_preflight_returns_release_bound_machine_receipt(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
-            root = Path(temporary_directory)
+            root = Path(temporary_directory).resolve()
             report_dir = root / "report"
             release_id = "release-a"
             release_root = root / "data/releases" / release_id
             readiness_path = root / "release-readiness.json"
-            sample_plan = {
-                "schema": "quwoquan_data.release_uat_sample_plan",
-                "releaseId": release_id,
-                "milestone": "M100",
-                "sampleCases": [
-                    {"sampleId": "homepage-1", "carrier": "homepage", "objectId": "entity-a"},
-                    {"sampleId": "article-1", "carrier": "article", "objectId": "article-a"},
-                    {"sampleId": "image-1", "carrier": "image", "objectId": "image-a"},
-                    {"sampleId": "video-1", "carrier": "video", "objectId": "video-a"},
-                ],
-            }
-            sample_path = release_root / "payload/uat/sample_plan.json"
-            sample_path.parent.mkdir(parents=True)
-            sample_path.write_text(json.dumps(sample_plan), encoding="utf-8")
-            sample_digest = "sha256:" + hashlib.sha256(sample_path.read_bytes()).hexdigest()
+            manifest_digest = "sha256:" + "3" * 64
             header = {
+                "schema": "quwoquan_data.release",
                 "releaseId": release_id,
+                "sourceOwner": "qwq_data",
+                "releaseKind": "content",
                 "releaseClass": "commercial",
                 "productLifecycleState": "commercial",
-                "selectionScope": "milestone",
                 "milestone": "M100",
                 "poolDigest": "sha256:" + "2" * 64,
-                "samplePlanRef": "uat/sample_plan.json",
-                "samplePlanDigest": sample_digest,
+                "canonicalMerkle": "sha256:" + "6" * 64,
+                "sourceIdentitySetDigest": "sha256:" + "7" * 64,
                 "contents": [
                     {"contentId": "article-a", "postRef": "article/a"},
                     {"contentId": "image-a", "postRef": "image/a"},
@@ -784,18 +778,22 @@ class AppContentPreflightDebugRuntimeTest(unittest.TestCase):
                 ],
                 "authors": [],
             }
-            header_path = release_root / "payload/release.json"
-            header_path.write_text(json.dumps(header), encoding="utf-8")
+            header_path = write_derivable_release_payload(
+                release_root / "payload",
+                release_header=header,
+                entity_refs=["entity-a"],
+                header_bytes=json.dumps(header).encode("utf-8"),
+            )
             for ref, content_type, title, extra in (
                 ("article/a", "article", "文章 A", {"creatorProfileId": "creator-a", "tagRefs": ["Topic/a"]}),
                 ("image/a", "image", "图片 A", {}),
                 ("video/a", "video", "视频 A", {"sourceAttribution": {"attributionText": "来源 A"}}),
             ):
                 post_path = release_root / "payload/objects/posts" / ref / "manifest.json"
-                post_path.parent.mkdir(parents=True)
+                post_path.parent.mkdir(parents=True, exist_ok=True)
                 post_path.write_text(json.dumps({"contentType": content_type, "title": title, **extra}), encoding="utf-8")
             entity_path = release_root / "payload/objects/entities/entity-a/_entity.json"
-            entity_path.parent.mkdir(parents=True)
+            entity_path.parent.mkdir(parents=True, exist_ok=True)
             entity_path.write_text(json.dumps({"label": "首页 A"}), encoding="utf-8")
             creator_path = release_root / "payload/objects/creators/creator-a/profile.json"
             creator_path.parent.mkdir(parents=True)
@@ -808,12 +806,18 @@ class AppContentPreflightDebugRuntimeTest(unittest.TestCase):
             tag_path = release_root / "payload/objects/tags/Topic/a/_definition.json"
             tag_path.parent.mkdir(parents=True)
             tag_path.write_text(json.dumps({"label": "标签 A"}), encoding="utf-8")
-            manifest_digest = "sha256:" + "3" * 64
+            # 对象字节定稿后再派生，fixture 才能与生产路径取得同一 exact plan。
+            sample_plan, sample_ref, sample_digest = derive_fixture_release_uat_sample_plan(
+                release_root / "payload",
+                release_header=header,
+                manifest_digest=manifest_digest,
+            )
             attestation = {
                 "schema": "quwoquan_data.release_attestation",
                 "releaseId": release_id,
                 "releaseClass": "commercial",
                 "productLifecycleState": "commercial",
+                "canonicalMerkle": header["canonicalMerkle"],
                 "payloadSha256": manifest_digest,
             }
             attestation_path = release_root / "attestations/release.json"
@@ -849,7 +853,7 @@ class AppContentPreflightDebugRuntimeTest(unittest.TestCase):
             readiness_path.write_text(json.dumps(readiness), encoding="utf-8")
             projected_plan = {
                 "releaseId": release_id,
-                "releaseUatSamplePlanRef": "uat/sample_plan.json",
+                "releaseUatSamplePlanRef": sample_ref,
                 "releaseUatSamplePlanDigest": sample_digest,
                 "videoPagination": {"pageSize": 20, "expectedWorkIds": ["video-a"]},
             }

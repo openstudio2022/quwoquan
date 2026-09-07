@@ -488,20 +488,20 @@ def _validate_data_readiness(
         raise _consumer_error(
             "Data readiness manifestDigest drifted from explicit authority"
         )
+    declared = str(readiness.get("releaseClass") or "")  # DEC-041: production 为现役单一类别
+    release_class = declared if declared in {"research", "commercial", "production"} else "<lifecycle-bound>"
     expected = {
         "schema": "quwoquan_data.environment_release_readiness",
         "environment": "alpha",
         "releaseId": release_id,
-        "releaseClass": "research",
-        "productLifecycleState": "research",
-        "readinessPhase": "research",
+        "releaseClass": release_class,
+        "productLifecycleState": release_class,
+        "readinessPhase": release_class,
         "importRunId": import_run_id,
         "verifyRunId": verify_run_id,
         "passed": True,
     }
-    drift = [
-        field for field, value in expected.items() if readiness.get(field) != value
-    ]
+    drift = [f for f, v in expected.items() if readiness.get(f) != v]
     if drift:
         raise _consumer_error(
             "Data readiness identity/status drifted at " + ",".join(drift)

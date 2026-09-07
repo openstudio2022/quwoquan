@@ -48,36 +48,15 @@ def _read_exact_json_object(path: Path, *, label: str) -> tuple[dict[str, Any], 
 def _payload_tree_digest(payload_root: Path) -> str:
     """Return Data's canonical sha256-path-blob-merkle for exact payload bytes."""
 
-    entries: list[bytes] = []
-    for path in sorted(payload_root.rglob("*")):
-        if path.is_symlink():
-            raise ValueError("active candidate Data release payload contains a symlink")
-        if not path.is_file():
-            continue
-        relative = path.relative_to(payload_root).as_posix()
-        raw = path.read_bytes()
-        blob_digest = "sha256:" + hashlib.sha256(raw).hexdigest()
-        entries.append(
-            hashlib.sha256(
-                b"blob\0"
-                + relative.encode("utf-8")
-                + b"\0"
-                + blob_digest.encode("ascii")
-                + b"\0"
-                + str(len(raw)).encode("ascii")
-            ).digest()
-        )
-    if not entries:
-        return "sha256:" + hashlib.sha256(b"").hexdigest()
-    level = entries
-    while len(level) > 1:
-        if len(level) % 2:
-            level.append(level[-1])
-        level = [
-            hashlib.sha256(b"node\0" + level[index] + level[index + 1]).digest()
-            for index in range(0, len(level), 2)
-        ]
-    return "sha256:" + level[0].hex()
+    from quwoquan_ops.cli.lib.release_uat_sample_plan_derivation import (
+        ReleaseUatSamplePlanDerivationError,
+        payload_tree_digest,
+    )
+
+    try:
+        return payload_tree_digest(payload_root)
+    except ReleaseUatSamplePlanDerivationError as exc:
+        raise ValueError(f"active candidate Data release payload {exc}") from exc
 
 
 def _load_active_release_uat_contract(
@@ -149,6 +128,7 @@ def _load_active_release_uat_contract(
     sample_plan, sample_plan_ref, sample_plan_digest = load_release_uat_sample_plan(
         release_root=header_path.parent,
         release_header=release_header,
+        manifest_digest=manifest_digest,
     )
     return {
         "releaseRoot": str(release_root),
@@ -255,6 +235,7 @@ def _resolve_active_app_content_evidence(
     if release_class != lifecycle_state or release_class not in {
         ReadinessPhase.RESEARCH.value,
         ReadinessPhase.COMMERCIAL.value,
+        ReadinessPhase.PRODUCTION.value,
     }:
         raise ValueError("active candidate Data release lifecycle is invalid")
     readiness_phase = ReadinessPhase(release_class)
@@ -353,6 +334,7 @@ def _resolve_test_live_app_content_evidence(
         ReadinessPhase.CONSUMER.value,
         ReadinessPhase.RESEARCH.value,
         ReadinessPhase.COMMERCIAL.value,
+        ReadinessPhase.PRODUCTION.value,
     }:
         raise ValueError("test_live content binding readinessPhase is invalid")
     expected_ref = (

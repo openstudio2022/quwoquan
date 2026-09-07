@@ -28,6 +28,13 @@ from typing import Any, Mapping
 
 from quwoquan_ops.cli.lib.content_release_readiness import ReadinessPhase
 
+# release 类别与 readiness 相位同值绑定的相位（consumer 相位跟随 header，不绑定）。
+# production 是 Data producer 单一现役类别（DEC-041），与 research/commercial 一样
+# 要求 `releaseClass == productLifecycleState == readinessPhase`，且 premium 非空。
+_LIFECYCLE_BOUND_PHASES = frozenset(
+    {ReadinessPhase.RESEARCH, ReadinessPhase.COMMERCIAL, ReadinessPhase.PRODUCTION}
+)
+
 
 def _load_test_data_release_readiness(
     *,
@@ -57,12 +64,9 @@ def _load_test_data_release_readiness(
     if not isinstance(raw, Mapping):
         raise ValueError("canonical Data readiness receipt must be a JSON object")
     phase_value = str(raw.get("readinessPhase") or "").strip()
-    if phase_value not in {
-        ReadinessPhase.RESEARCH.value,
-        ReadinessPhase.COMMERCIAL.value,
-    }:
+    if phase_value not in {phase.value for phase in _LIFECYCLE_BOUND_PHASES}:
         raise ValueError(
-            "test-data readiness must be an immutable research or commercial release"
+            "test-data readiness must be an immutable research, commercial or production release"
         )
     return _stackctl._load_data_release_readiness(
         environment=environment,
@@ -123,7 +127,7 @@ def _load_data_release_readiness(
             )
     expected_release_class = (
         readiness_phase.value
-        if readiness_phase in {ReadinessPhase.RESEARCH, ReadinessPhase.COMMERCIAL}
+        if readiness_phase in _LIFECYCLE_BOUND_PHASES
         else str(receipt.get("releaseClass") or "")
     )
     if (
@@ -341,7 +345,7 @@ def _load_data_release_readiness(
                 observed_trace_ids.add(trace_id)
     expected_query_names = (
         _stackctl._DATA_COMMERCIAL_READINESS_QUERY_NAMES
-        if readiness_phase in {ReadinessPhase.RESEARCH, ReadinessPhase.COMMERCIAL}
+        if readiness_phase in _LIFECYCLE_BOUND_PHASES
         else _stackctl._DATA_CONSUMER_READINESS_QUERY_NAMES
     )
     if set(queries_by_name) != expected_query_names:
@@ -394,10 +398,7 @@ def _load_data_release_readiness(
         not isinstance(premium_count, int)
         or isinstance(premium_count, bool)
         or premium_count != len(premium_video_ids)
-        or (
-            readiness_phase in {ReadinessPhase.RESEARCH, ReadinessPhase.COMMERCIAL}
-            and premium_count < 1
-        )
+        or (readiness_phase in _LIFECYCLE_BOUND_PHASES and premium_count < 1)
     ):
         issues.append(
             "Data readiness counts.premiumPlayableVideos must match its readiness phase"
