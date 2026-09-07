@@ -14,7 +14,7 @@ metadata:
 
 ## 执行
 
-1. PRE 从用户目标、plan/diff 与已知路径确定 exact target；读取最近子树 `AGENTS.md`，运行默认 compact `make feature-context TARGET=<exact-path>`，保存 stdout 的 immutable exact ref，再确认 owner、scope、验收、OPEN、依赖和命名 evidence。若 target 含手写源码，只加载该 owner 的 code-health 阈值、当前复杂函数、复用候选与 hotspot，不加载全仓报告。
+1. PRE 从用户目标、plan/diff 与已知路径确定 exact target；读取最近子树 `AGENTS.md`，运行默认 compact `make feature-context TARGET=<exact-path>`，保存 stdout 的 immutable exact ref，再确认 owner、scope、验收、OPEN、依赖和命名 evidence。若 target 含手写源码，只以 `make code-health-hotspots OWNER=<owner-scope>` 加载该 owner 的紧凑阈值、热点与薄弱点（`unavailable` 时照常继续），不加载全仓报告。
 2. metadata/contract 变更先改 authoring source，再 verify/codegen；实现按 Red/Green/Refactor 闭环。DURING 必须 search-before-create、采用最简单可测实现并在同一增量删除被替代旧轨；不因单次复用需求造框架，测试 `spec_ref` 绑定对应验收，不为错误实现保留 shim/fallback。
 3. 执行影响面最小且足够的 `local_contract/api_integration/user_acceptance` 与 gate，分层报告源码、编译、runtime、release 与 UAT。
 4. POST 复用 PRE owner identity ref，并从 current exact changed paths 生成 candidate evidence predecessor；手写源码 candidate 必须产出 current `code-health-delta` named evidence。报告命名 evidence 命令与退出码；默认零 Reviewer。只在用户显式 `/review`，或增量进入 lane→`dev1.0` PR、handoff、release 准出时，才按 review Skill 派 Developer 主审与最多一名专审。

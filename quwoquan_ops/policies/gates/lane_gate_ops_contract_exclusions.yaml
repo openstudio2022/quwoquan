@@ -1,0 +1,34 @@
+# 04. Lane Gate 的 ops local_contract 分片在 ubuntu-latest 上执行，不装 Flutter/Go/
+# CocoaPods，也没有 macOS sandbox-exec、APFS `cp -c` 与本机受管根证书。下列合同把这些
+# 开发机事实写成了前提，在 hosted Linux 上必红且与 PR 改动无关。
+#
+# 这不是豁免：它们在 gate_repo.sh（开发机 / self-hosted macOS）仍全量执行；这里只声明
+# lane 门禁的判定边界。每条必须写明缺失的宿主能力，且只能减少。新增条目视为 lane 门禁
+# 覆盖面收缩，需在 local-continuous-integration spec 的 OPEN 中登记。
+governance:
+  owner: local-continuous-integration
+  reason: lane gate 是轻量 PR 门禁，不复制 RC qualification 的 macOS/设备/完整工具链
+  expires_when: 这些合同改为按宿主能力 skipif 或迁到 hosted macOS runner 后逐条删除
+  measure: 文件级路径精确匹配；ubuntu-latest 上 pytest 收集后必然失败的 ops local_contract 文件数
+
+exclusions:
+  - path: quwoquan_ops/tests/local_contract/stackctl/test_ios_pod_dependency_capsule__local_contract_test.py
+    missing_host_capability: macOS sandbox-exec network-denial sandbox
+  - path: quwoquan_ops/tests/local_contract/stackctl/test_app_dependency_capsule__local_contract_test.py
+    missing_host_capability: APFS cp -c clone (BSD cp)
+  - path: quwoquan_ops/tests/local_contract/environment/test_environment_patrol_smoke__device_env_tls_and_runtime__local_contract_test.py
+    missing_host_capability: Flutter executable for Patrol
+  - path: quwoquan_ops/tests/local_contract/environment/test_environment_patrol_smoke__typed_actor_sessions__local_contract_test.py
+    missing_host_capability: Flutter executable for Patrol
+  - path: quwoquan_ops/tests/local_contract/environment/test_environment_auth_token_isolation__local_contract_test.py
+    missing_host_capability: local-managed root certificate (public_domain_tls)
+  - path: quwoquan_ops/tests/local_contract/observability/test_product_telemetry_log_sink__security__local_contract_test.py
+    missing_host_capability: local-managed root certificate (public_domain_tls)
+  - path: quwoquan_ops/tests/local_contract/gate/test_app_generated_manifest__contract__local_contract_test.py
+    missing_host_capability: Go + Dart toolchain for App clean rebuild
+  - path: quwoquan_ops/tests/local_contract/service_ops/assistant-service/ci/test_assistant_device_matrix__local_contract_test.py
+    missing_host_capability: device matrix tool preflight (adb/xcrun)
+  - path: quwoquan_ops/tests/local_contract/stackctl/test_filter_catalog_release_stackctl__security__local_contract_test.py
+    missing_host_capability: stackctl runtime toolchain
+  - path: quwoquan_ops/tests/local_contract/stackctl/test_app_content_uat_failure_projection__local_contract_test.py
+    missing_host_capability: Flutter/device UAT projection toolchain

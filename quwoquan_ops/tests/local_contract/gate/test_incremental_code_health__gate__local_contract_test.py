@@ -33,6 +33,8 @@ from quwoquan_ops.gate.code_health_delta.policy import PolicyError, load_policy
 
 ROOT = Path(__file__).resolve().parents[4]
 POLICY = ROOT / "quwoquan_ops/policies/code_health_policy.yaml"
+# 与 canonical policy 同步：v2 起 file_lines.block=2000，fixture 必须真正越过它。
+OVER_BLOCK_LINES = load_policy(POLICY)["thresholds"]["file_lines"]["block"] + 1
 
 
 def git(repo: Path, *args: str) -> str:
@@ -102,24 +104,28 @@ def test_policy_is_closed_and_rejects_automatic_promotion(tmp_path: Path) -> Non
         load_policy(invalid)
 
 
-def test_policy_rejects_unknown_nested_field_and_false_active_tool(tmp_path: Path) -> None:
+def test_policy_rejects_unknown_nested_field_and_switch_like_notes(tmp_path: Path) -> None:
     raw = POLICY.read_text(encoding="utf-8")
     invalid = tmp_path / "policy.yaml"
     invalid.write_text(
-        raw.replace("    block: 1000", "    block: 1000\n    bypass: true"),
+        raw.replace("    block: 2000", "    block: 2000\n    bypass: true"),
         encoding="utf-8",
     )
     with pytest.raises(PolicyError, match="thresholds.file_lines 字段不闭合"):
         load_policy(invalid)
 
+    # notes 只是文档：任何看起来像开关的字段都不闭合，terminal 不可能从 yaml 被改写。
     invalid.write_text(
-        raw.replace(
-            "python: {provider: ruff, rules: [C901, PLR0912, PLR0915], version: unavailable, status: advisory-unavailable}",
-            "python: {provider: ruff, rules: [C901, PLR0912, PLR0915], version: unavailable, status: active}",
-        ),
+        raw.replace("  metrics_provider:", "  promote_advisory_to_block: true\n  metrics_provider:"),
         encoding="utf-8",
     )
-    with pytest.raises(PolicyError, match="active 时必须声明 exact version"):
+    with pytest.raises(PolicyError, match="notes 字段不闭合"):
+        load_policy(invalid)
+    invalid.write_text(
+        raw.replace("  blocking_codes: [", "  blocking_codes: [CODE_HEALTH.COMPLEXITY_ADVISORY, "),
+        encoding="utf-8",
+    )
+    with pytest.raises(PolicyError, match="既是 advisory 又是 blocking"):
         load_policy(invalid)
 
 
@@ -195,7 +201,7 @@ def test_tracked_index_blob_read_failure_is_not_treated_as_absent(
 
 def test_new_oversized_file_blocks_but_generated_and_test_do_not(tmp_path: Path) -> None:
     repo, base = init_repo(tmp_path)
-    body = "value = 1\n" * 1001
+    body = "value = 1\n" * OVER_BLOCK_LINES
     write(repo, "quwoquan_ops/ci/new_module.py", body)
     write(repo, "quwoquan_service/generated/new_module.py", body)
     write(repo, "quwoquan_ops/tests/local_contract/ci/test_big.py", body)
@@ -214,9 +220,9 @@ def test_new_oversized_file_blocks_but_generated_and_test_do_not(tmp_path: Path)
 
 def test_existing_oversized_growth_blocks_and_shrink_passes(tmp_path: Path) -> None:
     repo, _ = init_repo(tmp_path)
-    target = write(repo, "quwoquan_ops/ci/large.py", "value = 1\n" * 1001)
+    target = write(repo, "quwoquan_ops/ci/large.py", "value = 1\n" * OVER_BLOCK_LINES)
     base = commit(repo, "oversized baseline")
-    target.write_text("value = 1\n" * 1002, encoding="utf-8")
+    target.write_text("value = 1\n" * (OVER_BLOCK_LINES + 1), encoding="utf-8")
     grown = commit(repo, "grow")
     report = analyze_delta(repo, base=base, head=grown, policy_path=repo / "quwoquan_ops/policies/code_health_policy.yaml", mode="fast")
     blocker = next(
@@ -348,7 +354,7 @@ def test_cli_gate_block_is_nonzero_and_report_only_bypass_is_rejected(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     repo, _ = init_repo(tmp_path)
-    write(repo, "quwoquan_ops/ci/oversized.py", "value = 1\n" * 1001)
+    write(repo, "quwoquan_ops/ci/oversized.py", "value = 1\n" * OVER_BLOCK_LINES)
     output = tmp_path / "report.json"
     monkeypatch.setattr(verify_incremental_code_health, "ROOT", repo)
 
@@ -373,7 +379,7 @@ def test_index_only_reads_staged_bytes_and_ignores_later_worktree_edits(tmp_path
     repo, base = init_repo(tmp_path)
     target = write(repo, "quwoquan_ops/ci/staged_value.py", "VALUE = 1\n")
     git(repo, "add", str(target.relative_to(repo)))
-    target.write_text("VALUE = 1\n" * 1001, encoding="utf-8")
+    target.write_text("VALUE = 1\n" * OVER_BLOCK_LINES, encoding="utf-8")
 
     staged = analyze_delta(
         repo, base=base, head=base,
@@ -451,7 +457,7 @@ def test_default_cli_includes_untracked_source_and_binds_its_bytes(
 
     makefile = (ROOT / "Makefile").read_text(encoding="utf-8")
     assert (
-        "verify_incremental_code_health.py --base HEAD --head HEAD --working-tree --mode full"
+        "verify_incremental_code_health.py --base auto --head HEAD --working-tree --mode full"
         in makefile
     )
 
@@ -467,7 +473,7 @@ def test_fingerprint_changes_for_range_policy_and_candidate_bytes(tmp_path: Path
     assert one["evidenceFingerprint"]["digest"] != two["evidenceFingerprint"]["digest"]
 
     policy_path = repo / "quwoquan_ops/policies/code_health_policy.yaml"
-    policy_path.write_text(policy_path.read_text().replace("advisory: 800", "advisory: 799"), encoding="utf-8")
+    policy_path.write_text(policy_path.read_text().replace("advisory: 1000", "advisory: 999"), encoding="utf-8")
     changed_policy = analyze_delta(repo, base=head_one, head=head_two, policy_path=policy_path, mode="fast")
     assert two["evidenceFingerprint"]["digest"] != changed_policy["evidenceFingerprint"]["digest"]
 
@@ -495,7 +501,7 @@ def merge_fixture(tmp_path: Path) -> tuple[Path, str, str, str]:
     """base -> (lane edit | other-parent oversized file) -> merge with one authored file."""
     repo, base = init_repo(tmp_path)
     git(repo, "checkout", "-q", "-b", "other")
-    write(repo, "quwoquan_ops/ci/inherited.py", "value = 1\n" * 1200)
+    write(repo, "quwoquan_ops/ci/inherited.py", "value = 1\n" * (OVER_BLOCK_LINES + 199))
     other = commit(repo, "other parent debt")
     git(repo, "checkout", "-q", "-")
     write(repo, "quwoquan_ops/ci/lane.py", "LANE = 1\n")
@@ -506,7 +512,7 @@ def merge_fixture(tmp_path: Path) -> tuple[Path, str, str, str]:
 
 def test_merge_candidate_does_not_own_the_other_parent_debt(tmp_path: Path) -> None:
     repo, base, other, _ = merge_fixture(tmp_path)
-    write(repo, "quwoquan_ops/ci/authored.py", "value = 2\n" * 1200)
+    write(repo, "quwoquan_ops/ci/authored.py", "value = 2\n" * (OVER_BLOCK_LINES + 199))
     head = commit(repo, "merge")
     policy_path = repo / "quwoquan_ops/policies/code_health_policy.yaml"
 
@@ -532,25 +538,59 @@ def test_merge_candidate_does_not_own_the_other_parent_debt(tmp_path: Path) -> N
     assert unaware["evidenceFingerprint"]["digest"] != aware["evidenceFingerprint"]["digest"]
 
 
-def test_merge_parents_are_auto_detected_and_fail_closed(tmp_path: Path) -> None:
-    repo, base, other, _ = merge_fixture(tmp_path)
+def test_working_tree_merge_parents_come_from_merge_head_only(tmp_path: Path) -> None:
+    repo, _, other, _ = merge_fixture(tmp_path)
     assert git_delta.in_progress_merge_parents(repo) == [other]
     assert verify_incremental_code_health.resolve_merge_parents(
-        repo, base=base, head="HEAD", working_tree=True
+        repo, working_tree=True, explicit=[]
     ) == [other]
+    with pytest.raises(ValueError, match="MERGE_HEAD"):
+        verify_incremental_code_health.resolve_merge_parents(
+            repo, working_tree=True, explicit=[other]
+        )
 
-    head = commit(repo, "merge")
-    assert verify_incremental_code_health.resolve_merge_parents(
-        repo, base=base, head=head, working_tree=False
-    ) == [other]
+    commit(repo, "merge")
     assert git_delta.in_progress_merge_parents(repo) == []
     assert verify_incremental_code_health.resolve_merge_parents(
-        repo, base=base, head=base, working_tree=False
+        repo, working_tree=True, explicit=[]
     ) == []
+
+
+def test_commit_range_never_infers_merge_parents(tmp_path: Path) -> None:
+    """GitHub pull_request 合成合并提交的 parents 是 [base_tip, pr_head]。
+
+    若从 parents[1:] 自动推导，pr_head 会被当作"被继承的另一父"，PR 的全部改动都
+    与它字节相同而被丢弃，增量为空、恒 PASS。commit 模式只能吃显式声明。
+    """
+    repo, base = init_repo(tmp_path)
+    git(repo, "checkout", "-q", "-b", "pr")
+    write(repo, "quwoquan_ops/ci/authored.py", "value = 2\n" * (OVER_BLOCK_LINES + 199))
+    pr_head = commit(repo, "pr work")
+    git(repo, "checkout", "-q", "-")
+    # 模拟 refs/pull/N/merge：base_tip 与 pr_head 的合成合并。
+    git(repo, "merge", "-q", "--no-ff", "-m", "synthetic", pr_head)
+    synthetic = git(repo, "rev-parse", "HEAD")
+    assert git(repo, "rev-list", "--parents", "-n", "1", synthetic).split()[1:] == [base, pr_head]
+    policy_path = repo / "quwoquan_ops/policies/code_health_policy.yaml"
+
+    assert verify_incremental_code_health.resolve_merge_parents(
+        repo, working_tree=False, explicit=[]
+    ) == []
+    report = analyze_delta(repo, base=base, head=synthetic, policy_path=policy_path, mode="fast")
+    assert report["mergeParents"] == []
+    assert "quwoquan_ops/ci/authored.py" in report["changedPaths"]
+    assert report["terminal"] == "GATE_BLOCK"
+
+    # 反面：若有人把 pr_head 当作 inherited parent 传入，增量会被清空——这正是被禁止的路径。
+    poisoned = analyze_delta(
+        repo, base=base, head=synthetic, policy_path=policy_path, mode="fast",
+        merge_parents=[pr_head],
+    )
+    assert poisoned["changedPaths"] == []
+    assert poisoned["terminal"] == "PASS"
 
     with pytest.raises(ValueError):
         analyze_delta(
-            repo, base=base, head=head,
-            policy_path=repo / "quwoquan_ops/policies/code_health_policy.yaml",
+            repo, base=base, head=synthetic, policy_path=policy_path,
             mode="fast", merge_parents=["0" * 40],
         )

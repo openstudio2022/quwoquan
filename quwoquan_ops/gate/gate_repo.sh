@@ -179,7 +179,7 @@ python3 -B quwoquan_ops/gate/verify_governance_pipeline_admission.py
 python3 quwoquan_ops/gate/verify_knowledge_asset_s0_migration.py
 python3 quwoquan_ops/gate/verify_retired_runtime_architecture.py
 python3 quwoquan_ops/gate/verify_single_track_contracts.py
-# 单轨契约合约测试：Python 1000 行硬顶治理后按场景拆分，随门禁一起执行。
+# 单轨契约合约测试：按场景拆分为多个文件，随门禁一起执行。
 python3 quwoquan_ops/tests/local_contract/gate/test_single_track_contracts__contract__local_contract_test.py
 python3 quwoquan_ops/tests/local_contract/gate/test_single_track_contracts__fingerprint_ratchet__local_contract_test.py
 python3 quwoquan_ops/tests/local_contract/gate/test_single_track_contracts__versioned_identity__local_contract_test.py
@@ -231,6 +231,10 @@ python3 quwoquan_ops/gate/verify_external_provider_governance.py
 python3 quwoquan_ops/gate/verify_provider_substitute_prod_purity.py
 python3 quwoquan_ops/gate/verify_provider_conformance_evidence.py
 python3 quwoquan_ops/gate/verify_entrypoint_script_paths.py
+# workflow 调用仓内 CLI 时漏传 required 参数只会在 hosted 以 argparse exit 2 暴露。
+python3 quwoquan_ops/gate/verify_workflow_cli_arguments.py
+PYTHONPATH="$ROOT${PYTHONPATH:+:$PYTHONPATH}" \
+  python3 -B -m pytest -q quwoquan_ops/tests/local_contract/gate/test_workflow_cli_arguments__gate__local_contract_test.py
 python3 quwoquan_ops/gate/verify_github_artifact_lifecycle.py
 python3 -B quwoquan_ops/gate/verify_python_script_governance.py --scope "$python_script_scope" --mode check
 PYTHONPATH="$ROOT${PYTHONPATH:+:$PYTHONPATH}" \
@@ -322,7 +326,7 @@ python3 quwoquan_ops/tests/local_contract/gate/test_emitted_error_code_declarati
   promtool test rules "$ROOT"/quwoquan_ops/observability/monitoring/promtool_tests/*.yaml
   # 对象 × 层的结构性证据闭合：由受管管线现场派生 ContractGraph，
   # 任何 STRUCTURAL 缺口直接 BLOCK；不存在债务基线、刷新入口或计数额度。
-  # 合约测试在 Python 1000 行硬顶治理后按场景拆分，全部随门禁一起执行。
+  # 合约测试按场景拆分为多个文件，全部随门禁一起执行。
   python3 quwoquan_ops/tests/local_contract/gate/test_object_evidence_closure__strict_zero__contract_graph__local_contract_test.py
   python3 quwoquan_ops/tests/local_contract/gate/test_object_evidence_closure__strict_zero__structural_policy__local_contract_test.py
   python3 quwoquan_ops/tests/local_contract/gate/test_object_evidence_closure__strict_zero__dynamic_readiness__local_contract_test.py
@@ -360,6 +364,8 @@ run_service_core_after_packaging() {
   dart quwoquan_ops/tools/runtime_error_codegen/bin/generate_runtime_errors.dart --check
   dart quwoquan_ops/tools/runtime_error_codegen/bin/check_runtime_error_cutover.dart
   (cd quwoquan_service && make gate)
+  # go vet 是本机已有、无需安装的确定性静态检查；service Makefile 的 lint 目标此前无人调用。
+  (cd quwoquan_service && make lint)
   (
     cd quwoquan_service/services/product-ops-service
     export QWQ_OUTPUT_ROOT="$ROOT/.qwq_output"

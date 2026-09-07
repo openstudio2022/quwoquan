@@ -1,0 +1,91 @@
+# Hosted recomputation of the canonical Code Health Delta for each exact dev1.0 fast-forward.
+# Runs after the push has landed: a GATE_BLOCK fails this run and publishes a typed fact,
+# it cannot reject the push itself. Consuming the fact as admission evidence is owned by
+# the source-to-main pipeline; this workflow never reads or writes release facts.
+name: 10. Code Health Integration Recompute
+
+permissions:
+  contents: read
+
+env:
+  QWQ_OUTPUT_ROOT: ${{ github.workspace }}/.qwq_output
+  CODE_HEALTH_ROOT: ${{ github.workspace }}/.qwq_output/env/repo/runs/code-health/integration
+
+on:
+  push:
+    branches: [dev1.0]
+  workflow_dispatch:
+    inputs:
+      before:
+        description: Exact 40-hex dev1.0 OID before the range
+        required: true
+        type: string
+      after:
+        description: Exact 40-hex dev1.0 OID after the range
+        required: true
+        type: string
+
+concurrency:
+  group: code-health-integration-${{ github.event.after || inputs.after }}
+  cancel-in-progress: false
+
+jobs:
+  recompute:
+    name: Code Health Delta — exact dev1.0 range
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.after || inputs.after }}
+          persist-credentials: false
+      - uses: oras-project/setup-oras@1d808f7d7f6995cc68b7bf507bfe5c5446e1dc9d
+        with:
+          version: 1.3.3
+      - name: Install pinned report dependencies
+        run: python3 -m pip install --disable-pip-version-check PyYAML==6.0.3
+      - name: Recompute exact range
+        id: recompute
+        env:
+          RANGE_BEFORE: ${{ github.event.before || inputs.before }}
+          RANGE_AFTER: ${{ github.event.after || inputs.after }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$CODE_HEALTH_ROOT"
+          {
+            echo "before=$RANGE_BEFORE"
+            echo "after=$RANGE_AFTER"
+          } >> "$GITHUB_OUTPUT"
+          PYTHONDONTWRITEBYTECODE=1 python3 -B quwoquan_ops/ci/verify_code_health_integration.py \
+            --before "$RANGE_BEFORE" \
+            --after "$RANGE_AFTER" \
+            --report-output "$CODE_HEALTH_ROOT/report.json" \
+            --fact-output "$CODE_HEALTH_ROOT/fact.json" \
+            --summary-markdown "$CODE_HEALTH_ROOT/summary.md"
+      - name: Render step summary
+        if: ${{ !cancelled() }}
+        run: |
+          set -euo pipefail
+          test -f "$CODE_HEALTH_ROOT/summary.md"
+          cat "$CODE_HEALTH_ROOT/summary.md" >> "$GITHUB_STEP_SUMMARY"
+      - name: Publish typed code-health fact
+        if: ${{ !cancelled() }}
+        env:
+          GHCR_TOKEN: ${{ github.token }}
+          RANGE_BEFORE: ${{ steps.recompute.outputs.before }}
+          RANGE_AFTER: ${{ steps.recompute.outputs.after }}
+        run: |
+          set -euo pipefail
+          test -f "$CODE_HEALTH_ROOT/fact.json"
+          printf '%s' "$GHCR_TOKEN" | oras login ghcr.io --username "${{ github.actor }}" --password-stdin
+          trap 'oras logout ghcr.io >/dev/null 2>&1 || true' EXIT
+          PYTHONDONTWRITEBYTECODE=1 python3 -B quwoquan_ops/ci/code_health_evidence.py publish \
+            --report "$CODE_HEALTH_ROOT/fact.json" \
+            --repository "ghcr.io/${{ github.repository }}/code-health-integration" \
+            --transport-tag "base-${RANGE_BEFORE}-head-${RANGE_AFTER}" \
+            | tee "$CODE_HEALTH_ROOT/publish.json"
+          echo "- code-health fact: \`$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["exactRef"])' "$CODE_HEALTH_ROOT/publish.json")\`" >> "$GITHUB_STEP_SUMMARY"

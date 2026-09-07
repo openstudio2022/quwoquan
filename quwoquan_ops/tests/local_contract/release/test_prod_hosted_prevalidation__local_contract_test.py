@@ -255,8 +255,8 @@ class ProdHostedPrevalidationContractTest(unittest.TestCase):
         payload = _seal_snapshot({
             "schema": historical_reader.SCHEMA,
             "releaseTrainId": None,
-            "releaseCompositionId": None,
-            "status": "qualified",
+            "candidateId": None,
+            "status": "candidate-ready",
             "generatedAt": "2026-07-28T00:00:00Z",
             "source": {
                 "gitSha": "a" * 40,
@@ -348,7 +348,7 @@ class ProdHostedPrevalidationContractTest(unittest.TestCase):
                 "schema": historical_reader.ENVIRONMENT_RECEIPT_SCHEMA,
                 "environment": environment,
                 "status": "passed",
-                "releaseCompositionId": payload["releaseCompositionId"],
+                "candidateId": payload["candidateId"],
                 "sourceGitSha": source["gitSha"],
                 "sourceTreeDigest": source["treeDigest"],
                 "evidenceDigest": evidence_digest,
@@ -368,7 +368,7 @@ class ProdHostedPrevalidationContractTest(unittest.TestCase):
             "schema": historical_reader.ROLLBACK_RECEIPT_SCHEMA,
             "environment": "prod",
             "status": "ready",
-            "releaseCompositionId": payload["releaseCompositionId"],
+            "candidateId": payload["candidateId"],
             "sourceGitSha": source["gitSha"],
             "sourceTreeDigest": source["treeDigest"],
             "evidenceDigest": evidence_digest,
@@ -385,7 +385,7 @@ class ProdHostedPrevalidationContractTest(unittest.TestCase):
             "digest": "sha256:"
             + hashlib.sha256(rollback_path.read_bytes()).hexdigest(),
         }
-        payload["status"] = "main-admitted"
+        payload["status"] = "deployable"
         payload["blockers"] = ["prod-release-evidence-pending"]
         payload["missingEvidence"] = [
             "environmentReceipts.prod",
@@ -581,7 +581,7 @@ class ProdHostedPrevalidationContractTest(unittest.TestCase):
             with mock.patch.object(stackctl, "run", side_effect=git_results):
                 resolved = stackctl._frozen_diagnostic_snapshot(str(manifest))
             self.assertEqual(resolved[3], "1.20260726.42")
-            self.assertEqual(resolved[4], resolved[2]["releaseCompositionId"])
+            self.assertEqual(resolved[4], resolved[2]["candidateId"])
 
             dirty_results = [
                 subprocess.CompletedProcess(["git"], 0, stdout=("a" * 40) + "\n", stderr=""),

@@ -41,12 +41,6 @@ def blob(repo: Path, sha: str, path: str | None) -> bytes | None:
     return result.stdout if result.returncode == 0 else None
 
 
-def commit_parents(repo: Path, sha: str) -> list[str]:
-    """Exact parent SHAs of one commit, in Git parent order."""
-    fields = _run(repo, "rev-list", "--parents", "-n", "1", sha).decode().split()
-    return [validate_exact_sha(item, label=f"{sha}^") for item in fields[1:]]
-
-
 def in_progress_merge_parents(repo: Path) -> list[str]:
     """Exact MERGE_HEAD parents of an unfinished merge; empty when not merging."""
     path = Path(_run(repo, "rev-parse", "--git-path", "MERGE_HEAD").decode().strip())

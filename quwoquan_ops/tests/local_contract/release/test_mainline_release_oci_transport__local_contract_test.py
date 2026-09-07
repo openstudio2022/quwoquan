@@ -45,7 +45,7 @@ def _build_input_manifest(
         {
             "schema": finalizer.SCHEMA,
             "releaseTrainId": None,
-            "releaseCompositionId": None,
+            "candidateId": None,
             "status": "build-input",
             "generatedAt": "2026-07-28T00:00:00Z",
             "source": {
@@ -208,9 +208,8 @@ class MainlineReleaseOCITransportContractTest(unittest.TestCase):
             fetcher.FETCHABLE_STATUSES,
             {
                 "component-ready",
-                "artifact-complete",
-                "qualified",
-                "main-admitted",
+                "candidate-ready",
+                "deployable",
                 "released",
                 "rolled-back",
                 "rollback-failed",

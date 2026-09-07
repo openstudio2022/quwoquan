@@ -55,26 +55,97 @@ def _python_functions(text: str) -> list[FunctionMetric]:
     return metrics
 
 
+#: 控制流关键字出现在「函数头」位置时不是函数：`if len(x) == cap(x) {` 的 `len`
+#: 曾被当作函数统计。
+_CONTROL_KEYWORDS = frozenset({
+    "if", "else", "for", "while", "switch", "return", "case", "catch", "do", "try",
+    "defer", "go", "select", "await", "yield", "throw",
+})
+#: 函数头：`func (recv) Name(params) ReturnType {`、`Type name(params) async {`、`name() {`。
+#: `)` 与 `{` 之间允许 Go 的裸返回类型或 Dart 的 `async`，但不允许 `;`/`{`。
+_FUNCTION_START = re.compile(
+    r"^\s*(?:func\s+(?:\([^)]*\)\s*)?|(?P<prefix>(?:[A-Za-z_][\w<>?\[\], ]+\s+)+))"
+    r"(?P<name>[A-Za-z_]\w*)\s*\([^;]*\)\s*[^{;]*\{"
+)
+_BRANCH_TOKEN = re.compile(r"\b(?:if|for|while|case|catch)\b|&&|\|\|")
+
+
+def _newlines_only(fragment: str) -> str:
+    return "\n" * fragment.count("\n")
+
+
+def _skip_block(text: str, start: int, terminator: str, *, keep_terminator: bool) -> tuple[str, int]:
+    """Blank a span up to ``terminator``; return the replacement and the index after it."""
+    end = text.find(terminator, start)
+    if end < 0:
+        return _newlines_only(text[start:]), len(text)
+    replacement = _newlines_only(text[start:end]) + (terminator if keep_terminator else "")
+    return replacement, end + len(terminator)
+
+
+def _skip_quoted(text: str, start: int, quote: str) -> tuple[str, int]:
+    """Blank a string body: Go raw strings may span lines, other literals stop at newline."""
+    if quote == "`":
+        return _skip_block(text, start, "`", keep_terminator=True)
+    index = start
+    while index < len(text) and text[index] not in (quote, "\n"):
+        index += 2 if text[index] == "\\" else 1
+    if index < len(text) and text[index] == quote:
+        return quote, index + 1
+    return "", index
+
+
+def strip_code_noise(text: str) -> str:
+    """Blank out string literal bodies and comments while preserving line structure.
+
+    Brace/branch counting on raw text treats ``if`` inside a log message or a ``{`` inside a
+    template string as code. Quotes and newlines are kept so line numbers stay stable.
+    """
+    out: list[str] = []
+    index = 0
+    while index < len(text):
+        two = text[index:index + 2]
+        three = text[index:index + 3]
+        if two == "//":
+            replacement, index = _skip_block(text, index, "\n", keep_terminator=True)
+        elif two == "/*":
+            replacement, index = _skip_block(text, index + 2, "*/", keep_terminator=False)
+        elif three in {'"""', "'''"}:
+            body, index = _skip_block(text, index + 3, three, keep_terminator=False)
+            replacement = three + body + three
+        elif text[index] in {'"', "'", "`"}:
+            quote = text[index]
+            body, index = _skip_quoted(text, index + 1, quote)
+            replacement = quote + body
+        else:
+            replacement, index = text[index], index + 1
+        out.append(replacement)
+    return "".join(out)
+
+
 def _brace_functions(text: str) -> list[FunctionMetric]:
-    lines = text.splitlines()
-    starts = re.compile(r"^\s*(?:func\s+(?:\([^)]*\)\s*)?|(?:[A-Za-z_][\w<>?\[\], ]+\s+)+)([A-Za-z_]\w*)\s*\([^;]*\)\s*(?:async\s*)?\{")
+    lines = strip_code_noise(text).splitlines()
     results: list[FunctionMetric] = []
     for index, line in enumerate(lines):
-        match = starts.search(line)
+        match = _FUNCTION_START.search(line)
         if not match:
+            continue
+        prefix_tokens = (match.group("prefix") or "").split()
+        name = match.group("name")
+        if name in _CONTROL_KEYWORDS or any(token in _CONTROL_KEYWORDS for token in prefix_tokens):
             continue
         depth = 0; end = index; branches = 0; cognitive = 0
         for cursor in range(index, len(lines)):
             current = lines[cursor]
             before = depth
-            branches_here = len(re.findall(r"\b(?:if|for|while|case|catch)\b|&&|\|\|", current))
+            branches_here = len(_BRANCH_TOKEN.findall(current))
             branches += branches_here
             cognitive += branches_here * (1 + max(0, before - 1))
             depth += current.count("{") - current.count("}")
             end = cursor
             if cursor > index and depth <= 0:
                 break
-        results.append(FunctionMetric(match.group(1), index + 1, end + 1, 1 + branches, cognitive))
+        results.append(FunctionMetric(name, index + 1, end + 1, 1 + branches, cognitive))
     return results
 
 
@@ -137,32 +208,71 @@ def duplicate_window_index(corpus: Iterable[tuple[str, bytes]], *, block_lines: 
     return indexed
 
 
-def duplicate_windows(
-    candidate: bytes,
-    corpus: Iterable[tuple[str, bytes]] = (),
-    *,
-    block_lines: int,
-    baseline_index: dict[str, str] | None = None,
-    changed_lines: frozenset[int] | None = None,
-) -> tuple[int, str | None]:
-    """Count unique candidate lines covered by matching changed windows."""
+def _candidate_windows(candidate: bytes, *, block_lines: int) -> list[tuple[str, set[int]]]:
     lines = [_normalized_line(line) for line in candidate.decode("utf-8", "replace").splitlines()]
-    indexed = baseline_index if baseline_index is not None else duplicate_window_index(corpus, block_lines=block_lines)
-    changed = changed_lines or frozenset()
-    covered: set[int] = set()
-    sources: set[str] = set()
+    windows: list[tuple[str, set[int]]] = []
     for start in range(0, max(0, len(lines) - block_lines + 1)):
         window = lines[start:start + block_lines]
         if not all(window):
             continue
-        line_numbers = set(range(start + 1, start + block_lines + 1))
-        if changed and not line_numbers.intersection(changed):
-            continue
-        source = indexed.get(hashlib.sha256("\n".join(window).encode()).hexdigest())
+        digest = hashlib.sha256("\n".join(window).encode()).hexdigest()
+        windows.append((digest, set(range(start + 1, start + block_lines + 1))))
+    return windows
+
+
+def duplicate_windows(
+    candidate: bytes,
+    *,
+    block_lines: int,
+    baseline_index: dict[str, str],
+    changed_lines: frozenset[int],
+) -> tuple[frozenset[int], str | None]:
+    """Changed candidate lines whose window already exists in the baseline corpus.
+
+    只度量 ``changed_lines``：没有新增行的候选（纯删除）得到空集合，绝不退化为整文件，
+    否则只删几行的文件会把全部旧内容当作“新重复”计入。
+    """
+    covered: set[int] = set()
+    sources: set[str] = set()
+    for digest, line_numbers in _candidate_windows(candidate, block_lines=block_lines):
+        touched = line_numbers.intersection(changed_lines)
+        source = baseline_index.get(digest) if touched else None
         if source is not None:
-            covered.update(line_numbers.intersection(changed) if changed else line_numbers)
+            covered.update(touched)
             sources.add(source)
-    return len(covered), min(sources) if sources else None
+    return frozenset(covered), (min(sources) if sources else None)
+
+
+def candidate_duplicate_windows(
+    candidates: list[tuple[str, bytes, frozenset[int]]], *, block_lines: int,
+) -> dict[str, tuple[frozenset[int], str]]:
+    """Changed lines whose window also appears elsewhere inside the same candidate.
+
+    A window counts when it recurs in another changed file or at a second offset of the same
+    file. Only changed lines are attributed so untouched context never inflates the ratio;
+    a candidate with no new lines contributes nothing.
+    """
+    per_path = {path: _candidate_windows(body, block_lines=block_lines) for path, body, _ in candidates}
+    occurrences: dict[str, list[tuple[str, set[int]]]] = {}
+    for path, windows in per_path.items():
+        for digest, line_numbers in windows:
+            occurrences.setdefault(digest, []).append((path, line_numbers))
+    result: dict[str, tuple[frozenset[int], str]] = {}
+    for path, _body, changed in candidates:
+        covered: set[int] = set()
+        sources: set[str] = set()
+        for digest, line_numbers in per_path[path]:
+            touched = line_numbers.intersection(changed)
+            others = {
+                other_path for other_path, other_lines in occurrences[digest]
+                if other_path != path or other_lines.isdisjoint(line_numbers)
+            }
+            if touched and others:
+                covered.update(touched)
+                sources.update(others)
+        if covered:
+            result[path] = (frozenset(covered), min(sources))
+    return result
 
 
 def tracked_paths(repo: Path, sha: str) -> list[str]:
@@ -184,7 +294,9 @@ def has_repository_entry(repo: Path, head: str, path: str, *, working_tree: bool
         return True
     dotted = path[:-3].replace("/", ".")
     stem = Path(path).stem
-    patterns = (dotted, path, f"import {stem}", f"from {stem}")
+    # 包内相对导入（`from .stem import`、`from ..pkg.stem import`）与 `from . import stem`
+    # 是 Data package 最常见的入口形态；只查绝对 dotted path 会把它们全部误判为无入口。
+    patterns = (dotted, path, f"import {stem}", f"from {stem}", f".{stem} import")
     command = ["git", "grep", "-F", "-q"]
     for pattern in patterns:
         command.extend(["-e", pattern])

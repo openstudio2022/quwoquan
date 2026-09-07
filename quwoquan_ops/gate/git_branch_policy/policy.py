@@ -46,6 +46,7 @@ BRANCH_POLICY_FIELDS = frozenset(
         "production_selector",
         "production_workflow",
         "required_promotion_checks",
+        "required_integration_checks",
         "allowed_pull_request_edges",
         "integration_branch_updates",
         "system_backsync",
@@ -168,6 +169,7 @@ class BranchPolicy:
     production_selector: ProductionSelector
     production_workflow: str
     required_promotion_checks: tuple[RequiredPromotionCheck, ...]
+    required_integration_checks: tuple[RequiredPromotionCheck, ...]
     allowed_pull_request_edges: tuple[PullRequestEdge, ...]
     integration_branch_updates: IntegrationBranchUpdates
     system_backsync: SystemBacksync | None
@@ -233,10 +235,13 @@ def _string_set(
     return frozenset(rows)
 
 
-def _required_promotion_checks(
-    payload: Mapping[str, object],
+def _required_checks(
+    payload: Mapping[str, object], key: str,
 ) -> tuple[RequiredPromotionCheck, ...]:
-    key = "required_promotion_checks"
+    """`required_promotion_checks`（main ruleset）与 `required_integration_checks`（dev1.0
+    lane PR）共用同一 name+workflow 形状，但各自是独立集合：前者被 hosted release
+    authority 展开成 main-branch ruleset 期望值，往里加 lane check 会让校验失配。
+    """
     raw = payload.get(key)
     if not isinstance(raw, list):
         raise TypeError(f"branch policy {key} must be a list")
@@ -506,7 +511,8 @@ def load_policy_bytes(raw: bytes) -> BranchPolicy:
         source_admission_branch=_required_string(payload, "source_admission_branch"),
         production_selector=_production_selector(payload),
         production_workflow=_required_string(payload, "production_workflow"),
-        required_promotion_checks=_required_promotion_checks(payload),
+        required_promotion_checks=_required_checks(payload, "required_promotion_checks"),
+        required_integration_checks=_required_checks(payload, "required_integration_checks"),
         allowed_pull_request_edges=_pull_request_edges(payload),
         integration_branch_updates=_integration_branch_updates(payload),
         system_backsync=_system_backsync(payload),
@@ -534,6 +540,20 @@ def load_policy_bytes(raw: bytes) -> BranchPolicy:
     ) or not policy.production_workflow.endswith((".yml", ".yaml")):
         raise ValueError(
             "branch policy production_workflow must be a repository workflow path"
+        )
+    promotion_workflows = {row.workflow for row in policy.required_promotion_checks}
+    integration_workflows = {row.workflow for row in policy.required_integration_checks}
+    if promotion_workflows & integration_workflows:
+        raise ValueError(
+            "branch policy required_promotion_checks and required_integration_checks "
+            "must not share a workflow; the two branch protections are independent"
+        )
+    promotion_names = {row.name for row in policy.required_promotion_checks}
+    integration_names = {row.name for row in policy.required_integration_checks}
+    if promotion_names & integration_names:
+        raise ValueError(
+            "branch policy required_promotion_checks and required_integration_checks "
+            "must not share a check name"
         )
     for edge in policy.allowed_pull_request_edges:
         if edge.base not in policy.allowed_remote:

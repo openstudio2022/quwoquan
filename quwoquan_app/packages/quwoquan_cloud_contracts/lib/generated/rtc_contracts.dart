@@ -1,5 +1,5 @@
 // Code generated from the canonical rtc operation owner. DO NOT EDIT.
-// ContractGraph SHA256: 18fd7d043e20a4ab1216391ebdab42763cc1ab2b653c806c04ea02d7b9aa9ba2
+// ContractGraph SHA256: 157736ecc8566df93f4bf80645e3060c065d845c9dd2af2b8186447883b0206f
 
 library;
 

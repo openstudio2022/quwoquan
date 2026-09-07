@@ -478,6 +478,28 @@ class NamedEvidenceRunnerTest(unittest.TestCase):
         self.assertEqual("terminal_finding_identity", projected["findings_projection"]["operation"])
         self.assertEqual(len(artifact["findings"]), projected["findings_projection"]["original_count"])
 
+    def test_declared_artifact_command_failure_without_descriptor_is_a_failed_result(self) -> None:
+        """证据命令自身失败（如脏工作树下的 Code Health 拒绝执行）不是合同违规。
+
+        描述符缺失只在命令成功时才意味着 producer 违约；命令失败时它就是该证据的
+        失败事实，必须落入回执让 terminal 走 failed，而不是让 runner 整体 GATE_BLOCK。
+        否则 dirty-workspace 的 feedback_only 回执永远产生不出来。
+        """
+        plan, registry = self._plan([("artifact", True, "exit 2")])
+        registry["evidence"]["artifact"]["result_artifact"] = "code-health-report-v1"
+        source = {"mode": "workspace", "head_sha": plan["head_sha"], "merge_base_sha": plan["merge_base_sha"], "repository_clean": False, "immutable": False}
+        failed = type("Completed", (), {"returncode": 2, "timed_out": False, "termination_signal": None, "stdout": b"", "stderr": b"GATE_BLOCK: clean workspace required"})()
+        with mock.patch.object(runner, "run_command", return_value=failed), mock.patch.object(
+            runner, "_workspace_source_classification", return_value=source
+        ), mock.patch.object(runner, "_assert_source_head"):
+            receipt = self._run(plan, registry)
+        result = receipt["evidence"][0]
+        self.assertEqual(result["exit_code"], 2)
+        self.assertIsNone(result["artifact"])
+        self.assertEqual(receipt["evidence_class"], "feedback_only")
+        self.assertFalse(receipt["admission_eligible"])
+        self.assertNotEqual(receipt["terminal"]["status"], "PASS")
+
     def test_declared_artifact_identity_drift_and_missing_descriptor_fail_closed(self) -> None:
         plan, registry = self._plan([("artifact", True, "printf artifact")])
         registry["evidence"]["artifact"]["result_artifact"] = "code-health-report-v1"

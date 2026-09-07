@@ -391,6 +391,77 @@ class GithubSupplyChainContractTest(unittest.TestCase):
             failures,
         )
 
+    def test_invalid_job_context_property_fails_closed(self) -> None:
+        backsync = WORKFLOWS / "system-backsync.yml"
+        canonical = backsync.read_text(encoding="utf-8")
+        needle = (
+            "${{ github.repository }}/.github/workflows/system-backsync.yml"
+            "@${{ github.ref }}"
+        )
+        self.assertIn(needle, canonical)
+        forged = canonical.replace(needle, "${{ job.workflow_ref }}")
+
+        with _patched_workflow(backsync, forged):
+            failures = verify_github_supply_chain.verify_action_pins()
+
+        self.assertTrue(
+            any(
+                ".github/workflows/system-backsync.yml:" in failure
+                and "job.workflow_ref is not a GitHub Actions job context property" in failure
+                for failure in failures
+            ),
+            failures,
+        )
+        legal = canonical.replace(needle, "${{ job.status }}")
+        with _patched_workflow(backsync, legal):
+            self.assertEqual(
+                [
+                    failure
+                    for failure in verify_github_supply_chain.verify_action_pins()
+                    if "job context property" in failure
+                ],
+                [],
+            )
+
+    def test_job_level_env_rejects_runner_steps_env_and_job_contexts(self) -> None:
+        """delivery-gate.yml:27 曾在 job 级 env 里写 `runner.temp`，让 03 在每次 push 上
+        以 0-job run 静默失败。job 级 env 只能引用 github/inputs/matrix/needs/secrets/
+        strategy/vars；step 级 env 引用 runner/steps 则合法，不得误报。
+        """
+        gate = WORKFLOWS / "delivery-gate.yml"
+        canonical = gate.read_text(encoding="utf-8")
+        needle = "      CONTROL_ROOT: ${{ github.workspace }}/.qwq_output/env/repo/runs/release-control"
+        self.assertIn(needle, canonical)
+        for context in ("runner.temp", "steps.inputs.outputs.x", "env.HOME", "job.status"):
+            with self.subTest(context=context):
+                forged = canonical.replace(needle, f"      CONTROL_ROOT: ${{{{ {context} }}}}/x")
+                with _patched_workflow(gate, forged):
+                    failures = verify_github_supply_chain.verify_action_pins()
+                self.assertTrue(
+                    any(
+                        ".github/workflows/delivery-gate.yml:" in failure
+                        and "job-level env references the" in failure
+                        for failure in failures
+                    ),
+                    failures,
+                )
+        # step 级 env（缩进 10）里引用 runner/steps 是合法的，不得被 job 级规则误报。
+        step_env = canonical.replace(
+            "        env:\n          PR_HEAD_REF: ${{ github.event.pull_request.head.ref }}",
+            "        env:\n          SCRATCH: ${{ runner.temp }}/scratch\n"
+            "          PR_HEAD_REF: ${{ github.event.pull_request.head.ref }}",
+        )
+        self.assertNotEqual(step_env, canonical)
+        with _patched_workflow(gate, step_env):
+            self.assertEqual(
+                [
+                    failure
+                    for failure in verify_github_supply_chain.verify_action_pins()
+                    if "job-level env references" in failure
+                ],
+                [],
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -31,7 +31,7 @@ CONTRACT_GRAPH_DIGEST = "sha256:" + "9" * 64
 def _manifest() -> dict:
     return {
         "status": "qualified",
-        "releaseCompositionId": CANDIDATE,
+        "candidateId": CANDIDATE,
         "artifactDigest": ARTIFACT_DIGEST,
         "contractGraphDigest": CONTRACT_GRAPH_DIGEST,
         "source": {
@@ -60,7 +60,7 @@ def _stack_reports(root: Path) -> dict[str, Path]:
             "env": "beta",
             "target": "beta-local",
             "status": "ok",
-            "releaseCompositionId": CANDIDATE,
+            "candidateId": CANDIDATE,
             "artifactDigest": ARTIFACT_DIGEST,
             "sourceGitSha": GIT_SHA,
             "sourceTreeDigest": TREE_DIGEST,
@@ -306,7 +306,7 @@ def test_merge_requires_exact_oci_refs_one_host_and_parallel_device_leases() -> 
         payload = _merge(Path(temporary))
 
     assert payload["schema"] == "release-device-matrix-evidence"
-    assert payload["releaseCompositionId"] == CANDIDATE
+    assert payload["candidateId"] == CANDIDATE
     assert set(payload["platforms"]) == {"android", "ios"}
     assert payload["stackEvidence"]["evidenceRef"].endswith("@" + STACK_DIGEST)
     assert all(
