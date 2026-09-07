@@ -290,7 +290,7 @@
 - GIVEN 当前 candidate 具有 exact base/head、changed paths、policy 与 toolchain 身份。
 - WHEN 本地 L0/L1 或 Delivery Gate 执行 canonical code-health delta。
 - THEN 报告按七类互斥 source category 输出 changed-code 度量、typed finding 与 digest-bound EvidenceFingerprint。
-- THEN 新越过 1000 行、既有超限继续增长或明确新增且无生产入口的高置信代码债返回 `GATE_BLOCK`，advisory rollout 指标只返回 `PR_WARN`。
+- THEN 新越过 2000 行、既有超限继续增长或明确新增且无生产入口的高置信代码债返回 `GATE_BLOCK`，advisory rollout 指标只返回 `PR_WARN`。
 - THEN policy、toolchain、changed paths、base/head 或 candidate 字节任一漂移都会产生不同 receipt，clean CI 不信任本地脏树回执。
 - THEN L0 只执行秒级 changed-file 判据，L1 与独立 Delivery job 执行完整 delta，scheduled workflow 只产出全仓 report-only 热点。
 - THEN AI 与 Reviewer 只消费命名证据并提出修复建议，不能覆盖确定性 terminal、创建路径豁免或自动升格 rollout。

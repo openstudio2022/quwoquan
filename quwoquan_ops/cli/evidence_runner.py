@@ -482,12 +482,19 @@ def run_plan(
                 env=item_env,
             )
             item_finished = _now()
+            # 声明了 result_artifact 的证据命令若自身失败且未写描述符，这是该证据的
+            # 失败事实，应记入回执让 terminal 走 failed（如脏工作树下的 Code Health）；
+            # 只有命令成功却没有描述符、或描述符存在但身份漂移，才是合同违规。
+            descriptor_absent = not (descriptor_path.exists() or descriptor_path.is_symlink())
             try:
-                artifact = read_result_artifact(
-                    kind=item["result_artifact"], descriptor_path=descriptor_path,
-                    evidence_id=item["id"], plan=plan, plan_ref=resolved_plan_ref,
-                    plan_sha256=exact_plan_sha256, source=source, repo_root=repo_root,
-                )
+                if item["result_artifact"] is not None and descriptor_absent and completed.returncode != 0:
+                    artifact = None
+                else:
+                    artifact = read_result_artifact(
+                        kind=item["result_artifact"], descriptor_path=descriptor_path,
+                        evidence_id=item["id"], plan=plan, plan_ref=resolved_plan_ref,
+                        plan_sha256=exact_plan_sha256, source=source, repo_root=repo_root,
+                    )
             except NamedEvidenceArtifactError as exc:
                 raise EvidenceRunnerError(str(exc)) from exc
             results.append(

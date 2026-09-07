@@ -33,7 +33,8 @@ def test_release_control_requires_every_two_phase_tag_api_call() -> None:
         "finalize_release_tag_admission",
     )
 
-    assert required[4:-1] == canonical
+    # 表头为 promotion admission、release train 两个生产者（initial authority / rc selection）与 qualification 两步。
+    assert required[5:-1] == canonical
     for api in canonical:
         without_stage = source.replace(api, f"removed_{api}")
         findings = gate.release_control_tag_api_findings(relative_path, without_stage)
@@ -189,7 +190,8 @@ def test_factory_inputs_have_exact_required_type_semantics() -> None:
             "rc_tag_admission_ref": (True, "string"),
             "qualification_request_ref": (True, "string"),
             "qualification_request_digest": (True, "string"),
-            "artifact_build_number": (True, "number"),
+            # 与 app_pipeline 同型：caller 传入的 job output 恒为字符串，number 声明会让 actionlint 类型校验失败。
+            "artifact_build_number": (True, "string"),
             "artifact_build_number_allocation_ref": (True, "string"),
             "artifact_build_number_allocation_digest": (True, "string"),
         },

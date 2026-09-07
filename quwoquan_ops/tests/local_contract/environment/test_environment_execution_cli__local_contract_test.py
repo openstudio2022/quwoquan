@@ -17,14 +17,26 @@ from quwoquan_ops.ci.environment_scheduler import (  # noqa: E402
     exact_file_digest,
     write_create_once,
 )
+from quwoquan_ops.cli.lib.evidence_signing import (  # noqa: E402
+    ENVIRONMENT_OPS_IDENTITY,
+    INTEGRATION_SCHEDULER_IDENTITY,
+)
+from quwoquan_ops.tests.support.evidence_signing_test_support import (  # noqa: E402
+    TemporarySigning,
+    create_temporary_signing,
+)
 
 ROOT = Path(__file__).resolve().parents[4]
 CLI = ROOT / "quwoquan_ops/cli/environment_execution.py"
 CANDIDATE_CLI = ROOT / "quwoquan_ops/cli/integration_candidate.py"
 IMPACT = "sha256:" + "9" * 64
 NOW = datetime(2026, 9, 5, 10, 0, tzinfo=timezone.utc)
-ACCEPTANCE_KEY_ENV = "TEST_ENVIRONMENT_ACCEPTANCE_SIGNING_KEY"
-QUALIFICATION_KEY_ENV = "TEST_INTEGRATION_QUALIFICATION_SIGNING_KEY"
+
+
+def _signing(store: Path, **kwargs: object) -> TemporarySigning:
+    """每个测试的 store 旁边放一套临时私钥根 + keyring；重复调用幂等。"""
+
+    return create_temporary_signing(store.parent / "signing", **kwargs)  # type: ignore[arg-type]
 
 
 def _git(repository: Path, *args: str) -> str:
@@ -72,13 +84,13 @@ def _run_cli(
     *args: str,
 ) -> tuple[subprocess.CompletedProcess[str], dict[str, object]]:
     bytecode_root = store.parent / "python-cache"
-    environment = {
-        **os.environ,
-        "PYTHONDONTWRITEBYTECODE": "1",
-        "PYTHONPYCACHEPREFIX": str(bytecode_root),
-        ACCEPTANCE_KEY_ENV: "acceptance-secret-never-print",
-        QUALIFICATION_KEY_ENV: "qualification-secret-never-print",
-    }
+    environment = _signing(store).environment(
+        {
+            **os.environ,
+            "PYTHONDONTWRITEBYTECODE": "1",
+            "PYTHONPYCACHEPREFIX": str(bytecode_root),
+        }
+    )
     completed = subprocess.run(
         [
             sys.executable,
@@ -97,8 +109,7 @@ def _run_cli(
         env=environment,
     )
     assert completed.stderr == ""
-    assert "acceptance-secret-never-print" not in completed.stdout
-    assert "qualification-secret-never-print" not in completed.stdout
+    assert "PRIVATE KEY" not in completed.stdout
     lines = completed.stdout.splitlines()
     assert len(lines) == 1
     payload = json.loads(lines[0])
@@ -290,9 +301,9 @@ def _issue_acceptance(
         "--lease-closure-evidence",
         _exact_arg(roles["lease-closure"]),
         "--signer-identity",
-        "spiffe://quwoquan.local/environment-ops",
-        "--signing-key-env",
-        ACCEPTANCE_KEY_ENV,
+        ENVIRONMENT_OPS_IDENTITY,
+        "--signing-keyring",
+        str(_signing(store).keyring_path),
         "--issued-at",
         NOW.isoformat(),
         "--expires-at",
@@ -382,17 +393,15 @@ def _qualify(
         "--expected-dev-tree",
         tree,
         "--qualification-signer-identity",
-        "spiffe://quwoquan.local/integration",
-        "--qualification-signing-key-env",
-        QUALIFICATION_KEY_ENV,
-        "--environment-verification-key-env",
-        ACCEPTANCE_KEY_ENV,
+        INTEGRATION_SCHEDULER_IDENTITY,
+        "--signing-keyring",
+        str(_signing(store).keyring_path),
         "--expected-alpha-signer-identity",
-        "spiffe://quwoquan.local/environment-ops",
+        ENVIRONMENT_OPS_IDENTITY,
         "--expected-beta-signer-identity",
-        "spiffe://quwoquan.local/environment-ops",
+        ENVIRONMENT_OPS_IDENTITY,
         "--expected-gamma-signer-identity",
-        "spiffe://quwoquan.local/environment-ops",
+        ENVIRONMENT_OPS_IDENTITY,
         "--issued-at",
         NOW.isoformat(),
         "--expires-at",
@@ -490,17 +499,20 @@ def test_cli_qualify_blocks_gamma_for_stale_dev_head(tmp_path: Path) -> None:
 def test_cli_qualify_blocks_missing_environment_verification_key(
     tmp_path: Path,
 ) -> None:
+    """keyring 里没有 environment-ops 的 active 公钥时，Gamma 链验签器不可构造，fail closed。"""
+
     repository, store, publish_result, gamma, _ = _qualification_inputs(tmp_path)
     head, tree = _dev_identity(repository)
-    environment = os.environ.copy()
-    environment.update(
+    scheduler_only = create_temporary_signing(
+        tmp_path / "scheduler-only", identities=(INTEGRATION_SCHEDULER_IDENTITY,),
+    )
+    environment = scheduler_only.environment(
         {
+            **os.environ,
             "PYTHONDONTWRITEBYTECODE": "1",
             "PYTHONPYCACHEPREFIX": str(store.parent / "python-cache"),
-            QUALIFICATION_KEY_ENV: "qualification-secret-never-print",
         }
     )
-    environment.pop(ACCEPTANCE_KEY_ENV, None)
     completed = subprocess.run(
         [
             sys.executable,
@@ -520,17 +532,15 @@ def test_cli_qualify_blocks_missing_environment_verification_key(
             "--expected-dev-tree",
             tree,
             "--qualification-signer-identity",
-            "spiffe://quwoquan.local/integration",
-            "--qualification-signing-key-env",
-            QUALIFICATION_KEY_ENV,
-            "--environment-verification-key-env",
-            ACCEPTANCE_KEY_ENV,
+            INTEGRATION_SCHEDULER_IDENTITY,
+            "--signing-keyring",
+            str(scheduler_only.keyring_path),
             "--expected-alpha-signer-identity",
-            "spiffe://quwoquan.local/environment-ops",
+            ENVIRONMENT_OPS_IDENTITY,
             "--expected-beta-signer-identity",
-            "spiffe://quwoquan.local/environment-ops",
+            ENVIRONMENT_OPS_IDENTITY,
             "--expected-gamma-signer-identity",
-            "spiffe://quwoquan.local/environment-ops",
+            ENVIRONMENT_OPS_IDENTITY,
             "--issued-at",
             NOW.isoformat(),
             "--expires-at",
@@ -547,7 +557,7 @@ def test_cli_qualify_blocks_missing_environment_verification_key(
     assert completed.stderr == ""
     assert payload["terminal"] == "GATE_BLOCK"
     assert payload["code"] == "ENVIRONMENT_EXECUTION.ENVIRONMENT_VERIFIER_UNAVAILABLE"
-    assert "qualification-secret-never-print" not in completed.stdout
+    assert "PRIVATE KEY" not in completed.stdout
 
 
 def test_cli_qualify_blocks_key_purpose_reuse(tmp_path: Path) -> None:
@@ -566,17 +576,15 @@ def test_cli_qualify_blocks_key_purpose_reuse(tmp_path: Path) -> None:
         "--expected-dev-tree",
         tree,
         "--qualification-signer-identity",
-        "spiffe://quwoquan.local/integration",
-        "--qualification-signing-key-env",
-        QUALIFICATION_KEY_ENV,
-        "--environment-verification-key-env",
-        QUALIFICATION_KEY_ENV,
+        ENVIRONMENT_OPS_IDENTITY,
+        "--signing-keyring",
+        str(_signing(store).keyring_path),
         "--expected-alpha-signer-identity",
-        "spiffe://quwoquan.local/environment-ops",
+        ENVIRONMENT_OPS_IDENTITY,
         "--expected-beta-signer-identity",
-        "spiffe://quwoquan.local/environment-ops",
+        ENVIRONMENT_OPS_IDENTITY,
         "--expected-gamma-signer-identity",
-        "spiffe://quwoquan.local/environment-ops",
+        ENVIRONMENT_OPS_IDENTITY,
         "--issued-at",
         NOW.isoformat(),
         "--expires-at",
@@ -587,39 +595,31 @@ def test_cli_qualify_blocks_key_purpose_reuse(tmp_path: Path) -> None:
     assert payload["code"] == "ENVIRONMENT_EXECUTION.KEY_PURPOSE_CONFLICT"
 
 
-def test_integration_candidate_qualify_blocks_missing_environment_key() -> None:
-    environment = {
-        **os.environ,
-        "PYTHONDONTWRITEBYTECODE": "1",
-        QUALIFICATION_KEY_ENV: "qualification-secret-never-print",
-    }
-    environment.pop(ACCEPTANCE_KEY_ENV, None)
+def test_integration_candidate_qualify_blocks_missing_environment_key(tmp_path: Path) -> None:
+    scheduler_only = create_temporary_signing(
+        tmp_path / "scheduler-only", identities=(INTEGRATION_SCHEDULER_IDENTITY,),
+    )
+    environment = scheduler_only.environment({**os.environ, "PYTHONDONTWRITEBYTECODE": "1"})
     completed = subprocess.run(
         [
             sys.executable,
             "-B",
             str(CANDIDATE_CLI),
             "qualify",
-            "--publish-result-ref",
-            "publish/result.json",
-            "--publish-result-digest",
-            "sha256:" + "1" * 64,
-            "--gamma-fact-ref",
-            "acceptance/gamma.json",
-            "--gamma-fact-digest",
-            "sha256:" + "2" * 64,
+            "--publish-result",
+            "publish/result.json=sha256:" + "1" * 64,
+            "--gamma-fact",
+            "acceptance/gamma.json=sha256:" + "2" * 64,
             "--qualification-signer-identity",
-            "spiffe://quwoquan.local/integration",
-            "--qualification-signing-key-env",
-            QUALIFICATION_KEY_ENV,
-            "--environment-verification-key-env",
-            ACCEPTANCE_KEY_ENV,
+            INTEGRATION_SCHEDULER_IDENTITY,
+            "--signing-keyring",
+            str(scheduler_only.keyring_path),
             "--expected-alpha-signer-identity",
-            "spiffe://quwoquan.local/environment-ops",
+            ENVIRONMENT_OPS_IDENTITY,
             "--expected-beta-signer-identity",
-            "spiffe://quwoquan.local/environment-ops",
+            ENVIRONMENT_OPS_IDENTITY,
             "--expected-gamma-signer-identity",
-            "spiffe://quwoquan.local/environment-ops",
+            ENVIRONMENT_OPS_IDENTITY,
             "--issued-at",
             NOW.isoformat(),
             "--expires-at",
@@ -636,7 +636,7 @@ def test_integration_candidate_qualify_blocks_missing_environment_key() -> None:
     assert completed.stderr == ""
     assert payload["terminal"] == "GATE_BLOCK"
     assert payload["code"] == "SCOPED_CANDIDATE.ENVIRONMENT_VERIFIER_UNAVAILABLE"
-    assert "qualification-secret-never-print" not in completed.stdout
+    assert "PRIVATE KEY" not in completed.stdout
 
 
 def test_cli_issues_gamma_and_qualifies_current_exact_dev_head(

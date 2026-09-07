@@ -112,8 +112,16 @@ def test_staged_capsule_materializes_exact_add_delete_rename_mode_and_symlink() 
             assert os.access(capsule / "source.txt", os.X_OK)
             assert (capsule / "link.txt").is_symlink()
             assert os.readlink(capsule / "link.txt") == "target.txt"
-            assert Path(env["GIT_DIR"]).parent.parent == _state_root(state) / "process/materializations"
-            assert Path(env["GIT_DIR"]).is_dir()
+            # capsule 以 gitfile 按 cwd 发现仓库；GIT_DIR/GIT_WORK_TREE 不导出给检查进程，
+            # 否则测试自建仓库与 Flutter SDK 的 git 调用都会被劫持到 capsule。
+            gitfile = (capsule / ".git").read_text(encoding="utf-8")
+            assert gitfile.startswith("gitdir: ")
+            git_dir = Path(gitfile.removeprefix("gitdir: ").strip())
+            assert git_dir.parent.parent == _state_root(state) / "process/materializations"
+            assert git_dir.is_dir()
+            assert "GIT_DIR" not in env and "GIT_WORK_TREE" not in env
+            head = subprocess.run(["git", "rev-parse", "--abbrev-ref", "HEAD"], cwd=capsule, text=True, capture_output=True, check=True).stdout.strip()
+            assert head == "dev1.0"
             assert any(entry["path"] == "added.txt" for entry in entries)
         assert not list((state / "process/materializations").glob("*-*"))
 
@@ -195,13 +203,14 @@ def test_data_release_readiness_is_local_and_promotion_does_not_repeat_data_gate
         (ROOT / ".github/workflows/delivery-gate.yml").read_text(encoding="utf-8")
     )
     jobs = workflow["jobs"]
-    assert list(jobs) == ["promotion_verify", "main_source_seal", "system_backsync"]
-    assert jobs["promotion_verify"]["if"] == "${{ github.event_name == 'pull_request' }}"
+    # 回同步走 integration FF 通道（make promotion-backsync），Gate 只剩两 job。
+    assert list(jobs) == ["promotion_verify", "main_source_seal"]
+    assert jobs["promotion_verify"]["if"] == (
+        "${{ github.event_name == 'pull_request' || github.event_name == 'pull_request_review' }}"
+    )
     assert jobs["main_source_seal"]["if"] == (
         "${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}"
     )
-    assert jobs["system_backsync"]["needs"] == "main_source_seal"
-    assert jobs["system_backsync"]["uses"] == "./.github/workflows/system-backsync.yml"
     promotion_steps = json.dumps(jobs["promotion_verify"]["steps"], ensure_ascii=False)
     main_steps = json.dumps(jobs["main_source_seal"]["steps"], ensure_ascii=False)
     assert "PromotionAdmissionReceipt" in promotion_steps

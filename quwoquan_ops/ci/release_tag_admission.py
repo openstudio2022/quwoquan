@@ -420,17 +420,21 @@ def _require_main_reachable(repository: Path, commit: str) -> None:
         _fail("RELEASE_TAG.GIT_UNAVAILABLE", "main reachability is unavailable")
 
 
+DEPLOY_KEY_BYPASS = {"actorType": "DeployKey", "bypassMode": "always"}
+
+
 def _controller_producer(
-    *, app_id: int, installation_id: int, app_slug: str,
+    *, controller: str, key_id: int, key_title: str, key_fingerprint: str,
 ) -> dict[str, Any]:
-    return {
-        "kind": "github_app_installation",
-        "appId": _positive_int(app_id, "controllerAppId"),
-        "installationId": _positive_int(
-            installation_id, "controllerInstallationId"
-        ),
-        "slug": _text(app_slug, "controllerAppSlug"),
-    }
+    """唯一 controller 就是 title 等于策略 controller identity 的可写 deploy key；tag ruleset 只给
+    DeployKey 留 bypass，所以“谁能创建 v* 标签”由 hosted ruleset 保证，readback 只需证明身份一致。"""
+    fingerprint = _text(key_fingerprint, "controllerKeyFingerprint")
+    if re.fullmatch(r"SHA256:[A-Za-z0-9+/=]{43,44}", fingerprint) is None:
+        _fail("RELEASE_TAG.CONTROLLER_DENIED", "controller deploy key fingerprint must be SHA256:<base64>")
+    title = _text(key_title, "controllerKeyTitle")
+    if title != controller:
+        _fail("RELEASE_TAG.CONTROLLER_DENIED", "controller deploy key title drifted from policy")
+    return {"kind": "github_deploy_key", "keyId": _positive_int(key_id, "controllerKeyId"), "title": title, "fingerprint": fingerprint}
 
 
 def _readback_common(
@@ -466,7 +470,7 @@ def _readback_common(
 def _creator_readback(
     root: Path, exact: Mapping[str, str], *, phase: str, tag_name: str,
     tag: Mapping[str, str] | None, producer: Mapping[str, Any],
-    repository: str, outcome_id: str | None = None,
+    repository: str, intent_id: str | None = None,
 ) -> tuple[dict[str, str], datetime]:
     fact, normalized, observed = _readback_common(
         root, exact, name="creator_readback", phase=phase,
@@ -486,40 +490,38 @@ def _creator_readback(
                 "pre-mutation creator readback must prove absence",
             )
         return normalized, observed
-    if tag is None or outcome_id is None:
+    if tag is None or intent_id is None:
         _fail("RELEASE_TAG.READBACK_INVALID", "post-mutation binding is incomplete")
     record = fact.get("creationRecord")
-    expected_actor = f"{producer['slug']}[bot]"
-    expected_external_id = (
-        f"release-tag:{repository}:{tag_name}:"
-        f"{tag['tagObjectOid']}:{outcome_id}"
-    )
+    expected_actor = f"deploy-key:{producer['title']}"
+    # annotated tag message 在创建时就写入 intentId：hosted 读回的 tag 对象自身证明它属于这次 admission intent。
+    expected_marker = f"release-tag-intent: {intent_id}"
     if (
         fact.get("creator") != expected_actor
         or not isinstance(record, Mapping)
         or set(record) != {
-            "kind", "recordId", "nodeId", "name", "externalId",
-            "status", "conclusion", "headSha", "appId", "appSlug",
-            "repository", "completedAt",
+            "kind", "tagObjectOid", "peeledCommit", "taggerName", "taggerEmail",
+            "taggedAt", "message", "deployKeyId", "deployKeyTitle",
+            "deployKeyFingerprint", "deployKeyReadOnly", "repository",
         }
-        or record.get("kind") != "github_check_run"
-        or _positive_int(record.get("recordId"), "creationRecord.recordId") <= 0
-        or record.get("name") != "release-tag-creation"
-        or record.get("externalId") != expected_external_id
-        or record.get("status") != "completed"
-        or record.get("conclusion") != "success"
-        or record.get("headSha") != tag["peeledCommit"]
-        or record.get("appId") != producer["appId"]
-        or record.get("appSlug") != producer["slug"]
+        or record.get("kind") != "github_annotated_tag"
+        or record.get("tagObjectOid") != tag["tagObjectOid"]
+        or record.get("peeledCommit") != tag["peeledCommit"]
+        or record.get("taggerName") != producer["title"]
+        or not isinstance(record.get("message"), str)
+        or expected_marker not in record["message"]
+        or record.get("deployKeyId") != producer["keyId"]
+        or record.get("deployKeyTitle") != producer["title"]
+        or record.get("deployKeyFingerprint") != producer["fingerprint"]
+        or record.get("deployKeyReadOnly") is not False
         or record.get("repository") != repository
-        or _time(record.get("completedAt"), "creationRecord.completedAt")
-        > observed
+        or _time(record.get("taggedAt"), "creationRecord.taggedAt") > observed
     ):
         _fail(
             "RELEASE_TAG.CONTROLLER_DENIED",
-            "creator is not the authenticated controller App",
+            "creator is not the controller deploy key or the tag object does not bind the mutation outcome",
         )
-    _text(record.get("nodeId"), "creationRecord.nodeId")
+    _text(record.get("taggerEmail"), "creationRecord.taggerEmail")
     return normalized, observed
 
 
@@ -534,12 +536,14 @@ def _ruleset_readback(
         repository=repository,
     )
     version, pattern = fact.get("rulesetVersion"), fact.get("refNamePattern")
+    # hosted 现状：`v*` 创建对所有人 denied、只给 DeployKey bypass（= 只有 controller 能创建）；
+    # update/delete 全 denied 且无 bypass（= 不可移动、不可删除）。两条 active ruleset 共同构成闭合控制。
     if (
         set(fact) != {
             "schema", "readbackId", "status", "phase", "producer",
             "repository", "tagRef", "tagName", "tagObjectOid",
-            "peeledCommit", "rulesetId", "rulesetVersion", "target",
-            "enforcement", "refNamePattern", "create", "update",
+            "peeledCommit", "rulesetId", "immutabilityRulesetId", "rulesetVersion",
+            "target", "enforcement", "refNamePattern", "create", "update",
             "delete", "bypass", "observedAt",
         }
         or not isinstance(version, Mapping)
@@ -548,22 +552,26 @@ def _ruleset_readback(
         or fact.get("target") != "tag"
         or fact.get("enforcement") != "active"
         or fact.get("create") != {
-            "decision": "allowed", "mode": "create_only", "bypassActors": [],
+            "decision": "controller_only", "mode": "create_only",
+            "bypassActors": [DEPLOY_KEY_BYPASS],
         }
         or fact.get("update") != {"decision": "denied", "bypassActors": []}
         or fact.get("delete") != {"decision": "denied", "bypassActors": []}
-        or fact.get("bypass") != {"mode": "closed", "actors": []}
+        or fact.get("bypass") != {"mode": "deploy_key_only", "actors": [DEPLOY_KEY_BYPASS]}
     ):
         _fail(
             "RELEASE_TAG.READBACK_INVALID",
             "tag ruleset closed controls drifted",
         )
     ruleset_id = _positive_int(fact.get("rulesetId"), "rulesetId")
+    immutability_id = _positive_int(fact.get("immutabilityRulesetId"), "immutabilityRulesetId")
+    if immutability_id == ruleset_id:
+        _fail("RELEASE_TAG.READBACK_INVALID", "create and immutability rulesets must be distinct")
     etag = _text(version.get("etag"), "rulesetVersion.etag")
     payload_digest = _digest(
         version.get("apiPayloadDigest"), "rulesetVersion.apiPayloadDigest"
     )
-    return normalized, observed, (ruleset_id, etag, payload_digest)
+    return normalized, observed, (ruleset_id, immutability_id, etag, payload_digest)
 
 def _existing_facts(root: Path, schema: str) -> list[dict[str, Any]]:
     result: list[dict[str, Any]] = []
@@ -757,8 +765,8 @@ def create_release_candidate_tag_intent(
     product_version_manifest_path: Path, release_selection_policy_path: Path,
     reservation_ref: Mapping[str, str], selection_fact_ref: Mapping[str, str],
     creator_readback_ref: Mapping[str, str], ruleset_readback_ref: Mapping[str, str],
-    repository_identity: str, controller_app_id: int,
-    controller_installation_id: int, controller_app_slug: str,
+    repository_identity: str, controller_key_id: int,
+    controller_key_title: str, controller_key_fingerprint: str,
     admitted_at: str,
     initial_release_authority_ref: Mapping[str, str] | None = None,
 ) -> Path:
@@ -789,13 +797,7 @@ def create_release_candidate_tag_intent(
         _fail("RELEASE_TAG.SELECTION_INVALID", "RC selection does not bind exact source and manifest")
     controller = _text(policy["controller"]["identity"], "controller.identity")
     repository_identity = _repository(repository_identity, "repositoryIdentity")
-    producer = _controller_producer(
-        app_id=controller_app_id,
-        installation_id=controller_installation_id,
-        app_slug=controller_app_slug,
-    )
-    if producer["slug"] != controller:
-        _fail("RELEASE_TAG.CONTROLLER_DENIED", "controller App slug drifted from policy")
+    producer = _controller_producer(controller=controller, key_id=controller_key_id, key_title=controller_key_title, key_fingerprint=controller_key_fingerprint)
     admitted = _time(admitted_at, "admittedAt")
     creator, creator_at = _creator_readback(
         root, creator_readback_ref, phase="pre_mutation",
@@ -950,8 +952,8 @@ def create_release_tag_intent(
     qualification_fact_ref: Mapping[str, str],
     product_authority_fact_ref: Mapping[str, str], release_authority_fact_ref: Mapping[str, str],
     creator_readback_ref: Mapping[str, str], ruleset_readback_ref: Mapping[str, str],
-    repository_identity: str, controller_app_id: int,
-    controller_installation_id: int, controller_app_slug: str,
+    repository_identity: str, controller_key_id: int,
+    controller_key_title: str, controller_key_fingerprint: str,
     admitted_at: str,
     initial_release_authority_ref: Mapping[str, str] | None = None,
 ) -> Path:
@@ -982,13 +984,7 @@ def create_release_tag_intent(
     )
     controller = _text(policy["controller"]["identity"], "controller.identity")
     repository_identity = _repository(repository_identity, "repositoryIdentity")
-    producer = _controller_producer(
-        app_id=controller_app_id,
-        installation_id=controller_installation_id,
-        app_slug=controller_app_slug,
-    )
-    if producer["slug"] != controller:
-        _fail("RELEASE_TAG.CONTROLLER_DENIED", "controller App slug drifted from policy")
+    producer = _controller_producer(controller=controller, key_id=controller_key_id, key_title=controller_key_title, key_fingerprint=controller_key_fingerprint)
     admitted = _time(admitted_at, "admittedAt")
     creator, creator_at = _creator_readback(
         root, creator_readback_ref, phase="pre_mutation",
@@ -1047,11 +1043,11 @@ def _final_readbacks(
     )
     if pre_creator != intent.get("preCreatorReadback") or pre_ruleset != intent.get("preRulesetReadback"):
         _fail("RELEASE_TAG.INTENT_INVALID", "pre-mutation readback predecessor drifted")
-    outcome_id = _digest(outcome.get("outcomeId"), "mutationOutcome.outcomeId")
+    _digest(outcome.get("outcomeId"), "mutationOutcome.outcomeId")
     creator, creator_at = _creator_readback(
         root, creator_ref, phase="post_mutation", tag_name=tag["tagName"],
         tag=tag, producer=producer, repository=repository,
-        outcome_id=outcome_id,
+        intent_id=_digest(intent.get("intentId"), "intent.intentId"),
     )
     ruleset, ruleset_at, post_ruleset_identity = _ruleset_readback(
         root, ruleset_ref, phase="post_mutation", tag_name=tag["tagName"],

@@ -33,11 +33,12 @@ HOSTED_AT = "2026-09-05T11:00:02Z"
 FINAL_AT = "2026-09-05T11:00:03Z"
 REPOSITORY = "quwoquan/integration"
 PRODUCER = {
-    "kind": "github_app_installation",
-    "appId": 24680,
-    "installationId": 13579,
-    "slug": "release-controller",
+    "kind": "github_deploy_key",
+    "keyId": 24680,
+    "title": "release-controller",
+    "fingerprint": "SHA256:Af/r9qvnjWX6aozbaY/zGsk7Izu3Tn+EEm2KROP+/qI",
 }
+DEPLOY_KEY_BYPASS = {"actorType": "DeployKey", "bypassMode": "always"}
 D1 = "sha256:" + "1" * 64
 D2 = "sha256:" + "2" * 64
 D3 = "sha256:" + "3" * 64
@@ -150,14 +151,14 @@ def ruleset_body(
         "phase": phase, "producer": PRODUCER, "repository": REPOSITORY,
         "tagRef": f"refs/tags/{tag_name}", "tagName": tag_name,
         "tagObjectOid": oid, "peeledCommit": commit,
-        "rulesetId": 7001,
+        "rulesetId": 7001, "immutabilityRulesetId": 7002,
         "rulesetVersion": {"etag": '"ruleset-etag-12"', "apiPayloadDigest": D4},
         "target": "tag", "enforcement": "active",
         "refNamePattern": {"include": ["refs/tags/v*"], "exclude": []},
-        "create": {"decision": "allowed", "mode": "create_only", "bypassActors": []},
+        "create": {"decision": "controller_only", "mode": "create_only", "bypassActors": [DEPLOY_KEY_BYPASS]},
         "update": {"decision": "denied", "bypassActors": []},
         "delete": {"decision": "denied", "bypassActors": []},
-        "bypass": {"mode": "closed", "actors": []},
+        "bypass": {"mode": "deploy_key_only", "actors": [DEPLOY_KEY_BYPASS]},
         "observedAt": observed_at,
     }, "readbackId")
 
@@ -169,24 +170,24 @@ def pre_ruleset(store: Path, name: str) -> dict[str, str]:
     )
 
 def hosted_readbacks(
-    store: Path, repo: Path, tag_name: str, outcome_id: str,
+    store: Path, repo: Path, tag_name: str, intent_id: str,
 ) -> tuple[dict[str, str], dict[str, str]]:
     oid = git(repo, "rev-parse", f"refs/tags/{tag_name}")
     commit = git(repo, "rev-parse", f"refs/tags/{tag_name}^{{}}")
     creation_record = {
-        "kind": "github_check_run", "recordId": 98765,
-        "nodeId": "CR_kwDOrelease123", "name": "release-tag-creation",
-        "externalId": f"release-tag:{REPOSITORY}:{tag_name}:{oid}:{outcome_id}",
-        "status": "completed", "conclusion": "success", "headSha": commit,
-        "appId": PRODUCER["appId"], "appSlug": PRODUCER["slug"],
-        "repository": REPOSITORY, "completedAt": HOSTED_AT,
+        "kind": "github_annotated_tag", "tagObjectOid": oid, "peeledCommit": commit,
+        "taggerName": PRODUCER["title"], "taggerEmail": "release-controller@example.invalid",
+        "taggedAt": OUTCOME_AT, "message": f"{tag_name}\n\nrelease-tag-intent: {intent_id}\n",
+        "deployKeyId": PRODUCER["keyId"], "deployKeyTitle": PRODUCER["title"],
+        "deployKeyFingerprint": PRODUCER["fingerprint"], "deployKeyReadOnly": False,
+        "repository": REPOSITORY,
     }
     creator = write(store, f"readback/{tag_name}-creator-after.json", identified({
         "schema": "quwoquan_ops.creator_readback_fact.v1", "status": "verified",
         "phase": "post_mutation", "producer": PRODUCER, "repository": REPOSITORY,
         "tagRef": f"refs/tags/{tag_name}", "tagName": tag_name,
         "tagObjectOid": oid, "peeledCommit": commit,
-        "creator": "release-controller[bot]",
+        "creator": "deploy-key:release-controller",
         "creationRecord": creation_record, "observedAt": HOSTED_AT,
     }, "readbackId"))
     ruleset = write(
@@ -236,9 +237,9 @@ def create_rc_intent(
         creator_readback_ref=pre_creator(store, name),
         ruleset_readback_ref=pre_ruleset(store, name),
         repository_identity=REPOSITORY,
-        controller_app_id=PRODUCER["appId"],
-        controller_installation_id=PRODUCER["installationId"],
-        controller_app_slug=PRODUCER["slug"],
+        controller_key_id=PRODUCER["keyId"],
+        controller_key_title=PRODUCER["title"],
+        controller_key_fingerprint=PRODUCER["fingerprint"],
         initial_release_authority_ref=authority_ref(manifest), admitted_at=INTENT_AT,
     )
     return path, exact(store, path)
@@ -255,7 +256,7 @@ def finalize_rc(
         peeled_commit=commit, recorded_at=OUTCOME_AT,
     )
     creator, ruleset = hosted_readbacks(
-        store, repo, name, json.loads(outcome_path.read_text())["outcomeId"],
+        store, repo, name, load_fact(store, intent)["intentId"],
     )
     path = finalize_release_candidate_tag_admission(
         repository=repo, evidence_root=store, tag_name=name,
@@ -350,9 +351,9 @@ def create_stable_intent(
         creator_readback_ref=pre_creator(store, name),
         ruleset_readback_ref=pre_ruleset(store, name),
         repository_identity=REPOSITORY,
-        controller_app_id=PRODUCER["appId"],
-        controller_installation_id=PRODUCER["installationId"],
-        controller_app_slug=PRODUCER["slug"],
+        controller_key_id=PRODUCER["keyId"],
+        controller_key_title=PRODUCER["title"],
+        controller_key_fingerprint=PRODUCER["fingerprint"],
         initial_release_authority_ref=authority_ref(manifest), admitted_at=INTENT_AT,
     )
     return path, exact(store, path)
@@ -369,7 +370,7 @@ def finalize_stable(
         peeled_commit=main, recorded_at=OUTCOME_AT,
     )
     creator, ruleset = hosted_readbacks(
-        store, repo, name, json.loads(outcome.read_text())["outcomeId"],
+        store, repo, name, load_fact(store, intent)["intentId"],
     )
     return finalize_release_tag_admission(
         repository=repo, evidence_root=store, tag_name=name,
@@ -420,9 +421,9 @@ def test_pre_admission_rejects_invalid_reservation_and_qualification_without_mut
             creator_readback_ref=pre_creator(store, "v1.2.0-rc.1"),
             ruleset_readback_ref=pre_ruleset(store, "v1.2.0-rc.1"),
             repository_identity=REPOSITORY,
-            controller_app_id=PRODUCER["appId"],
-            controller_installation_id=PRODUCER["installationId"],
-            controller_app_slug=PRODUCER["slug"],
+            controller_key_id=PRODUCER["keyId"],
+            controller_key_title=PRODUCER["title"],
+            controller_key_fingerprint=PRODUCER["fingerprint"],
             initial_release_authority_ref=authority_ref(manifest), admitted_at=INTENT_AT,
         )
     assert not git(repo, "show-ref", "--verify", "refs/tags/v1.2.0-rc.1", check=False)
@@ -515,7 +516,7 @@ def test_finalization_rejects_hosted_object_or_creator_mismatch(tmp_path: Path) 
         peeled_commit=main, recorded_at=OUTCOME_AT,
     )
     creator, ruleset = hosted_readbacks(
-        store, repo, "v1.2.0-rc.1", json.loads(outcome.read_text())["outcomeId"],
+        store, repo, "v1.2.0-rc.1", load_fact(store, intent)["intentId"],
     )
     wrong_creator_body = json.loads((store / creator["ref"]).read_text())
     wrong_creator_body["tagObjectOid"] = "b" * 40
@@ -561,7 +562,7 @@ def prepared_rc_finalization(
         peeled_commit=main, recorded_at=OUTCOME_AT,
     )
     creator, ruleset = hosted_readbacks(
-        store, repo, "v1.2.0-rc.1", load_fact(store, exact(store, outcome))["outcomeId"],
+        store, repo, "v1.2.0-rc.1", load_fact(store, intent)["intentId"],
     )
     return repo, store, main, intent, outcome, creator, ruleset
 
@@ -571,11 +572,11 @@ def test_pre_readback_rejects_wrong_producer_app_repository_and_fabricated_creat
 ) -> None:
     repo, store, manifest, main, tree = fixture(tmp_path)
     for field, replacement in (
-        ("appId", 99999), ("installationId", 99999), ("repository", "evil/fork"),
+        ("keyId", 99999), ("fingerprint", "SHA256:" + "A" * 43), ("repository", "evil/fork"),
         ("creator", "release-controller"),
     ):
         creator = load_fact(store, pre_creator(store, "v1.2.0-rc.1"))
-        if field in {"appId", "installationId"}:
+        if field in {"keyId", "fingerprint"}:
             creator["producer"][field] = replacement
         else:
             creator[field] = replacement
@@ -590,9 +591,9 @@ def test_pre_readback_rejects_wrong_producer_app_repository_and_fabricated_creat
                 creator_readback_ref=bad,
                 ruleset_readback_ref=pre_ruleset(store, "v1.2.0-rc.1"),
                 repository_identity=REPOSITORY,
-                controller_app_id=PRODUCER["appId"],
-                controller_installation_id=PRODUCER["installationId"],
-                controller_app_slug=PRODUCER["slug"],
+                controller_key_id=PRODUCER["keyId"],
+                controller_key_title=PRODUCER["title"],
+                controller_key_fingerprint=PRODUCER["fingerprint"],
                 initial_release_authority_ref=authority_ref(manifest),
                 admitted_at=INTENT_AT,
             )
@@ -603,12 +604,14 @@ def test_finalization_rejects_post_producer_repo_commit_and_check_record_drift(
 ) -> None:
     repo, store, _, intent, outcome, creator, ruleset = prepared_rc_finalization(tmp_path)
     for label, mutate, code in (
-        ("producer", lambda fact: fact["producer"].update(appId=99999), "READBACK_INVALID"),
+        ("producer", lambda fact: fact["producer"].update(keyId=99999), "READBACK_INVALID"),
         ("repository", lambda fact: fact.update(repository="evil/fork"), "READBACK_INVALID"),
         ("commit", lambda fact: fact.update(peeledCommit="f" * 40), "READBACK_INVALID"),
         ("actor", lambda fact: fact.update(creator="release-controller"), "CONTROLLER_DENIED"),
-        ("check-app", lambda fact: fact["creationRecord"].update(appId=99999), "CONTROLLER_DENIED"),
-        ("check-object", lambda fact: fact["creationRecord"].update(externalId="release-tag:forged"), "CONTROLLER_DENIED"),
+        ("key", lambda fact: fact["creationRecord"].update(deployKeyId=99999), "CONTROLLER_DENIED"),
+        ("read-only-key", lambda fact: fact["creationRecord"].update(deployKeyReadOnly=True), "CONTROLLER_DENIED"),
+        ("tagger", lambda fact: fact["creationRecord"].update(taggerName="someone"), "CONTROLLER_DENIED"),
+        ("intent-marker", lambda fact: fact["creationRecord"].update(message="v1.2.0-rc.1\n\nrelease-tag-intent: forged"), "CONTROLLER_DENIED"),
     ):
         fact = load_fact(store, creator)
         mutate(fact)
@@ -639,14 +642,16 @@ def test_finalization_rejects_forged_readback_self_identity(tmp_path: Path) -> N
 def test_finalization_rejects_ruleset_version_policy_and_bypass_drift(tmp_path: Path) -> None:
     repo, store, _, intent, outcome, creator, ruleset = prepared_rc_finalization(tmp_path)
     for label, mutate in (
-        ("producer", lambda fact: fact["producer"].update(installationId=99999)),
+        ("producer", lambda fact: fact["producer"].update(keyId=99999)),
+        ("same-ruleset", lambda fact: fact.update(immutabilityRulesetId=fact["rulesetId"])),
         ("repository", lambda fact: fact.update(repository="evil/fork")),
         ("object", lambda fact: fact.update(tagObjectOid="f" * 40)),
         ("version", lambda fact: fact["rulesetVersion"].update(etag='"ruleset-etag-13"')),
         ("create", lambda fact: fact["create"].update(mode="upsert")),
         ("update", lambda fact: fact["update"].update(decision="allowed")),
         ("delete", lambda fact: fact["delete"].update(decision="allowed")),
-        ("bypass", lambda fact: fact["bypass"].update(actors=[{"type": "Integration", "id": 1}])),
+        ("bypass", lambda fact: fact["bypass"].update(actors=[{"actorType": "Integration", "bypassMode": "always"}])),
+        ("create-open", lambda fact: fact["create"].update(decision="allowed", bypassActors=[])),
     ):
         fact = load_fact(store, ruleset)
         mutate(fact)
@@ -744,21 +749,23 @@ def test_no_committer_date_identity_synthesis_in_controller() -> None:
     assert "tag-admit-rc-intent" in workflow and "tag-admit-stable-intent" in workflow
     create = workflow.index('git tag -a "$TAG"')
     push = workflow.index('git push origin "refs/tags/$TAG:refs/tags/$TAG"')
-    remote = workflow.index('repos/${GITHUB_REPOSITORY}/git/ref/tags/${TAG}', push)
+    remote = workflow.index('git/ref/tags/${TAG}" > "$READBACK/ref-after.json"', push)
     finalize = workflow.index('"tag-admit-$KIND-finalize"')
     assert workflow.index("tag-admit-rc-intent") < create
     assert workflow.index("tag-admit-stable-intent") < create
     assert create < push < remote < finalize
+    # controller 身份 = 仓库 deploy key；不再有自建 App、外部 readback 服务或 check-run 伪造 creator。
+    assert "RELEASE_CONTROLLER_DEPLOY_KEY" in workflow
+    assert "ssh-keygen -lf" in workflow and "release_tag_readback.py" in workflow
+    assert "--controller-key-fingerprint" in workflow
+    assert "RELEASE_CONTROLLER_APP_ID" not in workflow
+    assert "RELEASE_CONTROLLER_READBACK_URL" not in workflow
+    assert "actions/create-github-app-token@" not in workflow
+    assert "release-tag-creation" not in workflow
     assert 'creator": "release-controller"' not in workflow
     assert 'git fetch --force' not in workflow
-    assert "RELEASE_CONTROLLER_DEPLOY_KEY" not in workflow
-    assert "RELEASE_CONTROLLER_APP_ID" in workflow
-    assert "RELEASE_CONTROLLER_READBACK_URL" in workflow
-    assert "actions/create-github-app-token@" in workflow
-    assert '"name": "release-tag-creation"' in workflow
-    assert '"external_id": sys.argv[2]' in workflow
-    assert '"checkRunId=$CHECK_RUN_ID"' in workflow
     assert 'git/tags/${REMOTE_OBJECT_OID}' in workflow
     assert 'github.run_started_at' not in workflow
     assert 'if git show-ref --verify --quiet "refs/tags/$TAG"' in workflow
     assert workflow.count('git tag -a "$TAG"') == 1
+    assert 'release-tag-intent: $INTENT_ID' in workflow

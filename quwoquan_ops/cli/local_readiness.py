@@ -232,9 +232,27 @@ def _cleanup_portal_outputs(portal: Path) -> None:
         (portal / name).unlink(missing_ok=True)
 
 
+def _link_portal_dependencies(portal: Path) -> None:
+    """readiness capsule 只物化 tracked 文件；portal 的 node_modules 是安装产物，从源工作树借用。
+
+    只在 capsule（QWQ_LOCAL_READINESS_REPO_ROOT 指向真实仓库）且本地无 node_modules 时建符号链接；
+    源工作树也没装依赖时保持缺失，由 npm 以 typed 失败暴露，不做隐藏网络安装。
+    """
+
+    if (portal / "node_modules").exists():
+        return
+    source_root = os.environ.get("QWQ_LOCAL_READINESS_REPO_ROOT", "").strip()
+    if not source_root:
+        return
+    source = Path(source_root) / "quwoquan_ops/portal/node_modules"
+    if source.is_dir() and Path(source_root).resolve() != ROOT.resolve():
+        (portal / "node_modules").symlink_to(source, target_is_directory=True)
+
+
 def command_managed_portal_test(_args: argparse.Namespace) -> int:
     portal = ROOT / "quwoquan_ops/portal"
     try:
+        _link_portal_dependencies(portal)
         return subprocess.run(["npm", "--prefix", str(portal), "test"], cwd=ROOT, check=False).returncode
     finally:
         _cleanup_portal_outputs(portal)
@@ -243,6 +261,7 @@ def command_managed_portal_test(_args: argparse.Namespace) -> int:
 def command_managed_portal_build(_args: argparse.Namespace) -> int:
     portal = ROOT / "quwoquan_ops/portal"
     try:
+        _link_portal_dependencies(portal)
         with tempfile.TemporaryDirectory(prefix="qwq-local-readiness-portal-") as directory:
             env = os.environ.copy()
             env.update({"QWQ_DEPLOY_WORK_ROOT": directory, "QWQ_DEPLOY_TARGET": "prod-hosted"})

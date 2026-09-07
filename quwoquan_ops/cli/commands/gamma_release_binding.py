@@ -694,9 +694,9 @@ def _materialize_release_evidence_configuration(
     if not isinstance(manifest, dict):
         raise ValueError(f"invalid release evidence manifest: {manifest_path}")
     allowed_statuses = (
-        {"main-admitted", "released"}
+        {"deployable", "released"}
         if env_name == "prod"
-        else {"qualified", "main-admitted", "released"}
+        else {"candidate-ready", "deployable", "released"}
     )
     from quwoquan_ops.ci.release_evidence_reader import (
         validate_frozen_diagnostic_snapshot,
@@ -707,7 +707,7 @@ def _materialize_release_evidence_configuration(
         artifact_dir=artifact_root,
         allowed_statuses=allowed_statuses,
     )
-    candidate_id = str(manifest["releaseCompositionId"])
+    candidate_id = str(manifest["candidateId"])
     configuration_packages = manifest["environmentArtifacts"][env_name][
         "configurationPackages"
     ]
@@ -745,13 +745,13 @@ def _materialize_release_evidence_configuration(
             "manifest": _stackctl.relpath(manifest_path),
             "evidenceFileDigest": archive_digest,
             "artifactDigest": manifest["artifactDigest"],
-            "releaseCompositionId": candidate_id,
+            "candidateId": candidate_id,
             "verifiedConfigDigest": effective_digest,
         }
         _stackctl.write_json(report_path, provenance)
     source = manifest["source"]
     return {
-        "releaseCompositionId": candidate_id,
+        "candidateId": candidate_id,
         "artifactDigest": str(manifest["artifactDigest"]),
         "sourceGitSha": str(source["gitSha"]),
         "sourceTreeDigest": str(source["treeDigest"]),

@@ -1,0 +1,22 @@
+# 证据签名公钥 keyring（authoring source）。私钥永不进仓；条目只能由
+# `make evidence-signing-bootstrap`（quwoquan_ops/cli/evidence_signing_bootstrap.py）写入。
+# hosted Delivery Gate 只用这里的 active 公钥验签 EAF / IQF，不需要任何 repository secret。
+schema: quwoquan_ops.evidence_signing_keyring.v1
+authoringSource: quwoquan_ops/policies/evidence_signing_keyring.yaml
+algorithm: ed25519
+signatureEncoding: ed25519:<base64 raw 64-byte signature over DSSE PAE>
+signers:
+- identity: quwoquan-environment-ops-local
+  purpose: environment_acceptance
+  keys:
+  - keyId: ed25519-b6f7549d151d0b6c
+    publicKey: DA+JAaxsgD8Aq1vDz458finqg+X2tuXDUFPKaSi5wwg=
+    status: active
+    registeredAt: '2026-09-06T14:45:36Z'
+- identity: quwoquan-integration-scheduler-local
+  purpose: integration_qualification
+  keys:
+  - keyId: ed25519-e14a3ff7a6dd19f1
+    publicKey: Ha+zRHpzfICZf22CwQrWG73ATK93ZTO5vcmGxwT4MTE=
+    status: active
+    registeredAt: '2026-09-06T14:45:36Z'

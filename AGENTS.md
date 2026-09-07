@@ -48,7 +48,7 @@ Feature Tree 与 owner 算法见 [`specs/feature-tree/README.md`](specs/feature-
 
 - 本地与远端只允许`dev1.0`、`main`与六条长期`lane/*`；lane或integration可构造scoped candidate。`dev1.0`可由trusted publisher在Alpha/Beta准入后CAS更新、由`integration/`从匹配本地`dev1.0`普通认证push执行non-force fast-forward，或由managed system fast-forward backsync更新；lane仍只推同名lane。唯一源码promotion边为`dev1.0 -> main`；Prod只消费main-reachable stable tag AdmissionFact绑定的exact OCI digests。
 - 新建 linked worktree 或再次 clone 每次都须先取得用户明确授权，并以 `QWQ_WORKTREE_AUTHZ="<授权理由>" <command>` 执行。clone 后先运行 `make install-hooks`。
-- `main`本地只读且禁止direct push。`integration/`允许直接编辑、创建提交并把匹配本地`dev1.0`以non-force fast-forward普通push更新到远端同名分支；before/after OID缺失、ancestry不可证、非快进、force/delete或来源不匹配一律阻断。该push只提交源码，不签发`integrationEligibility`、Alpha/Beta/Gamma、`IntegrationQualificationFact`、promotion或release/Prod authority；需要main promotion或发布时仍走exact candidate + Alpha/Beta、current dev head Gamma及既有资格链。lane仍可按同一candidate协议交付，路径与分支由`worktree_policy.yaml`交叉验证。
+- `main`本地只读且禁止direct push。`integration/`允许直接编辑、创建提交并把匹配本地`dev1.0`以non-force fast-forward普通push更新到远端同名分支；before/after OID缺失、ancestry不可证、非快进、force/delete或来源不匹配一律阻断。裸push只提交源码，不签发`integrationEligibility`、Alpha/Beta/Gamma、`IntegrationQualificationFact`、promotion或release/Prod authority；要携带资格须经`make integrate`：以HEAD或lane head为exact candidate，在远端ref移动前完成本地readiness source fact与Alpha（ImpactPlan `abg_release_sensitive`时含Beta）`EnvironmentAcceptanceFact`并形成admission，再以expected-old lease fast-forward发布、按`before|after|other`读回；其publish result才是current dev head Gamma与`IntegrationQualificationFact`的前驱。lane→`dev1.0` PR只是评审载体，合入由integration按该通道执行。lane仍可按同一candidate协议交付，路径与分支由`worktree_policy.yaml`交叉验证。
 - 只有用户明确要求时才创建提交；提交按 `commit` Skill 执行，不用 `--no-verify` 作为常规通道。
 
 ## 沟通

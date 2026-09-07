@@ -8,9 +8,7 @@ import json
 import re
 import sys
 from collections.abc import Mapping
-from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
 
 import yaml
 
@@ -20,8 +18,26 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from quwoquan_ops.cli.lib.evidence_signing import (  # noqa: E402
+    KEYRING_RELATIVE_PATH,
+    SIGNER_PURPOSES,
+    EvidenceSigningError,
+    load_keyring,
+)
 from quwoquan_ops.gate.ci_cd_evidence_contracts import (  # noqa: E402
     constant_resolution,
+)
+from quwoquan_ops.gate.ci_cd_evidence_contracts.findings import (  # noqa: E402
+    Finding,
+)
+from quwoquan_ops.gate.ci_cd_evidence_contracts.findings import (
+    negative_line as _negative_line,
+)
+from quwoquan_ops.gate.ci_cd_evidence_contracts.findings import (
+    workflow_on as _workflow_on,
+)
+from quwoquan_ops.gate.ci_cd_evidence_contracts.promotion_workflow import (  # noqa: E402
+    promotion_workflow_findings,
 )
 
 ENVIRONMENT_ACCEPTANCE_V2 = "quwoquan_ops.environment_acceptance_fact.v2"
@@ -236,7 +252,8 @@ REQUIRED_SOURCE_TOKENS: dict[str, tuple[str, ...]] = {
     ),
     "quwoquan_ops/ci/release_control.py": (
         "create_promotion_admission",
-        "create_main_source_seal",
+        "create_initial_release_authority",
+        "create_release_candidate_selection",
         "create_qualification_request",
         "create_qualification_fact",
         "create_release_candidate_tag_intent",
@@ -283,17 +300,17 @@ REQUIRED_SOURCE_TOKENS: dict[str, tuple[str, ...]] = {
     PROMOTION_WORKFLOW: (
         "name: 03. Delivery Gate",
         "pull_request:",
+        "pull_request_review:",
         "push:",
         "promotion_verify:",
         "main_source_seal:",
-        "system_backsync:",
-        "uses: ./.github/workflows/system-backsync.yml",
         "timeout-minutes: 5",
-        '"quwoquan_ops/ci/release_control.py",',
-        '"promotion-admit"',
+        "quwoquan_ops/ci/release_control.py --store-root",
+        "promotion-admit",
+        "promotion_hosted.py materialize-oci-bundle",
+        "promotion_hosted.py hosted-authority",
         "promotion_evidence.py main-seal",
         "promotion_evidence.py materialize-oci",
-        "actions/create-github-app-token@",
         "promotion-admission-handoff/v1",
         "validate-hosted-handoff",
         "sync_hosted_ci_timing_ledger.py append-sample",
@@ -322,11 +339,6 @@ REQUIRED_SOURCE_TOKENS: dict[str, tuple[str, ...]] = {
     ),
 }
 
-NEGATIVE_LANGUAGE = re.compile(
-    r"(?:禁止|不得|不存在|拒绝|阻断|移除|退役|forbidden|reject|must not|"
-    r"never|non[-_ ]promotable|no compat|no fallback|without rebuilding)",
-    re.IGNORECASE,
-)
 MUTABLE_AUTHORITY = re.compile(
     r"(?:RELEASED_RELEASE_EVIDENCE_REF|latestQualified|latest[_-]qualified)",
     re.IGNORECASE,
@@ -338,13 +350,6 @@ BARE_SOURCE_PROMOTABLE = re.compile(
     r"(?<!non[-_ ])\b(?:promotable|promotion[_-]?eligible|production[_-]?eligible)\b"
     r"[^\n]{0,96}\b(?:source(?:[_-]?(?:git|commit))?[_-]?(?:sha|oid)?|"
     r"git[_-]?sha|commit|main(?:[_ -]?head)?)\b)",
-    re.IGNORECASE,
-)
-PROMOTION_FORBIDDEN_EXECUTION = re.compile(
-    r"(?:actions/setup-(?:go|node|java)|subosito/flutter-action|\bflutter\s+test\b|"
-    r"\bgo\s+test\b|\bnpm\s|\bstackctl\.py\s+(?:package|up|health|verify|deploy)\b|"
-    r"\b(?:build|package|ABG|device)\b|\bprovider(?:[-_ ]conformance)?\s+live\b|"
-    r"\b(?:alpha|beta|gamma)[-_ ](?:environment|matrix|execution)\b)",
     re.IGNORECASE,
 )
 PROD_MARKER = re.compile(
@@ -360,28 +365,10 @@ FACTORY_SCHEMA_IDENTITY = re.compile(
 )
 
 
-@dataclass(frozen=True)
-class Finding:
-    path: str
-    line: int
-    detail: str
-
-
 def _constant_value(
     path: Path, constant_name: str, root: Path = ROOT, depth: int = 0
 ) -> object:
     return constant_resolution.constant_value(path, constant_name, root, depth)
-
-
-def _negative_line(line: str) -> bool:
-    """Ignore comments and explicit diagnostic assertions, not executable suffixes."""
-
-    stripped = line.strip()
-    return (
-        not stripped
-        or stripped.startswith("#")
-        or ("echo" in stripped and NEGATIVE_LANGUAGE.search(stripped) is not None)
-    )
 
 
 def _retired_invocation(line: str) -> str | None:
@@ -426,10 +413,6 @@ def _schema_identities(value: object) -> set[str]:
         for child in value:
             identities.update(_schema_identities(child))
     return identities
-
-
-def _workflow_on(workflow: Mapping[object, object]) -> object:
-    return workflow.get("on", workflow.get(True))
 
 
 def _event_configuration(workflow: Mapping[object, object], event: str) -> tuple[bool, object]:
@@ -561,284 +544,6 @@ def factory_workflow_findings(
                     0,
                     f"factory immutable qualification check is missing: {token}",
                 )
-            )
-    return findings
-
-
-def _job_commands(job: object) -> str:
-    if not isinstance(job, Mapping):
-        return ""
-    steps = job.get("steps")
-    if not isinstance(steps, list):
-        return ""
-    return "\n".join(
-        str(step.get("run") or "")
-        for step in steps
-        if isinstance(step, Mapping)
-    )
-
-
-def _job_checkout_ref(job: object) -> object:
-    if not isinstance(job, Mapping):
-        return None
-    steps = job.get("steps")
-    if not isinstance(steps, list):
-        return None
-    for step in steps:
-        if isinstance(step, Mapping) and isinstance(step.get("uses"), str):
-            configuration = step.get("with")
-            return configuration.get("ref") if isinstance(configuration, Mapping) else None
-    return None
-
-
-def promotion_workflow_findings(
-    relative_path: str,
-    text: str,
-    workflow: Mapping[object, object] | None = None,
-) -> list[Finding]:
-    findings: list[Finding] = []
-    for number, line in enumerate(text.splitlines(), start=1):
-        if _negative_line(line):
-            continue
-        match = PROMOTION_FORBIDDEN_EXECUTION.search(line)
-        if match is not None:
-            findings.append(
-                Finding(
-                    relative_path,
-                    number,
-                    f"03 Delivery Gate contains forbidden execution: {match.group(0)}",
-                )
-            )
-
-    if workflow is None:
-        return findings
-
-    triggers = _workflow_on(workflow)
-    expected_triggers = {
-        "pull_request": {"branches": ["main"]},
-        "push": {"branches": ["main"]},
-    }
-    if triggers != expected_triggers:
-        findings.append(
-            Finding(
-                relative_path,
-                0,
-                "promotion workflow must use only pull_request and trusted post-merge main push",
-            )
-        )
-
-    if workflow.get("permissions") != {"contents": "read"}:
-        findings.append(
-            Finding(relative_path, 0, "promotion workflow top-level permissions must be contents: read")
-        )
-
-    jobs = workflow.get("jobs")
-    expected_jobs = ["promotion_verify", "main_source_seal", "system_backsync"]
-    if not isinstance(jobs, Mapping) or list(jobs) != expected_jobs:
-        findings.append(
-            Finding(
-                relative_path,
-                0,
-                "promotion workflow must separate pre-merge verification and MainSourceSeal, then expose exactly one system backsync caller",
-            )
-        )
-        return findings
-
-    premerge = jobs["promotion_verify"]
-    postmerge = jobs["main_source_seal"]
-    backsync = jobs["system_backsync"]
-    pre_commands = _job_commands(premerge)
-    post_commands = _job_commands(postmerge)
-    expected_permissions = {
-        "promotion_verify": {"contents": "read", "packages": "write"},
-        "main_source_seal": {
-            "contents": "read", "packages": "write",
-            "checks": "read", "pull-requests": "read",
-        },
-    }
-    for job_name, job in (("promotion_verify", premerge), ("main_source_seal", postmerge)):
-        if not isinstance(job, Mapping) or job.get("permissions") != expected_permissions[job_name]:
-            findings.append(
-                Finding(relative_path, 0, f"{job_name} permissions drifted from least privilege")
-            )
-        if not isinstance(job, Mapping) or job.get("runs-on") != "ubuntu-latest":
-            findings.append(Finding(relative_path, 0, f"{job_name} must use a GitHub-hosted portable runner"))
-        if not isinstance(job, Mapping) or job.get("timeout-minutes") != 5:
-            findings.append(Finding(relative_path, 0, f"{job_name} must retain the five-minute job boundary"))
-
-    pre_condition = str(premerge.get("if") or "") if isinstance(premerge, Mapping) else ""
-    if pre_condition != "${{ github.event_name == 'pull_request' }}":
-        findings.append(
-            Finding(
-                relative_path,
-                0,
-                "pre-merge job must run for every pull request targeting main and fail closed inside the job",
-            )
-        )
-    for token in (
-        'values["HEAD_REF"] != "dev1.0"',
-        'values["BASE_REF"] != "main"',
-        'os.environ["PR_HEAD_REPOSITORY"] != os.environ["REPOSITORY"]',
-    ):
-        if token not in _job_commands(premerge):
-            findings.append(
-                Finding(relative_path, 0, f"pre-merge qualification validation is missing: {token}")
-            )
-    for token in (
-        "actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1",
-        "permission-checks: write",
-        "promotion_evidence.py create-handoff",
-        "/check-runs",
-    ):
-        if token not in text:
-            findings.append(Finding(relative_path, 0, f"trusted hosted handoff producer is missing: {token}"))
-    if '"promotion_admission_ref"' in pre_commands:
-        findings.append(Finding(relative_path, 0, "PR body must not self-assert final exact admission ref"))
-
-    expected_push_condition = (
-        "${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}"
-    )
-    if not isinstance(postmerge, Mapping) or postmerge.get("if") != expected_push_condition:
-        findings.append(
-            Finding(relative_path, 0, "MainSourceSeal must run only for the trusted main push event")
-        )
-
-    expected_seal_outputs = {
-        "source_sha": "${{ steps.readback.outputs.source_sha }}",
-        "main_source_seal_ref": "${{ steps.seal.outputs.main_source_seal_ref }}",
-        "main_source_seal_digest": "${{ steps.seal.outputs.main_source_seal_digest }}",
-    }
-    if not isinstance(postmerge, Mapping) or postmerge.get("outputs") != expected_seal_outputs:
-        findings.append(
-            Finding(
-                relative_path,
-                0,
-                "MainSourceSeal job outputs must expose the exact readback source and seal ref/digest",
-            )
-        )
-
-    expected_backsync_permissions = {
-        "actions": "read",
-        "checks": "read",
-        "contents": "read",
-        "packages": "read",
-    }
-    expected_backsync_inputs = {
-        "expected_dev_before": "${{ needs.main_source_seal.outputs.source_sha }}",
-        "source_sha": "${{ needs.main_source_seal.outputs.source_sha }}",
-        "main_source_seal_ref": "${{ needs.main_source_seal.outputs.main_source_seal_ref }}",
-        "main_source_seal_digest": "${{ needs.main_source_seal.outputs.main_source_seal_digest }}",
-    }
-    allowed_backsync_keys = {"name", "needs", "if", "permissions", "uses", "with"}
-    if not isinstance(backsync, Mapping):
-        findings.append(Finding(relative_path, 0, "system backsync caller must be a reusable workflow job"))
-    else:
-        if set(backsync) != allowed_backsync_keys:
-            findings.append(
-                Finding(
-                    relative_path,
-                    0,
-                    "system backsync caller must contain no direct steps, environment, runner, secrets, or fallback",
-                )
-            )
-        if backsync.get("needs") != "main_source_seal":
-            findings.append(Finding(relative_path, 0, "system backsync caller must need MainSourceSeal"))
-        if backsync.get("if") != expected_push_condition:
-            findings.append(Finding(relative_path, 0, "system backsync caller must run only for the trusted main push event"))
-        if backsync.get("uses") != "./.github/workflows/system-backsync.yml":
-            findings.append(Finding(relative_path, 0, "system backsync caller must use the same-commit canonical reusable workflow"))
-        if backsync.get("permissions") != expected_backsync_permissions:
-            findings.append(Finding(relative_path, 0, "system backsync caller permissions drifted from read-only least privilege"))
-        if backsync.get("with") != expected_backsync_inputs:
-            findings.append(Finding(relative_path, 0, "system backsync caller must consume only exact sealed outputs"))
-
-    if _job_checkout_ref(premerge) != "${{ github.event.pull_request.head.sha }}":
-        findings.append(Finding(relative_path, 0, "pre-merge checkout must bind the exact PR head SHA"))
-    if _job_checkout_ref(postmerge) != "${{ github.event.after }}":
-        findings.append(Finding(relative_path, 0, "post-merge checkout must bind the exact main push after SHA"))
-    if "github.sha" in text:
-        findings.append(Finding(relative_path, 0, "github.sha fallback is forbidden in source promotion"))
-
-    for token in (
-        "main-seal",
-        "main-source-seal",
-        "promotion_timing_ratchet.py sample",
-        "sync_hosted_ci_timing_ledger.py append-sample",
-    ):
-        if token in pre_commands:
-            findings.append(
-                Finding(relative_path, 0, f"pre-merge qualification must not issue post-merge evidence: {token}")
-            )
-    if "promotion-admit" not in pre_commands:
-        findings.append(Finding(relative_path, 0, "pre-merge qualification must issue PromotionAdmissionReceipt"))
-    if "promotion-admit" in post_commands:
-        findings.append(
-            Finding(relative_path, 0, "post-merge sealing must consume rather than recreate PromotionAdmissionReceipt")
-        )
-
-    required_postmerge_tokens = (
-        ("refs/remotes/origin/main", "hosted main HEAD readback"),
-        ("PUSH_BEFORE_SHA", "main push before identity"),
-        ("PUSH_AFTER_SHA", "main push after identity"),
-        ("/commits/${SOURCE_SHA}/check-runs", "exact hosted handoff lookup"),
-        ("HANDOFF_COUNT", "create-once hosted handoff cardinality"),
-        ("validate-hosted-handoff", "hosted App/workflow identity verification"),
-        ("--ref \"$PROMOTION_ADMISSION_REF\"", "exact PromotionAdmissionReceipt materialization"),
-        ("git merge-base --is-ancestor", "post-merge source reachability"),
-        ("promotion_evidence.py main-seal", "MainSourceSeal exact predecessor issuance"),
-        ("--admission-oci-ref \"$PROMOTION_ADMISSION_REF\"", "MainSourceSeal exact OCI binding"),
-        ("--hosted-handoff", "MainSourceSeal hosted record binding"),
-        ("main-source-seal-oci.json", "MainSourceSeal OCI publication"),
-        ("--ref \"$MAIN_SOURCE_SEAL_REF\"", "hosted MainSourceSeal readback"),
-        ("cmp \"$CONTROL_ROOT/$SEAL_PATH\" \"$RUNNER_TEMP/main-source-seal-readback.json\"", "exact MainSourceSeal byte readback"),
-        ("promotion_timing_ratchet.py sample", "post-readback promotion timing sample"),
-        ("sync_hosted_ci_timing_ledger.py append-sample", "hosted timing sample readback"),
-    )
-    for token, description in required_postmerge_tokens:
-        if token not in post_commands:
-            findings.append(Finding(relative_path, 0, f"post-merge path is missing {description}"))
-
-    order_tokens = (
-        "refs/remotes/origin/main",
-        "/commits/${SOURCE_SHA}/check-runs",
-        "validate-hosted-handoff",
-        "promotion_evidence.py materialize-oci",
-        "git merge-base --is-ancestor",
-        "promotion_evidence.py main-seal",
-        "main-source-seal-readback.json",
-        'cmp "$CONTROL_ROOT/$SEAL_PATH" "$RUNNER_TEMP/main-source-seal-readback.json"',
-        'MAIN_SOURCE_SEAL_DIGEST="${MAIN_SOURCE_SEAL_REF##*@}"',
-        'echo "main_source_seal_digest=$MAIN_SOURCE_SEAL_DIGEST"',
-        "promotion_timing_ratchet.py sample",
-        "sync_hosted_ci_timing_ledger.py append-sample",
-    )
-    positions = [post_commands.find(token) for token in order_tokens]
-    if any(position < 0 for position in positions) or positions != sorted(positions):
-        findings.append(
-            Finding(
-                relative_path,
-                0,
-                "post-merge order must preserve MainSourceSeal post-readback ref/digest outputs before timing and backsync",
-            )
-        )
-
-    forbidden_authority = (
-        "oras resolve", '"promotion_admission_ref"', "latest",
-        "promotion-handoff-status", "$STORE/promotion-handoff",
-    )
-    for token in forbidden_authority:
-        if token in post_commands:
-            findings.append(
-                Finding(relative_path, 0, f"post-merge mutable or local handoff authority is forbidden: {token}")
-            )
-    for fake in (
-        "$STORE/main-source-seal.json",
-        'cp "$SEAL_PATH" "$RUNNER_TEMP/main-source-seal-readback.json"',
-        'cp "$CONTROL_ROOT/$SEAL_PATH" "$RUNNER_TEMP/main-source-seal-readback.json"',
-    ):
-        if fake in post_commands:
-            findings.append(
-                Finding(relative_path, 0, "local store must not masquerade as hosted MainSourceSeal readback")
             )
     return findings
 
@@ -1453,8 +1158,34 @@ def _configuration_findings() -> list[Finding]:
     return findings
 
 
+def evidence_signing_keyring_findings(root: Path = ROOT) -> list[Finding]:
+    """EAF / IQF 验签信任根：仓内 keyring 必须可解析，且两个 canonical signer 各有一把 active 公钥。"""
+
+    try:
+        keyring = load_keyring(root / KEYRING_RELATIVE_PATH)
+    except EvidenceSigningError as exc:
+        return [Finding(KEYRING_RELATIVE_PATH, 0, f"evidence signing keyring is invalid: {exc.detail}")]
+    findings: list[Finding] = []
+    for identity in SIGNER_PURPOSES:
+        signer = keyring.signers.get(identity)
+        if signer is None or signer.active is None:
+            findings.append(
+                Finding(KEYRING_RELATIVE_PATH, 0, f"evidence signer {identity} has no active Ed25519 public key")
+            )
+    active_keys = {
+        identity: signer.active.public_key
+        for identity, signer in keyring.signers.items() if signer.active is not None
+    }
+    if len(set(active_keys.values())) != len(active_keys):
+        findings.append(
+            Finding(KEYRING_RELATIVE_PATH, 0, "evidence signer identities must not share an active public key")
+        )
+    return findings
+
+
 def evidence_contract_findings(root: Path = ROOT) -> list[Finding]:
     findings = _configuration_findings()
+    findings.extend(evidence_signing_keyring_findings(root))
 
     for relative_path in sorted(RETIRED_WORKFLOWS):
         if (root / relative_path).exists():

@@ -15,6 +15,7 @@ if str(ROOT) not in sys.path:
 
 from quwoquan_ops.ci.impact_planner_core import canonical_digest, validate_exact_sha
 from quwoquan_ops.gate.code_health_delta.engine import analyze_delta
+from quwoquan_ops.gate.code_health_delta.render import render_candidate
 
 
 def verify_delivery(
@@ -66,6 +67,10 @@ def main() -> int:
     parser.add_argument("--head-sha", required=True)
     parser.add_argument("--expected-path-digest", required=True)
     parser.add_argument("--expected-impact-plan-digest", required=True)
+    parser.add_argument(
+        "--summary-markdown", type=Path,
+        help="Also write the Markdown projection (blockers, recovery, debt delta) for the PR step summary",
+    )
     args = parser.parse_args()
     try:
         report, output, identity = verify_delivery(
@@ -75,6 +80,11 @@ def main() -> int:
             expected_path_digest=args.expected_path_digest,
             expected_impact_plan_digest=args.expected_impact_plan_digest,
         )
+        markdown = render_candidate(report)
+        if args.summary_markdown is not None:
+            args.summary_markdown.parent.mkdir(parents=True, exist_ok=True)
+            args.summary_markdown.write_text(markdown, encoding="utf-8")
+        print(markdown, end="")
         print(f"code-health-delivery: {report['terminal']} identity={identity} output={output}")
         return 1 if report["terminal"] == "GATE_BLOCK" else 0
     except Exception as exc:

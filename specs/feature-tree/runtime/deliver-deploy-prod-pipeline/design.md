@@ -130,6 +130,49 @@
 - 影响 Story：[`gray-release-to-prod`](./gray-release-to-prod/spec.md)、[`multi-environment-wave-deployment`](./multi-environment-wave-deployment/spec.md)
 - 关联验收：[`SIT-001`](./spec.md#sit-001)、[`gray-release-to-prod GWT-001`](./gray-release-to-prod/spec.md#gwt-001)、[`multi-environment-wave-deployment GWT-001`](./multi-environment-wave-deployment/spec.md#gwt-001)
 
+<a id="dec-009"></a>
+### DEC-009 发布标签生命周期：hosted ruleset + 仓库 deploy key 即唯一 controller，本地 Environment Ops 承担全部准入证据
+
+- 对象与 owner：`ProductVersionManifest`（`quwoquan_ops/policies/product_version.yaml`）拥有单一 active train 与目标版本；首个 train 由人工 `initial_release_authority_fact`（记录 GitHub login 读回、时间、目标版本）激活，后续 train 只能由 `previousStable imported` 激活；`release_candidate_selection_fact` 记录产品方"对哪个 main-reachable commit 打哪个 RC"的 create-once 决定；唯一 controller 就是 title 等于策略 `controller.identity` 的可写 deploy key，其权威来自 hosted tag ruleset（`v*` 创建对所有人 denied、仅 DeployKey bypass；update/delete denied 且无 bypass），不引入自建 GitHub App、外部 readback 服务或 check-run 伪造 creator。
+- Command/query 分流：写侧只有 controller workflow 的两个 job：pre-admission 只读 hosted readback（deploy key、tag ref 缺失、两条 ruleset 含 ETag）→ 本地评估器封 create-once intent → 发布 intent；create job 消费 intent、以 deploy key SSH 推送一个 annotated tag（tagger = controller title，message 携带 `release-tag-intent: <intentId>`）→ REST 读回 ref/tag object/ruleset → 封 `ReleaseTagAdmissionFact`。读侧对任何 tag 的判定只看 AdmissionFact 与 hosted readback，不看本地 git tag、workflow 结论或 OCI transport tag。
+- 时机与节奏：RC 只对 `MainSourceSeal` 已封印的 main-reachable commit 创建，且必须先有 current dev head 的 `IntegrationQualificationFact`；同一 train 内 RC 序号单调、不可复用、不可上 Prod。stable 只在产品选中一个 exact qualified RC 且 release authority 批准后创建，与 RC 同 commit、同 CMM/build number/digests，禁止重建。main 持续前移不创建标签、不改变已发布版本；每个 RC 对应一次"有发布意图的晋级"，无意图的晋级不打标签。
+- 回滚与纠错：标签不可移动、删除或重建；线上回滚只引用 hosted ledger 中 exact previous `ProdReleasedFact`，源码纠错只能进入下一个 RC → 下一个 stable。同一 material 最多一个 stable。
+- 一致性与幂等：intent、mutation outcome、pre/post readback、final admission 严格按时间顺序绑定同一 tag 对象；pre/post ruleset ETag 与 payload digest 必须一致；tag 已存在或 intent 已消费均在 mutation 前 typed 阻断（`RELEASE_TAG.INTENT_REPLAY`、`RELEASE_TAG.RC_REUSED`、`RELEASE_TAG.RC_NOT_MONOTONIC`、`RELEASE_TAG.CONTROLLER_DENIED`、`RELEASE_TAG.READBACK_INVALID`）。
+- 测试 seam：local contract 覆盖 deploy key 身份漂移、只读 key、tagger 冒名、intent marker 伪造、ruleset 开放（create allowed / bypass 增加 / 两条 ruleset 合一）、时间倒序；readback 生产者以真实 hosted REST 响应样本回归。
+- 理由：现有 hosted 配置已经把"谁能创建、能否改动"收敛到 ruleset + 单一 deploy key，controller 再叠一层 GitHub App 与外部 readback 服务只增加不存在的执行面而不增加保证；用 tag 对象自身携带 intent 绑定，比外部 check-run 更不可伪造且随对象不可变。
+- 被否决方案：GitHub App token 推标签（被 ruleset 本身拒绝）、外部 `/v1/release-tag-readback` 服务、以 check-run 记录 creator、lightweight tag、允许 update/delete bypass、由 main push 自动打 RC。
+- 关联要求：[`REQ-001`](./spec.md#req-001)、[`daily-merge-release-strategy REQ-002`](./daily-merge-release-strategy/spec.md#req-002)
+- 影响 Story：[`daily-merge-release-strategy`](./daily-merge-release-strategy/spec.md)、[`gray-release-to-prod`](./gray-release-to-prod/spec.md)
+- 关联验收：[`SIT-001`](./spec.md#sit-001)、[`daily-merge-release-strategy GWT-003`](./daily-merge-release-strategy/spec.md#gwt-003)
+
+<a id="dec-010"></a>
+### DEC-010 证据签名信任根：Ed25519 私钥仅本地持有，公钥登记进仓内版本化 keyring，hosted 只验签
+
+- 对象与 owner：`EnvironmentAcceptanceFact` 与 `IntegrationQualificationFact` 的 DSSE 签名统一使用 Ed25519；`quwoquan_ops/policies/evidence_signing_keyring.yaml` 是两个 signer identity（`quwoquan-environment-ops-local` 签 A/B/G EAF、`quwoquan-integration-scheduler-local` 签 IQF）与其公钥的唯一 authoring source，也是 signer identity 的 canonical 真相源。私钥只落在仓外 `QWQ_EVIDENCE_SIGNING_KEY_ROOT`（默认 `~/.cache/quwoquan/keys/evidence-signing`，0600），由 `make evidence-signing-bootstrap` 生成并把公钥登记为 `active`；bootstrap 幂等，keyring 改动随普通提交进入 `dev1.0`。
+- Command/query 分流：签名侧（`environment_execution.py issue/qualify`、`integration_run.py`、`integration_candidate.py qualify`）签前必须证明本地私钥派生的公钥就是 keyring 中该 identity 的 active 公钥，签名编码固定 `ed25519:<base64 raw 64B>`；验签侧（`integration_qualification.py`、`generate_release_bound_environment_identity.py`、hosted `03. Delivery Gate`）只加载 PR head exact bytes 里的 keyring，按 expected signer identity 取 active 公钥验签，不读任何 secret、环境变量或 hosted variable。qualification 与 environment 两个 identity 的 active 公钥不得相同（`KEY_PURPOSE_CONFLICT`）。
+- 轮换与失效：同一 identity 至多一个 `active`，历史 key 只能置 `retired`（保留 `retiredAt` 审计）且不可重新激活；验签只接受 `active`，因此轮换后未消费的 EAF/IQF（TTL 72h）自然失效，需在新 key 下重新签发。私钥泄露即 rotate 并提交 keyring，无需触碰 hosted 配置。
+- 测试 seam：local contract 覆盖 keyring 结构漂移（双 active、keyId 不由公钥派生、purpose/identity 漂移、未知状态、多余字段）、错误 key 与 retired key 验签失败、私钥权限/仓外约束、bootstrap 幂等与 rotate、CLI 缺 identity 的 typed 阻断；`verify_ci_cd_evidence_contracts` 以仓内 keyring 可解析且两 identity 各有一把互异 active 公钥为门禁。
+- 理由：HMAC 对称 key 要求同一 secret 同时存在于本地与 hosted，验签方随之获得签名能力，与"Gate 只验签不签"不自洽，且从未有 canonical 真相源导致 A/B/G 事实从未真实签发；非对称把信任材料变成可评审、可版本化的仓内公钥，hosted 零 secret，本地 key 可自动生成。
+- 被否决方案：继续 HMAC 并把 secret 同步到 repository secrets、在 EAF `signer` 中新增 `keyId` 字段（改 schema 而收益有限，由 identity→active 公钥映射替代）、复用 App runtime config 的 Ed25519 keyring 文件（用途与轮换节奏不同）。
+- 关联要求：[`REQ-001`](./spec.md#req-001)、[`daily-merge-release-strategy REQ-002`](./daily-merge-release-strategy/spec.md#req-002)
+- 影响 Story：[`daily-merge-release-strategy`](./daily-merge-release-strategy/spec.md)、[`local-gamma-mirror`](./local-gamma-mirror/spec.md)
+- 关联验收：[`SIT-001`](./spec.md#sit-001)、[`daily-merge-release-strategy GWT-001`](./daily-merge-release-strategy/spec.md#gwt-001)
+
+<a id="dec-011"></a>
+### DEC-011 lane→dev1.0 准入：hosted required check 与 integration 通道 admission 叠加，ruleset 把直推目标约束为已过检 lane head
+
+- 对象与 owner：`lane/* -> dev1.0` 的合入由两层互不替代的准入共同决定。第一层是 hosted required check `04. Lane Gate`（owner `local-continuous-integration`，由 `branch_policy.yaml#required_integration_checks` 唯一声明，在 exact PR head 重跑静态治理、ImpactPlan/boundary、Code Health Delta 与 ops 合同分片）；第二层是本 Story 的 integration 工作区通道（`make integrate`：L1 readiness source fact + Alpha/条件 Beta `EnvironmentAcceptanceFact` → publish admission → expected-old fast-forward push）。hosted `dev1.0` ruleset 是把两层缝合起来的机制：`required_status_checks=[04. Lane Gate]`（strict）对**每一次 ref 更新**生效，包括 integration 通道的直推，因此能进入 `dev1.0` 的 commit 必须是已带该 check SUCCESS 的 lane head；ruleset 不设 `pull_request` 规则（否则封死该通道）、`bypass_actors` 为空；后者只有对 ruleset 有 write 权限的调用者才能观测，governance job 的只读 token 读不到，因此 hosted readback 只对可见的 bypass 阻断并以 `bypassActorsObservable` 留痕，为空的证明由 admin 侧读回承担（`local-continuous-integration#gwt-005`）。
+- Command/query 分流：写侧只有 integration 通道的 publish（`local_git_cas_publish`，`--force-with-lease=refs/heads/dev1.0:<before>` 的 fast-forward push + `before|after|other` 读回）；PR merge 按钮不是合入执行者，hosted 在 `dev1.0` 包含 lane head 后自动标记 PR merged。读侧：`04. Lane Gate` 的 governance job 以只读 token 读回 dev1.0 ruleset 证明自身是 required（`local-continuous-integration#gwt-005`，收据 `hosted-integration-ruleset-receipt`）；integration 通道不读 check-run，把 required check 的强制完全交给 ruleset。
+- 时机与节奏：lane head 先经 PR 拿到 `04` SUCCESS，再在 integration 工作区把本地 `dev1.0` fast-forward 到该 lane head（readiness 的 push identity 要求 `refs/heads/dev1.0 == candidate`）并以 `CANDIDATE=HEAD` 走通道；两者顺序不可颠倒，通道 publish 在 ruleset 下对未过检 commit 必被拒绝且零写。
+- 回滚与纠错：ruleset 缺 required check、多出 `pull_request` 规则、第二条按 GitHub ref 语义（`~ALL`/`~DEFAULT_BRANCH`/fnmatch）命中 `dev1.0` 的 active ruleset，或出现可见的 bypass actor 时，`04. Lane Gate` 自身转红并阻断所有 lane PR，直到 hosted 配置恢复；不得以 bypass、warn-only 或本地回执替代。promotion 后 `main -> dev1.0` 回同步推的是 merge commit、不带 `04` check，会被同一 ruleset 拒绝：这是有意的——回同步属受管 system backsync（`daily-merge-release-strategy` OPEN-004），只能由专用 system actor 携其自身 bypass 语义执行，人工 `make promotion-backsync` 在该 actor 就位前不可用于带 required check 的 `dev1.0`。
+- 一致性与幂等：publish 读回 `after` 才写 publish result；`before` 零写、`other` 为 CAS 冲突。ruleset readback 与 publish 读回都只绑定 exact SHA，不依赖 workflow conclusion。
+- 测试 seam：`verify_hosted_integration_ruleset.py` 的 local contract 覆盖缺 required check、存在 bypass actor、多出 `pull_request` 规则、非 strict、多条适用 ruleset；`test_lane_gate_workflow` 锁定 governance job 的 readback 步骤；`scoped_candidate/core.py` 的 publish 三态与 `NOT_FAST_FORWARD` 合同覆盖通道侧。
+- 理由：只保留 PR required check 会让 integration 通道成为绕过 hosted 复算的旁路（`local-continuous-integration` OPEN-003 的原始缺口）；只保留通道 admission 又让 lane PR 退化为可见性载体、hosted 无强制。ruleset 对直推同样生效这一 GitHub 语义使两层可以叠加而不需要通道自己去读 check-run。
+- 被否决方案：ruleset 加 `pull_request` 规则并把 integration pusher 设为 bypass actor（bypass 同时豁免 required check，等于回到旁路）；通道在 publish 前自行调用 check-runs API 判定 `04`（重复实现且可被本地绕过）；`04. Lane Gate` 降为 advisory。
+- 关联要求：[`daily-merge-release-strategy REQ-001`](./daily-merge-release-strategy/spec.md#req-001)、[`local-continuous-integration REQ-003`](../development-workflow-governance/local-continuous-integration/spec.md#req-003)
+- 影响 Story：[`daily-merge-release-strategy`](./daily-merge-release-strategy/spec.md)、[`local-continuous-integration`](../development-workflow-governance/local-continuous-integration/spec.md)
+- 关联验收：[`daily-merge-release-strategy GWT-001`](./daily-merge-release-strategy/spec.md#gwt-001)、[`local-continuous-integration GWT-005`](../development-workflow-governance/local-continuous-integration/spec.md#gwt-005)
+
 ## 5. 失败与恢复
 
 - 失败类型：分支 policy 无效、PR/ref 非法、`main` direct push、integration push 缺 before/after OID或 ancestry authority、integration/backsync 非 fast-forward、force/delete、ref compare-and-swap 冲突、Prod source 不可达 main、权限拒绝、依赖超时、候选摘要冲突、证据缺失或持久化失败。

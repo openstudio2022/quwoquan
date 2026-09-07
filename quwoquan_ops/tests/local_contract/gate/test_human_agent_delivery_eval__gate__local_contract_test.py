@@ -78,6 +78,9 @@ def test_repository_gate_bootstraps_runtime_root_before_eval(tmp_path: Path) -> 
         ),
         "quwoquan_ops/gate/verify_git_branch_policy.py": "raise SystemExit(0)\n",
         "quwoquan_ops/gate/verify_github_supply_chain.py": "raise SystemExit(0)\n",
+        # gate_repo.sh 在 eval 之前还会跑 workflow actionlint；这里只关心 runtime root 的
+        # bootstrap 顺序，把它同样桩掉。
+        "quwoquan_ops/gate/verify_workflow_actionlint.sh": "#!/usr/bin/env bash\nexit 0\n",
         "quwoquan_ops/gate/emit_gate_repo_summary.py": "raise SystemExit(0)\n",
         "quwoquan_ops/gate/verify_human_agent_delivery_eval.py": """
 from pathlib import Path

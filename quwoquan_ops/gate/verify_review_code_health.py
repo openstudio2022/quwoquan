@@ -20,6 +20,7 @@ for entry in (ROOT, ROOT / "quwoquan_ops/cli"):
 
 from quwoquan_ops.ci.verify_code_health_delivery import verify_delivery  # noqa: E402
 from quwoquan_ops.gate import verify_review_baseline  # noqa: E402
+from quwoquan_ops.gate.code_health_delta.render import render_candidate  # noqa: E402
 
 RESULT_PATH_ENV = "QWQ_NAMED_EVIDENCE_RESULT_PATH"
 SOURCE_HEAD_ENV = "QWQ_REVIEW_EVIDENCE_HEAD_SHA"
@@ -147,15 +148,17 @@ def verify() -> dict[str, Any]:
         "findings": report["findings"],
     }
     _write_descriptor(descriptor_path, descriptor)
-    return descriptor
+    return descriptor, report
 
 
 def main() -> int:
     try:
-        descriptor = verify()
+        descriptor, report = verify()
     except (KeyError, OSError, TypeError, ValueError, json.JSONDecodeError) as exc:
         print(f"[review-code-health] GATE_BLOCK: {exc}", file=sys.stderr)
         return 2
+    # Reviewer 只读这段 Markdown 与 typed terminal，不重跑、不打开 JSON。
+    print(render_candidate(report))
     print(
         "review-code-health: "
         f"{descriptor['terminal']} identity={descriptor['report_identity']} "

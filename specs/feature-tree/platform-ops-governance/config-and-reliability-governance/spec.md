@@ -73,18 +73,11 @@
 - AND 本地 runtime 生命周期只收敛目标自有资源并保持独立控制面在场；所有权无法唯一裁定或目标自有资源未收敛时不得产生成功终态。
 
 <a id="sit-002"></a>
-### SIT-002 行数预算对单文件 stdin pipe 契约脚本的机器派生豁免
+### SIT-002 单文件 stdin pipe 契约脚本的规模治理单轨归 Code Health Delta
 
 - GIVEN 某 Python 脚本被 ops shell 编排以整文件 stdin pipe 到远端裸 `python3 -` 执行（远端不存在仓库树，如 `quwoquan_ops/cli/prod/sync_prod_plane_stack.sh` 之于 `hosted_release_ledger.py`），单文件自包含是物理设计契约。
-- WHEN 全仓 Python 行数硬顶预算对该脚本求值。
-- THEN 行数门禁从 shell 编排的调用形态机器派生该脚本的豁免，不引入人工 allowlist，且不影响其余文件的硬顶阻断。
-
-<a id="sit-003"></a>
-### SIT-003 prod 远端 helper 传输协议改造后取消单文件豁免
-
-- GIVEN `hosted_release_ledger.py` 的远端执行改为先落盘再执行（或等价可 import 的传输协议），远端链路回归通过。
-- WHEN 该脚本按职责拆分为 ≤1000 行模块。
-- THEN 行数门禁不再依赖单文件 pipe 契约豁免即可全绿，prod 发布/回滚链路行为不变。
+- WHEN 治理门评估该脚本的文件规模。
+- THEN 唯一判罚来源是 canonical Code Health Delta 的 `thresholds.file_lines`（新越过 block 或既有超限继续增长才 `GATE_BLOCK`），Python 脚本治理不维护第二套行数预算、人工 allowlist 或机器派生豁免，单文件契约脚本与其余手写生产文件适用同一阈值。
 
 <a id="sit-004"></a>
 ### SIT-004 Hosted Human Authority 身份、决定与 Objective 消费闭环
@@ -105,17 +98,6 @@
 - 准出影响：`track`
 - 影响或价值：尚缺实现或直接 `spec_ref`；目标：承接 `platform-ops` 的平台运维控制面规格，负责把“配置治理 + 服务治理 + 发布灰度 + 环境依赖”沉淀为可设计、可实现、可验收的统一平台能力。
 - 完成判定：`SIT-001` 对应行为满足且真实测试 `spec_ref` 有效
-
-<a id="open-002"></a>
-### OPEN-002 hosted_release_ledger 传输协议改造与拆分
-
-- 类型：`risk`
-- 优先级：`P2`
-- 准出影响：`track`
-- 影响或价值：`quwoquan_ops/cli/prod/hosted_release_ledger.py`（约 1462 行）超出 1000 行硬顶，但它被 `sync_prod_plane_stack.sh` 整文件 stdin pipe 到远端裸 `python3 -` 执行，单文件自包含是物理设计契约，直接拆分会弄断 prod 发布/回滚链路；当前由 SIT-002 的机器派生豁免承接。
-- 完成判定：`SIT-003` 对应行为满足且真实测试 `spec_ref` 有效
-- 依赖：prod 远端传输协议改造（helper 落盘或等价方案）与 prod 链路回归验证。
-
 
 <a id="open-003"></a>
 ### OPEN-003 Hosted Human Authority 能力级集成尚未闭合

@@ -1,5 +1,8 @@
 # Canonical post-promotion source convergence. The caller must pass the exact
 # MainSourceSeal emitted for this main merge; no release or Prod fact is involved.
+# 现状：dev1.0 的回同步由 integration 工作区 `make promotion-backsync`（FF 通道）执行；
+# 本 reusable workflow 暂无 caller，待 dedicated deploy key 与 Environment 到位后再接回
+# （见 daily-merge-release-strategy OPEN）。
 name: 08. Managed System Backsync
 
 permissions:
@@ -42,7 +45,7 @@ jobs:
       packages: read
     env:
       QWQ_MANAGED_SYSTEM_BACKSYNC: system-fast-forward-cas-v1
-      QWQ_SYSTEM_BACKSYNC_WORKFLOW_REF: ${{ job.workflow_ref }}
+      QWQ_SYSTEM_BACKSYNC_WORKFLOW_REF: ${{ github.repository }}/.github/workflows/system-backsync.yml@${{ github.ref }}
       QWQ_PROMOTION_RECORDER_APP_SLUG: ${{ vars.QWQ_PROMOTION_RECORDER_APP_SLUG }}
       QWQ_PROMOTION_RECORDER_APP_ID: ${{ vars.QWQ_PROMOTION_RECORDER_APP_ID }}
       GITHUB_EVENT_BEFORE: ${{ github.event.before }}

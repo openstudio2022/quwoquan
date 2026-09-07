@@ -80,7 +80,7 @@ _R4_GOVERNANCE_PREFIXES = (
     "quwoquan_ops/ci/impact_planner_core.py",
     "quwoquan_ops/ci/detect_ci_impacted_scopes.py",
     "quwoquan_ops/ci/verify_ci_changed_boundary.py",
-    "quwoquan_ops/ci/verify_hosted_release_authority.py",
+    "quwoquan_ops/ci/verify_hosted_integration_ruleset.py",
     "quwoquan_ops/policies/branch_policy.yaml",
     "quwoquan_ops/policies/ci_test_ownership.json",
     "quwoquan_ops/policies/flaky_test_policy.json",
@@ -416,6 +416,12 @@ def derive_integration_depth(classification: Mapping[str, object]) -> str:
 
 
 def classify_impacts(paths: Iterable[str], *, fail_closed_empty: bool = False) -> dict[str, object]:
+    """把 changed paths 分类成"触及了哪些运行时 scope"的事实。
+
+    未知根级路径在这里不扇出：它触及的运行时是零，而非全部。把它升到 R3 并要求全 scope
+    是 Delivery 的 fail-closed 决策，由 `build_delivery_impact_plan` 显式施加；本地
+    L-1/L0 复用本函数做秒级 focused 反馈，不能为一个陌生根文件跑遍全部 scope。
+    """
     normalized = normalize_changed_paths(paths)
     scopes = {scope: False for scope in SCOPE_NAMES}
     if not normalized and fail_closed_empty:
@@ -423,8 +429,6 @@ def classify_impacts(paths: Iterable[str], *, fail_closed_empty: bool = False) -
     else:
         for path in normalized:
             _classify_one(path, scopes)
-        if any(not _known_path(path) for path in normalized):
-            _apply_all(scopes)
 
     spec_contract = any(
         path.startswith(("specs/", "quwoquan_ops/policies/"))
@@ -478,6 +482,9 @@ def build_delivery_impact_plan(
     classified = classify_impacts(paths, fail_closed_empty=fail_closed_empty)
     changed_paths = list(classified["paths"])
     runtime_scopes = dict(classified["scopes"])
+    # Delivery fail-closed：任一未知根级路径都不可能被证明"不影响"，全 scope 必跑。
+    if any(not _known_path(path) for path in changed_paths):
+        _apply_all(runtime_scopes)
     for scope in requested_scopes:
         runtime_scopes[scope] = True
     governance_closure = any(

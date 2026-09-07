@@ -2,13 +2,13 @@
 """Verify-only dev1.0 promotion admission and post-merge MainSourceSeal."""
 from __future__ import annotations
 
+import argparse
 import base64
 import hashlib
 import json
-import argparse
 import os
-import shutil
 import re
+import shutil
 import stat
 import subprocess
 import tempfile
@@ -23,7 +23,12 @@ ADMISSION_SCHEMA = "quwoquan_ops.promotion_admission_receipt.v1"
 SEAL_SCHEMA = "quwoquan_ops.main_source_seal.v1"
 HANDOFF_SCHEMA = "quwoquan_ops.promotion_admission_handoff.v1"
 HANDOFF_CONTEXT = "quwoquan/promotion-admission-handoff/v1"
-_MAX_HANDOFF_AGE_SECONDS = 900
+# handoff 有效窗口 = promotion ratchet 的 enforcement budget（1800s）；只此一处常量，不再另设 15 分钟第二阈值。
+_MAX_HANDOFF_AGE_SECONDS = 1800
+# 原生 GitHub Actions 就是 main ruleset 里 required check 信任的 integration；handoff check-run 由 GITHUB_TOKEN 创建。
+GITHUB_ACTIONS_APP_SLUG = "github-actions"
+GITHUB_ACTIONS_APP_ID = 15368
+_HANDOFF_WORKFLOW_EVENTS = frozenset({"pull_request", "pull_request_review"})
 _AUTHORITY_SCHEMAS = {
     "approval": "quwoquan_ops.promotion_approval_fact.v1",
     "threads": "quwoquan_ops.promotion_thread_fact.v1",
@@ -694,7 +699,7 @@ def validate_hosted_promotion_handoff(
     if (
         workflow_run.get("id") != record.get("workflowRunId")
         or workflow_run.get("run_attempt") != record.get("workflowRunAttempt")
-        or workflow_run.get("event") != "pull_request"
+        or workflow_run.get("event") not in _HANDOFF_WORKFLOW_EVENTS
         or workflow_run.get("path") != ".github/workflows/delivery-gate.yml"
         or workflow_run.get("head_sha") != expected["headSha"]
         or workflow_run.get("html_url")

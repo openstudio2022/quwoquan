@@ -230,7 +230,7 @@ class StackctlGammaOperationLockContractTest(
                 )
 
             self.assertEqual(composition["imageDigest"], image_set_digest)
-            self.assertEqual(composition["releaseCompositionId"], candidate["baselineId"])
+            self.assertEqual(composition["candidateId"], candidate["baselineId"])
             self.assertEqual(
                 environment["QWQ_STARTUP_IMAGE_COMPOSITION_FILE"],
                 str(shared / "oci-images.json"),

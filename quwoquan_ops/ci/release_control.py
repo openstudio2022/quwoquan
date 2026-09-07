@@ -12,9 +12,9 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from quwoquan_ops.ci.promotion_evidence import create_main_source_seal, create_promotion_admission, digest
 from quwoquan_ops.ci.artifact_build_number import allocate_hosted_sequence
-from quwoquan_ops.ci.qualified_prod import create_prod_activation_admission, materialize_prod_activation_input
+from quwoquan_ops.ci.promotion_evidence import create_promotion_admission, digest
+from quwoquan_ops.ci.release_authority import create_initial_release_authority, create_release_candidate_selection
 from quwoquan_ops.ci.release_qualification import (
     create_candidate_material_from_factory_outputs,
     create_qualification_fact,
@@ -28,7 +28,6 @@ from quwoquan_ops.ci.release_tag_admission import (
     finalize_release_tag_admission,
     record_tag_mutation_outcome,
 )
-
 
 POLICY = ROOT / "quwoquan_ops/policies/release_selection_policy.yaml"
 VERSION = ROOT / "quwoquan_ops/policies/product_version.yaml"
@@ -66,11 +65,6 @@ def _parser() -> argparse.ArgumentParser:
     promotion.add_argument("--base-sha", required=True)
     promotion.add_argument("--synthetic-merge-sha", required=True)
     promotion.add_argument("--promotion-ready-at", required=True)
-
-    seal = sub.add_parser("main-seal")
-    seal.add_argument("--admission", required=True)
-    seal.add_argument("--main-sha", required=True)
-    seal.add_argument("--main-readback-at", required=True)
 
     request = sub.add_parser("qualification-request")
     request.add_argument("--rc-admission", required=True)
@@ -117,9 +111,9 @@ def _parser() -> argparse.ArgumentParser:
         intent.add_argument("--creator-readback", required=True)
         intent.add_argument("--ruleset-readback", required=True)
         intent.add_argument("--repository", required=True)
-        intent.add_argument("--controller-app-id", required=True, type=int)
-        intent.add_argument("--controller-installation-id", required=True, type=int)
-        intent.add_argument("--controller-app-slug", required=True)
+        intent.add_argument("--controller-key-id", required=True, type=int)
+        intent.add_argument("--controller-key-title", required=True)
+        intent.add_argument("--controller-key-fingerprint", required=True)
         intent.add_argument("--initial-release-authority")
         intent.add_argument("--admitted-at", required=True)
         if kind == "rc":
@@ -138,6 +132,20 @@ def _parser() -> argparse.ArgumentParser:
         finalize.add_argument("--ruleset-readback", required=True)
         finalize.add_argument("--admitted-at", required=True)
 
+    initial = sub.add_parser("initial-release-authority", help="记录首个 release train 的人工激活授权")
+    initial.add_argument("--repository", required=True)
+    initial.add_argument("--target-version", required=True)
+    initial.add_argument("--approver-login", required=True)
+    initial.add_argument("--approver-readback", required=True, type=Path, help="gh api user 的 JSON 回读文件")
+    initial.add_argument("--approved-at", required=True)
+    initial.add_argument("--basis", required=True, help="一句话说明为何激活（人工输入，原文记录）")
+    rc_select = sub.add_parser("rc-select", help="记录产品方对 main-reachable commit 的 RC 标签选择")
+    rc_select.add_argument("--repository", required=True)
+    rc_select.add_argument("--tag-name", required=True)
+    rc_select.add_argument("--source-git-sha", required=True)
+    rc_select.add_argument("--selector-login", required=True)
+    rc_select.add_argument("--selector-readback", required=True, type=Path)
+    rc_select.add_argument("--selected-at", required=True)
     intent_check = sub.add_parser("tag-admission-intent-check")
     intent_check.add_argument("--tag-kind", required=True, choices=("rc", "stable"))
     intent_check.add_argument("--tag-name", required=True)
@@ -345,8 +353,6 @@ def main(argv: list[str] | None = None) -> int:
                 required_evidence=_refs(args.required_evidence, "required-evidence"),
                 promotion_ready_at=args.promotion_ready_at,
             )
-        elif args.command == "main-seal":
-            path = create_main_source_seal(repository=ROOT, evidence_root=store, admission_ref=_exact(args.admission, "admission"), main_sha=args.main_sha, main_readback_at=args.main_readback_at)
         elif args.command == "qualification-request":
             path = create_qualification_request(root=store, rc_tag_admission_ref=_exact(args.rc_admission, "rc-admission"), main_source_seal_ref=_exact(args.main_source_seal, "main-source-seal"), integration_qualification_ref=_exact(args.integration_qualification, "integration-qualification"), requested_by_ref=_exact(args.request_authority, "request-authority"), requested_at=args.requested_at)
         elif args.command == "build-number-allocate":
@@ -396,9 +402,9 @@ def main(argv: list[str] | None = None) -> int:
                 creator_readback_ref=_exact(args.creator_readback, "creator-readback"),
                 ruleset_readback_ref=_exact(args.ruleset_readback, "ruleset-readback"),
                 repository_identity=args.repository,
-                controller_app_id=args.controller_app_id,
-                controller_installation_id=args.controller_installation_id,
-                controller_app_slug=args.controller_app_slug,
+                controller_key_id=args.controller_key_id,
+                controller_key_title=args.controller_key_title,
+                controller_key_fingerprint=args.controller_key_fingerprint,
                 initial_release_authority_ref=_exact(args.initial_release_authority, "initial-release-authority") if args.initial_release_authority else None,
                 admitted_at=args.admitted_at,
             )
@@ -416,9 +422,9 @@ def main(argv: list[str] | None = None) -> int:
                 creator_readback_ref=_exact(args.creator_readback, "creator-readback"),
                 ruleset_readback_ref=_exact(args.ruleset_readback, "ruleset-readback"),
                 repository_identity=args.repository,
-                controller_app_id=args.controller_app_id,
-                controller_installation_id=args.controller_installation_id,
-                controller_app_slug=args.controller_app_slug,
+                controller_key_id=args.controller_key_id,
+                controller_key_title=args.controller_key_title,
+                controller_key_fingerprint=args.controller_key_fingerprint,
                 initial_release_authority_ref=_exact(args.initial_release_authority, "initial-release-authority") if args.initial_release_authority else None,
                 admitted_at=args.admitted_at,
             )
@@ -453,9 +459,27 @@ def main(argv: list[str] | None = None) -> int:
                 ruleset_readback_ref=_exact(args.ruleset_readback, "ruleset-readback"),
                 admitted_at=args.admitted_at, release_selection_policy_path=POLICY,
             )
+        elif args.command == "initial-release-authority":
+            path = create_initial_release_authority(
+                store_root=store, repository=args.repository, target_version=args.target_version,
+                approver_login=args.approver_login, approved_at=args.approved_at, basis=args.basis,
+                readback=json.loads(args.approver_readback.read_text(encoding="utf-8")),
+            )
+        elif args.command == "rc-select":
+            path = create_release_candidate_selection(
+                store_root=store, repository_root=ROOT, repository=args.repository, tag_name=args.tag_name,
+                source_git_sha=args.source_git_sha, product_version_manifest=VERSION,
+                selector_login=args.selector_login, selected_at=args.selected_at,
+                readback=json.loads(args.selector_readback.read_text(encoding="utf-8")),
+            )
         elif args.command == "prod-admit":
+            # prod 子命令才需要 jsonschema 依赖；promotion/qualification 路径在 hosted runner 上不得因它 ImportError。
+            from quwoquan_ops.ci.qualified_prod import create_prod_activation_admission
+
             path = create_prod_activation_admission(root=store, release_tag_admission_ref=_exact(args.release_tag_admission, "release-tag-admission"), previous_active_released_ledger_ref=_exact(args.previous_active_released_ledger, "previous-active-released-ledger"), rollback_readiness_ref=_exact(args.rollback_readiness, "rollback-readiness"), control_plane_git_sha=args.control_plane_git_sha, admitted_at=args.admitted_at)
         elif args.command == "prod-materialize-input":
+            from quwoquan_ops.ci.qualified_prod import materialize_prod_activation_input
+
             materialize_prod_activation_input(root=store, admission_ref=_exact(args.admission, "admission"), service_material_ref=_exact(args.service_factory_material, "service-factory-material"), app_material_ref=_exact(args.app_factory_material, "app-factory-material"), output=args.output, repository_root=ROOT)
             path = args.output.resolve()
             if args.github_output:

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import subprocess
+import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -10,6 +11,7 @@ from quwoquan_ops.gate import verify_github_supply_chain
 
 # spec_ref: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/spec.md#sit-001.t4
 # spec_ref: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/spec.md#sit-001.t5
+# spec_ref: specs/feature-tree/runtime/development-workflow-governance/local-continuous-integration/spec.md#gwt-005
 ROOT = Path(__file__).resolve().parents[4]
 WORKFLOWS = ROOT / ".github" / "workflows"
 
@@ -101,15 +103,19 @@ class GithubSupplyChainContractTest(unittest.TestCase):
         )
 
     def test_tag_controller_uses_trusted_two_phase_order(self) -> None:
+        """controller 即 hosted deploy key（DEC-009）：pre-readback → 双 intent → intent check →
+        远端不存在 → 私钥指纹与 /keys 比对 → ssh remote → create-once → 恢复 https remote →
+        REST ref/object 读回 → outcome → post-readback → finalize → 删私钥。"""
         selection = WORKFLOWS / "release-tag-selection.yml"
         text = selection.read_text(encoding="utf-8")
-        pre_readback = text.index('hosted_readback pre_mutation "$PRE_CREATOR_FILE"')
+        pre_readback = text.index("--phase pre_mutation")
         admit_rc = text.index("tag-admit-rc-intent")
         admit_stable = text.index("tag-admit-stable-intent")
         intent_check = text.index("tag-admission-intent-check")
-        remote_absent = text.index('test "$REMOTE_STATUS" = 404')
-        token_remote = text.index(
-            'git remote set-url origin "https://x-access-token:${APP_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"'
+        remote_absent = text.index("already exists before mutation", intent_check)
+        key_match = text.index('test "$LOCAL_FINGERPRINT" = "$HOSTED_FINGERPRINT"')
+        ssh_remote = text.index(
+            'git remote set-url origin "ssh://git@${GITHUB_SERVER_URL#https://}/${GITHUB_REPOSITORY}.git"'
         )
         create = text.index('git tag -a "$TAG" "$SOURCE_SHA"')
         push = text.index('git push origin "refs/tags/$TAG:refs/tags/$TAG"')
@@ -120,31 +126,27 @@ class GithubSupplyChainContractTest(unittest.TestCase):
         ref_readback = text.index("/git/ref/tags/${TAG}", push)
         object_readback = text.index("/git/tags/${REMOTE_OBJECT_OID}", ref_readback)
         outcome = text.index("tag-mutation-outcome", object_readback)
-        check_run = text.index(
-            "$GITHUB_API_URL/repos/${GITHUB_REPOSITORY}/check-runs", outcome,
-        )
-        post_creator = text.index(
-            'post_readback post_mutation "$CREATOR_FILE"', check_run,
-        )
-        post_ruleset = text.index(
-            'post_readback post_mutation "$RULESET_FILE"', check_run,
-        )
-        finalize = text.index('"tag-admit-$KIND-finalize"', post_ruleset)
+        post_readback = text.index("--phase post_mutation", outcome)
+        finalize = text.index('"tag-admit-$KIND-finalize"', post_readback)
+        key_removed = text.index('rm -f "$KEY_FILE"', finalize)
 
         self.assertLess(pre_readback, admit_rc)
         self.assertLess(pre_readback, admit_stable)
         self.assertLess(max(admit_rc, admit_stable), intent_check)
         self.assertLess(intent_check, remote_absent)
-        self.assertLess(remote_absent, token_remote)
-        self.assertLess(token_remote, create)
+        self.assertLess(remote_absent, key_match)
+        self.assertLess(key_match, ssh_remote)
+        self.assertLess(ssh_remote, create)
         self.assertLessEqual(create, push)
         self.assertLess(push, restored_remote)
         self.assertLess(restored_remote, ref_readback)
         self.assertLess(ref_readback, object_readback)
         self.assertLess(object_readback, outcome)
-        self.assertLess(outcome, check_run)
-        self.assertLess(check_run, min(post_creator, post_ruleset))
-        self.assertLess(max(post_creator, post_ruleset), finalize)
+        self.assertLess(outcome, post_readback)
+        self.assertLess(post_readback, finalize)
+        self.assertLess(finalize, key_removed)
+        self.assertNotIn("actions/create-github-app-token@", text)
+        self.assertNotIn("RELEASE_CONTROLLER_READBACK_URL", text)
         self.assertEqual(
             verify_github_supply_chain.verify_release_tag_selection_controls(),
             [],
@@ -153,24 +155,10 @@ class GithubSupplyChainContractTest(unittest.TestCase):
     def test_tag_controller_forged_controls_fail_closed(self) -> None:
         selection = WORKFLOWS / "release-tag-selection.yml"
         original = selection.read_text(encoding="utf-8")
-        app_token = (
-            "actions/create-github-app-token@"
-            "bcd2ba49218906704ab6c1aa796996da409d3eb1"
-        )
         for label, forged in (
             (
-                "pre-creator-readback",
-                original.replace(
-                    'hosted_readback pre_mutation "$PRE_CREATOR_FILE"',
-                    'echo pre_mutation "$PRE_CREATOR_FILE"',
-                ),
-            ),
-            (
-                "pre-ruleset-readback",
-                original.replace(
-                    'hosted_readback pre_mutation "$PRE_RULESET_FILE"',
-                    'echo pre_mutation "$PRE_RULESET_FILE"',
-                ),
+                "pre-readback",
+                original.replace("--phase pre_mutation", "--phase pre_retired"),
             ),
             (
                 "RC intent",
@@ -182,67 +170,47 @@ class GithubSupplyChainContractTest(unittest.TestCase):
                     "tag-admit-stable-intent", "tag-admit-stable-retired"
                 ),
             ),
-            ("App token", original.replace(app_token, "actions/checkout@" + "0" * 40)),
+            (
+                "controller App token resurrected",
+                original + "\n      - uses: actions/create-github-app-token@" + "0" * 40 + "\n",
+            ),
+            (
+                "external readback service resurrected",
+                original + "\nenv:\n  READBACK_URL: ${{ vars.RELEASE_CONTROLLER_READBACK_URL }}\n",
+            ),
+            (
+                "deploy key fingerprint check",
+                original.replace(
+                    'test "$LOCAL_FINGERPRINT" = "$HOSTED_FINGERPRINT"',
+                    'test -n "$LOCAL_FINGERPRINT"',
+                ),
+            ),
+            (
+                "deploy key secret",
+                original.replace(
+                    "RELEASE_CONTROLLER_DEPLOY_KEY: ${{ secrets.RELEASE_CONTROLLER_DEPLOY_KEY }}",
+                    "RELEASE_CONTROLLER_DEPLOY_KEY: ${{ secrets.RETIRED_DEPLOY_KEY }}",
+                ),
+            ),
             (
                 "REST object readback",
                 original.replace("/git/tags/${REMOTE_OBJECT_OID}", "/git/commits/${REMOTE_OBJECT_OID}"),
             ),
             (
-                "check-run",
-                original.replace('"name": "release-tag-creation"', '"name": "forged-tag-creation"'),
-            ),
-            (
-                "post-creator-readback",
-                original.replace(
-                    'post_readback post_mutation "$CREATOR_FILE"',
-                    'echo post_mutation "$CREATOR_FILE"',
-                ),
-            ),
-            (
-                "post-ruleset-readback",
-                original.replace(
-                    'post_readback post_mutation "$RULESET_FILE"',
-                    'echo post_mutation "$RULESET_FILE"',
-                ),
+                "post-readback",
+                original.replace("--phase post_mutation", "--phase post_retired"),
             ),
             (
                 "finalize",
                 original.replace('"tag-admit-$KIND-finalize"', '"tag-admit-$KIND-retired"'),
             ),
             (
-                "missing App secret",
-                original.replace(
-                    "RELEASE_CONTROLLER_APP_PRIVATE_KEY",
-                    "RELEASE_CONTROLLER_RETIRED_PRIVATE_KEY",
-                ),
+                "intent binding in tag message",
+                original.replace("release-tag-intent: $INTENT_ID", "release-tag: $TAG"),
             ),
             (
-                "missing App installation id",
-                original.replace(
-                    "RELEASE_CONTROLLER_INSTALLATION_ID",
-                    "RELEASE_CONTROLLER_RETIRED_INSTALLATION_ID",
-                ),
-            ),
-            (
-                "missing App slug",
-                original.replace(
-                    "RELEASE_CONTROLLER_APP_SLUG",
-                    "RELEASE_CONTROLLER_RETIRED_APP_SLUG",
-                ),
-            ),
-            (
-                "missing readback URL",
-                original.replace(
-                    "RELEASE_CONTROLLER_READBACK_URL",
-                    "RELEASE_CONTROLLER_RETIRED_READBACK_URL",
-                ),
-            ),
-            (
-                "missing readback token",
-                original.replace(
-                    "RELEASE_CONTROLLER_READBACK_TOKEN",
-                    "RELEASE_CONTROLLER_RETIRED_READBACK_TOKEN",
-                ),
+                "private key left on runner",
+                original.replace('rm -f "$KEY_FILE"', "echo key-retained"),
             ),
             (
                 "checkout credential persistence",
@@ -254,10 +222,6 @@ class GithubSupplyChainContractTest(unittest.TestCase):
                     'git remote set-url origin "https://github.com/${GITHUB_REPOSITORY}.git"',
                     "echo remote-restoration-retired",
                 ),
-            ),
-            (
-                "deploy key",
-                original + "\nenv:\n  RELEASE_CONTROLLER_DEPLOY_KEY: retired\n",
             ),
             (
                 "force fetch",
@@ -427,6 +391,200 @@ class GithubSupplyChainContractTest(unittest.TestCase):
                 for failure in failures
             ),
             failures,
+        )
+
+    def test_invalid_job_context_property_fails_closed(self) -> None:
+        backsync = WORKFLOWS / "system-backsync.yml"
+        canonical = backsync.read_text(encoding="utf-8")
+        needle = (
+            "${{ github.repository }}/.github/workflows/system-backsync.yml"
+            "@${{ github.ref }}"
+        )
+        self.assertIn(needle, canonical)
+        forged = canonical.replace(needle, "${{ job.workflow_ref }}")
+
+        with _patched_workflow(backsync, forged):
+            failures = verify_github_supply_chain.verify_action_pins()
+
+        self.assertTrue(
+            any(
+                ".github/workflows/system-backsync.yml:" in failure
+                and "job.workflow_ref is not a GitHub Actions job context property" in failure
+                for failure in failures
+            ),
+            failures,
+        )
+        legal = canonical.replace(needle, "${{ job.status }}")
+        with _patched_workflow(backsync, legal):
+            self.assertEqual(
+                [
+                    failure
+                    for failure in verify_github_supply_chain.verify_action_pins()
+                    if "job context property" in failure
+                ],
+                [],
+            )
+
+    def test_job_level_env_rejects_runner_steps_env_and_job_contexts(self) -> None:
+        """delivery-gate.yml:27 曾在 job 级 env 里写 `runner.temp`，让 03 在每次 push 上
+        以 0-job run 静默失败。job 级 env 只能引用 github/inputs/matrix/needs/secrets/
+        strategy/vars；step 级 env 引用 runner/steps 则合法，不得误报。
+        """
+        gate = WORKFLOWS / "delivery-gate.yml"
+        canonical = gate.read_text(encoding="utf-8")
+        # 回归锚：当前 job 级 env 只能引用 github.* ；曾经的 runner.temp 写法已随重构消失。
+        needle = "      CONTROL_ROOT: ${{ github.workspace }}/.qwq_output/env/repo/runs/release-control"
+        self.assertIn(needle, canonical)
+        self.assertEqual(
+            [f for f in verify_github_supply_chain.verify_action_pins() if "job-level env references" in f],
+            [],
+        )
+        for context in ("runner.temp", "steps.inputs.outputs.x", "env.HOME", "job.status"):
+            with self.subTest(context=context):
+                forged = canonical.replace(needle, f"      CONTROL_ROOT: ${{{{ {context} }}}}/x")
+                with _patched_workflow(gate, forged):
+                    failures = verify_github_supply_chain.verify_action_pins()
+                self.assertTrue(
+                    any(
+                        ".github/workflows/delivery-gate.yml:" in failure
+                        and "job-level env references the" in failure
+                        for failure in failures
+                    ),
+                    failures,
+                )
+        # step 级 env（缩进 10）里引用 runner/steps 是合法的，不得被 job 级规则误报。
+        step_env = canonical.replace(
+            "        env:\n          PR_HEAD_REF: ${{ github.event.pull_request.head.ref }}",
+            "        env:\n          SCRATCH: ${{ runner.temp }}/scratch\n"
+            "          PR_HEAD_REF: ${{ github.event.pull_request.head.ref }}",
+        )
+        self.assertNotEqual(step_env, canonical)
+        with _patched_workflow(gate, step_env):
+            self.assertEqual(
+                [
+                    failure
+                    for failure in verify_github_supply_chain.verify_action_pins()
+                    if "job-level env references" in failure
+                ],
+                [],
+            )
+
+
+#: 最小 workflow 骨架：顶层 permissions 满足既有规则，只留 step 自引用这一条待验证的规则。
+_STEP_SELF_OUTPUT_WORKFLOW_HEAD = (
+    "name: forged\n"
+    "on: push\n"
+    "permissions:\n"
+    "  contents: read\n"
+    "jobs:\n"
+    "  forged:\n"
+    "    runs-on: ubuntu-latest\n"
+    "    steps:\n"
+)
+
+
+class StepSelfOutputReferenceContractTest(unittest.TestCase):
+    """9f2ee2093 的 delivery-gate.yml `id: admission` step 先在 run 里把 `path=...` 写进
+    GITHUB_OUTPUT，几行后同一个 run 又用 `${{ steps.admission.outputs.path }}` 传给
+    `--fact-file`。该表达式在 step 开始前求值，永远是空串，实际执行 `--fact-file ""`。
+    """
+
+    def _failures(self, steps: str) -> list[str]:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            workflows = root / ".github" / "workflows"
+            workflows.mkdir(parents=True)
+            (workflows / "forged.yml").write_text(
+                _STEP_SELF_OUTPUT_WORKFLOW_HEAD + steps, encoding="utf-8",
+            )
+            with mock.patch.object(verify_github_supply_chain, "ROOT", root), mock.patch.object(
+                verify_github_supply_chain, "WORKFLOWS", workflows,
+            ):
+                return [
+                    failure
+                    for failure in verify_github_supply_chain.verify_action_pins()
+                    if "references its own steps." in failure
+                ]
+
+    def test_step_referencing_its_own_outputs_in_run_fails_closed(self) -> None:
+        failures = self._failures(
+            "      - name: Validate exact facts and issue PromotionAdmissionReceipt\n"
+            "        id: admission\n"
+            "        run: |\n"
+            "          set -euo pipefail\n"
+            "          echo \"path=$RUNNER_TEMP/admission.json\" >> \"$GITHUB_OUTPUT\"\n"
+            "          python3 quwoquan_ops/ci/promotion_evidence.py publish-oci \\\n"
+            "            --fact-file \"${{ steps.admission.outputs.path }}\"\n"
+        )
+
+        self.assertEqual(len(failures), 1, failures)
+        self.assertIn(
+            ".github/workflows/forged.yml:15: step 'admission' references its own "
+            "steps.admission.outputs",
+            failures[0],
+        )
+        self.assertIn("evaluated before the step runs and is always empty", failures[0])
+
+    def test_later_step_referencing_previous_step_outputs_is_legal(self) -> None:
+        failures = self._failures(
+            "      - name: Validate exact facts and issue PromotionAdmissionReceipt\n"
+            "        id: admission\n"
+            "        run: |\n"
+            "          echo \"digest=sha256:0\" >> \"$GITHUB_OUTPUT\"\n"
+            "      - name: Create exact promotion handoff payload\n"
+            "        id: handoff\n"
+            "        env:\n"
+            "          ADMISSION_DIGEST: ${{ steps.admission.outputs.digest }}\n"
+            "        run: echo \"$ADMISSION_DIGEST\"\n"
+        )
+
+        self.assertEqual(failures, [])
+
+    def test_cross_step_forward_reference_is_outside_self_reference_scope(self) -> None:
+        """first 前向引用 second 的 outputs 在运行期同样是空串，但那不是「自引用」；本检查只
+        拦同一 step 内引用自身 outputs 的形态，跨 step 前向引用不在其范围。"""
+        failures = self._failures(
+            "      - id: first\n"
+            "        env:\n"
+            "          PEER: ${{ steps.second.outputs.value }}\n"
+            "        run: echo \"value=1\" >> \"$GITHUB_OUTPUT\"\n"
+            "      - id: second\n"
+            "        env:\n"
+            "          PEER: ${{ steps.first.outputs.value }}\n"
+            "        run: echo \"value=2\" >> \"$GITHUB_OUTPUT\"\n"
+        )
+
+        self.assertEqual(failures, [])
+
+    def test_hash_prefixed_heredoc_line_referencing_own_outputs_is_still_caught(self) -> None:
+        """run heredoc 里以 `#` 起头的 markdown 行不是 shell 注释，表达式照样在 step 开始前求值为空串。"""
+        failures = self._failures(
+            "      - name: summarize admission\n"
+            "        id: admission\n"
+            "        run: |\n"
+            "          echo \"path=x\" >> \"$GITHUB_OUTPUT\"\n"
+            "          cat >> \"$GITHUB_STEP_SUMMARY\" <<EOF\n"
+            "          # Admission ${{ steps.admission.outputs.path }}\n"
+            "          EOF\n"
+        )
+
+        self.assertEqual(len(failures), 1, failures)
+        self.assertIn(":14: step 'admission' references its own steps.admission.outputs", failures[0])
+
+    def test_quoted_step_id_is_still_recognized(self) -> None:
+        failures = self._failures(
+            "      - name: quoted id\n"
+            "        id: \"admission\"\n"
+            "        run: |\n"
+            "          echo \"path=x\" >> \"$GITHUB_OUTPUT\"\n"
+            "          echo \"${{ steps.admission.outputs.path }}\"\n"
+        )
+
+        self.assertEqual(len(failures), 1, failures)
+        self.assertIn(
+            ".github/workflows/forged.yml:13: step 'admission' references its own "
+            "steps.admission.outputs",
+            failures[0],
         )
 
 

@@ -65,7 +65,7 @@
 .PHONY: verify-local-port-manifest
 .PHONY: verify-public-vs-upstream-url-contract
 .PHONY: verify-domain-governance
-.PHONY: verify-python-script-governance verify-code-health-delta test-code-health-delta calibrate-code-health report-code-health-weekly verify-service-probe-homology
+.PHONY: verify-python-script-governance verify-code-health-delta test-code-health-delta calibrate-code-health report-code-health-weekly code-health-hotspots verify-service-probe-homology
 .PHONY: verify-vertical-architecture-ratchet
 .PHONY: test-vertical-architecture-ratchet-local-contract
 .PHONY: sync-page-object-source-paths verify-page-object-source-paths
@@ -142,7 +142,7 @@
 .PHONY: codegen-app-shell-navigation codegen-app-identity verify-app-identity verify-app-identity-state-isolation
 .PHONY: codegen-ops-portal
 .PHONY: codegen-control-plane-runtime
-.PHONY: verify-hosted-human-authority test-hosted-authority-adapter-local-contract test-hosted-human-authority-local-contract test-hosted-human-authority-api-integration test-ops-portal build-ops-portal gate-ops-portal
+.PHONY: verify-hosted-human-authority test-hosted-authority-adapter-local-contract test-hosted-integration-ruleset-local-contract test-hosted-human-authority-local-contract test-hosted-human-authority-api-integration test-ops-portal build-ops-portal gate-ops-portal
 .PHONY: codegen-content-service
 .PHONY: codegen-chat-service
 .PHONY: new-service
@@ -493,11 +493,22 @@ verify-domain-governance:
 verify-python-script-governance:
 	@PYTHONDONTWRITEBYTECODE=1 python3 quwoquan_ops/gate/verify_python_script_governance.py --scope all --mode check
 
+# base=auto 解析为 HEAD 与 dev1.0 的 merge-base：干净 lane 树上也能看到已提交的整条 lane 分歧；
+# 缺 dev1.0 引用时 typed 失败并给出恢复命令，不静默退回 HEAD。
 verify-code-health-delta:
-	@PYTHONDONTWRITEBYTECODE=1 python3 -B quwoquan_ops/gate/verify_incremental_code_health.py --base HEAD --head HEAD --working-tree --mode full
+	@PYTHONDONTWRITEBYTECODE=1 python3 -B quwoquan_ops/gate/verify_incremental_code_health.py --base auto --head HEAD --working-tree --mode full
 
 test-code-health-delta:
-	@$(PYTEST_RUNNER) $(PYTEST_INTERPRETER_FLAGS) -m pytest $(PYTEST_FLAGS) -p no:cacheprovider quwoquan_ops/tests/local_contract/gate/test_incremental_code_health__gate__local_contract_test.py quwoquan_ops/tests/local_contract/gate/test_code_health_calibration__gate__local_contract_test.py quwoquan_ops/tests/local_contract/gate/test_code_health_weekly__gate__local_contract_test.py quwoquan_ops/tests/local_contract/ci/test_code_health_delivery__local_contract_test.py -q
+	@$(PYTEST_RUNNER) $(PYTEST_INTERPRETER_FLAGS) -m pytest $(PYTEST_FLAGS) -p no:cacheprovider \
+		quwoquan_ops/tests/local_contract/gate/test_incremental_code_health__gate__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/gate/test_code_health_file_size__gate__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/gate/test_code_health_precision__gate__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/gate/test_code_health_render_and_history__gate__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/gate/test_code_health_hotspots__gate__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/gate/test_code_health_calibration__gate__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/gate/test_code_health_weekly__gate__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/ci/test_code_health_delivery__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/ci/test_code_health_integration__local_contract_test.py -q
 
 calibrate-code-health:
 	@test -n "$(SAMPLES)" || (echo "usage: make calibrate-code-health SAMPLES='--sample <pr>=<merge-sha> ...'" >&2; exit 2)
@@ -505,6 +516,11 @@ calibrate-code-health:
 
 report-code-health-weekly:
 	@PYTHONDONTWRITEBYTECODE=1 python3 -B quwoquan_ops/gate/report_code_health_weekly.py
+
+# Agent PRE / plan-next 的紧凑热点视图：本地最新 weekly report → OCI weekly fact → typed unavailable。
+code-health-hotspots:
+	@test -n "$(OWNER)" || (echo "usage: make code-health-hotspots OWNER=<owner-scope-prefix>" >&2; exit 2)
+	@PYTHONDONTWRITEBYTECODE=1 python3 -B quwoquan_ops/gate/report_code_health_hotspots.py --owner "$(OWNER)"
 
 # 服务端就绪路由与 deploy readinessProbe 同源：探针错配会让依赖断裂报绿。
 verify-service-probe-homology:
@@ -668,6 +684,12 @@ verify-hosted-human-authority:
 test-hosted-authority-adapter-local-contract: prepare-test-python
 	@$(PYTEST_RUNNER) $(PYTEST_INTERPRETER_FLAGS) -m pytest $(PYTEST_FLAGS) \
 		quwoquan_ops/tests/local_contract/gate/test_hosted_authority_adapter__local_contract_test.py -q
+
+# 04. Lane Gate governance job 调用的 dev1.0 ruleset 读回门禁，其合同必须也在 gate 链执行。
+test-hosted-integration-ruleset-local-contract: prepare-test-python
+	@$(PYTEST_RUNNER) $(PYTEST_INTERPRETER_FLAGS) -m pytest $(PYTEST_FLAGS) -p no:cacheprovider \
+		quwoquan_ops/tests/local_contract/ci/test_hosted_integration_ruleset__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/ci/test_delivery_gate_signer_identity__local_contract_test.py -q
 
 test-hosted-human-authority-local-contract: test-hosted-authority-adapter-local-contract
 	@$(MAKE) -C quwoquan_service test-platform-ops-local-contract
@@ -1391,7 +1413,7 @@ test-app-python-local-contract: prepare-test-python
 # 门禁配套 local_contract：这些测试锁定 gate 链上门禁自身的判据，必须与门禁同进同退。
 # 缺口清单由 verify_gate_local_contract_execution.py 实时派生，本目标必须与之保持零缺口；
 # 新增门禁时把它的配套测试补进这里，不要重新引入 allowance 基线。
-test-gate-companion-local-contract: test-review-dispatch test-review-consolidation test-named-evidence test-evidence-fingerprint test-handoff-contracts test-hosted-authority-adapter-local-contract test-governance-pipeline-admission test-delivery-ci-local-contract prepare-test-python
+test-gate-companion-local-contract: test-review-dispatch test-review-consolidation test-named-evidence test-evidence-fingerprint test-handoff-contracts test-hosted-authority-adapter-local-contract test-hosted-integration-ruleset-local-contract test-code-health-delta test-governance-pipeline-admission test-delivery-ci-local-contract prepare-test-python
 	@$(PYTEST_RUNNER) $(PYTEST_INTERPRETER_FLAGS) -m pytest $(PYTEST_FLAGS) \
 		quwoquan_ops/tests/local_contract/provider/test_external_provider_governance__local_contract_test.py \
 		quwoquan_ops/tests/local_contract/provider/test_provider_conformance_evidence__contract__local_contract_test.py \
@@ -1756,7 +1778,55 @@ gate-release:
 # Usage: make deploy-beta-k8s [CLOUD_PROVIDER=volcengine]
 .PHONY: deploy-beta-k8s
 deploy-beta-k8s:
-	@python3 quwoquan_ops/cli/stackctl.py deploy --env beta --mode environment-assembly
+	@python3 quwoquan_ops/cli/stackctl.py deploy --env beta --mode environment-assembly \
+		$(if $(CLOUD_PROVIDER),--cloud-provider "$(CLOUD_PROVIDER)",)
+
+# 证据签名信任根：为 EAF / IQF 两个 signer identity 生成仓外 Ed25519 私钥（0600），公钥登记进
+# quwoquan_ops/policies/evidence_signing_keyring.yaml。幂等；换 key 用 ROTATE=1。keyring 改动需随提交进入 dev1.0。
+.PHONY: evidence-signing-bootstrap
+evidence-signing-bootstrap:
+	@PYTHONDONTWRITEBYTECODE=1 python3 -B quwoquan_ops/cli/evidence_signing_bootstrap.py \
+		$$( [ "$${ROTATE:-0}" = "1" ] && printf -- '--rotate' ) $(EVIDENCE_SIGNING_ARGS)
+
+# integration 工作区模式二：对 exact candidate 做本地 readiness + Alpha（条件 Beta）真实验证，
+# 签发 EnvironmentAcceptanceFact 并（PUBLISH=1 时）以 expected-old CAS fast-forward 发布到远端 dev1.0。
+# 必填：RELEASE_ATTESTATION / ROLLBACK_RELEASE_ATTESTATION 指向两份不同的 immutable Data release attestation；
+# 签名私钥来自仓外 QWQ_EVIDENCE_SIGNING_KEY_ROOT（先 make evidence-signing-bootstrap）。可选：CANDIDATE=<sha>（默认 HEAD）、
+# OWNER_IDENTITY=<ref>、READINESS_LEVEL=fast|scope、PROFILE=integration|smoke、INTEGRATE_ARGS 透传。
+.PHONY: integrate
+integrate:
+	@if [ -z "$(RELEASE_ATTESTATION)" ] || [ -z "$(ROLLBACK_RELEASE_ATTESTATION)" ]; then \
+		echo "[integrate] GATE_BLOCK: RELEASE_ATTESTATION 与 ROLLBACK_RELEASE_ATTESTATION 必填（两份不同的 immutable Data release attestation）" >&2; exit 2; fi
+	@PYTHONDONTWRITEBYTECODE=1 python3 -B quwoquan_ops/cli/integration_run.py \
+		--candidate "$${CANDIDATE:-HEAD}" \
+		--release-attestation "$(RELEASE_ATTESTATION)" \
+		--rollback-release-attestation "$(ROLLBACK_RELEASE_ATTESTATION)" \
+		--readiness-level "$${READINESS_LEVEL:-fast}" \
+		--profile "$${PROFILE:-integration}" \
+		$$( [ -n "$(OWNER_IDENTITY)" ] && printf -- '--owner-identity %s' "$(OWNER_IDENTITY)" ) \
+		$$( [ "$${PUBLISH:-0}" = "1" ] && printf -- '--publish' ) \
+		$(INTEGRATE_ARGS)
+
+# dev1.0 -> main 合入后的源码回同步（integration 工作区 FF 通道）：
+# 校验远端 main 头是恰好一次两父 merge、其第二父就是本地 dev1.0 头，再 --ff-only 并按既有 pre-push FF 通道推送 dev1.0。
+# dev1.0 已前移（非 FF）时不 reset、不自动 merge，直接阻断交人工判断。
+.PHONY: promotion-backsync
+promotion-backsync:
+	@set -eu; \
+	git fetch --no-tags origin "+refs/heads/main:refs/remotes/origin/main" "+refs/heads/dev1.0:refs/remotes/origin/dev1.0"; \
+	test "$$(git symbolic-ref --quiet HEAD)" = refs/heads/dev1.0 || { echo "[promotion-backsync] GATE_BLOCK: 当前 HEAD 必须在 dev1.0" >&2; exit 2; }; \
+	test -z "$$(git status --porcelain --untracked-files=no)" || { echo "[promotion-backsync] GATE_BLOCK: 工作树必须干净" >&2; exit 2; }; \
+	local_dev="$$(git rev-parse refs/heads/dev1.0)"; remote_dev="$$(git rev-parse refs/remotes/origin/dev1.0)"; main_sha="$$(git rev-parse refs/remotes/origin/main)"; \
+	test "$$local_dev" = "$$remote_dev" || { echo "[promotion-backsync] GATE_BLOCK: 本地 dev1.0 $$local_dev != 远端 $$remote_dev" >&2; exit 2; }; \
+	if [ "$$local_dev" = "$$main_sha" ]; then echo "[promotion-backsync] dev1.0 已等于 main $$main_sha（幂等）"; exit 0; fi; \
+	parents="$$(git show -s --format=%P "$$main_sha")"; set -- $$parents; \
+	test "$$#" -eq 2 || { echo "[promotion-backsync] GATE_BLOCK: main 头 $$main_sha 不是两父 merge" >&2; exit 2; }; \
+	test "$$2" = "$$local_dev" || { echo "[promotion-backsync] GATE_BLOCK: main 头第二父 $$2 不是当前 dev1.0 $$local_dev；dev1.0 已前移，需人工 merge" >&2; exit 2; }; \
+	git merge --ff-only "$$main_sha"; \
+	git push origin refs/heads/dev1.0:refs/heads/dev1.0; \
+	readback="$$(git ls-remote origin refs/heads/dev1.0 | cut -f1)"; \
+	test "$$readback" = "$$main_sha" || { echo "[promotion-backsync] GATE_BLOCK: 远端读回 $$readback != $$main_sha" >&2; exit 2; }; \
+	echo "[promotion-backsync] dev1.0 $$local_dev -> $$main_sha readback ok"
 
 # 本地优先 CI/readiness：显式 producer，不在 pre-commit 内自动跑全面测试。
 local-readiness-plan:

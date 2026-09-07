@@ -7,7 +7,7 @@ plane 拥有上传/审核/发布事实。本命令是渠道分发回执的唯一
   已登记），blocked 渠道不得伪造分发证据。
 - 回执 schema/字段/约束单轨来自 `app_artifact_manifest.yaml` 的
   `app_distribution_receipt` 段，脚本不自持第二份字段集合。
-- fan-out 不变量在写入时强制：同一 releaseCompositionId 下所有 android 渠道回执
+- fan-out 不变量在写入时强制：同一 candidateId 下所有 android 渠道回执
   必须引用同一 release APK artifactDigest；非 uploaded 的 phase 要求同渠道
   同 candidate 已存在 uploaded 回执。
 - 回执 append-only、内容寻址落盘（prod-hosted deployment target），
@@ -55,7 +55,7 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
         ),
     )
     parser.add_argument("--channel", default="")
-    parser.add_argument("--release-composition-id", default="")
+    parser.add_argument("--candidate-id", default="")
     parser.add_argument("--artifact-digest", default="")
     parser.add_argument("--display-version", default="")
     parser.add_argument("--build-number", default="")
@@ -150,7 +150,7 @@ def _list_receipts(channel_id: str) -> dict[str, Any]:
         "details": [
             f"{receipt['channelId']}/{receipt['phase']}: "
             f"{receipt['displayVersion']}+{receipt['buildNumber']} "
-            f"candidate={str(receipt['releaseCompositionId'])[:19]}..."
+            f"candidate={str(receipt['candidateId'])[:19]}..."
             for receipt in receipts
         ],
         "receipts": receipts,
@@ -177,10 +177,10 @@ def _record_receipt(
         blockers.append(
             f"--channel must be one of: {', '.join(sorted(allowed_channels))}"
         )
-    release_composition_id = str(getattr(args, "release_composition_id", "") or "").strip()
+    candidate_id = str(getattr(args, "candidate_id", "") or "").strip()
     artifact_digest = str(getattr(args, "artifact_digest", "") or "").strip()
     for label, value in (
-        ("--release-composition-id", release_composition_id),
+        ("--candidate-id", candidate_id),
         ("--artifact-digest", artifact_digest),
     ):
         if _DIGEST_PATTERN.fullmatch(value) is None:
@@ -242,7 +242,7 @@ def _record_receipt(
             {
                 str(receipt["channelId"])
                 for receipt in existing
-                if receipt.get("releaseCompositionId") == release_composition_id
+                if receipt.get("candidateId") == candidate_id
                 and receipt.get("artifactDigest") != artifact_digest
                 and str(
                     (channels.get(str(receipt.get("channelId"))) or {}).get(
@@ -260,13 +260,13 @@ def _record_receipt(
                     "reviewed release APK source digest per candidate"
                 ),
                 "details": [
-                    f"candidate {release_composition_id} already distributed with a "
+                    f"candidate {candidate_id} already distributed with a "
                     f"different artifactDigest via: {', '.join(conflicting)}"
                 ],
             }
     if phase != "uploaded" and not any(
         receipt.get("channelId") == channel_id
-        and receipt.get("releaseCompositionId") == release_composition_id
+        and receipt.get("candidateId") == candidate_id
         and receipt.get("phase") == "uploaded"
         for receipt in existing
     ):
@@ -274,7 +274,7 @@ def _record_receipt(
             "exitCode": 2,
             "summary": (
                 f"phase={phase} requires an existing uploaded receipt for "
-                f"{channel_id}/{release_composition_id}"
+                f"{channel_id}/{candidate_id}"
             ),
             "details": [
                 "the distribution state chain must trace back to one real "
@@ -285,7 +285,7 @@ def _record_receipt(
     replay = next((
         receipt for receipt in existing
         if receipt.get("channelId") == channel_id
-        and receipt.get("releaseCompositionId") == release_composition_id
+        and receipt.get("candidateId") == candidate_id
         and receipt.get("artifactDigest") == artifact_digest
         and receipt.get("displayVersion") == display_version
         and receipt.get("buildNumber") == build_number
@@ -303,7 +303,7 @@ def _record_receipt(
     receipt: dict[str, Any] = {
         "schema": "app-distribution-receipt",
         "channelId": channel_id,
-        "releaseCompositionId": release_composition_id,
+        "candidateId": candidate_id,
         "artifactDigest": artifact_digest,
         "applicationId": row["applicationId"] or f"web.{channel_id}",
         "displayVersion": display_version,

@@ -30,7 +30,7 @@ IMMUTABLE_RELEASE_REF = re.compile(
 DIGEST = re.compile(r"sha256:[0-9a-f]{64}")
 GIT_SHA = re.compile(r"[0-9a-f]{40}")
 REPOSITORY = re.compile(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+")
-CONSUMABLE_STATUSES = ("qualified", "main-admitted", "released")
+CONSUMABLE_STATUSES = ("candidate-ready", "deployable", "released")
 
 
 def _load_json(path: Path, label: str) -> dict[str, Any]:
@@ -98,7 +98,7 @@ def derive(
         allowed_statuses={require_status},
     )
 
-    candidate = str(manifest.get("releaseCompositionId") or "")
+    candidate = str(manifest.get("candidateId") or "")
     artifact_digest = str(manifest.get("artifactDigest") or "")
     source = manifest.get("source")
     if (
@@ -117,7 +117,7 @@ def derive(
         raise ValueError("released manifest producer identity is invalid")
 
     for label, expected, actual in (
-        ("releaseCompositionId", expected_candidate, candidate),
+        ("candidateId", expected_candidate, candidate),
         ("artifactDigest", expected_artifact_digest, artifact_digest),
         ("source.gitSha", expected_source_sha, source_sha),
     ):

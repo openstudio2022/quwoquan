@@ -132,7 +132,12 @@ def test_ordinary_dirty_dev_chain_completes_review_but_blocks_scope_admission() 
             "candidate_evidence_manifest"
         )
         assert candidate["owner_identity_ref"] == owner_ref
-        assert candidate["changed_paths"] == [probe.relative_to(ROOT).as_posix()]
+        # candidate v2：exact paths 只挂在各自 Feature-owner group 下，顶层不再重复。
+        assert [
+            path
+            for group in candidate["impacted_owner_groups"]
+            for path in group["paths"]
+        ] == [probe.relative_to(ROOT).as_posix()]
         assert candidate["impact_plan_identity"]["digest"].startswith("sha256:")
         assert candidate["impact_plan_identity"]["projection_ref"].startswith(
             "local-readiness-plan:sha256:"
@@ -140,9 +145,9 @@ def test_ordinary_dirty_dev_chain_completes_review_but_blocks_scope_admission() 
         assert candidate["impact_plan_identity"]["timeout_policy_ref"] == (
             "quwoquan_ops/policies/local_readiness_contract.yaml"
         )
-        assert candidate["impact_plan_identity"]["timeout_policy_digest"] == (
-            candidate["impact_plan"]["timeout_policy"]["digest"]
-        )
+        # candidate v2 只内嵌 content-addressed ImpactPlan identity，不再重复整份 projection。
+        assert "impact_plan" not in candidate
+        assert candidate["impact_plan_identity"]["timeout_policy_digest"].startswith("sha256:")
 
         # A foreign path may change after POST without contaminating the focused digest.
         unrelated.write_text("foreign concurrent mutation\n", encoding="utf-8")
@@ -185,41 +190,54 @@ def test_ordinary_dirty_dev_chain_completes_review_but_blocks_scope_admission() 
         assert plan["candidate_evidence_identity"]["ref"] == candidate_ref
         assert plan["profiles"] == []
         assert [item["role"] for item in plan["reviewers"]] == ["developer"]
-        assert [item["id"] for item in plan["evidence"]] == ["review-baseline"]
-        assert [item["command"] for item in plan["evidence"]] == [
-            "python3 -B quwoquan_ops/gate/verify_review_baseline.py"
+        # dev POST 的 required evidence：baseline + candidate-bound Code Health。
+        assert [item["id"] for item in plan["evidence"]] == [
+            "review-baseline", "code-health-delta",
         ]
-        assert plan["evidence"][0]["timeout_seconds"] == 10
-        assert "pytest" not in plan["evidence"][0]["command"]
-        assert "make verify-review-dispatch" not in plan["evidence"][0]["command"]
-
-        evidence_ref = _last_line(
-            _run(
-                [
-                    sys.executable,
-                    "-B",
-                    "quwoquan_ops/cli/evidence_runner.py",
-                    "--plan",
-                    plan_path.relative_to(ROOT).as_posix(),
-                    "--run-id",
-                    case_id,
-                ],
-                env=env,
-            )
+        assert plan["evidence"][0]["command"] == (
+            "python3 -B quwoquan_ops/gate/verify_review_baseline.py"
         )
+        assert plan["evidence"][0]["timeout_seconds"] > 0
+        assert plan["evidence"][1]["result_artifact"] == "code-health-report-v1"
+        for item in plan["evidence"]:
+            assert "pytest" not in item["command"]
+            assert "make verify-review-dispatch" not in item["command"]
+
+        # 脏工作树下 runner 仍产出回执（feedback），但 candidate-bound Code Health 只接受
+        # clean workspace：该 required evidence 以自身失败落入回执，terminal 走 failed。
+        evidence_run = subprocess.run(
+            [
+                sys.executable,
+                "-B",
+                "quwoquan_ops/cli/evidence_runner.py",
+                "--plan",
+                plan_path.relative_to(ROOT).as_posix(),
+                "--run-id",
+                case_id,
+            ],
+            cwd=ROOT,
+            env=env,
+            text=True,
+            capture_output=True,
+            check=False,
+            timeout=600,
+        )
+        assert evidence_run.returncode == 1, evidence_run.stderr
+        evidence_ref = _last_line(evidence_run)
         evidence_path = ROOT / evidence_ref
         evidence = json.loads(evidence_path.read_bytes())
-        assert evidence["terminal"] == {
-            "status": "PASS",
-            "code": "EVIDENCE.PASSED",
-            "failed_evidence": None,
-        }
         assert evidence["evidence_class"] == "feedback_only"
         assert evidence["admission_eligible"] is False
-        assert len(evidence["evidence"]) == 1
-        assert evidence["evidence"][0]["id"] == "review-baseline"
-        assert evidence["evidence"][0]["exit_code"] == 0
+        assert evidence["terminal"]["status"] != "PASS"
+        assert evidence["terminal"]["failed_evidence"] == "code-health-delta"
+        by_id = {item["id"]: item for item in evidence["evidence"]}
+        assert by_id["review-baseline"]["exit_code"] == 0
+        assert by_id["code-health-delta"]["exit_code"] != 0
+        assert by_id["code-health-delta"]["artifact"] is None
 
+        # 非 PASS 的 named evidence 不能进入 consolidation，更不可能成为 scope-admission
+        # grant。clean temporary-repository 的成功路径由
+        # test_scope_and_release_queue_pending_is_contract_advisory 覆盖。
         result_path = case / "review-result-developer.json"
         result_path.write_bytes(
             canonical_json_bytes(
@@ -231,7 +249,7 @@ def test_ordinary_dirty_dev_chain_completes_review_but_blocks_scope_admission() 
                 )
             )
         )
-        consolidated = _run(
+        consolidated = subprocess.run(
             [
                 sys.executable,
                 "-B",
@@ -243,40 +261,6 @@ def test_ordinary_dirty_dev_chain_completes_review_but_blocks_scope_admission() 
                 "--reviewer-result",
                 result_path.relative_to(ROOT).as_posix(),
             ],
-            env=env,
-        )
-        consolidation = json.loads(consolidated.stdout)
-        assert consolidation["terminal"] == {"status": "PASS", "codes": []}
-        assert consolidation["evidence_identities"][0]["receipt_ref"] == evidence_ref
-        assert consolidation["reviewer_result_identities"][0]["result_ref"] == (
-            result_path.relative_to(ROOT).as_posix()
-        )
-        consolidation_path = case / "consolidation.json"
-        consolidation_path.write_bytes(canonical_json_bytes(consolidation))
-
-        # Dirty workspace evidence completes Review feedback, but it is never a
-        # formal scope-admission grant. The clean temporary-repository success
-        # path remains covered by
-        # test_scope_and_release_queue_pending_is_contract_advisory.
-        readiness_plan = subprocess.run(
-            [
-                sys.executable,
-                "-B",
-                "quwoquan_ops/cli/local_readiness.py",
-                "plan",
-                "--level",
-                "scope",
-                "--path",
-                probe.relative_to(ROOT).as_posix(),
-                "--owner-identity",
-                owner_ref,
-                "--candidate-evidence",
-                candidate_ref,
-                "--review-consolidation",
-                consolidation_path.relative_to(ROOT).as_posix(),
-                "--required-evidence",
-                evidence_ref,
-            ],
             cwd=ROOT,
             env=env,
             text=True,
@@ -284,8 +268,8 @@ def test_ordinary_dirty_dev_chain_completes_review_but_blocks_scope_admission() 
             check=False,
             timeout=60,
         )
-        assert readiness_plan.returncode == 2
-        assert "REVIEW.EVIDENCE_FEEDBACK_ONLY" in readiness_plan.stderr
+        assert consolidated.returncode != 0
+        assert "REVIEW.EVIDENCE_FAILED" in consolidated.stderr + consolidated.stdout
         assert not (case / "readiness-state/process/receipts/current").exists()
 
         # Ordinary development does not depend on an automatic after-edit chain.

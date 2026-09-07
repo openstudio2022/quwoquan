@@ -2468,6 +2468,24 @@ _PLATFORM_CONFIG_JSON = r'''{
       "type": "string"
     },
     {
+      "default": "quwoquan_content",
+      "key": "sys.entity-service.content_service.mongo_database",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
+      "default": "",
+      "key": "sys.entity-service.content_service.mongo_uri",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": true,
+      "type": "string"
+    },
+    {
       "default": "/content/intersections/object",
       "key": "sys.entity-service.content_service.object_intersections_path",
       "reload": "restart",
@@ -5124,6 +5142,24 @@ _PLATFORM_CONFIG_JSON = r'''{
       "scope": "workload",
       "sensitive": false,
       "type": "int"
+    },
+    {
+      "default": "quwoquan_content",
+      "key": "sys.user-service.content_service.mongo_database",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
+      "default": "",
+      "key": "sys.user-service.content_service.mongo_uri",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": true,
+      "type": "string"
     },
     {
       "default": 0,

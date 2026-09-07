@@ -18,16 +18,16 @@ def _commands(job: dict[str, object]) -> str:
 def test_delivery_gate_uses_two_exact_sha_bounded_jobs() -> None:
     text = WORKFLOW.read_text(encoding="utf-8")
     workflow = yaml.safe_load(text)
-    assert list(workflow["jobs"]) == [
-        "promotion_verify", "main_source_seal", "system_backsync",
-    ]
+    assert list(workflow["jobs"]) == ["promotion_verify", "main_source_seal"]
     assert workflow["permissions"] == {"contents": "read"}
 
     promotion = workflow["jobs"]["promotion_verify"]
     sealing = workflow["jobs"]["main_source_seal"]
     assert promotion["timeout-minutes"] == 5
     assert sealing["timeout-minutes"] == 5
-    assert promotion["permissions"] == {"contents": "read", "packages": "write"}
+    assert promotion["permissions"] == {
+        "contents": "read", "packages": "write", "checks": "write", "pull-requests": "read",
+    }
     assert sealing["permissions"] == {
         "contents": "read", "packages": "write",
         "checks": "read", "pull-requests": "read",
@@ -37,18 +37,8 @@ def test_delivery_gate_uses_two_exact_sha_bounded_jobs() -> None:
         "main_source_seal_ref": "${{ steps.seal.outputs.main_source_seal_ref }}",
         "main_source_seal_digest": "${{ steps.seal.outputs.main_source_seal_digest }}",
     }
-    caller = workflow["jobs"]["system_backsync"]
-    assert caller["needs"] == "main_source_seal"
-    assert caller["uses"] == "./.github/workflows/system-backsync.yml"
-    assert caller["permissions"] == {
-        "actions": "read", "checks": "read", "contents": "read", "packages": "read",
-    }
-    assert set(caller["with"]) == {
-        "expected_dev_before", "source_sha", "main_source_seal_ref",
-        "main_source_seal_digest",
-    }
-    assert "secrets" not in caller
-    assert "steps" not in caller
+    # main→dev1.0 回同步由 integration 工作区按 FF 通道执行（make promotion-backsync），workflow 不再承载 backsync caller。
+    assert "system_backsync" not in workflow["jobs"]
     assert "git push" not in text
     assert "git update-ref" not in text
     assert "github.sha" not in text
@@ -61,8 +51,8 @@ def test_pull_request_and_push_paths_have_disjoint_evidence_effects() -> None:
 
     for token in (
         "HEAD_REF", "BASE_REF", "HEAD_SHA", "BASE_SHA", "MERGE_SHA",
-        "QUALIFICATION_REF", "APPROVAL_REF", "THREAD_REF", "RULESET_REF",
-        "BOUNDARY_REF", "REQUIRED_EVIDENCE_REFS", "promotion-admit",
+        "QUALIFICATION_BUNDLE_REF", "materialize-oci-bundle", "hosted-authority",
+        "APPROVAL", "THREADS", "RULESET", "BOUNDARY", "REQUIRED_EVIDENCE", "promotion-admit",
     ):
         assert token in promotion
     assert "main-seal" not in promotion
@@ -94,6 +84,6 @@ def test_main_push_fail_closed_checks_exact_merge_and_reachability() -> None:
         "GATE_BLOCK: merged source is not reachable from hosted main",
         "GATE_BLOCK: PromotionAdmissionReceipt does not bind merged main",
         "GATE_BLOCK: exact promotion handoff must exist exactly once",
-        "GATE_BLOCK: trusted promotion recorder App identity is not configured",
+        "GATE_BLOCK: promotion handoff must be verified against the GitHub Actions integration",
     ):
         assert token in sealing

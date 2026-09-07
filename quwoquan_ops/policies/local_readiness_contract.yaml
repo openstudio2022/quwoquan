@@ -45,6 +45,8 @@ profiles:
     required_admission: [review_consolidation_pass, required_named_evidence_pass]
 timeouts:
   schema_version: 1
+  # 解析顺序固定为 check → phase → level → default。每个 canonical check 都带 phase，
+  # 所以 default_by_level / default_seconds 只在缺 phase 的新 check 上生效，不得删以免 schema 漂移。
   default_seconds: 300
   default_by_level:
     fast: 120

@@ -86,7 +86,7 @@ class ReleaseEvidenceManifestFixtureMixin:
             {
                 "schema": finalizer.SCHEMA,
                 "releaseTrainId": None,
-                "releaseCompositionId": None,
+                "candidateId": None,
                 "status": "build-input",
                 "generatedAt": "2026-07-28T00:00:00Z",
                 "source": {
@@ -439,7 +439,7 @@ class ReleaseEvidenceManifestFixtureMixin:
                 "schema": schema,
                 "environment": environment,
                 "status": status,
-                "releaseCompositionId": manifest["releaseCompositionId"],
+                "candidateId": manifest["candidateId"],
                 "sourceGitSha": source["gitSha"],
                 "sourceTreeDigest": source["treeDigest"],
                 "evidenceDigest": evidence_digest,

@@ -3375,6 +3375,30 @@ export const platformConfig = {
       "sensitive": false
     },
     {
+      "key": "sys.entity-service.content_service.mongo_database",
+      "type": "string",
+      "owner": "",
+      "default": "quwoquan_content",
+      "scope": "workload",
+      "reload": "restart",
+      "rollout": "progressive",
+      "risk_level": "",
+      "ui_editable": false,
+      "sensitive": false
+    },
+    {
+      "key": "sys.entity-service.content_service.mongo_uri",
+      "type": "string",
+      "owner": "",
+      "default": "",
+      "scope": "workload",
+      "reload": "restart",
+      "rollout": "progressive",
+      "risk_level": "",
+      "ui_editable": false,
+      "sensitive": true
+    },
+    {
       "key": "sys.entity-service.content_service.object_intersections_path",
       "type": "string",
       "owner": "",
@@ -6997,6 +7021,30 @@ export const platformConfig = {
       "risk_level": "",
       "ui_editable": false,
       "sensitive": false
+    },
+    {
+      "key": "sys.user-service.content_service.mongo_database",
+      "type": "string",
+      "owner": "",
+      "default": "quwoquan_content",
+      "scope": "workload",
+      "reload": "restart",
+      "rollout": "progressive",
+      "risk_level": "",
+      "ui_editable": false,
+      "sensitive": false
+    },
+    {
+      "key": "sys.user-service.content_service.mongo_uri",
+      "type": "string",
+      "owner": "",
+      "default": "",
+      "scope": "workload",
+      "reload": "restart",
+      "rollout": "progressive",
+      "risk_level": "",
+      "ui_editable": false,
+      "sensitive": true
     },
     {
       "key": "sys.user-service.es.embeddingDims",

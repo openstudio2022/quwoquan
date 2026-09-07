@@ -34,7 +34,7 @@ def promotion_evidence(
     value: dict[str, Any] = {
         "schema": "prod-rollout-stage-promotion-evidence",
         "authority": "protected-prod-runner",
-        "releaseCompositionId": candidate_id,
+        "candidateId": candidate_id,
         "artifactDigest": artifact_digest,
         "campaignId": "release-test-campaign",
         "routingPolicyDigest": DIGEST,

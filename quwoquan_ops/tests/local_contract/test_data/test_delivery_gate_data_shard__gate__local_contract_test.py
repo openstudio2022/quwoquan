@@ -76,12 +76,11 @@ def _run_data_phase_validation(
 
 def test_source_promotion_excludes_data_execution() -> None:
     workflow = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))
-    assert set(workflow[True]) == {"pull_request", "push"}
-    assert set(workflow["jobs"]) == {
-        "promotion_verify",
-        "main_source_seal",
-        "system_backsync",
-    }
+    # pull_request_review 只用于审批后重新评估 promotion admission，同样不执行任何 data 分片。
+    assert set(workflow[True]) == {"pull_request", "pull_request_review", "push"}
+    # system backsync 已移出本 workflow（reusable system-backsync.yml 无 caller，见
+    # daily-merge-release-strategy OPEN-004），promotion 只剩验真与封印两个 job。
+    assert set(workflow["jobs"]) == {"promotion_verify", "main_source_seal"}
     source = WORKFLOW.read_text(encoding="utf-8")
     for token in (
         "quwoquan_data",
@@ -131,6 +130,75 @@ def test_a_test_file_added_later_still_lands_in_a_shard() -> None:
 
 def test_single_shard_selects_the_whole_set() -> None:
     assert shard.sharded_test_files(ROOT, 1, 0) == shard.local_contract_test_files(ROOT)
+
+
+def test_ops_scope_shards_its_own_tree_with_the_same_discipline() -> None:
+    """ops local_contract 与 data 共用同一取模分片器，默认 scope 仍是 data。"""
+    ops_full = shard.local_contract_test_files(ROOT, "ops")
+    assert ops_full
+    assert all(path.startswith("quwoquan_ops/tests/local_contract/") for path in ops_full)
+    assert not set(ops_full) & set(shard.local_contract_test_files(ROOT))
+    selected = [
+        path for index in range(4) for path in shard.sharded_test_files(ROOT, 4, index, "ops")
+    ]
+    assert sorted(selected) == ops_full
+    assert len(selected) == len(set(selected))
+    listed = subprocess.run(
+        [sys.executable, "-B", str(ROOT / "quwoquan_ops/gate/delivery_gate_data_shard.py"),
+         "--scope", "ops", "--total-shards", "4", "--shard-index", "2"],
+        cwd=ROOT, capture_output=True, text=True, check=False,
+    )
+    assert listed.returncode == 0, listed.stderr
+    assert listed.stdout.split() == shard.sharded_test_files(ROOT, 4, 2, "ops")
+
+
+# local-continuous-integration OPEN-004 冻结的排除集合：只能减少。新增条目 = lane 门禁覆盖面收缩，
+# 必须先在该 OPEN 登记并同步这里，不能靠修改 yaml 静默通过。
+LANE_GATE_EXCLUSIONS_FROZEN_2026_09_07 = frozenset({
+    "quwoquan_ops/tests/local_contract/environment/test_environment_auth_token_isolation__local_contract_test.py",
+    "quwoquan_ops/tests/local_contract/environment/test_environment_patrol_smoke__device_env_tls_and_runtime__local_contract_test.py",
+    "quwoquan_ops/tests/local_contract/environment/test_environment_patrol_smoke__typed_actor_sessions__local_contract_test.py",
+    "quwoquan_ops/tests/local_contract/gate/test_app_generated_manifest__contract__local_contract_test.py",
+    "quwoquan_ops/tests/local_contract/observability/test_product_telemetry_log_sink__security__local_contract_test.py",
+    "quwoquan_ops/tests/local_contract/service_ops/assistant-service/ci/test_assistant_device_matrix__local_contract_test.py",
+    "quwoquan_ops/tests/local_contract/stackctl/test_app_content_uat_failure_projection__local_contract_test.py",
+    "quwoquan_ops/tests/local_contract/stackctl/test_app_dependency_capsule__local_contract_test.py",
+    "quwoquan_ops/tests/local_contract/stackctl/test_filter_catalog_release_stackctl__security__local_contract_test.py",
+    "quwoquan_ops/tests/local_contract/stackctl/test_ios_pod_dependency_capsule__local_contract_test.py",
+})
+
+
+def test_lane_gate_exclusions_are_declared_real_ops_files_and_only_narrow_ops(tmp_path: Path) -> None:
+    """lane 门禁排除清单是声明式、文件级、指向真实 ops 合同，只减不增，且不影响 data 与全量。"""
+    excluded = shard.lane_gate_excluded_files(ROOT)
+    assert excluded
+    assert excluded <= LANE_GATE_EXCLUSIONS_FROZEN_2026_09_07, sorted(excluded - LANE_GATE_EXCLUSIONS_FROZEN_2026_09_07)
+    full = shard.local_contract_test_files(ROOT, "ops")
+    narrowed = shard.local_contract_test_files(ROOT, "ops", lane_gate=True)
+    assert excluded <= set(full)
+    assert sorted(set(full) - excluded) == narrowed
+    assert shard.local_contract_test_files(ROOT, "data") == shard.local_contract_test_files(ROOT)
+    with pytest.raises(ValueError, match="只适用于 ops"):
+        shard.local_contract_test_files(ROOT, "data", lane_gate=True)
+    selected = [
+        path for index in range(4)
+        for path in shard.sharded_test_files(ROOT, 4, index, "ops", lane_gate=True)
+    ]
+    assert sorted(selected) == narrowed
+
+    # 排除清单只能指向真实文件：指向不存在的路径必须 fail closed。
+    policy = ROOT / shard.LANE_GATE_OPS_EXCLUSIONS
+    forged_root = tmp_path / "repo"
+    (forged_root / policy.parent.relative_to(ROOT)).mkdir(parents=True)
+    (forged_root / "quwoquan_ops/tests/local_contract").mkdir(parents=True)
+    (forged_root / policy.relative_to(ROOT)).write_text(
+        "exclusions:\n"
+        "  - path: quwoquan_ops/tests/local_contract/absent__local_contract_test.py\n"
+        "    missing_host_capability: nothing\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="不存在"):
+        shard.lane_gate_excluded_files(forged_root)
 
 
 def test_shard_discovery_covers_every_test_file_on_disk() -> None:

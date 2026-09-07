@@ -35,8 +35,7 @@ from quwoquan_ops.tests.support.release_bound_environment_identity_test_support 
     SOURCE_DIGEST,
     SOURCE_REVISION,
     SUBJECT_HASH,
-    TEST_ENVIRONMENT_ACCEPTANCE_SIGNING_KEY,
-    TEST_ENVIRONMENT_ACCEPTANCE_SIGNING_KEY_ENV,
+    TEST_SIGNING_ENVIRONMENT,
     ENVIRONMENT_ACCEPTANCE_SCHEMA,
     Fixture,
     verify_environment_acceptance_signature,
@@ -81,14 +80,7 @@ class ReleaseBoundEnvironmentIdentityContractTest(unittest.TestCase):
             "_validate_telemetry_backend_receipt",
         )
         self.telemetry_backend = self.telemetry_backend_patcher.start()
-        mock.patch.dict(
-            "os.environ",
-            {
-                TEST_ENVIRONMENT_ACCEPTANCE_SIGNING_KEY_ENV:
-                    TEST_ENVIRONMENT_ACCEPTANCE_SIGNING_KEY,
-            },
-            clear=False,
-        ).start()
+        mock.patch.dict("os.environ", TEST_SIGNING_ENVIRONMENT, clear=False).start()
         self.addCleanup(mock.patch.stopall)
 
     @staticmethod

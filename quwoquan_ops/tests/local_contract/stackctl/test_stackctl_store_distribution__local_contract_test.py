@@ -32,7 +32,7 @@ _OTHER_DIGEST = "sha256:" + "c" * 64
 def _args(**overrides: object) -> argparse.Namespace:
     values: dict[str, object] = {
         "channel": "vivo_market",
-        "release_composition_id": _CANDIDATE,
+        "candidate_id": _CANDIDATE,
         "artifact_digest": _APK_DIGEST,
         "display_version": "1.4.0",
         "build_number": "58",
@@ -148,7 +148,7 @@ class StackctlStoreDistributionTest(unittest.TestCase):
         result = command_store_distribution(
             _args(
                 channel="unknown_market",
-                release_composition_id="not-a-digest",
+                candidate_id="not-a-digest",
                 artifact_digest="",
                 display_version="",
                 build_number="",
@@ -161,7 +161,7 @@ class StackctlStoreDistributionTest(unittest.TestCase):
         details = " ".join(str(item) for item in result["details"])
         for marker in (
             "--channel",
-            "--release-composition-id",
+            "--candidate-id",
             "--artifact-digest",
             "--display-version",
             "--phase",
