@@ -127,8 +127,48 @@ def test_admin_readback_requires_observable_bypass_actors() -> None:
     responses = _responses()
     assert _verify(responses, require_bypass_observable=True)["ruleset"]["bypassActorsObservable"] is True
     responses["/rulesets/1"].pop("bypass_actors")
-    with pytest.raises(HostedIntegrationRulesetError, match="bypass_actors is not observable"):
+    with pytest.raises(HostedIntegrationRulesetError, match="bypass_actors is not observable") as error:
         _verify(responses, require_bypass_observable=True)
+    # 恢复动作是换 ruleset write 权限的 token，不是改 ruleset。
+    assert "recovery=rerun_readback_with_ruleset_write_token" in str(error.value)
+
+
+@pytest.mark.parametrize(
+    ("pattern", "ref", "expected"),
+    [
+        # GitHub 文档给出的语义：* 不跨 /，**/ 任意层级，qa**/**/* 更宽。
+        ("qa/*", "qa/foo", True),
+        ("qa/*", "qa/foo/bar", False),
+        ("qa/**/*", "qa/foo/bar/foobar/hello-world", True),
+        ("qa**/**/*", "qa-team/foo/bar", True),
+        ("refs/heads/**/*", "refs/heads/dev1.0", True),
+        ("refs/heads/**/*", "refs/heads/release/1.0", True),
+        ("refs/*", "refs/heads/dev1.0", False),
+        ("refs/heads/dev?.0", "refs/heads/dev1.0", True),
+        ("refs/heads/dev[12].0", "refs/heads/dev1.0", True),
+        ("refs/heads/dev[23].0", "refs/heads/dev1.0", False),
+        ("refs/heads/dev1.0", "refs/heads/dev1.0", True),
+        ("refs/heads/dev1.0", "refs/heads/dev1.01", False),
+    ],
+)
+def test_github_fnmatch_dialect(pattern: str, ref: str, expected: bool) -> None:
+    from quwoquan_ops.ci.verify_hosted_integration_ruleset import _ref_pattern_matches
+
+    assert _ref_pattern_matches(pattern, ref=ref, default_branch_ref="refs/heads/main") is expected
+
+
+def test_default_branch_must_be_observable_for_tilde_default_branch_semantics() -> None:
+    responses = _responses()
+    responses[""] = {}
+    with pytest.raises(HostedIntegrationRulesetError, match="lacks default_branch"):
+        _verify(responses, expected_calls={""})
+
+
+def test_full_ruleset_page_blocks_instead_of_silently_truncating() -> None:
+    responses = _responses()
+    responses[RULESETS] = [{"id": index} for index in range(1, 101)]
+    with pytest.raises(HostedIntegrationRulesetError, match="may be truncated at per_page=100"):
+        _verify(responses, expected_calls={"", RULESETS})
 
 
 def test_non_active_or_non_branch_rulesets_do_not_count_as_applicable() -> None:
@@ -152,11 +192,22 @@ def test_exclude_pattern_removes_wildcard_ruleset_from_dev_applicability() -> No
     assert _verify(responses, expected_calls=EXPECTED_CALLS | {"/rulesets/3"})["ruleset"]["id"] == 1
 
 
+def test_star_does_not_cross_slash_so_refs_star_ruleset_is_not_applicable() -> None:
+    # GitHub FNM_PATHNAME：`refs/*` 只命中 refs 下一层，不命中 refs/heads/dev1.0；Python fnmatch 会误判为命中。
+    responses = _responses()
+    shallow = _ruleset(3, "shallow", ["04. Lane Gate"], with_pull_request=True)
+    shallow["conditions"] = {"ref_name": {"include": ["refs/*"], "exclude": []}}
+    _add_ruleset(responses, shallow)
+    assert _verify(responses, expected_calls=EXPECTED_CALLS | {"/rulesets/3"})["ruleset"]["id"] == 1
+
+
 @pytest.mark.parametrize(
     ("label", "include"),
     [
         ("tilde-all", ["~ALL"]),
-        ("fnmatch", ["refs/heads/dev*"]),
+        ("fnmatch-prefix", ["refs/heads/dev*"]),
+        # GitHub 文档的「全部分支」惯用写法；Python fnmatch 对它判不命中，会漏掉影子 ruleset。
+        ("globstar", ["refs/heads/**/*"]),
         ("default-branch", ["~DEFAULT_BRANCH"]),
     ],
 )
@@ -193,6 +244,8 @@ def test_second_ruleset_matching_dev_by_github_pattern_semantics_is_not_missed(l
         ("unbound-check-producer", lambda value: _dev_required_checks(value)[0].pop("integration_id"), "required checks must be exactly"),
         ("bypass-actor", lambda value: value["/rulesets/1"].update(bypass_actors=[{"actor_id": 1, "actor_type": "DeployKey"}]), "must have no bypass actors"),
         ("pull-request-rule", lambda value: value["/rulesets/1"]["rules"].insert(2, _pull_request_rule()), "must not require pull requests"),
+        # 唯一命中但以通配写法指向 dev1.0：形状漂移，detail 带 observed。
+        ("sole-wildcard-dev-ruleset", lambda value: value["/rulesets/1"]["conditions"]["ref_name"]["include"].__setitem__(0, "refs/heads/dev*"), 'ref condition must be exactly {"exclude": [], "include": ["refs/heads/dev1.0"]} (observed {"exclude": [], "include": ["refs/heads/dev*"]})'),
         ("non-strict", lambda value: value["/rulesets/1"]["rules"][_rule_index(value["/rulesets/1"], "required_status_checks")]["parameters"].update(strict_required_status_checks_policy=False), "required-check protection is incomplete"),
         ("enforce-on-create-off", lambda value: value["/rulesets/1"]["rules"][_rule_index(value["/rulesets/1"], "required_status_checks")]["parameters"].update(do_not_enforce_on_create=True), "required-check protection is incomplete"),
         ("missing-non-fast-forward", lambda value: value["/rulesets/1"]["rules"].pop(_rule_index(value["/rulesets/1"], "non_fast_forward")), "must contain one 'non_fast_forward' rule"),

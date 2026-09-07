@@ -134,7 +134,7 @@ def test_candidate_markdown_leads_with_blockers_and_debt_delta(tmp_path: Path) -
     assert "```json" in markdown
 
 
-def test_cli_discovers_local_history_by_default(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_cli_discovers_local_history_by_default(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
     repo, _base = init_repo(tmp_path)
     cloc = _fake_cloc(tmp_path)
     monkeypatch.setattr(report_code_health_weekly, "ROOT", repo)
@@ -170,7 +170,8 @@ def test_cli_discovers_local_history_by_default(tmp_path: Path, monkeypatch: pyt
     (weekly_root / "corrupt" / "report.json").write_text("{not json", encoding="utf-8")
     with pytest.raises(ValueError, match="local weekly report 无法读取"):
         report_code_health_weekly.discover_local_previous(weekly_root, current_head=second_head)
-    assert report_code_health_weekly.main(["--head", second_head, "--policy", str(policy_path(repo)), "--cloc", str(cloc)]) != 0
+    assert report_code_health_weekly.main(["--head", second_head, "--policy", str(policy_path(repo)), "--cloc", str(cloc)]) == 2
+    assert "code-health-weekly: FAILED: local weekly report 无法读取" in capsys.readouterr().err
 
 
 def test_weekly_markdown_and_cli_write_summary(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:

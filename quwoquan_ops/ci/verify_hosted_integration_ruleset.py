@@ -26,10 +26,10 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
-import fnmatch
 import hashlib
 import json
 import os
+import re
 import sys
 from pathlib import Path
 from typing import Any, Mapping
@@ -45,7 +45,9 @@ from quwoquan_ops.gate.verify_git_branch_policy import BranchPolicy, load_policy
 AUTHORITY_CODE = "OPS.BRANCH.AUTHORITY_UNAVAILABLE"
 GITHUB_ACTIONS_APP_ID = 15368
 RECEIPT_SCHEMA = "hosted-integration-ruleset-receipt"
+RULESET_PAGE_SIZE = 100
 RECOVERY_RESTORE = "restore_git_authority_then_retry"
+RECOVERY_WRITE_TOKEN = "rerun_readback_with_ruleset_write_token"
 RECOVERY_RULESET = (
     "configure the dev1.0 branch ruleset: exactly one active ruleset for refs/heads/dev1.0, "
     "rules deletion + non_fast_forward + required_status_checks(strict, GitHub Actions context "
@@ -107,15 +109,44 @@ def _rule(ruleset: Mapping[str, Any], rule_type: str) -> dict[str, Any]:
     return matches[0]
 
 
+def _github_fnmatch_regex(pattern: str) -> "re.Pattern[str]":
+    """GitHub ruleset 的 fnmatch 方言（Ruby `File.fnmatch` + `FNM_PATHNAME`）。
+
+    与 Python `fnmatch` 不同：`*`/`?` 不跨 `/`；`**/` 匹配零个或多个路径段；不跟 `/` 的 `**`
+    等价于 `*`；`[...]` 字符集按字面（GitHub 不支持 `[^...]` 取补与反斜杠转义）。用 Python
+    `fnmatch` 会把 `refs/heads/**/*`（GitHub 文档的「全部分支」惯用写法）判为不命中 `refs/heads/dev1.0`。
+    """
+    parts: list[str] = []
+    index = 0
+    while index < len(pattern):
+        if pattern.startswith("**/", index):
+            parts.append("(?:[^/]+/)*")
+            index += 3
+        elif pattern[index] == "*":
+            while index < len(pattern) and pattern[index] == "*":
+                index += 1
+            parts.append("[^/]*")
+        elif pattern[index] == "?":
+            parts.append("[^/]")
+            index += 1
+        elif pattern[index] == "[" and (closing := pattern.find("]", index + 1)) > index + 1:
+            parts.append("[" + pattern[index + 1:closing].replace("\\", "\\\\").replace("^", "\\^") + "]")
+            index = closing + 1
+        else:
+            parts.append(re.escape(pattern[index]))
+            index += 1
+    return re.compile("^" + "".join(parts) + "$")
+
+
 def _ref_pattern_matches(pattern: object, *, ref: str, default_branch_ref: str) -> bool:
-    """GitHub ref_name 条件语义：`~ALL`、`~DEFAULT_BRANCH` 与 fnmatch 通配。"""
+    """GitHub ref_name 条件语义：`~ALL`、`~DEFAULT_BRANCH` 与 GitHub 方言 fnmatch 通配。"""
     if not isinstance(pattern, str):
         return False
     if pattern == "~ALL":
         return True
     if pattern == "~DEFAULT_BRANCH":
         return ref == default_branch_ref
-    return fnmatch.fnmatchcase(ref, pattern)
+    return _github_fnmatch_regex(pattern).match(ref) is not None
 
 
 def _applies_to_ref(ruleset: Mapping[str, Any], *, ref: str, default_branch_ref: str) -> bool:
@@ -143,8 +174,16 @@ def _branch_ruleset(*, repository: str, token: str, branch: str) -> dict[str, An
     include；否则第二条以通配命中 dev1.0 并带 pull_request 规则的 ruleset 会被漏掉。
     """
     default_branch = _object(_api_get(repository, "", token), "repository").get("default_branch")
-    default_branch_ref = f"refs/heads/{default_branch}" if isinstance(default_branch, str) else ""
-    summaries = _object_list(_api_get(repository, "/rulesets?per_page=100", token), "rulesets")
+    if not isinstance(default_branch, str) or not default_branch:
+        # `~DEFAULT_BRANCH` 的适用判定依赖它；读不到就不能宣称已判完唯一性。
+        raise _block("repository response lacks default_branch; ~DEFAULT_BRANCH applicability is not observable")
+    default_branch_ref = f"refs/heads/{default_branch}"
+    summaries = _object_list(_api_get(repository, f"/rulesets?per_page={RULESET_PAGE_SIZE}", token), "rulesets")
+    if len(summaries) >= RULESET_PAGE_SIZE:
+        raise _block(
+            f"ruleset list may be truncated at per_page={RULESET_PAGE_SIZE}; "
+            "uniqueness cannot be proven without reading every ruleset"
+        )
     ref = f"refs/heads/{branch}"
     matches = []
     for summary in summaries:
@@ -179,7 +218,7 @@ def _verify_bypass_actors(ruleset: Mapping[str, Any], *, branch: str, require_ob
         raise _block(
             f"{branch} ruleset bypass_actors is not observable with this token; "
             "admin-side readback requires a token with ruleset write access",
-            recovery=RECOVERY_RULESET,
+            recovery=RECOVERY_WRITE_TOKEN,
         )
     return observable
 
@@ -220,8 +259,14 @@ def _verify_ruleset(
     )
     conditions = ruleset.get("conditions") or {}
     ref_name = conditions.get("ref_name") if isinstance(conditions, dict) else None
-    if ref_name != {"exclude": [], "include": [f"refs/heads/{branch}"]}:
-        raise _block(f"{branch} ruleset ref condition drifted", recovery=RECOVERY_RULESET)
+    expected_ref_name = {"exclude": [], "include": [f"refs/heads/{branch}"]}
+    if ref_name != expected_ref_name:
+        # 唯一命中的 ruleset 还必须以字面 include 指向 dev1.0：通配写法会让它随其他分支的变更漂移。
+        raise _block(
+            f"{branch} ruleset ref condition must be exactly {json.dumps(expected_ref_name, sort_keys=True)} "
+            f"(observed {json.dumps(ref_name, sort_keys=True)})",
+            recovery=RECOVERY_RULESET,
+        )
     _rule(ruleset, "deletion")
     _rule(ruleset, "non_fast_forward")
     # dev1.0 的合入执行者是 integration 工作区 fast-forward push（DEC-011），pull_request
