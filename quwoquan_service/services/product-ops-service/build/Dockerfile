@@ -23,6 +23,11 @@ RUN --mount=type=cache,id=quwoquan-go-build,target=/root/.cache/go-build \
     && CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} GOMAXPROCS=1 GOGC=20 GOMEMLIMIT=1536MiB \
     go build -overlay=/run/qwq-provider-bindings/go.overlay.json ${GO_BUILD_FLAGS} \
     -o /product-ops-service ./services/product-ops-service/cmd/api
+RUN --mount=type=cache,id=quwoquan-go-build,target=/root/.cache/go-build \
+    --mount=type=cache,id=quwoquan-go-mod,target=/go/pkg/mod \
+    CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} GOMAXPROCS=1 GOGC=20 GOMEMLIMIT=1536MiB \
+    go build ${GO_BUILD_FLAGS} -o /product-ops-elasticsearch-bootstrap \
+    ./services/product-ops-service/cmd/elasticsearch-bootstrap
 
 # 环境身份不烤入镜像：artifact-identity.json 由部署面挂载（DEC-005 信任域裁决），
 # 启动时经 QWQ_ARTIFACT_IDENTITY_FILE 读取并用 APP_ENV 断言校验。
@@ -41,5 +46,6 @@ RUN if command -v apk >/dev/null 2>&1; then \
       && rm -rf /var/lib/apt/lists/*; \
     fi
 COPY --from=builder /product-ops-service /usr/local/bin/product-ops-service
+COPY --from=builder /product-ops-elasticsearch-bootstrap /usr/local/bin/product-ops-elasticsearch-bootstrap
 EXPOSE 18086
 CMD ["product-ops-service"]

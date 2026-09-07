@@ -7,6 +7,7 @@ from typing import Any
 from urllib.parse import urlparse
 
 from .common import ROOT, load_json_yaml
+from .data_plane_binding import validate_data_plane_binding
 from .port_manifest import load_port_manifest, profile_ports
 
 
@@ -20,6 +21,10 @@ TARGETS = (
     "prod-hosted",
 )
 ROLE_CATALOG_PATH = DEFAULT_PATH / "domain_governance.yaml"
+BACKUP_RECOVERY_PLAN_PATH = DEFAULT_PATH / "prod" / "backup-recovery.yaml"
+DATA_PLANE_METRICS_PATH = (
+    ROOT / "quwoquan_ops" / "observability" / "data-plane-metrics.yaml"
+)
 _ROLE_CATALOG = {
     str(entry["role"]): entry
     for entry in load_json_yaml(ROLE_CATALOG_PATH)["endpointRegistry"]
@@ -384,6 +389,228 @@ def get_target(manifest: dict[str, Any], target_name: str) -> dict[str, Any]:
     return target
 
 
+def validate_prod_data_plane_backup_coverage(
+    manifest: dict[str, Any],
+    *,
+    backup_plan: dict[str, Any] | None = None,
+) -> list[str]:
+    """Cross-check prod binding backup ownership against the recovery plan."""
+
+    issues: list[str] = []
+    try:
+        plan = backup_plan or load_json_yaml(BACKUP_RECOVERY_PLAN_PATH)
+    except Exception as exc:  # pragma: no cover - surfaced by the repo gate.
+        return [f"prod backup recovery plan could not be loaded: {exc}"]
+    if (
+        not isinstance(plan, dict)
+        or plan.get("schema") != "quwoquan-prod-backup-recovery-plan"
+    ):
+        return ["prod backup recovery plan is invalid"]
+    datasets = plan.get("datasets")
+    if not isinstance(datasets, list):
+        return ["prod backup recovery plan datasets must be a list"]
+    by_id: dict[str, dict[str, Any]] = {}
+    for index, dataset in enumerate(datasets):
+        if not isinstance(dataset, dict) or not isinstance(dataset.get("id"), str):
+            issues.append(f"prod backup recovery plan datasets[{index}] is invalid")
+            continue
+        dataset_id = dataset["id"]
+        if dataset_id in by_id:
+            issues.append(f"prod backup recovery plan dataset is duplicated: {dataset_id}")
+            continue
+        by_id[dataset_id] = dataset
+
+    prod = (manifest.get("targets") or {}).get("prod-hosted")
+    data_plane = prod.get("dataPlane") if isinstance(prod, dict) else None
+    bindings = data_plane.get("bindings") if isinstance(data_plane, dict) else None
+    if not isinstance(bindings, dict):
+        return [*issues, "prod-hosted: dataPlane.bindings is required for backup coverage"]
+    for binding_key, binding in sorted(bindings.items()):
+        if not isinstance(binding, dict):
+            continue
+        backup_ref = str(binding.get("backupRef") or "").strip()
+        dataset = by_id.get(backup_ref)
+        if dataset is None:
+            issues.append(
+                f"prod-hosted: {binding_key}.backupRef has no backup dataset: {backup_ref}"
+            )
+            continue
+        resource = str(binding.get("resource") or "").strip()
+        if dataset.get("resourceRef") != resource:
+            issues.append(
+                f"prod-hosted: {binding_key}.backupRef {backup_ref} resourceRef "
+                f"must be {resource}"
+            )
+        memberships = dataset.get("namespaces")
+        membership_set = (
+            set(memberships)
+            if isinstance(memberships, list)
+            and all(isinstance(item, str) for item in memberships)
+            else set()
+        )
+        required_namespaces = {str(binding.get("namespace") or "").strip()}
+        inject = binding.get("inject")
+        if isinstance(inject, dict):
+            for descriptor in inject.values():
+                if (
+                    isinstance(descriptor, dict)
+                    and descriptor.get("kind") in {"database", "index"}
+                    and isinstance(descriptor.get("value"), str)
+                ):
+                    required_namespaces.add(descriptor["value"].strip())
+        for namespace in sorted(required_namespaces - {""}):
+            if namespace not in membership_set:
+                issues.append(
+                    f"prod-hosted: {binding_key} namespace {namespace} is outside "
+                    f"backup dataset {backup_ref} membership"
+                )
+    return issues
+
+
+
+def validate_data_plane_metrics_coverage(
+    manifest: dict[str, Any],
+    *,
+    metrics_manifest: dict[str, Any] | None = None,
+) -> list[str]:
+    """Cross-check binding metrics refs and physical scrape ownership."""
+
+    issues: list[str] = []
+    try:
+        metrics = metrics_manifest or load_json_yaml(DATA_PLANE_METRICS_PATH)
+    except Exception as exc:  # pragma: no cover - surfaced by the repo gate.
+        return [f"data-plane metrics manifest could not be loaded: {exc}"]
+    if not isinstance(metrics, dict) or metrics.get("schema") != "quwoquan-data-plane-metrics":
+        return ["data-plane metrics manifest is invalid"]
+    physical_profiles = metrics.get("physicalProfiles")
+    binding_profiles = metrics.get("bindingProfiles")
+    if not isinstance(physical_profiles, dict) or not isinstance(binding_profiles, dict):
+        return ["data-plane metrics profiles must be mappings"]
+
+    jobs: dict[str, str] = {}
+    for profile_id, profile in sorted(physical_profiles.items()):
+        if not isinstance(profile, dict):
+            issues.append(f"data-plane physical metrics profile {profile_id} is invalid")
+            continue
+        resource_ref = str(profile.get("resourceRef") or "").strip()
+        scrape_job = str(profile.get("scrapeJob") or "").strip()
+        if profile_id != resource_ref or not scrape_job:
+            issues.append(
+                f"data-plane physical metrics profile {profile_id} must identify one resource and scrape job"
+            )
+        previous = jobs.get(scrape_job)
+        if previous is not None and previous != resource_ref:
+            issues.append(
+                f"data-plane physical metrics scrape job {scrape_job} is shared by {previous} and {resource_ref}"
+            )
+        jobs[scrape_job] = resource_ref
+
+    physical_binding_profiles: dict[str, list[str]] = {}
+    for profile_id, profile in sorted(binding_profiles.items()):
+        if not isinstance(profile, dict) or profile.get("scope") != "physical_resource":
+            continue
+        physical_ref = str(profile.get("physicalProfileRef") or "").strip()
+        if physical_ref:
+            physical_binding_profiles.setdefault(physical_ref, []).append(
+                str(profile_id)
+            )
+    for physical_ref, profile_ids in sorted(physical_binding_profiles.items()):
+        if len(profile_ids) > 1:
+            issues.append(
+                "data-plane physicalProfileRef "
+                f"{physical_ref} has multiple physical_resource binding profiles: "
+                f"{profile_ids}"
+            )
+
+    targets = manifest.get("targets")
+    if not isinstance(targets, dict):
+        return [*issues, "environment topology targets are unavailable for metrics coverage"]
+    for target_name in ("alpha-local", "beta-local", "gamma-local", "prod-hosted"):
+        target = targets.get(target_name)
+        data_plane = target.get("dataPlane") if isinstance(target, dict) else None
+        resources = data_plane.get("resources") if isinstance(data_plane, dict) else None
+        bindings = data_plane.get("bindings") if isinstance(data_plane, dict) else None
+        if not isinstance(resources, dict) or not isinstance(bindings, dict):
+            continue
+        physical_profiles_by_resource: dict[str, set[str]] = {}
+        for binding_key, binding in sorted(bindings.items()):
+            if not isinstance(binding, dict):
+                continue
+            metrics_ref = str(binding.get("metricsRef") or "").strip()
+            profile = binding_profiles.get(metrics_ref)
+            if not isinstance(profile, dict):
+                issues.append(
+                    f"{target_name}: {binding_key}.metricsRef has no metrics profile: {metrics_ref}"
+                )
+                continue
+            resource_ref = str(binding.get("resource") or "").strip()
+            engine = str(binding.get("engine") or "").strip()
+            physical_ref = str(profile.get("physicalProfileRef") or "").strip()
+            scrape_job = str(profile.get("scrapeJob") or "").strip()
+            physical = physical_profiles.get(physical_ref)
+            if profile.get("engine") != engine or not isinstance(physical, dict):
+                issues.append(
+                    f"{target_name}: {binding_key}.metricsRef {metrics_ref} engine/profile mismatch"
+                )
+                continue
+            if physical.get("resourceRef") != resource_ref:
+                issues.append(
+                    f"{target_name}: {binding_key}.metricsRef {metrics_ref} must reference resource {resource_ref}"
+                )
+            scope = profile.get("scope")
+            expected_job = str(physical.get("scrapeJob") or "").strip()
+            if scope == "physical_resource" and scrape_job != expected_job:
+                issues.append(
+                    f"{target_name}: {metrics_ref} physical profile must use scrape job {expected_job}"
+                )
+            if scope == "logical_namespace" and (
+                not scrape_job or scrape_job == expected_job
+            ):
+                issues.append(
+                    f"{target_name}: {metrics_ref} logical profile requires an owner-scoped scrape job distinct from {expected_job}"
+                )
+            patterns = profile.get("namespacePatterns")
+            owner_label = profile.get("ownerLabel")
+            if scope == "physical_resource":
+                if owner_label is not None or patterns != []:
+                    issues.append(
+                        f"{target_name}: {metrics_ref} physical profile cannot declare owner namespaces"
+                    )
+                physical_profiles_by_resource.setdefault(resource_ref, set()).add(
+                    physical_ref
+                )
+            elif scope == "logical_namespace":
+                namespace = str(binding.get("namespace") or "").strip()
+                if not isinstance(owner_label, str) or not owner_label or not isinstance(patterns, list):
+                    issues.append(
+                        f"{target_name}: {metrics_ref} logical profile requires ownerLabel and namespacePatterns"
+                    )
+                elif not any(
+                    isinstance(pattern, str)
+                    and (pattern == namespace or (pattern.endswith("*") and namespace.startswith(pattern[:-1])))
+                    for pattern in patterns
+                ):
+                    issues.append(
+                        f"{target_name}: {binding_key} namespace {namespace} is outside metrics profile {metrics_ref}"
+                    )
+            else:
+                issues.append(
+                    f"{target_name}: {metrics_ref}.scope must be physical_resource or logical_namespace"
+                )
+        used_resources = {
+            str(binding.get("resource") or "").strip()
+            for binding in bindings.values()
+            if isinstance(binding, dict)
+        }
+        for resource_ref in sorted(used_resources):
+            profiles = physical_profiles_by_resource.get(resource_ref, set())
+            if profiles != {resource_ref}:
+                issues.append(
+                    f"{target_name}: physical resource {resource_ref} must resolve "
+                    "exactly one same-identity physical metrics profile"
+                )
+    return issues
+
 def validate_environment_topology(
     manifest: dict[str, Any],
     *,
@@ -730,10 +957,20 @@ def validate_environment_topology(
                         issues.append(
                             f"{target_name}: dataRelease.redisDatabase must be a non-negative integer"
                         )
+        issues.extend(
+            validate_data_plane_binding(
+                target,
+                target_name=target_name,
+                required=target_name
+                in {"alpha-local", "beta-local", "gamma-local", "prod-hosted"},
+            )
+        )
         if target_name == "prod-hosted" and env_name != "prod":
             issues.append("prod-hosted target must map to prod environment")
         if target_name == "prod-hosted" and backend != "ssh-hosted":
             issues.append("prod-hosted target must use ssh-hosted backend")
+    issues.extend(validate_prod_data_plane_backup_coverage(manifest))
+    issues.extend(validate_data_plane_metrics_coverage(manifest))
     for env_name, target_name in ENVIRONMENT_CANONICAL_TARGET.items():
         env = environments.get(env_name)
         target = targets.get(target_name)

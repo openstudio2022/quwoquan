@@ -173,6 +173,20 @@
 - 影响 Story：[`daily-merge-release-strategy`](./daily-merge-release-strategy/spec.md)、[`local-continuous-integration`](../development-workflow-governance/local-continuous-integration/spec.md)
 - 关联验收：[`daily-merge-release-strategy GWT-001`](./daily-merge-release-strategy/spec.md#gwt-001)、[`local-continuous-integration GWT-005`](../development-workflow-governance/local-continuous-integration/spec.md#gwt-005)
 
+<a id="dec-012"></a>
+### DEC-012 数据面绑定只在部署面解析，并支持物理共址与可逆拆分
+- 决策与对象边界：每个 target 的 runtime 装配附近以 `resources` 声明非秘密的 `physicalIdentity`、`engine` 与 `failureDomain`，以 `bindings` 将每个显式 `service.typedSlot` 映射到 `resource`、独立 `namespace`/`role`、`secretRef`、`backup` 与 `metrics`。`resources`/`bindings` 只属于 deployment control plane，不成为领域、服务或 App 的运行时发现 API；同一 physical resource 可以被多个显式 binding 共用，但不得据此推导默认 binding、共享 namespace 或共享 ACL。
+- 唯一解析与候选身份：环境 `package` 阶段（不含 component build）是唯一 projection boundary，确定性地把 binding 解析为既有服务前缀的 URI/DSN/endpoint 与 Redis mode，再通过现有配置注入面交付应用。应用 config 与源码不得出现 `clusterRef` 候选、physical resource 选择分支或 registry lookup。candidate 只记录对非秘密声明求得的 redacted `bindingDigest`；其中 `secretRef` 只保留非秘密引用身份，secret material 与物化后的 URI/DSN/endpoint 均不进入 candidate、digest payload、日志或回执。
+- 一致性、命令与幂等：binding 变更是部署控制面的显式 compare-and-swap command，输入绑定 `fromBindingDigest -> toBindingDigest`；package projection 与应用启动只查询该次已封存结果，不进行运行时重选。相同输入重放必须幂等，digest、resource identity、namespace/role、backup 或 metrics coverage 任一漂移都在应用 admission 前 `GATE_BLOCK`，不得产生部分 ready、双 reader/writer 或隐式 fallback。
+- 共址与拆分：共址只表示多个 binding 显式引用同一 physical resource，各 binding 仍独立拥有 namespace、最小权限 role、备份/恢复边界、容量预算、noisy-neighbor 归因和指标覆盖。拆分不得修改应用源码、服务契约或既有配置键，只改目标 binding，并严格执行“备份验证 -> 复制 -> 追平 -> quiesce -> 原子 cutover -> readiness -> readback”；任一步失败都停止在可判定状态，并在声明的限时回滚窗口内以原 `bindingDigest` 恢复。Search 的 reader/writer 必须由同一个原子共享 binding 一起切换，禁止在追平或回滚期间分别指向新旧资源。
+- 恢复、容量与观测：恢复点、复制 lag、quiesce/cutover/rollback 时长、连接/容量水位、noisy-neighbor、ACL readback、备份可恢复性与指标 coverage 均按 `binding + namespace` 记录和判定；physical resource 聚合视图只用于容量诊断，不能替代任一 binding 的证据。每次迁移 attempt 的 backup、ACL、readiness、readback 与 required metrics coverage 必须为 100%，超出 binding 的容量/SLO 或限时回滚预算立即告警并阻断晋级。
+- 验证边界与测试 seam：首个非生产验证范围只在 `gamma-local`，用 production projection 路径证明“多个显式 binding 共址同一本地 physical resource”和“单个 binding 临时拆分后按上述序列切换并回滚”；local contract 证明 typed-slot 完整性、确定性 projection、redaction、共享 namespace/role 禁令、Search 原子 binding 与 CAS 幂等，Gamma 验收证明 readiness/readback 和按 binding/namespace 的恢复、容量、ACL、noisy-neighbor、metrics 证据。不得因此创建、采购或声称已验证任何 Prod 数据集群，Prod 仍保持现有外部阻断与准入要求。
+- 理由：把逻辑数据所有权与当前物理部署密度分离，既允许首发以显式隔离的 namespace/role 安全共址，也能在容量、故障域或 noisy-neighbor 需要时只迁移一个 binding，且应用和候选无需感知基础设施拓扑。
+- 被否决方案：在应用 config/源码保留多组 `clusterRef` 并运行时查 registry、按服务复制 physical resource 清单、因共址而共享 namespace/role、将 secret/DSN 写入 candidate、Search reader/writer 分步切换、以 dual-read/dual-write 长期过渡，或用本地演练冒充 Prod 集群建设完成。
+- 关联要求：`REQ-002`
+- 影响 Story：[`local-gamma-mirror`](./local-gamma-mirror/spec.md)、[`service-core-composition`](./service-core-composition/spec.md)、[`multi-environment-wave-deployment`](./multi-environment-wave-deployment/spec.md)
+- 关联验收：`SIT-002`
+
 ## 5. 失败与恢复
 
 - 失败类型：分支 policy 无效、PR/ref 非法、`main` direct push、integration push 缺 before/after OID或 ancestry authority、integration/backsync 非 fast-forward、force/delete、ref compare-and-swap 冲突、Prod source 不可达 main、权限拒绝、依赖超时、候选摘要冲突、证据缺失或持久化失败。

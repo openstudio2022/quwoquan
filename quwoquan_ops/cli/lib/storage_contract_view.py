@@ -25,6 +25,7 @@ STORAGE_DOCUMENT_KEYS = frozenset(
         "streams",
         "transaction",
         "redis_cache",
+        "resources",
         "environment_backends",
         "fallback",
         "logstores",

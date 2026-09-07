@@ -233,17 +233,18 @@ type ObjectReadinessEvidence struct {
 }
 
 type Object struct {
-	ID             string               `json:"id"`
-	Domain         string               `json:"domain"`
-	Name           string               `json:"name"`
-	Kind           ObjectKind           `json:"kind"`
-	KindExplicit   bool                 `json:"kindExplicit"`
-	ModelVersion   string               `json:"modelVersion,omitempty"`
-	AggregateOwner string               `json:"aggregateOwner,omitempty"`
-	StorageBackend string               `json:"storageBackend,omitempty"`
-	SourcePath     string               `json:"sourcePath"`
-	Members        []Member             `json:"members,omitempty"`
-	Lifecycle      *LifecycleDefinition `json:"lifecycle,omitempty"`
+	ID               string                  `json:"id"`
+	Domain           string                  `json:"domain"`
+	Name             string                  `json:"name"`
+	Kind             ObjectKind              `json:"kind"`
+	KindExplicit     bool                    `json:"kindExplicit"`
+	ModelVersion     string                  `json:"modelVersion,omitempty"`
+	AggregateOwner   string                  `json:"aggregateOwner,omitempty"`
+	StorageBackend   string                  `json:"storageBackend,omitempty"`
+	StorageResources []ObjectStorageResource `json:"storageResources,omitempty"`
+	SourcePath       string                  `json:"sourcePath"`
+	Members          []Member                `json:"members,omitempty"`
+	Lifecycle        *LifecycleDefinition    `json:"lifecycle,omitempty"`
 }
 
 type Member struct {
@@ -264,18 +265,19 @@ type Member struct {
 // internal append ports and external ports all use this one non-HTTP track;
 // none of them is exposed to App/OpenAPI generators.
 type RuntimeEntrypoint struct {
-	ID              string        `json:"id"`
-	LocalID         string        `json:"localId"`
-	Domain          string        `json:"domain"`
-	ObjectID        string        `json:"objectId"`
-	RuntimeKind     string        `json:"runtimeKind"`
-	Phase           string        `json:"phase"`
-	ApplicationKind OperationKind `json:"applicationKind"`
-	Facet           string        `json:"facet"`
-	FacadeMethod    string        `json:"facadeMethod"`
-	ObjectOwner     string        `json:"objectOwner"`
-	SourceObjects   []string      `json:"sourceObjects,omitempty"`
-	Idempotency     string        `json:"idempotency,omitempty"`
+	ID              string                `json:"id"`
+	LocalID         string                `json:"localId"`
+	Domain          string                `json:"domain"`
+	ObjectID        string                `json:"objectId"`
+	RuntimeKind     string                `json:"runtimeKind"`
+	Phase           string                `json:"phase"`
+	ApplicationKind OperationKind         `json:"applicationKind"`
+	Facet           string                `json:"facet"`
+	FacadeMethod    string                `json:"facadeMethod"`
+	ObjectOwner     string                `json:"objectOwner"`
+	SourceObjects   []string              `json:"sourceObjects,omitempty"`
+	Idempotency     string                `json:"idempotency,omitempty"`
+	Consistency     *OperationConsistency `json:"consistency,omitempty"`
 	// Telemetry 与 HTTP operation 同语义：metric 是契约层逻辑标识（join key），
 	// 只以 contract_metric label 形式被 PromQL 消费，不是 series 发射承诺。
 	Telemetry  TelemetryPolicy      `json:"telemetry"`
@@ -346,6 +348,7 @@ type Operation struct {
 	Pagination             *PaginationPolicy        `json:"pagination,omitempty"`
 	ResponseAdmission      *ResponseAdmissionPolicy `json:"responseAdmission,omitempty"`
 	Concurrency            ConcurrencyPolicy        `json:"concurrency,omitempty"`
+	Consistency            *OperationConsistency    `json:"consistency,omitempty"`
 	ErrorCodes             []string                 `json:"errorCodes,omitempty"`
 	Privacy                PrivacyPolicy            `json:"privacy"`
 	Telemetry              TelemetryPolicy          `json:"telemetry"`
@@ -355,6 +358,15 @@ type Operation struct {
 	// ContractGraph derives the App ABI from request_entity/response_entity;
 	// validators use this marker to reject a handwritten second truth source.
 	ClientContractExplicit bool `json:"-"`
+}
+
+type OperationConsistency struct {
+	AtomicCommit        *bool  `json:"atomicCommit,omitempty"`
+	Arbitration         string `json:"arbitration,omitempty"`
+	Source              string `json:"source,omitempty"`
+	Freshness           string `json:"freshness,omitempty"`
+	MaxStalenessSeconds int    `json:"maxStalenessSeconds,omitempty"`
+	StaleResult         string `json:"staleResult,omitempty"`
 }
 
 type StreamingPolicy struct {
@@ -488,18 +500,34 @@ type ClientContract struct {
 }
 
 type Projection struct {
-	ID                string   `json:"id"`
-	Domain            string   `json:"domain"`
-	ObjectID          string   `json:"objectId"`
-	ReadModel         string   `json:"readModel"`
-	ReadModelExplicit bool     `json:"readModelExplicit"`
-	DartClass         string   `json:"dartClass,omitempty"`
-	OutputPath        string   `json:"outputPath,omitempty"`
-	ExternalDartPath  string   `json:"-"`
-	FieldNames        []string `json:"fieldNames,omitempty"`
-	SourceEntities    []string `json:"sourceEntities,omitempty"`
-	SourceEvents      []string `json:"sourceEvents,omitempty"`
-	SourcePath        string   `json:"sourcePath"`
+	ID                string                       `json:"id"`
+	Domain            string                       `json:"domain"`
+	ObjectID          string                       `json:"objectId"`
+	ReadModel         string                       `json:"readModel"`
+	ReadModelExplicit bool                         `json:"readModelExplicit"`
+	DartClass         string                       `json:"dartClass,omitempty"`
+	OutputPath        string                       `json:"outputPath,omitempty"`
+	ExternalDartPath  string                       `json:"-"`
+	FieldNames        []string                     `json:"fieldNames,omitempty"`
+	SourceEntities    []string                     `json:"sourceEntities,omitempty"`
+	SourceEvents      []string                     `json:"sourceEvents,omitempty"`
+	ConsistencyPolicy *ProjectionConsistencyPolicy `json:"consistencyPolicy,omitempty"`
+	SourcePath        string                       `json:"sourcePath"`
+}
+
+// ProjectionConsistencyPolicy is the typed ContractGraph view of the
+// projection-owned ordering, freshness, checkpoint, and rebuild contract.
+type ProjectionConsistencyPolicy struct {
+	OrderingKey         string `json:"orderingKey,omitempty"`
+	SourceVersionField  string `json:"sourceVersionField,omitempty"`
+	ApplyMode           string `json:"applyMode,omitempty"`
+	DeleteMode          string `json:"deleteMode,omitempty"`
+	CheckpointField     string `json:"checkpointField,omitempty"`
+	WatermarkField      string `json:"watermarkField,omitempty"`
+	FreshnessSLOSeconds int    `json:"freshnessSloSeconds,omitempty"`
+	BacklogSLOEvents    int    `json:"backlogSloEvents,omitempty"`
+	RebuildStrategy     string `json:"rebuildStrategy,omitempty"`
+	OverflowPolicy      string `json:"overflowPolicy,omitempty"`
 }
 
 // MetadataGovernance is a compiler-only typed view used by cross-document
@@ -646,25 +674,26 @@ type BusinessObjectMap struct {
 }
 
 type BusinessObjectBoundary struct {
-	CanonicalObject      string               `json:"canonicalObject"`
-	BoundedContext       string               `json:"boundedContext"`
-	ObjectKind           ObjectKind           `json:"objectKind"`
-	AggregateOwner       string               `json:"aggregateOwner,omitempty"`
-	Identity             ObjectIdentity       `json:"identity"`
-	InvariantRefs        []string             `json:"invariantRefs"`
-	MemberBounds         map[string]int       `json:"memberBounds"`
-	StorageRole          string               `json:"storageRole"`
-	StorageBackend       string               `json:"storageBackend,omitempty"`
-	MutationEntrypoints  []string             `json:"mutationEntrypoints"`
-	EventConsumers       []string             `json:"eventConsumers"`
-	LifecycleRefs        []string             `json:"lifecycleRefs"`
-	SourceDocument       string               `json:"sourceDocument,omitempty"`
-	SourceEntity         string               `json:"sourceEntity,omitempty"`
-	Access               ObjectAccessPolicy   `json:"access"`
-	Relationships        []ObjectRelationship `json:"relationships"`
-	CounterSources       map[string]string    `json:"counterSources,omitempty"`
-	FieldRoles           map[string][]string  `json:"fieldRoles"`
-	LocalIdentityReasons map[string]string    `json:"localIdentityReasons,omitempty"`
+	CanonicalObject      string                  `json:"canonicalObject"`
+	BoundedContext       string                  `json:"boundedContext"`
+	ObjectKind           ObjectKind              `json:"objectKind"`
+	AggregateOwner       string                  `json:"aggregateOwner,omitempty"`
+	Identity             ObjectIdentity          `json:"identity"`
+	InvariantRefs        []string                `json:"invariantRefs"`
+	MemberBounds         map[string]int          `json:"memberBounds"`
+	StorageRole          string                  `json:"storageRole"`
+	StorageBackend       string                  `json:"storageBackend,omitempty"`
+	StorageResources     []ObjectStorageResource `json:"storageResources,omitempty"`
+	MutationEntrypoints  []string                `json:"mutationEntrypoints"`
+	EventConsumers       []string                `json:"eventConsumers"`
+	LifecycleRefs        []string                `json:"lifecycleRefs"`
+	SourceDocument       string                  `json:"sourceDocument,omitempty"`
+	SourceEntity         string                  `json:"sourceEntity,omitempty"`
+	Access               ObjectAccessPolicy      `json:"access"`
+	Relationships        []ObjectRelationship    `json:"relationships"`
+	CounterSources       map[string]string       `json:"counterSources,omitempty"`
+	FieldRoles           map[string][]string     `json:"fieldRoles"`
+	LocalIdentityReasons map[string]string       `json:"localIdentityReasons,omitempty"`
 }
 
 // ObjectIdentity 明确对象身份与并发版本的来源；version 不再由 DTO 或存储实现猜测。

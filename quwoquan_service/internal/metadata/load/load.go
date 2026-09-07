@@ -82,7 +82,7 @@ func Load(metadataDir string, options ...Option) (*ast.Catalog, error) {
 			return nil
 		}
 
-		object, objectErr := loadObject(metadataDir, path)
+		object, objectErr := loadObjectWithContractView(metadataDir, path, resolved.contractView)
 		if objectErr != nil {
 			loadErrors = append(loadErrors, objectErr)
 			return nil
@@ -205,6 +205,14 @@ func collectSourceDigests(catalog *ast.Catalog, metadataDir string, errs *[]erro
 }
 
 func loadObject(metadataDir, path string) (ast.Object, error) {
+	return loadObjectWithContractView(metadataDir, path, nil)
+}
+
+func loadObjectWithContractView(
+	metadataDir, objectPath string,
+	contractView *contractViewProvenance,
+) (ast.Object, error) {
+	path := objectPath
 	top, err := loadTopLevelMapping(path)
 	if err != nil {
 		return ast.Object{}, err
@@ -255,10 +263,37 @@ func loadObject(metadataDir, path string) (ast.Object, error) {
 			return ast.Object{}, fmt.Errorf("%s: lifecycle: %w", path, err)
 		}
 	}
-	if storage, storageErr := storagecontract.LoadOptional(filepath.Join(filepath.Dir(path), "storage.yaml")); storageErr != nil {
+	storagePath := filepath.Join(filepath.Dir(path), "storage.yaml")
+	if storage, storageErr := storagecontract.LoadOptional(storagePath); storageErr != nil {
 		return ast.Object{}, storageErr
 	} else if storage != nil {
 		object.StorageBackend = strings.TrimSpace(storage.Backend)
+		resourceSourcePath := relativePath(metadataDir, storagePath)
+		if contractView != nil && len(storage.Resources) > 0 {
+			resourceSourcePath, storageErr = contractView.canonicalSourceFor(storagePath)
+			if storageErr != nil {
+				return ast.Object{}, storageErr
+			}
+		}
+		resourceNames := make([]string, 0, len(storage.Resources))
+		for name := range storage.Resources {
+			resourceNames = append(resourceNames, name)
+		}
+		sort.Strings(resourceNames)
+		for _, name := range resourceNames {
+			resource := storage.Resources[name]
+			identity, identityErr := ast.DerivedResourceIdentity(resourceSourcePath, name)
+			if identityErr != nil {
+				return ast.Object{}, fmt.Errorf("%s: derive storage resource %q: %w", storagePath, name, identityErr)
+			}
+			object.StorageResources = append(object.StorageResources, ast.ObjectStorageResource{
+				LocalName: name,
+				Identity:  identity,
+				Engine:    strings.TrimSpace(resource.Engine),
+				Role:      strings.TrimSpace(resource.Role),
+				Required:  resource.IsRequired(),
+			})
+		}
 	}
 	if members := top["members"]; members != nil {
 		if object.Kind != ast.ObjectKindAggregateRoot {
@@ -529,6 +564,36 @@ func loadProjections(metadataDir, objectDir string, object ast.Object) ([]ast.Pr
 				}
 			}
 		}
+		var consistencyPolicy *ast.ProjectionConsistencyPolicy
+		if node := top["consistency_policy"]; node != nil {
+			var policy struct {
+				OrderingKey         string `yaml:"ordering_key"`
+				SourceVersionField  string `yaml:"source_version_field"`
+				ApplyMode           string `yaml:"apply_mode"`
+				DeleteMode          string `yaml:"delete_mode"`
+				CheckpointField     string `yaml:"checkpoint_field"`
+				WatermarkField      string `yaml:"watermark_field"`
+				FreshnessSLOSeconds int    `yaml:"freshness_slo_seconds"`
+				BacklogSLOEvents    int    `yaml:"backlog_slo_events"`
+				RebuildStrategy     string `yaml:"rebuild_strategy"`
+				OverflowPolicy      string `yaml:"overflow_policy"`
+			}
+			if decodeErr := node.Decode(&policy); decodeErr != nil {
+				return fmt.Errorf("%s: consistency_policy: %w", path, decodeErr)
+			}
+			consistencyPolicy = &ast.ProjectionConsistencyPolicy{
+				OrderingKey:         strings.TrimSpace(policy.OrderingKey),
+				SourceVersionField:  strings.TrimSpace(policy.SourceVersionField),
+				ApplyMode:           strings.TrimSpace(policy.ApplyMode),
+				DeleteMode:          strings.TrimSpace(policy.DeleteMode),
+				CheckpointField:     strings.TrimSpace(policy.CheckpointField),
+				WatermarkField:      strings.TrimSpace(policy.WatermarkField),
+				FreshnessSLOSeconds: policy.FreshnessSLOSeconds,
+				BacklogSLOEvents:    policy.BacklogSLOEvents,
+				RebuildStrategy:     strings.TrimSpace(policy.RebuildStrategy),
+				OverflowPolicy:      strings.TrimSpace(policy.OverflowPolicy),
+			}
+		}
 		projections = append(projections, ast.Projection{
 			ID:                object.ID + "." + readModel,
 			Domain:            object.Domain,
@@ -541,6 +606,7 @@ func loadProjections(metadataDir, objectDir string, object ast.Object) ([]ast.Pr
 			FieldNames:        fieldNames,
 			SourceEntities:    stringSequence(top["source_entities"]),
 			SourceEvents:      stringSequence(top["source_events"]),
+			ConsistencyPolicy: consistencyPolicy,
 			SourcePath:        relativePath(metadataDir, path),
 		})
 		projectionPaths = append(projectionPaths, path)

@@ -20,6 +20,12 @@ type RuntimeLogRecord struct {
 	IngestedAt time.Time
 }
 
+// RuntimeLogSinkPort 是运行日志逻辑 Provider 的独立端口。
+// 它不包含产品事件或启动诊断能力。
+type RuntimeLogSinkPort interface {
+	RuntimeLogStore
+}
+
 type RuntimeLogStore interface {
 	PutRuntimeLogBatch(context.Context, string, []RuntimeLogRecord) error
 	HasRuntimeLogBatch(context.Context, string, int) (bool, error)
@@ -29,13 +35,6 @@ type RuntimeLogStore interface {
 
 type IncompleteRuntimeLogBatchRepairer interface {
 	RepairRuntimeLogBatch(context.Context, string, []RuntimeLogRecord) error
-}
-
-// ObservabilityLogSink 是 product-ops 对外部日志供应商的统一端口。
-// 同一实现统一承载事件、启动诊断和运行时日志协议；调用方仍只依赖各自所需的窄接口。
-type ObservabilityLogSink interface {
-	EventLogStore
-	RuntimeLogStore
 }
 
 type RuntimeLogSummaryQuery struct {

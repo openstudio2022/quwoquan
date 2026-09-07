@@ -1,4 +1,4 @@
-backend: postgresql
+backend: postgres
 role: authoritative
 tables:
   invite_records:

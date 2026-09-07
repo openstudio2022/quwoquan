@@ -4,13 +4,23 @@ commercial_defaults:
   gap_id: OPS_EVENT_RECORD_PROVIDER_EVIDENCE
   target_story: event-schema-governance
 externalDependencies:
-- capability: runtime.log.sink
-  port: ObservabilityLogSinkPort
-  operations: [appendEvents]
+- capability: product.telemetry.sink
+  port: ProductTelemetrySinkPort
+  operations: [appendEvents, appendStartupDiagnostics]
   conformance: observability_log_sink
   adapterContracts:
     ext.obs.elasticsearch:
-      endpointEnvs: {endpoint: PRODUCT_OPS_ELASTICSEARCH_ENDPOINT}
+      endpointEnvs: {endpoint: PRODUCT_OPS_TELEMETRY_ELASTICSEARCH_ENDPOINT}
+      secretRefs: []
+      defaultTimeoutMs: 5000
+      allowEnvironmentOverrides: [secretRefs, timeoutMs]
+- capability: runtime.log.sink
+  port: RuntimeLogSinkPort
+  operations: [appendRuntimeLogs]
+  conformance: observability_log_sink
+  adapterContracts:
+    ext.obs.elasticsearch:
+      endpointEnvs: {endpoint: PRODUCT_OPS_RUNTIME_LOG_ELASTICSEARCH_ENDPOINT}
       secretRefs: []
       defaultTimeoutMs: 5000
       allowEnvironmentOverrides: [secretRefs, timeoutMs]

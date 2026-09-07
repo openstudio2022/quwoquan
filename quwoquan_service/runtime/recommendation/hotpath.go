@@ -217,11 +217,14 @@ type BehaviorSignal struct {
 	IntersectionClass      string `json:"intersectionClass,omitempty"`
 	IntersectionSourceRef  string `json:"intersectionSourceRef,omitempty"`
 	IntersectionEvidenceID string `json:"intersectionEvidenceId,omitempty"`
-	MotionDirection        string `json:"direction,omitempty"`
-	MotionProfile          string `json:"motionProfile,omitempty"`
-	SettleMS               *int   `json:"settleMs,omitempty"`
-	ReducedMotion          *bool  `json:"reducedMotion,omitempty"`
-	Committed              *bool  `json:"committed,omitempty"`
+	// IntersectionCohort 是产出该交集的策略身份（注册表/生成表摘要），随曝光→点击→转化→清零
+	// 全链原样透传，使漏斗可按策略版本（灰度 cohort）下钻。
+	IntersectionCohort string `json:"intersectionCohort,omitempty"`
+	MotionDirection    string `json:"direction,omitempty"`
+	MotionProfile      string `json:"motionProfile,omitempty"`
+	SettleMS           *int   `json:"settleMs,omitempty"`
+	ReducedMotion      *bool  `json:"reducedMotion,omitempty"`
+	Committed          *bool  `json:"committed,omitempty"`
 }
 
 // EffectiveSessionID returns the feed-scoped session ID for recommendation

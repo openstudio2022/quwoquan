@@ -39,7 +39,7 @@ class RuntimeTopologyPackageSecurityTest(unittest.TestCase):
         self._write_topology(
             self.repo
             / "quwoquan_ops/environments/compose/docker-compose.gamma-local.yaml",
-            ["mongodb", "platform-ops-service", *services],
+            ["mongodb", "postgres", "postgres-init", "platform-ops-service", *services],
         )
         for service in services:
             self._write_config_schema(
@@ -143,6 +143,82 @@ class RuntimeTopologyPackageSecurityTest(unittest.TestCase):
             ),
             encoding="utf-8",
         )
+        runtime = self.repo / "quwoquan_ops/environments/gamma/runtime.yaml"
+        runtime.parent.mkdir(parents=True, exist_ok=True)
+        contract_graph = (
+            self.repo / "quwoquan_service/generated/contract_graph.json"
+        )
+        contract_graph.parent.mkdir(parents=True, exist_ok=True)
+        contract_graph.write_text(
+            json.dumps({"objects": []}) + "\n",
+            encoding="utf-8",
+        )
+        runtime.write_text(
+            yaml.safe_dump(
+                {
+                    "schema": "environment-runtime",
+                    "environment": "gamma",
+                    "targets": {
+                        "gamma-local": {
+                            "dataPlane": {
+                                "resources": {
+                                    "primary-mongodb": {
+                                        "engine": "mongodb",
+                                        "physicalIdentity": {
+                                            "local": "mongodb",
+                                            "prevalidate": "mongodb",
+                                            "external": "gamma-primary-mongodb",
+                                        },
+                                        "failureDomain": "test-local",
+                                        "shared": False,
+                                    },
+                                    "primary-postgres": {
+                                        "engine": "postgres",
+                                        "physicalIdentity": {
+                                            "local": "postgres",
+                                            "prevalidate": "postgres",
+                                            "external": "gamma-primary-postgres",
+                                        },
+                                        "failureDomain": "test-local",
+                                        "shared": False,
+                                    },
+                                },
+                                "bindings": {
+                                    "content-service.mongodb": {
+                                        "service": "content-service",
+                                        "slot": "mongodb",
+                                        "engine": "mongodb",
+                                        "resource": "primary-mongodb",
+                                        "namespace": "quwoquan_content",
+                                        "secretRef": None,
+                                        "shared": False,
+                                        "required": True,
+                                        "backupRef": "test-mongodb-backup",
+                                        "metricsRef": "test-mongodb-metrics",
+                                        "inject": {"CONTENT_MONGO_URI": {"kind": "uri"}},
+                                    },
+                                    "content-service.postgres": {
+                                        "service": "content-service",
+                                        "slot": "postgres",
+                                        "engine": "postgres",
+                                        "resource": "primary-postgres",
+                                        "namespace": "quwoquan_content",
+                                        "secretRef": None,
+                                        "shared": False,
+                                        "required": True,
+                                        "backupRef": "test-postgres-backup",
+                                        "metricsRef": "test-postgres-metrics",
+                                        "inject": {"CONTENT_POSTGRES_DSN": {"kind": "dsn"}},
+                                    },
+                                },
+                            }
+                        }
+                    },
+                },
+                sort_keys=False,
+            ),
+            encoding="utf-8",
+        )
 
     def tearDown(self) -> None:
         self.temporary.cleanup()
@@ -177,11 +253,15 @@ class RuntimeTopologyPackageSecurityTest(unittest.TestCase):
     @staticmethod
     def _write_topology(path: Path, services: list[str]) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
+        definitions = {service: {"image": service} for service in services}
+        definitions["postgres-init"] = {
+            "image": "postgres",
+            "environment": {
+                "QWQ_POSTGRES_DATABASES": "${QWQ_POSTGRES_DATABASES:?required}"
+            },
+        }
         path.write_text(
-            yaml.safe_dump(
-                {"services": {service: {"image": service} for service in services}},
-                sort_keys=False,
-            ),
+            yaml.safe_dump({"services": definitions}, sort_keys=False),
             encoding="utf-8",
         )
 
@@ -234,6 +314,263 @@ class RuntimeTopologyPackageSecurityTest(unittest.TestCase):
         self.assertFalse(SERVICE_CORE_MODULE_SET & component_names)
         self.assertTrue(result["policyFile"].is_relative_to(self.candidate))
 
+    def test_candidate_projects_postgres_namespaces_dependencies_and_control_plane(
+        self,
+    ) -> None:
+        materialize_runtime_topology_package(
+            "gamma",
+            "gamma-local",
+            self.shared,
+            repo_root=REPO_ROOT,
+        )
+        result = load_runtime_topology_package(
+            self.candidate,
+            environment="gamma",
+            target="gamma-local",
+            workload="full",
+        )
+        binding = json.loads(
+            result["dataPlaneBindingFile"].read_text(encoding="utf-8")
+        )
+        runtime = yaml.safe_load(
+            (REPO_ROOT / "quwoquan_ops/environments/gamma/runtime.yaml").read_text(
+                encoding="utf-8"
+            )
+        )
+        expected_namespaces = sorted(
+            {
+                item["namespace"]
+                for item in runtime["targets"]["gamma-local"]["dataPlane"][
+                    "bindings"
+                ].values()
+                if item["engine"] == "postgres" and item["required"] is True
+            }
+        )
+        self.assertEqual(
+            sorted(
+                {
+                    item["namespace"]
+                    for item in binding["bindings"].values()
+                    if item["engine"] == "postgres" and item["required"] is True
+                }
+            ),
+            expected_namespaces,
+        )
+        merged: dict[str, dict[str, object]] = {}
+        for compose_file in result["composeFiles"]:
+            compose = yaml.safe_load(compose_file.read_text(encoding="utf-8"))
+            for name, definition in (compose.get("services") or {}).items():
+                target = merged.setdefault(name, {})
+                for key, value in (definition or {}).items():
+                    if key in {"environment", "depends_on"} and isinstance(value, dict):
+                        target.setdefault(key, {}).update(value)
+                    else:
+                        target[key] = value
+
+        self.assertEqual(
+            merged["postgres-init"]["environment"]["QWQ_POSTGRES_DATABASES"],
+            " ".join(expected_namespaces),
+        )
+        self.assertEqual(
+            merged["postgres-init"]["labels"][
+                "com.quwoquan.runtime.one-shot"
+            ],
+            "true",
+        )
+        service_core = merged[SERVICE_CORE_WORKLOAD]
+        for environment_key, namespace in (
+            ("USER_POSTGRES_DSN", "quwoquan_user"),
+            ("ASSISTANT_POSTGRES_DSN", "quwoquan_assistant"),
+            ("CONTENT_POSTGRES_REPORT_DSN", "quwoquan_content_report"),
+        ):
+            self.assertEqual(
+                service_core["environment"][environment_key],
+                f"postgres://quwoquan:quwoquan@postgres:5432/{namespace}?sslmode=disable",
+            )
+        self.assertEqual(
+            merged["product-ops-service"]["environment"]["PRODUCT_OPS_POSTGRES_DSN"],
+            "postgres://quwoquan:quwoquan@postgres:5432/quwoquan_product_ops?sslmode=disable",
+        )
+        self.assertEqual(
+            merged["platform-ops-service"]["environment"]["PLATFORM_OPS_POSTGRES_DSN"],
+            "postgres://quwoquan:quwoquan@postgres:5432/quwoquan_platform_ops?sslmode=disable",
+        )
+        for service in (
+            SERVICE_CORE_WORKLOAD,
+            "product-ops-service",
+            "platform-ops-service",
+        ):
+            self.assertEqual(
+                merged[service]["depends_on"]["postgres-init"]["condition"],
+                "service_completed_successfully",
+            )
+        control_plane_entry = next(
+            item for item in result["composeFiles"] if "/control-plane/" in str(item)
+        )
+        control_plane = yaml.safe_load(control_plane_entry.read_text(encoding="utf-8"))
+        manifest_entry = next(
+            item
+            for item in json.loads(
+                (self.shared / "runtime-topology/manifest.json").read_text(encoding="utf-8")
+            )["compose"]
+            if item["ref"].endswith("control-plane/platform-ops.compose.yaml")
+        )
+        self.assertEqual(manifest_entry["role"], "control-plane")
+        self.assertEqual(manifest_entry["service"], "")
+        self.assertIn(
+            "PLATFORM_OPS_POSTGRES_DSN",
+            control_plane["services"]["platform-ops-service"]["environment"],
+        )
+
+    def test_candidate_projects_product_ops_elasticsearch_bootstrap(self) -> None:
+        materialize_runtime_topology_package(
+            "alpha",
+            "alpha-local",
+            self.shared,
+            repo_root=REPO_ROOT,
+        )
+        result = load_runtime_topology_package(
+            self.candidate,
+            environment="alpha",
+            target="alpha-local",
+            workload="full",
+        )
+        product_ops_compose = next(
+            compose_file
+            for compose_file in result["composeFiles"]
+            if "/services/product-ops-service/base.compose.yaml" in str(compose_file)
+        )
+        services = yaml.safe_load(
+            product_ops_compose.read_text(encoding="utf-8")
+        )["services"]
+        bootstrap_name = "product-ops-service-migrate-elasticsearch"
+        bootstrap = services[bootstrap_name]
+        owner = services["product-ops-service"]
+        runtime = yaml.safe_load(
+            (REPO_ROOT / "quwoquan_ops/environments/alpha/runtime.yaml").read_text(
+                encoding="utf-8"
+            )
+        )
+        data_plane = runtime["targets"]["alpha-local"]
+        from quwoquan_ops.cli.lib.data_plane_binding import (
+            resolve_data_plane_environment,
+        )
+        projection = resolve_data_plane_environment(
+            data_plane,
+            mode="local",
+            target_name="alpha-local",
+        )
+        expected = {
+            "PRODUCT_OPS_ELASTICSEARCH_ADMIN_ENDPOINT": projection[
+                "deploymentEnvironment"
+            ]["deployment-control.telemetry.admin"]["endpoint"],
+            "PRODUCT_OPS_ELASTICSEARCH_ADMIN_API_KEY": projection[
+                "deploymentEnvironment"
+            ]["deployment-control.telemetry.admin"]["credential"],
+            **{
+                key: value
+                for key, value in projection["environment"][
+                    "product-ops-service"
+                ].items()
+                if key.endswith("_INDEX")
+            },
+        }
+
+        self.assertEqual(
+            bootstrap["command"],
+            ["product-ops-elasticsearch-bootstrap"],
+        )
+        self.assertEqual(bootstrap["environment"], expected)
+        self.assertEqual(len(expected), 7)
+        self.assertEqual(
+            owner["depends_on"][bootstrap_name],
+            {"condition": "service_completed_successfully"},
+        )
+        self.assertNotIn(
+            "PRODUCT_OPS_ELASTICSEARCH_ADMIN_ENDPOINT",
+            owner["environment"],
+        )
+        self.assertNotIn(
+            "PRODUCT_OPS_ELASTICSEARCH_ADMIN_API_KEY",
+            owner["environment"],
+        )
+
+    def test_product_ops_bootstrap_source_contract_matches_image_binary(self) -> None:
+        compose = yaml.safe_load(
+            (
+                REPO_ROOT
+                / "quwoquan_service/services/product-ops-service/deploy/compose.yaml"
+            ).read_text(encoding="utf-8")
+        )
+        dockerfile = (
+            REPO_ROOT
+            / "quwoquan_service/services/product-ops-service/build/Dockerfile"
+        ).read_text(encoding="utf-8")
+        bootstrap = compose["services"][
+            "product-ops-service-migrate-elasticsearch"
+        ]
+
+        self.assertEqual(
+            bootstrap["command"],
+            ["product-ops-elasticsearch-bootstrap"],
+        )
+        self.assertIn(
+            "go build ${GO_BUILD_FLAGS} -o /product-ops-elasticsearch-bootstrap",
+            dockerfile,
+        )
+        self.assertIn(
+            "./services/product-ops-service/cmd/elasticsearch-bootstrap",
+            dockerfile,
+        )
+        self.assertIn(
+            "COPY --from=builder /product-ops-elasticsearch-bootstrap "
+            "/usr/local/bin/product-ops-elasticsearch-bootstrap",
+            dockerfile,
+        )
+
+    def test_postgres_bindings_and_init_source_fail_closed(self) -> None:
+        runtime_path = self.repo / "quwoquan_ops/environments/gamma/runtime.yaml"
+        runtime = yaml.safe_load(runtime_path.read_text(encoding="utf-8"))
+        data_plane = runtime["targets"]["gamma-local"]["dataPlane"]
+        del data_plane["bindings"]["content-service.postgres"]
+        runtime_path.write_text(
+            yaml.safe_dump(runtime, sort_keys=False),
+            encoding="utf-8",
+        )
+        with self.assertRaisesRegex(RuntimeTopologyPackageError, "postgres namespace"):
+            self._materialize()
+
+        self.shared.joinpath("data-plane-binding.json").unlink(missing_ok=True)
+        source = (
+            self.repo
+            / "quwoquan_ops/environments/compose/docker-compose.gamma-local.yaml"
+        )
+        topology = yaml.safe_load(source.read_text(encoding="utf-8"))
+        del topology["services"]["postgres-init"]
+        source.write_text(
+            yaml.safe_dump(topology, sort_keys=False),
+            encoding="utf-8",
+        )
+        data_plane["bindings"]["content-service.postgres"] = {
+            "service": "content-service",
+            "slot": "postgres",
+            "engine": "postgres",
+            "resource": "primary-postgres",
+            "namespace": "quwoquan_content",
+            "secretRef": None,
+            "shared": False,
+            "required": True,
+            "backupRef": "test-postgres-backup",
+            "metricsRef": "test-postgres-metrics",
+            "inject": {"CONTENT_POSTGRES_DSN": {"kind": "dsn"}},
+        }
+        runtime_path.write_text(
+            yaml.safe_dump(runtime, sort_keys=False),
+            encoding="utf-8",
+        )
+        with self.assertRaisesRegex(RuntimeTopologyPackageError, "postgres-init"):
+            self._materialize()
+
     def test_retired_service_source_cannot_enter_runtime_package(self) -> None:
         manifest = self._materialize()
 
@@ -270,6 +607,12 @@ class RuntimeTopologyPackageSecurityTest(unittest.TestCase):
         )
 
         self.assertEqual(result["topologyDigest"], manifest["topologyDigest"])
+        self.assertEqual(result["schema"], "qwq.runtime_topology_package.v4")
+        self.assertEqual(
+            result["dataPlaneBindingDigest"],
+            manifest["dataPlaneBinding"]["bindingDigest"],
+        )
+        self.assertTrue(result["dataPlaneBindingFile"].is_relative_to(self.candidate))
         self.assertEqual(set(result["serviceNames"]), set(manifest["serviceNames"]))
         self.assertGreaterEqual(len(result["serviceNames"]), 14)
         self.assertNotIn("travel-service", result["serviceNames"])
@@ -383,6 +726,104 @@ class RuntimeTopologyPackageSecurityTest(unittest.TestCase):
         self.assertTrue(result["composeFiles"])
         self.assertTrue(result["policyFile"].is_relative_to(candidate))
 
+    def test_prod_runtime_shared_package_seals_binding_without_local_topology(self) -> None:
+        from quwoquan_ops.cli import stackctl
+
+        candidate = self.root / "prod-candidate"
+        shared = candidate / "packages/runtime-shared"
+        with patch.object(
+            stackctl,
+            "runtime_shared_deployment_package_dir",
+            return_value=shared,
+        ):
+            package_dir = stackctl._build_runtime_shared_package(
+                "prod",
+                target="prod-hosted",
+            )
+
+        manifest = json.loads(
+            (package_dir / "manifest.json").read_text(encoding="utf-8")
+        )
+        self.assertEqual(manifest["environment"], "prod")
+        self.assertEqual(manifest["target"], "prod-hosted")
+        self.assertIsNone(manifest["runtimeTopology"])
+        binding = manifest["dataPlaneBinding"]
+        self.assertEqual(
+            binding["ref"],
+            "packages/runtime-shared/data-plane-binding.json",
+        )
+        artifact = package_dir / "data-plane-binding.json"
+        self.assertEqual(
+            binding["digest"],
+            "sha256:" + __import__("hashlib").sha256(artifact.read_bytes()).hexdigest(),
+        )
+        self.assertNotIn("actual-password", artifact.read_text(encoding="utf-8"))
+
+    def test_legacy_data_plane_ref_is_rejected_for_every_purpose(self) -> None:
+        manifest = self._materialize()
+        source = self.shared / "data-plane-binding.json"
+        legacy = self.shared / "runtime-topology/data-plane-binding.json"
+        source.replace(legacy)
+        data_plane = dict(manifest["dataPlaneBinding"])
+        data_plane["ref"] = (
+            "packages/runtime-shared/runtime-topology/data-plane-binding.json"
+        )
+        manifest["dataPlaneBinding"] = data_plane
+        identity = {
+            field: manifest[field]
+            for field in (
+                "compose",
+                "policy",
+                "observabilityPolicy",
+                "serviceNames",
+                "runtimeServiceNames",
+                "serviceCoreModules",
+                "compositionSbom",
+                "dataPlaneBinding",
+            )
+        }
+        manifest["topologyDigest"] = "sha256:" + __import__("hashlib").sha256(
+            json.dumps(
+                identity,
+                ensure_ascii=False,
+                sort_keys=True,
+                separators=(",", ":"),
+            ).encode("utf-8")
+        ).hexdigest()
+        (self.shared / "runtime-topology/manifest.json").write_text(
+            json.dumps(manifest, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+
+        for purpose in ("self_verify", "teardown", "currentness"):
+            with self.subTest(purpose=purpose), self.assertRaisesRegex(
+                RuntimeTopologyPackageError,
+                "artifact ref mismatch",
+            ):
+                load_runtime_topology_package(
+                    self.candidate,
+                    environment="gamma",
+                    target="gamma-local",
+                    workload="full",
+                    purpose=purpose,
+                )
+
+    def test_current_data_plane_ref_accepts_default_and_teardown(self) -> None:
+        manifest = self._materialize()
+        for purpose in ("self_verify", "teardown"):
+            with self.subTest(purpose=purpose):
+                loaded = load_runtime_topology_package(
+                    self.candidate,
+                    environment="gamma",
+                    target="gamma-local",
+                    workload="full",
+                    purpose=purpose,
+                )
+                self.assertEqual(
+                    loaded["dataPlaneBindingDigest"],
+                    manifest["dataPlaneBinding"]["bindingDigest"],
+                )
+
     def test_bounded_workloads_select_the_exact_service_closure(self) -> None:
         self._materialize()
 
@@ -487,6 +928,7 @@ class RuntimeTopologyPackageSecurityTest(unittest.TestCase):
             "runtimeServiceNames": manifest["runtimeServiceNames"],
             "serviceCoreModules": manifest["serviceCoreModules"],
             "compositionSbom": manifest["compositionSbom"],
+            "dataPlaneBinding": manifest["dataPlaneBinding"],
         }
         # Keep the manifest internally self-consistent; the closure check must
         # still reject the omitted canonical service base.

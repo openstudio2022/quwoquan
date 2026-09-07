@@ -51,6 +51,7 @@ func UpsertReleaseMediaAssetProjections(
 			)
 		}
 		update := bson.M{
+			"$addToSet": bson.M{"sourceReleaseIds": releaseID},
 			"$set": bson.M{
 				"ownerId": ownerID,
 				// media_assets 对 sourceSessionId 有唯一索引（UGC 每资产一个
@@ -63,8 +64,9 @@ func UpsertReleaseMediaAssetProjections(
 				"fileSize":         asset.Bytes,
 				"accessPolicy":     "referenced_post",
 				"processingStatus": "ready",
-				"sourceReleaseId":  releaseID,
-				"updatedAt":        now,
+				// 单值只保留最近一次导入诊断；授权只认 sourceReleaseIds。
+				"sourceReleaseId": releaseID,
+				"updatedAt":       now,
 			},
 			"$setOnInsert": bson.M{
 				"version":   int64(1),

@@ -18,6 +18,18 @@
     "manifestDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
     "runId": {"type": "string", "minLength": 1},
     "importRunId": {"type": "string", "minLength": 1},
+    "verifyRunId": {"type": "string", "minLength": 1},
+    "stageRunId": {"type": "string", "minLength": 1},
+    "activateRunId": {"type": "string", "minLength": 1},
+    "contentPhase": {
+      "description": "stage：只写候选与 additive 引用对象；verify：候选读回；activate：单事务切 pointer 并执行 destructive 收尾。缺省表示 consumer 读回或历史一步式 run。",
+      "enum": ["stage", "verify", "activate"]
+    },
+    "candidateRevision": {"type": "integer", "minimum": 1},
+    "revision": {"type": "integer", "minimum": 1},
+    "fullSync": {"type": "boolean"},
+    "candidateVerificationRef": {"type": "string"},
+    "mediaPruneRef": {"type": "string"},
     "readinessPhase": {"enum": ["research", "consumer", "commercial"]},
     "lifecycleExitRef": {
       "type": "string",

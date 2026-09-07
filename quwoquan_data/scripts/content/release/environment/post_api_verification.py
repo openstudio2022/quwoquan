@@ -153,7 +153,7 @@ def _verify_detail(
     creator: CreatorProfileCase,
     *,
     media_origin: str = "",
-    signed_sample_asset_id: str = "",
+    research_signed_probe: bool = False,
 ) -> dict[str, Any]:
     response = client.get_json(
         f"content/posts/{quote(case.post_id, safe='')}",
@@ -197,14 +197,15 @@ def _verify_detail(
     probes: list[dict[str, Any]] = []
     for asset in case.media_assets:
         if asset.delivery_ref:
-            # research：私有交付资产逐个证明匿名不可达；对采样资产附加一次
-            # 原图短签取回校验（配额窗口内只采样一次，避免撞 grant 限额）。
+            # research：私有交付资产逐个证明匿名不可达，并对每个首屏图片资产做
+            # 一次原图短签取回校验。grant 配额按 viewer×asset 计，逐资产一次不会
+            # 撞限额；只采样一个资产曾让“部分图片不显示”在验收中漏网。
             probe = _verify_research_denied_media(
                 client,
                 media_origin=media_origin,
                 asset=asset,
             )
-            if asset.asset_id == signed_sample_asset_id:
+            if research_signed_probe and asset.kind == "image":
                 probe["signedProbe"] = _research_signed_media_probe(client, asset)
             probes.append(probe)
             continue
@@ -238,6 +239,8 @@ def _verify_detail(
 def _verify_author_profile(
     client: PublicApiClient,
     creator: CreatorProfileCase,
+    *,
+    research_signed_probe: bool = False,
 ) -> dict[str, Any]:
     response = client.get_json(
         f"user/{quote(creator.persona_id, safe='')}",
@@ -294,8 +297,23 @@ def _verify_author_profile(
             f"creator avatar authority is incomplete for {creator.creator_ref}"
         )
     if not creator.avatar_url.startswith("https://"):
-        # research 私有交付 avatar：回读与权威的相对 CAS key 一致即绪；
-        # 匿名不可达由 post 私有媒体探测与边缘守卫覆盖，不再按资产取回。
+        # research 私有交付 avatar：回读与权威的相对 CAS key 一致，且每个 avatar
+        # 都必须能以 research 身份完成一次原图短签取回。头像缺失是最常见的
+        # 感知故障，不能只靠 post 媒体采样间接覆盖。
+        avatar_probe = None
+        if research_signed_probe:
+            avatar_probe = _research_signed_media_probe(
+                client,
+                ReleaseMediaAssetCase(
+                    asset_id=creator.avatar_asset_id,
+                    kind="avatar",
+                    public_url=creator.avatar_url,
+                    expected_bytes=creator.avatar_bytes,
+                    expected_sha256=creator.avatar_sha256,
+                    expected_mime_type=creator.avatar_mime_type,
+                    delivery_ref=creator.avatar_url,
+                ),
+            )
         return {
             "creatorRef": creator.creator_ref,
             "authorId": creator.author_id,
@@ -304,8 +322,8 @@ def _verify_author_profile(
             "avatarAssetId": creator.avatar_asset_id,
             "avatarUrl": creator.avatar_url,
             "avatarMediaReady": True,
-            "avatarProbeCount": 0,
-            "avatarProbe": None,
+            "avatarProbeCount": 1 if avatar_probe is not None else 0,
+            "avatarProbe": avatar_probe,
             "usesPlatformDefaultAvatar": False,
         }
     avatar_probe = _verify_binary_media(
@@ -362,7 +380,6 @@ def write_post_api_verification(
         media_origin = media_delivery_base_url.rstrip("/")
         guest = None
         internal_subject_hash = ""
-        signed_sample_asset_id = ""
         if research:
             # research 证据禁止匿名 guest；消费身份是受保护白名单研究账号，
             # 凭证经 stackctl 进程内存签发（DEC-032 能力面之内的消费核验）。
@@ -376,15 +393,6 @@ def write_post_api_verification(
                 base_url=api_base_url,
                 bearer_token=credential["bearerToken"],
                 ssl_cafile=ssl_cafile,
-            )
-            signed_sample_asset_id = min(
-                (
-                    asset.asset_id
-                    for case in cases
-                    for asset in case.media_assets
-                    if asset.kind == "image" and asset.delivery_ref
-                ),
-                default="",
             )
         else:
             unauthenticated_client = PublicApiClient(
@@ -403,7 +411,7 @@ def write_post_api_verification(
             include_premium_stream=True,
         )
         creator_rows = [
-            _verify_author_profile(client, creator)
+            _verify_author_profile(client, creator, research_signed_probe=research)
             for creator in sorted(
                 creators_by_author.values(),
                 key=lambda item: item.creator_ref,
@@ -426,7 +434,7 @@ def write_post_api_verification(
                 case,
                 creators_by_author[case.author_id],
                 media_origin=media_origin,
-                signed_sample_asset_id=signed_sample_asset_id,
+                research_signed_probe=research,
             )
             rows.append(
                 {

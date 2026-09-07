@@ -14,6 +14,9 @@ collections:
       keys:
         sourceSessionId: 1
       unique: true
+    - name: idx_media_assets_source_release
+      keys:
+        sourceReleaseIds: 1
     - name: idx_media_assets_object_key
       keys:
         objectKey: 1

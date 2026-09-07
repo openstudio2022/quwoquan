@@ -36,6 +36,8 @@ type activeSupplyReleaseState struct {
 	ActiveReleaseID string    `bson:"activeReleaseId"`
 	ManifestDigest  string    `bson:"manifestDigest"`
 	ReleaseClass    string    `bson:"releaseClass"`
+	Revision        int64     `bson:"revision"`
+	SourceVersion   int64     `bson:"sourceVersion"`
 	ActivatedAt     time.Time `bson:"activatedAt"`
 }
 
@@ -104,6 +106,18 @@ func (r *MongoActiveSupplyReader) ActiveSupplySnapshot(
 	}
 	releaseID := strings.TrimSpace(state.ActiveReleaseID)
 	manifestDigest := strings.TrimSpace(state.ManifestDigest)
+	if state.Status != "active" {
+		r.cache.Invalidate()
+		return empty, fmt.Errorf("active release status is malformed")
+	}
+	if state.Revision <= 0 || state.SourceVersion <= 0 {
+		r.cache.Invalidate()
+		return empty, fmt.Errorf("active release revision/sourceVersion is malformed")
+	}
+	if state.ActivatedAt.IsZero() {
+		r.cache.Invalidate()
+		return empty, fmt.Errorf("active release activatedAt is malformed")
+	}
 	if releaseID == "" || !canonicalManifestDigestPattern.MatchString(manifestDigest) {
 		r.cache.Invalidate()
 		return empty, fmt.Errorf("active release binding is malformed")
@@ -113,6 +127,8 @@ func (r *MongoActiveSupplyReader) ActiveSupplySnapshot(
 		releaseID:      releaseID,
 		manifestDigest: manifestDigest,
 		releaseClass:   strings.TrimSpace(state.ReleaseClass),
+		revision:       state.Revision,
+		sourceVersion:  state.SourceVersion,
 	}
 	return r.cache.Load(ctx, key, func(readCtx context.Context) (postports.ActiveSupplySnapshot, error) {
 		snapshot, readErr := r.readActiveSupplyProjectionCounts(
@@ -136,7 +152,8 @@ func (r *MongoActiveSupplyReader) ActiveSupplySnapshot(
 		}
 		if !currentFound || strings.TrimSpace(current.ActiveReleaseID) != releaseID ||
 			strings.TrimSpace(current.ManifestDigest) != manifestDigest ||
-			strings.TrimSpace(current.ReleaseClass) != strings.TrimSpace(state.ReleaseClass) {
+			strings.TrimSpace(current.ReleaseClass) != strings.TrimSpace(state.ReleaseClass) ||
+			current.Revision != state.Revision || current.SourceVersion != state.SourceVersion {
 			return empty, fmt.Errorf("active release changed during supply readback")
 		}
 		return snapshot, nil
@@ -146,28 +163,37 @@ func (r *MongoActiveSupplyReader) ActiveSupplySnapshot(
 func (r *MongoActiveSupplyReader) readActiveSupplyReleaseState(
 	ctx context.Context,
 ) (activeSupplyReleaseState, bool, error) {
-	var state activeSupplyReleaseState
-	err := r.stateCollection.FindOne(
+	cursor, err := r.stateCollection.Find(
 		ctx,
 		bson.M{
-			"environment":     r.environment,
-			"sourceOwner":     "qwq_data",
-			"status":          "active",
-			"activeReleaseId": bson.M{"$type": "string", "$ne": ""},
+			"environment": r.environment,
+			"sourceOwner": "qwq_data",
 		},
-		options.FindOne().SetProjection(bson.M{
+		options.Find().SetProjection(bson.M{
 			"environment": 1, "sourceOwner": 1, "status": 1,
 			"activeReleaseId": 1, "manifestDigest": 1, "releaseClass": 1,
-			"activatedAt": 1,
-		}).SetSort(bson.D{{Key: "activatedAt", Value: -1}}),
-	).Decode(&state)
+			"revision": 1, "sourceVersion": 1, "activatedAt": 1,
+		}).SetLimit(2),
+	)
 	if err != nil {
-		if err == mongo.ErrNoDocuments {
-			return activeSupplyReleaseState{}, false, nil
-		}
 		return activeSupplyReleaseState{}, false, err
 	}
-	return state, true, nil
+	defer cursor.Close(ctx)
+	var states []activeSupplyReleaseState
+	if err := cursor.All(ctx, &states); err != nil {
+		return activeSupplyReleaseState{}, false, err
+	}
+	switch len(states) {
+	case 0:
+		return activeSupplyReleaseState{}, false, nil
+	case 1:
+		return states[0], true, nil
+	default:
+		return activeSupplyReleaseState{}, false, fmt.Errorf(
+			"GATE_BLOCK CONTENT.RELEASE.ACTIVE_POINTER_DUPLICATE: environment=%q sourceOwner=%q",
+			r.environment, "qwq_data",
+		)
+	}
 }
 
 func (r *MongoActiveSupplyReader) readActiveSupplyProjectionCounts(

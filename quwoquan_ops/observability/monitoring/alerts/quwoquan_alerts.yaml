@@ -1198,15 +1198,15 @@ groups:
 
       - alert: IntersectionRepeatExposureRateHigh
         expr: |
-          sum(rate(intersection_feed_candidates_total{rank_state="seen"}[30m]))
-          / (sum(rate(intersection_feed_candidates_total[30m])) + 0.001) > 0.20
+          sum(rate(intersection_feed_filtered_total{reason="seen"}[30m]))
+          / (sum(rate(intersection_feed_candidates_total[30m])) + sum(rate(intersection_feed_filtered_total[30m])) + 0.001) > 0.20
         for: 30m
         labels:
           severity: warning
           layer: l2
         annotations:
           summary: "交集重复曝光率 > 20%"
-          description: "spotlight 候选窗中命中跨会话冷却记忆窗（seen）占比 {{ $value | humanizePercentage }}，超出 SLO（repeat_exposure_rate<=0.20），换新不足或冷却窗失效。"
+          description: "Feed 候选因命中曝光冷却窗口（seen：曝光未转化且未清零）被过滤的占比 {{ $value | humanizePercentage }}，超出 SLO（repeat_exposure_rate<=0.20），供给换新不足。"
 
       - alert: IntersectionFreshnessFilterRateHigh
         expr: |
@@ -1416,13 +1416,80 @@ groups:
       # ===== 数据面（mongodb / postgres / redis exporter） =====
       - alert: DataPlaneExporterDown
         expr: |
-          up{job=~"mongodb-exporter|postgres-exporter|redis-exporter|node-exporter|podman-exporter"} == 0
+          up{job=~"mongodb-exporter|postgres-exporter|redis-exporter|node-exporter|podman-exporter|search-elasticsearch-exporter|telemetry-elasticsearch-exporter|search-objects-elasticsearch-exporter|product-telemetry-elasticsearch-exporter|runtime-logs-elasticsearch-exporter"} == 0
         for: 5m
         labels:
           severity: critical
           layer: l4
         annotations:
           summary: "基础设施 exporter {{ $labels.job }} 不可达"
+
+      - alert: ElasticsearchHeapPressureHigh
+        expr: |
+          elasticsearch_jvm_memory_used_bytes{area="heap",data_resource=~"search-elasticsearch|telemetry-elasticsearch"}
+          / clamp_min(elasticsearch_jvm_memory_max_bytes{area="heap",data_resource=~"search-elasticsearch|telemetry-elasticsearch"}, 1) > 0.85
+        for: 10m
+        labels:
+          severity: critical
+          layer: l4
+        annotations:
+          summary: "Elasticsearch {{ $labels.data_resource }} heap 使用率超过 85%"
+          description: "按 data_resource 定位物理集群；确认 GC、查询/写入负载和容量，逻辑 owner 的 index 指标另行归因。"
+
+      - alert: ElasticsearchPrimaryShardUnavailable
+        expr: |
+          elasticsearch_cluster_health_status{color="red",data_resource=~"search-elasticsearch|telemetry-elasticsearch"} == 1
+        for: 2m
+        labels:
+          severity: critical
+          layer: l4
+        annotations:
+          summary: "Elasticsearch {{ $labels.data_resource }} 集群状态为 red"
+          description: "存在不可用 primary shard；保持对应逻辑 binding fail-closed，先恢复 shard 与 readback，再恢复流量。"
+
+      - alert: ElasticsearchUnassignedShardsPresent
+        expr: |
+          elasticsearch_cluster_health_unassigned_shards{data_resource=~"search-elasticsearch|telemetry-elasticsearch"} > 0
+        for: 10m
+        labels:
+          severity: warning
+          layer: l4
+        annotations:
+          summary: "Elasticsearch {{ $labels.data_resource }} 存在未分配 shard"
+          description: "检查容量、水位、replica 与节点故障域；物理集群健康不得重复归因到多个逻辑 owner。"
+
+      - alert: ElasticsearchMergeTimeHigh
+        expr: |
+          sum by (data_owner) (rate(elasticsearch_indices_merges_total_time_seconds_total{data_owner=~"search-objects|product-telemetry|runtime-logs"}[10m])) > 0.5
+        for: 15m
+        labels:
+          severity: warning
+          layer: l4
+        annotations:
+          summary: "Elasticsearch {{ $labels.data_owner }} merge 时间占用持续偏高"
+          description: "检查写入速率、segment 数、磁盘 IO 与 ILM；阈值按每秒累计 merge 时间评估。"
+
+      - alert: ElasticsearchSnapshotStale
+        expr: |
+          time() - elasticsearch_snapshot_stats_latest_snapshot_timestamp_seconds{data_owner=~"search-objects|product-telemetry|runtime-logs"} > 93600
+        for: 15m
+        labels:
+          severity: critical
+          layer: l4
+        annotations:
+          summary: "Elasticsearch {{ $labels.data_owner }} 最近快照超过 26 小时"
+          description: "检查对应 snapshot policy、远端副本与 namespace membership；未完成 restore/readback 不得称为恢复完成。"
+
+      - alert: ElasticsearchSnapshotShardFailure
+        expr: |
+          elasticsearch_snapshot_stats_snapshot_failed_shards{data_owner=~"search-objects|product-telemetry|runtime-logs"} > 0
+        for: 5m
+        labels:
+          severity: critical
+          layer: l4
+        annotations:
+          summary: "Elasticsearch {{ $labels.data_owner }} 最近快照存在失败 shard"
+          description: "快照不完整；阻断依赖该快照的迁移或恢复，修复后重新 snapshot→restore→readback。"
 
       - alert: MongoConnectionsHigh
         expr: mongodb_ss_connections{conn_type="current"} > 800

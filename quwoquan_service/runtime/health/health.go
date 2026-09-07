@@ -36,7 +36,10 @@ var (
 
 type CheckFunc func(ctx context.Context) error
 
-const defaultCheckTimeout = 2 * time.Second
+const (
+	defaultCheckTimeout              = 2 * time.Second
+	duplicateCheckRegistrationResult = "registration error: duplicate check name"
+)
 
 type checkDefinition struct {
 	fn      CheckFunc
@@ -44,12 +47,16 @@ type checkDefinition struct {
 }
 
 type Checker struct {
-	mu     sync.RWMutex
-	checks map[string]checkDefinition
+	mu                 sync.RWMutex
+	checks             map[string]checkDefinition
+	registrationErrors map[string]string
 }
 
 func NewChecker() *Checker {
-	return &Checker{checks: make(map[string]checkDefinition)}
+	return &Checker{
+		checks:             make(map[string]checkDefinition),
+		registrationErrors: make(map[string]string),
+	}
 }
 
 func (c *Checker) Register(name string, fn CheckFunc) {
@@ -67,6 +74,12 @@ func (c *Checker) RegisterWithTimeout(
 ) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	// Registration stays source-compatible by surfacing faults through Check.
+	// Preserve the first definition so a duplicate cannot silently replace it.
+	if _, exists := c.checks[name]; exists {
+		c.registrationErrors[name] = duplicateCheckRegistrationResult
+		return
+	}
 	c.checks[name] = checkDefinition{fn: fn, timeout: timeout}
 }
 
@@ -82,11 +95,19 @@ func (c *Checker) Check(ctx context.Context) Result {
 	for k, v := range c.checks {
 		checks[k] = v
 	}
+	registrationErrors := make(map[string]string, len(c.registrationErrors))
+	for k, v := range c.registrationErrors {
+		registrationErrors[k] = v
+	}
 	c.mu.RUnlock()
 
 	results := make(map[string]string, len(checks))
-	failedChecks := make([]string, 0)
-	allOK := true
+	failedChecks := make([]string, 0, len(registrationErrors))
+	allOK := len(registrationErrors) == 0
+	for name, diagnostic := range registrationErrors {
+		results[name] = diagnostic
+		failedChecks = append(failedChecks, name)
+	}
 
 	type checkResult struct {
 		name     string
@@ -112,6 +133,10 @@ func (c *Checker) Check(ctx context.Context) Result {
 	for range checks {
 		r := <-ch
 		healthCheckDuration.WithLabelValues(r.name).Observe(r.duration.Seconds())
+		if _, invalidRegistration := registrationErrors[r.name]; invalidRegistration {
+			healthCheckStatus.WithLabelValues(r.name).Set(0)
+			continue
+		}
 		if r.err != nil {
 			results[r.name] = r.err.Error()
 			failedChecks = append(failedChecks, r.name)

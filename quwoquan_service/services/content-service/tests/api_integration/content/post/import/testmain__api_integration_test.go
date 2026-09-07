@@ -8,51 +8,41 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
-	mongomod "github.com/testcontainers/testcontainers-go/modules/mongodb"
+	"quwoquan_service/internal/platform/testinfra"
 )
 
 var testMongoURI string
 
 func TestMain(m *testing.M) {
-	ctx := context.Background()
-	testMongoURI = strings.TrimSpace(os.Getenv("QWQ_TEST_MONGO_URI"))
-	if testMongoURI == "" {
-		testMongoURI = strings.TrimSpace(os.Getenv("TEST_MONGO_URI"))
+	startupCtx, startupCancel := context.WithTimeout(context.Background(), 3*time.Minute)
+	mongoRuntime, err := testinfra.StartRealMongo(
+		startupCtx,
+		testinfra.UniqueDatabaseName("content_post_import_api_integration"),
+	)
+	startupCancel()
+	if err != nil {
+		panic("content-service import contract requires a real MongoDB replica set: " + err.Error())
 	}
 
-	var mongoContainer *mongomod.MongoDBContainer
-	if testMongoURI == "" {
-		container, runErr := tryRunMongoContainer(ctx)
-		if runErr != nil {
-			panic(
-				"content-service import contract requires a real MongoDB; " +
-					"set QWQ_TEST_MONGO_URI/TEST_MONGO_URI or start Docker: " +
-					runErr.Error(),
-			)
+	if mongoRuntime.Source == testinfra.DependencySourceExternal {
+		testMongoURI = strings.TrimSpace(os.Getenv("TEST_MONGO_URI"))
+		if testMongoURI == "" {
+			testMongoURI = strings.TrimSpace(os.Getenv("QWQ_TEST_MONGO_URI"))
 		}
-		mongoContainer = container
-		uri, connErr := container.ConnectionString(ctx)
-		if connErr != nil {
-			panic("failed to get mongo connection string: " + connErr.Error())
-		}
-		testMongoURI = uri + "&directConnection=true"
+	} else {
+		testMongoURI = fmt.Sprintf(
+			"mongodb://%s/?replicaSet=%s&directConnection=true",
+			mongoRuntime.Endpoint,
+			mongoRuntime.ReplicaSet,
+		)
 	}
 
 	code := m.Run()
 
-	if mongoContainer != nil {
-		_ = mongoContainer.Terminate(ctx)
-	}
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 30*time.Second)
+	_ = mongoRuntime.Close(shutdownCtx)
+	shutdownCancel()
 	os.Exit(code)
-}
-
-func tryRunMongoContainer(ctx context.Context) (c *mongomod.MongoDBContainer, err error) {
-	defer func() {
-		if r := recover(); r != nil {
-			err = fmt.Errorf("testcontainers panic (Docker unavailable?): %v", r)
-		}
-	}()
-	c, err = mongomod.Run(ctx, "mongo:7-jammy", mongomod.WithReplicaSet("rs0"))
-	return
 }

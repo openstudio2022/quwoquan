@@ -17,9 +17,24 @@ import (
 	"testing"
 	"time"
 
+	postgenerated "quwoquan_service/services/content-service/generated/content/post"
 	postports "quwoquan_service/services/content-service/internal/content/post/domain/ports"
 	releaseimport "quwoquan_service/services/content-service/internal/content/post/infrastructure/releaseimport"
 )
+
+func TestDataReleaseRevisionConflictMatchesExistingTypedError(t *testing.T) {
+	err := &releaseimport.DataReleaseRevisionConflict{
+		Environment: "alpha", SourceOwner: "qwq_data", ReleaseID: "rel_conflict",
+		ManifestDigest: "sha256:" + strings.Repeat("a", 64), ExpectedRevision: 7,
+	}
+	if !errors.Is(err, postgenerated.ErrVersionConflict) {
+		t.Fatalf("revision conflict is not bound to generated CONTENT.USER.version_conflict: %v", err)
+	}
+	var typed *releaseimport.DataReleaseRevisionConflict
+	if !errors.As(err, &typed) || typed.ExpectedRevision != 7 {
+		t.Fatalf("revision conflict lost typed context: %+v", typed)
+	}
+}
 
 func TestReplayRepairOptionsAreExplicitAndCountBound(t *testing.T) {
 	for _, tc := range []struct {
@@ -155,6 +170,7 @@ func TestReplaySourceImportReportIsStrictAndCountBound(t *testing.T) {
 		},
 		"postBindings": []releaseimport.ImportedPostBinding{binding},
 		"auditEvents":  []string{"DataReleasePrepared", "DataReleaseActivated"},
+		"revision":     1, "sourceVersion": 1,
 	}
 	write := func(name string, value map[string]any) string {
 		t.Helper()
@@ -175,6 +191,15 @@ func TestReplaySourceImportReportIsStrictAndCountBound(t *testing.T) {
 	if err != nil || len(bindings) != 1 || bindings[0].PostID != binding.PostID {
 		t.Fatalf("valid source report bindings=%+v err=%v", bindings, err)
 	}
+
+	delete(report, "revision")
+	if _, err := releaseimport.LoadImportedPostReplayBindings(
+		write("missing-revision.json", report), "alpha", "legacy-release", digest, "qwq_data",
+		[]releaseimport.PostDoc{post},
+	); err == nil || !strings.Contains(err.Error(), "GATE_BLOCK") {
+		t.Fatalf("revisionless source report accepted: %v", err)
+	}
+	report["revision"] = 1
 
 	report["unexpectedSecondTruth"] = true
 	if _, err := releaseimport.LoadImportedPostReplayBindings(

@@ -102,7 +102,7 @@ from .log_sink_package import (  # noqa: F401
     _ELASTICSEARCH_IMAGE_LITERAL_RE,
     _ELASTICSEARCH_IMAGE_LOCAL_TAG_DEFAULT_RE,
     _ELASTICSEARCH_IMAGE_LOCAL_TAG_RE,
-    _canonical_observability_log_sink_binding,
+    _canonical_observability_log_sink_bindings,
     _local_elasticsearch_runtime_selection,
     canonical_local_observability_log_sink_composition,
     load_observability_log_sink_package,

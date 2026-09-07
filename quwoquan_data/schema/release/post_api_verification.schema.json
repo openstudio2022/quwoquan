@@ -203,7 +203,13 @@
           "avatarUrl": {"type": "string"},
           "avatarMediaReady": {"type": "boolean"},
           "avatarProbeCount": {"type": "integer", "minimum": 0, "maximum": 1},
-          "avatarProbe": {"oneOf": [{"$ref": "#/$defs/fullImageProbe"}, {"type": "null"}]},
+          "avatarProbe": {
+            "oneOf": [
+              {"$ref": "#/$defs/fullImageProbe"},
+              {"$ref": "#/$defs/signedImageProbe"},
+              {"type": "null"}
+            ]
+          },
           "usesPlatformDefaultAvatar": {"type": "boolean"}
         },
         "oneOf": [
@@ -218,12 +224,13 @@
             }
           },
           {
+            "description": "research 私有交付 avatar：每个 avatar 都以研究身份完成一次原图短签取回（signedImageProbe），不再只采样一个资产。",
             "properties": {
               "avatarAssetId": {"type": "string", "minLength": 1},
               "avatarUrl": {"pattern": "^media/objects/sha256/"},
               "avatarMediaReady": {"const": true},
-              "avatarProbeCount": {"const": 0},
-              "avatarProbe": {"type": "null"},
+              "avatarProbeCount": {"const": 1},
+              "avatarProbe": {"$ref": "#/$defs/signedImageProbe"},
               "usesPlatformDefaultAvatar": {"const": false}
             }
           },
@@ -385,7 +392,7 @@
       ]
     },
     "researchMediaProbe": {
-      "description": "research 私有交付资产的消费核验：匿名 GET 必须 401/403；采样资产附带一次原图短签取回校验（signedProbe）。",
+      "description": "research 私有交付资产的消费核验：匿名 GET 必须 401/403；每个首屏图片资产都附带一次原图短签取回校验（signedProbe），视频资产为 null。",
       "type": "object",
       "additionalProperties": false,
       "required": [

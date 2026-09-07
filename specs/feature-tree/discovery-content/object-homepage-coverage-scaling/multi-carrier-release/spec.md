@@ -591,3 +591,27 @@
 - 尚缺验收证据：[`GWT-003.t3`](#gwt-003)、[`GWT-003.t4`](#gwt-003)，[`GWT-024.t1`](#gwt-024) 至 [`GWT-024.t4`](#gwt-024)，以及 [`GWT-025.t1`](#gwt-025) 至 [`GWT-025.t5`](#gwt-025) 尚无职责匹配的直接测试或可执行门；旧 campaign/wave 路径不得恢复来补证据。
 - 完成判定：[`GWT-003.t3`](#gwt-003)、[`GWT-003.t4`](#gwt-003)，[`GWT-024.t1`](#gwt-024) 至 [`GWT-024.t4`](#gwt-024)，以及 [`GWT-025.t1`](#gwt-025) 至 [`GWT-025.t5`](#gwt-025) 逐条由硬切后当前实现的 local_contract/api_integration 直接绑定并实际通过；`GWT-025` 还须证明字段名/值语义不匹配和非 HTTPS 官网均 fail closed。完成前这些复合验收保持 pending，不宣称 closed/supported。
 - 依赖：Data source/adoption owner 提供当前单轨实现与直接证据；不得用 fixture 文件存在、schema 可解析或旧 receipt 代替行为断言。
+
+<a id="open-021"></a>
+### OPEN-021 Content 单事务 activate 超出 M100 预算后的分批方案尚未授权
+
+- 类型：`risk`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：当前 verified-before-active 以 `posts_candidate` 加单个 Mongo transaction copy/tombstone/outbox/pointer CAS 覆盖 M100 量级。仓内尚无证据证明 M1000/M10000 闭包可在同一事务预算、oplog 与锁窗口内稳定完成；静默放大将扩大切换失败半径。
+- 尚缺实现：无当前 M100 缺口。只有实测超过事务预算后，才允许设计 generation-keyed 投影或有界分批 prepare + 单指针切换；方案必须保持 stable Post identity、comment/interaction 引用、单一 activation authority 与 previous active 可回滚，不得把 Search/Recommendation 候选索引或环境蓝绿默认加入。
+- 尚缺验收证据：M1000/M10000 候选闭包的 transaction duration/oplog/abort/retry 实测，以及故障注入下 pointer、posts、outbox 的原子性和 rollback 四入口同 identity。
+- 完成判定：[`GWT-016.t3`](#gwt-016) 与 [`GWT-016.t4`](#gwt-016) 在 M1000/M10000 规模实测中给出明确 transaction bound；若超限，新的设计决定与 local_contract/api_integration 证明分批方案不产生半可见状态、混合 release identity 或第二 activation authority。
+- 依赖：Content/Mongo owner 的受控规模与故障注入环境。
+
+<a id="open-022"></a>
+### OPEN-022 引用型对象激活前 upsert 会覆盖同 ID live 投影，真正私有 staging 尚未授权
+
+- 类型：`risk`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：当前 lean staging 只把 Content Post 放进受保护的 `posts_candidate`；Tag taxonomy importer 在 stage 阶段即写入 snapshot 并切换 taxonomy 自己的 active pointer（previous snapshot 按 `releaseId` 保留、可重新 Activate），Creator 与 Homepage 在 activate 前以 `upsert` 写入 live 投影。对新增对象这是纯加法，但 Tag 消费面会在 Content verify 之前看到新 taxonomy，同一 stable ID 的既存 Creator/Homepage 会在 Content pointer 切换前被新 release 的字段覆盖，且激活前的候选验证是 importer 的受保护存储读回而不是公开 API 读回。`GWT-016.t2` 中 "projection/API/media verify 在 activate 前" 目前只在 Content 存储层与媒体字节/摘要层闭合，不能声称引用型对象或公开 API 已在激活前得到验证。
+- 尚缺实现：只有当既存 Creator/Homepage 在同一环境内跨 release 发生字段变化、或 Tag taxonomy 需要与 Content 同窗口切换的真实用例出现时，才允许为引用型对象引入 release-scoped 候选投影与 activation window 内的 materialize/Activate；在此之前，激活前 `upsert` 覆盖既存对象与 Tag pointer 先切视为已接受的精简取舍，Creator/Homepage 的删除/下线仍只允许在 Content activate 成功后执行。不得为此新增线上 HTTP candidate API 或跨服务两阶段提交。
+- 尚缺验收证据：既存 Creator/Homepage 字段跨 release 变化时，activate 前公开读面返回 previous 投影而非 candidate 投影的 api_integration；rollback 后同一对象恢复 previous 字段的 readback。
+- 完成判定：[`GWT-016.t2`](#gwt-016) 与 [`GWT-016.t3`](#gwt-016) 由引用型对象的 local_contract/api_integration 证明 activate 前 previous 投影字节不变，或由新的设计决定明确把引用型对象的 pre-activation 验证边界限定为存储读回并获得 owner 批准。
+- 依赖：User/Entity/Tag owner 对候选投影存储与 activation window 的授权；Data owner 提供跨 release 字段变化的真实 release 对照。

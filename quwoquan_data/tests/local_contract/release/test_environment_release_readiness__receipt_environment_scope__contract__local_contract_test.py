@@ -450,6 +450,8 @@ def _fixture(root: Path) -> dict[str, Path]:
                 for post_ref, post_id, content_type in POSTS
             ],
             "auditEvents": [],
+            "revision": 1,
+            "sourceVersion": 1,
         },
     )
     write_json(
@@ -733,10 +735,22 @@ def _convert_fixture_to_research(paths: dict[str, Path]) -> str:
     post_report["internalSubjectHash"] = subject_hash
     post_report.pop("guestActorHash", None)
     post_report.pop("guestLogin", None)
+    def _signed_probe(asset: dict[str, object]) -> dict[str, object]:
+        # research：每个 avatar 与首屏图片都必须以研究身份完成一次原图短签取回。
+        return {
+            "targetEvidence": "hostClass=dns,pathHash=sha256:" + "5" * 64,
+            "status": 200,
+            "mimeType": asset["contentType"],
+            "bytes": asset["bytes"],
+            "sha256": asset["sha256"],
+            "hashVerified": True,
+        }
+
     creator = post_report["creators"][0]
-    creator["avatarUrl"] = media_by_id["creator-avatar-a"]["privateObjectKey"]
-    creator["avatarProbeCount"] = 0
-    creator["avatarProbe"] = None
+    avatar_asset = media_by_id["creator-avatar-a"]
+    creator["avatarUrl"] = avatar_asset["privateObjectKey"]
+    creator["avatarProbeCount"] = 1
+    creator["avatarProbe"] = _signed_probe(avatar_asset)
     for post in post_report["posts"]:
         post["mediaProbes"] = [
             {
@@ -748,7 +762,11 @@ def _convert_fixture_to_research(paths: dict[str, Path]) -> str:
                 "anonymousStatus": 403,
                 "expectedBytes": media_by_id[probe["assetId"]]["bytes"],
                 "expectedSha256": media_by_id[probe["assetId"]]["sha256"],
-                "signedProbe": None,
+                "signedProbe": (
+                    _signed_probe(media_by_id[probe["assetId"]])
+                    if media_by_id[probe["assetId"]]["kind"] == "image"
+                    else None
+                ),
             }
             for probe in post["mediaProbes"]
         ]

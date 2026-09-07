@@ -1,4 +1,13 @@
 backend: postgres
+resources:
+  account_store:
+    engine: postgres
+    role: authority
+    required: true
+  account_runtime_state:
+    engine: redis
+    role: runtime
+    required: true
 tables:
   user_profiles:
     publication_role: not_published

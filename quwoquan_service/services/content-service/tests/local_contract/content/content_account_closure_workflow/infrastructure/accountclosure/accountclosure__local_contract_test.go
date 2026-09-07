@@ -23,8 +23,9 @@ func TestProcessorCompletesCleanupAndReplaysIdempotently(t *testing.T) {
 	t.Parallel()
 	event := accountClosedEventForTest("evt-processor-normal")
 	document := SearchDocumentID{
-		ObjectType: ContentPostSearchObjectType,
-		ObjectID:   "post-closed",
+		ObjectType:    ContentPostSearchObjectType,
+		ObjectID:      "post-closed",
+		SourceVersion: 4,
 	}
 	store := newProcessorStoreForTest(document)
 	search := &searchDeleterForTest{}
@@ -88,8 +89,9 @@ func TestProcessorSearchFailureRemainsPendingAndRecovers(t *testing.T) {
 	t.Parallel()
 	event := accountClosedEventForTest("evt-processor-search-retry")
 	document := SearchDocumentID{
-		ObjectType: ContentPostSearchObjectType,
-		ObjectID:   "post-search-retry",
+		ObjectType:    ContentPostSearchObjectType,
+		ObjectID:      "post-search-retry",
+		SourceVersion: 2,
 	}
 	store := newProcessorStoreForTest(document)
 	search := &searchDeleterForTest{failuresRemaining: 1}
@@ -387,11 +389,13 @@ func accountClosureDigestorForTest(t *testing.T) SubjectDigestor {
 	return digestor
 }
 
-func TestSearchIndexerDeleterUsesCanonicalIdentityAndPropagatesFailure(t *testing.T) {
+// spec_ref: specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/design.md#dec-002
+func TestSearchIndexerDeleterWritesVersionedTombstoneAndPropagatesFailure(t *testing.T) {
 	t.Parallel()
 	document := SearchDocumentID{
-		ObjectType: ContentPostSearchObjectType,
-		ObjectID:   "post-search-adapter",
+		ObjectType:    ContentPostSearchObjectType,
+		ObjectID:      "post-search-adapter",
+		SourceVersion: 7,
 	}
 	writer := &searchWriterForTest{}
 	deleter, err := NewSearchIndexerDeleter(es.NewIndexer(writer, "search_objects"), true)
@@ -399,15 +403,29 @@ func TestSearchIndexerDeleterUsesCanonicalIdentityAndPropagatesFailure(t *testin
 		t.Fatal(err)
 	}
 	if err := deleter.DeleteSearchDocument(t.Context(), document); err != nil {
-		t.Fatalf("delete canonical document: %v", err)
+		t.Fatalf("tombstone canonical document: %v", err)
 	}
-	if !slices.Equal(writer.deleted, []string{document.CanonicalID()}) {
-		t.Fatalf("deleted ids=%v, want %s", writer.deleted, document.CanonicalID())
+	if !slices.Equal(writer.tombstoned, []string{document.CanonicalID()}) {
+		t.Fatalf("tombstoned ids=%v, want %s", writer.tombstoned, document.CanonicalID())
+	}
+	if writer.versions[document.CanonicalID()] != 7 || len(writer.upserted) != 0 || len(writer.hardDeleted) != 0 {
+		t.Fatalf(
+			"closure must write exactly one versioned tombstone: versions=%v upserts=%v hardDeletes=%v",
+			writer.versions, writer.upserted, writer.hardDeleted,
+		)
+	}
+	// 同版本重放是幂等成功，不得让 inbox 卡住。
+	if err := deleter.DeleteSearchDocument(t.Context(), document); err != nil {
+		t.Fatalf("replayed tombstone must succeed: %v", err)
 	}
 
 	writer.failure = errors.New("search backend unavailable")
 	if err := deleter.DeleteSearchDocument(t.Context(), document); err == nil {
 		t.Fatal("search backend failure was swallowed")
+	}
+	unversioned := SearchDocumentID{ObjectType: ContentPostSearchObjectType, ObjectID: "post-unversioned"}
+	if err := deleter.DeleteSearchDocument(t.Context(), unversioned); err == nil {
+		t.Fatal("a staged tombstone without sourceVersion must fail closed")
 	}
 	if _, err := NewSearchIndexerDeleter(nil, true); err == nil {
 		t.Fatal("enabled search accepted a missing indexer")
@@ -705,30 +723,55 @@ func (cleaner *cacheCleanerForTest) VerifyNoPersonalDataResidual(
 	return nil
 }
 
+// searchWriterForTest 是 es.VersionedWriter 替身：记录每个文档的最高版本，同版本
+// 重放返回 applied=false 且无错误，与真实 Elasticsearch 外部版本围栏一致。
+// hardDeleted 永远为空 —— 它只用来断言不存在物理 DELETE 通路。
 type searchWriterForTest struct {
-	deleted []string
-	failure error
+	tombstoned  []string
+	upserted    []string
+	hardDeleted []string
+	versions    map[string]int64
+	failure     error
 }
 
-func (writer *searchWriterForTest) Upsert(
-	context.Context,
-	string,
-	string,
-	map[string]any,
-) error {
-	return nil
-}
-
-func (writer *searchWriterForTest) Delete(
+func (writer *searchWriterForTest) UpsertVersioned(
 	_ context.Context,
 	_ string,
 	id string,
-) error {
+	sourceVersion int64,
+	_ map[string]any,
+) (bool, error) {
 	if writer.failure != nil {
-		return writer.failure
+		return false, writer.failure
 	}
-	writer.deleted = append(writer.deleted, id)
-	return nil
+	writer.upserted = append(writer.upserted, id)
+	return writer.advance(id, sourceVersion), nil
+}
+
+func (writer *searchWriterForTest) TombstoneVersioned(
+	_ context.Context,
+	_ string,
+	id string,
+	_ string,
+	_ string,
+	sourceVersion int64,
+) (bool, error) {
+	if writer.failure != nil {
+		return false, writer.failure
+	}
+	writer.tombstoned = append(writer.tombstoned, id)
+	return writer.advance(id, sourceVersion), nil
+}
+
+func (writer *searchWriterForTest) advance(id string, sourceVersion int64) bool {
+	if writer.versions == nil {
+		writer.versions = map[string]int64{}
+	}
+	if writer.versions[id] >= sourceVersion {
+		return false
+	}
+	writer.versions[id] = sourceVersion
+	return true
 }
 
 func (deleter *searchDeleterForTest) DeleteSearchDocument(

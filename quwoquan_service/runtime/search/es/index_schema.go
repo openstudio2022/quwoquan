@@ -117,10 +117,13 @@ func buildIndexSettings(c IndexSchemaConfig) map[string]any {
 
 func buildIndexMappings(c IndexSchemaConfig) map[string]any {
 	props := map[string]any{
-		"target":      keywordField(),
-		"objectType":  keywordField(),
-		"objectId":    keywordField(),
-		"contentType": keywordField(),
+		"target":        keywordField(),
+		"objectType":    keywordField(),
+		"objectId":      keywordField(),
+		"sourceVersion": map[string]any{"type": "long"},
+		"sourceDigest":  keywordField(),
+		"deleted":       map[string]any{"type": "boolean"},
+		"contentType":   keywordField(),
 		// Short name/title fields carry a .py pinyin sub-field for latin-input
 		// recall. summary/body deliberately do not: pinyin (like edge_ngram)
 		// inflates long-text indexes far beyond its recall value.

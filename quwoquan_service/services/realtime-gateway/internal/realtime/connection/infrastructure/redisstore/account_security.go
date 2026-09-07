@@ -59,6 +59,7 @@ type accountSecuritySessionRecord struct {
 	PersonaID    string `json:"personaId"`
 	DeviceID     string `json:"deviceId"`
 	ConnectionID string `json:"connectionId"`
+	Fence        int64  `json:"fence"`
 }
 
 func (s *AccountSecurityStateStore) Admit(
@@ -94,6 +95,7 @@ func (s *AccountSecurityStateStore) RegisterSession(
 	ctx context.Context,
 	identity application.TrustedIdentity,
 	connID string,
+	fence int64,
 ) error {
 	if s == nil || s.client == nil {
 		return application.ErrAccountSecurityUnavailable
@@ -112,9 +114,10 @@ func (s *AccountSecurityStateStore) RegisterSession(
 		PersonaID:    strings.TrimSpace(identity.PersonaID),
 		DeviceID:     strings.TrimSpace(identity.DeviceID),
 		ConnectionID: strings.TrimSpace(connID),
+		Fence:        fence,
 	}
 	if record.AccountID == "" || record.PersonaID == "" ||
-		record.DeviceID == "" || record.ConnectionID == "" {
+		record.DeviceID == "" || record.ConnectionID == "" || record.Fence <= 0 {
 		return application.ErrAccountSecurityUnavailable
 	}
 	payload, err := json.Marshal(record)
@@ -368,27 +371,52 @@ func (s *AccountSecurityStateStore) clearAccountSessions(
 		}
 		if getErr == nil {
 			var record accountSecuritySessionRecord
-			if json.Unmarshal([]byte(payload), &record) == nil &&
-				record.AccountID == strings.TrimSpace(accountID) &&
-				record.ConnectionID == connID {
-				if err := s.client.Del(
+			if json.Unmarshal([]byte(payload), &record) != nil ||
+				record.AccountID != strings.TrimSpace(accountID) ||
+				record.ConnectionID != connID ||
+				strings.TrimSpace(record.PersonaID) == "" ||
+				strings.TrimSpace(record.DeviceID) == "" {
+				return errors.New("invalid realtime account security session record")
+			}
+			if record.Fence > 0 {
+				identity := application.TrustedIdentity{
+					PersonaID: record.PersonaID,
+					DeviceID:  record.DeviceID,
+				}
+				releaseErr := NewLeaseStore(s.client).Release(
 					ctx,
-					leaseKey(application.TrustedIdentity{
+					identity,
+					record.ConnectionID,
+					record.Fence,
+				)
+				if releaseErr != nil && !errors.Is(releaseErr, application.ErrLeaseFenced) &&
+					!errors.Is(releaseErr, application.ErrLeaseExpired) {
+					return releaseErr
+				}
+			} else {
+				// Pre-fence session records predate fencing and can only name the
+				// pre-migration lease shape. Never synthesize a current token or
+				// touch the digest-based lease: that key may belong to a newer
+				// session with the same connection id.
+				if err := NewLeaseStore(s.client).ReleasePreFenceLease(
+					ctx,
+					application.TrustedIdentity{
 						PersonaID: record.PersonaID,
 						DeviceID:  record.DeviceID,
-					}, record.ConnectionID),
-				); err != nil {
-					return err
-				}
-				if err := s.revoker.RemoveConnection(
-					ctx,
-					record.AccountID,
-					record.PersonaID,
-					record.DeviceID,
+					},
 					record.ConnectionID,
 				); err != nil {
 					return err
 				}
+			}
+			if err := s.revoker.RemoveConnection(
+				ctx,
+				record.AccountID,
+				record.PersonaID,
+				record.DeviceID,
+				record.ConnectionID,
+			); err != nil {
+				return err
 			}
 		}
 		if err := s.client.Del(ctx, recordKey); err != nil {

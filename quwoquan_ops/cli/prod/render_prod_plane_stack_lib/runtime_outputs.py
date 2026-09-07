@@ -90,13 +90,13 @@ def _write_env_file(
                 "LOCAL_GAMMA_OBJECT_STORAGE_EDGE_PORT=39440",
                 "LOCAL_GAMMA_OBJECT_STORAGE_ENDPOINT=object-storage:9000",
                 "LOCAL_GAMMA_OBJECT_STORAGE_ACCESS_KEY_ID=prevalidation-only",
-                "LOCAL_GAMMA_OBJECT_STORAGE_ACCESS_KEY_SECRET=prevalidation-only-not-production",
+                "LOCAL_GAMMA_OBJECT_STORAGE_ACCESS_KEY_SECRET=prevalidation-only",
                 "LOCAL_GAMMA_OBJECT_STORAGE_BUCKET=prevalidation-empty",
                 "QWQ_COMPOSE_OBJECT_STORAGE_ENDPOINT=http://object-storage:9000",
                 "QWQ_COMPOSE_OBJECT_STORAGE_BUCKET=prevalidation-empty",
                 "QWQ_COMPOSE_OBJECT_STORAGE_REGION=prevalidation-local",
                 "QWQ_COMPOSE_OBJECT_STORAGE_ACCESS_KEY_ID=prevalidation-only",
-                "QWQ_COMPOSE_OBJECT_STORAGE_ACCESS_KEY_SECRET=prevalidation-only-not-production",
+                "QWQ_COMPOSE_OBJECT_STORAGE_ACCESS_KEY_SECRET=prevalidation-only",
                 (
                     "QWQ_COMPOSE_OBJECT_STORAGE_CDN_SIGN_KEY="
                     + auth["QWQ_COMPOSE_OBJECT_STORAGE_CDN_SIGN_KEY"]
@@ -127,8 +127,22 @@ def _write_env_file(
                 "PROD_RTC_MEDIA_CONNECTION_URL=wss://sfu-unavailable.invalid",
                 "PROD_RTC_MEDIA_API_KEY=provider-unavailable",
                 "PROD_RTC_MEDIA_API_SECRET=provider-unavailable",
-                "PRODUCT_OPS_ELASTICSEARCH_ENDPOINT=http://elasticsearch:9200",
-                "PRODUCT_OPS_ELASTICSEARCH_API_KEY=prevalidation-not-release-evidence",
+                (
+                    "PRODUCT_OPS_TELEMETRY_ELASTICSEARCH_ENDPOINT="
+                    "http://elasticsearch:9200"
+                ),
+                (
+                    "PRODUCT_OPS_TELEMETRY_ELASTICSEARCH_API_KEY="
+                    "prevalidation-telemetry-not-release-evidence"
+                ),
+                (
+                    "PRODUCT_OPS_RUNTIME_LOG_ELASTICSEARCH_ENDPOINT="
+                    "http://elasticsearch:9200"
+                ),
+                (
+                    "PRODUCT_OPS_RUNTIME_LOG_ELASTICSEARCH_API_KEY="
+                    "prevalidation-runtime-log-not-release-evidence"
+                ),
             ]
         )
     elif instance == "gray":

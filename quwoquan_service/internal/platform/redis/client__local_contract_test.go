@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -648,4 +649,96 @@ func atomicIndexKey(tag string) string {
 
 func atomicMetadataKey(tag string) string {
 	return fmt.Sprintf("rec:bounded_metadata:{%s}", tag)
+}
+
+func TestLeaseFenceAtomicPrimitiveRejectsCrossSlotBeforeRedis(t *testing.T) {
+	client := &client{}
+	if _, err := client.AcquireLeaseFenceAtomic(
+		context.Background(),
+		"rt:conn:fence:{persona-a}",
+		"rt:conn:lease:{persona-b}:lease:connection",
+		"owner",
+		time.Minute,
+	); err == nil || !strings.Contains(err.Error(), "share one non-empty Cluster hash tag") {
+		t.Fatalf("cross-slot acquire error=%v", err)
+	}
+}
+
+func TestLeaseFenceAtomicPrimitiveRequiresCapability(t *testing.T) {
+	_, err := rtredis.AcquireLeaseFenceAtomic(
+		context.Background(),
+		&clientWithoutLeaseFence{Client: rtredis.NewMemoryClient()},
+		"rt:conn:fence:{scope}",
+		"rt:conn:lease:{scope}:lease:connection",
+		"owner",
+		time.Minute,
+	)
+	if !errors.Is(err, rtredis.ErrAtomicLeaseFenceUnavailable) {
+		t.Fatalf("missing capability error=%v", err)
+	}
+}
+
+func TestLeaseFenceAtomicAuthorityPersistsAndMissingAuthorityNeverReusesOldToken(t *testing.T) {
+	raw, client := newAtomicTestClient(t)
+	ctx := context.Background()
+	const (
+		fenceKey = "rt:conn:fence:{authority-loss}"
+		oldLease = "rt:conn:lease:{authority-loss}:lease:old"
+		newLease = "rt:conn:lease:{authority-loss}:lease:new"
+	)
+	oldFence, err := client.AcquireLeaseFenceAtomic(
+		ctx, fenceKey, oldLease, "old-owner", 10*time.Minute,
+	)
+	if err != nil {
+		t.Fatalf("acquire old lease: %v", err)
+	}
+	if ttl, ttlErr := raw.PTTL(ctx, fenceKey).Result(); ttlErr != nil || ttl != -1 {
+		t.Fatalf("fence authority TTL=%v err=%v, want persistent -1ns", ttl, ttlErr)
+	}
+
+	if err := raw.Del(ctx, fenceKey).Err(); err != nil {
+		t.Fatalf("simulate lost fence authority: %v", err)
+	}
+	if result, renewErr := client.RenewLeaseFenceAtomic(
+		ctx, fenceKey, oldLease, "old-owner", oldFence, 10*time.Minute,
+	); renewErr != nil || result != rtredis.LeaseFenceExpired {
+		t.Fatalf("old renew after authority loss result=%v err=%v", result, renewErr)
+	}
+
+	if _, err := client.AcquireLeaseFenceAtomic(
+		ctx, fenceKey, oldLease, "new-owner", 10*time.Minute,
+	); err == nil || !strings.Contains(err.Error(), "authority missing") {
+		t.Fatalf("same-key acquire after authority loss error=%v, want fail-closed", err)
+	}
+	if err := raw.Del(ctx, oldLease).Err(); err != nil {
+		t.Fatalf("expire old lease before recovery acquire: %v", err)
+	}
+	newFence, err := client.AcquireLeaseFenceAtomic(
+		ctx, fenceKey, newLease, "new-owner", 10*time.Minute,
+	)
+	if err != nil {
+		t.Fatalf("acquire new key after simulated authority loss: %v", err)
+	}
+	if newFence != oldFence {
+		t.Fatalf("loss simulation expected numeric reuse old=%d new=%d", oldFence, newFence)
+	}
+	if result, renewErr := client.RenewLeaseFenceAtomic(
+		ctx, fenceKey, oldLease, "old-owner", oldFence, 10*time.Minute,
+	); renewErr != nil || result != rtredis.LeaseFenceExpired {
+		t.Fatalf("old expired lease after token reuse result=%v err=%v", result, renewErr)
+	}
+	if result, releaseErr := client.ReleaseLeaseFenceAtomic(
+		ctx, fenceKey, oldLease, "old-owner", oldFence,
+	); releaseErr != nil || result != rtredis.LeaseFenceExpired {
+		t.Fatalf("old expired lease release after token reuse result=%v err=%v", result, releaseErr)
+	}
+	if result, renewErr := client.RenewLeaseFenceAtomic(
+		ctx, fenceKey, newLease, "new-owner", newFence, 10*time.Minute,
+	); renewErr != nil || result != rtredis.LeaseFenceApplied {
+		t.Fatalf("new lease after old rejection result=%v err=%v", result, renewErr)
+	}
+}
+
+type clientWithoutLeaseFence struct {
+	rtredis.Client
 }

@@ -279,6 +279,9 @@ from quwoquan_ops.cli.lib.runtime_topology_package import (
     CONTENT_COMMERCIAL_COMPOSE_PROFILES, FULL_WORKLOAD_COMPOSE_PROFILES,
     load_runtime_topology_package, materialize_runtime_topology_package,
 )
+from quwoquan_ops.cli.lib.data_plane_binding import (
+    materialize_data_plane_binding_package,
+)
 from quwoquan_ops.cli.lib.service_core_composition import (
     SERVICE_CORE_IMAGE_ENV, SERVICE_CORE_MODULE_SET, SERVICE_CORE_WORKLOAD,
     project_compose_document,

@@ -35,10 +35,19 @@ func (reader definitionReader) List(context.Context, string, int) ([]definitionm
 	return []definitionmodel.Definition{reader.definition}, nil
 }
 
-type connectionReader struct{ connection connectionmodel.Connection }
+type connectionReader struct {
+	connection connectionmodel.Connection
+	reads      int
+	afterRead  func(int)
+}
 
 func (reader *connectionReader) Get(context.Context, string, string) (connectionmodel.Connection, error) {
-	return reader.connection, nil
+	reader.reads++
+	connection := reader.connection
+	if reader.afterRead != nil {
+		reader.afterRead(reader.reads)
+	}
+	return connection, nil
 }
 
 func (reader *connectionReader) List(context.Context, string, int) ([]connectionmodel.Connection, error) {

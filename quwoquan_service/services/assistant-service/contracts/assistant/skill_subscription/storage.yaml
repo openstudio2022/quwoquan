@@ -1,4 +1,13 @@
 backend: mongodb
+resources:
+  subscription_store:
+    engine: mongodb
+    role: authority
+    required: true
+  delivery_leases:
+    engine: redis
+    role: runtime
+    required: true
 collections:
   skill_subscriptions:
     publication_role: not_published

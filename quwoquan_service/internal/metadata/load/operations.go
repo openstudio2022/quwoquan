@@ -35,7 +35,15 @@ type runtimeEntrypointDocument struct {
 	Phase         string   `yaml:"phase"`
 	SourceObjects []string `yaml:"source_objects"`
 	Idempotency   string   `yaml:"idempotency"`
-	Application   struct {
+	Consistency   *struct {
+		AtomicCommit        *bool  `yaml:"atomic_commit"`
+		Arbitration         string `yaml:"arbitration"`
+		Source              string `yaml:"source"`
+		Freshness           string `yaml:"freshness"`
+		MaxStalenessSeconds int    `yaml:"max_staleness_seconds"`
+		StaleResult         string `yaml:"stale_result"`
+	} `yaml:"consistency"`
+	Application struct {
 		Kind        string `yaml:"kind"`
 		Facet       string `yaml:"facet"`
 		Method      string `yaml:"method"`
@@ -111,6 +119,14 @@ type routeDocument struct {
 	Concurrency struct {
 		VersionPrecondition string `yaml:"version_precondition"`
 	} `yaml:"concurrency"`
+	Consistency *struct {
+		AtomicCommit        *bool  `yaml:"atomic_commit"`
+		Arbitration         string `yaml:"arbitration"`
+		Source              string `yaml:"source"`
+		Freshness           string `yaml:"freshness"`
+		MaxStalenessSeconds int    `yaml:"max_staleness_seconds"`
+		StaleResult         string `yaml:"stale_result"`
+	} `yaml:"consistency"`
 	ErrorCodes []string `yaml:"error_codes"`
 	Privacy    struct {
 		RequestClassification  string `yaml:"request_classification"`
@@ -342,6 +358,17 @@ func loadService(
 				MaximumBodyBytes: route.ResponseAdmission.MaximumBodyBytes,
 			}
 		}
+		var consistency *ast.OperationConsistency
+		if route.Consistency != nil {
+			consistency = &ast.OperationConsistency{
+				AtomicCommit:        route.Consistency.AtomicCommit,
+				Arbitration:         strings.TrimSpace(route.Consistency.Arbitration),
+				Source:              strings.TrimSpace(route.Consistency.Source),
+				Freshness:           strings.TrimSpace(route.Consistency.Freshness),
+				MaxStalenessSeconds: route.Consistency.MaxStalenessSeconds,
+				StaleResult:         strings.TrimSpace(route.Consistency.StaleResult),
+			}
+		}
 		transport := strings.ToLower(strings.TrimSpace(route.Transport))
 		if transport == "" {
 			transport = "json"
@@ -439,7 +466,8 @@ func loadService(
 					route.Concurrency.VersionPrecondition,
 				)),
 			},
-			ErrorCodes: trimStrings(route.ErrorCodes),
+			Consistency: consistency,
+			ErrorCodes:  trimStrings(route.ErrorCodes),
 			Privacy: ast.PrivacyPolicy{
 				RequestClassification: strings.TrimSpace(
 					route.Privacy.RequestClassification,
@@ -488,6 +516,17 @@ func loadService(
 				kindErr,
 			)
 		}
+		var consistency *ast.OperationConsistency
+		if entrypoint.Consistency != nil {
+			consistency = &ast.OperationConsistency{
+				AtomicCommit:        entrypoint.Consistency.AtomicCommit,
+				Arbitration:         strings.TrimSpace(entrypoint.Consistency.Arbitration),
+				Source:              strings.TrimSpace(entrypoint.Consistency.Source),
+				Freshness:           strings.TrimSpace(entrypoint.Consistency.Freshness),
+				MaxStalenessSeconds: entrypoint.Consistency.MaxStalenessSeconds,
+				StaleResult:         strings.TrimSpace(entrypoint.Consistency.StaleResult),
+			}
+		}
 		runtimeEntrypoints = append(runtimeEntrypoints, ast.RuntimeEntrypoint{
 			ID:              object.ID + "." + localID,
 			LocalID:         localID,
@@ -501,6 +540,7 @@ func loadService(
 			ObjectOwner:     strings.TrimSpace(entrypoint.Application.ObjectOwner),
 			SourceObjects:   trimStrings(entrypoint.SourceObjects),
 			Idempotency:     strings.TrimSpace(entrypoint.Idempotency),
+			Consistency:     consistency,
 			Telemetry: ast.TelemetryPolicy{
 				Metric:     strings.TrimSpace(entrypoint.Telemetry.Metric),
 				Trace:      entrypoint.Telemetry.Trace,

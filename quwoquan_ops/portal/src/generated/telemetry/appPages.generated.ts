@@ -217,9 +217,14 @@ export const appPages = {
       "route_id": "circles"
     },
     {
-      "collect_page_access": true,
-      "page_name": "interest_match",
+      "collect_page_access": false,
+      "page_name": "my_intersections_compat_redirect",
       "route_id": "interestMatch"
+    },
+    {
+      "collect_page_access": true,
+      "page_name": "video_book",
+      "route_id": "videoBook"
     },
     {
       "collect_page_access": true,

@@ -2,7 +2,6 @@ package persistence
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -42,11 +41,6 @@ func (i *ESIndex) UpsertIfNewer(
 	ctx context.Context,
 	item searchitemapp.SearchItem,
 ) (bool, error) {
-	if current, found, err := i.currentVersion(ctx, item.HomepageID); err != nil {
-		return false, err
-	} else if found && current > item.SourceVersion {
-		return false, nil
-	}
 	document := rtsearch.Document{
 		ObjectType: rtsearch.ObjectTypeEntityHomepage,
 		ObjectID:   strings.TrimSpace(item.HomepageID), Title: strings.TrimSpace(item.DisplayName),
@@ -68,10 +62,16 @@ func (i *ESIndex) UpsertIfNewer(
 	if item.Latitude != nil && item.Longitude != nil {
 		document.Geo = &rtsearch.GeoPoint{Lat: *item.Latitude, Lng: *item.Longitude}
 	}
-	if err := i.indexer.Apply(ctx, es.ChangeEvent{Op: es.OpUpsert, Doc: document}); err != nil {
+	applied, err := i.indexer.ApplyVersioned(ctx, es.VersionedChangeEvent{
+		Op: es.OpUpsert, Doc: document, SourceVersion: item.SourceVersion,
+	})
+	if err != nil {
 		return false, fmt.Errorf("upsert HomepageSearchItemView: %w", err)
 	}
-	return true, i.recordVersion(ctx, item.HomepageID, item.SourceVersion, false)
+	if err := i.recordVersion(ctx, item.HomepageID, item.SourceVersion, false); err != nil {
+		return applied, err
+	}
+	return applied, nil
 }
 
 func (i *ESIndex) DeleteIfNotOlder(
@@ -79,48 +79,59 @@ func (i *ESIndex) DeleteIfNotOlder(
 	homepageID string,
 	sourceVersion int64,
 ) (bool, error) {
-	if current, found, err := i.currentVersion(ctx, homepageID); err != nil {
-		return false, err
-	} else if found && current > sourceVersion {
-		return false, nil
-	}
-	if err := i.indexer.Apply(ctx, es.ChangeEvent{
-		Op:  es.OpDelete,
-		Doc: rtsearch.Document{ObjectType: rtsearch.ObjectTypeEntityHomepage, ObjectID: strings.TrimSpace(homepageID)},
-	}); err != nil {
+	applied, err := i.indexer.ApplyVersioned(ctx, es.VersionedChangeEvent{
+		Op: es.OpDelete,
+		Doc: rtsearch.Document{
+			ObjectType: rtsearch.ObjectTypeEntityHomepage,
+			ObjectID:   strings.TrimSpace(homepageID),
+		},
+		SourceVersion: sourceVersion,
+	})
+	if err != nil {
 		return false, fmt.Errorf("delete HomepageSearchItemView: %w", err)
 	}
-	return true, i.recordVersion(ctx, homepageID, sourceVersion, true)
+	if err := i.recordVersion(ctx, homepageID, sourceVersion, true); err != nil {
+		return applied, err
+	}
+	return applied, nil
 }
 
-func (i *ESIndex) currentVersion(ctx context.Context, homepageID string) (int64, bool, error) {
-	var record struct {
-		SourceVersion int64 `bson:"sourceVersion"`
-	}
-	err := i.versions.FindOne(ctx, bson.M{"_id": strings.TrimSpace(homepageID)}).Decode(&record)
-	if errors.Is(err, mongo.ErrNoDocuments) {
-		return 0, false, nil
-	}
-	return record.SourceVersion, err == nil, err
-}
-
+// recordVersion is a progress/checkpoint record only; Elasticsearch external
+// versioning is the mutation arbiter. The conditional update plus insert/retry
+// path makes this record monotonic without an unsafe read-before-write upsert.
 func (i *ESIndex) recordVersion(
 	ctx context.Context,
 	homepageID string,
 	sourceVersion int64,
 	tombstone bool,
 ) error {
-	_, err := i.versions.UpdateOne(
-		ctx,
-		bson.M{"_id": strings.TrimSpace(homepageID), "sourceVersion": bson.M{"$lte": sourceVersion}},
-		bson.M{"$set": bson.M{
-			"sourceVersion": sourceVersion, "tombstone": tombstone, "updatedAt": time.Now().UTC(),
-		}},
-		options.UpdateOne().SetUpsert(true),
-	)
-	if mongo.IsDuplicateKeyError(err) {
+	id := strings.TrimSpace(homepageID)
+	update := bson.M{"$set": bson.M{
+		"sourceVersion": sourceVersion,
+		"tombstone":     tombstone,
+		"updatedAt":     time.Now().UTC(),
+	}}
+	filter := bson.M{"_id": id, "sourceVersion": bson.M{"$lt": sourceVersion}}
+	result, err := i.versions.UpdateOne(ctx, filter, update)
+	if err != nil {
+		return err
+	}
+	if result.MatchedCount > 0 {
 		return nil
 	}
+	_, err = i.versions.InsertOne(ctx, bson.M{
+		"_id": id, "sourceVersion": sourceVersion,
+		"tombstone": tombstone, "updatedAt": time.Now().UTC(),
+	})
+	if err == nil {
+		return nil
+	}
+	if !mongo.IsDuplicateKeyError(err) {
+		return err
+	}
+	// A concurrent higher/equal checkpoint won the insert. Retry only the
+	// strictly-newer conditional update; a lower/equal input remains a no-op.
+	_, err = i.versions.UpdateOne(ctx, filter, update)
 	return err
 }
 

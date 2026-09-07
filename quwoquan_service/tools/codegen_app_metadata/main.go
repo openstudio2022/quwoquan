@@ -27,6 +27,7 @@ func main() {
 	var checkAppIdentity bool
 	var appIdentityManifestPath string
 	var appLaunchContractOnly bool
+	var intersectionMetadataOnly bool
 	var checkAppLaunchContract bool
 	var appLaunchContractManifestPath string
 	flag.StringVar(&metadataDir, "metadata-dir", "contracts/metadata", "metadata root directory")
@@ -69,6 +70,12 @@ func main() {
 		"app-launch-contract-only",
 		false,
 		"generate only App/Ops/native launch contract projections",
+	)
+	flag.BoolVar(
+		&intersectionMetadataOnly,
+		"intersection-metadata-only",
+		false,
+		"generate only the App intersection registry projections (vocabulary / client policy / display metadata / feedback contracts)",
 	)
 	flag.BoolVar(
 		&checkAppLaunchContract,
@@ -168,6 +175,23 @@ func main() {
 		); err != nil {
 			exitErr(err)
 		}
+		return
+	}
+	if intersectionMetadataOnly && (appLaunchContractOnly || shellNavigationMetadataOnly || serviceOutputRequested) {
+		exitErr(fmt.Errorf(
+			"--intersection-metadata-only cannot be combined with other output modes",
+		))
+	}
+	if intersectionMetadataOnly {
+		// 交集注册表投影不依赖 ContractGraph：注册表改动后可单独重生成 App 侧四份产物，
+		// 不必等待其他 owner 的 ContractGraph 重建。
+		if err := initializeMetadataDocumentSource(metadataDir, []string{
+			"_shared/types.yaml",
+			intersectionKindRegistryMetadataPath,
+		}); err != nil {
+			exitErr(fmt.Errorf("initialize intersection metadata source: %w", err))
+		}
+		writeIntersectionAppOutputs(appDir, metadataDir)
 		return
 	}
 	if appLaunchContractOnly && (shellNavigationMetadataOnly || serviceOutputRequested) {
@@ -634,21 +658,7 @@ func main() {
 	if err := writeRealtimeEventCatalog(appDir); err != nil {
 		exitErr(err)
 	}
-	intersectionSource, intersectionRegistry, err :=
-		readIntersectionGeneratedMetadata(metadataDir)
-	if err != nil {
-		exitErr(err)
-	}
-	writeIntersectionFeedbackContracts(
-		appDir,
-		intersectionSource,
-		intersectionRegistry,
-	)
-	writeCanonicalIntersectionMetadata(
-		appDir,
-		intersectionSource,
-		intersectionRegistry,
-	)
+	writeIntersectionAppOutputs(appDir, metadataDir)
 	if err := writeImpactHelpTypeMetadata(appDir, metadataDir); err != nil {
 		exitErr(err)
 	}
@@ -769,3 +779,16 @@ func writeGatheringPlanErrorsDart(metadataDir string, appDir string) error {
 }
 
 // ── readers ───────────────────────────────────────────────────────────────────
+
+// writeIntersectionAppOutputs 是交集注册表四份 App 产物（feedback contracts + canonical
+// metadata）的唯一写入生命周期：全量 codegen-app 与 --intersection-metadata-only 都只经此入口，
+// 两个 writer 各自只有一个调用点。
+func writeIntersectionAppOutputs(appDir string, metadataDir string) {
+	intersectionSource, intersectionRegistry, err :=
+		readIntersectionGeneratedMetadata(metadataDir)
+	if err != nil {
+		exitErr(err)
+	}
+	writeIntersectionFeedbackContracts(appDir, intersectionSource, intersectionRegistry)
+	writeCanonicalIntersectionMetadata(appDir, intersectionSource, intersectionRegistry)
+}

@@ -189,6 +189,11 @@ class StackctlCandidateSingleTrackTest(unittest.TestCase):
                         "imageDigest": f"sha256:{'3' * 64}",
                         "runtimeConfigDigest": f"sha256:{'4' * 64}",
                         "environmentRuntimeDigest": f"sha256:{'5' * 64}",
+                        "dataPlaneBinding": {
+                            "ref": "packages/runtime-shared/data-plane-binding.json",
+                            "digest": f"sha256:{'a' * 64}",
+                            "bindingDigest": f"sha256:{'b' * 64}",
+                        },
                         "runtimeSchemaVersion": "environment-runtime-package",
                         "observabilityLogSink": {
                             "adapterId": "ext.obs.elasticsearch",
@@ -196,7 +201,6 @@ class StackctlCandidateSingleTrackTest(unittest.TestCase):
                             "imageDigest": f"sha256:{'6' * 64}",
                             "bindingDigest": f"sha256:{'7' * 64}",
                             "deploymentDigest": f"sha256:{'8' * 64}",
-                            "clusterRef": "target:alpha-local/product-ops/elasticsearch",
                         },
                         "providerRuntime": {
                             "composition": {
@@ -276,6 +280,11 @@ class StackctlCandidateSingleTrackTest(unittest.TestCase):
                 "imageDigest": f"sha256:{'3' * 64}",
                 "runtimeConfigDigest": f"sha256:{'4' * 64}",
                 "environmentRuntimeDigest": f"sha256:{'5' * 64}",
+                "dataPlaneBinding": {
+                    "ref": "packages/runtime-shared/data-plane-binding.json",
+                    "digest": f"sha256:{'a' * 64}",
+                    "bindingDigest": f"sha256:{'b' * 64}",
+                },
                 "runtimeSchemaVersion": "environment-runtime-package",
                 "observabilityLogSink": {},
                 "providerRuntime": {},

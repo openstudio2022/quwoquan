@@ -192,7 +192,7 @@
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`track`
-- 影响或价值：尚缺可执行 gate/check 与直接测试 `spec_ref`——协议语义已冻结为 `REQ-004`（exact path claim、private index、scope tree closure、ContractGraph静止窗口），但语义只靠自觉时，并行脏树互锁仍可能逼出 `--no-verify`（出处：调研转录 `0c4c608c-7219-47c2-bcda-5c66dcf93294`）。
+- 影响或价值：尚缺可执行 gate/check 与直接测试 `spec_ref`——协议语义已冻结为 `REQ-004`（exact path claim、private index、scope tree closure、ContractGraph静止窗口），但语义只靠自觉时，并行脏树互锁仍可能逼出 `--no-verify`。
 - 完成判定：`SIT-003` 的合入子句（`.t2`）由真实 gate/check 覆盖——`REQ-004` 的合法合入态有可执行校验（如提交前 scope-green 自动判定、交接单 foreign-red 登记联动检查），ContractGraph 静止窗口约定有门禁化表达，且对应测试带 `spec_ref` 绑定。
 - 依赖：commit gate、handoff manifest 与 ContractGraph 静止窗口门禁。
 

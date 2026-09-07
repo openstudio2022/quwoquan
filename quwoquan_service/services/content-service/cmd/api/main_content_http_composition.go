@@ -15,7 +15,6 @@ import (
 	rtredis "quwoquan_service/runtime/redis"
 	contentgenerated "quwoquan_service/services/content-service/generated/content/post"
 	commenthttp "quwoquan_service/services/content-service/internal/content/comment/adapters/inbound/http"
-	contentpublicweb "quwoquan_service/services/content-service/internal/content/post/adapters/inbound/publicweb"
 	commentapp "quwoquan_service/services/content-service/internal/content/comment/application"
 	commentpersistence "quwoquan_service/services/content-service/internal/content/comment/infrastructure/persistence"
 	behaviorhttp "quwoquan_service/services/content-service/internal/content/content_behavior_fact/adapters/inbound/http"
@@ -36,6 +35,7 @@ import (
 	outboundshareapp "quwoquan_service/services/content-service/internal/content/outbound_share_fact/application/command"
 	postgraphql "quwoquan_service/services/content-service/internal/content/post/adapters/inbound/graphql"
 	httpadapter "quwoquan_service/services/content-service/internal/content/post/adapters/inbound/http"
+	contentpublicweb "quwoquan_service/services/content-service/internal/content/post/adapters/inbound/publicweb"
 	postapp "quwoquan_service/services/content-service/internal/content/post/application"
 	feedapp "quwoquan_service/services/content-service/internal/content/post/application/feed"
 	"quwoquan_service/services/content-service/internal/content/post/application/ports"
@@ -301,6 +301,7 @@ func buildContentHTTPHandler(input contentHTTPHandlerInput) (contentHTTPHandlers
 	if intersectionService == nil {
 		return contentHTTPHandlers{}, fmt.Errorf("content-service IntersectionVisitState object composition is not configured")
 	}
+	handlerOpts = append(handlerOpts, httpadapter.WithPostIntersectionReader(intersectionService))
 	handlerOpts = append(
 		handlerOpts,
 		httpadapter.WithIntersectionVisitStateHandler(

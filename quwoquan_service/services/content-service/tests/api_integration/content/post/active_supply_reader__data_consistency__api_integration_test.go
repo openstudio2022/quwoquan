@@ -3,7 +3,10 @@ package api_integration
 
 import (
 	"context"
+	"fmt"
+	"strings"
 	"testing"
+	"time"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
 
@@ -41,11 +44,15 @@ func TestMongoActiveSupplyReaderUsesEnvironmentScopedActiveRelease(t *testing.T)
 			"environment": environment, "sourceOwner": "other_owner",
 			"status": "active", "activeReleaseId": "rel_wrong_owner",
 			"manifestDigest": manifestDigest, "releaseClass": "commercial",
+			"revision": int64(1), "sourceVersion": int64(1),
+			"activatedAt": time.Now().UTC(),
 		},
 		bson.M{
 			"environment": environment, "sourceOwner": "qwq_data",
 			"status": "active", "activeReleaseId": "rel_empty",
 			"manifestDigest": manifestDigest, "releaseClass": "commercial",
+			"revision": int64(1), "sourceVersion": int64(1),
+			"activatedAt": time.Now().UTC(),
 		},
 	}); err != nil {
 		t.Fatalf("insert release states: %v", err)
@@ -106,5 +113,54 @@ func TestMongoActiveSupplyReaderUsesEnvironmentScopedActiveRelease(t *testing.T)
 	}
 	if snapshot.ReleaseClass != "research" || !snapshot.IsResearchRelease() {
 		t.Fatalf("releaseClass cache identity drifted: %+v", snapshot)
+	}
+}
+
+func TestMongoActiveSupplyReaderRejectsMissingRevisionAndDuplicateAuthority(t *testing.T) {
+	ctx := context.Background()
+	db := requireMongoDB(t)
+	const environment = "api-integration-active-supply-corruption"
+	collection := db.Collection("data_release_state")
+	if _, err := collection.DeleteMany(ctx, bson.M{"environment": environment}); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_, _ = collection.DeleteMany(context.Background(), bson.M{"environment": environment})
+	})
+	if _, err := collection.InsertOne(ctx, bson.M{
+		"environment": environment, "sourceOwner": "qwq_data", "status": "active",
+		"activeReleaseId": "rel_missing_revision",
+		"manifestDigest":  "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	reader := persistence.NewMongoActiveSupplyReader(db, environment)
+	if _, err := reader.ActiveSupplySnapshot(ctx); err == nil ||
+		!strings.Contains(err.Error(), "revision/sourceVersion") {
+		t.Fatalf("missing revision did not fail closed: %v", err)
+	}
+	if _, err := collection.DeleteMany(ctx, bson.M{"environment": environment}); err != nil {
+		t.Fatal(err)
+	}
+	for index := 0; index < 2; index++ {
+		status := "active"
+		activeReleaseID := fmt.Sprintf("rel_duplicate_%d", index)
+		if index == 1 {
+			status = "superseded"
+			activeReleaseID = ""
+		}
+		if _, err := collection.InsertOne(ctx, bson.M{
+			"environment": environment, "sourceOwner": "qwq_data", "status": status,
+			"activeReleaseId": activeReleaseID,
+			"manifestDigest":  "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+			"revision":        int64(index + 1), "sourceVersion": int64(index + 1),
+			"activatedAt": time.Now().UTC(),
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := reader.ActiveSupplySnapshot(ctx); err == nil ||
+		!strings.Contains(err.Error(), "ACTIVE_POINTER_DUPLICATE") {
+		t.Fatalf("duplicate active pointer did not fail closed: %v", err)
 	}
 }

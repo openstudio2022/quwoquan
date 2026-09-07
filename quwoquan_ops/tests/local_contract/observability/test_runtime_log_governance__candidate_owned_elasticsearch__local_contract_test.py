@@ -73,7 +73,7 @@ class CandidateOwnedElasticsearchGovernanceTest(unittest.TestCase):
         }
         configs["gamma"] = {
             "overrides": {
-                "sys.product-ops-service.elasticsearch.endpoint": (
+                "sys.product-ops-service.telemetry_elasticsearch.endpoint": (
                     "http://elasticsearch:9200"
                 )
             }
@@ -136,7 +136,7 @@ export QWQ_COMPOSE_ELASTICSEARCH_IMAGE="mutable"
         self.assertIn("composeRef", joined)
         self.assertIn("composeDigest", joined)
 
-    def test_candidate_owned_single_track_is_accepted(self) -> None:
+    def test_candidate_owned_dual_binding_track_is_accepted(self) -> None:
         issues: list[str] = []
 
         GATE._verify_candidate_owned_local_elasticsearch_runtime(
@@ -151,6 +151,91 @@ export QWQ_COMPOSE_ELASTICSEARCH_IMAGE="mutable"
         )
 
         self.assertEqual(issues, [])
+
+    def test_environment_bindings_require_both_logical_tracks(self) -> None:
+        selected = {
+            environment: {
+                capability_id: {
+                    "state": "enabled",
+                    "adapter_id": "ext.obs.elasticsearch",
+                    "endpoint_ref": (
+                        expectation["prod_endpoint_ref"]
+                        if environment == "prod"
+                        else "local_topology:elasticsearch"
+                    ),
+                    "endpoint_envs": {
+                        "endpoint": expectation["endpoint_key"]
+                    },
+                    "secret_refs": (
+                        [expectation["prod_secret_key"]]
+                        if environment == "prod"
+                        else []
+                    ),
+                }
+                for capability_id, expectation in (
+                    GATE.PRODUCT_OPS_LOG_SINK_BINDINGS.items()
+                )
+            }
+            for environment in ("alpha", "beta", "gamma", "prod")
+        }
+        issues: list[str] = []
+        GATE._verify_environment_bindings(
+            issues,
+            selected_bindings=selected,
+        )
+        self.assertEqual(issues, [])
+
+        selected["prod"].pop("product.telemetry.sink")
+        issues = []
+        GATE._verify_environment_bindings(
+            issues,
+            selected_bindings=selected,
+        )
+        self.assertEqual(len(issues), 1)
+        self.assertIn("product.telemetry.sink", issues[0])
+
+    def test_observability_composition_requires_the_standard_semantic_chain(self) -> None:
+        valid_observability = """func NewObservabilityStack() {
+    robs.NewRuntimeLogExportWriter(stdout)
+    robs.NewRuntimeLogExportWriter(stderr)
+    robs.NewProcessTraceLogger(stdout, stderr)
+}
+"""
+        valid_bootstrap = """func Bootstrap[T any](serviceName string, spec Spec[T]) {
+    bootstrapAssembly(serviceName, spec)
+}
+func bootstrapAssembly[T any](serviceName string, spec Spec[T]) {
+    NewObservabilityStack(identity, spec.ObservabilityKVFilter)
+}
+"""
+        valid_main = """func main() {
+    servicekit.RunStandalone(serviceName, func() { return newModule() })
+}
+"""
+        valid_product_bootstrap = """func newModule() {
+    servicekit.Bootstrap(serviceName, spec)
+}
+"""
+        issues: list[str] = []
+        GATE._verify_product_ops_standard_observability_composition(
+            issues,
+            servicekit_observability_text=valid_observability,
+            servicekit_bootstrap_text=valid_bootstrap,
+            product_ops_main_text=valid_main,
+            product_ops_bootstrap_text=valid_product_bootstrap,
+        )
+        self.assertEqual(issues, [])
+
+        issues = []
+        GATE._verify_product_ops_standard_observability_composition(
+            issues,
+            servicekit_observability_text=valid_observability,
+            servicekit_bootstrap_text=valid_bootstrap,
+            product_ops_main_text="func main() {}",
+            product_ops_bootstrap_text=valid_product_bootstrap,
+        )
+        self.assertEqual(len(issues), 1)
+        self.assertIn("RunStandalone/newModule", issues[0])
 
 
 class ProductOpsServicekitRuntimeLogWiringTest(unittest.TestCase):

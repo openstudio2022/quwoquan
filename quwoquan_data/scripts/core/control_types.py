@@ -45,7 +45,16 @@ class DeploymentEnvironment(StrEnum):
 class ReleaseRunKind(StrEnum):
     APPLY = "apply"
     VERIFY = "verify"
+    ACTIVATE = "activate"
     ROLLBACK = "rollback"
+
+
+class ContentImportPhase(StrEnum):
+    """content-service cmd/import 的三阶段：stage 只写候选，activate 才切 pointer。"""
+
+    STAGE = "stage"
+    VERIFY = "verify"
+    ACTIVATE = "activate"
 
 
 class ReleaseRunStatus(StrEnum):
@@ -56,6 +65,8 @@ class ReleaseRunStatus(StrEnum):
 
 
 class ContentImportStatus(StrEnum):
+    STAGED = "staged"
+    VERIFIED = "verified"
     ACTIVE = "active"
     DRY_RUN = "dry-run"
 

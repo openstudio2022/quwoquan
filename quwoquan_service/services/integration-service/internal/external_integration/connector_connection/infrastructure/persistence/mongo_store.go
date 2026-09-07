@@ -16,13 +16,15 @@ import (
 
 	authorizationports "quwoquan_service/services/integration-service/internal/external_integration/connector_authorization/domain/ports"
 	"quwoquan_service/services/integration-service/internal/external_integration/connector_connection/domain/model"
+	"quwoquan_service/services/integration-service/internal/external_integration/connector_connection/domain/ports"
 )
 
 type MongoStore struct {
-	connections   *mongo.Collection
-	receipts      *mongo.Collection
-	outbox        *mongo.Collection
-	grantConsumer authorizationports.GrantConsumer
+	connections       *mongo.Collection
+	receipts          *mongo.Collection
+	outbox            *mongo.Collection
+	grantConsumer     authorizationports.GrantConsumer
+	invocationRevoker ports.PendingInvocationRevoker
 }
 
 type commandReceipt struct {
@@ -51,15 +53,22 @@ type outboxRecord struct {
 	OccurredAt          time.Time  `bson:"occurredAt"`
 }
 
-func NewMongoStore(database *mongo.Database, grantConsumer authorizationports.GrantConsumer) *MongoStore {
+func NewMongoStore(
+	database *mongo.Database,
+	grantConsumer authorizationports.GrantConsumer,
+	invocationRevoker ports.PendingInvocationRevoker,
+) *MongoStore {
 	if database == nil {
-		return &MongoStore{grantConsumer: grantConsumer}
+		return &MongoStore{
+			grantConsumer: grantConsumer, invocationRevoker: invocationRevoker,
+		}
 	}
 	return &MongoStore{
-		connections:   database.Collection("connector_connections"),
-		receipts:      database.Collection("connector_connection_command_receipts"),
-		outbox:        database.Collection("connector_connection_outbox"),
-		grantConsumer: grantConsumer,
+		connections:       database.Collection("connector_connections"),
+		receipts:          database.Collection("connector_connection_command_receipts"),
+		outbox:            database.Collection("connector_connection_outbox"),
+		grantConsumer:     grantConsumer,
+		invocationRevoker: invocationRevoker,
 	}
 }
 
@@ -240,6 +249,9 @@ func (store *MongoStore) Revoke(ctx context.Context, input model.RevokeInput) (m
 		if current.Revision != input.ExpectedRevision {
 			return nil, model.ErrRevisionConflict
 		}
+		if current.Status != model.StatusActive || current.RevokedAt != nil {
+			return nil, model.ErrRevisionConflict
+		}
 		next := current
 		next.Status = model.StatusRevoked
 		next.CredentialRef = ""
@@ -247,7 +259,7 @@ func (store *MongoStore) Revoke(ctx context.Context, input model.RevokeInput) (m
 		next.RevokedAt = timePointer(input.OccurredAt)
 		next.Revision++
 		next.UpdatedAt = input.OccurredAt
-		if store.grantConsumer == nil {
+		if store.grantConsumer == nil || store.invocationRevoker == nil {
 			return nil, model.ErrStorageUnavailable
 		}
 		if err := store.grantConsumer.Revoke(
@@ -257,7 +269,12 @@ func (store *MongoStore) Revoke(ctx context.Context, input model.RevokeInput) (m
 			current.GrantReceiptDigest,
 			input.OccurredAt,
 		); err != nil {
-			return nil, model.ErrStorageUnavailable
+			return nil, err
+		}
+		if err := store.invocationRevoker.RevokePendingForConnection(
+			txCtx, current.AccountID, current.ConnectionID, input.OccurredAt,
+		); err != nil {
+			return nil, err
 		}
 		updated, err := store.connections.ReplaceOne(txCtx, bson.M{
 			"accountId": input.AccountID, "connectionId": input.ConnectionID,

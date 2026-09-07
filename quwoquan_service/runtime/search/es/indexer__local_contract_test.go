@@ -2,6 +2,7 @@ package es
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -9,18 +10,61 @@ import (
 )
 
 type fakeWriter struct {
-	docs map[string]map[string]any
+	docs     map[string]map[string]any
+	versions map[string]int64
+	digests  map[string]string
 }
 
-func newFakeWriter() *fakeWriter { return &fakeWriter{docs: map[string]map[string]any{}} }
+func newFakeWriter() *fakeWriter {
+	return &fakeWriter{
+		docs:     map[string]map[string]any{},
+		versions: map[string]int64{},
+		digests:  map[string]string{},
+	}
+}
 
-func (w *fakeWriter) Upsert(_ context.Context, _ string, id string, doc map[string]any) error {
+func (w *fakeWriter) UpsertVersioned(
+	_ context.Context,
+	_ string,
+	id string,
+	sourceVersion int64,
+	doc map[string]any,
+) (bool, error) {
+	canonical, err := WithCanonicalSourceDigest(doc)
+	if err != nil {
+		return false, err
+	}
+	doc = canonical
+	digest, _ := doc["sourceDigest"].(string)
+	if w.versions[id] > sourceVersion {
+		return false, nil
+	}
+	if w.versions[id] == sourceVersion {
+		if w.digests[id] == digest {
+			return false, nil
+		}
+		return false, &SameVersionDigestConflictError{
+			DocumentID: id, SourceVersion: sourceVersion, SourceDigest: digest,
+		}
+	}
+	w.versions[id] = sourceVersion
+	w.digests[id] = digest
 	w.docs[id] = doc
-	return nil
+	return true, nil
 }
-func (w *fakeWriter) Delete(_ context.Context, _ string, id string) error {
-	delete(w.docs, id)
-	return nil
+func (w *fakeWriter) TombstoneVersioned(
+	_ context.Context,
+	_ string,
+	id string,
+	objectType string,
+	objectID string,
+	sourceVersion int64,
+) (bool, error) {
+	document, err := VersionedTombstoneDocument(objectType, objectID, sourceVersion)
+	if err != nil {
+		return false, err
+	}
+	return w.UpsertVersioned(context.Background(), "", id, sourceVersion, document)
 }
 
 func TestIndexerUpsertMapsTargetAndAnchors(t *testing.T) {
@@ -32,8 +76,9 @@ func TestIndexerUpsertMapsTargetAndAnchors(t *testing.T) {
 		Freshness: time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC),
 		Fields:    map[string]string{"authorId": "user_1", "authorName": "alice"},
 	}
-	if err := ix.Apply(context.Background(), ChangeEvent{Op: OpUpsert, Doc: doc}); err != nil {
-		t.Fatalf("apply err=%v", err)
+	applied, err := ix.ApplyVersioned(context.Background(), VersionedChangeEvent{Op: OpUpsert, Doc: doc, SourceVersion: 1})
+	if err != nil || !applied {
+		t.Fatalf("apply applied=%v err=%v", applied, err)
 	}
 	stored, ok := w.docs["content.post:post_1"]
 	if !ok {
@@ -44,6 +89,9 @@ func TestIndexerUpsertMapsTargetAndAnchors(t *testing.T) {
 	}
 	if stored["authorId"] != "user_1" || stored["authorName"] != "alice" {
 		t.Fatalf("anchor fields missing: %#v", stored)
+	}
+	if stored["sourceVersion"] != int64(1) || stored["deleted"] != false {
+		t.Fatalf("versioned upsert must persist sourceVersion and live marker: %#v", stored)
 	}
 }
 
@@ -111,19 +159,83 @@ func TestDocumentToIndexOmitsGeoWhenAbsent(t *testing.T) {
 	}
 }
 
-func TestIndexerDeleteIsIdempotent(t *testing.T) {
+func TestIndexerTombstoneIsIdempotent(t *testing.T) {
 	w := newFakeWriter()
 	ix := NewIndexer(w, "")
 	doc := rtsearch.Document{ObjectType: rtsearch.ObjectTypeUserProfile, ObjectID: "user_1", Title: "alice"}
-	_ = ix.Apply(context.Background(), ChangeEvent{Op: OpUpsert, Doc: doc})
-	if err := ix.Apply(context.Background(), ChangeEvent{Op: OpDelete, Doc: doc}); err != nil {
-		t.Fatalf("delete err=%v", err)
+	if _, err := ix.ApplyVersioned(context.Background(), VersionedChangeEvent{Op: OpUpsert, Doc: doc, SourceVersion: 1}); err != nil {
+		t.Fatalf("upsert err=%v", err)
 	}
-	// Replayed delete must not error.
-	if err := ix.Apply(context.Background(), ChangeEvent{Op: OpDelete, Doc: doc}); err != nil {
-		t.Fatalf("replay delete err=%v", err)
+	applied, err := ix.ApplyVersioned(context.Background(), VersionedChangeEvent{Op: OpDelete, Doc: doc, SourceVersion: 2})
+	if err != nil || !applied {
+		t.Fatalf("tombstone applied=%v err=%v", applied, err)
 	}
-	if len(w.docs) != 0 {
-		t.Fatalf("expected empty index, got %#v", w.docs)
+	// Replayed tombstone is a same-version same-digest replay: no error, no write.
+	applied, err = ix.ApplyVersioned(context.Background(), VersionedChangeEvent{Op: OpDelete, Doc: doc, SourceVersion: 2})
+	if err != nil || applied {
+		t.Fatalf("replay tombstone applied=%v err=%v", applied, err)
+	}
+	stored := w.docs[IndexID(doc)]
+	if stored["deleted"] != true || stored["sourceVersion"] != int64(2) {
+		t.Fatalf("tombstone must persist as a versioned soft-delete, got %#v", stored)
+	}
+}
+
+func TestApplyVersionedRejectsOutOfOrderAndPreventsResurrection(t *testing.T) {
+	w := newFakeWriter()
+	ix := NewIndexer(w, "")
+	doc := rtsearch.Document{
+		ObjectType: rtsearch.ObjectTypeEntityHomepage,
+		ObjectID:   "homepage-1",
+		Title:      "version two",
+	}
+	apply := func(op ChangeOp, version int64, title string) (bool, error) {
+		doc.Title = title
+		return ix.ApplyVersioned(context.Background(), VersionedChangeEvent{
+			Op: op, Doc: doc, SourceVersion: version,
+		})
+	}
+	if applied, err := apply(OpUpsert, 2, "version two"); err != nil || !applied {
+		t.Fatalf("v2 upsert applied=%v err=%v", applied, err)
+	}
+	if applied, err := apply(OpUpsert, 1, "late version one"); err != nil || applied {
+		t.Fatalf("stale v1 applied=%v err=%v", applied, err)
+	}
+	if applied, err := apply(OpUpsert, 2, "version two"); err != nil || applied {
+		t.Fatalf("same-digest v2 replay applied=%v err=%v", applied, err)
+	}
+	if applied, err := apply(OpUpsert, 2, "different version two"); applied || !errors.Is(err, ErrSameVersionDigestConflict) {
+		t.Fatalf("different-digest v2 applied=%v err=%v", applied, err)
+	}
+	stored := w.docs[IndexID(doc)]
+	if stored["title"] != "version two" || stored["sourceVersion"] != int64(2) || stored["deleted"] != false {
+		t.Fatalf("out-of-order upsert changed document: %#v", stored)
+	}
+	if applied, err := apply(OpDelete, 3, ""); err != nil || !applied {
+		t.Fatalf("v3 tombstone applied=%v err=%v", applied, err)
+	}
+	if applied, err := apply(OpUpsert, 2, "late version two"); err != nil || applied {
+		t.Fatalf("late v2 applied=%v err=%v", applied, err)
+	}
+	tombstone := w.docs[IndexID(doc)]
+	if tombstone["deleted"] != true || tombstone["sourceVersion"] != int64(3) || len(tombstone) != 5 {
+		t.Fatalf("unexpected persistent tombstone: %#v", tombstone)
+	}
+	if applied, err := apply(OpDelete, 3, ""); err != nil || applied {
+		t.Fatalf("tombstone replay applied=%v err=%v", applied, err)
+	}
+	if applied, err := apply(OpUpsert, 3, "different same-version facts"); applied || !errors.Is(err, ErrSameVersionDigestConflict) {
+		t.Fatalf("same-version conflict applied=%v err=%v", applied, err)
+	}
+}
+
+func TestApplyVersionedRequiresExplicitPositiveVersion(t *testing.T) {
+	ix := NewIndexer(newFakeWriter(), "")
+	_, err := ix.ApplyVersioned(context.Background(), VersionedChangeEvent{
+		Op:  OpUpsert,
+		Doc: rtsearch.Document{ObjectType: rtsearch.ObjectTypeCircle, ObjectID: "circle-1"},
+	})
+	if err == nil {
+		t.Fatal("missing sourceVersion must fail")
 	}
 }

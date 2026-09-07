@@ -283,6 +283,125 @@ func oldestMemoryImmutableOwnerRecords(
 	return victims, victimBytes
 }
 
+func (m *memoryClient) AcquireLeaseFenceAtomic(
+	_ context.Context,
+	fenceKey string,
+	leaseKey string,
+	leaseOwner string,
+	leaseTTL time.Duration,
+) (int64, error) {
+	leaseOwner = strings.TrimSpace(leaseOwner)
+	if leaseOwner == "" || leaseTTL <= 0 {
+		return 0, fmt.Errorf("redis lease owner and TTL must be valid")
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	now := time.Now()
+	fenceEntry, exists := m.strings[fenceKey]
+	if !exists {
+		if leaseEntry, leaseExists := m.strings[leaseKey]; leaseExists && !leaseEntry.expired() {
+			return 0, fmt.Errorf(
+				"redis lease fence authority missing while lease is live",
+			)
+		}
+	}
+	var fence int64
+	if exists {
+		parsed, err := strconv.ParseInt(fenceEntry.strVal, 10, 64)
+		if err != nil || parsed < 0 {
+			return 0, fmt.Errorf("redis lease fence counter is invalid")
+		}
+		fence = parsed
+	}
+	if fence == int64(^uint64(0)>>1) {
+		return 0, fmt.Errorf("redis lease fence counter overflow")
+	}
+	fence++
+	encoded := strconv.FormatInt(fence, 10)
+	m.strings[fenceKey] = memEntry{
+		strVal: encoded,
+		binVal: []byte(encoded),
+	}
+	leaseValue := encoded + ":" + leaseOwner
+	m.strings[leaseKey] = memEntry{
+		strVal:  leaseValue,
+		binVal:  []byte(leaseValue),
+		expires: now.Add(leaseTTL),
+	}
+	return fence, nil
+}
+
+func (m *memoryClient) RenewLeaseFenceAtomic(
+	_ context.Context,
+	fenceKey string,
+	leaseKey string,
+	leaseOwner string,
+	expectedFence int64,
+	leaseTTL time.Duration,
+) (LeaseFenceResult, error) {
+	leaseOwner = strings.TrimSpace(leaseOwner)
+	if leaseOwner == "" || expectedFence <= 0 || leaseTTL <= 0 {
+		return 0, fmt.Errorf("redis lease fence renew arguments are invalid")
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.compareLeaseFenceLocked(
+		fenceKey, leaseKey, leaseOwner, expectedFence, leaseTTL, false,
+	)
+}
+
+func (m *memoryClient) ReleaseLeaseFenceAtomic(
+	_ context.Context,
+	fenceKey string,
+	leaseKey string,
+	leaseOwner string,
+	expectedFence int64,
+) (LeaseFenceResult, error) {
+	leaseOwner = strings.TrimSpace(leaseOwner)
+	if leaseOwner == "" || expectedFence <= 0 {
+		return 0, fmt.Errorf("redis lease fence release token is invalid")
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.compareLeaseFenceLocked(
+		fenceKey, leaseKey, leaseOwner, expectedFence, 0, true,
+	)
+}
+
+func (m *memoryClient) compareLeaseFenceLocked(
+	fenceKey string,
+	leaseKey string,
+	leaseOwner string,
+	expectedFence int64,
+	leaseTTL time.Duration,
+	deleteLease bool,
+) (LeaseFenceResult, error) {
+	fenceEntry, fenceExists := m.strings[fenceKey]
+	if !fenceExists || fenceEntry.expired() {
+		delete(m.strings, fenceKey)
+		return LeaseFenceExpired, nil
+	}
+	expected := strconv.FormatInt(expectedFence, 10)
+	if fenceEntry.strVal != expected {
+		return LeaseFenceRejected, nil
+	}
+	leaseEntry, leaseExists := m.strings[leaseKey]
+	if !leaseExists || leaseEntry.expired() {
+		delete(m.strings, leaseKey)
+		return LeaseFenceExpired, nil
+	}
+	if leaseEntry.strVal != expected+":"+leaseOwner {
+		return LeaseFenceRejected, nil
+	}
+	if deleteLease {
+		delete(m.strings, leaseKey)
+	} else {
+		leaseEntry.expires = time.Now().Add(leaseTTL)
+		m.strings[leaseKey] = leaseEntry
+	}
+	return LeaseFenceApplied, nil
+}
+
 func (m *memoryClient) Del(_ context.Context, keys ...string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()

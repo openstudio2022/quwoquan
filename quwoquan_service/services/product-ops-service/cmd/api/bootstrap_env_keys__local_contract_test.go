@@ -1,9 +1,16 @@
 package main
 
 import (
+	"context"
+	"errors"
+	"strings"
 	"testing"
 
+	runtimeconfig "quwoquan_service/runtime/config"
+	rthealth "quwoquan_service/runtime/health"
 	"quwoquan_service/runtime/servicekit"
+	eventrecordgenerated "quwoquan_service/services/product-ops-service/generated/product_ops/event_record"
+	"quwoquan_service/services/product-ops-service/internal/product_ops/event_record/infrastructure/logsink"
 )
 
 // TestDeclaredEnvKeysCoverHandwrittenOverrides 锁定声明式配置派生的 env 覆盖
@@ -46,13 +53,17 @@ func TestDeclaredEnvKeysCoverHandwrittenOverrides(t *testing.T) {
 		"PRODUCT_OPS_WEB_MINIMUM_SUPPORTED_BUILD",
 		"PRODUCT_OPS_WEB_UPDATE_URL",
 		"PRODUCT_OPS_WEB_RECOVERY_URL",
-		"PRODUCT_OPS_ELASTICSEARCH_ENDPOINT",
-		"PRODUCT_OPS_ELASTICSEARCH_API_KEY",
-		"PRODUCT_OPS_ELASTICSEARCH_RAW_INDEX",
-		"PRODUCT_OPS_ELASTICSEARCH_STARTUP_DIAGNOSTIC_INDEX",
-		"PRODUCT_OPS_ELASTICSEARCH_RUNTIME_LOG_INDEX",
-		"PRODUCT_OPS_ELASTICSEARCH_AGGREGATE_INDEX",
-		"PRODUCT_OPS_ELASTICSEARCH_TIMEOUT_MS",
+		"PRODUCT_OPS_TELEMETRY_ELASTICSEARCH_ENDPOINT",
+		"PRODUCT_OPS_TELEMETRY_ELASTICSEARCH_API_KEY",
+		"PRODUCT_OPS_TELEMETRY_ELASTICSEARCH_RAW_INDEX",
+		"PRODUCT_OPS_TELEMETRY_ELASTICSEARCH_STARTUP_DIAGNOSTIC_INDEX",
+		"PRODUCT_OPS_TELEMETRY_ELASTICSEARCH_AGGREGATE_INDEX",
+		"PRODUCT_OPS_TELEMETRY_ELASTICSEARCH_TIMEOUT_MS",
+		"PRODUCT_OPS_RUNTIME_LOG_ELASTICSEARCH_ENDPOINT",
+		"PRODUCT_OPS_RUNTIME_LOG_ELASTICSEARCH_API_KEY",
+		"PRODUCT_OPS_RUNTIME_LOG_ELASTICSEARCH_RAW_INDEX",
+		"PRODUCT_OPS_RUNTIME_LOG_ELASTICSEARCH_AGGREGATE_INDEX",
+		"PRODUCT_OPS_RUNTIME_LOG_ELASTICSEARCH_TIMEOUT_MS",
 		"PRODUCT_OPS_TELEMETRY_ALERTS_POLICY_PATH",
 		"PRODUCT_OPS_TELEMETRY_ALERTS_ALERTMANAGER_URL",
 		"PRODUCT_OPS_TELEMETRY_ALERTS_INTERVAL_MS",
@@ -92,7 +103,8 @@ func TestValidateProductOpsConfigRejectsUnrenderedPlaceholders(t *testing.T) {
 		t.Fatal("expected unrendered postgres.dsn rejection")
 	}
 	cfg.Postgres.DSN = "postgres://user:pass@postgres:5432/db"
-	cfg.Elasticsearch.Endpoint = "http://elasticsearch:9200"
+	cfg.TelemetryElasticsearch.Endpoint = "http://telemetry-elasticsearch:9200"
+	cfg.RuntimeLogElasticsearch.Endpoint = "http://runtime-log-elasticsearch:9200"
 	if err := rejectUnrenderedPlaceholders(cfg); err != nil {
 		t.Fatalf("rendered endpoints must pass: %v", err)
 	}
@@ -101,6 +113,99 @@ func TestValidateProductOpsConfigRejectsUnrenderedPlaceholders(t *testing.T) {
 // TestValidateProductOpsConfigRequiresRealRedisScenes 锁定 fail-closed：
 // rec/general 落到 memory 会让实验分流与事件批次账本变成单实例内存态。声明了
 // standalone 却缺地址是注入缺陷，判否而不是静默降级。
+type elasticsearchReadinessFunc func(context.Context) error
+
+func (f elasticsearchReadinessFunc) Ping(ctx context.Context) error {
+	return f(ctx)
+}
+
+func TestElasticsearchReadinessChecksAreIndependent(t *testing.T) {
+	assembly := &servicekit.Assembly{Health: rthealth.NewChecker()}
+	registerElasticsearchReadiness(
+		assembly,
+		elasticsearchReadinessFunc(func(context.Context) error { return nil }),
+		elasticsearchReadinessFunc(func(context.Context) error {
+			return errors.New("runtime unavailable")
+		}),
+	)
+	result := assembly.Health.Check(context.Background())
+	if result.Checks["telemetry-elasticsearch"] != "ok" {
+		t.Fatalf("telemetry readiness = %q", result.Checks["telemetry-elasticsearch"])
+	}
+	if result.Checks["runtime-log-elasticsearch"] != "runtime unavailable" {
+		t.Fatalf("runtime readiness = %q", result.Checks["runtime-log-elasticsearch"])
+	}
+	if len(result.FailedChecks) != 1 || result.FailedChecks[0] != "runtime-log-elasticsearch" {
+		t.Fatalf("failed readiness checks = %v", result.FailedChecks)
+	}
+}
+
+func TestResolveElasticsearchBindingsKeepsCredentialsIndependent(t *testing.T) {
+	cfg := &config{}
+	cfg.Environment = "prod"
+	provider := runtimeconfig.MapRuntimeConfigProvider{Values: map[string]string{
+		"PRODUCT_OPS_TELEMETRY_ELASTICSEARCH_ENDPOINT":   "https://telemetry.example.test",
+		"PRODUCT_OPS_TELEMETRY_ELASTICSEARCH_API_KEY":    "telemetry-key",
+		"PRODUCT_OPS_RUNTIME_LOG_ELASTICSEARCH_ENDPOINT": "https://runtime.example.test",
+		"PRODUCT_OPS_RUNTIME_LOG_ELASTICSEARCH_API_KEY":  "runtime-key",
+	}}
+	telemetry, ok := eventrecordgenerated.ExternalProviderBindingFor("prod", productTelemetrySinkCapability)
+	if !ok {
+		t.Fatal("prod telemetry binding is missing")
+	}
+	runtimeLog, ok := eventrecordgenerated.ExternalProviderBindingFor("prod", runtimeLogSinkCapability)
+	if !ok {
+		t.Fatal("prod runtime-log binding is missing")
+	}
+	if err := resolveElasticsearchBinding(
+		productTelemetrySinkCapability, telemetry, provider,
+		&cfg.TelemetryElasticsearch.Endpoint, &cfg.TelemetryElasticsearch.APIKey,
+		&cfg.TelemetryElasticsearch.TimeoutMS, &cfg.TelemetrySinkAdapterID,
+	); err != nil {
+		t.Fatal(err)
+	}
+	if err := resolveElasticsearchBinding(
+		runtimeLogSinkCapability, runtimeLog, provider,
+		&cfg.RuntimeLogElasticsearch.Endpoint, &cfg.RuntimeLogElasticsearch.APIKey,
+		&cfg.RuntimeLogElasticsearch.TimeoutMS, &cfg.RuntimeLogSinkAdapterID,
+	); err != nil {
+		t.Fatal(err)
+	}
+	if cfg.TelemetryElasticsearch.APIKey != "telemetry-key" ||
+		cfg.RuntimeLogElasticsearch.APIKey != "runtime-key" {
+		t.Fatalf("credentials crossed logical stores: telemetry=%q runtime=%q",
+			cfg.TelemetryElasticsearch.APIKey, cfg.RuntimeLogElasticsearch.APIKey)
+	}
+}
+
+func TestEventRepositoryConfigFailsClosedPerLogicalStore(t *testing.T) {
+	cfg := &config{}
+	cfg.TelemetrySinkAdapterID = logsink.ElasticsearchAdapterID
+	cfg.RuntimeLogSinkAdapterID = logsink.ElasticsearchAdapterID
+	cfg.TelemetryElasticsearch.Endpoint = "http://telemetry:9200"
+	cfg.TelemetryElasticsearch.RawIndex = "app-product-telemetry-raw"
+	cfg.TelemetryElasticsearch.StartupDiagnosticIndex = "app-startup-diagnostic-raw"
+	cfg.TelemetryElasticsearch.AggregateIndex = "app-product-telemetry-hourly"
+	cfg.TelemetryElasticsearch.TimeoutMS = 5000
+	cfg.RuntimeLogElasticsearch.Endpoint = "http://runtime:9200"
+	cfg.RuntimeLogElasticsearch.RawIndex = "runtime-diagnostics-raw"
+	cfg.RuntimeLogElasticsearch.AggregateIndex = "runtime-diagnostics-hourly"
+	cfg.RuntimeLogElasticsearch.TimeoutMS = 5000
+	if err := validateEventRepositoryBounds(cfg); err != nil {
+		t.Fatalf("valid split config rejected: %v", err)
+	}
+	cfg.RuntimeLogElasticsearch.AggregateIndex = cfg.TelemetryElasticsearch.AggregateIndex
+	if err := validateEventRepositoryBounds(cfg); err == nil {
+		t.Fatal("overlapping aggregate index must be rejected")
+	}
+	cfg.RuntimeLogElasticsearch.AggregateIndex = "runtime-diagnostics-hourly"
+	cfg.RuntimeLogElasticsearch.Endpoint = ""
+	if err := validateEventRepositoryBounds(cfg); err == nil ||
+		!strings.Contains(err.Error(), "runtime_log_elasticsearch.endpoint") {
+		t.Fatalf("missing runtime endpoint must fail closed: %v", err)
+	}
+}
+
 func TestValidateProductOpsConfigRequiresRealRedisScenes(t *testing.T) {
 	cfg := &config{}
 	cfg.Redis.Rec.Mode = servicekit.RedisModeStandalone

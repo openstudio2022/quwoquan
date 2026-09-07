@@ -302,78 +302,80 @@ type eventRepositoryComposition struct {
 	batchLedger       application.EventBatchLedger
 }
 
-// assembleEventRepository 按 generated runtime.log.sink adapter 装配事件仓库。
-// 协议与契约证据由 local_contract 测试直接组装 in-memory store；生产二进制
-// 不承载任何 Memory composition，缺后端能力时 fail-closed。
-
-func newElasticsearchEventLogStore(
-	config telemetrypersistence.ElasticsearchConfig,
-	credential string,
-) (*telemetrypersistence.ElasticsearchEventLogStore, error) {
-	config.APIKey = credential
-	return telemetrypersistence.NewElasticsearchEventLogStore(config)
-}
-
+// assembleEventRepository 按 generated product.telemetry.sink 与
+// runtime.log.sink 分别装配两个逻辑 store。协议与契约证据由 local_contract
+// 测试直接组装 in-memory store；生产二进制不承载 Memory composition。
 func assembleEventRepository(
 	asm *servicekit.Assembly, cfg *config,
 ) (eventRepositoryComposition, error) {
-	if cfg.LogSinkAdapterID != logsink.ElasticsearchAdapterID {
+	if cfg.TelemetrySinkAdapterID != logsink.ElasticsearchAdapterID {
 		return eventRepositoryComposition{}, fmt.Errorf(
-			"runtime.log.sink adapter is unsupported: %s", cfg.LogSinkAdapterID,
+			"%s adapter is unsupported: %s",
+			productTelemetrySinkCapability, cfg.TelemetrySinkAdapterID,
 		)
 	}
-	elasticsearchConfig := telemetrypersistence.ElasticsearchConfig{
-		Endpoint:               cfg.Elasticsearch.Endpoint,
-		RawIndex:               cfg.Elasticsearch.RawIndex,
-		StartupDiagnosticIndex: cfg.Elasticsearch.StartupDiagnosticIndex,
-		RuntimeLogIndex:        cfg.Elasticsearch.RuntimeLogIndex,
-		AggregateIndex:         cfg.Elasticsearch.AggregateIndex,
-		Timeout:                time.Duration(cfg.Elasticsearch.TimeoutMS) * time.Millisecond,
+	if cfg.RuntimeLogSinkAdapterID != logsink.ElasticsearchAdapterID {
+		return eventRepositoryComposition{}, fmt.Errorf(
+			"%s adapter is unsupported: %s",
+			runtimeLogSinkCapability, cfg.RuntimeLogSinkAdapterID,
+		)
 	}
-	store, err := newElasticsearchEventLogStore(
-		elasticsearchConfig,
-		cfg.Elasticsearch.APIKey,
+	telemetryStore, err := telemetrypersistence.NewElasticsearchEventLogStore(
+		telemetrypersistence.ElasticsearchConfig{
+			Kind:                   telemetrypersistence.ElasticsearchTelemetryStoreKind,
+			Endpoint:               cfg.TelemetryElasticsearch.Endpoint,
+			APIKey:                 cfg.TelemetryElasticsearch.APIKey,
+			RawIndex:               cfg.TelemetryElasticsearch.RawIndex,
+			StartupDiagnosticIndex: cfg.TelemetryElasticsearch.StartupDiagnosticIndex,
+			AggregateIndex:         cfg.TelemetryElasticsearch.AggregateIndex,
+			Timeout:                time.Duration(cfg.TelemetryElasticsearch.TimeoutMS) * time.Millisecond,
+		},
 	)
 	if err != nil {
 		return eventRepositoryComposition{}, fmt.Errorf(
 			"Elasticsearch telemetry store invalid: %w", err,
 		)
 	}
-	if err := ensureTelemetryIndices(asm.Context, store); err != nil {
-		return eventRepositoryComposition{}, err
+	runtimeLogStore, err := telemetrypersistence.NewElasticsearchEventLogStore(
+		telemetrypersistence.ElasticsearchConfig{
+			Kind:           telemetrypersistence.ElasticsearchRuntimeLogStoreKind,
+			Endpoint:       cfg.RuntimeLogElasticsearch.Endpoint,
+			APIKey:         cfg.RuntimeLogElasticsearch.APIKey,
+			RawIndex:       cfg.RuntimeLogElasticsearch.RawIndex,
+			AggregateIndex: cfg.RuntimeLogElasticsearch.AggregateIndex,
+			Timeout:        time.Duration(cfg.RuntimeLogElasticsearch.TimeoutMS) * time.Millisecond,
+		},
+	)
+	if err != nil {
+		return eventRepositoryComposition{}, fmt.Errorf(
+			"Elasticsearch runtime-log store invalid: %w", err,
+		)
 	}
-	asm.Health.Register("telemetry-elasticsearch", store.Ping)
-	startTelemetryAlertLoop(asm.Context, *cfg, store)
+	registerElasticsearchReadiness(asm, telemetryStore, runtimeLogStore)
+	startTelemetryAlertLoop(asm.Context, *cfg, telemetryStore, runtimeLogStore)
 	return eventRepositoryComposition{
-		eventStore:        store,
-		rtcMediaQoeReader: store,
-		runtimeLogStore:   store,
+		eventStore:        telemetryStore,
+		rtcMediaQoeReader: telemetryStore,
+		runtimeLogStore:   runtimeLogStore,
 		batchLedger: telemetrypersistence.NewRedisEventBatchLedger(
 			asm.RedisRouter.Scene("general"),
 		),
 	}, nil
 }
 
-// ensureTelemetryIndices 对索引初始化做有界重试。Docker/Colima 内嵌 DNS 在
-// 全栈冷启动最初几秒可能对刚接入网络的容器返回瞬时解析失败；不重试会让本
-// 服务秒退，进而卡死「实验策略激活 → recommendation-service healthy」的启动
-// 链。重试耗尽仍失败则维持 fail-closed 退出。
-func ensureTelemetryIndices(
-	ctx context.Context, store *telemetrypersistence.ElasticsearchEventLogStore,
-) error {
-	err := store.EnsureIndices(ctx)
-	for attempt := 1; err != nil && attempt <= 10; attempt++ {
-		log.Printf(
-			"product-ops-service Elasticsearch telemetry index initialization retry %d/10: %v",
-			attempt, err,
-		)
-		time.Sleep(3 * time.Second)
-		err = store.EnsureIndices(ctx)
-	}
-	if err != nil {
-		return fmt.Errorf("Elasticsearch telemetry index initialization failed: %w", err)
-	}
-	return nil
+// Elasticsearch ILM、template 与首个索引由 deployment-only bootstrap 管理。
+// 应用进程仅持有各自逻辑 namespace 的读写凭据，并通过 Ping 参与 readiness。
+type elasticsearchReadinessStore interface {
+	Ping(context.Context) error
+}
+
+func registerElasticsearchReadiness(
+	asm *servicekit.Assembly,
+	telemetry elasticsearchReadinessStore,
+	runtimeLog elasticsearchReadinessStore,
+) {
+	asm.Health.Register("telemetry-elasticsearch", telemetry.Ping)
+	asm.Health.Register("runtime-log-elasticsearch", runtimeLog.Ping)
 }
 
 // assembleAccountEnforcement 装配账号处置用例：申诉受理与处置投递各自持有

@@ -67,6 +67,8 @@ api_routes:
     facet: ConnectionSessionFacet
     method: issueTicket
     session_owner: Connection
+  consistency:
+    arbitration: fence
   description: 签发绑定可信 accountId+personaId+deviceId 的短期一次性连接 ticket（WS 升级 query 只携带 ticket）
   request_entity: IssueConnectionTicketRequest
   request_body_kind: none
@@ -120,6 +122,8 @@ api_routes:
     facet: ConnectionSessionFacet
     method: openWebSocket
     session_owner: Connection
+  consistency:
+    arbitration: fence
   description: WebSocket Upgrade（query 携带一次性 ticket；服务端消费 ticket 派生可信身份后下发 auth_ack）
   request_entity: WebSocketUpgradeRequest
   request_body_kind: none

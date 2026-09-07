@@ -102,6 +102,9 @@ func renderGeneratedClient(b *strings.Builder, input bundleGenerationInput) {
 	b.WriteString("    final assembled = <String, Object?>{};\n    _mergeSlice(assembled, base, baseDescriptor.operationName);\n")
 	b.WriteString("    for (final descriptor in AppPersistedGraphQLQueries.all) {\n      if (descriptor.role == 'extension' && descriptor.requiredForContentTypes.contains(contentTypeValue)) {\n        _mergeSlice(assembled, await _executeSlice(descriptor, request, context), descriptor.operationName);\n      }\n    }\n")
 	b.WriteString("    _applyAssemblyMappings(assembled, AppPersistedGraphQLQueries.assemblyMappings);\n")
+	for _, field := range input.plan.OptionalRESTFields {
+		fmt.Fprintf(b, "    assembled[%s] = null;\n", dartString(field))
+	}
 	b.WriteString("    _requireExactFields(assembled, AppPersistedGraphQLQueries.assemblyProjectionFields, 'ContentPostDetailSlice');\n")
 	b.WriteString("    return decodeContentPostDetailSlice(assembled);\n  }\n\n")
 	b.WriteString("  Future<Map<String, Object?>> _executeSlice(PersistedGraphQLQueryDescriptor descriptor, ContentPostDetailQuery request, CloudOperationInvocationContext context) {\n")

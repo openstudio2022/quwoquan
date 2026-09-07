@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -22,6 +23,8 @@ type fakeCluster struct {
 	mappingCode int
 	lastSearch  map[string]any
 	upserts     map[string]map[string]any
+	versions    map[string]int64
+	versionHits []string
 	deletes     []string
 	bulkBody    string
 	authHeader  string
@@ -32,6 +35,7 @@ type fakeCluster struct {
 func newFakeCluster() *fakeCluster {
 	return &fakeCluster{
 		upserts:     map[string]map[string]any{},
+		versions:    map[string]int64{},
 		searchScore: 1.5,
 		mappingCode: http.StatusOK,
 	}
@@ -79,8 +83,44 @@ func (f *fakeCluster) handler() http.Handler {
 			body, _ := io.ReadAll(r.Body)
 			var doc map[string]any
 			_ = json.Unmarshal(body, &doc)
+			if rawVersion := r.URL.Query().Get("version"); rawVersion != "" {
+				version, _ := strconv.ParseInt(rawVersion, 10, 64)
+				f.versionHits = append(f.versionHits, r.URL.RawQuery)
+				if r.URL.Query().Get("version_type") != "external" || f.versions[id] >= version {
+					writeJSON(w, http.StatusConflict, map[string]any{"error": "version_conflict_engine_exception"})
+					return
+				}
+				f.versions[id] = version
+			}
 			f.upserts[id] = doc
 			writeJSON(w, http.StatusCreated, map[string]any{"result": "created"})
+		case r.Method == http.MethodPost && strings.HasPrefix(r.URL.Path, "/"+DefaultIndex+"/_update/"):
+			id := strings.TrimPrefix(r.URL.Path, "/"+DefaultIndex+"/_update/")
+			body, _ := io.ReadAll(r.Body)
+			var request struct {
+				Script struct {
+					Params struct {
+						SourceVersion int64  `json:"sourceVersion"`
+						SourceDigest  string `json:"sourceDigest"`
+					} `json:"params"`
+				} `json:"script"`
+			}
+			_ = json.Unmarshal(body, &request)
+			stored, ok := f.upserts[id]
+			currentVersion := f.versions[id]
+			currentDigest, _ := stored["sourceDigest"].(string)
+			switch {
+			case !ok || currentVersion <= 0 || currentDigest == "":
+				writeJSON(w, http.StatusBadRequest, map[string]any{"error": versionConflictStateMarker})
+			case currentVersion > request.Script.Params.SourceVersion:
+				writeJSON(w, http.StatusOK, map[string]any{"result": "noop"})
+			case currentVersion == request.Script.Params.SourceVersion && currentDigest == request.Script.Params.SourceDigest:
+				writeJSON(w, http.StatusOK, map[string]any{"result": "noop"})
+			case currentVersion == request.Script.Params.SourceVersion:
+				writeJSON(w, http.StatusBadRequest, map[string]any{"error": versionConflictDigestMarker})
+			default:
+				writeJSON(w, http.StatusBadRequest, map[string]any{"error": versionConflictStateMarker})
+			}
 		case r.Method == http.MethodDelete && strings.HasPrefix(r.URL.Path, "/"+DefaultIndex+"/_doc/"):
 			id := strings.TrimPrefix(r.URL.Path, "/"+DefaultIndex+"/_doc/")
 			f.deletes = append(f.deletes, id)
@@ -146,6 +186,12 @@ func TestClientEnsureIndexCreatesWithAnalyzer(t *testing.T) {
 	target, _ := props["target"].(map[string]any)
 	if target["type"] != "keyword" {
 		t.Fatalf("target field should be keyword, got %#v", target)
+	}
+	sourceVersion, _ := props["sourceVersion"].(map[string]any)
+	sourceDigest, _ := props["sourceDigest"].(map[string]any)
+	deleted, _ := props["deleted"].(map[string]any)
+	if sourceVersion["type"] != "long" || sourceDigest["type"] != "keyword" || deleted["type"] != "boolean" {
+		t.Fatalf("version/digest/tombstone mappings missing: sourceVersion=%#v sourceDigest=%#v deleted=%#v", sourceVersion, sourceDigest, deleted)
 	}
 
 	// Existing indexes must reconcile mappings without re-creating the index.
@@ -267,14 +313,15 @@ func TestClientCheckSearchReadyAcceptsQueryableAlias(t *testing.T) {
 	}
 }
 
-func TestClientUpsertAndDelete(t *testing.T) {
+func TestClientVersionedWriteSendsAuthAndExternalVersion(t *testing.T) {
 	fc := newFakeCluster()
 	srv := httptest.NewServer(fc.handler())
 	defer srv.Close()
 	c := newTestClient(t, srv)
 
-	if err := c.Upsert(context.Background(), "", "content.post:post_1", map[string]any{"title": "x"}); err != nil {
-		t.Fatalf("Upsert err=%v", err)
+	applied, err := c.UpsertVersioned(context.Background(), "", "content.post:post_1", 1, map[string]any{"title": "x"})
+	if err != nil || !applied {
+		t.Fatalf("UpsertVersioned applied=%v err=%v", applied, err)
 	}
 	if _, ok := fc.upserts["content.post:post_1"]; !ok {
 		t.Fatalf("upsert not recorded: %#v", fc.upserts)
@@ -282,37 +329,62 @@ func TestClientUpsertAndDelete(t *testing.T) {
 	if fc.authHeader == "" {
 		t.Fatalf("basic auth header not sent")
 	}
-	if err := c.Delete(context.Background(), "", "content.post:post_1"); err != nil {
-		t.Fatalf("Delete err=%v", err)
+	if len(fc.versionHits) != 1 || !strings.Contains(fc.versionHits[0], "version=1") || !strings.Contains(fc.versionHits[0], "version_type=external") {
+		t.Fatalf("every write must carry the external version fence: %#v", fc.versionHits)
 	}
-	if len(fc.deletes) != 1 {
-		t.Fatalf("delete not recorded: %#v", fc.deletes)
+	if len(fc.deletes) != 0 || fc.bulkBody != "" {
+		t.Fatalf("no unversioned DELETE or _bulk transport may remain: deletes=%#v bulk=%q", fc.deletes, fc.bulkBody)
 	}
 }
 
-func TestClientBulkEmitsNDJSON(t *testing.T) {
-	fc := newFakeCluster()
-	srv := httptest.NewServer(fc.handler())
-	defer srv.Close()
-	c := newTestClient(t, srv)
+// spec_ref: specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/design.md#dec-002
+// spec_ref: specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/search-storage-topology-and-elasticity/spec.md#req-006
+// TestClientVersionedUpsertOverLegacyDocumentWithoutSourceVersion 固定存量文档
+// （无 sourceVersion/sourceDigest/deleted 字段、Elasticsearch 内部 _version 为 1）
+// 的行为：第一笔 versioned 写入只要 sourceVersion 高于 _version 就会被外部版本
+// 直接接受并补齐 sourceVersion/deleted；若存量 _version 已不低于 sourceVersion，
+// 冲突分类脚本会因缺字段抛出 QWQ_VERSIONED_SOURCE_STATE_INVALID 并 fail closed，
+// 而不是把存量文档伪装成过期写入静默吞掉。这两条共同要求存量索引在切到
+// alias_replace 重建前完成 sourceVersion 回填（OPEN 见 storage topology spec）。
+func TestClientVersionedUpsertOverLegacyDocumentWithoutSourceVersion(t *testing.T) {
+	cluster := newFakeCluster()
+	server := httptest.NewServer(cluster.handler())
+	defer server.Close()
+	client := newTestClient(t, server)
+	id := "content.post:legacy-1"
+	// 存量文档：由旧轨无版本写入，Elasticsearch 内部 _version=1，且没有任何
+	// versioned 元字段。
+	cluster.upserts[id] = map[string]any{"objectType": "content.post", "objectId": "legacy-1", "title": "legacy"}
+	cluster.versions[id] = 1
 
-	events := []ChangeEvent{
-		{Op: OpUpsert, Doc: rtsearch.Document{ObjectType: rtsearch.ObjectTypeUserProfile, ObjectID: "u1", Title: "alice", Freshness: time.Now()}},
-		{Op: OpDelete, Doc: rtsearch.Document{ObjectType: rtsearch.ObjectTypeUserProfile, ObjectID: "u2"}},
+	applied, err := client.UpsertVersioned(context.Background(), "", id, 2, map[string]any{
+		"objectType": "content.post", "objectId": "legacy-1", "title": "versioned",
+	})
+	if err != nil || !applied {
+		t.Fatalf("higher sourceVersion over legacy document applied=%v err=%v", applied, err)
 	}
-	if err := c.Bulk(context.Background(), "", events); err != nil {
-		t.Fatalf("Bulk err=%v", err)
+	stored := cluster.upserts[id]
+	if stored["title"] != "versioned" || stored["sourceVersion"] != float64(2) || stored["deleted"] != false {
+		t.Fatalf("legacy document must be replaced by the versioned source: %#v", stored)
 	}
-	lines := strings.Split(strings.TrimSpace(fc.bulkBody), "\n")
-	// upsert => 2 lines (action + doc), delete => 1 line => total 3.
-	if len(lines) != 3 {
-		t.Fatalf("want 3 ndjson lines, got %d: %q", len(lines), fc.bulkBody)
+	if _, hasDigest := stored["sourceDigest"].(string); !hasDigest {
+		t.Fatalf("versioned write must backfill sourceDigest: %#v", stored)
 	}
-	if !strings.Contains(lines[0], "\"index\"") || !strings.Contains(lines[0], "user.profile:u1") {
-		t.Fatalf("bad index action line: %q", lines[0])
+
+	legacyID := "content.post:legacy-2"
+	cluster.upserts[legacyID] = map[string]any{"objectType": "content.post", "objectId": "legacy-2", "title": "legacy"}
+	cluster.versions[legacyID] = 3
+	applied, err = client.UpsertVersioned(context.Background(), "", legacyID, 1, map[string]any{
+		"objectType": "content.post", "objectId": "legacy-2", "title": "late",
+	})
+	if applied || err == nil || errors.Is(err, ErrSameVersionDigestConflict) || IsDependencyUnavailable(err) {
+		t.Fatalf("legacy document without sourceVersion must fail closed on conflict, applied=%v err=%v", applied, err)
 	}
-	if !strings.Contains(lines[2], "\"delete\"") || !strings.Contains(lines[2], "user.profile:u2") {
-		t.Fatalf("bad delete action line: %q", lines[2])
+	if !errors.Is(err, ErrVersionedWriteRejected) || !strings.Contains(err.Error(), versionConflictStateMarker) {
+		t.Fatalf("conflict over legacy document must surface QWQ_VERSIONED_SOURCE_STATE_INVALID, got %v", err)
+	}
+	if cluster.upserts[legacyID]["title"] != "legacy" {
+		t.Fatalf("rejected write must not mutate the legacy document: %#v", cluster.upserts[legacyID])
 	}
 }
 
@@ -357,5 +429,87 @@ func TestIndexToDocumentRoundTrip(t *testing.T) {
 	}
 	if !got.Freshness.Equal(orig.Freshness) {
 		t.Fatalf("freshness round-trip mismatch: %v", got.Freshness)
+	}
+}
+
+func TestClientVersionedWritesClassifyConflictByVersionAndDigest(t *testing.T) {
+	cluster := newFakeCluster()
+	server := httptest.NewServer(cluster.handler())
+	defer server.Close()
+	client := newTestClient(t, server)
+	id := "entity.homepage:homepage-1"
+	v2 := map[string]any{
+		"objectType": "entity.homepage", "objectId": "homepage-1", "title": "version two",
+	}
+
+	applied, err := client.UpsertVersioned(context.Background(), "", id, 2, v2)
+	if err != nil || !applied {
+		t.Fatalf("versioned upsert applied=%v err=%v", applied, err)
+	}
+	storedV2 := cluster.upserts[id]
+	digestV2, _ := storedV2["sourceDigest"].(string)
+	if !strings.HasPrefix(digestV2, "sha256:") || storedV2["sourceVersion"] != float64(2) {
+		t.Fatalf("versioned source lacks canonical digest: %#v", storedV2)
+	}
+	if applied, err = client.UpsertVersioned(context.Background(), "", id, 1, map[string]any{"title": "stale"}); err != nil || applied {
+		t.Fatalf("stale upsert applied=%v err=%v", applied, err)
+	}
+	if applied, err = client.UpsertVersioned(context.Background(), "", id, 2, v2); err != nil || applied {
+		t.Fatalf("same-digest replay applied=%v err=%v", applied, err)
+	}
+	if applied, err = client.UpsertVersioned(context.Background(), "", id, 2, map[string]any{"title": "different facts"}); applied || !errors.Is(err, ErrSameVersionDigestConflict) {
+		t.Fatalf("same-version different-digest applied=%v err=%v", applied, err)
+	}
+	if cluster.upserts[id]["title"] != "version two" {
+		t.Fatalf("same-version conflict changed winner: %#v", cluster.upserts[id])
+	}
+
+	if applied, err = client.TombstoneVersioned(context.Background(), "", id, "entity.homepage", "homepage-1", 3); err != nil || !applied {
+		t.Fatalf("tombstone applied=%v err=%v", applied, err)
+	}
+	if applied, err = client.TombstoneVersioned(context.Background(), "", id, "entity.homepage", "homepage-1", 3); err != nil || applied {
+		t.Fatalf("tombstone replay applied=%v err=%v", applied, err)
+	}
+	if applied, err = client.UpsertVersioned(context.Background(), "", id, 3, map[string]any{"title": "same-version resurrection"}); applied || !errors.Is(err, ErrSameVersionDigestConflict) {
+		t.Fatalf("same-version resurrection applied=%v err=%v", applied, err)
+	}
+	stored := cluster.upserts[id]
+	if stored["deleted"] != true || stored["sourceVersion"] != float64(3) || !strings.HasPrefix(stored["sourceDigest"].(string), "sha256:") || len(stored) != 5 {
+		t.Fatalf("tombstone body=%#v", stored)
+	}
+	if len(cluster.deletes) != 0 {
+		t.Fatalf("versioned tombstone must not issue DELETE: %#v", cluster.deletes)
+	}
+	if len(cluster.versionHits) != 7 || !strings.Contains(cluster.versionHits[0], "version_type=external") {
+		t.Fatalf("version query params=%#v", cluster.versionHits)
+	}
+}
+
+func TestClientSearchAddsTombstoneFilterToAdHocAndHybridBodies(t *testing.T) {
+	cluster := newFakeCluster()
+	server := httptest.NewServer(cluster.handler())
+	defer server.Close()
+	client := newTestClient(t, server)
+
+	body := map[string]any{"size": 5, "pit": map[string]any{"id": "pit-1"}, "knn": map[string]any{
+		"field": "embedding", "query_vector": []float64{0.1}, "k": 1,
+	}}
+	// The fake only exposes indexed search, so omit PIT for transport while still
+	// exercising PIT-compatible body mutation directly.
+	EnsureNotDeletedSearchBody(body)
+	if !queryExcludesDeleted(body["query"].(map[string]any)) {
+		t.Fatalf("PIT body lacks tombstone exclusion: %#v", body)
+	}
+	knn := body["knn"].(map[string]any)
+	if _, ok := knn["filter"].(map[string]any); !ok {
+		t.Fatalf("hybrid kNN lacks tombstone filter: %#v", knn)
+	}
+
+	searchBody := map[string]any{"size": 5}
+	if _, err := client.Search(context.Background(), "", searchBody); err != nil {
+		t.Fatal(err)
+	}
+	if !queryExcludesDeleted(cluster.lastSearch["query"].(map[string]any)) {
+		t.Fatalf("client Search did not enforce tombstone exclusion: %#v", cluster.lastSearch)
 	}
 }

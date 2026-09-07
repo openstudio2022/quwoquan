@@ -1,5 +1,11 @@
 package ast
 
+import (
+	"fmt"
+	"path"
+	"strings"
+)
+
 // StorageDocument is the compiler's only typed view of storage.yaml.
 //
 // Keep every authored key in this document and its nested structs in exact
@@ -8,6 +14,7 @@ package ast
 // consumer-specific anonymous subset.
 type StorageDocument struct {
 	Backend             string                               `json:"backend" yaml:"backend"`
+	Resources           map[string]StorageResource           `json:"resources,omitempty" yaml:"resources,omitempty"`
 	Description         string                               `json:"description,omitempty" yaml:"description,omitempty"`
 	Role                string                               `json:"role" yaml:"role"`
 	Tables              map[string]StorageTable              `json:"tables,omitempty" yaml:"tables,omitempty"`
@@ -124,10 +131,39 @@ type StorageStream struct {
 	PublicationRole  string   `json:"publication_role,omitempty" yaml:"publication_role,omitempty"`
 }
 
+type StorageResource struct {
+	Engine   string `json:"engine" yaml:"engine"`
+	Role     string `json:"role" yaml:"role"`
+	Required *bool  `json:"required,omitempty" yaml:"required,omitempty"`
+}
+
+// ObjectStorageResource is the single ContractGraph view of one object-local
+// named resource. Identity is derived from canonical source provenance; it is
+// never authored and never contains a physical selector.
+type ObjectStorageResource struct {
+	LocalName string `json:"localName"`
+	Identity  string `json:"identity"`
+	Engine    string `json:"engine"`
+	Role      string `json:"role"`
+	Required  bool   `json:"required"`
+}
+
+// IsRequired materializes the schema default without erasing an explicit false.
+func (resource StorageResource) IsRequired() bool {
+	return resource.Required == nil || *resource.Required
+}
+
 type StorageTransaction struct {
-	Scope      []string `json:"scope" yaml:"scope"`
-	Isolation  string   `json:"isolation" yaml:"isolation"`
-	Guarantees []string `json:"guarantees" yaml:"guarantees"`
+	Scope        []string                        `json:"scope" yaml:"scope"`
+	Isolation    string                          `json:"isolation" yaml:"isolation"`
+	Guarantees   []string                        `json:"guarantees" yaml:"guarantees"`
+	Mechanism    string                          `json:"mechanism,omitempty" yaml:"mechanism,omitempty"`
+	Participants []StorageTransactionParticipant `json:"participants,omitempty" yaml:"participants,omitempty"`
+}
+
+type StorageTransactionParticipant struct {
+	Object      string   `json:"object" yaml:"object"`
+	Collections []string `json:"collections" yaml:"collections"`
 }
 
 type StorageRedisCache struct {
@@ -138,6 +174,12 @@ type StorageRedisCache struct {
 	Entity                      string   `json:"entity,omitempty" yaml:"entity,omitempty"`
 	Description                 string   `json:"description,omitempty" yaml:"description,omitempty"`
 	Isolation                   string   `json:"isolation,omitempty" yaml:"isolation,omitempty"`
+	EvictionConsequence         string   `json:"eviction_consequence,omitempty" yaml:"eviction_consequence,omitempty"`
+	Durability                  string   `json:"durability,omitempty" yaml:"durability,omitempty"`
+	KeyPrefix                   string   `json:"key_prefix,omitempty" yaml:"key_prefix,omitempty"`
+	HashTag                     string   `json:"hash_tag,omitempty" yaml:"hash_tag,omitempty"`
+	AtomicKeys                  []string `json:"atomic_keys,omitempty" yaml:"atomic_keys,omitempty"`
+	Fence                       string   `json:"fence,omitempty" yaml:"fence,omitempty"`
 	InvalidateOn                []string `json:"invalidate_on,omitempty" yaml:"invalidate_on,omitempty"`
 	CreateOperation             string   `json:"create_operation,omitempty" yaml:"create_operation,omitempty"`
 	Member                      string   `json:"member,omitempty" yaml:"member,omitempty"`
@@ -193,4 +235,61 @@ type StorageCodegenCacheOverride struct {
 	Entity string `json:"entity,omitempty" yaml:"entity,omitempty"`
 	Name   string `json:"name,omitempty" yaml:"name,omitempty"`
 	Skip   bool   `json:"skip,omitempty" yaml:"skip,omitempty"`
+}
+
+// DerivedResourceIdentity returns the canonical logical identity for a named
+// object-local resource. sourcePath may be a contract-view path
+// (<domain>/<context>/<object>/storage.yaml) or the canonical repository path
+// (quwoquan_service/services/<service>/contracts/<context>/<object>/storage.yaml).
+// Physical cluster selectors deliberately do not participate in this identity.
+func DerivedResourceIdentity(sourcePath, localName string) (string, error) {
+	normalizedPath := path.Clean(strings.TrimSpace(strings.ReplaceAll(sourcePath, "\\", "/")))
+	segments := strings.Split(normalizedPath, "/")
+	var service, context, object string
+	switch {
+	case len(segments) == 4 && segments[3] == "storage.yaml":
+		service, context, object = segments[0], segments[1], segments[2]
+	case len(segments) == 7 && segments[0] == "quwoquan_service" && segments[1] == "services" &&
+		segments[3] == "contracts" && segments[6] == "storage.yaml":
+		service, context, object = segments[2], segments[4], segments[5]
+	case len(segments) == 7 && segments[0] == "quwoquan_service" && segments[1] == "control-plane" &&
+		segments[3] == "contracts" && segments[6] == "storage.yaml":
+		service, context, object = segments[2], segments[4], segments[5]
+	default:
+		return "", fmt.Errorf("storage resource source path %q is not an object-local storage.yaml path", sourcePath)
+	}
+	for _, segment := range []string{service, context, object} {
+		if !canonicalResourcePathSegment(segment) {
+			return "", fmt.Errorf("storage resource source path %q contains invalid identity segment %q", sourcePath, segment)
+		}
+	}
+	localName = strings.TrimSpace(localName)
+	if !canonicalResourceLocalName(localName) {
+		return "", fmt.Errorf("storage resource local name %q must match ^[a-z][a-z0-9_]*$", localName)
+	}
+	return strings.Join([]string{service, context, object, localName}, "/"), nil
+}
+
+func canonicalResourcePathSegment(value string) bool {
+	if value == "" || value == "." || value == ".." || value[0] < 'a' || value[0] > 'z' {
+		return false
+	}
+	for _, current := range value[1:] {
+		if (current < 'a' || current > 'z') && (current < '0' || current > '9') && current != '_' && current != '-' {
+			return false
+		}
+	}
+	return true
+}
+
+func canonicalResourceLocalName(value string) bool {
+	if value == "" || value[0] < 'a' || value[0] > 'z' {
+		return false
+	}
+	for _, current := range value[1:] {
+		if (current < 'a' || current > 'z') && (current < '0' || current > '9') && current != '_' {
+			return false
+		}
+	}
+	return true
 }

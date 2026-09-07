@@ -12,9 +12,17 @@ import (
 
 const ContentPostSearchObjectType = rtsearch.ObjectTypeContentPost
 
+// SearchDocumentID identifies one canonical search document staged for
+// closed-account removal. SourceVersion is the tombstone's version fence
+// (DEC-002): it is captured inside the same Mongo transaction that hard-deletes
+// the Post as `post.version + 1`, i.e. the terminal version of the aggregate.
+// Because the aggregate row is gone in that transaction, no higher Post version
+// can ever be committed, so the tombstone strictly supersedes every projection
+// that write-time relays may still be replaying.
 type SearchDocumentID struct {
-	ObjectType string
-	ObjectID   string
+	ObjectType    string
+	ObjectID      string
+	SourceVersion int64
 }
 
 // MediaArtifactCleanupWork describes opaque object-store cleanup that must
@@ -33,6 +41,9 @@ func (document SearchDocumentID) Validate() error {
 	if strings.TrimSpace(document.ObjectType) == "" ||
 		strings.TrimSpace(document.ObjectID) == "" {
 		return errors.New("search document identity is incomplete")
+	}
+	if document.SourceVersion <= 0 {
+		return errors.New("search document tombstone requires a positive sourceVersion")
 	}
 	return nil
 }

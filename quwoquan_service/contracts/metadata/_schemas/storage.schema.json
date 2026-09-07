@@ -10,8 +10,7 @@
   ],
   "properties": {
     "backend": {
-      "type": "string",
-      "minLength": 1
+      "$ref": "#/$defs/storageEngine"
     },
     "description": {
       "description": "该对象存储事实的散文补充说明。仅承载无法结构化的语义（例如 CAS/幂等的提交语义、Redis 场景的原子性说明）。任何可结构化的事实必须使用对应结构键，不得退回本字段。",
@@ -114,6 +113,23 @@
           "items": {
             "type": "string",
             "pattern": "^[a-z][a-z0-9_]*$"
+          }
+        },
+        "mechanism": {
+          "enum": [
+            "version_cas",
+            "unique_constraint",
+            "conditional_update",
+            "fence"
+          ]
+        },
+        "participants": {
+          "description": "同一 service/context 内参与该物理事务的兄弟对象资源；scope 仍只列当前 storage.yaml 自有资源，跨对象资源必须逐对象、逐集合显式声明。",
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/storageTransactionParticipant"
           }
         }
       }
@@ -248,6 +264,46 @@
           "global_max_live_bytes": {
             "type": "integer",
             "minimum": 1
+          },
+          "eviction_consequence": {
+            "enum": [
+              "reconstruct",
+              "fail_closed"
+            ]
+          },
+          "durability": {
+            "enum": [
+              "ephemeral",
+              "aof",
+              "rdb_aof"
+            ]
+          },
+          "key_prefix": {
+            "description": "不含动态 identity 的稳定 Redis key 前缀；用于证明同一逻辑资源族的路由与命名边界。",
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9:_-]*:$"
+          },
+          "hash_tag": {
+            "description": "Redis Cluster hash tag 的完整模板内容；只声明 key 模板花括号内真实使用的内容（例如 identitySlot 或 rfw-<quotaShard>），不得用 DB number 代替 slot 共址。",
+            "type": "string",
+            "pattern": "^[a-z][A-Za-z0-9]*(?:-<[a-z][A-Za-z0-9]*>)?$"
+          },
+          "atomic_keys": {
+            "description": "一个 Redis server-side 原子操作必须共同读取或写入的本 storage.yaml key 模板闭集。",
+            "type": "array",
+            "minItems": 2,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "fence": {
+            "description": "该键参与的 fencing 语义；token_value 是 token 载体，current_counter 是当前代际计数器。",
+            "enum": [
+              "token_value",
+              "current_counter"
+            ]
           }
         }
       }
@@ -278,8 +334,7 @@
             "pattern": "^ext\\.[a-z0-9]+(?:\\.[a-z0-9_]+)+$"
           },
           "backend": {
-            "type": "string",
-            "minLength": 1
+            "$ref": "#/$defs/storageEngine"
           }
         }
       }
@@ -425,6 +480,17 @@
             }
           }
         }
+      }
+    },
+    "resources": {
+      "description": "对象内具名逻辑资源。资源身份由 storage.yaml 的 service/context/object 路径与本地名派生，不手写 resource ref 或物理 cluster selector。",
+      "type": "object",
+      "minProperties": 1,
+      "propertyNames": {
+        "pattern": "^[a-z][a-z0-9_]*$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/storageResource"
       }
     }
   },
@@ -933,6 +999,76 @@
           }
         }
       ]
+    },
+    "storageTransactionParticipant": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "object",
+        "collections"
+      ],
+      "properties": {
+        "object": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]*$"
+        },
+        "collections": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]*$"
+          }
+        }
+      }
+    },
+    "storageEngine": {
+      "enum": [
+        "postgres",
+        "mongodb",
+        "elasticsearch",
+        "redis",
+        "object_storage",
+        "service_resource",
+        "observability_log_sink",
+        "owner_named_readers"
+      ]
+    },
+    "physicalStorageEngine": {
+      "enum": [
+        "postgres",
+        "mongodb",
+        "elasticsearch",
+        "redis",
+        "object_storage"
+      ]
+    },
+    "storageResource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "engine",
+        "role"
+      ],
+      "properties": {
+        "engine": {
+          "$ref": "#/$defs/physicalStorageEngine"
+        },
+        "role": {
+          "enum": [
+            "authority",
+            "query_projection",
+            "analytics_projection",
+            "append_only_fact",
+            "runtime"
+          ]
+        },
+        "required": {
+          "type": "boolean",
+          "default": true
+        }
+      }
     }
   }
 }

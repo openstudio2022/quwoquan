@@ -149,6 +149,7 @@ def _candidate_observability_log_sink(
     *,
     candidate_manifest: Mapping[str, Any] | None = None,
     candidate_root: Path | None = None,
+    purpose: str = "self_verify",
 ) -> dict[str, Any]:
     """Load the ES contract sealed into one exact immutable candidate."""
     import quwoquan_ops.cli.stackctl as _stackctl
@@ -178,6 +179,7 @@ def _candidate_observability_log_sink(
             target_name,
             normalized_baseline,
             require_full=True,
+            purpose=purpose,
         )
     )
     if (
@@ -191,6 +193,7 @@ def _candidate_observability_log_sink(
         expected_environment=environment_name,
         expected_target=target_name,
         candidate_root=resolved_candidate_root,
+        purpose=purpose,
     )
     return {
         "baselineId": normalized_baseline,
@@ -299,6 +302,7 @@ def _observability_log_sink_launch_environment(
     target_name: str,
     candidate_root: Path,
     workload: str,
+    purpose: str = "self_verify",
 ) -> dict[str, str]:
     """Project candidate-owned ES inputs without consulting the workspace."""
     import quwoquan_ops.cli.stackctl as _stackctl
@@ -309,7 +313,9 @@ def _observability_log_sink_launch_environment(
         expected_environment=environment_name,
         expected_target=target_name,
         candidate_root=candidate_root,
+        purpose=purpose,
     )
+
     projected = {
         "QWQ_OBSERVABILITY_LOG_SINK_COMPOSE_FILE": "",
         "QWQ_OBSERVABILITY_LOG_SINK_DIGEST": "",
@@ -334,9 +340,12 @@ def _observability_log_sink_launch_environment(
             "QWQ_OBSERVABILITY_LOG_SINK_DIGEST": str(
                 validated["composeDigest"]
             ),
-            str(validated["endpointEnvironmentKey"]): str(
-                validated["runtimeEndpoint"]
-            ),
+            **{
+                str(binding["endpointEnvironmentKey"]): str(
+                    validated["runtimeEndpoint"]
+                )
+                for binding in validated["bindings"]
+            },
         }
     )
     return projected

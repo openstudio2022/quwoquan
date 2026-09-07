@@ -2,6 +2,10 @@ package es
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/json"
+	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -19,14 +23,29 @@ var anchorFieldKeys = []string{
 	"placeId", "placeName",
 }
 
-// Writer abstracts ES write transport (bulk upsert/delete). The production
-// writer is an HTTP _bulk client; tests use an in-memory fake.
-type Writer interface {
-	Upsert(ctx context.Context, index, id string, doc map[string]any) error
-	Delete(ctx context.Context, index, id string) error
+// VersionedWriter 是唯一的 Elasticsearch 写传输契约：所有投影写入都必须携带
+// 权威对象的 sourceVersion，由 Elasticsearch 在分片内原子比较；删除以带版本的
+// tombstone 文档落盘而不是物理 DELETE（search-provider-routing DEC-002）。
+// 实现不得用 read-before-write 模拟该契约；无版本的 Upsert/Delete 写入面已删除。
+type VersionedWriter interface {
+	UpsertVersioned(
+		ctx context.Context,
+		index string,
+		id string,
+		sourceVersion int64,
+		doc map[string]any,
+	) (bool, error)
+	TombstoneVersioned(
+		ctx context.Context,
+		index string,
+		id string,
+		objectType string,
+		objectID string,
+		sourceVersion int64,
+	) (bool, error)
 }
 
-// ChangeOp is the kind of change-stream mutation.
+// ChangeOp is the kind of projection mutation.
 type ChangeOp string
 
 const (
@@ -34,22 +53,24 @@ const (
 	OpDelete ChangeOp = "delete"
 )
 
-// ChangeEvent is the normalized mutation consumed from a Mongo change stream
-// (via runtime/projector) and applied to the ES index.
-type ChangeEvent struct {
-	Op  ChangeOp
-	Doc rtsearch.Document
+// VersionedChangeEvent is an explicitly source-versioned projection mutation.
+// SourceVersion 必须来自权威对象自身的单调版本字段；调用方不得凭空捏造。
+type VersionedChangeEvent struct {
+	Op            ChangeOp
+	Doc           rtsearch.Document
+	SourceVersion int64
 }
 
-// Indexer applies change events to the unified ES index. It is idempotent:
-// upsert uses a stable doc id so replays converge.
+// Indexer applies versioned change events to the unified ES index. It is
+// idempotent: upsert uses a stable doc id so replays converge, and the
+// provider-side version fence rejects stale or out-of-order writes.
 type Indexer struct {
-	writer Writer
+	writer VersionedWriter
 	index  string
 }
 
 // NewIndexer constructs an indexer; index defaults to DefaultIndex.
-func NewIndexer(writer Writer, index string) *Indexer {
+func NewIndexer(writer VersionedWriter, index string) *Indexer {
 	if index == "" {
 		index = DefaultIndex
 	}
@@ -61,19 +82,86 @@ func IndexID(doc rtsearch.Document) string {
 	return doc.ObjectType + ":" + doc.ObjectID
 }
 
-// Apply maps and applies a single change event.
-func (ix *Indexer) Apply(ctx context.Context, ev ChangeEvent) error {
-	id := IndexID(ev.Doc)
-	if ev.Op == OpDelete {
-		return ix.writer.Delete(ctx, ix.index, id)
+// ApplyVersioned validates and applies one projection mutation using the
+// provider's atomic source-version comparison. False/nil means only a stale
+// write or same-version/same-digest replay; divergent equal versions error.
+func (ix *Indexer) ApplyVersioned(ctx context.Context, ev VersionedChangeEvent) (bool, error) {
+	if ix == nil || ix.writer == nil {
+		return false, errors.New("es: versioned indexer is unavailable")
 	}
-	return ix.writer.Upsert(ctx, ix.index, id, DocumentToIndex(ev.Doc))
+	if ev.SourceVersion <= 0 {
+		return false, errors.New("es: sourceVersion must be positive")
+	}
+	if strings.TrimSpace(ev.Doc.ObjectType) == "" || strings.TrimSpace(ev.Doc.ObjectID) == "" {
+		return false, errors.New("es: versioned document identity is required")
+	}
+	writer := ix.writer
+	id := IndexID(ev.Doc)
+	switch ev.Op {
+	case OpUpsert:
+		return writer.UpsertVersioned(
+			ctx,
+			ix.index,
+			id,
+			ev.SourceVersion,
+			DocumentToIndex(ev.Doc, ev.SourceVersion),
+		)
+	case OpDelete:
+		return writer.TombstoneVersioned(
+			ctx,
+			ix.index,
+			id,
+			ev.Doc.ObjectType,
+			ev.Doc.ObjectID,
+			ev.SourceVersion,
+		)
+	default:
+		return false, fmt.Errorf("es: unsupported versioned change operation %q", ev.Op)
+	}
+}
+
+// WithCanonicalSourceDigest clones a versioned Elasticsearch source and binds
+// it to a deterministic SHA-256 over every canonical fact except the digest
+// field itself. encoding/json sorts map keys, yielding stable bytes for replay.
+func WithCanonicalSourceDigest(doc map[string]any) (map[string]any, error) {
+	canonical := make(map[string]any, len(doc))
+	for key, value := range doc {
+		if key != "sourceDigest" {
+			canonical[key] = value
+		}
+	}
+	payload, err := json.Marshal(canonical)
+	if err != nil {
+		return nil, fmt.Errorf("es: canonicalize versioned source: %w", err)
+	}
+	digest := sha256.Sum256(payload)
+	canonical["sourceDigest"] = fmt.Sprintf("sha256:%x", digest)
+	return canonical, nil
+}
+
+// VersionedTombstoneDocument is the canonical soft-delete source shared by
+// production and contract writers.
+func VersionedTombstoneDocument(
+	objectType string,
+	objectID string,
+	sourceVersion int64,
+) (map[string]any, error) {
+	if strings.TrimSpace(objectType) == "" || strings.TrimSpace(objectID) == "" {
+		return nil, errors.New("es: tombstone identity is required")
+	}
+	return WithCanonicalSourceDigest(map[string]any{
+		"objectType":    strings.TrimSpace(objectType),
+		"objectId":      strings.TrimSpace(objectID),
+		"sourceVersion": sourceVersion,
+		"deleted":       true,
+	})
 }
 
 // DocumentToIndex projects a runtime/search Document into the unified ES index
 // document, including the AI target and reverse-lookup anchor fields.
-func DocumentToIndex(doc rtsearch.Document) map[string]any {
+func DocumentToIndex(doc rtsearch.Document, sourceVersion ...int64) map[string]any {
 	out := map[string]any{
+		"deleted":    false,
 		"target":     string(rtsearch.TargetForDocument(doc)),
 		"objectType": doc.ObjectType,
 		"objectId":   doc.ObjectID,
@@ -84,6 +172,9 @@ func DocumentToIndex(doc rtsearch.Document) map[string]any {
 		"entities":   doc.Entities,
 		"visibility": firstNonEmpty(doc.Visibility, "public"),
 		"quality":    doc.Popularity,
+	}
+	if len(sourceVersion) > 0 && sourceVersion[0] > 0 {
+		out["sourceVersion"] = sourceVersion[0]
 	}
 	// contentType keeps article/photo/video distinguishable on read-back so the
 	// shared ranker can re-derive the AI target without guessing.

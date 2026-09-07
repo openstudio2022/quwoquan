@@ -402,8 +402,8 @@ func TestCircleAppSurfaceUsesCanonicalResponseEntitiesAndOneGeneratedOwner(t *te
 		}
 		lock.AppExposedOperations = append(lock.AppExposedOperations, operation)
 	}
-	if got := len(lock.AppExposedOperations); got != 64 {
-		t.Fatalf("Circle App-exposed operations = %d, want 64", got)
+	if got := len(lock.AppExposedOperations); got != 70 {
+		t.Fatalf("Circle App-exposed operations = %d, want 70", got)
 	}
 
 	appDir := t.TempDir()
@@ -415,8 +415,8 @@ func TestCircleAppSurfaceUsesCanonicalResponseEntitiesAndOneGeneratedOwner(t *te
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := len(artifacts); got != 64 {
-		t.Fatalf("Circle typed request artifacts = %d, want 64", got)
+	if got := len(artifacts); got != 70 {
+		t.Fatalf("Circle typed request artifacts = %d, want 70", got)
 	}
 	ownerPayload := readGeneratedTestFile(t, filepath.Join(
 		appDir,
@@ -491,8 +491,8 @@ func TestChatAppSurfaceUsesObjectLocalCanonicalResponsesAndOneGeneratedOwner(t *
 		}
 		lock.AppExposedOperations = append(lock.AppExposedOperations, operation)
 	}
-	if got := len(lock.AppExposedOperations); got != 33 {
-		t.Fatalf("Chat App-exposed operations = %d, want 33", got)
+	if got := len(lock.AppExposedOperations); got != 34 {
+		t.Fatalf("Chat App-exposed operations = %d, want 34", got)
 	}
 
 	appDir := t.TempDir()
@@ -504,8 +504,8 @@ func TestChatAppSurfaceUsesObjectLocalCanonicalResponsesAndOneGeneratedOwner(t *
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := len(artifacts); got != 33 {
-		t.Fatalf("Chat typed request artifacts = %d, want 33", got)
+	if got := len(artifacts); got != 34 {
+		t.Fatalf("Chat typed request artifacts = %d, want 34", got)
 	}
 	ownerPayload := readGeneratedTestFile(t, filepath.Join(
 		appDir,
@@ -575,12 +575,12 @@ func TestContentAppSurfaceUsesCanonicalResponseEntitiesAndOneGeneratedOwner(t *t
 		}
 		lock.AppExposedOperations = append(lock.AppExposedOperations, operation)
 	}
-	if got := len(lock.AppExposedOperations); got != 44 {
+	if got := len(lock.AppExposedOperations); got != 47 {
 		ids := make([]string, 0, len(lock.AppExposedOperations))
 		for _, operation := range lock.AppExposedOperations {
 			ids = append(ids, operation.CanonicalOperationID)
 		}
-		t.Fatalf("Content App-exposed operations = %d, want 44: %s", got, strings.Join(ids, ", "))
+		t.Fatalf("Content App-exposed operations = %d, want 47: %s", got, strings.Join(ids, ", "))
 	}
 
 	appDir := t.TempDir()
@@ -592,8 +592,8 @@ func TestContentAppSurfaceUsesCanonicalResponseEntitiesAndOneGeneratedOwner(t *t
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := len(artifacts); got != 44 {
-		t.Fatalf("Content typed request artifacts = %d, want 44", got)
+	if got := len(artifacts); got != 47 {
+		t.Fatalf("Content typed request artifacts = %d, want 47", got)
 	}
 	ownerPayload := readGeneratedTestFile(t, filepath.Join(
 		appDir,
@@ -687,12 +687,12 @@ func TestUserAppSurfaceUsesCanonicalResponseEntitiesAndOneGeneratedOwner(t *test
 		}
 		lock.AppExposedOperations = append(lock.AppExposedOperations, operation)
 	}
-	if got := len(lock.AppExposedOperations); got != 73 {
+	if got := len(lock.AppExposedOperations); got != 75 {
 		ids := make([]string, 0, len(lock.AppExposedOperations))
 		for _, operation := range lock.AppExposedOperations {
 			ids = append(ids, operation.CanonicalOperationID)
 		}
-		t.Fatalf("User App-exposed operations = %d, want 73: %s", got, strings.Join(ids, ", "))
+		t.Fatalf("User App-exposed operations = %d, want 75: %s", got, strings.Join(ids, ", "))
 	}
 
 	appDir := t.TempDir()
@@ -704,8 +704,8 @@ func TestUserAppSurfaceUsesCanonicalResponseEntitiesAndOneGeneratedOwner(t *test
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := len(artifacts); got != 73 {
-		t.Fatalf("User typed request artifacts = %d, want 73", got)
+	if got := len(artifacts); got != 75 {
+		t.Fatalf("User typed request artifacts = %d, want 75", got)
 	}
 	ownerPayload := readGeneratedTestFile(t, filepath.Join(
 		appDir,
@@ -864,8 +864,8 @@ func TestEntityAppSurfaceUsesCanonicalProjectionDependencies(t *testing.T) {
 		}
 		lock.AppExposedOperations = append(lock.AppExposedOperations, operation)
 	}
-	if got := len(lock.AppExposedOperations); got != 17 {
-		t.Fatalf("Entity App-exposed operations = %d, want 17", got)
+	if got := len(lock.AppExposedOperations); got != 19 {
+		t.Fatalf("Entity App-exposed operations = %d, want 19", got)
 	}
 	assertCanonicalRequestInputs(t, lock.AppExposedOperations)
 
@@ -878,8 +878,8 @@ func TestEntityAppSurfaceUsesCanonicalProjectionDependencies(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := len(artifacts); got != 17 {
-		t.Fatalf("Entity typed request artifacts = %d, want 17", got)
+	if got := len(artifacts); got != 19 {
+		t.Fatalf("Entity typed request artifacts = %d, want 19", got)
 	}
 	ownerPayload := readGeneratedTestFile(t, filepath.Join(
 		appDir,

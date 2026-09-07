@@ -1,4 +1,13 @@
 backend: mongodb
+resources:
+  conversation_store:
+    engine: mongodb
+    role: authority
+    required: true
+  conversation_read_cache:
+    engine: redis
+    role: runtime
+    required: true
 collections:
   conversations:
     publication_role: not_published

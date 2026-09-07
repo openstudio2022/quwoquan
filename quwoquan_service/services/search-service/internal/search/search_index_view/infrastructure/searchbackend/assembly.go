@@ -5,6 +5,8 @@ package searchbackend
 import (
 	"context"
 	"fmt"
+	"slices"
+	"strings"
 	"time"
 
 	rtsearch "quwoquan_service/runtime/search"
@@ -30,13 +32,25 @@ type ESConfig struct {
 	Replicas         int      `yaml:"replicas"`
 	Synonyms         []string `yaml:"synonyms"`
 	EmbeddingDims    int      `yaml:"embeddingDims"`
+
+	// Writer* is the Search-owned UserProfile projection credential. It is a
+	// second role binding over the same generation, not an alternate provider.
+	WriterEnabled   bool     `yaml:"-" envAbsolute:"SEARCH_ES_WRITER_ENABLED"`
+	WriterEndpoints []string `yaml:"-" envAbsolute:"SEARCH_ES_WRITER_ENDPOINTS"`
+	WriterUsername  string   `yaml:"-" envAbsolute:"SEARCH_ES_WRITER_USERNAME"`
+	WriterPassword  string   `yaml:"-" envAbsolute:"SEARCH_ES_WRITER_PASSWORD"`
+	WriterAPIKey    string   `yaml:"-" envAbsolute:"SEARCH_ES_WRITER_API_KEY"`
+	WriterIndex     string   `yaml:"-" envAbsolute:"SEARCH_ES_WRITER_INDEX"`
 }
 
-// Built holds the assembled backend plus the optional ES client (nil when ES is
-// configured) so the caller can EnsureIndex and register a health ping.
+// Built holds role-scoped clients over one search.objects generation. Reader
+// serves recall/PIT/readiness; Writer is used only by the Search-owned profile
+// projection. Index lifecycle is deployment-control/admin work and is never
+// attempted by either application credential.
 type Built struct {
 	Backend rtsearch.RecallBackend
-	Client  *es.Client
+	Reader  *es.Client
+	Writer  *es.Client
 }
 
 // Build assembles the only production recall backend. Disabled or incomplete ES
@@ -49,15 +63,57 @@ func Build(cfg ESConfig) (Built, error) {
 	}
 	if len(cfg.Endpoints) == 0 {
 		return Built{}, fmt.Errorf(
-			"search Elasticsearch is enabled without endpoints",
+			"search Elasticsearch is enabled without reader endpoints",
+		)
+	}
+	if !cfg.WriterEnabled || len(cfg.WriterEndpoints) == 0 {
+		return Built{}, fmt.Errorf(
+			"search Elasticsearch UserProfile projection writer binding is incomplete",
+		)
+	}
+	if strings.TrimSpace(cfg.WriterIndex) != strings.TrimSpace(cfg.Index) ||
+		!sameEndpoints(cfg.Endpoints, cfg.WriterEndpoints) {
+		return Built{}, fmt.Errorf(
+			"search Elasticsearch reader and writer bindings must share one generation",
+		)
+	}
+	if strings.TrimSpace(cfg.APIKey) != "" && cfg.APIKey == cfg.WriterAPIKey {
+		return Built{}, fmt.Errorf(
+			"search Elasticsearch reader and writer credentials must be role-separated",
 		)
 	}
 
-	client, err := es.NewClient(es.Config{
-		Endpoints:      cfg.Endpoints,
-		Username:       cfg.Username,
-		Password:       cfg.Password,
-		APIKey:         cfg.APIKey,
+	reader, err := newClient(cfg, cfg.Endpoints, cfg.Username, cfg.Password, cfg.APIKey)
+	if err != nil {
+		return Built{}, err
+	}
+	writer, err := newClient(
+		cfg,
+		cfg.WriterEndpoints,
+		cfg.WriterUsername,
+		cfg.WriterPassword,
+		cfg.WriterAPIKey,
+	)
+	if err != nil {
+		return Built{}, err
+	}
+
+	backend := es.NewBackend(reader, reader.IndexName())
+	return Built{Backend: backend, Reader: reader, Writer: writer}, nil
+}
+
+func newClient(
+	cfg ESConfig,
+	endpoints []string,
+	username string,
+	password string,
+	apiKey string,
+) (*es.Client, error) {
+	return es.NewClient(es.Config{
+		Endpoints:      endpoints,
+		Username:       username,
+		Password:       password,
+		APIKey:         apiKey,
 		Index:          cfg.Index,
 		RequestTimeout: time.Duration(cfg.RequestTimeoutMs) * time.Millisecond,
 		InsecureTLS:    cfg.InsecureTLS,
@@ -68,27 +124,31 @@ func Build(cfg ESConfig) (Built, error) {
 			EmbeddingDims:    cfg.EmbeddingDims,
 		},
 	})
-	if err != nil {
-		return Built{}, err
-	}
-
-	backend := es.NewBackend(client, client.IndexName())
-	return Built{Backend: backend, Client: client}, nil
 }
 
-// EnsureIndex creates the unified index when ES is enabled (no-op otherwise).
-func (b Built) EnsureIndex(ctx context.Context) error {
-	if b.Client == nil {
-		return nil
+func sameEndpoints(left, right []string) bool {
+	if len(left) != len(right) {
+		return false
 	}
-	return b.Client.EnsureIndex(ctx)
+	normalize := func(values []string) []string {
+		normalized := make([]string, 0, len(values))
+		for _, value := range values {
+			normalized = append(
+				normalized,
+				strings.TrimRight(strings.TrimSpace(value), "/"),
+			)
+		}
+		slices.Sort(normalized)
+		return normalized
+	}
+	return slices.Equal(normalize(left), normalize(right))
 }
 
 // ReadinessCheck returns the functional ES query probe required by the search
 // serving path when Elasticsearch is enabled, else nil.
 func (b Built) ReadinessCheck() func(context.Context) error {
-	if b.Client == nil {
+	if b.Reader == nil {
 		return nil
 	}
-	return b.Client.CheckSearchReady
+	return b.Reader.CheckSearchReady
 }

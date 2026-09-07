@@ -469,7 +469,7 @@ rules:
     group: quwoquan_intersection
     rule: IntersectionRepeatExposureRateHigh
     reason: first_party_series_not_contract_operation
-    justification: "消费 ['intersection_feed_candidates_total']：第一方服务自注册的运行时/业务 series，不是 HTTP operation 的 http_server_* 观测面，ContractGraph 未为其声明 telemetry/slo。"
+    justification: "消费 ['intersection_feed_candidates_total', 'intersection_feed_filtered_total']：第一方服务自注册的运行时/业务 series，不是 HTTP operation 的 http_server_* 观测面，ContractGraph 未为其声明 telemetry/slo。"
   - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
     group: quwoquan_intersection
     rule: IntersectionFreshnessFilterRateHigh

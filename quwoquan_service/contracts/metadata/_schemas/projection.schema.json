@@ -148,6 +148,9 @@
             "limit": { "type": "object", "minProperties": 1 },
             "pagination": { "type": "object", "minProperties": 1 }
           }
+        },
+        "consistency_policy": {
+          "$ref": "#/$defs/projectionConsistencyPolicy"
         }
       }
     },
@@ -340,6 +343,84 @@
         "api_exposure": { "type": "string", "minLength": 1 },
         "ops_exposure": { "type": "string", "minLength": 1 }
       }
+    },
+    "projectionConsistencyPolicy": {
+      "description": "读模型事件应用、删除、checkpoint、新鲜度与重建的最小 typed policy；真实 adapter conformance 由对象测试绑定。",
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "properties": {
+        "ordering_key": {
+          "type": "string",
+          "minLength": 1
+        },
+        "source_version_field": {
+          "type": "string",
+          "minLength": 1
+        },
+        "apply_mode": {
+          "const": "strictly_newer"
+        },
+        "delete_mode": {
+          "enum": [
+            "versioned_tombstone",
+            "source_delete"
+          ]
+        },
+        "checkpoint_field": {
+          "type": "string",
+          "minLength": 1
+        },
+        "watermark_field": {
+          "type": "string",
+          "minLength": 1
+        },
+        "freshness_slo_seconds": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "backlog_slo_events": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "rebuild_strategy": {
+          "enum": [
+            "alias_replace",
+            "truncate_replay",
+            "upsert_replay"
+          ]
+        },
+        "overflow_policy": {
+          "enum": [
+            "fail_closed",
+            "serve_with_watermark"
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "anyOf": [
+              {
+                "required": [
+                  "apply_mode"
+                ]
+              },
+              {
+                "required": [
+                  "delete_mode"
+                ]
+              }
+            ]
+          },
+          "then": {
+            "required": [
+              "source_version_field",
+              "ordering_key"
+            ]
+          }
+        }
+      ]
     }
   }
 }

@@ -11,8 +11,17 @@ export PROD_SERVICE_NETWORK=quwoquan-prod-service_default
 # 基础设施 exporter 家族（主机 / 容器 / 数据面）
 export PODMAN_SOCKET_PATH=/run/user/1000/podman/podman.sock
 export MONGODB_EXPORTER_URI="mongodb://host.containers.internal:19410"
-export POSTGRES_EXPORTER_DSN="postgresql://quwoquan:quwoquan@host.containers.internal:19400/quwoquan?sslmode=disable"
+export POSTGRES_EXPORTER_DSN="postgresql://host.containers.internal:19400/quwoquan?sslmode=disable&user=quwoquan&password=quwoquan"
 export REDIS_EXPORTER_ADDR="redis://host.containers.internal:19420"
+# ES exporter 使用只读监控 API key；URI 不含凭据，Search 与观测数据面分开注入。
+export SEARCH_ELASTICSEARCH_EXPORTER_URI="https://search-es.example.invalid"
+export SEARCH_ELASTICSEARCH_EXPORTER_API_KEY="<physical-monitor-host-secret>"
+export SEARCH_OBJECTS_ELASTICSEARCH_EXPORTER_API_KEY="<search-index-monitor-host-secret>"
+export TELEMETRY_ELASTICSEARCH_EXPORTER_URI="https://telemetry-es.example.invalid"
+export TELEMETRY_ELASTICSEARCH_EXPORTER_API_KEY="<physical-monitor-host-secret>"
+export PRODUCT_TELEMETRY_ELASTICSEARCH_EXPORTER_API_KEY="<telemetry-index-monitor-host-secret>"
+export RUNTIME_LOGS_ELASTICSEARCH_EXPORTER_API_KEY="<runtime-log-index-monitor-host-secret>"
+export OBSERVABILITY_ELASTICSEARCH_EXPORTER_IMAGE="prometheuscommunity/elasticsearch-exporter@sha256:a6a4d4403f670faf6a94b8c7f9adbca3ead91f26dd64e5ccf95fa69025dc6e58"
 podman compose -f quwoquan_ops/observability/monitoring/docker-compose.prod.yml up -d
 ```
 
@@ -38,8 +47,11 @@ podman compose -f quwoquan_ops/observability/monitoring/docker-compose.prod.yml 
 - 生产部署 job 注入 `PROD_PROMETHEUS_URL`，供 `stackctl deploy` 做 SLO readback；
 - 基础设施 exporter 家族随观测栈启动：`node-exporter`（主机 CPU/内存/磁盘/网络）、
   `podman-exporter`（rootless 容器级指标，经 `PODMAN_SOCKET_PATH` 用户级 socket）、
-  `mongodb-exporter` / `postgres-exporter` / `redis-exporter`（数据面服务级 + 实例级）。
-  对应告警在 `quwoquan_l4_infrastructure` 组（整体负荷 + 毛刺双阈值）。
+  `mongodb-exporter` / `postgres-exporter` / `redis-exporter`（数据面服务级 + 实例级），以及
+  三个独立的 `search-elasticsearch-exporter` / `product-telemetry-elasticsearch-exporter` /
+  `runtime-logs-elasticsearch-exporter`。三者分别使用只读监控 API key，并以
+  `data_owner=search-objects|product-telemetry|runtime-logs` 归因 heap、shard、merge、ILM 与 snapshot；
+  不得在 URI 中内嵌 credential。对应告警在 `quwoquan_l4_infrastructure` 组。
 
 告警规则的阈值与业务 SLO 仍以各自 metadata/policy 为准；本目录不复制阈值。
 

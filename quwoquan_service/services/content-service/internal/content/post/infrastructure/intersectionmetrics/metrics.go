@@ -24,23 +24,26 @@ const (
 
 var (
 	// feedCandidates counts intersections that entered the spotlight candidate
-	// window, split by class (fact|affinity) and rank_state (fresh|seen). The
-	// repeat-exposure rate SLI = seen / total.
+	// window, split by class (fact|affinity) and rank_state as served by the read
+	// model. Candidates inside the exposure cooldown window never enter the window
+	// (they are counted by feedFiltered reason=seen), so the repeat-exposure rate
+	// SLI = filtered{seen} / (candidates + filtered).
 	feedCandidates = promauto.NewCounterVec(prometheus.CounterOpts{
 		Namespace: namespace,
 		Subsystem: "feed",
 		Name:      "candidates_total",
-		Help:      "Intersection feed candidates entering the spotlight window by channel, class(fact|affinity) and rank_state(fresh|seen).",
+		Help:      "Intersection feed candidates entering the spotlight window by channel, class(fact|affinity) and rank_state.",
 	}, []string{"channel", "class", "rank_state"})
 
 	// feedFiltered counts intersections dropped before the candidate window.
-	// reason: stale (past freshness, triggers recompute) | display_incomplete
+	// reason: negative | seen (exposure cooldown) | stale (past expiresAt; recompute
+	// is owned by the Recommendation read path) | display_incomplete
 	// (missing primaryText/avatar, blank-window governance).
 	feedFiltered = promauto.NewCounterVec(prometheus.CounterOpts{
 		Namespace: namespace,
 		Subsystem: "feed",
 		Name:      "filtered_total",
-		Help:      "Intersection feed candidates filtered before the window by channel and reason(stale|display_incomplete).",
+		Help:      "Intersection feed candidates filtered before the window by channel and reason(negative|seen|stale|display_incomplete|cold_start_supply|supply_probe_unavailable).",
 	}, []string{"channel", "reason"})
 
 	// exposureReported counts objects written into the cross-session cooldown

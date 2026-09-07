@@ -1,4 +1,4 @@
-backend: postgresql
+backend: postgres
 tables:
   greeting_requests:
     publication_role: not_published

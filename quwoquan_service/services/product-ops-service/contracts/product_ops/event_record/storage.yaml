@@ -1,4 +1,19 @@
 backend: observability_log_sink
+resources:
+  # 两个 Elasticsearch 逻辑资源保留策略与故障域不同（DEC-032 具名 slot）：
+  # localName 与部署面 binding slot 同名（telemetry / runtime-logs），由 data_plane_binding 交叉校验。
+  telemetry:
+    engine: elasticsearch
+    role: append_only_fact
+    required: true
+  runtime_logs:
+    engine: elasticsearch
+    role: append_only_fact
+    required: true
+  batch_dedup:
+    engine: redis
+    role: runtime
+    required: true
 environment_backends:
   alpha:
     adapter: ext.obs.elasticsearch
@@ -32,7 +47,7 @@ collections:
 logstores:
   raw:
     provider_config_keys:
-      elasticsearch: elasticsearch.raw_index
+      telemetry_elasticsearch: telemetry_elasticsearch.raw_index
     default_name: app-product-telemetry-raw
     ttl_days: 3
     time_field: ingestedAt
@@ -109,7 +124,7 @@ logstores:
     - callStack
   startup_diagnostic:
     provider_config_keys:
-      elasticsearch: elasticsearch.startup_diagnostic_index
+      telemetry_elasticsearch: telemetry_elasticsearch.startup_diagnostic_index
     default_name: app-startup-diagnostic-raw
     ttl_days: 3
     forbidden_fields:
@@ -119,7 +134,7 @@ logstores:
     - callStack
   runtime_diagnostic:
     provider_config_keys:
-      elasticsearch: elasticsearch.runtime_log_index
+      runtime_log_elasticsearch: runtime_log_elasticsearch.raw_index
     default_name: runtime-diagnostics-raw
     ttl_days: 3
     forbidden_fields:
@@ -135,11 +150,21 @@ logstores:
     - rawEndpoint
   aggregate:
     provider_config_keys:
-      elasticsearch: elasticsearch.aggregate_index
+      telemetry_elasticsearch: telemetry_elasticsearch.aggregate_index
     default_name: app-product-telemetry-hourly
     ttl_days: 90
     internal_fields:
     - sessionHashes
+    forbidden_fields:
+    - sessionId
+    - userId
+    - callStack
+    - _batchKey
+  runtime_aggregate:
+    provider_config_keys:
+      runtime_log_elasticsearch: runtime_log_elasticsearch.aggregate_index
+    default_name: runtime-diagnostics-hourly
+    ttl_days: 90
     forbidden_fields:
     - sessionId
     - userId

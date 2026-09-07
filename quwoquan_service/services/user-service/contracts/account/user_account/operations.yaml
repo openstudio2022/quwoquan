@@ -1013,6 +1013,8 @@ api_routes:
       retry_mode: idempotent
       max_attempts: 2
       idempotency: required
+    consistency:
+      atomic_commit: true
     error_codes:
       - USER.USER.unauthorized
       - USER.USER.not_found
@@ -1083,6 +1085,8 @@ api_routes:
       retry_mode: idempotent
       max_attempts: 2
       idempotency: required
+    consistency:
+      atomic_commit: true
     error_codes:
       - USER.USER.unauthorized
       - USER.USER.forbidden
@@ -1150,6 +1154,8 @@ api_routes:
       retry_mode: idempotent
       max_attempts: 2
       idempotency: required
+    consistency:
+      atomic_commit: true
     error_codes:
       - USER.USER.unauthorized
       - USER.USER.forbidden
@@ -1208,6 +1214,10 @@ api_routes:
       retry_mode: none
       max_attempts: 1
       idempotency: none
+    consistency:
+      source: authority
+      freshness: read_your_writes
+      stale_result: fail_closed
     error_codes:
       - USER.USER.unauthorized
       - USER.USER.forbidden
@@ -1260,6 +1270,10 @@ api_routes:
       retry_mode: none
       max_attempts: 1
       idempotency: none
+    consistency:
+      source: authority
+      freshness: read_your_writes
+      stale_result: fail_closed
     error_codes:
       - USER.USER.unauthorized
       - USER.USER.forbidden

@@ -2,21 +2,120 @@ schema: quwoquan-prod-backup-recovery-plan
 receiptMaxAgeHours: 26
 datasets:
   - id: postgres
+    resourceRef: primary-postgres
+    namespaces:
+      - quwoquan_assistant
+      - quwoquan_content_report
+      - quwoquan_platform_ops
+      - quwoquan_product_ops
+      - quwoquan_user
+    indexPatterns: []
+    snapshotPolicyRef: postgres-wal-prod
+    readback: [documentCount, canonicalDigest, timeBoundary]
     rpoMinutes: 15
     rtoMinutes: 120
     requiredRemoteCopy: true
     requiredIsolationTarget: true
   - id: mongodb
+    resourceRef: primary-mongodb
+    namespaces:
+      - quwoquan_assistant
+      - quwoquan_chat
+      - quwoquan_circle
+      - quwoquan_content
+      - quwoquan_entity
+      - quwoquan_integration
+      - quwoquan_notification
+      - quwoquan_product_ops
+      - quwoquan_recommendation
+      - quwoquan_rtc
+      - quwoquan_search
+      - quwoquan_tag
+      - quwoquan_user
+    indexPatterns: []
+    snapshotPolicyRef: mongodb-snapshot-prod
+    readback: [documentCount, canonicalDigest, timeBoundary]
+    rpoMinutes: 15
+    rtoMinutes: 120
+    requiredRemoteCopy: true
+    requiredIsolationTarget: true
+  - id: redis
+    resourceRef: primary-redis
+    namespaces:
+      - db-assistant
+      - db-chat
+      - db-circle
+      - db-content
+      - db-entity
+      - db-integration
+      - db-notification
+      - db-platform-ops
+      - db-product-ops
+      - db-recommendation
+      - db-realtime-gateway
+      - db-rtc
+      - db-search
+      - db-tag
+      - db-user
+    indexPatterns: []
+    snapshotPolicyRef: redis-rdb-prod
+    readback: [documentCount, canonicalDigest, timeBoundary]
     rpoMinutes: 15
     rtoMinutes: 120
     requiredRemoteCopy: true
     requiredIsolationTarget: true
   - id: object-media
+    resourceRef: media-object-storage
+    namespaces: [media]
+    indexPatterns: []
+    snapshotPolicyRef: object-media-versioned-prod
+    readback: [documentCount, canonicalDigest, timeBoundary]
     rpoMinutes: 60
     rtoMinutes: 240
     requiredRemoteCopy: true
     requiredIsolationTarget: true
-  - id: elasticsearch-snapshot
+  - id: search-objects
+    resourceRef: search-elasticsearch
+    namespaces: [quwoquan_objects, quwoquan_objects-v1]
+    indexPatterns: [quwoquan_objects-v1-*]
+    snapshotPolicyRef: search-objects-snapshot-prod
+    readback: [mapping, documentCount, canonicalDigest, timeBoundary]
+    rpoMinutes: 60
+    rtoMinutes: 240
+    requiredRemoteCopy: true
+    requiredIsolationTarget: true
+  - id: product-observability-admin
+    resourceRef: telemetry-elasticsearch
+    namespaces: [product-ops-observability]
+    indexPatterns: []
+    snapshotPolicyRef: product-observability-admin-prod
+    readback: [mapping, documentCount, canonicalDigest, timeBoundary]
+    rpoMinutes: 60
+    rtoMinutes: 240
+    requiredRemoteCopy: true
+    requiredIsolationTarget: true
+  - id: product-telemetry
+    resourceRef: telemetry-elasticsearch
+    namespaces:
+      - app-product-telemetry-raw
+      - app-startup-diagnostic-raw
+      - app-product-telemetry-hourly
+    indexPatterns:
+      - app-product-telemetry-raw-*
+      - app-startup-diagnostic-raw-*
+      - app-product-telemetry-hourly-*
+    snapshotPolicyRef: product-telemetry-snapshot-prod
+    readback: [mapping, documentCount, canonicalDigest, timeBoundary, aggregateConsistency]
+    rpoMinutes: 60
+    rtoMinutes: 240
+    requiredRemoteCopy: true
+    requiredIsolationTarget: true
+  - id: runtime-logs
+    resourceRef: telemetry-elasticsearch
+    namespaces: [runtime-diagnostics-raw, runtime-diagnostics-hourly]
+    indexPatterns: [runtime-diagnostics-raw-*, runtime-diagnostics-hourly-*]
+    snapshotPolicyRef: runtime-logs-snapshot-prod
+    readback: [mapping, documentCount, canonicalDigest, timeBoundary, aggregateConsistency]
     rpoMinutes: 60
     rtoMinutes: 240
     requiredRemoteCopy: true

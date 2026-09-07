@@ -46,6 +46,7 @@ func NewQueryBuilder() *QueryBuilder {
 func (b *QueryBuilder) Build(plan rtsearch.RetrievePlan) map[string]any {
 	must := []map[string]any{}
 	filter := []map[string]any{}
+	mustNot := []map[string]any{NotDeletedQuery()}
 	should := []map[string]any{}
 
 	// terms -> composed text recall: at least one of best_fields / exact phrase /
@@ -194,6 +195,7 @@ func (b *QueryBuilder) Build(plan rtsearch.RetrievePlan) map[string]any {
 	if len(filter) > 0 {
 		boolQuery["filter"] = filter
 	}
+	boolQuery["must_not"] = mustNot
 	if len(should) > 0 {
 		boolQuery["should"] = should
 	}
@@ -331,5 +333,99 @@ func (b *QueryBuilder) BuildHybrid(plan rtsearch.RetrievePlan, queryVector []flo
 		"num_candidates": k * 5,
 	}
 	body["rank"] = map[string]any{"rrf": map[string]any{}}
+	EnsureNotDeletedSearchBody(body)
 	return body
+}
+
+// NotDeletedQuery is the canonical soft-tombstone exclusion clause. It uses a
+// must_not term so legacy documents without the field remain visible while all
+// versioned tombstones are excluded from lexical, PIT, and hybrid recall.
+func NotDeletedQuery() map[string]any {
+	return map[string]any{"term": map[string]any{"deleted": true}}
+}
+
+// EnsureNotDeletedSearchBody applies the canonical tombstone exclusion to any
+// Elasticsearch body accepted by Client.Search. It preserves an existing query
+// (including bool/function_score/PIT shapes) and also filters hybrid kNN recall.
+func EnsureNotDeletedSearchBody(body map[string]any) {
+	if body == nil {
+		return
+	}
+	query, hasQuery := body["query"].(map[string]any)
+	if !hasQuery {
+		query = map[string]any{"match_all": map[string]any{}}
+	}
+	if !queryExcludesDeleted(query) {
+		body["query"] = map[string]any{"bool": map[string]any{
+			"must":     []map[string]any{query},
+			"must_not": []map[string]any{NotDeletedQuery()},
+		}}
+	}
+	knn, ok := body["knn"].(map[string]any)
+	if !ok {
+		return
+	}
+	deletedFilter := map[string]any{"bool": map[string]any{
+		"must_not": []map[string]any{NotDeletedQuery()},
+	}}
+	if existing, exists := knn["filter"]; exists {
+		if filterExcludesDeleted(existing) {
+			return
+		}
+		knn["filter"] = map[string]any{"bool": map[string]any{
+			"filter": []any{existing, deletedFilter},
+		}}
+	} else {
+		knn["filter"] = deletedFilter
+	}
+}
+
+func queryExcludesDeleted(query map[string]any) bool {
+	if boolQuery, ok := query["bool"].(map[string]any); ok {
+		switch clauses := boolQuery["must_not"].(type) {
+		case []map[string]any:
+			for _, clause := range clauses {
+				if isDeletedTerm(clause) {
+					return true
+				}
+			}
+		case []any:
+			for _, raw := range clauses {
+				if clause, ok := raw.(map[string]any); ok && isDeletedTerm(clause) {
+					return true
+				}
+			}
+		}
+	}
+	if functionScore, ok := query["function_score"].(map[string]any); ok {
+		if inner, ok := functionScore["query"].(map[string]any); ok {
+			return queryExcludesDeleted(inner)
+		}
+	}
+	return false
+}
+
+func isDeletedTerm(query map[string]any) bool {
+	term, ok := query["term"].(map[string]any)
+	return ok && term["deleted"] == true
+}
+
+func filterExcludesDeleted(filter any) bool {
+	switch value := filter.(type) {
+	case map[string]any:
+		return queryExcludesDeleted(value)
+	case []map[string]any:
+		for _, clause := range value {
+			if queryExcludesDeleted(clause) {
+				return true
+			}
+		}
+	case []any:
+		for _, clause := range value {
+			if filterExcludesDeleted(clause) {
+				return true
+			}
+		}
+	}
+	return false
 }

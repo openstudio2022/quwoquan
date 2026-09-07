@@ -18,7 +18,7 @@ from core.media_asset_url import (
     is_public_media_slice_key,
     release_media_delivery_key,
 )
-from core.media_library_sync import sync_media_library
+from core.media_library_sync import prune_media_library, sync_media_library
 from core.release_layout import payload_file, payload_root
 from core.schema import assert_valid
 
@@ -157,11 +157,42 @@ def sync_media(*, release: Path, destination: str, run: Path) -> None:
         payload_root(release),
         Path(destination),
         object_digests=release_media_public_slices(release),
-        prune_unselected=True,
+        # Import/stage 只允许 additive copy。删除 previous active 独有字节会让
+        # 后续验证失败或回滚路径直接 404；回收必须由 post-activate 显式执行。
+        prune_unselected=False,
     )
     write_json(run / "media-sync.json", report)
     if report["failed"] or report["issues"]:
         raise SystemExit(f"[ship] media sync failed: {report['issues'][:5]}")
+
+
+def prune_media(
+    *,
+    release: Path,
+    previous_release: Path | None,
+    destination: str,
+    run: Path,
+) -> None:
+    """Post-activate 显式回收：保留新 active 与 previous active 两个闭包。
+
+    previous release root 不在本机时不做任何删除——保留多余字节永远比删掉
+    回滚仍需服务的字节安全。
+    """
+    keep = dict(release_media_public_slices(release))
+    if previous_release is not None and payload_file(previous_release, "release.json").is_file():
+        keep.update(release_media_public_slices(previous_release))
+        report = prune_media_library(Path(destination), keep_keys=keep)
+    elif previous_release is None:
+        report = prune_media_library(Path(destination), keep_keys=keep)
+    else:
+        report = {
+            "schema": "quwoquan_data.media_library_prune",
+            "destRoot": destination,
+            "keptKeys": len(keep),
+            "pruned": 0,
+            "skipped": "previous active release root is unavailable locally",
+        }
+    write_json(run / "media-prune.json", report)
 
 
 def assert_target_action_allowed(

@@ -86,6 +86,123 @@ var ErrAtomicHashFieldCompareAndSwapUnavailable = errors.New(
 	"redis: atomic hash field compare-and-swap unavailable",
 )
 
+// ErrAtomicLeaseFenceUnavailable is returned when an adapter cannot execute
+// the multi-key lease/fence lifecycle as one Redis server-side operation.
+// Lease owners must fail closed instead of composing GET/INCR/EXPIRE/DEL calls.
+var ErrAtomicLeaseFenceUnavailable = errors.New(
+	"redis: atomic lease fence unavailable",
+)
+
+// LeaseFenceResult is the closed result set for fenced lease lifecycle calls.
+type LeaseFenceResult uint8
+
+const (
+	LeaseFenceApplied LeaseFenceResult = iota + 1
+	LeaseFenceExpired
+	LeaseFenceRejected
+)
+
+// LeaseFenceAtomicClient is the optional capability implemented by adapters
+// that can atomically maintain a same-slot fence counter and lease value.
+type LeaseFenceAtomicClient interface {
+	AcquireLeaseFenceAtomic(
+		ctx context.Context,
+		fenceKey string,
+		leaseKey string,
+		leaseOwner string,
+		leaseTTL time.Duration,
+	) (int64, error)
+	RenewLeaseFenceAtomic(
+		ctx context.Context,
+		fenceKey string,
+		leaseKey string,
+		leaseOwner string,
+		expectedFence int64,
+		leaseTTL time.Duration,
+	) (LeaseFenceResult, error)
+	ReleaseLeaseFenceAtomic(
+		ctx context.Context,
+		fenceKey string,
+		leaseKey string,
+		leaseOwner string,
+		expectedFence int64,
+	) (LeaseFenceResult, error)
+}
+
+// AcquireLeaseFenceAtomic increments a non-expiring fencing authority and
+// writes the matching owner-scoped expiring lease in one server-side operation.
+// A missing authority alongside a live lease is rejected as corrupted state.
+// The authority deliberately has no TTL: once a token has been issued, expiry
+// must never make that token reusable.
+func AcquireLeaseFenceAtomic(
+	ctx context.Context,
+	client Client,
+	fenceKey string,
+	leaseKey string,
+	leaseOwner string,
+	leaseTTL time.Duration,
+) (int64, error) {
+	atomicClient, ok := client.(LeaseFenceAtomicClient)
+	if !ok {
+		return 0, ErrAtomicLeaseFenceUnavailable
+	}
+	return atomicClient.AcquireLeaseFenceAtomic(
+		ctx,
+		fenceKey,
+		leaseKey,
+		leaseOwner,
+		leaseTTL,
+	)
+}
+
+// RenewLeaseFenceAtomic refreshes only a live lease whose owner/value and
+// current fence both exactly match the caller's captured authority.
+func RenewLeaseFenceAtomic(
+	ctx context.Context,
+	client Client,
+	fenceKey string,
+	leaseKey string,
+	leaseOwner string,
+	expectedFence int64,
+	leaseTTL time.Duration,
+) (LeaseFenceResult, error) {
+	atomicClient, ok := client.(LeaseFenceAtomicClient)
+	if !ok {
+		return 0, ErrAtomicLeaseFenceUnavailable
+	}
+	return atomicClient.RenewLeaseFenceAtomic(
+		ctx,
+		fenceKey,
+		leaseKey,
+		leaseOwner,
+		expectedFence,
+		leaseTTL,
+	)
+}
+
+// ReleaseLeaseFenceAtomic deletes only a live lease whose owner/value and
+// current fence both exactly match the caller's captured authority.
+func ReleaseLeaseFenceAtomic(
+	ctx context.Context,
+	client Client,
+	fenceKey string,
+	leaseKey string,
+	leaseOwner string,
+	expectedFence int64,
+) (LeaseFenceResult, error) {
+	atomicClient, ok := client.(LeaseFenceAtomicClient)
+	if !ok {
+		return 0, ErrAtomicLeaseFenceUnavailable
+	}
+	return atomicClient.ReleaseLeaseFenceAtomic(
+		ctx,
+		fenceKey,
+		leaseKey,
+		leaseOwner,
+		expectedFence,
+	)
+}
+
 // HashFieldCompareAndSwapClient is an optional atomic capability. It is kept
 // outside Client so third-party read-only adapters do not silently acquire a
 // mutation contract they cannot honour.

@@ -106,7 +106,6 @@ func (store *connectionStore) Revoke(_ context.Context, input connectionmodel.Re
 	store.current.Status = connectionmodel.StatusRevoked
 	store.current.CredentialRef = ""
 	store.current.ProviderAccountSubjectDigest = ""
-	store.current.GrantReceiptDigest = ""
 	store.current.RevokedAt = &revokedAt
 	store.current.Revision++
 	store.current.UpdatedAt = input.OccurredAt

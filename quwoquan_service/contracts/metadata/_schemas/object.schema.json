@@ -56,8 +56,7 @@
     "relationships": {
       "type": "array",
       "items": {
-        "type": "object",
-        "additionalProperties": true
+        "$ref": "#/$defs/relationship"
       }
     },
     "members": {
@@ -530,6 +529,43 @@
           }
         }
       ]
+    },
+    "relationship": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "kind": {
+          "enum": [
+            "owned",
+            "reference",
+            "event_source",
+            "projection_source",
+            "external"
+          ]
+        },
+        "consistency": {
+          "description": "strong 仅表示同一 aggregate 的同一次原子提交；不承诺线性一致、数据库隔离级别、跨请求 read-your-writes 或 projection 立即可见。",
+          "enum": [
+            "strong",
+            "eventual",
+            "runtime"
+          ]
+        }
+      },
+      "not": {
+        "required": [
+          "kind",
+          "consistency"
+        ],
+        "properties": {
+          "kind": {
+            "const": "projection_source"
+          },
+          "consistency": {
+            "const": "strong"
+          }
+        }
+      }
     }
   }
 }

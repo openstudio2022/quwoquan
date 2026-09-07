@@ -145,6 +145,7 @@ def load_closed_sets(data: dict) -> tuple[set[str], set[str], set[str], set[str]
     vert_set = set(verticals)
 
     object_kinds: set[str] = set()
+    wire_object_type_by_route: dict[str, str] = {}
     for item in object_kinds_raw:
         if not isinstance(item, dict):
             fail("objectKinds entries must be mappings (kind/roles/routeId/assetKind)")
@@ -161,6 +162,18 @@ def load_closed_sets(data: dict) -> tuple[set[str], set[str], set[str], set[str]
             fail(f"objectKind {kind} invalid roles {sorted(bad)} (allowed: {sorted(OBJECT_KIND_ROLES)})")
         if "object" in roles and not str(item.get("assetKind", "")).strip():
             fail(f"objectKind {kind} has role object but missing assetKind")
+        if not str(item.get("objectType", "")).strip():
+            fail(f"objectKind {kind} missing canonical wire objectType")
+        route_id = str(item.get("routeId", "")).strip()
+        if route_id:
+            # 消费方允许在 kind 缺失时按 routeId 反查 wire objectType（Go map 遍历无序），
+            # 该反查只有在「同一路由下所有 kind 的 objectType 同值」时才是确定的。
+            previous = wire_object_type_by_route.setdefault(route_id, str(item["objectType"]).strip())
+            if previous != str(item["objectType"]).strip():
+                fail(
+                    f"objectKind {kind} declares objectType {item['objectType']} but route {route_id} "
+                    f"already maps to {previous}; kinds sharing a routeId must share one wire objectType"
+                )
         # dimension/label 决定这类对象上的共享标签算哪个维度、缺展示名时怎么称呼
         # （同校 / 同游 / 同圈 / 同好）。缺任一个，服务端就只能回到手写 switch。
         dimension = str(item.get("dimension", "")).strip()
@@ -442,6 +455,18 @@ def validate_fact_producer_shapes(
             fail(
                 f"factProducerShapes[{producer_id}] outputs unknown objectKinds "
                 f"{sorted(unknown_objects)}"
+            )
+        # outputObjectKinds 是产出 reason 的主对象 kind：必须与每个 outputKind 登记的 objectKind 一致，
+        # 否则生产者 shape 与 kind 本体各说各话（DEC-003 经历交集主对象是人）。
+        declared_object_kinds = {
+            str(item.get("objectKind") or "")
+            for item in (data.get("kinds") or [])
+            if isinstance(item, dict) and item.get("kind") in set(shape["outputKinds"])
+        }
+        if visibility == "intersection" and set(shape["outputObjectKinds"]) != declared_object_kinds:
+            fail(
+                f"factProducerShapes[{producer_id}].outputObjectKinds {sorted(shape['outputObjectKinds'])} "
+                f"must equal the objectKind of its outputKinds {sorted(declared_object_kinds)}"
             )
         if visibility == "intersection" and not shape["outputKinds"]:
             fail(f"factProducerShapes[{producer_id}] intersection producer must output kinds")

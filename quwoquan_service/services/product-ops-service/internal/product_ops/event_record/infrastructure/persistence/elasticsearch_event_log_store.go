@@ -22,16 +22,25 @@ const maxElasticsearchDailyIndexBaseBytes = 244
 var elasticsearchIndexNamePattern = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]*$`)
 
 const (
-	elasticsearchRawRetentionPolicy       = "qwq-product-telemetry-raw-3d"
-	elasticsearchAggregateRetentionPolicy = "qwq-product-telemetry-hourly-90d"
+	elasticsearchTelemetryRawRetentionPolicy       = "qwq-product-telemetry-raw-3d"
+	elasticsearchTelemetryAggregateRetentionPolicy = "qwq-product-telemetry-hourly-90d"
+	elasticsearchRuntimeRawRetentionPolicy         = "qwq-runtime-diagnostics-raw-3d"
+	elasticsearchRuntimeAggregateRetentionPolicy   = "qwq-runtime-diagnostics-hourly-90d"
+)
+
+type ElasticsearchStoreKind string
+
+const (
+	ElasticsearchTelemetryStoreKind  ElasticsearchStoreKind = "telemetry"
+	ElasticsearchRuntimeLogStoreKind ElasticsearchStoreKind = "runtime_log"
 )
 
 type ElasticsearchConfig struct {
+	Kind                   ElasticsearchStoreKind
 	Endpoint               string
 	APIKey                 string
 	RawIndex               string
 	StartupDiagnosticIndex string
-	RuntimeLogIndex        string
 	AggregateIndex         string
 	Timeout                time.Duration
 }
@@ -43,7 +52,6 @@ type ElasticsearchEventLogStore struct {
 }
 
 var (
-	_ application.ObservabilityLogSink              = (*ElasticsearchEventLogStore)(nil)
 	_ application.RtcMediaQoeSummaryReader          = (*ElasticsearchEventLogStore)(nil)
 	_ application.ActiveSessionLister               = (*ElasticsearchEventLogStore)(nil)
 	_ application.IncompleteEventBatchRepairer      = (*ElasticsearchEventLogStore)(nil)
@@ -72,23 +80,44 @@ func NewElasticsearchEventLogStore(
 		endpoint.Fragment != "" {
 		return nil, fmt.Errorf("Elasticsearch endpoint is invalid")
 	}
-	for role, index := range map[string]string{
-		"raw":                config.RawIndex,
-		"startup_diagnostic": config.StartupDiagnosticIndex,
-		"runtime_log":        config.RuntimeLogIndex,
-		"aggregate":          config.AggregateIndex,
-	} {
+	indices := map[string]string{
+		"raw":       config.RawIndex,
+		"aggregate": config.AggregateIndex,
+	}
+	switch config.Kind {
+	case ElasticsearchTelemetryStoreKind:
+		indices["startup_diagnostic"] = config.StartupDiagnosticIndex
+	case ElasticsearchRuntimeLogStoreKind:
+		if strings.TrimSpace(config.StartupDiagnosticIndex) != "" {
+			return nil, fmt.Errorf("Elasticsearch runtime-log store must not configure startup diagnostic index")
+		}
+	default:
+		return nil, fmt.Errorf("Elasticsearch store kind is invalid")
+	}
+	seenIndices := make(map[string]string, len(indices))
+	for role, index := range indices {
 		if !elasticsearchIndexNamePattern.MatchString(index) ||
 			strings.Contains(index, "..") ||
 			len(index) > maxElasticsearchDailyIndexBaseBytes {
 			return nil, fmt.Errorf("Elasticsearch %s index is invalid", role)
 		}
+		if otherRole, exists := seenIndices[index]; exists {
+			return nil, fmt.Errorf("Elasticsearch %s and %s indices must be distinct", otherRole, role)
+		}
+		seenIndices[index] = role
 	}
 	return &ElasticsearchEventLogStore{
 		config: config,
 		client: &http.Client{Timeout: config.Timeout},
 		now:    time.Now,
 	}, nil
+}
+
+func (s *ElasticsearchEventLogStore) requireKind(kind ElasticsearchStoreKind) error {
+	if s.config.Kind != kind {
+		return fmt.Errorf("Elasticsearch %s store operation is unavailable from %s store", kind, s.config.Kind)
+	}
+	return nil
 }
 
 func (s *ElasticsearchEventLogStore) Ping(ctx context.Context) error {
@@ -113,23 +142,50 @@ func (s *ElasticsearchEventLogStore) Ping(ctx context.Context) error {
 }
 
 func (s *ElasticsearchEventLogStore) EnsureIndices(ctx context.Context) error {
-	for policy, minimumAge := range map[string]string{
-		elasticsearchRawRetentionPolicy:       "3d",
-		elasticsearchAggregateRetentionPolicy: "90d",
-	} {
+	var policies map[string]string
+	var items []struct {
+		name string
+		body map[string]any
+	}
+	switch s.config.Kind {
+	case ElasticsearchTelemetryStoreKind:
+		policies = map[string]string{
+			elasticsearchTelemetryRawRetentionPolicy:       "3d",
+			elasticsearchTelemetryAggregateRetentionPolicy: "90d",
+		}
+		items = []struct {
+			name string
+			body map[string]any
+		}{
+			{s.config.RawIndex, elasticsearchRawIndexDefinition()},
+			{s.config.StartupDiagnosticIndex, elasticsearchStartupIndexDefinition()},
+			{s.config.AggregateIndex, elasticsearchAggregateIndexDefinition(
+				elasticsearchTelemetryAggregateRetentionPolicy,
+			)},
+		}
+	case ElasticsearchRuntimeLogStoreKind:
+		policies = map[string]string{
+			elasticsearchRuntimeRawRetentionPolicy:       "3d",
+			elasticsearchRuntimeAggregateRetentionPolicy: "90d",
+		}
+		items = []struct {
+			name string
+			body map[string]any
+		}{
+			{s.config.RawIndex, elasticsearchRuntimeIndexDefinition()},
+			{s.config.AggregateIndex, elasticsearchAggregateIndexDefinition(
+				elasticsearchRuntimeAggregateRetentionPolicy,
+			)},
+		}
+	default:
+		return fmt.Errorf("Elasticsearch store kind is invalid")
+	}
+	for policy, minimumAge := range policies {
 		if err := s.ensureLifecyclePolicy(ctx, policy, minimumAge); err != nil {
 			return err
 		}
 	}
-	for _, item := range []struct {
-		name string
-		body map[string]any
-	}{
-		{s.config.RawIndex, elasticsearchRawIndexDefinition()},
-		{s.config.StartupDiagnosticIndex, elasticsearchStartupIndexDefinition()},
-		{s.config.RuntimeLogIndex, elasticsearchRuntimeIndexDefinition()},
-		{s.config.AggregateIndex, elasticsearchAggregateIndexDefinition()},
-	} {
+	for _, item := range items {
 		if err := s.ensureIndexTemplate(ctx, item.name, item.body); err != nil {
 			return err
 		}
@@ -305,6 +361,9 @@ func (s *ElasticsearchEventLogStore) PutEventBatch(
 	batchKey string,
 	records []application.EventRecord,
 ) error {
+	if err := s.requireKind(ElasticsearchTelemetryStoreKind); err != nil {
+		return err
+	}
 	documents := make([]elasticsearchBulkDocument, 0, len(records)*2)
 	for _, record := range records {
 		index, err := dailyElasticsearchIndex(
@@ -340,6 +399,9 @@ func (s *ElasticsearchEventLogStore) RepairEventBatch(
 	batchKey string,
 	records []application.EventRecord,
 ) error {
+	if err := s.requireKind(ElasticsearchTelemetryStoreKind); err != nil {
+		return err
+	}
 	return s.PutEventBatch(ctx, batchKey, records)
 }
 
@@ -348,6 +410,9 @@ func (s *ElasticsearchEventLogStore) HasEventBatch(
 	batchKey string,
 	expected int,
 ) (bool, error) {
+	if err := s.requireKind(ElasticsearchTelemetryStoreKind); err != nil {
+		return false, err
+	}
 	rawDocuments, complete, err := s.batchDocuments(
 		ctx,
 		elasticsearchIndexPattern(s.config.RawIndex),
@@ -403,6 +468,9 @@ func (s *ElasticsearchEventLogStore) PutStartupDiagnostics(
 	batchKey string,
 	records []application.StartupDiagnosticRecord,
 ) error {
+	if err := s.requireKind(ElasticsearchTelemetryStoreKind); err != nil {
+		return err
+	}
 	now := s.now().UTC()
 	documents := make([]elasticsearchBulkDocument, 0, len(records))
 	for position, record := range records {
@@ -457,6 +525,9 @@ func (s *ElasticsearchEventLogStore) RepairStartupDiagnosticBatch(
 	batchKey string,
 	records []application.StartupDiagnosticRecord,
 ) error {
+	if err := s.requireKind(ElasticsearchTelemetryStoreKind); err != nil {
+		return err
+	}
 	return s.PutStartupDiagnostics(ctx, batchKey, records)
 }
 
@@ -465,6 +536,9 @@ func (s *ElasticsearchEventLogStore) HasStartupDiagnosticBatch(
 	batchKey string,
 	expected int,
 ) (bool, error) {
+	if err := s.requireKind(ElasticsearchTelemetryStoreKind); err != nil {
+		return false, err
+	}
 	return s.hasBatch(
 		ctx,
 		elasticsearchIndexPattern(s.config.StartupDiagnosticIndex),
@@ -478,6 +552,9 @@ func (s *ElasticsearchEventLogStore) PutRuntimeLogBatch(
 	batchKey string,
 	records []application.RuntimeLogRecord,
 ) error {
+	if err := s.requireKind(ElasticsearchRuntimeLogStoreKind); err != nil {
+		return err
+	}
 	documents := make([]elasticsearchBulkDocument, 0, len(records)*2)
 	for _, record := range records {
 		fields := make(map[string]string, len(record.Fields)+3)
@@ -490,7 +567,7 @@ func (s *ElasticsearchEventLogStore) PutRuntimeLogBatch(
 		fields["_batchIndex"] = strconv.Itoa(record.BatchIndex)
 		fields["ingestedAt"] = record.IngestedAt.UTC().Format(time.RFC3339Nano)
 		index, err := dailyElasticsearchIndex(
-			s.config.RuntimeLogIndex,
+			s.config.RawIndex,
 			fields["occurredAt"],
 		)
 		if err != nil {
@@ -522,6 +599,9 @@ func (s *ElasticsearchEventLogStore) RepairRuntimeLogBatch(
 	batchKey string,
 	records []application.RuntimeLogRecord,
 ) error {
+	if err := s.requireKind(ElasticsearchRuntimeLogStoreKind); err != nil {
+		return err
+	}
 	return s.PutRuntimeLogBatch(ctx, batchKey, records)
 }
 
@@ -530,9 +610,12 @@ func (s *ElasticsearchEventLogStore) HasRuntimeLogBatch(
 	batchKey string,
 	expected int,
 ) (bool, error) {
+	if err := s.requireKind(ElasticsearchRuntimeLogStoreKind); err != nil {
+		return false, err
+	}
 	rawDocuments, complete, err := s.batchDocuments(
 		ctx,
-		elasticsearchIndexPattern(s.config.RuntimeLogIndex),
+		elasticsearchIndexPattern(s.config.RawIndex),
 		batchKey,
 		expected,
 	)

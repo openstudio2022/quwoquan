@@ -152,24 +152,17 @@ func assembleUserDomain(asm *servicekit.Assembly, cfg *config) error {
 	// 拒绝启动，因此按 URI 在场条件装配，而不是交给「声明即装配」。
 	var mongoDB *mongo.Database
 	if strings.TrimSpace(cfg.MongoDB.URI) != "" {
-		database, err := asm.Mongo(servicekit.MongoConfig{
-			URI:      cfg.MongoDB.URI,
-			Database: cfg.MongoDB.Database,
-		})
+		database, err := asm.MongoWithReadinessTimeout(
+			servicekit.MongoConfig{
+				URI:      cfg.MongoDB.URI,
+				Database: cfg.MongoDB.Database,
+			},
+			rtmongo.DefaultReadinessTimeout,
+		)
 		if err != nil {
 			return err
 		}
 		mongoDB = database
-		// asm.Mongo 用 2s 通用预算登记 mongodb 就绪检查，而驱动的 server
-		// selection 窗口本身是 5s：沿用迁移前的 6s 预算重新登记同名检查，
-		// 否则一次正常的 selection 周期会被判成依赖故障。
-		asm.Health.RegisterWithTimeout(
-			"mongodb",
-			rtmongo.DefaultReadinessTimeout,
-			func(hctx context.Context) error {
-				return mongoDB.Client().Ping(hctx, nil)
-			},
-		)
 	}
 
 	redisRouter := asm.RedisRouter

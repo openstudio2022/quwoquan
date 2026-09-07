@@ -191,6 +191,16 @@ def _prod_prevalidation_executor(
         "--scope",
         str(args.prevalidate_scope),
     ]
+    if args.data_mode == "external":
+        candidate_root = _stackctl.deployment_candidate_dir(
+            "prod-hosted", candidate_digest
+        )
+        argv.extend(
+            [
+                "--data-plane-binding",
+                str(candidate_root / "packages/runtime-shared/data-plane-binding.json"),
+            ]
+        )
     if args.ssh_host:
         argv.extend(["--host", str(args.ssh_host)])
     for host_id in getattr(args, "host_id", []) or []:

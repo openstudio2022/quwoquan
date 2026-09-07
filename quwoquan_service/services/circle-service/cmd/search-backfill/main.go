@@ -103,27 +103,28 @@ func main() {
 
 	groupReport, err := groupsearchindex.Backfill(
 		ctx,
-		built.Client,
+		built.Indexer,
 		groupersistence.NewMongoReaders(database),
 		*batchSize,
 	)
 	if err != nil {
 		log.Fatalf(
-			"[search-backfill] CircleGroup backfill failed (indexed=%d deleted=%d batches=%d): %v",
+			"[search-backfill] CircleGroup backfill failed (indexed=%d tombstoned=%d batches=%d): %v",
 			groupReport.IndexedGroups,
-			groupReport.DeletedGroups,
-			groupReport.BatchesPushed,
+			groupReport.TombstonedGroups,
+			groupReport.BatchesRead,
 			err,
 		)
 	}
 	log.Printf(
-		"[search-backfill] groups OK env=%s index=%s total=%d indexed=%d deleted=%d batches=%d",
+		"[search-backfill] groups OK env=%s index=%s total=%d indexed=%d tombstoned=%d stale=%d batches=%d",
 		*env,
 		built.Client.IndexName(),
 		groupReport.TotalGroups,
 		groupReport.IndexedGroups,
-		groupReport.DeletedGroups,
-		groupReport.BatchesPushed,
+		groupReport.TombstonedGroups,
+		groupReport.StaleWrites,
+		groupReport.BatchesRead,
 	)
 }
 

@@ -1,0 +1,89 @@
+schema: quwoquan-data-plane-metrics
+physicalProfiles:
+  primary-postgres:
+    engine: postgres
+    resourceRef: primary-postgres
+    scrapeJob: postgres-exporter
+  primary-mongodb:
+    engine: mongodb
+    resourceRef: primary-mongodb
+    scrapeJob: mongodb-exporter
+  primary-redis:
+    engine: redis
+    resourceRef: primary-redis
+    scrapeJob: redis-exporter
+  search-elasticsearch:
+    engine: elasticsearch
+    resourceRef: search-elasticsearch
+    scrapeJob: search-elasticsearch-exporter
+  telemetry-elasticsearch:
+    engine: elasticsearch
+    resourceRef: telemetry-elasticsearch
+    scrapeJob: telemetry-elasticsearch-exporter
+bindingProfiles:
+  primary-postgres-metrics:
+    engine: postgres
+    physicalProfileRef: primary-postgres
+    scrapeJob: postgres-exporter
+    scope: physical_resource
+    ownerLabel: null
+    namespacePatterns: []
+  primary-mongodb-metrics:
+    engine: mongodb
+    physicalProfileRef: primary-mongodb
+    scrapeJob: mongodb-exporter
+    scope: physical_resource
+    ownerLabel: null
+    namespacePatterns: []
+  primary-redis-metrics:
+    engine: redis
+    physicalProfileRef: primary-redis
+    scrapeJob: redis-exporter
+    scope: physical_resource
+    ownerLabel: null
+    namespacePatterns: []
+  search-objects-metrics:
+    engine: elasticsearch
+    physicalProfileRef: search-elasticsearch
+    scrapeJob: search-objects-elasticsearch-exporter
+    scope: logical_namespace
+    ownerLabel: search-objects
+    namespacePatterns: [quwoquan_objects-v1, quwoquan_objects-v1-*]
+  product-telemetry-metrics:
+    engine: elasticsearch
+    physicalProfileRef: telemetry-elasticsearch
+    scrapeJob: product-telemetry-elasticsearch-exporter
+    scope: logical_namespace
+    ownerLabel: product-telemetry
+    namespacePatterns:
+      - app-product-telemetry-raw
+      - app-product-telemetry-raw-*
+      - app-startup-diagnostic-raw
+      - app-startup-diagnostic-raw-*
+      - app-product-telemetry-hourly
+      - app-product-telemetry-hourly-*
+  runtime-logs-metrics:
+    engine: elasticsearch
+    physicalProfileRef: telemetry-elasticsearch
+    scrapeJob: runtime-logs-elasticsearch-exporter
+    scope: logical_namespace
+    ownerLabel: runtime-logs
+    namespacePatterns:
+      - runtime-diagnostics-raw
+      - runtime-diagnostics-raw-*
+      - runtime-diagnostics-hourly
+      - runtime-diagnostics-hourly-*
+  search-elasticsearch-physical-metrics:
+    engine: elasticsearch
+    physicalProfileRef: search-elasticsearch
+    scrapeJob: search-elasticsearch-exporter
+    scope: physical_resource
+    ownerLabel: null
+    namespacePatterns: []
+  telemetry-elasticsearch-physical-metrics:
+    engine: elasticsearch
+    physicalProfileRef: telemetry-elasticsearch
+    scrapeJob: telemetry-elasticsearch-exporter
+    scope: physical_resource
+    ownerLabel: null
+    namespacePatterns: []

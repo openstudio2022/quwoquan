@@ -422,3 +422,54 @@ func serviceRootFromProjectionSchemaTest(t *testing.T) string {
 	}
 	return filepath.Clean(filepath.Join(filepath.Dir(thisFile), "..", "..", ".."))
 }
+
+// spec_ref: specs/feature-tree/runtime/system-architecture-and-engineering-guide/spec.md#sit-001
+func TestProjectionConsistencyPolicyAcceptsCanonicalTypedFacts(t *testing.T) {
+	t.Parallel()
+
+	document := `
+read_model: SearchItemSlice
+fields:
+- itemId
+consistency_policy:
+  ordering_key: sourceVersion
+  source_version_field: sourceVersion
+  apply_mode: strictly_newer
+  delete_mode: versioned_tombstone
+  checkpoint_field: checkpoint
+  watermark_field: sourceVersion
+  freshness_slo_seconds: 30
+  backlog_slo_events: 1000
+  rebuild_strategy: alias_replace
+  overflow_policy: serve_with_watermark
+`
+	if issues := projectionIssuesFor(t, document); len(issues) != 0 {
+		t.Fatalf("canonical projection consistency policy rejected: %+v", issues)
+	}
+}
+
+// spec_ref: specs/feature-tree/runtime/system-architecture-and-engineering-guide/spec.md#sit-001
+func TestProjectionConsistencyPolicyRejectsIncompleteOrUnboundedFacts(t *testing.T) {
+	t.Parallel()
+
+	for name, policy := range map[string]string{
+		"apply mode without ordering facts":  `apply_mode: strictly_newer`,
+		"delete mode without ordering facts": `delete_mode: source_delete`,
+		"zero freshness SLO":                 `freshness_slo_seconds: 0`,
+		"zero backlog SLO":                   `backlog_slo_events: 0`,
+		"unknown apply mode": `ordering_key: version
+source_version_field: version
+apply_mode: last_write_wins`,
+		"unknown rebuild strategy": `rebuild_strategy: in_place_magic`,
+		"unknown overflow policy":  `overflow_policy: stale_ok`,
+	} {
+		name, policy := name, policy
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			document := "read_model: SearchItemSlice\nfields:\n- itemId\nconsistency_policy:\n  " + strings.ReplaceAll(policy, "\n", "\n  ") + "\n"
+			if issues := projectionIssuesFor(t, document); len(issues) == 0 {
+				t.Fatalf("projection schema accepted invalid consistency policy:\n%s", document)
+			}
+		})
+	}
+}

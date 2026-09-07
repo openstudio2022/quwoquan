@@ -1,6 +1,7 @@
 package es
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -311,5 +312,49 @@ func TestBuildHybridAddsKnnAndRRF(t *testing.T) {
 	}
 	if _, ok := body["rank"]; !ok {
 		t.Fatalf("expected rrf rank, got %#v", body)
+	}
+}
+
+func TestEveryCanonicalQueryExcludesSoftTombstones(t *testing.T) {
+	builder := NewQueryBuilder()
+	plan, _ := rtsearch.PlanRequest(rtsearch.RetrieveRequest{
+		Targets: []rtsearch.Target{rtsearch.TargetArticle},
+		Terms:   []string{"露营"},
+	}, rtsearch.Viewer{})
+	for name, body := range map[string]map[string]any{
+		"lexical": builder.Build(plan),
+		"pit": func() map[string]any {
+			pitPlan := plan
+			pitPlan.PITID = "pit-1"
+			return builder.Build(pitPlan)
+		}(),
+		"hybrid": builder.BuildHybrid(plan, []float64{0.1, 0.2}, 2),
+	} {
+		t.Run(name, func(t *testing.T) {
+			query := body["query"].(map[string]any)
+			if !queryExcludesDeleted(query) {
+				t.Fatalf("canonical query includes tombstones: %#v", body)
+			}
+			if name == "hybrid" {
+				knn := body["knn"].(map[string]any)
+				if _, ok := knn["filter"]; !ok {
+					t.Fatalf("hybrid kNN includes tombstones: %#v", knn)
+				}
+			}
+		})
+	}
+}
+
+func TestEnsureNotDeletedSearchBodyIsIdempotent(t *testing.T) {
+	body := map[string]any{
+		"query": map[string]any{"match_all": map[string]any{}},
+		"knn":   map[string]any{"field": "embedding"},
+	}
+	EnsureNotDeletedSearchBody(body)
+	first := fmt.Sprintf("%#v", body)
+	EnsureNotDeletedSearchBody(body)
+	second := fmt.Sprintf("%#v", body)
+	if first != second {
+		t.Fatalf("tombstone filter duplicated on retry: first=%s second=%s", first, second)
 	}
 }

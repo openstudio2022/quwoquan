@@ -4,8 +4,13 @@ import importlib.util
 import unittest
 from pathlib import Path
 
+import yaml
+
 
 ROOT = Path(__file__).resolve().parents[4]
+RUNTIME = yaml.safe_load(
+    (ROOT / "quwoquan_ops/environments/prod/runtime.yaml").read_text(encoding="utf-8")
+)
 RENDER_PATH = ROOT / "quwoquan_ops/cli/prod/render_prod_plane_stack.py"
 
 
@@ -22,6 +27,13 @@ class RuntimeLogSpoolWiringContractTest(unittest.TestCase):
         self.render = _load_render_module()
 
     def rewrite(self, name: str):
+        from quwoquan_ops.cli.lib.data_plane_binding import resolve_data_plane_environment
+
+        projection = resolve_data_plane_environment(
+            RUNTIME["targets"]["prod-hosted"],
+            mode="external",
+            target_name="prod-hosted",
+        )["environment"]
         return self.render._rewrite_service(
             name,
             {"image": f"example/{name}:digest", "environment": {}, "volumes": []},
@@ -38,6 +50,7 @@ class RuntimeLogSpoolWiringContractTest(unittest.TestCase):
             web_root="/runtime/public-web",
             caddyfile_path="/runtime/Caddyfile",
             model_cache_root="/runtime/model-cache",
+            data_plane_environment=dict(projection.get(name) or {}),
         )
 
     def test_prod_service_image_is_never_latest(self) -> None:
@@ -129,13 +142,16 @@ class RuntimeLogSpoolWiringContractTest(unittest.TestCase):
         self.assertNotIn("CONFIG_ACK_REQUIRED_INSTANCES", platform)
         self.assertNotIn("CONFIG_ACK_MAX_AGE_SECONDS", platform)
         self.assertNotIn("POSTGRES_DSN", platform)
-        self.assertTrue(
-            platform["PLATFORM_OPS_POSTGRES_DSN"].startswith("postgres://"),
+        self.assertEqual(
             platform["PLATFORM_OPS_POSTGRES_DSN"],
+            "${PROD_PLATFORM_OPS_POSTGRES_DSN:?}",
         )
         # outbox 的 typed event 总线必须指向本次数据面的实际 redis，而不是
         # compose 基线里只在 isolated 面成立的 redis:6379。
-        self.assertNotEqual(platform["PLATFORM_OPS_REDIS_GENERAL_ADDR"], "redis:6379")
+        self.assertEqual(
+            platform["PLATFORM_OPS_REDIS_GENERAL_ADDR"],
+            "${PROD_PLATFORM_OPS_REDIS_ADDR:?}",
+        )
 
 
 if __name__ == "__main__":

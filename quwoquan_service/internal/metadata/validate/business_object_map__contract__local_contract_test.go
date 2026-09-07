@@ -87,6 +87,27 @@ func TestProjectionRequiresCanonicalSourceRelationship(t *testing.T) {
 	}
 }
 
+// spec_ref: specs/feature-tree/runtime/system-architecture-and-engineering-guide/spec.md#sit-001
+func TestProjectionSourceRelationshipRejectsStrongConsistency(t *testing.T) {
+	t.Parallel()
+
+	object := ast.BusinessObjectBoundary{
+		CanonicalObject: "SkillCatalog",
+		ObjectKind:      ast.ObjectKindProjection,
+		Relationships: []ast.ObjectRelationship{{
+			Name: "activePackageRelease", Kind: "projection_source",
+			Consistency: "strong",
+		}},
+	}
+	issues := validateObjectRelationships(
+		"assistant/assistant/skill_catalog/object.yaml", "assistant", object,
+		map[string]registeredBoundary{}, map[string]registeredMember{},
+	)
+	if !businessObjectIssueCodePresent(issues, "CONTRACT.RELATIONSHIP.PROJECTION_SOURCE_STRONG") {
+		t.Fatalf("expected projection source strong rejection, got %+v", issues)
+	}
+}
+
 func TestAggregateRootAccessAllowsRepositoryCLICommandFacade(t *testing.T) {
 	t.Parallel()
 
@@ -102,4 +123,13 @@ func TestAggregateRootAccessAllowsRepositoryCLICommandFacade(t *testing.T) {
 	if issues := validateObjectAccess("recommendation/recommendation_model_release/object.yaml", object); len(issues) != 0 {
 		t.Fatalf("CLI-owned aggregate access issues = %+v", issues)
 	}
+}
+
+func businessObjectIssueCodePresent(issues []Issue, code string) bool {
+	for _, candidate := range issues {
+		if candidate.Code == code {
+			return true
+		}
+	}
+	return false
 }

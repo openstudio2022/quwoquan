@@ -18,6 +18,11 @@ func TestBuildRejectsMissingRecallBackend(t *testing.T) {
 	if _, err := searchbackend.Build(searchbackend.ESConfig{Enabled: true}); err == nil {
 		t.Fatal("enabled Elasticsearch without endpoints must fail")
 	}
+	if _, err := searchbackend.Build(searchbackend.ESConfig{
+		Enabled: true, Endpoints: []string{"http://reader"}, Index: "objects",
+	}); err == nil {
+		t.Fatal("missing Search-owned writer binding must fail")
+	}
 }
 
 func TestReadinessCheckRequiresElasticsearchQueryability(t *testing.T) {
@@ -38,8 +43,14 @@ func TestReadinessCheckRequiresElasticsearchQueryability(t *testing.T) {
 	defer server.Close()
 
 	built, err := searchbackend.Build(searchbackend.ESConfig{
-		Enabled:   true,
-		Endpoints: []string{server.URL},
+		Enabled:         true,
+		Endpoints:       []string{server.URL},
+		Index:           runtimees.DefaultIndex,
+		APIKey:          "reader-key",
+		WriterEnabled:   true,
+		WriterEndpoints: []string{server.URL},
+		WriterIndex:     runtimees.DefaultIndex,
+		WriterAPIKey:    "writer-key",
 	})
 	if err != nil {
 		t.Fatalf("Build err=%v", err)
@@ -53,5 +64,78 @@ func TestReadinessCheckRequiresElasticsearchQueryability(t *testing.T) {
 	}
 	if rootRequests != 0 || searchRequests != 1 {
 		t.Fatalf("readiness must query the read alias, root=%d search=%d", rootRequests, searchRequests)
+	}
+}
+
+func TestReaderAndWriterUseOnlyTheirRoleCredentials(t *testing.T) {
+	var credentials []string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		credentials = append(credentials, r.Header.Get("Authorization"))
+		switch r.URL.Path {
+		case "/" + runtimees.DefaultIndex + "/_search":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"hits":{"hits":[]}}`))
+		case "/" + runtimees.DefaultIndex + "-write/_doc/user.profile:user-1":
+			w.WriteHeader(http.StatusCreated)
+		default:
+			http.Error(w, "unexpected request", http.StatusTeapot)
+		}
+	}))
+	defer server.Close()
+
+	built, err := searchbackend.Build(searchbackend.ESConfig{
+		Enabled:         true,
+		Endpoints:       []string{server.URL},
+		Index:           runtimees.DefaultIndex,
+		APIKey:          "reader-key",
+		WriterEnabled:   true,
+		WriterEndpoints: []string{server.URL},
+		WriterIndex:     runtimees.DefaultIndex,
+		WriterAPIKey:    "writer-key",
+	})
+	if err != nil {
+		t.Fatalf("Build err=%v", err)
+	}
+	if _, err := built.Reader.Search(
+		context.Background(),
+		"",
+		map[string]any{"query": map[string]any{"match_all": map[string]any{}}},
+	); err != nil {
+		t.Fatalf("reader search: %v", err)
+	}
+	if applied, err := built.Writer.UpsertVersioned(
+		context.Background(),
+		built.Writer.WriteIndexName(),
+		"user.profile:user-1",
+		1,
+		map[string]any{"objectType": "user.profile"},
+	); err != nil || !applied {
+		t.Fatalf("writer versioned upsert applied=%v err=%v", applied, err)
+	}
+	if len(credentials) != 2 ||
+		credentials[0] != "ApiKey reader-key" ||
+		credentials[1] != "ApiKey writer-key" {
+		t.Fatalf("role credentials crossed: %#v", credentials)
+	}
+}
+
+func TestBuildRejectsMixedGenerationAndSharedRoleCredential(t *testing.T) {
+	base := searchbackend.ESConfig{
+		Enabled:         true,
+		Endpoints:       []string{"http://search-es"},
+		Index:           "quwoquan_objects-v1",
+		APIKey:          "reader-key",
+		WriterEnabled:   true,
+		WriterEndpoints: []string{"http://search-es"},
+		WriterIndex:     "quwoquan_objects-v2",
+		WriterAPIKey:    "writer-key",
+	}
+	if _, err := searchbackend.Build(base); err == nil {
+		t.Fatal("mixed reader/writer generation must fail")
+	}
+	base.WriterIndex = base.Index
+	base.WriterAPIKey = base.APIKey
+	if _, err := searchbackend.Build(base); err == nil {
+		t.Fatal("shared reader/writer API key must fail")
 	}
 }

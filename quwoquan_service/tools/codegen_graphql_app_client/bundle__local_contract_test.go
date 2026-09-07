@@ -22,6 +22,31 @@ func TestValidateDetailBundleRequiresExactPerContentTypeAssembly(t *testing.T) {
 	}
 }
 
+func TestValidateDetailBundleAllowsKnownNullableRESTOnlyProjectionField(t *testing.T) {
+	t.Parallel()
+	binding := detailBundleBindingFixture()
+	plan, err := validateDetailBundle([]bundleSliceInput{
+		bundleSlice("ContentPostDetailBase", binding, "postId", "contentType", "title"),
+	}, []string{"postId", "contentType", "title", "intersectionReasons"}, detailProjectionID)
+	if err != nil {
+		t.Fatalf("validateDetailBundle: %v", err)
+	}
+	if len(plan.OptionalRESTFields) != 1 || plan.OptionalRESTFields[0] != "intersectionReasons" {
+		t.Fatalf("optional REST fields=%v", plan.OptionalRESTFields)
+	}
+}
+
+func TestValidateDetailBundleRejectsUnknownMissingProjectionField(t *testing.T) {
+	t.Parallel()
+	binding := detailBundleBindingFixture()
+	_, err := validateDetailBundle([]bundleSliceInput{
+		bundleSlice("ContentPostDetailBase", binding, "postId", "contentType", "title"),
+	}, []string{"postId", "contentType", "title", "unknownViewerState"}, detailProjectionID)
+	if err == nil || !strings.Contains(err.Error(), "unknownViewerState") {
+		t.Fatalf("error=%v", err)
+	}
+}
+
 func TestValidateDetailBundleRejectsCrossRailOrIncompleteBindings(t *testing.T) {
 	t.Parallel()
 	base := detailBundleBindingFixture()

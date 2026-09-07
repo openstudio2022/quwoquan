@@ -44,8 +44,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"testing"
 	"time"
 
@@ -229,6 +231,185 @@ func TestChatProjectionUsesStableUniqueConversationIDPerGathering(t *testing.T) 
 			projection.ensureCalls,
 			projection.roomCreations,
 			projection.conversationIDs,
+		)
+	}
+}
+
+// spec_ref: specs/feature-tree/circle-community/gathering-coordination/gathering-participant-roster/spec.md#gwt-001
+func TestConcurrentMongoInviteRequestsCannotOverbookOneSeat(t *testing.T) {
+	ctx := context.Background()
+	runtime, err := testinfra.StartRealMongo(
+		ctx,
+		"circle_gathering_concurrent_capacity_api_integration",
+	)
+	if err != nil {
+		t.Fatalf("start real Mongo replica set: %v", err)
+	}
+	t.Cleanup(func() {
+		if closeErr := runtime.Close(context.Background()); closeErr != nil {
+			t.Errorf("close real Mongo: %v", closeErr)
+		}
+	})
+
+	store := gatheringpersistence.NewMongoAggregateStore(runtime.Database)
+	if err := store.EnsureIndexes(ctx); err != nil {
+		t.Fatalf("ensure Gathering indexes: %v", err)
+	}
+	hostOutcome := gatheringapp.NewHostOutcomeFacade(store, hostAuthorityReader{})
+	lifecycle := gatheringapp.NewLifecycleFacade(
+		store,
+		targetReader{},
+		hostOutcome,
+		hostOutcome,
+		hostOutcome,
+		safetyAuthorizer{},
+	)
+	participation := gatheringapp.NewCommandFacade(store)
+	queries := gatheringapp.NewGatheringQueryFacade(
+		gatheringpersistence.NewMongoGatheringQueryReader(runtime.Database),
+		time.Now,
+	)
+	mux := http.NewServeMux()
+	gatheringhttp.NewHandler(
+		lifecycle,
+		participation,
+		hostOutcome,
+		queries,
+	).Register(mux)
+
+	now := time.Now().UTC()
+	createBody := gatheringDraftBody(
+		now,
+		now.Add(3*time.Hour),
+		now.Add(5*time.Hour),
+		"并发邀请容量裁决",
+	)
+	policySet := createBody["policySet"].(map[string]any)
+	policySet["admissionPolicy"] = "invite_only"
+	policySet["capacityPolicy"] = map[string]any{"maxParticipants": 2}
+	created := execute(
+		t,
+		mux,
+		http.MethodPost,
+		"/gatherings",
+		createBody,
+		"persona-owner",
+		"create-concurrent-capacity-1",
+	)
+	if created.Code != http.StatusCreated {
+		t.Fatalf(
+			"create concurrent-capacity Gathering status=%d body=%s",
+			created.Code,
+			created.Body.String(),
+		)
+	}
+	gatheringID, _ := decode(t, created)["gatheringId"].(string)
+	chat := &chatProjection{}
+	reconciler := gatheringapp.NewReconciler(store, store, chat)
+	if count, reconcileErr := reconciler.ReconcileOnce(ctx, 10); reconcileErr != nil || count != 1 {
+		t.Fatalf("reconcile concurrent-capacity Gathering count=%d err=%v", count, reconcileErr)
+	}
+	current, found, loadErr := store.Load(ctx, gatheringID)
+	if loadErr != nil || !found ||
+		current.RoomBindingStatus != contract.GatheringRoomBindingStatusReady {
+		t.Fatalf(
+			"load room-ready concurrent-capacity Gathering found=%v value=%+v err=%v",
+			found,
+			current,
+			loadErr,
+		)
+	}
+	published := execute(
+		t,
+		mux,
+		http.MethodPost,
+		"/gatherings/"+gatheringID+":publish",
+		gatheringVersionRequest{ExpectedGatheringVersion: current.Version},
+		"persona-owner",
+		"publish-concurrent-capacity-1",
+	)
+	if published.Code != http.StatusOK {
+		t.Fatalf(
+			"publish concurrent-capacity Gathering status=%d body=%s",
+			published.Code,
+			published.Body.String(),
+		)
+	}
+	current, found, loadErr = store.Load(ctx, gatheringID)
+	if loadErr != nil || !found {
+		t.Fatalf("load published concurrent-capacity Gathering found=%v err=%v", found, loadErr)
+	}
+	expectedVersion := current.Version
+
+	start := make(chan struct{})
+	responses := make(chan *httptest.ResponseRecorder, 2)
+	var wait sync.WaitGroup
+	for index, personaID := range []string{"persona-invite-a", "persona-invite-b"} {
+		index, personaID := index, personaID
+		wait.Add(1)
+		go func() {
+			defer wait.Done()
+			<-start
+			responses <- execute(
+				t,
+				mux,
+				http.MethodPost,
+				"/gatherings/"+gatheringID+":invite",
+				map[string]any{
+					"participantPersonaId":         personaID,
+					"expectedGatheringVersion":     expectedVersion,
+					"expectedParticipationVersion": 0,
+					"seatHoldUntil":                now.Add(time.Hour),
+				},
+				"persona-owner",
+				fmt.Sprintf("invite-concurrent-capacity-%d", index),
+			)
+		}()
+	}
+	close(start)
+	wait.Wait()
+	close(responses)
+
+	successes := 0
+	conflicts := 0
+	for response := range responses {
+		switch response.Code {
+		case http.StatusOK:
+			successes++
+		case http.StatusConflict:
+			conflicts++
+		default:
+			t.Fatalf(
+				"concurrent invite returned unexpected status=%d body=%s",
+				response.Code,
+				response.Body.String(),
+			)
+		}
+	}
+	after, found, loadErr := store.Load(ctx, gatheringID)
+	if loadErr != nil || !found {
+		t.Fatalf("load concurrent-capacity result found=%v err=%v", found, loadErr)
+	}
+	capacity := gatheringmodel.CapacityAt(after, time.Now().UTC())
+	invited := 0
+	for _, candidate := range after.Participations {
+		if candidate.State == contract.GatheringParticipationStateInvitedPending {
+			invited++
+		}
+	}
+	if successes != 1 || conflicts != 1 ||
+		after.Version != expectedVersion+1 ||
+		capacity.OccupiedSeats != 2 || capacity.RemainingSeats != 0 ||
+		invited != 1 || len(after.Participations) != 2 {
+		t.Fatalf(
+			"Mongo concurrent invite overbooked or lost arbitration: successes=%d conflicts=%d beforeVersion=%d afterVersion=%d capacity=%+v invited=%d participations=%+v",
+			successes,
+			conflicts,
+			expectedVersion,
+			after.Version,
+			capacity,
+			invited,
+			after.Participations,
 		)
 	}
 }

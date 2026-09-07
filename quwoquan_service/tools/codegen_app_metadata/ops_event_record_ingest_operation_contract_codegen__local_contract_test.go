@@ -153,17 +153,37 @@ func TestOpsRuntimeLogDerivedTypeRejectsAnUnboundEmptyMarker(t *testing.T) {
 	if withoutSource == string(payload) {
 		t.Fatal("RuntimeLogRecordWire derived_from marker was not present")
 	}
-	// The compiler view deliberately uses symlinks back to the service-owned
-	// contract sources.  Break this file's symlink before the negative mutation;
-	// writing through it would corrupt the repository truth source and make the
-	// test outcome depend on execution order.
-	if err := os.Remove(fieldsPath); err != nil {
-		t.Fatal(err)
+	// Mutate a test-local document Source instead of the provenance-bound compiler
+	// view: the negative case exercises the derived marker, not view tampering.
+	mutatedRoot := t.TempDir()
+	for _, relative := range []string{
+		operation.SourcePath,
+		"_shared/types.yaml",
+		"_shared/runtime_observability.yaml",
+		"ops/product_ops/event_record/fields.yaml",
+	} {
+		source := filepath.Join(metadataDir, filepath.FromSlash(relative))
+		target := filepath.Join(mutatedRoot, filepath.FromSlash(relative))
+		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		content, readErr := os.ReadFile(source)
+		if readErr != nil {
+			t.Fatal(readErr)
+		}
+		if relative == "ops/product_ops/event_record/fields.yaml" {
+			content = []byte(withoutSource)
+		}
+		if err := os.WriteFile(target, content, 0o644); err != nil {
+			t.Fatal(err)
+		}
 	}
-	if err := os.WriteFile(fieldsPath, []byte(withoutSource), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if err := initializeMetadataSourceForServiceOutput(metadataDir); err != nil {
+	if err := initializeMetadataDocumentSource(mutatedRoot, []string{
+		operation.SourcePath,
+		"_shared/types.yaml",
+		"_shared/runtime_observability.yaml",
+		"ops/product_ops/event_record/fields.yaml",
+	}); err != nil {
 		t.Fatal(err)
 	}
 	_, _, err = loadOperationRequestModel(operation, "RuntimeLogBatchRequest")

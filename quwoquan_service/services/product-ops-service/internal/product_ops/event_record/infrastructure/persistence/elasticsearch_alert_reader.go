@@ -21,6 +21,13 @@ func (s *ElasticsearchEventLogStore) ListAggregateAlertRows(
 	from time.Time,
 	to time.Time,
 ) ([]map[string]any, error) {
+	if rowKind == "runtime_diagnostics" {
+		if err := s.requireKind(ElasticsearchRuntimeLogStoreKind); err != nil {
+			return nil, err
+		}
+	} else if err := s.requireKind(ElasticsearchTelemetryStoreKind); err != nil {
+		return nil, err
+	}
 	var response struct {
 		Hits struct {
 			Total struct {
@@ -63,6 +70,9 @@ func (s *ElasticsearchEventLogStore) ListAggregateAlertRows(
 func (s *ElasticsearchEventLogStore) AggregateGeneratedThrough(
 	ctx context.Context,
 ) (time.Time, bool, error) {
+	if err := s.requireKind(ElasticsearchTelemetryStoreKind); err != nil {
+		return time.Time{}, false, err
+	}
 	var response struct {
 		Aggregations struct {
 			GeneratedThrough struct {
@@ -105,11 +115,17 @@ func (s *ElasticsearchEventLogStore) AggregateGeneratedThrough(
 // 两类原始索引共用 qwq-product-telemetry-raw-3d 策略，各自独立读取，
 // 保证任一侧被改绑或改值时均能观测。
 func (s *ElasticsearchEventLogStore) RawRetentionDays(ctx context.Context) (int, error) {
-	return s.lifecycleRetentionDays(ctx, elasticsearchRawRetentionPolicy)
+	if s.config.Kind != ElasticsearchTelemetryStoreKind {
+		return 0, fmt.Errorf("raw retention is unavailable from non-telemetry store")
+	}
+	return s.lifecycleRetentionDays(ctx, elasticsearchTelemetryRawRetentionPolicy)
 }
 
 func (s *ElasticsearchEventLogStore) RuntimeRawRetentionDays(ctx context.Context) (int, error) {
-	return s.lifecycleRetentionDays(ctx, elasticsearchRawRetentionPolicy)
+	if s.config.Kind != ElasticsearchRuntimeLogStoreKind {
+		return 0, fmt.Errorf("runtime raw retention is unavailable from non-runtime-log store")
+	}
+	return s.lifecycleRetentionDays(ctx, elasticsearchRuntimeRawRetentionPolicy)
 }
 
 var elasticsearchMinimumAgePattern = regexp.MustCompile(`^(\d+)d$`)

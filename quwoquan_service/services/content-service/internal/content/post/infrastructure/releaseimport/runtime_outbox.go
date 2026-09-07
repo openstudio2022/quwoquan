@@ -16,6 +16,7 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 
+	postgenerated "quwoquan_service/services/content-service/generated/content/post"
 	postports "quwoquan_service/services/content-service/internal/content/post/domain/ports"
 )
 
@@ -32,18 +33,23 @@ type ImportedReleaseApplyResult struct {
 	OutboxEventsRepaired    int
 	OutboxRepairAudits      []ImportedPostOutboxRepairAudit
 	ProjectionVersion       int64
+	Revision                int64
 	Replayed                bool
 	RepairReplay            bool
 	PreviousReleaseID       string
 	PreviousManifestDigest  string
+	// CandidateCleanupError 只在 activate 提交后清理 posts_candidate 失败时非空；
+	// 它是诊断信息，不影响激活成功语义。
+	CandidateCleanupError string
 }
 
 type importedReleaseState struct {
-	ActiveReleaseID   string    `bson:"activeReleaseId"`
-	ManifestDigest    string    `bson:"manifestDigest"`
-	Status            string    `bson:"status"`
-	ProjectionVersion int64     `bson:"projectionVersion"`
-	ActivatedAt       time.Time `bson:"activatedAt"`
+	ActiveReleaseID string    `bson:"activeReleaseId"`
+	ManifestDigest  string    `bson:"manifestDigest"`
+	Status          string    `bson:"status"`
+	Revision        int64     `bson:"revision"`
+	SourceVersion   int64     `bson:"sourceVersion"`
+	ActivatedAt     time.Time `bson:"activatedAt"`
 }
 
 type importedOutboxDocument struct {
@@ -111,6 +117,11 @@ func ApplyImportedPostRelease(
 	if environment == "" {
 		return ImportedReleaseApplyResult{}, fmt.Errorf("content release import environment is required")
 	}
+	if opts.ProjectionVersion <= 0 {
+		return ImportedReleaseApplyResult{}, fmt.Errorf(
+			"content release import sourceVersion must be positive",
+		)
+	}
 	opts = NormalizeImportOptions(opts)
 	if strings.TrimSpace(opts.ManifestDigest) == "" {
 		return ImportedReleaseApplyResult{}, fmt.Errorf("content release import manifestDigest is required")
@@ -119,7 +130,6 @@ func ApplyImportedPostRelease(
 	if requestedAt.IsZero() {
 		requestedAt = time.Now().UTC().Truncate(time.Millisecond)
 	}
-
 	postsColl := database.Collection("posts")
 	outboxColl := database.Collection("content_outbox")
 	sequenceColl := database.Collection("content_outbox_sequences")
@@ -136,33 +146,6 @@ func ApplyImportedPostRelease(
 	}
 	attemptID := releaseAttemptID(environment, opts, requestedAt)
 	stageStarted := time.Now()
-	if err := appendReleaseStageReceipt(ctx, receiptColl, releaseStageReceipt{
-		Environment: environment, ReleaseID: opts.ReleaseID,
-		ManifestDigest: opts.ManifestDigest, Stage: "prepared",
-		AttemptID: attemptID, Status: "passed", RecordedAt: requestedAt,
-		AttemptedCount: len(posts), SuccessCount: len(posts),
-		Checkpoint: "canonical-input-validated",
-	}); err != nil {
-		return ImportedReleaseApplyResult{}, err
-	}
-	latestPrepared, err := readLatestReleaseStageReceipt(
-		ctx,
-		receiptColl,
-		environment,
-		opts.ReleaseID,
-		requestedAt,
-	)
-	if err != nil {
-		return ImportedReleaseApplyResult{}, fmt.Errorf(
-			"attest prepared Data release receipt: %w",
-			err,
-		)
-	}
-	if latestPrepared.AttemptID != attemptID || latestPrepared.Stage != "prepared" {
-		return ImportedReleaseApplyResult{}, fmt.Errorf(
-			"attest prepared Data release receipt: latest receipt identity mismatch",
-		)
-	}
 
 	session, err := database.Client().StartSession()
 	if err != nil {
@@ -171,8 +154,9 @@ func ApplyImportedPostRelease(
 	defer session.EndSession(ctx)
 
 	var result ImportedReleaseApplyResult
+	ordinaryReplay := false
 	_, err = session.WithTransaction(ctx, func(txCtx context.Context) (any, error) {
-		resolved, activatedAt, replayed, previousReleaseID, previousManifestDigest, err := resolveImportedProjectionVersion(
+		resolved, currentRevision, activatedAt, replayed, previousReleaseID, previousManifestDigest, err := resolveImportedProjectionVersion(
 			txCtx,
 			stateColl,
 			environment,
@@ -184,6 +168,50 @@ func ApplyImportedPostRelease(
 		}
 		if err := ValidateReplayRepairBinding(opts, replayed); err != nil {
 			return nil, err
+		}
+		if replayed && !opts.RequireReplay {
+			ordinaryReplay = true
+			opts.ProjectionVersion = resolved
+			result, err = ValidateImportedReleaseReplayClosure(
+				txCtx,
+				postsColl,
+				outboxColl,
+				posts,
+				opts,
+				activatedAt,
+			)
+			if err != nil {
+				return nil, err
+			}
+			result.Revision = currentRevision
+			if err := ValidateImportedReleaseApplyResult(result, len(posts)); err != nil {
+				return nil, err
+			}
+			return nil, nil
+		}
+		if err := appendReleaseStageReceipt(txCtx, receiptColl, releaseStageReceipt{
+			Environment: environment, ReleaseID: opts.ReleaseID,
+			ManifestDigest: opts.ManifestDigest, Stage: "prepared",
+			AttemptID: attemptID, Status: "passed", RecordedAt: requestedAt,
+			AttemptedCount: len(posts), SuccessCount: len(posts),
+			Checkpoint: "canonical-input-validated",
+		}); err != nil {
+			return nil, err
+		}
+		latestPrepared, err := readLatestReleaseStageReceipt(
+			txCtx,
+			receiptColl,
+			environment,
+			opts.ReleaseID,
+			requestedAt,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("attest prepared Data release receipt: %w", err)
+		}
+		if latestPrepared.AttemptID != attemptID || latestPrepared.Stage != "prepared" {
+			return nil, fmt.Errorf(
+				"attest prepared Data release receipt: latest receipt identity mismatch",
+			)
 		}
 		opts.ProjectionVersion = resolved
 		deletedPosts, err := MissingImportedPostSnapshots(
@@ -270,6 +298,7 @@ func ApplyImportedPostRelease(
 			OutboxEventsRepaired:    len(outboxResult.Repairs),
 			OutboxRepairAudits:      outboxResult.Repairs,
 			ProjectionVersion:       resolved,
+			Revision:                resolvedDataReleaseRevision(opts),
 			Replayed:                replayed,
 			RepairReplay:            opts.RequireReplay,
 			PreviousReleaseID:       previousReleaseID,
@@ -325,6 +354,9 @@ func ApplyImportedPostRelease(
 		return nil, nil
 	})
 	if err != nil {
+		if ordinaryReplay {
+			return ImportedReleaseApplyResult{}, err
+		}
 		if receiptErr := appendReleaseStageReceipt(ctx, receiptColl, releaseStageReceipt{
 			Environment: environment, ReleaseID: opts.ReleaseID,
 			ManifestDigest: opts.ManifestDigest, Stage: "imported",
@@ -445,6 +477,22 @@ func ValidateImportedReleaseApplyResult(
 	return nil
 }
 
+func EnsureImportedReleaseIndexes(
+	ctx context.Context,
+	database *mongo.Database,
+) error {
+	if database == nil {
+		return fmt.Errorf("content release import database is required")
+	}
+	return ensureImportedReleaseIndexes(
+		ctx,
+		database.Collection("posts"),
+		database.Collection("content_outbox"),
+		database.Collection("data_release_state"),
+		database.Collection("data_release_stage_receipts"),
+	)
+}
+
 func ensureImportedReleaseIndexes(
 	ctx context.Context,
 	posts *mongo.Collection,
@@ -483,34 +531,72 @@ func resolveImportedProjectionVersion(
 	environment string,
 	opts ImportOptions,
 	requestedAt time.Time,
-) (int64, time.Time, bool, string, string, error) {
+) (int64, int64, time.Time, bool, string, string, error) {
+	if opts.ExpectedRevision < 0 {
+		return 0, 0, time.Time{}, false, "", "", fmt.Errorf(
+			"GATE_BLOCK CONTENT.USER.version_conflict: expectedRevision must be non-negative",
+		)
+	}
 	var current importedReleaseState
 	err := state.FindOne(ctx, bson.M{
 		"environment": environment,
 		"sourceOwner": opts.SourceOwner,
 	}).Decode(&current)
 	if err != nil && err != mongo.ErrNoDocuments {
-		return 0, time.Time{}, false, "", "", fmt.Errorf("read active Data release: %w", err)
+		return 0, 0, time.Time{}, false, "", "", fmt.Errorf("read active Data release: %w", err)
 	}
-	if err == nil && current.Status == "active" &&
+	if err == nil && current.Revision <= 0 {
+		return 0, 0, time.Time{}, false, "", "", fmt.Errorf(
+			"GATE_BLOCK CONTENT.RELEASE.ACTIVE_POINTER_REVISION_MISSING: environment=%q sourceOwner=%q",
+			environment, opts.SourceOwner,
+		)
+	}
+	if err == nil && current.Status != "active" {
+		return 0, 0, time.Time{}, false, "", "", fmt.Errorf(
+			"GATE_BLOCK CONTENT.RELEASE.ACTIVE_POINTER_STATUS_INVALID: environment=%q sourceOwner=%q status=%q",
+			environment, opts.SourceOwner, current.Status,
+		)
+	}
+	if err == nil &&
 		strings.TrimSpace(current.ActiveReleaseID) == opts.ReleaseID &&
-		strings.TrimSpace(current.ManifestDigest) == opts.ManifestDigest &&
-		current.ProjectionVersion > 0 {
+		strings.TrimSpace(current.ManifestDigest) == opts.ManifestDigest {
+		if current.SourceVersion <= 0 {
+			return 0, 0, time.Time{}, false, "", "", fmt.Errorf(
+				"GATE_BLOCK CONTENT.RELEASE.ACTIVE_POINTER_SOURCE_VERSION_INVALID: environment=%q sourceOwner=%q",
+				environment, opts.SourceOwner,
+			)
+		}
 		activatedAt := current.ActivatedAt.UTC()
 		if activatedAt.IsZero() {
-			activatedAt = requestedAt
+			return 0, 0, time.Time{}, false, "", "", fmt.Errorf(
+				"GATE_BLOCK CONTENT.RELEASE.ACTIVE_POINTER_ACTIVATED_AT_MISSING: environment=%q sourceOwner=%q",
+				environment, opts.SourceOwner,
+			)
 		}
-		return current.ProjectionVersion, activatedAt, true, "", "", nil
+		return current.SourceVersion, current.Revision, activatedAt, true, "", "", nil
+	}
+	if err == mongo.ErrNoDocuments {
+		if opts.ExpectedRevision != 0 {
+			return 0, 0, time.Time{}, false, "", "", newDataReleaseRevisionConflict(
+				environment, opts, nil,
+			)
+		}
+	} else if opts.ExpectedRevision != current.Revision {
+		return 0, 0, time.Time{}, false, "", "", newDataReleaseRevisionConflict(
+			environment, opts, nil,
+		)
 	}
 	version := opts.ProjectionVersion
 	if version <= 0 {
 		version = requestedAt.UnixMilli()
 	}
-	if current.ProjectionVersion >= version {
-		version = current.ProjectionVersion + 1
+	if current.SourceVersion >= version {
+		return 0, 0, time.Time{}, false, "", "", fmt.Errorf(
+			"GATE_BLOCK CONTENT.USER.version_conflict: sourceVersion must advance beyond current active pointer",
+		)
 	}
 	if version <= 0 {
-		return 0, time.Time{}, false, "", "", fmt.Errorf("content release projectionVersion must be positive")
+		return 0, 0, time.Time{}, false, "", "", fmt.Errorf("content release projectionVersion must be positive")
 	}
 	previousReleaseID := ""
 	previousManifestDigest := ""
@@ -518,7 +604,56 @@ func resolveImportedProjectionVersion(
 		previousReleaseID = strings.TrimSpace(current.ActiveReleaseID)
 		previousManifestDigest = strings.TrimSpace(current.ManifestDigest)
 	}
-	return version, requestedAt, false, previousReleaseID, previousManifestDigest, nil
+	return version, opts.ExpectedRevision, requestedAt, false, previousReleaseID, previousManifestDigest, nil
+}
+
+func resolvedDataReleaseRevision(opts ImportOptions) int64 {
+	return opts.ExpectedRevision + 1
+}
+
+type DataReleaseRevisionConflict struct {
+	Environment      string
+	SourceOwner      string
+	ReleaseID        string
+	ManifestDigest   string
+	ExpectedRevision int64
+	Cause            error
+}
+
+func (err *DataReleaseRevisionConflict) Error() string {
+	if err == nil {
+		return "CONTENT.USER.version_conflict"
+	}
+	message := fmt.Sprintf(
+		"GATE_BLOCK CONTENT.USER.version_conflict: Data release activation environment=%q sourceOwner=%q releaseId=%q manifestDigest=%q expectedRevision=%d",
+		err.Environment, err.SourceOwner, err.ReleaseID, err.ManifestDigest, err.ExpectedRevision,
+	)
+	if err.Cause != nil {
+		return message + ": " + err.Cause.Error()
+	}
+	return message
+}
+
+func (err *DataReleaseRevisionConflict) Unwrap() []error {
+	if err == nil {
+		return nil
+	}
+	if err.Cause == nil {
+		return []error{postgenerated.ErrVersionConflict}
+	}
+	return []error{postgenerated.ErrVersionConflict, err.Cause}
+}
+
+func newDataReleaseRevisionConflict(
+	environment string,
+	opts ImportOptions,
+	cause error,
+) error {
+	return &DataReleaseRevisionConflict{
+		Environment: strings.TrimSpace(environment), SourceOwner: strings.TrimSpace(opts.SourceOwner),
+		ReleaseID: strings.TrimSpace(opts.ReleaseID), ManifestDigest: strings.TrimSpace(opts.ManifestDigest),
+		ExpectedRevision: opts.ExpectedRevision, Cause: cause,
+	}
 }
 
 // BuildImportedPostLifecycleEvents creates the only lifecycle facts for a

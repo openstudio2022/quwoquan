@@ -657,6 +657,7 @@ var featureProfileTransportOrder = []string{
 	"IntersectionRepresentativeActor",
 	"IntersectionActorEvidence",
 	"IntersectionActionHint",
+	"IntersectionEvidenceRow",
 	"IntersectionPropagationPath",
 	"IntersectionReason",
 	"IntersectionInboxSummary",

@@ -54,4 +54,19 @@ collections:
     entity: Message
     role: projection
     description: 各 Message event consumer 独立保存的可重放 checkpoint。
+transaction:
+  scope:
+  - messages
+  - messages_command_receipts
+  - messages_sequences
+  - messages_outbox
+  - messages_outbox_sequences
+  isolation: mongo_transaction
+  guarantees:
+  - per_conversation_seq_strictly_unique_monotonic
+  - message_receipt_outbox_atomic_commit
+  - same_client_message_command_idempotent_replay
+  - conflicting_client_message_command_fail_closed
+  - message_outbox_sequence_strictly_unique_monotonic
+  mechanism: conditional_update
 role: authoritative

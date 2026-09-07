@@ -175,6 +175,44 @@ class DeploymentCandidateManifestContractTest(
                 purpose="teardown",
             )
 
+    def test_candidate_binding_artifact_and_manifest_tamper_are_blocked(self) -> None:
+        path = subject.write_candidate_manifest(
+            "alpha",
+            "alpha-local",
+            package_snapshot=self.snapshot,
+            release_attestation=str(self.release),
+            rollback_release_attestation=str(self.rollback),
+        )
+        canonical = json.loads(path.read_text(encoding="utf-8"))
+        self.assertEqual(canonical["dataPlaneBinding"], self.data_plane_binding)
+        serialized = json.dumps(canonical["dataPlaneBinding"])
+        self.assertNotIn("actual-password", serialized)
+
+        drifted = dict(canonical)
+        drifted["dataPlaneBinding"] = {
+            **canonical["dataPlaneBinding"],
+            "bindingDigest": "sha256:" + "9" * 64,
+        }
+        with self.assertRaisesRegex(ValueError, "dataPlaneBinding identity drifted"):
+            subject.validate_candidate_manifest(
+                drifted,
+                expected_environment="alpha",
+                expected_target="alpha-local",
+                require_full=True,
+                candidate_root=self.candidate,
+            )
+
+        artifact = self.shared / "data-plane-binding.json"
+        artifact.write_text("{}\n", encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "data-plane binding is invalid"):
+            subject.validate_candidate_manifest(
+                canonical,
+                expected_environment="alpha",
+                expected_target="alpha-local",
+                require_full=True,
+                candidate_root=self.candidate,
+            )
+
     def test_candidate_rejects_missing_configuration_identity(self) -> None:
         path = subject.write_candidate_manifest(
             "alpha",

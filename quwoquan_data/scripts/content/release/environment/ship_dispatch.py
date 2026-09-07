@@ -25,12 +25,18 @@ def dispatch_ship(
     apply: Callable[[argparse.Namespace], None],
     rollback: Callable[[argparse.Namespace], None],
     verify: Callable[[argparse.Namespace], None],
+    activate: Callable[[argparse.Namespace], None] | None = None,
 ) -> None:
     operations = {
         ReleaseRunKind.APPLY: (str(getattr(args, "release_id", "")), apply),
         ReleaseRunKind.ROLLBACK: (str(getattr(args, "to_release", "")), rollback),
         ReleaseRunKind.VERIFY: (str(getattr(args, "release_id", "")), verify),
     }
+    if activate is not None:
+        operations[ReleaseRunKind.ACTIVATE] = (
+            str(getattr(args, "release_id", "")),
+            activate,
+        )
     selected = operations.get(args.ship_command)
     if selected is None:
         raise SystemExit("[ship] subcommand required")

@@ -31,6 +31,8 @@ type TicketClaims struct {
 var (
 	ErrTicketInvalid  = errors.New("realtime: ticket invalid")
 	ErrTicketReplayed = errors.New("realtime: ticket replayed")
+	ErrLeaseFenced    = errors.New("realtime: lease fenced")
+	ErrLeaseExpired   = errors.New("realtime: lease expired")
 )
 
 // TicketStore 管理短期一次性连接凭据（redis rt:ticket:*）。
@@ -48,11 +50,19 @@ type TicketStore interface {
 // （redis rt:conn:lease:* / rt:conn:fence:*，RUNTIME-SESSION-010）。
 type LeaseStore interface {
 	Acquire(ctx context.Context, identity TrustedIdentity, connID string, ttl time.Duration) (int64, error)
-	Renew(ctx context.Context, identity TrustedIdentity, connID string, ttl time.Duration) error
-	Release(ctx context.Context, identity TrustedIdentity, connID string) error
-	// CurrentFence 返回该 persona/device 当前最大 fencing token；持有更小 token 的
-	// 旧连接不得再回写共享状态。
-	CurrentFence(ctx context.Context, identity TrustedIdentity) (int64, error)
+	Renew(
+		ctx context.Context,
+		identity TrustedIdentity,
+		connID string,
+		expectedFence int64,
+		ttl time.Duration,
+	) error
+	Release(
+		ctx context.Context,
+		identity TrustedIdentity,
+		connID string,
+		expectedFence int64,
+	) error
 }
 
 // PresenceProjector is the typed lifecycle port to the separately-owned
@@ -155,6 +165,7 @@ type AccountSecurityGate interface {
 		ctx context.Context,
 		identity TrustedIdentity,
 		connID string,
+		fence int64,
 	) error
 	UnregisterSession(
 		ctx context.Context,

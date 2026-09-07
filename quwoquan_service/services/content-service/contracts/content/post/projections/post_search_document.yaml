@@ -1,0 +1,27 @@
+read_model: PostSearchDocument
+description: >-
+  content.Post 写入统一 Elasticsearch 查询投影的文档（含地点维度 placeindex 同一契约）。只经 runtime/search/es VersionedWriter 以 Post 自身 version 作 sourceVersion 原子条件写；删除落带版本 tombstone；rebuild 为按 Post version 的 upsert 重放，不能把旧文档写回。
+source_entities:
+- Post
+storage_backend: elasticsearch
+fields:
+- {name: target, type: string, nullable: false, description: 统一 AI target（由 objectType/contentType 派生），读面据此分流 typed slice。}
+- {name: objectType, type: string, nullable: false}
+- {name: objectId, type: string, nullable: false}
+- {name: sourceVersion, type: int64, nullable: false, description: 权威对象自身的单调版本；Elasticsearch 在分片内原子比较，只接受严格更新的写入。}
+- {name: deleted, type: bool, nullable: false, description: 带版本 tombstone 标记；删除不做物理 DELETE，读面按 deleted=false 过滤。}
+- {name: title, type: string, nullable: true}
+- {name: summary, type: string, nullable: true}
+- {name: body, type: string, nullable: true}
+- {name: contentType, type: string, nullable: true}
+- {name: visibility, type: string, nullable: false}
+- {name: tags, type: '[]string', nullable: true}
+- {name: entities, type: '[]string', nullable: true}
+- {name: quality, type: float64, nullable: true}
+- {name: updatedAt, type: timestamp, nullable: true}
+consistency_policy:
+  ordering_key: sourceVersion
+  source_version_field: sourceVersion
+  apply_mode: strictly_newer
+  delete_mode: versioned_tombstone
+  rebuild_strategy: upsert_replay

@@ -27,6 +27,7 @@ type appExposedOperation struct {
 	ClientContract       *appClientContract          `json:"clientContract"`
 	Commercial           appCommercialBinding        `json:"commercial"`
 	Concurrency          appConcurrencyPolicy        `json:"concurrency"`
+	Consistency          *appOperationConsistency    `json:"consistency"`
 	Domain               string                      `json:"domain"`
 	ErrorCodes           []string                    `json:"errorCodes"`
 	Facet                string                      `json:"facet"`
@@ -130,6 +131,15 @@ type appStreamingPolicy struct {
 
 type appConcurrencyPolicy struct {
 	VersionPrecondition string `json:"versionPrecondition"`
+}
+
+type appOperationConsistency struct {
+	AtomicCommit        *bool  `json:"atomicCommit"`
+	Arbitration         string `json:"arbitration"`
+	Source              string `json:"source"`
+	Freshness           string `json:"freshness"`
+	MaxStalenessSeconds int    `json:"maxStalenessSeconds"`
+	StaleResult         string `json:"staleResult"`
 }
 
 type appPrivacyPolicy struct {

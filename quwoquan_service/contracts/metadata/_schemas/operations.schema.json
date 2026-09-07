@@ -323,7 +323,8 @@
             }
           },
           "response_entity": { "type": "string", "pattern": "^[A-Z][A-Za-z0-9]*$" },
-          "response_body_kind": { "enum": ["object", "page"] }
+          "response_body_kind": { "enum": ["object", "page"] },
+          "consistency": { "$ref": "#/$defs/queryConsistency" }
         }
       }
     },
@@ -427,6 +428,74 @@
                   "required": ["auth_mode"],
                   "properties": {"auth_mode": {"const": "required"}}
                 }
+              }
+            }
+          },
+          {
+            "if": {
+              "required": [
+                "application"
+              ],
+              "properties": {
+                "application": {
+                  "required": [
+                    "kind"
+                  ],
+                  "properties": {
+                    "kind": {
+                      "const": "command"
+                    }
+                  }
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "consistency": {
+                  "$ref": "#/$defs/commandConsistency"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "required": [
+                "application"
+              ],
+              "properties": {
+                "application": {
+                  "required": [
+                    "kind"
+                  ],
+                  "properties": {
+                    "kind": {
+                      "const": "query"
+                    }
+                  }
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "consistency": {
+                  "$ref": "#/$defs/queryConsistency"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "required": ["application"],
+              "properties": {
+                "application": {
+                  "required": ["kind"],
+                  "properties": {"kind": {"const": "session"}}
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "consistency": {"$ref": "#/$defs/sessionConsistency"}
               }
             }
           }
@@ -1087,6 +1156,9 @@
                 "pattern": "^[a-z][A-Za-z0-9]*$"
               }
             }
+          },
+          "consistency": {
+            "$ref": "#/$defs/operationConsistency"
           }
         }
       }
@@ -1226,6 +1298,9 @@
                 "maximum": 100
               }
             }
+          },
+          "consistency": {
+            "$ref": "#/$defs/operationConsistency"
           }
         },
         "allOf": [
@@ -1598,6 +1673,146 @@
         "field": { "type": "string", "minLength": 1 },
         "required": { "type": "boolean" }
       }
+    },
+    "operationConsistency": {
+      "description": "仅在 operation 偏离默认一致性路径时声明。command 默认由 owning object 提交；query 默认不承诺 projection 新鲜度。",
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "properties": {
+        "atomic_commit": {
+          "type": "boolean"
+        },
+        "arbitration": {
+          "enum": [
+            "version_cas",
+            "unique_winner",
+            "conditional_admission",
+            "fence"
+          ]
+        },
+        "source": {
+          "enum": [
+            "authority",
+            "projection"
+          ]
+        },
+        "freshness": {
+          "enum": [
+            "read_your_writes",
+            "bounded",
+            "eventual"
+          ]
+        },
+        "max_staleness_seconds": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "stale_result": {
+          "enum": [
+            "fail_closed",
+            "with_watermark"
+          ]
+        }
+      }
+    },
+    "commandConsistency": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/operationConsistency"
+        },
+        {
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "source"
+                ]
+              },
+              {
+                "required": [
+                  "freshness"
+                ]
+              },
+              {
+                "required": [
+                  "max_staleness_seconds"
+                ]
+              },
+              {
+                "required": [
+                  "stale_result"
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "sessionConsistency": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/operationConsistency"
+        },
+        {
+          "not": {
+            "anyOf": [
+              {"required": ["atomic_commit"]},
+              {"required": ["source"]},
+              {"required": ["freshness"]},
+              {"required": ["max_staleness_seconds"]},
+              {"required": ["stale_result"]}
+            ]
+          }
+        }
+      ]
+    },
+    "queryConsistency": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/operationConsistency"
+        },
+        {
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "atomic_commit"
+                ]
+              },
+              {
+                "required": [
+                  "arbitration"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "freshness"
+            ],
+            "properties": {
+              "freshness": {
+                "const": "bounded"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "max_staleness_seconds"
+            ]
+          },
+          "else": {
+            "not": {
+              "required": [
+                "max_staleness_seconds"
+              ]
+            }
+          }
+        }
+      ]
     }
   }
 }

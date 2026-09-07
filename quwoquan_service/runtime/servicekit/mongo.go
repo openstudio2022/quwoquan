@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	rtmongo "quwoquan_service/internal/platform/mongodb"
 )
@@ -25,9 +26,27 @@ type mongoConnectFunc func(ctx context.Context, cfg rtmongo.ConnectConfig) (rtmo
 // 以 typed double 临时替换来验证装配编排。
 var defaultMongoConnect mongoConnectFunc = rtmongo.Open
 
-// Mongo 按声明连接 MongoDB 并自动注册 ping 健康检查与断连清理，返回目标
-// database 句柄。物理组网只来自渲染配置与部署面 env 覆盖，缺失即 fail-closed。
+// Mongo 按声明连接 MongoDB 并自动注册默认预算的 ping 健康检查与断连清理，
+// 返回目标 database 句柄。物理组网只来自渲染配置与部署面 env 覆盖，缺失即
+// fail-closed。
 func (assembly *Assembly) Mongo(config MongoConfig) (MongoDatabase, error) {
+	return assembly.mongo(config, 0)
+}
+
+// MongoWithReadinessTimeout 与 Mongo 使用同一装配路径，但允许调用方把 mongodb
+// ping 的健康检查预算与驱动自身的 bounded selection 窗口对齐。非正预算沿用
+// Mongo 的默认检查预算，与 health.Register 的既有 API 语义一致。
+func (assembly *Assembly) MongoWithReadinessTimeout(
+	config MongoConfig,
+	readinessTimeout time.Duration,
+) (MongoDatabase, error) {
+	return assembly.mongo(config, readinessTimeout)
+}
+
+func (assembly *Assembly) mongo(
+	config MongoConfig,
+	readinessTimeout time.Duration,
+) (MongoDatabase, error) {
 	serviceName := assembly.Identity.ServiceName
 	if strings.TrimSpace(config.URI) == "" {
 		return nil, fmt.Errorf("%s mongo.uri is required", serviceName)
@@ -43,6 +62,10 @@ func (assembly *Assembly) Mongo(config MongoConfig) (MongoDatabase, error) {
 	assembly.Cleanups.Add(func(cleanupCtx context.Context) error {
 		return client.Disconnect(cleanupCtx)
 	})
-	assembly.Health.Register("mongodb", client.Ping)
+	if readinessTimeout > 0 {
+		assembly.Health.RegisterWithTimeout("mongodb", readinessTimeout, client.Ping)
+	} else {
+		assembly.Health.Register("mongodb", client.Ping)
+	}
 	return client.Database(config.Database), nil
 }

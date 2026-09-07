@@ -1,4 +1,4 @@
-backend: postgresql
+backend: postgres
 role: authoritative
 tables:
   account_appeal_credentials:

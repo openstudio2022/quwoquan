@@ -65,7 +65,7 @@ class GammaRuntimeContainerOneShotLabelTest(unittest.TestCase):
         compose = yaml.safe_load(COMPOSE_PATH.read_text(encoding="utf-8"))
         services = compose["services"]
 
-        for service in ("mongo-init", "object-storage-init"):
+        for service in ("mongo-init", "postgres-init", "object-storage-init"):
             with self.subTest(service=service):
                 self.assertEqual(
                     services[service]["labels"][RUNTIME_ONE_SHOT_LABEL],

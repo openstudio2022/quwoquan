@@ -41,6 +41,7 @@ type detailBundlePlan struct {
 	SupportedContentTypes []string
 	AssemblyProjectionID  string
 	AssemblyMappings      []assemblyMapping
+	OptionalRESTFields    []string
 }
 
 func validateDetailBundle(slices []bundleSliceInput, projectionFields []string, projectionID string) (detailBundlePlan, error) {
@@ -121,17 +122,47 @@ func validateDetailBundle(slices []bundleSliceInput, projectionFields []string, 
 	if err != nil {
 		return detailBundlePlan{}, err
 	}
-	if missing := missingFields(projectionFields, allFields); len(missing) != 0 {
+	optionalRESTFields := optionalRESTProjectionFields(projectionFields, allFields)
+	persistedProjectionFields := withoutFields(projectionFields, optionalRESTFields)
+	if missing := missingFields(persistedProjectionFields, allFields); len(missing) != 0 {
 		return detailBundlePlan{}, fmt.Errorf("signed bundle is missing assembly projection fields: %s", strings.Join(missing, ", "))
 	}
-	if extra := extraFields(projectionFields, allFields); len(extra) != 0 {
+	if extra := extraFields(persistedProjectionFields, allFields); len(extra) != 0 {
 		return detailBundlePlan{}, fmt.Errorf("signed bundle exposes fields outside assembly projection: %s", strings.Join(extra, ", "))
 	}
 	return detailBundlePlan{
 		Base: base, Extensions: extensions,
 		SupportedContentTypes: append([]string(nil), baseBinding.SupportedContentTypes...),
 		AssemblyProjectionID:  projectionID, AssemblyMappings: allMappings,
+		OptionalRESTFields: optionalRESTFields,
 	}, nil
+}
+
+// optionalRESTProjectionFields lists nullable viewer-scoped fields that belong to
+// the public authenticated REST GetPost response but are intentionally absent
+// from the public persisted GraphQL owner bundle. The bundle remains a complete
+// decoder input by explicitly injecting null for each absent optional field.
+func optionalRESTProjectionFields(projectionFields []string, assembled map[string]bool) []string {
+	allowed := map[string]bool{"intersectionReasons": true}
+	fields := make([]string, 0)
+	for _, field := range projectionFields {
+		if allowed[field] && !assembled[field] {
+			fields = append(fields, field)
+		}
+	}
+	sort.Strings(fields)
+	return fields
+}
+
+func withoutFields(fields, excluded []string) []string {
+	exclusions := stringSet(excluded)
+	result := make([]string, 0, len(fields))
+	for _, field := range fields {
+		if !exclusions[field] {
+			result = append(result, field)
+		}
+	}
+	return result
 }
 
 func validateBundleBindingShape(binding appClientBundleBinding) error {

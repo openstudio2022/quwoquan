@@ -1,4 +1,13 @@
 backend: mongodb
+resources:
+  call_session_store:
+    engine: mongodb
+    role: authority
+    required: true
+  call_runtime_cache:
+    engine: redis
+    role: runtime
+    required: true
 collections:
   call_sessions:
     publication_role: not_published

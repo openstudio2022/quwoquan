@@ -41,6 +41,7 @@ PREVIOUS_CANDIDATE_DIGEST="${PREVIOUS_CANDIDATE_DIGEST:-}"
 SERVICE_FACTORY_MATERIAL="${SERVICE_FACTORY_MATERIAL:-}"
 CANDIDATE_MATERIAL_ID="${CANDIDATE_MATERIAL_ID:-}"
 PROD_ACTIVATION_ADMISSION_DIGEST="${PROD_ACTIVATION_ADMISSION_DIGEST:-}"
+DATA_PLANE_BINDING="${DATA_PLANE_BINDING:-}"
 ROLLOUT_TIMEOUT_SECONDS="${ROLLOUT_TIMEOUT_SECONDS:-300}"
 PROD_SSH_KEY_DIR="${PROD_SSH_KEY_DIR:-$HOME/.ssh/quwoquan-prod}"
 SERVICE_FILTER="${SERVICE:-}"
@@ -74,6 +75,25 @@ for identity in "$CANDIDATE_MATERIAL_ID" "$PROD_ACTIVATION_ADMISSION_DIGEST"; do
     exit 2
   fi
 done
+EXPECTED_DATA_PLANE_BINDING=""
+if [[ "$CANDIDATE_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+  EXPECTED_CANDIDATE_DIR="$(PYTHONPATH="$ROOT" PYTHONDONTWRITEBYTECODE=1 python3 -B - "$CANDIDATE_DIGEST" <<'PY'
+import sys
+from quwoquan_ops.cli.lib.output_paths import deployment_candidate_dir
+print(deployment_candidate_dir("prod-hosted", sys.argv[1]))
+PY
+)"
+  EXPECTED_DATA_PLANE_BINDING="$EXPECTED_CANDIDATE_DIR/packages/runtime-shared/data-plane-binding.json"
+  if [[ -z "$DATA_PLANE_BINDING" ]]; then
+    DATA_PLANE_BINDING="$EXPECTED_DATA_PLANE_BINDING"
+  fi
+fi
+if [[ "$DRY_RUN" != "true" ]]; then
+  if [[ "$DATA_PLANE_BINDING" != "$EXPECTED_DATA_PLANE_BINDING" || ! -f "$DATA_PLANE_BINDING" || -L "$DATA_PLANE_BINDING" ]]; then
+    echo "::error::真实发布必须使用 candidate-owned data-plane binding: $EXPECTED_DATA_PLANE_BINDING" >&2
+    exit 2
+  fi
+fi
 if [[ "$DRY_RUN" != "true" && "$PROD_IMAGE_DELIVERY_MODE" != "skip" && ! -s "$SERVICE_FACTORY_MATERIAL" ]]; then
   echo "::error::真实发布必须提供已验证的 SERVICE_FACTORY_MATERIAL" >&2
   exit 2
@@ -260,6 +280,7 @@ PY
         --host-id "$host_id" \
         --rollout-stage "$ROLLOUT_STAGE" \
         --candidate-digest "$CANDIDATE_DIGEST" \
+        --data-plane-binding "$DATA_PLANE_BINDING" \
         --web-runtime-config-trust "$QWQ_WEB_RUNTIME_CONFIG_TRUST_PATH" \
         --web-runtime-config-package "$QWQ_WEB_RUNTIME_CONFIG_PACKAGE_PATH" \
         --output-dir "$render_dir" \
@@ -517,7 +538,7 @@ for key in ${required_environment//,/ }; do
     exit 2
   fi
 done
-for key in OBSERVABILITY_PROMETHEUS_IMAGE OBSERVABILITY_ALERTMANAGER_IMAGE OBSERVABILITY_OTEL_COLLECTOR_IMAGE OBSERVABILITY_NODE_EXPORTER_IMAGE OBSERVABILITY_PODMAN_EXPORTER_IMAGE OBSERVABILITY_MONGODB_EXPORTER_IMAGE OBSERVABILITY_POSTGRES_EXPORTER_IMAGE OBSERVABILITY_REDIS_EXPORTER_IMAGE; do
+for key in OBSERVABILITY_PROMETHEUS_IMAGE OBSERVABILITY_ALERTMANAGER_IMAGE OBSERVABILITY_GRAFANA_IMAGE OBSERVABILITY_OTEL_COLLECTOR_IMAGE OBSERVABILITY_BLACKBOX_EXPORTER_IMAGE OBSERVABILITY_NODE_EXPORTER_IMAGE OBSERVABILITY_PODMAN_EXPORTER_IMAGE OBSERVABILITY_MONGODB_EXPORTER_IMAGE OBSERVABILITY_POSTGRES_EXPORTER_IMAGE OBSERVABILITY_REDIS_EXPORTER_IMAGE OBSERVABILITY_ELASTICSEARCH_EXPORTER_IMAGE; do
   image=\"\$(awk -F= -v expected=\"\$key\" '\$1 == expected { print substr(\$0, index(\$0, \"=\") + 1); exit }' \"\$observability_env\")\"
   if [[ ! \"\$image\" =~ @sha256:[0-9a-f]{64}$ ]]; then
     echo \"FAIL: observability image must be immutable digest: \$key\" >&2
@@ -599,6 +620,7 @@ PY
     --host "$ssh_host" \
     --rollout-stage "$ROLLOUT_STAGE" \
     --candidate-digest "$CANDIDATE_DIGEST" \
+    --data-plane-binding "$DATA_PLANE_BINDING" \
     --output-dir "$render_dir" >/dev/null
   bash quwoquan_ops/cli/prod/sync_prod_plane_stack.sh \
     --plane service \

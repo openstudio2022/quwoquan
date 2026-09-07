@@ -6,6 +6,7 @@ package redisstore
 import (
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -27,7 +28,6 @@ const (
 	fenceKeyPrefix      = "rt:conn:fence:"
 
 	ticketUsedMarkerTTL = 60 * time.Second
-	fenceCounterTTL     = 24 * time.Hour
 )
 
 type TicketStore struct {
@@ -149,70 +149,177 @@ func (s *LeaseStore) Acquire(
 	connID string,
 	ttl time.Duration,
 ) (int64, error) {
-	fence, err := s.client.Incr(ctx, fenceKey(identity))
+	fenceKey, leaseKey, err := leaseFenceKeys(identity, connID)
 	if err != nil {
 		return 0, err
 	}
-	if err := s.client.Expire(ctx, fenceKey(identity), fenceCounterTTL); err != nil {
+	owner, err := leaseOwnerDigest(connID)
+	if err != nil {
 		return 0, err
 	}
-	if err := s.client.Set(
+	return rtredis.AcquireLeaseFenceAtomic(
 		ctx,
-		leaseKey(identity, connID),
-		fmt.Sprintf("%d", fence),
+		s.client,
+		fenceKey,
+		leaseKey,
+		owner,
 		ttl,
-	); err != nil {
-		return 0, err
+	)
+}
+
+// ReleasePreFenceLease deletes only the pre-fencing lease shape named by a pre-fence
+// account-session record. It is intentionally separate from Release: callers
+// must never synthesize a current fencing token for migrated records.
+func (s *LeaseStore) ReleasePreFenceLease(
+	ctx context.Context,
+	identity application.TrustedIdentity,
+	connID string,
+) error {
+	key, err := preFenceLeaseKey(identity, connID)
+	if err != nil {
+		return err
 	}
-	return fence, nil
+	return s.client.Del(ctx, key)
 }
 
 func (s *LeaseStore) Renew(
 	ctx context.Context,
 	identity application.TrustedIdentity,
 	connID string,
+	expectedFence int64,
 	ttl time.Duration,
 ) error {
-	return s.client.Expire(ctx, leaseKey(identity, connID), ttl)
+	fenceKey, leaseKey, err := leaseFenceKeys(identity, connID)
+	if err != nil {
+		return err
+	}
+	owner, err := leaseOwnerDigest(connID)
+	if err != nil {
+		return err
+	}
+	result, err := rtredis.RenewLeaseFenceAtomic(
+		ctx,
+		s.client,
+		fenceKey,
+		leaseKey,
+		owner,
+		expectedFence,
+		ttl,
+	)
+	return leaseFenceError(result, err)
 }
 
 func (s *LeaseStore) Release(
 	ctx context.Context,
 	identity application.TrustedIdentity,
 	connID string,
+	expectedFence int64,
 ) error {
-	return s.client.Del(ctx, leaseKey(identity, connID))
+	fenceKey, leaseKey, err := leaseFenceKeys(identity, connID)
+	if err != nil {
+		return err
+	}
+	owner, err := leaseOwnerDigest(connID)
+	if err != nil {
+		return err
+	}
+	result, err := rtredis.ReleaseLeaseFenceAtomic(
+		ctx,
+		s.client,
+		fenceKey,
+		leaseKey,
+		owner,
+		expectedFence,
+	)
+	return leaseFenceError(result, err)
 }
 
-func (s *LeaseStore) CurrentFence(
-	ctx context.Context,
-	identity application.TrustedIdentity,
-) (int64, error) {
-	value, err := s.client.Get(ctx, fenceKey(identity))
-	if errors.Is(err, rtredis.ErrKeyNotFound) {
-		return 0, nil
-	}
+func leaseFenceError(result rtredis.LeaseFenceResult, err error) error {
 	if err != nil {
-		return 0, err
+		return err
 	}
-	var fence int64
-	if _, err := fmt.Sscanf(value, "%d", &fence); err != nil {
-		return 0, err
+	switch result {
+	case rtredis.LeaseFenceApplied:
+		return nil
+	case rtredis.LeaseFenceExpired:
+		return application.ErrLeaseExpired
+	case rtredis.LeaseFenceRejected:
+		return application.ErrLeaseFenced
+	default:
+		return fmt.Errorf("realtime lease fence returned unknown result %d", result)
 	}
-	return fence, nil
+}
+
+func preFenceLeaseKey(
+	identity application.TrustedIdentity,
+	connID string,
+) (string, error) {
+	personaID := strings.TrimSpace(identity.PersonaID)
+	deviceID := strings.TrimSpace(identity.DeviceID)
+	connID = strings.TrimSpace(connID)
+	if personaID == "" || deviceID == "" || connID == "" {
+		return "", errors.New(
+			"realtime pre-fence lease requires persona, device and connection identities",
+		)
+	}
+	return leaseKeyPrefix + personaID + ":" + deviceID + ":" + connID, nil
 }
 
 func leaseKey(identity application.TrustedIdentity, connID string) string {
-	return leaseKeyPrefix +
-		strings.TrimSpace(identity.PersonaID) + ":" +
-		strings.TrimSpace(identity.DeviceID) + ":" +
-		strings.TrimSpace(connID)
+	_, key, err := leaseFenceKeys(identity, connID)
+	if err != nil {
+		return ""
+	}
+	return key
 }
 
 func fenceKey(identity application.TrustedIdentity) string {
-	return fenceKeyPrefix +
-		strings.TrimSpace(identity.PersonaID) + ":" +
-		strings.TrimSpace(identity.DeviceID)
+	slot, err := leaseIdentitySlot(identity)
+	if err != nil {
+		return ""
+	}
+	return fenceKeyPrefix + "{" + slot + "}"
+}
+
+func leaseFenceKeys(
+	identity application.TrustedIdentity,
+	connID string,
+) (string, string, error) {
+	slot, err := leaseIdentitySlot(identity)
+	if err != nil {
+		return "", "", err
+	}
+	connID = strings.TrimSpace(connID)
+	if connID == "" {
+		return "", "", errors.New("realtime lease requires a connection id")
+	}
+	connectionDigest := sha256.Sum256([]byte(connID))
+	hashTag := "{" + slot + "}"
+	return fenceKeyPrefix + hashTag,
+		leaseKeyPrefix + hashTag + ":lease:" + hex.EncodeToString(connectionDigest[:]),
+		nil
+}
+
+func leaseOwnerDigest(connID string) (string, error) {
+	connID = strings.TrimSpace(connID)
+	if connID == "" {
+		return "", errors.New("realtime lease requires a connection id")
+	}
+	digest := sha256.Sum256([]byte(connID))
+	return hex.EncodeToString(digest[:]), nil
+}
+
+func leaseIdentitySlot(identity application.TrustedIdentity) (string, error) {
+	personaID := strings.TrimSpace(identity.PersonaID)
+	deviceID := strings.TrimSpace(identity.DeviceID)
+	if personaID == "" || deviceID == "" {
+		return "", errors.New("realtime lease requires persona and device identities")
+	}
+	digest := sha256.New()
+	_, _ = digest.Write([]byte(personaID))
+	_, _ = digest.Write([]byte{0})
+	_, _ = digest.Write([]byte(deviceID))
+	return hex.EncodeToString(digest.Sum(nil)), nil
 }
 
 // EventSource 按可信 identity 订阅明确语义的通道；RTC 只按 persona，
@@ -326,7 +433,7 @@ func bindRealtimeMessageToIdentity(
 	}
 	if !targeted {
 		// Device/persona routing belongs only to the trusted transport wrapper.
-		// A legacy flat RTC frame carrying either field must not cross the client
+		// A pre-envelope flat RTC frame carrying either field must not cross the client
 		// boundary.
 		var top map[string]json.RawMessage
 		if json.Unmarshal(message.Payload, &top) != nil {

@@ -45,6 +45,30 @@ fields:
     description: 产生该资产的上传会话；同一会话最多物化一个资产。
     role: authoritative_state
     reference: true
+  - name: sourceReleaseId
+    source: sourceReleaseId
+    type: string
+    constraints:
+      - NULLABLE
+    classification: INTERNAL
+    log_policy: hash
+    api_exposure: drop
+    ops_exposure: read
+    description: Data release importer 最近一次写入的诊断值；不得用于访问授权或 active membership 判定。
+    role: projection
+  - name: sourceReleaseIds
+    source: sourceReleaseIds
+    type: '[]string'
+    max_items: 128
+    item_max_utf8_bytes: 256
+    constraints:
+      - NULLABLE
+    classification: INTERNAL
+    log_policy: hash
+    api_exposure: drop
+    ops_exposure: read
+    description: Data release importer 以集合语义累加的 release membership；research 原图授权仅按 active release 是否为集合成员判定。
+    role: projection
   - name: objectKey
     source: objectKey
     type: string

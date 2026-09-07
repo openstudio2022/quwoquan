@@ -497,6 +497,7 @@ class StackctlGammaOperationLockContractTest(
             receipt_candidate,
             candidate_manifest={"baselineId": receipt_candidate},
             candidate_root=candidate_root,
+            purpose="teardown",
         )
         active_candidate.assert_not_called()
         self.assertNotEqual(receipt_candidate, switched_active_candidate)

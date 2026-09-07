@@ -28,6 +28,9 @@ api_routes:
       retry_mode: idempotent
       max_attempts: 2
       idempotency: none
+    consistency:
+      source: authority
+      stale_result: fail_closed
     error_codes:
       - USER.USER.unauthorized
       - USER.SYSTEM.internal_error
@@ -96,6 +99,9 @@ api_routes:
       retry_mode: none
       max_attempts: 1
       idempotency: none
+    consistency:
+      atomic_commit: true
+      arbitration: unique_winner
     error_codes:
       - USER.USER.invalid_argument
       - USER.USER.unauthorized
@@ -164,6 +170,9 @@ api_routes:
       retry_mode: none
       max_attempts: 1
       idempotency: none
+    consistency:
+      atomic_commit: true
+      arbitration: unique_winner
     error_codes:
       - USER.USER.invalid_argument
       - USER.AUTH.consent_required
@@ -239,6 +248,9 @@ api_routes:
       retry_mode: none
       max_attempts: 1
       idempotency: none
+    consistency:
+      atomic_commit: true
+      arbitration: unique_winner
     error_codes:
       - USER.USER.invalid_argument
       - USER.USER.unauthorized
@@ -308,6 +320,9 @@ api_routes:
       retry_mode: none
       max_attempts: 1
       idempotency: none
+    consistency:
+      atomic_commit: true
+      arbitration: version_cas
     error_codes:
       - USER.USER.invalid_argument
       - USER.USER.unauthorized
@@ -349,7 +364,7 @@ readiness_cases:
     producer: service
     layer: api_integration
     target: {kind: operation, id: ListCredentials}
-    runner_source_path: quwoquan_service/services/user-service/tests/api_integration/account/credential_binding/postgres_binding__api_integration_test.go
+    runner_source_path: quwoquan_service/services/user-service/tests/api_integration/account/credential_binding/postgres_binding__data_consistency__api_integration_test.go
     executions:
       - {env: beta, platform: service, device: runner, provider: postgres, digest_binding: candidate}
   - case_id: unbind-credential-local
@@ -365,7 +380,7 @@ readiness_cases:
     producer: service
     layer: api_integration
     target: {kind: operation, id: UnbindCredential}
-    runner_source_path: quwoquan_service/services/user-service/tests/api_integration/account/credential_binding/postgres_binding__api_integration_test.go
+    runner_source_path: quwoquan_service/services/user-service/tests/api_integration/account/credential_binding/postgres_binding__data_consistency__api_integration_test.go
     executions:
       - {env: beta, platform: service, device: runner, provider: postgres, digest_binding: candidate}
   - case_id: bind-phone-credential-local
@@ -381,7 +396,7 @@ readiness_cases:
     producer: service
     layer: api_integration
     target: {kind: operation, id: BindPhoneCredential}
-    runner_source_path: quwoquan_service/services/user-service/tests/api_integration/account/credential_binding/postgres_binding__api_integration_test.go
+    runner_source_path: quwoquan_service/services/user-service/tests/api_integration/account/credential_binding/postgres_binding__data_consistency__api_integration_test.go
     executions:
       - {env: beta, platform: service, device: runner, provider: postgres, digest_binding: candidate}
   - case_id: complete-federated-phone-binding-local
@@ -397,7 +412,7 @@ readiness_cases:
     producer: service
     layer: api_integration
     target: {kind: operation, id: CompleteFederatedPhoneBinding}
-    runner_source_path: quwoquan_service/services/user-service/tests/api_integration/account/credential_binding/postgres_binding__api_integration_test.go
+    runner_source_path: quwoquan_service/services/user-service/tests/api_integration/account/credential_binding/postgres_binding__data_consistency__api_integration_test.go
     executions:
       - {env: beta, platform: service, device: runner, provider: postgres, digest_binding: candidate}
   - case_id: bind-carrier-phone-credential-local
@@ -413,7 +428,7 @@ readiness_cases:
     producer: service
     layer: api_integration
     target: {kind: operation, id: BindCarrierPhoneCredential}
-    runner_source_path: quwoquan_service/services/user-service/tests/api_integration/account/credential_binding/postgres_binding__api_integration_test.go
+    runner_source_path: quwoquan_service/services/user-service/tests/api_integration/account/credential_binding/postgres_binding__data_consistency__api_integration_test.go
     executions:
       - {env: beta, platform: service, device: runner, provider: postgres, digest_binding: candidate}
   - case_id: credential_binding_bind_carrier_phone_credential_app_local

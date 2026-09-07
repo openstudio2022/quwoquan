@@ -504,6 +504,11 @@ def _command_deploy_with_lock(args: argparse.Namespace) -> dict[str, Any]:
                     "SERVICE": args.service,
                     "CANDIDATE_DIGEST": args.to_candidate_digest,
                     "PREVIOUS_CANDIDATE_DIGEST": args.from_candidate_digest,
+                    "DATA_PLANE_BINDING": str(
+                        _stackctl.deployment_candidate_dir(
+                            "prod-hosted", args.to_candidate_digest
+                        ) / "packages/runtime-shared/data-plane-binding.json"
+                    ),
                     "ROLLOUT_STAGE": rollout_stage,
                     "DRY_RUN": args.dry_run,
                     "SERVICE_FACTORY_MATERIAL": str(service_factory_material_path),

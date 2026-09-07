@@ -6,6 +6,7 @@
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import shutil
@@ -13,6 +14,13 @@ from pathlib import Path
 from typing import Any
 
 from quwoquan_ops.cli.lib.compose_layout import domain_service_compose_files
+from quwoquan_ops.cli.lib.data_plane_binding import (
+    DATA_PLANE_BINDING_PACKAGE_REF,
+    DataPlaneBindingError,
+    resolve_data_plane_environment,
+    validate_canonical_data_plane_binding,
+)
+from quwoquan_ops.cli.lib.output_paths import deployment_candidate_dir
 from quwoquan_ops.cli.lib.output_paths import deployment_target_path
 from quwoquan_ops.cli.lib.output_paths import legal_static_deployment_package_dir
 from quwoquan_ops.cli.lib.output_paths import portal_deployment_package_dir
@@ -44,6 +52,79 @@ try:
     import yaml
 except ImportError:  # pragma: no cover
     raise SystemExit("FAIL: PyYAML required")
+
+def _load_candidate_data_plane_projection(
+    *,
+    data_mode: str,
+    candidate_digest: str,
+    data_plane_binding: str | Path,
+) -> tuple[dict[str, Any] | None, dict[str, str] | None]:
+    if data_mode != "external":
+        return None, None
+    candidate_root = deployment_candidate_dir("prod-hosted", candidate_digest)
+    binding_path = Path(str(data_plane_binding or "")).expanduser()
+    expected_binding = candidate_root / DATA_PLANE_BINDING_PACKAGE_REF.as_posix()
+    if (
+        not binding_path.is_absolute()
+        or binding_path != expected_binding
+        or binding_path.is_symlink()
+        or not binding_path.is_file()
+    ):
+        raise SystemExit(
+            "FAIL: external data mode requires the candidate-owned "
+            "--data-plane-binding artifact"
+        )
+    manifest_path = candidate_root / "manifest.json"
+    try:
+        candidate = json.loads(manifest_path.read_text(encoding="utf-8"))
+        if not isinstance(candidate, dict):
+            raise ValueError("candidate manifest must be an object")
+        if (
+            candidate.get("schema") != "stackctl-deployment-candidate"
+            or candidate.get("candidateType") != "runtime-full"
+            or candidate.get("environment") != "prod"
+            or candidate.get("target") != "prod-hosted"
+            or candidate.get("baselineId") != candidate_digest
+        ):
+            raise ValueError("candidate manifest identity mismatch")
+        data_plane_identity = candidate.get("dataPlaneBinding")
+        if not isinstance(data_plane_identity, dict) or set(data_plane_identity) != {
+            "ref", "digest", "bindingDigest"
+        }:
+            raise ValueError("candidate dataPlaneBinding fields mismatch")
+        encoded_binding = binding_path.read_bytes()
+        canonical = validate_canonical_data_plane_binding(
+            json.loads(encoded_binding.decode("utf-8"))
+        )
+        artifact_digest = "sha256:" + hashlib.sha256(encoded_binding).hexdigest()
+        if data_plane_identity != {
+            "ref": DATA_PLANE_BINDING_PACKAGE_REF.as_posix(),
+            "digest": artifact_digest,
+            "bindingDigest": canonical["bindingDigest"],
+        }:
+            raise ValueError("candidate dataPlaneBinding identity drifted")
+        projection = resolve_data_plane_environment(
+            {
+                "dataPlane": {
+                    "resources": canonical["resources"],
+                    "bindings": canonical["bindings"],
+                }
+            },
+            mode="external",
+            target_name="prod-hosted",
+        )
+        if projection["bindingDigest"] != data_plane_identity["bindingDigest"]:
+            raise ValueError("candidate data-plane binding digest mismatch")
+    except (
+        OSError,
+        UnicodeError,
+        json.JSONDecodeError,
+        ValueError,
+        DataPlaneBindingError,
+    ) as exc:
+        raise SystemExit(f"FAIL: candidate data-plane binding is invalid: {exc}") from exc
+    return projection, data_plane_identity
+
 
 def main() -> int:
     # 延迟导入入口模块：_rewrite_service / _write_config_tree / _write_caddyfile
@@ -259,8 +340,40 @@ def main() -> int:
         *Path(model_cache_root).parts,
     ).mkdir(parents=True, exist_ok=True)
 
+    data_plane_projection, data_plane_identity = (
+        _load_candidate_data_plane_projection(
+            data_mode=args.data_mode,
+            candidate_digest=args.candidate_digest,
+            data_plane_binding=args.data_plane_binding,
+        )
+    )
+
     template = _load_yaml(compose_template)
     services = dict(template.get("services") or {})
+    isolated_data_volumes: dict[str, Any] = {}
+    if (
+        args.plane == "service"
+        and args.instance == "prevalidate"
+        and args.data_mode == "isolated"
+        and "elasticsearch" in selected
+    ):
+        elasticsearch_fragment = _load_yaml(
+            ROOT
+            / "quwoquan_service"
+            / "services"
+            / "product-ops-service"
+            / "deploy"
+            / "local-elasticsearch.compose.yaml"
+        )
+        elasticsearch_service = (
+            elasticsearch_fragment.get("services") or {}
+        ).get("elasticsearch")
+        if not isinstance(elasticsearch_service, dict):
+            raise SystemExit(
+                "FAIL: local Elasticsearch Compose fragment missing elasticsearch service"
+            )
+        services["elasticsearch"] = elasticsearch_service
+        isolated_data_volumes = dict(elasticsearch_fragment.get("volumes") or {})
     service_fragments = domain_service_compose_files(ROOT)
     service_fragments.append(
         ROOT
@@ -273,11 +386,27 @@ def main() -> int:
     for fragment in service_fragments:
         fragment_services = _load_yaml(fragment).get("services") or {}
         duplicates = set(services) & set(fragment_services)
-        if duplicates:
-            raise SystemExit(
-                f"FAIL: Compose service has multiple owners {sorted(duplicates)}: {fragment}"
-            )
-        services.update(fragment_services)
+        for duplicate in sorted(duplicates):
+            base = services.get(duplicate)
+            owned = fragment_services.get(duplicate)
+            if not isinstance(base, dict) or not isinstance(owned, dict):
+                raise SystemExit(
+                    f"FAIL: Compose service has invalid owner projection {duplicate}: {fragment}"
+                )
+            overlap = set(base) & set(owned)
+            if any(base[key] != owned[key] for key in overlap):
+                raise SystemExit(
+                    "FAIL: Compose service has conflicting owners "
+                    f"{duplicate}.{sorted(overlap)}: {fragment}"
+                )
+            services[duplicate] = {**base, **owned}
+        services.update(
+            {
+                name: definition
+                for name, definition in fragment_services.items()
+                if name not in duplicates
+            }
+        )
     rendered_services: dict[str, Any] = {}
     selected_names = set(selected)
     governed_names = set(governed)
@@ -293,6 +422,55 @@ def main() -> int:
             args.instance == "prevalidate" and args.data_mode == "isolated"
         ),
     )
+    if (
+        args.plane == "service"
+        and args.data_mode == "external"
+        and data_plane_projection is not None
+        and "product-ops-service" in selected
+    ):
+        bootstrap_name = "product-ops-service-migrate-elasticsearch"
+        bootstrap_source = services.get(bootstrap_name)
+        if not isinstance(bootstrap_source, dict):
+            raise SystemExit(
+                "FAIL: Product Ops deployment-only Elasticsearch bootstrap is missing"
+            )
+        deployment_environment = dict(
+            (data_plane_projection.get("deploymentEnvironment") or {}).get(
+                "deployment-control.telemetry.admin"
+            )
+            or {}
+        )
+        owner_environment = dict(
+            (data_plane_projection.get("environment") or {}).get(
+                "product-ops-service"
+            )
+            or {}
+        )
+        admin_credential = deployment_environment.get("credential")
+        admin_endpoint = deployment_environment.get("endpoint")
+        if not admin_credential or not admin_endpoint:
+            raise SystemExit(
+                "FAIL: Product Ops Elasticsearch admin binding is incomplete"
+            )
+        bootstrap = dict(bootstrap_source)
+        bootstrap["environment"] = {
+            "PRODUCT_OPS_ELASTICSEARCH_ADMIN_ENDPOINT": admin_endpoint,
+            "PRODUCT_OPS_ELASTICSEARCH_ADMIN_API_KEY": admin_credential,
+            **{
+                key: value
+                for key, value in owner_environment.items()
+                if key.endswith("_INDEX")
+            },
+        }
+        bootstrap["command"] = ["product-ops-elasticsearch-bootstrap"]
+        bootstrap["labels"] = {
+            **dict(bootstrap.get("labels") or {}),
+            "com.quwoquan.runtime.one-shot": "true",
+        }
+        bootstrap.pop("ports", None)
+        bootstrap.pop("healthcheck", None)
+        rendered_services[bootstrap_name] = bootstrap
+
     for service_name in selected:
         raw = services.get(service_name)
         if raw is None:
@@ -325,7 +503,26 @@ def main() -> int:
             data_mode=args.data_mode,
             prevalidation_images=prevalidation_images,
             startup_services=set(startup_services),
+            data_plane_environment=(
+                dict(
+                    (
+                        data_plane_projection.get("environment") or {}
+                    ).get(service_name) or {}
+                )
+                if data_plane_projection is not None
+                else None
+            ),
         )
+        if (
+            service_name == "product-ops-service"
+            and args.data_mode == "external"
+            and "product-ops-service-migrate-elasticsearch" in rendered_services
+        ):
+            dependencies = dict(rendered.get("depends_on") or {})
+            dependencies["product-ops-service-migrate-elasticsearch"] = {
+                "condition": "service_completed_successfully"
+            }
+            rendered["depends_on"] = dependencies
         if service_network_name:
             rendered["networks"] = ["service-plane"]
         rendered_services[service_name] = rendered
@@ -336,6 +533,7 @@ def main() -> int:
             "service-plane": {"name": service_network_name}
         }
     top_level_volumes = dict(template.get("volumes") or {})
+    top_level_volumes.update(isolated_data_volumes)
     if any(name in RUNTIME_LOG_EXPORT_SERVICES for name in rendered_services):
         top_level_volumes.setdefault("runtime-log-spool", {})
     if args.instance == "prevalidate" and "platform-ops-service" in rendered_services:
@@ -410,6 +608,12 @@ def main() -> int:
         "startupServices": startup_services,
         "imageAndConfigOnlyServices": image_only_services,
         "dataMode": args.data_mode,
+        "dataPlaneBinding": data_plane_identity,
+        "dataPlaneBindingDigest": (
+            str(data_plane_projection.get("bindingDigest") or "")
+            if data_plane_projection is not None
+            else ""
+        ),
         "configServices": config_services,
         "candidateDigest": args.candidate_digest,
         "imageTransportTag": args.image_transport_tag,

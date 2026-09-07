@@ -5,6 +5,7 @@ package api_integration
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/url"
@@ -54,7 +55,7 @@ func TestCircleSearchItemViewProductionSinkProjectsIntoRealElasticsearch(t *test
 	defer cleanup()
 
 	built, err := viewes.Build(viewes.Config{
-		Enabled: true, Endpoints: []string{endpoint}, RequestTimeoutMs: 10_000,
+		Enabled: true, Endpoints: []string{endpoint}, RequestTimeoutMs: 30_000,
 		Shards: 1, Replicas: 0,
 	})
 	if err != nil {
@@ -63,39 +64,154 @@ func TestCircleSearchItemViewProductionSinkProjectsIntoRealElasticsearch(t *test
 	if err := built.EnsureIndex(ctx); err != nil {
 		t.Fatal(err)
 	}
-	item := viewapp.SearchItem{
-		CircleID: "circle-1", DisplayName: "洱海骑行圈", Description: "环湖骑行",
+	itemV2 := viewapp.SearchItem{
+		CircleID: "circle-1", DisplayName: "洱海骑行圈 v2", Description: "环湖骑行",
 		CategoryID: "outdoor", MemberCount: 120, PostCount: 30,
-		Visibility: "public", SourceVersion: 7,
+		Visibility: "public", SourceVersion: 2,
 	}
 	sink := viewevents.NewSink(viewapp.NewProjector(built.Index), searchSnapshots{
-		item: item, visible: true,
+		item: itemV2, visible: true,
 	})
 	database := testsupport.StartRealMongo(t, "circle_search_item_view_api")
 	checkpoints := viewpersistence.NewMongoCheckpointStore(database)
 	relay := viewapp.NewRelay(lifecycleSource{events: []viewapp.LifecycleEvent{
-		{EventID: "circle-updated-7", Type: "CircleUpdated", CircleID: item.CircleID, SourceVersion: item.SourceVersion, Checkpoint: "7"},
+		{EventID: "circle-updated-2", Type: "CircleUpdated", CircleID: itemV2.CircleID, SourceVersion: itemV2.SourceVersion, Checkpoint: "2"},
 	}}, checkpoints, sink, "circle-search-api")
 	if count, err := relay.Drain(ctx, 10); err != nil || count != 1 {
 		t.Fatalf("drain count=%d err=%v", count, err)
 	}
 	document := loadCircleSearchDocument(t, ctx, endpoint, "circle.circle:circle-1", http.StatusOK)
 	payload, _ := document["payload"].(map[string]any)
-	if document["objectId"] != "circle-1" || payload["sourceVersion"] != "7" || payload["memberCount"] != "120" {
-		t.Fatalf("canonical search document drifted: %#v", document)
+	if document["objectId"] != "circle-1" || document["title"] != itemV2.DisplayName ||
+		document["sourceVersion"] != float64(2) || document["deleted"] != false ||
+		payload["sourceVersion"] != "2" || payload["memberCount"] != "120" {
+		t.Fatalf("canonical v2 search document drifted: %#v", document)
 	}
-	if checkpoint, err := checkpoints.Load(ctx, "circle-search-api"); err != nil || checkpoint != "7" {
+	if checkpoint, err := checkpoints.Load(ctx, "circle-search-api"); err != nil || checkpoint != "2" {
 		t.Fatalf("projection checkpoint=%q err=%v", checkpoint, err)
 	}
 
-	if err := sink.Apply(ctx, viewapp.LifecycleEvent{
-		Type: "CircleArchived", CircleID: item.CircleID, SourceVersion: item.SourceVersion + 1,
-	}); err != nil {
+	lateV1 := itemV2
+	lateV1.DisplayName = "late version one"
+	lateV1.SourceVersion = 1
+	if applied, err := built.Index.UpsertIfNewer(ctx, lateV1); err != nil || applied {
+		t.Fatalf("late v1 applied=%v err=%v; external versioning must reject it", applied, err)
+	}
+	document = loadCircleSearchDocument(t, ctx, endpoint, "circle.circle:circle-1", http.StatusOK)
+	if document["title"] != itemV2.DisplayName || document["sourceVersion"] != float64(2) || document["deleted"] != false {
+		t.Fatalf("late v1 overwrote v2: %#v", document)
+	}
+
+	// Equal external versions are classified by canonical source digest: exact
+	// replay is a no-op, while divergent facts fail closed.
+	if applied, err := built.Index.UpsertIfNewer(ctx, itemV2); err != nil || applied {
+		t.Fatalf("exact v2 replay applied=%v err=%v", applied, err)
+	}
+	conflictingV2 := itemV2
+	conflictingV2.DisplayName = "conflicting version two"
+	if applied, err := built.Index.UpsertIfNewer(ctx, conflictingV2); applied || !errors.Is(err, es.ErrSameVersionDigestConflict) {
+		t.Fatalf("conflicting v2 applied=%v err=%v", applied, err)
+	}
+	document = loadCircleSearchDocument(t, ctx, endpoint, "circle.circle:circle-1", http.StatusOK)
+	if document["title"] != itemV2.DisplayName || document["sourceVersion"] != float64(2) {
+		t.Fatalf("equal-version conflict changed the winner: %#v", document)
+	}
+
+	concurrentItems := []viewapp.SearchItem{itemV2, itemV2}
+	concurrentItems[0].DisplayName = "version four"
+	concurrentItems[0].SourceVersion = 4
+	concurrentItems[1].DisplayName = "version five"
+	concurrentItems[1].SourceVersion = 5
+	type writeResult struct {
+		version int64
+		applied bool
+		err     error
+	}
+	start := make(chan struct{})
+	results := make(chan writeResult, len(concurrentItems))
+	for _, item := range concurrentItems {
+		go func(candidate viewapp.SearchItem) {
+			<-start
+			applied, err := built.Index.UpsertIfNewer(ctx, candidate)
+			results <- writeResult{version: candidate.SourceVersion, applied: applied, err: err}
+		}(item)
+	}
+	close(start)
+	v5Applied := false
+	for range concurrentItems {
+		result := <-results
+		if result.err != nil {
+			t.Fatalf("concurrent v%d: %v", result.version, result.err)
+		}
+		if result.version == 5 {
+			v5Applied = result.applied
+		}
+	}
+	if !v5Applied {
+		t.Fatal("v5 must win regardless of concurrent v4 arrival order")
+	}
+	document = loadCircleSearchDocument(t, ctx, endpoint, "circle.circle:circle-1", http.StatusOK)
+	if document["title"] != "version five" || document["sourceVersion"] != float64(5) || document["deleted"] != false {
+		t.Fatalf("concurrent v4/v5 did not converge to v5: %#v", document)
+	}
+
+	if applied, err := built.Index.DeleteIfNotOlder(ctx, itemV2.CircleID, 6); err != nil || !applied {
+		t.Fatalf("v6 tombstone applied=%v err=%v", applied, err)
+	}
+	resurrectionV2 := itemV2
+	resurrectionV2.DisplayName = "late resurrection v2"
+	if applied, err := built.Index.UpsertIfNewer(ctx, resurrectionV2); err != nil || applied {
+		t.Fatalf("late upsert v2 after tombstone applied=%v err=%v", applied, err)
+	}
+	if applied, err := built.Index.DeleteIfNotOlder(ctx, itemV2.CircleID, 6); err != nil || applied {
+		t.Fatalf("same-version tombstone replay applied=%v err=%v", applied, err)
+	}
+	equalVersionResurrection := itemV2
+	equalVersionResurrection.DisplayName = "same-version resurrection v6"
+	equalVersionResurrection.SourceVersion = 6
+	if applied, err := built.Index.UpsertIfNewer(ctx, equalVersionResurrection); applied || !errors.Is(err, es.ErrSameVersionDigestConflict) {
+		t.Fatalf("same-version upsert against tombstone applied=%v err=%v", applied, err)
+	}
+	tombstone := loadCircleSearchDocument(t, ctx, endpoint, "circle.circle:circle-1", http.StatusOK)
+	if tombstone["deleted"] != true || tombstone["sourceVersion"] != float64(6) ||
+		!strings.HasPrefix(tombstone["sourceDigest"].(string), "sha256:") || len(tombstone) != 5 {
+		t.Fatalf("persistent CircleSearchItemView tombstone drifted: %#v", tombstone)
+	}
+
+	visible := itemV2
+	visible.CircleID = "circle-visible"
+	visible.DisplayName = "visible control"
+	visible.SourceVersion = 1
+	if applied, err := built.Index.UpsertIfNewer(ctx, visible); err != nil || !applied {
+		t.Fatalf("visible control applied=%v err=%v", applied, err)
+	}
+	visibleSource := loadCircleSearchDocument(t, ctx, endpoint, "circle.circle:circle-visible", http.StatusOK)
+	if visibleSource["sourceVersion"] != float64(1) || visibleSource["deleted"] != false {
+		t.Fatalf("visible control source-version fields drifted: %#v", visibleSource)
+	}
+	if err := built.Client.Refresh(ctx); err != nil {
 		t.Fatal(err)
 	}
-	loadCircleSearchDocument(t, ctx, endpoint, "circle.circle:circle-1", http.StatusNotFound)
+	candidates, err := built.Client.Search(ctx, built.Client.IndexName(), map[string]any{
+		"size":  20,
+		"query": map[string]any{"match_all": map[string]any{}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	foundVisible := false
+	for _, candidate := range candidates {
+		switch candidate.Document.ObjectID {
+		case itemV2.CircleID:
+			t.Fatalf("default search returned deleted tombstone: %+v", candidate.Document)
+		case visible.CircleID:
+			foundVisible = true
+		}
+	}
+	if !foundVisible {
+		t.Fatalf("default search omitted visible control: %+v", candidates)
+	}
 }
-
 func loadCircleSearchDocument(
 	t *testing.T,
 	ctx context.Context,
@@ -171,7 +287,7 @@ func startCircleSearchElasticsearch(t *testing.T, ctx context.Context) (string, 
 		ctx,
 		testcontainers.GenericContainerRequest{
 			ContainerRequest: testcontainers.ContainerRequest{
-				Image:        "docker.elastic.co/elasticsearch/elasticsearch:8.13.4",
+				Image:        "quwoquan/elasticsearch-cjk:8.13.4",
 				SkipReaper:   true,
 				Env:          environment,
 				ExposedPorts: []string{"9200/tcp"},

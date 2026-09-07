@@ -26,23 +26,23 @@ func (index *Index) UpsertIfNewer(ctx context.Context, item viewapp.SearchItem) 
 	if err != nil {
 		return false, err
 	}
-	if err := index.indexer.Apply(ctx, es.ChangeEvent{Op: es.OpUpsert, Doc: document}); err != nil {
-		return false, err
-	}
-	return true, nil
+	return index.indexer.ApplyVersioned(ctx, es.VersionedChangeEvent{
+		Op: es.OpUpsert, Doc: document, SourceVersion: item.SourceVersion,
+	})
 }
 
 func (index *Index) DeleteIfNotOlder(ctx context.Context, circleID string, sourceVersion int64) (bool, error) {
 	if strings.TrimSpace(circleID) == "" || sourceVersion <= 0 {
 		return false, fmt.Errorf("CircleSearchItemView delete requires identity and sourceVersion")
 	}
-	if err := index.indexer.Apply(ctx, es.ChangeEvent{
-		Op:  es.OpDelete,
-		Doc: rtsearch.Document{ObjectType: rtsearch.ObjectTypeCircle, ObjectID: strings.TrimSpace(circleID)},
-	}); err != nil {
-		return false, err
-	}
-	return true, nil
+	return index.indexer.ApplyVersioned(ctx, es.VersionedChangeEvent{
+		Op: es.OpDelete,
+		Doc: rtsearch.Document{
+			ObjectType: rtsearch.ObjectTypeCircle,
+			ObjectID:   strings.TrimSpace(circleID),
+		},
+		SourceVersion: sourceVersion,
+	})
 }
 
 func documentFrom(item viewapp.SearchItem) (rtsearch.Document, error) {

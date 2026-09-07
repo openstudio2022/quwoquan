@@ -1,4 +1,4 @@
-backend: redis_stream
+backend: redis
 role: append_only
 streams:
   events.search.recommendation_signals:

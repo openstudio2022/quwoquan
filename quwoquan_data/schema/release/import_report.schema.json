@@ -11,21 +11,36 @@
     "releaseId",
     "sourceOwner",
     "manifestDigest",
-    "mode",
-    "deletePolicy",
     "counts",
-    "postBindings",
-    "auditEvents"
+    "postBindings"
   ],
   "additionalProperties": false,
   "properties": {
     "status": {
+      "description": "dry-run 只加载不写；staged/verified/active 是三阶段回执；imported 是历史一步式激活回执。",
       "type": "string",
       "enum": [
         "dry-run",
+        "staged",
+        "verified",
+        "active",
         "imported"
       ]
     },
+    "phase": {
+      "description": "content importer 三阶段：stage 只写 posts_candidate 与 additive 媒体归属；verify 读回候选闭包；activate 才在单事务内提交 Post/outbox/pointer。",
+      "enum": ["stage", "verify", "activate"]
+    },
+    "candidateRevision": {
+      "description": "stage 分配、verify/activate 必须精确回显的候选身份。",
+      "type": "integer",
+      "minimum": 1
+    },
+    "previousReleaseId": {"type": "string"},
+    "previousManifestDigest": {"type": "string"},
+    "previousRevision": {"type": "integer", "minimum": 0},
+    "candidatePostIds": {"type": "array", "items": {"type": "string", "minLength": 1}},
+    "candidateSourceHashes": {"type": "array", "items": {"type": "string", "minLength": 1}},
     "environment": {
       "type": "string",
       "minLength": 1
@@ -70,6 +85,16 @@
         "researchLoaded": {"type": "integer", "minimum": 0},
         "commercialLoaded": {"type": "integer", "minimum": 0},
         "postsUpserted": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "postsStaged": {
+          "description": "stage 写入 posts_candidate 的候选 Post 数。",
+          "type": "integer",
+          "minimum": 0
+        },
+        "candidatePosts": {
+          "description": "verify 按 candidateRevision 读回的候选 Post 数，必须等于 postsLoaded。",
           "type": "integer",
           "minimum": 0
         },
@@ -141,6 +166,16 @@
         "type": "string"
       }
     },
+    "revision": {
+      "description": "成功 activation 后 data_release_state 的 authoritative revision。dry-run/staged/verified 不产生 revision。",
+      "type": "integer",
+      "minimum": 1
+    },
+    "sourceVersion": {
+      "description": "成功 activation 后写入 Post/outbox/active pointer 的 immutable source version。",
+      "type": "integer",
+      "minimum": 1
+    },
     "generatedAt": {
       "type": "string"
     },
@@ -150,5 +185,53 @@
     "schema": {
       "const": "quwoquan.content_import_report"
     }
-  }
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"status": {"enum": ["imported", "active"]}}, "required": ["status"]},
+      "then": {"required": ["revision", "sourceVersion", "mode", "deletePolicy", "auditEvents"]},
+      "else": {
+        "not": {
+          "anyOf": [
+            {"required": ["revision"]},
+            {"required": ["sourceVersion"]}
+          ]
+        }
+      }
+    },
+    {
+      "if": {"properties": {"status": {"enum": ["staged", "verified", "active"]}}, "required": ["status"]},
+      "then": {"required": ["phase", "candidateRevision"]},
+      "else": {
+        "not": {
+          "anyOf": [
+            {"required": ["phase"]},
+            {"required": ["candidateRevision"]}
+          ]
+        }
+      }
+    },
+    {
+      "if": {"properties": {"status": {"const": "staged"}}, "required": ["status"]},
+      "then": {
+        "required": ["mode", "deletePolicy", "auditEvents", "previousReleaseId", "previousManifestDigest", "previousRevision"],
+        "properties": {"phase": {"const": "stage"}}
+      }
+    },
+    {
+      "if": {"properties": {"status": {"const": "verified"}}, "required": ["status"]},
+      "then": {
+        "required": ["candidatePostIds", "candidateSourceHashes", "auditEvents"],
+        "properties": {"phase": {"const": "verify"}}
+      }
+    },
+    {
+      "if": {"properties": {"status": {"const": "active"}}, "required": ["status"]},
+      "then": {"properties": {"phase": {"const": "activate"}}}
+    },
+    {
+      "if": {"properties": {"status": {"const": "dry-run"}}, "required": ["status"]},
+      "then": {"required": ["mode", "deletePolicy", "auditEvents"]}
+    }
+  ]
 }

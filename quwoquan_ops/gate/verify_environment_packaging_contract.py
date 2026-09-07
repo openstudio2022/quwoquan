@@ -14,6 +14,10 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from quwoquan_ops.cli.lib.data_plane_binding import (
+    DataPlaneBindingError,
+    validate_canonical_data_plane_binding,
+)
 from quwoquan_ops.cli.lib.environment_topology import (
     ENVIRONMENTS,
     app_artifact_policy,
@@ -31,7 +35,8 @@ from quwoquan_ops.cli.lib.output_paths import (
 )
 
 _PRODUCT_TELEMETRY_SECRET_RUNTIME_VARIABLES = (
-    "PRODUCT_OPS_ELASTICSEARCH_API_KEY",
+    "PRODUCT_OPS_TELEMETRY_ELASTICSEARCH_API_KEY",
+    "PRODUCT_OPS_RUNTIME_LOG_ELASTICSEARCH_API_KEY",
 )
 
 SHA256_RE = re.compile(r"sha256:[0-9a-f]{64}")
@@ -170,11 +175,47 @@ def validate_runtime_shared_package(
         issues.append("invalid runtime-shared package schema")
     if manifest.get("environment") != environment:
         issues.append("runtime-shared package environment mismatch")
+    if manifest.get("target") != target:
+        issues.append("runtime-shared package target mismatch")
+    data_plane = manifest.get("dataPlaneBinding")
+    if not isinstance(data_plane, dict) or set(data_plane) != {
+        "ref", "digest", "bindingDigest"
+    }:
+        issues.append("runtime-shared data-plane binding identity mismatch")
+    else:
+        data_plane_path = package_dir / "data-plane-binding.json"
+        if data_plane.get("ref") != "packages/runtime-shared/data-plane-binding.json":
+            issues.append("runtime-shared data-plane binding ref mismatch")
+        elif not data_plane_path.is_file() or data_plane_path.is_symlink():
+            issues.append("runtime-shared data-plane binding artifact missing")
+        elif _sha256(data_plane_path) != data_plane.get("digest"):
+            issues.append("runtime-shared data-plane binding artifact drifted")
+        else:
+            try:
+                canonical = validate_canonical_data_plane_binding(
+                    json.loads(data_plane_path.read_text(encoding="utf-8"))
+                )
+            except (
+                OSError,
+                UnicodeError,
+                json.JSONDecodeError,
+                DataPlaneBindingError,
+            ):
+                canonical = None
+            if (
+                canonical is None
+                or canonical.get("bindingDigest") != data_plane.get("bindingDigest")
+            ):
+                issues.append("runtime-shared data-plane binding digest drifted")
     provenance = manifest.get("provenance")
     files = provenance.get("files") if isinstance(provenance, dict) else None
     if not isinstance(files, dict) or set(files) != RUNTIME_SHARED_FILES:
         return [*issues, "runtime-shared package provenance files mismatch"]
-    required_files = {*RUNTIME_SHARED_FILES, "manifest.json"}
+    required_files = {
+        *RUNTIME_SHARED_FILES,
+        "data-plane-binding.json",
+        "manifest.json",
+    }
     actual_files = {
         path.relative_to(package_dir).as_posix()
         for path in package_dir.rglob("*")

@@ -29,3 +29,15 @@ collections:
     indexes:
     - {name: uq_connector_authorization_grant_receipt_digest, keys: {grantReceiptDigest: 1}, unique: true}
     - {name: ttl_connector_authorization_grant_receipts, keys: {expiresAt: 1}, expire_after_seconds: 0}
+transaction:
+  scope:
+  - connector_authorizations
+  - connector_authorization_command_receipts
+  - connector_authorization_outbox
+  - connector_authorization_grant_receipts
+  isolation: mongo_transaction
+  guarantees:
+  - authorization_revision_cas
+  - grant_receipt_credential_lifecycle
+  - authorization_receipt_outbox_atomicity
+  mechanism: version_cas

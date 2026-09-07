@@ -1,10 +1,26 @@
 backend: mongodb
+resources:
+  run_store:
+    engine: mongodb
+    role: authority
+    required: true
+  run_control_signals:
+    engine: redis
+    role: runtime
+    required: true
 collections:
   assistant_runs:
     publication_role: not_published
     entity: AssistantRun
     description: AssistantRun aggregate 与 terminalSnapshot 的 authoritative 无 TTL 存储；事件日志过期不得影响 GetRun、SSE 终态重放或历史恢复。
     indexes:
+    - name: uq_runs_active_session
+      keys:
+        activeSessionKey: 1
+      unique: true
+      partial_filter:
+        activeSessionKey:
+          $type: string
     - name: idx_runs_user_created
       keys:
         userId: 1
@@ -164,9 +180,12 @@ transaction:
   isolation: mongo_transaction
   guarantees:
   - aggregate_revision_cas
+  - one_active_run_per_session_unique_winner
+  - active_session_key_terminal_release_by_run_identity_cas
   - work_claim_fencing
   - journal_receipt_outbox_atomicity
   - stop_hook_delivery_intent_atomicity
+  mechanism: unique_constraint
 redis_cache:
 - key: page_ctx:{userId}
   ttl_seconds: 300

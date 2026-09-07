@@ -281,9 +281,14 @@ class LocalGammaStartupReleaseLifecycleTest(unittest.TestCase):
         service_block = service_compose("product-ops-service")
         start_script = START_SCRIPT.read_text(encoding="utf-8")
 
-        key = "PRODUCT_OPS_ELASTICSEARCH_ENDPOINT"
-        self.assertIn(f'{key}: "${{{key}:-}}"', service_block)
-        self.assertIn(f'-z "${{{key}:-}}"', start_script)
+        for key in (
+            "PRODUCT_OPS_TELEMETRY_ELASTICSEARCH_ENDPOINT",
+            "PRODUCT_OPS_RUNTIME_LOG_ELASTICSEARCH_ENDPOINT",
+        ):
+            self.assertIn(f'{key}: "${{{key}:-}}"', service_block)
+            self.assertIn(f'-z "${{{key}:-}}"', start_script)
+        self.assertNotIn("PRODUCT_OPS_ELASTICSEARCH_ENDPOINT", service_block)
+        self.assertNotIn("PRODUCT_OPS_ELASTICSEARCH_ENDPOINT", start_script)
         self.assertIn(
             "QWQ_OBSERVABILITY_LOG_SINK_COMPOSE_FILE",
             start_script,
@@ -463,10 +468,33 @@ class LocalGammaStartupReleaseLifecycleTest(unittest.TestCase):
         # healthy 的 Postgres/Redis，以及 Elasticsearch（telemetry ILM/index
         # 初始化重试耗尽后 exit 1）。基础设施集必须一次补齐。
         self.assertIn(
-            "for bootstrap_service in mongodb mongo-init postgres redis elasticsearch; do",
+            "for bootstrap_service in service-core product-ops-service postgres-init; do",
             bootstrap_block,
         )
-        self.assertIn('"${compose_cmd[@]}" ps -aq mongo-init', bootstrap_block)
+        self.assertIn(
+            "for bootstrap_service in mongodb mongo-init postgres postgres-init redis elasticsearch; do",
+            bootstrap_block,
+        )
+        self.assertIn(
+            "for bootstrap_service in mongo-init postgres-init; do",
+            bootstrap_block,
+        )
+        self.assertIn(
+            '"${compose_cmd[@]}" ps -aq "$bootstrap_service"',
+            bootstrap_block,
+        )
+        for init_service in ("mongo-init", "postgres-init"):
+            self.assertIn(init_service, bootstrap_block)
+        self.assertIn(
+            "$bootstrap_service did not complete within the policy owner bootstrap deadline",
+            bootstrap_block,
+        )
+        self.assertLess(
+            bootstrap_block.index(
+                "for bootstrap_service in mongo-init postgres-init; do"
+            ),
+            bootstrap_block.index("up -d --no-build --no-deps service-core"),
+        )
         self.assertIn(
             "for bootstrap_service in postgres redis elasticsearch; do",
             bootstrap_block,

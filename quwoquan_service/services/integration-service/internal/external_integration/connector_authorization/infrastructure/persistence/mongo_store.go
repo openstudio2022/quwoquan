@@ -388,6 +388,18 @@ func (store *MongoStore) Revoke(
 	if err != nil {
 		return err
 	}
+	grantReceiptUpdate, err := store.grantReceipts.UpdateOne(ctx, bson.M{
+		"accountId": accountID, "connectorId": connectorID,
+		"grantReceiptDigest": grantReceiptDigest,
+	}, bson.M{
+		"$set": bson.M{"credentialRef": "", "revokedAt": occurredAt},
+	})
+	if err != nil {
+		return err
+	}
+	if grantReceiptUpdate.MatchedCount != 1 {
+		return model.ErrNotFound
+	}
 	return store.insertOutbox(ctx, authorization, "ConnectorAuthorizationRevoked")
 }
 

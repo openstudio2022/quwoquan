@@ -232,8 +232,8 @@ func TestConnectorInvocationHTTPUsesRealMongoConnectionAndDefinition(t *testing.
 	now := time.Date(2026, time.August, 5, 13, 0, 0, 0, time.UTC)
 	definitionStore := definitionpersistence.NewMongoStore(runtime.Database)
 	authorizationStore := authorizationpersistence.NewMongoStore(runtime.Database)
-	connectionStore := connectionpersistence.NewMongoStore(runtime.Database, authorizationStore)
 	invocationStore := invocationpersistence.NewMongoStore(runtime.Database)
+	connectionStore := connectionpersistence.NewMongoStore(runtime.Database, authorizationStore, invocationStore)
 	for name, ensure := range map[string]func(context.Context) error{
 		"definition":    definitionStore.EnsureIndexes,
 		"authorization": authorizationStore.EnsureIndexes,

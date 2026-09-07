@@ -27,10 +27,6 @@ from quwoquan_ops.cli.prod.render_prod_plane_stack_lib.constants import (  # noq
     ACCESS_MANIFEST,
     DEFAULT_OUTPUT_ROOT,
     EXTERNAL_DATA_HOST,
-    EXTERNAL_MONGO_PORT,
-    EXTERNAL_MONGO_URI,
-    EXTERNAL_POSTGRES_PORT,
-    EXTERNAL_REDIS_PORT,
     OBSERVABILITY_SOURCE_ROOT,
     PREVALIDATION_AUTH_SECRET_KEYS,
     PROD_CADDY_IMAGE,
@@ -126,6 +122,7 @@ def _rewrite_service(
     data_mode: str = "external",
     prevalidation_images: dict[str, str] | None = None,
     startup_services: set[str] | None = None,
+    data_plane_environment: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     updated = copy.deepcopy(spec)
     updated.pop("build", None)
@@ -257,40 +254,30 @@ def _rewrite_service(
             environment["RUNTIME_LOG_SPOOL_DIR"] = (
                 f"/var/lib/quwoquan/runtime-log-spool/{name}"
             )
-        edge_prevalidation = (
-            instance == "prevalidate"
-            and data_mode == "isolated"
-            and name in {"realtime-gateway", "rtc-service"}
-        )
-        isolated_local = data_mode == "isolated" and not edge_prevalidation
-        mongo_host = "mongodb" if isolated_local else EXTERNAL_DATA_HOST
-        mongo_port = (
-            27017
-            if isolated_local
-            else (39410 if edge_prevalidation else EXTERNAL_MONGO_PORT)
-        )
-        mongo_uri = f"mongodb://{mongo_host}:{mongo_port}/?directConnection=true"
-        redis_host = "redis" if isolated_local else EXTERNAL_DATA_HOST
-        redis_port = (
-            6379
-            if isolated_local
-            else (39420 if edge_prevalidation else EXTERNAL_REDIS_PORT)
-        )
-        redis_addr = f"{redis_host}:{redis_port}"
-        postgres_host = "postgres" if isolated_local else EXTERNAL_DATA_HOST
-        postgres_port = (
-            5432
-            if isolated_local
-            else (39400 if edge_prevalidation else EXTERNAL_POSTGRES_PORT)
-        )
-        if name == "recommendation-service":
-            environment["MONGODB_URI"] = mongo_uri
-        if name == "content-service":
-            environment["CONTENT_MONGO_URI"] = mongo_uri
-            for scene in ("REC", "GENERAL", "REALTIME"):
-                _wire_redis_scene(environment, f"CONTENT_REDIS_{scene}", redis_addr)
-            environment["SEARCH_ES_ENABLED"] = "true"
-            if data_mode == "isolated":
+        if data_mode == "external":
+            if data_plane_environment is not None:
+                environment.update(data_plane_environment)
+        else:
+            edge_prevalidation = (
+                instance == "prevalidate"
+                and name in {"realtime-gateway", "rtc-service"}
+            )
+            isolated_local = not edge_prevalidation
+            mongo_host = "mongodb" if isolated_local else EXTERNAL_DATA_HOST
+            mongo_port = 27017 if isolated_local else 39410
+            mongo_uri = f"mongodb://{mongo_host}:{mongo_port}/?directConnection=true"
+            redis_host = "redis" if isolated_local else EXTERNAL_DATA_HOST
+            redis_port = 6379 if isolated_local else 39420
+            redis_addr = f"{redis_host}:{redis_port}"
+            postgres_host = "postgres" if isolated_local else EXTERNAL_DATA_HOST
+            postgres_port = 5432 if isolated_local else 39400
+            if name == "recommendation-service":
+                environment["MONGODB_URI"] = mongo_uri
+            if name == "content-service":
+                environment["CONTENT_MONGO_URI"] = mongo_uri
+                for scene in ("REC", "GENERAL", "REALTIME"):
+                    _wire_redis_scene(environment, f"CONTENT_REDIS_{scene}", redis_addr)
+                environment["SEARCH_ES_ENABLED"] = "true"
                 if (
                     "elasticsearch" not in selected
                     or startup_services is None
@@ -304,121 +291,112 @@ def _rewrite_service(
                 updated.setdefault("depends_on", {})["elasticsearch"] = {
                     "condition": "service_healthy"
                 }
-            else:
-                environment["SEARCH_ES_ENDPOINTS"] = (
-                    "${PROD_CONTENT_SEARCH_ES_ENDPOINTS:?managed content search "
-                    "endpoint is required}"
+            if name == "chat-service":
+                environment["CHAT_MONGO_URI"] = mongo_uri
+                for scene in ("REALTIME", "GENERAL", "RELIABLE_TASK"):
+                    _wire_redis_scene(environment, f"CHAT_REDIS_{scene}", redis_addr)
+            if name == "user-service":
+                environment["USER_POSTGRES_DSN"] = (
+                    f"postgres://quwoquan:quwoquan@{postgres_host}:{postgres_port}/"
+                    "quwoquan?sslmode=disable"
                 )
-        if name == "chat-service":
-            environment["CHAT_MONGO_URI"] = mongo_uri
-            # chat 的三个 scene 各自注入物理地址，不存在需要兜底的 scene，
-            # 因此不再注入无前缀的共享 REDIS_ADDR。
-            for scene in ("REALTIME", "GENERAL", "RELIABLE_TASK"):
-                _wire_redis_scene(environment, f"CHAT_REDIS_{scene}", redis_addr)
-        if name == "user-service":
-            environment["USER_POSTGRES_DSN"] = (
-                f"postgres://quwoquan:quwoquan@{postgres_host}:{postgres_port}/"
-                "quwoquan?sslmode=disable"
+                environment["USER_MONGO_URI"] = mongo_uri
+                _wire_redis_scene(environment, "USER_REDIS_GENERAL", redis_addr)
+            if name == "assistant-service":
+                environment["ASSISTANT_MONGO_URI"] = mongo_uri
+                for scene in ("GENERAL", "REC"):
+                    _wire_redis_scene(environment, f"ASSISTANT_REDIS_{scene}", redis_addr)
+            if name == "product-ops-service":
+                environment["PRODUCT_OPS_POSTGRES_DSN"] = (
+                    f"postgres://quwoquan:quwoquan@{postgres_host}:{postgres_port}/"
+                    "quwoquan?sslmode=disable"
+                )
+                environment["PRODUCT_OPS_MONGO_URI"] = mongo_uri
+                for scene in ("REC", "GENERAL"):
+                    _wire_redis_scene(environment, f"PRODUCT_OPS_REDIS_{scene}", redis_addr)
+            if name == "platform-ops-service":
+                environment.pop("POSTGRES_DSN", None)
+                environment["PLATFORM_OPS_POSTGRES_DSN"] = (
+                    f"postgres://quwoquan:quwoquan@{postgres_host}:{postgres_port}/"
+                    "quwoquan?sslmode=disable"
+                )
+                _wire_redis_scene(environment, "PLATFORM_OPS_REDIS_GENERAL", redis_addr)
+            if name == "tag-service":
+                _wire_redis_scene(environment, "TAG_REDIS_GENERAL", redis_addr)
+                environment["TAG_MONGO_URI"] = mongo_uri
+            if name == "entity-service":
+                environment["ENTITY_MONGO_URI"] = mongo_uri
+                _wire_redis_scene(environment, "ENTITY_REDIS_GENERAL", redis_addr)
+                environment["SEARCH_ES_ENABLED"] = "true"
+                environment["SEARCH_ES_ENDPOINTS"] = "http://elasticsearch:9200"
+            if name == "integration-service":
+                environment["INTEGRATION_MONGO_URI"] = mongo_uri
+                _wire_redis_scene(environment, "INTEGRATION_REDIS_GENERAL", redis_addr)
+            if name == "search-service":
+                environment["SEARCH_MONGO_URI"] = mongo_uri
+                for scene in ("REC", "GENERAL"):
+                    _wire_redis_scene(environment, f"SEARCH_REDIS_{scene}", redis_addr)
+                environment["SEARCH_ES_ENABLED"] = "true"
+                environment["SEARCH_ES_ENDPOINTS"] = "http://elasticsearch:9200"
+            if name == "circle-service":
+                environment["CIRCLE_MONGO_URI"] = mongo_uri
+                _wire_redis_scene(environment, "CIRCLE_REDIS_GENERAL", redis_addr)
+                environment["SEARCH_ES_ENABLED"] = "true"
+                environment["SEARCH_ES_ENDPOINTS"] = "http://elasticsearch:9200"
+            if name == "notification-service":
+                environment["NOTIFICATION_MONGO_URI"] = mongo_uri
+                for scene in ("GENERAL", "REALTIME"):
+                    _wire_redis_scene(environment, f"NOTIFICATION_REDIS_{scene}", redis_addr)
+            if name == "realtime-gateway":
+                _wire_redis_scene(
+                    environment, "REALTIME_GATEWAY_REDIS_REALTIME", redis_addr
+                )
+            if name == "rtc-service":
+                environment["RTC_MONGO_URI"] = mongo_uri
+                environment["RTC_REDIS_ADDR"] = redis_addr
+                for scene in ("GENERAL", "REALTIME"):
+                    _wire_redis_scene(environment, f"RTC_REDIS_{scene}", redis_addr)
+        if name == "assistant-service" and instance == "prevalidate":
+            environment.update(
+                {
+                    "ASSISTANT_MODEL_COMPLETION_URL": "https://model-provider-unavailable.invalid/v1/chat/completions",
+                    "ASSISTANT_MODEL_API_KEY": "provider-unavailable",
+                    "ASSISTANT_PUBLIC_SEARCH_URL": "https://search-provider-unavailable.invalid/",
+                    "ASSISTANT_WEATHER_GEOCODING_URL": "https://weather-provider-unavailable.invalid/geocode",
+                    "ASSISTANT_WEATHER_FORECAST_URL": "https://weather-provider-unavailable.invalid/forecast",
+                    "ASSISTANT_FINANCE_CHART_URL": "https://finance-provider-unavailable.invalid/chart",
+                }
             )
-            environment["USER_MONGO_URI"] = mongo_uri
-            # realtime scene 在 user-service 的装配里从 general 继承地址，因此
-            # 只注入 general。
-            _wire_redis_scene(environment, "USER_REDIS_GENERAL", redis_addr)
-        if name == "assistant-service":
-            environment["ASSISTANT_MONGO_URI"] = mongo_uri
-            for scene in ("GENERAL", "REC"):
-                _wire_redis_scene(environment, f"ASSISTANT_REDIS_{scene}", redis_addr)
-            if instance == "prevalidate":
-                environment.update(
-                    {
-                        "ASSISTANT_MODEL_COMPLETION_URL": "https://model-provider-unavailable.invalid/v1/chat/completions",
-                        "ASSISTANT_MODEL_API_KEY": "provider-unavailable",
-                        "ASSISTANT_PUBLIC_SEARCH_URL": "https://search-provider-unavailable.invalid/",
-                        "ASSISTANT_WEATHER_GEOCODING_URL": "https://weather-provider-unavailable.invalid/geocode",
-                        "ASSISTANT_WEATHER_FORECAST_URL": "https://weather-provider-unavailable.invalid/forecast",
-                        "ASSISTANT_FINANCE_CHART_URL": "https://finance-provider-unavailable.invalid/chart",
-                    }
-                )
         if name == "product-ops-service":
-            environment["PRODUCT_OPS_POSTGRES_DSN"] = (
-                f"postgres://quwoquan:quwoquan@{postgres_host}:{postgres_port}/"
-                "quwoquan?sslmode=disable"
-            )
-            environment["PRODUCT_OPS_MONGO_URI"] = mongo_uri
-            for scene in ("REC", "GENERAL"):
-                _wire_redis_scene(environment, f"PRODUCT_OPS_REDIS_{scene}", redis_addr)
             environment["PROMETHEUS_URL"] = "${PRODUCT_OPS_PROMETHEUS_URL:-http://prometheus:9090}"
-            # 云侧服务日志上云内部通道的服务端校验密钥（fail-closed）。
             environment["RUNTIME_LOG_INGEST_TOKEN"] = (
                 "${RUNTIME_LOG_INGEST_TOKEN:?RUNTIME_LOG_INGEST_TOKEN is required}"
             )
-            environment["OPS_OIDC_ISSUER"] = (
-                "${OPS_OIDC_ISSUER:?OPS_OIDC_ISSUER is required}"
-            )
-            environment["OPS_OIDC_AUDIENCE"] = (
-                "${OPS_OIDC_AUDIENCE:?OPS_OIDC_AUDIENCE is required}"
-            )
-            environment["OPS_OIDC_JWKS_URL"] = (
-                "${OPS_OIDC_JWKS_URL:?OPS_OIDC_JWKS_URL is required}"
-            )
+            environment["OPS_OIDC_ISSUER"] = "${OPS_OIDC_ISSUER:?OPS_OIDC_ISSUER is required}"
+            environment["OPS_OIDC_AUDIENCE"] = "${OPS_OIDC_AUDIENCE:?OPS_OIDC_AUDIENCE is required}"
+            environment["OPS_OIDC_JWKS_URL"] = "${OPS_OIDC_JWKS_URL:?OPS_OIDC_JWKS_URL is required}"
         if name == "platform-ops-service":
             environment.pop("POSTGRES_DSN", None)
-            environment["PLATFORM_OPS_POSTGRES_DSN"] = (
-                f"postgres://quwoquan:quwoquan@{postgres_host}:{postgres_port}/"
-                "quwoquan?sslmode=disable"
-            )
-            # ConfigInstanceReport transactional outbox 的 typed event 总线。
-            # compose 基线里的 redis:6379 只在 isolated 数据面成立，hosted 面
-            # 必须指向外部数据主机，否则 outbox 起不来。
-            _wire_redis_scene(environment, "PLATFORM_OPS_REDIS_GENERAL", redis_addr)
-            # Alertmanager 告警回流 ingest 的机器凭据；缺失时服务端 fail-closed。
             environment["ALERT_INGEST_TOKEN"] = "${ALERT_INGEST_TOKEN:?ALERT_INGEST_TOKEN is required}"
-            environment["OPS_OIDC_ISSUER"] = (
-                "${OPS_OIDC_ISSUER:?OPS_OIDC_ISSUER is required}"
-            )
-            environment["OPS_OIDC_AUDIENCE"] = (
-                "${OPS_OIDC_AUDIENCE:?OPS_OIDC_AUDIENCE is required}"
-            )
-            environment["OPS_OIDC_JWKS_URL"] = (
-                "${OPS_OIDC_JWKS_URL:?OPS_OIDC_JWKS_URL is required}"
-            )
-        if name == "tag-service":
-            # tag-service 只读 scene 专属键。
-            _wire_redis_scene(environment, "TAG_REDIS_GENERAL", redis_addr)
-            environment["TAG_MONGO_URI"] = mongo_uri
-        if name == "entity-service":
-            environment["ENTITY_MONGO_URI"] = mongo_uri
-            # general 是本服务 message transport binding 的必需 scene：homepage
-            # 的跨服务事实流建立在跨副本可见的前提上，缺地址会回落进程内存。
-            _wire_redis_scene(environment, "ENTITY_REDIS_GENERAL", redis_addr)
-            # prod-hosted 首波 service plane 不含 elasticsearch（search-service 未迁入），
-            # 关闭 write-time 索引投影；主页读写主链路（Mongo homepages 权威集合）不受影响。
-            if data_mode == "isolated":
-                environment["SEARCH_ES_ENABLED"] = "true"
-                environment["SEARCH_ES_ENDPOINTS"] = "http://elasticsearch:9200"
-            else:
-                environment["SEARCH_ES_ENABLED"] = "false"
-                environment.pop("SEARCH_ES_ENDPOINTS", None)
+            environment["OPS_OIDC_ISSUER"] = "${OPS_OIDC_ISSUER:?OPS_OIDC_ISSUER is required}"
+            environment["OPS_OIDC_AUDIENCE"] = "${OPS_OIDC_AUDIENCE:?OPS_OIDC_AUDIENCE is required}"
+            environment["OPS_OIDC_JWKS_URL"] = "${OPS_OIDC_JWKS_URL:?OPS_OIDC_JWKS_URL is required}"
         if name == "integration-service":
-            environment["INTEGRATION_MONGO_URI"] = mongo_uri
-            # Redis 是 integration 的启动必需依赖（外部交互幂等与限流），此前
-            # 本平面没有任何注入轨，环境快照只留了一个未兑现的占位符地址。
-            _wire_redis_scene(environment, "INTEGRATION_REDIS_GENERAL", redis_addr)
-            environment["INTEGRATION_PUSH_USER_SERVICE_BASE_URL"] = (
-                "http://user-service:18082"
-            )
+            environment["INTEGRATION_PUSH_USER_SERVICE_BASE_URL"] = "http://user-service:18082"
             environment["INTEGRATION_PUSH_APNS_ENVIRONMENT"] = "production"
-            environment["INTEGRATION_PUSH_APNS_KEY_FILE"] = (
-                "/run/secrets/quwoquan/integration/apns-auth-key.p8"
+            environment["INTEGRATION_PUSH_APNS_KEY_FILE"] = "/run/secrets/quwoquan/integration/apns-auth-key.p8"
+            environment["INTEGRATION_PUSH_FCM_SERVICE_ACCOUNT_FILE"] = "/run/secrets/quwoquan/integration/fcm-service-account.json"
+        if name == "notification-service":
+            environment["NOTIFICATION_REDIS_GENERAL_DB"] = "1"
+            environment["NOTIFICATION_REDIS_REALTIME_DB"] = "4"
+            environment["NOTIFICATION_REALTIME_BASE_URL"] = (
+                f"http://{EXTERNAL_DATA_HOST}:"
+                "${LOCAL_GAMMA_REALTIME_PORT:?realtime port is required}"
             )
-            environment["INTEGRATION_PUSH_FCM_SERVICE_ACCOUNT_FILE"] = (
-                "/run/secrets/quwoquan/integration/fcm-service-account.json"
-            )
-        if name == "search-service":
-            # rec scene 的快照声明是云上 cluster；general 未声明物理组网，按
-            # 「本环境不接真实 Redis」保持原样。
-            for scene in ("REC", "GENERAL"):
-                _wire_redis_scene(environment, f"SEARCH_REDIS_{scene}", redis_addr)
+        if name == "rtc-service":
+            environment["RTC_MEDIA_CONNECTION_URL"] = "${PROD_RTC_MEDIA_CONNECTION_URL:?PROD_RTC_MEDIA_CONNECTION_URL is required}"
+            environment["RTC_MEDIA_API_KEY"] = "${PROD_RTC_MEDIA_API_KEY:?PROD_RTC_MEDIA_API_KEY is required}"
+            environment["RTC_MEDIA_API_SECRET"] = "${PROD_RTC_MEDIA_API_SECRET:?PROD_RTC_MEDIA_API_SECRET is required}"
         if instance == "prevalidate" and name == "user-service":
             environment.update(
                 {
@@ -444,38 +422,6 @@ def _rewrite_service(
                 "https://embedding-provider-unavailable.invalid/v1/embeddings"
             )
             environment["CONTENT_EMBEDDING_API_KEY"] = "provider-unavailable"
-        if name == "notification-service":
-            environment["NOTIFICATION_MONGO_URI"] = mongo_uri
-            # notification-service 只读 scene 专属键。
-            for scene in ("GENERAL", "REALTIME"):
-                _wire_redis_scene(environment, f"NOTIFICATION_REDIS_{scene}", redis_addr)
-            environment["NOTIFICATION_REDIS_GENERAL_DB"] = "1"
-            environment["NOTIFICATION_REDIS_REALTIME_DB"] = "4"
-            environment["NOTIFICATION_REALTIME_BASE_URL"] = (
-                f"http://{EXTERNAL_DATA_HOST}:"
-                "${LOCAL_GAMMA_REALTIME_PORT:?realtime port is required}"
-            )
-        if name == "realtime-gateway":
-            _wire_redis_scene(
-                environment, "REALTIME_GATEWAY_REDIS_REALTIME", redis_addr
-            )
-        if name == "rtc-service":
-            environment["RTC_MONGO_URI"] = mongo_uri
-            # rtc 的 rec scene 在装配里复用 general，因此只需接 general 与
-            # realtime 两个 scene；共享兜底键 RTC_REDIS_ADDR 保留为该服务部署面
-            # 的既有契约，scene 专属键优先。
-            environment["RTC_REDIS_ADDR"] = redis_addr
-            for scene in ("GENERAL", "REALTIME"):
-                _wire_redis_scene(environment, f"RTC_REDIS_{scene}", redis_addr)
-            environment["RTC_MEDIA_CONNECTION_URL"] = (
-                "${PROD_RTC_MEDIA_CONNECTION_URL:?PROD_RTC_MEDIA_CONNECTION_URL is required}"
-            )
-            environment["RTC_MEDIA_API_KEY"] = (
-                "${PROD_RTC_MEDIA_API_KEY:?PROD_RTC_MEDIA_API_KEY is required}"
-            )
-            environment["RTC_MEDIA_API_SECRET"] = (
-                "${PROD_RTC_MEDIA_API_SECRET:?PROD_RTC_MEDIA_API_SECRET is required}"
-            )
     if name not in {"gamma-proxy", "postgres", "mongodb", "mongo-init", "redis", "object-storage", "object-storage-init", "elasticsearch"}:
         extra_hosts = list(updated.get("extra_hosts") or [])
         if f"{EXTERNAL_DATA_HOST}:host-gateway" not in extra_hosts:
@@ -591,6 +537,15 @@ def _rewrite_service(
             )
             for item in volumes
         ]
+    if (
+        instance == "prevalidate"
+        and data_mode == "isolated"
+        and name == "elasticsearch"
+    ):
+        updated["ports"] = ["39430:9200"]
+        environment = updated.setdefault("environment", {})
+        environment["cluster.name"] = "quwoquan-prod-prevalidate-logs"
+        environment["node.name"] = "prod-prevalidate-logs-0"
     if instance == "prevalidate":
         limits = _prevalidation_spec().get("resourceLimits") or {}
         defaults = limits.get("defaults") or {}

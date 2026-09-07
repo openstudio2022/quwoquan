@@ -70,6 +70,7 @@ api_routes:
   telemetry: {metric: integration_connector_connection_command, trace: true, attributes: [operation, outcome, error_code, replayed]}
   slo: {latency_p95_ms: 1000, availability_percent: 99.9}
   application: {kind: command, facet: ConnectorConnectionCommandFacade, method: revokeConnection, aggregate_owner: ConnectorConnection, mutation_target: ConnectorConnection, invariant_target: ConnectorConnection}
+  consistency: {atomic_commit: true, arbitration: version_cas}
   description: 原子撤销连接、credential reference、grant 和待执行 invocation；下一个 Run 安全边界立即失效。
 - method: POST
   path: /internal/integrations/connector-capability-grants:resolve
@@ -86,6 +87,7 @@ api_routes:
   telemetry: {metric: integration_connector_capability_resolution, trace: true, attributes: [operation, surface_kind, outcome, reason, error_code]}
   slo: {latency_p95_ms: 300, availability_percent: 99.9}
   application: {kind: query, facet: ConnectorConnectionQueryFacade, method: resolveCapabilityGrant, reader: ConnectorConnectionReader, slice: ConnectorCapabilityGrantDecision}
+  consistency: {source: authority, freshness: read_your_writes, stale_result: fail_closed}
   description: 受信服务使用验签 account subject 与独立 service actor，委托唯一 CapabilityGrantSessionFacade 按 surface、capability 与已授权 connection refs 动态求交；只返回脱敏决定，撤权或过期立即 allowed=false。
 consumers:
 - name: app
@@ -106,7 +108,7 @@ readiness_cases:
   producer: service
   layer: api_integration
   target: {kind: operation, id: ListConnectorConnections}
-  runner_source_path: quwoquan_service/services/integration-service/tests/api_integration/external_integration/connector_connection/connector_connection_mongo__api_integration_test.go
+  runner_source_path: quwoquan_service/services/integration-service/tests/api_integration/external_integration/connector_connection/connector_connection_mongo__data_consistency__api_integration_test.go
   executions:
   - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
 - case_id: get-connector-connection-local
@@ -122,7 +124,7 @@ readiness_cases:
   producer: service
   layer: api_integration
   target: {kind: operation, id: GetConnectorConnection}
-  runner_source_path: quwoquan_service/services/integration-service/tests/api_integration/external_integration/connector_connection/connector_connection_mongo__api_integration_test.go
+  runner_source_path: quwoquan_service/services/integration-service/tests/api_integration/external_integration/connector_connection/connector_connection_mongo__data_consistency__api_integration_test.go
   executions:
   - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
 - case_id: create-connector-connection-local
@@ -138,7 +140,7 @@ readiness_cases:
   producer: service
   layer: api_integration
   target: {kind: operation, id: CreateConnectorConnection}
-  runner_source_path: quwoquan_service/services/integration-service/tests/api_integration/external_integration/connector_connection/connector_connection_mongo__api_integration_test.go
+  runner_source_path: quwoquan_service/services/integration-service/tests/api_integration/external_integration/connector_connection/connector_connection_mongo__data_consistency__api_integration_test.go
   executions:
   - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
 - case_id: revoke-connector-connection-local
@@ -154,7 +156,7 @@ readiness_cases:
   producer: service
   layer: api_integration
   target: {kind: operation, id: RevokeConnectorConnection}
-  runner_source_path: quwoquan_service/services/integration-service/tests/api_integration/external_integration/connector_connection/connector_connection_mongo__api_integration_test.go
+  runner_source_path: quwoquan_service/services/integration-service/tests/api_integration/external_integration/connector_connection/connector_connection_mongo__data_consistency__api_integration_test.go
   executions:
   - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
 - case_id: resolve-connector-capability-grant-local
@@ -170,7 +172,7 @@ readiness_cases:
   producer: service
   layer: api_integration
   target: {kind: operation, id: ResolveConnectorCapabilityGrant}
-  runner_source_path: quwoquan_service/services/integration-service/tests/api_integration/external_integration/connector_connection/connector_connection_mongo__api_integration_test.go
+  runner_source_path: quwoquan_service/services/integration-service/tests/api_integration/external_integration/connector_connection/connector_connection_mongo__data_consistency__api_integration_test.go
   executions:
   - {env: beta, platform: service, device: runner, provider: mongodb-redis, digest_binding: candidate}
 - case_id: connector_connection_list_connector_connections_app_local

@@ -95,6 +95,11 @@ def _deploy_prod_hosted_finalize(scope: dict[str, Any]) -> dict[str, Any]:
             "SERVICE": args.service,
             "CANDIDATE_DIGEST": args.from_candidate_digest,
             "PREVIOUS_CANDIDATE_DIGEST": args.to_candidate_digest,
+            "DATA_PLANE_BINDING": str(
+                _stackctl.deployment_candidate_dir(
+                    "prod-hosted", args.from_candidate_digest
+                ) / "packages/runtime-shared/data-plane-binding.json"
+            ),
             "ROLLOUT_STAGE": "100",
             "DRY_RUN": "false",
             "PROD_IMAGE_DELIVERY_MODE": "skip",

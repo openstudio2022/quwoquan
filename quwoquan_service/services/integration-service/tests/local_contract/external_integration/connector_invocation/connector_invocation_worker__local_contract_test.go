@@ -127,6 +127,62 @@ func TestInvocationWorkerRechecksRevocationBeforeProviderExecution(t *testing.T)
 	}
 }
 
+func TestInvocationWorkerRechecksAuthorityAfterPermitBeforeProviderExecution(t *testing.T) {
+	now := time.Date(2026, time.August, 2, 14, 2, 0, 0, time.UTC)
+	store := &workerStore{found: true, claim: invocationmodel.ExecutionClaim{
+		Invocation: invocationmodel.Invocation{
+			InvocationID: "invocation-race", AccountID: "account-1",
+			ConnectionID: "connection-1", Capability: "calendar.event.create",
+			ResolutionID: "resolution-race", SurfaceKind: "personal",
+			InputDigest: digestValue("input-race"), ConfirmationRef: "confirmation-race",
+			PermitRef: "permit-race", IdempotencyKey: "invoke-race",
+			Status: invocationmodel.StatusExecuting, Revision: 2,
+		},
+		PayloadRef: "protected://payload-race",
+	}}
+	connections := &connectionReader{connection: connectionmodel.Connection{
+		ConnectionID: "connection-1", AccountID: "account-1",
+		ConnectorID: "system_calendar", Status: connectionmodel.StatusActive,
+		CredentialRef:       "protected://credential-race",
+		GrantedCapabilities: []string{"calendar.event.create"}, Revision: 1,
+	}}
+	definition := definitionmodel.Definition{
+		ConnectorID: "system_calendar", Status: definitionmodel.StatusActive,
+		Capabilities: []string{"calendar.event.create"}, SupportedSurfaceKinds: []string{"personal"},
+		ReleaseDigest: digestValue("calendar-contract"),
+	}
+	grantSession, _ := authorizeWorkerInvocation(t, now, connections, definition, &store.claim.Invocation)
+	connections.reads = 0
+	connections.afterRead = func(reads int) {
+		if reads == 2 {
+			connections.connection.Status = connectionmodel.StatusRevoked
+			connections.connection.CredentialRef = ""
+			connections.connection.Revision++
+		}
+	}
+	authority := &recordingExecutionAuthority{permit: invocationapp.ExecutionPermit{
+		PermitRef: "permit-race", Digest: grantmodel.OpaqueDigest("permit-race"),
+		ExpiresAt: now.Add(time.Minute),
+	}}
+	executor := &recordingExecutor{}
+	worker := invocationapp.NewInvocationWorker(
+		store, grantSession, connections, definitionReader{definition: definition},
+		authority, executor, "worker-race", time.Minute, func() time.Time { return now },
+	)
+	processed, err := worker.RunOnce(context.Background())
+	if err != nil || !processed {
+		t.Fatalf("run worker: processed=%v err=%v", processed, err)
+	}
+	if !authority.called || executor.called {
+		t.Fatalf("authority_called=%v executor_called=%v", authority.called, executor.called)
+	}
+	if connections.reads < 3 || store.completed.Status != invocationmodel.StatusFailed ||
+		store.completed.NormalizedFailureCode != "connection_inactive" ||
+		store.completed.RecoveryAction != "reconnect" {
+		t.Fatalf("provider-boundary revocation was not observed: reads=%d completion=%#v", connections.reads, store.completed)
+	}
+}
+
 func TestInvocationWorkerPassesProtectedRefsOnlyToIntegrationExecutor(t *testing.T) {
 	now := time.Date(2026, time.August, 2, 14, 5, 0, 0, time.UTC)
 	store := &workerStore{found: true, claim: invocationmodel.ExecutionClaim{

@@ -11,10 +11,17 @@ secretRefs:
   sys.product-ops-service.redis.general.password: PRODUCT_OPS_REDIS_GENERAL_PASSWORD
   sys.product-ops-service.redis.rec.password: PRODUCT_OPS_REDIS_REC_PASSWORD
 externalBindings:
+  product.telemetry.sink:
+    state: enabled
+    adapter: ext.obs.elasticsearch
+    endpointRef: environment_binding:product_ops.telemetry.elasticsearch
+    secretRefs:
+    - PRODUCT_OPS_TELEMETRY_ELASTICSEARCH_API_KEY
+    timeoutMs: 10000
   runtime.log.sink:
     state: enabled
     adapter: ext.obs.elasticsearch
-    endpointRef: environment_binding:product_ops.elasticsearch
+    endpointRef: environment_binding:product_ops.runtime_log.elasticsearch
     secretRefs:
-    - PRODUCT_OPS_ELASTICSEARCH_API_KEY
+    - PRODUCT_OPS_RUNTIME_LOG_ELASTICSEARCH_API_KEY
     timeoutMs: 10000

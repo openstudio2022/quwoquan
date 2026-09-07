@@ -1,0 +1,27 @@
+read_model: CircleSearchDocument
+description: >-
+  circle_search_item_view 写入统一 Elasticsearch 查询投影的文档。sourceVersion 取 Circle 聚合版本；Circle / Homepage tombstone 落带版本 tombstone 文档；rebuild 为重放 Circle 公开事件的 upsert 重放。
+source_entities:
+- CircleSearchItemView
+storage_backend: elasticsearch
+fields:
+- {name: target, type: string, nullable: false, description: 统一 AI target（由 objectType/contentType 派生），读面据此分流 typed slice。}
+- {name: objectType, type: string, nullable: false}
+- {name: objectId, type: string, nullable: false}
+- {name: sourceVersion, type: int64, nullable: false, description: 权威对象自身的单调版本；Elasticsearch 在分片内原子比较，只接受严格更新的写入。}
+- {name: deleted, type: bool, nullable: false, description: 带版本 tombstone 标记；删除不做物理 DELETE，读面按 deleted=false 过滤。}
+- {name: title, type: string, nullable: true}
+- {name: summary, type: string, nullable: true}
+- {name: body, type: string, nullable: true}
+- {name: contentType, type: string, nullable: true}
+- {name: visibility, type: string, nullable: false}
+- {name: tags, type: '[]string', nullable: true}
+- {name: entities, type: '[]string', nullable: true}
+- {name: quality, type: float64, nullable: true}
+- {name: updatedAt, type: timestamp, nullable: true}
+consistency_policy:
+  ordering_key: sourceVersion
+  source_version_field: sourceVersion
+  apply_mode: strictly_newer
+  delete_mode: versioned_tombstone
+  rebuild_strategy: upsert_replay

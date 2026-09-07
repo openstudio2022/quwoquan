@@ -122,6 +122,9 @@ def collect_issues() -> list[str]:
                 "method": "admit",
                 "object_owner": "RateLimitBucket",
             },
+            # DEC-032：operation 拥有同步 arbitration 语义；admission 是条件准入，
+            # 不是事务也不是版本 CAS。
+            "consistency": {"arbitration": "conditional_admission"},
             "telemetry": {
                 "metric": "api_edge_admission_decisions_total",
                 "trace": True,

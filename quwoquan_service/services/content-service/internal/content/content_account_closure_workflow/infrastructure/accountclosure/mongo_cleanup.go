@@ -19,6 +19,9 @@ const (
 type postClosureRow struct {
 	ID       string `bson:"_id"`
 	AuthorID string `bson:"authorId"`
+	// Version is the Post's server-owned CAS version at closure time; the search
+	// tombstone is fenced at Version+1 (see SearchDocumentID.SourceVersion).
+	Version int64 `bson:"version"`
 }
 
 type cleanupInventory struct {
@@ -51,7 +54,7 @@ func (store *MongoStore) applyContentCleanup(
 	if err != nil {
 		return err
 	}
-	if err := store.stageSearchDeletion(ctx, event, inventory.postIDs); err != nil {
+	if err := store.stageSearchDeletion(ctx, event, inventory.postRows); err != nil {
 		return err
 	}
 	if err := store.writeAnonymousClosureAudit(ctx, event, len(subjectIDs)); err != nil {
@@ -241,7 +244,7 @@ func findPostClosureRows(
 	cursor, err := collection.Find(
 		ctx,
 		filter,
-		options.Find().SetProjection(bson.M{"_id": 1, "authorId": 1}),
+		options.Find().SetProjection(bson.M{"_id": 1, "authorId": 1, "version": 1}),
 	)
 	if err != nil {
 		return nil, err
@@ -262,29 +265,46 @@ func postClosureIDs(rows []postClosureRow) []string {
 	return uniqueStrings(ids)
 }
 
+// stageSearchDeletion 在硬删除 Post 的同一事务内登记搜索 tombstone 工作项，并把
+// 每个 Post 的终态版本（version + 1）作为 tombstone 的 sourceVersion 一并持久化。
+// 缺失 version 的 Post 行违反 content.post storage 契约（NOT_NULL / DEFAULT_1），
+// 直接 fail closed 而不是退回无版本删除。
 func (store *MongoStore) stageSearchDeletion(
 	ctx context.Context,
 	event UserAccountClosedEvent,
-	postIDs []string,
+	rows []postClosureRow,
 ) error {
-	if len(postIDs) == 0 {
+	if len(rows) == 0 {
 		return nil
 	}
 	now := time.Now().UTC()
-	models := make([]mongo.WriteModel, 0, len(postIDs))
-	for _, postID := range postIDs {
+	models := make([]mongo.WriteModel, 0, len(rows))
+	seen := make(map[string]struct{}, len(rows))
+	for _, row := range rows {
+		if _, duplicate := seen[row.ID]; duplicate {
+			continue
+		}
+		seen[row.ID] = struct{}{}
+		if row.Version <= 0 {
+			return fmt.Errorf(
+				"stage closed-account search deletion: Post %s has no positive version",
+				row.ID,
+			)
+		}
 		document := SearchDocumentID{
-			ObjectType: ContentPostSearchObjectType,
-			ObjectID:   postID,
+			ObjectType:    ContentPostSearchObjectType,
+			ObjectID:      row.ID,
+			SourceVersion: row.Version + 1,
 		}
 		models = append(models, mongo.NewUpdateOneModel().
 			SetFilter(bson.M{"_id": searchWorkID(event.EventID, document.CanonicalID())}).
 			SetUpdate(bson.M{"$setOnInsert": bson.M{
-				"eventId":     event.EventID,
-				"canonicalId": document.CanonicalID(),
-				"objectType":  document.ObjectType,
-				"objectId":    document.ObjectID,
-				"createdAt":   now,
+				"eventId":       event.EventID,
+				"canonicalId":   document.CanonicalID(),
+				"objectType":    document.ObjectType,
+				"objectId":      document.ObjectID,
+				"sourceVersion": document.SourceVersion,
+				"createdAt":     now,
 			}}).
 			SetUpsert(true))
 	}

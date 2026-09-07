@@ -264,6 +264,110 @@ func (store *MongoStore) ClaimNext(
 	return claim, found, nil
 }
 
+func (store *MongoStore) RevokePendingForConnection(
+	ctx context.Context,
+	accountID string,
+	connectionID string,
+	occurredAt time.Time,
+) error {
+	if !store.available() || mongo.SessionFromContext(ctx) == nil {
+		return model.ErrStorageUnavailable
+	}
+	accountID = strings.TrimSpace(accountID)
+	connectionID = strings.TrimSpace(connectionID)
+	occurredAt = occurredAt.UTC()
+	if accountID == "" || connectionID == "" || occurredAt.IsZero() {
+		return model.ErrInvalidArgument
+	}
+	filter := bson.M{
+		"accountId": accountID, "connectionId": connectionID,
+		"status": bson.M{"$in": bson.A{
+			model.StatusAccepted,
+			model.StatusAwaitingConfirmation,
+			model.StatusExecuting,
+		}},
+	}
+	cursor, err := store.invocations.Find(ctx, filter)
+	if err != nil {
+		return err
+	}
+	defer cursor.Close(ctx)
+	var pending []model.Invocation
+	if err := cursor.All(ctx, &pending); err != nil {
+		return err
+	}
+	if len(pending) == 0 {
+		return nil
+	}
+	invocationIDs := make([]string, 0, len(pending))
+	for _, invocation := range pending {
+		invocationIDs = append(invocationIDs, invocation.InvocationID)
+	}
+	update := bson.M{
+		"$set": bson.M{
+			"status":                model.StatusFailed,
+			"normalizedFailureCode": "connection_inactive",
+			"recoveryAction":        "reconnect",
+			"completedAt":           occurredAt,
+			"updatedAt":             occurredAt,
+		},
+		"$unset": bson.M{
+			"leaseOwner":     "",
+			"leaseExpiresAt": "",
+			"resultRef":      "",
+			"resultDigest":   "",
+		},
+		"$inc": bson.M{"revision": 1},
+	}
+	updated, err := store.invocations.UpdateMany(ctx, bson.M{
+		"accountId": accountID, "connectionId": connectionID,
+		"invocationId": bson.M{"$in": invocationIDs},
+		"status": bson.M{"$in": bson.A{
+			model.StatusAccepted,
+			model.StatusAwaitingConfirmation,
+			model.StatusExecuting,
+		}},
+	}, update)
+	if err != nil {
+		return err
+	}
+	if updated.MatchedCount != int64(len(invocationIDs)) ||
+		updated.ModifiedCount != int64(len(invocationIDs)) {
+		return fmt.Errorf("revoke pending connector invocations lost transaction snapshot")
+	}
+	terminalCursor, err := store.invocations.Find(ctx, bson.M{
+		"accountId": accountID, "connectionId": connectionID,
+		"invocationId":          bson.M{"$in": invocationIDs},
+		"status":                model.StatusFailed,
+		"normalizedFailureCode": "connection_inactive",
+		"completedAt":           occurredAt,
+	})
+	if err != nil {
+		return err
+	}
+	defer terminalCursor.Close(ctx)
+	var terminal []model.Invocation
+	if err := terminalCursor.All(ctx, &terminal); err != nil {
+		return err
+	}
+	if len(terminal) != len(invocationIDs) {
+		return fmt.Errorf("revoke pending connector invocations terminal readback mismatch")
+	}
+	if _, err := store.payloadRefs.DeleteMany(ctx, bson.M{
+		"invocationId": bson.M{"$in": invocationIDs},
+	}); err != nil {
+		return err
+	}
+	outbox := make([]any, 0, len(terminal))
+	for _, invocation := range terminal {
+		outbox = append(outbox, buildOutboxRecord(invocation))
+	}
+	if _, err := store.outbox.InsertMany(ctx, outbox); err != nil {
+		return err
+	}
+	return nil
+}
+
 func (store *MongoStore) Complete(ctx context.Context, input model.CompleteInput) (model.MutationResult, error) {
 	if !store.available() {
 		return model.MutationResult{}, model.ErrStorageUnavailable

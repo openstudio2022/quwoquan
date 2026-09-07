@@ -44,6 +44,15 @@ class BackupRecoveryReleaseGateContractTest(unittest.TestCase):
                     "restoreVerified": True,
                     "rpoMinutes": policy["rpoMinutes"],
                     "restoreDurationMinutes": policy["rtoMinutes"],
+                    "memberships": {
+                        "resourceRef": policy["resourceRef"],
+                        "namespaces": policy["namespaces"],
+                        "indexPatterns": policy["indexPatterns"],
+                        "snapshotPolicyRef": policy["snapshotPolicyRef"],
+                    },
+                    "readback": {
+                        field: True for field in policy["readback"]
+                    },
                 }
             )
         return {
@@ -90,6 +99,54 @@ class BackupRecoveryReleaseGateContractTest(unittest.TestCase):
         code, report = self._run(tampered)
         self.assertEqual(code, 2)
         self.assertIn("planDigest", " ".join(report["issues"]))
+
+    def test_dataset_membership_must_be_exact(self) -> None:
+        receipt = self._receipt()
+        receipt["datasets"][0]["memberships"]["namespaces"] = []
+
+        code, report = self._run(receipt)
+
+        self.assertEqual(code, 2)
+        self.assertTrue(
+            any("memberships do not exactly match" in issue for issue in report["issues"]),
+            report,
+        )
+
+    def test_wildcard_outside_membership_blocks_plan(self) -> None:
+        plan = json.loads(json.dumps(self.plan))
+        search = next(item for item in plan["datasets"] if item["id"] == "search-objects")
+        search["indexPatterns"] = ["quwoquan_objects-v2-*"]
+
+        issues = self.module._validate_plan_datasets(plan)
+
+        self.assertTrue(any("index pattern exceeds namespace membership" in issue for issue in issues), issues)
+
+    def test_dataset_memberships_cannot_overlap_on_same_resource(self) -> None:
+        plan = json.loads(json.dumps(self.plan))
+        telemetry = next(
+            item for item in plan["datasets"] if item["id"] == "product-telemetry"
+        )
+        telemetry["namespaces"].append("runtime-diagnostics-raw")
+
+        issues = self.module._validate_plan_datasets(plan)
+
+        self.assertTrue(
+            any("backup membership overlaps" in issue for issue in issues),
+            issues,
+        )
+
+    def test_false_readback_blocks_release(self) -> None:
+        receipt = self._receipt()
+        search = next(item for item in receipt["datasets"] if item["id"] == "search-objects")
+        search["readback"]["canonicalDigest"] = False
+
+        code, report = self._run(receipt)
+
+        self.assertEqual(code, 2)
+        self.assertIn(
+            "search-objects: readback.canonicalDigest is not verified",
+            report["issues"],
+        )
 
 
 if __name__ == "__main__":

@@ -198,11 +198,36 @@ def _write_runtime_shared(module, package_dir: Path, environment: str) -> None:
             "source": module.RUNTIME_SHARED_SOURCE_PREFIXES[name] + name,
             "sha256": _digest(path),
         }
+    identity = {
+        "schema": "qwq.data_plane_binding.v1",
+        "resources": {},
+        "bindings": {},
+    }
+    binding_digest = "sha256:" + hashlib.sha256(
+        json.dumps(
+            identity,
+            ensure_ascii=False,
+            separators=(",", ":"),
+            sort_keys=True,
+        ).encode("utf-8")
+    ).hexdigest()
+    binding_path = _write(
+        package_dir / "data-plane-binding.json",
+        json.dumps({**identity, "bindingDigest": binding_digest}) + "\n",
+    )
+    binding = {
+        "ref": "packages/runtime-shared/data-plane-binding.json",
+        "digest": _digest(binding_path),
+        "bindingDigest": binding_digest,
+    }
     _write_json(
         package_dir / "manifest.json",
         {
             "schema": "qwq.runtime_shared_package",
             "environment": environment,
+            "target": f"{environment}-local",
+            "dataPlaneBinding": binding,
+            "runtimeTopology": None,
             "provenance": {"files": files},
         },
     )
@@ -750,43 +775,53 @@ class ProductTelemetrySecretTest(unittest.TestCase):
 
     def test_unresolved_reference_is_accepted(self) -> None:
         self.assertEqual(
-            self._issues('PRODUCT_OPS_ELASTICSEARCH_API_KEY: "${PRODUCT_OPS_ELASTICSEARCH_API_KEY}"\n'),
+            self._issues('PRODUCT_OPS_TELEMETRY_ELASTICSEARCH_API_KEY: "${PRODUCT_OPS_TELEMETRY_ELASTICSEARCH_API_KEY}"\n'),
             [],
         )
 
     def test_empty_placeholder_is_accepted(self) -> None:
         self.assertEqual(
-            self._issues('PRODUCT_OPS_ELASTICSEARCH_API_KEY: ""\n'),
+            self._issues('PRODUCT_OPS_TELEMETRY_ELASTICSEARCH_API_KEY: ""\n'),
             [],
         )
 
     def test_embedded_literal_is_rejected(self) -> None:
-        issues = self._issues("PRODUCT_OPS_ELASTICSEARCH_API_KEY: redacted-literal\n")
+        issues = self._issues("PRODUCT_OPS_TELEMETRY_ELASTICSEARCH_API_KEY: redacted-literal\n")
         self.assertEqual(len(issues), 1)
-        self.assertIn("PRODUCT_OPS_ELASTICSEARCH_API_KEY", issues[0])
+        self.assertIn("PRODUCT_OPS_TELEMETRY_ELASTICSEARCH_API_KEY", issues[0])
         self.assertIn("injected at deployment time", issues[0])
 
     def test_embedded_literal_in_manifest_env_list_is_rejected(self) -> None:
         """k8s 的 `- name/value` 形态和 dotenv 形态是同一件事，判据不能只覆盖其中一种。"""
         issues = self._issues(
             "env:\n"
-            "  - name: PRODUCT_OPS_ELASTICSEARCH_API_KEY\n"
+            "  - name: PRODUCT_OPS_TELEMETRY_ELASTICSEARCH_API_KEY\n"
             "    value: redacted-literal\n"
         )
         self.assertEqual(len(issues), 1)
-        self.assertIn("PRODUCT_OPS_ELASTICSEARCH_API_KEY", issues[0])
+        self.assertIn("PRODUCT_OPS_TELEMETRY_ELASTICSEARCH_API_KEY", issues[0])
 
     def test_secret_key_reference_in_manifest_env_list_is_accepted(self) -> None:
         self.assertEqual(
             self._issues(
                 "env:\n"
-                "  - name: PRODUCT_OPS_ELASTICSEARCH_API_KEY\n"
+                "  - name: PRODUCT_OPS_TELEMETRY_ELASTICSEARCH_API_KEY\n"
                 "    valueFrom:\n"
                 "      secretKeyRef:\n"
                 "        name: product-ops-telemetry\n"
                 "        key: elasticsearchApiKey\n"
             ),
             [],
+        )
+
+    def test_runtime_log_secret_literal_is_rejected(self) -> None:
+        issues = self._issues(
+            "PRODUCT_OPS_RUNTIME_LOG_ELASTICSEARCH_API_KEY: redacted-literal\n"
+        )
+        self.assertEqual(len(issues), 1)
+        self.assertIn(
+            "PRODUCT_OPS_RUNTIME_LOG_ELASTICSEARCH_API_KEY",
+            issues[0],
         )
 
     def test_unrelated_variable_is_not_inspected(self) -> None:

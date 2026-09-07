@@ -208,6 +208,80 @@ func (c *instrumentedClient) Expire(ctx context.Context, key string, ttl time.Du
 	return err
 }
 
+func (c *instrumentedClient) AcquireLeaseFenceAtomic(
+	ctx context.Context,
+	fenceKey string,
+	leaseKey string,
+	leaseOwner string,
+	leaseTTL time.Duration,
+) (int64, error) {
+	t := time.Now()
+	inner, ok := c.inner.(LeaseFenceAtomicClient)
+	if !ok {
+		c.record(t, ErrAtomicLeaseFenceUnavailable)
+		return 0, ErrAtomicLeaseFenceUnavailable
+	}
+	fence, err := inner.AcquireLeaseFenceAtomic(
+		ctx,
+		fenceKey,
+		leaseKey,
+		leaseOwner,
+		leaseTTL,
+	)
+	c.record(t, err)
+	return fence, err
+}
+
+func (c *instrumentedClient) RenewLeaseFenceAtomic(
+	ctx context.Context,
+	fenceKey string,
+	leaseKey string,
+	leaseOwner string,
+	expectedFence int64,
+	leaseTTL time.Duration,
+) (LeaseFenceResult, error) {
+	t := time.Now()
+	inner, ok := c.inner.(LeaseFenceAtomicClient)
+	if !ok {
+		c.record(t, ErrAtomicLeaseFenceUnavailable)
+		return 0, ErrAtomicLeaseFenceUnavailable
+	}
+	result, err := inner.RenewLeaseFenceAtomic(
+		ctx,
+		fenceKey,
+		leaseKey,
+		leaseOwner,
+		expectedFence,
+		leaseTTL,
+	)
+	c.record(t, err)
+	return result, err
+}
+
+func (c *instrumentedClient) ReleaseLeaseFenceAtomic(
+	ctx context.Context,
+	fenceKey string,
+	leaseKey string,
+	leaseOwner string,
+	expectedFence int64,
+) (LeaseFenceResult, error) {
+	t := time.Now()
+	inner, ok := c.inner.(LeaseFenceAtomicClient)
+	if !ok {
+		c.record(t, ErrAtomicLeaseFenceUnavailable)
+		return 0, ErrAtomicLeaseFenceUnavailable
+	}
+	result, err := inner.ReleaseLeaseFenceAtomic(
+		ctx,
+		fenceKey,
+		leaseKey,
+		leaseOwner,
+		expectedFence,
+	)
+	c.record(t, err)
+	return result, err
+}
+
 func (c *instrumentedClient) HSet(ctx context.Context, key, field, value string) error {
 	t := time.Now()
 	err := c.inner.HSet(ctx, key, field, value)

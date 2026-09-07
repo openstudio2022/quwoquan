@@ -30,6 +30,9 @@ func (s *ElasticsearchEventLogStore) GetEventSummary(
 	ctx context.Context,
 	query application.EventSummaryQuery,
 ) (application.EventSummary, error) {
+	if err := s.requireKind(ElasticsearchTelemetryStoreKind); err != nil {
+		return application.EventSummary{}, err
+	}
 	dimensions := []string{
 		"logType",
 		"eventType",
@@ -144,6 +147,9 @@ func (s *ElasticsearchEventLogStore) GetRuntimeLogSummary(
 	ctx context.Context,
 	query application.RuntimeLogSummaryQuery,
 ) (application.RuntimeLogSummary, error) {
+	if err := s.requireKind(ElasticsearchRuntimeLogStoreKind); err != nil {
+		return application.RuntimeLogSummary{}, err
+	}
 	dimensions := []string{
 		"logKind",
 		"severity",
@@ -246,6 +252,9 @@ func (s *ElasticsearchEventLogStore) GetEventDrilldown(
 	ctx context.Context,
 	query application.EventDrilldownQuery,
 ) (application.EventDrilldown, error) {
+	if err := s.requireKind(ElasticsearchTelemetryStoreKind); err != nil {
+		return application.EventDrilldown{}, err
+	}
 	filters := []any{elasticsearchRangeFilter("occurredAt", query.From, query.To)}
 	for field, value := range map[string]string{
 		"logType":      query.LogType,
@@ -309,6 +318,9 @@ func (s *ElasticsearchEventLogStore) GetRuntimeLogDrilldown(
 	ctx context.Context,
 	query application.RuntimeLogDrilldownQuery,
 ) (application.RuntimeLogDrilldown, error) {
+	if err := s.requireKind(ElasticsearchRuntimeLogStoreKind); err != nil {
+		return application.RuntimeLogDrilldown{}, err
+	}
 	filters := []any{elasticsearchRangeFilter("occurredAt", query.From, query.To)}
 	for field, value := range map[string]string{
 		"signal":             query.Signal,
@@ -340,7 +352,7 @@ func (s *ElasticsearchEventLogStore) GetRuntimeLogDrilldown(
 	var response struct {
 		Hits elasticsearchHits `json:"hits"`
 	}
-	if err := s.search(ctx, elasticsearchIndexPattern(s.config.RuntimeLogIndex), map[string]any{
+	if err := s.search(ctx, elasticsearchIndexPattern(s.config.RawIndex), map[string]any{
 		"size":             query.Limit,
 		"track_total_hits": true,
 		"query":            map[string]any{"bool": boolQuery},
@@ -382,6 +394,9 @@ func (s *ElasticsearchEventLogStore) GetPageExperienceStats(
 	ctx context.Context,
 	query application.PageExperienceQuery,
 ) ([]application.PageExperienceStat, error) {
+	if err := s.requireKind(ElasticsearchTelemetryStoreKind); err != nil {
+		return nil, err
+	}
 	var response struct {
 		Aggregations struct {
 			Pages struct {
@@ -477,6 +492,9 @@ func (s *ElasticsearchEventLogStore) GetEventValueStats(
 	ctx context.Context,
 	query application.EventValueStatsQuery,
 ) (application.EventValueStats, error) {
+	if err := s.requireKind(ElasticsearchTelemetryStoreKind); err != nil {
+		return application.EventValueStats{}, err
+	}
 	filters := []any{
 		elasticsearchRangeFilter("occurredAt", query.From, query.To),
 		map[string]any{"term": map[string]any{"eventType": query.EventType}},
@@ -558,6 +576,9 @@ func (s *ElasticsearchEventLogStore) ListDistinctSessionsByEvent(
 	to time.Time,
 	limit int,
 ) ([]string, error) {
+	if err := s.requireKind(ElasticsearchTelemetryStoreKind); err != nil {
+		return nil, err
+	}
 	if limit <= 0 {
 		return nil, fmt.Errorf("Elasticsearch distinct session limit must be positive")
 	}
@@ -628,6 +649,9 @@ func (s *ElasticsearchEventLogStore) ListDistinctSessions(
 	to time.Time,
 	limit int,
 ) ([]string, int64, error) {
+	if err := s.requireKind(ElasticsearchTelemetryStoreKind); err != nil {
+		return nil, 0, err
+	}
 	if limit <= 0 {
 		return nil, 0, fmt.Errorf("Elasticsearch distinct session limit must be positive")
 	}
@@ -770,6 +794,9 @@ func (s *ElasticsearchEventLogStore) ReadRtcMediaQoeSummary(
 	ctx context.Context,
 	query application.RtcMediaQoeSummaryQuery,
 ) (application.RtcMediaQoeSummarySlice, error) {
+	if err := s.requireKind(ElasticsearchTelemetryStoreKind); err != nil {
+		return application.RtcMediaQoeSummarySlice{}, err
+	}
 	metrics := elasticsearchRtcMetricsAggregations()
 	aggregations := map[string]any{
 		"hourly": map[string]any{

@@ -18,7 +18,8 @@ import (
 func startTelemetryAlertLoop(
 	ctx context.Context,
 	cfg config,
-	store *telemetrypersistence.ElasticsearchEventLogStore,
+	telemetryStore *telemetrypersistence.ElasticsearchEventLogStore,
+	runtimeLogStore *telemetrypersistence.ElasticsearchEventLogStore,
 ) {
 	policyPath := strings.TrimSpace(cfg.TelemetryAlerts.PolicyPath)
 	alertmanagerURL := strings.TrimSpace(cfg.TelemetryAlerts.AlertmanagerURL)
@@ -45,9 +46,9 @@ func startTelemetryAlertLoop(
 	}
 	loop, err := application.NewAlertEvaluationLoop(
 		policy,
-		store,
+		application.NewSplitAlertAggregateReader(telemetryStore, runtimeLogStore),
 		notifier,
-		store,
+		application.NewSplitAlertRetentionInspector(telemetryStore, runtimeLogStore),
 		time.Duration(cfg.TelemetryAlerts.IntervalMS)*time.Millisecond,
 	)
 	if err != nil {

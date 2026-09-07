@@ -102,6 +102,41 @@ func MetadataSchemas(metadataDir string) ([]Issue, error) {
 		return nil, err
 	}
 	issues = append(issues, redisIssues...)
+	redisAtomicIssues, err := storageRedisAtomicKeyIssues(metadataDir)
+	if err != nil {
+		return nil, err
+	}
+	issues = append(issues, redisAtomicIssues...)
+	resourceIssues, err := storageResourceIdentityIssues(metadataDir)
+	if err != nil {
+		return nil, err
+	}
+	issues = append(issues, resourceIssues...)
+	transactionIssues, err := storageTransactionScopeIssues(metadataDir)
+	if err != nil {
+		return nil, err
+	}
+	issues = append(issues, transactionIssues...)
+	consistencyPolicyIssues, err := projectionConsistencyPolicyIssues(metadataDir)
+	if err != nil {
+		return nil, err
+	}
+	issues = append(issues, consistencyPolicyIssues...)
+	resourceDeclarationIssues, err := storageResourceDeclarationIssues(metadataDir)
+	if err != nil {
+		return nil, err
+	}
+	issues = append(issues, resourceDeclarationIssues...)
+	redisFieldIssues, err := storageRedisFieldSemanticsIssues(metadataDir)
+	if err != nil {
+		return nil, err
+	}
+	issues = append(issues, redisFieldIssues...)
+	mechanismIssues, err := storageTransactionMechanismIssues(metadataDir)
+	if err != nil {
+		return nil, err
+	}
+	issues = append(issues, mechanismIssues...)
 	sortIssues(issues)
 	return issues, nil
 }

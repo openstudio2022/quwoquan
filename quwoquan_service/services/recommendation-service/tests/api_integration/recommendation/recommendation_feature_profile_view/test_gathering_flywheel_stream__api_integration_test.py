@@ -238,7 +238,13 @@ def test_gathering_flywheel_stream_materializes_co_experienced(
     assert reason["dimension"] == "relationship"
     assert reason["moment"] == "retrospective"
     action_keys = [hint["actionKey"] for hint in reason["actionHints"]]
-    assert action_keys == ["start_gathering", "open_object"]
+    # 行动阶梯逐项来自注册表 actionHintsByKind，首位 primary 是「再约一次」。
+    from generated.recommendation.recommendation_feature_profile_view.intersection_policy import (
+        ACTION_KEYS_BY_KIND,
+    )
+
+    assert action_keys == list(ACTION_KEYS_BY_KIND["coExperiencedGathering"])
+    assert action_keys[0] == "start_gathering"
 
 
 def test_gathering_flywheel_stream_requires_both_sides_to_publish(
@@ -354,6 +360,14 @@ def test_co_wishlisted_intent_stream_requires_both_sides(
     ]
     assert len(matched) == 1
     assert matched[0]["intersectionClass"] == "fact"
+    assert matched[0]["subjectContext"] == f"homepage:{entity}"
+    target = matched[0]["actionHints"][0]["target"]
+    assert target == {
+        "objectType": "homepage",
+        "objectId": entity,
+        "objectKind": "place",
+        "routeId": "homepageDetail",
+    }
 
     solo_snapshot = reader.list_object_intersections(
         subject_id=subject_a,

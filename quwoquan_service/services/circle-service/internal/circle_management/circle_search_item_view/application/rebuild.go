@@ -45,15 +45,21 @@ func (projector *Projector) Rebuild(
 		for _, entry := range entries {
 			report.Total++
 			if entry.Visible {
-				if _, err := projector.Upsert(ctx, entry.Item); err != nil {
+				applied, err := projector.Upsert(ctx, entry.Item)
+				if err != nil {
 					return report, err
 				}
-				report.Upserted++
+				if applied {
+					report.Upserted++
+				}
 			} else {
-				if _, err := projector.Delete(ctx, entry.Item.CircleID, entry.Item.SourceVersion); err != nil {
+				applied, err := projector.Delete(ctx, entry.Item.CircleID, entry.Item.SourceVersion)
+				if err != nil {
 					return report, err
 				}
-				report.Deleted++
+				if applied {
+					report.Deleted++
+				}
 			}
 		}
 		report.Batches++

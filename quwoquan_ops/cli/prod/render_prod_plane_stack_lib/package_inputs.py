@@ -82,6 +82,11 @@ def parse_args() -> argparse.Namespace:
         choices=["isolated", "external"],
     )
     parser.add_argument(
+        "--data-plane-binding",
+        default="",
+        help="Candidate-owned canonical data-plane-binding.json artifact.",
+    )
+    parser.add_argument(
         "--prevalidate-scope",
         default="",
         choices=["", "first-party"],

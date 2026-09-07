@@ -650,22 +650,22 @@ func assembleContentDomain(
 		postmessaging.NewPostLifecycleStreamPublisher(router.Scene("general")),
 		"content-post-lifecycle-stream", "post_outbox_lifecycle_stream", healthChecker, logger)
 	startPostOutboxRelay(ctx, workers, store, store,
-		postmessaging.NewPostOutboxPublisher(postmessaging.NewInProcessProjectorPublisher(
+		postmessaging.NewInProcessProjectorPublisher(
 			recinfra.NewDiscoveryFeedProjector(db),
-		)),
+		),
 		"content-discovery-feed-projection", "post_outbox_discovery_feed", healthChecker, logger)
 	if searchBuilt.Projector != nil {
 		startPostOutboxRelay(ctx, workers, store, store,
-			postmessaging.NewPostOutboxPublisher(postmessaging.NewInProcessProjectorPublisher(
+			postmessaging.NewInProcessProjectorPublisher(
 				&projectorAdapter{search: searchBuilt.Projector},
-			)),
+			),
 			"content-search-projection", "post_outbox_search", healthChecker, logger)
 	}
 	if placeProjector != nil {
 		startPostOutboxRelay(ctx, workers, store, store,
-			postmessaging.NewPostOutboxPublisher(postmessaging.NewInProcessProjectorPublisher(
+			postmessaging.NewInProcessProjectorPublisher(
 				&projectorAdapter{place: placeProjector},
-			)),
+			),
 			"content-place-projection", "post_outbox_place", healthChecker, logger)
 	}
 	// Non-Post interaction facts still use the transport publisher.
@@ -685,9 +685,9 @@ func assembleContentDomain(
 			db, embedder, router.Scene("rec"), logger,
 		)
 		startPostOutboxRelay(ctx, workers, store, store,
-			postmessaging.NewPostOutboxPublisher(postmessaging.NewInProcessProjectorPublisher(
+			postmessaging.NewInProcessProjectorPublisher(
 				&projectorAdapter{embedding: embeddingProjector},
-			)),
+			),
 			"content-embedding-projection", "post_outbox_embedding", healthChecker, logger)
 		log.Printf("content-service embedding write pipeline enabled adapter=binding budget=%d/day", recinfra.EmbeddingDailyBudgetDefault)
 		log.Printf("content-service embedding write pipeline is enrichment-only; candidate recall is owned by recommendation-service")

@@ -1,4 +1,20 @@
-backend: elasticsearch+mongodb
+backend: elasticsearch
+description: >-
+  SearchIndexView 文档以稳定 objectType:objectId 作为 Elasticsearch _id，并由 sourceVersion
+  external versioning 在 Elasticsearch shard 内原子裁决；严格更高版本才生效，低版本为 stale
+  no-op，同版本仅在 canonical sourceDigest 相同时为 replay no-op，不同 digest 返回 typed conflict。
+  删除写入保留 objectType/objectId/sourceVersion/sourceDigest/deleted=true 的持久 soft tombstone，
+  所有 canonical 查询排除 deleted=true。Mongo inbox/watermark 仅记录消费进度与
+  同版本载荷冲突，不作为 Elasticsearch 写入顺序真相源。
+resources:
+  search_documents:
+    engine: elasticsearch
+    role: query_projection
+    required: true
+  projection_inbox_and_watermarks:
+    engine: mongodb
+    role: query_projection
+    required: true
 role: projection
 collections:
   search_user_profile_projection_inbox:

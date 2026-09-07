@@ -808,7 +808,12 @@ def _dev_session_render_runtime_inputs(
             ),
             **observability_launch_environment,
             "QWQ_PRODUCT_TELEMETRY_AVAILABLE": "1",
-            "PRODUCT_OPS_ELASTICSEARCH_ENDPOINT": "http://elasticsearch:9200",
+            "PRODUCT_OPS_TELEMETRY_ELASTICSEARCH_ENDPOINT": (
+                "http://elasticsearch:9200"
+            ),
+            "PRODUCT_OPS_RUNTIME_LOG_ELASTICSEARCH_ENDPOINT": (
+                "http://elasticsearch:9200"
+            ),
             "QWQ_COMPOSE_REC_POLICY_SOURCE": str(
                 _stackctl.ROOT
                 / "quwoquan_service/services/content-service/resources/policies/content/post/recommendation_policy.yaml"

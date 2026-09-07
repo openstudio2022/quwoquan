@@ -80,7 +80,7 @@ func startGoldenSearchService(t *testing.T) (*application.SearchService, func())
 			Freshness:   now,
 			DeepLink:    "quwoquan://objects/" + row.objectID,
 		}
-		if err := indexer.Apply(ctx, es.ChangeEvent{Op: es.OpUpsert, Doc: document}); err != nil {
+		if _, err := indexer.ApplyVersioned(ctx, es.VersionedChangeEvent{Op: es.OpUpsert, Doc: document, SourceVersion: 1}); err != nil {
 			stop()
 			t.Fatalf("index golden doc %s: %v", row.objectID, err)
 		}

@@ -56,11 +56,11 @@ func TestUserAccountClosedCleanupConvergesAndRejectsEventIDReuse(t *testing.T) {
 	now := time.Now().UTC()
 	mustInsertAccountClosureDocuments(t, db.Collection("posts"), []any{
 		bson.M{
-			"_id": ownedPostID, "authorId": event.Payload.PersonaIDs[0],
+			"_id": ownedPostID, "authorId": event.Payload.PersonaIDs[0], "version": int64(3),
 			"status": "published", "commentCount": int64(0), "likeCount": int64(0),
 		},
 		bson.M{
-			"_id": keptPostID, "authorId": "acct-close-other-persona",
+			"_id": keptPostID, "authorId": "acct-close-other-persona", "version": int64(1),
 			"status": "published", "commentCount": int64(3), "likeCount": int64(2),
 			"shareCount": int64(2),
 		},
@@ -389,6 +389,10 @@ func TestUserAccountClosedCleanupConvergesAndRejectsEventIDReuse(t *testing.T) {
 	if got := search.canonicalIDs(); len(got) != 1 ||
 		got[0] != "content.post:"+ownedPostID {
 		t.Fatalf("canonical search deletes=%v", got)
+	}
+	// DEC-002：tombstone 的 sourceVersion 是硬删除事务内捕获的 Post.version + 1。
+	if got := search.tombstoneVersion("content.post:" + ownedPostID); got != 4 {
+		t.Fatalf("search tombstone sourceVersion=%d, want post.version(3)+1", got)
 	}
 	for _, key := range []string{
 		"rec:session_signals:{acct-close-account}:acct-close-session",
@@ -734,7 +738,7 @@ func TestUserAccountClosedSearchFailureLeavesInboxPendingAndRecovers(t *testing.
 		)
 	})
 	mustInsertAccountClosureDocuments(t, db.Collection("posts"), []any{
-		bson.M{"_id": postID, "authorId": event.Payload.PersonaIDs[0], "status": "published"},
+		bson.M{"_id": postID, "authorId": event.Payload.PersonaIDs[0], "status": "published", "version": int64(2)},
 	})
 
 	store, err := accountclosure.NewMongoStore(
@@ -803,6 +807,7 @@ type accountClosureSearchForIntegration struct {
 	mu                sync.Mutex
 	failuresRemaining int
 	deleted           []string
+	versions          map[string]int64
 }
 
 type accountClosureCacheForIntegration struct {
@@ -907,7 +912,14 @@ func (search *accountClosureSearchForIntegration) DeleteSearchDocument(
 		search.failuresRemaining--
 		return errors.New("integration search unavailable")
 	}
+	if err := document.Validate(); err != nil {
+		return err
+	}
 	search.deleted = append(search.deleted, document.CanonicalID())
+	if search.versions == nil {
+		search.versions = map[string]int64{}
+	}
+	search.versions[document.CanonicalID()] = document.SourceVersion
 	return nil
 }
 
@@ -915,6 +927,12 @@ func (search *accountClosureSearchForIntegration) canonicalIDs() []string {
 	search.mu.Lock()
 	defer search.mu.Unlock()
 	return append([]string(nil), search.deleted...)
+}
+
+func (search *accountClosureSearchForIntegration) tombstoneVersion(canonicalID string) int64 {
+	search.mu.Lock()
+	defer search.mu.Unlock()
+	return search.versions[canonicalID]
 }
 
 func accountClosureIntegrationEvent(eventID string) accountclosure.UserAccountClosedEvent {

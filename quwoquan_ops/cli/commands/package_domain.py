@@ -543,6 +543,7 @@ def command_package(args: argparse.Namespace) -> dict[str, Any]:
                         "environmentRuntimeDigest": reused_manifest[
                             "environmentRuntimeDigest"
                         ],
+                        "dataPlaneBinding": reused_manifest["dataPlaneBinding"],
                         "runtimeSchemaVersion": reused_manifest["runtimeSchemaVersion"],
                         "observabilityLogSink": reused_manifest["observabilityLogSink"],
                         "providerRuntime": reused_manifest["providerRuntime"],
@@ -620,6 +621,7 @@ def command_package(args: argparse.Namespace) -> dict[str, Any]:
             "imageDigest",
             "runtimeConfigDigest",
             "environmentRuntimeDigest",
+            "dataPlaneBinding",
             "runtimeSchemaVersion",
             "observabilityLogSink",
             "providerRuntime",

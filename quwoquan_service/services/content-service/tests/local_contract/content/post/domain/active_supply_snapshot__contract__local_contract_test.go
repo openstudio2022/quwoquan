@@ -44,7 +44,6 @@ func TestActiveSupplySnapshotRequiresReleaseBoundPlayableReadback(t *testing.T) 
 		"invalid digest":        func(value *postports.ActiveSupplySnapshot) { value.ManifestDigest = "bad" },
 		"readback pending":      func(value *postports.ActiveSupplySnapshot) { value.ReadbackStatus = "pending" },
 		"zero posts":            func(value *postports.ActiveSupplySnapshot) { value.Posts = 0 },
-		"zero playable video":   func(value *postports.ActiveSupplySnapshot) { value.PlayableVideos = 0 },
 	}
 	for name, mutate := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -54,6 +53,12 @@ func TestActiveSupplySnapshotRequiresReleaseBoundPlayableReadback(t *testing.T) 
 				t.Fatalf("incomplete snapshot must fail closed: %+v", candidate)
 			}
 		})
+	}
+
+	withoutVideo := ready
+	withoutVideo.PlayableVideos = 0
+	if !withoutVideo.Ready() || !withoutVideo.ContentReady() || withoutVideo.PlayableVideoReady() {
+		t.Fatalf("content-only release must be generally ready but not video-ready: %+v", withoutVideo)
 	}
 
 	zeroSupply := ready

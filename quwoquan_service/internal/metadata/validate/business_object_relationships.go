@@ -54,6 +54,15 @@ func validateObjectRelationships(
 				relationship.Name,
 			))
 		}
+		if relationship.Kind == "projection_source" && relationship.Consistency == "strong" {
+			issues = append(issues, issue(
+				"CONTRACT.RELATIONSHIP.PROJECTION_SOURCE_STRONG",
+				sourcePath,
+				"projection_source relationship %s.%s cannot claim strong; strong is limited to the same aggregate commit and does not imply linearizability, isolation, read-your-writes, or immediate projection visibility",
+				object.CanonicalObject,
+				relationship.Name,
+			))
+		}
 		targetIDs := append([]string{}, relationship.TargetObjects...)
 		if relationship.TargetObject != "" {
 			targetIDs = append(targetIDs, relationship.TargetObject)

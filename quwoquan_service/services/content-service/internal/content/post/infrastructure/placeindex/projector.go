@@ -138,7 +138,8 @@ func (p *PlaceProjector) retractAll(ctx context.Context, postID, eventType strin
 }
 
 // retract drops one post's reference from a place, re-indexing the survivor or
-// deleting the place doc when no references remain.
+// tombstoning the place doc when no references remain. Both writes carry the
+// place record's post-mutation version (DEC-002).
 func (p *PlaceProjector) retract(ctx context.Context, placeID, postID, eventType string) error {
 	snap, remaining, err := p.store.RemoveReference(ctx, placeID, postID)
 	if err != nil {
@@ -146,25 +147,29 @@ func (p *PlaceProjector) retract(ctx context.Context, placeID, postID, eventType
 		return fmt.Errorf("place store remove reference %s from %s: %w", postID, placeID, err)
 	}
 	if remaining <= 0 {
-		return p.indexDelete(ctx, placeID, eventType)
+		return p.indexTombstone(ctx, snap, eventType)
 	}
 	return p.indexUpsert(ctx, snap, eventType)
 }
 
 func (p *PlaceProjector) indexUpsert(ctx context.Context, snap searchprojection.PlaceSnapshot, eventType string) error {
 	doc := searchprojection.ProjectPlaceToSearchDocument(snap)
-	if err := p.indexer.Apply(ctx, es.ChangeEvent{Op: es.OpUpsert, Doc: doc}); err != nil {
+	if _, err := p.indexer.ApplyVersioned(ctx, es.VersionedChangeEvent{
+		Op: es.OpUpsert, Doc: doc, SourceVersion: snap.Version,
+	}); err != nil {
 		p.logger.Warn("place index upsert failed", "event", eventType, "placeId", snap.PlaceID, "err", err)
 		return fmt.Errorf("place index upsert %s: %w", snap.PlaceID, err)
 	}
 	return nil
 }
 
-func (p *PlaceProjector) indexDelete(ctx context.Context, placeID, eventType string) error {
-	doc := rtsearch.Document{ObjectType: rtsearch.ObjectTypeLocation, ObjectID: placeID}
-	if err := p.indexer.Apply(ctx, es.ChangeEvent{Op: es.OpDelete, Doc: doc}); err != nil {
-		p.logger.Warn("place index delete failed", "event", eventType, "placeId", placeID, "err", err)
-		return fmt.Errorf("place index delete %s: %w", placeID, err)
+func (p *PlaceProjector) indexTombstone(ctx context.Context, snap searchprojection.PlaceSnapshot, eventType string) error {
+	doc := rtsearch.Document{ObjectType: rtsearch.ObjectTypeLocation, ObjectID: snap.PlaceID}
+	if _, err := p.indexer.ApplyVersioned(ctx, es.VersionedChangeEvent{
+		Op: es.OpDelete, Doc: doc, SourceVersion: snap.Version,
+	}); err != nil {
+		p.logger.Warn("place index tombstone failed", "event", eventType, "placeId", snap.PlaceID, "err", err)
+		return fmt.Errorf("place index tombstone %s: %w", snap.PlaceID, err)
 	}
 	return nil
 }

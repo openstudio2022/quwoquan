@@ -13,8 +13,12 @@ secretRefs:
   sys.product-ops-service.redis.general.password: PRODUCT_OPS_REDIS_GENERAL_PASSWORD
   sys.product-ops-service.redis.rec.password: PRODUCT_OPS_REDIS_REC_PASSWORD
 externalBindings:
+  product.telemetry.sink:
+    state: enabled
+    adapter: ext.obs.elasticsearch
+    # DEC-004 允许本地两条逻辑轨共用同一物理 Elasticsearch。
+    endpointRef: local_topology:elasticsearch
   runtime.log.sink:
     state: enabled
     adapter: ext.obs.elasticsearch
-    # 逻辑键环境无关：实际 endpoint 由运行时 PRODUCT_OPS_ELASTICSEARCH_ENDPOINT 解析。
     endpointRef: local_topology:elasticsearch

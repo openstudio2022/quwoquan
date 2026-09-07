@@ -237,12 +237,13 @@ const DefaultMoment = "current"
 // 两者挂在 objectKind 而不是 objectType 上：判定「同游」的依据是对象是地点，
 // 与它是博物馆还是温泉无关。
 type ObjectKindDef struct {
-	Kind      string   `yaml:"kind"`
-	Roles     []string `yaml:"roles"`
-	RouteID   string   `yaml:"routeId"`
-	AssetKind string   `yaml:"assetKind"`
-	Dimension string   `yaml:"dimension"`
-	Label     string   `yaml:"label"`
+	Kind       string   `yaml:"kind"`
+	Roles      []string `yaml:"roles"`
+	RouteID    string   `yaml:"routeId"`
+	ObjectType string   `yaml:"objectType"`
+	AssetKind  string   `yaml:"assetKind"`
+	Dimension  string   `yaml:"dimension"`
+	Label      string   `yaml:"label"`
 }
 
 // ObjectTypeBinding 把开放的 objectType 词汇收口到 objectKind 闭集。

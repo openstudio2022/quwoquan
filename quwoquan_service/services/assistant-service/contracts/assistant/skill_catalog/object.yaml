@@ -15,7 +15,7 @@ access:
 relationships:
 - access: event
   cardinality: N:1
-  consistency: strong
+  consistency: eventual
   kind: projection_source
   name: activePackageRelease
   on_delete: tombstone

@@ -18,12 +18,23 @@ type ExternalProviderBinding struct {
 
 var ExternalProviderBindings = map[string]map[string]ExternalProviderBinding{
 	"alpha": {
+		"product.telemetry.sink": {
+			State:       "enabled",
+			AdapterID:   "ext.obs.elasticsearch",
+			EndpointRef: "local_topology:elasticsearch",
+			EndpointEnvironmentKeys: map[string]string{
+				"endpoint": "PRODUCT_OPS_TELEMETRY_ELASTICSEARCH_ENDPOINT",
+			},
+			SecretEnvironmentKeys: []string{},
+			TimeoutMilliseconds:   5000,
+			RequiredRedisScenes:   []string{},
+		},
 		"runtime.log.sink": {
 			State:       "enabled",
 			AdapterID:   "ext.obs.elasticsearch",
 			EndpointRef: "local_topology:elasticsearch",
 			EndpointEnvironmentKeys: map[string]string{
-				"endpoint": "PRODUCT_OPS_ELASTICSEARCH_ENDPOINT",
+				"endpoint": "PRODUCT_OPS_RUNTIME_LOG_ELASTICSEARCH_ENDPOINT",
 			},
 			SecretEnvironmentKeys: []string{},
 			TimeoutMilliseconds:   5000,
@@ -31,12 +42,23 @@ var ExternalProviderBindings = map[string]map[string]ExternalProviderBinding{
 		},
 	},
 	"beta": {
+		"product.telemetry.sink": {
+			State:       "enabled",
+			AdapterID:   "ext.obs.elasticsearch",
+			EndpointRef: "local_topology:elasticsearch",
+			EndpointEnvironmentKeys: map[string]string{
+				"endpoint": "PRODUCT_OPS_TELEMETRY_ELASTICSEARCH_ENDPOINT",
+			},
+			SecretEnvironmentKeys: []string{},
+			TimeoutMilliseconds:   5000,
+			RequiredRedisScenes:   []string{},
+		},
 		"runtime.log.sink": {
 			State:       "enabled",
 			AdapterID:   "ext.obs.elasticsearch",
 			EndpointRef: "local_topology:elasticsearch",
 			EndpointEnvironmentKeys: map[string]string{
-				"endpoint": "PRODUCT_OPS_ELASTICSEARCH_ENDPOINT",
+				"endpoint": "PRODUCT_OPS_RUNTIME_LOG_ELASTICSEARCH_ENDPOINT",
 			},
 			SecretEnvironmentKeys: []string{},
 			TimeoutMilliseconds:   5000,
@@ -44,12 +66,23 @@ var ExternalProviderBindings = map[string]map[string]ExternalProviderBinding{
 		},
 	},
 	"gamma": {
+		"product.telemetry.sink": {
+			State:       "enabled",
+			AdapterID:   "ext.obs.elasticsearch",
+			EndpointRef: "local_topology:elasticsearch",
+			EndpointEnvironmentKeys: map[string]string{
+				"endpoint": "PRODUCT_OPS_TELEMETRY_ELASTICSEARCH_ENDPOINT",
+			},
+			SecretEnvironmentKeys: []string{},
+			TimeoutMilliseconds:   5000,
+			RequiredRedisScenes:   []string{},
+		},
 		"runtime.log.sink": {
 			State:       "enabled",
 			AdapterID:   "ext.obs.elasticsearch",
 			EndpointRef: "local_topology:elasticsearch",
 			EndpointEnvironmentKeys: map[string]string{
-				"endpoint": "PRODUCT_OPS_ELASTICSEARCH_ENDPOINT",
+				"endpoint": "PRODUCT_OPS_RUNTIME_LOG_ELASTICSEARCH_ENDPOINT",
 			},
 			SecretEnvironmentKeys: []string{},
 			TimeoutMilliseconds:   5000,
@@ -57,15 +90,28 @@ var ExternalProviderBindings = map[string]map[string]ExternalProviderBinding{
 		},
 	},
 	"prod": {
+		"product.telemetry.sink": {
+			State:       "enabled",
+			AdapterID:   "ext.obs.elasticsearch",
+			EndpointRef: "environment_binding:product_ops.telemetry.elasticsearch",
+			EndpointEnvironmentKeys: map[string]string{
+				"endpoint": "PRODUCT_OPS_TELEMETRY_ELASTICSEARCH_ENDPOINT",
+			},
+			SecretEnvironmentKeys: []string{
+				"PRODUCT_OPS_TELEMETRY_ELASTICSEARCH_API_KEY",
+			},
+			TimeoutMilliseconds: 10000,
+			RequiredRedisScenes: []string{},
+		},
 		"runtime.log.sink": {
 			State:       "enabled",
 			AdapterID:   "ext.obs.elasticsearch",
-			EndpointRef: "environment_binding:product_ops.elasticsearch",
+			EndpointRef: "environment_binding:product_ops.runtime_log.elasticsearch",
 			EndpointEnvironmentKeys: map[string]string{
-				"endpoint": "PRODUCT_OPS_ELASTICSEARCH_ENDPOINT",
+				"endpoint": "PRODUCT_OPS_RUNTIME_LOG_ELASTICSEARCH_ENDPOINT",
 			},
 			SecretEnvironmentKeys: []string{
-				"PRODUCT_OPS_ELASTICSEARCH_API_KEY",
+				"PRODUCT_OPS_RUNTIME_LOG_ELASTICSEARCH_API_KEY",
 			},
 			TimeoutMilliseconds: 10000,
 			RequiredRedisScenes: []string{},

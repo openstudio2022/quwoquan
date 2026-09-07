@@ -28,7 +28,12 @@ ROOT = Path(__file__).resolve().parents[3]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from quwoquan_ops.cli.lib.output_paths import deployment_render_dir
+from quwoquan_ops.cli.lib.data_plane_binding import DATA_PLANE_BINDING_PACKAGE_REF
+from quwoquan_ops.cli.lib.deployment_candidate_manifest import load_candidate_manifest
+from quwoquan_ops.cli.lib.output_paths import (
+    deployment_candidate_dir,
+    deployment_render_dir,
+)
 from quwoquan_ops.cli.prod.prod_hosted_topology import (
     DeploymentReplica,
     ProdHostedTopologyError,
@@ -65,11 +70,40 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--image-transport-tag", required=True)
     parser.add_argument("--candidate-digest", required=True)
     parser.add_argument("--data-mode", choices=("isolated", "external"), required=True)
+    parser.add_argument("--data-plane-binding", type=Path, default=None)
     parser.add_argument("--scope", choices=("first-party",), required=True)
     parser.add_argument("--key-dir", type=Path, default=DEFAULT_KEY_DIR)
     parser.add_argument("--dry-run", action="store_true")
     return parser.parse_args()
 
+
+
+def validate_external_data_plane_candidate(args: argparse.Namespace) -> Path | None:
+    if args.data_mode != "external":
+        return None
+    candidate_root = deployment_candidate_dir("prod-hosted", args.candidate_digest)
+    expected = candidate_root / DATA_PLANE_BINDING_PACKAGE_REF.as_posix()
+    binding = args.data_plane_binding
+    if (
+        binding is None
+        or not binding.is_absolute()
+        or binding != expected
+        or binding.is_symlink()
+        or not binding.is_file()
+    ):
+        raise PrevalidationError(
+            "external prevalidation requires the candidate-owned data-plane binding"
+        )
+    candidate = load_candidate_manifest(
+        "prod",
+        "prod-hosted",
+        args.candidate_digest,
+        require_full=True,
+        purpose="self_verify",
+    )
+    if candidate.get("baselineId") != args.candidate_digest:
+        raise PrevalidationError("external prevalidation candidate identity mismatch")
+    return binding
 
 def _load_yaml(path: Path) -> dict[str, Any]:
     payload = yaml.safe_load(path.read_text(encoding="utf-8"))
@@ -658,6 +692,11 @@ def execute_deployment(
                     args.data_mode,
                     "--prevalidate-scope",
                     args.scope,
+                    *(
+                        ["--data-plane-binding", str(args.data_plane_binding)]
+                        if args.data_mode == "external"
+                        else []
+                    ),
                 ]
             )
         )
@@ -865,6 +904,7 @@ def main() -> int:
             raise PrevalidationError(f"scope is not allowed: {args.scope}")
         if args.data_mode not in (spec.get("allowedDataModes") or []):
             raise PrevalidationError(f"data mode is not allowed: {args.data_mode}")
+        validate_external_data_plane_candidate(args)
         plan = resolve_plan(
             load_access_manifest(),
             instance="prevalidate",

@@ -56,6 +56,19 @@ class ProdObservabilityStackContractTest(unittest.TestCase):
             runtime["requiredEnvironment"],
         )
         self.assertIn("OTEL_TRACE_BACKEND_ENDPOINT", runtime["requiredEnvironment"])
+        for key in (
+            "SEARCH_ELASTICSEARCH_EXPORTER_URI",
+            "SEARCH_ELASTICSEARCH_EXPORTER_API_KEY",
+            "SEARCH_OBJECTS_ELASTICSEARCH_EXPORTER_API_KEY",
+            "TELEMETRY_ELASTICSEARCH_EXPORTER_URI",
+            "TELEMETRY_ELASTICSEARCH_EXPORTER_API_KEY",
+            "PRODUCT_TELEMETRY_ELASTICSEARCH_EXPORTER_API_KEY",
+            "RUNTIME_LOGS_ELASTICSEARCH_EXPORTER_API_KEY",
+            "OBSERVABILITY_GRAFANA_IMAGE",
+            "OBSERVABILITY_BLACKBOX_EXPORTER_IMAGE",
+            "OBSERVABILITY_ELASTICSEARCH_EXPORTER_IMAGE",
+        ):
+            self.assertIn(key, runtime["requiredEnvironment"])
 
     def test_rendered_service_plane_contains_the_observability_composition(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -98,12 +111,19 @@ class ProdObservabilityStackContractTest(unittest.TestCase):
         expected = {
             "prometheus": "OBSERVABILITY_PROMETHEUS_IMAGE",
             "alertmanager": "OBSERVABILITY_ALERTMANAGER_IMAGE",
+            "grafana": "OBSERVABILITY_GRAFANA_IMAGE",
             "otel-collector": "OBSERVABILITY_OTEL_COLLECTOR_IMAGE",
+            "blackbox-exporter": "OBSERVABILITY_BLACKBOX_EXPORTER_IMAGE",
             "node-exporter": "OBSERVABILITY_NODE_EXPORTER_IMAGE",
             "podman-exporter": "OBSERVABILITY_PODMAN_EXPORTER_IMAGE",
             "mongodb-exporter": "OBSERVABILITY_MONGODB_EXPORTER_IMAGE",
             "postgres-exporter": "OBSERVABILITY_POSTGRES_EXPORTER_IMAGE",
             "redis-exporter": "OBSERVABILITY_REDIS_EXPORTER_IMAGE",
+            "search-elasticsearch-exporter": "OBSERVABILITY_ELASTICSEARCH_EXPORTER_IMAGE",
+            "telemetry-elasticsearch-exporter": "OBSERVABILITY_ELASTICSEARCH_EXPORTER_IMAGE",
+            "search-objects-elasticsearch-exporter": "OBSERVABILITY_ELASTICSEARCH_EXPORTER_IMAGE",
+            "product-telemetry-elasticsearch-exporter": "OBSERVABILITY_ELASTICSEARCH_EXPORTER_IMAGE",
+            "runtime-logs-elasticsearch-exporter": "OBSERVABILITY_ELASTICSEARCH_EXPORTER_IMAGE",
         }
         for service, variable in expected.items():
             image = compose["services"][service]["image"]
@@ -119,6 +139,125 @@ class ProdObservabilityStackContractTest(unittest.TestCase):
         self.assertEqual(
             compose["services"]["otel-collector"]["ports"],
             ["127.0.0.1:13133:13133"],
+        )
+        physical_exporters = {
+            "search-elasticsearch-exporter": (
+                "SEARCH_ELASTICSEARCH_EXPORTER_URI",
+                "SEARCH_ELASTICSEARCH_EXPORTER_API_KEY",
+            ),
+            "telemetry-elasticsearch-exporter": (
+                "TELEMETRY_ELASTICSEARCH_EXPORTER_URI",
+                "TELEMETRY_ELASTICSEARCH_EXPORTER_API_KEY",
+            ),
+        }
+        owner_exporters = {
+            "search-objects-elasticsearch-exporter": (
+                "SEARCH_ELASTICSEARCH_EXPORTER_URI",
+                "SEARCH_OBJECTS_ELASTICSEARCH_EXPORTER_API_KEY",
+            ),
+            "product-telemetry-elasticsearch-exporter": (
+                "TELEMETRY_ELASTICSEARCH_EXPORTER_URI",
+                "PRODUCT_TELEMETRY_ELASTICSEARCH_EXPORTER_API_KEY",
+            ),
+            "runtime-logs-elasticsearch-exporter": (
+                "TELEMETRY_ELASTICSEARCH_EXPORTER_URI",
+                "RUNTIME_LOGS_ELASTICSEARCH_EXPORTER_API_KEY",
+            ),
+        }
+        for service, (uri_key, api_key) in {
+            **physical_exporters,
+            **owner_exporters,
+        }.items():
+            exporter = compose["services"][service]
+            self.assertIn(
+                f"--es.uri=${{{uri_key}:?{uri_key} is required}}",
+                exporter["command"],
+            )
+            self.assertEqual(
+                exporter["environment"]["ES_API_KEY"],
+                f"${{{api_key}:?{api_key} is required}}",
+            )
+            self.assertNotIn("ports", exporter)
+        for service in physical_exporters:
+            exporter = compose["services"][service]
+            self.assertIn("--es.all", exporter["command"])
+            self.assertIn("--es.shards", exporter["command"])
+        for service in owner_exporters:
+            exporter = compose["services"][service]
+            self.assertNotIn("--es.all", exporter["command"])
+            self.assertIn("--es.indices", exporter["command"])
+            self.assertIn("--es.shards", exporter["command"])
+
+        telemetry_uris = {
+            next(
+                argument for argument in compose["services"][service]["command"]
+                if argument.startswith("--es.uri=")
+            )
+            for service in (
+                "telemetry-elasticsearch-exporter",
+                "product-telemetry-elasticsearch-exporter",
+                "runtime-logs-elasticsearch-exporter",
+            )
+        }
+        self.assertEqual(
+            telemetry_uris,
+            {
+                "--es.uri=${TELEMETRY_ELASTICSEARCH_EXPORTER_URI:?"
+                "TELEMETRY_ELASTICSEARCH_EXPORTER_URI is required}"
+            },
+        )
+
+        prometheus = yaml.safe_load(
+            (COMPOSE.parent / "prometheus.yml").read_text(encoding="utf-8")
+        )
+        jobs = {job["job_name"]: job for job in prometheus["scrape_configs"]}
+        physical_jobs = {
+            "search-elasticsearch-exporter": "search-elasticsearch",
+            "telemetry-elasticsearch-exporter": "telemetry-elasticsearch",
+        }
+        for job_name, resource in physical_jobs.items():
+            static_config = jobs[job_name]["static_configs"][0]
+            self.assertEqual(static_config["labels"]["data_resource"], resource)
+            self.assertNotIn("data_owner", static_config["labels"])
+            self.assertEqual(
+                jobs[job_name]["metric_relabel_configs"][0]["action"],
+                "drop",
+            )
+        for job_name, owner in (
+            ("search-objects-elasticsearch-exporter", "search-objects"),
+            ("product-telemetry-elasticsearch-exporter", "product-telemetry"),
+            ("runtime-logs-elasticsearch-exporter", "runtime-logs"),
+        ):
+            static_config = jobs[job_name]["static_configs"][0]
+            self.assertEqual(static_config["labels"]["data_owner"], owner)
+            self.assertNotIn("data_resource", static_config["labels"])
+            self.assertEqual(
+                jobs[job_name]["metric_relabel_configs"][0]["action"],
+                "keep",
+            )
+            self.assertEqual(
+                static_config["targets"],
+                [f"{job_name}:9114"],
+            )
+
+        alerts = yaml.safe_load(
+            (COMPOSE.parent / "alerts/quwoquan_alerts.yaml").read_text(encoding="utf-8")
+        )
+        alert_names = {
+            rule["alert"]
+            for group in alerts["groups"]
+            for rule in group.get("rules", [])
+            if "alert" in rule
+        }
+        self.assertTrue(
+            {
+                "ElasticsearchHeapPressureHigh",
+                "ElasticsearchPrimaryShardUnavailable",
+                "ElasticsearchUnassignedShardsPresent",
+                "ElasticsearchMergeTimeHigh",
+                "ElasticsearchSnapshotStale",
+                "ElasticsearchSnapshotShardFailure",
+            }.issubset(alert_names)
         )
 
         otel = yaml.safe_load(OTEL.read_text(encoding="utf-8"))

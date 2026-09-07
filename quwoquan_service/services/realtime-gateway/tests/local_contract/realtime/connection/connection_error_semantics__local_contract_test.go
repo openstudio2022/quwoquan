@@ -261,6 +261,7 @@ func (*errSemValidationGate) RegisterSession(
 	context.Context,
 	application.TrustedIdentity,
 	string,
+	int64,
 ) error {
 	return nil
 }

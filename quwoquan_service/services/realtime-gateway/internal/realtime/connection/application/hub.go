@@ -296,7 +296,7 @@ func (h *Hub) Attach(
 		transport,
 		fence,
 	); err != nil {
-		_ = h.leases.Release(ctx, identity, connID)
+		_ = h.leases.Release(ctx, identity, connID, fence)
 		return nil, err
 	}
 	session, err := connectionmodel.StartSession(
@@ -313,13 +313,13 @@ func (h *Hub) Attach(
 	)
 	if err != nil {
 		_ = h.presence.Detach(ctx, identity, connID, fence)
-		_ = h.leases.Release(ctx, identity, connID)
+		_ = h.leases.Release(ctx, identity, connID, fence)
 		return nil, err
 	}
 	subscription, err := h.events.SubscribeIdentity(ctx, identity)
 	if err != nil {
 		_ = h.presence.Detach(ctx, identity, connID, fence)
-		_ = h.leases.Release(ctx, identity, connID)
+		_ = h.leases.Release(ctx, identity, connID, fence)
 		return nil, err
 	}
 
@@ -339,10 +339,10 @@ func (h *Hub) Attach(
 		)
 		defer cancelCleanup()
 		_ = h.presence.Detach(background, identity, connID, fence)
-		_ = h.leases.Release(background, identity, connID)
+		_ = h.leases.Release(background, identity, connID, fence)
 		_ = h.security.UnregisterSession(background, identity, connID)
 	}
-	if err := h.security.RegisterSession(ctx, identity, connID); err != nil {
+	if err := h.security.RegisterSession(ctx, identity, connID, fence); err != nil {
 		connection.close()
 		return nil, err
 	}
@@ -409,6 +409,62 @@ func (h *Hub) pumpEvents(
 	}
 }
 
+// RenewConnection runs one heartbeat cycle using the fencing token captured
+// when this connection acquired its lease. A fenced/expired lease terminates
+// the connection before any presence write can occur.
+func (h *Hub) RenewConnection(
+	ctx context.Context,
+	identity TrustedIdentity,
+	connectionID string,
+	expectedFence int64,
+	now time.Time,
+) error {
+	h.mu.Lock()
+	connection := h.connections[strings.TrimSpace(identity.PersonaID)][strings.TrimSpace(connectionID)]
+	h.mu.Unlock()
+	if connection == nil || connection.session.Fence != expectedFence ||
+		connection.session.Identity.AccountID != strings.TrimSpace(identity.AccountID) ||
+		connection.session.Identity.PersonaID != strings.TrimSpace(identity.PersonaID) ||
+		connection.session.Identity.DeviceID != strings.TrimSpace(identity.DeviceID) {
+		return ErrLeaseFenced
+	}
+	if err := VerifyAccountSecurity(
+		ctx,
+		h.authority,
+		connection.session.Identity.AccountID,
+		connection.session.AuthEpoch,
+	); err != nil {
+		return err
+	}
+	if err := h.security.Admit(
+		ctx,
+		connection.trustedIdentity(),
+		connection.session.AuthEpoch,
+	); err != nil {
+		return err
+	}
+	if err := connection.session.Renew(now.UTC()); err != nil {
+		return err
+	}
+	if err := h.leases.Renew(
+		ctx,
+		connection.trustedIdentity(),
+		connection.session.ConnectionID,
+		connection.session.Fence,
+		h.leaseTTL,
+	); err != nil {
+		return err
+	}
+	return h.presence.Heartbeat(
+		ctx,
+		connection.trustedIdentity(),
+		connection.session.ConnectionID,
+		h.nodeID,
+		connection.session.Transport,
+		connection.session.Fence,
+	)
+}
+
 func (h *Hub) keepAlive(ctx context.Context, connection *activeConnection) {
 	ticker := time.NewTicker(defaultHeartbeatInterval)
 	defer ticker.Stop()
@@ -417,62 +473,21 @@ func (h *Hub) keepAlive(ctx context.Context, connection *activeConnection) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			// The durable gate provides immediate eviction, while this
-			// synchronous recheck protects active sessions if stream delivery
-			// is delayed or the authority advances an epoch first.
-			if err := VerifyAccountSecurity(
-				ctx,
-				h.authority,
-				connection.session.Identity.AccountID,
-				connection.session.AuthEpoch,
-			); err != nil {
-				connection.terminate("account_security_rejected")
-				return
-			}
-			if err := h.security.Admit(
+			err := h.RenewConnection(
 				ctx,
 				connection.trustedIdentity(),
-				connection.session.AuthEpoch,
-			); err != nil {
-				connection.terminate("account_security_rejected")
-				return
-			}
-			// fencing：新连接取号后旧 token 失效，旧连接不得继续续租/回写。
-			currentFence, err := h.leases.CurrentFence(
-				ctx,
-				connection.trustedIdentity(),
+				connection.session.ConnectionID,
+				connection.session.Fence,
+				time.Now().UTC(),
 			)
-			if err == nil && currentFence > connection.session.Fence && !h.hasNewerLocal(connection) {
-				// 更高 fence 属于其他节点的新连接；本连接保持只读推送，
-				// 但停止续租共享状态由对端接管（单节点部署下不触发）。
+			if err == nil {
 				continue
 			}
-			if err := connection.session.Renew(time.Now().UTC()); err != nil {
-				connection.terminate("session_expired")
-				return
-			}
-			if err := h.leases.Renew(
-				ctx,
-				connection.trustedIdentity(),
-				connection.session.ConnectionID,
-				h.leaseTTL,
-			); err != nil {
-				h.logger.Warn("realtime lease renew failed",
-					"nodeId", h.nodeID,
-					"errorDigest", ErrorDigest(err))
-			}
-			if err := h.presence.Heartbeat(
-				ctx,
-				connection.trustedIdentity(),
-				connection.session.ConnectionID,
-				h.nodeID,
-				connection.session.Transport,
-				connection.session.Fence,
-			); err != nil {
-				h.logger.Warn("realtime presence heartbeat failed",
-					"nodeId", h.nodeID,
-					"errorDigest", ErrorDigest(err))
-			}
+			h.logger.Warn("realtime connection heartbeat rejected",
+				"nodeId", h.nodeID,
+				"errorDigest", ErrorDigest(err))
+			connection.terminate("heartbeat_rejected")
+			return
 		}
 	}
 }
@@ -515,18 +530,6 @@ func (h *Hub) unregister(connection *activeConnection) {
 	if len(personaConnections) == 0 {
 		delete(h.connections, connection.session.Identity.PersonaID)
 	}
-}
-
-func (h *Hub) hasNewerLocal(connection *activeConnection) bool {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	for _, existing := range h.connections[connection.session.Identity.PersonaID] {
-		if existing.session.Identity.DeviceID == connection.session.Identity.DeviceID &&
-			existing.session.Fence > connection.session.Fence {
-			return true
-		}
-	}
-	return false
 }
 
 func (connection *activeConnection) trustedIdentity() TrustedIdentity {

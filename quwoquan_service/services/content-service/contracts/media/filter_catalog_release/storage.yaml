@@ -1,4 +1,13 @@
 backend: mongodb
+resources:
+  release_store:
+    engine: mongodb
+    role: authority
+    required: true
+  active_release_cache:
+    engine: redis
+    role: runtime
+    required: true
 collections:
   filter_catalog_releases:
     publication_role: not_published

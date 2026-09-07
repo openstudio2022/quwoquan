@@ -441,6 +441,97 @@ func (store *Store) Lease(ctx Context) { store.outbox.FindOneAndUpdate(ctx, nil,
 	assertPublicationResolution(t, index, "string_only_outbox", false, false)
 }
 
+func TestPostgresCompositionResolvesOnlyStaticRangeItemRelationField(t *testing.T) {
+	t.Parallel()
+
+	moduleRoot := filepath.Join(t.TempDir(), "quwoquan_service")
+	serviceRoot := filepath.Join(moduleRoot, "services", "sample-service")
+	writePublicationTestSource(t, serviceRoot, "cmd/api/main.go", `package main
+
+import (
+    fake "example.com/not-canonical"
+    pg "quwoquan_service/internal/platform/pgoutbox"
+)
+
+const constantOutbox = "range_constant_outbox"
+var dynamicOutbox = resolveTable()
+
+type Database struct{}
+type Pool struct{}
+type Publisher struct{}
+
+func compose(pool *Pool, publisher *Publisher) {
+    for _, outbox := range []struct {
+        table string
+        label string
+    }{
+        {table: "range_literal_outbox", label: "unselected_label_outbox"},
+        {table: constantOutbox, label: "another_label_outbox"},
+    } {
+        _, _ = pg.NewDispatcher(pool, publisher, outbox.table)
+        _, _ = fake.NewDispatcher(pool, publisher, outbox.label)
+    }
+    NewDispatcher(pool, publisher, "local_same_name_outbox")
+
+    for _, outbox := range []struct{ table string }{
+        {table: "mixed_static_outbox"},
+        {table: dynamicOutbox},
+    } {
+        _, _ = pg.NewDispatcher(pool, publisher, outbox.table)
+    }
+
+    configured := []struct{ table string }{{table: "named_source_outbox"}}
+    for _, outbox := range configured {
+        _, _ = pg.NewDispatcher(pool, publisher, outbox.table)
+    }
+
+    for _, outbox := range []struct{ table string }{{table: "wrong_field_outbox"}} {
+        _, _ = pg.NewDispatcher(pool, publisher, outbox.unknown)
+    }
+
+    for _, outbox := range []struct{ table string }{{table: "other_argument_outbox"}} {
+        _, _ = pg.NewDispatcher(outbox.table, publisher, "literal_relation_outbox")
+    }
+}
+
+func NewDispatcher(pool *Pool, publisher *Publisher, table string) {}
+func resolveTable() string { return "dynamic_unknown_outbox" }
+func diagnostic() string {
+    return "pg.NewDispatcher(pool, publisher, comment_or_string_outbox)"
+}
+// pg.NewDispatcher(pool, publisher, "comment_only_range_outbox")
+`)
+	writePublicationTestSource(t, moduleRoot, "internal/platform/pgoutbox/dispatcher.go", `package pgoutbox
+func NewDispatcher(pool any, publisher any, relation string) (any, error) { return nil, nil }
+`)
+
+	index, err := buildServiceWriteIndex(serviceRoot)
+	if err != nil {
+		t.Fatalf("build write index: %v", err)
+	}
+	for _, relation := range []string{
+		"range_literal_outbox",
+		"range_constant_outbox",
+		"literal_relation_outbox",
+	} {
+		assertPublicationResolution(t, index, relation, false, true)
+	}
+	for _, relation := range []string{
+		"unselected_label_outbox",
+		"another_label_outbox",
+		"mixed_static_outbox",
+		"dynamic_unknown_outbox",
+		"named_source_outbox",
+		"wrong_field_outbox",
+		"other_argument_outbox",
+		"local_same_name_outbox",
+		"comment_or_string_outbox",
+		"comment_only_range_outbox",
+	} {
+		assertPublicationResolution(t, index, relation, false, false)
+	}
+}
+
 func TestPythonPublicationScannerRequiresPyMongoTransactionStructure(t *testing.T) {
 	t.Parallel()
 

@@ -21,7 +21,9 @@ type activeSupplyCacheKey struct {
 	manifestDigest string
 	// releaseClass 参与缓存身份。若同一 release identity 的状态被修复为
 	// research，旧 commercial snapshot 不得在 TTL 内继续放行匿名 feed。
-	releaseClass string
+	releaseClass  string
+	revision      int64
+	sourceVersion int64
 }
 
 type activeSupplySnapshotCall struct {
@@ -31,7 +33,7 @@ type activeSupplySnapshotCall struct {
 }
 
 // activeSupplySnapshotCache coalesces the expensive projection readback counts
-// after the caller has read the current release identity. Only Ready snapshots
+// after the caller has read the current release identity. Only ContentReady snapshots
 // are cached; failures and incomplete readbacks invalidate the selected key.
 // A release/digest change switches currentKey before loading, so a late result
 // from the previous release can never repopulate the cache.
@@ -97,7 +99,7 @@ func (cache *activeSupplySnapshotCache) Load(
 		cache.snapshot = postports.ActiveSupplySnapshot{}
 		cache.expiresAt = time.Time{}
 	}
-	if cache.snapshot.Ready() && now.Before(cache.expiresAt) {
+	if cache.snapshot.ContentReady() && now.Before(cache.expiresAt) {
 		snapshot := cache.snapshot
 		cache.mu.Unlock()
 		return snapshot, nil
@@ -120,7 +122,7 @@ func (cache *activeSupplySnapshotCache) Load(
 	delete(cache.inflight, key)
 	call.snapshot = snapshot
 	call.err = err
-	if err == nil && snapshot.Ready() && cache.currentKey == key {
+	if err == nil && snapshot.ContentReady() && cache.currentKey == key {
 		cache.snapshot = snapshot
 		cache.expiresAt = cache.now().Add(cache.ttl + cache.nextJitterLocked())
 	} else if cache.currentKey == key {

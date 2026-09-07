@@ -104,7 +104,9 @@ def import_receipt_issues(
     # state with different literals in their own schemas, so each is compared
     # against the value its producer is allowed to write.
     expected_status = "dry-run" if dry_run else "active"
-    expected_content_status = "dry-run" if dry_run else "imported"
+    # Content 三阶段 activate 回执写 active；历史一步式回执写 imported。两者都证明
+    # pointer 已切换；staged/verified 候选回执永远不能证明激活。
+    expected_content_statuses = {"dry-run"} if dry_run else {"imported", "active"}
     receipts = {
         name: bound_report(
             result=result,
@@ -170,7 +172,7 @@ def import_receipt_issues(
                 f"{run / 'creator-import.json'}: creator readback differs from desired state"
             )
     if content:
-        if content.get("status") != expected_content_status:
+        if content.get("status") not in expected_content_statuses:
             issues.append(f"{run / 'import.json'}: status does not match run mode")
         if content.get("manifestDigest") != manifest_digest:
             issues.append(
@@ -219,7 +221,12 @@ def rollback_issues(
     rollback_from_release_id: str | None,
 ) -> list[str]:
     issues: list[str] = []
-    if run.get("kind") == "rollback":
+    # fresh rollback 的 pointer 切换发生在 ``<rollback>-activate`` 子 run；该子 run
+    # 同样持有 rollback_ref.json，因此按证据文件而不是只按 kind 判定回滚身份。
+    is_rollback_run = run.get("kind") == "rollback" or (
+        run.get("kind") == "activate" and (import_run / "rollback_ref.json").is_file()
+    )
+    if is_rollback_run:
         rollback = run_document(
             import_run,
             "rollback_ref.json",

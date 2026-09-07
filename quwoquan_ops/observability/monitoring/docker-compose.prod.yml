@@ -147,6 +147,70 @@ services:
     networks:
       - service-plane
 
+  search-elasticsearch-exporter:
+    image: ${OBSERVABILITY_ELASTICSEARCH_EXPORTER_IMAGE:?OBSERVABILITY_ELASTICSEARCH_EXPORTER_IMAGE is required}
+    restart: unless-stopped
+    command:
+      - --es.uri=${SEARCH_ELASTICSEARCH_EXPORTER_URI:?SEARCH_ELASTICSEARCH_EXPORTER_URI is required}
+      - --es.all
+      - --es.shards
+    environment:
+      ES_API_KEY: ${SEARCH_ELASTICSEARCH_EXPORTER_API_KEY:?SEARCH_ELASTICSEARCH_EXPORTER_API_KEY is required}
+    networks:
+      - service-plane
+
+  telemetry-elasticsearch-exporter:
+    image: ${OBSERVABILITY_ELASTICSEARCH_EXPORTER_IMAGE:?OBSERVABILITY_ELASTICSEARCH_EXPORTER_IMAGE is required}
+    restart: unless-stopped
+    command:
+      - --es.uri=${TELEMETRY_ELASTICSEARCH_EXPORTER_URI:?TELEMETRY_ELASTICSEARCH_EXPORTER_URI is required}
+      - --es.all
+      - --es.shards
+    environment:
+      ES_API_KEY: ${TELEMETRY_ELASTICSEARCH_EXPORTER_API_KEY:?TELEMETRY_ELASTICSEARCH_EXPORTER_API_KEY is required}
+    networks:
+      - service-plane
+
+  search-objects-elasticsearch-exporter:
+    image: ${OBSERVABILITY_ELASTICSEARCH_EXPORTER_IMAGE:?OBSERVABILITY_ELASTICSEARCH_EXPORTER_IMAGE is required}
+    restart: unless-stopped
+    command:
+      - --es.uri=${SEARCH_ELASTICSEARCH_EXPORTER_URI:?SEARCH_ELASTICSEARCH_EXPORTER_URI is required}
+      - --es.indices
+      - --es.shards
+    environment:
+      ES_API_KEY: ${SEARCH_OBJECTS_ELASTICSEARCH_EXPORTER_API_KEY:?SEARCH_OBJECTS_ELASTICSEARCH_EXPORTER_API_KEY is required}
+    networks:
+      - service-plane
+
+  product-telemetry-elasticsearch-exporter:
+    image: ${OBSERVABILITY_ELASTICSEARCH_EXPORTER_IMAGE:?OBSERVABILITY_ELASTICSEARCH_EXPORTER_IMAGE is required}
+    restart: unless-stopped
+    command:
+      - --es.uri=${TELEMETRY_ELASTICSEARCH_EXPORTER_URI:?TELEMETRY_ELASTICSEARCH_EXPORTER_URI is required}
+      - --es.indices
+      - --es.shards
+      - --collector.snapshots
+      - --collector.ilm
+    environment:
+      ES_API_KEY: ${PRODUCT_TELEMETRY_ELASTICSEARCH_EXPORTER_API_KEY:?PRODUCT_TELEMETRY_ELASTICSEARCH_EXPORTER_API_KEY is required}
+    networks:
+      - service-plane
+
+  runtime-logs-elasticsearch-exporter:
+    image: ${OBSERVABILITY_ELASTICSEARCH_EXPORTER_IMAGE:?OBSERVABILITY_ELASTICSEARCH_EXPORTER_IMAGE is required}
+    restart: unless-stopped
+    command:
+      - --es.uri=${TELEMETRY_ELASTICSEARCH_EXPORTER_URI:?TELEMETRY_ELASTICSEARCH_EXPORTER_URI is required}
+      - --es.indices
+      - --es.shards
+      - --collector.snapshots
+      - --collector.ilm
+    environment:
+      ES_API_KEY: ${RUNTIME_LOGS_ELASTICSEARCH_EXPORTER_API_KEY:?RUNTIME_LOGS_ELASTICSEARCH_EXPORTER_API_KEY is required}
+    networks:
+      - service-plane
+
 volumes:
   prometheus-data:
   alertmanager-data:

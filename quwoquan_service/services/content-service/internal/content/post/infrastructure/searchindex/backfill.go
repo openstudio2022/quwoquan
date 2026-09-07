@@ -9,89 +9,67 @@ import (
 	"quwoquan_service/services/content-service/internal/content/post/application/searchprojection"
 )
 
-// defaultBackfillBatchSize bounds how many docs go into one _bulk round trip.
-const defaultBackfillBatchSize = 500
-
-// BulkIndexer is the subset of the ES client backfill needs: ensure the index
-// exists, then write batches of change events. *es.Client satisfies it.
-type BulkIndexer interface {
-	EnsureIndex(ctx context.Context) error
-	Bulk(ctx context.Context, index string, events []es.ChangeEvent) error
+// VersionedIndexer is the only write surface backfill may use: every document
+// is written under the Post's own sourceVersion so a rebuild can never regress
+// a newer write-time projection (DEC-002). *es.Indexer satisfies it.
+type VersionedIndexer interface {
+	ApplyVersioned(ctx context.Context, event es.VersionedChangeEvent) (bool, error)
 }
 
 // BackfillReport summarizes a full rebuild for logging / cold-start audit.
 type BackfillReport struct {
-	TotalPosts    int `json:"totalPosts"`
-	IndexedPosts  int `json:"indexedPosts"`
-	DeletedPosts  int `json:"deletedPosts"`
-	BatchesPushed int `json:"batchesPushed"`
+	TotalPosts      int `json:"totalPosts"`
+	IndexedPosts    int `json:"indexedPosts"`
+	TombstonedPosts int `json:"tombstonedPosts"`
+	// StaleWrites counts documents the provider rejected as not newer than the
+	// version it already holds (an idempotent replay or a concurrent write-time
+	// projection that already advanced further). They are not failures.
+	StaleWrites int `json:"staleWrites"`
 }
 
-// Backfill rebuilds the unified index from the live store: it ensures the index
-// exists, lists every post, projects the eligible (published + public) ones
-// through the shared projection, and bulk-upserts them in batches. It is the
-// cold-start / reconcile entry for the content search index. batchSize <= 0 uses
-// the default.
-func Backfill(ctx context.Context, indexer BulkIndexer, reader PostReader, batchSize int) (BackfillReport, error) {
+// Backfill reconciles the unified index from the live store: it lists every
+// post, projects the eligible (published + public + approved) ones through the
+// shared projection and upserts them under their authoritative version, and
+// writes versioned tombstones for the rest. Index existence is the assembly's
+// responsibility (Built.EnsureIndex) so backfill and write-time projection share
+// one bootstrap path.
+func Backfill(ctx context.Context, indexer VersionedIndexer, reader PostReader) (BackfillReport, error) {
 	var report BackfillReport
 	if indexer == nil || reader == nil {
 		return report, fmt.Errorf(
 			"Post search backfill requires indexer and reader",
 		)
 	}
-	if batchSize <= 0 {
-		batchSize = defaultBackfillBatchSize
-	}
-	if err := indexer.EnsureIndex(ctx); err != nil {
-		return report, err
-	}
-
 	posts, err := reader.ListAll(ctx)
 	if err != nil {
 		return report, fmt.Errorf("list posts: %w", err)
 	}
 	report.TotalPosts = len(posts)
-	batch := make([]es.ChangeEvent, 0, batchSize)
-	flush := func() error {
-		if len(batch) == 0 {
-			return nil
-		}
-		if err := indexer.Bulk(ctx, "", batch); err != nil {
-			return err
-		}
-		report.BatchesPushed++
-		batch = batch[:0]
-		return nil
-	}
-
 	for i := range posts {
-		if !searchEligible(&posts[i]) {
-			batch = append(batch, es.ChangeEvent{
-				Op: es.OpDelete,
-				Doc: rtsearch.Document{
-					ObjectType: rtsearch.ObjectTypeContentPost,
-					ObjectID:   posts[i].ID,
-				},
-			})
-			report.DeletedPosts++
-			if len(batch) >= batchSize {
-				if err := flush(); err != nil {
-					return report, err
-				}
-			}
-			continue
+		post := &posts[i]
+		if post.Version <= 0 {
+			return report, fmt.Errorf("Post %s has no positive version for search backfill", post.ID)
 		}
-		doc := searchprojection.ProjectPostToSearchDocument(posts[i])
-		batch = append(batch, es.ChangeEvent{Op: es.OpUpsert, Doc: doc})
-		report.IndexedPosts++
-		if len(batch) >= batchSize {
-			if err := flush(); err != nil {
-				return report, err
+		event := es.VersionedChangeEvent{SourceVersion: post.Version}
+		if searchEligible(post) {
+			event.Op = es.OpUpsert
+			event.Doc = searchprojection.ProjectPostToSearchDocument(*post)
+			report.IndexedPosts++
+		} else {
+			event.Op = es.OpDelete
+			event.Doc = rtsearch.Document{
+				ObjectType: rtsearch.ObjectTypeContentPost,
+				ObjectID:   post.ID,
 			}
+			report.TombstonedPosts++
 		}
-	}
-	if err := flush(); err != nil {
-		return report, err
+		applied, err := indexer.ApplyVersioned(ctx, event)
+		if err != nil {
+			return report, fmt.Errorf("search backfill %s %s: %w", event.Op, post.ID, err)
+		}
+		if !applied {
+			report.StaleWrites++
+		}
 	}
 	return report, nil
 }

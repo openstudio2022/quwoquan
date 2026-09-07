@@ -7,8 +7,13 @@ redis_cache:
   ttl_seconds: 86400
   type: string
   scene: general
+  key_prefix: 'edge:rate:'
+  isolation: single_key_lua
+  eviction_consequence: reconstruct
+  durability: ephemeral
   description: >-
     value 为当前窗口计数且最多保持 limit+1；实际 TTL 由 operation policy window_seconds
     决定并受 86400 秒硬上限约束。subjectDigest 与 operationDigest 均为完整 SHA-256 十六进制，
-    key 不含 instance 或 rollout stage，stable/gray 因而共享总阈值。
+    key 不含 instance 或 rollout stage，stable/gray 因而共享总阈值。单 key Lua 原子执行
+    INCR、计数封顶和 PEXPIRE；key 丢失后下一次 admission 从新窗口计数重建。
 role: runtime

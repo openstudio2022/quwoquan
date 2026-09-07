@@ -18,6 +18,47 @@ services:
       timeout: 3s
       retries: 10
 
+  postgres-init:
+    image: "${LOCAL_GAMMA_POSTGRES_IMAGE:-docker.io/library/postgres:16-alpine}"
+    labels:
+      com.quwoquan.runtime.one-shot: "true"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      POSTGRES_USER: quwoquan
+      POSTGRES_DB: quwoquan
+      PGPASSWORD: quwoquan
+      QWQ_POSTGRES_DATABASES: "${QWQ_POSTGRES_DATABASES:?QWQ_POSTGRES_DATABASES is required}"
+    entrypoint:
+      - /bin/sh
+      - -ec
+      - |
+        : "$${QWQ_POSTGRES_DATABASES:?QWQ_POSTGRES_DATABASES is required}"
+        database_count=0
+        for database in $${QWQ_POSTGRES_DATABASES}; do
+          case "$${database}" in
+            ""|*[!a-zA-Z0-9._-]*)
+              echo "postgres-init rejected unsafe database namespace" >&2
+              exit 1
+              ;;
+          esac
+          database_count=$$((database_count + 1))
+          psql --host postgres --username "$${POSTGRES_USER}" --dbname "$${POSTGRES_DB}" \
+            --set ON_ERROR_STOP=1 --set database="$${database}" <<'SQL'
+        SELECT format('CREATE DATABASE %I', :'database')
+        WHERE NOT EXISTS (
+          SELECT 1 FROM pg_database WHERE datname = :'database'
+        )
+        \gexec
+        SQL
+        done
+        if [ "$${database_count}" -eq 0 ]; then
+          echo "postgres-init requires at least one database namespace" >&2
+          exit 1
+        fi
+    restart: "no"
+
   mongodb:
     image: "${LOCAL_GAMMA_MONGO_IMAGE:-docker.io/library/mongo:7-jammy}"
     command:

@@ -1,10 +1,13 @@
 # spec_ref: specs/feature-tree/recommendation-platform/spec.md#dom-001
 # spec_ref: specs/feature-tree/product-ops-growth/experiment-bucketing-and-rollout/spec.md#sit-001.t2
 # readiness_case: append-feedback-api
-from datetime import datetime, timezone
+from dataclasses import replace
+from datetime import datetime, timedelta, timezone
 import hashlib
 import json
 from types import SimpleNamespace
+
+import pytest
 
 from internal.recommendation.recommendation_feedback_fact.adapters.inbound.stream.content_behavior_consumer import (
     CONSUMER_GROUP,
@@ -18,11 +21,21 @@ from internal.recommendation.recommendation_feedback_fact.domain.fact import (
 from internal.recommendation.recommendation_feedback_fact.infrastructure.mongo_store import (
     MongoRecommendationFeedbackFactStore,
 )
+from internal.recommendation.recommendation_feature_profile_view.application.projector import (
+    Projector,
+)
+from internal.recommendation.recommendation_feature_profile_view.infrastructure.mongo_store import (
+    MongoFeatureProfileStore,
+)
+from stream_redis import StreamConsumerRedis
 from tests.support.recommendation_mongo import mongo_client, mongo_database
-from tests.support.recommendation_redis import real_redis
+from tests.support.recommendation_redis import durable_redis, real_redis
 
 
 class _ExposureReader:
+    def __init__(self, *, subject_id: str = "persona-stream-001") -> None:
+        self._subject_id = subject_id
+
     def exists(self, exposure_id: str) -> bool:
         return exposure_id == "exposure-001"
 
@@ -31,7 +44,7 @@ class _ExposureReader:
             return None
         return SimpleNamespace(
             exposure_id="exposure-001",
-            subject_id="persona-stream-001",
+            subject_id=self._subject_id,
             experiment_bucket="model",
         )
 
@@ -135,6 +148,188 @@ def test_feedback_fact_has_one_source_event_identity_in_mongo(mongo_database) ->
         occurred_at=now,
         recorded_at=now,
     )
-    assert appender.append(fact)[1]
-    assert not appender.append(fact)[1]
-    assert mongo_database["recommendation_feedback_facts"].count_documents({"sourceEventId": "behavior-001"}) == 1
+    persisted, created = appender.append(fact)
+    assert created
+    replayed, replay_created = appender.append(
+        replace(fact, recorded_at=now + timedelta(seconds=1))
+    )
+    assert not replay_created
+    assert replayed.recorded_at == persisted.recorded_at
+    with pytest.raises(RuntimeError, match="identity conflicts"):
+        store.append_if_absent(
+            replace(
+                fact,
+                target_id="post-conflicting",
+                recorded_at=now + timedelta(seconds=2),
+            )
+        )
+    assert mongo_database["recommendation_feedback_facts"].count_documents(
+        {"sourceEventId": "behavior-001"}
+    ) == 1
+
+
+class _CrashBeforeAckRedis:
+    def __init__(self, inner) -> None:
+        self._inner = inner
+
+    def __getattr__(self, name: str):
+        return getattr(self._inner, name)
+
+    def xack(self, *_args, **_kwargs):
+        raise RuntimeError("simulated application crash before Redis ACK")
+
+
+class _ClaimRecordingRedis:
+    def __init__(self, inner) -> None:
+        self._inner = inner
+        self.claimed_ids: list[str] = []
+
+    def __getattr__(self, name: str):
+        return getattr(self._inner, name)
+
+    def xautoclaim(self, *args, **kwargs):
+        result = self._inner.xautoclaim(*args, **kwargs)
+        entries = (
+            result[1]
+            if isinstance(result, (list, tuple)) and len(result) > 1
+            else []
+        )
+        self.claimed_ids.extend(
+            stream_id.decode("utf-8") if isinstance(stream_id, bytes) else str(stream_id)
+            for stream_id, _fields in entries
+        )
+        return result
+
+
+# spec_ref: specs/feature-tree/runtime/system-architecture-and-engineering-guide/design.md#dec-032
+# spec_ref: specs/feature-tree/recommendation-platform/spec.md#dom-001
+def test_content_behavior_stream_recovers_pel_after_sigkill_without_duplicate_business_result(
+    mongo_database,
+    durable_redis,
+) -> None:
+    feedback_store = MongoRecommendationFeedbackFactStore(mongo_database)
+    feedback_store.ensure_indexes()
+    feature_store = MongoFeatureProfileStore(mongo_database)
+    feature_store.ensure_indexes()
+    subject_id = "persona-durable-001"
+    client_event_id = "behavior-durable-001"
+    event_id = hashlib.sha256(
+        f"ContentBehaviorRecorded:{subject_id}:{client_event_id}".encode()
+    ).hexdigest()
+    occurred_at = "2026-08-05T08:00:00Z"
+    payload = {
+        "clientEventId": client_event_id,
+        "personaId": subject_id,
+        "deviceActorId": "",
+        "sessionId": "session-durable-001",
+        "contentId": "post-stream-001",
+        "contentType": "post",
+        "action": "like",
+        "state": "interaction",
+        "duration": 0.0,
+        "tagRefs": ["Topic/旅行"],
+        "entityRefs": [],
+        "authorId": "persona-author",
+        "feedRequestId": "feed-stream-001",
+        "occurredAt": occurred_at,
+    }
+    stream_id = durable_redis.client.xadd(
+        CONTENT_BEHAVIOR_STREAM,
+        {
+            "eventId": event_id,
+            "eventName": "ContentBehaviorRecorded",
+            "sourceSequence": "0000000000000002",
+            "subjectId": subject_id,
+            "feedRequestId": "feed-stream-001",
+            "targetId": "post-stream-001",
+            "payload": json.dumps(payload),
+            "occurredAt": occurred_at,
+        },
+    )
+    stream_id_text = (
+        stream_id.decode("utf-8") if isinstance(stream_id, bytes) else str(stream_id)
+    )
+    crashing_redis = _CrashBeforeAckRedis(
+        StreamConsumerRedis(durable_redis.client)
+    )
+    crashing_consumer = ContentBehaviorConsumer(
+        redis_client=crashing_redis,
+        feedback_store=feedback_store,
+        exposure_store=_ExposureReader(subject_id=subject_id),
+        subject_closures=_OpenSubjects(),
+        feature_projector=Projector(feature_store),
+        consumer="feedback-before-crash",
+    )
+
+    with pytest.raises(RuntimeError, match="before Redis ACK"):
+        crashing_consumer.process_once()
+    assert durable_redis.client.xpending(CONTENT_BEHAVIOR_STREAM, CONSUMER_GROUP)[
+        "pending"
+    ] == 1
+    assert mongo_database["recommendation_feedback_facts"].count_documents(
+        {"sourceEventId": event_id}
+    ) == 1
+    profile_before = mongo_database["rm_recommend_feature"].find_one(
+        {"_id": subject_id}
+    )
+    assert profile_before is not None
+    assert profile_before["checkpoint"] == 1
+    assert profile_before["sparseFeatures"]["action:like"] == 1.0
+
+    durable_redis.client.xclaim(
+        CONTENT_BEHAVIOR_STREAM,
+        CONSUMER_GROUP,
+        "feedback-before-crash",
+        min_idle_time=0,
+        message_ids=[stream_id],
+        idle=30_001,
+    )
+    pending_before_restart = durable_redis.client.xpending_range(
+        CONTENT_BEHAVIOR_STREAM,
+        CONSUMER_GROUP,
+        min="-",
+        max="+",
+        count=1,
+    )
+    assert pending_before_restart[0]["time_since_delivered"] >= 30_000
+    container_before, container_after = durable_redis.restart_after_sigkill()
+    assert container_before != container_after
+    assert durable_redis.client.config_get("appendonly") == {"appendonly": "yes"}
+    assert durable_redis.client.config_get("appendfsync") == {"appendfsync": "always"}
+    recovered_messages = durable_redis.client.xrange(
+        CONTENT_BEHAVIOR_STREAM, min=stream_id, max=stream_id
+    )
+    assert len(recovered_messages) == 1
+    assert durable_redis.client.xlen(CONTENT_BEHAVIOR_STREAM) == 1
+    assert durable_redis.client.xpending(CONTENT_BEHAVIOR_STREAM, CONSUMER_GROUP)[
+        "pending"
+    ] == 1
+
+    recovering_redis = _ClaimRecordingRedis(
+        StreamConsumerRedis(durable_redis.client)
+    )
+    recovering_consumer = ContentBehaviorConsumer(
+        redis_client=recovering_redis,
+        feedback_store=feedback_store,
+        exposure_store=_ExposureReader(subject_id=subject_id),
+        subject_closures=_OpenSubjects(),
+        feature_projector=Projector(feature_store),
+        consumer="feedback-after-restart",
+    )
+    assert recovering_consumer.process_once() == 1
+    assert recovering_redis.claimed_ids == [stream_id_text]
+    assert durable_redis.client.xpending(CONTENT_BEHAVIOR_STREAM, CONSUMER_GROUP)[
+        "pending"
+    ] == 0
+    assert mongo_database["recommendation_feedback_facts"].count_documents(
+        {"sourceEventId": event_id}
+    ) == 1
+    profile_after = mongo_database["rm_recommend_feature"].find_one(
+        {"_id": subject_id}
+    )
+    assert profile_after is not None
+    assert profile_after["checkpoint"] == 1
+    assert profile_after["sparseFeatures"]["action:like"] == 1.0
+    assert mongo_database["recommendation_feature_projection_checkpoints"].count_documents(
+        {"eventId": event_id, "subjectId": subject_id}
+    ) == 1

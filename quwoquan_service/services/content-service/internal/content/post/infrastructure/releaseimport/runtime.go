@@ -46,6 +46,8 @@ func Run() {
 	postsDB := flag.String("posts-db", "quwoquan_content", "target db for posts")
 	env := flag.String("env", "", "environment label (for logging)")
 	dryRun := flag.Bool("dry-run", false, "load + report only, do not write mongo")
+	phase := flag.String("phase", "stage", "release phase: stage|verify|activate")
+	candidateRevision := flag.Int64("candidate-revision", -1, "positive candidate identity emitted by stage; required for verify/activate")
 	mode := flag.String("mode", "upsert", "apply mode: upsert|sync|reset-source")
 	deletePolicy := flag.String("delete-policy", "none", "missing object policy: none|tombstone|hard-delete")
 	sourceOwner := flag.String("source-owner", "qwq_data", "source owner for imported documents")
@@ -65,12 +67,35 @@ func Run() {
 		-1,
 		"exact replay repair count; requires --require-replay",
 	)
+	expectedRevision := flag.Int64(
+		"expected-revision",
+		-1,
+		"expected active pointer revision; 0 creates the first pointer, positive values activate through CAS",
+	)
+	backfillReleaseState := flag.Bool(
+		"backfill-release-state",
+		false,
+		"one-shot migration for the unique unversioned active pointer missing revision/sourceVersion",
+	)
 	flag.Parse()
 	if err := ValidateReplayRepairOptions(
 		*requireReplay,
 		*expectedOutboxRepairCount,
 	); err != nil {
 		log.Fatal(err)
+	}
+	*phase = strings.TrimSpace(strings.ToLower(*phase))
+	if *phase != "stage" && *phase != "verify" && *phase != "activate" {
+		log.Fatal("--phase must be stage, verify, or activate")
+	}
+	if !*dryRun && !*backfillReleaseState && *phase == "activate" && *expectedRevision < 0 {
+		log.Fatal("--expected-revision is required for Content release activation")
+	}
+	if !*dryRun && !*backfillReleaseState && (*phase == "verify" || *phase == "activate") && *candidateRevision <= 0 {
+		log.Fatal("--candidate-revision is required for Content release verify/activate")
+	}
+	if *backfillReleaseState && (*dryRun || *requireReplay || *expectedRevision >= 0 || *candidateRevision >= 0) {
+		log.Fatal("--backfill-release-state is an exclusive write command; do not combine it with --dry-run, --require-replay, --expected-revision, or --candidate-revision")
 	}
 	if err := ValidateReplaySourceImportReportOption(
 		*requireReplay,
@@ -79,6 +104,35 @@ func Run() {
 		log.Fatal(err)
 	}
 
+	if *backfillReleaseState {
+		if strings.TrimSpace(*env) == "" {
+			log.Fatal("--env is required for --backfill-release-state")
+		}
+		ctx := context.Background()
+		client, connectErr := mongo.Connect(options.Client().ApplyURI(*mongoURI))
+		if connectErr != nil {
+			log.Fatalf("mongo connect: %v", connectErr)
+		}
+		defer client.Disconnect(ctx)
+		now := time.Now().UTC()
+		result, backfillErr := BackfillUnversionedReleaseState(
+			ctx, client.Database(*postsDB), *env, *sourceOwner, now,
+		)
+		if backfillErr != nil {
+			log.Fatalf("backfill Content Data release state: %v", backfillErr)
+		}
+		if reportErr := WriteImportReport(*reportPath, bson.M{
+			"schema": "quwoquan.content_release_state_backfill_report",
+			"status": "completed", "environment": result.Environment,
+			"sourceOwner": result.SourceOwner, "releaseId": result.ReleaseID,
+			"revision": result.Revision, "sourceVersion": result.SourceVersion,
+			"replayed": result.Replayed, "generatedAt": now,
+		}); reportErr != nil {
+			log.Fatalf("write release state backfill report: %v", reportErr)
+		}
+		log.Printf("[import] release-state backfill OK env=%s release=%s revision=%d replayed=%t", result.Environment, result.ReleaseID, result.Revision, result.Replayed)
+		return
+	}
 	if strings.TrimSpace(*releaseRoot) == "" {
 		log.Fatalf("--release-root is required; full-tree import and sample bundle fallback are forbidden")
 	}
@@ -220,68 +274,126 @@ func Run() {
 		DeletePolicy:              *deletePolicy,
 		SourceOwner:               *sourceOwner,
 		ProjectionVersion:         now.UnixMilli(),
+		ExpectedRevision:          *expectedRevision,
 		RequireReplay:             *requireReplay,
 		ExpectedOutboxRepairCount: expectedRepairCount,
 		ReplayPostBindings:        replayPostBindings,
 	})
-	applyResult, err := ApplyImportedPostRelease(
-		ctx,
-		client.Database(*postsDB),
-		*env,
-		posts,
-		now,
-		opts,
-	)
-	if err != nil {
-		log.Fatalf("apply Content-owned Data release: %v", err)
-	}
-	mediaAssetsProjected, err := UpsertReleaseMediaAssetProjections(
-		ctx,
-		client.Database(*postsDB).Collection("media_assets"),
-		releaseMediaAssets,
-		releaseBinding.SourceOwner,
-		opts.ReleaseID,
-		now,
-	)
-	if err != nil {
-		log.Fatalf("project release media assets: %v", err)
-	}
-	activeCounts := ImportPoolCounts(posts, len(desired.DesiredRefs.Entities))
-	activeCounts["mediaAssetsProjected"] = mediaAssetsProjected
-	activeCounts["postsUpserted"] = applyResult.PostsUpserted
-	activeCounts["postsRemoved"] = applyResult.PostsRemoved
-	activeCounts["outboxEventsReady"] = applyResult.OutboxEventsReady
-	activeCounts["outboxEventsAppended"] = applyResult.OutboxEventsAppended
-	auditEvents := ImportAuditEvents(
-		applyResult.PreviousReleaseID,
-		applyResult.PreviousManifestDigest,
-		applyResult.OutboxRepairAudits...,
-	)
-	if opts.RequireReplay {
-		auditEvents = ImportReplayRepairAuditEvents(
-			applyResult.OutboxRepairAudits...,
+	database := client.Database(*postsDB)
+	baseCounts := ImportPoolCounts(posts, len(desired.DesiredRefs.Entities))
+	if *requireReplay {
+		// 唯一允许调用一步式 ApplyImportedPostRelease 的入口：对已 active 的同一
+		// release/digest 做 exact replay 与有界 outbox repair。普通发布只能走
+		// stage → verify → activate，不得借此绕过 verified-before-active。
+		if *expectedRevision < 0 {
+			log.Fatal("--require-replay requires --expected-revision of the active pointer")
+		}
+		// 存量 active release 在 P1a 之前只有单值 sourceReleaseId；exact replay 同时
+		// 以 additive $addToSet 补齐 sourceReleaseIds，否则 research 原图授权会对
+		// 该 release 全部拒绝。同一 release 的成员补齐不改变 replay 语义。
+		replayMediaProjected, projectErr := UpsertReleaseMediaAssetProjections(
+			ctx, database.Collection("media_assets"), releaseMediaAssets,
+			releaseBinding.SourceOwner, opts.ReleaseID, now,
 		)
+		if projectErr != nil {
+			log.Fatalf("project release media assets during replay: %v", projectErr)
+		}
+		baseCounts["mediaAssetsProjected"] = replayMediaProjected
+		replayResult, replayErr := ApplyImportedPostRelease(ctx, database, *env, posts, now, opts)
+		if replayErr != nil {
+			log.Fatalf("replay active Content-owned Data release: %v", replayErr)
+		}
+		if !replayResult.Replayed {
+			log.Fatalf("--require-replay activated a new release instead of replaying the active one")
+		}
+		baseCounts["postsUpserted"] = replayResult.PostsUpserted
+		baseCounts["postsRemoved"] = replayResult.PostsRemoved
+		baseCounts["outboxEventsReady"] = replayResult.OutboxEventsReady
+		baseCounts["outboxEventsAppended"] = replayResult.OutboxEventsAppended
+		if err := WriteImportReport(*reportPath, bson.M{
+			"schema": "quwoquan.content_import_report", "status": "imported",
+			"environment": *env, "releaseId": opts.ReleaseID, "sourceOwner": opts.SourceOwner,
+			"manifestDigest": opts.ManifestDigest, "mode": opts.Mode, "deletePolicy": opts.DeletePolicy,
+			"counts": baseCounts, "postBindings": reportPostBindings,
+			"auditEvents": ImportReplayRepairAuditEvents(replayResult.OutboxRepairAudits...),
+			"revision":    replayResult.Revision, "sourceVersion": replayResult.ProjectionVersion,
+			"generatedAt": now,
+		}); err != nil {
+			log.Fatalf("write replay report: %v", err)
+		}
+		log.Printf("[import] REPLAYED env=%s release=%s repaired=%d", *env, opts.ReleaseID, replayResult.OutboxEventsRepaired)
+		return
 	}
-	if err := WriteImportReport(*reportPath, bson.M{
-		"schema":         "quwoquan.content_import_report",
-		"status":         "imported",
-		"environment":    *env,
-		"releaseId":      opts.ReleaseID,
-		"sourceOwner":    opts.SourceOwner,
-		"manifestDigest": opts.ManifestDigest,
-		"mode":           opts.Mode,
-		"deletePolicy":   opts.DeletePolicy,
-		"counts":         activeCounts,
-		"postBindings":   reportPostBindings,
-		"auditEvents":    auditEvents,
-		"generatedAt":    now,
-	}); err != nil {
-		log.Fatalf("write import report: %v", err)
+	switch *phase {
+	case "stage":
+		mediaAssetsProjected, projectErr := UpsertReleaseMediaAssetProjections(
+			ctx, database.Collection("media_assets"), releaseMediaAssets,
+			releaseBinding.SourceOwner, opts.ReleaseID, now,
+		)
+		if projectErr != nil {
+			log.Fatalf("project release media assets before candidate stage: %v", projectErr)
+		}
+		stageResult, stageErr := StageImportedPostRelease(ctx, database, *env, posts, now, opts)
+		if stageErr != nil {
+			log.Fatalf("stage Content-owned Data release: %v", stageErr)
+		}
+		baseCounts["mediaAssetsProjected"] = mediaAssetsProjected
+		baseCounts["postsStaged"] = stageResult.PostsStaged
+		if err := WriteImportReport(*reportPath, bson.M{
+			"schema": "quwoquan.content_import_report", "status": "staged", "phase": "stage",
+			"environment": *env, "releaseId": opts.ReleaseID, "sourceOwner": opts.SourceOwner,
+			"manifestDigest": opts.ManifestDigest, "mode": opts.Mode, "deletePolicy": opts.DeletePolicy,
+			"counts": baseCounts, "postBindings": reportPostBindings,
+			"candidateRevision":      stageResult.CandidateRevision,
+			"previousReleaseId":      stageResult.PreviousReleaseID,
+			"previousManifestDigest": stageResult.PreviousManifestDigest,
+			"previousRevision":       stageResult.PreviousRevision,
+			"auditEvents":            []string{"DataReleasePrepared", "DataReleaseImported", "DataReleaseProjected"},
+			"generatedAt":            now,
+		}); err != nil {
+			log.Fatalf("write stage report: %v", err)
+		}
+		log.Printf("[import] STAGED env=%s release=%s candidateRevision=%d posts=%d media=%d", *env, opts.ReleaseID, stageResult.CandidateRevision, stageResult.PostsStaged, mediaAssetsProjected)
+	case "verify":
+		readback, verifyErr := VerifyImportedPostReleaseCandidate(ctx, database, *env, posts, now, opts, *candidateRevision)
+		if verifyErr != nil {
+			log.Fatalf("verify Content-owned Data release candidate: %v", verifyErr)
+		}
+		baseCounts["candidatePosts"] = len(readback.PostIDs)
+		if err := WriteImportReport(*reportPath, bson.M{
+			"schema": "quwoquan.content_import_report", "status": "verified", "phase": "verify",
+			"environment": *env, "releaseId": opts.ReleaseID, "sourceOwner": opts.SourceOwner,
+			"manifestDigest": opts.ManifestDigest, "candidateRevision": readback.CandidateRevision,
+			"counts": baseCounts, "postBindings": reportPostBindings,
+			"candidatePostIds": readback.PostIDs, "candidateSourceHashes": readback.SourceHashes,
+			"auditEvents": []string{"DataReleaseVerified"}, "generatedAt": now,
+		}); err != nil {
+			log.Fatalf("write verify report: %v", err)
+		}
+		log.Printf("[import] VERIFIED env=%s release=%s candidateRevision=%d posts=%d", *env, opts.ReleaseID, readback.CandidateRevision, len(readback.PostIDs))
+	case "activate":
+		applyResult, applyErr := ActivateImportedPostRelease(ctx, database, *env, posts, now, opts, *candidateRevision)
+		if applyErr != nil {
+			log.Fatalf("activate Content-owned Data release: %v", applyErr)
+		}
+		baseCounts["postsUpserted"] = applyResult.PostsUpserted
+		baseCounts["postsRemoved"] = applyResult.PostsRemoved
+		baseCounts["outboxEventsReady"] = applyResult.OutboxEventsReady
+		baseCounts["outboxEventsAppended"] = applyResult.OutboxEventsAppended
+		auditEvents := ImportAuditEvents(applyResult.PreviousReleaseID, applyResult.PreviousManifestDigest, applyResult.OutboxRepairAudits...)
+		if err := WriteImportReport(*reportPath, bson.M{
+			"schema": "quwoquan.content_import_report", "status": "active", "phase": "activate",
+			"environment": *env, "releaseId": opts.ReleaseID, "sourceOwner": opts.SourceOwner,
+			"manifestDigest": opts.ManifestDigest, "mode": opts.Mode, "deletePolicy": opts.DeletePolicy,
+			"counts": baseCounts, "postBindings": reportPostBindings, "auditEvents": auditEvents,
+			"candidateRevision": *candidateRevision, "revision": applyResult.Revision,
+			"sourceVersion": applyResult.ProjectionVersion, "generatedAt": now,
+		}); err != nil {
+			log.Fatalf("write activation report: %v", err)
+		}
+		log.Printf("[import] ACTIVE env=%s release=%s candidateRevision=%d revision=%d posts=%d removed=%d", *env, opts.ReleaseID, *candidateRevision, applyResult.Revision, applyResult.PostsUpserted, applyResult.PostsRemoved)
 	}
-	log.Printf("[import] OK env=%s release=%s mode=%s deletePolicy=%s upserted posts=%d outboxEvents=%d appended=%d repaired=%d removed posts=%d replayed=%t",
-		*env, opts.ReleaseID, opts.Mode, opts.DeletePolicy, applyResult.PostsUpserted,
-		applyResult.OutboxEventsReady, applyResult.OutboxEventsAppended,
-		applyResult.OutboxEventsRepaired, applyResult.PostsRemoved, applyResult.Replayed)
+
 }
 
 // ValidateReplayRepairOptions keeps the bounded repair mode explicit. Normal
@@ -371,6 +483,9 @@ func UpsertPosts(ctx context.Context, coll *mongo.Collection, posts []PostDoc, n
 type ImportOptions struct {
 	ReleaseID      string
 	ManifestDigest string
+	// ExpectedRevision is the caller-observed active pointer revision. Zero is
+	// the create-only precondition; positive values are exact update CAS values.
+	ExpectedRevision int64
 	// ReleaseClass 是 release.json 声明的 release 级类别（research|commercial），
 	// 随导入落进 data_release_state，供 research readback 判定 release 类别。
 	ReleaseClass              string
@@ -641,83 +756,96 @@ func desiredEntityRefs(entities []EntityDoc) []string {
 	return refs
 }
 
+func importedPostDocument(
+	p PostDoc,
+	now time.Time,
+	opts ImportOptions,
+	lifecycleStatus string,
+) (bson.M, error) {
+	opts = NormalizeImportOptions(opts)
+	contentIdentity, err := canonicalImportedContentIdentity(p.ContentIdentity)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", p.PostRef, err)
+	}
+	postID := RuntimePostID(p.ContentID)
+	if postID == "" {
+		return nil, fmt.Errorf("contentId is required to derive runtime postId")
+	}
+	runtimeEntityRefs := p.NormalizedEntityRefs
+	if len(runtimeEntityRefs) == 0 {
+		runtimeEntityRefs = p.EntityRefs
+	}
+	accessMode := MediaDeliveryAccessModeForReleaseClass(opts.ReleaseClass)
+	media := ImportedMediaFields(importedPostAssets(p), accessMode)
+	body := p.ArticleMarkdown
+	summary := ProjectImportedArticleSummary(p.ArticleMarkdown)
+	if p.ContentType == "image" {
+		body = p.Body
+		summary = p.Body
+	}
+	doc := bson.M{
+		"postRef": p.PostRef, "postId": postID, "contentType": p.ContentType,
+		"contentId": p.ContentID, "contentVersion": p.ContentVersion,
+		"poolSourceType": p.PoolSourceType, "variantPurpose": p.VariantPurpose,
+		"admission": p.Admission, "poolStatus": p.PoolStatus,
+		"contentIdentity": contentIdentity, "title": p.Title,
+		"angle": p.Angle, "seq": p.Seq, "entityRefs": runtimeEntityRefs, "tagRefs": p.TagRefs,
+		"intersectionHints":         p.IntersectionHints,
+		"semanticMentions":          p.SemanticMentions,
+		"authorId":                  p.AuthorID,
+		"authorDisplayNameSnapshot": p.AuthorDisplayName,
+		"authorAvatarUrlSnapshot":   p.AuthorAvatarURL,
+		"creatorProfileId":          p.CreatorProfileID,
+		"creatorArchetype":          p.CreatorArchetype,
+		"creatorProfileVersion":     p.CreatorProfileVersion,
+		"creatorDisclosure":         p.CreatorDisclosure,
+		"experienceClaimMode":       p.ExperienceClaimMode,
+		"authorQualitySignals":      p.AuthorQualitySignals,
+		"sourceCollectionId":        p.SourceCollectionID,
+		"sourcePlatform":            p.SourcePlatform,
+		"sourceAttribution":         p.SourceAttribution,
+		"creator":                   p.Creator,
+		"page":                      p.Page,
+		"licenseProof":              p.LicenseProof,
+		"template":                  p.Template,
+		"articleTemplate":           p.Template,
+		"body":                      body,
+		"summary":                   summary,
+		"mediaUrls":                 media.MediaURLs,
+		"mediaItems":                media.MediaItems,
+		"coverUrl":                  media.CoverURL,
+		"mediaAssetIds":             media.MediaAssetIDs,
+		"articleMarkdown":           p.ArticleMarkdown,
+		"articleDigest":             p.ArticleDigest,
+		"articleMarkdownDigest":     p.ArticleDigest,
+		"articleAssetManifest": ImportedArticleAssetManifest(
+			p.ArticleAssetManifest,
+			accessMode,
+		),
+		"createdAt": p.CreatedAt, "updatedAt": p.UpdatedAt,
+		"publishedAt": p.PublishedAt, "version": opts.ProjectionVersion,
+		"status": "published", "visibility": "public",
+		"moderationStatus": importedModerationStatus,
+		"sourceHash":       sourceHash(p),
+	}
+	applyImportedVideoFields(doc, media)
+	ApplyImportedAuthorAvatarDeliveryFields(doc, p, accessMode)
+	for key, value := range releaseFields(opts, now, lifecycleStatus) {
+		doc[key] = value
+	}
+	return doc, nil
+}
+
 func UpsertPostsWithOptions(ctx context.Context, coll *mongo.Collection, posts []PostDoc, now time.Time, opts ImportOptions) (int, error) {
 	opts = NormalizeImportOptions(opts)
 	n := 0
-	for _, p := range posts {
-		contentIdentity, err := canonicalImportedContentIdentity(p.ContentIdentity)
+	for _, post := range posts {
+		doc, err := importedPostDocument(post, now, opts, "active")
 		if err != nil {
-			return n, fmt.Errorf("%s: %w", p.PostRef, err)
+			return n, err
 		}
-		postID := RuntimePostID(p.ContentID)
-		if postID == "" {
-			return n, fmt.Errorf("contentId is required to derive runtime postId")
-		}
-		newHash := sourceHash(p)
-		runtimeEntityRefs := p.NormalizedEntityRefs
-		if len(runtimeEntityRefs) == 0 {
-			runtimeEntityRefs = p.EntityRefs
-		}
-		accessMode := MediaDeliveryAccessModeForReleaseClass(opts.ReleaseClass)
-		media := ImportedMediaFields(importedPostAssets(p), accessMode)
-		body := p.ArticleMarkdown
-		summary := ProjectImportedArticleSummary(p.ArticleMarkdown)
-		if p.ContentType == "image" {
-			body = p.Body
-			summary = p.Body
-		}
-		doc := bson.M{
-			"postRef": p.PostRef, "postId": postID, "contentType": p.ContentType,
-			"contentId": p.ContentID, "contentVersion": p.ContentVersion,
-			"poolSourceType": p.PoolSourceType, "variantPurpose": p.VariantPurpose,
-			"admission": p.Admission, "poolStatus": p.PoolStatus,
-			"contentIdentity": contentIdentity, "title": p.Title,
-			"angle": p.Angle, "seq": p.Seq, "entityRefs": runtimeEntityRefs, "tagRefs": p.TagRefs,
-			"intersectionHints":         p.IntersectionHints,
-			"semanticMentions":          p.SemanticMentions,
-			"authorId":                  p.AuthorID,
-			"authorDisplayNameSnapshot": p.AuthorDisplayName,
-			"authorAvatarUrlSnapshot":   p.AuthorAvatarURL,
-			"creatorProfileId":          p.CreatorProfileID,
-			"creatorArchetype":          p.CreatorArchetype,
-			"creatorProfileVersion":     p.CreatorProfileVersion,
-			"creatorDisclosure":         p.CreatorDisclosure,
-			"experienceClaimMode":       p.ExperienceClaimMode,
-			"authorQualitySignals":      p.AuthorQualitySignals,
-			"sourceCollectionId":        p.SourceCollectionID,
-			"sourcePlatform":            p.SourcePlatform,
-			"sourceAttribution":         p.SourceAttribution,
-			"creator":                   p.Creator,
-			"page":                      p.Page,
-			"licenseProof":              p.LicenseProof,
-			"template":                  p.Template, "articleTemplate": p.Template,
-			"body": body, "summary": summary,
-			"mediaUrls": media.MediaURLs, "mediaItems": media.MediaItems, "coverUrl": media.CoverURL,
-			"mediaAssetIds":   media.MediaAssetIDs,
-			"articleMarkdown": p.ArticleMarkdown, "articleDigest": p.ArticleDigest, "articleMarkdownDigest": p.ArticleDigest,
-			"articleAssetManifest": ImportedArticleAssetManifest(
-				p.ArticleAssetManifest,
-				accessMode,
-			),
-			"createdAt":   p.CreatedAt,
-			"updatedAt":   p.UpdatedAt,
-			"publishedAt": p.PublishedAt,
-			"version":     opts.ProjectionVersion,
-			// Path A 导入的 publish 主线文章默认视为已公开发布，保证
-			// 在线 search/feed 与 rm_discovery_feed 的 discoverability 口径一致。
-			"status":           "published",
-			"visibility":       "public",
-			"moderationStatus": importedModerationStatus,
-			"sourceHash":       newHash,
-		}
-		applyImportedVideoFields(doc, media)
-		ApplyImportedAuthorAvatarDeliveryFields(doc, p, accessMode)
-		for k, v := range releaseFields(opts, now, "active") {
-			doc[k] = v
-		}
-		if err := migrateImportedPostIdentity(
-			ctx, coll, p.ContentID, p.PostRef, postID, opts,
-		); err != nil {
+		postID := RuntimePostID(post.ContentID)
+		if err := migrateImportedPostIdentity(ctx, coll, post.ContentID, post.PostRef, postID, opts); err != nil {
 			return n, err
 		}
 		if _, err := coll.UpdateOne(ctx,
@@ -880,31 +1008,75 @@ func ApplyMissingEntityPolicy(ctx context.Context, coll *mongo.Collection, entit
 	return res.ModifiedCount, nil
 }
 
-func UpsertReleaseState(ctx context.Context, coll *mongo.Collection, env string, opts ImportOptions, now time.Time, counts bson.M) error {
+func UpsertReleaseState(
+	ctx context.Context,
+	coll *mongo.Collection,
+	env string,
+	opts ImportOptions,
+	now time.Time,
+	counts bson.M,
+) error {
 	opts = NormalizeImportOptions(opts)
-	_, err := coll.UpdateOne(ctx,
-		bson.M{"environment": env, "sourceOwner": opts.SourceOwner},
-		bson.M{"$set": bson.M{
-			"environment": env, "sourceOwner": opts.SourceOwner,
-			"releaseId": opts.ReleaseID, "activeReleaseId": opts.ReleaseID, "status": "active",
-			"manifestDigest":    opts.ManifestDigest,
-			"releaseClass":      opts.ReleaseClass,
-			"projectionVersion": opts.ProjectionVersion,
-			"activatedAt":       now,
-			"readback": bson.M{
-				"status": "content_imported",
-				"counts": bson.M{
-					"posts":          counts["postsUpserted"],
-					"discoveryPosts": counts["feedUpserted"],
-				},
-				"checkedAt": now,
+	if coll == nil {
+		return fmt.Errorf("Data release state collection is required")
+	}
+	if strings.TrimSpace(env) == "" || strings.TrimSpace(opts.SourceOwner) == "" ||
+		strings.TrimSpace(opts.ReleaseID) == "" ||
+		strings.TrimSpace(opts.ManifestDigest) == "" ||
+		opts.ExpectedRevision < 0 {
+		return fmt.Errorf("Data release activation identity or expectedRevision is incomplete")
+	}
+	nextRevision := opts.ExpectedRevision + 1
+	set := bson.M{
+		"environment": env, "sourceOwner": opts.SourceOwner,
+		"releaseId": opts.ReleaseID, "activeReleaseId": opts.ReleaseID, "status": "active",
+		"manifestDigest": opts.ManifestDigest,
+		"releaseClass":   opts.ReleaseClass,
+		"revision":       nextRevision,
+		"sourceVersion":  opts.ProjectionVersion,
+		"activatedAt":    now,
+		"readback": bson.M{
+			"status": "content_imported",
+			"counts": bson.M{
+				"posts":          counts["postsUpserted"],
+				"discoveryPosts": counts["feedUpserted"],
 			},
-			"mode": opts.Mode, "deletePolicy": opts.DeletePolicy,
-			"counts": counts, "updatedAt": now,
-		}, "$setOnInsert": bson.M{"createdAt": now}},
-		options.UpdateOne().SetUpsert(true),
-	)
-	return err
+			"checkedAt": now,
+		},
+		"mode": opts.Mode, "deletePolicy": opts.DeletePolicy,
+		"counts": counts, "updatedAt": now,
+	}
+	if opts.ExpectedRevision == 0 {
+		_, err := coll.InsertOne(ctx, bson.M{
+			"createdAt":   now,
+			"environment": set["environment"], "sourceOwner": set["sourceOwner"],
+			"releaseId": set["releaseId"], "activeReleaseId": set["activeReleaseId"],
+			"status": set["status"], "manifestDigest": set["manifestDigest"],
+			"releaseClass": set["releaseClass"], "revision": set["revision"],
+			"sourceVersion": set["sourceVersion"],
+			"activatedAt":   set["activatedAt"], "readback": set["readback"],
+			"mode": set["mode"], "deletePolicy": set["deletePolicy"],
+			"counts": set["counts"], "updatedAt": set["updatedAt"],
+		})
+		if mongo.IsDuplicateKeyError(err) {
+			return newDataReleaseRevisionConflict(env, opts, err)
+		}
+		return err
+	}
+	result, err := coll.UpdateOne(ctx, bson.M{
+		"environment": env, "sourceOwner": opts.SourceOwner,
+		"revision": opts.ExpectedRevision,
+	}, bson.M{"$set": set})
+	if err != nil {
+		if mongo.IsDuplicateKeyError(err) {
+			return newDataReleaseRevisionConflict(env, opts, err)
+		}
+		return err
+	}
+	if result.MatchedCount != 1 {
+		return newDataReleaseRevisionConflict(env, opts, nil)
+	}
+	return nil
 }
 
 // ImportLoadedCounts always emits schema-required loaded counters, including

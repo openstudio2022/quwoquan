@@ -140,9 +140,17 @@ func assembleIntegrationDomain(asm *servicekit.Assembly, cfg *config) error {
 		connectorAuthorizationStore,
 	)
 
+	connectorInvocationStore := connectorinvocationpersistence.NewMongoStore(database)
+	if err := ensureIndexes(
+		ctx, "connector invocation", connectorInvocationStore.EnsureIndexes,
+	); err != nil {
+		return err
+	}
+
 	connectorConnectionStore := connectorconnectionpersistence.NewMongoStore(
 		database,
 		connectorAuthorizationStore,
+		connectorInvocationStore,
 	)
 	if err := ensureIndexes(
 		ctx, "connector connection", connectorConnectionStore.EnsureIndexes,
@@ -187,12 +195,6 @@ func assembleIntegrationDomain(asm *servicekit.Assembly, cfg *config) error {
 		grantadapter.NewMiddleware(grantSession),
 	)
 
-	connectorInvocationStore := connectorinvocationpersistence.NewMongoStore(database)
-	if err := ensureIndexes(
-		ctx, "connector invocation", connectorInvocationStore.EnsureIndexes,
-	); err != nil {
-		return err
-	}
 	connectorInvocationCommands := connectorinvocationapp.NewCommandFacade(
 		connectorInvocationStore,
 		grantSession,

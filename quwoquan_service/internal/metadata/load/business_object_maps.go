@@ -265,6 +265,7 @@ func deriveBusinessObjectMaps(catalog *ast.Catalog, errs *[]error) {
 			MemberBounds:        memberBounds,
 			StorageRole:         strings.TrimSpace(storage.Role),
 			StorageBackend:      strings.TrimSpace(storage.Backend),
+			StorageResources:    append([]ast.ObjectStorageResource(nil), object.StorageResources...),
 			MutationEntrypoints: mutationEntrypoints,
 			EventConsumers:      normalizedStrings(eventConsumers),
 			LifecycleRefs:       lifecycleRefs,

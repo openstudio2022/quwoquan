@@ -1,4 +1,13 @@
 backend: mongodb
+resources:
+  interaction_store:
+    engine: mongodb
+    role: authority
+    required: true
+  readiness_signals:
+    engine: redis
+    role: runtime
+    required: true
 collections:
   reliable_task_outbox:
     publication_role: not_published

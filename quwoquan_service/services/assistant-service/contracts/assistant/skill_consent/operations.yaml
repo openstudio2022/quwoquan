@@ -32,6 +32,9 @@ api_routes:
     retry_mode: idempotent
     max_attempts: 2
     idempotency: required
+  consistency:
+    atomic_commit: true
+    arbitration: unique_winner
   error_codes:
   - ASSISTANT.USER.consent_invalid_argument
   - ASSISTANT.USER.consent_idempotency_conflict
@@ -90,6 +93,9 @@ api_routes:
     retry_mode: idempotent
     max_attempts: 2
     idempotency: required
+  consistency:
+    atomic_commit: true
+    arbitration: conditional_admission
   error_codes:
   - ASSISTANT.USER.consent_invalid_argument
   - ASSISTANT.USER.consent_idempotency_conflict
@@ -141,6 +147,9 @@ api_routes:
     retry_mode: idempotent
     max_attempts: 2
     idempotency: none
+  consistency:
+    source: authority
+    stale_result: fail_closed
   error_codes:
   - ASSISTANT.USER.consent_unauthorized
   - ASSISTANT.SYSTEM.consent_unavailable

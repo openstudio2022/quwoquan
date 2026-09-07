@@ -61,26 +61,41 @@ func TestElasticsearchLogSinkPersistsAndQueriesCanonicalTelemetry(
 
 	suffix := fmt.Sprintf("%d", time.Now().UnixNano())
 	config := telemetrypersistence.ElasticsearchConfig{
+		Kind:                   telemetrypersistence.ElasticsearchTelemetryStoreKind,
 		Endpoint:               endpoint,
 		RawIndex:               "qwq-telemetry-raw-" + suffix,
 		StartupDiagnosticIndex: "qwq-telemetry-startup-" + suffix,
-		RuntimeLogIndex:        "qwq-telemetry-runtime-" + suffix,
 		AggregateIndex:         "qwq-telemetry-hourly-" + suffix,
 		Timeout:                30 * time.Second,
+	}
+	runtimeConfig := telemetrypersistence.ElasticsearchConfig{
+		Kind:           telemetrypersistence.ElasticsearchRuntimeLogStoreKind,
+		Endpoint:       endpoint,
+		RawIndex:       "qwq-runtime-raw-" + suffix,
+		AggregateIndex: "qwq-runtime-hourly-" + suffix,
+		Timeout:        30 * time.Second,
 	}
 	store, err := telemetrypersistence.NewElasticsearchEventLogStore(config)
 	if err != nil {
 		t.Fatalf("NewElasticsearchEventLogStore() error = %v", err)
 	}
 	if err := store.EnsureIndices(ctx); err != nil {
-		t.Fatalf("EnsureIndices() error = %v", err)
+		t.Fatalf("telemetry EnsureIndices() error = %v", err)
+	}
+	runtimeStore, err := telemetrypersistence.NewElasticsearchEventLogStore(runtimeConfig)
+	if err != nil {
+		t.Fatalf("NewElasticsearchEventLogStore(runtime) error = %v", err)
+	}
+	if err := runtimeStore.EnsureIndices(ctx); err != nil {
+		t.Fatalf("runtime EnsureIndices() error = %v", err)
 	}
 	t.Cleanup(func() {
 		for _, indexBase := range []string{
 			config.RawIndex,
 			config.StartupDiagnosticIndex,
-			config.RuntimeLogIndex,
 			config.AggregateIndex,
+			runtimeConfig.RawIndex,
+			runtimeConfig.AggregateIndex,
 		} {
 			for _, resource := range []string{
 				"/" + indexBase + "-*",
@@ -190,7 +205,7 @@ func TestElasticsearchLogSinkPersistsAndQueriesCanonicalTelemetry(
 	}
 
 	runtimeBatchKey := strings.Repeat("c", 64)
-	if err := store.PutRuntimeLogBatch(
+	if err := runtimeStore.PutRuntimeLogBatch(
 		ctx,
 		runtimeBatchKey,
 		[]application.RuntimeLogRecord{{
@@ -215,7 +230,7 @@ func TestElasticsearchLogSinkPersistsAndQueriesCanonicalTelemetry(
 	); err != nil {
 		t.Fatalf("PutRuntimeLogBatch() error = %v", err)
 	}
-	complete, err = store.HasRuntimeLogBatch(ctx, runtimeBatchKey, 1)
+	complete, err = runtimeStore.HasRuntimeLogBatch(ctx, runtimeBatchKey, 1)
 	if err != nil || !complete {
 		t.Fatalf("HasRuntimeLogBatch() = %v, %v; want true, nil", complete, err)
 	}
@@ -240,9 +255,9 @@ func TestElasticsearchLogSinkPersistsAndQueriesCanonicalTelemetry(
 		t,
 		ctx,
 		endpoint,
-		config.RuntimeLogIndex,
+		runtimeConfig.RawIndex,
 		now,
-		"qwq-product-telemetry-raw-3d",
+		"qwq-runtime-diagnostics-raw-3d",
 	)
 	assertElasticsearchLifecycleBinding(
 		t,
@@ -251,6 +266,14 @@ func TestElasticsearchLogSinkPersistsAndQueriesCanonicalTelemetry(
 		config.AggregateIndex,
 		now,
 		"qwq-product-telemetry-hourly-90d",
+	)
+	assertElasticsearchLifecycleBinding(
+		t,
+		ctx,
+		endpoint,
+		runtimeConfig.AggregateIndex,
+		now,
+		"qwq-runtime-diagnostics-hourly-90d",
 	)
 
 	from := now.Add(-time.Hour)
@@ -295,7 +318,7 @@ func TestElasticsearchLogSinkPersistsAndQueriesCanonicalTelemetry(
 	if len(eventDimensionRows) == 0 {
 		t.Fatal("event_dimensions aggregate rows missing from real Elasticsearch")
 	}
-	runtimeRows, err := store.ListAggregateAlertRows(
+	runtimeRows, err := runtimeStore.ListAggregateAlertRows(
 		ctx, "runtime_diagnostics", from, to,
 	)
 	if err != nil {
@@ -573,7 +596,7 @@ func TestElasticsearchLogSinkPersistsAndQueriesCanonicalTelemetry(
 		t.Fatalf("ReadRtcMediaQoeSummary() = %+v", rtcSummary)
 	}
 
-	runtimeSummary, err := store.GetRuntimeLogSummary(
+	runtimeSummary, err := runtimeStore.GetRuntimeLogSummary(
 		ctx,
 		application.RuntimeLogSummaryQuery{From: from, To: to},
 	)
@@ -584,7 +607,7 @@ func TestElasticsearchLogSinkPersistsAndQueriesCanonicalTelemetry(
 		runtimeSummary.DimensionCounters["signal"]["app.runtime_exception"] != 1 {
 		t.Fatalf("GetRuntimeLogSummary() = %+v", runtimeSummary)
 	}
-	runtimeDrilldown, err := store.GetRuntimeLogDrilldown(
+	runtimeDrilldown, err := runtimeStore.GetRuntimeLogDrilldown(
 		ctx,
 		application.RuntimeLogDrilldownQuery{
 			From:            from,

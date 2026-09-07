@@ -28,4 +28,5 @@ transaction:
   - viewer_media_purpose_rate_window_serialization
   - grant_reservation_atomic_commit
   - grant_expiry_never_extended_on_replay
+  mechanism: conditional_update
 role: authoritative

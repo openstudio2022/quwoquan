@@ -803,17 +803,17 @@ func TestRTCPersonaChannelFiltersDeviceTargetedFrames(t *testing.T) {
 	}
 }
 
-func TestLeaseFencingTokensAreMonotonic(t *testing.T) {
+func TestLeaseFencingRejectsStaleExpiredAndOldRelease(t *testing.T) {
 	t.Parallel()
 	client := rtredis.NewMemoryClient()
 	leases := redisstore.NewLeaseStore(client)
 	ctx := context.Background()
-
 	identity := application.TrustedIdentity{
 		AccountID: "acct-lease",
 		PersonaID: "persona-lease",
 		DeviceID:  "device-lease",
 	}
+
 	first, err := leases.Acquire(ctx, identity, "conn-1", time.Minute)
 	if err != nil {
 		t.Fatalf("acquire first: %v", err)
@@ -825,12 +825,108 @@ func TestLeaseFencingTokensAreMonotonic(t *testing.T) {
 	if second <= first {
 		t.Fatalf("fencing token must be monotonic: first=%d second=%d", first, second)
 	}
-	current, err := leases.CurrentFence(ctx, identity)
-	if err != nil || current != second {
-		t.Fatalf("current fence = %d err = %v, want %d", current, err, second)
+	if err := leases.Renew(ctx, identity, "conn-1", first, time.Minute); !errors.Is(
+		err,
+		application.ErrLeaseFenced,
+	) {
+		t.Fatalf("stale renew error=%v, want ErrLeaseFenced", err)
 	}
-	if err := leases.Release(ctx, identity, "conn-1"); err != nil {
-		t.Fatalf("release: %v", err)
+	if err := leases.Release(ctx, identity, "conn-2", first); !errors.Is(
+		err,
+		application.ErrLeaseFenced,
+	) {
+		t.Fatalf("old release error=%v, want ErrLeaseFenced", err)
+	}
+	if err := leases.Renew(ctx, identity, "conn-2", second, time.Minute); err != nil {
+		t.Fatalf("current lease was removed or rejected by old release: %v", err)
+	}
+	if err := leases.Release(ctx, identity, "conn-2", second); err != nil {
+		t.Fatalf("release current lease: %v", err)
+	}
+	if err := leases.Renew(ctx, identity, "conn-2", second, time.Minute); !errors.Is(
+		err,
+		application.ErrLeaseExpired,
+	) {
+		t.Fatalf("expired renew error=%v, want ErrLeaseExpired", err)
+	}
+}
+
+func TestLeaseFenceMemoryAuthorityHasNoTTLAndSurvivesLongRenewals(t *testing.T) {
+	client := rtredis.NewMemoryClient()
+	leases := redisstore.NewLeaseStore(client)
+	ctx := context.Background()
+	identity := application.TrustedIdentity{
+		AccountID: "acct-long-fence",
+		PersonaID: "persona-long-fence",
+		DeviceID:  "device-long-fence",
+	}
+	fence, err := leases.Acquire(ctx, identity, "conn-long-fence", time.Hour)
+	if err != nil {
+		t.Fatalf("acquire long lease: %v", err)
+	}
+	for renewal := 0; renewal < 128; renewal++ {
+		if err := leases.Renew(
+			ctx, identity, "conn-long-fence", fence, time.Hour,
+		); err != nil {
+			t.Fatalf("long renewal %d: %v", renewal, err)
+		}
+	}
+	next, err := leases.Acquire(ctx, identity, "conn-after-long", time.Hour)
+	if err != nil {
+		t.Fatalf("acquire after long renewals: %v", err)
+	}
+	if next <= fence {
+		t.Fatalf("long renewals lost authority: first=%d next=%d", fence, next)
+	}
+	if err := leases.Renew(
+		ctx, identity, "conn-long-fence", fence, time.Hour,
+	); !errors.Is(err, application.ErrLeaseFenced) {
+		t.Fatalf("old long-lived lease renewed after next acquire: %v", err)
+	}
+}
+
+type heartbeatTestSink struct{}
+
+func (heartbeatTestSink) Deliver(string) bool { return true }
+func (heartbeatTestSink) Kick(string)         {}
+
+func TestGatewayHeartbeatPassesCapturedFenceToken(t *testing.T) {
+	t.Parallel()
+	harness := newGatewayHarness(t)
+	identity := application.TrustedIdentity{
+		AccountID: "acct-heartbeat-fence",
+		PersonaID: "persona-heartbeat-fence",
+		DeviceID:  "device-heartbeat-fence",
+	}
+	detach, err := harness.hub.Attach(
+		context.Background(),
+		identity,
+		1,
+		"conn-heartbeat-fence",
+		"websocket",
+		heartbeatTestSink{},
+	)
+	if err != nil {
+		t.Fatalf("attach heartbeat connection: %v", err)
+	}
+	t.Cleanup(detach)
+	if err := harness.hub.RenewConnection(
+		context.Background(),
+		identity,
+		"conn-heartbeat-fence",
+		1,
+		time.Now().UTC(),
+	); err != nil {
+		t.Fatalf("heartbeat with acquired fence: %v", err)
+	}
+	if err := harness.hub.RenewConnection(
+		context.Background(),
+		identity,
+		"conn-heartbeat-fence",
+		2,
+		time.Now().UTC(),
+	); !errors.Is(err, application.ErrLeaseFenced) {
+		t.Fatalf("heartbeat with non-session fence=%v, want ErrLeaseFenced", err)
 	}
 }
 

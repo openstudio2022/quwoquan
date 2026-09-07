@@ -17,6 +17,7 @@ import (
 	rtauth "quwoquan_service/runtime/auth"
 	rterr "quwoquan_service/runtime/errors"
 	runtimemessaging "quwoquan_service/runtime/messaging"
+	rtredis "quwoquan_service/runtime/redis"
 	streamadapter "quwoquan_service/services/realtime-gateway/internal/realtime/connection/adapters/inbound/stream"
 	"quwoquan_service/services/realtime-gateway/internal/realtime/connection/application"
 	"quwoquan_service/services/realtime-gateway/internal/realtime/connection/infrastructure/redisstore"
@@ -302,6 +303,66 @@ func waitForLongPollPresence(
 			t.Fatalf("long-poll did not register presence: %v", err)
 		}
 		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+func TestLegacyAccountSessionCleanupDoesNotDeleteCurrentLease(t *testing.T) {
+	harness := newGatewayHarness(t)
+	ctx := context.Background()
+	identity := application.TrustedIdentity{
+		AccountID: "account-legacy-cleanup-local",
+		PersonaID: "persona-legacy-cleanup-local",
+		DeviceID:  "device-legacy-cleanup-local",
+	}
+	const connectionID = "connection-legacy-cleanup-local"
+	leaseStore := redisstore.NewLeaseStore(harness.client)
+	currentFence, err := leaseStore.Acquire(ctx, identity, connectionID, time.Minute)
+	if err != nil {
+		t.Fatalf("acquire current lease: %v", err)
+	}
+	preFenceLeaseKey := "rt:conn:lease:" + identity.PersonaID + ":" + identity.DeviceID + ":" + connectionID
+	if err := harness.client.Set(ctx, preFenceLeaseKey, "1", time.Minute); err != nil {
+		t.Fatalf("seed legacy lease: %v", err)
+	}
+	legacyRecord, err := json.Marshal(map[string]string{
+		"accountId": identity.AccountID, "personaId": identity.PersonaID,
+		"deviceId": identity.DeviceID, "connectionId": connectionID,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := harness.client.Set(
+		ctx,
+		"rt:account:session:"+identity.AccountID+":"+connectionID,
+		string(legacyRecord),
+		0,
+	); err != nil {
+		t.Fatal(err)
+	}
+	if err := harness.client.SAdd(
+		ctx, "rt:account:sessions:"+identity.AccountID, connectionID,
+	); err != nil {
+		t.Fatal(err)
+	}
+	store := redisstore.NewAccountSecurityStateStore(
+		harness.client,
+		newTestPresenceProjection(t, harness.client),
+	)
+	result, err := store.ApplyAccountSecurityEvent(ctx, application.AccountSecurityEvent{
+		EventID: "event-legacy-cleanup-local", AccountID: identity.AccountID,
+		PersonaIDs: []string{identity.PersonaID}, AccountState: "suspended",
+		AuthEpoch: 2, OccurredAt: time.Now().UTC(),
+	})
+	if err != nil || !result.Evict {
+		t.Fatalf("apply legacy cleanup result=%+v err=%v", result, err)
+	}
+	if _, err := harness.client.Get(ctx, preFenceLeaseKey); !errors.Is(err, rtredis.ErrKeyNotFound) {
+		t.Fatalf("legacy lease cleanup error=%v, want not found", err)
+	}
+	if err := leaseStore.Renew(
+		ctx, identity, connectionID, currentFence, time.Minute,
+	); err != nil {
+		t.Fatalf("legacy cleanup deleted current lease: %v", err)
 	}
 }
 

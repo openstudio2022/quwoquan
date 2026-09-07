@@ -25,10 +25,87 @@ type AlertAggregateReader interface {
 	AggregateGeneratedThrough(ctx context.Context) (time.Time, bool, error)
 }
 
+// SplitAlertAggregateReader 仅把 runtime_diagnostics rowKind 路由到 runtime
+// credential；其余产品聚合与 freshness 始终由 telemetry credential 读取。
+type SplitAlertAggregateReader struct {
+	telemetry AlertAggregateReader
+	runtime   AlertAggregateReader
+}
+
+func NewSplitAlertAggregateReader(
+	telemetry AlertAggregateReader,
+	runtime AlertAggregateReader,
+) AlertAggregateReader {
+	return SplitAlertAggregateReader{telemetry: telemetry, runtime: runtime}
+}
+
+func (s SplitAlertAggregateReader) ListAggregateAlertRows(
+	ctx context.Context,
+	rowKind string,
+	from time.Time,
+	to time.Time,
+) ([]map[string]any, error) {
+	if rowKind == "runtime_diagnostics" {
+		if s.runtime == nil {
+			return nil, fmt.Errorf("runtime-log alert aggregate reader is unavailable")
+		}
+		return s.runtime.ListAggregateAlertRows(ctx, rowKind, from, to)
+	}
+	if s.telemetry == nil {
+		return nil, fmt.Errorf("telemetry alert aggregate reader is unavailable")
+	}
+	return s.telemetry.ListAggregateAlertRows(ctx, rowKind, from, to)
+}
+
+func (s SplitAlertAggregateReader) AggregateGeneratedThrough(
+	ctx context.Context,
+) (time.Time, bool, error) {
+	if s.telemetry == nil {
+		return time.Time{}, false, fmt.Errorf("telemetry alert aggregate reader is unavailable")
+	}
+	return s.telemetry.AggregateGeneratedThrough(ctx)
+}
+
 // AlertRetentionInspector 读取原始索引 ILM 实际保留天数。
 type AlertRetentionInspector interface {
 	RawRetentionDays(ctx context.Context) (int, error)
 	RuntimeRawRetentionDays(ctx context.Context) (int, error)
+}
+
+// TelemetryRetentionInspector 与 RuntimeLogRetentionInspector 保持两条凭据的
+// 最小读取面；组合器不会让 telemetry credential 触碰 runtime ILM。
+type TelemetryRetentionInspector interface {
+	RawRetentionDays(ctx context.Context) (int, error)
+}
+
+type RuntimeLogRetentionInspector interface {
+	RuntimeRawRetentionDays(ctx context.Context) (int, error)
+}
+
+type SplitAlertRetentionInspector struct {
+	telemetry TelemetryRetentionInspector
+	runtime   RuntimeLogRetentionInspector
+}
+
+func NewSplitAlertRetentionInspector(
+	telemetry TelemetryRetentionInspector,
+	runtime RuntimeLogRetentionInspector,
+) AlertRetentionInspector {
+	return SplitAlertRetentionInspector{telemetry: telemetry, runtime: runtime}
+}
+
+func (s SplitAlertRetentionInspector) RawRetentionDays(ctx context.Context) (int, error) {
+	if s.telemetry == nil {
+		return 0, fmt.Errorf("telemetry retention inspector is unavailable")
+	}
+	return s.telemetry.RawRetentionDays(ctx)
+}
+
+func (s SplitAlertRetentionInspector) RuntimeRawRetentionDays(ctx context.Context) (int, error) {
+	if s.runtime == nil {
+		return 0, fmt.Errorf("runtime-log retention inspector is unavailable")
+	}
+	return s.runtime.RuntimeRawRetentionDays(ctx)
 }
 
 // AlertmanagerAlert 是 Alertmanager v2 POST /api/v2/alerts 的单条负载。

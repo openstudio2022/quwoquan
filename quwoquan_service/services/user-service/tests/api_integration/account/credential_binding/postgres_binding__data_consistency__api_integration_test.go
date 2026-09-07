@@ -170,6 +170,9 @@ func TestBindPhoneCredentialVerifiesChallengeAndCommitsPostgresBinding(t *testin
 		if err := usersupport.SeedAccountPersona(ctx, pool, ownerID, personaID); err != nil {
 			t.Fatalf("seed phone binding owner: %v", err)
 		}
+		if _, err := pool.Exec(ctx, `UPDATE user_profiles SET phone=NULL WHERE user_id=$1`, ownerID); err != nil {
+			t.Fatalf("prepare owner without phone: %v", err)
+		}
 		bindingStore, err := bindingpersistence.NewPostgresStore(pool)
 		if err != nil {
 			t.Fatalf("credential store: %v", err)

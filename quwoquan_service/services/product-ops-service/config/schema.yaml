@@ -277,48 +277,75 @@ configs:
   rollout: progressive
   sensitive: false
   default: 20
-- key: sys.product-ops-service.elasticsearch.aggregate_index
+- key: sys.product-ops-service.telemetry_elasticsearch.aggregate_index
   type: string
   scope: workload
   reload: restart
   rollout: progressive
   sensitive: false
   default: app-product-telemetry-hourly
-- key: sys.product-ops-service.elasticsearch.api_key
+- key: sys.product-ops-service.telemetry_elasticsearch.api_key
   type: string
   scope: workload
   reload: restart
   rollout: progressive
   sensitive: true
-- key: sys.product-ops-service.elasticsearch.endpoint
+- key: sys.product-ops-service.telemetry_elasticsearch.endpoint
   type: string
   scope: workload
   reload: restart
   rollout: progressive
   sensitive: false
-  default: ${PRODUCT_OPS_ELASTICSEARCH_ENDPOINT}
-- key: sys.product-ops-service.elasticsearch.raw_index
+  default: ${PRODUCT_OPS_TELEMETRY_ELASTICSEARCH_ENDPOINT}
+- key: sys.product-ops-service.telemetry_elasticsearch.raw_index
   type: string
   scope: workload
   reload: restart
   rollout: progressive
   sensitive: false
   default: app-product-telemetry-raw
-- key: sys.product-ops-service.elasticsearch.runtime_log_index
-  type: string
-  scope: workload
-  reload: restart
-  rollout: progressive
-  sensitive: false
-  default: runtime-diagnostics-raw
-- key: sys.product-ops-service.elasticsearch.startup_diagnostic_index
+- key: sys.product-ops-service.telemetry_elasticsearch.startup_diagnostic_index
   type: string
   scope: workload
   reload: restart
   rollout: progressive
   sensitive: false
   default: app-startup-diagnostic-raw
-- key: sys.product-ops-service.elasticsearch.timeout_ms
+- key: sys.product-ops-service.telemetry_elasticsearch.timeout_ms
+  type: int
+  scope: workload
+  reload: restart
+  rollout: progressive
+  sensitive: false
+  default: 5000
+- key: sys.product-ops-service.runtime_log_elasticsearch.aggregate_index
+  type: string
+  scope: workload
+  reload: restart
+  rollout: progressive
+  sensitive: false
+  default: runtime-diagnostics-hourly
+- key: sys.product-ops-service.runtime_log_elasticsearch.api_key
+  type: string
+  scope: workload
+  reload: restart
+  rollout: progressive
+  sensitive: true
+- key: sys.product-ops-service.runtime_log_elasticsearch.endpoint
+  type: string
+  scope: workload
+  reload: restart
+  rollout: progressive
+  sensitive: false
+  default: ${PRODUCT_OPS_RUNTIME_LOG_ELASTICSEARCH_ENDPOINT}
+- key: sys.product-ops-service.runtime_log_elasticsearch.raw_index
+  type: string
+  scope: workload
+  reload: restart
+  rollout: progressive
+  sensitive: false
+  default: runtime-diagnostics-raw
+- key: sys.product-ops-service.runtime_log_elasticsearch.timeout_ms
   type: int
   scope: workload
   reload: restart

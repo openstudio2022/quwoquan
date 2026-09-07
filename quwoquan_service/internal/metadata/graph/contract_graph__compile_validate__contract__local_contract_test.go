@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"strings"
 	"testing"
@@ -85,6 +86,245 @@ func TestContractGraphCompilesObjectFirstPacket(t *testing.T) {
 	}
 }
 
+// spec_ref: specs/feature-tree/runtime/system-architecture-and-engineering-guide/spec.md#sit-001
+func TestOperationConsistencyCompilesIntoTypedGraphView(t *testing.T) {
+	metadataDir := t.TempDir()
+	query := strings.Replace(
+		commercialQuery("Post", "GetPost", "/content/posts/{postId}"),
+		"    application:\n",
+		"    consistency: {source: projection, freshness: bounded, max_staleness_seconds: 30, stale_result: with_watermark}\n    application:\n",
+		1,
+	)
+	writeObjectFixture(t, metadataDir, "content/content/post", aggregateObject("Post"), query)
+	catalog, err := load.Load(metadataDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	contractGraph := graph.Build(catalog)
+	if len(contractGraph.Operations) != 1 || contractGraph.Operations[0].Consistency == nil {
+		t.Fatalf("typed operation consistency missing: %+v", contractGraph.Operations)
+	}
+	consistency := contractGraph.Operations[0].Consistency
+	if consistency.Source != "projection" || consistency.Freshness != "bounded" ||
+		consistency.MaxStalenessSeconds != 30 || consistency.StaleResult != "with_watermark" {
+		t.Fatalf("unexpected typed query consistency: %+v", consistency)
+	}
+	if issues, err := validate.MetadataSchemas(metadataDir); err != nil {
+		t.Fatal(err)
+	} else if len(issues) != 0 {
+		t.Fatalf("operations schema rejected typed query consistency: %+v", issues)
+	}
+	if err := validate.ContractGraphSchema(metadataDir, contractGraph); err != nil {
+		t.Fatalf("graph schema rejected typed query consistency: %v", err)
+	}
+}
+
+// spec_ref: specs/feature-tree/runtime/system-architecture-and-engineering-guide/spec.md#sit-001
+func TestProjectionConsistencyPolicyCompilesEveryFieldIntoTypedGraphView(t *testing.T) {
+	metadataDir := t.TempDir()
+	writeObjectFixture(
+		t,
+		metadataDir,
+		"search/search/search_index_view",
+		projectionObject(),
+		commercialQuery("SearchIndexView", "GetSearchIndex", "/search/index"),
+	)
+	writeFile(t, filepath.Join(
+		metadataDir,
+		"search/search/search_index_view/projections/search_items.yaml",
+	), `
+read_model: SearchItemSlice
+fields: [id, status]
+source_entities: [SearchDocument]
+source_events: [SearchDocumentUpdated]
+consistency_policy:
+  ordering_key: documentId
+  source_version_field: sourceVersion
+  apply_mode: strictly_newer
+  delete_mode: versioned_tombstone
+  checkpoint_field: checkpoint
+  watermark_field: sourceVersion
+  freshness_slo_seconds: 30
+  backlog_slo_events: 1000
+  rebuild_strategy: alias_replace
+  overflow_policy: serve_with_watermark
+`)
+
+	catalog, err := load.Load(metadataDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	contractGraph := graph.Build(catalog)
+	if len(contractGraph.Projections) != 1 || contractGraph.Projections[0].ConsistencyPolicy == nil {
+		t.Fatalf("typed projection consistency policy missing: %+v", contractGraph.Projections)
+	}
+	want := map[string]any{
+		"orderingKey": "documentId", "sourceVersionField": "sourceVersion",
+		"applyMode": "strictly_newer", "deleteMode": "versioned_tombstone",
+		"checkpointField": "checkpoint", "watermarkField": "sourceVersion",
+		"freshnessSloSeconds": float64(30), "backlogSloEvents": float64(1000),
+		"rebuildStrategy": "alias_replace", "overflowPolicy": "serve_with_watermark",
+	}
+	payload, err := json.Marshal(contractGraph.Projections[0].ConsistencyPolicy)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got map[string]any
+	if err := json.Unmarshal(payload, &got); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("projection consistency policy = %#v, want %#v", got, want)
+	}
+	if err := validate.ContractGraphSchema(metadataDir, contractGraph); err != nil {
+		t.Fatalf("graph schema rejected typed projection consistency policy: %v", err)
+	}
+}
+
+// spec_ref: specs/feature-tree/runtime/system-architecture-and-engineering-guide/spec.md#sit-001
+func TestGraphQLQueryConsistencyLoadsAndCompilesIntoOperation(t *testing.T) {
+	metadataDir := t.TempDir()
+	query := strings.Replace(
+		commercialGraphQLQuery("SearchIndexView", "SearchPage"),
+		"    application:",
+		"    consistency: {source: projection, freshness: bounded, max_staleness_seconds: 15, stale_result: with_watermark}\n    application:",
+		1,
+	)
+	writeObjectFixture(t, metadataDir, "search/search/search_index_view", projectionObject(), query)
+	catalog, err := load.Load(metadataDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(catalog.Operations) != 1 || catalog.Operations[0].Consistency == nil {
+		t.Fatalf("GraphQL query consistency missing after load: %+v", catalog.Operations)
+	}
+	consistency := catalog.Operations[0].Consistency
+	if consistency.Source != "projection" || consistency.Freshness != "bounded" ||
+		consistency.MaxStalenessSeconds != 15 || consistency.StaleResult != "with_watermark" {
+		t.Fatalf("GraphQL query consistency = %+v", consistency)
+	}
+	contractGraph := graph.Build(catalog)
+	if err := validate.ContractGraphSchema(metadataDir, contractGraph); err != nil {
+		t.Fatalf("graph schema rejected GraphQL query consistency: %v", err)
+	}
+	if issues, schemaErr := validate.MetadataSchemas(metadataDir); schemaErr != nil {
+		t.Fatal(schemaErr)
+	} else {
+		for _, issue := range issues {
+			if strings.HasSuffix(issue.SourcePath, "/operations.yaml") {
+				t.Fatalf("operations schema rejected GraphQL query consistency: %+v", issues)
+			}
+		}
+	}
+}
+
+func TestGraphQLQueryConsistencySchemaRejectsCommandOnlyAndInvalidBoundedFacts(t *testing.T) {
+	for name, consistency := range map[string]string{
+		"command atomic commit": "{atomic_commit: true}",
+		"command arbitration":   "{arbitration: version_cas}",
+		"bounded without limit": "{source: projection, freshness: bounded}",
+		"eventual with limit":   "{source: projection, freshness: eventual, max_staleness_seconds: 15}",
+	} {
+		name, consistency := name, consistency
+		t.Run(name, func(t *testing.T) {
+			metadataDir := t.TempDir()
+			query := strings.Replace(
+				commercialGraphQLQuery("SearchIndexView", "SearchPage"),
+				"    application:",
+				"    consistency: "+consistency+"\n    application:",
+				1,
+			)
+			writeObjectFixture(t, metadataDir, "search/search/search_index_view", projectionObject(), query)
+			issues, err := validate.MetadataSchemas(metadataDir)
+			if err != nil {
+				t.Fatal(err)
+			}
+			operationsRejected := false
+			for _, issue := range issues {
+				if strings.HasSuffix(issue.SourcePath, "/operations.yaml") {
+					operationsRejected = true
+					break
+				}
+			}
+			if !operationsRejected {
+				t.Fatalf("operations schema accepted invalid GraphQL consistency %s; issues=%+v", consistency, issues)
+			}
+		})
+	}
+}
+
+// spec_ref: specs/feature-tree/runtime/system-architecture-and-engineering-guide/spec.md#sit-001
+func TestSessionOperationConsistencyCompilesFenceArbitration(t *testing.T) {
+	metadataDir := t.TempDir()
+	operation := strings.Replace(
+		webSocketUpgradeFixture("stream_budget: {handshake_ms: 5000, idle_ms: 90000, max_duration_ms: 1800000}"),
+		"    application:",
+		"    consistency: {arbitration: fence}\n    application:",
+		1,
+	)
+	writeObjectFixture(
+		t,
+		metadataDir,
+		"realtime/realtime/connection",
+		`kind: runtime_session
+description: transient connection
+identity: {fields: [id], version_source: session}
+access: {commands: session_owner, queries: named_reader, cross_context: public_contract_only}
+relationships: []
+search_policy:
+  exposed: none
+  not_exposed_reason: runtime connection fixtures are not stable searchable objects
+assistant_access:
+  read: {mode: none, scopes: []}
+  cite: {mode: none, scopes: []}
+  write: {mode: none, scopes: []}
+business_rules: [connection_identity_is_session_scoped]
+lifecycle: {ttl_seconds: 300, expiry_semantics: discard_transient_session}
+`,
+		operation,
+	)
+	catalog, err := load.Load(metadataDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	contractGraph := graph.Build(catalog)
+	if len(contractGraph.Operations) != 1 || contractGraph.Operations[0].Consistency == nil ||
+		contractGraph.Operations[0].Consistency.Arbitration != "fence" {
+		t.Fatalf("session fence consistency missing: %+v", contractGraph.Operations)
+	}
+	if issues, schemaErr := validate.MetadataSchemas(metadataDir); schemaErr != nil {
+		t.Fatal(schemaErr)
+	} else if len(issues) != 0 {
+		t.Fatalf("operations schema rejected session fence: %+v", issues)
+	}
+}
+
+func TestOperationConsistencySchemaEnforcesKindAndBoundedFreshness(t *testing.T) {
+	for _, test := range []struct {
+		name        string
+		base        string
+		consistency string
+	}{
+		{"command rejects query source", commandOperation("Post", "CreatePost", "/content/posts"), "{source: authority}"},
+		{"query rejects command arbitration", commercialQuery("Post", "GetPost", "/content/posts/{postId}"), "{arbitration: version_cas}"},
+		{"bounded requires max staleness", commercialQuery("Post", "GetPost", "/content/posts/{postId}"), "{source: projection, freshness: bounded}"},
+		{"eventual rejects max staleness", commercialQuery("Post", "GetPost", "/content/posts/{postId}"), "{source: projection, freshness: eventual, max_staleness_seconds: 30}"},
+		{"empty policy rejected", commercialQuery("Post", "GetPost", "/content/posts/{postId}"), "{}"},
+	} {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			metadataDir := t.TempDir()
+			operation := strings.Replace(test.base, "    application:\n", "    consistency: "+test.consistency+"\n    application:\n", 1)
+			writeObjectFixture(t, metadataDir, "content/content/post", aggregateObject("Post"), operation)
+			if issues, err := validate.MetadataSchemas(metadataDir); err != nil {
+				t.Fatal(err)
+			} else if len(issues) == 0 {
+				t.Fatal("operations schema accepted invalid kind-specific consistency")
+			}
+		})
+	}
+}
+
 func TestContractGraphRejectsDuplicateTransport(t *testing.T) {
 	metadataDir := t.TempDir()
 	writeObjectFixture(t, metadataDir, "content/content/post", aggregateObject("Post"), commercialQuery("Post", "GetPost", "/content/shared"))
@@ -158,7 +398,7 @@ api_routes:
     authorization: {principal: account, ownership_policy: ticket_self}
     commercial: {status: ready}
     reliability: {` + reliability + `, cancellation: supported, retry_mode: none, max_attempts: 1, idempotency: none}
-    error_codes: [CONTENT.SYSTEM.unavailable]
+    error_codes: [GATEWAY.SYSTEM.fixture_graphql_unavailable]
     privacy: {request_classification: INTERNAL, response_classification: INTERNAL, log_policy: metadata_only}
     telemetry: {metric: realtime_upgrade, trace: true}
     slo: {latency_p95_ms: 300, availability_percent: 99.9}
@@ -648,7 +888,7 @@ lifecycle:
 func projectionObject() string {
 	return `
 kind: projection
-description: read model
+description: canonical read model projection fixture
 identity: {fields: [id], version_source: checkpoint}
 access: {commands: none, queries: named_reader, cross_context: public_contract_only}
 relationships: []
@@ -718,6 +958,30 @@ api_routes:
     error_codes: [CONTENT.SYSTEM.unavailable]
     privacy: {request_classification: PUBLIC, response_classification: PUBLIC, log_policy: metadata_only}
     telemetry: {metric: contract_query, trace: true}
+    slo: {latency_p95_ms: 300, availability_percent: 99.9}
+`
+}
+
+func commercialGraphQLQuery(object, operation string) string {
+	return `
+api_routes: []
+graphql_queries:
+  - operation: ` + operation + `
+    operation_type: query
+    response_entity: ` + object + `Slice
+    response_body_kind: object
+    application:
+      kind: query
+      facet: ` + object + `QueryFacade
+      method: get
+      reader: ` + object + `Reader
+      slice: ` + object + `Slice
+    authorization: {principal: public, ownership_policy: public_read}
+    commercial: {status: ready}
+    reliability: {timeout_ms: 1000, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: none}
+    error_codes: [CONTENT.SYSTEM.unavailable]
+    privacy: {request_classification: PUBLIC, response_classification: PUBLIC, log_policy: metadata_only}
+    telemetry: {metric: contract_graphql_query, trace: true, attributes: [outcome]}
     slo: {latency_p95_ms: 300, availability_percent: 99.9}
 `
 }

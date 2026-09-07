@@ -73,6 +73,7 @@ transaction:
   - occupied_seat_capacity_bound
   - command_idempotency
   - owner_state_receipt_outbox_atomicity
+  mechanism: version_cas
 streams:
   events.circle.gatherings:
     publication_role: publication_accessory

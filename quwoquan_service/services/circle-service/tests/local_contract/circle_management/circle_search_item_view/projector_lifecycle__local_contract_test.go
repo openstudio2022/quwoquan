@@ -4,6 +4,7 @@ package local_contract
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	viewevents "quwoquan_service/services/circle-service/internal/circle_management/circle_search_item_view/adapters/inbound/events"
@@ -94,5 +95,48 @@ func TestCircleSearchItemViewOwnsTypedEventAndRebuildLifecycle(t *testing.T) {
 	}, 100)
 	if err != nil || report.Total != 2 || report.Upserted != 1 || report.Deleted != 1 {
 		t.Fatalf("rebuild report drifted: report=%+v err=%v", report, err)
+	}
+}
+
+type mutableSearchSnapshots struct {
+	item    viewapp.SearchItem
+	visible bool
+}
+
+func (source *mutableSearchSnapshots) LoadSearchItem(context.Context, string) (viewapp.SearchItem, bool, error) {
+	return source.item, source.visible, nil
+}
+
+func TestCircleSearchItemViewProjectionLagDoesNotWriteOrAdvanceCheckpoint(t *testing.T) {
+	index := &recordingIndex{}
+	snapshots := &mutableSearchSnapshots{
+		visible: true,
+		item: viewapp.SearchItem{
+			CircleID: "circle-lag", DisplayName: "snapshot v4", SourceVersion: 4,
+		},
+	}
+	checkpoint := &memoryCheckpoint{}
+	relay := viewapp.NewRelay(lifecycleSource{events: []viewapp.LifecycleEvent{{
+		EventID: "circle-updated-5", Type: "CircleUpdated", CircleID: "circle-lag",
+		SourceVersion: 5, Checkpoint: "5",
+	}}}, checkpoint, viewevents.NewSink(viewapp.NewProjector(index), snapshots), "circle-search-lag")
+
+	count, err := relay.Drain(context.Background(), 1)
+	var lag *viewevents.ProjectionLagError
+	if count != 0 || !errors.As(err, &lag) || !lag.Temporary() || !lag.RetryableProjectionFailure() {
+		t.Fatalf("lag drain count=%d err=%v typed=%+v", count, err, lag)
+	}
+	if len(index.upserts) != 0 || len(index.deletes) != 0 || checkpoint.value != "" {
+		t.Fatalf("lag must not mutate ES/checkpoint: upserts=%d deletes=%d checkpoint=%q", len(index.upserts), len(index.deletes), checkpoint.value)
+	}
+
+	snapshots.item.DisplayName = "snapshot v5"
+	snapshots.item.SourceVersion = 5
+	count, err = relay.Drain(context.Background(), 1)
+	if err != nil || count != 1 {
+		t.Fatalf("caught-up drain count=%d err=%v", count, err)
+	}
+	if len(index.upserts) != 1 || index.upserts[0].SourceVersion != 5 || checkpoint.value != "5" {
+		t.Fatalf("caught-up projection did not converge: upserts=%+v checkpoint=%q", index.upserts, checkpoint.value)
 	}
 }

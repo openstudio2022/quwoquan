@@ -526,6 +526,23 @@ func renderIntersectionClientPolicyDart(
 	b.WriteString("};\n\n")
 	b.WriteString("String intersectionRouteIdForObjectKind(IntersectionObjectKind kind) =>\n")
 	b.WriteString("    intersectionRouteIdByObjectKind[kind] ?? '';\n\n")
+	b.WriteString("/// objectKind → canonical wire objectType（registry.objectKinds[].objectType）。\n")
+	b.WriteString("/// IntersectionTarget.objectType 归一化只查此表，端不再按 routeId / kind 手写 switch。\n")
+	b.WriteString("const Map<IntersectionObjectKind, String> intersectionWireObjectTypeByObjectKind =\n")
+	b.WriteString("    <IntersectionObjectKind, String>{\n")
+	for _, item := range r.ObjectKinds {
+		if strings.TrimSpace(item.ObjectType) == "" {
+			continue
+		}
+		b.WriteString(fmt.Sprintf(
+			"  IntersectionObjectKind.%s: %q,\n",
+			intersectionDartEnumMemberName(item.Kind),
+			item.ObjectType,
+		))
+	}
+	b.WriteString("};\n\n")
+	b.WriteString("String intersectionWireObjectTypeForObjectKind(IntersectionObjectKind kind) =>\n")
+	b.WriteString("    intersectionWireObjectTypeByObjectKind[kind] ?? '';\n\n")
 	b.WriteString("IntersectionObjectKind? intersectionObjectKindForObjectType(\n")
 	b.WriteString("  String? objectType,\n")
 	b.WriteString(") {\n")

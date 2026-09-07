@@ -1,4 +1,4 @@
-"""Resolve the environment-selected product telemetry log-sink material."""
+"""Resolve Product Ops telemetry/runtime-log sink material from one candidate."""
 
 from __future__ import annotations
 
@@ -6,6 +6,7 @@ import hashlib
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping
+from urllib.parse import urlsplit
 
 from quwoquan_ops.cli.lib.deployment_candidate_manifest import (
     validate_observability_log_sink_package,
@@ -18,22 +19,22 @@ class ProductTelemetryLogSink:
     secret_path: Path | None
     source: str
     status: str
-    redacted_digest: str
+    material_digest: str
     binding_digest: str
     runtime_artifact_digest: str
-    cluster_ref: str
+    binding_identities: tuple[str, ...]
     adapter_id: str = "ext.obs.elasticsearch"
 
-    def redacted_receipt(self) -> dict[str, str]:
-        """Return the only binding fields suitable for reports or stdout."""
+    def redacted_receipt(self) -> dict[str, Any]:
+        """Return only digests and non-secret logical binding identities."""
         return {
             "adapterId": self.adapter_id,
             "source": self.source,
             "status": self.status,
-            "redactedDigest": self.redacted_digest,
+            "materialDigest": self.material_digest,
             "bindingDigest": self.binding_digest,
             "runtimeArtifactDigest": self.runtime_artifact_digest,
-            "clusterRef": self.cluster_ref,
+            "bindingIdentities": list(self.binding_identities),
         }
 
 
@@ -45,7 +46,7 @@ def load_product_telemetry_log_sink(
     process_environment: Mapping[str, str] | None = None,
     home: Path | None = None,
 ) -> ProductTelemetryLogSink:
-    """Project Product Ops material only from a validated candidate contract."""
+    """Project both logical Product Ops sinks from a validated candidate."""
 
     del home
     if runtime_composition is None:
@@ -55,12 +56,26 @@ def load_product_telemetry_log_sink(
         expected_environment=environment,
         expected_target=target_name,
     )
-    endpoint_key = str(composition["endpointEnvironmentKey"])
+    bindings = composition["bindings"]
     if composition["deploymentMode"] == "package-bound-local":
-        values = {endpoint_key: str(composition["runtimeEndpoint"])}
+        runtime_endpoint = str(composition["runtimeEndpoint"])
+        values = {
+            str(binding["endpointEnvironmentKey"]): runtime_endpoint
+            for binding in bindings
+        }
     else:
         protected = process_environment or {}
-        required_keys = (endpoint_key, *composition["secretEnvironmentKeys"])
+        required_keys = tuple(
+            key
+            for binding in bindings
+            for key in (
+                str(binding["endpointEnvironmentKey"]),
+                *(
+                    str(secret_key)
+                    for secret_key in binding["secretEnvironmentKeys"]
+                ),
+            )
+        )
         values = {
             key: str(protected.get(key) or "").strip()
             for key in required_keys
@@ -71,24 +86,39 @@ def load_product_telemetry_log_sink(
                 "managed Product Ops Elasticsearch material is unavailable: "
                 + ", ".join(missing)
             )
-        if not values[endpoint_key].startswith("https://"):
+        for binding in bindings:
+            endpoint_key = str(binding["endpointEnvironmentKey"])
+            parsed = urlsplit(values[endpoint_key])
+            if parsed.scheme != "https" or not parsed.netloc:
+                raise ValueError(
+                    f"managed Product Ops Elasticsearch endpoint must use HTTPS: {endpoint_key}"
+                )
+        secret_values = [
+            values[str(secret_key)]
+            for binding in bindings
+            for secret_key in binding["secretEnvironmentKeys"]
+        ]
+        if len(secret_values) != len(set(secret_values)):
             raise ValueError(
-                "managed Product Ops Elasticsearch endpoint must use HTTPS"
+                "managed Product Ops Elasticsearch API keys must be role-isolated"
             )
-    source = str(composition["clusterRef"])
+    identities = tuple(
+        str(binding["capabilityId"])
+        for binding in bindings
+    )
     return ProductTelemetryLogSink(
         environment=values,
         secret_path=None,
-        source=source,
+        source="candidate-bound-product-ops-log-sinks",
         status="ready",
-        redacted_digest=_redacted_digest(values),
+        material_digest=_material_digest(values),
         binding_digest=str(composition["bindingDigest"]),
         runtime_artifact_digest=str(composition["composeDigest"]),
-        cluster_ref=str(composition["clusterRef"]),
+        binding_identities=identities,
     )
 
 
-def _redacted_digest(values: Mapping[str, str]) -> str:
+def _material_digest(values: Mapping[str, str]) -> str:
     digest = hashlib.sha256()
     for key in sorted(values):
         digest.update(key.encode("utf-8"))

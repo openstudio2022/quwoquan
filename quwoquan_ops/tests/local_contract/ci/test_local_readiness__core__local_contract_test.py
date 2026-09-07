@@ -996,3 +996,27 @@ def test_unknown_root_path_stays_focused_locally_but_fans_out_in_delivery() -> N
     )
     assert delivery["risk"]["level"] == "R3"
     assert all(delivery["scopes"][name] for name in ("service", "app", "portal", "topology", "data"))
+
+
+def test_staged_secret_scan_distinguishes_credential_bodies_from_injection_indirection() -> None:
+    """staged-boundary 的 secret 扫描只拦凭证本体；环境变量名与点号标识符是注入间接层。"""
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(
+        "local_readiness_cli", ROOT / "quwoquan_ops/cli/local_readiness.py"
+    )
+    module = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(module)
+    has_secret = module._has_secret_material
+
+    # 凭证样本在运行期拼出来，避免本测试源文件自己被 staged-boundary 拦下。
+    body = ("4f9a8c7d6e5b" * 3).encode()
+    assert has_secret(b"api_" + b"key = 'sk-" + body + b"'")
+    assert has_secret(b"pass" + b"word: " + body)
+    assert has_secret(b"-----BEGIN RSA " + b"PRIVATE KEY-----")
+    assert has_secret(b"AK" + b"IA" + b"ABCDEFGHIJKLMNOP")
+
+    assert not has_secret(b"  sys.product-ops-service.redis.general.password: PRODUCT_OPS_REDIS_GENERAL_PASSWORD")
+    assert not has_secret(b"APIKey:                 cfg.TelemetryElasticsearch.APIKey,")
+    assert not has_secret(b'_ADMIN_CREDENTIAL_ENV = "PRODUCT_OPS_ELASTICSEARCH_ADMIN_API_KEY"')

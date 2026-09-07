@@ -7,11 +7,16 @@ import re
 import subprocess
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 import yaml
 
+from quwoquan_ops.cli.lib.data_plane_binding import (
+    materialize_data_plane_binding_package,
+)
 from quwoquan_ops.cli.lib.output_paths import (
+    deployment_candidate_dir,
     deployment_target_path_in_work_root,
 )
 from quwoquan_ops.cli.prod import render_prod_plane_stack as render
@@ -50,6 +55,40 @@ class ProdPlaneRuntimeStackTest(unittest.TestCase):
         deploy_root = Path(tmp) / "deploy"
         artifact_manifest = Path(tmp) / "release-artifact-manifest.json"
         artifact_manifest.write_text("{}\n", encoding="utf-8")
+        previous_deploy_root = os.environ.get("QWQ_DEPLOY_WORK_ROOT")
+        os.environ["QWQ_DEPLOY_WORK_ROOT"] = str(deploy_root)
+        try:
+            candidate_root = deployment_candidate_dir(
+                "prod-hosted", CANDIDATE_DIGEST
+            )
+        finally:
+            if previous_deploy_root is None:
+                os.environ.pop("QWQ_DEPLOY_WORK_ROOT", None)
+            else:
+                os.environ["QWQ_DEPLOY_WORK_ROOT"] = previous_deploy_root
+        candidate_shared = candidate_root / "packages/runtime-shared"
+        candidate_shared.mkdir(parents=True, exist_ok=True)
+        data_plane_binding = materialize_data_plane_binding_package(
+            "prod",
+            "prod-hosted",
+            candidate_shared,
+            repo_root=ROOT,
+        )
+        (candidate_root / "manifest.json").write_text(
+            json.dumps(
+                {
+                    "schema": "stackctl-deployment-candidate",
+                    "candidateType": "runtime-full",
+                    "environment": "prod",
+                    "target": "prod-hosted",
+                    "baselineId": CANDIDATE_DIGEST,
+                    "dataPlaneBinding": data_plane_binding,
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        data_plane_path = candidate_shared / "data-plane-binding.json"
         service_names = sorted(
             {
                 str(service)
@@ -108,9 +147,27 @@ class ProdPlaneRuntimeStackTest(unittest.TestCase):
             "public",
         )
         legal.mkdir(parents=True, exist_ok=True)
+        from quwoquan_app.test.support.runtime.launcher.launcher_package_fixture import (
+            temporary_launcher_package,
+        )
+
+        with temporary_launcher_package("prod", "prod-hosted") as fixture:
+            trust = Path(tmp) / "runtime-config-trust.json"
+            package = Path(tmp) / "runtime-config-package.json"
+            trust.write_text(
+                json.dumps(fixture.runtime_config_trust_envelope),
+                encoding="utf-8",
+            )
+            package.write_text(
+                json.dumps(fixture.runtime_config_package),
+                encoding="utf-8",
+            )
         env = dict(os.environ)
         env["QWQ_OUTPUT_ROOT"] = str(output_root)
         env["QWQ_DEPLOY_WORK_ROOT"] = str(deploy_root)
+        env["QWQ_WEB_RUNTIME_CONFIG_TRUST_PATH"] = str(trust)
+        env["QWQ_WEB_RUNTIME_CONFIG_PACKAGE_PATH"] = str(package)
+        env["QWQ_TEST_DATA_PLANE_BINDING"] = str(data_plane_path)
         return env, output_root
 
     def test_render_service_plane_outputs_onebox_subset(self) -> None:
@@ -127,6 +184,8 @@ class ProdPlaneRuntimeStackTest(unittest.TestCase):
                     "prod",
                     "--candidate-digest",
                     CANDIDATE_DIGEST,
+                    "--data-plane-binding",
+                    env["QWQ_TEST_DATA_PLANE_BINDING"],
                     "--image-transport-tag",
                     "1.20260617.rootless-service-plane",
                     "--output-dir",
@@ -141,6 +200,11 @@ class ProdPlaneRuntimeStackTest(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             report = json.loads((out_dir / "provenance.json").read_text(encoding="utf-8"))
             self.assertEqual(report["plane"], "service")
+            self.assertRegex(
+                report["dataPlaneBindingDigest"],
+                r"^sha256:[0-9a-f]{64}$",
+            )
+            self.assertNotIn("PROD_CONTENT_MONGO_URI", json.dumps(report))
             self.assertEqual(
                 report["governedComposeServices"],
                 [
@@ -164,8 +228,8 @@ class ProdPlaneRuntimeStackTest(unittest.TestCase):
             compose = (out_dir / "docker-compose.prod-hosted.yaml").read_text(encoding="utf-8")
             self.assertIn("gamma-proxy", compose)
             self.assertIn("content-service", compose)
-            self.assertIn("host.containers.internal", compose)
-            self.assertIn("directConnection=true", compose)
+            self.assertNotIn("host.containers.internal:19410", compose)
+            self.assertIn("${PROD_CONTENT_MONGO_URI:?}", compose)
             self.assertIn(
                 f"{output_root / 'env/prod/local/prod-hosted/process/volumes/media'}:/srv/media:ro",
                 compose,
@@ -181,19 +245,59 @@ class ProdPlaneRuntimeStackTest(unittest.TestCase):
             self.assertIn("\n  search-service:\n", compose)
             self.assertIn("\n  circle-service:\n", compose)
             compose_payload = yaml.safe_load(compose)
+            self.assertNotIn("elasticsearch", compose_payload["services"])
+            self.assertNotIn(
+                "product-ops-elasticsearch-data",
+                compose_payload.get("volumes") or {},
+            )
+            bootstrap = compose_payload["services"][
+                "product-ops-service-migrate-elasticsearch"
+            ]
+            bootstrap_env = bootstrap["environment"]
+            self.assertEqual(
+                bootstrap["command"],
+                ["product-ops-elasticsearch-bootstrap"],
+            )
+            self.assertEqual(
+                bootstrap_env["PRODUCT_OPS_ELASTICSEARCH_ADMIN_ENDPOINT"],
+                "${PROD_PRODUCT_TELEMETRY_ES_ENDPOINT:?}",
+            )
+            self.assertEqual(
+                bootstrap_env["PRODUCT_OPS_ELASTICSEARCH_ADMIN_API_KEY"],
+                "${PROD_PRODUCT_TELEMETRY_ES_ADMIN:?}",
+            )
+            self.assertEqual(
+                bootstrap["labels"]["com.quwoquan.runtime.one-shot"],
+                "true",
+            )
+            self.assertEqual(
+                compose_payload["services"]["product-ops-service"]["depends_on"][
+                    "product-ops-service-migrate-elasticsearch"
+                ],
+                {"condition": "service_completed_successfully"},
+            )
+            self.assertNotIn(
+                "product-ops-service-migrate-elasticsearch",
+                report["governedComposeServices"],
+            )
             entity_env = compose_payload["services"]["entity-service"]["environment"]
             self.assertEqual(
                 entity_env["ENTITY_MONGO_URI"],
-                "mongodb://host.containers.internal:19410/?directConnection=true",
+                "${PROD_ENTITY_MONGO_URI:?}",
             )
-            # prod-hosted 首波不含 elasticsearch，write-time 投影必须关闭。
-            self.assertEqual(entity_env["SEARCH_ES_ENABLED"], "false")
-            self.assertNotIn("SEARCH_ES_ENDPOINTS", entity_env)
+            self.assertEqual(
+                entity_env["SEARCH_ES_ENDPOINTS"],
+                "${PROD_SEARCH_OBJECTS_ENDPOINT:?}",
+            )
+            self.assertEqual(
+                entity_env["SEARCH_ES_API_KEY"],
+                "${PROD_SEARCH_OBJECTS_WRITER:?}",
+            )
             integration = compose_payload["services"]["integration-service"]
             integration_env = integration["environment"]
             self.assertEqual(
                 integration_env["INTEGRATION_MONGO_URI"],
-                "mongodb://host.containers.internal:19410/?directConnection=true",
+                "${PROD_INTEGRATION_MONGO_URI:?}",
             )
             self.assertNotIn("INTEGRATION_PUSH_ENABLED", integration_env)
             self.assertNotIn("INTEGRATION_PUSH_MODE", integration_env)
@@ -222,13 +326,13 @@ class ProdPlaneRuntimeStackTest(unittest.TestCase):
             ]
             self.assertEqual(
                 notification_env["NOTIFICATION_MONGO_URI"],
-                "mongodb://host.containers.internal:19410/?directConnection=true",
+                "${PROD_NOTIFICATION_MONGO_URI:?}",
             )
             self.assertNotIn("NOTIFICATION_REDIS_ADDR", notification_env)
             for scene in ("GENERAL", "REALTIME"):
                 self.assertEqual(
                     notification_env[f"NOTIFICATION_REDIS_{scene}_ADDR"],
-                    "host.containers.internal:19420",
+                    "${PROD_NOTIFICATION_REDIS_ADDR:?}",
                 )
                 self.assertEqual(
                     notification_env[f"NOTIFICATION_REDIS_{scene}_MODE"], "standalone"
@@ -364,6 +468,20 @@ class ProdPlaneRuntimeStackTest(unittest.TestCase):
                 services["elasticsearch"]["environment"]["ES_JAVA_OPTS"],
                 "-Xms128m -Xmx128m",
             )
+            self.assertEqual(
+                services["elasticsearch"]["image"],
+                render._prevalidation_spec()["isolatedData"]["images"][
+                    "elasticsearch"
+                ],
+            )
+            self.assertEqual(
+                services["elasticsearch"]["volumes"],
+                ["product-ops-elasticsearch-data:/usr/share/elasticsearch/data"],
+            )
+            self.assertIn(
+                "product-ops-elasticsearch-data",
+                compose.get("volumes") or {},
+            )
             self.assertIn("integration-service", services)
             self.assertNotIn("livekit", services)
             self.assertNotIn("coturn", services)
@@ -395,13 +513,14 @@ class ProdPlaneRuntimeStackTest(unittest.TestCase):
                 services["platform-ops-service"].get("volumes") or [],
             )
             self.assertNotIn("env_file", services["integration-service"])
-            unit = (
-                out_dir / "systemd/quwoquan-service-prevalidate.service"
-            ).read_text(encoding="utf-8")
-            self.assertIn(
-                "WorkingDirectory=/home/prod-service-svc/stack/prevalidate",
-                unit,
+            self.assertEqual(
+                report["systemdUnitFile"],
+                "quwoquan-service-prevalidate-r0.service",
             )
+            unit = (
+                out_dir / "systemd" / report["systemdUnitFile"]
+            ).read_text(encoding="utf-8")
+            self.assertIn(f"WorkingDirectory={report['remoteRoot']}", unit)
             exec_start = next(
                 line for line in unit.splitlines() if line.startswith("ExecStart=")
             )
@@ -420,20 +539,13 @@ class ProdPlaneRuntimeStackTest(unittest.TestCase):
                 "QWQ_COMPOSE_OBJECT_STORAGE_ENDPOINT",
             ):
                 self.assertRegex(env_text, rf"(?m)^{key}=.+$")
-            required = set(
-                re.findall(
-                    r"\$\{([A-Z0-9_]+):\?",
-                    (out_dir / "docker-compose.prod-hosted.yaml").read_text(
-                        encoding="utf-8"
-                    ),
-                )
+            elasticsearch_compose = yaml.safe_dump(
+                services["elasticsearch"], sort_keys=False
             )
-            available = {
-                line.split("=", 1)[0]
-                for line in env_text.splitlines()
-                if "=" in line
-            }
-            self.assertEqual(required - available, set())
+            self.assertNotRegex(
+                elasticsearch_compose,
+                r"\$\{(?:QWQ_COMPOSE_ELASTICSEARCH_PORT|QWQ_LOCAL_RELEASE_TARGET):\?",
+            )
 
     def test_render_gray_instance_uses_non_prod_ports(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -449,6 +561,8 @@ class ProdPlaneRuntimeStackTest(unittest.TestCase):
                     "gray",
                     "--candidate-digest",
                     CANDIDATE_DIGEST,
+                    "--data-plane-binding",
+                    env["QWQ_TEST_DATA_PLANE_BINDING"],
                     "--image-transport-tag",
                     "1.20260617.rootless-service-plane",
                     "--output-dir",
@@ -488,6 +602,8 @@ class ProdPlaneRuntimeStackTest(unittest.TestCase):
                     "prod",
                     "--candidate-digest",
                     CANDIDATE_DIGEST,
+                    "--data-plane-binding",
+                    env["QWQ_TEST_DATA_PLANE_BINDING"],
                     "--image-transport-tag",
                     "d6ccc4c96adb",
                     "--output-dir",
@@ -504,6 +620,11 @@ class ProdPlaneRuntimeStackTest(unittest.TestCase):
                 (out_dir / "provenance.json").read_text(encoding="utf-8")
             )
             self.assertEqual(report["plane"], "edge")
+            self.assertRegex(
+                report["dataPlaneBindingDigest"],
+                r"^sha256:[0-9a-f]{64}$",
+            )
+            self.assertNotIn("PROD_RTC_MONGO_URI", json.dumps(report))
             self.assertEqual(
                 report["governedComposeServices"],
                 ["realtime-gateway", "rtc-service"],
@@ -521,13 +642,13 @@ class ProdPlaneRuntimeStackTest(unittest.TestCase):
             rtc_env = compose["services"]["rtc-service"]["environment"]
             self.assertEqual(
                 realtime_env["REALTIME_GATEWAY_REDIS_REALTIME_ADDR"],
-                "host.containers.internal:19420",
+                "${PROD_REALTIME_GATEWAY_REDIS_ADDR:?}",
             )
             self.assertEqual(
                 rtc_env["RTC_MONGO_URI"],
-                "mongodb://host.containers.internal:19410/?directConnection=true",
+                "${PROD_RTC_MONGO_URI:?}",
             )
-            self.assertEqual(rtc_env["RTC_REDIS_ADDR"], "host.containers.internal:19420")
+            self.assertEqual(rtc_env["RTC_REDIS_ADDR"], "${PROD_RTC_REDIS_ADDR:?}")
             self.assertIn(
                 "PROD_RTC_MEDIA_CONNECTION_URL",
                 rtc_env["RTC_MEDIA_CONNECTION_URL"],
@@ -566,6 +687,8 @@ class ProdPlaneRuntimeStackTest(unittest.TestCase):
                     "quwoquan_ops/cli/prod/render_prod_plane_stack.py",
                     "--candidate-digest",
                     CANDIDATE_DIGEST,
+                    "--data-plane-binding",
+                    env["QWQ_TEST_DATA_PLANE_BINDING"],
                     "--output-dir",
                     str(out_dir),
                 ],
@@ -605,6 +728,84 @@ class ProdPlaneRuntimeStackTest(unittest.TestCase):
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("resolver-derived", result.stdout + result.stderr)
             self.assertFalse(rejected_output.exists())
+
+    def test_external_render_rejects_missing_and_tampered_candidate_binding(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            env, _ = self._render_env(tmp)
+            binding = Path(env["QWQ_TEST_DATA_PLANE_BINDING"])
+            base = [
+                "python3",
+                "quwoquan_ops/cli/prod/render_prod_plane_stack.py",
+                "--candidate-digest",
+                CANDIDATE_DIGEST,
+                "--output-dir",
+                str(self._render_dir(tmp, "service-prod-r0")),
+            ]
+            missing = subprocess.run(
+                base,
+                cwd=str(ROOT),
+                env=env,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertNotEqual(missing.returncode, 0)
+            self.assertIn("--data-plane-binding", missing.stdout + missing.stderr)
+
+            payload = json.loads(binding.read_text(encoding="utf-8"))
+            payload["bindings"]["content-service.mongodb"]["namespace"] = "tampered"
+            binding.write_text(json.dumps(payload) + "\n", encoding="utf-8")
+            tampered = subprocess.run(
+                [*base, "--data-plane-binding", str(binding)],
+                cwd=str(ROOT),
+                env=env,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertNotEqual(tampered.returncode, 0)
+            self.assertIn("digest drifted", tampered.stdout + tampered.stderr)
+
+    def test_renderer_uses_sealed_binding_after_repo_runtime_changes(self) -> None:
+        from quwoquan_ops.cli.prod.render_prod_plane_stack_lib import render_entry
+
+        with tempfile.TemporaryDirectory() as tmp:
+            env, _ = self._render_env(tmp)
+            binding = Path(env["QWQ_TEST_DATA_PLANE_BINDING"])
+            with mock.patch.dict(
+                os.environ,
+                {"QWQ_DEPLOY_WORK_ROOT": str(Path(tmp) / "deploy")},
+            ):
+                sealed_projection, identity = (
+                    render_entry._load_candidate_data_plane_projection(
+                        data_mode="external",
+                        candidate_digest=CANDIDATE_DIGEST,
+                        data_plane_binding=binding,
+                    )
+                )
+            self.assertEqual(
+                sealed_projection["bindingDigest"], identity["bindingDigest"]
+            )
+            with (
+                mock.patch.dict(
+                    os.environ,
+                    {"QWQ_DEPLOY_WORK_ROOT": str(Path(tmp) / "deploy")},
+                ),
+                mock.patch.object(
+                    render_entry,
+                    "ROOT",
+                    Path(tmp) / "repo-with-tampered-runtime",
+                ),
+            ):
+                repeated, repeated_identity = (
+                    render_entry._load_candidate_data_plane_projection(
+                        data_mode="external",
+                        candidate_digest=CANDIDATE_DIGEST,
+                        data_plane_binding=binding,
+                    )
+                )
+            self.assertEqual(repeated, sealed_projection)
+            self.assertEqual(repeated_identity, identity)
 
     def test_load_prod_plane_images_dry_run_reports_localhost_images(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

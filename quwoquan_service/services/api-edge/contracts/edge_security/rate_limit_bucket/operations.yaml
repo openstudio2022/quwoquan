@@ -12,6 +12,8 @@ runtime_entrypoints:
     facet: RateLimitAdmissionFacade
     method: admit
     object_owner: RateLimitBucket
+  consistency:
+    arbitration: conditional_admission
   telemetry:
     # 与运行时实际注册的 emitter 同名同标签（infrastructure/observability/metrics.go）；
     # 契约声明名与实现名漂移会制造既无 emitter 也无消费面的双向缺口。

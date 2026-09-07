@@ -63,6 +63,31 @@ _ELASTICSEARCH_IMAGE_LOCAL_TAG_DEFAULT_RE = re.compile(
     r"quwoquan/elasticsearch-cjk:(\d+\.\d+\.\d+)\}$"
 )
 
+_LOG_SINK_CAPABILITIES = (
+    "product.telemetry.sink",
+    "runtime.log.sink",
+)
+_LOG_SINK_ENDPOINT_KEYS = {
+    "product.telemetry.sink": "PRODUCT_OPS_TELEMETRY_ELASTICSEARCH_ENDPOINT",
+    "runtime.log.sink": "PRODUCT_OPS_RUNTIME_LOG_ELASTICSEARCH_ENDPOINT",
+}
+_LOG_SINK_PROD_ENDPOINT_REFS = {
+    "product.telemetry.sink": (
+        "environment_binding:product_ops.telemetry.elasticsearch"
+    ),
+    "runtime.log.sink": (
+        "environment_binding:product_ops.runtime_log.elasticsearch"
+    ),
+}
+_LOG_SINK_PROD_SECRET_KEYS = {
+    "product.telemetry.sink": (
+        "PRODUCT_OPS_TELEMETRY_ELASTICSEARCH_API_KEY"
+    ),
+    "runtime.log.sink": (
+        "PRODUCT_OPS_RUNTIME_LOG_ELASTICSEARCH_API_KEY"
+    ),
+}
+
 
 def local_elasticsearch_image_digest(image_reference: str) -> str:
     """Resolve the one immutable local ES image form accepted by packaging."""
@@ -93,57 +118,121 @@ def local_elasticsearch_image_digest(image_reference: str) -> str:
     )
 
 
-def _canonical_observability_log_sink_binding(
-    provider_composition: object,
+def _expected_provider_log_sink_binding(
+    capability_id: str,
+    *,
+    env_name: str,
+) -> dict[str, Any]:
+    if capability_id not in _LOG_SINK_CAPABILITIES:
+        raise ValueError(f"unsupported Product Ops log-sink capability: {capability_id}")
+    if env_name == "prod":
+        endpoint_ref = _LOG_SINK_PROD_ENDPOINT_REFS[capability_id]
+        secret_keys = [_LOG_SINK_PROD_SECRET_KEYS[capability_id]]
+    elif env_name in {"alpha", "beta", "gamma"}:
+        endpoint_ref = "local_topology:elasticsearch"
+        secret_keys = []
+    else:
+        raise ValueError(f"unsupported Product Ops log-sink environment: {env_name}")
+    return {
+        "capabilityId": capability_id,
+        "state": "enabled",
+        "adapterId": LOG_SINK_ADAPTER_ID,
+        "endpointRef": endpoint_ref,
+        "endpointEnvironmentKeys": {
+            "endpoint": _LOG_SINK_ENDPOINT_KEYS[capability_id],
+        },
+        "secretEnvironmentKeys": secret_keys,
+    }
+
+
+def _package_log_sink_binding(
+    provider_binding: dict[str, Any],
     *,
     env_name: str,
     target_name: str,
 ) -> dict[str, Any]:
+    capability_id = str(provider_binding["capabilityId"])
+    resource_ref = (
+        _LOG_SINK_PROD_ENDPOINT_REFS[capability_id].replace(
+            "environment_binding:", "environment-binding:", 1
+        )
+        if env_name == "prod"
+        else f"target:{target_name}/product-ops/elasticsearch"
+    )
+    return {
+        "capabilityId": capability_id,
+        "endpointRef": str(provider_binding["endpointRef"]),
+        "endpointEnvironmentKey": str(
+            provider_binding["endpointEnvironmentKeys"]["endpoint"]
+        ),
+        "secretEnvironmentKeys": list(
+            provider_binding["secretEnvironmentKeys"]
+        ),
+        "resourceRef": resource_ref,
+        "bindingDigest": _sha256_json(provider_binding),
+    }
+
+
+def _expected_package_log_sink_bindings(
+    *,
+    env_name: str,
+    target_name: str,
+) -> list[dict[str, Any]]:
+    return [
+        _package_log_sink_binding(
+            _expected_provider_log_sink_binding(
+                capability_id,
+                env_name=env_name,
+            ),
+            env_name=env_name,
+            target_name=target_name,
+        )
+        for capability_id in _LOG_SINK_CAPABILITIES
+    ]
+
+
+def _canonical_observability_log_sink_bindings(
+    provider_composition: object,
+    *,
+    env_name: str,
+    target_name: str,
+) -> list[dict[str, Any]]:
     composition = validate_provider_runtime_composition(
         provider_composition,
         expected_environment=env_name,
         expected_target=target_name,
     )
-    binding = next(
-        (
-            item
-            for item in composition["bindings"]
-            if item["capabilityId"] == "runtime.log.sink"
-        ),
-        None,
-    )
-    if not isinstance(binding, dict):
-        raise TypeError("canonical Product Ops log-sink Binding is missing")
-    if (
-        binding.get("state") != "enabled"
-        or binding.get("adapterId") != LOG_SINK_ADAPTER_ID
-        or binding.get("endpointEnvironmentKeys")
-        != {"endpoint": "PRODUCT_OPS_ELASTICSEARCH_ENDPOINT"}
-    ):
-        raise ValueError("canonical Product Ops log-sink Binding is invalid")
-    if env_name == "prod":
-        if (
-            binding.get("endpointRef")
-            != "environment_binding:product_ops.elasticsearch"
-            or binding.get("secretEnvironmentKeys")
-            != ["PRODUCT_OPS_ELASTICSEARCH_API_KEY"]
-        ):
+    selected: dict[str, dict[str, Any]] = {}
+    for binding in composition["bindings"]:
+        capability_id = str(binding["capabilityId"])
+        if capability_id not in _LOG_SINK_CAPABILITIES:
+            continue
+        if capability_id in selected:
             raise ValueError(
-                "Prod Product Ops Binding must select protected managed Elasticsearch"
+                "canonical Product Ops log-sink Binding has duplicate capability"
             )
-    elif env_name in {"alpha", "beta", "gamma"}:
-        if (
-            binding.get("endpointRef") != "local_topology:elasticsearch"
-            or binding.get("secretEnvironmentKeys") != []
-        ):
+        selected[capability_id] = binding
+    if set(selected) != set(_LOG_SINK_CAPABILITIES):
+        raise TypeError(
+            "canonical Product Ops telemetry/runtime-log Binding closure is incomplete"
+        )
+    for capability_id in _LOG_SINK_CAPABILITIES:
+        expected = _expected_provider_log_sink_binding(
+            capability_id,
+            env_name=env_name,
+        )
+        if selected[capability_id] != expected:
             raise ValueError(
-                f"{env_name} Product Ops Binding does not use the shared "
-                "nonprod Elasticsearch authority"
+                f"canonical Product Ops {capability_id} Binding is invalid"
             )
-    else:
-        raise ValueError(f"unsupported Product Ops log-sink environment: {env_name}")
-    return binding
-
+    return [
+        _package_log_sink_binding(
+            selected[capability_id],
+            env_name=env_name,
+            target_name=target_name,
+        )
+        for capability_id in _LOG_SINK_CAPABILITIES
+    ]
 
 def _local_elasticsearch_runtime_selection(
     compose: object,
@@ -278,7 +367,7 @@ def materialize_observability_log_sink_package(
 ) -> dict[str, Any]:
     """Seal the selected ES Binding and exact local workload into a candidate."""
 
-    binding = _canonical_observability_log_sink_binding(
+    bindings = _canonical_observability_log_sink_bindings(
         provider_composition,
         env_name=env_name,
         target_name=target_name,
@@ -294,12 +383,8 @@ def materialize_observability_log_sink_package(
     common = {
         "schema": OBSERVABILITY_LOG_SINK_PACKAGE_SCHEMA,
         "adapterId": LOG_SINK_ADAPTER_ID,
-        "bindingDigest": _sha256_json(binding),
-        "endpointRef": str(binding["endpointRef"]),
-        "endpointEnvironmentKey": str(
-            binding["endpointEnvironmentKeys"]["endpoint"]
-        ),
-        "secretEnvironmentKeys": list(binding["secretEnvironmentKeys"]),
+        "bindings": bindings,
+        "bindingDigest": _sha256_json(bindings),
     }
     staged_files: dict[str, bytes] = {}
     if env_name == "prod":
@@ -312,7 +397,6 @@ def materialize_observability_log_sink_package(
             "sourceComposeDigest": "",
             "composeRef": "",
             "composeDigest": "",
-            "clusterRef": "environment-binding:product_ops.elasticsearch",
         }
     else:
         source_path = (
@@ -338,8 +422,9 @@ def materialize_observability_log_sink_package(
             "imageDigest": selection["imageDigest"],
             "sourceComposeDigest": canonical["sourceComposeDigest"],
             "composeRef": deployment_ref,
-            "composeDigest": canonical["composeDigest"],
-            "clusterRef": f"target:{target_name}/product-ops/elasticsearch",
+            "composeDigest": (
+                "sha256:" + hashlib.sha256(compose_bytes).hexdigest()
+            ),
         }
     validate_observability_log_sink_package(
         payload,
@@ -399,6 +484,8 @@ def load_observability_log_sink_package(
     env_name: str,
     target_name: str,
     candidate_root: Path,
+    *,
+    purpose: str = "self_verify",
 ) -> dict[str, Any]:
     payload = _read_candidate_object(
         candidate_root,
@@ -410,6 +497,7 @@ def load_observability_log_sink_package(
         expected_environment=env_name,
         expected_target=target_name,
         candidate_root=candidate_root,
+        purpose=purpose,
     )
 
 
@@ -419,14 +507,16 @@ def validate_observability_log_sink_package(
     expected_environment: str,
     expected_target: str,
     candidate_root: Path | None = None,
+    purpose: str = "self_verify",
 ) -> dict[str, Any]:
+    if purpose not in {"self_verify", "teardown", "currentness"}:
+        raise ValueError("observability log-sink validation purpose is invalid")
+
     required = {
         "schema",
         "adapterId",
+        "bindings",
         "bindingDigest",
-        "endpointRef",
-        "endpointEnvironmentKey",
-        "secretEnvironmentKeys",
         "deploymentMode",
         "platform",
         "runtimeEndpoint",
@@ -434,28 +524,63 @@ def validate_observability_log_sink_package(
         "sourceComposeDigest",
         "composeRef",
         "composeDigest",
-        "clusterRef",
     }
     if not isinstance(payload, dict) or set(payload) != required:
         raise ValueError("observability log-sink package fields mismatch")
     if (
         payload.get("schema") != OBSERVABILITY_LOG_SINK_PACKAGE_SCHEMA
         or payload.get("adapterId") != LOG_SINK_ADAPTER_ID
-        or _DIGEST.fullmatch(str(payload.get("bindingDigest") or "")) is None
-        or payload.get("endpointEnvironmentKey")
-        != "PRODUCT_OPS_ELASTICSEARCH_ENDPOINT"
     ):
         raise ValueError("observability log-sink package identity is invalid")
+    bindings = payload.get("bindings")
+    if not isinstance(bindings, list):
+        raise ValueError("observability log-sink package bindings are invalid")
+    if expected_environment not in {"alpha", "beta", "gamma", "prod"}:
+        raise ValueError(
+            f"unsupported Product Ops log-sink environment: {expected_environment}"
+        )
+    if (
+        expected_environment == "prod"
+        and expected_target != "prod-hosted"
+    ) or (
+        expected_environment != "prod"
+        and expected_target != f"{expected_environment}-local"
+    ):
+        raise ValueError(
+            "observability log-sink package target identity is invalid"
+        )
+    expected_bindings = _expected_package_log_sink_bindings(
+        env_name=expected_environment,
+        target_name=expected_target,
+    )
+    if bindings != expected_bindings:
+        raise ValueError(
+            "observability log-sink package Binding closure is invalid"
+        )
+    if payload.get("bindingDigest") != _sha256_json(bindings):
+        raise ValueError("observability log-sink package bindingDigest mismatch")
+    endpoint_keys = [
+        str(binding["endpointEnvironmentKey"]) for binding in bindings
+    ]
+    secret_keys = [
+        str(key)
+        for binding in bindings
+        for key in binding["secretEnvironmentKeys"]
+    ]
+    if len(endpoint_keys) != len(set(endpoint_keys)) or len(secret_keys) != len(
+        set(secret_keys)
+    ):
+        raise ValueError(
+            "observability log-sink package material roles must be unique"
+        )
+    if set(endpoint_keys) & set(secret_keys):
+        raise ValueError(
+            "observability log-sink package endpoint/secret roles overlap"
+        )
     if expected_environment == "prod":
         if (
             expected_target != "prod-hosted"
             or payload.get("deploymentMode") != "managed-external"
-            or payload.get("endpointRef")
-            != "environment_binding:product_ops.elasticsearch"
-            or payload.get("secretEnvironmentKeys")
-            != ["PRODUCT_OPS_ELASTICSEARCH_API_KEY"]
-            or payload.get("clusterRef")
-            != "environment-binding:product_ops.elasticsearch"
             or any(
                 payload.get(field) != ""
                 for field in (
@@ -469,11 +594,26 @@ def validate_observability_log_sink_package(
             )
         ):
             raise ValueError(
-                "Prod observability log sink must bind managed Elasticsearch"
+                "Prod observability log sink must bind two managed Elasticsearch resources"
             )
         return payload
-    # 每个身份字段单独报错：失败终态必须能指名是哪一个字段、期望什么、实到什么，
-    # 否则调用方只能看到一条无法定位的聚合拒绝。
+    _validate_local_log_sink_artifact_identity(
+        payload,
+        expected_environment=expected_environment,
+        expected_target=expected_target,
+        candidate_root=candidate_root,
+    )
+    return payload
+
+
+
+def _validate_local_log_sink_artifact_identity(
+    payload: dict[str, Any],
+    *,
+    expected_environment: str,
+    expected_target: str,
+    candidate_root: Path | None,
+) -> None:
     identity_issues: list[str] = []
     if expected_environment not in {"alpha", "beta", "gamma"}:
         identity_issues.append(
@@ -487,10 +627,7 @@ def validate_observability_log_sink_package(
         )
     for field, expected in (
         ("deploymentMode", "package-bound-local"),
-        ("endpointRef", "local_topology:elasticsearch"),
-        ("secretEnvironmentKeys", []),
         ("runtimeEndpoint", "http://elasticsearch:9200"),
-        ("clusterRef", f"target:{expected_target}/product-ops/elasticsearch"),
     ):
         actual = payload.get(field)
         if actual != expected:
@@ -513,8 +650,6 @@ def validate_observability_log_sink_package(
         "composeDigest",
     ):
         value = str(payload.get(field) or "")
-        # imageDigest 允许本地构建 quwoquan/elasticsearch-cjk 的精确版本 tag 身份
-        # （推 registry 前无 manifest digest）；compose 摘要仍必须是 sha256。
         if field == "imageDigest" and re.fullmatch(r"tag:\d+\.\d+\.\d+", value):
             continue
         if _DIGEST.fullmatch(value) is None:
@@ -524,49 +659,49 @@ def validate_observability_log_sink_package(
         prefix="packages/runtime-shared/observability-log-sink/",
         label="observability log-sink deployment",
     )
-    if candidate_root is not None:
-        try:
-            deployment_bytes = _read_candidate_bytes(
-                candidate_root,
-                deployment_ref,
-                label="packaged observability log-sink artifact",
-            )
-        except _UnsafeCandidatePath as exc:
-            raise ValueError(
-                "packaged observability log-sink artifact is unsafe"
-            ) from exc
-        if (
-            "sha256:" + hashlib.sha256(deployment_bytes).hexdigest()
-            != payload["composeDigest"]
-        ):
-            raise ValueError("packaged observability log-sink artifact drifted")
-        try:
-            compose = yaml.safe_load(deployment_bytes.decode("utf-8"))
-        except (UnicodeError, yaml.YAMLError) as exc:
-            raise ValueError(
-                "packaged observability log-sink artifact is unreadable"
-            ) from exc
-        if (
-            not isinstance(compose, dict)
-            or "x-qwq-package-elasticsearch" in compose
-        ):
-            raise ValueError(
-                "packaged observability log-sink retains a runtime selector"
-            )
-        services = compose.get("services")
-        elasticsearch = (
-            services.get("elasticsearch")
-            if isinstance(services, dict)
-            else None
+    if candidate_root is None:
+        return
+    try:
+        deployment_bytes = _read_candidate_bytes(
+            candidate_root,
+            deployment_ref,
+            label="packaged observability log-sink artifact",
         )
-        if (
-            not isinstance(elasticsearch, dict)
-            or local_elasticsearch_image_digest(
-                str(elasticsearch.get("image") or "")
-            )
-            != payload["imageDigest"]
-        ):
-            raise ValueError(
-                "packaged observability log-sink image identity drifted"
-            )
-    return payload
+    except _UnsafeCandidatePath as exc:
+        raise ValueError(
+            "packaged observability log-sink artifact is unsafe"
+        ) from exc
+    if (
+        "sha256:" + hashlib.sha256(deployment_bytes).hexdigest()
+        != payload["composeDigest"]
+    ):
+        raise ValueError("packaged observability log-sink artifact drifted")
+    try:
+        compose = yaml.safe_load(deployment_bytes.decode("utf-8"))
+    except (UnicodeError, yaml.YAMLError) as exc:
+        raise ValueError(
+            "packaged observability log-sink artifact is unreadable"
+        ) from exc
+    if (
+        not isinstance(compose, dict)
+        or "x-qwq-package-elasticsearch" in compose
+    ):
+        raise ValueError(
+            "packaged observability log-sink retains a runtime selector"
+        )
+    services = compose.get("services")
+    elasticsearch = (
+        services.get("elasticsearch")
+        if isinstance(services, dict)
+        else None
+    )
+    if (
+        not isinstance(elasticsearch, dict)
+        or local_elasticsearch_image_digest(
+            str(elasticsearch.get("image") or "")
+        )
+        != payload["imageDigest"]
+    ):
+        raise ValueError(
+            "packaged observability log-sink image identity drifted"
+        )

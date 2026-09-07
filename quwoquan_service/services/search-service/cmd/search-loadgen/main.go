@@ -218,40 +218,37 @@ func percentile(sorted []float64, q float64) float64 {
 	return sorted[index]
 }
 
+// seedCorpus 以带版本写入播种合成语料。合成语料没有权威聚合，本次播种的启动
+// 时刻（Unix 秒）即这一代语料的 sourceVersion：同一次运行内所有文档同版本，
+// 后续重新播种以更高版本整体覆盖，绝不写无版本文档。
 func seedCorpus(ctx context.Context, client *es.Client, count int) {
 	random := rand.New(rand.NewSource(7))
-	events := make([]es.ChangeEvent, 0, 500)
-	flush := func() {
-		if len(events) == 0 {
-			return
-		}
-		if err := client.Bulk(ctx, client.WriteIndexName(), events); err != nil {
-			log.Fatalf("[search-loadgen] bulk seed: %v", err)
-		}
-		events = events[:0]
-	}
+	indexer := es.NewIndexer(client, client.WriteIndexName())
+	corpusVersion := time.Now().Unix()
 	contentTypes := []string{"article", "image", "video"}
 	buckets := []string{"苍山", "洱海", "古城", "民宿", "徒步", "骑行", "美食", "日落", "甜品", "周末"}
 	for index := 0; index < count; index++ {
 		bucket := buckets[index%len(buckets)]
 		title := bucket + seedTitles[random.Intn(len(seedTitles))] + " 第" + strconv.Itoa(index) + "篇"
-		events = append(events, es.ChangeEvent{Op: es.OpUpsert, Doc: rtsearch.Document{
-			ObjectType:  "content.post",
-			ObjectID:    fmt.Sprintf("loadgen-%06d", index),
-			Title:       title,
-			Summary:     "压测语料：" + title,
-			Body:        strings.Repeat(title+"。", 4),
-			ContentType: contentTypes[random.Intn(len(contentTypes))],
-			Visibility:  "public",
-			Popularity:  float64(random.Intn(5)),
-			Freshness:   time.Now().Add(-time.Duration(random.Intn(720)) * time.Hour),
-			DeepLink:    "quwoquan://content/posts/loadgen-" + strconv.Itoa(index),
-		}})
-		if len(events) >= 500 {
-			flush()
+		if _, err := indexer.ApplyVersioned(ctx, es.VersionedChangeEvent{
+			Op:            es.OpUpsert,
+			SourceVersion: corpusVersion,
+			Doc: rtsearch.Document{
+				ObjectType:  "content.post",
+				ObjectID:    fmt.Sprintf("loadgen-%06d", index),
+				Title:       title,
+				Summary:     "压测语料：" + title,
+				Body:        strings.Repeat(title+"。", 4),
+				ContentType: contentTypes[random.Intn(len(contentTypes))],
+				Visibility:  "public",
+				Popularity:  float64(random.Intn(5)),
+				Freshness:   time.Now().Add(-time.Duration(random.Intn(720)) * time.Hour),
+				DeepLink:    "quwoquan://content/posts/loadgen-" + strconv.Itoa(index),
+			},
+		}); err != nil {
+			log.Fatalf("[search-loadgen] versioned seed %d: %v", index, err)
 		}
 	}
-	flush()
 	if err := client.Refresh(ctx); err != nil {
 		log.Fatalf("[search-loadgen] refresh: %v", err)
 	}

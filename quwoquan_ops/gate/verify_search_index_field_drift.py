@@ -92,6 +92,17 @@ def indexer_written_keys(body: str) -> tuple[set[str], set[str]]:
     section = block.group(1)
     written = set(re.findall(r'^\s*"([A-Za-z][A-Za-z0-9_]*)":\s', section, re.MULTILINE))
     written.update(re.findall(r'out\["([A-Za-z][A-Za-z0-9_]*)"\]\s*=', section))
+    # 版本化写传输的 canonical 信封字段（search-provider-routing DEC-002）：
+    # WithCanonicalSourceDigest 在每次 UpsertVersioned / TombstoneVersioned 落盘前
+    # 写入 sourceDigest，它与 DocumentToIndex 一样是唯一写入面的一部分。
+    envelope = re.search(
+        r"func WithCanonicalSourceDigest\([^)]*\)[^{]*\{(.*?)\n\}", body, re.DOTALL
+    )
+    if not envelope:
+        raise ScanError("WithCanonicalSourceDigest not found in indexer.go")
+    written.update(
+        re.findall(r'canonical\["([A-Za-z][A-Za-z0-9_]*)"\]\s*=', envelope.group(1))
+    )
     anchors = re.search(r"anchorFieldKeys = \[\]string\{(.*?)\}", body, re.DOTALL)
     if not anchors:
         raise ScanError("anchorFieldKeys not found in indexer.go")

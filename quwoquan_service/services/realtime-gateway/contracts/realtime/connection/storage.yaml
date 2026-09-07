@@ -42,8 +42,13 @@ redis_cache:
   ttl_seconds: 0
   type: string
   scene: realtime
-  description: '账户连接清理记录。value = JSON{accountId,personaId,deviceId,connectionId}；
-    仅用于终态会话回收，不对 API 或日志暴露。
+  description: '账户连接清理记录。当前 schema 的 value = JSON{accountId,personaId,deviceId,
+    connectionId,fence}；fence 是该会话 Acquire 时捕获的 token，终态回收必须将它传给
+    lease compare-and-delete，不得先读取当前 lease value 再释放。迁移前缺 fence 的有界旧格式
+    记录只能删除其明确命名的旧式 rt:conn:lease:{personaId}:{deviceId}:{connId} key，不得伪造
+    token 或触碰 digest-based 新 lease；随后继续撤销 presence 并删除 session record/index。无法
+    解析或 identity 不一致时 fail-closed，保留记录供同一 durable event 重试/recovery 收敛。
+    该记录仅用于终态会话回收，不对 API 或日志暴露。
 
     '
 - key: rt:account:security-events:{accountId}
@@ -58,22 +63,53 @@ redis_cache:
   description: durable security consumer 的 source stream/message reference、失败次数、
     事件/错误摘要和 DLQ 状态；不得保存原始 payload 或账户标识。ttl_seconds 只约束普通重试，
     terminal marker 必须无 TTL 持有原 source PEL，直到受控 recovery。
-- key: rt:conn:lease:{personaId}:{deviceId}:{connId}
-  ttl_seconds: 60
+- key: rt:conn:lease:{identitySlot}:lease:{connectionDigest}
+  key_prefix: 'rt:conn:lease:'
+  ttl_seconds: 120
   type: string
   scene: realtime
-  description: '连接租约（lease + fencing）。value = 单调递增 fencing token
-
-    （INCR rt:conn:fence:{personaId}:{deviceId} 派生）。
-
-    心跳续租；节点崩溃后租约过期自动出清；旧连接携带过期 fencing token 的写入一律拒绝。
+  hash_tag: identitySlot
+  atomic_keys:
+  - rt:conn:fence:{identitySlot}
+  - rt:conn:lease:{identitySlot}:lease:{connectionDigest}
+  fence: token_value
+  eviction_consequence: fail_closed
+  durability: ephemeral
+  description: '连接租约（lease + fencing）。identitySlot = SHA-256(personaId + NUL + deviceId)，
+    connectionDigest = SHA-256(connectionId)；key 不暴露原始 identity，两个 key 通过同一
+    {identitySlot} 落入 Redis Cluster 同 slot。value = fencing token + SHA-256(connectionId)
+    owner digest；token 与 owner 必须同时匹配，防止 authority 异常丢失后相同数字令旧 lease ABA。
+    Acquire 用单个 Lua 原子执行 fence INCR/PERSIST 与 lease SET PX；Renew 只在
+    non-expiring fence authority 等于 expected token，且 lease token/owner 同时匹配并存在时
+    PEXPIRE；Release 只在上述三者都匹配时 compare-and-delete。任一权威丢失、失配或 lease
+    过期都 fail-closed，旧连接绝不续租或删除新状态；若 authority 丢失但同 connection key
+    的 lease 仍存活，Acquire 也 fail-closed，避免覆盖未知 owner。节点崩溃后 lease 按 TTL 自动
+    出清。恢复来源：lease 本身 ephemeral 且不需要恢复——被 eviction 或丢失后，持有该连接的
+    网关节点下一次 Renew fail-closed 并主动断开，客户端按 realtime 重连协议重新 Acquire，
+    新代际 token 由 aof 持久的 rt:conn:fence 权威签发；不存在从 lease 残留反推当前代际的路径。
 
     '
-- key: rt:conn:fence:{personaId}:{deviceId}
-  ttl_seconds: 86400
+- key: rt:conn:fence:{identitySlot}
+  key_prefix: 'rt:conn:fence:'
+  ttl_seconds: 0
   type: string
   scene: realtime
-  description: 每 persona/device fencing token 单调计数器（INCR，任何新连接取号，保证旧连接不可回写）。
+  hash_tag: identitySlot
+  atomic_keys:
+  - rt:conn:fence:{identitySlot}
+  - rt:conn:lease:{identitySlot}:lease:{connectionDigest}
+  fence: current_counter
+  eviction_consequence: fail_closed
+  durability: aof
+  description: '每 persona/device 的受控持久 fencing authority。identitySlot 使用与 lease
+    相同的脱敏摘要和 hash tag；只由 Acquire Lua 原子 INCR，并以 PERSIST 清除迁移前遗留
+    TTL。authority 无 TTL，必须绑定 AOF/复制且不允许 eviction；这是已经签发 token 不再复用
+    的唯一恢复依据。authority 丢失或与 expected token 不符时 Renew/Release 均 fail-closed，
+    服务不得仅凭残留 lease 合成当前代际或继续 presence 写入；在受控 Redis 恢复 authority
+    前，该 identity 的新 Acquire 不具备跨数据丢失的不复用证明，因此 production admission
+    必须由 binding/readiness 阻断。
+
+    '
 - key: rt:account:security-relay
   type: pubsub_channel
   scene: realtime

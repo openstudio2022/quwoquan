@@ -17,6 +17,31 @@ var projectionOutcomes = rtobs.NewEntrypointOutcomeCounter("circle_search_item_p
 // resolves the current authoritative snapshot before applying an idempotent
 // index mutation, so a transport relay cannot bypass visibility/tombstone
 // semantics.
+// ProjectionLagError is a typed retryable failure: the authoritative snapshot
+// has not reached the lifecycle event version yet. Returning it leaves the
+// relay checkpoint untouched so the same event can converge on retry.
+type ProjectionLagError struct {
+	CircleID        string
+	EventVersion    int64
+	SnapshotVersion int64
+}
+
+func (err *ProjectionLagError) Error() string {
+	if err == nil {
+		return "CircleSearchItemView snapshot is behind lifecycle event"
+	}
+	return fmt.Sprintf(
+		"CircleSearchItemView snapshot is behind lifecycle event: circleId=%q eventVersion=%d snapshotVersion=%d",
+		err.CircleID,
+		err.EventVersion,
+		err.SnapshotVersion,
+	)
+}
+
+func (err *ProjectionLagError) Temporary() bool { return true }
+
+func (err *ProjectionLagError) RetryableProjectionFailure() bool { return true }
+
 type CircleSearchItemViewProjector struct {
 	projector *viewapp.Projector
 	snapshots viewapp.SnapshotReader
@@ -56,7 +81,10 @@ func (sink *CircleSearchItemViewProjector) Apply(ctx context.Context, event view
 			return err
 		}
 		if item.SourceVersion < version {
-			item.SourceVersion = version
+			return &ProjectionLagError{
+				CircleID: circleID, EventVersion: version,
+				SnapshotVersion: item.SourceVersion,
+			}
 		}
 		_, err = sink.projector.Upsert(ctx, item)
 		return err

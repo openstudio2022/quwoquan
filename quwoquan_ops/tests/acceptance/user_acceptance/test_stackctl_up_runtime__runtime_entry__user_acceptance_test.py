@@ -367,7 +367,12 @@ class StackctlUpRuntimeTest(unittest.TestCase):
             "_load_active_product_telemetry_log_sink",
             return_value=mock.Mock(
                 environment={
-                    "PRODUCT_OPS_ELASTICSEARCH_ENDPOINT": "http://elasticsearch:9200",
+                    "PRODUCT_OPS_TELEMETRY_ELASTICSEARCH_ENDPOINT": (
+                        "http://elasticsearch:9200"
+                    ),
+                    "PRODUCT_OPS_RUNTIME_LOG_ELASTICSEARCH_ENDPOINT": (
+                        "http://elasticsearch:9200"
+                    ),
                 }
             ),
         ):
@@ -378,7 +383,7 @@ class StackctlUpRuntimeTest(unittest.TestCase):
 
         self.assertEqual(environment["QWQ_PRODUCT_TELEMETRY_AVAILABLE"], "1")
         self.assertEqual(
-            environment["PRODUCT_OPS_ELASTICSEARCH_ENDPOINT"],
+            environment["PRODUCT_OPS_TELEMETRY_ELASTICSEARCH_ENDPOINT"],
             "http://elasticsearch:9200",
         )
         self.assertEqual(advisory, "")

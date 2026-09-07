@@ -118,8 +118,17 @@ def environment_lifecycle_issues(
         )
         if document.get("runId") != import_run_id:
             issues.append(f"{import_run / filename}: runId does not match directory")
-    if run.get("kind") not in {"apply", "rollback"}:
-        issues.append(f"{import_run / 'run.json'}: import run kind must be apply or rollback")
+    if run.get("kind") not in {"apply", "activate", "rollback"}:
+        issues.append(
+            f"{import_run / 'run.json'}: import run kind must be apply, activate or rollback"
+        )
+    if prod_mode == "activated" and run.get("kind") == "apply" and (
+        result.get("contentPhase") == "stage"
+    ):
+        issues.append(
+            f"{import_run / 'result.json'}: a stage-only apply run cannot prove activation; "
+            "reference the activate run"
+        )
     issues.extend(
         _rollback_issues(
             run=run,

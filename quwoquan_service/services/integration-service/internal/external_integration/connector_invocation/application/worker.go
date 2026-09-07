@@ -188,6 +188,26 @@ func (worker *InvocationWorker) RunOnce(ctx context.Context) (bool, error) {
 		return true, worker.fail(ctx, claim, "provider_unavailable", "retry")
 	}
 
+	// Permit acquisition can race with connection revocation. Re-read the owning
+	// authority immediately before crossing the Provider side-effect boundary and
+	// use only this fresh credential snapshot. The revoke transaction also advances
+	// the invocation revision, so this claim's completion fence is invalid afterward.
+	connection, err = worker.connections.Get(
+		ctx, claim.Invocation.AccountID, claim.Invocation.ConnectionID,
+	)
+	if errors.Is(err, connectionmodel.ErrNotFound) ||
+		(err == nil && !connection.IsActive(worker.now())) {
+		return true, worker.fail(ctx, claim, "connection_inactive", "reconnect")
+	}
+	if err != nil {
+		return true, err
+	}
+	if !connection.Grants(claim.Invocation.Capability) ||
+		connection.Revision != validated.Grant.UserConnector.Revision ||
+		connection.ConnectorID != validated.Grant.UserConnector.ConnectorID {
+		return true, worker.fail(ctx, claim, "authorization_changed", "review_permissions")
+	}
+
 	outcome, err := worker.executor.Execute(ctx, CapabilityExecution{
 		InvocationID:       claim.Invocation.InvocationID,
 		ResolutionID:       claim.Invocation.ResolutionID,

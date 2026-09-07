@@ -143,6 +143,12 @@ type StartupDiagnosticRecord struct {
 	Sequence, PhaseDurationMS, ElapsedMS                                 int
 }
 
+// ProductTelemetrySinkPort 是产品事件、启动诊断与产品读侧共用的逻辑 Provider 端口。
+// 它不包含 RuntimeLogStore，避免物理 ES 共用扩大权限边界。
+type ProductTelemetrySinkPort interface {
+	EventLogStore
+}
+
 type EventLogStore interface {
 	PutEventBatch(context.Context, string, []EventRecord) error
 	HasEventBatch(context.Context, string, int) (bool, error)

@@ -27,10 +27,22 @@ func TestElasticsearchLogSinkUsesDeterministicDocumentsAndProviderNeutralPrivacy
 	harness := newElasticsearchHarness(nil)
 	server := httptest.NewServer(harness)
 	t.Cleanup(server.Close)
-	store := newTestElasticsearchStore(t, server.URL)
+	telemetryStore := newTestElasticsearchStore(t, server.URL)
+	runtimeLogStore := newTestRuntimeLogElasticsearchStore(t, server.URL)
 	ctx := context.Background()
-	if err := store.EnsureIndices(ctx); err != nil {
-		t.Fatalf("EnsureIndices() error = %v", err)
+	if err := telemetryStore.EnsureIndices(ctx); err != nil {
+		t.Fatalf("telemetry EnsureIndices() error = %v", err)
+	}
+	if err := runtimeLogStore.EnsureIndices(ctx); err != nil {
+		t.Fatalf("runtime-log EnsureIndices() error = %v", err)
+	}
+	for _, unexpected := range []string{
+		"runtime-diagnostics-raw-template",
+		"runtime-diagnostics-hourly-template",
+	} {
+		if _, exists := harness.indexTemplates[unexpected]; !exists {
+			t.Fatalf("runtime-log template %s was not created", unexpected)
+		}
 	}
 	rawTemplateProperties := harness.indexTemplateProperties(
 		t,
@@ -76,10 +88,10 @@ func TestElasticsearchLogSinkUsesDeterministicDocumentsAndProviderNeutralPrivacy
 		BatchIndex:       0,
 		IngestedAt:       now.Add(time.Second),
 	}
-	if err := store.PutEventBatch(ctx, batchKey, []application.EventRecord{record}); err != nil {
+	if err := telemetryStore.PutEventBatch(ctx, batchKey, []application.EventRecord{record}); err != nil {
 		t.Fatalf("PutEventBatch() error = %v", err)
 	}
-	if err := store.PutEventBatch(ctx, batchKey, []application.EventRecord{record}); err != nil {
+	if err := telemetryStore.PutEventBatch(ctx, batchKey, []application.EventRecord{record}); err != nil {
 		t.Fatalf("PutEventBatch() replay error = %v", err)
 	}
 	rawIndex := "app-product-telemetry-raw-" + now.Format("2006.01.02")
@@ -95,7 +107,7 @@ func TestElasticsearchLogSinkUsesDeterministicDocumentsAndProviderNeutralPrivacy
 		harness.hasExactIndex("app-product-telemetry-hourly") {
 		t.Fatal("telemetry writes must not target non-expiring base indices")
 	}
-	complete, err := store.HasEventBatch(ctx, batchKey, 1)
+	complete, err := telemetryStore.HasEventBatch(ctx, batchKey, 1)
 	if err != nil || !complete {
 		t.Fatalf("HasEventBatch() = %v, %v; want true, nil", complete, err)
 	}
@@ -123,7 +135,7 @@ func TestElasticsearchLogSinkUsesDeterministicDocumentsAndProviderNeutralPrivacy
 		t.Fatalf("aggregate document misses privacy-preserving sessionHashes")
 	}
 	harness.deleteFirstDocument("app-product-telemetry-hourly")
-	complete, err = store.HasEventBatch(ctx, batchKey, 1)
+	complete, err = telemetryStore.HasEventBatch(ctx, batchKey, 1)
 	if err != nil || !complete {
 		t.Fatalf(
 			"HasEventBatch() with repairable rollup = %v, %v; want true, nil",
@@ -134,10 +146,10 @@ func TestElasticsearchLogSinkUsesDeterministicDocumentsAndProviderNeutralPrivacy
 	if got := harness.documentCount("app-product-telemetry-hourly"); got != 1 {
 		t.Fatalf("repaired event rollup documents = %d; want 1", got)
 	}
-	if err := store.PutEventBatch(ctx, batchKey, []application.EventRecord{record}); err != nil {
+	if err := telemetryStore.PutEventBatch(ctx, batchKey, []application.EventRecord{record}); err != nil {
 		t.Fatalf("PutEventBatch() repair error = %v", err)
 	}
-	complete, err = store.HasEventBatch(ctx, batchKey, 1)
+	complete, err = telemetryStore.HasEventBatch(ctx, batchKey, 1)
 	if err != nil || !complete {
 		t.Fatalf(
 			"HasEventBatch() after repair = %v, %v; want true, nil",
@@ -147,7 +159,7 @@ func TestElasticsearchLogSinkUsesDeterministicDocumentsAndProviderNeutralPrivacy
 	}
 
 	startupBatchKey := strings.Repeat("b", 64)
-	if err := store.PutStartupDiagnostics(
+	if err := telemetryStore.PutStartupDiagnostics(
 		ctx,
 		startupBatchKey,
 		[]application.StartupDiagnosticRecord{{
@@ -167,7 +179,7 @@ func TestElasticsearchLogSinkUsesDeterministicDocumentsAndProviderNeutralPrivacy
 	); err != nil {
 		t.Fatalf("PutStartupDiagnostics() error = %v", err)
 	}
-	complete, err = store.HasStartupDiagnosticBatch(ctx, startupBatchKey, 1)
+	complete, err = telemetryStore.HasStartupDiagnosticBatch(ctx, startupBatchKey, 1)
 	if err != nil || !complete {
 		t.Fatalf(
 			"HasStartupDiagnosticBatch() = %v, %v; want true, nil",
@@ -192,7 +204,7 @@ func TestElasticsearchLogSinkUsesDeterministicDocumentsAndProviderNeutralPrivacy
 	}
 
 	runtimeBatchKey := strings.Repeat("c", 64)
-	if err := store.PutRuntimeLogBatch(
+	if err := runtimeLogStore.PutRuntimeLogBatch(
 		ctx,
 		runtimeBatchKey,
 		[]application.RuntimeLogRecord{{
@@ -214,15 +226,151 @@ func TestElasticsearchLogSinkUsesDeterministicDocumentsAndProviderNeutralPrivacy
 	); err != nil {
 		t.Fatalf("PutRuntimeLogBatch() error = %v", err)
 	}
-	complete, err = store.HasRuntimeLogBatch(ctx, runtimeBatchKey, 1)
+	complete, err = runtimeLogStore.HasRuntimeLogBatch(ctx, runtimeBatchKey, 1)
 	if err != nil || !complete {
 		t.Fatalf("HasRuntimeLogBatch() = %v, %v; want true, nil", complete, err)
 	}
 	if got := harness.documentCount("runtime-diagnostics-raw"); got != 1 {
 		t.Fatalf("runtime raw documents = %d; want 1", got)
 	}
-	if got := harness.documentCount("app-product-telemetry-hourly"); got != 2 {
-		t.Fatalf("combined rollup documents = %d; want 2", got)
+	if got := harness.documentCount("app-product-telemetry-hourly"); got != 1 {
+		t.Fatalf("telemetry rollup documents = %d; want 1", got)
+	}
+	if got := harness.documentCount("runtime-diagnostics-hourly"); got != 1 {
+		t.Fatalf("runtime rollup documents = %d; want 1", got)
+	}
+}
+
+func TestElasticsearchStoresCreateOnlyOwnedIndicesAndTemplates(
+	t *testing.T,
+) {
+	t.Parallel()
+	testCases := []struct {
+		name      string
+		store     func(*testing.T, string) *telemetrypersistence.ElasticsearchEventLogStore
+		want      []string
+		forbidden []string
+	}{
+		{
+			name:  "telemetry",
+			store: newTestElasticsearchStore,
+			want: []string{
+				"app-product-telemetry-raw",
+				"app-startup-diagnostic-raw",
+				"app-product-telemetry-hourly",
+			},
+			forbidden: []string{"runtime-diagnostics-raw", "runtime-diagnostics-hourly"},
+		},
+		{
+			name:  "runtime-log",
+			store: newTestRuntimeLogElasticsearchStore,
+			want:  []string{"runtime-diagnostics-raw", "runtime-diagnostics-hourly"},
+			forbidden: []string{
+				"app-product-telemetry-raw",
+				"app-startup-diagnostic-raw",
+				"app-product-telemetry-hourly",
+			},
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			harness := newElasticsearchHarness(nil)
+			server := httptest.NewServer(harness)
+			t.Cleanup(server.Close)
+			if err := tc.store(t, server.URL).EnsureIndices(context.Background()); err != nil {
+				t.Fatalf("EnsureIndices() error = %v", err)
+			}
+			for _, base := range tc.want {
+				if _, exists := harness.indexTemplates[base+"-template"]; !exists {
+					t.Errorf("owned template %s was not created", base)
+				}
+				if !harness.hasIndexBase(base) {
+					t.Errorf("owned daily index %s was not created", base)
+				}
+			}
+			for _, base := range tc.forbidden {
+				if _, exists := harness.indexTemplates[base+"-template"]; exists {
+					t.Errorf("foreign template %s was created", base)
+				}
+				if harness.hasIndexBase(base) {
+					t.Errorf("foreign daily index %s was created", base)
+				}
+			}
+		})
+	}
+}
+
+func TestElasticsearchStoresUseOnlyOwnedCredentialsAndPaths(
+	t *testing.T,
+) {
+	t.Parallel()
+	type observedRequest struct {
+		authorization string
+		path          string
+	}
+	var mu sync.Mutex
+	observed := make([]observedRequest, 0)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		observed = append(observed, observedRequest{r.Header.Get("Authorization"), r.URL.Path})
+		mu.Unlock()
+		writeJSON(w, http.StatusOK, map[string]any{
+			"hits": map[string]any{
+				"total": map[string]any{"value": 0},
+				"hits":  []any{},
+			},
+			"aggregations": map[string]any{},
+		})
+	}))
+	t.Cleanup(server.Close)
+	telemetryStore, err := telemetrypersistence.NewElasticsearchEventLogStore(
+		telemetrypersistence.ElasticsearchConfig{
+			Kind:                   telemetrypersistence.ElasticsearchTelemetryStoreKind,
+			Endpoint:               server.URL,
+			APIKey:                 "telemetry-key",
+			RawIndex:               "app-product-telemetry-raw",
+			StartupDiagnosticIndex: "app-startup-diagnostic-raw",
+			AggregateIndex:         "app-product-telemetry-hourly",
+			Timeout:                time.Second,
+		},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	runtimeStore, err := telemetrypersistence.NewElasticsearchEventLogStore(
+		telemetrypersistence.ElasticsearchConfig{
+			Kind:           telemetrypersistence.ElasticsearchRuntimeLogStoreKind,
+			Endpoint:       server.URL,
+			APIKey:         "runtime-key",
+			RawIndex:       "runtime-diagnostics-raw",
+			AggregateIndex: "runtime-diagnostics-hourly",
+			Timeout:        time.Second,
+		},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC()
+	_, _ = telemetryStore.GetEventSummary(context.Background(), application.EventSummaryQuery{From: now.Add(-time.Hour), To: now})
+	_, _ = runtimeStore.GetRuntimeLogSummary(context.Background(), application.RuntimeLogSummaryQuery{From: now.Add(-time.Hour), To: now})
+	mu.Lock()
+	defer mu.Unlock()
+	if len(observed) != 2 {
+		t.Fatalf("observed requests = %v; want 2", observed)
+	}
+	for _, request := range observed {
+		switch request.authorization {
+		case "ApiKey telemetry-key":
+			if !strings.Contains(request.path, "app-product-telemetry-hourly") || strings.Contains(request.path, "runtime-diagnostics") {
+				t.Errorf("telemetry credential accessed foreign path %s", request.path)
+			}
+		case "ApiKey runtime-key":
+			if !strings.Contains(request.path, "runtime-diagnostics-hourly") || strings.Contains(request.path, "app-product-telemetry") {
+				t.Errorf("runtime credential accessed foreign path %s", request.path)
+			}
+		default:
+			t.Errorf("unexpected credential %q for %s", request.authorization, request.path)
+		}
 	}
 }
 
@@ -238,12 +386,13 @@ func TestElasticsearchLogSinkProvidesAllReadPortsAndMasksSensitiveFields(
 	)
 	server := httptest.NewServer(harness)
 	t.Cleanup(server.Close)
-	store := newTestElasticsearchStore(t, server.URL)
+	telemetryStore := newTestElasticsearchStore(t, server.URL)
+	runtimeLogStore := newTestRuntimeLogElasticsearchStore(t, server.URL)
 	ctx := context.Background()
 	from := now.Add(-2 * time.Hour)
 	to := now.Add(time.Minute)
 
-	eventSummary, err := store.GetEventSummary(ctx, application.EventSummaryQuery{
+	eventSummary, err := telemetryStore.GetEventSummary(ctx, application.EventSummaryQuery{
 		EventType: "chat_interaction_outcome",
 		From:      from,
 		To:        to,
@@ -258,7 +407,7 @@ func TestElasticsearchLogSinkProvidesAllReadPortsAndMasksSensitiveFields(
 		t.Fatalf("GetEventSummary() = %+v", eventSummary)
 	}
 
-	runtimeSummary, err := store.GetRuntimeLogSummary(
+	runtimeSummary, err := runtimeLogStore.GetRuntimeLogSummary(
 		ctx,
 		application.RuntimeLogSummaryQuery{
 			Signal: "app.runtime_exception",
@@ -274,7 +423,7 @@ func TestElasticsearchLogSinkProvidesAllReadPortsAndMasksSensitiveFields(
 		t.Fatalf("GetRuntimeLogSummary() = %+v", runtimeSummary)
 	}
 
-	eventDrilldown, err := store.GetEventDrilldown(
+	eventDrilldown, err := telemetryStore.GetEventDrilldown(
 		ctx,
 		application.EventDrilldownQuery{From: from, To: to, Limit: 10},
 	)
@@ -287,7 +436,7 @@ func TestElasticsearchLogSinkProvidesAllReadPortsAndMasksSensitiveFields(
 		t.Fatalf("GetEventDrilldown() did not mask session: %+v", eventDrilldown)
 	}
 
-	runtimeDrilldown, err := store.GetRuntimeLogDrilldown(
+	runtimeDrilldown, err := runtimeLogStore.GetRuntimeLogDrilldown(
 		ctx,
 		application.RuntimeLogDrilldownQuery{
 			From:            from,
@@ -308,7 +457,7 @@ func TestElasticsearchLogSinkProvidesAllReadPortsAndMasksSensitiveFields(
 		)
 	}
 
-	pageStats, err := store.GetPageExperienceStats(
+	pageStats, err := telemetryStore.GetPageExperienceStats(
 		ctx,
 		application.PageExperienceQuery{From: from, To: to},
 	)
@@ -322,7 +471,7 @@ func TestElasticsearchLogSinkProvidesAllReadPortsAndMasksSensitiveFields(
 		t.Fatalf("GetPageExperienceStats() = %+v", pageStats)
 	}
 
-	sessions, pageViews, err := store.ListDistinctSessions(ctx, from, to, 100)
+	sessions, pageViews, err := telemetryStore.ListDistinctSessions(ctx, from, to, 100)
 	if err != nil {
 		t.Fatalf("ListDistinctSessions() error = %v", err)
 	}
@@ -334,7 +483,7 @@ func TestElasticsearchLogSinkProvidesAllReadPortsAndMasksSensitiveFields(
 		)
 	}
 
-	rtcSummary, err := store.ReadRtcMediaQoeSummary(
+	rtcSummary, err := telemetryStore.ReadRtcMediaQoeSummary(
 		ctx,
 		application.RtcMediaQoeSummaryQuery{From: from, To: to},
 	)
@@ -484,11 +633,11 @@ func TestElasticsearchLogSinkUsesApiKeyWithoutLeakingIt(t *testing.T) {
 	t.Cleanup(server.Close)
 	store, err := telemetrypersistence.NewElasticsearchEventLogStore(
 		telemetrypersistence.ElasticsearchConfig{
+			Kind:                   telemetrypersistence.ElasticsearchTelemetryStoreKind,
 			Endpoint:               server.URL,
 			APIKey:                 apiKey,
 			RawIndex:               "app-product-telemetry-raw",
 			StartupDiagnosticIndex: "app-startup-diagnostic-raw",
-			RuntimeLogIndex:        "runtime-diagnostics-raw",
 			AggregateIndex:         "app-product-telemetry-hourly",
 			Timeout:                time.Second,
 		},
@@ -504,11 +653,11 @@ func TestElasticsearchLogSinkUsesApiKeyWithoutLeakingIt(t *testing.T) {
 	}
 	if _, err := telemetrypersistence.NewElasticsearchEventLogStore(
 		telemetrypersistence.ElasticsearchConfig{
+			Kind:                   telemetrypersistence.ElasticsearchTelemetryStoreKind,
 			Endpoint:               server.URL,
 			APIKey:                 "credential\r\ninjected: true",
 			RawIndex:               "app-product-telemetry-raw",
 			StartupDiagnosticIndex: "app-startup-diagnostic-raw",
-			RuntimeLogIndex:        "runtime-diagnostics-raw",
 			AggregateIndex:         "app-product-telemetry-hourly",
 			Timeout:                time.Second,
 		},
@@ -545,16 +694,36 @@ func newTestElasticsearchStore(
 	t.Helper()
 	store, err := telemetrypersistence.NewElasticsearchEventLogStore(
 		telemetrypersistence.ElasticsearchConfig{
+			Kind:                   telemetrypersistence.ElasticsearchTelemetryStoreKind,
 			Endpoint:               endpoint,
 			RawIndex:               "app-product-telemetry-raw",
 			StartupDiagnosticIndex: "app-startup-diagnostic-raw",
-			RuntimeLogIndex:        "runtime-diagnostics-raw",
 			AggregateIndex:         "app-product-telemetry-hourly",
 			Timeout:                time.Second,
 		},
 	)
 	if err != nil {
 		t.Fatalf("NewElasticsearchEventLogStore() error = %v", err)
+	}
+	return store
+}
+
+func newTestRuntimeLogElasticsearchStore(
+	t *testing.T,
+	endpoint string,
+) *telemetrypersistence.ElasticsearchEventLogStore {
+	t.Helper()
+	store, err := telemetrypersistence.NewElasticsearchEventLogStore(
+		telemetrypersistence.ElasticsearchConfig{
+			Kind:           telemetrypersistence.ElasticsearchRuntimeLogStoreKind,
+			Endpoint:       endpoint,
+			RawIndex:       "runtime-diagnostics-raw",
+			AggregateIndex: "runtime-diagnostics-hourly",
+			Timeout:        time.Second,
+		},
+	)
+	if err != nil {
+		t.Fatalf("NewElasticsearchEventLogStore(runtime-log) error = %v", err)
 	}
 	return store
 }
@@ -809,6 +978,17 @@ func (h *elasticsearchHarness) documentCount(index string) int {
 		}
 	}
 	return count
+}
+
+func (h *elasticsearchHarness) hasIndexBase(base string) bool {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	for index := range h.indices {
+		if strings.HasPrefix(index, base+"-") {
+			return true
+		}
+	}
+	return false
 }
 
 func (h *elasticsearchHarness) hasExactIndex(index string) bool {

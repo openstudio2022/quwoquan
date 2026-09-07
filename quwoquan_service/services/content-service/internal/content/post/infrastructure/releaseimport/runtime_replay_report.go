@@ -34,6 +34,8 @@ type importedPostReplayReport struct {
 	Counts           map[string]int        `json:"counts"`
 	PostBindings     []ImportedPostBinding `json:"postBindings"`
 	AuditEvents      []string              `json:"auditEvents"`
+	Revision         int64                 `json:"revision"`
+	SourceVersion    int64                 `json:"sourceVersion"`
 	GeneratedAt      string                `json:"generatedAt,omitempty"`
 	SourceReportPath string                `json:"sourceReportPath,omitempty"`
 }
@@ -80,7 +82,8 @@ func LoadImportedPostReplayBindings(
 		report.ReleaseID != strings.TrimSpace(releaseID) ||
 		report.ManifestDigest != strings.TrimSpace(manifestDigest) ||
 		report.SourceOwner != strings.TrimSpace(sourceOwner) ||
-		report.Mode != "sync" || report.DeletePolicy != "tombstone" {
+		report.Mode != "sync" || report.DeletePolicy != "tombstone" ||
+		report.Revision <= 0 || report.SourceVersion <= 0 {
 		return nil, fmt.Errorf("GATE_BLOCK: replay source import report binding drift")
 	}
 	postsLoaded := report.Counts["postsLoaded"]

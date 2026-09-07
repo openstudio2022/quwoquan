@@ -3,9 +3,11 @@ package load_test
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
+	"quwoquan_service/internal/metadata/ast"
 	"quwoquan_service/internal/metadata/graph"
 	"quwoquan_service/internal/metadata/load"
 	"quwoquan_service/internal/metadata/validate"
@@ -93,6 +95,53 @@ fields:
 	contractGraph.BusinessObjectMaps[0].Objects[0].FieldRoles["owned_entity"] = []string{"id"}
 	if err := validate.ContractGraphSchema(metadataDir, contractGraph); err == nil {
 		t.Fatal("ContractGraph schema accepted owned_entity as a fieldRoles key")
+	}
+}
+
+// spec_ref: specs/feature-tree/runtime/system-architecture-and-engineering-guide/spec.md#sit-001
+func TestContractViewStorageResourcesReachObjectAndBusinessObjectMap(t *testing.T) {
+	t.Parallel()
+
+	metadataDir := contractsview.Build(t)
+	catalog, err := load.Load(metadataDir)
+	if err != nil {
+		t.Fatalf("load service contract view: %v", err)
+	}
+	contractGraph := graph.Build(catalog)
+	if err := validate.ContractGraphSchema(metadataDir, contractGraph); err != nil {
+		t.Fatalf("validate storage resources in ContractGraph schema: %v", err)
+	}
+
+	objectByID := map[string]int{}
+	for index, object := range contractGraph.Objects {
+		objectByID[object.ID] = index
+	}
+	found := false
+	for _, objectMap := range contractGraph.BusinessObjectMaps {
+		for _, boundary := range objectMap.Objects {
+			if boundary.CanonicalObject != "SearchIndexView" {
+				continue
+			}
+			found = true
+			index, ok := objectByID[objectMap.Domain+".search_index_view"]
+			if !ok {
+				t.Fatal("SearchIndexView canonical object is absent")
+			}
+			objectResources := contractGraph.Objects[index].StorageResources
+			if len(objectResources) != 2 || !reflect.DeepEqual(objectResources, boundary.StorageResources) {
+				t.Fatalf("SearchIndexView resources were not preserved in both graph views: object=%+v boundary=%+v", objectResources, boundary.StorageResources)
+			}
+			want := []ast.ObjectStorageResource{
+				{LocalName: "projection_inbox_and_watermarks", Identity: "search-service/search/search_index_view/projection_inbox_and_watermarks", Engine: "mongodb", Role: "query_projection", Required: true},
+				{LocalName: "search_documents", Identity: "search-service/search/search_index_view/search_documents", Engine: "elasticsearch", Role: "query_projection", Required: true},
+			}
+			if !reflect.DeepEqual(objectResources, want) {
+				t.Fatalf("SearchIndexView resources = %+v, want %+v", objectResources, want)
+			}
+		}
+	}
+	if !found {
+		t.Fatal("SearchIndexView missing from businessObjectMaps")
 	}
 }
 

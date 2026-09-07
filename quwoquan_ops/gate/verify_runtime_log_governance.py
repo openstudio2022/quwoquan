@@ -63,6 +63,26 @@ STACKCTL = ROOT / "quwoquan_ops/cli/stackctl.py"
 STACKCTL_PROVIDER_RUNTIME_BINDING = (
     ROOT / "quwoquan_ops/cli/commands/provider_runtime_binding.py"
 )
+SERVICEKIT_OBSERVABILITY = ROOT / "quwoquan_service/runtime/servicekit/observability.go"
+SERVICEKIT_BOOTSTRAP = ROOT / "quwoquan_service/runtime/servicekit/bootstrap.go"
+PRODUCT_OPS_MAIN = PRODUCT_OPS_ROOT / "cmd/api/main.go"
+PRODUCT_OPS_BOOTSTRAP = PRODUCT_OPS_ROOT / "cmd/api/bootstrap.go"
+PRODUCT_OPS_LOG_SINK_BINDINGS = {
+    "product.telemetry.sink": {
+        "endpoint_key": "PRODUCT_OPS_TELEMETRY_ELASTICSEARCH_ENDPOINT",
+        "prod_endpoint_ref": (
+            "environment_binding:product_ops.telemetry.elasticsearch"
+        ),
+        "prod_secret_key": "PRODUCT_OPS_TELEMETRY_ELASTICSEARCH_API_KEY",
+    },
+    "runtime.log.sink": {
+        "endpoint_key": "PRODUCT_OPS_RUNTIME_LOG_ELASTICSEARCH_ENDPOINT",
+        "prod_endpoint_ref": (
+            "environment_binding:product_ops.runtime_log.elasticsearch"
+        ),
+        "prod_secret_key": "PRODUCT_OPS_RUNTIME_LOG_ELASTICSEARCH_API_KEY",
+    },
+}
 SLS_TOKEN = re.compile(r"(?<![A-Za-z0-9])SLS(?![A-Za-z0-9])", re.IGNORECASE)
 RUNTIME_LOG_STORAGE_KEYS = frozenset(
     {
@@ -101,6 +121,7 @@ def main() -> int:
         issues,
     )
     _verify_product_ops_servicekit_runtime_log_wiring(issues)
+    _verify_product_ops_standard_observability_composition(issues)
     _require_text(
         ROOT / "quwoquan_app/lib/runtime/di/cloud_http_client_provider.dart",
         ("RuntimeApiLatencyDispatcher",),
@@ -575,55 +596,196 @@ def _verify_elasticsearch(
         issues.append("runtime diagnostic hourly fingerprint aggregation is missing")
 
 
-def _verify_environment_bindings(issues: list[str]) -> None:
-    try:
-        compiled, compilation_issues = provider_governance.load_and_compile()
-    except (OSError, RuntimeError, ValueError, yaml.YAMLError) as exc:
-        issues.append(f"compiled Provider Binding cannot be loaded: {exc}")
-        return
-    if compilation_issues:
-        issues.extend(
-            "compiled Provider Binding: " + issue.render()
-            for issue in compilation_issues
-        )
-        return
-    selected_bindings = compiled.get("selectedBindings")
-    if not isinstance(selected_bindings, dict):
+def _verify_environment_bindings(
+    issues: list[str],
+    *,
+    selected_bindings: dict[str, object] | None = None,
+) -> None:
+    if selected_bindings is None:
+        try:
+            compiled, compilation_issues = provider_governance.load_and_compile()
+        except (OSError, RuntimeError, ValueError, yaml.YAMLError) as exc:
+            issues.append(f"compiled Provider Binding cannot be loaded: {exc}")
+            return
+        if compilation_issues:
+            issues.extend(
+                "compiled Provider Binding: " + issue.render()
+                for issue in compilation_issues
+            )
+            return
+        selected = compiled.get("selectedBindings")
+    else:
+        selected = selected_bindings
+    if not isinstance(selected, dict):
         issues.append("compiled Provider Binding misses selectedBindings")
         return
     for environment in ("alpha", "beta", "gamma", "prod"):
-        environment_bindings = selected_bindings.get(environment)
-        binding = (
-            environment_bindings.get("runtime.log.sink")
-            if isinstance(environment_bindings, dict)
-            else None
-        )
-        if not isinstance(binding, dict):
-            issues.append(f"compiled {environment} Binding must select runtime.log.sink")
+        environment_bindings = selected.get(environment)
+        if not isinstance(environment_bindings, dict):
+            issues.append(f"compiled {environment} Binding set is missing")
             continue
-        if (
-            binding.get("state") != "enabled"
-            or binding.get("adapter_id") != "ext.obs.elasticsearch"
-        ):
-            issues.append(
-                f"compiled {environment} Binding must enable only ext.obs.elasticsearch"
-            )
-        endpoint_ref = str(binding.get("endpoint_ref") or "")
-        secret_refs = binding.get("secret_refs")
-        if environment == "prod":
-            if endpoint_ref != "environment_binding:product_ops.elasticsearch":
-                issues.append("Prod runtime.log.sink must use the managed ES environment binding")
-            if secret_refs != ["PRODUCT_OPS_ELASTICSEARCH_API_KEY"]:
-                issues.append("Prod runtime.log.sink must use only the managed ES API key reference")
-        else:
-            # 非生产三环境共用同一个本地 ES 信任域权威，逻辑键因此不带环境名；
-            # 实际 endpoint 由各环境 runtime 的 PRODUCT_OPS_ELASTICSEARCH_ENDPOINT 解析。
-            expected_ref = "local_topology:elasticsearch"
-            if endpoint_ref != expected_ref:
-                issues.append(f"{environment} runtime.log.sink must use {expected_ref}")
-            if secret_refs != []:
-                issues.append(f"{environment} local ES binding must not require a Provider secret")
+        for capability_id, expectation in PRODUCT_OPS_LOG_SINK_BINDINGS.items():
+            binding = environment_bindings.get(capability_id)
+            if not isinstance(binding, dict):
+                issues.append(
+                    f"compiled {environment} Binding must select {capability_id}"
+                )
+                continue
+            if (
+                binding.get("state") != "enabled"
+                or binding.get("adapter_id") != "ext.obs.elasticsearch"
+            ):
+                issues.append(
+                    f"compiled {environment} {capability_id} must enable "
+                    "ext.obs.elasticsearch"
+                )
+            expected_endpoint_key = expectation["endpoint_key"]
+            if binding.get("endpoint_envs") != {
+                "endpoint": expected_endpoint_key
+            }:
+                issues.append(
+                    f"compiled {environment} {capability_id} must project only "
+                    f"{expected_endpoint_key}"
+                )
+            endpoint_ref = str(binding.get("endpoint_ref") or "")
+            secret_refs = binding.get("secret_refs")
+            if environment == "prod":
+                if endpoint_ref != expectation["prod_endpoint_ref"]:
+                    issues.append(
+                        f"Prod {capability_id} must use "
+                        f"{expectation['prod_endpoint_ref']}"
+                    )
+                expected_secret = [expectation["prod_secret_key"]]
+                if secret_refs != expected_secret:
+                    issues.append(
+                        f"Prod {capability_id} must use only "
+                        f"{expectation['prod_secret_key']}"
+                    )
+            else:
+                if endpoint_ref != "local_topology:elasticsearch":
+                    issues.append(
+                        f"{environment} {capability_id} must use "
+                        "local_topology:elasticsearch"
+                    )
+                if secret_refs != []:
+                    issues.append(
+                        f"{environment} {capability_id} local binding must not "
+                        "require a Provider secret"
+                    )
 
+
+def _go_function_body_by_name(text: str, function_name: str) -> str | None:
+    declaration = re.search(
+        rf"(?m)^func\s+(?:\([^\n]+\)\s+)?{re.escape(function_name)}\s*",
+        text,
+    )
+    if declaration is None:
+        return None
+    opening = -1
+    parenthesis_depth = 0
+    bracket_depth = 0
+    for index in range(declaration.end(), len(text)):
+        character = text[index]
+        if character == "(":
+            parenthesis_depth += 1
+        elif character == ")":
+            parenthesis_depth -= 1
+        elif character == "[":
+            bracket_depth += 1
+        elif character == "]":
+            bracket_depth -= 1
+        elif (
+            character == "{"
+            and parenthesis_depth == 0
+            and bracket_depth == 0
+        ):
+            opening = index
+            break
+    if opening < 0:
+        return None
+    depth = 0
+    for index in range(opening, len(text)):
+        character = text[index]
+        if character == "{":
+            depth += 1
+        elif character == "}":
+            depth -= 1
+            if depth == 0:
+                return text[opening + 1 : index]
+    return None
+
+
+def _verify_product_ops_standard_observability_composition(
+    issues: list[str],
+    *,
+    servicekit_observability_text: str | None = None,
+    servicekit_bootstrap_text: str | None = None,
+    product_ops_main_text: str | None = None,
+    product_ops_bootstrap_text: str | None = None,
+) -> None:
+    sources = {
+        "observability": (
+            SERVICEKIT_OBSERVABILITY,
+            servicekit_observability_text,
+        ),
+        "bootstrap": (SERVICEKIT_BOOTSTRAP, servicekit_bootstrap_text),
+        "main": (PRODUCT_OPS_MAIN, product_ops_main_text),
+        "product_bootstrap": (PRODUCT_OPS_BOOTSTRAP, product_ops_bootstrap_text),
+    }
+    texts = {
+        name: _read(source_path, issues) if supplied is None else supplied
+        for name, (source_path, supplied) in sources.items()
+    }
+    observability_body = _go_function_body_by_name(
+        texts["observability"], "NewObservabilityStack"
+    )
+    if (
+        observability_body is None
+        or observability_body.count("robs.NewRuntimeLogExportWriter(") < 2
+        or "robs.NewProcessTraceLogger(" not in observability_body
+    ):
+        issues.append(
+            f"{_rel(SERVICEKIT_OBSERVABILITY)} NewObservabilityStack must construct "
+            "stdout/stderr RuntimeLogExportWriters and ProcessTraceLogger"
+        )
+    bootstrap_body = _go_function_body_by_name(texts["bootstrap"], "Bootstrap")
+    assembly_body = _go_function_body_by_name(texts["bootstrap"], "bootstrapAssembly")
+    bootstrap_delegates = (
+        bootstrap_body is not None
+        and re.search(
+            r"bootstrapAssembly\s*\(\s*serviceName\s*,\s*spec\s*\)",
+            bootstrap_body,
+        )
+        is not None
+    )
+    assembly_constructs = (
+        assembly_body is not None
+        and re.search(
+            r"NewObservabilityStack\s*\(\s*identity\s*,\s*"
+            r"spec\.ObservabilityKVFilter\s*\)",
+            assembly_body,
+        )
+        is not None
+    )
+    if not bootstrap_delegates or not assembly_constructs:
+        issues.append(
+            f"{_rel(SERVICEKIT_BOOTSTRAP)} Bootstrap must delegate to an assembly "
+            "that calls NewObservabilityStack"
+        )
+    main_body = _go_function_body_by_name(texts["main"], "main")
+    if (
+        main_body is None
+        or "servicekit.RunStandalone(" not in main_body
+        or "newModule()" not in main_body
+    ):
+        issues.append(
+            f"{_rel(PRODUCT_OPS_MAIN)} main must use servicekit.RunStandalone/newModule"
+        )
+    module_body = _go_function_body_by_name(texts["product_bootstrap"], "newModule")
+    if module_body is None or "servicekit.Bootstrap(" not in module_body:
+        issues.append(
+            f"{_rel(PRODUCT_OPS_BOOTSTRAP)} newModule must use servicekit.Bootstrap"
+        )
 
 def _verify_candidate_owned_environment_elasticsearch_config(
     issues: list[str],
@@ -632,27 +794,34 @@ def _verify_candidate_owned_environment_elasticsearch_config(
 ) -> None:
     """Forbid environment config from becoming a second ES endpoint owner.
 
-    The Provider Binding owns endpoint identity and the immutable candidate
-    projects it to ``PRODUCT_OPS_ELASTICSEARCH_ENDPOINT``.  Service environment
-    config may select the Binding, but must not persist the resolved endpoint.
+    Provider Bindings own both logical endpoint identities and the immutable
+    candidate projects their distinct environment keys. Service environment
+    config may select each Binding, but must not persist resolved endpoints.
     """
 
     resolved_configs = configs or {
         environment: _load(path, issues)
         for environment, path in PRODUCT_OPS_ENVIRONMENT_CONFIGS.items()
     }
-    endpoint_key = "sys.product-ops-service.elasticsearch.endpoint"
+    endpoint_keys = (
+        "sys.product-ops-service.telemetry_elasticsearch.endpoint",
+        "sys.product-ops-service.runtime_log_elasticsearch.endpoint",
+        "sys.product-ops-service.elasticsearch.endpoint",
+    )
     for environment in ("alpha", "beta", "gamma", "prod"):
         payload = resolved_configs.get(environment)
         if not isinstance(payload, dict):
             issues.append(f"Product Ops {environment} environment config is missing")
             continue
         overrides = payload.get("overrides")
-        if isinstance(overrides, dict) and endpoint_key in overrides:
-            issues.append(
-                f"Product Ops {environment} environment config must not own "
-                f"{endpoint_key}; consume the candidate-owned Provider Binding endpoint"
-            )
+        if not isinstance(overrides, dict):
+            continue
+        for endpoint_key in endpoint_keys:
+            if endpoint_key in overrides:
+                issues.append(
+                    f"Product Ops {environment} environment config must not own "
+                    f"{endpoint_key}; consume the candidate-owned Provider Binding endpoint"
+                )
 
 
 def _verify_local_elasticsearch_workload(issues: list[str]) -> None:
@@ -749,14 +918,9 @@ def _verify_candidate_owned_local_elasticsearch_runtime(
         + "quwoquan_service/services/product-ops-service/deploy/"
         + "local-elasticsearch.compose.yaml"
     )
-    hardcoded_endpoint = (
-        'PRODUCT_OPS_ELASTICSEARCH_ENDPOINT="${'
-        + "PRODUCT_OPS_ELASTICSEARCH_ENDPOINT:-http://elasticsearch:9200}"
-        + '"'
-    )
     forbidden_startup = (
         workspace_compose,
-        hardcoded_endpoint,
+        "PRODUCT_OPS_ELASTICSEARCH_ENDPOINT",
         "LOCAL_GAMMA_ELASTICSEARCH_IMAGE=",
         "QWQ_COMPOSE_ELASTICSEARCH_IMAGE",
     )
@@ -772,6 +936,16 @@ def _verify_candidate_owned_local_elasticsearch_runtime(
             "product telemetry log-sink resolver must not synthesize an Elasticsearch "
             "endpoint outside the candidate"
         )
+    for source_name, source_text in (
+        ("startup", startup),
+        ("resolver", resolver),
+        ("candidate", candidate),
+        ("stackctl", stackctl),
+    ):
+        if "PRODUCT_OPS_ELASTICSEARCH_ENDPOINT" in source_text:
+            issues.append(
+                f"{source_name} retains retired PRODUCT_OPS_ELASTICSEARCH_ENDPOINT"
+            )
     if "QWQ_OBSERVABILITY_LOG_SINK_COMPOSE_FILE" not in stackctl:
         issues.append(
             "stackctl must pass the candidate-owned Elasticsearch Compose artifact "

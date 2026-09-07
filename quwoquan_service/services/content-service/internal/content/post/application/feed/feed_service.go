@@ -24,7 +24,7 @@ import (
 
 type FeedService struct {
 	postReader       postports.PostFeedReader
-	intersections    feedIntersectionProvider
+	intersections    FeedIntersectionProvider
 	objectCardPolicy func() recpolicy.ObjectCardConfig
 	filterObserver   FeedFilterObserver
 	viewerBlocks     FeedViewerBlockReader
@@ -139,7 +139,7 @@ func WithFeedFilterObserver(observer FeedFilterObserver) FeedServiceOption {
 }
 
 // WithFeedIntersectionProvider 注入交集理由池来源（70/20/10 内容流附着）。
-func WithFeedIntersectionProvider(provider feedIntersectionProvider) FeedServiceOption {
+func WithFeedIntersectionProvider(provider FeedIntersectionProvider) FeedServiceOption {
 	return func(s *FeedService) { s.intersections = provider }
 }
 
@@ -780,7 +780,10 @@ func (s *FeedService) ListFeed(ctx context.Context, req ListFeedRequest) (resp *
 		nextCursor = ""
 	}
 	if s.intersections != nil && strings.TrimSpace(req.UserID) != "" {
-		if reasons, reasonErr := s.intersections.Feed(ctx, req.UserID, route.ChannelID, feedIntersectionPoolLimit); reasonErr == nil {
+		reasons, reasonErr := s.intersections.Feed(ctx, req.UserID, route.ChannelID, IntersectionReasonPoolLimit)
+		if reasonErr != nil {
+			LogIntersectionReadFailure("feed", route.ChannelID, reasonErr)
+		} else {
 			AttachFeedIntersections(views, reasons, req.UserID)
 		}
 	}

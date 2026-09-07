@@ -82,7 +82,7 @@ func elasticsearchRawIndexDefinition() map[string]any {
 		properties[field] = map[string]any{"type": "boolean"}
 	}
 	return map[string]any{
-		"settings": elasticsearchIndexSettings(elasticsearchRawRetentionPolicy),
+		"settings": elasticsearchIndexSettings(elasticsearchTelemetryRawRetentionPolicy),
 		"mappings": map[string]any{
 			"dynamic":           true,
 			"dynamic_templates": elasticsearchDynamicTemplates(),
@@ -94,7 +94,7 @@ func elasticsearchRawIndexDefinition() map[string]any {
 
 func elasticsearchStartupIndexDefinition() map[string]any {
 	return map[string]any{
-		"settings": elasticsearchIndexSettings(elasticsearchRawRetentionPolicy),
+		"settings": elasticsearchIndexSettings(elasticsearchTelemetryRawRetentionPolicy),
 		"mappings": map[string]any{
 			"dynamic":           true,
 			"dynamic_templates": elasticsearchDynamicTemplates(),
@@ -118,7 +118,7 @@ func elasticsearchStartupIndexDefinition() map[string]any {
 
 func elasticsearchRuntimeIndexDefinition() map[string]any {
 	return map[string]any{
-		"settings": elasticsearchIndexSettings(elasticsearchRawRetentionPolicy),
+		"settings": elasticsearchIndexSettings(elasticsearchRuntimeRawRetentionPolicy),
 		"mappings": map[string]any{
 			"dynamic":           true,
 			"dynamic_templates": elasticsearchDynamicTemplates(),
@@ -134,9 +134,9 @@ func elasticsearchRuntimeIndexDefinition() map[string]any {
 	}
 }
 
-func elasticsearchAggregateIndexDefinition() map[string]any {
+func elasticsearchAggregateIndexDefinition(policy string) map[string]any {
 	return map[string]any{
-		"settings": elasticsearchIndexSettings(elasticsearchAggregateRetentionPolicy),
+		"settings": elasticsearchIndexSettings(policy),
 		"mappings": map[string]any{
 			"dynamic":           true,
 			"dynamic_templates": elasticsearchDynamicTemplates(),

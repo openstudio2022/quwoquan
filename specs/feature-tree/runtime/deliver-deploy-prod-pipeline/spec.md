@@ -150,6 +150,18 @@
 - 目标：完成全部外部平台对 `com.leadwise.quwoquan` + 生产签名证书摘要的登记，并以渠道 readback 证明一致。
 - 完成判定：`SIT-001` 下 `stackctl store-channels` 对已启用渠道的身份 readback 与 `app_artifact_manifest.yaml` 一致，且 DEC-004 正式身份条目无冲突登记
 
+<a id="open-009"></a>
+### OPEN-009 dataRelease 物理坐标绕过 canonical binding
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚未实现 `dataRelease` 对 canonical data-plane binding 与 `bindingDigest` 的消费。当前内容 release 解析仍走第二条物理坐标通道：local import 从 `mongoPortRole`、`redisPortRole`、`userPostgresPortRole` 拼接 loopback endpoint，hosted import 直接读取 `mongoUriEnv`、`redisAddrEnv`、`userPostgresDsnEnv`、`mediaRootEnv`；因此它可在未绑定同一 resource/namespace/role/CAS 身份时访问数据面，必须保持 typed blocker，不得把 data-plane binding 的通过结果外推为 release import/readback 已闭合。
+- 已落地的前置：prod deploy 入口（`quwoquan_ops/cli/prod/deploy_to_prod.sh`）已要求 `DATA_PLANE_BINDING` 并校验候选自带的 `packages/runtime-shared/data-plane-binding.json` 与 `EXPECTED_DATA_PLANE_BINDING` 一致，候选 manifest 的 `dataPlaneBinding.{ref,digest,bindingDigest}` 篡改由 `test_deployment_candidate_manifest__contract__local_contract_test.py` 判否；`clusterRef` 物理 selector 已从 runtime topology package 与 log sink package 删除（[DEC-012](design.md#dec-012)）。
+- 尚缺实现与验收证据：data release resolver 尚未读取 canonical binding artifact/digest，也没有覆盖旧物理坐标旁路判否及 Gamma 同 binding import/readback 的直接测试。附带 track 项：`dataPlane.resources.*.physicalIdentity` 允许只声明部分 mode（如仅 `external`）的 mapping，校验期不报错，缺失 mode 直到 `resolve_data_plane_environment` 才 fail closed；收紧为"字符串或三 mode 齐全"会更早暴露配置歧义，但需先确认四环境声明均已齐全，随本 OPEN 一并处理。
+- 目标：由 data release resolver 消费与目标 runtime package 相同的 canonical data-plane binding artifact/digest，显式映射 MongoDB、PostgreSQL、Redis 与 media/object-storage binding；删除 port-role/env-name 物理坐标旁路，缺 binding、歧义、digest 漂移、role/namespace 不匹配或 CAS/readback 不完整均 fail closed。
+- 完成判定：`SIT-002` 的数据面抽象、每域归属、gamma/prod 同构与拆分后契约不变子句均成立；聚焦 `local_contract` 以直接 `spec_ref` 覆盖 local/hosted 两种旧旁路判否、canonical binding 唯一解析、digest/CAS 漂移与缺失映射，Gamma `api_integration` 证明内容 import/readback 使用同一已封存 binding，Prod 仍由外部准入证据关闭。
+
 <a id="open-005"></a>
 ### OPEN-005 build-once 构建矩阵原子切换未完成
 

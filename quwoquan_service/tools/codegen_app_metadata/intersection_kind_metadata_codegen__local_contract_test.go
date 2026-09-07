@@ -18,6 +18,8 @@ func loadIntersectionGeneratedTestRegistry(
 	metadataDir := contractsview.Build(t)
 	if err := initializeMetadataDocumentSource(metadataDir, []string{
 		"_shared/types.yaml",
+		"_shared/search_contract.yaml",
+		"search/search/search_index_view/fields.yaml",
 		intersectionKindRegistryMetadataPath,
 	}); err != nil {
 		t.Fatalf("initialize metadata source: %v", err)
@@ -43,6 +45,7 @@ func readIntersectionGeneratedTestFile(t *testing.T, path string) string {
 }
 
 // spec_ref: specs/feature-tree/object-homepage-network/intersection-unified-experience/intersection-algorithm-closure/spec.md#gwt-001
+// spec_ref: specs/feature-tree/object-homepage-network/intersection-unified-experience/intersection-algorithm-closure/spec.md#gwt-002.t1
 func TestCanonicalIntersectionMetadataHasLayeredOwnersWithoutLegacyOutput(
 	t *testing.T,
 ) {
@@ -118,6 +121,7 @@ func TestCanonicalIntersectionMetadataHasLayeredOwnersWithoutLegacyOutput(
 		"final class IntersectionActionPolicy",
 		"intersectionActionPolicies",
 		"intersectionRouteIdByObjectKind",
+		"intersectionWireObjectTypeByObjectKind",
 		"intersectionObjectKindForObjectType",
 	} {
 		if !strings.Contains(outputs["application"], symbol) {
@@ -252,11 +256,11 @@ func TestIntersectionMetadataMatchesEveryCanonicalRegistryEntry(t *testing.T) {
 	if got, want := len(registry.ObjectKinds), 12; got != want {
 		t.Fatalf("object kind count = %d, want %d", got, want)
 	}
-	if got, want := len(registry.ObjectTypeBindings), 30; got != want {
+	if got, want := len(registry.ObjectTypeBindings), 33; got != want {
 		t.Fatalf("object type binding count = %d, want %d", got, want)
 	}
-	if got := strings.Count(application, " => IntersectionObjectKind."); got != 30 {
-		t.Fatalf("generated object type binding count = %d, want 30", got)
+	if got, want := strings.Count(application, " => IntersectionObjectKind."), len(registry.ObjectTypeBindings); got != want {
+		t.Fatalf("generated object type binding count = %d, want %d", got, want)
 	}
 	routeCount := 0
 	assetCount := 0
@@ -283,13 +287,13 @@ func TestIntersectionMetadataMatchesEveryCanonicalRegistryEntry(t *testing.T) {
 	if routeCount != 11 {
 		t.Fatalf("route parity = %d, want 11", routeCount)
 	}
-	if got, want := len(registry.Kinds), 16; got != want {
+	if got, want := len(registry.Kinds), 17; got != want {
 		t.Fatalf("display kind count = %d, want %d", got, want)
 	}
-	if got := strings.Count(presentation, "IntersectionKindDisplayMetadata(iconKey:"); got != 16 {
-		t.Fatalf("generated display kind count = %d, want 16", got)
+	if got, want := strings.Count(presentation, "IntersectionKindDisplayMetadata(iconKey:"), len(registry.Kinds); got != want {
+		t.Fatalf("generated display kind count = %d, want %d", got, want)
 	}
-	if got, want := len(registry.VisualToneByIcon), 13; got != want {
+	if got, want := len(registry.VisualToneByIcon), 14; got != want {
 		t.Fatalf("visual tone count = %d, want %d", got, want)
 	}
 	if got, want := len(registry.IconKeyByDimension), 5; got != want {

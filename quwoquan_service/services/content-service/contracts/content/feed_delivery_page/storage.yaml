@@ -6,6 +6,14 @@ description: >-
   过期/缺失清理、scope 淘汰和分片 live key/live byte 准入。
 redis_cache:
 - key: rec:feed_delivery_page:{fdp-<quotaShard>}:<scopeHash>:<deliveryPageId>
+  key_prefix: 'rec:feed_delivery_page:'
+  hash_tag: fdp-<quotaShard>
+  atomic_keys:
+  - rec:feed_delivery_page:{fdp-<quotaShard>}:<scopeHash>:<deliveryPageId>
+  - rec:feed_delivery_page_index:{fdp-<quotaShard>}
+  - rec:feed_delivery_page_metadata:{fdp-<quotaShard>}
+  eviction_consequence: reconstruct
+  durability: ephemeral
   ttl_seconds: 600
   type: string
   scene: rec
@@ -25,6 +33,14 @@ redis_cache:
     未压缩 FeedDeliveryPage JSON；同一 key 只允许相同 payload 幂等胜出。
     分片满只拒绝 contender，禁止跨 scope 淘汰；key 与 payload 不含协议版本信封。
 - key: rec:feed_delivery_page_index:{fdp-<quotaShard>}
+  key_prefix: 'rec:feed_delivery_page_index:'
+  hash_tag: fdp-<quotaShard>
+  atomic_keys:
+  - rec:feed_delivery_page:{fdp-<quotaShard>}:<scopeHash>:<deliveryPageId>
+  - rec:feed_delivery_page_index:{fdp-<quotaShard>}
+  - rec:feed_delivery_page_metadata:{fdp-<quotaShard>}
+  eviction_consequence: reconstruct
+  durability: ephemeral
   ttl_seconds: 600
   type: sorted_set
   scene: rec
@@ -34,6 +50,14 @@ redis_cache:
   description: >-
     固定 quota shard 的有界索引；scopeHash 只决定自身最多 400 页的淘汰集合。
 - key: rec:feed_delivery_page_metadata:{fdp-<quotaShard>}
+  key_prefix: 'rec:feed_delivery_page_metadata:'
+  hash_tag: fdp-<quotaShard>
+  atomic_keys:
+  - rec:feed_delivery_page:{fdp-<quotaShard>}:<scopeHash>:<deliveryPageId>
+  - rec:feed_delivery_page_index:{fdp-<quotaShard>}
+  - rec:feed_delivery_page_metadata:{fdp-<quotaShard>}
+  eviction_consequence: reconstruct
+  durability: ephemeral
   ttl_seconds: 600
   type: hash
   scene: rec

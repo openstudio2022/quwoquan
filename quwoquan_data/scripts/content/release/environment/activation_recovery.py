@@ -21,6 +21,14 @@ class PreviousVerifiedRelease:
     readiness_path: Path
 
 
+def previous_active_release_identity(
+    import_report: Mapping[str, object],
+) -> tuple[str, str]:
+    """Return (releaseId, manifestDigest) of the pointer an activation replaced."""
+
+    return _previous_active(import_report)
+
+
 def _previous_active(import_report: Mapping[str, object]) -> tuple[str, str]:
     events = import_report.get("auditEvents")
     if not isinstance(events, list):
@@ -124,6 +132,7 @@ def restore_after_delivery_failure(
 __all__ = [
     "ContentDeliveryRecoveryError",
     "PreviousVerifiedRelease",
+    "previous_active_release_identity",
     "previous_verified_release",
     "restore_after_delivery_failure",
 ]

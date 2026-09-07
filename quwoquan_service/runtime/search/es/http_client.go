@@ -10,6 +10,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -18,9 +19,42 @@ import (
 )
 
 var (
-	ErrDependencyUnavailable   = errors.New("search dependency is unavailable")
-	ErrIndexSchemaIncompatible = errors.New("search index schema is incompatible")
+	ErrDependencyUnavailable     = errors.New("search dependency is unavailable")
+	ErrIndexSchemaIncompatible   = errors.New("search index schema is incompatible")
+	ErrVersionedWriteRejected    = errors.New("search versioned write was rejected")
+	ErrSameVersionDigestConflict = errors.New("search same-version source digest conflict")
+	// ErrVersionedSourceStateInvalid 表示冲突方的 _source 缺少 sourceVersion/sourceDigest：
+	// 它是版本化写入面之前写入的存量文档（或被旁路写坏的文档），无法参与版本裁决，
+	// 只能 fail-closed 交给 owner backfill 以更高 sourceVersion 收敛。
+	ErrVersionedSourceStateInvalid = errors.New("search versioned source state invalid")
 )
+
+// SameVersionDigestConflictError reports that one sourceVersion was reused for
+// different canonical facts. It is never a stale write or an idempotent replay.
+type SameVersionDigestConflictError struct {
+	Index         string
+	DocumentID    string
+	SourceVersion int64
+	SourceDigest  string
+}
+
+func (err *SameVersionDigestConflictError) Error() string {
+	if err == nil {
+		return ErrSameVersionDigestConflict.Error()
+	}
+	return fmt.Sprintf(
+		"%s: index=%q documentId=%q sourceVersion=%d sourceDigest=%q",
+		ErrSameVersionDigestConflict,
+		err.Index,
+		err.DocumentID,
+		err.SourceVersion,
+		err.SourceDigest,
+	)
+}
+
+func (err *SameVersionDigestConflictError) Unwrap() error {
+	return ErrSameVersionDigestConflict
+}
 
 // IsDependencyUnavailable reports whether an operation failed for a bounded,
 // recoverable transport or server-capacity reason. Authentication, request and
@@ -50,9 +84,9 @@ type Config struct {
 	Schema IndexSchemaConfig
 }
 
-// Client is the production HTTP Searcher + Writer for ES/OpenSearch. It satisfies
-// both the es.Searcher and es.Writer interfaces, and additionally manages index
-// creation, bulk writes, and liveness probing.
+// Client is the production HTTP Searcher + VersionedWriter for ES/OpenSearch.
+// It satisfies the es.Searcher and es.VersionedWriter interfaces, and
+// additionally manages index creation, alias lifecycle, and liveness probing.
 type Client struct {
 	cfg        Config
 	http       *http.Client
@@ -63,8 +97,8 @@ type Client struct {
 
 // Compile-time guarantees the client satisfies the transport interfaces.
 var (
-	_ Searcher = (*Client)(nil)
-	_ Writer   = (*Client)(nil)
+	_ Searcher        = (*Client)(nil)
+	_ VersionedWriter = (*Client)(nil)
 )
 
 // NewClient validates the config and builds the HTTP client.
@@ -122,6 +156,7 @@ func (c *Client) Search(ctx context.Context, index string, body map[string]any) 
 	if strings.TrimSpace(index) == "" {
 		index = c.index
 	}
+	EnsureNotDeletedSearchBody(body)
 	var path string
 	if _, hasPIT := body["pit"]; hasPIT {
 		// A PIT search must not carry an index path or preference: the snapshot
@@ -164,78 +199,166 @@ func (c *Client) Search(ctx context.Context, index string, body map[string]any) 
 	return out, nil
 }
 
-// Upsert implements es.Writer: idempotent PUT {index}/_doc/{id}.
-func (c *Client) Upsert(ctx context.Context, index, id string, doc map[string]any) error {
-	if strings.TrimSpace(index) == "" {
-		index = c.index
+// UpsertVersioned atomically accepts only a strictly higher source version.
+// A 409 is classified against the winning source: higher is stale, equal with
+// the same digest is replay, and equal with a different digest is an error.
+func (c *Client) UpsertVersioned(
+	ctx context.Context,
+	index string,
+	id string,
+	sourceVersion int64,
+	doc map[string]any,
+) (bool, error) {
+	versionedDoc := make(map[string]any, len(doc)+2)
+	for key, value := range doc {
+		versionedDoc[key] = value
 	}
-	status, data, err := c.send(ctx, http.MethodPut, "/"+index+"/_doc/"+url.PathEscape(id), doc, "application/json")
+	versionedDoc["sourceVersion"] = sourceVersion
+	versionedDoc["deleted"] = false
+	versionedDoc, err := WithCanonicalSourceDigest(versionedDoc)
 	if err != nil {
-		return err
+		return false, err
 	}
-	if status < 200 || status >= 300 {
-		return fmt.Errorf("es: upsert status %d: %s", status, truncateBytes(data, 300))
-	}
-	return nil
+	return c.putVersioned(ctx, index, id, sourceVersion, versionedDoc)
 }
 
-// Delete implements es.Writer: DELETE {index}/_doc/{id}; a missing doc is not an
-// error (idempotent replay).
-func (c *Client) Delete(ctx context.Context, index, id string) error {
-	if strings.TrimSpace(index) == "" {
-		index = c.index
-	}
-	status, data, err := c.send(ctx, http.MethodDelete, "/"+index+"/_doc/"+url.PathEscape(id), nil, "application/json")
+// TombstoneVersioned persists a minimal soft-delete document under the same
+// external version fence. It deliberately uses PUT rather than DELETE so stale
+// upserts cannot resurrect the object after Elasticsearch gc_deletes expires.
+func (c *Client) TombstoneVersioned(
+	ctx context.Context,
+	index string,
+	id string,
+	objectType string,
+	objectID string,
+	sourceVersion int64,
+) (bool, error) {
+	document, err := VersionedTombstoneDocument(objectType, objectID, sourceVersion)
 	if err != nil {
-		return err
+		return false, err
 	}
-	if status == http.StatusNotFound {
-		return nil
-	}
-	if status < 200 || status >= 300 {
-		return fmt.Errorf("es: delete status %d: %s", status, truncateBytes(data, 300))
-	}
-	return nil
+	return c.putVersioned(ctx, index, id, sourceVersion, document)
 }
 
-// Bulk applies a batch of change events in one _bulk round trip.
-func (c *Client) Bulk(ctx context.Context, index string, events []ChangeEvent) error {
+func (c *Client) putVersioned(
+	ctx context.Context,
+	index string,
+	id string,
+	sourceVersion int64,
+	doc map[string]any,
+) (bool, error) {
 	if strings.TrimSpace(index) == "" {
 		index = c.index
 	}
-	if len(events) == 0 {
-		return nil
+	if sourceVersion <= 0 {
+		return false, errors.New("es: sourceVersion must be positive")
 	}
-	var buf bytes.Buffer
-	for _, ev := range events {
-		id := IndexID(ev.Doc)
-		if ev.Op == OpDelete {
-			meta, _ := json.Marshal(map[string]any{"delete": map[string]any{"_index": index, "_id": id}})
-			buf.Write(meta)
-			buf.WriteByte('\n')
-			continue
+	if strings.TrimSpace(id) == "" {
+		return false, errors.New("es: versioned document identity is required")
+	}
+	path := "/" + index + "/_doc/" + url.PathEscape(id) +
+		"?version=" + strconv.FormatInt(sourceVersion, 10) + "&version_type=external"
+	status, data, err := c.send(ctx, http.MethodPut, path, doc, "application/json")
+	if err != nil {
+		return false, err
+	}
+	if status == http.StatusConflict && bytes.Contains(data, []byte("version_conflict_engine_exception")) {
+		digest, _ := doc["sourceDigest"].(string)
+		if err := c.classifyVersionConflict(ctx, index, id, sourceVersion, digest); err != nil {
+			return false, err
 		}
-		meta, _ := json.Marshal(map[string]any{"index": map[string]any{"_index": index, "_id": id}})
-		docLine, _ := json.Marshal(DocumentToIndex(ev.Doc))
-		buf.Write(meta)
-		buf.WriteByte('\n')
-		buf.Write(docLine)
-		buf.WriteByte('\n')
+		return false, nil
 	}
-	status, data, err := c.send(ctx, http.MethodPost, "/_bulk", buf.Bytes(), "application/x-ndjson")
+	if status < 200 || status >= 300 {
+		if retryableDependencyStatus(status) {
+			return false, fmt.Errorf(
+				"%w: es versioned upsert status %d: %s",
+				ErrDependencyUnavailable,
+				status,
+				truncateBytes(data, 300),
+			)
+		}
+		return false, fmt.Errorf(
+			"%w: status %d: %s",
+			ErrVersionedWriteRejected,
+			status,
+			truncateBytes(data, 300),
+		)
+	}
+	return true, nil
+}
+
+const (
+	versionConflictDigestMarker = "QWQ_SAME_VERSION_DIGEST_CONFLICT"
+	versionConflictStateMarker  = "QWQ_VERSIONED_SOURCE_STATE_INVALID"
+)
+
+// classifyVersionConflict atomically inspects the winning source in the same
+// shard operation without granting the writer general read/search privileges.
+// The script is read-only: every accepted branch resolves to noop.
+func (c *Client) classifyVersionConflict(
+	ctx context.Context,
+	index string,
+	id string,
+	sourceVersion int64,
+	sourceDigest string,
+) error {
+	body := map[string]any{
+		"script": map[string]any{
+			"lang":   "painless",
+			"source": `if (!ctx._source.containsKey('sourceVersion') || !ctx._source.containsKey('sourceDigest')) { throw new IllegalStateException('QWQ_VERSIONED_SOURCE_STATE_INVALID'); } if (ctx._source.sourceVersion > params.sourceVersion) { ctx.op = 'noop'; } else if (ctx._source.sourceVersion == params.sourceVersion && ctx._source.sourceDigest == params.sourceDigest) { ctx.op = 'noop'; } else if (ctx._source.sourceVersion == params.sourceVersion) { throw new IllegalArgumentException('QWQ_SAME_VERSION_DIGEST_CONFLICT'); } else { throw new IllegalStateException('QWQ_VERSIONED_SOURCE_STATE_INVALID'); }`,
+			"params": map[string]any{
+				"sourceVersion": sourceVersion,
+				"sourceDigest":  sourceDigest,
+			},
+		},
+	}
+	status, data, err := c.send(
+		ctx,
+		http.MethodPost,
+		"/"+index+"/_update/"+url.PathEscape(id)+"?require_alias=true",
+		body,
+		"application/json",
+	)
 	if err != nil {
 		return err
 	}
-	if status < 200 || status >= 300 {
-		return fmt.Errorf("es: bulk status %d: %s", status, truncateBytes(data, 300))
+	if status >= 200 && status < 300 {
+		return nil
 	}
-	var br struct {
-		Errors bool `json:"errors"`
+	if bytes.Contains(data, []byte(versionConflictDigestMarker)) {
+		return &SameVersionDigestConflictError{
+			Index: index, DocumentID: id, SourceVersion: sourceVersion,
+			SourceDigest: sourceDigest,
+		}
 	}
-	if err := json.Unmarshal(data, &br); err == nil && br.Errors {
-		return fmt.Errorf("es: bulk reported item errors: %s", truncateBytes(data, 500))
+	if bytes.Contains(data, []byte(versionConflictStateMarker)) {
+		// 真实 ES 的 script_exception 正文很长，marker 可能落在截断之外；这里把它提升为
+		// typed 错误并显式带上 marker，调用方按 errors.Is 判定而不是猜正文。
+		return fmt.Errorf(
+			"%w: %w: %s index=%q documentId=%q sourceVersion=%d",
+			ErrVersionedWriteRejected,
+			ErrVersionedSourceStateInvalid,
+			versionConflictStateMarker,
+			index,
+			id,
+			sourceVersion,
+		)
 	}
-	return nil
+	if retryableDependencyStatus(status) {
+		return fmt.Errorf(
+			"%w: es version conflict classification status %d: %s",
+			ErrDependencyUnavailable,
+			status,
+			truncateBytes(data, 300),
+		)
+	}
+	return fmt.Errorf(
+		"%w: version conflict classification status %d: %s",
+		ErrVersionedWriteRejected,
+		status,
+		truncateBytes(data, 300),
+	)
 }
 
 // EnsureIndex guarantees the aliased unified index exists (idempotent, safe on
@@ -380,7 +503,10 @@ func (c *Client) CheckSearchReady(ctx context.Context) error {
 			"size":             1,
 			"track_total_hits": false,
 			"_source":          false,
-			"query":            map[string]any{"match_all": map[string]any{}},
+			"query": map[string]any{"bool": map[string]any{
+				"must":     []map[string]any{{"match_all": map[string]any{}}},
+				"must_not": []map[string]any{NotDeletedQuery()},
+			}},
 		},
 		"application/json",
 	)

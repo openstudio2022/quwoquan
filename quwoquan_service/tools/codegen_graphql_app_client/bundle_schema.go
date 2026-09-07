@@ -12,7 +12,8 @@ func validateBundleSchemaTypes(schema *ast.Schema, targetTypeName string, projec
 	if target == nil || target.Kind != ast.Object {
 		return fmt.Errorf("GraphQL schema assembly target %s must be an object matching App lock response type", targetTypeName)
 	}
-	if err := validateTargetProjectionFields(target, projectionFields); err != nil {
+	persistedProjectionFields := withoutFields(projectionFields, plan.OptionalRESTFields)
+	if err := validateTargetProjectionFields(target, persistedProjectionFields); err != nil {
 		return err
 	}
 	mappedSources := map[string]bool{}

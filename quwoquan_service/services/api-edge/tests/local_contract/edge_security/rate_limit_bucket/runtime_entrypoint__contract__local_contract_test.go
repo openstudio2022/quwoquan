@@ -38,6 +38,9 @@ func TestRateLimitBucketHasOneCanonicalNonHTTPRuntimeEntrypoint(t *testing.T) {
 				Method      string `yaml:"method"`
 				ObjectOwner string `yaml:"object_owner"`
 			} `yaml:"application"`
+			Consistency struct {
+				Arbitration string `yaml:"arbitration"`
+			} `yaml:"consistency"`
 		} `yaml:"runtime_entrypoints"`
 	}
 	if err := yaml.Unmarshal(data, &document); err != nil {
@@ -59,7 +62,49 @@ func TestRateLimitBucketHasOneCanonicalNonHTTPRuntimeEntrypoint(t *testing.T) {
 		entrypoint.Application.Kind != "session" ||
 		entrypoint.Application.Facet != "RateLimitAdmissionFacade" ||
 		entrypoint.Application.Method != "admit" ||
-		entrypoint.Application.ObjectOwner != "RateLimitBucket" {
+		entrypoint.Application.ObjectOwner != "RateLimitBucket" ||
+		entrypoint.Consistency.Arbitration != "conditional_admission" {
 		t.Fatalf("runtime entrypoint drifted: %+v", entrypoint)
+	}
+}
+
+func TestRateLimitBucketDeclaresEphemeralEvictionSemantics(t *testing.T) {
+	_, sourcePath, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("resolve test source path")
+	}
+	serviceRoot := filepath.Clean(filepath.Join(filepath.Dir(sourcePath), "../../../.."))
+	data, err := os.ReadFile(filepath.Join(
+		serviceRoot,
+		"contracts",
+		"edge_security",
+		"rate_limit_bucket",
+		"storage.yaml",
+	))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var document struct {
+		RedisCache []struct {
+			Key                 string `yaml:"key"`
+			KeyPrefix           string `yaml:"key_prefix"`
+			Isolation           string `yaml:"isolation"`
+			EvictionConsequence string `yaml:"eviction_consequence"`
+			Durability          string `yaml:"durability"`
+		} `yaml:"redis_cache"`
+	}
+	if err := yaml.Unmarshal(data, &document); err != nil {
+		t.Fatal(err)
+	}
+	if len(document.RedisCache) != 1 {
+		t.Fatalf("redis_cache=%d, want exactly one admission key", len(document.RedisCache))
+	}
+	bucket := document.RedisCache[0]
+	if bucket.Key != "edge:rate:{environment}:{subjectDigest}:{operationDigest}" ||
+		bucket.KeyPrefix != "edge:rate:" ||
+		bucket.Isolation != "single_key_lua" ||
+		bucket.EvictionConsequence != "reconstruct" ||
+		bucket.Durability != "ephemeral" {
+		t.Fatalf("Redis admission storage drifted: %+v", bucket)
 	}
 }

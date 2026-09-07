@@ -127,6 +127,7 @@ func (scan *serviceScan) indexCompositionCalls(
 		if !ok || function.Body == nil {
 			continue
 		}
+		rangeRelations := staticRangeDispatcherRelations(function.Body, constants)
 		goast.Inspect(function.Body, func(node goast.Node) bool {
 			call, isCall := node.(*goast.CallExpr)
 			if !isCall {
@@ -153,11 +154,8 @@ func (scan *serviceScan) indexCompositionCalls(
 			if importPath != postgresOutboxImportPath || selector.Sel.Name != "NewDispatcher" {
 				return true
 			}
-			for _, argument := range call.Args {
-				relation, resolved := stringArgument(argument, constants)
-				if !resolved || !relationNamePattern.MatchString(relation) {
-					continue
-				}
+			relations := staticDispatcherRelations(call, constants, rangeRelations[call])
+			for relation := range relations {
 				index.compositionDeliveries[relation] = appendSite(
 					index.compositionDeliveries[relation],
 					writeSite{file: path, function: function.Name.Name},
@@ -166,6 +164,125 @@ func (scan *serviceScan) indexCompositionCalls(
 			return true
 		})
 	}
+}
+
+// staticRangeDispatcherRelations 只解析调用所在 range 的内联静态 composite literal：
+//
+//	for _, item := range []struct{ table string }{{table: "sample_outbox"}} {
+//		pgoutbox.NewDispatcher(pool, publisher, item.table)
+//	}
+//
+// 第三个实参必须直接选择该 range item 的 keyed field；每一行都必须为该字段提供可静态
+// 解析的关系名字面量或包级字符串常量。缺字段、动态值、非内联 range 来源、嵌套 range
+// 与闭包均不沿外层绑定推导，避免把任意 composite literal 字符串计为投递事实。
+func staticRangeDispatcherRelations(
+	body *goast.BlockStmt,
+	constants map[string]string,
+) map[*goast.CallExpr]map[string]struct{} {
+	byCall := map[*goast.CallExpr]map[string]struct{}{}
+	goast.Inspect(body, func(node goast.Node) bool {
+		statement, ok := node.(*goast.RangeStmt)
+		if !ok {
+			return true
+		}
+		item, ok := statement.Value.(*goast.Ident)
+		if !ok || item.Name == "_" {
+			return true
+		}
+		source, ok := statement.X.(*goast.CompositeLit)
+		if !ok {
+			return true
+		}
+		goast.Inspect(statement.Body, func(bodyNode goast.Node) bool {
+			switch typed := bodyNode.(type) {
+			case *goast.FuncLit, *goast.RangeStmt:
+				return false
+			case *goast.CallExpr:
+				if len(typed.Args) != 3 {
+					return true
+				}
+				selector, ok := typed.Args[2].(*goast.SelectorExpr)
+				if !ok {
+					return true
+				}
+				selectedItem, ok := selector.X.(*goast.Ident)
+				if !ok || selectedItem.Name != item.Name {
+					return true
+				}
+				relations, resolved := staticCompositeFieldRelations(
+					source, selector.Sel.Name, constants,
+				)
+				if resolved {
+					byCall[typed] = relations
+				}
+			}
+			return true
+		})
+		return true
+	})
+	return byCall
+}
+
+func staticCompositeFieldRelations(
+	source *goast.CompositeLit,
+	field string,
+	constants map[string]string,
+) (map[string]struct{}, bool) {
+	if len(source.Elts) == 0 {
+		return nil, false
+	}
+	relations := map[string]struct{}{}
+	for _, element := range source.Elts {
+		row, ok := element.(*goast.CompositeLit)
+		if !ok {
+			return nil, false
+		}
+		found := false
+		for _, rowElement := range row.Elts {
+			pair, ok := rowElement.(*goast.KeyValueExpr)
+			if !ok {
+				continue
+			}
+			key, ok := pair.Key.(*goast.Ident)
+			if !ok || key.Name != field {
+				continue
+			}
+			if found {
+				return nil, false
+			}
+			found = true
+			relation, resolved := stringArgument(pair.Value, constants)
+			if !resolved || !relationNamePattern.MatchString(relation) {
+				return nil, false
+			}
+			relations[relation] = struct{}{}
+		}
+		if !found {
+			return nil, false
+		}
+	}
+	return relations, true
+}
+
+func staticDispatcherRelations(
+	call *goast.CallExpr,
+	constants map[string]string,
+	rangeRelations map[string]struct{},
+) map[string]struct{} {
+	relations := map[string]struct{}{}
+	if len(call.Args) != 3 {
+		return relations
+	}
+	if relation, resolved := stringArgument(call.Args[2], constants); resolved {
+		if relationNamePattern.MatchString(relation) {
+			relations[relation] = struct{}{}
+		}
+		return relations
+	}
+	for relation := range rangeRelations {
+		relations[relation] = struct{}{}
+	}
+	return relations
 }
 
 // composedObjectRelayScope 将 cmd 里的 import-qualified relay constructor 解析回同一服务

@@ -178,6 +178,19 @@ errors:
   user_message:
     zh: 请求重复提交，请刷新后重试
     en: Duplicate request, please refresh and retry
+- code: ASSISTANT.USER.run_active_conflict
+  reason: run_active_conflict
+  http_status: 409
+  emitted_by:
+  - surface: http
+    operations: [StartAssistantRun]
+  recovery_action: retry
+  disruption_level: snackbar
+  dart_const: runActiveConflict
+  go_const: ErrRunActiveConflict
+  user_message:
+    zh: 当前会话已有任务正在执行，请等待其结束后重试
+    en: This session already has an active assistant run; retry after it finishes
 - code: ASSISTANT.SYSTEM.run_storage_unavailable
   reason: unavailable
   http_status: 503

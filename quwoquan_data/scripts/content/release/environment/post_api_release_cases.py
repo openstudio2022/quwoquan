@@ -182,8 +182,10 @@ def read_post_and_creator_cases(
         raise PostApiVerificationError("release desired state schema is invalid")
     if str(desired.get("releaseId") or "") != release_id:
         raise PostApiVerificationError("release desired state releaseId mismatch")
-    if report.get("status") != "imported":
-        raise PostApiVerificationError("post importer report is not imported")
+    # 公开消费面只在 pointer 切换之后存在：接受三阶段的 active 回执与历史一步式
+    # imported 回执；staged/verified 候选回执不得进入 consumer verification。
+    if report.get("status") not in {"active", "imported"}:
+        raise PostApiVerificationError("post importer report is not an activation report")
     if creator_report.get("status") != "active":
         raise PostApiVerificationError("creator importer report is not active")
     if str(report.get("environment") or "") != environment.value:

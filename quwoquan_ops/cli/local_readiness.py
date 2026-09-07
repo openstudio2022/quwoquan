@@ -207,9 +207,26 @@ def command_managed_pytest(args: argparse.Namespace) -> int:
 
 _SECRET_PATTERNS = (
     re.compile(rb"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----"),
-    re.compile(rb"(?i)(?:api[_-]?key|secret|password|access[_-]?token)\s*[:=]\s*['\"]?[A-Za-z0-9/+_.-]{24,}"),
+    re.compile(rb"(?i)(?:api[_-]?key|secret|password|access[_-]?token)\s*[:=]\s*['\"]?(?P<value>[A-Za-z0-9/+_.-]{24,})"),
     re.compile(rb"AKIA[0-9A-Z]{16}"),
 )
+# 凭证键右侧若只是环境变量名（`password: X_REDIS_PASSWORD`）或代码里的点号标识符
+# （`APIKey: cfg.Telemetry.APIKey`），是注入间接层而不是凭证本体，不算 secret material。
+_SECRET_INDIRECTION_VALUES = (
+    re.compile(rb"^[A-Z][A-Z0-9_]*$"),
+    re.compile(rb"^[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)+$"),
+)
+
+
+def _has_secret_material(blob: bytes) -> bool:
+    for pattern in _SECRET_PATTERNS:
+        for match in pattern.finditer(blob):
+            value = match.groupdict().get("value")
+            if value is None:
+                return True
+            if not any(shape.fullmatch(value) for shape in _SECRET_INDIRECTION_VALUES):
+                return True
+    return False
 _PII_PATTERNS = (
     # 手机号两侧排除十六进制字符：sha256/digest 里任意 11 位数字子串（如 "18916601719eac…"）
     # 不是号码；否则 contract_graph.json 这类生成物每次刷新都会被误判为直接 PII。
@@ -354,7 +371,7 @@ def command_staged_boundary(_args: argparse.Namespace) -> int:
         blob = subprocess.run(["git", "show", f":{path}"], cwd=ROOT, capture_output=True, check=False)
         if blob.returncode != 0:  # deleted/rename source has no index blob
             continue
-        if any(pattern.search(blob.stdout) for pattern in _SECRET_PATTERNS):
+        if _has_secret_material(blob.stdout):
             raise LocalReadinessError(f"staged secret material detected: {path}")
         pii_matches = [match.group(0).decode("utf-8", errors="replace") for pattern in _PII_PATTERNS for match in pattern.finditer(blob.stdout)]
         pii_matches = [value for value in pii_matches if not value.lower().endswith(("@example.invalid", "@example.com", "@example.org"))]

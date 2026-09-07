@@ -23,6 +23,7 @@ from pathlib import Path
 
 import yaml
 
+from quwoquan_ops.cli.lib.data_plane_binding import resolve_data_plane_environment
 from quwoquan_ops.cli.prod import render_prod_plane_stack as renderer
 
 
@@ -78,6 +79,17 @@ def _rendered_environment(service_dir: Path) -> dict[str, str]:
     service_spec = (compose.get("services") or {}).get(service_dir.name)
     if not isinstance(service_spec, dict):
         return {}
+    runtime = yaml.safe_load(
+        (ROOT / "quwoquan_ops/environments/prod/runtime.yaml").read_text(
+            encoding="utf-8"
+        )
+    )
+    target = runtime["targets"]["prod-hosted"]
+    projection = resolve_data_plane_environment(
+        target,
+        mode="external",
+        target_name="prod-hosted",
+    )["environment"]
     rendered = renderer._rewrite_service(
         service_dir.name,
         service_spec,
@@ -96,8 +108,9 @@ def _rendered_environment(service_dir: Path) -> dict[str, str]:
         model_cache_root="runtime/model-cache",
         # hosted 是 prod plane 的默认数据面形态：数据主机在栈外，因此每个数据面
         # 地址都必须被显式注入，不能靠 compose 基线里的 isolated 服务名兜底。
-        data_mode="hosted",
+        data_mode="external",
         startup_services={service_dir.name},
+        data_plane_environment=dict(projection.get(service_dir.name) or {}),
     )
     environment = rendered.get("environment")
     return environment if isinstance(environment, dict) else {}

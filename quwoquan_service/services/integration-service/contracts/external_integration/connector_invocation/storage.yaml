@@ -29,3 +29,16 @@ collections:
     indexes:
     - {name: uq_connector_invocation_payload_ref, keys: {invocationId: 1}, unique: true}
     - {name: ttl_connector_invocation_payload_refs, keys: {expiresAt: 1}, expire_after_seconds: 0}
+transaction:
+  scope:
+  - connector_invocations
+  - connector_invocation_command_receipts
+  - connector_invocation_outbox
+  - connector_invocation_payload_refs
+  isolation: mongo_transaction
+  guarantees:
+  - invocation_revision_cas
+  - lease_owner_revision_fence
+  - claim_payload_outbox_atomicity
+  - terminal_payload_cleanup_atomicity
+  mechanism: fence

@@ -39,4 +39,7 @@ class ShipOperationDependencies:
     write_research_isolation_verification: Callable[..., Path]
     write_environment_release_readiness: Callable[..., Path]
     now_compact: Callable[[], str]
-    restore_previous_release: Callable[..., None] | None = None
+    # 返回 fresh rollback 的 activate run id，供恢复后的四入口读回绑定。
+    restore_previous_release: Callable[..., str | None] | None = None
+    # Post-activate 显式媒体回收；缺省表示该环境没有本地媒体根，不做删除。
+    prune_media: Callable[..., None] | None = None

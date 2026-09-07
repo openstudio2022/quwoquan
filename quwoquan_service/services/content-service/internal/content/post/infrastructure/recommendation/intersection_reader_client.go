@@ -253,6 +253,7 @@ func mapIntersectionReason(wire transport.IntersectionReason) intersectionapp.In
 		ActorEvidenceCompleteness: wire.ActorEvidenceCompleteness,
 		ActorEvidence:             mapIntersectionActorEvidence(wire.ActorEvidence),
 		ActionHints:               mapIntersectionActionHints(wire.ActionHints),
+		EvidenceRows:              mapIntersectionEvidenceRows(wire.EvidenceRows),
 		LifecycleState:            wire.LifecycleState, PreviousStrength: wire.PreviousStrength,
 		StrengthDelta: wire.StrengthDelta, EdgeWeight: wire.EdgeWeight,
 		IconKey: wire.IconKey, Tone: wire.Tone,
@@ -261,6 +262,7 @@ func mapIntersectionReason(wire transport.IntersectionReason) intersectionapp.In
 		TimeBucket:   wire.TimeBucket, DedupeKey: wire.DedupeKey,
 		AnchorUserWeight: wire.AnchorUserWeight, MutualCount: wire.MutualCount,
 		Moment: wire.Moment, SubjectID: wire.SubjectId, SubjectContext: wire.SubjectContext,
+		Cohort: wire.Cohort,
 	}
 }
 
@@ -370,6 +372,14 @@ func mapIntersectionActionHints(wires []transport.IntersectionActionHint) []inte
 			IsPrimary: wire.IsPrimary, Priority: wire.Priority, ActionTier: wire.ActionTier,
 			RequiredGates: append([]string(nil), wire.RequiredGates...), Dispatch: wire.Dispatch,
 		})
+	}
+	return views
+}
+
+func mapIntersectionEvidenceRows(wires []transport.IntersectionEvidenceRow) []intersectionapp.IntersectionEvidenceRowView {
+	views := make([]intersectionapp.IntersectionEvidenceRowView, 0, len(wires))
+	for _, wire := range wires {
+		views = append(views, intersectionapp.IntersectionEvidenceRowView{Text: wire.Text, Source: wire.Source})
 	}
 	return views
 }

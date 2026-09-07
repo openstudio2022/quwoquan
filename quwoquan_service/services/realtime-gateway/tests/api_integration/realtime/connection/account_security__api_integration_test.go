@@ -251,12 +251,16 @@ func TestUserAccountSecurityTerminalStateClosesRealRedisAcrossNodes(t *testing.T
 	if len(presence) != 0 {
 		t.Fatalf("residual presence after terminal event: %v", presence)
 	}
-	if _, leaseErr := client.Get(
+	leaseStore := redisstore.NewLeaseStore(client)
+	if renewErr := leaseStore.Renew(
 		ctx,
-		"rt:conn:lease:"+identity.PersonaID+":"+identity.DeviceID+
-			":connection-security-api",
-	); !errors.Is(leaseErr, rtredis.ErrKeyNotFound) {
-		t.Fatalf("residual lease after terminal event: %v", leaseErr)
+		identity,
+		"connection-security-api",
+		1,
+		time.Minute,
+	); !errors.Is(renewErr, application.ErrLeaseExpired) &&
+		!errors.Is(renewErr, application.ErrLeaseFenced) {
+		t.Fatalf("terminal event left a renewable lease: %v", renewErr)
 	}
 	if err := stateStore.Admit(ctx, identity, 1); !errors.Is(
 		err,
@@ -383,5 +387,98 @@ func appendUserAccountSecurityStreamRecord(
 		},
 	}); err != nil {
 		t.Fatalf("append UserAccount security stream record: %v", err)
+	}
+}
+
+func TestLegacyAccountSessionCleanupUsesOnlyLegacyLeaseShapeRealRedis(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	realRedis, err := testinfra.StartRealRedis(ctx)
+	if err != nil {
+		t.Fatalf("legacy cleanup api_integration requires real Redis: %v", err)
+	}
+	t.Cleanup(func() {
+		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cleanupCancel()
+		_ = realRedis.Close(cleanupCtx)
+	})
+	if err := realRedis.FlushDBs(ctx, 0); err != nil {
+		t.Fatalf("flush Redis: %v", err)
+	}
+	router, err := platformredis.NewRouter(rtredis.RouterConfig{
+		Scenes: map[string]rtredis.SceneConfig{
+			"realtime": {
+				Mode: "standalone", Addr: realRedis.Addr, Password: realRedis.Password, DB: 0, TLS: realRedis.TLS,
+			},
+		},
+		DefaultScene: "realtime",
+	})
+	if err != nil {
+		t.Fatalf("new Redis router: %v", err)
+	}
+	t.Cleanup(func() { _ = router.Close() })
+	client := router.Scene("realtime")
+	presence := newIntegrationPresenceProjection(t, client)
+	stateStore := redisstore.NewAccountSecurityStateStore(client, presence)
+	leaseStore := redisstore.NewLeaseStore(client)
+	identity := application.TrustedIdentity{
+		AccountID: "account-legacy-cleanup",
+		PersonaID: "persona-legacy-cleanup",
+		DeviceID:  "device-legacy-cleanup",
+	}
+	const connectionID = "connection-legacy-cleanup"
+	newFence, err := leaseStore.Acquire(ctx, identity, connectionID, 2*time.Minute)
+	if err != nil {
+		t.Fatalf("acquire current lease: %v", err)
+	}
+	preFenceLeaseKey := "rt:conn:lease:" + identity.PersonaID + ":" + identity.DeviceID + ":" + connectionID
+	if err := client.Set(ctx, preFenceLeaseKey, "1", 2*time.Minute); err != nil {
+		t.Fatalf("seed legacy lease: %v", err)
+	}
+	legacyRecord, err := json.Marshal(map[string]string{
+		"accountId": identity.AccountID, "personaId": identity.PersonaID,
+		"deviceId": identity.DeviceID, "connectionId": connectionID,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := client.Set(
+		ctx,
+		"rt:account:session:"+identity.AccountID+":"+connectionID,
+		string(legacyRecord),
+		0,
+	); err != nil {
+		t.Fatalf("seed legacy session record: %v", err)
+	}
+	if err := client.SAdd(
+		ctx, "rt:account:sessions:"+identity.AccountID, connectionID,
+	); err != nil {
+		t.Fatalf("seed account session index: %v", err)
+	}
+	event := application.AccountSecurityEvent{
+		EventID: "event-legacy-cleanup", AccountID: identity.AccountID,
+		PersonaIDs: []string{identity.PersonaID}, AccountState: "suspended",
+		AuthEpoch: 2, OccurredAt: time.Now().UTC(),
+	}
+	result, err := stateStore.ApplyAccountSecurityEvent(ctx, event)
+	if err != nil || !result.Evict {
+		t.Fatalf("apply terminal event result=%+v err=%v", result, err)
+	}
+	if _, err := client.Get(ctx, preFenceLeaseKey); !errors.Is(err, rtredis.ErrKeyNotFound) {
+		t.Fatalf("legacy lease cleanup error=%v, want not found", err)
+	}
+	if err := leaseStore.Renew(
+		ctx, identity, connectionID, newFence, 2*time.Minute,
+	); err != nil {
+		t.Fatalf("legacy cleanup touched current lease: %v", err)
+	}
+	if _, err := client.Get(
+		ctx, "rt:account:session:"+identity.AccountID+":"+connectionID,
+	); !errors.Is(err, rtredis.ErrKeyNotFound) {
+		t.Fatalf("legacy session record cleanup error=%v, want not found", err)
+	}
+	members, err := client.SMembers(ctx, "rt:account:sessions:"+identity.AccountID)
+	if err != nil || len(members) != 0 {
+		t.Fatalf("legacy session index members=%v err=%v", members, err)
 	}
 }

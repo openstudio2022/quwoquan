@@ -20,6 +20,7 @@ from content.release.environment.coverage_receipt import (
 )
 from content.release.environment._ship_operations import (
     ShipOperationDependencies,
+    activate_release,
     apply_release,
     rollback_release,
     verify_release_consumers,
@@ -66,6 +67,7 @@ from content.release.environment.release_runtime import (
 )
 from content.release.environment.release_runtime import (
     load_release,
+    prune_media,
     release_has_posts,
     release_requires_full_sync,
     sync_media,
@@ -170,20 +172,43 @@ def _restore_previous_release(
     environment: str,
     failed_release_id: str,
     previous_release_id: str,
-) -> None:
-    """Replay a verified previous release through the formal importers."""
+    expected_revision: int,
+) -> str:
+    """Replay a verified previous release through fresh stage → verify → activate.
 
+    Returns the activate run id so the caller can bind the four-entry consumer
+    readback to exactly the run that switched the pointer back.
+    """
+
+    run_id = f"restore-{_now_compact()}"
     rollback_release(
         argparse.Namespace(
             to_release=previous_release_id,
             from_release_id=failed_release_id,
             env=environment,
-            run_id=f"restore-{_now_compact()}",
+            run_id=run_id,
             import_to_db=True,
             dry_run=False,
             confirm_prod_apply=False,
+            expected_revision=expected_revision,
         ),
         dependencies=_operation_dependencies(),
+    )
+    return f"{run_id}-activate"
+
+
+def _prune_media(
+    *,
+    release: Path,
+    previous_release: Path | None,
+    destination: str,
+    run: Path,
+) -> None:
+    prune_media(
+        release=release,
+        previous_release=previous_release,
+        destination=destination,
+        run=run,
     )
 
 
@@ -211,6 +236,7 @@ def _operation_dependencies() -> ShipOperationDependencies:
         create_run=_create_run,
         run_root=_run_root,
         sync_media=_sync_media,
+        prune_media=_prune_media,
         write_applied_ref=_write_applied_ref,
         restore_previous_release=_restore_previous_release,
         assert_target_action_allowed=_assert_target_action_allowed,
@@ -249,6 +275,10 @@ def _rollback_release(args: argparse.Namespace) -> None:
     rollback_release(args, dependencies=_operation_dependencies())
 
 
+def _activate_release(args: argparse.Namespace) -> None:
+    activate_release(args, dependencies=_operation_dependencies())
+
+
 def _verify_release_consumers(args: argparse.Namespace) -> None:
     verify_release_consumers(args, dependencies=_operation_dependencies())
 
@@ -258,6 +288,7 @@ def handle_ship(args: argparse.Namespace) -> None:
         args,
         release_root=RELEASE_ROOT,
         apply=_apply_release,
+        activate=_activate_release,
         rollback=_rollback_release,
         verify=_verify_release_consumers,
     )

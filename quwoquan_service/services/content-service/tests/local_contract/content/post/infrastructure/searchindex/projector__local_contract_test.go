@@ -1,3 +1,4 @@
+// spec_ref: specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/design.md#dec-002
 package searchindex_test
 
 import (
@@ -10,6 +11,7 @@ import (
 	"net/http/httptest"
 	. "quwoquan_service/services/content-service/internal/content/post/infrastructure/searchindex"
 	"reflect"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -23,37 +25,38 @@ import (
 	"quwoquan_service/services/content-service/internal/content/post/application/searchprojection"
 )
 
-// fakeES simulates the subset of the ES HTTP API the writer/indexer uses, so the
-// projector can be driven through the real es.Client transport (parallel to
-// runtime/search/es.fakeCluster). writeFailStatus forces _doc writes to fail.
+// fakeES simulates the subset of the ES HTTP API the versioned writer uses, so
+// the projector can be driven through the real es.Client transport (parallel to
+// runtime/search/es.fakeCluster). Every _doc write must carry
+// version_type=external; a tombstone body (deleted=true) is recorded under
+// tombstones, a live body under upserts. writeFailStatus forces writes to fail.
 type fakeES struct {
 	mu              sync.Mutex
-	created         bool
 	upserts         map[string]map[string]any
-	deletes         []string
-	bulkBody        string
+	tombstones      map[string]map[string]any
+	versions        map[string]int64
+	unversioned     []string
+	hardDeletes     []string
 	writeFailStatus int
 }
 
-func newFakeES() *fakeES { return &fakeES{upserts: map[string]map[string]any{}} }
+func newFakeES() *fakeES {
+	return &fakeES{
+		upserts:    map[string]map[string]any{},
+		tombstones: map[string]map[string]any{},
+		versions:   map[string]int64{},
+	}
+}
 
 func (f *fakeES) handler() http.Handler {
 	docPrefix := "/" + es.DefaultIndex + "/_doc/"
+	updatePrefix := "/" + es.DefaultIndex + "/_update/"
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		f.mu.Lock()
 		defer f.mu.Unlock()
 		switch {
 		case r.Method == http.MethodGet && r.URL.Path == "/":
 			writeJSON(w, http.StatusOK, map[string]any{"cluster_name": "fake"})
-		case r.Method == http.MethodHead && r.URL.Path == "/"+es.DefaultIndex:
-			if f.created {
-				w.WriteHeader(http.StatusOK)
-			} else {
-				w.WriteHeader(http.StatusNotFound)
-			}
-		case r.Method == http.MethodPut && r.URL.Path == "/"+es.DefaultIndex:
-			f.created = true
-			writeJSON(w, http.StatusOK, map[string]any{"acknowledged": true})
 		case r.Method == http.MethodPut && strings.HasPrefix(r.URL.Path, docPrefix):
 			if f.writeFailStatus != 0 {
 				w.WriteHeader(f.writeFailStatus)
@@ -63,24 +66,77 @@ func (f *fakeES) handler() http.Handler {
 			body, _ := io.ReadAll(r.Body)
 			var doc map[string]any
 			_ = json.Unmarshal(body, &doc)
-			f.upserts[id] = doc
-			writeJSON(w, http.StatusCreated, map[string]any{"result": "created"})
-		case r.Method == http.MethodDelete && strings.HasPrefix(r.URL.Path, docPrefix):
-			if f.writeFailStatus != 0 {
-				w.WriteHeader(f.writeFailStatus)
+			rawVersion := r.URL.Query().Get("version")
+			if rawVersion == "" || r.URL.Query().Get("version_type") != "external" {
+				f.unversioned = append(f.unversioned, id)
+				writeJSON(w, http.StatusCreated, map[string]any{"result": "created"})
 				return
 			}
-			id := strings.TrimPrefix(r.URL.Path, docPrefix)
-			f.deletes = append(f.deletes, id)
-			writeJSON(w, http.StatusOK, map[string]any{"result": "deleted"})
-		case r.Method == http.MethodPost && r.URL.Path == "/_bulk":
+			version, _ := strconv.ParseInt(rawVersion, 10, 64)
+			if f.versions[id] >= version {
+				writeJSON(w, http.StatusConflict, map[string]any{"error": "version_conflict_engine_exception"})
+				return
+			}
+			f.versions[id] = version
+			if doc["deleted"] == true {
+				f.tombstones[id] = doc
+				delete(f.upserts, id)
+			} else {
+				f.upserts[id] = doc
+				delete(f.tombstones, id)
+			}
+			writeJSON(w, http.StatusCreated, map[string]any{"result": "created"})
+		case r.Method == http.MethodPost && strings.HasPrefix(r.URL.Path, updatePrefix):
+			// Conflict classification: the fake treats every conflict as a
+			// stale/replayed write (noop) unless the digest differs at an equal
+			// version, which the real script reports as a digest conflict.
+			id := strings.TrimPrefix(r.URL.Path, updatePrefix)
 			body, _ := io.ReadAll(r.Body)
-			f.bulkBody = string(body)
-			writeJSON(w, http.StatusOK, map[string]any{"errors": false, "items": []any{}})
+			var request struct {
+				Script struct {
+					Params struct {
+						SourceVersion int64  `json:"sourceVersion"`
+						SourceDigest  string `json:"sourceDigest"`
+					} `json:"params"`
+				} `json:"script"`
+			}
+			_ = json.Unmarshal(body, &request)
+			stored := f.upserts[id]
+			if stored == nil {
+				stored = f.tombstones[id]
+			}
+			storedDigest, _ := stored["sourceDigest"].(string)
+			if f.versions[id] == request.Script.Params.SourceVersion && storedDigest != request.Script.Params.SourceDigest {
+				writeJSON(w, http.StatusBadRequest, map[string]any{"error": "QWQ_SAME_VERSION_DIGEST_CONFLICT"})
+				return
+			}
+			writeJSON(w, http.StatusOK, map[string]any{"result": "noop"})
+		case r.Method == http.MethodDelete && strings.HasPrefix(r.URL.Path, docPrefix):
+			f.hardDeletes = append(f.hardDeletes, strings.TrimPrefix(r.URL.Path, docPrefix))
+			writeJSON(w, http.StatusOK, map[string]any{"result": "deleted"})
 		default:
 			writeUnexpectedRequest(w, r)
 		}
 	})
+}
+
+func (f *fakeES) tombstoneIDs() []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	out := make([]string, 0, len(f.tombstones))
+	for id := range f.tombstones {
+		out = append(out, id)
+	}
+	return out
+}
+
+func (f *fakeES) assertOnlyVersionedWrites(t *testing.T) {
+	t.Helper()
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if len(f.unversioned) != 0 || len(f.hardDeletes) != 0 {
+		t.Fatalf("projector must only issue versioned writes: unversioned=%v hardDeletes=%v", f.unversioned, f.hardDeletes)
+	}
 }
 
 func writeUnexpectedRequest(w http.ResponseWriter, r *http.Request) {
@@ -121,7 +177,7 @@ func (r fakeReader) ListAll(_ context.Context) ([]postmodel.Post, error) { retur
 
 func publishedPost() postmodel.Post {
 	return postmodel.Post{
-		ID: "post_1", Title: "洱海骑行攻略", Summary: "环湖一日", Body: "正文",
+		ID: "post_1", Version: 3, Title: "洱海骑行攻略", Summary: "环湖一日", Body: "正文",
 		ContentType: "video", Status: "published", Visibility: "public", ModerationStatus: "approved",
 		ContentIdentity: "work", CoverUrl: "https://cdn.example/post.webp",
 		Width: 1280, Height: 720,
@@ -145,13 +201,13 @@ func newProjectorWithFakeES(t *testing.T, f *fakeES, reader PostReader) *Project
 	return NewProjector(indexer, reader, WithLogger(slog.Default()))
 }
 
-func TestProjectorUpsertsOnPublish(t *testing.T) {
+func TestProjectorUpsertsOnPublishUnderPostVersion(t *testing.T) {
 	post := publishedPost()
 	f := newFakeES()
 	proj := newProjectorWithFakeES(t, f, fakeReader{byID: map[string]postmodel.Post{post.ID: post}})
 
 	if err := proj.Project(context.Background(), ports.ProjectorEvent{
-		Type: "PostPublished", AggregateType: "Post", AggregateID: post.ID,
+		Type: "PostPublished", AggregateType: "Post", AggregateID: post.ID, AggregateVersion: post.Version,
 	}); err != nil {
 		t.Fatalf("Project err=%v", err)
 	}
@@ -167,6 +223,9 @@ func TestProjectorUpsertsOnPublish(t *testing.T) {
 	if doc["authorId"] != "user_9" {
 		t.Fatalf("author anchor missing: %#v", doc)
 	}
+	if doc["sourceVersion"] != float64(post.Version) || doc["deleted"] != false || f.versions[id] != post.Version {
+		t.Fatalf("document must be fenced by the Post's own version: doc=%#v versions=%v", doc, f.versions)
+	}
 	payload, ok := doc["payload"].(map[string]any)
 	if !ok ||
 		payload["authorAvatarUrl"] != post.AuthorAvatarUrlSnapshot ||
@@ -178,6 +237,7 @@ func TestProjectorUpsertsOnPublish(t *testing.T) {
 		payload["publishedAt"] != post.PublishedAt.Format(time.RFC3339Nano) {
 		t.Fatalf("post presentation payload incomplete: %#v", doc["payload"])
 	}
+	f.assertOnlyVersionedWrites(t)
 }
 
 // TestProjectorSharesProjectionWithCandidateSource proves the projector indexes
@@ -188,12 +248,15 @@ func TestProjectorSharesProjectionWithCandidateSource(t *testing.T) {
 	f := newFakeES()
 	proj := newProjectorWithFakeES(t, f, fakeReader{byID: map[string]postmodel.Post{post.ID: post}})
 	if err := proj.Project(context.Background(), ports.ProjectorEvent{
-		Type: "PostPublished", AggregateID: post.ID,
+		Type: "PostPublished", AggregateID: post.ID, AggregateVersion: post.Version,
 	}); err != nil {
 		t.Fatalf("Project err=%v", err)
 	}
 
-	want := es.DocumentToIndex(searchprojection.ProjectPostToSearchDocument(post))
+	want, err := es.WithCanonicalSourceDigest(es.DocumentToIndex(searchprojection.ProjectPostToSearchDocument(post), post.Version))
+	if err != nil {
+		t.Fatal(err)
+	}
 	// Normalize through JSON because the fake ES decodes the stored doc from JSON.
 	raw, _ := json.Marshal(want)
 	var wantJSON map[string]any
@@ -205,69 +268,131 @@ func TestProjectorSharesProjectionWithCandidateSource(t *testing.T) {
 	}
 }
 
-func TestProjectorDeletesOnDelete(t *testing.T) {
+// TestProjectorStaleEventDoesNotRegressNewerDocument 固定 DEC-002 的核心保证：
+// 迟到的低版本事件不能覆盖索引里已经存在的更高版本文档。
+func TestProjectorStaleEventDoesNotRegressNewerDocument(t *testing.T) {
+	newer := publishedPost()
+	newer.Version = 5
+	newer.Title = "版本五"
 	f := newFakeES()
-	proj := newProjectorWithFakeES(t, f, fakeReader{})
-
+	reader := fakeReader{byID: map[string]postmodel.Post{newer.ID: newer}}
+	proj := newProjectorWithFakeES(t, f, reader)
 	if err := proj.Project(context.Background(), ports.ProjectorEvent{
-		Type: "PostDeleted", AggregateID: "post_1",
+		Type: "PostUpdated", AggregateID: newer.ID, AggregateVersion: 5,
 	}); err != nil {
-		t.Fatalf("Project err=%v", err)
+		t.Fatalf("Project(v5) err=%v", err)
 	}
-	if len(f.deletes) != 1 || f.deletes[0] != "content.post:post_1" {
-		t.Fatalf("expected delete of content.post:post_1, got %#v", f.deletes)
+	// 权威存储回退到更低版本只会发生在测试里；这里用它模拟一个迟到的旧读回。
+	older := newer
+	older.Version = 4
+	older.Title = "版本四"
+	reader.byID[newer.ID] = older
+	if err := proj.Project(context.Background(), ports.ProjectorEvent{
+		Type: "PostUpdated", AggregateID: newer.ID, AggregateVersion: 4,
+	}); err != nil {
+		t.Fatalf("stale replay must be a silent success, err=%v", err)
+	}
+	if got := f.upserts["content.post:post_1"]; got["title"] != "版本五" || f.versions["content.post:post_1"] != 5 {
+		t.Fatalf("stale write regressed the newer document: %#v versions=%v", got, f.versions)
 	}
 }
 
-func TestProjectorDeletesWhenNoLongerEligible(t *testing.T) {
+func TestProjectorTombstonesDeletedPostUnderItsVersion(t *testing.T) {
+	post := publishedPost()
+	post.Status = "deleted"
+	post.Version = 4
+	f := newFakeES()
+	proj := newProjectorWithFakeES(t, f, fakeReader{byID: map[string]postmodel.Post{post.ID: post}})
+
+	if err := proj.Project(context.Background(), ports.ProjectorEvent{
+		Type: "PostDeleted", AggregateID: post.ID, AggregateVersion: 4,
+	}); err != nil {
+		t.Fatalf("Project err=%v", err)
+	}
+	if ids := f.tombstoneIDs(); len(ids) != 1 || ids[0] != "content.post:post_1" {
+		t.Fatalf("expected tombstone of content.post:post_1, got %#v", ids)
+	}
+	if f.versions["content.post:post_1"] != 4 || f.tombstones["content.post:post_1"]["deleted"] != true {
+		t.Fatalf("tombstone must be fenced by the deleted Post's version: %#v", f.tombstones)
+	}
+	f.assertOnlyVersionedWrites(t)
+}
+
+func TestProjectorTombstonesWhenNoLongerEligible(t *testing.T) {
 	post := publishedPost()
 	post.Visibility = "private" // turned private => must drop from the index
 	f := newFakeES()
 	proj := newProjectorWithFakeES(t, f, fakeReader{byID: map[string]postmodel.Post{post.ID: post}})
 
 	if err := proj.Project(context.Background(), ports.ProjectorEvent{
-		Type: "PostSettingsUpdated", AggregateID: post.ID,
+		Type: "PostSettingsUpdated", AggregateID: post.ID, AggregateVersion: post.Version,
 	}); err != nil {
 		t.Fatalf("Project err=%v", err)
 	}
 	if len(f.upserts) != 0 {
 		t.Fatalf("private post must not be upserted: %#v", f.upserts)
 	}
-	if len(f.deletes) != 1 || f.deletes[0] != "content.post:post_1" {
-		t.Fatalf("expected delete for ineligible post, got %#v", f.deletes)
+	if ids := f.tombstoneIDs(); len(ids) != 1 || ids[0] != "content.post:post_1" {
+		t.Fatalf("expected tombstone for ineligible post, got %#v", ids)
 	}
 }
 
-func TestProjectorDeletesModerationRejectedPost(t *testing.T) {
+func TestProjectorTombstonesModerationRejectedPost(t *testing.T) {
 	post := publishedPost()
 	post.ModerationStatus = "rejected"
 	f := newFakeES()
 	proj := newProjectorWithFakeES(t, f, fakeReader{byID: map[string]postmodel.Post{post.ID: post}})
 
 	if err := proj.Project(context.Background(), ports.ProjectorEvent{
-		Type: "PostSettingsUpdated", AggregateID: post.ID,
+		Type: "PostSettingsUpdated", AggregateID: post.ID, AggregateVersion: post.Version,
 	}); err != nil {
 		t.Fatalf("Project err=%v", err)
 	}
 	if len(f.upserts) != 0 {
 		t.Fatalf("moderation rejected post must not be upserted: %#v", f.upserts)
 	}
-	if len(f.deletes) != 1 || f.deletes[0] != "content.post:post_1" {
-		t.Fatalf("expected rejected post deletion, got %#v", f.deletes)
+	if ids := f.tombstoneIDs(); len(ids) != 1 || ids[0] != "content.post:post_1" {
+		t.Fatalf("expected rejected post tombstone, got %#v", ids)
 	}
 }
 
-func TestProjectorDeletesWhenPostMissing(t *testing.T) {
+// TestProjectorTombstonesMissingPostUnderEventVersion 固定权威对象已不可读时的
+// 版本来源：outbox 事实的 AggregateVersion。没有版本就必须 fail closed，
+// 禁止退回无版本删除。
+func TestProjectorTombstonesMissingPostUnderEventVersion(t *testing.T) {
 	f := newFakeES()
 	proj := newProjectorWithFakeES(t, f, fakeReader{}) // store returns not-found
 
 	if err := proj.Project(context.Background(), ports.ProjectorEvent{
-		Type: "PostPublished", AggregateID: "post_gone",
+		Type: "PostPublished", AggregateID: "post_gone", AggregateVersion: 9,
 	}); err != nil {
 		t.Fatalf("Project err=%v", err)
 	}
-	if len(f.deletes) != 1 || f.deletes[0] != "content.post:post_gone" {
-		t.Fatalf("missing post should be deleted from index, got %#v", f.deletes)
+	if ids := f.tombstoneIDs(); len(ids) != 1 || ids[0] != "content.post:post_gone" || f.versions["content.post:post_gone"] != 9 {
+		t.Fatalf("missing post must be tombstoned under the event version, got %#v versions=%v", ids, f.versions)
+	}
+
+	if err := proj.Project(context.Background(), ports.ProjectorEvent{
+		Type: "PostDeleted", AggregateID: "post_gone_unversioned",
+	}); err == nil {
+		t.Fatal("missing post without an event version must fail closed instead of deleting unversioned")
+	}
+	f.assertOnlyVersionedWrites(t)
+}
+
+func TestProjectorRejectsPostWithoutVersion(t *testing.T) {
+	post := publishedPost()
+	post.Version = 0
+	f := newFakeES()
+	proj := newProjectorWithFakeES(t, f, fakeReader{byID: map[string]postmodel.Post{post.ID: post}})
+
+	if err := proj.Project(context.Background(), ports.ProjectorEvent{
+		Type: "PostPublished", AggregateID: post.ID, AggregateVersion: 1,
+	}); err == nil {
+		t.Fatal("a Post without a positive version must not be projected")
+	}
+	if len(f.upserts) != 0 || len(f.tombstones) != 0 {
+		t.Fatalf("no write may happen without a version: upserts=%#v tombstones=%#v", f.upserts, f.tombstones)
 	}
 }
 
@@ -276,12 +401,12 @@ func TestProjectorReadFailureKeepsOutboxCheckpointReplayable(t *testing.T) {
 	proj := newProjectorWithFakeES(t, f, fakeReader{loadErr: errors.New("malformed Mongo Post")})
 
 	if err := proj.Project(context.Background(), ports.ProjectorEvent{
-		Type: "PostSettingsUpdated", AggregateID: "post-corrupt",
+		Type: "PostSettingsUpdated", AggregateID: "post-corrupt", AggregateVersion: 1,
 	}); err == nil {
 		t.Fatal("Post read failure must fail search projection")
 	}
-	if len(f.upserts) != 0 || len(f.deletes) != 0 {
-		t.Fatalf("read failure must not mutate search index: upserts=%#v deletes=%#v", f.upserts, f.deletes)
+	if len(f.upserts) != 0 || len(f.tombstones) != 0 {
+		t.Fatalf("read failure must not mutate search index: upserts=%#v tombstones=%#v", f.upserts, f.tombstones)
 	}
 }
 
@@ -291,12 +416,12 @@ func TestProjectorIgnoresCounterOnlyEvents(t *testing.T) {
 	proj := newProjectorWithFakeES(t, f, fakeReader{byID: map[string]postmodel.Post{post.ID: post}})
 
 	for _, et := range []string{"ContentReactionSet", "BehaviorBatchReported", "SomethingElse"} {
-		if err := proj.Project(context.Background(), ports.ProjectorEvent{Type: et, AggregateID: post.ID}); err != nil {
+		if err := proj.Project(context.Background(), ports.ProjectorEvent{Type: et, AggregateID: post.ID, AggregateVersion: post.Version}); err != nil {
 			t.Fatalf("Project(%s) err=%v", et, err)
 		}
 	}
-	if len(f.upserts) != 0 || len(f.deletes) != 0 {
-		t.Fatalf("counter-only events must not touch the index: upserts=%#v deletes=%#v", f.upserts, f.deletes)
+	if len(f.upserts) != 0 || len(f.tombstones) != 0 {
+		t.Fatalf("counter-only events must not touch the index: upserts=%#v tombstones=%#v", f.upserts, f.tombstones)
 	}
 }
 
@@ -310,7 +435,7 @@ func TestProjectorESOutageKeepsOutboxConsumerReplayable(t *testing.T) {
 	proj := newProjectorWithFakeES(t, f, fakeReader{byID: map[string]postmodel.Post{post.ID: post}})
 
 	if err := proj.Project(context.Background(), ports.ProjectorEvent{
-		Type: "PostPublished", AggregateID: post.ID,
+		Type: "PostPublished", AggregateID: post.ID, AggregateVersion: post.Version,
 	}); err == nil {
 		t.Fatal("ES outage must fail the search outbox consumer")
 	}

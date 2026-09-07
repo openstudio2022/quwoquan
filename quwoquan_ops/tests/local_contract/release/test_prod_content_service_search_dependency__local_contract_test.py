@@ -43,6 +43,14 @@ class ProdContentServiceSearchDependencyTest(unittest.TestCase):
             model_cache_root="runtime/model-cache",
             data_mode=data_mode,
             startup_services=startup_services,
+            data_plane_environment=(
+                {
+                    "SEARCH_ES_ENDPOINTS": "${PROD_SEARCH_OBJECTS_ENDPOINT:?}",
+                    "SEARCH_ES_ENABLED": "true",
+                }
+                if data_mode == "external"
+                else None
+            ),
         )
 
     def test_isolated_prod_content_waits_for_selected_elasticsearch_health(self) -> None:
@@ -92,7 +100,7 @@ class ProdContentServiceSearchDependencyTest(unittest.TestCase):
         self.assertEqual(rendered["environment"]["SEARCH_ES_ENABLED"], "true")
         self.assertEqual(
             rendered["environment"]["SEARCH_ES_ENDPOINTS"],
-            "${PROD_CONTENT_SEARCH_ES_ENDPOINTS:?managed content search endpoint is required}",
+            "${PROD_SEARCH_OBJECTS_ENDPOINT:?}",
         )
 
 

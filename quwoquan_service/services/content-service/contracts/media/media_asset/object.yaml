@@ -41,6 +41,9 @@ relationships:
   reference_fields:
   - manualCoverAssetId
   target_object: content.MediaAsset
+local_identity_reasons:
+  sourceReleaseId: Data release importer 最近一次写入的 immutable release key 诊断值；不是聚合身份，也不参与授权
+  sourceReleaseIds: Data release importer 以集合语义累加的 immutable release key 归属集合；只用于 research 原图授权的 active release membership 判定，不是对象引用
 search_policy:
   exposed: none
   not_exposed_reason: "服务内部投影，只供所属域 named Reader 消费，不构成独立检索结果类型。"

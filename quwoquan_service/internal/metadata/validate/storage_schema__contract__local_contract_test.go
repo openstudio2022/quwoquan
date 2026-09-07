@@ -160,6 +160,7 @@ func TestStorageSchemaAndTypedDocumentHaveRecursiveKeyParity(t *testing.T) {
 		node   map[string]any
 	}{
 		{"document", reflect.TypeOf(ast.StorageDocument{}), root},
+		{"resource", reflect.TypeOf(ast.StorageResource{}), schemaDefinition(t, root, "storageResource")},
 		{"table", reflect.TypeOf(ast.StorageTable{}), schemaDefinition(t, root, "storageTable")},
 		{"column", reflect.TypeOf(ast.StorageColumn{}), schemaDefinition(t, root, "storageColumn")},
 		{"table index", reflect.TypeOf(ast.StorageTableIndex{}), schemaDefinition(t, root, "storageTableIndex")},
@@ -170,6 +171,7 @@ func TestStorageSchemaAndTypedDocumentHaveRecursiveKeyParity(t *testing.T) {
 		{"collection index", reflect.TypeOf(ast.StorageCollectionIndex{}), schemaDefinition(t, root, "storageCollectionIndex")},
 		{"stream", reflect.TypeOf(ast.StorageStream{}), nestedSchemaNode(t, root, "properties", "streams", "additionalProperties")},
 		{"transaction", reflect.TypeOf(ast.StorageTransaction{}), nestedSchemaNode(t, root, "properties", "transaction")},
+		{"transaction participant", reflect.TypeOf(ast.StorageTransactionParticipant{}), schemaDefinition(t, root, "storageTransactionParticipant")},
 		{"Redis cache", reflect.TypeOf(ast.StorageRedisCache{}), nestedSchemaNode(t, root, "properties", "redis_cache", "items")},
 		{"environment backend", reflect.TypeOf(ast.StorageEnvironmentBackend{}), nestedSchemaNode(t, root, "properties", "environment_backends", "additionalProperties")},
 		{"logstore", reflect.TypeOf(ast.StorageLogstore{}), nestedSchemaNode(t, root, "properties", "logstores", "additionalProperties")},
@@ -269,5 +271,120 @@ func assertSchemaStructKeyParity(t *testing.T, typeOf reflect.Type, schema map[s
 	sort.Strings(schemaKeys)
 	if !reflect.DeepEqual(structKeys, schemaKeys) {
 		t.Fatalf("%s keys = %v, schema = %v", typeOf.Name(), structKeys, schemaKeys)
+	}
+}
+
+// spec_ref: specs/feature-tree/runtime/system-architecture-and-engineering-guide/spec.md#sit-001
+func TestStorageSchemaClosesEnginesAndTypesNamedResources(t *testing.T) {
+	t.Parallel()
+
+	schema := compileStorageSchema(t)
+	valid := map[string]any{
+		"backend": "elasticsearch",
+		"role":    "projection",
+		"resources": map[string]any{
+			"search_documents": map[string]any{
+				"engine": "elasticsearch",
+				"role":   "query_projection",
+			},
+			"projection_checkpoints": map[string]any{
+				"engine":   "mongodb",
+				"role":     "runtime",
+				"required": false,
+			},
+		},
+	}
+	if err := schema.Validate(valid); err != nil {
+		t.Fatalf("schema rejected canonical named resources: %v", err)
+	}
+
+	for name, mutate := range map[string]func(map[string]any){
+		"retired postgresql alias":      func(document map[string]any) { document["backend"] = "postgresql" },
+		"composite ES Mongo backend":    func(document map[string]any) { document["backend"] = "elasticsearch+mongodb" },
+		"composite Mongo Redis backend": func(document map[string]any) { document["backend"] = "mongodb+redis" },
+		"unknown environment backend": func(document map[string]any) {
+			document["environment_backends"] = map[string]any{"alpha": map[string]any{"adapter": "ext.search.provider", "backend": "cockroachdb"}}
+		},
+		"resource missing engine": func(document map[string]any) {
+			document["resources"] = map[string]any{"projection_checkpoints": map[string]any{"role": "runtime"}}
+		},
+		"resource missing role": func(document map[string]any) {
+			document["resources"] = map[string]any{"projection_checkpoints": map[string]any{"engine": "mongodb"}}
+		},
+		"resource contains cluster ref": func(document map[string]any) {
+			document["resources"] = map[string]any{"projection_checkpoints": map[string]any{"engine": "mongodb", "role": "runtime", "clusterRef": "mongo-a"}}
+		},
+		"invalid resource local name": func(document map[string]any) {
+			document["resources"] = map[string]any{"ProjectionCheckpoints": map[string]any{"engine": "mongodb", "role": "runtime"}}
+		},
+		"logical backend cannot be object resource engine": func(document map[string]any) {
+			document["resources"] = map[string]any{"catalog": map[string]any{"engine": "service_resource", "role": "query_projection"}}
+		},
+		"observability sink cannot be object resource engine": func(document map[string]any) {
+			document["resources"] = map[string]any{"events": map[string]any{"engine": "observability_log_sink", "role": "append_only_fact"}}
+		},
+	} {
+		name, mutate := name, mutate
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			document := map[string]any{"backend": "elasticsearch", "role": "projection"}
+			mutate(document)
+			if err := schema.Validate(document); err == nil {
+				t.Fatalf("schema accepted invalid storage document: %#v", document)
+			}
+		})
+	}
+}
+
+// spec_ref: specs/feature-tree/runtime/system-architecture-and-engineering-guide/spec.md#sit-001
+func TestStorageSchemaTypesMinimalEngineMechanisms(t *testing.T) {
+	t.Parallel()
+
+	schema := compileStorageSchema(t)
+	valid := map[string]any{
+		"backend": "mongodb",
+		"role":    "authoritative",
+		"transaction": map[string]any{
+			"scope": []any{"records"}, "isolation": "mongo_transaction",
+			"guarantees": []any{"versioned_write"}, "mechanism": "version_cas",
+		},
+		"redis_cache": []any{map[string]any{
+			"key":                  "probe:{scope}:value:<id>",
+			"key_prefix":           "probe:",
+			"hash_tag":             "scope",
+			"atomic_keys":          []any{"probe:{scope}:value:<id>", "probe:{scope}:fence"},
+			"fence":                "token_value",
+			"eviction_consequence": "reconstruct",
+			"durability":           "aof",
+		}},
+	}
+	if err := schema.Validate(valid); err != nil {
+		t.Fatalf("schema rejected typed storage mechanisms: %v", err)
+	}
+	for _, test := range []struct {
+		name, field string
+		value       any
+	}{
+		{"unknown transaction mechanism", "mechanism", "universal_transaction"},
+		{"unknown eviction consequence", "eviction_consequence", "best_effort"},
+		{"unknown Redis durability", "durability", "durable"},
+		{"invalid Redis key prefix", "key_prefix", "Probe"},
+		{"invalid Redis hash tag identity", "hash_tag", "scope:value"},
+		{"singleton Redis atomic key set", "atomic_keys", []any{"probe:{scope}:value:<id>"}},
+		{"unknown Redis fence role", "fence", "best_effort"},
+	} {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			invalid := map[string]any{"backend": "mongodb", "role": "authoritative"}
+			if test.field == "mechanism" {
+				invalid["transaction"] = map[string]any{"scope": []any{"records"}, "isolation": "mongo_transaction", "guarantees": []any{"versioned_write"}, test.field: test.value}
+			} else {
+				invalid["redis_cache"] = []any{map[string]any{"key": "probe:<id>", test.field: test.value}}
+			}
+			if err := schema.Validate(invalid); err == nil {
+				t.Fatal("schema accepted unknown mechanism value")
+			}
+		})
 	}
 }

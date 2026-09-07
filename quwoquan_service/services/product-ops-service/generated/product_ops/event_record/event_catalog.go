@@ -738,7 +738,6 @@ var AppPageNames = map[string]struct{}{
 	"homepage_maintenance":              {},
 	"homepage_picker":                   {},
 	"homepage_status_report":            {},
-	"interest_match":                    {},
 	"interest_onboarding":               {},
 	"legal_permissions":                 {},
 	"legal_privacy_policy":              {},
@@ -750,6 +749,7 @@ var AppPageNames = map[string]struct{}{
 	"my_footprint":                      {},
 	"my_gatherings":                     {},
 	"my_intersections":                  {},
+	"my_intersections_compat_redirect":  {},
 	"my_qr_code":                        {},
 	"my_reports":                        {},
 	"object_intersections":              {},
@@ -777,6 +777,7 @@ var AppPageNames = map[string]struct{}{
 	"start_group_chat":                  {},
 	"suggest_homepage":                  {},
 	"user_profile":                      {},
+	"video_book":                        {},
 	"welcome":                           {},
 	"work_browser":                      {},
 }

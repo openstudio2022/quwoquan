@@ -79,7 +79,7 @@
 - 类型：`capability_gap`
 - 优先级：`P2`
 - 准出影响：`track`
-- 影响或价值：当前 storage 映射只能由单个对象的 `storage.yaml` 声明表，缺少平台级共用存储的归属表达位。仓内存在跨服务共用、不属于任何单一业务对象的平台级存储，这类表既无法如实声明归属，也不会出现在任何对象的存储契约里，于是成为按对象归属工作的判定与扫描的静默盲区；硬塞给某个对象则是造假归属。落在该盲区的存储如下，全部由平台组件建表并被多服务共用：
+- 影响或价值：当前 storage 映射只能由单个对象的 `storage.yaml` 声明表，缺少平台级共用存储的归属表达位。对象内具名逻辑资源 `storage.yaml#resources`（[system-architecture DEC-032](../../system-architecture-and-engineering-guide/design.md#dec-032)，多引擎对象强制逐引擎声明）是对象级的表达位雏形，但它的身份从 `service/context/object/resource` 派生，仍不能承载「不属于任何单一对象」的平台级存储，因此本缺口不因 resources 落地而关闭。仓内存在跨服务共用、不属于任何单一业务对象的平台级存储，这类表既无法如实声明归属，也不会出现在任何对象的存储契约里，于是成为按对象归属工作的判定与扫描的静默盲区；硬塞给某个对象则是造假归属。落在该盲区的存储如下，全部由平台组件建表并被多服务共用：
   - `notification_outbox`（`internal/platform/reliabletaskmongo/store.go`）：通用可靠任务队列的任务表，被 chat-service 与 integration-service 两个服务共用。命名含 `outbox` 但语义是任务队列而非事件发布，属既存命名缺陷；改名需要生产数据迁移，当前不改，只如实记录。
   - `product_control_plane_outbox`、`platform_control_plane_outbox`、`generic_control_plane_outbox`（`internal/platform/controlplane/persistence/postgres_store.go`）：发布配置证明的控制面事件表，按 scope 参数化，被 8 个以上服务的 `controlplane.StartReleaseConfigAttestation` 共用。
   - `reliable_task_outbox`（由 `external_integration/external_interaction` 声明）与 `post_import_task_outbox`（由 `content/post` 声明）：已有对象归属，但与 `notification_outbox` 同属命名缺陷——名为 outbox 实为可靠任务队列，待存储 `role` 字段落地后应标为非发布型，避免按名字工作的判定把它们当成事件发件箱。

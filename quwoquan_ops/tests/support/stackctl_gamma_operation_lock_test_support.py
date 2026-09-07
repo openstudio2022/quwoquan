@@ -6,6 +6,8 @@ setUpClass/setUp 与 helper 逐字来自拆分前的单文件套件，行为保�
 
 from __future__ import annotations
 
+import hashlib
+import json
 import os
 import tempfile
 import unittest
@@ -63,13 +65,41 @@ class StackctlGammaOperationLockContractTestBase(unittest.TestCase):
     ) -> dict[str, object]:
         digest = "sha256:" + "a" * 64
         target = f"{environment}-local"
+        bindings = []
+        for capability_id, endpoint_key in (
+            (
+                "product.telemetry.sink",
+                "PRODUCT_OPS_TELEMETRY_ELASTICSEARCH_ENDPOINT",
+            ),
+            (
+                "runtime.log.sink",
+                "PRODUCT_OPS_RUNTIME_LOG_ELASTICSEARCH_ENDPOINT",
+            ),
+        ):
+            binding = {
+                "capabilityId": capability_id,
+                "endpointRef": "local_topology:elasticsearch",
+                "endpointEnvironmentKey": endpoint_key,
+                "secretEnvironmentKeys": [],
+                "resourceRef": f"target:{target}/product-ops/elasticsearch",
+                "bindingDigest": digest,
+            }
+            bindings.append(binding)
         composition = {
             "schema": "stackctl-observability-log-sink-package",
             "adapterId": "ext.obs.elasticsearch",
-            "bindingDigest": digest,
-            "endpointRef": "local_topology:elasticsearch",
-            "endpointEnvironmentKey": "PRODUCT_OPS_ELASTICSEARCH_ENDPOINT",
-            "secretEnvironmentKeys": [],
+            "bindings": bindings,
+            "bindingDigest": (
+                "sha256:"
+                + hashlib.sha256(
+                    json.dumps(
+                        bindings,
+                        ensure_ascii=True,
+                        separators=(",", ":"),
+                        sort_keys=True,
+                    ).encode("utf-8")
+                ).hexdigest()
+            ),
             "deploymentMode": "package-bound-local",
             "platform": "arm64",
             "runtimeEndpoint": "http://elasticsearch:9200",
@@ -80,7 +110,6 @@ class StackctlGammaOperationLockContractTestBase(unittest.TestCase):
                 "elasticsearch.compose.yaml"
             ),
             "composeDigest": digest,
-            "clusterRef": f"target:{target}/product-ops/elasticsearch",
         }
         return {
             "candidateRoot": candidate_root,
@@ -91,7 +120,12 @@ class StackctlGammaOperationLockContractTestBase(unittest.TestCase):
         return {
             "QWQ_OBSERVABILITY_LOG_SINK_COMPOSE_FILE": "/candidate/elasticsearch.compose.yaml",
             "QWQ_OBSERVABILITY_LOG_SINK_DIGEST": "sha256:" + "a" * 64,
-            "PRODUCT_OPS_ELASTICSEARCH_ENDPOINT": "http://elasticsearch:9200",
+            "PRODUCT_OPS_TELEMETRY_ELASTICSEARCH_ENDPOINT": (
+                "http://elasticsearch:9200"
+            ),
+            "PRODUCT_OPS_RUNTIME_LOG_ELASTICSEARCH_ENDPOINT": (
+                "http://elasticsearch:9200"
+            ),
         }
 
     def _running_attempt(self, environment: str) -> dict[str, object]:

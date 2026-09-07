@@ -1,3 +1,4 @@
+// spec_ref: specs/feature-tree/runtime/system-architecture-and-engineering-guide/spec.md#sit-002
 package servicekit
 
 import (
@@ -5,6 +6,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	rtmongo "quwoquan_service/internal/platform/mongodb"
 	rthealth "quwoquan_service/runtime/health"
@@ -16,10 +18,14 @@ type mongoClientDouble struct {
 	pings       int
 	disconnects int
 	pingErr     error
+	ping        func(context.Context) error
 }
 
-func (double *mongoClientDouble) Ping(context.Context) error {
+func (double *mongoClientDouble) Ping(ctx context.Context) error {
 	double.pings++
+	if double.ping != nil {
+		return double.ping(ctx)
+	}
 	return double.pingErr
 }
 
@@ -101,5 +107,97 @@ func TestAssemblyMongoRegistersHealthAndCleanup(t *testing.T) {
 	}
 	if double.disconnects != 1 {
 		t.Fatalf("cleanup must disconnect exactly once, got %d", double.disconnects)
+	}
+}
+
+func TestAssemblyMongoWithReadinessTimeoutRegistersSingleTimedCheck(t *testing.T) {
+	const readinessTimeout = 25 * time.Millisecond
+	var connectCalls int
+	deadlineSeen := make(chan time.Time, 1)
+	double := &mongoClientDouble{
+		ping: func(ctx context.Context) error {
+			deadline, ok := ctx.Deadline()
+			if !ok {
+				return errors.New("mongodb readiness context has no deadline")
+			}
+			deadlineSeen <- deadline
+			<-ctx.Done()
+			return ctx.Err()
+		},
+	}
+	assembly := mongoTestAssembly(func(context.Context, rtmongo.ConnectConfig) (rtmongo.Handle, error) {
+		connectCalls++
+		return double, nil
+	})
+
+	startedAt := time.Now()
+	if _, err := assembly.MongoWithReadinessTimeout(MongoConfig{
+		URI: "mongodb://db:27017", Database: "quwoquan_tag",
+	}, readinessTimeout); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	result := assembly.Health.Check(context.Background())
+
+	if connectCalls != 1 {
+		t.Fatalf("mongo component must connect exactly once, got %d", connectCalls)
+	}
+	if len(result.Checks) != 1 || result.Checks["mongodb"] != context.DeadlineExceeded.Error() {
+		t.Fatalf("expected one timed mongodb check without registration error, got %v", result.Checks)
+	}
+	if result.Status != "degraded" {
+		t.Fatalf("timed out mongodb check must degrade readiness, got %q", result.Status)
+	}
+	deadline := <-deadlineSeen
+	if budget := deadline.Sub(startedAt); budget < readinessTimeout-10*time.Millisecond ||
+		budget > readinessTimeout+50*time.Millisecond {
+		t.Fatalf("mongodb check did not receive the custom readiness window: %v", budget)
+	}
+	if elapsed := time.Since(startedAt); elapsed > 250*time.Millisecond {
+		t.Fatalf("custom readiness check exceeded bounded test window: %v", elapsed)
+	}
+	if double.pings != 1 {
+		t.Fatalf("mongodb health check must run exactly once, got %d", double.pings)
+	}
+
+	if err := assembly.Cleanups.Close(context.Background()); err != nil {
+		t.Fatalf("unexpected cleanup error: %v", err)
+	}
+	if double.disconnects != 1 {
+		t.Fatalf("custom-timeout component must register one cleanup, got %d", double.disconnects)
+	}
+}
+
+func TestAssemblyMongoWithReadinessTimeoutDefaultsInvalidBudget(t *testing.T) {
+	for _, invalidTimeout := range []time.Duration{0, -time.Millisecond} {
+		t.Run(invalidTimeout.String(), func(t *testing.T) {
+			var remaining time.Duration
+			double := &mongoClientDouble{
+				ping: func(ctx context.Context) error {
+					deadline, ok := ctx.Deadline()
+					if !ok {
+						return errors.New("mongodb readiness context has no deadline")
+					}
+					remaining = time.Until(deadline)
+					return ctx.Err()
+				},
+			}
+			assembly := mongoTestAssembly(func(context.Context, rtmongo.ConnectConfig) (rtmongo.Handle, error) {
+				return double, nil
+			})
+
+			if _, err := assembly.MongoWithReadinessTimeout(MongoConfig{
+				URI: "mongodb://db:27017", Database: "quwoquan_tag",
+			}, invalidTimeout); err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			result := assembly.Health.Check(context.Background())
+
+			if result.Status != "ok" || len(result.Checks) != 1 || result.Checks["mongodb"] != "ok" {
+				t.Fatalf("invalid timeout must use the default mongodb check budget, got %+v", result)
+			}
+			if remaining < time.Second || remaining > 3*time.Second {
+				t.Fatalf("invalid timeout did not fall back to the default readiness budget: %v", remaining)
+			}
+		})
 	}
 }

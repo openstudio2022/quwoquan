@@ -20,6 +20,9 @@ from unittest import mock
 
 from quwoquan_ops.cli.lib import deployment_candidate_manifest as subject
 from quwoquan_ops.cli.lib.deployment_candidate_manifest import provider_binding_overlay
+from quwoquan_ops.cli.lib.data_plane_binding import (
+    materialize_data_plane_binding_package,
+)
 from quwoquan_ops.cli.lib.runtime_topology_package import (
     SCHEMA as RUNTIME_TOPOLOGY_SCHEMA,
 )
@@ -57,12 +60,25 @@ class DeploymentCandidateManifestContractBase(unittest.TestCase):
                         },
                         "secret_refs": ["INTEGRATION_SMS_TOKEN"],
                     },
+                    "product.telemetry.sink": {
+                        "state": "enabled",
+                        "adapter_id": "ext.obs.elasticsearch",
+                        "endpoint_ref": "local_topology:elasticsearch",
+                        "endpoint_envs": {
+                            "endpoint": (
+                                "PRODUCT_OPS_TELEMETRY_ELASTICSEARCH_ENDPOINT"
+                            ),
+                        },
+                        "secret_refs": [],
+                    },
                     "runtime.log.sink": {
                         "state": "enabled",
                         "adapter_id": "ext.obs.elasticsearch",
                         "endpoint_ref": "local_topology:elasticsearch",
                         "endpoint_envs": {
-                            "endpoint": "PRODUCT_OPS_ELASTICSEARCH_ENDPOINT",
+                            "endpoint": (
+                                "PRODUCT_OPS_RUNTIME_LOG_ELASTICSEARCH_ENDPOINT"
+                            ),
                         },
                         "secret_refs": [],
                     },
@@ -167,6 +183,26 @@ class DeploymentCandidateManifestContractBase(unittest.TestCase):
                 {
                     "buildInputDigest": digest,
                     "imageDigest": "sha256:" + "e" * 64,
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        self.data_plane_binding = materialize_data_plane_binding_package(
+            "alpha",
+            "alpha-local",
+            self.shared,
+            repo_root=subject.ROOT,
+        )
+        (self.shared / "manifest.json").write_text(
+            json.dumps(
+                {
+                    "schema": "qwq.runtime_shared_package",
+                    "environment": "alpha",
+                    "target": "alpha-local",
+                    "dataPlaneBinding": self.data_plane_binding,
+                    "runtimeTopology": None,
+                    "provenance": {"files": {}},
                 }
             )
             + "\n",

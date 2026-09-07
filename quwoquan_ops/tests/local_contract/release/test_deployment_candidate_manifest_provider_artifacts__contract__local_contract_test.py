@@ -129,6 +129,123 @@ class DeploymentCandidateManifestContractTest(
                 candidate_root=self.candidate,
             )
 
+    def test_candidate_binds_two_canonical_log_sink_bindings(self) -> None:
+        bindings = self.observability_log_sink["bindings"]
+        self.assertEqual(
+            [binding["capabilityId"] for binding in bindings],
+            ["product.telemetry.sink", "runtime.log.sink"],
+        )
+        self.assertEqual(
+            {
+                binding["endpointEnvironmentKey"]
+                for binding in bindings
+            },
+            {
+                "PRODUCT_OPS_TELEMETRY_ELASTICSEARCH_ENDPOINT",
+                "PRODUCT_OPS_RUNTIME_LOG_ELASTICSEARCH_ENDPOINT",
+            },
+        )
+        self.assertEqual(
+            self.observability_log_sink["bindingDigest"],
+            subject._sha256_json(bindings),
+        )
+        serialized = json.dumps(self.observability_log_sink, sort_keys=True)
+        self.assertNotIn("secretMaterial", serialized)
+        self.assertNotIn("PRODUCT_OPS_ELASTICSEARCH_ENDPOINT", serialized)
+
+    def test_candidate_rejects_missing_duplicate_or_tampered_log_sink_binding(
+        self,
+    ) -> None:
+        canonical = self.observability_log_sink
+        tampered_cases = []
+
+        missing = {**canonical, "bindings": canonical["bindings"][:1]}
+        missing["bindingDigest"] = subject._sha256_json(missing["bindings"])
+        tampered_cases.append(missing)
+
+        duplicate_bindings = [
+            canonical["bindings"][0],
+            canonical["bindings"][0],
+        ]
+        duplicate = {**canonical, "bindings": duplicate_bindings}
+        duplicate["bindingDigest"] = subject._sha256_json(duplicate_bindings)
+        tampered_cases.append(duplicate)
+
+        role_mixed_bindings = json.loads(json.dumps(canonical["bindings"]))
+        role_mixed_bindings[1]["endpointEnvironmentKey"] = (
+            "PRODUCT_OPS_TELEMETRY_ELASTICSEARCH_ENDPOINT"
+        )
+        role_mixed = {**canonical, "bindings": role_mixed_bindings}
+        role_mixed["bindingDigest"] = subject._sha256_json(role_mixed_bindings)
+        tampered_cases.append(role_mixed)
+
+        digest_tampered = {
+            **canonical,
+            "bindingDigest": "sha256:" + "9" * 64,
+        }
+        tampered_cases.append(digest_tampered)
+
+        for payload in tampered_cases:
+            with self.subTest(payload=payload), self.assertRaisesRegex(
+                ValueError,
+                "Binding closure|bindingDigest",
+            ):
+                subject.validate_observability_log_sink_package(
+                    payload,
+                    expected_environment="alpha",
+                    expected_target="alpha-local",
+                    candidate_root=self.candidate,
+                )
+
+    def test_legacy_single_binding_payload_is_rejected_for_every_purpose(
+        self,
+    ) -> None:
+        canonical = self.observability_log_sink
+        retired = {
+            "schema": canonical["schema"],
+            "adapterId": canonical["adapterId"],
+            "bindingDigest": (
+                "sha256:47135fea885dfc2985e2501621e606009"
+                "b40f3b3e67fe21e348e3f6519735b1b"
+            ),
+            "endpointRef": "local_topology:elasticsearch",
+            "endpointEnvironmentKey": "PRODUCT_OPS_ELASTICSEARCH_ENDPOINT",
+            "secretEnvironmentKeys": [],
+            "deploymentMode": canonical["deploymentMode"],
+            "platform": canonical["platform"],
+            "runtimeEndpoint": canonical["runtimeEndpoint"],
+            "imageDigest": canonical["imageDigest"],
+            "sourceComposeDigest": canonical["sourceComposeDigest"],
+            "composeRef": canonical["composeRef"],
+            "composeDigest": canonical["composeDigest"],
+            "clusterRef": "target:alpha-local/product-ops/elasticsearch",
+        }
+
+        for purpose in ("self_verify", "currentness", "teardown"):
+            with self.subTest(purpose=purpose), self.assertRaisesRegex(
+                ValueError,
+                "fields mismatch",
+            ):
+                subject.validate_observability_log_sink_package(
+                    retired,
+                    expected_environment="alpha",
+                    expected_target="alpha-local",
+                    candidate_root=self.candidate,
+                    purpose=purpose,
+                )
+
+    def test_new_log_sink_package_accepts_every_validation_purpose(self) -> None:
+        for purpose in ("self_verify", "teardown", "currentness"):
+            with self.subTest(purpose=purpose):
+                validated = subject.validate_observability_log_sink_package(
+                    self.observability_log_sink,
+                    expected_environment="alpha",
+                    expected_target="alpha-local",
+                    candidate_root=self.candidate,
+                    purpose=purpose,
+                )
+                self.assertIs(validated, self.observability_log_sink)
+
     def test_candidate_rejects_tampered_provider_runtime_identity(self) -> None:
         path = subject.write_candidate_manifest(
             "alpha",

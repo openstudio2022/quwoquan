@@ -264,6 +264,67 @@ end
 return 1
 `)
 
+var acquireLeaseFenceScript = goredis.NewScript(`
+local owner = ARGV[1]
+local lease_ttl_ms = tonumber(ARGV[2])
+if not owner or owner == '' or not lease_ttl_ms or lease_ttl_ms <= 0 then
+  return redis.error_reply('lease owner and TTL must be valid')
+end
+if redis.call('EXISTS', KEYS[1]) == 0 and redis.call('EXISTS', KEYS[2]) == 1 then
+  return redis.error_reply('lease fence authority missing while lease is live')
+end
+local fence = redis.call('INCR', KEYS[1])
+redis.call('PERSIST', KEYS[1])
+redis.call('SET', KEYS[2], tostring(fence) .. ':' .. owner, 'PX', lease_ttl_ms)
+return fence
+`)
+
+var renewLeaseFenceScript = goredis.NewScript(`
+local expected = ARGV[1]
+local owner = ARGV[2]
+local lease_ttl_ms = tonumber(ARGV[3])
+if not lease_ttl_ms or lease_ttl_ms <= 0 then
+  return redis.error_reply('lease TTL must be positive')
+end
+local current = redis.call('GET', KEYS[1])
+if not current then
+  return 0
+end
+if current ~= expected then
+  return -1
+end
+local lease = redis.call('GET', KEYS[2])
+if not lease then
+  return 0
+end
+if lease ~= expected .. ':' .. owner then
+  return -1
+end
+redis.call('PEXPIRE', KEYS[2], lease_ttl_ms)
+return 1
+`)
+
+var releaseLeaseFenceScript = goredis.NewScript(`
+local expected = ARGV[1]
+local owner = ARGV[2]
+local current = redis.call('GET', KEYS[1])
+if not current then
+  return 0
+end
+if current ~= expected then
+  return -1
+end
+local lease = redis.call('GET', KEYS[2])
+if not lease then
+  return 0
+end
+if lease ~= expected .. ':' .. owner then
+  return -1
+end
+redis.call('DEL', KEYS[2])
+return 1
+`)
+
 var boundedImmutableRecordAtomicCreateScript = goredis.NewScript(`
 local ttl_ms = tonumber(ARGV[2])
 local owner_digest = ARGV[3]
@@ -664,6 +725,104 @@ func (c *client) CreateBoundedImmutableRecordAtomic(
 		boundedrecord.ErrConcurrentIndexChange,
 		maxAttempts,
 	)
+}
+
+func (c *client) AcquireLeaseFenceAtomic(
+	ctx context.Context,
+	fenceKey string,
+	leaseKey string,
+	leaseOwner string,
+	leaseTTL time.Duration,
+) (int64, error) {
+	if err := validateLeaseFenceKeys(fenceKey, leaseKey); err != nil {
+		return 0, err
+	}
+	if strings.TrimSpace(leaseOwner) == "" || leaseTTL <= 0 {
+		return 0, errors.New("redis lease owner and TTL must be valid")
+	}
+	return acquireLeaseFenceScript.Run(
+		ctx,
+		c.raw,
+		[]string{fenceKey, leaseKey},
+		strings.TrimSpace(leaseOwner),
+		strconv.FormatInt(leaseTTL.Milliseconds(), 10),
+	).Int64()
+}
+
+func (c *client) RenewLeaseFenceAtomic(
+	ctx context.Context,
+	fenceKey string,
+	leaseKey string,
+	leaseOwner string,
+	expectedFence int64,
+	leaseTTL time.Duration,
+) (rtredis.LeaseFenceResult, error) {
+	if err := validateLeaseFenceKeys(fenceKey, leaseKey); err != nil {
+		return 0, err
+	}
+	if strings.TrimSpace(leaseOwner) == "" || expectedFence <= 0 || leaseTTL <= 0 {
+		return 0, errors.New("redis lease fence renew arguments are invalid")
+	}
+	status, err := renewLeaseFenceScript.Run(
+		ctx,
+		c.raw,
+		[]string{fenceKey, leaseKey},
+		strconv.FormatInt(expectedFence, 10),
+		strings.TrimSpace(leaseOwner),
+		strconv.FormatInt(leaseTTL.Milliseconds(), 10),
+	).Int64()
+	if err != nil {
+		return 0, err
+	}
+	return leaseFenceResult(status)
+}
+
+func (c *client) ReleaseLeaseFenceAtomic(
+	ctx context.Context,
+	fenceKey string,
+	leaseKey string,
+	leaseOwner string,
+	expectedFence int64,
+) (rtredis.LeaseFenceResult, error) {
+	if err := validateLeaseFenceKeys(fenceKey, leaseKey); err != nil {
+		return 0, err
+	}
+	if strings.TrimSpace(leaseOwner) == "" || expectedFence <= 0 {
+		return 0, errors.New("redis lease fence release arguments are invalid")
+	}
+	status, err := releaseLeaseFenceScript.Run(
+		ctx,
+		c.raw,
+		[]string{fenceKey, leaseKey},
+		strconv.FormatInt(expectedFence, 10),
+		strings.TrimSpace(leaseOwner),
+	).Int64()
+	if err != nil {
+		return 0, err
+	}
+	return leaseFenceResult(status)
+}
+
+func leaseFenceResult(status int64) (rtredis.LeaseFenceResult, error) {
+	switch status {
+	case 1:
+		return rtredis.LeaseFenceApplied, nil
+	case 0:
+		return rtredis.LeaseFenceExpired, nil
+	case -1:
+		return rtredis.LeaseFenceRejected, nil
+	default:
+		return 0, fmt.Errorf("redis lease fence script status=%d", status)
+	}
+}
+
+func validateLeaseFenceKeys(fenceKey string, leaseKey string) error {
+	fenceTag, fenceTagged := redisClusterHashTag(fenceKey)
+	leaseTag, leaseTagged := redisClusterHashTag(leaseKey)
+	if !fenceTagged || !leaseTagged || fenceTag != leaseTag {
+		return errors.New("redis lease fence keys must share one non-empty Cluster hash tag")
+	}
+	return nil
 }
 
 func (c *client) Del(ctx context.Context, keys ...string) error {

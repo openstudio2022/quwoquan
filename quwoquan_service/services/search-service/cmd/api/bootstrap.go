@@ -3,7 +3,6 @@ package bootstrap
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -166,7 +165,7 @@ func assembleSearchDomain(asm *servicekit.Assembly, cfg *config) error {
 		searchapplication.WithSearchCursorCodec(searchCursorCodec),
 		// 翻页快照（REQ-007/OPEN-005）：首个后续页惰性 OpenPIT，之后每页续期；
 		// 快照失效按 cursor fail-closed，不静默退化为无快照查询。
-		searchapplication.WithPaginationSnapshots(built.Client),
+		searchapplication.WithPaginationSnapshots(built.Reader),
 	)
 	requestFactRecorder := requestapplication.NewRecorder(
 		stores.queryLogSink,
@@ -264,43 +263,10 @@ func assembleSearchBackend(
 	if err != nil {
 		return searchbackend.Built{}, fmt.Errorf("backend assembly failed: %w", err)
 	}
-	if err := ensureSearchIndex(asm.Context, built); err != nil {
-		return searchbackend.Built{}, err
-	}
 	if readiness := built.ReadinessCheck(); readiness != nil {
 		asm.Health.Register("elasticsearch", readiness)
 	}
 	return built, nil
-}
-
-// ensureSearchIndex 对索引初始化做有界重试。Docker/Colima 内嵌 DNS 在全栈冷
-// 启动最初几秒可能对刚接入网络的容器返回瞬时解析失败；不重试会让本服务秒退，
-// 而 ES 自身的 readiness 又排在本服务之后，形成「readiness 等索引、索引等
-// readiness」的启动死锁。schema 不兼容是确定性结论，重试只会推迟同一个失败，
-// 因此不进入重试直接 fail-closed。
-func ensureSearchIndex(ctx context.Context, built searchbackend.Built) error {
-	err := built.EnsureIndex(ctx)
-	for attempt := 1; err != nil && attempt <= 10; attempt++ {
-		if errors.Is(err, searchruntimees.ErrIndexSchemaIncompatible) {
-			break
-		}
-		slog.WarnContext(
-			ctx,
-			"search index initialization retry",
-			slog.Int("attempt", attempt),
-			slog.Int("max_attempts", 10),
-			slog.String("err", err.Error()),
-		)
-		time.Sleep(3 * time.Second)
-		err = built.EnsureIndex(ctx)
-	}
-	if err != nil {
-		if errors.Is(err, searchruntimees.ErrIndexSchemaIncompatible) {
-			return fmt.Errorf("search index schema migration failed: %w", err)
-		}
-		return fmt.Errorf("search index initialization failed: %w", err)
-	}
-	return nil
 }
 
 // mongoStoreDeps 是 Mongo 侧读写模型装配所需的外部构件。
@@ -448,7 +414,7 @@ func assembleMongoStores(
 
 	userProfileProjection, err := userprofileinfra.NewMongoUserProfileSearchProjection(
 		db,
-		searchruntimees.NewIndexer(deps.built.Client, deps.built.Client.WriteIndexName()),
+		searchruntimees.NewIndexer(deps.built.Writer, deps.built.Writer.WriteIndexName()),
 	)
 	if err != nil {
 		return mongoStores{}, fmt.Errorf(

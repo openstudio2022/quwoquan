@@ -8,13 +8,21 @@ import (
 	"quwoquan_service/runtime/search/es"
 )
 
+// VersionedIndexer is the only search write surface the closure workflow may
+// use: a closed account's documents are removed with versioned tombstones, never
+// with a physical DELETE that a replayed write-time projection could resurrect
+// (DEC-002). *es.Indexer satisfies it.
+type VersionedIndexer interface {
+	ApplyVersioned(context.Context, es.VersionedChangeEvent) (bool, error)
+}
+
 type SearchIndexerDeleter struct {
-	indexer *es.Indexer
+	indexer VersionedIndexer
 	enabled bool
 }
 
 func NewSearchIndexerDeleter(
-	indexer *es.Indexer,
+	indexer VersionedIndexer,
 	enabled bool,
 ) (*SearchIndexerDeleter, error) {
 	if enabled && indexer == nil {
@@ -28,6 +36,9 @@ func NewSearchIndexerDeleter(
 	}, nil
 }
 
+// DeleteSearchDocument writes the staged tombstone under the SourceVersion
+// captured with the Post hard-delete. A stale/replayed tombstone (applied=false)
+// is a success: the index already holds an equal or newer terminal state.
 func (deleter *SearchIndexerDeleter) DeleteSearchDocument(
 	ctx context.Context,
 	document SearchDocumentID,
@@ -44,11 +55,12 @@ func (deleter *SearchIndexerDeleter) DeleteSearchDocument(
 	if deleter.indexer == nil {
 		return errors.New("UserAccountClosed search indexer is unavailable")
 	}
-	if err := deleter.indexer.Apply(ctx, es.ChangeEvent{
-		Op:  es.OpDelete,
-		Doc: document.runtimeDocument(),
+	if _, err := deleter.indexer.ApplyVersioned(ctx, es.VersionedChangeEvent{
+		Op:            es.OpDelete,
+		Doc:           document.runtimeDocument(),
+		SourceVersion: document.SourceVersion,
 	}); err != nil {
-		return fmt.Errorf("delete canonical search document: %w", err)
+		return fmt.Errorf("tombstone canonical search document: %w", err)
 	}
 	return nil
 }

@@ -136,7 +136,12 @@ class StackctlGammaOperationLockContractTest(
             )
             telemetry = mock.Mock()
             telemetry.environment = {
-                "PRODUCT_OPS_ELASTICSEARCH_ENDPOINT": "http://elasticsearch:9200",
+                "PRODUCT_OPS_TELEMETRY_ELASTICSEARCH_ENDPOINT": (
+                    "http://elasticsearch:9200"
+                ),
+                "PRODUCT_OPS_RUNTIME_LOG_ELASTICSEARCH_ENDPOINT": (
+                    "http://elasticsearch:9200"
+                ),
             }
             telemetry.redacted_receipt.return_value = {
                 "source": "gamma-local-elasticsearch-topology",

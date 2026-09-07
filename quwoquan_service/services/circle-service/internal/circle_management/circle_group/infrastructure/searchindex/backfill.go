@@ -12,9 +12,11 @@ import (
 
 const defaultBackfillBatchSize = 500
 
-type BulkIndexer interface {
-	EnsureIndex(context.Context) error
-	Bulk(context.Context, string, []es.ChangeEvent) error
+// VersionedIndexer is the only search write surface backfill may use: every
+// document carries the CircleGroup's own version so a rebuild can never regress
+// a newer write-time projection (DEC-002). *es.Indexer satisfies it.
+type VersionedIndexer interface {
+	ApplyVersioned(context.Context, es.VersionedChangeEvent) (bool, error)
 }
 
 type GroupLister interface {
@@ -26,17 +28,22 @@ type GroupLister interface {
 }
 
 type BackfillReport struct {
-	TotalGroups   int `json:"totalGroups"`
-	IndexedGroups int `json:"indexedGroups"`
-	DeletedGroups int `json:"deletedGroups"`
-	BatchesPushed int `json:"batchesPushed"`
+	TotalGroups      int `json:"totalGroups"`
+	IndexedGroups    int `json:"indexedGroups"`
+	TombstonedGroups int `json:"tombstonedGroups"`
+	// StaleWrites counts documents the provider rejected as not newer than the
+	// version it already holds (idempotent replay). They are not failures.
+	StaleWrites int `json:"staleWrites"`
+	BatchesRead int `json:"batchesRead"`
 }
 
 // Backfill reconciles every CircleGroup into the shared index. Public active
-// groups are upserted; private or archived groups emit idempotent deletes.
+// groups are upserted and private or archived groups receive tombstones, each
+// under the group's own version. Index existence is the assembly's
+// responsibility; batchSize only bounds the source page size.
 func Backfill(
 	ctx context.Context,
-	indexer BulkIndexer,
+	indexer VersionedIndexer,
 	groups GroupLister,
 	batchSize int,
 ) (BackfillReport, error) {
@@ -49,9 +56,6 @@ func Backfill(
 	if batchSize <= 0 {
 		batchSize = defaultBackfillBatchSize
 	}
-	if err := indexer.EnsureIndex(ctx); err != nil {
-		return report, err
-	}
 
 	afterID := ""
 	for {
@@ -63,30 +67,33 @@ func Backfill(
 			break
 		}
 		report.TotalGroups += len(page)
-		batch := make([]es.ChangeEvent, 0, len(page))
 		for index := range page {
 			group := page[index]
-			if groupapp.CircleGroupSearchEligible(group) {
-				batch = append(batch, es.ChangeEvent{
-					Op:  es.OpUpsert,
-					Doc: groupapp.ProjectCircleGroupToSearchDocument(group),
-				})
-				report.IndexedGroups++
-				continue
+			if group.Version <= 0 {
+				return report, fmt.Errorf("CircleGroup %s has no positive version for search backfill", group.ID)
 			}
-			batch = append(batch, es.ChangeEvent{
-				Op: es.OpDelete,
-				Doc: rtsearch.Document{
+			event := es.VersionedChangeEvent{SourceVersion: group.Version}
+			if groupapp.CircleGroupSearchEligible(group) {
+				event.Op = es.OpUpsert
+				event.Doc = groupapp.ProjectCircleGroupToSearchDocument(group)
+				report.IndexedGroups++
+			} else {
+				event.Op = es.OpDelete
+				event.Doc = rtsearch.Document{
 					ObjectType: rtsearch.ObjectTypeCircleGroup,
 					ObjectID:   group.ID,
-				},
-			})
-			report.DeletedGroups++
+				}
+				report.TombstonedGroups++
+			}
+			applied, err := indexer.ApplyVersioned(ctx, event)
+			if err != nil {
+				return report, fmt.Errorf("CircleGroup search backfill %s %s: %w", event.Op, group.ID, err)
+			}
+			if !applied {
+				report.StaleWrites++
+			}
 		}
-		if err := indexer.Bulk(ctx, "", batch); err != nil {
-			return report, err
-		}
-		report.BatchesPushed++
+		report.BatchesRead++
 
 		nextID := page[len(page)-1].ID
 		if nextID == "" || nextID == afterID {

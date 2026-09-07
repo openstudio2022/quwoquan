@@ -411,7 +411,14 @@ class LocalGammaServiceRuntimeBindingsTest(unittest.TestCase):
         ).read_text(encoding="utf-8")
         assistant_compose = service_compose("assistant-service")
 
-        self.assertIn("case logsink.ElasticsearchAdapterID:", product_runtime_config)
+        # 两条逻辑 sink（product.telemetry.sink / runtime.log.sink）都只接受
+        # Elasticsearch adapter，其它 adapter 一律 fail-closed。
+        self.assertIn(
+            "descriptor.AdapterID != logsink.ElasticsearchAdapterID",
+            product_runtime_config,
+        )
+        self.assertIn("productTelemetrySinkCapability", product_runtime_config)
+        self.assertIn("runtimeLogSinkCapability", product_runtime_config)
         # 环境合法性（alpha|beta|gamma|prod）与配置身份校验由 servicekit 的
         # ResolveIdentity 统一承担，服务侧只声明通用段并内嵌 BaseConfig。
         self.assertIn("servicekit.BaseConfig", product_runtime_config)

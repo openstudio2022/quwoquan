@@ -348,6 +348,7 @@ def _bind_local_teardown_runtime(
         receipt_candidate,
         candidate_manifest=candidate_manifest,
         candidate_root=candidate_root,
+        purpose="teardown",
     )
     environment.update(
         _stackctl._observability_log_sink_launch_environment(
@@ -356,6 +357,7 @@ def _bind_local_teardown_runtime(
             target_name=target_name,
             candidate_root=observability_runtime_binding["candidateRoot"],
             workload=runtime_workload,
+            purpose="teardown",
         )
     )
     receipt_log_sink_digest = str(
@@ -454,6 +456,7 @@ def _receipt_bound_local_compose_model(
         environment=environment_name,
         target=target_name,
         workload=workload,
+        purpose="teardown",
     )
     compose_files = list(topology["composeFiles"])
     profiles: list[str] = []

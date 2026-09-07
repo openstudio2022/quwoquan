@@ -226,14 +226,14 @@ class StackctlReceiptBoundImmutableTeardownTest(unittest.TestCase):
                         "candidateRoot": candidate_root,
                         "composition": {},
                     },
-                ),
+                ) as candidate_observability,
                 mock.patch.object(
                     stackctl,
                     "_observability_log_sink_launch_environment",
                     return_value={
                         "QWQ_OBSERVABILITY_LOG_SINK_DIGEST": "sha256:" + "3" * 64
                     },
-                ),
+                ) as observability_environment,
                 mock.patch.object(
                     stackctl,
                     "_load_gamma_runtime_image_composition",
@@ -283,6 +283,22 @@ class StackctlReceiptBoundImmutableTeardownTest(unittest.TestCase):
             {"composition": {}},
             candidate_root=candidate_root,
             workload="full",
+        )
+        candidate_observability.assert_called_once_with(
+            "alpha",
+            "alpha-local",
+            receipt_candidate,
+            candidate_manifest={"baselineId": receipt_candidate},
+            candidate_root=candidate_root,
+            purpose="teardown",
+        )
+        observability_environment.assert_called_once_with(
+            {},
+            environment_name="alpha",
+            target_name="alpha-local",
+            candidate_root=candidate_root,
+            workload="full",
+            purpose="teardown",
         )
         active_candidate.assert_not_called()
 
@@ -500,6 +516,7 @@ class StackctlReceiptBoundImmutableTeardownTest(unittest.TestCase):
             environment="alpha",
             target="alpha-local",
             workload="full",
+            purpose="teardown",
         )
         command = run.call_args.args[0]
         self.assertEqual(

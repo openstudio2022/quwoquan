@@ -73,8 +73,9 @@ func NewProjector(indexer *es.Indexer, reader PostReader, opts ...Option) *Proje
 }
 
 // Project reconciles a post lifecycle event into the index. Content/visibility
-// changing events reconcile the post against its current eligibility (upsert when
-// searchable, delete otherwise); deletions remove the doc. Counter-only events
+// changing events (including deletion, which keeps the Post row with
+// status=deleted) reconcile the post against its current eligibility: upsert
+// when searchable, versioned tombstone otherwise. Counter-only events
 // (reactions, behavior batches) do not change the searchable surface and are
 // ignored. Each projector owns an independent outbox checkpoint, so a failing
 // index write must propagate to its relay rather than being acknowledged.
@@ -87,48 +88,65 @@ func (p *Projector) Project(ctx context.Context, event ports.ProjectorEvent) err
 		return fmt.Errorf("Post search event has no aggregate id")
 	}
 	switch event.Type {
-	case postevent.PostDeleted:
-		return p.delete(ctx, postID, event.Type)
-	case postevent.PostPublished, postevent.PostUpdated, postevent.PostSettingsUpdated, postevent.PostPromotedToWork:
-		return p.reconcile(ctx, postID, event.Type)
+	case postevent.PostDeleted, postevent.PostPublished, postevent.PostUpdated,
+		postevent.PostSettingsUpdated, postevent.PostPromotedToWork:
+		return p.reconcile(ctx, postID, event)
 	default:
 		// Counter-only / unrelated events: nothing searchable changed.
 	}
 	return nil
 }
 
-// reconcile reads the post back and upserts it when searchable, else removes it
-// (e.g. unpublished, turned private, or vanished). Keeping the index aligned with
-// the same eligibility the native source uses avoids a second discoverability
-// truth source.
-func (p *Projector) reconcile(ctx context.Context, postID, eventType string) error {
+// reconcile reads the post back and upserts it when searchable, else writes a
+// versioned tombstone (e.g. deleted, unpublished, turned private, or vanished).
+// Keeping the index aligned with the same eligibility the native source uses
+// avoids a second discoverability truth source.
+//
+// sourceVersion 来源（DEC-002）：读到 Post 时用其权威 version（server-owned
+// CAS 单调递增）；Post 已不可读（硬删除）时用触发本次投影的 outbox 事实的
+// AggregateVersion —— 它是该 Post 最后一次已提交的版本，任何更高版本的写入
+// 都会由 Elasticsearch 外部版本比较拒绝本 tombstone，而不是被它覆盖。
+func (p *Projector) reconcile(ctx context.Context, postID string, event ports.ProjectorEvent) error {
 	post, ok, err := p.reader.Load(ctx, postID)
 	if err != nil {
 		return fmt.Errorf("load post %s for search reconciliation: %w", postID, err)
 	}
 	if !ok || post == nil {
-		// Post is gone from the store: ensure it is not left in the index.
-		return p.delete(ctx, postID, eventType)
+		if event.AggregateVersion <= 0 {
+			return fmt.Errorf(
+				"Post %s is unreadable and event %s carries no aggregate version for its search tombstone",
+				postID, event.Type,
+			)
+		}
+		return p.tombstone(ctx, postID, event.Type, event.AggregateVersion)
+	}
+	if post.Version <= 0 {
+		return fmt.Errorf("Post %s has no positive version for search projection", postID)
 	}
 	if !searchEligible(post) {
-		return p.delete(ctx, postID, eventType)
+		return p.tombstone(ctx, postID, event.Type, post.Version)
 	}
 	doc := searchprojection.ProjectPostToSearchDocument(*post)
-	if err := p.indexer.Apply(ctx, es.ChangeEvent{Op: es.OpUpsert, Doc: doc}); err != nil {
+	if _, err := p.indexer.ApplyVersioned(ctx, es.VersionedChangeEvent{
+		Op: es.OpUpsert, Doc: doc, SourceVersion: post.Version,
+	}); err != nil {
 		p.logger.Warn("search index upsert failed",
-			"event", eventType, "postId", postID, "err", err)
+			"event", event.Type, "postId", postID, "err", err)
 		return fmt.Errorf("search index upsert %s: %w", postID, err)
 	}
 	return nil
 }
 
-// delete removes the post's doc from the index. Replayed deletes are idempotent.
-func (p *Projector) delete(ctx context.Context, postID, eventType string) error {
+// tombstone writes the post's versioned soft-delete document. Replayed and
+// stale tombstones are rejected atomically by the provider, never resurrected.
+func (p *Projector) tombstone(ctx context.Context, postID, eventType string, sourceVersion int64) error {
 	doc := rtsearch.Document{ObjectType: rtsearch.ObjectTypeContentPost, ObjectID: postID}
-	if err := p.indexer.Apply(ctx, es.ChangeEvent{Op: es.OpDelete, Doc: doc}); err != nil {
-		p.logger.Warn("search index delete failed",
+	if _, err := p.indexer.ApplyVersioned(ctx, es.VersionedChangeEvent{
+		Op: es.OpDelete, Doc: doc, SourceVersion: sourceVersion,
+	}); err != nil {
+		p.logger.Warn("search index tombstone failed",
 			"event", eventType, "postId", postID, "err", err)
-		return fmt.Errorf("search index delete %s: %w", postID, err)
+		return fmt.Errorf("search index tombstone %s: %w", postID, err)
 	}
 	return nil
 }

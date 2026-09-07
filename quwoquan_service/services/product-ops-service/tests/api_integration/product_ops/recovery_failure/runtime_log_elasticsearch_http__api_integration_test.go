@@ -59,12 +59,11 @@ func TestRecoveryFailureHTTPPersistsSanitizedFactInElasticsearch(
 
 	suffix := fmt.Sprintf("%d", time.Now().UnixNano())
 	config := eventpersistence.ElasticsearchConfig{
-		Endpoint:               endpoint,
-		RawIndex:               "qwq-recovery-raw-" + suffix,
-		StartupDiagnosticIndex: "qwq-recovery-startup-" + suffix,
-		RuntimeLogIndex:        "qwq-recovery-runtime-" + suffix,
-		AggregateIndex:         "qwq-recovery-hourly-" + suffix,
-		Timeout:                30 * time.Second,
+		Kind:           eventpersistence.ElasticsearchRuntimeLogStoreKind,
+		Endpoint:       endpoint,
+		RawIndex:       "qwq-recovery-runtime-" + suffix,
+		AggregateIndex: "qwq-recovery-runtime-hourly-" + suffix,
+		Timeout:        30 * time.Second,
 	}
 	store, err := eventpersistence.NewElasticsearchEventLogStore(config)
 	if err != nil {
@@ -254,8 +253,6 @@ func cleanupElasticsearchResources(
 	defer cancel()
 	for _, indexBase := range []string{
 		config.RawIndex,
-		config.StartupDiagnosticIndex,
-		config.RuntimeLogIndex,
 		config.AggregateIndex,
 	} {
 		for _, resource := range []string{

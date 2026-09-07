@@ -57,7 +57,7 @@ func startPITSearchService(t *testing.T) (*application.SearchService, *es.Client
 	indexer := es.NewIndexer(client, client.WriteIndexName())
 	now := time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC)
 	for index := 0; index < 9; index++ {
-		if err := indexer.Apply(ctx, es.ChangeEvent{Op: es.OpUpsert, Doc: rtsearch.Document{
+		if _, err := indexer.ApplyVersioned(ctx, es.VersionedChangeEvent{Op: es.OpUpsert, SourceVersion: 1, Doc: rtsearch.Document{
 			ObjectType:  "content.post",
 			ObjectID:    "pit-post-" + strconv.Itoa(index),
 			Title:       "大理翻页快照第" + strconv.Itoa(index) + "篇",
@@ -136,7 +136,7 @@ func TestPaginationSnapshotSurvivesConcurrentIndexWrites(t *testing.T) {
 	// unvisited one is deleted. The open snapshot must keep serving the state
 	// the pagination started on.
 	indexer := es.NewIndexer(client, client.WriteIndexName())
-	if err := indexer.Apply(ctx, es.ChangeEvent{Op: es.OpUpsert, Doc: rtsearch.Document{
+	if _, err := indexer.ApplyVersioned(ctx, es.VersionedChangeEvent{Op: es.OpUpsert, SourceVersion: 1, Doc: rtsearch.Document{
 		ObjectType: "content.post", ObjectID: "pit-post-late",
 		Title: "大理翻页快照插队新文档", Summary: "翻页开始后写入",
 		ContentType: "article", Visibility: "public", Popularity: 99,
@@ -144,10 +144,11 @@ func TestPaginationSnapshotSurvivesConcurrentIndexWrites(t *testing.T) {
 	}}); err != nil {
 		t.Fatalf("late upsert: %v", err)
 	}
-	if err := indexer.Apply(ctx, es.ChangeEvent{Op: es.OpDelete, Doc: rtsearch.Document{
+	// 版本 2 的 tombstone 严格高于播种时的版本 1，才会被外部版本围栏接受。
+	if applied, err := indexer.ApplyVersioned(ctx, es.VersionedChangeEvent{Op: es.OpDelete, SourceVersion: 2, Doc: rtsearch.Document{
 		ObjectType: "content.post", ObjectID: "pit-post-8",
-	}}); err != nil {
-		t.Fatalf("late delete: %v", err)
+	}}); err != nil || !applied {
+		t.Fatalf("late tombstone applied=%v err=%v", applied, err)
 	}
 	if err := client.Refresh(ctx); err != nil {
 		t.Fatalf("refresh: %v", err)

@@ -95,18 +95,41 @@ def _build_runtime_shared_package(
             "source": _runtime_shared_source_ref(source, source_root),
             "sha256": _stackctl._sha256_file(destination),
         }
-    _stackctl.materialize_runtime_topology_package(
+    data_plane_binding = _stackctl.materialize_data_plane_binding_package(
         env_name,
         target_name,
         package_dir,
         repo_root=source_root,
     )
+    runtime_topology = None
+    if env_name in {"alpha", "beta", "gamma"} and target_name == f"{env_name}-local":
+        runtime_topology = _stackctl.materialize_runtime_topology_package(
+            env_name,
+            target_name,
+            package_dir,
+            repo_root=source_root,
+        )
+        if runtime_topology.get("dataPlaneBinding") != data_plane_binding:
+            raise ValueError("runtime topology data-plane binding identity drifted")
     _stackctl.write_json(
         package_dir / "manifest.json",
         {
             "schema": "qwq.runtime_shared_package",
             "environment": env_name,
+            "target": target_name,
             "createdAt": _stackctl.utc_now(),
+            "dataPlaneBinding": data_plane_binding,
+            "runtimeTopology": (
+                {
+                    "ref": "packages/runtime-shared/runtime-topology/manifest.json",
+                    "digest": _stackctl._sha256_file(
+                        package_dir / "runtime-topology/manifest.json"
+                    ),
+                    "topologyDigest": runtime_topology["topologyDigest"],
+                }
+                if runtime_topology is not None
+                else None
+            ),
             "provenance": {"files": files},
         },
     )

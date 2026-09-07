@@ -67,15 +67,22 @@ type config struct {
 	MongoDB  servicekit.MongoConfig    `yaml:"mongodb"`
 	Postgres servicekit.PostgresConfig `yaml:"postgres"`
 
-	Elasticsearch struct {
+	TelemetryElasticsearch struct {
 		Endpoint               string `yaml:"endpoint" env:"ELASTICSEARCH_ENDPOINT"`
 		APIKey                 string `yaml:"api_key" env:"ELASTICSEARCH_API_KEY"`
 		RawIndex               string `yaml:"raw_index" env:"ELASTICSEARCH_RAW_INDEX"`
 		StartupDiagnosticIndex string `yaml:"startup_diagnostic_index" env:"ELASTICSEARCH_STARTUP_DIAGNOSTIC_INDEX"`
-		RuntimeLogIndex        string `yaml:"runtime_log_index" env:"ELASTICSEARCH_RUNTIME_LOG_INDEX"`
 		AggregateIndex         string `yaml:"aggregate_index" env:"ELASTICSEARCH_AGGREGATE_INDEX"`
 		TimeoutMS              int    `yaml:"timeout_ms" env:"ELASTICSEARCH_TIMEOUT_MS"`
-	} `yaml:"elasticsearch"`
+	} `yaml:"telemetry_elasticsearch" envPrefix:"TELEMETRY"`
+
+	RuntimeLogElasticsearch struct {
+		Endpoint       string `yaml:"endpoint" env:"ELASTICSEARCH_ENDPOINT"`
+		APIKey         string `yaml:"api_key" env:"ELASTICSEARCH_API_KEY"`
+		RawIndex       string `yaml:"raw_index" env:"ELASTICSEARCH_RAW_INDEX"`
+		AggregateIndex string `yaml:"aggregate_index" env:"ELASTICSEARCH_AGGREGATE_INDEX"`
+		TimeoutMS      int    `yaml:"timeout_ms" env:"ELASTICSEARCH_TIMEOUT_MS"`
+	} `yaml:"runtime_log_elasticsearch" envPrefix:"RUNTIME_LOG"`
 
 	TelemetryAlerts struct {
 		PolicyPath      string `yaml:"policy_path" env:"TELEMETRY_ALERTS_POLICY_PATH"`
@@ -88,8 +95,9 @@ type config struct {
 		General servicekit.RedisSceneConfig `yaml:"general" envPrefix:"GENERAL"`
 	} `yaml:"redis" envPrefix:"REDIS"`
 
-	// LogSinkAdapterID 由 generated runtime.log.sink Binding 解析，不来自快照。
-	LogSinkAdapterID string `yaml:"-"`
+	// Adapter ID 由两个 generated Provider Binding 分别解析，不来自快照。
+	TelemetrySinkAdapterID  string `yaml:"-"`
+	RuntimeLogSinkAdapterID string `yaml:"-"`
 }
 
 // retiredEnvKeys 是迁移到声明式装配时退役的手写覆盖键。
@@ -103,6 +111,13 @@ func retiredEnvKeys() []string {
 		"POSTGRES_DSN",
 		"REDIS_GENERAL_ADDR",
 		"REDIS_REC_ADDR",
+		"PRODUCT_OPS_ELASTICSEARCH_ENDPOINT",
+		"PRODUCT_OPS_ELASTICSEARCH_API_KEY",
+		"PRODUCT_OPS_ELASTICSEARCH_RAW_INDEX",
+		"PRODUCT_OPS_ELASTICSEARCH_STARTUP_DIAGNOSTIC_INDEX",
+		"PRODUCT_OPS_ELASTICSEARCH_RUNTIME_LOG_INDEX",
+		"PRODUCT_OPS_ELASTICSEARCH_AGGREGATE_INDEX",
+		"PRODUCT_OPS_ELASTICSEARCH_TIMEOUT_MS",
 	}
 }
 
@@ -116,63 +131,107 @@ func resolveRedisScenes(cfg *config) map[string]servicekit.RedisSceneConfig {
 	}
 }
 
-// resolveLogSinkBinding 从 generated runtime.log.sink Binding 解析事件仓库
-// adapter 与其端点/超时；缺 secret 或端点即 fail-closed。
-func resolveLogSinkBinding(
+const (
+	productTelemetrySinkCapability = "product.telemetry.sink"
+	runtimeLogSinkCapability       = "runtime.log.sink"
+)
+
+// resolveEventStoreBindings 从当前打包环境的两个 generated Provider Binding
+// 分别解析 endpoint、secret 与 timeout，任何一轨缺失都 fail-closed。
+func resolveEventStoreBindings(
 	cfg *config,
 	configProvider runtimeconfig.RuntimeConfigProvider,
 ) error {
 	if configProvider == nil {
-		return fmt.Errorf("runtime.log.sink binding has no runtime config provider")
+		return fmt.Errorf("event store bindings have no runtime config provider")
 	}
-	descriptor, found := eventrecordgenerated.CompiledBindingFor("runtime.log.sink")
+	telemetryDescriptor, found := eventrecordgenerated.CompiledBindingFor(
+		productTelemetrySinkCapability,
+	)
 	if !found {
 		return fmt.Errorf(
-			"runtime.log.sink binding is missing for environment=%s", cfg.Environment,
+			"%s binding is missing for environment=%s",
+			productTelemetrySinkCapability, cfg.Environment,
 		)
 	}
-	cfg.LogSinkAdapterID = descriptor.AdapterID
+	runtimeLogDescriptor, found := eventrecordgenerated.CompiledBindingFor(
+		runtimeLogSinkCapability,
+	)
+	if !found {
+		return fmt.Errorf(
+			"%s binding is missing for environment=%s",
+			runtimeLogSinkCapability, cfg.Environment,
+		)
+	}
+	if err := resolveElasticsearchBinding(
+		productTelemetrySinkCapability, telemetryDescriptor, configProvider,
+		&cfg.TelemetryElasticsearch.Endpoint, &cfg.TelemetryElasticsearch.APIKey,
+		&cfg.TelemetryElasticsearch.TimeoutMS, &cfg.TelemetrySinkAdapterID,
+	); err != nil {
+		return err
+	}
+	return resolveElasticsearchBinding(
+		runtimeLogSinkCapability, runtimeLogDescriptor, configProvider,
+		&cfg.RuntimeLogElasticsearch.Endpoint, &cfg.RuntimeLogElasticsearch.APIKey,
+		&cfg.RuntimeLogElasticsearch.TimeoutMS, &cfg.RuntimeLogSinkAdapterID,
+	)
+}
+
+func resolveElasticsearchBinding(
+	capability string,
+	descriptor eventrecordgenerated.ExternalProviderBinding,
+	configProvider runtimeconfig.RuntimeConfigProvider,
+	endpoint *string,
+	apiKey *string,
+	timeoutMS *int,
+	adapterID *string,
+) error {
+	*adapterID = descriptor.AdapterID
 	if descriptor.State != "enabled" {
-		// Prod 可以在厂商 secret 注入前保持 blocked。
+		// 打包前源码描述符不固化环境；若 capability 已存在于多环境投影，
+		// 仅将 endpoint/timeout 交给 config schema 与 env 覆盖解析。
 		return nil
+	}
+	if len(descriptor.SecretEnvironmentKeys) > 1 {
+		return fmt.Errorf("%s declares multiple API key secrets", capability)
 	}
 	for _, environmentKey := range descriptor.SecretEnvironmentKeys {
-		if _, ok := configProvider.GetString(environmentKey); !ok {
-			return fmt.Errorf(
-				"runtime.log.sink secret material is unavailable for environment=%s",
-				cfg.Environment,
-			)
-		}
-	}
-	switch descriptor.AdapterID {
-	case logsink.ElasticsearchAdapterID:
-		environmentKey, exists := descriptor.EndpointEnvironmentKeys["endpoint"]
-		if !exists {
-			return fmt.Errorf("runtime.log.sink endpoint role=endpoint is not declared")
-		}
 		value, ok := configProvider.GetString(environmentKey)
-		if !ok || strings.TrimSpace(value) == "" {
+		if !ok {
 			return fmt.Errorf(
-				"runtime.log.sink endpoint material is unavailable for role=endpoint",
+				"%s secret material is unavailable for environment key=%s",
+				capability, environmentKey,
 			)
 		}
-		cfg.Elasticsearch.Endpoint = strings.TrimSpace(value)
-		cfg.Elasticsearch.TimeoutMS = descriptor.TimeoutMilliseconds
-		if cfg.Elasticsearch.TimeoutMS <= 0 {
-			return fmt.Errorf("runtime.log.sink binding has an invalid timeout")
-		}
-		return nil
-	default:
+		*apiKey = strings.TrimSpace(value)
+	}
+	if descriptor.AdapterID != logsink.ElasticsearchAdapterID {
 		return fmt.Errorf(
-			"runtime.log.sink selects unsupported adapter=%s", descriptor.AdapterID,
+			"%s selects unsupported adapter=%s", capability, descriptor.AdapterID,
 		)
 	}
+	environmentKey, exists := descriptor.EndpointEnvironmentKeys["endpoint"]
+	if !exists {
+		return fmt.Errorf("%s endpoint role=endpoint is not declared", capability)
+	}
+	value, ok := configProvider.GetString(environmentKey)
+	if !ok || strings.TrimSpace(value) == "" {
+		return fmt.Errorf(
+			"%s endpoint material is unavailable for role=endpoint", capability,
+		)
+	}
+	*endpoint = strings.TrimSpace(value)
+	*timeoutMS = descriptor.TimeoutMilliseconds
+	if *timeoutMS <= 0 {
+		return fmt.Errorf("%s binding has an invalid timeout", capability)
+	}
+	return nil
 }
 
 // validateProductOpsConfig 施加领域配置下界。它在 required 校验之后、任何
 // 外部连接之前执行，因此非法配置不会产生副作用。
 func validateProductOpsConfig(cfg *config) error {
-	if err := resolveLogSinkBinding(cfg, runtimeconfig.EnvRuntimeConfigProvider{}); err != nil {
+	if err := resolveEventStoreBindings(cfg, runtimeconfig.EnvRuntimeConfigProvider{}); err != nil {
 		return err
 	}
 	if err := rejectUnrenderedPlaceholders(cfg); err != nil {
@@ -213,9 +272,10 @@ func validateProductOpsConfig(cfg *config) error {
 // 它既不是有效端点也不是缺席，直接连接会把注入缺口伪装成连接错误。
 func rejectUnrenderedPlaceholders(cfg *config) error {
 	for field, value := range map[string]string{
-		"mongodb.uri":            cfg.MongoDB.URI,
-		"postgres.dsn":           cfg.Postgres.DSN,
-		"elasticsearch.endpoint": cfg.Elasticsearch.Endpoint,
+		"mongodb.uri":                        cfg.MongoDB.URI,
+		"postgres.dsn":                       cfg.Postgres.DSN,
+		"telemetry_elasticsearch.endpoint":   cfg.TelemetryElasticsearch.Endpoint,
+		"runtime_log_elasticsearch.endpoint": cfg.RuntimeLogElasticsearch.Endpoint,
 	} {
 		if strings.HasPrefix(strings.TrimSpace(value), "${") {
 			return fmt.Errorf("%s still holds an unrendered placeholder: %s", field, value)
@@ -257,26 +317,63 @@ func validateAccountEnforcementBounds(cfg *config) error {
 }
 
 func validateEventRepositoryBounds(cfg *config) error {
-	switch cfg.LogSinkAdapterID {
-	case logsink.ElasticsearchAdapterID:
-		for name, value := range map[string]string{
-			"endpoint":                 cfg.Elasticsearch.Endpoint,
-			"raw_index":                cfg.Elasticsearch.RawIndex,
-			"startup_diagnostic_index": cfg.Elasticsearch.StartupDiagnosticIndex,
-			"runtime_log_index":        cfg.Elasticsearch.RuntimeLogIndex,
-			"aggregate_index":          cfg.Elasticsearch.AggregateIndex,
-		} {
-			if strings.TrimSpace(value) == "" {
-				return fmt.Errorf("elasticsearch.%s is required", name)
-			}
-		}
-		if cfg.Elasticsearch.TimeoutMS <= 0 || cfg.Elasticsearch.TimeoutMS > 10000 {
-			return fmt.Errorf("elasticsearch.timeout_ms must be within 1..10000")
-		}
-		return nil
-	default:
+	if cfg.TelemetrySinkAdapterID != logsink.ElasticsearchAdapterID {
 		return fmt.Errorf(
-			"runtime.log.sink selects unsupported adapter=%s", cfg.LogSinkAdapterID,
+			"%s selects unsupported adapter=%s",
+			productTelemetrySinkCapability, cfg.TelemetrySinkAdapterID,
 		)
 	}
+	if cfg.RuntimeLogSinkAdapterID != logsink.ElasticsearchAdapterID {
+		return fmt.Errorf(
+			"%s selects unsupported adapter=%s",
+			runtimeLogSinkCapability, cfg.RuntimeLogSinkAdapterID,
+		)
+	}
+	for name, value := range map[string]string{
+		"telemetry_elasticsearch.endpoint":                 cfg.TelemetryElasticsearch.Endpoint,
+		"telemetry_elasticsearch.raw_index":                cfg.TelemetryElasticsearch.RawIndex,
+		"telemetry_elasticsearch.startup_diagnostic_index": cfg.TelemetryElasticsearch.StartupDiagnosticIndex,
+		"telemetry_elasticsearch.aggregate_index":          cfg.TelemetryElasticsearch.AggregateIndex,
+		"runtime_log_elasticsearch.endpoint":               cfg.RuntimeLogElasticsearch.Endpoint,
+		"runtime_log_elasticsearch.raw_index":              cfg.RuntimeLogElasticsearch.RawIndex,
+		"runtime_log_elasticsearch.aggregate_index":        cfg.RuntimeLogElasticsearch.AggregateIndex,
+	} {
+		if strings.TrimSpace(value) == "" {
+			return fmt.Errorf("%s is required", name)
+		}
+	}
+	for name, timeoutMS := range map[string]int{
+		"telemetry_elasticsearch.timeout_ms":   cfg.TelemetryElasticsearch.TimeoutMS,
+		"runtime_log_elasticsearch.timeout_ms": cfg.RuntimeLogElasticsearch.TimeoutMS,
+	} {
+		if timeoutMS <= 0 || timeoutMS > 10000 {
+			return fmt.Errorf("%s must be within 1..10000", name)
+		}
+	}
+	if cfg.Environment == "prod" || cfg.Environment == "release" {
+		if cfg.TelemetryElasticsearch.APIKey == "" || cfg.RuntimeLogElasticsearch.APIKey == "" {
+			return fmt.Errorf("prod telemetry and runtime-log Elasticsearch API keys are required")
+		}
+		if cfg.TelemetryElasticsearch.APIKey == cfg.RuntimeLogElasticsearch.APIKey {
+			return fmt.Errorf("prod telemetry and runtime-log Elasticsearch API keys must be distinct")
+		}
+	}
+	for telemetryRole, telemetryIndex := range map[string]string{
+		"raw_index":                cfg.TelemetryElasticsearch.RawIndex,
+		"startup_diagnostic_index": cfg.TelemetryElasticsearch.StartupDiagnosticIndex,
+		"aggregate_index":          cfg.TelemetryElasticsearch.AggregateIndex,
+	} {
+		for runtimeRole, runtimeIndex := range map[string]string{
+			"raw_index":       cfg.RuntimeLogElasticsearch.RawIndex,
+			"aggregate_index": cfg.RuntimeLogElasticsearch.AggregateIndex,
+		} {
+			if telemetryIndex == runtimeIndex {
+				return fmt.Errorf(
+					"telemetry_elasticsearch.%s and runtime_log_elasticsearch.%s must not overlap",
+					telemetryRole, runtimeRole,
+				)
+			}
+		}
+	}
+	return nil
 }

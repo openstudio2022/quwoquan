@@ -376,8 +376,9 @@ func (store *MongoStore) PendingSearchDocuments(
 		},
 		options.Find().
 			SetProjection(bson.M{
-				"objectType": 1,
-				"objectId":   1,
+				"objectType":    1,
+				"objectId":      1,
+				"sourceVersion": 1,
 			}).
 			SetSort(bson.D{{Key: "_id", Value: 1}}).
 			SetLimit(limit),
@@ -390,8 +391,9 @@ func (store *MongoStore) PendingSearchDocuments(
 	}
 	defer cursor.Close(ctx)
 	var documents []struct {
-		ObjectType string `bson:"objectType"`
-		ObjectID   string `bson:"objectId"`
+		ObjectType    string `bson:"objectType"`
+		ObjectID      string `bson:"objectId"`
+		SourceVersion int64  `bson:"sourceVersion"`
 	}
 	if err := cursor.All(ctx, &documents); err != nil {
 		return nil, fmt.Errorf(
@@ -402,8 +404,9 @@ func (store *MongoStore) PendingSearchDocuments(
 	identities := make([]SearchDocumentID, 0, len(documents))
 	for _, document := range documents {
 		identity := SearchDocumentID{
-			ObjectType: document.ObjectType,
-			ObjectID:   document.ObjectID,
+			ObjectType:    document.ObjectType,
+			ObjectID:      document.ObjectID,
+			SourceVersion: document.SourceVersion,
 		}
 		if err := identity.Validate(); err != nil {
 			return nil, fmt.Errorf(

@@ -33,6 +33,9 @@ api_routes:
     mutation_target: AssistantRun
     invariant_target: AssistantRun
   description: 统一启动助手执行；流式结果是该 Run 的 transport，不存在 CreateTurn/StreamTurn 第二主线
+  consistency:
+    atomic_commit: true
+    arbitration: unique_winner
   request_entity: AssistantStartRunRequest
   request_body_kind: object
   request_bindings:
@@ -50,6 +53,7 @@ api_routes:
   - ASSISTANT.USER.run_invalid_argument
   - ASSISTANT.USER.session_not_found
   - ASSISTANT.USER.run_idempotency_conflict
+  - ASSISTANT.USER.run_active_conflict
   - ASSISTANT.USER.skill_consent_required
   - ASSISTANT.USER.intersection_evidence_not_found
   - ASSISTANT.USER.run_unauthorized

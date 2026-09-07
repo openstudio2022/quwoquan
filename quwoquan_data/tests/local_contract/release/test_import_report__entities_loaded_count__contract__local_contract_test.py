@@ -44,3 +44,25 @@ def test_import_report_rejects_missing_entities_loaded() -> None:
     with pytest.raises(ValueError, match="entitiesLoaded") as exc:
         assert_import_report_contract(_base_report(entities_loaded=None))
     assert "$.counts" in str(exc.value)
+
+
+def test_import_report_requires_authoritative_versions_for_imported_status() -> None:
+    report = _base_report(entities_loaded=0)
+    report["status"] = "imported"
+    with pytest.raises(ValueError, match="revision"):
+        assert_import_report_contract(report)
+
+    report["revision"] = 1
+    with pytest.raises(ValueError, match="sourceVersion"):
+        assert_import_report_contract(report)
+
+    report["sourceVersion"] = 7
+    assert_import_report_contract(report)
+
+
+def test_import_report_forbids_authoritative_versions_for_dry_run() -> None:
+    report = _base_report(entities_loaded=0)
+    report["revision"] = 1
+    report["sourceVersion"] = 7
+    with pytest.raises(ValueError):
+        assert_import_report_contract(report)

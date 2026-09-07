@@ -539,6 +539,46 @@ def materialize_prod_sim_app_launch_bundle(
     )
 
 
+
+def _validate_data_plane_binding_identity(
+    identity: object,
+    *,
+    candidate_root: Path,
+) -> dict[str, str]:
+    """Recompute the candidate-owned redacted data-plane binding identity."""
+
+    from quwoquan_ops.cli.lib.data_plane_binding import (
+        DATA_PLANE_BINDING_PACKAGE_REF,
+        DataPlaneBindingError,
+        validate_canonical_data_plane_binding,
+    )
+
+    required = {"ref", "digest", "bindingDigest"}
+    if not isinstance(identity, dict) or set(identity) != required:
+        raise ValueError("deployment candidate dataPlaneBinding fields mismatch")
+    reference = str(identity.get("ref") or "")
+    if reference != DATA_PLANE_BINDING_PACKAGE_REF.as_posix():
+        raise ValueError("deployment candidate dataPlaneBinding ref mismatch")
+    try:
+        encoded = _read_candidate_bytes(
+            candidate_root,
+            reference,
+            label="deployment candidate data-plane binding",
+        )
+        canonical = validate_canonical_data_plane_binding(
+            json.loads(encoded.decode("utf-8"))
+        )
+    except (_UnsafeCandidatePath, UnicodeError, json.JSONDecodeError, DataPlaneBindingError) as exc:
+        raise ValueError("deployment candidate data-plane binding is invalid") from exc
+    actual = {
+        "ref": reference,
+        "digest": "sha256:" + hashlib.sha256(encoded).hexdigest(),
+        "bindingDigest": str(canonical["bindingDigest"]),
+    }
+    if identity != actual:
+        raise ValueError("deployment candidate dataPlaneBinding identity drifted")
+    return actual
+
 def write_candidate_manifest(
     env_name: str,
     target_name: str,
@@ -649,6 +689,21 @@ def write_candidate_manifest(
         environment_runtime_ref,
         label="packaged environment runtime",
     )
+    runtime_shared_manifest = _read_candidate_object(
+        candidate_root,
+        "packages/runtime-shared/manifest.json",
+        label="runtime-shared package manifest",
+    )
+    if (
+        runtime_shared_manifest.get("schema") != "qwq.runtime_shared_package"
+        or runtime_shared_manifest.get("environment") != env_name
+        or runtime_shared_manifest.get("target") != target_name
+    ):
+        raise ValueError("runtime-shared package identity mismatch")
+    data_plane_binding = _validate_data_plane_binding_identity(
+        runtime_shared_manifest.get("dataPlaneBinding"),
+        candidate_root=candidate_root,
+    )
     provider_runtime = load_provider_runtime_package(
         env_name,
         target_name,
@@ -670,6 +725,7 @@ def write_candidate_manifest(
         "runtimeSchemaVersion": runtime_schema_version,
         "runtimeConfigDigest": app_report.get("runtimeConfigDigest"),
         "environmentRuntimeDigest": environment_runtime_digest,
+        "dataPlaneBinding": data_plane_binding,
         "observabilityLogSink": load_observability_log_sink_package(
             env_name,
             target_name,
@@ -763,6 +819,7 @@ def validate_candidate_manifest(
         "runtimeSchemaVersion",
         "runtimeConfigDigest",
         "environmentRuntimeDigest",
+        "dataPlaneBinding",
         "observabilityLogSink",
         "providerRuntime",
         "release",
@@ -821,15 +878,34 @@ def validate_candidate_manifest(
         raise ValueError("deployment candidate specRefs mismatch")
     if not require_full:
         raise ValueError("runtime deployment candidate cannot be loaded as App-only")
+    runtime_shared_manifest = _read_candidate_object(
+        candidate_root,
+        "packages/runtime-shared/manifest.json",
+        label="runtime-shared package manifest",
+    )
+    _validate_data_plane_binding_identity(
+        payload.get("dataPlaneBinding"),
+        candidate_root=candidate_root,
+    )
+    if runtime_shared_manifest.get("dataPlaneBinding") != payload.get(
+        "dataPlaneBinding"
+    ):
+        raise ValueError(
+            "deployment candidate dataPlaneBinding manifest binding drifted"
+        )
     for field in ("buildInputDigest", "imageDigest"):
         if _DIGEST.fullmatch(str(payload.get(field) or "")) is None:
             raise ValueError(f"full deployment candidate {field} is invalid")
-    validate_observability_log_sink_package(
+    observability_log_sink = validate_observability_log_sink_package(
         payload.get("observabilityLogSink"),
         expected_environment=expected_environment,
         expected_target=expected_target,
         candidate_root=candidate_root,
+        purpose=purpose,
     )
+    if observability_log_sink is not payload.get("observabilityLogSink"):
+        # Teardown projects a generation marker without changing sealed bytes.
+        payload = {**payload, "observabilityLogSink": observability_log_sink}
     validate_packaged_provider_runtime(
         payload.get("providerRuntime"),
         expected_environment=expected_environment,

@@ -143,9 +143,8 @@ def validate_readiness_closure(
             avatar.get("assetId"), label=f"creator avatarAssetId {normalized}"
         )
         media = media_by_id.get(avatar_id)
-        # research：avatar 不做匿名取回探测（avatarProbeCount=0）；
-        # commercial：逐资产全量取回探测（avatarProbeCount=1）。
-        expected_probe_count = 0 if research_release else 1
+        # research：每个 avatar 以研究身份做一次原图短签取回（signedImageProbe）；
+        # commercial：逐资产匿名全量取回探测。两者都要求 avatarProbeCount=1。
         if (
             media is None
             or evidence is None
@@ -156,19 +155,26 @@ def validate_readiness_closure(
             or evidence.get("personaId") != persona_id
             or evidence.get("avatarAssetId") != avatar_id
             or evidence.get("avatarMediaReady") is not True
-            or evidence.get("avatarProbeCount") != expected_probe_count
+            or evidence.get("avatarProbeCount") != 1
             or evidence.get("usesPlatformDefaultAvatar") is not False
         ):
             raise ReleaseReadinessClosureError(
                 f"creator/avatar readback drifts from release object: {normalized}"
             )
         if research_release:
+            signed_probe = evidence.get("avatarProbe")
             if (
-                evidence.get("avatarProbe") is not None
+                not isinstance(signed_probe, Mapping)
                 or evidence.get("avatarUrl") != media.get("privateObjectKey")
+                or "publicUrl" in signed_probe
+                or signed_probe.get("status") != 200
+                or signed_probe.get("hashVerified") is not True
+                or signed_probe.get("bytes") != media.get("bytes")
+                or signed_probe.get("sha256") != media.get("sha256")
+                or signed_probe.get("mimeType") != media.get("contentType")
             ):
                 raise ReleaseReadinessClosureError(
-                    f"creator avatar private delivery drifts: {normalized}"
+                    f"creator avatar signed readback drifts: {normalized}"
                 )
         else:
             avatar_probe = evidence.get("avatarProbe")

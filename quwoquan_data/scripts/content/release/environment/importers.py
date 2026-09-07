@@ -9,6 +9,7 @@ from typing import Any
 from core.io import read_json
 from core.paths import REPO_ROOT
 from core.release_layout import payload_digest, payload_file
+from core.control_types import ContentImportPhase, ContentImportStatus
 from core.schema import assert_valid
 from content.release.model import DeletePolicy, ImportMode
 
@@ -65,6 +66,10 @@ def assert_import_report_contract(
     return payload
 
 
+CONTENT_STAGE_REPORT = "import.json"
+CONTENT_CANDIDATE_VERIFY_REPORT = "candidate-verify.json"
+
+
 def run_content_importer(
     *,
     release: Path,
@@ -75,11 +80,27 @@ def run_content_importer(
     media_image_base_url: str,
     media_video_base_url: str,
     dry_run: bool,
+    creator_receipt: Path,
+    phase: ContentImportPhase = ContentImportPhase.STAGE,
+    candidate_revision: int | None = None,
+    expected_revision: int | None = None,
     mode: ImportMode = ImportMode.UPSERT,
     delete_policy: DeletePolicy = DeletePolicy.NONE,
-    creator_receipt: Path,
-) -> None:
-    report_path = run / "import.json"
+) -> dict[str, Any]:
+    """Run one content importer phase and validate its report contract.
+
+    ``stage`` only writes ``posts_candidate`` and additive media membership;
+    ``verify`` reads the candidate closure back by ``candidate_revision``;
+    ``activate`` is the only phase that needs ``expected_revision`` and moves
+    the active pointer. stage/activate reports are both named ``import.json``
+    inside their own run so downstream evidence readers see one file shape.
+    """
+    phase = ContentImportPhase(phase)
+    report_path = run / (
+        CONTENT_CANDIDATE_VERIFY_REPORT
+        if phase is ContentImportPhase.VERIFY
+        else CONTENT_STAGE_REPORT
+    )
     command = [
         "go",
         "run",
@@ -104,7 +125,24 @@ def run_content_importer(
         str(report_path),
         "--creator-receipt",
         str(creator_receipt),
+        "--phase",
+        phase.value,
     ]
+    if not dry_run:
+        if phase is not ContentImportPhase.STAGE:
+            if candidate_revision is None or int(candidate_revision) <= 0:
+                raise SystemExit(
+                    f"[ship] content importer {phase.value} requires the staged candidateRevision"
+                )
+            command.extend(["--candidate-revision", str(int(candidate_revision))])
+        if phase is ContentImportPhase.ACTIVATE:
+            if expected_revision is None or int(expected_revision) < 0:
+                raise SystemExit("[ship] content importer activate requires non-negative expected revision")
+            command.extend(["--expected-revision", str(int(expected_revision))])
+        elif expected_revision is not None:
+            raise SystemExit(
+                f"[ship] content importer {phase.value} must not carry --expected-revision"
+            )
     if dry_run:
         command.append("--dry-run")
     result = subprocess.run(
@@ -114,11 +152,29 @@ def run_content_importer(
     )
     if result.returncode != 0:
         raise SystemExit(f"[ship] importer failed: exit={result.returncode}")
-    assert_import_report_contract(
+    report = assert_import_report_contract(
         report_path,
         expected_release_id=release.name,
         expected_manifest_digest=payload_digest(release),
     )
+    expected_status = {
+        ContentImportPhase.STAGE: ContentImportStatus.STAGED,
+        ContentImportPhase.VERIFY: ContentImportStatus.VERIFIED,
+        ContentImportPhase.ACTIVATE: ContentImportStatus.ACTIVE,
+    }[phase]
+    if not dry_run and (
+        report.get("status") != expected_status
+        or report.get("phase") != phase.value
+        or (
+            candidate_revision is not None
+            and int(report.get("candidateRevision") or 0) != int(candidate_revision)
+        )
+    ):
+        raise SystemExit(
+            f"[ship] content importer {phase.value} report drifts from the requested "
+            f"phase/candidate: status={report.get('status')} phase={report.get('phase')}"
+        )
+    return report
 
 
 def run_creator_importer(
@@ -287,6 +343,8 @@ def run_homepage_importer(
 
 
 __all__ = [
+    "CONTENT_CANDIDATE_VERIFY_REPORT",
+    "CONTENT_STAGE_REPORT",
     "assert_import_report_contract",
     "run_tag_importer",
     "run_creator_importer",

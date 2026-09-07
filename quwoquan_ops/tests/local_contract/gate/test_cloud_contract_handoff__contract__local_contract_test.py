@@ -96,6 +96,12 @@ class CloudContractHandoffTest(unittest.TestCase):
                 "invariantTarget": "",
                 "actorRequirement": "persona",
                 "concurrency": {"versionPrecondition": "if_match"},
+                "consistency": {
+                    "source": "projection",
+                    "freshness": "bounded",
+                    "maxStalenessSeconds": 15,
+                    "staleResult": "with_watermark",
+                },
                 "pagination": {"defaultItems": 20, "maximumItems": 20},
                 "responseAdmission": {"maximumBodyBytes": 2097152},
                 "successStatus": 202,
@@ -274,6 +280,15 @@ class CloudContractHandoffTest(unittest.TestCase):
         self.assertEqual(
             lock["appExposedOperations"][0]["pagination"],
             {"defaultItems": 20, "maximumItems": 20},
+        )
+        self.assertEqual(
+            lock["appExposedOperations"][0]["consistency"],
+            {
+                "source": "projection",
+                "freshness": "bounded",
+                "maxStalenessSeconds": 15,
+                "staleResult": "with_watermark",
+            },
         )
         self.assertEqual(
             lock["appExposedOperations"][0]["responseAdmission"],
@@ -467,6 +482,36 @@ class CloudContractHandoffTest(unittest.TestCase):
         self.assertEqual(
             report["reviewedBreakingReport"]["sha256"],
             preview_sha,
+        )
+
+    def test_breaking_consistency_change_requires_explicit_approval(
+        self,
+    ) -> None:
+        self._write_graph()
+        self._snapshot_trusted_baseline()
+        graph = json.loads(self.graph.read_text(encoding="utf-8"))
+        graph["operations"][0]["consistency"] = {
+            "source": "projection",
+            "freshness": "eventual",
+            "staleResult": "fail_closed",
+        }
+        self.graph.write_text(
+            json.dumps(graph, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+
+        with self.assertRaisesRegex(ValueError, "preview.*canonical"):
+            handoff.accept(self._args(preview_report=self.preview))
+
+        report = handoff.read_json(self.preview)
+        self.assertEqual(report["breakingChanges"][0]["field"], "consistency")
+        self.assertEqual(
+            report["breakingChanges"][0]["before"]["freshness"],
+            "bounded",
+        )
+        self.assertEqual(
+            report["breakingChanges"][0]["after"]["freshness"],
+            "eventual",
         )
 
     def test_breaking_success_status_change_requires_explicit_approval(

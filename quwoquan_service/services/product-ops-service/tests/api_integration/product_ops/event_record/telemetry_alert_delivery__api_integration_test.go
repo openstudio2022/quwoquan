@@ -33,26 +33,41 @@ func TestTelemetryAlertLoopDeliversFingerprintSpikeToRealAlertmanager(
 
 	suffix := fmt.Sprintf("%d", time.Now().UnixNano())
 	config := telemetrypersistence.ElasticsearchConfig{
+		Kind:                   telemetrypersistence.ElasticsearchTelemetryStoreKind,
 		Endpoint:               elasticsearchEndpoint,
 		RawIndex:               "qwq-alertchain-raw-" + suffix,
 		StartupDiagnosticIndex: "qwq-alertchain-startup-" + suffix,
-		RuntimeLogIndex:        "qwq-alertchain-runtime-" + suffix,
 		AggregateIndex:         "qwq-alertchain-hourly-" + suffix,
 		Timeout:                30 * time.Second,
+	}
+	runtimeConfig := telemetrypersistence.ElasticsearchConfig{
+		Kind:           telemetrypersistence.ElasticsearchRuntimeLogStoreKind,
+		Endpoint:       elasticsearchEndpoint,
+		RawIndex:       "qwq-alertchain-runtime-" + suffix,
+		AggregateIndex: "qwq-alertchain-runtime-hourly-" + suffix,
+		Timeout:        30 * time.Second,
 	}
 	store, err := telemetrypersistence.NewElasticsearchEventLogStore(config)
 	if err != nil {
 		t.Fatalf("NewElasticsearchEventLogStore() error = %v", err)
 	}
 	if err := store.EnsureIndices(ctx); err != nil {
-		t.Fatalf("EnsureIndices() error = %v", err)
+		t.Fatalf("telemetry EnsureIndices() error = %v", err)
+	}
+	runtimeStore, err := telemetrypersistence.NewElasticsearchEventLogStore(runtimeConfig)
+	if err != nil {
+		t.Fatalf("NewElasticsearchEventLogStore(runtime) error = %v", err)
+	}
+	if err := runtimeStore.EnsureIndices(ctx); err != nil {
+		t.Fatalf("runtime EnsureIndices() error = %v", err)
 	}
 	t.Cleanup(func() {
 		for _, indexBase := range []string{
 			config.RawIndex,
 			config.StartupDiagnosticIndex,
-			config.RuntimeLogIndex,
 			config.AggregateIndex,
+			runtimeConfig.RawIndex,
+			runtimeConfig.AggregateIndex,
 		} {
 			for _, resource := range []string{
 				"/" + indexBase + "-*",
@@ -97,7 +112,7 @@ func TestTelemetryAlertLoopDeliversFingerprintSpikeToRealAlertmanager(
 			IngestedAt: now.Add(time.Duration(index+20) * time.Second),
 		})
 	}
-	if err := store.PutRuntimeLogBatch(ctx, batchKey, records); err != nil {
+	if err := runtimeStore.PutRuntimeLogBatch(ctx, batchKey, records); err != nil {
 		t.Fatalf("PutRuntimeLogBatch() error = %v", err)
 	}
 	refreshTelemetryIndices(t, ctx, elasticsearchEndpoint)
@@ -108,7 +123,11 @@ func TestTelemetryAlertLoopDeliversFingerprintSpikeToRealAlertmanager(
 		t.Fatalf("NewAlertmanagerClient() error = %v", err)
 	}
 	loop, err := application.NewAlertEvaluationLoop(
-		policy, store, notifier, store, time.Minute,
+		policy,
+		application.NewSplitAlertAggregateReader(store, runtimeStore),
+		notifier,
+		application.NewSplitAlertRetentionInspector(store, runtimeStore),
+		time.Minute,
 	)
 	if err != nil {
 		t.Fatalf("NewAlertEvaluationLoop() error = %v", err)

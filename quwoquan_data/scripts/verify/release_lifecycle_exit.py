@@ -105,8 +105,18 @@ def _run_kind(
         / "run.json"
     )
     document = read_object(path, label="environment release run", issues=issues)
-    if document and document.get("kind") != expected:
-        issues.append(f"{path}: run kind must be {expected}")
+    # 三阶段模型下 pointer 切换 run 的 kind 是 activate；fresh rollback 的切换发生在
+    # 带 rollback_ref.json 的 activate 子 run。历史一步式 apply/rollback run 继续接受。
+    allowed = {expected, "activate"}
+    if document and document.get("kind") not in allowed:
+        issues.append(f"{path}: run kind must be one of {sorted(allowed)}")
+    if (
+        document
+        and expected == "rollback"
+        and document.get("kind") == "activate"
+        and not (path.parent / "rollback_ref.json").is_file()
+    ):
+        issues.append(f"{path.parent}: rollback activate run lacks rollback_ref.json")
 
 
 def lifecycle_exit_issues(

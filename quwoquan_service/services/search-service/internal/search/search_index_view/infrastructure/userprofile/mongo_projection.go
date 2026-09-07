@@ -20,7 +20,7 @@ const (
 )
 
 type projectionWriter interface {
-	Apply(context.Context, es.ChangeEvent) error
+	ApplyVersioned(context.Context, es.VersionedChangeEvent) (bool, error)
 }
 
 type inboxDocument struct {
@@ -102,42 +102,46 @@ func (projection *MongoUserProfileSearchProjection) Apply(
 	} else if found {
 		return replay, nil
 	}
+
+	// Mongo retains replay/checkpoint facts, but never arbitrates an ES write.
+	// Even a locally-known stale event reaches the provider's atomic external
+	// version comparison, which remains correct after checkpoint loss/rebuild.
 	watermark, found, err := projection.loadWatermark(ctx, event.UserID)
 	if err != nil {
 		return application.UserProfileSearchProjectionResult{}, err
 	}
-	if found && watermark.ProfileVersion > event.ProfileVersion {
-		return projection.commitCheckpoint(ctx, event, true, false)
+	knownReplay := found && watermark.ProfileVersion == event.ProfileVersion
+	if knownReplay && watermark.ProjectionHash != event.Digest() {
+		return application.UserProfileSearchProjectionResult{},
+			application.ErrUserProfileSearchProjectionConflict
 	}
-	if found && watermark.ProfileVersion == event.ProfileVersion {
-		if watermark.ProjectionHash != event.Digest() {
-			return application.UserProfileSearchProjectionResult{},
-				application.ErrUserProfileSearchProjectionConflict
-		}
-		if err := projection.applyProviderProjection(ctx, event); err != nil {
-			return application.UserProfileSearchProjectionResult{}, err
-		}
-		return projection.commitCheckpoint(ctx, event, false, true)
-	}
-
-	if err := projection.applyProviderProjection(ctx, event); err != nil {
+	applied, err := projection.applyProviderProjection(ctx, event)
+	if err != nil {
 		return application.UserProfileSearchProjectionResult{}, err
 	}
-	return projection.commitCheckpoint(ctx, event, false, false)
+	knownStale := found && watermark.ProfileVersion > event.ProfileVersion
+	if !applied && !knownReplay && !knownStale {
+		// The provider can be ahead of a lost/rebuilt Mongo watermark. Treat the
+		// conflict as stale consumption progress; commitCheckpoint remains
+		// monotonic and must not become an Elasticsearch arbiter.
+		knownStale = true
+	}
+	return projection.commitCheckpoint(ctx, event, knownStale, knownReplay)
 }
 
 func (projection *MongoUserProfileSearchProjection) applyProviderProjection(
 	ctx context.Context,
 	event application.UserProfileSearchProjectionEvent,
-) error {
-	if err := projection.writer.Apply(ctx, BuildProviderChangeEvent(event)); err != nil {
+) (bool, error) {
+	applied, err := projection.writer.ApplyVersioned(ctx, BuildProviderChangeEvent(event))
+	if err != nil {
 		// The Search checkpoint is deliberately not advanced. Provider upserts and
 		// deletes use a stable object ID, so the pending stream event can replay.
-		return fmt.Errorf(
+		return false, fmt.Errorf(
 			"write Search UserProfile provider projection: %w", err,
 		)
 	}
-	return nil
+	return applied, nil
 }
 
 // BuildProviderChangeEvent translates one durable UserProfile projection event
@@ -146,12 +150,14 @@ func (projection *MongoUserProfileSearchProjection) applyProviderProjection(
 // replay identity without reaching into a concrete Mongo projection instance.
 func BuildProviderChangeEvent(
 	event application.UserProfileSearchProjectionEvent,
-) es.ChangeEvent {
+) es.VersionedChangeEvent {
 	op := es.OpUpsert
 	if event.Operation == "delete" {
 		op = es.OpDelete
 	}
-	return es.ChangeEvent{Op: op, Doc: event.Document()}
+	return es.VersionedChangeEvent{
+		Op: op, Doc: event.Document(), SourceVersion: event.ProfileVersion,
+	}
 }
 
 func (projection *MongoUserProfileSearchProjection) commitCheckpoint(
@@ -194,8 +200,8 @@ func (projection *MongoUserProfileSearchProjection) commitCheckpoint(
 			result.Replayed = true
 			return nil, projection.insertInbox(txCtx, event, result)
 		}
-		if knownStale || knownReplay {
-			return nil, errors.New("Search UserProfile checkpoint changed before commit")
+		if knownReplay {
+			return nil, errors.New("Search UserProfile replay checkpoint disappeared before commit")
 		}
 		now := projection.now().UTC()
 		if _, updateErr := projection.watermarks.UpdateOne(

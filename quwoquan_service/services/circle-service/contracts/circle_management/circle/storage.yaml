@@ -1,4 +1,13 @@
 backend: mongodb
+resources:
+  circle_store:
+    engine: mongodb
+    role: authority
+    required: true
+  circle_read_cache:
+    engine: redis
+    role: runtime
+    required: true
 collections:
   circles:
     publication_role: not_published

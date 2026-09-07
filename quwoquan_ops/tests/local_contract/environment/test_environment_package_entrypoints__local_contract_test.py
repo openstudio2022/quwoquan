@@ -138,11 +138,36 @@ def test_runtime_shared_package_requires_complete_provenance_and_digests(
             "source": source_by_name[name],
             "sha256": _sha256(path),
         }
+    identity = {
+        "schema": "qwq.data_plane_binding.v1",
+        "resources": {},
+        "bindings": {},
+    }
+    binding_digest = "sha256:" + hashlib.sha256(
+        json.dumps(
+            identity,
+            ensure_ascii=False,
+            separators=(",", ":"),
+            sort_keys=True,
+        ).encode("utf-8")
+    ).hexdigest()
+    binding_path = package_dir / "data-plane-binding.json"
+    binding_path.write_text(
+        json.dumps({**identity, "bindingDigest": binding_digest}) + "\n",
+        encoding="utf-8",
+    )
     (package_dir / "manifest.json").write_text(
         json.dumps(
             {
                 "schema": "qwq.runtime_shared_package",
                 "environment": "beta",
+                "target": "beta-local",
+                "dataPlaneBinding": {
+                    "ref": "packages/runtime-shared/data-plane-binding.json",
+                    "digest": _sha256(binding_path),
+                    "bindingDigest": binding_digest,
+                },
+                "runtimeTopology": None,
                 "provenance": {"files": files},
             }
         ),
@@ -358,19 +383,25 @@ def test_product_telemetry_package_rejects_resolved_credentials(
     config_dir.mkdir(parents=True)
     config = config_dir / "config.yaml"
     config.write_text(
-        "PRODUCT_OPS_ELASTICSEARCH_ENDPOINT: https://logs.prod.example\n"
-        "PRODUCT_OPS_ELASTICSEARCH_API_KEY: ${PRODUCT_OPS_ELASTICSEARCH_API_KEY:-}\n",
+        "PRODUCT_OPS_TELEMETRY_ELASTICSEARCH_ENDPOINT: "
+        "https://telemetry.prod.example\n"
+        "PRODUCT_OPS_TELEMETRY_ELASTICSEARCH_API_KEY: "
+        "${PRODUCT_OPS_TELEMETRY_ELASTICSEARCH_API_KEY:-}\n"
+        "PRODUCT_OPS_RUNTIME_LOG_ELASTICSEARCH_ENDPOINT: "
+        "https://runtime-logs.prod.example\n"
+        "PRODUCT_OPS_RUNTIME_LOG_ELASTICSEARCH_API_KEY: "
+        "${PRODUCT_OPS_RUNTIME_LOG_ELASTICSEARCH_API_KEY:-}\n",
         encoding="utf-8",
     )
     assert packaging.validate_product_telemetry_secret_package(package_dir) == []
 
     config.write_text(
-        "- name: PRODUCT_OPS_ELASTICSEARCH_API_KEY\n"
+        "- name: PRODUCT_OPS_RUNTIME_LOG_ELASTICSEARCH_API_KEY\n"
         "  value: fixture-value-must-not-package\n",
         encoding="utf-8",
     )
     assert any(
-        "PRODUCT_OPS_ELASTICSEARCH_API_KEY" in issue
+        "PRODUCT_OPS_RUNTIME_LOG_ELASTICSEARCH_API_KEY" in issue
         for issue in packaging.validate_product_telemetry_secret_package(package_dir)
     )
 

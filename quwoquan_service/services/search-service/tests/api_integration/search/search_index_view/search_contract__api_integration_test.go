@@ -164,7 +164,10 @@ func hitCount(parsed map[string]any) int {
 func TestSearchEndpointESBackedHits(t *testing.T) {
 	srv := fakeES(t)
 	defer srv.Close()
-	handler := newServer(t, searchbackend.ESConfig{Enabled: true, Endpoints: []string{srv.URL}}, nil)
+	handler := newServer(t, searchbackend.ESConfig{
+		Enabled: true, Endpoints: []string{srv.URL},
+		WriterEnabled: true, WriterEndpoints: []string{srv.URL},
+	}, nil)
 
 	rec, parsed := postSearch(t, handler, `{"query":"大理","objectTypes":["content.post"],"contentTypes":["article"]}`)
 	if rec.Code != http.StatusOK {
@@ -269,7 +272,10 @@ func TestSearchEndpointReadsLocationPlaceByCanonicalID(t *testing.T) {
 func TestSearchEndpointESOutageReturns503(t *testing.T) {
 	// The single production backend honestly surfaces unavailability instead of
 	// masking the outage with a second source of truth.
-	handler := newServer(t, searchbackend.ESConfig{Enabled: true, Endpoints: []string{"http://127.0.0.1:1"}}, nil)
+	handler := newServer(t, searchbackend.ESConfig{
+		Enabled: true, Endpoints: []string{"http://127.0.0.1:1"},
+		WriterEnabled: true, WriterEndpoints: []string{"http://127.0.0.1:1"},
+	}, nil)
 
 	rec, _ := postSearch(t, handler, `{"query":"大理","objectTypes":["content.post"],"contentTypes":["article"]}`)
 	if rec.Code != http.StatusServiceUnavailable {

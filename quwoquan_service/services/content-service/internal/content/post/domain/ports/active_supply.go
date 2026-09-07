@@ -69,8 +69,10 @@ func (snapshot ActiveSupplySnapshot) PlayableVideoReady() bool {
 	return snapshot.ContentReady() && snapshot.PlayableVideos > 0
 }
 
+// Ready is the cache-admission/readback readiness for the general Content
+// supply. Premium video routes use PlayableVideoReady explicitly.
 func (snapshot ActiveSupplySnapshot) Ready() bool {
-	return snapshot.PlayableVideoReady()
+	return snapshot.ContentReady()
 }
 
 type ActiveSupplyReader interface {

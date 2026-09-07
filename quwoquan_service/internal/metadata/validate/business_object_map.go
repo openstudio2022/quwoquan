@@ -3,6 +3,7 @@ package validate
 import (
 	"encoding/json"
 	"fmt"
+	"reflect"
 	"strings"
 
 	"quwoquan_service/internal/metadata/ast"
@@ -310,6 +311,14 @@ func validateBusinessObjectMap(
 					object.CanonicalObject,
 					object.StorageBackend,
 					declared.StorageBackend,
+				))
+			}
+			if !reflect.DeepEqual(declared.StorageResources, object.StorageResources) {
+				issues = append(issues, issue(
+					"CONTRACT.OBJECT_MAP.STORAGE_RESOURCES_MISMATCH",
+					sourcePath,
+					"object %q map storage resources differ from canonical resources",
+					object.CanonicalObject,
 				))
 			}
 		}

@@ -213,6 +213,42 @@ tests:
             exp_annotations:
               summary: "基础设施 exporter redis-exporter 不可达"
 
+  # ── Elasticsearch 物理资源健康与 owner 级恢复告警 ──
+  - interval: 1m
+    input_series:
+      - series: 'elasticsearch_cluster_health_status{color="red", data_resource="telemetry-elasticsearch", instance="telemetry-es"}'
+        values: '1+0x10'
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: ElasticsearchPrimaryShardUnavailable
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              layer: l4
+              color: red
+              data_resource: telemetry-elasticsearch
+              instance: telemetry-es
+            exp_annotations:
+              summary: "Elasticsearch telemetry-elasticsearch 集群状态为 red"
+              description: "存在不可用 primary shard；保持对应逻辑 binding fail-closed，先恢复 shard 与 readback，再恢复流量。"
+
+  - interval: 1m
+    input_series:
+      - series: 'elasticsearch_snapshot_stats_snapshot_failed_shards{data_owner="product-telemetry", repository="telemetry-snapshots"}'
+        values: '1+0x10'
+    alert_rule_test:
+      - eval_time: 6m
+        alertname: ElasticsearchSnapshotShardFailure
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              layer: l4
+              data_owner: product-telemetry
+              repository: telemetry-snapshots
+            exp_annotations:
+              summary: "Elasticsearch product-telemetry 最近快照存在失败 shard"
+              description: "快照不完整；阻断依赖该快照的迁移或恢复，修复后重新 snapshot→restore→readback。"
+
   # ── chat Inbox 投影 P95 延迟（样本全落 5-10s 桶）开火 ──
   - interval: 1m
     input_series:
