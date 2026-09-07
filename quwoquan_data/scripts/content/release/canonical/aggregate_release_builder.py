@@ -52,14 +52,29 @@ from core.media_asset_url import (
     copy_release_media_objects,
 )
 from core.paths import CONTROL_PLANE_TAXONOMY_ROOT
+from governance.coverage.distribution import RELEASE_CLASSES
 from core.release_layout import (
     attestation_root,
     objects_merkle,
     payload_digest,
+    payload_file,
     payload_root,
 )
 from core.release_media_binding import bind_release_object_media_assets
 from core.schema import assert_valid
+
+def _adopt_prefrozen_cohort(final_root: Path, staging: Path) -> None:
+    """finalize 会先把规范化 cohort.json 冻结进 release 目录；build 成功时把它并入 staging，
+    让 payload 与 cohort 一次原子落位。目录里若有其它内容则不是可接管的预冻结目录。"""
+
+    if not final_root.exists():
+        return
+    entries = list(final_root.iterdir())
+    if [path.name for path in entries] != ["cohort.json"]:
+        raise ObjectTransactionError(f"aggregate release target is not an empty pre-frozen release dir: {final_root}")
+    shutil.move(str(entries[0]), str(staging / "cohort.json"))
+    final_root.rmdir()
+
 
 @canonical_publish_serialized
 def _build_aggregate_release(
@@ -73,7 +88,7 @@ def _build_aggregate_release(
     """Create one immutable release from canonical objects bound to execution IDs."""
     release_id = _safe_id(release_id, label="releaseId")
     normalized_release_class = str(release_class or "").strip()
-    if normalized_release_class not in {"research", "commercial"}:
+    if normalized_release_class not in RELEASE_CLASSES:
         raise ObjectTransactionError(f"DATA.RELEASE.CLASS_INVALID: {normalized_release_class!r}")
     if not cohort:
         raise ObjectTransactionError(
@@ -120,7 +135,9 @@ def _build_aggregate_release(
         strict_admission=True,
     )
     final_root = release_root / release_id
-    if final_root.exists():
+    # release 目录里只有 finalize 预先规范化的 cohort.json 时不算已存在的 release；
+    # 以 payload/release.json 在场作为 create-once 判据。
+    if payload_file(final_root, "release.json").is_file():
         existing = reuse_existing_aggregate_release(
             publish_root=publish_root,
             final_root=final_root,
@@ -282,6 +299,7 @@ def _build_aggregate_release(
         )
         _write_json(attestation_root(staging) / "release.json", release_attestation)
         assert_environment_neutral(staging)
+        _adopt_prefrozen_cohort(final_root, staging)
         staging.replace(final_root)
         return aggregate_release_result(
             release_id=release_id,

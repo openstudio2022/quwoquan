@@ -45,17 +45,12 @@ def _previous_receipt(output: Path, environment: str) -> Path:
         "releaseId": "release-m100",
         "manifestDigest": DIGEST,
         "sourceIdentitySetDigest": IDENTITY_SET_DIGEST,
-        "releaseClass": "research",
-        "productLifecycleState": "research",
-        "readinessPhase": "research",
-        # research 收据的 schema 条件必需字段（allOf: readinessPhase=research）；
-        # 单轨谓词同样要求它们非空。
-        "internalSubjectHash": "sha256:" + "c" * 64,
-        "researchIsolationVerificationRef": (
-            f"env/{environment}/runs/data-release/release-m100/"
-            f"verify-{environment}/research-isolation-verification.json"
-        ),
-        "researchIsolationVerificationDigest": "sha256:" + "d" * 64,
+        "releaseClass": "production",
+        "productLifecycleState": "production",
+        "readinessPhase": "production",
+        # production 收据的 guest 证据（单轨谓词要求非空）。
+        "guestActorHash": "sha256:" + "c" * 64,
+        "guestLogin": {"path": "/auth/login/anonymous", "pageId": "user.login.anonymous", "status": 200},
         "verifyRunId": f"verify-{environment}",
         "activationEnvelope": activation,
         "activationEnvelopeDigest": document_digest(activation),
@@ -147,7 +142,7 @@ def test_environment_sequence_and_identity_drift_fail_closed(
         )
 
 
-def test_milestone_envelope_keeps_prod_research_and_requires_gamma() -> None:
+def test_milestone_envelope_keeps_prod_production_and_requires_gamma() -> None:
     identity = {
         "sourceRevision": "sha256:" + "4" * 64,
         "sourceDigest": "sha256:" + "5" * 64,
@@ -170,31 +165,21 @@ def test_milestone_envelope_keeps_prod_research_and_requires_gamma() -> None:
         source_revision=None,
         source_digest=None,
         entity_catalog_digest=None,
-        release_class="research",
-        product_lifecycle_state="research",
-        readiness_phase="research",
+        release_class="production",
+        product_lifecycle_state="production",
+        readiness_phase="production",
         import_run_id="import-prod",
         verify_run_id="verify-prod",
         import_report_ref=(
             "env/prod/runs/data-release/release-m100/import-prod/import.json"
         ),
         import_report_digest="sha256:" + "a" * 64,
-        research_isolation={
-            "policyRef": "quwoquan_ops/environments/prod/runtime.yaml",
-            "policySha256": "sha256:" + "b" * 64,
-            "subjectHash": "sha256:" + "c" * 64,
-        },
-        research_isolation_verification_ref=(
-            "env/prod/runs/data-release/release-m100/verify-prod/"
-            "research-isolation-verification.json"
-        ),
-        research_isolation_verification_digest="sha256:" + "d" * 64,
         source_identities=[identity],
         source_identity_set_digest=IDENTITY_SET_DIGEST,
         milestone="M100",
         previous_environment_activation=predecessor,
     )
 
-    assert envelope["releaseClass"] == "research"
-    assert envelope["productLifecycleState"] == "research"
+    assert envelope["releaseClass"] == "production"
+    assert envelope["productLifecycleState"] == "production"
     assert envelope["previousEnvironmentActivation"] == predecessor

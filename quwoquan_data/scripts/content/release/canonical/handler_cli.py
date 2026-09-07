@@ -34,6 +34,14 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     handoff_verify.add_argument("--release-root")
     handoff_verify.set_defaults(handler=owner.handle_handoff_verify)
 
+    pool_query = commands.add_parser(
+        "pool-query",
+        help="只读列出 canonical publish 池中可入 cohort 的对象与排除原因（不做选择）",
+    )
+    pool_query.add_argument("--publish-root")
+    pool_query.add_argument("--json", dest="json_output", help="把完整结果写到该路径；stdout 只打印计数")
+    pool_query.set_defaults(handler=owner.handle_pool_query)
+
     acceptance_lease = commands.add_parser(
         "acceptance-lease",
         help="管理 Data-owned 环境验收 lease 的 append-only acquire/revoke 事件",

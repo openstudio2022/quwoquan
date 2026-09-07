@@ -109,13 +109,6 @@ class ReleaseAttestation:
             raise ReleaseAttestationError(
                 "containsUnverifiedAssets must match authorizationRequiredAssetIds"
             )
-        if self.release_class is ReleaseClass.COMMERCIAL and (
-            self.contains_unverified_assets
-            or self.authorization_required_asset_ids
-        ):
-            raise ReleaseAttestationError(
-                "commercial release cannot contain authorization-required assets"
-            )
         if any(
             not isinstance(value, int) or isinstance(value, bool) or value < 0
             for value in (

@@ -184,7 +184,12 @@ def has_repository_entry(repo: Path, head: str, path: str, *, working_tree: bool
         return True
     dotted = path[:-3].replace("/", ".")
     stem = Path(path).stem
-    patterns = (dotted, path, f"import {stem}", f"from {stem}")
+    patterns = [dotted, path, f"import {stem}", f"from {stem}"]
+    # Data 包以 quwoquan_data/scripts 为 sys.path 根，真实入口边写作 `from core.x import`；
+    # 只认仓根 dotted 会把被引用的模块误判为孤儿。
+    data_scripts_root = "quwoquan_data/scripts/"
+    if path.startswith(data_scripts_root):
+        patterns.append(path[len(data_scripts_root):-3].replace("/", "."))
     command = ["git", "grep", "-F", "-q"]
     for pattern in patterns:
         command.extend(["-e", pattern])

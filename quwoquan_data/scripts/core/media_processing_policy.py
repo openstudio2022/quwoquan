@@ -24,6 +24,7 @@ class MediaProcessingPolicy:
     page_image_rendition_width: int
     max_publishable_image_pixels: int
     object_storage_budget_bytes_by_carrier: Mapping[str, int]
+    video_derivative_target_bytes: int
     max_assessment_image_pixels: int
     assessment_jpeg_quality: int
     ocr_image_pixels: int
@@ -88,6 +89,7 @@ def media_processing_policy() -> MediaProcessingPolicy:
         object_storage_budget_bytes_by_carrier=_required_carrier_budget_table(
             raw, "objectStorageBudgetBytesByCarrier"
         ),
+        video_derivative_target_bytes=_required_int(raw, "videoDerivativeTargetBytes"),
         max_assessment_image_pixels=_required_int(raw, "maxAssessmentImagePixels"),
         assessment_jpeg_quality=_required_int(raw, "assessmentJpegQuality"),
         ocr_image_pixels=_required_int(raw, "ocrImagePixels"),

@@ -63,7 +63,8 @@ def _review(root: Path, *, extra_rows: list[dict[str, object]] | None = None) ->
     return review
 
 
-def test_approved_content_review_requires_empty_issues_per_asset() -> None:
+def test_approved_content_review_keeps_asset_rights_issues_as_recorded_facts() -> None:
+    """spec_ref: multi-carrier-release/GWT-020 — 逐资产权利结论是记录事实，不牵连对象 decision。"""
     review = {
         "schema": "quwoquan_data.content_review",
         "stage": "5.review",
@@ -75,8 +76,10 @@ def test_approved_content_review_requires_empty_issues_per_asset() -> None:
         "blockingIssues": [],
         "assetRights": [_rights_row(passed=False, issues=["unresolved rights"])],
     }
+    assert_valid(review, "content", "content_review")
+
     with pytest.raises(ValueError):
-        assert_valid(review, "content", "content_review")
+        assert_valid({**review, "blockingIssues": ["missing evidence"]}, "content", "content_review")
 
 
 def test_review_authority_requires_exact_unique_asset_set_and_digest(tmp_path: Path) -> None:

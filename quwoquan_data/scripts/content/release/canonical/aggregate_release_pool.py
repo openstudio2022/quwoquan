@@ -41,7 +41,7 @@ from content.release.canonical.object_transaction_contract import (
 )
 from core.paths import CONTROL_PLANE_TAXONOMY_ROOT
 from core.source_digest import SourceDefinitionSnapshot
-from governance.coverage.distribution import load_content_distribution_policy
+from governance.coverage.distribution import RELEASE_CLASSES, load_content_distribution_policy
 
 
 @dataclass(frozen=True)
@@ -227,7 +227,7 @@ def prepare_pool_release(
 ) -> PoolReleasePreparation:
     """Validate one exact caller-declared cohort without scanning for candidates."""
     normalized_release_class = str(release_class or "").strip()
-    if normalized_release_class not in {"research", "commercial"}:
+    if normalized_release_class not in RELEASE_CLASSES:
         raise ObjectTransactionError("DATA.RELEASE.CLASS_INVALID")
     if cohort.get("releaseClass") != normalized_release_class:
         raise ObjectTransactionError("DATA.RELEASE.COHORT_CLASS_DRIFT")
@@ -257,15 +257,6 @@ def prepare_pool_release(
     )
     if exclusions or {row.post_ref for row in candidates} != post_refs:
         raise ObjectTransactionError("DATA.RELEASE.COHORT_POST_NOT_PUBLISHABLE")
-    if normalized_release_class == "commercial":
-        noncommercial_posts = sorted(
-            row.post_ref for row in candidates if row.usage_scope != "commercial"
-        )
-        if noncommercial_posts:
-            raise ObjectTransactionError(
-                "DATA.POOL.COMMERCIAL_RIGHTS_REQUIRED: "
-                f"posts/{noncommercial_posts[0]}"
-            )
     closure_cache: dict[
         str, tuple[set[str], list[str], list[str], list[dict[str, object]]]
     ] = {}
@@ -283,10 +274,7 @@ def prepare_pool_release(
         handoff = project_content_pool_handoff(
             publish_root=publish_root, object_type="homepage", object_ref=entity_ref
         )
-        if handoff is None or (
-            normalized_release_class == "commercial"
-            and handoff.usage_scope != "commercial"
-        ):
+        if handoff is None:
             raise ObjectTransactionError(
                 f"DATA.RELEASE.COHORT_ENTITY_NOT_PUBLISHABLE: {entity_ref}"
             )
@@ -319,10 +307,11 @@ def prepare_pool_release(
             raise ObjectTransactionError(
                 f"DATA.RELEASE.COHORT_MILESTONE_INVALID: {milestone!r}"
             )
-        if counts != milestone_targets:
+        # 每载体计数不低于里程碑目标即达标；允许把全部 eligible 对象纳入 cohort。
+        if any(counts[key] < int(milestone_targets[key]) for key in counts):
             raise ObjectTransactionError(
                 "DATA.RELEASE.COHORT_MILESTONE_COUNT_DRIFT: "
-                f"milestone={milestone} expected={milestone_targets} actual={counts}"
+                f"milestone={milestone} targets={milestone_targets} actual={counts}"
             )
     execution_ids, source_digests, source_identities, source_identity_set_digest = (
         pool_audit_provenance(

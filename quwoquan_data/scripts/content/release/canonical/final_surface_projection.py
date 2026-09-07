@@ -25,10 +25,15 @@ from content.release.canonical.object_transaction_contract import (
     _read_json,
     _safe_rel,
 )
+from content.release.canonical.media_rights_projection import (
+    asset_rights_fields,
+    object_rights_rollup,
+)
 from content.release.canonical.post_transaction_assets import source_assets
 from content.source.research.homepage_article_source_attribution import (
     encyclopedia_source_attribution,
 )
+from core.content_library import reference_existing_file
 from core.control_types import AUTHOR_ARTIFACT_BY_CARRIER
 from core.schema import assert_valid
 from governance.creators.assignment import creator_from_payload
@@ -356,6 +361,7 @@ def _media_attribution(
         for raw in assets
     )
     platform = str(first.get("platform") or "").strip() or urlparse(source_url).netloc
+    rights = object_rights_rollup(assets, carrier)
     return {
         "isOriginal": False,
         "originalCreatorId": None,
@@ -370,13 +376,12 @@ def _media_attribution(
         "publicationAdmission": "research_release",
         "authorizationProofUrl": proof or None,
         "termsUrl": terms_url or None,
-        "watermarkStatus": "absent",
-        "audioRightsStatus": "unverified" if carrier == "video" else "no_audio",
+        **{k: rights[k] for k in ("watermarkStatus", "watermarkKind", "audioRightsStatus")},
         "modelReleaseStatus": str(first.get("modelReleaseStatus") or "not_required"),
         "propertyReleaseStatus": str(first.get("propertyReleaseStatus") or "unverified"),
         "collectedAt": collected_at,
         "takedownPolicy": "quwoquan_standard_notice_and_takedown",
-        "derivedModifications": [],
+        "derivedModifications": rights["derivedModifications"],
     }
 
 
@@ -707,22 +712,12 @@ def _asset_projection(
         "termsUrl": str(source.get("termsUrl") or ""),
         "authorizationProof": str(source.get("authorizationProof") or ""),
         "usageScope": str(source.get("usageScope") or "app_publish"),
-        "modelReleaseStatus": str(
-            source.get("modelReleaseStatus") or "not_required"
-        ),
-        "propertyReleaseStatus": str(
-            source.get("propertyReleaseStatus") or "unverified"
-        ),
+        "modelReleaseStatus": str(source.get("modelReleaseStatus") or "not_required"),
+        "propertyReleaseStatus": str(source.get("propertyReleaseStatus") or "unverified"),
         "distributionDecision": str(source.get("distributionDecision") or ""),
-        "rightsAuditStatus": (
-            "verified" if rights_status == "verified" else rights_status
-        ),
+        "rightsAuditStatus": rights_status,
         "rightsAuditIssues": [
-            str(value)
-            for value in source.get("rightsIssues")
-            or source.get("rightsAuditIssues")
-            or []
-            if str(value)
+            str(value) for value in source.get("rightsIssues") or source.get("rightsAuditIssues") or [] if str(value)
         ],
         "sha256": digest,
         "objectKey": (
@@ -731,10 +726,9 @@ def _asset_projection(
         ),
         "mimeType": str(source.get("mimeType") or "application/octet-stream"),
         "sourceCollectionId": str(
-            source.get("sourceCollectionId")
-            or source.get("professionalAssetId")
-            or Path(source_ref).parts[1]
+            source.get("sourceCollectionId") or source.get("professionalAssetId") or Path(source_ref).parts[1]
         ),
+        **asset_rights_fields(source, kind),
     }
     if kind == "video":
         row["sourceAssetRefs"] = [source_ref]
@@ -984,7 +978,7 @@ def _write_create_once(
             if isinstance(expected, bytes):
                 target.write_bytes(expected)
             else:
-                shutil.copy2(expected, target)
+                reference_existing_file(expected, target)
         for relative, expected in missing:
             target = object_dir / relative
             if target.exists():

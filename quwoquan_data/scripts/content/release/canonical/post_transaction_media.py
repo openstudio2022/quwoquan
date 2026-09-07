@@ -7,6 +7,7 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
+from core.content_library import reference_existing_file
 from content.release.canonical.object_transaction_contract import (
     ObjectTransactionError,
     _safe_id,
@@ -62,7 +63,10 @@ def _copy_post_surface(source: Path, target: Path) -> None:
             shutil.copy2(path, target / name)
     assets = source / "assets"
     if assets.is_dir():
-        shutil.copytree(assets, target / "assets")
+        # 媒体字节已由 content library 持有（execution 内是硬链接）；包内只再挂一个名字，不复制。
+        for path in sorted(assets.rglob("*")):
+            if path.is_file():
+                reference_existing_file(path, target / "assets" / path.relative_to(assets))
 
 
 def _final_content_ref(target: Path, *, holds_media: bool) -> str:

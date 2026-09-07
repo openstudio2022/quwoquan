@@ -39,19 +39,10 @@ def rights_enforcement_mode(vertical: str) -> RightsEnforcementMode:
 
 
 def rights_proof_required(vertical: str) -> bool:
-    # The vertical policy owns what constitutes verified rights. Whether
-    # missing proof blocks this release is owned by the governed lifecycle,
-    # never inferred from alpha/beta/gamma/prod.
-    from governance.coverage.distribution import (
-        ProductLifecycleState,
-        load_content_distribution_policy,
-    )
-
-    return (
-        rights_enforcement_mode(vertical) is RightsEnforcementMode.ENFORCE
-        and load_content_distribution_policy().product_lifecycle_state
-        is ProductLifecycleState.COMMERCIAL
-    )
+    # 单一 production 生命周期下权利只记录不阻断：审计 issues 进入记录事实，
+    # 不构成发布门；本函数保留为策略读取点，恒为 False。
+    del vertical
+    return False
 
 
 def parse_rights_audit_status(*payloads: Mapping[str, Any]) -> RightsAuditStatus:

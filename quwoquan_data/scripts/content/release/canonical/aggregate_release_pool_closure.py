@@ -115,13 +115,6 @@ def _validate_entity_pool_identity(
             raise ObjectTransactionError(
                 f"DATA.POOL.OBJECT_NOT_ADMITTED: entities/{entity_ref}"
             )
-        if (
-            release_class == "commercial"
-            and record.get("usageScope") != "commercial"
-        ):
-            raise ObjectTransactionError(
-                f"DATA.POOL.COMMERCIAL_RIGHTS_REQUIRED: entities/{entity_ref}"
-            )
         entity_id = str(record.get("objectId") or "").strip()
         version = record.get("contentVersion")
         if (
@@ -243,13 +236,7 @@ def candidate_closure(
             },
             release_class=release_class,
         )
-    except ObjectTransactionError as exc:
-        if release_class == "commercial" and str(exc).startswith(
-            "commercial release contains non-commercial assets"
-        ):
-            raise ObjectTransactionError(
-                f"DATA.POOL.COMMERCIAL_RIGHTS_REQUIRED: posts/{post_ref}"
-            ) from exc
+    except ObjectTransactionError:
         raise
     return entity_refs, creator_refs, tag_refs, list(media_manifest["assets"])
 
@@ -314,13 +301,7 @@ def entity_candidate_closure(
             },
             release_class=release_class,
         )
-    except ObjectTransactionError as exc:
-        if release_class == "commercial" and str(exc).startswith(
-            "commercial release contains non-commercial assets"
-        ):
-            raise ObjectTransactionError(
-                f"DATA.POOL.COMMERCIAL_RIGHTS_REQUIRED: entities/{entity_ref}"
-            ) from exc
+    except ObjectTransactionError:
         raise
     return creator_refs, tag_refs
 

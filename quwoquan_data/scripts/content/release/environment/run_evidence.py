@@ -15,7 +15,8 @@ from core.io import read_json
 from core.schema import assert_valid
 
 _MAX_PATH_SEGMENT_BYTES = 255
-_VERIFY_PREDEPOSITED_FILES = frozenset({"research-isolation-runtime-proof.json"})
+# production 单相位不再预置任何 verify 证据文件。
+_VERIFY_PREDEPOSITED_FILES: frozenset[str] = frozenset()
 _RESULT_REF_FIELDS = (
     "lifecycleExitRef",
     "homepageVerificationCasesRef",
@@ -26,7 +27,6 @@ _RESULT_REF_FIELDS = (
     "coverageReceiptRef",
     "postApiVerificationRef",
     "releaseReadinessRef",
-    "researchIsolationVerificationRef",
     "tagConsumerVerificationRef",
     "homepageApiVerificationRef",
     "baselineApiVerificationRef",

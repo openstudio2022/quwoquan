@@ -7,8 +7,6 @@
     "schema",
     "executionId",
     "carrier",
-    "entityCatalogDigest",
-    "candidateCount",
     "targets"
   ],
   "properties": {
@@ -88,13 +86,13 @@
             "items": {
               "required": [
                 "publishAngle",
-                "publishTitle",
-                "publishSeq"
+                "publishTitle"
               ]
             }
           }
         }
       }
     }
-  ]
+  ],
+  "description": "AI 只需写 schema/executionId/carrier/targets；candidateCount 缺省为 targets 数，entityCatalogDigest 缺省由 task init 从受版本控制的实体目录计算。"
 }

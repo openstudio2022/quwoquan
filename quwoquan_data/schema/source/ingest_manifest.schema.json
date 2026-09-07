@@ -1,0 +1,259 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/source/ingest_manifest.schema.json",
+  "description": "task acquire 的唯一输入：一个 execution 内逐 target 的本地来源文件与 AI 申报的来源事实。脚本零网络——只从本地字节派生 sha256/CAS/mime/probe/poster，按申报 sha1 交叉校验，按申报 license 派生 rightsStatus。任何脚本能算出来的字段（rightsStatus、sha256、mime、尺寸）都不允许申报。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "executionId",
+    "targets"
+  ],
+  "properties": {
+    "schema": {
+      "const": "quwoquan_data.ingest_manifest"
+    },
+    "executionId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "targets": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "targetRef",
+          "sources"
+        ],
+        "properties": {
+          "targetRef": {
+            "type": "string",
+            "pattern": "^(?:entities/[^/]+/[^/]+/[^/]+|posts/(?:article|image|video)/[^/]+/[^/]+/[0-9]+)$"
+          },
+          "sources": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/pageSource"
+                },
+                {
+                  "$ref": "#/$defs/mediaSource"
+                }
+              ]
+            }
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "httpsUrl": {
+      "type": "string",
+      "pattern": "^https://"
+    },
+    "nonEmpty": {
+      "type": "string",
+      "minLength": 1
+    },
+    "watermarkStatus": {
+      "enum": [
+        "absent",
+        "present",
+        "unknown"
+      ]
+    },
+    "watermarkKind": {
+      "description": "作者签名与平台/图库标识分开记：前者通常可用且不得抹去，后者往往指向非自由来源或预览件。",
+      "enum": [
+        "none",
+        "author_signature",
+        "platform_logo",
+        "stock_agency",
+        "other",
+        "unknown"
+      ]
+    },
+    "pageSource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "sourceUrl",
+        "title",
+        "sourceMarkdownPath",
+        "license",
+        "licenseUrl",
+        "creator",
+        "relevance"
+      ],
+      "properties": {
+        "kind": {
+          "const": "page"
+        },
+        "sourceUrl": {
+          "$ref": "#/$defs/httpsUrl"
+        },
+        "title": {
+          "$ref": "#/$defs/nonEmpty"
+        },
+        "sourceMarkdownPath": {
+          "description": "AI 亲笔的 source.md 本地路径：首行 H1 为标题，正文含可见正文与结构化信息区取证。",
+          "$ref": "#/$defs/nonEmpty"
+        },
+        "license": {
+          "$ref": "#/$defs/nonEmpty"
+        },
+        "licenseUrl": {
+          "$ref": "#/$defs/httpsUrl"
+        },
+        "creator": {
+          "$ref": "#/$defs/nonEmpty"
+        },
+        "platform": {
+          "$ref": "#/$defs/nonEmpty"
+        },
+        "revisionId": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "relevance": {
+          "$ref": "#/$defs/nonEmpty"
+        }
+      }
+    },
+    "mediaSource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "sourceUrl",
+        "directUrl",
+        "filePath",
+        "license",
+        "licenseUrl",
+        "creator",
+        "relevance",
+        "watermarkStatus",
+        "watermarkKind"
+      ],
+      "properties": {
+        "kind": {
+          "enum": [
+            "image",
+            "video"
+          ]
+        },
+        "sourceUrl": {
+          "description": "来源文件页（如 Commons File: 页）。",
+          "$ref": "#/$defs/httpsUrl"
+        },
+        "directUrl": {
+          "description": "AI 实际下载的直链。",
+          "$ref": "#/$defs/httpsUrl"
+        },
+        "filePath": {
+          "description": "AI 已下载到本地的字节路径。",
+          "$ref": "#/$defs/nonEmpty"
+        },
+        "sha1": {
+          "description": "来源声明的 sha1（Commons imageinfo.sha1）；在场时与本地字节交叉校验。",
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "license": {
+          "description": "逐字抄自来源文件页的 license 短名。",
+          "$ref": "#/$defs/nonEmpty"
+        },
+        "licenseUrl": {
+          "$ref": "#/$defs/httpsUrl"
+        },
+        "creator": {
+          "$ref": "#/$defs/nonEmpty"
+        },
+        "platform": {
+          "$ref": "#/$defs/nonEmpty"
+        },
+        "description": {
+          "type": "string"
+        },
+        "relevance": {
+          "$ref": "#/$defs/nonEmpty"
+        },
+        "hasAudio": {
+          "description": "video 必填：是否含音轨。",
+          "type": "boolean"
+        },
+        "watermarkStatus": {
+          "$ref": "#/$defs/watermarkStatus"
+        },
+        "watermarkKind": {
+          "$ref": "#/$defs/watermarkKind"
+        },
+        "watermarkNote": {
+          "description": "观察到的位置与文字，供运营复核。",
+          "type": "string"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "video"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "hasAudio"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "watermarkStatus": {
+                "const": "present"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "watermarkKind": {
+                "enum": [
+                  "author_signature",
+                  "platform_logo",
+                  "stock_agency",
+                  "other"
+                ]
+              }
+            },
+            "required": [
+              "watermarkNote"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "watermarkStatus": {
+                "const": "absent"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "watermarkKind": {
+                "const": "none"
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

@@ -52,7 +52,6 @@ DATA_CACHE_ROOT = DATA_LOCAL_ROOT / "cache"
 DATA_WORKSPACE_ROOT = DATA_LOCAL_ROOT / "workspace"
 RUNTIME_ROOT = DATA_WORKSPACE_ROOT
 CANONICAL_PUBLISH_SIDECAR_ROOT = DATA_CACHE_ROOT / "canonical-publish"
-SOURCE_ACQUISITION_ROOT = DATA_WORKSPACE_ROOT / "source-acquisition"
 RELEASE_IDENTITY_INCIDENTS_ROOT = DATA_WORKSPACE_ROOT / "release-identity-incidents"
 RELEASE_IDENTITY_INCIDENT_MIGRATIONS_ROOT = (
     DATA_WORKSPACE_ROOT / "release-identity-incident-migrations"
@@ -88,16 +87,25 @@ LIBRARY_CAS_ROOT_BY_KIND = {
     "media": LIBRARY_MEDIA_CAS_ROOT,
     "source": LIBRARY_SOURCE_CAS_ROOT,
 }
-# carried media：canonical 引用字节的受版本控制随体，不是库镜像。库落在仓外且不可
-# 从版本控制重建，而 canonical 引用的编码视频、poster 与头像都是无上游可逐字节复现
-# 的派生物——库一丢，已 approved 的对象就永久不可交付，所以这个子集随树受控。
-# 按调用解析而非导入即冻结：它是发布事务的写入目标，冻结成模块常量会让「默认写真
-# 仓库」对任何执行 apply 的进程生效。QWQ_CARRIED_MEDIA_ROOT 把随体指向临时根。
+# carried media：canonical 引用字节的 durable 随体，不是库镜像。canonical 引用的编码
+# 视频、poster 与头像都是无上游可逐字节复现的派生物——库一丢，已 approved 的对象就永久
+# 不可交付，所以随体与库是两处独立副本、互为备份。随体不进 git：M1000 量级的媒体不该
+# 压进版本库；它落在仓外 XDG 数据目录（与 content_library 同级、不同目录），逃出
+# `git clean` 射程，并由 `verify publish-closure` 的随体闭包检查保证「可检测、可重建」——
+# 缺失的摘要连同 canonical 记录的 sourceUrl 一起报出，字节可按来源直链原样重取。
+# 按调用解析而非导入即冻结：它是发布事务的写入目标。QWQ_CARRIED_MEDIA_ROOT 可指向
+# 已备份卷或测试临时根。
+def default_carried_media_root() -> Path:
+    xdg_data_home = str(os.environ.get("XDG_DATA_HOME") or "").strip()
+    base = Path(xdg_data_home) if xdg_data_home else Path.home() / ".local" / "share"
+    return base / "quwoquan" / "golden_media"
+
+
 def carried_media_root() -> Path:
     override = str(os.environ.get("QWQ_CARRIED_MEDIA_ROOT") or "").strip()
     if override:
         return Path(override).expanduser()
-    return _REPO_DATA_ROOT / "reference" / "golden_media"
+    return default_carried_media_root()
 
 # canonical publish 根的逻辑身份。物理位置是环境事实（QWQ_PUBLISH_ROOT / DATA_ROOT），
 # 只由本模块解析；receipt 文档记录这个与位置无关的身份，不再内嵌仓库相对路径。

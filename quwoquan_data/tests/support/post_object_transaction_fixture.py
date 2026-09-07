@@ -140,8 +140,8 @@ def _force_commercial_lifecycle(monkeypatch: pytest.MonkeyPatch) -> None:
     research_policy = distribution.load_content_distribution_policy()
     commercial_policy = replace(
         research_policy,
-        product_lifecycle_state=distribution.ProductLifecycleState.COMMERCIAL,
-        release_class=distribution.ReleaseClass.COMMERCIAL,
+        product_lifecycle_state=distribution.ProductLifecycleState.PRODUCTION,
+        release_class=distribution.ReleaseClass.PRODUCTION,
     )
     monkeypatch.setattr(
         distribution,

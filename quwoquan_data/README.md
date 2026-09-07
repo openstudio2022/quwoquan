@@ -34,9 +34,16 @@ python3 quwoquan_data/scripts/cli.py task seal --help
 
 ## 取得、发布与 release
 
-`task acquire` 只接收 AI 点名的 `{kind: page|image|video, url, relevance}`：MediaWiki 页面走 API 取纯文本；Commons 文件页走 imageinfo API 取直链、license、作者，下载字节并算 sha256，图片按预算降采样，视频 ffprobe 并抽 poster。license 不在研究白名单（CC0/CC BY/CC BY-SA/PD）即 `GATE_BLOCK`。
+`task acquire` 只接收 AI 点名的 `{kind: page|image|video, url, relevance}`：MediaWiki 页面走 API 取纯文本；Commons 文件页走 imageinfo API 取直链、license、作者，下载字节并算 sha256，图片按预算降采样，视频超预算或容器不在 `mp4|webm` 时转码为 H.264 mp4 派生体并抽 poster。license 只记录并派生 `rightsStatus`（白名单 CC0/CC BY/CC BY-SA/PD → verified，其它 → unverified/unknown），不阻断。
 
-`4.draft` 每对象只保留 `page.md|draft.article.md|image_work.json|video_script.json` 之一，标题/tagRefs/creatorProfileId 由产物自身声明；`5.review` 每对象只保留 `content_review.json`，`task seal --stage 5.review` 补齐机械字段。approved 对象逐个 `publish-object`；`release finalize` 消费 AI 显式 cohort，一次完成 pool-build、release-integrity 与 create-once handoff。
+`4.draft` 每对象只保留 `page.md|draft.article.md|image_work.json|video_script.json` 之一，标题/tagRefs/creatorProfileId 由产物自身声明；`5.review` 每对象只保留 `content_review.json`，AI 只写 `decision/blockingIssues/advisories`，`task seal --stage 5.review` 补齐 `assetRights`、`dimensions` 与机械字段。approved 对象逐个 `publish-object`；`release finalize` 消费 AI 显式 cohort（`releaseClass` 唯一取值 `production`，计数不低于里程碑目标即达标），一次完成 pool-build、release-integrity 与 create-once handoff。
+
+## 持久性
+
+- `quwoquan_data/publish/**` 是 canonical 对象元数据（JSON/MD），受版本控制，与代码同等重要。
+- 媒体字节的运行时 holder 是仓外 content library（默认 `~/.local/share/quwoquan/content_library`，`QWQ_LIBRARY_ROOT` 可覆盖）；execution、object-transaction 包与 release payload 只以硬链接引用它。
+- 随体媒体根（默认 `~/.local/share/quwoquan/golden_media`，`QWQ_CARRIED_MEDIA_ROOT` 可指向已备份卷）是已发布对象所引用媒体的仓外 durable 副本，由 publish 事务写入，与 content library 互为备份；两处都不进 git，也都在 `git clean` 射程之外。任何 gc/hygiene/清理路径不得触碰这两个根。library 丢失时运行 `python3 quwoquan_data/scripts/cli.py verify all`，它在跑门禁前会从随体根逐 sha 校验并回填 library；`verify publish-closure` 对 canonical 引用的每个媒体摘要检查两处至少一处可达，缺失即 `DATA.PUBLISH.CARRIED_MEDIA_MISSING` 并附 `sourceUrl`，字节可按来源直链原样重取。
+- `.qwq_output/` 全部可删除重建；删除后 release 媒体可从 library/随体根重建。
 
 ```bash
 python3 quwoquan_data/scripts/cli.py release publish-object --help

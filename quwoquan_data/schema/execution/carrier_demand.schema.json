@@ -5,12 +5,9 @@
   "additionalProperties": false,
   "required": [
     "schema",
-    "status",
     "executionId",
     "carrier",
-    "familyRef",
-    "quota",
-    "retryOf"
+    "familyRef"
   ],
   "properties": {
     "schema": {
@@ -45,5 +42,6 @@
         "null"
       ]
     }
-  }
+  },
+  "description": "AI 只需写 schema/executionId/carrier/familyRef；status/quota/retryOf 缺省由 task init 派生（confirmed / targets 数 / null）。"
 }

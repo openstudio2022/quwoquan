@@ -1,7 +1,7 @@
 schema: quwoquan.content_distribution_policy
-policyId: research-content-cold-start
-productLifecycleState: research
-releaseClass: research
+policyId: production-content
+productLifecycleState: production
+releaseClass: production
 mediaGeneration:
   imageAllowed: false
   videoAllowed: false
@@ -34,16 +34,21 @@ researchDiscovery:
     normalization: same_platform_topic_time_bucket_percentile
     statistical: true
     nonBlocking: true
-researchDistribution:
-  allowedRightsStatuses:
+# 权利只记录不阻断：四种 rightsStatus 都可发布，公众可见性由下游运营运行时配置决定。
+productionDistribution:
+  recordedRightsStatuses:
     - verified
     - unverified
+    - restricted
     - unknown
-  requireInternalAccessIsolation: true
-commercialDistribution:
-  allowedRightsStatuses:
-    - verified
-  requireAuthorizationProof: true
+  rightsBlockPublish: false
+# 采集代码无法核实、只能按 producer 政策统一申明的资产级记录常量，唯一声明位在这里；
+# 采集与投影只搬运，不得逐资产另写一份。
+assetRecordDefaults:
+  commercialAuthorizationStatus: unverified
+  modelReleaseStatus: not_required
+  propertyReleaseStatus: not_required
+  takedownPolicy: remove_on_rights_holder_request
 articleMedia:
   illustratedRateTarget: 0.9
   textOnlyRateTarget: 0.1

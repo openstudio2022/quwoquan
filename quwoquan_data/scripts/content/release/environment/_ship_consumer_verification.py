@@ -23,9 +23,6 @@ from content.release.environment.readiness import ShipReadinessPhase
 from content.release.environment.release_readiness import (
     EnvironmentReleaseReadinessError,
 )
-from content.release.environment.research_isolation_verification import (
-    ResearchIsolationVerificationError,
-)
 from content.release.environment.run_evidence import (
     read_environment_result,
     validate_path_segment,
@@ -311,64 +308,12 @@ def _verify_release_consumers(
 
         failed_stage = "readiness_phase"
         readiness_phase = str(
-            getattr(args, "readiness_phase", "commercial") or "commercial"
+            getattr(args, "readiness_phase", "production") or "production"
         ).strip()
         phase_issue = readiness_phase_issue(readiness_phase)
         if phase_issue is not None:
             raise SystemExit(f"[ship] --readiness-phase: {phase_issue}")
         lifecycle_exit_ref = str(getattr(args, "lifecycle_exit_ref", "") or "").strip()
-        failed_stage = "lifecycle_exit_ref"
-        if readiness_phase == "commercial" and not lifecycle_exit_ref:
-            raise SystemExit(
-                f"[ship] GATE_BLOCK {env}/commercial: lifecycleExitRef is required"
-            )
-
-        research_isolation_report: Path | None = None
-        if readiness_phase == "research":
-            failed_stage = "research_isolation_verification"
-            try:
-                research_isolation_report = (
-                    dependencies.write_research_isolation_verification(
-                        environment=env,
-                        release_id=release_id,
-                        verify_run_id=run_id,
-                        release_root=release,
-                        output_root=dependencies.output_root,
-                        output_path=(run / "research-isolation-verification.json"),
-                        runtime_proof_path=(
-                            run / "research-isolation-runtime-proof.json"
-                        ),
-                    )
-                )
-                isolation = read_json(research_isolation_report)
-            except (
-                ResearchIsolationVerificationError,
-                OSError,
-                TypeError,
-                ValueError,
-            ) as exc:
-                raise SystemExit(
-                    f"[ship] {env} research isolation verification failed: {exc}"
-                ) from exc
-            if isolation.get("outcome") != "PASS":
-                blocker = isolation.get("blocker")
-                code = (
-                    str(blocker.get("code") or "DATA.RESEARCH.RUNTIME_PROOF_INCOMPLETE")
-                    if isinstance(blocker, dict)
-                    else "DATA.RESEARCH.RUNTIME_PROOF_INCOMPLETE"
-                )
-                error = ResearchIsolationVerificationError(
-                    f"{code}: GATE_BLOCK research runtime isolation proof is unavailable"
-                )
-                exit_error = SystemExit(f"[ship] {env} {error}")
-                exit_error.failure_evidence = {
-                    "researchIsolationVerificationRef": (
-                        research_isolation_report.relative_to(
-                            dependencies.output_root
-                        ).as_posix()
-                    )
-                }
-                raise exit_error from error
 
         post_report: Path | None = None
         if dependencies.release_has_posts(contract):
@@ -455,7 +400,6 @@ def _verify_release_consumers(
                     tag_consumer_verification_path=tag_report,
                     homepage_api_verification_path=homepage_report,
                     post_api_verification_path=post_report,
-                    research_isolation_verification_path=(research_isolation_report),
                     previous_environment_readiness_path=previous_readiness_path,
                     output_root=dependencies.output_root,
                     output_path=run / "release-readiness.json",
@@ -491,12 +435,6 @@ def _verify_release_consumers(
         }
         if lifecycle_exit_ref:
             result["lifecycleExitRef"] = lifecycle_exit_ref
-        if research_isolation_report is not None:
-            result["researchIsolationVerificationRef"] = (
-                research_isolation_report.relative_to(
-                    dependencies.output_root
-                ).as_posix()
-            )
         if post_report is not None:
             result["postApiVerificationRef"] = post_report.relative_to(
                 dependencies.output_root

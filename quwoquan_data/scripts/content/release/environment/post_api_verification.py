@@ -1,8 +1,6 @@
 """Verify release-imported posts through the public content API."""
 from __future__ import annotations
 
-import json
-import subprocess
 import uuid
 from collections.abc import Mapping
 from datetime import datetime, timezone
@@ -23,7 +21,6 @@ from content.release.environment.post_api_media_verification import (
     _require_media,
     _required_text,
     _verify_binary_media,
-    _verify_research_denied_media,
     _verify_source_attribution,
 )
 from content.release.environment.post_api_projection_verification import (
@@ -40,111 +37,12 @@ from content.release.environment.public_api_client import (
 from content.release.model import DeploymentEnvironment
 from core.control_types import ContentType
 from core.io import write_json
-from core.paths import OUTPUT_ROOT, REPO_ROOT
+from core.paths import OUTPUT_ROOT
 from core.schema import assert_valid
 from verify.release_publishability import readiness_phase_issue
 
 POST_DETAIL_PAGE_ID = "content.post.get"
 USER_PROFILE_PAGE_ID = "user.profile"
-ORIGINAL_ACCESS_PAGE_ID = "content.media.original_access"
-_RESEARCH_CREDENTIAL_ISSUANCE_TIMEOUT_SECONDS = 180
-
-
-def _research_consumer_credential(
-    *,
-    environment: str,
-    release_id: str,
-    run_id: str,
-) -> dict[str, str]:
-    """经 stackctl 签发 research 消费凭证；凭证只在进程内存传递。"""
-    command = [
-        "python3",
-        str(REPO_ROOT / "quwoquan_ops/cli/stackctl.py"),
-        "--output-format",
-        "json",
-        "research-consumer-credential",
-        "--env",
-        environment,
-        "--release-id",
-        release_id,
-        "--verify-run-id",
-        run_id,
-    ]
-    try:
-        completed = subprocess.run(
-            command,
-            capture_output=True,
-            text=True,
-            timeout=_RESEARCH_CREDENTIAL_ISSUANCE_TIMEOUT_SECONDS,
-            check=False,
-            cwd=str(REPO_ROOT),
-        )
-    except (OSError, subprocess.TimeoutExpired) as exc:
-        raise PostApiVerificationError(
-            f"research consumer credential issuance failed to run: {exc}"
-        ) from exc
-    try:
-        result = json.loads(completed.stdout or "{}")
-    except ValueError as exc:
-        raise PostApiVerificationError(
-            "research consumer credential issuance returned invalid JSON"
-        ) from exc
-    if completed.returncode != 0 or result.get("exitCode") != 0:
-        raise PostApiVerificationError(
-            "DATA.RESEARCH.CONSUMER_CREDENTIAL_UNAVAILABLE: "
-            f"{result.get('details') or completed.stderr.strip() or 'issuance failed'}"
-        )
-    evidence = result.get("evidence")
-    if not isinstance(evidence, Mapping):
-        raise PostApiVerificationError(
-            "research consumer credential issuance lacks evidence"
-        )
-    bearer_token = str(evidence.get("bearerToken") or "").strip()
-    subject_hash = str(evidence.get("subjectHash") or "").strip()
-    if not bearer_token or not subject_hash:
-        raise PostApiVerificationError(
-            "research consumer credential evidence lacks bearerToken/subjectHash"
-        )
-    return {"bearerToken": bearer_token, "subjectHash": subject_hash}
-
-
-def _research_signed_media_probe(
-    client: PublicApiClient,
-    asset: ReleaseMediaAssetCase,
-) -> dict[str, Any]:
-    """采样一次原图短签授权并按 release 权威校验取回字节。"""
-    issuance_path = (
-        f"content/media/{quote(asset.asset_id, safe='')}/original:access"
-    )
-    response = client.post_json(
-        issuance_path,
-        page_id=ORIGINAL_ACCESS_PAGE_ID,
-        body={"mediaId": asset.asset_id, "purpose": "view"},
-        extra_headers={"Idempotency-Key": f"readiness-{uuid.uuid4().hex}"},
-    )
-    if response.status != HTTPStatus.OK:
-        raise PostApiVerificationError(
-            "research signed media issuance returned "
-            f"status={response.status} for {asset.asset_id}"
-        )
-    original_url = _required_text(
-        response.payload,
-        "originalUrl",
-        endpoint="research signed media issuance",
-    )
-    if not urlsplit(original_url).query:
-        raise PostApiVerificationError(
-            f"research signed media URL lacks a signature: {asset.asset_id}"
-        )
-    return _verify_binary_media(
-        client,
-        original_url,
-        expected_kind="image",
-        expected_bytes=asset.expected_bytes,
-        expected_sha256=asset.expected_sha256,
-        expected_mime_type=asset.expected_mime_type,
-        evidence_policy="private_target",
-    )
 
 
 def _verify_detail(
@@ -153,7 +51,6 @@ def _verify_detail(
     creator: CreatorProfileCase,
     *,
     media_origin: str = "",
-    signed_sample_asset_id: str = "",
 ) -> dict[str, Any]:
     response = client.get_json(
         f"content/posts/{quote(case.post_id, safe='')}",
@@ -196,18 +93,6 @@ def _verify_detail(
         )
     probes: list[dict[str, Any]] = []
     for asset in case.media_assets:
-        if asset.delivery_ref:
-            # research：私有交付资产逐个证明匿名不可达；对采样资产附加一次
-            # 原图短签取回校验（配额窗口内只采样一次，避免撞 grant 限额）。
-            probe = _verify_research_denied_media(
-                client,
-                media_origin=media_origin,
-                asset=asset,
-            )
-            if asset.asset_id == signed_sample_asset_id:
-                probe["signedProbe"] = _research_signed_media_probe(client, asset)
-            probes.append(probe)
-            continue
         full_identity = asset.kind == "image"
         probe = _verify_binary_media(
             client,
@@ -293,21 +178,6 @@ def _verify_author_profile(
         raise PostApiVerificationError(
             f"creator avatar authority is incomplete for {creator.creator_ref}"
         )
-    if not creator.avatar_url.startswith("https://"):
-        # research 私有交付 avatar：回读与权威的相对 CAS key 一致即绪；
-        # 匿名不可达由 post 私有媒体探测与边缘守卫覆盖，不再按资产取回。
-        return {
-            "creatorRef": creator.creator_ref,
-            "authorId": creator.author_id,
-            "personaId": creator.persona_id,
-            "profileStatus": response.status,
-            "avatarAssetId": creator.avatar_asset_id,
-            "avatarUrl": creator.avatar_url,
-            "avatarMediaReady": True,
-            "avatarProbeCount": 0,
-            "avatarProbe": None,
-            "usesPlatformDefaultAvatar": False,
-        }
     avatar_probe = _verify_binary_media(
         client,
         avatar_url,
@@ -342,13 +212,12 @@ def write_post_api_verification(
     api_base_url: str,
     media_delivery_base_url: str,
     ssl_cafile: str = "",
-    readiness_phase: str = "commercial",
+    readiness_phase: str = "production",
 ) -> Path:
     """Write schema-validated, release-bound public post API evidence."""
     phase_issue = readiness_phase_issue(readiness_phase)
     if phase_issue is not None:
         raise PostApiVerificationError(f"post API verification {phase_issue}")
-    research = readiness_phase == "research"
     try:
         cases, creators_by_author = read_post_and_creator_cases(
             environment=environment,
@@ -360,39 +229,13 @@ def write_post_api_verification(
             readiness_phase=readiness_phase,
         )
         media_origin = media_delivery_base_url.rstrip("/")
-        guest = None
-        internal_subject_hash = ""
-        signed_sample_asset_id = ""
-        if research:
-            # research 证据禁止匿名 guest；消费身份是受保护白名单研究账号，
-            # 凭证经 stackctl 进程内存签发（DEC-032 能力面之内的消费核验）。
-            credential = _research_consumer_credential(
-                environment=environment.value,
-                release_id=release_id,
-                run_id=run_id,
-            )
-            internal_subject_hash = credential["subjectHash"]
-            client = PublicApiClient(
-                base_url=api_base_url,
-                bearer_token=credential["bearerToken"],
-                ssl_cafile=ssl_cafile,
-            )
-            signed_sample_asset_id = min(
-                (
-                    asset.asset_id
-                    for case in cases
-                    for asset in case.media_assets
-                    if asset.kind == "image" and asset.delivery_ref
-                ),
-                default="",
-            )
-        else:
-            unauthenticated_client = PublicApiClient(
-                base_url=api_base_url,
-                ssl_cafile=ssl_cafile,
-            )
-            guest = unauthenticated_client.login_fresh_guest()
-            client = unauthenticated_client.for_guest(guest)
+        # production 证据以 fresh guest 闭合：公开交付对匿名可达（DEC-041）。
+        unauthenticated_client = PublicApiClient(
+            base_url=api_base_url,
+            ssl_cafile=ssl_cafile,
+        )
+        guest = unauthenticated_client.login_fresh_guest()
+        client = unauthenticated_client.for_guest(guest)
         feed_status, feed_queries = _verify_typed_feed(
             client,
             cases,
@@ -426,7 +269,6 @@ def write_post_api_verification(
                 case,
                 creators_by_author[case.author_id],
                 media_origin=media_origin,
-                signed_sample_asset_id=signed_sample_asset_id,
             )
             rows.append(
                 {
@@ -450,14 +292,10 @@ def write_post_api_verification(
         creator_importer_ref = creator_importer_report_path.relative_to(OUTPUT_ROOT).as_posix()
     except ValueError as exc:
         raise PostApiVerificationError("post importer report must be below QWQ_OUTPUT_ROOT") from exc
-    identity_evidence: dict[str, Any] = (
-        {"internalSubjectHash": internal_subject_hash}
-        if research
-        else {
-            "guestActorHash": guest.guest_actor_hash,
-            "guestLogin": guest.login_operation.as_payload(),
-        }
-    )
+    identity_evidence: dict[str, Any] = {
+        "guestActorHash": guest.guest_actor_hash,
+        "guestLogin": guest.login_operation.as_payload(),
+    }
     payload = {
         "schema": "quwoquan_data.post_api_verification",
         "environment": environment.value,

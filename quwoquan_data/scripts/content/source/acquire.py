@@ -1,17 +1,20 @@
-"""task acquire：AI 只点名来源 URL、类型与相关性理由，脚本机械取得字节与权利硬事实。
+"""task acquire：零网络 ingest。AI 已用宿主原生能力出网检索、取证并下载来源；本命令只从本地字节
+派生不可伪造的硬事实，不发起任何网络请求。
 
-一次调用处理一个 target 的全部来源：
-- page：MediaWiki（zh.wikipedia 等）走 API 取纯文本与修订号；其它 https 页面取 HTML 转纯文本。
-- image / video：Wikimedia Commons 文件页走 imageinfo API 取直链、mime、尺寸、license、作者，
-  下载字节、算 sha256；图片按载体字节预算降采样；视频 ffprobe 探测并抽 poster 帧。
-写入 `sources/<unit>/{meta.json,source.md,snapshot.*,assets/}` 与对象 `1.download/source_refs.json`，
-媒体字节入 content library。license 不在研究白名单即 typed GATE_BLOCK。
+一次调用处理一个 execution 的 ingest 清单（逐 target 的本地文件 + AI 申报的来源事实）：
+- page：AI 亲笔 `source.md`（首行 H1 为标题），脚本只算摘要并登记来源身份。
+- image / video：读本地字节，算 sha256；申报了来源 sha1 时与字节交叉校验；探测 mime/尺寸/时长；
+  图片按载体预算降采样；视频超预算或容器不在发布闭集时转码为 H.264 mp4 派生体并抽 poster；
+  降采样/转码/抽帧都写进 `derivedModifications`，不再恒为空。
+- `rightsStatus` 只由申报 license 字符串经开放许可白名单纯函数派生（verified / unverified / unknown），
+  AI 不直接给出；水印三字段（watermarkStatus/watermarkKind/watermarkNote）由看过像素的 AI 申报并原样转录。
+写入 `sources/<unit>/{meta.json,source.md,assets/}` 与对象 `1.download/source_refs.json`，媒体字节入
+content library。逐 target 独立报告：单 target 失败以 typed issue 记录，不影响同批其余。
 """
 from __future__ import annotations
 
 import fcntl
 import hashlib
-import html
 import json
 import mimetypes
 import os
@@ -19,35 +22,49 @@ import re
 import shutil
 import subprocess
 import tempfile
-import urllib.parse
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 from content.execution.identity import parse_execution_id, validate_execution_id
 from content.execution.runtime_contract import stage_execution_context
-from content.source.html_text import _html_to_plain_text
-from content.source.mediawiki_page import fetch_mediawiki_page_bundle_for_url, mediawiki_title_from_url
-from content.source.research import network_io
 from core.content_library import library_root_for_output, link_bytes_from_library
 from core.control_types import carrier_of_target_ref
-from core.image_variants import derive_budget_compliant_variant
+from core.image_variants import derive_budget_compliant_variant, image_dimensions
+from core.media_processing_policy import MEDIA_PROCESSING_POLICY
+from core.media_source_provenance import DerivedModification
 from core.object_storage_budget import source_unit_asset_budget_bytes
 from core.paths import execution_root, execution_source_unit_dir
 from core.schema import assert_valid
+from core.video_variants import (
+    DERIVED_VIDEO_EXTENSION,
+    derive_budget_compliant_video,
+    probe_video,
+    video_needs_derivative,
+)
+from governance.coverage.distribution import load_content_distribution_policy
 
-_MAX_SOURCE_BYTES = 64 * 1024 * 1024
-_COMMONS_HOST = "commons.wikimedia.org"
-_COMMONS_TERMS = "https://commons.wikimedia.org/wiki/Commons:Licensing"
-_WIKIPEDIA_LICENSE = "CC BY-SA 4.0"
-_WIKIPEDIA_TERMS = "https://creativecommons.org/licenses/by-sa/4.0/"
-# 研究用途 license 白名单：CC0、CC BY、CC BY-SA、公有领域（含 PDM）。NC/ND 与其它一律拒绝。
-_LICENSE_ALLOWED = re.compile(r"^(cc0|cc[ -]by(?:[ -]sa)?(?:[ -][0-9.]+)?(?:[ -][a-z]{2})?|public domain|pd(?:m|-[a-z0-9-]+)?)\b", re.I)
-_LICENSE_FORBIDDEN = re.compile(r"\b(nc|nd|fair use|copyright)\b", re.I)
+
+def _asset_record_defaults() -> dict[str, str]:
+    """采集代码无法核实的资产级常量只从 content_distribution.policy.yaml 取，不在这里另写一份。"""
+    return dict(load_content_distribution_policy().asset_record_defaults)
+
+# 单个来源文件的传输上限，不是准入判据：源体允许大于对象预算，降采样/转码要先拿到源体。
+_MAX_SOURCE_BYTES = MEDIA_PROCESSING_POLICY.source_asset_max_bytes
+# 开放许可白名单：CC0、CC BY、CC BY-SA、公有领域（含 PDM）。命中即 rightsStatus=verified；
+# 其它可读 license 记为 unverified 并把 license 原文写进 rightsIssues；读不到记 unknown。
+_LICENSE_VERIFIED = re.compile(r"^(cc0|cc[ -]by(?:[ -]sa)?(?:[ -][0-9.]+)?(?:[ -][a-z]{2})?|public domain|pd(?:m|-[a-z0-9-]+)?)\b", re.I)
+_LICENSE_RESTRICTIVE = re.compile(r"\b(nc|nd|fair use|copyright)\b", re.I)
+_IMAGE_MAGIC: tuple[tuple[bytes, str], ...] = (
+    (b"\xff\xd8\xff", "image/jpeg"),
+    (b"\x89PNG\r\n\x1a\n", "image/png"),
+    (b"GIF8", "image/gif"),
+    (b"RIFF", "image/webp"),
+)
 
 
 class AcquireError(ValueError):
-    """来源不可取得或权利不允许研究用途。"""
+    """来源文件不可读、字节漂移或媒体不可用。"""
 
 
 def _canonical(value: object) -> bytes:
@@ -66,151 +83,118 @@ def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def _strip_html(value: str) -> str:
-    return html.unescape(re.sub(r"<[^>]+>", "", str(value or ""))).strip()
-
-
-def _license_allowed(short_name: str) -> bool:
+def _rights_record(short_name: str) -> tuple[str, list[str]]:
+    """按申报 license 原文派生 (rightsStatus, rightsIssues)；只记录，不判否。"""
     text = str(short_name or "").strip()
-    return bool(text) and bool(_LICENSE_ALLOWED.match(text)) and not _LICENSE_FORBIDDEN.search(text)
+    if not text:
+        return "unknown", ["license not readable from source metadata"]
+    if _LICENSE_VERIFIED.match(text) and not _LICENSE_RESTRICTIVE.search(text):
+        return "verified", []
+    return "unverified", [f"license outside open-license allowlist: {text}"]
 
 
-# ── 抓取 ──────────────────────────────────────────────────────────────
+def _platform_of(source: dict[str, Any]) -> str:
+    declared = str(source.get("platform") or "").strip()
+    if declared:
+        return declared
+    host = str(source["sourceUrl"]).split("//", 1)[-1].split("/", 1)[0]
+    if host.endswith("wikimedia.org"):
+        return "Wikimedia Commons"
+    if host.endswith("wikipedia.org"):
+        return "维基百科"
+    return host
 
 
-def _fetch_bytes(url: str) -> tuple[bytes, str]:
-    response = network_io.fetch_http(url, timeout=120)
-    if not response.ok or not response.body:
-        raise AcquireError(f"DATA.ACQUIRE.FETCH_FAILED: {url} status={response.status_code}")
-    if len(response.body) > _MAX_SOURCE_BYTES:
-        raise AcquireError(f"DATA.ACQUIRE.OVER_BYTES: {url}")
-    final_url = response.final_url or url
-    if not final_url.startswith("https://"):
-        raise AcquireError(f"DATA.ACQUIRE.NON_HTTPS_REDIRECT: {url}")
-    return response.body, final_url
+# ── 本地读取 ──────────────────────────────────────────────────────────
 
 
-def _acquire_page(source: dict[str, Any]) -> dict[str, Any]:
-    url = str(source["url"])
-    host, title = mediawiki_title_from_url(url)
-    if host and title:
-        bundle = fetch_mediawiki_page_bundle_for_url(url, include_images=False)
-        if bundle is None or not bundle.rendered_text:
-            raise AcquireError(f"DATA.ACQUIRE.PAGE_EMPTY: {url}")
-        canonical_url = f"https://{host}/wiki/{urllib.parse.quote(bundle.resolved_title.replace(' ', '_'))}"
-        return {
-            "title": bundle.resolved_title,
-            "sourceId": _slug(host.split(".")[0] + "_" + host.split(".")[1]),
-            "sourceClass": "encyclopedia",
-            "platform": "维基百科" if "wikipedia" in host else host,
-            "sourceUseMode": "factual_reference_only",
-            "canonicalUrl": canonical_url,
-            "license": _WIKIPEDIA_LICENSE,
-            "termsUrl": _WIKIPEDIA_TERMS,
-            "creator": f"{bundle.resolved_title} 条目贡献者",
-            "text": bundle.rendered_text,
-            "snapshot": bundle.raw.encode("utf-8"),
-            "snapshotName": "snapshot.raw",
-            "revisionId": bundle.revision_id,
-        }
-    body, final_url = _fetch_bytes(url)
-    if b"\x00" in body:
-        raise AcquireError(f"DATA.ACQUIRE.PAGE_NOT_TEXT: {url}")
-    text = _html_to_plain_text(body.decode("utf-8", errors="replace"), final_url)
+def _read_local_bytes(raw_path: str, *, label: str) -> bytes:
+    path = Path(raw_path).expanduser()
+    if not path.is_file():
+        raise AcquireError(f"DATA.ACQUIRE.LOCAL_FILE_MISSING: {label}: {raw_path}")
+    body = path.read_bytes()
+    if not body:
+        raise AcquireError(f"DATA.ACQUIRE.LOCAL_FILE_EMPTY: {label}: {raw_path}")
+    if len(body) > _MAX_SOURCE_BYTES:
+        raise AcquireError(f"DATA.ACQUIRE.OVER_BYTES: {label}: {raw_path}")
+    return body
+
+
+def _sniff_image_mime(body: bytes, *, hint: str) -> str:
+    for magic, mime in _IMAGE_MAGIC:
+        if body.startswith(magic):
+            if mime == "image/webp" and body[8:12] != b"WEBP":
+                continue
+            return mime
+    guessed = mimetypes.guess_type(hint)[0] or ""
+    if guessed.startswith("image/"):
+        return guessed
+    raise AcquireError(f"DATA.ACQUIRE.MIME_MISMATCH: {hint} is not a decodable image")
+
+
+def _ingest_page(source: dict[str, Any]) -> dict[str, Any]:
+    body = _read_local_bytes(str(source["sourceMarkdownPath"]), label="source.md")
+    text = body.decode("utf-8", errors="strict") if b"\x00" not in body else ""
     if not text.strip():
-        raise AcquireError(f"DATA.ACQUIRE.PAGE_EMPTY: {url}")
-    parsed = urllib.parse.urlparse(final_url)
+        raise AcquireError(f"DATA.ACQUIRE.PAGE_EMPTY: {source['sourceUrl']}")
+    host = str(source["sourceUrl"]).split("//", 1)[-1].split("/", 1)[0]
+    host_parts = host.split(".")
+    source_id = _slug("_".join(host_parts[:2]) if len(host_parts) >= 2 else host)
+    is_encyclopedia = host.endswith("wikipedia.org") or host.endswith("baike.baidu.com")
     return {
-        "title": text.strip().splitlines()[0][:120],
-        "sourceId": _slug(parsed.hostname or "web"),
-        "sourceClass": "web_page",
-        "platform": parsed.hostname or "web",
+        "title": str(source["title"]).strip(),
+        "sourceId": source_id,
+        "sourceClass": "encyclopedia" if is_encyclopedia else "web_page",
+        "platform": _platform_of(source),
         "sourceUseMode": "factual_reference_only",
-        "canonicalUrl": final_url,
-        "license": "all rights reserved (factual reference only)",
-        "termsUrl": final_url,
-        "creator": parsed.hostname or "web",
+        "canonicalUrl": str(source["sourceUrl"]),
+        "license": str(source["license"]).strip(),
+        "termsUrl": str(source["licenseUrl"]),
+        "creator": str(source["creator"]).strip(),
         "text": text,
         "snapshot": body,
         "snapshotName": "snapshot.raw",
-        "revisionId": 0,
-    }
-
-
-def _commons_file_title(url: str) -> str:
-    parsed = urllib.parse.urlparse(url)
-    if (parsed.hostname or "") != _COMMONS_HOST or "/wiki/" not in parsed.path:
-        raise AcquireError(f"DATA.ACQUIRE.NOT_COMMONS_FILE_PAGE: {url}")
-    title = urllib.parse.unquote(parsed.path.split("/wiki/", 1)[1].split("#", 1)[0])
-    if not title.startswith("File:"):
-        raise AcquireError(f"DATA.ACQUIRE.NOT_COMMONS_FILE_PAGE: {url}")
-    return title
-
-
-def _commons_imageinfo(title: str) -> dict[str, Any]:
-    payload = network_io.wiki_api(
-        _COMMONS_HOST,
-        {
-            "action": "query",
-            "titles": title,
-            "prop": "imageinfo",
-            "iiprop": "url|mime|size|sha1|extmetadata|user",
-            "iiextmetadatafilter": "LicenseShortName|LicenseUrl|Artist|ImageDescription|Credit|DateTimeOriginal|Attribution",
-            "format": "json",
-            "redirects": 1,
-        },
-    )
-    pages = ((payload.get("query") or {}).get("pages") or {}) if isinstance(payload, dict) else {}
-    page = next((row for row in pages.values() if isinstance(row, dict)), None)
-    info = (page or {}).get("imageinfo") if page else None
-    if not info or not isinstance(info, list) or not isinstance(info[0], dict):
-        raise AcquireError(f"DATA.ACQUIRE.COMMONS_IMAGEINFO_MISSING: {title}")
-    row = info[0]
-    meta = {key: _strip_html((value or {}).get("value")) for key, value in (row.get("extmetadata") or {}).items()}
-    # Commons 对 CC0/PD 常给出 http:// 的许可证链接；creativecommons.org 全站支持 https，统一为 https。
-    if meta.get("LicenseUrl", "").startswith("http://"):
-        meta["LicenseUrl"] = "https://" + meta["LicenseUrl"][len("http://"):]
-    return {
-        "directUrl": str(row.get("url") or ""),
-        "mime": str(row.get("mime") or ""),
-        "size": int(row.get("size") or 0),
-        "sha1": str(row.get("sha1") or ""),
-        "width": int(row.get("width") or 0),
-        "height": int(row.get("height") or 0),
-        "user": str(row.get("user") or ""),
-        "licenseShortName": meta.get("LicenseShortName", ""),
-        "licenseUrl": meta.get("LicenseUrl", ""),
-        "artist": meta.get("Artist", "") or meta.get("Attribution", "") or str(row.get("user") or ""),
-        "description": meta.get("ImageDescription", ""),
-        "credit": meta.get("Credit", ""),
-        "dateTimeOriginal": meta.get("DateTimeOriginal", ""),
+        "revisionId": int(source.get("revisionId") or 0),
     }
 
 
 def _ffprobe(path: Path) -> dict[str, Any]:
-    proc = subprocess.run(
-        ["ffprobe", "-v", "error", "-print_format", "json", "-show_format", "-show_streams", str(path)],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    if proc.returncode != 0:
-        raise AcquireError(f"DATA.ACQUIRE.VIDEO_NOT_PROBEABLE: {path.name}")
-    probe = json.loads(proc.stdout or "{}")
-    video = next((s for s in probe.get("streams", []) if s.get("codec_type") == "video"), None)
-    if video is None:
-        raise AcquireError(f"DATA.ACQUIRE.VIDEO_NO_STREAM: {path.name}")
-    duration = float((probe.get("format") or {}).get("duration") or 0)
-    if duration <= 0:
-        raise AcquireError(f"DATA.ACQUIRE.VIDEO_NO_DURATION: {path.name}")
+    try:
+        return probe_video(path)
+    except ValueError as exc:
+        raise AcquireError(f"DATA.ACQUIRE.VIDEO_NOT_PROBEABLE: {path.name}: {exc}") from exc
+
+
+def _derivative_binding(original: bytes, derived: bytes, *, mime: str, derived_mime: str, carrier: str, extension: str) -> dict[str, Any]:
     return {
-        "durationMs": int(duration * 1000),
-        "width": int(video.get("width") or 0),
-        "height": int(video.get("height") or 0),
-        "codec": str(video.get("codec_name") or ""),
-        "container": str((probe.get("format") or {}).get("format_name") or ""),
-        "hasAudio": any(s.get("codec_type") == "audio" for s in probe.get("streams", [])),
+        "originalSha256": _sha256(original),
+        "originalBytes": len(original),
+        "originalMimeType": mime,
+        "policy": "source_unit_asset_budget",
+        "profile": carrier,
+        "derivedSha256": _sha256(derived),
+        "derivedBytes": len(derived),
+        "derivedMimeType": derived_mime,
+        "derivedExtension": extension,
     }
+
+
+def _video_derivative(body: bytes, *, mime: str, carrier: str, title: str) -> tuple[bytes, str, dict[str, Any] | None]:
+    """超预算或容器不在发布闭集的视频转成装进预算的 mp4；返回 (body, mime, derivativeBinding)。"""
+    budget = source_unit_asset_budget_bytes(carrier)
+    if not video_needs_derivative(mime=mime, size_bytes=len(body), budget_bytes=budget):
+        return body, mime, None
+    try:
+        variant = derive_budget_compliant_video(
+            body, budget_bytes=budget, target_bytes=MEDIA_PROCESSING_POLICY.video_derivative_target_bytes
+        )
+    except ValueError as exc:
+        raise AcquireError(f"DATA.ACQUIRE.VIDEO_NOT_PROBEABLE: {title}: {exc}") from exc
+    if variant is None:
+        raise AcquireError(f"DATA.ACQUIRE.VIDEO_OVER_BUDGET: {title}")
+    derived = bytes(variant["bytes"])
+    derived_mime = str(variant["mimeType"])
+    return derived, derived_mime, _derivative_binding(body, derived, mime=mime, derived_mime=derived_mime, carrier=carrier, extension=DERIVED_VIDEO_EXTENSION)
 
 
 def _extract_poster(video_path: Path, poster_path: Path, *, duration_ms: int) -> None:
@@ -225,97 +209,125 @@ def _extract_poster(video_path: Path, poster_path: Path, *, duration_ms: int) ->
         raise AcquireError(f"DATA.ACQUIRE.POSTER_EXTRACT_FAILED: {video_path.name}")
 
 
-def _commons_attribution(info: dict[str, Any], *, file_page: str, collected_at: str) -> dict[str, Any]:
-    creator = info["artist"] or info["user"] or "Wikimedia Commons contributor"
+def _attribution(source: dict[str, Any], *, platform: str, collected_at: str, has_audio: bool | None, derived: list[str]) -> dict[str, Any]:
+    """来源署名：只转录 AI 申报的事实与脚本实际做过的衍生修改，不编造它不知道的字段。"""
+    creator = str(source["creator"]).strip()
+    license_name = str(source["license"]).strip()
+    license_url = str(source["licenseUrl"])
+    if has_audio is None:
+        audio = "no_audio"
+    else:
+        audio = "unverified" if has_audio else "no_audio"
+    defaults = _asset_record_defaults()
     return {
         "isOriginal": False,
         "originalCreatorId": None,
         "originalCreatorName": creator,
         "originalCreatorProfileUrl": None,
-        "platform": "Wikimedia Commons",
-        "sourcePostUrl": file_page,
-        "originalAssetUrl": info["directUrl"],
-        "attributionText": f"{creator} / Wikimedia Commons / {info['licenseShortName']}",
-        "rightsBasis": f"open_license:{info['licenseShortName']}",
-        "commercialAuthorizationStatus": "unverified",
+        "platform": platform,
+        "sourcePostUrl": str(source["sourceUrl"]),
+        "originalAssetUrl": str(source["directUrl"]),
+        "attributionText": f"{creator} / {platform} / {license_name}",
+        "rightsBasis": f"open_license:{license_name}",
+        "commercialAuthorizationStatus": defaults["commercialAuthorizationStatus"],
+        # 对象级权利词汇是已冻结在 canonical 字节中的记录事实，保持既有取值。
         "publicationAdmission": "research_release",
-        "authorizationProofUrl": info["licenseUrl"] or _COMMONS_TERMS,
-        "termsUrl": info["licenseUrl"] or _COMMONS_TERMS,
-        "watermarkStatus": "absent",
-        "audioRightsStatus": "no_audio",
-        "modelReleaseStatus": "not_required",
-        "propertyReleaseStatus": "not_required",
+        "authorizationProofUrl": license_url,
+        "termsUrl": license_url,
+        "watermarkStatus": str(source["watermarkStatus"]),
+        "watermarkKind": str(source["watermarkKind"]),
+        "watermarkNote": str(source.get("watermarkNote") or ""),
+        "audioRightsStatus": audio,
+        "modelReleaseStatus": defaults["modelReleaseStatus"],
+        "propertyReleaseStatus": defaults["propertyReleaseStatus"],
         "collectedAt": collected_at,
-        "takedownPolicy": "remove_on_rights_holder_request",
-        "derivedModifications": [],
+        "takedownPolicy": defaults["takedownPolicy"],
+        "derivedModifications": sorted(set(derived)),
     }
 
 
-def _acquire_media(source: dict[str, Any], *, kind: str, carrier: str) -> dict[str, Any]:
-    file_page = str(source["url"])
-    title = _commons_file_title(file_page)
-    info = _commons_imageinfo(title)
-    if not _license_allowed(info["licenseShortName"]):
-        raise AcquireError(
-            f"DATA.ACQUIRE.LICENSE_NOT_ALLOWED: {title} license={info['licenseShortName'] or 'unknown'}"
-        )
-    if not info["directUrl"].startswith("https://"):
-        raise AcquireError(f"DATA.ACQUIRE.COMMONS_DIRECT_URL_MISSING: {title}")
-    expected_prefix = "image/" if kind == "image" else "video/"
-    if not info["mime"].startswith(expected_prefix):
-        raise AcquireError(f"DATA.ACQUIRE.MIME_MISMATCH: {title} kind={kind} mime={info['mime']}")
-    body, _final = _fetch_bytes(info["directUrl"])
-    if hashlib.sha1(body).hexdigest() != info["sha1"]:
-        raise AcquireError(f"DATA.ACQUIRE.COMMONS_SHA1_DRIFT: {title}")
-    original_sha256 = _sha256(body)
-    original_bytes = len(body)
-    mime = info["mime"]
+def _ingest_media(source: dict[str, Any], *, kind: str, carrier: str) -> dict[str, Any]:
+    file_page = str(source["sourceUrl"])
+    title = str(source.get("description") or "").strip().splitlines()[0][:80] if str(source.get("description") or "").strip() else Path(str(source["filePath"])).name
+    body = _read_local_bytes(str(source["filePath"]), label=kind)
+    declared_sha1 = str(source.get("sha1") or "").strip().lower()
+    if declared_sha1 and hashlib.sha1(body).hexdigest() != declared_sha1:
+        raise AcquireError(f"DATA.ACQUIRE.SOURCE_SHA1_DRIFT: {file_page}")
+    derived: list[str] = []
     derivative: dict[str, Any] | None = None
+    width = height = 0
     if kind == "image":
+        mime = _sniff_image_mime(body, hint=str(source["filePath"]))
+        dims = image_dimensions(body)
+        if dims is None:
+            raise AcquireError(f"DATA.ACQUIRE.MIME_MISMATCH: {file_page} is not a decodable image")
+        width, height = dims
         budget = source_unit_asset_budget_bytes(carrier)
         if len(body) > budget:
             variant = derive_budget_compliant_variant(body, budget_bytes=budget)
             if variant is None or len(variant["bytes"]) > budget:
-                raise AcquireError(f"DATA.ACQUIRE.IMAGE_OVER_BUDGET: {title}")
-            derivative = {
-                "originalSha256": original_sha256,
-                "originalBytes": original_bytes,
-                "originalMimeType": mime,
-                "policy": "source_unit_asset_budget",
-                "profile": carrier,
-                "derivedSha256": _sha256(bytes(variant["bytes"])),
-                "derivedBytes": len(variant["bytes"]),
-                "derivedMimeType": str(variant["mimeType"]),
-                "derivedExtension": mimetypes.guess_extension(str(variant["mimeType"]), strict=False) or ".jpg",
-            }
+                raise AcquireError(f"DATA.ACQUIRE.IMAGE_OVER_BUDGET: {file_page}")
+            derived_mime = str(variant["mimeType"])
+            extension = mimetypes.guess_extension(derived_mime, strict=False) or ".jpg"
+            derivative = _derivative_binding(body, bytes(variant["bytes"]), mime=mime, derived_mime=derived_mime, carrier=carrier, extension=extension)
+            derived.append(DerivedModification.RESIZE.value)
+            if derived_mime != mime:
+                derived.append(DerivedModification.FORMAT_CONVERSION.value)
             body = bytes(variant["bytes"])
-            mime = str(variant["mimeType"])
+            mime = derived_mime
+            width, height = int(variant.get("width") or width), int(variant.get("height") or height)
+    else:
+        mime = mimetypes.guess_type(str(source["filePath"]))[0] or ""
+        if not mime.startswith("video/"):
+            with tempfile.NamedTemporaryFile(suffix=Path(str(source["filePath"])).suffix or ".bin", delete=False) as handle:
+                handle.write(body)
+                probe_path = Path(handle.name)
+            try:
+                probe = _ffprobe(probe_path)
+            finally:
+                probe_path.unlink(missing_ok=True)
+            mime = f"video/{probe.get('container') or 'mp4'}"
+        original_mime = mime
+        body, mime, derivative = _video_derivative(body, mime=mime, carrier=carrier, title=file_page)
+        if derivative is not None:
+            derived.append(DerivedModification.FORMAT_CONVERSION.value if original_mime != mime else DerivedModification.RESIZE.value)
+    license_name = str(source["license"]).strip()
+    rights_status, rights_issues = _rights_record(license_name)
     collected_at = _now()
+    platform = _platform_of(source)
+    has_audio = bool(source.get("hasAudio")) if kind == "video" else None
     return {
-        "title": title.removeprefix("File:"),
-        "sourceId": "wikimedia_commons" if kind == "image" else "wikimedia_commons_video",
+        "title": title,
+        "sourceId": _slug(platform.lower().replace(" ", "_")) + ("_video" if kind == "video" else ""),
         "sourceClass": "open_license_media",
-        "platform": "Wikimedia Commons",
+        "platform": platform,
         "sourceUseMode": "licensed_adaptation",
         "canonicalUrl": file_page,
-        "license": info["licenseShortName"],
-        "termsUrl": info["licenseUrl"] or _COMMONS_TERMS,
-        "creator": info["artist"] or info["user"] or "Wikimedia Commons contributor",
-        "text": f"# {title}\n\n{info['description'] or ''}\n\n作者：{info['artist'] or info['user']}\n许可：{info['licenseShortName']}\n来源页：{file_page}\n",
-        "snapshot": body,
-        "snapshotName": "snapshot.bin",
+        "license": license_name,
+        "termsUrl": str(source["licenseUrl"]),
+        "creator": str(source["creator"]).strip(),
+        "text": f"# {title}\n\n{str(source.get('description') or '')}\n\n作者：{source['creator']}\n许可：{license_name}\n来源页：{file_page}\n",
+        # 媒体来源不再单独落 snapshot：字节本身就是快照，摘要记在 meta.rawSha256。
+        "snapshot": None,
+        "snapshotName": None,
         "revisionId": 0,
         "media": {
             "kind": kind,
             "body": body,
             "mime": mime,
-            "directUrl": info["directUrl"],
-            "width": info["width"],
-            "height": info["height"],
+            "directUrl": str(source["directUrl"]),
+            "width": width,
+            "height": height,
             "derivative": derivative,
             "collectedAt": collected_at,
-            "attribution": _commons_attribution(info, file_page=file_page, collected_at=collected_at),
-            "description": info["description"],
+            "attribution": _attribution(source, platform=platform, collected_at=collected_at, has_audio=has_audio, derived=derived),
+            "description": str(source.get("description") or ""),
+            "rightsStatus": rights_status,
+            "rightsIssues": rights_issues,
+            "watermarkStatus": str(source["watermarkStatus"]),
+            "watermarkKind": str(source["watermarkKind"]),
+            "watermarkNote": str(source.get("watermarkNote") or ""),
+            "derivedModifications": sorted(set(derived)),
         },
     }
 
@@ -355,6 +367,8 @@ def _asset_row(
 ) -> dict[str, Any]:
     media = acquired["media"]
     attribution = media["attribution"]
+    rights_status = str(media.get("rightsStatus") or "verified")
+    rights_issues = list(media.get("rightsIssues") or [])
     return {
         "sourceAssetId": asset_id,
         "fileName": file_name,
@@ -372,20 +386,24 @@ def _asset_row(
         "capturedAt": media["collectedAt"],
         "licenseSnapshot": acquired["license"],
         "usageScope": "editorial",
-        "modelReleaseStatus": "not_required",
-        "propertyReleaseStatus": "not_required",
+        "modelReleaseStatus": attribution["modelReleaseStatus"],
+        "propertyReleaseStatus": attribution["propertyReleaseStatus"],
         "sourceAttribution": attribution,
         "sourceUrl": acquired["canonicalUrl"],
         "license": acquired["license"],
         "termsUrl": acquired["termsUrl"],
-        # 开放许可的授权证明就是许可证正文本身。
+        # 开放许可的授权证明就是许可证正文本身；非白名单 license 仍记 termsUrl，由 rightsStatus 说明状态。
         "authorizationProof": acquired["termsUrl"],
-        "rightsStatus": "verified",
-        "authorizationRequired": False,
+        "rightsStatus": rights_status,
+        "authorizationRequired": rights_status != "verified",
         "distributionDecision": "research_allowed",
-        "rightsIssues": [],
+        "rightsIssues": rights_issues,
         "relevance": relevance,
         "caption": media.get("description") or acquired["title"],
+        "watermarkStatus": media["watermarkStatus"],
+        "watermarkKind": media["watermarkKind"],
+        "watermarkNote": media["watermarkNote"],
+        "derivedModifications": list(media["derivedModifications"]),
         **(extra or {}),
     }
 
@@ -404,10 +422,11 @@ def _materialize(
     library_root = library_root_for_output(output_root)
     carrier = carrier_of_target_ref(target_ref)
     candidate_digest = _sha256(_canonical(source))
-    raw_sha = _sha256(acquired["snapshot"])
+    # 媒体来源的原始字节就是媒体本身，不再复制一份 snapshot 进 source CAS。
+    raw_sha = _sha256(acquired["snapshot"] if acquired["snapshot"] is not None else acquired["media"]["body"])
     unit_id = "%s__%s" % (
         _slug(acquired["sourceId"]),
-        hashlib.sha256("\n".join((execution_id, target_ref, str(source["url"]), raw_sha)).encode("utf-8")).hexdigest()[:16],
+        hashlib.sha256("\n".join((execution_id, target_ref, str(source["sourceUrl"]), raw_sha)).encode("utf-8")).hexdigest()[:16],
     )
     unit = execution_source_unit_dir(execution_id, unit_id)
     source_md = acquired["text"] if acquired["text"].startswith("# ") else f"# {acquired['title']}\n\n{acquired['text']}\n"
@@ -443,6 +462,9 @@ def _materialize(
             if existing.get("rawSha256") != raw_sha or existing.get("targetRef") != target_ref:
                 raise AcquireError(f"DATA.ACQUIRE.CREATE_ONCE_CONFLICT: {unit_id}")
             meta = existing
+            index_path = unit / "assets/index.json"
+            if index_path.is_file():
+                assets = list(json.loads(index_path.read_bytes()).get("assets") or [])
         else:
             unit.parent.mkdir(parents=True, exist_ok=True)
             temporary = Path(tempfile.mkdtemp(prefix=f".{unit_id}.", dir=unit.parent))
@@ -487,9 +509,21 @@ def _materialize(
                             mime=media["mime"], acquired=acquired, relevance=str(source["relevance"]),
                             receipt_ref=receipt_ref, extra=extra,
                         ))
+                        poster_acquired = {
+                            **acquired,
+                            "media": {
+                                **media,
+                                "attribution": {
+                                    **media["attribution"],
+                                    "audioRightsStatus": "no_audio",
+                                    "derivedModifications": sorted(set(media["derivedModifications"]) | {DerivedModification.VIDEO_FRAME_EXTRACTION.value}),
+                                },
+                                "derivedModifications": sorted(set(media["derivedModifications"]) | {DerivedModification.VIDEO_FRAME_EXTRACTION.value}),
+                            },
+                        }
                         assets.append(_asset_row(
                             asset_id=f"{unit_id}:poster", file_name=poster_name, role="poster", body=poster_body,
-                            mime="image/png", acquired=acquired, relevance=str(source["relevance"]),
+                            mime="image/png", acquired=poster_acquired, relevance=str(source["relevance"]),
                             receipt_ref=receipt_ref,
                             extra={"derivedFromSourceAssetId": f"{unit_id}:video", "derivation": "first_frame"},
                         ))
@@ -515,7 +549,8 @@ def _materialize(
                         "assets": [{k: row[k] for k in ("sourceAssetId", "fileName", "assetRole", "sha256", "bytes", "mimeType")} for row in assets],
                     }
                     _write_create_or_same(unit.parent / receipt_ref, _canonical(receipt))
-                link_bytes_from_library(acquired["snapshot"], temporary / acquired["snapshotName"], kind="source", library_root=library_root)
+                if acquired["snapshot"] is not None:
+                    link_bytes_from_library(acquired["snapshot"], temporary / acquired["snapshotName"], kind="source", library_root=library_root)
                 (temporary / "source.md").write_text(source_md, encoding="utf-8")
                 (temporary / "assets/index.json").write_bytes(_canonical({"assets": assets}))
                 assert_valid(meta, "source", "atomic_source_unit_meta", label=unit_id)
@@ -560,39 +595,59 @@ def _materialize(
         "kind": source["kind"],
         "title": acquired["title"],
         "license": acquired["license"],
+        "rightsStatus": acquired["media"]["rightsStatus"] if "media" in acquired else "verified",
+        "watermarkStatus": acquired["media"]["watermarkStatus"] if "media" in acquired else None,
         "assets": [row["fileName"] for row in assets],
         "sourceRef": row["sourceRef"],
     }
 
 
-def acquire(*, execution_id: str, target_ref: str, request_path: Path) -> dict[str, Any]:
+def _ingest_target(*, execution_id: str, target: dict[str, Any], carrier: str, plan_ref: str, plan_digest: str) -> dict[str, Any]:
+    target_ref = str(target["targetRef"]).strip().strip("/")
+    results: list[dict[str, Any]] = []
+    for source in target["sources"]:
+        kind = source["kind"]
+        acquired = _ingest_page(source) if kind == "page" else _ingest_media(source, kind=kind, carrier=carrier)
+        results.append(_materialize(
+            execution_id=execution_id, target_ref=target_ref, source=source, acquired=acquired,
+            plan_ref=plan_ref, plan_digest=plan_digest,
+        ))
+    return {"targetRef": target_ref, "status": "ingested", "sources": results}
+
+
+def acquire(*, execution_id: str, request_path: Path) -> dict[str, Any]:
+    """零网络 ingest 一个 execution 的全部 target；逐 target 独立报告。"""
     execution_id = validate_execution_id(execution_id)
-    target_ref = str(target_ref).strip().strip("/")
-    carrier = carrier_of_target_ref(target_ref)
-    if parse_execution_id(execution_id).content_type.value != carrier:
-        raise AcquireError(f"DATA.ACQUIRE.CARRIER_MISMATCH: execution={execution_id} target={target_ref}")
+    carrier = parse_execution_id(execution_id).content_type.value
     root = execution_root(execution_id)
     if not (root / "execution_manifest.json").is_file():
         raise AcquireError(f"DATA.ACQUIRE.EXECUTION_MISSING: {execution_id}")
     target_set = json.loads((root / "0.plan/target_set.json").read_bytes())
-    if target_ref not in (target_set.get("targetRefs") or []):
-        raise AcquireError(f"DATA.ACQUIRE.TARGET_NOT_DECLARED: {target_ref}")
+    declared_refs = set(target_set.get("targetRefs") or [])
     request = json.loads(Path(request_path).expanduser().read_bytes())
-    assert_valid(request, "source", "acquire_request", label=str(request_path))
+    assert_valid(request, "source", "ingest_manifest", label=str(request_path))
+    if request["executionId"] != execution_id:
+        raise AcquireError(f"DATA.ACQUIRE.EXECUTION_MISMATCH: manifest={request['executionId']} execution={execution_id}")
     request_bytes = _canonical(request)
     plan_digest = _sha256(request_bytes)
     plan_ref = f"sources/plans/{plan_digest.removeprefix('sha256:')}.json"
     _write_create_or_same(root / plan_ref, request_bytes)
 
-    results: list[dict[str, Any]] = []
-    for source in request["sources"]:
-        kind = source["kind"]
-        acquired = _acquire_page(source) if kind == "page" else _acquire_media(source, kind=kind, carrier=carrier)
-        results.append(_materialize(
-            execution_id=execution_id, target_ref=target_ref, source=source, acquired=acquired,
-            plan_ref=plan_ref, plan_digest=plan_digest,
-        ))
-    return {"executionId": execution_id, "targetRef": target_ref, "sources": results}
+    targets: list[dict[str, Any]] = []
+    for target in request["targets"]:
+        target_ref = str(target["targetRef"]).strip().strip("/")
+        try:
+            if carrier_of_target_ref(target_ref) != carrier:
+                raise AcquireError(f"DATA.ACQUIRE.CARRIER_MISMATCH: execution={execution_id} target={target_ref}")
+            if target_ref not in declared_refs:
+                raise AcquireError(f"DATA.ACQUIRE.TARGET_NOT_DECLARED: {target_ref}")
+            targets.append(_ingest_target(execution_id=execution_id, target=target, carrier=carrier, plan_ref=plan_ref, plan_digest=plan_digest))
+        except (AcquireError, OSError, ValueError) as exc:
+            message = str(exc)
+            code = message.split(":", 1)[0] if message.startswith("DATA.") else "DATA.ACQUIRE.TARGET_FAILED"
+            targets.append({"targetRef": target_ref, "status": "failed", "issue": {"code": code, "message": message}})
+    ingested = sum(1 for row in targets if row["status"] == "ingested")
+    return {"executionId": execution_id, "ingested": ingested, "failed": len(targets) - ingested, "targets": targets}
 
 
 __all__ = ["AcquireError", "acquire"]

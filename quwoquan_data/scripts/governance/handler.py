@@ -55,11 +55,6 @@ def handle_governance(args: argparse.Namespace) -> None:
 
         handle_taxonomy(args)
         return
-    if cmd == "coverage":
-        from governance.coverage.handler import handle_coverage_command
-
-        handle_coverage_command(args)
-        return
     if cmd == "media-probe":
         from governance.media_probe import (
             prepare_media_probe_assets,
@@ -147,7 +142,6 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     p = subparsers.add_parser("governance", help="Data governance candidate operations")
     sub = p.add_subparsers(dest="governance_command")
 
-    from governance.coverage.handler import register_coverage_parser
     from governance.taxonomy.handler import register_taxonomy_parser
 
     creators = sub.add_parser(
@@ -173,7 +167,6 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
         help="Attest that the selected source crop depicts no identifiable person",
     )
     register_taxonomy_parser(sub)
-    register_coverage_parser(sub)
     live_import = sub.add_parser(
         "public-cli-live-import-zero",
         help="隔离导入全部 public CLI command modules 并证明旧五家族零加载",

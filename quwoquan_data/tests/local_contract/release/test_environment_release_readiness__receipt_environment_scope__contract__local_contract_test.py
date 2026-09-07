@@ -136,8 +136,8 @@ def _fixture(root: Path) -> dict[str, Path]:
             "releaseId": RELEASE_ID,
             "sourceOwner": "qwq_data",
             "releaseKind": "content",
-            "releaseClass": "commercial",
-            "productLifecycleState": "commercial",
+            "releaseClass": "production",
+            "productLifecycleState": "production",
             "containsUnverifiedAssets": False,
             "rightsStatusCounts": {
                 "verified": 7,
@@ -353,8 +353,8 @@ def _fixture(root: Path) -> dict[str, Path]:
         {
             "schema": "quwoquan_data.release_asset_admission",
             "releaseId": RELEASE_ID,
-            "releaseClass": "commercial",
-            "productLifecycleState": "commercial",
+            "releaseClass": "production",
+            "productLifecycleState": "production",
             "containsUnverifiedAssets": False,
             "rightsStatusCounts": {
                 "verified": 7,
@@ -398,8 +398,8 @@ def _fixture(root: Path) -> dict[str, Path]:
             "releaseId": RELEASE_ID,
             "sourceOwner": "qwq_data",
             "releaseKind": "content",
-            "releaseClass": "commercial",
-            "productLifecycleState": "commercial",
+            "releaseClass": "production",
+            "productLifecycleState": "production",
             "containsUnverifiedAssets": False,
             "rightsStatusCounts": {
                 "verified": 7,
@@ -571,7 +571,7 @@ def _fixture(root: Path) -> dict[str, Path]:
             "environment": ENVIRONMENT,
             "releaseId": RELEASE_ID,
             "runId": VERIFY_RUN_ID,
-            "readinessPhase": "commercial",
+            "readinessPhase": "production",
             "sourceImportReportRef": (
                 f"env/{ENVIRONMENT}/runs/data-release/{RELEASE_ID}/{IMPORT_RUN_ID}/import.json"
             ),
@@ -723,94 +723,10 @@ def _resign_release(paths: dict[str, Path]) -> None:
     write_json(import_path, import_report)
 
 
-def _convert_fixture_to_research(paths: dict[str, Path]) -> str:
-    subject_hash = "sha256:" + "9" * 64
-    release = paths["release"]
-    for relative in (
-        "payload/release.json",
-        "payload/asset_admission.json",
-        "attestations/release.json",
-    ):
-        path = release / relative
-        document = json.loads(path.read_text(encoding="utf-8"))
-        document["releaseClass"] = "research"
-        document["productLifecycleState"] = "research"
-        write_json(path, document)
-
-    media_path = release / "payload/media_manifest.json"
-    media_manifest = json.loads(media_path.read_text(encoding="utf-8"))
-    extension_by_content_type = {
-        "image/jpeg": "jpg",
-        "video/mp4": "mp4",
-    }
-    for asset in media_manifest["assets"]:
-        digest = str(asset["sha256"]).removeprefix("sha256:")
-        extension = extension_by_content_type[str(asset["contentType"])]
-        asset.pop("publicSliceKey")
-        asset["privateObjectKey"] = (
-            f"media/objects/sha256/{digest[:2]}/{digest[2:4]}/"
-            f"{digest}.{extension}"
-        )
-    write_json(media_path, media_manifest)
-    media_by_id = {asset["assetId"]: asset for asset in media_manifest["assets"]}
-
-    homepage_path = paths["verify"] / "homepage-api-verification.json"
-    homepage_report = json.loads(homepage_path.read_text(encoding="utf-8"))
-    homepage_report["entities"][0]["coverUrl"] = media_by_id[
-        "entity-cover-a"
-    ]["privateObjectKey"]
-    write_json(homepage_path, homepage_report)
-
-    post_path = paths["verify"] / "post-api-verification.json"
-    post_report = json.loads(post_path.read_text(encoding="utf-8"))
-    post_report["readinessPhase"] = "research"
-    post_report["internalSubjectHash"] = subject_hash
-    post_report.pop("guestActorHash", None)
-    post_report.pop("guestLogin", None)
-    creator = post_report["creators"][0]
-    creator["avatarUrl"] = media_by_id["creator-avatar-a"]["privateObjectKey"]
-    creator["avatarProbeCount"] = 0
-    creator["avatarProbe"] = None
-    for post in post_report["posts"]:
-        post["mediaProbes"] = [
-            {
-                "assetId": probe["assetId"],
-                "kind": media_by_id[probe["assetId"]]["kind"],
-                "deliveryRef": media_by_id[probe["assetId"]][
-                    "privateObjectKey"
-                ],
-                "anonymousStatus": 403,
-                "expectedBytes": media_by_id[probe["assetId"]]["bytes"],
-                "expectedSha256": media_by_id[probe["assetId"]]["sha256"],
-                "signedProbe": None,
-            }
-            for probe in post["mediaProbes"]
-        ]
-    write_json(post_path, post_report)
-    _resign_release(paths)
-    return subject_hash
-
-
-def _convert_fixture_to_consumer(paths: dict[str, Path]) -> None:
-    """Move the fixture to the consumer phase and nothing else.
-
-    Consumer readiness proves the same release-bound reads as commercial, because the
-    App video shelf consumes only ``premium_stream``: dropping that query here would
-    let a typed_video green stand in for a video shelf that has nothing to play
-    (`environment-topology-and-packaging` spec).
-    """
-
-    post_path = paths["verify"] / "post-api-verification.json"
-    post_report = json.loads(post_path.read_text(encoding="utf-8"))
-    post_report["readinessPhase"] = "consumer"
-    write_json(post_path, post_report)
-
-
 def _write(
     root: Path,
     *,
-    readiness_phase: str = "commercial",
-    research_isolation_path: Path | None = None,
+    readiness_phase: str = "production",
 ) -> Path:
     paths = _paths(root)
     return write_environment_release_readiness(
@@ -826,7 +742,6 @@ def _write(
         post_api_verification_path=paths["verify"] / "post-api-verification.json",
         output_root=root,
         output_path=paths["verify"] / "release-readiness.json",
-        research_isolation_verification_path=research_isolation_path,
         readiness_phase=readiness_phase,
     )
 

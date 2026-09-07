@@ -47,7 +47,7 @@ def _candidate(release_id: str = "release-a") -> dict[str, object]:
         "sourceOwner": "qwq_data",
         "releaseId": release_id,
         "manifestDigest": DIGEST_A,
-        "releaseClass": "research",
+        "releaseClass": "production",
         "releaseKind": "content",
         "mode": "sync",
         "deletePolicy": "tombstone",
@@ -125,7 +125,7 @@ def _active(
         result.update(
             releaseId=release_id,
             manifestDigest=digest,
-            releaseClass="research",
+            releaseClass="production",
             projectionVersion=5,
             revision=revision,
             activatedAt="2026-09-05T00:00:00Z",
@@ -155,7 +155,7 @@ def _activation(expected: dict[str, object], *, revision: int) -> dict[str, obje
         "active": {
             "releaseId": "release-a",
             "manifestDigest": DIGEST_A,
-            "releaseClass": "research",
+            "releaseClass": "production",
             "projectionVersion": 8,
             "revision": revision,
             "activatedAt": "2026-09-05T00:00:03Z",
@@ -357,8 +357,8 @@ def _release(root: Path) -> tuple[Path, ReleaseAdmission]:
         release / "payload/release.json",
         {
             "releaseId": "release-a",
-            "releaseClass": "research",
-            "productLifecycleState": "research",
+            "releaseClass": "production",
+            "productLifecycleState": "production",
             "containsUnverifiedAssets": True,
         },
     )
@@ -492,8 +492,8 @@ def _prepare_apply(root: Path, admission: ReleaseAdmission) -> None:
             "schema": "quwoquan_data.environment_release_result",
             "environment": "alpha",
             "releaseId": "release-a",
-            "releaseClass": "research",
-            "productLifecycleState": "research",
+            "releaseClass": "production",
+            "productLifecycleState": "production",
             "containsUnverifiedAssets": True,
             "manifestDigest": admission.manifest_digest,
             **admission.result_envelope(),

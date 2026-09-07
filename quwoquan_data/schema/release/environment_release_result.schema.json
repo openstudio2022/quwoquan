@@ -37,14 +37,12 @@
     },
     "releaseClass": {
       "enum": [
-        "research",
-        "commercial"
+        "production"
       ]
     },
     "productLifecycleState": {
       "enum": [
-        "research",
-        "commercial"
+        "production"
       ]
     },
     "containsUnverifiedAssets": {
@@ -90,9 +88,7 @@
     },
     "readinessPhase": {
       "enum": [
-        "research",
-        "consumer",
-        "commercial"
+        "production"
       ]
     },
     "lifecycleExitRef": {
@@ -144,10 +140,6 @@
     "releaseReadinessRef": {
       "type": "string",
       "pattern": "^(|env/(alpha|beta|gamma|prod)/runs/data-release/.+)$"
-    },
-    "researchIsolationVerificationRef": {
-      "type": "string",
-      "pattern": "^(|env/(alpha|beta|gamma|prod)/runs/data-release/.+/research-isolation-verification\\.json)$"
     },
     "tagConsumerVerificationRef": {
       "type": "string"

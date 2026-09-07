@@ -112,8 +112,8 @@ def _release(
         "releaseId": release_id,
         "sourceOwner": "qwq_data",
         "releaseKind": release_kind,
-        "releaseClass": "commercial",
-        "productLifecycleState": "commercial",
+        "releaseClass": "production",
+        "productLifecycleState": "production",
         "containsUnverifiedAssets": False,
         "rightsStatusCounts": {
             "verified": 0,
@@ -539,8 +539,8 @@ def _superseded_research_apply_blocks_before_readiness_or_import(
     release = _release(tmp_path)
     header_path = release / "payload/release.json"
     header = read_json(header_path)
-    header["releaseClass"] = "research"
-    header["productLifecycleState"] = "research"
+    header["releaseClass"] = "production"
+    header["productLifecycleState"] = "production"
     write_json(header_path, header)
     _patch_roots(monkeypatch, tmp_path)
     monkeypatch.setattr(
@@ -596,8 +596,8 @@ def _superseded_research_rollback_import_is_blocked_before_cas_adapter(
     release = _release(tmp_path)
     header_path = release / "payload/release.json"
     header = read_json(header_path)
-    header["releaseClass"] = "research"
-    header["productLifecycleState"] = "research"
+    header["releaseClass"] = "production"
+    header["productLifecycleState"] = "production"
     write_json(header_path, header)
     _patch_roots(monkeypatch, tmp_path)
     monkeypatch.setattr(
@@ -878,7 +878,7 @@ def test_ship_verify_uses_environment_topology_without_manual_network_arguments(
             env=environment.value,
             import_run_id=import_run_id,
             run_id="verify-001",
-            readiness_phase="consumer",
+            readiness_phase="production",
             lifecycle_exit_ref="",
             release_admission=_fixture_admission(release),
         )
@@ -952,14 +952,14 @@ def test_ship_verify_binds_consumer_readiness_to_verified_release(
             env="gamma",
             import_run_id=import_run_id,
             run_id="verify-ready",
-            readiness_phase="commercial",
+            readiness_phase="production",
             lifecycle_exit_ref=lifecycle_exit_ref,
             release_admission=_fixture_admission(release),
         )
     )
 
     assert observed["environment"] is DeploymentEnvironment.GAMMA
-    assert observed["phase"].value == "commercial"
+    assert observed["phase"].value == "production"
     assert observed["lifecycle_exit_ref"] == lifecycle_exit_ref
     assert observed["release_id"] == release.name
     assert observed["verify_run_id"] == "verify-ready"
@@ -1015,7 +1015,7 @@ def test_ship_verify_preserves_failed_consumer_receipt(
                 env="alpha",
                 import_run_id=import_run_id,
                 run_id="verify-failed",
-                readiness_phase="consumer",
+                readiness_phase="production",
                 lifecycle_exit_ref="",
                 release_admission=_fixture_admission(release),
             )

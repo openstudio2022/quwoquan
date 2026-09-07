@@ -29,19 +29,21 @@ def _carried_media_holdings(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Rebuild the checked-in golden holdings in this test's private library.
+    """Rebuild the durable carried holdings in this test's private library.
 
     Pytest deliberately redirects the writable carried-media root away from the
-    repository, while this legacy-tree test needs the repository's immutable
-    golden bytes as input. Point reads at that checked-in source and admissions
-    at a temporary CAS so the result cannot depend on or mutate a developer's
-    machine-level content library.
+    real one, while this real-tree test needs the real carried bytes as input.
+    Point reads at the machine's out-of-repo carried root and admissions at a
+    temporary CAS so the result cannot mutate a developer's content library.
+    Skip when the carried root has not been provisioned on this machine.
     """
 
-    monkeypatch.setenv(
-        "QWQ_CARRIED_MEDIA_ROOT",
-        str(ROOT / "quwoquan_data" / "reference" / "golden_media"),
-    )
+    from core import paths as _paths
+
+    carried_root = _paths.default_carried_media_root()
+    if not carried_root.is_dir() or not any(carried_root.iterdir()):
+        pytest.skip(f"carried media root not provisioned: {carried_root}")
+    monkeypatch.setenv("QWQ_CARRIED_MEDIA_ROOT", str(carried_root))
     monkeypatch.setitem(
         content_library.LIBRARY_CAS_ROOT_BY_KIND,
         content_library.MEDIA_KIND,

@@ -130,7 +130,7 @@ def test_media_sync_reads_only_immutable_release_payload(tmp_path: Path) -> None
     source.write_bytes(content)
     header = release / "payload/release.json"
     header.write_text(
-        json.dumps({"releaseId": "release-a", "releaseClass": "commercial"}),
+        json.dumps({"releaseId": "release-a", "releaseClass": "production"}),
         encoding="utf-8",
     )
     manifest = release / "payload/media_manifest.json"

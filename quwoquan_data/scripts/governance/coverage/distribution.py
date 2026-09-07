@@ -1,7 +1,10 @@
-"""Governed research/commercial asset admission.
+"""Governed asset rights recording for the single production release class.
 
 Acquisition and distribution are deliberately separate: a locally acquired
-file never proves that commercial redistribution is authorized.
+file never proves that commercial redistribution is authorized. The
+`DistributionDecision` values (`research_allowed|commercial_allowed|blocked`) are
+per-asset recorded rights facts frozen into canonical bytes; they do not select a
+release class. The only release class is `production`.
 """
 from __future__ import annotations
 
@@ -21,13 +24,14 @@ POLICY_PATH = (
 
 
 class ProductLifecycleState(StrEnum):
-    RESEARCH = "research"
-    COMMERCIAL = "commercial"
+    PRODUCTION = "production"
 
 
 class ReleaseClass(StrEnum):
-    RESEARCH = "research"
-    COMMERCIAL = "commercial"
+    PRODUCTION = "production"
+
+
+RELEASE_CLASSES: frozenset[str] = frozenset(item.value for item in ReleaseClass)
 
 
 class AcquisitionStatus(StrEnum):
@@ -71,6 +75,8 @@ class ContentDistributionPolicy:
     video_popularity_signals: tuple[str, ...]
     video_popularity_statistical: bool
     video_popularity_non_blocking: bool
+    # 采集代码无法核实、只能按政策统一申明的资产级记录常量；采集与投影只搬运。
+    asset_record_defaults: tuple[tuple[str, str], ...]
 
     def __post_init__(self) -> None:
         if self.release_class.value != self.product_lifecycle_state.value:
@@ -202,6 +208,9 @@ def load_content_distribution_policy(
         video_popularity_signals=tuple(video_popularity["signals"]),
         video_popularity_statistical=bool(video_popularity["statistical"]),
         video_popularity_non_blocking=bool(video_popularity["nonBlocking"]),
+        asset_record_defaults=tuple(
+            sorted((str(key), str(value)) for key, value in raw["assetRecordDefaults"].items())
+        ),
     )
 
 
@@ -385,6 +394,9 @@ def project_asset_admission(
         "authorizationProof": authorization_proof,
         "rightsIssues": rights_issues,
         "generated": generated,
+        # 只搬运 AI 申报的水印判定，供运营按资产审核；缺席一律 unknown，不得假定 absent。
+        "watermarkStatus": str(asset.get("watermarkStatus") or "unknown").strip(),
+        "watermarkKind": str(asset.get("watermarkKind") or "unknown").strip(),
     }
 
 

@@ -10,10 +10,10 @@
     "mediaGeneration",
     "acquisition",
     "researchDiscovery",
-    "researchDistribution",
-    "commercialDistribution",
     "articleMedia",
-    "scaleMilestones"
+    "scaleMilestones",
+    "productionDistribution",
+    "assetRecordDefaults"
   ],
   "additionalProperties": false,
   "properties": {
@@ -26,14 +26,12 @@
     },
     "productLifecycleState": {
       "enum": [
-        "research",
-        "commercial"
+        "production"
       ]
     },
     "releaseClass": {
       "enum": [
-        "research",
-        "commercial"
+        "production"
       ]
     },
     "mediaGeneration": {
@@ -143,43 +141,30 @@
         }
       }
     },
-    "researchDistribution": {
+    "assetRecordDefaults": {
+      "description": "采集代码无法核实、只能按 producer 政策统一申明的资产级记录常量；这是它们唯一的声明位。",
       "type": "object",
-      "required": [
-        "allowedRightsStatuses",
-        "requireInternalAccessIsolation"
-      ],
       "additionalProperties": false,
-      "properties": {
-        "allowedRightsStatuses": {
-          "type": "array",
-          "const": [
-            "verified",
-            "unverified",
-            "unknown"
-          ]
-        },
-        "requireInternalAccessIsolation": {
-          "const": true
-        }
-      }
-    },
-    "commercialDistribution": {
-      "type": "object",
       "required": [
-        "allowedRightsStatuses",
-        "requireAuthorizationProof"
+        "commercialAuthorizationStatus",
+        "modelReleaseStatus",
+        "propertyReleaseStatus",
+        "takedownPolicy"
       ],
-      "additionalProperties": false,
       "properties": {
-        "allowedRightsStatuses": {
-          "type": "array",
-          "const": [
-            "verified"
-          ]
+        "commercialAuthorizationStatus": {
+          "const": "unverified"
         },
-        "requireAuthorizationProof": {
-          "const": true
+        "modelReleaseStatus": {
+          "enum": ["not_required", "obtained", "editorial_only"]
+        },
+        "propertyReleaseStatus": {
+          "type": "string",
+          "minLength": 1
+        },
+        "takedownPolicy": {
+          "type": "string",
+          "minLength": 1
         }
       }
     },
@@ -226,11 +211,21 @@
       ],
       "additionalProperties": false,
       "properties": {
-        "m1Targets": {"$ref": "#/$defs/milestoneTargets"},
-        "m10Targets": {"$ref": "#/$defs/milestoneTargets"},
-        "m100Targets": {"$ref": "#/$defs/milestoneTargets"},
-        "m1000Targets": {"$ref": "#/$defs/milestoneTargets"},
-        "m10000Targets": {"$ref": "#/$defs/milestoneTargets"},
+        "m1Targets": {
+          "$ref": "#/$defs/milestoneTargets"
+        },
+        "m10Targets": {
+          "$ref": "#/$defs/milestoneTargets"
+        },
+        "m100Targets": {
+          "$ref": "#/$defs/milestoneTargets"
+        },
+        "m1000Targets": {
+          "$ref": "#/$defs/milestoneTargets"
+        },
+        "m10000Targets": {
+          "$ref": "#/$defs/milestoneTargets"
+        },
         "requireM100PromotionBeforeM1000": {
           "const": false
         },
@@ -244,44 +239,58 @@
           "const": "cumulative_unique_finalized_objects"
         }
       }
+    },
+    "productionDistribution": {
+      "type": "object",
+      "required": [
+        "recordedRightsStatuses",
+        "rightsBlockPublish"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "recordedRightsStatuses": {
+          "type": "array",
+          "const": [
+            "verified",
+            "unverified",
+            "restricted",
+            "unknown"
+          ]
+        },
+        "rightsBlockPublish": {
+          "const": false
+        }
+      }
     }
   },
   "$defs": {
     "milestoneTargets": {
       "type": "object",
-      "required": ["homepage", "article", "image", "video"],
+      "required": [
+        "homepage",
+        "article",
+        "image",
+        "video"
+      ],
       "additionalProperties": false,
       "properties": {
-        "homepage": {"type": "integer", "minimum": 1},
-        "article": {"type": "integer", "minimum": 1},
-        "image": {"type": "integer", "minimum": 1},
-        "video": {"type": "integer", "minimum": 1}
-      }
-    }
-  },
-  "allOf": [
-    {
-      "if": {
-        "properties": {
-          "productLifecycleState": {
-            "const": "research"
-          }
-        }
-      },
-      "then": {
-        "properties": {
-          "releaseClass": {
-            "const": "research"
-          }
-        }
-      },
-      "else": {
-        "properties": {
-          "releaseClass": {
-            "const": "commercial"
-          }
+        "homepage": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "article": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "image": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "video": {
+          "type": "integer",
+          "minimum": 1
         }
       }
     }
-  ]
+  }
 }

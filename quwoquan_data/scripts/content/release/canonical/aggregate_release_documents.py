@@ -106,6 +106,7 @@ def release_header_document(
         "authorizationRequiredAssetIds": asset_admission[
             "authorizationRequiredAssetIds"
         ],
+        "watermarkedAssetIds": list(asset_admission.get("watermarkedAssetIds") or []),
         "researchAcceptedCount": asset_admission["researchAcceptedCount"],
         "commercialAcceptedCount": asset_admission["commercialAcceptedCount"],
         "canonicalMerkle": canonical_merkle,

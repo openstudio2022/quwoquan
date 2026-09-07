@@ -79,6 +79,42 @@ def test_travel_unverified_asset_is_rejected_without_downgrade(
         )
 
 
+def test_unverified_asset_publishes_with_rights_recorded_not_enforced(
+    tmp_path: Path,
+) -> None:
+    """spec_ref: multi-carrier-release/GWT-020 — 权利只记录不阻断。"""
+    execution, package, _publish, transaction_id = _fixture(tmp_path)
+    issues = ["license outside open-license allowlist: GFDL 1.2"]
+    manifest_path = execution / "posts" / POST_REF / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    asset = manifest["assets"][0]
+    asset["rightsAuditStatus"] = "unverified"
+    asset["rightsAuditIssues"] = list(issues)
+    asset["distributionDecision"] = "research_allowed"
+    _write_json(manifest_path, manifest)
+    source_index_path = execution / "sources/commons/assets/index.json"
+    source_index = json.loads(source_index_path.read_text(encoding="utf-8"))
+    source_asset = source_index["assets"][0]
+    source_asset["rightsAuditStatus"] = "unverified"
+    source_asset["rightsAuditIssues"] = list(issues)
+    source_asset["distributionDecision"] = "research_allowed"
+    _write_json(source_index_path, source_index)
+
+    build_post_object_transaction_package(
+        execution_root=execution,
+        object_ref=POST_REF,
+        transaction_id=transaction_id,
+        package_root=package,
+    )
+
+    rights = json.loads((package / "object/rights.json").read_text(encoding="utf-8"))
+    recorded = rights["assets"][0]
+    assert recorded["rightsAuditStatus"] == "unverified"
+    assert recorded["rightsAuditIssues"] == issues
+    assert recorded["distributionDecision"] == "research_allowed"
+    assert_valid(rights, "release", "asset_rights_closure")
+
+
 def test_unverified_collection_page_is_rejected_without_downgrade(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

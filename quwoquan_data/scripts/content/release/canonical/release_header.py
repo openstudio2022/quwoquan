@@ -159,9 +159,10 @@ def validate_release_header(
                 key: int(counts.get(key) or 0)
                 for key in ("homepage", "article", "image", "video")
             }
-            if actual_counts != expected_targets:
+            # 达标判据是每载体计数不低于里程碑目标；header 分别冻结实际 counts 与 milestoneTargets。
+            if any(actual_counts[key] < int(expected_targets[key]) for key in actual_counts):
                 raise ReleaseHeaderError(
-                    f"{label} milestone counts are inconsistent"
+                    f"{label} milestone counts fall short of targets"
                 )
         elif milestone_targets is not None:
             raise ReleaseHeaderError(
@@ -202,17 +203,6 @@ def validate_release_header(
     rights_counts = document.get("rightsStatusCounts")
     if not isinstance(rights_counts, Mapping):
         raise ReleaseHeaderError(f"{label} rightsStatusCounts must be an object")
-    if release_class is ReleaseClass.COMMERCIAL and (
-        contains_unverified
-        or authorization_ids
-        or any(
-            int(rights_counts.get(status) or 0)
-            for status in ("unverified", "restricted", "unknown")
-        )
-    ):
-        raise ReleaseHeaderError(
-            f"{label} commercial release contains non-verified assets"
-        )
 
     execution_ids = document.get("executionIds")
     if not isinstance(execution_ids, list):

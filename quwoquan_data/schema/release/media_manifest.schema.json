@@ -34,11 +34,8 @@
           "sha256",
           "bytes",
           "ownerRefs",
-          "rightsSnapshotRefs"
-        ],
-        "oneOf": [
-          {"required": ["publicSliceKey"]},
-          {"required": ["privateObjectKey"]}
+          "rightsSnapshotRefs",
+          "publicSliceKey"
         ],
         "properties": {
           "assetId": {
@@ -46,7 +43,11 @@
             "minLength": 1
           },
           "kind": {
-            "enum": ["avatar", "image", "video"]
+            "enum": [
+              "avatar",
+              "image",
+              "video"
+            ]
           },
           "version": {
             "type": "integer",
@@ -65,10 +66,6 @@
           "publicSliceKey": {
             "type": "string",
             "pattern": "^media/(avatar|image|video)/s/asset/[A-Za-z0-9][A-Za-z0-9._-]*/v[1-9][0-9]*/source\\.[a-z0-9]+$"
-          },
-          "privateObjectKey": {
-            "type": "string",
-            "pattern": "^media/objects/sha256/[0-9a-f]{2}/[0-9a-f]{2}/[0-9a-f]{64}(\\.[a-z0-9]+)?$"
           },
           "sha256": {
             "type": "string",
@@ -108,7 +105,10 @@
     "counts": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["assets", "issues"],
+      "required": [
+        "assets",
+        "issues"
+      ],
       "properties": {
         "assets": {
           "type": "integer",

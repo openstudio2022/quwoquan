@@ -51,7 +51,7 @@
 - content plan 只消费 target set 冻结的 canonical target 与 aliases 作为实体锚定；只偶然列举目标的城市总览或 figure caption 不能因行长、推断短别名或标题回填成为目标文章底稿。
 - 图片与实体的相关性只由来源侧字段作证：来源说明、视觉主体、标题与来源/授权 URL。采集侧自己写给候选的 `relevance` 注释不是证据——把它算作证据等于允许候选自证相关，一张来源说明与 URL 都指向别处的图片，只要注释里写上实体名就能过门，而这类假阳性在规模生产下正是「配图与实体无关」的主要入口。
 - `factual_reference_only` 只可提取可核验事实、路线顺序、必要数字与专有名词；成稿必须使用独立句式、结构和叙事，不得保留来源连续长句、自然段、小标题或原文结构，也不得以 licensed adaptation 的底稿留存率为其设下限。
-- 来源的 `illustrated` 声明由「同源可发布图片至少两张」派生，不是独立的编辑意图。发布评估把同源图片剔到不足两张时该派生失去依据，候选按同一条规则收敛为 `text_only` 并计入 `articleImageSoftWarnings.no_publishable_source_asset`，合格正文不因图片侧短缺被丢弃；反向从 `text_only` 变为 `illustrated` 等于凭空造图，一律拒绝。来源本就声明 `text_only` 的候选谈不上缺可发布素材，不计入该软警告键。
+- 来源的 `illustrated` 声明由「同源可发布图片至少一张」派生，不是独立的编辑意图；配图张数不设下限，一张与多张同样合法。发布评估把同源图片剔到零张时该派生失去依据，候选按同一条规则收敛为 `text_only` 并计入 `articleImageSoftWarnings.no_publishable_source_asset`，合格正文不因图片侧短缺被丢弃；反向从 `text_only` 变为 `illustrated` 等于凭空造图，一律拒绝。来源本就声明 `text_only` 的候选谈不上缺可发布素材，不计入该软警告键。
 - independent review 的 reviewer result/attestation 与 stage receipt 均为 create-once；宿主中断不得改写已有 review 事实。OPEN 无 CLOSE 时按同一冻结输入重做 review，CLOSE blocked 后只能新建 execution。
 - retry 必须显式绑定 predecessor receipt、typed issues 与 failed-only exact refs；不得由 controller、campaign submission 或 reconciliation processor 自动派生。
 - `0.plan` 冻结该 scope，新 execution 以 `retryOf` 消费失败 refs；已通过对象不得重试。
@@ -93,7 +93,7 @@
 <a id="gwt-004"></a>
 ### GWT-004 `illustrated` 来源缺可发布图片时的准入结论单义且可对账
 
-- GIVEN 一个声明 `publishMediaMode=illustrated` 的文章来源，其同源图片中只有一张能通过发布评估。
+- GIVEN 一个声明 `publishMediaMode=illustrated` 的文章来源，其同源图片没有一张能通过发布评估。
 - WHEN content plan 对该来源做候选级准入。
 - THEN 该来源以 `text_only` 进入候选集合并计入 `articleImageSoftWarnings.no_publishable_source_asset`，不计入 `articleRejects`；同一个来源不得同时出现在两侧，也不得两侧都不出现。
 - THEN 收敛后的候选不再携带任何图片声明与素材引用，其 packet 的 `text_only` 与来源 meta 的 `illustrated` 之间的差异只在素材集合为空时被接受；从 `text_only` 反向变为 `illustrated` 一律拒绝。
@@ -133,6 +133,6 @@
 - 优先级：`P1`
 - 准出影响：`track`
 - 影响或价值：[`GWT-004`](#gwt-004) 在当前测试树中没有有效 `spec_ref`；因此不能再沿用“既有 consumer 判据已绑定”的表述，也不能仅凭 `publishMediaMode` schema 或通用 release admission 测试宣称该候选级收敛行为受支持。
-- 尚缺实现与证据：需要直接覆盖 illustrated 来源仅一张可发布同源图时降为 `text_only`、只进入 `articleImageSoftWarnings.no_publishable_source_asset` 而不进入 `articleRejects`、清空图片声明/引用、拒绝反向升级，并按来源逐一对账。
+- 尚缺实现与证据：需要直接覆盖 illustrated 来源零张可发布同源图时降为 `text_only`、只进入 `articleImageSoftWarnings.no_publishable_source_asset` 而不进入 `articleRejects`、清空图片声明/引用、拒绝反向升级，并按来源逐一对账。
 - 完成判定：[`GWT-004.t1`](#gwt-004) 至 [`GWT-004.t7`](#gwt-004) 逐条由当前 content-plan/article admission 的 local_contract 或 api_integration 绑定并实际通过；完成前该复合验收保持 pending。
 - 依赖：article content-plan/admission owner；不得用已删除旧编排测试、fixture 或只验证 schema 字段存在的测试代替候选级行为证据。

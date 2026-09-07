@@ -35,8 +35,8 @@ def _write_json(path: Path, document: dict) -> None:
 
 def _attestation(path: Path, release_id: str, digest: str, *, baseline: bool) -> None:
     lifecycle = {
-        "releaseClass": "research",
-        "productLifecycleState": "research",
+        "releaseClass": "production",
+        "productLifecycleState": "production",
         "containsUnverifiedAssets": False,
         "rightsStatusCounts": {
             "verified": 0 if baseline else 1,

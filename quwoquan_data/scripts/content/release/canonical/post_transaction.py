@@ -303,6 +303,7 @@ def build_post_object_transaction_package(
             if distribution_decision not in {
                 "research_allowed",
                 "commercial_allowed",
+                "blocked",
             }:
                 raise ObjectTransactionError(
                     f"post asset 缺 canonical distributionDecision：{asset_id}"
@@ -326,15 +327,8 @@ def build_post_object_transaction_package(
                 raise ObjectTransactionError(
                     f"post asset internal_reference scope is not publishable：{asset_id}"
                 )
-            if (
-                rights_audit_status is not RightsAuditStatus.VERIFIED
-                or rights_audit_issues
-                or not authorization_proof.startswith("https://")
-                or not license_url.startswith("https://")
-            ):
-                raise ObjectTransactionError(
-                    f"post asset unresolved rights are not publishable：{asset_id}"
-                )
+            # 权利状态只作记录事实写入 rights.json / rights_snapshots：非 verified、有审计问题
+            # 或缺 https 证明都不拒绝对象，公众可见性由下游运营运行时配置按这些事实决定。
             rights_row = {
                 "assetId": asset_id,
                 "sourceKind": str(primary_source.get("platform") or "source_catalog"),
@@ -383,6 +377,9 @@ def build_post_object_transaction_package(
                 "rightsAuditStatus": rights_audit_status.value,
                 "rightsAuditIssues": rights_audit_issues,
                 "modelReleaseStatus": model_release_status,
+                # 水印判定来自看过像素的 AI 申报（经 ingest 转录到资产行）；缺席只能记 unknown。
+                "watermarkStatus": str(raw.get("watermarkStatus") or "unknown"),
+                "watermarkKind": str(raw.get("watermarkKind") or "unknown"),
             }
             rights_rows.append(rights_row)
             cas_rows.append(

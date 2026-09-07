@@ -31,6 +31,7 @@ from content.release.canonical.review_rights_binding import (
 )
 from content.release.canonical.release_header import validate_release_header
 from content.release.canonical.sealed_release_facts import validate_sealed_release_structure
+from core.media_asset_url import SUFFIX_BY_CONTENT_TYPE, content_addressed_media_object_key
 from core.release_layout import objects_merkle, payload_digest, verify_release_holdings
 from core.schema import assert_valid
 from governance.coverage.distribution import load_content_distribution_policy
@@ -343,8 +344,6 @@ def _validate_query_against_sealed(
             or admission.get(field) != manifest_admission.get(field)
         ):
             raise _error("DATA.RELEASE.HANDOFF_POOL_RIGHTS_DRIFT", f"{object_ref} {field}")
-    if release_class == "commercial" and scope.get("usageScope") != "commercial":
-        raise _error("DATA.RELEASE.HANDOFF_COMMERCIAL_SCOPE_INVALID", object_ref)
 
     binding_ref = content_library.get("bindingRef")
     if binding_ref is None:
@@ -362,8 +361,10 @@ def _validate_query_against_sealed(
         if not isinstance(raw_bindings, list):
             raise _error("DATA.RELEASE.HANDOFF_POOL_BINDING_DRIFT", object_ref)
         # Sealed release objects intentionally remove private CAS objectKey.
-        # Rebind that one delivery-private field from the sealed MediaAsset
-        # authority before projecting the producer content-library identity.
+        # Rebind it before projecting the producer content-library identity: the
+        # CAS key is a pure function of sha256 plus the source file suffix (falling
+        # back to the MediaAsset contentType suffix), so it is reconstructed from
+        # the sealed row and the sealed MediaAsset authority without any private key.
         media_manifest, _ = _read_json_file(
             sealed_root.parent / "media_manifest.json",
             label="release MediaAsset authority",
@@ -379,7 +380,13 @@ def _validate_query_against_sealed(
             resolved = dict(raw) if isinstance(raw, Mapping) else raw
             if isinstance(resolved, dict) and not resolved.get("objectKey"):
                 authority = media_by_id.get(str(resolved.get("assetId") or ""), {})
-                resolved["objectKey"] = authority.get("privateObjectKey")
+                source_refs = resolved.get("sourceAssetRefs") or []
+                suffix = Path(str(source_refs[0])).suffix if source_refs else ""
+                if not suffix:
+                    content_type = str(authority.get("contentType") or "").split(";", 1)[0].strip().lower()
+                    suffix = SUFFIX_BY_CONTENT_TYPE.get(content_type, "")
+                if authority.get("sha256"):
+                    resolved["objectKey"] = content_addressed_media_object_key(str(authority["sha256"]), suffix=suffix)
             resolved_bindings.append(resolved)
         try:
             expected_bindings = [
@@ -570,9 +577,8 @@ def _validate_release_facts(
     if cohort.get("milestone") != milestone:
         raise _error("DATA.RELEASE.COHORT_MILESTONE_DRIFT", milestone)
     embedded_targets = header.get("milestoneTargets")
-    if (
-        not isinstance(embedded_targets, Mapping)
-        or {key: counts[key] for key in _CARRIERS} != dict(embedded_targets)
+    if not isinstance(embedded_targets, Mapping) or any(
+        counts[key] < int(embedded_targets.get(key) or 0) for key in _CARRIERS
     ):
         raise _error("DATA.RELEASE.COHORT_MILESTONE_COUNT_DRIFT", milestone)
     if policy_targets is not None and dict(embedded_targets) != dict(policy_targets):

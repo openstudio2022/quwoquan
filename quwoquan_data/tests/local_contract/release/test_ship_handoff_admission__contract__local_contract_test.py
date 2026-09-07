@@ -42,8 +42,8 @@ def _release_and_handoff(
             "releaseId": release_id,
             "sourceOwner": "qwq_data",
             "releaseKind": "content",
-            "releaseClass": "commercial",
-            "productLifecycleState": "commercial",
+            "releaseClass": "production",
+            "productLifecycleState": "production",
             "containsUnverifiedAssets": False,
             "rightsStatusCounts": {
                 "verified": 0,
@@ -301,8 +301,8 @@ def _empty_baseline_attestation(
         "releaseId": release_id,
         "sourceOwner": "qwq_data",
         "releaseKind": "empty_baseline",
-        "releaseClass": "commercial",
-        "productLifecycleState": "commercial",
+        "releaseClass": "production",
+        "productLifecycleState": "production",
         "containsUnverifiedAssets": False,
         "rightsStatusCounts": {
             "verified": 0,
@@ -607,8 +607,8 @@ def test_empty_baseline_header_identity_must_match_attestation(
     release, attestation, document = _empty_baseline_attestation(tmp_path)
     header_path = release / "payload/release.json"
     header = json.loads(header_path.read_text())
-    header["releaseClass"] = "research"
-    header["productLifecycleState"] = "research"
+    # 单一 production 类别下用 canonicalMerkle 制造 header 与 attestation 的身份漂移。
+    header["canonicalMerkle"] = "sha256:" + "e" * 64
     write_json(header_path, header)
     document["payloadSha256"] = payload_digest(release)
     write_json(attestation, document)
@@ -646,8 +646,8 @@ def _environment_result_document(**overrides: object) -> dict[str, object]:
         "schema": "quwoquan_data.environment_release_result",
         "environment": "alpha",
         "releaseId": "release-a",
-        "releaseClass": "commercial",
-        "productLifecycleState": "commercial",
+        "releaseClass": "production",
+        "productLifecycleState": "production",
         "containsUnverifiedAssets": False,
         "manifestDigest": "sha256:" + "a" * 64,
         "admissionKind": "producer_handoff",

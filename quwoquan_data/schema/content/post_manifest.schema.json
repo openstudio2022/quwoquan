@@ -70,7 +70,15 @@
         },
         "authorizationProofUrl": { "type": ["string", "null"] },
         "termsUrl": { "type": ["string", "null"] },
-        "watermarkStatus": { "const": "absent" },
+        "watermarkStatus": {
+          "description": "由看过像素的 AI 申报，不由采集代码假定。",
+          "enum": ["absent", "present", "unknown"]
+        },
+        "watermarkKind": {
+          "description": "作者签名与平台/图库标识分开记：前者通常可用且不得抹去，后者往往指向非自由来源或预览件。",
+          "enum": ["none", "author_signature", "platform_logo", "stock_agency", "other", "unknown"]
+        },
+        "watermarkNote": { "type": "string" },
         "audioRightsStatus": {
           "enum": [
             "licensed",
@@ -89,7 +97,7 @@
           "type": "array",
           "uniqueItems": true,
           "items": {
-            "enum": ["video_frame_extraction", "crop", "format_conversion"]
+            "enum": ["video_frame_extraction", "crop", "resize", "format_conversion"]
           }
         }
       },

@@ -44,14 +44,12 @@
     },
     "releaseClass": {
       "enum": [
-        "research",
-        "commercial"
+        "production"
       ]
     },
     "productLifecycleState": {
       "enum": [
-        "research",
-        "commercial"
+        "production"
       ]
     },
     "containsUnverifiedAssets": {
@@ -413,35 +411,6 @@
           },
           "commercialAcceptedCount": {
             "const": 0
-          }
-        }
-      }
-    },
-    {
-      "if": {
-        "properties": {
-          "releaseClass": {
-            "const": "commercial"
-          }
-        }
-      },
-      "then": {
-        "properties": {
-          "productLifecycleState": {
-            "const": "commercial"
-          },
-          "containsUnverifiedAssets": {
-            "const": false
-          },
-          "authorizationRequiredAssetIds": {
-            "maxItems": 0
-          }
-        }
-      },
-      "else": {
-        "properties": {
-          "productLifecycleState": {
-            "const": "research"
           }
         }
       }

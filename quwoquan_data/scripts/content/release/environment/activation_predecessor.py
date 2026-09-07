@@ -115,9 +115,9 @@ def load_previous_environment_activation(
         raise EnvironmentActivationEnvelopeError(
             "previous environment activation envelope is missing"
         )
-    if receipt.get("passed") is not True or receipt.get("readinessPhase") != "research":
+    if receipt.get("passed") is not True or receipt.get("readinessPhase") != "production":
         raise EnvironmentActivationEnvelopeError(
-            "previous environment Data readiness is not a passed research receipt"
+            "previous environment Data readiness is not a passed production receipt"
         )
     if (
         receipt.get("verificationChecksum") != _checksum(receipt)

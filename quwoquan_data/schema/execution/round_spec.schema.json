@@ -1,0 +1,132 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/execution/round_spec.schema.json",
+  "description": "task init 的唯一 AI 输入：一轮里每个 carrier 的 executionId 与逐 target 身份。carrier demand / candidate bindings 由 init 派生并复制进 execution，AI 不再手写。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "executions",
+    "targets"
+  ],
+  "properties": {
+    "schema": {
+      "const": "quwoquan_data.round_spec"
+    },
+    "executions": {
+      "description": "本轮各 carrier 的 executionId；只声明本轮实际有 target 的 carrier。",
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "properties": {
+        "homepage": {
+          "$ref": "#/$defs/executionId"
+        },
+        "article": {
+          "$ref": "#/$defs/executionId"
+        },
+        "image": {
+          "$ref": "#/$defs/executionId"
+        },
+        "video": {
+          "$ref": "#/$defs/executionId"
+        }
+      }
+    },
+    "retryOf": {
+      "description": "可选：按 carrier 绑定被 blocked 的前序 executionId，只允许显式给出。",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "homepage": {
+          "$ref": "#/$defs/executionId"
+        },
+        "article": {
+          "$ref": "#/$defs/executionId"
+        },
+        "image": {
+          "$ref": "#/$defs/executionId"
+        },
+        "video": {
+          "$ref": "#/$defs/executionId"
+        }
+      }
+    },
+    "targets": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "carrier",
+          "entityType",
+          "name"
+        ],
+        "properties": {
+          "carrier": {
+            "enum": [
+              "homepage",
+              "article",
+              "image",
+              "video"
+            ]
+          },
+          "entityType": {
+            "type": "string",
+            "pattern": "^[^/]+/[^/]+$"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "region": {
+            "description": "homepage 必填：现有 Topic/地理/行政区/<region> 节点。",
+            "type": "string",
+            "minLength": 1
+          },
+          "publishAngle": {
+            "type": "string",
+            "minLength": 1
+          },
+          "publishTitle": {
+            "type": "string",
+            "minLength": 1
+          },
+          "publishSeq": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "carrier": {
+                  "const": "homepage"
+                }
+              }
+            },
+            "then": {
+              "required": [
+                "region"
+              ]
+            },
+            "else": {
+              "required": [
+                "publishAngle",
+                "publishTitle"
+              ]
+            }
+          }
+        ]
+      }
+    }
+  },
+  "$defs": {
+    "executionId": {
+      "type": "string",
+      "pattern": "^20[0-9]{6}--[a-z][a-z0-9-]*-(homepage|article|image|video)-[a-z][a-z0-9-]*--[a-z0-9][a-z0-9-]*--(pilot|scale|full)-[0-9]{3,}$"
+    }
+  }
+}

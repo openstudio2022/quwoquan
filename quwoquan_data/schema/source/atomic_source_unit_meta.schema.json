@@ -185,7 +185,7 @@
             },
             "originalMimeType": {
               "type": "string",
-              "pattern": "^image/"
+              "pattern": "^(image|video)/"
             },
             "policy": {
               "const": "source_unit_asset_budget"
@@ -208,7 +208,7 @@
             },
             "derivedMimeType": {
               "type": "string",
-              "pattern": "^image/"
+              "pattern": "^(image|video)/"
             },
             "derivedExtension": {
               "type": "string",

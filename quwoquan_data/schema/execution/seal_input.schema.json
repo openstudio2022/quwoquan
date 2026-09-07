@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "quwoquan_data/schema/execution/seal_input.schema.json",
-  "description": "AI 提交给 task seal 的最小输入：真实 actor 与业务 verdict；机械校验由 seal 自己执行。",
+  "description": "AI 提交给 task seal 的最小输入：真实 actor 与业务 verdict；机械校验由 seal 自己执行。5.review 另带一份 execution 级 reviews（targetRef → 判断字段），由 seal 扇出为逐对象 content_review.json。",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -22,6 +22,14 @@
       "type": "array",
       "items": {
         "$ref": "#/$defs/typedIssue"
+      }
+    },
+    "reviews": {
+      "description": "仅 5.review 使用：键为 targetRef，值为 reviewer 的判断字段；机械字段由 seal 补齐。",
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {
+        "$ref": "#/$defs/reviewJudgement"
       }
     }
   },
@@ -93,6 +101,72 @@
             "runId": {
               "type": "string",
               "minLength": 1
+            }
+          }
+        }
+      }
+    },
+    "reviewJudgement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "decision",
+        "blockingIssues",
+        "advisories"
+      ],
+      "properties": {
+        "decision": {
+          "enum": [
+            "approved",
+            "rejected"
+          ]
+        },
+        "blockingIssues": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "advisories": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "safety": {
+          "enum": [
+            "ok",
+            "concern"
+          ]
+        },
+        "assetRights": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "assetRef"
+            ],
+            "properties": {
+              "assetRef": {
+                "type": "string",
+                "minLength": 1
+              },
+              "decision": {
+                "enum": [
+                  "approved",
+                  "rejected"
+                ]
+              },
+              "issues": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
             }
           }
         }

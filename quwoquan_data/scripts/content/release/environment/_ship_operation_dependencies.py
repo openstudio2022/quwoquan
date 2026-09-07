@@ -36,7 +36,6 @@ class ShipOperationDependencies:
     write_baseline_api_verification: Callable[..., Path]
     write_post_api_verification: Callable[..., Path]
     write_homepage_api_verification: Callable[..., Path]
-    write_research_isolation_verification: Callable[..., Path]
     write_environment_release_readiness: Callable[..., Path]
     now_compact: Callable[[], str]
     require_owner_local_staging_admission: Callable[..., Any] | None = None

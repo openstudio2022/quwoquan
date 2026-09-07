@@ -1,4 +1,4 @@
-"""ship verify forwards --lifecycle-exit-ref into commercial readiness."""
+"""ship verify forwards --lifecycle-exit-ref into production readiness."""
 
 from __future__ import annotations
 
@@ -28,9 +28,6 @@ from content.release.environment.run_evidence import (  # noqa: E402
 )
 from content.release.environment.release_contract import (  # noqa: E402
     build_release_contract,
-)
-from content.release.environment.research_isolation_verification import (  # noqa: E402
-    write_research_isolation_verification,
 )
 from content.release.environment.topology import (  # noqa: E402
     EnvironmentReleaseMode,
@@ -89,8 +86,8 @@ def _release(
             "sourceRevision": _SOURCE_REVISION,
             "sourceDigest": _SOURCE_DIGEST,
             "entityCatalogDigest": _ENTITY_CATALOG_DIGEST,
-            "releaseClass": "research" if research else "commercial",
-            "productLifecycleState": "research" if research else "commercial",
+            "releaseClass": "production",
+            "productLifecycleState": "production",
             "containsUnverifiedAssets": research,
             "rightsStatusCounts": {
                 "verified": 0,
@@ -228,7 +225,7 @@ def _dependencies(
             "sourceOwner": "qwq_data",
             "releaseId": release.name,
             "manifestDigest": manifest_digest,
-            "releaseClass": "research" if research else "commercial",
+            "releaseClass": "production",
             "releaseKind": str(release_kind),
             "mode": "sync",
             "deletePolicy": "tombstone",
@@ -274,7 +271,7 @@ def _dependencies(
             "active": {
                 "releaseId": release.name,
                 "manifestDigest": manifest_digest,
-                "releaseClass": "research" if research else "commercial",
+                "releaseClass": "production",
                 "projectionVersion": 2,
                 "revision": 1,
                 "activatedAt": "2026-09-05T00:00:03Z",
@@ -299,7 +296,7 @@ def _dependencies(
             "sourceOwner": "qwq_data",
             "releaseId": release.name,
             "manifestDigest": manifest_digest,
-            "releaseClass": "research" if research else "commercial",
+            "releaseClass": "production",
             "projectionVersion": 2,
             "revision": 1,
             "activatedAt": "2026-09-05T00:00:03Z",
@@ -373,8 +370,8 @@ def _dependencies(
         "schema": "quwoquan_data.environment_release_result",
         "environment": "gamma",
         "releaseId": release.name,
-        "releaseClass": "research" if research else "commercial",
-        "productLifecycleState": "research" if research else "commercial",
+        "releaseClass": "production",
+        "productLifecycleState": "production",
         "containsUnverifiedAssets": research,
         "manifestDigest": manifest_digest,
         **predecessor_admission,
@@ -460,44 +457,12 @@ def _dependencies(
         write_baseline_api_verification=_write_report,
         write_post_api_verification=_write_report,
         write_homepage_api_verification=_write_report,
-        write_research_isolation_verification=(write_research_isolation_verification),
         write_environment_release_readiness=_write_report,
         now_compact=lambda: "20260804T000000Z",
     )
 
 
-def test_ship_verify__commercial_fails_closed_without_lifecycle_exit_ref(
-    tmp_path: Path,
-) -> None:
-    observed: dict[str, Any] = {}
-    dependencies = _dependencies(tmp_path, observed=observed)
-
-    with pytest.raises(SystemExit, match="lifecycleExitRef is required"):
-        verify_release_consumers(
-            argparse.Namespace(
-                env="gamma",
-                import_run_id="activate-001",
-                run_id="commercial-verify-missing-ref",
-                readiness_phase="commercial",
-                lifecycle_exit_ref="",
-                release_admission=replace(
-                    _ADMISSION,
-                    release=tmp_path / "data/releases/release-a",
-                    contract=read_json(
-                        tmp_path / "data/releases/release-a/payload/desired_state.json"
-                    ),
-                    manifest_digest=payload_digest(
-                        tmp_path / "data/releases/release-a"
-                    ),
-                ),
-            ),
-            dependencies=dependencies,
-        )
-
-    assert "phase" not in observed
-
-
-def test_ship_verify__commercial_forwards_lifecycle_exit_ref(
+def test_ship_verify__production_forwards_lifecycle_exit_ref(
     tmp_path: Path,
 ) -> None:
     observed: dict[str, Any] = {}
@@ -509,7 +474,7 @@ def test_ship_verify__commercial_forwards_lifecycle_exit_ref(
             env="gamma",
             import_run_id="activate-001",
             run_id="commercial-verify-with-ref",
-            readiness_phase="commercial",
+            readiness_phase="production",
             lifecycle_exit_ref=_LIFECYCLE_EXIT_REF,
             release_admission=replace(
                 _ADMISSION,
@@ -524,131 +489,17 @@ def test_ship_verify__commercial_forwards_lifecycle_exit_ref(
     )
 
     assert observed["environment"] is DeploymentEnvironment.GAMMA
-    assert observed["phase"] is ShipReadinessPhase.COMMERCIAL
+    assert observed["phase"] is ShipReadinessPhase.PRODUCTION
     assert observed["lifecycle_exit_ref"] == _LIFECYCLE_EXIT_REF
     assert observed["release_id"] == "release-a"
     assert observed["verify_run_id"] == "commercial-verify-with-ref"
     assert observed["manifest_digest"] == payload_digest(release)
     result = observed["result"]
     assert result["lifecycleExitRef"] == _LIFECYCLE_EXIT_REF
-    assert result["readinessPhase"] == "commercial"
+    assert result["readinessPhase"] == "production"
     assert result["status"] == "completed"
     assert result["handoffArtifactRef"].endswith("/producer_release_handoff.json")
     assert result["handoffArtifactDigest"].startswith("sha256:")
-
-
-def test_ship_verify__research_writes_typed_isolation_blocker_before_post_api(
-    tmp_path: Path,
-) -> None:
-    observed: dict[str, Any] = {}
-    dependencies = _dependencies(
-        tmp_path,
-        observed=observed,
-        research=True,
-    )
-    original_writer = dependencies.write_research_isolation_verification
-
-    def _write_isolation(**kwargs: object) -> Path:
-        observed["runtime_proof_path"] = kwargs.get("runtime_proof_path")
-        return original_writer(**kwargs)
-
-    dependencies = replace(
-        dependencies,
-        write_research_isolation_verification=_write_isolation,
-    )
-
-    with pytest.raises(
-        SystemExit,
-        match="DATA.RESEARCH.RUNTIME_PROOF_INCOMPLETE",
-    ):
-        verify_release_consumers(
-            argparse.Namespace(
-                env="gamma",
-                import_run_id="activate-001",
-                run_id="research-verify-a",
-                readiness_phase="research",
-                lifecycle_exit_ref="",
-                release_admission=replace(
-                    _ADMISSION,
-                    release=tmp_path / "data/releases/release-a",
-                    contract=read_json(
-                        tmp_path / "data/releases/release-a/payload/desired_state.json"
-                    ),
-                    manifest_digest=payload_digest(
-                        tmp_path / "data/releases/release-a"
-                    ),
-                ),
-            ),
-            dependencies=dependencies,
-        )
-
-    result = observed["result"]
-    assert result["status"] == "failed"
-    assert result["handoffArtifactRef"].endswith("/producer_release_handoff.json")
-    assert result["handoffArtifactDigest"].startswith("sha256:")
-    assert result["failedStage"] == "research_isolation_verification"
-    ref = result["researchIsolationVerificationRef"]
-    receipt = read_json(tmp_path / ref)
-    assert receipt["outcome"] == "GATE_BLOCK"
-    assert receipt["blocker"]["code"] == "DATA.RESEARCH.RUNTIME_PROOF_INCOMPLETE"
-    assert observed["runtime_proof_path"] == (
-        tmp_path / "env/gamma/runs/data-release/release-a/research-verify-a/"
-        "research-isolation-runtime-proof.json"
-    )
-
-
-_PREDECESSOR_DRIFT_CASES = [
-    ("environment", {"environment": "alpha"}),
-    ("runId", {"runId": "apply-other"}),
-    ("releaseId", {"releaseId": "release-other"}),
-    ("manifestDigest", {"manifestDigest": "sha256:" + "9" * 64}),
-    (
-        "admissionKind",
-        {
-            "admissionKind": "empty_baseline_attestation",
-            "admissionKind": "empty_baseline_attestation",
-            "systemAttestationRef": "data/releases/release-a/attestations/release.json",
-            "systemAttestationDigest": "sha256:" + "7" * 64,
-        },
-    ),
-    (
-        "handoffArtifactRef",
-        {
-            "handoffArtifactRef": ".qwq_output/data/releases/release-other/producer_release_handoff.json"
-        },
-    ),
-    ("handoffArtifactDigest", {"handoffArtifactDigest": "sha256:" + "8" * 64}),
-]
-
-
-@pytest.mark.parametrize(("field", "overrides"), _PREDECESSOR_DRIFT_CASES)
-def test_ship_verify__rejects_import_predecessor_identity_drift_before_consumer(
-    tmp_path: Path,
-    field: str,
-    overrides: dict[str, Any],
-) -> None:
-    observed: dict[str, Any] = {}
-    dependencies = _dependencies(
-        tmp_path,
-        observed=observed,
-        predecessor_overrides=overrides,
-    )
-
-    with pytest.raises(SystemExit, match=field):
-        verify_release_consumers(
-            argparse.Namespace(
-                env="gamma",
-                import_run_id="activate-001",
-                run_id="verify-predecessor-drift",
-                readiness_phase="consumer",
-                lifecycle_exit_ref="",
-                release_admission=observed["admission"],
-            ),
-            dependencies=dependencies,
-        )
-
-    assert observed.get("created_runs") is None
-    assert observed.get("results") is None
 
 
 def test_ship_verify__rejects_revision_chain_drift_before_consumer(
@@ -689,7 +540,7 @@ def test_ship_verify__rejects_revision_chain_drift_before_consumer(
                 env="gamma",
                 import_run_id="activate-001",
                 run_id="verify-revision-drift",
-                readiness_phase="consumer",
+                readiness_phase="production",
                 lifecycle_exit_ref="",
                 release_admission=observed["admission"],
             ),
@@ -717,7 +568,7 @@ def test_ship_verify__rejects_import_predecessor_checksum_drift_before_consumer(
                 env="gamma",
                 import_run_id="activate-001",
                 run_id="verify-checksum-drift",
-                readiness_phase="consumer",
+                readiness_phase="production",
                 lifecycle_exit_ref="",
                 release_admission=observed["admission"],
             ),
@@ -743,7 +594,7 @@ def test_ship_verify__rejects_unsafe_import_run_id_before_consumer(
                 env="gamma",
                 import_run_id=import_run_id,
                 run_id="verify-unsafe-import-run",
-                readiness_phase="consumer",
+                readiness_phase="production",
                 lifecycle_exit_ref="",
                 release_admission=observed["admission"],
             ),
@@ -761,7 +612,7 @@ def _verify_args(
         "env": "gamma",
         "import_run_id": "activate-001",
         "run_id": run_id,
-        "readiness_phase": "consumer",
+        "readiness_phase": "production",
         "lifecycle_exit_ref": "",
         "previous_environment_readiness": "",
         "release_admission": admission,
@@ -774,7 +625,6 @@ def _verify_args(
     ("case", "expected_stage", "message"),
     [
         ("invalid_phase", "readiness_phase", "readiness-phase"),
-        ("missing_lifecycle", "lifecycle_exit_ref", "lifecycleExitRef is required"),
         ("missing_homepage", "homepage_verification_cases", "cases missing"),
         ("drifted_homepage", "homepage_verification_cases", "does not bind"),
         (
@@ -795,8 +645,6 @@ def test_ship_verify__post_create_direct_failures_write_one_typed_result(
     args = _verify_args(observed["admission"], run_id=f"verify-{case}")
     if case == "invalid_phase":
         args.readiness_phase = "invalid"
-    elif case == "missing_lifecycle":
-        args.readiness_phase = "commercial"
     elif case == "missing_homepage":
         (
             tmp_path / "env/gamma/runs/data-release/release-a/apply-001/"

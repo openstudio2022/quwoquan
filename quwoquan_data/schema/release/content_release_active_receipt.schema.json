@@ -45,8 +45,7 @@
     },
     "releaseClass": {
       "enum": [
-        "research",
-        "commercial"
+        "production"
       ]
     },
     "projectionVersion": {

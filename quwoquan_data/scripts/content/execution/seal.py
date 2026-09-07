@@ -164,8 +164,48 @@ def _assert_tag_refs_resolve(tag_refs: list[str], *, label: str) -> None:
             raise SealError(f"tagRef 不在 taxonomy 中：{ref}（{label}）")
 
 
+_FRONTMATTER_CREATOR = re.compile(r"^creatorProfileId:\s*(\S+)\s*$", re.M)
+
+
+def _declared_creator(path: Path, document: dict[str, Any] | None) -> str:
+    if document is not None:
+        return str(document.get("creatorProfileId") or "").strip()
+    text = path.read_text(encoding="utf-8")
+    if not text.startswith("---\n"):
+        return ""
+    match = _FRONTMATTER_CREATOR.search(text.split("\n---\n", 1)[0])
+    return match.group(1).strip().strip("'\"") if match else ""
+
+
+def _assert_creator_resolves(creator_profile_id: str, *, label: str) -> None:
+    """creatorProfileId 缺省按载体默认，写了就必须解析到 creator 注册表；publish 会拒绝，提前报出。"""
+
+    if not creator_profile_id:
+        return
+    from governance.creators.assignment import creator_from_payload
+
+    if not creator_from_payload({"creatorProfileId": creator_profile_id}):
+        raise SealError(f"creatorProfileId 不在 creator 注册表中：{creator_profile_id}（{label}）")
+
+
+def _assert_homepage_has_encyclopedia_source(root: Path, target_ref: str) -> None:
+    """homepage 的 _entity.json 要求百科主源；缺失在 author seal 即判否，不留到 publish。"""
+
+    if carrier_of_target_ref(target_ref) != "homepage":
+        return
+    refs_doc = _read_json(root / f"{target_ref}/1.download/source_refs.json", label="source_refs")
+    for row in refs_doc.get("sources") or []:
+        identity = f"{row.get('sourceId') or ''} {row.get('sourceClass') or ''}".lower()
+        if "wikipedia" in identity or "baike" in identity or "encyclopedia" in identity:
+            return
+    raise SealError(f"homepage 缺少百科 page 来源（zh.wikipedia/baike）：{target_ref}")
+
+
 def _seal_author(root: Path, execution_id: str, target_refs: list[str]) -> list[dict[str, str]]:
-    """每对象恰有一个非空 carrier 产物；JSON 产物由 seal 补齐身份字段后校 schema。"""
+    """每对象恰有一个非空 carrier 产物；JSON 产物由 seal 补齐身份字段后校 schema。
+
+    4.draft 目录允许存在草稿以外的文件（笔记、备选稿），只有 carrier 产物进入 receipt。
+    """
 
     result_refs: list[dict[str, str]] = []
     for target_ref in target_refs:
@@ -173,10 +213,6 @@ def _seal_author(root: Path, execution_id: str, target_refs: list[str]) -> list[
         path = _regular(root / artifact_ref, label=artifact_ref)
         if path.stat().st_size == 0:
             raise SealError(f"author 产物为空：{artifact_ref}")
-        draft_dir = path.parent
-        extras = sorted(p.name for p in draft_dir.iterdir() if p.name != path.name)
-        if extras:
-            raise SealError(f"4.draft 只允许唯一 carrier 产物，多余：{extras}")
         document: dict[str, Any] | None = None
         if path.suffix == ".json":
             schema_name = path.stem
@@ -192,6 +228,8 @@ def _seal_author(root: Path, execution_id: str, target_refs: list[str]) -> list[
                 _write_create_or_same(path, canonical_bytes(completed), allow_rewrite=True)
             document = completed
         _assert_tag_refs_resolve(_declared_tag_refs(path, document), label=artifact_ref)
+        _assert_creator_resolves(_declared_creator(path, document), label=artifact_ref)
+        _assert_homepage_has_encyclopedia_source(root, target_ref)
         result_refs.append(_frozen(root, artifact_ref))
     return result_refs
 
@@ -224,6 +262,28 @@ def _normalize_asset_ref(raw: str, assets: dict[str, dict[str, Any]]) -> str:
     return matches[0]
 
 
+_MARKDOWN_IMAGE = re.compile(r"!\[[^\]]*\]\(([^)\s]+)\)")
+
+
+def _referenced_asset_refs(root: Path, target_ref: str, assets: dict[str, dict[str, Any]]) -> list[str]:
+    """对象产物实际引用的资产（publish 会精确核对这个集合）：image 取 assetRefs，video 取全部
+    源资产（视频 + poster），article/homepage 取正文 `![](assets/...)`。"""
+
+    carrier = carrier_of_target_ref(target_ref)
+    draft_path = root / _author_artifact_ref(target_ref)
+    if carrier == "video":
+        return sorted(assets)
+    if carrier == "image":
+        document = _read_json(draft_path, label=draft_path.name)
+        raw_refs = [str(value) for value in document.get("assetRefs") or []]
+    else:
+        raw_refs = [
+            match for match in _MARKDOWN_IMAGE.findall(draft_path.read_text(encoding="utf-8"))
+            if "assets/" in match
+        ]
+    return sorted({_normalize_asset_ref(raw, assets) for raw in raw_refs})
+
+
 def _complete_review(
     review: dict[str, Any],
     *,
@@ -231,33 +291,48 @@ def _complete_review(
     target_ref: str,
     root: Path,
 ) -> dict[str, Any]:
+    """reviewer 只写 decision/blockingIssues/advisories（可选 safety、assetRights[].issues）；
+    assetRights 按对象实际引用的资产机械补齐，dimensions 缺省为单维。"""
+
     draft_ref = _author_artifact_ref(target_ref)
     draft_digest = sha256(_regular(root / draft_ref, label=draft_ref).read_bytes())
     assets = _object_source_assets(root, target_ref)
-    rights_rows = review.get("assetRights")
-    if not isinstance(rights_rows, list):
-        raise SealError(f"content_review.assetRights 必须是数组：{target_ref}")
-    completed_rights: list[dict[str, Any]] = []
-    for row in rights_rows:
+    referenced = _referenced_asset_refs(root, target_ref, assets)
+    raw_rows = review.get("assetRights") if isinstance(review.get("assetRights"), list) else []
+    reviewer_rows: dict[str, dict[str, Any]] = {}
+    advisories = [str(item) for item in (review.get("advisories") or []) if str(item).strip()]
+    for row in raw_rows:
         if not isinstance(row, dict):
             raise SealError(f"content_review.assetRights 行必须是对象：{target_ref}")
         ref = _normalize_asset_ref(str(row.get("assetRef") or ""), assets)
+        if ref not in referenced:
+            # 未被产物引用的资产不进入发布集合；reviewer 的意见保留为 advisory 记录。
+            for issue in row.get("issues") or []:
+                advisories.append(f"{ref}: {issue}")
+            continue
+        reviewer_rows[ref] = row
+    completed_rights: list[dict[str, Any]] = []
+    for ref in referenced:
+        row = reviewer_rows.get(ref, {})
         source = assets[ref]
-        transcription = {
-            "sourceUrl": source.get("sourceUrl") or source.get("url"),
-            "license": source.get("license"),
-            "termsUrl": source.get("termsUrl"),
-            "authorizationProof": source.get("authorizationProof") or None,
-        }
         completed_rights.append(
             {
                 **{k: v for k, v in row.items() if k not in _RIGHTS_TRANSCRIPTION_FIELDS},
                 "assetRef": ref,
+                "decision": row.get("decision") or "approved",
                 "usageScope": row.get("usageScope") or "research",
                 "issues": row.get("issues") if isinstance(row.get("issues"), list) else [],
-                **transcription,
+                "sourceUrl": source.get("sourceUrl") or source.get("url"),
+                "license": source.get("license"),
+                "termsUrl": source.get("termsUrl"),
+                "authorizationProof": source.get("authorizationProof") or None,
             }
         )
+    decision = str(review.get("decision") or "")
+    blocking = review.get("blockingIssues") if isinstance(review.get("blockingIssues"), list) else []
+    dimensions = review.get("dimensions") if isinstance(review.get("dimensions"), list) and review.get("dimensions") else [
+        {"name": "overall", "decision": decision, "issues": [] if decision == "approved" else list(blocking)}
+    ]
     completed = {
         **review,
         "schema": "quwoquan_data.content_review",
@@ -265,9 +340,11 @@ def _complete_review(
         "executionId": execution_id,
         "objectRef": target_ref,
         "draft": {"ref": f"4.draft/{PurePosixPath(draft_ref).name}", "digest": draft_digest},
+        "dimensions": dimensions,
+        "blockingIssues": blocking,
+        "advisories": advisories,
         "assetRights": completed_rights,
     }
-    completed.setdefault("blockingIssues", [])
     return completed
 
 
@@ -277,9 +354,13 @@ def _seal_review(
     target_refs: list[str],
     *,
     reviewer: dict[str, Any],
+    reviews: dict[str, Any],
     author_receipt: dict[str, Any],
 ) -> tuple[list[dict[str, str]], int]:
-    """补齐并校验每对象 content_review.json；reviewer 与 author 必须是不同 session/runId。"""
+    """把 execution 级 reviews 扇出为逐对象 content_review.json 并补齐机械字段。
+
+    reviewer 与 author 必须是不同 session/runId。单阶段扇出：只对显式输入展开，不读其它 receipt。
+    """
 
     author = author_receipt.get("actor") or {}
     author_host, author_session, author_run = _actor_key(author)
@@ -288,20 +369,25 @@ def _seal_review(
         raise SealError("reviewer 与 author 使用同一 host/sessionId")
     if author_run == reviewer_run:
         raise SealError("reviewer 与 author 使用同一 invocation.runId")
+    declared = {str(key).strip().strip("/") for key in reviews}
+    expected = set(target_refs)
+    if declared != expected:
+        raise SealError(
+            f"reviews 必须恰好覆盖 execution 全部 target：missing={sorted(expected - declared)} extra={sorted(declared - expected)}"
+        )
 
     result_refs: list[dict[str, str]] = []
     approved = 0
     for target_ref in target_refs:
         review_ref = f"{target_ref}/5.review/content_review.json"
         path = root / review_ref
-        review = _read_json(path, label=review_ref)
-        completed = _complete_review(review, execution_id=execution_id, target_ref=target_ref, root=root)
+        judgement = reviews.get(target_ref) or reviews.get(f"/{target_ref}") or {}
+        completed = _complete_review(dict(judgement), execution_id=execution_id, target_ref=target_ref, root=root)
         try:
             assert_valid(completed, "content", "content_review", label=review_ref)
         except ValueError as exc:
             raise SealError(str(exc)) from exc
-        if completed != review:
-            _write_create_or_same(path, canonical_bytes(completed), allow_rewrite=True)
+        _write_create_or_same(path, canonical_bytes(completed))
         approved += completed.get("decision") == "approved"
         result_refs.append(_frozen(root, review_ref))
     return result_refs, approved
@@ -373,6 +459,11 @@ def seal_stage(*, execution_id: str, stage: str, input_path: Path) -> dict[str, 
     actor = seal_input["actor"]
     verdict = seal_input["verdict"]
     typed_issues = list(seal_input.get("typedIssues") or [])
+    reviews = seal_input.get("reviews")
+    if stage == "5.review" and not isinstance(reviews, dict):
+        raise SealError("5.review seal 需要 execution 级 reviews（targetRef → 判断字段）")
+    if stage != "5.review" and reviews is not None:
+        raise SealError(f"{stage} seal 不接受 reviews")
 
     with _lock(root / RECEIPT_DIRECTORY / ".seal.lock"):
         prior, predecessor = _load_prior_receipts(root, stage)
@@ -382,7 +473,7 @@ def seal_stage(*, execution_id: str, stage: str, input_path: Path) -> dict[str, 
             result_refs = _seal_author(root, execution_id, target_refs)
         else:
             result_refs, approved = _seal_review(
-                root, execution_id, target_refs, reviewer=actor, author_receipt=prior[1]
+                root, execution_id, target_refs, reviewer=actor, reviews=reviews, author_receipt=prior[1]
             )
             if verdict == "pass" and approved == 0:
                 raise SealError("review pass 必须至少有一个 approved 对象")

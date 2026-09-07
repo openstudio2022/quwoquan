@@ -1,4 +1,4 @@
-"""从两份 AI 已准备输入确定性创建最小 execution 工作包。"""
+"""从一份 round spec 确定性创建一轮内全部 carrier 的最小 execution 工作包。"""
 from __future__ import annotations
 
 import fcntl
@@ -23,6 +23,10 @@ from core.schema import assert_valid
 
 REQUEST_REF = "0.plan/request.json"
 TARGET_SET_REF = "0.plan/target_set.json"
+# AI 提交的两份输入按 canonical 字节复制到 execution 内，binding ref 指向该副本而不是提交路径。
+INPUTS_REF = "0.plan/inputs"
+# 候选绑定省略 entityCatalogDigest 时，从受版本控制的实体目录实际计算，不再要求 AI 手写。
+ENTITY_CATALOG_SOURCE_REF = "quwoquan_data/reference/travel"
 
 
 class TaskInitError(ValueError):
@@ -158,25 +162,25 @@ def _read_regular_at(root_fd: int, ref: str, *, label: str) -> bytes:
         os.close(descriptor)
 
 
-def _load_bound_document(
-    path: Path,
-    *,
-    root: Path,
-    root_fd: int,
-    schema_name: str,
-) -> tuple[dict[str, Any], str, bytes]:
-    ref = _relative_ref(path, root=root, label=f"{schema_name} 输入")
-    raw = _read_regular_at(root_fd, ref, label=schema_name)
+def _load_submitted_document(path: Path, *, schema_name: str) -> dict[str, Any]:
+    """读取 AI 提交的输入：任意路径、任意 JSON 排版；只要求是对象且过 schema。"""
+    raw = _assert_regular_bytes(path, label=f"{schema_name} 输入")
     try:
         value = json.loads(raw)
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise TaskInitError(f"{schema_name} 必须是合法 JSON") from exc
     if not isinstance(value, dict):
         raise TaskInitError(f"{schema_name} 必须是 JSON 对象")
-    if raw != _canonical_bytes(value):
-        raise TaskInitError(f"{schema_name} 必须是 canonical JSON exact bytes")
     assert_valid(value, "execution", schema_name, label=f"task init {schema_name}")
-    return value, ref, raw
+    return value
+
+
+def _region_tag_exists(region: str) -> bool:
+    taxonomy_root = Path(os.environ.get("QWQ_TAGS_ROOT") or paths.CONTROL_PLANE_TAXONOMY_ROOT)
+    parts = PurePosixPath(region).parts
+    if not parts or any(part in {"", ".", ".."} for part in parts):
+        return False
+    return (taxonomy_root / "Topic" / "地理" / "行政区" / region / "_definition.json").is_file()
 
 
 def _target_ref(target: Mapping[str, Any], *, carrier: str) -> str:
@@ -205,9 +209,16 @@ def _normalized_targets(value: object, *, carrier: str) -> tuple[list[dict[str, 
         target = dict(raw)
         target["name"] = str(target.get("name") or "").strip()
         target["entityType"] = str(target.get("entityType") or "").strip().strip("/")
-        if carrier != "homepage":
+        if carrier == "homepage":
+            # region 在 publish 派生 geoTagRef；缺失或不可解析在这里就判否，不留到第 5 步。
+            region = str(target.get("region") or "").strip()
+            if not region or not _region_tag_exists(region):
+                raise TaskInitError(f"homepage target 缺少可解析的 region（Topic/地理/行政区/<region>）：{target['name']}")
+            target["region"] = region
+        else:
             target["publishAngle"] = str(target.get("publishAngle") or "").strip()
             target["publishTitle"] = str(target.get("publishTitle") or "").strip()
+            target.setdefault("publishSeq", 1)
         ref = _target_ref(target, carrier=carrier)
         if ref in seen:
             raise TaskInitError(f"targetRef 重复：{ref}")
@@ -351,30 +362,106 @@ def _documents_match(root_fd: int, documents: Mapping[str, Mapping[str, Any]]) -
         return False
 
 
-def initialize_task(*, carrier_demand_path: Path, candidate_bindings_path: Path) -> dict[str, Any]:
-    output_fd = _open_root(paths.OUTPUT_ROOT, label="output 根")
-    try:
-        demand, demand_ref, demand_canonical = _load_bound_document(
-            carrier_demand_path,
-            root=paths.OUTPUT_ROOT,
-            root_fd=output_fd,
-            schema_name="carrier_demand",
-        )
-        bindings, bindings_ref, bindings_canonical = _load_bound_document(
-            candidate_bindings_path,
-            root=paths.OUTPUT_ROOT,
-            root_fd=output_fd,
-            schema_name="immutable_candidate_bindings",
-        )
-    finally:
-        os.close(output_fd)
+def _normalized_inputs(
+    demand: dict[str, Any], bindings: dict[str, Any], *, target_count: int
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """把 AI 可省略的机械字段补成确定值；语义字段原样保留。"""
+    demand = dict(demand)
+    bindings = dict(bindings)
+    demand.setdefault("status", "confirmed")
+    demand.setdefault("quota", target_count)
+    demand.setdefault("retryOf", None)
+    bindings.setdefault("candidateCount", target_count)
+    if not bindings.get("entityCatalogDigest"):
+        from content.execution.workspace import entity_catalog_digest
 
-    execution_id = validate_execution_id(str(demand["executionId"]))
+        bindings["entityCatalogDigest"] = entity_catalog_digest(ENTITY_CATALOG_SOURCE_REF)
+    return demand, bindings
+
+
+_CARRIERS = ("homepage", "article", "image", "video")
+_TARGET_IDENTITY_FIELDS = ("entityType", "name", "region", "publishAngle", "publishTitle", "publishSeq")
+
+
+def _round_documents(round_spec: dict[str, Any]) -> list[tuple[dict[str, Any], dict[str, Any]]]:
+    """把一份 round spec 展开为逐 carrier 的 (carrier_demand, candidate_bindings)。
+
+    familyRef 固定为 `content/travel/<carrier>/<carrier>`；只为实际有 target 的 carrier 建 execution。
+    """
+    executions = round_spec["executions"]
+    retry_of = round_spec.get("retryOf") or {}
+    by_carrier: dict[str, list[dict[str, Any]]] = {}
+    for raw in round_spec["targets"]:
+        carrier = str(raw["carrier"])
+        if carrier not in executions:
+            raise TaskInitError(f"target 的 carrier 没有对应 executionId：{carrier}/{raw.get('name')}")
+        target = {key: raw[key] for key in _TARGET_IDENTITY_FIELDS if key in raw}
+        by_carrier.setdefault(carrier, []).append(target)
+    missing = sorted(set(executions) - set(by_carrier))
+    if missing:
+        raise TaskInitError(f"executions 声明了没有任何 target 的 carrier：{missing}")
+    documents: list[tuple[dict[str, Any], dict[str, Any]]] = []
+    for carrier in _CARRIERS:
+        if carrier not in by_carrier:
+            continue
+        execution_id = str(executions[carrier])
+        demand: dict[str, Any] = {
+            "schema": "quwoquan_data.carrier_demand",
+            "executionId": execution_id,
+            "carrier": carrier,
+            "familyRef": f"content/travel/{carrier}/{carrier}",
+        }
+        if carrier in retry_of:
+            demand["retryOf"] = str(retry_of[carrier])
+        bindings: dict[str, Any] = {
+            "schema": "quwoquan_data.immutable_candidate_bindings",
+            "executionId": execution_id,
+            "carrier": carrier,
+            "targets": by_carrier[carrier],
+        }
+        documents.append((demand, bindings))
+    return documents
+
+
+def initialize_round(*, round_spec_path: Path) -> dict[str, Any]:
+    """从一份 round spec 原子创建该轮全部 carrier execution；逐 execution 结果独立报告。
+
+    单阶段批量：只在 init 这一步对显式输入做展开，不读 receipt、不推进、不恢复。
+    """
+    round_spec = _load_submitted_document(round_spec_path, schema_name="round_spec")
+    results: list[dict[str, Any]] = []
+    for demand, bindings in _round_documents(round_spec):
+        assert_valid(demand, "execution", "carrier_demand", label="round spec derived carrier_demand")
+        assert_valid(bindings, "execution", "immutable_candidate_bindings", label="round spec derived candidate_bindings")
+        results.append(initialize_execution(submitted_demand=demand, submitted_bindings=bindings))
+    return {"executions": results}
+
+
+def initialize_task(*, carrier_demand_path: Path, candidate_bindings_path: Path) -> dict[str, Any]:
+    submitted_demand = _load_submitted_document(carrier_demand_path, schema_name="carrier_demand")
+    submitted_bindings = _load_submitted_document(
+        candidate_bindings_path, schema_name="immutable_candidate_bindings"
+    )
+    return initialize_execution(submitted_demand=submitted_demand, submitted_bindings=submitted_bindings)
+
+
+def initialize_execution(*, submitted_demand: dict[str, Any], submitted_bindings: dict[str, Any]) -> dict[str, Any]:
+    execution_id = validate_execution_id(str(submitted_demand["executionId"]))
     carrier = parse_execution_id(execution_id).content_type.value
-    if demand["carrier"] != carrier or bindings["carrier"] != carrier:
+    if submitted_demand["carrier"] != carrier or submitted_bindings["carrier"] != carrier:
         raise TaskInitError("carrier 与 executionId 不一致")
-    if bindings["executionId"] != execution_id:
+    if submitted_bindings["executionId"] != execution_id:
         raise TaskInitError("两份初始化输入的 executionId 不一致")
+    targets, target_refs = _normalized_targets(submitted_bindings["targets"], carrier=carrier)
+    demand, bindings = _normalized_inputs(submitted_demand, submitted_bindings, target_count=len(targets))
+    bindings["targets"] = targets
+    demand_canonical = _canonical_bytes(demand)
+    bindings_canonical = _canonical_bytes(bindings)
+    inputs_root = paths.DATA_EXECUTIONS_ROOT / execution_id / INPUTS_REF
+    demand_ref = _relative_ref(inputs_root / "carrier_demand.json", root=paths.OUTPUT_ROOT, label="carrier_demand 输入")
+    bindings_ref = _relative_ref(
+        inputs_root / "candidate_bindings.json", root=paths.OUTPUT_ROOT, label="candidate_bindings 输入"
+    )
 
     family_ref = str(demand["familyRef"]).strip().strip("/")
     family_parts = PurePosixPath(family_ref).parts
@@ -393,7 +480,6 @@ def initialize_task(*, carrier_demand_path: Path, candidate_bindings_path: Path)
     finally:
         os.close(repo_fd)
 
-    targets, target_refs = _normalized_targets(bindings["targets"], carrier=carrier)
     candidate_count = int(bindings["candidateCount"])
     quota = int(demand["quota"])
     if candidate_count != len(targets):
@@ -441,7 +527,13 @@ def initialize_task(*, carrier_demand_path: Path, candidate_bindings_path: Path)
     assert_valid(target_set, "execution", "target_set", label=f"task init target set:{execution_id}")
     assert_valid(manifest, "execution", "content_execution_manifest", label=f"task init manifest:{execution_id}")
 
-    documents = {"execution_manifest.json": manifest, REQUEST_REF: request, TARGET_SET_REF: target_set}
+    documents = {
+        "execution_manifest.json": manifest,
+        REQUEST_REF: request,
+        TARGET_SET_REF: target_set,
+        f"{INPUTS_REF}/carrier_demand.json": demand,
+        f"{INPUTS_REF}/candidate_bindings.json": bindings,
+    }
     target_root = paths.DATA_EXECUTIONS_ROOT / execution_id
     with _init_lock(execution_id):
         output_fd = _open_root(paths.OUTPUT_ROOT, label="output 根")
@@ -488,4 +580,4 @@ def initialize_task(*, carrier_demand_path: Path, candidate_bindings_path: Path)
     return {"executionId": execution_id, "status": "created", "artifacts": list(documents)}
 
 
-__all__ = ["TaskInitConflict", "TaskInitError", "initialize_task"]
+__all__ = ["TaskInitConflict", "TaskInitError", "initialize_execution", "initialize_round", "initialize_task"]

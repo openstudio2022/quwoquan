@@ -10,12 +10,12 @@ from content.release.environment.consistency_report import blocking_issue as _is
 from core.io import read_json
 from core.media_asset_url import (
     build_public_media_slice_key,
-    is_cas_media_object_key,
     is_public_media_slice_key,
     sha256_file,
 )
 from core.release_layout import payload_file
 from core.schema import assert_valid
+from governance.coverage.distribution import RELEASE_CLASSES
 
 
 def release_private_storage_issues(objects: Path) -> list[dict[str, str]]:
@@ -192,16 +192,15 @@ def release_media_issues(
     release_class = ""
     if header_path.is_file():
         release_class = str(read_json(header_path).get("releaseClass") or "").strip()
-    if release_class not in {"research", "commercial"}:
+    if release_class not in RELEASE_CLASSES:
         issues.append(
             _issue(
                 "release_media_delivery_class_invalid",
-                "release header 必须声明 research/commercial releaseClass",
+                "release header 必须声明 production releaseClass",
                 release_id,
             )
         )
         return issues
-    private_delivery = release_class == "research"
 
     actual_identity: dict[str, str] = {}
     slice_owners: dict[str, str] = {}
@@ -222,75 +221,44 @@ def release_media_issues(
                     asset_id,
                 )
             )
-        if private_delivery:
-            if public_slice_key:
-                issues.append(
-                    _issue(
-                        "release_media_delivery_class_mismatch",
-                        "research release 不得携带公开交付 slice",
-                        asset_id,
-                    )
+        if private_object_key:
+            issues.append(
+                _issue(
+                    "release_media_delivery_class_mismatch",
+                    "production release 不得携带已退役的私有交付 key",
+                    asset_id,
                 )
-                continue
-            if not is_cas_media_object_key(private_object_key):
-                issues.append(
-                    _issue(
-                        "release_media_private_object_key_invalid",
-                        "privateObjectKey 必须是 canonical CAS media key",
-                        asset_id,
-                    )
-                )
-                continue
-            digest = sha256.removeprefix("sha256:")
-            if digest and digest not in private_object_key:
-                issues.append(
-                    _issue(
-                        "release_media_private_object_key_identity_mismatch",
-                        "privateObjectKey 必须与 MediaAsset sha256 内容寻址一致",
-                        asset_id,
-                    )
-                )
-                continue
-            delivery_key = private_object_key
-        else:
-            if private_object_key:
-                issues.append(
-                    _issue(
-                        "release_media_delivery_class_mismatch",
-                        "commercial release 不得携带私有交付 key",
-                        asset_id,
-                    )
-                )
-                continue
-            expected_slice_key = (
-                build_public_media_slice_key(
-                    asset_id=asset_id,
-                    kind=str(row.get("kind") or ""),
-                    version=version,
-                    content_type=str(row.get("contentType") or ""),
-                )
-                if isinstance(version, int) and not isinstance(version, bool)
-                else ""
             )
-            if not is_public_media_slice_key(public_slice_key):
-                issues.append(
-                    _issue(
-                        "release_media_public_slice_invalid",
-                        "publicSliceKey 不是 avatar/image/video canonical slice",
-                        asset_id,
-                    )
+            continue
+        expected_slice_key = (
+            build_public_media_slice_key(
+                asset_id=asset_id,
+                kind=str(row.get("kind") or ""),
+                version=version,
+                content_type=str(row.get("contentType") or ""),
+            )
+            if isinstance(version, int) and not isinstance(version, bool)
+            else ""
+        )
+        if not is_public_media_slice_key(public_slice_key):
+            issues.append(
+                _issue(
+                    "release_media_public_slice_invalid",
+                    "publicSliceKey 不是 avatar/image/video canonical slice",
+                    asset_id,
                 )
-                continue
-            if public_slice_key != expected_slice_key:
-                issues.append(
-                    _issue(
-                        "release_media_public_slice_identity_mismatch",
-                        "publicSliceKey 必须由 MediaAsset kind/assetId/version/contentType 唯一派生",
-                        asset_id,
-                    )
+            )
+            continue
+        if public_slice_key != expected_slice_key:
+            issues.append(
+                _issue(
+                    "release_media_public_slice_identity_mismatch",
+                    "publicSliceKey 必须由 MediaAsset kind/assetId/version/contentType 唯一派生",
+                    asset_id,
                 )
-                continue
-            delivery_key = public_slice_key
+            )
+            continue
+        delivery_key = public_slice_key
         if asset_id in actual_identity:
             issues.append(
                 _issue(
@@ -300,19 +268,17 @@ def release_media_issues(
                 )
             )
             continue
-        # CAS keys are content-addressed and may legitimately be shared by
-        # multiple assets; only derived public slices must be exclusive.
-        if not private_delivery:
-            slice_owner = slice_owners.get(delivery_key)
-            if slice_owner is not None:
-                issues.append(
-                    _issue(
-                        "release_media_public_slice_collision",
-                        f"publicSliceKey 同时绑定 {slice_owner} 与 {asset_id}",
-                        delivery_key,
-                    )
+        # 派生的公开 slice 必须独占一个 assetId。
+        slice_owner = slice_owners.get(delivery_key)
+        if slice_owner is not None:
+            issues.append(
+                _issue(
+                    "release_media_public_slice_collision",
+                    f"publicSliceKey 同时绑定 {slice_owner} 与 {asset_id}",
+                    delivery_key,
                 )
-                continue
+            )
+            continue
 
         raw_owner_refs = row.get("ownerRefs")
         owner_refs = (

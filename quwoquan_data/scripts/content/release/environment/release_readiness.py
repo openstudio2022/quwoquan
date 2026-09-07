@@ -23,11 +23,6 @@ from content.release.environment.release_readiness_closure import (
     ReleaseReadinessClosureError,
     validate_readiness_closure,
 )
-from content.release.environment.research_isolation_verification import (
-    ResearchIsolationVerificationError,
-    load_research_isolation_verification,
-    research_isolation_file_digest,
-)
 from content.release.model import DataSourceOwner, ReleaseKind
 from core.io import read_json, write_json
 from core.release_layout import attestation_root, payload_digest, payload_file
@@ -100,9 +95,8 @@ def write_environment_release_readiness(
     post_api_verification_path: Path,
     output_root: Path,
     output_path: Path,
-    research_isolation_verification_path: Path | None = None,
     previous_environment_readiness_path: Path | None = None,
-    readiness_phase: str = "commercial",
+    readiness_phase: str = "production",
 ) -> Path:
     """Write append-only Data release/import/readback readiness evidence."""
     phase_issue = readiness_phase_issue(readiness_phase)
@@ -195,35 +189,6 @@ def write_environment_release_readiness(
         raise EnvironmentReleaseReadinessError(
             "release lifecycle/admission projection drift"
         )
-    if readiness_phase == "commercial" and (
-        header.get("containsUnverifiedAssets") is not False
-        or header.get("authorizationRequiredAssetIds") != []
-    ):
-        raise EnvironmentReleaseReadinessError(
-            "commercial readiness cannot contain authorization-required assets"
-        )
-    research_isolation: dict[str, Any] | None = None
-    if readiness_phase == "research":
-        if research_isolation_verification_path is None:
-            raise EnvironmentReleaseReadinessError(
-                "DATA.RESEARCH.RUNTIME_PROOF_INCOMPLETE: research readiness "
-                "requires canonical isolation verification"
-            )
-        try:
-            research_isolation = load_research_isolation_verification(
-                research_isolation_verification_path,
-                environment=environment,
-                release_id=release_id,
-                verify_run_id=verify_run_id,
-                manifest_digest=actual_payload_digest,
-                require_pass=True,
-            )
-        except ResearchIsolationVerificationError as exc:
-            raise EnvironmentReleaseReadinessError(str(exc)) from exc
-    elif research_isolation_verification_path is not None:
-        raise EnvironmentReleaseReadinessError(
-            "research isolation verification is research-only"
-        )
     if (
         header.get("sourceOwner") != DataSourceOwner.QWQ_DATA
         or attestation.get("sourceOwner") != DataSourceOwner.QWQ_DATA
@@ -310,15 +275,7 @@ def write_environment_release_readiness(
         raise EnvironmentReleaseReadinessError("post verification lacks feedQueries")
     guest_actor_hash = str(post_report.get("guestActorHash") or "").strip()
     guest_login = post_report.get("guestLogin")
-    if research_isolation is not None and post_report.get(
-        "internalSubjectHash"
-    ) != research_isolation.get("subjectHash"):
-        raise EnvironmentReleaseReadinessError(
-            "research post readback subject drifts from isolation identity"
-        )
-    if readiness_phase != "research" and (
-        not guest_actor_hash or not isinstance(guest_login, Mapping)
-    ):
+    if not guest_actor_hash or not isinstance(guest_login, Mapping):
         raise EnvironmentReleaseReadinessError(
             "post verification lacks fresh guest identity evidence"
         )
@@ -401,42 +358,11 @@ def write_environment_release_readiness(
             "content import manifestDigest drift from immutable payload"
         )
     media_manifest_digest = f"sha256:{hashlib.sha256(media_manifest_path.read_bytes()).hexdigest()}"
-    if research_isolation is not None:
-        # readback（GetResearchReleaseReadback）是 post 域对象闭包：
-        # entityRefs 为 posts 关联实体的 runtime 规范形态并集，
-        # mediaAssetIds 为 post 拥有媒体的并集（avatar/homepage 专属媒体
-        # 属于 user/entity 域回读，不在该口径内）。
-        readback = research_isolation.get("positiveReadback")
-        if not isinstance(readback, Mapping) or any(
-            (
-                readback.get("releaseId") != release_id,
-                readback.get("entityRefs") != sorted(closure["postEntityRefs"]),
-                readback.get("postIds") != post_ids,
-                readback.get("mediaAssetIds")
-                != sorted(closure["postMediaAssetIds"]),
-            )
-        ):
-            raise EnvironmentReleaseReadinessError(
-                "research isolation exact release readback drifts from release closure"
-            )
-
     content_import_report_ref = _relative(
         import_report_path,
         output_root=output_root,
         label="content import report",
     )
-    research_isolation_verification_ref = ""
-    research_isolation_verification_digest = ""
-    if research_isolation is not None:
-        assert research_isolation_verification_path is not None
-        research_isolation_verification_ref = _relative(
-            research_isolation_verification_path,
-            output_root=output_root,
-            label="research isolation verification",
-        )
-        research_isolation_verification_digest = research_isolation_file_digest(
-            research_isolation_verification_path
-        )
     try:
         previous_environment_activation = (
             previous_environment_activation_for_release(
@@ -460,13 +386,6 @@ def write_environment_release_readiness(
             verify_run_id=verify_run_id,
             import_report_ref=content_import_report_ref,
             import_report_digest=file_digest(import_report_path),
-            research_isolation=research_isolation,
-            research_isolation_verification_ref=(
-                research_isolation_verification_ref
-            ),
-            research_isolation_verification_digest=(
-                research_isolation_verification_digest
-            ),
             previous_environment_activation=previous_environment_activation,
         )
     except EnvironmentActivationEnvelopeError as exc:
@@ -528,23 +447,8 @@ def write_environment_release_readiness(
         document[field] = header[field]
     if "milestone" in header:
         document["milestone"] = header["milestone"]
-    if research_isolation is not None:
-        document["internalSubjectHash"] = research_isolation["subjectHash"]
-        document["researchIsolationVerificationRef"] = (
-            research_isolation_verification_ref
-        )
-        document["researchIsolationVerificationDigest"] = (
-            research_isolation_verification_digest
-        )
-        # post 域对象闭包口径（与 runtime readback 同源），供 ops 复核
-        # runtime proof 时精确比对；entityRefs/mediaAssetIds 保持全量口径。
-        document["researchReadbackEntityRefs"] = sorted(closure["postEntityRefs"])
-        document["researchReadbackMediaAssetIds"] = sorted(
-            closure["postMediaAssetIds"]
-        )
-    else:
-        document["guestActorHash"] = guest_actor_hash
-        document["guestLogin"] = dict(guest_login)
+    document["guestActorHash"] = guest_actor_hash
+    document["guestLogin"] = dict(guest_login)
     document["verificationChecksum"] = _checksum(document)
     try:
         assert_valid(

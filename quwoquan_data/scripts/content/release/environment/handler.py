@@ -65,9 +65,6 @@ from content.release.environment.post_api_verification import (
     write_post_api_verification,
 )
 from content.release.environment.readiness import require_environment_readiness
-from content.release.environment.research_isolation_verification import (
-    write_research_isolation_verification,
-)
 from content.release.environment.release_readiness import (
     EnvironmentReleaseReadinessError,
     write_environment_release_readiness,
@@ -241,7 +238,6 @@ def _operation_dependencies() -> ShipOperationDependencies:
         write_baseline_api_verification=write_baseline_api_verification,
         write_post_api_verification=write_post_api_verification,
         write_homepage_api_verification=write_homepage_api_verification,
-        write_research_isolation_verification=(write_research_isolation_verification),
         write_environment_release_readiness=write_environment_release_readiness,
         now_compact=_now_compact,
         require_owner_local_staging_admission=_require_owner_local_staging_admission,

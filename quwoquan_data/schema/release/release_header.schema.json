@@ -38,14 +38,12 @@
     },
     "releaseClass": {
       "enum": [
-        "research",
-        "commercial"
+        "production"
       ]
     },
     "productLifecycleState": {
       "enum": [
-        "research",
-        "commercial"
+        "production"
       ]
     },
     "containsUnverifiedAssets": {
@@ -80,6 +78,15 @@
       }
     },
     "authorizationRequiredAssetIds": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "watermarkedAssetIds": {
+      "description": "AI 看图申报 watermarkStatus=present 的资产；与 authorizationRequiredAssetIds 并列供运营逐条审核，不阻断。",
       "type": "array",
       "uniqueItems": true,
       "items": {
@@ -388,35 +395,6 @@
               ]
             }
           ]
-        }
-      }
-    },
-    {
-      "if": {
-        "properties": {
-          "releaseClass": {
-            "const": "commercial"
-          }
-        }
-      },
-      "then": {
-        "properties": {
-          "productLifecycleState": {
-            "const": "commercial"
-          },
-          "containsUnverifiedAssets": {
-            "const": false
-          },
-          "authorizationRequiredAssetIds": {
-            "maxItems": 0
-          }
-        }
-      },
-      "else": {
-        "properties": {
-          "productLifecycleState": {
-            "const": "research"
-          }
         }
       }
     },

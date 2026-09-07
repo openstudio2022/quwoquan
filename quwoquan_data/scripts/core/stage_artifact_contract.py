@@ -36,10 +36,10 @@ LANE_ADAPTERS: Final[dict[str, dict[str, tuple[str, ...]]]] = {
     },
 }
 
+# 媒体来源的字节就是快照本身（摘要记在 meta.rawSha256），只有页面来源另落 snapshot.raw。
 SOURCE_UNIT_ARTIFACTS: Final[tuple[str, ...]] = (
     "meta.json",
     "source.md",
-    "snapshot.bin",
     "assets/index.json",
 )
 

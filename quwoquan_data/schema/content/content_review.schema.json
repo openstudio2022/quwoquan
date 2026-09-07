@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "quwoquan_data/schema/content/content_review.schema.json",
-  "description": "review 每对象唯一内容与逐资产权利裁决。AI 只写 decision/dimensions/blockingIssues/assetRights[].{assetRef,decision,issues,usageScope}/safety/advisories；schema/stage/executionId/objectRef/draft 与 assetRights 权利转录字段由 task seal 从 execution 与 source meta 补齐。",
+  "description": "review 每对象唯一内容裁决。AI 只写 decision/blockingIssues/advisories（可选 safety 与 assetRights[].{assetRef,issues}）；dimensions、assetRights 逐资产行及其权利转录字段（sourceUrl/license/termsUrl/authorizationProof/usageScope）与 schema/stage/executionId/objectRef/draft 由 task seal 从产物实际引用的资产补齐。assetRights[].decision/issues 是权利记录事实，不牵连对象 decision。",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -186,18 +186,6 @@
             "maxItems": 0
           },
           "dimensions": {
-            "items": {
-              "properties": {
-                "decision": {
-                  "const": "approved"
-                },
-                "issues": {
-                  "maxItems": 0
-                }
-              }
-            }
-          },
-          "assetRights": {
             "items": {
               "properties": {
                 "decision": {

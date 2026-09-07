@@ -86,7 +86,7 @@
 - THEN 静态 family、provider、schema、prompt/template 与 reference 不含运行实例值。
 - THEN execution packet 的 request 与 target set 均固化在 `0.plan`，且 output 删除后仍可从受版本控制的静态输入重建。
 - THEN 四类载体均能由同一 CLI 门面创建、review、promote 与聚合 release。
-- THEN release 只消费显式 exact cohort；未合格对象不进入 cohort，已合格对象可形成 partial Research release。
+- THEN release 只消费显式 exact cohort；未合格对象不进入 cohort，已合格对象可形成 partial production release。
 - THEN 文章配图、来源分布、视频热度与宿主实际重叠只作诊断，不形成业务 authority。
 - THEN 每个实际启动的 task 分别形成 typed 终态；排队、未启动或诊断 sample 不算 task 结果。canonical publish 以单写对象事务接收已合格对象，最终 Manifest/release 对被选对象及引用做 exact closure。
 - THEN 对象下限与工作单元数独立冻结；宿主并发/截止不写入 execution，receipt 不记录宿主调度 authority。

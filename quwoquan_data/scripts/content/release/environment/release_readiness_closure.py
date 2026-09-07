@@ -36,9 +36,8 @@ def validate_readiness_closure(
 ) -> dict[str, set[str]]:
     """Validate and return exact IDs proven by the immutable object graph."""
 
-    # DEC-031：research 私有交付的回读证据以相对 CAS key 闭合、不做匿名取回
-    # 探测；commercial 保持匿名 CDN URL 与逐资产取回探测闭合。
-    research_release = header.get("releaseClass") == "research"
+    # DEC-041：production release 只有匿名 CDN URL 交付，逐资产取回探测闭合。
+    research_release = False
     _assert_attestation_projection(
         release_root=release_root,
         header=header,
@@ -366,11 +365,12 @@ def validate_readiness_closure(
             else:
                 video_count += 1
         if content_type == "article":
-            if image_count >= 2:
+            # illustrated 只要求至少一张图（首图即封面）；正文图张数不设下限。
+            if image_count >= 1:
                 illustrated_article_ids.add(post_id)
             elif manifest.get("publishMediaMode") != "text_only" or owned:
                 raise ReleaseReadinessClosureError(
-                    f"article lacks cover/body release media closure: {post_ref}"
+                    f"article lacks cover release media closure: {post_ref}"
                 )
         elif content_type == "image":
             if image_count < 1 or video_count:

@@ -31,7 +31,7 @@
 <a id="req-001"></a>
 ### REQ-001 用户意图只编译为现役四载体 demand
 
-- 上游 preview/confirm 只表达内容运营者确认的范围、active carrier、每载体对象数量、`research|commercial` lifecycle、`fresh|retry` 意图与显式依赖引用；仓内落点只形成现役 carrier demand，不恢复 Campaign、Reconciliation、SourcePool 或 WorkRequest schema。
+- 上游 preview/confirm 只表达内容运营者确认的范围、active carrier、每载体对象数量、单一 `production` lifecycle、`fresh|retry` 意图与显式依赖引用；仓内落点只形成现役 carrier demand，不恢复 Campaign、Reconciliation、SourcePool 或 WorkRequest schema。
 - preview 必须回显解析出的输入、每个 active carrier 的对象数量、提出的默认建议、依赖 identity/digest 与 typed outcome。缺数量、未知或冲突的范围/载体/lifecycle、无效 retry 引用返回 `needs_input`；confirmed demand 或其它必需依赖缺失、依赖 digest 漂移返回 `blocked`。两类结果的新 carrier demand 与工作包写入数均为零。
 - 内容运营者可以确认、修改或取消 preview。修改回到新的 preview。取消不写 carrier demand。只有确认才进入编译。宿主 Agent 不运行仓内 Cursor key/model/SDK semantic preflight；来源访问与素材 rights 分别在 source admission 与对象 admission 返回 typed 失败，不得塌陷为空结果。
 - 同一已确认输入、resolver policy/catalog digest 与全部依赖 ref/digest 必须生成相同 confirmed-demand digest 与每 carrier demand digest。每个 active carrier 恰好生成一个 demand record；编译器不得直写 execution work package、Campaign plan/report、reconciliation receipt、SourcePool 或 pool record。

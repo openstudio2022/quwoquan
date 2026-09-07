@@ -243,7 +243,8 @@
         "distributionDecision": {
           "enum": [
             "research_allowed",
-            "commercial_allowed"
+            "commercial_allowed",
+            "blocked"
           ]
         },
         "modelReleaseStatus": {
@@ -252,6 +253,13 @@
             "obtained",
             "editorial_only"
           ]
+        },
+        "watermarkStatus": {
+          "description": "由看过像素的 AI 申报并经 ingest 转录；缺席只能记 unknown，不得假定 absent。",
+          "enum": ["absent", "present", "unknown"]
+        },
+        "watermarkKind": {
+          "enum": ["none", "author_signature", "platform_logo", "stock_agency", "other", "unknown"]
         },
         "rightsAuditStatus": {
           "enum": [
@@ -309,9 +317,6 @@
           },
           "else": {
             "properties": {
-              "sourceUseMode": {
-                "const": "rights_audit_only"
-              },
               "rightsAuditIssues": {
                 "minItems": 1
               }

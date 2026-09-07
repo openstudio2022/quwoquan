@@ -38,8 +38,8 @@ def _receipt() -> ReleaseAttestation:
         release_id="20260718--travel-homepage-coverage--test-release-a--001",
         source_owner=DataSourceOwner.QWQ_DATA,
         release_kind=ReleaseKind.CONTENT,
-        release_class=ReleaseClass.RESEARCH,
-        product_lifecycle_state=ProductLifecycleState.RESEARCH,
+        release_class=ReleaseClass.PRODUCTION,
+        product_lifecycle_state=ProductLifecycleState.PRODUCTION,
         contains_unverified_assets=True,
         rights_status_counts={
             "verified": 0,

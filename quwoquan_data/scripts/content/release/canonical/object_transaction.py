@@ -50,6 +50,7 @@ from content.release.canonical.pool_source_attribution import (
     source_attribution_complete,
 )
 from content.release.canonical.review_rights_binding import validate_review_authority
+from core.content_library import reference_existing_file
 from core.source_attribution import canonical_source_attribution
 from governance.coverage.license import (
     RightsAuditStatus,
@@ -182,8 +183,7 @@ def build_entity_object_transaction_package(
             object_key = f"media/objects/sha256/{hex_digest[:2]}/{hex_digest[2:4]}/{hex_digest}.{suffix}"
             cas_ref = Path("cas") / f"{hex_digest}.{suffix}"
             cas_target = staging / cas_ref
-            cas_target.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(asset_source, cas_target)
+            reference_existing_file(asset_source, cas_target)
             width, height, mime = _image_dimensions(asset_source)
             asset_id = str(raw.get("assetId") or "").strip()
             source_asset_ref, source_asset = _source_asset_for_manifest_asset(
@@ -303,6 +303,7 @@ def build_entity_object_transaction_package(
             if distribution_decision not in {
                 "research_allowed",
                 "commercial_allowed",
+                "blocked",
             }:
                 raise ObjectTransactionError(
                     f"asset {asset_id} 缺 canonical distributionDecision"
@@ -318,15 +319,8 @@ def build_entity_object_transaction_package(
                 raise ObjectTransactionError(
                     f"asset {asset_id} commercial rights proof is incomplete"
                 )
-            if (
-                rights_audit_status is not RightsAuditStatus.VERIFIED
-                or rights_audit_issues
-                or not authorization_proof.startswith("https://")
-                or not license_url.startswith("https://")
-            ):
-                raise ObjectTransactionError(
-                    f"asset {asset_id} unresolved rights are not publishable"
-                )
+            # 权利状态只作记录事实写入 rights.json：非 verified、有审计问题或缺 https 证明
+            # 都不拒绝对象，公众可见性由下游运营运行时配置按这些事实决定。
             rights_row = {
                 "assetId": asset_id,
                 "sourceKind": str(
@@ -372,6 +366,9 @@ def build_entity_object_transaction_package(
                 "rightsAuditStatus": rights_audit_status.value,
                 "rightsAuditIssues": rights_audit_issues,
                 "modelReleaseStatus": model_release_status,
+                # 水印判定来自看过像素的 AI 申报（经 ingest 转录到资产行）；缺席只能记 unknown。
+                "watermarkStatus": str(raw.get("watermarkStatus") or "unknown"),
+                "watermarkKind": str(raw.get("watermarkKind") or "unknown"),
             }
             rights_rows.append(rights_row)
             cas_rows.append(

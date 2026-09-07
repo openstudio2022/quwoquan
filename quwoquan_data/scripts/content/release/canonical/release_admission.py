@@ -12,6 +12,7 @@ from content.release.canonical.object_transaction_contract import (
     _read_json,
 )
 from governance.coverage.distribution import (
+    RELEASE_CLASSES,
     DistributionDecision,
     RightsStatus,
     project_asset_admission,
@@ -115,15 +116,14 @@ def _article_media_mode(row: Mapping[str, Any]) -> str:
     covers = [
         asset for asset in assets if str(asset.get("role") or "").strip() == "cover"
     ]
-    bodies = [asset for asset in assets if asset not in covers]
+    # illustrated 只要求「有图即恰好一张封面、全部为可追溯来源的图片」；正文图张数不设下限。
     if (
         len(covers) != 1
-        or not bodies
         or any(str(asset.get("kind") or "image").strip() != "image" for asset in assets)
         or any(not str(asset.get("sourceRef") or "").strip() for asset in assets)
     ):
         raise ObjectTransactionError(
-            f"{object_ref}: illustrated article must bind one cover and body assets"
+            f"{object_ref}: illustrated article must bind exactly one cover image with source refs"
         )
     return "illustrated"
 
@@ -240,7 +240,7 @@ def build_release_asset_admission(
 
         output_root = core_paths.OUTPUT_ROOT
     release_mode = str(release_class or "").strip()
-    if release_mode not in {"research", "commercial"}:
+    if release_mode not in RELEASE_CLASSES:
         raise ObjectTransactionError(f"DATA.RELEASE.CLASS_INVALID: {release_mode!r}")
     objects = _object_rows(objects_root, desired, output_root=output_root)
     assets = [asset for row in objects for asset in row["assets"]]
@@ -270,28 +270,8 @@ def build_release_asset_admission(
             "generated image/video assets are disabled by current policy: "
             + ", ".join(generated[:10])
         )
-    blocked_assets = [
-        asset
-        for asset in assets
-        if asset["distributionDecision"] == DistributionDecision.BLOCKED.value
-    ]
-    if blocked_assets:
-        raise ObjectTransactionError(
-            "release contains blocked assets: "
-            + ", ".join(str(asset["assetId"]) for asset in blocked_assets[:10])
-        )
-    if release_mode == "commercial":
-        noncommercial = [
-            asset
-            for asset in assets
-            if asset["distributionDecision"]
-            != DistributionDecision.COMMERCIAL_ALLOWED.value
-        ]
-        if noncommercial:
-            raise ObjectTransactionError(
-                "commercial release contains non-commercial assets: "
-                + ", ".join(str(asset["assetId"]) for asset in noncommercial[:10])
-            )
+    # `distributionDecision=blocked`（restricted 权利）只进入下方 rejected/restricted 计数，
+    # 不阻断 release：权利是记录事实，公众可见性由下游运营运行时配置决定。
     article_coverage = _article_media_coverage(objects)
     rights_counts = Counter(str(asset["rightsStatus"]) for asset in assets)
     carrier_counts: list[dict[str, Any]] = []
@@ -377,6 +357,10 @@ def build_release_asset_admission(
     authorization_required_ids = sorted(
         str(asset["assetId"]) for asset in assets if asset["authorizationRequired"]
     )
+    # 与 authorizationRequiredAssetIds 并列：运营发布后可按资产逐条审核水印可用性；只记录不阻断。
+    watermarked_ids = sorted(
+        str(asset["assetId"]) for asset in assets if str(asset.get("watermarkStatus") or "") == "present"
+    )
     return {
         "schema": "quwoquan_data.release_asset_admission",
         "releaseId": release_id,
@@ -387,6 +371,7 @@ def build_release_asset_admission(
             status.value: rights_counts[status.value] for status in RightsStatus
         },
         "authorizationRequiredAssetIds": authorization_required_ids,
+        "watermarkedAssetIds": watermarked_ids,
         "researchAcceptedCount": research_total,
         "commercialAcceptedCount": commercial_total,
         "carrierCounts": carrier_counts,

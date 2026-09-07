@@ -25,14 +25,11 @@ class PostApiVerificationError(ValueError):
 class ReleaseMediaAssetCase:
     asset_id: str
     kind: str
-    # commercial：匿名 CDN 绝对 URL；research：与 delivery_ref 同值的相对
-    # CAS key（App 回读比对用同一字段，探测语义由 delivery_ref 是否非空分流）。
+    # production：匿名 CDN 绝对 URL（DEC-041 公开交付）。
     public_url: str
     expected_bytes: int
     expected_sha256: str
     expected_mime_type: str
-    # research 私有交付的相对 CAS objectKey（media/objects/sha256/...）。
-    delivery_ref: str = ""
 
 
 @dataclass(frozen=True)
@@ -210,34 +207,6 @@ def _verify_binary_media(
         "publicUrl": url,
         **receipt,
         "etag": str(getattr(response, "etag", "") or ""),
-    }
-
-
-def _verify_research_denied_media(
-    client: PublicApiClient,
-    *,
-    media_origin: str,
-    asset: ReleaseMediaAssetCase,
-) -> dict[str, Any]:
-    """匿名 GET research 私有交付 URL 必须被边缘 401/403 拒绝。"""
-    anonymous_url = f"{media_origin}/{asset.delivery_ref}"
-    response = client.get_bytes(anonymous_url, byte_range="", max_bytes=65536)
-    if response.status not in {
-        HTTPStatus.UNAUTHORIZED,
-        HTTPStatus.FORBIDDEN,
-    }:
-        raise PostApiVerificationError(
-            "research private media must deny anonymous access "
-            f"(status={response.status}): {_public_url_evidence(anonymous_url)}"
-        )
-    return {
-        "assetId": asset.asset_id,
-        "kind": asset.kind,
-        "deliveryRef": asset.delivery_ref,
-        "anonymousStatus": response.status,
-        "expectedBytes": asset.expected_bytes,
-        "expectedSha256": asset.expected_sha256,
-        "signedProbe": None,
     }
 
 

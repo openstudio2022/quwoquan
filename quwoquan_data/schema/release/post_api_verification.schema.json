@@ -23,36 +23,79 @@
     "issues"
   ],
   "properties": {
-    "schema": {"const": "quwoquan_data.post_api_verification"},
-    "environment": {"enum": ["alpha", "beta", "gamma", "prod"]},
-    "releaseId": {"type": "string", "minLength": 1},
-    "runId": {"type": "string", "minLength": 1},
-    "readinessPhase": {"enum": ["research", "consumer", "commercial"]},
-    "sourceImportReportRef": {"type": "string", "pattern": "^env/(alpha|beta|gamma|prod)/runs/data-release/"},
-    "creatorImportReportRef": {"type": "string", "pattern": "^env/(alpha|beta|gamma|prod)/runs/data-release/"},
-    "apiBaseUrl": {"type": "string", "pattern": "^https://"},
+    "schema": {
+      "const": "quwoquan_data.post_api_verification"
+    },
+    "environment": {
+      "enum": [
+        "alpha",
+        "beta",
+        "gamma",
+        "prod"
+      ]
+    },
+    "releaseId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "runId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "readinessPhase": {
+      "enum": [
+        "production"
+      ]
+    },
+    "sourceImportReportRef": {
+      "type": "string",
+      "pattern": "^env/(alpha|beta|gamma|prod)/runs/data-release/"
+    },
+    "creatorImportReportRef": {
+      "type": "string",
+      "pattern": "^env/(alpha|beta|gamma|prod)/runs/data-release/"
+    },
+    "apiBaseUrl": {
+      "type": "string",
+      "pattern": "^https://"
+    },
     "mediaDeliveryBaseUrl": {
       "type": "string",
       "pattern": "^https://[^/?#]+$",
       "description": "Path-free environment CDN origin. Release publicSliceKey owns the single media/avatar|image|video path."
     },
-    "guestActorHash": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
-    "internalSubjectHash": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "guestActorHash": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
     "guestLogin": {
       "allOf": [
-        {"$ref": "#/$defs/operationEvidence"},
+        {
+          "$ref": "#/$defs/operationEvidence"
+        },
         {
           "type": "object",
           "properties": {
-            "path": {"const": "/auth/login/anonymous"},
-            "pageId": {"const": "user.login.anonymous"},
-            "status": {"const": 200}
+            "path": {
+              "const": "/auth/login/anonymous"
+            },
+            "pageId": {
+              "const": "user.login.anonymous"
+            },
+            "status": {
+              "const": 200
+            }
           }
         }
       ]
     },
-    "verifiedAt": {"type": "string", "minLength": 1},
-    "passed": {"const": true},
+    "verifiedAt": {
+      "type": "string",
+      "minLength": 1
+    },
+    "passed": {
+      "const": true
+    },
     "feedQueries": {
       "type": "array",
       "minItems": 5,
@@ -60,31 +103,68 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["name", "path", "query", "status", "releaseBound", "matchedPostIds", "requests"],
+        "required": [
+          "name",
+          "path",
+          "query",
+          "status",
+          "releaseBound",
+          "matchedPostIds",
+          "requests"
+        ],
         "properties": {
-          "name": {"enum": ["discovery_work", "typed_article", "typed_image", "typed_video", "homepage_recommend", "premium_stream"]},
-          "path": {"const": "/content/feed"},
-          "query": {"type": "string", "minLength": 1},
-          "status": {"const": 200},
-          "releaseBound": {"const": true},
+          "name": {
+            "enum": [
+              "discovery_work",
+              "typed_article",
+              "typed_image",
+              "typed_video",
+              "homepage_recommend",
+              "premium_stream"
+            ]
+          },
+          "path": {
+            "const": "/content/feed"
+          },
+          "query": {
+            "type": "string",
+            "minLength": 1
+          },
+          "status": {
+            "const": 200
+          },
+          "releaseBound": {
+            "const": true
+          },
           "matchedPostIds": {
             "type": "array",
             "minItems": 1,
             "uniqueItems": true,
-            "items": {"type": "string", "minLength": 1}
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
           },
           "requests": {
             "type": "array",
             "minItems": 1,
             "items": {
               "allOf": [
-                {"$ref": "#/$defs/operationEvidence"},
+                {
+                  "$ref": "#/$defs/operationEvidence"
+                },
                 {
                   "type": "object",
                   "properties": {
-                    "path": {"const": "/content/feed"},
-                    "pageId": {"const": "content.feed.list"},
-                    "status": {"const": 200}
+                    "path": {
+                      "const": "/content/feed"
+                    },
+                    "pageId": {
+                      "const": "content.feed.list"
+                    },
+                    "status": {
+                      "const": 200
+                    }
                   }
                 }
               ]
@@ -93,9 +173,57 @@
         }
       },
       "allOf": [
-        {"contains": {"type": "object", "properties": {"name": {"const": "discovery_work"}, "query": {"pattern": "^identity=work&limit=[1-9][0-9]*$"}}, "required": ["name", "query"]}},
-        {"contains": {"type": "object", "properties": {"name": {"const": "typed_video"}, "query": {"pattern": "^identity=work&type=video&limit=[1-9][0-9]*$"}}, "required": ["name", "query"]}},
-        {"contains": {"type": "object", "properties": {"name": {"const": "homepage_recommend"}, "query": {"pattern": "^sort=recommend&channelId=recommend&limit=[1-9][0-9]*$"}}, "required": ["name", "query"]}}
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "const": "discovery_work"
+              },
+              "query": {
+                "pattern": "^identity=work&limit=[1-9][0-9]*$"
+              }
+            },
+            "required": [
+              "name",
+              "query"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "const": "typed_video"
+              },
+              "query": {
+                "pattern": "^identity=work&type=video&limit=[1-9][0-9]*$"
+              }
+            },
+            "required": [
+              "name",
+              "query"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "const": "homepage_recommend"
+              },
+              "query": {
+                "pattern": "^sort=recommend&channelId=recommend&limit=[1-9][0-9]*$"
+              }
+            },
+            "required": [
+              "name",
+              "query"
+            ]
+          }
+        }
       ]
     },
     "searchQueries": {
@@ -105,17 +233,40 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["targetType", "targetId", "query", "status", "matchedObjectIds", "attempts"],
+        "required": [
+          "targetType",
+          "targetId",
+          "query",
+          "status",
+          "matchedObjectIds",
+          "attempts"
+        ],
         "properties": {
-          "targetType": {"enum": ["post", "author"]},
-          "targetId": {"type": "string", "minLength": 1},
-          "query": {"type": "string", "minLength": 1},
-          "status": {"const": 200},
+          "targetType": {
+            "enum": [
+              "post",
+              "author"
+            ]
+          },
+          "targetId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "query": {
+            "type": "string",
+            "minLength": 1
+          },
+          "status": {
+            "const": 200
+          },
           "matchedObjectIds": {
             "type": "array",
             "minItems": 1,
             "uniqueItems": true,
-            "items": {"type": "string", "minLength": 1}
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
           },
           "attempts": {
             "type": "array",
@@ -125,15 +276,34 @@
             "items": {
               "type": "object",
               "additionalProperties": false,
-              "required": ["attempt", "canonicalErrorCode", "recoveryAction", "recoveryAfterSeconds", "retryAfterSeconds", "operation"],
+              "required": [
+                "attempt",
+                "canonicalErrorCode",
+                "recoveryAction",
+                "recoveryAfterSeconds",
+                "retryAfterSeconds",
+                "operation"
+              ],
               "properties": {
-                "attempt": {"type": "integer", "minimum": 1, "maximum": 2},
+                "attempt": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 2
+                },
                 "canonicalErrorCode": {
                   "type": "string",
                   "pattern": "^(none|[A-Z][A-Z0-9_]*\\.[A-Z][A-Z0-9_]*\\.[a-z][a-z0-9_]*)$"
                 },
                 "recoveryAction": {
-                  "enum": ["none", "retry", "surface", "absorb", "fallback", "escalate", "compensate"]
+                  "enum": [
+                    "none",
+                    "retry",
+                    "surface",
+                    "absorb",
+                    "fallback",
+                    "escalate",
+                    "compensate"
+                  ]
                 },
                 "recoveryAfterSeconds": {
                   "type": "integer",
@@ -147,12 +317,18 @@
                 },
                 "operation": {
                   "allOf": [
-                    {"$ref": "#/$defs/operationEvidence"},
+                    {
+                      "$ref": "#/$defs/operationEvidence"
+                    },
                     {
                       "type": "object",
                       "properties": {
-                        "path": {"const": "/search"},
-                        "pageId": {"const": "search.global"}
+                        "path": {
+                          "const": "/search"
+                        },
+                        "pageId": {
+                          "const": "search.global"
+                        }
                       }
                     }
                   ]
@@ -161,11 +337,17 @@
             },
             "contains": {
               "type": "object",
-              "required": ["operation"],
+              "required": [
+                "operation"
+              ],
               "properties": {
                 "operation": {
                   "type": "object",
-                  "properties": {"status": {"const": 200}}
+                  "properties": {
+                    "status": {
+                      "const": 200
+                    }
+                  }
                 }
               }
             },
@@ -195,46 +377,119 @@
           "usesPlatformDefaultAvatar"
         ],
         "properties": {
-          "creatorRef": {"type": "string", "minLength": 1},
-          "authorId": {"type": "string", "minLength": 1},
-          "personaId": {"type": "string", "minLength": 1},
-          "profileStatus": {"const": 200},
-          "avatarAssetId": {"type": ["string", "null"]},
-          "avatarUrl": {"type": "string"},
-          "avatarMediaReady": {"type": "boolean"},
-          "avatarProbeCount": {"type": "integer", "minimum": 0, "maximum": 1},
-          "avatarProbe": {"oneOf": [{"$ref": "#/$defs/fullImageProbe"}, {"type": "null"}]},
-          "usesPlatformDefaultAvatar": {"type": "boolean"}
+          "creatorRef": {
+            "type": "string",
+            "minLength": 1
+          },
+          "authorId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "personaId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "profileStatus": {
+            "const": 200
+          },
+          "avatarAssetId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "avatarUrl": {
+            "type": "string"
+          },
+          "avatarMediaReady": {
+            "type": "boolean"
+          },
+          "avatarProbeCount": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "avatarProbe": {
+            "oneOf": [
+              {
+                "$ref": "#/$defs/fullImageProbe"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "usesPlatformDefaultAvatar": {
+            "type": "boolean"
+          }
         },
         "oneOf": [
           {
             "properties": {
-              "avatarAssetId": {"type": "string", "minLength": 1},
-              "avatarUrl": {"pattern": "^https://[^/?#]+/media/avatar/s/"},
-              "avatarMediaReady": {"const": true},
-              "avatarProbeCount": {"const": 1},
-              "avatarProbe": {"$ref": "#/$defs/fullImageProbe"},
-              "usesPlatformDefaultAvatar": {"const": false}
+              "avatarAssetId": {
+                "type": "string",
+                "minLength": 1
+              },
+              "avatarUrl": {
+                "pattern": "^https://[^/?#]+/media/avatar/s/"
+              },
+              "avatarMediaReady": {
+                "const": true
+              },
+              "avatarProbeCount": {
+                "const": 1
+              },
+              "avatarProbe": {
+                "$ref": "#/$defs/fullImageProbe"
+              },
+              "usesPlatformDefaultAvatar": {
+                "const": false
+              }
             }
           },
           {
             "properties": {
-              "avatarAssetId": {"type": "string", "minLength": 1},
-              "avatarUrl": {"pattern": "^media/objects/sha256/"},
-              "avatarMediaReady": {"const": true},
-              "avatarProbeCount": {"const": 0},
-              "avatarProbe": {"type": "null"},
-              "usesPlatformDefaultAvatar": {"const": false}
+              "avatarAssetId": {
+                "type": "string",
+                "minLength": 1
+              },
+              "avatarUrl": {
+                "pattern": "^media/objects/sha256/"
+              },
+              "avatarMediaReady": {
+                "const": true
+              },
+              "avatarProbeCount": {
+                "const": 0
+              },
+              "avatarProbe": {
+                "type": "null"
+              },
+              "usesPlatformDefaultAvatar": {
+                "const": false
+              }
             }
           },
           {
             "properties": {
-              "avatarAssetId": {"type": "null"},
-              "avatarUrl": {"const": ""},
-              "avatarMediaReady": {"const": false},
-              "avatarProbeCount": {"const": 0},
-              "avatarProbe": {"type": "null"},
-              "usesPlatformDefaultAvatar": {"const": true}
+              "avatarAssetId": {
+                "type": "null"
+              },
+              "avatarUrl": {
+                "const": ""
+              },
+              "avatarMediaReady": {
+                "const": false
+              },
+              "avatarProbeCount": {
+                "const": 0
+              },
+              "avatarProbe": {
+                "type": "null"
+              },
+              "usesPlatformDefaultAvatar": {
+                "const": true
+              }
             }
           }
         ]
@@ -245,68 +500,86 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["postRef", "postId", "contentType", "authorId", "detailStatus", "feedStatus", "mediaReady", "mediaProbeCount", "mediaProbes", "sourceAttributionReady", "authorProfileStatus"],
+        "required": [
+          "postRef",
+          "postId",
+          "contentType",
+          "authorId",
+          "detailStatus",
+          "feedStatus",
+          "mediaReady",
+          "mediaProbeCount",
+          "mediaProbes",
+          "sourceAttributionReady",
+          "authorProfileStatus"
+        ],
         "properties": {
-          "postRef": {"type": "string", "minLength": 1},
-          "postId": {"type": "string", "minLength": 1},
-          "contentType": {"enum": ["article", "image", "video"]},
-          "authorId": {"type": "string", "minLength": 1},
-          "detailStatus": {"const": 200},
-          "feedStatus": {"const": 200},
-          "mediaReady": {"const": true},
-          "mediaProbeCount": {"type": "integer", "minimum": 0},
+          "postRef": {
+            "type": "string",
+            "minLength": 1
+          },
+          "postId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "contentType": {
+            "enum": [
+              "article",
+              "image",
+              "video"
+            ]
+          },
+          "authorId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "detailStatus": {
+            "const": 200
+          },
+          "feedStatus": {
+            "const": 200
+          },
+          "mediaReady": {
+            "const": true
+          },
+          "mediaProbeCount": {
+            "type": "integer",
+            "minimum": 0
+          },
           "mediaProbes": {
             "type": "array",
             "uniqueItems": true,
             "items": {
-              "anyOf": [
-                {"$ref": "#/$defs/releaseMediaProbe"},
-                {"$ref": "#/$defs/researchMediaProbe"}
-              ]
+              "$ref": "#/$defs/releaseMediaProbe"
             }
           },
-          "sourceAttributionReady": {"const": true},
-          "authorProfileStatus": {"const": 200}
+          "sourceAttributionReady": {
+            "const": true
+          },
+          "authorProfileStatus": {
+            "const": 200
+          }
         }
       }
     },
-    "issues": {"type": "array", "maxItems": 0}
+    "issues": {
+      "type": "array",
+      "maxItems": 0
+    }
   },
   "allOf": [
     {
-      "if": {
-        "properties": {"readinessPhase": {"const": "research"}},
-        "required": ["readinessPhase"]
-      },
-      "then": {
-        "required": ["internalSubjectHash"],
-        "not": {
-          "anyOf": [
-            {"required": ["guestActorHash"]},
-            {"required": ["guestLogin"]}
-          ]
-        },
-        "properties": {
-          "posts": {
-            "items": {
-              "properties": {
-                "mediaProbes": {
-                  "items": {"$ref": "#/$defs/researchMediaProbe"}
-                }
-              }
-            }
-          }
-        }
-      },
-      "else": {
-        "required": ["guestActorHash", "guestLogin"],
-        "not": {"required": ["internalSubjectHash"]},
-        "properties": {
-          "posts": {
-            "items": {
-              "properties": {
-                "mediaProbes": {
-                  "items": {"$ref": "#/$defs/releaseMediaProbe"}
+      "required": [
+        "guestActorHash",
+        "guestLogin"
+      ],
+      "properties": {
+        "posts": {
+          "items": {
+            "properties": {
+              "mediaProbes": {
+                "items": {
+                  "$ref": "#/$defs/releaseMediaProbe"
                 }
               }
             }
@@ -321,10 +594,17 @@
           "contains": {
             "type": "object",
             "properties": {
-              "name": {"const": "premium_stream"},
-              "query": {"pattern": "^sort=recommend&channelId=premium_stream&limit=[1-9][0-9]*$"}
+              "name": {
+                "const": "premium_stream"
+              },
+              "query": {
+                "pattern": "^sort=recommend&channelId=premium_stream&limit=[1-9][0-9]*$"
+              }
             },
-            "required": ["name", "query"]
+            "required": [
+              "name",
+              "query"
+            ]
           }
         }
       }
@@ -348,90 +628,108 @@
         "expectedSha256"
       ],
       "properties": {
-        "assetId": {"type": "string", "minLength": 1},
-        "kind": {"enum": ["image", "video"]},
-        "publicUrl": {"type": "string", "pattern": "^https://[^/?#]+/media/(image|video)/s/"},
-        "status": {"enum": [200, 206]},
-        "mimeType": {"type": "string", "pattern": "^(image|video)/"},
-        "bytes": {"type": "integer", "minimum": 1},
-        "sha256": {"type": "string", "pattern": "^(|sha256:[0-9a-f]{64})$"},
-        "etag": {"type": "string"},
-        "hashVerified": {"type": "boolean"},
-        "expectedBytes": {"type": "integer", "minimum": 1},
-        "expectedSha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+        "assetId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "kind": {
+          "enum": [
+            "image",
+            "video"
+          ]
+        },
+        "publicUrl": {
+          "type": "string",
+          "pattern": "^https://[^/?#]+/media/(image|video)/s/"
+        },
+        "status": {
+          "enum": [
+            200,
+            206
+          ]
+        },
+        "mimeType": {
+          "type": "string",
+          "pattern": "^(image|video)/"
+        },
+        "bytes": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^(|sha256:[0-9a-f]{64})$"
+        },
+        "etag": {
+          "type": "string"
+        },
+        "hashVerified": {
+          "type": "boolean"
+        },
+        "expectedBytes": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "expectedSha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
       },
       "allOf": [
         {
-          "if": {"properties": {"kind": {"const": "image"}}, "required": ["kind"]},
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "image"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
           "then": {
             "properties": {
-              "status": {"const": 200},
-              "mimeType": {"pattern": "^image/"},
-              "sha256": {"pattern": "^sha256:[0-9a-f]{64}$"},
-              "hashVerified": {"const": true}
+              "status": {
+                "const": 200
+              },
+              "mimeType": {
+                "pattern": "^image/"
+              },
+              "sha256": {
+                "pattern": "^sha256:[0-9a-f]{64}$"
+              },
+              "hashVerified": {
+                "const": true
+              }
             }
           }
         },
         {
-          "if": {"properties": {"kind": {"const": "video"}}, "required": ["kind"]},
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "video"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
           "then": {
             "properties": {
-              "status": {"const": 206},
-              "mimeType": {"pattern": "^video/"},
-              "hashVerified": {"const": false}
+              "status": {
+                "const": 206
+              },
+              "mimeType": {
+                "pattern": "^video/"
+              },
+              "hashVerified": {
+                "const": false
+              }
             }
           }
         }
       ]
-    },
-    "researchMediaProbe": {
-      "description": "research 私有交付资产的消费核验：匿名 GET 必须 401/403；采样资产附带一次原图短签取回校验（signedProbe）。",
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "assetId",
-        "kind",
-        "deliveryRef",
-        "anonymousStatus",
-        "expectedBytes",
-        "expectedSha256",
-        "signedProbe"
-      ],
-      "properties": {
-        "assetId": {"type": "string", "minLength": 1},
-        "kind": {"enum": ["image", "video"]},
-        "deliveryRef": {"type": "string", "pattern": "^media/objects/sha256/"},
-        "anonymousStatus": {"enum": [401, 403]},
-        "expectedBytes": {"type": "integer", "minimum": 1},
-        "expectedSha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
-        "signedProbe": {
-          "oneOf": [{"$ref": "#/$defs/signedImageProbe"}, {"type": "null"}]
-        }
-      }
-    },
-    "signedImageProbe": {
-      "description": "Research short-signed GET receipt. The request URL stays process-local; only origin/query-free target evidence may persist.",
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "targetEvidence",
-        "status",
-        "mimeType",
-        "bytes",
-        "sha256",
-        "hashVerified"
-      ],
-      "properties": {
-        "targetEvidence": {
-          "type": "string",
-          "pattern": "^hostClass=(dns|ip|missing),pathHash=sha256:[0-9a-f]{64}$"
-        },
-        "status": {"const": 200},
-        "mimeType": {"type": "string", "pattern": "^image/"},
-        "bytes": {"type": "integer", "minimum": 1},
-        "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
-        "hashVerified": {"const": true}
-      }
     },
     "fullImageProbe": {
       "type": "object",
@@ -446,13 +744,31 @@
         "hashVerified"
       ],
       "properties": {
-        "publicUrl": {"type": "string", "pattern": "^https://"},
-        "status": {"const": 200},
-        "mimeType": {"type": "string", "pattern": "^image/"},
-        "bytes": {"type": "integer", "minimum": 1},
-        "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
-        "etag": {"type": "string"},
-        "hashVerified": {"const": true}
+        "publicUrl": {
+          "type": "string",
+          "pattern": "^https://"
+        },
+        "status": {
+          "const": 200
+        },
+        "mimeType": {
+          "type": "string",
+          "pattern": "^image/"
+        },
+        "bytes": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "etag": {
+          "type": "string"
+        },
+        "hashVerified": {
+          "const": true
+        }
       }
     },
     "operationEvidence": {
@@ -469,14 +785,39 @@
         "durationMs"
       ],
       "properties": {
-        "path": {"type": "string", "pattern": "^/"},
-        "pageId": {"type": "string", "minLength": 1},
-        "status": {"type": "integer", "minimum": 100, "maximum": 599},
-        "requestId": {"type": "string", "minLength": 1},
-        "traceId": {"type": "string", "minLength": 1},
-        "startedAt": {"type": "string", "minLength": 1},
-        "endedAt": {"type": "string", "minLength": 1},
-        "durationMs": {"type": "integer", "minimum": 0}
+        "path": {
+          "type": "string",
+          "pattern": "^/"
+        },
+        "pageId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "status": {
+          "type": "integer",
+          "minimum": 100,
+          "maximum": 599
+        },
+        "requestId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "traceId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "startedAt": {
+          "type": "string",
+          "minLength": 1
+        },
+        "endedAt": {
+          "type": "string",
+          "minLength": 1
+        },
+        "durationMs": {
+          "type": "integer",
+          "minimum": 0
+        }
       }
     }
   }

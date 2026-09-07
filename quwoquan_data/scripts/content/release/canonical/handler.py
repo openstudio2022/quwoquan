@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 from pathlib import Path
 
 from content.release.canonical.object_transaction_contract import ObjectTransactionError
@@ -22,6 +23,69 @@ def handle_publish_object(args: argparse.Namespace) -> None:
     handle(args)
 
 
+_CANONICAL_COHORT_NAME = "cohort.json"
+_COHORT_CARRIER_PREFIXES = (
+    ("homepage", "entities/"),
+    ("article", "posts/article/"),
+    ("image", "posts/image/"),
+    ("video", "posts/video/"),
+)
+
+
+def _normalize_cohort(raw: dict, *, milestone: str, release_root: Path, release_id: str) -> Path:
+    """AI 只声明 objectRefs/milestone/producerBaselineRevision；排序、releaseClass、
+    expectedCarrierCounts 与 canonical 字节由这里补齐，并 create-once 写入 release 目录。"""
+
+    refs = raw.get("objectRefs")
+    if not isinstance(refs, list) or not refs:
+        raise ObjectTransactionError("DATA.RELEASE.COHORT_INVALID: objectRefs must be a non-empty list")
+    object_refs = sorted({str(ref).strip().strip("/") for ref in refs})
+    counts = {carrier: 0 for carrier, _prefix in _COHORT_CARRIER_PREFIXES}
+    for ref in object_refs:
+        carrier = next((name for name, prefix in _COHORT_CARRIER_PREFIXES if ref.startswith(prefix)), None)
+        if carrier is None:
+            raise ObjectTransactionError(f"DATA.RELEASE.COHORT_REF_INVALID: {ref}")
+        counts[carrier] += 1
+    cohort = {
+        **raw,
+        "schema": "quwoquan_data.release_cohort",
+        "releaseClass": str(raw.get("releaseClass") or "production"),
+        "milestone": str(raw.get("milestone") or milestone),
+        "objectRefs": object_refs,
+        "expectedCarrierCounts": dict(raw.get("expectedCarrierCounts") or counts),
+    }
+    data = (json.dumps(cohort, ensure_ascii=False, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8")
+    target = release_root / release_id / _CANONICAL_COHORT_NAME
+    if target.exists() and target.read_bytes() != data:
+        # payload 已封存则 cohort 不可变；build 尚未成功的 release 目录允许用修正后的 cohort 重来。
+        if (release_root / release_id / "payload" / "release.json").is_file():
+            raise ObjectTransactionError("DATA.RELEASE.COHORT_CONFLICT: canonical cohort already frozen with different bytes")
+        target.unlink()
+    if target.exists():
+        return target
+    target.parent.mkdir(parents=True, exist_ok=True)
+    temporary = target.with_name(f".{target.name}.{os.getpid()}.tmp")
+    temporary.write_bytes(data)
+    os.replace(temporary, target)
+    return target
+
+
+def handle_pool_query(args: argparse.Namespace) -> None:
+    """只读：列出 publish 池 eligible/excluded 对象；选择权仍在调用方。"""
+
+    from content.release.canonical.pool_query import query_pool
+
+    publish_root = Path(args.publish_root or PUBLISH_ROOT).resolve()
+    result = query_pool(publish_root)
+    if args.json_output:
+        target = Path(args.json_output).expanduser()
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(json.dumps(result, ensure_ascii=False, indent=1, sort_keys=True) + "\n", encoding="utf-8")
+        print(json.dumps({"schema": result["schema"], "counts": result["counts"], "excludedCount": len(result["excluded"]), "output": target.as_posix()}, ensure_ascii=False))
+        return
+    print(json.dumps(result, ensure_ascii=False, indent=1, sort_keys=True))
+
+
 def handle_release_finalize(args: argparse.Namespace) -> None:
     """pool-build → release-integrity → create-once handoff，一次完成并固定 producer END。"""
 
@@ -31,11 +95,16 @@ def handle_release_finalize(args: argparse.Namespace) -> None:
     output_root = Path(OUTPUT_ROOT).resolve()
     publish_root = Path(args.publish_root or PUBLISH_ROOT).resolve()
     release_root = Path(args.release_root or output_root / "data/releases").resolve()
-    cohort_file = Path(args.cohort_file).expanduser().resolve()
     release_id = str(args.release_id)
     try:
+        submitted = json.loads(Path(args.cohort_file).expanduser().resolve().read_bytes())
+        if not isinstance(submitted, dict):
+            raise ObjectTransactionError("DATA.RELEASE.COHORT_INVALID: cohort must be an object")
+        cohort_file = _normalize_cohort(
+            submitted, milestone=str(args.milestone), release_root=release_root, release_id=release_id
+        )
         cohort = json.loads(cohort_file.read_bytes())
-        release_class = str(cohort.get("releaseClass") or "research")
+        release_class = str(cohort["releaseClass"])
         if not (release_root / release_id / "payload/release.json").is_file():
             build_report = build_pool_release(
                 publish_root=publish_root,

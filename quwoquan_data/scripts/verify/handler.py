@@ -54,7 +54,7 @@ def _admit_carried_media_holdings() -> int:
 def handle_all() -> list[str]:
     # Closure gates resolve media through the repository-external content library.
     # A clean checkout starts with an empty library, so first admit the exact,
-    # hash-verified bodies carried beside canonical publish in version control.
+    # hash-verified bodies carried in the out-of-repo carried media root.
     if _admit_carried_media_holdings() != 0:
         raise SystemExit(1)
 

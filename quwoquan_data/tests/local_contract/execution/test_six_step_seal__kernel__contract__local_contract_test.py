@@ -82,7 +82,7 @@ def execution(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     }
     _write(unit / "assets/index.json", _canonical({"assets": [asset_row]}))
     plan_ref = "sources/plans/" + "a" * 64 + ".json"
-    _write(root / plan_ref, _canonical({"schema": "quwoquan_data.acquire_request", "sources": []}))
+    _write(root / plan_ref, _canonical({"schema": "quwoquan_data.ingest_manifest", "executionId": EXECUTION_ID, "targets": []}))
     meta = {
         "schema": "quwoquan_data.atomic_source_unit", "stage": "1.download", "executionId": EXECUTION_ID,
         "executionBinding": "frozen", "sourceUnitId": "zh_wikipedia__abc", "sourcePlanRef": plan_ref,
@@ -107,9 +107,12 @@ def execution(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     return root
 
 
-def _seal(root: Path, stage: str, actor: dict, verdict: str = "pass") -> dict:
+def _seal(root: Path, stage: str, actor: dict, verdict: str = "pass", reviews: dict | None = None) -> dict:
     seal_input = root.parent / f"{stage}.seal.json"
-    _write(seal_input, _canonical({"actor": actor, "verdict": verdict}))
+    payload: dict = {"actor": actor, "verdict": verdict}
+    if reviews is not None:
+        payload["reviews"] = reviews
+    _write(seal_input, _canonical(payload))
     return seal_module.seal_stage(execution_id=EXECUTION_ID, stage=stage, input_path=seal_input)
 
 
@@ -117,22 +120,28 @@ def test_three_seals_form_chain_and_seal_completes_review_fields(execution: Path
     acquire = _seal(execution, "1.download", AUTHOR)
     assert acquire["status"] == "created" and acquire["resultRefs"] == 1
 
-    _write(execution / TARGET_REF / "4.draft/draft.article.md", "---\ntitle: 西湖速览\ntagRefs: [Entity/地点/景区]\n---\n# 西湖速览\n\n西湖位于杭州。\n")
+    # 4.draft 允许放草稿以外的笔记；只有 carrier 产物进入 receipt。
+    _write(execution / TARGET_REF / "4.draft/notes.md", "备选开头\n")
+    _write(
+        execution / TARGET_REF / "4.draft/draft.article.md",
+        "---\ntitle: 西湖速览\ntagRefs: [Entity/地点/景区]\n---\n# 西湖速览\n\n西湖位于杭州。\n\n![西湖](assets/001_xihu.png)\n",
+    )
     author = _seal(execution, "4.draft", AUTHOR)
     assert author["receipt"] == "_shared/receipts/002-4.draft.json"
 
+    # reviewer 按 execution 提交一份判断输入；seal 扇出为逐对象文件，dimensions 与 assetRights 按正文实际引用的资产补齐。
     review = {
         "decision": "approved",
-        "dimensions": [{"name": "证据", "decision": "approved", "issues": []}],
         "blockingIssues": [],
-        "assetRights": [{"assetRef": "001_xihu.png", "decision": "approved", "issues": [], "usageScope": "research"}],
         "safety": "ok",
         "advisories": ["标题可更具体"],
+        "assetRights": [{"assetRef": "001_xihu.png", "issues": ["署名建议写全名"]}],
     }
     review_path = execution / TARGET_REF / "5.review/content_review.json"
-    _write(review_path, _canonical(review))
-    sealed = _seal(execution, "5.review", REVIEWER)
+    assert not review_path.exists()
+    sealed = _seal(execution, "5.review", REVIEWER, reviews={TARGET_REF: review})
     assert sealed["status"] == "created"
+    assert review_path.is_file()
 
     completed = json.loads(review_path.read_bytes())
     assert completed["schema"] == "quwoquan_data.content_review"
@@ -140,8 +149,13 @@ def test_three_seals_form_chain_and_seal_completes_review_fields(execution: Path
     assert completed["executionId"] == EXECUTION_ID
     assert completed["objectRef"] == TARGET_REF
     assert completed["draft"]["ref"] == "4.draft/draft.article.md"
+    assert completed["dimensions"] == [{"name": "overall", "decision": "approved", "issues": []}]
+    assert len(completed["assetRights"]) == 1
     rights = completed["assetRights"][0]
     assert rights["assetRef"] == "sources/zh_wikipedia__abc/assets/001_xihu.png"
+    assert rights["decision"] == "approved"
+    assert rights["issues"] == ["署名建议写全名"]
+    assert rights["usageScope"] == "research"
     assert rights["sourceUrl"] == "https://commons.wikimedia.org/wiki/File:Xihu.png"
     assert rights["license"] == "CC BY-SA 4.0"
     assert rights["termsUrl"].startswith("https://")
@@ -153,9 +167,9 @@ def test_three_seals_form_chain_and_seal_completes_review_fields(execution: Path
     assert approved_review["decision"] == "approved"
 
     # replay：同输入再次 seal 不报错；不同输入冲突
-    assert _seal(execution, "5.review", REVIEWER)["status"] == "replayed"
+    assert _seal(execution, "5.review", REVIEWER, reviews={TARGET_REF: review})["status"] == "replayed"
     with pytest.raises(seal_module.SealConflict):
-        _seal(execution, "5.review", {**REVIEWER, "sessionId": "another"})
+        _seal(execution, "5.review", {**REVIEWER, "sessionId": "another"}, reviews={TARGET_REF: review})
 
 
 def test_review_rejects_same_actor_as_author_and_out_of_order_seal(execution: Path) -> None:
@@ -164,14 +178,24 @@ def test_review_rejects_same_actor_as_author_and_out_of_order_seal(execution: Pa
     _seal(execution, "1.download", AUTHOR)
     _write(execution / TARGET_REF / "4.draft/draft.article.md", "# 西湖速览\n\n正文。\n")
     _seal(execution, "4.draft", AUTHOR)
-    _write(execution / TARGET_REF / "5.review/content_review.json", _canonical({
-        "decision": "approved", "dimensions": [{"name": "证据", "decision": "approved", "issues": []}],
-        "blockingIssues": [], "assetRights": [],
-    }))
+    judgement = {"decision": "approved", "blockingIssues": [], "advisories": []}
     with pytest.raises(seal_module.SealError, match="同一 host/sessionId"):
-        _seal(execution, "5.review", AUTHOR)
+        _seal(execution, "5.review", AUTHOR, reviews={TARGET_REF: judgement})
     with pytest.raises(ReceiptChainError):
         validate_publish_review_chain(execution_id=EXECUTION_ID, execution_root=execution, target_ref=TARGET_REF)
+
+
+def test_review_seal_requires_reviews_covering_exactly_the_target_set(execution: Path) -> None:
+    _seal(execution, "1.download", AUTHOR)
+    _write(execution / TARGET_REF / "4.draft/draft.article.md", "# 西湖速览\n\n正文。\n")
+    _seal(execution, "4.draft", AUTHOR)
+    judgement = {"decision": "approved", "blockingIssues": [], "advisories": []}
+    with pytest.raises(seal_module.SealError, match="需要 execution 级 reviews"):
+        _seal(execution, "5.review", REVIEWER)
+    with pytest.raises(seal_module.SealError, match="恰好覆盖"):
+        _seal(execution, "5.review", REVIEWER, reviews={"posts/article/导览/不存在/1": judgement})
+    with pytest.raises(seal_module.SealError, match="不接受 reviews"):
+        _seal(execution, "1.download", AUTHOR, reviews={TARGET_REF: judgement})
 
 
 def test_acquire_seal_rejects_asset_digest_drift(execution: Path) -> None:

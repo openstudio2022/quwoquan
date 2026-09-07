@@ -10,7 +10,7 @@ from content.release.canonical.object_transaction_contract import ObjectTransact
 from core.schema import assert_valid
 
 
-def _cohort(*, milestone: str | None = None, release_class: str = "research") -> dict[str, object]:
+def _cohort(*, milestone: str | None = None, release_class: str = "production") -> dict[str, object]:
     document: dict[str, object] = {
         "schema": "quwoquan_data.release_cohort",
         "releaseClass": release_class,
@@ -67,7 +67,7 @@ def _stub_pool_facts(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(pool, "creator_tag_refs", lambda *_args, **_kwargs: [])
 
 
-def test_partial_research_cohort_omits_milestone_and_builds_exact_explicit_set(
+def test_partial_production_cohort_omits_milestone_and_builds_exact_explicit_set(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     cohort = _cohort()
@@ -77,7 +77,7 @@ def test_partial_research_cohort_omits_milestone_and_builds_exact_explicit_set(
     prepared = pool.prepare_pool_release(
         publish_root=tmp_path / "publish",
         cohort=cohort,
-        release_class="research",
+        release_class="production",
     )
 
     assert prepared.cohort_selection.milestone is None
@@ -91,37 +91,7 @@ def test_partial_research_cohort_omits_milestone_and_builds_exact_explicit_set(
     }
 
 
-def test_commercial_post_scope_rejected_before_candidate_closure(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    cohort = _cohort(release_class="commercial")
-    calls: list[str] = []
-    monkeypatch.setattr(
-        pool,
-        "discover_explicit_cohort_candidates",
-        lambda **_kwargs: ([_article_candidate()], []),
-    )
-    monkeypatch.setattr(
-        pool,
-        "candidate_closure",
-        lambda *_args, **_kwargs: calls.append("candidate_closure"),
-    )
-
-    with pytest.raises(ObjectTransactionError, match=(
-        r"DATA\.POOL\.COMMERCIAL_RIGHTS_REQUIRED: "
-        r"posts/article/攻略/西湖/1"
-    )):
-        pool.prepare_pool_release(
-            publish_root=tmp_path / "publish",
-            cohort=cohort,
-            release_class="commercial",
-        )
-
-    assert calls == []
-    assert not (tmp_path / "publish").exists()
-
-
-def test_milestone_claim_still_requires_policy_exact_counts(
+def test_milestone_claim_fails_short_of_policy_targets(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     cohort = _cohort(milestone="M1")
@@ -132,5 +102,5 @@ def test_milestone_claim_still_requires_policy_exact_counts(
         pool.prepare_pool_release(
             publish_root=tmp_path / "publish",
             cohort=cohort,
-            release_class="research",
+            release_class="production",
         )
