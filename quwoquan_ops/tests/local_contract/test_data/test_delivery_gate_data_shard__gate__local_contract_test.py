@@ -76,12 +76,11 @@ def _run_data_phase_validation(
 
 def test_source_promotion_excludes_data_execution() -> None:
     workflow = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))
-    assert set(workflow[True]) == {"pull_request", "push"}
-    assert set(workflow["jobs"]) == {
-        "promotion_verify",
-        "main_source_seal",
-        "system_backsync",
-    }
+    # pull_request_review 只用于审批后重新评估 promotion admission，同样不执行任何 data 分片。
+    assert set(workflow[True]) == {"pull_request", "pull_request_review", "push"}
+    # system backsync 已移出本 workflow（reusable system-backsync.yml 无 caller，见
+    # daily-merge-release-strategy OPEN-004），promotion 只剩验真与封印两个 job。
+    assert set(workflow["jobs"]) == {"promotion_verify", "main_source_seal"}
     source = WORKFLOW.read_text(encoding="utf-8")
     for token in (
         "quwoquan_data",
