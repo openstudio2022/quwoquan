@@ -25,7 +25,8 @@ from lib.agent_governance_contract import (  # noqa: E402
     contract_schema_version, validate_candidate_evidence_manifest,
 )
 from lib.candidate_evidence import (  # noqa: E402
-    CandidateEvidenceError, build_candidate_evidence, validate_candidate_ref,
+    CandidateEvidenceError, _delivery_identity, build_candidate_evidence,
+    validate_candidate_ref,
 )
 from lib.evidence_fingerprint import canonical_json_bytes  # noqa: E402
 from lib.feature_tree.commands import _context_manifest  # noqa: E402
@@ -125,8 +126,12 @@ def test_cross_owner_candidate_is_one_atomic_review_identity() -> None:
         expected_changed_paths=CHANGED,
     )
     assert candidate["schema_version"] == 2
-    assert candidate["delivery_owner"] == "lane/engineering"
-    assert candidate["lead_lane"] == "lane/engineering"
+    # 最小 v2 中 delivery owner 与 lead lane 同为 current logical lane；hosted
+    # PR job 与本地 lane worktree 都可能是六条 lane 中任一条，断言不得钉死某条 lane。
+    current_lane, current_lead, _ = _delivery_identity(repo_root=ROOT)
+    assert current_lane.startswith("lane/") and current_lane == current_lead
+    assert candidate["delivery_owner"] == current_lane
+    assert candidate["lead_lane"] == current_lane
     assert "changed_paths" not in candidate
     assert "owner_chain" not in candidate
     groups = candidate["impacted_owner_groups"]
@@ -160,8 +165,8 @@ def test_cross_owner_candidate_is_one_atomic_review_identity() -> None:
     )
     identity = plan["candidate_evidence_identity"]
     assert identity["schema_version"] == 2
-    assert identity["delivery_owner"] == "lane/engineering"
-    assert identity["lead_lane"] == "lane/engineering"
+    assert identity["delivery_owner"] == current_lane
+    assert identity["lead_lane"] == current_lane
     assert identity["impacted_owner_groups_digest"].startswith("sha256:")
     assert identity["changed_paths_digest"].startswith("sha256:")
     assert review_dispatch.validate_current_review_plan(
