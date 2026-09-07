@@ -165,6 +165,13 @@ def test_cli_discovers_local_history_by_default(tmp_path: Path, monkeypatch: pyt
     assert [json.loads(path.read_text(encoding="utf-8"))["headSha"] for path in discovered] == [first_head]
     assert report_code_health_weekly.discover_local_previous(tmp_path / "missing", current_head=second_head) == []
 
+    # 损坏的本地上期报告不能被静默当作「缺席」：那会让棘轮方向在残缺基线上算出 comparable。
+    (weekly_root / "corrupt").mkdir()
+    (weekly_root / "corrupt" / "report.json").write_text("{not json", encoding="utf-8")
+    with pytest.raises(ValueError, match="local weekly report 无法读取"):
+        report_code_health_weekly.discover_local_previous(weekly_root, current_head=second_head)
+    assert report_code_health_weekly.main(["--head", second_head, "--policy", str(policy_path(repo)), "--cloc", str(cloc)]) != 0
+
 
 def test_weekly_markdown_and_cli_write_summary(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
     repo, _base = init_repo(tmp_path)

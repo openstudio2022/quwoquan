@@ -110,7 +110,7 @@
 - AND `lane_gate_summary` 以 `always()` 汇总且对全部三个 job 只接受 `success`；任一 job 失败、`code-health-delta` 返回 `GATE_BLOCK`、或分片为空时该 check 失败，PR 不可合入。GWT-004 的 push 后复算是 report-only 事实，不替代本 check。
 - AND 该 check 名称与 `branch_policy.yaml#required_integration_checks` 唯一声明一致，与 `required_promotion_checks` 不共享 workflow 或名字；job 间不通过 Actions artifact 交换结果，digest 在需要处就地重算。
 - AND workflow 对仓内 Python CLI 的每次直接调用都必须覆盖该脚本全部常量 required 选项（含 `for x in <字符串常量元组>` 内 f-string 声明的成组 required，静态展开后比对）；`verify_workflow_cli_arguments.py` 在 L0 只对本次 staged 的 workflow 判定、在 `gate_repo.sh` 全量判定，漏传即 `GATE_BLOCK`。任一 step 在自身 `run`/`env`/`with` 中引用 `steps.<自身 id>.outputs` 由 `verify_github_supply_chain.py` 静态阻断（表达式在 step 开始前求值，恒为空串）。
-- AND 仓内 `required_integration_checks` 声明不能自证 hosted 强制：governance job 以只读 `github.token` 运行 `verify_hosted_integration_ruleset.py`，从 `repos/{r}/rulesets` 读回唯一适用于 `refs/heads/dev1.0` 的 active ruleset，要求其 `required_status_checks` 恰为 `04. Lane Gate`（GitHub Actions producer）、`strict_required_status_checks_policy=true`、`do_not_enforce_on_create=false`、含 `deletion` 与 `non_fast_forward`、`bypass_actors` 可见时为空、且**没有** `pull_request` 规则（该规则会封死 `daily-merge-release-strategy` 定义的 integration fast-forward 通道）；任一不满足即 `GATE_BLOCK`，本 check 转红。GitHub 只向对 ruleset 有 write 权限的调用者返回 `bypass_actors`，只读 `github.token` 读不到该字段：不可见不视为已证明为空，readback 只在字段可见且非空时阻断，并在收据以 `ruleset.bypassActorsObservable` 如实标记；bypass 为空的证明由 admin 侧读回承担，不得据此给 governance job 提权。readback 收据 schema 为 `hosted-integration-ruleset-receipt`（字段 `branch`、`requiredIntegrationChecksEnforced`、`ruleset.requiredChecks`、`ruleset.mergeExecutor=integration_fast_forward_push`、`ruleset.bypassActorsObservable`、`evidenceDigest`），只作证据不签发任何 release authority。由此 hosted 侧只允许已带本 check SUCCESS 的 lane head 快进进入 `dev1.0`，integration 通道的 admission 与本 check 是叠加而非替代。
+- AND 仓内 `required_integration_checks` 声明不能自证 hosted 强制：governance job 以只读 `github.token` 运行 `verify_hosted_integration_ruleset.py`，从 `repos/{r}/rulesets`（`per_page=100`）读回按 GitHub ref_name 语义（`~ALL`、`~DEFAULT_BRANCH`、fnmatch，exclude 优先）唯一对 `refs/heads/dev1.0` 生效的 active branch ruleset——字面 include 比对会漏掉第二条以通配命中并带 `pull_request` 规则的 ruleset；要求其 `required_status_checks` 恰为 `04. Lane Gate`（GitHub Actions producer）、`strict_required_status_checks_policy=true`、`do_not_enforce_on_create=false`、含 `deletion` 与 `non_fast_forward`、`bypass_actors` 可见时为空、且**没有** `pull_request` 规则（该规则会封死 `daily-merge-release-strategy` 定义的 integration fast-forward 通道）；任一不满足即 `GATE_BLOCK`，本 check 转红，且每条阻断的 detail 文本唯一指向该失败形状。GitHub 只向对 ruleset 有 write 权限的调用者返回 `bypass_actors`，只读 `github.token` 读不到该字段：不可见不视为已证明为空，readback 只在字段可见且非空时阻断，并在收据以 `ruleset.bypassActorsObservable` 如实标记、同时打印到 stdout；bypass 为空的证明由 admin 侧以 `--require-bypass-observable`（不可见即阻断）读回承担，不得据此给 governance job 提权。readback 收据 schema 为 `hosted-integration-ruleset-receipt`（字段 `branch`、`requiredIntegrationChecksEnforced`、`ruleset.requiredChecks`、`ruleset.mergeExecutor=integration_fast_forward_push`、`ruleset.bypassActorsObservable`、`evidenceDigest`），其中 `requiredIntegrationChecksEnforced` 只证明 required_status_checks 规则形状、不含 bypass 证明；收据只作证据不签发任何 release authority。由此 hosted 侧只允许已带本 check SUCCESS 的 lane head 快进进入 `dev1.0`，integration 通道的 admission 与本 check 是叠加而非替代。
 
 ## 6. 依赖
 
@@ -170,3 +170,23 @@
 - 影响或价值：`verify_gate_local_contract_execution.py` 在 `gate_repo.sh` 全量（不传变更区间）时以 `origin/main` 为基线判定「改动过的门禁脚本必须有被 gate 链执行的 companion」。`main` 长期落后 `dev1.0`，于是 `dev1.0` 与本 lane 上同样有 13 个 unproven gate 尚未闭合：`quwoquan_data/scripts/verify/` 下 11 个 verify 脚本没有任何同名 companion；`quwoquan_ops/gate/verify_stackctl_args_contract.py` 挂在 `gate_repo.sh` 上但没有 companion；`quwoquan_ops/gate/verify_app_cloud_closure.py` 有 59 例 companion 却在全仓没有任何调用方（死门禁）。该判据不进入 `04. Lane Gate`、L0 或 L1 readiness，因此不阻断 lane→`dev1.0`，但让开发机 `gate_repo.sh` 全量持续红，掩盖真正新增的自证缺口。
 - 完成判定：`GWT-002` 下 `gate_repo.sh` 全量对当前 `main` 基线的 `verify_gate_local_contract_execution.py` 退出 0：Data lane 为 11 个 verify 脚本补 companion 或把它们从 gate 链下线；`verify_stackctl_args_contract.py` 获得 companion 并进入 `test-gate-companion-local-contract`；`verify_app_cloud_closure.py` 要么接入 gate 链要么连同 companion 一并删除，不保留无 caller 的门禁。
 - 依赖：Data lane 对 `quwoquan_data/scripts/verify/**` companion 的产出；`main` 经 promotion 前移后基线自然收窄。
+
+<a id="open-006"></a>
+### OPEN-006 L0 选择器 `commit_gate_select.classify` / `static_checks` 复杂度热点收敛
+
+- 类型：`capability_gap`
+- 优先级：`P2`
+- 准出影响：`track`
+- 影响或价值：lane→`dev1.0` 增量 `22786e264..1f4e09aa2` 的 candidate Code Health（hosted `04. Lane Gate` 与 dev1.0 push 后 `10. Code Health Integration Recompute` 一致）把 `quwoquan_ops/gate/commit_gate_select.py` 的 `classify`（cyclomatic 37 / cognitive 68，基线 34 / 63）与 `static_checks`（24 / 27，基线 23 / 26）标为 `CODE_HEALTH.COMPLEXITY_ADVISORY`。两者在 dev1.0 基线已越过 15/20 阈值，本增量只为 `workflow_actionlint` 与 checker 自触发各加一两条分支；calibration 阶段 `PR_WARN` 不阻断，但 L0 选择器是每次提交都走的路径，分支继续堆积会让「哪些 staged 改动触发哪些检查」不可审计。同一增量新增的 `_verify_ruleset`、`_step_self_output_reference_failures`、`_constant_loop_required` 三处热点已在 candidate 内以纯函数抽取修复，不在本 OPEN。尚缺的实现：把 path→flag 分类与 flag→静态检查两张表数据化并让两个函数回到阈值内；尚缺的验收证据：一份对该收敛后 head 的 fresh clean-range Code Health report，其中这两个 symbol 不再出现在 `CODE_HEALTH.COMPLEXITY_ADVISORY`。
+- 完成判定：`GWT-001`/`GWT-002` 对应行为与 `test_commit_gate_select` 合同继续满足；在独立 owner increment 中把 path→flag 分类与 flag→静态检查两张表数据化，fresh clean-range Code Health 不再为这两个 symbol 产生复杂度 advisory，且不得新增 allowlist、baseline 或改变 fail-closed terminal。
+- 依赖：current Code Health named evidence；[`OPEN-002`](#open-002) 的同类收敛先例。
+
+<a id="open-007"></a>
+### OPEN-007 三处基线已存在的「失败折成空值」路径
+
+- 类型：`capability_gap`
+- 优先级：`P2`
+- 准出影响：`track`
+- 影响或价值：落地后独立评审在 dev1.0 基线里指出三处把外部失败折成空集合而无 typed 留痕的路径，均在本增量相邻但未改动：`.github/workflows/code-health-weekly.yml` 拉取 workflow runs 失败时 `|| echo '[]'`（weekly 报告会把 API 失败当作「无运行」）；`quwoquan_ops/gate/commit_gate_select.py` 的 `git diff --cached` 非零退出返回 `[]`（L0 会把 git 失败当作「无 staged 改动」而空跑）；`quwoquan_ops/gate/verify_workflow_cli_arguments.py` 的 `_run_blocks` 对 `yaml.YAMLError` 返回 `[]`（workflow 解析失败时该门禁对该文件零判定；解析期失效本身由 `verify_workflow_actionlint.sh` 拦截，故为可见性缺口而非漏放）。同一增量新增的 `report_code_health_weekly.discover_local_previous` 同形态问题已在 candidate 内修复为与 `_load_previous` 同轨抛错。
+- 完成判定：三处改为 typed 失败（非零退出或显式 `skipped`/`failed` 字段）并各补一条让其变红的负例：`GWT-002` 下 L0 对 `git diff --cached` 失败返回 typed 失败而非空跑（`test_commit_gate_select` 锁定）；`GWT-005` 下 `verify_workflow_cli_arguments.py` 对 YAML 解析失败给出 typed 判定而非零判定；weekly 报告在 runs 拉取失败时标注 `deliveryRunsStatus=unavailable` 而非空样本（`GWT-004.t3` 的 report-only 语义保持）。
+- 依赖：无外部依赖；按最低 owner 拆入各自 focused contract。

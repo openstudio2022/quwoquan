@@ -32,13 +32,17 @@ def _load_previous(paths: list[Path]) -> list[dict]:
 
 
 def discover_local_previous(weekly_root: Path, *, current_head: str, limit: int = LOCAL_HISTORY_LIMIT) -> list[Path]:
-    """本地既有 weekly report（不同 head，按 window end 倒序），让本地运行也能给出棘轮方向。"""
+    """本地既有 weekly report（不同 head，按 window end 倒序），让本地运行也能给出棘轮方向。
+
+    只有 schema 不符或同 head 才算「不是上期」；不可读或损坏的报告与 `_load_previous` 同轨抛错，
+    否则棘轮方向会在残缺基线上计算却仍标为 comparable。
+    """
     candidates: list[tuple[str, Path]] = []
     for path in sorted(weekly_root.glob("*/report.json")):
         try:
             report = json.loads(path.read_text(encoding="utf-8"))
-        except (OSError, UnicodeError, json.JSONDecodeError):
-            continue
+        except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+            raise ValueError(f"local weekly report 无法读取 {path}: {exc}") from exc
         if not isinstance(report, dict) or report.get("schema") != WEEKLY_SCHEMA or report.get("headSha") == current_head:
             continue
         candidates.append((str(report["window"]["end"]), path))

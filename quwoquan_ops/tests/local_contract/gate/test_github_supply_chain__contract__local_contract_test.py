@@ -540,7 +540,9 @@ class StepSelfOutputReferenceContractTest(unittest.TestCase):
 
         self.assertEqual(failures, [])
 
-    def test_steps_referencing_each_other_outputs_are_legal(self) -> None:
+    def test_cross_step_forward_reference_is_outside_self_reference_scope(self) -> None:
+        """first 前向引用 second 的 outputs 在运行期同样是空串，但那不是「自引用」；本检查只
+        拦同一 step 内引用自身 outputs 的形态，跨 step 前向引用不在其范围。"""
         failures = self._failures(
             "      - id: first\n"
             "        env:\n"
@@ -550,6 +552,16 @@ class StepSelfOutputReferenceContractTest(unittest.TestCase):
             "        env:\n"
             "          PEER: ${{ steps.first.outputs.value }}\n"
             "        run: echo \"value=2\" >> \"$GITHUB_OUTPUT\"\n"
+        )
+
+        self.assertEqual(failures, [])
+
+    def test_comment_mentioning_own_outputs_is_not_an_executable_reference(self) -> None:
+        failures = self._failures(
+            "      - id: admission\n"
+            "        run: |\n"
+            "          # 不要在本 step 内读 ${{ steps.admission.outputs.path }}，它此时恒为空串\n"
+            "          echo \"path=x\" >> \"$GITHUB_OUTPUT\"\n"
         )
 
         self.assertEqual(failures, [])
