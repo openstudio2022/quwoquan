@@ -190,3 +190,14 @@
 - 影响或价值：落地后独立评审在 dev1.0 基线里指出三处把外部失败折成空集合而无 typed 留痕的路径，均在本增量相邻但未改动：`.github/workflows/code-health-weekly.yml` 拉取 workflow runs 失败时 `|| echo '[]'`（weekly 报告会把 API 失败当作「无运行」）；`quwoquan_ops/gate/commit_gate_select.py` 的 `git diff --cached` 非零退出返回 `[]`（L0 会把 git 失败当作「无 staged 改动」而空跑）；`quwoquan_ops/gate/verify_workflow_cli_arguments.py` 的 `_run_blocks` 对 `yaml.YAMLError` 返回 `[]`（workflow 解析失败时该门禁对该文件零判定；解析期失效本身由 `verify_workflow_actionlint.sh` 拦截，故为可见性缺口而非漏放）。同一增量新增的 `report_code_health_weekly.discover_local_previous` 同形态问题已在 candidate 内修复为与 `_load_previous` 同轨抛错。
 - 完成判定：三处改为 typed 失败（非零退出或显式 `skipped`/`failed` 字段）并各补一条让其变红的负例：`GWT-002` 下 L0 对 `git diff --cached` 失败返回 typed 失败而非空跑（`test_commit_gate_select` 锁定）；`GWT-005` 下 `verify_workflow_cli_arguments.py` 对 YAML 解析失败给出 typed 判定而非零判定；weekly 报告在 runs 拉取失败时标注 `deliveryRunsStatus=unavailable` 而非空样本（`GWT-004.t3` 的 report-only 语义保持）。
 - 依赖：无外部依赖；按最低 owner 拆入各自 focused contract。
+
+<a id="open-008"></a>
+### OPEN-008 scope readiness 的 `app-package-smoke` 以裸 SDK 构建，按 App trust gate 设计必然 fail-closed
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：`local_readiness_planner.py` 在 R4 影响面下把 `scope_build:app-package-smoke` 声明为 immutable capsule 内的裸 `flutter build apk --debug --no-pub`；而 [`environment-topology-and-packaging` REQ-003](../../runtime-config/environment-topology-and-packaging/spec.md#req-003) 已规定绕过 canonical dispatcher 的 raw SDK 构建在无 canonical handoff 时必须以 `APP.LAUNCH.runtime_config_trust_missing` fail-closed（`QWQ_ANDROID_RUNTIME_CONFIG_ASSET_ROOT` 只由 `run.sh`/managed launcher 物化）。两份规格叠加的结果是：任何触及 `.github/workflows/**` 的 lane 增量都无法签发 scope 级 `sourceReadiness`，即使其余 13 项检查全绿——lane→`dev1.0` 增量 `1f4e09aa2..` 的 scope receipt 正是这样 FAIL 的，其首个 typed blocker 就是该 trust gate。这不是 App 的缺陷（gate 按设计工作），而是 planner 的 check 定义没有跟上 App 的启动 ownership 三层模型。
+- 尚缺的实现：把 `app-package-smoke` 改为经 canonical 入口（managed launcher 的 compile-only 面，或 `stackctl` 打包面）在 capsule 内物化 nonprod trust envelope 后构建；或把它从 scope_build 移出并由 `04. Lane Gate` 的 hosted App job（已物化 nonprod trust）唯一承担，planner 不再声明一项本机注定失败的检查。尚缺的验收证据：一份对含 workflow 变更的 lane candidate 的 scope receipt，其 `sourceReadiness` 不再因该 check 而 `not_ready`。
+- 完成判定：`GWT-002` 下 scope receipt 的 `app-package-smoke` 要么真实通过要么不再被声明，`sourceReadiness` 对不触及 App 源码的 workflow/ops 增量能达到 `scope_green`；`GWT-001` 的精确内容变化仍使回执失效；App 侧 `environment-topology-and-packaging#gwt-002` 的三层 ownership 不因此放宽，不得以环境变量注入或 allowlist 绕过 trust gate。
+- 依赖：`environment-topology-and-packaging` 对 compile-only canonical 入口的定义；`quwoquan_ops/policies/local_readiness_contract.yaml` 的 scope_build 声明。
