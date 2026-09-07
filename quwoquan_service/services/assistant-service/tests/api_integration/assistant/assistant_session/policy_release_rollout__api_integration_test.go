@@ -291,6 +291,9 @@ func TestAssistantRunFreezesRealPolicySelectionAcrossActivationAndRollback(
 	if err != nil {
 		t.Fatalf("activate candidate: %v", err)
 	}
+	// 同一 session 只允许一个 active run：每个 turn 终态化后才创建下一 turn，
+	// 冻结的 policy 选择仍要在终态 run 上可回读。
+	cancelPolicyRun(t, commands, "policy-freeze-user", firstTurn.RunID, "policy-freeze-baseline-cancel")
 	secondTurn := createPolicyRun(
 		t,
 		commands,
@@ -313,6 +316,7 @@ func TestAssistantRunFreezesRealPolicySelectionAcrossActivationAndRollback(
 	if err != nil {
 		t.Fatalf("rollback candidate: %v", err)
 	}
+	cancelPolicyRun(t, commands, "policy-freeze-user", secondTurn.RunID, "policy-freeze-candidate-cancel")
 	thirdTurn := createPolicyRun(
 		t,
 		commands,
@@ -400,6 +404,19 @@ func createPolicyRun(
 		t.Fatalf("create policy run: %v", err)
 	}
 	return run
+}
+
+func cancelPolicyRun(
+	t *testing.T,
+	commands *runruntime.CommandService,
+	userID string,
+	runID string,
+	commandID string,
+) {
+	t.Helper()
+	if _, err := commands.Cancel(context.Background(), userID, runID, commandID); err != nil {
+		t.Fatalf("cancel policy run %s: %v", runID, err)
+	}
 }
 
 func assertSelectedPolicyDigest(

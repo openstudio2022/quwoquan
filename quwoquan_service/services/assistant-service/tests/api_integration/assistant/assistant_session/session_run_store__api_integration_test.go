@@ -335,6 +335,32 @@ func assistantAPIInjectedRunCommand(
 	return recorder
 }
 
+// cancelActiveRunForNextStart 把同一 session 里仍 active 的 run 经 canonical cancel 推到终态。
+// 一个 session 只允许一个 active run（ASSISTANT.USER.run_active_conflict），需要在同一
+// session 上连续 Start 的用例必须先让前一个 run 终态化，而不是绕过该不变量。
+func cancelActiveRunForNextStart(
+	t *testing.T,
+	handler http.Handler,
+	runID string,
+	userID string,
+	commandID string,
+) {
+	t.Helper()
+	cancelled := assistantAPIInjectedRunCommand(
+		t, handler, "/assistant/runs/"+runID+"/cancel", userID, commandID,
+	)
+	if cancelled.Code != http.StatusOK {
+		t.Fatalf("cancel active run %s status=%d body=%s", runID, cancelled.Code, cancelled.Body.String())
+	}
+	var envelope assistantRunEnvelope
+	if err := json.Unmarshal(cancelled.Body.Bytes(), &envelope); err != nil {
+		t.Fatalf("decode cancelled run %s: %v", runID, err)
+	}
+	if envelope.Status != "cancelled" {
+		t.Fatalf("run %s must be terminal before the next start in the same session, got %s", runID, envelope.Status)
+	}
+}
+
 type assistantRunEnvelope struct {
 	RunID            string                                 `json:"runId"`
 	SessionID        string                                 `json:"sessionId"`
@@ -1500,6 +1526,13 @@ func TestSkillConsentRevokeImmediateEnforcement(t *testing.T) {
 	})
 	if err != nil || granted.RunID == "" {
 		t.Fatalf("granted sensitive run start: run=%#v err=%v", granted, err)
+	}
+	// 同一 session 只允许一个 active run；先把已授权的 run 终态化，
+	// 撤销后的第二次 Start 才会走到 consent 门而不是 active-winner 冲突。
+	if _, err := integrationRunCommands.Cancel(
+		ctx, "enforce-user", granted.RunID, "consent-gate-run-cancel",
+	); err != nil {
+		t.Fatalf("cancel granted run before consent revoke: %v", err)
 	}
 
 	if _, err := commands.Revoke(

@@ -285,6 +285,8 @@ func TestAssistantPreferencePersistenceRunSnapshotAndRestore(t *testing.T) {
 	if len(activeView.Items) != 0 {
 		t.Fatalf("revoked preference leaked into active list: %#v", activeView.Items)
 	}
+	// 同一 session 只允许一个 active run：先把首个 run 取消到终态，再验证撤销后的新 run 快照。
+	cancelActiveRunForNextStart(t, handler, startRunID, "preference-owner", "preference-run-cancel-1")
 	revokedRun := assistantAPIRequest(
 		t,
 		handler,
@@ -352,6 +354,7 @@ func TestAssistantPreferencePersistenceRunSnapshotAndRestore(t *testing.T) {
 		activeView.Items[0].PreferenceID != preference.PreferenceID {
 		t.Fatalf("restored preference did not survive restart: %#v", activeView.Items)
 	}
+	cancelActiveRunForNextStart(t, restarted, revokedRunID, "preference-owner", "preference-run-cancel-2")
 	restoredRun := assistantAPIRequest(
 		t,
 		restarted,

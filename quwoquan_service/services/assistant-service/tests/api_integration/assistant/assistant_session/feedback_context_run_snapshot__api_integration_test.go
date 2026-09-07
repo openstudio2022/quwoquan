@@ -265,6 +265,10 @@ func TestFeedbackContextFreezesCanonicalProjectionAndConsentIntoAssistantRun(
 	); err != nil {
 		t.Fatalf("revoke feedback context consent: %v", err)
 	}
+	// 同一 target session 只允许一个 active run：前一个 run 终态化后才 Start 下一个。
+	if _, err := commands.Cancel(ctx, accountID, personalRun.RunID, "feedback-context-personal-cancel"); err != nil {
+		t.Fatalf("cancel personal run before revoked start: %v", err)
+	}
 	revokedRun, err := commands.Start(
 		ctx,
 		feedbackContextStartCommand(
@@ -299,6 +303,9 @@ func TestFeedbackContextFreezesCanonicalProjectionAndConsentIntoAssistantRun(
 		[]string{feedbackContextConsentScope},
 	); err != nil {
 		t.Fatalf("regrant feedback context consent: %v", err)
+	}
+	if _, err := commands.Cancel(ctx, accountID, revokedRun.RunID, "feedback-context-revoked-cancel"); err != nil {
+		t.Fatalf("cancel revoked run before shared-surface start: %v", err)
 	}
 	sharedRun, err := commands.Start(
 		ctx,
