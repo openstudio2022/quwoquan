@@ -116,26 +116,24 @@ def _github_fnmatch_regex(pattern: str) -> "re.Pattern[str]":
     等价于 `*`；`[...]` 字符集按字面（GitHub 不支持 `[^...]` 取补与反斜杠转义）。用 Python
     `fnmatch` 会把 `refs/heads/**/*`（GitHub 文档的「全部分支」惯用写法）判为不命中 `refs/heads/dev1.0`。
     """
-    parts: list[str] = []
-    index = 0
-    while index < len(pattern):
-        if pattern.startswith("**/", index):
-            parts.append("(?:[^/]+/)*")
-            index += 3
-        elif pattern[index] == "*":
-            while index < len(pattern) and pattern[index] == "*":
-                index += 1
-            parts.append("[^/]*")
-        elif pattern[index] == "?":
-            parts.append("[^/]")
-            index += 1
-        elif pattern[index] == "[" and (closing := pattern.find("]", index + 1)) > index + 1:
-            parts.append("[" + pattern[index + 1:closing].replace("\\", "\\\\").replace("^", "\\^") + "]")
-            index = closing + 1
-        else:
-            parts.append(re.escape(pattern[index]))
-            index += 1
-    return re.compile("^" + "".join(parts) + "$")
+    return re.compile("^" + _FNMATCH_TOKEN.sub(_translate_fnmatch_token, pattern) + "$")
+
+
+# 分词顺序即优先级：`**/` → 连续 `*` → `?` → 非空字符集 → 任意单字符。
+_FNMATCH_TOKEN = re.compile(r"\*\*/|\*+|\?|\[[^\]]+\]|.", re.DOTALL)
+
+
+def _translate_fnmatch_token(match: "re.Match[str]") -> str:
+    token = match.group(0)
+    if token == "**/":
+        return "(?:[^/]+/)*"
+    if token.startswith("*"):
+        return "[^/]*"
+    if token == "?":
+        return "[^/]"
+    if token.startswith("[") and token.endswith("]") and len(token) > 2:
+        return "[" + token[1:-1].replace("\\", "\\\\").replace("^", "\\^") + "]"
+    return re.escape(token)
 
 
 def _ref_pattern_matches(pattern: object, *, ref: str, default_branch_ref: str) -> bool:
