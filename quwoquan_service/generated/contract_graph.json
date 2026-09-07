@@ -104501,7 +104501,7 @@
           },
           {
             "path": "quwoquan_service/services/assistant-service/tests/api_integration/assistant/assistant_session/assistant_preference_run_snapshot__api_integration_test.go",
-            "sha256": "8a6c1349c987e430f1ef841465e90cd159d7772c2a0f6474c1ce1dba6026971b"
+            "sha256": "b72ffe4c4e071df8311c909934cc2df1eda6afc94f9f4cb6e83f0280f4f4fba2"
           },
           {
             "path": "quwoquan_service/services/assistant-service/tests/api_integration/assistant/assistant_session/assistant_run_single_truth__api_integration_test.go",
@@ -104517,7 +104517,7 @@
           },
           {
             "path": "quwoquan_service/services/assistant-service/tests/api_integration/assistant/assistant_session/feedback_context_run_snapshot__api_integration_test.go",
-            "sha256": "a07300682e597d7417e3e631a8c8f2daf59023d068db3ace3a95c0fcce13e29a"
+            "sha256": "6664cbee267eed8f6e4094d27f79cdd534d56228c0fb4d014dac5713cef7e4dc"
           },
           {
             "path": "quwoquan_service/services/assistant-service/tests/api_integration/assistant/assistant_session/learning_facts__data_consistency__api_integration_test.go",
@@ -104533,7 +104533,7 @@
           },
           {
             "path": "quwoquan_service/services/assistant-service/tests/api_integration/assistant/assistant_session/policy_release_rollout__api_integration_test.go",
-            "sha256": "d71f9b29f6be99660aa64476f0e7eda290e314fcf8c893ac1b1f1dd15f9e9640"
+            "sha256": "fdb7945958edb1a1dbbaec484bbb843162ba25c76b1151b0d3953d8d2f618a88"
           },
           {
             "path": "quwoquan_service/services/assistant-service/tests/api_integration/assistant/assistant_session/public_web_persistence__api_integration_test.go",
@@ -104545,7 +104545,7 @@
           },
           {
             "path": "quwoquan_service/services/assistant-service/tests/api_integration/assistant/assistant_session/session_run_store__api_integration_test.go",
-            "sha256": "eab18273f8b3f5c756abde41aaf0ce4a60671a4774d018c260969e2415169c33"
+            "sha256": "891eb3d37040f67899c714418442015c6a870aeccab2658165310509b5f54947"
           },
           {
             "path": "quwoquan_service/services/assistant-service/tests/api_integration/assistant/assistant_session/skill_package_test_support__api_integration_test.go",
