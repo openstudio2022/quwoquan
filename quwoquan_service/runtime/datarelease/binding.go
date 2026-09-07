@@ -48,7 +48,20 @@ const (
 
 	ReleaseClassResearch   ReleaseClass = "research"
 	ReleaseClassCommercial ReleaseClass = "commercial"
+	// ReleaseClassProduction 是 Data producer 单一 production 类别（DEC-041）；
+	// research/commercial 为历史 release 的封存取值，下游按 OPEN-024 退役。
+	ReleaseClassProduction ReleaseClass = "production"
 )
+
+// IsKnownReleaseClass 是四域 importer 与 release-control 共用的 releaseClass 闭集。
+func IsKnownReleaseClass(class ReleaseClass) bool {
+	switch class {
+	case ReleaseClassResearch, ReleaseClassCommercial, ReleaseClassProduction:
+		return true
+	default:
+		return false
+	}
+}
 
 // Header is the identity-bearing subset of payload/release.json. Other header
 // fields remain owned by the producer schema and are deliberately not copied
@@ -475,7 +488,7 @@ func validateHeaderFields(header Header) error {
 	if header.ReleaseKind != ReleaseKindContent && header.ReleaseKind != ReleaseKindEmptyBaseline {
 		return invalidEnum(HeaderPath, "releaseKind", string(header.ReleaseKind))
 	}
-	if header.ReleaseClass != ReleaseClassResearch && header.ReleaseClass != ReleaseClassCommercial {
+	if !IsKnownReleaseClass(header.ReleaseClass) {
 		return invalidEnum(HeaderPath, "releaseClass", string(header.ReleaseClass))
 	}
 	return nil
@@ -488,7 +501,7 @@ func validateAttestationFields(attestation Attestation) error {
 	if attestation.ReleaseKind != ReleaseKindContent && attestation.ReleaseKind != ReleaseKindEmptyBaseline {
 		return invalidEnum(AttestationPath, "releaseKind", string(attestation.ReleaseKind))
 	}
-	if attestation.ReleaseClass != ReleaseClassResearch && attestation.ReleaseClass != ReleaseClassCommercial {
+	if !IsKnownReleaseClass(attestation.ReleaseClass) {
 		return invalidEnum(AttestationPath, "releaseClass", string(attestation.ReleaseClass))
 	}
 	if !canonicalDigestPattern.MatchString(string(attestation.PayloadSHA256)) {

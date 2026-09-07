@@ -10,6 +10,8 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	postports "quwoquan_service/services/content-service/internal/content/post/domain/ports"
 )
 
 var canonicalManifestDigestPattern = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
@@ -131,7 +133,7 @@ func ValidateActiveReleaseFence(
 		strings.TrimSpace(fence.SourceOwner) != sourceOwner ||
 		strings.TrimSpace(fence.ReleaseID) == "" ||
 		!canonicalManifestDigestPattern.MatchString(strings.TrimSpace(fence.ManifestDigest)) ||
-		(releaseClass != "research" && releaseClass != "commercial") ||
+		!postports.IsKnownReleaseClass(releaseClass) ||
 		fence.Revision <= 0 || fence.ProjectionVersion <= 0 ||
 		fence.ActivatedAt.IsZero() {
 		return &ActiveReleaseFenceError{Reason: "found fence identity is incomplete or drifted"}

@@ -37,6 +37,13 @@ func TestActiveSupplySnapshotRequiresReleaseBoundPlayableReadback(t *testing.T) 
 	if !research.IsResearchRelease() {
 		t.Fatalf("research releaseClass must be authoritative: %+v", research)
 	}
+	// DEC-041：production 是 Data producer 单一现役类别，读面必须把它当作
+	// release-bound 且非 research，否则首页/视频书对 production release 永远空页。
+	production := ready
+	production.ReleaseClass = "production"
+	if !production.Ready() || !production.ReleaseBoundReadbackReady() || production.IsResearchRelease() {
+		t.Fatalf("production snapshot must be release-bound, ready and non-research: %+v", production)
+	}
 	if !(postports.ActiveSupplySnapshot{}).IsEmpty() {
 		t.Fatal("zero snapshot must be the sole no-active-release sentinel")
 	}

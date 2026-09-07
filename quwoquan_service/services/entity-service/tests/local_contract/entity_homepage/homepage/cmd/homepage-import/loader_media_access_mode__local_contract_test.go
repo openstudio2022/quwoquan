@@ -77,6 +77,31 @@ func TestLoadHomepageProjectionsBindsCommercialAssetsToPublic(t *testing.T) {
 	}
 }
 
+// spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-002
+func TestLoadHomepageProjectionsBindsProductionAssetsToPublic(t *testing.T) {
+	root := t.TempDir()
+	seedPublishEntity(t, root, "地点/景区/九寨沟", true)
+
+	inputs, _, err := homepageimport.LoadHomepageProjections(
+		root,
+		nil,
+		releaseMediaAuthority(t, root),
+		runtimemedia.MediaDeliveryBases{Image: "https://media.example.com"},
+		"production",
+	)
+	if err != nil {
+		t.Fatalf("load production projections: %v", err)
+	}
+	if len(inputs) != 1 {
+		t.Fatalf("expected 1 projection, got %d", len(inputs))
+	}
+	for _, asset := range inputs[0].IntroductionAssets {
+		if asset.AccessMode != "public" {
+			t.Fatalf("production asset %s accessMode = %q, want public (DEC-041)", asset.AssetID, asset.AccessMode)
+		}
+	}
+}
+
 func TestLoadHomepageProjectionsLeavesUnknownReleaseClassAccessModeAbsent(t *testing.T) {
 	root := t.TempDir()
 	seedPublishEntity(t, root, "地点/景区/九寨沟", true)

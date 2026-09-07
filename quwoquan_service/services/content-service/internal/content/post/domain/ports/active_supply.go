@@ -9,6 +9,18 @@ import (
 
 var canonicalReleaseDigestPattern = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
 
+// IsKnownReleaseClass 是 feed/detail 读面接受的 release 级类别闭集：production 是
+// Data producer 的单一现役类别（DEC-041），research/commercial 是历史 release 的
+// 封存取值。未声明或未知类别一律视为 malformed，读面 fail closed。
+func IsKnownReleaseClass(releaseClass string) bool {
+	switch releaseClass {
+	case "research", "commercial", "production":
+		return true
+	default:
+		return false
+	}
+}
+
 // ActiveSupplySnapshot identifies the canonical data release whose materialized
 // Posts may serve a release-bound initial page. Recommendation candidate
 // readiness belongs to recommendation-service and is not duplicated here.
@@ -18,7 +30,7 @@ type ActiveSupplySnapshot struct {
 	Status          string
 	ActiveReleaseID string
 	ManifestDigest  string
-	// ReleaseClass 是激活 release 的 release 级类别（research|commercial），
+	// ReleaseClass 是激活 release 的 release 级类别（research|commercial|production），
 	// 由 importer 从 release.json 落到 data_release_state。research readback
 	// 用它判定 release 类别；per-post usageScope 只表达对象的最大许可范围。
 	ReleaseClass      string
@@ -37,7 +49,7 @@ func (snapshot ActiveSupplySnapshot) ReleaseBoundReadbackReady() bool {
 		strings.TrimSpace(snapshot.Status) == "active" &&
 		strings.TrimSpace(snapshot.ActiveReleaseID) != "" &&
 		canonicalReleaseDigestPattern.MatchString(strings.TrimSpace(snapshot.ManifestDigest)) &&
-		(releaseClass == "research" || releaseClass == "commercial") &&
+		IsKnownReleaseClass(releaseClass) &&
 		snapshot.ProjectionVersion > 0 &&
 		snapshot.Revision > 0 &&
 		!snapshot.ActivatedAt.IsZero() &&

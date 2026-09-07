@@ -68,14 +68,14 @@ const (
 )
 
 // mediaDeliveryAccessModeForReleaseClass 把 release header 的 releaseClass 映射
-// 为逐资产 accessMode（DEC-033）：research → signed_grant、commercial → public。
-// 其它/未声明类别返回空串表示缺席——契约 accessMode 为 NULLABLE，缺席时端按
-// 存量 public 交付消费，不得由 importer 造值。
+// 为逐资产 accessMode（DEC-033/DEC-041）：research → signed_grant、
+// commercial/production → public。其它/未声明类别返回空串表示缺席——契约
+// accessMode 为 NULLABLE，缺席时端按存量 public 交付消费，不得由 importer 造值。
 func mediaDeliveryAccessModeForReleaseClass(releaseClass string) string {
 	switch strings.TrimSpace(releaseClass) {
 	case "research":
 		return mediaDeliveryAccessModeSignedGrant
-	case "commercial":
+	case "commercial", "production":
 		return mediaDeliveryAccessModePublic
 	default:
 		return ""

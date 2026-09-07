@@ -114,6 +114,33 @@ func TestMongoActiveSupplyReaderUsesEnvironmentScopedActiveRelease(t *testing.T)
 	if snapshot.ReleaseClass != "research" || !snapshot.IsResearchRelease() {
 		t.Fatalf("releaseClass cache identity drifted: %+v", snapshot)
 	}
+
+	// DEC-041：production 是 Data producer 单一现役类别。importer 落下 production
+	// pointer 后，匿名 feed/详情读面必须把它当作 release-bound、ready 且非 research。
+	if _, err := collection.UpdateOne(ctx,
+		bson.M{"environment": environment, "sourceOwner": "qwq_data"},
+		bson.M{"$set": bson.M{"releaseClass": "production"}},
+	); err != nil {
+		t.Fatalf("switch active release class to production: %v", err)
+	}
+	snapshot, err = reader.ActiveSupplySnapshot(ctx)
+	if err != nil {
+		t.Fatalf("ActiveSupplySnapshot production class: %v", err)
+	}
+	if snapshot.ReleaseClass != "production" || snapshot.IsResearchRelease() || !snapshot.Ready() {
+		t.Fatalf("production release must be ready and non-research: %+v", snapshot)
+	}
+
+	// 未知类别仍 fail closed，不得被当作 public serving 放行。
+	if _, err := collection.UpdateOne(ctx,
+		bson.M{"environment": environment, "sourceOwner": "qwq_data"},
+		bson.M{"$set": bson.M{"releaseClass": "preview"}},
+	); err != nil {
+		t.Fatalf("switch active release class to unknown: %v", err)
+	}
+	if _, err := reader.ActiveSupplySnapshot(ctx); err == nil {
+		t.Fatal("unknown releaseClass must be rejected as a malformed active binding")
+	}
 }
 
 func TestMongoActiveSupplyReaderIgnoresNonPointerActiveDocuments(t *testing.T) {

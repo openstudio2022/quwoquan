@@ -125,7 +125,7 @@ func (r *MongoActiveSupplyReader) ActiveSupplySnapshot(
 	manifestDigest := strings.TrimSpace(state.ManifestDigest)
 	releaseClass := strings.TrimSpace(state.ReleaseClass)
 	if releaseID == "" || !canonicalManifestDigestPattern.MatchString(manifestDigest) ||
-		(releaseClass != "research" && releaseClass != "commercial") ||
+		!postports.IsKnownReleaseClass(releaseClass) ||
 		state.ProjectionVersion <= 0 || state.Revision <= 0 || state.ActivatedAt.IsZero() {
 		r.cache.Invalidate()
 		return empty, fmt.Errorf("active release binding is malformed")

@@ -158,6 +158,53 @@ func TestLoadRejectsMissingEmptyAndInvalidFields(t *testing.T) {
 	}
 }
 
+// spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-002
+func TestLoadAcceptsProductionReleaseClassAndRejectsUnknown(t *testing.T) {
+	setClass := func(class string) func(map[string]any) {
+		return func(document map[string]any) { document["releaseClass"] = class }
+	}
+
+	t.Run("production is the single active producer class", func(t *testing.T) {
+		root, digest := writeReleaseFixture(t)
+		mutateJSONDocument(t, filepath.Join(root, "payload", "release.json"), setClass("production"))
+		// header 字节变化后 payload digest 变化，attestation 必须重新绑定同一 exact bytes。
+		digest = payloadDigest(t, filepath.Join(root, "payload"))
+		mutateJSONDocument(t, filepath.Join(root, "attestations", "release.json"), func(document map[string]any) {
+			document["releaseClass"] = "production"
+			document["payloadSha256"] = digest
+		})
+
+		tuple, err := datarelease.Load(root)
+		if err != nil {
+			t.Fatalf("production release must load: %v", err)
+		}
+		if tuple.ReleaseClass != datarelease.ReleaseClassProduction {
+			t.Fatalf("release class drifted: %+v", tuple)
+		}
+	})
+
+	t.Run("unknown class fails closed", func(t *testing.T) {
+		root, _ := writeReleaseFixture(t)
+		mutateJSONDocument(t, filepath.Join(root, "attestations", "release.json"), setClass("preview"))
+
+		_, err := datarelease.Load(root)
+		assertLoadError(t, err, datarelease.CodeInvalidField, "releaseClass")
+	})
+
+	for _, class := range []datarelease.ReleaseClass{
+		datarelease.ReleaseClassResearch,
+		datarelease.ReleaseClassCommercial,
+		datarelease.ReleaseClassProduction,
+	} {
+		if !datarelease.IsKnownReleaseClass(class) {
+			t.Fatalf("%s must be a known release class", class)
+		}
+	}
+	if datarelease.IsKnownReleaseClass("") || datarelease.IsKnownReleaseClass("preview") {
+		t.Fatal("empty or unknown release class must not be known")
+	}
+}
+
 func TestLoadRejectsDuplicateIdentityField(t *testing.T) {
 	root, _ := writeReleaseFixture(t)
 	path := filepath.Join(root, "attestations", "release.json")
