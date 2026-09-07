@@ -141,14 +141,24 @@ def test_admin_readback_requires_observable_bypass_actors() -> None:
         ("qa/*", "qa/foo/bar", False),
         ("qa/**/*", "qa/foo/bar/foobar/hello-world", True),
         ("qa**/**/*", "qa-team/foo/bar", True),
+        # 段中 `**` 退化为 `*`，因此 `qa**/**/*` 同样命中 `qa/foo/bar`（比 `qa/**/*` 更宽，而非更窄）。
+        ("qa**/**/*", "qa/foo/bar", True),
+        # `dev**/` 不是段首，`**` 退化为 `*`，仍要求其后再有一段。
+        ("refs/heads/dev**/*", "refs/heads/dev1.0", False),
         ("refs/heads/**/*", "refs/heads/dev1.0", True),
         ("refs/heads/**/*", "refs/heads/release/1.0", True),
         ("refs/*", "refs/heads/dev1.0", False),
         ("refs/heads/dev?.0", "refs/heads/dev1.0", True),
         ("refs/heads/dev[12].0", "refs/heads/dev1.0", True),
         ("refs/heads/dev[23].0", "refs/heads/dev1.0", False),
+        ("refs/heads/[!x]*", "refs/heads/dev1.0", True),
+        ("refs/heads/[!d]*", "refs/heads/dev1.0", False),
+        # GitHub 不支持反斜杠转义：`\` 按字面，因此不命中。
+        ("refs/heads/dev1\\.0", "refs/heads/dev1.0", False),
         ("refs/heads/dev1.0", "refs/heads/dev1.0", True),
         ("refs/heads/dev1.0", "refs/heads/dev1.01", False),
+        ("~DEFAULT_BRANCH", "refs/heads/dev1.0", False),
+        ("~DEFAULT_BRANCH", "refs/heads/main", True),
     ],
 )
 def test_github_fnmatch_dialect(pattern: str, ref: str, expected: bool) -> None:
@@ -157,18 +167,35 @@ def test_github_fnmatch_dialect(pattern: str, ref: str, expected: bool) -> None:
     assert _ref_pattern_matches(pattern, ref=ref, default_branch_ref="refs/heads/main") is expected
 
 
+def test_untranslatable_ref_pattern_is_a_typed_block_not_a_traceback() -> None:
+    from quwoquan_ops.ci.verify_hosted_integration_ruleset import _ref_pattern_matches
+
+    with pytest.raises(HostedIntegrationRulesetError, match="not a translatable GitHub fnmatch pattern"):
+        _ref_pattern_matches("refs/heads/[z-a]", ref="refs/heads/dev1.0", default_branch_ref="refs/heads/main")
+
+
 def test_default_branch_must_be_observable_for_tilde_default_branch_semantics() -> None:
     responses = _responses()
     responses[""] = {}
-    with pytest.raises(HostedIntegrationRulesetError, match="lacks default_branch"):
+    with pytest.raises(HostedIntegrationRulesetError, match="lacks default_branch") as error:
         _verify(responses, expected_calls={""})
+    assert "recovery=restore_git_authority_then_retry" in str(error.value)
 
 
 def test_full_ruleset_page_blocks_instead_of_silently_truncating() -> None:
     responses = _responses()
     responses[RULESETS] = [{"id": index} for index in range(1, 101)]
-    with pytest.raises(HostedIntegrationRulesetError, match="may be truncated at per_page=100"):
+    with pytest.raises(HostedIntegrationRulesetError, match="may be truncated at per_page=100") as error:
         _verify(responses, expected_calls={"", RULESETS})
+    # 重试解不开「ruleset 太多」，recovery 必须指向真实动作。
+    assert "recovery=reduce_rulesets_below_page_size_or_paginate_readback" in str(error.value)
+
+
+def test_ruleset_summary_without_integer_id_blocks_instead_of_being_skipped() -> None:
+    responses = _responses()
+    responses[RULESETS] = [{"id": 1}, {"id": "x"}]
+    with pytest.raises(HostedIntegrationRulesetError, match="lacks integer id"):
+        _verify(responses, expected_calls={"", RULESETS, "/rulesets/1"})
 
 
 def test_non_active_or_non_branch_rulesets_do_not_count_as_applicable() -> None:
@@ -246,8 +273,8 @@ def test_second_ruleset_matching_dev_by_github_pattern_semantics_is_not_missed(l
         ("pull-request-rule", lambda value: value["/rulesets/1"]["rules"].insert(2, _pull_request_rule()), "must not require pull requests"),
         # 唯一命中但以通配写法指向 dev1.0：形状漂移，detail 带 observed。
         ("sole-wildcard-dev-ruleset", lambda value: value["/rulesets/1"]["conditions"]["ref_name"]["include"].__setitem__(0, "refs/heads/dev*"), 'ref condition must be exactly {"exclude": [], "include": ["refs/heads/dev1.0"]} (observed {"exclude": [], "include": ["refs/heads/dev*"]})'),
-        ("non-strict", lambda value: value["/rulesets/1"]["rules"][_rule_index(value["/rulesets/1"], "required_status_checks")]["parameters"].update(strict_required_status_checks_policy=False), "required-check protection is incomplete"),
-        ("enforce-on-create-off", lambda value: value["/rulesets/1"]["rules"][_rule_index(value["/rulesets/1"], "required_status_checks")]["parameters"].update(do_not_enforce_on_create=True), "required-check protection is incomplete"),
+        ("non-strict", lambda value: value["/rulesets/1"]["rules"][_rule_index(value["/rulesets/1"], "required_status_checks")]["parameters"].update(strict_required_status_checks_policy=False), 'required-check protection is incomplete (strict + enforce-on-create required; observed {"do_not_enforce_on_create": false, "strict_required_status_checks_policy": false}'),
+        ("enforce-on-create-off", lambda value: value["/rulesets/1"]["rules"][_rule_index(value["/rulesets/1"], "required_status_checks")]["parameters"].update(do_not_enforce_on_create=True), 'required-check protection is incomplete (strict + enforce-on-create required; observed {"do_not_enforce_on_create": true, "strict_required_status_checks_policy": true}'),
         ("missing-non-fast-forward", lambda value: value["/rulesets/1"]["rules"].pop(_rule_index(value["/rulesets/1"], "non_fast_forward")), "must contain one 'non_fast_forward' rule"),
         ("inactive", lambda value: value["/rulesets/1"].update(enforcement="evaluate"), "exactly one applicable active branch ruleset (found 0)"),
         ("two-dev-rulesets", lambda value: value["/rulesets/2"]["conditions"]["ref_name"]["include"].append("refs/heads/dev1.0"), "exactly one applicable active branch ruleset (found 2)"),

@@ -48,6 +48,7 @@ RECEIPT_SCHEMA = "hosted-integration-ruleset-receipt"
 RULESET_PAGE_SIZE = 100
 RECOVERY_RESTORE = "restore_git_authority_then_retry"
 RECOVERY_WRITE_TOKEN = "rerun_readback_with_ruleset_write_token"
+RECOVERY_PAGINATE = "reduce_rulesets_below_page_size_or_paginate_readback"
 RECOVERY_RULESET = (
     "configure the dev1.0 branch ruleset: exactly one active ruleset for refs/heads/dev1.0, "
     "rules deletion + non_fast_forward + required_status_checks(strict, GitHub Actions context "
@@ -112,15 +113,22 @@ def _rule(ruleset: Mapping[str, Any], rule_type: str) -> dict[str, Any]:
 def _github_fnmatch_regex(pattern: str) -> "re.Pattern[str]":
     """GitHub ruleset 的 fnmatch 方言（Ruby `File.fnmatch` + `FNM_PATHNAME`）。
 
-    与 Python `fnmatch` 不同：`*`/`?` 不跨 `/`；`**/` 匹配零个或多个路径段；不跟 `/` 的 `**`
-    等价于 `*`；`[...]` 字符集按字面（GitHub 不支持 `[^...]` 取补与反斜杠转义）。用 Python
-    `fnmatch` 会把 `refs/heads/**/*`（GitHub 文档的「全部分支」惯用写法）判为不命中 `refs/heads/dev1.0`。
+    与 Python `fnmatch` 不同：`*`/`?` 不跨 `/`；位于路径段首的 `**/` 匹配零个或多个路径段，
+    段中的 `**` 退化为 `*`（所以 `qa**/**/*` 比 `qa/**/*` 更宽）；`[...]` 字符集按字面、`[!...]`
+    取补（GitHub 不支持 `[^...]` 与反斜杠转义，二者按字面）。不支持 `]` 作字符集首成员与字符集内
+    的 `/`——GitHub ruleset 中无此写法。用 Python `fnmatch` 会把 `refs/heads/**/*`（GitHub 文档
+    的「全部分支」惯用写法）判为不命中 `refs/heads/dev1.0`。
     """
-    return re.compile("^" + _FNMATCH_TOKEN.sub(_translate_fnmatch_token, pattern) + "$")
+    try:
+        return re.compile("^" + _FNMATCH_TOKEN.sub(_translate_fnmatch_token, pattern) + "$")
+    except re.error as error:
+        raise _block(
+            f"ruleset ref pattern {pattern!r} is not a translatable GitHub fnmatch pattern: {error}"
+        ) from error
 
 
-# 分词顺序即优先级：`**/` → 连续 `*` → `?` → 非空字符集 → 任意单字符。
-_FNMATCH_TOKEN = re.compile(r"\*\*/|\*+|\?|\[[^\]]+\]|.", re.DOTALL)
+# 分词顺序即优先级：段首 `**/` → 连续 `*` → `?` → 非空字符集 → 任意单字符。
+_FNMATCH_TOKEN = re.compile(r"(?:^|(?<=/))\*\*/|\*+|\?|\[[^\]]+\]|.", re.DOTALL)
 
 
 def _translate_fnmatch_token(match: "re.Match[str]") -> str:
@@ -132,7 +140,8 @@ def _translate_fnmatch_token(match: "re.Match[str]") -> str:
     if token == "?":
         return "[^/]"
     if token.startswith("[") and token.endswith("]") and len(token) > 2:
-        return "[" + token[1:-1].replace("\\", "\\\\").replace("^", "\\^") + "]"
+        body = token[1:-1].replace("\\", "\\\\").replace("^", "\\^")
+        return "[^" + body[1:] + "]" if body.startswith("!") and len(body) > 1 else "[" + body + "]"
     return re.escape(token)
 
 
@@ -180,14 +189,18 @@ def _branch_ruleset(*, repository: str, token: str, branch: str) -> dict[str, An
     if len(summaries) >= RULESET_PAGE_SIZE:
         raise _block(
             f"ruleset list may be truncated at per_page={RULESET_PAGE_SIZE}; "
-            "uniqueness cannot be proven without reading every ruleset"
+            "uniqueness cannot be proven without reading every ruleset",
+            recovery=RECOVERY_PAGINATE,
         )
     ref = f"refs/heads/{branch}"
     matches = []
     for summary in summaries:
         ruleset_id = summary.get("id")
         if not isinstance(ruleset_id, int):
-            continue
+            raise _block(
+                f"ruleset summary lacks integer id ({json.dumps(summary, sort_keys=True)}); "
+                "uniqueness cannot be proven"
+            )
         detail = _object(_api_get(repository, f"/rulesets/{ruleset_id}", token), f"ruleset {ruleset_id}")
         if _applies_to_ref(detail, ref=ref, default_branch_ref=default_branch_ref):
             matches.append(detail)
@@ -231,8 +244,13 @@ def _verify_required_checks(
         or required.get("do_not_enforce_on_create") is not False
         or not isinstance(checks, list)
     ):
+        observed_shape = {
+            key: required.get(key)
+            for key in ("strict_required_status_checks_policy", "do_not_enforce_on_create")
+        }
         raise _block(
-            f"{branch} required-check protection is incomplete (strict + enforce-on-create required)",
+            f"{branch} required-check protection is incomplete (strict + enforce-on-create required; "
+            f"observed {json.dumps(observed_shape, sort_keys=True)}, checks list {isinstance(checks, list)})",
             recovery=RECOVERY_RULESET,
         )
     observed = {

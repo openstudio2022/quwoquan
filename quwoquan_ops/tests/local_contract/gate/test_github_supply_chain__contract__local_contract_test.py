@@ -556,15 +556,20 @@ class StepSelfOutputReferenceContractTest(unittest.TestCase):
 
         self.assertEqual(failures, [])
 
-    def test_comment_mentioning_own_outputs_is_not_an_executable_reference(self) -> None:
+    def test_hash_prefixed_heredoc_line_referencing_own_outputs_is_still_caught(self) -> None:
+        """run heredoc 里以 `#` 起头的 markdown 行不是 shell 注释，表达式照样在 step 开始前求值为空串。"""
         failures = self._failures(
-            "      - id: admission\n"
+            "      - name: summarize admission\n"
+            "        id: admission\n"
             "        run: |\n"
-            "          # 不要在本 step 内读 ${{ steps.admission.outputs.path }}，它此时恒为空串\n"
             "          echo \"path=x\" >> \"$GITHUB_OUTPUT\"\n"
+            "          cat >> \"$GITHUB_STEP_SUMMARY\" <<EOF\n"
+            "          # Admission ${{ steps.admission.outputs.path }}\n"
+            "          EOF\n"
         )
 
-        self.assertEqual(failures, [])
+        self.assertEqual(len(failures), 1, failures)
+        self.assertIn(":14: step 'admission' references its own steps.admission.outputs", failures[0])
 
     def test_quoted_step_id_is_still_recognized(self) -> None:
         failures = self._failures(

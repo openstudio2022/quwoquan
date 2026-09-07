@@ -213,8 +213,8 @@ def _step_self_output_reference_failures(path: Path, text: str) -> list[str]:
             continue
         self_reference = re.compile(rf"steps\.{re.escape(step_id)}\.outputs")
         for offset, line in enumerate(block):
-            # 与 _executable_token_index 同一口径：注释行不是可执行引用。
-            if line.strip().startswith("#") or self_reference.search(line) is None:
+            # 不豁免 `#` 开头的行：run heredoc 里以 `#` 起头的 markdown/内容行同样会被 Actions 求值为空串。
+            if self_reference.search(line) is None:
                 continue
             failures.append(
                 f"{path.relative_to(ROOT)}:{start + offset + 1}: step '{step_id}' references "
