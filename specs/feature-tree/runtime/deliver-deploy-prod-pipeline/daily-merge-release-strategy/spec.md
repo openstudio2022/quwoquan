@@ -72,7 +72,7 @@
 - GIVEN current dev head已有匹配的IntegrationQualificationFact且main base稳定。
 - WHEN 创建`dev1.0 -> main` promotion并完成merge。
 - THEN 唯一required context只验branch/tree/evidence/approval/ruleset并生成MainSourceSeal，随后回同步（integration FF 通道或受管 system actor）以expected-before无force fast-forward更新dev；equal幂等，分叉或漂移零写阻断。
-- AND `dev1.0 -> main` 与 `lane/* -> dev1.0` 各有独立的 required check：前者由 `required_promotion_checks` 唯一声明并展开为 main ruleset 期望值，后者由 `required_integration_checks` 唯一声明（`04. Lane Gate`，见 `local-continuous-integration#gwt-005`）；两者不共享 workflow 或名字。reusable `system-backsync.yml` 只引用 GitHub Actions 合法上下文，其 `QWQ_SYSTEM_BACKSYNC_WORKFLOW_REF` 由 caller 的 `github.repository`/`github.ref` 拼装，静态门禁拒绝任何非 `container|services|status` 的 `job.*` 属性。
+- AND `dev1.0 -> main` 与 `lane/* -> dev1.0` 各有独立的 required check：前者由 `required_promotion_checks` 唯一声明并展开为 main ruleset 期望值，后者由 `required_integration_checks` 唯一声明（`04. Lane Gate`，见 `local-continuous-integration#gwt-005`）；两者不共享 workflow 或名字。reusable `system-backsync.yml` 只引用 GitHub Actions 合法上下文，其 `QWQ_SYSTEM_BACKSYNC_WORKFLOW_REF` 由 `github.repository`/`github.ref` 拼装（当前无 caller，见 OPEN-004），静态门禁拒绝任何非 `container|services|status` 的 `job.*` 属性，actionlint 拦截解析期即失效的其余上下文/属性/类型错误。
 
 <a id="gwt-003"></a>
 ### GWT-003 main可用源码与Prod版本选择分离
@@ -104,8 +104,8 @@
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`block`
-- 影响或价值：仓内 decision-table 已覆盖普通 lane 同名 push、匹配 integration worktree 的 direct fast-forward push，以及可证明 system fast-forward backsync；尚缺真实 scoped candidate、trusted publisher CAS、`dev1.0 -> main` PR/check、promotion 后 system CAS backsync，以及 hosted 八条分支权威清单与干净 clone 复现回执。Hosted 仍需证明 non-fast-forward、delete/force 与 `main` direct push 保护，但 direct fast-forward dev push 不再定义为非法。signer 信任根已单轨到仓内 `evidence_signing_keyring.yaml`（`DEC-010`），`promotion_verify` 对 `integration_qualification.py` 传齐 `--signing-keyring` 与四个 `--expected-*-signer-identity`，`verify_workflow_cli_arguments.py` 已能静态展开该脚本常量循环内的 required 并对该调用判绿；workflow 里的 `QUALIFICATION_SIGNER_IDENTITY` / `ENVIRONMENT_SIGNER_IDENTITY` 是 job env 字面常量，由 `test_delivery_gate_signer_identity` 锁定为 keyring 已登记且 purpose 匹配的 identity，并锁定四个 `--expected-*-signer-identity` 逐一透传。剩余缺口只在 hosted 真实执行面。
-- 完成判定：`GWT-001.t1..t2` 与 `GWT-002.t1..t2` 具备 decision-table local contract；当前最终 SHA 的 hosted readback 证明 lane PR/check、promotion PR/check、system actor、八条 refs 闭集以及 dev non-FF/force/delete 与 main direct-push 保护，真实 system backsync 证明 CAS 与 ref before/after。
+- 影响或价值：仓内 decision-table 已覆盖普通 lane 同名 push、匹配 integration worktree 的 direct fast-forward push，以及可证明 system fast-forward backsync；尚缺真实 scoped candidate、trusted publisher CAS、`dev1.0 -> main` PR/check、promotion 后 system CAS backsync，以及 hosted 八条分支权威清单与干净 clone 复现回执。Hosted 仍需证明 non-fast-forward、delete/force 与 `main` direct push 保护，但 direct fast-forward dev push 不再定义为非法。`promotion_verify` 对 `integration_qualification.py` 的接线已收口：signer identity 的 canonical 真相源是 `quwoquan_ops/policies/evidence_signing_keyring.yaml`（Ed25519 公钥，见 [L2 DEC-010](../design.md#dec-010)），workflow 以 `--signing-keyring` 与四个 `--expected-*-signer-identity` 逐一传入，不再需要 verification key env 或 repository secret；`verify_workflow_cli_arguments.py` 已能静态展开该脚本常量循环内的 required 并对该调用判绿；workflow 里的 `QUALIFICATION_SIGNER_IDENTITY` / `ENVIRONMENT_SIGNER_IDENTITY` 字面常量由 `test_delivery_gate_signer_identity` 锁定为 keyring 已登记且 purpose 匹配的 identity 并逐一透传；`deploy-prod-auto.yml` / `release-qualification.yml` 的 `${{ github.run_started_at }}` 已改为 shell 侧 `date -u`。仍缺：真实 `dev1.0 -> main` PR/check 回执与 hosted readback 证据。
+- 完成判定：`GWT-001.t1..t2` 与 `GWT-002.t1..t2` 具备 decision-table local contract；`integration_qualification.py` 的合同测试覆盖 workflow 调用形态（keyring 验签）；当前最终 SHA 的 hosted readback 证明 lane PR/check、promotion PR/check、system actor、八条 refs 闭集以及 dev non-FF/force/delete 与 main direct-push 保护，真实 system backsync 证明 CAS 与 ref before/after。
 
 <a id="open-002"></a>
 ### OPEN-002 private-free GitHub 托管分支保护

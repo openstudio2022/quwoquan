@@ -222,6 +222,12 @@ jobs:
             --validate-impact-plan "$IMPACT_ROOT/impact-plan.json"
           PLAN_DIGEST="$(sed -n 's/^plan_digest=//p' "$IMPACT_ROOT/outputs.env")"
           CHANGED_PATHS_DIGEST="$(sed -n 's/^changed_paths_digest=//p' "$IMPACT_ROOT/outputs.env")"
+          # ImpactPlan 自校验：source sha / tree / plan digest 三者绑定，漂移即在 boundary 之前阻断。
+          python3 quwoquan_ops/ci/detect_ci_impacted_scopes.py \
+            --validate-impact-plan "$IMPACT_ROOT/impact-plan.json" \
+            --expected-source-sha "$HEAD_SHA" \
+            --expected-tree-digest "sha1:${HEAD_TREE}" \
+            --expected-plan-digest "$PLAN_DIGEST"
           set +e
           python3 quwoquan_ops/ci/verify_ci_changed_boundary.py \
             --impact-plan "$IMPACT_ROOT/impact-plan.json" --expected-source-sha "$HEAD_SHA" \
