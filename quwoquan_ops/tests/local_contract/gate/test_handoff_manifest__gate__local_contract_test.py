@@ -28,7 +28,7 @@ def _load_gate() -> ModuleType:
     return module
 
 
-VALID = """# 轮次交接单
+_VALID_TEMPLATE = """# 轮次交接单
 
 - intent 终版：示例轮次（范围变更：无）
 - 新轮触发判定：不触发（依据：判据全绿）
@@ -64,14 +64,20 @@ VALID = """# 轮次交接单
 - `make verify-feature-tree` exit=0 2026-08-25T12:00:00+08:00 abc1234
 """
 
-VALID = VALID.replace("__HANDOFF_INPUT_DIGEST__", _HANDOFF_INPUT_DIGEST).replace(
+_VALID_TEMPLATE = _VALID_TEMPLATE.replace("__HANDOFF_INPUT_DIGEST__", _HANDOFF_INPUT_DIGEST).replace(
     "__HANDOFF_OUTPUT_DIGEST__", _HANDOFF_OUTPUT_DIGEST
 )
 
-_CURRENT_HEAD = subprocess.run(
-    ["git", "rev-parse", "HEAD"], cwd=_REPO_ROOT, check=True, capture_output=True, text=True
-).stdout.strip()
-VALID = VALID.replace("`aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa`", f"`{_CURRENT_HEAD}`", 1)
+
+def _current_head() -> str:
+    return subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=_REPO_ROOT, check=True, capture_output=True, text=True
+    ).stdout.strip()
+
+
+def _valid_manifest(head: str) -> str:
+    # 只替换 source_head 字段；digest_payload 里的 head_sha 必须保持原字节，否则 canonical digest 对不上。
+    return _VALID_TEMPLATE.replace("`aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa`", f"`{head}`", 1)
 
 
 class HandoffManifestGateTest(unittest.TestCase):
@@ -79,6 +85,11 @@ class HandoffManifestGateTest(unittest.TestCase):
 
     def setUp(self) -> None:
         self.module = _load_gate()
+        # 校验器在 validate 时读取当前 HEAD。fixture 若在 import 期固化 HEAD，共享工作树里
+        # 并行会话的一次提交就会让全量运行中途的正例误报 source_head stale，因此在每个用例
+        # 执行前与校验器同一时刻采集。
+        self.head = _current_head()
+        self.valid = _valid_manifest(self.head)
 
     def test_valid_manifest_passes(self) -> None:
         with mock.patch.object(
@@ -86,31 +97,31 @@ class HandoffManifestGateTest(unittest.TestCase):
             "_load_json_ref",
             side_effect=ValueError("fixture payload omitted"),
         ):
-            issues = self.module.validate(VALID, "m.md")
+            issues = self.module.validate(self.valid, "m.md")
         self.assertEqual(
             [issue for issue in issues if "canonical handoff payload stale" not in issue],
             [],
         )
 
     def test_detects_missing_constitution_section(self) -> None:
-        text = VALID.replace("## 唯一合法下游", "## 别的段")
+        text = self.valid.replace("## 唯一合法下游", "## 别的段")
         issues = self.module.validate(text, "m.md")
         self.assertTrue(any("缺 required 段落「## 唯一合法下游」" in i for i in issues), issues)
 
     def test_detects_missing_head_field(self) -> None:
-        text = VALID.replace("- 新轮触发判定：不触发（依据：判据全绿）", "")
+        text = self.valid.replace("- 新轮触发判定：不触发（依据：判据全绿）", "")
         issues = self.module.validate(text, "m.md")
         self.assertTrue(any("缺头部字段「新轮触发判定」" in i for i in issues), issues)
 
     def test_detects_dangling_pending_item(self) -> None:
         """未决项没有三向裁决就是悬空——历史上缺口悬空到下轮才暴露的主形态。"""
-        text = VALID.replace("转 `OPEN-007`", "还没想好怎么办")
+        text = self.valid.replace("转 `OPEN-007`", "还没想好怎么办")
         issues = self.module.validate(text, "m.md")
         self.assertTrue(any("未决项悬空" in i for i in issues), issues)
 
     def test_detects_pending_item_without_generalization(self) -> None:
         """有裁决但缺「孤例/一类」泛化判定——举一反三必须留痕，不许只靠自觉。"""
-        text = VALID.replace(
+        text = self.valid.replace(
             "- 组网知识升格（孤例）：下一工作流 `prd` 承接",
             "- 组网知识升格：下一工作流 `prd` 承接",
         )
@@ -120,7 +131,7 @@ class HandoffManifestGateTest(unittest.TestCase):
 
     def test_generalization_marker_does_not_match_incidental_substring(self) -> None:
         """「统一类型」含「一类」子串，但不是结构化泛化判定，不得假通过。"""
-        text = VALID.replace(
+        text = self.valid.replace(
             "- 组网知识升格（孤例）：下一工作流 `prd` 承接",
             "- 组网知识升格按统一类型处理：下一工作流 `prd` 承接",
         )
@@ -129,7 +140,7 @@ class HandoffManifestGateTest(unittest.TestCase):
 
     def test_detects_evidence_without_fields(self) -> None:
         """无退出码/时间戳/SHA 的证据无法复跑，只能被转抄——必须拦。"""
-        text = VALID.replace(
+        text = self.valid.replace(
             "- `make verify-feature-tree` exit=0 2026-08-25T12:00:00+08:00 abc1234",
             "- 测试都跑过了，全绿",
         )
@@ -137,7 +148,7 @@ class HandoffManifestGateTest(unittest.TestCase):
         self.assertTrue(any("证据条目缺字段" in i for i in issues), issues)
 
     def test_detects_empty_evidence_chain(self) -> None:
-        text = VALID.replace(
+        text = self.valid.replace(
             "- `make verify-feature-tree` exit=0 2026-08-25T12:00:00+08:00 abc1234",
             "",
         )
@@ -145,14 +156,14 @@ class HandoffManifestGateTest(unittest.TestCase):
         self.assertTrue(any("证据链为空" in i for i in issues), issues)
 
     def test_detects_missing_canonical_fingerprint(self) -> None:
-        text = VALID.replace("- ref: `evidence-fingerprint-v1:", "- legacy_ref: `evidence-fingerprint-v1:")
+        text = self.valid.replace("- ref: `evidence-fingerprint-v1:", "- legacy_ref: `evidence-fingerprint-v1:")
         issues = self.module.validate(text, "m.md")
         self.assertTrue(any("EvidenceFingerprint 字段闭集漂移" in i for i in issues), issues)
 
     def test_detects_stale_source_head(self) -> None:
         issues = self.module.validate(
-            VALID.replace(
-                f"- source_head: `{_CURRENT_HEAD}`",
+            self.valid.replace(
+                f"- source_head: `{self.head}`",
                 f"- source_head: `{'0' * 40}`",
             ),
             "m.md",
@@ -161,14 +172,14 @@ class HandoffManifestGateTest(unittest.TestCase):
 
     def test_detects_stale_evidence(self) -> None:
         issues = self.module.validate(
-            VALID.replace("- freshness: `fresh`", "- freshness: `stale`"),
+            self.valid.replace("- freshness: `fresh`", "- freshness: `stale`"),
             "m.md",
         )
         self.assertTrue(any("evidence freshness" in i for i in issues), issues)
 
     def test_detects_recovery_token_failure(self) -> None:
         issues = self.module.validate(
-            VALID.replace(
+            self.valid.replace(
                 "- recovery_token: `rerun_evidence_for_new_fingerprint`",
                 "- recovery_token: `continue_anyway`",
             ),
@@ -177,12 +188,12 @@ class HandoffManifestGateTest(unittest.TestCase):
         self.assertTrue(any("recovery_token 非法" in i for i in issues), issues)
 
     def test_detects_digest_payload_byte_change(self) -> None:
-        text = VALID.replace('"provider_digest":"sha256:', '"provider_digest":"sha256:0', 1)
+        text = self.valid.replace('"provider_digest":"sha256:', '"provider_digest":"sha256:0', 1)
         issues = self.module.validate(text, "m.md")
         self.assertTrue(any("digest_payload 与 canonical digest 不一致" in i for i in issues), issues)
 
     def test_accepts_explicit_no_pending_declaration(self) -> None:
-        text = VALID.replace(
+        text = self.valid.replace(
             "- 谓词单轨缺口（一类：已全仓 AST 扫描收敛并加防回潮锁）：转 `OPEN-007`\n"
             "- 组网知识升格（孤例）：下一工作流 `prd` 承接",
             "- 无未决项",
