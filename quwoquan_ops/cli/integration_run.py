@@ -92,7 +92,8 @@ def _now() -> str:
 
 
 def _git(*args: str) -> str:
-    completed = subprocess.run(["git", *args], cwd=ROOT, text=True, capture_output=True, check=False)
+    # canonical publish 对象含中文路径；关闭 quotePath 才能把 diff-tree 输出原样交给 ImpactPlanner。
+    completed = subprocess.run(["git", "-c", "core.quotePath=false", *args], cwd=ROOT, text=True, capture_output=True, check=False)
     if completed.returncode != 0:
         raise IntegrationRunError("INTEGRATION_RUN.GIT", f"git {' '.join(args)}: {' '.join((completed.stderr or completed.stdout).split())}")
     return completed.stdout.strip()
