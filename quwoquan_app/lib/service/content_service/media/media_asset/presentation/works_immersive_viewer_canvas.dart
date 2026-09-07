@@ -398,7 +398,26 @@ class _WorksVideoCanvasState extends State<_WorksVideoCanvas>
   Widget build(BuildContext context) {
     final items = widget.items;
     if (items.isEmpty) {
-      return Container(color: AppColors.worksBackground);
+      // 视频作品的每一集交付引用都未能解析（投影 mediaItems 缺席、URL 不合
+      // canonical 公开形态或 accessMode 判否）。这是内容交付失败，不是"没有内容"：
+      // 必须挂 `video-player-error` 让 UAT 与用户都能区分黑屏与合法空态。
+      final failure = MediaPlaybackFailure.fromKind(
+        MediaCandidateFailureKind.noPlayableSource,
+      );
+      final copy = failure.copy;
+      final message = copy.message?.trim() ?? '';
+      return Container(
+        key: const ValueKey<String>('works-video-delivery-unresolved'),
+        color: AppColors.worksBackground,
+        alignment: Alignment.center,
+        child: ImmersiveMediaFailureContent(
+          key: const ValueKey<String>('video-player-error'),
+          presentation: MediaFailurePresentation(
+            title: copy.title,
+            message: message.isEmpty ? null : message,
+          ),
+        ),
+      );
     }
     return Stack(
       fit: StackFit.expand,

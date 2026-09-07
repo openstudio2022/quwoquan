@@ -94,6 +94,11 @@ import 'package:quwoquan_app/design_system/feedback/app_toast.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/public/content_keyword_suggester.dart';
 import 'package:quwoquan_app/runtime/shell/actions/blocked_keyword_confirmation_sheet.dart';
 import 'package:quwoquan_app/runtime/shell/actions/content_report_reason_sheet.dart';
+import 'package:quwoquan_app/runtime/transport/media/media_candidate_failure.dart'
+    show MediaCandidateFailureKind;
+import 'package:quwoquan_app/service/content_service/media/media_asset/application/media_playback_failure.dart'
+    show MediaPlaybackFailure;
+import 'package:quwoquan_app/service/content_service/media/media_asset/presentation/immersive_media_failure_content.dart';
 import 'package:quwoquan_app/service/content_service/media/media_asset/presentation/video_playback_session.dart';
 import 'package:quwoquan_app/service/content_service/media/media_asset/presentation/video_playback_center_glyph.dart';
 import 'package:quwoquan_app/service/content_service/media/media_asset/presentation/video_playback_timeline.dart';

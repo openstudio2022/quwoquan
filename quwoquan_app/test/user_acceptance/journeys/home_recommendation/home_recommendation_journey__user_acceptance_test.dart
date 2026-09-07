@@ -36,10 +36,29 @@ const _apiContractEnv = String.fromEnvironment(
   'API_CONTRACT_ENV',
   defaultValue: 'gamma',
 );
+// 三个本地 nonprod target 消费同一 immutable release activation（DEC-041 单一
+// production 类别），首页推荐旅程在 alpha/beta/gamma 上语义相同；Prod 不在闭集内。
+const _nonprodEnvironments = <String>{'alpha', 'beta', 'gamma'};
 
 // 首页推荐 feed 卡片容器 key（home_multi_form_feed.dart 真相源）。
 const _kFeedCard0 = ValueKey<String>('home-feed-card-0');
 const _kHomeSearchChrome = ValueKey<String>('home-primary-tab-chrome');
+// 视频书（featured 频道）入口与终态 key（home_primary_tab_strip / home_page /
+// works_immersive_viewer_* 真相源）。
+const _kFeaturedTab = ValueKey<String>('home-primary-tab-featured');
+const _kFeaturedChannelBody = ValueKey<String>('home-featured-channel-body');
+const _kVideoPlayerReady = ValueKey<String>('video-player-ready');
+const _kVideoPlayerError = ValueKey<String>('video-player-error');
+const _kWorksVideoDeliveryUnresolved = ValueKey<String>(
+  'works-video-delivery-unresolved',
+);
+const _kWorksInternalFeedError = ValueKey<String>('works-internal-feed-error');
+// works_immersive_viewer_build.dart 以 `works-internal-feed-empty-<emptyReason wire>`
+// 表达 canonical 空态；premium 单路只可能出现下列 wire 值。
+const _kWorksInternalFeedEmptyKeys = <ValueKey<String>>[
+  ValueKey<String>('works-internal-feed-empty-no_active_release'),
+  ValueKey<String>('works-internal-feed-empty-no_eligible_content'),
+];
 const _kRelationHeader = ValueKey<String>('home-relation-card-header');
 const _kRelationActions = ValueKey<String>('home-relation-card-actions');
 
@@ -68,8 +87,8 @@ void main() {
     ($) async {
       await launchPatrolAppOnce($);
       assert(
-        _apiContractEnv == 'gamma',
-        'Patrol user_acceptance journey must run with API_CONTRACT_ENV=gamma',
+        _nonprodEnvironments.contains(_apiContractEnv),
+        'Patrol user_acceptance journey must run with API_CONTRACT_ENV=alpha|beta|gamma',
       );
       await _recoverToHomeFeed($);
 
@@ -77,7 +96,7 @@ void main() {
       expect(
         _existsInTree($, find.byKey(_kFeedCard0)),
         isTrue,
-        reason: 'gamma 推荐 feed 首刷必须渲染至少一张卡片（feed 非空）',
+        reason: '$_apiContractEnv 推荐 feed 首刷必须渲染至少一张卡片（feed 非空）',
       );
       // 卡片必须带真实远端社交 chrome（作者头部 + 互动操作行），证明这是一张
       // 多形态能力卡片承载真实远端数据，而非占位/空态。
@@ -150,6 +169,74 @@ void main() {
       );
 
       await _settleFeedToTopForHandoff($);
+    },
+  );
+
+  // 视频书 = 首页「精选」频道 + premium 单路数据源 + 沉浸 viewer。它与三路浏览流
+  // 不共享回退：premium 池空即空态、任一集交付引用解析失败即显式失败态，二者都
+  // 不得被首页推荐绿冒充（environment-topology-and-packaging REQ-002：
+  // premium_stream release-bound 非空读回）。
+  patrolTest(
+    'home_video_book_featured_channel_renders_playable_episode',
+    tags: ['user-acceptance', 'home-rec', 'discovery', 'video-book'],
+    skip: !kRunPatrolAcceptance,
+    config: PatrolTesterConfig(visibleTimeout: const Duration(seconds: 12)),
+    ($) async {
+      await launchPatrolAppOnce($);
+      await _recoverToHomeFeed($);
+
+      await $(_kFeaturedTab).tap();
+      final entered = await _waitForKeyInTree(
+        $,
+        _kFeaturedChannelBody,
+        timeout: const Duration(seconds: 12),
+      );
+      expect(entered, isTrue, reason: '点击「视频书」频道必须进入 premium 沉浸正文');
+
+      // 终态三选一：ready（内容 + 交付 + 播放器均成立）/ 显式失败 / 合法空态。
+      // 只有 ready 是验收通过；空态与失败态都必须可区分并作为红报告。
+      final settled = await _waitForAnyKeyInTree(
+        $,
+        <Key>[
+          _kVideoPlayerReady,
+          _kVideoPlayerError,
+          _kWorksVideoDeliveryUnresolved,
+          _kWorksInternalFeedError,
+          ..._kWorksInternalFeedEmptyKeys,
+        ],
+        timeout: const Duration(seconds: 45),
+      );
+      expect(settled, isTrue, reason: '视频书必须在预算内到达可判定终态，不得停留在加载态');
+      expect(
+        _existsInTree($, find.byKey(_kWorksInternalFeedError)),
+        isFalse,
+        reason: '视频书 premium 单路 feed 不得进入协议/传输错误态',
+      );
+      for (final emptyKey in _kWorksInternalFeedEmptyKeys) {
+        expect(
+          _existsInTree($, find.byKey(emptyKey)),
+          isFalse,
+          reason: '视频书 premium 池不得为空：${emptyKey.value}（precious pool 首次激活未完成）',
+        );
+      }
+      expect(
+        _existsInTree($, find.byKey(_kWorksVideoDeliveryUnresolved)),
+        isFalse,
+        reason: '视频书当前集的全部交付引用解析失败（mediaItems/accessMode/URL 形态不合契约）',
+      );
+      expect(
+        _existsInTree($, find.byKey(_kVideoPlayerError)),
+        isFalse,
+        reason: '视频书首集不得进入播放失败覆盖层',
+      );
+      expect(
+        _existsInTree($, find.byKey(_kVideoPlayerReady)),
+        isTrue,
+        reason: '视频书首集必须完成原生播放器初始化（release-bound 可播放视频）',
+      );
+
+      await $.platform.android.pressBack();
+      await _recoverToHomeFeed($);
     },
   );
 

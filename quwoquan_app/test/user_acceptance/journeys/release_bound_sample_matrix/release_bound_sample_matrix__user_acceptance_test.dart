@@ -154,6 +154,10 @@ Future<void> _runNavigableSlot(
   }
 }
 
+/// GetFeed 与 Search 契约的 `pagination.maximum_items` 均为 20；客户端执行器在
+/// 发请求前按契约校验 limit，超限会把整格观测吞成 QUERY_BLOCKED 而非红。
+const int _contractPageLimit = 20;
+
 Future<Map<String, String>> _readFeedObservations(
   ProviderContainer container,
   ReleaseUatSampleMatrix matrix,
@@ -165,7 +169,7 @@ Future<Map<String, String>> _readFeedObservations(
       final page = await query.listDiscoveryFeedPage(
         category: 'recommend',
         channelId: 'recommend',
-        limit: 50,
+        limit: _contractPageLimit,
       );
       final match = page.objectCards.where(
         (card) => card.objectId == sample.runtimeObjectId,
@@ -181,7 +185,7 @@ Future<Map<String, String>> _readFeedObservations(
       channelId: route.channelId,
       identity: route.identity,
       type: route.type,
-      limit: 50,
+      limit: _contractPageLimit,
     );
     final match = page.items.where((post) => post.id == sample.runtimeObjectId);
     if (match.isNotEmpty) observations[sample.carrier] = match.first.title;
@@ -202,7 +206,7 @@ Future<Map<String, String>> _readRecommendationObservations(
       channelId: routedChannel,
       identity: routedChannel == null ? channel.feedQuery['identity'] : null,
       type: routedChannel == null ? channel.feedQuery['type'] : null,
-      limit: 50,
+      limit: _contractPageLimit,
     );
     for (final sample in matrix.samples) {
       if (observations.containsKey(sample.carrier)) continue;
@@ -244,7 +248,7 @@ Future<Map<String, String>> _readSearchObservations(
             : <SearchContentTypeFilter>{
                 SearchContentTypeFilter.fromWire(sample.carrier)!,
               },
-        limit: 50,
+        limit: _contractPageLimit,
       ),
       deadlineAt: DateTime.now().add(_remoteTimeout),
     );
