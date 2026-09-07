@@ -61,7 +61,7 @@ PR body 只接受一个 JSON 对象，恰好两个键：
 
 `.github/workflows/lane-gate.yml` 是 `lane/* -> dev1.0` 的唯一 hosted required check，context 名精确为 `04. Lane Gate`，由 `branch_policy.yaml#required_integration_checks` 唯一声明，与 `03. Delivery Gate` 不共享 workflow 或名字。它只监听 `pull_request: branches: [dev1.0]`，在 exact PR head 的 clean checkout 上重跑静态治理、ImpactPlan/boundary、candidate-bound Code Health Delta 与 `quwoquan_ops/tests/local_contract/**` 四分片；不打包、不签名、不触碰设备或环境。合入不在该 context 内发生：由 integration 工作区通道携 Alpha/Beta admission 把远端 `dev1.0` 快进到已过检的 lane head（见 `daily-merge-release-strategy`）。
 
-唯一的 hosted 读取是 governance job 以默认只读 `github.token`（`permissions: contents: read`，rulesets 只需 metadata read）执行 `verify_hosted_release_authority.py --scope integration-ruleset`，读回 `repos/{r}/rulesets` 中适用于 `refs/heads/dev1.0` 的 ruleset 并产出 `hosted-integration-ruleset-receipt`；它不持有任何 secret，不创建 check-run，不写任何 ref。
+唯一的 hosted 读取是 governance job 以默认只读 `github.token`（`permissions: contents: read`，rulesets 只需 metadata read）执行 `verify_hosted_integration_ruleset.py`，读回 `repos/{r}/rulesets` 中适用于 `refs/heads/dev1.0` 的 ruleset 并产出 `hosted-integration-ruleset-receipt`；它不持有任何 secret，不创建 check-run，不写任何 ref。
 
 ## 4. 三个 release workflow 的单一职责
 

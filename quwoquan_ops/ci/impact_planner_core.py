@@ -80,7 +80,7 @@ _R4_GOVERNANCE_PREFIXES = (
     "quwoquan_ops/ci/impact_planner_core.py",
     "quwoquan_ops/ci/detect_ci_impacted_scopes.py",
     "quwoquan_ops/ci/verify_ci_changed_boundary.py",
-    "quwoquan_ops/ci/verify_hosted_release_authority.py",
+    "quwoquan_ops/ci/verify_hosted_integration_ruleset.py",
     "quwoquan_ops/policies/branch_policy.yaml",
     "quwoquan_ops/policies/ci_test_ownership.json",
     "quwoquan_ops/policies/flaky_test_policy.json",

@@ -142,7 +142,7 @@
 .PHONY: codegen-app-shell-navigation codegen-app-identity verify-app-identity verify-app-identity-state-isolation
 .PHONY: codegen-ops-portal
 .PHONY: codegen-control-plane-runtime
-.PHONY: verify-hosted-human-authority test-hosted-authority-adapter-local-contract test-hosted-human-authority-local-contract test-hosted-human-authority-api-integration test-ops-portal build-ops-portal gate-ops-portal
+.PHONY: verify-hosted-human-authority test-hosted-authority-adapter-local-contract test-hosted-integration-ruleset-local-contract test-hosted-human-authority-local-contract test-hosted-human-authority-api-integration test-ops-portal build-ops-portal gate-ops-portal
 .PHONY: codegen-content-service
 .PHONY: codegen-chat-service
 .PHONY: new-service
@@ -684,6 +684,12 @@ verify-hosted-human-authority:
 test-hosted-authority-adapter-local-contract: prepare-test-python
 	@$(PYTEST_RUNNER) $(PYTEST_INTERPRETER_FLAGS) -m pytest $(PYTEST_FLAGS) \
 		quwoquan_ops/tests/local_contract/gate/test_hosted_authority_adapter__local_contract_test.py -q
+
+# 04. Lane Gate governance job 调用的 dev1.0 ruleset 读回门禁，其合同必须也在 gate 链执行。
+test-hosted-integration-ruleset-local-contract: prepare-test-python
+	@$(PYTEST_RUNNER) $(PYTEST_INTERPRETER_FLAGS) -m pytest $(PYTEST_FLAGS) -p no:cacheprovider \
+		quwoquan_ops/tests/local_contract/ci/test_hosted_integration_ruleset__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/ci/test_delivery_gate_signer_identity__local_contract_test.py -q
 
 test-hosted-human-authority-local-contract: test-hosted-authority-adapter-local-contract
 	@$(MAKE) -C quwoquan_service test-platform-ops-local-contract
@@ -1407,7 +1413,7 @@ test-app-python-local-contract: prepare-test-python
 # 门禁配套 local_contract：这些测试锁定 gate 链上门禁自身的判据，必须与门禁同进同退。
 # 缺口清单由 verify_gate_local_contract_execution.py 实时派生，本目标必须与之保持零缺口；
 # 新增门禁时把它的配套测试补进这里，不要重新引入 allowance 基线。
-test-gate-companion-local-contract: test-review-dispatch test-review-consolidation test-named-evidence test-evidence-fingerprint test-handoff-contracts test-hosted-authority-adapter-local-contract test-governance-pipeline-admission test-delivery-ci-local-contract prepare-test-python
+test-gate-companion-local-contract: test-review-dispatch test-review-consolidation test-named-evidence test-evidence-fingerprint test-handoff-contracts test-hosted-authority-adapter-local-contract test-hosted-integration-ruleset-local-contract test-code-health-delta test-governance-pipeline-admission test-delivery-ci-local-contract prepare-test-python
 	@$(PYTEST_RUNNER) $(PYTEST_INTERPRETER_FLAGS) -m pytest $(PYTEST_FLAGS) \
 		quwoquan_ops/tests/local_contract/provider/test_external_provider_governance__local_contract_test.py \
 		quwoquan_ops/tests/local_contract/provider/test_provider_conformance_evidence__contract__local_contract_test.py \

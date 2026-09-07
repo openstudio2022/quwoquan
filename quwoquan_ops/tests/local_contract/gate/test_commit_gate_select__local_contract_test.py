@@ -170,15 +170,50 @@ def test_commit_gate_changes_select_only_their_focused_contracts() -> None:
 
 
 def test_supply_chain_gate_selects_its_release_contract() -> None:
+    # 供应链门禁有两份 companion：规则合同（gate/）与 release 供应链证明（release/），
+    # 只映射后者时新增的 job 上下文 / step 自引用规则回退在 L0 不可见。
     assert select_pytest_paths(
         ["quwoquan_ops/gate/verify_github_supply_chain.py"]
     ) == (
         [
+            "quwoquan_ops/tests/local_contract/gate/"
+            "test_github_supply_chain__contract__local_contract_test.py",
             "quwoquan_ops/tests/local_contract/release/"
-            "test_service_supply_chain_provenance__supply_chain__local_contract_test.py"
+            "test_service_supply_chain_provenance__supply_chain__local_contract_test.py",
         ],
         [],
     )
+
+
+def test_ruleset_readback_and_cli_argument_gates_select_their_exact_contracts() -> None:
+    assert select_pytest_paths(["quwoquan_ops/ci/verify_hosted_integration_ruleset.py"]) == (
+        ["quwoquan_ops/tests/local_contract/ci/test_hosted_integration_ruleset__local_contract_test.py"],
+        [],
+    )
+    assert select_pytest_paths(["quwoquan_ops/gate/verify_workflow_cli_arguments.py"]) == (
+        ["quwoquan_ops/tests/local_contract/gate/test_workflow_cli_arguments__gate__local_contract_test.py"],
+        [],
+    )
+    assert select_pytest_paths(["quwoquan_ops/ci/verify_code_health_delivery.py"]) == (
+        ["quwoquan_ops/tests/local_contract/ci/test_code_health_delivery__local_contract_test.py"],
+        [],
+    )
+
+
+def test_code_health_delta_maps_to_every_code_health_contract() -> None:
+    selected, deferred = select_pytest_paths(["quwoquan_ops/gate/code_health_delta/calibration.py"])
+    names = {path.rsplit("/", 1)[-1] for path in selected + deferred}
+    assert names == {
+        "test_incremental_code_health__gate__local_contract_test.py",
+        "test_code_health_file_size__gate__local_contract_test.py",
+        "test_code_health_precision__gate__local_contract_test.py",
+        "test_code_health_render_and_history__gate__local_contract_test.py",
+        "test_code_health_calibration__gate__local_contract_test.py",
+        "test_code_health_weekly__gate__local_contract_test.py",
+        "test_code_health_hotspots__gate__local_contract_test.py",
+        "test_code_health_delivery__local_contract_test.py",
+        "test_code_health_integration__local_contract_test.py",
+    }
 
 
 def test_ordinary_gate_and_ci_sources_defer_directories_instead_of_running_them() -> None:

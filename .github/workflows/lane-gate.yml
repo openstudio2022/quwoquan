@@ -61,8 +61,7 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          python3 quwoquan_ops/ci/verify_hosted_release_authority.py \
-            --scope integration-ruleset \
+          python3 quwoquan_ops/ci/verify_hosted_integration_ruleset.py \
             --repository "$GITHUB_REPOSITORY" \
             --output "$QWQ_OUTPUT_ROOT/env/repo/runs/lane-gate/hosted-integration-ruleset.json"
       - name: Python script governance

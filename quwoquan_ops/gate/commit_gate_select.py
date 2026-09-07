@@ -168,6 +168,9 @@ def classify(paths: list[str]) -> dict[str, bool]:
             continue
         if path.startswith(".github/workflows/") and path.endswith((".yml", ".yaml")):
             flags["has_workflows"] = True
+        # 判定规则本身改动时同样触发 workflow_cli_arguments（commit_gate.sh 对此走全量）。
+        if path == "quwoquan_ops/gate/verify_workflow_cli_arguments.py":
+            flags["has_workflows"] = True
         if path.startswith("quwoquan_service/"):
             flags["has_service"] = True
             if "/contracts/" in path or path.startswith(
@@ -375,6 +378,9 @@ def _select_pytest_targets(paths: list[str]) -> dict[str, object]:
             ),
         ),
         (
+            # code_health_delta 是九个合同共同的实现面（与 Makefile test-code-health-delta
+            # 目标同集合）：只映射一部分会让 calibration/weekly/hotspots/delivery/integration
+            # 的回退在 L0 不可见。
             "quwoquan_ops/gate/code_health_delta/",
             (
                 "quwoquan_ops/tests/local_contract/gate/"
@@ -385,6 +391,46 @@ def _select_pytest_targets(paths: list[str]) -> dict[str, object]:
                 "test_code_health_precision__gate__local_contract_test.py",
                 "quwoquan_ops/tests/local_contract/gate/"
                 "test_code_health_render_and_history__gate__local_contract_test.py",
+                "quwoquan_ops/tests/local_contract/gate/"
+                "test_code_health_calibration__gate__local_contract_test.py",
+                "quwoquan_ops/tests/local_contract/gate/"
+                "test_code_health_weekly__gate__local_contract_test.py",
+                "quwoquan_ops/tests/local_contract/gate/"
+                "test_code_health_hotspots__gate__local_contract_test.py",
+                "quwoquan_ops/tests/local_contract/ci/"
+                "test_code_health_delivery__local_contract_test.py",
+                "quwoquan_ops/tests/local_contract/ci/"
+                "test_code_health_integration__local_contract_test.py",
+            ),
+        ),
+        (
+            "quwoquan_ops/ci/verify_code_health_delivery.py",
+            (
+                "quwoquan_ops/tests/local_contract/ci/"
+                "test_code_health_delivery__local_contract_test.py",
+            ),
+        ),
+        (
+            "quwoquan_ops/ci/verify_hosted_integration_ruleset.py",
+            (
+                "quwoquan_ops/tests/local_contract/ci/"
+                "test_hosted_integration_ruleset__local_contract_test.py",
+            ),
+        ),
+        (
+            "quwoquan_ops/gate/verify_workflow_cli_arguments.py",
+            (
+                "quwoquan_ops/tests/local_contract/gate/"
+                "test_workflow_cli_arguments__gate__local_contract_test.py",
+            ),
+        ),
+        (
+            "quwoquan_ops/gate/verify_github_supply_chain.py",
+            (
+                "quwoquan_ops/tests/local_contract/gate/"
+                "test_github_supply_chain__contract__local_contract_test.py",
+                "quwoquan_ops/tests/local_contract/release/"
+                "test_service_supply_chain_provenance__supply_chain__local_contract_test.py",
             ),
         ),
         (
@@ -466,13 +512,6 @@ def _select_pytest_targets(paths: list[str]) -> dict[str, object]:
             (
                 "quwoquan_ops/tests/local_contract/ci/"
                 "test_local_readiness__core__local_contract_test.py",
-            ),
-        ),
-        (
-            "quwoquan_ops/gate/verify_github_supply_chain.py",
-            (
-                "quwoquan_ops/tests/local_contract/release/"
-                "test_service_supply_chain_provenance__supply_chain__local_contract_test.py",
             ),
         ),
         (

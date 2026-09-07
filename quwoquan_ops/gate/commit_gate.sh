@@ -143,15 +143,22 @@ run_static_check() {
       ;;
     workflow_cli_arguments)
       # L0 只对本次 staged 触及的 workflow 判定；全量在 gate_repo.sh。
+      # 门禁脚本自身被改而没有 staged workflow 时，判定规则变了而被判对象没变，
+      # 此时对全部 workflow 重判，否则规则回退在提交前不可见。
       workflow_args=()
       while IFS= read -r changed; do
         [[ -n "$changed" ]] && workflow_args+=(--workflow "$changed")
       done < <(git diff --cached --name-only -- '.github/workflows/*.yml' '.github/workflows/*.yaml')
       if [[ ${#workflow_args[@]} -eq 0 ]]; then
-        log "FAIL: workflow_cli_arguments selected without staged workflow files"
-        return 2
+        if git diff --cached --name-only -- quwoquan_ops/gate/verify_workflow_cli_arguments.py | grep -q .; then
+          python3 -B quwoquan_ops/gate/verify_workflow_cli_arguments.py
+        else
+          log "FAIL: workflow_cli_arguments selected without staged workflow files"
+          return 2
+        fi
+      else
+        python3 -B quwoquan_ops/gate/verify_workflow_cli_arguments.py "${workflow_args[@]}"
       fi
-      python3 -B quwoquan_ops/gate/verify_workflow_cli_arguments.py "${workflow_args[@]}"
       ;;
     code_health_delta_fast)
       changed_args=()

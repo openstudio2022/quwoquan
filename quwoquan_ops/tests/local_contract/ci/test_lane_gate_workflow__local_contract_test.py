@@ -93,12 +93,11 @@ def test_lane_gate_reads_back_that_its_own_check_is_hosted_required() -> None:
     _, workflow = _load()
     steps = [
         step for step in workflow["jobs"]["governance"]["steps"]
-        if "verify_hosted_release_authority.py" in step.get("run", "")
+        if "verify_hosted_integration_ruleset.py" in step.get("run", "")
     ]
     assert len(steps) == 1
     step = steps[0]
     assert step["env"] == {"GITHUB_TOKEN": "${{ github.token }}"}
-    assert "--scope integration-ruleset" in step["run"]
     assert '--repository "$GITHUB_REPOSITORY"' in step["run"]
     assert "--output" in step["run"]
 

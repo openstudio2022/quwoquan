@@ -14,6 +14,12 @@
 且不伪装成已检查：`$(...)` / 反引号捕获、heredoc、`"${arr[@]}"` 数组展开、`$VAR` 位置
 透传、mutually exclusive group、通过函数或 `main(argv)` 间接构造的 parser、迭代源或
 f-string 插值不是上述常量的 required。
+
+修复方式：按 FAIL 行列出的选项名在 workflow 调用处补参；若该选项确实由运行期决定，
+把调用改成数组展开等不可判定形态而不是删掉 required。接入：L0 `commit_gate.sh` 在
+staged 含 workflow（或本脚本自身）时运行，`gate_repo.sh` 与 `04. Lane Gate` governance
+job 全量运行；合同 `tests/local_contract/gate/test_workflow_cli_arguments__gate__local_contract_test.py`
+由 `gate_repo.sh` 直接执行。
 """
 
 from __future__ import annotations
