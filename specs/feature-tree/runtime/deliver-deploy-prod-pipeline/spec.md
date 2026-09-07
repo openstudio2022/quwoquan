@@ -183,3 +183,25 @@
 - 影响或价值：尚缺一次带计时 receipt 的真实演练验收证据，无法证明三条止损路径各自在 300 秒内完成。三条工具链实现均已存在且不触发重打包：内容 active pointer 回上一 immutable release（`quwoquan_data ship rollback`）、Web current pointer 回上一 artifact（`stackctl deploy --artifact-kind web --expected-current` CAS 切换）、远端配置关闭不兼容能力（`GetAppConfig` kill_switches `immediate`）；演练仍依赖运行中的环境和可回切的上一 release/artifact。
 - 目标：在 `gamma-local` 对三条止损路径各执行一次演练，产出含开始/结束时间戳与恢复验证的机器 receipt，全程无打包/编译步骤。
 - 完成判定：`SIT-001` 的 auto rollback 可验证子句满足，且演练 receipt 证明三条路径耗时 ≤300 秒并有真实 `spec_ref` 绑定
+
+<a id="open-007"></a>
+### OPEN-007 `quwoquan_data/tests/local_contract` 没有任何 hosted 执行点
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：`9f2ee2093` 把 `03. Delivery Gate` 收敛为只验 promotion evidence 时拆掉了它的 data local_contract 分片；`04. Lane Gate`（`local-continuous-integration#gwt-005`）的分片器只跑 `quwoquan_ops/tests/local_contract/**`。于是 `quwoquan_data/tests/local_contract/**` 在 lane PR、promotion 与任何 hosted workflow 上都不执行，只剩开发机 L0 按影响面选中与 `gate_repo.sh` 全量；Data lane 的合同回归在进入 `dev1.0` 前没有 hosted 复算。
+- 目标：由交付链 owner 决定 data 合同的 hosted 宿主——扩展 `04. Lane Gate` 的分片器加 `--scope data` 分片，或为 Data lane 建独立 required check——并把该 check 名进入 `branch_policy.yaml` 的对应 required 集合。
+- 完成判定：`SIT-001` 下任一 `lane/* -> dev1.0` PR 触及 `quwoquan_data/**` 时，hosted 上存在对 `quwoquan_data/tests/local_contract/**` 的 fail-closed 执行（与 `local-continuous-integration#gwt-005` 对 ops 合同的证明形态一致），且 `delivery_gate_data_shard.py` 的 data 分片合同证明分片非空；在此之前本 OPEN 与 `local-continuous-integration#open-004` 一样如实标注 hosted 覆盖缺口。
+- 依赖：ubuntu-latest 上 data 合同的宿主能力清单（与 ops 合同同类的 macOS/工具链前提需先逐条声明）。
+
+<a id="open-008"></a>
+### OPEN-008 `candidateId` 与 `releaseCompositionId` 在发布链读侧仍混用
+
+- 类型：`capability_gap`
+- 优先级：`P2`
+- 准出影响：`track`
+- 影响或价值：`4512b65fb` 把 27 个 App/ops 生成物与 `store_distribution.py`、`release_bound_environment_identity_test_support.py` 收敛为 `candidateId` / `candidate-ready` / `deployable` 语义，但发布链读侧尚未收敛：`quwoquan_ops/cli/lib/app_readiness_facts.py` 仍要求 manifest 含 `releaseCompositionId` 且 status ∈ `{artifact-complete, qualified, main-admitted}`，`dev1.0` 上另有约 30 个文件（多为生成物内嵌 JSON）仍未改名。同一 manifest 在写侧与读侧使用不同字段名与状态集，读侧对新语义的 manifest 会 fail closed 或静默不匹配，新语义的 App readiness 事实链尚未在任一环境真实产出。
+- 目标：以 `quwoquan_service/contracts/metadata/_shared/app_artifact_manifest.yaml` 为唯一 authoring source，把 `app_readiness_facts.py` 与其余读侧收敛到 `candidateId` 与新 status 集，并让 codegen 收敛残余生成物；不保留双读。
+- 完成判定：全仓（生成物除外）`releaseCompositionId` 零命中，`app_readiness_facts` 的 local contract 以新字段名与 status 集通过，`SIT-001` 的 App readiness 事实链在 Alpha 上真实产出一次。
+- 依赖：发布链 owner 对 `artifact-complete/qualified/main-admitted` 与 `candidate-ready/deployable` 状态映射的裁决。

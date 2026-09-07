@@ -158,6 +158,21 @@
 - 影响 Story：[`daily-merge-release-strategy`](./daily-merge-release-strategy/spec.md)、[`local-gamma-mirror`](./local-gamma-mirror/spec.md)
 - 关联验收：[`SIT-001`](./spec.md#sit-001)、[`daily-merge-release-strategy GWT-001`](./daily-merge-release-strategy/spec.md#gwt-001)
 
+<a id="dec-011"></a>
+### DEC-011 lane→dev1.0 准入：hosted required check 与 integration 通道 admission 叠加，ruleset 把直推目标约束为已过检 lane head
+
+- 对象与 owner：`lane/* -> dev1.0` 的合入由两层互不替代的准入共同决定。第一层是 hosted required check `04. Lane Gate`（owner `local-continuous-integration`，由 `branch_policy.yaml#required_integration_checks` 唯一声明，在 exact PR head 重跑静态治理、ImpactPlan/boundary、Code Health Delta 与 ops 合同分片）；第二层是本 Story 的 integration 工作区通道（`make integrate`：L1 readiness source fact + Alpha/条件 Beta `EnvironmentAcceptanceFact` → publish admission → expected-old fast-forward push）。hosted `dev1.0` ruleset 是把两层缝合起来的机制：`required_status_checks=[04. Lane Gate]`（strict）对**每一次 ref 更新**生效，包括 integration 通道的直推，因此能进入 `dev1.0` 的 commit 必须是已带该 check SUCCESS 的 lane head；ruleset 不设 `pull_request` 规则（否则封死该通道）、`bypass_actors` 为空。
+- Command/query 分流：写侧只有 integration 通道的 publish（`local_git_cas_publish`，`--force-with-lease=refs/heads/dev1.0:<before>` 的 fast-forward push + `before|after|other` 读回）；PR merge 按钮不是合入执行者，hosted 在 `dev1.0` 包含 lane head 后自动标记 PR merged。读侧：`04. Lane Gate` 的 governance job 以只读 token 读回 dev1.0 ruleset 证明自身是 required（`local-continuous-integration#gwt-005`，收据 `hosted-integration-ruleset-receipt`）；integration 通道不读 check-run，把 required check 的强制完全交给 ruleset。
+- 时机与节奏：lane head 先经 PR 拿到 `04` SUCCESS，再在 integration 工作区把本地 `dev1.0` fast-forward 到该 lane head（readiness 的 push identity 要求 `refs/heads/dev1.0 == candidate`）并以 `CANDIDATE=HEAD` 走通道；两者顺序不可颠倒，通道 publish 在 ruleset 下对未过检 commit 必被拒绝且零写。
+- 回滚与纠错：ruleset 缺 required check、多出 `pull_request` 规则或出现任何 bypass actor 时，`04. Lane Gate` 自身转红并阻断所有 lane PR，直到 hosted 配置恢复；不得以 bypass、warn-only 或本地回执替代。promotion 后 `main -> dev1.0` 回同步推的是 merge commit、不带 `04` check，会被同一 ruleset 拒绝：这是有意的——回同步属受管 system backsync（`daily-merge-release-strategy` OPEN-004），只能由专用 system actor 携其自身 bypass 语义执行，人工 `make promotion-backsync` 在该 actor 就位前不可用于带 required check 的 `dev1.0`。
+- 一致性与幂等：publish 读回 `after` 才写 publish result；`before` 零写、`other` 为 CAS 冲突。ruleset readback 与 publish 读回都只绑定 exact SHA，不依赖 workflow conclusion。
+- 测试 seam：`verify_hosted_release_authority.py --scope integration-ruleset` 的 local contract 覆盖缺 required check、存在 bypass actor、多出 `pull_request` 规则、非 strict、多条适用 ruleset；`test_lane_gate_workflow` 锁定 governance job 的 readback 步骤；`scoped_candidate/core.py` 的 publish 三态与 `NOT_FAST_FORWARD` 合同覆盖通道侧。
+- 理由：只保留 PR required check 会让 integration 通道成为绕过 hosted 复算的旁路（`local-continuous-integration` OPEN-003 的原始缺口）；只保留通道 admission 又让 lane PR 退化为可见性载体、hosted 无强制。ruleset 对直推同样生效这一 GitHub 语义使两层可以叠加而不需要通道自己去读 check-run。
+- 被否决方案：ruleset 加 `pull_request` 规则并把 integration pusher 设为 bypass actor（bypass 同时豁免 required check，等于回到旁路）；通道在 publish 前自行调用 check-runs API 判定 `04`（重复实现且可被本地绕过）；`04. Lane Gate` 降为 advisory。
+- 关联要求：[`daily-merge-release-strategy REQ-001`](./daily-merge-release-strategy/spec.md#req-001)、[`local-continuous-integration REQ-003`](../development-workflow-governance/local-continuous-integration/spec.md#req-003)
+- 影响 Story：[`daily-merge-release-strategy`](./daily-merge-release-strategy/spec.md)、[`local-continuous-integration`](../development-workflow-governance/local-continuous-integration/spec.md)
+- 关联验收：[`daily-merge-release-strategy GWT-001`](./daily-merge-release-strategy/spec.md#gwt-001)、[`local-continuous-integration GWT-005`](../development-workflow-governance/local-continuous-integration/spec.md#gwt-005)
+
 ## 5. 失败与恢复
 
 - 失败类型：分支 policy 无效、PR/ref 非法、`main` direct push、integration push 缺 before/after OID或 ancestry authority、integration/backsync 非 fast-forward、force/delete、ref compare-and-swap 冲突、Prod source 不可达 main、权限拒绝、依赖超时、候选摘要冲突、证据缺失或持久化失败。

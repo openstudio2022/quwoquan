@@ -55,7 +55,13 @@ PR body 只接受一个 JSON 对象，恰好两个键：
 
 该 context 禁止安装语言工具链、构建、源码测试、打包、ABG、Provider live、设备执行、环境 cleanup、合并或 Git ref 写入。仓库 ruleset 只应要求这一项 promotion context；不得再把其他编号 context 组合成源码晋级条件。
 
-本地左移：`make commit-gate` 在 `.github/workflows/**` 变更时运行 `verify_workflow_actionlint.sh`（pinned actionlint，拦截解析期即失效的非法上下文、不存在属性与 reusable 输入类型错误）；workflow↔仓内 CLI 的 argparse required 一致性由 `verify_workflow_cli_arguments.py` 负责。两者在 `gate_repo.sh` 全量执行。
+本地左移：`make commit-gate` 在 `.github/workflows/**` 变更时运行 `verify_workflow_actionlint.sh`（pinned actionlint，拦截解析期即失效的非法上下文、不存在属性与 reusable 输入类型错误）；workflow↔仓内 CLI 的 argparse required 一致性由 `verify_workflow_cli_arguments.py` 负责（含常量循环内 f-string 声明的成组 required）；step 内引用自身 `steps.<id>.outputs` 由 `verify_github_supply_chain.py` 拦截。三者在 `gate_repo.sh` 全量执行。
+
+### 3.1 `04. Lane Gate` 只做 lane PR 静态/合同复算与 dev1.0 ruleset 读回
+
+`.github/workflows/lane-gate.yml` 是 `lane/* -> dev1.0` 的唯一 hosted required check，context 名精确为 `04. Lane Gate`，由 `branch_policy.yaml#required_integration_checks` 唯一声明，与 `03. Delivery Gate` 不共享 workflow 或名字。它只监听 `pull_request: branches: [dev1.0]`，在 exact PR head 的 clean checkout 上重跑静态治理、ImpactPlan/boundary、candidate-bound Code Health Delta 与 `quwoquan_ops/tests/local_contract/**` 四分片；不打包、不签名、不触碰设备或环境。合入不在该 context 内发生：由 integration 工作区通道携 Alpha/Beta admission 把远端 `dev1.0` 快进到已过检的 lane head（见 `daily-merge-release-strategy`）。
+
+唯一的 hosted 读取是 governance job 以默认只读 `github.token`（`permissions: contents: read`，rulesets 只需 metadata read）执行 `verify_hosted_release_authority.py --scope integration-ruleset`，读回 `repos/{r}/rulesets` 中适用于 `refs/heads/dev1.0` 的 ruleset 并产出 `hosted-integration-ruleset-receipt`；它不持有任何 secret，不创建 check-run，不写任何 ref。
 
 ## 4. 三个 release workflow 的单一职责
 
@@ -199,6 +205,7 @@ GitHub OIDC、GHCR write/read 与 attestation signer identity必须有受信策�
 
 - `quwoquan_ops/policies/product_version.yaml` 的 release train 为 `inactive`，previous stable 为 `not_imported`，initial release authority 为 `absent`，activation 为 `blocked`；因此 RC/stable 发布链尚未激活。
 - Hosted branch protection/ruleset、唯一 promotion binding、system actor 与八条允许 refs 的真实 API readback 尚未提供；在此前 `hostedProtectionVerified=false`、`formalProd=false`。
+- `dev1.0` ruleset 尚未把 `04. Lane Gate` 设为 `required_status_checks`（须 strict、`do_not_enforce_on_create=false`），且当前带一条无规格来源的 `DeployKey`/`always` bypass actor；两者任一存在时 `04. Lane Gate` 的 governance job 读回 fail closed、该 check 转红，lane PR 不可视为已通过 hosted 强制。该 ruleset **不得**加 `pull_request` 规则（会封死 integration fast-forward 合入通道）；promotion 后 `main -> dev1.0` 回同步推的是 merge commit、不带本 check，在专用 system backsync actor 与其 bypass 语义就位前（daily-merge-release-strategy OPEN-004）只能由人工按 OPEN 流程处理。
 - 受管 system backsync 尚无执行面：`system-backsync` Environment 与仅写 `dev1.0` 的 `SYSTEM_BACKSYNC_DEPLOY_KEY` 未配置，`delivery-gate.yml` 也不再调用 reusable backsync；当前回同步只由 integration 工作区 `make promotion-backsync` 完成（daily-merge-release-strategy OPEN-004）。
 - `03. Delivery Gate` 验签只依赖仓内 `evidence_signing_keyring.yaml`；keyring 缺 identity 的 active 公钥、或 IQF/EAF 由未登记 key 签发时，PR job 在验签步骤 fail closed（不需要也不接受 repository secret）。
 - trusted publisher 的真实 GitHub App/broker credential、跨主机协调与 Hosted ref CAS/readback 尚缺外部证明。

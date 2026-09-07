@@ -104,8 +104,8 @@
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`block`
-- 影响或价值：仓内 decision-table 已覆盖普通 lane 同名 push、匹配 integration worktree 的 direct fast-forward push，以及可证明 system fast-forward backsync；尚缺真实 scoped candidate、trusted publisher CAS、`dev1.0 -> main` PR/check、promotion 后 system CAS backsync，以及 hosted 八条分支权威清单与干净 clone 复现回执。Hosted 仍需证明 non-fast-forward、delete/force 与 `main` direct push 保护，但 direct fast-forward dev push 不再定义为非法。此外 `promotion_verify` 调用 `integration_qualification.py` 时仍缺 `--qualification-verification-key-env`、`--environment-verification-key-env` 与 `--expected-{qualification,alpha,beta,gamma}-signer-identity`：workflow 只注入一把 `QWQ_INTEGRATION_QUALIFICATION_SIGNING_KEY`，而合同要求两把互异 verification key 与四个 SPIFFE signer identity，且仓内尚无这些 identity 与 key env 名的 canonical 真相源（生产侧 `environment_execution.py` / `integration_candidate.py` 同样只以 required 参数接收、无默认值）。该脚本含 f-string 命名的 required 选项，`verify_workflow_cli_arguments.py` 对它整体判为不可静态判定而非放行；在真相源建立并接线前，promotion 门禁在该 step 必以 argparse exit 2 结束。另外 `deploy-prod-auto.yml` 与 `release-qualification.yml` 三处以 `${{ github.run_started_at }}` 填充 `--admitted-at` / `--created-at` / `--qualified-at`，该上下文属性在 GitHub Actions 中不存在，运行期展开为空串，会让对应 fact 的时间戳字段为空或被 CLI 拒绝。
-- 完成判定：`GWT-001.t1..t2` 与 `GWT-002.t1..t2` 具备 decision-table local contract；signer identity 与两把 verification key env 名进入版本化 policy 并由 `promotion_verify` 逐一传入，`integration_qualification.py` 的合同测试覆盖 workflow 调用形态；当前最终 SHA 的 hosted readback 证明 lane PR/check、promotion PR/check、system actor、八条 refs 闭集以及 dev non-FF/force/delete 与 main direct-push 保护，真实 system backsync 证明 CAS 与 ref before/after。
+- 影响或价值：仓内 decision-table 已覆盖普通 lane 同名 push、匹配 integration worktree 的 direct fast-forward push，以及可证明 system fast-forward backsync；尚缺真实 scoped candidate、trusted publisher CAS、`dev1.0 -> main` PR/check、promotion 后 system CAS backsync，以及 hosted 八条分支权威清单与干净 clone 复现回执。Hosted 仍需证明 non-fast-forward、delete/force 与 `main` direct push 保护，但 direct fast-forward dev push 不再定义为非法。signer 信任根已单轨到仓内 `evidence_signing_keyring.yaml`（`DEC-010`），`promotion_verify` 对 `integration_qualification.py` 传齐 `--signing-keyring` 与四个 `--expected-*-signer-identity`，`verify_workflow_cli_arguments.py` 已能静态展开该脚本常量循环内的 required 并对该调用判绿；workflow 里的 `QUALIFICATION_SIGNER_IDENTITY` / `ENVIRONMENT_SIGNER_IDENTITY` 是 job env 字面常量，由 `test_delivery_gate_signer_identity` 锁定为 keyring 已登记且 purpose 匹配的 identity，并锁定四个 `--expected-*-signer-identity` 逐一透传。剩余缺口只在 hosted 真实执行面。
+- 完成判定：`GWT-001.t1..t2` 与 `GWT-002.t1..t2` 具备 decision-table local contract；当前最终 SHA 的 hosted readback 证明 lane PR/check、promotion PR/check、system actor、八条 refs 闭集以及 dev non-FF/force/delete 与 main direct-push 保护，真实 system backsync 证明 CAS 与 ref before/after。
 
 <a id="open-002"></a>
 ### OPEN-002 private-free GitHub 托管分支保护
@@ -133,9 +133,9 @@
 - 类型：`external_blocker`
 - 优先级：`P2`
 - 准出影响：`track`
-- 影响或价值：`dev1.0` 三条写入通道中，trusted publisher CAS 需要 hosted authenticated broker，受管 system backsync 需要专用 `SYSTEM_BACKSYNC_DEPLOY_KEY` 与 `system-backsync` Environment；两者当前都没有外部执行面。现行闭环全部由 integration 工作区 FF 通道承担（`make integrate` 发布、`make promotion-backsync` 回同步），reusable `system-backsync.yml` 保留合同但无 caller。
-- 完成判定：`GWT-001.t2` 的 publisher CAS 与 `GWT-002.t2` 的 system actor 回同步各有一次真实 hosted 执行回执，且与 integration FF 通道产生的 publish result / 回同步读回同 schema、同终态。
-- 依赖：hosted broker 凭据与 URL、dedicated deploy key、`system-backsync` Environment。
+- 影响或价值：`dev1.0` 三条写入通道中，trusted publisher CAS 需要 hosted authenticated broker，受管 system backsync 需要专用 `SYSTEM_BACKSYNC_DEPLOY_KEY` 与 `system-backsync` Environment；两者当前都没有外部执行面。现行闭环全部由 integration 工作区 FF 通道承担（`make integrate` 发布、`make promotion-backsync` 回同步），reusable `system-backsync.yml` 保留合同但无 caller。`DEC-011` 把 `dev1.0` ruleset 设为 `required_status_checks=[04. Lane Gate]` 后，promotion 产生的 main merge commit 不带该 check，`make promotion-backsync` 的直推会被 ruleset 拒绝：回同步只能由专用 system backsync actor 以其自身 bypass 语义执行，而当前 `dev1.0` ruleset 上那条无规格来源的 `DeployKey`/`always` bypass 既不是该 actor，也让 `release-controller` 可写 key 获得强推能力，须移除。
+- 完成判定：`GWT-001.t2` 的 publisher CAS 与 `GWT-002.t2` 的 system actor 回同步各有一次真实 hosted 执行回执，且与 integration FF 通道产生的 publish result / 回同步读回同 schema、同终态；system backsync actor 的 bypass 不得同时豁免 `non_fast_forward`/`deletion`（GitHub bypass 按 ruleset 整体生效，因此 `required_status_checks` 须放入独立 ruleset 并只给该 actor bypass），且 `04. Lane Gate` 的 ruleset readback 显式接受这一结构与该唯一 actor。
+- 依赖：hosted broker 凭据与 URL、dedicated deploy key、`system-backsync` Environment、ruleset bypass actor 只登记该 deploy key。
 
 <a id="open-005"></a>
 ### OPEN-005 CI 效率、晋级 ratchet 与 RC factory 四类事实缺口
