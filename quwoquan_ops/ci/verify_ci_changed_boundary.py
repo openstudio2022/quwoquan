@@ -17,7 +17,7 @@ from quwoquan_ops.ci.impact_planner_core import validate_delivery_impact_plan
 from quwoquan_ops.cli.local_readiness import (
     LocalReadinessError,
     _PII_PATTERNS,
-    _SECRET_PATTERNS,
+    _has_secret_material,
     _staged_governance,
 )
 
@@ -49,7 +49,7 @@ def verify(plan_path: Path, *, expected_source_sha: str, expected_tree_digest: s
         blob = _candidate_blob(expected_source_sha, changed_path)
         if blob is None:
             continue
-        if any(pattern.search(blob) for pattern in _SECRET_PATTERNS):
+        if _has_secret_material(blob):
             raise LocalReadinessError(
                 f"changed candidate secret material detected: {changed_path}"
             )
