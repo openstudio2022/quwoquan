@@ -20,9 +20,7 @@ _RECEIPT_SCHEMA = "quwoquan_ops.ship_readiness_receipt"
 
 class ShipReadinessPhase(StrEnum):
     IMPORT = "import"
-    RESEARCH = "research"
-    CONSUMER = "consumer"
-    COMMERCIAL = "commercial"
+    PRODUCTION = "production"
 
 
 @dataclass(frozen=True, slots=True)
@@ -67,17 +65,12 @@ def require_environment_readiness(
     verify_run_id = str(verify_run_id or "").strip()
     manifest_digest = str(manifest_digest or "").strip()
     lifecycle_exit_ref = str(lifecycle_exit_ref or "").strip()
-    if phase in {ShipReadinessPhase.CONSUMER, ShipReadinessPhase.COMMERCIAL} and (
+    if phase is ShipReadinessPhase.PRODUCTION and (
         not release_id or not verify_run_id or not manifest_digest
     ):
         raise SystemExit(
             f"[ship] GATE_BLOCK {environment.value}/{phase.value}: "
             "releaseId, verifyRunId and manifestDigest are required"
-        )
-    if phase is ShipReadinessPhase.COMMERCIAL and not lifecycle_exit_ref:
-        raise SystemExit(
-            f"[ship] GATE_BLOCK {environment.value}/{phase.value}: "
-            "lifecycleExitRef is required"
         )
     command = [
         sys.executable,
@@ -92,18 +85,7 @@ def require_environment_readiness(
         "--report-dir",
         str(run / "ops-readiness"),
     ]
-    if phase is ShipReadinessPhase.RESEARCH and (
-        not release_id or not manifest_digest
-    ):
-        raise SystemExit(
-            f"[ship] GATE_BLOCK {environment.value}/{phase.value}: "
-            "releaseId and manifestDigest are required"
-        )
-    if phase in {
-        ShipReadinessPhase.RESEARCH,
-        ShipReadinessPhase.CONSUMER,
-        ShipReadinessPhase.COMMERCIAL,
-    }:
+    if phase is ShipReadinessPhase.PRODUCTION:
         command.extend(
             [
                 "--release-id",

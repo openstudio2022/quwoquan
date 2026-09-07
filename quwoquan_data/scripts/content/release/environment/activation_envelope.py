@@ -50,9 +50,6 @@ def build_environment_activation_envelope(
     verify_run_id: str,
     import_report_ref: str,
     import_report_digest: str,
-    research_isolation: Mapping[str, Any] | None,
-    research_isolation_verification_ref: str = "",
-    research_isolation_verification_digest: str = "",
     source_identities: list[dict[str, object]] | None = None,
     source_identity_set_digest: str | None = None,
     milestone: str | None = None,
@@ -63,8 +60,8 @@ def build_environment_activation_envelope(
     The envelope deliberately contains no deployment endpoint or mutable active
     pointer.  It binds an immutable Data release to one environment import and
     one environment readback. It is a Data import/readback fact and carries no
-    target App UAT, device, runner, package, or promotion authority. Research
-    isolation is required only for the research readiness phase.
+    target App UAT, device, runner, package, or promotion authority. The single
+    production phase carries no isolation binding (DEC-041).
     """
 
     text_fields = {
@@ -110,48 +107,17 @@ def build_environment_activation_envelope(
                 "entityCatalogDigest": entity_catalog_digest,
             }
         )
-    if readiness_phase == "research":
-        if research_isolation is None:
-            raise EnvironmentActivationEnvelopeError(
-                "research activation requires isolation policy and runtime proof"
-            )
-        isolation = {
-            "policyRef": str(research_isolation.get("policyRef") or "").strip(),
-            "policyDigest": str(
-                research_isolation.get("policySha256") or ""
-            ).strip(),
-            "verificationRef": str(
-                research_isolation_verification_ref or ""
-            ).strip(),
-            "verificationDigest": str(
-                research_isolation_verification_digest or ""
-            ).strip(),
-            "subjectHash": str(research_isolation.get("subjectHash") or "").strip(),
-        }
-        missing_isolation = sorted(
-            key for key, value in isolation.items() if not value
-        )
-        if missing_isolation:
-            raise EnvironmentActivationEnvelopeError(
-                "research activation isolation is incomplete: "
-                + ", ".join(missing_isolation)
-            )
-        envelope["researchIsolationPolicy"] = isolation
-    elif research_isolation is not None:
-        raise EnvironmentActivationEnvelopeError(
-            "research isolation cannot bind a non-research activation phase"
-        )
     if milestone is not None:
         if (
-            milestone not in {"M100", "M1000", "M10000"}
-            or readiness_phase != "research"
-            or release_class != "research"
-            or product_lifecycle_state != "research"
+            milestone not in {"M1", "M10", "M100", "M1000", "M10000"}
+            or readiness_phase != "production"
+            or release_class != "production"
+            or product_lifecycle_state != "production"
             or source_identities is None
             or not source_identity_set_digest
         ):
             raise EnvironmentActivationEnvelopeError(
-                "milestone activation must bind one Research source identity set"
+                "milestone activation must bind one production source identity set"
             )
         previous = {
             "alpha": None,
@@ -201,9 +167,6 @@ def build_release_activation_envelope(
     verify_run_id: str,
     import_report_ref: str,
     import_report_digest: str,
-    research_isolation: Mapping[str, Any] | None,
-    research_isolation_verification_ref: str,
-    research_isolation_verification_digest: str,
     previous_environment_activation: Mapping[str, str] | None,
 ) -> dict[str, Any]:
     """Project immutable header identity into one environment envelope."""
@@ -230,11 +193,6 @@ def build_release_activation_envelope(
         verify_run_id=verify_run_id,
         import_report_ref=import_report_ref,
         import_report_digest=import_report_digest,
-        research_isolation=research_isolation,
-        research_isolation_verification_ref=research_isolation_verification_ref,
-        research_isolation_verification_digest=(
-            research_isolation_verification_digest
-        ),
         source_identities=(
             list(header["sourceIdentities"])
             if "sourceIdentities" in header

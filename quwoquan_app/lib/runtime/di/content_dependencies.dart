@@ -19,6 +19,7 @@ import 'package:quwoquan_app/service/content_service/content/content_behavior_fa
 import 'package:quwoquan_app/service/content_service/content/post/adapters/post_delete_remote.dart';
 import 'package:quwoquan_app/service/content_service/content/post/adapters/post_publication_remote.dart';
 import 'package:quwoquan_app/service/content_service/content/post/adapters/research_release_readback_remote.dart';
+import 'package:quwoquan_app/service/content_service/content/feed_delivery_page/application/public/content_activation_identity.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/public/research_release_readback.dart';
 import 'package:quwoquan_app/service/content_service/trust_safety/report/adapters/report_query_remote.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/content_repository_contract.dart';
@@ -224,6 +225,11 @@ final class ContentProductionComposition {
     required Future<List<String>> Function() blockedKeywordsLoader,
     required PostObjectCacheService postCache,
     required ContentQuerySnapshotStore querySnapshotStore,
+    required ContentCacheIsolationIdentity? Function() currentCacheIdentity,
+    required ContentCacheIsolationIdentity? Function(
+      ContentActivationIdentity? activationIdentity,
+    )
+    cacheIsolationIdentityResolver,
     required UserProfileCacheService userProfileCache,
     required CacheTelemetrySink telemetrySink,
   }) {
@@ -245,6 +251,8 @@ final class ContentProductionComposition {
       deleteDelegate: deleteWriter,
       postCache: postCache,
       querySnapshotStore: querySnapshotStore,
+      currentCacheIdentity: currentCacheIdentity,
+      cacheIsolationIdentityResolver: cacheIsolationIdentityResolver,
       blockedKeywordsLoader: blockedKeywordsLoader,
       userProfileCache: userProfileCache,
       telemetrySink: telemetrySink,
@@ -286,6 +294,7 @@ final class ContentProductionComposition {
     required Object invocationContext,
     required PostObjectCacheService postCache,
     required ContentQuerySnapshotStore querySnapshotStore,
+    required ContentCacheIsolationIdentity? Function() currentCacheIdentity,
     required UserProfileCacheService userProfileCache,
     required CacheTelemetrySink telemetrySink,
   }) {
@@ -298,6 +307,7 @@ final class ContentProductionComposition {
       authorPostsDelegate: remote,
       postCache: postCache,
       querySnapshotStore: querySnapshotStore,
+      currentCacheIdentity: currentCacheIdentity,
       userProfileCache: userProfileCache,
       telemetrySink: telemetrySink,
     );

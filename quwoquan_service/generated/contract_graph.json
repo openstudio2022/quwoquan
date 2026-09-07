@@ -1704,7 +1704,7 @@
             "idempotency": "event_id",
             "implementation": {
               "path": "quwoquan_service/services/entity-service/internal/entity_homepage/homepage/application/homepage_orchestration/homepage_packet_service.go",
-              "sha256": "c2396fb7b16eeebe6727f17814ef3d7c96755cdc357e8bc4d83e77182f7089ce"
+              "sha256": "e836517032d6f4429c56c22b315338ea6009d79f3b0565622146c0a037555af9"
             }
           },
           {
@@ -1715,7 +1715,7 @@
             "idempotency": "event_id",
             "implementation": {
               "path": "quwoquan_service/services/entity-service/internal/entity_homepage/homepage/application/homepage_orchestration/homepage_packet_service.go",
-              "sha256": "c2396fb7b16eeebe6727f17814ef3d7c96755cdc357e8bc4d83e77182f7089ce"
+              "sha256": "e836517032d6f4429c56c22b315338ea6009d79f3b0565622146c0a037555af9"
             }
           },
           {
@@ -1737,7 +1737,7 @@
             "idempotency": "event_id",
             "implementation": {
               "path": "quwoquan_service/services/entity-service/internal/entity_homepage/homepage/application/homepage_orchestration/homepage_packet_service.go",
-              "sha256": "c2396fb7b16eeebe6727f17814ef3d7c96755cdc357e8bc4d83e77182f7089ce"
+              "sha256": "e836517032d6f4429c56c22b315338ea6009d79f3b0565622146c0a037555af9"
             }
           }
         ]
@@ -3091,6 +3091,7 @@
       "lifecycle": {
         "states": [
           "staged",
+          "verified",
           "active",
           "retired",
           "rejected"
@@ -51025,6 +51026,40 @@
       "sourcePath": "entity/entity_homepage/homepage/projections/homepage_related_group_summary.yaml"
     },
     {
+      "id": "entity.homepage.HomepageReleaseProjection",
+      "domain": "entity",
+      "objectId": "entity.homepage",
+      "readModel": "HomepageReleaseProjection",
+      "readModelExplicit": true,
+      "fieldNames": [
+        "categoryTags",
+        "city",
+        "closureDigest",
+        "coverUrl",
+        "documentDigest",
+        "entityRef",
+        "environment",
+        "homepageId",
+        "homepageType",
+        "introductionAssets",
+        "introductionMarkdown",
+        "location",
+        "manifestDigest",
+        "primarySource",
+        "projectionVersion",
+        "releaseId",
+        "sourceOwner",
+        "sourceUrls",
+        "structuredFacts",
+        "title",
+        "verifiedAt"
+      ],
+      "sourceEntities": [
+        "Homepage"
+      ],
+      "sourcePath": "entity/entity_homepage/homepage/projections/homepage_release_projection.yaml"
+    },
+    {
       "id": "entity.homepage.HomepageReviewSummaryData",
       "domain": "entity",
       "objectId": "entity.homepage",
@@ -63401,6 +63436,11 @@
               "works",
               "packageDigest",
               "releaseId",
+              "environment",
+              "sourceOwner",
+              "manifestDigest",
+              "projectionVersion",
+              "verifiedAt",
               "status",
               "managedBy",
               "importedAt",
@@ -111688,7 +111728,7 @@
         "application": [
           {
             "path": "quwoquan_app/lib/service/content_service/content/feed_delivery_page/application/public/content_activation_identity.dart",
-            "sha256": "599a51270830af3023213e63ede770e9d2a1e9e0dd2bee08e1fefff19209e741"
+            "sha256": "7149933d4f0bfa16ebaf314748c8eadf0642d1812e3b7dbc8dbb32be910147c1"
           },
           {
             "path": "quwoquan_app/lib/service/content_service/content/feed_delivery_page/application/public/discovery_feed_page.dart",
@@ -112735,7 +112775,7 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/media/media_asset/works_immersive_viewer_widget__local_contract_test.dart",
-            "sha256": "af30825fd9f78915c50c6a833a31195ec1ef7f973abddf1b84fd41d1d3f64cc0"
+            "sha256": "80c75a036587d6701c92410568d815dd6ef29c5b970d80ee41681376d870f86d"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/media/media_asset/works_immersive_viewer_wishlist__local_contract_test.dart",
@@ -113467,7 +113507,7 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/media/original_access_quota/signed_media_delivery_coordinator__local_contract_test.dart",
-            "sha256": "d4007f75768ade82ff844c51a2430c8ac21c1bda32588d3a2fe3e908c96b8b94"
+            "sha256": "990cce40330a76afffbadcb9299399accb4a19cfbee3ca29d836a197c50db13e"
           }
         ],
         "apiIntegration": [
@@ -113638,7 +113678,7 @@
         "domain": [
           {
             "path": "quwoquan_service/services/content-service/internal/content/post/domain/ports/active_supply.go",
-            "sha256": "1f683a5f9d1483e43be4667b0116b0e4b1a0eb297409860b9a45d49cd8c86ba3"
+            "sha256": "0a407e8992bfb467af0a2b69c2b328f4f641095a4bdf67826353b09b8764e65a"
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/post/domain/ports/aggregate_store.go",
@@ -113646,7 +113686,7 @@
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/post/domain/ports/gathering_query.go",
-            "sha256": "29b061caa0d132f6089e62aeae6cb2ce16563d31acf48cbd504aadb9c364990b"
+            "sha256": "c81e5271c73c0b13fc886fe0d1b2a0935f82d1aa3aa07cd5e0f33ed50ad66c22"
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/post/domain/ports/gathering_reference.go",
@@ -113658,7 +113698,7 @@
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/post/domain/ports/query.go",
-            "sha256": "170d1816c5ac739e8821f85e3e189d757a3f3040011db3278d3d6fc94ecd52dc"
+            "sha256": "f37795a0518905262002a21c20d8588992473b45d12fd1a65b3aba631c5a4f3a"
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/post/domain/semantic/mentions.go",
@@ -113732,11 +113772,11 @@
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/post/infrastructure/persistence/active_supply_snapshot_cache.go",
-            "sha256": "da4e18809615e04e5aadbb148a81388b569b99fd176159c691970db4e59bc77b"
+            "sha256": "97dfcd56a4420c28eb12cebf61749338e3904a154ae1a281da767453ce759815"
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/post/infrastructure/persistence/mongo_active_supply_reader.go",
-            "sha256": "1c4d4519f88fc4fad0443bb2509b54ea70441c71c72232776dafabd9ab83acf8"
+            "sha256": "52b2fe1e85946af35504f627370a4e815b948f9beb5b64b87224e69dfdc58be8"
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/post/infrastructure/persistence/mongo_post_outbox.go",
@@ -113744,7 +113784,7 @@
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/post/infrastructure/persistence/mongo_post_query_reader.go",
-            "sha256": "cd986239dafbc81a4d98f2c26f99eb44a29de1b371b16a5d994b63efee240ce5"
+            "sha256": "ac5ca380b37a2953132126d2b66db8e9ce9331061c5b2226db608c081b11d043"
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/post/infrastructure/persistence/mongo_post_store.go",
@@ -113836,47 +113876,55 @@
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/post/infrastructure/releaseimport/loader.go",
-            "sha256": "0a07e5772079bc5c8e409bc16918a19928e9b762c9f7829a2ecb0a9455074e72"
+            "sha256": "ee934902bce13afbb247f4f0dae7e0061c3acc2b13ddb1f1111f2964601349e7"
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/post/infrastructure/releaseimport/post_manifest_validation.go",
-            "sha256": "5372a7be8259ecfb3594bc33c6b4c68198192923880114b9506d632ad540cc4c"
+            "sha256": "0fcabbf06e9f0e856e7d5733589c829b026bfe74ded9eb3ce470e3d09e7d4258"
+          },
+          {
+            "path": "quwoquan_service/services/content-service/internal/content/post/infrastructure/releaseimport/prior_release_state_migration.go",
+            "sha256": "2b1a96ec9cf68f4500ac38daf217f695537bf14580a4126e3b2e46d94b94304e"
+          },
+          {
+            "path": "quwoquan_service/services/content-service/internal/content/post/infrastructure/releaseimport/release_control.go",
+            "sha256": "5ad33ef0f2cb118c8db1803893262de12f1db27a2c3b53a0b6e1d38cee194f7b"
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/post/infrastructure/releaseimport/release_stage_receipts.go",
-            "sha256": "3d4b3c0c989dc70f0367bebf83d8d42db5e4fae271d605aacf719d89a08256ce"
-          },
-          {
-            "path": "quwoquan_service/services/content-service/internal/content/post/infrastructure/releaseimport/release_staging.go",
-            "sha256": "9dc5593660129db9ae89237e28c7d259704a72b00479d1c65e50de231becc40d"
-          },
-          {
-            "path": "quwoquan_service/services/content-service/internal/content/post/infrastructure/releaseimport/release_state_backfill.go",
-            "sha256": "6213490d4cc5089fb4b94235eae5869cf2af3da6c08b7011a663c8be0c7a936f"
+            "sha256": "a59357a2ecb4b89b83dfbfc400c5781339b6bad241e8cf02e2f1f7be473e7686"
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/post/infrastructure/releaseimport/runtime.go",
-            "sha256": "cec5dcb7bb1384b15d067457ea42d18d1086144de39e6c322897d4a065ff3f8c"
+            "sha256": "e96b58954b30fc8141fa4d0959256e2974bebd8ef93a92c9a5c2cc91087be9c5"
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/post/infrastructure/releaseimport/runtime_discovery_feed.go",
-            "sha256": "1528ce49395f407a966f6301da28c93acb4c697cfa95b401cb691b7c0c9e759c"
+            "sha256": "3c4a94095ae1e5bb7d23fe981da8613615bdabadaf6e2bce1ef5a7be35da6eb2"
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/post/infrastructure/releaseimport/runtime_media_assets.go",
-            "sha256": "1bf16f3c09601271d84cac048a764bd0b564d31ddfce4288079a5dcc503dfd7e"
+            "sha256": "e53d5a320a6312724c82bd1ff955c0069786cb5a5084bc10e6e62bc5699c28ff"
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/post/infrastructure/releaseimport/runtime_outbox.go",
-            "sha256": "b4e7841143d9bc141b6da0bf1f3404c339b0830ddd62e9a2988fe5560029b445"
+            "sha256": "7ba740a3c3b29450b4f87dc46ab351ba383dce66eaca2cb26fca68ca713979dd"
+          },
+          {
+            "path": "quwoquan_service/services/content-service/internal/content/post/infrastructure/releaseimport/runtime_outbox_activation_events.go",
+            "sha256": "db676880d10dc700b3418fe573bd982e3afac0efbda50df58c9b1fcfd48c27d4"
+          },
+          {
+            "path": "quwoquan_service/services/content-service/internal/content/post/infrastructure/releaseimport/runtime_outbox_activation_materialize.go",
+            "sha256": "08a994f2337016f5e7d92de752756d24b9d2c07208a0337a320df408a6018b69"
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/post/infrastructure/releaseimport/runtime_replay_report.go",
-            "sha256": "b06f23939fdb9af3f589a20bf59a07272ab7ee23e1592ff40d8549f83102f501"
+            "sha256": "deeffe78ab8f04632e2098719eb729c2cb194bfde43a1aaaced0d6683b2051a4"
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/post/infrastructure/releaseimport/runtime_replay_validation.go",
-            "sha256": "8e998a0c1286f4aa6ba177d5f4412318d57dcaca1f5684877645d896e65b7a0e"
+            "sha256": "f57316fb9b33011209b79fe5ab293e6e3a7eb2168d6a6a2e38aa2772fff5d91b"
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/post/infrastructure/runtimeconfig/runtime_config.go",
@@ -114066,8 +114114,12 @@
             "sha256": "ad9f068f10b6dc76a4ecd51a2e4ba42822cadc60df77f9edeecd6bebc6a2fbf2"
           },
           {
+            "path": "quwoquan_service/services/content-service/internal/content/post/application/public/active_release_fence.go",
+            "sha256": "28cc94e01cfa60919d58231898bfb6d293e947c81ac775789db02dc97512cdbf"
+          },
+          {
             "path": "quwoquan_service/services/content-service/internal/content/post/application/query_facade.go",
-            "sha256": "7487de9ba816f18b24e2c87a185b937bd3e7f657a2bc303ff140b49cfdd6170e"
+            "sha256": "69b5f239fb4c22cada2ff5898f16ea1662f7efc18b8cfea11eaa6f95834eaf22"
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/post/application/research_release_readback.go",
@@ -114093,7 +114145,7 @@
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/post/adapters/inbound/http/content_handler.go",
-            "sha256": "5088bb249f58bc951007348335cb29054b93a8ba75849f86e32e5c1e06aa986f"
+            "sha256": "cd06dcfe0b584bcce21975f75d78b0d07dba13c0c70a07704f66afc92439c933"
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/post/adapters/inbound/http/content_handler_article_summary.go",
@@ -114147,7 +114199,7 @@
           },
           {
             "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/adapters/inbound/graphql/internal_persisted_get_post__local_contract_test.go",
-            "sha256": "0f65e61d5be6cdfebfbb294202694d35a398bbac15b34b692d868a2bdeeb2689"
+            "sha256": "db04430563c0e154f861a4e57bd008c22bd325d709d7eae8d070fd7dd2d1df5a"
           },
           {
             "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/adapters/inbound/graphql/internal_persisted_get_post_contract__local_contract_test.go",
@@ -114155,7 +114207,7 @@
           },
           {
             "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/adapters/inbound/http/content_handler__local_contract_test.go",
-            "sha256": "29f51b3c330bbb865312febd18ea4bc7a5dbdd88d6b2946d770e0e13ae108323"
+            "sha256": "434a227a7c2f9e828fc2865dfbcc9ff8457dc993f5511701c21d859004cc4c2e"
           },
           {
             "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/adapters/inbound/http/content_handler_helpers__security__local_contract_test.go",
@@ -114171,11 +114223,11 @@
           },
           {
             "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/adapters/inbound/http/feed_research_principal_wiring__security__local_contract_test.go",
-            "sha256": "6537c417080b133b10d252504008e2abb4e1233b74e326b8899ff76180304ad2"
+            "sha256": "741ca7ac5d6a85932ed06353619a72b187f96f3e08538899d60a6d507ef9c050"
           },
           {
             "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/adapters/inbound/http/get_post_source_attribution_projection__contract__local_contract_test.go",
-            "sha256": "1989d6336fa10e3bea38873539f0497a73de477ceb6e96d8ac574a8ddd44aea1"
+            "sha256": "051cebd63127fa6c7a7c3d2e510c1452fcbb66c6898658fc62a7f4a4d593fd77"
           },
           {
             "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/adapters/inbound/http/research_release_readback_error_mapping__security__local_contract_test.go",
@@ -114263,7 +114315,7 @@
           },
           {
             "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/application/feed/feed_terminal__local_contract_test.go",
-            "sha256": "25db14f07691549a475294c0e7aa1b5d3266b5f23b209d04be4c9c8bcbc3bdb2"
+            "sha256": "a1139dcd6910faeccc557a85150eff91cbc5f0cfc06d1c48fc992e5eeb037ca5"
           },
           {
             "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/application/feed/feed_viewer_liked_attach__local_contract_test.go",
@@ -114330,6 +114382,10 @@
             "sha256": "932baa32b4ec0c6088b863c8a018093620c3bbb8dfbe3d8f9a9438bb256cc0d9"
           },
           {
+            "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/application/public/active_release_fence__contract__local_contract_test.go",
+            "sha256": "95ccecdbba144be5c3d78e91821e2a4e3293fee5fccfb4c19bceaf5f007bcf37"
+          },
+          {
             "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/application/research_release_readback__security__local_contract_test.go",
             "sha256": "fa52dcb94ae33a52a6693fd9baf449b4e311184fdf3a03738a0ef3b3a1f0a0eb"
           },
@@ -114375,11 +114431,11 @@
           },
           {
             "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/data_release_staged_activation__contract__local_contract_test.go",
-            "sha256": "3cb7410c66b9ebdcb6ff794bbd87b49e0892818b0fe8c89a75eb9b377bac9204"
+            "sha256": "192554f8688ed7bb3ed4bc5f2c7271b108cd53ca6d7918ca3a8f7d7da17fba27"
           },
           {
             "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/domain/active_supply_snapshot__contract__local_contract_test.go",
-            "sha256": "0ce772b1f57a013076d2e7ff94b03b039c6e25bf2a966f608b64ed2b5d9328b4"
+            "sha256": "26692ac59161b4e0a35f840a21102cd5a888507c09b01d5e0fcc856377d3068f"
           },
           {
             "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/domain/media/model/media_capture_metadata__local_contract_test.go",
@@ -114423,11 +114479,11 @@
           },
           {
             "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/import/loader__local_contract_test.go",
-            "sha256": "38df7fe63ba433e8a3bffafc489d4a3bcbd45a3d22d76237f84a9976f48b2552"
+            "sha256": "d45586d8560160741401b43143646f84b41fca0df3b1a89c38d937783fde0276"
           },
           {
             "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/import/media_delivery_binding__local_contract_test.go",
-            "sha256": "10369a39db36f43f2b6915322c9424cf8d7ed5fc6cd7e356bcf2aba6c6037ef0"
+            "sha256": "fe83a0575ef96e46058cb8653f4f1c13d55464341881c93599010b4ccca58131"
           },
           {
             "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/import/runtime_content_identity__local_contract_test.go",
@@ -114503,7 +114559,7 @@
           },
           {
             "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/infrastructure/persistence/mongo_post_query_reader__local_contract_test.go",
-            "sha256": "2856373a3f51ddfa3e924769c481edf86216c2754e7105d3d8e3491c2def0c0b"
+            "sha256": "237e5080038ea8bb267de3baabc033a55c4735a6b5dab8ff0901bd4e18bdf624"
           },
           {
             "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/infrastructure/persistence/mongo_post_store__local_contract_test.go",
@@ -114555,15 +114611,27 @@
           },
           {
             "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/infrastructure/releaseimport/import_report_counts__contract__local_contract_test.go",
-            "sha256": "4dce71d40a4c6fa00a8fd7ceae3724c6b7a912f899dbf4f3410a5b8cefc08906"
+            "sha256": "bebeccf4eabaa7331672bd0b34136e9ef2e0bc195b4885878f40d785e67baeff"
+          },
+          {
+            "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/infrastructure/releaseimport/prior_release_state_migration__contract__local_contract_test.go",
+            "sha256": "54ed69dc44623d1f9242845e8421883fc81c1034cbdff5027e494b14bd4a01d7"
+          },
+          {
+            "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/infrastructure/releaseimport/release_activation_contract__local_contract_test.go",
+            "sha256": "67fa76fd3618bc435eb1fc2556c6173d7f04ccc3271283d3beb99e0873949685"
           },
           {
             "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/infrastructure/releaseimport/release_binding__contract__local_contract_test.go",
             "sha256": "8df1f121827040a5cf653e0b74309c9de7232f7b03143ed46c837b181dd1b485"
           },
           {
+            "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/infrastructure/releaseimport/release_control__contract__local_contract_test.go",
+            "sha256": "3bcf312c251726f4333e57739bee2786396a60d0bcf5f4e0c149bb0224737f14"
+          },
+          {
             "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/infrastructure/releaseimport/runtime_projection__local_contract_test.go",
-            "sha256": "36bc94a3739f7bcc03559ec0dfe40275f8e7b535115145489558b579eff9c83e"
+            "sha256": "7dc6325341abd169ae2784e6040e55d51f5bb5df1a2968c6ca9dd7c5e4f7c453"
           },
           {
             "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/infrastructure/searchindex/backfill__local_contract_test.go",
@@ -114631,7 +114699,7 @@
           },
           {
             "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/post_query_facet__local_contract_test.go",
-            "sha256": "455abce85662ea7d961ac9868f7384e05e6cbe05986f0d6124411d1c33aff0e5"
+            "sha256": "6d91e94504117ed47f945c9ee68f8b5d3a2bc9c3519b14f9bb492a83799a4202"
           },
           {
             "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/runtime/recommendation/collaborative_recall__local_contract_test.go",
@@ -114673,7 +114741,7 @@
         "apiIntegration": [
           {
             "path": "quwoquan_service/services/content-service/tests/api_integration/content/post/active_supply_reader__data_consistency__api_integration_test.go",
-            "sha256": "c782b5fddb4e8cd5d93d67f91802fc0f642096cc398ee9e23443a5111d11ad4c"
+            "sha256": "faf6a6445cd574433cf3956acda12e91d1b1688550c86effdb1d8b8f739cd94a"
           },
           {
             "path": "quwoquan_service/services/content-service/tests/api_integration/content/post/app_config__api_integration_test.go",
@@ -114737,11 +114805,19 @@
           },
           {
             "path": "quwoquan_service/services/content-service/tests/api_integration/content/post/import/mongo_import__data_consistency__api_integration_test.go",
-            "sha256": "d47ab4929f19095f5b02fe1b07ff2df6c17c268a4f970cf746f934764c3dd51d"
+            "sha256": "57bead429ef9dc801aa7cbe3f2ee533ccd3de33640999b0de5ec7ac8b73b7115"
+          },
+          {
+            "path": "quwoquan_service/services/content-service/tests/api_integration/content/post/import/prior_release_state_migration__data_consistency__api_integration_test.go",
+            "sha256": "9ed3b232a66bc996bfa461e38a81c211b007e319d7eed2f9719e69214f81ad3c"
+          },
+          {
+            "path": "quwoquan_service/services/content-service/tests/api_integration/content/post/import/release_activation_cas__data_consistency__api_integration_test.go",
+            "sha256": "adcfd90e63726b7442d80467dc90595c9deae9a1bed6a9255802ff2912546bab"
           },
           {
             "path": "quwoquan_service/services/content-service/tests/api_integration/content/post/import/runtime_content_identity_migration__data_consistency__api_integration_test.go",
-            "sha256": "2af4fbe8659fa20cae0115fe805758665e57cedb49c50891fea0425d2f85f384"
+            "sha256": "36852f9168024307d7789bcd5df9036dc5068a55293a185ec055377c3caaee4f"
           },
           {
             "path": "quwoquan_service/services/content-service/tests/api_integration/content/post/import/testmain__api_integration_test.go",
@@ -114889,7 +114965,7 @@
           },
           {
             "path": "quwoquan_service/services/content-service/tests/api_integration/content/post/testmain__support__api_integration_test.go",
-            "sha256": "96fb82c3873e6cbe19df9ff7fdd49afdaa8f070b206aaffc2300cc465d0e9f56"
+            "sha256": "938ce3ce6cf3f44ce45d97a2e53e4cd3f6b047a3e52ac8b01ba229d499f201f7"
           },
           {
             "path": "quwoquan_service/services/content-service/tests/api_integration/content/post/user_account_closed_cleanup__data_consistency__api_integration_test.go",
@@ -115233,11 +115309,11 @@
           },
           {
             "path": "quwoquan_app/lib/service/content_service/content/post/adapters/cached_content_post_reader.dart",
-            "sha256": "0ac9062b056d5c451dac88453d11d429ce131b73f7ffb0774010c49d0d7d9df4"
+            "sha256": "9e7b029fd4e2138c95d8e8b6172e89a8b03c73318efdac648cb94415d4e36a06"
           },
           {
             "path": "quwoquan_app/lib/service/content_service/content/post/adapters/cached_content_repository.dart",
-            "sha256": "e859ab8348a0a81e1bd0f0cba73aa353e6126babdcd28337f60540fe4e2e7191"
+            "sha256": "dc14da8ca13201579e8e10c0df6a290d21467cd5091356e3368ddacf9df62fec"
           },
           {
             "path": "quwoquan_app/lib/service/content_service/content/post/adapters/content_app_config_remote.dart",
@@ -115245,7 +115321,7 @@
           },
           {
             "path": "quwoquan_app/lib/service/content_service/content/post/adapters/content_cache_services.dart",
-            "sha256": "e8c26a1bebed57f167e27212555feadf92b76dab3aae3a63f6d4122c5180f65a"
+            "sha256": "d90d17b99b7033d29d9c5e753673a81eb3627c23cf8b88d12dfd73a88171fac9"
           },
           {
             "path": "quwoquan_app/lib/service/content_service/content/post/adapters/content_media_cover_selection.dart",
@@ -115355,7 +115431,7 @@
           },
           {
             "path": "quwoquan_app/lib/service/content_service/content/post/presentation/home_page.dart",
-            "sha256": "7e040927fa3d09d6da6fddc108524dcf97bd5bcda2db72b36428142e71abd993"
+            "sha256": "4010a00b0b47a1826f60bc07530e83ca618915915f6c0af62584c137d76f173b"
           },
           {
             "path": "quwoquan_app/lib/service/content_service/content/post/presentation/interest_onboarding_page.dart",
@@ -115496,8 +115572,12 @@
             "sha256": "f4c838af6ab09d46e0d6ec321fe38e2857b23a640b72aaebab4f5825631566cb"
           },
           {
+            "path": "quwoquan_app/test/local_contract/service/content_service/content/post/content_cache_lifecycle__local_contract_test.dart",
+            "sha256": "30c4956f1528616c99fd35e68d1775815dcf3f578dc157373b119889872a670a"
+          },
+          {
             "path": "quwoquan_app/test/local_contract/service/content_service/content/post/content_cache_services__local_contract_test.dart",
-            "sha256": "23a69e0393c9d29bfb41cd8afe150166defa8b3e87473c62a3867177bff6b488"
+            "sha256": "bd4a3062f79ae833c37e332db2ebbc8b2f78ce112a5c2f3c3e1fb6a793d88224"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/content/post/content_component_structure__contract__local_contract_test.dart",
@@ -115745,7 +115825,7 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/content/post/home_page_active_channel_reconciliation__local_contract_test.dart",
-            "sha256": "4725ee22afd21e072e446e158d1a95408d3dd4f40cc1ff88e725f24a73bf3177"
+            "sha256": "a9e61183354e4bb98206087c4253fddfbb0a44038725f008794025275096bd5a"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/content/post/home_page_widget__local_contract_test.dart",
@@ -116702,7 +116782,7 @@
         "domain": [
           {
             "path": "quwoquan_service/services/entity-service/internal/entity_homepage/homepage/domain/model/homepage.go",
-            "sha256": "d4aa28f020897b170859148fa5056a085ebeb04963a478fe254bda25cd5df28d"
+            "sha256": "d86c0ed619975c04bee16563998ac517d203173d1819e701948f5040e1e832e0"
           },
           {
             "path": "quwoquan_service/services/entity-service/internal/entity_homepage/homepage/domain/model/structured_facts.go",
@@ -116710,7 +116790,7 @@
           },
           {
             "path": "quwoquan_service/services/entity-service/internal/entity_homepage/homepage/domain/ports/aggregate_store.go",
-            "sha256": "01ebc41ef7860dddc095b873f00bf1c87c09fcd16de9b279b4fd39e57dbe7fa2"
+            "sha256": "388675ef982f95a8642ffe875fdaae3a749be1d3fbfb588d27bee7c67d6e2179"
           }
         ],
         "store": [
@@ -116724,11 +116804,15 @@
           },
           {
             "path": "quwoquan_service/services/entity-service/internal/entity_homepage/homepage/infrastructure/homepageimport/loader.go",
-            "sha256": "71283b24a8973cdffc1d6d58cf4eddc2a014ce09aa29e62fd9b05ad0b9889daf"
+            "sha256": "3a470f3034b0fe04576f2c2ed41098dfde3de308572e1461d0830ca4d0cebd44"
           },
           {
             "path": "quwoquan_service/services/entity-service/internal/entity_homepage/homepage/infrastructure/homepageimport/metrics.go",
             "sha256": "185639b8f55493db1c4f987516b80ffda1a4d0555cc2f22a5047cc269952141a"
+          },
+          {
+            "path": "quwoquan_service/services/entity-service/internal/entity_homepage/homepage/infrastructure/homepageimport/release_control.go",
+            "sha256": "e6031ec9f3aba5fe58e95d7b90b1f3262562fdb1634e8fde7692251973a5187f"
           },
           {
             "path": "quwoquan_service/services/entity-service/internal/entity_homepage/homepage/infrastructure/messaging/durable_stream_transport.go",
@@ -116743,12 +116827,28 @@
             "sha256": "3c26e9a36e6d55072c1fb0880c88843deaa7b852cd6b0d7af470ce7719c75158"
           },
           {
+            "path": "quwoquan_service/services/entity-service/internal/entity_homepage/homepage/infrastructure/persistence/content_active_release_loader.go",
+            "sha256": "baeceaec524a4c296548158e40ba611d61f1f41929ef771f3db3e146f02ceda3"
+          },
+          {
+            "path": "quwoquan_service/services/entity-service/internal/entity_homepage/homepage/infrastructure/persistence/memory_homepage_release_projection.go",
+            "sha256": "9ea9656f74a5605592bf328fae6663c85deefee1deb0c07bf175878a7a10753b"
+          },
+          {
             "path": "quwoquan_service/services/entity-service/internal/entity_homepage/homepage/infrastructure/persistence/memory_homepage_store.go",
-            "sha256": "cecf3fc0f47db7aa12eff758dd87ad14b7ccbb3861aab57731fa4fde3da3f2e2"
+            "sha256": "760f7927b3724ccb54b15027c72836dd71e7753875c81fdfa1c03538d153a362"
+          },
+          {
+            "path": "quwoquan_service/services/entity-service/internal/entity_homepage/homepage/infrastructure/persistence/mongo_homepage_release_projection.go",
+            "sha256": "8873b1547cec64af3b1c0a9cd4dbf261bc73ebf59a315e77a00e57377bbcb1a8"
           },
           {
             "path": "quwoquan_service/services/entity-service/internal/entity_homepage/homepage/infrastructure/persistence/mongo_homepage_store.go",
-            "sha256": "27cec031f92d26ef12de319f0137d111ec8e638a075428c4c1aa7da159e470bb"
+            "sha256": "6524183bf47ffe5e248e2d00c15054a260db112bbec625a6387a79e5bf66b8ce"
+          },
+          {
+            "path": "quwoquan_service/services/entity-service/internal/entity_homepage/homepage/infrastructure/persistence/mongo_homepage_store_checkpoint.go",
+            "sha256": "f099c61eee754f36625a54d25deaa0dcdf5402c72c2c27665293aa63c75fa624"
           },
           {
             "path": "quwoquan_service/services/entity-service/internal/entity_homepage/homepage/infrastructure/persistence/mongo_homepage_value_helpers.go",
@@ -116760,7 +116860,7 @@
             "storage": "homepage_outbox",
             "artifact": {
               "path": "quwoquan_service/services/entity-service/internal/entity_homepage/homepage/infrastructure/persistence/mongo_homepage_store.go",
-              "sha256": "27cec031f92d26ef12de319f0137d111ec8e638a075428c4c1aa7da159e470bb"
+              "sha256": "6524183bf47ffe5e248e2d00c15054a260db112bbec625a6387a79e5bf66b8ce"
             }
           }
         ],
@@ -116795,7 +116895,11 @@
           },
           {
             "path": "quwoquan_service/services/entity-service/internal/entity_homepage/homepage/application/homepage_orchestration/homepage_packet_service.go",
-            "sha256": "c2396fb7b16eeebe6727f17814ef3d7c96755cdc357e8bc4d83e77182f7089ce"
+            "sha256": "e836517032d6f4429c56c22b315338ea6009d79f3b0565622146c0a037555af9"
+          },
+          {
+            "path": "quwoquan_service/services/entity-service/internal/entity_homepage/homepage/application/homepage_orchestration/homepage_release_projection.go",
+            "sha256": "79daf05a05a845b79450ebaeebaf887e03048ef9867601ec183f50370efd94f3"
           },
           {
             "path": "quwoquan_service/services/entity-service/internal/entity_homepage/homepage/application/homepage_orchestration/homepage_search_projection.go",
@@ -116815,7 +116919,11 @@
           },
           {
             "path": "quwoquan_service/services/entity-service/internal/entity_homepage/homepage/application/query_facade.go",
-            "sha256": "0661be08611163f26fafc3f750ee490c83dc2a61f1e64cb220a5f1366681c4f1"
+            "sha256": "8caace1daa4be3700a8982c6c09f8271a97d4a5cc4d21847820dccfbf4a45877"
+          },
+          {
+            "path": "quwoquan_service/services/entity-service/internal/entity_homepage/homepage/application/release_projection.go",
+            "sha256": "53f21c4713b4dbae6f0a933775dcde2d3fbb4364d2ba6398d8037cdcee189c3f"
           },
           {
             "path": "quwoquan_service/services/entity-service/internal/entity_homepage/homepage/application/types.go",
@@ -116839,11 +116947,11 @@
           },
           {
             "path": "quwoquan_service/services/entity-service/tests/local_contract/entity_homepage/homepage/bootstrap_env_keys__local_contract_test.go",
-            "sha256": "6d74cac2ce86bb64ecb5c3354d405c5805ab1854a5e36c81ec034236135acb8f"
+            "sha256": "e971ad9bbc593bbc4a6fc893cf45cdfe66b8aebae80aa3e154dc57e1c931a840"
           },
           {
             "path": "quwoquan_service/services/entity-service/tests/local_contract/entity_homepage/homepage/cmd/homepage-import/loader__local_contract_test.go",
-            "sha256": "9c725a184f419d8f04f0c18703351b90138fab82b832e875e071df01a7225224"
+            "sha256": "b8f01847e5cd4800f867e77d3381619718b5f8d04dcd774552a04fc19ee5efd9"
           },
           {
             "path": "quwoquan_service/services/entity-service/tests/local_contract/entity_homepage/homepage/cmd/homepage-import/loader_coordinates__local_contract_test.go",
@@ -116851,7 +116959,7 @@
           },
           {
             "path": "quwoquan_service/services/entity-service/tests/local_contract/entity_homepage/homepage/cmd/homepage-import/loader_media_access_mode__local_contract_test.go",
-            "sha256": "1ca3dc60484b88c97d8040a50e3d26b540a58086948519fcf8f2e1ce51b95c50"
+            "sha256": "af87a879de8d3468da9eb23884bb43e705cb587982f90cbff99d5ed61ff9aaae"
           },
           {
             "path": "quwoquan_service/services/entity-service/tests/local_contract/entity_homepage/homepage/cmd/homepage-import/metrics__local_contract_test.go",
@@ -116900,6 +117008,10 @@
           {
             "path": "quwoquan_service/services/entity-service/tests/local_contract/entity_homepage/homepage/homepage_lifecycle_stream_publisher__local_contract_test.go",
             "sha256": "d8b03661625442647b67337ef9e1ffcfe4cfefe58941cacd87a962e0bd84c892"
+          },
+          {
+            "path": "quwoquan_service/services/entity-service/tests/local_contract/entity_homepage/homepage/homepage_release_projection__contract__local_contract_test.go",
+            "sha256": "e2d40a08b88fee509289588f1a20e8fded5ee79d0645168a716dd47565bfdc45"
           },
           {
             "path": "quwoquan_service/services/entity-service/tests/local_contract/entity_homepage/homepage/homepage_search_projection__local_contract_test.go",
@@ -117235,7 +117347,7 @@
           "storage": "homepage_outbox",
           "artifact": {
             "path": "quwoquan_service/services/entity-service/internal/entity_homepage/homepage/infrastructure/persistence/mongo_homepage_store.go",
-            "sha256": "27cec031f92d26ef12de319f0137d111ec8e638a075428c4c1aa7da159e470bb"
+            "sha256": "6524183bf47ffe5e248e2d00c15054a260db112bbec625a6387a79e5bf66b8ce"
           }
         }
       ],
@@ -124040,7 +124152,7 @@
           },
           {
             "path": "quwoquan_service/services/search-service/internal/search/search_index_view/infrastructure/experimentpolicy/mongo_store.go",
-            "sha256": "f430b6cd0470bd9429937845f0f383ffe0c39efcac1b415d54362ef46b1ac89b"
+            "sha256": "cddf57ff25936a5688813d5367cbf86eabcd10461dcb505accdc273f86fdf8fa"
           },
           {
             "path": "quwoquan_service/services/search-service/internal/search/search_index_view/infrastructure/intersectionclient/client.go",
@@ -124079,7 +124191,7 @@
           },
           {
             "path": "quwoquan_service/services/search-service/internal/search/search_index_view/application/experiments.go",
-            "sha256": "a2e4bdc45cdbf2b3dfacc56616398b2b80e2cff0f2444afec0dfbdca54456aec"
+            "sha256": "43bfcfba2a9cbc2ff30b002d43f513031bd6dbc30524e1a10b744b40bb626f16"
           },
           {
             "path": "quwoquan_service/services/search-service/internal/search/search_index_view/application/intersection_attach.go",
@@ -124167,7 +124279,7 @@
           },
           {
             "path": "quwoquan_service/services/search-service/tests/local_contract/search/search_index_view/experiment_policy_single_track__local_contract_test.go",
-            "sha256": "a95e3968cb5af0bbd6ce06b0ac26b9fbe6171da8f5156d3e978211c8a7b4265c"
+            "sha256": "9d66836b4acc7d92e7ef07f0d6e3b566e733b4902fbd745c43ce16c866c57cd3"
           },
           {
             "path": "quwoquan_service/services/search-service/tests/local_contract/search/search_index_view/health_probe_split__local_contract_test.go",
@@ -125051,6 +125163,14 @@
         ],
         "store": [
           {
+            "path": "quwoquan_service/services/tag-service/internal/tag/tag_taxonomy_release/infrastructure/tagreleasecontrol/release_control.go",
+            "sha256": "02262f35b306e619b1b2c6e95bae75cc1d72fe9a0b2dd7cec4c5f01f37fbb6a5"
+          },
+          {
+            "path": "quwoquan_service/services/tag-service/internal/tag/tag_taxonomy_release/infrastructure/taxonomyreleasestore/content_candidate.go",
+            "sha256": "69203909673fd01a403a3fc72d9fd419a11312149c344ee26661a6b346d62e78"
+          },
+          {
             "path": "quwoquan_service/services/tag-service/internal/tag/tag_taxonomy_release/infrastructure/taxonomyreleasestore/mongo_store.go",
             "sha256": "7ebbdd7b0c1299ca53f38960de979223cdfc91fce869de99ff921656566e3ac4"
           }
@@ -125074,16 +125194,20 @@
         ],
         "localContract": [
           {
+            "path": "quwoquan_service/services/tag-service/tests/local_contract/tag/tag_taxonomy_release/content_candidate_release_control__local_contract_test.go",
+            "sha256": "d45dfd4d3b9b31bc55c93e855476eeec22a3e6e00c7858150d6d300631f8c740"
+          },
+          {
             "path": "quwoquan_service/services/tag-service/tests/local_contract/tag/tag_taxonomy_release/error_behavior_negative__local_contract_test.go",
             "sha256": "ffad66dea969f7602a1abe44a3f1465adad3754d5adf1b366c9a2e179fc8d005"
           },
           {
             "path": "quwoquan_service/services/tag-service/tests/local_contract/tag/tag_taxonomy_release/release_input__release_kind__local_contract_test.go",
-            "sha256": "104f15e1441ba9b88aae335ce536d13b8d0a94cbcd3c849a5cf849a876ee3606"
+            "sha256": "9ccb796ec18f7476b560e0bbfe4c181fa9898bf50b73104c3da8a993c7c683f3"
           },
           {
             "path": "quwoquan_service/services/tag-service/tests/local_contract/tag/tag_taxonomy_release/taxonomy_import_projection__local_contract_test.go",
-            "sha256": "5f0435f46a9f33f3817a6309e8a7297ae6f2673dcacf0d66caab7452ff18457b"
+            "sha256": "e8fab5f751ac1ce09994200b584a0e306a1476ca1bad186ad65feb608bf00fba"
           },
           {
             "path": "quwoquan_service/services/tag-service/tests/local_contract/tag/tag_taxonomy_release/taxonomy_release_commands__local_contract_test.go",
@@ -125092,12 +125216,16 @@
         ],
         "apiIntegration": [
           {
+            "path": "quwoquan_service/services/tag-service/tests/api_integration/tag/tag_taxonomy_release/content_candidate_release__data_consistency__api_integration_test.go",
+            "sha256": "6bc0e6c3ee02bc85cb88682a9d81f4f989eea186919ec7e9900d5d547998277b"
+          },
+          {
             "path": "quwoquan_service/services/tag-service/tests/api_integration/tag/tag_taxonomy_release/taxonomy_release_contract__data_consistency__api_integration_test.go",
             "sha256": "70f6776c8df7c68a9d59bf782735c1872e4747b046e04e131ddaed5a12f50f8f"
           },
           {
             "path": "quwoquan_service/services/tag-service/tests/api_integration/tag/tag_taxonomy_release/testmain__api_integration_test.go",
-            "sha256": "aa8a738fd463cdf9e14fd8e5aab28f269364a60787131f145126d4bcf6dcbb2f"
+            "sha256": "2019662c13848039bc0f1ab02e35a4f8dc4d9b38f7797568fc2a52f4b9bb4a59"
           }
         ]
       },
@@ -125118,6 +125246,7 @@
         "replayRunner": []
       },
       "unannotatedStores": [
+        "tag_release_candidates",
         "tag_taxonomy_releases"
       ],
       "sourcePath": "quwoquan_service/services/tag-service/internal/tag/tag_taxonomy_release"
@@ -125749,20 +125878,32 @@
           {
             "path": "quwoquan_service/services/user-service/internal/profile_projection/creator_runtime_profile/domain/model/profile.go",
             "sha256": "8b48b64315b22a942d2a60d68f265944584dd844cfa1d2c82f436d974f064dec"
+          },
+          {
+            "path": "quwoquan_service/services/user-service/internal/profile_projection/creator_runtime_profile/domain/model/release_candidate.go",
+            "sha256": "1d2fe4ffedbfc3b5d5c5af484a44a24912b732700ea621b9d5a98142f571581a"
           }
         ],
         "store": [
+          {
+            "path": "quwoquan_service/services/user-service/internal/profile_projection/creator_runtime_profile/infrastructure/persistence/content_release_fence_reader.go",
+            "sha256": "9e8b9ef27662b5b54659fd688b9f57acd80c92d0c4bc1ff80cbc98562f4136ad"
+          },
           {
             "path": "quwoquan_service/services/user-service/internal/profile_projection/creator_runtime_profile/infrastructure/persistence/mongo_store.go",
             "sha256": "8922257713398ffe2a510571471278f8b8b068df746501beb6d8498b2932ebf7"
           },
           {
-            "path": "quwoquan_service/services/user-service/internal/profile_projection/creator_runtime_profile/infrastructure/releaseimport/persona_command_meta.go",
-            "sha256": "e48ad2971ff92a44fb586458186cfd87b8ddb1ecaf585f6cc50d1b1f3db3b92f"
+            "path": "quwoquan_service/services/user-service/internal/profile_projection/creator_runtime_profile/infrastructure/persistence/release_candidate_store.go",
+            "sha256": "0be85d33d32bfe0b441af98b0eb44192e01cc2396ba797220a51d4914d2088f0"
+          },
+          {
+            "path": "quwoquan_service/services/user-service/internal/profile_projection/creator_runtime_profile/infrastructure/releaseimport/release_control.go",
+            "sha256": "b8f513dff5ca603eb5253a652b98b4c79ac447ae837374ad6bbb5b53f8c3f5ed"
           },
           {
             "path": "quwoquan_service/services/user-service/internal/profile_projection/creator_runtime_profile/infrastructure/releaseimport/runtime.go",
-            "sha256": "cab1a1edc446ed768f40c12ff128f0a15d68106ced64013c1dc39cccc7e1d168"
+            "sha256": "c88e7c74182eec07648c091d5d57b9d457203072d8e8dc667cc1003a365a27a4"
           }
         ],
         "outbox": [],
@@ -125784,26 +125925,38 @@
         ],
         "localContract": [
           {
+            "path": "quwoquan_service/services/user-service/tests/local_contract/profile_projection/creator_runtime_profile/content_release_fence__exact__contract__local_contract_test.go",
+            "sha256": "5837842b58f845e48fc7854f254cb30bd450d1bd8a3d30a0ccb2eb672b697ed9"
+          },
+          {
             "path": "quwoquan_service/services/user-service/tests/local_contract/profile_projection/creator_runtime_profile/event_source_binding__contract__local_contract_test.go",
             "sha256": "fe9fc735f3e8063d7f01f77ba6d924e1bba67e59c63859a1f3a0d5ef1c8e666a"
           },
           {
-            "path": "quwoquan_service/services/user-service/tests/local_contract/profile_projection/creator_runtime_profile/persona_command_meta__local_contract_test.go",
-            "sha256": "8474f5724d65b2c5fc4341e98786e4f15f4dab13df46776dbc400d59ad211141"
+            "path": "quwoquan_service/services/user-service/tests/local_contract/profile_projection/creator_runtime_profile/release_candidate__contract__local_contract_test.go",
+            "sha256": "b7d165c0201a087f0e1e68f8df9c38a9e65de08bec85a079f54db949ba2e0477"
           },
           {
             "path": "quwoquan_service/services/user-service/tests/local_contract/profile_projection/creator_runtime_profile/release_import__media_authority__local_contract_test.go",
-            "sha256": "b4c62f77f9f0fa75debcd9e495743f6e0bae3400e28d4a4263bd5713a57d49fa"
+            "sha256": "716b3e2bb2cc23b2985c7e5266ec360df3d7d389b4ae2a30421429546ebe9eec"
           },
           {
             "path": "quwoquan_service/services/user-service/tests/local_contract/profile_projection/creator_runtime_profile/release_import__research_media_binding__local_contract_test.go",
-            "sha256": "d1e64acadb92230315a6b9d005b53f70b1666f74b2532312d6336d3ca66db06d"
+            "sha256": "531c8ce5620ca090d6def3bc1deb3f2af2c8b1e4f36dc72e5b60d8d361b394ec"
+          },
+          {
+            "path": "quwoquan_service/services/user-service/tests/local_contract/profile_projection/creator_runtime_profile/release_import_stage_only__contract__local_contract_test.go",
+            "sha256": "06da1c93afdff99fc96bac15efdb3d0f6d0ee82bbce9780c0579e6c721574533"
           }
         ],
         "apiIntegration": [
           {
             "path": "quwoquan_service/services/user-service/tests/api_integration/profile_projection/creator_runtime_profile/mongo_projection__api_integration_test.go",
             "sha256": "df1b068ba19310616a34b6ae641f62246dfd7ea69c35628ec0ba50b4a95a1728"
+          },
+          {
+            "path": "quwoquan_service/services/user-service/tests/api_integration/profile_projection/creator_runtime_profile/release_candidate_mongo__data_consistency__api_integration_test.go",
+            "sha256": "4fbf76cc93187cf41deea8d96c3d10dafe36f0fc23ce3445c18538c92756378f"
           }
         ]
       },
@@ -125824,6 +125977,8 @@
         "replayRunner": []
       },
       "unannotatedStores": [
+        "creator_release_candidate_states",
+        "creator_release_projections",
         "creator_runtime_profiles"
       ],
       "sourcePath": "quwoquan_service/services/user-service/internal/profile_projection/creator_runtime_profile"
@@ -127692,8 +127847,12 @@
             "sha256": "b6914f65ceae2f50aa7655600c84c8e23e2982429b658b91e87976e8dba02719"
           },
           {
+            "path": "quwoquan_service/services/user-service/internal/account/user_account/domain/user/ports/content_release_fence.go",
+            "sha256": "4758d32e76821c020ec92bbf5035cc523ac91ff162f6b650259a9ac17e578c93"
+          },
+          {
             "path": "quwoquan_service/services/user-service/internal/account/user_account/domain/user/ports/creator_runtime_profile_reader.go",
-            "sha256": "eeb0f0ac1d5f20955881addb58d59645e5463dd13960e8f4237fcda470eecf7c"
+            "sha256": "637c88181448eb917769c74e2ea6268d1427b7c33694b0aa48169d076be40cea"
           },
           {
             "path": "quwoquan_service/services/user-service/internal/account/user_account/domain/user/ports/device_registration_and_consent_store.go",
@@ -127961,7 +128120,7 @@
           },
           {
             "path": "quwoquan_service/services/user-service/internal/account/user_account/application/account_orchestration/persona_service.go",
-            "sha256": "b95948f60e6b8385b94a398aeddece6edb9a126ac45e82a79a9db5422db39e87"
+            "sha256": "05841be8d5d3d361cf29b5a3e236ba641c6468161dd8b3b3e0ef30a8763babcf"
           },
           {
             "path": "quwoquan_service/services/user-service/internal/account/user_account/application/account_orchestration/profile_edit_validation.go",
@@ -128129,7 +128288,7 @@
           },
           {
             "path": "quwoquan_service/services/user-service/tests/local_contract/account/user_account/creator_release_public_identity__contract__local_contract_test.go",
-            "sha256": "a082d4e13ae6d196b1cb630cad2d0e225cdaee1a3f8b16518ec988360507314d"
+            "sha256": "0602bf69818c250d44ade982cffd82a3c39ccd7f0e25e56fe1a802dcce273141"
           },
           {
             "path": "quwoquan_service/services/user-service/tests/local_contract/account/user_account/creator_runtime_profile_view__projection__local_contract_test.go",
@@ -128335,7 +128494,7 @@
           },
           {
             "path": "quwoquan_service/services/user-service/tests/api_integration/account/user_account/creator_runtime_profile_composition__support__api_integration_test.go",
-            "sha256": "2a42d9a4a1ec95835ae6e35690bc949a8728b5ea5386839a4d9e265752f99494"
+            "sha256": "baf1fab7be4cdc6e2e5b43179bf10e29df030795d920643923df69eefc455f87"
           },
           {
             "path": "quwoquan_service/services/user-service/tests/api_integration/account/user_account/credential_contract__api_integration_test.go",
@@ -128447,7 +128606,7 @@
           },
           {
             "path": "quwoquan_service/services/user-service/tests/api_integration/account/user_account/testmain__api_integration_test.go",
-            "sha256": "7bfc17043f73662f7ea39b4d7413b1ba1d4b77403b1f70389251358494667810"
+            "sha256": "8cdef394caee0c0c09d336330cf9edd45909a1c6426169df6989c71e6e4a9093"
           },
           {
             "path": "quwoquan_service/services/user-service/tests/api_integration/account/user_account/user_settings_packet__api_integration_test.go",
@@ -130434,7 +130593,7 @@
     },
     {
       "path": "_shared/app_launch_manifest.yaml",
-      "sha256": "68d7c43820d427203d4d0c7ebf97b238dda50d308762c4909fadd80046f0b77f"
+      "sha256": "5507644c87a15de04b77ae656f38693176596a419c97bf7d606785dfd11b2990"
     },
     {
       "path": "_shared/app_pages.yaml",
@@ -131886,11 +132045,11 @@
     },
     {
       "path": "content/content/post/errors.yaml",
-      "sha256": "214615541b849d4cc56a751794f2169b0f9495a4a640a00b6f25214e807dee47"
+      "sha256": "2d5e201f93ea730df5afdbee898a58a68a34f6a653e35dcadb9061230a54b570"
     },
     {
       "path": "content/content/post/events.yaml",
-      "sha256": "d3bf3fe5afbe35d1cd6be0c498af9400eada4d69690ef45a9eb26fb01a59e131"
+      "sha256": "ba382516c67f3ab79c00b0c1596b2ec9a7bd9b6b0f4bc764a67e84419a33711a"
     },
     {
       "path": "content/content/post/fields.yaml",
@@ -131906,7 +132065,7 @@
     },
     {
       "path": "content/content/post/operations.yaml",
-      "sha256": "e9cb3b2e74c955bc616bd0d74a0e681b65f26a18c4630d0f6e91580330c838ff"
+      "sha256": "42e8507018a9ab3e46aaa10365680468422ecad585f04b6c92cb25df4546820f"
     },
     {
       "path": "content/content/post/persisted_queries/content_post_detail.yaml",
@@ -132046,7 +132205,7 @@
     },
     {
       "path": "content/content/post/storage.yaml",
-      "sha256": "9165b9c1a6cd722a85c7aea6c12dc6523ee25703597c11bd3e377d050568586e"
+      "sha256": "2d329dc3d88eb5376a59ce91015a77f17a8cd386d5cef566dc5b66bdb4491d6e"
     },
     {
       "path": "content/content/post/ui_config.yaml",
@@ -132174,7 +132333,7 @@
     },
     {
       "path": "content/media/media_asset/public_slice_derivation_cases.json",
-      "sha256": "1258a08885b20b6935b0983d3f4db1f710febb4b85e0732bcc928ef1f442f735"
+      "sha256": "ed190c54400250c0441e7b3b6c8cad9e6e922ee15c4e87f71b86a3ea0ef11e82"
     },
     {
       "path": "content/media/media_asset/storage.yaml",
@@ -132374,7 +132533,7 @@
     },
     {
       "path": "entity/entity_homepage/homepage/object.yaml",
-      "sha256": "4ae43adc509bd6a315403057b31709142bd5d6e90d794e4cdd90fc9312710b9e"
+      "sha256": "97d1c5c4e52c05d62c5ae4d1c16a04d36a7f6ea0fdf82b6490e2543395ae5709"
     },
     {
       "path": "entity/entity_homepage/homepage/operations.yaml",
@@ -132429,6 +132588,10 @@
       "sha256": "462ffb9bcc3353356e93dd430764695725111cd5012ede48c9b25799f72fee69"
     },
     {
+      "path": "entity/entity_homepage/homepage/projections/homepage_release_projection.yaml",
+      "sha256": "f731d580a87379058c49e427133870113e72f6756c4feb4c8374cdeef017262a"
+    },
+    {
       "path": "entity/entity_homepage/homepage/projections/homepage_review_summary_data.yaml",
       "sha256": "8df7d016a17ddafe17b20370edba8a29d78764f83a1bdff11c7c787ee092e04d"
     },
@@ -132470,7 +132633,7 @@
     },
     {
       "path": "entity/entity_homepage/homepage/storage.yaml",
-      "sha256": "eeb716a8ed9bc7db17d719205b967aa3bfdac03c5dfa3e581112c1c4beb8f300"
+      "sha256": "95857b098d58c13426ac05356494c00d4c8b4698a3f9d96def382513bcc99870"
     },
     {
       "path": "entity/entity_homepage/homepage/ui_config.yaml",
@@ -133282,7 +133445,7 @@
     },
     {
       "path": "platform/config.yaml",
-      "sha256": "fec2585d0f469fd30d1f7c038f00b85915246cc2c0bc5adfd0a861b14e1bf3c1"
+      "sha256": "b54d188bde2c9e7ea07c2d34bc377cdd2e43424f16c155a1ab38a81223098723"
     },
     {
       "path": "realtime/openapi.yaml",
@@ -133846,19 +134009,19 @@
     },
     {
       "path": "tag/tag/tag_taxonomy_release/fields.yaml",
-      "sha256": "57a9d82a9cccd3ab91cba2b8289586fc129cd7c31df16babb8e88dd6df532dcc"
+      "sha256": "d35c18d098a0aabae89782e826c030da3e9a733e9c4f8991215894cb5c46ac94"
     },
     {
       "path": "tag/tag/tag_taxonomy_release/object.yaml",
-      "sha256": "427732badecf82200dd02e858b7c1cccb2413874f89cd9f5a58c97573223a19f"
+      "sha256": "1f36185ca1c81392f6c6f93bbb7a7db84150f2ae28948f13fb55b7de2eaf0320"
     },
     {
       "path": "tag/tag/tag_taxonomy_release/operations.yaml",
-      "sha256": "d5277ffd3fb20a4bc9ca4872d7be358f3f9a937274042ae76416bab9e4ef8366"
+      "sha256": "cb3d38770deeaecb3250e891c0f42725695aee1d9e360ecfbf937a0f330ce5a3"
     },
     {
       "path": "tag/tag/tag_taxonomy_release/storage.yaml",
-      "sha256": "0134f6720c6eaf8243542229c16574f93bfcd29908c8910c1a8a218600a8a1c1"
+      "sha256": "314e1d3e2ed0a6ab4a1fe1444a46534b5db5855f99a2f67db849248bcc3492da"
     },
     {
       "path": "user/account/account_appeal_intake/errors.yaml",
@@ -134194,11 +134357,11 @@
     },
     {
       "path": "user/profile_projection/creator_runtime_profile/fields.yaml",
-      "sha256": "30ca60eaf7b05232e326bbf862daa6ed978579f3e17b53033d0ab08bda42ac06"
+      "sha256": "aaa72195c379537265671c889e839ff4500b9294121be5c4e2ac1a225028d25a"
     },
     {
       "path": "user/profile_projection/creator_runtime_profile/object.yaml",
-      "sha256": "2d2032fd899e6aa552420f87ce18d16d08bf3a1a3d677ce3c26a0c298474c7fe"
+      "sha256": "fa7c5e5304399a3d258e79fe9c2fe48727aa68daaa50892b6ec9b749146eb7e5"
     },
     {
       "path": "user/profile_projection/creator_runtime_profile/operations.yaml",
@@ -134206,7 +134369,7 @@
     },
     {
       "path": "user/profile_projection/creator_runtime_profile/storage.yaml",
-      "sha256": "b6e511b7bc8d5a37d4bd984e41f61f0bc3578b1b9be5da1cba64d75017a2de76"
+      "sha256": "c3fd04c5ea163d142f1d5564195dbbd00bdf8381097e12cae00bedb51f201cdb"
     },
     {
       "path": "user/profile_projection/following_subject/events.yaml",
@@ -136515,7 +136678,7 @@
     },
     {
       "path": "_shared/app_launch_manifest.yaml",
-      "sha256": "68d7c43820d427203d4d0c7ebf97b238dda50d308762c4909fadd80046f0b77f",
+      "sha256": "5507644c87a15de04b77ae656f38693176596a419c97bf7d606785dfd11b2990",
       "mediaType": "application/yaml",
       "content": {
         "app_launch_attempt_forward_states": [
@@ -136702,7 +136865,8 @@
           }
         },
         "runtime_config_supply_modes": [
-          "external_runtime_package"
+          "external_runtime_package",
+          "build_time_self_supply"
         ],
         "runtime_config_trust": {
           "build_profiles": [
@@ -260141,7 +260305,7 @@
     },
     {
       "path": "content/content/post/errors.yaml",
-      "sha256": "214615541b849d4cc56a751794f2169b0f9495a4a640a00b6f25214e807dee47",
+      "sha256": "2d5e201f93ea730df5afdbee898a58a68a34f6a653e35dcadb9061230a54b570",
       "mediaType": "application/yaml",
       "content": {
         "description": "Post 对象与 content 域共享的结构化错误码声明。格式：MODULE.KIND.REASON。\n对象专属错误码位于各对象目录（comment、media_asset、original_access_quota、\nreport、post_moderation_case 的 errors.yaml）；codegen 与端云 parity 门禁按\ncontent 域固定文件列表合并生成 Dart ContentErrorCode enum + Go errors.go，\n合并时 code 必须全域唯一。CloudErrorMapper 解析 response body \"code\" 字段。\n",
@@ -260899,49 +261063,13 @@
               "en": "The content service timed out, please try again later",
               "zh": "内容服务响应超时，请稍后重试"
             }
-          },
-          {
-            "code": "CONTENT.USER.release_candidate_missing",
-            "dart_const": "releaseCandidateMissing",
-            "disruption_level": "inlineCard",
-            "emitted_by": [
-              {
-                "operation": "GetReleaseCandidateReadback",
-                "surface": "worker"
-              }
-            ],
-            "go_const": "ErrReleaseCandidateMissing",
-            "reason": "release_candidate_missing",
-            "recovery_action": "retry",
-            "user_message": {
-              "en": "The release candidate is missing or incomplete",
-              "zh": "发布候选不存在或不完整，请重新导入"
-            }
-          },
-          {
-            "code": "CONTENT.USER.release_candidate_drift",
-            "dart_const": "releaseCandidateDrift",
-            "disruption_level": "inlineCard",
-            "emitted_by": [
-              {
-                "operation": "GetReleaseCandidateReadback",
-                "surface": "worker"
-              }
-            ],
-            "go_const": "ErrReleaseCandidateDrift",
-            "reason": "release_candidate_drift",
-            "recovery_action": "retry",
-            "user_message": {
-              "en": "The release candidate differs from the immutable manifest",
-              "zh": "发布候选与不可变清单不一致，请重新导入"
-            }
           }
         ]
       }
     },
     {
       "path": "content/content/post/events.yaml",
-      "sha256": "d3bf3fe5afbe35d1cd6be0c498af9400eada4d69690ef45a9eb26fb01a59e131",
+      "sha256": "ba382516c67f3ab79c00b0c1596b2ec9a7bd9b6b0f4bc764a67e84419a33711a",
       "mediaType": "application/yaml",
       "content": {
         "events": [
@@ -261012,7 +261140,11 @@
               "updatedAt",
               "lastActiveAt",
               "sourcePostId",
-              "sourcePostAuthorId"
+              "sourcePostAuthorId",
+              "sourceOwner",
+              "releaseId",
+              "manifestDigest",
+              "activationRevision"
             ],
             "wire_event_type": "PostPublished"
           },
@@ -261173,7 +261305,11 @@
               "contentType",
               "contentIdentity",
               "status",
-              "deletedAt"
+              "deletedAt",
+              "sourceOwner",
+              "releaseId",
+              "manifestDigest",
+              "activationRevision"
             ],
             "wire_event_type": "PostDeleted"
           },
@@ -265487,7 +265623,7 @@
     },
     {
       "path": "content/content/post/operations.yaml",
-      "sha256": "e9cb3b2e74c955bc616bd0d74a0e681b65f26a18c4630d0f6e91580330c838ff",
+      "sha256": "42e8507018a9ab3e46aaa10365680468422ecad585f04b6c92cb25df4546820f",
       "mediaType": "application/yaml",
       "content": {
         "api_routes": [
@@ -267008,7 +267144,7 @@
             "name": "circle-service"
           }
         ],
-        "description": "内容发布、浏览、互动、评论与媒体管理。非 HTTP 的 canonical Data release 由 content-service cmd/import 的受保护 stage/verify/activate 三阶段入口执行：stage 只写 posts_candidate、additive media membership 与阶段回执，GetReleaseCandidateReadback 只按完整 candidate identity 读取受保护候选闭包，activate 必须绑定 verified evidence，并在一个 Mongo transaction 内原子提交 candidate→Post、tombstone、lifecycle outbox、stage receipt 与 data_release_state CAS。首次 expectedRevision=0 只允许一个 environment+sourceOwner winner；stale revision 必须 fail closed。",
+        "description": "内容发布、浏览、互动、评论与媒体管理",
         "externalDependencies": [
           {
             "adapterContracts": {
@@ -268341,7 +268477,8 @@
               "kind": "page"
             }
           }
-        ]
+        ],
+        "runtime_entrypoints": []
       }
     },
     {
@@ -271569,7 +271706,7 @@
     },
     {
       "path": "content/content/post/storage.yaml",
-      "sha256": "9165b9c1a6cd722a85c7aea6c12dc6523ee25703597c11bd3e377d050568586e",
+      "sha256": "2d329dc3d88eb5376a59ce91015a77f17a8cd386d5cef566dc5b66bdb4491d6e",
       "mediaType": "application/yaml",
       "content": {
         "backend": "mongodb",
@@ -271657,8 +271794,82 @@
             "publication_role": "not_published",
             "role": "inbox"
           },
+          "data_release_candidate_media_assets": {
+            "description": "candidate-scoped importer-owned MediaAsset projection，create-once 保存 documentDigest。Stage 不写 live media_assets；Activate/rollback 先校验 assetId/sourceSessionId/ownerId/sha256，再以 owner-bound $set 更新 importer-owned 字段，保留 live rich descriptors；任一冲突回滚全部 live 写与 pointer。",
+            "entity": "MediaAsset",
+            "indexes": [
+              {
+                "keys": {
+                  "assetId": 1,
+                  "environment": 1,
+                  "manifestDigest": 1,
+                  "releaseId": 1,
+                  "sourceOwner": 1
+                },
+                "name": "uq_data_release_candidate_media_asset",
+                "unique": true
+              }
+            ],
+            "publication_role": "not_published",
+            "role": "projection"
+          },
+          "data_release_candidate_outbox": {
+            "description": "candidate-scoped Post identity facts；只冻结 target Post identity、candidate binding 与 document digest，不冻结最终 live eventId/aggregateVersion。每次 Activate/rollback 以 data_release_sequences 分配的新 activation version 和 pointer revision 生成一组 PostPublished/PostDeleted transition，再经 content_outbox_sequences 分配全序并追加至 live content_outbox；每个 activation lifecycle/outbox envelope 与 payload 均携带 sourceOwner、releaseId、manifestDigest、activationRevision，Search/Recommendation 可按 revision 追平。",
+            "entity": "Post",
+            "indexes": [
+              {
+                "keys": {
+                  "environment": 1,
+                  "manifestDigest": 1,
+                  "postId": 1,
+                  "releaseId": 1,
+                  "sourceOwner": 1
+                },
+                "name": "uq_data_release_candidate_outbox_event",
+                "unique": true
+              }
+            ],
+            "publication_role": "not_published",
+            "role": "append_only"
+          },
+          "data_release_candidate_posts": {
+            "description": "按 environment/sourceOwner/releaseId/manifestDigest create-once 隔离并永久保留的 verified candidate Post 闭包；每项保存 canonical live Post 全字段与 documentDigest，verified replay 只逐项 readback 校验不得写。Activate/rollback 仅可 owner-bound ReplaceOne 已有 Data-owned Post；sync+tombstone 才对 target closure 缺失的旧 active Post 做 tombstone。",
+            "entity": "Post",
+            "indexes": [
+              {
+                "keys": {
+                  "environment": 1,
+                  "manifestDigest": 1,
+                  "postId": 1,
+                  "releaseId": 1,
+                  "sourceOwner": 1
+                },
+                "name": "uq_data_release_candidate_post",
+                "unique": true
+              },
+              {
+                "keys": {
+                  "environment": 1,
+                  "manifestDigest": 1,
+                  "postRef": 1,
+                  "releaseId": 1,
+                  "sourceOwner": 1
+                },
+                "name": "idx_data_release_candidate_post_ref",
+                "unique": true
+              }
+            ],
+            "publication_role": "not_published",
+            "role": "projection"
+          },
+          "data_release_sequences": {
+            "description": "Content release stage 与 Activate transaction 共享的全局单调 projection version 分配器；仅通过 data_release_sequences/content-release-projection 的事务 $inc 推进，避免并发 stage 或 rollback transition 的 aggregateVersion 冲突。",
+            "entity": "Post",
+            "publication_role": "publication_accessory",
+            "role": "authoritative"
+          },
           "data_release_stage_receipts": {
-            "description": "每次 prepared/imported/projected/verified/active 尝试的脱敏持久化回执；保留 duration、attempted/success count、checkpoint 与 first typed blocker。失败回执不可覆盖成功阶段，且不得推进 active pointer。",
+            "description": "每次 prepared/imported/projected/verified/active 尝试的脱敏持久化回执；保留 duration、attempted/success count、checkpoint 与 first typed blocker。失败回执不可覆盖成功阶段，且不得推进 active pointer；same candidate exact active replay 不追加重复 active 事实。",
             "entity": "Post",
             "indexes": [
               {
@@ -271667,6 +271878,7 @@
                   "environment": 1,
                   "manifestDigest": 1,
                   "releaseId": 1,
+                  "sourceOwner": 1,
                   "stage": 1
                 },
                 "name": "uq_data_release_stage_receipt_attempt",
@@ -271676,7 +271888,8 @@
                 "keys": {
                   "environment": 1,
                   "recordedAt": 1,
-                  "releaseId": 1
+                  "releaseId": 1,
+                  "sourceOwner": 1
                 },
                 "name": "idx_data_release_stage_receipt_timeline"
               }
@@ -271685,44 +271898,38 @@
             "role": "append_only"
           },
           "data_release_state": {
-            "description": "canonical immutable content release 的唯一 active pointer；每个 environment + sourceOwner 恰一权威行且必须持有正 revision。只能按 prepared -\u003e imported -\u003e projected -\u003e verified -\u003e active 单调推进；激活在同一 Mongo transaction 内以 expectedRevision 执行 version CAS，首次 revision=0 只允许唯一 winner，相同 releaseId + manifestDigest 重放幂等，stale release 不得覆盖 winner。active pointer 仅在 verified 后切换；任何阶段失败都保留 previous active，不得把导入成功伪装成激活成功。既存重复或缺 revision 数据必须由受控迁移先行治理，索引建立与读取均 fail closed，禁止静默去重或兼容读取。",
+            "description": "canonical immutable content release 的 Content owner-local 控制面。全流程为 prepared -\u003e imported -\u003e projected -\u003e verified -\u003e active，但 kind=candidate 的 status 只允许到 verified；kind=active_pointer 是每个 environment/sourceOwner 唯一 active binding，并由 application/public.ActiveReleaseFenceQueryPort 以 environment + sourceOwner exact key 提供跨服务 typed 只读 seam（transport adapter 可复用，禁止共享 Mongo）；既有 cmd/import --read-active-report 继续作为运维报告 adapter。Activate 在同一 Mongo transaction 中先把 verified candidate 原子物化到 posts/content_outbox/media_assets、对缺失旧 Post 做 tombstone，再以 revision 和 expected-current tuple CAS pointer；任一步失败全部回滚。旧单文档 active shape 必须 fail closed，禁止 dual-read；candidate stage 或失败不得改变 previous active。",
             "entity": "Post",
             "indexes": [
               {
                 "keys": {
                   "environment": 1,
+                  "kind": 1,
+                  "manifestDigest": 1,
+                  "releaseId": 1,
                   "sourceOwner": 1
                 },
-                "name": "uq_data_release_state_environment_source_owner",
+                "name": "uq_data_release_state_environment_candidate",
+                "partial_filter": {
+                  "kind": "candidate"
+                },
                 "unique": true
               },
               {
                 "keys": {
-                  "activatedAt": -1,
                   "environment": 1,
-                  "sourceOwner": 1,
-                  "status": 1
+                  "kind": 1,
+                  "sourceOwner": 1
                 },
-                "name": "idx_data_release_state_active_pointer"
-              }
-            ],
-            "publication_role": "not_published",
-            "role": "authoritative"
-          },
-          "data_release_state_migration_receipts": {
-            "description": "受控一次性 active pointer revision/sourceVersion backfill 的 create-once 回执；按 migration + environment + sourceOwner 唯一，且与 pointer 更新同事务提交。",
-            "entity": "Post",
-            "indexes": [
-              {
-                "keys": {
-                  "_id": 1
+                "name": "uq_data_release_state_active_pointer",
+                "partial_filter": {
+                  "kind": "active_pointer"
                 },
-                "name": "idx_data_release_state_migration_receipt_id",
                 "unique": true
               }
             ],
             "publication_role": "not_published",
-            "role": "append_only"
+            "role": "authoritative"
           },
           "post_command_receipts": {
             "description": "Post command 幂等结果；与聚合版本和 outbox 在同一 Mongo transaction 提交",
@@ -271900,35 +272107,6 @@
             ],
             "publication_role": "not_published"
           },
-          "posts_candidate": {
-            "description": "受保护的 Content Data release 候选集合；文档与 posts 同形但 lifecycleStatus=candidate，按 environment + sourceOwner + releaseId + manifestDigest + targetPostId 唯一。仅 release importer 的 stage/verify/activate 入口可访问，不属于线上读面。",
-            "entity": "Post",
-            "indexes": [
-              {
-                "keys": {
-                  "environment": 1,
-                  "manifestDigest": 1,
-                  "releaseId": 1,
-                  "sourceOwner": 1,
-                  "targetPostId": 1
-                },
-                "name": "uq_posts_candidate_release_post",
-                "unique": true
-              },
-              {
-                "keys": {
-                  "candidateRevision": 1,
-                  "environment": 1,
-                  "manifestDigest": 1,
-                  "releaseId": 1,
-                  "sourceOwner": 1
-                },
-                "name": "idx_posts_candidate_readback"
-              }
-            ],
-            "publication_role": "not_published",
-            "role": "projection"
-          },
           "projection_checkpoints": {
             "description": "Feed/Search/Recommendation/Homepage/Circle replay/rebuild checkpoint",
             "entity": "Post",
@@ -272025,26 +272203,6 @@
             "retention_seconds": 604800,
             "role": "dead_letter"
           }
-        },
-        "transaction": {
-          "guarantees": [
-            "verified_candidate_posts_outbox_active_pointer_atomic_commit",
-            "active_pointer_environment_source_owner_unique_winner",
-            "active_pointer_revision_cas",
-            "same_release_digest_idempotent_replay",
-            "stale_release_conflict_fail_closed"
-          ],
-          "isolation": "mongo_transaction",
-          "mechanism": "version_cas",
-          "scope": [
-            "posts_candidate",
-            "posts",
-            "content_outbox",
-            "content_outbox_sequences",
-            "data_release_state",
-            "data_release_state_migration_receipts",
-            "data_release_stage_receipts"
-          ]
         }
       }
     },
@@ -280848,7 +281006,7 @@
     },
     {
       "path": "content/media/media_asset/public_slice_derivation_cases.json",
-      "sha256": "1258a08885b20b6935b0983d3f4db1f710febb4b85e0732bcc928ef1f442f735",
+      "sha256": "ed190c54400250c0441e7b3b6c8cad9e6e922ee15c4e87f71b86a3ea0ef11e82",
       "mediaType": "application/json",
       "content": {
         "cases": [
@@ -280970,6 +281128,22 @@
             "mediaType": "attachment",
             "name": "unsupported_kind_has_no_public_identity",
             "publicSliceKey": "",
+            "version": 1
+          },
+          {
+            "assetId": "wikimedia_commons_video__341fea6aa4d4c375:video",
+            "contentType": "video/mp4",
+            "mediaType": "video",
+            "name": "six_step_video_unit_role_asset_id_hashes_to_role_prefixed_segment",
+            "publicSliceKey": "media/video/s/asset/video-526fa927efc0c216b68d3d93e04a31e1/v1/source.mp4",
+            "version": 1
+          },
+          {
+            "assetId": "wikimedia_commons_video__341fea6aa4d4c375:poster",
+            "contentType": "image/png",
+            "mediaType": "image",
+            "name": "six_step_video_poster_unit_role_asset_id_hashes_to_role_prefixed_segment",
+            "publicSliceKey": "media/image/s/asset/poster-1351b26540914c8272f3b877001fd936/v1/source.png",
             "version": 1
           }
         ],
@@ -298128,7 +298302,7 @@
     },
     {
       "path": "entity/entity_homepage/homepage/object.yaml",
-      "sha256": "4ae43adc509bd6a315403057b31709142bd5d6e90d794e4cdd90fc9312710b9e",
+      "sha256": "97d1c5c4e52c05d62c5ae4d1c16a04d36a7f6ea0fdf82b6490e2543395ae5709",
       "mediaType": "application/yaml",
       "content": {
         "access": {
@@ -298183,7 +298357,9 @@
         },
         "business_rules": [
           "canonical identity 与 homepageType 创建后不可变",
-          "candidate 只能在必填主档、标签和来源证据齐全后发布",
+          "candidate 只能在必填主档、标签和来源证据齐全后发布；这是 Homepage aggregate governance candidate，不得当作 release candidate",
+          "数据发布只写 homepage_release_projection stage candidate；Content active tuple 是唯一 live fence，Homepage 不建立独立 active pointer",
+          "公开读必须按 Content active environment/sourceOwner/releaseId/manifestDigest 精确选择 release projection，并与 Homepage claim/owner overlay 组合；禁止 latest 或旧 release fallback",
           "published 主档修改使用服务端内部 version CAS 并生成可审计事件",
           "offline 主页不可重新公开，重新上线必须创建新候选版本",
           "认领、状态上报和评价均通过各自上下文公开契约；关注关系唯一归属 user.SubjectFollow，Homepage 不提供 follow 写入口",
@@ -301094,6 +301270,113 @@
       }
     },
     {
+      "path": "entity/entity_homepage/homepage/projections/homepage_release_projection.yaml",
+      "sha256": "f731d580a87379058c49e427133870113e72f6756c4feb4c8374cdeef017262a",
+      "mediaType": "application/yaml",
+      "content": {
+        "consumers": [
+          "entity-service"
+        ],
+        "description": "Homepage owner 按 exact environment/sourceOwner/releaseId/manifestDigest 保存的 create-once stage candidate。它独立于 Homepage aggregate 的 governance status； 公开读只能由 Content active tuple 精确选中，不存在 latest/旧版本 fallback。",
+        "fields": [
+          {
+            "name": "environment",
+            "type": "string"
+          },
+          {
+            "name": "sourceOwner",
+            "type": "string"
+          },
+          {
+            "name": "releaseId",
+            "type": "string"
+          },
+          {
+            "name": "manifestDigest",
+            "type": "string"
+          },
+          {
+            "name": "homepageId",
+            "type": "string"
+          },
+          {
+            "name": "entityRef",
+            "type": "string"
+          },
+          {
+            "name": "title",
+            "type": "string"
+          },
+          {
+            "name": "homepageType",
+            "type": "string"
+          },
+          {
+            "name": "city",
+            "nullable": true,
+            "type": "string"
+          },
+          {
+            "name": "location",
+            "nullable": true,
+            "type": "HomepageGeoPoint"
+          },
+          {
+            "name": "categoryTags",
+            "type": "[]string"
+          },
+          {
+            "name": "coverUrl",
+            "nullable": true,
+            "type": "string"
+          },
+          {
+            "name": "introductionMarkdown",
+            "nullable": true,
+            "type": "string"
+          },
+          {
+            "name": "introductionAssets",
+            "type": "[]HomepageIntroductionAsset"
+          },
+          {
+            "name": "structuredFacts",
+            "nullable": true,
+            "type": "HomepageStructuredFactsView"
+          },
+          {
+            "name": "primarySource",
+            "nullable": true,
+            "type": "HomepageSource"
+          },
+          {
+            "name": "sourceUrls",
+            "type": "[]string"
+          },
+          {
+            "name": "projectionVersion",
+            "type": "int64"
+          },
+          {
+            "name": "closureDigest",
+            "type": "string"
+          },
+          {
+            "name": "documentDigest",
+            "type": "string"
+          },
+          {
+            "name": "verifiedAt",
+            "type": "timestamp"
+          }
+        ],
+        "read_model": "HomepageReleaseProjection",
+        "source_entities": [
+          "Homepage"
+        ]
+      }
+    },
+    {
       "path": "entity/entity_homepage/homepage/projections/homepage_review_summary_data.yaml",
       "sha256": "8df7d016a17ddafe17b20370edba8a29d78764f83a1bdff11c7c787ee092e04d",
       "mediaType": "application/yaml",
@@ -301636,7 +301919,7 @@
     },
     {
       "path": "entity/entity_homepage/homepage/storage.yaml",
-      "sha256": "eeb716a8ed9bc7db17d719205b967aa3bfdac03c5dfa3e581112c1c4beb8f300",
+      "sha256": "95857b098d58c13426ac05356494c00d4c8b4698a3f9d96def382513bcc99870",
       "mediaType": "application/yaml",
       "content": {
         "backend": "mongodb",
@@ -301742,6 +302025,54 @@
               }
             ],
             "publication_role": "publication_accessory",
+            "role": "projection"
+          },
+          "homepage_release_candidate_state": {
+            "description": "exact candidate closure 的 verified state；不承担 active pointer。",
+            "entity": "HomepageReleaseProjection",
+            "indexes": [
+              {
+                "keys": {
+                  "environment": 1,
+                  "manifestDigest": 1,
+                  "releaseId": 1,
+                  "sourceOwner": 1
+                },
+                "name": "uq_homepage_release_candidate_state",
+                "unique": true
+              }
+            ],
+            "publication_role": "not_published",
+            "role": "projection"
+          },
+          "homepage_release_projection": {
+            "description": "exact environment/sourceOwner/releaseId/manifestDigest 隔离的 release-owned stage candidate；同一 tuple create-once，公开读由 Content active tuple 精确选择。",
+            "entity": "HomepageReleaseProjection",
+            "indexes": [
+              {
+                "keys": {
+                  "entityRef": 1,
+                  "environment": 1,
+                  "manifestDigest": 1,
+                  "releaseId": 1,
+                  "sourceOwner": 1
+                },
+                "name": "uq_homepage_release_projection_identity",
+                "unique": true
+              },
+              {
+                "keys": {
+                  "environment": 1,
+                  "homepageId": 1,
+                  "manifestDigest": 1,
+                  "releaseId": 1,
+                  "sourceOwner": 1
+                },
+                "name": "uq_homepage_release_projection_homepage",
+                "unique": true
+              }
+            ],
+            "publication_role": "not_published",
             "role": "projection"
           },
           "homepages": {
@@ -358060,7 +358391,7 @@
     },
     {
       "path": "platform/config.yaml",
-      "sha256": "fec2585d0f469fd30d1f7c038f00b85915246cc2c0bc5adfd0a861b14e1bf3c1",
+      "sha256": "b54d188bde2c9e7ea07c2d34bc377cdd2e43424f16c155a1ab38a81223098723",
       "mediaType": "application/yaml",
       "content": {
         "configs": [
@@ -360525,6 +360856,24 @@
             "rollout": "progressive",
             "scope": "workload",
             "sensitive": false,
+            "type": "string"
+          },
+          {
+            "default": "quwoquan_content",
+            "key": "sys.entity-service.content_service.mongo_database",
+            "reload": "restart",
+            "rollout": "progressive",
+            "scope": "workload",
+            "sensitive": false,
+            "type": "string"
+          },
+          {
+            "default": "",
+            "key": "sys.entity-service.content_service.mongo_uri",
+            "reload": "restart",
+            "rollout": "progressive",
+            "scope": "workload",
+            "sensitive": true,
             "type": "string"
           },
           {
@@ -363219,6 +363568,24 @@
             "scope": "workload",
             "sensitive": false,
             "type": "int"
+          },
+          {
+            "default": "quwoquan_content",
+            "key": "sys.user-service.content_service.mongo_database",
+            "reload": "restart",
+            "rollout": "progressive",
+            "scope": "workload",
+            "sensitive": false,
+            "type": "string"
+          },
+          {
+            "default": "",
+            "key": "sys.user-service.content_service.mongo_uri",
+            "reload": "restart",
+            "rollout": "progressive",
+            "scope": "workload",
+            "sensitive": true,
+            "type": "string"
           },
           {
             "default": 0,
@@ -397115,17 +397482,18 @@
     },
     {
       "path": "tag/tag/tag_taxonomy_release/fields.yaml",
-      "sha256": "57a9d82a9cccd3ab91cba2b8289586fc129cd7c31df16babb8e88dd6df532dcc",
+      "sha256": "d35c18d098a0aabae89782e826c030da3e9a733e9c4f8991215894cb5c46ac94",
       "mediaType": "application/yaml",
       "content": {
-        "description": "数据工程 taxonomy 的不可变发布批次及激活状态",
+        "description": "数据工程 taxonomy 的 prior 发布批次及 Data content-release owner-local verified candidate",
         "enums": {
           "TagTaxonomyReleaseStatus": {
             "values": [
               "staged",
               "active",
               "retired",
-              "rejected"
+              "rejected",
+              "verified"
             ]
           }
         },
@@ -397230,7 +397598,7 @@
         ],
         "types": {
           "StageTagTaxonomyReleaseRequest": {
-            "description": "Data publish Facade 提交不可变 taxonomy 发布批次的请求体。",
+            "description": "Prior 非 Data rail taxonomy 发布批次请求体。",
             "fields": [
               {
                 "api_exposure": "write",
@@ -397288,13 +397656,222 @@
                 "type": "int"
               }
             ]
+          },
+          "TagContentReleaseCandidateIdentity": {
+            "description": "Content 跨域唯一 live fence；query-candidate 必须完整携带且不得 latest fallback。",
+            "fields": [
+              {
+                "api_exposure": "drop",
+                "classification": "INTERNAL",
+                "constraints": [
+                  "NOT_NULL"
+                ],
+                "log_policy": "allow",
+                "name": "environment",
+                "ops_exposure": "write",
+                "type": "string"
+              },
+              {
+                "api_exposure": "drop",
+                "classification": "INTERNAL",
+                "constraints": [
+                  "NOT_NULL"
+                ],
+                "log_policy": "allow",
+                "name": "sourceOwner",
+                "ops_exposure": "write",
+                "type": "string"
+              },
+              {
+                "api_exposure": "drop",
+                "classification": "INTERNAL",
+                "constraints": [
+                  "NOT_NULL"
+                ],
+                "log_policy": "allow",
+                "name": "releaseId",
+                "ops_exposure": "write",
+                "type": "string"
+              },
+              {
+                "api_exposure": "drop",
+                "classification": "INTERNAL",
+                "constraints": [
+                  "NOT_NULL"
+                ],
+                "log_policy": "allow",
+                "name": "manifestDigest",
+                "ops_exposure": "write",
+                "type": "string"
+              }
+            ]
+          },
+          "TagContentReleaseCandidateReceipt": {
+            "description": "exact query 的 create-once 回执；found 时携带完整 verified closure 证据。",
+            "fields": [
+              {
+                "api_exposure": "drop",
+                "classification": "INTERNAL",
+                "constraints": [
+                  "NOT_NULL"
+                ],
+                "log_policy": "allow",
+                "name": "schema",
+                "ops_exposure": "read",
+                "type": "string"
+              },
+              {
+                "api_exposure": "drop",
+                "classification": "INTERNAL",
+                "constraints": [
+                  "NOT_NULL"
+                ],
+                "log_policy": "allow",
+                "name": "status",
+                "ops_exposure": "read",
+                "type": "string"
+              },
+              {
+                "api_exposure": "drop",
+                "classification": "INTERNAL",
+                "constraints": [
+                  "NOT_NULL"
+                ],
+                "log_policy": "allow",
+                "name": "environment",
+                "ops_exposure": "read",
+                "type": "string"
+              },
+              {
+                "api_exposure": "drop",
+                "classification": "INTERNAL",
+                "constraints": [
+                  "NOT_NULL"
+                ],
+                "log_policy": "allow",
+                "name": "sourceOwner",
+                "ops_exposure": "read",
+                "type": "string"
+              },
+              {
+                "api_exposure": "drop",
+                "classification": "INTERNAL",
+                "constraints": [
+                  "NOT_NULL"
+                ],
+                "log_policy": "allow",
+                "name": "releaseId",
+                "ops_exposure": "read",
+                "type": "string"
+              },
+              {
+                "api_exposure": "drop",
+                "classification": "INTERNAL",
+                "constraints": [
+                  "NOT_NULL"
+                ],
+                "log_policy": "allow",
+                "name": "manifestDigest",
+                "ops_exposure": "read",
+                "type": "string"
+              },
+              {
+                "api_exposure": "drop",
+                "classification": "INTERNAL",
+                "constraints": [
+                  "NULLABLE"
+                ],
+                "log_policy": "allow",
+                "name": "projectionVersion",
+                "ops_exposure": "read",
+                "type": "int64"
+              },
+              {
+                "api_exposure": "drop",
+                "classification": "INTERNAL",
+                "constraints": [
+                  "NULLABLE"
+                ],
+                "log_policy": "allow",
+                "name": "verifiedAt",
+                "ops_exposure": "read",
+                "type": "timestamp"
+              },
+              {
+                "api_exposure": "drop",
+                "classification": "INTERNAL",
+                "constraints": [
+                  "NULLABLE"
+                ],
+                "log_policy": "allow",
+                "name": "closureDigest",
+                "ops_exposure": "read",
+                "type": "string"
+              },
+              {
+                "api_exposure": "drop",
+                "classification": "INTERNAL",
+                "constraints": [
+                  "NULLABLE"
+                ],
+                "description": "与 creator/homepage 候选回执同形的 expected/projected 节点计数对象；found 时必填且两者相等。",
+                "log_policy": "allow",
+                "name": "counts",
+                "ops_exposure": "read",
+                "type": "object"
+              },
+              {
+                "api_exposure": "drop",
+                "classification": "INTERNAL",
+                "constraints": [
+                  "NULLABLE"
+                ],
+                "log_policy": "allow",
+                "name": "canonicalDigest",
+                "ops_exposure": "read",
+                "type": "string"
+              },
+              {
+                "api_exposure": "drop",
+                "classification": "INTERNAL",
+                "constraints": [
+                  "NULLABLE"
+                ],
+                "log_policy": "allow",
+                "name": "releaseKind",
+                "ops_exposure": "read",
+                "type": "string"
+              },
+              {
+                "api_exposure": "drop",
+                "classification": "INTERNAL",
+                "constraints": [
+                  "NULLABLE"
+                ],
+                "log_policy": "allow",
+                "name": "tagRefsDigest",
+                "ops_exposure": "read",
+                "type": "string"
+              },
+              {
+                "api_exposure": "drop",
+                "classification": "INTERNAL",
+                "constraints": [
+                  "NOT_NULL"
+                ],
+                "log_policy": "allow",
+                "name": "generatedAt",
+                "ops_exposure": "read",
+                "type": "timestamp"
+              }
+            ]
           }
         }
       }
     },
     {
       "path": "tag/tag/tag_taxonomy_release/object.yaml",
-      "sha256": "427732badecf82200dd02e858b7c1cccb2413874f89cd9f5a58c97573223a19f",
+      "sha256": "1f36185ca1c81392f6c6f93bbb7a7db84150f2ae28948f13fb55b7de2eaf0320",
       "mediaType": "application/yaml",
       "content": {
         "access": {
@@ -397319,14 +397896,14 @@
           }
         },
         "business_rules": [
-          "releaseId、contentDigest 和 parent graph 创建后不可变",
-          "content release 至少包含一个节点；release-bound empty_baseline 是合法的零节点 snapshot",
-          "taxonomy 必须无环且所有 node path、alias 和 canonical id 唯一",
-          "同一 taxonomy 只能有一个 active release",
-          "retired release 可作为 rollback/replay 目标再次激活，历史 release 与 TagNode snapshot 不物理删除",
-          "在线服务不得直接修改 TagNodeView，只能切换已验证 release"
+          "Data content fence 唯一身份为 environment/sourceOwner/releaseId/manifestDigest；sourceOwner 必须 qwq_data",
+          "Data candidate 到 verified 为止，绑定 projectionVersion、canonicalDigest、node closure、tagRefsDigest 和 expected/projected counts",
+          "exact query 每次重验 persisted candidate、节点闭包和 canonical indexes；禁止扫描 latest",
+          "Data importer 必须显式 stage-only，不调用 prior Activate，stage B 不改变 active A",
+          "prior taxonomy active 只用于非 Data rail 兼容；不得创建 Tag 独立 Content active pointer",
+          "retired prior release 可 rollback/replay，历史 release 与 TagNode snapshot 不物理删除"
         ],
-        "description": "一次不可变标签分类发布。数据工程 publish/import 是唯一写入口；\nTagNodeView 通过 releaseId 归属该版本投影，在线 tag-service 仅查询激活投影。\n",
+        "description": "一次不可变标签分类发布。prior taxonomy 可保留单 active；Data content rail 只按完整 Content\nfence stage verified candidate，不创建 Tag 自有 Content active pointer，也不得激活 prior taxonomy。",
         "identity": {
           "fields": [
             "releaseId"
@@ -397340,6 +397917,7 @@
           "state_field": "status",
           "states": [
             "staged",
+            "verified",
             "active",
             "retired",
             "rejected"
@@ -397354,7 +397932,7 @@
     },
     {
       "path": "tag/tag/tag_taxonomy_release/operations.yaml",
-      "sha256": "d5277ffd3fb20a4bc9ca4872d7be358f3f9a937274042ae76416bab9e4ef8366",
+      "sha256": "cb3d38770deeaecb3250e891c0f42725695aee1d9e360ecfbf937a0f330ce5a3",
       "mediaType": "application/yaml",
       "content": {
         "api_routes": [
@@ -397375,7 +397953,7 @@
             "commercial": {
               "status": "ready"
             },
-            "description": "落一条不可变 staged release（releaseId/sourceOwner/canonicalDigest/releaseKind/nodeCount）。\nreleaseId 是业务身份；只有同 releaseId 的完整 intent（sourceOwner/canonicalDigest/releaseKind/nodeCount）\n完全相同才返回首次记录。不同 releaseId 可引用同一 canonicalDigest，并分别保存为独立 immutable release；\n同 releaseId 的任一 intent 字段漂移均返回幂等冲突。\ncontent 必须至少包含一个节点；release-bound empty_baseline 必须恰好为零节点。\n",
+            "description": "Prior 非 Data rail：按 releaseId 落 staged taxonomy release。Data content importer 不调用此\nHTTP Activate 流；其 owner-local candidate 使用完整 Content fence 单独持久化到 verified。",
             "error_codes": [
               "TAG.USER.release_invalid_argument",
               "TAG.USER.release_idempotency_conflict",
@@ -397436,7 +398014,7 @@
             "commercial": {
               "status": "ready"
             },
-            "description": "激活 staged 或 retired immutable release：服务端内部 CAS 完成单 active 切换（旧 active → retired）。\n目标已 active 时按 no-op receipt 重放安全；retired 允许 rollback replay， 历史 release 与 TagNode snapshot 不物理删除；公开请求不携带版本字段。\n",
+            "description": "Prior 非 Data rail 的 taxonomy active CAS。Data content rail importer 必须显式\n--activation-mode=stage-only，禁止调用本操作，因此 stage B 不会改变 prior active A。",
             "error_codes": [
               "TAG.USER.release_not_found",
               "TAG.USER.release_invalid_transition",
@@ -397500,7 +398078,9 @@
           {
             "capabilities": [
               "stage_taxonomy_release",
-              "activate_taxonomy_release"
+              "activate_taxonomy_release",
+              "stage_tag_content_release_candidate",
+              "query_exact_tag_content_release_candidate"
             ],
             "name": "data-publish-pipeline"
           }
@@ -397508,35 +398088,32 @@
         "contract_test": {
           "test_strategy": {
             "service_side": {
-              "description": "真实 Mongo 验证 release intent 幂等、同 digest 多 release、单 active CAS 切换与状态机",
+              "description": "真实 Mongo 验证 prior 激活兼容与 Data rail exact verified candidate/receipt",
               "real_engines": {
                 "mongodb": "testcontainers (mongo:7)"
               },
               "scenarios": [
                 {
                   "assertions": [
-                    "同 releaseId 且完整 intent 相同的重复 Stage 返回首次记录，不落第二条",
-                    "同 releaseId 任一 intent 字段漂移返回幂等冲突",
-                    "不同 releaseId 使用相同 canonicalDigest 时各自成功落一条 immutable release"
+                    "完整 Content fence 首次导入落 verified candidate，same digest replay 只读校验",
+                    "同 environment/sourceOwner/releaseId 的 manifest 或 candidate projection 漂移显式冲突",
+                    "stage B 不调用 Activate 且不改变 prior active A"
                   ],
-                  "name": "stage_release_intent_idempotent",
-                  "route": "POST /internal/tag/taxonomy-releases"
+                  "name": "data_candidate_stage_only"
                 },
                 {
                   "assertions": [
-                    "激活目标严格按 releaseId 选择，不按 canonicalDigest 选择",
-                    "激活后旧 active release 变 retired，同一时刻只有一个 active",
-                    "重复激活 no-op 重放安全",
-                    "release-bound empty_baseline 零节点快照可激活并可重放 retired 历史快照"
+                    "只按 environment/sourceOwner/releaseId/manifestDigest exact query，不扫描 latest",
+                    "查询重验 persisted candidate、node count/closure、canonical digest、tagRefs digest 与索引",
+                    "not_found 与 found 均输出 create-once、非 symlink receipt"
                   ],
-                  "name": "activate_single_active_cas",
-                  "route": "POST /internal/tag/taxonomy-releases/{releaseId}:activate"
+                  "name": "data_candidate_exact_query"
                 }
               ]
             }
           }
         },
-        "description": "TagTaxonomyRelease 只接受 Data publish Facade 的版本化导入与激活命令。\n离线导入器（cmd/import）是唯一节点写入口：导入完成后经 Stage 以完整\nrelease intent 落不可变记录，再经 Activate 按 releaseId 做单 active CAS 切换。\nreleaseId 是业务身份；canonicalDigest 只校验 taxonomy snapshot 内容，允许不同\nimmutable content release 引用同一 digest。\n",
+        "description": "TagTaxonomyRelease 同时保留 prior taxonomy 激活轨与 Data content-release rail。\nData rail 只接受 canonical immutable release header + attestation，以\n(environment, sourceOwner=qwq_data, releaseId, manifestDigest) stage immutable verified\ncandidate；导入器在 stage-only 模式绝不调用 prior Activate，后续 exact query 也只按完整\nidentity 读取、重验 candidate document、节点闭包和 canonical indexes，不扫描 latest。",
         "readiness_cases": [
           {
             "case_id": "stage-tag-taxonomy-release-local",
@@ -397623,11 +398200,37 @@
     },
     {
       "path": "tag/tag/tag_taxonomy_release/storage.yaml",
-      "sha256": "0134f6720c6eaf8243542229c16574f93bfcd29908c8910c1a8a218600a8a1c1",
+      "sha256": "314e1d3e2ed0a6ab4a1fe1444a46534b5db5855f99a2f67db849248bcc3492da",
       "mediaType": "application/yaml",
       "content": {
         "backend": "mongodb",
         "collections": {
+          "tag_release_candidates": {
+            "description": "Data content-release rail owner-local immutable verified candidate。身份严格为\nenvironment/sourceOwner/releaseId/manifestDigest；保存 projectionVersion、verifiedAt、\ncanonicalDigest、closureDigest、tagRefsDigest、expected/projected counts 和 releaseKind。\n不保存 Content active pointer，也不修改 prior taxonomy active。",
+            "entity": "TagTaxonomyRelease",
+            "indexes": [
+              {
+                "keys": {
+                  "environment": 1,
+                  "manifestDigest": 1,
+                  "releaseId": 1,
+                  "sourceOwner": 1
+                },
+                "name": "uq_tag_release_candidate_identity",
+                "unique": true
+              },
+              {
+                "keys": {
+                  "environment": 1,
+                  "releaseId": 1,
+                  "sourceOwner": 1
+                },
+                "name": "uq_tag_release_candidate_release_fence",
+                "unique": true
+              }
+            ],
+            "role": "authoritative"
+          },
           "tag_taxonomy_releases": {
             "entity": "TagTaxonomyRelease",
             "indexes": [
@@ -432656,7 +433259,7 @@
     },
     {
       "path": "user/profile_projection/creator_runtime_profile/fields.yaml",
-      "sha256": "30ca60eaf7b05232e326bbf862daa6ed978579f3e17b53033d0ab08bda42ac06",
+      "sha256": "aaa72195c379537265671c889e839ff4500b9294121be5c4e2ac1a225028d25a",
       "mediaType": "application/yaml",
       "content": {
         "fields": [
@@ -433124,6 +433727,75 @@
             "constraints": [
               "NOT_NULL"
             ],
+            "description": "release candidate 身份维度；只在 owner-local candidate collections 中出现",
+            "log_policy": "allow",
+            "name": "environment",
+            "ops_exposure": "read",
+            "role": "projection",
+            "source": "environment",
+            "type": "string"
+          },
+          {
+            "api_exposure": "none",
+            "classification": "INTERNAL",
+            "constraints": [
+              "NOT_NULL"
+            ],
+            "description": "release candidate 身份维度；固定为 qwq_data",
+            "log_policy": "allow",
+            "name": "sourceOwner",
+            "ops_exposure": "read",
+            "role": "projection",
+            "source": "sourceOwner",
+            "type": "string"
+          },
+          {
+            "api_exposure": "none",
+            "classification": "INTERNAL",
+            "constraints": [
+              "NOT_NULL"
+            ],
+            "description": "immutable release payload digest；与 releaseId 一起构成 candidate 的 exact 身份",
+            "log_policy": "hash",
+            "name": "manifestDigest",
+            "ops_exposure": "read",
+            "role": "projection",
+            "source": "manifestDigest",
+            "type": "string"
+          },
+          {
+            "api_exposure": "none",
+            "classification": "INTERNAL",
+            "constraints": [
+              "NOT_NULL"
+            ],
+            "log_policy": "allow",
+            "name": "projectionVersion",
+            "ops_exposure": "read",
+            "role": "projection",
+            "source": "projectionVersion",
+            "type": "int"
+          },
+          {
+            "api_exposure": "none",
+            "classification": "INTERNAL",
+            "constraints": [
+              "NULLABLE"
+            ],
+            "description": "candidate 通过真实 storage closure 校验的时刻；未 verified 的 candidate 不可被公开读取",
+            "log_policy": "allow",
+            "name": "verifiedAt",
+            "ops_exposure": "read",
+            "role": "projection",
+            "source": "verifiedAt",
+            "type": "timestamp"
+          },
+          {
+            "api_exposure": "none",
+            "classification": "INTERNAL",
+            "constraints": [
+              "NOT_NULL"
+            ],
             "log_policy": "allow",
             "name": "status",
             "ops_exposure": "read",
@@ -433188,7 +433860,7 @@
     },
     {
       "path": "user/profile_projection/creator_runtime_profile/object.yaml",
-      "sha256": "2d2032fd899e6aa552420f87ce18d16d08bf3a1a3d677ce3c26a0c298474c7fe",
+      "sha256": "fa7c5e5304399a3d258e79fe9c2fe48727aa68daaa50892b6ec9b749146eb7e5",
       "mediaType": "application/yaml",
       "content": {
         "access": {
@@ -433215,9 +433887,9 @@
           }
         },
         "business_rules": [
-          "Creator package 只由已激活 immutable release 投影，禁止创建可登录账号或复制 Post 正文。",
-          "creatorId 唯一映射 canonical personaId，release 切换必须整包原子替换并校验媒体引用。",
-          "Persona 关闭或 release 撤销必须 tombstone 该运行时档案并从公开查询移除。"
+          "事件投影集合不得承载 immutable Data release candidate；Data candidate 只写本对象 owner-local 的 creator_release_projections / creator_release_candidate_states，stage-only，不创建可登录账号、不写 Persona outbox 或 command receipt，也不维护 User 侧 active/latest pointer。",
+          "release candidate 公开读取必须绑定 Content active tuple（environment/sourceOwner/releaseId/manifestDigest）exact fence，不得从事件投影或旧 content_release Persona fallback。",
+          "Persona 关闭必须 tombstone 事件来源的运行时档案并从公开查询移除。"
         ],
         "description": "immutable release desired-state 引用的 canonical creator package 只读运行时投影。\n归属 user-service，复用既有 creator/profile/works API；不创建可登录用户，不复制作品正文。\n",
         "identity": {
@@ -433367,11 +434039,54 @@
     },
     {
       "path": "user/profile_projection/creator_runtime_profile/storage.yaml",
-      "sha256": "b6e511b7bc8d5a37d4bd984e41f61f0bc3578b1b9be5da1cba64d75017a2de76",
+      "sha256": "c3fd04c5ea163d142f1d5564195dbbd00bdf8381097e12cae00bedb51f201cdb",
       "mediaType": "application/yaml",
       "content": {
         "backend": "mongodb",
         "collections": {
+          "creator_release_candidate_states": {
+            "description": "每个 release tuple 一份 candidate 状态（storage closure 校验通过后为 verified）；stage-only，不写 PostgreSQL UserAccount/Persona、Persona outbox 或 command receipt。",
+            "entity": "CreatorRuntimeProfile",
+            "indexes": [
+              {
+                "keys": {
+                  "environment": 1,
+                  "manifestDigest": 1,
+                  "releaseId": 1,
+                  "sourceOwner": 1
+                },
+                "name": "uq_creator_release_candidate_identity",
+                "unique": true
+              }
+            ]
+          },
+          "creator_release_projections": {
+            "description": "owner-local immutable Data release candidate 的逐 creator 快照；身份为 environment/sourceOwner/releaseId/manifestDigest/creatorId，同 creatorId 的不同 release candidate 可共存，公开读取只按 Content active tuple exact fence 解析，不建立 User 侧 active/latest pointer。",
+            "entity": "CreatorRuntimeProfile",
+            "indexes": [
+              {
+                "keys": {
+                  "creatorId": 1,
+                  "environment": 1,
+                  "manifestDigest": 1,
+                  "releaseId": 1,
+                  "sourceOwner": 1
+                },
+                "name": "uq_creator_release_projection_identity",
+                "unique": true
+              },
+              {
+                "keys": {
+                  "environment": 1,
+                  "manifestDigest": 1,
+                  "personaId": 1,
+                  "releaseId": 1,
+                  "sourceOwner": 1
+                },
+                "name": "idx_creator_release_projection_public_identity"
+              }
+            ]
+          },
           "creator_runtime_profiles": {
             "entity": "CreatorRuntimeProfile",
             "indexes": [

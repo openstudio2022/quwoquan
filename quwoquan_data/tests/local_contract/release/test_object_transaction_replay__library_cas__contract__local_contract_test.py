@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 
 from content.release.canonical import handler as release_handler
+from content.release.canonical import handler_consumers as release_handler_consumers
 from content.release.canonical.application import rollback_object_transaction
 from content.release.canonical.object_transaction_contract import (
     ObjectTransactionError,
@@ -45,7 +46,7 @@ def test_exact_package_replay_cli_binds_explicit_library_and_roots(
             "status": "applied",
         }
 
-    monkeypatch.setattr(release_handler, "replay_object_transaction_package", replay)
+    monkeypatch.setattr(release_handler_consumers, "replay_object_transaction_package", replay)
     parser = argparse.ArgumentParser()
     release_handler.register_parser(
         parser.add_subparsers(dest="command", required=True)

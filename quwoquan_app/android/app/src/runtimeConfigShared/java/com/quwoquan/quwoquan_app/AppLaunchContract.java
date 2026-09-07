@@ -8,7 +8,7 @@ import java.util.List;
 import java.util.Map;
 
 public final class AppLaunchContract {
-  public static final String SOURCE_DIGEST = "sha256:b38964bc4c020536fc1f6bd31b35746f416128faa63bbed34b3e2676f6a4460d";
+  public static final String SOURCE_DIGEST = "sha256:e886af2683ad9a21a5ac7dd6a2d27ce5b9c97b6976a45312c35067b70fee1dc3";
   public static final List<String> ENVIRONMENTS = Collections.unmodifiableList(Arrays.asList(
       "alpha",
       "beta",
@@ -44,7 +44,8 @@ public final class AppLaunchContract {
       "icon_cold_launch"
   ));
   public static final List<String> RUNTIME_CONFIG_SUPPLY_MODES = Collections.unmodifiableList(Arrays.asList(
-      "external_runtime_package"
+      "external_runtime_package",
+      "build_time_self_supply"
   ));
   public static final List<String> RUNTIME_VALUE_KEYS = Collections.unmodifiableList(Arrays.asList(
       "appDownloadBaseUrl",

@@ -144,7 +144,7 @@ def pytest_configure(config):
     }
     config._qwq_publish_baseline = _snapshot_files(DATA_ROOT / "publish")
     config._qwq_carried_media_baseline = _snapshot_files(
-        DATA_ROOT / "reference" / "golden_media"
+        _paths.default_carried_media_root()
     )
 
 
@@ -266,9 +266,9 @@ def pytest_unconfigure(config):
             f"{DATA_ROOT / 'publish'} changed files ({', '.join(publish_details)})"
         )
 
-    # 随体媒体根与 publish 同为仓内受版本控制真相源：发布事务按契约往那里落字节，
-    # 因此一次测试运行留下的字节会被误当成生产资产提交。
-    carried_root = DATA_ROOT / "reference" / "golden_media"
+    # 随体媒体根是仓外 durable 副本：发布事务按契约往那里落字节，一次测试运行留下的
+    # 字节会被当成生产资产长期持有；测试必须只写 QWQ_CARRIED_MEDIA_ROOT 指向的隔离根。
+    carried_root = _paths.default_carried_media_root()
     carried_details = _snapshot_diff(
         _snapshot_files(carried_root),
         getattr(config, "_qwq_carried_media_baseline", {}),

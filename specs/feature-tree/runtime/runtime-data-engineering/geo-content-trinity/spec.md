@@ -36,8 +36,8 @@
 ### REQ-002 失败对象隔离与成功对象独立发布
 
 - release-first ship 与 operator journey 契约通过；同一 release digest 依次在 alpha/beta/gamma/prod 形成 import/API/media/rollback receipt。
-- homepage、article、image、video 共享冻结 entity catalog，但各自使用 immutable execution、quota 与失败终态；post 不依赖 homepage execution 或 publish 结果。
-- 四类 active workloads 彼此独立调度，可串行或重叠运行；固定四路并发、四个同时 workspace、capacity soak 或 resource sample 均不是 dispatch/promotion 前置。每个实际启动的 task 逐项形成 typed 终态，共享 canonical publish 继续由对象事务单写。
+- homepage、article、image、video 共享冻结 entity catalog，但各自使用 immutable execution 与失败终态；post 不依赖 homepage execution 或 publish 结果。
+- 各载体由宿主 AI 独立执行，每个实际启动的 task 逐项形成 typed 终态；共享 canonical publish 继续由对象事务单写。
 
 ## 4. 契约引用
 
@@ -63,9 +63,9 @@
 ### GWT-002 失败对象隔离与成功对象独立发布
 
 - GIVEN 四个 carrier execution 共享同一 commit、source digest 与 entity catalog digest，且部分对象在来源、质量、权利或 review 门失败。
-- WHEN 四个 execution 按可用容量独立调度，可串行或重叠执行，并分别产生实际 task 终态后进入 canonical publish 与 immutable release。
-- THEN 每个 carrier 按自身 quota 隔离失败对象，post 不等待 homepage；release 只包含 approved 对象，失败对象保留在所属 execution evidence。
-- THEN soak、workspace smoke、effective concurrency 与 resource samples 只记录诊断事实，不改变 task dispatch、对象发布或结构性 promotion；canonical publish 保持单写者，最终 release 对全部被选对象与引用做 exact closure。
+- WHEN 四个 execution 由宿主 AI 独立执行，并分别产生实际 task 终态后进入 canonical publish 与 immutable release。
+- THEN 每个 carrier 隔离失败对象，post 不等待 homepage；release 只包含 approved 对象，失败对象保留在所属 execution evidence。
+- THEN canonical publish 保持单写者，最终 release 对全部被选对象与引用做 exact closure。
 - THEN 下游不得看到悬挂 entity、creator、tag 或 media 引用。
 
 ## 6. 依赖

@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:quwoquan_app/service/content_service/content/feed_delivery_page/application/public/content_activation_identity.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/public/content_post_view_data.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/public/content_post_detail_payload.dart';
 import 'package:quwoquan_app/runtime/transport/models/cursor_page.dart';
@@ -23,6 +24,7 @@ final class CachedContentPostReader
     required this.authorPostsDelegate,
     required this.postCache,
     required this.querySnapshotStore,
+    required this.currentCacheIdentity,
     this.userProfileCache,
     // 契约：best-effort 预热，失败自行留痕、不向上抛。
     Future<void> Function(String avatarUrl)? avatarPreloader,
@@ -34,6 +36,7 @@ final class CachedContentPostReader
   final ContentAuthorPostsReader authorPostsDelegate;
   final PostObjectCacheService postCache;
   final ContentQuerySnapshotStore querySnapshotStore;
+  final ContentCacheIsolationIdentity? Function() currentCacheIdentity;
   final UserProfileAuthorSnapshotCache? userProfileCache;
   final Future<void> Function(String avatarUrl) _avatarPreloader;
   final CacheTelemetrySink telemetrySink;
@@ -75,7 +78,7 @@ final class CachedContentPostReader
     String? cursor,
     int limit = ContentAuthorPostsQuery.defaultLimit,
   }) async {
-    final key = contentUserPostsQueryKey(
+    final baseKey = contentUserPostsQueryKey(
       userId: userId,
       identity: identity,
       type: type,
@@ -83,8 +86,13 @@ final class CachedContentPostReader
       cursor: cursor,
       limit: limit,
     );
+    final requestCacheIdentity = currentCacheIdentity();
+    final key = querySnapshotStore.isolateQueryKey(
+      baseKey,
+      identity: requestCacheIdentity,
+    );
     await querySnapshotStore.ensureHydrated();
-    final cached = querySnapshotStore.get(key);
+    final cached = key == null ? null : querySnapshotStore.get(key);
     try {
       final page = await authorPostsDelegate.listUserPosts(
         userId: userId,
@@ -94,11 +102,14 @@ final class CachedContentPostReader
         cursor: cursor,
         limit: limit,
       );
-      _storeCursorPage(key, page);
+      final responseCacheIdentity = currentCacheIdentity();
+      if (requestCacheIdentity == responseCacheIdentity) {
+        _storeCursorPage(key, page, cacheIdentity: responseCacheIdentity);
+      }
       return page;
     } catch (error) {
       if (cached != null) {
-        _recordCacheHit(key: key, result: cached);
+        _recordCacheHit(key: key!, result: cached);
         final cachedPage = cached.value.toCursorPage();
         return CursorPage<ContentPostViewData>(
           items: cachedPage.items,
@@ -124,7 +135,14 @@ final class CachedContentPostReader
     }
   }
 
-  void _storeCursorPage(String key, CursorPage<ContentPostViewData> page) {
+  void _storeCursorPage(
+    String? key,
+    CursorPage<ContentPostViewData> page, {
+    required ContentCacheIsolationIdentity? cacheIdentity,
+  }) {
+    if (key == null || cacheIdentity == null) {
+      return;
+    }
     postCache.putProjections(page.items);
     for (final post in page.items) {
       _registerAuthorSnapshot(post);
@@ -133,6 +151,7 @@ final class CachedContentPostReader
       key: key,
       items: page.items,
       nextCursor: page.nextCursor,
+      activationIdentity: cacheIdentity.activationIdentity,
     );
   }
 

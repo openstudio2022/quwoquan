@@ -194,6 +194,7 @@ fun escapedBuildConfigString(name: String): String =
 // 因此受同一组判否约束。
 apply(from = rootProject.file("gradle/runtime-config-assets.gradle.kts"))
 val externalAndroidRuntimeConfigAssetRoot = extra["qwqRuntimeConfigAssetRoot"] as File?
+val androidRuntimeConfigSelfSupply = extra["qwqRuntimeConfigSelfSupply"] as Boolean
 androidComponents {
     beforeVariants { variantBuilder ->
         val buildProfile =
@@ -225,8 +226,11 @@ android {
         isCoreLibraryDesugaringEnabled = true
     }
 
-    externalAndroidRuntimeConfigAssetRoot?.let { externalAssetRoot ->
-        sourceSets.getByName("main").assets.srcDir(externalAssetRoot)
+    externalAndroidRuntimeConfigAssetRoot?.let { assetRoot ->
+        // 外部 canonical handoff 服务所有变体；构建期自供给（REQ-003）只允许进入 debug
+        // source set，Release/Profile 制品永远拿不到自供给材料。
+        val consumingSourceSet = if (androidRuntimeConfigSelfSupply) "debug" else "main"
+        sourceSets.getByName(consumingSourceSet).assets.srcDir(assetRoot)
     }
 
     // runtime config 供给面被隔离在独立 source root，由本工程与 Patrol UAT test host

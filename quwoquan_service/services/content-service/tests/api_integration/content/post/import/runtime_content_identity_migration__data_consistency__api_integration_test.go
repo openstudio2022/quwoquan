@@ -12,7 +12,7 @@ import (
 	. "quwoquan_service/services/content-service/internal/content/post/infrastructure/releaseimport"
 )
 
-func TestMongoImportMigratesLegacyPostRefIDToStableContentID(t *testing.T) {
+func TestMongoImportMigratesPriorPostRefIDToStableContentID(t *testing.T) {
 	db, cleanup := testDB(t)
 	defer cleanup()
 	ctx := context.Background()
@@ -26,7 +26,7 @@ func TestMongoImportMigratesLegacyPostRefIDToStableContentID(t *testing.T) {
 		"_id": postRefDerivedID, "postId": postRefDerivedID, "postRef": postRefIdentity,
 		"contentId": contentID, "sourceOwner": "qwq_data",
 	}); err != nil {
-		t.Fatalf("seed legacy imported Post: %v", err)
+		t.Fatalf("seed prior imported Post: %v", err)
 	}
 	post := PostDoc{
 		PostRef: nextRef, ContentID: contentID, ContentVersion: 4,
@@ -60,7 +60,7 @@ func TestMongoImportMigratesLegacyPostRefIDToStableContentID(t *testing.T) {
 		"postId": RuntimePostID(postRefIdentity), "postRef": postRefIdentity,
 		"contentId": contentID, "sourceOwner": "qwq_data",
 	}); err != nil {
-		t.Fatalf("seed legacy discovery identity: %v", err)
+		t.Fatalf("seed prior discovery identity: %v", err)
 	}
 	if _, err := UpsertDiscoveryFeedWithOptions(
 		ctx, feed, []PostDoc{post}, nil, time.Now().UTC(),

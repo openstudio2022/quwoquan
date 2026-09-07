@@ -235,6 +235,16 @@ type Homepage struct {
 	offlineAt            *time.Time
 }
 
+func NewReleaseShell(id, entityRef, homepageType, title, sourceOwner string, now time.Time) (*Homepage, error) {
+	return Intake(IntakeParams{
+		ID: strings.TrimSpace(id), Title: strings.TrimSpace(title), HomepageType: strings.TrimSpace(homepageType),
+		CanonicalEntityID: CanonicalEntityID(homepageType, title),
+		LookupAliases:     []string{id, entityRef, title}, SourceType: "official_seed",
+		SourceOwner: strings.TrimSpace(sourceOwner), SourceEntityRef: strings.TrimSpace(entityRef),
+		PublishImmediately: true, Now: now,
+	})
+}
+
 func Intake(params IntakeParams) (*Homepage, error) {
 	now := params.Now.UTC()
 	if now.IsZero() {

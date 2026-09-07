@@ -671,8 +671,14 @@ private final class RecoveryFailureEncryptedStore {
       // 进入 Flutter；当前进程只提交原生 CAS，绝不能创建 implicit engine。
       return true
     }
-    // 嵌入默认供给（embedded_default_package）已退役：缺 canonical supply 时由
-    // 既有 typed trust/config 阻断 fail-closed，Debug 构建不再补默认 alpha 包。
+    #if DEBUG
+      // Debug-nonprod 构建期自供给（REQ-003 build_time_self_supply）：无外部 activation 参数时消费制品内嵌的
+      // 激活请求；Release 制品不含该请求也不编译此路径。失败只记账，随后由既有 typed trust/config 阻断呈现。
+      let selfSupply = NativeRuntimeConfigActivationCoordinator.consumeBundledSelfSupplyRequest()
+      if selfSupply.requested {
+        NSLog("QWQStartup ios_runtime_config_self_supply activated=%@ code=%@ issues=%@", selfSupply.activated ? "true" : "false", selfSupply.errorCode, selfSupply.validationIssues.joined(separator: ","))
+      }
+    #endif
     confirmedPreviousBuildFatal = NativeCrashMarkerStore.shouldRecoverCurrentBuild()
     if confirmedPreviousBuildFatal {
       // FlutterAppDelegate 的 will/didFinish 都不得进入；恢复 gate 必须先于
@@ -737,45 +743,32 @@ private final class RecoveryFailureEncryptedStore {
     configurationForConnecting connectingSceneSession: UISceneSession,
     options: UIScene.ConnectionOptions
   ) -> UISceneConfiguration {
-    guard confirmedPreviousBuildFatal
-            || nativeActivationOnly
-            || !nativeActivationFailureCode.isEmpty
-    else {
-      // FlutterAppDelegate adopts UIApplicationDelegate but does not implement
-      // this optional selector on every engine version. Calling super here
-      // therefore crashes normal launch with an unrecognized selector.
-      let normal = UISceneConfiguration(
-        name: "flutter",
-        sessionRole: connectingSceneSession.role
-      )
-      normal.sceneClass = UIWindowScene.self
-      normal.delegateClass = AppSceneDelegate.self
-      normal.storyboard = UIStoryboard(name: "Main", bundle: nil)
-      return normal
-    }
-    // Main.storyboard contains FlutterViewController. The fatal path must
-    // replace the scene configuration before UIKit resolves that storyboard;
-    // hiding the Flutter view later would already have created the implicit
-    // engine behind the native recovery gate.
-    let recovery = UISceneConfiguration(
-      name: "native-startup-recovery",
+    // FlutterAppDelegate 并非在每个引擎版本都实现此可选 selector，调用 super 会以 unrecognized selector 崩溃。
+    // 只允许一份 scene 配置且不挂 storyboard：UIKit 会把 UISceneConfiguration 随 UISceneSession 持久化并在后续
+    // 冷启动复用，若仅激活/恢复启动返回另一份无 storyboard 配置，下一次正常冷启动会继承它而永不实例化
+    // FlutterViewController（黑屏且无引擎日志）。Main.storyboard 是否实例化由 AppSceneDelegate 在 willConnectTo 按当前 gate 决定。
+    let configuration = UISceneConfiguration(
+      name: "flutter",
       sessionRole: connectingSceneSession.role
     )
-    recovery.delegateClass = StartupRecoverySceneDelegate.self
-    recovery.storyboard = nil
-    return recovery
+    configuration.sceneClass = UIWindowScene.self
+    configuration.delegateClass = AppSceneDelegate.self
+    configuration.storyboard = nil
+    return configuration
+  }
+
+  var isNativeStartupGateActive: Bool {
+    confirmedPreviousBuildFatal || nativeActivationOnly || !nativeActivationFailureCode.isEmpty
   }
 
   func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
-    guard !confirmedPreviousBuildFatal,
-          !nativeActivationOnly,
-          nativeActivationFailureCode.isEmpty
-    else {
-      assertionFailure("Flutter engine initialized behind native startup recovery gate")
+    guard !isNativeStartupGateActive else {
+      // 旧的持久化 session 仍可能携带 storyboard 配置，UIKit 会在 gate 之前实例化
+      // FlutterViewController；这里只记账不 trap，scene delegate 随后会替换 root。
+      NSLog("QWQStartup ios_implicit_flutter_engine_behind_native_gate")
       return
     }
     NSLog("QWQStartup ios_implicit_flutter_engine_initialized")
-    window?.rootViewController?.view.backgroundColor = StartupTransitionBackground.color
     registerStartupTimingsChannel(
       binaryMessenger: engineBridge.applicationRegistrar.messenger()
     )
@@ -790,8 +783,15 @@ private final class RecoveryFailureEncryptedStore {
       binaryMessenger: engineBridge.applicationRegistrar.messenger(),
       includeStartupTimings: false
     )
+  }
+
+  /// Scene delegate 把真实承载 Flutter 的 window 交回：绑定 renderer 首帧回调。不写 AppDelegate.window——
+  /// FlutterSceneDelegate 会把非空的 appDelegate.window.rootViewController 视为旧式手动装配并搬进新 window。
+  func attachFlutterSceneWindow(_ sceneWindow: UIWindow) {
+    sceneWindow.backgroundColor = StartupTransitionBackground.color
+    sceneWindow.rootViewController?.view.backgroundColor = StartupTransitionBackground.color
     observeNativeFlutterFirstFrame(
-      window?.rootViewController as? FlutterViewController
+      sceneWindow.rootViewController as? FlutterViewController
     )
   }
 

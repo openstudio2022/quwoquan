@@ -46,6 +46,10 @@ final class RuntimeConfigActivationCoordinator {
   static final String ACTIVE_RECEIPT_FILE_NAME = "runtime-config-active-receipt.json";
   static final String REQUEST_DIGEST_EXTRA =
       "quwoquan.runtime_config.ACTIVATION_REQUEST_DIGEST";
+  // Debug-nonprod 构建期自供给（REQ-003 build_time_self_supply）随 APK assets 嵌入的激活请求。
+  static final String SELF_SUPPLY_REQUEST_ASSET_NAME =
+      "qwq_runtime/runtime-config-self-supply-request.json";
+  static final String SELF_SUPPLY_MODE = "build_time_self_supply";
 
   private static final String REQUEST_SCHEMA =
       requiredGeneratedSchemaValue("runtime_config_activation_request");
@@ -279,6 +283,97 @@ final class RuntimeConfigActivationCoordinator {
           previousActiveDigestKnown,
           code,
           List.of(code));
+    }
+  }
+
+  /**
+   * Debug-nonprod 构建期自供给：冷启动无外部 activation extra 时消费 assets 内嵌的激活请求。
+   *
+   * <p>与外部请求走同一 validate → CAS activate → receipt 路径，区别只有两点：请求来自
+   * assets 而非私有容器，`expectedActiveDigest` 由这里以当前 active digest 现场补齐。
+   * 决策矩阵：active 为外部供给且新鲜 → 保持不变（NOT_REQUESTED）；active 缺席 / 过期 /
+   * 同为自供给但 requestDigest 变化（重建）→ 激活；已是该请求 → ACTIVATED。失败只记账。
+   */
+  synchronized ConsumeResult consumeBundledSelfSupplyRequest(InputStream requestStream) {
+    Map<String, Object> request = null;
+    String requestDigest = zeroDigest();
+    String previousActiveDigest = "";
+    boolean previousActiveDigestKnown = false;
+    try {
+      JsonObject requestDocument =
+          readStreamDocument(requestStream, "runtime_config_activation_request_malformed");
+      requestDigest =
+          RuntimeConfigPackageStore.sha256Identity(
+              RuntimeConfigPackageStore.canonicalJsonBytes(requestDocument));
+      request = objectMap(requestDocument);
+      List<String> requestIssues = validateRequest(requestDocument);
+      if (!requestIssues.isEmpty()) {
+        throw new ActivationFailure(requestIssues.get(0), requestIssues);
+      }
+      if (!SELF_SUPPLY_MODE.equals(effectiveManifestStringMapValue(request, "runtimeConfigSupplyMode"))
+          || !"".equals(stringMapValue(request, "expectedActiveDigest"))) {
+        throw new ActivationFailure("runtime_config_activation_identity_mismatch");
+      }
+      Map<String, Object> state = store.readStateEnvelope();
+      if ("present".equals(state.get("state"))) {
+        String activeSupplyMode = "";
+        try {
+          activeSupplyMode = stringMapValue(readActiveReceipt(), "runtimeConfigSupplyMode");
+        } catch (RuntimeConfigPackageStore.RuntimeConfigException ignored) {
+          // 无可读 active receipt 时按“非外部供给”处理，交给下面的 CAS 激活替换。
+        }
+        if (!SELF_SUPPLY_MODE.equals(activeSupplyMode)) {
+          // 外部 canonical launcher 已激活且新鲜：显式外部选择优先于构建期默认。
+          return ConsumeResult.notRequested();
+        }
+        if (isAlreadyActivated(request, requestDigest)) {
+          return ConsumeResult.activated();
+        }
+      }
+      // 过期包仍可被替换（豁免时间窗读 CAS 前值）；结构性损坏在这里抛出并记账。
+      previousActiveDigest = store.readCurrentActiveDigest();
+      previousActiveDigestKnown = true;
+      JsonObject packageDocument = requestDocument.getAsJsonObject("package");
+      Map<String, Object> finalRequest = request;
+      String finalRequestDigest = requestDigest;
+      store.activate(
+          packageDocument,
+          (String) request.get("packageDigest"),
+          (String) request.get("trustEnvelopeDigest"),
+          previousActiveDigest,
+          result ->
+              commitActivationReceipts(
+                  buildReceipt(
+                      finalRequest,
+                      finalRequestDigest,
+                      ACTIVATED_STATUS,
+                      result.previousActiveDigest,
+                      result.packageDigest,
+                      "",
+                      Collections.emptyList())));
+      return ConsumeResult.activated();
+    } catch (ActivationFailure error) {
+      logFailure(error.code, error);
+      return recordFailure(
+          request, requestDigest, previousActiveDigest, previousActiveDigestKnown,
+          error.code, error.issues);
+    } catch (RuntimeConfigPackageStore.RuntimeConfigException error) {
+      logFailure(error.code, error);
+      return recordFailure(
+          request, requestDigest, previousActiveDigest, previousActiveDigestKnown,
+          error.code, List.of(error.code));
+    } catch (IOException error) {
+      String code = "runtime_config_activation_request_read_failed";
+      logFailure(code, error);
+      return recordFailure(
+          request, requestDigest, previousActiveDigest, previousActiveDigestKnown,
+          code, List.of(code));
+    } catch (RuntimeException error) {
+      String code = "runtime_config_internal_failure";
+      logFailure(code, error);
+      return recordFailure(
+          request, requestDigest, previousActiveDigest, previousActiveDigestKnown,
+          code, List.of(code));
     }
   }
 

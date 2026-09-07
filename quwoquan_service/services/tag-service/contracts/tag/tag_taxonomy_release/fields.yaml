@@ -1,87 +1,45 @@
-description: 数据工程 taxonomy 的不可变发布批次及激活状态
+description: 数据工程 taxonomy 的 prior 发布批次及 Data content-release owner-local verified candidate
 fields:
-- name: releaseId
-  type: string
-  constraints:
-  - PK
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  role: authoritative_state
-- name: sourceOwner
-  type: string
-  constraints:
-  - NOT_NULL
-  classification: INTERNAL
-  log_policy: allow
-  api_exposure: drop
-  ops_exposure: read
-  role: authoritative_state
-- name: canonicalDigest
-  type: string
-  constraints:
-  - NOT_NULL
-  classification: INTERNAL
-  log_policy: allow
-  api_exposure: drop
-  ops_exposure: read
-  role: authoritative_state
-- name: releaseKind
-  type: string
-  constraints:
-  - NOT_NULL
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  role: authoritative_state
-- name: nodeCount
-  type: int
-  constraints:
-  - NOT_NULL
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  role: authoritative_state
-- name: status
-  type: enum
-  enum_ref: TagTaxonomyReleaseStatus
-  constraints:
-  - NOT_NULL
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  role: authoritative_state
-- name: importedAt
-  type: timestamp
-  constraints:
-  - NOT_NULL
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  role: authoritative_state
-- name: activatedAt
-  type: timestamp
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  role: authoritative_state
+- {name: releaseId, type: string, constraints: [PK], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read, role: authoritative_state}
+- {name: sourceOwner, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read, role: authoritative_state}
+- {name: canonicalDigest, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read, role: authoritative_state}
+- {name: releaseKind, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read, role: authoritative_state}
+- {name: nodeCount, type: int, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read, role: authoritative_state}
+- {name: status, type: enum, enum_ref: TagTaxonomyReleaseStatus, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read, role: authoritative_state}
+- {name: importedAt, type: timestamp, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read, role: authoritative_state}
+- {name: activatedAt, type: timestamp, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read, role: authoritative_state}
 types:
   StageTagTaxonomyReleaseRequest:
-    description: Data publish Facade 提交不可变 taxonomy 发布批次的请求体。
+    description: Prior 非 Data rail taxonomy 发布批次请求体。
     fields:
     - {name: releaseId, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: write}
     - {name: sourceOwner, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: write}
     - {name: canonicalDigest, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: write}
     - {name: releaseKind, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: write}
     - {name: nodeCount, type: int, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: write}
+  TagContentReleaseCandidateIdentity:
+    description: Content 跨域唯一 live fence；query-candidate 必须完整携带且不得 latest fallback。
+    fields:
+    - {name: environment, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: write}
+    - {name: sourceOwner, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: write}
+    - {name: releaseId, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: write}
+    - {name: manifestDigest, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: write}
+  TagContentReleaseCandidateReceipt:
+    description: exact query 的 create-once 回执；found 时携带完整 verified closure 证据。
+    fields:
+    - {name: schema, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read}
+    - {name: status, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read}
+    - {name: environment, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read}
+    - {name: sourceOwner, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read}
+    - {name: releaseId, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read}
+    - {name: manifestDigest, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read}
+    - {name: projectionVersion, type: int64, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read}
+    - {name: verifiedAt, type: timestamp, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read}
+    - {name: closureDigest, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read}
+    - {name: counts, type: object, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read, description: "与 creator/homepage 候选回执同形的 expected/projected 节点计数对象；found 时必填且两者相等。"}
+    - {name: canonicalDigest, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read}
+    - {name: releaseKind, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read}
+    - {name: tagRefsDigest, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read}
+    - {name: generatedAt, type: timestamp, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read}
 enums:
-  TagTaxonomyReleaseStatus:
-    values: [staged, active, retired, rejected]
+  TagTaxonomyReleaseStatus: {values: [staged, active, retired, rejected, verified]}

@@ -1,7 +1,6 @@
 """Atomically promote every approved post in one execution to canonical publish."""
 from __future__ import annotations
 
-import hashlib
 from pathlib import Path
 from collections.abc import Mapping
 
@@ -21,7 +20,10 @@ from content.release.canonical.content_pool_record import (
     pool_payload_digest,
 )
 from content.release.canonical.object_transaction_audit import audit_object_transaction
-from content.release.canonical.object_transaction_contract import ObjectTransactionError
+from content.release.canonical.object_transaction_contract import (
+    ObjectTransactionError,
+    canonical_transaction_id,
+)
 from content.release.canonical.object_transaction_lock import (
     canonical_publish_serialized,
 )
@@ -130,17 +132,18 @@ def promote_post_object(
     if len(normalized_ref.split("/")) < 4:
         raise ObjectTransactionError(f"post objectRef is invalid: {post_ref!r}")
     post_root = root / "posts" / normalized_ref
-    attestation_path = post_root / "5.review/attestation.json"
-    if not attestation_path.is_file() or not (post_root / "manifest.json").is_file():
+    content_review_path = post_root / "5.review/content_review.json"
+    if not content_review_path.is_file() or not (post_root / "manifest.json").is_file():
         raise ObjectTransactionError(
             f"post is not materialized and reviewed: {normalized_ref}"
         )
-    attestation = read_json(attestation_path)
-    if not isinstance(attestation, dict) or attestation.get("decision") != "approved":
+    content_review = read_json(content_review_path)
+    if not isinstance(content_review, dict) or content_review.get("decision") != "approved":
         raise ObjectTransactionError(f"post is not review-approved: {normalized_ref}")
-    transaction_id = (
-        f"{execution_id}--post-"
-        f"{hashlib.sha256(normalized_ref.encode('utf-8')).hexdigest()[:12]}"
+    transaction_id = canonical_transaction_id(
+        execution_id=execution_id,
+        object_kind="posts",
+        object_ref=normalized_ref,
     )
     package_root = root / "evidence/object-transactions" / transaction_id
     apply_report = (

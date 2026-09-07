@@ -107,7 +107,7 @@ CARRIER_LANES: dict[str, CarrierLane] = {
             "assets/poster.webp",
             "subtitles.vtt",
         ),
-        draft_artifacts=("video_script.json", "draft_meta.json"),
+        draft_artifacts=("video_script.json",),
         agent_authored=True,
         notes="视频：Agent 负责脚本与字幕，CLI 渲染 9:16 H.264 并冻结权利与校验证据",
     ),

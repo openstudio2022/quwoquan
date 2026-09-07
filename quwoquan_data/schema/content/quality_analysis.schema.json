@@ -5,10 +5,8 @@
     "schema",
     "stage",
     "executionId",
-    "executionBinding",
-    "sourcePolicyRevision",
-    "sourceRevision",
     "recommendation",
+    "sourceRefs",
     "sourcePaths",
     "sourceAdmissions",
     "rejectionReasons",
@@ -29,7 +27,8 @@
       ]
     },
     "sourcePolicyRevision": {
-      "const": "encyclopedia-primary"
+      "type": "string",
+      "minLength": 1
     },
     "sourceRevision": {
       "type": "string",
@@ -147,6 +146,24 @@
     },
     "schema": {
       "const": "quwoquan_data.quality_analysis"
+    },
+    "sourceRefs": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ref",
+        "digest"
+      ],
+      "properties": {
+        "ref": {
+          "const": "1.download/source_refs.json"
+        },
+        "digest": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      }
     }
-  }
+  },
+  "additionalProperties": false
 }

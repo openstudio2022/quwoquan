@@ -20,6 +20,9 @@
     "processResult": {"enum": ["completed", "failed"]},
     "qualityResult": {"enum": ["passed", "failed"]},
     "eligibilityResult": {"enum": ["passed", "pending", "failed"]},
+    "rightsResult": {"const": "passed"},
+    "rightsAuthorityRef": {"type": "string", "minLength": 1},
+    "rightsAuthorityDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
     "usageScope": {"type": ["string", "null"], "enum": ["research", "commercial", null]},
     "evidenceRef": {"type": "string", "minLength": 1},
     "evidenceDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
@@ -31,7 +34,7 @@
   "allOf": [
     {
       "if": {"properties": {"objectType": {"enum": ["homepage", "content"]}}, "required": ["objectType"]},
-      "then": {"required": ["canonicalObjectDigest", "sourceIdentity", "sourceAttribution"]}
+      "then": {"required": ["canonicalObjectDigest", "sourceIdentity", "sourceAttribution", "rightsResult", "rightsAuthorityRef", "rightsAuthorityDigest"]}
     }
   ],
   "$defs": {

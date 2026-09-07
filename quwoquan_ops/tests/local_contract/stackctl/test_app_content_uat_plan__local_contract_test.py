@@ -183,7 +183,9 @@ def _sample_plan(*, eligible_homepages: int = 100) -> dict[str, object]:
     }
 
 
-def _header(plan_digest: str) -> dict[str, object]:
+def _header() -> dict[str, object]:
+    # producer detachment 禁止 header 携带 selectionScope/samplePlanRef/samplePlanDigest；
+    # 下游派生 plan 只与 header 的 identity、digest 与 counts 对齐。
     return {
         "schema": "quwoquan_data.release",
         "releaseId": "release-m100-a",
@@ -191,7 +193,6 @@ def _header(plan_digest: str) -> dict[str, object]:
         "releaseKind": "content",
         "releaseClass": "research",
         "productLifecycleState": "research",
-        "selectionScope": "milestone",
         "milestone": "M100",
         "milestoneTargets": {
             "homepage": 100,
@@ -199,13 +200,18 @@ def _header(plan_digest: str) -> dict[str, object]:
             "image": 100,
             "video": 10,
         },
+        "counts": {
+            "homepage": 100,
+            "article": 100,
+            "image": 100,
+            "video": 10,
+            "total": 310,
+        },
         "poolDigest": DIGESTS["pool"],
         "canonicalMerkle": DIGESTS["merkle"],
         "sourceIdentities": [{"executionId": "execution-a"}],
         "sourceIdentitySetDigest": DIGESTS["source"],
         "contents": _contents(),
-        "samplePlanRef": "uat/sample_plan.json",
-        "samplePlanDigest": plan_digest,
     }
 
 
@@ -213,13 +219,13 @@ def _build(
     *,
     readiness: dict[str, object] | None = None,
     sample_plan: dict[str, object] | None = None,
-    header_digest: str | None = None,
+    plan_digest: str | None = None,
 ) -> dict[str, object]:
     resolved_plan = sample_plan or _sample_plan()
-    observed_digest = _canonical_digest(resolved_plan)
+    observed_digest = plan_digest or _canonical_digest(resolved_plan)
     return build_app_content_uat_plan(
         readiness or _readiness(),
-        release_header=_header(header_digest or observed_digest),
+        release_header=_header(),
         release_uat_sample_plan=resolved_plan,
         release_uat_sample_plan_digest=observed_digest,
         release_payload_sha256=DIGESTS["manifest"],
@@ -237,9 +243,7 @@ def test_uat_plan__missing_header_and_sample_plan_fail_closed__local_contract() 
     with pytest.raises(ValueError, match="explicit release header is missing"):
         build_app_content_uat_plan(readiness)
     with pytest.raises(ValueError, match="ReleaseUatSamplePlan is missing"):
-        build_app_content_uat_plan(
-            readiness, release_header=_header("sha256:" + "9" * 64)
-        )
+        build_app_content_uat_plan(readiness, release_header=_header())
 
 
 def test_uat_plan__retired_readiness_envelope_fails_closed__local_contract() -> None:
@@ -255,7 +259,10 @@ def test_uat_plan__projects_canonical_samples_and_required_cells__local_contract
 
     assert plan["releaseIdentity"]["releaseId"] == "release-m100-a"
     assert plan["releaseIdentity"]["payloadSha256"] == DIGESTS["manifest"]
-    assert plan["releaseUatSamplePlanRef"] == "uat/sample_plan.json"
+    assert "selectionScope" not in plan["releaseIdentity"]
+    assert plan["releaseUatSamplePlanRef"] == (
+        "data/releases/release-m100-a/uat/sample_plan.json"
+    )
     assert len(plan["orderedSamples"]) == 100
     assert plan["orderedSamples"][0] == _samples()[0]
     assert len(plan["requiredCasePlan"]) == 16
@@ -300,15 +307,17 @@ def test_uat_plan__counts_cannot_infer_or_replace_explicit_plan__local_contract(
     }
 
     with pytest.raises(ValueError, match="ReleaseUatSamplePlan is missing"):
-        build_app_content_uat_plan(
-            readiness,
-            release_header=_header("sha256:" + "9" * 64),
-        )
+        build_app_content_uat_plan(readiness, release_header=_header())
 
 
 def test_uat_plan__rejects_digest_release_and_distribution_drift__local_contract() -> None:
-    with pytest.raises(ValueError, match="digest binding drifted"):
-        _build(header_digest="sha256:" + "9" * 64)
+    with pytest.raises(ValueError, match="not a canonical sha256 digest"):
+        _build(plan_digest="sha256:not-a-digest")
+
+    drifted_cohort = _sample_plan()
+    drifted_cohort["exactCohortCounts"]["video"] = 9  # type: ignore[index]
+    with pytest.raises(ValueError, match="exact cohort drifted"):
+        _build(sample_plan=drifted_cohort)
 
     drifted_release = _sample_plan()
     drifted_release["releaseId"] = "release-other"
@@ -326,32 +335,154 @@ def test_uat_plan__rejects_digest_release_and_distribution_drift__local_contract
         _build(sample_plan=drifted_distribution)
 
 
-def test_load_release_uat_sample_plan__uses_header_ref_and_exact_bytes__local_contract(
-    tmp_path: Path,
-) -> None:
-    sample_plan = _sample_plan()
-    raw = (
-        json.dumps(sample_plan, sort_keys=True, separators=(",", ":")) + "\n"
-    ).encode()
-    path = tmp_path / "uat/sample_plan.json"
-    path.parent.mkdir(parents=True)
-    path.write_bytes(raw)
-    digest = "sha256:" + hashlib.sha256(raw).hexdigest()
+def _write_release_fixture(output_root: Path, *, release_id: str) -> tuple[Path, dict[str, object]]:
+    """一份最小 immutable release：每载体一个对象目录 + desired_state + header。"""
 
-    loaded, ref, observed_digest = load_release_uat_sample_plan(
-        release_root=tmp_path,
-        release_header=_header(digest),
+    payload = output_root / "data" / "releases" / release_id / "payload"
+    entity_ref = "地点/景区/塘栖古镇"
+    post_refs = {
+        "article": "article/美食/塘栖枇杷漫谈/1",
+        "image": "image/风光/广济桥上望塘栖/1",
+        "video": "video/风光/塘栖古镇水乡漫步/1",
+    }
+    (payload / "objects" / "entities" / entity_ref).mkdir(parents=True)
+    (payload / "objects" / "entities" / entity_ref / "_entity.json").write_text(
+        '{"label":"塘栖古镇"}\n', encoding="utf-8"
     )
-    assert loaded == sample_plan
-    assert ref == "uat/sample_plan.json"
-    assert observed_digest == digest
-
-    path.write_bytes(raw + b"\n")
-    with pytest.raises(ValueError, match="digest drifted"):
-        load_release_uat_sample_plan(
-            release_root=tmp_path,
-            release_header=_header(digest),
+    for post_ref in post_refs.values():
+        (payload / "objects" / "posts" / post_ref).mkdir(parents=True)
+        (payload / "objects" / "posts" / post_ref / "manifest.json").write_text(
+            json.dumps({"postRef": post_ref}) + "\n", encoding="utf-8"
         )
+    (payload / "desired_state.json").write_text(
+        json.dumps(
+            {
+                "schema": "quwoquan_data.release_desired_state",
+                "releaseId": release_id,
+                "desiredRefs": {
+                    "creators": [],
+                    "entities": [entity_ref],
+                    "posts": list(post_refs.values()),
+                    "tags": [],
+                },
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    header: dict[str, object] = {
+        "schema": "quwoquan_data.release",
+        "releaseId": release_id,
+        "sourceOwner": "qwq_data",
+        "releaseKind": "content",
+        "releaseClass": "production",
+        "productLifecycleState": "production",
+        "milestone": "M1",
+        "counts": {"homepage": 1, "article": 1, "image": 1, "video": 1, "total": 4},
+        "poolDigest": DIGESTS["pool"],
+        "canonicalMerkle": DIGESTS["merkle"],
+        "sourceIdentities": [{"executionId": "execution-derived"}],
+        "sourceIdentitySetDigest": DIGESTS["source"],
+        "contents": [
+            {"contentId": f"content-{carrier}", "version": 1, "postRef": post_ref}
+            for carrier, post_ref in post_refs.items()
+        ],
+    }
+    (payload / "release.json").write_text(
+        json.dumps(header, ensure_ascii=False, sort_keys=True) + "\n", encoding="utf-8"
+    )
+    return payload, header
+
+
+def test_load_release_uat_sample_plan__derives_create_once_from_release_bytes__local_contract(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """spec_ref: specs/feature-tree/runtime/runtime-config/environment-topology-and-packaging/spec.md#gwt-004"""
+
+    monkeypatch.setenv("QWQ_OUTPUT_ROOT", str(tmp_path))
+    payload, header = _write_release_fixture(tmp_path, release_id="release-derived-a")
+
+    plan, ref, digest = load_release_uat_sample_plan(
+        release_root=payload, release_header=header
+    )
+    assert ref == "data/releases/release-derived-a/uat/sample_plan.json"
+    plan_path = tmp_path / ref
+    assert plan_path.is_file() and (plan_path.parent / "derivation.json").is_file()
+    assert "sha256:" + hashlib.sha256(plan_path.read_bytes()).hexdigest() == digest
+    assert plan["milestone"] is None
+    assert plan["sampleStrategy"]["name"] == "baseline_per_required_carrier"
+    assert [row["carrier"] for row in plan["samples"]] == list(CARRIERS)
+    assert plan["samples"][0]["objectId"] == "/entity/地点/景区/塘栖古镇"
+    assert plan["samples"][0]["objectRef"] == "objects/entities/地点/景区/塘栖古镇"
+    assert plan["samples"][3]["objectRef"] == "objects/posts/video/风光/塘栖古镇水乡漫步/1"
+    assert plan["exactCohortCounts"] == {"homepage": 1, "article": 1, "image": 1, "video": 1}
+    assert len(plan["entryCarrierCells"]) == 16
+    # payload/ 之外落盘：immutable payload 字节不受派生影响。
+    assert not (payload / "uat").exists()
+
+    # 同字节重放幂等，且 App UAT plan 能直接消费派生结果。
+    again, again_ref, again_digest = load_release_uat_sample_plan(
+        release_root=payload, release_header=header
+    )
+    assert (again, again_ref, again_digest) == (plan, ref, digest)
+    readiness = {
+        "releaseId": "release-derived-a",
+        "releaseClass": "production",
+        "productLifecycleState": "production",
+        "manifestDigest": DIGESTS["manifest"],
+        "sourceIdentities": [{"executionId": "execution-derived"}],
+        "sourceIdentitySetDigest": DIGESTS["source"],
+        "entityRefs": ["/entity/地点/景区/塘栖古镇"],
+        "postIds": ["content-article", "content-image", "content-video"],
+        "feedQueries": [
+            {"name": "typed_video", "matchedPostIds": ["content-video"]},
+            {"name": "homepage_recommend", "matchedPostIds": ["content-article"]},
+            {
+                "name": "premium_stream",
+                "query": "sort=recommend&channelId=premium_stream&limit=20",
+                "matchedPostIds": ["content-video"],
+            },
+        ],
+    }
+    uat_plan = build_app_content_uat_plan(
+        readiness,
+        release_header=header,
+        release_uat_sample_plan=plan,
+        release_uat_sample_plan_digest=digest,
+        release_payload_sha256=DIGESTS["manifest"],
+    )
+    assert uat_plan["releaseUatSamplePlanRef"] == ref
+    assert uat_plan["releaseUatSamplePlanDigest"] == digest
+    assert uat_plan["carrierIdentities"]["video"] == "content-video"
+
+    # 已落盘字节被改写 → fail closed，不静默重派生覆盖。
+    plan_path.write_bytes(plan_path.read_bytes() + b"\n")
+    with pytest.raises(ValueError, match="drifted from immutable release bytes"):
+        load_release_uat_sample_plan(release_root=payload, release_header=header)
+
+
+def test_load_release_uat_sample_plan__rejects_cross_release_receipt_and_noncanonical_root__local_contract(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("QWQ_OUTPUT_ROOT", str(tmp_path))
+    payload, header = _write_release_fixture(tmp_path, release_id="release-derived-b")
+    load_release_uat_sample_plan(release_root=payload, release_header=header)
+
+    # 把另一个 release 的派生回执搬运过来：plan 字节相同也必须被 manifestDigest 绑定拒绝。
+    receipt_path = tmp_path / "data/releases/release-derived-b/uat/derivation.json"
+    receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+    receipt["manifestDigest"] = "sha256:" + "f" * 64
+    receipt_path.write_text(
+        json.dumps(receipt, sort_keys=True, separators=(",", ":")) + "\n", encoding="utf-8"
+    )
+    with pytest.raises(ValueError, match="not bound to this exact release"):
+        load_release_uat_sample_plan(release_root=payload, release_header=header)
+
+    # 非 canonical release root 不得派生。
+    stray = tmp_path / "elsewhere" / "release-derived-b" / "payload"
+    stray.mkdir(parents=True)
+    with pytest.raises(ValueError, match="not the canonical data/releases"):
+        load_release_uat_sample_plan(release_root=stray, release_header=header)
 
 
 

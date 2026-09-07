@@ -3,98 +3,174 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
+import os
 from pathlib import Path
 
-from content.release.canonical.application import rollback_object_transaction
-from content.release.canonical.build_lookup_indexes import (
-    build_publish_lookup_indexes,
-)
-from content.release.canonical.publish_object import handle_publish_object  # noqa: F401
-from content.release.canonical.handler_pool import handle_pool_release_build  # noqa: F401
 from content.release.canonical.object_transaction_contract import ObjectTransactionError
-from content.release.canonical.object_transaction_lock import canonical_publish_lock
-from content.release.canonical.object_transaction_replay import (
-    replay_object_transaction_package,
+from content.release.canonical.producer_release_handoff import (
+    ProducerReleaseHandoffError,
+    read_producer_release_handoff,
+    write_producer_release_handoff,
 )
-from content.release.canonical.release_operation_lock import (
-    ReleaseOperationConflict,
-    release_operation_guard,
-    release_operation_lock_root,
+from core.paths import OUTPUT_ROOT, PUBLISH_ROOT, REPO_ROOT
+
+
+def handle_publish_object(args: argparse.Namespace) -> None:
+    from content.release.canonical.publish_object import handle_publish_object as handle
+
+    handle(args)
+
+
+_CANONICAL_COHORT_NAME = "cohort.json"
+_COHORT_CARRIER_PREFIXES = (
+    ("homepage", "entities/"),
+    ("article", "posts/article/"),
+    ("image", "posts/image/"),
+    ("video", "posts/video/"),
 )
-from content.release.canonical.reset import handle_reset_canonical  # noqa: F401
-from core.io import read_json
-from core.paths import OUTPUT_ROOT, PUBLISH_ROOT
-from core.release_layout import attestation_root
 
 
-def handle_object_transaction_rollback(args: argparse.Namespace) -> None:
-    """Rollback one exact applied canonical object transaction."""
+def _normalize_cohort(raw: dict, *, milestone: str, release_root: Path, release_id: str) -> Path:
+    """AI 只声明 objectRefs/milestone/producerBaselineRevision；排序、releaseClass、
+    expectedCarrierCounts 与 canonical 字节由这里补齐，并 create-once 写入 release 目录。"""
 
-    output_root = Path(args.output_root or OUTPUT_ROOT).resolve()
+    refs = raw.get("objectRefs")
+    if not isinstance(refs, list) or not refs:
+        raise ObjectTransactionError("DATA.RELEASE.COHORT_INVALID: objectRefs must be a non-empty list")
+    object_refs = sorted({str(ref).strip().strip("/") for ref in refs})
+    counts = {carrier: 0 for carrier, _prefix in _COHORT_CARRIER_PREFIXES}
+    for ref in object_refs:
+        carrier = next((name for name, prefix in _COHORT_CARRIER_PREFIXES if ref.startswith(prefix)), None)
+        if carrier is None:
+            raise ObjectTransactionError(f"DATA.RELEASE.COHORT_REF_INVALID: {ref}")
+        counts[carrier] += 1
+    cohort = {
+        **raw,
+        "schema": "quwoquan_data.release_cohort",
+        "releaseClass": str(raw.get("releaseClass") or "production"),
+        "milestone": str(raw.get("milestone") or milestone),
+        "objectRefs": object_refs,
+        "expectedCarrierCounts": dict(raw.get("expectedCarrierCounts") or counts),
+    }
+    data = (json.dumps(cohort, ensure_ascii=False, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8")
+    target = release_root / release_id / _CANONICAL_COHORT_NAME
+    if target.exists() and target.read_bytes() != data:
+        # payload 已封存则 cohort 不可变；build 尚未成功的 release 目录允许用修正后的 cohort 重来。
+        if (release_root / release_id / "payload" / "release.json").is_file():
+            raise ObjectTransactionError("DATA.RELEASE.COHORT_CONFLICT: canonical cohort already frozen with different bytes")
+        target.unlink()
+    if target.exists():
+        return target
+    target.parent.mkdir(parents=True, exist_ok=True)
+    temporary = target.with_name(f".{target.name}.{os.getpid()}.tmp")
+    temporary.write_bytes(data)
+    os.replace(temporary, target)
+    return target
+
+
+def handle_pool_query(args: argparse.Namespace) -> None:
+    """只读：列出 publish 池 eligible/excluded 对象；选择权仍在调用方。"""
+
+    from content.release.canonical.pool_query import query_pool
+
     publish_root = Path(args.publish_root or PUBLISH_ROOT).resolve()
-    try:
-        report = rollback_object_transaction(
-            publish_root=publish_root,
-            output_root=output_root,
-            transaction_id=str(args.transaction_id),
-        )
-    except (FileNotFoundError, OSError, ObjectTransactionError, ValueError) as exc:
-        raise SystemExit(
-            f"[release object-transaction rollback] GATE_BLOCK {exc}"
-        ) from exc
-    print(json.dumps(report, ensure_ascii=False, indent=2))
+    result = query_pool(publish_root)
+    if args.json_output:
+        target = Path(args.json_output).expanduser()
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(json.dumps(result, ensure_ascii=False, indent=1, sort_keys=True) + "\n", encoding="utf-8")
+        print(json.dumps({"schema": result["schema"], "counts": result["counts"], "excludedCount": len(result["excluded"]), "output": target.as_posix()}, ensure_ascii=False))
+        return
+    print(json.dumps(result, ensure_ascii=False, indent=1, sort_keys=True))
 
 
-def handle_object_transaction_replay_package(args: argparse.Namespace) -> None:
-    """Replay one reviewed package whose media bodies live in a content library."""
+def handle_release_finalize(args: argparse.Namespace) -> None:
+    """pool-build → release-integrity → create-once handoff，一次完成并固定 producer END。"""
 
-    try:
-        report = replay_object_transaction_package(
-            replay_id=str(args.replay_id),
-            source_package_root=Path(args.source_package_root),
-            media_library_root=Path(args.media_library_root),
-            output_root=Path(args.output_root or OUTPUT_ROOT).resolve(),
-            publish_root=Path(args.publish_root or PUBLISH_ROOT).resolve(),
-        )
-    except (FileNotFoundError, OSError, ObjectTransactionError, ValueError) as exc:
-        raise SystemExit(
-            f"[release object-transaction replay-package] GATE_BLOCK {exc}"
-        ) from exc
-    print(json.dumps(report, ensure_ascii=False, indent=2))
+    from content.release.canonical.aggregate_release import build_pool_release
+    from content.release.canonical.integrity import scan_release_integrity
 
-
-def handle_build_lookup_indexes(args: argparse.Namespace) -> None:
+    output_root = Path(OUTPUT_ROOT).resolve()
+    publish_root = Path(args.publish_root or PUBLISH_ROOT).resolve()
+    release_root = Path(args.release_root or output_root / "data/releases").resolve()
     release_id = str(args.release_id)
-    publish_root = Path(args.publish_root or PUBLISH_ROOT)
-    release_root = Path(args.release_root or (OUTPUT_ROOT / "data/releases"))
     try:
-        with (
-            release_operation_guard(
-                lock_root=release_operation_lock_root(release_root),
-                release_ids=(release_id,),
-                exclusive_releases=True,
-            ),
-            canonical_publish_lock(publish_root),
-        ):
-            report = build_publish_lookup_indexes(
-                release_id=release_id,
-                canonical_root=publish_root,
+        submitted = json.loads(Path(args.cohort_file).expanduser().resolve().read_bytes())
+        if not isinstance(submitted, dict):
+            raise ObjectTransactionError("DATA.RELEASE.COHORT_INVALID: cohort must be an object")
+        cohort_file = _normalize_cohort(
+            submitted, milestone=str(args.milestone), release_root=release_root, release_id=release_id
+        )
+        cohort = json.loads(cohort_file.read_bytes())
+        release_class = str(cohort["releaseClass"])
+        if not (release_root / release_id / "payload/release.json").is_file():
+            build_report = build_pool_release(
+                publish_root=publish_root,
                 release_root=release_root,
-                taxonomy_root=(
-                    Path(args.taxonomy_root) if args.taxonomy_root else None
-                ),
+                release_id=release_id,
+                cohort_file=cohort_file,
+                release_class=release_class,
             )
-    except (
-        FileExistsError,
-        FileNotFoundError,
-        OSError,
-        ReleaseOperationConflict,
-        TypeError,
-        ValueError,
-    ) as exc:
-        raise SystemExit(f"[release build-lookups] GATE_BLOCK {exc}") from exc
-    print(json.dumps(report, ensure_ascii=False, indent=2))
+        else:
+            build_report = {"status": "replayed", "releaseId": release_id}
+        integrity = scan_release_integrity(release_id)
+        if not integrity.get("passed"):
+            raise ObjectTransactionError(
+                "release integrity failed: " + "; ".join(str(issue) for issue in integrity.get("issues") or [])
+            )
+        document, path, replayed = write_producer_release_handoff(
+            release_id=release_id,
+            cohort_file=cohort_file,
+            milestone=str(args.milestone),
+            producer_baseline_revision=str(args.producer_baseline_revision),
+            repo_root=Path(REPO_ROOT).resolve(),
+            output_root=output_root,
+            publish_root=publish_root,
+            release_root=release_root,
+        )
+    except (FileNotFoundError, OSError, ProducerReleaseHandoffError, ObjectTransactionError, TypeError, ValueError) as exc:
+        raise SystemExit(f"[release finalize] GATE_BLOCK {exc}") from exc
+    print(json.dumps({
+        "schema": "quwoquan_data.release_finalize_result",
+        "releaseId": release_id,
+        "milestone": str(args.milestone),
+        "build": {key: build_report.get(key) for key in ("status", "releaseId", "canonicalMerkle", "counts") if key in build_report},
+        "integrity": {"passed": True, "canonicalMerkle": integrity.get("canonicalMerkle")},
+        "handoff": {
+            "status": "replayed" if replayed else "created",
+            "handoffRef": path.relative_to(output_root).as_posix(),
+            "handoffDigest": "sha256:" + hashlib.sha256(path.read_bytes()).hexdigest(),
+            "carrierCounts": document.get("carrierCounts"),
+            "producerBaselineRevision": document.get("producerBaselineRevision"),
+            "producerContractDigest": document.get("producerContractDigest"),
+        },
+        "terminal": "END",
+    }, ensure_ascii=False, indent=2))
+
+
+def handle_handoff_verify(args: argparse.Namespace) -> None:
+    output_root = Path(OUTPUT_ROOT).resolve()
+    release_root = Path(args.release_root or output_root / "data/releases").resolve()
+    path = release_root / str(args.release_id) / "producer_release_handoff.json"
+    try:
+        document = read_producer_release_handoff(
+            path,
+            repo_root=Path(REPO_ROOT).resolve(),
+            output_root=output_root,
+            release_root=release_root,
+        )
+    except (FileNotFoundError, OSError, ProducerReleaseHandoffError, TypeError, ValueError) as exc:
+        raise SystemExit(f"[release handoff-verify] GATE_BLOCK {exc}") from exc
+    print(json.dumps({
+        "schema": "quwoquan_data.handoff_verify_result",
+        "releaseId": document["releaseId"],
+        "milestone": document["milestone"],
+        "carrierCounts": document["carrierCounts"],
+        "handoffDigest": "sha256:" + hashlib.sha256(path.read_bytes()).hexdigest(),
+        "passed": True,
+    }, ensure_ascii=False, indent=2))
 
 
 from content.release.canonical.handler_cli import register_parser  # noqa: F401

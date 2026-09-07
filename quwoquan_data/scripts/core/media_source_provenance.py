@@ -69,6 +69,7 @@ class DerivedModification(StrEnum):
 
     VIDEO_FRAME_EXTRACTION = "video_frame_extraction"
     CROP = "crop"
+    RESIZE = "resize"
     FORMAT_CONVERSION = "format_conversion"
 
 

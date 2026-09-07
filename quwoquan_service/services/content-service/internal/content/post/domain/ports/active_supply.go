@@ -4,9 +4,22 @@ import (
 	"context"
 	"regexp"
 	"strings"
+	"time"
 )
 
 var canonicalReleaseDigestPattern = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
+
+// IsKnownReleaseClass 是 feed/detail 读面接受的 release 级类别闭集：production 是
+// Data producer 的单一现役类别（DEC-041），research/commercial 是历史 release 的
+// 封存取值。未声明或未知类别一律视为 malformed，读面 fail closed。
+func IsKnownReleaseClass(releaseClass string) bool {
+	switch releaseClass {
+	case "research", "commercial", "production":
+		return true
+	default:
+		return false
+	}
+}
 
 // ActiveSupplySnapshot identifies the canonical data release whose materialized
 // Posts may serve a release-bound initial page. Recommendation candidate
@@ -17,13 +30,16 @@ type ActiveSupplySnapshot struct {
 	Status          string
 	ActiveReleaseID string
 	ManifestDigest  string
-	// ReleaseClass 是激活 release 的 release 级类别（research|commercial），
+	// ReleaseClass 是激活 release 的 release 级类别（research|commercial|production），
 	// 由 importer 从 release.json 落到 data_release_state。research readback
 	// 用它判定 release 类别；per-post usageScope 只表达对象的最大许可范围。
-	ReleaseClass   string
-	ReadbackStatus string
-	Posts          int64
-	PlayableVideos int64
+	ReleaseClass      string
+	ProjectionVersion int64
+	Revision          int64
+	ActivatedAt       time.Time
+	ReadbackStatus    string
+	Posts             int64
+	PlayableVideos    int64
 }
 
 func (snapshot ActiveSupplySnapshot) ReleaseBoundReadbackReady() bool {
@@ -33,7 +49,10 @@ func (snapshot ActiveSupplySnapshot) ReleaseBoundReadbackReady() bool {
 		strings.TrimSpace(snapshot.Status) == "active" &&
 		strings.TrimSpace(snapshot.ActiveReleaseID) != "" &&
 		canonicalReleaseDigestPattern.MatchString(strings.TrimSpace(snapshot.ManifestDigest)) &&
-		(releaseClass == "research" || releaseClass == "commercial") &&
+		IsKnownReleaseClass(releaseClass) &&
+		snapshot.ProjectionVersion > 0 &&
+		snapshot.Revision > 0 &&
+		!snapshot.ActivatedAt.IsZero() &&
 		strings.TrimSpace(snapshot.ReadbackStatus) == "passed"
 }
 
@@ -47,6 +66,9 @@ func (snapshot ActiveSupplySnapshot) IsEmpty() bool {
 		strings.TrimSpace(snapshot.ActiveReleaseID) == "" &&
 		strings.TrimSpace(snapshot.ManifestDigest) == "" &&
 		strings.TrimSpace(snapshot.ReleaseClass) == "" &&
+		snapshot.ProjectionVersion == 0 &&
+		snapshot.Revision == 0 &&
+		snapshot.ActivatedAt.IsZero() &&
 		strings.TrimSpace(snapshot.ReadbackStatus) == "" &&
 		snapshot.Posts == 0 &&
 		snapshot.PlayableVideos == 0
@@ -69,10 +91,8 @@ func (snapshot ActiveSupplySnapshot) PlayableVideoReady() bool {
 	return snapshot.ContentReady() && snapshot.PlayableVideos > 0
 }
 
-// Ready is the cache-admission/readback readiness for the general Content
-// supply. Premium video routes use PlayableVideoReady explicitly.
 func (snapshot ActiveSupplySnapshot) Ready() bool {
-	return snapshot.ContentReady()
+	return snapshot.PlayableVideoReady()
 }
 
 type ActiveSupplyReader interface {

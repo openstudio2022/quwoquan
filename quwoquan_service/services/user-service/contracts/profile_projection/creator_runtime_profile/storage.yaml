@@ -19,4 +19,34 @@ collections:
       keys:
         managedBy: 1
         status: 1
+  creator_release_projections:
+    entity: CreatorRuntimeProfile
+    description: owner-local immutable Data release candidate 的逐 creator 快照；身份为 environment/sourceOwner/releaseId/manifestDigest/creatorId，同 creatorId 的不同 release candidate 可共存，公开读取只按 Content active tuple exact fence 解析，不建立 User 侧 active/latest pointer。
+    indexes:
+    - name: uq_creator_release_projection_identity
+      keys:
+        environment: 1
+        sourceOwner: 1
+        releaseId: 1
+        manifestDigest: 1
+        creatorId: 1
+      unique: true
+    - name: idx_creator_release_projection_public_identity
+      keys:
+        environment: 1
+        sourceOwner: 1
+        releaseId: 1
+        manifestDigest: 1
+        personaId: 1
+  creator_release_candidate_states:
+    entity: CreatorRuntimeProfile
+    description: 每个 release tuple 一份 candidate 状态（storage closure 校验通过后为 verified）；stage-only，不写 PostgreSQL UserAccount/Persona、Persona outbox 或 command receipt。
+    indexes:
+    - name: uq_creator_release_candidate_identity
+      keys:
+        environment: 1
+        sourceOwner: 1
+        releaseId: 1
+        manifestDigest: 1
+      unique: true
 role: projection

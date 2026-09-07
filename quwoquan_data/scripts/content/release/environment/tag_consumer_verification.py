@@ -30,8 +30,11 @@ def write_tag_consumer_verification(
     expected = sorted(
         str(item) for item in release_contract.get("desiredRefs", {}).get("tags", []) if str(item).strip()
     )
+    # Data content release 的 Tag 导入只允许 stage-only，报告终态是 owner-local
+    # `verified` candidate；可见性由 Content active pointer fence 决定，Tag 侧没有
+    # 独立 `active` 状态可供消费验证。
     if (
-        report.get("status") != "active"
+        report.get("status") != "verified"
         or report.get("environment") != environment
         or report.get("sourceOwner") != "qwq_data"
         or report.get("releaseKind") != release_kind.value

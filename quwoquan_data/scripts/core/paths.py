@@ -52,7 +52,6 @@ DATA_CACHE_ROOT = DATA_LOCAL_ROOT / "cache"
 DATA_WORKSPACE_ROOT = DATA_LOCAL_ROOT / "workspace"
 RUNTIME_ROOT = DATA_WORKSPACE_ROOT
 CANONICAL_PUBLISH_SIDECAR_ROOT = DATA_CACHE_ROOT / "canonical-publish"
-SOURCE_ACQUISITION_ROOT = DATA_WORKSPACE_ROOT / "source-acquisition"
 RELEASE_IDENTITY_INCIDENTS_ROOT = DATA_WORKSPACE_ROOT / "release-identity-incidents"
 RELEASE_IDENTITY_INCIDENT_MIGRATIONS_ROOT = (
     DATA_WORKSPACE_ROOT / "release-identity-incident-migrations"
@@ -82,22 +81,31 @@ LIBRARY_ROOT = Path(
 ).expanduser()
 # 媒体字节：source 阶段下载一次入库，成品与 publish 只引用同一条目。
 LIBRARY_MEDIA_CAS_ROOT = LIBRARY_ROOT / "_media_cas"
-# 受治理代码/输入字节：campaign capsule 与 execution bundle 共享同一份入库字节。
+# 受治理代码/输入字节：source capsule 与 execution bundle 共享同一份入库字节。
 LIBRARY_SOURCE_CAS_ROOT = LIBRARY_ROOT / "_source_cas"
 LIBRARY_CAS_ROOT_BY_KIND = {
     "media": LIBRARY_MEDIA_CAS_ROOT,
     "source": LIBRARY_SOURCE_CAS_ROOT,
 }
-# carried media：canonical 引用字节的受版本控制随体，不是库镜像。库落在仓外且不可
-# 从版本控制重建，而 canonical 引用的编码视频、poster 与头像都是无上游可逐字节复现
-# 的派生物——库一丢，已 approved 的对象就永久不可交付，所以这个子集随树受控。
-# 按调用解析而非导入即冻结：它是发布事务的写入目标，冻结成模块常量会让「默认写真
-# 仓库」对任何执行 apply 的进程生效。QWQ_CARRIED_MEDIA_ROOT 把随体指向临时根。
+# carried media：canonical 引用字节的 durable 随体，不是库镜像。canonical 引用的编码
+# 视频、poster 与头像都是无上游可逐字节复现的派生物——库一丢，已 approved 的对象就永久
+# 不可交付，所以随体与库是两处独立副本、互为备份。随体不进 git：M1000 量级的媒体不该
+# 压进版本库；它落在仓外 XDG 数据目录（与 content_library 同级、不同目录），逃出
+# `git clean` 射程，并由 `verify publish-closure` 的随体闭包检查保证「可检测、可重建」——
+# 缺失的摘要连同 canonical 记录的 sourceUrl 一起报出，字节可按来源直链原样重取。
+# 按调用解析而非导入即冻结：它是发布事务的写入目标。QWQ_CARRIED_MEDIA_ROOT 可指向
+# 已备份卷或测试临时根。
+def default_carried_media_root() -> Path:
+    xdg_data_home = str(os.environ.get("XDG_DATA_HOME") or "").strip()
+    base = Path(xdg_data_home) if xdg_data_home else Path.home() / ".local" / "share"
+    return base / "quwoquan" / "golden_media"
+
+
 def carried_media_root() -> Path:
     override = str(os.environ.get("QWQ_CARRIED_MEDIA_ROOT") or "").strip()
     if override:
         return Path(override).expanduser()
-    return _REPO_DATA_ROOT / "reference" / "golden_media"
+    return default_carried_media_root()
 
 # canonical publish 根的逻辑身份。物理位置是环境事实（QWQ_PUBLISH_ROOT / DATA_ROOT），
 # 只由本模块解析；receipt 文档记录这个与位置无关的身份，不再内嵌仓库相对路径。
@@ -165,8 +173,8 @@ def now_iso() -> str:
 
 NOW_ISO = now_iso()
 EXECUTION_ROOT_DIRECTORIES = (
-    ReceiptStage.PLAN.value,
-    ReceiptStage.SOURCES.value,
+    "0.plan",
+    "sources",
     "entities",
     "posts",
     "_shared",
@@ -194,25 +202,6 @@ def execution_shared_entry_role(name: str) -> str:
         return "reclaimable"
     return "unknown"
 
-WORKSPACE_ROOT_BY_COMMAND = {
-    "source": "source",
-    "homepage": "homepage",
-    "post": "post",
-    "release": "release",
-}
-
-
-def normalize_execution_workspace_command(command: str) -> str:
-    """Return the only accepted execution workspace identity.
-
-    Execution reports are partitioned by a small, stable ownership set.  Stage
-    names and controller implementation names must never become a workspace
-    axis, otherwise writers and readers silently diverge.
-    """
-    normalized = str(command or "").strip()
-    if normalized not in WORKSPACE_ROOT_BY_COMMAND:
-        raise ValueError(f"unsupported execution workspace: {command}")
-    return normalized
 
 
 # ─── executionId ↔ work package ───────────────────────────────────
@@ -322,8 +311,6 @@ _INTENT_LABEL_MAX = 64
 # 内容对象 = tasks/{executionId}/posts/{contentType}/{angle}/{title}/{seq}/
 # 对象目录下过程阶段统一编号；成品落对象根（promote 时与 publish 同名直拷）。
 STAGE_DOWNLOAD = ReceiptStage.DOWNLOAD.value
-STAGE_QUALITY = ReceiptStage.QUALITY.value
-STAGE_COMPOSE = ReceiptStage.COMPOSE.value
 STAGE_DRAFT = ReceiptStage.DRAFT.value
 STAGE_REVIEW = ReceiptStage.REVIEW.value
 # 实体/内容共享同一阶段骨架，差异只体现在阶段产物内容；阶段名来自 receipt 协议闭集。
@@ -381,29 +368,22 @@ OBJECT_STAGES = tuple(stage.value for stage in OBJECT_STAGE_SEQUENCE)
 
 # ─── layout helpers ───────────────────────────────────────────────
 from core.execution_paths import (  # noqa: F401
-    ensure_execution_command_layout,
     ensure_execution_layout,
     ensure_object_stages,
     env_data_release_evidence_ref,
     env_data_release_run_root,
-    execution_assistant_task,
-    execution_command_root,
     execution_data,
     execution_entity_object_dir,
-    execution_entity_page_input_path,
     execution_entity_stage_dir,
     execution_id_from_dir,
-    execution_inputs_dir,
     execution_manifest_path,
     execution_post_object_dir,
     execution_post_roots,
     execution_post_stage_dir,
     execution_posts_root,
-    execution_results_dir,
     execution_root_entry,
     execution_shared_dir,
     execution_source_unit_dir,
-    execution_sources_dir,
     execution_sources_root,
     executions_root,
     iter_all_execution_dirs,

@@ -25,13 +25,17 @@ type PersonaService struct {
 	profiles        userrepo.UserProfileStore
 	pcache          ProfileCacheInvalidator
 	creatorProfiles userrepo.CreatorRuntimeProfileReader
+	contentFence    userrepo.ContentReleaseFenceReader
 }
 
 type PersonaServiceOption func(*PersonaService)
 
-func WithCreatorRuntimeProfiles(repository userrepo.CreatorRuntimeProfileReader) PersonaServiceOption {
+func WithCreatorRuntimeProfiles(repository userrepo.CreatorRuntimeProfileReader, fences ...userrepo.ContentReleaseFenceReader) PersonaServiceOption {
 	return func(service *PersonaService) {
 		service.creatorProfiles = repository
+		if len(fences) > 0 {
+			service.contentFence = fences[0]
+		}
 	}
 }
 
@@ -452,16 +456,33 @@ func (s *PersonaService) GetPersonaProfileView(ctx context.Context, handleOrPers
 	if err != nil {
 		return nil, err
 	}
+	var owner *model.UserProfile
+	if persona != nil && s.profiles != nil {
+		owner, err = s.profiles.FindByID(ctx, persona.UserID)
+		if err != nil {
+			return nil, err
+		}
+		// Historical release imports materialized synthetic Persona rows. They
+		// are retired as a read fallback: only the exact Content fence may expose
+		// a release-owned Creator candidate.
+		if owner != nil && strings.TrimSpace(owner.IdentityOrigin) == "content_release" {
+			persona, owner = nil, nil
+		}
+	}
 	if persona == nil {
-		if s.creatorProfiles != nil {
-			creator, found, creatorErr := s.creatorProfiles.FindActiveByPublicIdentity(ctx, handleOrPersonaID)
-			if creatorErr != nil {
-				return nil, generated.AppErrorFromInternalError(
-					fmt.Sprintf("creator runtime profile read failed: %v", creatorErr),
-				)
+		if s.creatorProfiles != nil && s.contentFence != nil {
+			fence, fenceFound, fenceErr := s.contentFence.ActiveContentReleaseFence(ctx)
+			if fenceErr != nil {
+				return nil, generated.AppErrorFromInternalError(fmt.Sprintf("Content active fence read failed: %v", fenceErr))
 			}
-			if found {
-				return BuildCreatorRuntimeProfileView(creator), nil
+			if fenceFound {
+				creator, found, creatorErr := s.creatorProfiles.FindByExactContentFence(ctx, fence, handleOrPersonaID)
+				if creatorErr != nil {
+					return nil, generated.AppErrorFromInternalError(fmt.Sprintf("Creator exact-fence read failed: %v", creatorErr))
+				}
+				if found {
+					return BuildCreatorRuntimeProfileView(creator), nil
+				}
 			}
 		}
 		usertelemetry.Collector().RecordVisibilityNotFound()
@@ -471,9 +492,11 @@ func (s *PersonaService) GetPersonaProfileView(ctx context.Context, handleOrPers
 		usertelemetry.Collector().RecordVisibilityNotFound()
 		return nil, nil
 	}
-	owner, err := s.profiles.FindByID(ctx, persona.UserID)
-	if err != nil {
-		return nil, err
+	if owner == nil {
+		owner, err = s.profiles.FindByID(ctx, persona.UserID)
+		if err != nil {
+			return nil, err
+		}
 	}
 	view := buildPublicPersonaProfileView(owner, persona)
 	if hasPublicLeakage(view) {

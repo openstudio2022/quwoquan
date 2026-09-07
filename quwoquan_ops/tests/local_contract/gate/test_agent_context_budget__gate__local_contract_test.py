@@ -278,6 +278,24 @@ class AgentContextBudgetGateTest(unittest.TestCase):
                 self.assertIn("no-review-deliverable", text)
                 self.assertNotIn("纯环境操作不要求 Feature owner manifest", text)
 
+    def test_content_production_bounds_independent_actor_dispatch(self) -> None:
+        # spec_ref: specs/feature-tree/runtime/development-workflow-governance/agent-skill-review-context-organization/spec.md#gwt-001.t3
+        text = (_REPO_ROOT / ".agents/skills/content-production/SKILL.md").read_text(
+            encoding="utf-8"
+        )
+        for required in (
+            "直接完成 init、acquire、author、publish、release 与全部机械命令，不把任何步骤委托给通用子 Agent",
+            "全局同一时刻至多一个 reviewer 调用，始终前台",
+            "一次调用负责该 execution 全部对象",
+            "不派发子 Agent、不改产物、不 seal、不 publish",
+            "`starting up` 不是进度也不是失败",
+            "不得据此补发相同或替代调用",
+            "找首个未闭合步骤继续",
+            "已有 receipt 或 reviewer 产物的工作单元不得再次派发",
+        ):
+            with self.subTest(required=required):
+                self.assertIn(required, text)
+
     def test_mutation_skills_require_unique_owner_before_writing(self) -> None:
         # spec_ref: specs/feature-tree/runtime/development-workflow-governance/agent-skill-review-context-organization/spec.md#gwt-002.t3
         expectations = {

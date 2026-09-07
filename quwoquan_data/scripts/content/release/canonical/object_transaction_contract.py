@@ -14,7 +14,7 @@ OBJECT_ASSET_OVER_BUDGET = "DATA.PUBLISH.OBJECT_ASSET_OVER_BUDGET"
 OBJECT_CLOSURE_OVER_BUDGET = "DATA.PUBLISH.OBJECT_CLOSURE_OVER_BUDGET"
 
 
-class TypedPublishExclusion:
+class TypedPublishExclusion(Exception):
     """Typed mechanical publish exclusion without execution orchestration."""
 
     def __init__(self, issue_code: str, message: str) -> None:
@@ -40,6 +40,9 @@ ROLLBACK_SCHEMA = "quwoquan_data.object_transaction_rollback"
 LAYOUT_SCHEMA = "quwoquan_data.canonical_publish"
 RELEASE_SCHEMA = "quwoquan_data.release"
 REQUIRED_SOURCE_POLICY = SourcePolicyRevision.ENCYCLOPEDIA_PRIMARY.value
+EXECUTION_CONTENT_REVIEW_REF = "5.review/content_review.json"
+CANONICAL_CONTENT_REVIEW_REF = "content_review.json"
+CANONICAL_TRANSACTION_LAYOUT_REVISION = "content-review-v1"
 ALLOWED_OBJECT_KINDS = {"creators", "entities", "posts"}
 # Canonical publish holds the documents that describe a work, never the bytes it
 # shows: media bodies are owned once by the content library and reached by the
@@ -64,11 +67,7 @@ EXPECTED_SOURCE_POLICIES = {
 }
 
 def assert_environment_neutral(root: Path) -> None:
-    """Reject mutable activation state from an immutable release payload.
-
-    ``targetEnvironment`` is an immutable build policy and is intentionally
-    allowed; mutable environment state still belongs only to stackctl runs.
-    """
+    """Reject consumer or mutable environment state from producer release bytes."""
     for path in _files(root):
         if path.suffix != ".json":
             continue
@@ -138,6 +137,24 @@ def _safe_id(value: str, *, label: str) -> str:
     if not text or "/" in text or "\\" in text or text in {".", ".."}:
         raise ObjectTransactionError(f"{label} 非法：{value!r}")
     return text
+
+
+def canonical_transaction_id(
+    *, execution_id: str, object_kind: str, object_ref: str
+) -> str:
+    """Bind create-once transaction identity to the hard-cut package layout."""
+
+    normalized_execution = _execution_id(execution_id)
+    marker = {"entities": "entity", "posts": "post"}.get(object_kind)
+    if marker is None:
+        raise ObjectTransactionError(f"transaction objectKind 不支持：{object_kind}")
+    normalized_ref = _safe_rel(object_ref, label="objectRef").as_posix()
+    ref_digest = hashlib.sha256(normalized_ref.encode("utf-8")).hexdigest()[:12]
+    return (
+        f"{normalized_execution}--{marker}-{ref_digest}--"
+        f"{CANONICAL_TRANSACTION_LAYOUT_REVISION}"
+    )
+
 
 def _safe_rel(value: str, *, label: str) -> Path:
     text = str(value or "").strip().strip("/")
@@ -338,23 +355,35 @@ def _review_binding(object_root: Path, package: Mapping[str, Any]) -> dict[str, 
     review = package.get("review")
     if not isinstance(review, dict):
         raise ObjectTransactionError("对象包缺 review binding")
-    attestation_ref = _safe_rel(
-        str(review.get("attestationRef") or ""),
-        label="review.attestationRef",
+    content_review_ref = _safe_rel(
+        str(review.get("contentReviewRef") or ""),
+        label="review.contentReviewRef",
     )
-    attestation_path = object_root / attestation_ref
-    if not attestation_path.is_file():
-        raise ObjectTransactionError("对象包缺 review attestation")
-    attestation = _read_json(attestation_path)
-    if attestation.get("decision") != "approved":
+    content_review_path = object_root / content_review_ref
+    if (
+        content_review_ref.as_posix() != CANONICAL_CONTENT_REVIEW_REF
+        or content_review_path.is_symlink()
+        or not content_review_path.is_file()
+    ):
+        raise ObjectTransactionError("对象包 content review exact binding drift")
+    content_review = _read_json(content_review_path)
+    try:
+        assert_valid(
+            content_review,
+            "content",
+            "content_review",
+            label=content_review_path.as_posix(),
+        )
+    except (FileNotFoundError, TypeError, ValueError) as exc:
+        raise ObjectTransactionError(str(exc)) from exc
+    if content_review.get("decision") != "approved":
         raise ObjectTransactionError("对象未 review-approved")
-    for key in ("deterministicGate", "independentReviewer", "mediaRefReview"):
-        value = attestation.get(key)
-        if not isinstance(value, dict) or value.get("status") != "passed":
-            raise ObjectTransactionError(f"review 前置未通过：{key}")
+    digest = _digest_file(content_review_path)
     return {
-        "attestationRef": attestation_ref.as_posix(),
-        "attestationSha256": _digest_file(attestation_path),
+        "contentReviewRef": content_review_ref.as_posix(),
+        "contentReviewSha256": digest,
+        "rightsAuthorityRef": content_review_ref.as_posix(),
+        "rightsAuthoritySha256": digest,
     }
 
 def _rights_binding(
@@ -488,26 +517,13 @@ def _closure_digest(
     closure: Mapping[str, Any],
     cas_rows: list[dict[str, Any]],
     review: Mapping[str, Any],
-    metadata_adoption: Mapping[str, Any] | None = None,
 ) -> str:
-    """Digest everything an object's identity may not silently change.
-
-    An adopted successor differs from a freshly authored object only by the
-    adoption receipt that authorizes it, so that binding has to be inside the
-    digest: otherwise a v2 could be re-pointed at a different source review and
-    still present the same closure digest. Objects with no adoption keep their
-    digest input shape unchanged, so already-sealed digests stay reproducible.
-    """
+    """Digest everything an object's identity may not silently change."""
 
     _admit_object_storage_budget(
         object_root,
         object_kind=object_kind,
         object_ref=object_ref,
-    )
-    adoption = (
-        {"metadataAdoption": dict(metadata_adoption)}
-        if metadata_adoption is not None
-        else {}
     )
     return _digest_bytes(
         _json_bytes(
@@ -545,7 +561,6 @@ def _closure_digest(
                 },
                 "cas": sorted(cas_rows, key=lambda row: row["objectKey"]),
                 "review": dict(review),
-                **adoption,
             }
         )
     )

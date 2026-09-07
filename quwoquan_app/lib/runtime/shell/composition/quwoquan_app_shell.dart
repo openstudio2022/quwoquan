@@ -40,6 +40,7 @@ import 'package:quwoquan_app/runtime/di/app_providers.dart'
         appResourceCacheProfileProvider,
         cacheTelemetrySinkProvider,
         contentBehaviorTrackerProvider,
+        contentCacheLifecycleCoordinatorProvider,
         mediaDownloadCacheProvider,
         postObjectCacheProvider,
         realtimeConnectionManagerProvider;
@@ -262,13 +263,14 @@ class _QuWoQuanAppRootState extends ConsumerState<QuWoQuanAppRoot>
           inflightDownloads: mediaDownloadCache.inflightDownloadCount,
           cacheSizeBytes: mediaDownloadCache.currentCacheSizeBytes,
         );
-    ref
-        .read(cacheTelemetrySinkProvider)
-        .record('resource.bytes_cleared', <String, Object?>{
-          'reason': 'memory_pressure',
-          'profile': AppResourceCacheProfile.compact.name,
-          'postDetails': clearedPostDetails,
-        });
+    ref.read(cacheTelemetrySinkProvider).record(
+      'resource.bytes_cleared',
+      <String, Object?>{
+        'reason': 'memory_pressure',
+        'profile': AppResourceCacheProfile.compact.name,
+        'postDetails': clearedPostDetails,
+      },
+    );
   }
 
   @override
@@ -337,6 +339,7 @@ class _QuWoQuanAppRootState extends ConsumerState<QuWoQuanAppRoot>
   @override
   Widget build(BuildContext context) {
     ref.watch(accountClosureLocalCleanupLifecycleProvider);
+    ref.watch(contentCacheLifecycleCoordinatorProvider);
     final startup = _startupStateMachine.snapshot;
     if (startup.phase == StartupRootPhase.welcome) {
       return _buildStartupWelcomeApp(startupWelcomeAppearanceSnapshot());

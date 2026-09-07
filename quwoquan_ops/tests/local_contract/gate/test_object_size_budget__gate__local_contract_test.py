@@ -413,12 +413,12 @@ class ObjectSizeBudgetGateLocalContractTest(unittest.TestCase):
             _publish_object(
                 sandbox,
                 "posts/video/体验/大视频/1",
-                document_sizes={"source.mp4": 12 * MEBIBYTE},
+                document_sizes={"transcript.vtt": 12 * MEBIBYTE},
             )
             _publish_object(
                 sandbox,
                 "posts/article/攻略/大图文/1",
-                document_sizes={"inline.bin": 12 * MEBIBYTE},
+                document_sizes={"body.md": 12 * MEBIBYTE},
             )
             closures, issues = module.object_closures(publish_root=sandbox / "publish")
             self.assertEqual(issues, [])
@@ -432,7 +432,7 @@ class ObjectSizeBudgetGateLocalContractTest(unittest.TestCase):
             _publish_object(
                 sandbox,
                 "posts/article/攻略/超预算/1",
-                document_sizes={"inline.bin": 11 * MEBIBYTE},
+                document_sizes={"body.md": 11 * MEBIBYTE},
             )
             code, out = _run_main(module)
             self.assertEqual(code, 1)

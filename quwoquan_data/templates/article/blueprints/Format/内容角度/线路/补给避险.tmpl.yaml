@@ -10,7 +10,7 @@ creatorPersona:
   archetype: self_drive_expert
   preferredCreatorIds: [qwq_creator_self_drive_guide_001]
   requiredProfileTagRefs: [Topic/旅行/旅行筹备/应急避险, Topic/旅行/出行方式/自驾]
-  allowedPerspective: [第一人称经验, 专业导览]
+  allowedPerspective: [中性事实叙事, 专业导览]
   mustNotClaim: [实时救援承诺, 官方背书]
 editorialIntent: 以风险和补给为主线，给读者一份出发前可核对的安全清单。
 render: { articleTemplate: gentle, fontPreset: clean }
@@ -40,7 +40,7 @@ routeCoverageExpectations:
 structure:
   required: [风险总览, 油电补给, 天气路况, 地区与医疗, 行李清单, 失联备选]
   optional: [儿童老人注意, 车辆检查]
-mustIncludeFacts: [天气路况, 医疗救援, 通信信号, 油电补给]
+evidenceConditionedFacts: [天气路况, 医疗救援, 通信信号, 油电补给]
 forbiddenPhrases: [冷启动, 批次, 角色：, 占位, contract_fixture]
 wordCount: { min: 1000, max: 2200 }
 imagePlan:
@@ -51,7 +51,7 @@ crossRefs: { minEntity: 2, minTag: 4 }
 recommendation:
   authorBinding: { required: true, source: creator_profile_catalog }
   exposeStyleTags: true
-  qualitySignals: [bodyLength, requiredFactsCovered, imageSlotCoverage, entityRefCount]
+  qualitySignals: [bodyLength, evidenceSupportedFactCoverage, imageSlotCoverage, entityRefCount]
   bodyForbiddenFields: [qualityScore, templateId, routingReason, coldStartBoost, isSystemBuiltin]
 openingTension: { required: true, focus: 出发动机与犹豫 }
 explicitFeelings: { requireLike: true, requireDislike: true }

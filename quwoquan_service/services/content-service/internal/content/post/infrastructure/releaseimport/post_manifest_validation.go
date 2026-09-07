@@ -176,7 +176,7 @@ func validateReleaseMediaDeliveryContract(
 // manifests are not a legacy escape hatch.
 func ValidateImportedPostMediaBindings(posts []PostDoc, releaseClass string) error {
 	if MediaDeliveryAccessModeForReleaseClass(releaseClass) == "" {
-		return fmt.Errorf("releaseClass must be research or commercial")
+		return fmt.Errorf("releaseClass must be research, commercial or production")
 	}
 	for _, post := range posts {
 		assets := importedPostAssets(post)
@@ -220,10 +220,10 @@ func isHLSMediaAsset(asset AssetManifestItem) bool {
 func parseRightsAuditStatus(raw string) (RightsAuditStatus, error) {
 	status := RightsAuditStatus(strings.TrimSpace(raw))
 	switch status {
-	case RightsAuditStatusVerified, RightsAuditStatusUnverified:
+	case RightsAuditStatusVerified, RightsAuditStatusUnverified, RightsAuditStatusUnknown, RightsAuditStatusRestricted:
 		return status, nil
 	default:
-		return "", fmt.Errorf("rightsAuditStatus must be verified or unverified")
+		return "", fmt.Errorf("rightsAuditStatus must be verified, unverified, unknown or restricted")
 	}
 }
 
@@ -266,11 +266,10 @@ func validateImageAssets(assets []AssetManifestItem, sourceCollectionID string, 
 			if hasNonEmptyString(asset.RightsAuditIssues) {
 				return fmt.Errorf("%s: verified image asset %q has audit issues", ref, asset.AssetID)
 			}
-		case RightsAuditStatusUnverified:
-			// research release 类别接受未完成商用核验的资产（与 Data 侧
-			// research_allowed 准入同轨），但许可链字段必须完整在场；
-			// commercial 与未声明类别保持 fail closed。
-			if releaseClass != "research" {
+		case RightsAuditStatusUnverified, RightsAuditStatusUnknown, RightsAuditStatusRestricted:
+			// research/production 类别接受未完成商用核验的资产（Data 侧权利只记录，
+			// DEC-041），但许可链字段必须完整在场；commercial 与未声明类别保持 fail closed。
+			if releaseClass != "research" && releaseClass != "production" {
 				return fmt.Errorf(
 					"%s: unverified image asset %q cannot enter an immutable release",
 					ref,
@@ -290,7 +289,7 @@ func validateImageAssets(assets []AssetManifestItem, sourceCollectionID string, 
 	return nil
 }
 
-func validateVideoAssets(assets []AssetManifestItem, ref string) error {
+func validateVideoAssets(assets []AssetManifestItem, ref string, releaseClass string) error {
 	byID := make(map[string]AssetManifestItem, len(assets))
 	for _, asset := range assets {
 		if err := validateAssetItem(asset, ref); err != nil {
@@ -301,11 +300,19 @@ func validateVideoAssets(assets []AssetManifestItem, ref string) error {
 			return fmt.Errorf("%s: video asset %q %w", ref, asset.AssetID, err)
 		}
 		if status != RightsAuditStatusVerified || hasNonEmptyString(asset.RightsAuditIssues) {
-			return fmt.Errorf(
-				"%s: video asset %q must be commercially verified without issues",
-				ref,
-				asset.AssetID,
-			)
+			// production 类别（DEC-041）接受未完成商用核验的视频资产作为记录事实，
+			// 但许可链字段必须在场；其它类别保持 fail closed。
+			if releaseClass != "production" {
+				return fmt.Errorf(
+					"%s: video asset %q must be commercially verified without issues",
+					ref,
+					asset.AssetID,
+				)
+			}
+			if strings.TrimSpace(asset.License) == "" ||
+				(strings.TrimSpace(asset.TermsURL) == "" && strings.TrimSpace(asset.AuthorizationProof) == "") {
+				return fmt.Errorf("%s: production unverified video asset %q missing license or proof", ref, asset.AssetID)
+			}
 		}
 		if _, exists := byID[asset.AssetID]; exists {
 			return fmt.Errorf("%s: duplicate assetId %q", ref, asset.AssetID)

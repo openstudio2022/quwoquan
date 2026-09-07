@@ -2,6 +2,7 @@
 
 import 'dart:async';
 
+import 'package:quwoquan_app/service/content_service/content/feed_delivery_page/application/public/content_activation_identity.dart';
 import 'package:quwoquan_app/service/content_service/content/feed_delivery_page/application/public/discovery_feed_page.dart';
 import 'package:quwoquan_app/service/content_service/content/feed_delivery_page/application/public/discovery_feed_query.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/public/content_post_view_data.dart';
@@ -24,6 +25,11 @@ class CachedContentRepository
     required ContentPostDeleteCommandWriter deleteDelegate,
     required PostObjectCacheService postCache,
     required ContentQuerySnapshotStore querySnapshotStore,
+    required ContentCacheIsolationIdentity? Function() currentCacheIdentity,
+    required ContentCacheIsolationIdentity? Function(
+      ContentActivationIdentity? activationIdentity,
+    )
+    cacheIsolationIdentityResolver,
     UserProfileAuthorSnapshotCache? userProfileCache,
     Future<List<String>> Function()? blockedKeywordsLoader,
     // 契约：best-effort 预热，失败自行留痕、不向上抛。
@@ -33,6 +39,8 @@ class CachedContentRepository
        _deleteDelegate = deleteDelegate,
        _postCache = postCache,
        _querySnapshotStore = querySnapshotStore,
+       _currentCacheIdentity = currentCacheIdentity,
+       _cacheIsolationIdentityResolver = cacheIsolationIdentityResolver,
        _userProfileCache = userProfileCache,
        _blockedKeywordsLoader = blockedKeywordsLoader ?? _emptyBlockedKeywords,
        _telemetrySink = telemetrySink,
@@ -43,6 +51,11 @@ class CachedContentRepository
   final ContentPostDeleteCommandWriter _deleteDelegate;
   final PostObjectCacheService _postCache;
   final ContentQuerySnapshotStore _querySnapshotStore;
+  final ContentCacheIsolationIdentity? Function() _currentCacheIdentity;
+  final ContentCacheIsolationIdentity? Function(
+    ContentActivationIdentity? activationIdentity,
+  )
+  _cacheIsolationIdentityResolver;
   final UserProfileAuthorSnapshotCache? _userProfileCache;
   final Future<List<String>> Function() _blockedKeywordsLoader;
   final CacheTelemetrySink _telemetrySink;
@@ -64,7 +77,7 @@ class CachedContentRepository
     CloudOperationCancellationSignal? cancellation,
     DateTime? deadlineAt,
   }) async {
-    final key = contentFeedQueryKey(
+    final baseKey = contentFeedQueryKey(
       category: category,
       channelId: channelId,
       identity: identity,
@@ -74,14 +87,18 @@ class CachedContentRepository
       sort: sort,
       limit: limit,
     );
+    final key = _querySnapshotStore.isolateQueryKey(
+      baseKey,
+      identity: _currentCacheIdentity(),
+    );
     await runCloudOperationPrerequisite(
       _querySnapshotStore.ensureHydrated,
       cancellation: cancellation,
       deadlineAt: deadlineAt,
     );
-    final cached = _querySnapshotStore.get(key);
+    final cached = key == null ? null : _querySnapshotStore.get(key);
     final isInitialPage = cursor == null || cursor.trim().isEmpty;
-    if (cached != null && isInitialPage) {
+    if (key != null && cached != null && isInitialPage) {
       final cachedPage = await _visibleCachedFeedPage(
         key: key,
         cached: cached,
@@ -92,6 +109,7 @@ class CachedContentRepository
       final revalidation = _revalidateFeedPage(
         cachedPage: cachedPage,
         key: key,
+        baseKey: baseKey,
         category: category,
         channelId: channelId,
         identity: identity,
@@ -110,6 +128,7 @@ class CachedContentRepository
     try {
       return await _fetchAndStoreFeedPage(
         key: key,
+        baseKey: baseKey,
         category: category,
         channelId: channelId,
         identity: identity,
@@ -124,7 +143,7 @@ class CachedContentRepository
         deadlineAt: deadlineAt,
       );
     } catch (error) {
-      if (cached != null) {
+      if (key != null && cached != null) {
         final cachedPage = await _visibleCachedFeedPage(
           key: key,
           cached: cached,
@@ -139,7 +158,8 @@ class CachedContentRepository
   }
 
   Future<DiscoveryFeedPage> _fetchAndStoreFeedPage({
-    required String key,
+    required String? key,
+    required String baseKey,
     required String category,
     String? channelId,
     String? identity,
@@ -173,6 +193,7 @@ class CachedContentRepository
     );
     _storeFeedPage(
       key,
+      baseKey,
       page,
       sessionId: sessionId,
       isInitialPage: cursor == null || cursor.trim().isEmpty,
@@ -227,6 +248,7 @@ class CachedContentRepository
   Future<DiscoveryFeedPage> _revalidateFeedPage({
     required DiscoveryFeedPage cachedPage,
     required String key,
+    required String baseKey,
     required String category,
     String? channelId,
     String? identity,
@@ -243,6 +265,7 @@ class CachedContentRepository
     try {
       return await _fetchAndStoreFeedPage(
         key: key,
+        baseKey: baseKey,
         category: category,
         channelId: channelId,
         identity: identity,
@@ -303,20 +326,33 @@ class CachedContentRepository
   }
 
   void _storeFeedPage(
-    String key,
+    String? key,
+    String baseKey,
     DiscoveryFeedPage page, {
     String? sessionId,
     required bool isInitialPage,
   }) {
-    _storePostProjections(page.items);
-    // 远端权威响应驱动运行时内容身份：新 digest 原子切 namespace，
-    // no_active_release 停止回放 release-bound 快照。continuation 页冻结
-    // 首刷身份，不参与采纳（避免回放旧 release 时倒灌身份）。
+    // 远端权威首刷确认完整 release tuple 后，才让当前 principal namespace
+    // 可写入/回放。no_active_release 会清掉旧身份与可重建状态；其它未绑定
+    // release 的首刷不持久化，避免落入当前 release namespace。
     if (isInitialPage) {
-      _querySnapshotStore.adoptContentActivationIdentity(
-        page.activationIdentity,
-      );
+      final activationIdentity = page.activationIdentity;
+      if (activationIdentity == null) {
+        key = null;
+        if (page.emptyReason == ContentFeedEmptyReason.noActiveRelease) {
+          _cacheIsolationIdentityResolver(null);
+          _querySnapshotStore.adoptContentCacheIsolationIdentity(null);
+        }
+      } else {
+        final identity = _cacheIsolationIdentityResolver(activationIdentity);
+        _querySnapshotStore.adoptContentCacheIsolationIdentity(identity);
+        key = identity?.isolateQueryKey(baseKey);
+      }
     }
+    if (key == null) {
+      return;
+    }
+    _storePostProjections(page.items);
     _querySnapshotStore.put(
       key: key,
       items: page.items,

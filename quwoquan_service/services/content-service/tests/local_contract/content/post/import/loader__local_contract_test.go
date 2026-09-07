@@ -940,19 +940,53 @@ func TestValidatePostAuthorsRejectsMissingReleaseCreator(t *testing.T) {
 }
 
 func TestValidateCreatorImportReceiptRequiresExactAuthorClosure(t *testing.T) {
+	binding := ReleaseBinding{
+		ReleaseID:      "release-a",
+		SourceOwner:    "qwq_data",
+		ManifestDigest: "sha256:" + strings.Repeat("a", 64),
+	}
+	path := filepath.Join(t.TempDir(), "creator-candidate-receipt.json")
+	writeFile(t, path, `{
+		"schema":"quwoquan.creator_release_candidate_receipt",
+		"status":"found",
+		"environment":"alpha",
+		"releaseId":"release-a",
+		"sourceOwner":"qwq_data",
+		"manifestDigest":"sha256:`+strings.Repeat("a", 64)+`",
+		"counts":{"expected":1,"projected":1},
+		"authorIds":["author-a"]
+	}`)
+	if err := ValidateCreatorImportReceipt(path, binding, "alpha", false, map[string]bool{"author-a": true}); err != nil {
+		t.Fatalf("valid creator candidate receipt rejected: %v", err)
+	}
+	if err := ValidateCreatorImportReceipt(path, binding, "alpha", false, map[string]bool{"author-b": true}); err == nil {
+		t.Fatal("creator receipt with a mismatched author closure must be rejected")
+	}
+	if err := ValidateCreatorImportReceipt(path, binding, "beta", false, map[string]bool{"author-a": true}); err == nil {
+		t.Fatal("creator candidate receipt for another environment must be rejected")
+	}
+	drifted := binding
+	drifted.ManifestDigest = "sha256:" + strings.Repeat("b", 64)
+	if err := ValidateCreatorImportReceipt(path, drifted, "alpha", false, map[string]bool{"author-a": true}); err == nil {
+		t.Fatal("creator candidate receipt with manifest digest drift must be rejected")
+	}
+}
+
+func TestValidateCreatorImportReceiptAcceptsImportReportOnlyForDryRun(t *testing.T) {
+	binding := ReleaseBinding{ReleaseID: "release-a", SourceOwner: "qwq_data", ManifestDigest: "sha256:" + strings.Repeat("a", 64)}
 	path := filepath.Join(t.TempDir(), "creator-import.json")
 	writeFile(t, path, `{
 		"schema":"quwoquan.user_creator_import_report",
-		"status":"active",
+		"status":"dry-run",
 		"releaseId":"release-a",
 		"sourceOwner":"qwq_data",
 		"authorIds":["author-a"]
 	}`)
-	if err := ValidateCreatorImportReceipt(path, "release-a", map[string]bool{"author-a": true}); err != nil {
-		t.Fatalf("valid creator receipt rejected: %v", err)
+	if err := ValidateCreatorImportReceipt(path, binding, "alpha", true, map[string]bool{"author-a": true}); err != nil {
+		t.Fatalf("dry-run creator import report rejected: %v", err)
 	}
-	if err := ValidateCreatorImportReceipt(path, "release-a", map[string]bool{"author-b": true}); err == nil {
-		t.Fatal("creator receipt with a mismatched author closure must be rejected")
+	if err := ValidateCreatorImportReceipt(path, binding, "alpha", false, map[string]bool{"author-a": true}); err == nil {
+		t.Fatal("real stage must require the Creator verified candidate receipt, not the import report")
 	}
 }
 

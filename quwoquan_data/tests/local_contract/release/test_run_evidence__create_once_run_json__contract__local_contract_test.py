@@ -32,9 +32,10 @@ def _create(tmp_path: Path) -> Path:
     )
 
 
-def test_create_run_accepts_predeposited_runtime_proof_directory(
+def test_create_run_rejects_retired_research_runtime_proof_predeposit(
     tmp_path: Path,
 ) -> None:
+    """production 单相位不再预置任何 verify 证据；遗留的 research runtime proof 视为脏目录。"""
     run_dir = (
         tmp_path
         / "env/gamma/runs/data-release/release-a/research-api-001"
@@ -45,11 +46,29 @@ def test_create_run_accepts_predeposited_runtime_proof_directory(
         encoding="utf-8",
     )
 
-    created = _create(tmp_path)
+    with pytest.raises(SystemExit, match="预存证据"):
+        _create(tmp_path)
 
-    assert created == run_dir
-    assert (created / "run.json").is_file()
-    assert (created / "research-isolation-runtime-proof.json").is_file()
+
+def test_create_run_verify_rejects_noncanonical_predeposited_file(
+    tmp_path: Path,
+) -> None:
+    run_dir = (
+        tmp_path
+        / "env/gamma/runs/data-release/release-a/research-api-unexpected"
+    )
+    run_dir.mkdir(parents=True)
+    (run_dir / "result.json").write_text("{}", encoding="utf-8")
+
+    with pytest.raises(SystemExit, match="预存证据"):
+        create_run(
+            output_root=tmp_path,
+            environment="gamma",
+            release_id="release-a",
+            run_id="research-api-unexpected",
+            kind="verify",
+            valid_environments=_VALID,
+        )
 
 
 def test_create_run_rejects_existing_run_json(tmp_path: Path) -> None:

@@ -261,8 +261,12 @@ public final class StartupGateActivity extends Activity {
       finishAndRemoveTask();
       return;
     }
-    // 嵌入默认供给（embedded_default_package）已退役：缺 canonical supply 时由
-    // 既有 typed trust/config 阻断在 Flutter 侧 fail-closed，此处不再补供给。
+    if (BuildConfig.DEBUG) {
+      // Debug-nonprod 构建期自供给（REQ-003 build_time_self_supply）：无外部 activation
+      // extra 时消费 assets 内嵌的激活请求；Release 制品不含该 asset 也不进入此分支。
+      // 失败只记账，随后由既有 typed trust/config 阻断在 Flutter 侧呈现，不得静默回退。
+      consumeBundledSelfSupplyRequest();
+    }
     StartupHealthStore.promoteConfirmedPlatformStartupCrash(this);
     if (!StartupHealthStore.shouldRecoverConfirmedStartupFatal(this)) {
       if (!isTaskRoot()) {
@@ -339,6 +343,31 @@ public final class StartupGateActivity extends Activity {
     recoveryWeb = null;
     versionExecutor.shutdownNow();
     super.onDestroy();
+  }
+
+  private void consumeBundledSelfSupplyRequest() {
+    RuntimeConfigActivationCoordinator.ConsumeResult selfSupply;
+    try (InputStream requestStream =
+        getAssets().open(RuntimeConfigActivationCoordinator.SELF_SUPPLY_REQUEST_ASSET_NAME)) {
+      selfSupply = runtimeConfigActivationCoordinator.consumeBundledSelfSupplyRequest(requestStream);
+    } catch (java.io.FileNotFoundException absent) {
+      return;
+    } catch (java.io.IOException error) {
+      Log.w(STARTUP_TAG, "android_runtime_config_self_supply asset_unreadable", error);
+      return;
+    }
+    if (selfSupply.kind == RuntimeConfigActivationCoordinator.ConsumeKind.NOT_REQUESTED) {
+      Log.i(STARTUP_TAG, "android_runtime_config_self_supply_skipped reason=external_active");
+      return;
+    }
+    Log.i(
+        STARTUP_TAG,
+        "android_runtime_config_self_supply activated="
+            + (selfSupply.kind == RuntimeConfigActivationCoordinator.ConsumeKind.ACTIVATED)
+            + " code="
+            + selfSupply.errorCode
+            + " issues="
+            + String.join(",", selfSupply.validationIssues));
   }
 
   private void startFlutterMainActivity() {

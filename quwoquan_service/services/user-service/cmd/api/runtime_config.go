@@ -86,6 +86,14 @@ type config struct {
 		ExternalInteractionBaseURL string `yaml:"external_interaction_base_url" envAbsolute:"INTEGRATION_EXTERNAL_INTERACTION_BASE_URL"`
 	} `yaml:"integration"`
 
+	// ContentService 只读 Content owner 的 active release tuple（data_release_state
+	// 的唯一 active_pointer），作为 Creator release candidate 的唯一可见性 fence；
+	// User 不落 active/latest pointer。与 entity-service 共用同一组无前缀共享键。
+	ContentService struct {
+		MongoURI      string `yaml:"mongo_uri" envAbsolute:"CONTENT_MONGO_URI"`
+		MongoDatabase string `yaml:"mongo_database" envAbsolute:"CONTENT_MONGO_DATABASE"`
+	} `yaml:"content_service"`
+
 	ResearchIdentity struct {
 		Enabled    bool `yaml:"enabled"`
 		TTLSeconds int  `yaml:"ttl_seconds"`

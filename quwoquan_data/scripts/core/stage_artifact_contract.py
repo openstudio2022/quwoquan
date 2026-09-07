@@ -1,10 +1,10 @@
-"""五阶段产物唯一契约：common contract → lane adapter。"""
+"""三步产物唯一契约：acquire(1.download) → author(4.draft) → review(5.review) → final。"""
 
 from __future__ import annotations
 
 from typing import Final
 
-from core.control_types import OBJECT_STAGE_SEQUENCE
+from core.control_types import AUTHOR_ARTIFACT_BY_CARRIER, OBJECT_STAGE_SEQUENCE
 
 
 STAGES: Final[tuple[str, ...]] = tuple(
@@ -14,62 +14,51 @@ LANES: Final[tuple[str, ...]] = ("homepage", "article", "image", "video")
 
 COMMON_STAGE_ARTIFACTS: Final[dict[str, tuple[str, ...]]] = {
     "1.download": ("source_refs.json",),
-    "2.quality": ("quality_analysis.json",),
-    "4.draft": (
-        "draft_meta.json",
-        "author_self_check.json",
-        "agent_result_envelope.json",
-    ),
-    "5.review": (
-        "rubric_review.json",
-        "reviewer_result.json",
-        "media_ref_review.json",
-        "attestation.json",
-    ),
+    "5.review": ("content_review.json",),
 }
 
 LANE_ADAPTERS: Final[dict[str, dict[str, tuple[str, ...]]]] = {
     "homepage": {
-        "3.compose": ("entity_page_input.json",),
-        "4.draft": ("page.md",),
+        "4.draft": (AUTHOR_ARTIFACT_BY_CARRIER["homepage"],),
         "final": ("_entity.json", "page.md", "manifest.json"),
     },
     "article": {
-        "3.compose": ("writing_pack.json",),
-        "4.draft": ("draft.article.md",),
+        "4.draft": (AUTHOR_ARTIFACT_BY_CARRIER["article"],),
         "final": ("article.md", "manifest.json"),
     },
     "image": {
-        "3.compose": ("writing_pack.json",),
-        "4.draft": ("image_work.json",),
+        "4.draft": (AUTHOR_ARTIFACT_BY_CARRIER["image"],),
         "final": ("manifest.json",),
     },
     "video": {
-        "3.compose": ("writing_pack.json",),
-        "4.draft": ("video_script.json",),
+        "4.draft": (AUTHOR_ARTIFACT_BY_CARRIER["video"],),
         "final": ("manifest.json",),
     },
 }
 
+# 媒体来源的字节就是快照本身（摘要记在 meta.rawSha256），只有页面来源另落 snapshot.raw。
 SOURCE_UNIT_ARTIFACTS: Final[tuple[str, ...]] = (
     "meta.json",
     "source.md",
-    "source.clean.md",
-    "source.layout.json",
-    "source.quality.json",
     "assets/index.json",
 )
 
-PROCESS_ARTIFACT_NAMES: Final[frozenset[str]] = frozenset(
+# canonical publish/release 不得含 execution 过程文件。
+CANONICAL_FORBIDDEN_PROCESS_ARTIFACT_NAMES: Final[frozenset[str]] = frozenset(
     {
+        "quality_analysis.json",
+        "writing_pack.json",
+        "entity_page_input.json",
         "author_self_check.json",
         "agent_result_envelope.json",
         "draft_meta.json",
+        "rubric_review.json",
+        "reviewer_result.json",
+        "media_ref_review.json",
+        "attestation.json",
         "repair_report.json",
         "failure.json",
-        "reviewer_result.json",
         "deterministic_gate.json",
-        "media_ref_review.json",
         "runbook.md",
         "rollout.json",
         "rollback.json",

@@ -211,7 +211,7 @@ lanePolicies:
     promptFacts:
       - 文章来源不按 UGC、社区、媒体、官方或垂类专业站天然升降级。
       - 所有文章型来源按内容质量、图文完整、事实可追溯、去重价值和文字/图片权利风险判断。
-      - 文章底稿必须来自 article lane，源图是底稿证据链的一部分，一稿一用。
+      - 文章底稿必须来自 article lane；维基百科主题/线路/文化/事件条目是文章底稿，同页 Commons 配图随底稿一并取得，一稿一用。
   image:
     discoveryAllowed: true
     publishRequiresAssetRights: true
@@ -253,16 +253,16 @@ lanePolicies:
       - { sourceId: youtube, sourceKind: tourism_video_site, publicationAdmissions: [] }
       - { sourceId: vimeo, sourceKind: tourism_video_site, publicationAdmissions: [] }
       - { sourceId: bilibili, sourceKind: tourism_video_site, publicationAdmissions: [] }
-      - { sourceId: douyin, sourceKind: douyin, publicationAdmissions: [research_release, risk_accepted_attribution_only, commercial_release] }
-      - { sourceId: tiktok, sourceKind: tiktok, publicationAdmissions: [research_release, risk_accepted_attribution_only, commercial_release] }
-      - { sourceId: weibo, sourceKind: weibo, publicationAdmissions: [research_release, risk_accepted_attribution_only, commercial_release] }
-      - { sourceId: toutiao_video, sourceKind: toutiao, publicationAdmissions: [research_release, risk_accepted_attribution_only, commercial_release] }
+      - { sourceId: douyin, sourceKind: douyin, publicationAdmissions: [research_release, commercial_release] }
+      - { sourceId: tiktok, sourceKind: tiktok, publicationAdmissions: [research_release, commercial_release] }
+      - { sourceId: weibo, sourceKind: weibo, publicationAdmissions: [research_release, commercial_release] }
+      - { sourceId: toutiao_video, sourceKind: toutiao, publicationAdmissions: [research_release, commercial_release] }
       - { sourceId: pexels_videos, sourceKind: tourism_video_site, publicationAdmissions: [research_release, commercial_release] }
       - { sourceId: pixabay_videos, sourceKind: tourism_video_site, publicationAdmissions: [research_release, commercial_release] }
       - { sourceId: pond5, sourceKind: tourism_video_site, publicationAdmissions: [research_release, commercial_release] }
       - { sourceId: storyblocks, sourceKind: tourism_video_site, publicationAdmissions: [research_release, commercial_release] }
-      - { sourceId: travel_vlog, sourceKind: tourism_video_site, publicationAdmissions: [research_release, risk_accepted_attribution_only, commercial_release] }
-      - { sourceId: chinese_tourism_vertical, sourceKind: tourism_video_site, publicationAdmissions: [research_release, risk_accepted_attribution_only, commercial_release] }
+      - { sourceId: travel_vlog, sourceKind: tourism_video_site, publicationAdmissions: [research_release, commercial_release] }
+      - { sourceId: chinese_tourism_vertical, sourceKind: tourism_video_site, publicationAdmissions: [research_release, commercial_release] }
       - { sourceId: cctv_video, sourceKind: tourism_video_site, publicationAdmissions: [research_release] }
     rankingSignals:
       - visual_relevance
@@ -301,12 +301,12 @@ common:
     - sourceId: wikipedia
       platform: 维基百科
       sourceClass: encyclopedia
-      lanes: [homepage]
+      lanes: [homepage, article]
       defaultRole: primary
       fetchMode: api
       rightsPolicy: factual_reference_only
       rateLimit: conservative
-      promptFacts: [多语言百科主事实源, 不整段搬运, 适合作为实体主页核心证据]
+      promptFacts: [多语言百科主事实源, 不整段搬运, 实体条目作实体主页核心证据, 主题/线路/文化条目作文章底稿]
     - sourceId: wikidata
       platform: Wikidata
       sourceClass: knowledge_graph

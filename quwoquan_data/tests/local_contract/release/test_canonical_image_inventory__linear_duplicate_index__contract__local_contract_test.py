@@ -17,12 +17,15 @@ from content.release.canonical.canonical_inventory import (
 from content.release.canonical.object_transaction_contract import ObjectTransactionError
 
 
-def _manifest(index: int, *, perceptual_hash: str | None = None) -> dict[str, object]:
+def _manifest(
+    index: int, *, perceptual_hash: str | None = None, asset_id: str | None = None
+) -> dict[str, object]:
+    # 同 assetId 是被允许的稳定资产复用；跨对象重复必须用不同 assetId 才构成冲突。
     return {
         "contentType": "image",
         "assets": [
             {
-                "assetId": f"asset-{index}",
+                "assetId": asset_id or f"asset-{index}",
                 "kind": "image",
                 "sha256": "sha256:"
                 + hashlib.sha256(f"asset-{index}".encode()).hexdigest(),
@@ -98,7 +101,7 @@ def test_image_duplicate_hot_index_is_linear_and_complete_at_one_thousand(
         ).fetchone()[0] == inventory["inventoryDigest"]
     assert database.stat().st_size < size_at_one_hundred * 15
 
-    exact = _manifest(0, perceptual_hash="f" * 16)
+    exact = _manifest(0, perceptual_hash="f" * 16, asset_id="asset-0-copy")
     with pytest.raises(ObjectTransactionError, match="duplicated by sha256"):
         assert_canonical_image_unique(
             publish_root=publish,
@@ -148,15 +151,18 @@ def test_duplicate_manifest_rolls_back_inventory_and_image_index_together(
     duplicate = "posts/image/atomic/duplicate/manifest.json"
     duplicate_path = publish / duplicate
     duplicate_path.parent.mkdir(parents=True)
-    duplicate_path.write_bytes(payload)
+    duplicate_payload = (
+        json.dumps(_manifest(7, asset_id="asset-7-copy"), sort_keys=True) + "\n"
+    ).encode()
+    duplicate_path.write_bytes(duplicate_payload)
     pending = apply_inventory_delta(
         before,
         [
             {
                 "destination": duplicate,
                 "operation": "create",
-                "sha256": "sha256:" + hashlib.sha256(payload).hexdigest(),
-                "bytes": len(payload),
+                "sha256": "sha256:" + hashlib.sha256(duplicate_payload).hexdigest(),
+                "bytes": len(duplicate_payload),
             }
         ],
         publish_root=publish,
@@ -255,8 +261,10 @@ def test_cold_bootstrap_rejects_preexisting_cross_post_duplicate(
     tmp_path: Path,
 ) -> None:
     publish = tmp_path / "publish"
-    payload = (json.dumps(_manifest(88), sort_keys=True) + "\n").encode()
-    for name in ("first", "duplicate"):
+    for name, asset_id in (("first", None), ("duplicate", "asset-88-copy")):
+        payload = (
+            json.dumps(_manifest(88, asset_id=asset_id), sort_keys=True) + "\n"
+        ).encode()
         manifest_path = publish / f"posts/image/bootstrap/{name}/manifest.json"
         manifest_path.parent.mkdir(parents=True, exist_ok=True)
         manifest_path.write_bytes(payload)

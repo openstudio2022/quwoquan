@@ -30,19 +30,14 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-READINESS_PHASES: frozenset[str] = frozenset({"research", "consumer", "commercial"})
+# 单一 production 相位：guest 证据闭合，lifecycle 与 release header 同值（DEC-041）。
+READINESS_PHASES: frozenset[str] = frozenset({"production"})
 
-# consumer 收据介于两态之间，lifecycle 跟随 release header，不强制对齐。
 _LIFECYCLE_BOUND_PHASES: dict[str, str] = {
-    "research": "research",
-    "commercial": "commercial",
+    "production": "production",
 }
 
-_RESEARCH_REQUIRED_FIELDS: tuple[str, ...] = (
-    "internalSubjectHash",
-    "researchIsolationVerificationRef",
-    "researchIsolationVerificationDigest",
-)
+_GUEST_REQUIRED_FIELDS: tuple[str, ...] = ("guestActorHash", "guestLogin")
 
 
 @dataclass(frozen=True)
@@ -67,7 +62,7 @@ def phase_lifecycle_alignment_issue(
     release_class: str,
     product_lifecycle_state: str,
 ) -> str | None:
-    """research/commercial 收据必须与 immutable release lifecycle 同值。"""
+    """production 收据必须与 immutable release lifecycle 同值。"""
     expected = _LIFECYCLE_BOUND_PHASES.get(phase)
     if expected is None:
         return None
@@ -85,8 +80,7 @@ def evaluate_release_readiness_receipt(
 ) -> ReleasePublishabilityVerdict:
     """判定一份环境 readiness 收据是否表示「可发布」。
 
-    只裁定收据自含的可发布语义（phase 闭集、lifecycle 对齐、research 隔离
-    证据在场、passed）；身份精确匹配（releaseId、digest、环境序）与深度完整性
+    只裁定收据自含的可发布语义（phase 闭集、lifecycle 对齐、guest 证据在场、passed）；身份精确匹配（releaseId、digest、环境序）与深度完整性
     （counts、closure、checksum）由各调用方按自身职责另行校验。
     """
     phase = str(receipt.get("readinessPhase") or "")
@@ -102,12 +96,11 @@ def evaluate_release_readiness_receipt(
         )
         if alignment_issue is not None:
             issues.append(alignment_issue)
-        if phase == "research":
-            for field in _RESEARCH_REQUIRED_FIELDS:
-                if not str(receipt.get(field) or ""):
-                    issues.append(
-                        f"research readiness requires non-empty {field}"
-                    )
+        for field in _GUEST_REQUIRED_FIELDS:
+            if not receipt.get(field):
+                issues.append(
+                    f"production readiness requires non-empty {field}"
+                )
     if receipt.get("passed") is not True:
         issues.append("readiness receipt must carry passed: true")
     return ReleasePublishabilityVerdict(

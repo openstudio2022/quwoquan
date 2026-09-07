@@ -10,14 +10,14 @@ creatorPersona:
   archetype: travel_blogger
   preferredCreatorIds: [qwq_creator_travel_blogger_001]
   requiredProfileTagRefs: [Topic/旅行, Format/内容角度/攻略]
-  allowedPerspective: [第一人称经验, 编辑部]
+  allowedPerspective: [中性事实叙事, 编辑部]
   mustNotClaim: [官方推荐, 商业合作]
 editorialIntent: 以实用信息为主，覆盖交通、门票、路线、季节和注意事项。
 render: { articleTemplate: journal, fontPreset: clean }
 structure:
   required: [交通方式, 门票信息, 推荐路线, 最佳季节, 注意事项]
   optional: [住宿推荐, 周边美食, 摄影建议]
-mustIncludeFacts: [门票价格, 开放时间, 到达方式]
+evidenceConditionedFacts: [门票价格, 开放时间, 到达方式]
 forbiddenPhrases: [冷启动, 批次, 角色：, 占位, contract_fixture]
 wordCount: { min: 800, max: 2000 }
 imagePlan:
@@ -27,5 +27,5 @@ crossRefs: { minEntity: 1, minTag: 2 }
 recommendation:
   authorBinding: { required: true, source: creator_profile_catalog }
   exposeStyleTags: true
-  qualitySignals: [bodyLength, requiredFactsCovered, imageSlotCoverage, entityRefCount]
+  qualitySignals: [bodyLength, evidenceSupportedFactCoverage, imageSlotCoverage, entityRefCount]
   bodyForbiddenFields: [qualityScore, templateId, routingReason, coldStartBoost, isSystemBuiltin]

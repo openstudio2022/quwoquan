@@ -49,9 +49,12 @@ var entityTypeToHomepageType = map[string]string{
 // `manifest.json` is the only semantic asset source. `asset.refs.json` is a
 // CAS-closure index and deliberately contains no role or caption; using it as
 // a projection input silently turns every asset into a related image.
+// 生产端 final_surface_projection 对 homepage 配图默认写 role=detail（正文图），
+// 只有显式选定的封面才是 cover；detail 与 inline 在 introduction 投影里同义。
 var assetRoleToIntroductionRole = map[string]string{
 	"cover":   "cover",
 	"inline":  "inline",
+	"detail":  "inline",
 	"related": "related",
 }
 
@@ -65,14 +68,14 @@ const (
 )
 
 // mediaDeliveryAccessModeForReleaseClass 把 release header 的 releaseClass 映射
-// 为逐资产 accessMode（DEC-033）：research → signed_grant、commercial → public。
-// 其它/未声明类别返回空串表示缺席——契约 accessMode 为 NULLABLE，缺席时端按
-// 存量 public 交付消费，不得由 importer 造值。
+// 为逐资产 accessMode（DEC-033/DEC-041）：research → signed_grant、
+// commercial/production → public。其它/未声明类别返回空串表示缺席——契约
+// accessMode 为 NULLABLE，缺席时端按存量 public 交付消费，不得由 importer 造值。
 func mediaDeliveryAccessModeForReleaseClass(releaseClass string) string {
 	switch strings.TrimSpace(releaseClass) {
 	case "research":
 		return mediaDeliveryAccessModeSignedGrant
-	case "commercial":
+	case "commercial", "production":
 		return mediaDeliveryAccessModePublic
 	default:
 		return ""
@@ -128,7 +131,17 @@ func validatePublicHomepageSources(header entityHeader) error {
 	if header.PrimarySource.PolicyRevision != homepageSourcePolicy {
 		return fmt.Errorf("primarySource.policyRevision 与当前合同不一致")
 	}
-	if len(header.SourceURLs) == 0 || strings.TrimSpace(header.PrimarySource.SourceURL) != strings.TrimSpace(header.SourceURLs[0]) {
+	// 生产端按来源行顺序写 sourceUrls（配图 Commons 页可能排在百科条目之前），
+	// 主来源只要求在闭集内，不要求排在首位。
+	primaryURL := strings.TrimSpace(header.PrimarySource.SourceURL)
+	primaryListed := false
+	for _, raw := range header.SourceURLs {
+		if strings.TrimSpace(raw) == primaryURL {
+			primaryListed = true
+			break
+		}
+	}
+	if len(header.SourceURLs) == 0 || primaryURL == "" || !primaryListed {
 		return fmt.Errorf("sourceUrls 与 primarySource.sourceUrl 不一致")
 	}
 	for _, raw := range header.SourceURLs {
@@ -183,8 +196,9 @@ func loadIntroductionAssets(
 	if err := json.Unmarshal(rawManifest, &manifest); err != nil {
 		return nil, fmt.Errorf("%s: invalid semantic manifest.json: %w", entityRef, err)
 	}
+	// publishMediaMode=text_only 的主页没有配图，introduction 只投影正文。
 	if len(manifest.Assets) == 0 {
-		return nil, fmt.Errorf("%s: semantic manifest.json has no homepage assets", entityRef)
+		return nil, nil
 	}
 
 	assets := make([]application.HomepageIntroductionAsset, 0, len(manifest.Assets))
@@ -232,16 +246,19 @@ func loadIntroductionAssets(
 			Role:       role,
 		})
 	}
-	if coverCount != 1 {
-		return nil, fmt.Errorf("%s: semantic manifest must contain exactly one cover asset, got %d", entityRef, coverCount)
+	if coverCount > 1 {
+		return nil, fmt.Errorf("%s: semantic manifest must contain at most one cover asset, got %d", entityRef, coverCount)
 	}
 	return assets, nil
 }
 
+// frontmatterCoverAssetID 读取 page.md YAML frontmatter 中的 coverImage。
+// 封面是可选的：无 frontmatter 或 frontmatter 未声明 coverImage 时返回空串；
+// 一旦声明，就必须是合法的 asset://<assetId>，并由调用方与 manifest cover 配对。
 func frontmatterCoverAssetID(page []byte) (string, error) {
 	lines := strings.Split(strings.ReplaceAll(string(page), "\r\n", "\n"), "\n")
 	if len(lines) < 3 || strings.TrimSpace(lines[0]) != "---" {
-		return "", fmt.Errorf("page.md lacks YAML frontmatter")
+		return "", nil
 	}
 	coverID := ""
 	closed := false
@@ -263,8 +280,8 @@ func frontmatterCoverAssetID(page []byte) (string, error) {
 		}
 		coverID = strings.TrimSpace(strings.TrimPrefix(value, "asset://"))
 	}
-	if !closed || coverID == "" {
-		return "", fmt.Errorf("page.md lacks coverImage")
+	if !closed {
+		return "", fmt.Errorf("page.md YAML frontmatter is not closed")
 	}
 	return coverID, nil
 }
@@ -345,15 +362,17 @@ func LoadHomepageProjections(
 		if coverErr != nil {
 			return fmt.Errorf("%s: %w", entityRef, coverErr)
 		}
-		coverMatches := false
-		for _, asset := range assets {
-			if asset.Role == "cover" && asset.AssetID == coverID {
-				coverMatches = true
-				break
+		if coverID != "" {
+			coverMatches := false
+			for _, asset := range assets {
+				if asset.Role == "cover" && asset.AssetID == coverID {
+					coverMatches = true
+					break
+				}
 			}
-		}
-		if !coverMatches {
-			return fmt.Errorf("%s: page.md coverImage %q does not match semantic cover asset", entityRef, coverID)
+			if !coverMatches {
+				return fmt.Errorf("%s: page.md coverImage %q does not match semantic cover asset", entityRef, coverID)
+			}
 		}
 		// WP3 统一打标：_entity.json.tagRefs → categoryTags 投影，
 		// 与 content-service import 导 entities.tagRefs 同源（消除双轨不一致）。

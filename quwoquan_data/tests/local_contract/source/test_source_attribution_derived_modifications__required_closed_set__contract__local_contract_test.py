@@ -42,7 +42,6 @@ ATTRIBUTION = {
     "publicationAdmission": "commercial_release",
     "authorizationProofUrl": "https://media.example/proofs/hailuogou",
     "termsUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
-    "riskAcceptanceId": None,
     "watermarkStatus": "absent",
     "audioRightsStatus": "no_audio",
     "modelReleaseStatus": "not_required",
@@ -80,7 +79,7 @@ def test_declared_modifications_pass_as_closed_set_members() -> None:
 
 def test_value_outside_the_closed_set_is_refused() -> None:
     with pytest.raises(ValueError, match="derivedModifications"):
-        canonical_source_attribution(_attribution(["resize"]))
+        canonical_source_attribution(_attribution(["color_grading"]))
 
 
 def test_repeated_member_is_refused_so_one_modification_is_stated_once() -> None:

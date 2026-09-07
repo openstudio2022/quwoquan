@@ -132,7 +132,11 @@ def _referenced_media_bytes(object_root: Path) -> tuple[int, int, list[str]]:
 def _document_bytes(object_root: Path) -> int:
     total = 0
     for path in object_root.rglob("*"):
-        if path.is_file():
+        # Media bodies are measured exactly once through asset refs below.  The
+        # transaction package temporarily carries those bytes under assets/ so
+        # they can enter the content library, but they are not canonical publish
+        # documents and must not be counted a second time here.
+        if path.is_file() and path.suffix.lower() in {".json", ".md", ".ndjson", ".vtt"}:
             total += path.stat().st_size
     return total
 

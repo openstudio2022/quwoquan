@@ -11,6 +11,7 @@ import (
 	"context"
 	"testing"
 
+	userports "quwoquan_service/services/user-service/internal/account/user_account/domain/user/ports"
 	creatormodel "quwoquan_service/services/user-service/internal/profile_projection/creator_runtime_profile/domain/model"
 )
 
@@ -19,18 +20,12 @@ type stubCreatorRuntimeProfileReader struct {
 	profile *creatormodel.CreatorRuntimeProfile
 }
 
-func (s *stubCreatorRuntimeProfileReader) FindActiveByPublicIdentity(
+func (s *stubCreatorRuntimeProfileReader) FindByExactContentFence(
 	context.Context,
+	creatormodel.ReleaseIdentity,
 	string,
 ) (*creatormodel.CreatorRuntimeProfile, bool, error) {
 	return s.profile, s.profile != nil, nil
-}
-
-func (s *stubCreatorRuntimeProfileReader) ListActiveWorks(
-	context.Context,
-	string,
-) ([]creatormodel.CreatorWorkRef, bool, error) {
-	return nil, s.profile != nil, nil
 }
 
 func findCreatorView(
@@ -41,8 +36,9 @@ func findCreatorView(
 	adapter := NewCreatorRuntimeProfileAdapter(
 		&stubCreatorRuntimeProfileReader{profile: profile},
 	)
-	view, found, err := adapter.FindActiveByPublicIdentity(
+	view, found, err := adapter.FindByExactContentFence(
 		context.Background(),
+		userports.ContentReleaseFence{Environment: "alpha", SourceOwner: "qwq_data", ReleaseID: "release-a", ManifestDigest: "sha256:" + repeatHex64()},
 		profile.PersonaID,
 	)
 	if err != nil || !found || view == nil {

@@ -12,11 +12,14 @@
       "type": "array", "minItems": 1,
       "items": {
         "type": "object", "additionalProperties": false,
-        "required": ["sourceUnitId", "sourceRef", "metaRef", "sourceId", "sourceClass", "targetRefs"],
+        "required": ["sourceUnitId", "sourceRef", "metaRef", "sourcePlanRef", "sourcePlanDigest", "chosenCandidateDigest", "sourceId", "sourceClass", "targetRefs"],
         "properties": {
           "sourceUnitId": {"type": "string", "minLength": 1},
           "sourceRef": {"type": "string", "pattern": "^sources/[^/]+/source\\.md$"},
           "metaRef": {"type": "string", "pattern": "^sources/[^/]+/meta\\.json$"},
+          "sourcePlanRef": {"type": "string", "pattern": "^sources/plans/[0-9a-f]{64}\\.json$"},
+          "sourcePlanDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+          "chosenCandidateDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
           "sourceId": {"type": "string", "minLength": 1},
           "sourceClass": {"type": "string", "minLength": 1},
           "targetRefs": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}}

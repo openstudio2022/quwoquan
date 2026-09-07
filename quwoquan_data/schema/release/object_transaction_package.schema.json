@@ -30,7 +30,11 @@
       "pattern": "^sha256:[0-9a-f]{64}$"
     },
     "publishMediaMode": {
-      "enum": ["not_applicable", "text_only", "embedded_media"]
+      "enum": [
+        "not_applicable",
+        "text_only",
+        "embedded_media"
+      ]
     },
     "sourcePolicyRevision": {
       "enum": [
@@ -151,10 +155,20 @@
           "items": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["creatorRef", "packageRef", "treeDigest"],
+            "required": [
+              "creatorRef",
+              "packageRef",
+              "treeDigest"
+            ],
             "properties": {
-              "creatorRef": { "type": "string", "minLength": 1 },
-              "packageRef": { "type": "string", "minLength": 1 },
+              "creatorRef": {
+                "type": "string",
+                "minLength": 1
+              },
+              "packageRef": {
+                "type": "string",
+                "minLength": 1
+              },
               "treeDigest": {
                 "type": "string",
                 "pattern": "^sha256:[0-9a-f]{64}$"
@@ -168,36 +182,11 @@
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "attestationRef"
+        "contentReviewRef"
       ],
       "properties": {
-        "attestationRef": {
-          "type": "string",
-          "minLength": 1
-        }
-      }
-    },
-    "metadataAdoption": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "ref",
-        "sha256",
-        "receiptDigest"
-      ],
-      "properties": {
-        "ref": {
-          "type": "string",
-          "minLength": 1,
-          "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$"
-        },
-        "sha256": {
-          "type": "string",
-          "pattern": "^sha256:[0-9a-f]{64}$"
-        },
-        "receiptDigest": {
-          "type": "string",
-          "pattern": "^sha256:[0-9a-f]{64}$"
+        "contentReviewRef": {
+          "const": "content_review.json"
         }
       }
     },
@@ -212,26 +201,50 @@
   "allOf": [
     {
       "if": {
-        "properties": {"publishMediaMode": {"const": "text_only"}},
-        "required": ["publishMediaMode"]
+        "properties": {
+          "publishMediaMode": {
+            "const": "text_only"
+          }
+        },
+        "required": [
+          "publishMediaMode"
+        ]
       },
       "then": {
         "properties": {
           "target": {
-            "properties": {"objectKind": {"const": "posts"}},
-            "required": ["objectKind"]
+            "properties": {
+              "objectKind": {
+                "enum": ["posts", "entities"]
+              }
+            },
+            "required": [
+              "objectKind"
+            ]
           },
           "closure": {
-            "properties": {"casRefs": {"maxItems": 0}},
-            "required": ["casRefs"]
+            "properties": {
+              "casRefs": {
+                "maxItems": 0
+              }
+            },
+            "required": [
+              "casRefs"
+            ]
           }
         }
       },
       "else": {
         "properties": {
           "closure": {
-            "properties": {"casRefs": {"minItems": 1}},
-            "required": ["casRefs"]
+            "properties": {
+              "casRefs": {
+                "minItems": 1
+              }
+            },
+            "required": [
+              "casRefs"
+            ]
           }
         }
       }

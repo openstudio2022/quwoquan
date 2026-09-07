@@ -104,3 +104,6 @@ quwoquan_app/vendor/commercial_auth/aliyun/android/*.jar
 quwoquan_app/vendor/commercial_auth/aliyun/ios/*.framework/
 quwoquan_app/vendor/commercial_auth/aliyun/ios/*.xcframework/
 quwoquan_app/vendor/commercial_auth/aliyun/ios/*.bundle/
+
+# 随体媒体已出仓（仓外 XDG 数据目录，见 quwoquan_data/scripts/core/paths.py carried_media_root）；禁止再把媒体字节加回版本库
+quwoquan_data/reference/golden_media/

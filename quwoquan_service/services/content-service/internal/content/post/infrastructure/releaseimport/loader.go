@@ -26,6 +26,9 @@ type RightsAuditStatus string
 const (
 	RightsAuditStatusVerified   RightsAuditStatus = "verified"
 	RightsAuditStatusUnverified RightsAuditStatus = "unverified"
+	// Data 侧权利只记录（DEC-041）：unknown/restricted 作为记录事实随 production release 进入导入。
+	RightsAuditStatusUnknown    RightsAuditStatus = "unknown"
+	RightsAuditStatusRestricted RightsAuditStatus = "restricted"
 )
 
 var sha256Pattern = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
@@ -297,12 +300,26 @@ type CreatorAuthorSnapshot struct {
 	AvatarAssetID string
 }
 
+const (
+	creatorCandidateReceiptSchema = "quwoquan.creator_release_candidate_receipt"
+	creatorImportReportSchema     = "quwoquan.user_creator_import_report"
+)
+
+// creatorImportReceipt 同时承载两种 Creator 侧证明：
+// 真实 stage 时 Data 传入 Creator verified 候选查询回执（精确 tuple）；
+// dry-run 时只有 Creator 导入报告可用。
 type creatorImportReceipt struct {
-	Schema      string   `json:"schema"`
-	Status      string   `json:"status"`
-	ReleaseID   string   `json:"releaseId"`
-	SourceOwner string   `json:"sourceOwner"`
-	AuthorIDs   []string `json:"authorIds"`
+	Schema         string   `json:"schema"`
+	Status         string   `json:"status"`
+	Environment    string   `json:"environment"`
+	ReleaseID      string   `json:"releaseId"`
+	SourceOwner    string   `json:"sourceOwner"`
+	ManifestDigest string   `json:"manifestDigest"`
+	AuthorIDs      []string `json:"authorIds"`
+	Counts         *struct {
+		Expected  int `json:"expected"`
+		Projected int `json:"projected"`
+	} `json:"counts"`
 }
 
 type ReleaseMediaAsset = runtimemedia.ReleaseMediaAsset
@@ -420,7 +437,7 @@ func CreatorAuthorIDs(snapshots map[string]CreatorAuthorSnapshot) map[string]boo
 	return authors
 }
 
-func ValidateCreatorImportReceipt(path, releaseID string, expectedAuthors map[string]bool) error {
+func ValidateCreatorImportReceipt(path string, binding ReleaseBinding, environment string, dryRun bool, expectedAuthors map[string]bool) error {
 	raw, err := os.ReadFile(path)
 	if err != nil {
 		return fmt.Errorf("read creator import receipt: %w", err)
@@ -429,9 +446,31 @@ func ValidateCreatorImportReceipt(path, releaseID string, expectedAuthors map[st
 	if err := json.Unmarshal(raw, &receipt); err != nil {
 		return fmt.Errorf("decode creator import receipt: %w", err)
 	}
-	if receipt.Schema != "quwoquan.user_creator_import_report" ||
-		receipt.ReleaseID != releaseID || receipt.SourceOwner != "qwq_data" ||
-		(receipt.Status != "active" && receipt.Status != "dry-run") {
+	if receipt.ReleaseID != binding.ReleaseID || receipt.SourceOwner != binding.SourceOwner {
+		return fmt.Errorf("creator import receipt contract is invalid")
+	}
+	switch receipt.Schema {
+	case creatorCandidateReceiptSchema:
+		// 真实 stage 只认 Creator verified 候选对精确 tuple 的查询回执。
+		if receipt.Status != "found" {
+			return fmt.Errorf("creator release candidate is not found for %s", binding.ReleaseID)
+		}
+		if receipt.ManifestDigest != binding.ManifestDigest {
+			return fmt.Errorf("creator release candidate manifest digest drift for %s", binding.ReleaseID)
+		}
+		if strings.TrimSpace(environment) != "" && receipt.Environment != environment {
+			return fmt.Errorf("creator release candidate environment drift for %s", binding.ReleaseID)
+		}
+		if receipt.Counts == nil ||
+			receipt.Counts.Expected != receipt.Counts.Projected ||
+			receipt.Counts.Expected != len(expectedAuthors) {
+			return fmt.Errorf("creator release candidate closure is not complete for %s", binding.ReleaseID)
+		}
+	case creatorImportReportSchema:
+		if !dryRun || receipt.Status != "dry-run" {
+			return fmt.Errorf("creator import report is only acceptable as dry-run proof")
+		}
+	default:
 		return fmt.Errorf("creator import receipt contract is invalid")
 	}
 	actual := make(map[string]bool, len(receipt.AuthorIDs))
@@ -539,7 +578,7 @@ func LoadPosts(publishRoot string, filter map[string]bool, releaseClass string) 
 			if len(m.Assets) == 0 || len(m.Assets) > 20 {
 				return fmt.Errorf("%s: video manifest assets must contain 1..20 items", postRef)
 			}
-			if err := validateVideoAssets(m.Assets, postRef); err != nil {
+			if err := validateVideoAssets(m.Assets, postRef, releaseClass); err != nil {
 				return err
 			}
 		}

@@ -1,17 +1,29 @@
-# spec_ref: specs/feature-tree/runtime/runtime-config/environment-topology-and-packaging/spec.md#req-002
+# spec_ref: specs/feature-tree/runtime/runtime-config/environment-topology-and-packaging/spec.md#req-003
 #
-# 构建期默认供给（embedded_default_package / native_flutter_run）退役负例：
-# 无 canonical handoff 的构建不得物化任何默认 trust/package，raw SDK 绝对路径
-# 旁路在既有 trust gate 以 APP.LAUNCH.runtime_config_trust_missing fail-closed。
+# Debug-nonprod 构建期自供给（build_time_self_supply）契约：
+# - 无外部 canonical handoff 时，iOS Debug-nonprod / Android nonprod debug 构建阶段以当前
+#   源码树调用 canonical handoff builder 现场签发 alpha test_live package + nonprod trust，
+#   并以 runtime_config_activation_request 形态嵌入制品；原生 gate 在冷启动经同一
+#   CAS/receipt 路径激活。
+# - Profile/Release、prod 与非 alpha 环境不得物化或消费自供给；早前的双读旁路
+#   （embedded_default_package）与 workspace_flutter_run/native_flutter_run 不得恢复。
 
 from __future__ import annotations
 
+import json
+import os
+import subprocess
+import sys
+import tempfile
 import unittest
 from pathlib import Path
 
 APP_DIR = Path(__file__).resolve().parents[3]
+REPO_ROOT = APP_DIR.parent
 RETIRED_SCRIPT = APP_DIR / "scripts/device/build_default_debug_supply.py"
+SELF_SUPPLY_BUILDER = APP_DIR / "scripts/device/build_self_supply_request.py"
 ANDROID_TRUST_GATE = APP_DIR / "android/gradle/runtime-config-assets.gradle.kts"
+ANDROID_APP_GRADLE = APP_DIR / "android/app/build.gradle.kts"
 IOS_PREPARE_SCRIPT = APP_DIR / "scripts/ios/build_prepare_dart_defines.sh"
 IOS_EMBED_SCRIPT = APP_DIR / "scripts/ios/build_embed_runtime_config_trust.py"
 IOS_APP_DELEGATE = APP_DIR / "ios/Runner/AppDelegate.swift"
@@ -19,98 +31,246 @@ IOS_RUNTIME_CONFIG_SUPPLY = APP_DIR / "ios/Runner/NativeRuntimeConfigSupply.swif
 ANDROID_STARTUP_GATE = (
     APP_DIR / "android/app/src/main/java/com/quwoquan/quwoquan_app/StartupGateActivity.java"
 )
-ANDROID_SHARED_JAVA_ROOT = (
-    APP_DIR / "android/app/src/runtimeConfigShared/java/com/quwoquan/quwoquan_app"
+ANDROID_COORDINATOR = (
+    APP_DIR
+    / "android/app/src/runtimeConfigShared/java/com/quwoquan/quwoquan_app/RuntimeConfigActivationCoordinator.java"
 )
+LAUNCH_MANIFEST = REPO_ROOT / "quwoquan_service/contracts/metadata/_shared/app_launch_manifest.yaml"
+GENERATED_CONTRACT = (
+    APP_DIR / "tool/app_launch_contract_codegen/app_launch_contract.generated.json"
+)
+SELF_SUPPLY_MODE = "build_time_self_supply"
+SELF_SUPPLY_REQUEST_FILE_NAME = "runtime-config-self-supply-request.json"
 
 
-class DefaultDebugSupplyRetirementContractTest(unittest.TestCase):
-    """默认供给旁路必须物理退役，缺 canonical supply 一律 typed fail-closed。"""
+class BuildTimeSelfSupplyContractTest(unittest.TestCase):
+    """自供给是 Debug-nonprod 的唯一构建期供给；其他制品仍 fail-closed。"""
 
-    def test_shared_default_supply_script_is_deleted(self) -> None:
+    def test_supply_mode_is_in_the_canonical_closed_set(self) -> None:
+        contract = json.loads(GENERATED_CONTRACT.read_text(encoding="utf-8"))
+        modes = contract["runtimeConfigSupplyModes"]
+        self.assertEqual(modes[0], "external_runtime_package")
+        self.assertIn(SELF_SUPPLY_MODE, modes)
+        self.assertNotIn("embedded_default_package", modes)
+        self.assertIn(SELF_SUPPLY_MODE, LAUNCH_MANIFEST.read_text(encoding="utf-8"))
+        self.assertNotIn("workspace_flutter_run", contract["launchProvenances"])
+        self.assertNotIn("native_flutter_run", contract["launchProvenances"])
+
+    def test_retired_dual_read_bypass_stays_deleted(self) -> None:
         self.assertFalse(RETIRED_SCRIPT.exists())
-
-    def test_android_trust_gate_has_no_default_supply_branch(self) -> None:
-        source = ANDROID_TRUST_GATE.read_text(encoding="utf-8")
-        for retired in (
-            "materializeDefaultDebugSupply",
-            "validateDefaultSupplyMaterial",
-            "defaultDebugSupplyRoot",
-            "defaultSupplyMode",
-            "isDebugArtifactTask",
-            "build_default_debug_supply.py",
-            "runtime-config-default-package.json",
-            "runtime-config-default-manifest.json",
-        ):
-            self.assertNotIn(retired, source)
-        # 缺 handoff 即 fail-closed：asset root 缺席只剩 typed reject，
-        # trust gate 码与 canonical launcher 指引仍在。
-        self.assertIn("QWQ_ANDROID_RUNTIME_CONFIG_ASSET_ROOT is absent", source)
-        self.assertIn(".runtime_config_trust_missing", source)
-        self.assertIn("./quwoquan_app/run.sh -d <device>", source)
-
-    def test_android_native_gate_has_no_embedded_default_consumption(self) -> None:
-        sources = [ANDROID_STARTUP_GATE.read_text(encoding="utf-8")]
-        for java_file in sorted(ANDROID_SHARED_JAVA_ROOT.glob("*.java")):
-            sources.append(java_file.read_text(encoding="utf-8"))
-        combined = "\n".join(sources)
+        combined = "\n".join(
+            path.read_text(encoding="utf-8")
+            for path in (
+                IOS_APP_DELEGATE,
+                IOS_RUNTIME_CONFIG_SUPPLY,
+                ANDROID_STARTUP_GATE,
+                ANDROID_COORDINATOR,
+                ANDROID_TRUST_GATE,
+                IOS_EMBED_SCRIPT,
+                IOS_PREPARE_SCRIPT,
+            )
+        )
         for retired in (
             "consumeEmbeddedDefaultSupply",
             "EmbeddedDefaultSupplySource",
-            "DEFAULT_PACKAGE_ASSET_NAME",
-            "DEFAULT_MANIFEST_ASSET_NAME",
             "createEmbeddedDefaultSupplySource",
-            "android_runtime_config_embedded_default_activated",
-        ):
-            self.assertNotIn(retired, combined)
-
-    def test_ios_prepare_script_fails_closed_without_external_trust(self) -> None:
-        source = IOS_PREPARE_SCRIPT.read_text(encoding="utf-8")
-        for retired in (
+            "materializeDefaultDebugSupply",
             "build_default_debug_supply.py",
-            "RUNTIME_CONFIG_SUPPLY_KIND",
-            "DEFAULT_SUPPLY",
-            "runtime-config-default-package.json",
-            "runtime-config-default-manifest.json",
-        ):
-            self.assertNotIn(retired, source)
-        # trust 缺席对一切 configuration 都是同一 typed blocker。
-        self.assertIn("APP.LAUNCH.runtime_config_trust_missing", source)
-        self.assertIn(
-            "build-profile runtime trust envelope is required", source
-        )
-        self.assertIn("./quwoquan_app/run.sh -d <device>", source)
-
-    def test_ios_embed_script_only_embeds_trust_and_purges_retired_material(self) -> None:
-        source = IOS_EMBED_SCRIPT.read_text(encoding="utf-8")
-        # 退役说明性注释允许提及枚举名；这里只判否功能分支的结构性标识。
-        for retired in (
             "_verified_default_supply",
-            "--default-package",
-            "--default-manifest",
             "native_flutter_run",
-            "_DEFAULT_SUPPLY_BUILD_PROFILE",
-        ):
-            self.assertNotIn(retired, source)
-        # 增量构建残留的退役默认供给材料必须在装配期清除。
-        self.assertIn("_RETIRED_DEFAULT_PACKAGE_FILE_NAME", source)
-        self.assertIn("_RETIRED_DEFAULT_MANIFEST_FILE_NAME", source)
-        self.assertIn('_remove_if_present(resource_root / "runtime-config-package.json")', source)
-
-    def test_ios_native_gate_has_no_embedded_default_consumption(self) -> None:
-        combined = IOS_APP_DELEGATE.read_text(
-            encoding="utf-8"
-        ) + IOS_RUNTIME_CONFIG_SUPPLY.read_text(encoding="utf-8")
-        for retired in (
-            "consumeEmbeddedDefaultSupply",
-            "nativeRuntimeDefaultPackageFileName",
-            "nativeRuntimeDefaultManifestFileName",
-            "runtime-config-default-package.json",
-            "runtime-config-default-manifest.json",
-            "ios_runtime_config_embedded_default_activated",
-            "ios_embedded_default_skipped",
         ):
             self.assertNotIn(retired, combined)
+
+    def test_self_supply_builder_issues_an_embeddable_activation_request(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="qwq-self-supply-") as raw_root:
+            root = Path(raw_root)
+            trust_output = root / "runtime-config-trust.json"
+            request_output = root / SELF_SUPPLY_REQUEST_FILE_NAME
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(SELF_SUPPLY_BUILDER),
+                    "--trust-output",
+                    str(trust_output),
+                    "--request-output",
+                    str(request_output),
+                ],
+                cwd=REPO_ROOT,
+                env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1", "PYTHONPATH": str(REPO_ROOT)},
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            summary = json.loads(result.stdout)
+            self.assertEqual(summary["runtimeConfigSupplyMode"], SELF_SUPPLY_MODE)
+            self.assertEqual(summary["launchProvenance"], "workspace_ide_debug")
+            self.assertEqual(summary["environment"], "alpha")
+            self.assertEqual(summary["buildProfile"], "nonprod")
+            request = json.loads(request_output.read_text(encoding="utf-8"))
+            trust = json.loads(trust_output.read_text(encoding="utf-8"))
+            self.assertEqual(request["expectedActiveDigest"], "")
+            self.assertEqual(request["buildProfile"], "nonprod")
+            self.assertEqual(request["target"], "alpha-local")
+            manifest = request["effectiveLaunchManifest"]
+            self.assertEqual(manifest["runtimeConfigSupplyMode"], SELF_SUPPLY_MODE)
+            self.assertEqual(manifest["launchProvenance"], "workspace_ide_debug")
+            self.assertEqual(manifest["launchPolicy"], "test_live")
+            self.assertEqual(request["packageDigest"], summary["packageDigest"])
+            self.assertEqual(trust["buildProfile"], "nonprod")
+            self.assertEqual(
+                request["package"]["trustedPublicKeys"], trust["trustedPublicKeys"]
+            )
+            # 嵌入脚本接受该请求并把 trust + 请求一起放进 qwq_runtime/，同时清除残留 package。
+            resources = root / "resources"
+            runtime_dir = resources / "Runner.app" / "qwq_runtime"
+            runtime_dir.mkdir(parents=True)
+            (runtime_dir / "runtime-config-package.json").write_text("{}", encoding="utf-8")
+            embed = subprocess.run(
+                [
+                    sys.executable,
+                    str(IOS_EMBED_SCRIPT),
+                    str(trust_output),
+                    "nonprod",
+                    str(resources),
+                    "Runner.app",
+                    "--self-supply-request",
+                    str(request_output),
+                ],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            self.assertEqual(embed.returncode, 0, embed.stderr)
+            self.assertEqual(
+                sorted(path.name for path in runtime_dir.iterdir()),
+                sorted(["runtime-config-trust.json", SELF_SUPPLY_REQUEST_FILE_NAME]),
+            )
+            # Release/prod profile 不得接受自供给请求。
+            rejected = subprocess.run(
+                [
+                    sys.executable,
+                    str(IOS_EMBED_SCRIPT),
+                    str(trust_output),
+                    "prod",
+                    str(resources),
+                    "Runner.app",
+                    "--self-supply-request",
+                    str(request_output),
+                ],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            self.assertNotEqual(rejected.returncode, 0)
+            self.assertIn("conflicts", rejected.stderr + rejected.stdout)
+            # 用 nonprod trust 冒充 Release 也不行：请求校验单独拒绝非 nonprod profile。
+            forged_release = subprocess.run(
+                [
+                    sys.executable,
+                    "-c",
+                    "import sys; sys.argv=['embed']; "
+                    "import importlib.util; spec=importlib.util.spec_from_file_location('embed', sys.argv0 if False else %r); "
+                    "m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m); "
+                    "m._verified_self_supply_request(__import__('pathlib').Path(%r), 'prod')"
+                    % (str(IOS_EMBED_SCRIPT), str(request_output)),
+                ],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            self.assertNotEqual(forged_release.returncode, 0)
+            self.assertIn("nonprod", forged_release.stderr)
+
+    def test_self_supply_builder_rejects_outputs_inside_the_source_tree(self) -> None:
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(SELF_SUPPLY_BUILDER),
+                "--trust-output",
+                str(APP_DIR / "build" / "runtime-config-trust.json"),
+                "--request-output",
+                str(APP_DIR / "build" / SELF_SUPPLY_REQUEST_FILE_NAME),
+            ],
+            cwd=REPO_ROOT,
+            env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"},
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("outside the source tree", result.stderr)
+
+    def test_ios_prepare_script_self_supplies_only_debug_nonprod(self) -> None:
+        source = IOS_PREPARE_SCRIPT.read_text(encoding="utf-8")
+        self.assertIn('"${CONFIGURATION:-}" == "Debug-nonprod"', source)
+        self.assertIn("build_self_supply_request.py", source)
+        self.assertIn("--self-supply-request", source)
+        # 自供给材料落在源码树外的私有临时目录并在脚本退出时清除。
+        self.assertIn('mktemp -d "${TMPDIR:-/tmp}/qwq-ios-self-supply', source)
+        self.assertIn("trap cleanup_self_supply EXIT", source)
+        # 自供给分支之后，trust 缺席对其余 configuration 仍是同一 typed blocker。
+        self.assertIn("APP.LAUNCH.runtime_config_trust_missing", source)
+        self.assertIn("build-profile runtime trust envelope is required", source)
+        self.assertLess(
+            source.index('"${CONFIGURATION:-}" == "Debug-nonprod"'),
+            source.index("build-profile runtime trust envelope is required"),
+        )
+        # raw flutter run 不带 --target 时 Xcode 收到 lib/main.dart：接受该纯委托别名并归一。
+        self.assertIn('(app_dir / "lib/main.dart").resolve()', source)
+        self.assertIn('print("export FLUTTER_TARGET=" + shlex.quote("lib/main_prod.dart"))', source)
+
+    def test_ios_native_gate_consumes_self_supply_only_in_debug(self) -> None:
+        delegate = IOS_APP_DELEGATE.read_text(encoding="utf-8")
+        supply = IOS_RUNTIME_CONFIG_SUPPLY.read_text(encoding="utf-8")
+        self.assertIn("consumeBundledSelfSupplyRequest", supply)
+        self.assertIn(f'"{SELF_SUPPLY_REQUEST_FILE_NAME}"', supply)
+        self.assertIn(f'"{SELF_SUPPLY_MODE}"', supply)
+        # 外部 canonical 供给已激活且新鲜时保持不变；重建后 requestDigest 变化才刷新。
+        self.assertIn("ios_runtime_config_self_supply_skipped reason=external_active", supply)
+        self.assertIn("activeReceipt?[\"requestDigest\"] as? String == requestDigest", supply)
+        # 消费只编入 DEBUG，且位于外部 activation 之后、fatal gate 之前。
+        debug_block = delegate[
+            delegate.index("#if DEBUG\n      // Debug-nonprod 构建期自供给") : delegate.index(
+                "confirmedPreviousBuildFatal = NativeCrashMarkerStore.shouldRecoverCurrentBuild()"
+            )
+        ]
+        self.assertIn("consumeBundledSelfSupplyRequest()", debug_block)
+        self.assertIn("#endif", debug_block)
+        self.assertLess(
+            delegate.index("let activation = consumePendingActivationRequest()"),
+            delegate.index("consumeBundledSelfSupplyRequest()"),
+        )
+
+    def test_android_gradle_self_supplies_only_nonprod_debug(self) -> None:
+        gate = ANDROID_TRUST_GATE.read_text(encoding="utf-8")
+        self.assertIn("build_self_supply_request.py", gate)
+        self.assertIn('val SELF_SUPPLY_VARIANT_TOKEN = "nonproddebug"', gate)
+        self.assertIn("artifactSelectors.all { it.lowercase().contains(SELF_SUPPLY_VARIANT_TOKEN) }", gate)
+        self.assertIn("must stay outside the source tree", gate)
+        self.assertIn("root.deleteRecursively()", gate)
+        # 自供给也必须过同一 validateRuntimeConfigTrust；外部注入路径仍要求 QWQ_APP_BUILD_PROFILE。
+        self.assertIn("validateRuntimeConfigTrust(contract, selfSupplyAssetRoot.path, selfSupply = true)", gate)
+        self.assertIn("validateRuntimeConfigTrust(contract, configuredAssetRoot)", gate)
+        self.assertIn("QWQ_ANDROID_RUNTIME_CONFIG_ASSET_ROOT is absent", gate)
+        self.assertIn(".runtime_config_trust_missing", gate)
+        app_gradle = ANDROID_APP_GRADLE.read_text(encoding="utf-8")
+        self.assertIn('if (androidRuntimeConfigSelfSupply) "debug" else "main"', app_gradle)
+
+    def test_android_native_gate_consumes_self_supply_only_in_debug(self) -> None:
+        startup = ANDROID_STARTUP_GATE.read_text(encoding="utf-8")
+        coordinator = ANDROID_COORDINATOR.read_text(encoding="utf-8")
+        self.assertIn("if (BuildConfig.DEBUG) {", startup)
+        self.assertIn("consumeBundledSelfSupplyRequest();", startup)
+        self.assertIn(
+            f'"qwq_runtime/{SELF_SUPPLY_REQUEST_FILE_NAME}"', coordinator
+        )
+        self.assertIn(f'SELF_SUPPLY_MODE = "{SELF_SUPPLY_MODE}"', coordinator)
+        self.assertIn("return ConsumeResult.notRequested();", coordinator)
+        self.assertLess(
+            startup.index("runtimeConfigActivationCoordinator.consumePendingRequest(getIntent(), isTaskRoot())"),
+            startup.index("consumeBundledSelfSupplyRequest();"),
+        )
 
 
 if __name__ == "__main__":

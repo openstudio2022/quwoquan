@@ -54,7 +54,8 @@ def _import_report(
             {
                 "schema": "quwoquan.content_import_report",
                 "environment": environment,
-                "status": "imported",
+                "status": "staged",
+                "activationMode": "stage-only",
                 "releaseId": release_id,
                 "manifestDigest": manifest_digest,
                 "postBindings": [
@@ -211,7 +212,7 @@ class PremiumPoolBootstrapBindingLocalContractTest(unittest.TestCase):
             report = _import_report(root, environment="beta")
             with self.assertRaisesRegex(
                 premium_pool_release.PremiumPoolReleaseError,
-                "canonical content import report",
+                "canonical stage-only content import report",
             ):
                 self._load(report, root)
 
@@ -243,9 +244,31 @@ class PremiumPoolBootstrapBindingLocalContractTest(unittest.TestCase):
             report.write_text(json.dumps(payload), encoding="utf-8")
             with self.assertRaisesRegex(
                 premium_pool_release.PremiumPoolReleaseError,
-                "canonical content import report",
+                "canonical stage-only content import report",
             ):
                 self._load(report, root)
+
+    def test_a_legacy_imported_status_is_not_activation_evidence(self) -> None:
+        """四域 apply 只产出 stage-only `staged` 报告；旧 `imported` 或非 stage-only
+        报告不再是首次激活的输入。
+
+        spec_ref: environment-topology-and-packaging GWT-004
+        """
+        for overrides in (
+            {"status": "imported"},
+            {"activationMode": "activate"},
+        ):
+            with tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                report = _import_report(root)
+                payload = json.loads(report.read_text(encoding="utf-8"))
+                payload.update(overrides)
+                report.write_text(json.dumps(payload), encoding="utf-8")
+                with self.assertRaisesRegex(
+                    premium_pool_release.PremiumPoolReleaseError,
+                    "canonical stage-only content import report",
+                ):
+                    self._load(report, root)
 
     def test_the_receipt_records_import_evidence_not_a_readiness_receipt(self) -> None:
         """收据必须如实记录这是导入证据绑定，且不谎称存在 verify 运行。

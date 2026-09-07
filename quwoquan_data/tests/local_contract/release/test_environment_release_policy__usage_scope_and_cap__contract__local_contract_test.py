@@ -53,12 +53,12 @@ def _release(
 
 
 @pytest.mark.parametrize("environment", ["alpha", "beta", "gamma"])
-def test_research_environments_accept_research_release(
+def test_environments_accept_production_release(
     tmp_path: Path,
     environment: str,
 ) -> None:
     assert_environment_release_policy(
-        release=_release(tmp_path, "research"),
+        release=_release(tmp_path, "production"),
         contract={"desiredRefs": {"posts": ["article/a"]}},
         environment=environment,
     )
@@ -73,7 +73,7 @@ def test_a_release_declaring_half_its_authorization_is_refused(tmp_path: Path) -
     commercially" exists and the environment name would have to invent one.
     """
 
-    release = _release(tmp_path, "research", lifecycle="commercial")
+    release = _release(tmp_path, "production", lifecycle="research")
     with pytest.raises(SystemExit, match="DATA.RELEASE.USAGE_SCOPE_MISMATCH"):
         assert_environment_release_policy(
             release=release,
@@ -83,7 +83,7 @@ def test_a_release_declaring_half_its_authorization_is_refused(tmp_path: Path) -
 
 
 def test_a_release_without_a_lifecycle_cannot_borrow_one(tmp_path: Path) -> None:
-    release = _release(tmp_path, "research", lifecycle="")
+    release = _release(tmp_path, "production", lifecycle="")
     with pytest.raises(SystemExit, match="DATA.RELEASE.USAGE_SCOPE_MISMATCH"):
         assert_environment_release_policy(
             release=release,
@@ -92,9 +92,9 @@ def test_a_release_without_a_lifecycle_cannot_borrow_one(tmp_path: Path) -> None
         )
 
 
-def test_prod_accepts_environment_neutral_research_milestone(tmp_path: Path) -> None:
+def test_prod_accepts_environment_neutral_production_milestone(tmp_path: Path) -> None:
     assert_environment_release_policy(
-        release=_release(tmp_path, "research", milestone="M1000"),
+        release=_release(tmp_path, "production", milestone="M1000"),
         contract={"desiredRefs": {"posts": ["article/a"]}},
         environment="prod",
     )
@@ -103,7 +103,7 @@ def test_prod_accepts_environment_neutral_research_milestone(tmp_path: Path) -> 
 def test_environment_specific_manifest_cannot_activate_elsewhere(tmp_path: Path) -> None:
     release = _release(
         tmp_path,
-        "research",
+        "production",
         target_environment="alpha",
     )
     with pytest.raises(
@@ -118,7 +118,7 @@ def test_environment_specific_manifest_cannot_activate_elsewhere(tmp_path: Path)
 
 
 def test_alpha_cap_counts_only_data_posts(tmp_path: Path) -> None:
-    release = _release(tmp_path, "research")
+    release = _release(tmp_path, "production")
     with pytest.raises(SystemExit, match="DATA.RELEASE.POST_CAP_EXCEEDED"):
         assert_environment_release_policy(
             release=release,
@@ -136,7 +136,7 @@ def test_alpha_cap_counts_only_data_posts(tmp_path: Path) -> None:
 
 def test_prod_has_no_data_post_cap(tmp_path: Path) -> None:
     assert_environment_release_policy(
-        release=_release(tmp_path, "commercial"),
+        release=_release(tmp_path, "production"),
         contract={
             "desiredRefs": {
                 "posts": [f"article/{index}" for index in range(100_001)]

@@ -12,7 +12,8 @@ from typing import Any
 import yaml
 
 from core.asset_identity import parse_post_asset_id
-from core.content_library import MediaHoldingError, resolve_media_holding
+from core.content_library import MediaHoldingError, reference_existing_file, resolve_media_holding
+from governance.coverage.distribution import RELEASE_CLASSES
 from core.paths import PUBLISH_ROOT, RELEASE_ROOT, REPO_ROOT
 from core.release_layout import payload_file
 from core.schema import assert_valid
@@ -22,6 +23,7 @@ _CAS_RE = re.compile(
 )
 _SHA256_RE = re.compile(r"^sha256:([0-9a-f]{64})$")
 _PUBLIC_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
+_UNIT_ROLE_ASSET_ID_RE = re.compile(r"^([A-Za-z0-9][A-Za-z0-9._-]*):([a-z]+)$")
 _CANONICAL_DECIMAL_RE = re.compile(r"^(?:0|[1-9][0-9]*)$")
 _PUBLIC_SLICE_RE = re.compile(
     r"^media/(avatar|image|video)/s/asset/[A-Za-z0-9][A-Za-z0-9._-]*/"
@@ -53,6 +55,16 @@ _SUFFIX_BY_CONTENT_TYPE = {
     "video/mp4": ".mp4",
     "video/webm": ".webm",
 }
+SUFFIX_BY_CONTENT_TYPE = _SUFFIX_BY_CONTENT_TYPE
+
+
+def content_addressed_media_object_key(sha256: str, *, suffix: str) -> str:
+    """CAS objectKey 是 sha256 与文件后缀的确定函数：`media/objects/sha256/aa/bb/<hex><suffix>`。"""
+    digest = str(sha256).removeprefix("sha256:")
+    normalized_suffix = str(suffix or "").lower()
+    if normalized_suffix and not normalized_suffix.startswith("."):
+        normalized_suffix = "." + normalized_suffix
+    return f"media/objects/sha256/{digest[:2]}/{digest[2:4]}/{digest}{normalized_suffix or '.bin'}"
 _IMAGE_VARIANT_POLICY = (
     REPO_ROOT
     / "quwoquan_service"
@@ -155,6 +167,13 @@ def _public_asset_segment(asset_id: str) -> str:
         return ""
     if _PUBLIC_ID_RE.fullmatch(value):
         return value
+    # 六步 producer 的视频资产 ID 形如 `<sourceUnit>:video` / `<sourceUnit>:poster`：
+    # 冒号不能进 URL 路径，取角色做可读前缀并对整个 ID 取摘要（与 Go
+    # cleanContentAssetIdentity 同一派生规则）。
+    unit_role = _UNIT_ROLE_ASSET_ID_RE.fullmatch(value)
+    if unit_role is not None:
+        digest = hashlib.sha256(value.encode("utf-8")).hexdigest()
+        return f"{unit_role.group(2)}-{digest[:32]}"
     # Data post asset IDs carry Chinese display text that cannot enter a URL
     # path. The role and execution sequence are ASCII already, so the derived
     # segment keeps them readable and only hashes the parts that are not.
@@ -318,21 +337,19 @@ def build_release_media_manifest(
     publish_root: Path | None = None,
     object_root: Path | None = None,
     source_owner: str = "qwq_data",
-    release_class: str = "commercial",
+    release_class: str = "production",
 ) -> dict[str, Any]:
     """Build the MediaAsset closure for one immutable release.
 
     A release is an object closure, not a snapshot of the whole canonical media
     library. Canonical objects name their bodies by digest and the content
-    library owns those bodies, so packaging resolves them there. Delivery form
-    follows the release class (DEC-031): commercial assets derive an anonymous
-    ``publicSliceKey`` while research assets keep the CAS ``privateObjectKey``
-    that the delivery signer already accepts, so research media never gains an
-    anonymous delivery identity.
+    library owns those bodies, so packaging resolves them there. The single
+    ``production`` release class delivers every asset through an anonymous
+    ``publicSliceKey`` (DEC-041); public visibility of rights-flagged content is
+    an operations runtime decision downstream, not a delivery-form fork here.
     """
-    if release_class not in {"research", "commercial"}:
+    if release_class not in RELEASE_CLASSES:
         raise ValueError(f"invalid release class: {release_class!r}")
-    private_delivery = release_class == "research"
     canonical = publish_root or PUBLISH_ROOT
     objects = object_root or canonical
     assets: dict[str, dict[str, Any]] = {}
@@ -389,22 +406,18 @@ def build_release_media_manifest(
                     metadata=metadata,
                 )
                 content_type = _asset_content_type(object_key, metadata)
-                if private_delivery:
-                    delivery_field = "privateObjectKey"
-                    delivery_key = object_key
-                else:
-                    delivery_field = "publicSliceKey"
-                    delivery_key = build_public_media_slice_key(
-                        asset_id=asset_id,
-                        kind=asset_kind,
-                        version=1,
-                        content_type=content_type,
+                delivery_field = "publicSliceKey"
+                delivery_key = build_public_media_slice_key(
+                    asset_id=asset_id,
+                    kind=asset_kind,
+                    version=1,
+                    content_type=content_type,
+                )
+                if not delivery_key:
+                    issues.append(
+                        f"public slice unresolved: {kind}/{ref}:{asset_id}"
                     )
-                    if not delivery_key:
-                        issues.append(
-                            f"public slice unresolved: {kind}/{ref}:{asset_id}"
-                        )
-                        continue
+                    continue
                 owner_ref = f"{kind}/{ref.removeprefix(f'{kind}/')}"
                 rights_refs, rights_issues = _rights_snapshot_refs(
                     object_kind=kind,
@@ -443,17 +456,15 @@ def build_release_media_manifest(
                         {*old["rightsSnapshotRefs"], *rights_refs}
                     )
                     continue
-                # CAS keys are content-addressed, so distinct assets may share
-                # one private body; only derived public slices must be unique.
-                if not private_delivery:
-                    other_asset_id = slice_owners.get(delivery_key)
-                    if other_asset_id is not None and other_asset_id != asset_id:
-                        issues.append(
-                            f"public slice collision: {delivery_key}:"
-                            f"{other_asset_id},{asset_id}"
-                        )
-                        continue
-                    slice_owners[delivery_key] = asset_id
+                # 派生的公开 slice 必须独占一个 assetId。
+                other_asset_id = slice_owners.get(delivery_key)
+                if other_asset_id is not None and other_asset_id != asset_id:
+                    issues.append(
+                        f"public slice collision: {delivery_key}:"
+                        f"{other_asset_id},{asset_id}"
+                    )
+                    continue
+                slice_owners[delivery_key] = asset_id
                 assets[asset_id] = normalized
     manifest = {
         "schema": "quwoquan_data.release_media_manifest",
@@ -475,28 +486,20 @@ def build_release_media_manifest(
 def release_media_delivery_key(row: Mapping[str, Any]) -> str:
     """Return the validated delivery key of one release media manifest row.
 
-    Every asset carries exactly one delivery identity (DEC-031): a derived
-    ``publicSliceKey`` for commercial delivery or the CAS ``privateObjectKey``
-    for research delivery.
+    Every production asset carries exactly one delivery identity (DEC-041): a
+    derived anonymous ``publicSliceKey``. Private CAS delivery is retired.
     """
+    if row.get("privateObjectKey"):
+        raise ValueError(
+            "release media asset declares retired private delivery: "
+            f"{row.get('privateObjectKey')}"
+        )
     public_slice_key = str(row.get("publicSliceKey") or "")
-    private_object_key = str(row.get("privateObjectKey") or "")
-    if public_slice_key and private_object_key:
+    if not is_public_media_slice_key(public_slice_key):
         raise ValueError(
-            "release media asset declares both public and private delivery: "
-            f"{public_slice_key} / {private_object_key}"
+            f"invalid release media publicSliceKey: {public_slice_key}"
         )
-    if public_slice_key:
-        if not is_public_media_slice_key(public_slice_key):
-            raise ValueError(
-                f"invalid release media publicSliceKey: {public_slice_key}"
-            )
-        return public_slice_key
-    if not is_cas_media_object_key(private_object_key):
-        raise ValueError(
-            f"invalid release media privateObjectKey: {private_object_key}"
-        )
-    return private_object_key
+    return public_slice_key
 
 
 def copy_release_media_objects(
@@ -526,9 +529,11 @@ def copy_release_media_objects(
             if sha256_file(target) != expected:
                 raise FileExistsError(f"immutable release media conflict: {target}")
             continue
+        # release payload 只是 library 字节的 distribution materialization：同卷时硬链接，
+        # 不再让 23 个 release 各持一份拷贝；EXDEV 才退回拷贝，字节与摘要仍逐位一致。
         target.parent.mkdir(parents=True, exist_ok=True)
         temporary = target.with_name(target.name + ".copy-tmp")
-        shutil.copy2(source, temporary)
+        reference_existing_file(source, temporary)
         if sha256_file(temporary) != expected:
             temporary.unlink(missing_ok=True)
             raise ValueError(
@@ -546,7 +551,7 @@ def materialize_release_media(
     publish_root: Path | None = None,
     release_root: Path | None = None,
     source_owner: str = "qwq_data",
-    release_class: str = "commercial",
+    release_class: str = "production",
 ) -> dict[str, Any]:
     """Freeze the exact canonical CAS closure into one release payload."""
     release = (release_root or RELEASE_ROOT) / release_id

@@ -21,13 +21,15 @@ import (
 // MemoryHomepageStore 是 alpha/local_contract 显式注入的适配器；production
 // composition 不得引用它。
 type MemoryHomepageStore struct {
-	mu          sync.RWMutex
-	homepages   map[string]homepagemodel.Snapshot
-	details     map[string]homepageports.DetailProjection
-	receipts    map[string]memoryReceipt
-	outbox      map[string]homepageports.OutboxEvent
-	followers   map[string]map[string]memoryFollower
-	checkpoints map[string]string
+	mu                 sync.RWMutex
+	homepages          map[string]homepagemodel.Snapshot
+	details            map[string]homepageports.DetailProjection
+	receipts           map[string]memoryReceipt
+	outbox             map[string]homepageports.OutboxEvent
+	followers          map[string]map[string]memoryFollower
+	checkpoints        map[string]string
+	releaseCandidates  map[string]homepageports.ReleaseCandidateState
+	releaseProjections map[string]map[string]homepageports.ReleaseProjection
 }
 
 type memoryReceipt struct {
@@ -47,12 +49,14 @@ type memoryFollower struct {
 
 func NewMemoryHomepageStore(seeds ...homepagemodel.Snapshot) (*MemoryHomepageStore, error) {
 	store := &MemoryHomepageStore{
-		homepages:   map[string]homepagemodel.Snapshot{},
-		details:     map[string]homepageports.DetailProjection{},
-		receipts:    map[string]memoryReceipt{},
-		outbox:      map[string]homepageports.OutboxEvent{},
-		followers:   map[string]map[string]memoryFollower{},
-		checkpoints: map[string]string{},
+		homepages:          map[string]homepagemodel.Snapshot{},
+		details:            map[string]homepageports.DetailProjection{},
+		receipts:           map[string]memoryReceipt{},
+		outbox:             map[string]homepageports.OutboxEvent{},
+		followers:          map[string]map[string]memoryFollower{},
+		checkpoints:        map[string]string{},
+		releaseCandidates:  map[string]homepageports.ReleaseCandidateState{},
+		releaseProjections: map[string]map[string]homepageports.ReleaseProjection{},
 	}
 	for _, seed := range seeds {
 		aggregate, err := homepagemodel.Restore(seed)

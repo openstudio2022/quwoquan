@@ -188,7 +188,7 @@ def test_data_release_readiness_is_local_and_promotion_does_not_repeat_data_gate
     plan = build_impact_plan(
         [
             "quwoquan_data/tests/local_contract/execution/"
-            "test_execution_kernel__minimal__contract__local_contract_test.py"
+            "test_six_step_seal__kernel__contract__local_contract_test.py"
         ],
         level="release",
     )

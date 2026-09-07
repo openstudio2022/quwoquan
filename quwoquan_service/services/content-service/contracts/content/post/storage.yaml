@@ -101,17 +101,6 @@ collections:
         _id: 1
         version: 1
       unique: true
-  posts_candidate:
-    publication_role: not_published
-    entity: Post
-    role: projection
-    description: 受保护的 Content Data release 候选集合；文档与 posts 同形但 lifecycleStatus=candidate，按 environment + sourceOwner + releaseId + manifestDigest + targetPostId 唯一。仅 release importer 的 stage/verify/activate 入口可访问，不属于线上读面。
-    indexes:
-    - name: uq_posts_candidate_release_post
-      keys: {environment: 1, sourceOwner: 1, releaseId: 1, manifestDigest: 1, targetPostId: 1}
-      unique: true
-    - name: idx_posts_candidate_readback
-      keys: {environment: 1, sourceOwner: 1, releaseId: 1, manifestDigest: 1, candidateRevision: 1}
   post_command_receipts:
     publication_role: not_published
     entity: Post
@@ -162,37 +151,68 @@ collections:
       keys:
         _id: 1
       unique: true
+  data_release_sequences:
+    publication_role: publication_accessory
+    entity: Post
+    role: authoritative
+    description: Content release stage 与 Activate transaction 共享的全局单调 projection version 分配器；仅通过 data_release_sequences/content-release-projection 的事务 $inc 推进，避免并发 stage 或 rollback transition 的 aggregateVersion 冲突。
   data_release_state:
     publication_role: not_published
     entity: Post
     role: authoritative
-    description: canonical immutable content release 的唯一 active pointer；每个 environment + sourceOwner 恰一权威行且必须持有正 revision。只能按 prepared -> imported -> projected -> verified -> active 单调推进；激活在同一 Mongo transaction 内以 expectedRevision 执行 version CAS，首次 revision=0 只允许唯一 winner，相同 releaseId + manifestDigest 重放幂等，stale release 不得覆盖 winner。active pointer 仅在 verified 后切换；任何阶段失败都保留 previous active，不得把导入成功伪装成激活成功。既存重复或缺 revision 数据必须由受控迁移先行治理，索引建立与读取均 fail closed，禁止静默去重或兼容读取。
+    description: canonical immutable content release 的 Content owner-local 控制面。全流程为 prepared -> imported -> projected -> verified -> active，但 kind=candidate 的 status 只允许到 verified；kind=active_pointer 是每个 environment/sourceOwner 唯一 active binding，并由 application/public.ActiveReleaseFenceQueryPort 以 environment + sourceOwner exact key 提供跨服务 typed 只读 seam（transport adapter 可复用，禁止共享 Mongo）；既有 cmd/import --read-active-report 继续作为运维报告 adapter。Activate 在同一 Mongo transaction 中先把 verified candidate 原子物化到 posts/content_outbox/media_assets、对缺失旧 Post 做 tombstone，再以 revision 和 expected-current tuple CAS pointer；任一步失败全部回滚。旧单文档 active shape 必须 fail closed，禁止 dual-read；candidate stage 或失败不得改变 previous active。
     indexes:
-    - name: uq_data_release_state_environment_source_owner
-      keys: {environment: 1, sourceOwner: 1}
+    - name: uq_data_release_state_environment_candidate
+      keys: {environment: 1, sourceOwner: 1, kind: 1, releaseId: 1, manifestDigest: 1}
       unique: true
-    - name: idx_data_release_state_active_pointer
-      keys: {environment: 1, sourceOwner: 1, status: 1, activatedAt: -1}
-  data_release_state_migration_receipts:
-    publication_role: not_published
-    entity: Post
-    role: append_only
-    description: 受控一次性 active pointer revision/sourceVersion backfill 的 create-once 回执；按 migration + environment + sourceOwner 唯一，且与 pointer 更新同事务提交。
-    indexes:
-    - name: idx_data_release_state_migration_receipt_id
-      keys: {_id: 1}
+      partial_filter:
+        kind: candidate
+    - name: uq_data_release_state_active_pointer
+      keys: {environment: 1, sourceOwner: 1, kind: 1}
       unique: true
+      partial_filter:
+        kind: active_pointer
   data_release_stage_receipts:
     publication_role: not_published
     entity: Post
     role: append_only
-    description: 每次 prepared/imported/projected/verified/active 尝试的脱敏持久化回执；保留 duration、attempted/success count、checkpoint 与 first typed blocker。失败回执不可覆盖成功阶段，且不得推进 active pointer。
+    description: 每次 prepared/imported/projected/verified/active 尝试的脱敏持久化回执；保留 duration、attempted/success count、checkpoint 与 first typed blocker。失败回执不可覆盖成功阶段，且不得推进 active pointer；same candidate exact active replay 不追加重复 active 事实。
     indexes:
     - name: uq_data_release_stage_receipt_attempt
-      keys: {environment: 1, releaseId: 1, manifestDigest: 1, stage: 1, attemptId: 1}
+      keys: {environment: 1, sourceOwner: 1, releaseId: 1, manifestDigest: 1, stage: 1, attemptId: 1}
       unique: true
     - name: idx_data_release_stage_receipt_timeline
-      keys: {environment: 1, releaseId: 1, recordedAt: 1}
+      keys: {environment: 1, sourceOwner: 1, releaseId: 1, recordedAt: 1}
+  data_release_candidate_posts:
+    publication_role: not_published
+    entity: Post
+    role: projection
+    description: 按 environment/sourceOwner/releaseId/manifestDigest create-once 隔离并永久保留的 verified candidate Post 闭包；每项保存 canonical live Post 全字段与 documentDigest，verified replay 只逐项 readback 校验不得写。Activate/rollback 仅可 owner-bound ReplaceOne 已有 Data-owned Post；sync+tombstone 才对 target closure 缺失的旧 active Post 做 tombstone。
+    indexes:
+    - name: uq_data_release_candidate_post
+      keys: {environment: 1, sourceOwner: 1, releaseId: 1, manifestDigest: 1, postId: 1}
+      unique: true
+    - name: idx_data_release_candidate_post_ref
+      keys: {environment: 1, sourceOwner: 1, releaseId: 1, manifestDigest: 1, postRef: 1}
+      unique: true
+  data_release_candidate_outbox:
+    publication_role: not_published
+    entity: Post
+    role: append_only
+    description: candidate-scoped Post identity facts；只冻结 target Post identity、candidate binding 与 document digest，不冻结最终 live eventId/aggregateVersion。每次 Activate/rollback 以 data_release_sequences 分配的新 activation version 和 pointer revision 生成一组 PostPublished/PostDeleted transition，再经 content_outbox_sequences 分配全序并追加至 live content_outbox；每个 activation lifecycle/outbox envelope 与 payload 均携带 sourceOwner、releaseId、manifestDigest、activationRevision，Search/Recommendation 可按 revision 追平。
+    indexes:
+    - name: uq_data_release_candidate_outbox_event
+      keys: {environment: 1, sourceOwner: 1, releaseId: 1, manifestDigest: 1, postId: 1}
+      unique: true
+  data_release_candidate_media_assets:
+    publication_role: not_published
+    entity: MediaAsset
+    role: projection
+    description: candidate-scoped importer-owned MediaAsset projection，create-once 保存 documentDigest。Stage 不写 live media_assets；Activate/rollback 先校验 assetId/sourceSessionId/ownerId/sha256，再以 owner-bound $set 更新 importer-owned 字段，保留 live rich descriptors；任一冲突回滚全部 live 写与 pointer。
+    indexes:
+    - name: uq_data_release_candidate_media_asset
+      keys: {environment: 1, sourceOwner: 1, releaseId: 1, manifestDigest: 1, assetId: 1}
+      unique: true
   rm_search_intent:
     publication_role: not_published
     entity: SearchIntentProjection
@@ -256,23 +276,6 @@ streams:
     idempotency_key: sourceStreamId
     retention_seconds: 604800
     description: Content Persona 访问控制投影无法解码或应用 User typed relationship event 时的脱敏失败记录。
-transaction:
-  scope:
-  - posts_candidate
-  - posts
-  - content_outbox
-  - content_outbox_sequences
-  - data_release_state
-  - data_release_state_migration_receipts
-  - data_release_stage_receipts
-  isolation: mongo_transaction
-  guarantees:
-  - verified_candidate_posts_outbox_active_pointer_atomic_commit
-  - active_pointer_environment_source_owner_unique_winner
-  - active_pointer_revision_cas
-  - same_release_digest_idempotent_replay
-  - stale_release_conflict_fail_closed
-  mechanism: version_cas
 redis_cache:
 - key: cache:post:{postId}
   ttl_seconds: 300

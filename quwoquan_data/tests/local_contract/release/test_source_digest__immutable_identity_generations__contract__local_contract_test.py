@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import shutil
+import subprocess
 import sys
 from pathlib import Path
 
@@ -51,3 +53,51 @@ def test_runtime_output_is_never_an_accepted_input_closure() -> None:
 
     with pytest.raises(SourceDigestError):
         parse_immutable_source_digest_document(document)
+
+
+def test_source_definition_inputs_are_producer_owned_and_exact() -> None:
+    """source-definition 输入只包含 producer 拥有的契约根，不含任何 consumer/environment 路径。"""
+
+    inputs = SourceDefinitionSnapshot(CURRENT_DIGEST).to_document()["inputs"]
+    repo_root = DATA_SCRIPTS.parents[1]
+
+    assert inputs == sorted(set(inputs)) or len(inputs) == len(set(inputs))
+    assert all((repo_root / item).exists() for item in inputs)
+    assert ".agents/skills/content-production" in inputs
+    assert "quwoquan_data/prompts" in inputs
+    assert "quwoquan_data/schema/execution" in inputs
+    for forbidden in ("quwoquan_data/scripts", "quwoquan_data/scripts/core", "quwoquan_data/scripts/verify", ".qwq_output"):
+        assert forbidden not in inputs
+    assert not any("recommendation-service" in item for item in inputs)
+    assert not any(item.endswith("/ui_config.yaml") for item in inputs)
+    assert not any("release_uat" in item or "/release/environment" in item for item in inputs)
+    assert not any("import_report" in item or "readback" in item for item in inputs)
+
+
+def _materialize_source_definition_inputs(repo: Path) -> None:
+    source_root = DATA_SCRIPTS.parents[1]
+    for relative in SourceDefinitionSnapshot(CURRENT_DIGEST).to_document()["inputs"]:
+        source = source_root / relative
+        target = repo / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        if source.is_dir():
+            shutil.copytree(source, target)
+        else:
+            shutil.copy2(source, target)
+
+
+def test_source_definition_digest_ignores_consumer_paths_and_tracks_exact_inputs(
+    tmp_path: Path,
+) -> None:
+    repo = tmp_path / "repo"
+    _materialize_source_definition_inputs(repo)
+    baseline = SourceDefinitionSnapshot.build(repo_root=repo)
+
+    consumer = repo / "quwoquan_data/scripts/content/release/environment/consumer.py"
+    consumer.parent.mkdir(parents=True, exist_ok=True)
+    consumer.write_text("CONSUMER = 'changed'\n", encoding="utf-8")
+    assert SourceDefinitionSnapshot.build(repo_root=repo) == baseline
+
+    exact = repo / ".agents/skills/content-production/SKILL.md"
+    exact.write_text(exact.read_text(encoding="utf-8") + "\nproducer-change\n", encoding="utf-8")
+    assert SourceDefinitionSnapshot.build(repo_root=repo) != baseline

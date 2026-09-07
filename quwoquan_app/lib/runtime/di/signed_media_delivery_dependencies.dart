@@ -29,9 +29,11 @@ final class _ContentMediaFacetOriginalAccessGateway
 /// 均发生在作品浏览域内。
 final signedMediaDeliveryCoordinatorProvider =
     Provider<SignedMediaDeliveryCoordinator>((ref) {
-      return SignedMediaDeliveryCoordinator(
+      final coordinator = SignedMediaDeliveryCoordinator(
         gateway: _ContentMediaFacetOriginalAccessGateway(
           ref.watch(workBrowserContentMediaFacetProvider),
         ),
       );
+      ref.onDispose(coordinator.clearAll);
+      return coordinator;
     });

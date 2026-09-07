@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -86,11 +87,7 @@ func TestImmutableContentReleaseProjectsExactTagReceipt(t *testing.T) {
 	if err := os.MkdirAll(tagRoot, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	writeJSONFile(t, filepath.Join(releaseRoot, "payload", "release.json"), map[string]any{
-		"schema":      "quwoquan_data.release",
-		"releaseId":   "release-a",
-		"releaseKind": "content",
-	})
+	writeReleaseHeader(t, releaseRoot, "release-a", "content")
 	writeJSONFile(t, filepath.Join(releaseRoot, "payload", "desired_state.json"), map[string]any{
 		"schema":    "quwoquan_data.release_desired_state",
 		"releaseId": "release-a",
@@ -102,6 +99,7 @@ func TestImmutableContentReleaseProjectsExactTagReceipt(t *testing.T) {
 		"label":   "旅行",
 		"labelEn": "travel",
 	})
+	writeReleaseAttestation(t, serviceRoot, releaseRoot, "release-a", "content", 1)
 	reportPath := filepath.Join(t.TempDir(), "tag-import.json")
 	command := exec.Command(
 		"go",
@@ -113,6 +111,8 @@ func TestImmutableContentReleaseProjectsExactTagReceipt(t *testing.T) {
 		"release-a",
 		"--env",
 		"gamma",
+		"--activation-mode",
+		"stage-only",
 		"--report",
 		reportPath,
 		"--dry-run",
@@ -152,11 +152,7 @@ func TestImmutableContentReleaseProjectsExactTagReceipt(t *testing.T) {
 func TestImmutableEmptyBaselineProjectsZeroNodeReceipt(t *testing.T) {
 	serviceRoot := findServiceRoot(t)
 	releaseRoot := filepath.Join(t.TempDir(), "baseline-a")
-	writeJSONFile(t, filepath.Join(releaseRoot, "payload", "release.json"), map[string]any{
-		"schema":      "quwoquan_data.release",
-		"releaseId":   "baseline-a",
-		"releaseKind": "empty_baseline",
-	})
+	writeReleaseHeader(t, releaseRoot, "baseline-a", "empty_baseline")
 	writeJSONFile(t, filepath.Join(releaseRoot, "payload", "desired_state.json"), map[string]any{
 		"schema":    "quwoquan_data.release_desired_state",
 		"releaseId": "baseline-a",
@@ -164,6 +160,7 @@ func TestImmutableEmptyBaselineProjectsZeroNodeReceipt(t *testing.T) {
 			"tags": []string{},
 		},
 	})
+	writeReleaseAttestation(t, serviceRoot, releaseRoot, "baseline-a", "empty_baseline", 0)
 	reportPath := filepath.Join(t.TempDir(), "tag-import.json")
 	command := exec.Command(
 		"go",
@@ -173,6 +170,8 @@ func TestImmutableEmptyBaselineProjectsZeroNodeReceipt(t *testing.T) {
 		releaseRoot,
 		"--env",
 		"gamma",
+		"--activation-mode",
+		"stage-only",
 		"--report",
 		reportPath,
 		"--dry-run",
@@ -232,4 +231,33 @@ func findServiceRoot(t *testing.T) string {
 		}
 		current = parent
 	}
+}
+
+func writeReleaseHeader(t *testing.T, releaseRoot, releaseID, releaseKind string) {
+	t.Helper()
+	merkle := "sha256:" + strings.Repeat("b", 64)
+	writeJSONFile(t, filepath.Join(releaseRoot, "payload", "release.json"), map[string]any{
+		"schema": "quwoquan_data.release", "releaseId": releaseID,
+		"sourceOwner": "qwq_data", "releaseKind": releaseKind, "releaseClass": "research", "canonicalMerkle": merkle,
+	})
+}
+
+func writeReleaseAttestation(t *testing.T, serviceRoot, releaseRoot, releaseID, releaseKind string, tagCount int) {
+	t.Helper()
+	command := exec.Command("python3", "-c", `
+import pathlib, sys
+sys.path.insert(0, str(pathlib.Path(sys.argv[1]) / ".." / "quwoquan_data" / "scripts"))
+from core.release_layout import payload_digest
+print(payload_digest(pathlib.Path(sys.argv[2])))
+`, serviceRoot, releaseRoot)
+	digest, err := command.Output()
+	if err != nil {
+		t.Fatalf("calculate fixture payload digest: %v", err)
+	}
+	writeJSONFile(t, filepath.Join(releaseRoot, "attestations", "release.json"), map[string]any{
+		"schema": "quwoquan_data.release_attestation", "releaseId": releaseID,
+		"sourceOwner": "qwq_data", "releaseKind": releaseKind, "releaseClass": "research",
+		"canonicalMerkle": "sha256:" + strings.Repeat("b", 64),
+		"tagCount":        tagCount, "payloadSha256": strings.TrimSpace(string(digest)),
+	})
 }

@@ -34,8 +34,6 @@ type importedPostReplayReport struct {
 	Counts           map[string]int        `json:"counts"`
 	PostBindings     []ImportedPostBinding `json:"postBindings"`
 	AuditEvents      []string              `json:"auditEvents"`
-	Revision         int64                 `json:"revision"`
-	SourceVersion    int64                 `json:"sourceVersion"`
 	GeneratedAt      string                `json:"generatedAt,omitempty"`
 	SourceReportPath string                `json:"sourceReportPath,omitempty"`
 }
@@ -77,13 +75,12 @@ func LoadImportedPostReplayBindings(
 		return nil, fmt.Errorf("GATE_BLOCK: replay source import report contains trailing JSON")
 	}
 	if report.Schema != "quwoquan.content_import_report" ||
-		report.Status != "imported" ||
+		report.Status != "staged" ||
 		report.Environment != strings.TrimSpace(environment) ||
 		report.ReleaseID != strings.TrimSpace(releaseID) ||
 		report.ManifestDigest != strings.TrimSpace(manifestDigest) ||
 		report.SourceOwner != strings.TrimSpace(sourceOwner) ||
-		report.Mode != "sync" || report.DeletePolicy != "tombstone" ||
-		report.Revision <= 0 || report.SourceVersion <= 0 {
+		report.Mode != "sync" || report.DeletePolicy != "tombstone" {
 		return nil, fmt.Errorf("GATE_BLOCK: replay source import report binding drift")
 	}
 	postsLoaded := report.Counts["postsLoaded"]

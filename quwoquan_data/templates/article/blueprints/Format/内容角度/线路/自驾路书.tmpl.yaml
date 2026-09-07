@@ -10,7 +10,7 @@ creatorPersona:
   archetype: self_drive_expert
   preferredCreatorIds: [qwq_creator_self_drive_guide_001]
   requiredProfileTagRefs: [Topic/旅行/出行方式/自驾, Format/内容角度/攻略/路线推荐]
-  allowedPerspective: [第一人称经验, 专业导览]
+  allowedPerspective: [中性事实叙事, 专业导览]
   mustNotClaim: [官方背书, 实时路况承诺, 商业合作]
 editorialIntent: 把复杂自驾线路拆成可执行的路书，帮助读者判断天数、路况、补给和风险。
 render: { articleTemplate: journal, fontPreset: clean }
@@ -40,7 +40,7 @@ routeCoverageExpectations:
 structure:
   required: [线路总览, 行前判断, 分段路书, 补给与住宿, 风险与替代方案]
   optional: [摄影停靠点, 车型建议, 返程路线]
-mustIncludeFacts: [里程, 分段耗时, 路况, 油电补给, 停车点, 应急避险]
+evidenceConditionedFacts: [里程, 分段耗时, 路况, 油电补给, 停车点, 应急避险]
 forbiddenPhrases: [冷启动, 批次, 角色：, 占位, contract_fixture]
 wordCount: { min: 1400, max: 2600 }
 imagePlan:
@@ -52,7 +52,7 @@ crossRefs: { minEntity: 3, minTag: 4 }
 recommendation:
   authorBinding: { required: true, source: creator_profile_catalog }
   exposeStyleTags: true
-  qualitySignals: [bodyLength, requiredFactsCovered, imageSlotCoverage, entityRefCount]
+  qualitySignals: [bodyLength, evidenceSupportedFactCoverage, imageSlotCoverage, entityRefCount]
   bodyForbiddenFields: [qualityScore, templateId, routingReason, coldStartBoost, isSystemBuiltin]
 openingTension: { required: true, focus: 出发动机与犹豫 }
 explicitFeelings: { requireLike: true, requireDislike: true }

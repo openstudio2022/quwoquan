@@ -38,7 +38,7 @@ func creatorReleaseFixture(t *testing.T) string {
 	writeReleaseTestFile(
 		t,
 		filepath.Join(root, "payload", "release.json"),
-		`{"schema":"quwoquan_data.release","releaseId":"release-a","releaseClass":"commercial"}`,
+		`{"schema":"quwoquan_data.release","releaseId":"release-a","sourceOwner":"qwq_data","releaseKind":"content","releaseClass":"commercial"}`,
 	)
 	creatorRoot := filepath.Join(root, "payload", "objects", "creators", testCreatorID)
 	writeReleaseTestFile(
@@ -202,5 +202,16 @@ func TestLoadCreatorsRejectsRetiredAndInconsistentAvatarBindings(t *testing.T) {
 				t.Fatalf("%s must fail closed, err=%v", test.name, err)
 			}
 		})
+	}
+}
+
+func TestLoadCreatorsUsesCanonicalProfileDigestNotReleaseID(t *testing.T) {
+	root := creatorReleaseFixture(t)
+	_, creators, err := releaseimport.LoadCreatorsForRelease(root, "https://avatar.example.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(creators) != 1 || creators[0].ProfileDigest == "" || creators[0].ProfileDigest == "release-a" || !strings.HasPrefix(creators[0].ProfileDigest, "sha256:") {
+		t.Fatalf("creator profile digest is not content-addressed: %+v", creators)
 	}
 }

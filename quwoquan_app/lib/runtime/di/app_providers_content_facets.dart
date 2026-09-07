@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+
 import 'package:crypto/crypto.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/runtime/di/cloud_http_client_provider.dart';
@@ -15,6 +16,7 @@ import 'package:quwoquan_app/runtime/observability/app_trace_context_store.dart'
 import 'package:quwoquan_app/runtime/di/generated_operation_client_dependencies.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/content_repository_contract.dart';
 import 'package:quwoquan_app/service/content_service/content/feed_delivery_page/application/public/discovery_feed_query.dart';
+import 'package:quwoquan_app/service/content_service/content/feed_delivery_page/application/public/content_activation_identity.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/public/content_post_delete.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/public/post_article_detail_projector.dart';
 import 'package:quwoquan_app/service/content_service/content/post/adapters/post_view_projection.dart';
@@ -46,6 +48,7 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
 import 'package:quwoquan_app/runtime/di/app_providers_chat_search.dart';
 import 'package:quwoquan_app/runtime/di/app_providers_client_sync.dart';
 import 'package:quwoquan_app/runtime/di/app_providers_content_extras.dart';
+import 'package:quwoquan_app/runtime/di/content_cache_lifecycle_dependencies.dart';
 import 'package:quwoquan_app/runtime/di/app_providers_operations.dart';
 
 /// 仅供组合根装配 Remote / Mock / Cache 的强类型 facets holder。
@@ -92,6 +95,38 @@ final _contentFacetsProvider = Provider<_ContentFacets>((ref) {
     blockedKeywordsLoader: loadBlockedKeywords,
     postCache: ref.watch(postObjectCacheProvider),
     querySnapshotStore: ref.watch(contentQuerySnapshotStoreProvider),
+    currentCacheIdentity: () => ref.read(contentCacheIsolationIdentityProvider),
+    cacheIsolationIdentityResolver: (activationIdentity) {
+      final lifecycle = ref.read(contentCacheLifecycleCoordinatorProvider);
+      if (activationIdentity == null) {
+        lifecycle.handleActivationIdentity(null);
+        ref.read(contentCacheIsolationIdentityProvider.notifier).clear();
+        return null;
+      }
+      final session = ref.read(authSessionControllerProvider);
+      final accountId = session.ownerId.trim();
+      final personaId = session.activePersonaId.trim();
+      if (!session.hasTrustedSession ||
+          accountId.isEmpty ||
+          personaId.isEmpty) {
+        return null;
+      }
+      final identity = ContentCacheIsolationIdentity(
+        environment: ref.read(cloudRuntimeEnvironmentProvider).environment.name,
+        // 未验签 JWT 只选择分区；Remote 已授权响应中的 release tuple 才使
+        // 完整 identity 可采纳，绝不据此开放 Research 数据。
+        audience: contentReleaseAudiencePartitionHintFromAccessToken(
+          session.accessToken,
+        ),
+        accountId: accountId,
+        personaId: personaId,
+        sourceOwner: 'qwq_data',
+        activationIdentity: activationIdentity,
+      );
+      lifecycle.handleActivationIdentity(activationIdentity);
+      ref.read(contentCacheIsolationIdentityProvider.notifier).adopt(identity);
+      return identity;
+    },
     userProfileCache: ref.watch(userProfileCacheProvider),
     telemetrySink: ref.watch(cacheTelemetrySinkProvider),
   );

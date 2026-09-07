@@ -7,8 +7,6 @@
     "schema",
     "executionId",
     "carrier",
-    "entityCatalogDigest",
-    "candidateCount",
     "targets"
   ],
   "properties": {
@@ -42,5 +40,59 @@
         "$ref": "target_set.schema.json#/$defs/target"
       }
     }
-  }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "carrier": {
+            "const": "homepage"
+          }
+        },
+        "required": [
+          "carrier"
+        ]
+      },
+      "then": {
+        "properties": {
+          "targets": {
+            "items": {
+              "not": {
+                "anyOf": [
+                  {
+                    "required": [
+                      "publishAngle"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "publishTitle"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "publishSeq"
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "targets": {
+            "items": {
+              "required": [
+                "publishAngle",
+                "publishTitle"
+              ]
+            }
+          }
+        }
+      }
+    }
+  ],
+  "description": "AI 只需写 schema/executionId/carrier/targets；candidateCount 缺省为 targets 数，entityCatalogDigest 缺省由 task init 从受版本控制的实体目录计算。"
 }

@@ -1,63 +1,57 @@
 # quwoquan_data
 
-`quwoquan_data` 负责可复用内容输入、不可变 execution 工作包、canonical 内容对象、release 与环境交付。内容生产的唯一业务流程见 [content-production Skill](../.agents/skills/content-production/SKILL.md)；本 README 只给出工程边界和最短操作入口，不复制阶段细则。
+`quwoquan_data` 负责 Travel Research 可复用内容输入、不可变 execution 工作包、canonical 内容对象与 immutable producer release handoff。内容生产的唯一流程真相源见 [content-production Skill](../.agents/skills/content-production/SKILL.md)；本 README 只给出工程边界和最短操作入口，不复制步骤细则。
 
 ## Skill + AI Agent
 
-宿主 Cursor/Codex IDE/CLI AI Agent 是内容语义工作的主体：选择来源、取舍素材、创作、自检、独立 review，并显式决定阶段 `pass|blocked`、发布对象和 release cohort。仓库代码只处理确定性初始化、下载/CAS、schema 与引用闭包校验、create-once receipt、单对象 publish、immutable release 和 ship 原子 IO。
+宿主 Cursor/Codex IDE/CLI Agent 是唯一内容语义主体：判定来源类型与载体、点名来源 URL 与相关性理由、创作每对象唯一 carrier 产物、以另一个真实会话独立写 `content_review.json` 的判断字段，并显式决定 approved 对象、release cohort 与 milestone。仓库代码只处理 identity-only 初始化、机械取得字节与权利硬事实、schema/digest/ref/media 校验、create-once seal receipt、单对象 publish 与 explicit cohort immutable release。
 
-固定十阶段为：
+producer 固定为六步 `init → acquire → author → review → publish → release`，`release finalize` 成功即 `END`。import/activate/readback/health、API/App UAT、EAF、sampling authority、promotion、rollback/replay 全部 out of scope；下游 owner 是 Environment Ops scheduler，Data 不创建环境 acceptance。
 
-```text
-0.plan -> sources -> 1.download -> 2.quality -> 3.compose -> 4.draft -> 5.review
--> publish -> release -> ship -> END
-```
-
-每次只执行当前阶段及其 Skill stage contract。正文、review、typed issue、verdict、后继阶段和恢复动作都不能由脚本代替 AI 决定。ReliableTask 继续作为跨域通用基础设施存在，但不参与 Data 内容阶段推进。
+两个 actor：主会话直接完成 init/acquire/author/publish/release；`review` 由另一个 reviewer 会话完成，全局至多一个前台 reviewer 调用。不得新增 resolver/projector/runner/controller/queue/registry/SDK、actor projection、stage-open 或自动恢复。
 
 ## 工作包与只读恢复
-
-任务输出位于：
 
 ```text
 .qwq_output/data/tasks/<executionId>/
   execution_manifest.json
-  0.plan/
-  sources/
-  entities/**/<1.download..5.review>/
-  posts/<carrier>/**/<1.download..5.review>/
-  _shared/stage-authority/<stage>/open.json
-  _shared/receipts/<stage>.json
-  evidence/publish_refs/
+  0.plan/{request.json,target_set.json}
+  sources/<unit>/{meta.json,source.md,snapshot.*,assets/}
+  sources/plans/<sha256>.json            # acquire 请求原文
+  entities/**/<1.download|4.draft|5.review>/
+  posts/<carrier>/**/<1.download|4.draft|5.review>/
+  _shared/receipts/{001-1.download,002-4.draft,003-5.review}.json
+  evidence/object-transactions/
 ```
 
-新任务由 `task init` 原子创建 manifest、plan request 与 target set。每阶段开始前由 AI 用 `task stage-open` 显式提交并冻结 exact input refs；完成后用 `task stage-close` 提交 actor、verdict、typed issues、result refs 和真实 verifier facts。
-
-恢复只读 create-once receipts：最后一份 `pass` receipt 对应十阶段中的固定后继；已有 OPEN 而无 CLOSE 时，在同一冻结输入上重做当前阶段；最后一份 receipt 为 `blocked` 时创建新的 execution。恢复过程不改写旧 receipt，也不从聊天摘要或可变运行状态推断进度。
+恢复只读 `_shared/receipts/`：找首个未闭合步骤继续；最后一份 receipt 为 `blocked` 时创建新 execution。恢复不改写旧 receipt，也不从聊天摘要、宿主调度或环境状态推断 producer 进度。
 
 ```bash
 python3 quwoquan_data/scripts/cli.py task init --help
-python3 quwoquan_data/scripts/cli.py task stage-open --help
-python3 quwoquan_data/scripts/cli.py task stage-close --help
+python3 quwoquan_data/scripts/cli.py task acquire --help
+python3 quwoquan_data/scripts/cli.py task seal --help
 ```
 
-## 下载、发布与交付
+## 取得、发布与 release
 
-`sources` 阶段由 AI 写逐 target source plan；`1.download` 使用窄命令下载媒体并写入内容寻址存储（CAS）。下载器只封装已选来源，不替 AI 选择候选。
+`task acquire` 只接收 AI 点名的 `{kind: page|image|video, url, relevance}`：MediaWiki 页面走 API 取纯文本；Commons 文件页走 imageinfo API 取直链、license、作者，下载字节并算 sha256，图片按预算降采样，视频超预算或容器不在 `mp4|webm` 时转码为 H.264 mp4 派生体并抽 poster。license 只记录并派生 `rightsStatus`（白名单 CC0/CC BY/CC BY-SA/PD → verified，其它 → unverified/unknown），不阻断。
+
+`4.draft` 每对象只保留 `page.md|draft.article.md|image_work.json|video_script.json` 之一，标题/tagRefs/creatorProfileId 由产物自身声明；`5.review` 每对象只保留 `content_review.json`，AI 只写 `decision/blockingIssues/advisories`，`task seal --stage 5.review` 补齐 `assetRights`、`dimensions` 与机械字段。approved 对象逐个 `publish-object`；`release finalize` 消费 AI 显式 cohort（`releaseClass` 唯一取值 `production`，计数不低于里程碑目标即达标），一次完成 pool-build、release-integrity 与 create-once handoff。
+
+## 持久性
+
+- `quwoquan_data/publish/**` 是 canonical 对象元数据（JSON/MD），受版本控制，与代码同等重要。
+- 媒体字节的运行时 holder 是仓外 content library（默认 `~/.local/share/quwoquan/content_library`，`QWQ_LIBRARY_ROOT` 可覆盖）；execution、object-transaction 包与 release payload 只以硬链接引用它。
+- 随体媒体根（默认 `~/.local/share/quwoquan/golden_media`，`QWQ_CARRIED_MEDIA_ROOT` 可指向已备份卷）是已发布对象所引用媒体的仓外 durable 副本，由 publish 事务写入，与 content library 互为备份；两处都不进 git，也都在 `git clean` 射程之外。任何 gc/hygiene/清理路径不得触碰这两个根。library 丢失时运行 `python3 quwoquan_data/scripts/cli.py verify all`，它在跑门禁前会从随体根逐 sha 校验并回填 library；`verify publish-closure` 对 canonical 引用的每个媒体摘要检查两处至少一处可达，缺失即 `DATA.PUBLISH.CARRIED_MEDIA_MISSING` 并附 `sourceUrl`，字节可按来源直链原样重取。
+- `.qwq_output/` 全部可删除重建；删除后 release 媒体可从 library/随体根重建。
 
 ```bash
-python3 quwoquan_data/scripts/cli.py task acquire-images --help
-python3 quwoquan_data/scripts/cli.py task acquire-videos --help
+python3 quwoquan_data/scripts/cli.py release publish-object --help
+python3 quwoquan_data/scripts/cli.py release finalize --help
+python3 quwoquan_data/scripts/cli.py release handoff-verify --help
 ```
 
-通过独立 review 的对象在 `publish` 阶段逐个提交；每个 approved object package 单独执行 create-once canonical transaction，不做 execution 级批量发布。`release` 只消费 AI 显式给出的 exact cohort，生成环境无关的 immutable release；不得隐式选择“全部可发布对象”。`ship` 只消费该 release 的精确身份，显式执行目标环境 apply、import/readback、health 与所需 API consumer raw CaseResult；Data 不创建环境 acceptance。
-
-```bash
-python3 quwoquan_data/scripts/cli.py release --help
-python3 quwoquan_data/scripts/cli.py ship --help
-```
-
-`m1_api_consumer` 仅可作为内容 execution 选择 Alpha Service/API consumer fresh raw CaseResult 的 intent，不是 `EnvironmentAcceptanceFact` profile、字段或 writer。Data 交付证据止于 ship apply/import/readback/health 与 raw CaseResult；若下游需要 EAF，必须把同一 exact integration candidate request 交给 Environment Ops scheduler，由其以 canonical `smoke|integration|release` profile 和完整 v2 named closure 签发。Prod 接受 `ReleaseTagAdmissionFact -> ProdActivationAdmissionFact -> hosted rollout/readback facts`，不使用 EAF。
+M1/M10/M100/M1000 按 `cumulative_unique_finalized_objects` 累计，每级形成自己的 full explicit cohort/release/handoff；凡已完成 canonical publish 且 review approved 的对象都可复用进入 cohort。handoff 以 canonical publish proof 为凭，记录 `producerBaselineRevision` 与 `producerContractDigest`，不含 UAT/import/readback/EAF/promotion/rollback。任何外部 consumer 只可只读上述 immutable producer facts。
 
 ## 可复用输入与输出边界
 
@@ -66,9 +60,9 @@ python3 quwoquan_data/scripts/cli.py ship --help
 `.qwq_output/data/` 一级只允许：
 
 ```text
-tasks/       不可变 execution 工作包与 create-once receipts
-releases/    环境无关的 immutable release
-local/       可删除重跑的本地缓存与报告
+tasks/       不可变 producer execution 工作包与 create-once receipts
+releases/    环境无关 immutable release 与 handoff 事实
+local/       cache/ runs/ workspace/ 三个子目录；本次 run 的输入放 workspace/<run>/
 ```
 
 删除 `.qwq_output/` 不得损失依赖声明、recipe、prompt、template、schema、policy 或部署规则。静态检查的组合入口保持为：

@@ -1,8 +1,7 @@
 """research isolation runtime probe 的组装、fail-closed 与 create-once 契约。
 
-HTTP 层全部通过 monkeypatch 模块级 request/fetch 函数替换；schema 断言直接读
-``quwoquan_data/schema/release/research_isolation_verification.schema.json``
-做结构判定，不 import quwoquan_data 代码。
+HTTP 层全部通过 monkeypatch 模块级 request/fetch 函数替换；PASS 文档结构约束由
+本测试内联的 Ops 侧合同判定（Data schema 已随 DEC-041 退役，见 OPEN-024）。
 
 spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md
 """
@@ -28,9 +27,6 @@ from quwoquan_ops.cli.lib.local_environment_auth import (
     LocalEnvironmentHTTPError,
 )
 
-SCHEMA_PATH = (
-    ROOT / "quwoquan_data/schema/release/research_isolation_verification.schema.json"
-)
 
 RELEASE_ID = "rel-research-0001"
 VERIFY_RUN_ID = "verify-run-0001"
@@ -332,34 +328,53 @@ def _all_operations(document: dict[str, object]) -> list[dict[str, object]]:
     ]
 
 
-def _assert_document_matches_data_schema(document: dict[str, object]) -> None:
-    """按 Data schema JSON 的结构约束逐点断言（不 import quwoquan_data 代码）。"""
+# Data 侧的 research_isolation_verification schema 已随 DEC-041 退役；Ops 探针的
+# 物理删除由 multi-carrier-release OPEN-024 跟踪。在此之前 PASS 文档的结构约束
+# 由本测试作为 Ops 侧合同直接钉住，不再读取已删除的 Data schema 文件。
+_PROOF_REQUIRED = (
+    "schema", "environment", "releaseId", "manifestDigest", "releaseClass",
+    "productLifecycleState", "verifyRunId", "policyRef", "policySha256", "outcome",
+    "verifiedAt", "verificationChecksum",
+)
+_PROOF_PASS_REQUIRED = (
+    "subjectHash", "identityIssuance", "identityAttestation", "internalAppReadback",
+    "anonymousContentProbe", "anonymousMediaProbe", "networkExposureReadback",
+    "deniedCapabilities", "signedMedia", "positiveReadback",
+)
+_PROOF_ENVIRONMENTS = {"alpha", "beta", "gamma", "prod"}
+_PROOF_POLICY_REF = re.compile(r"^quwoquan_ops/environments/(alpha|beta|gamma|prod)/runtime\.yaml$")
+_PROOF_DIGEST = re.compile(r"^sha256:[0-9a-f]{64}$")
+_PROOF_REPOSITORY_REF = re.compile(r"^(quwoquan_data|quwoquan_ops|quwoquan_service)/[^/].+")
+_PROOF_IDENTITY_KEYS = {"subjectHash", "attestationIdHash", "contractRef", "contractSha256", "operation"}
+_PROOF_OPERATION_KEYS = {"path", "pageId", "status", "requestId", "traceId", "startedAt", "endedAt", "durationMs"}
+_PROOF_DENIED_STATUSES = {401, 403}
+_PROOF_CAPABILITY_STATUSES = {200, 401, 403}
+_PROOF_ACCESS_STATUSES = {200, 206}
+_PROOF_SIGNED_MEDIA_KEYS = {
+    "assetId", "signedUrlHash", "ttlSeconds", "auditEventId", "issuanceOperation",
+    "accessOperation", "rangeAccessOperation", "forgedSignatureOperation",
+    "tamperedExpiryOperation", "auditReadbackOperation",
+}
 
-    schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
-    assert schema["additionalProperties"] is False
-    assert set(document) <= set(schema["properties"])
-    for key in schema["required"]:
+
+def _assert_document_matches_data_schema(document: dict[str, object]) -> None:
+    """按退役前 Data schema 的结构约束逐点断言（Ops 侧合同内联，不读 Data 文件）。"""
+
+    assert set(document) <= set(probe.PASS_DOCUMENT_KEYS)
+    for key in _PROOF_REQUIRED:
         assert key in document, f"schema required key missing: {key}"
 
-    assert document["schema"] == schema["properties"]["schema"]["const"]
-    assert document["environment"] in schema["properties"]["environment"]["enum"]
-    assert document["releaseClass"] == schema["properties"]["releaseClass"]["const"]
-    assert (
-        document["productLifecycleState"]
-        == schema["properties"]["productLifecycleState"]["const"]
-    )
+    assert document["schema"] == "quwoquan_data.research_isolation_verification"
+    assert document["environment"] in _PROOF_ENVIRONMENTS
+    assert document["releaseClass"] == "research"
+    assert document["productLifecycleState"] == "research"
     assert document["outcome"] == "PASS"
-    assert re.fullmatch(
-        schema["properties"]["policyRef"]["pattern"],
-        document["policyRef"],
-    )
+    assert _PROOF_POLICY_REF.fullmatch(document["policyRef"])
 
-    pass_branch = schema["allOf"][0]["then"]
-    for key in pass_branch["required"]:
+    for key in _PROOF_PASS_REQUIRED:
         assert key in document, f"PASS branch key missing: {key}"
     assert "blocker" not in document
 
-    digest_pattern = re.compile(schema["$defs"]["digest"]["pattern"])
     for label, value in (
         ("manifestDigest", document["manifestDigest"]),
         ("policySha256", document["policySha256"]),
@@ -370,21 +385,14 @@ def _assert_document_matches_data_schema(document: dict[str, object]) -> None:
         ("internalAppReadback.attestationIdHash", document["internalAppReadback"]["attestationIdHash"]),
         ("signedMedia.signedUrlHash", document["signedMedia"]["signedUrlHash"]),
     ):
-        assert digest_pattern.fullmatch(str(value)), f"{label} is not a digest"
+        assert _PROOF_DIGEST.fullmatch(str(value)), f"{label} is not a digest"
 
-    identity_required = set(schema["$defs"]["identityProof"]["required"])
     for segment in ("identityIssuance", "identityAttestation"):
-        assert set(document[segment]) == identity_required
-        assert re.fullmatch(
-            schema["$defs"]["repositoryRef"]["pattern"],
-            document[segment]["contractRef"],
-        )
+        assert set(document[segment]) == _PROOF_IDENTITY_KEYS
+        assert _PROOF_REPOSITORY_REF.fullmatch(document[segment]["contractRef"])
 
-    operation_required = set(schema["$defs"]["operation"]["required"])
-    operation_properties = set(schema["$defs"]["operation"]["properties"])
-    assert operation_required == operation_properties
     for operation in _all_operations(document):
-        assert set(operation) == operation_required
+        assert set(operation) == _PROOF_OPERATION_KEYS
         assert str(operation["path"]).startswith("/")
         assert isinstance(operation["status"], int)
         assert 100 <= operation["status"] <= 599
@@ -393,28 +401,15 @@ def _assert_document_matches_data_schema(document: dict[str, object]) -> None:
         for field in ("pageId", "requestId", "traceId", "startedAt", "endedAt"):
             assert str(operation[field]).strip()
 
-    denied_statuses = set(
-        schema["$defs"]["deniedProbe"]["properties"]["operation"]["allOf"][1][
-            "properties"
-        ]["status"]["enum"]
-    )
     for segment in ("anonymousContentProbe", "anonymousMediaProbe"):
         assert document[segment]["decision"] == "denied"
-        assert document[segment]["operation"]["status"] in denied_statuses
+        assert document[segment]["operation"]["status"] in _PROOF_DENIED_STATUSES
 
-    capability_statuses = set(
-        schema["$defs"]["deniedCapability"]["properties"]["operation"]["allOf"][1][
-            "properties"
-        ]["status"]["enum"]
-    )
     assert set(document["deniedCapabilities"]) == {"share", "export"}
     for row in document["deniedCapabilities"].values():
         assert row["decision"] == "denied"
-        assert row["operation"]["status"] in capability_statuses
+        assert row["operation"]["status"] in _PROOF_CAPABILITY_STATUSES
 
-    success_status = schema["$defs"]["successOperation"]["allOf"][1]["properties"][
-        "status"
-    ]["const"]
     for operation in (
         document["identityIssuance"]["operation"],
         document["identityAttestation"]["operation"],
@@ -424,23 +419,16 @@ def _assert_document_matches_data_schema(document: dict[str, object]) -> None:
         document["signedMedia"]["auditReadbackOperation"],
         document["positiveReadback"]["operation"],
     ):
-        assert operation["status"] == success_status
-    access_statuses = set(
-        schema["properties"]["signedMedia"]["properties"]["accessOperation"][
-            "allOf"
-        ][1]["properties"]["status"]["enum"]
-    )
-    assert document["signedMedia"]["accessOperation"]["status"] in access_statuses
+        assert operation["status"] == 200
+    assert document["signedMedia"]["accessOperation"]["status"] in _PROOF_ACCESS_STATUSES
+    assert document["signedMedia"]["rangeAccessOperation"]["status"] in _PROOF_ACCESS_STATUSES
+    for key in ("forgedSignatureOperation", "tamperedExpiryOperation"):
+        assert document["signedMedia"][key]["status"] in _PROOF_DENIED_STATUSES
 
-    signed_schema = schema["properties"]["signedMedia"]
-    assert set(document["signedMedia"]) == set(signed_schema["required"])
+    assert set(document["signedMedia"]) == _PROOF_SIGNED_MEDIA_KEYS
     ttl = document["signedMedia"]["ttlSeconds"]
     assert isinstance(ttl, int)
-    assert (
-        signed_schema["properties"]["ttlSeconds"]["minimum"]
-        <= ttl
-        <= signed_schema["properties"]["ttlSeconds"]["maximum"]
-    )
+    assert 1 <= ttl <= 900
 
     for field in ("entityRefs", "postIds", "mediaAssetIds"):
         rows = document["positiveReadback"][field]

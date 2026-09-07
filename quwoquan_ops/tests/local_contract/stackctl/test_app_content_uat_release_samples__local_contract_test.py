@@ -196,8 +196,6 @@ def _release_header(sample_plan_digest: str) -> dict[str, object]:
         "sourceIdentities": [{"executionId": "execution-a"}],
         "sourceIdentitySetDigest": DIGESTS["source"],
         "contents": _contents(),
-        "samplePlanRef": "uat/sample_plan.json",
-        "samplePlanDigest": sample_plan_digest,
     }
 
 
@@ -313,7 +311,9 @@ def test_release_samples__resolve_and_validate_one_hundred_plan_owned_reads__loc
     )
 
     assert resolved["milestone"] == "M100"
-    assert resolved["releaseUatSamplePlanRef"] == "uat/sample_plan.json"
+    assert resolved["releaseUatSamplePlanRef"] == (
+        "data/releases/release-m100-samples/uat/sample_plan.json"
+    )
     assert resolved["releaseUatSamplePlanDigest"] == plan["releaseUatSamplePlanDigest"]
     assert len(resolved["samples"]) == 100
     assert resolved["samples"][0]["sourceObjectId"] == "/entity/place-001"

@@ -25,7 +25,7 @@ from core.content_source_registry import homepage_source_can_seed_base_draft
 from core.control_types import MediaClosureVerdict
 from core.tree_integrity import tree_integrity_stats
 from core.release_layout import objects_merkle, payload_file, verify_release_holdings
-from content.release.environment.consistency import scan_release_contract
+from content.release.canonical.release_consistency import scan_release_contract
 from governance.coverage.license import (
     rights_audit_status_recorded,
 )

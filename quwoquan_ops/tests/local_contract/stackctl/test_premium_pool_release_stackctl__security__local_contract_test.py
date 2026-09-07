@@ -19,6 +19,9 @@ from quwoquan_ops.cli.lib import (
     premium_pool_release,
     public_domain_tls,
 )
+from quwoquan_ops.tests.support.derivable_release_payload_test_support import (
+    write_derivable_release_payload,
+)
 
 
 def _jwt(claims: dict[str, object], *, alg: str = "HS256") -> str:
@@ -144,85 +147,7 @@ def _write_candidate_release_fixture(
         }
         for carrier in ("article", "image", "video")
     ]
-    selection_evidence = {
-        "poolDigest": pool_digest,
-        "sourceIdentitySetDigest": source_identity_set_digest,
-        "canonicalMerkle": canonical_merkle,
-        "releaseContentsDigest": _checksum(contents),
-        "releaseEntityCohortDigest": _checksum(["homepage-1"]),
-    }
-    release_digest = _checksum(
-        {
-            "schema": "quwoquan_data.release_uat_sample_plan_identity",
-            "releaseId": release_id,
-            "canonicalMerkle": canonical_merkle,
-            "selectionEvidence": selection_evidence,
-        }
-    )
-    carriers = ("homepage", "article", "image", "video")
-    distribution = {carrier: 1 for carrier in carriers}
-    sample_plan = {
-        "schema": "quwoquan_data.release_uat_sample_plan",
-        "releaseId": release_id,
-        "releaseDigest": release_digest,
-        "milestone": None,
-        "selectionEvidence": selection_evidence,
-        "eligiblePopulationCounts": dict(distribution),
-        "exactCohortCounts": dict(distribution),
-        "entryCarrierCells": [
-            {
-                "entry": entry,
-                "carrier": carrier,
-                "applicability": "required",
-                "specRef": (
-                    "specs/feature-tree/runtime/runtime-config/"
-                    "environment-topology-and-packaging/spec.md#req-006"
-                ),
-                "runnerClass": f"qwq.content_consumer.{entry}.{carrier}.v1",
-            }
-            for entry in ("feed", "search", "recommendation", "direct_or_object_route")
-            for carrier in carriers
-        ],
-        "sampleStrategy": {
-            "name": "baseline_per_required_carrier",
-            "version": 1,
-            "seedDigest": _checksum(
-                {"releaseDigest": release_digest, "sampleDistribution": distribution}
-            ),
-            "carrierOrder": list(carriers),
-            "sortKey": "identity",
-            "direction": "ascending",
-            "objectDigestAlgorithm": "sha256-path-blob-merkle",
-            "sampleDistribution": distribution,
-        },
-        "sampleCount": 4,
-        "samples": [
-            {
-                "sampleId": f"canary-{carrier}-001",
-                "carrier": carrier,
-                "objectId": (
-                    "/entity/homepage-1" if carrier == "homepage" else f"{carrier}-1"
-                ),
-                "objectRef": (
-                    "objects/entities/homepage-1"
-                    if carrier == "homepage"
-                    else f"objects/posts/{carrier}/{carrier}-1/1"
-                ),
-                "objectDigest": _checksum({"carrier": carrier, "fixture": "object"}),
-            }
-            for carrier in carriers
-        ],
-    }
-    sample_bytes = (
-        json.dumps(
-            sample_plan, ensure_ascii=False, sort_keys=True, separators=(",", ":")
-        )
-        + "\n"
-    ).encode("utf-8")
     release_root = root / "data/releases" / release_id
-    sample_path = release_root / "payload/uat/sample_plan.json"
-    sample_path.parent.mkdir(parents=True, exist_ok=True)
-    sample_path.write_bytes(sample_bytes)
     header = {
         "schema": "quwoquan_data.release",
         "releaseId": release_id,
@@ -237,16 +162,16 @@ def _write_candidate_release_fixture(
         "selectionScope": "target_environment",
         "targetEnvironment": "alpha",
         "releaseMode": "research",
-        "counts": {"article": 1, "image": 1, "video": 1, "total": 3},
+        "counts": {"homepage": 1, "article": 1, "image": 1, "video": 1, "total": 4},
         "contents": contents,
         "authors": [],
         "buildResult": "completed",
-        "samplePlanRef": "uat/sample_plan.json",
-        "samplePlanDigest": "sha256:" + hashlib.sha256(sample_bytes).hexdigest(),
     }
-    (release_root / "payload/release.json").write_text(
-        json.dumps(header, ensure_ascii=False, sort_keys=True) + "\n",
-        encoding="utf-8",
+    # sample plan 由下游从 payload 派生；fixture 写最小可派生 payload。
+    write_derivable_release_payload(
+        release_root / "payload",
+        release_header=header,
+        entity_refs=["homepage-1"],
     )
     attestation = {
         "schema": "quwoquan_data.release_attestation",

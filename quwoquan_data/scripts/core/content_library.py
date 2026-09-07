@@ -222,12 +222,13 @@ def carried_media_entry(sha256: str) -> Path | None:
 
 
 def carry_media_reference(source: Path, *, sha256: str, suffix: str = "") -> Path:
-    """Carry one media body in version control beside the canonical tree.
+    """Carry one media body into the out-of-repo carried media root.
 
-    The library that holds media bodies lives outside the working tree and cannot
-    be rebuilt from version control, so an approved object whose bytes exist only
-    there is not deliverable on any other checkout. Carrying the body here is what
-    makes the digest recorded in the object resolvable from the repository alone.
+    The library that holds media bodies cannot be rebuilt from version control, so
+    an approved object whose bytes exist only there is one lost library away from
+    being undeliverable. The carried root is an independent durable copy beside
+    the library (same machine, different directory; neither is tracked by git),
+    and ``verify publish-closure`` reports any referenced digest held by neither.
 
     Carrying verifies bytes against ``sha256`` the same way admission does, so a
     substituted body cannot be carried under a digest it does not hash to. An
@@ -324,6 +325,25 @@ def reference_library_entry(entry: Path, destination: Path) -> None:
             "content library and reference must share one filesystem: "
             f"entry={entry} destination={destination}"
         ) from error
+
+
+def reference_existing_file(source: Path, destination: Path) -> None:
+    """把一个已由 library 持有（或任何已落盘）的文件暴露到 ``destination``，不复制字节。
+
+    execution、object-transaction 包与 release payload 里的媒体都只是同一份 library 字节的
+    另一个名字；硬链接让 `du` 只计一次。只有源与目标不在同一文件系统（EXDEV）时才退回
+    拷贝——那是卷拓扑事实，不是可修复的错误，且字节与摘要仍逐位相同。
+    """
+
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    if destination.exists() or destination.is_symlink():
+        destination.unlink()
+    try:
+        os.link(source, destination)
+    except OSError as error:
+        if error.errno != errno.EXDEV:
+            raise
+        shutil.copyfile(source, destination)
 
 
 def link_from_library(
@@ -427,6 +447,7 @@ __all__ = [
     "library_cas_root",
     "library_root_for_output",
     "link_from_library",
+    "reference_existing_file",
     "reference_library_entry",
     "resolve_media_holding",
 ]

@@ -7,14 +7,12 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
-from content.release.canonical.asset_review_adoption import (
-    validate_frozen_asset_review_binding,
-)
 from content.release.canonical.object_transaction_contract import (
     ObjectTransactionError,
     _read_json,
 )
 from governance.coverage.distribution import (
+    RELEASE_CLASSES,
     DistributionDecision,
     RightsStatus,
     project_asset_admission,
@@ -23,22 +21,15 @@ from governance.coverage.distribution import (
 _CARRIERS = ("homepage", "article", "image", "video")
 
 
-def _review_attestation_passed(root: Path) -> bool:
-    path = root / "attestation.json"
+def _content_review_approved(root: Path) -> bool:
+    path = root / "content_review.json"
     if not path.is_file():
         return False
-    attestation = _read_json(path)
+    review = _read_json(path)
     return bool(
-        attestation.get("schema") == "quwoquan_data.review_attestation"
-        and attestation.get("decision") == "approved"
-        and isinstance(attestation.get("deterministicGate"), Mapping)
-        and attestation["deterministicGate"].get("status") == "passed"
-        and isinstance(attestation.get("independentReviewer"), Mapping)
-        and attestation["independentReviewer"].get("status") == "passed"
-        and isinstance(attestation.get("mediaRefReview"), Mapping)
-        and attestation["mediaRefReview"].get("status") == "passed"
+        review.get("schema") == "quwoquan_data.content_review"
+        and review.get("decision") == "approved"
     )
-
 
 def _object_rows(
     objects_root: Path,
@@ -63,11 +54,6 @@ def _object_rows(
                 raise ObjectTransactionError(
                     f"release object carrier is invalid: {kind}/{ref}:{carrier}"
                 )
-            source_identity = manifest.get("sourceIdentity")
-            source_identity = (
-                source_identity if isinstance(source_identity, Mapping) else {}
-            )
-            source_digest = str(source_identity.get("sourceDigest") or "").strip()
             rights_path = root / "rights.json"
             rights = (
                 _read_json(rights_path) if rights_path.is_file() else {"assets": []}
@@ -78,31 +64,15 @@ def _object_rows(
                     f"release object rights assets must be an array: {kind}/{ref}"
                 )
             object_ref = f"{kind}/{ref}"
-            review_object_ref = (
-                f"/entity/{ref}"
-                if kind == "entities"
-                else str(manifest.get("topicId") or ref).strip()
-            )
             assets: list[dict[str, Any]] = []
-            reviewed_asset_kinds: dict[str, str] = {}
             for raw in raw_assets:
                 if not isinstance(raw, Mapping):
                     raise ObjectTransactionError(
                         f"release rights asset must be an object: {object_ref}"
                     )
                 try:
-                    review_binding = validate_frozen_asset_review_binding(
-                        output_root=output_root,
-                        object_ref=review_object_ref,
-                        rights_asset=raw,
-                        source_digest=source_digest,
-                    )
                     projected = project_asset_admission(raw, object_ref=object_ref)
                     assets.append(projected)
-                    if review_binding is not None:
-                        reviewed_asset_kinds[str(projected["assetId"])] = str(
-                            review_binding["assetKind"]
-                        )
                 except (TypeError, ValueError) as exc:
                     raise ObjectTransactionError(str(exc)) from exc
             rows.append(
@@ -111,8 +81,7 @@ def _object_rows(
                     "carrier": carrier,
                     "manifest": manifest,
                     "assets": assets,
-                    "reviewedAssetKinds": reviewed_asset_kinds,
-                    "reviewAttestationPassed": _review_attestation_passed(root),
+                    "contentReviewApproved": _content_review_approved(root),
                 }
             )
     return rows
@@ -147,15 +116,14 @@ def _article_media_mode(row: Mapping[str, Any]) -> str:
     covers = [
         asset for asset in assets if str(asset.get("role") or "").strip() == "cover"
     ]
-    bodies = [asset for asset in assets if asset not in covers]
+    # illustrated 只要求「有图即恰好一张封面、全部为可追溯来源的图片」；正文图张数不设下限。
     if (
         len(covers) != 1
-        or not bodies
         or any(str(asset.get("kind") or "image").strip() != "image" for asset in assets)
         or any(not str(asset.get("sourceRef") or "").strip() for asset in assets)
     ):
         raise ObjectTransactionError(
-            f"{object_ref}: illustrated article must bind one cover and body assets"
+            f"{object_ref}: illustrated article must bind exactly one cover image with source refs"
         )
     return "illustrated"
 
@@ -225,16 +193,18 @@ def _object_media_is_admissible(row: Mapping[str, Any]) -> bool:
     if carrier == "article":
         text_only = str(manifest.get("publishMediaMode") or "").strip() == "text_only"
         return not manifest_assets if text_only else bool(manifest_assets)
-    if carrier in {"homepage", "image"}:
+    if carrier == "homepage":
+        text_only = str(manifest.get("publishMediaMode") or "").strip() == "text_only"
+        return not manifest_assets if text_only else any(
+            str(asset.get("kind") or "image").strip() == "image"
+            for asset in manifest_assets
+        )
+    if carrier == "image":
         return any(
             str(asset.get("kind") or "image").strip() == "image"
             for asset in manifest_assets
         )
     if carrier == "video":
-        reviewed_asset_kinds = row.get("reviewedAssetKinds")
-        reviewed_asset_kinds = (
-            reviewed_asset_kinds if isinstance(reviewed_asset_kinds, Mapping) else {}
-        )
         by_id = {
             str(asset.get("assetId") or "").strip(): asset for asset in manifest_assets
         }
@@ -247,11 +217,7 @@ def _object_media_is_admissible(row: Mapping[str, Any]) -> bool:
             if (
                 mime_type.startswith("video/")
                 and sha256.startswith("sha256:")
-                and (
-                    reviewed_asset_kinds.get(str(asset.get("assetId") or "").strip())
-                    == "video"
-                    or bool(row.get("reviewAttestationPassed"))
-                )
+                and bool(row.get("contentReviewApproved"))
                 and isinstance(poster, Mapping)
                 and str(poster.get("kind") or "").strip() == "image"
                 and str(poster.get("role") or "").strip() == "cover"
@@ -274,45 +240,38 @@ def build_release_asset_admission(
 
         output_root = core_paths.OUTPUT_ROOT
     release_mode = str(release_class or "").strip()
-    if release_mode not in {"research", "commercial"}:
+    if release_mode not in RELEASE_CLASSES:
         raise ObjectTransactionError(f"DATA.RELEASE.CLASS_INVALID: {release_mode!r}")
     objects = _object_rows(objects_root, desired, output_root=output_root)
     assets = [asset for row in objects for asset in row["assets"]]
     asset_ids = [str(asset["assetId"]) for asset in assets]
-    if any(not asset_id for asset_id in asset_ids) or len(asset_ids) != len(
-        set(asset_ids)
-    ):
-        raise ObjectTransactionError(
-            "release asset IDs must be globally unique and non-empty"
-        )
+    if any(not asset_id for asset_id in asset_ids):
+        raise ObjectTransactionError("release asset IDs must be non-empty")
+    identity_fields = (
+        "contentSha256",
+        "sourceUrl",
+        "license",
+        "termsUrl",
+        "authorizationProof",
+        "creator",
+    )
+    asset_identities: dict[str, tuple[str, ...]] = {}
+    for asset in assets:
+        asset_id = str(asset["assetId"])
+        identity = tuple(str(asset[field]) for field in identity_fields)
+        previous = asset_identities.setdefault(asset_id, identity)
+        if previous != identity:
+            raise ObjectTransactionError(
+                f"release asset ID identity conflict: {asset_id}"
+            )
     if any(asset["generated"] for asset in assets):
         generated = [asset["assetId"] for asset in assets if asset["generated"]]
         raise ObjectTransactionError(
             "generated image/video assets are disabled by current policy: "
             + ", ".join(generated[:10])
         )
-    blocked_assets = [
-        asset
-        for asset in assets
-        if asset["distributionDecision"] == DistributionDecision.BLOCKED.value
-    ]
-    if blocked_assets:
-        raise ObjectTransactionError(
-            "release contains blocked assets: "
-            + ", ".join(str(asset["assetId"]) for asset in blocked_assets[:10])
-        )
-    if release_mode == "commercial":
-        noncommercial = [
-            asset
-            for asset in assets
-            if asset["distributionDecision"]
-            != DistributionDecision.COMMERCIAL_ALLOWED.value
-        ]
-        if noncommercial:
-            raise ObjectTransactionError(
-                "commercial release contains non-commercial assets: "
-                + ", ".join(str(asset["assetId"]) for asset in noncommercial[:10])
-            )
+    # `distributionDecision=blocked`（restricted 权利）只进入下方 rejected/restricted 计数，
+    # 不阻断 release：权利是记录事实，公众可见性由下游运营运行时配置决定。
     article_coverage = _article_media_coverage(objects)
     rights_counts = Counter(str(asset["rightsStatus"]) for asset in assets)
     carrier_counts: list[dict[str, Any]] = []
@@ -398,6 +357,10 @@ def build_release_asset_admission(
     authorization_required_ids = sorted(
         str(asset["assetId"]) for asset in assets if asset["authorizationRequired"]
     )
+    # 与 authorizationRequiredAssetIds 并列：运营发布后可按资产逐条审核水印可用性；只记录不阻断。
+    watermarked_ids = sorted(
+        str(asset["assetId"]) for asset in assets if str(asset.get("watermarkStatus") or "") == "present"
+    )
     return {
         "schema": "quwoquan_data.release_asset_admission",
         "releaseId": release_id,
@@ -408,6 +371,7 @@ def build_release_asset_admission(
             status.value: rights_counts[status.value] for status in RightsStatus
         },
         "authorizationRequiredAssetIds": authorization_required_ids,
+        "watermarkedAssetIds": watermarked_ids,
         "researchAcceptedCount": research_total,
         "commercialAcceptedCount": commercial_total,
         "carrierCounts": carrier_counts,

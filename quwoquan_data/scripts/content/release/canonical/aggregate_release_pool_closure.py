@@ -100,7 +100,7 @@ def _validate_entity_pool_identity(
     publish_root: Path,
     *,
     entity_refs: set[str],
-    release_mode: str,
+    release_class: str,
 ) -> None:
     for entity_ref in sorted(entity_refs):
         root = object_root(publish_root, "entities", entity_ref)
@@ -114,13 +114,6 @@ def _validate_entity_pool_identity(
         if not is_pool_record_admitted(record):
             raise ObjectTransactionError(
                 f"DATA.POOL.OBJECT_NOT_ADMITTED: entities/{entity_ref}"
-            )
-        if (
-            release_mode == "commercial"
-            and record.get("usageScope") != "commercial"
-        ):
-            raise ObjectTransactionError(
-                f"DATA.POOL.COMMERCIAL_RIGHTS_REQUIRED: entities/{entity_ref}"
             )
         entity_id = str(record.get("objectId") or "").strip()
         version = record.get("contentVersion")
@@ -179,7 +172,7 @@ def candidate_closure(
     publish_root: Path,
     *,
     post_ref: str,
-    release_mode: str,
+    release_class: str,
 ) -> tuple[set[str], list[str], list[str], list[dict[str, object]]]:
     """Validate one selectable Post and only its runtime dependencies."""
 
@@ -191,7 +184,7 @@ def candidate_closure(
     _validate_entity_pool_identity(
         publish_root,
         entity_refs=entity_refs,
-        release_mode=release_mode,
+        release_class=release_class,
     )
     creator_refs, tag_refs = reference_closure(
         publish_root,
@@ -224,7 +217,7 @@ def candidate_closure(
         entity_refs=sorted(entity_refs),
         creator_refs=creator_refs,
         publish_root=publish_root,
-        release_class=release_mode,
+        release_class=release_class,
     )
     if media_manifest["issues"]:
         raise ObjectTransactionError(
@@ -241,15 +234,9 @@ def candidate_closure(
                 "posts": [post_ref],
                 "tags": tag_refs,
             },
-            release_class=release_mode,
+            release_class=release_class,
         )
-    except ObjectTransactionError as exc:
-        if release_mode == "commercial" and str(exc).startswith(
-            "commercial release contains non-commercial assets"
-        ):
-            raise ObjectTransactionError(
-                f"DATA.POOL.COMMERCIAL_RIGHTS_REQUIRED: posts/{post_ref}"
-            ) from exc
+    except ObjectTransactionError:
         raise
     return entity_refs, creator_refs, tag_refs, list(media_manifest["assets"])
 
@@ -258,13 +245,13 @@ def entity_candidate_closure(
     publish_root: Path,
     *,
     entity_ref: str,
-    release_mode: str,
+    release_class: str,
 ) -> tuple[list[str], list[str]]:
     entity_refs = {entity_ref}
     _validate_entity_pool_identity(
         publish_root,
         entity_refs=entity_refs,
-        release_mode=release_mode,
+        release_class=release_class,
     )
     creator_refs, tag_refs = reference_closure(
         publish_root,
@@ -295,7 +282,7 @@ def entity_candidate_closure(
         entity_refs=[entity_ref],
         creator_refs=creator_refs,
         publish_root=publish_root,
-        release_class=release_mode,
+        release_class=release_class,
     )
     if media_manifest["issues"]:
         raise ObjectTransactionError(
@@ -312,15 +299,9 @@ def entity_candidate_closure(
                 "posts": [],
                 "tags": tag_refs,
             },
-            release_class=release_mode,
+            release_class=release_class,
         )
-    except ObjectTransactionError as exc:
-        if release_mode == "commercial" and str(exc).startswith(
-            "commercial release contains non-commercial assets"
-        ):
-            raise ObjectTransactionError(
-                f"DATA.POOL.COMMERCIAL_RIGHTS_REQUIRED: entities/{entity_ref}"
-            ) from exc
+    except ObjectTransactionError:
         raise
     return creator_refs, tag_refs
 

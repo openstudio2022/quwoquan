@@ -72,14 +72,14 @@ STAGE_EVIDENCE_CONTRACT = {
     },
     "agent_draft": {
         "input": "3.compose/{entity_page_input.json|writing_pack.json}",
-        "output": "4.draft/{page.md|draft.article.md|image_work.json|video_script.json,draft_meta.json,author_self_check.json,agent_result_envelope.json}",
+        "output": "4.draft/{page.md|draft.article.md|image_work.json|video_script.json}",
     },
     "review": {
         "input": "4.draft outputs + exact source/quality/compose/media identity",
-        "output": "5.review/{rubric_review.json,reviewer_result.json,media_ref_review.json,attestation.json}",
+        "output": "5.review/content_review.json",
     },
     "materialize": {
-        "input": "approved four-file review closure + AI-prepared final artifacts",
+        "input": "approved content_review.json + AI-prepared final artifacts",
         "output": "homepage: {_entity.json,page.md,manifest.json}; article: {article.md,manifest.json}; image/video: {manifest.json}",
     },
 }

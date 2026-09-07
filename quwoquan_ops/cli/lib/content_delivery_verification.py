@@ -93,7 +93,7 @@ def verify_content_delivery(
         ):
             raise ValueError("release readiness identity or result is invalid")
         readiness_phase = str(readiness.get("readinessPhase") or "").strip()
-        if readiness_phase not in {"consumer", "research", "commercial"}:
+        if readiness_phase not in {"consumer", "research", "commercial", "production"}:
             raise ValueError("release readiness phase is invalid")
         consumer_readiness = readiness_phase == "consumer"
 

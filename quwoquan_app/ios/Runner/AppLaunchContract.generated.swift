@@ -2,7 +2,7 @@
 import Foundation
 
 enum AppLaunchContract {
-  static let sourceDigest = "sha256:b38964bc4c020536fc1f6bd31b35746f416128faa63bbed34b3e2676f6a4460d"
+  static let sourceDigest = "sha256:e886af2683ad9a21a5ac7dd6a2d27ce5b9c97b6976a45312c35067b70fee1dc3"
   static let environments: [String] = [
     "alpha",
     "beta",
@@ -39,6 +39,7 @@ enum AppLaunchContract {
   ]
   static let runtimeConfigSupplyModes: [String] = [
     "external_runtime_package",
+    "build_time_self_supply",
   ]
   static let runtimeValueKeys: [String] = [
     "appDownloadBaseUrl",

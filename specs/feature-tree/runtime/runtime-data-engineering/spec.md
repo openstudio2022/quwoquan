@@ -16,7 +16,7 @@
 - canonical entity 与 entityRef。
 - 内容语义 relationEdge 候选事实；不包含关注、圈成员或会话成员等在线交易关系。
 - tag/entity/post/media 的跨域消费 projection、importer/outbox 与 App/Service wire 一致性。
-- 只读消费 discovery owner 交付的 immutable release、canonical identity、content-library binding 与环境 operation facts；不拥有 execution、pool、milestone、release build/promotion 或 UAT/acceptance。
+- 只读消费 discovery producer owner 交付的 immutable release/canonical/content-library facts，以及下游环境 owner 的 operation facts；不拥有 execution、pool、milestone、release build/handoff、promotion 或 UAT/acceptance。
 - `content_library` sole-holder 与 raw UAT authority 作为上游不变量被本域消费者验证，不在本节点复制 owner、生命周期或完成结论。
 
 ### Out of Scope
@@ -57,7 +57,7 @@
 
 - 标签 authoring 真相源仍为数据工程 `control_plane/governance/taxonomy`；`publish/tags` 只保存上游 canonical 对象实际引用的 consumer snapshot。本域 importer 不恢复扁平枚举、不复制整棵 taxonomy。
 - 实体归一产物必须映射到 runtime `canonicalEntityId`；Post/Creator/Entity/Tag/Media 引用以同一 immutable release identity 和 manifest digest 原子导入，缺引用或 digest 漂移整次 fail closed。
-- pool selection、Research/Commercial、M100/M1000 profile、release build/promotion、`ReleaseUatSamplePlan`、`TargetUatBinding`、raw `ReadinessCaseResult` 与 `EnvironmentAcceptanceFact` 的业务 owner 均为 [`discovery-content/object-homepage-coverage-scaling/multi-carrier-release`](../../discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md) 及其声明 owner；本节点只读验证公开 ref/digest，不复制命令、枚举、状态或 OPEN。
+- pool selection、Research/Commercial、release build/promotion、`ReleaseUatSamplePlan`、`TargetUatBinding`、raw `ReadinessCaseResult` 与 `EnvironmentAcceptanceFact` 的业务 owner 均为 [`discovery-content/object-homepage-coverage-scaling/multi-carrier-release`](../../discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md) 及其声明 owner；本节点只读验证公开 ref/digest，不复制命令、枚举、状态或 OPEN。
 - content importer 必须原子写 Post 与 durable outbox，并在 receipt 中绑定 `sourceOwner=qwq_data`、上游 immutable payload digest 与 exact object/author/media readback。Recommendation/Search 只消费 Content 所有的 lifecycle；禁止 Mongo 直写、Redis-only 推送或 seed 搜索/推荐表。
 - consumer rollback/replay 只跟随上游 environment operation/active pointer，并以同 manifest digest 完成 importer/API/media readback；本节点不创建 release lifecycle 或 acceptance 事实。
 - 逐对象 attribution、rights 与 media access mode 只从 canonical projection 读取，服务与 App 不维护第二套字段，不得从 provider、SourcePool、execution/campaign/model 或路径字面推断。
@@ -82,7 +82,7 @@
 <a id="req-005"></a>
 ### REQ-005 宿主 execution 与运营视图只作为上游只读事实
 
-- 宿主 AI 十阶段、OPEN/CLOSE receipts、逐对象 publish、显式 cohort release 与 ship facts 全部归 discovery owner；runtime-data-engineering 不拥有执行命令、状态机、recovery、milestone 或完成结论。
+- 宿主 AI producer 九阶段、OPEN/CLOSE receipts、逐对象 publish 与显式 cohort release handoff 归 discovery producer owner；ship/environment facts 归下游环境 owner。runtime-data-engineering 只读 handoff 与环境 operation facts，不拥有执行命令、状态机、recovery、milestone 或任一 owner 的完成结论。
 - 本域的消费状态查询只能读取 immutable release、importer/outbox 与 active pointer facts；不得从 execution/campaign/provider/model 推导消费资格，也不得回写上游 terminal。
 - 任何跨域运营 projection 均无 command、Repository、checkpoint 或独立 lifecycle，删除后可从公开 owner facts exact rebuild。
 
@@ -90,7 +90,7 @@
 ### REQ-006 UAT 与 environment acceptance 只读边界
 
 - Data-owned sample plan、Ops target binding、metadata raw `ReadinessCaseResult` 与 Ops `EnvironmentAcceptanceFact` 的分层 authority 保持不变，但业务规格与完成证据只在 discovery owner 声明。
-- runtime importer/query 可为 required case 提供真实 readback，并以公开 ref/digest 供 runner 消费；不得生成 raw UAT verdict、acceptance、promotion、predecessor 或 M1000 start gate。
+- runtime importer/query 可为 required case 提供真实 readback，并以公开 ref/digest 供 runner 消费；不得生成 raw UAT verdict、acceptance、promotion、predecessor 或内容生产启动门。
 - 任一上游 UAT/acceptance 缺失、失败或 digest 漂移只形成 typed read blocker，不得以本域 integration PASS、bundle、counts 或缓存代填。
 
 ## 6. 契约与依赖
@@ -98,7 +98,7 @@
 - 上游能力：[`runtime`](../spec.md) 声明的领域入口。
 - 下游能力：本目录直接 Story 及其公开结果。
 - 一致性要求：遵循本层或父 L1 DEC 声明的一致性边界。
-- owner 边界：discovery `multi-carrier-release` 拥有 execution/pool/milestone/release 与其 UAT 业务闭环；content library、metadata raw result、Ops target/acceptance 仍由各自 canonical owner 单写。本节点只拥有 importer/outbox/query/App wire 的跨域消费边界。
+- owner 边界：discovery `multi-carrier-release` 的 producer owner 拥有 execution/pool/milestone/release handoff；下游环境 owner 拥有 import/activation/readback/promotion/UAT 业务闭环；content library、metadata raw result、Ops target/acceptance 仍由各自 canonical owner 单写。本节点只拥有 importer/outbox/query/App wire 的跨域消费边界。
 - fresh 环境/物理设备 evidence 由 discovery OPEN 跟踪；本节点不得复制证据 OPEN 或据本域测试关闭上游缺口。
 - 证据执行隔离：验证执行产生的临时字节只进入 tempfile 临时根，不得写入仓库根或 `QWQ_OUTPUT_ROOT`；runner 与落盘隔离门属于 evidence contract。
 - 验收证据层：`SIT-001` 的对象、pool、holder、promotion 与 receipt 约束由 `local_contract` 承接，真实 import/readback/Search/Recommendation/lifecycle 由 `api_integration` 承接，App 消费结果由 `user_acceptance` raw `ReadinessCaseResult` 承接。
@@ -141,7 +141,7 @@
 
 - GIVEN discovery/Ops 已创建 sample plan 与 target binding。
 - WHEN required runner 调用 runtime/App consumer 并写 raw `ReadinessCaseResult`。
-- THEN runtime 只提供绑定同 release/candidate 的真实 readback，不生成或修改 raw result、acceptance、predecessor、promotion 或 M1000 start gate；缺失事实 fail closed。
+- THEN runtime 只提供绑定同 release/candidate 的真实 readback，不生成或修改 raw result、acceptance、predecessor、promotion 或 内容生产启动门；缺失事实 fail closed。
 
 
 ## 8. 开放事项
@@ -152,7 +152,7 @@
 - 类型：`capability_gap`
 - 优先级：`P0`
 - 准出影响：`block`
-- 影响或价值：仍缺同一 current immutable release 在 Content importer/outbox、Search、Recommendation、Homepage 与 App media projection 的 exact identity/readback；这不表示本节点拥有 M100/M1000、release build/promotion 或 UAT acceptance。
+- 影响或价值：仍缺同一 current immutable release 在 Content importer/outbox、Search、Recommendation、Homepage 与 App media projection 的 exact identity/readback；这不表示本节点拥有 release build/promotion 或 UAT acceptance。
 - 完成判定：`SIT-001` 由真实 importer/storage/query api_integration 直接绑定，同 release identity 的对象、数量与 media binding 全部一致，负例证明 SourcePool/execution/campaign/provider/model 与 fixture 均不能代填。
 
 

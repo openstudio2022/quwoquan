@@ -298,6 +298,16 @@ def test_new_unreferenced_python_module_blocks_but_imported_module_passes(tmp_pa
     report = analyze_delta(repo, base=base, head=second, policy_path=repo / "quwoquan_ops/policies/code_health_policy.yaml", mode="fast")
     assert not any(item["code"] == "CODE_HEALTH.NEW_PRIVATE_PYTHON_WITHOUT_ENTRY" for item in report["findings"])
 
+    # Data 包内真实写法：以 quwoquan_data/scripts 为根的 `from content.x import`。
+    write(repo, "quwoquan_data/scripts/core/private_helper.py", "def helper():\n    return 2\n")
+    write(repo, "quwoquan_data/scripts/content/consumer.py", "from core.private_helper import helper\nprint(helper())\n")
+    third = commit(repo, "data-root dotted import")
+    report = analyze_delta(repo, base=second, head=third, policy_path=repo / "quwoquan_ops/policies/code_health_policy.yaml", mode="fast")
+    assert not any(
+        item["code"] == "CODE_HEALTH.NEW_PRIVATE_PYTHON_WITHOUT_ENTRY" and item["path"].endswith("private_helper.py")
+        for item in report["findings"]
+    )
+
 
 def test_rename_delete_and_atomic_migration_are_not_size_blockers(tmp_path: Path) -> None:
     repo, _ = init_repo(tmp_path)

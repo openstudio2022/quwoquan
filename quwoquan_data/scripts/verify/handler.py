@@ -22,12 +22,10 @@ _STATIC_GATES = {
     "runtime-input-ownership": "verify_runtime_input_ownership",
     "output-root-isolation": "verify_output_root_isolation",
     "object-size-budget": "verify_object_size_budget",
-    "publish-purity": "verify_publish_purity",
     "publish-closure": "verify_publish_closure",
 }
 _EXECUTION_GATES = {
     "task-init-contract": "verify_task_init_contract",
-    "source-plan": "verify_source_plan",
 }
 _ARGV_STATIC_GATES = {
     "public-cli-live-import-zero",
@@ -56,7 +54,7 @@ def _admit_carried_media_holdings() -> int:
 def handle_all() -> list[str]:
     # Closure gates resolve media through the repository-external content library.
     # A clean checkout starts with an empty library, so first admit the exact,
-    # hash-verified bodies carried beside canonical publish in version control.
+    # hash-verified bodies carried in the out-of-repo carried media root.
     if _admit_carried_media_holdings() != 0:
         raise SystemExit(1)
 
@@ -119,7 +117,7 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
         command.add_argument("--execution-id", required=True)
     stage = commands.add_parser(
         "stage-artifacts",
-        help="按 target_set 校验阶段闭包；省略 --through 时校验 publish 后 final closure",
+        help="按 target_set 只读复核三步产物闭包；省略 --through 时校验 publish 后 final closure",
     )
     stage.add_argument("--execution-id", required=True)
     stage.add_argument("--publish-root")
@@ -128,7 +126,7 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     stage.add_argument(
         "--through",
         choices=paths.OBJECT_STAGES,
-        help="截止到指定对象阶段；省略表示 publish 后 final closure",
+        help="截止到 1.download / 4.draft / 5.review 之一；省略表示 publish 后 final closure",
     )
     integrity = commands.add_parser("release-integrity")
     integrity.add_argument("--release", required=True)

@@ -42,6 +42,8 @@ final _contentPostReaderFacetsProvider =
         ),
         postCache: ref.watch(postObjectCacheProvider),
         querySnapshotStore: ref.watch(contentQuerySnapshotStoreProvider),
+        currentCacheIdentity: () =>
+            ref.read(contentCacheIsolationIdentityProvider),
         userProfileCache: ref.watch(userProfileCacheProvider),
         telemetrySink: ref.watch(cacheTelemetrySinkProvider),
       );

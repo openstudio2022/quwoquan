@@ -2,90 +2,51 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "quwoquan_data/schema/_common/data_issue.schema.json",
   "title": "Data workflow issue",
-  "description": "Offline Data control-flow issue. code and recovery drive automation; message is presentation only.",
+  "description": "Offline Data diagnostic issue. Consumers may inspect code, message and origin fields but must not derive recovery control flow.",
   "type": "object",
-  "required": ["code", "stage", "ref", "lane", "recovery", "message", "attrs"],
+  "required": [
+    "code",
+    "message",
+    "ref",
+    "origin",
+    "attrs"
+  ],
   "additionalProperties": false,
   "properties": {
     "code": {
       "enum": [
-        "DATA.SOURCE.MISSING",
-        "DATA.SOURCE.UNREADABLE",
-        "DATA.SOURCE.PLAN_INVALID",
-        "DATA.SOURCE.RETAINED_SHORTFALL",
-        "DATA.SOURCE.CATEGORY_SHORTFALL",
-        "DATA.SOURCE.PRIMARY_AUTHORITY_MISSING",
-        "DATA.SOURCE.ENTITY_MISMATCH",
-        "DATA.SOURCE.PAGE_TYPE_INVALID",
-        "DATA.SOURCE.CONTENT_INCOMPLETE",
-        "DATA.SOURCE.QUALIFICATION_EXHAUSTED",
-        "DATA.SOURCE.POOL_SHORTFALL",
-        "DATA.MEDIA.FETCH_FAILED",
-        "DATA.MEDIA.RIGHTS_UNAVAILABLE",
-        "DATA.MEDIA.PUBLISHABLE_SHORTFALL",
         "DATA.MEDIA.ENUMERATION_INCOMPLETE",
         "DATA.MEDIA.DOWNLOAD_INCOMPLETE",
         "DATA.MEDIA.CAPTION_INVALID",
         "DATA.MEDIA.COVER_CONFLICT",
-        "DATA.AGENT.REVIEW_UNAVAILABLE",
-        "DATA.AGENT.REVIEW_INVALID",
-        "DATA.AGENT.EXECUTION_FAILED",
-        "DATA.AGENT.CREDENTIAL_INVALID",
-        "DATA.AGENT.PROVIDER_REJECTED",
-        "DATA.AGENT.CAPACITY_SHORTFALL",
-        "DATA.AGENT.SCALE_CALIBRATION_REQUIRED",
-        "DATA.AGENT.TIMEOUT",
-        "DATA.AGENT.RESULT_INVALID",
-        "DATA.CONTENT.CLASSIFICATION_REJECTED",
-        "DATA.ENVIRONMENT.NOT_READY",
-        "DATA.INFRA.NETWORK_UNREACHABLE",
-        "DATA.CONTRACT.INVALID",
-        "DATA.QUALITY.FAILED",
-        "DATA.QUEUE.EXECUTION_FAILED",
-        "DATA.QUEUE.GOVERNANCE_INVALID",
-        "DATA.QUEUE.STARTUP_FAILED",
-        "DATA.QUEUE.RESULT_ENVELOPE_INVALID",
-        "DATA.QUEUE.TIMEOUT",
-        "DATA.POOL.DELIVERY_UNAVAILABLE",
-        "DATA.SCALE.ATTAINMENT_SHORTFALL",
-        "DATA.SCALE.PREDECESSOR_IDENTITY_DRIFT",
-        "DATA.SCALE.M10000_WALL_CLOCK_BUDGET_EXCEEDED",
-        "DATA.SCALE.REMOTE_HOST_EXECUTOR_UNAVAILABLE",
-        "DATA.INTERNAL.UNEXPECTED"
+        "DATA.CONTRACT.INVALID"
       ]
     },
-    "stage": {
-      "enum": [
-        "annotate-entities", "agent_compose", "author", "baseline", "build_homepage",
-        "build_prepare", "build_validate", "compose_brief", "content_plan",
-        "controller_yield", "download", "download_fetch", "download_plan", "4.draft",
-        "entity_source_bundle", "explore", "image_fetch", "image_rights",
-        "media_check", "post_annotate", "post_author", "post_compose", "post_plan",
-        "post_review", "publish", "quality_analysis",
-        "review", "scale_promotion", "source_gate", "source_plan", "source_screen", "verify_homepage_media"
-      ]
+    "ref": {
+      "type": "string",
+      "maxLength": 512
     },
-    "ref": { "type": "string", "maxLength": 512 },
-    "lane": { "enum": ["all", "homepage", "article", "image", "video"] },
-    "recovery": {
-      "enum": [
-        "retry_source_discovery",
-        "replace_source",
-        "replace_media",
-        "rewind_download",
-        "rewind_compose",
-        "retry_agent",
-        "retry_delivery",
-        "manual_review",
-        "stop"
-      ]
+    "message": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
     },
-    "message": { "type": "string", "minLength": 1, "maxLength": 2048 },
+    "origin": {
+      "type": "string",
+      "maxLength": 512
+    },
     "attrs": {
       "type": "object",
       "maxProperties": 16,
-      "propertyNames": { "type": "string", "minLength": 1, "maxLength": 64 },
-      "additionalProperties": { "type": "string", "maxLength": 512 }
+      "propertyNames": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 64
+      },
+      "additionalProperties": {
+        "type": "string",
+        "maxLength": 512
+      }
     }
   }
 }

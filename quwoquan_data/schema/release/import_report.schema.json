@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "quwoquan_data/schema/release/import_report.schema.json",
   "title": "Environment import report (content importer 回执)",
-  "description": "content-service cmd/import 产出的 import-<env>.json 契约（Go 侧写、数据侧消费）。ship 转写批次证据前必须通过本 Schema，防止导入证据链断裂。",
+  "description": "Non-authoritative content stage report. Four owner candidate query receipts, not this report, authorize prepared/activate.",
   "type": "object",
   "required": [
     "schema",
@@ -11,36 +11,24 @@
     "releaseId",
     "sourceOwner",
     "manifestDigest",
+    "activationMode",
+    "mode",
+    "deletePolicy",
     "counts",
-    "postBindings"
+    "postBindings",
+    "auditEvents",
+    "stageResult"
   ],
   "additionalProperties": false,
   "properties": {
     "status": {
-      "description": "dry-run 只加载不写；staged/verified/active 是三阶段回执；imported 是历史一步式激活回执。",
       "type": "string",
       "enum": [
         "dry-run",
         "staged",
-        "verified",
-        "active",
-        "imported"
+        "replay_validated"
       ]
     },
-    "phase": {
-      "description": "content importer 三阶段：stage 只写 posts_candidate 与 additive 媒体归属；verify 读回候选闭包；activate 才在单事务内提交 Post/outbox/pointer。",
-      "enum": ["stage", "verify", "activate"]
-    },
-    "candidateRevision": {
-      "description": "stage 分配、verify/activate 必须精确回显的候选身份。",
-      "type": "integer",
-      "minimum": 1
-    },
-    "previousReleaseId": {"type": "string"},
-    "previousManifestDigest": {"type": "string"},
-    "previousRevision": {"type": "integer", "minimum": 0},
-    "candidatePostIds": {"type": "array", "items": {"type": "string", "minLength": 1}},
-    "candidateSourceHashes": {"type": "array", "items": {"type": "string", "minLength": 1}},
     "environment": {
       "type": "string",
       "minLength": 1
@@ -57,11 +45,20 @@
       "type": "string",
       "pattern": "^sha256:[0-9a-f]{64}$"
     },
+    "activationMode": {
+      "const": "stage-only"
+    },
     "mode": {
-      "enum": ["upsert", "sync"]
+      "enum": [
+        "upsert",
+        "sync"
+      ]
     },
     "deletePolicy": {
-      "enum": ["none", "tombstone"]
+      "enum": [
+        "none",
+        "tombstone"
+      ]
     },
     "counts": {
       "type": "object",
@@ -79,22 +76,27 @@
           "type": "integer",
           "minimum": 0
         },
-        "articleLoaded": {"type": "integer", "minimum": 0},
-        "imageLoaded": {"type": "integer", "minimum": 0},
-        "videoLoaded": {"type": "integer", "minimum": 0},
-        "researchLoaded": {"type": "integer", "minimum": 0},
-        "commercialLoaded": {"type": "integer", "minimum": 0},
+        "articleLoaded": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "imageLoaded": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "videoLoaded": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "researchLoaded": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "commercialLoaded": {
+          "type": "integer",
+          "minimum": 0
+        },
         "postsUpserted": {
-          "type": "integer",
-          "minimum": 0
-        },
-        "postsStaged": {
-          "description": "stage 写入 posts_candidate 的候选 Post 数。",
-          "type": "integer",
-          "minimum": 0
-        },
-        "candidatePosts": {
-          "description": "verify 按 candidateRevision 读回的候选 Post 数，必须等于 postsLoaded。",
           "type": "integer",
           "minimum": 0
         },
@@ -150,13 +152,39 @@
         ],
         "additionalProperties": false,
         "properties": {
-          "postRef": {"type": "string", "pattern": "^(article|image|video)/[^/].*$"},
-          "postId": {"type": "string", "minLength": 1},
-          "contentId": {"type": "string", "minLength": 1},
-          "contentVersion": {"type": "integer", "minimum": 1},
-          "usageScope": {"enum": ["research", "commercial"]},
-          "contentType": {"enum": ["article", "image", "video"]},
-          "authorId": {"type": "string", "minLength": 1}
+          "postRef": {
+            "type": "string",
+            "pattern": "^(article|image|video)/[^/].*$"
+          },
+          "postId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "contentId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "contentVersion": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "usageScope": {
+            "enum": [
+              "research",
+              "commercial"
+            ]
+          },
+          "contentType": {
+            "enum": [
+              "article",
+              "image",
+              "video"
+            ]
+          },
+          "authorId": {
+            "type": "string",
+            "minLength": 1
+          }
         }
       }
     },
@@ -166,16 +194,6 @@
         "type": "string"
       }
     },
-    "revision": {
-      "description": "成功 activation 后 data_release_state 的 authoritative revision。dry-run/staged/verified 不产生 revision。",
-      "type": "integer",
-      "minimum": 1
-    },
-    "sourceVersion": {
-      "description": "成功 activation 后写入 Post/outbox/active pointer 的 immutable source version。",
-      "type": "integer",
-      "minimum": 1
-    },
     "generatedAt": {
       "type": "string"
     },
@@ -184,54 +202,54 @@
     },
     "schema": {
       "const": "quwoquan.content_import_report"
+    },
+    "stageResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "postsExpected",
+        "postsProjected",
+        "mediaExpected",
+        "mediaProjected",
+        "outboxExpected",
+        "outboxProjected",
+        "projectionVersion",
+        "replayed"
+      ],
+      "properties": {
+        "postsExpected": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "postsProjected": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "mediaExpected": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "mediaProjected": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "outboxExpected": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "outboxProjected": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "projectionVersion": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "replayed": {
+          "type": "boolean"
+        }
+      }
     }
   },
-  "allOf": [
-    {
-      "if": {"properties": {"status": {"enum": ["imported", "active"]}}, "required": ["status"]},
-      "then": {"required": ["revision", "sourceVersion", "mode", "deletePolicy", "auditEvents"]},
-      "else": {
-        "not": {
-          "anyOf": [
-            {"required": ["revision"]},
-            {"required": ["sourceVersion"]}
-          ]
-        }
-      }
-    },
-    {
-      "if": {"properties": {"status": {"enum": ["staged", "verified", "active"]}}, "required": ["status"]},
-      "then": {"required": ["phase", "candidateRevision"]},
-      "else": {
-        "not": {
-          "anyOf": [
-            {"required": ["phase"]},
-            {"required": ["candidateRevision"]}
-          ]
-        }
-      }
-    },
-    {
-      "if": {"properties": {"status": {"const": "staged"}}, "required": ["status"]},
-      "then": {
-        "required": ["mode", "deletePolicy", "auditEvents", "previousReleaseId", "previousManifestDigest", "previousRevision"],
-        "properties": {"phase": {"const": "stage"}}
-      }
-    },
-    {
-      "if": {"properties": {"status": {"const": "verified"}}, "required": ["status"]},
-      "then": {
-        "required": ["candidatePostIds", "candidateSourceHashes", "auditEvents"],
-        "properties": {"phase": {"const": "verify"}}
-      }
-    },
-    {
-      "if": {"properties": {"status": {"const": "active"}}, "required": ["status"]},
-      "then": {"properties": {"phase": {"const": "activate"}}}
-    },
-    {
-      "if": {"properties": {"status": {"const": "dry-run"}}, "required": ["status"]},
-      "then": {"required": ["mode", "deletePolicy", "auditEvents"]}
-    }
-  ]
+  "allOf": []
 }

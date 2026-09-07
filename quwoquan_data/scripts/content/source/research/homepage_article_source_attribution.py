@@ -54,8 +54,9 @@ def encyclopedia_source_attribution(
             if wikipedia
             else None
         ),
-        "riskAcceptanceId": None,
+        # 百科来源只承载正文事实、不落像素，「无水印」是事实而不是假定。
         "watermarkStatus": "absent",
+        "watermarkKind": "none",
         "audioRightsStatus": "no_audio",
         "modelReleaseStatus": "not_required",
         "propertyReleaseStatus": "not_required",

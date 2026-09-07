@@ -1,32 +1,13 @@
-"""Immutable release 的 apply(stage)、activate、rollback 与 consumer verification。
-
-三段编排（DEC-042 lean staging）：
-
-- ``apply``：单环境 import-only。Content 只写 ``posts_candidate`` 与 additive 媒体
-  归属；Creator/Homepage 只做 ``upsert``；Tag taxonomy importer 没有 upsert/sync
-  之分，它在这里就写入按 releaseId 保留的 snapshot 并切换 taxonomy 自己的 active
-  pointer（可重新 Activate previous，见 multi-carrier-release OPEN-022）。Content
-  active pointer、``posts``、媒体文件与 Creator/Homepage 的删除/下线一律不动。
-- ``verify``（候选态）：按 stage 回执的 ``candidateRevision`` 读回候选闭包。
-- ``activate``：绑定 stage + verify 两个 run 的同一候选身份，在 Content 单事务内
-  切换 pointer；只有成功之后才执行 Creator/Homepage ``sync`` 的删除/下线与显式
-  媒体回收。
-- ``rollback``：对目标 release 走 fresh stage → verify → activate，再由 consumer
-  verify 做四入口读回。
-"""
+"""Immutable release 的 apply、rollback 与 consumer verification 操作。"""
 
 from __future__ import annotations
 
 import argparse
-from collections.abc import Mapping
+import re
 from pathlib import Path
-from typing import Any
 
 from content.release.environment._ship_operation_dependencies import (
     ShipOperationDependencies,
-)
-from content.release.environment.activation_recovery import (
-    previous_active_release_identity,
 )
 from content.release.environment.consistency import (
     report_to_text,
@@ -35,105 +16,258 @@ from content.release.environment.consistency import (
 from content.release.environment.homepage_verification_cases import (
     HomepageVerificationCaseError,
 )
+from content.release.environment.importers import (
+    assert_content_release_evidence_unchanged,
+)
 from content.release.environment.readiness import ShipReadinessPhase
+from content.release.environment.run_evidence import (
+    read_environment_result,
+    validate_path_segment,
+)
 from content.release.model import (
     DeletePolicy,
     DeploymentEnvironment,
     EvidenceStatus,
     ImportMode,
 )
-from core.control_types import ContentImportPhase, ReleaseRunKind, ReleaseRunStatus
+from core.control_types import ReleaseRunKind, ReleaseRunStatus
 from core.io import read_json, write_json
 from core.paths import release_ref
-from core.release_layout import payload_digest, payload_file
-
-ROLLBACK_FAILED_CODE = "DATA.DELIVERY.ROLLBACK_FAILED"
+from core.release_layout import payload_file
 
 
-def _lifecycle_evidence(release: Path) -> dict[str, Any]:
-    header = read_json(payload_file(release, "release.json"))
+_SENSITIVE_ERROR_ASSIGNMENT = re.compile(
+    r"(?i)\b(authorization|access[_-]?token|refresh[_-]?token|token|password|"
+    r"secret|body|query)\b\s*[:=]\s*(?:Bearer\s+)?(?:\{[^}]*\}|\[[^]]*\]|"
+    r'"[^"]*"|\'[^\']*\'|[^\s,;]+)'
+)
+_SENSITIVE_ERROR_BEARER = re.compile(r"(?i)\bBearer\s+[^\s,;]+")
+_SENSITIVE_URL_CREDENTIALS = re.compile(
+    r"(?i)\b([a-z][a-z0-9+.-]*://)[^/@\s:]+:[^/@\s]+@"
+)
+
+
+def _bounded_error(
+    error: Exception | SystemExit,
+    *,
+    limit: int = 1024,
+) -> str:
+    """Return one bounded, redacted diagnostic line without traceback text."""
+
+    message = " ".join(str(error).splitlines()).strip()
+    message = _SENSITIVE_ERROR_BEARER.sub("Bearer [REDACTED]", message)
+    message = _SENSITIVE_URL_CREDENTIALS.sub(r"\1[REDACTED]@", message)
+    message = _SENSITIVE_ERROR_ASSIGNMENT.sub(
+        lambda match: f"{match.group(1)}=[REDACTED]",
+        message,
+    )
+    return (message or type(error).__name__)[:limit]
+
+
+def _write_terminal_result(
+    *,
+    dependencies: ShipOperationDependencies,
+    run: Path,
+    document: dict[str, object],
+) -> None:
+    dependencies.write_verification_result(run / "result.json", document)
+
+
+def _record_failed_result(
+    *,
+    dependencies: ShipOperationDependencies,
+    run: Path,
+    base_result: dict[str, object],
+    failed_stage: str,
+    error: Exception | SystemExit,
+) -> Exception | None:
+    try:
+        _write_terminal_result(
+            dependencies=dependencies,
+            run=run,
+            document={
+                **base_result,
+                "status": ReleaseRunStatus.FAILED,
+                "failedStage": failed_stage,
+                "error": _bounded_error(error),
+            },
+        )
+    except Exception as receipt_error:  # Preserve the operation as the first cause.
+        return receipt_error
+    return None
+
+
+def _failed_receipt_note(
+    *,
+    error: Exception | SystemExit,
+    receipt_error: Exception | None,
+) -> None:
+    if receipt_error is not None:
+        error.add_note(
+            f"{_bounded_error(error)}; failed result evidence error: "
+            f"{_bounded_error(receipt_error)}"
+        )
+
+
+def _release_admission(
+    args: argparse.Namespace,
+    dependencies: ShipOperationDependencies,
+):
+    admission = getattr(args, "release_admission", None)
+    if admission is None:
+        admission = dependencies.admit_release(args)
+    if admission is None:
+        raise SystemExit("[ship] GATE_BLOCK sealed release admission is missing")
+    return admission
+
+
+def _required_adapter(dependencies: ShipOperationDependencies, name: str):
+    adapter = getattr(dependencies, name, None)
+    if adapter is None:
+        raise SystemExit(
+            f"[ship] GATE_BLOCK owner release adapter missing: {name}"
+        )
+    return adapter
+
+
+def _require_owner_local_staging_admission(
+    *,
+    dependencies: ShipOperationDependencies,
+    evidence: dict[str, object],
+    environment: str,
+    release_id: str,
+    manifest_digest: str,
+):
+    adapter = _required_adapter(dependencies, "require_owner_local_staging_admission")
+    return adapter(
+        evidence=evidence,
+        output_root=dependencies.output_root,
+        environment=environment,
+        release_id=release_id,
+        manifest_digest=manifest_digest,
+    )
+
+
+def _query_all_owner_candidates(
+    *,
+    dependencies: ShipOperationDependencies,
+    target: object,
+    run: Path,
+    environment: str,
+    release_id: str,
+    manifest_digest: str,
+    initial_evidence: dict[str, object] | None = None,
+) -> dict[str, object]:
+    evidence: dict[str, object] = dict(initial_evidence or {})
+    for owner in ("tag", "creator", "homepage", "content"):
+        if owner in evidence:
+            continue
+        adapter = _required_adapter(dependencies, f"query_{owner}_release_candidate")
+        evidence[owner] = adapter(
+            env=environment,
+            mongo_uri=target.mongo_uri,
+            release_id=release_id,
+            manifest_digest=manifest_digest,
+            report_path=run / f"{owner}-candidate-receipt.json",
+            output_root=dependencies.output_root,
+        )
+    return evidence
+
+
+def _candidate_result_fields(evidence: dict[str, object]) -> dict[str, str]:
+    fields: dict[str, str] = {}
+    for owner, item in evidence.items():
+        fields[f"{owner}CandidateReceiptRef"] = item.ref
+        fields[f"{owner}CandidateReceiptDigest"] = item.digest
+    return fields
+
+
+def _load_prepared_owner_candidates(
+    *,
+    dependencies: ShipOperationDependencies,
+    import_result: dict[str, object],
+    environment: str,
+    release_id: str,
+    manifest_digest: str,
+) -> dict[str, object]:
+    loader = _required_adapter(dependencies, "load_owner_release_candidate_receipt")
+    evidence: dict[str, object] = {}
+    for owner in ("tag", "creator", "homepage", "content"):
+        ref = str(import_result.get(f"{owner}CandidateReceiptRef") or "")
+        digest = str(import_result.get(f"{owner}CandidateReceiptDigest") or "")
+        if not ref or not digest:
+            raise SystemExit(f"[ship] prepared result lacks {owner} candidate proof")
+        evidence[owner] = loader(
+            dependencies.output_root / ref,
+            owner=owner,
+            output_root=dependencies.output_root,
+            environment=environment,
+            release_id=release_id,
+            manifest_digest=manifest_digest,
+            expected_digest=digest,
+        )
+    return evidence
+
+
+def _content_fence(active: dict[str, object]) -> dict[str, object]:
     return {
-        "releaseClass": str(header.get("releaseClass") or ""),
-        "productLifecycleState": str(
-            header.get("productLifecycleState") or ""
-        ),
-        "containsUnverifiedAssets": bool(
-            header.get("containsUnverifiedAssets")
-        ),
-        "manifestDigest": payload_digest(release),
+        "environment": active.get("environment"),
+        "sourceOwner": active.get("sourceOwner"),
+        "releaseId": active.get("releaseId"),
+        "manifestDigest": active.get("manifestDigest"),
+        "revision": active.get("revision"),
     }
 
 
-def _single_environment(raw: object, *, command: str) -> str:
-    envs = [item.strip() for item in str(raw or "").split(",") if item.strip()]
-    if len(envs) != 1:
-        raise SystemExit(
-            f"[ship] {command} 只接受单个 --env；候选与激活身份按环境逐一绑定"
-        )
-    return envs[0]
 
-
-def _relative(dependencies: ShipOperationDependencies, path: Path) -> str:
-    return path.relative_to(dependencies.output_root).as_posix()
-
-
-def _run_reference_importers(
+def _readback_all_owners(
     *,
     dependencies: ShipOperationDependencies,
-    release: Path,
-    contract: Mapping[str, Any],
-    env: str,
+    target: object,
     run: Path,
-    run_id: str,
-    target: Any,
-    dry_run: bool,
-    destructive: bool,
-) -> tuple[dict[str, str], Path]:
-    """Tag/Creator/Homepage importer 与 coverage/case 证据。
+    content_active: object,
+) -> dict[str, str]:
+    fence = _content_fence(content_active.document)
+    fields: dict[str, str] = {}
+    for owner in ("tag", "creator", "homepage", "content"):
+        adapter = _required_adapter(dependencies, f"readback_{owner}_at_content_fence")
+        evidence = adapter(
+            env=fence["environment"],
+            mongo_uri=target.mongo_uri,
+            fence=fence,
+            report_path=run / f"{owner}-fenced-readback-receipt.json",
+            output_root=dependencies.output_root,
+        )
+        document = evidence.document
+        if any(document.get(field) != value for field, value in fence.items()):
+            raise RuntimeError(f"{owner} fenced readback differs from Content fence")
+        assert_content_release_evidence_unchanged(evidence)
+        fields[f"{owner}FencedReadbackReceiptRef"] = evidence.ref
+        fields[f"{owner}FencedReadbackReceiptDigest"] = evidence.digest
+    return fields
 
-    ``destructive=False`` 只允许 additive ``upsert``；``destructive=True`` 只在
-    Content activate 成功后使用，才允许 Creator/Homepage ``sync`` 删除或下线。
-    """
-    reference_mode = ImportMode.SYNC if destructive else ImportMode.UPSERT
-    refs: dict[str, str] = {}
-    tag_receipt = dependencies.run_tag_importer(
-        release=release, env=env, run=run, mongo_uri=target.mongo_uri, dry_run=dry_run,
-    )
-    refs["tagImportReportRef"] = _relative(dependencies, tag_receipt)
-    creator_receipt = dependencies.run_creator_importer(
-        release=release, env=env, run=run, mongo_uri=target.mongo_uri,
-        postgres_dsn=target.user_postgres_dsn,
-        media_avatar_base_url=target.media_delivery_base_url,
-        dry_run=dry_run, mode=reference_mode,
-    )
-    refs["creatorImportReportRef"] = _relative(dependencies, creator_receipt)
-    homepage_import_report = dependencies.run_homepage_importer(
-        release=release, env=env, run=run, run_id=run_id, mongo_uri=target.mongo_uri,
-        media_image_base_url=target.media_delivery_base_url,
-        dry_run=dry_run, mode=reference_mode,
-    )
-    refs["homepageImportReportRef"] = _relative(
-        dependencies, run / "homepage-import.json"
-    )
-    coverage_receipt = dependencies.write_environment_coverage_receipt(
-        environment=target.environment, release_id=release.name, run_id=run_id,
-        release_root=release, run_root=run, importer_report=homepage_import_report,
-        api_base_url=target.api_base_url,
-    )
-    refs["coverageReceiptRef"] = _relative(dependencies, coverage_receipt)
-    expected_entities = contract.get("desiredRefs", {}).get("entities", [])
-    if not dry_run and expected_entities:
-        try:
-            verification_cases = dependencies.write_homepage_verification_case_manifest(
-                environment=target.environment, release_root=release, run_root=run,
-                run_id=run_id, importer_report=homepage_import_report,
-            )
-        except HomepageVerificationCaseError as exc:
-            raise SystemExit(
-                f"[ship] homepage verification case manifest failed: {exc}"
-            ) from exc
-        refs["homepageVerificationCasesRef"] = _relative(dependencies, verification_cases)
-    return refs, creator_receipt
+
+def _lifecycle_evidence(admission: object) -> dict[str, object]:
+    header = read_json(payload_file(admission.release, "release.json"))
+    return {
+        "releaseClass": str(header.get("releaseClass") or ""),
+        "productLifecycleState": str(header.get("productLifecycleState") or ""),
+        "containsUnverifiedAssets": bool(header.get("containsUnverifiedAssets")),
+        "manifestDigest": admission.manifest_digest,
+    }
+
+
+def _import_evidence_refs(
+    run: Path, dependencies: ShipOperationDependencies
+) -> dict[str, str]:
+    return {
+        "homepageVerificationCasesRef": "",
+        "tagImportReportRef": "",
+        "creatorImportReportRef": "",
+        "contentImportReportRef": "",
+        "homepageImportReportRef": "",
+        "coverageReceiptRef": "",
+    }
 
 
 def apply_release(
@@ -141,12 +275,18 @@ def apply_release(
     *,
     dependencies: ShipOperationDependencies,
 ) -> None:
-    """Stage one immutable release into one environment without activating it."""
-
-    release_id = str(args.release_id)
-    release, contract = dependencies.load_release(release_id)
-    lifecycle_evidence = _lifecycle_evidence(release)
-    env = _single_environment(args.env, command="apply")
+    admission = _release_admission(args, dependencies)
+    release_id = validate_path_segment(admission.release_id, label="release_id")
+    release, contract = admission.release, admission.contract
+    lifecycle_evidence = _lifecycle_evidence(admission)
+    env = str(args.env)
+    if (
+        not env
+        or env != env.strip()
+        or "," in env
+        or any(character.isspace() for character in env)
+    ):
+        raise SystemExit("[ship] apply --env 必须且只能是一个环境")
     if (
         env == DeploymentEnvironment.PROD
         and args.import_to_db
@@ -162,106 +302,202 @@ def apply_release(
     if dependencies.release_requires_full_sync(release) and not full_sync:
         raise SystemExit("[ship] immutable release requires --full-sync")
     dependencies.assert_environment_release_policy(
-        release=release, contract=contract, environment=env,
+        release=release, contract=contract, environment=env
     )
     target = dependencies.resolve_environment_release_target(env)
     dependencies.assert_target_action_allowed(
-        target=target, import_to_db=bool(args.import_to_db),
-        dry_run=bool(args.dry_run), action="apply",
+        target=target,
+        import_to_db=bool(args.import_to_db),
+        dry_run=bool(args.dry_run),
+        action="apply",
     )
-    run_id = str(args.run_id or f"apply-{dependencies.now_compact()}")
+    run_id = validate_path_segment(
+        str(args.run_id or f"apply-{dependencies.now_compact()}"), label="run_id"
+    )
     run = dependencies.create_run(env, release_id, run_id, kind=ReleaseRunKind.APPLY)
-    if args.import_to_db and not args.dry_run:
-        # Stage 只证明导入能力；lifecycle readback 归 verify/activate 之后。
-        dependencies.require_environment_readiness(
-            environment=target.environment, phase=ShipReadinessPhase.IMPORT,
-            run=run, release_id=release_id,
-            manifest_digest=lifecycle_evidence["manifestDigest"],
-        )
-    write_json(run / "consistency-preflight.json", preflight)
-    if target.media_sync_root is not None and args.import_to_db and not args.dry_run:
-        dependencies.sync_media(
-            release=release, destination=str(target.media_sync_root), run=run,
-        )
-    refs: dict[str, Any] = {}
-    candidate_revision: int | None = None
-    if args.import_to_db:
-        refs, creator_receipt = _run_reference_importers(
-            dependencies=dependencies, release=release, contract=contract, env=env,
-            run=run, run_id=run_id, target=target, dry_run=bool(args.dry_run),
-            destructive=False,
-        )
-        stage_report = dependencies.run_content_importer(
-            release=release, env=env, run=run, mongo_uri=target.mongo_uri,
-            media_avatar_base_url=target.media_delivery_base_url,
-            media_image_base_url=target.media_delivery_base_url,
-            media_video_base_url=target.media_delivery_base_url,
-            dry_run=bool(args.dry_run), creator_receipt=creator_receipt,
-            phase=ContentImportPhase.STAGE,
-            mode=ImportMode.SYNC if full_sync else ImportMode.UPSERT,
-            delete_policy=DeletePolicy.TOMBSTONE if full_sync else DeletePolicy.NONE,
-        )
-        refs["contentImportReportRef"] = _relative(dependencies, run / "import.json")
-        if not args.dry_run:
-            candidate_revision = int(stage_report["candidateRevision"])
-    dependencies.write_release_evidence(
-        run / "result.json",
-        {
-            "schema": "quwoquan_data.environment_release_result",
-            "environment": env,
-            "releaseId": release_id,
-            **lifecycle_evidence,
-            "runId": run_id,
-            "status": (
-                ReleaseRunStatus.DRY_RUN
-                if args.dry_run
-                else (
-                    ReleaseRunStatus.COMPLETED
-                    if args.import_to_db
-                    else ReleaseRunStatus.PREPARED
+    base_result: dict[str, object] = {
+        "schema": "quwoquan_data.environment_release_result",
+        "environment": env,
+        "releaseId": release_id,
+        **lifecycle_evidence,
+        **admission.result_envelope(),
+        "runId": run_id,
+    }
+    refs = _import_evidence_refs(run, dependencies)
+    failed_stage = "owner_local_staging_admission"
+    try:
+        if args.import_to_db and not args.dry_run:
+            failed_stage = "environment_readiness"
+            dependencies.require_environment_readiness(
+                environment=target.environment,
+                phase=ShipReadinessPhase.IMPORT,
+                run=run,
+                release_id=release_id,
+                manifest_digest=admission.manifest_digest,
+            )
+        failed_stage = "consistency_preflight_evidence"
+        write_json(run / "consistency-preflight.json", preflight)
+        if (
+            target.media_sync_root is not None
+            and args.import_to_db
+            and not args.dry_run
+        ):
+            failed_stage = "media_sync"
+            dependencies.sync_media(
+                release=release, destination=str(target.media_sync_root), run=run
+            )
+        candidate_evidence: dict[str, object] = {}
+        if args.import_to_db:
+            failed_stage = "tag_import"
+            tag_receipt = dependencies.run_tag_importer(
+                release=release,
+                env=env,
+                run=run,
+                mongo_uri=target.mongo_uri,
+                dry_run=bool(args.dry_run),
+            )
+            refs["tagImportReportRef"] = tag_receipt.relative_to(
+                dependencies.output_root
+            ).as_posix()
+            failed_stage = "creator_import"
+            creator_receipt = dependencies.run_creator_importer(
+                release=release,
+                env=env,
+                run=run,
+                mongo_uri=target.mongo_uri,
+                postgres_dsn=target.user_postgres_dsn,
+                media_avatar_base_url=target.media_delivery_base_url,
+                dry_run=bool(args.dry_run),
+                mode=ImportMode.SYNC if full_sync else ImportMode.UPSERT,
+            )
+            refs["creatorImportReportRef"] = creator_receipt.relative_to(
+                dependencies.output_root
+            ).as_posix()
+            creator_candidate = None
+            if not args.dry_run:
+                failed_stage = "creator_candidate_query"
+                creator_candidate = _required_adapter(
+                    dependencies, "query_creator_release_candidate"
+                )(
+                    env=env,
+                    mongo_uri=target.mongo_uri,
+                    release_id=release_id,
+                    manifest_digest=admission.manifest_digest,
+                    report_path=run / "creator-candidate-receipt.json",
+                    output_root=dependencies.output_root,
                 )
-            ),
-            "contentPhase": ContentImportPhase.STAGE.value,
-            "fullSync": full_sync,
-            **({"candidateRevision": candidate_revision} if candidate_revision else {}),
-            **refs,
-        },
-        "environment_release_result",
-    )
-    print(f"[ship] {env} staged release={release_id} run={run_id} evidence={run}")
-
-
-def _load_completed_run(
-    dependencies: ShipOperationDependencies,
-    *,
-    env: str,
-    release_id: str,
-    run_id: str,
-    manifest_digest: str,
-    content_phase: ContentImportPhase,
-    label: str,
-) -> dict[str, Any]:
-    run = dependencies.run_root(env, release_id, run_id)
-    result_path = run / "result.json"
-    if not result_path.is_file():
-        raise SystemExit(
-            f"[ship] {label} run {run_id} has no result evidence for {release_id}; "
-            f"a completed {content_phase.value} run is required"
+            failed_stage = "content_candidate_stage"
+            content_receipt = dependencies.run_content_importer(
+                release=release,
+                env=env,
+                run=run,
+                mongo_uri=target.mongo_uri,
+                media_avatar_base_url=target.media_delivery_base_url,
+                media_image_base_url=target.media_delivery_base_url,
+                media_video_base_url=target.media_delivery_base_url,
+                dry_run=bool(args.dry_run),
+                mode=ImportMode.SYNC if full_sync else ImportMode.UPSERT,
+                delete_policy=DeletePolicy.TOMBSTONE
+                if full_sync
+                else DeletePolicy.NONE,
+                creator_candidate_receipt=(creator_candidate.path if creator_candidate else creator_receipt),
+            )
+            refs["contentImportReportRef"] = content_receipt.relative_to(
+                dependencies.output_root
+            ).as_posix()
+            failed_stage = "homepage_import"
+            homepage_import_report = dependencies.run_homepage_importer(
+                release=release,
+                env=env,
+                run=run,
+                run_id=run_id,
+                mongo_uri=target.mongo_uri,
+                media_image_base_url=target.media_delivery_base_url,
+                dry_run=bool(args.dry_run),
+                mode=ImportMode.SYNC if full_sync else ImportMode.UPSERT,
+            )
+            refs["homepageImportReportRef"] = (
+                (run / "homepage-import.json")
+                .relative_to(dependencies.output_root)
+                .as_posix()
+            )
+            if not args.dry_run:
+                failed_stage = "owner_candidate_query"
+                owner_candidates = _query_all_owner_candidates(
+                    dependencies=dependencies,
+                    target=target,
+                    run=run,
+                    environment=env,
+                    release_id=release_id,
+                    manifest_digest=admission.manifest_digest,
+                    initial_evidence={"creator": creator_candidate},
+                )
+                failed_stage = "owner_local_staging_admission"
+                admitted = _require_owner_local_staging_admission(
+                    dependencies=dependencies,
+                    evidence=owner_candidates,
+                    environment=env,
+                    release_id=release_id,
+                    manifest_digest=admission.manifest_digest,
+                )
+                candidate_evidence = admitted.result_fields()
+            failed_stage = "coverage_receipt"
+            coverage_receipt = dependencies.write_environment_coverage_receipt(
+                environment=target.environment,
+                release_id=release_id,
+                run_id=run_id,
+                release_root=release,
+                run_root=run,
+                importer_report=homepage_import_report,
+                api_base_url=target.api_base_url,
+            )
+            refs["coverageReceiptRef"] = coverage_receipt.relative_to(
+                dependencies.output_root
+            ).as_posix()
+            expected_entities = contract.get("desiredRefs", {}).get("entities", [])
+            if not args.dry_run and expected_entities:
+                failed_stage = "homepage_verification_cases"
+                try:
+                    verification_cases = (
+                        dependencies.write_homepage_verification_case_manifest(
+                            environment=target.environment,
+                            release_root=release,
+                            run_root=run,
+                            run_id=run_id,
+                            importer_report=homepage_import_report,
+                        )
+                    )
+                except HomepageVerificationCaseError as exc:
+                    raise SystemExit(
+                        f"[ship] homepage verification case manifest failed: {exc}"
+                    ) from exc
+                refs["homepageVerificationCasesRef"] = verification_cases.relative_to(
+                    dependencies.output_root
+                ).as_posix()
+        failed_stage = "terminal_result"
+        _write_terminal_result(
+            dependencies=dependencies,
+            run=run,
+            document={
+                **base_result,
+                "status": ReleaseRunStatus.DRY_RUN
+                if args.dry_run
+                else ReleaseRunStatus.PREPARED,
+                **refs,
+                **candidate_evidence,
+            },
         )
-    result = read_json(result_path)
-    if (
-        result.get("environment") != env
-        or result.get("releaseId") != release_id
-        or result.get("manifestDigest") != manifest_digest
-        or result.get("status") != ReleaseRunStatus.COMPLETED
-        or result.get("contentPhase") != content_phase.value
-        or int(result.get("candidateRevision") or 0) <= 0
-    ):
-        raise SystemExit(
-            f"[ship] {label} run {run_id} is not a completed {content_phase.value} "
-            f"run for {release_id}@{manifest_digest}"
+    except (Exception, SystemExit) as error:
+        receipt_error = _record_failed_result(
+            dependencies=dependencies,
+            run=run,
+            base_result=base_result,
+            failed_stage=failed_stage,
+            error=error,
         )
-    return result
+        _failed_receipt_note(error=error, receipt_error=receipt_error)
+        raise
+    print(f"[ship] {env} release={release_id} run={run_id} evidence={run}")
 
 
 def activate_release(
@@ -269,163 +505,144 @@ def activate_release(
     *,
     dependencies: ShipOperationDependencies,
 ) -> None:
-    """Switch the active pointer to an exactly verified candidate, then clean up."""
-
-    release_id = str(args.release_id)
-    release, contract = dependencies.load_release(release_id)
-    lifecycle_evidence = _lifecycle_evidence(release)
-    env = _single_environment(args.env, command="activate")
-    expected_revision = int(args.expected_revision)
-    if expected_revision < 0:
-        raise SystemExit("[ship] activate --expected-revision 必须为非负整数")
+    admission = _release_admission(args, dependencies)
+    release_id = validate_path_segment(admission.release_id, label="release_id")
+    env = str(args.env).strip()
+    target = dependencies.resolve_environment_release_target(env)
+    dependencies.assert_environment_release_policy(
+        release=admission.release,
+        contract=admission.contract,
+        environment=env,
+    )
+    dependencies.assert_target_action_allowed(
+        target=target,
+        import_to_db=True,
+        dry_run=False,
+        action="activate",
+    )
     if env == DeploymentEnvironment.PROD and not args.confirm_prod_apply:
         raise SystemExit("[ship] prod activate 需要 --confirm-prod-apply")
-    manifest_digest = lifecycle_evidence["manifestDigest"]
-    import_run_id = str(args.import_run_id).strip()
-    verify_run_id = str(args.verify_run_id).strip()
-    stage_result = _load_completed_run(
-        dependencies, env=env, release_id=release_id, run_id=import_run_id,
-        manifest_digest=manifest_digest, content_phase=ContentImportPhase.STAGE,
-        label="import",
+    import_run_id = validate_path_segment(
+        str(args.import_run_id), label="import_run_id"
     )
-    verify_result = _load_completed_run(
-        dependencies, env=env, release_id=release_id, run_id=verify_run_id,
-        manifest_digest=manifest_digest, content_phase=ContentImportPhase.VERIFY,
-        label="verify",
+    import_run = dependencies.run_root(env, release_id, import_run_id)
+    import_result = read_environment_result(
+        import_run / "result.json",
+        expected={
+            "environment": env,
+            "releaseId": release_id,
+            "runId": import_run_id,
+            "manifestDigest": admission.manifest_digest,
+            **admission.result_envelope(),
+        },
+        required_status=ReleaseRunStatus.PREPARED,
+        label="prepared apply predecessor result",
     )
-    candidate_revision = int(stage_result["candidateRevision"])
-    if (
-        int(verify_result["candidateRevision"]) != candidate_revision
-        or verify_result.get("importRunId") != import_run_id
-    ):
-        raise SystemExit(
-            "[ship] verify run does not bind the staged candidate identity: "
-            f"stage={candidate_revision} verify={verify_result.get('candidateRevision')}"
-        )
-    full_sync = bool(stage_result.get("fullSync"))
-    dependencies.assert_environment_release_policy(
-        release=release, contract=contract, environment=env,
+    candidates = _load_prepared_owner_candidates(
+        dependencies=dependencies,
+        import_result=import_result,
+        environment=env,
+        release_id=release_id,
+        manifest_digest=admission.manifest_digest,
     )
-    target = dependencies.resolve_environment_release_target(env)
-    dependencies.assert_target_action_allowed(
-        target=target, import_to_db=True, dry_run=False, action="activate",
+    run_id = validate_path_segment(
+        str(args.run_id or f"activate-{dependencies.now_compact()}"), label="run_id"
     )
-    run_id = str(args.run_id or f"activate-{dependencies.now_compact()}")
     run = dependencies.create_run(env, release_id, run_id, kind=ReleaseRunKind.ACTIVATE)
-    dependencies.require_environment_readiness(
-        environment=target.environment, phase=ShipReadinessPhase.IMPORT,
-        run=run, release_id=release_id, manifest_digest=manifest_digest,
-    )
-    stage_run = dependencies.run_root(env, release_id, import_run_id)
-    activation = dependencies.run_content_importer(
-        release=release, env=env, run=run, mongo_uri=target.mongo_uri,
-        media_avatar_base_url=target.media_delivery_base_url,
-        media_image_base_url=target.media_delivery_base_url,
-        media_video_base_url=target.media_delivery_base_url,
-        dry_run=False,
-        # Creator receipt 已在 stage run 由 additive upsert 验证，activate 绑定同一份。
-        creator_receipt=stage_run / "creator-import.json",
-        phase=ContentImportPhase.ACTIVATE, candidate_revision=candidate_revision,
-        expected_revision=expected_revision,
-        mode=ImportMode.SYNC if full_sync else ImportMode.UPSERT,
-        delete_policy=DeletePolicy.TOMBSTONE if full_sync else DeletePolicy.NONE,
-    )
-    activated_result: dict[str, Any] = {
+    base_result: dict[str, object] = {
         "schema": "quwoquan_data.environment_release_result",
         "environment": env,
         "releaseId": release_id,
-        **lifecycle_evidence,
+        **_lifecycle_evidence(admission),
+        **admission.result_envelope(),
         "runId": run_id,
         "importRunId": import_run_id,
-        "verifyRunId": verify_run_id,
-        "contentPhase": ContentImportPhase.ACTIVATE.value,
-        "fullSync": full_sync,
-        "candidateRevision": candidate_revision,
-        "revision": int(activation["revision"]),
-        "contentImportReportRef": _relative(dependencies, run / "import.json"),
+        **_candidate_result_fields(candidates),
     }
-    # Pointer 已切换，以下收尾都在 Content 事务之外。任一步失败都必须留下带
-    # revision 的 failed result：重跑 activate 会命中 CANDIDATE_ALREADY_ACTIVE，
-    # 只有可观测的终态才能让 consumer verify / fresh rollback 接手。
-    refs: dict[str, str] = {}
+    failed_stage = "owner_local_staging_admission"
     try:
-        # 引用型对象在这里再跑一遍：full-sync 时才允许 Creator/Homepage ``sync``
-        # 删除/下线；否则只是幂等 upsert。activate run 因此持有 consumer verify
-        # 需要的完整导入证据。
-        refs, _ = _run_reference_importers(
-            dependencies=dependencies, release=release, contract=contract, env=env,
-            run=run, run_id=run_id, target=target, dry_run=False, destructive=full_sync,
+        admitted = _require_owner_local_staging_admission(
+            dependencies=dependencies,
+            evidence=candidates,
+            environment=env,
+            release_id=release_id,
+            manifest_digest=admission.manifest_digest,
         )
-        if target.media_sync_root is not None and dependencies.prune_media is not None:
-            dependencies.prune_media(
-                release=release,
-                previous_release=_previous_release_root(
-                    dependencies, release=release, release_id=release_id,
-                    stage_result=stage_result, activation=activation,
-                ),
-                destination=str(target.media_sync_root), run=run,
-            )
-            refs["mediaPruneRef"] = _relative(dependencies, run / "media-prune.json")
+        base_result.update(admitted.result_fields())
+        failed_stage = "content_active_pre_query"
+        pre = _required_adapter(dependencies, "query_content_active_release")(
+            env=env,
+            mongo_uri=target.mongo_uri,
+            report_path=run / "content-active-pre-receipt.json",
+            output_root=dependencies.output_root,
+        )
+        failed_stage = "content_activation_cas"
+        activation = _required_adapter(dependencies, "activate_content_release")(
+            env=env,
+            mongo_uri=target.mongo_uri,
+            release_id=release_id,
+            manifest_digest=admission.manifest_digest,
+            expected_active=pre.document,
+            report_path=run / "content-activation-receipt.json",
+            output_root=dependencies.output_root,
+        )
+        failed_stage = "content_active_post_query"
+        post = _required_adapter(dependencies, "query_content_active_release")(
+            env=env,
+            mongo_uri=target.mongo_uri,
+            report_path=run / "content-active-post-receipt.json",
+            output_root=dependencies.output_root,
+        )
+        active = activation.document["active"]
+        expected_revision = int(pre.document.get("revision") or 0) + 1
+        if (
+            post.document.get("status") != "found"
+            or post.document.get("releaseId") != release_id
+            or post.document.get("manifestDigest") != admission.manifest_digest
+            or post.document.get("releaseClass") != active.get("releaseClass")
+            or post.document.get("projectionVersion") != active.get("projectionVersion")
+            or post.document.get("revision") != active.get("revision")
+            or post.document.get("activatedAt") != active.get("activatedAt")
+            or active.get("revision") != expected_revision
+        ):
+            raise SystemExit("[ship] Content activation post-CAS readback differs")
+        failed_stage = "owner_fenced_readback"
+        readback_evidence = _readback_all_owners(
+            dependencies=dependencies,
+            target=target,
+            run=run,
+            content_active=post,
+        )
+        for evidence in (*candidates.values(), pre, activation, post):
+            assert_content_release_evidence_unchanged(evidence)
+        completed = {
+            **base_result,
+            "status": ReleaseRunStatus.COMPLETED,
+            "contentPreActiveReceiptRef": pre.ref,
+            "contentPreActiveReceiptDigest": pre.digest,
+            "contentActivationReceiptRef": activation.ref,
+            "contentActivationReceiptDigest": activation.digest,
+            "contentPostActiveReceiptRef": post.ref,
+            "contentPostActiveReceiptDigest": post.digest,
+            **readback_evidence,
+        }
+        # Never seal completed before its activation marker exists. If the marker
+        # write fails, the catch path can still seal one failed result instead.
+        failed_stage = "applied_ref"
         dependencies.write_applied_ref(run=run, env=env, release_id=release_id)
-    except (SystemExit, OSError, RuntimeError, ValueError, TypeError) as exc:
-        if not refs:
-            failed_stage = "post_activate_reference_sync"
-        elif "mediaPruneRef" not in refs and target.media_sync_root is not None:
-            failed_stage = "post_activate_media_prune"
-        else:
-            failed_stage = "applied_ref"
-        dependencies.write_release_evidence(
-            run / "result.json",
-            {
-                **activated_result,
-                **refs,
-                "status": ReleaseRunStatus.FAILED,
-                "failedStage": failed_stage,
-                "error": f"DATA.DELIVERY.POST_ACTIVATE_FAILED: {str(exc)[:900]}",
-            },
-            "environment_release_result",
+        failed_stage = "terminal_result"
+        _write_terminal_result(dependencies=dependencies, run=run, document=completed)
+    except (Exception, SystemExit) as error:
+        receipt_error = _record_failed_result(
+            dependencies=dependencies,
+            run=run,
+            base_result=base_result,
+            failed_stage=failed_stage,
+            error=error,
         )
-        raise SystemExit(
-            f"[ship] DATA.DELIVERY.POST_ACTIVATE_FAILED: env={env} release={release_id} "
-            f"revision={activation['revision']} failedStage={failed_stage}: {exc}"
-        ) from exc
-    dependencies.write_release_evidence(
-        run / "result.json",
-        {**activated_result, **refs, "status": ReleaseRunStatus.COMPLETED},
-        "environment_release_result",
-    )
-    print(
-        f"[ship] {env} activated release={release_id} revision={activation['revision']} "
-        f"run={run_id} evidence={run}"
-    )
-
-
-def _previous_release_root(
-    dependencies: ShipOperationDependencies,
-    *,
-    release: Path,
-    release_id: str,
-    stage_result: Mapping[str, Any],
-    activation: Mapping[str, Any],
-) -> Path | None:
-    """Resolve the previous active release root for post-activate media prune.
-
-    ``None`` means "this is the first activation, prune may keep only the new
-    closure". A previous release that is known from stage/activate evidence but
-    unavailable locally is returned as a non-existent path so ``prune_media``
-    skips deletion instead of pruning the rollback window away.
-    """
-
-    previous_release_id = str(stage_result.get("previousReleaseId") or "").strip()
-    if not previous_release_id:
-        previous_release_id = previous_active_release_identity(activation)[0]
-    if not previous_release_id or previous_release_id == release_id:
-        return None
-    try:
-        previous_release, _ = dependencies.load_release(previous_release_id)
-    except (SystemExit, OSError, ValueError, TypeError):
-        return release.parent / previous_release_id
-    return previous_release
+        _failed_receipt_note(error=error, receipt_error=receipt_error)
+        raise
+    print(f"[ship] activate env={env} release={release_id} run={run_id}")
 
 
 def rollback_release(
@@ -433,25 +650,21 @@ def rollback_release(
     *,
     dependencies: ShipOperationDependencies,
 ) -> None:
-    """Fresh stage → verify → activate of the rollback target release."""
-
-    from content.release.environment._ship_consumer_verification import (
-        verify_release_candidate,
-    )
-
-    target_id = str(args.to_release)
-    source_id = str(args.from_release_id).strip()
-    if not source_id or source_id == target_id:
+    admission = _release_admission(args, dependencies)
+    target_id = validate_path_segment(admission.release_id, label="release_id")
+    source_id = validate_path_segment(str(args.from_release_id), label="from_release_id")
+    source_manifest_digest = str(getattr(args, "from_manifest_digest", "") or "").strip()
+    source_revision = int(getattr(args, "from_revision", 0) or 0)
+    if source_id == target_id:
         raise SystemExit("[ship] rollback requires a distinct --from-release-id")
-    release, contract = dependencies.load_release(target_id)
-    lifecycle_evidence = _lifecycle_evidence(release)
-    env = _single_environment(args.env, command="rollback")
+    if not source_manifest_digest or source_revision <= 0:
+        raise SystemExit("[ship] rollback requires complete --from releaseId/manifestDigest/revision tuple")
+    release, contract = admission.release, admission.contract
+    lifecycle_evidence = _lifecycle_evidence(admission)
+    env = str(args.env)
     dependencies.assert_environment_release_policy(
-        release=release, contract=contract, environment=env,
+        release=release, contract=contract, environment=env
     )
-    expected_revision = int(args.expected_revision)
-    if expected_revision < 0:
-        raise SystemExit("[ship] rollback --expected-revision 必须为非负整数")
     target = dependencies.resolve_environment_release_target(env)
     if (
         env == DeploymentEnvironment.PROD
@@ -464,141 +677,175 @@ def rollback_release(
     if preflight["status"] != EvidenceStatus.PASSED:
         raise SystemExit("[ship] rollback target release consistency failed")
     dependencies.assert_target_action_allowed(
-        target=target, import_to_db=bool(args.import_to_db),
-        dry_run=bool(args.dry_run), action="rollback",
+        target=target,
+        import_to_db=bool(args.import_to_db),
+        dry_run=bool(args.dry_run),
+        action="rollback",
     )
-    run_id = str(args.run_id or f"rollback-{dependencies.now_compact()}")
+    import_run_id = ""
+    import_result: dict[str, object] = {}
+    if args.import_to_db and not args.dry_run:
+        import_run_id = validate_path_segment(
+            str(getattr(args, "import_run_id", "") or ""), label="import_run_id"
+        )
+        import_run = dependencies.run_root(env, target_id, import_run_id)
+        import_result = read_environment_result(
+            import_run / "result.json",
+            expected={
+                "environment": env,
+                "releaseId": target_id,
+                "runId": import_run_id,
+                "manifestDigest": admission.manifest_digest,
+                **admission.result_envelope(),
+            },
+            required_status=ReleaseRunStatus.PREPARED,
+            label="rollback target prepared result",
+        )
+    run_id = validate_path_segment(
+        str(args.run_id or f"rollback-{dependencies.now_compact()}"), label="run_id"
+    )
     run = dependencies.create_run(env, target_id, run_id, kind=ReleaseRunKind.ROLLBACK)
-    dependencies.write_release_evidence(
-        run / "rollback_ref.json",
-        {
-            "schema": "quwoquan_data.rollback_release_ref",
-            "rollbackTo": target_id,
-            "rollbackFromReleaseId": source_id,
-            "releaseRef": release_ref(target_id),
-        },
-        "rollback_release_ref",
-    )
-    write_json(run / "consistency-preflight.json", preflight)
-    base_result: dict[str, Any] = {
+    base_result: dict[str, object] = {
         "schema": "quwoquan_data.environment_release_result",
         "environment": env,
         "releaseId": target_id,
         **lifecycle_evidence,
+        **admission.result_envelope(),
         "runId": run_id,
     }
-    if not args.import_to_db or args.dry_run:
-        stage_run_id = f"{run_id}-stage"
-        apply_release(
-            argparse.Namespace(
-                release_id=target_id, env=env, run_id=stage_run_id,
-                import_to_db=bool(args.import_to_db), full_sync=True,
-                dry_run=bool(args.dry_run), confirm_prod_apply=bool(args.confirm_prod_apply),
-            ),
-            dependencies=dependencies,
-        )
-        dependencies.write_release_evidence(
-            run / "result.json",
-            {
-                **base_result,
-                "status": ReleaseRunStatus.DRY_RUN if args.dry_run else ReleaseRunStatus.PREPARED,
-                "stageRunId": stage_run_id,
-            },
-            "environment_release_result",
-        )
-        print(f"[ship] rollback env={env} target={target_id} run={run_id} (not activated)")
-        return
-
-    stage_run_id = f"{run_id}-stage"
-    verify_run_id = f"{run_id}-verify"
-    activate_run_id = f"{run_id}-activate"
-    stage_names = (
-        ("stage", stage_run_id),
-        ("verify", verify_run_id),
-        ("activate", activate_run_id),
-    )
-    completed: dict[str, str] = {}
+    if import_run_id:
+        base_result["importRunId"] = import_run_id
+    failed_stage = "rollback_intent"
     try:
-        apply_release(
-            argparse.Namespace(
-                release_id=target_id, env=env, run_id=stage_run_id, import_to_db=True,
-                full_sync=True, dry_run=False, confirm_prod_apply=bool(args.confirm_prod_apply),
-            ),
-            dependencies=dependencies,
-        )
-        completed["stageRunId"] = stage_run_id
-        verify_release_candidate(
-            argparse.Namespace(
-                release_id=target_id, env=env, import_run_id=stage_run_id,
-                run_id=verify_run_id,
-            ),
-            dependencies=dependencies,
-        )
-        completed["verifyRunId"] = verify_run_id
-        activate_release(
-            argparse.Namespace(
-                release_id=target_id, env=env, import_run_id=stage_run_id,
-                verify_run_id=verify_run_id, run_id=activate_run_id,
-                expected_revision=expected_revision,
-                confirm_prod_apply=bool(args.confirm_prod_apply),
-            ),
-            dependencies=dependencies,
-        )
-        completed["activateRunId"] = activate_run_id
-        # pointer 切换发生在 activate 子 run；lifecycle 证据按该子 run 判定回滚身份。
         dependencies.write_release_evidence(
-            dependencies.run_root(env, target_id, activate_run_id) / "rollback_ref.json",
+            run / "rollback_ref.json",
             {
                 "schema": "quwoquan_data.rollback_release_ref",
+                "authority": "asserted_intent",
                 "rollbackTo": target_id,
                 "rollbackFromReleaseId": source_id,
+                "rollbackFromManifestDigest": source_manifest_digest,
+                "rollbackFromRevision": source_revision,
+                "rollbackToManifestDigest": admission.manifest_digest,
                 "releaseRef": release_ref(target_id),
             },
             "rollback_release_ref",
         )
-    except (SystemExit, OSError, RuntimeError, ValueError, TypeError) as exc:
-        # report 契约漂移抛 RuntimeError、schema 违反抛 ValueError、release 文件缺失
-        # 抛 OSError；它们都必须收敛为同一 rollback_failed 终态，不能绕过。
-        failed_stage = next(
-            (name for name, sub_run in stage_names if f"{name}RunId" not in completed),
-            "rollback_ref",
+        write_json(run / "consistency-preflight.json", preflight)
+        if not args.import_to_db or args.dry_run:
+            failed_stage = "terminal_result"
+            _write_terminal_result(
+                dependencies=dependencies,
+                run=run,
+                document={**base_result, "status": ReleaseRunStatus.DRY_RUN},
+            )
+            print(f"[ship] rollback env={env} target={target_id} run={run_id}")
+            return
+
+        failed_stage = "rollback_target_candidate_load"
+        candidates = _load_prepared_owner_candidates(
+            dependencies=dependencies,
+            import_result=import_result,
+            environment=env,
+            release_id=target_id,
+            manifest_digest=admission.manifest_digest,
         )
-        dependencies.write_release_evidence(
-            run / "result.json",
-            {
-                **base_result,
-                "status": ReleaseRunStatus.FAILED,
-                "failedStage": failed_stage,
-                "error": f"{ROLLBACK_FAILED_CODE}: {str(exc)[:900]}",
-                **completed,
-            },
-            "environment_release_result",
+        failed_stage = "owner_local_staging_admission"
+        admitted = _require_owner_local_staging_admission(
+            dependencies=dependencies,
+            evidence=candidates,
+            environment=env,
+            release_id=target_id,
+            manifest_digest=admission.manifest_digest,
         )
-        raise SystemExit(
-            f"[ship] {ROLLBACK_FAILED_CODE}: env={env} target={target_id} "
-            f"failedStage={failed_stage}: {exc}"
-        ) from exc
-    activate_result = read_json(
-        dependencies.run_root(env, target_id, activate_run_id) / "result.json"
-    )
-    dependencies.write_release_evidence(
-        run / "result.json",
-        {
+        base_result.update(admitted.result_fields())
+        failed_stage = "environment_readiness"
+        dependencies.require_environment_readiness(
+            environment=target.environment,
+            phase=ShipReadinessPhase.IMPORT,
+            run=run,
+            release_id=target_id,
+            manifest_digest=admission.manifest_digest,
+        )
+        failed_stage = "content_active_pre_query"
+        pre = _required_adapter(dependencies, "query_content_active_release")(
+            env=env,
+            mongo_uri=target.mongo_uri,
+            report_path=run / "content-active-pre-receipt.json",
+            output_root=dependencies.output_root,
+        )
+        if (
+            pre.document.get("status") != "found"
+            or pre.document.get("releaseId") != source_id
+            or pre.document.get("manifestDigest") != source_manifest_digest
+            or pre.document.get("revision") != source_revision
+        ):
+            raise SystemExit(
+                "CONTENT.RELEASE.ACTIVE_CAS_CONFLICT: rollback asserted from tuple differs from queried active pointer"
+            )
+        failed_stage = "content_activation_cas"
+        activation = _required_adapter(dependencies, "activate_content_release")(
+            env=env,
+            mongo_uri=target.mongo_uri,
+            release_id=target_id,
+            manifest_digest=admission.manifest_digest,
+            expected_active=pre.document,
+            report_path=run / "content-activation-receipt.json",
+            output_root=dependencies.output_root,
+        )
+        failed_stage = "content_active_post_query"
+        post = _required_adapter(dependencies, "query_content_active_release")(
+            env=env,
+            mongo_uri=target.mongo_uri,
+            report_path=run / "content-active-post-receipt.json",
+            output_root=dependencies.output_root,
+        )
+        active = activation.document["active"]
+        if (
+            post.document.get("status") != "found"
+            or post.document.get("releaseId") != target_id
+            or post.document.get("manifestDigest") != admission.manifest_digest
+            or post.document.get("revision") != source_revision + 1
+            or post.document.get("revision") != active.get("revision")
+            or post.document.get("projectionVersion") != active.get("projectionVersion")
+            or post.document.get("activatedAt") != active.get("activatedAt")
+        ):
+            raise SystemExit("[ship] Content rollback post-CAS readback differs")
+        failed_stage = "owner_fenced_readback"
+        readback_evidence = _readback_all_owners(
+            dependencies=dependencies,
+            target=target,
+            run=run,
+            content_active=post,
+        )
+        for evidence in (*candidates.values(), pre, activation, post):
+            assert_content_release_evidence_unchanged(evidence)
+        completed = {
             **base_result,
             "status": ReleaseRunStatus.COMPLETED,
-            "contentPhase": ContentImportPhase.ACTIVATE.value,
-            "fullSync": True,
-            "candidateRevision": int(activate_result["candidateRevision"]),
-            "revision": int(activate_result["revision"]),
-            "contentImportReportRef": str(activate_result.get("contentImportReportRef") or ""),
-            **completed,
-        },
-        "environment_release_result",
-    )
-    print(
-        f"[ship] rollback env={env} target={target_id} run={run_id} "
-        f"activateRun={activate_run_id}"
-    )
+            "contentPreActiveReceiptRef": pre.ref,
+            "contentPreActiveReceiptDigest": pre.digest,
+            "contentActivationReceiptRef": activation.ref,
+            "contentActivationReceiptDigest": activation.digest,
+            "contentPostActiveReceiptRef": post.ref,
+            "contentPostActiveReceiptDigest": post.digest,
+            **readback_evidence,
+        }
+        failed_stage = "applied_ref"
+        dependencies.write_applied_ref(run=run, env=env, release_id=target_id)
+        failed_stage = "terminal_result"
+        _write_terminal_result(dependencies=dependencies, run=run, document=completed)
+    except (Exception, SystemExit) as error:
+        receipt_error = _record_failed_result(
+            dependencies=dependencies,
+            run=run,
+            base_result=base_result,
+            failed_stage=failed_stage,
+            error=error,
+        )
+        _failed_receipt_note(error=error, receipt_error=receipt_error)
+        raise
+    print(f"[ship] rollback env={env} target={target_id} run={run_id}")
 
 
 def verify_release_consumers(

@@ -415,11 +415,80 @@ func TestLoadHomepageProjectionsRejectsSemanticRoleDrift(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read manifest: %v", err)
 	}
-	mutated := strings.Replace(string(raw), `"role":"cover"`, `"role":"detail"`, 1)
+	mutated := strings.Replace(string(raw), `"role":"cover"`, `"role":"hero"`, 1)
 	writeFile(t, manifestPath, mutated)
 	_, _, err = loadHomepageProjections(t, root, nil, "https://media.example.com")
 	if err == nil || !strings.Contains(err.Error(), "unsupported role") {
 		t.Fatalf("semantic role drift must fail closed, err=%v", err)
+	}
+}
+
+// 生产端对 homepage 配图默认写 role=detail 且 page.md 不带封面 frontmatter；
+// 导入器必须把 detail 投影为 inline，并在未声明 coverImage 时不要求封面。
+func TestLoadHomepageProjectionsAcceptsProducerDetailRoleWithoutCoverFrontmatter(t *testing.T) {
+	root := t.TempDir()
+	seedPublishEntity(t, root, "地点/景区/九寨沟", true)
+	dir := filepath.Join(root, "entities", "地点", "景区", "九寨沟")
+	raw, err := os.ReadFile(filepath.Join(dir, "manifest.json"))
+	if err != nil {
+		t.Fatalf("read manifest: %v", err)
+	}
+	writeFile(t, filepath.Join(dir, "manifest.json"), strings.Replace(string(raw), `"role":"cover"`, `"role":"detail"`, 1))
+	writeFile(t, filepath.Join(dir, "page.md"), "# 九寨沟\n\n:::figure id=\"cover\" layout=\"fullWidth\" caption=\"树正寨\"\nasset://cover\n:::\n\n## 概况\n\n真实正文。\n")
+	inputs, _, err := loadHomepageProjections(t, root, nil, "https://media.example.com")
+	if err != nil {
+		t.Fatalf("producer detail-role homepage rejected: %v", err)
+	}
+	if len(inputs) != 1 || len(inputs[0].IntroductionAssets) != 1 || inputs[0].IntroductionAssets[0].Role != "inline" {
+		t.Fatalf("detail asset must project as inline, inputs=%+v", inputs)
+	}
+}
+
+// 带 Commons 配图的主页 sourceUrls 按来源行顺序排列，百科主来源不一定在首位。
+func TestLoadHomepageProjectionsAcceptsPrimarySourceAnywhereInSourceURLs(t *testing.T) {
+	root := t.TempDir()
+	seedPublishEntity(t, root, "地点/景区/九寨沟", true)
+	entityPath := filepath.Join(root, "entities", "地点", "景区", "九寨沟", "_entity.json")
+	raw, err := os.ReadFile(entityPath)
+	if err != nil {
+		t.Fatalf("read _entity.json: %v", err)
+	}
+	reordered := strings.Replace(
+		string(raw),
+		`"sourceUrls":["https://zh.wikipedia.org/wiki/%E4%B9%9D%E5%AF%A8%E6%B2%9F"]`,
+		`"sourceUrls":["https://commons.wikimedia.org/wiki/File:Jiuzhaigou.jpg","https://zh.wikipedia.org/wiki/%E4%B9%9D%E5%AF%A8%E6%B2%9F"]`,
+		1,
+	)
+	if reordered == string(raw) {
+		t.Fatal("fixture sourceUrls did not change")
+	}
+	writeFile(t, entityPath, reordered)
+	inputs, issues, err := loadHomepageProjections(t, root, nil, "https://media.example.com")
+	if err != nil {
+		t.Fatalf("multi-source homepage rejected: %v", err)
+	}
+	if len(inputs) != 1 || len(issues) != 0 {
+		t.Fatalf("primary source listed after the Commons page must still project, inputs=%d issues=%v", len(inputs), issues)
+	}
+}
+
+// publishMediaMode=text_only 的主页 manifest.assets 为空，只投影正文。
+func TestLoadHomepageProjectionsAcceptsTextOnlyHomepage(t *testing.T) {
+	root := t.TempDir()
+	seedPublishEntity(t, root, "地点/景区/九寨沟", false)
+	dir := filepath.Join(root, "entities", "地点", "景区", "九寨沟")
+	writeFile(t, filepath.Join(dir, "manifest.json"), `{"executionId":"20260906--travel-homepage--text-only-001","assets":[],"publishMediaMode":"text_only"}`)
+	writeFile(t, filepath.Join(dir, "asset.refs.json"), `{"assets":[]}`)
+	writeFile(t, filepath.Join(dir, "page.md"), "# 九寨沟\n\n九寨沟位于四川阿坝。\n\n## 主要看点\n\n真实正文。\n")
+	inputs, _, err := loadHomepageProjections(t, root, nil, "https://media.example.com")
+	if err != nil {
+		t.Fatalf("text_only homepage rejected: %v", err)
+	}
+	if len(inputs) != 1 || len(inputs[0].IntroductionAssets) != 0 {
+		t.Fatalf("text_only homepage must project without introduction assets, inputs=%+v", inputs)
+	}
+	if !strings.Contains(inputs[0].IntroductionMarkdown, "主要看点") {
+		t.Fatalf("text_only homepage must keep page.md body, got %q", inputs[0].IntroductionMarkdown)
 	}
 }
 

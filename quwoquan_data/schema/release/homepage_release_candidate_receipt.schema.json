@@ -1,0 +1,146 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Homepage verified release candidate receipt",
+  "type": "object",
+  "required": [
+    "schema",
+    "status",
+    "identity"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "quwoquan.homepage_release_candidate_receipt"
+    },
+    "status": {
+      "enum": [
+        "found",
+        "not_found"
+      ]
+    },
+    "identity": {
+      "type": "object",
+      "required": [
+        "environment",
+        "sourceOwner",
+        "releaseId",
+        "manifestDigest"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "environment": {
+          "enum": [
+            "alpha",
+            "beta",
+            "gamma",
+            "prod"
+          ]
+        },
+        "sourceOwner": {
+          "const": "qwq_data"
+        },
+        "releaseId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "manifestDigest": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      }
+    },
+    "projectionVersion": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "verifiedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "closureDigest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "counts": {
+      "type": "object",
+      "required": [
+        "expected",
+        "projected"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "expected": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "projected": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "entityRefMappingDigest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "found"
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "then": {
+        "required": [
+          "projectionVersion",
+          "verifiedAt",
+          "closureDigest",
+          "counts",
+          "entityRefMappingDigest"
+        ]
+      },
+      "else": {
+        "not": {
+          "anyOf": [
+            {
+              "required": [
+                "projectionVersion"
+              ]
+            },
+            {
+              "required": [
+                "verifiedAt"
+              ]
+            },
+            {
+              "required": [
+                "closureDigest"
+              ]
+            },
+            {
+              "required": [
+                "counts"
+              ]
+            },
+            {
+              "required": [
+                "entityRefMappingDigest"
+              ]
+            },
+            {
+              "required": [
+                "entityRefMappingDigest"
+              ]
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

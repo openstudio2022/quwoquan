@@ -10,14 +10,14 @@ creatorPersona:
   archetype: travel_blogger
   preferredCreatorIds: [qwq_creator_travel_blogger_001]
   requiredProfileTagRefs: [Format/内容角度/盘点/Top榜单, Topic/旅行]
-  allowedPerspective: [编辑部, 第一人称经验]
+  allowedPerspective: [编辑部, 中性事实叙事]
   mustNotClaim: [官方排名, 商业合作]
 editorialIntent: 用明确标准做榜单，而不是把地点简单罗列。
 render: { articleTemplate: journal, fontPreset: clean }
 structure:
   required: [榜单标准, 逐项推荐, 横向对比, 怎么选择, 避坑提醒]
   optional: [地图分布, 预算区间]
-mustIncludeFacts: [入选理由, 适合人群, 交通或位置, 优缺点]
+evidenceConditionedFacts: [入选理由, 适合人群, 交通或位置, 优缺点]
 forbiddenPhrases: [冷启动, 批次, 角色：, 占位, contract_fixture, 官方榜单]
 wordCount: { min: 1200, max: 2400 }
 imagePlan:
@@ -28,5 +28,5 @@ crossRefs: { minEntity: 5, minTag: 4 }
 recommendation:
   authorBinding: { required: true, source: creator_profile_catalog }
   exposeStyleTags: true
-  qualitySignals: [bodyLength, requiredFactsCovered, imageSlotCoverage, entityRefCount]
+  qualitySignals: [bodyLength, evidenceSupportedFactCoverage, imageSlotCoverage, entityRefCount]
   bodyForbiddenFields: [qualityScore, templateId, routingReason, coldStartBoost, isSystemBuiltin]

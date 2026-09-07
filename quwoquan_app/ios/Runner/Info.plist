@@ -114,8 +114,6 @@
 					<string>$(PRODUCT_MODULE_NAME).AppSceneDelegate</string>
 					<key>UISceneConfigurationName</key>
 					<string>flutter</string>
-					<key>UISceneStoryboardFile</key>
-					<string>Main</string>
 				</dict>
 			</array>
 		</dict>

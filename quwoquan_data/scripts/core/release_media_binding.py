@@ -76,14 +76,8 @@ def bind_release_object_media_assets(
     # Release objects are consumer payloads, not a copy of canonical private
     # storage metadata. Sanitize governed consumer JSON so asset.refs and rights
     # snapshots cannot retain CAS keys after manifests have been rebound.
-    # Independently signed/reviewed receipts are immutable evidence, however:
-    # rewriting their assetSnapshot would invalidate both their schema and
-    # receiptDigest before release admission can revalidate them.
     paths = sorted(objects_root.rglob("*.json"))
     for path in paths:
-        relative = path.relative_to(objects_root)
-        if "asset_reviews" in relative.parts:
-            continue
         document = json.loads(path.read_text(encoding="utf-8"))
         if not bind(document, source=path):
             continue

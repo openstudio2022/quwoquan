@@ -362,14 +362,18 @@ def assert_image_manifest_unique(
         for peer in peers:
             peer_ref = str(peer.get("manifestPath") or "pending-post")
             peer_id = str(peer["assetId"])
-            if digest and digest == peer["sha256"]:
+            stable_asset_reuse = identity["assetId"] == peer_id
+            if digest and digest == peer["sha256"] and not stable_asset_reuse:
                 raise ObjectTransactionError(
                     "canonical image identity duplicated by sha256: "
                     f"{identity['assetId']} conflicts with {peer_ref}:{peer_id}"
                 )
-            if perceptual_hash_distance(
-                str(identity["perceptualHash"]), str(peer["perceptualHash"])
-            ) <= NEAR_DUP_HAMMING:
+            if (
+                perceptual_hash_distance(
+                    str(identity["perceptualHash"]), str(peer["perceptualHash"])
+                ) <= NEAR_DUP_HAMMING
+                and not stable_asset_reuse
+            ):
                 raise ObjectTransactionError(
                     "canonical image identity duplicated by perceptualHash: "
                     f"{identity['assetId']} conflicts with {peer_ref}:{peer_id}"

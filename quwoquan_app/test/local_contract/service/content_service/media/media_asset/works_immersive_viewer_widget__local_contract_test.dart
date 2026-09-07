@@ -2248,6 +2248,46 @@ void main() {
     expect((canvasRect.top - viewerRect.top).abs(), lessThan(1));
   });
 
+  testWidgets('视频集交付引用全部解析失败时显式失败态而非黑屏', (tester) async {
+    // spec_ref: specs/feature-tree/runtime/runtime-config/environment-topology-and-packaging/spec.md#req-002
+    // 投影 URL 带签名 query，不是 canonical 公开切片形态：MediaDeliveryResolver
+    // 判否，旧实现会静默丢集并渲染纯色块，UAT 无法区分"黑屏"与"无内容"。
+    final post = _videoPost(
+      width: 1920,
+      height: 1080,
+      videoUrl:
+          'media/video/s/video-primary-0001/post/video-content-0001/v1/source.mp4'
+          '?sign=deadbeef&t=1',
+    );
+    await tester.pumpWidget(
+      _wrap(
+        WorksImmersiveViewer(
+          showWorksToolbar: true,
+          showTopNavigation: false,
+          externalPosts: [post],
+          externalPostViews: [ContentSurfaceViewMapper.fromDto(post)],
+          onUserTap: (_, {avatarUrl, displayName, backgroundUrl}) {},
+          onAssistantTap: () {},
+        ),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 16));
+    _consumeImageLoadExceptions(tester);
+
+    expect(
+      find.byKey(const ValueKey<String>('works-video-delivery-unresolved')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('video-player-error')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('video-player-ready')),
+      findsNothing,
+    );
+  });
+
   testWidgets('外部来源视频在沉浸播放器展示冻结的原创者归属', (tester) async {
     const attributionText = '原创：山海旅行者 · 来源：头条';
     final post = _videoPost(

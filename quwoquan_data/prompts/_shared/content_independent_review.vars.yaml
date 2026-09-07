@@ -1,0 +1,12 @@
+template: content_independent_review
+system:
+  required: []
+  optional: []
+task:
+  required:
+    - execution_id
+    - object_ref
+    - draft
+    - sources
+    - assets
+  optional: []

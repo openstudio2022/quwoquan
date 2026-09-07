@@ -191,8 +191,11 @@ func CanonicalExperimentPolicy(policy ExperimentPolicy) (ExperimentPolicy, error
 	if len(seen) != 2 || total != 10_000 {
 		return ExperimentPolicy{}, errors.New("search ranking experiment variants must allocate exactly 10000 basis points")
 	}
+	// 摘要只覆盖语义内容：owner 在可变运行时重建同一 revision 时 updatedAt
+	// 必然不同，不能把时钟差异判成 revision 内容冲突。
 	digestInput := policy
 	digestInput.Digest = ""
+	digestInput.UpdatedAt = ""
 	encoded, err := json.Marshal(digestInput)
 	if err != nil {
 		return ExperimentPolicy{}, err

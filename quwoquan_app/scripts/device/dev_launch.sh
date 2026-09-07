@@ -159,19 +159,25 @@ PY
 DEVICE_EXPORTS="$(python3 -c "$DEVICE_SELECT_SCRIPT" "$APP_DIR" "$REAL_FLUTTER" "$DEVICE_ID")" || exit 2
 eval "$DEVICE_EXPORTS"
 log "device: $DEVICE_NAME ($DEVICE_ID, $DEVICE_KIND)"
-if [[ "$PLATFORM" == "ios" && -z "${QWQ_COCOAPODS_BINDING_SEAL:-}" ]]; then
+if [[ "$PLATFORM" == "ios" ]]; then
+  # direct 路径不信任父 shell 的半激活状态：facade 投影漂移时身份变量可能已导出而 PATH 未前置。
+  # executor 会用 `which pod` 复核子进程 PATH 必须解析到同一物理可执行文件（Homebrew 的 bin/pod
+  # 只是 wrapper，物理文件在 libexec/bin），因此这里总是重新解析（以已声明的 executable 为候选）
+  # 并经 cocoapods_environment 把物理目录前置到 PATH。
   COCOAPODS_EXPORTS="$(python3 - <<'PY'
-import shlex, sys
+import os, shlex, sys
 from quwoquan_ops.cli.lib.app_dependency_toolchain import (
-    AppDependencyToolchainError, resolve_cocoapods_identity,
+    AppDependencyToolchainError, cocoapods_environment, resolve_cocoapods_identity,
 )
 try:
-    identity = resolve_cocoapods_identity()
+    identity = resolve_cocoapods_identity(os.environ.get("QWQ_COCOAPODS_EXECUTABLE", ""))
+    projected = cocoapods_environment(identity, base=os.environ)
 except AppDependencyToolchainError as error:
     print(f"GATE_BLOCK: {error}", file=sys.stderr)
     raise SystemExit(2)
 for key, value in identity.as_environment().items():
     print(f"export {key}={shlex.quote(value)}")
+print(f"export PATH={shlex.quote(projected['PATH'])}")
 PY
 )" || exit 2
   eval "$COCOAPODS_EXPORTS"

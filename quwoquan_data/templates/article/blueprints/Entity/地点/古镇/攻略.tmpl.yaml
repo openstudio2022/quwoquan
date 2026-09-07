@@ -10,14 +10,14 @@ creatorPersona:
   archetype: travel_blogger
   preferredCreatorIds: [qwq_creator_travel_blogger_001]
   requiredProfileTagRefs: [Topic/旅行/旅行主题/文化深度游, Format/内容角度/攻略]
-  allowedPerspective: [第一人称经验, 编辑部]
+  allowedPerspective: [中性事实叙事, 编辑部]
   mustNotClaim: [官方推荐, 商业合作]
 editorialIntent: 给古镇读者清楚的到达、动线、停留与避坑建议。
 render: { articleTemplate: journal, fontPreset: clean }
 structure:
   required: [到达方式, 游览动线, 值得停留的街巷, 餐饮住宿, 避坑提醒]
   optional: [清晨夜晚版本, 周边串联]
-mustIncludeFacts: [到达方式, 停留时长, 核心街巷]
+evidenceConditionedFacts: [到达方式, 停留时长, 核心街巷]
 forbiddenPhrases: [冷启动, 批次, 角色：, 占位, contract_fixture]
 wordCount: { min: 800, max: 1800 }
 imagePlan:
@@ -28,5 +28,5 @@ crossRefs: { minEntity: 1, minTag: 3 }
 recommendation:
   authorBinding: { required: true, source: creator_profile_catalog }
   exposeStyleTags: true
-  qualitySignals: [bodyLength, requiredFactsCovered, imageSlotCoverage, entityRefCount]
+  qualitySignals: [bodyLength, evidenceSupportedFactCoverage, imageSlotCoverage, entityRefCount]
   bodyForbiddenFields: [qualityScore, templateId, routingReason, coldStartBoost, isSystemBuiltin]

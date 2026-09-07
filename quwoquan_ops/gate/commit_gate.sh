@@ -164,7 +164,7 @@ run_static_check() {
       changed_args=()
       while IFS= read -r changed; do
         [[ -n "$changed" ]] && changed_args+=(--changed-file "$changed")
-      done < <(git diff --cached --name-only)
+      done < <(git -c core.quotePath=false diff --cached --name-only)
       python3 -B quwoquan_ops/gate/verify_incremental_code_health.py         --base HEAD --head HEAD --working-tree --index-only --mode fast "${changed_args[@]}"
       ;;
     local_worktree_lifecycle)

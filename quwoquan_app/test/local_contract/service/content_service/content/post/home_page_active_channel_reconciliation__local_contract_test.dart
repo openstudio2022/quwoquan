@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:quwoquan_app/runtime/auth/auth_session.dart';
 import 'package:quwoquan_app/runtime/di/app_providers_content_runtime.dart';
 import 'package:quwoquan_app/runtime/di/app_providers_content_runtime_defaults.dart';
 import 'package:quwoquan_app/runtime/di/ops_event_dependencies.dart'
@@ -107,6 +108,41 @@ class _AutomaticRecoveryFeedMapNotifier extends DiscoveryFeedMapNotifier {
     state = <String, AsyncValue<DiscoveryFeedState>>{
       'recommend': AsyncData(DiscoveryFeedState(blockingError: next)),
     };
+  }
+}
+
+class _FlippableAuthSession extends AuthSessionController {
+  @override
+  AuthSessionState build() =>
+      const AuthSessionState(status: AuthSessionStatus.guest);
+
+  void authenticate() {
+    state = const AuthSessionState(
+      status: AuthSessionStatus.authenticated,
+      accessToken: 'access-token',
+      refreshToken: 'refresh-token',
+      ownerId: 'account-a',
+      activePersonaId: 'persona-a',
+      accountState: 'active',
+    );
+  }
+}
+
+class _LoginRefreshFeedMapNotifier extends _RecordingDiscoveryFeedMapNotifier {
+  int forceLoadCalls = 0;
+
+  @override
+  Future<DiscoveryFeedLoadResult> load(
+    String channelId, {
+    bool force = false,
+  }) async {
+    if (force) {
+      forceLoadCalls += 1;
+    }
+    return DiscoveryFeedLoadResult(
+      terminal: DiscoveryFeedLoadTerminal.content,
+      generation: forceLoadCalls,
+    );
   }
 }
 
@@ -257,6 +293,43 @@ _pumpRecoveryHome(
 }
 
 void main() {
+  testWidgets('guest 登录成功后强制刷新当前 feed 一次', (tester) async {
+    final feed = _LoginRefreshFeedMapNotifier();
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: <Override>[
+          authSessionControllerProvider.overrideWith(_FlippableAuthSession.new),
+          homeChannelsProvider.overrideWith(
+            (ref) => ref.watch(_testHomeChannelsProvider),
+          ),
+          discoveryFeedMapProvider.overrideWith(() => feed),
+          appRemoteConfigProvider.overrideWith(
+            _RecordingAppRemoteConfigNotifier.new,
+          ),
+          isDarkProvider.overrideWithValue(false),
+        ],
+        child: ScreenUtilInit(
+          designSize: const Size(393, 852),
+          child: const MaterialApp(
+            home: HomePage(isStartupHomeActive: false, routeLocation: '/'),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(HomePage)),
+    );
+
+    (container.read(
+      authSessionControllerProvider.notifier,
+    ) as _FlippableAuthSession).authenticate();
+    await tester.pump();
+    await tester.pump();
+
+    expect(feed.forceLoadCalls, 1);
+  });
+
   testWidgets('typed timeout 终态按 canonical backoff 自动重取一次且不轮询', (tester) async {
     final harness = await _pumpRecoveryHome(
       tester,
@@ -350,9 +423,9 @@ void main() {
     final container = ProviderScope.containerOf(
       tester.element(find.byType(HomePage)),
     );
-    final feedNotifier =
-        container.read(discoveryFeedMapProvider.notifier)
-            as _StateWritingDiscoveryFeedMapNotifier;
+    final feedNotifier = container.read(
+      discoveryFeedMapProvider.notifier,
+    ) as _StateWritingDiscoveryFeedMapNotifier;
 
     isActive.value = false;
     await tester.pump();
@@ -374,9 +447,9 @@ void main() {
       tester.element(find.byType(HomePage)),
     );
     final channels = container.read(_testHomeChannelsProvider.notifier);
-    final feedNotifier =
-        container.read(discoveryFeedMapProvider.notifier)
-            as _RecordingDiscoveryFeedMapNotifier;
+    final feedNotifier = container.read(
+      discoveryFeedMapProvider.notifier,
+    ) as _RecordingDiscoveryFeedMapNotifier;
 
     expect(
       tester

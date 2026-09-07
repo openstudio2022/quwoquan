@@ -4,28 +4,8 @@ system:
   optional: []
 task:
   required:
-    - title
-    - ref
-    - kind
-    - carrier
-    - template_id
-    - byline
-    - word_count_min
-    - word_count_max
-    - base_draft_block
-    - must_include_facts_block
-    - assets_block
-  optional:
-    - creator_lock_line
-    - primary_entity_contract_line
-    - creative_brief_block
-    - persona_block
-    - writing_intent_line
-    - article_category_line
-    - narrative_block
-    - base_source_line
-    - banned_terms_line
-    - opening_guidance_block
-    - numeric_whitelist_block
-    - section_intents_block
-    - evidence_block
+    - target
+    - retained_evidence_excerpts
+    - selected_blueprint_intent
+    - output_path
+  optional: []

@@ -37,6 +37,9 @@
         "processResult",
         "qualityResult",
         "usageScope",
+        "rightsResult",
+        "rightsAuthorityRef",
+        "rightsAuthorityDigest",
         "evidenceRef",
         "evidenceDigest"
       ],
@@ -44,6 +47,9 @@
         "processResult": {"$ref": "#/$defs/processResult"},
         "qualityResult": {"$ref": "#/$defs/qualityResult"},
         "usageScope": {"$ref": "#/$defs/usageScope"},
+        "rightsResult": {"const": "passed"},
+        "rightsAuthorityRef": {"type": "string", "minLength": 1},
+        "rightsAuthorityDigest": {"$ref": "#/$defs/evidenceDigest"},
         "evidenceRef": {"$ref": "#/$defs/evidenceRef"},
         "evidenceDigest": {"$ref": "#/$defs/evidenceDigest"}
       }

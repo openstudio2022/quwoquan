@@ -17,7 +17,7 @@ render: { articleTemplate: journal, fontPreset: clean }
 structure:
   required: [机位总览, 到达方式, 光线时段, 焦段建议, 拍摄限制]
   optional: [无人机限制, 替代机位, 后期方向]
-mustIncludeFacts: [机位坐标, 朝向, 焦段, 光线时段, 禁飞禁拍限制]
+evidenceConditionedFacts: [机位坐标, 朝向, 焦段, 光线时段, 禁飞禁拍限制]
 forbiddenPhrases: [冷启动, 批次, 角色：, 占位, contract_fixture]
 wordCount: { min: 900, max: 1800 }
 imagePlan:
@@ -28,5 +28,5 @@ crossRefs: { minEntity: 1, minTag: 4 }
 recommendation:
   authorBinding: { required: true, source: creator_profile_catalog }
   exposeStyleTags: true
-  qualitySignals: [bodyLength, requiredFactsCovered, imageSlotCoverage, entityRefCount]
+  qualitySignals: [bodyLength, evidenceSupportedFactCoverage, imageSlotCoverage, entityRefCount]
   bodyForbiddenFields: [qualityScore, templateId, routingReason, coldStartBoost, isSystemBuiltin]

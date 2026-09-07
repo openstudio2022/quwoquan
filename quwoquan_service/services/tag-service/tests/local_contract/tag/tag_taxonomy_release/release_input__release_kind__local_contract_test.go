@@ -74,6 +74,7 @@ func runTagImporter(
 	reportPath string,
 ) string {
 	t.Helper()
+	writeFixtureAttestation(t, releaseRoot)
 	command := exec.Command(
 		"go",
 		"run",
@@ -81,6 +82,8 @@ func runTagImporter(
 		"--release-root",
 		releaseRoot,
 		"--dry-run",
+		"--activation-mode",
+		"stage-only",
 		"--env",
 		"alpha",
 		"--report",
@@ -106,9 +109,9 @@ func writeReleaseFixture(
 	t.Helper()
 	root := t.TempDir()
 	writeJSON(t, filepath.Join(root, "payload", "release.json"), map[string]any{
-		"schema":      "quwoquan_data.release",
-		"releaseId":   releaseID,
-		"releaseKind": releaseKind,
+		"schema": "quwoquan_data.release", "releaseId": releaseID,
+		"sourceOwner": "qwq_data", "releaseKind": releaseKind, "releaseClass": "research",
+		"canonicalMerkle": "sha256:" + strings.Repeat("b", 64),
 	})
 	writeJSON(
 		t,
@@ -170,4 +173,35 @@ func serviceRoot(t *testing.T) string {
 		t.Fatalf("resolve service root %s: %v", root, err)
 	}
 	return root
+}
+
+func writeFixtureAttestation(t *testing.T, releaseRoot string) {
+	t.Helper()
+	var header struct {
+		ReleaseID   string `json:"releaseId"`
+		ReleaseKind string `json:"releaseKind"`
+	}
+	readJSON(t, filepath.Join(releaseRoot, "payload", "release.json"), &header)
+	var desired struct {
+		DesiredRefs struct {
+			Tags []string `json:"tags"`
+		} `json:"desiredRefs"`
+	}
+	readJSON(t, filepath.Join(releaseRoot, "payload", "desired_state.json"), &desired)
+	command := exec.Command("python3", "-c", `
+import pathlib, sys
+sys.path.insert(0, str(pathlib.Path(sys.argv[1]) / ".." / "quwoquan_data" / "scripts"))
+from core.release_layout import payload_digest
+print(payload_digest(pathlib.Path(sys.argv[2])))
+`, serviceRoot(t), releaseRoot)
+	digest, err := command.Output()
+	if err != nil {
+		t.Fatalf("calculate payload digest: %v", err)
+	}
+	writeJSON(t, filepath.Join(releaseRoot, "attestations", "release.json"), map[string]any{
+		"schema": "quwoquan_data.release_attestation", "releaseId": header.ReleaseID,
+		"sourceOwner": "qwq_data", "releaseKind": header.ReleaseKind, "releaseClass": "research",
+		"canonicalMerkle": "sha256:" + strings.Repeat("b", 64),
+		"tagCount":        len(desired.DesiredRefs.Tags), "payloadSha256": strings.TrimSpace(string(digest)),
+	})
 }

@@ -37,10 +37,6 @@ ENUM_ENTRY_RE = re.compile(r"^\s*(\w+)\('([A-Z_]+\.[A-Z_]+\.[a-z_]+)'", re.M)
 
 #: 确属 App 不可触达的码；每条豁免必须写明理由。
 EXEMPT_CODES: dict[str, str] = {
-    # content/post errors.yaml `emitted_by: {surface: worker, operation: GetReleaseCandidateReadback}`：
-    # 只由 content-service cmd/import 的 stage/verify/activate 非 HTTP 入口 fail closed，
-    # 不进入任何 App 可调用 operation 的响应；服务侧断言见
-    # mongo_import__data_consistency__api_integration_test.go。
     "CONTENT.USER.release_candidate_missing": "content-service import worker 专用，App 无触达入口",
     "CONTENT.USER.release_candidate_drift": "content-service import worker 专用，App 无触达入口",
 }

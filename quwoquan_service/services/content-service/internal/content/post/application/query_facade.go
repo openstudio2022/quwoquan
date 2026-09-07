@@ -23,6 +23,7 @@ type PostQueryDependencies struct {
 	SocialProof  appports.GatheringSocialProofProjectionReader
 	Tombstones   postports.TombstoneReader
 	ViewerBlocks postports.ViewerBlockReader
+	ActiveSupply postports.ActiveSupplyReader
 }
 
 // PostQueryFacade 为 GetPost、ListUserPosts、ListPostsByGathering 提供
@@ -34,6 +35,7 @@ type PostQueryFacade struct {
 	socialProof  appports.GatheringSocialProofProjectionReader
 	tombstones   postports.TombstoneReader
 	viewerBlocks postports.ViewerBlockReader
+	activeSupply postports.ActiveSupplyReader
 }
 
 func NewPostQueryFacade(dependencies PostQueryDependencies) *PostQueryFacade {
@@ -44,6 +46,7 @@ func NewPostQueryFacade(dependencies PostQueryDependencies) *PostQueryFacade {
 		socialProof:  dependencies.SocialProof,
 		tombstones:   dependencies.Tombstones,
 		viewerBlocks: dependencies.ViewerBlocks,
+		activeSupply: dependencies.ActiveSupply,
 	}
 }
 
@@ -58,7 +61,18 @@ func (f *PostQueryFacade) GetPost(
 		return postports.PostDetailSlice{}, postQueryReaderUnavailable("GetPost detail reader is not configured")
 	}
 
-	detail, found, err := f.detail.FindPostDetail(ctx, query.PostID())
+	binding, err := f.admitPublicReleaseRead(ctx, "GetPost", query.ResearchPrincipal())
+	if err != nil {
+		return postports.PostDetailSlice{}, err
+	}
+	detail, found, err := f.findPostDetail(
+		ctx,
+		postports.NewPostDetailReadRequest(
+			query.PostID(),
+			binding.ActiveReleaseID,
+			binding.ManifestDigest,
+		),
+	)
 	if err != nil {
 		return postports.PostDetailSlice{}, postQueryReadFailure("GetPost", err)
 	}
@@ -116,6 +130,7 @@ func (f *PostQueryFacade) GetPost(
 func (f *PostQueryFacade) GetHelperRead(
 	ctx context.Context,
 	postID string,
+	researchPrincipal ...bool,
 ) (postports.HelperReadSlice, error) {
 	canonicalPostID := postports.PostID(strings.TrimSpace(postID))
 	if canonicalPostID == "" {
@@ -129,7 +144,22 @@ func (f *PostQueryFacade) GetHelperRead(
 		)
 	}
 
-	detail, found, err := f.detail.FindPostDetail(ctx, canonicalPostID)
+	binding, err := f.admitPublicReleaseRead(
+		ctx,
+		"GetHelperRead",
+		len(researchPrincipal) > 0 && researchPrincipal[0],
+	)
+	if err != nil {
+		return postports.HelperReadSlice{}, err
+	}
+	detail, found, err := f.findPostDetail(
+		ctx,
+		postports.NewPostDetailReadRequest(
+			canonicalPostID,
+			binding.ActiveReleaseID,
+			binding.ManifestDigest,
+		),
+	)
 	if err != nil {
 		return postports.HelperReadSlice{}, postQueryReadFailure("GetHelperRead", err)
 	}
@@ -169,6 +199,14 @@ func (f *PostQueryFacade) ListUserPosts(
 		return postports.AuthorPostPageSlice{}, postQueryReaderUnavailable(
 			"ListUserPosts author reader is not configured",
 		)
+	}
+	binding, err := f.admitPublicReleaseRead(
+		ctx,
+		"ListUserPosts",
+		query.ResearchPrincipal(),
+	)
+	if err != nil {
+		return postports.AuthorPostPageSlice{}, err
 	}
 
 	limit, err := normalizePostQueryLimit(query.Limit())
@@ -230,6 +268,8 @@ func (f *PostQueryFacade) ListUserPosts(
 		visibility,
 		postports.AuthorPostCursor{},
 		limit,
+		binding.ActiveReleaseID,
+		binding.ManifestDigest,
 	)
 	if cursor.IsSet() && cursor.Scope() != unpagedRequest.CursorScope() {
 		return postports.AuthorPostPageSlice{}, invalidPostQueryArgument(
@@ -244,6 +284,8 @@ func (f *PostQueryFacade) ListUserPosts(
 		visibility,
 		cursor,
 		limit,
+		binding.ActiveReleaseID,
+		binding.ManifestDigest,
 	)
 
 	page, err := f.author.ListAuthorPosts(ctx, request)
@@ -273,6 +315,14 @@ func (f *PostQueryFacade) ListPostsByGathering(
 			"ListPostsByGathering gathering reader is not configured",
 		)
 	}
+	binding, err := f.admitPublicReleaseRead(
+		ctx,
+		"ListPostsByGathering",
+		query.ResearchPrincipal(),
+	)
+	if err != nil {
+		return postports.GatheringPostPageSlice{}, err
+	}
 	limit, err := normalizePostQueryLimit(query.Limit())
 	if err != nil {
 		return postports.GatheringPostPageSlice{}, invalidPostQueryArgument(err.Error())
@@ -287,6 +337,8 @@ func (f *PostQueryFacade) ListPostsByGathering(
 		query.GatheringID(),
 		postports.AuthorPostCursor{},
 		limit,
+		binding.ActiveReleaseID,
+		binding.ManifestDigest,
 	)
 	if cursor.IsSet() && cursor.Scope() != unpagedRequest.CursorScope() {
 		return postports.GatheringPostPageSlice{}, invalidPostQueryArgument(
@@ -297,6 +349,8 @@ func (f *PostQueryFacade) ListPostsByGathering(
 		query.GatheringID(),
 		cursor,
 		limit,
+		binding.ActiveReleaseID,
+		binding.ManifestDigest,
 	)
 	page, err := f.gathering.ListGatheringPosts(ctx, request)
 	if err != nil {
@@ -306,6 +360,93 @@ func (f *PostQueryFacade) ListPostsByGathering(
 		)
 	}
 	return page, nil
+}
+
+// PublicPostIDLister 是 sitemap 的持久化窄端口；release admission 与
+// 具体 Mongo filter 仍分别由 application 和 infrastructure 持有。
+type PublicPostIDLister interface {
+	ListPublicPostIDs(
+		ctx context.Context,
+		limit int,
+		activeReleaseBinding ...string,
+	) ([]string, error)
+}
+
+func (f *PostQueryFacade) findPostDetail(
+	ctx context.Context,
+	request postports.PostDetailReadRequest,
+) (postports.PostDetailSlice, bool, error) {
+	if releaseBound, ok := f.detail.(postports.ReleaseBoundPostDetailReader); ok {
+		return releaseBound.FindReleaseBoundPostDetail(ctx, request)
+	}
+	if request.ActiveReleaseID() != "" || request.ManifestDigest() != "" {
+		return postports.PostDetailSlice{}, false, errors.New(
+			"Post detail reader cannot enforce active release binding",
+		)
+	}
+	return f.detail.FindPostDetail(ctx, request.PostID())
+}
+
+func (f *PostQueryFacade) ListPublicPostIDs(
+	ctx context.Context,
+	lister PublicPostIDLister,
+	limit int,
+	researchPrincipal ...bool,
+) ([]string, error) {
+	if lister == nil {
+		return nil, postQueryReaderUnavailable("sitemap post reader is not configured")
+	}
+	binding, err := f.admitPublicReleaseRead(
+		ctx,
+		"ListPublicPostIDs",
+		len(researchPrincipal) > 0 && researchPrincipal[0],
+	)
+	if err != nil {
+		return nil, err
+	}
+	ids, err := lister.ListPublicPostIDs(
+		ctx,
+		limit,
+		binding.ActiveReleaseID,
+		binding.ManifestDigest,
+	)
+	if err != nil {
+		return nil, postQueryReadFailure("ListPublicPostIDs", err)
+	}
+	return ids, nil
+}
+
+func (f *PostQueryFacade) admitPublicReleaseRead(
+	ctx context.Context,
+	operation string,
+	researchPrincipal bool,
+) (postports.ActiveSupplySnapshot, error) {
+	if f == nil {
+		return postports.ActiveSupplySnapshot{}, postQueryReaderUnavailable(
+			operation + " query facade is not configured",
+		)
+	}
+	if f.activeSupply == nil {
+		return postports.ActiveSupplySnapshot{}, nil
+	}
+	snapshot, err := f.activeSupply.ActiveSupplySnapshot(ctx)
+	if err != nil {
+		return postports.ActiveSupplySnapshot{}, postQueryReadFailure(operation, err)
+	}
+	if snapshot.IsEmpty() {
+		return snapshot, nil
+	}
+	if !snapshot.ReleaseBoundReadbackReady() {
+		return postports.ActiveSupplySnapshot{}, postQueryReaderUnavailable(
+			operation + " active release binding is inconsistent",
+		)
+	}
+	if snapshot.IsResearchRelease() && !researchPrincipal {
+		return postports.ActiveSupplySnapshot{}, contentgenerated.AppErrorFromPostNotFound(
+			operation + " target is missing or not visible to viewer",
+		)
+	}
+	return snapshot, nil
 }
 
 var allowedSocialProofAnchors = map[string]struct{}{

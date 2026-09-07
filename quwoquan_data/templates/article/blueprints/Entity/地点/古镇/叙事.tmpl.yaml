@@ -10,14 +10,14 @@ creatorPersona:
   archetype: travel_blogger
   preferredCreatorIds: [qwq_creator_travel_blogger_001]
   requiredProfileTagRefs: [Format/内容角度/叙事/旅行叙事, Topic/旅行/旅行主题/文化深度游]
-  allowedPerspective: [第一人称经验]
+  allowedPerspective: [中性事实叙事]
   mustNotClaim: [官方推荐, 商业合作]
 editorialIntent: 用一个真实漫步视角写出古镇的时间感和生活气。
 render: { articleTemplate: journal, fontPreset: handwritten }
 structure:
   required: [抵达时刻, 街巷漫步, 一个生活细节, 人文故事, 实用补充]
   optional: [夜色, 雨天, 老店]
-mustIncludeFacts: [抵达方式, 街巷节点, 体验时间]
+evidenceConditionedFacts: [抵达方式, 街巷节点, 体验时间]
 forbiddenPhrases: [冷启动, 批次, 角色：, 占位, contract_fixture]
 wordCount: { min: 800, max: 1600 }
 imagePlan:
@@ -27,5 +27,5 @@ crossRefs: { minEntity: 1, minTag: 3 }
 recommendation:
   authorBinding: { required: true, source: creator_profile_catalog }
   exposeStyleTags: true
-  qualitySignals: [bodyLength, requiredFactsCovered, imageSlotCoverage, entityRefCount]
+  qualitySignals: [bodyLength, evidenceSupportedFactCoverage, imageSlotCoverage, entityRefCount]
   bodyForbiddenFields: [qualityScore, templateId, routingReason, coldStartBoost, isSystemBuiltin]

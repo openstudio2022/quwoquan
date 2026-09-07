@@ -465,6 +465,38 @@ void main() {
     expect(calls, 3);
   });
 
+  test('clearAll 取消旧 in-flight 的落缓存资格，完成后仍须重新兑换', () async {
+    final pendingGrant = Completer<MediaOriginalAccessGrant>();
+    var issued = 0;
+    final gateway = _ScriptedOriginalAccessGateway((_) async {
+      issued += 1;
+      if (issued == 1) {
+        return pendingGrant.future;
+      }
+      return grant();
+    });
+    final coordinator = SignedMediaDeliveryCoordinator(
+      gateway: gateway,
+      now: _ManualClock(epoch).now,
+    );
+
+    final oldInFlight = coordinator.resolve(
+      assetId: 'asset-1',
+      kind: MediaDeliveryKind.image,
+      accessMode: MediaDeliveryAccessMode.signedGrant,
+    );
+    coordinator.clearAll();
+    pendingGrant.complete(grant());
+    await oldInFlight;
+
+    await coordinator.resolve(
+      assetId: 'asset-1',
+      kind: MediaDeliveryKind.image,
+      accessMode: MediaDeliveryAccessMode.signedGrant,
+    );
+    expect(issued, 2);
+  });
+
   test('clearAll 清空租约缓存，后续请求重新兑换', () async {
     var issued = 0;
     final gateway = _ScriptedOriginalAccessGateway((_) async {

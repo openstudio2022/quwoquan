@@ -32,7 +32,10 @@ CachedContentRepository _cachedContentRepository({
   UserProfileCacheService? userProfileCache,
   Future<void> Function(String avatarUrl)? avatarPreloader,
   Future<List<String>> Function()? blockedKeywordsLoader,
+  ContentCacheIsolationIdentity? cacheIdentity,
 }) {
+  cacheIdentity ??= _defaultCacheIdentity();
+  querySnapshotStore.adoptContentCacheIsolationIdentity(cacheIdentity);
   return CachedContentRepository(
     feedDelegate: delegate,
     deleteDelegate: InMemoryContentPostDeleteCommandWriter(
@@ -40,6 +43,9 @@ CachedContentRepository _cachedContentRepository({
     ),
     postCache: postCache,
     querySnapshotStore: querySnapshotStore,
+    currentCacheIdentity: () => cacheIdentity,
+    cacheIsolationIdentityResolver: (activationIdentity) =>
+        activationIdentity == null ? null : cacheIdentity,
     userProfileCache: userProfileCache,
     avatarPreloader: avatarPreloader,
     blockedKeywordsLoader: blockedKeywordsLoader,
@@ -52,14 +58,36 @@ CachedContentPostReader _cachedContentPostReader({
   required ContentQuerySnapshotStore querySnapshotStore,
   UserProfileCacheService? userProfileCache,
   Future<void> Function(String avatarUrl)? avatarPreloader,
+  ContentCacheIsolationIdentity? cacheIdentity,
 }) {
+  cacheIdentity ??= _defaultCacheIdentity();
+  querySnapshotStore.adoptContentCacheIsolationIdentity(cacheIdentity);
+  postCache.adoptNamespace(cacheIdentity);
   return CachedContentPostReader(
     detailDelegate: delegate,
     authorPostsDelegate: delegate,
     postCache: postCache,
     querySnapshotStore: querySnapshotStore,
+    currentCacheIdentity: () => cacheIdentity,
     userProfileCache: userProfileCache,
     avatarPreloader: avatarPreloader,
+  );
+}
+
+const _defaultDigest =
+    'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+
+ContentCacheIsolationIdentity _defaultCacheIdentity() {
+  return ContentCacheIsolationIdentity(
+    environment: 'alpha',
+    audience: ContentReleaseAudience.commercial,
+    accountId: 'account-default',
+    personaId: 'persona-default',
+    sourceOwner: 'qwq_data',
+    activationIdentity: ContentActivationIdentity(
+      releaseId: 'release-default',
+      manifestDigest: _defaultDigest,
+    ),
   );
 }
 
@@ -188,64 +216,115 @@ void main() {
     ContentQuerySnapshotStore newStore() =>
         ContentQuerySnapshotStore(persistToPreferences: false);
 
-    void putBoundSnapshot(
-      ContentQuerySnapshotStore store,
-      ContentActivationIdentity identity,
-    ) {
-      store.put(
-        key: feedKey,
-        items: <ContentPostViewData>[contentCachePostFixture('post_1')],
-        activationIdentity: identity,
+    ContentCacheIsolationIdentity cacheIdentity({
+      String environment = 'alpha',
+      ContentReleaseAudience audience = ContentReleaseAudience.research,
+      String accountId = 'account-a',
+      String personaId = 'persona-a',
+      String sourceOwner = 'qwq_data',
+      ContentActivationIdentity? activationIdentity,
+    }) {
+      return ContentCacheIsolationIdentity(
+        environment: environment,
+        audience: audience,
+        accountId: accountId,
+        personaId: personaId,
+        sourceOwner: sourceOwner,
+        activationIdentity: activationIdentity ?? identityA,
       );
     }
 
-    test('未采纳权威身份前 release-bound 快照按 LKG 语义可回放', () {
-      final store = newStore();
-      putBoundSnapshot(store, identityA);
-
-      expect(store.get(feedKey), isNotNull);
-    });
-
-    test('采纳新身份原子停用旧 release 快照，服务端回滚后可恢复', () {
-      final store = newStore();
-      putBoundSnapshot(store, identityA);
-      store.adoptContentActivationIdentity(identityA);
-      expect(store.get(feedKey), isNotNull);
-
-      // 服务端切到 release B：旧快照保留但不回放。
-      store.adoptContentActivationIdentity(identityB);
-      expect(store.get(feedKey), isNull);
-
-      // 服务端回滚到 release A：保留 namespace 原子恢复。
-      store.adoptContentActivationIdentity(identityA);
-      expect(store.get(feedKey), isNotNull);
-    });
-
-    test('采纳 no_active_release（缺席身份）后不回放任何 release-bound 快照', () {
-      final store = newStore();
-      putBoundSnapshot(store, identityA);
-      store.adoptContentActivationIdentity(identityA);
-      expect(store.get(feedKey), isNotNull);
-
-      store.adoptContentActivationIdentity(null);
-      expect(store.get(feedKey), isNull);
-    });
-
-    test('不绑定 release 的快照不受身份切换影响', () {
-      final store = newStore();
-      final userPostsKey = contentUserPostsQueryKey(
-        userId: 'user_1',
-        limit: 20,
-      );
+    void putBoundSnapshot(
+      ContentQuerySnapshotStore store,
+      ContentCacheIsolationIdentity identity,
+    ) {
       store.put(
-        key: userPostsKey,
-        items: <ContentPostViewData>[contentCachePostFixture('post_2')],
+        key: identity.isolateQueryKey(feedKey),
+        items: <ContentPostViewData>[contentCachePostFixture('post_1')],
+        activationIdentity: identity.activationIdentity,
+      );
+    }
+
+    test('未确认完整缓存身份时不得回放 release-bound 或匿名历史快照', () {
+      final store = newStore();
+      final identity = cacheIdentity();
+      store.adoptContentCacheIsolationIdentity(null);
+      putBoundSnapshot(store, identity);
+      store.put(
+        key: feedKey,
+        items: const <ContentPostViewData>[],
+        outcome: ContentFeedOutcome.empty,
+        emptyReason: ContentFeedEmptyReason.noActiveRelease,
       );
 
-      store.adoptContentActivationIdentity(identityB);
-      expect(store.get(userPostsKey), isNotNull);
-      store.adoptContentActivationIdentity(null);
-      expect(store.get(userPostsKey), isNotNull);
+      expect(store.isolateQueryKey(feedKey), isNull);
+      expect(store.get(identity.isolateQueryKey(feedKey)), isNull);
+      expect(store.get(feedKey), isNull);
+    });
+
+    test('未验签 JWT 只产生分区提示，未获 Remote tuple 前仍禁止回放', () {
+      final payload = base64Url
+          .encode(
+            utf8.encode(
+              jsonEncode(<String, Object?>{
+                'roles': <String>['research'],
+              }),
+            ),
+          )
+          .replaceAll('=', '');
+      final hint = contentReleaseAudiencePartitionHintFromAccessToken(
+        'unsigned.$payload.signature',
+      );
+      final identity = cacheIdentity(audience: hint);
+      final store = newStore();
+      store.adoptContentCacheIsolationIdentity(null);
+      putBoundSnapshot(store, identity);
+
+      expect(hint, ContentReleaseAudience.research);
+      expect(store.get(identity.isolateQueryKey(feedKey)), isNull);
+    });
+
+    test(
+      '隔离 key 完整覆盖 environment、audience、account、persona、owner 与 release tuple',
+      () {
+        final key = cacheIdentity().isolateQueryKey(feedKey);
+
+        expect(key, contains('environment=alpha'));
+        expect(key, contains('audience=research'));
+        expect(key, contains('account=account-a'));
+        expect(key, contains('persona=persona-a'));
+        expect(key, contains('sourceOwner=qwq_data'));
+        expect(key, contains('releaseId=release-a'));
+        expect(
+          key,
+          contains('manifestDigest=${Uri.encodeQueryComponent(digestA)}'),
+        );
+        expect(key, endsWith(feedKey));
+      },
+    );
+
+    test('账号、Persona 与 release 切换均 fail closed，只有完全相同身份可回放', () {
+      final store = newStore();
+      final original = cacheIdentity();
+      putBoundSnapshot(store, original);
+
+      store.adoptContentCacheIsolationIdentity(original);
+      expect(store.get(original.isolateQueryKey(feedKey)), isNotNull);
+
+      for (final switched in <ContentCacheIsolationIdentity>[
+        cacheIdentity(environment: 'beta'),
+        cacheIdentity(audience: ContentReleaseAudience.commercial),
+        cacheIdentity(accountId: 'account-b'),
+        cacheIdentity(personaId: 'persona-b'),
+        cacheIdentity(sourceOwner: 'other_owner'),
+        cacheIdentity(activationIdentity: identityB),
+      ]) {
+        store.adoptContentCacheIsolationIdentity(switched);
+        expect(store.get(original.isolateQueryKey(feedKey)), isNull);
+      }
+
+      store.adoptContentCacheIsolationIdentity(null);
+      expect(store.get(original.isolateQueryKey(feedKey)), isNull);
     });
 
     test('no_active_release 空页快照禁止携带激活身份', () {
@@ -393,6 +472,81 @@ void main() {
       );
       expect(delegate.feedRequestCount, 0);
       expect(store.count, 0);
+    });
+
+    test('未确认身份时首刷 Remote 结果不写 query 或 post cache', () async {
+      final postCache = PostObjectCacheService();
+      final store = ContentQuerySnapshotStore();
+      final delegate = _CountingContentRepository();
+      final repo = CachedContentRepository(
+        feedDelegate: delegate,
+        deleteDelegate: InMemoryContentPostDeleteCommandWriter(
+          InMemoryContentPostStore(),
+        ),
+        postCache: postCache,
+        querySnapshotStore: store,
+        currentCacheIdentity: () => null,
+        cacheIsolationIdentityResolver: (_) => null,
+      );
+
+      final page = await repo.listDiscoveryFeedPage(category: 'moment');
+
+      expect(page.items.single.id, 'post_1');
+      expect(delegate.feedRequestCount, 1);
+      expect(store.count, 0);
+      expect(postCache.projectionCount, 0);
+    });
+
+    test('no_active_release 首刷不持久化匿名空快照并清除旧隔离身份', () async {
+      final postCache = PostObjectCacheService();
+      final store = ContentQuerySnapshotStore();
+      final identity = _defaultCacheIdentity();
+      store.adoptContentCacheIsolationIdentity(identity);
+      store.put(
+        key: identity.isolateQueryKey(
+          contentFeedQueryKey(
+            category: 'old-moment',
+            sort: kFeedSortRecommend,
+            limit: 20,
+          ),
+        ),
+        items: <ContentPostViewData>[_postDto('old-post')],
+        activationIdentity: identity.activationIdentity,
+      );
+      final empty = Completer<DiscoveryFeedPage>()
+        ..complete(
+          const DiscoveryFeedPage(
+            items: <ContentPostViewData>[],
+            outcome: ContentFeedOutcome.empty,
+            emptyReason: ContentFeedEmptyReason.noActiveRelease,
+          ),
+        );
+      final delegate = _CountingContentRepository()..pendingFeedPage = empty;
+      final repo = CachedContentRepository(
+        feedDelegate: delegate,
+        deleteDelegate: InMemoryContentPostDeleteCommandWriter(
+          InMemoryContentPostStore(),
+        ),
+        postCache: postCache,
+        querySnapshotStore: store,
+        currentCacheIdentity: () => identity,
+        cacheIsolationIdentityResolver: (activationIdentity) {
+          if (activationIdentity == null) {
+            store.clearAll();
+            return null;
+          }
+          return identity;
+        },
+      );
+
+      final page = await repo.listDiscoveryFeedPage(category: 'moment');
+
+      expect(page.emptyReason, ContentFeedEmptyReason.noActiveRelease);
+      expect(store.count, 0);
+      expect(
+        store.get(identity.isolateQueryKey('surface=discoveryFeed&cursor=')),
+        isNull,
+      );
     });
 
     test('feed 首屏先返回持久快照并用同一结果句柄完成远端再验证', () async {
@@ -653,15 +807,12 @@ void main() {
         paginationExpiresAt: DateTime.utc(2026, 7, 29, 12),
         paginationSessionId: 'session-persisted',
         feedRequestId: 'feed_request_1',
-        policyDigest:
-            'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+        policyDigest: 'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
       );
       await store.flushPersistence();
-      final persistedPayload =
-          jsonDecode(
-                (await SharedPreferences.getInstance()).getString(storageKey)!,
-              )
-              as Map<String, dynamic>;
+      final persistedPayload = jsonDecode(
+        (await SharedPreferences.getInstance()).getString(storageKey)!,
+      ) as Map<String, dynamic>;
       expect(persistedPayload.keys, <String>['snapshots']);
       final memoryCached = store.get(queryKey);
       expect(memoryCached?.source, CacheReadSource.memory);
@@ -790,42 +941,39 @@ void main() {
       expect(store.count, 1);
     });
 
-    test(
-      'cached feed cursors require the same live session and unexpired boundary',
-      () {
-        final expiresAt = DateTime.utc(2026, 7, 29, 12);
-        final snapshot = ContentQuerySnapshot(
-          key: 'surface=discoveryFeed&cursor=',
-          items: <ContentPostViewData>[_postDto('post_1')],
-          fetchedAt: DateTime.utc(2026, 7, 29, 11),
-          nextCursor: 'fc.next',
-          previousCursor: 'fc.previous',
-          paginationExpiresAt: expiresAt,
-          paginationSessionId: 'session-a',
-        );
+    test('cached feed cursors require the same live session and unexpired boundary', () {
+      final expiresAt = DateTime.utc(2026, 7, 29, 12);
+      final snapshot = ContentQuerySnapshot(
+        key: 'surface=discoveryFeed&cursor=',
+        items: <ContentPostViewData>[_postDto('post_1')],
+        fetchedAt: DateTime.utc(2026, 7, 29, 11),
+        nextCursor: 'fc.next',
+        previousCursor: 'fc.previous',
+        paginationExpiresAt: expiresAt,
+        paginationSessionId: 'session-a',
+      );
 
-        final live = snapshot.toDiscoveryFeedPage(
-          currentSessionId: 'session-a',
-          now: DateTime.utc(2026, 7, 29, 11, 30),
-        );
-        expect(live.nextCursor, 'fc.next');
-        expect(live.previousCursor, 'fc.previous');
+      final live = snapshot.toDiscoveryFeedPage(
+        currentSessionId: 'session-a',
+        now: DateTime.utc(2026, 7, 29, 11, 30),
+      );
+      expect(live.nextCursor, 'fc.next');
+      expect(live.previousCursor, 'fc.previous');
 
-        final crossSession = snapshot.toDiscoveryFeedPage(
-          currentSessionId: 'session-b',
-          now: DateTime.utc(2026, 7, 29, 11, 30),
-        );
-        expect(crossSession.nextCursor, isNull);
-        expect(crossSession.previousCursor, isNull);
+      final crossSession = snapshot.toDiscoveryFeedPage(
+        currentSessionId: 'session-b',
+        now: DateTime.utc(2026, 7, 29, 11, 30),
+      );
+      expect(crossSession.nextCursor, isNull);
+      expect(crossSession.previousCursor, isNull);
 
-        final expired = snapshot.toDiscoveryFeedPage(
-          currentSessionId: 'session-a',
-          now: expiresAt,
-        );
-        expect(expired.nextCursor, isNull);
-        expect(expired.previousCursor, isNull);
-      },
-    );
+      final expired = snapshot.toDiscoveryFeedPage(
+        currentSessionId: 'session-a',
+        now: expiresAt,
+      );
+      expect(expired.nextCursor, isNull);
+      expect(expired.previousCursor, isNull);
+    });
 
     test('query snapshot 超过 24 小时后从内存和持久层主动清退', () async {
       SharedPreferences.setMockInitialValues(<String, Object>{});
@@ -1450,6 +1598,7 @@ class _CountingContentRepository extends Fake
       feedRequestId: feedRequestId?.trim().isNotEmpty == true
           ? feedRequestId!.trim()
           : 'frq_mock_${DateTime.now().microsecondsSinceEpoch}',
+      activationIdentity: _defaultCacheIdentity().activationIdentity,
     );
   }
 

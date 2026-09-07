@@ -1,12 +1,11 @@
+template: video_author
 system:
   required: []
   optional: []
 task:
   required:
-    - content_ref
-    - entity_name
-    - segment_count
-    - source_video_json
-    - video_script_path
-    - draft_meta_path
+    - target
+    - retained_evidence_excerpts
+    - selected_blueprint_intent
+    - output_path
   optional: []

@@ -39,7 +39,7 @@ from support.post_object_transaction_fixture import (
 )
 
 
-def test_travel_unverified_asset_is_retained_for_research(
+def test_travel_unverified_asset_is_rejected_without_downgrade(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -70,22 +70,52 @@ def test_travel_unverified_asset_is_retained_for_research(
     source_asset["rightsAuditIssues"] = list(asset["rightsAuditIssues"])
     _write_json(source_index_path, source_index)
 
+    with pytest.raises(ObjectTransactionError, match="rights facts drift|commercial rights proof"):
+        build_post_object_transaction_package(
+            execution_root=execution,
+            object_ref=POST_REF,
+            transaction_id=transaction_id,
+            package_root=package,
+        )
+
+
+def test_unverified_asset_publishes_with_rights_recorded_not_enforced(
+    tmp_path: Path,
+) -> None:
+    """spec_ref: multi-carrier-release/GWT-020 — 权利只记录不阻断。"""
+    execution, package, _publish, transaction_id = _fixture(tmp_path)
+    issues = ["license outside open-license allowlist: GFDL 1.2"]
+    manifest_path = execution / "posts" / POST_REF / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    asset = manifest["assets"][0]
+    asset["rightsAuditStatus"] = "unverified"
+    asset["rightsAuditIssues"] = list(issues)
+    asset["distributionDecision"] = "research_allowed"
+    _write_json(manifest_path, manifest)
+    source_index_path = execution / "sources/commons/assets/index.json"
+    source_index = json.loads(source_index_path.read_text(encoding="utf-8"))
+    source_asset = source_index["assets"][0]
+    source_asset["rightsAuditStatus"] = "unverified"
+    source_asset["rightsAuditIssues"] = list(issues)
+    source_asset["distributionDecision"] = "research_allowed"
+    _write_json(source_index_path, source_index)
+
     build_post_object_transaction_package(
         execution_root=execution,
         object_ref=POST_REF,
         transaction_id=transaction_id,
         package_root=package,
     )
-    rights = json.loads(
-        (package / "object/rights.json").read_text(encoding="utf-8")
-    )["assets"][0]
-    assert rights["distributionDecision"] == "research_allowed"
-    assert "commercial distribution proof incomplete; retained for research" in rights[
-        "rightsAuditIssues"
-    ]
+
+    rights = json.loads((package / "object/rights.json").read_text(encoding="utf-8"))
+    recorded = rights["assets"][0]
+    assert recorded["rightsAuditStatus"] == "unverified"
+    assert recorded["rightsAuditIssues"] == issues
+    assert recorded["distributionDecision"] == "research_allowed"
+    assert_valid(rights, "release", "asset_rights_closure")
 
 
-def test_unverified_collection_page_is_retained_for_research(
+def test_unverified_collection_page_is_rejected_without_downgrade(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -126,19 +156,13 @@ def test_unverified_collection_page_is_retained_for_research(
     )
     _write_json(source_index_path, source_index)
 
-    build_post_object_transaction_package(
-        execution_root=execution,
-        object_ref=POST_REF,
-        transaction_id=transaction_id,
-        package_root=package,
-    )
-    rights = json.loads(
-        (package / "object/rights.json").read_text(encoding="utf-8")
-    )["assets"][0]
-    assert rights["distributionDecision"] == "research_allowed"
-    assert "commercial distribution proof incomplete; retained for research" in rights[
-        "rightsAuditIssues"
-    ]
+    with pytest.raises(ObjectTransactionError, match="rights facts drift|commercial rights proof"):
+        build_post_object_transaction_package(
+            execution_root=execution,
+            object_ref=POST_REF,
+            transaction_id=transaction_id,
+            package_root=package,
+        )
 
 
 def test_canonical_source_catalog_preserves_factual_reference_only_truth(
@@ -178,7 +202,7 @@ def test_canonical_source_catalog_preserves_factual_reference_only_truth(
     assert validate_result(rights, "release", "asset_rights_closure") == []
 
 
-def test_verified_research_asset_projects_final_editorial_rights(
+def test_internal_reference_asset_is_rejected_without_scope_upgrade(
     tmp_path: Path,
 ) -> None:
     execution, package, _publish, transaction_id = _fixture(tmp_path)
@@ -199,20 +223,16 @@ def test_verified_research_asset_projects_final_editorial_rights(
     manifest["assets"][0]["usageScope"] = "internal_reference"
     _write_json(manifest_path, manifest)
 
-    build_post_object_transaction_package(
-        execution_root=execution,
-        object_ref=POST_REF,
-        transaction_id=transaction_id,
-        package_root=package,
-    )
-
-    rights = json.loads((package / "object/rights.json").read_text(encoding="utf-8"))
-    assert rights["assets"][0]["sourceUseMode"] == "licensed_adaptation"
-    assert rights["assets"][0]["usageScope"] == "editorial"
-    assert validate_result(rights, "release", "asset_rights_closure") == []
+    with pytest.raises(ObjectTransactionError, match="sourceUseMode|internal_reference"):
+        build_post_object_transaction_package(
+            execution_root=execution,
+            object_ref=POST_REF,
+            transaction_id=transaction_id,
+            package_root=package,
+        )
 
 
-def test_research_asset_without_authorization_proof_stays_audit_only(
+def test_research_asset_without_authorization_proof_is_rejected(
     tmp_path: Path,
 ) -> None:
     execution, package, _publish, transaction_id = _fixture(tmp_path)
@@ -233,22 +253,13 @@ def test_research_asset_without_authorization_proof_stays_audit_only(
     manifest["assets"][0]["authorizationProof"] = ""
     _write_json(manifest_path, manifest)
 
-    build_post_object_transaction_package(
-        execution_root=execution,
-        object_ref=POST_REF,
-        transaction_id=transaction_id,
-        package_root=package,
-    )
-
-    rights = json.loads((package / "object/rights.json").read_text(encoding="utf-8"))
-    asset = rights["assets"][0]
-    assert asset["sourceUseMode"] == "rights_audit_only"
-    assert asset["rightsAuditStatus"] == "unverified"
-    assert asset["authorizationProof"] == ""
-    assert asset["rightsAuditIssues"] == [
-        "authorizationProof: not independently verified for research distribution"
-    ]
-    assert validate_result(rights, "release", "asset_rights_closure") == []
+    with pytest.raises(ObjectTransactionError, match="rights facts drift|authorizationProof"):
+        build_post_object_transaction_package(
+            execution_root=execution,
+            object_ref=POST_REF,
+            transaction_id=transaction_id,
+            package_root=package,
+        )
 
 
 def test_canonical_transaction_rejects_source_use_mode_upgrade(

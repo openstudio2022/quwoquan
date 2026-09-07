@@ -13,7 +13,7 @@ class ShipOperationDependencies:
     """由公开 handler 注入的路径与边界操作，保留既有测试替换点。"""
 
     output_root: Path
-    load_release: Callable[[str], tuple[Path, dict[str, Any]]]
+    admit_release: Callable[[Any], Any]
     release_requires_full_sync: Callable[[Path], bool]
     release_has_posts: Callable[[Mapping[str, Any]], bool]
     create_run: Callable[..., Path]
@@ -36,10 +36,18 @@ class ShipOperationDependencies:
     write_baseline_api_verification: Callable[..., Path]
     write_post_api_verification: Callable[..., Path]
     write_homepage_api_verification: Callable[..., Path]
-    write_research_isolation_verification: Callable[..., Path]
     write_environment_release_readiness: Callable[..., Path]
     now_compact: Callable[[], str]
-    # 返回 fresh rollback 的 activate run id，供恢复后的四入口读回绑定。
-    restore_previous_release: Callable[..., str | None] | None = None
-    # Post-activate 显式媒体回收；缺省表示该环境没有本地媒体根，不做删除。
-    prune_media: Callable[..., None] | None = None
+    require_owner_local_staging_admission: Callable[..., Any] | None = None
+    query_tag_release_candidate: Callable[..., Any] | None = None
+    query_creator_release_candidate: Callable[..., Any] | None = None
+    query_homepage_release_candidate: Callable[..., Any] | None = None
+    query_content_release_candidate: Callable[..., Any] | None = None
+    load_owner_release_candidate_receipt: Callable[..., Any] | None = None
+    load_content_release_candidate_receipt: Callable[..., Any] | None = None
+    query_content_active_release: Callable[..., Any] | None = None
+    activate_content_release: Callable[..., Any] | None = None
+    readback_tag_at_content_fence: Callable[..., Any] | None = None
+    readback_creator_at_content_fence: Callable[..., Any] | None = None
+    readback_homepage_at_content_fence: Callable[..., Any] | None = None
+    readback_content_at_content_fence: Callable[..., Any] | None = None

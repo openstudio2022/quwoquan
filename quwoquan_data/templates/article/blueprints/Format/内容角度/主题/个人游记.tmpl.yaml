@@ -10,14 +10,14 @@ creatorPersona:
   archetype: travel_blogger
   preferredCreatorIds: [qwq_creator_travel_blogger_001]
   requiredProfileTagRefs: [Format/内容载体/文章/游记, Format/内容角度/叙事/旅行叙事]
-  allowedPerspective: [第一人称经验]
+  allowedPerspective: [中性事实叙事]
   mustNotClaim: [官方推荐, 商业合作]
-editorialIntent: 用个人经验写出真实旅行感受，同时把事实信息和主观感受分清楚。
+editorialIntent: 基于可核验证据组织旅行叙事；没有主体自述证据时不写第一人称经历或主观感受。
 render: { articleTemplate: journal, fontPreset: handwritten }
 structure:
   required: [出发原因, 路上片段, 一个具体时刻, 实用补充, 回看这趟旅行]
   optional: [同行者, 花费, 遗憾]
-mustIncludeFacts: [旅行时间, 交通方式, 停留地点, 主观体验边界]
+evidenceConditionedFacts: [旅行时间, 交通方式, 停留地点, 主观体验边界]
 forbiddenPhrases: [冷启动, 批次, 角色：, 占位, contract_fixture]
 wordCount: { min: 900, max: 1800 }
 imagePlan:
@@ -28,5 +28,5 @@ crossRefs: { minEntity: 1, minTag: 3 }
 recommendation:
   authorBinding: { required: true, source: creator_profile_catalog }
   exposeStyleTags: true
-  qualitySignals: [bodyLength, requiredFactsCovered, imageSlotCoverage, entityRefCount]
+  qualitySignals: [bodyLength, evidenceSupportedFactCoverage, imageSlotCoverage, entityRefCount]
   bodyForbiddenFields: [qualityScore, templateId, routingReason, coldStartBoost, isSystemBuiltin]

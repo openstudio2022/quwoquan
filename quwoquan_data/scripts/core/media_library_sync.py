@@ -15,7 +15,6 @@ from __future__ import annotations
 
 import hashlib
 import re
-from collections.abc import Iterable
 from pathlib import Path
 from typing import Any, Mapping
 
@@ -157,30 +156,6 @@ def sync_media_library(
             expected={Path(key) for key in selected_digests},
             report=report,
         )
-    return report
-
-
-def prune_media_library(
-    dest_root: Path,
-    *,
-    keep_keys: Iterable[str],
-) -> dict[str, Any]:
-    """Post-activate 显式回收：只删除不在任何保留闭包内的公开 slice。
-
-    ``keep_keys`` 是新 active 与 previous active 两个 release 闭包的并集；
-    回滚窗口内两者都必须可服务，因此回收永远不在 stage/verify 阶段发生。
-    """
-    dest_root = Path(dest_root)
-    report: dict[str, Any] = {
-        "schema": "quwoquan_data.media_library_prune",
-        "destRoot": _portable_path(dest_root),
-        "keptKeys": 0,
-        "pruned": 0,
-        "prunedAt": now_iso(),
-    }
-    expected = {Path(str(key).lstrip("/")) for key in keep_keys if str(key).strip()}
-    report["keptKeys"] = len(expected)
-    _prune_public_slices(dest_root, expected=expected, report=report)
     return report
 
 

@@ -48,7 +48,7 @@ graphql_queries:
     telemetry: {metric: content_post_detail_article_entities_graphql_get, trace: true, attributes: [outcome, content_type]}
     slo: {latency_p95_ms: 500, availability_percent: 99.9}
     response_entity: ContentPostDetailSlice
-description: 内容发布、浏览、互动、评论与媒体管理。非 HTTP 的 canonical Data release 由 content-service cmd/import 的受保护 stage/verify/activate 三阶段入口执行：stage 只写 posts_candidate、additive media membership 与阶段回执，GetReleaseCandidateReadback 只按完整 candidate identity 读取受保护候选闭包，activate 必须绑定 verified evidence，并在一个 Mongo transaction 内原子提交 candidate→Post、tombstone、lifecycle outbox、stage receipt 与 data_release_state CAS。首次 expectedRevision=0 只允许一个 environment+sourceOwner winner；stale revision 必须 fail closed。
+description: 内容发布、浏览、互动、评论与媒体管理
 externalDependencies:
   - capability: content.embedding.generation
     port: EmbeddingGenerationPort
@@ -97,6 +97,7 @@ externalDependencies:
     port: MessageTransportPort
     operations: [appendDurable, consumeDurable]
     scenes: [general, realtime]
+runtime_entrypoints: []
 api_routes:
   - method: GET
     path: /content/research/readback

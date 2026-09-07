@@ -161,14 +161,20 @@ func (v ViewerContext) IsOwner(author PersonaID) bool {
 
 // PostDetailQuery 是 GetPost 的 immutable 输入。
 type PostDetailQuery struct {
-	postID PostID
-	viewer ViewerContext
+	postID            PostID
+	viewer            ViewerContext
+	researchPrincipal bool
 }
 
-func NewPostDetailQuery(postID PostID, viewer ViewerContext) PostDetailQuery {
+func NewPostDetailQuery(
+	postID PostID,
+	viewer ViewerContext,
+	researchPrincipal ...bool,
+) PostDetailQuery {
 	return PostDetailQuery{
-		postID: NewPostID(string(postID)),
-		viewer: viewer,
+		postID:            NewPostID(string(postID)),
+		viewer:            viewer,
+		researchPrincipal: len(researchPrincipal) > 0 && researchPrincipal[0],
 	}
 }
 
@@ -180,16 +186,21 @@ func (q PostDetailQuery) Viewer() ViewerContext {
 	return q.viewer
 }
 
+func (q PostDetailQuery) ResearchPrincipal() bool {
+	return q.researchPrincipal
+}
+
 // AuthorPostPageQuery 是 ListUserPosts 的 transport-neutral 输入。cursor 保留
 // wire 值，进入 reader 前必须由 application 解析为 AuthorPostCursor。
 type AuthorPostPageQuery struct {
-	authorPersonaID PersonaID
-	viewer          ViewerContext
-	identity        ContentIdentity
-	contentType     ContentType
-	visibility      PostVisibility
-	cursor          string
-	limit           int
+	authorPersonaID   PersonaID
+	viewer            ViewerContext
+	identity          ContentIdentity
+	contentType       ContentType
+	visibility        PostVisibility
+	cursor            string
+	limit             int
+	researchPrincipal bool
 }
 
 func NewAuthorPostPageQuery(
@@ -200,15 +211,17 @@ func NewAuthorPostPageQuery(
 	visibility PostVisibility,
 	cursor string,
 	limit int,
+	researchPrincipal ...bool,
 ) AuthorPostPageQuery {
 	return AuthorPostPageQuery{
-		authorPersonaID: NewPersonaID(string(authorPersonaID)),
-		viewer:          viewer,
-		identity:        ContentIdentity(strings.TrimSpace(string(identity))),
-		contentType:     ContentType(strings.TrimSpace(string(contentType))),
-		visibility:      PostVisibility(strings.TrimSpace(string(visibility))),
-		cursor:          strings.TrimSpace(cursor),
-		limit:           limit,
+		authorPersonaID:   NewPersonaID(string(authorPersonaID)),
+		viewer:            viewer,
+		identity:          ContentIdentity(strings.TrimSpace(string(identity))),
+		contentType:       ContentType(strings.TrimSpace(string(contentType))),
+		visibility:        PostVisibility(strings.TrimSpace(string(visibility))),
+		cursor:            strings.TrimSpace(cursor),
+		limit:             limit,
+		researchPrincipal: len(researchPrincipal) > 0 && researchPrincipal[0],
 	}
 }
 
@@ -238,6 +251,10 @@ func (q AuthorPostPageQuery) Cursor() string {
 
 func (q AuthorPostPageQuery) Limit() int {
 	return q.limit
+}
+
+func (q AuthorPostPageQuery) ResearchPrincipal() bool {
+	return q.researchPrincipal
 }
 
 // PostCreatorDisclosureSlice 是用户可见的虚拟创作者披露，排除作者质量和
@@ -376,15 +393,15 @@ type PostHomepageSnapshotSlice struct {
 // 不能被误作 Post 聚合继续写回。ModerationStatus 只供 application 做
 // 服务端可见性判定，json:"-" 保证它不进入任何客户端响应。
 type PostDetailSlice struct {
-	PostID                  PostID                         `json:"postId" bson:"_id"`
-	AuthorPersonaID         PersonaID                      `json:"authorId" bson:"authorId"`
-	CreatorProfileID        string                         `json:"creatorProfileId,omitempty" bson:"creatorProfileId,omitempty"`
-	CreatorArchetype        string                         `json:"creatorArchetype,omitempty" bson:"creatorArchetype,omitempty"`
-	CreatorProfileVersion   string                         `json:"creatorProfileVersion,omitempty" bson:"creatorProfileVersion,omitempty"`
-	CreatorDisclosure       *PostCreatorDisclosureSlice    `json:"creatorDisclosure,omitempty" bson:"creatorDisclosure,omitempty"`
-	ExperienceClaimMode     string                         `json:"experienceClaimMode,omitempty" bson:"experienceClaimMode,omitempty"`
-	AuthorDisplayName       string                         `json:"authorDisplayNameSnapshot,omitempty" bson:"authorDisplayNameSnapshot,omitempty"`
-	AuthorAvatarURL         string                         `json:"authorAvatarUrlSnapshot,omitempty" bson:"authorAvatarUrlSnapshot,omitempty"`
+	PostID                PostID                      `json:"postId" bson:"_id"`
+	AuthorPersonaID       PersonaID                   `json:"authorId" bson:"authorId"`
+	CreatorProfileID      string                      `json:"creatorProfileId,omitempty" bson:"creatorProfileId,omitempty"`
+	CreatorArchetype      string                      `json:"creatorArchetype,omitempty" bson:"creatorArchetype,omitempty"`
+	CreatorProfileVersion string                      `json:"creatorProfileVersion,omitempty" bson:"creatorProfileVersion,omitempty"`
+	CreatorDisclosure     *PostCreatorDisclosureSlice `json:"creatorDisclosure,omitempty" bson:"creatorDisclosure,omitempty"`
+	ExperienceClaimMode   string                      `json:"experienceClaimMode,omitempty" bson:"experienceClaimMode,omitempty"`
+	AuthorDisplayName     string                      `json:"authorDisplayNameSnapshot,omitempty" bson:"authorDisplayNameSnapshot,omitempty"`
+	AuthorAvatarURL       string                      `json:"authorAvatarUrlSnapshot,omitempty" bson:"authorAvatarUrlSnapshot,omitempty"`
 	// AuthorAvatarAssetID/AuthorAvatarAccessMode 作者头像的媒体交付绑定
 	// （DEC-033，契约 authorAvatarAssetId/authorAvatarAccessMode 均 NULLABLE）；
 	// 缺席以省略键表达。
@@ -436,18 +453,18 @@ type PostDetailSlice struct {
 	SourceType              string                         `json:"sourceType,omitempty" bson:"sourceType,omitempty"`
 	// GatheringRef 共同经历回流引用（作者显式关联的 canonical Gathering ID）；
 	// 空值表示普通内容，wire 契约声明 nullable string。
-	GatheringRef            string                         `json:"gatheringRef,omitempty" bson:"gatheringRef,omitempty"`
-	IllustrationAssetID     string                         `json:"illustrationAssetId,omitempty" bson:"illustrationAssetId,omitempty"`
-	LikeCount               int64                          `json:"likeCount" bson:"likeCount"`
-	CommentCount            int64                          `json:"commentCount" bson:"commentCount"`
-	PinnedCommentID         string                         `json:"pinnedCommentId,omitempty" bson:"pinnedCommentId,omitempty"`
-	ShareCount              int64                          `json:"shareCount" bson:"shareCount"`
-	ViewCount               int64                          `json:"viewCount" bson:"viewCount"`
-	HelperReadSummary       string                         `json:"helperReadSummary,omitempty" bson:"helperReadSummary,omitempty"`
-	CreatedAt               time.Time                      `json:"createdAt" bson:"createdAt"`
-	UpdatedAt               time.Time                      `json:"updatedAt" bson:"updatedAt"`
-	PublishedAt             time.Time                      `json:"publishedAt,omitempty" bson:"publishedAt,omitempty"`
-	LastActiveAt            time.Time                      `json:"lastActiveAt,omitempty" bson:"lastActiveAt,omitempty"`
+	GatheringRef        string    `json:"gatheringRef,omitempty" bson:"gatheringRef,omitempty"`
+	IllustrationAssetID string    `json:"illustrationAssetId,omitempty" bson:"illustrationAssetId,omitempty"`
+	LikeCount           int64     `json:"likeCount" bson:"likeCount"`
+	CommentCount        int64     `json:"commentCount" bson:"commentCount"`
+	PinnedCommentID     string    `json:"pinnedCommentId,omitempty" bson:"pinnedCommentId,omitempty"`
+	ShareCount          int64     `json:"shareCount" bson:"shareCount"`
+	ViewCount           int64     `json:"viewCount" bson:"viewCount"`
+	HelperReadSummary   string    `json:"helperReadSummary,omitempty" bson:"helperReadSummary,omitempty"`
+	CreatedAt           time.Time `json:"createdAt" bson:"createdAt"`
+	UpdatedAt           time.Time `json:"updatedAt" bson:"updatedAt"`
+	PublishedAt         time.Time `json:"publishedAt,omitempty" bson:"publishedAt,omitempty"`
+	LastActiveAt        time.Time `json:"lastActiveAt,omitempty" bson:"lastActiveAt,omitempty"`
 }
 
 // AuthorPostItemSlice 是个人主页创作页的紧凑卡片白名单。它不会载入详情
@@ -510,43 +527,43 @@ type PostFeedItemSlice struct {
 	// （空串省略）表示无头像或存量 public 交付，禁止以 authorId 冒充。
 	AuthorAvatarAssetID    string               `json:"authorAvatarAssetId,omitempty" bson:"authorAvatarAssetId,omitempty"`
 	AuthorAvatarAccessMode string               `json:"authorAvatarAccessMode,omitempty" bson:"authorAvatarAccessMode,omitempty"`
-	ContentType        ContentType          `json:"contentType" bson:"contentType"`
-	ContentIdentity    ContentIdentity      `json:"contentIdentity,omitempty" bson:"contentIdentity,omitempty"`
-	AssistantUsePolicy string               `json:"assistantUsePolicy,omitempty" bson:"assistantUsePolicy,omitempty"`
-	Title              string               `json:"title,omitempty" bson:"title,omitempty"`
-	Body               string               `json:"body,omitempty" bson:"body,omitempty"`
-	Summary            string               `json:"summary,omitempty" bson:"summary,omitempty"`
-	MediaURLs          []string             `json:"mediaUrls,omitempty" bson:"mediaUrls,omitempty"`
-	MediaItems         []PostMediaItemSlice `json:"mediaItems,omitempty" bson:"mediaItems,omitempty"`
-	VideoURL           string               `json:"videoUrl,omitempty" bson:"videoUrl,omitempty"`
-	CoverURL           string               `json:"coverUrl,omitempty" bson:"coverUrl,omitempty"`
-	ThumbnailURL       string               `json:"thumbnailUrl,omitempty" bson:"thumbnailUrl,omitempty"`
-	CoverStrategy      string               `json:"coverStrategy,omitempty" bson:"coverStrategy,omitempty"`
-	CoverFrameTimeMS   int64                `json:"coverFrameTimeMs,omitempty" bson:"coverFrameTimeMs,omitempty"`
-	DurationMS         int64                `json:"durationMs,omitempty" bson:"-"`
-	Width              int64                `json:"width,omitempty" bson:"-"`
-	Height             int64                `json:"height,omitempty" bson:"-"`
-	TagRefs            []string             `json:"tagRefs,omitempty" bson:"tagRefs,omitempty"`
-	EntityRefs         []string             `json:"entityRefs,omitempty" bson:"entityRefs,omitempty"`
-	Visibility         PostVisibility       `json:"visibility,omitempty" bson:"visibility,omitempty"`
-	ContentVertical    string               `json:"contentVertical,omitempty" bson:"contentVertical,omitempty"`
+	ContentType            ContentType          `json:"contentType" bson:"contentType"`
+	ContentIdentity        ContentIdentity      `json:"contentIdentity,omitempty" bson:"contentIdentity,omitempty"`
+	AssistantUsePolicy     string               `json:"assistantUsePolicy,omitempty" bson:"assistantUsePolicy,omitempty"`
+	Title                  string               `json:"title,omitempty" bson:"title,omitempty"`
+	Body                   string               `json:"body,omitempty" bson:"body,omitempty"`
+	Summary                string               `json:"summary,omitempty" bson:"summary,omitempty"`
+	MediaURLs              []string             `json:"mediaUrls,omitempty" bson:"mediaUrls,omitempty"`
+	MediaItems             []PostMediaItemSlice `json:"mediaItems,omitempty" bson:"mediaItems,omitempty"`
+	VideoURL               string               `json:"videoUrl,omitempty" bson:"videoUrl,omitempty"`
+	CoverURL               string               `json:"coverUrl,omitempty" bson:"coverUrl,omitempty"`
+	ThumbnailURL           string               `json:"thumbnailUrl,omitempty" bson:"thumbnailUrl,omitempty"`
+	CoverStrategy          string               `json:"coverStrategy,omitempty" bson:"coverStrategy,omitempty"`
+	CoverFrameTimeMS       int64                `json:"coverFrameTimeMs,omitempty" bson:"coverFrameTimeMs,omitempty"`
+	DurationMS             int64                `json:"durationMs,omitempty" bson:"-"`
+	Width                  int64                `json:"width,omitempty" bson:"-"`
+	Height                 int64                `json:"height,omitempty" bson:"-"`
+	TagRefs                []string             `json:"tagRefs,omitempty" bson:"tagRefs,omitempty"`
+	EntityRefs             []string             `json:"entityRefs,omitempty" bson:"entityRefs,omitempty"`
+	Visibility             PostVisibility       `json:"visibility,omitempty" bson:"visibility,omitempty"`
+	ContentVertical        string               `json:"contentVertical,omitempty" bson:"contentVertical,omitempty"`
 	// 主实体锚点（canonical homepage 引用）：feed 卡想去 CTA 与实体跳转的
 	// 意图信号源；无实体锚点时为空。
 	PrimaryHomepageID   string `json:"primaryHomepageId,omitempty" bson:"primaryHomepageId,omitempty"`
 	PrimaryHomepageType string `json:"primaryHomepageType,omitempty" bson:"primaryHomepageType,omitempty"`
 	// GatheringRef 共同经历回流引用：feed 卡溯源标「他们从这条内容出发」的
 	// 物理载体；作者删除或取消关联即为空。
-	GatheringRef string `json:"gatheringRef,omitempty" bson:"gatheringRef,omitempty"`
-	SourceOwner        string               `json:"-" bson:"sourceOwner,omitempty"`
-	ReleaseID          string               `json:"-" bson:"releaseId,omitempty"`
-	ManifestDigest     string               `json:"-" bson:"manifestDigest,omitempty"`
-	LifecycleStatus    string               `json:"-" bson:"lifecycleStatus,omitempty"`
-	LikeCount          int64                `json:"likeCount" bson:"likeCount"`
-	CommentCount       int64                `json:"commentCount" bson:"commentCount"`
-	ShareCount         int64                `json:"shareCount" bson:"shareCount"`
-	CreatedAt          time.Time            `json:"createdAt" bson:"createdAt"`
-	UpdatedAt          time.Time            `json:"updatedAt" bson:"updatedAt"`
-	PublishedAt        time.Time            `json:"publishedAt,omitempty" bson:"publishedAt,omitempty"`
+	GatheringRef    string    `json:"gatheringRef,omitempty" bson:"gatheringRef,omitempty"`
+	SourceOwner     string    `json:"-" bson:"sourceOwner,omitempty"`
+	ReleaseID       string    `json:"-" bson:"releaseId,omitempty"`
+	ManifestDigest  string    `json:"-" bson:"manifestDigest,omitempty"`
+	LifecycleStatus string    `json:"-" bson:"lifecycleStatus,omitempty"`
+	LikeCount       int64     `json:"likeCount" bson:"likeCount"`
+	CommentCount    int64     `json:"commentCount" bson:"commentCount"`
+	ShareCount      int64     `json:"shareCount" bson:"shareCount"`
+	CreatedAt       time.Time `json:"createdAt" bson:"createdAt"`
+	UpdatedAt       time.Time `json:"updatedAt" bson:"updatedAt"`
+	PublishedAt     time.Time `json:"publishedAt,omitempty" bson:"publishedAt,omitempty"`
 }
 
 type PostFeedSlice struct {
@@ -555,8 +572,41 @@ type PostFeedSlice struct {
 
 // PostDetailReader 与 AuthorPostReader 是两个独立 query port。Post
 // aggregate store 只能服务命令路径，不能替代任何一个 reader。
+// PostDetailReadRequest 把详情读取绑定到 application 已确认的 active release。
+// 空绑定只允许读取非 qwq_data 内容；任何 qwq_data Post 必须精确匹配两元组。
+type PostDetailReadRequest struct {
+	postID          PostID
+	activeReleaseID string
+	manifestDigest  string
+}
+
+func NewPostDetailReadRequest(
+	postID PostID,
+	activeReleaseID string,
+	manifestDigest string,
+) PostDetailReadRequest {
+	return PostDetailReadRequest{
+		postID:          NewPostID(string(postID)),
+		activeReleaseID: strings.TrimSpace(activeReleaseID),
+		manifestDigest:  strings.TrimSpace(manifestDigest),
+	}
+}
+
+func (r PostDetailReadRequest) PostID() PostID          { return r.postID }
+func (r PostDetailReadRequest) ActiveReleaseID() string { return r.activeReleaseID }
+func (r PostDetailReadRequest) ManifestDigest() string  { return r.manifestDigest }
+
 type PostDetailReader interface {
 	FindPostDetail(ctx context.Context, postID PostID) (PostDetailSlice, bool, error)
+}
+
+// ReleaseBoundPostDetailReader 是生产公开详情 reader 的增强端口。Facade 在
+// ActiveSupply 存在时必须使用它，禁止把 release fence 降级成普通 ID 查询。
+type ReleaseBoundPostDetailReader interface {
+	FindReleaseBoundPostDetail(
+		ctx context.Context,
+		request PostDetailReadRequest,
+	) (PostDetailSlice, bool, error)
 }
 
 // HelperReadSlice 是公开辅助阅读接口的最小白名单投影。它只承载已经
@@ -705,6 +755,8 @@ type AuthorPostReadRequest struct {
 	visibility      PostVisibility
 	cursor          AuthorPostCursor
 	limit           int
+	activeReleaseID string
+	manifestDigest  string
 }
 
 func NewAuthorPostReadRequest(
@@ -715,7 +767,9 @@ func NewAuthorPostReadRequest(
 	visibility PostVisibility,
 	cursor AuthorPostCursor,
 	limit int,
+	activeReleaseBinding ...string,
 ) AuthorPostReadRequest {
+	activeReleaseID, manifestDigest := activeReleaseBindingValues(activeReleaseBinding)
 	return AuthorPostReadRequest{
 		authorPersonaID: NewPersonaID(string(authorPersonaID)),
 		accessScope:     accessScope,
@@ -724,6 +778,8 @@ func NewAuthorPostReadRequest(
 		visibility:      visibility,
 		cursor:          cursor,
 		limit:           limit,
+		activeReleaseID: activeReleaseID,
+		manifestDigest:  manifestDigest,
 	}
 }
 
@@ -755,6 +811,9 @@ func (r AuthorPostReadRequest) Limit() int {
 	return r.limit
 }
 
+func (r AuthorPostReadRequest) ActiveReleaseID() string { return r.activeReleaseID }
+func (r AuthorPostReadRequest) ManifestDigest() string  { return r.manifestDigest }
+
 func (r AuthorPostReadRequest) SortField() string {
 	if r.accessScope == AuthorPostAccessOwner {
 		return "updatedAt"
@@ -770,7 +829,21 @@ func (r AuthorPostReadRequest) CursorScope() string {
 		string(r.identity),
 		string(r.contentType),
 		string(r.visibility),
+		r.activeReleaseID,
+		r.manifestDigest,
 	)
+}
+
+func activeReleaseBindingValues(values []string) (string, string) {
+	activeReleaseID := ""
+	manifestDigest := ""
+	if len(values) > 0 {
+		activeReleaseID = strings.TrimSpace(values[0])
+	}
+	if len(values) > 1 {
+		manifestDigest = strings.TrimSpace(values[1])
+	}
+	return activeReleaseID, manifestDigest
 }
 
 func cursorScope(parts ...string) string {

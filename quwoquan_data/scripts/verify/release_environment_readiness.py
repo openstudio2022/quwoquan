@@ -18,11 +18,6 @@ from content.release.environment.release_readiness_closure import (
     ReleaseReadinessClosureError,
     validate_readiness_closure,
 )
-from content.release.environment.research_isolation_verification import (
-    ResearchIsolationVerificationError,
-    load_research_isolation_verification,
-    research_isolation_file_digest,
-)
 from core.io import read_json
 from core.release_layout import payload_file
 from verify.release_publishability import phase_lifecycle_alignment_issue
@@ -112,45 +107,11 @@ def environment_release_readiness_issues(
     )
     if alignment_issue is not None:
         issues.append(f"{path}: {alignment_issue}")
-    isolation_fields = (
-        "internalSubjectHash",
-        "researchIsolationVerificationRef",
-        "researchIsolationVerificationDigest",
-    )
-    isolation: dict[str, Any] | None = None
-    if readiness_phase == "research":
-        isolation_ref = str(
-            readiness.get("researchIsolationVerificationRef") or ""
-        )
-        isolation_path = output_root / isolation_ref
-        expected_isolation_path = verify_run / "research-isolation-verification.json"
-        if not isolation_ref or isolation_path.resolve() != expected_isolation_path.resolve():
-            issues.append(f"{path}: research isolation ref is not the canonical run proof")
-        else:
-            try:
-                isolation = load_research_isolation_verification(
-                    isolation_path,
-                    environment=environment,
-                    release_id=release_id,
-                    verify_run_id=verify_run_id,
-                    manifest_digest=str(readiness.get("manifestDigest") or ""),
-                    require_pass=True,
-                )
-                isolation_digest = research_isolation_file_digest(isolation_path)
-            except (OSError, ResearchIsolationVerificationError) as exc:
-                issues.append(f"{path}: research isolation proof is invalid: {exc}")
-            else:
-                if (
-                    readiness.get("internalSubjectHash")
-                    != isolation.get("subjectHash")
-                    or readiness.get("researchIsolationVerificationDigest")
-                    != isolation_digest
-                ):
-                    issues.append(
-                        f"{path}: research isolation identity/digest drift"
-                    )
-    elif any(field in readiness for field in isolation_fields):
-        issues.append(f"{path}: research isolation evidence is research-only")
+    if any(
+        field in readiness
+        for field in ("internalSubjectHash", "researchIsolationVerificationRef", "researchIsolationVerificationDigest")
+    ):
+        issues.append(f"{path}: retired research isolation evidence is not allowed")
 
     media_manifest_path = payload_file(release, "media_manifest.json")
     try:
@@ -365,13 +326,6 @@ def environment_release_readiness_issues(
             verify_run_id=verify_run_id,
             import_report_ref=import_report_ref,
             import_report_digest=file_digest(import_run / "import.json"),
-            research_isolation=isolation,
-            research_isolation_verification_ref=str(
-                readiness.get("researchIsolationVerificationRef") or ""
-            ),
-            research_isolation_verification_digest=str(
-                readiness.get("researchIsolationVerificationDigest") or ""
-            ),
             previous_environment_activation=previous_environment_activation,
         )
     except (ValueError, EnvironmentActivationEnvelopeError) as exc:

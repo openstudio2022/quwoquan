@@ -6,8 +6,9 @@ trust envelope 与生产 App 受同一组判否约束，否则「宿主起得来
 两个工程的 configuration 命名不同（生产带 buildProfile flavor 后缀，宿主没有），因此
 build profile 由调用方显式交出，本脚本不从 configuration 名反推。
 
-构建期默认供给（embedded_default_package）已退役：资源目录只嵌 trust envelope，
-并清除任何残留 package/默认供给材料；target runtime package 不得随构建进入产物。
+资源目录嵌 trust envelope；Debug-nonprod 在无外部 canonical handoff 时另嵌一份
+`build_time_self_supply` 激活请求（REQ-003）。target runtime package 本身不得以可读
+package 形态进入产物，早前的 embedded_default_package 双读材料仍作为残留被清除。
 """
 from __future__ import annotations
 
@@ -122,6 +123,43 @@ def _verified_trust_envelope(trust_path: Path, build_profile: str) -> None:
 # 已退役的默认供给材料命名：增量构建可能残留旧字节，装配期必须清除。
 _RETIRED_DEFAULT_PACKAGE_FILE_NAME = "runtime-config-default-package.json"
 _RETIRED_DEFAULT_MANIFEST_FILE_NAME = "runtime-config-default-manifest.json"
+_SELF_SUPPLY_REQUEST_FILE_NAME = "runtime-config-self-supply-request.json"
+_SELF_SUPPLY_MODE = "build_time_self_supply"
+_SELF_SUPPLY_BUILD_PROFILE = "nonprod"
+
+
+def _verified_self_supply_request(request_path: Path, build_profile: str) -> None:
+    contract = _generated_contract()
+    schemas = contract.get("schemaValues")
+    supply_modes = contract.get("runtimeConfigSupplyModes")
+    if not isinstance(schemas, dict) or not isinstance(supply_modes, list):
+        raise SystemExit("generated app launch activation contract is incomplete")
+    if _SELF_SUPPLY_MODE not in supply_modes:
+        raise SystemExit("build_time_self_supply is absent from the generated closed set")
+    if build_profile != _SELF_SUPPLY_BUILD_PROFILE:
+        raise SystemExit("self supply request is only admissible for the nonprod profile")
+    if (
+        not request_path.is_absolute()
+        or request_path.is_symlink()
+        or not request_path.is_file()
+        or request_path.stat().st_size <= 0
+        or request_path.stat().st_size > 1024 * 1024
+    ):
+        raise SystemExit("self supply request must be an absolute regular non-symlink file")
+    try:
+        request = json.loads(request_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise SystemExit(f"self supply request is malformed: {exc}") from exc
+    manifest = request.get("effectiveLaunchManifest") if isinstance(request, dict) else None
+    if (
+        not isinstance(request, dict)
+        or request.get("schema") != schemas.get("runtime_config_activation_request")
+        or request.get("buildProfile") != _SELF_SUPPLY_BUILD_PROFILE
+        or request.get("expectedActiveDigest") != ""
+        or not isinstance(manifest, dict)
+        or manifest.get("runtimeConfigSupplyMode") != _SELF_SUPPLY_MODE
+    ):
+        raise SystemExit("self supply request identity conflicts with the build profile")
 
 
 def _copy_into_resources(source: Path, destination: Path) -> None:
@@ -136,15 +174,26 @@ def _remove_if_present(destination: Path) -> None:
         destination.unlink()
 
 
-def _embed(trust_path: Path, resource_root: Path) -> None:
+def _embed(
+    trust_path: Path,
+    resource_root: Path,
+    *,
+    self_supply_request_path: Path | None,
+) -> None:
     resource_root.mkdir(parents=True, exist_ok=True)
-    # target runtime package 不得随构建进入产物：装配期只交 trust envelope，package 由
-    # 运行时 activation 供给。资源目录可被增量构建复用，因此每次都清掉残留 package
-    # 与已退役默认供给材料。
+    # target runtime package 不得以可读 package 进入产物：装配期只交 trust envelope 与
+    # （Debug-nonprod 自供给时）一份待激活请求，package 仍由运行时 activation 写入私有
+    # 容器。资源目录可被增量构建复用，因此每次都清掉残留 package、已退役默认供给材料，
+    # 以及上一次构建留下的自供给请求。
     _remove_if_present(resource_root / "runtime-config-package.json")
     _remove_if_present(resource_root / _RETIRED_DEFAULT_PACKAGE_FILE_NAME)
     _remove_if_present(resource_root / _RETIRED_DEFAULT_MANIFEST_FILE_NAME)
+    _remove_if_present(resource_root / _SELF_SUPPLY_REQUEST_FILE_NAME)
     _copy_into_resources(trust_path, resource_root / "runtime-config-trust.json")
+    if self_supply_request_path is not None:
+        _copy_into_resources(
+            self_supply_request_path, resource_root / _SELF_SUPPLY_REQUEST_FILE_NAME
+        )
 
 
 def main(argv: list[str]) -> int:
@@ -153,15 +202,21 @@ def main(argv: list[str]) -> int:
     parser.add_argument("build_profile")
     parser.add_argument("target_build_dir")
     parser.add_argument("resources_folder_path")
+    parser.add_argument("--self-supply-request", default="")
     arguments = parser.parse_args(argv[1:])
     trust_path = Path(arguments.trust_path).expanduser()
     build_profile = arguments.build_profile.strip()
     if not build_profile:
         raise SystemExit("build profile must be declared by the calling build phase")
     _verified_trust_envelope(trust_path, build_profile)
+    self_supply_request_path: Path | None = None
+    if arguments.self_supply_request.strip():
+        self_supply_request_path = Path(arguments.self_supply_request).expanduser()
+        _verified_self_supply_request(self_supply_request_path, build_profile)
     _embed(
         trust_path,
         Path(arguments.target_build_dir) / arguments.resources_folder_path / "qwq_runtime",
+        self_supply_request_path=self_supply_request_path,
     )
     return 0
 

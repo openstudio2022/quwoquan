@@ -17,24 +17,9 @@ import (
 	"testing"
 	"time"
 
-	postgenerated "quwoquan_service/services/content-service/generated/content/post"
 	postports "quwoquan_service/services/content-service/internal/content/post/domain/ports"
 	releaseimport "quwoquan_service/services/content-service/internal/content/post/infrastructure/releaseimport"
 )
-
-func TestDataReleaseRevisionConflictMatchesExistingTypedError(t *testing.T) {
-	err := &releaseimport.DataReleaseRevisionConflict{
-		Environment: "alpha", SourceOwner: "qwq_data", ReleaseID: "rel_conflict",
-		ManifestDigest: "sha256:" + strings.Repeat("a", 64), ExpectedRevision: 7,
-	}
-	if !errors.Is(err, postgenerated.ErrVersionConflict) {
-		t.Fatalf("revision conflict is not bound to generated CONTENT.USER.version_conflict: %v", err)
-	}
-	var typed *releaseimport.DataReleaseRevisionConflict
-	if !errors.As(err, &typed) || typed.ExpectedRevision != 7 {
-		t.Fatalf("revision conflict lost typed context: %+v", typed)
-	}
-}
 
 func TestReplayRepairOptionsAreExplicitAndCountBound(t *testing.T) {
 	for _, tc := range []struct {
@@ -145,7 +130,7 @@ func TestReplayRepairRequiresContentIDDerivedPostBinding(
 func TestReplaySourceImportReportIsStrictAndCountBound(t *testing.T) {
 	t.Parallel()
 	post := releaseimport.PostDoc{
-		PostRef: "posts/video/体验/legacy-video/1", ContentID: "legacy-video-content",
+		PostRef: "posts/video/体验/prior-video/1", ContentID: "prior-video-content",
 		ContentVersion: 2, ContentType: "video", ContentIdentity: "work",
 		AuthorID: "builtin_video_author",
 		Admission: releaseimport.ContentAdmission{
@@ -153,15 +138,15 @@ func TestReplaySourceImportReportIsStrictAndCountBound(t *testing.T) {
 		},
 	}
 	binding := releaseimport.ImportedPostBinding{
-		PostRef:   "video/体验/legacy-video/1",
+		PostRef:   "video/体验/prior-video/1",
 		PostID:    releaseimport.RuntimePostID(post.ContentID),
 		ContentID: post.ContentID, ContentVersion: 2, UsageScope: "research",
 		ContentType: "video", AuthorID: post.AuthorID,
 	}
 	digest := "sha256:" + strings.Repeat("a", 64)
 	report := map[string]any{
-		"schema": "quwoquan.content_import_report", "status": "imported",
-		"environment": "alpha", "releaseId": "legacy-release",
+		"schema": "quwoquan.content_import_report", "status": "staged",
+		"environment": "alpha", "releaseId": "prior-release",
 		"sourceOwner": "qwq_data", "manifestDigest": digest,
 		"mode": "sync", "deletePolicy": "tombstone",
 		"counts": map[string]int{
@@ -170,7 +155,6 @@ func TestReplaySourceImportReportIsStrictAndCountBound(t *testing.T) {
 		},
 		"postBindings": []releaseimport.ImportedPostBinding{binding},
 		"auditEvents":  []string{"DataReleasePrepared", "DataReleaseActivated"},
-		"revision":     1, "sourceVersion": 1,
 	}
 	write := func(name string, value map[string]any) string {
 		t.Helper()
@@ -185,25 +169,16 @@ func TestReplaySourceImportReportIsStrictAndCountBound(t *testing.T) {
 		return path
 	}
 	bindings, err := releaseimport.LoadImportedPostReplayBindings(
-		write("import.json", report), "alpha", "legacy-release", digest, "qwq_data",
+		write("import.json", report), "alpha", "prior-release", digest, "qwq_data",
 		[]releaseimport.PostDoc{post},
 	)
 	if err != nil || len(bindings) != 1 || bindings[0].PostID != binding.PostID {
 		t.Fatalf("valid source report bindings=%+v err=%v", bindings, err)
 	}
 
-	delete(report, "revision")
-	if _, err := releaseimport.LoadImportedPostReplayBindings(
-		write("missing-revision.json", report), "alpha", "legacy-release", digest, "qwq_data",
-		[]releaseimport.PostDoc{post},
-	); err == nil || !strings.Contains(err.Error(), "GATE_BLOCK") {
-		t.Fatalf("revisionless source report accepted: %v", err)
-	}
-	report["revision"] = 1
-
 	report["unexpectedSecondTruth"] = true
 	if _, err := releaseimport.LoadImportedPostReplayBindings(
-		write("unknown.json", report), "alpha", "legacy-release", digest, "qwq_data",
+		write("unknown.json", report), "alpha", "prior-release", digest, "qwq_data",
 		[]releaseimport.PostDoc{post},
 	); err == nil || !strings.Contains(err.Error(), "GATE_BLOCK") {
 		t.Fatalf("unknown source report field accepted: %v", err)
@@ -376,7 +351,7 @@ func TestAlreadyTombstonedPostKeepsPublishedStatusBeforeDelete(t *testing.T) {
 	}
 }
 
-func TestFourLegacyPostDeletedEventsRepairOnceAndReplayByteIdentically(
+func TestFourPriorPostDeletedEventsRepairOnceAndReplayByteIdentically(
 	t *testing.T,
 ) {
 	t.Parallel()
@@ -398,7 +373,7 @@ func TestFourLegacyPostDeletedEventsRepairOnceAndReplayByteIdentically(
 			t,
 			event,
 			int64(index+47),
-			legacyPostDeletedPayload(t, event, opts),
+			priorPostDeletedPayload(t, event, opts),
 		)
 	}
 	if err := releaseimport.ValidateImportedPostDeletionReplayClosure(
@@ -423,7 +398,7 @@ func TestFourLegacyPostDeletedEventsRepairOnceAndReplayByteIdentically(
 			t.Fatalf("repair %s: %v", event.EventID, err)
 		}
 		if audit == nil {
-			t.Fatalf("legacy event %s was not repaired", event.EventID)
+			t.Fatalf("prior event %s was not repaired", event.EventID)
 		}
 		audits = append(audits, *audit)
 		got := cas.events[event.EventID]
@@ -553,7 +528,7 @@ func TestIntermediatePostDeletedStatusRepairsByExactCAS(t *testing.T) {
 	}
 }
 
-func TestLegacyPostDeletedRepairRejectsUnknownShapeBindingAndMissingSnapshot(
+func TestPriorPostDeletedRepairRejectsUnknownShapeBindingAndMissingSnapshot(
 	t *testing.T,
 ) {
 	t.Parallel()
@@ -574,7 +549,7 @@ func TestLegacyPostDeletedRepairRejectsUnknownShapeBindingAndMissingSnapshot(
 		t.Fatal(err)
 	}
 	event := events[0]
-	valid := legacyPostDeletedPayload(t, event, opts)
+	valid := priorPostDeletedPayload(t, event, opts)
 
 	var validMap map[string]any
 	if err := json.Unmarshal(valid, &validMap); err != nil {
@@ -614,10 +589,10 @@ func TestLegacyPostDeletedRepairRejectsUnknownShapeBindingAndMissingSnapshot(
 			if _, err := releaseimport.RepairImportedPostOutboxEvent(
 				context.Background(), cas, existing, event, opts,
 			); err == nil || !strings.Contains(err.Error(), "GATE_BLOCK") {
-				t.Fatalf("unsafe legacy event accepted: %v", err)
+				t.Fatalf("unsafe prior event accepted: %v", err)
 			}
 			if cas.calls != 0 {
-				t.Fatalf("unsafe legacy event reached CAS: %d", cas.calls)
+				t.Fatalf("unsafe prior event reached CAS: %d", cas.calls)
 			}
 		})
 	}
@@ -632,7 +607,7 @@ func TestLegacyPostDeletedRepairRejectsUnknownShapeBindingAndMissingSnapshot(
 	}
 }
 
-func TestLegacyPostDeletedRepairCASFailureIsNotAcknowledged(t *testing.T) {
+func TestPriorPostDeletedRepairCASFailureIsNotAcknowledged(t *testing.T) {
 	t.Parallel()
 	now := time.Date(2026, 8, 11, 3, 10, 0, 0, time.UTC)
 	opts := releaseimport.ImportOptions{
@@ -646,7 +621,7 @@ func TestLegacyPostDeletedRepairCASFailureIsNotAcknowledged(t *testing.T) {
 		t.Fatal(err)
 	}
 	event := events[0]
-	existing := importedOutboxSnapshot(t, event, 47, legacyPostDeletedPayload(t, event, opts))
+	existing := importedOutboxSnapshot(t, event, 47, priorPostDeletedPayload(t, event, opts))
 	for _, test := range []struct {
 		name          string
 		forceMismatch bool
@@ -688,7 +663,7 @@ func fourDeletionSnapshots() []releaseimport.ImportedPostDeletionSnapshot {
 	return snapshots
 }
 
-func legacyPostDeletedPayload(
+func priorPostDeletedPayload(
 	t *testing.T,
 	event postports.OutboxEvent,
 	opts releaseimport.ImportOptions,

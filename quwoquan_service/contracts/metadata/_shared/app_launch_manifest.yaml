@@ -52,13 +52,17 @@ runtime_config_trust:
   signature_algorithm: ed25519
   build_profiles: [nonprod, prod]
 
-# 配置供给方式与启动来源正交。AppArtifact 只接受安装后由平台私有容器读取的
-# 外部签名 package；embedded_default_package（Debug-nonprod 构建期嵌入默认
-# alpha 签名 package）已退役，任何制品不得再物化或消费嵌入默认供给，无 canonical
-# handoff 的构建在 trust gate fail-closed。入口 provenance 的闭集唯一来自
-# app_artifact_manifest。
+# 配置供给方式与启动来源正交。入口 provenance 的闭集唯一来自 app_artifact_manifest。
+# - external_runtime_package：安装后由 canonical launcher 写入平台私有容器的外部签名
+#   package；Profile/Release、prod buildProfile 与 beta/gamma 的唯一供给方式。
+# - build_time_self_supply：Debug-nonprod 构建在无外部 canonical handoff 时，由构建阶段
+#   调用仓内 canonical handoff builder 现场签发 alpha test_live package 与 nonprod trust
+#   envelope，并以 activation request 形态嵌入制品；原生 gate 在冷启动仅当无外部 active
+#   package（缺席、过期或同为自供给且 digest 变化）时按同一 CAS/receipt 路径激活。
+#   每次构建重签、不缓存；Profile/Release、prod 与非 alpha 环境不得物化或消费该模式。
 runtime_config_supply_modes:
   - external_runtime_package
+  - build_time_self_supply
 
 # attempt 状态顺序由本段唯一拥有。terminal states 是 statuses 去除 forward_states
 # 的稳定差集；消费者不得再手写状态闭集或前进顺序。

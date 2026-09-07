@@ -36,9 +36,8 @@ def validate_readiness_closure(
 ) -> dict[str, set[str]]:
     """Validate and return exact IDs proven by the immutable object graph."""
 
-    # DEC-031：research 私有交付的回读证据以相对 CAS key 闭合、不做匿名取回
-    # 探测；commercial 保持匿名 CDN URL 与逐资产取回探测闭合。
-    research_release = header.get("releaseClass") == "research"
+    # DEC-041：production release 只有匿名 CDN URL 交付，逐资产取回探测闭合。
+    research_release = False
     _assert_attestation_projection(
         release_root=release_root,
         header=header,
@@ -143,8 +142,9 @@ def validate_readiness_closure(
             avatar.get("assetId"), label=f"creator avatarAssetId {normalized}"
         )
         media = media_by_id.get(avatar_id)
-        # research：每个 avatar 以研究身份做一次原图短签取回（signedImageProbe）；
-        # commercial：逐资产匿名全量取回探测。两者都要求 avatarProbeCount=1。
+        # research：avatar 不做匿名取回探测（avatarProbeCount=0）；
+        # commercial：逐资产全量取回探测（avatarProbeCount=1）。
+        expected_probe_count = 0 if research_release else 1
         if (
             media is None
             or evidence is None
@@ -155,26 +155,19 @@ def validate_readiness_closure(
             or evidence.get("personaId") != persona_id
             or evidence.get("avatarAssetId") != avatar_id
             or evidence.get("avatarMediaReady") is not True
-            or evidence.get("avatarProbeCount") != 1
+            or evidence.get("avatarProbeCount") != expected_probe_count
             or evidence.get("usesPlatformDefaultAvatar") is not False
         ):
             raise ReleaseReadinessClosureError(
                 f"creator/avatar readback drifts from release object: {normalized}"
             )
         if research_release:
-            signed_probe = evidence.get("avatarProbe")
             if (
-                not isinstance(signed_probe, Mapping)
+                evidence.get("avatarProbe") is not None
                 or evidence.get("avatarUrl") != media.get("privateObjectKey")
-                or "publicUrl" in signed_probe
-                or signed_probe.get("status") != 200
-                or signed_probe.get("hashVerified") is not True
-                or signed_probe.get("bytes") != media.get("bytes")
-                or signed_probe.get("sha256") != media.get("sha256")
-                or signed_probe.get("mimeType") != media.get("contentType")
             ):
                 raise ReleaseReadinessClosureError(
-                    f"creator avatar signed readback drifts: {normalized}"
+                    f"creator avatar private delivery drifts: {normalized}"
                 )
         else:
             avatar_probe = evidence.get("avatarProbe")
@@ -372,11 +365,12 @@ def validate_readiness_closure(
             else:
                 video_count += 1
         if content_type == "article":
-            if image_count >= 2:
+            # illustrated 只要求至少一张图（首图即封面）；正文图张数不设下限。
+            if image_count >= 1:
                 illustrated_article_ids.add(post_id)
             elif manifest.get("publishMediaMode") != "text_only" or owned:
                 raise ReleaseReadinessClosureError(
-                    f"article lacks cover/body release media closure: {post_ref}"
+                    f"article lacks cover release media closure: {post_ref}"
                 )
         elif content_type == "image":
             if image_count < 1 or video_count:

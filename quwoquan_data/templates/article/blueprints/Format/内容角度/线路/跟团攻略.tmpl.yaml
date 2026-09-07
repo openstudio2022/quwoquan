@@ -40,7 +40,7 @@ routeCoverageExpectations:
 structure:
   required: [产品类型, 行程概览, 成团与退改, 费用构成, 强度与适合人群, 避坑提醒]
   optional: [购物与自费, 散团衔接]
-mustIncludeFacts: [行程天数, 集合方式, 费用包含, 自费项目, 退改规则, 强度说明]
+evidenceConditionedFacts: [行程天数, 集合方式, 费用包含, 自费项目, 退改规则, 强度说明]
 forbiddenPhrases: [冷启动, 批次, 角色：, 占位, contract_fixture, 零购物]
 wordCount: { min: 1200, max: 2200 }
 imagePlan:
@@ -51,7 +51,7 @@ crossRefs: { minEntity: 3, minTag: 5 }
 recommendation:
   authorBinding: { required: true, source: creator_profile_catalog }
   exposeStyleTags: true
-  qualitySignals: [bodyLength, requiredFactsCovered, imageSlotCoverage, entityRefCount]
+  qualitySignals: [bodyLength, evidenceSupportedFactCoverage, imageSlotCoverage, entityRefCount]
   bodyForbiddenFields: [qualityScore, templateId, routingReason, coldStartBoost, isSystemBuiltin, recommendationWeight]
 openingTension: { required: true, focus: 出发动机与犹豫 }
 explicitFeelings: { requireLike: true, requireDislike: true }

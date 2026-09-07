@@ -2,10 +2,17 @@ package api_integration
 
 import (
 	"context"
+	"strings"
 
 	userports "quwoquan_service/services/user-service/internal/account/user_account/domain/user/ports"
 	creatormodel "quwoquan_service/services/user-service/internal/profile_projection/creator_runtime_profile/domain/model"
 )
+
+type apiIntegrationContentFenceReader struct{}
+
+func (apiIntegrationContentFenceReader) ActiveContentReleaseFence(context.Context) (userports.ContentReleaseFence, bool, error) {
+	return userports.ContentReleaseFence{Environment: "alpha", SourceOwner: "qwq_data", ReleaseID: "release-a", ManifestDigest: "sha256:" + strings.Repeat("a", 64)}, true, nil
+}
 
 type creatorRuntimeProfileTestReader interface {
 	FindActiveByPublicIdentity(context.Context, string) (*creatormodel.CreatorRuntimeProfile, bool, error)
@@ -20,8 +27,9 @@ func newCreatorRuntimeProfileTestAdapter(reader creatorRuntimeProfileTestReader)
 	return &creatorRuntimeProfileTestAdapter{reader: reader}
 }
 
-func (a *creatorRuntimeProfileTestAdapter) FindActiveByPublicIdentity(
+func (a *creatorRuntimeProfileTestAdapter) FindByExactContentFence(
 	ctx context.Context,
+	_ userports.ContentReleaseFence,
 	identity string,
 ) (*userports.CreatorRuntimeProfileView, bool, error) {
 	profile, found, err := a.reader.FindActiveByPublicIdentity(ctx, identity)
@@ -52,8 +60,9 @@ func (a *creatorRuntimeProfileTestAdapter) FindActiveByPublicIdentity(
 	}, true, nil
 }
 
-func (a *creatorRuntimeProfileTestAdapter) ListActiveWorks(
+func (a *creatorRuntimeProfileTestAdapter) ListWorksByExactContentFence(
 	ctx context.Context,
+	_ userports.ContentReleaseFence,
 	identity string,
 ) ([]userports.CreatorWorkView, bool, error) {
 	works, found, err := a.reader.ListActiveWorks(ctx, identity)

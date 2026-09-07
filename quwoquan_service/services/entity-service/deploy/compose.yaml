@@ -18,6 +18,10 @@ services:
       IMAGE_VERSION: "${QWQ_COMPOSE_IMAGE_VERSION:?immutable image version is required}"
       ENTITY_MONGO_URI: mongodb://mongodb:27017
       ENTITY_MONGO_DATABASE: quwoquan_entity
+      # Homepage release projection 只按 Content owner 的 active release tuple 可见；
+      # 这里只读 Content 库的 data_release_state，Entity 不落自己的 pointer。
+      CONTENT_MONGO_URI: "${QWQ_COMPOSE_MONGO_URI:-mongodb://mongodb:27017}"
+      CONTENT_MONGO_DATABASE: quwoquan_content
       ENTITY_REDIS_GENERAL_ADDR: redis:6379
       AUTH_JWT_SECRET: "${AUTH_JWT_SECRET:?AUTH_JWT_SECRET is required}"
       AUTH_JWT_ISSUER: "${AUTH_JWT_ISSUER:?AUTH_JWT_ISSUER is required}"

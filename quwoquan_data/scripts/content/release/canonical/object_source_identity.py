@@ -64,6 +64,14 @@ def _file_digest(path: Path) -> str:
         ) from exc
 
 
+def _target_semantics(value: object) -> list[bytes] | None:
+    if not isinstance(value, list) or any(
+        not isinstance(row, Mapping) for row in value
+    ):
+        return None
+    return sorted(_canonical_bytes(dict(row)) for row in value)
+
+
 def _digest(value: object, *, label: str) -> str:
     normalized = str(value or "").strip()
     if not _SHA256.fullmatch(normalized):
@@ -306,13 +314,19 @@ def freeze_execution_source_identity(
         or submitted_demand.get("carrier") != carrier
         or submitted_demand.get("familyRef") != family["ref"]
         or submitted_demand.get("quota") != request.get("quota")
-        or submitted_demand.get("retryOf") != request.get("retryOf")
+        or submitted_demand.get("retryOf")
+        != (
+            request.get("retryOf", {}).get("executionId")
+            if isinstance(request.get("retryOf"), Mapping)
+            else request.get("retryOf")
+        )
         or submitted_candidates.get("executionId") != execution_id
         or submitted_candidates.get("carrier") != carrier
         or submitted_candidates.get("entityCatalogDigest")
         != target_set.get("entityCatalogDigest")
         or submitted_candidates.get("candidateCount") != request.get("candidateCount")
-        or submitted_candidates.get("targets") != target_set.get("targets")
+        or _target_semantics(submitted_candidates.get("targets"))
+        != _target_semantics(target_set.get("targets"))
     ):
         raise ObjectTransactionError(
             "DATA.POOL.SOURCE_IDENTITY_DRIFT: submitted input semantics"

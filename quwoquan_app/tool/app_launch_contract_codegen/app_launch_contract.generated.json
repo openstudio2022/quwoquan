@@ -1,6 +1,6 @@
 {
   "schema": "qwq.app-launch-contract.generated",
-  "sourceDigest": "sha256:b38964bc4c020536fc1f6bd31b35746f416128faa63bbed34b3e2676f6a4460d",
+  "sourceDigest": "sha256:e886af2683ad9a21a5ac7dd6a2d27ce5b9c97b6976a45312c35067b70fee1dc3",
   "sources": [
     {
       "path": "quwoquan_service/contracts/metadata/_shared/app_artifact_manifest.yaml",
@@ -8,7 +8,7 @@
     },
     {
       "path": "quwoquan_service/contracts/metadata/_shared/app_launch_manifest.yaml",
-      "sha256": "sha256:68d7c43820d427203d4d0c7ebf97b238dda50d308762c4909fadd80046f0b77f"
+      "sha256": "sha256:5507644c87a15de04b77ae656f38693176596a419c97bf7d606785dfd11b2990"
     }
   ],
   "environments": [
@@ -52,7 +52,8 @@
     "icon_cold_launch"
   ],
   "runtimeConfigSupplyModes": [
-    "external_runtime_package"
+    "external_runtime_package",
+    "build_time_self_supply"
   ],
   "runtimeValueKeys": [
     "appDownloadBaseUrl",
@@ -598,7 +599,8 @@
       }
     },
     "runtime_config_supply_modes": [
-      "external_runtime_package"
+      "external_runtime_package",
+      "build_time_self_supply"
     ],
     "runtime_config_trust": {
       "build_profiles": [

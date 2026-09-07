@@ -337,13 +337,22 @@ def assert_video_manifest_unique(
         for peer in peers:
             peer_ref = str(peer.get("manifestPath") or "pending-post")
             peer_execution = str(peer.get("executionId") or "pending-execution")
-            if identity["contentSha256"] == peer["contentSha256"]:
+            # Exact media reuse is valid when the release keeps the same canonical
+            # asset IDs.  Reject only identity aliasing: one byte identity presented
+            # under a different video or poster ID.
+            if (
+                identity["contentSha256"] == peer["contentSha256"]
+                and identity["assetId"] != peer["assetId"]
+            ):
                 raise ObjectTransactionError(
                     "canonical video identity duplicated by content sha256: "
                     f"{identity['assetId']} conflicts with "
                     f"{peer_execution}:{peer_ref}:{peer['assetId']}"
                 )
-            if identity["posterSha256"] == peer["posterSha256"]:
+            if (
+                identity["posterSha256"] == peer["posterSha256"]
+                and identity["posterAssetId"] != peer["posterAssetId"]
+            ):
                 raise ObjectTransactionError(
                     "canonical video identity duplicated by poster sha256: "
                     f"{identity['posterAssetId']} conflicts with "

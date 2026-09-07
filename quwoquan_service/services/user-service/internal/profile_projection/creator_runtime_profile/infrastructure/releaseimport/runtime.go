@@ -1,11 +1,13 @@
-// Package releaseimport materializes the public creator projection of one
-// immutable Data release. It never creates credentials or modifies accounts
-// that are not explicitly owned by the Data release.
+// Package releaseimport stages the Creator owner-local projection of one
+// immutable Data release. It never writes PostgreSQL UserAccount/Persona state,
+// Persona outbox/receipts, or a mutable active/latest pointer.
 package releaseimport
 
 import (
 	"bufio"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -15,24 +17,22 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
-	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 
+	"quwoquan_service/runtime/datarelease"
 	runtimemedia "quwoquan_service/runtime/media"
 	model "quwoquan_service/services/user-service/internal/profile_projection/creator_runtime_profile/domain/model"
+	creatorpersistence "quwoquan_service/services/user-service/internal/profile_projection/creator_runtime_profile/infrastructure/persistence"
 )
 
 const (
 	releaseSchema       = "quwoquan_data.release_desired_state"
 	reportSchema        = "quwoquan.user_creator_import_report"
 	dataSourceOwner     = "qwq_data"
-	contentIdentityKind = "content_release"
 	projectionDatabase  = "quwoquan_user"
-	modeUpsert          = "upsert"
-	modeSync            = "sync"
+	projectionVersion   = int64(1)
+	activationStageOnly = "stage-only"
 )
 
 type desiredState struct {
@@ -44,22 +44,23 @@ type desiredState struct {
 }
 
 type creatorProfile struct {
-	Schema               string                `json:"schema"`
-	CreatorID            string                `json:"creatorId"`
-	UserID               string                `json:"userId"`
-	AuthorID             string                `json:"authorId"`
-	PersonaID            string                `json:"personaId"`
-	DisplayName          string                `json:"displayName"`
-	UserHandle           string                `json:"userHandle"`
-	AvatarAsset          *creatorMediaAssetRef `json:"avatarAsset"`
-	AvatarObjectKey      string                `json:"avatarObjectKey"`
-	AvatarURL            string                `json:"-"`
-	AvatarVersion        int64                 `json:"-"`
-	AvatarPublicSliceKey string                `json:"-"`
-	Headline             string                `json:"headline"`
-	Bio                  string                `json:"bio"`
-	CreatorArchetype     string                `json:"creatorArchetype"`
-	PublicProfileTagRefs []string              `json:"publicProfileTagRefs"`
+	Schema               string                  `json:"schema"`
+	CreatorID            string                  `json:"creatorId"`
+	UserID               string                  `json:"userId"`
+	AuthorID             string                  `json:"authorId"`
+	PersonaID            string                  `json:"personaId"`
+	DisplayName          string                  `json:"displayName"`
+	UserHandle           string                  `json:"userHandle"`
+	AvatarAsset          *creatorMediaAssetRef   `json:"avatarAsset"`
+	AvatarObjectKey      string                  `json:"avatarObjectKey"`
+	AvatarURL            string                  `json:"-"`
+	AvatarVersion        int64                   `json:"-"`
+	AvatarPublicSliceKey string                  `json:"-"`
+	Headline             string                  `json:"headline"`
+	Bio                  string                  `json:"bio"`
+	CreatorArchetype     string                  `json:"creatorArchetype"`
+	PublicProfileTagRefs []string                `json:"publicProfileTagRefs"`
+	Disclosure           model.CreatorDisclosure `json:"disclosure"`
 }
 
 type creatorMediaAssetRef struct {
@@ -70,191 +71,112 @@ type creatorMediaAssetRef struct {
 }
 
 type creatorRecord struct {
-	Profile creatorProfile
-	Works   []model.CreatorWorkRef
+	Profile       creatorProfile
+	ProfileDigest string
+	Works         []model.CreatorWorkRef
 }
-
-// CreatorPersonaState is the immutable-release input for the Persona command
-// adapter composed by cmd/release-import. The release importer owns source
-// validation; Persona state/receipt/outbox and UserAccount projection remain
-// behind their owning object adapters.
-type CreatorPersonaState struct {
-	ReleaseID          string
-	UserID             string
-	PersonaID          string
-	DisplayName        string
-	UserHandle         string
-	Bio                string
-	IdentityTags       []string
-	AvatarMediaAssetID string
-	AvatarURL          string
-	AvatarVersion      int
-}
-
-type CreatorPersonaMaterializer interface {
-	UpsertAndProject(context.Context, CreatorPersonaState, string) error
-}
-
-type CreatorPersonaMaterializerFactory func(
-	*pgxpool.Pool,
-) (CreatorPersonaMaterializer, error)
 
 type importReport struct {
-	Schema             string   `json:"schema"`
-	Status             string   `json:"status"`
-	Environment        string   `json:"environment"`
-	ReleaseID          string   `json:"releaseId"`
-	SourceOwner        string   `json:"sourceOwner"`
-	Mode               string   `json:"mode"`
-	ProjectionDatabase string   `json:"projectionDatabase"`
-	Counts             counts   `json:"counts"`
-	AuthorIDs          []string `json:"authorIds"`
-	VerifiedCreatorIDs []string `json:"verifiedCreatorIds"`
-	GeneratedAt        string   `json:"generatedAt"`
+	Schema             string                               `json:"schema"`
+	Status             string                               `json:"status"`
+	Environment        string                               `json:"environment"`
+	ReleaseID          string                               `json:"releaseId"`
+	SourceOwner        string                               `json:"sourceOwner"`
+	ManifestDigest     string                               `json:"manifestDigest"`
+	ActivationMode     string                               `json:"activationMode"`
+	ProjectionDatabase string                               `json:"projectionDatabase"`
+	ProjectionVersion  int64                                `json:"projectionVersion,omitempty"`
+	ClosureDigest      string                               `json:"closureDigest,omitempty"`
+	VerifiedAt         *time.Time                           `json:"verifiedAt,omitempty"`
+	Counts             counts                               `json:"counts"`
+	AuthorIDs          []string                             `json:"authorIds"`
+	ProfileDigests     []model.CreatorProfileDigestBinding  `json:"profileDigests"`
+	VerifiedCreatorIDs []string                             `json:"verifiedCreatorIds"`
+	PostgreSQLWrites   model.CandidatePostgreSQLWriteCounts `json:"postgresqlWrites"`
+	GeneratedAt        string                               `json:"generatedAt"`
 }
 
 type counts struct {
-	CreatorsLoaded   int `json:"creatorsLoaded"`
-	UsersUpserted    int `json:"usersUpserted"`
-	CreatorsUpserted int `json:"creatorsUpserted"`
-	UsersRemoved     int `json:"usersRemoved"`
-	CreatorsRemoved  int `json:"creatorsRemoved"`
+	CreatorsExpected  int `json:"creatorsExpected"`
+	CreatorsProjected int `json:"creatorsProjected"`
+	UsersUpserted     int `json:"usersUpserted"`
+	PersonasUpserted  int `json:"personasUpserted"`
 }
 
-func Run(personaFactory CreatorPersonaMaterializerFactory) {
-	releaseRoot := flag.String("release-root", "", "immutable release root (required)")
-	postgresDSN := flag.String("postgres-dsn", "", "user-service PostgreSQL DSN (required)")
-	mongoURI := flag.String("mongo-uri", "", "user-service MongoDB URI (required)")
-	mediaAvatarBaseURL := flag.String("media-avatar-base-url", "", "avatar media public base URL")
-	environment := flag.String("env", "", "environment label (required)")
-	runID := flag.String("run-id", "", "environment import run identity (required)")
-	mode := flag.String("mode", modeUpsert, "apply mode: upsert|sync")
-	reportPath := flag.String("report", "", "machine-readable report path (required)")
-	dryRun := flag.Bool("dry-run", false, "validate release without writes")
-	flag.Parse()
+// Run stages a Creator candidate. --postgres-dsn, --run-id and --mode are
+// accepted as deprecated compatibility seams but can never trigger PG writes.
+func Run() {
+	set := flag.NewFlagSet("release-import", flag.ExitOnError)
+	releaseRoot := set.String("release-root", "", "immutable release root (required)")
+	_ = set.String("postgres-dsn", "", "deprecated compatibility seam; ignored")
+	mongoURI := set.String("mongo-uri", "", "user-service MongoDB URI (required)")
+	mediaAvatarBaseURL := set.String("media-avatar-base-url", "", "avatar media public base URL")
+	environment := set.String("env", "", "environment label (required)")
+	_ = set.String("run-id", "", "deprecated compatibility seam; ignored")
+	_ = set.String("mode", "upsert", "deprecated compatibility seam; ignored")
+	activationMode := set.String("activation-mode", activationStageOnly, "only stage-only is supported")
+	reportPath := set.String("report", "", "machine-readable create-once report path (required)")
+	dryRun := set.Bool("dry-run", false, "validate release without writes")
+	_ = set.Parse(os.Args[1:])
 
-	if err := requireArguments(
-		*releaseRoot,
-		*postgresDSN,
-		*mongoURI,
-		*environment,
-		*reportPath,
-		*runID,
-		*mode,
-	); err != nil {
-		fatal(err)
+	if strings.TrimSpace(*releaseRoot) == "" || strings.TrimSpace(*mongoURI) == "" || strings.TrimSpace(*environment) == "" || strings.TrimSpace(*reportPath) == "" {
+		fatal(fmt.Errorf("release importer requires release root, mongo URI, environment and report path"))
 	}
-	state, creators, err := LoadCreatorsForRelease(
-		*releaseRoot,
-		*mediaAvatarBaseURL,
-	)
+	if strings.TrimSpace(*activationMode) != activationStageOnly {
+		fatal(fmt.Errorf("Creator release importer supports only --activation-mode=stage-only"))
+	}
+	tuple, err := datarelease.Load(*releaseRoot)
+	if err != nil {
+		fatal(fmt.Errorf("verify immutable release identity: %w", err))
+	}
+	state, creators, err := LoadCreatorsForRelease(*releaseRoot, *mediaAvatarBaseURL)
 	if err != nil {
 		fatal(err)
 	}
-	report := importReport{
-		Schema: reportSchema, Status: "dry-run", Environment: *environment,
-		ReleaseID: state.ReleaseID, SourceOwner: dataSourceOwner, Mode: *mode,
-		ProjectionDatabase: projectionDatabase,
-		Counts:             counts{CreatorsLoaded: len(creators)},
-		AuthorIDs:          authorIDs(creators),
-		VerifiedCreatorIDs: []string{},
-		GeneratedAt:        time.Now().UTC().Format(time.RFC3339),
+	if state.ReleaseID != tuple.ReleaseID || tuple.SourceOwner != datarelease.SourceOwnerQWQData {
+		fatal(fmt.Errorf("desired state differs from immutable release identity"))
 	}
+	identity := model.ReleaseIdentity{Environment: strings.TrimSpace(*environment), SourceOwner: string(tuple.SourceOwner), ReleaseID: tuple.ReleaseID, ManifestDigest: string(tuple.PayloadSHA256)}
+	generatedAt := time.Now().UTC().Truncate(time.Millisecond)
+	projections, candidate, err := buildCandidate(identity, creators, generatedAt)
+	if err != nil {
+		fatal(err)
+	}
+	report := candidateImportReport(candidate, creatorIDs(creators), *dryRun, generatedAt)
 	if *dryRun {
-		fatal(writeReport(*reportPath, report))
+		fatal(WriteCreateOnceReport(*reportPath, report))
 		return
 	}
-
 	ctx := context.Background()
-	pool, err := pgxpool.New(ctx, *postgresDSN)
-	if err != nil {
-		fatal(fmt.Errorf("connect user postgres: %w", err))
-	}
-	defer pool.Close()
-	if personaFactory == nil {
-		fatal(fmt.Errorf("creator Persona materializer factory is required"))
-	}
-	personaMaterializer, err := personaFactory(pool)
-	if err != nil {
-		fatal(fmt.Errorf("initialize creator Persona materializer: %w", err))
-	}
 	client, err := mongo.Connect(options.Client().ApplyURI(*mongoURI))
 	if err != nil {
-		fatal(fmt.Errorf("connect user mongo: %w", err))
+		fatal(fmt.Errorf("connect user MongoDB: %w", err))
 	}
 	defer client.Disconnect(ctx)
-
-	if err := assertNoForeignUserCollision(ctx, pool, creators); err != nil {
+	store := creatorpersistence.NewCreatorReleaseCandidateStore(client.Database(projectionDatabase))
+	if err := store.EnsureIndexes(ctx); err != nil {
 		fatal(err)
 	}
-	usersUpserted, err := upsertUsers(
-		ctx,
-		pool,
-		personaMaterializer,
-		creators,
-		state.ReleaseID,
-		*runID,
-	)
-	if err != nil {
+	if _, err := store.Stage(ctx, candidate, projections); err != nil {
 		fatal(err)
 	}
-	projectionDB := client.Database(projectionDatabase)
-	creatorsUpserted, err := upsertCreatorProfiles(ctx, projectionDB, creators, state.ReleaseID)
-	if err != nil {
-		fatal(err)
+	readback, found, err := store.ReadVerifiedCandidate(ctx, identity)
+	if err != nil || !found {
+		fatal(fmt.Errorf("read back verified Creator release candidate: found=%v err=%w", found, err))
 	}
-	verifiedCreatorIDs, err := verifyCreatorProfileReadback(
-		ctx,
-		projectionDB,
-		creators,
-		state.ReleaseID,
-	)
-	if err != nil {
-		fatal(err)
-	}
-	report.Counts.UsersUpserted = usersUpserted
-	report.Counts.CreatorsUpserted = creatorsUpserted
-	report.VerifiedCreatorIDs = verifiedCreatorIDs
-	if *mode == modeSync {
-		report.Counts.UsersRemoved, err = removeAbsentUsers(ctx, pool, report.AuthorIDs)
-		if err != nil {
-			fatal(err)
-		}
-		report.Counts.CreatorsRemoved, err = removeAbsentCreatorProfiles(ctx, projectionDB, creatorIDs(creators))
-		if err != nil {
-			fatal(err)
-		}
-	}
-	report.Status = "active"
-	report.GeneratedAt = time.Now().UTC().Format(time.RFC3339)
-	fatal(writeReport(*reportPath, report))
+	report = candidateImportReport(readback, creatorIDs(creators), false, generatedAt)
+	fatal(WriteCreateOnceReport(*reportPath, report))
 }
 
-func requireArguments(values ...string) error {
-	for _, value := range values[:6] {
-		if strings.TrimSpace(value) == "" {
-			return fmt.Errorf("release importer requires release root, postgres DSN, mongo URI, environment, report path and run ID")
-		}
-	}
-	if values[6] != modeUpsert && values[6] != modeSync {
-		return fmt.Errorf("release importer mode must be %q or %q", modeUpsert, modeSync)
-	}
-	return nil
-}
-
-// LoadCreatorsForRelease validates and projects creator objects from one
-// immutable Data release without performing environment writes.
-func LoadCreatorsForRelease(
-	releaseRoot string,
-	mediaAvatarBaseURL string,
-) (desiredState, []creatorRecord, error) {
+// LoadCreatorsForRelease validates and projects creator objects without writes.
+func LoadCreatorsForRelease(releaseRoot, mediaAvatarBaseURL string) (desiredState, []creatorRecord, error) {
 	statePath := filepath.Join(releaseRoot, "payload", "desired_state.json")
-	bytes, err := os.ReadFile(statePath)
+	raw, err := os.ReadFile(statePath)
 	if err != nil {
 		return desiredState{}, nil, fmt.Errorf("read desired state: %w", err)
 	}
 	var state desiredState
-	if err := json.Unmarshal(bytes, &state); err != nil {
+	if err := json.Unmarshal(raw, &state); err != nil {
 		return desiredState{}, nil, fmt.Errorf("decode desired state: %w", err)
 	}
 	if state.Schema != releaseSchema || strings.TrimSpace(state.ReleaseID) == "" {
@@ -264,11 +186,7 @@ func LoadCreatorsForRelease(
 	if err != nil {
 		return desiredState{}, nil, err
 	}
-	releaseAssets, err := runtimemedia.LoadReleaseMediaAssets(
-		releaseRoot,
-		state.ReleaseID,
-		releaseClass,
-	)
+	releaseAssets, err := runtimemedia.LoadReleaseMediaAssets(releaseRoot, state.ReleaseID, releaseClass)
 	if err != nil {
 		return desiredState{}, nil, fmt.Errorf("load release media authority: %w", err)
 	}
@@ -283,44 +201,70 @@ func LoadCreatorsForRelease(
 		}
 		seen[ref] = struct{}{}
 		root := filepath.Join(releaseRoot, "payload", "objects", "creators", ref)
-		profile, err := loadCreatorProfile(root, ref)
+		profile, profileDigest, err := loadCreatorProfile(root, ref)
 		if err != nil {
 			return desiredState{}, nil, err
 		}
 		if profile.AvatarAsset != nil {
-			resolved, resolveErr := runtimemedia.ResolveReleaseMediaAsset(
-				releaseAssets,
-				runtimemedia.MediaDeliveryBases{Avatar: mediaAvatarBaseURL},
-				profile.AvatarAsset.AssetID,
-				profile.AvatarAsset.Kind,
-				profile.AvatarAsset.SHA256,
-				"creators/"+ref,
-			)
+			resolved, resolveErr := runtimemedia.ResolveReleaseMediaAsset(releaseAssets, runtimemedia.MediaDeliveryBases{Avatar: mediaAvatarBaseURL}, profile.AvatarAsset.AssetID, profile.AvatarAsset.Kind, profile.AvatarAsset.SHA256, "creators/"+ref)
 			if resolveErr != nil {
-				return desiredState{}, nil, fmt.Errorf(
-					"creator %s avatar differs from release media authority: %w",
-					ref,
-					resolveErr,
-				)
+				return desiredState{}, nil, fmt.Errorf("creator %s avatar differs from release media authority: %w", ref, resolveErr)
 			}
-			profile.AvatarURL = resolved.DeliveryRef
-			profile.AvatarVersion = resolved.Version
-			profile.AvatarPublicSliceKey = resolved.PublicSliceKey
+			profile.AvatarURL, profile.AvatarVersion, profile.AvatarPublicSliceKey = resolved.DeliveryRef, resolved.Version, resolved.PublicSliceKey
 		}
 		works, err := loadCreatorWorks(filepath.Join(root, "works.refs.ndjson"))
 		if err != nil {
 			return desiredState{}, nil, err
 		}
-		records = append(records, creatorRecord{Profile: profile, Works: works})
+		records = append(records, creatorRecord{Profile: profile, ProfileDigest: profileDigest, Works: works})
 	}
-	sort.Slice(records, func(left, right int) bool {
-		return records[left].Profile.CreatorID < records[right].Profile.CreatorID
-	})
+	sort.Slice(records, func(left, right int) bool { return records[left].Profile.CreatorID < records[right].Profile.CreatorID })
 	return state, records, nil
 }
 
-// loadReleaseClass reads the frozen delivery class from the immutable release
-// header; delivery form is asserted from the release, never inferred (DEC-031).
+func buildCandidate(identity model.ReleaseIdentity, creators []creatorRecord, verifiedAt time.Time) ([]model.CreatorReleaseProjection, model.CreatorReleaseCandidateState, error) {
+	projections := make([]model.CreatorReleaseProjection, 0, len(creators))
+	authors := make([]string, 0, len(creators))
+	profileDigests := make([]model.CreatorProfileDigestBinding, 0, len(creators))
+	parts := make([]string, 0, len(creators))
+	for _, creator := range creators {
+		profile := creator.Profile
+		runtime := model.CreatorRuntimeProfile{CreatorID: profile.CreatorID, PersonaID: profile.PersonaID, Handle: profile.UserHandle, DisplayName: profile.DisplayName, Headline: profile.Headline, Bio: profile.Bio, AvatarURL: profile.AvatarURL, AvatarVersion: profile.AvatarVersion, AvatarPublicSliceKey: profile.AvatarPublicSliceKey, PublicProfileTagRefs: append([]string(nil), profile.PublicProfileTagRefs...), CreatorArchetype: profile.CreatorArchetype, Disclosure: profile.Disclosure, Works: append([]model.CreatorWorkRef(nil), creator.Works...), PackageDigest: identity.ManifestDigest, ReleaseID: identity.ReleaseID, Status: "candidate", ManagedBy: identity.SourceOwner, ImportedAt: verifiedAt, UpdatedAt: verifiedAt}
+		if profile.AvatarAsset != nil {
+			runtime.AvatarAssetID, runtime.AvatarSHA256 = profile.AvatarAsset.AssetID, profile.AvatarAsset.SHA256
+		}
+		projection := model.CreatorReleaseProjection{ReleaseIdentity: identity, CreatorID: profile.CreatorID, PersonaID: profile.PersonaID, Profile: runtime, AuthorID: profile.AuthorID, ProfileDigest: creator.ProfileDigest, ProjectionVersion: projectionVersion, VerifiedAt: verifiedAt}
+		digest, err := creatorpersistence.DocumentDigest(projection, "documentDigest")
+		if err != nil {
+			return nil, model.CreatorReleaseCandidateState{}, err
+		}
+		projection.DocumentDigest = digest
+		projections = append(projections, projection)
+		authors = append(authors, profile.AuthorID)
+		profileDigests = append(profileDigests, model.CreatorProfileDigestBinding{CreatorID: profile.CreatorID, AuthorID: profile.AuthorID, Digest: creator.ProfileDigest})
+		parts = append(parts, profile.CreatorID+"="+digest)
+	}
+	sort.Strings(authors)
+	sort.Slice(profileDigests, func(left, right int) bool { return profileDigests[left].CreatorID < profileDigests[right].CreatorID })
+	candidate := model.CreatorReleaseCandidateState{ReleaseIdentity: identity, Status: "verified", ProjectionVersion: projectionVersion, VerifiedAt: verifiedAt, ClosureDigest: creatorpersistence.ClosureDigest(parts), ExpectedCount: len(creators), ProjectedCount: len(creators), AuthorIDs: authors, ProfileDigests: profileDigests}
+	return projections, candidate, nil
+}
+
+func candidateImportReport(candidate model.CreatorReleaseCandidateState, verifiedCreatorIDs []string, dryRun bool, generatedAt time.Time) importReport {
+	status := "verified"
+	var verifiedAt *time.Time
+	projection := candidate.ProjectionVersion
+	closure := candidate.ClosureDigest
+	projected := candidate.ProjectedCount
+	if dryRun {
+		status, projection, closure, projected = "dry-run", 0, "", 0
+	} else {
+		value := candidate.VerifiedAt.UTC()
+		verifiedAt = &value
+	}
+	return importReport{Schema: reportSchema, Status: status, Environment: candidate.Environment, ReleaseID: candidate.ReleaseID, SourceOwner: candidate.SourceOwner, ManifestDigest: candidate.ManifestDigest, ActivationMode: activationStageOnly, ProjectionDatabase: projectionDatabase, ProjectionVersion: projection, ClosureDigest: closure, VerifiedAt: verifiedAt, Counts: counts{CreatorsExpected: candidate.ExpectedCount, CreatorsProjected: projected}, AuthorIDs: append([]string(nil), candidate.AuthorIDs...), ProfileDigests: append([]model.CreatorProfileDigestBinding(nil), candidate.ProfileDigests...), VerifiedCreatorIDs: verifiedCreatorIDs, PostgreSQLWrites: candidate.PostgreSQLWrites, GeneratedAt: generatedAt.Format(time.RFC3339Nano)}
+}
+
 func loadReleaseClass(releaseRoot string) (string, error) {
 	raw, err := os.ReadFile(filepath.Join(releaseRoot, "payload", "release.json"))
 	if err != nil {
@@ -332,11 +276,10 @@ func loadReleaseClass(releaseRoot string) (string, error) {
 	if err := json.Unmarshal(raw, &header); err != nil {
 		return "", fmt.Errorf("decode release header: %w", err)
 	}
-	releaseClass := strings.TrimSpace(header.ReleaseClass)
-	if releaseClass == "" {
+	if strings.TrimSpace(header.ReleaseClass) == "" {
 		return "", fmt.Errorf("release header releaseClass is required")
 	}
-	return releaseClass, nil
+	return strings.TrimSpace(header.ReleaseClass), nil
 }
 
 func safeRef(ref string) error {
@@ -347,34 +290,31 @@ func safeRef(ref string) error {
 	return nil
 }
 
-func loadCreatorProfile(root, ref string) (creatorProfile, error) {
+func loadCreatorProfile(root, ref string) (creatorProfile, string, error) {
 	path := filepath.Join(root, "profile.json")
-	bytes, err := os.ReadFile(path)
+	raw, err := os.ReadFile(path)
 	if err != nil {
-		return creatorProfile{}, fmt.Errorf("read creator profile %s: %w", ref, err)
+		return creatorProfile{}, "", fmt.Errorf("read creator profile %s: %w", ref, err)
 	}
 	var profile creatorProfile
-	if err := json.Unmarshal(bytes, &profile); err != nil {
-		return creatorProfile{}, fmt.Errorf("decode creator profile %s: %w", ref, err)
+	if err := json.Unmarshal(raw, &profile); err != nil {
+		return creatorProfile{}, "", fmt.Errorf("decode creator profile %s: %w", ref, err)
 	}
-	if strings.TrimSpace(profile.AvatarObjectKey) != "" ||
-		(profile.AvatarAsset != nil && strings.TrimSpace(profile.AvatarAsset.ObjectKey) != "") {
-		return creatorProfile{}, fmt.Errorf(
-			"creator profile %s contains forbidden avatar objectKey",
-			ref,
-		)
+	if strings.TrimSpace(profile.AvatarObjectKey) != "" || (profile.AvatarAsset != nil && strings.TrimSpace(profile.AvatarAsset.ObjectKey) != "") {
+		return creatorProfile{}, "", fmt.Errorf("creator profile %s contains forbidden avatar objectKey", ref)
 	}
-	if profile.Schema != "quwoquan_data.creator_profile" || profile.CreatorID != ref ||
-		profile.UserID == "" || profile.AuthorID == "" || profile.UserID != profile.AuthorID ||
-		profile.PersonaID == "" || profile.DisplayName == "" {
-		return creatorProfile{}, fmt.Errorf("invalid creator profile: %s", ref)
+	if profile.Schema != "quwoquan_data.creator_profile" || profile.CreatorID != ref || profile.UserID == "" || profile.AuthorID == "" || profile.UserID != profile.AuthorID || profile.PersonaID == "" || profile.DisplayName == "" {
+		return creatorProfile{}, "", fmt.Errorf("invalid creator profile: %s", ref)
 	}
-	return profile, nil
+	return profile, digestCanonicalJSON(raw), nil
 }
 
 func loadCreatorWorks(path string) ([]model.CreatorWorkRef, error) {
 	file, err := os.Open(path)
 	if err != nil {
+		if os.IsNotExist(err) {
+			return []model.CreatorWorkRef{}, nil
+		}
 		return nil, fmt.Errorf("read creator works: %w", err)
 	}
 	defer file.Close()
@@ -397,243 +337,18 @@ func loadCreatorWorks(path string) ([]model.CreatorWorkRef, error) {
 	return works, nil
 }
 
-func assertNoForeignUserCollision(ctx context.Context, pool *pgxpool.Pool, creators []creatorRecord) error {
-	for _, creator := range creators {
-		var origin string
-		err := pool.QueryRow(ctx, "SELECT identity_origin FROM user_profiles WHERE user_id=$1", creator.Profile.UserID).Scan(&origin)
-		if err != nil && err != pgx.ErrNoRows {
-			return fmt.Errorf("lookup creator user %s: %w", creator.Profile.UserID, err)
-		}
-		if err == nil && origin != contentIdentityKind {
-			return fmt.Errorf("creator userId collides with non-release account: %s", creator.Profile.UserID)
-		}
+func digestCanonicalJSON(raw []byte) string {
+	var value any
+	if err := json.Unmarshal(raw, &value); err != nil {
+		return ""
 	}
-	return nil
-}
-
-func upsertUsers(
-	ctx context.Context,
-	pool *pgxpool.Pool,
-	personaMaterializer CreatorPersonaMaterializer,
-	creators []creatorRecord,
-	releaseID string,
-	runID string,
-) (int, error) {
-	const query = `INSERT INTO user_profiles (
-		user_id, account_state, identity_origin, logical_shard, anonymous_retention_policy,
-		phone, nickname, nickname_customized, avatar_version, profile_version,
-		owner_display_name, persona_count, created_at, updated_at
-	) VALUES ($1, 'active', 'content_release', 0, 'preserve', NULL, '', false, 0, 0, '', 1, NOW(), NOW())
-	ON CONFLICT (user_id) DO UPDATE SET account_state='active', updated_at=NOW()
-	WHERE user_profiles.identity_origin='content_release'`
-	count := 0
-	for _, creator := range creators {
-		profile := creator.Profile
-		avatarAssetID := ""
-		if profile.AvatarAsset != nil {
-			avatarAssetID = profile.AvatarAsset.AssetID
-		}
-		tag, err := pool.Exec(
-			ctx,
-			query,
-			profile.UserID,
-		)
-		if err != nil {
-			return 0, fmt.Errorf("upsert creator user %s: %w", creator.Profile.UserID, err)
-		}
-		if tag.RowsAffected() != 1 {
-			return 0, fmt.Errorf("creator user not owned by release: %s", creator.Profile.UserID)
-		}
-		if err := personaMaterializer.UpsertAndProject(ctx, CreatorPersonaState{
-			ReleaseID:          releaseID,
-			UserID:             profile.UserID,
-			PersonaID:          profile.PersonaID,
-			DisplayName:        profile.DisplayName,
-			UserHandle:         profile.UserHandle,
-			Bio:                profile.Bio,
-			IdentityTags:       append([]string(nil), profile.PublicProfileTagRefs...),
-			AvatarMediaAssetID: avatarAssetID,
-			AvatarURL:          profile.AvatarURL,
-			AvatarVersion:      int(profile.AvatarVersion),
-		}, runID); err != nil {
-			return 0, fmt.Errorf("upsert creator Persona %s: %w", profile.PersonaID, err)
-		}
-		count++
-	}
-	return count, nil
-}
-
-func upsertCreatorProfiles(ctx context.Context, database *mongo.Database, creators []creatorRecord, releaseID string) (int, error) {
-	collection := database.Collection("creator_runtime_profiles")
-	count := 0
-	for _, creator := range creators {
-		profile := creator.Profile
-		runtime := model.CreatorRuntimeProfile{
-			CreatorID: profile.CreatorID, PersonaID: profile.PersonaID, Handle: profile.UserHandle,
-			DisplayName: profile.DisplayName, Headline: profile.Headline, Bio: profile.Bio,
-			AvatarURL: profile.AvatarURL, AvatarVersion: profile.AvatarVersion,
-			AvatarPublicSliceKey: profile.AvatarPublicSliceKey,
-			PublicProfileTagRefs: profile.PublicProfileTagRefs,
-			CreatorArchetype:     profile.CreatorArchetype, Works: creator.Works, PackageDigest: releaseID,
-			ReleaseID: releaseID, Status: "active", ManagedBy: dataSourceOwner,
-			ImportedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC(),
-		}
-		if profile.AvatarAsset != nil {
-			runtime.AvatarAssetID = profile.AvatarAsset.AssetID
-			runtime.AvatarSHA256 = profile.AvatarAsset.SHA256
-		}
-		_, err := collection.UpdateOne(ctx, bson.M{"creatorId": profile.CreatorID}, bson.M{"$set": runtime}, options.UpdateOne().SetUpsert(true))
-		if err != nil {
-			return 0, fmt.Errorf("upsert creator runtime profile %s: %w", profile.CreatorID, err)
-		}
-		count++
-	}
-	return count, nil
-}
-
-func verifyCreatorProfileReadback(
-	ctx context.Context,
-	database *mongo.Database,
-	creators []creatorRecord,
-	releaseID string,
-) ([]string, error) {
-	collection := database.Collection("creator_runtime_profiles")
-	verified := make([]string, 0, len(creators))
-	for _, creator := range creators {
-		profile := creator.Profile
-		var persisted model.CreatorRuntimeProfile
-		err := collection.FindOne(ctx, bson.M{
-			"creatorId": profile.CreatorID,
-			"personaId": profile.PersonaID,
-			"releaseId": releaseID,
-			"managedBy": dataSourceOwner,
-			"status":    "active",
-		}).Decode(&persisted)
-		if err != nil {
-			return nil, fmt.Errorf(
-				"read back creator projection %s from %s: %w",
-				profile.CreatorID,
-				projectionDatabase,
-				err,
-			)
-		}
-		if persisted.CreatorID != profile.CreatorID ||
-			persisted.PersonaID != profile.PersonaID {
-			return nil, fmt.Errorf(
-				"creator projection identity drift after readback: %s",
-				profile.CreatorID,
-			)
-		}
-		verified = append(verified, persisted.CreatorID)
-	}
-	sort.Strings(verified)
-	return verified, nil
-}
-
-func removeAbsentUsers(ctx context.Context, pool *pgxpool.Pool, authorIDs []string) (int, error) {
-	tx, err := pool.Begin(ctx)
+	canonical, err := json.Marshal(value)
 	if err != nil {
-		return 0, fmt.Errorf("begin absent release user cleanup: %w", err)
+		return ""
 	}
-	defer tx.Rollback(ctx)
-
-	userRows, err := tx.Query(ctx, `
-SELECT user_id
-FROM user_profiles
-WHERE identity_origin = 'content_release'
-  AND NOT (user_id = ANY($1))
-`, authorIDs)
-	if err != nil {
-		return 0, fmt.Errorf("list absent release users: %w", err)
-	}
-	userIDs := make([]string, 0)
-	for userRows.Next() {
-		var userID string
-		if scanErr := userRows.Scan(&userID); scanErr != nil {
-			userRows.Close()
-			return 0, fmt.Errorf("scan absent release user: %w", scanErr)
-		}
-		userIDs = append(userIDs, userID)
-	}
-	userRows.Close()
-	if err := userRows.Err(); err != nil {
-		return 0, fmt.Errorf("iterate absent release users: %w", err)
-	}
-
-	aggregateIDs := append([]string(nil), userIDs...)
-	if len(userIDs) > 0 {
-		personaRows, err := tx.Query(ctx, `
-SELECT persona_id
-FROM personas
-WHERE user_id = ANY($1)
-`, userIDs)
-		if err != nil {
-			return 0, fmt.Errorf("list absent release personas: %w", err)
-		}
-		for personaRows.Next() {
-			var personaID string
-			if scanErr := personaRows.Scan(&personaID); scanErr != nil {
-				personaRows.Close()
-				return 0, fmt.Errorf("scan absent release persona: %w", scanErr)
-			}
-			aggregateIDs = append(aggregateIDs, personaID)
-		}
-		personaRows.Close()
-		if err := personaRows.Err(); err != nil {
-			return 0, fmt.Errorf("iterate absent release personas: %w", err)
-		}
-	}
-
-	if len(aggregateIDs) > 0 {
-		if _, err := tx.Exec(ctx,
-			`DELETE FROM personas_command_receipts WHERE aggregate_id = ANY($1)`,
-			aggregateIDs,
-		); err != nil {
-			return 0, fmt.Errorf("remove absent release persona receipts: %w", err)
-		}
-		if _, err := tx.Exec(ctx,
-			`DELETE FROM personas_outbox WHERE aggregate_id = ANY($1)`,
-			aggregateIDs,
-		); err != nil {
-			return 0, fmt.Errorf("remove absent release persona outbox: %w", err)
-		}
-	}
-
-	tag, err := tx.Exec(ctx,
-		`DELETE FROM user_profiles
-WHERE identity_origin = 'content_release'
-  AND NOT (user_id = ANY($1))`,
-		authorIDs,
-	)
-	if err != nil {
-		return 0, fmt.Errorf("remove absent release users: %w", err)
-	}
-	if err := tx.Commit(ctx); err != nil {
-		return 0, fmt.Errorf("commit absent release user cleanup: %w", err)
-	}
-	return int(tag.RowsAffected()), nil
+	sum := sha256.Sum256(canonical)
+	return "sha256:" + hex.EncodeToString(sum[:])
 }
-
-func removeAbsentCreatorProfiles(ctx context.Context, database *mongo.Database, ids []string) (int, error) {
-	result, err := database.Collection("creator_runtime_profiles").DeleteMany(ctx, bson.M{
-		"managedBy": dataSourceOwner,
-		"creatorId": bson.M{"$nin": ids},
-	})
-	if err != nil {
-		return 0, fmt.Errorf("remove absent creator runtime profiles: %w", err)
-	}
-	return int(result.DeletedCount), nil
-}
-
-func authorIDs(creators []creatorRecord) []string {
-	ids := make([]string, 0, len(creators))
-	for _, creator := range creators {
-		ids = append(ids, creator.Profile.AuthorID)
-	}
-	sort.Strings(ids)
-	return ids
-}
-
 func creatorIDs(creators []creatorRecord) []string {
 	ids := make([]string, 0, len(creators))
 	for _, creator := range creators {
@@ -642,19 +357,6 @@ func creatorIDs(creators []creatorRecord) []string {
 	sort.Strings(ids)
 	return ids
 }
-
-func writeReport(path string, report importReport) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return fmt.Errorf("create report directory: %w", err)
-	}
-	file, err := os.OpenFile(path, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o600)
-	if err != nil {
-		return fmt.Errorf("open report: %w", err)
-	}
-	defer file.Close()
-	return json.NewEncoder(file).Encode(report)
-}
-
 func fatal(err error) {
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "release creator import:", err)

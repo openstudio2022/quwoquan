@@ -10,7 +10,7 @@ creatorPersona:
   archetype: self_drive_expert
   preferredCreatorIds: [qwq_creator_self_drive_guide_001]
   requiredProfileTagRefs: [Topic/旅行/出行方式/徒步穿越, Format/内容角度/攻略/路线推荐, Topic/旅行/旅行筹备/应急避险]
-  allowedPerspective: [第一人称经验, 专业导览]
+  allowedPerspective: [中性事实叙事, 专业导览]
   mustNotClaim: [官方救援, 向导资质保证, 零风险承诺]
 editorialIntent: 面向 7–14 日深度与徒步穿越线路，强调补给、风险、向导与体能边界，不做探险营销。
 render: { articleTemplate: journal, fontPreset: clean }
@@ -40,7 +40,7 @@ routeCoverageExpectations:
 structure:
   required: [线路定位, 体能与经验要求, 分段行程, 补给与露营, 风险与应急, 向导与许可, 替代方案]
   optional: [摄影停靠, 地形适应]
-mustIncludeFacts: [总里程, 高程变化, 补给点, 露营或住宿, 向导需求, 应急避险, 最佳季节]
+evidenceConditionedFacts: [总里程, 高程变化, 补给点, 露营或住宿, 向导需求, 应急避险, 最佳季节]
 forbiddenPhrases: [冷启动, 批次, 角色：, 占位, contract_fixture, 零风险]
 wordCount: { min: 1600, max: 3200 }
 imagePlan:
@@ -52,7 +52,7 @@ crossRefs: { minEntity: 2, minTag: 5 }
 recommendation:
   authorBinding: { required: true, source: creator_profile_catalog }
   exposeStyleTags: true
-  qualitySignals: [bodyLength, requiredFactsCovered, imageSlotCoverage, entityRefCount]
+  qualitySignals: [bodyLength, evidenceSupportedFactCoverage, imageSlotCoverage, entityRefCount]
   bodyForbiddenFields: [qualityScore, templateId, routingReason, coldStartBoost, isSystemBuiltin, recommendationWeight]
 openingTension: { required: true, focus: 出发动机与犹豫 }
 explicitFeelings: { requireLike: true, requireDislike: true }

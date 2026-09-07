@@ -33,6 +33,8 @@ func TestDeclaredEnvKeysCoverRetiredHandwrittenHooks(t *testing.T) {
 		"ENTITY_REDIS_GENERAL_TLS",
 		"CONTENT_SERVICE_BASE_URL",
 		"CONTENT_SERVICE_OBJECT_INTERSECTIONS_PATH",
+		"CONTENT_MONGO_URI",
+		"CONTENT_MONGO_DATABASE",
 	}
 	if !reflect.DeepEqual(keys, expected) {
 		t.Fatalf("declared env keys drifted:\n got %v\nwant %v", keys, expected)
@@ -47,6 +49,8 @@ func TestDeclaredEnvKeysCoverRetiredHandwrittenHooks(t *testing.T) {
 		"ENTITY_REDIS_GENERAL_PASSWORD",
 		"CONTENT_SERVICE_BASE_URL",
 		"CONTENT_SERVICE_OBJECT_INTERSECTIONS_PATH",
+		"CONTENT_MONGO_URI",
+		"CONTENT_MONGO_DATABASE",
 	}
 	declared := make(map[string]bool, len(keys))
 	for _, key := range keys {

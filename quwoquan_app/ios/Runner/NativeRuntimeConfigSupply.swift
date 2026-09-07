@@ -17,6 +17,9 @@ private let nativeRuntimeTrustFileName = "runtime-config-trust.json"
 private let nativeRuntimeActivationRequestFileName = "runtime-config-activation-request.json"
 private let nativeRuntimeActivationReceiptFileName = "runtime-config-activation-receipt.json"
 private let nativeRuntimeActiveReceiptFileName = "runtime-config-active-receipt.json"
+// Debug-nonprod 构建期自供给（REQ-003 build_time_self_supply）随制品嵌入的激活请求。
+private let nativeRuntimeSelfSupplyRequestFileName = "runtime-config-self-supply-request.json"
+private let nativeRuntimeSelfSupplyMode = "build_time_self_supply"
 private let nativeRuntimeActivationRequestDigestArgument =
   "--qwq-runtime-config-activation-request-digest"
 private let nativeRuntimeConfigDirectory = "qwq_runtime"
@@ -1039,6 +1042,114 @@ enum NativeRuntimeConfigActivationCoordinator {
         previousActiveDigest: previousActiveDigest,
         previousActiveDigestKnown: previousActiveDigestKnown,
         cleanupPendingRequestFile: true
+      )
+    }
+  }
+
+  /// Debug-nonprod 构建期自供给：冷启动无外部 activation 参数时消费制品内嵌的激活请求。
+  ///
+  /// 与外部请求走同一 validate → CAS activate → receipt 路径，区别只有两点：请求位于
+  /// 制品而非私有容器，`expectedActiveDigest` 由这里以当前 active digest 现场补齐。
+  /// 决策矩阵：制品无请求 → 未请求；active 为外部供给且新鲜 → 保持不变（未请求）；
+  /// active 缺席 / 过期 / 同为自供给但 requestDigest 变化（重建）→ 激活；已是该请求 → 已激活。
+  /// 失败只记账并返回 typed 码，调用方继续既有 trust/config 阻断，不得静默回退。
+  static func consumeBundledSelfSupplyRequest() -> NativeRuntimeConfigActivationConsumeResult {
+    let notRequested = NativeRuntimeConfigActivationConsumeResult(
+      requested: false,
+      activated: false,
+      errorCode: "",
+      validationIssues: []
+    )
+    guard let requestURL = Bundle.main.url(
+      forResource: nativeRuntimeSelfSupplyRequestFileName,
+      withExtension: nil,
+      subdirectory: nativeRuntimeConfigDirectory
+    ) else {
+      return notRequested
+    }
+    var receiptIdentity = NativeRuntimeConfigReceiptIdentityProjection.empty
+    var requestDigest = String(repeating: "0", count: 64).withSHA256Prefix
+    var previousActiveDigest = ""
+    var previousActiveDigestKnown = false
+    do {
+      let requestData = try readActivationData(requestURL)
+      let decoded = try requestData.activationJSONObject()
+      requestDigest = nativeSHA256Identity(try canonicalJSONData(decoded))
+      receiptIdentity = validatedReceiptIdentityProjection(decoded)
+      try validateRequest(decoded)
+      guard receiptIdentity.isComplete,
+            receiptIdentity.runtimeConfigSupplyMode == nativeRuntimeSelfSupplyMode,
+            decoded["expectedActiveDigest"] as? String == ""
+      else {
+        throw NativeRuntimeConfigReadError.activationIdentityMismatch
+      }
+      switch NativeRuntimeConfigStore.readActivePackage() {
+      case .present(let active):
+        let activeReceipt = try? readActiveReceiptDocument()
+        let activeSupplyMode = activeReceipt?["runtimeConfigSupplyMode"] as? String ?? ""
+        if activeSupplyMode != nativeRuntimeSelfSupplyMode {
+          // 外部 canonical launcher 已激活且新鲜：显式外部选择优先于构建期默认。
+          NSLog(
+            "QWQStartup ios_runtime_config_self_supply_skipped reason=external_active supplyMode=%@",
+            activeSupplyMode
+          )
+          return notRequested
+        }
+        if activeReceipt?["requestDigest"] as? String == requestDigest,
+           active.packageDigest == receiptIdentity.packageDigest {
+          return NativeRuntimeConfigActivationConsumeResult(
+            requested: true,
+            activated: true,
+            errorCode: "",
+            validationIssues: []
+          )
+        }
+        previousActiveDigest = active.packageDigest
+      case .absent:
+        previousActiveDigest = ""
+      case .failure:
+        // 过期包仍可被替换（豁免时间窗读 CAS 前值）；结构性损坏在这里抛出并记账。
+        previousActiveDigest = try currentActiveDigest()
+      }
+      previousActiveDigestKnown = true
+      guard let package = decoded["package"] as? [String: Any],
+            let packageDigest = decoded["packageDigest"] as? String,
+            let trustDigest = decoded["trustEnvelopeDigest"] as? String
+      else {
+        throw NativeRuntimeConfigReadError.activationRequestMalformed
+      }
+      _ = try NativeRuntimeConfigStore.activate(
+        package: package,
+        expectedPackageDigest: packageDigest,
+        expectedTrustEnvelopeDigest: trustDigest,
+        expectedActiveDigest: previousActiveDigest
+      ) { result in
+        let receipt = buildReceipt(
+          identity: receiptIdentity,
+          requestDigest: requestDigest,
+          status: activatedReceiptStatus,
+          previousActiveDigest: result.previousActiveDigest,
+          activePackageDigest: result.packageDigest,
+          errorCode: "",
+          validationIssues: []
+        )
+        try commitActivationReceipts(receipt)
+      }
+      return NativeRuntimeConfigActivationConsumeResult(
+        requested: true,
+        activated: true,
+        errorCode: "",
+        validationIssues: []
+      )
+    } catch {
+      return recordActivationFailure(
+        error,
+        context: "consume_self_supply_request",
+        receiptIdentity: receiptIdentity,
+        requestDigest: requestDigest,
+        previousActiveDigest: previousActiveDigest,
+        previousActiveDigestKnown: previousActiveDigestKnown,
+        cleanupPendingRequestFile: false
       )
     }
   }

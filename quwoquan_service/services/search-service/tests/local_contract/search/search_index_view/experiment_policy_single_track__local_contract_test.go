@@ -77,6 +77,46 @@ func TestSearchExperimentPolicyProjectsAndPublishesObservedAssignment(t *testing
 	}
 }
 
+// owner 在可变运行时重建同一 revision 时只有 updatedAt 变化：必须视为同一策略，
+// 而 variants 等语义内容不同仍按 revision 冲突 fail closed。
+func TestSearchExperimentPolicySameRevisionIgnoresUpdatedAtButRejectsContentDrift(t *testing.T) {
+	experiments, err := application.NewExperiments(noopAssignmentPublisher{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	base := application.ExperimentPolicy{
+		ID: application.SearchRankingExperimentID, Revision: 1, Status: "running",
+		Variants: []application.ExperimentPolicyVariant{
+			{Key: application.BucketControl, AllocationBasisPoints: 5000},
+			{Key: application.BucketTermHeat, AllocationBasisPoints: 5000},
+		},
+		UpdatedAt: "2026-09-06T05:03:59Z",
+	}
+	if err := experiments.ApplyPolicy(base); err != nil {
+		t.Fatalf("first ApplyPolicy() error = %v", err)
+	}
+	republished := base
+	republished.UpdatedAt = "2026-09-06T10:36:33Z"
+	if err := experiments.ApplyPolicy(republished); err != nil {
+		t.Fatalf("same-content republish must not conflict: %v", err)
+	}
+	drifted := base
+	drifted.UpdatedAt = "2026-09-06T10:36:33Z"
+	drifted.Variants = []application.ExperimentPolicyVariant{
+		{Key: application.BucketControl, AllocationBasisPoints: 9000},
+		{Key: application.BucketTermHeat, AllocationBasisPoints: 1000},
+	}
+	if err := experiments.ApplyPolicy(drifted); err == nil {
+		t.Fatal("content drift under the same revision must fail closed")
+	}
+}
+
+type noopAssignmentPublisher struct{}
+
+func (noopAssignmentPublisher) PublishExperimentAssignment(context.Context, application.AssignmentObservation) error {
+	return nil
+}
+
 type policyRepository struct {
 	mu      sync.Mutex
 	current application.ExperimentPolicy

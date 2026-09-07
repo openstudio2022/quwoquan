@@ -19,28 +19,40 @@ from pathlib import Path
 from core.paths import DATA_CACHE_ROOT, REPO_ROOT
 
 _SOURCE_DEFINITION_INPUT_ROOTS = (
-    "quwoquan_data/schema",
-    "quwoquan_data/control_plane",
+    ".agents/skills/content-production",
+    "quwoquan_data/schema/_common",
+    "quwoquan_data/schema/content",
+    "quwoquan_data/schema/execution",
+    "quwoquan_data/schema/source",
+    "quwoquan_data/schema/publish",
+    "quwoquan_data/schema/release",
+    "quwoquan_data/schema/governance",
+    "quwoquan_data/control_plane/_shared/content_distribution.policy.yaml",
+    "quwoquan_data/control_plane/_shared/media_processing.policy.yaml",
+    "quwoquan_data/control_plane/_shared/catalogs/content_source_registry.yaml",
     "quwoquan_data/prompts",
     "quwoquan_data/templates",
-    "quwoquan_data/verticals/travel",
-    "quwoquan_data/reference",
-    "quwoquan_data/requirements.txt",
-    "quwoquan_service/services/content-service/contracts/media/media_asset",
-    "quwoquan_service/services/content-service/contracts/content/post/ui_config.yaml",
-    "quwoquan_service/services/recommendation-service/contracts/recommendation/recommendation_feature_profile_view/projections/intersection_reason.yaml",
+    "quwoquan_data/verticals/travel/content_policy.yaml",
+    "quwoquan_data/verticals/travel/providers.yaml",
+    "quwoquan_data/verticals/travel/rights/license_policy.yaml",
 )
 _EXECUTION_BUNDLE_INPUT_ROOTS = (
-    "quwoquan_data/scripts",
     "quwoquan_data/requirements.txt",
-    "quwoquan_ops/policies/branch_policy.yaml",
-    "specs/feature-tree/discovery-content/object-homepage-coverage-scaling/spec.md",
-    "specs/feature-tree/discovery-content/object-homepage-coverage-scaling/design.md",
-    "specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md",
+    "quwoquan_data/scripts/content/execution",
+    "quwoquan_data/scripts/content/source",
+    "quwoquan_data/scripts/content/release/canonical",
+    "quwoquan_data/scripts/core",
+    "quwoquan_data/scripts/governance/coverage/distribution.py",
+    "quwoquan_data/scripts/governance/coverage/license.py",
+    "quwoquan_service/services/content-service/contracts/media/media_asset/image_variant_policy.yaml",
 )
-# Kept for terminal legacy evidence only. New candidates bind the two identities
-# separately so executor refactors do not pretend that content semantics changed.
-_INPUT_ROOTS = ("quwoquan_data/scripts", *_SOURCE_DEFINITION_INPUT_ROOTS)
+# Historical combined sourceDigest documents used the broad scripts root. Keep
+# that input name only for immutable terminal evidence parsing; current producer
+# source-definition and execution-bundle identities use the exact tuples above.
+_LEGACY_SOURCE_DIGEST_INPUT_ROOTS = (
+    "quwoquan_data/scripts",
+    *_SOURCE_DEFINITION_INPUT_ROOTS,
+)
 # Data execution identity is deliberately environment-neutral. Environment
 # topology and readiness policy apply only when an immutable release is shipped.
 _DIGEST_PREFIX = "sha256:"
@@ -87,7 +99,7 @@ class SourceDigest:
                 previous_entries = {}
             next_entries: dict[str, dict[str, object]] = {}
             digest = hashlib.sha256()
-            for relative_root in _INPUT_ROOTS:
+            for relative_root in _LEGACY_SOURCE_DIGEST_INPUT_ROOTS:
                 root = normalized_root / relative_root
                 if not root.exists():
                     raise SourceDigestError(
@@ -137,7 +149,7 @@ class SourceDigest:
         if not isinstance(digest, str) or not _is_sha256(digest):
             raise SourceDigestError("sourceDigest.digest must be a sha256 digest")
         inputs = value.get("inputs")
-        if not isinstance(inputs, list) or tuple(inputs) != _INPUT_ROOTS:
+        if not isinstance(inputs, list) or tuple(inputs) != _LEGACY_SOURCE_DIGEST_INPUT_ROOTS:
             raise SourceDigestError("sourceDigest.inputs must name the fixed repository inputs")
         return cls(digest=digest)
 
@@ -145,7 +157,7 @@ class SourceDigest:
         return {
             "algorithm": "sha256",
             "digest": self.digest,
-            "inputs": list(_INPUT_ROOTS),
+            "inputs": list(_LEGACY_SOURCE_DIGEST_INPUT_ROOTS),
         }
 
 
@@ -320,14 +332,14 @@ def content_source_revision(
     source_digest: str,
     entity_catalog_digest: str,
 ) -> str:
-    """Derive the one content revision shared by campaign and release evidence."""
+    """Derive the content revision shared by task and release evidence."""
     if not _is_sha256(source_digest):
         raise SourceDigestError("sourceDigest must be a sha256 digest")
     if not _is_sha256(entity_catalog_digest):
         raise SourceDigestError("entityCatalogDigest must be a sha256 digest")
     encoded = json.dumps(
         {
-            "schema": "quwoquan_data.campaign_content_source_revision",
+            "schema": "quwoquan_data.content_source_revision",
             "sourceDigest": source_digest,
             "entityCatalogDigest": entity_catalog_digest,
         },

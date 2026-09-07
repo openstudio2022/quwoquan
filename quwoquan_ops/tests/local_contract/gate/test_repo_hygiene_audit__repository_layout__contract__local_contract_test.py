@@ -77,7 +77,6 @@ def test_make_and_data_cli_use_the_single_verification_entrypoint() -> None:
         "verify_runtime_input_ownership",
         "verify_output_root_isolation",
         "verify_object_size_budget",
-        "verify_publish_purity",
         "verify_publish_closure",
     ):
         assert gate_name in verify_handler

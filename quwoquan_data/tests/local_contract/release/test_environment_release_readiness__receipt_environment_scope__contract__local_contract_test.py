@@ -136,8 +136,8 @@ def _fixture(root: Path) -> dict[str, Path]:
             "releaseId": RELEASE_ID,
             "sourceOwner": "qwq_data",
             "releaseKind": "content",
-            "releaseClass": "commercial",
-            "productLifecycleState": "commercial",
+            "releaseClass": "production",
+            "productLifecycleState": "production",
             "containsUnverifiedAssets": False,
             "rightsStatusCounts": {
                 "verified": 7,
@@ -353,8 +353,8 @@ def _fixture(root: Path) -> dict[str, Path]:
         {
             "schema": "quwoquan_data.release_asset_admission",
             "releaseId": RELEASE_ID,
-            "releaseClass": "commercial",
-            "productLifecycleState": "commercial",
+            "releaseClass": "production",
+            "productLifecycleState": "production",
             "containsUnverifiedAssets": False,
             "rightsStatusCounts": {
                 "verified": 7,
@@ -398,8 +398,8 @@ def _fixture(root: Path) -> dict[str, Path]:
             "releaseId": RELEASE_ID,
             "sourceOwner": "qwq_data",
             "releaseKind": "content",
-            "releaseClass": "commercial",
-            "productLifecycleState": "commercial",
+            "releaseClass": "production",
+            "productLifecycleState": "production",
             "containsUnverifiedAssets": False,
             "rightsStatusCounts": {
                 "verified": 7,
@@ -411,6 +411,13 @@ def _fixture(root: Path) -> dict[str, Path]:
             "researchAcceptedCount": 4,
             "commercialAcceptedCount": 4,
             "executionIds": ["20260728--travel-content--test--pilot-002"],
+            "carrierCounts": {
+                "homepage": 1,
+                "article": 1,
+                "image": 1,
+                "video": 1,
+                "total": 4,
+            },
             "entityCount": 1,
             "postCount": 3,
             "creatorCount": 1,
@@ -429,14 +436,25 @@ def _fixture(root: Path) -> dict[str, Path]:
         import_run / "import.json",
         {
             "schema": "quwoquan.content_import_report",
-            "status": "imported",
+            "status": "staged",
             "environment": ENVIRONMENT,
             "releaseId": RELEASE_ID,
             "sourceOwner": "qwq_data",
             "manifestDigest": payload_digest(release),
+            "activationMode": "stage-only",
             "mode": "sync",
             "deletePolicy": "tombstone",
             "counts": {"postsLoaded": 3, "entitiesLoaded": 1},
+            "stageResult": {
+                "postsExpected": 3,
+                "postsProjected": 3,
+                "mediaExpected": 0,
+                "mediaProjected": 0,
+                "outboxExpected": 3,
+                "outboxProjected": 3,
+                "projectionVersion": 1,
+                "replayed": False,
+            },
             "postBindings": [
                 {
                     "postRef": post_ref,
@@ -450,29 +468,43 @@ def _fixture(root: Path) -> dict[str, Path]:
                 for post_ref, post_id, content_type in POSTS
             ],
             "auditEvents": [],
-            "revision": 1,
-            "sourceVersion": 1,
         },
     )
     write_json(
         import_run / "creator-import.json",
         {
             "schema": "quwoquan.user_creator_import_report",
-            "status": "active",
+            "status": "verified",
             "environment": ENVIRONMENT,
             "releaseId": RELEASE_ID,
             "sourceOwner": "qwq_data",
-            "mode": "sync",
+            "manifestDigest": payload_digest(release),
+            "activationMode": "stage-only",
             "projectionDatabase": "quwoquan_user",
+            "projectionVersion": 1,
+            "closureDigest": "sha256:" + "b" * 64,
+            "verifiedAt": "2026-07-28T00:01:00Z",
             "counts": {
-                "creatorsLoaded": 1,
-                "usersUpserted": 1,
-                "creatorsUpserted": 1,
-                "usersRemoved": 0,
-                "creatorsRemoved": 0,
+                "creatorsExpected": 1,
+                "creatorsProjected": 1,
+                "usersUpserted": 0,
+                "personasUpserted": 0,
             },
             "authorIds": ["author-a"],
+            "profileDigests": [
+                {
+                    "creatorId": CREATOR_ID,
+                    "authorId": "author-a",
+                    "digest": "sha256:" + "c" * 64,
+                }
+            ],
             "verifiedCreatorIds": [CREATOR_ID],
+            "postgresqlWrites": {
+                "userAccounts": 0,
+                "personas": 0,
+                "personaOutbox": 0,
+                "commandReceipts": 0,
+            },
             "generatedAt": "2026-07-28T00:01:00Z",
         },
     )
@@ -539,7 +571,7 @@ def _fixture(root: Path) -> dict[str, Path]:
             "environment": ENVIRONMENT,
             "releaseId": RELEASE_ID,
             "runId": VERIFY_RUN_ID,
-            "readinessPhase": "commercial",
+            "readinessPhase": "production",
             "sourceImportReportRef": (
                 f"env/{ENVIRONMENT}/runs/data-release/{RELEASE_ID}/{IMPORT_RUN_ID}/import.json"
             ),
@@ -691,110 +723,10 @@ def _resign_release(paths: dict[str, Path]) -> None:
     write_json(import_path, import_report)
 
 
-def _convert_fixture_to_research(paths: dict[str, Path]) -> str:
-    subject_hash = "sha256:" + "9" * 64
-    release = paths["release"]
-    for relative in (
-        "payload/release.json",
-        "payload/asset_admission.json",
-        "attestations/release.json",
-    ):
-        path = release / relative
-        document = json.loads(path.read_text(encoding="utf-8"))
-        document["releaseClass"] = "research"
-        document["productLifecycleState"] = "research"
-        write_json(path, document)
-
-    media_path = release / "payload/media_manifest.json"
-    media_manifest = json.loads(media_path.read_text(encoding="utf-8"))
-    extension_by_content_type = {
-        "image/jpeg": "jpg",
-        "video/mp4": "mp4",
-    }
-    for asset in media_manifest["assets"]:
-        digest = str(asset["sha256"]).removeprefix("sha256:")
-        extension = extension_by_content_type[str(asset["contentType"])]
-        asset.pop("publicSliceKey")
-        asset["privateObjectKey"] = (
-            f"media/objects/sha256/{digest[:2]}/{digest[2:4]}/"
-            f"{digest}.{extension}"
-        )
-    write_json(media_path, media_manifest)
-    media_by_id = {asset["assetId"]: asset for asset in media_manifest["assets"]}
-
-    homepage_path = paths["verify"] / "homepage-api-verification.json"
-    homepage_report = json.loads(homepage_path.read_text(encoding="utf-8"))
-    homepage_report["entities"][0]["coverUrl"] = media_by_id[
-        "entity-cover-a"
-    ]["privateObjectKey"]
-    write_json(homepage_path, homepage_report)
-
-    post_path = paths["verify"] / "post-api-verification.json"
-    post_report = json.loads(post_path.read_text(encoding="utf-8"))
-    post_report["readinessPhase"] = "research"
-    post_report["internalSubjectHash"] = subject_hash
-    post_report.pop("guestActorHash", None)
-    post_report.pop("guestLogin", None)
-    def _signed_probe(asset: dict[str, object]) -> dict[str, object]:
-        # research：每个 avatar 与首屏图片都必须以研究身份完成一次原图短签取回。
-        return {
-            "targetEvidence": "hostClass=dns,pathHash=sha256:" + "5" * 64,
-            "status": 200,
-            "mimeType": asset["contentType"],
-            "bytes": asset["bytes"],
-            "sha256": asset["sha256"],
-            "hashVerified": True,
-        }
-
-    creator = post_report["creators"][0]
-    avatar_asset = media_by_id["creator-avatar-a"]
-    creator["avatarUrl"] = avatar_asset["privateObjectKey"]
-    creator["avatarProbeCount"] = 1
-    creator["avatarProbe"] = _signed_probe(avatar_asset)
-    for post in post_report["posts"]:
-        post["mediaProbes"] = [
-            {
-                "assetId": probe["assetId"],
-                "kind": media_by_id[probe["assetId"]]["kind"],
-                "deliveryRef": media_by_id[probe["assetId"]][
-                    "privateObjectKey"
-                ],
-                "anonymousStatus": 403,
-                "expectedBytes": media_by_id[probe["assetId"]]["bytes"],
-                "expectedSha256": media_by_id[probe["assetId"]]["sha256"],
-                "signedProbe": (
-                    _signed_probe(media_by_id[probe["assetId"]])
-                    if media_by_id[probe["assetId"]]["kind"] == "image"
-                    else None
-                ),
-            }
-            for probe in post["mediaProbes"]
-        ]
-    write_json(post_path, post_report)
-    _resign_release(paths)
-    return subject_hash
-
-
-def _convert_fixture_to_consumer(paths: dict[str, Path]) -> None:
-    """Move the fixture to the consumer phase and nothing else.
-
-    Consumer readiness proves the same release-bound reads as commercial, because the
-    App video shelf consumes only ``premium_stream``: dropping that query here would
-    let a typed_video green stand in for a video shelf that has nothing to play
-    (`environment-topology-and-packaging` spec).
-    """
-
-    post_path = paths["verify"] / "post-api-verification.json"
-    post_report = json.loads(post_path.read_text(encoding="utf-8"))
-    post_report["readinessPhase"] = "consumer"
-    write_json(post_path, post_report)
-
-
 def _write(
     root: Path,
     *,
-    readiness_phase: str = "commercial",
-    research_isolation_path: Path | None = None,
+    readiness_phase: str = "production",
 ) -> Path:
     paths = _paths(root)
     return write_environment_release_readiness(
@@ -810,7 +742,6 @@ def _write(
         post_api_verification_path=paths["verify"] / "post-api-verification.json",
         output_root=root,
         output_path=paths["verify"] / "release-readiness.json",
-        research_isolation_verification_path=research_isolation_path,
         readiness_phase=readiness_phase,
     )
 

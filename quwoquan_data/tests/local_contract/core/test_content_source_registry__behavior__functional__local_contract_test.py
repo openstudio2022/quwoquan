@@ -225,7 +225,7 @@ def test_reference_only_video_sources_separate_research_bytes_from_release_defau
             source_kind="tourism_video_site",
             publication_admission="research_release",
         )
-        for publication in ("commercial_release", "risk_accepted_attribution_only"):
+        for publication in ("commercial_release",):
             with pytest.raises(ValueError, match=f"{publication} is not allowed"):
                 assert_video_distribution_use_allowed(
                     data,

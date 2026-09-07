@@ -14,9 +14,11 @@ import java.util.Base64
 // 仓库根由消费方 Gradle 根显式声明（qwq.repositoryRoot），不按固定相对深度推断：
 // 两个工程到仓库根的深度不同，而「assets 根必须在源码树外」这条判否依赖它。
 //
-// 构建期默认供给（embedded_default_package）已退役（REQ-002/REQ-003）：
-// QWQ_ANDROID_RUNTIME_CONFIG_ASSET_ROOT 缺席时不物化任何 runtime config assets，
-// 一切 buildMode/buildProfile 的 artifact task 都以 trust blocker fail-closed。
+// Debug-nonprod 构建期自供给（REQ-003 build_time_self_supply）：
+// QWQ_ANDROID_RUNTIME_CONFIG_ASSET_ROOT 缺席且本次请求只含 nonprod debug artifact task 时，
+// 以当前源码树调用仓内 canonical handoff builder 现场签发 alpha test_live package + nonprod
+// trust，物化到源码树外的私有目录并只挂到 debug source set；其余 buildMode/buildProfile
+// 缺外部注入仍以 trust blocker fail-closed。
 
 val declaredRepositoryRoot =
     (project.findProperty("qwq.repositoryRoot") as String?)?.trim().orEmpty()
@@ -28,8 +30,119 @@ val repositoryRoot = rootProject.projectDir.resolve(declaredRepositoryRoot).cano
 val configuredAssetRoot =
     System.getenv("QWQ_ANDROID_RUNTIME_CONFIG_ASSET_ROOT")?.trim().orEmpty()
 
+val SELF_SUPPLY_REQUEST_FILE_NAME = "runtime-config-self-supply-request.json"
+val SELF_SUPPLY_MODE = "build_time_self_supply"
+val SELF_SUPPLY_BUILD_PROFILE = "nonprod"
+val SELF_SUPPLY_VARIANT_TOKEN = "nonproddebug"
+
+fun explicitTaskSelectorsEarly(rawArguments: List<String>): List<String> {
+    val selectors = mutableListOf<String>()
+    var skipNextValue = false
+    rawArguments.forEach { argument ->
+        if (skipNextValue) {
+            skipNextValue = false
+        } else if (argument == "--tests") {
+            skipNextValue = true
+        } else if (!argument.startsWith("-")) {
+            selectors.add(argument)
+        }
+    }
+    return selectors
+}
+
+fun requiresRuntimeConfigTrustEarly(taskName: String): Boolean {
+    val normalized = taskName.lowercase()
+    if (normalized.contains("unittest")) {
+        return false
+    }
+    return listOf("assemble", "bundle", "package", "install", "connected", "device", "publish", "upload")
+        .any(normalized::startsWith)
+}
+
+// 自供给只在“显式请求的 artifact task 全部属于 nonprod debug 变体”时启用：
+// 同一次调用夹带任何 Release/Profile/prod 制品都回到 fail-closed。
+val selfSupplyEligible: Boolean =
+    configuredAssetRoot.isEmpty() &&
+        run {
+            val artifactSelectors =
+                explicitTaskSelectorsEarly(gradle.startParameter.taskNames)
+                    .map { it.substringAfterLast(':') }
+                    .filter(::requiresRuntimeConfigTrustEarly)
+            artifactSelectors.isNotEmpty() &&
+                artifactSelectors.all { it.lowercase().contains(SELF_SUPPLY_VARIANT_TOKEN) }
+        }
+
+fun resolveSelfSupplyPython(): String {
+    val resolver = repositoryRoot.resolve("quwoquan_app/scripts/ios/build_resolve_stackctl_python.sh")
+    val process =
+        ProcessBuilder("bash", resolver.path)
+            .redirectErrorStream(false)
+            .start()
+    val output = process.inputStream.bufferedReader().readText().trim()
+    val errors = process.errorStream.bufferedReader().readText().trim()
+    if (process.waitFor() != 0 || output.isEmpty()) {
+        throw GradleException(
+            "GATE_BLOCK: build-time self supply requires Python 3.10+ with PyYAML. $errors",
+        )
+    }
+    return output
+}
+
+fun materializeSelfSupply(): File {
+    // 源码树外、按项目路径隔离的私有目录；每次构建先清空再重生成，不缓存材料。
+    val projectKey =
+        MessageDigest.getInstance("SHA-256")
+            .digest(rootProject.projectDir.canonicalPath.toByteArray())
+            .joinToString("") { byte -> "%02x".format(byte) }
+            .take(16)
+    val root = File(System.getProperty("java.io.tmpdir"), "qwq-android-self-supply/$projectKey").canonicalFile
+    if (root.toPath().startsWith(repositoryRoot.toPath())) {
+        throw GradleException("GATE_BLOCK: self supply material root must stay outside the source tree.")
+    }
+    root.deleteRecursively()
+    val runtimeRoot = root.resolve("qwq_runtime")
+    if (!runtimeRoot.mkdirs()) {
+        throw GradleException("GATE_BLOCK: self supply material root could not be created.")
+    }
+    // canonical handoff builder 要求输出目录仅属主可访问（与 launcher 私有材料同一约束）。
+    val privateDirectory = java.nio.file.attribute.PosixFilePermissions.fromString("rwx------")
+    for (directory in listOf(root.parentFile, root, runtimeRoot)) {
+        Files.setPosixFilePermissions(directory.toPath(), privateDirectory)
+    }
+    val python = resolveSelfSupplyPython()
+    val builder = repositoryRoot.resolve("quwoquan_app/scripts/device/build_self_supply_request.py")
+    val process =
+        ProcessBuilder(
+            python,
+            builder.path,
+            "--trust-output",
+            runtimeRoot.resolve("runtime-config-trust.json").path,
+            "--request-output",
+            runtimeRoot.resolve(SELF_SUPPLY_REQUEST_FILE_NAME).path,
+        )
+            .directory(repositoryRoot)
+            .apply {
+                environment()["PYTHONDONTWRITEBYTECODE"] = "1"
+                environment()["PYTHONPATH"] =
+                    listOfNotNull(repositoryRoot.path, System.getenv("PYTHONPATH")?.takeIf { it.isNotEmpty() })
+                        .joinToString(File.pathSeparator)
+            }
+            .start()
+    val summary = process.inputStream.bufferedReader().readText().trim()
+    val errors = process.errorStream.bufferedReader().readText().trim()
+    if (process.waitFor() != 0) {
+        throw GradleException(
+            "GATE_BLOCK: Debug-nonprod build-time self supply failed. $errors",
+        )
+    }
+    logger.lifecycle("[android-runtime-config] runtimeConfigSupplyMode=$SELF_SUPPLY_MODE $summary")
+    return root
+}
+
+val selfSupplyAssetRoot: File? = if (selfSupplyEligible) materializeSelfSupply() else null
+
 val resolvedAssetRoot: File? =
-    configuredAssetRoot.takeIf { it.isNotEmpty() }?.let(::File)?.canonicalFile
+    configuredAssetRoot.takeIf { it.isNotEmpty() }?.let(::File)?.canonicalFile ?: selfSupplyAssetRoot
 
 fun requiresRuntimeConfigTrust(taskName: String): Boolean {
     val normalized = taskName.lowercase()
@@ -173,6 +286,7 @@ fun generatedTrustBlocker(generatedContract: Map<String, Any?>): String {
 fun validateRuntimeConfigTrust(
     generatedContract: Map<String, Any?>,
     assetRootDeclaration: String,
+    selfSupply: Boolean = false,
 ) {
     val blocker = generatedTrustBlocker(generatedContract)
     fun reject(reason: String): Nothing {
@@ -229,10 +343,15 @@ fun validateRuntimeConfigTrust(
     val runtimeRoot = canonicalRoot.resolve("qwq_runtime")
     val trustFile = runtimeRoot.resolve("runtime-config-trust.json")
     val packageFile = runtimeRoot.resolve("runtime-config-package.json")
-    // canonical 注入只嵌 trust envelope；任何 runtime package 材料都不得进入产物。
+    val selfSupplyRequestFile = runtimeRoot.resolve(SELF_SUPPLY_REQUEST_FILE_NAME)
+    // canonical 外部注入只嵌 trust envelope；自供给另嵌一份待激活请求。可读 runtime
+    // package 都不得进入产物。
+    val expectedAssetNames =
+        if (selfSupply) setOf("runtime-config-trust.json", SELF_SUPPLY_REQUEST_FILE_NAME)
+        else setOf("runtime-config-trust.json")
     if (!runtimeRoot.isDirectory ||
         Files.isSymbolicLink(runtimeRoot.toPath()) ||
-        runtimeRoot.listFiles()?.map { it.name }?.toSet() != setOf("runtime-config-trust.json")
+        runtimeRoot.listFiles()?.map { it.name }?.toSet() != expectedAssetNames
     ) {
         reject("A target runtime package must not enter Android assets.")
     }
@@ -249,7 +368,34 @@ fun validateRuntimeConfigTrust(
         } catch (_: Exception) {
             null
         } ?: reject("The Android build-profile trust envelope is malformed.")
-    val selectedBuildProfile = System.getenv("QWQ_APP_BUILD_PROFILE")?.trim().orEmpty()
+    // 外部注入以 launcher 导出的 QWQ_APP_BUILD_PROFILE 为准；自供给只允许 nonprod 且由变体
+    // 判定（raw flutter run 不带该环境变量）。
+    val selectedBuildProfile =
+        if (selfSupply) SELF_SUPPLY_BUILD_PROFILE
+        else System.getenv("QWQ_APP_BUILD_PROFILE")?.trim().orEmpty()
+    if (selfSupply) {
+        if (!Files.isRegularFile(selfSupplyRequestFile.toPath(), LinkOption.NOFOLLOW_LINKS) ||
+            Files.isSymbolicLink(selfSupplyRequestFile.toPath()) ||
+            selfSupplyRequestFile.length() !in 1..(1024 * 1024)
+        ) {
+            reject("The Android build-time self supply request is missing or invalid.")
+        }
+        val request =
+            try {
+                JsonSlurper().parse(selfSupplyRequestFile) as? Map<String, Any?>
+            } catch (_: Exception) {
+                null
+            } ?: reject("The Android build-time self supply request is malformed.")
+        val requestManifest = request["effectiveLaunchManifest"] as? Map<String, Any?>
+        val requestSchema = schemas["runtime_config_activation_request"] as? Map<String, Any?>
+        if (request["schema"] != requestSchema?.get("schema_value") ||
+            request["buildProfile"] != SELF_SUPPLY_BUILD_PROFILE ||
+            request["expectedActiveDigest"] != "" ||
+            requestManifest?.get("runtimeConfigSupplyMode") != SELF_SUPPLY_MODE
+        ) {
+            reject("The Android build-time self supply request identity conflicts with the debug build.")
+        }
+    }
     if (selectedBuildProfile !in trustedBuildProfiles ||
         trust.keys != requiredFields ||
         trust["schema"] != schemaValue ||
@@ -312,8 +458,22 @@ gradle.taskGraph.whenReady {
             requireNotNull(generatedContract) {
                 "artifact tasks must consume the generated App launch contract"
             }
-        validateRuntimeConfigTrust(contract, configuredAssetRoot)
+        if (selfSupplyAssetRoot != null) {
+            // 自供给只挂到 debug source set：task graph 里若混入非 nonprod debug 制品，
+            // 说明配置期判定与实际图不一致，按 fail-closed 处理。
+            val foreign = artifactTasks.filterNot { it.name.lowercase().contains(SELF_SUPPLY_VARIANT_TOKEN) }
+            if (foreign.isNotEmpty()) {
+                throw GradleException(
+                    "GATE_BLOCK: ${generatedTrustBlocker(contract)}: build-time self supply only serves " +
+                        "nonprod debug artifacts; ${foreign.map { it.path }} require a canonical handoff.",
+                )
+            }
+            validateRuntimeConfigTrust(contract, selfSupplyAssetRoot.path, selfSupply = true)
+        } else {
+            validateRuntimeConfigTrust(contract, configuredAssetRoot)
+        }
     }
 }
 
 project.extra["qwqRuntimeConfigAssetRoot"] = resolvedAssetRoot
+project.extra["qwqRuntimeConfigSelfSupply"] = selfSupplyAssetRoot != null

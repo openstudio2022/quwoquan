@@ -44,7 +44,7 @@ def _write(root: Path, ref: str, value: Mapping[str, Any]) -> tuple[str, str]:
     return ref, subject._digest_bytes(path.read_bytes())
 
 
-def _authorities(root: Path) -> dict[str, str]:
+def _authorities(root: Path, *, release_class: str = "research") -> dict[str, str]:
     samples = [
         {
             "sampleId": f"baseline-{carrier}-001",
@@ -166,10 +166,10 @@ def _authorities(root: Path) -> dict[str, str]:
         "environment": "alpha",
         "releaseId": RELEASE_ID,
         "releaseKind": "content",
-        "releaseClass": "research",
-        "productLifecycleState": "research",
+        "releaseClass": release_class,
+        "productLifecycleState": release_class,
         "sourceOwner": "qwq_data",
-        "readinessPhase": "research",
+        "readinessPhase": release_class,
         "manifestDigest": MANIFEST_DIGEST,
         "importRunId": IMPORT_RUN_ID,
         "verifyRunId": VERIFY_RUN_ID,
@@ -314,10 +314,12 @@ def _run(
     monkeypatch: pytest.MonkeyPatch,
     *,
     http: Any = _http,
+    release_class: str = "research",
+    credential_issuer: Any = None,
 ) -> tuple[dict[str, Any], Path, dict[str, str]]:
     root = tmp_path / "output"
     root.mkdir()
-    refs = _authorities(root)
+    refs = _authorities(root, release_class=release_class)
     ca = tmp_path / "root.crt"
     ca.write_text("test CA", encoding="utf-8")
     monkeypatch.setattr(
@@ -336,10 +338,52 @@ def _run(
         report_dir=report_dir,
         output_root=root,
         http_request=http,
-        credential_issuer=lambda **_kwargs: _credential(ca),
+        credential_issuer=credential_issuer or (lambda **_kwargs: _credential(ca)),
         **refs,
     )
     return result, report_dir, refs
+
+
+def test_production_release_consumes_anonymously_without_research_credential(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-002
+
+    production release 是公开 serving：十六格观测以匿名读者身份进行，不签发也
+    不携带 research 凭证；研究凭证 issuer 若被调用即为回归。
+    """
+    seen_tokens: list[tuple[str, str]] = []
+
+    def anonymous_http(**kwargs: Any) -> subject.HttpObservation:
+        seen_tokens.append((kwargs["bearer_token"], kwargs["attestation_token"]))
+        return _http(**kwargs)
+
+    result, report_dir, _refs = _run(
+        tmp_path,
+        monkeypatch,
+        http=anonymous_http,
+        release_class="production",
+        credential_issuer=lambda **_kwargs: pytest.fail(
+            "production consumer must not issue a research credential"
+        ),
+    )
+
+    assert result["exitCode"] == 0
+    assert len(seen_tokens) == 16 and set(seen_tokens) == {("", "")}
+    raw = [
+        json.loads(path.read_text(encoding="utf-8"))
+        for path in (report_dir / "raw").glob("*/*.json")
+    ]
+    assert len(raw) == 16 and {row["status"] for row in raw} == {"passed"}
+
+
+def test_readiness_release_class_triplet_must_be_lifecycle_bound(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    with pytest.raises(subject.ContentApiConsumerError, match="releaseClass"):
+        _run(tmp_path, monkeypatch, release_class="preview")
 
 
 def test_matrix_writes_sixteen_observations_and_canonical_raw_without_secret(

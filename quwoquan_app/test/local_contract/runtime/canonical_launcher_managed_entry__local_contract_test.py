@@ -101,6 +101,45 @@ class CanonicalLauncherManagedEntryContractTest(unittest.TestCase):
         (app / "run.sh").chmod(0o755)
         executor_dir = app / "scripts/device"
         (executor_dir / "canonical_app_instance").mkdir(parents=True)
+        dev_launch_log = root / "dev_launch.log"
+        dev_launch = executor_dir / "dev_launch.sh"
+        dev_launch.write_text(
+            "#!/usr/bin/env bash\n"
+            f"printf '%s\n' \"$*\" >> {dev_launch_log!s}\n"
+            "exit 0\n",
+            encoding="utf-8",
+        )
+        dev_launch.chmod(0o755)
+        projection = executor_dir / "prepare_workspace_launch_projection.py"
+        projection.write_text(
+            "import argparse\n"
+            "import json\n"
+            "import shutil\n"
+            "from pathlib import Path\n"
+            "def verify_workspace_launch_projection(**_kwargs):\n"
+            "    return {}\n"
+            "if __name__ == '__main__':\n"
+            "    parser = argparse.ArgumentParser()\n"
+            "    parser.add_argument('--output-root', required=True)\n"
+            "    parser.add_argument('--attempt-root', required=True)\n"
+            "    args = parser.parse_args()\n"
+            "    source_root = Path(__file__).resolve().parents[3]\n"
+            "    attempt_root = Path(args.attempt_root)\n"
+            "    projected_root = attempt_root / 'repo'\n"
+            "    capsule_root = attempt_root / 'input-capsule'\n"
+            "    shutil.copytree(source_root / 'quwoquan_app', projected_root / 'quwoquan_app')\n"
+            "    shutil.copytree(source_root / 'quwoquan_ops', projected_root / 'quwoquan_ops')\n"
+            "    capsule_root.mkdir(parents=True)\n"
+            "    manifest = capsule_root / 'manifest.json'\n"
+            "    manifest.write_text('{}\\n', encoding='utf-8')\n"
+            "    print(json.dumps({\n"
+            "        'projectionRoot': str(projected_root),\n"
+            "        'sourceCapsuleManifest': str(manifest),\n"
+            "        'sourceRevision': '1' * 40,\n"
+            "        'sourceCapsuleDigest': 'sha256:' + '2' * 64,\n"
+            "    }))\n",
+            encoding="utf-8",
+        )
         for relative in (
             "canonical_app_instance/__init__.py",
             "canonical_app_instance/arguments.py",
@@ -223,6 +262,10 @@ class CanonicalLauncherManagedEntryContractTest(unittest.TestCase):
         environment.pop("QWQ_MANAGED_FLUTTER_ENTRY", None)
         environment.pop("QWQ_APP_DEBUG_PREFLIGHT_RECEIPT", None)
         return temporary, app, environment
+
+    @staticmethod
+    def _mark_as_live_worktree(app: Path) -> None:
+        (app.parent / ".git").mkdir()
 
     def _write_managed_receipt(
         self,
@@ -362,6 +405,7 @@ class CanonicalLauncherManagedEntryContractTest(unittest.TestCase):
                 },
             )
             with temporary2:
+                self._mark_as_live_worktree(app)
                 environment["QWQ_MANAGED_FLUTTER_ENTRY"] = "1"
                 result = subprocess.run(
                     [
@@ -379,6 +423,10 @@ class CanonicalLauncherManagedEntryContractTest(unittest.TestCase):
                     text=True,
                 )
                 sandbox = app.parent
+                self.assertFalse(
+                    (sandbox / "dev_launch.log").exists(),
+                    "managed intent in a live .git worktree must bypass dev_launch",
+                )
                 managed_calls = (
                     (sandbox / "managed_calls.log").read_text(encoding="utf-8")
                 )
@@ -611,11 +659,10 @@ class CanonicalLauncherManagedEntryContractTest(unittest.TestCase):
             self.assertFalse((sandbox / "preflight_calls.log").exists())
             self.assertFalse((sandbox / "find_device.log").exists())
 
-    def test_unset_managed_entry_never_calls_app_managed_prepare(self) -> None:
-        temporary, app, environment = self._workspace(
-            preflight=_passed_content_live_payload(),
-        )
+    def test_unset_managed_entry_in_live_worktree_execs_direct_launcher(self) -> None:
+        temporary, app, environment = self._workspace()
         with temporary:
+            self._mark_as_live_worktree(app)
             result = subprocess.run(
                 ["bash", "run.sh", "--mode", "content-live", "-d", "device-1"],
                 cwd=app,
@@ -625,17 +672,23 @@ class CanonicalLauncherManagedEntryContractTest(unittest.TestCase):
                 text=True,
             )
             sandbox = app.parent
+            self.assertEqual(result.returncode, 0, result.stderr)
+            direct_calls = (sandbox / "dev_launch.log").read_text(encoding="utf-8")
+            self.assertEqual(
+                direct_calls.strip(),
+                "--mode content-live -d device-1",
+                "unset managed intent must preserve exact direct dev_launch argv",
+            )
             self.assertFalse(
                 (sandbox / "managed_calls.log").exists(),
                 "direct run.sh must keep zero managed preparation calls",
             )
-            # 未设变量时保持既有 test_live 语义：launcher 自己拥有 preflight。
-            preflight_calls = (
-                (sandbox / "preflight_calls.log").read_text(encoding="utf-8")
+            self.assertFalse(
+                (sandbox / "stackctl_calls.log").exists(),
+                "direct routing must not acquire or inspect lease/transport state",
             )
-            self.assertEqual(len(preflight_calls.strip().splitlines()), 1)
-            self.assertTrue((sandbox / "find_device.log").exists())
-            self.assertEqual(result.returncode, 2, result.stdout)
+            self.assertFalse((sandbox / "preflight_calls.log").exists())
+            self.assertFalse((sandbox / "find_device.log").exists())
 
     def test_managed_block_precedes_the_single_preflight_owner(self) -> None:
         source = LAUNCHER.read_text(encoding="utf-8")

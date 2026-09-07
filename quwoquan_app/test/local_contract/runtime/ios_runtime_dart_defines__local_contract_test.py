@@ -223,10 +223,9 @@ class IosRuntimeConfigBuildPreparationContractTest(unittest.TestCase):
     def test_missing_or_invalid_trust_envelope_fails_closed(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            # 默认供给已退役：包括 Debug-nonprod 在内的一切 configuration
-            # trust 缺席都 GATE_BLOCK，且错误指引 run.sh 而非已退役的 facade。
+            # Debug-nonprod 之外的 configuration trust 缺席都 GATE_BLOCK（REQ-003：
+            # 自供给只服务 Debug-nonprod），且错误指引 run.sh 而非已退役的 facade。
             for configuration, build_profile in (
-                ("Debug-nonprod", "nonprod"),
                 ("Profile-nonprod", "nonprod"),
                 ("Release-nonprod", "nonprod"),
                 ("Release-prod", "prod"),
@@ -284,15 +283,18 @@ class IosRuntimeConfigBuildPreparationContractTest(unittest.TestCase):
                 invalid_result.stderr,
             )
 
-    def test_debug_nonprod_missing_trust_fails_closed_without_materialization(self) -> None:
-        # 默认供给已退役：Debug-nonprod 缺 canonical handoff 时不再物化任何
-        # 默认 trust/package，raw `flutter run` 绝对路径旁路因此 fail-closed。
+    def test_debug_nonprod_missing_trust_self_supplies_without_readable_package(self) -> None:
+        # REQ-003 build_time_self_supply：Debug-nonprod 缺 canonical handoff 时由构建阶段
+        # 现场签发 alpha trust + 激活请求并嵌入；可读 runtime package 仍不进入产物，
+        # 也不再需要 PATH facade 或任何用户级配置。
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             environment = self._environment()
             environment.pop("QWQ_IOS_RUNTIME_CONFIG_TRUST_PATH", None)
             environment.update(
                 {
+                    "CONFIGURATION": "Debug-nonprod",
+                    "QWQ_APP_BUILD_PROFILE": "nonprod",
                     "TARGET_BUILD_DIR": str(root / "build"),
                     "UNLOCALIZED_RESOURCES_FOLDER_PATH": "Runner.app",
                 }
@@ -305,11 +307,59 @@ class IosRuntimeConfigBuildPreparationContractTest(unittest.TestCase):
                 capture_output=True,
                 text=True,
             )
-            self.assertEqual(result.returncode, 2)
-            self.assertIn("APP.LAUNCH.runtime_config_trust_missing", result.stderr)
-            self.assertIn("./quwoquan_app/run.sh -d <device>", result.stderr)
-            self.assertNotIn("embedded default", result.stderr)
-            self.assertFalse((root / "build").exists())
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("runtimeConfigSupplyMode=build_time_self_supply", result.stderr)
+            self.assertIn("selfSupplyRequest=1", result.stderr)
+            self.assertIn("export QWQ_IOS_DART_DEFINES_READY=1", result.stdout)
+            runtime_dir = root / "build/Runner.app/qwq_runtime"
+            self.assertEqual(
+                sorted(path.name for path in runtime_dir.iterdir()),
+                ["runtime-config-self-supply-request.json", "runtime-config-trust.json"],
+            )
+            trust = json.loads(
+                (runtime_dir / "runtime-config-trust.json").read_text(encoding="utf-8")
+            )
+            self.assertEqual(trust["buildProfile"], "nonprod")
+            request = json.loads(
+                (runtime_dir / "runtime-config-self-supply-request.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            self.assertEqual(request["environment"], "alpha")
+            self.assertEqual(request["target"], "alpha-local")
+            self.assertEqual(request["expectedActiveDigest"], "")
+            self.assertEqual(
+                request["effectiveLaunchManifest"]["runtimeConfigSupplyMode"],
+                "build_time_self_supply",
+            )
+            self.assertEqual(
+                request["effectiveLaunchManifest"]["launchProvenance"],
+                "workspace_ide_debug",
+            )
+            self.assertEqual(request["trustEnvelopeDigest"], request["effectiveLaunchManifest"]["runtimeConfigTrustEnvelopeDigest"])
+
+    def test_debug_nonprod_external_handoff_wins_over_self_supply(self) -> None:
+        # 外部 canonical handoff 已注入 trust 时不物化自供给请求：canonical launcher 路径
+        # 与 raw 路径进入同一制品门，但只嵌各自应有的材料。
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            trust = _trust_envelope(root)
+            environment = self._materialization_environment(root, trust)
+            result = subprocess.run(
+                ["bash", str(SCRIPT)],
+                cwd=APP_DIR,
+                env=environment,
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("selfSupplyRequest=0", result.stderr)
+            runtime_dir = root / "build/Runner.app/qwq_runtime"
+            self.assertEqual(
+                [path.name for path in runtime_dir.iterdir()],
+                ["runtime-config-trust.json"],
+            )
 
     def test_external_injection_purges_stale_default_supply_material(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

@@ -3,9 +3,11 @@
   "$id": "quwoquan_data/schema/source/source_candidate.schema.json",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schema", "sourceId", "title", "sourceClass", "sourceUseMode", "purpose", "rightsClue"],
+  "required": ["schema", "sourcePlanRef", "sourcePlanDigest", "sourceId", "title", "sourceClass", "sourceUseMode", "purpose", "rightsClue"],
   "properties": {
     "schema": {"const": "quwoquan_data.source_candidate"},
+    "sourcePlanRef": {"type": "string", "pattern": "^sources/plans/[0-9a-f]{64}\\.json$"},
+    "sourcePlanDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
     "sourceId": {"type": "string", "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$"},
     "title": {"type": "string", "minLength": 1},
     "sourceClass": {"type": "string", "minLength": 1},

@@ -59,6 +59,12 @@ class HandoffStoreUnsafe(HandoffStoreError):
     code = "HANDOFF.STORE_UNSAFE"
 
 
+class HandoffArtifactError(HandoffStoreError):
+    """One authoritative handoff artifact cannot be resolved exactly."""
+
+    code = "HANDOFF.ARTIFACT_INVALID"
+
+
 def _sha256(raw: bytes) -> str:
     return "sha256:" + hashlib.sha256(raw).hexdigest()
 
@@ -250,3 +256,60 @@ def read(handoff_ref: str, *, repo_root: Path) -> bytes:
     finally:
         if root_fd is not None:
             os.close(root_fd)
+
+
+def resolve_unique_artifact(
+    payload: Mapping[str, Any],
+    *,
+    repo_root: Path,
+    filename: str,
+    schema: str,
+) -> tuple[str, Path, bytes, str]:
+    """Resolve exactly one regular repo artifact and bind its exact bytes.
+
+    ``artifacts`` remains the existing portable string-list interface.  The
+    artifact's own canonical schema is its type discriminator; no parallel
+    registry or compatibility path is introduced here.
+    """
+
+    artifacts = payload.get("artifacts")
+    if not isinstance(artifacts, list):
+        raise HandoffArtifactError("handoff artifacts 必须为列表")
+    matches: list[tuple[str, Path, bytes, str]] = []
+    for raw_ref in artifacts:
+        if not isinstance(raw_ref, str) or not raw_ref:
+            raise HandoffArtifactError("handoff artifact ref 必须为非空字符串")
+        ref = raw_ref.replace("\\", "/")
+        candidate = Path(ref)
+        if (
+            candidate.is_absolute()
+            or ref != candidate.as_posix()
+            or candidate.name != filename
+            or any(part in {"", ".", ".."} for part in candidate.parts)
+        ):
+            continue
+        path = repo_root / candidate
+        try:
+            root = repo_root.resolve(strict=True)
+            parent = path.parent.resolve(strict=True)
+        except OSError as error:
+            raise HandoffArtifactError(f"artifact ref 无法解析：{ref}: {error}") from error
+        if parent != root and root not in parent.parents:
+            raise HandoffArtifactError(f"artifact ref 越出仓库：{ref}")
+        if path.is_symlink() or not path.is_file():
+            raise HandoffArtifactError(f"artifact 必须为普通非 symlink 文件：{ref}")
+        raw = path.read_bytes()
+        try:
+            document = json.loads(raw.decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError) as error:
+            raise HandoffArtifactError(f"artifact JSON 非法：{ref}") from error
+        if isinstance(document, dict) and document.get("schema") == schema:
+            digest = _sha256(raw)
+            if path.read_bytes() != raw:
+                raise HandoffArtifactError(f"artifact exact bytes 在读取期间漂移：{ref}")
+            matches.append((ref, path, raw, digest))
+    if len(matches) != 1:
+        raise HandoffArtifactError(
+            f"authority 必须恰好定位一个 {schema} artifact，实际={len(matches)}"
+        )
+    return matches[0]

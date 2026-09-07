@@ -10,7 +10,7 @@ creatorPersona:
   archetype: travel_blogger
   preferredCreatorIds: [qwq_creator_travel_blogger_001]
   requiredProfileTagRefs: [Topic/旅行/行程形态/自由行, Format/内容角度/攻略]
-  allowedPerspective: [第一人称经验, 编辑部]
+  allowedPerspective: [中性事实叙事, 编辑部]
   mustNotClaim: [官方推荐, 实时路况承诺]
 editorialIntent: 用环线视角组织多个实体，帮助读者理解顺序、天数、强度和取舍。
 render: { articleTemplate: journal, fontPreset: clean }
@@ -40,7 +40,7 @@ routeCoverageExpectations:
 structure:
   required: [路线逻辑, 天数安排, 每日节点, 住宿选择, 适合与不适合]
   optional: [反向走法, 雨雪备选, 预算区间]
-mustIncludeFacts: [天数, 节点顺序, 交通耗时, 住宿点, 替代方案]
+evidenceConditionedFacts: [天数, 节点顺序, 交通耗时, 住宿点, 替代方案]
 forbiddenPhrases: [冷启动, 批次, 角色：, 占位, contract_fixture]
 wordCount: { min: 1200, max: 2400 }
 imagePlan:
@@ -51,7 +51,7 @@ crossRefs: { minEntity: 4, minTag: 4 }
 recommendation:
   authorBinding: { required: true, source: creator_profile_catalog }
   exposeStyleTags: true
-  qualitySignals: [bodyLength, requiredFactsCovered, imageSlotCoverage, entityRefCount]
+  qualitySignals: [bodyLength, evidenceSupportedFactCoverage, imageSlotCoverage, entityRefCount]
   bodyForbiddenFields: [qualityScore, templateId, routingReason, coldStartBoost, isSystemBuiltin]
 openingTension: { required: true, focus: 出发动机与犹豫 }
 explicitFeelings: { requireLike: true, requireDislike: true }

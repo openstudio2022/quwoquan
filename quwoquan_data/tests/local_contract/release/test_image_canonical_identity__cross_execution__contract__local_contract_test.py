@@ -26,12 +26,15 @@ from core.image_deduplication import perceptual_hash_distance
 from core.io import write_json
 
 
-def _manifest(*, digest: str, perceptual_hash: str) -> dict[str, object]:
+def _manifest(
+    *, digest: str, perceptual_hash: str, asset_id: str = "image-1"
+) -> dict[str, object]:
+    # 同 assetId 是被允许的稳定资产复用；跨对象重复必须用不同 assetId 才构成冲突。
     return {
         "contentType": "image",
         "assets": [
             {
-                "assetId": "image-1",
+                "assetId": asset_id,
                 "kind": "image",
                 "sha256": digest,
                 "perceptualHash": perceptual_hash,
@@ -77,7 +80,9 @@ def test_cross_execution_exact_image_identity_is_rejected(
     )
     write_json(
         package / "object/manifest.json",
-        _manifest(digest="sha256:" + "a" * 64, perceptual_hash="f" * 16),
+        _manifest(
+            digest="sha256:" + "a" * 64, perceptual_hash="f" * 16, asset_id="image-2"
+        ),
     )
     monkeypatch.setattr(subject, "PUBLISH_ROOT", publish)
 
@@ -100,7 +105,9 @@ def test_cross_execution_perceptual_duplicate_is_rejected(
     )
     write_json(
         package / "object/manifest.json",
-        _manifest(digest="sha256:" + "b" * 64, perceptual_hash="0" * 15 + "3"),
+        _manifest(
+            digest="sha256:" + "b" * 64, perceptual_hash="0" * 15 + "3", asset_id="image-2"
+        ),
     )
     monkeypatch.setattr(subject, "PUBLISH_ROOT", publish)
 

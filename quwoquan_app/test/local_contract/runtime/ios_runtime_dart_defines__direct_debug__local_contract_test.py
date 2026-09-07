@@ -162,8 +162,8 @@ class IosRuntimeDartDefinesDirectDebugContractTest(unittest.TestCase):
                     )
 
     def test_xcode_wrapper_stops_before_backend_without_trust_envelope(self) -> None:
-        # 默认供给已退役：包括 Debug-nonprod 在内的一切配置 trust 缺席都必须在
-        # backend 之前停下，且不物化任何 runtime config 资源。
+        # 非 Debug-nonprod 配置 trust 缺席必须在 backend 之前停下，且不物化任何
+        # runtime config 资源（REQ-003：自供给只服务 Debug-nonprod）。
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)
             flutter_root = root / "flutter"
@@ -180,11 +180,15 @@ class IosRuntimeDartDefinesDirectDebugContractTest(unittest.TestCase):
                 f"#!/bin/sh\ntouch {shlex.quote(str(marker))}\n",
                 encoding="utf-8",
             )
-            for configuration in ("Debug-nonprod", "Release-nonprod"):
+            for configuration, build_profile in (
+                ("Release-nonprod", "nonprod"),
+                ("Profile-nonprod", "nonprod"),
+                ("Release-prod", "prod"),
+            ):
                 with self.subTest(configuration=configuration):
                     environment = self._environment(root)
                     environment["CONFIGURATION"] = configuration
-                    environment["QWQ_APP_BUILD_PROFILE"] = "nonprod"
+                    environment["QWQ_APP_BUILD_PROFILE"] = build_profile
                     environment["FLUTTER_ROOT"] = str(flutter_root)
                     result = subprocess.run(
                         ["bash", str(BUILD_WRAPPER)],
@@ -200,6 +204,68 @@ class IosRuntimeDartDefinesDirectDebugContractTest(unittest.TestCase):
                     self.assertFalse(
                         (root / "build/Runner.app/qwq_runtime").exists()
                     )
+
+    def test_xcode_wrapper_self_supplies_debug_nonprod_then_invokes_backend(self) -> None:
+        # Debug-nonprod 无外部 handoff：构建阶段现场签发 alpha trust + 自供给激活请求，
+        # 嵌入资源后才进入 backend；raw `flutter run` 由此不再依赖 PATH facade。
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            flutter_root = root / "flutter"
+            backend = (
+                flutter_root
+                / "packages"
+                / "flutter_tools"
+                / "bin"
+                / "xcode_backend.sh"
+            )
+            backend.parent.mkdir(parents=True)
+            marker = root / "backend-called"
+            backend.write_text(
+                f"#!/bin/sh\ntouch {shlex.quote(str(marker))}\n",
+                encoding="utf-8",
+            )
+            environment = self._environment(root)
+            environment["CONFIGURATION"] = "Debug-nonprod"
+            environment["QWQ_APP_BUILD_PROFILE"] = "nonprod"
+            environment["FLUTTER_ROOT"] = str(flutter_root)
+            environment.pop("QWQ_IOS_RUNTIME_CONFIG_TRUST_PATH", None)
+            result = subprocess.run(
+                ["bash", str(BUILD_WRAPPER)],
+                cwd=APP_DIR,
+                env=environment,
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertTrue(marker.exists())
+            self.assertIn("runtimeConfigSupplyMode=build_time_self_supply", result.stderr)
+            self.assertIn("selfSupplyRequest=1", result.stderr)
+            runtime_dir = root / "build/Runner.app/qwq_runtime"
+            self.assertEqual(
+                sorted(path.name for path in runtime_dir.iterdir()),
+                ["runtime-config-self-supply-request.json", "runtime-config-trust.json"],
+            )
+            request = json.loads(
+                (runtime_dir / "runtime-config-self-supply-request.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            self.assertEqual(
+                request["effectiveLaunchManifest"]["runtimeConfigSupplyMode"],
+                "build_time_self_supply",
+            )
+            self.assertEqual(request["expectedActiveDigest"], "")
+            # 自供给材料不落源码目录（build/ 产物除外），且构建阶段私有临时目录已清理。
+            for source_dir in ("ios", "android", "lib", "scripts", "assets"):
+                self.assertFalse(
+                    any(
+                        (APP_DIR / source_dir).glob(
+                            "**/runtime-config-self-supply-request.json"
+                        )
+                    ),
+                    source_dir,
+                )
 
     def test_xcode_wrapper_invokes_backend_after_trust_materialization(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:

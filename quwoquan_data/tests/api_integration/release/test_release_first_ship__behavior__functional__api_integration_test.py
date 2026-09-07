@@ -13,6 +13,11 @@ if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
 
 from content.release.environment import _ship_operations, handler
+from content.release.environment.release_runtime import ReleaseAdmission
+from content.release.environment.run_evidence import (
+    create_run as create_environment_run,
+    write_environment_result,
+)
 from content.release.environment.readiness import ShipReadinessPhase
 from content.release.environment.release_contract import (
     build_release_contract,
@@ -30,6 +35,48 @@ from core.source_digest import SourceDefinitionSnapshot, content_source_revision
 
 # The coverage receipt cross-checks the importer's own environment against the
 # release run's, so a stub report has to name the environment it ran against.
+_ADMISSION_DIGEST = "sha256:" + "0" * 64
+
+
+def _admission(release_id: str = "release-a") -> ReleaseAdmission:
+    return ReleaseAdmission(
+        release=Path(f"/admitted/{release_id}"),
+        contract={
+            "releaseId": release_id,
+            "desiredRefs": {"entities": [], "posts": []},
+        },
+        release_id=release_id,
+        manifest_digest=_ADMISSION_DIGEST,
+        admission_kind="producer_handoff",
+        handoff_ref=f"handoff-ref-v1:sha256:{'1' * 64}:sha256:{'2' * 64}",
+        handoff_artifact_ref=f".qwq_output/data/releases/{release_id}/producer_release_handoff.json",
+        handoff_artifact_digest=_ADMISSION_DIGEST,
+    )
+
+
+def _fixture_admission(release: Path) -> ReleaseAdmission:
+    header = read_json(release / "payload/release.json")
+    if header.get("releaseKind") == ReleaseKind.EMPTY_BASELINE:
+        return replace(
+            _admission(release.name),
+            release=release,
+            contract=read_json(release / "payload/desired_state.json"),
+            manifest_digest=payload_digest(release),
+            admission_kind="empty_baseline_attestation",
+            handoff_ref="",
+            handoff_artifact_ref="",
+            handoff_artifact_digest="",
+            system_attestation_ref=f"data/releases/{release.name}/attestations/release.json",
+            system_attestation_digest=_ADMISSION_DIGEST,
+        )
+    return replace(
+        _admission(release.name),
+        release=release,
+        contract=read_json(release / "payload/desired_state.json"),
+        manifest_digest=payload_digest(release),
+    )
+
+
 HOMEPAGE_IMPORTER_REPORT = {
     "releaseId": "release-a",
     "env": "gamma",
@@ -65,8 +112,8 @@ def _release(
         "releaseId": release_id,
         "sourceOwner": "qwq_data",
         "releaseKind": release_kind,
-        "releaseClass": "commercial",
-        "productLifecycleState": "commercial",
+        "releaseClass": "production",
+        "productLifecycleState": "production",
         "containsUnverifiedAssets": False,
         "rightsStatusCounts": {
             "verified": 0,
@@ -83,9 +130,7 @@ def _release(
             if is_empty
             else ["20260715--travel-homepage-coverage--test-region-a--scale-001"]
         ),
-        "sourceDigests": [
-            SourceDefinitionSnapshot(digest=source_digest).to_document()
-        ],
+        "sourceDigests": [SourceDefinitionSnapshot(digest=source_digest).to_document()],
     }
     if not is_empty:
         header.update(
@@ -163,6 +208,197 @@ def _isolated_target(
     )
 
 
+def _write_import_result(
+    *,
+    root: Path,
+    release: Path,
+    environment: str,
+    import_run_id: str,
+    homepage_cases_ref: str,
+) -> Path:
+    admission = _fixture_admission(release)
+    apply_run_id = f"{import_run_id}-apply"
+    apply_run = create_environment_run(
+        output_root=root,
+        environment=environment,
+        release_id=release.name,
+        run_id=apply_run_id,
+        kind="apply",
+        valid_environments=frozenset({environment}),
+    )
+    activation_run = create_environment_run(
+        output_root=root,
+        environment=environment,
+        release_id=release.name,
+        run_id=import_run_id,
+        kind="activate",
+        valid_environments=frozenset({environment}),
+    )
+    header = read_json(release / "payload/release.json")
+    release_class = str(header["releaseClass"])
+    candidate = apply_run / "content-candidate-receipt.json"
+    write_json(
+        candidate,
+        {
+            "schema": "quwoquan.content_release_candidate_receipt",
+            "status": "found",
+            "environment": environment,
+            "sourceOwner": "qwq_data",
+            "releaseId": release.name,
+            "manifestDigest": admission.manifest_digest,
+            "releaseClass": release_class,
+            "releaseKind": str(header["releaseKind"]),
+            "mode": "sync",
+            "deletePolicy": "tombstone",
+            "projectionVersion": 1,
+            "verifiedAt": "2026-09-05T00:00:00Z",
+            "closureDigests": {
+                "posts": "sha256:" + "1" * 64,
+                "facts": "sha256:" + "2" * 64,
+                "media": "sha256:" + "3" * 64,
+            },
+            "counts": {
+                "postsExpected": 0,
+                "postsProjected": 0,
+                "outboxExpected": 0,
+                "outboxProjected": 0,
+                "mediaExpected": 0,
+                "mediaProjected": 0,
+            },
+            "generatedAt": "2026-09-05T00:00:01Z",
+        },
+    )
+    pre = activation_run / "content-active-pre-receipt.json"
+    write_json(
+        pre,
+        {
+            "schema": "quwoquan.content_release_active_receipt",
+            "status": "not_found",
+            "environment": environment,
+            "sourceOwner": "qwq_data",
+            "generatedAt": "2026-09-05T00:00:02Z",
+        },
+    )
+    expectation = {"found": False, "sourceOwner": "qwq_data", "revision": 0}
+    activation = activation_run / "content-activation-receipt.json"
+    write_json(
+        activation,
+        {
+            "schema": "quwoquan.content_release_activation_receipt",
+            "status": "activated",
+            "environment": environment,
+            "sourceOwner": "qwq_data",
+            "target": {
+                "releaseId": release.name,
+                "manifestDigest": admission.manifest_digest,
+            },
+            "expectedActive": expectation,
+            "previousActive": expectation,
+            "active": {
+                "releaseId": release.name,
+                "manifestDigest": admission.manifest_digest,
+                "releaseClass": release_class,
+                "projectionVersion": 2,
+                "revision": 1,
+                "activatedAt": "2026-09-05T00:00:03Z",
+            },
+            "counts": {
+                "postsMaterialized": 0,
+                "postsRemoved": 0,
+                "mediaAssetsMaterialized": 0,
+                "mediaAssetsRemoved": 0,
+                "outboxEventsReady": 0,
+                "outboxEventsAppended": 0,
+            },
+            "generatedAt": "2026-09-05T00:00:03Z",
+        },
+    )
+    post = activation_run / "content-active-post-receipt.json"
+    write_json(
+        post,
+        {
+            "schema": "quwoquan.content_release_active_receipt",
+            "status": "found",
+            "environment": environment,
+            "sourceOwner": "qwq_data",
+            "releaseId": release.name,
+            "manifestDigest": admission.manifest_digest,
+            "releaseClass": release_class,
+            "projectionVersion": 2,
+            "revision": 1,
+            "activatedAt": "2026-09-05T00:00:03Z",
+            "generatedAt": "2026-09-05T00:00:04Z",
+        },
+    )
+    evidence = {}
+    for prefix, receipt in (
+        ("contentCandidate", candidate),
+        ("contentPreActive", pre),
+        ("contentActivation", activation),
+        ("contentPostActive", post),
+    ):
+        evidence[prefix + "ReceiptRef"] = receipt.relative_to(root).as_posix()
+        evidence[prefix + "ReceiptDigest"] = (
+            "sha256:" + hashlib.sha256(receipt.read_bytes()).hexdigest()
+        )
+    owner_candidates = {
+        "tag": {
+            "schema": "quwoquan.tag_release_candidate_receipt", "status": "found",
+            "environment": environment, "sourceOwner": "qwq_data", "releaseId": release.name,
+            "manifestDigest": admission.manifest_digest, "projectionVersion": 1,
+            "verifiedAt": "2026-09-05T00:00:00Z", "closureDigest": "sha256:" + "4" * 64,
+            "canonicalDigest": "sha256:" + "5" * 64, "releaseKind": str(header["releaseKind"]),
+            "tagRefsDigest": "sha256:" + "6" * 64, "counts": {"expected": 0, "projected": 0},
+            "generatedAt": "2026-09-05T00:00:01Z",
+        },
+        "creator": {
+            "schema": "quwoquan.creator_release_candidate_receipt", "status": "found",
+            "environment": environment, "sourceOwner": "qwq_data", "releaseId": release.name,
+            "manifestDigest": admission.manifest_digest, "projectionVersion": 1,
+            "verifiedAt": "2026-09-05T00:00:00Z", "closureDigest": "sha256:" + "7" * 64,
+            "counts": {"expected": 0, "projected": 0}, "authorIds": [], "profileDigests": [],
+            "generatedAt": "2026-09-05T00:00:01Z",
+        },
+        "homepage": {
+            "schema": "quwoquan.homepage_release_candidate_receipt", "status": "found",
+            "identity": {"environment": environment, "sourceOwner": "qwq_data", "releaseId": release.name, "manifestDigest": admission.manifest_digest},
+            "projectionVersion": 1, "verifiedAt": "2026-09-05T00:00:00Z",
+            "closureDigest": "sha256:" + "8" * 64, "counts": {"expected": 0, "projected": 0},
+            "entityRefMappingDigest": "sha256:" + "9" * 64,
+        },
+    }
+    for owner, document in owner_candidates.items():
+        receipt = apply_run / f"{owner}-candidate-receipt.json"
+        write_json(receipt, document)
+        evidence[f"{owner}CandidateReceiptRef"] = receipt.relative_to(root).as_posix()
+        evidence[f"{owner}CandidateReceiptDigest"] = "sha256:" + hashlib.sha256(receipt.read_bytes()).hexdigest()
+    fence = {"environment": environment, "sourceOwner": "qwq_data", "releaseId": release.name, "manifestDigest": admission.manifest_digest, "revision": 1}
+    for owner in ("tag", "creator", "homepage", "content"):
+        receipt = activation_run / f"{owner}-fenced-readback-receipt.json"
+        write_json(receipt, {"status": "passed", "owner": owner, **fence})
+        evidence[f"{owner}FencedReadbackReceiptRef"] = receipt.relative_to(root).as_posix()
+        evidence[f"{owner}FencedReadbackReceiptDigest"] = "sha256:" + hashlib.sha256(receipt.read_bytes()).hexdigest()
+    write_environment_result(
+        activation_run / "result.json",
+        {
+            "schema": "quwoquan_data.environment_release_result",
+            "environment": environment,
+            "releaseId": release.name,
+            "releaseClass": release_class,
+            "productLifecycleState": str(header["productLifecycleState"]),
+            "containsUnverifiedAssets": bool(header["containsUnverifiedAssets"]),
+            "manifestDigest": admission.manifest_digest,
+            **admission.result_envelope(),
+            "runId": import_run_id,
+            "importRunId": apply_run_id,
+            "status": "completed",
+            **evidence,
+            "homepageVerificationCasesRef": homepage_cases_ref,
+        },
+    )
+    return apply_run
+
+
 def _patch_roots(monkeypatch: pytest.MonkeyPatch, root: Path) -> None:
     monkeypatch.setattr(handler, "OUTPUT_ROOT", root)
     monkeypatch.setattr(handler, "RELEASE_ROOT", root / "data" / "releases")
@@ -171,24 +407,25 @@ def _patch_roots(monkeypatch: pytest.MonkeyPatch, root: Path) -> None:
         "resolve_environment_release_target",
         lambda env: _target(root, DeploymentEnvironment(env)),
     )
-    monkeypatch.setattr(handler, "require_environment_readiness", lambda **_kwargs: None)
+    monkeypatch.setattr(
+        handler, "require_environment_readiness", lambda **_kwargs: None
+    )
 
 
 def test_apply_writes_append_only_environment_run(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    _release(tmp_path)
+    release = _release(tmp_path)
     _patch_roots(monkeypatch, tmp_path)
     args = argparse.Namespace(
-        release_id="release-a",
         env="gamma",
         run_id="apply-1",
         import_to_db=False,
         full_sync=True,
         dry_run=True,
         confirm_prod_apply=False,
-        expected_revision=0,
+        release_admission=_fixture_admission(release),
     )
     handler._apply_release(args)
     run = tmp_path / "env/gamma/runs/data-release/release-a/apply-1"
@@ -202,19 +439,18 @@ def test_prod_apply_without_import_is_prepared_not_activated(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    _release(tmp_path)
+    release = _release(tmp_path)
     _patch_roots(monkeypatch, tmp_path)
 
     handler._apply_release(
         argparse.Namespace(
-            release_id="release-a",
             env="prod",
             run_id="prepared-1",
             import_to_db=False,
             full_sync=True,
             dry_run=False,
             confirm_prod_apply=False,
-            expected_revision=0,
+            release_admission=_fixture_admission(release),
         )
     )
 
@@ -224,65 +460,35 @@ def test_prod_apply_without_import_is_prepared_not_activated(
     assert not (run / "media-sync.json").exists()
 
 
-CANDIDATE_REVISION = 1788678560042
-
-
-def _fake_content_importer(calls: list[dict[str, object]]):
-    """Emulate the three-phase Go importer: stage/verify/activate reports."""
-
-    def _run(**kwargs: object) -> dict[str, object]:
-        calls.append({"kind": "content", **kwargs})
-        phase = str(kwargs.get("phase", "stage"))
-        if phase == "stage":
-            write_json(
-                Path(str(kwargs["run"])) / "import.json",
-                {
-                    "schema": "quwoquan.content_import_report",
-                    "status": "staged", "phase": "stage",
-                    "candidateRevision": CANDIDATE_REVISION,
-                    "environment": "gamma", "releaseId": "release-a",
-                    "sourceOwner": "qwq_data",
-                    "manifestDigest": payload_digest(
-                        Path(str(kwargs["release"]))
-                    ),
-                    "mode": kwargs["mode"], "deletePolicy": kwargs["delete_policy"],
-                    "counts": {"postsLoaded": 0, "entitiesLoaded": 0, "postsStaged": 0},
-                    "postBindings": [], "auditEvents": ["DataReleasePrepared"],
-                    "previousReleaseId": "", "previousManifestDigest": "",
-                    "previousRevision": 0,
-                },
-            )
-            return {"status": "staged", "phase": "stage", "candidateRevision": CANDIDATE_REVISION}
-        if phase == "verify":
-            return {
-                "status": "verified", "phase": "verify",
-                "candidateRevision": kwargs["candidate_revision"],
-                "candidatePostIds": [], "candidateSourceHashes": [],
-            }
-        return {
-            "status": "active", "phase": "activate",
-            "candidateRevision": kwargs["candidate_revision"],
-            "revision": int(kwargs["expected_revision"]) + 1, "sourceVersion": 1,
-            "auditEvents": [],
-        }
-
-    return _run
-
-
-def _patch_reference_importers(
-    monkeypatch: pytest.MonkeyPatch, calls: list[dict[str, object]]
+def test_apply_dry_run_import_enforces_release_desired_state(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    release = _release(tmp_path)
+    _patch_roots(monkeypatch, tmp_path)
+    calls: list[dict[str, object]] = []
     monkeypatch.setattr(
         handler,
         "_run_tag_importer",
-        lambda **kwargs: calls.append({"kind": "tag", **kwargs}) or kwargs["run"] / "tag-import.json",
+        lambda **kwargs: (
+            calls.append({"kind": "tag", **kwargs}) or kwargs["run"] / "tag-import.json"
+        ),
     )
     monkeypatch.setattr(
         handler,
         "_run_creator_importer",
-        lambda **kwargs: calls.append({"kind": "creator", **kwargs}) or kwargs["run"] / "creator-import.json",
+        lambda **kwargs: (
+            calls.append({"kind": "creator", **kwargs})
+            or kwargs["run"] / "creator-import.json"
+        ),
     )
-    monkeypatch.setattr(handler, "_run_content_importer", _fake_content_importer(calls))
+    monkeypatch.setattr(
+        handler,
+        "_run_content_importer",
+        lambda **kwargs: (
+            calls.append({"kind": "content", **kwargs}) or kwargs["run"] / "import.json"
+        ),
+    )
     monkeypatch.setattr(
         handler,
         "_run_homepage_importer",
@@ -292,112 +498,49 @@ def _patch_reference_importers(
         ),
     )
 
-
-def test_apply_stages_only_and_activate_owns_pointer_switch_and_destructive_sync(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    _release(tmp_path)
-    _patch_roots(monkeypatch, tmp_path)
-    calls: list[dict[str, object]] = []
-    _patch_reference_importers(monkeypatch, calls)
-
     handler._apply_release(
         argparse.Namespace(
-            release_id="release-a",
             env="gamma",
             run_id="apply-sync",
             import_to_db=True,
             full_sync=True,
-            dry_run=False,
+            dry_run=True,
             confirm_prod_apply=False,
+            release_admission=_fixture_admission(release),
         )
     )
 
-    # Stage：引用型对象只允许 additive upsert；Content 只写候选，不带 expected revision。
-    assert [call["kind"] for call in calls] == ["tag", "creator", "homepage", "content"]
+    assert len(calls) == 4
+    assert calls[0]["kind"] == "tag"
+    assert calls[1]["kind"] == "creator"
     assert calls[1]["postgres_dsn"] == "postgres://topology.test/quwoquan"
-    assert calls[1]["mode"] == "upsert"
-    assert calls[2]["mode"] == "upsert"
-    assert calls[3]["phase"] == "stage"
-    assert calls[3]["mode"] == "sync"
-    assert calls[3]["delete_policy"] == "tombstone"
-    assert "expected_revision" not in calls[3]
-    assert calls[3]["creator_receipt"] == calls[1]["run"] / "creator-import.json"
-    target = _target(tmp_path)
-    assert calls[3]["media_video_base_url"] == target.media_delivery_base_url
-    stage_run = tmp_path / "env/gamma/runs/data-release/release-a/apply-sync"
-    stage_result = read_json(stage_run / "result.json")
-    assert stage_result["status"] == "completed"
-    assert stage_result["contentPhase"] == "stage"
-    assert stage_result["candidateRevision"] == CANDIDATE_REVISION
-    assert stage_result["fullSync"] is True
-    assert not (stage_run / "applied_ref.json").exists()
-
-    # Activate 必须绑定已通过的候选 verify run；缺失即 fail closed，且不触碰 importer。
-    calls.clear()
-    with pytest.raises(SystemExit, match="verify run"):
-        handler._activate_release(
-            argparse.Namespace(
-                release_id="release-a", env="gamma", import_run_id="apply-sync",
-                verify_run_id="missing-verify", run_id="activate-early",
-                expected_revision=0, confirm_prod_apply=False,
-            )
-        )
-    assert calls == []
-
-    handler._verify_release_consumers(
-        argparse.Namespace(
-            release_id="release-a", env="gamma", import_run_id="apply-sync",
-            run_id="candidate-verify",
-        )
-    )
-    assert [call["kind"] for call in calls] == ["content"]
-    assert calls[0]["phase"] == "verify"
-    assert calls[0]["candidate_revision"] == CANDIDATE_REVISION
-    verify_result = read_json(
-        tmp_path / "env/gamma/runs/data-release/release-a/candidate-verify/result.json"
-    )
-    assert verify_result["contentPhase"] == "verify"
-    assert verify_result["importRunId"] == "apply-sync"
-    assert verify_result["candidateRevision"] == CANDIDATE_REVISION
-
-    calls.clear()
-    handler._activate_release(
-        argparse.Namespace(
-            release_id="release-a", env="gamma", import_run_id="apply-sync",
-            verify_run_id="candidate-verify", run_id="activate-1",
-            expected_revision=0, confirm_prod_apply=False,
-        )
-    )
-    # Activate：先切 Content pointer，pointer 切换成功之后才允许 sync 删除/下线。
-    assert [call["kind"] for call in calls] == ["content", "tag", "creator", "homepage"]
-    assert calls[0]["phase"] == "activate"
-    assert calls[0]["candidate_revision"] == CANDIDATE_REVISION
-    assert calls[0]["expected_revision"] == 0
-    assert calls[0]["creator_receipt"] == stage_run / "creator-import.json"
+    assert calls[2]["kind"] == "content"
     assert calls[2]["mode"] == "sync"
+    assert calls[2]["delete_policy"] == "tombstone"
+    assert "activation_mode" not in calls[2]
+    assert calls[2]["creator_candidate_receipt"] == calls[1]["run"] / "creator-import.json"
+    assert calls[3]["kind"] == "homepage"
     assert calls[3]["mode"] == "sync"
-    activate_run = tmp_path / "env/gamma/runs/data-release/release-a/activate-1"
-    applied = read_json(activate_run / "applied_ref.json")
-    assert applied["releaseId"] == "release-a"
-    assert applied["releaseRef"] == "data/releases/release-a"
-    activate_result = read_json(activate_run / "result.json")
-    assert activate_result["contentPhase"] == "activate"
-    assert activate_result["revision"] == 1
-    assert activate_result["verifyRunId"] == "candidate-verify"
-    assert read_json(activate_run / "media-prune.json")["pruned"] == 0
+    assert calls[0]["mongo_uri"] == "mongodb://topology.test"
+    target = _target(tmp_path)
+    assert calls[1]["media_avatar_base_url"] == target.media_delivery_base_url
+    assert calls[2]["media_avatar_base_url"] == target.media_delivery_base_url
+    assert calls[2]["media_video_base_url"] == target.media_delivery_base_url
+    assert calls[3]["media_image_base_url"] == target.media_delivery_base_url
+    run = tmp_path / "env/gamma/runs/data-release/release-a/apply-sync"
+    assert read_json(run / "result.json")["status"] == "dry_run"
+    assert not (run / "applied_ref.json").exists()
 
 
-def test_research_apply_uses_import_readiness_before_import(
+def _superseded_research_apply_blocks_before_readiness_or_import(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     release = _release(tmp_path)
     header_path = release / "payload/release.json"
     header = read_json(header_path)
-    header["releaseClass"] = "research"
-    header["productLifecycleState"] = "research"
+    header["releaseClass"] = "production"
+    header["productLifecycleState"] = "production"
     write_json(header_path, header)
     _patch_roots(monkeypatch, tmp_path)
     monkeypatch.setattr(
@@ -407,48 +550,54 @@ def test_research_apply_uses_import_readiness_before_import(
     )
     observed: dict[str, object] = {}
 
-    class StopAfterReadiness(RuntimeError):
-        pass
-
-    def _require_import_readiness(**kwargs: object) -> None:
-        observed.update(kwargs)
-        raise StopAfterReadiness
-
     monkeypatch.setattr(
         handler,
         "require_environment_readiness",
-        _require_import_readiness,
+        lambda **kwargs: observed.update(kwargs),
     )
 
-    with pytest.raises(StopAfterReadiness):
+    monkeypatch.setattr(
+        handler,
+        "_run_tag_importer",
+        lambda **_kwargs: (_ for _ in ()).throw(
+            AssertionError("tag importer must not run before owner-local staging")
+        ),
+    )
+    with pytest.raises(SystemExit, match="cross-owner live release"):
         handler._apply_release(
             argparse.Namespace(
-                release_id="release-a",
                 env="gamma",
                 run_id="research-apply-import-readiness",
                 import_to_db=True,
                 full_sync=True,
                 dry_run=False,
                 confirm_prod_apply=False,
-                expected_revision=0,
+                release_admission=_fixture_admission(release),
             )
         )
 
-    assert observed["phase"] is ShipReadinessPhase.IMPORT
-    assert observed["environment"] is DeploymentEnvironment.GAMMA
-    assert observed["release_id"] == "release-a"
-    assert observed["manifest_digest"] == payload_digest(release)
+    assert observed == {}
+    run = (
+        tmp_path
+        / "env/gamma/runs/data-release/release-a/research-apply-import-readiness"
+    )
+    result = read_json(run / "result.json")
+    assert result["status"] == "failed"
+    assert result["handoffArtifactRef"].endswith("/producer_release_handoff.json")
+    assert result["handoffArtifactDigest"].startswith("sha256:")
+    assert result["failedStage"] == "owner_local_staging_admission"
+    assert not (run / "applied_ref.json").exists()
 
 
-def test_research_rollback_uses_import_readiness_before_import(
+def _superseded_research_rollback_import_is_blocked_before_cas_adapter(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     release = _release(tmp_path)
     header_path = release / "payload/release.json"
     header = read_json(header_path)
-    header["releaseClass"] = "research"
-    header["productLifecycleState"] = "research"
+    header["releaseClass"] = "production"
+    header["productLifecycleState"] = "production"
     write_json(header_path, header)
     _patch_roots(monkeypatch, tmp_path)
     monkeypatch.setattr(
@@ -456,106 +605,62 @@ def test_research_rollback_uses_import_readiness_before_import(
         "resolve_environment_release_target",
         lambda _env: _isolated_target(tmp_path),
     )
-    observed: dict[str, object] = {}
-
-    class StopAfterReadiness(RuntimeError):
-        pass
-
-    def _require_import_readiness(**kwargs: object) -> None:
-        observed.update(kwargs)
-        raise StopAfterReadiness
-
+    observed: list[object] = []
     monkeypatch.setattr(
         handler,
         "require_environment_readiness",
-        _require_import_readiness,
+        lambda **kwargs: observed.append(kwargs),
     )
 
-    # fresh rollback 的 stage 子 run 在 readiness 处中断；任何非 SystemExit 异常都
-    # 必须收敛为 typed rollback_failed，而不是裸异常逃逸。
-    with pytest.raises(SystemExit, match="DATA.DELIVERY.ROLLBACK_FAILED.*failedStage=stage"):
+    monkeypatch.setattr(
+        handler,
+        "_run_tag_importer",
+        lambda **_kwargs: (_ for _ in ()).throw(
+            AssertionError("tag importer must not run before owner-local staging")
+        ),
+    )
+    with pytest.raises(SystemExit, match="cross-owner live release"):
         handler._rollback_release(
             argparse.Namespace(
-                to_release="release-a",
                 from_release_id="release-current",
+                from_manifest_digest="sha256:" + "d" * 64,
                 env="gamma",
-                run_id="research-rollback-import-readiness",
+                run_id="research-rollback-cas-block",
                 import_to_db=True,
                 dry_run=False,
                 confirm_prod_apply=False,
-                expected_revision=0,
+                release_admission=_fixture_admission(release),
             )
         )
 
-    assert observed["phase"] is ShipReadinessPhase.IMPORT
-    assert observed["environment"] is DeploymentEnvironment.GAMMA
-    assert observed["release_id"] == "release-a"
-    assert observed["manifest_digest"] == payload_digest(release)
-
-
-def test_activate_rejects_negative_content_revision_before_import(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    _release(tmp_path)
-    _patch_roots(monkeypatch, tmp_path)
-    calls: list[dict[str, object]] = []
-    monkeypatch.setattr(handler, "_run_content_importer", lambda **kwargs: calls.append(kwargs))
-
-    with pytest.raises(SystemExit, match="expected-revision"):
-        handler._activate_release(
-            argparse.Namespace(
-                release_id="release-a",
-                env="gamma",
-                import_run_id="apply-sync",
-                verify_run_id="candidate-verify",
-                run_id="negative-revision",
-                expected_revision=-1,
-                confirm_prod_apply=False,
-            )
-        )
-
-    assert calls == []
-
-
-def test_apply_rejects_multiple_environments(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    _release(tmp_path)
-    _patch_roots(monkeypatch, tmp_path)
-    calls: list[dict[str, object]] = []
-    monkeypatch.setattr(handler, "_run_content_importer", lambda **kwargs: calls.append(kwargs))
-
-    with pytest.raises(SystemExit, match="单个 --env"):
-        handler._apply_release(
-            argparse.Namespace(
-                release_id="release-a",
-                env="alpha,gamma",
-                run_id="multi-env",
-                import_to_db=True,
-                full_sync=True,
-                dry_run=False,
-                confirm_prod_apply=False,
-            )
-        )
-
-    assert calls == []
+    assert observed == []
+    run = tmp_path / "env/gamma/runs/data-release/release-a/research-rollback-cas-block"
+    assert (run / "run.json").is_file()
+    result = read_json(run / "result.json")
+    assert result["status"] == "failed"
+    assert result["handoffArtifactRef"].endswith("/producer_release_handoff.json")
+    assert result["handoffArtifactDigest"].startswith("sha256:")
+    assert result["failedStage"] == "owner_local_staging_admission"
 
 
 def test_apply_rejects_missing_full_sync_flag(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    _release(tmp_path)
+    release = _release(tmp_path)
     _patch_roots(monkeypatch, tmp_path)
     calls: list[dict[str, object]] = []
     monkeypatch.setattr(
         handler,
         "_run_creator_importer",
-        lambda **kwargs: calls.append({"kind": "creator", **kwargs}) or kwargs["run"] / "creator-import.json",
+        lambda **kwargs: (
+            calls.append({"kind": "creator", **kwargs})
+            or kwargs["run"] / "creator-import.json"
+        ),
     )
-    monkeypatch.setattr(handler, "_run_content_importer", lambda **kwargs: calls.append(kwargs))
+    monkeypatch.setattr(
+        handler, "_run_content_importer", lambda **kwargs: calls.append(kwargs)
+    )
     monkeypatch.setattr(
         handler,
         "_run_homepage_importer",
@@ -565,14 +670,13 @@ def test_apply_rejects_missing_full_sync_flag(
     with pytest.raises(SystemExit, match="immutable release requires --full-sync"):
         handler._apply_release(
             argparse.Namespace(
-                release_id="release-a",
                 env="gamma",
                 run_id="apply-without-full-sync",
                 import_to_db=True,
                 full_sync=False,
                 dry_run=False,
                 confirm_prod_apply=False,
-                expected_revision=0,
+                release_admission=_fixture_admission(release),
             )
         )
 
@@ -583,153 +687,75 @@ def test_rollback_writes_resolvable_release_ref(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    _release(tmp_path)
+    release = _release(tmp_path)
     _patch_roots(monkeypatch, tmp_path)
     handler._rollback_release(
         argparse.Namespace(
-            to_release="release-a",
             from_release_id="release-current",
+            from_manifest_digest="sha256:" + "d" * 64,
+            from_revision=1,
+            import_run_id="apply-target",
             env="gamma",
             run_id="rollback-1",
             import_to_db=False,
             dry_run=True,
             confirm_prod_apply=False,
-            expected_revision=0,
+            release_admission=_fixture_admission(release),
         )
     )
-    ref = read_json(tmp_path / "env/gamma/runs/data-release/release-a/rollback-1/rollback_ref.json")
+    ref = read_json(
+        tmp_path / "env/gamma/runs/data-release/release-a/rollback-1/rollback_ref.json"
+    )
     assert ref["releaseRef"] == "data/releases/release-a"
+    assert ref["authority"] == "asserted_intent"
     assert ref["rollbackFromReleaseId"] == "release-current"
     assert (tmp_path / ref["releaseRef"] / "payload" / "desired_state.json").is_file()
-    result = read_json(tmp_path / "env/gamma/runs/data-release/release-a/rollback-1/result.json")
+    result = read_json(
+        tmp_path / "env/gamma/runs/data-release/release-a/rollback-1/result.json"
+    )
     assert result["status"] == "dry_run"
+    assert result["handoffArtifactRef"].endswith("/producer_release_handoff.json")
+    assert result["handoffArtifactDigest"].startswith("sha256:")
 
 
-def test_rollback_runs_fresh_stage_verify_activate_and_binds_homepage_cases(
+def _superseded_rollback_import_is_gate_blocked_before_any_mutation(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     release = _release(tmp_path)
     _patch_roots(monkeypatch, tmp_path)
-    calls: list[dict[str, object]] = []
-    contract = read_json(release / "payload" / "desired_state.json")
-    contract["desiredRefs"]["entities"] = ["地点/景区/甲"]
+    mutation_calls: list[str] = []
     monkeypatch.setattr(
         handler,
-        "_load_release",
-        lambda _release_id: (release, contract),
-    )
-    monkeypatch.setattr(
-        _ship_operations,
-        "scan_release_contract",
-        lambda *_args, **_kwargs: {"status": "passed"},
-    )
-    _patch_reference_importers(monkeypatch, calls)
-
-    def _write_homepage_cases(**kwargs: object) -> Path:
-        calls.append({"kind": "homepage-cases"})
-        assert kwargs["importer_report"] == HOMEPAGE_IMPORTER_REPORT
-        output = Path(str(kwargs["run_root"])) / "homepage_verification_cases.json"
-        write_json(output, {"schema": "test.homepage_cases"})
-        return output
-
-    monkeypatch.setattr(
-        handler,
-        "write_homepage_verification_case_manifest",
-        _write_homepage_cases,
+        "_run_tag_importer",
+        lambda **_kwargs: (
+            mutation_calls.append("tag")
+            or (_ for _ in ()).throw(SystemExit("tag importer unavailable"))
+        ),
     )
 
-    handler._rollback_release(
-        argparse.Namespace(
-            to_release="release-a",
-            from_release_id="release-current",
-            env="gamma",
-            run_id="rollback-reload",
-            import_to_db=True,
-            dry_run=False,
-            confirm_prod_apply=False,
-            expected_revision=4,
-        )
-    )
-
-    # fresh stage(additive) → candidate verify → activate(pointer) → destructive sync。
-    assert [(call["kind"], call.get("phase"), call.get("mode")) for call in calls] == [
-        ("tag", None, None),
-        ("creator", None, "upsert"),
-        ("homepage", None, "upsert"),
-        ("homepage-cases", None, None),
-        ("content", "stage", "sync"),
-        ("content", "verify", "sync"),
-        ("content", "activate", "sync"),
-        ("tag", None, None),
-        ("creator", None, "sync"),
-        ("homepage", None, "sync"),
-        ("homepage-cases", None, None),
-    ]
-    activate_call = next(call for call in calls if call.get("phase") == "activate")
-    assert activate_call["expected_revision"] == 4
-    assert activate_call["candidate_revision"] == CANDIDATE_REVISION
-    runs = tmp_path / "env/gamma/runs/data-release/release-a"
-    result = read_json(runs / "rollback-reload/result.json")
-    assert result["status"] == "completed"
-    assert result["contentPhase"] == "activate"
-    assert result["revision"] == 5
-    assert result["stageRunId"] == "rollback-reload-stage"
-    assert result["verifyRunId"] == "rollback-reload-verify"
-    assert result["activateRunId"] == "rollback-reload-activate"
-    activate_result = read_json(runs / "rollback-reload-activate/result.json")
-    assert activate_result["homepageVerificationCasesRef"].endswith(
-        "/rollback-reload-activate/homepage_verification_cases.json"
-    )
-    assert read_json(runs / "rollback-reload-activate/rollback_ref.json")[
-        "rollbackFromReleaseId"
-    ] == "release-current"
-    assert (runs / "rollback-reload-activate/applied_ref.json").is_file()
-    assert not (runs / "rollback-reload-stage/applied_ref.json").exists()
-
-
-def test_rollback_failure_before_activation_is_typed_and_leaves_no_applied_ref(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    release = _release(tmp_path)
-    _patch_roots(monkeypatch, tmp_path)
-    calls: list[dict[str, object]] = []
-    _patch_reference_importers(monkeypatch, calls)
-    fake_content = _fake_content_importer(calls)
-
-    def _failing_verify(**kwargs: object) -> dict[str, object]:
-        if kwargs.get("phase") == "verify":
-            calls.append({"kind": "content", **kwargs})
-            raise SystemExit("[ship] importer failed: exit=1")
-        return fake_content(**kwargs)
-
-    monkeypatch.setattr(handler, "_run_content_importer", _failing_verify)
-
-    with pytest.raises(SystemExit, match="DATA.DELIVERY.ROLLBACK_FAILED.*failedStage=verify"):
+    with pytest.raises(SystemExit, match="cross-owner live release"):
         handler._rollback_release(
             argparse.Namespace(
-                to_release="release-a",
                 from_release_id="release-current",
+                from_manifest_digest="sha256:" + "d" * 64,
                 env="gamma",
-                run_id="rollback-broken",
+                run_id="rollback-cas-block",
                 import_to_db=True,
                 dry_run=False,
                 confirm_prod_apply=False,
-                expected_revision=0,
+                release_admission=_fixture_admission(release),
             )
         )
 
-    assert [call.get("phase") for call in calls if call["kind"] == "content"] == ["stage", "verify"]
-    runs = tmp_path / "env/gamma/runs/data-release/release-a"
-    result = read_json(runs / "rollback-broken/result.json")
+    assert mutation_calls == []
+    run = tmp_path / "env/gamma/runs/data-release/release-a/rollback-cas-block"
+    assert (run / "run.json").is_file()
+    result = read_json(run / "result.json")
     assert result["status"] == "failed"
-    assert result["failedStage"] == "verify"
-    assert result["error"].startswith("DATA.DELIVERY.ROLLBACK_FAILED")
-    assert result["stageRunId"] == "rollback-broken-stage"
-    assert "activateRunId" not in result
-    assert not (runs / "rollback-broken-stage/applied_ref.json").exists()
-    assert not (runs / "rollback-broken-activate").exists()
+    assert result["handoffArtifactRef"].endswith("/producer_release_handoff.json")
+    assert result["handoffArtifactDigest"].startswith("sha256:")
+    assert result["failedStage"] == "owner_local_staging_admission"
 
 
 def test_release_contract_is_environment_neutral_and_create_once(
@@ -754,7 +780,9 @@ def test_release_contract_is_environment_neutral_and_create_once(
     with pytest.raises(FileExistsError, match="create-once"):
         write_release_contract(changed, release_root=tmp_path)
     with pytest.raises(ValueError, match="environment-neutral"):
-        write_release_contract({**contract, "environment": "gamma"}, release_root=tmp_path)
+        write_release_contract(
+            {**contract, "environment": "gamma"}, release_root=tmp_path
+        )
 
 
 def test_media_sync_reads_only_release_media_closure(
@@ -790,135 +818,10 @@ def test_media_sync_reads_only_release_media_closure(
     run = tmp_path / "env/gamma/runs/data-release/release-a/apply-1"
     run.mkdir(parents=True)
     destination = tmp_path / "media"
-    previous_active = destination / "media/image/s/release-old/post-old/v1/cover.jpg"
-    previous_active.parent.mkdir(parents=True)
-    previous_active.write_bytes(b"previous-active")
-
     handler._sync_media(release=release, destination=str(destination), run=run)
-
     assert (destination / source.relative_to(payload_root)).read_bytes() == payload
     assert not (destination / unrelated.relative_to(payload_root)).exists()
-    assert previous_active.read_bytes() == b"previous-active"
-    report = read_json(run / "media-sync.json")
-    assert report["failed"] == 0
-    assert report["pruned"] == 0
-
-
-def _media_release(root: Path, release_id: str, slice_key: str, payload: bytes) -> Path:
-    """One commercial release whose manifest ships exactly one public slice."""
-
-    release = _release(root, release_id=release_id)
-    payload_root = release / "payload"
-    source = payload_root / slice_key
-    source.parent.mkdir(parents=True, exist_ok=True)
-    source.write_bytes(payload)
-    write_json(
-        release / "payload" / "media_manifest.json",
-        {
-            "schema": "quwoquan_data.release_media_manifest",
-            "releaseId": release_id,
-            "assets": [
-                {
-                    "assetId": f"{release_id}-image",
-                    "publicSliceKey": slice_key,
-                    "sha256": "sha256:" + hashlib.sha256(payload).hexdigest(),
-                    "bytes": len(payload),
-                }
-            ],
-        },
-    )
-    return release
-
-
-def test_post_activate_prune_keeps_new_and_previous_active_closures(
-    tmp_path: Path,
-) -> None:
-    previous = _media_release(
-        tmp_path, "release-prev", "media/image/s/asset/prev-image/v1/source.webp", b"prev-bytes"
-    )
-    current = _media_release(
-        tmp_path, "release-next", "media/image/s/asset/next-image/v1/source.webp", b"next-bytes"
-    )
-    destination = tmp_path / "environment-media"
-    for key, payload in (
-        ("media/image/s/asset/prev-image/v1/source.webp", b"prev-bytes"),
-        ("media/image/s/asset/next-image/v1/source.webp", b"next-bytes"),
-        ("media/image/s/asset/stale-image/v1/source.webp", b"stale-bytes"),
-        ("media/objects/sha256/aa/bb/" + "a" * 64 + ".bin", b"cas-body"),
-    ):
-        path = destination / key
-        path.parent.mkdir(parents=True)
-        path.write_bytes(payload)
-    run = tmp_path / "runs/activate-1"
-    run.mkdir(parents=True)
-
-    handler._prune_media(
-        release=current, previous_release=previous, destination=str(destination), run=run,
-    )
-
-    # 回滚窗口内 previous 与 new 都必须可服务；只回收两者之外的公开 slice，
-    # 且永不触及 CAS 根。
-    assert (destination / "media/image/s/asset/prev-image/v1/source.webp").read_bytes() == b"prev-bytes"
-    assert (destination / "media/image/s/asset/next-image/v1/source.webp").read_bytes() == b"next-bytes"
-    assert not (destination / "media/image/s/asset/stale-image/v1/source.webp").exists()
-    assert (destination / ("media/objects/sha256/aa/bb/" + "a" * 64 + ".bin")).exists()
-    report = read_json(run / "media-prune.json")
-    assert report["pruned"] == 1
-    assert report["keptKeys"] == 2
-
-
-def test_post_activate_prune_skips_when_previous_release_is_unavailable_locally(
-    tmp_path: Path,
-) -> None:
-    current = _media_release(
-        tmp_path, "release-next", "media/image/s/asset/next-image/v1/source.webp", b"next-bytes"
-    )
-    destination = tmp_path / "environment-media"
-    stale = destination / "media/image/s/asset/stale-image/v1/source.webp"
-    stale.parent.mkdir(parents=True)
-    stale.write_bytes(b"stale-bytes")
-    run = tmp_path / "runs/activate-2"
-    run.mkdir(parents=True)
-
-    handler._prune_media(
-        release=current,
-        previous_release=tmp_path / "data/releases/release-missing",
-        destination=str(destination),
-        run=run,
-    )
-
-    # previous release 身份已知但本机不可得：保留多余字节永远比删掉回滚仍需
-    # 服务的字节安全。
-    assert stale.read_bytes() == b"stale-bytes"
-    report = read_json(run / "media-prune.json")
-    assert report["pruned"] == 0
-    assert "unavailable" in report["skipped"]
-
-
-def test_first_activation_prune_keeps_only_new_closure(
-    tmp_path: Path,
-) -> None:
-    current = _media_release(
-        tmp_path, "release-next", "media/image/s/asset/next-image/v1/source.webp", b"next-bytes"
-    )
-    destination = tmp_path / "environment-media"
-    for key, payload in (
-        ("media/image/s/asset/next-image/v1/source.webp", b"next-bytes"),
-        ("media/image/s/asset/fixture-image/v1/source.webp", b"fixture-bytes"),
-    ):
-        path = destination / key
-        path.parent.mkdir(parents=True)
-        path.write_bytes(payload)
-    run = tmp_path / "runs/activate-3"
-    run.mkdir(parents=True)
-
-    handler._prune_media(
-        release=current, previous_release=None, destination=str(destination), run=run,
-    )
-
-    assert (destination / "media/image/s/asset/next-image/v1/source.webp").exists()
-    assert not (destination / "media/image/s/asset/fixture-image/v1/source.webp").exists()
-    assert read_json(run / "media-prune.json")["pruned"] == 1
+    assert read_json(run / "media-sync.json")["failed"] == 0
 
 
 @pytest.mark.parametrize(
@@ -942,19 +845,25 @@ def test_ship_verify_uses_environment_topology_without_manual_network_arguments(
         _stub_tag_consumer_verification,
     )
     import_run_id = "apply-verified"
-    import_root = tmp_path / "env" / environment.value / "runs/data-release" / release.name / import_run_id
+    import_root = (
+        tmp_path
+        / "env"
+        / environment.value
+        / "runs/data-release"
+        / release.name
+        / import_run_id
+    )
     cases = import_root / "homepage_verification_cases.json"
     cases_ref = cases.relative_to(tmp_path).as_posix()
-    write_json(cases, {"environment": environment.value})
-    write_json(
-        import_root / "result.json",
-        {
-            "environment": environment.value,
-            "releaseId": release.name,
-            "status": "completed",
-            "homepageVerificationCasesRef": cases_ref,
-        },
+    import_root = _write_import_result(
+        root=tmp_path,
+        release=release,
+        environment=environment.value,
+        import_run_id=import_run_id,
+        homepage_cases_ref=cases_ref.replace(import_run_id, f"{import_run_id}-apply"),
     )
+    cases = import_root / "homepage_verification_cases.json"
+    write_json(cases, {"environment": environment.value})
     observed: dict[str, object] = {}
 
     def _verify(**kwargs: object) -> Path:
@@ -966,21 +875,28 @@ def test_ship_verify_uses_environment_topology_without_manual_network_arguments(
     monkeypatch.setattr(handler, "write_homepage_api_verification", _verify)
     handler._verify_release_consumers(
         argparse.Namespace(
-            release_id=release.name,
             env=environment.value,
             import_run_id=import_run_id,
             run_id="verify-001",
-            readiness_phase="consumer",
+            readiness_phase="production",
             lifecycle_exit_ref="",
+            release_admission=_fixture_admission(release),
         )
     )
 
     assert observed["environment"] is environment
     assert observed["api_base_url"] == _target(tmp_path, environment).api_base_url
     result = read_json(
-        tmp_path / "env" / environment.value / "runs/data-release" / release.name / "verify-001/result.json"
+        tmp_path
+        / "env"
+        / environment.value
+        / "runs/data-release"
+        / release.name
+        / "verify-001/result.json"
     )
-    assert result["homepageApiVerificationRef"].endswith("/verify-001/homepage-api-verification.json")
+    assert result["homepageApiVerificationRef"].endswith(
+        "/verify-001/homepage-api-verification.json"
+    )
 
 
 def test_ship_verify_binds_consumer_readiness_to_verified_release(
@@ -996,18 +912,21 @@ def test_ship_verify_binds_consumer_readiness_to_verified_release(
         _stub_tag_consumer_verification,
     )
     import_run_id = "apply-ready"
-    import_root = tmp_path / "env/gamma/runs/data-release" / release.name / import_run_id
+    import_root = (
+        tmp_path / "env/gamma/runs/data-release" / release.name / import_run_id
+    )
+    cases = import_root / "homepage_verification_cases.json"
+    import_root = _write_import_result(
+        root=tmp_path,
+        release=release,
+        environment="gamma",
+        import_run_id=import_run_id,
+        homepage_cases_ref=cases.relative_to(tmp_path)
+        .as_posix()
+        .replace(import_run_id, f"{import_run_id}-apply"),
+    )
     cases = import_root / "homepage_verification_cases.json"
     write_json(cases, {"environment": "gamma"})
-    write_json(
-        import_root / "result.json",
-        {
-            "environment": "gamma",
-            "releaseId": release.name,
-            "status": "completed",
-            "homepageVerificationCasesRef": cases.relative_to(tmp_path).as_posix(),
-        },
-    )
 
     def _write_report(**kwargs: object) -> Path:
         output = Path(str(kwargs["output_path"]))
@@ -1030,17 +949,17 @@ def test_ship_verify_binds_consumer_readiness_to_verified_release(
     )
     handler._verify_release_consumers(
         argparse.Namespace(
-            release_id=release.name,
             env="gamma",
             import_run_id=import_run_id,
             run_id="verify-ready",
-            readiness_phase="commercial",
+            readiness_phase="production",
             lifecycle_exit_ref=lifecycle_exit_ref,
+            release_admission=_fixture_admission(release),
         )
     )
 
     assert observed["environment"] is DeploymentEnvironment.GAMMA
-    assert observed["phase"].value == "commercial"
+    assert observed["phase"].value == "production"
     assert observed["lifecycle_exit_ref"] == lifecycle_exit_ref
     assert observed["release_id"] == release.name
     assert observed["verify_run_id"] == "verify-ready"
@@ -1049,7 +968,9 @@ def test_ship_verify_binds_consumer_readiness_to_verified_release(
         tmp_path / "env/gamma/runs/data-release" / release.name / "verify-ready"
     )
     result = read_json(Path(str(observed["run"])) / "result.json")
-    assert result["releaseReadinessRef"].endswith("/verify-ready/release-readiness.json")
+    assert result["releaseReadinessRef"].endswith(
+        "/verify-ready/release-readiness.json"
+    )
     assert result["lifecycleExitRef"] == lifecycle_exit_ref
 
 
@@ -1065,41 +986,53 @@ def test_ship_verify_preserves_failed_consumer_receipt(
         _stub_tag_consumer_verification,
     )
     import_run_id = "apply-before-failure"
-    import_root = tmp_path / "env/alpha/runs/data-release" / release.name / import_run_id
+    import_root = (
+        tmp_path / "env/alpha/runs/data-release" / release.name / import_run_id
+    )
+    cases = import_root / "homepage_verification_cases.json"
+    import_root = _write_import_result(
+        root=tmp_path,
+        release=release,
+        environment="alpha",
+        import_run_id=import_run_id,
+        homepage_cases_ref=cases.relative_to(tmp_path)
+        .as_posix()
+        .replace(import_run_id, f"{import_run_id}-apply"),
+    )
     cases = import_root / "homepage_verification_cases.json"
     write_json(cases, {"environment": "alpha"})
-    write_json(
-        import_root / "result.json",
-        {
-            "environment": "alpha",
-            "releaseId": release.name,
-            "status": "completed",
-            "homepageVerificationCasesRef": cases.relative_to(tmp_path).as_posix(),
-        },
-    )
     monkeypatch.setattr(
         handler,
         "write_homepage_api_verification",
-        lambda **_kwargs: (_ for _ in ()).throw(handler.HomepageApiVerificationError("public homepage returned 404")),
+        lambda **_kwargs: (_ for _ in ()).throw(
+            handler.HomepageApiVerificationError("public homepage returned 404")
+        ),
     )
 
     with pytest.raises(SystemExit, match="homepage API verification failed"):
         handler._verify_release_consumers(
             argparse.Namespace(
-                release_id=release.name,
                 env="alpha",
                 import_run_id=import_run_id,
                 run_id="verify-failed",
-                readiness_phase="consumer",
+                readiness_phase="production",
                 lifecycle_exit_ref="",
+                release_admission=_fixture_admission(release),
             )
         )
 
-    result = read_json(tmp_path / "env/alpha/runs/data-release" / release.name / "verify-failed/result.json")
+    result = read_json(
+        tmp_path
+        / "env/alpha/runs/data-release"
+        / release.name
+        / "verify-failed/result.json"
+    )
     assert result["status"] == "failed"
+    assert result["handoffArtifactRef"].endswith("/producer_release_handoff.json")
+    assert result["handoffArtifactDigest"].startswith("sha256:")
     assert result["importRunId"] == import_run_id
     assert result["failedStage"] == "homepage_api_verification"
-    assert result["error"] == "public homepage returned 404"
+    assert result["error"].endswith("public homepage returned 404")
     assert result["verificationChecksum"].startswith("sha256:")
 
 
@@ -1115,15 +1048,15 @@ def test_ship_verify_empty_baseline_proves_isolated_removal(
         _stub_tag_consumer_verification,
     )
     import_run_id = "baseline-import"
-    import_root = tmp_path / "env/gamma/runs/data-release" / release.name / import_run_id
-    write_json(
-        import_root / "result.json",
-        {
-            "environment": "gamma",
-            "releaseId": release.name,
-            "status": "completed",
-            "homepageVerificationCasesRef": "",
-        },
+    import_root = (
+        tmp_path / "env/gamma/runs/data-release" / release.name / import_run_id
+    )
+    import_root = _write_import_result(
+        root=tmp_path,
+        release=release,
+        environment="gamma",
+        import_run_id=import_run_id,
+        homepage_cases_ref="",
     )
     write_json(import_root / "homepage-import.json", {"offlined": ["homepage-old"]})
     observed: dict[str, object] = {}
@@ -1137,113 +1070,22 @@ def test_ship_verify_empty_baseline_proves_isolated_removal(
     monkeypatch.setattr(handler, "write_baseline_api_verification", _verify_baseline)
     handler._verify_release_consumers(
         argparse.Namespace(
-            release_id=release.name,
             env="gamma",
             import_run_id=import_run_id,
             run_id="baseline-verify",
+            release_admission=_fixture_admission(release),
         )
     )
 
     assert observed["importer_report_path"] == import_root / "homepage-import.json"
-    result = read_json(tmp_path / "env/gamma/runs/data-release" / release.name / "baseline-verify/result.json")
-    assert result["baselineApiVerificationRef"].endswith("/baseline-verify/baseline-api-verification.json")
-
-
-def test_activate_post_switch_failure_leaves_typed_failed_result_with_revision(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    _release(tmp_path)
-    _patch_roots(monkeypatch, tmp_path)
-    calls: list[dict[str, object]] = []
-    _patch_reference_importers(monkeypatch, calls)
-    handler._apply_release(
-        argparse.Namespace(
-            release_id="release-a", env="gamma", run_id="apply-sync", import_to_db=True,
-            full_sync=True, dry_run=False, confirm_prod_apply=False,
-        )
+    result = read_json(
+        tmp_path
+        / "env/gamma/runs/data-release"
+        / release.name
+        / "baseline-verify/result.json"
     )
-    handler._verify_release_consumers(
-        argparse.Namespace(
-            release_id="release-a", env="gamma", import_run_id="apply-sync",
-            run_id="candidate-verify",
-        )
+    assert result["baselineApiVerificationRef"].endswith(
+        "/baseline-verify/baseline-api-verification.json"
     )
-
-    def _broken_homepage(**kwargs: object) -> dict[str, object]:
-        calls.append({"kind": "homepage", **kwargs})
-        raise SystemExit("[ship] homepage importer failed: exit=1")
-
-    monkeypatch.setattr(handler, "_run_homepage_importer", _broken_homepage)
-    calls.clear()
-    with pytest.raises(SystemExit, match="DATA.DELIVERY.POST_ACTIVATE_FAILED.*revision=1"):
-        handler._activate_release(
-            argparse.Namespace(
-                release_id="release-a", env="gamma", import_run_id="apply-sync",
-                verify_run_id="candidate-verify", run_id="activate-broken",
-                expected_revision=0, confirm_prod_apply=False,
-            )
-        )
-
-    # pointer 已切换（content activate 已执行），收尾失败必须留下可观测终态。
-    assert [call["kind"] for call in calls] == ["content", "tag", "creator", "homepage"]
-    run = tmp_path / "env/gamma/runs/data-release/release-a/activate-broken"
-    result = read_json(run / "result.json")
-    assert result["status"] == "failed"
-    assert result["failedStage"] == "post_activate_reference_sync"
-    assert result["revision"] == 1
-    assert result["candidateRevision"] == CANDIDATE_REVISION
-    assert result["contentPhase"] == "activate"
-    assert result["error"].startswith("DATA.DELIVERY.POST_ACTIVATE_FAILED")
-    assert not (run / "applied_ref.json").exists()
-
-
-def test_consumer_verify_argument_error_never_triggers_restore(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    _release(tmp_path)
-    _patch_roots(monkeypatch, tmp_path)
-    calls: list[dict[str, object]] = []
-    _patch_reference_importers(monkeypatch, calls)
-    handler._apply_release(
-        argparse.Namespace(
-            release_id="release-a", env="gamma", run_id="apply-sync", import_to_db=True,
-            full_sync=True, dry_run=False, confirm_prod_apply=False,
-        )
-    )
-    handler._verify_release_consumers(
-        argparse.Namespace(
-            release_id="release-a", env="gamma", import_run_id="apply-sync",
-            run_id="candidate-verify",
-        )
-    )
-    handler._activate_release(
-        argparse.Namespace(
-            release_id="release-a", env="gamma", import_run_id="apply-sync",
-            verify_run_id="candidate-verify", run_id="activate-1",
-            expected_revision=0, confirm_prod_apply=False,
-        )
-    )
-    restores: list[dict[str, object]] = []
-    monkeypatch.setattr(
-        handler,
-        "_restore_previous_release",
-        lambda **kwargs: restores.append(kwargs) or "restore-x-activate",
-    )
-    monkeypatch.setattr(
-        handler,
-        "_write_tag_consumer_verification",
-        _stub_tag_consumer_verification,
-    )
-
-    # --readiness-phase 非法是参数错误，发生在任何 verifier 之前；它不能变成回滚。
-    with pytest.raises(SystemExit, match="--readiness-phase"):
-        handler._verify_release_consumers(
-            argparse.Namespace(
-                release_id="release-a", env="gamma", import_run_id="activate-1",
-                run_id="consumer-bad-args", readiness_phase="not-a-phase",
-                lifecycle_exit_ref="", previous_environment_readiness="",
-            )
-        )
-    assert restores == []
+    assert result["admissionKind"] == "empty_baseline_attestation"
+    assert result["systemAttestationRef"].endswith("/attestations/release.json")

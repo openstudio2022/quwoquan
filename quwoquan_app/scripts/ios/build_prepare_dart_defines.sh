@@ -29,16 +29,21 @@ if [[ "$QWQ_APP_BUILD_PROFILE" != "$BUILD_PROFILE" ]]; then
   exit 2
 fi
 
-# trust 是 AppArtifact 的第一道制品门：先于 Python/toolchain、Flutter backend 与
-# 任何编译动作判否，确保 raw Xcode 也得到与 canonical executor 相同的 typed blocker。
-# 构建期默认供给（embedded_default_package）已退役：一切 configuration 缺外部注入
-# 即 fail-closed；字面 flutter run 经受管 dispatcher 进入 canonical launcher 闭环。
+# trust 是 AppArtifact 的第一道制品门：先于 Flutter backend 与任何编译动作判否，确保
+# raw Xcode 也得到与 canonical executor 相同的 typed blocker。
+# Debug-nonprod 构建期自供给（REQ-003 build_time_self_supply）：无外部 canonical handoff
+# 时，以当前源码树（SRCROOT 推导的 APP_DIR，不读任何用户级配置）调用仓内 canonical
+# handoff builder 现场签发 alpha test_live package + nonprod trust，并以激活请求形态嵌入
+# 制品；Profile/Release 与 prod 仍 fail-closed。
 RUNTIME_TRUST_PATH="${QWQ_IOS_RUNTIME_CONFIG_TRUST_PATH:-}"
-if [[ -z "$RUNTIME_TRUST_PATH" ]]; then
-  echo "[ios-runtime-config] GATE_BLOCK: $TRUST_BLOCKER: build-profile runtime trust envelope is required for every ${CONFIGURATION:-} iOS AppArtifact." >&2
-  echo "[ios-runtime-config] launch through ./quwoquan_app/run.sh -d <device>; the canonical launcher materializes the trust envelope." >&2
-  exit 2
-fi
+SELF_SUPPLY_REQUEST_PATH=""
+SELF_SUPPLY_ROOT=""
+cleanup_self_supply() {
+  if [[ -n "$SELF_SUPPLY_ROOT" ]]; then
+    rm -rf -- "$SELF_SUPPLY_ROOT"
+  fi
+}
+trap cleanup_self_supply EXIT
 if [[ -z "${TARGET_BUILD_DIR:-}" || -z "${UNLOCALIZED_RESOURCES_FOLDER_PATH:-}" ]]; then
   echo "[ios-runtime-config] GATE_BLOCK: $TRUST_BLOCKER: Xcode resource output is required to materialize the trust envelope." >&2
   exit 2
@@ -48,6 +53,28 @@ RUNTIME_PYTHON="$(bash "$STACKCTL_PYTHON_RESOLVER")" || {
   echo "[ios-runtime-config] GATE_BLOCK: build requires Python 3.10+ with PyYAML." >&2
   exit 2
 }
+
+if [[ -z "$RUNTIME_TRUST_PATH" && "${CONFIGURATION:-}" == "Debug-nonprod" ]]; then
+  SELF_SUPPLY_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/qwq-ios-self-supply.XXXXXX")"
+  chmod 0700 "$SELF_SUPPLY_ROOT"
+  RUNTIME_TRUST_PATH="$SELF_SUPPLY_ROOT/runtime-config-trust.json"
+  SELF_SUPPLY_REQUEST_PATH="$SELF_SUPPLY_ROOT/runtime-config-self-supply-request.json"
+  if ! SELF_SUPPLY_SUMMARY="$(
+    PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$APP_DIR/..${PYTHONPATH:+:$PYTHONPATH}" \
+      "$RUNTIME_PYTHON" "$APP_DIR/scripts/device/build_self_supply_request.py" \
+        --trust-output "$RUNTIME_TRUST_PATH" \
+        --request-output "$SELF_SUPPLY_REQUEST_PATH"
+  )"; then
+    echo "[ios-runtime-config] GATE_BLOCK: $TRUST_BLOCKER: Debug-nonprod build-time self supply failed (see the typed blocker above)." >&2
+    exit 2
+  fi
+  echo "[ios-runtime-config] runtimeConfigSupplyMode=build_time_self_supply $(printf '%s' "$SELF_SUPPLY_SUMMARY" | "$RUNTIME_PYTHON" -c 'import json,sys; d=json.load(sys.stdin); print("requestDigest="+d["requestDigest"], "packageDigest="+d["packageDigest"])')" >&2
+fi
+if [[ -z "$RUNTIME_TRUST_PATH" ]]; then
+  echo "[ios-runtime-config] GATE_BLOCK: $TRUST_BLOCKER: build-profile runtime trust envelope is required for every ${CONFIGURATION:-} iOS AppArtifact." >&2
+  echo "[ios-runtime-config] launch through ./quwoquan_app/run.sh -d <device>; the canonical launcher materializes the trust envelope." >&2
+  exit 2
+fi
 
 VALIDATION_EXPORTS="$($RUNTIME_PYTHON - "${DART_DEFINES:-}" "${FLUTTER_TARGET:-}" "$APP_DIR" <<'PY'
 import base64
@@ -97,12 +124,15 @@ if decoded_defines.get("RUN_PATROL_ACCEPTANCE", "").strip().lower() == "true":
     )
 app_dir = Path(sys.argv[3]).resolve()
 main_entrypoint = (app_dir / "lib/main_prod.dart").resolve()
+# lib/main.dart 是纯委托到 main_prod 的 SDK 默认入口：raw `flutter run` 不带 --target
+# 时 Xcode 收到的就是它。接受该别名但仍归一为 canonical 入口编译，其他入口一律拒绝。
+admissible_entrypoints = {main_entrypoint, (app_dir / "lib/main.dart").resolve()}
 requested = sys.argv[2].strip()
 if requested:
     requested_path = Path(requested)
     if not requested_path.is_absolute():
         requested_path = app_dir / requested_path
-    if requested_path.resolve() != main_entrypoint:
+    if requested_path.resolve() not in admissible_entrypoints:
         raise SystemExit("FLUTTER_TARGET must remain lib/main_prod.dart")
 print("export FLUTTER_TARGET=" + shlex.quote("lib/main_prod.dart"))
 print("export DART_DEFINES=" + shlex.quote(existing or "__QWQ_COMPILE_ONLY__"))
@@ -139,17 +169,23 @@ if [[ -n "${QWQ_APP_RUNTIME_TRUSTED_PUBLIC_KEYS_JSON:-}" ]]; then
 fi
 
 # trust 嵌入与 Patrol UAT test host 共用同一份实现，宿主与生产因此受同一组判否约束。
-# 只嵌 trust envelope，任何 runtime package 材料不得进入 Runner.app。
+# 嵌 trust envelope；Debug-nonprod 自供给时另嵌激活请求。可读 runtime package 不进入 Runner.app。
+EMBED_ARGUMENTS=(
+  "$RUNTIME_TRUST_PATH" "$BUILD_PROFILE"
+  "$TARGET_BUILD_DIR" "$UNLOCALIZED_RESOURCES_FOLDER_PATH"
+)
+if [[ -n "$SELF_SUPPLY_REQUEST_PATH" ]]; then
+  EMBED_ARGUMENTS+=(--self-supply-request "$SELF_SUPPLY_REQUEST_PATH")
+fi
 if ! "$RUNTIME_PYTHON" "$APP_DIR/scripts/ios/build_embed_runtime_config_trust.py" \
-  "$RUNTIME_TRUST_PATH" "$BUILD_PROFILE" \
-  "$TARGET_BUILD_DIR" "$UNLOCALIZED_RESOURCES_FOLDER_PATH"; then
+  "${EMBED_ARGUMENTS[@]}"; then
   echo "[ios-runtime-config] GATE_BLOCK: $TRUST_BLOCKER: build-profile runtime trust envelope is invalid." >&2
   exit 2
 fi
 
 export FLUTTER_TARGET DART_DEFINES
 export QWQ_IOS_DART_DEFINES_READY=1
-echo "[ios-runtime-config] buildProduct=ios-${BUILD_PROFILE}-app compileRuntimeDefines=0 embeddedRuntimePackage=0" >&2
+echo "[ios-runtime-config] buildProduct=ios-${BUILD_PROFILE}-app compileRuntimeDefines=0 embeddedRuntimePackage=0 selfSupplyRequest=$([[ -n "$SELF_SUPPLY_REQUEST_PATH" ]] && echo 1 || echo 0)" >&2
 printf 'export FLUTTER_TARGET=%q\n' "$FLUTTER_TARGET"
 printf 'export DART_DEFINES=%q\n' "$DART_DEFINES"
 printf 'export QWQ_IOS_DART_DEFINES_READY=1\n'

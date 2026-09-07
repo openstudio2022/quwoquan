@@ -87,6 +87,41 @@ collections:
         aggregateId: 1
         aggregateVersion: 1
       unique: true
+  homepage_release_projection:
+    publication_role: not_published
+    entity: HomepageReleaseProjection
+    role: projection
+    description: exact environment/sourceOwner/releaseId/manifestDigest 隔离的 release-owned stage candidate；同一 tuple create-once，公开读由 Content active tuple 精确选择。
+    indexes:
+    - name: uq_homepage_release_projection_identity
+      keys:
+        environment: 1
+        sourceOwner: 1
+        releaseId: 1
+        manifestDigest: 1
+        entityRef: 1
+      unique: true
+    - name: uq_homepage_release_projection_homepage
+      keys:
+        environment: 1
+        sourceOwner: 1
+        releaseId: 1
+        manifestDigest: 1
+        homepageId: 1
+      unique: true
+  homepage_release_candidate_state:
+    publication_role: not_published
+    entity: HomepageReleaseProjection
+    role: projection
+    description: exact candidate closure 的 verified state；不承担 active pointer。
+    indexes:
+    - name: uq_homepage_release_candidate_state
+      keys:
+        environment: 1
+        sourceOwner: 1
+        releaseId: 1
+        manifestDigest: 1
+      unique: true
   homepage_detail_views:
     publication_role: not_published
     entity: HomepageDetailView

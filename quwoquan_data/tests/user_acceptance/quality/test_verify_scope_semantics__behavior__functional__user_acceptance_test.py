@@ -27,7 +27,7 @@ sys.path.insert(0, str(SCRIPTS_ROOT))
 
 
 from core.io import write_json  # noqa: E402
-from core.paths import RELEASE_ROOT, execution_root, ensure_execution_command_layout, ensure_execution_layout  # noqa: E402
+from core.paths import RELEASE_ROOT, execution_root, ensure_execution_layout  # noqa: E402
 from verify import post_verify  # noqa: E402
 
 EXECUTION_ID = "20260711--travel-homepage-scope-semantics--test-region-b--pilot-001"
@@ -35,7 +35,6 @@ EXECUTION_ID = "20260711--travel-homepage-scope-semantics--test-region-b--pilot-
 
 def _seed_runtime_execution_with_defect() -> Path:
     ensure_execution_layout(EXECUTION_ID)
-    ensure_execution_command_layout(EXECUTION_ID, "post")
     posts = execution_root(EXECUTION_ID) / "posts" / "article" / "缺字段帖"
     posts.mkdir(parents=True, exist_ok=True)
     # 缺 topicId / sourcePaths / sourceUrls 等必填，故意制造缺陷

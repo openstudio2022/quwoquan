@@ -1,22 +1,12 @@
-"""提示词模板渲染器（P1 核心）：把 prompt 正文从 .py 字符串拼接迁出到 md 模板。
+"""轻量提示词模板渲染器。
 
-设计原则（宿主无关的系统提示词格式）：
-- **真相源外置**：所有 prompt 正文落 `quwoquan_data/prompts/{homepage,article,image,video,_shared}/*.md`，
-  `.py` 只负责「加载模板 + 计算动态数据块 + 校验占位符 + 组装」，禁止再在脚本里硬编码 prompt 正文。
-- **业界格式骨架**：系统提示词用 XML 标签分区（`<role>/<capabilities>/<constraints>(always/never)/
-  <output_format>`），任务区承载动态上下文（`<documents>` + 底稿/素材），静态在前、动态在后，
-  对齐 prompt caching（重复 author/rewind 共享前缀）。
-- **占位符 + 校验**：模板用 `{{var}}` 占位、`{{> _shared/partials/x.md}}` 复用片段；
-  渲染器按内容类型目录中的变量声明校验后填充；渲染后不得残留未闭合 `{{`/`}}`。
-
-prompts 是受版本控制的契约真相源，跟代码仓库走（`_REPO_DATA_ROOT/prompts`），不随运行时
-`QWQ_DATA_ROOT` 漂移；仅 `QWQ_PROMPTS_ROOT` 可显式覆盖（供测试）。
+模板正文位于 `quwoquan_data/prompts/**`；本模块只负责 family 映射、partial 展开、
+占位符校验和 system/task 拼接，不承担生产 caller 注册或业务编排。
 """
 from __future__ import annotations
 
 import os
 import re
-import hashlib
 from pathlib import Path
 from typing import Any, Mapping
 
@@ -29,14 +19,11 @@ TASK_KEY = "task"
 PARTIALS_DIR = "_shared/partials"
 _PROMPT_FAMILY = {
     "article_author": "article",
+    "content_independent_review": "_shared",
+    "entity_homepage": "homepage",
+    "homepage_source_judge": "homepage",
     "image_curation": "image",
     "video_author": "video",
-    "entity_homepage": "homepage",
-    "homepage_independent_review": "homepage",
-    "homepage_source_judge": "homepage",
-    "post_independent_review": "_shared",
-    "professional_asset_independent_review": "_shared",
-    "review_repair": "_shared",
 }
 
 # 系统/任务区行数预算（lint 与渲染契约共用：防止指令区重新膨胀回 140+ 行）。
@@ -191,7 +178,7 @@ def render(
 ) -> str:
     """渲染某环节 prompt：系统提示词（静态）+ 物理分隔 + 任务上下文（动态）。
 
-    name: 模板族名（如 article_author / entity_homepage / image_curation / review_repair）。
+    name: 模板族名（如 article_author / entity_homepage / content_independent_review）。
     """
     schema = load_vars_schema(name)
     system_text = _read_template_file(system_template_path(name))
@@ -203,55 +190,6 @@ def render(
         task_text, declared=schema[TASK_KEY], values=task_vars or {}, section=TASK_KEY, name=name
     )
     return system_block.rstrip() + SECTION_SEPARATOR + task_block.rstrip() + "\n"
-
-
-def render_partial(name: str) -> str:
-    """渲染单个 partial 正文（无变量填充；供 .py 做「按运行时条件二选一」装配）。
-
-    正文真相源仍在 prompts/_shared/partials/**；调用方只做选择，不得拼接硬编码 prompt 正文。
-    """
-    rel = name if name.startswith(f"{PARTIALS_DIR}/") else f"{PARTIALS_DIR}/{name}"
-    body = _expand_partials(_read_template_file(rel))
-    if _VAR_RE.search(body):
-        raise PromptTemplateError(f"partial {rel} must not use variables when rendered standalone")
-    return body.strip() + "\n"
-
-
-def prompt_template_material(name: str) -> dict[str, Any]:
-    """返回可重放 Prompt 的模板组成，不包含任何运行时凭据。"""
-    system_ref = system_template_path(name)
-    task_ref = task_template_path(name)
-    system_text = _read_template_file(system_ref)
-    task_text = _read_template_file(task_ref)
-    partial_refs: set[str] = set()
-
-    def _collect(text: str) -> None:
-        for match in _INCLUDE_RE.finditer(text):
-            rel = match.group(1)
-            if not rel.startswith(f"{PARTIALS_DIR}/"):
-                rel = f"{PARTIALS_DIR}/{rel}"
-            if rel in partial_refs:
-                continue
-            partial_refs.add(rel)
-            _collect(_read_template_file(rel))
-
-    _collect(system_text)
-    _collect(task_text)
-    partial_rows = [
-        {"ref": rel, "sha256": f"sha256:{hashlib.sha256(_read_template_file(rel).encode('utf-8')).hexdigest()}"}
-        for rel in sorted(partial_refs)
-    ]
-    return {
-        "system": {
-            "ref": system_ref,
-            "sha256": f"sha256:{hashlib.sha256(system_text.encode('utf-8')).hexdigest()}",
-        },
-        "task": {
-            "ref": task_ref,
-            "sha256": f"sha256:{hashlib.sha256(task_text.encode('utf-8')).hexdigest()}",
-        },
-        "partials": partial_rows,
-    }
 
 
 def fmt_bullets(items: Any, *, bullet: str = "-", empty: str = "（无）") -> str:
@@ -271,8 +209,6 @@ __all__ = [
     "SYSTEM_KEY",
     "TASK_KEY",
     "render",
-    "render_partial",
-    "prompt_template_material",
     "template_variables",
     "load_vars_schema",
     "system_template_path",

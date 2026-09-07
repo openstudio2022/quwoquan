@@ -115,7 +115,7 @@ def parse_args() -> argparse.Namespace:
 
 def staged_files() -> list[str]:
     proc = subprocess.run(
-        ["git", "diff", "--cached", "--name-only"],
+        ["git", "-c", "core.quotePath=false", "diff", "--cached", "--name-only"],
         cwd=ROOT,
         check=False,
         capture_output=True,

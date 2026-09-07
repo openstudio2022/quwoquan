@@ -17,7 +17,7 @@ render: { articleTemplate: gentle, fontPreset: clean }
 structure:
   required: [进入前准备, 推荐动线, 必停讲解点, 避开人流策略, 参观后延伸]
   optional: [儿童老人版本, 雨天版本]
-mustIncludeFacts: [导览动线, 停留时长, 讲解点, 人流避开策略]
+evidenceConditionedFacts: [导览动线, 停留时长, 讲解点, 人流避开策略]
 forbiddenPhrases: [冷启动, 批次, 角色：, 占位, contract_fixture]
 wordCount: { min: 900, max: 1800 }
 imagePlan:
@@ -27,5 +27,5 @@ crossRefs: { minEntity: 1, minTag: 3 }
 recommendation:
   authorBinding: { required: true, source: creator_profile_catalog }
   exposeStyleTags: true
-  qualitySignals: [bodyLength, requiredFactsCovered, imageSlotCoverage, entityRefCount]
+  qualitySignals: [bodyLength, evidenceSupportedFactCoverage, imageSlotCoverage, entityRefCount]
   bodyForbiddenFields: [qualityScore, templateId, routingReason, coldStartBoost, isSystemBuiltin]

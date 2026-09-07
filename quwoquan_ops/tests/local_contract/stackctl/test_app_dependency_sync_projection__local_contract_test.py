@@ -31,6 +31,30 @@ def _write_manifest(root: Path, value: dict[str, Any]) -> None:
     )
 
 
+def test_projection_excludes_toolchain_owned_gradle_wrapper_binaries(
+    tmp_path: Path,
+) -> None:
+    repo = tmp_path / "repo"
+    app = minimal_projection_source(repo)
+    for relative in (
+        "android/gradlew",
+        "android/gradlew.bat",
+        "android/gradle/wrapper/gradle-wrapper.jar",
+    ):
+        path = app / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(b"live wrapper must not be projected")
+
+    projected = sync._project(repo, tmp_path / "projection")
+
+    for relative in (
+        "android/gradlew",
+        "android/gradlew.bat",
+        "android/gradle/wrapper/gradle-wrapper.jar",
+    ):
+        assert not (projected / relative).exists()
+
+
 def test_projection_materializes_current_metadata_and_ops_output_closure(
     tmp_path: Path,
 ) -> None:

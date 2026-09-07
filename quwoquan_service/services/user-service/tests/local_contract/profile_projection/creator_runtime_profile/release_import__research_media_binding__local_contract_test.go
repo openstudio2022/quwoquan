@@ -26,7 +26,7 @@ func researchCreatorReleaseFixture(t *testing.T) (string, string) {
 	writeReleaseTestFile(
 		t,
 		filepath.Join(root, "payload", "release.json"),
-		`{"schema":"quwoquan_data.release","releaseId":"release-a","releaseClass":"research"}`,
+		`{"schema":"quwoquan_data.release","releaseId":"release-a","sourceOwner":"qwq_data","releaseKind":"content","releaseClass":"research"}`,
 	)
 	writeReleaseTestFile(
 		t,

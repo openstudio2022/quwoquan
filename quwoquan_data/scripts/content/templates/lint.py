@@ -10,7 +10,6 @@ from content.templates.blueprint import (
     validate_required,
 )
 from content.templates.creator import validate_creators
-from content.templates.recommend import validate_recommendation_contract
 from content.templates.registry import BLUEPRINTS_ROOT, TemplateRegistry, tag_exists
 from content.templates.source import validate_source_catalog
 from content.templates.style import validate_style_catalog
@@ -121,7 +120,6 @@ def lint_all() -> list[str]:
     registry = TemplateRegistry.load()
     errors = []
     errors.extend(lint_templates(registry))
-    errors.extend(validate_recommendation_contract(registry))
     errors.extend(validate_creators(registry))
     errors.extend(validate_audiences(registry))
     errors.extend(validate_source_catalog(registry))

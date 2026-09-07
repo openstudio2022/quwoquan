@@ -521,19 +521,20 @@ void main() {
         appDelegateGate,
         contains('configurationForConnecting connectingSceneSession'),
       );
+      // UIKit 会把 UISceneConfiguration 随 UISceneSession 持久化并在后续冷启动复用。
+      // 因此 scene 配置必须唯一且不挂 storyboard：任何按 gate 分叉的第二份配置
+      //（如仅激活启动返回无 storyboard 的恢复 delegate）都会被下一次正常冷启动继承，
+      // 让 FlutterViewController 永远不再实例化（黑屏、无引擎日志）。
       expect(
         appDelegateGate,
-        contains('recovery.delegateClass = StartupRecoverySceneDelegate.self'),
+        contains('configuration.delegateClass = AppSceneDelegate.self'),
       );
-      expect(appDelegateGate, contains('recovery.storyboard = nil'));
+      expect(appDelegateGate, contains('configuration.storyboard = nil'));
       expect(
         appDelegateGate,
-        contains('normal.delegateClass = AppSceneDelegate.self'),
+        isNot(contains('StartupRecoverySceneDelegate.self')),
       );
-      expect(
-        appDelegateGate,
-        contains('normal.storyboard = UIStoryboard(name: "Main", bundle: nil)'),
-      );
+      expect(appDelegateGate, isNot(contains('UIStoryboard(name: "Main"')));
       expect(
         appDelegateGate,
         isNot(
@@ -543,11 +544,17 @@ void main() {
           ),
         ),
       );
-      expect(scene, contains('class StartupRecoverySceneDelegate'));
+      // 旧 session 可能已持久化恢复 delegate 类名：保留类名但不得再有分叉行为。
       expect(
         scene,
         contains(
-          'appDelegate.connectNativeStartupSceneIfNeeded(in: recoveryWindow)',
+          '@objc final class StartupRecoverySceneDelegate: AppSceneDelegate {}',
+        ),
+      );
+      expect(
+        scene,
+        contains(
+          'appDelegate.connectNativeStartupSceneIfNeeded(in: sceneWindow)',
         ),
       );
       expect(ios, contains('func connectNativeStartupSceneIfNeeded('));
@@ -556,22 +563,33 @@ void main() {
         contains('installNativeStartupRecoveryRoot(in: sceneWindow)'),
       );
       expect(ios, contains('ios_native_activation_scene_connected'));
-      final recoveryScene = scene.substring(
-        scene.indexOf('class StartupRecoverySceneDelegate'),
-        scene.indexOf('@objc final class AppSceneDelegate'),
-      );
-      expect(recoveryScene, isNot(contains('FlutterSceneDelegate')));
       final appSceneDelegate = scene.substring(
-        scene.indexOf('@objc final class AppSceneDelegate'),
+        scene.indexOf('@objc class AppSceneDelegate'),
+        scene.indexOf('@objc final class StartupRecoverySceneDelegate'),
+      );
+      // Main.storyboard 只在 gate 判否之后由 scene delegate 实例化；复用 UIKit 已
+      // 创建的 window（旧 storyboard 配置的持久化 session）而不造第二个 window。
+      expect(
+        appSceneDelegate,
+        contains('let sceneWindow = window ?? UIWindow(windowScene: windowScene)'),
       );
       expect(
         appSceneDelegate,
-        contains('connectNativeStartupSceneIfNeeded(in: recoveryWindow)'),
+        contains(
+          'UIStoryboard(name: "Main", bundle: nil).instantiateInitialViewController()',
+        ),
       );
       expect(
-        appSceneDelegate,
-        contains('nativeStartupWindow = recoveryWindow'),
+        appSceneDelegate.indexOf('connectNativeStartupSceneIfNeeded(in: sceneWindow)'),
+        lessThan(appSceneDelegate.indexOf('instantiateInitialViewController()')),
       );
+      expect(appSceneDelegate, contains('nativeStartupWindow = sceneWindow'));
+      expect(appSceneDelegate, contains('sceneWindow.makeKeyAndVisible()'));
+      expect(
+        appSceneDelegate,
+        contains('appDelegate.attachFlutterSceneWindow(sceneWindow)'),
+      );
+      expect(appSceneDelegate, contains('ios_flutter_scene_connected'));
       expect(
         appSceneDelegate,
         contains(
@@ -580,14 +598,16 @@ void main() {
         ),
       );
       expect(appSceneDelegate, isNot(contains('NSUserActivity(')));
+      // 引擎在 gate 之后被旧持久化配置提前创建时只记账，不得 trap 掉进程。
+      expect(ios, isNot(contains('assertionFailure("Flutter engine initialized')));
+      expect(ios, contains('ios_implicit_flutter_engine_behind_native_gate'));
       final infoPlist = _readAppFile('ios/Runner/Info.plist');
       expect(infoPlist, isNot(contains('NSUserActivityTypes')));
-      // iOS 16+ normal launch owns Main.storyboard through the scene
-      // configuration.  A top-level main storyboard would instantiate the
-      // implicit Flutter engine before the activation-only recovery scene can
-      // replace it.
+      // storyboard 不进入任何 scene 配置（Info.plist 或 configurationForConnecting）：
+      // 顶层 main storyboard 或 scene storyboard 都会在 gate 之前实例化 implicit engine，
+      // 并把该选择随 session 持久化。
       expect(infoPlist, isNot(contains('<key>UIMainStoryboardFile</key>')));
-      expect(infoPlist, contains('<key>UISceneStoryboardFile</key>'));
+      expect(infoPlist, isNot(contains('<key>UISceneStoryboardFile</key>')));
       final iosGateProbe = _readAppFile(
         'scripts/tools/device/inspect_ios_native_startup.py',
       );
@@ -640,13 +660,7 @@ void main() {
         contains('startup_fatal_marker_ignored reason=safe_shell_reached'),
       );
       expect(ios, contains('startup_fatal_marker_recorded'));
-      expect(
-        ios,
-        contains(
-          'assertionFailure('
-          '"Flutter engine initialized behind native startup recovery gate"',
-        ),
-      );
+      expect(ios, contains('guard !isNativeStartupGateActive else {'));
       expect(ios, contains('maximumRecoveryRecords = 20'));
       expect(
         ios,

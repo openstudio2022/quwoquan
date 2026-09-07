@@ -6,8 +6,6 @@ from typing import Any, Mapping
 from core.data_issue import (
     DataIssue,
     DataIssueCode,
-    DataIssueStage,
-    DataRecoveryAction,
     data_issue,
 )
 
@@ -21,10 +19,9 @@ def issue(
 ) -> DataIssue:
     return data_issue(
         code,
-        stage=DataIssueStage.VERIFY_HOMEPAGE_MEDIA,
+        origin="verify_homepage_media",
         ref=ref,
         message=message,
-        recovery=DataRecoveryAction.STOP,
         attributes=attrs,
     )
 

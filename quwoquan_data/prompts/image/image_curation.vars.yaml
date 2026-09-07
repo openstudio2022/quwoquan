@@ -1,17 +1,11 @@
 template: image_curation
 system:
-  required:
-    - title_max_chars
-    - caption_max_chars
+  required: []
   optional: []
 task:
   required:
-    - execution_id
-    - title
-    - ref
-    - carrier
-    - source_collection
-    - byline
-    - assets_block
-  optional:
-    - creator_lock_line
+    - target
+    - retained_evidence_excerpts
+    - selected_blueprint_intent
+    - output_path
+  optional: []

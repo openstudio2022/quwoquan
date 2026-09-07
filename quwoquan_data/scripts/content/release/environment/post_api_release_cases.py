@@ -20,6 +20,7 @@ from content.release.model import DeploymentEnvironment
 from core.control_types import ContentType
 from core.io import read_json
 from core.release_layout import payload_digest, payload_file
+from governance.coverage.distribution import RELEASE_CLASSES
 
 
 @dataclass(frozen=True)
@@ -78,29 +79,6 @@ def _release_media_case(
         raise PostApiVerificationError(
             f"release media asset projection is invalid: {asset_id}"
         )
-    if release_class == "research":
-        # DEC-031：research 私有交付键是相对 CAS objectKey；App 回读字段与
-        # 权威比对复用 public_url 槽位（同为相对 key），探测语义走 delivery_ref。
-        private_object_key = _required_text(
-            row,
-            "privateObjectKey",
-            endpoint=f"release media asset {asset_id}",
-        ).lstrip("/")
-        if row.get("publicSliceKey") is not None or not private_object_key.startswith(
-            "media/objects/sha256/"
-        ):
-            raise PostApiVerificationError(
-                f"research media asset delivery key is invalid: {asset_id}"
-            )
-        return ReleaseMediaAssetCase(
-            asset_id=asset_id,
-            kind=kind,
-            public_url=private_object_key,
-            expected_bytes=expected_bytes,
-            expected_sha256=expected_sha256,
-            expected_mime_type=expected_mime_type,
-            delivery_ref=private_object_key,
-        )
     public_slice_key = _required_text(
         row,
         "publicSliceKey",
@@ -143,7 +121,7 @@ def read_post_and_creator_cases(
     importer_report_path: Path,
     creator_importer_report_path: Path,
     media_delivery_base_url: str,
-    readiness_phase: str = "commercial",
+    readiness_phase: str = "production",
 ) -> tuple[list[PostApiCase], dict[str, CreatorProfileCase]]:
     """Bind importer readback to immutable creator/post/media authorities."""
 
@@ -157,10 +135,8 @@ def read_post_and_creator_cases(
             f"release header is unreadable: {exc}"
         ) from exc
     release_class = str(release_header.get("releaseClass") or "").strip()
-    # readiness 相位与 release 类别必须同向：research 核验只对 research
-    # release 有意义，commercial/consumer 核验只对 commercial release 有意义。
-    expected_class = "research" if readiness_phase == "research" else "commercial"
-    if release_class != expected_class:
+    # 单一 production 类别与单一 production 相位（DEC-041）。
+    if release_class not in RELEASE_CLASSES or readiness_phase != "production":
         raise PostApiVerificationError(
             f"readiness phase {readiness_phase} cannot verify a "
             f"{release_class or 'classless'} release"
@@ -182,12 +158,12 @@ def read_post_and_creator_cases(
         raise PostApiVerificationError("release desired state schema is invalid")
     if str(desired.get("releaseId") or "") != release_id:
         raise PostApiVerificationError("release desired state releaseId mismatch")
-    # 公开消费面只在 pointer 切换之后存在：接受三阶段的 active 回执与历史一步式
-    # imported 回执；staged/verified 候选回执不得进入 consumer verification。
-    if report.get("status") not in {"active", "imported"}:
-        raise PostApiVerificationError("post importer report is not an activation report")
-    if creator_report.get("status") != "active":
-        raise PostApiVerificationError("creator importer report is not active")
+    # DEC-003 stage-only：Content 报告为 staged、Creator 报告为 verified；
+    # 激活事实由 Content active pointer 与四域 fenced readback 证明，不由报告自证。
+    if report.get("status") != "staged":
+        raise PostApiVerificationError("post importer report is not staged")
+    if creator_report.get("status") != "verified":
+        raise PostApiVerificationError("creator importer report is not verified")
     if str(report.get("environment") or "") != environment.value:
         raise PostApiVerificationError("post importer report environment mismatch")
     desired_refs = _object(desired.get("desiredRefs"), label="release desiredRefs")
@@ -287,25 +263,13 @@ def read_post_and_creator_cases(
             "sha256",
             endpoint=f"creator avatar binding {creator_ref}",
         )
-        if release_class == "research":
-            avatar_delivery_key = _required_text(
-                release_avatar,
-                "privateObjectKey",
-                endpoint=f"release avatar asset {avatar_asset_id}",
-            ).lstrip("/")
-            avatar_key_valid = release_avatar.get(
-                "publicSliceKey"
-            ) is None and avatar_delivery_key.startswith("media/objects/sha256/")
-            # research：avatar 交付键为相对 CAS key，比对回读时不拼 origin。
-            avatar_url = avatar_delivery_key
-        else:
-            avatar_delivery_key = _required_text(
-                release_avatar,
-                "publicSliceKey",
-                endpoint=f"release avatar asset {avatar_asset_id}",
-            ).lstrip("/")
-            avatar_key_valid = avatar_delivery_key.startswith("media/avatar/s/")
-            avatar_url = f"{media_origin}/{avatar_delivery_key}"
+        avatar_delivery_key = _required_text(
+            release_avatar,
+            "publicSliceKey",
+            endpoint=f"release avatar asset {avatar_asset_id}",
+        ).lstrip("/")
+        avatar_key_valid = avatar_delivery_key.startswith("media/avatar/s/")
+        avatar_url = f"{media_origin}/{avatar_delivery_key}"
         owner_refs = release_avatar.get("ownerRefs")
         avatar_bytes = release_avatar.get("bytes")
         avatar_mime_type = str(

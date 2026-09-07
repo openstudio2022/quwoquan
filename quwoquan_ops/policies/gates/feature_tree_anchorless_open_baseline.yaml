@@ -22,10 +22,6 @@ entries:
   open_id: OPEN-008
 - spec: specs/feature-tree/object-homepage-network/intersection-unified-experience/intersection-algorithm-closure/spec.md
   open_id: OPEN-002
-- spec: specs/feature-tree/object-homepage-network/intersection-unified-experience/intersection-algorithm-closure/spec.md
-  open_id: OPEN-003
-- spec: specs/feature-tree/object-homepage-network/intersection-unified-experience/intersection-sentence-unification/spec.md
-  open_id: OPEN-002
 - spec: specs/feature-tree/platform-ops-governance/commercial-readiness-risk-closure/spec.md
   open_id: OPEN-001
 - spec: specs/feature-tree/product-ops-growth/product-control-plane-foundation/spec.md

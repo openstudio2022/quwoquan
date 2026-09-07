@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	mongomod "github.com/testcontainers/testcontainers-go/modules/mongodb"
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	mongoopts "go.mongodb.org/mongo-driver/v2/mongo/options"
@@ -280,18 +281,41 @@ func TestMain(m *testing.M) {
 		panic("flush content-service integration Redis: " + err.Error())
 	}
 
-	// api_integration 使用 canonical real-dependency launcher：外部 URI 优先，
-	// 然后尝试 testcontainer，最后使用本机 mongod 副本集；任何路径都必须提供
-	// transaction-capable writable primary，禁止退化到 standalone 或内存替身。
-	mongoRuntime, err := testinfra.StartRealMongo(
-		ctx,
-		testinfra.UniqueDatabaseName("content_post_api_integration"),
-	)
-	if err != nil {
-		panic("content-service api_integration requires a real MongoDB replica set: " + err.Error())
+	// Start MongoDB testcontainer (mongo:7-jammy) for realistic L2 tests.
+	// Falls back to TEST_MONGO_URI env var for CI environments that pre-provision Mongo.
+	// 缺少真实 MongoDB 时必须失败，禁止把未执行的集成测试记为通过。
+	var mongoContainer *mongomod.MongoDBContainer
+
+	mongoURI := os.Getenv("TEST_MONGO_URI")
+	if mongoURI == "" {
+		container, runErr := tryRunMongoContainer(ctx)
+		if runErr != nil {
+			panic(
+				"content-service api_integration requires a real MongoDB; " +
+					"set TEST_MONGO_URI or start Docker: " + runErr.Error(),
+			)
+		}
+		mongoContainer = container
+		uri, connErr := container.ConnectionString(ctx)
+		if connErr != nil {
+			panic("failed to get mongo connection string: " + connErr.Error())
+		}
+		mongoURI = uri
 	}
-	mongoClient = mongoRuntime.Client
-	mongoDB = mongoRuntime.Database
+
+	mongoClientOptions := mongoopts.Client().ApplyURI(mongoURI)
+	if mongoContainer != nil {
+		// Colima exposes the replica-set member through a forwarded localhost
+		// port while Mongo advertises its container IP. Direct mode keeps the
+		// driver on that reachable endpoint; the server still runs as rs0 so
+		// aggregate/outbox transactions remain available.
+		mongoClientOptions.SetDirect(true)
+	}
+	mongoClient, err = mongo.Connect(mongoClientOptions)
+	if err != nil {
+		panic("failed to connect to mongo: " + err.Error())
+	}
+	mongoDB = mongoClient.Database("content_test")
 	personaAccessProjection := accessinfra.NewPersonaAccessProjection(mongoDB)
 	if err := personaAccessProjection.EnsureIndexes(ctx); err != nil {
 		panic("failed to initialize Content persona access projection: " + err.Error())
@@ -428,12 +452,17 @@ func TestMain(m *testing.M) {
 	activeSupplyDB := mongoDB
 	if _, err := activeSupplyDB.Collection("data_release_state").UpdateOne(
 		ctx,
-		bson.M{"environment": integrationEnvironment, "sourceOwner": "qwq_data"},
+		bson.M{
+			"environment": integrationEnvironment, "sourceOwner": "qwq_data",
+			"kind": "active_pointer",
+		},
 		bson.M{"$set": bson.M{
 			"environment": integrationEnvironment, "sourceOwner": "qwq_data",
-			"status": "active", "activeReleaseId": integrationReleaseID,
-			"manifestDigest": integrationManifestDigest, "releaseClass": "commercial",
-			"revision": int64(1), "sourceVersion": int64(1),
+			"kind": "active_pointer", "status": "active",
+			"activeReleaseId": integrationReleaseID,
+			"manifestDigest":  integrationManifestDigest, "releaseClass": "commercial",
+			"projectionVersion": int64(1), "revision": int64(1),
+			"activatedAt": time.Now().UTC().Truncate(time.Millisecond),
 		}},
 		mongoopts.UpdateOne().SetUpsert(true),
 	); err != nil {
@@ -639,6 +668,7 @@ func TestMain(m *testing.M) {
 			Gathering:    postQueryReader,
 			Tombstones:   postStore,
 			ViewerBlocks: personaBlockReader,
+			ActiveSupply: persistence.NewMongoActiveSupplyReader(mongoDB, "api-integration"),
 		}),
 		commenthttp.NewHandler(commentapp.BindFacades(testCommentService)),
 		reactionhttp.NewHandler(reactionapp.BindFacades(reactionService)),
@@ -752,8 +782,11 @@ func TestMain(m *testing.M) {
 
 	code := m.Run()
 
-	// Teardown: close real dependencies in reverse order.
-	_ = mongoRuntime.Close(ctx)
+	// Teardown: disconnect and terminate in reverse order.
+	_ = mongoClient.Disconnect(ctx)
+	if mongoContainer != nil {
+		_ = mongoContainer.Terminate(ctx)
+	}
 	_ = testRouter.Close()
 	_ = integrationRedis.Close(ctx)
 	if err := testPostgresFixture.Close(); err != nil && code == 0 {
@@ -844,6 +877,19 @@ func (g *apiIntegrationMediaObjectGateway) DeliveryURL(_ context.Context, object
 
 func (g *apiIntegrationMediaObjectGateway) DeliveryURLUntil(_ context.Context, objectKey string, expiresAt time.Time) (string, error) {
 	return fmt.Sprintf("https://cdn.test/%s?expires=%d", objectKey, expiresAt.UTC().Unix()), nil
+}
+
+// tryRunMongoContainer attempts to start a mongo:7-jammy testcontainer.
+// Returns (nil, err) when Docker is unavailable or the container fails to start,
+// capturing both returned errors and internal panics from the testcontainers runtime.
+func tryRunMongoContainer(ctx context.Context) (c *mongomod.MongoDBContainer, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("testcontainers panic (Docker unavailable?): %v", r)
+		}
+	}()
+	c, err = mongomod.Run(ctx, "mongo:7-jammy", mongomod.WithReplicaSet("rs0"))
+	return
 }
 
 // cleanPosts clears the Post aggregate and its durable command/outbox state so

@@ -20,31 +20,37 @@ import (
 )
 
 const (
-	homepageCollection           = "homepages"
-	homepageReceiptsCollection   = "homepage_command_receipts"
-	homepageOutboxCollection     = "homepage_outbox"
-	homepageDetailsCollection    = "homepage_detail_views"
-	homepageFollowersCollection  = "homepage_follower_projection"
-	homepageCheckpointCollection = "homepage_projection_checkpoints"
+	homepageCollection                  = "homepages"
+	homepageReceiptsCollection          = "homepage_command_receipts"
+	homepageOutboxCollection            = "homepage_outbox"
+	homepageDetailsCollection           = "homepage_detail_views"
+	homepageFollowersCollection         = "homepage_follower_projection"
+	homepageCheckpointCollection        = "homepage_projection_checkpoints"
+	homepageReleaseProjectionCollection = "homepage_release_projection"
+	homepageReleaseCandidateCollection  = "homepage_release_candidate_state"
 )
 
 type MongoHomepageStore struct {
-	homepages   *mongo.Collection
-	receipts    *mongo.Collection
-	outbox      *mongo.Collection
-	details     *mongo.Collection
-	followers   *mongo.Collection
-	checkpoints *mongo.Collection
+	homepages              *mongo.Collection
+	receipts               *mongo.Collection
+	outbox                 *mongo.Collection
+	details                *mongo.Collection
+	followers              *mongo.Collection
+	checkpoints            *mongo.Collection
+	releaseProjections     *mongo.Collection
+	releaseCandidateStates *mongo.Collection
 }
 
 func NewMongoHomepageStore(db *mongo.Database) *MongoHomepageStore {
 	return &MongoHomepageStore{
-		homepages:   db.Collection(homepageCollection),
-		receipts:    db.Collection(homepageReceiptsCollection),
-		outbox:      db.Collection(homepageOutboxCollection),
-		details:     db.Collection(homepageDetailsCollection),
-		followers:   db.Collection(homepageFollowersCollection),
-		checkpoints: db.Collection(homepageCheckpointCollection),
+		homepages:              db.Collection(homepageCollection),
+		receipts:               db.Collection(homepageReceiptsCollection),
+		outbox:                 db.Collection(homepageOutboxCollection),
+		details:                db.Collection(homepageDetailsCollection),
+		followers:              db.Collection(homepageFollowersCollection),
+		checkpoints:            db.Collection(homepageCheckpointCollection),
+		releaseProjections:     db.Collection(homepageReleaseProjectionCollection),
+		releaseCandidateStates: db.Collection(homepageReleaseCandidateCollection),
 	}
 }
 
@@ -55,6 +61,7 @@ var (
 	_ homepageports.FollowerProjectionStore   = (*MongoHomepageStore)(nil)
 	_ homepageports.OutboxReader              = (*MongoHomepageStore)(nil)
 	_ homepageports.ProjectionCheckpointStore = (*MongoHomepageStore)(nil)
+	_ homepageports.ReleaseProjectionStore    = (*MongoHomepageStore)(nil)
 )
 
 func (s *MongoHomepageStore) EnsureIndexes(ctx context.Context) error {
@@ -129,6 +136,24 @@ func (s *MongoHomepageStore) EnsureIndexes(ctx context.Context) error {
 			Keys:    bson.D{{Key: "aggregateId", Value: 1}, {Key: "aggregateVersion", Value: 1}},
 			Options: options.Index().SetName("idx_homepage_outbox_aggregate_version").SetUnique(true),
 		},
+	}); err != nil {
+		return err
+	}
+	if _, err := s.releaseProjections.Indexes().CreateMany(ctx, []mongo.IndexModel{
+		{
+			Keys:    bson.D{{Key: "environment", Value: 1}, {Key: "sourceOwner", Value: 1}, {Key: "releaseId", Value: 1}, {Key: "manifestDigest", Value: 1}, {Key: "entityRef", Value: 1}},
+			Options: options.Index().SetName("uq_homepage_release_projection_identity").SetUnique(true),
+		},
+		{
+			Keys:    bson.D{{Key: "environment", Value: 1}, {Key: "sourceOwner", Value: 1}, {Key: "releaseId", Value: 1}, {Key: "manifestDigest", Value: 1}, {Key: "homepageId", Value: 1}},
+			Options: options.Index().SetName("uq_homepage_release_projection_homepage").SetUnique(true),
+		},
+	}); err != nil {
+		return err
+	}
+	if _, err := s.releaseCandidateStates.Indexes().CreateOne(ctx, mongo.IndexModel{
+		Keys:    bson.D{{Key: "environment", Value: 1}, {Key: "sourceOwner", Value: 1}, {Key: "releaseId", Value: 1}, {Key: "manifestDigest", Value: 1}},
+		Options: options.Index().SetName("uq_homepage_release_candidate_state").SetUnique(true),
 	}); err != nil {
 		return err
 	}
@@ -926,44 +951,6 @@ type checkpointDocument struct {
 	Checkpoint       string     `bson:"checkpoint"`
 	CursorOccurredAt *time.Time `bson:"cursorOccurredAt,omitempty"`
 	UpdatedAt        time.Time  `bson:"updatedAt"`
-}
-
-func (s *MongoHomepageStore) LoadCheckpoint(ctx context.Context, consumer string) (string, error) {
-	var document checkpointDocument
-	err := s.checkpoints.FindOne(ctx, bson.M{"_id": strings.TrimSpace(consumer)}).Decode(&document)
-	if errors.Is(err, mongo.ErrNoDocuments) {
-		return "", nil
-	}
-	if err == nil && (document.CursorOccurredAt == nil || document.CursorOccurredAt.IsZero()) {
-		// 旧 checkpoint 只保存非时序 EventID，无法证明未跳过更小哈希。
-		// 返回空游标触发一次完整、幂等重放；下一次 SaveCheckpoint 会升级它。
-		return "", nil
-	}
-	return document.Checkpoint, err
-}
-
-func (s *MongoHomepageStore) SaveCheckpoint(
-	ctx context.Context,
-	consumer string,
-	checkpoint string,
-) error {
-	checkpoint = strings.TrimSpace(checkpoint)
-	var checkpointEvent outboxDocument
-	if err := s.outbox.FindOne(ctx, bson.M{"_id": checkpoint}).Decode(&checkpointEvent); err != nil {
-		return err
-	}
-	cursorOccurredAt := checkpointEvent.OccurredAt.UTC()
-	_, err := s.checkpoints.UpdateOne(
-		ctx,
-		bson.M{"_id": strings.TrimSpace(consumer)},
-		bson.M{"$set": bson.M{
-			"checkpoint":       checkpoint,
-			"cursorOccurredAt": cursorOccurredAt,
-			"updatedAt":        time.Now().UTC(),
-		}},
-		options.UpdateOne().SetUpsert(true),
-	)
-	return err
 }
 
 func receiptID(actorID, idempotencyKey string) string {

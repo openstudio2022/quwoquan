@@ -45,9 +45,9 @@ assistant_access:
     mode: none
     scopes: []
 business_rules:
-- Creator package 只由已激活 immutable release 投影，禁止创建可登录账号或复制 Post 正文。
-- creatorId 唯一映射 canonical personaId，release 切换必须整包原子替换并校验媒体引用。
-- Persona 关闭或 release 撤销必须 tombstone 该运行时档案并从公开查询移除。
+- 事件投影集合不得承载 immutable Data release candidate；Data candidate 只写本对象 owner-local 的 creator_release_projections / creator_release_candidate_states，stage-only，不创建可登录账号、不写 Persona outbox 或 command receipt，也不维护 User 侧 active/latest pointer。
+- release candidate 公开读取必须绑定 Content active tuple（environment/sourceOwner/releaseId/manifestDigest）exact fence，不得从事件投影或旧 content_release Persona fallback。
+- Persona 关闭必须 tombstone 事件来源的运行时档案并从公开查询移除。
 lifecycle:
   source_events:
   - user.user_account.UserAccountClosed

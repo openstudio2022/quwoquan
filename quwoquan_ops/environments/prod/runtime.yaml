@@ -95,6 +95,15 @@
         "source": "published-release",
         "workIdEnv": "VIDEO_PLAYBACK_CANARY_WORK_ID",
         "publicSliceKeyEnv": "VIDEO_PLAYBACK_CANARY_PUBLIC_SLICE_KEY"
+      },
+      "dataRelease": {
+        "mode": "local-import",
+        "mongoPortRole": "mongodb",
+        "redisPortRole": "redis",
+        "redisDatabase": 1,
+        "mediaLocalRef": "cache/media",
+        "userPostgresPortRole": "postgres",
+        "publicReadyTimeoutSeconds": 240
       }
     },
     "prod-hosted": {

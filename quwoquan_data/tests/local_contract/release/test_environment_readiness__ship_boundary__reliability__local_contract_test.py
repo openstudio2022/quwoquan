@@ -26,7 +26,7 @@ _LIFECYCLE_EXIT_REF = (
 )
 
 
-def test_consumer_readiness__fails_closed_without_release_identity(
+def test_production_readiness__fails_closed_without_release_identity(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
@@ -41,12 +41,12 @@ def test_consumer_readiness__fails_closed_without_release_identity(
     with pytest.raises(SystemExit, match="releaseId, verifyRunId and manifestDigest"):
         subject.require_environment_readiness(
             environment=DeploymentEnvironment.GAMMA,
-            phase=ShipReadinessPhase.CONSUMER,
+            phase=ShipReadinessPhase.PRODUCTION,
             run=tmp_path / "verify-001",
         )
 
 
-def test_consumer_readiness__passes_exact_release_identity_to_stackctl(
+def test_production_readiness__passes_exact_release_identity_to_stackctl(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
@@ -59,7 +59,7 @@ def test_consumer_readiness__passes_exact_release_identity_to_stackctl(
             stdout=json.dumps(
                 {
                     "schema": "quwoquan_ops.ship_readiness_receipt",
-                    "phase": "consumer",
+                    "phase": "production",
                     "environment": "gamma",
                     "target": "gamma-local",
                     "outcome": "PASS",
@@ -73,7 +73,7 @@ def test_consumer_readiness__passes_exact_release_identity_to_stackctl(
 
     receipt = subject.require_environment_readiness(
         environment=DeploymentEnvironment.GAMMA,
-        phase=ShipReadinessPhase.CONSUMER,
+        phase=ShipReadinessPhase.PRODUCTION,
         run=run_root,
         release_id="pilot-003",
         verify_run_id="verify-001",
@@ -87,35 +87,12 @@ def test_consumer_readiness__passes_exact_release_identity_to_stackctl(
     assert command[command.index("--manifest-digest") + 1] == "sha256:" + "a" * 64
     assert "--lifecycle-exit-ref" not in command
     evidence = read_json(run_root / "environment-readiness.json")
-    assert evidence["phase"] == "consumer"
+    assert evidence["phase"] == "production"
     assert evidence["outcome"] == "PASS"
     assert "lifecycleExitRef" not in evidence
 
 
-def test_commercial_readiness__fails_closed_without_lifecycle_exit_ref(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    monkeypatch.setattr(
-        subject.subprocess,
-        "run",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(
-            AssertionError("commercial without lifecycleExitRef must fail closed")
-        ),
-    )
-
-    with pytest.raises(SystemExit, match="lifecycleExitRef is required"):
-        subject.require_environment_readiness(
-            environment=DeploymentEnvironment.ALPHA,
-            phase=ShipReadinessPhase.COMMERCIAL,
-            run=tmp_path / "verify-commercial",
-            release_id="pilot-003",
-            verify_run_id="verify-commercial",
-            manifest_digest="sha256:" + "a" * 64,
-        )
-
-
-def test_commercial_readiness__passes_lifecycle_exit_ref_to_stackctl(
+def test_production_readiness__passes_lifecycle_exit_ref_to_stackctl(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
@@ -128,7 +105,7 @@ def test_commercial_readiness__passes_lifecycle_exit_ref_to_stackctl(
             stdout=json.dumps(
                 {
                     "schema": "quwoquan_ops.ship_readiness_receipt",
-                    "phase": "commercial",
+                    "phase": "production",
                     "environment": "alpha",
                     "target": "alpha-local",
                     "outcome": "PASS",
@@ -141,7 +118,7 @@ def test_commercial_readiness__passes_lifecycle_exit_ref_to_stackctl(
     run_root = tmp_path / "verify-commercial"
     receipt = subject.require_environment_readiness(
         environment=DeploymentEnvironment.ALPHA,
-        phase=ShipReadinessPhase.COMMERCIAL,
+        phase=ShipReadinessPhase.PRODUCTION,
         run=run_root,
         release_id="pilot-003",
         verify_run_id="verify-commercial",
@@ -149,9 +126,9 @@ def test_commercial_readiness__passes_lifecycle_exit_ref_to_stackctl(
         lifecycle_exit_ref=_LIFECYCLE_EXIT_REF,
     )
 
-    assert receipt is not None and receipt.phase is ShipReadinessPhase.COMMERCIAL
+    assert receipt is not None and receipt.phase is ShipReadinessPhase.PRODUCTION
     command = observed[0]
-    assert command[command.index("--phase") + 1] == "commercial"
+    assert command[command.index("--phase") + 1] == "production"
     assert command[command.index("--lifecycle-exit-ref") + 1] == _LIFECYCLE_EXIT_REF
     evidence = read_json(run_root / "environment-readiness.json")
     assert evidence["lifecycleExitRef"] == _LIFECYCLE_EXIT_REF
@@ -167,24 +144,23 @@ def test_ship_verify_cli__registers_lifecycle_exit_ref_flag() -> None:
         [
             "ship",
             "verify",
-            "--release-id",
-            "pilot-003",
+            "--handoff-ref",
+            "handoff-ref-v1:sha256:" + "a" * 64 + ":sha256:" + "b" * 64,
             "--env",
             "gamma",
             "--import-run-id",
             "apply-001",
-            "--readiness-phase",
-            "commercial",
+            "--readiness-phase", "production",
             "--lifecycle-exit-ref",
             _LIFECYCLE_EXIT_REF,
         ]
     )
 
     assert args.lifecycle_exit_ref == _LIFECYCLE_EXIT_REF
-    assert args.readiness_phase == "commercial"
+    assert args.readiness_phase == "production"
 
 
-def test_ship_verify_cli__exposes_research_phase_without_weakening_identity_gate() -> None:
+def test_ship_verify_cli__exposes_production_phase_without_weakening_identity_gate() -> None:
     parser = argparse.ArgumentParser()
     subparsers = parser.add_subparsers(dest="command", required=True)
     ship_cli.register_parser(subparsers)
@@ -193,23 +169,22 @@ def test_ship_verify_cli__exposes_research_phase_without_weakening_identity_gate
         [
             "ship",
             "verify",
-            "--release-id",
-            "research-001",
+            "--handoff-ref",
+            "handoff-ref-v1:sha256:" + "a" * 64 + ":sha256:" + "b" * 64,
             "--env",
             "alpha",
             "--import-run-id",
             "apply-001",
-            "--readiness-phase",
-            "research",
+            "--readiness-phase", "production",
         ]
     )
 
-    assert args.readiness_phase == "research"
+    assert args.readiness_phase == "production"
     assert args.lifecycle_exit_ref == ""
 
 
 @pytest.mark.parametrize("environment", tuple(DeploymentEnvironment))
-def test_research_readiness_is_release_bound_in_every_environment(
+def test_production_readiness_is_release_bound_in_every_environment(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
     environment: DeploymentEnvironment,
@@ -223,7 +198,7 @@ def test_research_readiness_is_release_bound_in_every_environment(
             stdout=json.dumps(
                 {
                     "schema": "quwoquan_ops.ship_readiness_receipt",
-                    "phase": "research",
+                    "phase": "production",
                     "environment": environment.value,
                     "target": f"{environment.value}-research",
                     "outcome": "PASS",
@@ -238,17 +213,18 @@ def test_research_readiness_is_release_bound_in_every_environment(
     run_root = tmp_path / environment.value / "research-001"
     receipt = subject.require_environment_readiness(
         environment=environment,
-        phase=ShipReadinessPhase.RESEARCH,
+        phase=ShipReadinessPhase.PRODUCTION,
         run=run_root,
         release_id="research-001",
+        verify_run_id="verify-001",
         manifest_digest="sha256:" + "a" * 64,
     )
 
     assert receipt is not None and receipt.passed
     command = observed[0]
-    assert command[command.index("--phase") + 1] == "research"
+    assert command[command.index("--phase") + 1] == "production"
     assert command[command.index("--env") + 1] == environment.value
     assert "--lifecycle-exit-ref" not in command
     evidence = read_json(run_root / "environment-readiness.json")
-    assert evidence["phase"] == "research"
+    assert evidence["phase"] == "production"
     assert evidence["environment"] == environment.value

@@ -17,7 +17,7 @@ render: { articleTemplate: journal, fontPreset: classic }
 structure:
   required: [地理问题, 区域脉络, 地貌与季节, 人与路线, 旅行观察]
   optional: [地图信息图, 图说长卷, 延伸阅读]
-mustIncludeFacts: [地理位置, 地貌成因, 季节窗口, 观察点, 安全边界]
+evidenceConditionedFacts: [地理位置, 地貌成因, 季节窗口, 观察点, 安全边界]
 forbiddenPhrases: [冷启动, 批次, 角色：, 占位, contract_fixture, 国家地理]
 wordCount: { min: 1600, max: 3000 }
 imagePlan:
@@ -29,5 +29,5 @@ crossRefs: { minEntity: 2, minTag: 5 }
 recommendation:
   authorBinding: { required: true, source: creator_profile_catalog }
   exposeStyleTags: true
-  qualitySignals: [bodyLength, requiredFactsCovered, imageSlotCoverage, entityRefCount]
+  qualitySignals: [bodyLength, evidenceSupportedFactCoverage, imageSlotCoverage, entityRefCount]
   bodyForbiddenFields: [qualityScore, templateId, routingReason, coldStartBoost, isSystemBuiltin]

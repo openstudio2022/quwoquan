@@ -162,10 +162,11 @@ def test_same_execution_target_is_idempotent_but_another_target_is_not(
         manifest=manifest,
         excluded_manifest_path=relative,
     )
+    # 同 assetId 是稳定资产复用；另一 execution 的不同 assetId 复用同一字节才是冲突。
     with pytest.raises(ObjectTransactionError, match="content sha256"):
         assert_canonical_video_unique(
             publish_root=publish,
-            manifest=manifest,
+            manifest=_manifest("execution-other", content="same", poster="same-poster"),
             excluded_manifest_path="posts/video/体验/另一个对象/1/manifest.json",
         )
 
