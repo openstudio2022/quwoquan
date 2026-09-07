@@ -540,7 +540,9 @@ class StepSelfOutputReferenceContractTest(unittest.TestCase):
 
         self.assertEqual(failures, [])
 
-    def test_steps_referencing_each_other_outputs_are_legal(self) -> None:
+    def test_cross_step_forward_reference_is_outside_self_reference_scope(self) -> None:
+        """first 前向引用 second 的 outputs 在运行期同样是空串，但那不是「自引用」；本检查只
+        拦同一 step 内引用自身 outputs 的形态，跨 step 前向引用不在其范围。"""
         failures = self._failures(
             "      - id: first\n"
             "        env:\n"
@@ -553,6 +555,21 @@ class StepSelfOutputReferenceContractTest(unittest.TestCase):
         )
 
         self.assertEqual(failures, [])
+
+    def test_hash_prefixed_heredoc_line_referencing_own_outputs_is_still_caught(self) -> None:
+        """run heredoc 里以 `#` 起头的 markdown 行不是 shell 注释，表达式照样在 step 开始前求值为空串。"""
+        failures = self._failures(
+            "      - name: summarize admission\n"
+            "        id: admission\n"
+            "        run: |\n"
+            "          echo \"path=x\" >> \"$GITHUB_OUTPUT\"\n"
+            "          cat >> \"$GITHUB_STEP_SUMMARY\" <<EOF\n"
+            "          # Admission ${{ steps.admission.outputs.path }}\n"
+            "          EOF\n"
+        )
+
+        self.assertEqual(len(failures), 1, failures)
+        self.assertIn(":14: step 'admission' references its own steps.admission.outputs", failures[0])
 
     def test_quoted_step_id_is_still_recognized(self) -> None:
         failures = self._failures(

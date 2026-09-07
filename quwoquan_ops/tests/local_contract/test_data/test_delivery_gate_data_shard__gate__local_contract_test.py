@@ -152,10 +152,27 @@ def test_ops_scope_shards_its_own_tree_with_the_same_discipline() -> None:
     assert listed.stdout.split() == shard.sharded_test_files(ROOT, 4, 2, "ops")
 
 
+# local-continuous-integration OPEN-004 冻结的排除集合：只能减少。新增条目 = lane 门禁覆盖面收缩，
+# 必须先在该 OPEN 登记并同步这里，不能靠修改 yaml 静默通过。
+LANE_GATE_EXCLUSIONS_FROZEN_2026_09_07 = frozenset({
+    "quwoquan_ops/tests/local_contract/environment/test_environment_auth_token_isolation__local_contract_test.py",
+    "quwoquan_ops/tests/local_contract/environment/test_environment_patrol_smoke__device_env_tls_and_runtime__local_contract_test.py",
+    "quwoquan_ops/tests/local_contract/environment/test_environment_patrol_smoke__typed_actor_sessions__local_contract_test.py",
+    "quwoquan_ops/tests/local_contract/gate/test_app_generated_manifest__contract__local_contract_test.py",
+    "quwoquan_ops/tests/local_contract/observability/test_product_telemetry_log_sink__security__local_contract_test.py",
+    "quwoquan_ops/tests/local_contract/service_ops/assistant-service/ci/test_assistant_device_matrix__local_contract_test.py",
+    "quwoquan_ops/tests/local_contract/stackctl/test_app_content_uat_failure_projection__local_contract_test.py",
+    "quwoquan_ops/tests/local_contract/stackctl/test_app_dependency_capsule__local_contract_test.py",
+    "quwoquan_ops/tests/local_contract/stackctl/test_filter_catalog_release_stackctl__security__local_contract_test.py",
+    "quwoquan_ops/tests/local_contract/stackctl/test_ios_pod_dependency_capsule__local_contract_test.py",
+})
+
+
 def test_lane_gate_exclusions_are_declared_real_ops_files_and_only_narrow_ops(tmp_path: Path) -> None:
-    """lane 门禁排除清单是声明式、文件级、指向真实 ops 合同，且不影响 data 与全量。"""
+    """lane 门禁排除清单是声明式、文件级、指向真实 ops 合同，只减不增，且不影响 data 与全量。"""
     excluded = shard.lane_gate_excluded_files(ROOT)
     assert excluded
+    assert excluded <= LANE_GATE_EXCLUSIONS_FROZEN_2026_09_07, sorted(excluded - LANE_GATE_EXCLUSIONS_FROZEN_2026_09_07)
     full = shard.local_contract_test_files(ROOT, "ops")
     narrowed = shard.local_contract_test_files(ROOT, "ops", lane_gate=True)
     assert excluded <= set(full)

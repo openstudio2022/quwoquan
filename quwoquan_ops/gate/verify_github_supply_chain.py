@@ -207,33 +207,43 @@ def _step_self_output_reference_failures(path: Path, text: str) -> list[str]:
     精确行号且不受 `id:` 与 `run:` 的键序影响。
     """
     failures: list[str] = []
-    lines = text.splitlines()
-    step_starts = [index for index, line in enumerate(lines) if line.startswith("      - ")]
-    for position, start in enumerate(step_starts):
-        end = step_starts[position + 1] if position + 1 < len(step_starts) else len(lines)
-        for cursor in range(start + 1, end):
-            line = lines[cursor]
-            if line.strip() and not line.startswith("      "):
-                end = cursor
-                break
-        block = lines[start:end]
-        step_id: str | None = None
-        for line in block:
-            match = re.fullmatch(r"        id:\s*(\S.*?)\s*(?:#.*)?", line)
-            if match is not None:
-                step_id = match.group(1).strip().strip("\"'")
-                break
+    for start, block in _step_blocks(text.splitlines()):
+        step_id = _step_id(block)
         if not step_id:
             continue
         self_reference = re.compile(rf"steps\.{re.escape(step_id)}\.outputs")
         for offset, line in enumerate(block):
-            for _ in self_reference.finditer(line):
-                failures.append(
-                    f"{path.relative_to(ROOT)}:{start + offset + 1}: step '{step_id}' references "
-                    f"its own steps.{step_id}.outputs inside the same step; the expression is "
-                    f"evaluated before the step runs and is always empty"
-                )
+            # 不豁免 `#` 开头的行：run heredoc 里以 `#` 起头的 markdown/内容行同样会被 Actions 求值为空串。
+            if self_reference.search(line) is None:
+                continue
+            failures.append(
+                f"{path.relative_to(ROOT)}:{start + offset + 1}: step '{step_id}' references "
+                f"its own steps.{step_id}.outputs inside the same step; the expression is "
+                f"evaluated before the step runs and is always empty"
+            )
     return failures
+
+
+def _step_blocks(lines: list[str]) -> list[tuple[int, list[str]]]:
+    """按 `      - ` 起始行切 step 块；块在下一个 step 或缩进小于 6 的非空行处结束。"""
+    step_starts = [index for index, line in enumerate(lines) if line.startswith("      - ")]
+    blocks: list[tuple[int, list[str]]] = []
+    for position, start in enumerate(step_starts):
+        end = step_starts[position + 1] if position + 1 < len(step_starts) else len(lines)
+        for cursor in range(start + 1, end):
+            if lines[cursor].strip() and not lines[cursor].startswith("      "):
+                end = cursor
+                break
+        blocks.append((start, lines[start:end]))
+    return blocks
+
+
+def _step_id(block: list[str]) -> str | None:
+    for line in block:
+        match = re.fullmatch(r"        id:\s*(\S.*?)\s*(?:#.*)?", line)
+        if match is not None:
+            return match.group(1).strip().strip("\"'")
+    return None
 
 
 def verify_release_qualification_controls() -> list[str]:

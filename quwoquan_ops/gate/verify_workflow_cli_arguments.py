@@ -122,32 +122,44 @@ def _constant_loop_required(tree: ast.Module) -> dict[int, tuple[str, list[str]]
     sequences = _module_const_sequences(tree)
     rendered: dict[int, tuple[str, list[str]]] = {}
     for loop in ast.walk(tree):
-        if not isinstance(loop, ast.For) or loop.orelse:
+        resolved = _const_loop(loop, sequences)
+        if resolved is None:
             continue
-        variable = _name_of(loop.target)
-        values = _const_str_sequence(loop.iter)
-        if values is None and _name_of(loop.iter) in sequences:
-            values = sequences[_name_of(loop.iter) or ""]
-        if variable is None or values is None:
-            continue
+        variable, values = resolved
         for node in ast.walk(ast.Module(body=loop.body, type_ignores=[])):
-            if not (
-                isinstance(node, ast.Call)
-                and isinstance(node.func, ast.Attribute)
-                and node.func.attr == "add_argument"
-                and _is_required_call(node)
-                and node.args
-                and isinstance(node.args[0], ast.JoinedStr)
-            ):
+            if not _is_fstring_required_add_argument(node):
                 continue
             owner = _name_of(node.func.value)
-            if owner is None:
-                continue
             names = [_render_fstring(node.args[0], {variable: value}) for value in values]
-            if any(name is None or not name.startswith("--") for name in names):
+            if owner is None or any(name is None or not name.startswith("--") for name in names):
                 continue
             rendered[id(node)] = (owner, [name for name in names if name is not None])
     return rendered
+
+
+def _const_loop(node: ast.AST, sequences: dict[str, tuple[str, ...]]) -> tuple[str, tuple[str, ...]] | None:
+    """`for <name> in <字符串常量元组 | 模块级常量名>:`（无 else）→ (循环变量, 常量值列表)。"""
+    if not isinstance(node, ast.For) or node.orelse:
+        return None
+    variable = _name_of(node.target)
+    values = _const_str_sequence(node.iter)
+    if values is None:
+        values = sequences.get(_name_of(node.iter) or "")
+    if variable is None or values is None:
+        return None
+    return variable, values
+
+
+def _is_fstring_required_add_argument(node: ast.AST) -> bool:
+    """`<parser>.add_argument(f"--...", required=True, ...)`：第一个位置参数是 f-string 的 required 声明。"""
+    return (
+        isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and node.func.attr == "add_argument"
+        and _is_required_call(node)
+        and bool(node.args)
+        and isinstance(node.args[0], ast.JoinedStr)
+    )
 
 
 def parser_spec(script: Path) -> ParserSpec | None:
