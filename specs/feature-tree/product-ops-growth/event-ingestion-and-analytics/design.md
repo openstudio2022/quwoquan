@@ -27,7 +27,7 @@
 - 决策：Alpha、Beta、Gamma、Prod 均绑定 `ext.obs.elasticsearch`，以环境隔离的 Elasticsearch 集群承载产品事件、启动诊断、运行日志和小时聚合四个逻辑分区；环境组合根只提供集群 endpoint 与受保护认证材料，不选择第二种日志后端。
 - 理由：统一真实网络、持久化、索引、聚合、查询、告警和回滚语义，避免 Alpha/Beta 的 PostgreSQL 替身与 Prod SLS 形成无法由同一候选晋级的三轨实现。
 - 被否决方案：任一环境使用 PostgreSQL、SLS、文件或内存冒充日志 Provider，调用方直连 ES，多后端双写、失败 fallback，以及用一个环境的 receipt 冒充另一个环境 readiness。
-- 约束与影响：`ObservabilityLogSinkPort`、事件目录、product-ops API、查询 Slice、错误语义、索引模板、ILM 与 rollup 代数保持唯一；环境差异只允许 endpoint、认证、容量与保留执行资源不同。
+- 约束与影响：`ProductTelemetrySinkPort`（产品事件）与 `RuntimeLogSinkPort`（运行日志）、事件目录、product-ops API、查询 Slice、错误语义、索引模板、ILM 与 rollup 代数保持唯一；环境差异只允许 endpoint、认证、容量与保留执行资源不同。
 - 关联要求：`REQ-001`
 - 影响 Story：[`analytics-metric-dictionary`](./analytics-metric-dictionary/spec.md)、[`event-schema-governance`](./event-schema-governance/spec.md)
 - 关联验收：`SIT-001`

@@ -6,7 +6,7 @@
 
 ## 1. 能力目标
 
-统一采集 App 产品事件、异常和受限启动诊断，经同一 `ObservabilityLogSinkPort` 和 Elasticsearch 存储合同形成可查询明细与聚合，并将推荐反馈保持在唯一行为事实边界；Alpha、Beta、Gamma、Prod 不再按环境切换日志后端。
+统一采集 App 产品事件、异常和受限启动诊断，经同一 `ProductTelemetrySinkPort`（产品事件）与 `RuntimeLogSinkPort`（运行日志） 和 Elasticsearch 存储合同形成可查询明细与聚合，并将推荐反馈保持在唯一行为事实边界；Alpha、Beta、Gamma、Prod 不再按环境切换日志后端。
 
 ## 2. 范围与非目标
 
@@ -62,7 +62,7 @@
 
 - `/ops/recovery-failures` 是唯一匿名恢复异常入口，只接收 `occurredAt`、`appVersion`、`buildNumber`、`platform`、`osVersion`、`deviceModel`、`errorSource`、`errorType`、`errorMessage`、`stackTrace` 十个脱敏字段；未知字段整条拒绝。
 - 正常和缓慢启动在安全 Shell 后经普通 Reporter 写产品事件；不得生成启动尝试 ID、检查点、诊断编号或异常指纹，也不得向恢复异常接口复制产品/身份字段。
-- 恢复异常继续使用同一 `ObservabilityLogSinkPort` 和环境日志 Provider；客户端本地加密队列只负责失败补报，不形成第二远端链路。
+- 恢复异常继续使用同一 `ProductTelemetrySinkPort`（产品事件）与 `RuntimeLogSinkPort`（运行日志） 和环境日志 Provider；客户端本地加密队列只负责失败补报，不形成第二远端链路。
 
 <a id="req-004"></a>
 ### REQ-004 推荐反馈单出口与一次生效

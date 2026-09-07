@@ -4,7 +4,7 @@
 
 ## 单轨约束
 
-- Alpha、Beta、Gamma、Prod 均绑定 `ext.obs.elasticsearch` 和同一 `ObservabilityLogSinkPort`。
+- Alpha、Beta、Gamma、Prod 均绑定 `ext.obs.elasticsearch` 和同一 `ProductTelemetrySinkPort`（产品事件）与 `RuntimeLogSinkPort`（运行日志）。
 - Alpha/Beta/Gamma 使用各自本地拓扑中的独立 Elasticsearch 容器、索引和数据卷；Prod 使用受保护环境注入的正式 Elasticsearch endpoint 与 API key。
 - 不允许 PostgreSQL、SLS、文件或内存作为环境运行时 log sink，也不允许双写、fallback 或运行时选择器。
 - 本地 endpoint 只由 packaged runtime/port manifest 解析，并分别投影到 telemetry/runtime-log 逻辑键；Prod 的两条 endpoint 与 `PRODUCT_OPS_TELEMETRY_ELASTICSEARCH_API_KEY`、`PRODUCT_OPS_RUNTIME_LOG_ELASTICSEARCH_API_KEY` 只由受保护部署环境按角色注入。
