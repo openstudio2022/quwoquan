@@ -105,21 +105,14 @@ final gatheringDetailGatheringPostsReaderProvider =
           .gatheringPosts,
     );
 
-/// 四锚点社会证明读取（按 surface 装配）：gathering 详情发起人卡、
-/// 实体主页近期行动区与沉浸详情内容锚点共用同一 typed 读面。
+/// 四锚点社会证明读取（按 surface 装配）：gathering 详情发起人卡与沉浸详情内容锚点
+/// 共用同一 typed 读面（实体主页近期行动区已随一级行动发现入口退役）。
 final gatheringDetailSocialProofReaderProvider =
     Provider<ContentGatheringSocialProofReader>(
       (ref) => ref
           .watch(
             _contentPostReaderFacetsProvider(AppUiSurfaces.gatheringDetail),
           )
-          .gatheringSocialProof,
-    );
-
-final homepageDetailSocialProofReaderProvider =
-    Provider<ContentGatheringSocialProofReader>(
-      (ref) => ref
-          .watch(_contentPostReaderFacetsProvider(AppUiSurfaces.homepageDetail))
           .gatheringSocialProof,
     );
 

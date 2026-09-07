@@ -84,7 +84,6 @@ import 'package:quwoquan_app/service/search_service/search/search_index_view/pre
 import 'package:quwoquan_app/service/search_service/search/search_index_view/presentation/location_place_landing_page.dart';
 import 'package:quwoquan_app/service/search_service/search/search_index_view/presentation/search_network_results_page.dart';
 import 'package:quwoquan_app/service/search_service/search/search_index_view/application/public/search_launch_contract.dart';
-import 'package:quwoquan_app/runtime/shell/interest_match/interest_match_page.dart';
 import 'package:quwoquan_app/service/content_service/content/post/presentation/interest_onboarding_page.dart';
 import 'package:quwoquan_app/service/entity_service/entity_homepage/homepage/application/public/homepage_route_models.dart';
 import 'package:quwoquan_app/service/entity_service/entity_homepage/homepage_claim_request/presentation/homepage_claim_page.dart';
@@ -258,8 +257,14 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             path: AppRoutePaths.home,
             pageBuilder: (context, state) => NoTransitionPage(
               key: state.pageKey,
-              child:
-                  const SizedBox.shrink(), // HomePage 由 MainAppShell 的 IndexedStack 承载渲染
+              child: const SizedBox.shrink(), // HomePage 由 MainAppShell 的 IndexedStack 承载渲染
+            ),
+          ),
+          GoRoute(
+            path: AppRoutePaths.videoBook,
+            pageBuilder: (context, state) => NoTransitionPage(
+              key: state.pageKey,
+              child: const SizedBox.shrink(), // 视频书由 MainAppShell 的 IndexedStack 承载
             ),
           ),
           GoRoute(
@@ -271,12 +276,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path: AppRoutePaths.interestMatch,
-            pageBuilder: (context, state) => NoTransitionPage(
-              key: state.pageKey,
-              child: InterestMatchPage(
-                visitRecorderService: ref.read(visitRecorderServiceProvider),
-              ),
-            ),
+            redirect: (context, state) => AppRoutePaths.myIntersections(),
           ),
           GoRoute(
             path: AppRoutePaths.profile,
@@ -543,11 +543,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                     action.name,
                   );
                 },
-                onStartGathering: (navigationContext) =>
-                    GlobalQuickActionSheet.openGatedStartGathering(
-                      navigationContext,
-                      widgetRef,
-                    ),
                 onStartGroupChat: (navigationContext) =>
                     GlobalQuickActionSheet.openGatedStartGroupChat(
                       navigationContext,

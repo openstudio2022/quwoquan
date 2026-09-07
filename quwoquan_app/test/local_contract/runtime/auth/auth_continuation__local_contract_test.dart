@@ -12,6 +12,9 @@ import 'package:quwoquan_app/runtime/auth/auth_session.dart';
 import 'package:quwoquan_app/runtime/shell/actions/global_surface_actions.dart';
 import 'package:quwoquan_app/runtime/di/global_surface_action_dependencies.dart';
 import 'package:quwoquan_app/runtime/testing/test_keys.dart';
+import 'package:quwoquan_app/service/content_service/content/content_behavior_fact/application/public/content_behavior_repository.dart'
+    show ReferralSource;
+import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/application/public/gathering_create_navigation_request.dart';
 import 'package:quwoquan_app/l10n/l10n.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
@@ -63,6 +66,62 @@ void main() {
       // 取出后清空，二次 take 为空（杜绝重复续接）。
       expect(container.read(authContinuationProvider), isNull);
       expect(controller.take<SubmitCommentContinuation>(), isNull);
+    });
+
+    test('行动登录续接原样保留完整 typed request 且只消费一次', () {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      final request = GatheringCreateNavigationRequest(
+        actionKey: 'start_gathering',
+        actionLabel: '邀 TA 一起去',
+        sourceRefs: const <GatheringCreateSourceReference>[
+          GatheringCreateSourceReference(
+            sourceRef: 'content_context',
+            objectId: 'post-1',
+            objectKind: 'content',
+            routeId: 'workBrowser',
+          ),
+          GatheringCreateSourceReference(
+            sourceRef: 'coWishlistedEntity',
+            objectId: 'place-1',
+            objectKind: 'place',
+            routeId: 'homepageDetail',
+          ),
+        ],
+        targetObject: const GatheringCreateTargetObject(
+          objectId: 'place-1',
+          objectKind: 'place',
+          objectName: '西湖',
+          routeId: 'homepageDetail',
+        ),
+        intersection: const GatheringCreateIntersectionContext(
+          intersectionId: 'ix-1',
+          dimension: 'location',
+          intersectionClass: 'fact',
+        ),
+        evidence: const GatheringCreateEvidenceContext(
+          evidenceId: 'ev-1',
+          sourceRef: 'coWishlistedEntity',
+          tagRefs: <String>['travel:lake'],
+        ),
+        referralSource: ReferralSource.organicFeed,
+        inviteePersonaId: 'persona-2',
+        inviteeDisplayName: '小雅',
+      );
+      final controller = container.read(authContinuationProvider.notifier);
+
+      expect(
+        controller.set(StartGatheringContinuation(request: request)),
+        isTrue,
+      );
+      final restored = controller
+          .take<StartGatheringContinuation<GatheringCreateNavigationRequest>>();
+      expect(identical(restored?.request, request), isTrue);
+      expect(restored?.request.sourceRefs, hasLength(2));
+      expect(restored?.request.inviteePersonaId, 'persona-2');
+      expect(restored?.request.evidence.evidenceId, 'ev-1');
+      expect(restored?.request.referralSource, ReferralSource.organicFeed);
+      expect(controller.take<StartGatheringContinuation>(), isNull);
     });
 
     test('B2 页面动作续接保持强类型目标', () {
@@ -232,9 +291,9 @@ void main() {
       );
 
       // 模拟真实登录成功：会话先翻转，登录页再 pop，原浮层回到前台后续提。
-      (container.read(authSessionControllerProvider.notifier)
-              as _FlippableSession)
-          .loginNow();
+      (container.read(
+        authSessionControllerProvider.notifier,
+      ) as _FlippableSession).loginNow();
       expect(
         container.read(authSessionControllerProvider).isAuthenticated,
         isTrue,

@@ -5,8 +5,8 @@
 1. 首页关注频道登录关闭后 pop 回触发点再次弹登录。
 2. createEntry / 加号入口被路由守卫提前拦截，未进入具体动作就弹登录。
 3. Web/宽屏创作主入口未登录直接显示登录面板。
-4. 活动/群聊具体动作绕过 gate，或登录成功后没有 typed continuation 精确续接。
-5. 缺少「关闭不回环」与「登录成功进目标态」回归测试。
+4. 合法 Gathering 深链/交集承接或群聊具体动作绕过 gate，或登录成功后没有 typed continuation 精确续接。
+5. C 位重新暴露无上下文 Gathering，或缺少「关闭不回环」与「登录成功进目标态」回归测试。
 6. 鉴权双真相源回归：`page_object_contract.yaml` 的 auth_requirement 与
    `requiredRouteGateForLocation` 漂移（缺 parity 测试、守卫丢 RTC/settings
    分支、auth_gate 重新引入裸路径前缀字面量）。
@@ -151,13 +151,13 @@ def main() -> int:
         errors,
     )
     require(
-        "openGatedStartGathering" in create_entry_route,
-        "createEntry 发起活动必须走 openGatedStartGathering，禁止绕过登录门",
+        "openGatedStartGathering" not in create_entry_route,
+        "createEntry/C 位禁止重新暴露无上下文 Gathering；活动只能由交集或合法任务深链承接",
         errors,
     )
     require(
         "openGatedStartGroupChat" in create_entry_route,
-        "createEntry 发起群聊必须走 openGatedStartGroupChat，禁止绕过登录门",
+        "createEntry 次级群聊动作必须走 openGatedStartGroupChat，禁止绕过登录门",
         errors,
     )
     gated_action_block = block_between(
@@ -192,27 +192,15 @@ def main() -> int:
         errors,
     )
 
-    primary_block = block_between(
-        create_action_sheet,
-        "final primaryActions = <_SheetActionSpec>[",
-        "final contentActions = <_SheetActionSpec>[",
-    )
     content_block = block_between(
         create_action_sheet,
         "final contentActions = <_SheetActionSpec>[",
-        "final actions = _showsContentActions",
+        "final moreActions = <_SheetActionSpec>[",
     )
-    require(
-        all(
-            needle in primary_block
-            for needle in (
-                "createActionPublishContent",
-                "createActionStartGathering",
-                "createActionStartGroupChat",
-            )
-        ),
-        "创作入口首层必须固定为发内容/发起活动/发起群聊",
-        errors,
+    more_actions_block = block_between(
+        create_action_sheet,
+        "final moreActions = <_SheetActionSpec>[",
+        "final actions = _showsMoreActions",
     )
     require(
         all(
@@ -221,9 +209,21 @@ def main() -> int:
                 "createActionGallery",
                 "createActionCapture",
                 "createActionWrite",
+                "createActionMore",
             )
         ),
-        "发内容二级必须固定为照片/视频/文字",
+        "创作入口首层必须固定为照片/视频/文字/更多",
+        errors,
+    )
+    require(
+        "createActionStartGathering" not in create_action_sheet,
+        "C 位首层与次级更多均禁止无上下文 Gathering",
+        errors,
+    )
+    require(
+        "createActionStartGroupChat" not in content_block
+        and "createActionStartGroupChat" in more_actions_block,
+        "普通群聊只允许位于次级更多并继续走所属登录门",
         errors,
     )
     require(
@@ -277,35 +277,37 @@ def main() -> int:
         all(
             needle in create_entry_test
             for needle in (
-                "TestKeys.createActionPublishContent",
-                "TestKeys.createActionStartGathering",
-                "TestKeys.createActionStartGroupChat",
+                "加号入口首层内容优先，更多不包含活动",
+                "移动端更多仅承接普通群聊，不暴露无上下文活动",
                 "TestKeys.createActionGallery",
                 "TestKeys.createActionCapture",
                 "TestKeys.createActionWrite",
+                "TestKeys.createActionMore",
+                "expect(find.text('发起活动'), findsNothing)",
             )
         ),
-        "缺少 mobile/createEntry 首层 3 项 + 发内容二级 3 项测试",
+        "缺少 mobile/createEntry 内容首层、次级更多与无上下文 Gathering 负例测试",
         errors,
     )
     require(
         all(
             needle in web_create_test
             for needle in (
-                "TestKeys.webCreateActionPublishContent",
+                "首层内容创作与更多分组，活动不直接暴露",
+                "网页更多菜单不暴露无上下文活动",
+                "TestKeys.webCreateActionMore",
                 "TestKeys.webCreateActionStartGathering",
-                "TestKeys.webCreateActionStartGroupChat",
                 "web-create-card-album",
                 "web-create-card-camera",
                 "web-create-card-write",
             )
         ),
-        "缺少 Web 创作工作台首层 3 项 + 发内容二级 3 项测试",
+        "缺少 Web 创作工作台内容首层、次级更多与无上下文 Gathering 负例测试",
         errors,
     )
     require(
-        "游客从网页发起活动先登录，关闭后回安全首页且不回环" in web_create_test,
-        "缺少发起活动具体动作的游客登录关闭安全态与不回环测试",
+        "游客从网页发起群聊先登录，关闭后不回环" in web_create_test,
+        "缺少次级群聊具体动作的游客登录关闭安全态与不回环测试",
         errors,
     )
 

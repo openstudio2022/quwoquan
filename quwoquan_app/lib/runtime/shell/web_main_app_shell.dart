@@ -11,16 +11,13 @@ import 'package:quwoquan_app/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/runtime/shell/startup/app_startup_runtime.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/main_tab_registry.dart';
-import 'package:quwoquan_app/l10n/copy/app_concept_constants.dart';
 import 'package:quwoquan_app/l10n/copy/chat_text_constants.dart';
 import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
 import 'package:quwoquan_app/runtime/auth/auth_gate.dart';
 import 'package:quwoquan_app/runtime/auth/auth_session.dart';
 import 'package:quwoquan_app/runtime/testing/test_keys.dart';
 import 'package:quwoquan_app/design_system/providers/theme_provider.dart';
-import 'package:quwoquan_app/runtime/di/app_providers_app_state.dart';
 import 'package:quwoquan_app/runtime/shell/actions/global_surface_actions.dart';
-import 'package:quwoquan_app/runtime/shell/interest_match/interest_match_page.dart';
 import 'package:quwoquan_app/runtime/shell/welcome/welcome_appearance.dart';
 import 'package:quwoquan_app/runtime/shell/welcome/welcome_flower_mark.dart';
 
@@ -48,8 +45,8 @@ typedef WebMainAppShellContentFeedBuilder = Widget Function({
 });
 
 typedef WebMainAppShellPageBuilder = Widget Function();
-typedef WebMainAppShellFeaturedChannelBuilder = Widget Function({
-  required VoidCallback onExitToRecommend,
+typedef WebMainAppShellVideoBookBuilder = Widget Function({
+  required VoidCallback onExitToHome,
 });
 
 enum WebMainAppShellCreateIntent { gallery, video, write }
@@ -70,23 +67,19 @@ class WebMainAppShellDependencies {
   const WebMainAppShellDependencies({
     required this.homeContextOptions,
     required this.buildContentFeed,
-    required this.buildFeaturedChannel,
+    required this.buildVideoBook,
     required this.buildChat,
     required this.buildProfile,
-    required this.buildActionsDiscovery,
     required this.openCreate,
-    required this.openStartGathering,
     required this.openStartGroupChat,
   });
 
   final List<WebMainAppShellContextOption> homeContextOptions;
   final WebMainAppShellContentFeedBuilder buildContentFeed;
-  final WebMainAppShellFeaturedChannelBuilder buildFeaturedChannel;
+  final WebMainAppShellVideoBookBuilder buildVideoBook;
   final WebMainAppShellPageBuilder buildChat;
   final WebMainAppShellPageBuilder buildProfile;
-  final WebMainAppShellPageBuilder buildActionsDiscovery;
   final WebMainAppShellCreateAction openCreate;
-  final WebMainAppShellAccountAction openStartGathering;
   final WebMainAppShellAccountAction openStartGroupChat;
 }
 
@@ -558,10 +551,10 @@ class _WebPrimaryActions extends StatelessWidget {
           onTap: onSelected,
         ),
         _WebPrimaryActionButton(
-          destination: MainTabDestination.actions,
-          label: AppConceptConstants.offlineActions,
-          icon: CupertinoIcons.flag,
-          selected: selected == MainTabDestination.actions,
+          destination: MainTabDestination.videoBook,
+          label: DiscoveryText.webPcPrimaryFeatured,
+          icon: CupertinoIcons.book,
+          selected: selected == MainTabDestination.videoBook,
           onTap: onSelected,
         ),
         _WebPrimaryActionButton(
@@ -581,13 +574,6 @@ class _WebPrimaryActions extends StatelessWidget {
             backgroundColor: AppColors.iosGroupedSurface(context),
             filled: filled,
           ),
-          onTap: onSelected,
-        ),
-        _WebPrimaryActionButton(
-          destination: MainTabDestination.interestMatch,
-          label: AppConceptConstants.interestMatch,
-          icon: CupertinoIcons.person_2,
-          selected: selected == MainTabDestination.interestMatch,
           onTap: onSelected,
         ),
         _WebPrimaryActionButton(
@@ -736,11 +722,10 @@ class _WebCreateWorkspace extends ConsumerStatefulWidget {
 }
 
 class _WebCreateWorkspaceState extends ConsumerState<_WebCreateWorkspace> {
-  bool _showsContentActions = false;
+  bool _showsMoreActions = false;
 
-  /// 账号态动作（发起活动 / 发起群聊）在游客态会压入登录门。登录门压栈后立刻请求
-  /// 宿主把宽屏壳归位首页安全态：create 工作台是内部 tab，关闭登录只会 `go(home)`，
-  /// 不归位就会原地回到触发面板。
+  /// 次级社交动作在游客态会压入登录门。登录门压栈后立刻请求
+  /// 宿主把宽屏壳归位首页安全态。
   Future<void> _runAccountGatedAction(Future<void> Function() action) async {
     final wasGuest = !AuthGate.isAuthenticated(ref);
     await action();
@@ -783,25 +768,7 @@ class _WebCreateWorkspaceState extends ConsumerState<_WebCreateWorkspace> {
         ),
       ),
     ];
-    final primaryActions = <_CreateCardSpec>[
-      _CreateCardSpec(
-        id: 'content',
-        icon: CupertinoIcons.square_pencil,
-        title: CreationText.createActionPublishContent,
-        subtitle: CreationText.createEntryChooseContentSubtitle,
-        action: () => setState(() => _showsContentActions = true),
-      ),
-      _CreateCardSpec(
-        id: 'gathering',
-        icon: CupertinoIcons.calendar_badge_plus,
-        title: CommunityText.createActionStartGathering,
-        subtitle: CommunityText.authGateSubtitleStartGathering,
-        action: () => unawaited(
-          _runAccountGatedAction(
-            () => widget.dependencies.openStartGathering(context, ref),
-          ),
-        ),
-      ),
+    final moreActions = <_CreateCardSpec>[
       _CreateCardSpec(
         id: 'group-chat',
         icon: CupertinoIcons.chat_bubble_2,
@@ -814,7 +781,18 @@ class _WebCreateWorkspaceState extends ConsumerState<_WebCreateWorkspace> {
         ),
       ),
     ];
-    final actions = _showsContentActions ? contentActions : primaryActions;
+    final primaryActions = <_CreateCardSpec>[
+      ...contentActions,
+      _CreateCardSpec(
+        id: 'more',
+        icon: CupertinoIcons.ellipsis,
+        title: ChatText.more,
+        subtitle: CreationText.createEntryChooseContentSubtitle,
+        action: () => setState(() => _showsMoreActions = true),
+      ),
+    ];
+    final actions = _showsMoreActions ? moreActions : primaryActions;
+
     return _WebDesktopFrame(
       child: ListView(
         padding: const EdgeInsets.all(AppSpacing.lg),
@@ -829,9 +807,9 @@ class _WebCreateWorkspaceState extends ConsumerState<_WebCreateWorkspace> {
           ),
           const SizedBox(height: AppSpacing.sm),
           Text(
-            _showsContentActions
-                ? CreationText.createEntryChooseContentSubtitle
-                : CreationText.createEntryChooseActionSubtitle,
+            _showsMoreActions
+                ? CreationText.createEntryChooseActionSubtitle
+                : CreationText.createEntryChooseContentSubtitle,
             style: TextStyle(
               fontSize: AppTypography.iosCallout,
               color: AppColors.iosSecondaryLabel(context),
@@ -849,8 +827,8 @@ class _WebCreateWorkspaceState extends ConsumerState<_WebCreateWorkspace> {
             child: CupertinoButton(
               key: TestKeys.webCreateActionCancel,
               onPressed: () {
-                if (_showsContentActions) {
-                  setState(() => _showsContentActions = false);
+                if (_showsMoreActions) {
+                  setState(() => _showsMoreActions = false);
                   return;
                 }
                 context.go(AppRoutePaths.home);
@@ -910,8 +888,8 @@ class _CreateWorkspaceCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final cardKey = switch (spec.id) {
       'content' => TestKeys.webCreateActionPublishContent,
-      'gathering' => TestKeys.webCreateActionStartGathering,
       'group-chat' => TestKeys.webCreateActionStartGroupChat,
+      'more' => TestKeys.webCreateActionMore,
       _ => ValueKey<String>('web-create-card-${spec.id}'),
     };
     return CupertinoButton(

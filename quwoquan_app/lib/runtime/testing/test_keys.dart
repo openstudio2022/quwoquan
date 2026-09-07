@@ -167,6 +167,8 @@ class TestKeys {
   );
 
   // ── Feed / Grid ──────────────────────────────────────────────────────
+  static const mainTabVideoBook = ValueKey<String>('main_tab_video_book');
+
   static const photoFeedGrid = ValueKey<String>('photo_feed_grid');
   static const videoFeedList = ValueKey<String>('video_feed_list');
 
@@ -286,9 +288,7 @@ class TestKeys {
   static const createActionPublishContent = ValueKey<String>(
     'create_action_publish_content',
   );
-  static const createActionStartGathering = ValueKey<String>(
-    'create_action_start_gathering',
-  );
+  static const createActionMore = ValueKey<String>('create_action_more');
   static const createActionStartGroupChat = ValueKey<String>(
     'create_action_start_group_chat',
   );
@@ -298,15 +298,14 @@ class TestKeys {
     'create_action_continue_from_draft',
   );
   static const createActionCapture = ValueKey<String>('create_action_capture');
-  static const createActionInterestMatch = ValueKey<String>(
-    'create_action_interest_match',
-  );
   static const webCreateActionPublishContent = ValueKey<String>(
     'web_create_action_publish_content',
   );
+  @Deprecated('Direct Gathering creation is retired.')
   static const webCreateActionStartGathering = ValueKey<String>(
     'web_create_action_start_gathering',
   );
+  static const webCreateActionMore = ValueKey<String>('web_create_action_more');
   static const webCreateActionStartGroupChat = ValueKey<String>(
     'web_create_action_start_group_chat',
   );

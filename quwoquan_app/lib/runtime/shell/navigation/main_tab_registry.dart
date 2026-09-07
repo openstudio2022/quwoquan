@@ -2,13 +2,13 @@ import 'package:quwoquan_app/runtime/shell/navigation/generated/app_route_paths.
 
 /// 主壳目的地。
 ///
-/// `actions`（线下行动与发现）占据底栏第 2 位；视频书是首页频道，不是壳层目的地。
-enum MainTabDestination { home, actions, create, chat, interestMatch, profile }
+/// `videoBook` 是 canonical `/video-book` 内容根入口，占据底栏第 2 位。
+enum MainTabDestination { home, videoBook, create, chat, profile }
 
 extension MainTabDestinationX on MainTabDestination {
   static const List<MainTabDestination> bottomNavOrdered = <MainTabDestination>[
     MainTabDestination.home,
-    MainTabDestination.actions,
+    MainTabDestination.videoBook,
     MainTabDestination.create,
     MainTabDestination.chat,
     MainTabDestination.profile,
@@ -17,7 +17,7 @@ extension MainTabDestinationX on MainTabDestination {
   static const List<MainTabDestination> mobileShellStackOrdered =
       <MainTabDestination>[
         MainTabDestination.home,
-        MainTabDestination.actions,
+        MainTabDestination.videoBook,
         MainTabDestination.create,
         MainTabDestination.chat,
         MainTabDestination.profile,
@@ -25,10 +25,9 @@ extension MainTabDestinationX on MainTabDestination {
 
   int get bottomNavIndex => switch (this) {
     MainTabDestination.home => 0,
-    MainTabDestination.actions => 1,
+    MainTabDestination.videoBook => 1,
     MainTabDestination.create => 2,
     MainTabDestination.chat => 3,
-    MainTabDestination.interestMatch => -1,
     MainTabDestination.profile => 4,
   };
 
@@ -42,19 +41,17 @@ extension MainTabDestinationX on MainTabDestination {
 
   String get routePath => switch (this) {
     MainTabDestination.home => AppRoutePaths.home,
-    MainTabDestination.actions => AppRoutePaths.home,
+    MainTabDestination.videoBook => AppRoutePaths.videoBook,
     MainTabDestination.create => AppRoutePaths.createEntry,
     MainTabDestination.chat => AppRoutePaths.chat,
-    MainTabDestination.interestMatch => AppRoutePaths.interestMatch,
     MainTabDestination.profile => AppRoutePaths.profile,
   };
 
   String get routeName => switch (this) {
     MainTabDestination.home => 'home',
-    MainTabDestination.actions => 'actions',
+    MainTabDestination.videoBook => 'videoBook',
     MainTabDestination.create => 'create',
     MainTabDestination.chat => 'chat',
-    MainTabDestination.interestMatch => 'interestMatch',
     MainTabDestination.profile => 'profile',
   };
 }
@@ -66,15 +63,15 @@ MainTabDestination mainTabFromLocation(String location) {
   if (location == AppRoutePaths.circles) {
     return MainTabDestination.home;
   }
+  if (location == AppRoutePaths.videoBook) {
+    return MainTabDestination.videoBook;
+  }
   if (location == AppRoutePaths.createEntry ||
       location.startsWith(AppRoutePaths.createPathTemplate)) {
     return MainTabDestination.create;
   }
   if (location.startsWith(AppRoutePaths.chat)) {
     return MainTabDestination.chat;
-  }
-  if (location.startsWith(AppRoutePaths.interestMatch)) {
-    return MainTabDestination.interestMatch;
   }
   if (location == AppRoutePaths.profile) {
     return MainTabDestination.profile;

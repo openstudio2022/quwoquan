@@ -18,7 +18,7 @@ void main() {
   });
 
   group('Web 添加页', () {
-    testWidgets('首层固定发内容活动群聊，发内容后二级固定照片视频文字', (tester) async {
+    testWidgets('首层内容创作与更多分组，活动不直接暴露', (tester) async {
       WebShellTestHarness.suppressExpectedErrors();
       WebShellTestHarness.useWideViewport(tester);
 
@@ -38,31 +38,22 @@ void main() {
         find.byKey(const ValueKey<String>('web-create-actions')),
         findsOneWidget,
       );
-      expect(
-        find.byKey(TestKeys.webCreateActionPublishContent),
-        findsOneWidget,
-      );
-      expect(
-        find.byKey(TestKeys.webCreateActionStartGathering),
-        findsOneWidget,
-      );
-      expect(
-        find.byKey(TestKeys.webCreateActionStartGroupChat),
-        findsOneWidget,
-      );
+      expect(find.byKey(TestKeys.webCreateActionMore), findsOneWidget);
+      expect(find.byKey(TestKeys.webCreateActionStartGathering), findsNothing);
+      expect(find.byKey(TestKeys.webCreateActionStartGroupChat), findsNothing);
       expect(find.byKey(TestKeys.webCreateActionCancel), findsOneWidget);
-      expect(find.text(ChatText.webPcCreateGroupChatTitle), findsOneWidget);
+      expect(find.text(ChatText.webPcCreateGroupChatTitle), findsNothing);
       expect(
         find.byKey(const ValueKey<String>('web-create-card-album')),
-        findsNothing,
+        findsOneWidget,
       );
       expect(
         find.byKey(const ValueKey<String>('web-create-card-camera')),
-        findsNothing,
+        findsOneWidget,
       );
       expect(
         find.byKey(const ValueKey<String>('web-create-card-write')),
-        findsNothing,
+        findsOneWidget,
       );
       expect(
         find.byKey(const ValueKey<String>('web-create-card-add-contact')),
@@ -73,12 +64,7 @@ void main() {
         findsNothing,
       );
 
-      await tester.tap(find.byKey(TestKeys.webCreateActionPublishContent));
-      await tester.pump();
-
-      expect(find.byKey(TestKeys.webCreateActionPublishContent), findsNothing);
       expect(find.byKey(TestKeys.webCreateActionStartGathering), findsNothing);
-      expect(find.byKey(TestKeys.webCreateActionStartGroupChat), findsNothing);
       expect(
         find.byKey(const ValueKey<String>('web-create-card-album')),
         findsOneWidget,
@@ -111,6 +97,8 @@ void main() {
       );
       await WebShellTestHarness.enterToolbar(tester);
       await WebShellTestHarness.tapPrimary(tester, 'create');
+      await tester.tap(find.byKey(TestKeys.webCreateActionMore));
+      await tester.pump();
       await tester.tap(find.byKey(TestKeys.webCreateActionStartGroupChat));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 500));
@@ -128,8 +116,7 @@ void main() {
       expect(find.byType(LoginPage), findsNothing);
     });
 
-    testWidgets('游客从网页发起活动先登录，关闭后回安全首页且不回环', (tester) async {
-      AuthGate.resetDebounce();
+    testWidgets('网页更多菜单不暴露无上下文活动', (tester) async {
       WebShellTestHarness.suppressExpectedErrors();
       WebShellTestHarness.useWideViewport(tester);
 
@@ -143,20 +130,14 @@ void main() {
       );
       await WebShellTestHarness.enterToolbar(tester);
       await WebShellTestHarness.tapPrimary(tester, 'create');
-      await tester.tap(find.byKey(TestKeys.webCreateActionStartGathering));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 500));
-
-      expect(find.byType(LoginPage), findsOneWidget);
-
-      // REQ-012：根步骤顶栏为返回箭头，箭头即执行宿主关闭策略。
-      await tester.tap(find.byIcon(CupertinoIcons.back));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 500));
-
-      expect(find.byType(LoginPage), findsNothing);
       expect(find.byKey(TestKeys.webCreateActionStartGathering), findsNothing);
-      await tester.pump(const Duration(seconds: 1));
+      await tester.tap(find.byKey(TestKeys.webCreateActionMore));
+      await tester.pump();
+      expect(find.byKey(TestKeys.webCreateActionStartGathering), findsNothing);
+      expect(
+        find.byKey(TestKeys.webCreateActionStartGroupChat),
+        findsOneWidget,
+      );
       expect(find.byType(LoginPage), findsNothing);
     });
   });

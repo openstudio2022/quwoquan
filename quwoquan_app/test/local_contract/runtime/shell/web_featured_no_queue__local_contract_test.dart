@@ -1,3 +1,5 @@
+// spec_ref: specs/feature-tree/discovery-content/feed-orchestration-recommendation/premium-stream-recommendation/spec.md#gwt-001.t2
+
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
@@ -12,7 +14,7 @@ void main() {
     SharedPreferences.setMockInitialValues(const <String, Object>{});
   });
 
-  testWidgets('Web 工具栏不再提供独立视频书入口，首页上下文保留视频书文本频道', (tester) async {
+  testWidgets('Web 工具栏提供独立视频书根入口且首页不再保留 featured 频道', (tester) async {
     WebShellTestHarness.suppressExpectedErrors();
     WebShellTestHarness.useWideViewport(tester);
 
@@ -27,14 +29,16 @@ void main() {
     await WebShellTestHarness.enterToolbar(tester);
 
     expect(
-      find.byKey(const ValueKey<String>('web-primary-featured')),
-      findsNothing,
+      find.byKey(const ValueKey<String>('web-primary-videoBook')),
+      findsOneWidget,
     );
     expect(
       find.byKey(const ValueKey<String>('web-context-tab-featured')),
-      findsOneWidget,
+      findsNothing,
     );
-    expect(find.text(DiscoveryText.homeTabFeatured), findsOneWidget);
-    expect(find.text(DiscoveryText.webPcSearchHintFeatured), findsNothing);
+    expect(find.text(DiscoveryText.homeTabFeatured), findsNothing);
+
+    await WebShellTestHarness.tapPrimary(tester, 'videoBook');
+    expect(find.text(DiscoveryText.webPcSearchHintFeatured), findsOneWidget);
   });
 }

@@ -1,7 +1,6 @@
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/service/chat_service/chat/chat_inbox_view/presentation/chat_page.dart';
-import 'package:quwoquan_app/service/circle_service/circle_management/gathering/presentation/gathering_actions_discovery_page.dart';
 import 'package:quwoquan_app/service/content_service/content/post/presentation/home_featured_immersive_page.dart';
 import 'package:quwoquan_app/service/content_service/content/post/presentation/home_page.dart';
 import 'package:quwoquan_app/service/rtc_service/rtc/call_session/application/active_call_service.dart';
@@ -11,7 +10,6 @@ import 'package:quwoquan_app/service/rtc_service/rtc/call_session/application/in
 import 'package:quwoquan_app/service/rtc_service/rtc/call_session/presentation/active_call_bar.dart';
 import 'package:quwoquan_app/service/rtc_service/rtc/call_session/presentation/pip_call_overlay.dart';
 import 'package:quwoquan_app/service/user_service/persona_management/persona/presentation/my_profile_page.dart';
-import 'package:quwoquan_app/runtime/di/recommendation_presentation_slots.dart';
 
 class MainAppShellActiveCallRoute {
   const MainAppShellActiveCallRoute({
@@ -46,13 +44,15 @@ class MainAppShellBindings {
 
   Widget buildChat() => const ChatPage();
 
-  Widget buildFeatured({required VoidCallback onExitToHome}) {
-    return HomeFeaturedImmersivePage(onExitToHome: onExitToHome);
+  Widget buildFeatured({
+    required bool isActive,
+    required VoidCallback onExitToHome,
+  }) {
+    return HomeFeaturedImmersivePage(
+      isActive: isActive,
+      onExitToHome: onExitToHome,
+    );
   }
-
-  Widget buildActionsDiscovery() => GatheringActionsDiscoveryPage(
-    buildIntersectionInbox: buildGatheringIntersectionInboxSlot,
-  );
 
   Widget buildProfile() => const MyProfilePage();
 

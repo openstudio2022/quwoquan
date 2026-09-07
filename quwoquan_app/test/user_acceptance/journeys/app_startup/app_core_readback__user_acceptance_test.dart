@@ -1,7 +1,9 @@
 // spec_ref: specs/feature-tree/spec.md#uat-003
+// spec_ref: specs/feature-tree/spec.md#uat-011
 // spec_ref: specs/feature-tree/runtime/runtime-data-engineering/spec.md#sit-001
 // spec_ref: specs/feature-tree/runtime/runtime-config/environment-topology-and-packaging/spec.md#gwt-001
 // spec_ref: specs/feature-tree/runtime/runtime-config/environment-topology-and-packaging/spec.md#gwt-002
+// spec_ref: specs/feature-tree/discovery-content/feed-orchestration-recommendation/premium-stream-recommendation/spec.md#gwt-001.t3
 /// user_acceptance Patrol: release-bound 核心 Remote readback 组合旅程。
 ///
 /// 覆盖 startup/feed/entity/article/image/video/Creator/avatar/recovery。
@@ -56,9 +58,8 @@ const _videoAttribution = String.fromEnvironment(
 const _videoPageCount = int.fromEnvironment('DATA_RELEASE_VIDEO_PAGE_COUNT');
 
 const _homeFeedKey = ValueKey<String>('home-feed-recommend');
-// 视频书不再有顶栏专用入口图标，改为首页一级文本频道。Journey 断言的始终是
-// 「从首页可达视频书沉浸消费」，锚点随实现落到频道 Tab。
-const _homeFeaturedEntryKey = ValueKey<String>('home-primary-tab-featured');
+// 视频书是独立一级根页；首页不再保留 featured 频道或第二入口。
+const _videoBookEntryKey = TestKeys.mainTabVideoBook;
 const _homeSearchChromeKey = ValueKey<String>('home-primary-tab-chrome');
 const _worksTopBackKey = ValueKey<String>('works-top-back');
 const _videoErrorKey = ValueKey<String>('video-player-error');
@@ -476,14 +477,14 @@ Future<void> _expectFeaturedVideoBook(PatrolIntegrationTester $) async {
   );
 
   final entryVisible = await _waitForAnyFinder($, <Finder>[
-    find.byKey(_homeFeaturedEntryKey),
+    find.byKey(_videoBookEntryKey),
   ]);
   expect(
     entryVisible,
     isTrue,
-    reason: 'video book home entry must be reachable',
+    reason: 'video book bottom-tab entry must be reachable',
   );
-  await $.tester.tap(find.byKey(_homeFeaturedEntryKey).first);
+  await $.tester.tap(find.byKey(_videoBookEntryKey).first);
   await $.pump(const Duration(seconds: 1));
 
   final pagerVisible = await _waitForAnyFinder($, <Finder>[
@@ -493,6 +494,13 @@ Future<void> _expectFeaturedVideoBook(PatrolIntegrationTester $) async {
     pagerVisible,
     isTrue,
     reason: 'video book must open its immersive pager',
+  );
+  expect(
+    GoRouterState.of(
+      $.tester.element(find.byKey(TestKeys.worksImmersivePager).first),
+    ).uri.path,
+    AppRoutePaths.videoBook,
+    reason: 'video book entry must commit the canonical /video-book route',
   );
   // 视频书唯一消费 premium_stream 池：canonical 空态（「暂无内容/内容加载
   // 完毕」黑屏）意味着 premium 供给缺失，属于环境 readiness 回归而非可通过态。
@@ -546,14 +554,14 @@ Future<void> _expectFeaturedVideoBook(PatrolIntegrationTester $) async {
     GoRouterState.of(
       $.tester.element(find.byKey(TestKeys.worksImmersivePager).first),
     ).uri.path,
-    AppRoutePaths.home,
-    reason: 'video book screenshot terminal must remain on the home route',
+    AppRoutePaths.videoBook,
+    reason: 'video book screenshot terminal must remain on the canonical /video-book route',
   );
   await emitPatrolAppContentPageScreenshotReady(
     $,
     environment: _apiContractEnv,
     suite: 'app-core-readback',
-    route: AppRoutePaths.home,
+    route: AppRoutePaths.videoBook,
     terminalKey: TestKeys.worksImmersivePager.value,
     terminalFinder: find.byKey(TestKeys.worksImmersivePager),
   );
@@ -600,18 +608,32 @@ Future<void> _expectFeaturedVideoBook(PatrolIntegrationTester $) async {
       .waitUntilVisible(timeout: const Duration(seconds: 40));
   expect(find.byKey(_homeSearchChromeKey), findsOneWidget);
   expect(
+    GoRouterState.of($.tester.element(find.byKey(_homeSearchChromeKey).first))
+        .uri
+        .path,
+    AppRoutePaths.home,
+    reason: 'back from video book must restore the canonical home route',
+  );
+  expect(
     _homeFeedOffset($),
     closeTo(feedOffsetBefore!, 1),
     reason: 'returning from video book must preserve the home feed position',
   );
 
-  await $.tester.tap(find.byKey(_homeFeaturedEntryKey).first);
+  await $.tester.tap(find.byKey(_videoBookEntryKey).first);
   expect(
     await _waitForAnyFinder($, <Finder>[
       find.byKey(TestKeys.worksImmersivePager),
     ]),
     isTrue,
     reason: 'app-core screenshot terminal must be the video book pager',
+  );
+  expect(
+    GoRouterState.of(
+      $.tester.element(find.byKey(TestKeys.worksImmersivePager).first),
+    ).uri.path,
+    AppRoutePaths.videoBook,
+    reason: 'video book re-entry must restore the canonical /video-book route',
   );
   if (_videoPageCount == 1) {
     expect(

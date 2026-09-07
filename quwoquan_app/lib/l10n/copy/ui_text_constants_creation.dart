@@ -97,8 +97,6 @@ abstract final class CreationText {
       DiscoveryText.homeObjectActionAddContact;
   static const String createActionCreateCircleShort =
       CommunityText.createCircle;
-  static const String createActionInterestMatchShort = '交集配对';
-  static const String createActionInterestMatchSubtitle = '发现同趣的人、圈子与地点';
   static const String createActionPublishGroupTitle = publishAction;
   static const String createActionSocialGroupTitle =
       ProfileText.profileTabInteraction;

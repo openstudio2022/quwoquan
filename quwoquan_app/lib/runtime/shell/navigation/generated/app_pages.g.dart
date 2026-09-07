@@ -74,7 +74,6 @@ abstract final class PageNames {
   static const String homepageMaintenance = 'homepage_maintenance';
   static const String homepagePicker = 'homepage_picker';
   static const String homepageStatusReport = 'homepage_status_report';
-  static const String interestMatch = 'interest_match';
   static const String interestOnboarding = 'interest_onboarding';
   static const String legalPermissions = 'legal_permissions';
   static const String legalPrivacyPolicy = 'legal_privacy_policy';
@@ -86,6 +85,7 @@ abstract final class PageNames {
   static const String myFootprint = 'my_footprint';
   static const String myGatherings = 'my_gatherings';
   static const String myIntersections = 'my_intersections';
+  static const String myIntersectionsCompatRedirect = 'my_intersections_compat_redirect';
   static const String myQrCode = 'my_qr_code';
   static const String myReports = 'my_reports';
   static const String objectIntersections = 'object_intersections';
@@ -113,6 +113,7 @@ abstract final class PageNames {
   static const String startGroupChat = 'start_group_chat';
   static const String suggestHomepage = 'suggest_homepage';
   static const String userProfile = 'user_profile';
+  static const String videoBook = 'video_book';
   static const String welcome = 'welcome';
   static const String workBrowser = 'work_browser';
 }
@@ -152,7 +153,7 @@ abstract final class AppPages {
     AppPageDefinition(pageName: 'profile_personas', routeId: 'profilePersonas', pathTemplate: '/profile/personas', collectPageAccess: true),
     AppPageDefinition(pageName: 'settings_privacy', routeId: 'settingsPrivacy', pathTemplate: '/settings/privacy', collectPageAccess: true),
     AppPageDefinition(pageName: 'greeting_inbox', routeId: 'greetingInbox', pathTemplate: '/chat/greetings', collectPageAccess: true),
-    AppPageDefinition(pageName: 'interest_match', routeId: 'interestMatch', pathTemplate: '/interest-match', collectPageAccess: true),
+    AppPageDefinition(pageName: 'my_intersections_compat_redirect', routeId: 'interestMatch', pathTemplate: '/interest-match', collectPageAccess: false),
     AppPageDefinition(pageName: 'global_search_network', routeId: 'globalSearchNetworkResults', pathTemplate: '/search/network', collectPageAccess: true),
     AppPageDefinition(pageName: 'settings_about', routeId: 'settingsAbout', pathTemplate: '/settings/about', collectPageAccess: true),
     AppPageDefinition(pageName: 'settings_calls', routeId: 'settingsCalls', pathTemplate: '/settings/calls', collectPageAccess: true),
@@ -162,6 +163,7 @@ abstract final class AppPages {
     AppPageDefinition(pageName: 'profile_edit', routeId: 'profileEdit', pathTemplate: '/profile/edit', collectPageAccess: true),
     AppPageDefinition(pageName: 'add_contact', routeId: 'addContact', pathTemplate: '/add-contact', collectPageAccess: true),
     AppPageDefinition(pageName: 'my_qr_code', routeId: 'myQrCode', pathTemplate: '/me/qr-code', collectPageAccess: true),
+    AppPageDefinition(pageName: 'video_book', routeId: 'videoBook', pathTemplate: '/video-book', collectPageAccess: true),
     AppPageDefinition(pageName: 'assistant', routeId: 'assistant', pathTemplate: '/assistant', collectPageAccess: true),
     AppPageDefinition(pageName: 'settings', routeId: 'settings', pathTemplate: '/settings', collectPageAccess: true),
     AppPageDefinition(pageName: 'home', routeId: 'circles', pathTemplate: '/circles', collectPageAccess: true),

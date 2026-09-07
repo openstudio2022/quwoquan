@@ -14,6 +14,9 @@ class HomeChannelsRemoteOverride {
   /// 与首页频道滚动锚点预算一致：默认 7 个频道，并保留 1 个运营扩展位。
   static const int maximumChannelCount = 8;
 
+  /// `featured` 已迁移至独立“视频书”根入口，不再允许作为首页频道。
+  static const String _retiredFeaturedChannelId = 'featured';
+
   /// 从 generated `ContentAppConfig` 解析首页频道覆盖列表。
   /// 按 order 升序排序。超过 [maximumChannelCount]、重复 id 或任一
   /// feed query 字段无效时整份覆盖无效，
@@ -29,6 +32,8 @@ class HomeChannelsRemoteOverride {
     for (final entry in raw) {
       final id = entry.id.trim();
       if (id.isEmpty) return null;
+      // 远程与 LKG 配置残留退役 id 均视为整份配置漂移，禁止部分过滤。
+      if (id == _retiredFeaturedChannelId) return null;
       if (!channelIds.add(id)) return null;
       final feedQuery = _parseFeedQuery(entry.feedQuery);
       if (feedQuery == null) return null;

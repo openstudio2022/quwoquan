@@ -5,10 +5,13 @@ import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/service/content_service/content/post/domain/create_editor_models.dart';
 import 'package:quwoquan_app/service/content_service/content/post/presentation/create_entry_sheet.dart';
 
-typedef CreateEntrySelection =
-    void Function(BuildContext navigationContext, EditorStartAction action);
-typedef CreateEntryCrossObjectAction =
-    Future<void> Function(BuildContext navigationContext);
+typedef CreateEntrySelection = void Function(
+  BuildContext navigationContext,
+  EditorStartAction action,
+);
+typedef CreateEntryCrossObjectAction = Future<void> Function(
+  BuildContext navigationContext,
+);
 
 /// Content-owned host for the create entry sheet.
 ///
@@ -19,12 +22,10 @@ class CreateEntryRouteHost extends StatelessWidget {
   const CreateEntryRouteHost({
     super.key,
     required this.onSelect,
-    required this.onStartGathering,
     required this.onStartGroupChat,
   });
 
   final CreateEntrySelection onSelect;
-  final CreateEntryCrossObjectAction onStartGathering;
   final CreateEntryCrossObjectAction onStartGroupChat;
 
   @override
@@ -33,7 +34,6 @@ class CreateEntryRouteHost extends StatelessWidget {
       isOpen: true,
       onClose: () => context.pop(),
       onSelect: (action) => _select(context, action),
-      onStartGathering: () => _runAfterEntryClosed(context, onStartGathering),
       onStartGroupChat: () => _runAfterEntryClosed(context, onStartGroupChat),
     );
   }

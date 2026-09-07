@@ -11,38 +11,49 @@ import 'package:quwoquan_app/runtime/di/presentation/content_viewer_composition.
 import 'package:quwoquan_app/runtime/models/visit_models.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/service/assistant_service/assistant/page_context/application/public/assistant_open_context.dart';
-import 'package:quwoquan_app/service/content_service/content/post/presentation/home_primary_tab_strip.dart';
 import 'package:quwoquan_app/service/user_service/persona_management/persona/application/public/user_profile_route_extra.dart';
 
-/// 首页「视频书」频道的 premium 沉浸正文。
+/// canonical `/video-book` 根页的 premium 沉浸正文。
 ///
 /// 页面本身不持有业务数据；沉浸流内容、交集单句与行动 CTA 均由
 /// `ContentViewerComposition.featuredWorks` 装配的 viewer 消费各自读面。
 class HomeFeaturedImmersivePage extends ConsumerWidget {
-  const HomeFeaturedImmersivePage({super.key, required this.onExitToHome});
+  const HomeFeaturedImmersivePage({
+    super.key,
+    required this.onExitToHome,
+    this.isActive = true,
+  });
+
+  static const Key pageKey = ValueKey<String>('video-book-root');
 
   final VoidCallback onExitToHome;
+  final bool isActive;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return CupertinoPageScaffold(
+      key: pageKey,
       backgroundColor: AppColors.black,
-      child: Material(
-        type: MaterialType.transparency,
-        child: ContentViewerComposition.featuredWorks(
-          topChromeSafeInset: 0,
-          onUserTap: (userId, {avatarUrl, displayName, backgroundUrl}) =>
-              _openUserProfile(
-                context,
-                userId,
-                avatarUrl: avatarUrl,
-                displayName: displayName,
-                backgroundUrl: backgroundUrl,
-              ),
-          onAssistantTap: () => _openAssistantHalfSheet(context, ref),
-          onTapBack: onExitToHome,
-          onSwitchToFollowing: onExitToHome,
-          onSwitchToCircles: onExitToHome,
+      child: SafeArea(
+        bottom: false,
+        child: Material(
+          type: MaterialType.transparency,
+          child: ContentViewerComposition.featuredWorks(
+            isActive: isActive,
+            topChromeSafeInset: 0,
+            onUserTap: (userId, {avatarUrl, displayName, backgroundUrl}) =>
+                _openUserProfile(
+                  context,
+                  userId,
+                  avatarUrl: avatarUrl,
+                  displayName: displayName,
+                  backgroundUrl: backgroundUrl,
+                ),
+            onAssistantTap: () => _openAssistantHalfSheet(context, ref),
+            onTapBack: onExitToHome,
+            onSwitchToFollowing: onExitToHome,
+            onSwitchToCircles: onExitToHome,
+          ),
         ),
       ),
     );
@@ -67,11 +78,11 @@ class HomeFeaturedImmersivePage extends ConsumerWidget {
   }
 
   void _openAssistantHalfSheet(BuildContext context, WidgetRef ref) {
-    final target = VisitTarget.page('home_featured');
+    final target = VisitTarget.page('video_book');
     final service = ref.read(visitRecorderServiceProvider);
     final ctx = AssistantOpenContext(
       source: AssistantSource.discovery,
-      tab: HomePrimaryTabStrip.featuredChannelId,
+      tab: 'video_book',
       experienceLevel: switch (service.getExperience(target)) {
         ExperienceLevel.firstTime => AssistantExperienceLevel.firstTime,
         ExperienceLevel.returning => AssistantExperienceLevel.returning,

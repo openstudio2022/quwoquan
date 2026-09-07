@@ -214,6 +214,19 @@ class JoinCircleContinuation extends AuthContinuation {
   final String circleId;
 }
 
+/// 游客从交集证据发起行动时保存完整 typed request。登录页只改变账号态；
+/// 受邀者、Post/实体来源与 evidence attribution 均由该不可变对象原样恢复。
+///
+/// runtime/auth 不依赖任何业务对象类型：[TRequest] 由组合根（runtime/di 的
+/// Recommendation navigator 与 gathering binding）以其 typed 导航请求实例化与还原，
+/// 本层只持有不可变载荷并保证单槽位 / 显式 take 语义。
+class StartGatheringContinuation<TRequest extends Object>
+    extends AuthContinuation {
+  const StartGatheringContinuation({required this.request});
+
+  final TRequest request;
+}
+
 /// 续接「打开某个动作面板/流程」。
 ///
 /// [startGathering] 只保存稳定动作身份；Circle route codegen 完成后由组合根注入

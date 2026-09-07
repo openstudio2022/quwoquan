@@ -15,7 +15,6 @@ abstract final class ObjectHomepageText {
   static const String objectIntersectionEmptyCircle =
       '你和这个圈子暂时没有可展示交集，进入讨论或关注成员后会在这里沉淀';
   static const String entityActionPublishRecord = '发记录';
-  static const String entityActionStartGathering = '在这里发起';
   static const String circleActionEnterDiscussion = '进入讨论';
   static const String objectConnectionWithYou = '与你的交集';
   static const String impactEnumerableHintMine = '可查看与你内容相关的连接来源';

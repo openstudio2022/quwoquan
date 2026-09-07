@@ -8,14 +8,12 @@ class CreateEntrySheet extends StatelessWidget {
     required this.isOpen,
     required this.onClose,
     required this.onSelect,
-    required this.onStartGathering,
     required this.onStartGroupChat,
   });
 
   final bool isOpen;
   final VoidCallback onClose;
   final void Function(EditorStartAction action) onSelect;
-  final VoidCallback onStartGathering;
   final VoidCallback onStartGroupChat;
 
   @override
@@ -26,7 +24,6 @@ class CreateEntrySheet extends StatelessWidget {
 
     return CreateActionSheet(
       onCreateAction: onSelect,
-      onStartGathering: onStartGathering,
       onStartGroupChat: onStartGroupChat,
       onCancel: onClose,
     );

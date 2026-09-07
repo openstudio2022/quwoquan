@@ -4,8 +4,6 @@ class _WebMainAppShellState extends ConsumerState<WebMainAppShell> {
   static const String _defaultHomeChannelId = 'recommend';
   static const String _defaultCreateTabId = 'gallery';
   static const String _defaultMessageTabId = 'messages';
-  static const String _interestMatchContextId = 'interest_match';
-  static const String _actionsContextId = 'actions';
   static const String _profileContextId = 'profile';
 
   final ScrollController _scrollController = ScrollController();
@@ -142,17 +140,15 @@ class _WebMainAppShellState extends ConsumerState<WebMainAppShell> {
             .map(
               (option) => _WebContextTabSpec(
                 id: option.id,
-                label: option.id == 'featured'
-                    ? DiscoveryText.homeTabFeatured
-                    : UITextConstants.homeChannelLabel(option.labelKey),
+                label: UITextConstants.homeChannelLabel(option.labelKey),
               ),
             )
             .toList(growable: false);
-      case MainTabDestination.actions:
+      case MainTabDestination.videoBook:
         return const <_WebContextTabSpec>[
           _WebContextTabSpec(
-            id: _actionsContextId,
-            label: AppConceptConstants.offlineActionsPageTitle,
+            id: 'video-book',
+            label: DiscoveryText.webPcFeaturedFeedTitle,
           ),
         ];
       case MainTabDestination.create:
@@ -189,13 +185,6 @@ class _WebMainAppShellState extends ConsumerState<WebMainAppShell> {
             label: ChatText.webPcMessagesTabGroups,
           ),
         ];
-      case MainTabDestination.interestMatch:
-        return const <_WebContextTabSpec>[
-          _WebContextTabSpec(
-            id: _interestMatchContextId,
-            label: AppConceptConstants.interestMatch,
-          ),
-        ];
       case MainTabDestination.profile:
         return const <_WebContextTabSpec>[
           _WebContextTabSpec(
@@ -210,14 +199,12 @@ class _WebMainAppShellState extends ConsumerState<WebMainAppShell> {
     switch (destination) {
       case MainTabDestination.home:
         return _homeChannelId;
-      case MainTabDestination.actions:
-        return _actionsContextId;
+      case MainTabDestination.videoBook:
+        return 'video-book';
       case MainTabDestination.create:
         return _createTabId;
       case MainTabDestination.chat:
         return _messageTabId;
-      case MainTabDestination.interestMatch:
-        return _interestMatchContextId;
       case MainTabDestination.profile:
         return _profileContextId;
     }
@@ -227,14 +214,12 @@ class _WebMainAppShellState extends ConsumerState<WebMainAppShell> {
     switch (destination) {
       case MainTabDestination.home:
         return DiscoveryText.webPcSearchHintHome;
-      case MainTabDestination.actions:
-        return DiscoveryText.webPcSearchHintHome;
+      case MainTabDestination.videoBook:
+        return DiscoveryText.webPcSearchHintFeatured;
       case MainTabDestination.create:
         return DiscoveryText.webPcSearchHintCreate;
       case MainTabDestination.chat:
         return ChatText.webPcSearchHintMessages;
-      case MainTabDestination.interestMatch:
-        return DiscoveryText.webPcSearchHintHome;
       case MainTabDestination.profile:
         return DiscoveryText.webPcSearchHintProfile;
     }
@@ -246,15 +231,13 @@ class _WebMainAppShellState extends ConsumerState<WebMainAppShell> {
         case MainTabDestination.home:
           _homeChannelId = id;
           break;
-        case MainTabDestination.actions:
+        case MainTabDestination.videoBook:
           break;
         case MainTabDestination.create:
           _createTabId = id;
           break;
         case MainTabDestination.chat:
           _messageTabId = id;
-          break;
-        case MainTabDestination.interestMatch:
           break;
         case MainTabDestination.profile:
           break;
@@ -265,25 +248,13 @@ class _WebMainAppShellState extends ConsumerState<WebMainAppShell> {
   Widget _buildContent(MainTabDestination destination) {
     switch (destination) {
       case MainTabDestination.home:
-        if (_homeChannelId == 'featured') {
-          return widget.dependencies.buildFeaturedChannel(
-            onExitToRecommend: () {
-              if (!mounted) {
-                return;
-              }
-              setState(() {
-                _homeChannelId = _defaultHomeChannelId;
-              });
-            },
-          );
-        }
         return _WebHomeWorkspace(
           channelId: _homeChannelId,
           dependencies: widget.dependencies,
         );
-      case MainTabDestination.actions:
-        return _WebDesktopFrame(
-          child: widget.dependencies.buildActionsDiscovery(),
+      case MainTabDestination.videoBook:
+        return widget.dependencies.buildVideoBook(
+          onExitToHome: () => _selectPrimary(MainTabDestination.home),
         );
       case MainTabDestination.create:
         return _WebCreateWorkspace(
@@ -293,12 +264,6 @@ class _WebMainAppShellState extends ConsumerState<WebMainAppShell> {
         );
       case MainTabDestination.chat:
         return _WebDesktopFrame(child: widget.dependencies.buildChat());
-      case MainTabDestination.interestMatch:
-        return _WebDesktopFrame(
-          child: InterestMatchPage(
-            visitRecorderService: ref.read(visitRecorderServiceProvider),
-          ),
-        );
       case MainTabDestination.profile:
         return _WebDesktopFrame(child: widget.dependencies.buildProfile());
     }

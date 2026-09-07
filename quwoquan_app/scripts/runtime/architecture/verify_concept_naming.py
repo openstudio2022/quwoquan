@@ -56,7 +56,8 @@ QUOTE_RE = re.compile(r"""(['"])(?P<value>.*?)(?<!\\)\1""")
 GROUP_FORBIDDEN = ("群组", "趣群", "讨论群", "空间", "频道", "论坛")
 CONTENT_ACTION_FORBIDDEN = ("收藏", "收藏夹", "稍后看", "关注内容", "共同关注内容")
 # v3 交集主轴（§18.7 / §24）：前台入口统一「交集配对」、今日卡统一「今日交集」、成就模块统一「打动」，
-# 旧词「兴趣配对 / 今日同趣机会 / 影响力」退场。机器标识 interest_match / impact / route / surface 保持不变（§14.2）。
+# 旧词「兴趣配对 / 今日同趣机会 / 影响力」退场。机器标识 impact 保持不变；interestMatch surface 已随行动 Tab
+# 下线删除，仅保留 `/interest-match` 兼容重定向 route 与 `my_intersections_compat_redirect` page（§14.2）。
 # 只禁无歧义旧词：不含「找同趣」——「同趣」作情感修饰（如「找同趣的人 / 找到同趣的人」）仍被 §18.7.1
 # 允许，substring 会误伤；「影响力」为前台成就文案词（§18.7.1 收敛为「打动」），机器名/注释里的「影响力」
 # 属 impact 内部语义，门禁只扫引号内 value + 跳过 // /// 注释与 generated，不误伤。
@@ -181,7 +182,7 @@ def scan_user_visible_text() -> list[Finding]:
                                 line_no,
                                 token,
                                 "v3 交集主轴：前台入口统一「交集配对」、今日卡统一「今日交集」，旧词兴趣配对/今日同趣机会退场",
-                                "改为「交集配对 / 今日交集」；机器标识 interest_match/route/surface 保持不变（§14.2）。",
+                                "改为「交集配对 / 今日交集」；`/interest-match` 兼容重定向 route 与 my_intersections_compat_redirect page 保持不变，interestMatch surface 已删除（§14.2）。",
                             )
                         )
             # Some constants do not appear as quoted strings in ARB metadata.

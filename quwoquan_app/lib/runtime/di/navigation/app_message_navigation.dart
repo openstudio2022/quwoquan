@@ -29,6 +29,12 @@ class AppMessageNavigationTarget {
         AppRoutePaths.homepageDetail(id: targetId),
       );
     }
+    // Gathering 邀请、接受/婉拒回执、促成与完成提醒统一回到任务详情。
+    if (targetType == 'gathering' && targetId.isNotEmpty) {
+      return AppMessageNavigationTarget._(
+        AppRoutePaths.gatheringDetail(id: targetId),
+      );
+    }
     if (targetType == 'assistant_run' && targetId.isNotEmpty) {
       return AppMessageNavigationTarget._(
         Uri(

@@ -71,11 +71,12 @@ String _homeObjectSharedCount(int count) {
   return '$count${DiscoveryText.homeObjectSharedCountSuffix}';
 }
 
+// routeName 取值与 MainTabDestinationX.routeName 同源（home/videoBook/create/chat/profile）。
 String _webPcPrimaryLabel(String routeName) {
   switch (routeName) {
     case 'home':
       return DiscoveryText.webPcPrimaryHome;
-    case 'featured':
+    case 'videoBook':
       return DiscoveryText.webPcPrimaryFeatured;
     case 'create':
       return DiscoveryText.webPcPrimaryCreate;

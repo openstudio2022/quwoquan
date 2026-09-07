@@ -13,6 +13,7 @@ import 'package:quwoquan_app/l10n/copy/chat_text_constants.dart';
 import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
 import 'package:quwoquan_app/runtime/auth/auth_session.dart';
 import 'package:quwoquan_app/runtime/shell/shell_immersive_providers.dart';
+import 'package:quwoquan_app/runtime/testing/test_keys.dart';
 
 class BottomNavigationWidget extends ConsumerWidget {
   final int currentIndex;
@@ -51,11 +52,9 @@ class BottomNavigationWidget extends ConsumerWidget {
         selectedIcon: FluentIcons.home_24_filled,
       ),
       _BottomDestination(
-        // 线下行动与发现：视频书已改为首页顶部固定入口（心动供给），
-        // 底栏第二格承载交集主线的线下行动目的地（心动变现）。
-        label: AppConceptConstants.offlineActions,
-        icon: FluentIcons.people_community_24_regular,
-        selectedIcon: FluentIcons.people_community_24_filled,
+        label: AppConceptConstants.premium,
+        icon: CupertinoIcons.book,
+        selectedIcon: CupertinoIcons.book_fill,
       ),
       _BottomDestination(
         label: '',
@@ -97,6 +96,7 @@ class BottomNavigationWidget extends ConsumerWidget {
                 final destination = destinations[index];
                 return Expanded(
                   child: CupertinoButton(
+                    key: index == 1 ? TestKeys.mainTabVideoBook : null,
                     padding: EdgeInsets.zero,
                     minimumSize: Size.zero,
                     onPressed: () {
@@ -121,8 +121,11 @@ class BottomNavigationWidget extends ConsumerWidget {
   }
 }
 
-typedef _BottomIconBuilder =
-    Widget Function(Color color, bool selected, double size);
+typedef _BottomIconBuilder = Widget Function(
+  Color color,
+  bool selected,
+  double size,
+);
 
 class _BottomDestination {
   const _BottomDestination({

@@ -203,6 +203,7 @@ Page<T> appRoutePage<T>({
 bool isBottomNavRootLocation(String location) {
   final path = Uri.tryParse(location)?.path ?? location;
   return path == AppRoutePaths.home ||
+      path == AppRoutePaths.videoBook ||
       path == AppRoutePaths.circles ||
       path == AppRoutePaths.chat ||
       path == AppRoutePaths.profile;

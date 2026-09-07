@@ -21,17 +21,25 @@ void main() {
       expect(policy.supportedBackEdges, {EdgeBackDirection.leading});
       expect(
         policy.resolveBack(
-          const AppRouteContext(
-            location: AppRoutePaths.home,
+          AppRouteContext(
+            location: AppRoutePaths.videoBook,
             canPop: false,
-            isBottomNavRoot: true,
+            isBottomNavRoot: isBottomNavRootLocation(AppRoutePaths.videoBook),
           ),
         ),
         AppBackDisposition.ignoreRoot,
       );
     });
 
-    test('Android supports both edges and guards bottom-nav root exit', () {
+    test('video book is a bottom-nav root with normalized URI queries', () {
+      expect(isBottomNavRootLocation(AppRoutePaths.videoBook), isTrue);
+      expect(
+        isBottomNavRootLocation('${AppRoutePaths.videoBook}?source=home'),
+        isTrue,
+      );
+    });
+
+    test('Android supports both edges and guards video-book root exit', () {
       final policy = nativeBackNavigationPolicyForPlatform(
         TargetPlatform.android,
       );
@@ -43,10 +51,10 @@ void main() {
       });
       expect(
         policy.resolveBack(
-          const AppRouteContext(
-            location: AppRoutePaths.home,
+          AppRouteContext(
+            location: AppRoutePaths.videoBook,
             canPop: false,
-            isBottomNavRoot: true,
+            isBottomNavRoot: isBottomNavRootLocation(AppRoutePaths.videoBook),
           ),
         ),
         AppBackDisposition.guardRootExit,

@@ -4,12 +4,10 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/runtime/di/app_providers_content_runtime.dart';
-import 'package:quwoquan_app/runtime/di/recommendation_presentation_slots.dart';
 import 'package:quwoquan_app/runtime/shell/actions/global_surface_actions.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/runtime/shell/web_main_app_shell.dart';
 import 'package:quwoquan_app/service/chat_service/chat/chat_inbox_view/presentation/chat_page.dart';
-import 'package:quwoquan_app/service/circle_service/circle_management/gathering/presentation/gathering_actions_discovery_page.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/home_feed_post_open_action.dart';
 import 'package:quwoquan_app/service/content_service/content/post/domain/create_editor_models.dart';
 import 'package:quwoquan_app/service/content_service/content/post/presentation/home_featured_immersive_page.dart';
@@ -76,12 +74,9 @@ final webMainAppShellDependenciesProvider =
                 );
               },
             ),
-        buildFeaturedChannel: ({required onExitToRecommend}) =>
-            HomeFeaturedImmersivePage(onExitToHome: onExitToRecommend),
+        buildVideoBook: ({required onExitToHome}) =>
+            HomeFeaturedImmersivePage(onExitToHome: onExitToHome),
         buildChat: () => const ChatPage(),
-        buildActionsDiscovery: () => GatheringActionsDiscoveryPage(
-          buildIntersectionInbox: buildGatheringIntersectionInboxSlot,
-        ),
         buildProfile: () => const MyProfilePage(),
         openCreate: (context, intent) {
           final action = EditorStartAction.values.singleWhere(
@@ -89,7 +84,6 @@ final webMainAppShellDependenciesProvider =
           );
           GlobalQuickActionSheet.openCreateAction(context, action.name);
         },
-        openStartGathering: GlobalQuickActionSheet.openGatedStartGathering,
         openStartGroupChat: GlobalQuickActionSheet.openGatedStartGroupChat,
       );
     });

@@ -72,21 +72,9 @@ class AppConceptConstants {
   static const String discovery = '首页';
   static const String circles = '圈子';
   static const String premium = '视频书';
-  static const String offlineActions = '行动';
-  static const String offlineActionsPageTitle = '线下行动与发现';
   static const String create = '创作';
   static const String chat = '消息';
   static const String profile = '我';
-
-  // ==================== 交集配对（发现启动器入口） ====================
-  /// 交集配对能力短标签：以交集与亲和力为半径，发现同趣的人 / 圈子 / 地点并行动。
-  static const String interestMatch = '交集配对';
-
-  /// 交集配对页标题（发现启动器）
-  static const String interestMatchTitle = '交集配对';
-
-  /// 交集配对页副标题：以交集为半径，遇见同趣的人、圈子与地点
-  static const String interestMatchSubtitle = '以交集为半径，遇见同趣的人、圈子与地点';
 
   // ==================== 交集展示（发现流徽章 / 对象页行动区） ====================
   /// 发现流连接徽章：内容挂载的对象主页前缀。

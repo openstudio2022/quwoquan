@@ -15,7 +15,7 @@
 ### In Scope
 
 - premium/similar/featured/immersive/精品 路由到 FeedSimilar + premium_stream。
-- 视频书是首页顶部文本分类 Tab，固定紧跟“推荐”；移动与 Web 搜索/主工具栏不保留视频书 action、独立壳目的地或专用入口图标。
+- 视频书是移动底栏与 Web 主导航的独立内容根入口，canonical route 为 `/video-book`；它继续复用 featured/premium query、沉浸 viewer、Post 状态与交集规则，不建立第二内容池。首页频道条不再包含 `featured`，避免同一能力双入口。
 - premium preset、质量分和交集融合排序。
 - 精品解释标题与 primaryText-only 呈现。
 - product-ops 全局精品池写入前置：global scope、质量准入、审计、过期、回滚和下架剔除。
@@ -34,8 +34,8 @@
 ### REQ-001 精品流式体验路由与解释契约
 
 - 精品流必须统一路由、排序与解释；全局精品必须先经 product-ops 写入并由 Recommendation 消费 typed event，候选投影或排序窗口未闭合时不得返回伪精品结果。
-- 首页频道 metadata 必须包含 `recommend → featured` 邻接不变量；远程覆盖缺失、重复或重排任一项时整份覆盖 fail-closed 到发布默认，不由 UI 本地补插第二份 Tab。
-- `featured` Tab 复用现有沉浸 viewer 和 `premium_stream` 数据语义，不走普通首页 feed、不新建独立业务列表。compact/regular/expanded 仅允许视觉布局差异，供给、route、错误和归因保持同源。
+- 首页频道 metadata 不得包含 `featured`；视频书根页经 canonical `/video-book` route 与 `videoBook` surface 挂载 featured 内容能力，不由首页内存态 Tab 或 UI 本地补插第二入口。
+- 视频书根页复用现有沉浸 viewer 和 `premium_stream` 数据语义，不走普通首页 feed、不新建独立业务列表或播放器状态。compact/regular/expanded 仅允许视觉布局和安全区差异，供给、Post 状态、route、错误、交集和归因保持同源。
 - premium_stream/similar 首刷必须读取当前环境 canonical active release snapshot；健康零 active release 或同 release eligible playable-video 计数为零时返回 canonical 成功空结果，依赖读取/绑定/硬过滤/召回/scorer/hydration 故障返回 `CONTENT.SYSTEM.required_dependency_unavailable`。任何成功空态都不能替代发布门要求的当前 release 非空可播放视频精品。
 
 <a id="req-002"></a>
@@ -72,7 +72,7 @@
 - GIVEN 用户进入精品/沉浸式内容流，内容具备质量分和交集理由。
 - WHEN content-service 请求推荐引擎，App 展示精品详情解释。
 - THEN 推荐场景为 similar/premium_stream，App 标题展示“与你相关的线索”，主句只显示 primaryText。
-- AND 首页顶部“视频书”文本 Tab 紧跟“推荐”，选择后挂载同源沉浸 viewer；移动/Web 工具栏、独立 shell destination 与专用视频书入口图标均不存在。
+- AND 移动底栏固定为“首页 / 视频书 / + / 联系 / 我”，Web 主导航存在同源视频书入口；`/video-book` 冷启动、返回栈与对象详情后的根目的地恢复正确，首页频道条不再出现 `featured`。
 
 <a id="gwt-002"></a>
 ### GWT-002 精品池全局召回读路径闭环
@@ -98,7 +98,7 @@
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`track`
-- 影响或价值：仍缺同一真实候选下路由、排序、解释、product-ops 准入和失效恢复的组合 `api_integration / user_acceptance` 证据；已有直接 `spec_ref` 锁定发布模式下非空精品供给与空结果信封。
+- 影响或价值：仍缺同一真实候选下路由、排序、解释、product-ops 准入和失效恢复的组合 `api_integration / user_acceptance` 证据；已有直接 `spec_ref` 锁定发布模式下非空精品供给与空结果信封。视频书导航验收（移动底栏五项、Web 同源入口、`/video-book` 冷启动与返回栈、对象详情回根目的地、首页频道条无 `featured`）已由 `GWT-001.t2` / `GWT-001.t3` 子句级 `local_contract / user_acceptance` 测试绑定，剩余缺口只在真实环境 release 非空可播放视频供给。
 - 完成判定：`GWT-001` 对应行为满足且真实测试 `spec_ref` 有效
 
 <a id="open-002"></a>

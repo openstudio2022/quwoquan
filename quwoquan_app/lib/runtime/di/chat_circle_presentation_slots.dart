@@ -5,7 +5,7 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
 
 /// 通知收件箱的 Circle participant 插槽绑定：Gathering 邀请专卡。
 ///
-/// 与 [homepage_circle_presentation_slots] 同范式：跨域 participant Widget 只在
+/// 与 [profile_presentation_slots] 同范式：跨域 participant Widget 只在
 /// runtime/di 组合根绑定，chat presentation 不直接依赖 circle presentation。
 Widget buildChatInboxGatheringInvitationSlot({
   required AppMessage message,

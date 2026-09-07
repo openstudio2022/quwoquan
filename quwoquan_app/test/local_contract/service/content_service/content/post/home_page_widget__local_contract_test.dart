@@ -259,8 +259,7 @@ List<ContentPostViewData> _stableFollowingArticles() {
     _stableFollowingArticlePost(
       id: 'diffuse_cover_summary_only',
       summary: '把路线、风向和停留时间直接写进正文里，让临场决定也能保持连贯。',
-      coverUrl:
-          'media/image/s/archived-image/post/fixture_article_001/v1/image-2.png',
+      coverUrl: 'media/image/s/archived-image/post/fixture_article_001/v1/image-2.png',
     ),
     _stableFollowingArticlePost(
       id: 'journal_plain_summary_only',
@@ -475,7 +474,7 @@ void main() {
       },
     );
 
-    testWidgets('展示八个首页文本频道并在频道条右侧保留全局搜索与小趣入口', (tester) async {
+    testWidgets('展示七个首页文本频道并在频道条右侧保留全局搜索与小趣入口', (tester) async {
       _suppressExpectedErrors();
       await tester.pumpWidget(_buildApp());
       await tester.pump(const Duration(milliseconds: 300));
@@ -483,7 +482,7 @@ void main() {
       expect(find.byType(HomePage), findsOneWidget);
       expect(find.text(DiscoveryText.homeTabFollowing), findsWidgets);
       expect(find.text(DiscoveryText.homeTabRecommended), findsWidgets);
-      expect(find.text(DiscoveryText.homeTabFeatured), findsOneWidget);
+      expect(find.text(DiscoveryText.homeTabFeatured), findsNothing);
       expect(find.text(DiscoveryText.circleScenarioCampus), findsWidgets);
       expect(find.text(DiscoveryText.homeTabTravel), findsWidgets);
       expect(find.text(DiscoveryText.homeTabPhotography), findsWidgets);
@@ -988,39 +987,21 @@ void main() {
       }
       expect(
         tabLabels,
-        equals(<String>['关注', '推荐', '视频书', '校园', '旅行', '摄影', '科技', '车之家']),
+        equals(<String>['关注', '推荐', '校园', '旅行', '摄影', '科技', '车之家']),
       );
     });
 
-    testWidgets('视频书文本 Tab 复用 premium 沉浸 viewer 作为特殊正文', (tester) async {
+    testWidgets('首页频道不再包含视频书双入口', (tester) async {
       _suppressExpectedErrors();
       await tester.pumpWidget(_buildApp());
       await tester.pump(const Duration(milliseconds: 300));
 
-      await tester.tap(
-        find.byKey(
-          HomePrimaryTabStrip.channelKey(HomePrimaryTabStrip.featuredChannelId),
-        ),
-      );
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 300));
-
       expect(
-        find.byKey(const ValueKey<String>('home-featured-channel-body')),
-        findsOneWidget,
-      );
-      expect(find.byType(HomeFeaturedImmersivePage), findsOneWidget);
-      expect(find.byType(WorksImmersiveViewer), findsOneWidget);
-      expect(
-        find.byKey(const ValueKey<String>('works-top-back')),
-        findsOneWidget,
-      );
-      // 视频书只作为文本频道存在，不再有顶栏专用入口图标；
-      // 沉浸正文接管的是频道 body，顶栏的搜索与小趣入口必须保持可达。
-      expect(
-        find.byKey(const ValueKey<String>('home-featured-entry')),
+        find.byKey(HomePrimaryTabStrip.channelKey('featured')),
         findsNothing,
       );
+      expect(find.byType(HomeFeaturedImmersivePage), findsNothing);
+      expect(find.byType(WorksImmersiveViewer), findsNothing);
       expect(find.byKey(TestKeys.globalSearchLauncherButton), findsOneWidget);
       expect(find.byKey(TestKeys.globalAssistantEntryMark), findsOneWidget);
     });

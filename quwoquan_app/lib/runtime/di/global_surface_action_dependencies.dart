@@ -1,6 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:quwoquan_app/runtime/auth/auth_continuation.dart';
 import 'package:quwoquan_app/runtime/di/app_providers_app_state.dart';
 import 'package:quwoquan_app/runtime/models/visit_models.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_route_paths.g.dart';
@@ -15,11 +16,10 @@ import 'package:quwoquan_app/service/recommendation_service/recommendation/recom
 
 /// Recommendation 可携带 typed request 覆盖默认活动创建入口；该类型只在组合根
 /// 与 Recommendation navigator 之间流动，runtime shell 不感知业务 request。
-typedef GatheringCreateNavigationBinding =
-    Future<void> Function(
-      BuildContext context, [
-      GatheringCreateNavigationRequest? request,
-    ]);
+typedef GatheringCreateNavigationBinding = Future<void> Function(
+  BuildContext context, [
+  GatheringCreateNavigationRequest? request,
+]);
 
 final startGatheringNavigationBindingProvider =
     Provider<GatheringCreateNavigationBinding?>((ref) {
@@ -32,6 +32,23 @@ final startGatheringNavigationBindingProvider =
 
       return binding;
     });
+
+/// 登录续接：把 runtime/auth 持有的 [StartGatheringContinuation] 载荷还原为 typed
+/// request 并交给 gathering binding。载荷不是 [GatheringCreateNavigationRequest]
+/// 时 fail-closed（不承接、不猜测），生产 DI 只会由 Recommendation navigator 写入 typed 值。
+Future<void> resumeStartGatheringContinuation(
+  BuildContext context,
+  WidgetRef ref,
+  StartGatheringContinuation<Object> continuation,
+) async {
+  final binding = ref.read(startGatheringNavigationBindingProvider);
+  assert(binding != null, 'startGatheringNavigationBinding 未注入：登录续接的约伴请求无法承接');
+  final request = continuation.request;
+  if (binding == null || request is! GatheringCreateNavigationRequest) {
+    return;
+  }
+  await binding(context, request);
+}
 
 typedef GlobalCreateActionSelected = void Function(String actionWire);
 
@@ -61,13 +78,11 @@ class GlobalSurfaceActionBindings {
   Widget buildQuickActionSheet({
     required BuildContext context,
     required GlobalCreateActionSelected onCreateAction,
-    required VoidCallback onStartGathering,
     required VoidCallback onStartGroupChat,
     required VoidCallback onCancel,
   }) {
     return CreateActionSheet(
       onCreateAction: (action) => onCreateAction(action.name),
-      onStartGathering: onStartGathering,
       onStartGroupChat: onStartGroupChat,
       onCancel: onCancel,
     );

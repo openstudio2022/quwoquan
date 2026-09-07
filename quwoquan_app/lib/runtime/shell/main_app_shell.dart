@@ -16,6 +16,7 @@ import 'package:quwoquan_app/runtime/auth/auth_gate.dart';
 import 'package:quwoquan_app/runtime/auth/auth_session.dart';
 import 'package:quwoquan_app/runtime/di/app_providers_app_state.dart';
 import 'package:quwoquan_app/runtime/di/client_state_sync_dependencies.dart';
+import 'package:quwoquan_app/runtime/di/global_surface_action_dependencies.dart';
 import 'package:quwoquan_app/runtime/errors/app_user_recovery.dart';
 import 'package:quwoquan_app/runtime/errors/ui_error_models.dart';
 import 'package:quwoquan_app/runtime/transport/state_sync/client_state_sync.dart';
@@ -219,16 +220,25 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
       if (!justLoggedIn) {
         return;
       }
-      final pending = ref
-          .read(authContinuationProvider.notifier)
-          .take<OpenSheetContinuation>();
-      if (pending == null || !mounted) {
+      final controller = ref.read(authContinuationProvider.notifier);
+      final pendingGathering = ref.read(authContinuationProvider);
+      if (pendingGathering is StartGatheringContinuation) {
+        WidgetsBinding.instance.addPostFrameCallback((_) async {
+          if (!context.mounted) return;
+          // 先出槽再判 binding：单槽续接不能因 binding 缺失而滞留，否则后续所有
+          // OpenSheetContinuation 都会被「槽位已占」拒绝。生产 DI 恒有 binding。
+          final gathering = controller.take<StartGatheringContinuation>();
+          if (gathering == null) {
+            return;
+          }
+          await resumeStartGatheringContinuation(context, ref, gathering);
+        });
         return;
       }
+      final pending = controller.take<OpenSheetContinuation>();
+      if (pending == null || !mounted) return;
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!context.mounted) {
-          return;
-        }
+        if (!context.mounted) return;
         unawaited(
           GlobalQuickActionSheet.resumeSheetContinuation(
             context,
@@ -343,9 +353,15 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
                                     ),
                                   ),
                                   _buildTabBody(
-                                    destination: MainTabDestination.actions,
-                                    child: shellBindings
-                                        .buildActionsDiscovery(),
+                                    destination: MainTabDestination.videoBook,
+                                    child: shellBindings.buildFeatured(
+                                      isActive:
+                                          _currentDestination ==
+                                          MainTabDestination.videoBook,
+                                      onExitToHome: () => _selectMainTab(
+                                        MainTabDestination.home,
+                                      ),
+                                    ),
                                   ),
                                   const SizedBox.shrink(),
                                   _buildTabBody(
@@ -485,19 +501,12 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
         break;
       case MainTabDestination.create:
         break;
-      case MainTabDestination.actions:
-        // 线下行动与发现：壳内存态 tab（无独立路由），保留底栏与常规明暗。
-        ref.read(lastMainTabBeforeAssistantProvider.notifier).set(null);
-        ref.read(bottomNavHiddenProvider.notifier).setHidden(false);
-        break;
-      case MainTabDestination.chat:
+      case MainTabDestination.videoBook:
         ref.read(lastMainTabBeforeAssistantProvider.notifier).set(null);
         ref.read(bottomNavHiddenProvider.notifier).setHidden(false);
         context.go(nextTab.routePath);
         break;
-      case MainTabDestination.interestMatch:
-        // 同趣（兴趣配对）：游客可浏览，无登录门；移动端由加号面板进入，
-        // Web 宽屏仍可作为主工作区 destination 承载。
+      case MainTabDestination.chat:
         ref.read(lastMainTabBeforeAssistantProvider.notifier).set(null);
         ref.read(bottomNavHiddenProvider.notifier).setHidden(false);
         context.go(nextTab.routePath);

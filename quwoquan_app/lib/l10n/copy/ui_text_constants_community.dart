@@ -2,7 +2,6 @@ part of 'ui_text_constants.dart';
 
 abstract final class CommunityText {
   static const String createCircle = '创建圈子';
-  static const String createActionStartGathering = '发起活动';
   static const String authGateTitleStartGathering = '登录后发起活动';
   static const String authGateSubtitleStartGathering =
       '活动将以你的账号身份创建，并保留后续参与和群聊协作。';

@@ -15,13 +15,11 @@ class CreateActionSheet extends StatefulWidget {
   const CreateActionSheet({
     super.key,
     required this.onCreateAction,
-    required this.onStartGathering,
     required this.onStartGroupChat,
     required this.onCancel,
   });
 
   final CreateActionSelected onCreateAction;
-  final VoidCallback onStartGathering;
   final VoidCallback onStartGroupChat;
   final VoidCallback onCancel;
 
@@ -30,7 +28,7 @@ class CreateActionSheet extends StatefulWidget {
 }
 
 class _CreateActionSheetState extends State<CreateActionSheet> {
-  bool _showsContentActions = false;
+  bool _showsMoreActions = false;
 
   @override
   Widget build(BuildContext context) {
@@ -43,23 +41,6 @@ class _CreateActionSheetState extends State<CreateActionSheet> {
     final primaryText =
         SettingsSemanticConstants.conversationSheetPrimaryLabelColor(isDark);
 
-    final primaryActions = <_SheetActionSpec>[
-      _SheetActionSpec(
-        label: CreationText.createActionPublishContent,
-        labelKey: TestKeys.createActionPublishContent,
-        onPressed: () => setState(() => _showsContentActions = true),
-      ),
-      _SheetActionSpec(
-        label: CommunityText.createActionStartGathering,
-        labelKey: TestKeys.createActionStartGathering,
-        onPressed: widget.onStartGathering,
-      ),
-      _SheetActionSpec(
-        label: ChatText.createActionCreateGroupShort,
-        labelKey: TestKeys.createActionStartGroupChat,
-        onPressed: widget.onStartGroupChat,
-      ),
-    ];
     final contentActions = <_SheetActionSpec>[
       _SheetActionSpec(
         label: CreationText.createActionPostPhotoShort,
@@ -78,8 +59,20 @@ class _CreateActionSheetState extends State<CreateActionSheet> {
         labelKey: TestKeys.createActionWrite,
         onPressed: () => widget.onCreateAction(EditorStartAction.write),
       ),
+      _SheetActionSpec(
+        label: ChatText.more,
+        labelKey: TestKeys.createActionMore,
+        onPressed: () => setState(() => _showsMoreActions = true),
+      ),
     ];
-    final actions = _showsContentActions ? contentActions : primaryActions;
+    final moreActions = <_SheetActionSpec>[
+      _SheetActionSpec(
+        label: ChatText.createActionCreateGroupShort,
+        labelKey: TestKeys.createActionStartGroupChat,
+        onPressed: widget.onStartGroupChat,
+      ),
+    ];
+    final actions = _showsMoreActions ? moreActions : contentActions;
 
     return AppBottomModalSurface(
       onDismiss: widget.onCancel,

@@ -67,7 +67,7 @@ void main() {
         remoteWriter: remote,
       );
 
-      await service.recordVisit(const VisitTarget.page('interest_match'));
+      await service.recordVisit(const VisitTarget.page('fixture_page'));
       // recordVisit 内的远端同步是 fire-and-forget：轮询等待失败输入
       // 完成入队（enqueue 本身也是异步的）。
       final pendingBox = await Hive.openBox<String>(kVisitPendingSyncBoxName);

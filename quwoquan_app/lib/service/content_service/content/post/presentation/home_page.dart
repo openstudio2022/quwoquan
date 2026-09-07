@@ -8,7 +8,6 @@ import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/runtime/shell/startup/app_startup_runtime.dart';
 import 'package:quwoquan_app/runtime/shell/actions/global_surface_actions.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_route_paths.g.dart';
-import 'package:quwoquan_app/service/content_service/content/post/presentation/home_featured_immersive_page.dart';
 import 'package:quwoquan_app/service/content_service/content/post/presentation/home_primary_tab_strip.dart';
 import 'package:quwoquan_app/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/design_system/semantics/navigation_semantic_constants.dart';
@@ -540,9 +539,7 @@ class _HomePageState extends ConsumerState<HomePage>
                 ),
                 Expanded(
                   child: TabSwipeSwitchRegion(
-                    enabled:
-                        effectiveActiveChannelId !=
-                        HomePrimaryTabStrip.featuredChannelId,
+                    enabled: true,
                     onSwipe: _handleTabSwipe,
                     child: widget.isStartupHomeActive
                         ? _buildBody(isDark, channels, effectiveActiveChannelId)
@@ -573,12 +570,6 @@ class _HomePageState extends ConsumerState<HomePage>
     }
     if (channel == null) {
       return const SizedBox.shrink();
-    }
-    if (channel.id == HomePrimaryTabStrip.featuredChannelId) {
-      return HomeFeaturedImmersivePage(
-        key: const ValueKey<String>('home-featured-channel-body'),
-        onExitToHome: () => _handleChannelChange(_defaultChannelId),
-      );
     }
     return HomeMultiFormFeed(
       key: ValueKey<String>('home-feed-${channel.id}'),

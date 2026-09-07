@@ -19,7 +19,6 @@ class HomePrimaryTabStrip extends StatelessWidget {
   static const String followingChannelId = 'following';
   // 与 ContentUIConfig.homeChannels 的推荐频道 id 对齐（运营/远程覆盖真相源）。
   static const String recommendedChannelId = 'recommend';
-  static const String featuredChannelId = 'featured';
   static const String circlesChannelId = 'circles';
   static const String travelPhotographyChannelId = 'travel_photography';
   static const String campusChannelId = 'campus';
@@ -33,7 +32,6 @@ class HomePrimaryTabStrip extends StatelessWidget {
   static const List<String> homeChannelIds = <String>[
     followingChannelId,
     recommendedChannelId,
-    featuredChannelId,
     campusChannelId,
     travelChannelId,
     photographyChannelId,
@@ -89,9 +87,8 @@ class HomePrimaryTabStrip extends StatelessWidget {
         ? channels!.map((channel) => channel.id).toList(growable: false)
         : homeChannelIds;
     final channelIds = regularChannelIds;
-    String labelFor(String channelId) => channelId == featuredChannelId
-        ? DiscoveryText.homeTabFeatured
-        : labelByChannelId[channelId] ?? _labelForChannel(channelId);
+    String labelFor(String channelId) =>
+        labelByChannelId[channelId] ?? _labelForChannel(channelId);
     return GestureDetector(
       behavior: HitTestBehavior.translucent,
       onHorizontalDragEnd: onHorizontalDragEnd,
@@ -126,7 +123,6 @@ class HomePrimaryTabStrip extends StatelessWidget {
   static String _labelForChannel(String channelId) => switch (channelId) {
     followingChannelId => DiscoveryText.homeTabFollowing,
     recommendedChannelId => DiscoveryText.homeTabRecommended,
-    featuredChannelId => DiscoveryText.homeTabFeatured,
     circlesChannelId => DiscoveryText.homeTabCircles,
     travelPhotographyChannelId => DiscoveryText.circleScenarioTravelPhotography,
     campusChannelId => DiscoveryText.circleScenarioCampus,

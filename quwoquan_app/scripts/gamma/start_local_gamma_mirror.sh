@@ -183,7 +183,7 @@ esac
 if [[ "$WORKLOAD" == "full" || "$WORKLOAD" == "content-commercial" ]]; then
   if [[ ! "$OBSERVABILITY_LOG_SINK_DIGEST" =~ ^sha256:[0-9a-f]{64}$ \
      || -z "$OBSERVABILITY_LOG_SINK_COMPOSE_FILE" \
-     || -z "${PRODUCT_OPS_ELASTICSEARCH_ENDPOINT:-}" ]]; then
+     || -z "${PRODUCT_OPS_TELEMETRY_ELASTICSEARCH_ENDPOINT:-}" || -z "${PRODUCT_OPS_RUNTIME_LOG_ELASTICSEARCH_ENDPOINT:-}" ]]; then
     echo "[local-release] GATE_BLOCK: candidate-bound Elasticsearch runtime is required" >&2
     exit 2
   fi
@@ -876,6 +876,7 @@ LOCAL_GAMMA_MANAGED_CONTAINER_BASE_NAMES=(
   integration-service
   notification-service
   mongo-init
+  postgres-init
   recommendation-service
   elasticsearch
   redis
@@ -2044,7 +2045,7 @@ if [[ "$podman_compose" == "1" ]]; then
       -e MONGO_URI=mongodb://mongodb:27017 \
       -e POSTGRES_DSN='postgres://quwoquan:quwoquan@postgres:5432/quwoquan?sslmode=disable' \
       -e PRODUCT_OPS_REDIS_REC_ADDR=redis:6379 -e PRODUCT_OPS_REDIS_GENERAL_ADDR=redis:6379 \
-      -e PRODUCT_OPS_ELASTICSEARCH_ENDPOINT \
+      -e PRODUCT_OPS_TELEMETRY_ELASTICSEARCH_ENDPOINT -e PRODUCT_OPS_RUNTIME_LOG_ELASTICSEARCH_ENDPOINT \
       -e AUTH_JWT_SECRET="${AUTH_JWT_SECRET:?AUTH_JWT_SECRET is required}" \
       -e AUTH_JWT_ISSUER="${AUTH_JWT_ISSUER:?AUTH_JWT_ISSUER is required}" \
       -e AUTH_JWT_AUDIENCE="${AUTH_JWT_AUDIENCE:?AUTH_JWT_AUDIENCE is required}" \
@@ -2514,7 +2515,7 @@ else
     local state=""
     local deadline=0
     bootstrap_services="$("${compose_cmd[@]}" config --services 2>/dev/null || true)"
-    for bootstrap_service in service-core product-ops-service; do
+    for bootstrap_service in service-core product-ops-service postgres-init; do
       if [[ -z "$bootstrap_services" ]] \
         || ! grep -qx "$bootstrap_service" <<<"$bootstrap_services"; then
         echo "[local-gamma] FAIL: policy owner bootstrap requires $bootstrap_service in the compose topology" >&2
@@ -2526,7 +2527,7 @@ else
     # AccountSecurityAuthority 属于 readiness；它的 owner service-core 在基础
     # 设施健康后单独拉起，不能误归为降级路径。
     local -a bootstrap_infra=()
-    for bootstrap_service in mongodb mongo-init postgres redis elasticsearch; do
+    for bootstrap_service in mongodb mongo-init postgres postgres-init redis elasticsearch; do
       if grep -qx "$bootstrap_service" <<<"$bootstrap_services"; then
         bootstrap_infra+=("$bootstrap_service")
       fi
@@ -2536,24 +2537,22 @@ else
       echo "[local-gamma] FAIL: policy owner bootstrap infrastructure up failed" >&2
       return 1
     fi
-    # product-ops 需要可写 replica-set primary；等待 mongo-init one-shot 完成。
-    deadline=$((SECONDS + 180))
-    while true; do
-      cid="$("${compose_cmd[@]}" ps -aq mongo-init 2>/dev/null | head -n 1)"
-      state="$(docker inspect --format '{{.State.Status}} {{.State.ExitCode}}' "$cid" 2>/dev/null || true)"
-      if [[ "$state" == "exited 0" ]]; then
-        break
-      fi
-      if [[ "$state" == exited* ]]; then
-        echo "[local-gamma] FAIL: mongo-init exited abnormally during policy owner bootstrap ($state)" >&2
-        docker logs --tail 40 "$cid" >&2 || true
-        return 1
-      fi
-      if (( SECONDS >= deadline )); then
-        echo "[local-gamma] FAIL: mongo-init did not complete within the policy owner bootstrap deadline" >&2
-        return 1
-      fi
-      sleep 2
+    # 可写 Mongo primary 与 candidate data-plane binding 声明的全部 PostgreSQL
+    # namespace 两个 one-shot 都必须在 --no-deps 启动 service-core 前限时完成。
+    for bootstrap_service in mongo-init postgres-init; do
+      deadline=$((SECONDS + 180))
+      while true; do
+        cid="$("${compose_cmd[@]}" ps -aq "$bootstrap_service" 2>/dev/null | head -n 1)"
+        state="$(docker inspect --format '{{.State.Status}} {{.State.ExitCode}}' "$cid" 2>/dev/null || true)"
+        [[ "$state" == "exited 0" ]] && break
+        if [[ "$state" == exited* ]]; then
+          echo "[local-gamma] FAIL: $bootstrap_service exited abnormally during policy owner bootstrap ($state)" >&2
+          docker logs --tail 40 "$cid" >&2 || true
+          return 1
+        fi
+        (( SECONDS >= deadline )) && { echo "[local-gamma] FAIL: $bootstrap_service did not complete within the policy owner bootstrap deadline" >&2; return 1; }
+        sleep 2
+      done
     done
     # product-ops 进程启动即探 Postgres schema、Redis ping 与 Elasticsearch
     # telemetry 索引初始化，failure 是 fatal；必须等全部 healthy 再启动 owner。

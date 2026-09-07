@@ -432,19 +432,6 @@ class GlobalQuickActionSheet {
     }
   }
 
-  static Future<void> openGatedStartGathering(
-    BuildContext context,
-    WidgetRef ref,
-  ) {
-    return _runGatedSheetAction(
-      context,
-      ref,
-      reason: AuthGateReason.startGathering,
-      sheet: AuthContinuationSheet.startGathering,
-      openNow: () => openStartGathering(context, ref),
-    );
-  }
-
   /// 发起群聊。已登录直接进入；登录后续接由 [OpenSheetContinuation] 在外壳消费。
   static void openStartGroupChat(BuildContext context) {
     context.push(AppRoutePaths.startGroupChat);
@@ -475,11 +462,6 @@ class GlobalQuickActionSheet {
       context,
       listen: false,
     ).read(globalSurfaceActionBindingsProvider).openCreateCircle(context);
-  }
-
-  /// 打开「兴趣配对」发现入口。此页仅导流既有真实面，游客可浏览。
-  static void openInterestMatch(BuildContext context) {
-    context.push(AppRoutePaths.interestMatch);
   }
 
   /// 登录成功后消费 [OpenSheetContinuation]：续接打开对应面板/流程。
@@ -513,8 +495,6 @@ class GlobalQuickActionSheet {
           return;
         }
         openCreateAction(context, action);
-      case _QuickActionIntentKind.startGathering:
-        await openGatedStartGathering(context, ref);
       case _QuickActionIntentKind.startGroupChat:
         await openGatedStartGroupChat(context, ref);
     }
@@ -546,7 +526,7 @@ class GlobalQuickActionSheet {
   }
 }
 
-enum _QuickActionIntentKind { createAction, startGathering, startGroupChat }
+enum _QuickActionIntentKind { createAction, startGroupChat }
 
 class _QuickActionIntent {
   const _QuickActionIntent(this.kind, {this.createAction});
@@ -573,12 +553,8 @@ class _QuickActionSheet extends StatelessWidget {
       context: context,
       onCreateAction: (actionWire) =>
           Navigator.of(context).pop(_QuickActionIntent.create(actionWire)),
-      onStartGathering: () => Navigator.of(
-        context,
-      ).pop(const _QuickActionIntent(_QuickActionIntentKind.startGathering)),
-      onStartGroupChat: () => Navigator.of(
-        context,
-      ).pop(const _QuickActionIntent(_QuickActionIntentKind.startGroupChat)),
+      onStartGroupChat: () => Navigator.of(context)
+          .pop(const _QuickActionIntent(_QuickActionIntentKind.startGroupChat)),
       onCancel: () => Navigator.of(context).pop(),
     );
   }

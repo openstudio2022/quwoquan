@@ -1,5 +1,3 @@
-// spec_ref: specs/feature-tree/circle-community/gathering-coordination/offline-actions-discovery-tab/spec.md#gwt-001.t1
-// spec_ref: specs/feature-tree/circle-community/gathering-coordination/offline-actions-discovery-tab/spec.md#gwt-001.t2
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -10,6 +8,8 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:quwoquan_app/service/rtc_service/rtc/call_session/application/incoming_call_coordinator.dart';
 import 'package:quwoquan_app/service/content_service/content/content_behavior_fact/application/public/content_behavior_repository.dart';
+import 'package:quwoquan_app/service/content_service/content/content_behavior_fact/application/content_behavior_tracker.dart';
+import 'package:quwoquan_app/service/content_service/content/content_behavior_fact/application/public/content_engagement_tracker.dart';
 import 'package:quwoquan_app/service/content_service/content/intersection_visit_state/adapters/intersection_repository.dart';
 import 'package:quwoquan_app/runtime/transport/cloud_api_query_defaults.dart';
 import 'package:quwoquan_app/service/user_service/persona_management/persona/application/public/persona_management_view_data.dart';
@@ -23,6 +23,9 @@ import 'package:quwoquan_app/runtime/shell/main_app_shell.dart';
 import 'package:quwoquan_app/runtime/shell/web_app_install_banner.dart';
 import 'package:quwoquan_app/service/content_service/content/post/presentation/home_primary_tab_strip.dart';
 import 'package:quwoquan_app/runtime/auth/auth_session.dart';
+import 'package:quwoquan_app/runtime/auth/auth_continuation.dart';
+import 'package:quwoquan_app/runtime/di/global_surface_action_dependencies.dart';
+import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/application/public/gathering_create_navigation_request.dart';
 import 'package:quwoquan_app/l10n/copy/app_concept_constants.dart';
 import 'package:quwoquan_app/design_system/semantics/settings_semantic_constants.dart';
 import 'package:quwoquan_app/design_system/feedback/app_toast.dart';
@@ -42,10 +45,9 @@ import 'package:quwoquan_app/design_system/layout/app_terminal_viewport.dart';
 import 'package:quwoquan_app/runtime/auth/auth_gate.dart';
 import 'package:quwoquan_app/l10n/l10n.dart';
 import 'package:quwoquan_app/service/chat_service/chat/chat_inbox_view/presentation/chat_page.dart';
-import 'package:quwoquan_app/service/circle_service/circle_management/gathering/presentation/gathering_actions_discovery_page.dart';
 import 'package:quwoquan_app/service/content_service/content/post/presentation/home_featured_immersive_page.dart';
 import 'package:quwoquan_app/service/content_service/content/post/presentation/home_page.dart';
-import 'package:quwoquan_app/runtime/shell/interest_match/interest_match_page.dart';
+import 'package:quwoquan_app/service/content_service/media/media_asset/presentation/works_immersive_viewer.dart';
 import 'package:quwoquan_app/service/user_service/account/account_session/presentation/login_page.dart';
 import 'package:quwoquan_app/service/user_service/persona_management/persona/presentation/my_profile_page.dart';
 import 'package:quwoquan_app/runtime/shell/welcome/welcome_flower_mark.dart';
@@ -133,12 +135,10 @@ List<Override> _shellTestOverrides({
       const EmptyAppMessageQueryDouble(),
     ),
     greetingRepositoryProvider.overrideWithValue(alphaGreetingRepository()),
-    authorImpactQueryProvider(
-      AppUiSurfaces.profileHome,
-    ).overrideWithValue(const UserProfileObjectTypedDouble()),
-    profileQueryProvider(
-      AppUiSurfaces.profileHome,
-    ).overrideWithValue(const UserProfileObjectTypedDouble()),
+    authorImpactQueryProvider(AppUiSurfaces.profileHome)
+        .overrideWithValue(const UserProfileObjectTypedDouble()),
+    profileQueryProvider(AppUiSurfaces.profileHome)
+        .overrideWithValue(const UserProfileObjectTypedDouble()),
     intersectionRepositoryProvider.overrideWithValue(
       const _EmptyIntersectionRepository(),
     ),
@@ -247,6 +247,15 @@ final class _NoopBehaviorReporter implements BehaviorReporter {
   Future<void> reportEvents({required List<BehaviorEvent> events}) async {}
 }
 
+final class _RecordingBehaviorReporter implements BehaviorReporter {
+  final List<BehaviorEvent> recorded = <BehaviorEvent>[];
+
+  @override
+  Future<void> reportEvents({required List<BehaviorEvent> events}) async {
+    recorded.addAll(events);
+  }
+}
+
 Widget _buildDarkShell(String location, {bool authenticated = true}) {
   return ScreenUtilInit(
     designSize: const Size(393, 852),
@@ -272,7 +281,10 @@ Widget _buildDarkShell(String location, {bool authenticated = true}) {
   );
 }
 
-Widget _buildShellRouter({required bool authenticated}) {
+Widget _buildShellRouter({
+  required bool authenticated,
+  GlobalKey<NavigatorState>? navigatorKey,
+}) {
   final visitRecorderService = VisitRecorderService();
   return ScreenUtilInit(
     designSize: const Size(393, 852),
@@ -292,14 +304,22 @@ Widget _buildShellRouter({required bool authenticated}) {
         ],
         supportedLocales: const [Locale('zh', 'CN'), Locale('en', 'US')],
         routerConfig: GoRouter(
+          navigatorKey: navigatorKey,
           initialLocation: AppRoutePaths.home,
           routes: [
-            GoRoute(
-              path: AppRoutePaths.home,
-              builder: (context, state) => MainAppShell(
-                currentLocation: state.uri.path,
-                child: const SizedBox.shrink(),
-              ),
+            ShellRoute(
+              builder: (context, state, child) =>
+                  MainAppShell(currentLocation: state.uri.path, child: child),
+              routes: [
+                for (final path in <String>[
+                  AppRoutePaths.home,
+                  AppRoutePaths.videoBook,
+                ])
+                  GoRoute(
+                    path: path,
+                    builder: (context, state) => const SizedBox.shrink(),
+                  ),
+              ],
             ),
             GoRoute(
               path: AppRoutePaths.loginPathTemplate,
@@ -326,11 +346,6 @@ Widget _buildShellRouter({required bool authenticated}) {
                 }
                 return const Scaffold(body: Center(child: Text('CREATE_PAGE')));
               },
-            ),
-            GoRoute(
-              path: AppRoutePaths.interestMatch,
-              builder: (context, state) =>
-                  InterestMatchPage(visitRecorderService: visitRecorderService),
             ),
           ],
         ),
@@ -690,6 +705,136 @@ void main() {
     });
 
     testWidgets(
+      // spec_ref: specs/feature-tree/spec.md#uat-011
+      '游客交集行动登录成功后恢复完整 typed request 且只续接一次',
+      (tester) async {
+        final store = _MutableAuthSessionStore();
+        final requests = <GatheringCreateNavigationRequest>[];
+        final container = ProviderContainer(
+          overrides: <Override>[
+            ..._shellTestOverrides(
+              authenticated: false,
+              store: store,
+              flippable: true,
+            ),
+            startGatheringNavigationBindingProvider.overrideWithValue((
+              context, [
+              request,
+            ]) async {
+              if (request != null) {
+                requests.add(request);
+              }
+            }),
+          ],
+        );
+
+        await tester.pumpWidget(
+          ScreenUtilInit(
+            designSize: const Size(393, 852),
+            child: UncontrolledProviderScope(
+              container: container,
+              child: MaterialApp(
+                localizationsDelegates: const [
+                  AppLocalizations.delegate,
+                  GlobalMaterialLocalizations.delegate,
+                  GlobalWidgetsLocalizations.delegate,
+                  GlobalCupertinoLocalizations.delegate,
+                ],
+                supportedLocales: const [
+                  Locale('zh', 'CN'),
+                  Locale('en', 'US'),
+                ],
+                home: const MainAppShell(
+                  currentLocation: AppRoutePaths.home,
+                  child: SizedBox.shrink(),
+                ),
+              ),
+            ),
+          ),
+        );
+        await tester.pump();
+
+        final request = GatheringCreateNavigationRequest(
+          actionKey: 'start_gathering',
+          actionLabel: '邀 TA 一起去',
+          sourceRefs: const <GatheringCreateSourceReference>[
+            GatheringCreateSourceReference(
+              sourceRef: 'content_context',
+              objectId: 'post-1',
+              objectKind: 'content',
+              routeId: 'workBrowser',
+            ),
+            GatheringCreateSourceReference(
+              sourceRef: 'coWishlistedEntity',
+              objectId: 'place-1',
+              objectKind: 'place',
+              routeId: 'homepageDetail',
+            ),
+          ],
+          targetObject: const GatheringCreateTargetObject(
+            objectId: 'place-1',
+            objectKind: 'place',
+            objectName: '西湖',
+            routeId: 'homepageDetail',
+          ),
+          intersection: const GatheringCreateIntersectionContext(
+            intersectionId: 'ix-1',
+            dimension: 'location',
+            intersectionClass: 'fact',
+          ),
+          evidence: const GatheringCreateEvidenceContext(
+            evidenceId: 'ev-1',
+            sourceRef: 'coWishlistedEntity',
+            tagRefs: <String>['travel:lake'],
+          ),
+          referralSource: ReferralSource.organicFeed,
+          inviteePersonaId: 'persona-2',
+          inviteeDisplayName: '小雅',
+        );
+        expect(
+          container
+              .read(authContinuationProvider.notifier)
+              .set(
+                StartGatheringContinuation(request: request),
+                ownerToken: 'intersection:start_gathering:place:place-1',
+              ),
+          isTrue,
+        );
+
+        await container
+            .read(authSessionControllerProvider.notifier)
+            .applyLoginGrant(
+              const AuthSessionGrant(
+                accessToken: 'access-token',
+                refreshToken: 'refresh-token',
+                ownerId: 'user_001',
+                accountState: 'active',
+                identityOrigin: 'phone',
+                activePersona: ActivePersonaEnvelope(personaId: 'user_001'),
+                logicalShard: 0,
+                anonymousRetentionPolicy: '',
+                personaCount: 1,
+                sessionRememberTtlSeconds: 0,
+              ),
+            );
+        await tester.pump();
+        await tester.pump();
+
+        expect(requests, hasLength(1));
+        expect(identical(requests.single, request), isTrue);
+        expect(requests.single.sourceRefs, hasLength(2));
+        expect(requests.single.inviteePersonaId, 'persona-2');
+        expect(requests.single.evidence.evidenceId, 'ev-1');
+        expect(container.read(authContinuationProvider), isNull);
+
+        await tester.pump();
+        expect(requests, hasLength(1), reason: '续接必须 one-shot，不能重复发起');
+        await tester.pumpWidget(const SizedBox.shrink());
+        container.dispose();
+      },
+    );
+
+    testWidgets(
       // spec_ref: specs/feature-tree/discovery-content/content-display-consistency/viewer-profile-state-sync-contract/spec.md#gwt-001.t6
       'outbox 终态失败经壳层弹统一警示轻提示并一次性消费信号',
       (tester) async {
@@ -740,13 +885,13 @@ void main() {
       },
     );
 
-    testWidgets('底部导航展示五栏，行动（线下行动与发现）成为独立一级入口', (tester) async {
+    testWidgets('底部导航固定首页视频书加号联系我', (tester) async {
       _suppressExpectedErrors();
       await tester.pumpWidget(_buildShell(AppRoutePaths.home));
       await tester.pump(const Duration(milliseconds: 300));
 
       expect(find.text('首页'), findsWidgets);
-      expect(find.text(AppConceptConstants.offlineActions), findsWidgets);
+      expect(find.text(AppConceptConstants.premium), findsWidgets);
       expect(find.text('我'), findsWidgets);
       expect(find.text(FoundationText.bottomNavGuestProfile), findsNothing);
       expect(
@@ -759,44 +904,18 @@ void main() {
       expect(
         find.descendant(
           of: find.byType(BottomNavigationWidget),
-          matching: find.text(AppConceptConstants.chat),
-        ),
-        findsNothing,
-      );
-      expect(
-        find.descendant(
-          of: find.byType(BottomNavigationWidget),
-          matching: find.text(AppConceptConstants.offlineActions),
+          matching: find.text(AppConceptConstants.premium),
         ),
         findsOneWidget,
-      );
-      // 视频书属于首页文本频道，不占底栏，也不保留独立图标入口。
-      expect(
-        find.descendant(
-          of: find.byType(BottomNavigationWidget),
-          matching: find.text('视频书'),
-        ),
-        findsNothing,
-      );
-      expect(
-        find.byKey(const ValueKey<String>('home-featured-entry')),
-        findsNothing,
       );
       expect(
         find.byKey(HomePrimaryTabStrip.channelKey('featured')),
-        findsOneWidget,
-      );
-      expect(
-        find.descendant(
-          of: find.byType(BottomNavigationWidget),
-          matching: find.text(AppConceptConstants.interestMatch),
-        ),
         findsNothing,
       );
       expect(
         find.descendant(
           of: find.byType(BottomNavigationWidget),
-          matching: find.text('精品'),
+          matching: find.text('交集配对'),
         ),
         findsNothing,
       );
@@ -806,13 +925,6 @@ void main() {
           matching: find.byIcon(CupertinoIcons.plus),
         ),
         findsOneWidget,
-      );
-      expect(
-        find.descendant(
-          of: find.byType(BottomNavigationWidget),
-          matching: find.text('创作'),
-        ),
-        findsNothing,
       );
       final navContext = tester.element(find.byType(BottomNavigationWidget));
       final obstructionScope = tester.widget<AppViewportObstructionScope>(
@@ -825,51 +937,251 @@ void main() {
       );
     });
 
-    testWidgets('从首页视频书文本 Tab 进入沉浸正文，不切换壳层目的地', (tester) async {
-      await tester.pumpWidget(_buildShell(AppRoutePaths.home));
-      await tester.pump(const Duration(milliseconds: 300));
-
-      await tester.tap(find.byKey(HomePrimaryTabStrip.channelKey('featured')));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 300));
-
-      expect(tester.takeException(), isNull);
-      expect(find.byType(HomeFeaturedImmersivePage), findsOneWidget);
-      expect(find.byType(BottomNavigationWidget), findsOneWidget);
-      expect(
-        find.byKey(const ValueKey<String>('home-featured-entry')),
-        findsNothing,
-      );
-    });
-
-    testWidgets('底栏「行动」进入线下行动与发现页，游客可浏览且保留底栏', (tester) async {
+    testWidgets('视频书切离后保留子树并暂停 viewer，重新进入恢复 active', (tester) async {
       _suppressExpectedErrors();
+      final navigatorKey = GlobalKey<NavigatorState>();
       await tester.pumpWidget(
-        _buildShell(AppRoutePaths.home, authenticated: false),
+        _buildShellRouter(authenticated: true, navigatorKey: navigatorKey),
       );
       await tester.pump(const Duration(milliseconds: 300));
 
       await tester.tap(
         find.descendant(
           of: find.byType(BottomNavigationWidget),
-          matching: find.text(AppConceptConstants.offlineActions),
+          matching: find.text(AppConceptConstants.premium),
+        ),
+      );
+      await _pumpRouteTransition(tester);
+
+      expect(tester.takeException(), isNull);
+      expect(find.byKey(HomeFeaturedImmersivePage.pageKey), findsOneWidget);
+      expect(
+        tester
+            .widget<HomeFeaturedImmersivePage>(
+              find.byType(HomeFeaturedImmersivePage, skipOffstage: false),
+            )
+            .isActive,
+        isTrue,
+      );
+      expect(
+        tester
+            .widget<WorksImmersiveViewer>(
+              find.byType(WorksImmersiveViewer, skipOffstage: false),
+            )
+            .isActive,
+        isTrue,
+      );
+      expect(find.byType(BottomNavigationWidget), findsOneWidget);
+
+      navigatorKey.currentContext!.go(AppRoutePaths.home);
+      await _pumpRouteTransition(tester);
+
+      expect(find.byKey(HomeFeaturedImmersivePage.pageKey), findsNothing);
+      expect(
+        find.byType(HomeFeaturedImmersivePage, skipOffstage: false),
+        findsOneWidget,
+        reason: 'IndexedStack 必须保留已访问的视频书子树。',
+      );
+      expect(
+        tester
+            .widget<HomeFeaturedImmersivePage>(
+              find.byType(HomeFeaturedImmersivePage, skipOffstage: false),
+            )
+            .isActive,
+        isFalse,
+      );
+      expect(
+        tester
+            .widget<WorksImmersiveViewer>(
+              find.byType(WorksImmersiveViewer, skipOffstage: false),
+            )
+            .isActive,
+        isFalse,
+      );
+
+      await tester.tap(
+        find.descendant(
+          of: find.byType(BottomNavigationWidget),
+          matching: find.text(AppConceptConstants.premium),
+        ),
+      );
+      await _pumpRouteTransition(tester);
+
+      expect(find.byKey(HomeFeaturedImmersivePage.pageKey), findsOneWidget);
+      expect(
+        tester
+            .widget<HomeFeaturedImmersivePage>(
+              find.byType(HomeFeaturedImmersivePage, skipOffstage: false),
+            )
+            .isActive,
+        isTrue,
+      );
+      expect(
+        tester
+            .widget<WorksImmersiveViewer>(
+              find.byType(WorksImmersiveViewer, skipOffstage: false),
+            )
+            .isActive,
+        isTrue,
+      );
+    });
+
+    testWidgets(
+      // spec_ref: specs/feature-tree/discovery-content/feed-orchestration-recommendation/premium-stream-recommendation/spec.md#gwt-001.t3
+      '/video-book 冷启动首帧直接挂载视频书根页并高亮底栏第二项',
+      (tester) async {
+        _suppressExpectedErrors();
+        await tester.pumpWidget(_buildShell(AppRoutePaths.videoBook));
+        await tester.pump(const Duration(milliseconds: 300));
+
+        expect(tester.takeException(), isNull);
+        // 冷启动 location 即 /video-book：视频书根页首帧挂载且处于 active，
+        // 不经过首页再切换。
+        expect(find.byKey(HomeFeaturedImmersivePage.pageKey), findsOneWidget);
+        expect(
+          tester
+              .widget<HomeFeaturedImmersivePage>(
+                find.byType(HomeFeaturedImmersivePage, skipOffstage: false),
+              )
+              .isActive,
+          isTrue,
+        );
+        expect(
+          tester
+              .widget<WorksImmersiveViewer>(
+                find.byType(WorksImmersiveViewer, skipOffstage: false),
+              )
+              .isActive,
+          isTrue,
+        );
+        expect(
+          find.byType(HomePage, skipOffstage: false),
+          findsNothing,
+          reason: '冷启动落在视频书时，首页页签延后到首次访问才构建。',
+        );
+
+        final bottomNav = tester.widget<BottomNavigationWidget>(
+          find.byType(BottomNavigationWidget),
+        );
+        expect(bottomNav.currentIndex, 1);
+        expect(
+          find.descendant(
+            of: find.byKey(TestKeys.mainTabVideoBook),
+            matching: find.byIcon(CupertinoIcons.book_fill),
+          ),
+          findsOneWidget,
+          reason: '底栏第二项（视频书）必须以选中态实心图标高亮。',
+        );
+        expect(
+          find.descendant(
+            of: find.byType(BottomNavigationWidget),
+            matching: find.byIcon(FluentIcons.home_24_regular),
+          ),
+          findsOneWidget,
+          reason: '首页项保持未选中态，不与视频书同时高亮。',
+        );
+      },
+    );
+
+    testWidgets('viewer inactive 结算 tracking 且恢复后重启归因', (tester) async {
+      final reporter = _RecordingBehaviorReporter();
+      final behaviorTracker = ContentBehaviorTracker(
+        reporter: reporter,
+        maxBatchSize: 1,
+        enablePeriodicFlush: false,
+      );
+      final engagementTracker = ContentEngagementTracker(reporter: reporter);
+      final isActive = ValueNotifier<bool>(true);
+      addTearDown(isActive.dispose);
+      addTearDown(behaviorTracker.dispose);
+      addTearDown(engagementTracker.dispose);
+      final post = contentPostViewDataBuilder(
+        postId: 'video-book-lifecycle-post',
+        contentType: 'micro',
+        authorAvatarUrl: '',
+        authorBackgroundUrl: null,
+        body: '生命周期测试正文',
+      );
+
+      await tester.pumpWidget(
+        ScreenUtilInit(
+          designSize: const Size(393, 852),
+          child: ProviderScope(
+            overrides: [
+              ..._shellTestOverrides(authenticated: true),
+              contentBehaviorTrackerProvider.overrideWithValue(behaviorTracker),
+              contentEngagementTrackerProvider.overrideWithValue(
+                engagementTracker,
+              ),
+            ],
+            child: MaterialApp(
+              localizationsDelegates: const [
+                AppLocalizations.delegate,
+                GlobalMaterialLocalizations.delegate,
+                GlobalWidgetsLocalizations.delegate,
+                GlobalCupertinoLocalizations.delegate,
+              ],
+              supportedLocales: const [Locale('zh', 'CN'), Locale('en', 'US')],
+              home: Scaffold(
+                body: ValueListenableBuilder<bool>(
+                  valueListenable: isActive,
+                  builder: (context, active, _) => WorksImmersiveViewer(
+                    isActive: active,
+                    showWorksToolbar: true,
+                    showTopNavigation: false,
+                    externalPosts: [post],
+                    onUserTap: (_, {avatarUrl, displayName, backgroundUrl}) {},
+                    onAssistantTap: () {},
+                  ),
+                ),
+              ),
+            ),
+          ),
         ),
       );
       await tester.pump();
-      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 16));
+      expect(
+        reporter.recorded.where(
+          (event) =>
+              event.contentId == post.id &&
+              event.action == BehaviorEventType.impression,
+        ),
+        hasLength(2),
+      );
 
-      expect(tester.takeException(), isNull);
-      expect(find.byType(GatheringActionsDiscoveryPage), findsOneWidget);
-      // 游客可浏览：不弹登录门，底栏保持可见（登录入口无死循环宪法）。
-      expect(find.byType(BottomNavigationWidget), findsOneWidget);
-      expect(
-        find.byKey(const ValueKey<String>('actions-guest-login')),
-        findsOneWidget,
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 1100)),
       );
+      isActive.value = false;
+      await tester.pump();
+      await behaviorTracker.flush();
+      expect(find.byType(WorksImmersiveViewer), findsOneWidget);
       expect(
-        find.byKey(const ValueKey<String>('actions-discover-interest')),
-        findsOneWidget,
+        reporter.recorded.where(
+          (event) =>
+              event.contentId == post.id &&
+              event.action == BehaviorEventType.dwell,
+        ),
+        hasLength(1),
+        reason: 'inactive 转换必须立即结算本轮 dwell。',
       );
+
+      isActive.value = true;
+      await tester.pump();
+      await tester.pump();
+      expect(
+        reporter.recorded.where(
+          (event) =>
+              event.contentId == post.id &&
+              event.action == BehaviorEventType.impression,
+        ),
+        hasLength(3),
+        reason: '恢复 active 后 engagement tracker 必须开启新一轮归因展示。',
+      );
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
     });
 
     testWidgets('圈子路由归并到首页频道', (tester) async {
@@ -902,7 +1214,7 @@ void main() {
       expect(
         find.descendant(
           of: find.byType(BottomNavigationWidget),
-          matching: find.text(AppConceptConstants.offlineActions),
+          matching: find.text(AppConceptConstants.premium),
         ),
         findsOneWidget,
       );
@@ -931,7 +1243,7 @@ void main() {
       );
     });
 
-    testWidgets('底部中间加号打开统一动作面板', (tester) async {
+    testWidgets('底部中间加号打开内容优先创作面板', (tester) async {
       _suppressExpectedErrors();
       await tester.pumpWidget(_buildShell(AppRoutePaths.home));
       await tester.pumpAndSettle();
@@ -944,45 +1256,18 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.byKey(TestKeys.createActionPublishContent), findsOneWidget);
-      expect(find.byKey(TestKeys.createActionStartGathering), findsOneWidget);
-      expect(find.byKey(TestKeys.createActionStartGroupChat), findsOneWidget);
-      expect(find.byKey(TestKeys.createActionGallery), findsNothing);
-      expect(find.byKey(TestKeys.createActionCapture), findsNothing);
-      expect(find.byKey(TestKeys.createActionWrite), findsNothing);
+      expect(find.byKey(TestKeys.createActionGallery), findsOneWidget);
+      expect(find.byKey(TestKeys.createActionCapture), findsOneWidget);
+      expect(find.byKey(TestKeys.createActionWrite), findsOneWidget);
+      expect(find.byKey(TestKeys.createActionMore), findsOneWidget);
+      expect(find.text('发起活动'), findsNothing);
+      expect(find.byKey(TestKeys.createActionStartGroupChat), findsNothing);
       expect(find.text(CreationText.createActionAddContactShort), findsNothing);
       expect(
         find.text(CreationText.createActionCreateCircleShort),
         findsNothing,
       );
-      expect(
-        find.text(CreationText.createActionInterestMatchShort),
-        findsNothing,
-      );
-    });
-
-    testWidgets('加号面板发内容后展示照片视频文字二级入口', (tester) async {
-      _suppressExpectedErrors();
-      await tester.pumpWidget(_buildShellRouter(authenticated: true));
-      await tester.pumpAndSettle();
-
-      await tester.tap(
-        find.descendant(
-          of: find.byType(BottomNavigationWidget),
-          matching: find.byIcon(CupertinoIcons.plus),
-        ),
-      );
-      await tester.pumpAndSettle();
-
-      await tester.tap(find.byKey(TestKeys.createActionPublishContent));
-      await tester.pumpAndSettle();
-
-      expect(find.byKey(TestKeys.createActionPublishContent), findsNothing);
-      expect(find.byKey(TestKeys.createActionStartGathering), findsNothing);
-      expect(find.byKey(TestKeys.createActionStartGroupChat), findsNothing);
-      expect(find.byKey(TestKeys.createActionGallery), findsOneWidget);
-      expect(find.byKey(TestKeys.createActionCapture), findsOneWidget);
-      expect(find.byKey(TestKeys.createActionWrite), findsOneWidget);
+      expect(find.text('交集配对'), findsNothing);
     });
 
     testWidgets('游客点加号先开动作面板（不弹登录），后置到具体动作再拦截', (tester) async {
@@ -1001,15 +1286,10 @@ void main() {
 
       // 加号后置登录：先出现动作面板，不弹登录页。
       expect(find.byType(LoginPage), findsNothing);
-      expect(find.byKey(TestKeys.createActionPublishContent), findsOneWidget);
-      expect(find.byKey(TestKeys.createActionStartGathering), findsOneWidget);
-      expect(find.byKey(TestKeys.createActionStartGroupChat), findsOneWidget);
-
-      // 展开内容类型也不登录，直到选择具体创作动作才拦截。
-      await tester.tap(find.byKey(TestKeys.createActionPublishContent));
-      await tester.pumpAndSettle();
-      expect(find.byType(LoginPage), findsNothing);
       expect(find.byKey(TestKeys.createActionWrite), findsOneWidget);
+      expect(find.byKey(TestKeys.createActionMore), findsOneWidget);
+      expect(find.text('发起活动'), findsNothing);
+      expect(find.byKey(TestKeys.createActionStartGroupChat), findsNothing);
 
       // 选具体创作动作时才触发登录。
       await tester.tap(find.byKey(TestKeys.createActionWrite));
@@ -1314,9 +1594,9 @@ void main() {
         of: navFinder,
         matching: find.byIcon(FluentIcons.home_24_filled),
       );
-      final actionsIcon = find.descendant(
+      final videoBookIcon = find.descendant(
         of: navFinder,
-        matching: find.byIcon(FluentIcons.people_community_24_regular),
+        matching: find.byIcon(CupertinoIcons.book),
       );
       final contactsIcon = find.descendant(
         of: navFinder,
@@ -1331,8 +1611,8 @@ void main() {
       final iconCenterY = tester.getCenter(homeIcon).dy;
 
       expect(navSize.height, closeTo(expectedHeight, 0.5));
-      expect(tester.widget<Icon>(actionsIcon).size, expectedIconSize);
-      expect(tester.widget<Icon>(actionsIcon).color, inactiveColor);
+      expect(tester.widget<Icon>(videoBookIcon).size, expectedIconSize);
+      expect(tester.widget<Icon>(videoBookIcon).color, inactiveColor);
       expect(tester.widget<Icon>(contactsIcon).size, expectedIconSize);
       expect(tester.widget<Icon>(contactsIcon).color, inactiveColor);
       expect(
@@ -1348,7 +1628,7 @@ void main() {
       expect(iconToTop, greaterThanOrEqualTo(0));
       expect(iconToTop, lessThan(navHeight / 2));
       expect(
-        (tester.getCenter(actionsIcon).dy - iconCenterY).abs(),
+        (tester.getCenter(videoBookIcon).dy - iconCenterY).abs(),
         lessThan(1),
       );
       expect(
@@ -1403,9 +1683,9 @@ void main() {
       final navElement = tester.element(navFinder);
       final expectedIconSize = AppSpacing.bottomNavBarItemIconSize(navElement);
       final inactiveColor = AppColors.iosSecondaryLabel(navElement);
-      final actionsIcon = find.descendant(
+      final videoBookIcon = find.descendant(
         of: navFinder,
-        matching: find.byIcon(FluentIcons.people_community_24_regular),
+        matching: find.byIcon(CupertinoIcons.book),
       );
       final contactsIcon = find.descendant(
         of: navFinder,
@@ -1416,19 +1696,19 @@ void main() {
         matching: find.byType(AppProfilePersonIcon),
       );
 
-      final actions = tester.widget<Icon>(actionsIcon);
+      final videoBook = tester.widget<Icon>(videoBookIcon);
       final contacts = tester.widget<Icon>(contactsIcon);
       final profile = tester.widget<AppProfilePersonIcon>(profileIcon);
 
-      expect(actions.size, expectedIconSize);
+      expect(videoBook.size, expectedIconSize);
       expect(contacts.size, expectedIconSize);
       expect(profile.size, expectedIconSize);
       expect(profile.filled, isFalse);
-      expect(actions.color, inactiveColor);
+      expect(videoBook.color, inactiveColor);
       expect(contacts.color, AppColors.primaryColor);
       expect(profile.color, inactiveColor);
       expect(
-        (tester.getCenter(actionsIcon).dy - tester.getCenter(contactsIcon).dy)
+        (tester.getCenter(videoBookIcon).dy - tester.getCenter(contactsIcon).dy)
             .abs(),
         lessThan(1),
       );
@@ -1624,8 +1904,8 @@ void main() {
         findsOneWidget,
       );
       expect(
-        find.byKey(const ValueKey<String>('web-primary-featured')),
-        findsNothing,
+        find.byKey(const ValueKey<String>('web-primary-videoBook')),
+        findsOneWidget,
       );
       expect(
         find.byKey(const ValueKey<String>('web-primary-create')),
@@ -1671,7 +1951,10 @@ void main() {
       );
       expect(tester.getTopLeft(recommendedTab).dx, tabLeftBeforePinned);
 
-      expect(find.text(DiscoveryText.homeTabFeatured), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey<String>('web-primary-videoBook')),
+        findsOneWidget,
+      );
       expect(find.text(DiscoveryText.webPcSearchHintFeatured), findsNothing);
 
       await tester.tap(
@@ -1679,19 +1962,10 @@ void main() {
       );
       await tester.pump(const Duration(milliseconds: 300));
 
-      // 添加入口是动作工作台：顶部不再挂上下文 tab，首层固定三个动作卡片。
-      expect(
-        find.byKey(TestKeys.webCreateActionPublishContent),
-        findsOneWidget,
-      );
-      expect(
-        find.byKey(TestKeys.webCreateActionStartGathering),
-        findsOneWidget,
-      );
-      expect(
-        find.byKey(TestKeys.webCreateActionStartGroupChat),
-        findsOneWidget,
-      );
+      // 添加入口是动作工作台：顶部不再挂上下文 tab，首层固定内容创作与更多入口。
+      expect(find.byKey(TestKeys.webCreateActionMore), findsOneWidget);
+      expect(find.byKey(TestKeys.webCreateActionStartGathering), findsNothing);
+      expect(find.byKey(TestKeys.webCreateActionStartGroupChat), findsNothing);
       expect(find.text(DiscoveryText.webPcCreateTabGallery), findsNothing);
       expect(find.text(DiscoveryText.webPcSearchHintCreate), findsOneWidget);
     });
@@ -1757,19 +2031,10 @@ void main() {
 
       expect(find.byType(WebInlineLoginSurface), findsNothing);
       expect(find.byType(LoginPage), findsNothing);
-      // 游客先看到创建工作台的动作面板，登录拦截下沉到具体账号态动作。
-      expect(
-        find.byKey(TestKeys.webCreateActionPublishContent),
-        findsOneWidget,
-      );
-      expect(
-        find.byKey(TestKeys.webCreateActionStartGathering),
-        findsOneWidget,
-      );
-      expect(
-        find.byKey(TestKeys.webCreateActionStartGroupChat),
-        findsOneWidget,
-      );
+      // 游客先看到创建工作台的内容入口，登录拦截下沉到具体账号态动作。
+      expect(find.byKey(TestKeys.webCreateActionMore), findsOneWidget);
+      expect(find.byKey(TestKeys.webCreateActionStartGathering), findsNothing);
+      expect(find.byKey(TestKeys.webCreateActionStartGroupChat), findsNothing);
       await tester.pump(const Duration(milliseconds: 1200));
     });
   });

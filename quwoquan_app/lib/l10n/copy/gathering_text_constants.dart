@@ -3,15 +3,6 @@
 /// 页面仍通过 typed copy model 消费这些常量；local_contract 的探针文案只留在
 /// test/support，不进入 production `lib/**`。
 abstract final class GatheringText {
-  // 线下行动与发现（底栏「行动」tab）。
-  static const String actionsDiscoverySubtitle = '把线上遇见的心动，变成线下一起完成的事';
-  static const String actionsDiscoverInterestTitle = '发现同趣的人';
-  static const String actionsDiscoverInterestSubtitle = '按兴趣找到想一起行动的人';
-  static const String actionsCreateEntryTitle = '发起行动';
-  static const String actionsCreateEntrySubtitle = '定好时间地点，邀同趣的人一起去';
-  static const String actionsGuestIntroTitle = '登录后查看我的交集与行动';
-  static const String actionsGuestIntroSubtitle = '交集收件箱与我的行动记录需要登录后可见';
-
   static const String createPageTitle = '发起活动';
   static const String createPurposeSection = '活动内容';
   static const String createTitleLabel = '活动标题';
@@ -72,19 +63,18 @@ abstract final class GatheringText {
   static const String createPublishStepLabel = '正在发布活动';
   static const String createCompletedStepLabel = '活动已发布';
 
-  static const String sourceRecentGatheringsTitle = '近期行动';
   static String sourceGatheringSeatsRemaining(int count) => '余 $count 席';
   static const String sourceGatheringFullLabel = '已满';
 
   /// 「我的行动」入口与分组页（REQ-008；只消费 ListGatheringsByHost 公开披露面）。
   static const String myGatheringsTitle = '我的行动';
-  static const String myGatheringsEntryHint = '我发起的公开行动';
+  static const String myGatheringsEntryHint = '管理我发起的行动';
   static String myGatheringsUpcomingBadge(int count) => '$count 个即将开始';
   static const String myGatheringsSegmentUpcoming = '即将开始';
   static const String myGatheringsSegmentDraft = '草稿';
   static const String myGatheringsSegmentEnded = '已结束';
   static const String myGatheringsSegmentCancelled = '已取消';
-  static const String myGatheringsEmptyTitle = '还没有公开行动';
+  static const String myGatheringsEmptyTitle = '还没有行动';
   static const String myGatheringsEmptyDescription =
       '从一条交集出发发起第一次行动，成行后会沉淀在这里。';
   static const String myGatheringsSegmentEmpty = '该分组暂无行动';
@@ -96,7 +86,6 @@ abstract final class GatheringText {
     int formed,
     int experienced,
   ) => '发起 $published 次 · 成形 $formed 次 · 经历 $experienced 次';
-  static String sourceFormedCountLabel(int formed) => '$formed 次行动从这里成行';
 
   /// 经历内容溯源标（works 详情态两种语义，L0 氛围层）。
   static const String provenanceRecapBadge = '来自一次共同行动';

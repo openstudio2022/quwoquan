@@ -28,6 +28,12 @@ class PushTapNavigator {
     }
     if (intent.targetType == 'conversation' && intent.targetId.isNotEmpty) {
       push(AppRoutePaths.chatDetail(id: intent.targetId));
+      return;
+    }
+    // 系统推送与站内 AppMessage 共用 Gathering 任务详情承接点；无论冷启动
+    // initialMessage 还是后台 openedMessages，平台层都只需提供中性 target。
+    if (intent.targetType == 'gathering' && intent.targetId.isNotEmpty) {
+      push(AppRoutePaths.gatheringDetail(id: intent.targetId));
     }
   }
 

@@ -379,8 +379,7 @@ AuthGateReason? requiredRouteGateForLocation(String loc) {
   if (loc == AppRoutePaths.myReports) {
     return AuthGateReason.report;
   }
-  if (loc == AppRoutePaths.chat ||
-      loc.startsWith('${AppRoutePaths.chat}/')) {
+  if (loc == AppRoutePaths.chat || loc.startsWith('${AppRoutePaths.chat}/')) {
     return AuthGateReason.openChat;
   }
   // 添加联系人是「先开面板、动作再登录」的强入口：主页及其全部子页（扫一扫/
@@ -392,8 +391,14 @@ AuthGateReason? requiredRouteGateForLocation(String loc) {
   }
   // RTC 通话页族（来电/去电/语音/视频/选择参与人）全部是账号态：深链直达
   // 无账号无法建立会话，先登录、关闭兜底回首页。
-  if (_matchesParameterizedTemplate(loc, AppRoutePaths.rtcIncomingPathTemplate) ||
-      _matchesParameterizedTemplate(loc, AppRoutePaths.rtcOutgoingPathTemplate) ||
+  if (_matchesParameterizedTemplate(
+        loc,
+        AppRoutePaths.rtcIncomingPathTemplate,
+      ) ||
+      _matchesParameterizedTemplate(
+        loc,
+        AppRoutePaths.rtcOutgoingPathTemplate,
+      ) ||
       _matchesParameterizedTemplate(loc, AppRoutePaths.rtcVoicePathTemplate) ||
       _matchesParameterizedTemplate(loc, AppRoutePaths.rtcVideoPathTemplate) ||
       loc == AppRoutePaths.rtcPickParticipants) {
@@ -670,12 +675,50 @@ Future<bool> requireLogin(
   String? redirect,
   String? dismissFallback,
   LoginDismissPolicy dismissPolicy = LoginDismissPolicy.popPrevious,
+}) => _requireLogin(
+  isAuthenticated: AuthGate.isAuthenticated(ref),
+  context: context,
+  reason: reason,
+  redirect: redirect,
+  dismissFallback: dismissFallback,
+  dismissPolicy: dismissPolicy,
+);
+
+/// 给没有 [WidgetRef] 的 runtime navigator 使用同一套登录门与防抖逻辑。
+///
+/// 该入口只接受当前 [ProviderScope] 的 container，避免 navigator 为了登录续接
+/// 伪造 WidgetRef 或复制登录路由规则。
+Future<bool> requireLoginFromContainer(
+  ProviderContainer container,
+  BuildContext context,
+  AuthGateReason reason, {
+  String? redirect,
+  String? dismissFallback,
+  LoginDismissPolicy dismissPolicy = LoginDismissPolicy.popPrevious,
+}) => _requireLogin(
+  isAuthenticated: container
+      .read(authSessionControllerProvider)
+      .isAuthenticated,
+  context: context,
+  reason: reason,
+  redirect: redirect,
+  dismissFallback: dismissFallback,
+  dismissPolicy: dismissPolicy,
+);
+
+Future<bool> _requireLogin({
+  required bool isAuthenticated,
+  required BuildContext context,
+  required AuthGateReason reason,
+  required String? redirect,
+  required String? dismissFallback,
+  required LoginDismissPolicy dismissPolicy,
 }) async {
   // 无需账号的点赞/系统分享动作直接放行；它们不创建或伪造站外分享业务事实。
   if (guestWritableAuthGateReasons.contains(reason)) {
     return true;
   }
-  if (AuthGate.isAuthenticated(ref)) {
+  if (isAuthenticated) {
     return true;
   }
   if (_isLoginSurfaceActive(context)) {

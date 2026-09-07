@@ -1,3 +1,5 @@
+// spec_ref: specs/feature-tree/discovery-content/feed-orchestration-recommendation/premium-stream-recommendation/spec.md#gwt-001.t3
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/runtime/di/content_media_viewer_policy_dependencies.dart';
@@ -10,18 +12,18 @@ import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
 void main() {
   group('ContentUIConfig — home_channels contract', () {
     // 频道是运营资产：端 meta 默认（发布自带 fallback），云侧可远程覆盖。
-    // 本组锁定首页默认频道集与有限模板类型，防止视频书退回独立壳层入口。
-    test('home_channels — exactly 8 default channels', () {
-      expect(ContentUIConfig.homeChannels.length, equals(8));
+    // 本组锁定首页默认频道集与有限模板类型。视频书不再是首页频道：它作为特殊正文
+    // 由沉浸阅读器承载，首页只保留七个文本频道。
+    test('home_channels — exactly 7 default channels', () {
+      expect(ContentUIConfig.homeChannels.length, equals(7));
     });
 
-    test('home_channels ids: 关注/推荐/视频书/校园/旅行/摄影/科技/车友', () {
+    test('home_channels ids: 关注/推荐/校园/旅行/摄影/科技/车友', () {
       expect(
         ContentUIConfig.homeChannels.map((channel) => channel.id).toList(),
         equals(<String>[
           'following',
           'recommend',
-          'featured',
           'campus',
           'travel',
           'photography',
@@ -32,13 +34,13 @@ void main() {
     });
 
     test(
-      'home_channels order is monotonic 0..7 matching declared sequence',
+      'home_channels order is monotonic 0..6 matching declared sequence',
       () {
         final ordered = <HomeChannelConfig>[...ContentUIConfig.homeChannels]
           ..sort((a, b) => a.order.compareTo(b.order));
         expect(
           ordered.map((c) => c.order).toList(),
-          equals(<int>[0, 1, 2, 3, 4, 5, 6, 7]),
+          equals(<int>[0, 1, 2, 3, 4, 5, 6]),
           reason: 'order 必须连续单调，运营调序仅改 order 即生效',
         );
         expect(
@@ -46,7 +48,6 @@ void main() {
           equals(<String>[
             'following',
             'recommend',
-            'featured',
             'campus',
             'travel',
             'photography',
@@ -127,13 +128,11 @@ void main() {
         expect(following.phoneColumns, equals(1));
         expect(following.layoutTemplate, equals('singleColumnRelations'));
 
-        final featured = ContentUIConfig.homeChannels.firstWhere(
-          (channel) => channel.id == 'featured',
+        // 首页不再有 premium_immersive 频道：视频书退出频道条，交集只随内容卡出现。
+        expect(
+          ContentUIConfig.homeChannels.where((c) => c.id == 'featured'),
+          isEmpty,
         );
-        expect(featured.template, equals('premium_immersive'));
-        expect(featured.layoutTemplate, equals('immersivePremiumStream'));
-        expect(featured.contentCardPolicy, equals('premiumImmersive'));
-        expect(featured.feedQuery['channel'], equals('premium'));
 
         for (final id in <String>[
           'recommend',

@@ -395,7 +395,7 @@ class AppUiSurfaces {
     owner: 'entity',
     routeId: 'homepageDetail',
     pathTemplate: '/homepages/{id}',
-    description: '实体（共享主页）统一对象页：身份 / 我的交集 / 打动 / Tab 内容（含详情与阅读壳层、口碑评价读写、相关群组）；关注动作归 user.SubjectFollow，近期公开行动读面归 circle.gathering',
+    description: '实体（共享主页）统一对象页：身份 / 我的交集 / 打动 / Tab 内容（含详情与阅读壳层、口碑评价读写、相关群组）；关注动作归 user.SubjectFollow；已有行动只从交集证据或社会证明继续进入',
     operationIds: <String>[
       'GetObjectPageBundle',
       'GetEntityImpact',
@@ -676,6 +676,20 @@ class AppUiSurfaces {
     ],
   );
 
+  static const AppUiSurface videoBook = AppUiSurface(
+    id: 'videoBook',
+    owner: 'content',
+    routeId: 'videoBook',
+    pathTemplate: '/video-book',
+    description: '视频书独立内容根入口；复用 premium_stream、Content Post 状态与交集展示合同',
+    operationIds: <String>[
+      'GetFeed',
+      'GetEntityWishlistState',
+      'ReportBehaviors',
+      'GetGatheringSocialProof',
+    ],
+  );
+
   static const AppUiSurface homeFeed = AppUiSurface(
     id: 'homeFeed',
     owner: 'content',
@@ -761,16 +775,6 @@ class AppUiSurfaces {
     ],
   );
 
-  static const AppUiSurface interestMatch = AppUiSurface(
-    id: 'interestMatch',
-    owner: 'interest_match',
-    routeId: 'interestMatch',
-    pathTemplate: '/interest-match',
-    description: '找同趣与兴趣配对启动器',
-    operationIds: <String>[
-    ],
-  );
-
   static const AppUiSurface login = AppUiSurface(
     id: 'login',
     owner: 'user',
@@ -836,7 +840,7 @@ class AppUiSurfaces {
     owner: 'content',
     routeId: 'createEntry',
     pathTemplate: '/create-entry',
-    description: '全局创作入口动作面板（发内容/发起聚集/发起群聊）；游客可见，具体动作各自触发登录续接',
+    description: '全局内容创作入口动作面板（照片/视频/文字）；游客可见，具体内容动作触发登录续接；不提供无上下文 Gathering',
     operationIds: <String>[
     ],
   );
@@ -983,7 +987,7 @@ class AppUiSurfaces {
     owner: 'circle',
     routeId: 'gatheringCreate',
     pathTemplate: '/gatherings/create',
-    description: '从 C 位、内容或主页进入同一 Gathering 草稿与发布流程',
+    description: '从内容/交集 typed 下一步、合法会话来源或已有任务续接进入同一 Gathering 草稿与发布流程',
     operationIds: <String>[
       'CreateGatheringDraft',
       'PublishGathering',
@@ -1272,19 +1276,6 @@ class AppUiSurfaces {
     ],
   );
 
-  static const AppUiSurface homeActionsDiscovery = AppUiSurface(
-    id: 'homeActionsDiscovery',
-    owner: 'circle',
-    routeId: 'home',
-    pathTemplate: '/',
-    description: '底栏「行动」——线下行动与发现（交集收件箱、我的行动、兴趣配对与发起行动入口；视频书已改为首页顶部固定入口）',
-    operationIds: <String>[
-      'ListMyHostedGatherings',
-      'GetMyIntersectionSummary',
-      'ListMyIntersections',
-    ],
-  );
-
   static const AppUiSurface rtcOutgoing = AppUiSurface(
     id: 'rtcOutgoing',
     owner: 'rtc',
@@ -1402,11 +1393,11 @@ class AppUiSurfaces {
     addContactConfirm,
     myQrCode,
     appShell,
+    videoBook,
     homeFeed,
     welcome,
     circlesList,
     profileHome,
-    interestMatch,
     login,
     legalUserAgreement,
     legalPrivacyPolicy,
@@ -1439,7 +1430,6 @@ class AppUiSurfaces {
     myIntersections,
     objectIntersections,
     myGatherings,
-    homeActionsDiscovery,
     rtcOutgoing,
     rtcIncoming,
     rtcVoice,
@@ -1488,11 +1478,11 @@ class AppUiSurfaces {
     'addContactConfirm': addContactConfirm,
     'myQrCode': myQrCode,
     'appShell': appShell,
+    'videoBook': videoBook,
     'homeFeed': homeFeed,
     'welcome': welcome,
     'circlesList': circlesList,
     'profileHome': profileHome,
-    'interestMatch': interestMatch,
     'login': login,
     'legalUserAgreement': legalUserAgreement,
     'legalPrivacyPolicy': legalPrivacyPolicy,
@@ -1525,7 +1515,6 @@ class AppUiSurfaces {
     'myIntersections': myIntersections,
     'objectIntersections': objectIntersections,
     'myGatherings': myGatherings,
-    'homeActionsDiscovery': homeActionsDiscovery,
     'rtcOutgoing': rtcOutgoing,
     'rtcIncoming': rtcIncoming,
     'rtcVoice': rtcVoice,
