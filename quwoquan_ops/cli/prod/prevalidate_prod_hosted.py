@@ -31,6 +31,7 @@ if str(ROOT) not in sys.path:
 from quwoquan_ops.cli.lib.data_plane_binding import DATA_PLANE_BINDING_PACKAGE_REF
 from quwoquan_ops.cli.lib.deployment_candidate_manifest import load_candidate_manifest
 from quwoquan_ops.cli.lib.output_paths import (
+    active_deployment_candidate,
     deployment_candidate_dir,
     deployment_render_dir,
 )
@@ -97,6 +98,15 @@ def validate_rehearsal_candidate(args: argparse.Namespace) -> dict[str, Any]:
         prod_hosted_rehearsal as rehearsal,
     )
 
+    # 渲染面按 active candidate pointer 读取服务包；exact candidate 必须就是它，
+    # 否则交付的镜像与渲染的配置会来自两个不同候选。
+    active = active_deployment_candidate("prod-hosted")
+    active_id = str((active or {}).get("baselineId") or "")
+    if active_id != args.exact_candidate:
+        raise PrevalidationError(
+            "rehearsal exact candidate must be the active prod-hosted candidate: "
+            f"active={active_id or 'none'}"
+        )
     candidate_root = deployment_candidate_dir("prod-hosted", args.exact_candidate)
     oci_path = candidate_root / "packages/runtime-shared/oci-images.json"
     try:
