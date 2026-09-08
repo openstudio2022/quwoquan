@@ -15,7 +15,7 @@
 ## article（文章，叙事/攻略型）
 
 - 对象根 `posts/article/<angle>/<title>/<seq>/`。
-- 来源与发现：主源是同一实体条目换 `publishAngle`（人文/攻略/风光/美食/摄影/自驾/徒步）或一个主题条目页；事实参考追加携程游记/攻略（`site:you.ctrip.com/travels <实体> 游记|攻略`，按热度/最新）、zh.wikivoyage、robots 允许的公开博客；选题风向参考 YouTube/Bilibili 热门 vlog 标题与携程「必打卡」标签。马蜂窝、小红书、穷游、去哪儿按合规闭集不用。
+- 来源与发现：主源是同一实体条目换 `publishAngle`（人文/攻略/风光/美食/摄影/自驾/徒步）或一个主题条目页；事实参考追加携程游记/攻略（`site:you.ctrip.com/travels <实体> 游记|攻略`，按热度/最新）、新闻旅游频道（新华网/中新网）与政府/文旅厅/景区官网公告（门票、开放时间、季节、交通的权威事实，补 `practical_density`）、磨房户外线路帖、zh.wikivoyage；选题风向参考 YouTube/Bilibili 热门 vlog 标题与携程「必打卡」标签。马蜂窝页面若为服务端渲染可按 `accessPolicy=robots_disallowed` 取事实参考；小红书、穷游、去哪儿、知乎、公众号属技术性规避（登录墙/503/挑战页），不用。
 - 候选级筛选：游记正文 ≥ 1,500 字、含行程/交通/费用/时间/贴士中 ≥3 项、发布 ≤ 3 年、非软广、非纯图流水账；单篇不够则多篇合参。
 - acquire：第三方文本全部 `factual_reference_only`（游记页 HTML→text 落盘）；可附同源或 Flickr/Commons 配图。
 - author：`4.draft/draft.article.md`，frontmatter：
@@ -34,8 +34,8 @@ creatorProfileId: qwq_creator_travel_blogger_001
 ## image（图片作品，视觉型）
 
 - 对象根 `posts/image/<angle>/<title>/<seq>/`。
-- 来源与发现：Flickr API `photos.search`（`license=4,5,9,10`、`sort=interestingness-desc`、`text=<实体名/英文名>`，`getInfo` 取 license 与署名）为主；Wikimedia Commons（条目图与 Commons 类目，Quality/Featured 优先）；头条百科 `license: CC BY-SA 4.0 / copyright: self` 图；Unsplash/Pexels/Pixabay API 只在 CC 池不足时补（`unverified`）。Pinterest、图虫、500px 不进自动化路径，只能以「人工提供文件」登记。
-- 候选级筛选：长边 ≥ 1,600px；非扫描件/图表/地图/截图；主体明确切题（AI 看原件）；水印为 `platform_logo|stock_agency` 排除，`author_signature` 保留并申报；曝光/构图基本合格；interestingness/faves、QI/FP 作排序。
+- 来源与发现：**创作者批量优先**——Commons 高产上传者 `allimages&aiuser`（Zhangzhugang / Huangdan2060 / Gisling / N509FZ…）与 QI/FP/VI 类目；图虫标签周榜/摄影师 rest 列表（带 favorites/views，`unverified`）；Pinterest 画板 RSS + `originals` 原图（`unknown`，`accessPolicy=robots_disallowed`）；Openverse API（Flickr CC 无 key 入口）；Flickr API（有 key 时 `people.getPublicPhotos`/`photos.search` `license=4,5,9,10`）；iNaturalist（自然保护区实体）；头条百科 `license: CC BY-SA 4.0 / copyright: self` 图；Unsplash/Pexels/Pixabay API 只在不足时补（`unverified`）。以上全部入池，权利与 accessPolicy 逐资产记录，公众可见性由运营策略决定；500px 只作发现。
+- 候选级筛选：长边 ≥ 1,600px；非扫描件/图表/地图/截图；主体明确切题（AI 看原件）；水印为 `platform_logo|stock_agency` 排除，`author_signature` 保留并申报；曝光/构图基本合格；长宽比 ≤ 3:1 优先，更宽的全景每实体至多 1 张；interestingness/faves/图虫 favorites、QI/FP、`sourceTier` 作排序。
 - acquire：1–N 个文件页，各一句相关性理由；Commons 附 `sha1`，其他来源以 sha256 自证；逐张看原件申报水印三字段。
 - author：`4.draft/image_work.json`：`{"title","caption","assetRefs":["assets/..."],"creatorProfileId"}`；至少一个 assetRef；caption 写地点/季节/视角/故事。
 - publish：`manifest.json` 无正文，每个 asset 的权利字段由 acquire 记录、seal 转录。
@@ -44,7 +44,7 @@ creatorProfileId: qwq_creator_travel_blogger_001
 ## video（视频，动态视觉型）
 
 - 对象根 `posts/video/<angle>/<title>/<seq>/`。主题偏好：壮美河山——川西、新疆、西藏、雪山江河湖海、航拍、全国游。
-- 来源与发现：Commons（`Category:Drone videos from China`、`Aerial videos from China`、`Time-lapse videos from China`、`Walking China`、`Videos from <地区>` 子树，全文 `<地名> filetype:video`）；YouTube Data API `search.list?videoLicense=creativeCommon&videoDuration=short|medium&order=viewCount|relevance`，`videos.list` 取 `viewCount/likeCount/duration/definition`；旅行摄影博主的其他作品只保留逐条命中，不构造作者全集；Pexels/Pixabay/Vimeo CC 补航拍空镜；Bilibili 只在不足时用（`unverified`）。港澳台条目只用于补视频。抖音、快手、小红书不进任何路径。
+- 来源与发现：Commons（`Category:Drone videos from China`、`Aerial videos from China`、`Time-lapse videos from China`、`Walking China`、`Videos from <地区>` 子树，全文 `<地名> filetype:video`）；YouTube 无 key 走 `yt-dlp`（`ytsearch` 发现、频道 `/videos` 批量、单条 `license` 与 views/likes/comments/订阅数，只下载 CC）——有 Data API v3 key 时换 `search.list?videoLicense=creativeCommon`；**Bilibili UP 主批量**（`yt-dlp --flat-playlist https://space.bilibili.com/<mid>/video` + 逐条元数据，`unverified` + `authorizationRequired`，视频放量主力之一）；Dailymotion API（`unverified`）；Pexels/Pixabay/Vimeo CC 补航拍空镜。频道/UP 主全集是批量入口，入池仍逐条按实体落点与候选级筛选。港澳台条目只用于补视频。抖音、快手、西瓜、小红书属登录墙，不进任何路径。
 - 候选级筛选：时长 15s–5min、≥720p、实景为主（非 talking-head/讲解/幻灯）、无二传平台烫印（抖音/快手 logo → `platform_logo` 排除）、切题且能落到已发布或同轮实体（多实体线路落主实体；OPEN-021 判永不入 cohort 的实体不能作落点）；观看数/点赞只作排序。
 - acquire：Commons 直链 `curl`；YouTube 用 `yt-dlp -f "bv*[height<=720][ext=mp4]+ba[ext=m4a]/b[height<=720]"` 直取 720p mp4 让多数片段免转码；脚本对超预算或容器不在 `mp4|webm` 的源体统一转码为 H.264 mp4（720p、目标约 16 MiB、硬上限为载体预算 50 MiB），登记 `derivativeBinding`，并从派生体抽 poster 帧写 `posterAssetRef`；视频 execution 的 `task acquire` 放后台运行。看 poster 申报水印。
 - author：`4.draft/video_script.json`：`{"title","caption","scriptLines":["..."],"creatorProfileId"}`；`sourceVideoAssetRef` 缺省取对象唯一 source video；scriptLines 基于来源描述与实体事实。

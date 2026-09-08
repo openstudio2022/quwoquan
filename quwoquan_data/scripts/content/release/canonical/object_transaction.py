@@ -376,6 +376,8 @@ def build_entity_object_transaction_package(
                 # 水印判定来自看过像素的 AI 申报（经 ingest 转录到资产行）；缺席只能记 unknown。
                 "watermarkStatus": str(raw.get("watermarkStatus") or "unknown"),
                 "watermarkKind": str(raw.get("watermarkKind") or "unknown"),
+                # 访问政策只转录不判否；缺席即缺席，不补 open。
+                **({"accessPolicy": str(raw["accessPolicy"])} if raw.get("accessPolicy") else {}),
             }
             rights_rows.append(rights_row)
             cas_rows.append(

@@ -18,6 +18,9 @@ def asset_rights_fields(source: Mapping[str, Any], kind: str) -> dict[str, Any]:
             {str(value) for value in source.get("derivedModifications") or [] if str(value)}
         ),
     }
+    if str(source.get("accessPolicy") or "").strip():
+        # 访问政策只搬运：缺席即缺席，不补 open。
+        fields["accessPolicy"] = str(source["accessPolicy"]).strip()
     if kind == "video":
         attribution = source.get("sourceAttribution")
         declared_audio = (

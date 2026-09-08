@@ -361,6 +361,12 @@ def build_release_asset_admission(
     watermarked_ids = sorted(
         str(asset["assetId"]) for asset in assets if str(asset.get("watermarkStatus") or "") == "present"
     )
+    # 来源站点 robots/ToS 受限的资产同样只汇总不排除；未申报 accessPolicy 的资产不在此列。
+    access_restricted_ids = sorted(
+        str(asset["assetId"])
+        for asset in assets
+        if str(asset.get("accessPolicy") or "") not in ("", "open")
+    )
     return {
         "schema": "quwoquan_data.release_asset_admission",
         "releaseId": release_id,
@@ -372,6 +378,7 @@ def build_release_asset_admission(
         },
         "authorizationRequiredAssetIds": authorization_required_ids,
         "watermarkedAssetIds": watermarked_ids,
+        "accessRestrictedAssetIds": access_restricted_ids,
         "researchAcceptedCount": research_total,
         "commercialAcceptedCount": commercial_total,
         "carrierCounts": carrier_counts,
