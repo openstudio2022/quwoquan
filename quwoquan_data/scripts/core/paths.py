@@ -115,6 +115,10 @@ CANONICAL_PUBLISH_ROOT_REF = "canonical-publish"
 # OUTPUT_ROOT 漂移），且只保存已审核的消费者对象。taxonomy/profile/template 等
 # 可复用静态输入必须留在控制面；隔离根（QWQ_DATA_ROOT/QWQ_PUBLISH_ROOT）覆盖时才漂移。
 PUBLISH_ROOT = Path(os.environ.get("QWQ_PUBLISH_ROOT", DATA_ROOT / "publish"))
+# 里程碑 release 的 cohort.json 与 producer_release_handoff.json 版本化副本：`.qwq_output/data/releases`
+# 可删除重建，而这两份文件是 AI 决策与 terminal 事实的唯一记录，finalize 成功后以 create-or-same 复制到此。
+# 只是耐久副本，不是第二 canonical writer：handoff-verify 仍只读输出根。
+REFERENCE_RELEASES_ROOT = Path(os.environ.get("QWQ_REFERENCE_RELEASES_ROOT", DATA_ROOT / "reference" / "releases"))
 SCHEMA_ROOT = Path(os.environ.get("QWQ_SCHEMA_ROOT", _REPO_DATA_ROOT / "schema"))
 # Repo-wide scans that do not belong to one execution are disposable workspace
 # evidence, never synthetic children under `tasks/`.

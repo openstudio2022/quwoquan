@@ -217,6 +217,14 @@
           }
         }
       }
+    },
+    "discoverySignals": {
+      "description": "来自 ingest 清单的来源热度/发现信号原样转录，只记录不判否。",
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {
+        "type": "number"
+      }
     }
   }
 }

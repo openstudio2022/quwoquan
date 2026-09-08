@@ -115,6 +115,51 @@ def test_unverified_asset_publishes_with_rights_recorded_not_enforced(
     assert_valid(rights, "release", "asset_rights_closure")
 
 
+def test_rights_source_fields_prefer_source_page_over_license_page(
+    tmp_path: Path,
+) -> None:
+    """spec_ref: multi-carrier-release/GWT-020 — 来源字段回溯真实来源，许可证页只作 authorizationProof。"""
+    execution, package, _publish, transaction_id = _fixture(tmp_path)
+    license_page = "https://creativecommons.org/licenses/by/4.0"
+    file_page = "https://commons.wikimedia.org/wiki/File:Example.jpg"
+    upload_url = "https://upload.wikimedia.org/wikipedia/commons/example.jpg"
+    manifest_path = execution / "posts" / POST_REF / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["assets"][0]["authorizationProof"] = license_page
+    manifest["assets"][0]["collectionPageUrl"] = file_page
+    manifest["assets"][0]["originalAssetUrl"] = upload_url
+    _write_json(manifest_path, manifest)
+    source_index_path = execution / "sources/commons/assets/index.json"
+    source_index = json.loads(source_index_path.read_text(encoding="utf-8"))
+    source_index["assets"][0]["authorizationProof"] = license_page
+    _write_json(source_index_path, source_index)
+    review_path = execution / "posts" / POST_REF / "5.review/content_review.json"
+    review = json.loads(review_path.read_text(encoding="utf-8"))
+    review["assetRights"][0]["authorizationProof"] = license_page
+    _write_json(review_path, review)
+
+    build_post_object_transaction_package(
+        execution_root=execution,
+        object_ref=POST_REF,
+        transaction_id=transaction_id,
+        package_root=package,
+    )
+
+    rights = json.loads((package / "object/rights.json").read_text(encoding="utf-8"))
+    recorded = rights["assets"][0]
+    assert recorded["authorizationProof"] == license_page
+    assert recorded["canonicalFilePage"] == file_page
+    assert recorded["snapshotUrl"] == file_page
+    assert recorded["source"] == file_page
+    assert recorded["originalAssetUrl"] == upload_url
+    assert license_page not in {
+        recorded["canonicalFilePage"],
+        recorded["snapshotUrl"],
+        recorded["originalAssetUrl"],
+        recorded["source"],
+    }
+
+
 def test_unverified_collection_page_is_rejected_without_downgrade(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

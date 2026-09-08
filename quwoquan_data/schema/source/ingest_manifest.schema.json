@@ -122,6 +122,14 @@
         },
         "relevance": {
           "$ref": "#/$defs/nonEmpty"
+        },
+        "discoverySignals": {
+          "description": "AI 申报的来源热度/发现信号（只记录不判否），如 ctripHeat/ctripReviews/wikiViews30d/flickrFaves/ytViews；acquire 原样透传到 source unit meta.json。",
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": {
+            "type": "number"
+          }
         }
       }
     },
@@ -196,6 +204,14 @@
         "watermarkNote": {
           "description": "观察到的位置与文字，供运营复核。",
           "type": "string"
+        },
+        "discoverySignals": {
+          "description": "AI 申报的来源热度/发现信号（只记录不判否），如 ctripHeat/ctripReviews/wikiViews30d/flickrFaves/ytViews；acquire 原样透传到 source unit meta.json。",
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": {
+            "type": "number"
+          }
         }
       },
       "allOf": [

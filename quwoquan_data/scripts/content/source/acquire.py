@@ -102,7 +102,15 @@ def _platform_of(source: dict[str, Any]) -> str:
         return "Wikimedia Commons"
     if host.endswith("wikipedia.org"):
         return "维基百科"
+    if _is_toutiao_baike_host(host):
+        return "头条百科"
     return host
+
+
+def _is_toutiao_baike_host(host: str) -> bool:
+    """头条百科/快懂百科：`www.baike.com` 与其子域；publish 实体 schema 的百科闭集成员 `toutiao_baike`。"""
+
+    return host == "baike.com" or host.endswith(".baike.com")
 
 
 # ── 本地读取 ──────────────────────────────────────────────────────────
@@ -140,7 +148,10 @@ def _ingest_page(source: dict[str, Any]) -> dict[str, Any]:
     host = str(source["sourceUrl"]).split("//", 1)[-1].split("/", 1)[0]
     host_parts = host.split(".")
     source_id = _slug("_".join(host_parts[:2]) if len(host_parts) >= 2 else host)
-    is_encyclopedia = host.endswith("wikipedia.org") or host.endswith("baike.baidu.com")
+    if _is_toutiao_baike_host(host):
+        # 与 final_surface_projection._homepage_source_kind 的 "toutiao" 判据同一个词根。
+        source_id = "toutiao_baike"
+    is_encyclopedia = host.endswith("wikipedia.org") or host.endswith("baike.baidu.com") or _is_toutiao_baike_host(host)
     return {
         "title": str(source["title"]).strip(),
         "sourceId": source_id,
@@ -253,6 +264,9 @@ def _ingest_media(source: dict[str, Any], *, kind: str, carrier: str) -> dict[st
     declared_sha1 = str(source.get("sha1") or "").strip().lower()
     if declared_sha1 and hashlib.sha1(body).hexdigest() != declared_sha1:
         raise AcquireError(f"DATA.ACQUIRE.SOURCE_SHA1_DRIFT: {file_page}")
+    # source unit 身份必须由下载原件决定：转码/降采样派生体的字节不保证逐次相同，
+    # 若用派生体摘要定 unit id，重放会为同一 target 生成第二个 unit。
+    original_sha = _sha256(body)
     derived: list[str] = []
     derivative: dict[str, Any] | None = None
     width = height = 0
@@ -314,6 +328,7 @@ def _ingest_media(source: dict[str, Any], *, kind: str, carrier: str) -> dict[st
         "media": {
             "kind": kind,
             "body": body,
+            "originalSha256": original_sha,
             "mime": mime,
             "directUrl": str(source["directUrl"]),
             "width": width,
@@ -422,8 +437,12 @@ def _materialize(
     library_root = library_root_for_output(output_root)
     carrier = carrier_of_target_ref(target_ref)
     candidate_digest = _sha256(_canonical(source))
-    # 媒体来源的原始字节就是媒体本身，不再复制一份 snapshot 进 source CAS。
-    raw_sha = _sha256(acquired["snapshot"] if acquired["snapshot"] is not None else acquired["media"]["body"])
+    # 媒体来源的原始字节就是媒体本身，不再复制一份 snapshot 进 source CAS；
+    # unit 身份取下载原件的摘要，而不是可能逐次不同的派生体摘要。
+    if acquired["snapshot"] is not None:
+        raw_sha = _sha256(acquired["snapshot"])
+    else:
+        raw_sha = acquired["media"].get("originalSha256") or _sha256(acquired["media"]["body"])
     unit_id = "%s__%s" % (
         _slug(acquired["sourceId"]),
         hashlib.sha256("\n".join((execution_id, target_ref, str(source["sourceUrl"]), raw_sha)).encode("utf-8")).hexdigest()[:16],
@@ -454,6 +473,9 @@ def _materialize(
         "rawSha256": raw_sha,
         "sourceMarkdownSha256": source_sha,
     }
+    if isinstance(source.get("discoverySignals"), dict) and source["discoverySignals"]:
+        # 热度/发现信号只记录不判否：原样转录，不派生任何判据。
+        meta["discoverySignals"] = dict(source["discoverySignals"])
     assets: list[dict[str, Any]] = []
     receipt_ref = ""
     with _lock(unit.parent / f".{unit_id}.lock"):

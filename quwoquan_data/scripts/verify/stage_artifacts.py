@@ -38,6 +38,29 @@ def _target_refs(root: Path) -> list[str]:
     return [str(ref) for ref in target_set.get("targetRefs") or []]
 
 
+_RETIRE_CODES = {
+    "_shared/receipts/001-1.download.json": "DATA.SEAL.ACQUIRE_INVALID",
+    "_shared/receipts/002-4.draft.json": "DATA.SEAL.DRAFT_INVALID",
+}
+
+
+def _retired_at_draft(root: Path) -> set[str]:
+    """001/002 receipt 以 typed issue 退轮的对象：没有后续产物可复核，只在报告里点名。"""
+
+    retired: set[str] = set()
+    for rel, code in _RETIRE_CODES.items():
+        receipt_path = root / rel
+        if not _regular(receipt_path):
+            continue
+        receipt = _read_json(receipt_path)
+        retired.update(
+            str(issue.get("ref"))
+            for issue in receipt.get("typedIssues") or []
+            if isinstance(issue, Mapping) and issue.get("code") == code and issue.get("ref")
+        )
+    return retired
+
+
 def _artifact_issues(root: Path, object_ref: str, stage: str, name: str, execution_id: str) -> list[str]:
     rel = f"{stage}/{name}"
     path = root / object_ref / rel
@@ -111,6 +134,7 @@ def verify_stage_artifacts(
     if not _regular(root / "execution_manifest.json"):
         return {"executionId": execution_id, "passed": False, "issues": ["execution_manifest.json missing"]}
     target_refs = _target_refs(root)
+    retired = _retired_at_draft(root)
     if through is None:
         stages_to_check: tuple[str, ...] = STAGES
     else:
@@ -120,6 +144,8 @@ def verify_stage_artifacts(
         object_dir = root / object_ref
         if not object_dir.is_dir():
             issues.append(f"{object_ref}: declared target object directory missing")
+            continue
+        if object_ref in retired:
             continue
         carrier = carrier_of_target_ref(object_ref)
         required = required_stage_artifacts(carrier)
@@ -138,6 +164,7 @@ def verify_stage_artifacts(
         "executionId": execution_id,
         "through": through,
         "targets": len(target_refs),
+        "retiredAtDraft": sorted(retired),
         "passed": not issues,
         "issues": issues,
     }

@@ -71,6 +71,11 @@ allowedLicenseKinds:
   - CC BY-SA 2.5
   - CC-BY-SA 3.0
   - CC BY-SA 3.0
+  # IGO（政府间组织）变体条款与同版本 CC BY-SA 对研究用途等价；显式列出，不再依赖归一化截断后缀
+  - CC-BY-SA 3.0 IGO
+  - CC BY-SA 3.0 IGO
+  - CC-BY 3.0 IGO
+  - CC BY 3.0 IGO
   - CC-BY-SA 4.0
   - CC BY-SA 4.0
   - Public Domain

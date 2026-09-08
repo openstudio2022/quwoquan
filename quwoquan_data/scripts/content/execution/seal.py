@@ -20,6 +20,7 @@ from content.execution.identity import validate_execution_id
 from core import paths
 from core.control_types import (
     AUTHOR_ARTIFACT_BY_CARRIER,
+    QUALITY_DIMENSIONS_BY_CARRIER,
     RECEIPT_STAGE_SEQUENCE,
     carrier_of_target_ref,
 )
@@ -98,40 +99,72 @@ def _actor_key(actor: dict[str, Any]) -> tuple[str, str, str]:
 # ── 三步硬事实 ────────────────────────────────────────────────────────
 
 
-def _seal_acquire(root: Path, target_refs: list[str]) -> list[dict[str, str]]:
-    """每对象 source_refs.json 在场且每个 source unit 的正文/资产字节与记录一致。"""
+def _validate_acquire_target(root: Path, target_ref: str) -> dict[str, str]:
+    """单对象 source_refs.json 在场且每个 source unit 的正文/资产字节与记录一致；任一违规抛 SealError。"""
+
+    refs_ref = f"{target_ref}/1.download/source_refs.json"
+    refs_doc = _read_json(root / refs_ref, label=refs_ref)
+    try:
+        assert_valid(refs_doc, "source", "object_source_refs", label=refs_ref)
+    except ValueError as exc:
+        raise SealError(str(exc)) from exc
+    if refs_doc.get("objectRef") != target_ref:
+        raise SealError(f"source_refs objectRef 与 target 漂移：{target_ref}")
+    rows = refs_doc.get("sources") or []
+    if not rows:
+        raise SealError(f"acquire 未取得任何来源：{target_ref}")
+    for row in rows:
+        meta_ref = _safe_ref(str(row.get("metaRef") or ""), label="metaRef")
+        source_ref = _safe_ref(str(row.get("sourceRef") or ""), label="sourceRef")
+        meta = _read_json(root / meta_ref, label=meta_ref)
+        try:
+            assert_valid(meta, "source", "atomic_source_unit_meta", label=meta_ref)
+        except ValueError as exc:
+            raise SealError(str(exc)) from exc
+        source_bytes = _regular(root / source_ref, label=source_ref).read_bytes()
+        if sha256(source_bytes) != meta.get("sourceMarkdownSha256"):
+            raise SealError(f"source.md 摘要漂移：{source_ref}")
+        unit_dir = (root / meta_ref).parent
+        index = _read_json(unit_dir / "assets/index.json", label=f"{meta_ref}#assets")
+        for asset in index.get("assets") or []:
+            if not isinstance(asset, dict):
+                raise SealError(f"assets/index.json 行必须是对象：{meta_ref}")
+            file_name = _safe_ref(str(asset.get("fileName") or ""), label="assets.fileName")
+            asset_bytes = _regular(unit_dir / "assets" / file_name, label=file_name).read_bytes()
+            if sha256(asset_bytes) != asset.get("sha256") or len(asset_bytes) != int(asset.get("bytes") or -1):
+                raise SealError(f"资产字节或摘要漂移：{file_name}")
+            if not str(asset.get("sourceUrl") or "").startswith("https://"):
+                raise SealError(f"资产缺少 https sourceUrl：{file_name}")
+    return _frozen(root, refs_ref)
+
+
+def _seal_acquire(root: Path, target_refs: list[str]) -> tuple[list[dict[str, str]], list[dict[str, str]]]:
+    """逐对象校验 acquire 硬事实：ingest 失败或字节漂移的对象只记 typed issue 并退出本 execution。
+
+    与 `task acquire` 的「逐 target 独立报告」同一语义；零合规对象的判定交给调用方（verdict 必须为 blocked）。
+    """
 
     result_refs: list[dict[str, str]] = []
+    typed_issues: list[dict[str, str]] = []
     for target_ref in target_refs:
-        refs_ref = f"{target_ref}/1.download/source_refs.json"
-        refs_doc = _read_json(root / refs_ref, label=refs_ref)
-        assert_valid(refs_doc, "source", "object_source_refs", label=refs_ref)
-        if refs_doc.get("objectRef") != target_ref:
-            raise SealError(f"source_refs objectRef 与 target 漂移：{target_ref}")
-        rows = refs_doc.get("sources") or []
-        if not rows:
-            raise SealError(f"acquire 未取得任何来源：{target_ref}")
-        for row in rows:
-            meta_ref = _safe_ref(str(row.get("metaRef") or ""), label="metaRef")
-            source_ref = _safe_ref(str(row.get("sourceRef") or ""), label="sourceRef")
-            meta = _read_json(root / meta_ref, label=meta_ref)
-            assert_valid(meta, "source", "atomic_source_unit_meta", label=meta_ref)
-            source_bytes = _regular(root / source_ref, label=source_ref).read_bytes()
-            if sha256(source_bytes) != meta.get("sourceMarkdownSha256"):
-                raise SealError(f"source.md 摘要漂移：{source_ref}")
-            unit_dir = (root / meta_ref).parent
-            index = _read_json(unit_dir / "assets/index.json", label=f"{meta_ref}#assets")
-            for asset in index.get("assets") or []:
-                if not isinstance(asset, dict):
-                    raise SealError(f"assets/index.json 行必须是对象：{meta_ref}")
-                file_name = _safe_ref(str(asset.get("fileName") or ""), label="assets.fileName")
-                asset_bytes = _regular(unit_dir / "assets" / file_name, label=file_name).read_bytes()
-                if sha256(asset_bytes) != asset.get("sha256") or len(asset_bytes) != int(asset.get("bytes") or -1):
-                    raise SealError(f"资产字节或摘要漂移：{file_name}")
-                if not str(asset.get("sourceUrl") or "").startswith("https://"):
-                    raise SealError(f"资产缺少 https sourceUrl：{file_name}")
-        result_refs.append(_frozen(root, refs_ref))
-    return result_refs
+        try:
+            result_refs.append(_validate_acquire_target(root, target_ref))
+        except SealError as exc:
+            typed_issues.append({"code": "DATA.SEAL.ACQUIRE_INVALID", "message": str(exc), "ref": target_ref})
+    return result_refs, typed_issues
+
+
+def _acquire_receipt_target_refs(acquire_receipt: dict[str, Any]) -> list[str]:
+    """从 001-1.download receipt 的 resultRefs 反推已取得来源的对象集合；acquire 退轮的对象不在其中。"""
+
+    refs: list[str] = []
+    for row in acquire_receipt.get("resultRefs") or []:
+        ref = str((row or {}).get("ref") or "")
+        marker = "/1.download/"
+        if marker not in ref:
+            raise SealError(f"001-1.download resultRef 不是 source_refs：{ref!r}")
+        refs.append(ref.split(marker, 1)[0])
+    return sorted(set(refs))
 
 
 def _author_artifact_ref(target_ref: str) -> str:
@@ -201,37 +234,78 @@ def _assert_homepage_has_encyclopedia_source(root: Path, target_ref: str) -> Non
     raise SealError(f"homepage 缺少百科 page 来源（zh.wikipedia/baike）：{target_ref}")
 
 
-def _seal_author(root: Path, execution_id: str, target_refs: list[str]) -> list[dict[str, str]]:
-    """每对象恰有一个非空 carrier 产物；JSON 产物由 seal 补齐身份字段后校 schema。
+def _validate_author_artifact(root: Path, execution_id: str, target_ref: str) -> dict[str, str]:
+    """校验单个对象的 carrier 产物硬事实并返回其 frozen ref；任一违规抛 SealError。"""
 
-    4.draft 目录允许存在草稿以外的文件（笔记、备选稿），只有 carrier 产物进入 receipt。
+    artifact_ref = _author_artifact_ref(target_ref)
+    path = _regular(root / artifact_ref, label=artifact_ref)
+    if path.stat().st_size == 0:
+        raise SealError(f"author 产物为空：{artifact_ref}")
+    document: dict[str, Any] | None = None
+    if path.suffix == ".json":
+        schema_name = path.stem
+        document = _read_json(path, label=artifact_ref)
+        completed = {
+            **document,
+            "schema": f"quwoquan_data.{schema_name}",
+            "executionId": execution_id,
+            "objectRef": target_ref,
+        }
+        try:
+            assert_valid(completed, "content", schema_name, label=artifact_ref)
+        except ValueError as exc:
+            raise SealError(str(exc)) from exc
+        if completed != document:
+            _write_create_or_same(path, canonical_bytes(completed), allow_rewrite=True)
+        document = completed
+    _assert_tag_refs_resolve(_declared_tag_refs(path, document), label=artifact_ref)
+    _assert_creator_resolves(_declared_creator(path, document), label=artifact_ref)
+    _assert_homepage_has_encyclopedia_source(root, target_ref)
+    return _frozen(root, artifact_ref)
+
+
+def _seal_author(root: Path, execution_id: str, target_refs: list[str]) -> tuple[list[dict[str, str]], list[dict[str, str]]]:
+    """逐对象校验 carrier 产物：合规对象进入 resultRefs，违规对象只记 typed issue 并退出本 execution。
+
+    一次报出全部违规而不是只报首个；4.draft 目录允许存在草稿以外的文件（笔记、备选稿），
+    只有 carrier 产物进入 receipt。零合规对象的判定交给调用方（verdict 必须为 blocked）。
     """
 
     result_refs: list[dict[str, str]] = []
+    typed_issues: list[dict[str, str]] = []
     for target_ref in target_refs:
-        artifact_ref = _author_artifact_ref(target_ref)
-        path = _regular(root / artifact_ref, label=artifact_ref)
-        if path.stat().st_size == 0:
-            raise SealError(f"author 产物为空：{artifact_ref}")
-        document: dict[str, Any] | None = None
-        if path.suffix == ".json":
-            schema_name = path.stem
-            document = _read_json(path, label=artifact_ref)
-            completed = {
-                **document,
-                "schema": f"quwoquan_data.{schema_name}",
-                "executionId": execution_id,
-                "objectRef": target_ref,
-            }
-            assert_valid(completed, "content", schema_name, label=artifact_ref)
-            if completed != document:
-                _write_create_or_same(path, canonical_bytes(completed), allow_rewrite=True)
-            document = completed
-        _assert_tag_refs_resolve(_declared_tag_refs(path, document), label=artifact_ref)
-        _assert_creator_resolves(_declared_creator(path, document), label=artifact_ref)
-        _assert_homepage_has_encyclopedia_source(root, target_ref)
-        result_refs.append(_frozen(root, artifact_ref))
-    return result_refs
+        try:
+            result_refs.append(_validate_author_artifact(root, execution_id, target_ref))
+        except SealError as exc:
+            typed_issues.append({"code": "DATA.SEAL.DRAFT_INVALID", "message": str(exc), "ref": target_ref})
+    return result_refs, typed_issues
+
+
+def _author_receipt_target_refs(author_receipt: dict[str, Any]) -> list[str]:
+    """从 002-4.draft receipt 的 resultRefs 反推合规对象集合；4.draft 退轮的对象不在其中。"""
+
+    refs: list[str] = []
+    for row in author_receipt.get("resultRefs") or []:
+        ref = str((row or {}).get("ref") or "")
+        marker = "/4.draft/"
+        if marker not in ref:
+            raise SealError(f"002-4.draft resultRef 不是 carrier 产物：{ref!r}")
+        refs.append(ref.split(marker, 1)[0])
+    return sorted(set(refs))
+
+
+def _assert_quality_scores_match_carrier(review: dict[str, Any], *, target_ref: str) -> None:
+    """qualityScores 只记录不判否，但维度键必须落在该载体的闭集内，否则是申报错误而非评分差异。"""
+
+    scores = review.get("qualityScores")
+    if scores is None:
+        return
+    if not isinstance(scores, dict) or not scores:
+        raise SealError(f"qualityScores 必须是非空对象：{target_ref}")
+    allowed = set(QUALITY_DIMENSIONS_BY_CARRIER[carrier_of_target_ref(target_ref)])
+    unknown = sorted(set(scores) - allowed)
+    if unknown:
+        raise SealError(f"qualityScores 维度不属于该载体闭集：{target_ref} unknown={unknown}")
 
 
 def _object_source_assets(root: Path, target_ref: str) -> dict[str, dict[str, Any]]:
@@ -359,7 +433,8 @@ def _seal_review(
 ) -> tuple[list[dict[str, str]], int]:
     """把 execution 级 reviews 扇出为逐对象 content_review.json 并补齐机械字段。
 
-    reviewer 与 author 必须是不同 session/runId。单阶段扇出：只对显式输入展开，不读其它 receipt。
+    reviewer 与 author 必须是不同 session/runId。覆盖集合是 002-4.draft receipt 的 resultRefs 对象集合
+    （4.draft 退轮的对象没有产物可评，也不得被评）。单阶段扇出：只对显式输入与直接前序 receipt 展开。
     """
 
     author = author_receipt.get("actor") or {}
@@ -369,19 +444,24 @@ def _seal_review(
         raise SealError("reviewer 与 author 使用同一 host/sessionId")
     if author_run == reviewer_run:
         raise SealError("reviewer 与 author 使用同一 invocation.runId")
+    reviewable = _author_receipt_target_refs(author_receipt)
+    unknown = sorted(set(reviewable) - set(target_refs))
+    if unknown:
+        raise SealError(f"002-4.draft resultRefs 含 target_set 之外的对象：{unknown}")
     declared = {str(key).strip().strip("/") for key in reviews}
-    expected = set(target_refs)
+    expected = set(reviewable)
     if declared != expected:
         raise SealError(
-            f"reviews 必须恰好覆盖 execution 全部 target：missing={sorted(expected - declared)} extra={sorted(declared - expected)}"
+            f"reviews 必须恰好覆盖 002-4.draft 合规对象集合：missing={sorted(expected - declared)} extra={sorted(declared - expected)}"
         )
 
     result_refs: list[dict[str, str]] = []
     approved = 0
-    for target_ref in target_refs:
+    for target_ref in reviewable:
         review_ref = f"{target_ref}/5.review/content_review.json"
         path = root / review_ref
         judgement = reviews.get(target_ref) or reviews.get(f"/{target_ref}") or {}
+        _assert_quality_scores_match_carrier(judgement, target_ref=target_ref)
         completed = _complete_review(dict(judgement), execution_id=execution_id, target_ref=target_ref, root=root)
         try:
             assert_valid(completed, "content", "content_review", label=review_ref)
@@ -468,9 +548,25 @@ def seal_stage(*, execution_id: str, stage: str, input_path: Path) -> dict[str, 
     with _lock(root / RECEIPT_DIRECTORY / ".seal.lock"):
         prior, predecessor = _load_prior_receipts(root, stage)
         if stage == "1.download":
-            result_refs = _seal_acquire(root, target_refs)
+            result_refs, acquire_issues = _seal_acquire(root, target_refs)
+            typed_issues.extend(issue for issue in acquire_issues if issue not in typed_issues)
+            if verdict == "pass" and not result_refs:
+                raise SealError(
+                    "1.download pass 必须至少有一个取得来源的对象；全部对象失败时以 verdict=blocked 提交："
+                    + "; ".join(issue["message"] for issue in acquire_issues)
+                )
         elif stage == "4.draft":
-            result_refs = _seal_author(root, execution_id, target_refs)
+            acquired = _acquire_receipt_target_refs(prior[0])
+            unknown = sorted(set(acquired) - set(target_refs))
+            if unknown:
+                raise SealError(f"001-1.download resultRefs 含 target_set 之外的对象：{unknown}")
+            result_refs, draft_issues = _seal_author(root, execution_id, acquired)
+            typed_issues.extend(issue for issue in draft_issues if issue not in typed_issues)
+            if verdict == "pass" and not result_refs:
+                raise SealError(
+                    "4.draft pass 必须至少有一个合规产物；全部对象违规时以 verdict=blocked 提交："
+                    + "; ".join(issue["message"] for issue in draft_issues)
+                )
         else:
             result_refs, approved = _seal_review(
                 root, execution_id, target_refs, reviewer=actor, reviews=reviews, author_receipt=prior[1]
