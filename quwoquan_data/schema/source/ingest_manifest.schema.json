@@ -77,6 +77,14 @@
         "unknown"
       ]
     },
+    "accessPolicy": {
+      "description": "来源站点 robots 与服务条款对自动访问的态度，由 AI 读站点声明后申报；只记录不阻断，缺席即缺席不补 open。",
+      "enum": [
+        "open",
+        "robots_disallowed",
+        "tos_restricted"
+      ]
+    },
     "pageSource": {
       "type": "object",
       "additionalProperties": false,
@@ -122,6 +130,17 @@
         },
         "relevance": {
           "$ref": "#/$defs/nonEmpty"
+        },
+        "accessPolicy": {
+          "$ref": "#/$defs/accessPolicy"
+        },
+        "discoverySignals": {
+          "description": "AI 申报的来源热度/发现信号（只记录不判否），如 ctripHeat/ctripReviews/wikiViews30d/flickrFaves/ytViews；acquire 原样透传到 source unit meta.json。",
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": {
+            "type": "number"
+          }
         }
       }
     },
@@ -196,6 +215,17 @@
         "watermarkNote": {
           "description": "观察到的位置与文字，供运营复核。",
           "type": "string"
+        },
+        "accessPolicy": {
+          "$ref": "#/$defs/accessPolicy"
+        },
+        "discoverySignals": {
+          "description": "AI 申报的来源热度/发现信号（只记录不判否），如 ctripHeat/ctripReviews/wikiViews30d/flickrFaves/ytViews；acquire 原样透传到 source unit meta.json。",
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": {
+            "type": "number"
+          }
         }
       },
       "allOf": [

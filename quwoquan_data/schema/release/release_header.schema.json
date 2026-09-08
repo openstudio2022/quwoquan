@@ -94,6 +94,15 @@
         "minLength": 1
       }
     },
+    "accessRestrictedAssetIds": {
+      "description": "来源行申报 accessPolicy 为 robots_disallowed|tos_restricted 的资产；与 authorizationRequiredAssetIds 并列供运营决定公众可见性，不阻断。",
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
     "researchAcceptedCount": {
       "type": "integer",
       "minimum": 0

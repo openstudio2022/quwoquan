@@ -390,21 +390,27 @@ def load_premium_pool_bootstrap_binding(
         )
     )
     video_work_id = _required_raw_video_sample(sample_plan)
-    canonical_content_id = str(content_id or "").strip()
-    if not canonical_content_id or canonical_content_id != video_work_id:
-        raise PremiumPoolReleaseError(
-            "contentId must be the exact ReleaseUatSamplePlan video sample"
-        )
-    imported_video_ids = {
+    # sample plan 的 video objectId 是 canonical 对象身份（qwq_data_…）；精选池条目与推荐候选
+    # 都以环境 postId（data_post_…）为身份，两者经导入报告 postBindings 的 contentId → postId 绑定。
+    sample_post_ids = {
         str(row.get("postId") or "").strip()
         for row in report.get("postBindings") or []
         if isinstance(row, dict)
         and row.get("contentType") == "video"
         and str(row.get("postId") or "").strip()
+        and video_work_id in {
+            str(row.get("contentId") or "").strip(),
+            str(row.get("postId") or "").strip(),
+        }
     }
-    if canonical_content_id not in imported_video_ids:
+    if not sample_post_ids:
         raise PremiumPoolReleaseError(
             "ReleaseUatSamplePlan video sample is absent from the import report"
+        )
+    canonical_content_id = str(content_id or "").strip()
+    if canonical_content_id not in sample_post_ids:
+        raise PremiumPoolReleaseError(
+            "contentId must be the environment postId bound to the ReleaseUatSamplePlan video sample"
         )
     return PremiumPoolBootstrapBinding(
         environment=environment,

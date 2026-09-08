@@ -6,6 +6,7 @@
     "sourceAssetMaxBytes": { "type": "integer", "minimum": 1048576 },
     "pageImageRenditionWidth": { "type": "integer", "minimum": 800 },
     "maxPublishableImagePixels": { "type": "integer", "minimum": 1000000 },
+    "maxSourcePixels": { "type": "integer", "minimum": 1000000 },
     "objectStorageBudgetBytesByCarrier": {
       "type": "object",
       "properties": {
@@ -27,7 +28,7 @@
   },
   "required": [
     "policyId", "sourceAssetMaxBytes", "pageImageRenditionWidth", "maxPublishableImagePixels",
-    "objectStorageBudgetBytesByCarrier", "videoDerivativeTargetBytes",
+    "maxSourcePixels", "objectStorageBudgetBytesByCarrier", "videoDerivativeTargetBytes",
     "maxAssessmentImagePixels", "assessmentJpegQuality", "ocrImagePixels", "baseDraftImageCandidates",
     "imageFetchTargetSurplus", "imageCandidateSurplus", "webpMethod",
     "homepageBaseDraftMaxChars"

@@ -24,6 +24,10 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     finalize.add_argument("--producer-baseline-revision", required=True)
     finalize.add_argument("--publish-root")
     finalize.add_argument("--release-root")
+    finalize.add_argument(
+        "--reference-root",
+        help="cohort/handoff 版本化副本根（缺省 quwoquan_data/reference/releases）；只是耐久备份，handoff-verify 不读它",
+    )
     finalize.set_defaults(handler=owner.handle_release_finalize)
 
     handoff_verify = commands.add_parser(

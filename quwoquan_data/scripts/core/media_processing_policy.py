@@ -23,6 +23,7 @@ class MediaProcessingPolicy:
     source_asset_max_bytes: int
     page_image_rendition_width: int
     max_publishable_image_pixels: int
+    max_source_pixels: int
     object_storage_budget_bytes_by_carrier: Mapping[str, int]
     video_derivative_target_bytes: int
     max_assessment_image_pixels: int
@@ -82,10 +83,18 @@ def media_processing_policy() -> MediaProcessingPolicy:
         "media_processing_policy",
         label=MEDIA_PROCESSING_POLICY_PATH.as_posix(),
     )
+    max_publishable = _required_int(raw, "maxPublishableImagePixels")
+    max_source = _required_int(raw, "maxSourcePixels")
+    if max_source < max_publishable:
+        # 源上限低于发布上限会让一部分「可发布」的栅格根本读不进来，两个阈值就自相矛盾。
+        raise ValueError(
+            "media processing policy maxSourcePixels must be >= maxPublishableImagePixels"
+        )
     return MediaProcessingPolicy(
         source_asset_max_bytes=_required_int(raw, "sourceAssetMaxBytes"),
         page_image_rendition_width=_required_int(raw, "pageImageRenditionWidth"),
-        max_publishable_image_pixels=_required_int(raw, "maxPublishableImagePixels"),
+        max_publishable_image_pixels=max_publishable,
+        max_source_pixels=max_source,
         object_storage_budget_bytes_by_carrier=_required_carrier_budget_table(
             raw, "objectStorageBudgetBytesByCarrier"
         ),

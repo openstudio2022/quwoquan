@@ -8,7 +8,7 @@
 
 producer 固定为六步 `init → acquire → author → review → publish → release`，`release finalize` 成功即 `END`。import/activate/readback/health、API/App UAT、EAF、sampling authority、promotion、rollback/replay 全部 out of scope；下游 owner 是 Environment Ops scheduler，Data 不创建环境 acceptance。
 
-两个 actor：主会话直接完成 init/acquire/author/publish/release；`review` 由另一个 reviewer 会话完成，全局至多一个前台 reviewer 调用。不得新增 resolver/projector/runner/controller/queue/registry/SDK、actor projection、stage-open 或自动恢复。
+actor 契约：主会话拥有澄清、全部机械命令（init/acquire/seal/publish/finalize）、子 Agent 派发、每轮提交与镜像、收官；acquire 的出网取证可由主会话或该 execution 的 author 完成；一个 execution 恰有一个 author actor（主会话或独立子 Agent 会话）拥有 `4.draft`；`review` 由另一个真实 reviewer 会话完成，与该 execution 的 author 不同 session/runId，同一 execution 至多一个 reviewer，不同 execution 可并行。不得新增 resolver/projector/runner/controller/queue/registry/SDK、actor projection、stage-open 或自动恢复。
 
 ## 工作包与只读恢复
 
@@ -34,16 +34,17 @@ python3 quwoquan_data/scripts/cli.py task seal --help
 
 ## 取得、发布与 release
 
-`task acquire` 只接收 AI 点名的 `{kind: page|image|video, url, relevance}`：MediaWiki 页面走 API 取纯文本；Commons 文件页走 imageinfo API 取直链、license、作者，下载字节并算 sha256，图片按预算降采样，视频超预算或容器不在 `mp4|webm` 时转码为 H.264 mp4 派生体并抽 poster。license 只记录并派生 `rightsStatus`（白名单 CC0/CC BY/CC BY-SA/PD → verified，其它 → unverified/unknown），不阻断。
+`task acquire` 是零网络 ingest：出网检索、取证与下载全部由 AI 用通用工具按 Skill 的来源矩阵 v2 完成（zh.wikipedia / 头条百科 / Commons 上传者批量 / 携程游记 / 新闻与政府站 / Flickr CC / Openverse / iNaturalist / YouTube 与 Bilibili 经 yt-dlp / 图虫 rest / Pinterest RSS+originals 等；robots/ToS 限制只记录为 `accessPolicy`，版权保留来源按 `unverified` 入池），AI 按 execution 提交一份 ingest 清单（本地文件路径 + 申报的 `sourceUrl/directUrl/license/licenseUrl/creator/sha1/description/relevance`、水印三字段、可选 `discoverySignals` 与 `accessPolicy`；page 来源附落盘并附取证段的 `source.md`）；脚本只从本地字节算 sha256、按申报 sha1 交叉校验、探测 mime/尺寸/时长、图片按预算降采样、视频超预算或容器不在 `mp4|webm` 时转码为 H.264 mp4 派生体并抽 poster。license 只记录并派生 `rightsStatus`（白名单 CC0/CC BY/CC BY-SA/PD → verified，其它 → unverified/unknown），不阻断。
 
-`4.draft` 每对象只保留 `page.md|draft.article.md|image_work.json|video_script.json` 之一，标题/tagRefs/creatorProfileId 由产物自身声明；`5.review` 每对象只保留 `content_review.json`，AI 只写 `decision/blockingIssues/advisories`，`task seal --stage 5.review` 补齐 `assetRights`、`dimensions` 与机械字段。approved 对象逐个 `publish-object`；`release finalize` 消费 AI 显式 cohort（`releaseClass` 唯一取值 `production`，计数不低于里程碑目标即达标），一次完成 pool-build、release-integrity 与 create-once handoff。
+`4.draft` 每对象只保留 `page.md|draft.article.md|image_work.json|video_script.json` 之一，标题/tagRefs/creatorProfileId 由产物自身声明，seal 逐对象校验、违规对象以 typed issue 退轮；`5.review` 每对象只保留 `content_review.json`，AI 只写 `decision/blockingIssues/advisories` 与只记录的 `qualityScores/qualityNotes`，`task seal --stage 5.review` 按 `002-4.draft` resultRefs 覆盖并补齐 `assetRights`、`dimensions` 与机械字段。approved 对象逐个 `publish-object`；`release finalize` 消费 AI 显式 cohort（`releaseClass` 唯一取值 `production`，计数不低于里程碑目标即达标），一次完成 pool-build、release-integrity 与 create-once handoff，并把 `cohort.json`/`producer_release_handoff.json` 复制到受版本控制的 `reference/releases/<releaseId>/`。
 
 ## 持久性
 
 - `quwoquan_data/publish/**` 是 canonical 对象元数据（JSON/MD），受版本控制，与代码同等重要。
 - 媒体字节的运行时 holder 是仓外 content library（默认 `~/.local/share/quwoquan/content_library`，`QWQ_LIBRARY_ROOT` 可覆盖）；execution、object-transaction 包与 release payload 只以硬链接引用它。
 - 随体媒体根（默认 `~/.local/share/quwoquan/golden_media`，`QWQ_CARRIED_MEDIA_ROOT` 可指向已备份卷）是已发布对象所引用媒体的仓外 durable 副本，由 publish 事务写入，与 content library 互为备份；两处都不进 git，也都在 `git clean` 射程之外。任何 gc/hygiene/清理路径不得触碰这两个根。library 丢失时运行 `python3 quwoquan_data/scripts/cli.py verify all`，它在跑门禁前会从随体根逐 sha 校验并回填 library；`verify publish-closure` 对 canonical 引用的每个媒体摘要检查两处至少一处可达，缺失即 `DATA.PUBLISH.CARRIED_MEDIA_MISSING` 并附 `sourceUrl`，字节可按来源直链原样重取。
-- `.qwq_output/` 全部可删除重建；删除后 release 媒体可从 library/随体根重建。
+- `quwoquan_data/reference/releases/<releaseId>/{cohort.json,producer_release_handoff.json}` 是里程碑 release 的版本化副本，由 `release finalize` create-or-same 写入；它只是耐久备份，`handoff-verify` 仍只读 `.qwq_output/data/releases/`。
+- 每轮收官后 `publish/**` 随 `content(data)` 提交入库，随体根 rsync 到用户指定备份路径；`.qwq_output/` 全部可删除重建，删除后 release 媒体可从 library/随体根重建、release 目录可由版本化 cohort 重新 finalize。
 
 ```bash
 python3 quwoquan_data/scripts/cli.py release publish-object --help
@@ -55,7 +56,7 @@ M1/M10/M100/M1000 按 `cumulative_unique_finalized_objects` 累计，每级形�
 
 ## 可复用输入与输出边界
 
-受版本控制的可复用输入只位于 `control_plane/`、`verticals/`、`reference/`、`prompts/`、`templates/` 与 `schema/`；不得写入任务地区、数量、日期、execution identity 或运行输出。`publish/` 只保存 approved canonical objects 及其必要引用闭包，不保存 raw source、草稿、prompt、日志或 receipt。
+受版本控制的可复用输入只位于 `control_plane/`、`verticals/`、`reference/`、`prompts/`、`templates/` 与 `schema/`；不得写入任务地区、数量、日期、execution identity 或运行输出。唯一例外是 `reference/releases/<releaseId>/` 里由 finalize 写入的里程碑 cohort/handoff 版本化副本——它们是 terminal 事实的耐久备份而不是可复用输入。`publish/` 只保存 approved canonical objects 及其必要引用闭包，不保存 raw source、草稿、prompt、日志或 receipt。
 
 `.qwq_output/data/` 一级只允许：
 

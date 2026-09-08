@@ -275,6 +275,47 @@ class DeploymentCandidateManifestContractTest(
                 candidate_root=self.candidate,
             )
 
+    def test_teardown_binds_sealed_classification_without_rederiving_policy(self) -> None:
+        # 历史候选按旧派生规则封存为 mixed_inputs；派生规则变化后 teardown 仍须能退出该运行时。
+        path = subject.write_candidate_manifest(
+            "alpha",
+            "alpha-local",
+            package_snapshot=self.snapshot,
+            release_attestation=str(self.release),
+            rollback_release_attestation=str(self.rollback),
+        )
+        canonical = json.loads(path.read_text(encoding="utf-8"))
+        sealed_by_previous_policy = {**canonical, "releaseInputClassification": "mixed_inputs"}
+        with self.assertRaisesRegex(ValueError, "release input classification drifted"):
+            subject.validate_candidate_manifest(
+                sealed_by_previous_policy,
+                expected_environment="alpha",
+                expected_target="alpha-local",
+                require_full=True,
+                candidate_root=self.candidate,
+            )
+        try:
+            subject.validate_candidate_manifest(
+                sealed_by_previous_policy,
+                expected_environment="alpha",
+                expected_target="alpha-local",
+                require_full=True,
+                candidate_root=self.candidate,
+                purpose="teardown",
+            )
+        except ValueError as exc:
+            self.assertNotIn("release input classification", str(exc))
+        unknown_classification = {**canonical, "releaseInputClassification": "legacy_inputs"}
+        with self.assertRaisesRegex(ValueError, "release input classification is invalid"):
+            subject.validate_candidate_manifest(
+                unknown_classification,
+                expected_environment="alpha",
+                expected_target="alpha-local",
+                require_full=True,
+                candidate_root=self.candidate,
+                purpose="teardown",
+            )
+
         graph_drift = dict(canonical)
         graph_drift["contractGraphDigest"] = "sha256:" + "9" * 64
         # The environment artifact binds the contract graph digest into its own

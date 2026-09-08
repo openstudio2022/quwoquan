@@ -81,13 +81,22 @@ class IntegrationRunProductionReleaseContractTest(unittest.TestCase):
                 readiness.parent.mkdir(parents=True, exist_ok=True)
                 readiness.write_text("{}", encoding="utf-8")
 
+        def fake_bootstrap(**kwargs: object) -> None:
+            calls.append(("premium-pool", str(kwargs["environment"]), str(kwargs["import_run"])))
+
         args = SimpleNamespace(release_attestation=attestation, release_handoff_ref=VALID_REF)
-        with mock.patch.object(integration_run, "_data_ship", side_effect=fake_ship):
+        with (
+            mock.patch.object(integration_run, "_data_ship", side_effect=fake_ship),
+            mock.patch.object(integration_run, "_bootstrap_premium_pool", side_effect=fake_bootstrap),
+        ):
             readiness = integration_run._apply_data_release(
                 environment="alpha", run_id="run-1", args=args, log_dir=self.root / "logs", previous_readiness=None,
             )
         self.assertTrue(readiness.is_file())
-        self.assertEqual([call[0] for call in calls], ["apply", "activate", "verify"])
+        # 精选池首次激活夹在 activate 与 verify 之间：verify 的 premium_stream 判据依赖它
+        self.assertEqual([call[0] for call in calls], ["apply", "activate", "premium-pool", "verify"])
+        self.assertEqual(calls[2], ("premium-pool", "alpha", "run-1-import"))
+        calls = [call for call in calls if call[0] != "premium-pool"]
         for call in calls:
             self.assertIn("--handoff-ref", call)
             self.assertIn(VALID_REF, call)
@@ -96,7 +105,46 @@ class IntegrationRunProductionReleaseContractTest(unittest.TestCase):
         self.assertIn("--import", calls[0])
         verify = calls[2]
         self.assertEqual(verify[verify.index("--readiness-phase") + 1], "production")
-        self.assertEqual(verify[verify.index("--import-run-id") + 1], "run-1-import")
+        # verify 的前驱是 completed 的 activate run，而不是 prepared 的 apply run
+        self.assertEqual(verify[verify.index("--import-run-id") + 1], "run-1-activate")
+        activate = calls[1]
+        self.assertEqual(activate[activate.index("--import-run-id") + 1], "run-1-import")
+
+    def test_premium_pool_bootstrap_resolves_sample_video_to_environment_post_id(self) -> None:
+        attestation = _attestation(self.root, "rel-production", "production")
+        report = self.root / "env/alpha/runs/data-release/rel-production/run-1-import/import.json"
+        report.parent.mkdir(parents=True, exist_ok=True)
+        report.write_text(json.dumps({
+            "manifestDigest": "sha256:" + "a" * 64,
+            "postBindings": [
+                {"contentType": "article", "contentId": "qwq_data_" + "2" * 24, "postId": "data_post_" + "e" * 64},
+                {"contentType": "video", "contentId": "qwq_data_" + "1" * 24, "postId": "data_post_" + "d" * 64},
+            ],
+        }), encoding="utf-8")
+        plan = {"samples": [{"carrier": "video", "objectId": "qwq_data_" + "1" * 24}]}
+        seen: list[tuple[str, ...]] = []
+
+        def fake_stackctl(*args: str, log_dir: Path, env=None):
+            seen.append(args)
+            return integration_run.StackctlResult(" ".join(args), {"exitCode": 0}, "")
+
+        with (
+            mock.patch("quwoquan_ops.cli.lib.app_content_uat_plan.load_release_uat_sample_plan", return_value=(plan, "ref", "sha256:" + "f" * 64)),
+            mock.patch.object(integration_run, "_stackctl", side_effect=fake_stackctl),
+        ):
+            (attestation.parent.parent / "payload").mkdir(parents=True, exist_ok=True)
+            (attestation.parent.parent / "payload/release.json").write_text("{}", encoding="utf-8")
+            integration_run._bootstrap_premium_pool(
+                environment="alpha", release_id="rel-production", import_run="run-1-import",
+                attestation=attestation, log_dir=self.root / "logs",
+            )
+        self.assertEqual(len(seen), 1)
+        call = seen[0]
+        self.assertEqual(call[:2], ("premium-pool", "--target"))
+        self.assertEqual(call[call.index("--launch-policy") + 1], "release-import")
+        # 传给 stackctl 的是绑定到样本的环境 postId，而不是 canonical objectId
+        self.assertEqual(call[call.index("--content-id") + 1], "data_post_" + "d" * 64)
+        self.assertEqual(call[call.index("--readiness-receipt") + 1], str(report))
 
     def test_parser_requires_candidate_handoff_ref_only(self) -> None:
         # integrate 只对 candidate 执行 ship apply/activate/verify；rollback release 只参与

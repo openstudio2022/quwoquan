@@ -14,7 +14,7 @@ from content.release.canonical.producer_release_handoff import (
     read_producer_release_handoff,
     write_producer_release_handoff,
 )
-from core.paths import OUTPUT_ROOT, PUBLISH_ROOT, REPO_ROOT
+from core.paths import OUTPUT_ROOT, PUBLISH_ROOT, REFERENCE_RELEASES_ROOT, REPO_ROOT
 
 
 def handle_publish_object(args: argparse.Namespace) -> None:
@@ -130,6 +130,11 @@ def handle_release_finalize(args: argparse.Namespace) -> None:
             publish_root=publish_root,
             release_root=release_root,
         )
+        reference_copy = write_versioned_release_copy(
+            release_dir=release_root / release_id,
+            reference_root=Path(args.reference_root or REFERENCE_RELEASES_ROOT),
+            release_id=release_id,
+        )
     except (FileNotFoundError, OSError, ProducerReleaseHandoffError, ObjectTransactionError, TypeError, ValueError) as exc:
         raise SystemExit(f"[release finalize] GATE_BLOCK {exc}") from exc
     print(json.dumps({
@@ -146,8 +151,42 @@ def handle_release_finalize(args: argparse.Namespace) -> None:
             "producerBaselineRevision": document.get("producerBaselineRevision"),
             "producerContractDigest": document.get("producerContractDigest"),
         },
+        "referenceCopy": reference_copy,
         "terminal": "END",
     }, ensure_ascii=False, indent=2))
+
+
+_VERSIONED_RELEASE_FILES = ("cohort.json", "producer_release_handoff.json")
+
+
+def write_versioned_release_copy(*, release_dir: Path, reference_root: Path, release_id: str) -> dict[str, str]:
+    """把里程碑 release 的 cohort 与 handoff 逐字节复制到受版本控制的 reference/releases/<releaseId>/。
+
+    create-or-same：副本不存在则写入，已存在且逐字节相同视为 replay，不同则 fail closed——
+    副本只是可删除输出根的耐久备份，不允许出现第二套字节。
+    """
+
+    target_dir = reference_root / release_id
+    statuses: dict[str, str] = {}
+    for name in _VERSIONED_RELEASE_FILES:
+        source = release_dir / name
+        if not source.is_file():
+            raise ObjectTransactionError(f"DATA.RELEASE.REFERENCE_COPY_SOURCE_MISSING: {source}")
+        data = source.read_bytes()
+        target = target_dir / name
+        if target.exists():
+            if target.read_bytes() != data:
+                raise ObjectTransactionError(
+                    f"DATA.RELEASE.REFERENCE_COPY_CONFLICT: {target} differs from {source}"
+                )
+            statuses[name] = "replayed"
+            continue
+        target_dir.mkdir(parents=True, exist_ok=True)
+        temporary = target.with_name(f".{target.name}.{os.getpid()}.tmp")
+        temporary.write_bytes(data)
+        os.replace(temporary, target)
+        statuses[name] = "created"
+    return {"root": target_dir.as_posix(), **statuses}
 
 
 def handle_handoff_verify(args: argparse.Namespace) -> None:

@@ -327,15 +327,17 @@ def build_impact_plan(
         # build_time_self_supply）让裸 SDK 构建也能过 trust gate，因此这里直接以
         # canonical 入口编译，不再依赖 handoff 或 facade。iOS simulator 只能在 darwin
         # 主机执行；Android 必须带 nonprod flavor（工程声明了 buildProfile flavor 维度）。
+        # readiness capsule 只物化 tracked 文件，没有 .dart_tool/package_config.json，所以不能 --no-pub：
+        # 由 flutter 按 tracked pubspec.lock 从本地 pub cache 解析（无网且无缓存时 typed 失败）。
         if sys.platform == "darwin":
             checks.append(_check(
                 "scope_build:app-compile-ios-simulator", "app", "scope_build",
-                ["flutter", "build", "ios", "--simulator", "--debug", "--flavor", "nonprod", "--no-pub", "--no-codesign"],
+                ["flutter", "build", "ios", "--simulator", "--debug", "--flavor", "nonprod", "--no-codesign"],
                 cwd="quwoquan_app", resources=["flutter-build"],
             ))
         checks.append(_check(
             "scope_build:app-package-smoke", "app", "scope_build",
-            ["flutter", "build", "apk", "--debug", "--flavor", "nonprod", "--no-pub", "--android-skip-build-dependency-validation"],
+            ["flutter", "build", "apk", "--debug", "--flavor", "nonprod", "--android-skip-build-dependency-validation"],
             cwd="quwoquan_app", resources=["flutter-build"],
         ))
     if level != "fast" and "data" in scopes:

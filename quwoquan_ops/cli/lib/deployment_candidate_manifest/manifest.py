@@ -39,6 +39,7 @@ from .constants import (
     _RELEASE_BINDING_FIELDS,
     CANDIDATE_MANIFEST_SCHEMA,
     CANDIDATE_VALIDATION_PURPOSES,
+    RELEASE_INPUT_CLASSIFICATIONS,
     ROOT,
     RUNTIME_CANDIDATE_TYPE,
     SPEC_REFS,
@@ -971,9 +972,17 @@ def validate_candidate_manifest(
             current = _release_binding(attestation_ref, label=label)
             if current != binding:
                 raise ValueError(f"{label} release attestation bytes drifted")
-    expected_classification = release_input_classification(release)
-    if payload.get("releaseInputClassification") != expected_classification:
-        raise ValueError("deployment candidate release input classification drifted")
+    sealed_classification = payload.get("releaseInputClassification")
+    if purpose == "teardown":
+        # teardown 只绑定封存候选身份（分类由 package fingerprint 覆盖的封存字节自证）；
+        # 若按当前策略重算，派生规则一变（如新增 production_inputs）历史运行时就再也拆不掉。
+        if sealed_classification not in RELEASE_INPUT_CLASSIFICATIONS:
+            raise ValueError("deployment candidate release input classification is invalid")
+        expected_classification = sealed_classification
+    else:
+        expected_classification = release_input_classification(release)
+        if sealed_classification != expected_classification:
+            raise ValueError("deployment candidate release input classification drifted")
     if (
         purpose == "currentness"
         and payload.get("contractGraphDigest") != canonical_contract_graph_digest()

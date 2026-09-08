@@ -190,12 +190,15 @@ def build_entity_object_transaction_package(
                 raw,
                 source_assets,
             )
+            # 来源页优先于许可证页；authorizationProof 只在无任何来源字段时兜底。
             canonical_file_page = str(
-                raw.get("authorizationProof")
-                or source_asset.get("authorizationProof")
+                raw.get("collectionPageUrl")
                 or source_asset.get("collectionPageUrl")
+                or raw.get("sourceUrl")
                 or source_asset.get("sourceUrl")
                 or source_asset.get("url")
+                or raw.get("authorizationProof")
+                or source_asset.get("authorizationProof")
                 or ""
             ).strip()
             authorization_proof = str(
@@ -334,7 +337,11 @@ def build_entity_object_transaction_package(
                 "canonicalFilePage": canonical_file_page,
                 "snapshotUrl": canonical_file_page,
                 "pageRevision": _digest_file(snapshot_path),
-                "originalAssetUrl": str(source_asset.get("url") or canonical_file_page),
+                "originalAssetUrl": str(
+                    raw.get("originalAssetUrl")
+                    or source_asset.get("url")
+                    or canonical_file_page
+                ),
                 "author": author,
                 "source": str(
                     source_asset.get("collectionPageUrl") or canonical_file_page
@@ -369,6 +376,8 @@ def build_entity_object_transaction_package(
                 # 水印判定来自看过像素的 AI 申报（经 ingest 转录到资产行）；缺席只能记 unknown。
                 "watermarkStatus": str(raw.get("watermarkStatus") or "unknown"),
                 "watermarkKind": str(raw.get("watermarkKind") or "unknown"),
+                # 访问政策只转录不判否；缺席即缺席，不补 open。
+                **({"accessPolicy": str(raw["accessPolicy"])} if raw.get("accessPolicy") else {}),
             }
             rights_rows.append(rights_row)
             cas_rows.append(

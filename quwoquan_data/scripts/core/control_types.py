@@ -149,6 +149,43 @@ AUTHOR_ARTIFACT_BY_CARRIER: dict[str, str] = {
     ContentType.VIDEO.value: "video_script.json",
 }
 
+# 每个载体的多维质量评分维度闭集（只记录不门禁；语义锚点见 content-production Skill 的 quality.md）。
+# 维度名是机器键；reviewer 申报 1–5 整数分，seal 只按载体闭集校验并透传，脚本不算分、不聚合。
+QUALITY_DIMENSIONS_BY_CARRIER: dict[str, tuple[str, ...]] = {
+    ContentType.HOMEPAGE.value: (
+        "fact_traceability",
+        "information_completeness",
+        "structure_clarity",
+        "practical_value",
+        "image_relevance",
+        "source_quality",
+    ),
+    ContentType.ARTICLE.value: (
+        "fact_traceability",
+        "originality",
+        "angle_and_title",
+        "practical_density",
+        "readability",
+        "image_match",
+    ),
+    ContentType.IMAGE.value: (
+        "subject_relevance",
+        "technical_quality",
+        "composition_aesthetics",
+        "uniqueness",
+        "caption_value",
+        "rights_clarity",
+    ),
+    ContentType.VIDEO.value: (
+        "subject_relevance",
+        "visual_quality",
+        "editing_rhythm",
+        "audio_fit",
+        "unique_perspective",
+        "rights_clarity",
+    ),
+}
+
 
 def carrier_of_target_ref(target_ref: str) -> str:
     """从对象目录引用推出载体：entities/** 是 homepage，posts/<carrier>/** 是其余三种。"""
@@ -223,6 +260,7 @@ class MediaHoldingRecoveryAction(StrEnum):
 
 __all__ = [
     "AUTHOR_ARTIFACT_BY_CARRIER",
+    "QUALITY_DIMENSIONS_BY_CARRIER",
     "AppUatDataSource",
     "AppUatStatus",
     "ContentGenerator",
