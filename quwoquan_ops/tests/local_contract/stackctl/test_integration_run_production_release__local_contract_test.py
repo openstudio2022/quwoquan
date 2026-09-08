@@ -260,9 +260,56 @@ class IntegrationRunProductionReleaseContractTest(unittest.TestCase):
         for retired in ("--release-attestation", "--release-handoff-ref", "--readiness-level", "--owner-identity"):
             self.assertNotIn(retired, integrate_block)
 
+    def test_beta_policy_branch_is_independent_of_impact_depth(self) -> None:
+        # 从 main 执行实际分流；环境/签发是测试替身，不把本合同当成 runtime 验收。
+        commit, tree, parent = "1" * 40, "2" * 40, "0" * 40
+        store, refs = self._fake_store("policy-store", commit=commit, tree=tree, parent=parent)
+        release, rollback = _attestation(self.root, "rel-a", "production"), _attestation(self.root, "rel-b", "production")
+        plan_path = self.root / "plan.json"
+        plan_path.write_text("{}", encoding="utf-8")
+        answers = {("status",): "", ("rev-parse", "HEAD^{commit}"): commit,
+                   ("rev-parse", "HEAD"): commit, ("ls-remote",): f"{parent}\trefs/heads/dev1.0", ("show",): tree}
+
+        def fake_git(*args):
+            return next(value for key, value in answers.items() if args[:len(key)] == key)
+
+        def run_environment(**kwargs):
+            kwargs["summary"]["environments"][kwargs["environment"]] = {"executed": True}
+            return {"readiness": {}}
+
+        for depth in ("alpha_integration", "abg_release_sensitive"):
+            for opted_in in (False, True):
+                with self.subTest(depth=depth, opted_in=opted_in), self._runtime_patches(), ExitStack() as patches:
+                    replacements = {"_store": store, "_readiness_local_ref": "refs/heads/lane/product-mainline",
+                                    "_merged_lanes": [], "_impact_plan": ({"integration_depth": depth, "plan_digest": "d", "scopes": {}}, plan_path),
+                                    "_local_readiness": (self.root / "receipt.json", {}), "build_head_candidate": store / refs["candidate"]["ref"],
+                                    "create_source_fact": store / refs["sourceFact"]["ref"], "_issue": refs["alphaFact"], "release_claim": None}
+                    for name, result in replacements.items():
+                        patches.enter_context(mock.patch.object(integration_run, name, return_value=result))
+                    patches.enter_context(mock.patch.object(integration_run, "_git", side_effect=fake_git))
+                    patches.enter_context(mock.patch("subprocess.run", return_value=SimpleNamespace(returncode=0)))
+                    patches.enter_context(mock.patch.object(integration_run, "store_ref", return_value=refs["candidate"]))
+                    run = patches.enter_context(mock.patch.object(integration_run, "_run_environment", side_effect=run_environment))
+                    skip = patches.enter_context(mock.patch.object(integration_run, "_not_required_beta", return_value={}))
+                    bundle = patches.enter_context(mock.patch.object(integration_run, "_write_acceptance_bundle",
+                        side_effect=integration_run.IntegrationRunError("TEST.BUNDLE_REACHED", "stop before bundle")))
+                    run_id = f"policy-{depth}-{opted_in}"
+                    argv = ["--mode", "acceptance", "--release-attestation", str(release), "--rollback-release-attestation", str(rollback),
+                            "--release-handoff-ref", VALID_REF, *(["--beta"] if opted_in else [])]
+                    self.assertEqual(self._blocker(run_id, argv), "TEST.BUNDLE_REACHED")
+                    self.assertEqual([call.kwargs["environment"] for call in run.call_args_list], ["alpha", "beta"] if opted_in else ["alpha"])
+                    self.assertEqual(bundle.call_args.kwargs["beta_status"], "passed" if opted_in else "not_required")
+                    if opted_in:
+                        skip.assert_not_called()
+                        self.assertIsNone(bundle.call_args.kwargs["beta_reason"])
+                    else:
+                        skip.assert_called_once()
+                        self.assertEqual(skip.call_args.kwargs["reason_code"], integration_run.BETA_OPTIONAL_BY_POLICY)
+                        self.assertEqual(bundle.call_args.kwargs["beta_reason"], integration_run.BETA_OPTIONAL_BY_POLICY)
+
     def test_beta_is_explicit_opt_in_with_typed_reason(self) -> None:
-        # Beta 缺省不真跑：ImpactPlan 无需 live Beta 时 reason=NO_LIVE；ImpactPlan 判定敏感但未 --beta 时
-        # reason=ACCEPTANCE.BETA_OPTIONAL_BY_POLICY。两者都进入 case result 与签发的 reason_code。
+        # 政策跳过原因落在 EAF 与 named evidence；passed case result 不携带 reasonCode。
+        # 通用签发函数仍支持 ImpactPlan 免环境原因，不等于 acceptance 的缺省分流。
         from quwoquan_ops.cli.lib.environment_acceptance_fact_contract import (
             BETA_OPTIONAL_BY_POLICY,
             NO_LIVE_ENVIRONMENT_REQUIRED,

@@ -76,7 +76,7 @@
 ### REQ-003 验证执行面与证据分层
 
 - Alpha/Beta/Gamma 的正式 producer 必须位于受控本地 Environment Ops 执行面；GitHub-hosted 与 GitHub self-hosted workflow 均不得执行 ABG、Data mutation、设备 Journey 或环境 cleanup。
-- Alpha 是默认真实依赖最小闭包，也是 lane 合入 `dev1.0` 的唯一必跑环境；Beta 只在 lane 验收显式 opt-in 时真跑，否则以闭集原因码（ImpactPlan 无需 live Beta → `IMPACT_PLAN.NO_LIVE_ENVIRONMENT_REQUIRED`；判定敏感但未 opt-in → `ACCEPTANCE.BETA_OPTIONAL_BY_POLICY`）签绑定 candidate 与 ImpactPlan 的 typed `not_required` fact，不能从 skipped 推导；Gamma 只对 exact current `dev1.0` head 执行，与可选 prod canary 一起构成 integration 侧仅有的两级集成验证（见 [L2 DEC-014](./design.md#dec-014)）。
+- Alpha 是默认真实依赖最小闭包，也是 lane 合入 `dev1.0` 的唯一必跑环境；Beta 只在 lane 验收显式 opt-in 时真跑，否则不按集成深度分流，统一以政策原因码 `ACCEPTANCE.BETA_OPTIONAL_BY_POLICY` 签绑定 candidate 与 ImpactPlan 的 typed `not_required` fact，不能从 skipped 推导；Gamma 只对 exact current `dev1.0` head 执行，与可选 prod canary 一起构成 integration 侧仅有的两级集成验证（见 [L2 DEC-014](./design.md#dec-014)）。
 - 环境 PASS 仅在 package identity、startup、full health、受影响 CaseResult、readback、inspect/doctor、finally teardown、lease revoke 与端口释放全部闭合后封存为唯一 `EnvironmentAcceptanceFact`；Beta/Gamma 分别引用前驱 exact bytes。
 - 模拟器或仿真器只支持本地集成事实并显式 `nonPromotable`；最终签名包的 Android/iOS 物理设备接受属于 RC qualification，不进入五分钟 promotion，也不重跑 ABG 业务矩阵。
 - GitHub 只验证不可变证据并承担 RC build/sign/attest、资格归约、正式 tag admission 和 Prod approval/transaction。普通 source push、lane PR、promotion PR 不得触发 packaging、coverage 全量、设备矩阵、Provider live 或 environment workflow。

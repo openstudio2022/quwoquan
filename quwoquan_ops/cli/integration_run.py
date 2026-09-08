@@ -1025,9 +1025,8 @@ def _parser() -> argparse.ArgumentParser:
                         help="acceptance 专用：ImpactPlan/readiness 的 exact parent commit；缺省取远端 dev1.0 head，"
                              "candidate 已等于远端 dev1.0 时必须显式给出上一个已验收基线")
     parser.add_argument("--beta", action="store_true",
-                        help="acceptance 专用：显式 opt-in 真跑 Beta；缺省 Beta 以 typed not_required 闭合"
-                             "（ImpactPlan 无需 live Beta 时 reason=IMPACT_PLAN.NO_LIVE_ENVIRONMENT_REQUIRED，"
-                             "否则 reason=ACCEPTANCE.BETA_OPTIONAL_BY_POLICY）")
+                        help="acceptance 专用：显式 opt-in 真跑 Beta；缺省不按集成深度分流，"
+                             "以 typed not_required(reason=ACCEPTANCE.BETA_OPTIONAL_BY_POLICY) 闭合")
     parser.add_argument("--merged-lanes", action="append", default=[],
                         help="acceptance 专用：candidate 显式合并的其他 lane（lane/<name>，可重复）；每个都必须是 candidate 的祖先")
     parser.add_argument("--acceptance-bundle", type=Path, default=None,
@@ -1240,8 +1239,7 @@ def main(argv: list[str] | None = None) -> int:
         ))
         summary["environments"]["alpha"]["acceptance"] = alpha_ref
 
-        # Beta 只在用户显式 --beta 时真跑；否则以 typed not_required 闭合，reason 记录真实原因：
-        # ImpactPlan 本就无需 live Beta → NO_LIVE；ImpactPlan 判定敏感但未 opt-in → BETA_OPTIONAL_BY_POLICY。
+        # Beta 只在用户显式 --beta 时真跑；未 opt-in 是政策选择，不由 ImpactPlan 深度改写原因码。
         beta_reason: str | None
         if args.beta:
             beta_evidence = _run_environment(environment="beta", profile=args.profile, candidate=candidate_identity,
@@ -1249,7 +1247,7 @@ def main(argv: list[str] | None = None) -> int:
                                              previous_readiness=alpha_evidence["readiness"])
             beta_status, beta_reason = "passed", None
         else:
-            beta_reason = BETA_OPTIONAL_BY_POLICY if depth == "abg_release_sensitive" else NO_LIVE
+            beta_reason = BETA_OPTIONAL_BY_POLICY
             beta_evidence = _not_required_beta(candidate=candidate_identity, impact_plan_digest=impact_digest, impact_plan_path=plan_path,
                                                profile=args.profile, reason_code=beta_reason)
             beta_status = "not_required"
