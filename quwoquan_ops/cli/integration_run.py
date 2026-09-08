@@ -1,9 +1,16 @@
 #!/usr/bin/env python3
-"""integration 工作区「集成验证 → 发布 dev1.0」的 canonical 编排（模式二）。
+"""「集成验证 → 发布 dev1.0」的 canonical 编排（模式二），分两种运行位置：
+
+- `--mode acceptance`：在 lane 工作树（当前分支为该 lane）对 exact candidate 跑 Alpha（条件 Beta）
+  并签发 `EnvironmentAcceptanceFact`，终态 `accepted`，不 admit、不 publish。Data release 的
+  `ship --handoff-ref` admission 会用当前工作树重算 candidate evidence，因此只能在产出 handoff
+  的 lane 工作树完成；`--baseline` 指定 ImpactPlan/readiness 的 exact parent（默认远端 dev1.0）。
+- `--mode integrate`（默认）：在唯一 integration 工作区（分支 dev1.0）对 candidate 走完整链并
+  admit → publish（可选）；Gamma 与 prod 只在 integration 工作区推进。
 
 固定顺序：前置校验 → 本地 readiness（exact delta）→ build-head candidate → ImpactPlan 深度
 → environment request → Alpha（条件 Beta）package/up/health/verify/inspect/doctor/down
-→ 证据 canonical 化 → EnvironmentAcceptanceFact → admit → publish（可选）→ summary。
+→ 证据 canonical 化 → EnvironmentAcceptanceFact →（integrate）admit → publish（可选）→ summary。
 
 只编排、不解释结论：环境动作一律经 `stackctl` 子进程，事实一律经
 `quwoquan_ops.ci.scoped_candidate` / `environment_scheduler` 既有 create-once 入口。
@@ -693,6 +700,11 @@ def _issue(*, environment: str, candidate_ref: Mapping[str, str], impact_plan_di
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--candidate", default="HEAD", help="exact commit（HEAD 或 lane head sha）")
+    parser.add_argument("--mode", choices=("integrate", "acceptance"), default="integrate",
+                        help="integrate=integration 工作区完整链（admit/publish）；acceptance=lane 工作树只签发 Alpha/条件 Beta 事实")
+    parser.add_argument("--baseline", default="",
+                        help="acceptance 专用：ImpactPlan/readiness 的 exact parent commit；缺省取远端 dev1.0 head，"
+                             "candidate 已等于远端 dev1.0 时必须显式给出上一个已验收基线")
     parser.add_argument("--remote", default="origin")
     parser.add_argument("--owner-identity", default="", help="PRE owner identity manifest ref（make feature-context 输出）")
     parser.add_argument("--candidate-evidence", default="")
@@ -749,12 +761,29 @@ def main(argv: list[str] | None = None) -> int:
             raise IntegrationRunError("INTEGRATION_RUN.INPUT_INVALID", "release and rollback attestations must name two different releases")
         summary["dataReleases"] = sorted(release_ids)
         summary["dataReleaseHandoffRef"] = _handoff_ref(args.release_handoff_ref, label="--release-handoff-ref")
+        summary["mode"] = args.mode
+        if args.mode == "acceptance" and args.publish:
+            raise IntegrationRunError("INTEGRATION_RUN.INPUT_INVALID", "acceptance mode issues environment facts only; publish belongs to the integration worktree")
+        if args.mode == "integrate" and args.baseline:
+            raise IntegrationRunError("INTEGRATION_RUN.INPUT_INVALID", "--baseline is acceptance-only; integrate mode always uses the remote dev1.0 head")
 
         def preflight() -> dict[str, str]:
             if _git("status", "--porcelain", "--untracked-files=no"):
                 raise IntegrationRunError("INTEGRATION_RUN.DIRTY_WORKTREE", "worktree must be clean")
             commit = _git("rev-parse", f"{args.candidate}^{{commit}}")
-            parent = _git("ls-remote", args.remote, DEV_REF).split()[0]
+            remote_head = _git("ls-remote", args.remote, DEV_REF).split()[0]
+            if args.mode == "acceptance":
+                # lane 工作树只签发环境事实：parent 是显式基线（或远端 dev1.0），不要求 candidate 领先远端。
+                parent = _git("rev-parse", f"{args.baseline}^{{commit}}") if args.baseline else remote_head
+                if commit == parent:
+                    raise IntegrationRunError(
+                        "INTEGRATION_RUN.NOTHING_TO_ACCEPT",
+                        "candidate equals its baseline; pass --baseline <previous accepted commit> to accept an already-landed head",
+                    )
+                if subprocess.run(["git", "merge-base", "--is-ancestor", parent, commit], cwd=ROOT, check=False).returncode != 0:
+                    raise IntegrationRunError("INTEGRATION_RUN.NOT_FAST_FORWARD", "baseline is not an ancestor of the candidate")
+                return {"commit": commit, "parent": parent, "remoteHead": remote_head, "tree": _git("show", "-s", "--format=%T", commit)}
+            parent = remote_head
             if commit == parent:
                 raise IntegrationRunError("INTEGRATION_RUN.NOTHING_TO_INTEGRATE", "candidate equals remote dev1.0 head")
             if subprocess.run(["git", "merge-base", "--is-ancestor", parent, commit], cwd=ROOT, check=False).returncode != 0:
@@ -829,6 +858,13 @@ def main(argv: list[str] | None = None) -> int:
         if detached:
             _git("checkout", "--quiet", original_branch.removeprefix("refs/heads/"))
             detached = False
+
+        if args.mode == "acceptance":
+            # 环境事实已 create-once 落盘；admission/publish 只属于 integration 工作区（gamma/prod 亦然）。
+            summary["terminal"] = "accepted"
+            summary["acceptance"] = {"alphaFactRef": alpha_ref, "betaFactRef": beta_ref, "betaStatus": beta_status,
+                                     "note": "lane acceptance only: no publish admission, no dev1.0 write"}
+            return 0
 
         admission_path = phases.run("admit", lambda: create_publish_admission(
             repository=ROOT, policy_path=POLICY, candidate_ref=candidate_ref, source_fact_refs=[source_ref],
