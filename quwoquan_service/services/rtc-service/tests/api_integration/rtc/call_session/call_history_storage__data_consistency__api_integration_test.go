@@ -92,11 +92,11 @@ func TestCallHistoryStorageFacetFiltersBeforeCursorPagination(t *testing.T) {
 
 func TestCallSessionStorageFacetCreatesEveryDeclaredIndex(t *testing.T) {
 	expected := map[string][]string{
+		// 与 contracts/rtc/call_session/storage.yaml 的 call_sessions.indexes 一致；
+		// idx_cs_conv_created / idx_cs_circle_created 未在契约声明，也不由 EnsureIndexes 创建。
 		"call_sessions": {
 			"idx_cs_initiator_created",
 			"idx_cs_status",
-			"idx_cs_conv_created",
-			"idx_cs_circle_created",
 			"idx_cs_room",
 			"idx_cs_participant_user",
 			"idx_cs_ended_reason",
