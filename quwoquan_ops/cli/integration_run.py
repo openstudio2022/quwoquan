@@ -275,7 +275,9 @@ def _apply_data_release(*, environment: str, run_id: str, args: argparse.Namespa
                "--import", "--full-sync", log_dir=log_dir, label=f"{environment}-apply")
     _data_ship("activate", "--handoff-ref", handoff_ref, "--env", environment, "--import-run-id", import_run,
                "--run-id", activate_run, log_dir=log_dir, label=f"{environment}-activate")
-    verify_args = ["verify", "--handoff-ref", handoff_ref, "--env", environment, "--import-run-id", import_run,
+    # ship verify 的 --import-run-id 指向 completed 的 activate run（其 result.importRunId 再指回 apply run）；
+    # 传 apply run 会因 result status=prepared 被拒（"completed activation predecessor result status 不一致"）。
+    verify_args = ["verify", "--handoff-ref", handoff_ref, "--env", environment, "--import-run-id", activate_run,
                    "--run-id", verify_run, "--readiness-phase", release_class]
     if previous_readiness is not None:
         verify_args.extend(["--previous-environment-readiness", _output_ref(previous_readiness)])

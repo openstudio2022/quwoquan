@@ -96,7 +96,10 @@ class IntegrationRunProductionReleaseContractTest(unittest.TestCase):
         self.assertIn("--import", calls[0])
         verify = calls[2]
         self.assertEqual(verify[verify.index("--readiness-phase") + 1], "production")
-        self.assertEqual(verify[verify.index("--import-run-id") + 1], "run-1-import")
+        # verify 的前驱是 completed 的 activate run，而不是 prepared 的 apply run
+        self.assertEqual(verify[verify.index("--import-run-id") + 1], "run-1-activate")
+        activate = calls[1]
+        self.assertEqual(activate[activate.index("--import-run-id") + 1], "run-1-import")
 
     def test_parser_requires_candidate_handoff_ref_only(self) -> None:
         # integrate 只对 candidate 执行 ship apply/activate/verify；rollback release 只参与
