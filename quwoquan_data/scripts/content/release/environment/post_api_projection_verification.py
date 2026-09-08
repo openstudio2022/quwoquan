@@ -41,7 +41,8 @@ def _sleep_seconds(seconds: float) -> None:
 # Search 投影由 Content outbox 异步驱动，刚激活的 release 在 ES 里有一段最终一致窗口。
 # 这两个常量是 readiness 层的收敛预算，与 operations.yaml 的请求级重试（1500ms × 2）是不同语义：
 # 后者管单次请求，前者管「投影还没到」。整个 verify_search_projection 共享一个截止时间。
-SEARCH_PROJECTION_CONVERGENCE_SECONDS = 300.0
+# 实测 alpha 上 Search 投影按约 5 分钟一批落库（激活后 ~315s 才出现全部对象），预算须覆盖整周期加余量。
+SEARCH_PROJECTION_CONVERGENCE_SECONDS = 720.0
 SEARCH_PROJECTION_POLL_SECONDS = 5.0
 
 
@@ -421,9 +422,11 @@ def verify_search_projection(
             raise PostApiVerificationError(
                 f"search post manifest is unreadable for {case.post_ref}: {exc}"
             ) from exc
+        # 发布标题（publishTitle）才是交付与索引的标题；manifest.title 对视频/图片可能是来源
+        # 平台的原始描述（如英文 file page 描述），用它查不到自己。
         query = str(
-            manifest.get("title")
-            or manifest.get("publishTitle")
+            manifest.get("publishTitle")
+            or manifest.get("title")
             or manifest.get("caption")
             or case.post_id
         ).strip()
