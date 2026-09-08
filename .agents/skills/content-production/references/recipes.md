@@ -28,6 +28,18 @@ def get(url, dest=None, timeout=120, gap=0.7, retries=3, headers=None):
 def jget(url, **kw): return json.loads(get(url, **kw))
 def dump(name, obj): p = f"{WS}/api/{name}"; json.dump(obj, open(p, "w"), ensure_ascii=False, indent=1); return p
 def slug(s): return re.sub(r"[^\w\u4e00-\u9fff]+", "_", s).strip("_")[:80]
+FENCE = chr(96) * 3  # Markdown 代码围栏；模板本身在代码块里，不能直接写三个反引号
+```
+
+把本文件的代码块抽成脚本（公共头 + 各段，按出现顺序命名）：
+
+```text
+python3 - <<'EOF'
+import re; md = open("<REPO>/.agents/skills/content-production/references/recipes.md").read()
+blocks = re.findall(r"```python\n(.*?)```", md, re.S); header = blocks[0]
+names = ["wiki_acquire","evidence_append","toutiao_acquire","commons_search","creator_bulk","download","sheets","build_inputs","prompts","seal_review","publish"]
+for name, body in zip(names, blocks[1:]): open(f"/tmp/qwq_rNN/{name}.py", "w").write(header + "\n" + body)
+EOF
 ```
 
 ## 1. `wiki_acquire.py` — 维基条目正文 + 信息框 + 条目配图元数据
@@ -71,7 +83,7 @@ for pick in json.load(open(f"{WS}/api/{ROUND}_pick.json")):
     box = infobox_block(wikitext)
     imgs = [im["title"] for im in page.get("images", []) if not re.search(r"\.(svg|gif|ogg|mid)$", im["title"], re.I)]
     md = f"# {page['title']}\n\n{page['extract'].strip()}\n"
-    if box: md += f"\n## 信息区（原文）\n\n```\n{box}\n```\n"
+    if box: md += f"\n## 信息区（原文）\n\n{FENCE}\n{box}\n{FENCE}\n"
     md += f"\n- 来源条目：zh.wikipedia「{page['title']}」revid {page['lastrevid']}\n"
     open(f"{WS}/sources/{name}.source.md", "w").write(md)
     rows.append({"name": name, "title": page["title"], "url": page["fullurl"], "revid": page["lastrevid"], "extractChars": len(page["extract"]),
@@ -92,41 +104,65 @@ for name, lines in json.load(open(f"{WS}/api/{ROUND}_evidence.json")).items():
 
 ## 2. `toutiao_acquire.py` — 头条百科条目（维基缺条目或过薄时）
 
-输入同 `_pick.json`（可加 `"source":"toutiao"`）。页面最大 `<script>` 块是 JSON，正文段落在 `text` 字段、信息框在 `Infobox`/`abstract` 附近；图片行带 `license`/`copyright`。
+输入 `api/<round>_pick_toutiao.json`（同形，`title` 写头条百科的条目名，如「安顺龙宫」「宜春明月山」）。页内 `var __prefetch_doc_data__ = {...}` 是结构化真相：`VersionContent.Content` 与 `.Infobox` 是富文本节点树的 JSON 字符串，`HeadImageList[]` 带 `License`/`Copyright`，`ReferenceList[]` 是条目引用。输出 `sources/<name>.toutiao.source.md`（与维基产物并存，由 `build_inputs` 按 `plan.json` 的 `source` 选用）与 `api/<round>_toutiao.json`。条目不存在返回 404，按候选级放弃。
 
 ```python
-def largest_script_json(html):
-    best = None
-    for m in re.finditer(r"<script[^>]*>(.*?)</script>", html, re.S):
-        s = m.group(1).strip(); s = s[s.find("{"):] if "=" in s[:200] and not s.startswith("{") else s
-        if s.startswith("{") and (best is None or len(s) > len(best)): best = s
-    for cut in range(0, 3):
-        try: return json.loads(best.rstrip(";").rstrip())
-        except json.JSONDecodeError: best = best[: best.rfind("}") ] if cut < 2 else best
-    raise ValueError("no json script")
-def walk(o, texts, infos, imgs):
-    if isinstance(o, dict):
-        if isinstance(o.get("text"), str) and len(o["text"]) > 20: texts.append(o["text"].strip())
-        if "img_url" in o or "image_url" in o: imgs.append({k: o.get(k) for k in ("img_url", "image_url", "license", "copyright", "author", "desc")})
-        for k, v in o.items():
-            if k.lower().startswith("infobox") and isinstance(v, (list, dict)): infos.append(v)
-            walk(v, texts, infos, imgs)
-    elif isinstance(o, list): [walk(x, texts, infos, imgs) for x in o]
+def prefetch_doc_data(html):
+    """页内 `var __prefetch_doc_data__ = {...};` 是唯一结构化真相：用括号配对取出该对象。"""
+    i = html.find("__prefetch_doc_data__"); j = html.find("{", i)
+    depth, k, instr, esc = 0, j, False, False
+    while k < len(html):
+        c = html[k]
+        if instr:
+            if esc: esc = False
+            elif c == "\\": esc = True
+            elif c == '"': instr = False
+        else:
+            if c == '"': instr = True
+            elif c == "{": depth += 1
+            elif c == "}":
+                depth -= 1
+                if depth == 0: break
+        k += 1
+    return json.loads(html[j:k + 1])
+def node_text(node):
+    if isinstance(node, list): return "".join(node_text(n) for n in node)
+    if not isinstance(node, dict): return ""
+    return (node.get("text") or "") + node_text(node.get("children") or [])
+def content_lines(content_nodes):
+    lines = []
+    for n in content_nodes:
+        t = n.get("type", ""); txt = node_text(n).strip()
+        if not txt: continue
+        if t.startswith("heading"):
+            level = int(n.get("attrs", {}).get("level") or 2); lines.append("#" * min(level + 1, 4) + " " + txt)
+        elif t in ("paragraph", "blockquote", "list_item", "table_cell"): lines.append(txt)
+        else: lines.append(txt)
+    return lines
+def infobox_pairs(infobox_nodes):
+    pairs, key = [], None
+    for n in infobox_nodes:
+        t = n.get("type", "")
+        if t == "infobox_key": key = node_text(n).strip()
+        elif t == "infobox_value" and key: pairs.append((key, node_text(n).strip())); key = None
+    return pairs
 rows = []
-for pick in json.load(open(f"{WS}/api/{ROUND}_pick.json")):
-    name = pick["name"]; url = "https://www.baike.com/wiki/" + urllib.parse.quote(name)
+for pick in json.load(open(f"{WS}/api/{ROUND}_pick_toutiao.json")):
+    name = pick["name"]; query = pick.get("title") or name; url = "https://www.baike.com/wiki/" + urllib.parse.quote(query)
     html = get(url, dest=f"{WS}/api/toutiao_{name}.html").decode("utf-8", "replace")
-    if name not in re.search(r"<title>(.*?)</title>", html, re.S).group(1): print("SKIP", name, "no entry"); continue
-    texts, infos, imgs = [], [], []; walk(largest_script_json(html), texts, infos, imgs)
-    seen, body = set(), []
-    for t in texts:
-        if t not in seen: seen.add(t); body.append(t)
-    md = f"# {name}\n\n" + "\n\n".join(body) + "\n"
-    if infos: md += "\n## 信息区（原文）\n\n```\n" + json.dumps(infos[0], ensure_ascii=False, indent=1)[:6000] + "\n```\n"
-    md += f"\n- 来源条目：头条百科「{name}」 {url}\n"
-    open(f"{WS}/sources/{name}.source.md", "w").write(md)
-    rows.append({"name": name, "url": url, "chars": len("".join(body)), "infobox": bool(infos), "images": imgs})
-    print("OK", name, rows[-1]["chars"], "字", len(imgs), "图")
+    if "__prefetch_doc_data__" not in html: print("SKIP", name, "no doc data"); continue
+    d = prefetch_doc_data(html); vc = d.get("VersionContent") or {}; title = vc.get("Title") or (d.get("DocMeta") or {}).get("Title") or query
+    if query[:2] not in title and name[:2] not in title: print("SKIP", name, "title mismatch:", title); continue
+    content = json.loads(vc.get("Content") or "[]"); infobox = json.loads(vc.get("Infobox") or "[]")
+    lines = content_lines(content); pairs = infobox_pairs(infobox)
+    md = f"# {title}\n\n" + "\n\n".join(lines) + "\n"
+    if pairs: md += f"\n## 信息区（原文）\n\n{FENCE}\n" + "\n".join(f"{k}：{v}" for k, v in pairs) + f"\n{FENCE}\n"
+    refs = [r.get("URL") for r in (vc.get("ReferenceList") or []) if r.get("URL")]
+    md += f"\n- 来源条目：头条百科「{title}」 {url}（VersionNumber {d.get('VersionNumber')}）\n"
+    open(f"{WS}/sources/{name}.toutiao.source.md", "w").write(md)
+    imgs = [{"url": "https:" + im["URL"] if im.get("URL", "").startswith("//") else im.get("URL"), "w": im.get("Width"), "h": im.get("Height"), "license": im.get("License", ""), "copyright": im.get("Copyright", ""), "name": im.get("Name")} for im in (vc.get("HeadImageList") or [])]
+    rows.append({"name": name, "title": title, "url": url, "version": d.get("VersionNumber"), "chars": sum(len(l) for l in lines), "infobox": len(pairs), "references": refs[:10], "images": imgs})
+    print("OK", name, "→", title, rows[-1]["chars"], "字", "infobox", len(pairs), "imgs", len(imgs))
 dump(f"{ROUND}_toutiao.json", rows)
 ```
 
@@ -186,6 +222,9 @@ def youtube_channel(handle_url, cap=200):
         rows.append({"source": "youtube", "creator": d.get("uploader") or d.get("channel"), "creatorUrl": d.get("uploader_url") or handle_url, "title": e.get("title"), "url": e.get("url") or f"https://www.youtube.com/watch?v={e['id']}",
                      "directUrl": None, "duration": e.get("duration"), "views": e.get("view_count"), "license": None, "accessPolicy": "tos_restricted"})
     return rows
+def youtube_cc_search(query):  # 检索页自带 Creative Commons 过滤（sp=EgIwAQ%3D%3D），比频道全集更直接
+    d = ytdlp_json("https://www.youtube.com/results?search_query=" + urllib.parse.quote(query) + "&sp=EgIwAQ%253D%253D")
+    return [{"source": "youtube", "creator": e.get("channel"), "creatorUrl": e.get("channel_url"), "title": e.get("title"), "url": f"https://www.youtube.com/watch?v={e['id']}", "directUrl": None, "duration": e.get("duration"), "views": e.get("view_count"), "license": None, "accessPolicy": "tos_restricted"} for e in (d.get("entries") or []) if e]
 def youtube_detail(watch_url):  # license 只在单条元数据里；只取 "Creative Commons" 的下载
     d = ytdlp_json(watch_url, flat=False)
     return {"license": d.get("license"), "views": d.get("view_count"), "likes": d.get("like_count"), "comments": d.get("comment_count"), "creatorFollowers": d.get("channel_follower_count"),
@@ -199,9 +238,11 @@ def bilibili_space(mid, cap=200):
 def tuchong_tag(tag, pages=3, order="weekly"):
     rows = []
     for page in range(1, pages + 1):
-        d = jget(f"https://tuchong.com/rest/tags/{urllib.parse.quote(tag)}/posts?page={page}&count=20&order={order}", headers={"Accept": "application/json"})
-        for post in d.get("postList") or d.get("post_list") or []:
-            site = post.get("site") or {}
+        d = jget(f"https://tuchong.com/rest/tags/{urllib.parse.quote(tag)}/posts?page={page}&count=20&order={order}", headers={"Accept": "application/json"}, gap=3.0)
+        sites = d.get("siteList") if isinstance(d.get("siteList"), dict) else {}
+        if not d.get("postList") and order == "weekly": return tuchong_tag(tag, pages=pages, order="new")
+        for post in d.get("postList") or []:
+            site = sites.get(str(post.get("author_id") or post.get("site_id") or "")) or {}
             for im in post.get("images") or []:
                 rows.append({"source": "tuchong", "creator": site.get("name"), "creatorUrl": f"https://tuchong.com/{site.get('site_id')}/", "title": (post.get("title") or post.get("excerpt") or "")[:80], "url": post.get("url"),
                              "directUrl": f"https://photo.tuchong.com/{im.get('user_id')}/f/{im.get('img_id')}.jpg", "w": im.get("width"), "h": im.get("height"), "mime": "image/jpeg",
@@ -402,7 +443,9 @@ order = [c for c in ("homepage", "article", "image", "video") if c in R["executi
 for carrier in order:
     ex = R["executions"][carrier]; rc = f"{TASKS}/{ex}/_shared/receipts/003-5.review.json"
     if not os.path.exists(rc): print("NO REVIEW RECEIPT", carrier); continue
-    for ref in json.load(open(rc))["resultRefs"]:
+    for item in json.load(open(rc))["resultRefs"]:
+        # 003 receipt 的 resultRefs 是 {digest, ref, scope}，ref 指向 .../5.review/content_review.json
+        ref = (item["ref"] if isinstance(item, dict) else str(item)).split("/5.review/")[0]
         review = json.load(open(f"{TASKS}/{ex}/{ref}/5.review/content_review.json"))
         if review.get("decision") != "approved": results.append((carrier, ref, "skipped:" + review.get("decision", "?"))); continue
         r = subprocess.run(["python3", f"{REPO}/quwoquan_data/scripts/cli.py", "release", "publish-object", "--execution-id", ex, "--target-ref", ref], capture_output=True, text=True)
