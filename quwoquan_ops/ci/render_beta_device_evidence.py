@@ -210,9 +210,10 @@ def render_stack_bundle(
                 raise ValueError("package artifactDigest is not bound to the manifest")
             if "formalRelease" in evidence:
                 raise ValueError("package evidence must not claim formalRelease")
-            if evidence.get("releaseInputClassification") != "commercial_inputs":
+            # DEC-041：production 单类别为现役；commercial_inputs 仅为尚未删除的下游分叉保留。
+            if evidence.get("releaseInputClassification") not in {"production_inputs", "commercial_inputs"}:
                 raise ValueError(
-                    "package evidence requires commercial release inputs"
+                    "package evidence requires production release inputs"
                 )
             if evidence.get("contractGraphDigest") != manifest.get(
                 "contractGraphDigest"
@@ -248,7 +249,7 @@ def render_stack_bundle(
                 or evidence.get("runtimeCandidateDigest") != candidate
                 or evidence.get("formalRelease") is not True
                 or evidence.get("releaseInputClassification")
-                != "commercial_inputs"
+                not in {"production_inputs", "commercial_inputs"}
                 or not runtime_images_valid
                 or evidence.get("destructiveRepairPerformed") is not False
                 or evidence.get("destructiveActions") != []

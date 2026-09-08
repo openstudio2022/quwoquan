@@ -279,9 +279,11 @@ def _validate_activation(
     release_class = str(readiness.get("releaseClass") or "")
     lifecycle = str(readiness.get("productLifecycleState") or "")
     phase = str(readiness.get("readinessPhase") or "")
-    if release_class not in {"research", "commercial"} or lifecycle != release_class:
+    # DEC-041：producer 现役只有 production；research/commercial 仅为尚未删除的
+    # 下游分叉保留（multi-carrier-release OPEN-024）。
+    if release_class not in {"research", "commercial", "production"} or lifecycle != release_class:
         raise IdentityEvidenceError("release readiness lifecycle identity mismatch")
-    if phase not in {"research", "commercial"} or phase != release_class:
+    if phase not in {"research", "commercial", "production"} or phase != release_class:
         raise IdentityEvidenceError(
             "activation phase must match immutable release lifecycle"
         )

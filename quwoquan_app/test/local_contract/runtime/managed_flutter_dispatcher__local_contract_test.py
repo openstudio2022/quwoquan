@@ -26,6 +26,7 @@ from pathlib import Path
 
 APP_DIR = Path(__file__).resolve().parents[3]
 DISPATCHER_SOURCE = APP_DIR / "scripts/tools/launcher/bin/flutter"
+WORKTREE_SELECTION_SOURCE = APP_DIR / "scripts/tools/launcher/worktree_selection.py"
 FACADE_SOURCE = APP_DIR / "scripts/tools/flutter_facade/flutter_facade.py"
 SUBPROCESS_TIMEOUT_SECONDS = 30
 PINNED_VERSION = "3.47.0"
@@ -49,6 +50,9 @@ class ManagedFlutterDispatcherContractTest(unittest.TestCase):
         # dispatcher 与解析库按仓库真实相对位置复制进假工作树：
         # dispatcher 必须按自身物理路径定位 run.sh / facade / device authority。
         shutil.copy2(DISPATCHER_SOURCE, self.launcher_bin / "flutter")
+        shutil.copy2(
+            WORKTREE_SELECTION_SOURCE, self.launcher_bin.parent / "worktree_selection.py"
+        )
         _write_executable(
             self.launcher_bin / "run.sh",
             "#!/usr/bin/env bash\nexit 99\n",

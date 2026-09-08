@@ -1,6 +1,12 @@
 # App 启动入口
 
-公开启动面只有四个：字面 `flutter run`（受管一键入口，等价进入 canonical launcher）、`run.sh`（canonical launcher）、`make app-dev`/`make app-uat`（编排入口）、IDE canonical profile。终端 PATH 注入是它们的环境前提，不是第五个启动面；不要把原始 Xcode/Gradle、绝对路径 Flutter SDK 或设备发现命令包装成新入口。
+公开启动面只有四个：字面 `flutter run`（受管一键入口，等价进入 canonical launcher）、`run.sh`（canonical launcher）、`make app-dev`/`make app-uat`（编排入口）、IDE canonical profile。不要把原始 Xcode/Gradle 或设备发现命令包装成新入口。
+
+## 0. 最基础事实：Debug 启动只依赖仓库与 SDK
+
+在任意 App 工作树里，裸 SDK 的 `flutter run -d <device>`（或 Xcode / Android Studio 直接 Run）都必须能把 Debug-nonprod App 启动到 alpha 首页——这是 [`environment-topology-and-packaging` REQ-003](../../specs/feature-tree/runtime/runtime-config/environment-topology-and-packaging/spec.md#req-003) 的 `build_time_self_supply`：构建阶段在无外部 handoff 时现场签发 alpha `test_live` runtime package 与 nonprod trust 并随制品嵌入，原生 gate 在冷启动按同一 CAS/receipt 路径激活（日志 `ios_runtime_config_self_supply activated=true`、`runtimeConfigSupplyMode=build_time_self_supply`）。它不依赖下文的 PATH 注入、用户 shell 或某棵具体 worktree 的绝对路径；PATH facade 只是让 `run.sh` 全局可调用、让字面 `flutter run` 获得 managed 语义的便利层。Release/Profile、prod 与 beta/gamma 仍要求 canonical handoff，缺失即 `APP.LAUNCH.runtime_config_trust_missing`。
+
+同一事实也是集成准入的必需项：`app` 进入 ImpactPlan scopes 时，每一级 readiness 都真实编译 iOS simulator 与 Android debug，`make integrate` 的 Alpha 准入还会在模拟器上真实启动并对首页 feed 与视频书做 Remote readback（[`local-continuous-integration` REQ-004](../../specs/feature-tree/runtime/development-workflow-governance/local-continuous-integration/spec.md#req-004)）。
 
 ## 1. 终端 PATH 注入（一次性激活）
 
@@ -42,11 +48,12 @@ flutter run                # 无 -d 时委托 canonical device authority：
 flutter run -d <device-id> # 显式设备，exact 翻译为 canonical --device
 ```
 
-- dispatcher 从 cwd 向上定位最近的 `quwoquan_app`，并前台 exec **该工作树**的 `run.sh`；多个 clone/worktree 并存时不会跳回激活 facade 的那棵树。cwd 位于别的 Flutter project 时，`flutter run` 逐字透传真实 SDK；cwd 不属于任何 Flutter project 时才回退 facade 自身所在树。
+- dispatcher 从 cwd 向上定位最近的 `quwoquan_app`，并前台 exec **该工作树**的 `run.sh`；多个 lane worktree 并存时不会跳回激活 facade 的那棵树。cwd 位于别的 Flutter project 时，`flutter run` 逐字透传真实 SDK；cwd 不属于任何 App 工作树时枚举同仓全部 worktree——`flutter run --worktree <目录|分支>`（如 `--worktree engineering`、`--worktree lane/ops`）显式命中，TTY 下按编号选择，非 TTY 以 `APP.LAUNCH.workspace_entrypoint_inactive` 要求显式 `--worktree`，不再静默退回 facade 自身所在树。`run.sh` wrapper 接受同一 `--worktree` 参数。
+- facade 投影漂移（例如 worktree 重组后旧路径失效）时，新终端只打印一行 `GATE_BLOCK: APP.LAUNCH.workspace_entrypoint_inactive; …` 并完全回退（不导出半套身份变量、不改 PATH）；`make install-hooks` 末尾会报告 facade 状态。裸 `flutter run` 与 `./quwoquan_app/run.sh` 不受影响。
 - App 内的 `run` 白名单翻译为 `run.sh --env alpha --device <id>`，并注入 managed intent：stackctl 控制面先准备并持有 full runtime、consumer lease、所需 transport/receipt、device trust 与严格 preflight，再由同一 `run.sh` 验证和透传这些事实完成 build/install/activation/attach；键位（r/R/q）与字面 direct `run.sh` 相同，但 evidence authority 不同。
 - 白名单只有 `-d <id>`/`--device-id <id>` 与 `-v`/`--verbose`（后者以 `QWQ_LAUNCH_VERBOSE=1` 传递）。任何其他参数（`--target`、`--flavor`、`--dart-define*`、`--profile`/`--release`、端口类参数等）输出一行 `APP.LAUNCH.managed_argument_unsupported: <参数>` 并 exit 2；需要这些能力时使用 `run.sh` 的 canonical 参数面。
 - 其余全部 flutter 子命令（`--version`、`doctor`、`analyze`、`test`、`pub`、`build` 等）由 dispatcher 解析真实 SDK 后 exact argv/env/cwd 透传，退出码保留；真实 SDK 解析失败输出 typed `APP.LAUNCH.workspace_flutter_sdk_unavailable:` 并退出非零。
-- `native_flutter_run` provenance 与 `embedded_default_package` 构建期默认供给已退役：Debug-nonprod 在无 canonical handoff 时不再物化嵌入默认 alpha trust/package。用真实 SDK 绝对路径绕过 dispatcher 的 raw `flutter run` 会在既有 trust gate 以 `APP.LAUNCH.runtime_config_trust_missing` fail-closed。
+- 用真实 SDK 绝对路径绕过 dispatcher 的 raw `flutter run` 走第 0 节的 Debug-nonprod 构建期自供给（`runtimeConfigSupplyMode=build_time_self_supply`、`launchProvenance=workspace_ide_debug`），其证据只是开发观测、不具 managed/promotable authority；`native_flutter_run`/`workspace_flutter_run` provenance 不再存在。
 - 需要非 alpha 环境时使用 `run.sh --env beta|gamma`（见下节）。
 
 ## 3. `run.sh`：开发直连与 hermetic 路径
@@ -106,7 +113,7 @@ make app-uat \
 
 ## 7. 不受支持的 raw 路径
 
-原始 Xcode backend、原始 Gradle backend 与绝对路径真实 SDK 的 raw `flutter run` 都不属于受支持入口。一切 buildMode/buildProfile 缺少 canonical handoff/trust 时必须在构建/安装前以 `APP.LAUNCH.runtime_config_trust_missing` typed fail closed；build phase 只验证，不会创建、刷新或修复 PATH 注入、handoff 或 runtime config 投影（构建期默认供给已退役，无任何物化例外）。不得关闭 Prod trust gate。
+原始 Xcode backend、原始 Gradle backend 与绝对路径真实 SDK 的 raw `flutter run` 不是受支持的**证据**入口，但 Debug-nonprod 必须能由它们启动（第 0 节）。Profile/Release、prod 与 beta/gamma 缺少 canonical handoff/trust 时必须在构建/安装前以 `APP.LAUNCH.runtime_config_trust_missing` typed fail closed；build phase 不会创建、刷新或修复 PATH 注入或 handoff 投影，唯一的物化是 Debug-nonprod 自供给。不得关闭 Prod trust gate。
 
 ## 8. 生命周期与证据分层
 

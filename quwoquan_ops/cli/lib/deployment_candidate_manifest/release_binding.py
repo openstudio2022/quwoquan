@@ -83,6 +83,8 @@ def release_input_classification(release: object) -> str:
         return "research_inputs"
     if classes == ["commercial", "commercial"]:
         return "commercial_inputs"
+    if classes == ["production", "production"]:
+        return "production_inputs"
     return "mixed_inputs"
 
 

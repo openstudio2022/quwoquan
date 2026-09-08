@@ -16,10 +16,11 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import subprocess
 import sys
 import time
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
@@ -194,11 +195,22 @@ def _stackctl(*args: str, env: Mapping[str, str] | None = None, log_dir: Path) -
 DATA_CLI = ROOT / "quwoquan_data/scripts/cli.py"
 
 
+# DEC-041（object-homepage-coverage-scaling design）：producer 只有一个 release 类别 production，
+# releaseClass 与 productLifecycleState 同值。integrate 不再接受 research/commercial 输入。
+RELEASE_CLASS = "production"
+HANDOFF_REF_RE = re.compile(r"^handoff-ref-v1:sha256:[0-9a-f]{64}:sha256:[0-9a-f]{64}$")
+
+
 def _release_id(attestation: Path) -> tuple[str, str]:
     payload = json.loads(attestation.read_text(encoding="utf-8"))
     release_id, release_class = str(payload.get("releaseId") or ""), str(payload.get("releaseClass") or "")
-    if not release_id or release_class not in {"research", "commercial"}:
-        raise IntegrationRunError("INTEGRATION_RUN.INPUT_INVALID", f"{attestation} is not a canonical release attestation")
+    lifecycle = str(payload.get("productLifecycleState") or "")
+    if not release_id or release_class != RELEASE_CLASS or lifecycle != RELEASE_CLASS:
+        raise IntegrationRunError(
+            "INTEGRATION_RUN.INPUT_INVALID",
+            f"{attestation} is not a canonical {RELEASE_CLASS} release attestation "
+            f"(releaseClass={release_class or '-'}, productLifecycleState={lifecycle or '-'})",
+        )
     local = OUTPUT_ROOT / "data/releases" / release_id / "attestations/release.json"
     if not local.is_file() or local.read_bytes() != attestation.read_bytes():
         raise IntegrationRunError(
@@ -207,6 +219,19 @@ def _release_id(attestation: Path) -> tuple[str, str]:
             "ship apply only executes releases present in this worktree's Data root",
         )
     return release_id, release_class
+
+
+def _handoff_ref(value: str, *, label: str) -> str:
+    """现役 `qwq-data ship` 只接受 authoritative handoff-ref-v1 准入；release id 不再是隐式选择器。"""
+
+    ref = str(value or "").strip()
+    if not HANDOFF_REF_RE.fullmatch(ref):
+        raise IntegrationRunError(
+            "INTEGRATION_RUN.INPUT_INVALID",
+            f"{label} must be a canonical handoff-ref-v1 (got {ref[:48] or '-'}); "
+            "obtain it from the Data producer release handoff (qwq-state/handoffs)",
+        )
+    return ref
 
 
 def _data_ship(*args: str, log_dir: Path, label: str) -> None:
@@ -227,13 +252,20 @@ def _data_ship(*args: str, log_dir: Path, label: str) -> None:
 
 def _apply_data_release(*, environment: str, run_id: str, args: argparse.Namespace, log_dir: Path,
                         previous_readiness: Path | None) -> Path:
-    """candidate release：apply --import --full-sync → verify（research/commercial 按 attestation）；返回 readiness 回执。"""
+    """candidate release 进入环境：`ship apply --handoff-ref … --import --full-sync` → `ship activate` → `ship verify --readiness-phase production`。
+
+    handoff-ref 是现役 Data CLI 唯一的 release 准入身份；attestation 只用于 stackctl package 的候选绑定，
+    两者必须指向同一 releaseId（由 ship 侧对 handoff 做 exact 校验）。返回 release-readiness 回执路径。
+    """
 
     release_id, release_class = _release_id(args.release_attestation)
-    import_run, verify_run = f"{run_id}-import", f"{run_id}-verify"
-    _data_ship("apply", "--release-id", release_id, "--env", environment, "--run-id", import_run,
+    handoff_ref = _handoff_ref(args.release_handoff_ref, label="--release-handoff-ref")
+    import_run, activate_run, verify_run = f"{run_id}-import", f"{run_id}-activate", f"{run_id}-verify"
+    _data_ship("apply", "--handoff-ref", handoff_ref, "--env", environment, "--run-id", import_run,
                "--import", "--full-sync", log_dir=log_dir, label=f"{environment}-apply")
-    verify_args = ["verify", "--release-id", release_id, "--env", environment, "--import-run-id", import_run,
+    _data_ship("activate", "--handoff-ref", handoff_ref, "--env", environment, "--import-run-id", import_run,
+               "--run-id", activate_run, log_dir=log_dir, label=f"{environment}-activate")
+    verify_args = ["verify", "--handoff-ref", handoff_ref, "--env", environment, "--import-run-id", import_run,
                    "--run-id", verify_run, "--readiness-phase", release_class]
     if previous_readiness is not None:
         verify_args.extend(["--previous-environment-readiness", _output_ref(previous_readiness)])
@@ -410,9 +442,76 @@ def _package_with_dependency_recovery(*, environment: str, args: argparse.Namesp
     return _require_ok(result, "INTEGRATION_RUN.PACKAGE_FAILED")
 
 
+def _alpha_app_launch_cases(*, candidate: Mapping[str, str], runtime: Mapping[str, str], evidence_dir: Path,
+                            log_dir: Path, args: argparse.Namespace, env_summary: dict[str, Any]) -> list[dict[str, str]]:
+    """Alpha 的 App 启动 + 首页/视频书 readback：两份 raw ReadinessCaseResult，任一失败即 typed blocker。
+
+    服务 health 不等于 App 能启动；candidate 影响面含 `app` 时这是 Alpha 准入的必需证据，
+    没有可用模拟器同样阻断，不得降级为 PASS（environment-topology-and-packaging REQ-003、
+    local-continuous-integration REQ-004）。
+    """
+
+    from quwoquan_ops.cli.lib.integration_app_launch import (
+        APP_LAUNCH_SPEC_REF, CONTENT_READBACK_SPEC_REF, IntegrationAppLaunchError,
+        case_result, content_readback, launch_and_observe, select_ios_simulator,
+    )
+
+    try:
+        device = select_ios_simulator(preferred_udid=str(getattr(args, "app_launch_device", "") or ""))
+        observation = launch_and_observe(
+            repo_root=ROOT, device=device, log_dir=log_dir,
+            timeout_seconds=float(getattr(args, "app_launch_timeout_seconds", 900)),
+        )
+    except IntegrationAppLaunchError as exc:
+        raise IntegrationRunError(exc.code, exc.detail) from exc
+    launch_receipt = log_dir / "app-launch-alpha.json"
+    launch_receipt.write_text(json.dumps({
+        "device": {"udid": device.udid, "name": device.name},
+        "phases": observation.phases,
+        "launched": observation.launched,
+        "routerShell": observation.router_shell,
+        "configurationComplete": observation.configuration_complete,
+        "exitCode": observation.exit_code,
+        "firstBlocker": observation.first_blocker,
+        "logRef": _output_ref(observation.log_path) if observation.log_path else "",
+        "startedAt": observation.started_at,
+        "completedAt": observation.completed_at,
+    }, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
+    env_summary["appLaunch"] = {"device": device.name, "passed": observation.passed, "receipt": _output_ref(launch_receipt)}
+    if not observation.passed:
+        raise IntegrationRunError("INTEGRATION_RUN.APP_LAUNCH_FAILED", observation.first_blocker or "App launch did not reach launched/router_shell/complete")
+
+    readback_started = _now()
+    readback = content_readback(target="alpha-local")
+    readback_receipt = log_dir / "content-readback-alpha.json"
+    readback_receipt.write_text(json.dumps(readback, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
+    env_summary["contentReadback"] = {"passed": readback["passed"], "receipt": _output_ref(readback_receipt), "failures": readback["failures"]}
+    if not readback["passed"]:
+        raise IntegrationRunError("INTEGRATION_RUN.CONTENT_READBACK_FAILED", "; ".join(readback["failures"]))
+    readback_completed = _now()
+
+    refs: list[dict[str, str]] = []
+    for index, (case_id, object_id, spec_ref, target_id, receipt, started, completed) in enumerate((
+        ("app-launch:ios-simulator", "app-launch:alpha:ios-simulator", APP_LAUNCH_SPEC_REF, "app.launch.ios_simulator",
+         launch_receipt, observation.started_at, observation.completed_at),
+        ("content-readback:home-feed+video-book", "content-readback:alpha:home-feed+video-book", CONTENT_READBACK_SPEC_REF,
+         "content.feed.list", readback_receipt, readback_started, readback_completed),
+    )):
+        result = case_result(
+            case_id=case_id, object_id=object_id, spec_ref=spec_ref, target_id=target_id, environment="alpha",
+            candidate=candidate, runtime=runtime, started_at=started, completed_at=completed,
+            artifact_sha256=hashlib.sha256(receipt.read_bytes()).hexdigest(), receipt_ref=_output_ref(receipt),
+        )
+        case_path = evidence_dir / "cases" / f"app-{index:03d}.json"
+        case_path.parent.mkdir(parents=True, exist_ok=True)
+        write_readiness_case_result(case_path, result, generated_at=completed)
+        refs.append({"ref": case_path.relative_to(_store()).as_posix(), "digest": exact_file_digest(case_path)})
+    return refs
+
+
 def _run_environment(*, environment: str, profile: str, candidate: Mapping[str, str], impact_plan_digest: str,
                      args: argparse.Namespace, run_dir: Path, phases: Phases, summary: dict[str, Any],
-                     previous_readiness: Path | None = None) -> dict[str, Any]:
+                     previous_readiness: Path | None = None, scopes: Sequence[str] = ()) -> dict[str, Any]:
     target = f"{environment}-local"
     store = _store()
     evidence_dir = store / "environment-evidence" / candidate["candidateId"].removeprefix("sha256:") / environment
@@ -420,6 +519,7 @@ def _run_environment(*, environment: str, profile: str, candidate: Mapping[str, 
     env_summary: dict[str, Any] = {"environment": environment, "target": target, "reports": {}}
     summary["environments"][environment] = env_summary
     started_up = False
+    app_cases: list[dict[str, str]] = []
     try:
         package = phases.run(f"{environment}.package", lambda: _package_with_dependency_recovery(
             environment=environment, args=args, log_dir=log_dir, phases=phases,
@@ -446,6 +546,12 @@ def _run_environment(*, environment: str, profile: str, candidate: Mapping[str, 
         env_summary["reports"]["health"] = _report_source(health)
         runtime = _health_runtime(health=health, environment=environment, candidate=candidate, expected_baseline=baseline)
         env_summary["runtimeIdentity"] = runtime
+        if environment == "alpha" and "app" in scopes:
+            # App 可启动、首页与视频书可访问是 Alpha 准入的必需事实，在服务 health 之后、
+            # runtime 仍在线时执行；模拟器缺失或任一 readback 失败都在这里 typed 阻断。
+            app_cases = phases.run(f"{environment}.app-launch", lambda: _alpha_app_launch_cases(
+                candidate=candidate, runtime=runtime, evidence_dir=evidence_dir, log_dir=log_dir, args=args, env_summary=env_summary,
+            ))
         verify = phases.run(f"{environment}.verify", lambda: _require_ok(_stackctl("verify", "--env", environment, "--target", target, "--kind", "all", "--profile", profile, log_dir=log_dir), "INTEGRATION_RUN.VERIFY_FAILED"))
         env_summary["reports"]["verify"] = _report_source(verify)
         inspect = phases.run(f"{environment}.inspect", lambda: _require_ok(_stackctl("inspect", "--target", target, "--scope", "all", log_dir=log_dir), "INTEGRATION_RUN.INSPECT_FAILED"))
@@ -485,6 +591,7 @@ def _run_environment(*, environment: str, profile: str, candidate: Mapping[str, 
         "lease_closure_evidence": evidence("lease-closure", "released", status_after),
     }
     cases = _case_results_from_verify(verify=verify, environment=environment, profile=profile, candidate=candidate, runtime=runtime, evidence_dir=evidence_dir)
+    cases.extend(app_cases)
     env_summary["caseResults"] = len(cases)
     return {"named": named, "cases": cases, "readiness": readiness}
 
@@ -592,6 +699,9 @@ def _parser() -> argparse.ArgumentParser:
                         help="fast=exact delta 静态+聚焦（deferred 允许，L2 在 Gamma 前补齐）；scope 需 Review consolidation 输入")
     parser.add_argument("--release-attestation", type=Path, required=True)
     parser.add_argument("--rollback-release-attestation", type=Path, required=True)
+    parser.add_argument("--release-handoff-ref", required=True,
+                        help="candidate production release 的 authoritative handoff-ref-v1（现役 qwq-data ship 唯一准入身份）；"
+                             "rollback release 只参与 stackctl package 候选绑定，integrate 不执行 rollback，因此不需要其 handoff-ref")
     parser.add_argument("--workload", default="full", choices=("content-release", "content-commercial", "full"))
     parser.add_argument("--profile", default="integration", choices=("smoke", "integration"))
     parser.add_argument("--signer-identity", default=DEFAULT_SIGNER)
@@ -601,6 +711,9 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--writer", default="integration")
     parser.add_argument("--publish", action="store_true", help="admit 后以 local-git CAS 发布到远端 dev1.0")
     parser.add_argument("--run-id", default="")
+    parser.add_argument("--app-launch-device", default="",
+                        help="Alpha App 启动证据使用的 iOS 模拟器 udid；缺省选已 Booted 或第一台可用 iPhone")
+    parser.add_argument("--app-launch-timeout-seconds", type=int, default=900)
     return parser
 
 
@@ -632,6 +745,7 @@ def main(argv: list[str] | None = None) -> int:
         if len(release_ids) != 2:
             raise IntegrationRunError("INTEGRATION_RUN.INPUT_INVALID", "release and rollback attestations must name two different releases")
         summary["dataReleases"] = sorted(release_ids)
+        summary["dataReleaseHandoffRef"] = _handoff_ref(args.release_handoff_ref, label="--release-handoff-ref")
 
         def preflight() -> dict[str, str]:
             if _git("status", "--porcelain", "--untracked-files=no"):
@@ -686,7 +800,8 @@ def main(argv: list[str] | None = None) -> int:
             detached = True
 
         alpha_evidence = _run_environment(environment="alpha", profile=args.profile, candidate=candidate_identity,
-                                          impact_plan_digest=impact_digest, args=args, run_dir=run_dir, phases=phases, summary=summary)
+                                          impact_plan_digest=impact_digest, args=args, run_dir=run_dir, phases=phases, summary=summary,
+                                          scopes=tuple(str(scope) for scope in plan["scopes"]))
         alpha_ref = phases.run("alpha.issue", lambda: _issue(
             environment="alpha", candidate_ref=candidate_ref, impact_plan_digest=impact_digest, evidence=alpha_evidence,
             status="passed", predecessor=None, profile=args.profile, args=args, signer=signer,

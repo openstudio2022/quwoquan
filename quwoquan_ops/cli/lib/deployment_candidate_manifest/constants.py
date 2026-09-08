@@ -43,8 +43,10 @@ _RELEASE_BINDING_FIELDS = frozenset(
         "productLifecycleState",
     }
 )
+# production_inputs 是 DEC-041 单一 production 类别下 candidate/rollback 同类的分类；
+# research_inputs/commercial_inputs 只为尚未删除的下游分叉保留（multi-carrier-release OPEN-024）。
 RELEASE_INPUT_CLASSIFICATIONS = frozenset(
-    {"research_inputs", "commercial_inputs", "mixed_inputs"}
+    {"research_inputs", "commercial_inputs", "production_inputs", "mixed_inputs"}
 )
 CANDIDATE_VALIDATION_PURPOSES = frozenset(
     {"self_verify", "currentness", "teardown"}

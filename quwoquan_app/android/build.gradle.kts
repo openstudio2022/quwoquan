@@ -16,10 +16,28 @@ val warningCleanJavaModules =
     setOf("app", "firebase_messaging", "flutter_webrtc", "video_thumbnail")
 val java8CompatibilityModules = setOf("flutter_webrtc", "video_thumbnail")
 
+// 与 pub 走 pub.flutter-io.cn 同一策略：Google/Maven Central 在本地网络会 TLS 中断，先经国内镜像
+// 取同一坐标的同一制品，原始仓库保留兜底。vendored 插件各自的 buildscript 仓库在其脚本里追加在
+// 这些镜像之后，因此插件 classpath（如 video_thumbnail 的 AGP 4.1）同样先走镜像。
+val mirroredMavenRepositories =
+    listOf(
+        "https://maven.aliyun.com/repository/google",
+        "https://maven.aliyun.com/repository/public",
+        "https://maven.aliyun.com/repository/gradle-plugin",
+    )
+
 allprojects {
     repositories {
+        mirroredMavenRepositories.forEach { maven(url = it) }
         google()
         mavenCentral()
+    }
+    buildscript {
+        repositories {
+            mirroredMavenRepositories.forEach { maven(url = it) }
+            google()
+            mavenCentral()
+        }
     }
 }
 

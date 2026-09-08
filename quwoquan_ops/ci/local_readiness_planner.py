@@ -321,8 +321,23 @@ def build_impact_plan(
     if level != "fast" and "service" in scopes and not go_services:
         checks.append(_check("scope_build:service-compile", "service", "scope_build", ["go", "test", "./...", "-run", "^$", "-count=1", "-p=4"], cwd="quwoquan_service", resources=["go:service-all"]))
         checks.append(_check("scope_build:service-build", "service", "scope_build", ["go", "build", "./..."], cwd="quwoquan_service", resources=["go:service-all"]))
-    if level != "fast" and "app" in scopes:
-        checks.append(_check("scope_build:app-package-smoke", "app", "scope_build", ["flutter", "build", "apk", "--debug", "--no-pub"], cwd="quwoquan_app", resources=["flutter-build"]))
+    if "app" in scopes:
+        # App 可编译是每一级 readiness（含 integrate 默认的 fast）的基础事实：
+        # Debug-nonprod 构建期自供给（environment-topology-and-packaging REQ-003
+        # build_time_self_supply）让裸 SDK 构建也能过 trust gate，因此这里直接以
+        # canonical 入口编译，不再依赖 handoff 或 facade。iOS simulator 只能在 darwin
+        # 主机执行；Android 必须带 nonprod flavor（工程声明了 buildProfile flavor 维度）。
+        if sys.platform == "darwin":
+            checks.append(_check(
+                "scope_build:app-compile-ios-simulator", "app", "scope_build",
+                ["flutter", "build", "ios", "--simulator", "--debug", "--flavor", "nonprod", "--no-pub", "--no-codesign"],
+                cwd="quwoquan_app", resources=["flutter-build"],
+            ))
+        checks.append(_check(
+            "scope_build:app-package-smoke", "app", "scope_build",
+            ["flutter", "build", "apk", "--debug", "--flavor", "nonprod", "--no-pub", "--android-skip-build-dependency-validation"],
+            cwd="quwoquan_app", resources=["flutter-build"],
+        ))
     if level != "fast" and "data" in scopes:
         if not any(check["id"] == "static:data_verify" for check in checks):
             checks.append(_check("scope_build:data-verify-all", "data", "scope_build", ["python3", "-B", "quwoquan_data/scripts/cli.py", "verify", "all"], resources=["data-verify"]))

@@ -1790,17 +1790,22 @@ evidence-signing-bootstrap:
 
 # integration 工作区模式二：对 exact candidate 做本地 readiness + Alpha（条件 Beta）真实验证，
 # 签发 EnvironmentAcceptanceFact 并（PUBLISH=1 时）以 expected-old CAS fast-forward 发布到远端 dev1.0。
-# 必填：RELEASE_ATTESTATION / ROLLBACK_RELEASE_ATTESTATION 指向两份不同的 immutable Data release attestation；
+# 必填：RELEASE_ATTESTATION / ROLLBACK_RELEASE_ATTESTATION 指向两份不同的 immutable production Data release attestation
+# （stackctl package 的候选绑定），RELEASE_HANDOFF_REF 是 candidate release 的 authoritative handoff-ref-v1
+# （现役 qwq-data ship 唯一准入身份，DEC-041 单一 production 类别；integrate 不执行 rollback，rollback 只参与候选绑定）；
 # 签名私钥来自仓外 QWQ_EVIDENCE_SIGNING_KEY_ROOT（先 make evidence-signing-bootstrap）。可选：CANDIDATE=<sha>（默认 HEAD）、
 # OWNER_IDENTITY=<ref>、READINESS_LEVEL=fast|scope、PROFILE=integration|smoke、INTEGRATE_ARGS 透传。
 .PHONY: integrate
 integrate:
 	@if [ -z "$(RELEASE_ATTESTATION)" ] || [ -z "$(ROLLBACK_RELEASE_ATTESTATION)" ]; then \
-		echo "[integrate] GATE_BLOCK: RELEASE_ATTESTATION 与 ROLLBACK_RELEASE_ATTESTATION 必填（两份不同的 immutable Data release attestation）" >&2; exit 2; fi
+		echo "[integrate] GATE_BLOCK: RELEASE_ATTESTATION 与 ROLLBACK_RELEASE_ATTESTATION 必填（两份不同的 immutable production Data release attestation）" >&2; exit 2; fi
+	@if [ -z "$(RELEASE_HANDOFF_REF)" ]; then \
+		echo "[integrate] GATE_BLOCK: RELEASE_HANDOFF_REF 必填（candidate release 的 authoritative handoff-ref-v1）" >&2; exit 2; fi
 	@PYTHONDONTWRITEBYTECODE=1 python3 -B quwoquan_ops/cli/integration_run.py \
 		--candidate "$${CANDIDATE:-HEAD}" \
 		--release-attestation "$(RELEASE_ATTESTATION)" \
 		--rollback-release-attestation "$(ROLLBACK_RELEASE_ATTESTATION)" \
+		--release-handoff-ref "$(RELEASE_HANDOFF_REF)" \
 		--readiness-level "$${READINESS_LEVEL:-fast}" \
 		--profile "$${PROFILE:-integration}" \
 		$$( [ -n "$(OWNER_IDENTITY)" ] && printf -- '--owner-identity %s' "$(OWNER_IDENTITY)" ) \

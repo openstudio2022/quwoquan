@@ -781,6 +781,9 @@ class WorkspaceTerminalInjectionLocalContractTest(unittest.TestCase):
             fake_dispatcher = fake_launcher_bin / "flutter"
             fake_dispatcher.write_bytes((LAUNCHER_BIN / "flutter").read_bytes())
             fake_dispatcher.chmod(0o755)
+            (fake_launcher_bin.parent / "worktree_selection.py").write_bytes(
+                (LAUNCHER_BIN.parent / "worktree_selection.py").read_bytes()
+            )
             fake_wrapper = _write_executable(
                 fake_launcher_bin / "run.sh",
                 f"#!/bin/sh\nexec {shlex.quote(str(fake_app / 'run.sh'))} \"$@\"\n",

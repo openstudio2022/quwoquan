@@ -1,0 +1,11 @@
+// Xcode 中间产物按当前工作树隔离。
+//
+// 多个 lane worktree 共用用户级 DerivedData（IDEBuildLocationStyle=Custom 时 OBJROOT 落在
+// XcodeDerivedData/Build/Intermediates.noindex/Runner.build）会让不同树的增量构建互相污染，
+// 并在构建日志里刷出另一棵树路径的 "Stale file … outside of the allowed root paths" 警告。
+// canonical executor 已通过 FLUTTER_XCODE_OBJROOT 等环境变量做同样隔离；raw `flutter run`
+// 与 Xcode 直接构建也必须得到同一结果，因此把它固定在受版本控制的 xcconfig 里。
+// 路径与 scripts/device/run_app_instance.py 的 IOS_XCODE_BUILD_ISOLATION_RELATIVE_PATHS 保持一致。
+OBJROOT = $(SRCROOT)/../build/ios/xcode-objroot
+MODULE_CACHE_DIR = $(SRCROOT)/../build/ios/xcode-module-cache
+SHARED_PRECOMPS_DIR = $(SRCROOT)/../build/ios/xcode-shared-precomps

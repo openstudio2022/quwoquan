@@ -33,6 +33,8 @@ fingerprint:
   invalidating_inputs: [source, lockfile, toolchain, command, timeout_policy, owner_identity, candidate_evidence, review_consolidation, required_evidence]
 profiles:
   fast:
+    # app 进入 scopes 时 fast 同样包含 App 编译（scope_build phase 的两条 canonical 编译检查）；
+    # 其余 scope_build（Go compile/build、data verify、portal build）仍只在 scope/release。
     required_checks: [static, focused]
     allow_deferred: true
   scope:
@@ -58,12 +60,15 @@ timeouts:
     scope_build: 900
     release: 1800
   maximum_by_level:
-    fast: 300
+    # fast 上限抬到 900：App 冷编译（Xcode ~2–3 分钟、Gradle 更久）是 fast 的必需检查。
+    fast: 900
     scope: 1800
     release: 7200
   overrides_by_check:
     static:code_health_delta_fast: 30
     static:code-health-delta: 300
+    scope_build:app-compile-ios-simulator: 900
+    scope_build:app-package-smoke: 900
   resolution_order: [check, phase, level, default]
 scope_profiles:
   service:
@@ -71,7 +76,7 @@ scope_profiles:
     scope_build: [go_test_compile, go_build]
   app:
     focused: [dart_test]
-    scope_build: [app_affected_package_smoke]
+    scope_build: [app_compile_ios_simulator, app_affected_package_smoke]
   data:
     focused: [managed_pytest]
     scope_build: [data_verify_all, affected_tests]
