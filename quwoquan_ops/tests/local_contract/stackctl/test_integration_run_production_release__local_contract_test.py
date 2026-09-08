@@ -19,6 +19,7 @@ import shutil
 import sys
 import tempfile
 import unittest
+from datetime import datetime, timedelta, timezone
 from contextlib import ExitStack
 from pathlib import Path
 from types import SimpleNamespace
@@ -372,11 +373,21 @@ class IntegrationRunProductionReleaseContractTest(unittest.TestCase):
 
         candidate_id = "sha256:" + "a" * 64
         claim = write("claims/c1.json", {"claimId": "sha256:" + "c" * 64, "paths": ["x.txt"]})
-        candidate = write("candidates/a.json", {
-            "schema": "quwoquan_ops.exact_integration_candidate.v1", "candidateId": candidate_id, "commit": commit, "tree": tree,
+        candidate_body = {
+            "schema": "quwoquan_ops.exact_integration_candidate.v1", "commit": commit, "tree": tree,
             "expectedParent": parent, "claimRef": claim["ref"], "claimDigest": claim["digest"], "paths": ["x.txt"],
+            "impactPlanDigest": "sha256:" + "9" * 64,
+        }
+        candidate_id = integration_run._sha256_hex(integration_run._canonical_bytes(candidate_body))
+        candidate = write("candidates/a.json", {**candidate_body, "candidateId": candidate_id})
+        receipt = self.root / "env/repo/local/local-readiness/process/receipts/r1.json"
+        receipt.parent.mkdir(parents=True, exist_ok=True)
+        receipt.write_bytes(b'{"status":"passed"}\n')
+        source = write("source-facts/s.json", {
+            "status": "passed", "candidateId": candidate_id, "commit": commit, "tree": tree,
+            "candidate": candidate, "kind": "local_readiness_fast",
+            "receipt": {"ref": ".qwq_output/" + receipt.relative_to(self.root).as_posix(), "digest": digest(receipt)},
         })
-        source = write("source-facts/s.json", {"status": "passed", "candidateId": candidate_id, "commit": commit})
         facts: dict[str, dict[str, str]] = {"candidate": candidate, "claim": claim, "sourceFact": source}
         for environment in ("alpha", "beta"):
             named = {
@@ -387,6 +398,9 @@ class IntegrationRunProductionReleaseContractTest(unittest.TestCase):
             facts[f"{environment}Fact"] = write(f"environment-execution/acceptance/{'a' * 64}/{environment}.json", {
                 "schema": "quwoquan_ops.environment_acceptance_fact.v2", "environment": environment,
                 "status": "passed" if environment == "alpha" else "not_required",
+                "profile": "integration", "nonPromotable": False, "impactPlanDigest": "sha256:" + "9" * 64,
+                "predecessor": None if environment == "alpha" else facts["alphaFact"],
+                **({"reasonCode": integration_run.BETA_OPTIONAL_BY_POLICY} if environment == "beta" else {}),
                 "candidate": {"candidateId": candidate_id, "commit": commit, "tree": tree},
                 "caseResultRefs": cases, **named, "signer": {"identity": "quwoquan-environment-ops-local", "signature": "ed25519:x"},
             })
@@ -405,11 +419,172 @@ class IntegrationRunProductionReleaseContractTest(unittest.TestCase):
             bundle_dir = integration_run._write_acceptance_bundle(
                 run_dir=run_dir, candidate_ref=facts["candidate"], source_ref=facts["sourceFact"], alpha_ref=facts["alphaFact"],
                 beta_ref=facts["betaFact"], identity={"commit": commit, "parent": parent, "tree": tree, "remoteHead": parent},
-                plan_path=plan_path, summary=summary, beta_status="not_required", beta_reason="IMPACT_PLAN.NO_LIVE_ENVIRONMENT_REQUIRED",
+                plan_path=plan_path, summary=summary, beta_status="not_required", beta_reason=integration_run.BETA_OPTIONAL_BY_POLICY,
                 lane_branch="refs/heads/lane/product-mainline",
                 merged_lanes=[{"branch": "refs/heads/lane/product-mainline", "commit": commit}], args=args,
             )
         return bundle_dir, facts, store
+
+    def _signed_bundle(self):
+        """仅本地合同：临时密钥真实签发，真实验签；不连接环境，不签发运行时资格。"""
+        from quwoquan_ops.tests.support.evidence_signing_test_support import create_temporary_signing
+        from quwoquan_ops.cli.lib.environment_acceptance_fact_contract import _EVIDENCE_ROLE_CONTRACT
+
+        commit, tree, parent = "1" * 40, "2" * 40, "0" * 40
+        bundle, refs, store = self._bundle_from_fake_store(commit=commit, tree=tree, parent=parent)
+        signing = create_temporary_signing(self.root / "test-signing")
+        now = datetime.now(timezone.utc)
+        issued = (now - timedelta(minutes=1)).isoformat()
+        expires = (now + timedelta(hours=1)).isoformat()
+        impact = "sha256:" + "9" * 64
+        predecessor = None
+        args = SimpleNamespace(signer_identity=integration_run.DEFAULT_SIGNER, profile="integration", fact_ttl_hours=1)
+        for environment in ("alpha", "beta"):
+            fact = json.loads((store / refs[f"{environment}Fact"]["ref"]).read_bytes())
+            identity = fact["candidate"]
+            for field, (role, statuses) in _EVIDENCE_ROLE_CONTRACT.items():
+                path = store / fact[field]["ref"]
+                path.write_bytes(integration_run._canonical_bytes({
+                    "role": role, "status": sorted(statuses)[0], "environment": environment,
+                    "profile": "integration", "impactPlanDigest": impact, **identity,
+                }) + b"\n")
+                fact[field]["digest"] = integration_run.exact_file_digest(path)
+            case_path = store / fact["caseResultRefs"][0]["ref"]
+            from quwoquan_ops.cli.lib.readiness_case_result import write_readiness_case_result
+            write_readiness_case_result(case_path.with_name("signed.json"), {
+                "objectId": environment, "caseId": environment,
+                "specRef": "specs/feature-tree/runtime/deliver-deploy-prod-pipeline/daily-merge-release-strategy/spec.md#gwt-001",
+                "producer": "ops", "layer": "environment_acceptance", "status": "passed",
+                "target": {"kind": "operation", "id": environment}, "commitSha": commit,
+                "contractGraphSourceHash": "4" * 64, "deploymentTarget": f"{environment}-local",
+                "baselineId": "contract", "packageDigest": "sha256:" + "5" * 64,
+                "configurationDigest": "sha256:" + "6" * 64, "candidateManifestSha256": "7" * 64,
+                "candidateDigest": identity["candidateId"], "environment": environment,
+                "provider": "local-contract", "startedAt": issued, "completedAt": issued,
+                "runnerIdentity": "local-contract", "artifactSha256": "8" * 64, "receiptRef": "contract/test",
+            }, generated_at=issued)
+            case_path = case_path.with_name("signed.json")
+            case_path.write_bytes(case_path.read_bytes() + b"\n")
+            case = {"ref": case_path.relative_to(store).as_posix(), "digest": integration_run.exact_file_digest(case_path)}
+            request = integration_run.create_execution_request(store_root=store, candidate_ref=refs["candidate"],
+                environment=environment, impact_plan_digest=impact, priority=1)
+            request_ref = integration_run.request_exact_ref(store, request)
+            integration_run.append_task_state(store_root=store, request_ref=request_ref, state="queued")
+            if environment == "alpha":
+                integration_run.append_task_state(store_root=store, request_ref=request_ref, state="mutation_started")
+            named_args = dict(zip(("runtime_identity", "data_lifecycle", "provider_readiness", "observability_readiness",
+                                  "inspect_evidence", "doctor_evidence", "cleanup_evidence", "lease_closure_evidence"),
+                                 (fact[field] for field in integration_run._EAF_NAMED_FIELDS)))
+            path = integration_run.issue_environment_acceptance_fact(store_root=store, request_ref=request_ref,
+                profile="integration", status="passed" if environment == "alpha" else "not_required",
+                case_result_refs=[case], predecessor=predecessor, signer_identity=args.signer_identity,
+                signer=signing.signer(args.signer_identity), expires_at=expires, issued_at=issued, non_promotable=False,
+                reason_code=None if environment == "alpha" else integration_run.BETA_OPTIONAL_BY_POLICY, **named_args)
+            predecessor = refs[f"{environment}Fact"] = {
+                "ref": path.relative_to(store).as_posix(), "digest": integration_run.exact_file_digest(path)}
+        run = self.root / "runs/signed"
+        with mock.patch.object(integration_run, "_store", return_value=store):
+            bundle = integration_run._write_acceptance_bundle(run_dir=run, candidate_ref=refs["candidate"],
+                source_ref=refs["sourceFact"], alpha_ref=refs["alphaFact"], beta_ref=refs["betaFact"],
+                identity={"parent": parent, "remoteHead": parent}, plan_path=bundle.parent / "impact-plan.json",
+                summary={"runId": "signed", "impactPlan": {"digest": impact}}, beta_status="not_required",
+                beta_reason=integration_run.BETA_OPTIONAL_BY_POLICY, lane_branch="refs/heads/lane/product-mainline",
+                merged_lanes=[{"branch": "refs/heads/lane/product-mainline", "commit": commit}], args=args)
+        return bundle, refs, store, signing, args
+
+    def test_signed_bundle_portability_and_manifest_bindings(self) -> None:
+        bundle, refs, lane, signing, args = self._signed_bundle()
+        commit, tree, parent = "1" * 40, "2" * 40, "0" * 40
+        manifest = json.loads((bundle / "bundle.json").read_bytes())
+        for attack in ("plan", "beta", "missing-member", "source-symlink", "target-symlink", "wrong-key"):
+            with self.subTest(attack=attack):
+                copied = self.root / attack
+                shutil.copytree(bundle, copied)
+                changed = json.loads((copied / "bundle.json").read_bytes())
+                target = self.root / f"target-{attack}"
+                keyring = signing.keyring()
+                if attack == "plan":
+                    (copied / "impact-plan.json").write_bytes(b"{}")
+                elif attack == "beta":
+                    changed["beta"] = {"status": "passed", "executed": True, "reasonCode": None}
+                elif attack == "missing-member":
+                    changed["storeFiles"] = [r for r in changed["storeFiles"] if r != refs["sourceFact"]]
+                elif attack in ("source-symlink", "target-symlink"):
+                    root = copied / "store" if attack == "source-symlink" else target
+                    link = root / refs["sourceFact"]["ref"]
+                    link.parent.mkdir(parents=True, exist_ok=True)
+                    if link.exists():
+                        link.unlink()
+                    link.symlink_to(lane / refs["sourceFact"]["ref"])
+                elif attack == "wrong-key":
+                    from quwoquan_ops.tests.support.evidence_signing_test_support import create_temporary_signing
+                    keyring = create_temporary_signing(self.root / "other-key").keyring()
+                changed["bundleId"] = integration_run._sha256_hex(integration_run._canonical_bytes({k: v for k, v in changed.items() if k != "bundleId"}))
+                (copied / "bundle.json").write_bytes(integration_run._canonical_bytes(changed))
+                with mock.patch.object(integration_run, "_store", return_value=target), self.assertRaises(
+                    (integration_run.IntegrationRunError, integration_run.EnvironmentSchedulerError)):
+                    integration_run._import_acceptance_bundle(bundle_dir=copied, commit=commit, tree=tree, parent=parent, args=args, keyring=keyring)
+        # lane 原始输出不存在时，bundle 仍必须包含 source receipt 的 exact bytes。
+        receipt = json.loads((lane / refs["sourceFact"]["ref"]).read_bytes())["receipt"]
+        self.assertIn("sourceReceipt", manifest)
+        self.assertEqual(manifest["sourceReceipt"], receipt)
+        receipt_bytes = (self.root / receipt["ref"].removeprefix(".qwq_output/")).read_bytes()
+        self.assertEqual((bundle / "repository" / receipt["ref"]).read_bytes(), receipt_bytes)
+        target = self.root / "signed-import"
+        output = self.root / "integration-output"
+        shutil.rmtree(lane)
+        (self.root / receipt["ref"].removeprefix(".qwq_output/")).unlink()
+        with mock.patch.object(integration_run, "_store", return_value=target), mock.patch.object(integration_run, "OUTPUT_ROOT", output):
+            result = integration_run._import_acceptance_bundle(bundle_dir=bundle, commit=commit, tree=tree, parent=parent, args=args, keyring=signing.keyring())
+            again = integration_run._import_acceptance_bundle(bundle_dir=bundle, commit=commit, tree=tree, parent=parent, args=args, keyring=signing.keyring())
+        self.assertEqual(result["candidate"]["commit"], commit)
+        self.assertEqual(again["importedFiles"], 0)
+        self.assertEqual((output / receipt["ref"].removeprefix(".qwq_output/")).read_bytes(), receipt_bytes)
+        # 只替换本地 store 定位；执行真正 admission，不调用 publish、不触碰任何 ref。
+        from quwoquan_ops.ci.scoped_candidate import core
+        with mock.patch.object(core, "_claim_root", return_value=target):
+            admission = integration_run.create_publish_admission(repository=ROOT, policy_path=integration_run.POLICY,
+                candidate_ref=refs["candidate"], source_fact_refs=[refs["sourceFact"]],
+                alpha_fact_ref=refs["alphaFact"], beta_fact_ref=refs["betaFact"], expected_remote_oid=parent)
+        self.assertEqual(json.loads(admission.read_bytes())["decision"], "admitted")
+
+    def test_real_policy_beta_issuance_and_expiry(self) -> None:
+        bundle, refs, store, signing, args = self._signed_bundle()
+        candidate = json.loads((store / refs["candidate"]["ref"]).read_bytes())
+        identity = {key: candidate[key] for key in ("candidateId", "commit", "tree")}
+        store = self.root / "policy-signing-store"
+        shutil.copytree(bundle / "store", store)
+        (store / refs["betaFact"]["ref"]).unlink()
+        with mock.patch.object(integration_run, "_store", return_value=store):
+            evidence = integration_run._not_required_beta(candidate=identity, impact_plan_digest=candidate["impactPlanDigest"],
+                impact_plan_path=bundle / "impact-plan.json", profile="integration", reason_code=integration_run.BETA_OPTIONAL_BY_POLICY)
+            beta = integration_run._issue(environment="beta", candidate_ref=refs["candidate"],
+                impact_plan_digest=candidate["impactPlanDigest"], evidence=evidence, status="not_required",
+                predecessor=refs["alphaFact"], profile="integration", args=args, signer=signing.signer(args.signer_identity))
+        fact = json.loads((store / beta["ref"]).read_bytes())
+        integration_run.validate_environment_acceptance_fact(fact, store_root=store, verify_references=True,
+            signature_verifier=signing.environment_verifier(), expected_signer_identity=args.signer_identity)
+        future = datetime.now(timezone.utc) + timedelta(hours=2)
+        with mock.patch.object(integration_run, "datetime") as clock, self.assertRaises(integration_run.EnvironmentSchedulerError) as blocked:
+            clock.now.return_value = future
+            integration_run._import_acceptance_bundle(bundle_dir=bundle, commit=identity["commit"], tree=identity["tree"],
+                parent=candidate["expectedParent"], args=args, keyring=signing.keyring())
+        self.assertEqual(blocked.exception.code, "ENVIRONMENT_SCHEDULER.ACCEPTANCE_EXPIRED")
+
+    def test_bundle_create_once_loser_does_not_overwrite_winner(self) -> None:
+        import os
+        target = self.root / "race"
+        original = os.link
+
+        def race(source, destination):
+            Path(destination).write_bytes(b"winner")
+            original(source, destination)
+
+        with mock.patch.object(integration_run.os, "link", side_effect=race), self.assertRaises(integration_run.IntegrationRunError) as blocked:
+            integration_run._bundle_put(target, "fact.json", b"loser")
+        self.assertEqual(blocked.exception.code, "INTEGRATION_RUN.BUNDLE_DRIFT")
+        self.assertEqual((target / "fact.json").read_bytes(), b"winner")
+        self.assertEqual(sorted(path.name for path in target.iterdir()), ["fact.json"])
 
     def test_acceptance_bundle_round_trips_exact_bytes_into_integration_store(self) -> None:
         # accepted 终态把 candidate/claim/source fact/两份 EAF 及其全部 case/named 证据按 store 相对路径复制成 bundle；
@@ -422,7 +597,7 @@ class IntegrationRunProductionReleaseContractTest(unittest.TestCase):
         # 3 + 2 × (fact + 8 named + 1 case) = 23 个 exact store 文件
         self.assertEqual(len(manifest["storeFiles"]), 23)
         self.assertEqual(manifest["mergedLanes"][0]["branch"], "refs/heads/lane/product-mainline")
-        self.assertEqual(manifest["beta"], {"status": "not_required", "executed": False, "reasonCode": "IMPACT_PLAN.NO_LIVE_ENVIRONMENT_REQUIRED"})
+        self.assertEqual(manifest["beta"], {"status": "not_required", "executed": False, "reasonCode": integration_run.BETA_OPTIONAL_BY_POLICY})
         self.assertEqual(manifest["dataReleaseHandoffRef"], VALID_REF)
         for exact in manifest["storeFiles"]:
             self.assertEqual((bundle_dir / "store" / exact["ref"]).read_bytes(), (lane_store / exact["ref"]).read_bytes())
@@ -446,10 +621,10 @@ class IntegrationRunProductionReleaseContractTest(unittest.TestCase):
             self.assertEqual(again["importedFiles"], 0)
         for exact in manifest["storeFiles"]:
             self.assertEqual((integration_store / exact["ref"]).read_bytes(), (lane_store / exact["ref"]).read_bytes())
-        # 两份 EAF 都以 integration 自己的 store 为根验签并复核全部引用
+        # 先以 portable bundle 为根复核闭包，验证通过才原子写入 integration store。
         self.assertEqual([item["fact"]["environment"] for item in seen], ["alpha", "beta", "alpha", "beta"])
         for item in seen:
-            self.assertEqual(item["store_root"], integration_store)
+            self.assertEqual(item["store_root"], bundle_dir / "store")
             self.assertTrue(item["verify_references"])
             self.assertEqual(item["expected_signer_identity"], "quwoquan-environment-ops-local")
 
@@ -547,7 +722,7 @@ class IntegrationRunProductionReleaseContractTest(unittest.TestCase):
         self.assertEqual([phase["name"] for phase in summary["phases"]], ["preflight", "import-bundle", "admit"])
         self.assertEqual(summary["acceptanceBundle"]["bundleId"], manifest["bundleId"])
         self.assertEqual(summary["environments"]["alpha"]["imported"], True)
-        self.assertEqual(summary["environments"]["beta"]["reasonCode"], "IMPACT_PLAN.NO_LIVE_ENVIRONMENT_REQUIRED")
+        self.assertEqual(summary["environments"]["beta"]["reasonCode"], integration_run.BETA_OPTIONAL_BY_POLICY)
         self.assertEqual(admitted["candidate_ref"], facts["candidate"])
         self.assertEqual(admitted["source_fact_refs"], [facts["sourceFact"]])
         self.assertEqual((admitted["alpha_fact_ref"], admitted["beta_fact_ref"]), (facts["alphaFact"], facts["betaFact"]))

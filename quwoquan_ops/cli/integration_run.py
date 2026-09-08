@@ -25,9 +25,9 @@ import hashlib
 import json
 import os
 import re
-import shutil
 import subprocess
 import sys
+import tempfile
 import time
 from collections.abc import Mapping, Sequence
 from datetime import datetime, timedelta, timezone
@@ -80,7 +80,7 @@ from quwoquan_ops.cli.lib.evidence_signing import (
     load_keyring,
 )
 from quwoquan_ops.cli.lib.readiness_case_result import (
-    write_readiness_case_result,
+    validate_readiness_case_result,
 )
 
 POLICY = ROOT / "quwoquan_ops/policies/scoped_candidate_policy.yaml"
@@ -486,7 +486,7 @@ def _case_results_from_verify(*, verify: StackctlResult, environment: str, profi
         }
         case_path = evidence_dir / "cases" / f"{index:03d}.json"
         case_path.parent.mkdir(parents=True, exist_ok=True)
-        write_readiness_case_result(case_path, result, generated_at=completed)
+        _write_canonical(case_path, validate_readiness_case_result(result, generated_at=completed))
         refs.append({"ref": case_path.relative_to(_store()).as_posix(), "digest": exact_file_digest(case_path)})
     if not refs:
         raise IntegrationRunError("INTEGRATION_RUN.VERIFY_REPORT_INVALID", "verify report contains only skipped checks")
@@ -615,7 +615,7 @@ def _alpha_app_launch_cases(*, candidate: Mapping[str, str], runtime: Mapping[st
         )
         case_path = evidence_dir / "cases" / f"app-{index:03d}.json"
         case_path.parent.mkdir(parents=True, exist_ok=True)
-        write_readiness_case_result(case_path, result, generated_at=completed)
+        _write_canonical(case_path, validate_readiness_case_result(result, generated_at=completed))
         refs.append({"ref": case_path.relative_to(_store()).as_posix(), "digest": exact_file_digest(case_path)})
     return refs
 
@@ -775,7 +775,7 @@ def _not_required_beta(*, candidate: Mapping[str, str], impact_plan_digest: str,
     }
     case_path = evidence_dir / "cases" / "000.json"
     case_path.parent.mkdir(parents=True, exist_ok=True)
-    write_readiness_case_result(case_path, case, generated_at=now)
+    _write_canonical(case_path, validate_readiness_case_result(case, generated_at=now))
     return {"named": named, "cases": [{"ref": case_path.relative_to(store).as_posix(), "digest": exact_file_digest(case_path)}],
             "reasonCode": reason_code}
 
@@ -800,7 +800,7 @@ def _issue(*, environment: str, candidate_ref: Mapping[str, str], impact_plan_di
         **evidence["named"],
     )
     acceptance = {"ref": path.relative_to(store).as_posix(), "digest": exact_file_digest(path)}
-    append_task_state(store_root=store, request_ref=request_ref, state="acceptance_issued", acceptance_ref=acceptance)
+    # scheduler 签发入口已追加 acceptance_issued；编排不得重复追加终态。
     return acceptance
 
 
@@ -808,16 +808,69 @@ def _sha256_hex(data: bytes) -> str:
     return "sha256:" + hashlib.sha256(data).hexdigest()
 
 
-def _read_store_object(store: Path, exact: Mapping[str, str], label: str) -> dict[str, Any]:
-    path = store / str(exact.get("ref") or "")
+def _bundle_path(root: Path, ref: str) -> Path:
+    """exact ref 只允许物理根内 canonical POSIX 整文件，任何 symlink 分量拒绝。"""
+    if not ref or ref == "." or any(char in ref for char in "\x00\n\r\\") or Path(ref).is_absolute() or Path(ref).as_posix() != ref or ".." in Path(ref).parts:
+        raise IntegrationRunError("INTEGRATION_RUN.BUNDLE_INVALID", f"unsafe bundle ref: {ref!r}")
+    path = root / ref
+    if any(part.is_symlink() for part in (path, *path.parents)):
+        raise IntegrationRunError("INTEGRATION_RUN.BUNDLE_INVALID", f"linked bundle ref: {ref}")
+    return path
+
+
+def _bundle_bytes(root: Path, exact: Mapping[str, str]) -> bytes:
+    if not isinstance(exact, Mapping) or set(exact) != {"ref", "digest"}:
+        raise IntegrationRunError("INTEGRATION_RUN.BUNDLE_INVALID", "bundle exact ref must contain ref and digest")
+    if not isinstance(exact["ref"], str) or not re.fullmatch(r"sha256:[0-9a-f]{64}", str(exact["digest"])):
+        raise IntegrationRunError("INTEGRATION_RUN.BUNDLE_INVALID", "bundle exact ref has invalid types or digest")
+    path = _bundle_path(root, exact["ref"])
     if not path.is_file():
-        raise IntegrationRunError("INTEGRATION_RUN.BUNDLE_INCOMPLETE", f"{label} {exact.get('ref')} is absent from the candidate store")
-    if exact_file_digest(path) != exact.get("digest"):
-        raise IntegrationRunError("INTEGRATION_RUN.BUNDLE_DRIFT", f"{label} {exact.get('ref')} exact bytes drifted")
-    payload = json.loads(path.read_bytes())
+        raise IntegrationRunError("INTEGRATION_RUN.BUNDLE_INCOMPLETE", f"bundle file is absent: {exact['ref']}")
+    raw = path.read_bytes()
+    if _sha256_hex(raw) != exact["digest"]:
+        raise IntegrationRunError("INTEGRATION_RUN.BUNDLE_DRIFT", f"bundle exact bytes drifted: {exact['ref']}")
+    return raw
+
+
+def _bundle_put(root: Path, ref: str, raw: bytes) -> bool:
+    """先 fsync 私有临时文件，再 link 原子 create-once；竞争失败只接受 exact-byte replay。"""
+    path = _bundle_path(root, ref)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    descriptor, name = tempfile.mkstemp(prefix=".bundle-", dir=path.parent)
+    temporary = Path(name)
+    try:
+        with os.fdopen(descriptor, "wb") as handle:
+            handle.write(raw)
+            handle.flush()
+            os.fsync(handle.fileno())
+        _bundle_path(root, ref)
+        try:
+            os.link(temporary, path)
+            return True
+        except FileExistsError:
+            _bundle_path(root, ref)
+            if not path.is_file() or path.read_bytes() != raw:
+                raise IntegrationRunError("INTEGRATION_RUN.BUNDLE_DRIFT", f"create-once slot differs: {ref}")
+            return False
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
+def _read_store_object(store: Path, exact: Mapping[str, str], label: str) -> dict[str, Any]:
+    try:
+        payload = json.loads(_bundle_bytes(store, exact))
+    except (UnicodeError, json.JSONDecodeError) as exc:
+        raise IntegrationRunError("INTEGRATION_RUN.BUNDLE_INVALID", f"{label} is not JSON") from exc
     if not isinstance(payload, dict):
-        raise IntegrationRunError("INTEGRATION_RUN.BUNDLE_INVALID", f"{label} {exact.get('ref')} is not an object")
+        raise IntegrationRunError("INTEGRATION_RUN.BUNDLE_INVALID", f"{label} is not an object")
     return payload
+
+
+def _source_receipt(source: Mapping[str, Any]) -> tuple[dict[str, str], str]:
+    exact = source.get("receipt")
+    if not isinstance(exact, Mapping) or not str(exact.get("ref", "")).startswith(".qwq_output/env/repo/"):
+        raise IntegrationRunError("INTEGRATION_RUN.BUNDLE_INVALID", "source receipt must be an exact repo output ref")
+    return dict(exact), str(exact["ref"]).removeprefix(".qwq_output/")
 
 
 def _fact_evidence_refs(fact: Mapping[str, Any]) -> list[dict[str, str]]:
@@ -879,30 +932,27 @@ def _write_acceptance_bundle(*, run_dir: Path, candidate_ref: Mapping[str, str],
 
     def add(exact: Mapping[str, str], label: str) -> None:
         ref, digest = str(exact["ref"]), str(exact["digest"])
-        source = store / ref
-        if not source.is_file():
-            raise IntegrationRunError("INTEGRATION_RUN.BUNDLE_INCOMPLETE", f"{label} {ref} is absent from the candidate store")
-        if exact_file_digest(source) != digest:
-            raise IntegrationRunError("INTEGRATION_RUN.BUNDLE_DRIFT", f"{label} {ref} exact bytes drifted before packaging")
+        raw = _bundle_bytes(store, exact)
         if files.get(ref, digest) != digest:
             raise IntegrationRunError("INTEGRATION_RUN.BUNDLE_DRIFT", f"{label} {ref} is referenced with two digests")
         if ref in files:
             return
         files[ref] = digest
-        target = store_dir / ref
-        target.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(source, target)
+        _bundle_put(store_dir, ref, raw)
 
     add(candidate_ref, "candidate")
     add(claim_ref, "claim")
     add(source_ref, "sourceFact")
+    receipt, output_ref = _source_receipt(_read_store_object(store, source_ref, "sourceFact"))
+    receipt_raw = _bundle_bytes(OUTPUT_ROOT, {"ref": output_ref, "digest": receipt["digest"]})
+    _bundle_put(bundle_dir / "repository", receipt["ref"], receipt_raw)
     for environment, fact_ref in (("alpha", alpha_ref), ("beta", beta_ref)):
         add(fact_ref, f"{environment}Fact")
         fact = _read_store_object(store, fact_ref, f"{environment}Fact")
         for exact in _fact_evidence_refs(fact):
             add(exact, f"{environment} evidence")
     plan_bytes = plan_path.read_bytes()
-    (bundle_dir / "impact-plan.json").write_bytes(plan_bytes)
+    _bundle_put(bundle_dir, "impact-plan.json", plan_bytes)
     manifest: dict[str, Any] = {
         "schema": ACCEPTANCE_BUNDLE_SCHEMA, "runId": summary["runId"], "createdAt": _now(),
         "candidateId": candidate["candidateId"], "commit": candidate["commit"], "tree": candidate["tree"],
@@ -914,17 +964,17 @@ def _write_acceptance_bundle(*, run_dir: Path, candidate_ref: Mapping[str, str],
         "dataReleaseHandoffRef": str(summary.get("dataReleaseHandoffRef") or ""),
         "signerIdentity": args.signer_identity, "profile": args.profile,
         "beta": {"status": beta_status, "executed": beta_status == "passed", "reasonCode": beta_reason},
-        "candidate": dict(candidate_ref), "claim": claim_ref, "sourceFact": dict(source_ref),
+        "candidate": dict(candidate_ref), "claim": claim_ref, "sourceFact": dict(source_ref), "sourceReceipt": receipt,
         "alphaFact": dict(alpha_ref), "betaFact": dict(beta_ref),
         "storeFiles": [{"ref": ref, "digest": digest} for ref, digest in sorted(files.items())],
     }
     manifest["bundleId"] = _sha256_hex(_canonical_bytes(manifest))
-    (bundle_dir / BUNDLE_MANIFEST).write_bytes(_canonical_bytes(manifest) + b"\n")
+    _bundle_put(bundle_dir, BUNDLE_MANIFEST, _canonical_bytes(manifest) + b"\n")
     return bundle_dir
 
 
 def _load_bundle_manifest(bundle_dir: Path) -> dict[str, Any]:
-    manifest_path = bundle_dir / BUNDLE_MANIFEST
+    manifest_path = _bundle_path(bundle_dir, BUNDLE_MANIFEST)
     if not bundle_dir.is_dir() or not manifest_path.is_file():
         raise IntegrationRunError(
             "INTEGRATION_RUN.ACCEPTANCE_REQUIRED",
@@ -939,7 +989,7 @@ def _load_bundle_manifest(bundle_dir: Path) -> dict[str, Any]:
     material = {key: value for key, value in manifest.items() if key != "bundleId"}
     if manifest.get("bundleId") != _sha256_hex(_canonical_bytes(material)):
         raise IntegrationRunError("INTEGRATION_RUN.BUNDLE_DRIFT", "bundle manifest bytes do not match bundleId")
-    for key in ("candidateId", "commit", "tree", "expectedParent", "candidate", "claim", "sourceFact", "alphaFact", "betaFact", "storeFiles", "signerIdentity"):
+    for key in ("candidateId", "commit", "tree", "expectedParent", "candidate", "claim", "sourceFact", "alphaFact", "betaFact", "storeFiles", "signerIdentity", "sourceReceipt", "impactPlan", "beta", "profile"):
         if key not in manifest:
             raise IntegrationRunError("INTEGRATION_RUN.BUNDLE_INVALID", f"bundle manifest lacks {key}")
     return manifest
@@ -966,25 +1016,17 @@ def _import_acceptance_bundle(*, bundle_dir: Path, commit: str, tree: str, paren
             f"bundle expectedParent {str(manifest['expectedParent'])[:12]} != remote dev1.0 {parent[:12]}; "
             "dev1.0 moved since acceptance, re-run make accept on a head that includes the current dev1.0",
         )
-    store = _store()
-    imported = 0
-    for index, exact in enumerate(manifest["storeFiles"]):
-        if not isinstance(exact, Mapping) or set(exact) != {"ref", "digest"}:
-            raise IntegrationRunError("INTEGRATION_RUN.BUNDLE_INVALID", f"storeFiles[{index}] must be an exact ref")
-        ref, digest = str(exact["ref"]), str(exact["digest"])
-        if ref.startswith("/") or ".." in Path(ref).parts:
-            raise IntegrationRunError("INTEGRATION_RUN.BUNDLE_INVALID", f"storeFiles[{index}] ref escapes the store: {ref}")
-        source = bundle_dir / BUNDLE_STORE_DIR / ref
-        if not source.is_file() or exact_file_digest(source) != digest:
-            raise IntegrationRunError("INTEGRATION_RUN.BUNDLE_DRIFT", f"{ref} bytes differ from the bundle manifest")
-        target = store / ref
-        if target.exists():
-            if exact_file_digest(target) != digest:
-                raise IntegrationRunError("INTEGRATION_RUN.BUNDLE_DRIFT", f"{ref} already exists in the integration store with different bytes")
-            continue
-        target.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(source, target)
-        imported += 1
+    # 先在 bundle 内验证完整闭包，不让目标 store 的残留文件补齐不完整输入。
+    store = bundle_dir / BUNDLE_STORE_DIR
+    if not isinstance(manifest["storeFiles"], list) or not isinstance(manifest["impactPlan"], dict):
+        raise IntegrationRunError("INTEGRATION_RUN.BUNDLE_INVALID", "invalid storeFiles or impactPlan")
+    files: dict[str, bytes] = {}
+    for exact in manifest["storeFiles"]:
+        raw = _bundle_bytes(store, exact)
+        if exact["ref"] in files:
+            raise IntegrationRunError("INTEGRATION_RUN.BUNDLE_INVALID", "duplicate storeFiles ref")
+        files[exact["ref"]] = raw
+    _bundle_bytes(bundle_dir, {"ref": "impact-plan.json", "digest": manifest["impactPlan"].get("fileSha256")})
     candidate = _read_store_object(store, manifest["candidate"], "candidate")
     if (
         candidate.get("candidateId") != manifest["candidateId"] or candidate.get("commit") != commit
@@ -994,8 +1036,15 @@ def _import_acceptance_bundle(*, bundle_dir: Path, commit: str, tree: str, paren
         raise IntegrationRunError("INTEGRATION_RUN.BUNDLE_CANDIDATE_MISMATCH", "imported candidate does not bind the bundle identity")
     _read_store_object(store, manifest["claim"], "claim")
     source_fact = _read_store_object(store, manifest["sourceFact"], "sourceFact")
-    if source_fact.get("status") != "passed" or source_fact.get("candidateId") != candidate["candidateId"]:
+    if (source_fact.get("status") != "passed" or source_fact.get("candidateId") != candidate["candidateId"]
+            or source_fact.get("commit") != commit or source_fact.get("tree") != tree
+            or source_fact.get("candidate") != manifest["candidate"]):
         raise IntegrationRunError("INTEGRATION_RUN.BUNDLE_CANDIDATE_MISMATCH", "imported source fact is not passed for this candidate")
+    receipt, output_ref = _source_receipt(source_fact)
+    if receipt != manifest["sourceReceipt"]:
+        raise IntegrationRunError("INTEGRATION_RUN.BUNDLE_DRIFT", "source receipt differs from manifest")
+    receipt_raw = _bundle_bytes(bundle_dir / "repository", receipt)
+    required = [manifest[key] for key in ("candidate", "claim", "sourceFact", "alphaFact", "betaFact")]
     signer_identity = str(manifest["signerIdentity"])
     if signer_identity != args.signer_identity:
         raise IntegrationRunError("INTEGRATION_RUN.BUNDLE_INVALID", f"bundle signer {signer_identity} != expected {args.signer_identity}")
@@ -1006,13 +1055,28 @@ def _import_acceptance_bundle(*, bundle_dir: Path, commit: str, tree: str, paren
     for environment, fact_ref in (("alpha", manifest["alphaFact"]), ("beta", manifest["betaFact"])):
         fact = _read_store_object(store, fact_ref, f"{environment}Fact")
         validated = validate_environment_acceptance_fact(
-            fact, store_root=store, verify_references=True, signature_verifier=verifier, expected_signer_identity=signer_identity,
+            fact, store_root=store, verify_references=True, accepted_at=datetime.now(timezone.utc),
+            signature_verifier=verifier, expected_signer_identity=signer_identity,
         )
+        required.extend(_fact_evidence_refs(validated))
+        if (validated.get("profile") != manifest["profile"] or validated.get("nonPromotable") is not False
+                or validated.get("impactPlanDigest") != manifest["impactPlan"].get("digest")
+                or candidate.get("impactPlanDigest") != manifest["impactPlan"].get("digest")
+                or (environment == "alpha" and validated.get("status") != "passed")
+                or (environment == "beta" and (validated.get("predecessor") != manifest["alphaFact"] or manifest["beta"] != {
+                    "status": validated.get("status"), "executed": validated.get("status") == "passed",
+                    "reasonCode": validated.get("reasonCode")}))):
+            raise IntegrationRunError("INTEGRATION_RUN.BUNDLE_CANDIDATE_MISMATCH", f"{environment} signed fact differs from manifest")
         binding = validated.get("candidate") or {}
         if validated.get("environment") != environment or binding.get("candidateId") != candidate["candidateId"] \
                 or binding.get("commit") != commit or binding.get("tree") != tree:
             raise IntegrationRunError("INTEGRATION_RUN.BUNDLE_CANDIDATE_MISMATCH", f"{environment} fact does not bind the imported candidate")
-    return {"manifest": manifest, "candidate": candidate, "importedFiles": imported, "storeFiles": len(manifest["storeFiles"])}
+    if {item["ref"]: item["digest"] for item in required} != {ref: _sha256_hex(raw) for ref, raw in files.items()}:
+        raise IntegrationRunError("INTEGRATION_RUN.BUNDLE_INCOMPLETE", "storeFiles is not the exact evidence closure")
+    destination = _store()
+    imported = sum(_bundle_put(destination, ref, raw) for ref, raw in files.items())
+    _bundle_put(OUTPUT_ROOT, output_ref, receipt_raw)
+    return {"manifest": manifest, "candidate": candidate, "importedFiles": imported, "storeFiles": len(files)}
 
 
 def _parser() -> argparse.ArgumentParser:
