@@ -51,6 +51,7 @@ def _asset_record_defaults() -> dict[str, str]:
 
 # 单个来源文件的传输上限，不是准入判据：源体允许大于对象预算，降采样/转码要先拿到源体。
 _MAX_SOURCE_BYTES = MEDIA_PROCESSING_POLICY.source_asset_max_bytes
+_MAX_PUBLISHABLE_PIXELS = MEDIA_PROCESSING_POLICY.max_publishable_image_pixels
 # 开放许可白名单：CC0、CC BY、CC BY-SA、公有领域（含 PDM）。命中即 rightsStatus=verified；
 # 其它可读 license 记为 unverified 并把 license 原文写进 rightsIssues；读不到记 unknown。
 _LICENSE_VERIFIED = re.compile(r"^(cc0|cc[ -]by(?:[ -]sa)?(?:[ -][0-9.]+)?(?:[ -][a-z]{2})?|public domain|pd(?:m|-[a-z0-9-]+)?)\b", re.I)
@@ -277,7 +278,9 @@ def _ingest_media(source: dict[str, Any], *, kind: str, carrier: str) -> dict[st
             raise AcquireError(f"DATA.ACQUIRE.MIME_MISMATCH: {file_page} is not a decodable image")
         width, height = dims
         budget = source_unit_asset_budget_bytes(carrier)
-        if len(body) > budget:
+        # 入池存储体必须既装进对象字节预算、又不超过可发布像素上限：全景接片常常字节不大
+        # 但栅格数亿像素，若原样入池会在 publish 截面被判否，所以两条阈值任一超出都降采样。
+        if len(body) > budget or width * height > _MAX_PUBLISHABLE_PIXELS:
             variant = derive_budget_compliant_variant(body, budget_bytes=budget)
             if variant is None or len(variant["bytes"]) > budget:
                 raise AcquireError(f"DATA.ACQUIRE.IMAGE_OVER_BUDGET: {file_page}")
@@ -343,6 +346,8 @@ def _ingest_media(source: dict[str, Any], *, kind: str, carrier: str) -> dict[st
             "watermarkKind": str(source["watermarkKind"]),
             "watermarkNote": str(source.get("watermarkNote") or ""),
             "derivedModifications": sorted(set(derived)),
+            # 访问政策只记录不判否：缺席即缺席，不补 open。
+            **({"accessPolicy": str(source["accessPolicy"])} if source.get("accessPolicy") else {}),
         },
     }
 
@@ -419,6 +424,7 @@ def _asset_row(
         "watermarkKind": media["watermarkKind"],
         "watermarkNote": media["watermarkNote"],
         "derivedModifications": list(media["derivedModifications"]),
+        **({"accessPolicy": media["accessPolicy"]} if media.get("accessPolicy") else {}),
         **(extra or {}),
     }
 
@@ -476,6 +482,9 @@ def _materialize(
     if isinstance(source.get("discoverySignals"), dict) and source["discoverySignals"]:
         # 热度/发现信号只记录不判否：原样转录，不派生任何判据。
         meta["discoverySignals"] = dict(source["discoverySignals"])
+    if source.get("accessPolicy"):
+        # 来源站点 robots/ToS 态度只记录：schema 已把取值限定在闭集，这里不再解释含义。
+        meta["accessPolicy"] = str(source["accessPolicy"])
     assets: list[dict[str, Any]] = []
     receipt_ref = ""
     with _lock(unit.parent / f".{unit_id}.lock"):

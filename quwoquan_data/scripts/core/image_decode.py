@@ -2,10 +2,13 @@
 from __future__ import annotations
 
 import io
+import math
 import warnings
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
+
+from core.media_processing_policy import MEDIA_PROCESSING_POLICY
 
 try:  # pragma: no cover - dependency detection
     from PIL import Image, ImageOps, UnidentifiedImageError  # type: ignore
@@ -16,6 +19,13 @@ except ImportError:  # pragma: no cover
     ImageOps = None  # type: ignore[assignment]
     UnidentifiedImageError = OSError  # type: ignore[assignment,misc]
     _PIL_AVAILABLE = False
+
+# 源栅格像素上限只在 media_processing.policy.yaml 声明一次。PIL 自带的解压炸弹阈值
+# （默认约 1.79 亿）在这里对齐到同一个数，否则全景接片会在策略允许的范围内被 PIL
+# 先行判否，形成一条策略文件里看不见的第二阈值。
+MAX_SOURCE_PIXELS = MEDIA_PROCESSING_POLICY.max_source_pixels
+if _PIL_AVAILABLE:
+    Image.MAX_IMAGE_PIXELS = MAX_SOURCE_PIXELS
 
 
 class ImageDecodeFailure(StrEnum):
@@ -89,6 +99,9 @@ def _probe(stream: io.BytesIO | Path) -> ImageProbe:
         return ImageProbe(failure=ImageDecodeFailure.UNREADABLE)
     if width < 1 or height < 1 or not mime_type.startswith("image/"):
         return ImageProbe(failure=ImageDecodeFailure.UNREADABLE)
+    # PIL 的全局阈值可被进程内其它代码改写；策略值在这里再判一次，结论只依赖策略。
+    if width * height > MAX_SOURCE_PIXELS:
+        return ImageProbe(failure=ImageDecodeFailure.PIXEL_LIMIT_EXCEEDED)
     return ImageProbe(width=int(width), height=int(height), mime_type=mime_type)
 
 
@@ -117,9 +130,35 @@ def oriented_raster(image):
     return ImageOps.exif_transpose(image) or image
 
 
+def draft_to_display_width(image, *, probe: ImageProbe, target_width: int) -> None:
+    """在解码前把 JPEG 请求到「不小于目标交付宽度」的最小 DCT 缩放档。
+
+    全景接片动辄数亿像素，整幅解压再缩放会让派生一张 1920 宽的交付体占用数 GiB
+    内存。libjpeg 能在解码时按 1/2、1/4、1/8 直接出小栅格，``Image.draft`` 保证结果
+    不小于请求尺寸，之后的 LANCZOS 只做最多 2× 的收尾缩放，画质与整幅路径一致。
+    非 JPEG 编码没有这条捷径，``draft`` 是空操作，仍走整幅解码（由
+    ``MAX_SOURCE_PIXELS`` 兜底）。请求尺寸按存储栅格给出：EXIF 旋转让显示几何与存储
+    几何互换，而 ``draft`` 只认存储几何。必须在任何会触发 ``load`` 的调用之前调用。
+    """
+
+    if target_width >= probe.width:
+        return
+    scale = target_width / probe.width
+    stored_width, stored_height = image.size
+    image.draft(
+        image.mode,
+        (
+            max(1, math.ceil(stored_width * scale)),
+            max(1, math.ceil(stored_height * scale)),
+        ),
+    )
+
+
 __all__ = [
+    "MAX_SOURCE_PIXELS",
     "ImageDecodeFailure",
     "ImageProbe",
+    "draft_to_display_width",
     "oriented_raster",
     "pil_available",
     "probe_image_bytes",

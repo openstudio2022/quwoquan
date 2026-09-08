@@ -397,6 +397,12 @@ def project_asset_admission(
         # 只搬运 AI 申报的水印判定，供运营按资产审核；缺席一律 unknown，不得假定 absent。
         "watermarkStatus": str(asset.get("watermarkStatus") or "unknown").strip(),
         "watermarkKind": str(asset.get("watermarkKind") or "unknown").strip(),
+        # 访问政策只搬运；缺席即缺席，不补 open——header 只汇总明确申报为受限的资产。
+        **(
+            {"accessPolicy": str(asset["accessPolicy"]).strip()}
+            if str(asset.get("accessPolicy") or "").strip()
+            else {}
+        ),
     }
 
 

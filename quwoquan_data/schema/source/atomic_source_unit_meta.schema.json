@@ -225,6 +225,14 @@
       "additionalProperties": {
         "type": "number"
       }
+    },
+    "accessPolicy": {
+      "description": "来自 ingest 清单的来源站点访问政策原样转录（robots/ToS 态度），只记录不判否；缺席即缺席。",
+      "enum": [
+        "open",
+        "robots_disallowed",
+        "tos_restricted"
+      ]
     }
   }
 }

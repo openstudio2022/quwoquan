@@ -17,10 +17,16 @@ from __future__ import annotations
 
 import hashlib
 import io
+import math
 import warnings
 from typing import Any
 
-from core.image_decode import ImageProbe, oriented_raster, probe_image_bytes
+from core.image_decode import (
+    ImageProbe,
+    draft_to_display_width,
+    oriented_raster,
+    probe_image_bytes,
+)
 from core.image_decode import pil_available as decode_pil_available
 from core.media_asset_url import (
     IMAGE_VARIANT_POLICY_VERSION,
@@ -62,20 +68,28 @@ def build_local_variants(data: bytes, *, base_name: str) -> list[dict[str, Any]]
     probe: ImageProbe = probe_image_bytes(data)
     if not _PIL_OK or not probe.succeeded:
         return []
+    # 有效交付宽度是「声明宽度与存储体宽度取较小者」这一个投影，
+    # 由 media_asset_url 单点派生；本地变体不得自己再算一遍。按源的显示宽度
+    # 先算齐全部目标，最宽的那个决定解码前 draft 到多小。
+    targets = {
+        profile: effective_delivery_width(profile, stored_width=probe.width)
+        for profile in LOCAL_VARIANT_PROFILES
+        if IMAGE_VARIANT_PROFILES.get(profile)
+    }
+    if not targets:
+        return []
     try:
         with warnings.catch_warnings():
             warnings.simplefilter("error", Image.DecompressionBombWarning)
             with Image.open(io.BytesIO(data)) as im:
+                draft_to_display_width(
+                    im, probe=probe, target_width=max(targets.values())
+                )
                 im = oriented_raster(im).convert("RGB")
                 src_w, src_h = im.width, im.height
                 out: list[dict[str, Any]] = []
-                for profile in LOCAL_VARIANT_PROFILES:
-                    cfg = IMAGE_VARIANT_PROFILES.get(profile)
-                    if not cfg:
-                        continue
-                    # 有效交付宽度是「声明宽度与存储体宽度取较小者」这一个投影，
-                    # 由 media_asset_url 单点派生；本地变体不得自己再算一遍。
-                    target_w = effective_delivery_width(profile, stored_width=src_w)
+                for profile, target_w in targets.items():
+                    cfg = IMAGE_VARIANT_PROFILES[profile]
                     if target_w < src_w:
                         target_h = max(1, round(src_h * target_w / src_w))
                         resized = im.resize((target_w, target_h), Image.LANCZOS)
@@ -148,26 +162,35 @@ def derive_budget_compliant_variant(
     probe: ImageProbe = probe_image_bytes(data)
     if not _PIL_OK or not probe.succeeded:
         return None
+    source_width, source_height = probe.width, probe.height
+    profiles = budget_compliant_profiles()
     try:
         with warnings.catch_warnings():
             warnings.simplefilter("error", Image.DecompressionBombWarning)
             with Image.open(io.BytesIO(data)) as source:
+                draft_to_display_width(
+                    source,
+                    probe=probe,
+                    target_width=effective_delivery_width(
+                        profiles[0], stored_width=source_width
+                    ),
+                )
                 oriented = oriented_raster(source).convert("RGB")
-                source_width, source_height = oriented.width, oriented.height
-                for profile in budget_compliant_profiles():
+                decoded_width, decoded_height = oriented.width, oriented.height
+                for profile in profiles:
                     cfg = IMAGE_VARIANT_PROFILES[profile]
                     target_w = effective_delivery_width(
                         profile, stored_width=source_width
                     )
-                    if target_w < source_width:
+                    if target_w < decoded_width:
                         target_h = max(
-                            1, round(source_height * target_w / source_width)
+                            1, round(decoded_height * target_w / decoded_width)
                         )
                         candidate = oriented.resize(
                             (target_w, target_h), Image.Resampling.LANCZOS
                         )
                     else:
-                        target_h = source_height
+                        target_h = decoded_height
                         candidate = oriented
                     buffer = io.BytesIO()
                     candidate.save(
@@ -219,20 +242,40 @@ def build_center_square_cover_derivative(data: bytes) -> dict[str, Any] | None:
     if not _PIL_OK or not probe.succeeded or not profile:
         return None
     target_size = int(profile["width"])
-    if min(probe.width, probe.height) < target_size:
+    source_width, source_height = probe.width, probe.height
+    if min(source_width, source_height) < target_size:
         return None
+    # 裁切框按源几何计算并原样记录；draft 后的栅格只是同一框的等比投影。
+    square_size = min(source_width, source_height)
+    left = (source_width - square_size) // 2
+    top = (source_height - square_size) // 2
+    crop_box = (left, top, left + square_size, top + square_size)
     try:
         with warnings.catch_warnings():
             warnings.simplefilter("error", Image.DecompressionBombWarning)
             with Image.open(io.BytesIO(data)) as source:
+                # 短边只需不小于目标方边；换算成「显示宽度」的目标交给同一个 draft 入口。
+                draft_to_display_width(
+                    source,
+                    probe=probe,
+                    target_width=max(
+                        1, math.ceil(source_width * target_size / square_size)
+                    ),
+                )
                 source = oriented_raster(source).convert("RGB")
-                source_width, source_height = source.size
-                square_size = min(source_width, source_height)
-                left = (source_width - square_size) // 2
-                top = (source_height - square_size) // 2
-                crop_box = (left, top, left + square_size, top + square_size)
-                square = source.crop(crop_box)
-                if square_size != target_size:
+                decoded_width, decoded_height = source.size
+                decoded_square = min(decoded_width, decoded_height)
+                decoded_left = (decoded_width - decoded_square) // 2
+                decoded_top = (decoded_height - decoded_square) // 2
+                square = source.crop(
+                    (
+                        decoded_left,
+                        decoded_top,
+                        decoded_left + decoded_square,
+                        decoded_top + decoded_square,
+                    )
+                )
+                if square.size != (target_size, target_size):
                     square = square.resize(
                         (target_size, target_size),
                         Image.Resampling.LANCZOS,

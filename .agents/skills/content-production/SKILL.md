@@ -13,7 +13,7 @@ metadata:
 init -> acquire -> author -> review -> publish -> release
 ```
 
-每步的 AI 产出、脚本动作与唯一硬门见 [references/steps.md](references/steps.md)；四载体的来源、发现、筛选、采集与处理差异见 [references/carriers.md](references/carriers.md)；来源矩阵、合规闭集、热点信号与 exact 取证模板见 [references/sourcing.md](references/sourcing.md)；四套只记录不门禁的质量评分见 [references/quality.md](references/quality.md)；轮次、失败处置与收官见 [references/rounds.md](references/rounds.md)；里程碑 handoff 见 [references/handoff.md](references/handoff.md)。
+每步的 AI 产出、脚本动作与唯一硬门见 [references/steps.md](references/steps.md)；四载体的来源、发现、筛选、采集与处理差异见 [references/carriers.md](references/carriers.md)；来源矩阵 v2、accessPolicy 闭集、创作者批量路径、来源/创作者分层与 exact 取证模板见 [references/sourcing.md](references/sourcing.md)；轮次一次性脚本的可重建模板见 [references/recipes.md](references/recipes.md)（复制到 `/tmp/qwq_rNN/` 运行，不进仓、不进 `.qwq_output`）；四套只记录不门禁的质量评分见 [references/quality.md](references/quality.md)；轮次、失败处置与收官见 [references/rounds.md](references/rounds.md)；里程碑 handoff 见 [references/handoff.md](references/handoff.md)。
 
 ## 触发与输入
 
@@ -33,7 +33,7 @@ actor 契约：
 - **author**：一个 execution 恰有一个 author actor，可以是主会话，也可以是宿主派发的独立子 Agent 会话；它拥有该 execution 全部对象的 `4.draft` 产物。不同 execution 的 author 可并行。
 - **reviewer**：每个 execution 由另一个真实会话评审，与本 execution author 的 `host/sessionId` 与 `invocation.runId` 必须不同，可为同一 model family；同一 execution 同时至多一个 reviewer 调用，不同 execution 的 reviewer 可并行。reviewer 只写 execution 级 `reviews` 判断字段（含只记录的 `qualityScores`），不改产物、不 seal、不 publish。`starting up` 不是进度也不是失败，不得据此补发相同或替代调用。
 
-出网只在 acquire 且只由 AI 做：按 [sourcing.md](references/sourcing.md) 的来源矩阵与合规闭集检索候选、逐字抄下 license/作者/`sha1`/说明、用合规 UA 的 `curl`/`yt-dlp` 下载、以通用工具把来源正文落盘为 `source.md` 并亲笔附「信息区取证」段、看图申报水印三字段、申报可选的热度信号；同一来源站点串行、遵守其 Crawl-delay、遇 429/503 退避并放弃同一轮次剩余候选，并行子 Agent 不得同时打同一站点。正文、caption、video script、评审、评分、typed issue、verdict、cohort、milestone、来源是否切题、素材是否值得用、文章角度与作者人设一律由 AI 决定。
+出网只在 acquire 且只由 AI 做：按 [sourcing.md](references/sourcing.md) 的来源矩阵与 accessPolicy 闭集检索候选（robots/ToS 限制只记录为 `accessPolicy`，不阻断入池；登录墙/付费墙/验证码/DRM/反爬挑战等技术性规避仍禁止）、逐字抄下 license/作者/`sha1`/说明、申报 `accessPolicy`、用合规 UA 的 `curl`/`yt-dlp` 下载、以通用工具把来源正文落盘为 `source.md` 并亲笔附「信息区取证」段、看图申报水印三字段、申报可选的热度信号；同一来源站点串行、遵守其 Crawl-delay、遇 429/503 退避并放弃同一轮次剩余候选，并行子 Agent 不得同时打同一站点。正文、caption、video script、评审、评分、typed issue、verdict、cohort、milestone、来源是否切题、素材是否值得用、文章角度与作者人设一律由 AI 决定。
 
 ## 完成证据
 

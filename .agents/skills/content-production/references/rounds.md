@@ -9,7 +9,7 @@
 | 创作主体 | `creatorProfileId` 取 creator 注册表现有旅行博主档 | 缺省时收官报告必须写明「采用默认人设」 |
 | 地域与主题范围 | 大陆实体按 [sourcing.md](sourcing.md) 分层前沿开放消费；视频偏壮美河山（川西、新疆、西藏、雪山江河湖海、航拍、全国游）；港澳台只补视频 | 实体口径不限 A 级、不设上限 |
 | 里程碑与四载体配比 | 规格底线 M1000 = 1000/1000/1000/100；生产目标四载体各 1000；一个实体产 1 homepage + 1 article + 1–2 image [+ video] | 见 [handoff.md](handoff.md) |
-| 单轮规模与并行 | 实体轨 25 实体/轮（25 homepage + 25 article + 25 image）+ 视频轨约 28 条/轮；同时 ≤ 2 轮流水 | 每 execution 各派一个 author 子 Agent 与一个 reviewer 子 Agent |
+| 单轮规模与并行 | 实体轨 25 实体/轮（25 homepage + 25 article + 25–50 image）+ 视频轨 25–40 条/轮；同时 ≤ 2 轮流水；单轮预算 ≤ 60 分钟 | 每 execution 各派一个 author 子 Agent 与一个 reviewer 子 Agent，**2+2 错峰**（见下） |
 | 放弃比例上限 | 单轮 40% | 超限即停轮报告，通常意味着前沿质量、来源变更或水印结构性问题 |
 | 零净增停机 | 连续 2 轮 `pool-query` 四载体计数无增长 | 说明方法失效，换方法而不是硬跑 |
 | 随体媒体落盘与备份 | `QWQ_CARRIED_MEDIA_ROOT` 指向的仓外 durable 根；每轮 rsync 到用户指定备份路径（默认 `~/Backups/quwoquan_golden_media`） | 都不进 git |
@@ -17,18 +17,33 @@
 
 ## 一个轮次
 
-固定顺序：discover → init → acquire → author → review → publish → 计数 → 提交与镜像。
+固定顺序：discover → init → acquire → author → review → publish → 计数 → 提交与镜像。所有一次性脚本从 [recipes.md](recipes.md) 复制到 `/tmp/qwq_rNN/`，不在轮中重写。
 
-- discover：主会话按 [sourcing.md](sourcing.md) 从前沿快照取候选（携程景点榜热度排序 ∪ 维基类目 ∪ 秘境名单），先 `release pool-query` 做集合差，再逐条做候选级质量筛选（百科厚度、配图、游记长度、图片分辨率、视频时长/清晰度/落实体）；已发布的实体不再 init。
+- discover：主会话先从 `frontier/creators.json` 挑「切题素材 ≥3 张」的实体（创作者优先），再按 [sourcing.md](sourcing.md) 从前沿快照补候选（携程景点榜热度排序 ∪ 维基类目 ∪ 秘境名单 ∪ 头条百科）；`release pool-query --json` 后**按实体名**做集合差（`eligible.homepages` ∪ `excluded` 里的 `entities/**`，取路径末段；不是维基标题——武夷山条目标题「武夷山风景名胜区」曾因此漏判），再逐条做候选级质量筛选；已存在的实体不再 init。
 - init：一份 `round.json` 建本轮全部 carrier execution（见 [steps.md](steps.md)）。
-- acquire：默认由主会话批量完成——API 响应落文件、`jq` 生成 ingest 行、通用工具落盘 `source.md`、合规 UA 串行下载、看原件申报水印；视频 execution 的下载与 `task acquire`（含转码）放后台 shell。主会话运行 `task acquire` 与 `seal 1.download`。author/reviewer 子 Agent 在跑时，主会话即开始下一轮的 discover 与 acquire（双轮流水）。
-- author：每 execution 派一个 author 子 Agent，提示词内嵌：execution 根绝对路径、对象与来源清单、允许的 tagRefs 闭集、`creatorProfileId`、原件图片路径、「一条 shell 批量 cat 来源，读一个写一个」的节律、不运行 CLI/不出网/不改来源。主会话运行 `seal 4.draft`；违规对象由 seal 以 typed issue 退轮，不阻塞其余。
-- review：每 execution 派一个 reviewer 子 Agent（与该 execution 的 author 不同会话；不同 execution 的 reviewer 并行），提示词内嵌：只评 `002-4.draft` resultRefs 里的对象、批量 cat 读产物、关键论断回查 `source.md`、image 看原件、video 看 poster、按 [quality.md](quality.md) 六维打分、只写一份 `seal.review.json`。主会话运行 `seal 5.review`。
-- publish：主会话对 approved 对象用一条 shell 循环逐个 `release publish-object`，**homepage 必须先于引用它的 post**，否则 post 在 release 时 `REFERENCE_MISSING`。
+- acquire：默认由主会话批量完成——`wiki_acquire`/`toutiao_acquire` 落 `source.md`、`download` 串行下载并核 `sha1`、`sheets` 拼预览图、主会话看图写 `decisions.json`（水印三字段 + 相关性）、`build_inputs` 拼 `round.json` 与四份 ingest。视频 execution 的 `task acquire`（含转码）用**工具级后台**（`block_until_ms`）运行；shell `&`/`nohup` 会随工具 shell 退出被回收，不要用。主会话运行 `task acquire` 与 `seal 1.download`。author/reviewer 子 Agent 在跑时，主会话即开始下一轮的 discover 与 acquire（双轮流水）。
+- author：每 execution 派一个 author 子 Agent，提示词 = `prompt.author.common.md` + `prompts.py` 生成的对象清单（execution 根绝对路径、对象与来源清单、允许的 tagRefs 闭集、`creatorProfileId`、原件预览路径、「一条 shell 批量 cat 来源，读一个写一个」的节律、不运行 CLI/不出网/不改来源）。**2+2 错峰**：先派 homepage + article，两者返回后再派 image + video；4 个同时启动会撞 provider 用量上限。image 载体的 `image_work.json`（短 caption）可由主会话自己写，省一个子 Agent 位——主会话本就是合法 author actor。子 Agent 被 provider 上限中止时 `resume` 同一 agent 继续，算同一 actor。主会话运行 `seal 4.draft`；违规对象由 seal 以 typed issue 退轮，不阻塞其余。
+- review：每 execution 派一个 reviewer 子 Agent（与该 execution 的 author 不同会话；同样 2+2 错峰），提示词内嵌：只评 `002-4.draft` resultRefs 里的对象、批量 cat 读产物、关键论断回查 `source.md`、image 看原件、video 看 poster、按 [quality.md](quality.md) 六维打分、只写一份 `review.<carrier>.json`（`verdict` + `reviews`）。主会话用 `seal_review.py` 注入 reviewer actor 并运行 `seal 5.review`。
+- publish：`publish.py` 对 approved 对象逐个 `release publish-object`，**homepage 必须先于引用它的 post**，否则 post 在 release 时 `REFERENCE_MISSING`。
 - 计数：`release pool-query` 得到当前 eligible 四载体计数，与目标比对。
-- 提交与镜像：按 `commit` Skill 提交 `quwoquan_data/publish/**`（`content(data): 内容池增量 rNN`），随后 `rsync -a ~/.local/share/quwoquan/golden_media/ <备份路径>/`。
+- 提交与镜像：按 `commit` Skill 提交 `quwoquan_data/publish/**`（`content(data): 内容池增量 rNN`）与本轮工程改动（`feat(data)`，如有），随后 `rsync -a ~/.local/share/quwoquan/golden_media/ <备份路径>/`，再删除 `$QWQ_WS/downloads/` 原件（已进 content library；预览图可留）。
 
 `verify all` 不进每轮路径，只在 `release finalize` 与提交前跑。
+
+### 十步清单与 60 分钟预算
+
+1. 集合差 + 选 25 实体（创作者批量优先）— 5 min
+2. `wiki_acquire`/`toutiao_acquire` + AI 取证追加 — 5 min
+3. `download` + `sheets` + 看图写 `decisions.json` — 10 min（视频下载后台）
+4. AI 写 `plan.json`（类型/行政区/角度/标题）+ `build_inputs` — 5 min
+5. `task init` + 四份 `task acquire` + `seal 1.download` — 3 min
+6. 派 homepage + article author（等待中主会话写 image `image_work.json`）— 12 min
+7. 派 video author（如有）+ `seal 4.draft` ×4 — 3 min
+8. 派 reviewer 2+2 + `seal_review` ×4 — 12 min
+9. `publish.py` + `pool-query` — 3 min
+10. 提交 + rsync + 清理 downloads/ + 六段收官 — 2 min
+
+超过 60 分钟先查：是否在重写脚本、是否下载了 >512 MiB 原件、子 Agent 是否撞上限、是否在逐实体找图而不是从创作者批量结果挑实体。
 
 ## 视频候选必须先落实体
 
