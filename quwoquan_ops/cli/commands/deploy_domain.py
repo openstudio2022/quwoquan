@@ -179,7 +179,9 @@ def _prod_prevalidation_executor(
     import quwoquan_ops.cli.stackctl as _stackctl
 
     if material_source == "local-build":
-        source_argv = ["--exact-candidate", candidate_digest]
+        # 请求的 exact candidate 原样透传；来源门失败时 candidate_digest 仍为
+        # unresolved，执行器会以 typed 阻断而不是伪造的 digest 收口。
+        source_argv = ["--exact-candidate", str(getattr(args, "exact_candidate", "") or "")]
     else:
         source_argv = ["--frozen-diagnostic-snapshot", str(manifest_path)]
     argv = [
