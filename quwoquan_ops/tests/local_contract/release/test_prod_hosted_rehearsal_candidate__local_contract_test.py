@@ -76,7 +76,14 @@ def _rehearsal_oci(
     }
 
 
-def _git_runner(*, dirty: str = "", head: str = SOURCE, dev_head: str = SOURCE):
+def _git_runner(
+    *,
+    dirty: str = "",
+    head: str = SOURCE,
+    dev_head: str = SOURCE,
+    ancestor: bool = True,
+    changed_inputs: str = "",
+):
     def fake_run(argv, **_kwargs):
         args = list(argv)
         if args[1] == "status":
@@ -85,9 +92,31 @@ def _git_runner(*, dirty: str = "", head: str = SOURCE, dev_head: str = SOURCE):
             return subprocess.CompletedProcess(args, 0, stdout=head + "\n", stderr="")
         if args[1] == "rev-parse" and args[-1] == rehearsal.DEV_REF:
             return subprocess.CompletedProcess(args, 0, stdout=dev_head + "\n", stderr="")
+        if args[1] == "merge-base":
+            return subprocess.CompletedProcess(args, 0 if ancestor else 1, stdout="", stderr="")
+        if args[1] == "diff":
+            return subprocess.CompletedProcess(args, 0, stdout=changed_inputs, stderr="")
         raise AssertionError(f"unexpected git call: {args}")
 
     return fake_run
+
+
+def _capsule_root(tmp: str) -> Path:
+    root = Path(tmp).resolve()
+    (root / "input-capsule").mkdir(parents=True, exist_ok=True)
+    (root / "input-capsule" / "manifest.json").write_text(
+        json.dumps(
+            {
+                "deploymentInputRoots": [
+                    "/outside/release.json",
+                    "quwoquan_ops",
+                    "quwoquan_service/services",
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    return root
 
 
 class RehearsalSourceGateContractTest(unittest.TestCase):
@@ -98,15 +127,46 @@ class RehearsalSourceGateContractTest(unittest.TestCase):
         with mock.patch.object(rehearsal.subprocess, "run", side_effect=_git_runner(dirty=" M x")):
             with self.assertRaisesRegex(rehearsal.RehearsalError, "uncommitted worktree"):
                 rehearsal.rehearsal_candidate_source_gate(candidate, repo_root=Path("/repo"))
-        with mock.patch.object(rehearsal.subprocess, "run", side_effect=_git_runner(head="b" * 40)):
+        newer = "b" * 40
+        # HEAD 前移但候选不是其祖先（或无 capsule 可比较）→ 拒绝。
+        with mock.patch.object(
+            rehearsal.subprocess, "run", side_effect=_git_runner(head=newer, dev_head=newer, ancestor=False)
+        ):
             with self.assertRaisesRegex(rehearsal.RehearsalError, "does not match HEAD"):
+                rehearsal.rehearsal_candidate_source_gate(candidate, repo_root=Path("/repo"))
+        with mock.patch.object(
+            rehearsal.subprocess, "run", side_effect=_git_runner(head=newer, dev_head=newer)
+        ):
+            with self.assertRaisesRegex(rehearsal.RehearsalError, "inputs are unavailable"):
                 rehearsal.rehearsal_candidate_source_gate(candidate, repo_root=Path("/repo"))
         with mock.patch.object(rehearsal.subprocess, "run", side_effect=_git_runner(dev_head="c" * 40)):
             with self.assertRaisesRegex(rehearsal.RehearsalError, "exact local dev1.0 head"):
                 rehearsal.rehearsal_candidate_source_gate(candidate, repo_root=Path("/repo"))
         with mock.patch.object(rehearsal.subprocess, "run", side_effect=_git_runner()):
             gate = rehearsal.rehearsal_candidate_source_gate(candidate, repo_root=Path("/repo"))
-        self.assertEqual(gate, {"head": SOURCE, "devHead": SOURCE, "sourceRevision": SOURCE})
+        self.assertEqual(
+            gate,
+            {"head": SOURCE, "devHead": SOURCE, "sourceRevision": SOURCE, "reusedFromAncestor": "false"},
+        )
+        # 内容寻址复用：候选是 HEAD 祖先且打包输入路径无改动 → 接受并标记 reusedFromAncestor。
+        with tempfile.TemporaryDirectory() as tmp:
+            root = _capsule_root(tmp)
+            with mock.patch.object(
+                rehearsal.subprocess, "run", side_effect=_git_runner(head=newer, dev_head=newer)
+            ):
+                gate = rehearsal.rehearsal_candidate_source_gate(
+                    candidate, repo_root=Path("/repo"), candidate_root=root
+                )
+            self.assertEqual(gate["reusedFromAncestor"], "true")
+            with mock.patch.object(
+                rehearsal.subprocess,
+                "run",
+                side_effect=_git_runner(head=newer, dev_head=newer, changed_inputs="quwoquan_ops/cli/x.py\n"),
+            ):
+                with self.assertRaisesRegex(rehearsal.RehearsalError, "package inputs changed"):
+                    rehearsal.rehearsal_candidate_source_gate(
+                        candidate, repo_root=Path("/repo"), candidate_root=root
+                    )
 
     def test_rehearsal_manifest_only_accepts_local_amd64_digest_closure(self) -> None:
         oci = _rehearsal_oci()

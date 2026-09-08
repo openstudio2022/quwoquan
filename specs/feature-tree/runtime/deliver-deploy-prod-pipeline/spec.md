@@ -82,7 +82,7 @@
 - GitHub 只验证不可变证据并承担 RC build/sign/attest、资格归约、正式 tag admission 和 Prod approval/transaction。普通 source push、lane PR、promotion PR 不得触发 packaging、coverage 全量、设备矩阵、Provider live 或 environment workflow。
 - Nightly 只运行 fingerprint-aware 的深度回归、性能与可靠性，不轮转环境、不替代任何 candidate/head/RC 的 required fact，也不改变资格、标签或生产状态。
 - `prevalidate` / `prod-sim` 历史 snapshot 仅允许显式 `non-promotable` / history reader 只读；它们不得产生 admission 或 verdict，也不得进入正式发布链。
-- `prevalidate` 另接受 integration 工作区的 exact dev candidate rehearsal：候选必须由当前干净工作树以 canonical prod-hosted 打包入口生成并绑定 `sourceRevision`/tree，且 `sourceRevision` 同时等于 HEAD 与本地 `refs/heads/dev1.0`；镜像为本机 build-once 的 `linux/amd64` content digest，只经 exact digest 校验交付到目标平面账号；只进入 `prevalidate` deployment instance、`data-mode isolated` 与独立 namespace，结果固定 `nonPromotable=true`、`releaseEligibility=GATE_BLOCK`，零 ledger/receipt/admission/tag/stage 写入，不得进入正式链，也不得替代 Gamma、RC qualification 或 prod canary 证据。隔离数据面可接受 canonical immutable content release 的 hosted-import 与 activation（既非 seed 也非正式生产数据），其 readback 只构成 rehearsal 诊断。rehearsal 候选允许 legal-static 主体字段仍为占位，但必须在候选与报告中显式标记，且不构成任何法务、登录商用或发布证据；rehearsal 的公网入口由宿主共享 edge 按 Host 分流并以宿主自身 ACME 承接，不属于 `public-ca-prod` 签发自动化，也不构成 DNS/TLS 准出证据。
+- `prevalidate` 另接受 integration 工作区的 exact dev candidate rehearsal：候选必须由当前干净工作树以 canonical prod-hosted 打包入口生成并绑定 `sourceRevision`/tree，HEAD 必须等于本地 `refs/heads/dev1.0`，且候选内容身份等于 HEAD——`sourceRevision` 等于 HEAD，或者（打包入口按内容寻址复用既有不可变候选时）`sourceRevision` 是 HEAD 的祖先且两者之间没有任何打包输入路径的改动；镜像为本机 build-once 的 `linux/amd64` content digest，只经 exact digest 校验交付到目标平面账号；只进入 `prevalidate` deployment instance、`data-mode isolated` 与独立 namespace，结果固定 `nonPromotable=true`、`releaseEligibility=GATE_BLOCK`，零 ledger/receipt/admission/tag/stage 写入，不得进入正式链，也不得替代 Gamma、RC qualification 或 prod canary 证据。隔离数据面可接受 canonical immutable content release 的 hosted-import 与 activation（既非 seed 也非正式生产数据），其 readback 只构成 rehearsal 诊断。rehearsal 候选允许 legal-static 主体字段仍为占位，但必须在候选与报告中显式标记，且不构成任何法务、登录商用或发布证据；rehearsal 的公网入口由宿主共享 edge 按 Host 分流并以宿主自身 ACME 承接，不属于 `public-ca-prod` 签发自动化，也不构成 DNS/TLS 准出证据。
 - promotion 的固定 SLI 为 `promotionReadyAt -> mainReadbackAt`，包含 queue、验真、merge 与 ref readback，不包含 ABG、产品等待、qualification、tag、Prod 或 soak。目标 p95 为 300 秒；当前 enforcement budget 只可按固定窗口的完整全样本算法单调收紧，不得分阶段、success-only、重置计时或放宽。
 
 ## 6. 契约与依赖
@@ -125,7 +125,7 @@
 - GIVEN integration 工作树干净且 HEAD 等于本地 `refs/heads/dev1.0`，候选由 canonical prod-hosted 打包入口生成并绑定该 `sourceRevision`/tree。
 - GIVEN `prod-hosted` 平面账号、rootless Podman 与 user systemd 已就绪，且宿主共享 edge 独占公网 80/443。
 - WHEN 以该 exact dev candidate 执行 `prevalidate` rehearsal。
-- THEN 工作树脏、HEAD 不等于候选 `sourceRevision`、候选不等于本地 `refs/heads/dev1.0` head、镜像架构不是 `linux/amd64`，或本地镜像 content digest 与候选不一致时，在任何远端传输前 fail closed。
+- THEN 工作树脏、HEAD 不等于本地 `refs/heads/dev1.0` head、候选内容身份不等于 HEAD（`sourceRevision` 既不等于 HEAD，也不是「HEAD 的祖先且打包输入路径无改动」的内容寻址复用）、镜像架构不是 `linux/amd64`，或本地镜像 content digest 与候选不一致时，在任何远端传输前 fail closed。
 - THEN 候选镜像只经 exact digest 从本机交付到目标平面账号并读回一致，部署只落 `prevalidate` deployment instance 与独立 namespace，service/edge user systemd unit 为 enabled/active。
 - THEN 报告分轴给出 container runtime、Provider readiness 与 release eligibility，其中 `releaseEligibility` 恒为 `GATE_BLOCK` 且 `nonPromotable=true`；该候选不可被 formal rollout、frozen diagnostic snapshot 输入、tag、admission 或 ledger 消费。
 - THEN 隔离数据面对 canonical immutable content release 的 hosted-import 与 activation readback 只记为 rehearsal 诊断；legal-static 占位与宿主共享 edge 的 TLS 承接均在候选与报告中显式标记为非准出证据。
