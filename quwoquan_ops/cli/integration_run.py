@@ -311,10 +311,28 @@ def _impact_plan(*, parent: str, commit: str, run_dir: Path) -> tuple[dict[str, 
     return plan, path
 
 
+def _readiness_local_ref(*, args: argparse.Namespace, commit: str) -> str:
+    """readiness 的 push identity 要求 local ref 精确解析到 candidate。
+
+    integrate 在 integration 工作区，本地 `refs/heads/dev1.0` 就是 candidate；acceptance 在 lane
+    工作树，candidate 是 lane 自己的 branch ref（当前分支且解析到 candidate），不得借用 dev1.0。
+    """
+    if args.mode != "acceptance":
+        return DEV_REF
+    branch_ref = _git("symbolic-ref", "--quiet", "HEAD")
+    if not branch_ref.startswith("refs/heads/lane/") or _git("rev-parse", branch_ref) != commit:
+        raise IntegrationRunError(
+            "INTEGRATION_RUN.LANE_IDENTITY_INVALID",
+            f"acceptance must run on a lane branch whose head is the candidate (branch={branch_ref or 'detached'})",
+        )
+    return branch_ref
+
+
 def _local_readiness(*, level: str, parent: str, commit: str, run_dir: Path, args: argparse.Namespace) -> tuple[Path, dict[str, Any]]:
     # `run` 会读取 push updates 两次（plan + run），stdin 只能读一次，所以落成文件再传路径。
+    local_ref = _readiness_local_ref(args=args, commit=commit)
     updates_path = run_dir / f"push-updates-{level}.txt"
-    updates_path.write_text(f"{DEV_REF} {commit} {DEV_REF} {parent}\n", encoding="utf-8")
+    updates_path.write_text(f"{local_ref} {commit} {DEV_REF} {parent}\n", encoding="utf-8")
     command = [sys.executable, "-B", str(LOCAL_READINESS), "run", "--level", level, "--push-updates", str(updates_path)]
     if args.owner_identity:
         command += ["--owner-identity", args.owner_identity]
