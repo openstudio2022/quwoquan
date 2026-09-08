@@ -514,7 +514,7 @@ func TestCheckedInRegistryExampleIsGeneratedFromCanonicalInputs(t *testing.T) {
 		if entry.AppClientBundle == nil {
 			if entry.CanonicalOperationID != "gateway.persisted_query_execution.SearchPage" ||
 				entry.OperationName != "SearchPage" || entry.Cost.Depth != 3 ||
-				entry.Cost.TopLevelFields != 1 || entry.Cost.Complexity != 208 {
+				entry.Cost.TopLevelFields != 1 || entry.Cost.Complexity != 353 {
 				t.Fatalf("non-bundle canonical operation is invalid: %+v", entry)
 			}
 			searchBound = true

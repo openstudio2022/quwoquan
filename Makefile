@@ -1788,6 +1788,28 @@ evidence-signing-bootstrap:
 	@PYTHONDONTWRITEBYTECODE=1 python3 -B quwoquan_ops/cli/evidence_signing_bootstrap.py \
 		$$( [ "$${ROTATE:-0}" = "1" ] && printf -- '--rotate' ) $(EVIDENCE_SIGNING_ARGS)
 
+# lane 工作树 Alpha/Beta 验收：对 exact candidate（默认 HEAD）做本地 readiness + Alpha（条件 Beta）真实验证并签发
+# EnvironmentAcceptanceFact，终态 accepted；不 admit、不 publish。Data release 的 ship --handoff-ref admission 用当前工作树
+# 重算 candidate evidence，因此 Alpha/Beta 只能在产出 handoff 的 lane 工作树完成；gamma/prod 只在 integration 工作区推进。
+# 必填同 integrate；BASELINE=<sha> 指定 ImpactPlan/readiness 的 exact parent（candidate 已等于远端 dev1.0 时必填）。
+.PHONY: accept
+accept:
+	@if [ -z "$(RELEASE_ATTESTATION)" ] || [ -z "$(ROLLBACK_RELEASE_ATTESTATION)" ]; then \
+		echo "[accept] GATE_BLOCK: RELEASE_ATTESTATION 与 ROLLBACK_RELEASE_ATTESTATION 必填（两份不同的 immutable production Data release attestation）" >&2; exit 2; fi
+	@if [ -z "$(RELEASE_HANDOFF_REF)" ]; then \
+		echo "[accept] GATE_BLOCK: RELEASE_HANDOFF_REF 必填（candidate release 的 authoritative handoff-ref-v1）" >&2; exit 2; fi
+	@PYTHONDONTWRITEBYTECODE=1 python3 -B quwoquan_ops/cli/integration_run.py \
+		--mode acceptance \
+		--candidate "$${CANDIDATE:-HEAD}" \
+		$$( [ -n "$(BASELINE)" ] && printf -- '--baseline %s' "$(BASELINE)" ) \
+		--release-attestation "$(RELEASE_ATTESTATION)" \
+		--rollback-release-attestation "$(ROLLBACK_RELEASE_ATTESTATION)" \
+		--release-handoff-ref "$(RELEASE_HANDOFF_REF)" \
+		--readiness-level "$${READINESS_LEVEL:-fast}" \
+		--profile "$${PROFILE:-integration}" \
+		$$( [ -n "$(OWNER_IDENTITY)" ] && printf -- '--owner-identity %s' "$(OWNER_IDENTITY)" ) \
+		$(INTEGRATE_ARGS)
+
 # integration 工作区模式二：对 exact candidate 做本地 readiness + Alpha（条件 Beta）真实验证，
 # 签发 EnvironmentAcceptanceFact 并（PUBLISH=1 时）以 expected-old CAS fast-forward 发布到远端 dev1.0。
 # 必填：RELEASE_ATTESTATION / ROLLBACK_RELEASE_ATTESTATION 指向两份不同的 immutable production Data release attestation

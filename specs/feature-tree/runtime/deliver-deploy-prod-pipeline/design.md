@@ -201,6 +201,20 @@
 - 影响 Story：[`gray-release-to-prod`](./gray-release-to-prod/spec.md)、[`local-gamma-mirror`](./local-gamma-mirror/spec.md)
 - 关联验收：[`SIT-003`](./spec.md#sit-003)、[`zero-risk-production-readiness` GWT-005](../../platform-ops-governance/commercial-readiness-risk-closure/zero-risk-production-readiness/spec.md#gwt-005)
 
+<a id="dec-014"></a>
+### DEC-014 Alpha/Beta 验收在产出 handoff 的 lane 工作树完成，integration 工作区只承担 admit/publish 与 gamma/prod
+- 对象与 owner：`quwoquan_ops/cli/integration_run.py` 是同一编排器，按 `--mode` 分两种运行位置。`acceptance`（`make accept`）在 lane 工作树、当前分支为该 lane 时对 exact candidate 跑 L1 readiness、build-head candidate、Alpha（`abg_release_sensitive` 时含 Beta）并 create-once 签发 `EnvironmentAcceptanceFact`，终态 `accepted`；`integrate`（`make integrate`）只在唯一 integration 工作区（分支 `dev1.0`）走 admit → publish。Gamma 与 prod（含 rehearsal）只在 integration 工作区推进。
+- 为什么按工作树切分：Data release 进入环境的唯一准入是 `qwq-data ship --handoff-ref`，其 authority 校验（`handoff_consumer.validate_published_bytes(validate_current=True)`）会用当前工作树重算 candidate evidence，要求当前分支就是产出 handoff 的 lane 且 workspace digest 一致；在 `dev1.0` 分支上必报 `CANDIDATE.OWNER_DRIFT`。因此 Alpha/Beta 与 handoff 生产必须同处一个 lane 工作树，不得为了在 integration 工作区跑通而放宽该校验或复制他方 lane 的证据字节。
+- 候选身份与基线：acceptance 的 ImpactPlan/readiness parent 默认取远端 `dev1.0` head；candidate 已等于远端 head 时（lane 已裸 fast-forward 落地）必须显式 `--baseline <上一个已验收基线>`，否则 `INTEGRATION_RUN.NOTHING_TO_ACCEPT`。事实仍绑定 exact candidate commit/tree 与 ImpactPlan digest，`--baseline` 只决定 delta 覆盖面，不改变事实身份。
+- Command/query 分流与幂等：acceptance 不写 admission、不写 `dev1.0`、拒绝 `--publish`（`INTEGRATION_RUN.INPUT_INVALID`）；integrate 拒绝 `--baseline`。两种模式共用同一 fact schema 与 signer，后续 integrate 对同一 candidate 的 admission 以这些 Alpha/Beta 事实为 predecessor（消费侧接受既有事实 ref 的实现见 `daily-merge-release-strategy` OPEN-008）。
+- 失败与恢复：任一环境相位失败保留首个 typed blocker 并 `down`；不得以 lane 的 `accepted` 冒充 publish admission，也不得把 integration 工作区的裸 fast-forward push 当作已验收。
+- 测试 seam：`test_integration_run_production_release__local_contract_test.py` 覆盖 `--mode` 闭集、`make accept` 不含 `--publish`、acceptance+publish 与 integrate+baseline 的 typed 拒绝。
+- 理由：lane 工作树天然满足 handoff admission 的 delivery identity，environment 事实又是 create-once、可跨工作树按 ref 消费的 portable 证据，把「真跑环境」放在产出方、把「写 dev1.0」留在唯一 integration 工作区，既守住 Data 的 admission 合同，也不给 integration 工作区增加对他方 lane 工作树状态的依赖。
+- 被否决方案：在 integration 工作区消费 handoff 时关闭 `validate_current`（放宽 Data 准入合同）；把他方 lane 的 `.qwq_output` 证据字节复制到 integration 工作区（伪装 delivery identity）；在 lane 工作树直接 publish（绕开唯一 integration 写入通道）。
+- 关联要求：[`daily-merge-release-strategy REQ-002`](./daily-merge-release-strategy/spec.md#req-002)、[`DEC-011`](#dec-011)
+- 影响 Story：[`daily-merge-release-strategy`](./daily-merge-release-strategy/spec.md)、[`local-gamma-mirror`](./local-gamma-mirror/spec.md)
+- 关联验收：[`daily-merge-release-strategy GWT-001`](./daily-merge-release-strategy/spec.md#gwt-001)
+
 ## 5. 失败与恢复
 
 - 失败类型：分支 policy 无效、PR/ref 非法、`main` direct push、integration push 缺 before/after OID或 ancestry authority、integration/backsync 非 fast-forward、force/delete、ref compare-and-swap 冲突、Prod source 不可达 main、权限拒绝、依赖超时、候选摘要冲突、证据缺失或持久化失败。

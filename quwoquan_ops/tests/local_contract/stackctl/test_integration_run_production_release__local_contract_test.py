@@ -115,6 +115,58 @@ class IntegrationRunProductionReleaseContractTest(unittest.TestCase):
         self.assertNotIn("ROLLBACK_HANDOFF_REF", makefile)
         self.assertIn('--release-handoff-ref "$(RELEASE_HANDOFF_REF)"', makefile)
 
+    def test_acceptance_mode_is_lane_side_and_never_publishes(self) -> None:
+        # Alpha/Beta 只能在产出 handoff 的 lane 工作树完成（ship admission 重算当前工作树的
+        # candidate evidence）；integration 工作区只承担 admit/publish 与 gamma/prod。
+        parser = integration_run._parser()
+        base = ["--release-attestation", "a", "--rollback-release-attestation", "b", "--release-handoff-ref", VALID_REF]
+        self.assertEqual(parser.parse_args(base).mode, "integrate")
+        parsed = parser.parse_args([*base, "--mode", "acceptance", "--baseline", "abc123"])
+        self.assertEqual((parsed.mode, parsed.baseline), ("acceptance", "abc123"))
+        with self.assertRaises(SystemExit):
+            parser.parse_args([*base, "--mode", "gamma"])
+        makefile = (ROOT / "Makefile").read_text(encoding="utf-8")
+        self.assertIn("\naccept:\n", makefile)
+        self.assertIn("--mode acceptance", makefile)
+        self.assertIn("--baseline %s", makefile)
+        accept_block = makefile.split("\naccept:\n", 1)[1].split("\n.PHONY", 1)[0]
+        self.assertNotIn("--publish", accept_block)
+
+    def test_acceptance_mode_rejects_publish_and_integrate_rejects_baseline(self) -> None:
+        production = _attestation(self.root, "rel-candidate", "production")
+        rollback = _attestation(self.root, "rel-rollback", "production")
+        base = ["--release-attestation", str(production), "--rollback-release-attestation", str(rollback),
+                "--release-handoff-ref", VALID_REF]
+        with mock.patch.object(integration_run, "RUNS_ROOT", self.root / "runs"), \
+                mock.patch.object(integration_run, "ed25519_signer", return_value=object()), \
+                mock.patch.object(integration_run, "load_keyring", return_value={}), \
+                mock.patch.object(integration_run, "key_root", return_value=self.root):
+            for run_id, argv in (
+                ("acceptance-publish", [*base, "--mode", "acceptance", "--publish"]),
+                ("integrate-baseline", [*base, "--mode", "integrate", "--baseline", "abc123"]),
+            ):
+                with self.subTest(run_id=run_id):
+                    self.assertEqual(integration_run.main([*argv, "--run-id", run_id]), 1)
+                    payload = json.loads((self.root / "runs" / run_id / "summary.json").read_text(encoding="utf-8"))
+                    self.assertEqual(payload["terminal"], "GATE_BLOCK")
+                    self.assertEqual(payload["blocker"]["code"], "INTEGRATION_RUN.INPUT_INVALID")
+
+    def test_acceptance_readiness_identity_is_the_lane_branch_itself(self) -> None:
+        # readiness 的 push identity 要求 local ref 精确解析到 candidate：integrate 用 refs/heads/dev1.0，
+        # acceptance 用 lane 自己的 branch ref，且必须是当前分支的 head；detached/非 lane/漂移一律拒绝。
+        commit = "1" * 40
+        integrate = SimpleNamespace(mode="integrate")
+        self.assertEqual(integration_run._readiness_local_ref(args=integrate, commit=commit), "refs/heads/dev1.0")
+        acceptance = SimpleNamespace(mode="acceptance")
+        with mock.patch.object(integration_run, "_git", side_effect=lambda *a: {"symbolic-ref": "refs/heads/lane/product-mainline", "rev-parse": commit}[a[0]]):
+            self.assertEqual(integration_run._readiness_local_ref(args=acceptance, commit=commit), "refs/heads/lane/product-mainline")
+        for branch, head in (("refs/heads/dev1.0", commit), ("", commit), ("refs/heads/lane/product-mainline", "2" * 40)):
+            with self.subTest(branch=branch, head=head[:4]), \
+                    mock.patch.object(integration_run, "_git", side_effect=lambda *a, b=branch, h=head: {"symbolic-ref": b, "rev-parse": h}[a[0]]), \
+                    self.assertRaises(integration_run.IntegrationRunError) as blocked:
+                integration_run._readiness_local_ref(args=acceptance, commit=commit)
+            self.assertEqual(blocked.exception.code, "INTEGRATION_RUN.LANE_IDENTITY_INVALID")
+
     def test_production_pair_classifies_as_production_inputs(self) -> None:
         def binding(release_class: str) -> dict[str, str]:
             return {
