@@ -348,6 +348,44 @@ def test_review_and_runner_require_path_object_before_evidence(monkeypatch: pyte
         owner_manifest_assets(ROOT / owner_ref, repo_root=ROOT, candidate_evidence=ROOT / candidate_ref)
 
 
+@pytest.mark.parametrize("fault", ["missing", "tamper"])
+def test_runner_rechecks_path_closure_after_command(monkeypatch: pytest.MonkeyPatch, fault: str) -> None:
+    # spec_ref: specs/feature-tree/runtime/development-workflow-governance/agent-skill-review-context-organization/spec.md#gwt-007.t1
+    import evidence_runner
+    import lib.candidate_evidence as candidate_module
+    from quwoquan_ops.tests.local_contract.gate.test_named_evidence_runner__local_contract_test import NamedEvidenceRunnerTest
+
+    NamedEvidenceRunnerTest.setUpClass()
+    case = NamedEvidenceRunnerTest()
+    case.setUp()
+    try:
+        plan, registry = case._plan([("first", True, "printf first"), ("second", True, "printf second")])
+        reads = candidate_module.read_repo_relative_regular_single_link
+        commands = evidence_runner.run_command
+        ran = []
+
+        def after_command(root, ref, **kwargs):
+            if ran and "/candidate-paths/" in ref:
+                if fault == "missing":
+                    raise FileNotFoundError(ref)
+                return b"{}"
+            return reads(root, ref, **kwargs)
+
+        def command(*args, **kwargs):
+            result = commands(*args, **kwargs)
+            ran.append(args)
+            return result
+
+        monkeypatch.setattr(candidate_module, "read_repo_relative_regular_single_link", after_command)
+        monkeypatch.setattr(evidence_runner, "run_command", command)
+        with pytest.raises(evidence_runner.EvidenceRunnerError, match="CANDIDATE.STALE"):
+            case._run(plan, registry)
+        assert len(ran) == 1
+    finally:
+        case.tearDown()
+        case.doCleanups()
+
+
 def test_referenced_owner_receipt_is_bounded_and_portable(tmp_path: Path) -> None:
     # spec_ref: specs/feature-tree/runtime/development-workflow-governance/agent-skill-review-context-organization/spec.md#gwt-002.t10
     from lib.agent_governance_contract import contract_section

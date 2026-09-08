@@ -492,8 +492,21 @@ def validate_candidate_ref(raw_ref: str, *, repo_root: Path, expected_owner_iden
 
 def export_candidate_closure(ref: str, *, repo_root: Path) -> list[dict[str, str]]:
     """输出已验证的portable exact bytes；不是新的authority或candidate。"""
-    ref, raw, candidate, _ = validate_candidate_ref(ref, repo_root=repo_root)
-    owner_ref, owner_raw, owner = _load_owner(candidate["owner_identity_ref"], repo_root=repo_root)
+    ref, _, _, _ = validate_candidate_ref(ref, repo_root=repo_root)
+    return read_candidate_closure(ref, repo_root=repo_root)
+
+
+def read_candidate_closure(ref: str, *, repo_root: Path) -> list[dict[str, str]]:
+    """每次安全读回完整闭包；current工作树/owner解析仍由调用方freshness边界复核。"""
+    if _REF_RE.fullmatch(ref) is None:
+        _refuse("IDENTITY.MIGRATION_REQUIRED", "candidate closure ref 非canonical")
+    raw = _read_exact(ref, repo_root=repo_root, candidate=True)
+    candidate = _decode_exact(raw, ref, limit=int(contract_section("candidate_evidence_manifest")["max_bytes"]))
+    validate_candidate_evidence_manifest(candidate)
+    owner_ref = candidate["owner_identity_ref"]
+    owner_raw = _read_exact(owner_ref, repo_root=repo_root, candidate=False)
+    owner = _decode_exact(owner_raw, owner_ref, limit=int(contract_section("feature_context_manifest")["max_bytes"]))
+    validate_feature_context_manifest(owner)
     document = load_candidate_path_set(candidate, repo_root=repo_root)
     members = {ref: raw, owner_ref: owner_raw,
                candidate["path_set_identity"]["ref"]: canonical_json_bytes(document)}
