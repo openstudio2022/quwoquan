@@ -96,6 +96,12 @@
 - 下载后 `sha1` 与 imageinfo 不符（文件页被覆盖上传）按 `source_sha1_drift` 候选级换图，不重试。
 - 条目自身配图里常混有位置图、地形图、旗徽、老照片、博物馆建筑照与「同名不同地」的图（如城墙条目里的他处遗址），image 载体必须看原件确认主体就是该实体。
 - 头条百科头图 `License` 为空、`Copyright` 为 `no_copyright`/空时不能作资产，只能 text_only 或另取 Commons 图。
+- Commons 高产上传者按时间倒序的最近 1,000 张多为县级文保、城市建筑与海外生活照（广丰宗祠、长沙楼盘、多伦多商场），旅游实体命中率低；更高效的批量入口是 `Category:Quality images of China`（180）、`Featured pictures of China`（33）与 `Quality images of Yunnan`（107）——省级 QI 子类多数不存在，先 `categorymembers` 探一次再拉。QI/FP 行记 `sourceTier=1`。
+- 图虫 CDN `https://photo.tuchong.com/<user_id>/f/<img_id>.jpg` 对未登录访问只给**长边 1200px** 的压缩版（rest 元数据里的 `width/height` 是原图尺寸，不是可下载尺寸），`/l/`、`/m/` 路径 404；因此图虫图只能作 homepage 封面与 article 配图，**不进 image 载体**（长边 <1,600 不达标）。Commons 直链现在带 `?utm_source=...` 查询串，写 `directUrl` 与拼缩略图前必须 `split("?")[0]`；Commons 缩略图只接受固定宽度档（500/1280/1920 等，640/800/1000 返回 400），预览拼图用 `500px-`。
+- 图虫 `/rest/tags/<标签>/posts` 连续约 12 次请求后开始返回 HTML 挑战页（`Expecting value`），按 `source_throttled` 停止本轮该站请求；每轮最多 3–4 个标签、每标签 3 页、间隔 ≥3 s；`siteList` 是以 `site_id` 为键的对象，作者名从这里取，`weekly` 为空时退到 `order=new`。
+- Bilibili `space.bilibili.com/<mid>/video` 列表经常 412/352（风控），只能偶发拿到部分 BV 号；稳定路径是 `bilisearch:` 发现 + 单条 `-J`（每条约 3 s，间隔 1.5 s，遇 412 等 12 s）。单条元数据稳定给出播放/点赞/评论/时长/`filesize_approx`。
+- YouTube Creative Commons 过滤可以直接在检索 URL 上做：`https://www.youtube.com/results?search_query=<词>&sp=EgIwAQ%253D%253D` 交给 `yt-dlp --flat-playlist -J`，单次返回 30–400 条 CC 视频；中文地名 + 「航拍 4K」14 组查询得 2,004 条候选，剔除新闻机构（中国新闻社/大纪元）后逐条 `-J` 确认 `license` 与互动指标（100% 为 CC）。
+- Openverse 匿名配额极小（几次后即 401/429），实际使用需免费注册 API key（`OPENVERSE_CLIENT_ID/SECRET`）；无 key 时不列为可用来源。Pinterest 画板 `.rss` 对多数用户/画板返回 404，搜索页为纯前端应用无 pin 数据；只能对已知有 RSS 的用户用 `/<用户>/feed.rss`，其余靠 WebSearch 发现。
 
 ## exact 模板
 
