@@ -93,7 +93,8 @@ def _now() -> str:
 
 
 def _git(*args: str) -> str:
-    completed = subprocess.run(["git", *args], cwd=ROOT, text=True, capture_output=True, check=False)
+    # canonical publish 对象含中文路径；关闭 quotePath 才能把 diff-tree 输出原样交给 ImpactPlanner。
+    completed = subprocess.run(["git", "-c", "core.quotePath=false", *args], cwd=ROOT, text=True, capture_output=True, check=False)
     if completed.returncode != 0:
         raise IntegrationRunError("INTEGRATION_RUN.GIT", f"git {' '.join(args)}: {' '.join((completed.stderr or completed.stdout).split())}")
     return completed.stdout.strip()
@@ -202,6 +203,8 @@ HANDOFF_REF_RE = re.compile(r"^handoff-ref-v1:sha256:[0-9a-f]{64}:sha256:[0-9a-f
 
 
 def _release_id(attestation: Path) -> tuple[str, str]:
+    # DEC-041：Data producer 只产出单一 production release；research/commercial 已收敛，
+    # 与下游 `ship verify --readiness-phase production` 同一闭集，避免两端互斥。
     payload = json.loads(attestation.read_text(encoding="utf-8"))
     release_id, release_class = str(payload.get("releaseId") or ""), str(payload.get("releaseClass") or "")
     lifecycle = str(payload.get("productLifecycleState") or "")

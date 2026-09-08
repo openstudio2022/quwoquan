@@ -20,6 +20,10 @@ from .output_paths import deployment_target_path
 
 ROLE = "assistant-skill-package"
 KEY_ID = "local-managed-ed25519"
+# prod-hosted exact dev candidate rehearsal（DEC-013）：隔离投影不得继承正式 credentials，
+# Skill 包签名/信任材料使用 prod-hosted 目录下独立随机生成的一对 rehearsal key。
+REHEARSAL_ROLE = "assistant-skill-package-rehearsal"
+REHEARSAL_TARGET = "prod-hosted"
 
 
 @dataclass(frozen=True)
@@ -44,8 +48,34 @@ def prepare_local_assistant_skill_package_keys(
             "assistant Skill package key target/environment mismatch: "
             f"environment={environment} target={target_name}"
         )
-    selected = openssl or resolve_openssl3()
-    key_dir = deployment_target_path(target_name, "secrets", ROLE)
+    return _prepare_keys(
+        target_name,
+        ROLE,
+        openssl=openssl or resolve_openssl3(),
+    )
+
+
+def prepare_rehearsal_assistant_skill_package_keys(
+    *,
+    openssl: OpenSSL3Executable | None = None,
+) -> LocalAssistantSkillPackageKeys:
+    """prod-hosted rehearsal 专用 Skill 包信任材料；与正式 prod 凭据目录完全分离。"""
+
+    return _prepare_keys(
+        REHEARSAL_TARGET,
+        REHEARSAL_ROLE,
+        openssl=openssl or resolve_openssl3(),
+    )
+
+
+def _prepare_keys(
+    target_name: str,
+    role: str,
+    *,
+    openssl: OpenSSL3Executable,
+) -> LocalAssistantSkillPackageKeys:
+    selected = openssl
+    key_dir = deployment_target_path(target_name, "secrets", role)
     key_dir.mkdir(parents=True, exist_ok=True)
     os.chmod(key_dir, 0o700)
     private_pem = key_dir / "signing.pem"

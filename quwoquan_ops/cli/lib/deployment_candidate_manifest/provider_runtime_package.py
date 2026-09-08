@@ -479,7 +479,21 @@ def _validate_candidate_provider_oci_binding(
         )
     except _UnsafeCandidatePath as exc:
         raise ValueError("deployment candidate OCI image manifest is unsafe") from exc
-    if set(oci) != {
+    if oci.get("schema") != "stackctl-package-oci-images":
+        raise ValueError("package OCI image manifest fields mismatch")
+    if _pkg.is_rehearsal_oci_manifest(oci):
+        # DEC-013：rehearsal 候选的 oci-images.json 多出 materialSource/platform/
+        # nonPromotable/legalStaticPlaceholder/publicEntry 五个标记字段；字段集合由
+        # rehearsal 校验器独占裁定，这里不放宽 factory 形态的集合，两类输入不合流。
+        try:
+            _pkg.validate_rehearsal_oci_manifest(
+                oci,
+                expected_environment=str(candidate.get("environment") or ""),
+                expected_target=str(candidate.get("target") or ""),
+            )
+        except ValueError as exc:
+            raise ValueError(f"package OCI image manifest fields mismatch: {exc}") from exc
+    elif set(oci) != {
         "schema",
         "environment",
         "target",
@@ -487,7 +501,7 @@ def _validate_candidate_provider_oci_binding(
         "buildInputDigest",
         "imageDigest",
         "images",
-    } or oci.get("schema") != "stackctl-package-oci-images":
+    }:
         raise ValueError("package OCI image manifest fields mismatch")
     if (
         oci.get("environment") != candidate.get("environment")

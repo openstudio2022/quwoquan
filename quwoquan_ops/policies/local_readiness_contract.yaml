@@ -60,13 +60,19 @@ timeouts:
     scope_build: 900
     release: 1800
   maximum_by_level:
-    # fast 上限抬到 900：App 冷编译（Xcode ~2–3 分钟、Gradle 更久）是 fast 的必需检查。
+    # fast 上限抬到 900：App 冷编译（Xcode ~2–3 分钟、Gradle 更久）是 fast 的必需检查；
+    # focused go 套件（api_integration 含真实等待）在多套件并发下同样需 >300s。
     fast: 900
     scope: 1800
     release: 7200
   overrides_by_check:
     static:code_health_delta_fast: 30
     static:code-health-delta: 300
+    # App-only emitter 固定 Graph clean rebuild（cloudOutputs≈164）单跑约 50–80s，
+    # 与其余 static 并发时超 60s 默认；给 180s。
+    static:app_generated_manifest: 180
+    # product-ops-service api_integration（event_record 单包 ~165s）单跑 ~170s，8 套件并发下超 300s。
+    focused:go:product-ops-service: 600
     scope_build:app-compile-ios-simulator: 900
     scope_build:app-package-smoke: 900
   resolution_order: [check, phase, level, default]

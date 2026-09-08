@@ -494,6 +494,102 @@ def _entry(
     }
 
 
+HOSTED_TOPOLOGY_ACCESS_MANIFEST = PurePosixPath(
+    "quwoquan_ops/environments/prod/access-isolation.yaml"
+)
+HOSTED_TOPOLOGY_RUNTIME_MANIFEST = PurePosixPath(
+    "quwoquan_ops/environments/prod/runtime.yaml"
+)
+
+
+def materialize_prod_hosted_runtime_topology_manifest(
+    runtime_shared_root: Path,
+    *,
+    repo_root: Path = ROOT,
+) -> dict[str, Any]:
+    """prod-hosted 的运行拓扑身份：access-isolation 驱动的 render 输入闭包。
+
+    prod-hosted 不由 Compose profile 装配，而由 render_prod_plane_stack 按
+    access-isolation.yaml 的 host × instance × replica 渲染；因此它的拓扑身份就是
+    渲染输入（access-isolation、prod runtime.yaml、gamma-local compose 模板、各服务
+    compose 片段、data-plane binding）的精确字节摘要。该 manifest 只承载身份，
+    与本地 target 的 `qwq.runtime_topology_package` 共享 schema/environment/target/
+    topologyDigest 四个 environmentArtifact 消费字段。
+    """
+
+    from quwoquan_ops.cli.lib.compose_layout import (
+        domain_service_compose_files,
+        gamma_compose_files,
+    )
+
+    root = runtime_shared_root
+    try:
+        root_metadata = root.lstat()
+    except OSError as exc:
+        raise RuntimeTopologyPackageError(
+            "runtime-shared package root is unavailable"
+        ) from exc
+    if root.is_symlink() or not stat.S_ISDIR(root_metadata.st_mode):
+        raise RuntimeTopologyPackageError("runtime-shared package root is unsafe")
+    data_plane_path = root / DATA_PLANE_BINDING_PACKAGE_REF.name
+    data_plane_bytes = _safe_source_bytes(
+        data_plane_path, label="packaged data-plane binding"
+    )
+    try:
+        data_plane_payload = validate_canonical_data_plane_binding(
+            json.loads(data_plane_bytes.decode("utf-8"))
+        )
+    except (UnicodeError, json.JSONDecodeError, DataPlaneBindingError) as exc:
+        raise RuntimeTopologyPackageError(
+            "packaged data-plane binding is invalid"
+        ) from exc
+    render_inputs: dict[str, str] = {}
+    for label, relative in (
+        ("accessIsolation", HOSTED_TOPOLOGY_ACCESS_MANIFEST),
+        ("runtimeManifest", HOSTED_TOPOLOGY_RUNTIME_MANIFEST),
+    ):
+        render_inputs[label] = _sha256_bytes(
+            _safe_source_bytes(repo_root / relative.as_posix(), label=label)
+        )
+    compose_digests: dict[str, str] = {}
+    compose_files = list(gamma_compose_files(repo_root)) + list(
+        domain_service_compose_files(repo_root)
+    )
+    for compose_path in compose_files:
+        relative = compose_path.resolve().relative_to(repo_root.resolve()).as_posix()
+        compose_digests[relative] = _sha256_bytes(
+            _safe_source_bytes(compose_path, label=f"compose source {relative}")
+        )
+    identity = {
+        "hostedRenderInputs": render_inputs,
+        "composeSources": compose_digests,
+        "dataPlaneBinding": {
+            "ref": DATA_PLANE_BINDING_PACKAGE_REF.as_posix(),
+            "digest": _sha256_bytes(data_plane_bytes),
+            "bindingDigest": data_plane_payload["bindingDigest"],
+        },
+        "serviceNames": sorted(first_party_service_names(repo_root)),
+        "runtimeServiceNames": sorted(
+            (set(first_party_service_names(repo_root)) - SERVICE_CORE_MODULE_SET)
+            | {SERVICE_CORE_WORKLOAD}
+        ),
+        "serviceCoreModules": list(SERVICE_CORE_MODULES),
+    }
+    manifest = {
+        "schema": SCHEMA,
+        "environment": "prod",
+        "target": "prod-hosted",
+        "assembly": "hosted-render",
+        **identity,
+        "topologyDigest": _sha256_bytes(_canonical_json(identity)),
+    }
+    manifest_bytes = (
+        json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
+    ).encode("utf-8")
+    _write_exclusive(root, PurePosixPath("runtime-topology") / "manifest.json", manifest_bytes)
+    return manifest
+
+
 def materialize_runtime_topology_package(
     environment: str,
     target: str,
