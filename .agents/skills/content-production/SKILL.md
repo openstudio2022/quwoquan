@@ -22,16 +22,15 @@ init -> acquire -> author -> review -> publish -> release
 - 实体产出配比：一个实体默认产 1 homepage + 1 article（换角度）+ 1–2 image（配图丰富时产 2 件）+ video（能落到该实体时）。homepage 主源必须是百科闭集（zh.wikipedia 或头条百科）；article 以实体条目换角度或主题条目为主源，游记等只作事实参考；image 与 video 的主源就是那一个文件页/作品页。不做数量推断、不做刻意剔重。
 - 澄清完成后由宿主自己产出 plan 与 todos 并调度到终止条件；本 Skill 不定义调度器、状态机或轮次台账。
 - 恢复：「已存在什么」只读 `release pool-query`；「在飞 execution 到哪一步」只读 `.qwq_output/data/tasks/<executionId>/_shared/receipts/` 的首个未闭合步骤；本会话在飞状态只活在宿主 todos。任一 receipt `blocked` 则以 `retryOf` 新建 execution，不在原 execution 回退；已有 receipt 或 reviewer 产物的工作单元不得再次派发。
-- 产生 `content-release` 时，PRE 运行 `make feature-context TARGET=<exact-path>` 保存 content-addressed immutable owner manifest exact ref；纯只读且无送审交付只允许 `report-only/no-review-deliverable`。
+- 产生 `content-release` 时，PRE 运行 `make feature-context TARGET=<exact-path>` 保存 content-addressed immutable owner manifest exact ref；纯只读且无送审交付只允许 `report-only/no-review-deliverable`。Review 交互只引用 `quwoquan_ops/policies/human_agent_delivery_contract.yaml#workflow_interaction_binding.bindings.content-production`，可见输出由 canonical projector 生成。
 
 ## 执行
 
 actor 契约：
 
-- **主会话**：与用户澄清、执行全部机械命令（`task init`、`task acquire`、`task seal`、`release publish-object`、`release finalize`、`release handoff-verify`、`release pool-query`）、派发子 Agent、每轮提交与镜像、收官。
-- **acquire 取证者**：出网检索、取证、下载、写 ingest 清单可由主会话完成，也可由该 execution 的 author 完成；`001-1.download` 只冻结提交者。放量时默认由主会话批量完成，让 author 子 Agent 专注创作。
-- **author**：一个 execution 恰有一个 author actor，可以是主会话，也可以是宿主派发的独立子 Agent 会话；它拥有该 execution 全部对象的 `4.draft` 产物。不同 execution 的 author 可并行。
-- **reviewer**：每个 execution 由另一个真实会话评审，与本 execution author 的 `host/sessionId` 与 `invocation.runId` 必须不同，可为同一 model family；同一 execution 同时至多一个 reviewer 调用，不同 execution 的 reviewer 可并行。reviewer 只写 execution 级 `reviews` 判断字段（含只记录的 `qualityScores`），不改产物、不 seal、不 publish。`starting up` 不是进度也不是失败，不得据此补发相同或替代调用。
+- **主会话 owner**：与用户澄清、收官，直接完成 init、acquire、author、publish、release 与全部机械命令，不把任何步骤委托给通用子 Agent（`task init`、`task acquire`、`task seal`、`release publish-object`、`release finalize`、`release handoff-verify`、`release pool-query` 只在主会话执行）；只有 author 与 reviewer 两类独立语义 actor 可被派发，派发前先以 canonical artifact（receipt、`4.draft`、`reviews`）去重，已有 receipt 或 reviewer 产物的工作单元不得再次派发。
+- **author**：一个 execution 恰有一个 author actor，可以是主会话，也可以是宿主派发的独立会话；一次调用负责该 execution 全部对象的 acquire 出网取证与 `4.draft` 产物。不同 execution 的 author 可并行。
+- **reviewer**：每个 execution 由另一个真实会话评审，与本 execution author 的 `host/sessionId` 与 `invocation.runId` 必须不同，可为同一 model family；全局同一时刻至多一个 reviewer 调用，始终前台。reviewer 只写 execution 级 `reviews` 判断字段（含只记录的 `qualityScores`），不派发子 Agent、不改产物、不 seal、不 publish。`starting up` 不是进度也不是失败，不得据此补发相同或替代调用；中断后找首个未闭合步骤继续。
 
 出网只在 acquire 且只由 AI 做：按 [sourcing.md](references/sourcing.md) 的来源矩阵与 accessPolicy 闭集检索候选（robots/ToS 限制只记录为 `accessPolicy`，不阻断入池；登录墙/付费墙/验证码/DRM/反爬挑战等技术性规避仍禁止）、逐字抄下 license/作者/`sha1`/说明、申报 `accessPolicy`、用合规 UA 的 `curl`/`yt-dlp` 下载、以通用工具把来源正文落盘为 `source.md` 并亲笔附「信息区取证」段、看图申报水印三字段、申报可选的热度信号；同一来源站点串行、遵守其 Crawl-delay、遇 429/503 退避并放弃同一轮次剩余候选，并行子 Agent 不得同时打同一站点。正文、caption、video script、评审、评分、typed issue、verdict、cohort、milestone、来源是否切题、素材是否值得用、文章角度与作者人设一律由 AI 决定。
 

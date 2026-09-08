@@ -220,3 +220,14 @@
 - 影响或价值：当前 exact candidate-bound Code Health report 将 `evidence_runner.py::run_plan`、`agent_governance_contract.py::validate_candidate_evidence_manifest` 标为 `CODE_HEALTH.COMPLEXITY_ADVISORY`，并将 `review_dispatch.py` 标为 `CODE_HEALTH.FILE_LINES_ADVISORY`；这些 calibration `PR_WARN` 不阻断 candidate，但会增加 exact identity、artifact 与 fail-closed 分支的审计成本。
 - 完成判定：`GWT-003` 与 `GWT-007` 对应行为继续满足；在独立 owner increment 中逐项收敛这 3 个 identity，保持现有 Review schema、create-once、digest 与 terminal 合同；fresh clean-range Code Health 不再产生对应 advisory，且不得新增 allowlist、baseline 或削弱 Reviewer 输入预算。
 - 依赖：current Code Health named evidence与 Review focused contracts。
+
+<a id="open-004"></a>
+### OPEN-004 content-production 多 actor 派发契约尚未进入规格与治理合同
+
+- 类型：`capability_gap`
+- 优先级：`P2`
+- 准出影响：`track`
+- 影响或价值：data-engineering 在 `7f67384ea` 把 `content-production` Skill 的 actor 契约改写为主会话可派发子 Agent、author 可为独立子 Agent 会话、reviewer 按 execution 并行（同一 execution 至多一个、不同 execution 可并行），并删除了 `human_agent_delivery_contract.yaml#workflow_interaction_binding.bindings.content-production` 的绑定引用；但 `REQ-001` 第六条与 `GWT-001.t3` 仍要求单主会话 owner、全局单一前台 reviewer 调用与被派发 actor 禁止嵌套派发，`test_agent_context_budget__gate__local_contract_test` 与 `test_human_agent_delivery__contract_router__governance__local_contract_test` 两条治理合同仍固化该单主会话契约，导致 `04. Lane Gate` 判否。本次仅为通过 04 把 Skill 正文恢复到规格措辞，data lane 想要的多 actor 派发契约尚未在规格、治理合同与 Skill 三处形成一致的 canonical 声明，`references/rounds.md`、`references/recipes.md` 中「每 execution 各派 author 与 reviewer 子 Agent、2+2 错峰」的操作说明也与现行契约存在张力。
+- 目标：由 prd/design 走正规流程裁定是否放开多 actor 派发；若放开，先修改本 spec `REQ-001`/`GWT-001` 与两条治理合同测试，再改 Skill 正文与 references；若不放开，data lane 回收 references 中与单主会话契约相悖的操作说明。任何一方都不得再以先改 Skill 正文的方式绕过合同。
+- 完成判定：`GWT-001.t3` 与 `GWT-005` 对应行为满足：`.agents/skills/content-production/SKILL.md` 声明的 actor 契约、`REQ-001` 第六条、`agent_governance_contract`/`human_agent_delivery_contract` 相关合同测试三者措辞一致且 `04. Lane Gate` 的 ops local_contract shard 全部通过；如裁定放开多 actor 派发，`GWT-001.t3` 的 AND 子句与对应 `spec_ref` 测试须先于 Skill 正文更新，且 Skill 仍保留 `#workflow_interaction_binding.bindings.content-production` 绑定引用。
+- 依赖：`L2 DEC-005` 的 Workflow Skill 有界派发决策；data-engineering lane 对 `content-production` references 的 owner 增量；`quwoquan_ops/policies/human_agent_delivery_contract.yaml#workflow_interaction_binding`。
