@@ -304,7 +304,7 @@
       "id": "Entity/地点",
       "group": "Entity",
       "label": "地点",
-      "count": 102
+      "count": 103
     },
     {
       "id": "Entity/交通工具",
@@ -349,14 +349,14 @@
       "count": 15
     }
   ],
-  "totalCount": 5891,
+  "totalCount": 5892,
   "stats": {
     "byGroup": {
       "Topic": 5016,
       "Audience": 315,
       "Format": 258,
-      "Entity": 302
+      "Entity": 303
     }
   },
-  "generatedAt": "2026-07-28T14:30:11.970796+00:00"
+  "generatedAt": "2026-09-07T16:37:32.168853+00:00"
 }

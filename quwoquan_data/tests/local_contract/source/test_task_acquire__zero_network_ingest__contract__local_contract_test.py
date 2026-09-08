@@ -246,6 +246,49 @@ def test_page_source_takes_agent_written_markdown(execution: Path, tmp_path: Pat
     assert meta["rawSha256"] == "sha256:" + hashlib.sha256(source_md.read_bytes()).hexdigest()
 
 
+@pytest.mark.skipif(__import__("shutil").which("ffmpeg") is None or __import__("shutil").which("ffprobe") is None, reason="ffmpeg/ffprobe not on PATH")
+def test_transcoded_video_replay_keeps_one_source_unit_per_target(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """派生体（转码）字节逐次不同，但 unit 身份必须由下载原件决定：同一清单重放不得为同一 target 再生成第二个 unit。"""
+    import subprocess
+
+    video_id = "20260906--travel-video-six-step--ingest--pilot-001"
+    video_ref = "posts/video/风光/云和梯田航拍/1"
+    root = paths.DATA_EXECUTIONS_ROOT / video_id
+    _write(root / "execution_manifest.json", _canonical({"schema": "quwoquan_data.content_execution_manifest", "executionId": video_id}))
+    _write(root / "0.plan/target_set.json", _canonical({
+        "schema": "quwoquan_data.target_set", "executionId": video_id, "carrier": "video", "selectionPolicy": "frozen",
+        "entityCatalogDigest": "sha256:" + "0" * 64,
+        "candidateBinding": {"scope": "output", "ref": "x.json", "digest": "sha256:" + "1" * 64, "candidateCount": 1},
+        "targetCount": 1, "targetRefs": [video_ref],
+        "targets": [{"name": "云和梯田", "entityType": "地点/景区", "publishAngle": "风光", "publishTitle": "云和梯田航拍", "publishSeq": 1}],
+    }))
+    source = tmp_path / "downloads/source.mpg"
+    source.parent.mkdir(parents=True, exist_ok=True)
+    subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i", "testsrc2=size=640x360:rate=24:duration=2", "-c:v", "mpeg1video", "-q:v", "4", str(source)], check=True, capture_output=True)
+    body = source.read_bytes()
+    manifest = _write(tmp_path / "video.json", _canonical({"schema": "quwoquan_data.ingest_manifest", "executionId": video_id, "targets": [{"targetRef": video_ref, "sources": [{
+        "kind": "video", "sourceUrl": "https://commons.wikimedia.org/wiki/File:Yunhe.mpg", "directUrl": "https://upload.wikimedia.org/wikipedia/commons/1/11/Yunhe.mpg",
+        "filePath": str(source), "sha1": hashlib.sha1(body).hexdigest(), "license": "CC BY-SA 4.0", "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+        "creator": "唐代吉", "description": "云和梯田航拍", "relevance": "实体实景", "hasAudio": False, "watermarkStatus": "unknown", "watermarkKind": "unknown",
+    }]}]}))
+    first = acquire_module.acquire(execution_id=video_id, request_path=manifest)
+    assert first["ingested"] == 1
+    refs_path = root / video_ref / "1.download/source_refs.json"
+    before = json.loads(refs_path.read_bytes())
+    assert len(before["sources"]) == 1
+    unit = root / before["sources"][0]["metaRef"].rsplit("/", 1)[0]
+    meta = json.loads((unit / "meta.json").read_bytes())
+    assert meta["rawSha256"] == "sha256:" + hashlib.sha256(body).hexdigest(), "unit 身份取下载原件摘要"
+    asset = json.loads((unit / "assets/index.json").read_bytes())["assets"][0]
+    assert asset["mimeType"] == "video/mp4" and asset["derivativeBinding"]["originalSha256"] == meta["rawSha256"]
+
+    second = acquire_module.acquire(execution_id=video_id, request_path=manifest)
+    assert second["ingested"] == 1
+    after = json.loads(refs_path.read_bytes())
+    assert after == before, "重放不得为同一 target 追加第二个 source unit"
+    assert len([p for p in (root / "sources").iterdir() if p.name.startswith("wikimedia_commons_video__")]) == 1
+
+
 def test_replay_is_byte_identical_and_library_deduplicates_across_executions(execution: Path, tmp_path: Path) -> None:
     body = _png((5, 6, 7))
     image = _write(tmp_path / "downloads/x.png", body)

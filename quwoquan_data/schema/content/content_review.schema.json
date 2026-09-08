@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "quwoquan_data/schema/content/content_review.schema.json",
-  "description": "review 每对象唯一内容裁决。AI 只写 decision/blockingIssues/advisories（可选 safety 与 assetRights[].{assetRef,issues}）；dimensions、assetRights 逐资产行及其权利转录字段（sourceUrl/license/termsUrl/authorizationProof/usageScope）与 schema/stage/executionId/objectRef/draft 由 task seal 从产物实际引用的资产补齐。assetRights[].decision/issues 是权利记录事实，不牵连对象 decision。",
+  "description": "review 每对象唯一内容裁决。AI 只写 decision/blockingIssues/advisories（可选 safety 与 assetRights[].{assetRef,issues}）；dimensions、assetRights 逐资产行及其权利转录字段（sourceUrl/license/termsUrl/authorizationProof/usageScope）与 schema/stage/executionId/objectRef/draft 由 task seal 从产物实际引用的资产补齐。assetRights[].decision/issues 是权利记录事实，不牵连对象 decision。 qualityScores/qualityNotes 为 reviewer 可选申报的只记录字段，不参与 decision、admission 或 cohort。",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -166,6 +166,124 @@
           "pattern": "^sha256:[0-9a-f]{64}$"
         }
       }
+    },
+    "qualityScores": {
+      "description": "reviewer 申报的多维质量评分（只记录不门禁）：键为载体评分维度闭集成员（各载体六维，见 content-production Skill quality.md），值为 1–5 整数；缺席合法，脚本不补零。",
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": false,
+      "properties": {
+        "angle_and_title": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5
+        },
+        "audio_fit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5
+        },
+        "caption_value": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5
+        },
+        "composition_aesthetics": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5
+        },
+        "editing_rhythm": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5
+        },
+        "fact_traceability": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5
+        },
+        "image_match": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5
+        },
+        "image_relevance": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5
+        },
+        "information_completeness": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5
+        },
+        "originality": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5
+        },
+        "practical_density": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5
+        },
+        "practical_value": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5
+        },
+        "readability": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5
+        },
+        "rights_clarity": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5
+        },
+        "source_quality": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5
+        },
+        "structure_clarity": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5
+        },
+        "subject_relevance": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5
+        },
+        "technical_quality": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5
+        },
+        "unique_perspective": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5
+        },
+        "uniqueness": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5
+        },
+        "visual_quality": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5
+        }
+      }
+    },
+    "qualityNotes": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2000
     }
   },
   "allOf": [
