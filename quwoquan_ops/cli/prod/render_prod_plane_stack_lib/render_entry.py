@@ -195,7 +195,16 @@ def main() -> int:
     media_ref_path = Path(media_state_ref)
     if media_ref_path.is_absolute() or ".." in media_ref_path.parts:
         raise SystemExit("FAIL: rootlessRuntimeLayout.mediaStateRef must be a safe state-relative path")
-    media_root = str((resolve_target_local_dir("prod-hosted") / media_ref_path).resolve())
+    # 媒体状态是远端平面账号的持久目录，不是本机 QWQ_DEPLOY_WORK_ROOT 下的路径：
+    # 渲染到 compose 的 bind source 必须是远端 composeProjectRoot 下的 state 目录，
+    # 且按 instance/replica 隔离，重新 sync compose 目录时不被覆盖。
+    remote_compose_root = str(plane.get("composeProjectRoot") or "").rstrip("/")
+    if not remote_compose_root.startswith("/"):
+        raise SystemExit(f"FAIL: plane {args.plane} composeProjectRoot must be absolute")
+    media_root = (
+        f"{remote_compose_root}/state/{args.instance}/{args.replica_id}/"
+        f"{media_ref_path.as_posix()}"
+    )
     legal_root = str(layout.get("legalStaticRoot") or "runtime/legal-static")
     portal_root = str(layout.get("portalStaticRoot") or "runtime/portal")
     web_root = str(layout.get("webStaticRoot") or "runtime/public-web")
@@ -223,7 +232,6 @@ def main() -> int:
     if output_root.exists():
         remove_deployment_tree("prod-hosted", "rendered", render_name)
     output_root.mkdir(parents=True, exist_ok=True)
-    Path(media_root).mkdir(parents=True, exist_ok=True)
     legal_package_public = (
         legal_static_deployment_package_dir("prod", target="prod-hosted")
         / "current"
@@ -532,6 +540,32 @@ def main() -> int:
         compose_payload["networks"] = {
             "service-plane": {"name": service_network_name}
         }
+    else:
+        # 未声明平面专用网络时，服务仍引用模板网络（如 edge 平面的 default/edge）；
+        # 顶层 networks 只保留被引用的模板定义，否则 compose 报 undefined network。
+        referenced_networks: set[str] = set()
+        for spec in rendered_services.values():
+            declared = spec.get("networks")
+            names = list(declared) if isinstance(declared, (list, dict)) else []
+            referenced_networks.update(str(name) for name in names if name != "default")
+        template_networks = dict(template.get("networks") or {})
+        kept_networks = {
+            name: (template_networks.get(name) or {})
+            for name in sorted(referenced_networks)
+            if name in template_networks
+        }
+        if "default" in template_networks and any(
+            "default" in (spec.get("networks") or []) for spec in rendered_services.values()
+        ):
+            kept_networks["default"] = template_networks["default"] or {}
+        missing_networks = referenced_networks - set(template_networks)
+        if missing_networks:
+            raise SystemExit(
+                "FAIL: rendered services reference networks missing from the template: "
+                + ", ".join(sorted(missing_networks))
+            )
+        if kept_networks:
+            compose_payload["networks"] = kept_networks
     top_level_volumes = dict(template.get("volumes") or {})
     top_level_volumes.update(isolated_data_volumes)
     if any(name in RUNTIME_LOG_EXPORT_SERVICES for name in rendered_services):

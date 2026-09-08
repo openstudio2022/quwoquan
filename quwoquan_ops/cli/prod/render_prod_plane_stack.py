@@ -450,8 +450,14 @@ def _rewrite_service(
     volumes = list(updated.get("volumes") or [])
     if name == "gamma-proxy":
         web_mount = f"{_compose_bind_source(web_root)}:/srv/web:ro"
-        if web_mount not in volumes:
-            volumes.append(web_mount)
+        # 模板以 `${LOCAL_GAMMA_PUBLIC_WEB_ROOT:?}` 声明公网 Web 包挂载；渲染面用
+        # 候选内的 immutable Web 包路径替换它，而不是并列保留两份 /srv/web。
+        volumes = [
+            item
+            for item in volumes
+            if not (isinstance(item, str) and (":/srv/web:" in item or item.endswith(":/srv/web")))
+        ]
+        volumes.append(web_mount)
         # The prod renderer uses Caddy automatic TLS, while gray/prevalidation
         # expose an internal HTTP-only projection. The gamma-local certificate
         # bind mounts therefore never belong in a rendered prod plane.
@@ -547,6 +553,7 @@ def _rewrite_service(
         environment["cluster.name"] = "quwoquan-prod-prevalidate-logs"
         environment["node.name"] = "prod-prevalidate-logs-0"
     if instance == "prevalidate":
+        updated["ports"] = _prevalidation_published_ports(name, updated.get("ports"))
         limits = _prevalidation_spec().get("resourceLimits") or {}
         defaults = limits.get("defaults") or {}
         service_limits = (limits.get("services") or {}).get(name) or {}
@@ -566,6 +573,61 @@ def _rewrite_service(
             environment = updated.setdefault("environment", {})
             environment["ES_JAVA_OPTS"] = "-Xms128m -Xmx128m"
     return updated
+
+
+# 预验证实例的宿主端口：compose 模板以 `${QWQ_COMPOSE_<X>_PORT:-19xxx}` 声明 gamma-local
+# 段默认值；预验证必须落到 access-isolation 声明的 39xxx 段，且只绑定宿主回环——
+# 公网入口只经宿主共享 edge，数据面只经 SSH 隧道（SIT-003 t4 / REQ-003）。
+PREVALIDATION_HOST_PORTS: dict[str, int] = {
+    "QWQ_COMPOSE_CHAT_PORT": 39200,
+    "QWQ_COMPOSE_USER_PORT": 39210,
+    "QWQ_COMPOSE_CONTENT_PORT": 39220,
+    "QWQ_COMPOSE_ASSISTANT_PORT": 39230,
+    "QWQ_COMPOSE_REC_MODEL_PORT": 39240,
+    "QWQ_COMPOSE_PRODUCT_OPS_SERVICE_PORT": 39250,
+    "QWQ_COMPOSE_PLATFORM_OPS_SERVICE_PORT": 39260,
+    "QWQ_COMPOSE_TAG_PORT": 39270,
+    "QWQ_COMPOSE_SEARCH_PORT": 39280,
+    "QWQ_COMPOSE_ENTITY_PORT": 39290,
+    "QWQ_COMPOSE_CIRCLE_PORT": 39300,
+    "QWQ_COMPOSE_INTEGRATION_PORT": 39310,
+    "QWQ_COMPOSE_NOTIFICATION_PORT": 39320,
+    "QWQ_COMPOSE_REALTIME_PORT": 39340,
+    "QWQ_COMPOSE_RTC_PORT": 39350,
+    "LOCAL_GAMMA_POSTGRES_PORT": 39400,
+    "LOCAL_GAMMA_MONGO_PORT": 39410,
+    "LOCAL_GAMMA_REDIS_PORT": 39420,
+}
+_PORT_VARIABLE_REF = re.compile(r"^\$\{([A-Z][A-Z0-9_]*)(?::-(\d+))?\}$")
+
+
+def _prevalidation_published_ports(name: str, ports: Any) -> list[Any]:
+    """把模板端口映射改写为 `127.0.0.1:<39xxx>:<container>`；已带宿主地址的条目原样保留。"""
+
+    rendered: list[Any] = []
+    for item in ports or []:
+        if not isinstance(item, str):
+            rendered.append(item)
+            continue
+        if re.fullmatch(r"\d{1,3}(?:\.\d{1,3}){3}:\d+:\d+(?:/\w+)?", item):
+            rendered.append(item)  # 已显式绑定宿主地址（如 admin 端口）。
+            continue
+        if ":" not in item:
+            raise SystemExit(f"FAIL: prevalidation cannot interpret port mapping for {name}: {item}")
+        host_part, container_part = item.rsplit(":", 1)
+        match = _PORT_VARIABLE_REF.match(host_part)
+        if match is not None:
+            host_port = PREVALIDATION_HOST_PORTS.get(match.group(1))
+            if host_port is None:
+                raise SystemExit(
+                    f"FAIL: prevalidation has no 39xxx host port for {name}: {match.group(1)}"
+                )
+        elif host_part.isdigit():
+            host_port = int(host_part)
+        else:
+            raise SystemExit(f"FAIL: prevalidation cannot interpret host port for {name}: {item}")
+        rendered.append(f"127.0.0.1:{host_port}:{container_part}")
+    return rendered
 
 
 def _write_config_tree(

@@ -1,6 +1,7 @@
 """compose 卷与运行时凭据挂载重写（从 render_prod_plane_stack.py 逐字搬移）。"""
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Any
 
@@ -64,9 +65,17 @@ def _rewrite_volume_with_layout(
     return raw
 
 
+_DEFAULTED_VOLUME_REF = re.compile(r"^\$\{[A-Z][A-Z0-9_]*:-([A-Za-z0-9][A-Za-z0-9_.-]*)\}$")
+
+
 def _named_volume_source(raw: str) -> str | None:
     if ":" not in raw:
         return None
+    # `${VAR:-name}:/target` 形态的命名卷：渲染面不注入 VAR，插值结果就是默认名，
+    # 顶层 volumes 必须保留该默认名，否则 compose 报 undefined volume。
+    defaulted = _DEFAULTED_VOLUME_REF.match(raw.rsplit(":/", 1)[0] if ":/" in raw else raw)
+    if defaulted is not None:
+        return defaulted.group(1)
     source = raw.split(":", 1)[0]
     if source.startswith(".") or source.startswith("/") or source.startswith("${"):
         return None

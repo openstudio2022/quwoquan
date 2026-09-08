@@ -20,6 +20,19 @@ from .constants import OBSERVABILITY_SOURCE_ROOT, PROD_PLANE_ADMIN_PORTS, ROOT
 from .package_inputs import _plane_spec
 from .public_hosts import _prod_public_hosts
 
+
+def _tree_digest(root: Path) -> str:
+    """目录树的确定性内容摘要（相对路径 + 文件字节）；空树得到空字节的 sha256。"""
+    import hashlib
+
+    digest = hashlib.sha256()
+    if root.is_dir():
+        for path in sorted(p for p in root.rglob("*") if p.is_file()):
+            digest.update(path.relative_to(root).as_posix().encode("utf-8"))
+            digest.update(b"\0")
+            digest.update(hashlib.sha256(path.read_bytes()).digest())
+    return "sha256:" + digest.hexdigest()
+
 def _write_env_file(
     output_root: Path,
     candidate_digest: str,
@@ -71,10 +84,28 @@ def _write_env_file(
         )
 
         skill_trust = prepare_rehearsal_assistant_skill_package_keys()
+        # compose 会插值整份文件（含 image/config-only 的 integration-service）；
+        # 预验证不启动它，mTLS 挂载源只落显式占位文件，不生成任何可用凭据。
+        mtls_root = output_root / "runtime" / "integration-mtls"
+        mtls_root.mkdir(parents=True, exist_ok=True)
+        for filename in ("ca.crt", "client.crt", "client.key"):
+            (mtls_root / filename).write_text(
+                "prevalidation: integration-service is image-and-config-only; "
+                "mTLS material is intentionally not provisioned\n",
+                encoding="utf-8",
+            )
         lines.extend(
             [
                 "ASSISTANT_SKILL_PACKAGE_TRUSTED_PUBLIC_KEYS_JSON="
                 + skill_trust.public_keys_json,
+                "QWQ_PUBLIC_UPLOAD_HOST=" + public_hosts["mediaUpload"],
+                "QWQ_RELEASE_CANDIDATE_DIGEST=" + candidate_digest,
+                # 预验证不携带正式 Web release；该 digest 是实际渲染出的 /srv/web 树摘要。
+                "QWQ_PUBLIC_WEB_CONTENT_DIGEST="
+                + _tree_digest(output_root / "runtime" / "public-web"),
+                "INTEGRATION_SERVICE_MTLS_CA_FILE=./runtime/integration-mtls/ca.crt",
+                "INTEGRATION_SERVICE_MTLS_CLIENT_CERT_FILE=./runtime/integration-mtls/client.crt",
+                "INTEGRATION_SERVICE_MTLS_CLIENT_KEY_FILE=./runtime/integration-mtls/client.key",
                 "LOCAL_GAMMA_HTTP_PORT=39000",
                 "LOCAL_GAMMA_PRODUCT_OPS_PORT=39010",
                 "LOCAL_GAMMA_MEDIA_EDGE_PORT=39100",
