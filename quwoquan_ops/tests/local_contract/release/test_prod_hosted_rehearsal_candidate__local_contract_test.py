@@ -241,6 +241,58 @@ class RehearsalImageDeliveryContractTest(unittest.TestCase):
         self.assertEqual(remote[refs["chat-service"]], core)
         self.assertEqual(remote[refs["recommendation-service"]], rec)
 
+    def test_render_rewrites_artifact_identity_and_platform_ops_facts_mounts(self) -> None:
+        """SIT-003 t2：渲染面必须把 DEC-005 的两处 `${...:?}` 只读挂载改写为 render 输出内的材料，
+        否则 user systemd unit 在 compose 插值阶段即失败，永远到不了 enabled/active。"""
+        from quwoquan_ops.cli.prod.render_prod_plane_stack_lib import volume_layout
+
+        common = dict(
+            config_root="./runtime/config-root",
+            media_root="./runtime/media",
+            legal_root="./runtime/legal",
+            portal_root="./runtime/portal",
+            caddyfile_path="./runtime/Caddyfile",
+            model_cache_root="./runtime/model-cache",
+        )
+        self.assertEqual(
+            volume_layout._rewrite_volume_with_layout(
+                "${QWQ_COMPOSE_ARTIFACT_IDENTITY_FILE:?artifact identity mount is required}"
+                ":/etc/quwoquan/artifact-identity.json:ro",
+                **common,
+            ),
+            "./runtime/artifact-identity.json:/etc/quwoquan/artifact-identity.json:ro",
+        )
+        self.assertEqual(
+            volume_layout._rewrite_volume_with_layout(
+                "${QWQ_COMPOSE_PLATFORM_OPS_FACTS_ROOT:?platform-ops runtime facts mount is required}:/app:ro",
+                **common,
+            ),
+            "./runtime/platform-ops-facts:/app:ro",
+        )
+        # 精确 target 匹配：/app/cache 与嵌套 process 目录不被 /app 规则吞掉。
+        self.assertEqual(
+            volume_layout._rewrite_volume_with_layout("model-cache:/app/cache", **common),
+            "./runtime/model-cache:/app/cache",
+        )
+        nested = "platform-ops-prevalidation-state:/app/.qwq_output/env/repo/local/control-plane/process/platform-ops-service"
+        self.assertEqual(volume_layout._rewrite_volume_with_layout(nested, **common), nested)
+        from quwoquan_ops.cli.prod import render_prod_plane_stack as render
+
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp)
+            result = render._write_artifact_identity_and_platform_ops_facts(
+                output_root=out, candidate_digest=CANDIDATE
+            )
+            identity = json.loads((out / "runtime" / "artifact-identity.json").read_text())
+            self.assertEqual(identity["environment"], "prod")
+            self.assertEqual(identity["configDigest"], CANDIDATE)
+            facts = out / "runtime" / "platform-ops-facts"
+            self.assertTrue((facts / "quwoquan_ops/environments/prod/runtime.yaml").is_file())
+            self.assertTrue(
+                (facts / "quwoquan_service/control-plane/platform-ops/environments/prod").is_dir()
+            )
+            self.assertIn("user-service", result["platformOpsFactsServices"])
+
     def test_loader_rejects_factory_manifest_for_local_delivery(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             manifest_path = Path(tmp) / "oci-images.json"

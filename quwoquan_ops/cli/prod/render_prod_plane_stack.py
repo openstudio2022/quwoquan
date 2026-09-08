@@ -646,6 +646,10 @@ def _write_config_tree(
         "package": str(routing_policy_src),
         "policyDigest": _sha256(routing_policy_src),
     }
+    sources["artifactIdentity"] = _write_artifact_identity_and_platform_ops_facts(
+        output_root=output_root,
+        candidate_digest=candidate_digest,
+    )
     if isolated_prevalidation:
         policy_source = (
             ROOT
@@ -664,6 +668,69 @@ def _write_config_tree(
             "recommendationPolicySourceDigest": _sha256(policy_target),
         }
     return sources
+
+
+def _write_artifact_identity_and_platform_ops_facts(
+    *,
+    output_root: Path,
+    candidate_digest: str,
+) -> dict[str, Any]:
+    """DEC-005：部署面在渲染期材料化环境身份与 platform-ops 单环境 facts 树。
+
+    compose 模板以 `${QWQ_COMPOSE_ARTIFACT_IDENTITY_FILE}` 与
+    `${QWQ_COMPOSE_PLATFORM_OPS_FACTS_ROOT}` 声明这两个只读挂载；本地 target 由 up
+    在 run root 生成，prod-hosted 则随 render 输出一起 sync 到平面账号目录。
+    """
+
+    runtime_root = output_root / "runtime"
+    runtime_root.mkdir(parents=True, exist_ok=True)
+    identity_path = runtime_root / "artifact-identity.json"
+    identity_path.write_text(
+        json.dumps(
+            {
+                "schema": "qwq.environment-artifact-identity",
+                "environment": "prod",
+                "configDigest": candidate_digest,
+            },
+            separators=(",", ":"),
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    facts_root = runtime_root / "platform-ops-facts"
+    if facts_root.exists():
+        shutil.rmtree(facts_root)
+    services_root = ROOT / "quwoquan_service" / "services"
+    copied: list[str] = []
+    for service_root in sorted(services_root.iterdir()):
+        environment_root = service_root / "environments" / "prod"
+        if not environment_root.is_dir():
+            continue
+        target = facts_root / "quwoquan_service" / "services" / service_root.name
+        shutil.copytree(service_root / "config", target / "config")
+        shutil.copytree(environment_root, target / "environments" / "prod")
+        copied.append(service_root.name)
+    platform_root = ROOT / "quwoquan_service" / "control-plane" / "platform-ops"
+    platform_target = facts_root / "quwoquan_service" / "control-plane" / "platform-ops"
+    shutil.copytree(platform_root / "config", platform_target / "config")
+    shutil.copytree(
+        platform_root / "environments" / "prod",
+        platform_target / "environments" / "prod",
+    )
+    shutil.copytree(
+        ROOT / "quwoquan_ops" / "environments" / "prod",
+        facts_root / "quwoquan_ops" / "environments" / "prod",
+    )
+    # facts 树以 :ro 挂为容器 /app；compose 在其内部嵌套挂载 platform-ops 的可写
+    # process 目录，挂载点必须随材料预置。
+    (
+        facts_root
+        / ".qwq_output/env/repo/local/control-plane/process/platform-ops-service"
+    ).mkdir(parents=True, exist_ok=True)
+    return {
+        "artifactIdentityFile": _sha256(identity_path),
+        "platformOpsFactsServices": copied,
+    }
 
 
 def _write_caddyfile(
