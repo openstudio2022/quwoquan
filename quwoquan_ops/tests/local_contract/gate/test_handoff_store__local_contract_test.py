@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import copy
+from functools import lru_cache
 import json
 import os
 from pathlib import Path
@@ -21,6 +22,23 @@ from lib.human_agent_delivery.runtime_bridge import project_runtime_decision  # 
 
 
 def _payload() -> dict:
+    # 仅复用同一模块不变的输入fixture；每例深拷贝，生产consumer仍完整验证。
+    return copy.deepcopy(_payload_template())
+
+
+@lru_cache(maxsize=1)
+def _payload_template() -> dict:
+    from lib.candidate_evidence import build_candidate_evidence, export_candidate_closure
+    from lib.feature_tree.commands import _context_manifest
+    from lib.feature_tree.nodes import discover_nodes
+    from lib.feature_tree.ownership import resolve_target_details
+    from lib.feature_tree.content_addressed_writer import _write_content_addressed_bytes
+    target = "quwoquan_ops/cli/lib/handoff_store.py"
+    nodes = discover_nodes()
+    owner = _context_manifest(target, resolve_target_details(target, nodes), nodes)
+    owner_ref = _write_content_addressed_bytes(canonical_json_bytes(owner)).relative_to(ROOT).as_posix()
+    candidate = build_candidate_evidence(owner_ref, [target], repo_root=ROOT)
+    candidate_ref = _write_content_addressed_bytes(canonical_json_bytes(candidate), subdirectory="candidates/by-fingerprint").relative_to(ROOT).as_posix()
     payload = {
         "schema_version": contract_schema_version("handoff_manifest"),
         "intent": "durable explicit handoff",
@@ -30,8 +48,9 @@ def _payload() -> dict:
         "downstream": "plan-next",
         "human_decision_ref": None,
         "human_decision_projection": project_runtime_decision(target_kind="handoff"),
-        "owner_identity_ref": "owner.json",
-        "candidate_evidence_ref": "candidate.json",
+        "owner_identity_ref": owner_ref,
+        "candidate_evidence_ref": candidate_ref,
+        "candidate_closure": export_candidate_closure(candidate_ref, repo_root=ROOT),
         "review_plan_ref": "plan.json",
         "evidence_receipt_refs": ["evidence.json"],
         "reviewer_result_refs": ["review.json"],
@@ -172,6 +191,23 @@ def test_portable_raw_bytes_validate_in_another_clone_without_absolute_path(
         handoff_ref, transferred.read_bytes(), validate_current=False
     )
     assert payload["handoff_identity"]["digest"] == identity
+
+
+def test_portable_admission_rejects_missing_or_tampered_closure() -> None:
+    # spec_ref: specs/feature-tree/runtime/development-workflow-governance/agent-skill-review-context-organization/spec.md#gwt-002.t10
+    for fault in ("missing", "tamper", "old"):
+        payload = _payload()
+        if fault == "missing":
+            payload["candidate_closure"].pop()
+        elif fault == "tamper":
+            payload["candidate_closure"][0]["canonical_json"] = "{}"
+        else:
+            payload["schema_version"] = 4
+        handoff_store.bind_identity(payload)
+        raw = canonical_json_bytes(payload)
+        ref = f"handoff-ref-v1:{payload['handoff_identity']['digest']}:sha256:{__import__('hashlib').sha256(raw).hexdigest()}"
+        with pytest.raises(handoff_consumer.HandoffConsumerError):
+            handoff_consumer.validate_published_bytes(ref, raw, validate_current=False)
 
 
 def test_local_and_hosted_admission_accept_same_ref_and_exact_bytes(

@@ -11,6 +11,7 @@ from collections.abc import Mapping
 from pathlib import Path
 
 from ..descriptor_safe_io import read_regular_single_link_at
+from ..agent_governance_contract import contract_section
 from ..evidence_fingerprint import canonical_json_bytes
 from . import context
 
@@ -127,6 +128,7 @@ def _read_exact_bytes_at(directory_fd: int, name: str) -> bytes:
             name,
             display_path=f"immutable ref {name}",
             require_current_name=True,
+            max_bytes=int(contract_section("candidate_path_set")["max_bytes"]),
         )
     except OSError as error:
         if isinstance(error, FileNotFoundError):
@@ -141,7 +143,7 @@ def _write_content_addressed_bytes(
 ) -> Path:
     """目录 fd 绑定的原子 create-once；既不跟随 symlink，也不覆盖。"""
 
-    if subdirectory not in (None, "receipts", "candidates/by-fingerprint"):
+    if subdirectory not in (None, "receipts", "candidates/by-fingerprint", "candidate-paths"):
         raise ValueError(
             "GATE_BLOCK: immutable ref 只允许 canonical receipts/candidates 子目录"
         )

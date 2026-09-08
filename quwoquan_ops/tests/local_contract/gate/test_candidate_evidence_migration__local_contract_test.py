@@ -1,4 +1,4 @@
-"""Candidate v2 atomic cross-Feature-owner local contract.
+"""Candidate v3 atomic cross-Feature-owner lossless closure contract.
 
 # spec_ref: specs/feature-tree/runtime/development-workflow-governance/agent-skill-review-context-organization/spec.md#gwt-002.t5
 # spec_ref: specs/feature-tree/runtime/development-workflow-governance/agent-skill-review-context-organization/spec.md#gwt-002.t6
@@ -26,7 +26,7 @@ from lib.agent_governance_contract import (  # noqa: E402
 )
 from lib.candidate_evidence import (  # noqa: E402
     CandidateEvidenceError, _delivery_identity, build_candidate_evidence,
-    validate_candidate_ref,
+    validate_candidate_ref, load_candidate_path_set, _path_set_identity,
 )
 from lib.evidence_fingerprint import canonical_json_bytes  # noqa: E402
 from lib.feature_tree.commands import _context_manifest  # noqa: E402
@@ -125,7 +125,7 @@ def test_cross_owner_candidate_is_one_atomic_review_identity() -> None:
         expected_owner_identity_ref=owner_ref,
         expected_changed_paths=CHANGED,
     )
-    assert candidate["schema_version"] == 2
+    assert candidate["schema_version"] == 3
     # 最小 v2 中 delivery owner 与 lead lane 同为 current logical lane；hosted
     # PR job 与本地 lane worktree 都可能是六条 lane 中任一条，断言不得钉死某条 lane。
     current_lane, current_lead, _ = _delivery_identity(repo_root=ROOT)
@@ -134,7 +134,7 @@ def test_cross_owner_candidate_is_one_atomic_review_identity() -> None:
     assert candidate["lead_lane"] == current_lane
     assert "changed_paths" not in candidate
     assert "owner_chain" not in candidate
-    groups = candidate["impacted_owner_groups"]
+    groups = load_candidate_path_set(candidate, repo_root=ROOT)["impacted_owner_groups"]
     assert len(groups) == 2
     assert [group["owner_identity"]["resolved_owner"] for group in groups] == sorted(
         [group["owner_identity"]["resolved_owner"] for group in groups],
@@ -164,7 +164,7 @@ def test_cross_owner_candidate_is_one_atomic_review_identity() -> None:
         scope=TARGET,
     )
     identity = plan["candidate_evidence_identity"]
-    assert identity["schema_version"] == 2
+    assert identity["schema_version"] == 3
     assert identity["delivery_owner"] == current_lane
     assert identity["lead_lane"] == current_lane
     assert identity["impacted_owner_groups_digest"].startswith("sha256:")
@@ -175,6 +175,213 @@ def test_cross_owner_candidate_is_one_atomic_review_identity() -> None:
             (ROOT / ".agents/skills/review/references/registry.yaml").read_text()
         ),
     )["digest"] == plan["fingerprint"]
+
+
+def test_lossless_reference_closure_is_required_and_portable() -> None:
+    # spec_ref: specs/feature-tree/runtime/development-workflow-governance/agent-skill-review-context-organization/spec.md#gwt-002.t10
+    from lib.candidate_evidence import export_candidate_closure, validate_candidate_closure
+
+    owner_ref = _owner_ref()
+    ref = _candidate_ref(owner_ref, CHANGED)
+    closure = export_candidate_closure(ref, repo_root=ROOT)
+    candidate, paths = validate_candidate_closure(
+        closure, candidate_ref=ref, owner_identity_ref=owner_ref,
+    )
+    assert paths == sorted(CHANGED)
+    assert candidate["schema_version"] == 3
+    assert "impacted_owner_groups" not in candidate
+    assert candidate["path_set_identity"]["path_count"] == len(CHANGED)
+    missing = [item for item in closure if item["ref"] != candidate["path_set_identity"]["ref"]]
+    with pytest.raises(CandidateEvidenceError, match="closure"):
+        validate_candidate_closure(missing, candidate_ref=ref, owner_identity_ref=owner_ref)
+
+
+@pytest.mark.parametrize("fault", ["missing", "tamper", "oversized", "symlink", "hardlink", "directory-symlink"])
+def test_path_object_storage_faults_fail_closed(tmp_path: Path, fault: str) -> None:
+    # spec_ref: specs/feature-tree/runtime/development-workflow-governance/agent-skill-review-context-organization/spec.md#gwt-002.t10
+    import os
+    owner_ref = _owner_ref()
+    candidate = build_candidate_evidence(owner_ref, CHANGED, repo_root=ROOT)
+    ref = _write_tampered_candidate(candidate)
+    original = ROOT / candidate["path_set_identity"]["ref"]
+    copied = tmp_path / candidate["path_set_identity"]["ref"]
+    copied.parent.mkdir(parents=True)
+    if fault != "missing":
+        copied.write_bytes(original.read_bytes())
+    if fault == "tamper":
+        copied.write_bytes(b"{}")
+    elif fault == "oversized":
+        with copied.open("ab") as stream:
+            stream.write(b"x")
+    elif fault in ("symlink", "hardlink"):
+        target = tmp_path / "external.json"
+        target.write_bytes(original.read_bytes())
+        copied.unlink()
+        copied.symlink_to(target) if fault == "symlink" else os.link(target, copied)
+    elif fault == "directory-symlink":
+        directory = copied.parent
+        relocated = tmp_path / "relocated"
+        directory.rename(relocated)
+        directory.symlink_to(relocated, target_is_directory=True)
+    candidate_path = tmp_path / ref
+    candidate_path.parent.mkdir(parents=True, exist_ok=True)
+    candidate_path.write_bytes(canonical_json_bytes(candidate))
+    with pytest.raises(CandidateEvidenceError) as failure:
+        validate_candidate_ref(ref, repo_root=tmp_path)
+    assert failure.value.code == "CANDIDATE.STALE"
+
+
+@pytest.mark.parametrize("field", ["path_count", "byte_count", "changed_paths_digest", "impacted_owner_groups_digest"])
+def test_path_object_identity_tamper_is_rejected(field: str) -> None:
+    # spec_ref: specs/feature-tree/runtime/development-workflow-governance/agent-skill-review-context-organization/spec.md#gwt-002.t10
+    candidate = build_candidate_evidence(_owner_ref(), CHANGED, repo_root=ROOT)
+    identity = candidate["path_set_identity"]
+    identity[field] = identity[field] + 1 if isinstance(identity[field], int) else "sha256:" + "0" * 64
+    with pytest.raises(CandidateEvidenceError):
+        validate_candidate_ref(_write_tampered_candidate(candidate), repo_root=ROOT)
+
+
+def test_large_candidate_preserves_all_paths_under_manifest_budget() -> None:
+    # spec_ref: specs/feature-tree/runtime/development-workflow-governance/agent-skill-review-context-organization/spec.md#gwt-002.t10
+    # 确定性大路径集合（可表示已删除路径），不依赖运行测试时PR大小。
+    # 正式准出仍另由当前完整merge-base→HEAD范围生成，不能以本fixture替代。
+    paths = [TARGET, *[f"quwoquan_ops/cli/{'long-path-' * 10}{index:04}.py" for index in range(1700)]]
+    assert len(canonical_json_bytes(sorted(paths))) > 65536
+    owner_ref = _owner_ref()
+    result = subprocess.run([sys.executable, "-B", str(ROOT / "quwoquan_ops/cli/feature_tree.py"), "candidate-evidence", "--owner-identity", owner_ref,
+                             *[arg for path in paths for arg in ("--changed-path", path)]],
+                            cwd=ROOT, capture_output=True, text=True, check=False)
+    assert result.returncode == 0, result.stderr
+    ref = result.stdout.strip()
+    _, raw, candidate, _ = validate_candidate_ref(ref, repo_root=ROOT, expected_changed_paths=paths)
+    document = load_candidate_path_set(candidate, repo_root=ROOT)
+    restored = sorted(p for group in document["impacted_owner_groups"] for p in group["paths"])
+    assert restored == sorted(paths)
+    assert len(raw) <= 65536
+    assert candidate["path_set_identity"]["byte_count"] > len(raw)
+
+
+def test_path_object_predecessor_and_escape_rejected() -> None:
+    # spec_ref: specs/feature-tree/runtime/development-workflow-governance/agent-skill-review-context-organization/spec.md#gwt-002.t10
+    from lib.candidate_evidence import _validate_path_set
+    candidate = build_candidate_evidence(_owner_ref(), CHANGED, repo_root=ROOT)
+    document = load_candidate_path_set(candidate, repo_root=ROOT)
+    document["owner_identity_canonical_bytes_sha256"] = "sha256:" + "0" * 64
+    candidate["path_set_identity"] = _path_set_identity(document)
+    with pytest.raises(CandidateEvidenceError, match="predecessor"):
+        _validate_path_set(canonical_json_bytes(document), candidate)
+    document["owner_identity_canonical_bytes_sha256"] = candidate["owner_identity_canonical_bytes_sha256"]
+    document["impacted_owner_groups"][0]["paths"] = ["../escape"]
+    candidate["path_set_identity"] = _path_set_identity(document)
+    with pytest.raises(CandidateEvidenceError, match="路径非法"):
+        _validate_path_set(canonical_json_bytes(document), candidate)
+
+
+def test_path_object_concurrent_publish_and_consumer_no_write(monkeypatch: pytest.MonkeyPatch) -> None:
+    # spec_ref: specs/feature-tree/runtime/development-workflow-governance/agent-skill-review-context-organization/spec.md#gwt-002.t10
+    from concurrent.futures import ThreadPoolExecutor
+    from lib.feature_tree import content_addressed_writer
+    candidate = build_candidate_evidence(_owner_ref(), CHANGED, repo_root=ROOT)
+    document = load_candidate_path_set(candidate, repo_root=ROOT)
+    raw = canonical_json_bytes(document)
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        refs = list(pool.map(lambda _: _write_content_addressed_bytes(raw, subdirectory="candidate-paths"), range(4)))
+    assert len(set(refs)) == 1
+    ref = _write_tampered_candidate(candidate)
+    def reject_write(*args: object, **kwargs: object) -> None:
+        raise AssertionError("consumer must not publish")
+    monkeypatch.setattr(content_addressed_writer, "_write_content_addressed_bytes", reject_write)
+    validate_candidate_ref(ref, repo_root=ROOT)
+
+
+def test_owner_batch_rejects_rule_drift_and_does_not_cache_between_calls(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    # spec_ref: specs/feature-tree/runtime/development-workflow-governance/agent-skill-review-context-organization/spec.md#gwt-002.t10
+    from lib.feature_tree import nodes as node_module, ownership
+    node = node_module.Node(1, "batch", tmp_path)
+    node.spec.write_text("first")
+    monkeypatch.setattr(node_module, "discover_nodes", lambda: [node])
+    monkeypatch.setattr(ownership, "engineering_roots", lambda n: [n.spec.read_text()])
+    with pytest.raises(ValueError, match="漂移"):
+        with ownership.ownership_batch([node]):
+            assert ownership._engineering_roots(node) == ["first"]
+            node.spec.write_text("second")
+    with ownership.ownership_batch([node]):
+        assert ownership._engineering_roots(node) == ["second"]
+
+
+@pytest.mark.parametrize("fault", ["missing", "tamper"])
+def test_review_and_runner_require_path_object_before_evidence(monkeypatch: pytest.MonkeyPatch, fault: str) -> None:
+    # spec_ref: specs/feature-tree/runtime/development-workflow-governance/agent-skill-review-context-organization/spec.md#gwt-002.t10
+    import evidence_runner
+    import lib.candidate_evidence as candidate_module
+    import yaml
+    owner_ref = _owner_ref()
+    candidate_ref = _candidate_ref(owner_ref, CHANGED)
+    registry = yaml.safe_load((ROOT / ".agents/skills/review/references/registry.yaml").read_text())
+    def plan():
+        return review_dispatch.build_plan(
+            registry, "dev", "POST", None, CHANGED,
+            context_manifest=json.loads((ROOT / owner_ref).read_text()),
+            context_manifest_ref=owner_ref, candidate_evidence_ref=candidate_ref, scope=TARGET,
+        )
+    current_plan = plan()
+    original_read = candidate_module.read_repo_relative_regular_single_link
+    def faulty_read(root, ref, **kwargs):
+        if "/candidate-paths/" in ref:
+            if fault == "missing":
+                raise FileNotFoundError(ref)
+            return b"{}"
+        return original_read(root, ref, **kwargs)
+    def no_command(*args, **kwargs):
+        raise AssertionError("缺失闭包不得进入named evidence执行")
+    monkeypatch.setattr(candidate_module, "read_repo_relative_regular_single_link", faulty_read)
+    monkeypatch.setattr(evidence_runner, "run_command", no_command)
+    with pytest.raises(review_dispatch.ReviewDispatchError) as refusal:
+        plan()
+    assert refusal.value.code == "CANDIDATE.STALE"
+    with pytest.raises(evidence_runner.EvidenceRunnerError, match="CANDIDATE.STALE"):
+        evidence_runner.run_plan(current_plan, registry=registry, cwd=ROOT,
+                                 plan_bytes=canonical_json_bytes(current_plan), plan_ref="test-fixture:exact-plan")
+
+
+def test_referenced_owner_receipt_is_bounded_and_portable(tmp_path: Path) -> None:
+    # spec_ref: specs/feature-tree/runtime/development-workflow-governance/agent-skill-review-context-organization/spec.md#gwt-002.t10
+    from lib.agent_governance_contract import contract_section
+    from lib.candidate_evidence import export_candidate_closure, validate_candidate_closure
+    from lib.feature_context_fingerprint import referenced_fingerprint_binding, resolve_fingerprint_binding
+    from lib.evidence_fingerprint import EvidenceFingerprintError
+    owner = json.loads((ROOT / _owner_ref()).read_text())
+    receipt = owner["evidence_fingerprint"]["receipt"]
+    receipt_path = _write_content_addressed_bytes(canonical_json_bytes(receipt), subdirectory="receipts")
+    receipt_ref = receipt_path.relative_to(ROOT).as_posix()
+    owner["evidence_fingerprint"] = referenced_fingerprint_binding(receipt, receipt_ref=receipt_ref)
+    owner_ref = _write_content_addressed_bytes(canonical_json_bytes(owner)).relative_to(ROOT).as_posix()
+    candidate_ref = _candidate_ref(owner_ref, CHANGED)
+    closure = export_candidate_closure(candidate_ref, repo_root=ROOT)
+    assert len(closure) == 4
+    assert validate_candidate_closure(closure, candidate_ref=candidate_ref, owner_identity_ref=owner_ref)[1] == sorted(CHANGED)
+    hostile = tmp_path / receipt_ref
+    hostile.parent.mkdir(parents=True)
+    with hostile.open("wb") as stream:
+        stream.truncate(contract_section("feature_context_manifest")["fingerprint_receipt_max_bytes"] + 1)
+    with pytest.raises(EvidenceFingerprintError, match="读取字节边界"):
+        resolve_fingerprint_binding(owner["evidence_fingerprint"], repo_root=tmp_path)
+
+
+def test_review_cli_owner_read_rejects_oversized_before_json(tmp_path: Path) -> None:
+    # spec_ref: specs/feature-tree/runtime/development-workflow-governance/agent-skill-review-context-organization/spec.md#gwt-002.t10
+    from lib.review_dispatch_cli import _load_json
+    owner_ref = _owner_ref()
+    hostile = tmp_path / owner_ref
+    hostile.parent.mkdir(parents=True)
+    with hostile.open("wb") as stream:
+        stream.truncate(8193)
+    def refuse(code, message):
+        raise review_dispatch.ReviewDispatchError(code, message)
+    with pytest.raises(review_dispatch.ReviewDispatchError) as failure:
+        _load_json(owner_ref, label="owner_identity", refuse=refuse, repo_root=tmp_path)
+    assert failure.value.code == "REVIEW.OWNER_MANIFEST_INVALID"
+    assert "读取字节边界" in failure.value.message
 
 
 def test_empty_changed_paths_has_independent_terminal() -> None:
@@ -212,31 +419,38 @@ def test_primary_owner_must_be_impacted() -> None:
 def test_group_path_omission_duplicate_and_tamper_are_rejected() -> None:
     owner_ref = _owner_ref()
     candidate = build_candidate_evidence(owner_ref, CHANGED, repo_root=ROOT)
-    omitted = json.loads(json.dumps(candidate))
+    document = load_candidate_path_set(candidate, repo_root=ROOT)
+    def with_document(value: dict) -> str:
+        updated = json.loads(json.dumps(candidate))
+        updated["path_set_identity"] = _path_set_identity(value)
+        _write_content_addressed_bytes(canonical_json_bytes(value), subdirectory="candidate-paths")
+        return _write_tampered_candidate(updated)
+    omitted = json.loads(json.dumps(document))
     omitted["impacted_owner_groups"] = [
         group for group in omitted["impacted_owner_groups"]
-        if group["owner_identity"]["resolved_owner"] == omitted["resolved_owner"]
+        if group["owner_identity"]["resolved_owner"] == candidate["resolved_owner"]
     ]
-    omitted_ref = _write_tampered_candidate(omitted)
+    omitted_ref = with_document(omitted)
     with pytest.raises(CandidateEvidenceError) as missing:
         validate_candidate_ref(
             omitted_ref, repo_root=ROOT, expected_changed_paths=CHANGED
         )
     assert missing.value.code == "CANDIDATE.STALE"
 
-    duplicate = json.loads(json.dumps(candidate))
+    duplicate = json.loads(json.dumps(document))
     duplicate["impacted_owner_groups"][1]["paths"].append(
         duplicate["impacted_owner_groups"][0]["paths"][0]
     )
     duplicate["impacted_owner_groups"][1]["paths"].sort()
     with pytest.raises(ValueError, match="无重复覆盖"):
-        validate_candidate_evidence_manifest(duplicate)
+        from lib.agent_governance_contract import validate_candidate_path_set
+        validate_candidate_path_set(duplicate)
 
-    tampered = json.loads(json.dumps(candidate))
+    tampered = json.loads(json.dumps(document))
     tampered["impacted_owner_groups"][0]["owner_identity"]["owner_chain_digest"] = (
         "sha256:" + "0" * 64
     )
-    ref = _write_tampered_candidate(tampered)
+    ref = with_document(tampered)
     with pytest.raises(CandidateEvidenceError) as stale:
         validate_candidate_ref(ref, repo_root=ROOT)
     assert stale.value.code == "CANDIDATE.OWNER_DRIFT"
@@ -257,7 +471,7 @@ def test_candidate_stale_after_bytes_change() -> None:
 
 def test_old_candidate_schema_is_rejected() -> None:
     payload = build_candidate_evidence(_owner_ref(), CHANGED, repo_root=ROOT)
-    payload["schema_version"] = 1
+    payload["schema_version"] = 2
     ref = _write_tampered_candidate(payload)
     with pytest.raises(CandidateEvidenceError) as migration:
         validate_candidate_ref(ref, repo_root=ROOT)

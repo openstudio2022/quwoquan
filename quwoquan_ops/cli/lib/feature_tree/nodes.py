@@ -54,7 +54,15 @@ def discover_nodes() -> list[Node]:
 
 def node_for_spec(path: Path, nodes: Iterable[Node]) -> Node | None:
     resolved = path.resolve()
-    for node in nodes:
+    # 工程路径不可能是目录原生spec节点；先做物理边界检查，避免大候选
+    # 每条源码路径都逐个resolve全树节点。实际target仍解析symlink，不缓存事实。
+    if not resolved.is_relative_to(context.TREE_ROOT.resolve()):
+        return None
+    values = list(nodes)
+    for node in values:
+        if node.spec == resolved or node.directory == resolved:
+            return node
+    for node in values:
         if node.spec.resolve() == resolved or node.directory.resolve() == resolved:
             return node
     return None

@@ -1,4 +1,4 @@
-"""Candidate evidence v2 producer/consumer for one atomic delivery identity."""
+"""Candidate v3 的无损路径闭包与单个原子交付身份。"""
 from __future__ import annotations
 
 import hashlib
@@ -9,8 +9,8 @@ from pathlib import Path
 from typing import Any
 
 from .agent_governance_contract import (
-    contract_schema_version, declared_object, validate_candidate_evidence_manifest,
-    validate_feature_context_manifest,
+    contract_schema_version, contract_section, declared_object, validate_candidate_evidence_manifest,
+    validate_candidate_path_set, validate_feature_context_manifest,
 )
 from .descriptor_safe_io import read_repo_relative_regular_single_link
 from .evidence_fingerprint import (
@@ -20,7 +20,7 @@ from .evidence_fingerprint import (
 )
 from .feature_context_fingerprint import (
     CONTRACT_PATH, GENERATOR_PATH, resolve_fingerprint_binding,
-    validate_content_addressed_ref, validate_current_feature_context_fingerprint,
+    validate_content_addressed_ref, validate_current_feature_context_fingerprint, owner_identity_projection,
 )
 
 CANDIDATE_GENERATOR_PATH = "quwoquan_ops/cli/lib/candidate_evidence.py"
@@ -45,9 +45,11 @@ def _refuse(code: str, message: str) -> None:
 def _read_exact(ref: str, *, repo_root: Path, candidate: bool) -> bytes:
     relative = normalize_repo_relative_path(ref, repo_root)
     parts = _CANDIDATE_PARTS if candidate else _OWNER_PARTS
+    section = "candidate_evidence_manifest" if candidate else "feature_context_manifest"
     try:
         return read_repo_relative_regular_single_link(
-            repo_root, relative, expected_directory_parts=parts
+            repo_root, relative, expected_directory_parts=parts,
+            max_bytes=int(contract_section(section)["max_bytes"]), require_current_name=True,
         )
     except (OSError, ValueError) as exc:
         _refuse("CANDIDATE.STALE" if candidate else "IDENTITY.MIGRATION_REQUIRED", str(exc))
@@ -168,6 +170,22 @@ def _delivery_identity(*, repo_root: Path) -> tuple[str, str, dict[str, str]]:
 
 def _impacted_owner_groups(paths: list[str], *, repo_root: Path) -> list[dict[str, Any]]:
     from .feature_tree import context as tree_context
+    from .feature_tree.nodes import discover_nodes
+    from .feature_tree.ownership import ownership_batch
+    if tree_context.REPO_ROOT.resolve() != repo_root.resolve():
+        _refuse("CANDIDATE.STALE", "owner batch repository root 不一致")
+    try:
+        with ownership_batch(discover_nodes()):
+            return _resolve_impacted_owner_groups(paths, repo_root=repo_root)
+    except CandidateEvidenceError:
+        raise
+    except (OSError, ValueError) as exc:
+        _refuse("CANDIDATE.OWNER_RESOLUTION_FAILED", str(exc))
+    raise AssertionError("unreachable")
+
+
+def _resolve_impacted_owner_groups(paths: list[str], *, repo_root: Path) -> list[dict[str, Any]]:
+    from .feature_tree import context as tree_context
     from .feature_tree.nodes import discover_nodes, parent_chain
     from .feature_tree.ownership import resolve_target_details
 
@@ -210,11 +228,80 @@ def _impacted_owner_groups(paths: list[str], *, repo_root: Path) -> list[dict[st
         tree_context.REPO_ROOT, tree_context.TREE_ROOT = old_root, old_tree
 
 
-def _changed_paths(payload: dict[str, Any]) -> list[str]:
-    """Rebuild the canonical exact path projection stored once in owner groups."""
+def _path_set_identity(document: dict[str, Any]) -> dict[str, Any]:
+    raw = canonical_json_bytes(document)
+    digest = canonical_digest(document)
+    groups = document["impacted_owner_groups"]
+    paths = sorted((p for group in groups for p in group["paths"]), key=lambda p: p.encode("utf-8"))
+    return declared_object({
+        "ref": f"{contract_section('candidate_path_set')['directory']}/{digest[7:]}.json",
+        "canonical_bytes_sha256": digest, "byte_count": len(raw),
+        "path_count": len(paths), "owner_count": len(groups),
+        "changed_paths_digest": canonical_digest(paths),
+        "impacted_owner_groups_digest": canonical_digest(groups),
+    }, "candidate_path_set", "identity_fields")
 
+
+def _decode_exact(raw: bytes, ref: str, *, limit: int) -> dict[str, Any]:
+    if len(raw) > limit:
+        _refuse("CANDIDATE.STALE", "candidate closure 超出读取预算")
+    try:
+        value = json.loads(raw)
+        if not isinstance(value, dict) or canonical_json_bytes(value) != raw:
+            _refuse("CANDIDATE.STALE", "candidate closure 非 canonical object")
+    except (UnicodeError, ValueError, RecursionError) as exc:
+        _refuse("CANDIDATE.STALE", f"candidate closure JSON 非法：{exc}")
+    if hashlib.sha256(raw).hexdigest() != Path(ref).stem:
+        _refuse("CANDIDATE.STALE", "candidate closure ref/digest 漂移")
+    return value
+
+
+def _validate_path_set(raw: bytes, payload: dict[str, Any]) -> dict[str, Any]:
+    identity = payload["path_set_identity"]
+    expected_ref = f"{contract_section('candidate_path_set')['directory']}/{identity['canonical_bytes_sha256'][7:]}.json"
+    if identity["ref"] != expected_ref or len(raw) != identity["byte_count"]:
+        _refuse("CANDIDATE.STALE", "candidate path set ref/length 漂移")
+    document = _decode_exact(raw, expected_ref, limit=int(contract_section("candidate_path_set")["max_bytes"]))
+    validate_candidate_path_set(document)
+    for field in ("owner_identity_ref", "owner_identity_canonical_bytes_sha256"):
+        if document[field] != payload[field]:
+            _refuse("CANDIDATE.OWNER_DRIFT", "candidate path set predecessor 不一致")
+    if _path_set_identity(document) != identity:
+        _refuse("CANDIDATE.STALE", "candidate path set identity/coverage 漂移")
+    if payload["resolved_owner"] not in {g["owner_identity"]["resolved_owner"] for g in document["impacted_owner_groups"]}:
+        _refuse("CANDIDATE.OWNER_DRIFT", "candidate primary owner 不在 path set")
+    # 不依赖宿主的词法路径校验，current resolver 另在本地 freshness 边界重算。
+    for group in document["impacted_owner_groups"]:
+        for path in group["paths"]:
+            if path.startswith("/") or "\\" in path or any(c in path for c in ("\x00", "\n", "\r")) or any(p in ("", ".", "..") for p in path.split("/")):
+                _refuse("CANDIDATE.STALE", "candidate path set 路径非法")
+    return document
+
+
+def load_candidate_path_set(payload: dict[str, Any], *, repo_root: Path) -> dict[str, Any]:
+    validate_candidate_evidence_manifest(payload)
+    identity = payload["path_set_identity"]
+    directory = str(contract_section("candidate_path_set")["directory"])
+    expected_ref = f"{directory}/{identity['canonical_bytes_sha256'][7:]}.json"
+    if identity["ref"] != expected_ref:
+        _refuse("CANDIDATE.STALE", "candidate path set ref 非canonical")
+    try:
+        raw = read_repo_relative_regular_single_link(
+            repo_root, expected_ref, expected_directory_parts=tuple(directory.split("/")),
+            max_bytes=identity["byte_count"], require_current_name=True,
+        )
+        return _validate_path_set(raw, payload)
+    except (OSError, ValueError) as exc:
+        if isinstance(exc, CandidateEvidenceError):
+            raise
+        _refuse("CANDIDATE.STALE", f"candidate path set closure 不可用：{exc}")
+    raise AssertionError("unreachable")
+
+
+def _changed_paths(payload: dict[str, Any], *, repo_root: Path) -> list[str]:
+    document = load_candidate_path_set(payload, repo_root=repo_root)
     return sorted(
-        [path for group in payload["impacted_owner_groups"] for path in group["paths"]],
+        [path for group in document["impacted_owner_groups"] for path in group["paths"]],
         key=lambda item: item.encode("utf-8"),
     )
 
@@ -244,21 +331,25 @@ def _impact_plan(paths: list[str], *, repo_root: Path) -> tuple[dict[str, Any], 
 
 
 def build_candidate_fingerprint(payload: dict[str, Any], *, repo_root: Path, captured_by: str = "candidate_evidence") -> dict[str, Any]:
+    changed = _changed_paths(payload, repo_root=repo_root)
+    return _candidate_fingerprint(payload, workspace_digests(changed, repo_root=repo_root), captured_by=captured_by)
+
+
+def _candidate_fingerprint(payload: dict[str, Any], workspace: dict[str, Any], *, captured_by: str) -> dict[str, Any]:
     identity = {key: payload[key] for key in payload if key != "evidence_fingerprint"}
-    changed = _changed_paths(payload)
     return build_evidence_fingerprint({
         "git": {
             "head_sha": canonical_digest("candidate-head-independent"),
             "merge_base_sha": canonical_digest("candidate-merge-base-independent"),
         },
-        "workspace": workspace_digests(changed, repo_root=repo_root),
+        "workspace": workspace,
         "assets": {
             "canonical_assets_digest": canonical_digest(identity),
             "review_assets_digest": canonical_digest({
                 "delivery_owner": payload["delivery_owner"],
                 "lead_lane": payload["lead_lane"],
                 "delivery_policy_digests": payload["delivery_policy_digests"],
-                "impacted_owner_groups": payload["impacted_owner_groups"],
+                "path_set_identity": payload["path_set_identity"],
                 "context_snapshots": payload["context_snapshots"],
                 "impact_plan_identity": payload["impact_plan_identity"],
             }),
@@ -276,10 +367,10 @@ def build_candidate_fingerprint(payload: dict[str, Any], *, repo_root: Path, cap
                 "impact_plan": IMPACT_PLAN_SOURCE,
             }),
         },
-    }, captured_at="candidate-evidence-v2", captured_by=captured_by, captured_metadata={"consumer": "candidate_evidence_manifest"})
+    }, captured_at="candidate-evidence-v3", captured_by=captured_by, captured_metadata={"consumer": "candidate_evidence_manifest"})
 
 
-def build_candidate_evidence(owner_identity_ref: str, changed_paths: list[str], *, repo_root: Path) -> dict[str, Any]:
+def _assemble_candidate(owner_identity_ref: str, changed_paths: list[str], *, repo_root: Path) -> tuple[dict[str, Any], dict[str, Any]]:
     owner_ref, owner_raw, owner = _load_owner(owner_identity_ref, repo_root=repo_root)
     normalized = sorted(
         {normalize_repo_relative_path(path, repo_root) for path in changed_paths},
@@ -296,6 +387,16 @@ def build_candidate_evidence(owner_identity_ref: str, changed_paths: list[str], 
         _refuse("CANDIDATE.OWNER_DRIFT", "primary PRE target owner 未出现在 impacted owner groups")
     delivery_owner, lead_lane, policy_digests = _delivery_identity(repo_root=repo_root)
     _, impact_identity = _impact_plan(normalized, repo_root=repo_root)
+    document = {
+        "schema_version": contract_schema_version("candidate_path_set"),
+        "owner_identity_ref": owner_ref,
+        "owner_identity_canonical_bytes_sha256": "sha256:" + hashlib.sha256(owner_raw).hexdigest(),
+        "impacted_owner_groups": impacted_groups,
+    }
+    validate_candidate_path_set(document)
+    path_identity = _path_set_identity(document)
+    if path_identity["byte_count"] > int(contract_section("candidate_path_set")["max_bytes"]):
+        _refuse("CANDIDATE.STALE", "candidate path set 超出资源边界")
     payload: dict[str, Any] = {
         "schema_version": contract_schema_version("candidate_evidence_manifest"),
         "owner_identity_ref": owner_ref,
@@ -304,17 +405,28 @@ def build_candidate_evidence(owner_identity_ref: str, changed_paths: list[str], 
         "lead_lane": lead_lane,
         "delivery_policy_digests": policy_digests,
         "target": owner["target"], "resolved_owner": owner["resolved_owner"],
-        # Exact paths live only in their Feature-owner group. Owner chains are
-        # current resolver facts bound by digest, rather than repeated arrays.
-        "impacted_owner_groups": impacted_groups,
+        # 完整owner/path字节已先发布；manifest只绑定无损对象identity。
+        "path_set_identity": path_identity,
         "workspace_digests": workspace_digests(normalized, repo_root=repo_root),
         "context_snapshots": _context_snapshots(current, repo_root=repo_root),
         # Candidate 只内嵌 content-addressed ImpactPlan identity。完整 projection
         # 可由 changed_paths + current planner 重建；重复嵌入会让大原子候选突破预算。
         "impact_plan_identity": impact_identity,
+        "evidence_fingerprint": {},
     }
-    payload["evidence_fingerprint"] = build_candidate_fingerprint(payload, repo_root=repo_root)
+    payload["evidence_fingerprint"] = _candidate_fingerprint(payload, payload["workspace_digests"], captured_by="candidate_evidence")
     validate_candidate_evidence_manifest(payload)
+    return payload, document
+
+
+def build_candidate_evidence(owner_identity_ref: str, changed_paths: list[str], *, repo_root: Path) -> dict[str, Any]:
+    payload, document = _assemble_candidate(owner_identity_ref, changed_paths, repo_root=repo_root)
+    from .feature_tree.content_addressed_writer import _write_content_addressed_bytes
+    from .feature_tree import context as tree_context
+    if tree_context.REPO_ROOT.resolve() != repo_root.resolve():
+        _refuse("CANDIDATE.STALE", "candidate producer repository root 不一致")
+    _write_content_addressed_bytes(canonical_json_bytes(document), subdirectory="candidate-paths")
+    load_candidate_path_set(payload, repo_root=repo_root)
     return payload
 
 
@@ -340,7 +452,7 @@ def validate_candidate_ref(raw_ref: str, *, repo_root: Path, expected_owner_iden
         _refuse("IDENTITY.MIGRATION_REQUIRED", str(exc))
     if expected_owner_identity_ref and payload["owner_identity_ref"] != normalize_repo_relative_path(expected_owner_identity_ref, repo_root):
         _refuse("CANDIDATE.OWNER_DRIFT", "candidate predecessor owner identity 不匹配")
-    changed = _changed_paths(payload)
+    changed = _changed_paths(payload, repo_root=repo_root)
     if expected_changed_paths is not None:
         expected = sorted(
             {normalize_repo_relative_path(path, repo_root) for path in expected_changed_paths},
@@ -354,14 +466,15 @@ def validate_candidate_ref(raw_ref: str, *, repo_root: Path, expected_owner_iden
     current = _current_owner(str(owner["target"]), repo_root=repo_root, canonical_contexts=list(owner["canonical_contexts"]))
     if _owner_facts(current) != _owner_facts(owner):
         _refuse("CANDIDATE.OWNER_DRIFT", "candidate 当前 owner 重算漂移")
-    rebuilt = build_candidate_evidence(owner_ref, changed, repo_root=repo_root)
+    # consumer 重建事实不得发布或补全缺失对象。
+    rebuilt, _ = _assemble_candidate(owner_ref, changed, repo_root=repo_root)
     owner_fields = {
-        "target", "resolved_owner", "impacted_owner_groups", "delivery_owner",
+        "target", "resolved_owner", "path_set_identity", "delivery_owner",
         "lead_lane", "delivery_policy_digests",
     }
     for field in (
         "delivery_owner", "lead_lane", "delivery_policy_digests", "target", "resolved_owner",
-        "impacted_owner_groups", "workspace_digests", "context_snapshots",
+        "path_set_identity", "workspace_digests", "context_snapshots",
         "impact_plan_identity",
     ):
         if rebuilt[field] != payload[field]:
@@ -375,6 +488,93 @@ def validate_candidate_ref(raw_ref: str, *, repo_root: Path, expected_owner_iden
     return relative, raw, payload, actual
 
 
+def export_candidate_closure(ref: str, *, repo_root: Path) -> list[dict[str, str]]:
+    """输出已验证的portable exact bytes；不是新的authority或candidate。"""
+    ref, raw, candidate, _ = validate_candidate_ref(ref, repo_root=repo_root)
+    owner_ref, owner_raw, owner = _load_owner(candidate["owner_identity_ref"], repo_root=repo_root)
+    document = load_candidate_path_set(candidate, repo_root=repo_root)
+    members = {ref: raw, owner_ref: owner_raw,
+               candidate["path_set_identity"]["ref"]: canonical_json_bytes(document)}
+    binding = owner["evidence_fingerprint"]
+    if binding["mode"] == "referenced":
+        receipt_ref = binding["receipt_ref"]
+        members[receipt_ref] = read_repo_relative_regular_single_link(
+            repo_root, receipt_ref, expected_directory_parts=(*_OWNER_PARTS, "receipts"),
+            max_bytes=int(contract_section("feature_context_manifest")["fingerprint_receipt_max_bytes"]), require_current_name=True,
+        )
+    closure = [{"ref": key, "canonical_json": members[key].decode("utf-8")} for key in sorted(members)]
+    validate_candidate_closure(closure, candidate_ref=ref, owner_identity_ref=owner_ref)
+    return closure
+
+
+def validate_candidate_closure(
+    closure: list[dict[str, str]], *, candidate_ref: str, owner_identity_ref: str,
+) -> tuple[dict[str, Any], list[str]]:
+    """离线验证传输闭包；不读取本机工作树，不将其升级为current准出。"""
+    definition = contract_section("handoff_manifest")
+    if not isinstance(closure, list) or not 3 <= len(closure) <= int(definition["candidate_closure_max_members"]):
+        _refuse("CANDIDATE.STALE", "candidate closure member count 非法")
+    members: dict[str, bytes] = {}
+    cap = int(contract_section("candidate_path_set")["max_bytes"])
+    for item in closure:
+        if not isinstance(item, dict) or set(item) != {"ref", "canonical_json"}:
+            _refuse("CANDIDATE.STALE", "candidate closure member schema 非法")
+        ref, text = item["ref"], item["canonical_json"]
+        if not isinstance(ref, str) or ref in members or not isinstance(text, str) or len(text) > cap:
+            _refuse("CANDIDATE.STALE", "candidate closure duplicate/size 非法")
+        members[ref] = text.encode("utf-8")
+    def member(ref: str, limit: int) -> dict[str, Any]:
+        if ref not in members:
+            _refuse("CANDIDATE.STALE", f"candidate closure missing {ref}")
+        return _decode_exact(members[ref], ref, limit=limit)
+    if not isinstance(candidate_ref, str) or _REF_RE.fullmatch(candidate_ref) is None:
+        _refuse("IDENTITY.MIGRATION_REQUIRED", "candidate closure ref 非canonical")
+    candidate = member(candidate_ref, int(contract_section("candidate_evidence_manifest")["max_bytes"]))
+    if candidate.get("schema_version") != contract_schema_version("candidate_evidence_manifest"):
+        _refuse("IDENTITY.MIGRATION_REQUIRED", "candidate closure schema 已过期")
+    validate_candidate_evidence_manifest(candidate)
+    if candidate["owner_identity_ref"] != owner_identity_ref:
+        _refuse("CANDIDATE.OWNER_DRIFT", "candidate closure predecessor 不一致")
+    owner = member(owner_identity_ref, int(contract_section("feature_context_manifest")["max_bytes"]))
+    validate_content_addressed_ref(owner_identity_ref, raw_bytes=members[owner_identity_ref], repo_root=Path("/"))
+    validate_feature_context_manifest(owner)
+    if canonical_digest(owner) != candidate["owner_identity_canonical_bytes_sha256"]:
+        _refuse("CANDIDATE.OWNER_DRIFT", "candidate closure owner bytes 漂移")
+    if any(owner[field] != candidate[field] for field in ("target", "resolved_owner")):
+        _refuse("CANDIDATE.OWNER_DRIFT", "candidate closure owner identity 漂移")
+    path_ref = candidate["path_set_identity"]["ref"]
+    if path_ref not in members:
+        _refuse("CANDIDATE.STALE", "candidate closure missing path set")
+    document = _validate_path_set(members[path_ref], candidate)
+    expected = {candidate_ref, owner_identity_ref, path_ref}
+    binding = owner["evidence_fingerprint"]
+    if binding["mode"] == "referenced":
+        if binding["receipt"] is not None:
+            _refuse("CANDIDATE.STALE", "referenced owner 不得同时内嵌receipt")
+        receipt_ref = binding["receipt_ref"]
+        receipt = member(receipt_ref, int(contract_section("feature_context_manifest")["fingerprint_receipt_max_bytes"]))
+        validate_content_addressed_ref(receipt_ref, raw_bytes=members[receipt_ref], repo_root=Path("/"), receipt=True)
+        expected.add(receipt_ref)
+    else:
+        if binding["receipt_ref"] is not None:
+            _refuse("CANDIDATE.STALE", "embedded owner 不得同时携带receipt ref")
+        receipt = binding["receipt"]
+    fingerprint = validate_evidence_fingerprint(receipt)
+    owner_digest = canonical_digest(owner_identity_projection(owner, repo_root=Path("/")))
+    if fingerprint["digest_payload"]["assets"]["canonical_assets_digest"] != owner_digest:
+        _refuse("CANDIDATE.OWNER_DRIFT", "candidate closure owner facts 漂移")
+    if binding["digest"] != fingerprint["digest"] or binding["ref"] != fingerprint["ref"]:
+        _refuse("CANDIDATE.OWNER_DRIFT", "candidate closure owner fingerprint 漂移")
+    actual = validate_evidence_fingerprint(candidate["evidence_fingerprint"])
+    rebuilt = _candidate_fingerprint(candidate, candidate["workspace_digests"], captured_by="portable-candidate-consumer")
+    if any(actual[field] != rebuilt[field] for field in ("ref", "digest", "digest_payload")):
+        _refuse("CANDIDATE.STALE", "candidate closure fingerprint identity 漂移")
+    if set(members) != expected:
+        _refuse("CANDIDATE.STALE", "candidate closure unexpected members")
+    paths = sorted((p for group in document["impacted_owner_groups"] for p in group["paths"]), key=lambda p: p.encode("utf-8"))
+    return candidate, paths
+
+
 def candidate_identity(ref: str, raw: bytes, payload: dict[str, Any], fingerprint: dict[str, Any]) -> dict[str, Any]:
     return declared_object({
         "ref": ref,
@@ -386,8 +586,8 @@ def candidate_identity(ref: str, raw: bytes, payload: dict[str, Any], fingerprin
         "delivery_policy_digests": payload["delivery_policy_digests"],
         "target": payload["target"],
         "resolved_owner": payload["resolved_owner"],
-        "impacted_owner_groups_digest": canonical_digest(payload["impacted_owner_groups"]),
-        "changed_paths_digest": canonical_digest(_changed_paths(payload)),
+        "impacted_owner_groups_digest": payload["path_set_identity"]["impacted_owner_groups_digest"],
+        "changed_paths_digest": payload["path_set_identity"]["changed_paths_digest"],
         "workspace_digests": payload["workspace_digests"],
         "fingerprint_ref": fingerprint["ref"],
         "fingerprint_digest": fingerprint["digest"],

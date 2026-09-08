@@ -12,6 +12,7 @@ from typing import Any
 
 from .agent_governance_contract import (
     contract_schema_version,
+    contract_section,
     declared_object,
 )
 from .evidence_fingerprint import (
@@ -245,6 +246,8 @@ def resolve_fingerprint_binding(
                     "by-fingerprint",
                     "receipts",
                 ),
+                max_bytes=int(contract_section("feature_context_manifest")["fingerprint_receipt_max_bytes"]),
+                require_current_name=True,
             )
             validate_content_addressed_ref(
                 relative, raw_bytes=raw_bytes, repo_root=repo_root, receipt=True

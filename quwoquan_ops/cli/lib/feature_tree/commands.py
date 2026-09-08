@@ -567,6 +567,13 @@ def command_candidate_evidence(args: argparse.Namespace) -> int:
         output = _write_content_addressed_bytes(
             content, subdirectory="candidates/by-fingerprint"
         )
+        # 发布后完整读回；缺依赖/当前字节漂移时不返回可消费ref。
+        from ..candidate_evidence import validate_candidate_ref
+        validate_candidate_ref(
+            output.relative_to(context.REPO_ROOT).as_posix(), repo_root=context.REPO_ROOT,
+            expected_owner_identity_ref=args.owner_identity,
+            expected_changed_paths=list(args.changed_path),
+        )
     except CandidateEvidenceError as error:
         print(f"{error.code}: {error.message}", file=sys.stderr)
         return 2
