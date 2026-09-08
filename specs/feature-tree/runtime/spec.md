@@ -232,3 +232,11 @@ runtime 作为跨端云机制领域服务，治理共享 runtime 包和 integrat
 - 准出影响：`track`
 - 影响或价值：现有 metrics/observability 能力尚未提供按业务对象与特性绑定 SLI 的正式契约。
 - 完成判定：明确指标 owner、低基数约束和查询/告警消费方后，再建立独立 L2/L3，且新增节点后 `DOM-001` 的 L1/L2 与共享 runtime 包工程映射子句仍然成立。
+
+### OPEN-004 `readiness_result_bundle` 契约与 Go 评估器对 service/api_integration 结果的模型分歧
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：`quwoquan_service/contracts/metadata/_schemas/readiness_result_bundle.schema.json` 要求 `producer=service, layer=api_integration` 的结果携带 `releaseId/releaseDigest/importRunId/verifyRunId/objectRef/objectDigest` 且禁止 `platform/deviceClass/deviceRegistered`，而 `internal/metadata/readiness/model.go` 的 `ReadinessCaseResult` 无前四个字段、`platform/deviceClass/deviceRegistered` 恒输出，`evaluate.go` 亦以 platform/deviceClass 做执行槽匹配与身份校验。Go 模型尚缺这四个字段与按 producer/layer 区分的执行槽键，`tools/evaluate_readiness` 的 `TestCLIRequiresTheSignedSnapshotReceiptAndEvidenceChain` 因此报 `READINESS.BUNDLE.DECODE_FAILED`，evaluate_readiness 无法接受任何 Go 侧构造的 service/api_integration 结果。
+- 完成判定：以 schema 为 authoring source，`ReadinessCaseResult` 与评估器按 producer/layer 区分执行槽键与必填身份（service/api_integration 以 release/import/verify/object 绑定，不再要求设备身份），`go test ./tools/evaluate_readiness/... ./internal/metadata/readiness/...` 通过，Python 侧 `quwoquan_ops` 现有 bundle 产出（`release_bound_data_evidence.py` 等）通过同一 schema 校验，且 `DOM-001` 中「环境和 rollout stage 只作为三层测试证据维度」子句仍成立。
