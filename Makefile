@@ -1788,10 +1788,16 @@ evidence-signing-bootstrap:
 	@PYTHONDONTWRITEBYTECODE=1 python3 -B quwoquan_ops/cli/evidence_signing_bootstrap.py \
 		$$( [ "$${ROTATE:-0}" = "1" ] && printf -- '--rotate' ) $(EVIDENCE_SIGNING_ARGS)
 
-# lane 工作树 Alpha/Beta 验收：对 exact candidate（默认 HEAD）做本地 readiness + Alpha（条件 Beta）真实验证并签发
-# EnvironmentAcceptanceFact，终态 accepted；不 admit、不 publish。Data release 的 ship --handoff-ref admission 用当前工作树
-# 重算 candidate evidence，因此 Alpha/Beta 只能在产出 handoff 的 lane 工作树完成；gamma/prod 只在 integration 工作区推进。
-# 必填同 integrate；BASELINE=<sha> 指定 ImpactPlan/readiness 的 exact parent（candidate 已等于远端 dev1.0 时必填）。
+# lane 工作树验收：对 exact candidate（默认 HEAD，必须是当前 lane 分支 head）做本地 readiness + Alpha 真实验证并签发
+# EnvironmentAcceptanceFact，终态 accepted 并产出 portable acceptance bundle；不 admit、不 publish。
+# Beta 只在 BETA=1 时真跑，否则以 typed not_required 闭合（reason 记录 ImpactPlan 无需 / 政策可选）。
+# Data release 的 ship --handoff-ref admission 用当前工作树重算 candidate evidence，因此验收只能在产出 handoff 的 lane 工作树完成。
+# 必填：RELEASE_ATTESTATION / ROLLBACK_RELEASE_ATTESTATION（两份不同的 immutable production Data release attestation，
+# stackctl package 候选绑定）、RELEASE_HANDOFF_REF（candidate release 的 authoritative handoff-ref-v1，DEC-041 单一 production）；
+# 签名私钥来自仓外 QWQ_EVIDENCE_SIGNING_KEY_ROOT（先 make evidence-signing-bootstrap）。
+# 可选：BASELINE=<sha>（ImpactPlan/readiness 的 exact parent，candidate 已等于远端 dev1.0 时必填）、BETA=1、
+# MERGED_LANES="lane/a lane/b"（用户显式合并的其他 lane head，都须是 candidate 祖先）、CANDIDATE、OWNER_IDENTITY、
+# READINESS_LEVEL=fast|scope、PROFILE=integration|smoke、INTEGRATE_ARGS 透传。
 .PHONY: accept
 accept:
 	@if [ -z "$(RELEASE_ATTESTATION)" ] || [ -z "$(ROLLBACK_RELEASE_ATTESTATION)" ]; then \
@@ -1802,6 +1808,8 @@ accept:
 		--mode acceptance \
 		--candidate "$${CANDIDATE:-HEAD}" \
 		$$( [ -n "$(BASELINE)" ] && printf -- '--baseline %s' "$(BASELINE)" ) \
+		$$( [ "$${BETA:-0}" = "1" ] && printf -- '--beta' ) \
+		$$( for lane in $(MERGED_LANES); do printf -- '--merged-lanes %s ' "$$lane"; done ) \
 		--release-attestation "$(RELEASE_ATTESTATION)" \
 		--rollback-release-attestation "$(ROLLBACK_RELEASE_ATTESTATION)" \
 		--release-handoff-ref "$(RELEASE_HANDOFF_REF)" \
@@ -1810,27 +1818,18 @@ accept:
 		$$( [ -n "$(OWNER_IDENTITY)" ] && printf -- '--owner-identity %s' "$(OWNER_IDENTITY)" ) \
 		$(INTEGRATE_ARGS)
 
-# integration 工作区模式二：对 exact candidate 做本地 readiness + Alpha（条件 Beta）真实验证，
-# 签发 EnvironmentAcceptanceFact 并（PUBLISH=1 时）以 expected-old CAS fast-forward 发布到远端 dev1.0。
-# 必填：RELEASE_ATTESTATION / ROLLBACK_RELEASE_ATTESTATION 指向两份不同的 immutable production Data release attestation
-# （stackctl package 的候选绑定），RELEASE_HANDOFF_REF 是 candidate release 的 authoritative handoff-ref-v1
-# （现役 qwq-data ship 唯一准入身份，DEC-041 单一 production 类别；integrate 不执行 rollback，rollback 只参与候选绑定）；
-# 签名私钥来自仓外 QWQ_EVIDENCE_SIGNING_KEY_ROOT（先 make evidence-signing-bootstrap）。可选：CANDIDATE=<sha>（默认 HEAD）、
-# OWNER_IDENTITY=<ref>、READINESS_LEVEL=fast|scope、PROFILE=integration|smoke、INTEGRATE_ARGS 透传。
+# integration 工作区（分支 dev1.0，HEAD 已 ff 到 candidate）消费 lane 的 acceptance bundle：exact bytes 导入本工作树 store、
+# 验签并复核 candidate 绑定与 expectedParent == 远端 dev1.0，然后 admit 并（PUBLISH=1 时）以 expected-old lease fast-forward
+# 发布到远端 dev1.0、按 before|after|other 读回。这里不启动任何环境、不需要 Data release 输入；Gamma 与 prod canary 在 publish 之后推进。
+# 必填：ACCEPTANCE_BUNDLE=<lane make accept 产出的 acceptance-bundle 目录>。可选：CANDIDATE=<sha>（默认 HEAD）、PUBLISH=1、INTEGRATE_ARGS 透传。
 .PHONY: integrate
 integrate:
-	@if [ -z "$(RELEASE_ATTESTATION)" ] || [ -z "$(ROLLBACK_RELEASE_ATTESTATION)" ]; then \
-		echo "[integrate] GATE_BLOCK: RELEASE_ATTESTATION 与 ROLLBACK_RELEASE_ATTESTATION 必填（两份不同的 immutable production Data release attestation）" >&2; exit 2; fi
-	@if [ -z "$(RELEASE_HANDOFF_REF)" ]; then \
-		echo "[integrate] GATE_BLOCK: RELEASE_HANDOFF_REF 必填（candidate release 的 authoritative handoff-ref-v1）" >&2; exit 2; fi
+	@if [ -z "$(ACCEPTANCE_BUNDLE)" ]; then \
+		echo "[integrate] GATE_BLOCK: ACCEPTANCE_BUNDLE 必填（lane 工作树 make accept 产出的 acceptance-bundle 目录；integration 不再自行跑环境）" >&2; exit 2; fi
 	@PYTHONDONTWRITEBYTECODE=1 python3 -B quwoquan_ops/cli/integration_run.py \
+		--mode integrate \
 		--candidate "$${CANDIDATE:-HEAD}" \
-		--release-attestation "$(RELEASE_ATTESTATION)" \
-		--rollback-release-attestation "$(ROLLBACK_RELEASE_ATTESTATION)" \
-		--release-handoff-ref "$(RELEASE_HANDOFF_REF)" \
-		--readiness-level "$${READINESS_LEVEL:-fast}" \
-		--profile "$${PROFILE:-integration}" \
-		$$( [ -n "$(OWNER_IDENTITY)" ] && printf -- '--owner-identity %s' "$(OWNER_IDENTITY)" ) \
+		--acceptance-bundle "$(ACCEPTANCE_BUNDLE)" \
 		$$( [ "$${PUBLISH:-0}" = "1" ] && printf -- '--publish' ) \
 		$(INTEGRATE_ARGS)
 

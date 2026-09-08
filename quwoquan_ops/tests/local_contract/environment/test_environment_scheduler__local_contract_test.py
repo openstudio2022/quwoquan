@@ -398,6 +398,33 @@ def test_not_required_is_restricted_to_typed_beta_reason(tmp_path: Path) -> None
         )
 
 
+def test_beta_not_required_accepts_policy_optional_reason(tmp_path: Path) -> None:
+    # lane 验收默认只真跑 Alpha：ImpactPlan 判定 Beta 敏感但用户未 --beta opt-in 时，Beta 以
+    # ACCEPTANCE.BETA_OPTIONAL_BY_POLICY 写 typed not_required；该原因码与 no-live 同属闭集，
+    # 签发、schema 与 admission 三处一致；Alpha 与 Gamma 仍不得 not_required。
+    from quwoquan_ops.cli.lib.environment_acceptance_fact_contract import (
+        BETA_OPTIONAL_BY_POLICY,
+        NOT_REQUIRED_REASON_CODES,
+    )
+
+    assert NOT_REQUIRED_REASON_CODES == {NO_LIVE_ENVIRONMENT_REQUIRED, BETA_OPTIONAL_BY_POLICY}
+    candidate = _candidate(tmp_path, suffix="d")
+    _, alpha = _request(tmp_path, environment="alpha", candidate=candidate)
+    _mutate(tmp_path, alpha)
+    alpha_path = _issue(tmp_path, alpha)
+    _, beta = _request(tmp_path, environment="beta", candidate=candidate)
+    _queue(tmp_path, beta)
+    beta_path = _issue(
+        tmp_path, beta, status="not_required", predecessor=_exact(tmp_path, alpha_path),
+        reason_code=BETA_OPTIONAL_BY_POLICY,
+    )
+    beta_fact = json.loads(beta_path.read_text())
+    assert beta_fact["reasonCode"] == BETA_OPTIONAL_BY_POLICY
+    Draft202012Validator(json.loads(ACCEPTANCE_SCHEMA.read_text()), format_checker=FormatChecker()).validate(beta_fact)
+    with pytest.raises(EnvironmentSchedulerError, match="ACCEPTANCE_INVALID"):
+        validate_environment_acceptance_fact({**beta_fact, "reasonCode": "ACCEPTANCE.SKIPPED"})
+
+
 def test_create_once_conflict_rejects_different_bytes(tmp_path: Path) -> None:
     path = tmp_path / "facts" / "one.json"
     write_create_once(path, {"value": 1})

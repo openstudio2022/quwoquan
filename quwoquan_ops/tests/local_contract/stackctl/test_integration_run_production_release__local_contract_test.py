@@ -1,16 +1,25 @@
 # spec_ref: specs/feature-tree/runtime/development-workflow-governance/local-continuous-integration/spec.md#req-004
+# spec_ref: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/daily-merge-release-strategy/spec.md#gwt-001.t6
+# spec_ref: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/daily-merge-release-strategy/spec.md#gwt-001.t7
+# spec_ref: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/daily-merge-release-strategy/spec.md#gwt-001.t8
+# spec_ref: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/daily-merge-release-strategy/spec.md#gwt-001.t9
+# spec_ref: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/daily-merge-release-strategy/spec.md#gwt-001.t10
+# spec_ref: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/daily-merge-release-strategy/spec.md#gwt-001.t11
 #
-# integrate 的 Data release 输入按 DEC-041 单一 production 类别：attestation 只接受
-# releaseClass=productLifecycleState=production；进入环境只经现役 `qwq-data ship`
+# lane 验收（`--mode acceptance`）的 Data release 输入按 DEC-041 单一 production 类别：attestation
+# 只接受 releaseClass=productLifecycleState=production；进入环境只经现役 `qwq-data ship`
 # 的 handoff-ref 准入（apply → activate → verify --readiness-phase production），
-# 不再以 release id 隐式选择、也不接受 research/commercial。
+# 不再以 release id 隐式选择、也不接受 research/commercial。Beta 显式 opt-in；accepted 终态
+# 产出 acceptance bundle；integrate（integration 工作区）只消费 bundle 做 admit/publish（DEC-014）。
 
 from __future__ import annotations
 
 import json
+import shutil
 import sys
 import tempfile
 import unittest
+from contextlib import ExitStack
 from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
@@ -146,58 +155,341 @@ class IntegrationRunProductionReleaseContractTest(unittest.TestCase):
         self.assertEqual(call[call.index("--content-id") + 1], "data_post_" + "d" * 64)
         self.assertEqual(call[call.index("--readiness-receipt") + 1], str(report))
 
-    def test_parser_requires_candidate_handoff_ref_only(self) -> None:
-        # integrate 只对 candidate 执行 ship apply/activate/verify；rollback release 只参与
-        # stackctl package 的候选绑定，因此不需要 rollback handoff-ref。
+    def test_release_inputs_belong_to_acceptance_and_need_candidate_handoff_ref_only(self) -> None:
+        # Data release 输入（两份 attestation + candidate handoff-ref）只属于 acceptance；rollback release 只参与
+        # stackctl package 的候选绑定，因此不需要 rollback handoff-ref。parser 不再在 integrate 上强制它们。
         parser = integration_run._parser()
-        with self.assertRaises(SystemExit):
-            parser.parse_args(["--release-attestation", "a", "--rollback-release-attestation", "b"])
-        parsed = parser.parse_args([
-            "--release-attestation", "a", "--rollback-release-attestation", "b",
-            "--release-handoff-ref", VALID_REF,
-        ])
-        self.assertEqual(parsed.release_handoff_ref, VALID_REF)
+        parsed = parser.parse_args(["--mode", "integrate", "--acceptance-bundle", "/tmp/bundle"])
+        self.assertIsNone(parsed.release_attestation)
+        self.assertEqual(parsed.release_handoff_ref, "")
         self.assertFalse(hasattr(parsed, "rollback_handoff_ref"))
+        production = _attestation(self.root, "rel-candidate", "production")
+        rollback = _attestation(self.root, "rel-rollback", "production")
+        with self._runtime_patches():
+            for run_id, argv in (
+                ("acceptance-no-handoff", ["--mode", "acceptance", "--release-attestation", str(production),
+                                           "--rollback-release-attestation", str(rollback)]),
+                ("acceptance-no-attestation", ["--mode", "acceptance", "--release-handoff-ref", VALID_REF]),
+            ):
+                with self.subTest(run_id=run_id):
+                    self.assertEqual(self._blocker(run_id, argv), "INTEGRATION_RUN.INPUT_INVALID")
         makefile = (ROOT / "Makefile").read_text(encoding="utf-8")
         self.assertIn("RELEASE_HANDOFF_REF", makefile)
         self.assertNotIn("ROLLBACK_HANDOFF_REF", makefile)
-        self.assertIn('--release-handoff-ref "$(RELEASE_HANDOFF_REF)"', makefile)
+        accept_block = makefile.split("\naccept:\n", 1)[1].split("\n.PHONY", 1)[0]
+        self.assertIn('--release-handoff-ref "$(RELEASE_HANDOFF_REF)"', accept_block)
+
+    def _runtime_patches(self) -> ExitStack:
+        exit_stack = ExitStack()
+        for patcher in (
+            mock.patch.object(integration_run, "RUNS_ROOT", self.root / "runs"),
+            mock.patch.object(integration_run, "ed25519_signer", return_value=object()),
+            mock.patch.object(integration_run, "load_keyring", return_value={}),
+            mock.patch.object(integration_run, "key_root", return_value=self.root),
+        ):
+            exit_stack.enter_context(patcher)
+        return exit_stack
+
+    def _blocker(self, run_id: str, argv: list[str]) -> str:
+        self.assertEqual(integration_run.main([*argv, "--run-id", run_id]), 1)
+        payload = json.loads((self.root / "runs" / run_id / "summary.json").read_text(encoding="utf-8"))
+        self.assertEqual(payload["terminal"], "GATE_BLOCK")
+        return payload["blocker"]["code"]
 
     def test_acceptance_mode_is_lane_side_and_never_publishes(self) -> None:
-        # Alpha/Beta 只能在产出 handoff 的 lane 工作树完成（ship admission 重算当前工作树的
-        # candidate evidence）；integration 工作区只承担 admit/publish 与 gamma/prod。
+        # Alpha（可选 Beta）只能在产出 handoff 的 lane 工作树完成（ship admission 重算当前工作树的
+        # candidate evidence）；integration 工作区只消费 bundle 做 admit/publish 与 gamma/prod。
         parser = integration_run._parser()
         base = ["--release-attestation", "a", "--rollback-release-attestation", "b", "--release-handoff-ref", VALID_REF]
-        self.assertEqual(parser.parse_args(base).mode, "integrate")
-        parsed = parser.parse_args([*base, "--mode", "acceptance", "--baseline", "abc123"])
-        self.assertEqual((parsed.mode, parsed.baseline), ("acceptance", "abc123"))
+        self.assertEqual(parser.parse_args([]).mode, "integrate")
+        parsed = parser.parse_args([*base, "--mode", "acceptance", "--baseline", "abc123", "--beta",
+                                    "--merged-lanes", "lane/ops", "--merged-lanes", "lane/engineering"])
+        self.assertEqual((parsed.mode, parsed.baseline, parsed.beta), ("acceptance", "abc123", True))
+        self.assertEqual(parsed.merged_lanes, ["lane/ops", "lane/engineering"])
+        self.assertFalse(parser.parse_args([*base, "--mode", "acceptance"]).beta)
         with self.assertRaises(SystemExit):
             parser.parse_args([*base, "--mode", "gamma"])
         makefile = (ROOT / "Makefile").read_text(encoding="utf-8")
         self.assertIn("\naccept:\n", makefile)
-        self.assertIn("--mode acceptance", makefile)
-        self.assertIn("--baseline %s", makefile)
         accept_block = makefile.split("\naccept:\n", 1)[1].split("\n.PHONY", 1)[0]
+        self.assertIn("--mode acceptance", accept_block)
+        self.assertIn("--baseline %s", accept_block)
+        self.assertIn("'--beta'", accept_block)
+        self.assertIn("MERGED_LANES", accept_block)
         self.assertNotIn("--publish", accept_block)
 
-    def test_acceptance_mode_rejects_publish_and_integrate_rejects_baseline(self) -> None:
+    def test_integrate_consumes_bundle_only_and_rejects_acceptance_inputs(self) -> None:
+        # integrate 不签发、不跑环境：必须给 --acceptance-bundle，任何 acceptance 专用输入都是 INPUT_INVALID；
+        # acceptance 反之不得携带 bundle 或 --publish。
         production = _attestation(self.root, "rel-candidate", "production")
         rollback = _attestation(self.root, "rel-rollback", "production")
-        base = ["--release-attestation", str(production), "--rollback-release-attestation", str(rollback),
-                "--release-handoff-ref", VALID_REF]
-        with mock.patch.object(integration_run, "RUNS_ROOT", self.root / "runs"), \
-                mock.patch.object(integration_run, "ed25519_signer", return_value=object()), \
-                mock.patch.object(integration_run, "load_keyring", return_value={}), \
-                mock.patch.object(integration_run, "key_root", return_value=self.root):
+        acceptance = ["--mode", "acceptance", "--release-attestation", str(production),
+                      "--rollback-release-attestation", str(rollback), "--release-handoff-ref", VALID_REF]
+        with self._runtime_patches():
+            self.assertEqual(self._blocker("integrate-no-bundle", ["--mode", "integrate"]), "INTEGRATION_RUN.ACCEPTANCE_REQUIRED")
             for run_id, argv in (
-                ("acceptance-publish", [*base, "--mode", "acceptance", "--publish"]),
-                ("integrate-baseline", [*base, "--mode", "integrate", "--baseline", "abc123"]),
+                ("acceptance-publish", [*acceptance, "--publish"]),
+                ("acceptance-bundle", [*acceptance, "--acceptance-bundle", str(self.root)]),
+                ("integrate-baseline", ["--mode", "integrate", "--acceptance-bundle", str(self.root), "--baseline", "abc123"]),
+                ("integrate-beta", ["--mode", "integrate", "--acceptance-bundle", str(self.root), "--beta"]),
+                ("integrate-attestation", ["--mode", "integrate", "--acceptance-bundle", str(self.root), "--release-attestation", str(production)]),
+                ("integrate-handoff", ["--mode", "integrate", "--acceptance-bundle", str(self.root), "--release-handoff-ref", VALID_REF]),
             ):
                 with self.subTest(run_id=run_id):
-                    self.assertEqual(integration_run.main([*argv, "--run-id", run_id]), 1)
-                    payload = json.loads((self.root / "runs" / run_id / "summary.json").read_text(encoding="utf-8"))
-                    self.assertEqual(payload["terminal"], "GATE_BLOCK")
-                    self.assertEqual(payload["blocker"]["code"], "INTEGRATION_RUN.INPUT_INVALID")
+                    self.assertEqual(self._blocker(run_id, argv), "INTEGRATION_RUN.INPUT_INVALID")
+        makefile = (ROOT / "Makefile").read_text(encoding="utf-8")
+        integrate_block = makefile.split("\nintegrate:\n", 1)[1].split("\n.PHONY", 1)[0]
+        self.assertIn("ACCEPTANCE_BUNDLE", integrate_block)
+        self.assertIn('--acceptance-bundle "$(ACCEPTANCE_BUNDLE)"', integrate_block)
+        self.assertIn("--mode integrate", integrate_block)
+        for retired in ("--release-attestation", "--release-handoff-ref", "--readiness-level", "--owner-identity"):
+            self.assertNotIn(retired, integrate_block)
+
+    def test_beta_is_explicit_opt_in_with_typed_reason(self) -> None:
+        # Beta 缺省不真跑：ImpactPlan 无需 live Beta 时 reason=NO_LIVE；ImpactPlan 判定敏感但未 --beta 时
+        # reason=ACCEPTANCE.BETA_OPTIONAL_BY_POLICY。两者都进入 case result 与签发的 reason_code。
+        from quwoquan_ops.cli.lib.environment_acceptance_fact_contract import (
+            BETA_OPTIONAL_BY_POLICY,
+            NO_LIVE_ENVIRONMENT_REQUIRED,
+        )
+
+        plan_path = self.root / "runs/r1/impact-plan.json"
+        plan_path.parent.mkdir(parents=True)
+        plan_path.write_text('{"integration_depth": "abg_release_sensitive"}\n', encoding="utf-8")
+        store = self.root / "store"
+        candidate = {"candidateId": "sha256:" + "1" * 64, "commit": "2" * 40, "tree": "3" * 40}
+        with mock.patch.object(integration_run, "_store", return_value=store):
+            evidence = integration_run._not_required_beta(
+                candidate=candidate, impact_plan_digest="sha256:" + "4" * 64, impact_plan_path=plan_path,
+                profile="integration", reason_code=BETA_OPTIONAL_BY_POLICY,
+            )
+            self.assertEqual(evidence["reasonCode"], BETA_OPTIONAL_BY_POLICY)
+            case = json.loads((store / evidence["cases"][0]["ref"]).read_text(encoding="utf-8"))
+            # canonical ReadinessCaseResult：passed 结果不得带 reasonCode；原因落在 EAF 与 named evidence
+            self.assertEqual(case["status"], "passed")
+            self.assertNotIn("reasonCode", case)
+            runtime_identity = json.loads((store / evidence["named"]["runtime_identity"]["ref"]).read_text(encoding="utf-8"))
+            self.assertEqual(runtime_identity["source"]["basis"], BETA_OPTIONAL_BY_POLICY)
+            self.assertIs(runtime_identity["source"]["executed"], False)
+            issued: dict[str, object] = {}
+
+            def fake_issue(**kwargs: object) -> Path:
+                issued.update(kwargs)
+                fact = store / "environment-execution/acceptance/x/beta.json"
+                fact.parent.mkdir(parents=True, exist_ok=True)
+                fact.write_text("{}", encoding="utf-8")
+                return fact
+
+            with mock.patch.object(integration_run, "create_execution_request", return_value=store / "req.json"), \
+                    mock.patch.object(integration_run, "request_exact_ref", return_value={"ref": "req.json", "digest": "sha256:" + "5" * 64}), \
+                    mock.patch.object(integration_run, "append_task_state"), \
+                    mock.patch.object(integration_run, "issue_environment_acceptance_fact", side_effect=fake_issue):
+                args = SimpleNamespace(fact_ttl_hours=1, signer_identity="s")
+                integration_run._issue(environment="beta", candidate_ref={"ref": "c", "digest": "d"}, impact_plan_digest="sha256:" + "4" * 64,
+                                       evidence=evidence, status="not_required", predecessor={"ref": "a", "digest": "b"},
+                                       profile="integration", args=args, signer=object())
+                self.assertEqual(issued["reason_code"], BETA_OPTIONAL_BY_POLICY)
+                integration_run._issue(environment="beta", candidate_ref={"ref": "c", "digest": "d"}, impact_plan_digest="sha256:" + "4" * 64,
+                                       evidence={"named": evidence["named"], "cases": evidence["cases"]}, status="not_required",
+                                       predecessor={"ref": "a", "digest": "b"}, profile="integration", args=args, signer=object())
+                self.assertEqual(issued["reason_code"], NO_LIVE_ENVIRONMENT_REQUIRED)
+                integration_run._issue(environment="alpha", candidate_ref={"ref": "c", "digest": "d"}, impact_plan_digest="sha256:" + "4" * 64,
+                                       evidence=evidence, status="passed", predecessor=None, profile="integration", args=args, signer=object())
+                self.assertIsNone(issued["reason_code"])
+
+    def _fake_store(self, name: str, *, commit: str, tree: str, parent: str) -> tuple[Path, dict[str, dict[str, str]]]:
+        """构造一个含 candidate/claim/source fact/Alpha+Beta EAF 及其全部 exact 证据的假 store。"""
+        store = self.root / name
+        digest = integration_run.exact_file_digest
+
+        def write(ref: str, payload: dict[str, object]) -> dict[str, str]:
+            path = store / ref
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(integration_run._canonical_bytes(payload) + b"\n")
+            return {"ref": ref, "digest": digest(path)}
+
+        candidate_id = "sha256:" + "a" * 64
+        claim = write("claims/c1.json", {"claimId": "sha256:" + "c" * 64, "paths": ["x.txt"]})
+        candidate = write("candidates/a.json", {
+            "schema": "quwoquan_ops.exact_integration_candidate.v1", "candidateId": candidate_id, "commit": commit, "tree": tree,
+            "expectedParent": parent, "claimRef": claim["ref"], "claimDigest": claim["digest"], "paths": ["x.txt"],
+        })
+        source = write("source-facts/s.json", {"status": "passed", "candidateId": candidate_id, "commit": commit})
+        facts: dict[str, dict[str, str]] = {"candidate": candidate, "claim": claim, "sourceFact": source}
+        for environment in ("alpha", "beta"):
+            named = {
+                field: write(f"environment-evidence/{'a' * 64}/{environment}/{field}.json", {"role": field, "environment": environment})
+                for field in integration_run._EAF_NAMED_FIELDS
+            }
+            cases = [write(f"environment-evidence/{'a' * 64}/{environment}/cases/000.json", {"caseId": f"{environment}-0"})]
+            facts[f"{environment}Fact"] = write(f"environment-execution/acceptance/{'a' * 64}/{environment}.json", {
+                "schema": "quwoquan_ops.environment_acceptance_fact.v2", "environment": environment,
+                "status": "passed" if environment == "alpha" else "not_required",
+                "candidate": {"candidateId": candidate_id, "commit": commit, "tree": tree},
+                "caseResultRefs": cases, **named, "signer": {"identity": "quwoquan-environment-ops-local", "signature": "ed25519:x"},
+            })
+        return store, facts
+
+    def _bundle_from_fake_store(self, *, commit: str, tree: str, parent: str) -> tuple[Path, dict[str, dict[str, str]], Path]:
+        store, facts = self._fake_store("lane-store", commit=commit, tree=tree, parent=parent)
+        run_dir = self.root / "runs/acc-1"
+        run_dir.mkdir(parents=True)
+        plan_path = run_dir / "impact-plan.json"
+        plan_path.write_text('{"integration_depth":"alpha_integration"}\n', encoding="utf-8")
+        summary = {"runId": "acc-1", "impactPlan": {"digest": "sha256:" + "9" * 64, "integrationDepth": "alpha_integration"},
+                   "dataReleases": ["rel-a", "rel-b"], "dataReleaseHandoffRef": VALID_REF}
+        args = SimpleNamespace(signer_identity="quwoquan-environment-ops-local", profile="integration")
+        with mock.patch.object(integration_run, "_store", return_value=store):
+            bundle_dir = integration_run._write_acceptance_bundle(
+                run_dir=run_dir, candidate_ref=facts["candidate"], source_ref=facts["sourceFact"], alpha_ref=facts["alphaFact"],
+                beta_ref=facts["betaFact"], identity={"commit": commit, "parent": parent, "tree": tree, "remoteHead": parent},
+                plan_path=plan_path, summary=summary, beta_status="not_required", beta_reason="IMPACT_PLAN.NO_LIVE_ENVIRONMENT_REQUIRED",
+                lane_branch="refs/heads/lane/product-mainline",
+                merged_lanes=[{"branch": "refs/heads/lane/product-mainline", "commit": commit}], args=args,
+            )
+        return bundle_dir, facts, store
+
+    def test_acceptance_bundle_round_trips_exact_bytes_into_integration_store(self) -> None:
+        # accepted 终态把 candidate/claim/source fact/两份 EAF 及其全部 case/named 证据按 store 相对路径复制成 bundle；
+        # integration 逐字节复核后 create-once 导入自己的 store，再次导入幂等（0 新文件）。
+        commit, tree, parent = "1" * 40, "2" * 40, "0" * 40
+        bundle_dir, facts, lane_store = self._bundle_from_fake_store(commit=commit, tree=tree, parent=parent)
+        manifest = json.loads((bundle_dir / "bundle.json").read_bytes())
+        self.assertEqual(manifest["schema"], integration_run.ACCEPTANCE_BUNDLE_SCHEMA)
+        self.assertEqual((manifest["commit"], manifest["tree"], manifest["expectedParent"]), (commit, tree, parent))
+        # 3 + 2 × (fact + 8 named + 1 case) = 23 个 exact store 文件
+        self.assertEqual(len(manifest["storeFiles"]), 23)
+        self.assertEqual(manifest["mergedLanes"][0]["branch"], "refs/heads/lane/product-mainline")
+        self.assertEqual(manifest["beta"], {"status": "not_required", "executed": False, "reasonCode": "IMPACT_PLAN.NO_LIVE_ENVIRONMENT_REQUIRED"})
+        self.assertEqual(manifest["dataReleaseHandoffRef"], VALID_REF)
+        for exact in manifest["storeFiles"]:
+            self.assertEqual((bundle_dir / "store" / exact["ref"]).read_bytes(), (lane_store / exact["ref"]).read_bytes())
+        self.assertTrue((bundle_dir / "impact-plan.json").is_file())
+
+        integration_store = self.root / "integration-store"
+        seen: list[dict[str, object]] = []
+
+        def fake_validate(fact, **kwargs):
+            seen.append({"fact": fact, **kwargs})
+            return fact
+
+        args = SimpleNamespace(signer_identity="quwoquan-environment-ops-local")
+        with mock.patch.object(integration_run, "_store", return_value=integration_store), \
+                mock.patch.object(integration_run, "validate_environment_acceptance_fact", side_effect=fake_validate), \
+                mock.patch.object(integration_run, "ed25519_environment_verifier", return_value=lambda *a: True):
+            imported = integration_run._import_acceptance_bundle(bundle_dir=bundle_dir, commit=commit, tree=tree, parent=parent, args=args, keyring=object())
+            self.assertEqual((imported["importedFiles"], imported["storeFiles"]), (23, 23))
+            self.assertEqual(imported["candidate"]["candidateId"], manifest["candidateId"])
+            again = integration_run._import_acceptance_bundle(bundle_dir=bundle_dir, commit=commit, tree=tree, parent=parent, args=args, keyring=object())
+            self.assertEqual(again["importedFiles"], 0)
+        for exact in manifest["storeFiles"]:
+            self.assertEqual((integration_store / exact["ref"]).read_bytes(), (lane_store / exact["ref"]).read_bytes())
+        # 两份 EAF 都以 integration 自己的 store 为根验签并复核全部引用
+        self.assertEqual([item["fact"]["environment"] for item in seen], ["alpha", "beta", "alpha", "beta"])
+        for item in seen:
+            self.assertEqual(item["store_root"], integration_store)
+            self.assertTrue(item["verify_references"])
+            self.assertEqual(item["expected_signer_identity"], "quwoquan-environment-ops-local")
+
+    def test_bundle_import_rejects_drift_mismatch_and_stale_parent(self) -> None:
+        commit, tree, parent = "1" * 40, "2" * 40, "0" * 40
+        bundle_dir, facts, _ = self._bundle_from_fake_store(commit=commit, tree=tree, parent=parent)
+        args = SimpleNamespace(signer_identity="quwoquan-environment-ops-local")
+        manifest = json.loads((bundle_dir / "bundle.json").read_bytes())
+
+        def attempt(name: str, *, bundle: Path = bundle_dir, commit_: str = commit, tree_: str = tree, parent_: str = parent) -> str:
+            store = self.root / f"store-{name}"
+            with mock.patch.object(integration_run, "_store", return_value=store), \
+                    mock.patch.object(integration_run, "validate_environment_acceptance_fact", side_effect=lambda fact, **_: fact), \
+                    mock.patch.object(integration_run, "ed25519_environment_verifier", return_value=lambda *a: True), \
+                    self.assertRaises(integration_run.IntegrationRunError) as blocked:
+                integration_run._import_acceptance_bundle(bundle_dir=bundle, commit=commit_, tree=tree_, parent=parent_, args=args, keyring=object())
+            return blocked.exception.code
+
+        self.assertEqual(attempt("commit", commit_="f" * 40), "INTEGRATION_RUN.BUNDLE_CANDIDATE_MISMATCH")
+        self.assertEqual(attempt("parent", parent_="e" * 40), "INTEGRATION_RUN.BUNDLE_STALE")
+        self.assertEqual(attempt("missing", bundle=self.root / "nowhere"), "INTEGRATION_RUN.ACCEPTANCE_REQUIRED")
+        # store 文件字节被改 → 与 manifest digest 不符
+        tampered = self.root / "tampered"
+        shutil.copytree(bundle_dir, tampered)
+        victim = tampered / "store" / facts["sourceFact"]["ref"]
+        victim.write_bytes(victim.read_bytes().replace(b"passed", b"failed"))
+        self.assertEqual(attempt("tampered", bundle=tampered), "INTEGRATION_RUN.BUNDLE_DRIFT")
+        # manifest 被改 → bundleId 不再绑定
+        edited = self.root / "edited"
+        shutil.copytree(bundle_dir, edited)
+        (edited / "bundle.json").write_bytes(integration_run._canonical_bytes({**manifest, "laneBranch": "refs/heads/lane/ops"}) + b"\n")
+        self.assertEqual(attempt("edited", bundle=edited), "INTEGRATION_RUN.BUNDLE_DRIFT")
+        # integration store 已有同 ref 不同字节 → create-once 拒绝
+        occupied = self.root / "store-occupied"
+        existing = occupied / facts["candidate"]["ref"]
+        existing.parent.mkdir(parents=True)
+        existing.write_bytes(b"{}\n")
+        self.assertEqual(attempt("occupied"), "INTEGRATION_RUN.BUNDLE_DRIFT")
+        # bundle 的 signer 与 integration 期望的 signer 不一致
+        self.assertEqual(self._import_with_signer(bundle_dir, commit, tree, parent, "someone-else"), "INTEGRATION_RUN.BUNDLE_INVALID")
+
+    def _import_with_signer(self, bundle_dir: Path, commit: str, tree: str, parent: str, signer: str) -> str:
+        with mock.patch.object(integration_run, "_store", return_value=self.root / "store-signer"), \
+                mock.patch.object(integration_run, "validate_environment_acceptance_fact", side_effect=lambda fact, **_: fact), \
+                self.assertRaises(integration_run.IntegrationRunError) as blocked:
+            integration_run._import_acceptance_bundle(
+                bundle_dir=bundle_dir, commit=commit, tree=tree, parent=parent, args=SimpleNamespace(signer_identity=signer), keyring=object(),
+            )
+        return blocked.exception.code
+
+    def test_integrate_runs_no_environment_phase_and_admits_from_imported_facts(self) -> None:
+        # integrate 的相位只有 preflight → import-bundle → admit（→ publish）；不调用 readiness、build-head、
+        # 任何 stackctl 环境相位或 Data ship；admission 绑定的是导入的 candidate/source/EAF exact ref。
+        commit, tree, parent = "1" * 40, "2" * 40, "0" * 40
+        bundle_dir, facts, _ = self._bundle_from_fake_store(commit=commit, tree=tree, parent=parent)
+        manifest = json.loads((bundle_dir / "bundle.json").read_bytes())
+        integration_store = self.root / "integration-store"
+        git_answers = {
+            ("status",): "", ("rev-parse", f"HEAD^{{commit}}"): commit, ("ls-remote",): f"{parent}\trefs/heads/dev1.0",
+            ("symbolic-ref",): "refs/heads/dev1.0", ("rev-parse", "HEAD"): commit, ("show",): tree,
+        }
+
+        def fake_git(*args: str) -> str:
+            for key, value in git_answers.items():
+                if args[: len(key)] == key:
+                    return value
+            raise AssertionError(f"unexpected git {args}")
+
+        admitted: dict[str, object] = {}
+
+        def fake_admit(**kwargs: object) -> Path:
+            admitted.update(kwargs)
+            path = integration_store / "admissions/adm.json"
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text("{}", encoding="utf-8")
+            return path
+
+        forbidden = {name: mock.patch.object(integration_run, name, side_effect=AssertionError(f"{name} must not run in integrate"))
+                     for name in ("_run_environment", "_local_readiness", "_impact_plan", "_apply_data_release", "_stackctl", "_data_ship",
+                                  "build_head_candidate", "create_source_fact", "_not_required_beta", "_issue", "_write_acceptance_bundle")}
+        with self._runtime_patches(), mock.patch.object(integration_run, "_store", return_value=integration_store), \
+                mock.patch.object(integration_run, "_git", side_effect=fake_git), \
+                mock.patch("subprocess.run", return_value=SimpleNamespace(returncode=0, stdout="", stderr="")), \
+                mock.patch.object(integration_run, "validate_environment_acceptance_fact", side_effect=lambda fact, **_: fact), \
+                mock.patch.object(integration_run, "ed25519_environment_verifier", return_value=lambda *a: True), \
+                mock.patch.object(integration_run, "create_publish_admission", side_effect=fake_admit), \
+                mock.patch.object(integration_run, "release_claim"), \
+                mock.patch.object(integration_run, "store_ref", side_effect=lambda **kw: {"ref": kw["path"].name, "digest": "sha256:" + "0" * 64}):
+            for patcher in forbidden.values():
+                patcher.start()
+                self.addCleanup(patcher.stop)
+            self.assertEqual(integration_run.main(["--mode", "integrate", "--acceptance-bundle", str(bundle_dir), "--run-id", "int-1"]), 0)
+        summary = json.loads((self.root / "runs/int-1/summary.json").read_text(encoding="utf-8"))
+        self.assertEqual(summary["terminal"], "admitted")
+        self.assertEqual([phase["name"] for phase in summary["phases"]], ["preflight", "import-bundle", "admit"])
+        self.assertEqual(summary["acceptanceBundle"]["bundleId"], manifest["bundleId"])
+        self.assertEqual(summary["environments"]["alpha"]["imported"], True)
+        self.assertEqual(summary["environments"]["beta"]["reasonCode"], "IMPACT_PLAN.NO_LIVE_ENVIRONMENT_REQUIRED")
+        self.assertEqual(admitted["candidate_ref"], facts["candidate"])
+        self.assertEqual(admitted["source_fact_refs"], [facts["sourceFact"]])
+        self.assertEqual((admitted["alpha_fact_ref"], admitted["beta_fact_ref"]), (facts["alphaFact"], facts["betaFact"]))
+        self.assertEqual(admitted["expected_remote_oid"], parent)
 
     def test_acceptance_readiness_identity_is_the_lane_branch_itself(self) -> None:
         # readiness 的 push identity 要求 local ref 精确解析到 candidate：integrate 用 refs/heads/dev1.0，

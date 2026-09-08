@@ -18,6 +18,7 @@ from quwoquan_ops.cli.lib.environment_acceptance_fact_contract import (
     DSSE_PAYLOAD_TYPE,
     ENVIRONMENTS,
     NO_LIVE_ENVIRONMENT_REQUIRED,
+    NOT_REQUIRED_REASON_CODES,
 )
 from quwoquan_ops.cli.lib.environment_acceptance_fact_contract import (
     SCHEMA as ACCEPTANCE_SCHEMA,
@@ -754,11 +755,11 @@ def issue_environment_acceptance_fact(
     if status == "not_required":
         if (
             request["environment"] != "beta"
-            or reason_code != NO_LIVE_ENVIRONMENT_REQUIRED
+            or reason_code not in NOT_REQUIRED_REASON_CODES
         ):
             raise EnvironmentSchedulerError(
                 "ENVIRONMENT_SCHEDULER.NOT_REQUIRED_INVALID",
-                "only Beta may use typed no-live not_required",
+                "only Beta may use typed no-live or policy-optional not_required",
             )
     elif reason_code is not None:
         raise EnvironmentSchedulerError(

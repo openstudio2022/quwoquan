@@ -19,6 +19,8 @@ from typing import Any
 
 import yaml
 
+from quwoquan_ops.cli.lib.environment_acceptance_fact_contract import NOT_REQUIRED_REASON_CODES
+
 _SHA_RE = re.compile(r"^[0-9a-f]{40}(?:[0-9a-f]{24})?$")
 _DIGEST_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
 _SCHEMA = "quwoquan_ops.exact_integration_candidate.v1"
@@ -499,7 +501,7 @@ def create_publish_admission(
                 "SCOPED_CANDIDATE.STALE",
                 f"{environment} cleanup or lease evidence is incomplete",
             )
-        if fact.get("status") == "not_required" and fact.get("reasonCode") != "IMPACT_PLAN.NO_LIVE_ENVIRONMENT_REQUIRED":
+        if fact.get("status") == "not_required" and fact.get("reasonCode") not in NOT_REQUIRED_REASON_CODES:
             raise ScopedCandidateError("SCOPED_CANDIDATE.STALE", f"{environment} not_required reason is invalid")
         normalized_environment[environment] = {"ref": exact_ref["ref"], "digest": digest}
     body: dict[str, Any] = {

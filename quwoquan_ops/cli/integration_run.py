@@ -1,16 +1,17 @@
 #!/usr/bin/env python3
-"""「集成验证 → 发布 dev1.0」的 canonical 编排（模式二），分两种运行位置：
+"""「lane 验收 → integration 发布 dev1.0」的 canonical 编排，分两种运行位置：
 
-- `--mode acceptance`：在 lane 工作树（当前分支为该 lane）对 exact candidate 跑 Alpha（条件 Beta）
-  并签发 `EnvironmentAcceptanceFact`，终态 `accepted`，不 admit、不 publish。Data release 的
+- `--mode acceptance`：在 lane 工作树（当前分支为该 lane，head 即 candidate）对 exact candidate
+  跑本地 readiness、Alpha（Beta 仅 `--beta` 显式 opt-in，否则以 typed `not_required` 闭合）并签发
+  `EnvironmentAcceptanceFact`，终态 `accepted`，不 admit、不 publish；同时把 candidate/claim/
+  source fact/EAF 及其全部 exact 证据打成 portable acceptance bundle。Data release 的
   `ship --handoff-ref` admission 会用当前工作树重算 candidate evidence，因此只能在产出 handoff
-  的 lane 工作树完成；`--baseline` 指定 ImpactPlan/readiness 的 exact parent（默认远端 dev1.0）。
-- `--mode integrate`（默认）：在唯一 integration 工作区（分支 dev1.0）对 candidate 走完整链并
-  admit → publish（可选）；Gamma 与 prod 只在 integration 工作区推进。
-
-固定顺序：前置校验 → 本地 readiness（exact delta）→ build-head candidate → ImpactPlan 深度
-→ environment request → Alpha（条件 Beta）package/up/health/verify/inspect/doctor/down
-→ 证据 canonical 化 → EnvironmentAcceptanceFact →（integrate）admit → publish（可选）→ summary。
+  的 lane 工作树完成；`--baseline` 指定 ImpactPlan/readiness 的 exact parent（默认远端 dev1.0）；
+  用户显式合并多个 lane head 后验收时用 `--merged-lanes` 记录来源。
+- `--mode integrate`（默认）：在唯一 integration 工作区（分支 dev1.0，HEAD 即 candidate）只消费
+  `--acceptance-bundle`：exact bytes 导入本工作树 store（create-once）、验签并复核 candidate 绑定与
+  expected parent == 远端 before，然后 admit → publish（可选）。不启动任何环境、不需要 Data release
+  输入；Gamma 与 prod canary 只在 integration 工作区、在 publish 之后推进。
 
 只编排、不解释结论：环境动作一律经 `stackctl` 子进程，事实一律经
 `quwoquan_ops.ci.scoped_candidate` / `environment_scheduler` 既有 create-once 入口。
@@ -24,6 +25,7 @@ import hashlib
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import time
@@ -46,6 +48,7 @@ from quwoquan_ops.ci.environment_scheduler import (
     exact_file_digest,
     issue_environment_acceptance_fact,
     request_exact_ref,
+    validate_environment_acceptance_fact,
 )
 from quwoquan_ops.ci.impact_planner_core import (
     build_delivery_impact_plan,
@@ -64,9 +67,14 @@ from quwoquan_ops.ci.scoped_candidate import (
 from quwoquan_ops.cli.lib.content_api_consumer_authority import (
     _runtime_authority,
 )
+from quwoquan_ops.cli.lib.environment_acceptance_fact_contract import (
+    BETA_OPTIONAL_BY_POLICY,
+    NO_LIVE_ENVIRONMENT_REQUIRED,
+)
 from quwoquan_ops.cli.lib.evidence_signing import (
     DEFAULT_KEYRING_PATH,
     EvidenceSigningError,
+    ed25519_environment_verifier,
     ed25519_signer,
     key_root,
     load_keyring,
@@ -81,9 +89,16 @@ LOCAL_READINESS = ROOT / "quwoquan_ops/cli/local_readiness.py"
 OUTPUT_ROOT = ROOT / ".qwq_output"
 RUNS_ROOT = OUTPUT_ROOT / "env/repo/runs/integrate"
 DEV_REF = "refs/heads/dev1.0"
-NO_LIVE = "IMPACT_PLAN.NO_LIVE_ENVIRONMENT_REQUIRED"
+NO_LIVE = NO_LIVE_ENVIRONMENT_REQUIRED
 ENVIRONMENT_SPEC_REF = "specs/feature-tree/runtime/deliver-deploy-prod-pipeline/spec.md#sit-001"
 DEFAULT_SIGNER = "quwoquan-environment-ops-local"
+ACCEPTANCE_BUNDLE_SCHEMA = "quwoquan_ops.acceptance_bundle.v1"
+BUNDLE_MANIFEST = "bundle.json"
+BUNDLE_STORE_DIR = "store"
+_EAF_NAMED_FIELDS = (
+    "runtimeIdentity", "dataLifecycle", "providerReadiness", "observabilityReadiness",
+    "inspectEvidence", "doctorEvidence", "cleanupEvidence", "leaseClosureEvidence",
+)
 
 
 class IntegrationRunError(RuntimeError):
@@ -684,11 +699,15 @@ def _provider_ready(health_payload: Mapping[str, Any]) -> bool:
     return True
 
 
-def _not_required_beta(*, candidate: Mapping[str, str], impact_plan_digest: str, impact_plan_path: Path, profile: str) -> dict[str, Any]:
+def _not_required_beta(*, candidate: Mapping[str, str], impact_plan_digest: str, impact_plan_path: Path, profile: str,
+                       reason_code: str = NO_LIVE) -> dict[str, Any]:
+    """Beta 不真跑时的 typed not_required 证据：`reason_code` 记录真实原因——ImpactPlan 判定无需 live
+    Beta（`IMPACT_PLAN.NO_LIVE_ENVIRONMENT_REQUIRED`），或 ImpactPlan 判定敏感但用户未 `--beta` opt-in
+    （`ACCEPTANCE.BETA_OPTIONAL_BY_POLICY`）。两者都绑定 candidate 与 ImpactPlan，不从 skipped 推导。"""
     store = _store()
     evidence_dir = store / "environment-evidence" / candidate["candidateId"].removeprefix("sha256:") / "beta"
     plan_sha = hashlib.sha256(impact_plan_path.read_bytes()).hexdigest()
-    source = {"basis": NO_LIVE, "executed": False, "impactPlanRef": _output_ref(impact_plan_path), "impactPlanSha256": plan_sha}
+    source = {"basis": reason_code, "executed": False, "impactPlanRef": _output_ref(impact_plan_path), "impactPlanSha256": plan_sha}
 
     def evidence(role: str, status: str) -> dict[str, str]:
         return _write_canonical(evidence_dir / f"{role}.json", _evidence_object(
@@ -730,12 +749,13 @@ def _not_required_beta(*, candidate: Mapping[str, str], impact_plan_digest: str,
         "runnerIdentity": "integration-run",
         "artifactSha256": plan_sha,
         "receiptRef": _output_ref(impact_plan_path),
-        "reasonCode": NO_LIVE,
+        # ReadinessCaseResult 合同：passed 结果不得携带 reasonCode；不真跑的原因记录在 EAF.reasonCode 与 named evidence source.basis。
     }
     case_path = evidence_dir / "cases" / "000.json"
     case_path.parent.mkdir(parents=True, exist_ok=True)
     write_readiness_case_result(case_path, case, generated_at=now)
-    return {"named": named, "cases": [{"ref": case_path.relative_to(store).as_posix(), "digest": exact_file_digest(case_path)}]}
+    return {"named": named, "cases": [{"ref": case_path.relative_to(store).as_posix(), "digest": exact_file_digest(case_path)}],
+            "reasonCode": reason_code}
 
 
 def _issue(*, environment: str, candidate_ref: Mapping[str, str], impact_plan_digest: str, evidence: Mapping[str, Any],
@@ -754,7 +774,7 @@ def _issue(*, environment: str, candidate_ref: Mapping[str, str], impact_plan_di
         store_root=store, request_ref=request_ref, profile=profile, status=status,
         case_result_refs=evidence["cases"], predecessor=predecessor,
         signer_identity=args.signer_identity, signer=signer, expires_at=expires,
-        non_promotable=False, reason_code=NO_LIVE if status == "not_required" else None,
+        non_promotable=False, reason_code=str(evidence.get("reasonCode") or NO_LIVE) if status == "not_required" else None,
         **evidence["named"],
     )
     acceptance = {"ref": path.relative_to(store).as_posix(), "digest": exact_file_digest(path)}
@@ -762,14 +782,234 @@ def _issue(*, environment: str, candidate_ref: Mapping[str, str], impact_plan_di
     return acceptance
 
 
+def _sha256_hex(data: bytes) -> str:
+    return "sha256:" + hashlib.sha256(data).hexdigest()
+
+
+def _read_store_object(store: Path, exact: Mapping[str, str], label: str) -> dict[str, Any]:
+    path = store / str(exact.get("ref") or "")
+    if not path.is_file():
+        raise IntegrationRunError("INTEGRATION_RUN.BUNDLE_INCOMPLETE", f"{label} {exact.get('ref')} is absent from the candidate store")
+    if exact_file_digest(path) != exact.get("digest"):
+        raise IntegrationRunError("INTEGRATION_RUN.BUNDLE_DRIFT", f"{label} {exact.get('ref')} exact bytes drifted")
+    payload = json.loads(path.read_bytes())
+    if not isinstance(payload, dict):
+        raise IntegrationRunError("INTEGRATION_RUN.BUNDLE_INVALID", f"{label} {exact.get('ref')} is not an object")
+    return payload
+
+
+def _fact_evidence_refs(fact: Mapping[str, Any]) -> list[dict[str, str]]:
+    """EAF 的全部 store 内 exact 引用：caseResultRefs + 八类 named evidence（predecessor 单独打包）。"""
+    refs: list[dict[str, str]] = [dict(item) for item in (fact.get("caseResultRefs") or [])]
+    for field in _EAF_NAMED_FIELDS:
+        value = fact.get(field)
+        if not isinstance(value, Mapping):
+            raise IntegrationRunError("INTEGRATION_RUN.BUNDLE_INVALID", f"acceptance fact lacks {field}")
+        refs.append(dict(value))
+    return refs
+
+
+def _merged_lanes(*, values: Sequence[str], lane_branch: str, commit: str, remote: str) -> list[dict[str, str]]:
+    """记录本次验收 candidate 合并了哪些 lane head：每个 lane 解析为 exact commit 且必须是 candidate 的祖先。
+
+    这是多工作树合并验收的显式来源记录（用户明确指定），不是自动发现；缺省只记录 lane 自身。
+    """
+    entries: list[dict[str, str]] = []
+    seen: set[str] = set()
+    for raw in [lane_branch, *values]:
+        name = str(raw or "").strip().removeprefix("refs/heads/")
+        if not name.startswith("lane/"):
+            raise IntegrationRunError("INTEGRATION_RUN.INPUT_INVALID", f"--merged-lanes expects lane/<name> (got {name or '-'})")
+        if name in seen:
+            continue
+        resolved = ""
+        for ref in (f"refs/heads/{name}", f"refs/remotes/{remote}/{name}"):
+            probe = subprocess.run(["git", "rev-parse", "--verify", "--quiet", f"{ref}^{{commit}}"], cwd=ROOT, text=True, capture_output=True, check=False)
+            if probe.returncode == 0 and probe.stdout.strip():
+                resolved = probe.stdout.strip()
+                break
+        if not resolved:
+            raise IntegrationRunError("INTEGRATION_RUN.INPUT_INVALID", f"--merged-lanes {name} does not resolve to a local or {remote} lane head")
+        if subprocess.run(["git", "merge-base", "--is-ancestor", resolved, commit], cwd=ROOT, check=False).returncode != 0:
+            raise IntegrationRunError("INTEGRATION_RUN.INPUT_INVALID", f"--merged-lanes {name}@{resolved[:12]} is not an ancestor of the candidate")
+        seen.add(name)
+        entries.append({"branch": f"refs/heads/{name}", "commit": resolved})
+    return entries
+
+
+def _write_acceptance_bundle(*, run_dir: Path, candidate_ref: Mapping[str, str], source_ref: Mapping[str, str],
+                             alpha_ref: Mapping[str, str], beta_ref: Mapping[str, str], identity: Mapping[str, str],
+                             plan_path: Path, summary: Mapping[str, Any], beta_status: str, beta_reason: str | None,
+                             lane_branch: str, merged_lanes: Sequence[Mapping[str, str]], args: argparse.Namespace) -> Path:
+    """把 accepted 终态的全部 exact 事实按 store 相对路径复制成 portable bundle，供 integration 工作区导入。
+
+    bundle 只复制字节、不改写任何事实；`bundle.json` 记录 candidate 身份、baseline、lane 来源与每个文件的
+    exact digest，`bundleId` 是 manifest 自身的 canonical digest。integration 侧按同一 digest 逐字节复核。
+    """
+    store = _store()
+    bundle_dir = run_dir / "acceptance-bundle"
+    if bundle_dir.exists():
+        raise IntegrationRunError("INTEGRATION_RUN.CREATE_CONFLICT", f"acceptance bundle already exists: {bundle_dir}")
+    store_dir = bundle_dir / BUNDLE_STORE_DIR
+    candidate = _read_store_object(store, candidate_ref, "candidate")
+    claim_ref = {"ref": str(candidate["claimRef"]), "digest": str(candidate["claimDigest"])}
+    files: dict[str, str] = {}
+
+    def add(exact: Mapping[str, str], label: str) -> None:
+        ref, digest = str(exact["ref"]), str(exact["digest"])
+        source = store / ref
+        if not source.is_file():
+            raise IntegrationRunError("INTEGRATION_RUN.BUNDLE_INCOMPLETE", f"{label} {ref} is absent from the candidate store")
+        if exact_file_digest(source) != digest:
+            raise IntegrationRunError("INTEGRATION_RUN.BUNDLE_DRIFT", f"{label} {ref} exact bytes drifted before packaging")
+        if files.get(ref, digest) != digest:
+            raise IntegrationRunError("INTEGRATION_RUN.BUNDLE_DRIFT", f"{label} {ref} is referenced with two digests")
+        if ref in files:
+            return
+        files[ref] = digest
+        target = store_dir / ref
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(source, target)
+
+    add(candidate_ref, "candidate")
+    add(claim_ref, "claim")
+    add(source_ref, "sourceFact")
+    for environment, fact_ref in (("alpha", alpha_ref), ("beta", beta_ref)):
+        add(fact_ref, f"{environment}Fact")
+        fact = _read_store_object(store, fact_ref, f"{environment}Fact")
+        for exact in _fact_evidence_refs(fact):
+            add(exact, f"{environment} evidence")
+    plan_bytes = plan_path.read_bytes()
+    (bundle_dir / "impact-plan.json").write_bytes(plan_bytes)
+    manifest: dict[str, Any] = {
+        "schema": ACCEPTANCE_BUNDLE_SCHEMA, "runId": summary["runId"], "createdAt": _now(),
+        "candidateId": candidate["candidateId"], "commit": candidate["commit"], "tree": candidate["tree"],
+        "expectedParent": candidate["expectedParent"],
+        "baseline": identity["parent"], "remoteHeadAtAcceptance": identity.get("remoteHead", ""),
+        "laneBranch": lane_branch, "mergedLanes": [dict(item) for item in merged_lanes],
+        "impactPlan": {**dict(summary["impactPlan"]), "fileSha256": _sha256_hex(plan_bytes)},
+        "dataReleases": list(summary.get("dataReleases") or []),
+        "dataReleaseHandoffRef": str(summary.get("dataReleaseHandoffRef") or ""),
+        "signerIdentity": args.signer_identity, "profile": args.profile,
+        "beta": {"status": beta_status, "executed": beta_status == "passed", "reasonCode": beta_reason},
+        "candidate": dict(candidate_ref), "claim": claim_ref, "sourceFact": dict(source_ref),
+        "alphaFact": dict(alpha_ref), "betaFact": dict(beta_ref),
+        "storeFiles": [{"ref": ref, "digest": digest} for ref, digest in sorted(files.items())],
+    }
+    manifest["bundleId"] = _sha256_hex(_canonical_bytes(manifest))
+    (bundle_dir / BUNDLE_MANIFEST).write_bytes(_canonical_bytes(manifest) + b"\n")
+    return bundle_dir
+
+
+def _load_bundle_manifest(bundle_dir: Path) -> dict[str, Any]:
+    manifest_path = bundle_dir / BUNDLE_MANIFEST
+    if not bundle_dir.is_dir() or not manifest_path.is_file():
+        raise IntegrationRunError(
+            "INTEGRATION_RUN.ACCEPTANCE_REQUIRED",
+            f"integrate consumes a lane acceptance bundle; {manifest_path} is missing (run make accept in the lane worktree first)",
+        )
+    try:
+        manifest = json.loads(manifest_path.read_bytes())
+    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+        raise IntegrationRunError("INTEGRATION_RUN.BUNDLE_INVALID", f"bundle manifest is not JSON: {exc}") from exc
+    if not isinstance(manifest, dict) or manifest.get("schema") != ACCEPTANCE_BUNDLE_SCHEMA:
+        raise IntegrationRunError("INTEGRATION_RUN.BUNDLE_INVALID", f"bundle manifest schema must be {ACCEPTANCE_BUNDLE_SCHEMA}")
+    material = {key: value for key, value in manifest.items() if key != "bundleId"}
+    if manifest.get("bundleId") != _sha256_hex(_canonical_bytes(material)):
+        raise IntegrationRunError("INTEGRATION_RUN.BUNDLE_DRIFT", "bundle manifest bytes do not match bundleId")
+    for key in ("candidateId", "commit", "tree", "expectedParent", "candidate", "claim", "sourceFact", "alphaFact", "betaFact", "storeFiles", "signerIdentity"):
+        if key not in manifest:
+            raise IntegrationRunError("INTEGRATION_RUN.BUNDLE_INVALID", f"bundle manifest lacks {key}")
+    return manifest
+
+
+def _import_acceptance_bundle(*, bundle_dir: Path, commit: str, tree: str, parent: str, args: argparse.Namespace,
+                              keyring: Any) -> dict[str, Any]:
+    """integrate 模式唯一的事实来源：逐字节导入 lane bundle 并复核绑定。
+
+    - 每个 store 文件按 manifest digest 复核后 create-once 写入本工作树 store；已存在且字节不同即 `BUNDLE_DRIFT`。
+    - candidate.commit/tree 必须等于本工作区 HEAD candidate；expectedParent 必须等于当前远端 dev1.0（否则
+      `BUNDLE_STALE`：dev1.0 已前移，需在合入新 dev1.0 的 head 上重新 `make accept`）。
+    - Alpha/Beta EAF 以仓内 keyring 验签、复核全部引用与 candidate 绑定；source fact 必须 passed 且绑定同一 candidateId。
+    """
+    manifest = _load_bundle_manifest(bundle_dir)
+    if manifest["commit"] != commit or manifest["tree"] != tree:
+        raise IntegrationRunError(
+            "INTEGRATION_RUN.BUNDLE_CANDIDATE_MISMATCH",
+            f"bundle was accepted for {str(manifest['commit'])[:12]} but the integration candidate is {commit[:12]}",
+        )
+    if manifest["expectedParent"] != parent:
+        raise IntegrationRunError(
+            "INTEGRATION_RUN.BUNDLE_STALE",
+            f"bundle expectedParent {str(manifest['expectedParent'])[:12]} != remote dev1.0 {parent[:12]}; "
+            "dev1.0 moved since acceptance, re-run make accept on a head that includes the current dev1.0",
+        )
+    store = _store()
+    imported = 0
+    for index, exact in enumerate(manifest["storeFiles"]):
+        if not isinstance(exact, Mapping) or set(exact) != {"ref", "digest"}:
+            raise IntegrationRunError("INTEGRATION_RUN.BUNDLE_INVALID", f"storeFiles[{index}] must be an exact ref")
+        ref, digest = str(exact["ref"]), str(exact["digest"])
+        if ref.startswith("/") or ".." in Path(ref).parts:
+            raise IntegrationRunError("INTEGRATION_RUN.BUNDLE_INVALID", f"storeFiles[{index}] ref escapes the store: {ref}")
+        source = bundle_dir / BUNDLE_STORE_DIR / ref
+        if not source.is_file() or exact_file_digest(source) != digest:
+            raise IntegrationRunError("INTEGRATION_RUN.BUNDLE_DRIFT", f"{ref} bytes differ from the bundle manifest")
+        target = store / ref
+        if target.exists():
+            if exact_file_digest(target) != digest:
+                raise IntegrationRunError("INTEGRATION_RUN.BUNDLE_DRIFT", f"{ref} already exists in the integration store with different bytes")
+            continue
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(source, target)
+        imported += 1
+    candidate = _read_store_object(store, manifest["candidate"], "candidate")
+    if (
+        candidate.get("candidateId") != manifest["candidateId"] or candidate.get("commit") != commit
+        or candidate.get("tree") != tree or candidate.get("expectedParent") != parent
+        or candidate.get("claimRef") != manifest["claim"].get("ref") or candidate.get("claimDigest") != manifest["claim"].get("digest")
+    ):
+        raise IntegrationRunError("INTEGRATION_RUN.BUNDLE_CANDIDATE_MISMATCH", "imported candidate does not bind the bundle identity")
+    _read_store_object(store, manifest["claim"], "claim")
+    source_fact = _read_store_object(store, manifest["sourceFact"], "sourceFact")
+    if source_fact.get("status") != "passed" or source_fact.get("candidateId") != candidate["candidateId"]:
+        raise IntegrationRunError("INTEGRATION_RUN.BUNDLE_CANDIDATE_MISMATCH", "imported source fact is not passed for this candidate")
+    signer_identity = str(manifest["signerIdentity"])
+    if signer_identity != args.signer_identity:
+        raise IntegrationRunError("INTEGRATION_RUN.BUNDLE_INVALID", f"bundle signer {signer_identity} != expected {args.signer_identity}")
+    try:
+        verifier = ed25519_environment_verifier(keyring, [signer_identity])
+    except EvidenceSigningError as exc:
+        raise IntegrationRunError("INTEGRATION_RUN.SIGNER_UNREGISTERED", exc.detail) from exc
+    for environment, fact_ref in (("alpha", manifest["alphaFact"]), ("beta", manifest["betaFact"])):
+        fact = _read_store_object(store, fact_ref, f"{environment}Fact")
+        validated = validate_environment_acceptance_fact(
+            fact, store_root=store, verify_references=True, signature_verifier=verifier, expected_signer_identity=signer_identity,
+        )
+        binding = validated.get("candidate") or {}
+        if validated.get("environment") != environment or binding.get("candidateId") != candidate["candidateId"] \
+                or binding.get("commit") != commit or binding.get("tree") != tree:
+            raise IntegrationRunError("INTEGRATION_RUN.BUNDLE_CANDIDATE_MISMATCH", f"{environment} fact does not bind the imported candidate")
+    return {"manifest": manifest, "candidate": candidate, "importedFiles": imported, "storeFiles": len(manifest["storeFiles"])}
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--candidate", default="HEAD", help="exact commit（HEAD 或 lane head sha）")
     parser.add_argument("--mode", choices=("integrate", "acceptance"), default="integrate",
-                        help="integrate=integration 工作区完整链（admit/publish）；acceptance=lane 工作树只签发 Alpha/条件 Beta 事实")
+                        help="integrate=integration 工作区消费 acceptance bundle 并 admit/publish；"
+                             "acceptance=lane 工作树跑 readiness + Alpha（--beta 时含 Beta）并签发事实与 bundle")
     parser.add_argument("--baseline", default="",
                         help="acceptance 专用：ImpactPlan/readiness 的 exact parent commit；缺省取远端 dev1.0 head，"
                              "candidate 已等于远端 dev1.0 时必须显式给出上一个已验收基线")
+    parser.add_argument("--beta", action="store_true",
+                        help="acceptance 专用：显式 opt-in 真跑 Beta；缺省 Beta 以 typed not_required 闭合"
+                             "（ImpactPlan 无需 live Beta 时 reason=IMPACT_PLAN.NO_LIVE_ENVIRONMENT_REQUIRED，"
+                             "否则 reason=ACCEPTANCE.BETA_OPTIONAL_BY_POLICY）")
+    parser.add_argument("--merged-lanes", action="append", default=[],
+                        help="acceptance 专用：candidate 显式合并的其他 lane（lane/<name>，可重复）；每个都必须是 candidate 的祖先")
+    parser.add_argument("--acceptance-bundle", type=Path, default=None,
+                        help="integrate 专用：lane `make accept` 产出的 acceptance-bundle 目录；缺失即 INTEGRATION_RUN.ACCEPTANCE_REQUIRED")
     parser.add_argument("--remote", default="origin")
     parser.add_argument("--owner-identity", default="", help="PRE owner identity manifest ref（make feature-context 输出）")
     parser.add_argument("--candidate-evidence", default="")
@@ -777,11 +1017,13 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--required-evidence", action="append", default=[])
     parser.add_argument("--readiness-level", choices=("fast", "scope"), default="fast",
                         help="fast=exact delta 静态+聚焦（deferred 允许，L2 在 Gamma 前补齐）；scope 需 Review consolidation 输入")
-    parser.add_argument("--release-attestation", type=Path, required=True)
-    parser.add_argument("--rollback-release-attestation", type=Path, required=True)
-    parser.add_argument("--release-handoff-ref", required=True,
-                        help="candidate production release 的 authoritative handoff-ref-v1（现役 qwq-data ship 唯一准入身份）；"
-                             "rollback release 只参与 stackctl package 候选绑定，integrate 不执行 rollback，因此不需要其 handoff-ref")
+    parser.add_argument("--release-attestation", type=Path, default=None,
+                        help="acceptance 必填：candidate production Data release attestation（stackctl package 候选绑定）")
+    parser.add_argument("--rollback-release-attestation", type=Path, default=None,
+                        help="acceptance 必填：rollback production Data release attestation（只参与候选绑定，不执行 rollback）")
+    parser.add_argument("--release-handoff-ref", default="",
+                        help="acceptance 必填：candidate production release 的 authoritative handoff-ref-v1（现役 qwq-data ship 唯一准入身份）；"
+                             "rollback release 只参与 stackctl package 候选绑定，因此不需要其 handoff-ref")
     parser.add_argument("--workload", default="full", choices=("content-release", "content-commercial", "full"))
     parser.add_argument("--profile", default="integration", choices=("smoke", "integration"))
     parser.add_argument("--signer-identity", default=DEFAULT_SIGNER)
@@ -811,26 +1053,45 @@ def main(argv: list[str] | None = None) -> int:
     original_branch = None
     claim_path: Path | None = None
     try:
-        try:
-            signer = ed25519_signer(args.signer_identity, root=key_root(), keyring=load_keyring(args.signing_keyring))
-        except EvidenceSigningError as exc:
-            raise IntegrationRunError(
-                "INTEGRATION_RUN.SIGNER_UNREGISTERED" if exc.code == "EVIDENCE_SIGNING.SIGNER_UNREGISTERED" else "INTEGRATION_RUN.SIGNER_UNAVAILABLE",
-                exc.detail,
-            ) from exc
-        for label, path in (("release", args.release_attestation), ("rollback", args.rollback_release_attestation)):
-            if not path.is_file():
-                raise IntegrationRunError("INTEGRATION_RUN.INPUT_INVALID", f"{label} attestation is not a file: {path}")
-        release_ids = {_release_id(args.release_attestation)[0], _release_id(args.rollback_release_attestation)[0]}
-        if len(release_ids) != 2:
-            raise IntegrationRunError("INTEGRATION_RUN.INPUT_INVALID", "release and rollback attestations must name two different releases")
-        summary["dataReleases"] = sorted(release_ids)
-        summary["dataReleaseHandoffRef"] = _handoff_ref(args.release_handoff_ref, label="--release-handoff-ref")
         summary["mode"] = args.mode
-        if args.mode == "acceptance" and args.publish:
-            raise IntegrationRunError("INTEGRATION_RUN.INPUT_INVALID", "acceptance mode issues environment facts only; publish belongs to the integration worktree")
-        if args.mode == "integrate" and args.baseline:
-            raise IntegrationRunError("INTEGRATION_RUN.INPUT_INVALID", "--baseline is acceptance-only; integrate mode always uses the remote dev1.0 head")
+        try:
+            keyring = load_keyring(args.signing_keyring)
+        except EvidenceSigningError as exc:
+            raise IntegrationRunError("INTEGRATION_RUN.SIGNER_UNAVAILABLE", exc.detail) from exc
+        if args.mode == "integrate":
+            # integrate 只消费 lane 事实：不签发、不跑环境，因此不需要私钥与 Data release 输入。
+            for flag, value in (("--baseline", args.baseline), ("--beta", args.beta), ("--merged-lanes", args.merged_lanes),
+                                ("--release-attestation", args.release_attestation),
+                                ("--rollback-release-attestation", args.rollback_release_attestation),
+                                ("--release-handoff-ref", args.release_handoff_ref)):
+                if value:
+                    raise IntegrationRunError("INTEGRATION_RUN.INPUT_INVALID", f"{flag} is acceptance-only; integrate consumes --acceptance-bundle")
+            if args.acceptance_bundle is None:
+                raise IntegrationRunError(
+                    "INTEGRATION_RUN.ACCEPTANCE_REQUIRED",
+                    "integrate requires --acceptance-bundle produced by make accept in the lane worktree; no environment runs here",
+                )
+            signer = None
+        else:
+            if args.publish:
+                raise IntegrationRunError("INTEGRATION_RUN.INPUT_INVALID", "acceptance mode issues environment facts only; publish belongs to the integration worktree")
+            if args.acceptance_bundle is not None:
+                raise IntegrationRunError("INTEGRATION_RUN.INPUT_INVALID", "--acceptance-bundle is integrate-only; acceptance produces the bundle")
+            try:
+                signer = ed25519_signer(args.signer_identity, root=key_root(), keyring=keyring)
+            except EvidenceSigningError as exc:
+                raise IntegrationRunError(
+                    "INTEGRATION_RUN.SIGNER_UNREGISTERED" if exc.code == "EVIDENCE_SIGNING.SIGNER_UNREGISTERED" else "INTEGRATION_RUN.SIGNER_UNAVAILABLE",
+                    exc.detail,
+                ) from exc
+            for label, path in (("release", args.release_attestation), ("rollback", args.rollback_release_attestation)):
+                if path is None or not path.is_file():
+                    raise IntegrationRunError("INTEGRATION_RUN.INPUT_INVALID", f"{label} attestation is required in acceptance mode and must be a file: {path}")
+            release_ids = {_release_id(args.release_attestation)[0], _release_id(args.rollback_release_attestation)[0]}
+            if len(release_ids) != 2:
+                raise IntegrationRunError("INTEGRATION_RUN.INPUT_INVALID", "release and rollback attestations must name two different releases")
+            summary["dataReleases"] = sorted(release_ids)
+            summary["dataReleaseHandoffRef"] = _handoff_ref(args.release_handoff_ref, label="--release-handoff-ref")
 
         def preflight() -> dict[str, str]:
             if _git("status", "--porcelain", "--untracked-files=no"):
@@ -853,10 +1114,62 @@ def main(argv: list[str] | None = None) -> int:
                 raise IntegrationRunError("INTEGRATION_RUN.NOTHING_TO_INTEGRATE", "candidate equals remote dev1.0 head")
             if subprocess.run(["git", "merge-base", "--is-ancestor", parent, commit], cwd=ROOT, check=False).returncode != 0:
                 raise IntegrationRunError("INTEGRATION_RUN.NOT_FAST_FORWARD", "remote dev1.0 is not an ancestor of the candidate")
-            return {"commit": commit, "parent": parent, "tree": _git("show", "-s", "--format=%T", commit)}
+            # publish 在 dev1.0 分支上 ff 到 candidate；要求 HEAD 已是 candidate，避免导入后再移动本地分支。
+            if _git("symbolic-ref", "--quiet", "HEAD") != DEV_REF or _git("rev-parse", "HEAD") != commit:
+                raise IntegrationRunError(
+                    "INTEGRATION_RUN.INTEGRATION_IDENTITY_INVALID",
+                    "integrate must run on refs/heads/dev1.0 with HEAD == candidate (git merge --ff-only <lane head> first)",
+                )
+            return {"commit": commit, "parent": parent, "remoteHead": remote_head, "tree": _git("show", "-s", "--format=%T", commit)}
 
         identity = phases.run("preflight", preflight)
         summary["candidate"] = identity
+
+        if args.mode == "integrate":
+            imported = phases.run("import-bundle", lambda: _import_acceptance_bundle(
+                bundle_dir=args.acceptance_bundle, commit=identity["commit"], tree=identity["tree"], parent=identity["parent"],
+                args=args, keyring=keyring,
+            ))
+            manifest = imported["manifest"]
+            candidate = imported["candidate"]
+            claim_path = _store() / candidate["claimRef"]
+            summary["candidate"].update({"candidateId": candidate["candidateId"], "candidateRef": dict(manifest["candidate"]), "claimRef": candidate["claimRef"]})
+            summary["acceptanceBundle"] = {
+                "path": str(args.acceptance_bundle), "bundleId": manifest["bundleId"], "runId": manifest.get("runId"),
+                "laneBranch": manifest.get("laneBranch"), "mergedLanes": manifest.get("mergedLanes"),
+                "baseline": manifest.get("baseline"), "beta": manifest.get("beta"),
+                "importedFiles": imported["importedFiles"], "storeFiles": imported["storeFiles"],
+            }
+            summary["impactPlan"] = dict(manifest.get("impactPlan") or {})
+            summary["dataReleases"] = manifest.get("dataReleases")
+            summary["dataReleaseHandoffRef"] = manifest.get("dataReleaseHandoffRef")
+            summary["sourceFact"] = dict(manifest["sourceFact"])
+            summary["environments"] = {
+                "alpha": {"environment": "alpha", "executed": True, "imported": True, "acceptance": dict(manifest["alphaFact"])},
+                "beta": {"environment": "beta", "executed": bool((manifest.get("beta") or {}).get("executed")), "imported": True,
+                         "reasonCode": (manifest.get("beta") or {}).get("reasonCode"), "acceptance": dict(manifest["betaFact"])},
+            }
+            admission_path = phases.run("admit", lambda: create_publish_admission(
+                repository=ROOT, policy_path=POLICY, candidate_ref=manifest["candidate"], source_fact_refs=[manifest["sourceFact"]],
+                alpha_fact_ref=manifest["alphaFact"], beta_fact_ref=manifest["betaFact"], expected_remote_oid=identity["parent"],
+            ))
+            summary["admission"] = store_ref(repository=ROOT, policy_path=POLICY, path=admission_path)
+            if args.publish:
+                result_path = phases.run("publish", lambda: local_git_cas_publish(
+                    repository=ROOT, policy_path=POLICY, admission_ref=admission_path, remote=args.remote,
+                ))
+                result = json.loads(result_path.read_text(encoding="utf-8"))
+                summary["publish"] = {**store_ref(repository=ROOT, policy_path=POLICY, path=result_path),
+                                      "beforeOid": result["beforeOid"], "afterOid": result["afterOid"], "readbackOid": result["readbackOid"]}
+                summary["terminal"] = "published"
+            else:
+                summary["terminal"] = "admitted"
+            return 0
+
+        lane_branch = _readiness_local_ref(args=args, commit=identity["commit"])
+        merged_lanes = _merged_lanes(values=args.merged_lanes, lane_branch=lane_branch, commit=identity["commit"], remote=args.remote)
+        summary["laneBranch"] = lane_branch
+        summary["mergedLanes"] = merged_lanes
         plan, plan_path = phases.run("impact-plan", lambda: _impact_plan(parent=identity["parent"], commit=identity["commit"], run_dir=run_dir))
         depth = str(plan["integration_depth"])
         impact_digest = str(plan["plan_digest"])
@@ -905,15 +1218,20 @@ def main(argv: list[str] | None = None) -> int:
         ))
         summary["environments"]["alpha"]["acceptance"] = alpha_ref
 
-        if depth == "abg_release_sensitive":
+        # Beta 只在用户显式 --beta 时真跑；否则以 typed not_required 闭合，reason 记录真实原因：
+        # ImpactPlan 本就无需 live Beta → NO_LIVE；ImpactPlan 判定敏感但未 opt-in → BETA_OPTIONAL_BY_POLICY。
+        beta_reason: str | None
+        if args.beta:
             beta_evidence = _run_environment(environment="beta", profile=args.profile, candidate=candidate_identity,
                                              impact_plan_digest=impact_digest, args=args, run_dir=run_dir, phases=phases, summary=summary,
                                              previous_readiness=alpha_evidence["readiness"])
-            beta_status = "passed"
+            beta_status, beta_reason = "passed", None
         else:
-            beta_evidence = _not_required_beta(candidate=candidate_identity, impact_plan_digest=impact_digest, impact_plan_path=plan_path, profile=args.profile)
+            beta_reason = BETA_OPTIONAL_BY_POLICY if depth == "abg_release_sensitive" else NO_LIVE
+            beta_evidence = _not_required_beta(candidate=candidate_identity, impact_plan_digest=impact_digest, impact_plan_path=plan_path,
+                                               profile=args.profile, reason_code=beta_reason)
             beta_status = "not_required"
-            summary["environments"]["beta"] = {"environment": "beta", "executed": False, "reasonCode": NO_LIVE}
+            summary["environments"]["beta"] = {"environment": "beta", "executed": False, "reasonCode": beta_reason, "integrationDepth": depth}
         beta_ref = phases.run("beta.issue", lambda: _issue(
             environment="beta", candidate_ref=candidate_ref, impact_plan_digest=impact_digest, evidence=beta_evidence,
             status=beta_status, predecessor=alpha_ref, profile=args.profile, args=args, signer=signer,
@@ -924,29 +1242,19 @@ def main(argv: list[str] | None = None) -> int:
             _git("checkout", "--quiet", original_branch.removeprefix("refs/heads/"))
             detached = False
 
-        if args.mode == "acceptance":
-            # 环境事实已 create-once 落盘；admission/publish 只属于 integration 工作区（gamma/prod 亦然）。
-            summary["terminal"] = "accepted"
-            summary["acceptance"] = {"alphaFactRef": alpha_ref, "betaFactRef": beta_ref, "betaStatus": beta_status,
-                                     "note": "lane acceptance only: no publish admission, no dev1.0 write"}
-            return 0
-
-        admission_path = phases.run("admit", lambda: create_publish_admission(
-            repository=ROOT, policy_path=POLICY, candidate_ref=candidate_ref, source_fact_refs=[source_ref],
-            alpha_fact_ref=alpha_ref, beta_fact_ref=beta_ref, expected_remote_oid=identity["parent"],
+        # 环境事实已 create-once 落盘；admission/publish 只属于 integration 工作区（gamma/prod 亦然）。
+        # bundle 把全部 exact 事实按 store 相对路径复制出去，供 integration 逐字节导入。
+        bundle_dir = phases.run("bundle", lambda: _write_acceptance_bundle(
+            run_dir=run_dir, candidate_ref=candidate_ref, source_ref=source_ref, alpha_ref=alpha_ref, beta_ref=beta_ref,
+            identity=identity, plan_path=plan_path, summary=summary, beta_status=beta_status, beta_reason=beta_reason,
+            lane_branch=lane_branch, merged_lanes=merged_lanes, args=args,
         ))
-        summary["admission"] = store_ref(repository=ROOT, policy_path=POLICY, path=admission_path)
-
-        if args.publish:
-            result_path = phases.run("publish", lambda: local_git_cas_publish(
-                repository=ROOT, policy_path=POLICY, admission_ref=admission_path, remote=args.remote,
-            ))
-            result = json.loads(result_path.read_text(encoding="utf-8"))
-            summary["publish"] = {**store_ref(repository=ROOT, policy_path=POLICY, path=result_path),
-                                  "beforeOid": result["beforeOid"], "afterOid": result["afterOid"], "readbackOid": result["readbackOid"]}
-            summary["terminal"] = "published"
-        else:
-            summary["terminal"] = "admitted"
+        manifest = json.loads((bundle_dir / BUNDLE_MANIFEST).read_bytes())
+        summary["terminal"] = "accepted"
+        summary["acceptance"] = {"alphaFactRef": alpha_ref, "betaFactRef": beta_ref, "betaStatus": beta_status, "betaReasonCode": beta_reason,
+                                 "bundle": {"path": str(bundle_dir), "ref": _output_ref(bundle_dir), "bundleId": manifest["bundleId"],
+                                            "storeFiles": len(manifest["storeFiles"])},
+                                 "note": "lane acceptance only: no publish admission, no dev1.0 write; integrate consumes the bundle"}
         return 0
     except (IntegrationRunError, ScopedCandidateError, EnvironmentSchedulerError) as exc:
         code = getattr(exc, "code", "INTEGRATION_RUN.BLOCKED")
@@ -971,7 +1279,9 @@ def main(argv: list[str] | None = None) -> int:
         summary["wallClockSeconds"] = round(sum(item["durationSeconds"] for item in phases.items), 3)
         (run_dir / "summary.json").write_text(json.dumps(summary, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
         (run_dir / "summary.md").write_text(_render_summary(summary), encoding="utf-8")
+        bundle = (summary.get("acceptance") or {}).get("bundle") or {}
         print(json.dumps({"terminal": summary["terminal"], "runId": run_id, "summary": _output_ref(run_dir / "summary.json"),
+                          **({"acceptanceBundle": bundle["path"]} if bundle else {}),
                           **({"blocker": summary["blocker"]} if "blocker" in summary else {})}, ensure_ascii=False, sort_keys=True))
 
 
@@ -985,9 +1295,16 @@ def _render_summary(summary: Mapping[str, Any]) -> str:
         lines.append(f"- integrationDepth: `{plan.get('integrationDepth')}` impactPlanDigest `{plan.get('digest')}`")
     if "readiness" in summary:
         lines.append(f"- readiness: level `{summary['readiness']['level']}` deferred {summary['readiness']['deferred']} receipt `{summary['readiness']['receiptRef']}`")
+    if summary.get("mergedLanes"):
+        lines.append("- mergedLanes: " + ", ".join(f"`{item['branch']}@{item['commit'][:12]}`" for item in summary["mergedLanes"]))
     for name, env in (summary.get("environments") or {}).items():
         package = env.get("package") or {}
-        lines.append(f"- {name}: executed={env.get('executed', True)} baseline `{package.get('baselineId', '-')}` sourceRevision `{package.get('sourceRevision', '-')}` acceptance `{(env.get('acceptance') or {}).get('ref', '-')}`")
+        lines.append(f"- {name}: executed={env.get('executed', True)} imported={env.get('imported', False)} reason `{env.get('reasonCode') or '-'}` baseline `{package.get('baselineId', '-')}` sourceRevision `{package.get('sourceRevision', '-')}` acceptance `{(env.get('acceptance') or {}).get('ref', '-')}`")
+    bundle = (summary.get("acceptance") or {}).get("bundle") or summary.get("acceptanceBundle")
+    if bundle:
+        lines.append(f"- acceptanceBundle: `{bundle.get('path')}` bundleId `{bundle.get('bundleId')}` storeFiles {bundle.get('storeFiles')}")
+    if "admission" in summary:
+        lines.append(f"- admission: `{summary['admission']['ref']}`")
     if "publish" in summary:
         lines.append(f"- publish: `{summary['publish']['beforeOid']}` -> `{summary['publish']['afterOid']}` readback `{summary['publish']['readbackOid']}`")
     if "blocker" in summary:
