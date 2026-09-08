@@ -21,7 +21,7 @@ from .evidence_fingerprint import (
     canonical_digest,
     canonical_json_bytes,
     normalize_repo_relative_path,
-    snapshot_path,
+    snapshot_paths,
     validate_evidence_fingerprint,
     workspace_digests,
 )
@@ -122,6 +122,9 @@ def build_feature_context_fingerprint(
     captured_by: str = "feature_tree",
 ) -> dict[str, Any]:
     identity = owner_identity_projection(payload, repo_root=repo_root)
+    # generator与contract同一批次读取，两个身份字段绑定同一份完整快照。
+    snapshots = {item["path"]: item for item in snapshot_paths([GENERATOR_PATH, CONTRACT_PATH], repo_root=repo_root)}
+    assets_digest = canonical_digest({"generator": snapshots[GENERATOR_PATH], "contract": snapshots[CONTRACT_PATH]})
     return build_evidence_fingerprint(
         {
             "git": {
@@ -131,12 +134,7 @@ def build_feature_context_fingerprint(
             "workspace": workspace_digests([], repo_root=repo_root),
             "assets": {
                 "canonical_assets_digest": canonical_digest(identity),
-                "review_assets_digest": canonical_digest(
-                    {
-                        "generator": snapshot_path(GENERATOR_PATH, repo_root=repo_root),
-                        "contract": snapshot_path(CONTRACT_PATH, repo_root=repo_root),
-                    }
-                ),
+                "review_assets_digest": assets_digest,
             },
             "execution": {
                 "commands_digest": canonical_digest([]),
@@ -148,12 +146,7 @@ def build_feature_context_fingerprint(
                     }
                 ),
                 "provider_digest": canonical_digest("feature_tree.owner_identity"),
-                "generator_digest": canonical_digest(
-                    {
-                        "generator": snapshot_path(GENERATOR_PATH, repo_root=repo_root),
-                        "contract": snapshot_path(CONTRACT_PATH, repo_root=repo_root),
-                    }
-                ),
+                "generator_digest": assets_digest,
             },
         },
         captured_at="owner-identity-v4",

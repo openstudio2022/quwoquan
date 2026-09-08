@@ -15,11 +15,11 @@ from .agent_governance_contract import (
 from .descriptor_safe_io import read_repo_relative_regular_single_link
 from .evidence_fingerprint import (
     EvidenceFingerprintError, build_evidence_fingerprint, canonical_digest,
-    canonical_json_bytes, normalize_repo_relative_path, snapshot_path,
+    canonical_json_bytes, normalize_repo_relative_path, snapshot_paths,
     workspace_digests, validate_evidence_fingerprint,
 )
 from .feature_context_fingerprint import (
-    CONTRACT_PATH, GENERATOR_PATH, resolve_fingerprint_binding,
+    CONTRACT_PATH, GENERATOR_PATH,
     validate_content_addressed_ref, validate_current_feature_context_fingerprint, owner_identity_projection,
 )
 
@@ -108,10 +108,12 @@ def _owner_facts(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 def _context_snapshots(current: dict[str, Any], *, repo_root: Path) -> list[dict[str, Any]]:
+    paths = [normalize_repo_relative_path(str(item["path"]), repo_root) for item in current["canonical_contexts"]]
+    # 一次有界Git批读；保留原context顺序与同路径的不同anchor，不跨调用缓存。
+    by_path = {item["path"]: item for item in snapshot_paths(paths, repo_root=repo_root)}
     snapshots = []
-    for item in current["canonical_contexts"]:
-        path = normalize_repo_relative_path(str(item["path"]), repo_root)
-        snapshot = snapshot_path(path, repo_root=repo_root)
+    for item, path in zip(current["canonical_contexts"], paths):
+        snapshot = by_path[path]
         snapshots.append(declared_object({
             "path": path, "anchor": item.get("anchor"), "kind": item.get("kind"),
             "exists": snapshot["exists"], "content_digest": snapshot["content_digest"],

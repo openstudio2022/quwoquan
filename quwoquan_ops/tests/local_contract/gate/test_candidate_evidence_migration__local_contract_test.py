@@ -342,6 +342,10 @@ def test_review_and_runner_require_path_object_before_evidence(monkeypatch: pyte
     with pytest.raises(evidence_runner.EvidenceRunnerError, match="CANDIDATE.STALE"):
         evidence_runner.run_plan(current_plan, registry=registry, cwd=ROOT,
                                  plan_bytes=canonical_json_bytes(current_plan), plan_ref="test-fixture:exact-plan")
+    from lib.local_readiness.admission import owner_manifest_assets
+    from lib.local_readiness.core import LocalReadinessError
+    with pytest.raises(LocalReadinessError, match="candidate evidence 非 current"):
+        owner_manifest_assets(ROOT / owner_ref, repo_root=ROOT, candidate_evidence=ROOT / candidate_ref)
 
 
 def test_referenced_owner_receipt_is_bounded_and_portable(tmp_path: Path) -> None:
@@ -382,6 +386,35 @@ def test_review_cli_owner_read_rejects_oversized_before_json(tmp_path: Path) -> 
         _load_json(owner_ref, label="owner_identity", refuse=refuse, repo_root=tmp_path)
     assert failure.value.code == "REVIEW.OWNER_MANIFEST_INVALID"
     assert "读取字节边界" in failure.value.message
+
+
+@pytest.mark.parametrize("fault", ["oversized", "symlink", "hardlink", "directory-symlink"])
+def test_readiness_owner_read_rejects_unsafe_before_json(tmp_path: Path, fault: str) -> None:
+    # spec_ref: specs/feature-tree/runtime/development-workflow-governance/agent-skill-review-context-organization/spec.md#gwt-002.t10
+    import os
+    from lib.agent_governance_contract import contract_section
+    from lib.local_readiness.admission import owner_manifest_assets
+    from lib.local_readiness.core import LocalReadinessError
+
+    owner_ref = _owner_ref()
+    hostile = tmp_path / owner_ref
+    hostile.parent.mkdir(parents=True)
+    original = tmp_path / "original.json"
+    original.write_bytes((ROOT / owner_ref).read_bytes())
+    if fault == "oversized":
+        with hostile.open("wb") as stream:
+            stream.truncate(contract_section("feature_context_manifest")["max_bytes"] + 1)
+    elif fault == "symlink":
+        hostile.symlink_to(original)
+    elif fault == "hardlink":
+        os.link(original, hostile)
+    else:
+        directory = tmp_path / "redirected"
+        hostile.parent.rename(directory)
+        hostile.parent.symlink_to(directory, target_is_directory=True)
+        hostile.write_bytes(original.read_bytes())
+    with pytest.raises(LocalReadinessError, match="owner manifest 非 current"):
+        owner_manifest_assets(hostile, repo_root=tmp_path)
 
 
 def test_empty_changed_paths_has_independent_terminal() -> None:
@@ -467,6 +500,157 @@ def test_candidate_stale_after_bytes_change() -> None:
         assert stale.value.code == "CANDIDATE.STALE"
     finally:
         target.write_bytes(original)
+
+
+def test_context_batch_preserves_anchors_and_refreshes_bytes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from lib import candidate_evidence
+    from lib.evidence_fingerprint import snapshot_path, snapshot_paths
+
+    (tmp_path / "context.md").write_text("before", encoding="utf-8")
+    contexts = [
+        {"path": "context.md", "anchor": "REQ-002", "kind": "spec"},
+        {"path": "missing.md", "anchor": None, "kind": "design"},
+        {"path": "context.md", "anchor": "GWT-002", "kind": "spec"},
+    ]
+    expected = [
+        {**item, **{key: snapshot_path(item["path"], repo_root=tmp_path)[key]
+                   for key in ("exists", "content_digest")}}
+        for item in contexts
+    ]
+    calls = []
+
+    def batch(paths, *, repo_root):
+        calls.append(list(paths))
+        return snapshot_paths(paths, repo_root=repo_root)
+
+    monkeypatch.setattr(candidate_evidence, "snapshot_paths", batch)
+    current = {"canonical_contexts": contexts}
+    assert candidate_evidence._context_snapshots(current, repo_root=tmp_path) == expected
+    assert calls == [[item["path"] for item in contexts]]
+    (tmp_path / "context.md").write_text("after", encoding="utf-8")
+    refreshed = candidate_evidence._context_snapshots(current, repo_root=tmp_path)
+    assert len(calls) == 2
+    assert refreshed[0]["content_digest"] != expected[0]["content_digest"]
+    assert refreshed[0]["content_digest"] == refreshed[2]["content_digest"]
+    assert [item["anchor"] for item in refreshed] == [item["anchor"] for item in contexts]
+
+
+def test_owner_assets_batch_is_equivalent_and_rejects_later_drift(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from lib import feature_context_fingerprint as owner_fingerprint
+    from lib.evidence_fingerprint import EvidenceFingerprintError, canonical_digest, snapshot_path, snapshot_paths
+
+    owner = json.loads((ROOT / _owner_ref()).read_bytes())
+    generator, contract = owner_fingerprint.GENERATOR_PATH, owner_fingerprint.CONTRACT_PATH
+    expected = canonical_digest({
+        "generator": snapshot_path(generator, repo_root=ROOT),
+        "contract": snapshot_path(contract, repo_root=ROOT),
+    })
+    calls = []
+
+    def batch(paths, *, repo_root):
+        calls.append(list(paths))
+        values = snapshot_paths(paths, repo_root=repo_root)
+        if len(calls) > 1:
+            values[0]["content_digest"] = canonical_digest("changed canonical asset")
+        return values
+
+    monkeypatch.setattr(owner_fingerprint, "snapshot_paths", batch)
+    actual = owner_fingerprint.validate_current_feature_context_fingerprint(owner, repo_root=ROOT)
+    assert calls == [[generator, contract]]
+    assert actual["digest_payload"]["assets"]["review_assets_digest"] == expected
+    assert actual["digest_payload"]["execution"]["generator_digest"] == expected
+    with pytest.raises(EvidenceFingerprintError, match="owner identity EvidenceFingerprint"):
+        owner_fingerprint.validate_current_feature_context_fingerprint(owner, repo_root=ROOT)
+    assert len(calls) == 2
+
+
+def test_review_assets_batch_matches_single_reads_and_rechecks_drift(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from lib import review_fingerprint
+    from lib.evidence_fingerprint import canonical_digest, snapshot_path, snapshot_paths
+
+    reviewer = {
+        "role": "developer", "kind": "primary", "required": True, "profile": None,
+        "checklist": "roles/developer/checklists/dev/base.md",
+    }
+    inputs = dict(
+        workflow="dev", deliverable="implementation", scope=TARGET, owner_identity={},
+        candidate_evidence_identity={}, human_decision_projection={}, terminal={},
+        changed_paths=[], profiles=[], contexts=[], initial_reviewers=[reviewer, reviewer], evidence=[],
+    )
+    calls = []
+
+    def single_reads(paths, *, repo_root):
+        return [snapshot_path(path, repo_root=repo_root) for path in paths]
+
+    monkeypatch.setattr(review_fingerprint, "snapshot_paths", single_reads)
+    expected = review_fingerprint.build_review_fingerprint(**inputs)
+
+    def batch(paths, *, repo_root):
+        calls.append(list(paths))
+        values = snapshot_paths(paths, repo_root=repo_root)
+        if len(calls) > 1:
+            values[0]["content_digest"] = canonical_digest("changed review asset")
+        return values
+
+    monkeypatch.setattr(review_fingerprint, "snapshot_paths", batch)
+    actual = review_fingerprint.build_review_fingerprint(**inputs)
+    assert actual["digest_payload"] == expected["digest_payload"]
+    assert len(calls) == 1
+    assert len(calls[0]) > len(set(calls[0]))
+    assert review_fingerprint.build_review_fingerprint(**inputs)["digest"] != actual["digest"]
+    assert len(calls) == 2
+
+
+@pytest.mark.parametrize("state", ["clean", "ignored", "nested-untracked", "modified", "deleted", "renamed", "symlink"])
+def test_runner_clean_query_preserves_whole_tree_truth(tmp_path: Path, state: str) -> None:
+    # spec_ref: specs/feature-tree/runtime/development-workflow-governance/agent-skill-review-context-organization/spec.md#gwt-007.t1
+    import evidence_runner as runner
+
+    def git(*args: str) -> bytes:
+        return subprocess.run(["git", *args], cwd=tmp_path, capture_output=True, check=True).stdout
+
+    git("init", "-q")
+    tracked = tmp_path / "tracked.txt"
+    tracked.write_text("original", encoding="utf-8")
+    (tmp_path / ".gitignore").write_text("ignored/\n", encoding="utf-8")
+    git("add", "tracked.txt", ".gitignore")
+    git("-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "commit", "-qm", "fixture")
+    clean = runner._workspace_source_classification(tmp_path)
+    assert clean["repository_clean"] is True
+    if state in {"nested-untracked", "ignored"}:
+        path = tmp_path / ("ignored" if state == "ignored" else "outside-candidate") / "nested/file.txt"
+        path.parent.mkdir(parents=True)
+        path.write_text("untracked", encoding="utf-8")
+    elif state == "modified":
+        tracked.write_text("modified", encoding="utf-8")
+    elif state == "deleted":
+        tracked.unlink()
+    elif state == "renamed":
+        git("mv", "tracked.txt", "renamed.txt")
+    elif state == "symlink":
+        (tmp_path / "broken-link").symlink_to("missing-target")
+    exhaustive_clean = git("--no-optional-locks", "status", "--porcelain=v1", "-z", "--untracked-files=all") == b""
+    index = tmp_path / ".git/index"
+    before = index.read_bytes()
+    # 只读查询即使存在 writer 锁也不得删除、改写或抢占它。
+    lock = tmp_path / ".git/index.lock"
+    lock.write_bytes(b"other-writer")
+    actual = runner._workspace_source_classification(tmp_path)
+    assert actual["repository_clean"] is exhaustive_clean
+    assert actual["repository_clean"] is (state in {"clean", "ignored"})
+    assert index.read_bytes() == before
+    assert lock.read_bytes() == b"other-writer"
+    if exhaustive_clean:
+        runner._assert_source_head(clean, tmp_path)
+    else:
+        with pytest.raises(runner.EvidenceRunnerError, match="workspace 在命令后变脏"):
+            runner._assert_source_head(clean, tmp_path)
 
 
 def test_old_candidate_schema_is_rejected() -> None:

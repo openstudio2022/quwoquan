@@ -103,8 +103,12 @@ def _workspace_source_classification(repo_root: Path = ROOT) -> dict[str, Any]:
         if result.returncode == 0 and result.stdout.strip():
             merge_base_sha = result.stdout.strip()
             break
+    # 此处只判全树是否为空，不消费路径明细；normal 仍包含每个非空未跟踪目录，
+    # 禁用 rename 配对不改变空/非空，且只读查询不抢默认 index 锁。
+    # candidate 的完整路径与五类快照仍由 canonical snapshot_paths 独立逐阶段校验。
     status = subprocess.run(
-        ["git", "status", "--porcelain=v1", "-z", "--untracked-files=all"],
+        ["git", "--no-optional-locks", "status", "--porcelain=v1", "-z",
+         "--untracked-files=normal", "--no-renames"],
         cwd=repo_root,
         capture_output=True,
         check=False,
