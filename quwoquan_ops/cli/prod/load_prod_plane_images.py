@@ -241,6 +241,96 @@ def _remote_image_digest(
     return digest if re.fullmatch(r"sha256:[0-9a-f]{64}", digest) else None
 
 
+def _tag_remote_image(
+    source_ref: str,
+    target_ref: str,
+    account: str,
+    host: str,
+    key_file: Path,
+) -> str:
+    result = subprocess.run(
+        [
+            "ssh",
+            "-i",
+            str(key_file),
+            "-o",
+            "BatchMode=yes",
+            "-o",
+            "StrictHostKeyChecking=no",
+            f"{account}@{host}",
+            "podman",
+            "tag",
+            source_ref,
+            target_ref,
+        ],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        raise SystemExit(
+            f"FAIL: remote podman tag failed for {target_ref}: {(result.stderr or '').strip()}"
+        )
+    remote_digest = _remote_image_digest(target_ref, account, host, key_file)
+    if remote_digest is None:
+        raise SystemExit(
+            f"FAIL: remote image content digest unavailable after tag: {target_ref}"
+        )
+    return remote_digest
+
+
+def _deliver_images(
+    services: list[str],
+    *,
+    image_refs: dict[str, str],
+    local_digests: dict[str, str | None],
+    account: str,
+    host: str,
+    key_file: Path,
+) -> dict[str, str]:
+    """按 exact content digest 交付镜像：同一 digest 只跨网传一次，其余只在远端打 tag。
+
+    service-core 的各模块 compose 服务共用同一镜像；远端已持有同 digest（上一候选的
+    tag）时也只按 image ID 打新 tag。每个 tag 交付后都以远端 digest 读回校验。
+    """
+
+    delivered: dict[str, str] = {}
+    transport: dict[str, str] = {}
+    for service in services:
+        image_ref = image_refs.get(service)
+        if not image_ref:
+            continue
+        local_digest = local_digests.get(service)
+        if local_digest is None:
+            raise SystemExit(
+                f"FAIL: local image content digest unavailable: {image_ref}"
+            )
+        if local_digest in delivered:
+            remote_digest = _tag_remote_image(
+                delivered[local_digest], image_ref, account, host, key_file
+            )
+            transport[service] = "remote-tag"
+        elif _remote_image_digest(image_ref, account, host, key_file) == local_digest:
+            remote_digest = local_digest
+            transport[service] = "already-present"
+        elif _remote_image_digest(local_digest, account, host, key_file) == local_digest:
+            remote_digest = _tag_remote_image(
+                local_digest, image_ref, account, host, key_file
+            )
+            transport[service] = "remote-tag-by-digest"
+        else:
+            remote_digest = _stream_image(image_ref, account, host, key_file)
+            transport[service] = "streamed"
+        if remote_digest != local_digest:
+            raise SystemExit(
+                "FAIL: remote image digest mismatch for "
+                f"{service}: {remote_digest} != {local_digest}"
+            )
+        delivered.setdefault(local_digest, image_ref)
+    return transport
+
+
 def _stream_image(image_ref: str, account: str, host: str, key_file: Path) -> str:
     save_proc = subprocess.Popen(
         ["docker", "save", image_ref],
@@ -464,26 +554,14 @@ def main() -> int:
             f"FAIL: local docker images are not {target_arch}: {detail}; "
             "release images must be rebuilt by Service Pipeline for linux/amd64"
         )
-    for service in governed:
-        image_ref = image_refs.get(service)
-        if not image_ref:
-            continue
-        local_digest = local_digests.get(service)
-        if local_digest is None:
-            raise SystemExit(
-                f"FAIL: local image content digest unavailable: {image_ref}"
-            )
-        remote_digest = _stream_image(
-            image_ref,
-            plane.account,
-            args.host,
-            key_file,
-        )
-        if remote_digest != local_digest:
-            raise SystemExit(
-                "FAIL: remote image digest mismatch for "
-                f"{service}: {remote_digest} != {local_digest}"
-            )
+    report["transport"] = _deliver_images(
+        governed,
+        image_refs=image_refs,
+        local_digests=local_digests,
+        account=plane.account,
+        host=args.host,
+        key_file=key_file,
+    )
     report["remoteImageContentDigests"] = {
         service: _remote_image_digest(ref, plane.account, args.host, key_file)
         for service, ref in image_refs.items()
