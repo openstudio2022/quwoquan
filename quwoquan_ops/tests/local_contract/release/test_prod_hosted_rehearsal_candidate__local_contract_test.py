@@ -191,6 +191,56 @@ class RehearsalImageDeliveryContractTest(unittest.TestCase):
         with self.assertRaisesRegex(SystemExit, "valid OCI tag"):
             loader._compose_image_refs(["content-service"], candidate_digest=CANDIDATE, image_transport_tag="bad tag")
 
+    def test_loader_streams_each_content_digest_once_and_tags_the_rest(self) -> None:
+        """SIT-003 t2：同一 content digest 只跨网交付一次，其余 compose 服务只在远端按 digest 打 tag。"""
+        core = _sha("core-image")
+        rec = _sha("rec-image")
+        refs = {
+            "content-service": "localhost/quwoquan_service_content-service:t",
+            "chat-service": "localhost/quwoquan_service_chat-service:t",
+            "recommendation-service": "localhost/quwoquan_service_recommendation-service:t",
+        }
+        local = {"content-service": core, "chat-service": core, "recommendation-service": rec}
+        remote: dict[str, str] = {rec: rec}  # 上一候选已把 rec 镜像交付到远端（按 ID 可见）
+
+        def remote_digest(ref, *_args):
+            return remote.get(ref)
+
+        def stream(ref, *_args):
+            remote[ref] = local[next(s for s, r in refs.items() if r == ref)]
+            return remote[ref]
+
+        def tag(source, target, *_args):
+            remote[target] = remote[source]
+            return remote[target]
+
+        args = mock.Mock(host="h", image_source="local", dry_run=False, platform="linux/amd64")
+        with (
+            mock.patch.object(loader, "_remote_image_digest", side_effect=remote_digest),
+            mock.patch.object(loader, "_stream_image", side_effect=stream) as streamed,
+            mock.patch.object(loader, "_tag_remote_image", side_effect=tag) as tagged,
+        ):
+            transport = loader._deliver_images(
+                ["content-service", "chat-service", "recommendation-service"],
+                image_refs=refs,
+                local_digests=local,
+                account="prod-service-svc",
+                host=args.host,
+                key_file=Path("/k"),
+            )
+        self.assertEqual(
+            transport,
+            {
+                "content-service": "streamed",
+                "chat-service": "remote-tag",
+                "recommendation-service": "remote-tag-by-digest",
+            },
+        )
+        self.assertEqual(streamed.call_count, 1)
+        self.assertEqual(tagged.call_count, 2)
+        self.assertEqual(remote[refs["chat-service"]], core)
+        self.assertEqual(remote[refs["recommendation-service"]], rec)
+
     def test_loader_rejects_factory_manifest_for_local_delivery(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             manifest_path = Path(tmp) / "oci-images.json"
