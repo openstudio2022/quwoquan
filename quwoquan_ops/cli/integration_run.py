@@ -275,6 +275,8 @@ def _apply_data_release(*, environment: str, run_id: str, args: argparse.Namespa
                "--import", "--full-sync", log_dir=log_dir, label=f"{environment}-apply")
     _data_ship("activate", "--handoff-ref", handoff_ref, "--env", environment, "--import-run-id", import_run,
                "--run-id", activate_run, log_dir=log_dir, label=f"{environment}-activate")
+    _bootstrap_premium_pool(environment=environment, release_id=release_id, import_run=import_run,
+                            attestation=args.release_attestation, log_dir=log_dir)
     # ship verify 的 --import-run-id 指向 completed 的 activate run（其 result.importRunId 再指回 apply run）；
     # 传 apply run 会因 result status=prepared 被拒（"completed activation predecessor result status 不一致"）。
     verify_args = ["verify", "--handoff-ref", handoff_ref, "--env", environment, "--import-run-id", activate_run,
@@ -286,6 +288,49 @@ def _apply_data_release(*, environment: str, run_id: str, args: argparse.Namespa
     if not readiness.is_file():
         raise IntegrationRunError("INTEGRATION_RUN.DATA_RELEASE_FAILED", f"release readiness receipt missing: {readiness}")
     return readiness
+
+
+PREMIUM_POOL_BOOTSTRAP_QUALITY_SCORE = "1.0"
+PREMIUM_POOL_BOOTSTRAP_TTL_DAYS = 30
+
+
+def _bootstrap_premium_pool(*, environment: str, release_id: str, import_run: str, attestation: Path, log_dir: Path) -> None:
+    """fresh 环境的精选池首次激活：`ship verify --readiness-phase production` 要求 premium_stream 读回 release 视频，
+    而精选池只能经 canonical `stackctl premium-pool --launch-policy release-import` 自举（OPEN-023）。
+    样本来自派生 ReleaseUatSamplePlan 的 video objectId，经导入报告 contentId → postId 绑定；池非空时该路径按设计关闭，视为已激活。"""
+
+    from quwoquan_ops.cli.lib.app_content_uat_plan import load_release_uat_sample_plan
+
+    import_report = OUTPUT_ROOT / "env" / environment / "runs/data-release" / release_id / import_run / "import.json"
+    try:
+        report = json.loads(import_report.read_text(encoding="utf-8"))
+        header = json.loads((attestation.parent.parent / "payload/release.json").read_text(encoding="utf-8"))
+        plan, _ref, _digest = load_release_uat_sample_plan(
+            release_root=attestation.parent.parent / "payload", release_header=header,
+            manifest_digest=str(report.get("manifestDigest") or ""),
+        )
+    except (OSError, ValueError, json.JSONDecodeError) as exc:
+        raise IntegrationRunError("INTEGRATION_RUN.DATA_RELEASE_FAILED", f"premium pool bootstrap inputs unavailable: {exc}") from exc
+    video_object_ids = {str(s.get("objectId") or "") for s in plan.get("samples") or [] if isinstance(s, Mapping) and s.get("carrier") == "video"}
+    post_ids = sorted(
+        str(row.get("postId") or "")
+        for row in report.get("postBindings") or []
+        if isinstance(row, Mapping) and row.get("contentType") == "video" and str(row.get("contentId") or "") in video_object_ids
+    )
+    if not post_ids:
+        raise IntegrationRunError("INTEGRATION_RUN.DATA_RELEASE_FAILED", "ReleaseUatSamplePlan video sample has no postId binding in the import report")
+    expires_at = (datetime.now(timezone.utc) + timedelta(days=PREMIUM_POOL_BOOTSTRAP_TTL_DAYS)).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+    result = _stackctl(
+        "premium-pool", "--target", f"{environment}-local", "--action", "upsert-and-verify", "--launch-policy", "release-import",
+        "--readiness-receipt", str(import_report), "--content-id", post_ids[0],
+        "--quality-score", PREMIUM_POOL_BOOTSTRAP_QUALITY_SCORE, "--expires-at", expires_at, log_dir=log_dir,
+    )
+    if result.exit_code == 0:
+        return
+    details = " ".join(str(item) for item in (result.payload.get("details") or []))
+    if "already has premium pool entries" in details:
+        return
+    _require_ok(result, "INTEGRATION_RUN.DATA_RELEASE_FAILED")
 
 
 def _require_ok(result: StackctlResult, code: str) -> StackctlResult:
