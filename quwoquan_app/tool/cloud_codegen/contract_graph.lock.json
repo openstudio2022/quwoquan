@@ -30280,12 +30280,12 @@
   ],
   "breakingReport": {
     "path": "quwoquan_app/tool/cloud_codegen/contract_graph.breaking.json",
-    "sha256": "81d24ee32a1a41d1cfff7a51ffb5f00b54833f605fd856194cd049cdc5c5916c"
+    "sha256": "b338fc67b2bfcbd881fcd5453d3ef1820f6a1b8a7b1ae4becca7da7b14e3b631"
   },
   "contractGraph": {
     "compilerHash": "sha256:00961c84edb8af2a126a096ba81cfc605747324f0e738365b2cca8276c2dbad9",
     "path": "quwoquan_service/generated/contract_graph.json",
-    "sha256": "5b042faf6fd77c3702a1ff3e293c5f162816fe0b3d06f8cf40101377b146d731",
+    "sha256": "c372ef683b626026c4e7e35cec06c4c495cdfaa414d0b610ce9943a07ed019fe",
     "sourceDigestSetSha256": "0b503199842910db189d363b1aceb0a2b7a8db84c8f56c65078a806d5e19841a"
   },
   "generator": "app-cloud-handoff"

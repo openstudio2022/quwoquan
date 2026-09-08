@@ -123367,7 +123367,7 @@
           },
           {
             "path": "quwoquan_service/services/rtc-service/tests/api_integration/rtc/call_session/call_history_storage__data_consistency__api_integration_test.go",
-            "sha256": "f3d9315202c931d1c5567deb4969ddefd86b88fdff2a9a6b302ca6e22fb84b20"
+            "sha256": "6eadf6077e5c55ce312f2aea9e54511e210df4872ebe307ab1a957b4e403a5fe"
           },
           {
             "path": "quwoquan_service/services/rtc-service/tests/api_integration/rtc/call_session/call_lifecycle_contract__api_integration_test.go",
@@ -123399,7 +123399,7 @@
           },
           {
             "path": "quwoquan_service/services/rtc-service/tests/api_integration/rtc/call_session/testmain__api_integration_test.go",
-            "sha256": "524cbd1c59e7fb6d6d65619b37be8af3509ca16918728aa59cea2e625684bf85"
+            "sha256": "5872e1604106657f2a2d6d1d84a6e25722de5afee0662f87c489e1d5aa583137"
           }
         ]
       },
