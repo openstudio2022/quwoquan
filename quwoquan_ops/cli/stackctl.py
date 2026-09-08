@@ -278,6 +278,7 @@ from quwoquan_ops.cli.lib.local_graphql_read_registry_keys import (
 from quwoquan_ops.cli.lib.runtime_topology_package import (
     CONTENT_COMMERCIAL_COMPOSE_PROFILES, FULL_WORKLOAD_COMPOSE_PROFILES,
     load_runtime_topology_package, materialize_runtime_topology_package,
+    materialize_prod_hosted_runtime_topology_manifest,
 )
 from quwoquan_ops.cli.lib.data_plane_binding import (
     materialize_data_plane_binding_package,

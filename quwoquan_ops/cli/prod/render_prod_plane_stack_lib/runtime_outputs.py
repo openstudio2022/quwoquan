@@ -64,8 +64,17 @@ def _write_env_file(
     if instance == "prevalidate":
         auth = _stack._prevalidation_secret_environment()
         otp_key_version = "prod-hosted-prevalidation-k1"
+        # 预验证不得继承正式 credentials：assistant-service 的 Skill 包信任根使用
+        # prod-hosted 目录下独立生成的 rehearsal key（与 package 期签名 key 同源）。
+        from quwoquan_ops.cli.lib.local_assistant_skill_package_keys import (
+            prepare_rehearsal_assistant_skill_package_keys,
+        )
+
+        skill_trust = prepare_rehearsal_assistant_skill_package_keys()
         lines.extend(
             [
+                "ASSISTANT_SKILL_PACKAGE_TRUSTED_PUBLIC_KEYS_JSON="
+                + skill_trust.public_keys_json,
                 "LOCAL_GAMMA_HTTP_PORT=39000",
                 "LOCAL_GAMMA_PRODUCT_OPS_PORT=39010",
                 "LOCAL_GAMMA_MEDIA_EDGE_PORT=39100",

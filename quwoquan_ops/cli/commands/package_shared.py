@@ -111,6 +111,15 @@ def _build_runtime_shared_package(
         )
         if runtime_topology.get("dataPlaneBinding") != data_plane_binding:
             raise ValueError("runtime topology data-plane binding identity drifted")
+    elif (env_name, target_name) == ("prod", "prod-hosted"):
+        # prod-hosted 由 access-isolation 驱动渲染，不装配 Compose profile；
+        # 其拓扑身份是渲染输入闭包的摘要，供 environmentArtifact 复算。
+        runtime_topology = _stackctl.materialize_prod_hosted_runtime_topology_manifest(
+            package_dir,
+            repo_root=source_root,
+        )
+        if runtime_topology.get("dataPlaneBinding") != data_plane_binding:
+            raise ValueError("hosted runtime topology data-plane binding identity drifted")
     _stackctl.write_json(
         package_dir / "manifest.json",
         {

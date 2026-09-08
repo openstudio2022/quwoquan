@@ -304,6 +304,9 @@ def _command_package_unlocked(
             **timing,
         }
     legal_static_placeholder = False
+    if rehearsal_material:
+        # Skill 包签名等 prod 期外部签名材料在 rehearsal 中改用独立随机 rehearsal key。
+        package_environment["QWQ_PROD_HOSTED_MATERIAL_SOURCE"] = "local-build"
     if not args.service:
         legal_environment = dict(package_environment)
         if rehearsal_material:

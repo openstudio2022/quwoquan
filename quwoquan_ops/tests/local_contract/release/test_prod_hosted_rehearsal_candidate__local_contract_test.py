@@ -4,6 +4,8 @@ spec_ref: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/spec.md#sit-00
 spec_ref: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/spec.md#sit-003.t2
 spec_ref: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/spec.md#sit-003.t3
 spec_ref: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/spec.md#sit-003.t4
+spec_ref: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/spec.md#sit-003.t5
+spec_ref: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/spec.md#sit-003.t6
 spec_ref: specs/feature-tree/platform-ops-governance/commercial-readiness-risk-closure/zero-risk-production-readiness/spec.md#gwt-005.t1
 spec_ref: specs/feature-tree/platform-ops-governance/commercial-readiness-risk-closure/zero-risk-production-readiness/spec.md#gwt-005.t2
 spec_ref: specs/feature-tree/platform-ops-governance/commercial-readiness-risk-closure/zero-risk-production-readiness/spec.md#gwt-005.t3
@@ -246,7 +248,8 @@ class RehearsalImageDeliveryContractTest(unittest.TestCase):
 
 
 class RehearsalNonPromotableBoundaryContractTest(unittest.TestCase):
-    """SIT-003 t3 / GWT-005 t2：报告分轴且 releaseEligibility 恒 GATE_BLOCK；候选不进 formal/snapshot 路径。"""
+    """SIT-003 t3、t4 / GWT-005 t2：报告分轴且 releaseEligibility 恒 GATE_BLOCK（t3）；
+    候选不进 formal rollout / frozen snapshot / tag / admission / ledger 路径（t4）。"""
 
     def _deploy_args(self, tmp: str, *extra: str):
         return stackctl.build_parser().parse_args(
@@ -379,7 +382,8 @@ class RehearsalNonPromotableBoundaryContractTest(unittest.TestCase):
 
 
 class RehearsalDiagnosticMarkerContractTest(unittest.TestCase):
-    """SIT-003 t4 / GWT-005 t3：legal 占位、宿主 edge TLS 与 release readback 只是 rehearsal 诊断标记。"""
+    """SIT-003 t5、t6 / GWT-005 t3：release readback 只记为 rehearsal 诊断（evidenceClass），
+    legal 占位与宿主 edge TLS 承接在候选与报告中显式标记为非准出证据。"""
 
     def test_legal_static_placeholder_policy_blocks_by_default_and_only_marks_for_rehearsal(self) -> None:
         manifest, issues = legal_static.validate_manifest("prod")
@@ -507,6 +511,51 @@ class RehearsalDiagnosticMarkerContractTest(unittest.TestCase):
             )
             with self.assertRaisesRegex(ValueError, "buildInputDigest closure mismatch"):
                 candidate_manifest._validate_prod_hosted_oci_binding(candidate, candidate_root=root)
+
+    def test_provider_oci_binding_accepts_rehearsal_shape_and_still_rejects_unknown_fields(self) -> None:
+        """SIT-003 t4：候选封存的 Provider/OCI 交叉校验必须认得 rehearsal 12 字段形态，
+        而 factory 形态仍只允许 7 个字段——两类输入互斥，不得靠放宽字段集合合流。"""
+        oci = _rehearsal_oci()
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp).resolve()
+            (root / "packages" / "runtime-shared").mkdir(parents=True)
+            oci_path = root / "packages" / "runtime-shared" / "oci-images.json"
+            oci_path.write_text(json.dumps(oci), encoding="utf-8")
+            candidate = {
+                "environment": "prod",
+                "target": "prod-hosted",
+                "buildInputDigest": oci["buildInputDigest"],
+                "imageDigest": oci["imageDigest"],
+                "configurationDigest": oci["configurationDigest"],
+                "providerRuntime": {
+                    "images": {},
+                    "composition": {"runtimeCompositionDigest": PROVIDER_RUNTIME_DIGEST},
+                },
+            }
+            candidate_manifest._validate_candidate_provider_oci_binding(
+                candidate, candidate_root=root
+            )
+
+            factory_with_extra = {
+                key: value
+                for key, value in oci.items()
+                if key not in {"platform", "nonPromotable", "legalStaticPlaceholder", "publicEntry"}
+            }
+            factory_with_extra["materialSource"] = "factory"
+            oci_path.write_text(json.dumps(factory_with_extra), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "OCI image manifest fields mismatch"):
+                candidate_manifest._validate_candidate_provider_oci_binding(
+                    candidate, candidate_root=root
+                )
+
+            rehearsal_missing_marker = {
+                key: value for key, value in oci.items() if key != "nonPromotable"
+            }
+            oci_path.write_text(json.dumps(rehearsal_missing_marker), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "OCI manifest fields mismatch"):
+                candidate_manifest._validate_candidate_provider_oci_binding(
+                    candidate, candidate_root=root
+                )
 
 
 if __name__ == "__main__":

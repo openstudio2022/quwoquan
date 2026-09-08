@@ -16,8 +16,14 @@ from typing import Any
 from .local_assistant_skill_package_keys import (
     KEY_ID,
     prepare_local_assistant_skill_package_keys,
+    prepare_rehearsal_assistant_skill_package_keys,
 )
 from .openssl3_resolver import resolve_openssl3
+
+# package 域在 prod-hosted rehearsal（--material-source local-build）时注入该标记，
+# 其值与 deployment_candidate_manifest.prod_hosted_rehearsal.REHEARSAL_MATERIAL_SOURCE 同源。
+REHEARSAL_MATERIAL_SOURCE_ENV = "QWQ_PROD_HOSTED_MATERIAL_SOURCE"
+REHEARSAL_MATERIAL_SOURCE = "local-build"
 from .local_assistant_skill_package_publication import (
     _private_key_base64,
     _source_digest,
@@ -100,6 +106,24 @@ def _signing_material(
             )
             or ""
         ).strip()
+        if (
+            not (key_id or private_key_base64 or public_keys_json)
+            and package_environment.get(REHEARSAL_MATERIAL_SOURCE_ENV)
+            == REHEARSAL_MATERIAL_SOURCE
+        ):
+            # DEC-013：rehearsal 候选不得继承正式 prod 签名材料，改用 prod-hosted 目录下
+            # 独立随机生成的 rehearsal key；候选本身标记 nonPromotable。
+            openssl = resolve_openssl3()
+            keys = prepare_rehearsal_assistant_skill_package_keys(openssl=openssl)
+            return SigningMaterial(
+                key_id=KEY_ID,
+                private_key_base64=_private_key_base64(
+                    keys.private_key_path,
+                    keys.public_keys_json,
+                    openssl=openssl,
+                ),
+                public_keys_json=keys.public_keys_json,
+            )
         try:
             private_key = base64.b64decode(private_key_base64, validate=True)
         except (ValueError, base64.binascii.Error) as exc:
