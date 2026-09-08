@@ -64,6 +64,9 @@ timeouts:
   overrides_by_check:
     static:code_health_delta_fast: 30
     static:code-health-delta: 300
+    # App-only emitter 固定 Graph clean rebuild（cloudOutputs≈164）单跑约 50–80s，
+    # 与其余 static 并发时超 60s 默认；给 180s 仍在 fast 上限 300 内。
+    static:app_generated_manifest: 180
   resolution_order: [check, phase, level, default]
 scope_profiles:
   service:
