@@ -497,6 +497,27 @@ def _health_runtime(*, health: StackctlResult, environment: str, candidate: Mapp
     return runtime
 
 
+PACKAGE_REUSE_SUMMARY_MARKER = "reused immutable candidate"
+
+
+def _assert_package_identity(*, packaged_revision: str, candidate_commit: str, package: StackctlResult) -> None:
+    """候选身份是内容寻址的：baselineId 由当前树的打包输入派生，`stackctl package` 只在输入字节同一时复用既有
+    不可变候选，其 manifest.sourceRevision 保留首次打包的 commit。因此 sourceRevision 与 candidate 不等只在
+    「本次是复用」且「该 commit 是 candidate 祖先」时合法（例如只改 quwoquan_data/specs 的候选）。"""
+
+    if packaged_revision == candidate_commit:
+        return
+    reused = PACKAGE_REUSE_SUMMARY_MARKER in str(package.payload.get("summary") or "")
+    ancestor = bool(packaged_revision) and subprocess.run(
+        ["git", "merge-base", "--is-ancestor", packaged_revision, candidate_commit], cwd=ROOT, check=False,
+    ).returncode == 0
+    if not (reused and ancestor):
+        raise IntegrationRunError(
+            "INTEGRATION_RUN.PACKAGE_IDENTITY_INVALID",
+            f"packaged sourceRevision {packaged_revision} != candidate {candidate_commit} (reused={reused}, ancestor={ancestor})",
+        )
+
+
 def _package_with_dependency_recovery(*, environment: str, args: argparse.Namespace, log_dir: Path, phases: Phases) -> StackctlResult:
     """打包；App 依赖 bundle 缺失/过期时执行一次有界 canonical `app-dependency-sync` 再重试，其余失败原样阻断。"""
 
@@ -604,9 +625,10 @@ def _run_environment(*, environment: str, profile: str, candidate: Mapping[str, 
         active = json.loads(active_path.read_text(encoding="utf-8"))
         baseline = str(active.get("baselineId") or "")
         manifest = json.loads((Path(str(active["candidateDir"])) / "manifest.json").read_text(encoding="utf-8"))
-        if manifest.get("sourceRevision") != candidate["commit"]:
-            raise IntegrationRunError("INTEGRATION_RUN.PACKAGE_IDENTITY_INVALID", f"packaged sourceRevision {manifest.get('sourceRevision')} != candidate {candidate['commit']}")
-        env_summary["package"] = {"baselineId": baseline, "sourceRevision": manifest.get("sourceRevision"), "packageDigest": manifest.get("packageDigest"), "imageDigest": manifest.get("imageDigest")}
+        packaged_revision = str(manifest.get("sourceRevision") or "")
+        _assert_package_identity(packaged_revision=packaged_revision, candidate_commit=candidate["commit"], package=package)
+        env_summary["package"] = {"baselineId": baseline, "sourceRevision": packaged_revision, "packageDigest": manifest.get("packageDigest"), "imageDigest": manifest.get("imageDigest"),
+                                  "reusedFromAncestor": packaged_revision != candidate["commit"]}
 
         up = phases.run(f"{environment}.up", lambda: _stackctl("up", "--target", target, "--skip-app", "--workload", args.workload, log_dir=log_dir))
         started_up = True

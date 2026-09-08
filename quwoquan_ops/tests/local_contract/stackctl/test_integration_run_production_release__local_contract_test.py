@@ -146,6 +146,21 @@ class IntegrationRunProductionReleaseContractTest(unittest.TestCase):
         self.assertEqual(call[call.index("--content-id") + 1], "data_post_" + "d" * 64)
         self.assertEqual(call[call.index("--readiness-receipt") + 1], str(report))
 
+    def test_package_identity_accepts_reused_candidate_only_from_an_ancestor(self) -> None:
+        # 候选身份内容寻址：data-only 候选复用祖先 commit 打出的同一不可变候选是合法的；
+        # 非复用或非祖先的 sourceRevision 仍是身份漂移。
+        reused = integration_run.StackctlResult("package", {"exitCode": 0, "summary": "stackctl package reused immutable candidate for alpha"}, "")
+        fresh = integration_run.StackctlResult("package", {"exitCode": 0, "summary": "stackctl package built candidate for alpha"}, "")
+        head = integration_run._git("rev-parse", "HEAD")
+        parent = integration_run._git("rev-parse", "HEAD~1")
+        integration_run._assert_package_identity(packaged_revision=head, candidate_commit=head, package=fresh)
+        integration_run._assert_package_identity(packaged_revision=parent, candidate_commit=head, package=reused)
+        for packaged, package in ((parent, fresh), ("0" * 40, reused)):
+            with self.subTest(packaged=packaged[:9], summary=package.payload["summary"]):
+                with self.assertRaises(integration_run.IntegrationRunError) as blocked:
+                    integration_run._assert_package_identity(packaged_revision=packaged, candidate_commit=head, package=package)
+                self.assertEqual(blocked.exception.code, "INTEGRATION_RUN.PACKAGE_IDENTITY_INVALID")
+
     def test_parser_requires_candidate_handoff_ref_only(self) -> None:
         # integrate 只对 candidate 执行 ship apply/activate/verify；rollback release 只参与
         # stackctl package 的候选绑定，因此不需要 rollback handoff-ref。
