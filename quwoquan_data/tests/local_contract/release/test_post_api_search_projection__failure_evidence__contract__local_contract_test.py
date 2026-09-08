@@ -1081,3 +1081,38 @@ def test_search_projection_request_errors_are_not_treated_as_pending(
         )
 
     assert captured.value.projection_pending is False
+
+
+def test_search_projection_queries_by_publish_title_before_source_title(
+    tmp_path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """视频/图片 manifest.title 可能是来源平台的原始描述；索引与交付用的是 publishTitle。"""
+    from core.control_types import ContentType
+    from content.release.environment.post_api_media_verification import PostApiCase
+
+    monkeypatch.setattr(subject, "_sleep_seconds", lambda _seconds: None)
+    post_ref = "video/风光/三峡水库开闸泄洪/1"
+    manifest_path = tmp_path / "payload/objects/posts" / post_ref / "manifest.json"
+    manifest_path.parent.mkdir(parents=True)
+    manifest_path.write_text(
+        json.dumps({"title": "This is part of the 2020 China floods.", "publishTitle": "三峡水库开闸泄洪"}),
+        encoding="utf-8",
+    )
+    queries: list[str] = []
+
+    def post_json(_path, *, body, **_kwargs):
+        queries.append(body["query"])
+        return client_subject.PublicApiResponse(
+            status=200, payload={"hits": [{"objectId": "post-a"}]}, operation=_operation(status=200)
+        )
+
+    client = SimpleNamespace(new_request_identity=lambda **_kwargs: _logical_request(), post_json=post_json)
+    rows = subject.verify_search_projection(
+        client,
+        release_root=tmp_path,
+        cases=[PostApiCase(post_ref=post_ref, post_id="post-a", content_type=ContentType.VIDEO, author_id="a", source_attribution=None)],
+        creators_by_author={},
+    )
+
+    assert queries == ["三峡水库开闸泄洪"]
+    assert rows[0]["matchedObjectIds"] == ["post-a"]

@@ -448,7 +448,9 @@ def _validate_prod_hosted_release_evidence_currentness(
         # rehearsal 候选没有 GHCR release evidence；它的 currentness 就是
         # 候选 sourceRevision 仍等于当前 HEAD 与本地 dev1.0（SIT-003 t1）。
         try:
-            _rehearsal.rehearsal_candidate_source_gate(candidate, repo_root=ROOT)
+            _rehearsal.rehearsal_candidate_source_gate(
+                candidate, repo_root=ROOT, candidate_root=candidate_root
+            )
         except _rehearsal.RehearsalError as exc:
             raise ValueError(str(exc)) from exc
         return

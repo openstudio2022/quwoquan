@@ -509,7 +509,9 @@ def _exact_candidate_rehearsal_inputs(
             "--frozen-diagnostic-snapshot"
         )
     try:
-        rehearsal.rehearsal_candidate_source_gate(candidate, repo_root=_stackctl.ROOT)
+        rehearsal.rehearsal_candidate_source_gate(
+            candidate, repo_root=_stackctl.ROOT, candidate_root=candidate_root
+        )
         rehearsal.verify_local_rehearsal_images(oci)
     except rehearsal.RehearsalError as error:
         raise RuntimeError(str(error)) from error

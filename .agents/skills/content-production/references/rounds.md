@@ -68,6 +68,7 @@ Commons 与 YouTube 的说明常不点名实体（「Pandoj. Ĉengduo」「Templ
 - video：逐个看抽帧 poster；二传平台烫印（抖音/快手 logo）按 `platform_logo` 候选级排除。
 - 申报 `watermarkStatus=present` 时必须给 `watermarkKind` 与 `watermarkNote`；`author_signature` 通常可用且不得抹去，`platform_logo|stock_agency` 原则上不进 image 载体。不去水印、不给发布物烧制水印。
 - 看图一律看 `ingest.json` 里 `filePath` 指向的**下载原件**，不看 ingest 产出的派生体：超预算图会被降采样成 webp，宿主看图工具解不了 webp。派发子 Agent 时把原件路径一并给出；原件过大无法打开时由主会话先生成一份 jpg 预览再派发。主会话在选材时对原件的目视即为该资产的水印与相关性判定，写进 ingest 清单后对下游阶段有效。
+- image 载体的标题与 caption 只能从**原件或 ≥1200px 单图预览**写，不能从 `sheets` 的 500px 缩略拼图写：r04 三张 image 因白天/夜景、季节、主体在缩略图上误判而被评审拒（`阳朔西街夜色牌坊`、`龙脊梯田秋色` caption 与画面不符）。拼图只用于选材与水印初筛。另：Commons imageinfo 的 `url` 现在带 `?utm_source=` 查询串，拼 thumb URL 前必须 `split("?")[0]`；thumb 只接受固定宽度（500/1280/1920），640/800/1000 会 400。
 
 ## 终止条件闭集
 

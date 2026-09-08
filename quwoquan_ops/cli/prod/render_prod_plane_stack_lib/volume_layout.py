@@ -19,6 +19,19 @@ def _compose_bind_source(path_value: str) -> str:
     return f"./{value}"
 
 
+# DEC-005：环境身份与 platform-ops facts 树由部署面（渲染期）材料化后只读挂载，
+# 不烤入镜像；两者都落在 render 输出的 runtime/ 下随 sync 一起到达远端。
+ARTIFACT_IDENTITY_MOUNT_TARGET = "/etc/quwoquan/artifact-identity.json"
+ARTIFACT_IDENTITY_RENDER_REF = "./runtime/artifact-identity.json"
+PLATFORM_OPS_FACTS_MOUNT_TARGET = "/app"
+PLATFORM_OPS_FACTS_RENDER_REF = "./runtime/platform-ops-facts"
+
+
+def _mount_target_matches(raw: str, target: str) -> bool:
+    """按精确 mount target 匹配（`src:target` 或 `src:target:opts`），不做子串匹配。"""
+    return raw.endswith(f":{target}") or f":{target}:" in raw
+
+
 def _rewrite_volume_with_layout(
     raw: str,
     *,
@@ -29,6 +42,12 @@ def _rewrite_volume_with_layout(
     caddyfile_path: str,
     model_cache_root: str,
 ) -> str:
+    for target, source in (
+        (ARTIFACT_IDENTITY_MOUNT_TARGET, ARTIFACT_IDENTITY_RENDER_REF),
+        (PLATFORM_OPS_FACTS_MOUNT_TARGET, PLATFORM_OPS_FACTS_RENDER_REF),
+    ):
+        if _mount_target_matches(raw, target):
+            return f"{source}{raw[raw.index(':' + target):]}"
     mount_sources = {
         "/etc/qwq-config": config_root,
         "/srv/media": media_root,

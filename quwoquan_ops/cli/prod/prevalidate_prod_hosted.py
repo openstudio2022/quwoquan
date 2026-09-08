@@ -123,7 +123,9 @@ def validate_rehearsal_candidate(args: argparse.Namespace) -> dict[str, Any]:
         purpose="self_verify",
     )
     try:
-        source = rehearsal.rehearsal_candidate_source_gate(candidate, repo_root=ROOT)
+        source = rehearsal.rehearsal_candidate_source_gate(
+            candidate, repo_root=ROOT, candidate_root=candidate_root
+        )
         rehearsal.verify_local_rehearsal_images(oci)
     except rehearsal.RehearsalError as error:
         raise PrevalidationError(str(error)) from error
