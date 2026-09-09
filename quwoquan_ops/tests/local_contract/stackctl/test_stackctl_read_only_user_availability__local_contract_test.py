@@ -7,6 +7,10 @@ from __future__ import annotations
 
 import argparse
 import json
+import subprocess
+from types import SimpleNamespace
+
+import pytest
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -594,3 +598,379 @@ def test_inspect_aggregates_user_availability_and_fails_on_first_blocker(
     assert result["firstBlockerClass"] == "startup_identity"
     persisted = json.loads((report_dir / "report.json").read_text(encoding="utf-8"))
     assert persisted["inspection"]["userAvailability"]["status"] == "failed"
+
+
+@pytest.fixture
+def hosted_runtime(monkeypatch):
+    """只模拟 SSH 边界；身份匹配与分层判定执行真实实现。"""
+    from quwoquan_ops.cli.commands import hosted_read_only as hosted
+    from quwoquan_ops.cli.prod.render_prod_plane_stack_lib.constants import PROD_CADDY_IMAGE
+
+    access = stackctl.load_prod_hosted_access_manifest()
+    plan = stackctl.resolve_prod_hosted_plan(access, instance="prevalidate")
+    runtime_by_plane = {}
+    material_by_plane = {}
+    images = {}
+    from quwoquan_ops.cli.lib.deployment_candidate_manifest.prod_hosted_rehearsal import compose_service_image_owner
+    for placement in plan:
+        required = access["prevalidation"]["planes"][placement.plane]["startupServices"]
+        containers, inspected, configs = [], [], {}
+        for service in required:
+            images[compose_service_image_owner(service)] = {"imageDigest": DIGEST}
+            containers.append({"id": service, "composeService": service, "imageId": DIGEST, "running": True, "health": "healthy"})
+            inspected.append({
+                "Id": service, "Image": DIGEST,
+                "Config": {
+                    "Env": ["APP_ENV=prod", f"IMAGE_VERSION={DIGEST.removeprefix('sha256:')}", f"CONFIG_VERSION={OTHER_DIGEST}", "QWQ_NONPROMOTABLE_PREVALIDATION=first-party", "SECRET_TOKEN=do-not-expose"],
+                    "Labels": {"com.docker.compose.project": placement.project, "com.docker.compose.service": service},
+                },
+                "Mounts": [
+                    {"Destination": "/etc/qwq-config", "Source": placement.remote_root + "/runtime/config-root", "RW": False},
+                    {"Destination": "/etc/quwoquan/artifact-identity.json", "Source": placement.remote_root + "/runtime/artifact-identity.json", "RW": False},
+                ],
+            })
+            configs[service] = {"version": OTHER_DIGEST, "digest": TRAIN_DIGEST, "expectedDigest": TRAIN_DIGEST}
+        for service in placement.support_services:
+            containers.append({"id": service, "composeService": service, "image": PROD_CADDY_IMAGE, "imageId": DIGEST, "running": True, "health": "healthy"})
+            inspected.append({
+                "Id": service, "Image": DIGEST,
+                "Config": {"Image": PROD_CADDY_IMAGE, "Labels": {
+                    "com.docker.compose.project": placement.project,
+                    "com.docker.compose.service": service,
+                }},
+            })
+        runtime_by_plane[placement.plane] = {
+            "instance": placement.instance, "plane": placement.plane,
+            "hostId": placement.host_id, "host": placement.ssh_host,
+            "replicaId": placement.replica_id, "project": placement.project,
+            "account": placement.account, "composeRoot": placement.remote_root,
+            "composeFileExists": True, "envFileExists": True,
+            "unit": {"name": placement.systemd_unit, "enabled": True, "active": True},
+            "containers": containers, "inspect": inspected,
+        }
+        material_by_plane[placement.plane] = {
+            "candidateDigest": DIGEST, "instance": "prevalidate", "plane": placement.plane,
+            "dataMode": "external", "configs": configs,
+            "artifactIdentity": {"schema": "qwq.environment-artifact-identity", "environment": "prod", "configDigest": DIGEST},
+        }
+    monkeypatch.setattr(hosted, "_hosted_candidate", lambda *_: ({"baselineId": DIGEST}, {"materialSource": "local-build", "legalStaticPlaceholder": True, "images": images}))
+    material_reader = hosted._hosted_material_readback
+    monkeypatch.setattr(hosted, "_hosted_material_readback", lambda placement: material_by_plane[placement.plane])
+    calls = []
+    def runtime(plane, **kwargs):
+        calls.append((plane, kwargs))
+        return runtime_by_plane[plane]
+    monkeypatch.setattr(stackctl, "_prod_plane_runtime_report", runtime)
+    return SimpleNamespace(runtime=runtime_by_plane, material=material_by_plane, calls=calls, plan=plan, material_reader=material_reader, access=access)
+
+
+def _hosted_report():
+    return subject.read_only_user_availability_report(
+        "prod-hosted", deployment_instance="prevalidate", candidate_digest=DIGEST,
+    )
+
+
+def test_hosted_never_consumes_local_receipts_and_keeps_axes_separate(monkeypatch, hosted_runtime):
+    # spec_ref: specs/feature-tree/platform-ops-governance/commercial-readiness-risk-closure/zero-risk-production-readiness/spec.md#gwt-005.t2
+    def forbidden(*args, **kwargs):
+        pytest.fail("hosted must not consume any local receipt")
+    for name in ("load_test_live_startup_attempt", "read_startup_attempt", "active_deployment_candidate_snapshot", "load_test_live_content_binding", "inspect_consumer_leases"):
+        monkeypatch.setattr(stackctl, name, forbidden)
+    report = _hosted_report()
+    Draft202012Validator(json.loads(Path("quwoquan_ops/environments/read_only_user_availability_report.schema.json").read_text())).validate(report)
+    evidence = report["evidence"]
+    assert evidence["runtime"]["selectedMode"] == "hosted"
+    assert evidence["containerRuntime"]["status"] == "ready"
+    assert evidence["firstPartyReadiness"]["status"] == "ready"
+    assert evidence["providerReadiness"]["status"] == "unavailable"
+    assert evidence["contentUAT"]["status"] == "unavailable"
+    assert evidence["releaseEligibility"]["status"] == "GATE_BLOCK"
+    assert evidence["rehearsal"]["validated"] is True
+    assert report["status"] == "failed"
+    assert "SECRET_TOKEN" not in json.dumps(report)
+    assert "startupReceipt" not in evidence["runtime"]
+    assert all(kwargs["instance"] == "prevalidate" and kwargs["host_id"] and kwargs["host"] for _, kwargs in hosted_runtime.calls)
+
+
+@pytest.mark.parametrize("drift", ["host", "instance", "image", "config", "mount", "material", "label", "missing-container"])
+def test_hosted_identity_drift_never_validates_rehearsal(hosted_runtime, drift):
+    # spec_ref: specs/feature-tree/platform-ops-governance/commercial-readiness-risk-closure/zero-risk-production-readiness/spec.md#gwt-005.t1
+    runtime = hosted_runtime.runtime["service"]
+    if drift in {"host", "instance"}:
+        runtime[drift] = "other"
+    elif drift == "image":
+        runtime["containers"][0]["imageId"] = OTHER_DIGEST
+    elif drift == "config":
+        hosted_runtime.material["service"]["configs"][runtime["containers"][0]["composeService"]]["digest"] = DIGEST
+    elif drift == "mount":
+        runtime["inspect"][0]["Mounts"][0]["RW"] = True
+    elif drift == "material":
+        hosted_runtime.material["service"]["artifactIdentity"]["configDigest"] = OTHER_DIGEST
+    elif drift == "label":
+        runtime["inspect"][0]["Config"]["Labels"]["com.docker.compose.project"] = "local-project"
+    else:
+        runtime["containers"] = []
+    evidence = _hosted_report()["evidence"]
+    assert evidence["runtime"]["identity"]["status"] == "blocked"
+    assert evidence["rehearsal"]["validated"] is False
+    assert evidence["containerRuntime"]["status"] == "blocked"
+
+
+def test_unknown_hosted_instance_is_blocked_before_ssh(hosted_runtime):
+    report = subject.read_only_user_availability_report("prod-hosted", deployment_instance="unknown", candidate_digest=DIGEST)
+    assert report["status"] == "failed"
+    assert "unsupported deployment instance" in report["firstBlocker"]
+    assert hosted_runtime.calls == []
+
+
+def test_provider_unhealthy_does_not_claim_container_exit(hosted_runtime):
+    product_ops = next(item for item in hosted_runtime.runtime["service"]["containers"] if item["composeService"] == "product-ops-service")
+    product_ops["health"] = "unhealthy"
+    evidence = _hosted_report()["evidence"]
+    assert evidence["containerRuntime"]["status"] == "ready"
+    assert evidence["firstPartyReadiness"]["status"] == "ready"
+    assert evidence["providerReadiness"]["status"] == "unavailable"
+    product_ops["running"] = False
+    assert _hosted_report()["evidence"]["containerRuntime"]["status"] == "blocked"
+
+
+@pytest.mark.parametrize("instance,legal_issue,drift,expected_exit", [
+    ("prevalidate", "owner.name contains placeholder text", False, 0),
+    ("prod", "owner.name contains placeholder text", False, 1),
+    ("prevalidate", "owner.name contains placeholder text", True, 1),
+    ("prevalidate", "source checksum mismatch", False, 1),
+])
+def test_doctor_legal_exception_requires_exact_rehearsal(monkeypatch, tmp_path, hosted_runtime, instance, legal_issue, drift, expected_exit):
+    # spec_ref: specs/feature-tree/platform-ops-governance/commercial-readiness-risk-closure/zero-risk-production-readiness/spec.md#gwt-005.t3
+    if drift:
+        hosted_runtime.runtime["service"]["hostId"] = "other-host"
+    availability = _hosted_report()
+    diagnostics = availability["evidence"]
+    diagnostics["httpProbes"] = {"status": "failed", "endpointBinding": "public-target-only"}
+    captured = []
+    monkeypatch.setattr(stackctl, "command_health", lambda args: captured.append(args) or {"exitCode": 1, "runtimeDiagnostics": diagnostics, "details": ["public target HTTP probe failed"]})
+    monkeypatch.setattr(stackctl, "_legal_static_command", lambda *args, **kwargs: (subprocess.CompletedProcess([], 1), {"issues": [legal_issue]}))
+    monkeypatch.setattr(stackctl, "local_runtime_capacity_evidence", lambda target: {"issues": [], "warnings": [], "evidence": {}, "reclaimCommands": []})
+    monkeypatch.setattr(stackctl, "_load_release_state", lambda *_: {})
+    result = stackctl.command_doctor(argparse.Namespace(target="prod-hosted", deployment_instance=instance, candidate_digest=DIGEST, ssh_host="", host_id="", report_dir=str(tmp_path)))
+    assert result["exitCode"] == expected_exit
+    assert captured[0].candidate_digest == DIGEST
+    assert captured[0].deployment_instance == instance
+    assert captured[0].read_only is True
+    assert result["releaseEligibility"]["status"] == "GATE_BLOCK"
+    if expected_exit == 0:
+        assert result["nonPromotable"] is True
+        assert result["releaseEligibility"]["legalStatic"]["status"] == "GATE_BLOCK"
+
+
+def test_hosted_candidate_requires_explicit_digest_and_rejects_formal_local_build(monkeypatch, tmp_path):
+    from quwoquan_ops.cli.commands import hosted_read_only as hosted
+    with pytest.raises(ValueError, match="explicit exact"):
+        hosted._hosted_candidate("", "prevalidate")
+    oci_path = tmp_path / "packages/runtime-shared/oci-images.json"
+    oci_path.parent.mkdir(parents=True)
+    oci_path.write_text(json.dumps({"materialSource": "local-build"}))
+    monkeypatch.setattr(stackctl, "load_candidate_manifest", lambda *args, **kwargs: {"baselineId": DIGEST})
+    monkeypatch.setattr(stackctl, "deployment_candidate_dir", lambda *args: tmp_path)
+    with pytest.raises(ValueError, match="requires deployment instance prevalidate"):
+        hosted._hosted_candidate(DIGEST, "prod")
+    with pytest.raises(ValueError, match="fields mismatch"):
+        hosted._hosted_candidate(DIGEST, "prevalidate")
+
+
+@pytest.mark.parametrize("service", ["product-ops-service", "content-service", "gamma-proxy"])
+@pytest.mark.parametrize("state", [
+    {"health": "not-configured"}, {"health": ""}, {"health": None}, {"health": "unknown"},
+    {"running": False}, {"running": 1}, {"oomKilled": True}, {"error": "container start failed"},
+])
+def test_hosted_provider_exception_never_hides_missing_health_or_process_failure(hosted_runtime, service, state):
+    # spec_ref: specs/feature-tree/platform-ops-governance/commercial-readiness-risk-closure/zero-risk-production-readiness/spec.md#gwt-005.t2
+    container = next(item for item in hosted_runtime.runtime["service"]["containers"] if item["composeService"] == service)
+    container.update(state)
+    evidence = _hosted_report()["evidence"]
+    assert evidence["firstPartyReadiness"]["status"] == "blocked"
+    if any(field in state for field in ("running", "oomKilled", "error")):
+        assert evidence["containerRuntime"]["status"] == "blocked"
+
+
+def _add_isolated_support(hosted_runtime):
+    placement = next(item for item in hosted_runtime.plan if item.plane == "service")
+    isolated = hosted_runtime.access["prevalidation"]["isolatedData"]
+    runtime = hosted_runtime.runtime["service"]
+    hosted_runtime.material["service"]["dataMode"] = "isolated"
+    for service in isolated["services"]:
+        initializer = service in {"mongo-init", "object-storage-init"}
+        runtime["containers"].append({
+            "id": service, "composeService": service, "image": isolated["images"][service],
+            "imageId": DIGEST, "status": "exited" if initializer else "running",
+            "running": not initializer, "exitCode": 0, "oomKilled": False, "error": "",
+            "health": "not-configured" if initializer else "healthy",
+        })
+        runtime["inspect"].append({
+            "Id": service, "Image": DIGEST,
+            "Config": {"Image": isolated["images"][service], "Labels": {
+                "com.docker.compose.project": placement.project,
+                "com.docker.compose.service": service,
+            }},
+        })
+    return runtime
+
+
+@pytest.mark.parametrize("service", ["mongo-init", "object-storage-init"])
+@pytest.mark.parametrize("state", [
+    {"running": True}, {"running": 0}, {"exitCode": False}, {"exitCode": "0"},
+    {"exitCode": 0.0}, {"exitCode": None}, {"exitCode": 1}, {"oomKilled": True},
+    {"error": "initialization failed"}, {"status": "running", "running": True, "health": "healthy"},
+    {"status": "dead"},
+])
+def test_hosted_initializer_requires_exact_successful_exit(hosted_runtime, service, state):
+    runtime = _add_isolated_support(hosted_runtime)
+    container = next(item for item in runtime["containers"] if item["composeService"] == service)
+    container.update(state)
+    evidence = _hosted_report()["evidence"]
+    assert evidence["containerRuntime"]["status"] == "blocked"
+    observed = next(item for replica in evidence["runtime"]["replicas"] for item in replica["containers"] if item["service"] == service)
+    assert observed["completedTask"] is False
+
+
+def test_hosted_successful_initializers_do_not_need_daemon_health(hosted_runtime):
+    _add_isolated_support(hosted_runtime)
+    evidence = _hosted_report()["evidence"]
+    assert evidence["containerRuntime"]["status"] == "ready"
+    assert evidence["firstPartyReadiness"]["status"] == "ready"
+    for replica in evidence["runtime"]["replicas"]:
+        for item in replica["containers"]:
+            if item["service"] in {"mongo-init", "object-storage-init"}:
+                assert item["completedTask"] is True
+
+
+@pytest.mark.parametrize("service", ["gamma-proxy", "redis"])
+def test_unknown_one_shot_label_cannot_bypass_support_liveness(hosted_runtime, service):
+    runtime = _add_isolated_support(hosted_runtime)
+    item = next(item for item in runtime["containers"] if item["composeService"] == service)
+    item.update({"status": "exited", "running": False, "exitCode": 0, "health": "not-configured"})
+    raw = next(item for item in runtime["inspect"] if item["Id"] == service)
+    raw["Config"]["Labels"]["com.quwoquan.runtime.one-shot"] = "true"
+    evidence = _hosted_report()["evidence"]
+    assert evidence["containerRuntime"]["status"] == "blocked"
+
+
+@pytest.mark.parametrize("service", ["gamma-proxy", "redis", "mongo-init"])
+@pytest.mark.parametrize("drift", ["project", "service", "pinned-reference", "raw-reference", "image-id", "missing-image-id"])
+def test_hosted_support_identity_requires_labels_and_pinned_images(hosted_runtime, service, drift):
+    runtime = _add_isolated_support(hosted_runtime)
+    item = next(item for item in runtime["containers"] if item["composeService"] == service)
+    raw = next(item for item in runtime["inspect"] if item["Id"] == service)
+    if drift in {"project", "service"}:
+        raw["Config"]["Labels"]["com.docker.compose." + drift] = "foreign"
+    elif drift == "pinned-reference":
+        item["image"] = "foreign.invalid/image@" + OTHER_DIGEST
+    elif drift == "raw-reference":
+        raw["Config"]["Image"] = "foreign.invalid/image:latest"
+    elif drift == "image-id":
+        raw["Image"] = OTHER_DIGEST
+    else:
+        item.pop("imageId")
+    evidence = _hosted_report()["evidence"]
+    assert evidence["runtime"]["identity"]["status"] == "blocked"
+    assert evidence["rehearsal"]["validated"] is False
+
+
+@pytest.mark.parametrize("service", ["product-ops-service", "gamma-proxy", "mongo-init"])
+@pytest.mark.parametrize("state", [
+    {"running": True, "health": "healthy"},
+    {"running": True, "health": "starting"},
+    {"running": True, "health": "not-configured"},
+    {"running": True, "health": "healthy", "oomKilled": True},
+    {"running": True, "health": "healthy", "error": "failed"},
+    {"running": False, "status": "exited", "exitCode": 0},
+    {"running": False, "status": "exited", "exitCode": False},
+    {"running": True, "status": "exited", "exitCode": 0},
+])
+def test_hosted_container_acceptance_matches_executor(service, state):
+    from quwoquan_ops.cli.commands import hosted_read_only as hosted
+    from quwoquan_ops.cli.prod.prevalidate_prod_hosted import PlaneProjection, _runtime_blockers
+
+    # 不运行 executor：只对比它的纯判定函数，避免未来两处规则再次分叉。
+    container_issue, health_issue, _ = hosted._hosted_container_state(
+        state, service=service, provider_bound={"product-ops-service"},
+    )
+    blockers = _runtime_blockers(
+        {"containers": [{"composeService": service, "imageId": DIGEST, **state}], "unit": {"enabled": True, "active": True}},
+        PlaneProjection("edge", "unused", "unused", (service,), (), ()),
+        {"readinessPolicy": {"providerBoundServices": ["product-ops-service"]}},
+        {"remoteImageContentDigests": {service: DIGEST}, "contentDigestVerified": True},
+        data_mode="external",
+    )
+    assert bool(container_issue or health_issue) == bool(blockers)
+
+
+@pytest.mark.parametrize("image_ref", ["", "docker.io/library/redis:latest"])
+def test_hosted_rejects_missing_or_unpinned_support_source(monkeypatch, hosted_runtime, image_ref):
+    _add_isolated_support(hosted_runtime)
+    hosted_runtime.access["prevalidation"]["isolatedData"]["images"]["redis"] = image_ref
+    monkeypatch.setattr(stackctl, "load_prod_hosted_access_manifest", lambda: hosted_runtime.access)
+    monkeypatch.setattr(stackctl, "resolve_prod_hosted_plan", lambda *args, **kwargs: hosted_runtime.plan)
+    evidence = _hosted_report()["evidence"]
+    assert evidence["runtime"]["identity"]["status"] == "blocked"
+    assert any("redis: support pinned image reference missing" in issue for issue in evidence["runtime"]["identity"]["issues"])
+
+
+def test_support_reference_is_not_candidate_content_digest_proof(monkeypatch, hosted_runtime):
+    from quwoquan_ops.cli.commands import hosted_read_only as hosted
+
+    _add_isolated_support(hosted_runtime)
+    evidence = _hosted_report()["evidence"]
+    assert evidence["runtime"]["identity"]["status"] == "ready"
+    support = [item for replica in evidence["runtime"]["replicas"] for item in replica["containers"] if "pinnedReferenceVerified" in item]
+    assert support and all(item["pinnedReferenceVerified"] is True for item in support)
+    assert all(item["candidateContentDigestVerified"] is False for item in support)
+    assert all(item["candidateContentDigestReason"] for item in support)
+    def unavailable(*args):
+        raise ValueError("candidate unavailable")
+    monkeypatch.setattr(hosted, "_hosted_candidate", unavailable)
+    unavailable_evidence = _hosted_report()["evidence"]
+    assert unavailable_evidence["runtime"]["identity"]["status"] == "blocked"
+    assert unavailable_evidence["rehearsal"]["validated"] is False
+
+
+def test_duplicate_support_service_is_not_a_unique_runtime_identity(hosted_runtime):
+    runtime = _add_isolated_support(hosted_runtime)
+    container = next(item for item in runtime["containers"] if item["composeService"] == "redis")
+    runtime["containers"].append(dict(container))
+    evidence = _hosted_report()["evidence"]
+    assert evidence["runtime"]["identity"]["status"] == "blocked"
+    assert any("CONTAINER_DUPLICATE" in issue for issue in evidence["runtime"]["identity"]["issues"])
+
+
+def test_hosted_material_reader_hashes_real_config_bytes_without_exporting_secrets(monkeypatch, tmp_path, hosted_runtime):
+    import hashlib
+    import shlex
+    import sys
+    from quwoquan_ops.cli.commands import hosted_read_only as hosted
+    from quwoquan_ops.cli.prod import inspect_prod_plane_runtime as inspector
+
+    root = tmp_path / "remote"
+    config = root / "runtime/config-root/content-service.yaml"
+    config.parent.mkdir(parents=True)
+    config.write_text("secret: must-not-be-exported\n")
+    config_digest = "sha256:" + hashlib.sha256(config.read_bytes()).hexdigest()
+    (root / "runtime/artifact-identity.json").write_text(json.dumps({"configDigest": DIGEST}))
+    (root / "provenance.json").write_text(json.dumps({"candidateDigest": DIGEST, "instance": "prevalidate", "plane": "service", "configSources": {"content-service": {"configurationDigest": OTHER_DIGEST, "effectiveConfigDigest": config_digest}}}))
+    monkeypatch.setattr(inspector, "_resolve_key_source", lambda *args: ([], "test-key"))
+    def run(argv, **kwargs):
+        assert argv[0] == "ssh"
+        assert "StrictHostKeyChecking=yes" in argv
+        assert kwargs["timeout_seconds"] == 30
+        remote = shlex.split(argv[-1])
+        assert remote[:2] == ["python3", "-c"]
+        return subprocess.run([sys.executable, "-c", remote[2], str(root)], capture_output=True, text=True, check=False)
+    monkeypatch.setattr(stackctl, "run", run)
+    # fixture 仅替代了 SSH material 边界；此用例恢复真实读取函数执行远端脚本。
+    reader = hosted_runtime.material_reader
+    result = reader(hosted_runtime.plan[0])
+    assert result["configs"]["content-service"]["digest"] == config_digest
+    assert "must-not-be-exported" not in json.dumps(result)
+    config.write_text("secret: drifted\n")
+    drifted = reader(hosted_runtime.plan[0])
+    assert drifted["configs"]["content-service"]["digest"] != config_digest

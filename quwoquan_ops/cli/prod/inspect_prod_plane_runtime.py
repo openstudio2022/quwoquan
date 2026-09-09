@@ -19,6 +19,7 @@ ROOT = Path(__file__).resolve().parents[3]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from quwoquan_ops.cli.prod.load_prod_plane_images import normalize_image_id
 from quwoquan_ops.cli.prod.prod_hosted_topology import (
     ProdHostedTopologyError,
     load_access_manifest,
@@ -27,6 +28,7 @@ from quwoquan_ops.cli.prod.prod_hosted_topology import (
 
 ACCESS_MANIFEST = ROOT / "quwoquan_ops/environments/prod/access-isolation.yaml"
 DEFAULT_KEY_DIR = Path.home() / ".ssh" / "quwoquan-prod"
+INSPECTION_TIMEOUT_SECONDS = 90
 
 
 def parse_args() -> argparse.Namespace:
@@ -77,6 +79,7 @@ def _resolve_key_source(secret_name: str, account: str, key_dir: Path) -> tuple[
         if len(expected) >= 2:
             check = subprocess.run(
                 ["ssh-add", "-L"],
+                timeout=15,
                 text=True,
                 capture_output=True,
                 check=False,
@@ -112,6 +115,7 @@ def run(argv):
         stderr=subprocess.PIPE,
         universal_newlines=True,
         check=False,
+        timeout=15,
     )
     return {
         "argv": argv,
@@ -122,21 +126,23 @@ def run(argv):
 
 ps_result = run(["podman", "ps", "--all", "--format", "json"])
 containers = []
-if ps_result["returncode"] == 0 and ps_result["stdout"].strip():
-    try:
-        containers = json.loads(ps_result["stdout"])
-    except json.JSONDecodeError:
-        containers = []
+if ps_result["returncode"] != 0:
+    raise SystemExit("RUNTIME_INSPECTION_FAILED: podman ps: " + ps_result["stderr"])
+try:
+    containers = json.loads(ps_result["stdout"])
+except json.JSONDecodeError:
+    raise SystemExit("RUNTIME_INSPECTION_INVALID: podman ps returned invalid JSON")
 
 container_ids = [item.get("Id") for item in containers if item.get("Id")]
 inspect_payload = []
 if container_ids:
     inspect_result = run(["podman", "inspect", *container_ids])
-    if inspect_result["returncode"] == 0 and inspect_result["stdout"].strip():
-        try:
-            inspect_payload = json.loads(inspect_result["stdout"])
-        except json.JSONDecodeError:
-            inspect_payload = []
+    if inspect_result["returncode"] != 0:
+        raise SystemExit("RUNTIME_INSPECTION_FAILED: podman inspect: " + inspect_result["stderr"])
+    try:
+        inspect_payload = json.loads(inspect_result["stdout"])
+    except json.JSONDecodeError:
+        raise SystemExit("RUNTIME_INSPECTION_INVALID: podman inspect returned invalid JSON")
 else:
     inspect_result = {"argv": ["podman", "inspect"], "returncode": 0, "stdout": "[]", "stderr": ""}
 
@@ -158,7 +164,7 @@ for item in inspect_payload:
 runtime_containers = []
 for item in selected_inspect:
     state = item.get("State") or {}
-    health = state.get("Health") or {}
+    health = state.get("Health") or state.get("Healthcheck") or {}
     runtime_containers.append({
         "id": item.get("Id"),
         "name": str(item.get("Name") or "").lstrip("/"),
@@ -171,17 +177,13 @@ for item in selected_inspect:
         "status": state.get("Status"),
         "running": bool(state.get("Running")),
         "exitCode": state.get("ExitCode"),
+        "oomKilled": state.get("OOMKilled") is True,
+        "error": state.get("Error") or "",
         "health": health.get("Status") or "not-configured",
     })
 
 payload = {
-    "account": subprocess.run(
-        ["whoami"],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        universal_newlines=True,
-        check=True,
-    ).stdout.strip(),
+    "account": run(["whoami"])["stdout"].strip(),
     "composeRoot": str(compose_root),
     "composeFile": str(compose_file),
     "composeFileExists": compose_file.is_file(),
@@ -204,6 +206,20 @@ payload = {
 }
 print(json.dumps(payload, ensure_ascii=False))
 """
+
+
+def _normalize_runtime_images(payload: dict) -> dict:
+    for container in payload.get("containers") or []:
+        container["imageId"] = normalize_image_id(container.get("imageId"))
+    return payload
+
+
+def _inspect_remote(argv: list[str], script: str) -> subprocess.CompletedProcess:
+    try:
+        return subprocess.run(argv, input=script, text=True, capture_output=True,
+                              check=False, timeout=INSPECTION_TIMEOUT_SECONDS)
+    except subprocess.TimeoutExpired as error:
+        raise SystemExit(f"FAIL: RUNTIME_INSPECTION_TIMEOUT: exceeded {INSPECTION_TIMEOUT_SECONDS}s") from error
 
 
 def main() -> int:
@@ -238,12 +254,15 @@ def main() -> int:
     compose_file_name = str(layout.get("composeFile") or "docker-compose.prod-hosted.yaml")
     env_file_name = str(layout.get("envFile") or "stack.env")
 
-    result = subprocess.run(
+    result = _inspect_remote(
         [
-            "ssh",
+            "ssh", "-F", "/dev/null",
             *ssh_args,
+            "-o", "ConnectTimeout=15",
+            "-o", "ServerAliveInterval=15",
+            "-o", "ServerAliveCountMax=2",
             "-o",
-            "StrictHostKeyChecking=accept-new",
+            "StrictHostKeyChecking=yes",
             "-o",
             "BatchMode=yes",
             f"{plane['account']}@{host}",
@@ -256,17 +275,17 @@ def main() -> int:
                 "python3 -"
             ),
         ],
-        input=_remote_python(),
-        text=True,
-        capture_output=True,
-        check=False,
+        script=_remote_python(),
     )
     if result.returncode != 0:
         sys.stderr.write(result.stdout)
         sys.stderr.write(result.stderr)
         return result.returncode or 2
 
-    payload = json.loads(result.stdout)
+    try:
+        payload = _normalize_runtime_images(json.loads(result.stdout))
+    except ValueError as error:
+        raise SystemExit(f"FAIL: {error}") from error
     payload["plane"] = args.plane
     payload["instance"] = args.instance
     payload["replicaId"] = placement.replica_id

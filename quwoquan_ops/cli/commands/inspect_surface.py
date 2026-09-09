@@ -77,6 +77,7 @@ def register_parser(
             "all",
         ],
     )
+    inspect_parser.add_argument("--candidate-digest", default="")
     inspect_parser.add_argument("--distribution-root", default="")
     inspect_parser.add_argument("--verify-hosted", action="store_true")
     inspect_parser.add_argument(
@@ -107,7 +108,7 @@ def command_inspect(args: argparse.Namespace) -> dict[str, Any]:
             if getattr(args, "currentness", False)
             else _stackctl._candidate_workspace_report(args.target)
         )
-        if "config" in scopes or "data" in scopes
+        if args.target != "prod-hosted" and ("config" in scopes or "data" in scopes)
         else None
     )
     if "network" in scopes:
@@ -136,26 +137,7 @@ def command_inspect(args: argparse.Namespace) -> dict[str, Any]:
             ),
         }
         if args.target == "prod-hosted":
-            runtimes = _stackctl._prod_instance_runtime_reports(
-                report_dir,
-                instance=str(getattr(args, "deployment_instance", "prod") or "prod"),
-                host=str(getattr(args, "ssh_host", "") or ""),
-                host_id=str(getattr(args, "host_id", "") or ""),
-            )
-            inspection["config"]["rootlessRuntimeReplicas"] = runtimes
-            for runtime in runtimes:
-                plane = str(runtime.get("plane") or "unknown")
-                findings.extend(_stackctl._prod_plane_runtime_findings(runtime, plane=plane))
-            service_runtimes = [
-                runtime for runtime in runtimes if runtime.get("plane") == "service"
-            ]
-            edge_runtimes = [
-                runtime for runtime in runtimes if runtime.get("plane") == "edge"
-            ]
-            if len(service_runtimes) == 1:
-                inspection["config"]["rootlessRuntime"] = service_runtimes[0]
-            if len(edge_runtimes) == 1:
-                inspection["config"]["edgeRootlessRuntime"] = edge_runtimes[0]
+            inspection["config"]["runtimeIdentitySource"] = "hosted SSH readback; see userAvailability.evidence.runtime"
         if "data" not in scopes and candidate_workspace is not None:
             findings.extend(
                 f"candidate workspace: {issue}"
@@ -224,7 +206,11 @@ def command_inspect(args: argparse.Namespace) -> dict[str, Any]:
             }
             findings.append(f"release distribution: {error}")
     try:
-        user_availability = _stackctl._read_only_user_availability_report(args.target)
+        from quwoquan_ops.cli.commands.hosted_read_only import identity_arguments
+
+        user_availability = _stackctl._read_only_user_availability_report(
+            args.target, **(identity_arguments(args) if args.target == "prod-hosted" else {}),
+        )
     except (OSError, RuntimeError, TypeError, ValueError, json.JSONDecodeError) as error:
         detail = f"read-only availability aggregation blocked: {error}"
         user_availability = {
@@ -240,6 +226,12 @@ def command_inspect(args: argparse.Namespace) -> dict[str, Any]:
         }
         findings.append(detail)
     inspection["userAvailability"] = user_availability
+    if args.target == "prod-hosted":
+        hosted_evidence = user_availability.get("evidence", {})
+        inspection["runtimeDiagnostics"] = hosted_evidence
+        findings.extend((hosted_evidence.get("containerRuntime") or {}).get("issues") or [])
+        findings.extend((hosted_evidence.get("firstPartyReadiness") or {}).get("issues") or [])
+        findings = list(dict.fromkeys(findings))
     output_inspection = dict(inspection)
     timing = _stackctl._finish_timing(started_monotonic, started_at)
     _stackctl.write_json(
@@ -293,6 +285,7 @@ def command_inspect(args: argparse.Namespace) -> dict[str, Any]:
         "reportDir": _stackctl.relpath(report_dir),
         "userAvailability": user_availability.get("userAvailability", []),
         "firstBlockerClass": user_availability.get("firstBlockerClass", "startup_identity"),
+        "runtimeDiagnostics": user_availability.get("evidence", {}) if args.target == "prod-hosted" else {},
         **timing,
     }
 
@@ -300,6 +293,8 @@ def command_inspect(args: argparse.Namespace) -> dict[str, Any]:
 def _local_log_report(target_name: str) -> dict[str, Any]:
     import quwoquan_ops.cli.stackctl as _stackctl
 
+    if target_name == "prod-hosted":
+        return {"paths": [], "runtimeDiagnostics": {"availability": "unavailable", "reason": "hosted logs require an exact remote log reader; local runtime logs are not hosted evidence"}}
     candidates: dict[str, Path] = {
         "alpha-state": _stackctl.target_process_dir("alpha-local"),
         "beta-state": _stackctl.target_process_dir("beta-local"),

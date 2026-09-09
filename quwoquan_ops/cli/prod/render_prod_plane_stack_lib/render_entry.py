@@ -39,6 +39,7 @@ from .package_inputs import (
     _plane_spec,
     _prevalidation_spec,
     _resolve_render_output_dir,
+    _validate_prevalidation_interpolation,
     parse_args,
 )
 from .runtime_outputs import (
@@ -47,6 +48,7 @@ from .runtime_outputs import (
     _write_runtime_systemd_unit,
 )
 from .volume_layout import _filter_top_level_volumes
+from .data_plane_wiring import _prevalidation_port_bindings, _runtime_network_name, _validate_prevalidation_startup
 
 try:
     import yaml
@@ -180,6 +182,8 @@ def main() -> int:
             )
         if args.plane == "service" and "integration-service" not in image_only_services:
             raise SystemExit("FAIL: integration-service must remain image/config-only")
+        _validate_prevalidation_startup(set(startup_services))
+        config_services = list(governed)
     credentials_root = str(plane.get("credentialsPath") or "").strip()
     runtime_credentials = dict(plane.get("rootlessRuntimeCredentials") or {})
     selected = governed + support
@@ -418,10 +422,7 @@ def main() -> int:
     rendered_services: dict[str, Any] = {}
     selected_names = set(selected)
     governed_names = set(governed)
-    observability_config = plane.get("rootlessObservabilityRuntime") or {}
-    service_network_name = str(
-        observability_config.get("serviceNetworkName") or ""
-    ).strip()
+    service_network_name = _runtime_network_name(args.plane, args.instance, args.replica_id)
     config_sources = _stack._write_config_tree(
         config_services=config_services,
         candidate_digest=args.candidate_digest,
@@ -429,6 +430,7 @@ def main() -> int:
         isolated_prevalidation=(
             args.instance == "prevalidate" and args.data_mode == "isolated"
         ),
+        prevalidation_services=(selected_names if args.instance == "prevalidate" else None),
     )
     if (
         args.plane == "service"
@@ -531,41 +533,15 @@ def main() -> int:
                 "condition": "service_completed_successfully"
             }
             rendered["depends_on"] = dependencies
-        if service_network_name:
-            rendered["networks"] = ["service-plane"]
         rendered_services[service_name] = rendered
 
-    compose_payload: dict[str, Any] = {"services": rendered_services}
-    if service_network_name:
-        compose_payload["networks"] = {
-            "service-plane": {"name": service_network_name}
-        }
-    else:
-        # 未声明平面专用网络时，服务仍引用模板网络（如 edge 平面的 default/edge）；
-        # 顶层 networks 只保留被引用的模板定义，否则 compose 报 undefined network。
-        referenced_networks: set[str] = set()
-        for spec in rendered_services.values():
-            declared = spec.get("networks")
-            names = list(declared) if isinstance(declared, (list, dict)) else []
-            referenced_networks.update(str(name) for name in names if name != "default")
-        template_networks = dict(template.get("networks") or {})
-        kept_networks = {
-            name: (template_networks.get(name) or {})
-            for name in sorted(referenced_networks)
-            if name in template_networks
-        }
-        if "default" in template_networks and any(
-            "default" in (spec.get("networks") or []) for spec in rendered_services.values()
-        ):
-            kept_networks["default"] = template_networks["default"] or {}
-        missing_networks = referenced_networks - set(template_networks)
-        if missing_networks:
-            raise SystemExit(
-                "FAIL: rendered services reference networks missing from the template: "
-                + ", ".join(sorted(missing_networks))
-            )
-        if kept_networks:
-            compose_payload["networks"] = kept_networks
+    # 包括部署 one-shot 在内，每个实例/replica 只接本项目网络，不复用模板网络名。
+    for rendered in rendered_services.values():
+        rendered["networks"] = ["service-plane"]
+    compose_payload: dict[str, Any] = {
+        "services": rendered_services,
+        "networks": {"service-plane": {"name": service_network_name}},
+    }
     top_level_volumes = dict(template.get("volumes") or {})
     top_level_volumes.update(isolated_data_volumes)
     if any(name in RUNTIME_LOG_EXPORT_SERVICES for name in rendered_services):
@@ -598,6 +574,7 @@ def main() -> int:
             output_root,
             args.plane,
             render_name=render_name,
+            service_network=service_network_name,
             remote_root=(
                 f"{str(plane.get('composeProjectRoot') or '').rstrip('/')}"
                 f"/instances/{args.instance}/{args.replica_id}"
@@ -611,6 +588,12 @@ def main() -> int:
         args.image_transport_tag,
         args.instance,
     )
+    if args.instance == "prevalidate":
+        environment = dict(
+            line.split("=", 1) for line in (output_root / "stack.env").read_text().splitlines()
+            if line and not line.startswith("#")
+        )
+        _validate_prevalidation_interpolation(compose_payload, environment)
     systemd_unit_file = _write_runtime_systemd_unit(
         output_root,
         plane=plane,
@@ -641,6 +624,20 @@ def main() -> int:
         "supportComposeServices": support,
         "startupServices": startup_services,
         "imageAndConfigOnlyServices": image_only_services,
+        "network": service_network_name,
+        "crossPlaneTransport": (
+            _prevalidation_spec()["crossPlaneTransport"]
+            if args.instance == "prevalidate" else None
+        ),
+        "publishedPorts": (
+            [binding for binding in _prevalidation_port_bindings()
+             if binding["plane"] == args.plane and binding["service"] in startup_services]
+            if args.instance == "prevalidate" else []
+        ),
+        "unavailablePublicCapabilities": (
+            _prevalidation_spec()["unavailablePublicCapabilities"]
+            if args.instance == "prevalidate" else []
+        ),
         "dataMode": args.data_mode,
         "dataPlaneBinding": data_plane_identity,
         "dataPlaneBindingDigest": (

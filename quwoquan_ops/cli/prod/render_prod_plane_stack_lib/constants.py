@@ -18,14 +18,12 @@ PROD_CADDY_IMAGE = (
 )
 
 PROD_PLANE_CADDY_ADMIN_CONTAINER_PORT = 2019
-# prod 平面的 Caddy admin 主机端口由 prod 渲染器拥有，不派生自 local port manifest。
-# prod/gray/prevalidate 是同一台机器上的三个实例，各自需要互不冲突的 admin 编号；
-# manifest 只有单个 `prod-sim` profile，把它们归一过去会让三实例塌缩成同一个端口，
-# 破坏隔离。集中声明是为了让这三个数字有唯一出处，而不是散落成看似漂移的字面量。
+# 正式/灰度 Caddy admin 编号不派生自 local port profile。
+# prevalidate 的 admin 与其他发布口统一由 access-isolation.publishedPorts 拥有，
+# 此处不得再复制 rehearsal 编号。
 PROD_PLANE_ADMIN_PORTS = {
     "prod": 12019,
     "gray": 22019,
-    "prevalidate": 32019,
 }
 RUNTIME_LOG_EXPORT_SERVICES = {
     "api-edge",

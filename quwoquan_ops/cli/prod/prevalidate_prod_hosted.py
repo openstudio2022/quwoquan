@@ -11,7 +11,6 @@ import argparse
 import base64
 import json
 import os
-import platform
 import re
 import subprocess
 import sys
@@ -35,6 +34,7 @@ from quwoquan_ops.cli.lib.output_paths import (
     deployment_candidate_dir,
     deployment_render_dir,
 )
+from quwoquan_ops.cli.prod.load_prod_plane_images import normalize_image_id
 from quwoquan_ops.cli.prod.prod_hosted_topology import (
     DeploymentReplica,
     ProdHostedTopologyError,
@@ -47,8 +47,25 @@ DEFAULT_KEY_DIR = Path.home() / ".ssh" / "quwoquan-prod"
 DIGEST_REF = re.compile(r"[^\s@]+@sha256:[0-9a-f]{64}")
 
 
+COMMAND_TIMEOUT_SECONDS = 120
+TRANSFER_TIMEOUT_SECONDS = 3600
+ACTIVATION_TIMEOUT_SECONDS = 300
+# systemd 终态清理、属性读回与 SSH 传输分别留余量，外层不抢先截断首因。
+ACTIVATION_COMMAND_TIMEOUT_SECONDS = ACTIVATION_TIMEOUT_SECONDS + 30
+ACTIVATION_REMOTE_TIMEOUT_SECONDS = ACTIVATION_TIMEOUT_SECONDS + 120
+ACTIVATION_SSH_TIMEOUT_SECONDS = ACTIVATION_REMOTE_TIMEOUT_SECONDS + 30
+SSH_OPTIONS = (
+    "-F", "/dev/null", "-o", "BatchMode=yes", "-o", "StrictHostKeyChecking=yes",
+    "-o", "ConnectTimeout=12", "-o", "ServerAliveInterval=10", "-o", "ServerAliveCountMax=3",
+)
+READINESS_TIMEOUT_SECONDS = 300
+READINESS_POLL_SECONDS = 5
+
+
 class PrevalidationError(RuntimeError):
-    pass
+    def __init__(self, message: str, *, code: str = "PREVALIDATION_FAILED", **diagnostics: Any):
+        super().__init__(message)
+        self.blocker = {"code": code, "message": message, **diagnostics}
 
 
 @dataclass(frozen=True)
@@ -200,7 +217,6 @@ def load_projection() -> tuple[dict[str, Any], dict[str, PlaneProjection]]:
         reclaim.get("enabled") is True
         and reclaim.get("plane") == "service"
         and reclaim.get("removeVolumes") is False
-        and reclaim.get("pruneUnusedImages") is True
         and reclaim.get("containerNamePrefixes")
         and reclaim.get("allowedStates")
     ):
@@ -229,7 +245,7 @@ def load_projection() -> tuple[dict[str, Any], dict[str, PlaneProjection]]:
             raise PrevalidationError(f"prevalidation escapes {name} plane ownership")
         if set(startup) & set(image_only):
             raise PrevalidationError(f"prevalidation startup/image-only overlap: {name}")
-        ports = tuple(int(item) for item in projected.get("exposedPorts") or [])
+        ports = tuple(int(item["published"]) for item in projected.get("publishedPorts") or [])
         if not ports or any(port < 1024 or port > 65535 for port in ports):
             raise PrevalidationError(f"prevalidation ports are invalid: {name}")
         projections[name] = PlaneProjection(
@@ -308,6 +324,7 @@ def run(argv):
         stderr=subprocess.PIPE,
         universal_newlines=True,
         check=False,
+        timeout=15,
     )
     return {"returncode": result.returncode, "stdout": result.stdout, "stderr": result.stderr}
 
@@ -362,27 +379,22 @@ def collect_host_snapshots(
     snapshots: dict[str, dict[str, Any]] = {}
     for name, projection in projections.items():
         key = _resolve_key(projection, key_dir)
-        result = subprocess.run(
+        result = _bounded_command(
             [
-                "ssh",
-                "-i",
-                str(key),
-                "-o",
-                "BatchMode=yes",
-                "-o",
-                "StrictHostKeyChecking=accept-new",
+                "ssh", *SSH_OPTIONS, "-i", str(key),
                 f"{projection.account}@{host}",
                 "python3 -",
             ],
             input=_remote_snapshot_script(),
+            phase="preflight",
             text=True,
             capture_output=True,
             check=False,
         )
         if result.returncode != 0:
             raise PrevalidationError(
-                f"SSH isolation preflight failed for {projection.account}: "
-                f"{result.stderr.strip() or result.stdout.strip()}"
+                f"SSH isolation preflight failed for {projection.account}",
+                code="PREFLIGHT_SSH_FAILED", plane=name, exitCode=result.returncode,
             )
         try:
             snapshot = json.loads(result.stdout)
@@ -466,27 +478,22 @@ def _reclaim_stale_runtime(
         return {"plane": projection.name, "status": "not-required"}
     key = _resolve_key(projection, key_dir)
     script = _remote_reclaim_script(projection=projection, policy=policy)
-    result = subprocess.run(
+    result = _bounded_command(
         [
-            "ssh",
-            "-i",
-            str(key),
-            "-o",
-            "BatchMode=yes",
-            "-o",
-            "StrictHostKeyChecking=accept-new",
+            "ssh", *SSH_OPTIONS, "-i", str(key),
             f"{projection.account}@{host}",
             "python3 -",
         ],
         input=script,
+        phase="reclaim",
         text=True,
         capture_output=True,
         check=False,
     )
     if result.returncode != 0:
         raise PrevalidationError(
-            "scoped stale runtime reclaim failed: "
-            f"{result.stderr.strip() or result.stdout.strip()}"
+            "scoped stale runtime reclaim failed",
+            code="RECLAIM_FAILED", plane=projection.name, exitCode=result.returncode,
         )
     try:
         report = json.loads(result.stdout)
@@ -530,6 +537,7 @@ def run(argv):
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         check=False,
+        timeout=15,
     )
 
 listed = run(["podman", "ps", "-a", "--format", "json"])
@@ -604,12 +612,7 @@ if external.get("enabled"):
             raise SystemExit(external_removed_result.stderr or external_removed_result.stdout)
         external_removed.append(name)
 
-image_prune_output = ""
-if policy.get("pruneUnusedImages"):
-    prune = run(["podman", "image", "prune", "-a", "-f"])
-    if prune.returncode != 0:
-        raise SystemExit(prune.stderr or prune.stdout)
-    image_prune_output = prune.stdout.strip()
+# 未引用的镜像可能属于尚未启动的候选，不做全库 prune。
 stat = os.statvfs(pathlib.Path.home())
 print(json.dumps({{
     "plane": "{projection.name}",
@@ -619,19 +622,32 @@ print(json.dumps({{
     "preservedContainers": sorted(preserved),
     "volumesRemoved": False,
     "containerFreeBytes": stat.f_bavail * stat.f_frsize,
-    "imagePrune": image_prune_output,
+    "imagePrune": "skipped-candidate-preservation",
 }}))
 '''
 
 
-def _run(argv: list[str], *, env: dict[str, str] | None = None) -> dict[str, Any]:
-    result = subprocess.run(
-        argv,
+def _bounded_command(
+    argv: list[str], *, phase: str, timeout: float = COMMAND_TIMEOUT_SECONDS, **kwargs: Any,
+) -> subprocess.CompletedProcess:
+    try:
+        return subprocess.run(argv, timeout=timeout, **kwargs)
+    except subprocess.TimeoutExpired as error:
+        raise PrevalidationError(
+            f"{phase} exceeded {timeout:g}s", code=f"{phase.upper()}_TIMEOUT",
+            phase=phase, timeoutSeconds=timeout,
+        ) from error
+
+
+def _run(
+    argv: list[str], *, env: dict[str, str] | None = None,
+    phase: str = "command", timeout: float = COMMAND_TIMEOUT_SECONDS,
+) -> dict[str, Any]:
+    result = _bounded_command(
+        argv, phase=phase, timeout=timeout,
         cwd=ROOT,
-        env={**os.environ, **(env or {})},
-        text=True,
-        capture_output=True,
-        check=False,
+        env={**os.environ, **(env or {}), "PYTHONDONTWRITEBYTECODE": "1"},
+        text=True, capture_output=True, check=False,
     )
     payload: dict[str, Any] = {
         "argv": argv,
@@ -640,62 +656,258 @@ def _run(argv: list[str], *, env: dict[str, str] | None = None) -> dict[str, Any
         "stderr": result.stderr,
     }
     if result.returncode != 0:
+        detail = result.stderr.strip() or result.stdout.strip()
+        cause = re.match(r"(?:FAIL: )?([A-Z][A-Z_]+):", detail)
+        cause_code = cause.group(1) if cause else ""
+        code = f"{phase.upper()}_TIMEOUT" if cause_code.endswith("_TIMEOUT") else f"{phase.upper()}_FAILED"
         raise PrevalidationError(
-            f"command failed ({' '.join(argv[:3])}): "
-            f"{result.stderr.strip() or result.stdout.strip()}"
+            f"{phase} failed ({' '.join(argv[:3])}): {detail}",
+            code=code, phase=phase, exitCode=result.returncode, causeCode=cause_code,
         )
     return payload
 
 
+def _remote_activation_script(unit: str, remote_root: str) -> str:
+    """仅在受管 prevalidate unit 内串行重放；不运行 compose 的销毁路径。"""
+    return f'''
+import fcntl
+import json
+import os
+import pathlib
+import re
+import subprocess
+import time
+
+unit = {unit!r}
+source = pathlib.Path({remote_root!r}) / "systemd" / unit
+deadline = time.monotonic() + {ACTIVATION_REMOTE_TIMEOUT_SECONDS}
+report = {{"status": "GATE_BLOCK"}}
+step = "install"
+lock = None
+
+def run(arguments, budget):
+    remaining = deadline - time.monotonic()
+    if remaining <= 0:
+        raise subprocess.TimeoutExpired(arguments, budget)
+    return subprocess.run(
+        ["systemctl", "--user"] + arguments, timeout=min(budget, remaining),
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True, check=False,
+    )
+
+try:
+    os.umask(0o077)
+    unit_dir = pathlib.Path(os.environ.get("XDG_CONFIG_HOME") or pathlib.Path.home() / ".config") / "systemd/user"
+    unit_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
+    lock = os.open(str(unit_dir / (unit + ".activate.lock")), os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
+    step = "lock"
+    fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    step = "install"
+    (unit_dir / unit).write_bytes(source.read_bytes())
+    (unit_dir / unit).chmod(0o600)
+    override_dir = unit_dir / (unit + ".d")
+    override_dir.mkdir(mode=0o700, exist_ok=True)
+    # daemon-reload 先清除旧 ExecStop，restart 才不会执行 compose 销毁动作。
+    # drop-in 随 prevalidate unit 保留；正式 unit 与其他账号完全不受影响。
+    (override_dir / "activate.conf").write_text(
+        "[Service]\\nExecStop=\\nExecStopPost=\\nTimeoutStartSec={ACTIVATION_TIMEOUT_SECONDS}\\nTimeoutStopSec=15\\n", encoding="utf-8",
+    )
+    commands = [
+        (["daemon-reload"], 15), (["enable", unit], 15),
+        (["restart", unit], {ACTIVATION_COMMAND_TIMEOUT_SECONDS}),
+        (["is-enabled", "--quiet", unit], 15), (["is-active", "--quiet", unit], 15),
+    ]
+    for arguments, budget in commands:
+        step = arguments[0]
+        completed = run(arguments, budget)
+        if completed.returncode != 0:
+            report["firstBlocker"] = {{"code": "ACTIVATION_FAILED", "step": step, "exitCode": completed.returncode}}
+            break
+    else:
+        report["status"] = "passed"
+except BlockingIOError:
+    report["firstBlocker"] = {{"code": "ACTIVATION_BUSY", "step": step}}
+except subprocess.TimeoutExpired:
+    report["firstBlocker"] = {{"code": "ACTIVATION_TIMEOUT", "step": step}}
+except OSError:
+    report["firstBlocker"] = {{"code": "ACTIVATION_FAILED", "step": step}}
+
+# 只读闭集属性，不读 journal、环境或原始 stderr；诊断失败不能覆盖 activation 首因。
+try:
+    if step in {{"restart", "is-enabled", "is-active"}} and "firstBlocker" in report:
+        properties = ["Result", "ExecMainCode", "ExecMainStatus", "ActiveState", "SubState"]
+        try:
+            diagnostic = run(["show", unit] + [value for key in properties for value in ("-p", key)], 15)
+            if diagnostic.returncode != 0:
+                report["diagnosticBlocker"] = {{"code": "ACTIVATION_DIAGNOSTIC_FAILED", "exitCode": diagnostic.returncode}}
+            else:
+                state = {{}}
+                for line in diagnostic.stdout.splitlines():
+                    key, separator, value = line.partition("=")
+                    if separator and key in properties and re.fullmatch(r"[a-z0-9-]{{1,64}}", value):
+                        state[key] = value
+                report["systemdState"] = state
+                if step == "restart" and state.get("Result") == "timeout":
+                    report["firstBlocker"]["code"] = "ACTIVATION_TIMEOUT"
+        except (OSError, subprocess.TimeoutExpired) as error:
+            report["diagnosticBlocker"] = {{"code": "ACTIVATION_DIAGNOSTIC_TIMEOUT" if isinstance(error, subprocess.TimeoutExpired) else "ACTIVATION_DIAGNOSTIC_FAILED"}}
+finally:
+    if lock is not None:
+        os.close(lock)
+print(json.dumps(report))
+if report["status"] != "passed":
+    raise SystemExit(2)
+'''
+
+
 def _install_unit(
-    *,
-    host: str,
-    projection: PlaneProjection,
-    key_dir: Path,
-    replica_id: str,
-    remote_root: str,
+    *, host: str, projection: PlaneProjection, key_dir: Path,
+    replica_id: str, remote_root: str,
 ) -> dict[str, Any]:
+    if projection.name not in {"service", "edge"} or re.fullmatch(r"[a-z0-9][a-z0-9-]{0,31}", replica_id) is None:
+        raise PrevalidationError("activation must target a managed prevalidate unit", code="ACTIVATION_SCOPE_INVALID")
     key = _resolve_key(projection, key_dir)
     unit = f"quwoquan-{projection.name}-prevalidate-{replica_id}.service"
-    command = (
-        "set -euo pipefail; "
-        "unit_dir=${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user; "
-        "install -d -m 700 \"$unit_dir\"; "
-        f"install -m 600 {remote_root}/systemd/{unit} \"$unit_dir/{unit}\"; "
-        "systemctl --user daemon-reload; "
-        f"systemctl --user enable --now {unit}; "
-        f"systemctl --user is-enabled --quiet {unit}; "
-        f"systemctl --user is-active --quiet {unit}"
-    )
-    result = subprocess.run(
-        [
-            "ssh",
-            "-i",
-            str(key),
-            "-o",
-            "BatchMode=yes",
-            "-o",
-            "StrictHostKeyChecking=accept-new",
-            f"{projection.account}@{host}",
-            "bash -s",
-        ],
-        input=command,
-        text=True,
-        capture_output=True,
-        check=False,
-    )
-    if result.returncode != 0:
-        raise PrevalidationError(
-            f"systemd activation failed for {projection.name}: "
-            f"{result.stderr.strip() or result.stdout.strip()}"
+    try:
+        result = _bounded_command(
+            ["ssh", *SSH_OPTIONS, "-i", str(key), f"{projection.account}@{host}", "python3 -"],
+            input=_remote_activation_script(unit, remote_root), phase="activation",
+            timeout=ACTIVATION_SSH_TIMEOUT_SECONDS, text=True, capture_output=True, check=False,
         )
-    return {
-        "plane": projection.name,
-        "replicaId": replica_id,
-        "unit": unit,
-        "exitCode": result.returncode,
-        "stdout": result.stdout,
-    }
+    except PrevalidationError as error:
+        error.blocker.update(plane=projection.name, unit=unit, firstReason={"code": "ACTIVATION_TRANSPORT_TIMEOUT"})
+        raise
+    try:
+        report = json.loads(result.stdout) if result.returncode in {0, 2} else {}
+    except json.JSONDecodeError:
+        report = {}
+    if not isinstance(report, dict):
+        report = {}
+    if result.returncode != 0 or report.get("status") != "passed":
+        first = report.get("firstBlocker") or {"code": "ACTIVATION_FAILED", "step": "transport", "exitCode": result.returncode}
+        raise PrevalidationError(
+            f"systemd activation failed for {projection.name} at {first.get('step')}",
+            code=first["code"], plane=projection.name, unit=unit, firstReason=first,
+            systemdState=report.get("systemdState") or {}, diagnosticBlocker=report.get("diagnosticBlocker"),
+        )
+    return {"plane": projection.name, "replicaId": replica_id, "unit": unit,
+            "exitCode": result.returncode, "status": "passed"}
+
+
+def _runtime_blockers(
+    report: dict[str, Any], projection: PlaneProjection, spec: dict[str, Any],
+    delivered: dict[str, Any], *, data_mode: str,
+) -> list[dict[str, Any]]:
+    """按 required 闭包判定；Provider 例外不豁免存活、身份或探针存在性。"""
+    blockers: list[dict[str, Any]] = []
+
+    def add(code: str, service: str = "", *, terminal: bool = False, **details: Any) -> None:
+        blockers.append({"code": code, "plane": projection.name, "service": service,
+                         "terminal": terminal, **details})
+
+    by_service: dict[str, Any] = {}
+    for item in report.get("containers") or []:
+        service = str(item.get("composeService") or "")
+        if service in by_service:
+            add("CONTAINER_DUPLICATE", service, terminal=True)
+        by_service[service] = item
+    required = list(projection.startup_services)
+    initializers = {"mongo-init", "object-storage-init"}
+    if projection.name == "service":
+        required.append("gamma-proxy")
+        if data_mode == "isolated":
+            required.extend((spec.get("isolatedData") or {}).get("services") or [])
+    provider_bound = set((spec.get("readinessPolicy") or {}).get("providerBoundServices") or [])
+    for service in dict.fromkeys(required):
+        container = by_service.get(service)
+        if container is None:
+            add("CONTAINER_UNSCHEDULED", service)
+            continue
+        state = {key: container.get(key) for key in ("status", "running", "exitCode", "health", "error")}
+        if container.get("oomKilled") is True:
+            add("CONTAINER_OOM", service, terminal=True, **state)
+        elif service in initializers:
+            if container.get("error"):
+                add("INITIALIZATION_FAILED", service, terminal=True, **state)
+            elif container.get("status") == "exited":
+                if container.get("running") is not False or type(container.get("exitCode")) is not int or container["exitCode"] != 0:
+                    add("INITIALIZATION_FAILED", service, terminal=True, **state)
+            elif container.get("status") in {"dead", "stopped"}:
+                add("INITIALIZATION_FAILED", service, terminal=True, **state)
+            else:
+                add("INITIALIZATION_PENDING", service, **state)
+        elif container.get("error"):
+            add("CONTAINER_START_FAILED", service, terminal=True, **state)
+        elif container.get("running") is not True:
+            add("CONTAINER_EXITED" if container.get("status") in {"exited", "dead", "stopped"} else "CONTAINER_UNSCHEDULED",
+                service, terminal=container.get("status") in {"exited", "dead", "stopped"}, **state)
+        elif container.get("health") in {None, "", "not-configured"}:
+            add("HEALTHCHECK_NOT_CONFIGURED", service, terminal=True, **state)
+        elif container.get("health") != "healthy" and not (
+            service in provider_bound and container.get("health") in {"starting", "unhealthy"}
+        ):
+            add("CONTAINER_UNHEALTHY", service, **state)
+    digests = delivered.get("remoteImageContentDigests") or {}
+    if delivered.get("contentDigestVerified") is not True:
+        add("IMAGE_DELIVERY_UNVERIFIED", terminal=True)
+    for service in projection.startup_services + projection.image_only_services:
+        try:
+            expected = normalize_image_id(digests.get(service))
+            if service in projection.startup_services and service in by_service:
+                if normalize_image_id(by_service[service].get("imageId")) != expected:
+                    add("IMAGE_DIGEST_MISMATCH", service, terminal=True)
+        except ValueError:
+            add("IMAGE_ID_INVALID", service, terminal=True)
+    unit = report.get("unit") or {}
+    if unit.get("enabled") is not True or unit.get("active") is not True:
+        add("UNIT_NOT_READY", unit=unit.get("name"), enabled=unit.get("enabled"), active=unit.get("active"))
+    return blockers
+
+
+def _wait_for_readiness(
+    args: argparse.Namespace, spec: dict[str, Any], projections: dict[str, PlaneProjection],
+    placements: dict[str, DeploymentReplica], image_reports: dict[str, Any],
+) -> dict[str, Any]:
+    deadline = time.monotonic() + READINESS_TIMEOUT_SECONDS
+    first_reason: dict[str, Any] | None = None
+    runtime: dict[str, Any] = {}
+    latest: list[dict[str, Any]] = []
+    while time.monotonic() < deadline:
+        latest = []
+        for name, projection in projections.items():
+            placement = placements[name]
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                break
+            argv = ["python3", "quwoquan_ops/cli/prod/inspect_prod_plane_runtime.py",
+                    "--plane", name, "--instance", "prevalidate", "--host-id", placement.host_id,
+                    "--replica-id", placement.replica_id, "--key-dir", str(args.key_dir)]
+            if args.host:
+                argv.extend(["--host", args.host])
+            try:
+                step = _run(argv, phase="readiness", timeout=min(COMMAND_TIMEOUT_SECONDS, remaining))
+                report = json.loads(step["stdout"])
+            except PrevalidationError as error:
+                error.blocker["firstReason"] = first_reason or dict(error.blocker)
+                raise
+            runtime[name] = report
+            latest.extend(_runtime_blockers(report, projection, spec, image_reports.get(name) or {}, data_mode=args.data_mode))
+            if latest and first_reason is None:
+                first_reason = latest[0]
+            terminal = next((item for item in latest if item["terminal"]), None)
+            if terminal:
+                raise PrevalidationError(
+                    f"{terminal['code']}: {terminal['plane']}/{terminal['service']}",
+                    code=terminal["code"], firstReason=first_reason, blockers=latest,
+                )
+        remaining = deadline - time.monotonic()
+        if not latest and len(runtime) == len(projections) and remaining > 0:
+            return runtime
+        if remaining > 0:
+            time.sleep(min(READINESS_POLL_SECONDS, remaining))
+    raise PrevalidationError(
+        "prevalidation readiness deadline exceeded", code="READINESS_TIMEOUT",
+        timeoutSeconds=READINESS_TIMEOUT_SECONDS, firstReason=first_reason, blockers=latest,
+    )
 
 
 def execute_deployment(
@@ -800,7 +1012,7 @@ def execute_deployment(
                 *image_source_argv,
                 "--platform",
                 "linux/amd64",
-            ]
+            ], phase="transfer", timeout=TRANSFER_TIMEOUT_SECONDS,
         )
         steps.append(image_step)
         image_reports[name] = json.loads(image_step["stdout"])
@@ -817,7 +1029,7 @@ def execute_deployment(
                     str(render_dir),
                     "--root-suffix",
                     f"instances/prevalidate/{placement.replica_id}",
-                ]
+                ], phase="transfer", timeout=TRANSFER_TIMEOUT_SECONDS,
             )
         )
     units = [
@@ -830,102 +1042,7 @@ def execute_deployment(
         )
         for item in projections.values()
     ]
-    runtime: dict[str, Any] = {}
-    for _ in range(12):
-        runtime = {}
-        ready = True
-        for name, projection in projections.items():
-            placement = placements[name]
-            inspect_argv = [
-                "python3",
-                "quwoquan_ops/cli/prod/inspect_prod_plane_runtime.py",
-                "--plane",
-                name,
-                "--instance",
-                "prevalidate",
-                "--host-id",
-                placement.host_id,
-                "--replica-id",
-                placement.replica_id,
-                "--key-dir",
-                str(args.key_dir),
-            ]
-            if args.host:
-                inspect_argv.extend(["--host", args.host])
-            step = _run(
-                inspect_argv
-            )
-            report = json.loads(step["stdout"])
-            runtime[name] = report
-            containers = report.get("containers") or []
-            by_service = {
-                str(item.get("composeService")): item
-                for item in containers
-                if item.get("composeService")
-            }
-            present = set(projection.startup_services).issubset(by_service)
-            delivered = image_reports.get(name) or {}
-            delivered_digests = delivered.get("remoteImageContentDigests") or {}
-            digest_matches = all(
-                (by_service.get(service) or {}).get("imageId")
-                == delivered_digests.get(service)
-                for service in projection.startup_services
-            ) and all(
-                delivered_digests.get(service)
-                for service in projection.image_only_services
-            )
-            running = all(
-                (by_service.get(service) or {}).get("running") is True
-                for service in projection.startup_services
-            )
-            first_party_health = all(
-                service in provider_bound_services
-                or (by_service.get(service) or {}).get("health")
-                not in {"starting", "unhealthy"}
-                for service in projection.startup_services
-            )
-            data_ready = True
-            if name == "service" and args.data_mode == "isolated":
-                isolated_services = tuple(
-                    str(item)
-                    for item in ((spec.get("isolatedData") or {}).get("services") or [])
-                )
-                persistent = set(isolated_services) - {"mongo-init", "object-storage-init"}
-                initializers = {"mongo-init", "object-storage-init"}
-                data_ready = set(isolated_services).issubset(by_service) and all(
-                    (by_service.get(service) or {}).get("running") is True
-                    and (by_service.get(service) or {}).get("health")
-                    not in {"starting", "unhealthy"}
-                    for service in persistent
-                ) and all(
-                    (
-                        (by_service.get(service) or {}).get("running") is True
-                        or (
-                            (by_service.get(service) or {}).get("status") == "exited"
-                            and int((by_service.get(service) or {}).get("exitCode") or 0) == 0
-                        )
-                    )
-                    for service in initializers
-                )
-            unit = report.get("unit") or {}
-            ready = (
-                ready
-                and present
-                and running
-                and first_party_health
-                and data_ready
-                and digest_matches
-                and delivered.get("contentDigestVerified") is True
-                and unit.get("enabled")
-                and unit.get("active")
-            )
-        if ready:
-            break
-        time.sleep(5)
-    else:
-        raise PrevalidationError(
-            "prevalidation units, isolated data, or first-party container runtime did not become ready"
-        )
+    runtime = _wait_for_readiness(args, spec, projections, placements, image_reports)
     return {
         "status": "passed",
         "namespace": spec.get("namespace"),
@@ -1076,6 +1193,9 @@ def main() -> int:
         result["containerDeployment"] = {
             "status": "GATE_BLOCK",
             "issues": [str(error)],
+            "firstBlocker": error.blocker if isinstance(error, PrevalidationError) else {
+                "code": "PREVALIDATION_FAILED", "message": str(error),
+            },
         }
         print(json.dumps(result, ensure_ascii=False))
         return 2

@@ -68,6 +68,39 @@ class ProdImageContentDigestContractTest(unittest.TestCase):
         self.assertIn("podman", command)
         self.assertIn("inspect", command)
         self.assertNotIn("latest", command)
+        self.assertEqual(command[:3], ["ssh", "-F", "/dev/null"])
+        self.assertIn("StrictHostKeyChecking=yes", command)
+        self.assertIn("ConnectTimeout=15", command)
+        self.assertIn("ServerAliveCountMax=2", command)
+        self.assertNotIn("StrictHostKeyChecking=no", command)
+
+    # spec_ref: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/spec.md#sit-003
+    @patch.object(load_prod_plane_images.subprocess, "run")
+    def test_remote_tag_checks_known_host_and_readback_before_success(self, run) -> None:
+        digest = "sha256:" + "d" * 64
+        run.side_effect = [
+            subprocess.CompletedProcess([], 0, "", ""),
+            subprocess.CompletedProcess([], 0, digest, ""),
+        ]
+        result = load_prod_plane_images._tag_remote_image(
+            digest, "localhost/app:exact", "svc-edge", "203.0.113.10", Path("/tmp/test-key")
+        )
+        self.assertEqual(result, digest)
+        for call in run.call_args_list:
+            command = call.args[0]
+            self.assertEqual(command[:3], ["ssh", "-F", "/dev/null"])
+            self.assertIn("StrictHostKeyChecking=yes", command)
+            self.assertIn("ConnectTimeout=15", command)
+            self.assertIn("ServerAliveCountMax=2", command)
+            self.assertGreater(call.kwargs["timeout"], 0)
+
+    @patch.object(load_prod_plane_images.subprocess, "run")
+    def test_unknown_ssh_host_is_not_treated_as_missing_image(self, run) -> None:
+        run.return_value = subprocess.CompletedProcess([], 255, "", "Host key verification failed")
+        with self.assertRaisesRegex(SystemExit, "IMAGE_INSPECTION_FAILED"):
+            load_prod_plane_images._remote_image_digest(
+                "localhost/app:exact", "svc-edge", "203.0.113.10", Path("/tmp/test-key")
+            )
 
     @patch.object(load_prod_plane_images.subprocess, "run")
     def test_remote_digest_normalizes_legacy_podman_bare_image_id(

@@ -18,6 +18,7 @@ from quwoquan_ops.cli.lib.output_paths import remove_deployment_tree
 
 from .constants import OBSERVABILITY_SOURCE_ROOT, PROD_PLANE_ADMIN_PORTS, ROOT
 from .package_inputs import _plane_spec
+from .data_plane_wiring import _prevalidation_host_port, _validate_prevalidation_startup
 from .public_hosts import _prod_public_hosts
 
 
@@ -84,16 +85,7 @@ def _write_env_file(
         )
 
         skill_trust = prepare_rehearsal_assistant_skill_package_keys()
-        # compose 会插值整份文件（含 image/config-only 的 integration-service）；
-        # 预验证不启动它，mTLS 挂载源只落显式占位文件，不生成任何可用凭据。
-        mtls_root = output_root / "runtime" / "integration-mtls"
-        mtls_root.mkdir(parents=True, exist_ok=True)
-        for filename in ("ca.crt", "client.crt", "client.key"):
-            (mtls_root / filename).write_text(
-                "prevalidation: integration-service is image-and-config-only; "
-                "mTLS material is intentionally not provisioned\n",
-                encoding="utf-8",
-            )
+        # 正式 User OTP 依赖必须由启动前检阻断；不再生成看似凭据的 mTLS 占位物。
         lines.extend(
             [
                 "ASSISTANT_SKILL_PACKAGE_TRUSTED_PUBLIC_KEYS_JSON="
@@ -103,31 +95,8 @@ def _write_env_file(
                 # 预验证不携带正式 Web release；该 digest 是实际渲染出的 /srv/web 树摘要。
                 "QWQ_PUBLIC_WEB_CONTENT_DIGEST="
                 + _tree_digest(output_root / "runtime" / "public-web"),
-                "INTEGRATION_SERVICE_MTLS_CA_FILE=./runtime/integration-mtls/ca.crt",
-                "INTEGRATION_SERVICE_MTLS_CLIENT_CERT_FILE=./runtime/integration-mtls/client.crt",
-                "INTEGRATION_SERVICE_MTLS_CLIENT_KEY_FILE=./runtime/integration-mtls/client.key",
-                "LOCAL_GAMMA_HTTP_PORT=39000",
-                "LOCAL_GAMMA_PRODUCT_OPS_PORT=39010",
-                "LOCAL_GAMMA_MEDIA_EDGE_PORT=39100",
-                "LOCAL_GAMMA_HTTPS_PORT=38443",
-                f"LOCAL_GAMMA_ADMIN_PORT={PROD_PLANE_ADMIN_PORTS['prevalidate']}",
-                "LOCAL_GAMMA_CHAT_PORT=39200",
-                "LOCAL_GAMMA_USER_PORT=39210",
-                "LOCAL_GAMMA_CONTENT_PORT=39220",
-                "LOCAL_GAMMA_ASSISTANT_PORT=39230",
-                "LOCAL_GAMMA_REC_MODEL_PORT=39240",
-                "LOCAL_GAMMA_PRODUCT_OPS_SERVICE_PORT=39250",
-                "LOCAL_GAMMA_TAG_PORT=39270",
-                "LOCAL_GAMMA_ENTITY_PORT=39290",
-                "LOCAL_GAMMA_INTEGRATION_PORT=39310",
-                "LOCAL_GAMMA_NOTIFICATION_PORT=39320",
-                "LOCAL_GAMMA_REALTIME_PORT=39340",
-                "LOCAL_GAMMA_RTC_PORT=39350",
-                "LOCAL_GAMMA_POSTGRES_PORT=39400",
-                "LOCAL_GAMMA_MONGO_PORT=39410",
-                "LOCAL_GAMMA_REDIS_PORT=39420",
-                "LOCAL_GAMMA_ES_PORT=39430",
-                "LOCAL_GAMMA_OBJECT_STORAGE_EDGE_PORT=39440",
+                "LOCAL_GAMMA_OBJECT_STORAGE_EDGE_PORT="
+                + str(_prevalidation_host_port("object-storage")),
                 "LOCAL_GAMMA_OBJECT_STORAGE_ENDPOINT=object-storage:9000",
                 "LOCAL_GAMMA_OBJECT_STORAGE_ACCESS_KEY_ID=prevalidation-only",
                 "LOCAL_GAMMA_OBJECT_STORAGE_ACCESS_KEY_SECRET=prevalidation-only",
@@ -251,6 +220,8 @@ def _write_runtime_systemd_unit(
     remote_root: str,
     startup_services: list[str],
 ) -> str:
+    if instance == "prevalidate":
+        _validate_prevalidation_startup(set(startup_services))
     credentials_root = str(plane.get("credentialsPath") or "").strip()
     if not remote_root.startswith("/") or not credentials_root.startswith("/"):
         raise SystemExit("FAIL: runtime systemd paths must be absolute")
@@ -271,6 +242,8 @@ def _write_runtime_systemd_unit(
         "[Service]",
         "Type=oneshot",
         "RemainAfterExit=yes",
+        "TimeoutStartSec=300",
+        "TimeoutStopSec=120",
         f"WorkingDirectory={remote_root}",
     ]
     if instance != "prevalidate":
@@ -279,6 +252,10 @@ def _write_runtime_systemd_unit(
         )
     service_lines.extend(
         [
+            (
+                f"ExecStartPre=/usr/bin/podman compose --env-file {env_file} "
+                f"-f {compose_file} -p {project} config --quiet"
+            ),
             (
                 f"ExecStart=/usr/bin/podman compose --env-file {env_file} "
                 f"-f {compose_file} -p {project} up -d --remove-orphans {services}"
@@ -306,6 +283,7 @@ def _write_observability_tree(
     *,
     render_name: str,
     remote_root: str,
+    service_network: str = "",
 ) -> dict[str, Any] | None:
     plane = _plane_spec(plane_name)
     runtime = plane.get("rootlessObservabilityRuntime")
@@ -320,7 +298,7 @@ def _write_observability_tree(
     compose_file = str(runtime.get("composeFile") or "").strip()
     systemd_unit_file = str(runtime.get("systemdUnitFile") or "").strip()
     runtime_env_file = str(runtime.get("runtimeEnvFile") or "").strip()
-    service_network_name = str(runtime.get("serviceNetworkName") or "").strip()
+    service_network_name = service_network or str(runtime.get("serviceNetworkName") or "").strip()
     if (
         not directory.parts
         or directory.is_absolute()
@@ -400,7 +378,16 @@ def _write_observability_tree(
                 "[Service]",
                 "Type=oneshot",
                 "RemainAfterExit=yes",
+                "TimeoutStartSec=300",
+                "TimeoutStopSec=120",
                 f"WorkingDirectory={compose_root}",
+                (
+                    "ExecStartPre=/usr/bin/podman compose --env-file stack.env "
+                    f"--env-file {directory.as_posix()}/{runtime_env_file} "
+                    f"--env-file {credentials_env_path} "
+                    f"-f {directory.as_posix()}/{compose_file} "
+                    "-p quwoquan-observability-prod config --quiet"
+                ),
                 (
                     "ExecStart=/usr/bin/podman compose --env-file stack.env "
                     f"--env-file {directory.as_posix()}/{runtime_env_file} "

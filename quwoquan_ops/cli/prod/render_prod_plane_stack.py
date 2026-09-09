@@ -68,6 +68,9 @@ from quwoquan_ops.cli.prod.render_prod_plane_stack_lib.volume_layout import (  #
 )
 from quwoquan_ops.cli.prod.render_prod_plane_stack_lib.data_plane_wiring import (
     _wire_redis_scene,
+    _prevalidation_host_port,
+    _prevalidation_port_bindings,
+    _rewrite_prevalidation_urls,
 )
 
 
@@ -82,7 +85,10 @@ def _prod_plane_admin_publish(instance: str) -> str:
 
     if len(set(PROD_PLANE_ADMIN_PORTS.values())) != len(PROD_PLANE_ADMIN_PORTS):
         raise SystemExit("FAIL: prod plane admin ports must stay distinct per instance")
-    host_port = PROD_PLANE_ADMIN_PORTS.get(instance)
+    host_port = (
+        _prevalidation_host_port("gamma-proxy", 2019)
+        if instance == "prevalidate" else PROD_PLANE_ADMIN_PORTS.get(instance)
+    )
     if host_port is None:
         raise SystemExit(f"FAIL: prod plane instance has no admin port: {instance}")
     profiles = load_port_manifest().get("profiles") or {}
@@ -166,7 +172,7 @@ def _rewrite_service(
                 "retries": 10,
             }
         elif instance == "prevalidate":
-            updated["ports"] = ["39000:80", _prod_plane_admin_publish("prevalidate")]
+            updated["ports"] = ["80:80", "2019:2019"]
             updated["healthcheck"] = {
                 "test": [
                     "CMD-SHELL",
@@ -264,13 +270,13 @@ def _rewrite_service(
             )
             isolated_local = not edge_prevalidation
             mongo_host = "mongodb" if isolated_local else EXTERNAL_DATA_HOST
-            mongo_port = 27017 if isolated_local else 39410
+            mongo_port = 27017 if isolated_local else _prevalidation_host_port("mongodb")
             mongo_uri = f"mongodb://{mongo_host}:{mongo_port}/?directConnection=true"
             redis_host = "redis" if isolated_local else EXTERNAL_DATA_HOST
-            redis_port = 6379 if isolated_local else 39420
+            redis_port = 6379 if isolated_local else _prevalidation_host_port("redis")
             redis_addr = f"{redis_host}:{redis_port}"
             postgres_host = "postgres" if isolated_local else EXTERNAL_DATA_HOST
-            postgres_port = 5432 if isolated_local else 39400
+            postgres_port = 5432 if isolated_local else _prevalidation_host_port("postgres")
             if name == "recommendation-service":
                 environment["MONGODB_URI"] = mongo_uri
             if name == "content-service":
@@ -422,7 +428,7 @@ def _rewrite_service(
                 "https://embedding-provider-unavailable.invalid/v1/embeddings"
             )
             environment["CONTENT_EMBEDDING_API_KEY"] = "provider-unavailable"
-    if name not in {"gamma-proxy", "postgres", "mongodb", "mongo-init", "redis", "object-storage", "object-storage-init", "elasticsearch"}:
+    if instance != "prevalidate" and name not in {"gamma-proxy", "postgres", "mongodb", "mongo-init", "redis", "object-storage", "object-storage-init", "elasticsearch"}:
         extra_hosts = list(updated.get("extra_hosts") or [])
         if f"{EXTERNAL_DATA_HOST}:host-gateway" not in extra_hosts:
             extra_hosts.append(f"{EXTERNAL_DATA_HOST}:host-gateway")
@@ -431,19 +437,35 @@ def _rewrite_service(
         environment = updated.setdefault("environment", {})
         environment.pop("MINIO_CERTS_DIR", None)
         updated["command"] = ["server", "/data", "--address", ":9000", "--console-address", ":9001"]
-        updated["ports"] = ["39440:9000"]
+        updated["ports"] = ["9000:9000"]
         updated["volumes"] = ["local-gamma-object-storage:/data"]
+        # manifest 锁定的 RELEASE.2025-04-22 镜像包含 /usr/bin/curl，但无内置
+        # HEALTHCHECK；该版本 /ready 在对象层未就绪时也可能返回 200，所以检查
+        # /cluster 的对象层、bucket/IAM 初始化和写 quorum，不借用 init/running
+        # 充当健康。exec 语法不依赖 shell/凭据，也不发布新端口。
+        updated["healthcheck"] = {
+            "test": [
+                "CMD", "curl", "-f", "-s", "--connect-timeout", "2", "--max-time", "4",
+                "http://127.0.0.1:9000/minio/health/cluster",
+            ],
+            "interval": "10s",
+            "timeout": "5s",
+            "start_period": "30s",
+            "retries": 12,
+        }
     if instance == "prevalidate" and name == "object-storage-init":
+        updated.setdefault("depends_on", {})["object-storage"] = {"condition": "service_healthy"}
         updated["volumes"] = []
+        updated.setdefault("environment", {}).pop("SSL_CERT_FILE", None)
         updated["entrypoint"] = [
             "/bin/sh",
             "-ec",
             (
                 "for attempt in $(seq 1 60); do "
                 "if mc alias set qwq http://object-storage:9000 "
-                "\"$LOCAL_GAMMA_OBJECT_STORAGE_ACCESS_KEY_ID\" "
-                "\"$LOCAL_GAMMA_OBJECT_STORAGE_ACCESS_KEY_SECRET\"; then "
-                "mc mb --ignore-existing qwq/$LOCAL_GAMMA_OBJECT_STORAGE_BUCKET; exit 0; "
+                "\"$$LOCAL_GAMMA_OBJECT_STORAGE_ACCESS_KEY_ID\" "
+                "\"$$LOCAL_GAMMA_OBJECT_STORAGE_ACCESS_KEY_SECRET\"; then "
+                "mc mb --ignore-existing qwq/$$LOCAL_GAMMA_OBJECT_STORAGE_BUCKET; exit 0; "
                 "fi; sleep 2; done; exit 1"
             ),
         ]
@@ -548,11 +570,27 @@ def _rewrite_service(
         and data_mode == "isolated"
         and name == "elasticsearch"
     ):
-        updated["ports"] = ["39430:9200"]
+        updated["ports"] = ["9200:9200"]
         environment = updated.setdefault("environment", {})
         environment["cluster.name"] = "quwoquan-prod-prevalidate-logs"
         environment["node.name"] = "prod-prevalidate-logs-0"
     if instance == "prevalidate":
+        # 原生 rootless 回环映射由 Podman 管理，禁止覆盖成 bridge gateway。
+        extra_hosts = updated.get("extra_hosts") or []
+        if any(EXTERNAL_DATA_HOST in str(item) for item in extra_hosts):
+            raise SystemExit("GATE_BLOCK: native rootless loopback host must not be overridden")
+        environment = updated.get("environment")
+        if isinstance(environment, dict):
+            if name == "gamma-proxy":
+                for key in ("LOCAL_GAMMA_HTTP_PORT", "LOCAL_GAMMA_PRODUCT_OPS_PORT", "LOCAL_GAMMA_MEDIA_EDGE_PORT"):
+                    environment.pop(key, None)
+            if name == "notification-service":
+                environment["NOTIFICATION_REALTIME_BASE_URL"] = "http://realtime-gateway:18090"
+            if name in RUNTIME_LOG_EXPORT_SERVICES:
+                environment["RUNTIME_LOG_INGEST_URL"] = (
+                    "http://product-ops-service:18086/ops/internal/runtime-logs:ingest"
+                )
+            updated["environment"] = _rewrite_prevalidation_urls(environment, selected)
         updated["ports"] = _prevalidation_published_ports(name, updated.get("ports"))
         limits = _prevalidation_spec().get("resourceLimits") or {}
         defaults = limits.get("defaults") or {}
@@ -575,58 +613,42 @@ def _rewrite_service(
     return updated
 
 
-# 预验证实例的宿主端口：compose 模板以 `${QWQ_COMPOSE_<X>_PORT:-19xxx}` 声明 gamma-local
-# 段默认值；预验证必须落到 access-isolation 声明的 39xxx 段，且只绑定宿主回环——
-# 公网入口只经宿主共享 edge，数据面只经 SSH 隧道（SIT-003 t4 / REQ-003）。
-PREVALIDATION_HOST_PORTS: dict[str, int] = {
-    "QWQ_COMPOSE_CHAT_PORT": 39200,
-    "QWQ_COMPOSE_USER_PORT": 39210,
-    "QWQ_COMPOSE_CONTENT_PORT": 39220,
-    "QWQ_COMPOSE_ASSISTANT_PORT": 39230,
-    "QWQ_COMPOSE_REC_MODEL_PORT": 39240,
-    "QWQ_COMPOSE_PRODUCT_OPS_SERVICE_PORT": 39250,
-    "QWQ_COMPOSE_PLATFORM_OPS_SERVICE_PORT": 39260,
-    "QWQ_COMPOSE_TAG_PORT": 39270,
-    "QWQ_COMPOSE_SEARCH_PORT": 39280,
-    "QWQ_COMPOSE_ENTITY_PORT": 39290,
-    "QWQ_COMPOSE_CIRCLE_PORT": 39300,
-    "QWQ_COMPOSE_INTEGRATION_PORT": 39310,
-    "QWQ_COMPOSE_NOTIFICATION_PORT": 39320,
-    "QWQ_COMPOSE_REALTIME_PORT": 39340,
-    "QWQ_COMPOSE_RTC_PORT": 39350,
-    "LOCAL_GAMMA_POSTGRES_PORT": 39400,
-    "LOCAL_GAMMA_MONGO_PORT": 39410,
-    "LOCAL_GAMMA_REDIS_PORT": 39420,
-}
-_PORT_VARIABLE_REF = re.compile(r"^\$\{([A-Z][A-Z0-9_]*)(?::-(\d+))?\}$")
-
-
 def _prevalidation_published_ports(name: str, ports: Any) -> list[Any]:
-    """把模板端口映射改写为 `127.0.0.1:<39xxx>:<container>`；已带宿主地址的条目原样保留。"""
-
+    """长短语法都由 manifest 重建发布口，绝不保留宽地址或模板宿主端口。"""
+    bindings = {item["target"]: item for item in _prevalidation_port_bindings()
+                if item["service"] == name}
+    image_only = {
+        service for plane in _prevalidation_spec()["planes"].values()
+        for service in plane.get("imageAndConfigOnlyServices", [])
+    }
+    if name in image_only:
+        return []
     rendered: list[Any] = []
+    seen: set[int] = set()
     for item in ports or []:
-        if not isinstance(item, str):
-            rendered.append(item)
-            continue
-        if re.fullmatch(r"\d{1,3}(?:\.\d{1,3}){3}:\d+:\d+(?:/\w+)?", item):
-            rendered.append(item)  # 已显式绑定宿主地址（如 admin 端口）。
-            continue
-        if ":" not in item:
-            raise SystemExit(f"FAIL: prevalidation cannot interpret port mapping for {name}: {item}")
-        host_part, container_part = item.rsplit(":", 1)
-        match = _PORT_VARIABLE_REF.match(host_part)
-        if match is not None:
-            host_port = PREVALIDATION_HOST_PORTS.get(match.group(1))
-            if host_port is None:
-                raise SystemExit(
-                    f"FAIL: prevalidation has no 39xxx host port for {name}: {match.group(1)}"
-                )
-        elif host_part.isdigit():
-            host_port = int(host_part)
+        if isinstance(item, dict):
+            target = str(item.get("target", ""))
+            protocol = str(item.get("protocol", "tcp"))
+        elif isinstance(item, str):
+            container = item.rsplit(":", 1)[-1]
+            target, _, protocol = container.partition("/")
+            protocol = protocol or "tcp"
         else:
-            raise SystemExit(f"FAIL: prevalidation cannot interpret host port for {name}: {item}")
-        rendered.append(f"127.0.0.1:{host_port}:{container_part}")
+            raise SystemExit(f"FAIL: prevalidation cannot interpret port mapping for {name}")
+        if not target.isdigit() or protocol != "tcp" or int(target) not in bindings:
+            raise SystemExit(f"FAIL: undeclared prevalidation published port for {name}: {target}/{protocol}")
+        number = int(target)
+        if number in seen:
+            raise SystemExit(f"FAIL: duplicate prevalidation published port for {name}: {target}")
+        seen.add(number)
+        binding = bindings[number]
+        if isinstance(item, dict):
+            rendered.append({"target": number, "published": str(binding["published"]),
+                             "host_ip": "127.0.0.1", "protocol": "tcp"})
+        else:
+            rendered.append(f"127.0.0.1:{binding['published']}:{number}")
+    if seen != set(bindings):
+        raise SystemExit(f"FAIL: manifest prevalidation ports have no listener mapping: {name}")
     return rendered
 
 
@@ -636,6 +658,7 @@ def _write_config_tree(
     candidate_digest: str,
     output_root: Path,
     isolated_prevalidation: bool = False,
+    prevalidation_services: set[str] | None = None,
 ) -> dict[str, Any]:
     config_root = output_root / "runtime" / "config-root"
     sources: dict[str, Any] = {}
@@ -664,8 +687,25 @@ def _write_config_tree(
         shutil.copy2(config_src, config_target)
         provenance = json.loads((package_dir / "provenance.json").read_text(encoding="utf-8"))
         sources[service]["configurationDigest"] = provenance["configVersion"]
-        if isolated_prevalidation:
-            projection = _project_isolated_prevalidation_config(config_target)
+        if service == "api-edge":
+            graph = _load_yaml(config_src).get("graphql_read") or {}
+            if graph.get("enabled"):
+                for field in ("registry_file", "schema_file"):
+                    relative = Path(str(graph.get(field) or ""))
+                    if not relative.parts or relative.is_absolute() or ".." in relative.parts:
+                        raise SystemExit(f"GATE_BLOCK: invalid api-edge {field}")
+                    source = config_src.parent / relative
+                    if source.is_symlink() or not source.is_file():
+                        raise SystemExit(f"GATE_BLOCK: missing api-edge package {field}")
+                    target = config_root / relative
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(source, target)
+        if isolated_prevalidation or prevalidation_services is not None:
+            projection = _project_isolated_prevalidation_config(
+                config_target,
+                selected=prevalidation_services,
+                isolated_data=isolated_prevalidation,
+            )
             sources[service]["prevalidationProjection"] = projection
             sources[service]["configurationDigest"] = projection[
                 "projectedConfigurationDigest"
@@ -803,6 +843,23 @@ def _write_caddyfile(
     target = output_root / "runtime" / "Caddyfile"
     target.parent.mkdir(parents=True, exist_ok=True)
     public_hosts = _prod_public_hosts()
+    if instance == "prevalidate":
+        # 未闭合 signed-media/匿名白名单契约时不提供直读，也不让静态文件绕过 API Edge。
+        # healthz 只代理真实 API Edge；Web、ops、upload/SFU 不能共享一个 200 假健康。
+        target.write_text(
+            "{\n\tadmin 0.0.0.0:2019\n}\n\n:80 {\n"
+            '\theader Cache-Control "no-store"\n\troute {\n'
+            '\t@unavailable path /media /media/* /download* /upload /upload/* /ops /ops/* /control-plane/* /rtc /rtc/* /api/media /api/media/* /api/download* /api/upload* /api/ops* /api/control-plane/* /api/rtc*\n'
+            '\thandle @unavailable {\n\t\trespond "prevalidation capability unavailable" 503\n\t}\n'
+            '\thandle_path /api/* {\n\t\treverse_proxy api-edge:18079 {\n'
+            '\t\t\theader_up X-Edge-Client-IP {remote_host}\n\t\t}\n\t}\n'
+            '\t@api path /healthz /readyz /graphql /graphql/*\n'
+            '\thandle @api {\n\t\treverse_proxy api-edge:18079 {\n'
+            '\t\t\theader_up X-Edge-Client-IP {remote_host}\n\t\t}\n\t}\n'
+            '\thandle {\n\t\trespond "prevalidation public entry unavailable" 503\n\t}\n\t}\n}\n',
+            encoding="utf-8",
+        )
+        return
     gray_routing_block = (
         _render_gray_routing_block(rollout_stage) if instance == "prod" else ""
     )

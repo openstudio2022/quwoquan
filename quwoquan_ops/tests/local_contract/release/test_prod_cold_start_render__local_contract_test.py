@@ -82,6 +82,25 @@ class ProdColdStartRenderContractTest(unittest.TestCase):
         self.assertNotIn("tls internal", caddy)
         self.assertNotIn("quwoquan.com", caddy)
 
+    # spec_ref: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/spec.md#sit-003.t4
+    def test_prevalidation_caddy_never_serves_private_media_or_claims_five_domains(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            output = Path(temporary)
+            render._write_caddyfile(output, "prevalidate")
+            caddy = (output / "runtime/Caddyfile").read_text()
+        self.assertNotIn("file_server", caddy)
+        self.assertNotIn("/srv/media", caddy)
+        self.assertNotIn("public, max-age", caddy)
+        self.assertNotIn("tls", caddy)
+        self.assertIn('respond "prevalidation capability unavailable" 503', caddy)
+        self.assertIn('respond "prevalidation public entry unavailable" 503', caddy)
+        self.assertIn("handle_path /api/*", caddy)
+        self.assertIn("reverse_proxy api-edge:18079", caddy)
+        self.assertNotIn("reverse_proxy user-service", caddy)
+        for denied in ("/media/*", "/api/media/*", "/download*", "/upload/*", "/ops/*", "/rtc/*"):
+            self.assertIn(denied, caddy)
+        self.assertLess(caddy.index("handle @unavailable"), caddy.index("handle_path /api/*"))
+
     def test_caddy_never_owns_stable_candidate_business_routing(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             output = Path(temporary)

@@ -1,9 +1,46 @@
 """compose 卷与运行时凭据挂载重写（从 render_prod_plane_stack.py 逐字搬移）。"""
 from __future__ import annotations
 
+import json
 import re
+import shlex
 from pathlib import Path
 from typing import Any
+
+def _persistent_media_sync_command(source: Path, plane_name: str, remote_root: str) -> str:
+    """同步只创建所属账号的持久媒体目录；不打包状态、不 chown 他人目录。"""
+    from .package_inputs import _plane_spec
+
+    plane = _plane_spec(plane_name)
+    report = json.loads((source / "provenance.json").read_text(encoding="utf-8"))
+    instance, replica = report.get("instance", ""), report.get("replicaId", "")
+    if instance not in {"prevalidate", "gray", "prod"} or not re.fullmatch(r"[a-z0-9][a-z0-9-]{0,31}", replica):
+        raise SystemExit("GATE_BLOCK: invalid persistent media instance/replica")
+    base = Path(plane["composeProjectRoot"])
+    ref = Path(plane["rootlessRuntimeLayout"]["mediaStateRef"])
+    if not base.is_absolute() or ref.is_absolute() or ".." in ref.parts:
+        raise SystemExit("GATE_BLOCK: unsafe persistent media manifest path")
+    expected_root = base / "instances" / instance / replica
+    media = base / "state" / instance / replica / ref
+    if (
+        report.get("plane") != plane_name or remote_root != str(expected_root)
+        or report.get("remoteRoot") != str(expected_root) or report.get("mediaRoot") != str(media)
+    ):
+        raise SystemExit("GATE_BLOCK: persistent media owner/root identity mismatch")
+    script = """import os, pathlib, stat, sys
+base, target = map(pathlib.Path, sys.argv[1:])
+for parent in reversed((target, *target.parents)):
+    if parent.is_symlink():
+        raise SystemExit('GATE_BLOCK: persistent media symlink')
+    if parent == base or base in parent.parents:
+        parent.mkdir(mode=0o750, exist_ok=True)
+        info = parent.stat()
+        if not stat.S_ISDIR(info.st_mode) or info.st_uid != os.getuid():
+            raise SystemExit('GATE_BLOCK: persistent media owner mismatch')
+os.chmod(target, 0o750)
+"""
+    return "python3 -c " + shlex.quote(script) + " " + shlex.quote(str(base)) + " " + shlex.quote(str(media))
+
 
 def _rewrite_volume(raw: str) -> str:
     return raw
