@@ -39,14 +39,18 @@ def _tree_bytes(root: Path) -> dict[str, bytes]:
     }
 
 
-def _fixture(tmp_path: Path) -> tuple[Path, Path]:
+def _fixture(
+    tmp_path: Path, *, partitioned: bool = False, materialize: bool = True,
+) -> tuple[Path, Path]:
     canonical = tmp_path / "publish"
     release = tmp_path / "release/release-a"
     payload = tiny_png_bytes()
     digest = hashlib.sha256(payload).hexdigest()
     source_evidence = b"Fixture source: test author; rights unknown; no authorization granted.\n"
     source_ref = "sources/s001/source.json"
-    post = canonical / "posts/article/攻略/甲/1"
+    post = canonical / (
+        "posts/article/攻略/p0001/甲/1" if partitioned else "posts/article/攻略/甲/1"
+    )
     _write(
         post / "manifest.json",
         {
@@ -146,6 +150,8 @@ def _fixture(tmp_path: Path) -> tuple[Path, Path]:
         canonical / "tags/Topic/旅行",
         release / "payload/objects/tags/Topic/旅行",
     )
+    if not materialize:
+        return canonical, release
     media_manifest = materialize_release_media(
         release_id="release-a",
         post_refs=["posts/article/攻略/甲/1"],
@@ -165,6 +171,124 @@ def _fixture(tmp_path: Path) -> tuple[Path, Path]:
     )
     assert {path: (path.read_bytes(), path.stat().st_mode) for path in source_files} == source_before
     return canonical, release
+
+
+# spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-022
+@pytest.mark.parametrize("canonical_available", [True, False])
+def test_partitioned_materialize_uses_logical_carried_sources(
+    tmp_path: Path, canonical_available: bool,
+) -> None:
+    canonical, release = _fixture(tmp_path, partitioned=True, materialize=False)
+    canonical_before = _tree_bytes(canonical)
+    if not canonical_available:
+        canonical.rename(tmp_path / "unavailable-publish")
+    kwargs = dict(
+        release_id="release-a", post_refs=["posts/article/攻略/甲/1"],
+        entity_refs=[], publish_root=canonical, release_root=release.parent,
+    )
+    manifest = materialize_release_media(**kwargs)
+    assert manifest["issues"] == []
+    asset = manifest["assets"][0]
+    assert asset["ownerRefs"] == ["posts/article/攻略/甲/1"]
+    assert asset["rightsSnapshotRefs"] == [
+        "objects/posts/article/攻略/甲/1/sources/s001/source.json"
+    ]
+    assert (release / "payload" / asset["publicSliceKey"]).read_bytes() == tiny_png_bytes()
+    before = _tree_bytes(release)
+    assert materialize_release_media(**kwargs) == manifest
+    assert _tree_bytes(release) == before
+    source = canonical if canonical_available else tmp_path / "unavailable-publish"
+    assert _tree_bytes(source) == canonical_before
+
+
+# spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-041
+@pytest.mark.parametrize("partitioned", [False, True])
+def test_full_aggregate_build_and_replay_preserve_logical_media_owners(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, partitioned: bool,
+) -> None:
+    from types import SimpleNamespace
+
+    from content.release.canonical import aggregate_release_builder as builder
+    from content.release.canonical.aggregate_release_selection import (
+        ExplicitCohortSelection, PoolCandidate,
+    )
+    from content.release.canonical.object_source_identity import source_identity_set
+    from core.source_digest import SourceDefinitionSnapshot
+
+    canonical, _ = _fixture(tmp_path, partitioned=partitioned, materialize=False)
+    logical_ref = "article/攻略/甲/1"
+    physical_ref = "article/攻略/p0001/甲/1" if partitioned else logical_ref
+    post = canonical / "posts" / physical_ref
+    document = json.loads((post / "manifest.json").read_bytes())
+    document["assets"][0]["role"] = "cover"
+    _write(post / "manifest.json", document)
+    source_path = post / "sources/s001/source.json"
+    source = json.loads(source_path.read_bytes())
+    source["assets"][0].update(
+        bytes=len(tiny_png_bytes()), sourceUrl=source["sourceUrl"],
+        fetchedAt=source["fetchedAt"], rightsIssues=["authorization unknown"],
+    )
+    _write(source_path, source)
+    _write(post / "content_review.json", {
+        "schema": "quwoquan_data.content_review", "decision": "approved",
+        "draft": {"digest": "sha256:" + "9" * 64},
+    })
+    _write(post / "records/0001.json", {"originalFact": "preserve exact bytes"})
+    original = _tree_bytes(canonical)
+    selection = ExplicitCohortSelection(
+        candidates=(PoolCandidate(
+            post_ref=logical_ref, content_id="post-a", version=1,
+            content_type="article", author_id="creator-a", variant_purpose="original",
+            usage_scope="production", selection_identity_digest="sha256:" + "1" * 64,
+            canonical_object_digest="sha256:" + "2" * 64,
+            content_library_binding_digest="sha256:" + "3" * 64,
+        ),),
+        pool_digest="sha256:" + "4" * 64, eligible_count=1,
+        counts={"homepage": 0, "article": 1, "image": 0, "video": 0, "total": 1},
+    )
+    header = _header(release_id="aggregate-logical")
+    identities, identity_digest = source_identity_set([{
+        "executionId": header["executionIds"][0],
+        **{key: header[key] for key in ("sourceRevision", "sourceDigest", "entityCatalogDigest")},
+    }])
+    desired = {
+        "posts": [logical_ref], "entities": [],
+        "creators": ["creator-a"], "tags": ["Topic/旅行"],
+    }
+    # 只冻结池选择输入；复制、媒体绑定/物化、准入、schema、闭包和 existing 校验均走真实实现。
+    preparation = SimpleNamespace(
+        excluded=(), cohort_selection=selection, execution_ids=header["executionIds"],
+        source_digests=(SourceDefinitionSnapshot(header["sourceDigest"]),),
+        source_identities=tuple(identities), source_identity_set_digest=identity_digest,
+        entity_catalog_digest=None, source_revision=None, desired=desired,
+    )
+    monkeypatch.setattr(builder, "prepare_pool_release", lambda **_kwargs: preparation)
+    monkeypatch.setattr(builder, "build_release_authors", lambda *_args, **_kwargs: [
+        {"authorId": "creator-a", "creatorRef": "creator-a", "version": 1},
+    ])
+    kwargs = dict(
+        publish_root=canonical, release_root=tmp_path / "aggregate-releases",
+        release_id="aggregate-logical", cohort={"objectRefs": ["posts/" + logical_ref]},
+    )
+    first = builder._build_aggregate_release.__wrapped__(**kwargs)
+    assert first["idempotent"] is False
+    release = Path(first["releaseRoot"])
+    manifest = json.loads((release / "payload/media_manifest.json").read_bytes())
+    asset = manifest["assets"][0]
+    assert asset["ownerRefs"] == ["posts/" + logical_ref]
+    assert asset["rightsSnapshotRefs"] == [
+        "objects/posts/" + logical_ref + "/sources/s001/source.json"
+    ]
+    assert (release / "payload" / asset["publicSliceKey"]).read_bytes() == tiny_png_bytes()
+    assert _tree_bytes(release / "payload/objects/posts" / logical_ref) == _tree_bytes(post)
+    assert _tree_bytes(canonical) == original
+    before = _tree_bytes(release)
+    replay = builder._build_aggregate_release.__wrapped__(**kwargs)
+    assert replay["idempotent"] is True
+    assert replay["manifestDigest"] == first["manifestDigest"]
+    assert replay["canonicalMerkle"] == first["canonicalMerkle"]
+    assert _tree_bytes(release) == before
+    assert _tree_bytes(canonical) == original
 
 
 def test_release_first_consumer_closure_and_deterministic_index(tmp_path: Path) -> None:

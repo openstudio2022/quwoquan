@@ -154,6 +154,7 @@ def reuse_existing_aggregate_release(
             entity_refs=desired["entities"],
             creator_refs=desired["creators"],
             publish_root=publish_root,
+            object_root=payload_file(final_root, "objects"),
         )
         if expected_media_manifest["issues"] or media_manifest != expected_media_manifest:
             raise ObjectTransactionError("existing release media manifest drifted")

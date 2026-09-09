@@ -181,6 +181,7 @@ def _build_aggregate_release(
             entity_refs=desired["entities"],
             creator_refs=desired["creators"],
             publish_root=publish_root,
+            object_root=payload / "objects",
         )
         if media_manifest["issues"]:
             raise ObjectTransactionError(

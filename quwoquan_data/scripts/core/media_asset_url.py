@@ -562,6 +562,7 @@ def materialize_release_media(
         entity_refs=entity_refs,
         creator_refs=creator_refs,
         publish_root=publish_root,
+        object_root=payload_file(release, "objects"),
         source_owner=source_owner,
     )
     if manifest["issues"]:
