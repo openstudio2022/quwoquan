@@ -29,6 +29,9 @@ from lib.local_readiness.core import (  # noqa: E402
 @pytest.mark.parametrize("blob", [
     b"AccessKeySecret: ossBinding.AccessKeySecret,",
     b"APIKey: cfg.Telemetry.ProviderAPIKey,",
+    b"AppSecret: cfg.Telemetry.ProviderAPIKey,",
+    b"clientSecret: cfg.Telemetry.ProviderAPIKey,",
+    b"redisPassword: cfg.Telemetry.ProviderAPIKey,",
 ])
 def test_secret_scan_allows_unquoted_field_references(blob: bytes) -> None:
     from quwoquan_ops.cli import local_readiness as cli
@@ -40,9 +43,38 @@ def test_secret_scan_allows_unquoted_field_references(blob: bytes) -> None:
 def test_secret_scan_does_not_treat_operation_identifier_suffix_as_credential_label() -> None:
     from quwoquan_ops.cli import local_readiness as cli
 
-    assert not cli._has_secret_material(b"static const String resolvePushEndpointSecret = 'user.resolve.push.endpoint.secret';")
+    page_ids = ROOT / "quwoquan_app/lib/runtime/transport/generated/user/user_request_page_ids.g.dart"
+    assert not cli._has_secret_material(page_ids.read_bytes())
     for label in (b"AccessKeySecret", b"ACCESS_KEY_SECRET", b"API_KEY", b"SECRET", b"PASSWORD", b"ACCESS_TOKEN"):
         assert cli._has_secret_material(label + b" = '" + b"aB9_" * 8 + b"'")
+
+
+# spec_ref: specs/feature-tree/runtime/development-workflow-governance/local-continuous-integration/spec.md#gwt-003
+@pytest.mark.parametrize("label", [b"AppSecret", b"clientSecret", b"redisPassword", b"providerAPIKey", b"sessionAccessToken"])
+@pytest.mark.parametrize("quote", [b"", b"'", b'"', b"`"])
+def test_secret_scan_rejects_camelcase_sensitive_suffixes(label: bytes, quote: bytes) -> None:
+    from quwoquan_ops.cli import local_readiness as cli
+
+    assert cli._has_secret_material(label + b": " + quote + b"aB9_" * 8 + quote)
+    assert cli._has_secret_material(b"static const String " + label + b" = " + quote + b"A" * 32 + quote + b";")
+
+
+# spec_ref: specs/feature-tree/runtime/development-workflow-governance/local-continuous-integration/spec.md#gwt-003
+def test_secret_scan_operation_identifier_exemption_requires_complete_declaration() -> None:
+    from quwoquan_ops.cli import local_readiness as cli
+
+    operation = b"ResolvePushEndpointSecret"
+    page_id = b"user.resolve.push.endpoint.secret"
+    declaration = b"  static const String resolvePushEndpointSecret = '" + page_id + b"';\n"
+    mapping = b"  static const Map<String, String> operationToPageId = <String, String>{\n    '" + operation + b"': '" + page_id + b"',\n  };\n"
+    source = b"class UserRequestPageIds {\n  const UserRequestPageIds._();\n\n" + mapping + declaration + b"}\n"
+    assert not cli._has_secret_material(source)
+    assert cli._has_secret_material(declaration)
+    assert cli._has_secret_material(source.replace(mapping, b""))
+    assert cli._has_secret_material(source.replace(operation, b"DifferentOperation"))
+    assert cli._has_secret_material(source.replace(page_id, b"aB9_" * 8))
+    assert cli._has_secret_material(source + b"clientSecret: '" + page_id + b"'\n")
+    assert cli._has_secret_material(source.replace(b";\n}", b" + 'extra';\n}"))
 
 
 # spec_ref: specs/feature-tree/runtime/development-workflow-governance/local-continuous-integration/spec.md#gwt-002
@@ -201,7 +233,10 @@ def test_secret_scan_requires_structure_and_exact_snapshot_schema() -> None:
 
 # spec_ref: specs/feature-tree/runtime/development-workflow-governance/local-continuous-integration/spec.md#gwt-003
 @pytest.mark.parametrize("boundary", ["staged", "ci"])
-@pytest.mark.parametrize("case", ["valid", "literal", "unknown", "missing_schema", "nonsensitive_schema"])
+@pytest.mark.parametrize("case", [
+    "valid", "literal", "unknown", "missing_schema", "nonsensitive_schema", "field_reference",
+    "camel_AppSecret", "camel_clientSecret", "camel_redisPassword",
+])
 def test_secret_scan_boundaries_consume_their_exact_snapshot(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path, boundary: str, case: str,
 ) -> None:
@@ -216,6 +251,13 @@ def test_secret_scan_boundaries_consume_their_exact_snapshot(
     blobs = {SECRET_CONFIG_PATH: config, SECRET_SCHEMA_PATH: schema}
     if case == "missing_schema":
         del blobs[SECRET_SCHEMA_PATH]
+    changed_path = SECRET_CONFIG_PATH
+    if case.startswith("camel_") or case == "field_reference":
+        changed_path = "quwoquan_service/services/scanner-service/cmd/api/config.go"
+        label = case.removeprefix("camel_").encode()
+        blobs[changed_path] = label + b': "' + b"aB9_" * 8 + b'",\n'
+        if case == "field_reference":
+            blobs[changed_path] = b"AppSecret: ossBinding.AccessKeySecret,\n"
     # 工作树始终有合法声明；两个入口都不能用它覆盖快照的缺失/非敏感声明。
     worktree_schema = tmp_path / SECRET_SCHEMA_PATH
     worktree_schema.parent.mkdir(parents=True)
@@ -223,7 +265,7 @@ def test_secret_scan_boundaries_consume_their_exact_snapshot(
     observed: list[str] = []
     if boundary == "staged":
         monkeypatch.setattr(cli, "ROOT", tmp_path)
-        monkeypatch.setattr(cli, "staged_paths", lambda _: [SECRET_CONFIG_PATH])
+        monkeypatch.setattr(cli, "staged_paths", lambda _: [changed_path])
         monkeypatch.setattr(cli, "_assert_no_staged_unstaged_overlap", lambda _: None)
 
         def run(command: list[str], **kwargs: object) -> subprocess.CompletedProcess[bytes]:
@@ -242,7 +284,7 @@ def test_secret_scan_boundaries_consume_their_exact_snapshot(
         source = "b" * 40
         tree = "sha1:" + "c" * 40
         plan = build_delivery_impact_plan(
-            [SECRET_CONFIG_PATH], source_sha=source, base_sha="a" * 40,
+            [changed_path], source_sha=source, base_sha="a" * 40,
             source_tree_digest=tree,
         )
         plan_path = tmp_path / "impact-plan.json"
@@ -259,12 +301,13 @@ def test_secret_scan_boundaries_consume_their_exact_snapshot(
             plan_path, expected_source_sha=source, expected_tree_digest=tree,
             expected_plan_digest=plan["plan_digest"],
         )
-    if case == "valid":
+    if case in {"valid", "field_reference"}:
         invoke()
     else:
         with pytest.raises(cli.LocalReadinessError, match="secret material detected"):
             invoke()
-    assert observed == [SECRET_CONFIG_PATH, SECRET_SCHEMA_PATH]
+    expected_reads = [changed_path, SECRET_SCHEMA_PATH] if changed_path == SECRET_CONFIG_PATH else [changed_path]
+    assert observed == expected_reads
 
 
 def _repo() -> tempfile.TemporaryDirectory[str]:

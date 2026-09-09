@@ -210,12 +210,44 @@ def command_managed_pytest(args: argparse.Namespace) -> int:
 
 _SECRET_PATTERNS = (
     re.compile(rb"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----"),
-    re.compile(rb"(?i)(?<![A-Za-z0-9])(?:api[_-]?key|access[_-]?key[_-]?secret|secret|password|access[_-]?token)\s*[:=]\s*(?P<quote>['\"`]?)(?P<value>[A-Za-z0-9/+_.-]{24,})"),
+    re.compile(rb"(?i)(?:api[_-]?key|access[_-]?key[_-]?secret|secret|password|access[_-]?token)\s*[:=]\s*(?P<quote>['\"`]?)(?P<value>[A-Za-z0-9/+_.-]{24,})"),
     re.compile(rb"AKIA[0-9A-Z]{16}"),
 )
 # 仅裸字段引用属于代码间接层；带引号的相同文本仍是字面量。
 # 不豁免裸大写字符串：仅靠大写形状无法区分环境变量与真实密钥。
 _SECRET_FIELD_REFERENCE = re.compile(rb"[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)+")
+
+
+_REQUEST_PAGE_ID_ENTRY = rb"\s*'(?P<operation>[A-Z][A-Za-z0-9]*)':\s*'(?P<page>[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)+)',"
+_REQUEST_PAGE_ID_CONSTANT = rb"\s*static const String (?P<name>[a-z][A-Za-z0-9]*)\s*=\s*'(?P<value>[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)+)';"
+_REQUEST_PAGE_ID_CLASS = re.compile(
+    rb"\A(?:\s|//[^\n]*\n)*class (?P<class>[A-Z][A-Za-z0-9]*RequestPageIds)\s*\{"
+    rb"\s*const (?P=class)\._\(\);"
+    rb"\s*static const Map<String, String> operationToPageId = <String, String>\{"
+    rb"(?P<entries>(?:" + _REQUEST_PAGE_ID_ENTRY + rb")+)\s*\};"
+    rb"(?P<constants>(?:" + _REQUEST_PAGE_ID_CONSTANT + rb")+)\s*\}\s*\Z"
+)
+
+
+def _request_page_id_spans(blob: bytes) -> set[tuple[int, int]]:
+    # 仅完整的 page-ID 声明类：常量必须绑定同类 operation 映射及其规范拼写。
+    # 不凭 camelcase 前缀、带点字符串或单独 static const 放过敏感字面量。
+    declaration = _REQUEST_PAGE_ID_CLASS.fullmatch(blob)
+    if declaration is None:
+        return set()
+    entries = list(re.finditer(_REQUEST_PAGE_ID_ENTRY, declaration.group("entries")))
+    operations = {entry["operation"]: entry["page"] for entry in entries}
+    if len(operations) != len(entries):
+        return set()
+    spans: set[tuple[int, int]] = set()
+    for constant in re.finditer(_REQUEST_PAGE_ID_CONSTANT, declaration.group("constants")):
+        name, value = constant["name"], constant["value"]
+        operation = name[:1].upper() + name[1:]
+        canonical_name = b"".join(value.split(b".")[1:]).replace(b"_", b"")
+        if operations.get(operation) == value and canonical_name == name.lower():
+            offset = declaration.start("constants")
+            spans.add((offset + constant.start("value"), offset + constant.end("value")))
+    return spans
 
 
 class _SecretScanLoader(yaml.SafeLoader):
@@ -337,14 +369,17 @@ def _has_secret_material(
         except (ValueError, OSError, yaml.YAMLError, RecursionError):
             # 结构或声明无法证明合法时阻断，不折成空文档后放行。
             return True
+    page_id_spans = _request_page_id_spans(blob)
     for pattern in _SECRET_PATTERNS:
         for match in pattern.finditer(blob):
             value = match.groupdict().get("value")
-            if value is None or match.group("quote"):
+            if value is None:
                 return True
-            if match.span("value") in spans:
+            if match.span("value") in page_id_spans:
                 continue
-            if not _SECRET_FIELD_REFERENCE.fullmatch(value):
+            if match.group("quote") or (
+                match.span("value") not in spans and not _SECRET_FIELD_REFERENCE.fullmatch(value)
+            ):
                 return True
     return False
 
