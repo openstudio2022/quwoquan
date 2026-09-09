@@ -36,7 +36,7 @@ from content.release.canonical.object_transaction_contract import (
     _write_json,
 )
 from content.release.canonical.post_asset_identity import (
-    freeze_canonical_video_poster_identities,
+    project_canonical_post_asset_paths,
 )
 from content.release.canonical.review_rights_binding import validate_review_authority
 from content.release.canonical.post_transaction_assets import (
@@ -168,6 +168,7 @@ def build_post_object_transaction_package(
         cas_rows: list[dict[str, Any]] = []
         rights_rows: list[dict[str, Any]] = []
         canonical_assets: list[dict[str, Any]] = []
+        destination_paths: dict[str, str] = {}
         vertical = str(effective_source_manifest.get("vertical") or "").strip()
         if not vertical:
             raise ObjectTransactionError("post manifest 缺 vertical policy owner")
@@ -177,6 +178,11 @@ def build_post_object_transaction_package(
             raw = dict(raw_value)
             asset_source = _post_asset_path(source, raw)
             digest = _digest_file(asset_source)
+            claimed_digest = str(raw.get("sha256") or "").strip().lower()
+            if claimed_digest and claimed_digest != digest:
+                raise ObjectTransactionError(
+                    f"post canonical asset sha256 drift：{raw.get('assetId')}"
+                )
             digest_hex = digest.removeprefix("sha256:")
             suffix = asset_source.suffix.lower().lstrip(".") or "bin"
             object_key = (
@@ -367,9 +373,11 @@ def build_post_object_transaction_package(
                 {**raw, "assetId": asset_id}, asset_source=asset_source, mime_type=mime,
                 object_key=object_key, source_assets_by_ref=source_assets,
             )
-            asset.update(path=media_ref.as_posix(), fileName=media_ref.as_posix())
+            destination_paths[asset_id] = media_ref.as_posix()
             canonical_assets.append(asset)
-        freeze_canonical_video_poster_identities(canonical_assets)
+        canonical_assets = project_canonical_post_asset_paths(
+            canonical_assets, destination_paths=destination_paths,
+        )
         publish_media_mode = str(
             effective_source_manifest.get("publishMediaMode") or ""
         ).strip()
