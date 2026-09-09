@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from governance.coverage.distribution import (
     AcquisitionStatus,
     DistributionDecision,
@@ -96,7 +98,7 @@ def test_scale_target_supports_every_governed_milestone() -> None:
     assert policy.scale_target("M10000", "video") == 1000
 
 
-def test_research_admission_accepts_acquired_non_restricted_rights() -> None:
+def test_production_admission_is_independent_of_recorded_rights() -> None:
     for rights_status in (
         RightsStatus.VERIFIED,
         RightsStatus.UNVERIFIED,
@@ -190,6 +192,12 @@ def test_image_commercial_admission_cannot_exceed_frozen_usage_or_model_release_
         rights_status=RightsStatus.VERIFIED,
         authorization_proof="https://rights.example/proof",
     ) is DistributionDecision.BLOCKED
+
+
+@pytest.mark.parametrize("decision", ["research_allowed", "commercial_allowed", "blocked"])
+def test_projection_preserves_frozen_distribution_instead_of_rewriting(decision: str) -> None:
+    projected = project_asset_admission({**_asset(rights_status="unverified"), "distributionDecision": decision}, object_ref="posts/p1")
+    assert projected["distributionDecision"] == decision
 
 
 def test_projected_unverified_asset_keeps_exact_rights_gap() -> None:

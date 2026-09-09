@@ -115,7 +115,7 @@ def _readiness(
         "sourceOwner": "qwq_data", "releaseKind": "content", "passed": True,
         "containsUnverifiedAssets": True, "authorizationRequiredAssetIds": ["media-1"],
         "rightsStatusCounts": {"verified": 0, "unverified": 1, "restricted": 0, "unknown": 0},
-        "researchAcceptedCount": 1, "commercialAcceptedCount": 0,
+        "acceptedCount": 1,
         "importRunId": "import-1", "verifyRunId": "verify-1",
         "postIds": list(post_ids), "creatorIds": ["creator-1"],
         "entityRefs": [entity_ref], "tagRefs": ["tag-1"], "mediaAssetIds": ["media-1"],

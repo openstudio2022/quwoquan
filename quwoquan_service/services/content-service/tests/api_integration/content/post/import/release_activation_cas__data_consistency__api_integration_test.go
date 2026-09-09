@@ -37,7 +37,7 @@ func releaseCASPost(contentID, postRef string, now time.Time) PostDoc {
 		ContentType: "article", ContentIdentity: "work", Title: contentID,
 		AuthorID: "builtin_travel_blogger", ArticleMarkdown: "# " + contentID,
 		Admission: ContentAdmission{
-			ProcessResult: "completed", QualityResult: "passed", UsageScope: "research",
+			ProcessResult: "completed", QualityResult: "passed", UsageScope: "production",
 			EvidenceRef: "audit/attestation.json", EvidenceDigest: "sha256:" + strings.Repeat("a", 64),
 		},
 		CreatedAt: now.Add(-time.Hour), UpdatedAt: now, PublishedAt: now,

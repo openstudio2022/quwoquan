@@ -72,6 +72,31 @@ func TestAppLaunchContractCodegenProjectsCanonicalContractToEveryRuntime(t *test
 			t.Fatalf("normalized appLaunchManifest misses %q", key)
 		}
 	}
+	// 无类别投影仍保留 managed preparation 的 exact receipt 约束。
+	schemas := launchManifest["schemas"].(map[string]any)
+	preparation := schemas["app_managed_preparation"].(map[string]any)
+	fields := preparation["fields"].(map[string]any)
+	binding := fields["contentBinding"].(map[string]any)
+	bindingFields := binding["fields"].(map[string]any)
+	for _, retired := range []string{"releaseClass", "productLifecycleState", "readinessPhase"} {
+		if _, exists := bindingFields[retired]; exists {
+			t.Fatalf("managed preparation retained retired category field %q", retired)
+		}
+	}
+	for _, key := range []string{"manifestDigest", "readinessReceiptRef", "readinessReceiptDigest", "verifyRunId"} {
+		if _, exists := bindingFields[key]; !exists {
+			t.Fatalf("managed preparation lost exact content binding %q", key)
+		}
+	}
+	constraints, err := json.Marshal(preparation["constraints"])
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, invariant := range []string{"passed=true", "absolute regular no-symlink", "文件 exact bytes sha256", "release/verify/manifest"} {
+		if !strings.Contains(string(constraints), invariant) {
+			t.Fatalf("managed preparation lost exact invariant %q", invariant)
+		}
+	}
 	artifactContract, ok := document["appArtifactContract"].(map[string]any)
 	if !ok {
 		t.Fatalf("neutral projection misses appArtifactContract: %#v", document)

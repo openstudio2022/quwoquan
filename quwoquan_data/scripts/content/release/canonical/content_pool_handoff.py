@@ -22,7 +22,6 @@ from content.release.canonical.content_pool_record import (
 from content.release.canonical.object_transaction_contract import (
     ObjectTransactionError,
     _read_json,
-    _safe_rel,
 )
 from content.release.canonical.pool_source_attribution import (
     source_attribution_complete,
@@ -161,16 +160,11 @@ class ContentPoolHandoffQuery:
         return document
 
 
-def _creator_ref(object_root: Path, manifest: Mapping[str, Any]) -> str:
-    author_id = str(manifest.get("authorId") or "").strip()
-    creator_refs_path = object_root / "creator.refs.json"
-    if not author_id and creator_refs_path.is_file() and not creator_refs_path.is_symlink():
-        raw_refs = _read_json(creator_refs_path).get("creatorRefs")
-        if isinstance(raw_refs, list) and raw_refs:
-            author_id = str(raw_refs[0] or "").strip()
-    if not author_id:
-        raise ObjectTransactionError("DATA.POOL.IDENTITY_INVALID: authorId missing")
-    return author_id
+def _creator_ref(manifest: Mapping[str, Any]) -> str:
+    creator_ref = str(manifest.get("creatorProfileId") or "").strip()
+    if not creator_ref:
+        raise ObjectTransactionError("DATA.POOL.IDENTITY_INVALID: creatorProfileId missing")
+    return creator_ref
 
 
 def project_content_library_bindings(
@@ -205,12 +199,12 @@ def project_content_library_bindings(
             or f"/{digest[7:9]}/{digest[9:11]}/{digest[7:]}" not in object_key
             or not isinstance(source_asset_refs, list)
             or not source_asset_refs
-            or source_asset_refs != sorted(set(source_asset_refs))
             or any(not isinstance(ref, str) or not ref for ref in source_asset_refs)
+            or len(source_asset_refs) != len(set(source_asset_refs))
             or not isinstance(acquisition_receipt_refs, list)
             or not acquisition_receipt_refs
-            or acquisition_receipt_refs != sorted(set(acquisition_receipt_refs))
             or any(not isinstance(ref, str) or not ref for ref in acquisition_receipt_refs)
+            or len(acquisition_receipt_refs) != len(set(acquisition_receipt_refs))
             or (derivative_binding is not None and not isinstance(derivative_binding, Mapping))
             or not derivative_consistent
         ):
@@ -230,42 +224,26 @@ def project_content_library_bindings(
                 ),
             )
         )
-    return tuple(sorted(rows, key=lambda row: (row.asset_id, row.object_key)))
+    return tuple(rows)
 
 
 def _content_library_bindings(
     object_root: Path,
     manifest: Mapping[str, Any],
-) -> tuple[str | None, tuple[ContentLibraryBinding, ...], str]:
-    declared_ref = str(manifest.get("assetRefsRef") or "").strip()
-    if declared_ref:
-        relative = _safe_rel(declared_ref, label="manifest.assetRefsRef")
-        path = object_root / relative
-        binding_ref: str | None = relative.as_posix()
-        if path.is_symlink() or not path.is_file():
-            raise ObjectTransactionError("DATA.POOL.CONTENT_LIBRARY_BINDING_MISSING")
-    else:
-        path = object_root / "asset.refs.json"
-        binding_ref = "asset.refs.json" if path.is_file() and not path.is_symlink() else None
-    if binding_ref is None:
-        if (
-            str(manifest.get("contentType") or "") == "article"
-            and str(manifest.get("publishMediaMode") or "") == "text_only"
-        ):
-            return None, (), _canonical_digest([])
+) -> tuple[str, tuple[ContentLibraryBinding, ...], str]:
+    path = object_root / "manifest.json"
+    if path.is_symlink() or not path.is_file():
         raise ObjectTransactionError("DATA.POOL.CONTENT_LIBRARY_BINDING_MISSING")
-
-    document = _read_json(path)
-    bindings = project_content_library_bindings(document.get("assets"))
-    if not bindings:
-        if (
-            str(manifest.get("contentType") or "") == "article"
-            and str(manifest.get("publishMediaMode") or "") == "text_only"
-        ):
-            return None, (), _canonical_digest([])
+    if any(key in manifest for key in ("assetRefsRef", "creatorRefsRef", "tagRefsRef")):
+        raise ObjectTransactionError("DATA.POOL.MANIFEST_INVALID: retired sidecar pointer")
+    bindings = project_content_library_bindings(manifest.get("assets"))
+    if not bindings and not (
+        str(manifest.get("contentType") or "") in {"article", "homepage"}
+        and str(manifest.get("publishMediaMode") or "") == "text_only"
+    ):
         raise ObjectTransactionError("DATA.POOL.CONTENT_LIBRARY_BINDING_INVALID")
     return (
-        binding_ref,
+        "manifest.json",
         bindings,
         _canonical_digest([row.as_document() for row in bindings]),
     )
@@ -284,7 +262,8 @@ def project_content_pool_handoff(
     if normalized_type not in {"content", "homepage"} or not normalized_ref:
         raise ObjectTransactionError("DATA.POOL.IDENTITY_INVALID")
     kind = "posts" if normalized_type == "content" else "entities"
-    object_root = Path(publish_root) / kind / normalized_ref
+    from content.release.canonical.aggregate_release_closure import object_root as resolve_object_root
+    object_root = resolve_object_root(Path(publish_root), kind, normalized_ref)
     manifest_path = object_root / "manifest.json"
     try:
         manifest = _read_json(manifest_path)
@@ -370,7 +349,7 @@ def project_content_pool_handoff(
             raise ObjectTransactionError(
                 f"DATA.POOL.IDENTITY_INVALID: {kind}/{normalized_ref} contentType"
             )
-        author_id: str | None = _creator_ref(object_root, manifest)
+        author_id: str | None = _creator_ref(manifest)
         if str(manifest.get("generator") or "").strip() != "agent":
             raise ObjectTransactionError(
                 f"DATA.POOL.GENERATOR_PROVENANCE_INVALID: {normalized_ref}"
@@ -380,12 +359,9 @@ def project_content_pool_handoff(
             raise ObjectTransactionError(
                 f"DATA.POOL.VARIANT_INVALID: {normalized_ref}"
             )
-        if variant_purpose == "commercial_variant" and usage_scope != "commercial":
-            raise ObjectTransactionError(
-                f"DATA.POOL.VARIANT_SCOPE_INVALID: {normalized_ref}"
-            )
     else:
         carrier = "homepage"
+        _creator_ref(manifest)
         author_id = None
         variant_purpose = "not_applicable"
 
@@ -452,7 +428,7 @@ def project_content_pool_handoff(
         canonical_object_ref=f"{kind}/{normalized_ref}",
         manifest_ref=f"{kind}/{normalized_ref}/manifest.json",
         pool_record_ref=(
-            f"{kind}/{normalized_ref}/_pool/versions/{record_sequence}.json"
+            f"{kind}/{normalized_ref}/records/{record_sequence}.json"
         ),
         content_library_binding_ref=(
             f"{kind}/{normalized_ref}/{binding_ref}" if binding_ref else None

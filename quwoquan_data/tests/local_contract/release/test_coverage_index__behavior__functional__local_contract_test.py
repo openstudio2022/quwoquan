@@ -27,7 +27,9 @@ TAXONOMY_ROOT = _TMP / "control_plane" / "governance" / "taxonomy"
 
 from governance.coverage import master_list as coverage_master_list  # noqa: E402
 from core.io import read_ndjson, write_json  # noqa: E402
-from core.paths import OUTPUT_ROOT, PUBLISH_ROOT, RELEASE_ROOT  # noqa: E402
+OUTPUT_ROOT = _TMP / "output"
+PUBLISH_ROOT = _TMP / "publish"
+RELEASE_ROOT = _TMP / "releases"
 from content.release.canonical.build_lookup_indexes import build_publish_lookup_indexes  # noqa: E402
 from content.release.environment.coverage_receipt import write_environment_coverage_receipt  # noqa: E402
 
@@ -77,7 +79,7 @@ def _publish_entity(entity_ref: str, *, geo_ref: str, tag_refs: list[str], promo
             "tagRefs": tag_refs,
         },
     )
-    manifest: dict = {"assets": []}
+    manifest: dict = {"assets": [], "tagRefs": tag_refs}
     if promoted_at:
         manifest["quality"] = {"promotedAt": promoted_at}
     write_json(entity_dir / "manifest.json", manifest)
@@ -165,7 +167,8 @@ def _seed() -> None:
 _seed()
 try:
     _COUNTS = build_publish_lookup_indexes(
-        release_id="coverage-index", taxonomy_root=TAXONOMY_ROOT
+        release_id="coverage-index", canonical_root=PUBLISH_ROOT,
+        release_root=RELEASE_ROOT, taxonomy_root=TAXONOMY_ROOT
     )
 finally:
     coverage_master_list.COVERAGE_MASTER_ROOT = _ORIGINAL_COVERAGE_MASTER_ROOT

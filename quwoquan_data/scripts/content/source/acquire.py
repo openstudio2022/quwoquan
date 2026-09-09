@@ -6,7 +6,7 @@
 - image / video：读本地字节，算 sha256；申报了来源 sha1 时与字节交叉校验；探测 mime/尺寸/时长；
   图片按载体预算降采样；视频超预算或容器不在发布闭集时转码为 H.264 mp4 派生体并抽 poster；
   降采样/转码/抽帧都写进 `derivedModifications`，不再恒为空。
-- `rightsStatus` 只由申报 license 字符串经开放许可白名单纯函数派生（verified / unverified / unknown），
+- `rightsStatus` 优先保留显式申报；缺席时由 license 白名单记录许可审计结果，绝不等价于完整商用授权，
   AI 不直接给出；水印三字段（watermarkStatus/watermarkKind/watermarkNote）由看过像素的 AI 申报并原样转录。
 写入 `sources/<unit>/{meta.json,source.md,assets/}` 与对象 `1.download/source_refs.json`，媒体字节入
 content library。逐 target 独立报告：单 target 失败以 typed issue 记录，不影响同批其余。
@@ -42,7 +42,9 @@ from core.video_variants import (
     probe_video,
     video_needs_derivative,
 )
-from governance.coverage.distribution import load_content_distribution_policy
+from governance.coverage.distribution import (
+    AcquisitionStatus, RightsStatus, distribution_decision, load_content_distribution_policy,
+)
 
 
 def _asset_record_defaults() -> dict[str, str]:
@@ -240,18 +242,17 @@ def _attribution(source: dict[str, Any], *, platform: str, collected_at: str, ha
         "sourcePostUrl": str(source["sourceUrl"]),
         "originalAssetUrl": str(source["directUrl"]),
         "attributionText": f"{creator} / {platform} / {license_name}",
-        "rightsBasis": f"open_license:{license_name}",
-        "commercialAuthorizationStatus": defaults["commercialAuthorizationStatus"],
-        # 对象级权利词汇是已冻结在 canonical 字节中的记录事实，保持既有取值。
-        "publicationAdmission": "research_release",
-        "authorizationProofUrl": license_url,
+        "rightsBasis": license_name,
+        "commercialAuthorizationStatus": str(source.get("commercialAuthorizationStatus") or defaults["commercialAuthorizationStatus"]),
+        "publicationAdmission": "commercial_release" if str(source.get("commercialAuthorizationStatus") or defaults["commercialAuthorizationStatus"]) == "verified" else "research_release",
+        "authorizationProofUrl": source.get("authorizationProof") or None,
         "termsUrl": license_url,
         "watermarkStatus": str(source["watermarkStatus"]),
         "watermarkKind": str(source["watermarkKind"]),
         "watermarkNote": str(source.get("watermarkNote") or ""),
-        "audioRightsStatus": audio,
-        "modelReleaseStatus": defaults["modelReleaseStatus"],
-        "propertyReleaseStatus": defaults["propertyReleaseStatus"],
+        "audioRightsStatus": str(source.get("audioRightsStatus") or audio),
+        "modelReleaseStatus": str(source.get("modelReleaseStatus") or defaults["modelReleaseStatus"]),
+        "propertyReleaseStatus": str(source.get("propertyReleaseStatus") or defaults["propertyReleaseStatus"]),
         "collectedAt": collected_at,
         "takedownPolicy": defaults["takedownPolicy"],
         "derivedModifications": sorted(set(derived)),
@@ -310,6 +311,12 @@ def _ingest_media(source: dict[str, Any], *, kind: str, carrier: str) -> dict[st
             derived.append(DerivedModification.FORMAT_CONVERSION.value if original_mime != mime else DerivedModification.RESIZE.value)
     license_name = str(source["license"]).strip()
     rights_status, rights_issues = _rights_record(license_name)
+    if "rightsStatus" in source:
+        rights_status = str(source["rightsStatus"])
+    if "rightsIssues" in source:
+        rights_issues = list(source["rightsIssues"])
+    if rights_status != "verified" and not rights_issues:
+        rights_issues = [f"recorded rights status: {rights_status}"]
     collected_at = _now()
     platform = _platform_of(source)
     has_audio = bool(source.get("hasAudio")) if kind == "video" else None
@@ -342,6 +349,8 @@ def _ingest_media(source: dict[str, Any], *, kind: str, carrier: str) -> dict[st
             "description": str(source.get("description") or ""),
             "rightsStatus": rights_status,
             "rightsIssues": rights_issues,
+            "usageScope": str(source.get("usageScope") or "editorial"),
+            "authorizationProof": source.get("authorizationProof") or "",
             "watermarkStatus": str(source["watermarkStatus"]),
             "watermarkKind": str(source["watermarkKind"]),
             "watermarkNote": str(source.get("watermarkNote") or ""),
@@ -387,7 +396,7 @@ def _asset_row(
 ) -> dict[str, Any]:
     media = acquired["media"]
     attribution = media["attribution"]
-    rights_status = str(media.get("rightsStatus") or "verified")
+    rights_status = str(media["rightsStatus"])
     rights_issues = list(media.get("rightsIssues") or [])
     return {
         "sourceAssetId": asset_id,
@@ -405,18 +414,24 @@ def _asset_row(
         "originalAssetUrl": media["directUrl"],
         "capturedAt": media["collectedAt"],
         "licenseSnapshot": acquired["license"],
-        "usageScope": "editorial",
+        "usageScope": media["usageScope"],
         "modelReleaseStatus": attribution["modelReleaseStatus"],
         "propertyReleaseStatus": attribution["propertyReleaseStatus"],
         "sourceAttribution": attribution,
         "sourceUrl": acquired["canonicalUrl"],
         "license": acquired["license"],
         "termsUrl": acquired["termsUrl"],
-        # 开放许可的授权证明就是许可证正文本身；非白名单 license 仍记 termsUrl，由 rightsStatus 说明状态。
-        "authorizationProof": acquired["termsUrl"],
+        # 许可页面与授权证明不同；不替未知或受限来源补造证明。
+        "authorizationProof": media["authorizationProof"],
+        "commercialAuthorizationStatus": attribution["commercialAuthorizationStatus"],
+        "audioRightsStatus": attribution["audioRightsStatus"],
         "rightsStatus": rights_status,
-        "authorizationRequired": rights_status != "verified",
-        "distributionDecision": "research_allowed",
+        "authorizationRequired": rights_status != "verified" or not media["authorizationProof"],
+        "distributionDecision": distribution_decision(
+            acquisition_status=AcquisitionStatus.ACQUIRED,
+            rights_status=RightsStatus(rights_status),
+            authorization_proof=str(media["authorizationProof"] or ""),
+        ).value,
         "rightsIssues": rights_issues,
         "relevance": relevance,
         "caption": media.get("description") or acquired["title"],

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import shutil
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
@@ -149,6 +150,112 @@ def asset_source_use_mode(
             f"refs={refs} modes={sorted(modes)}"
         )
     return next(iter(modes))
+
+
+def project_object_sources(
+    *, execution_root: Path, source_object: Path, object_root: Path,
+    manifest: Mapping[str, Any], source_assets: Mapping[str, dict[str, Any]],
+    canonical_assets: list[dict[str, Any]], rights_rows: list[dict[str, Any]],
+) -> list[str]:
+    """只拷贝采用来源的实际证据；生成元数据不冒充原页或许可证明。"""
+    from content.release.canonical.object_transaction_contract import _digest_file, _write_json
+    from core.schema import assert_valid
+
+    selected: dict[str, dict[str, Any]] = {}
+    refs_doc = _read_json(source_object / "1.download/source_refs.json")
+    for raw in refs_doc.get("sources") or []:
+        ref = str(raw.get("metaRef") or raw.get("sourceRef") or raw.get("sourceAssetRef") or "")
+        rel = _safe_rel(ref, label="source unit ref")
+        if len(rel.parts) < 3 or rel.parts[0] != "sources":
+            raise ObjectTransactionError("DATA.PUBLISH.SOURCE_REF_INVALID")
+        selected.setdefault(rel.parts[1], dict(raw))
+    for asset in canonical_assets:
+        for ref in asset.get("sourceAssetRefs") or []:
+            rel = _safe_rel(str(ref), label="sourceAssetRef")
+            selected.setdefault(rel.parts[1], {})
+    if not selected:
+        raise ObjectTransactionError("DATA.PUBLISH.SOURCE_EVIDENCE_MISSING")
+    rights_by_id = {str(row["assetId"]): row for row in rights_rows}
+    refs: list[str] = []
+    for unit, selected_row in sorted(selected.items()):
+        unit_root = execution_root / "sources" / unit
+        meta = _read_json(unit_root / "meta.json")
+        url = https_source(selected_row.get("sourceUrl"), meta.get("canonicalUrl"), meta.get("url"))
+        if not url:
+            raise ObjectTransactionError(f"DATA.PUBLISH.SOURCE_URL_MISSING: {unit}")
+        source_ref = f"sources/{unit}/source.json"
+        target = object_root / "sources" / unit
+        evidence: list[dict[str, Any]] = []
+        originals = [path for path in sorted(unit_root.glob("snapshot.*")) if path.is_file()]
+        excerpt = unit_root / "source.md"
+        if excerpt.is_file():
+            originals.append(excerpt)
+        if not originals:
+            raise ObjectTransactionError(f"DATA.PUBLISH.SOURCE_EVIDENCE_MISSING: {unit}")
+        for index, original in enumerate(originals):
+            if original.is_symlink() or original.stat().st_size < 1:
+                raise ObjectTransactionError(f"DATA.PUBLISH.SOURCE_EVIDENCE_INVALID: {original}")
+            digest = _digest_file(original)
+            expected = meta.get("cleanSha256" if original.name == "source.md" else "rawSha256")
+            if expected and digest != expected:
+                raise ObjectTransactionError(f"DATA.PUBLISH.SOURCE_EVIDENCE_DRIFT: {original}")
+            filename = f"evidence{'-' + str(index + 1) if index else ''}{original.suffix}"
+            target.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(original, target / filename)
+            evidence.append({"path": filename, "sha256": digest, "bytes": original.stat().st_size,
+                             "kind": "source_excerpt" if original.name == "source.md" else "source_snapshot"})
+        adopted: list[dict[str, Any]] = []
+        for asset in canonical_assets:
+            matching = [ref for ref in asset.get("sourceAssetRefs") or [] if str(ref).startswith(f"sources/{unit}/")]
+            if not matching:
+                continue
+            asset.setdefault("sourceRefs", []).append(source_ref)
+            rights = rights_by_id[str(asset["assetId"])]
+            facts = {key: value for key, value in rights.items() if key not in {"snapshot", "asset", "pageRevision", "snapshotUrl"}}
+            facts.update(sha256=asset["sha256"], bytes=asset["bytes"], mimeType=asset["mimeType"])
+            for ref in matching:
+                adopted.append({**facts, "sourceAssetRef": ref, "sourceAsset": dict(source_assets[ref])})
+        fetched_at = str(meta.get("fetchedAt") or next((row.get("fetchedAt") for row in adopted if row.get("fetchedAt")), ""))
+        document = {"schema": "quwoquan_data.publish_source", "sourceId": unit, "sourceUrl": url,
+                    "sourceUseMode": meta.get("sourceUseMode"), "fetchedAt": fetched_at,
+                    "metadata": dict(meta), "assets": adopted, "evidence": evidence}
+        if isinstance(meta.get("sourceAttribution"), Mapping):
+            document["sourceAttribution"] = dict(meta["sourceAttribution"])
+        assert_valid(document, "publish", "source")
+        _write_json(target / "source.json", document)
+        refs.append(source_ref)
+    return refs
+
+
+def read_object_sources(object_root: Path, manifest: Mapping[str, Any]) -> list[dict[str, Any]]:
+    """发布态只读唯一新 schema，并验证真正随体证据。"""
+    from content.release.canonical.object_transaction_contract import _digest_file
+    from core.schema import assert_valid
+
+    refs = manifest.get("sourceRefs")
+    if not isinstance(refs, list) or not refs or len(refs) != len(set(refs)):
+        raise ObjectTransactionError("DATA.PUBLISH.SOURCE_REF_INVALID")
+    result = []
+    for ref in refs:
+        rel = _safe_rel(str(ref), label="manifest.sourceRefs")
+        if len(rel.parts) != 3 or rel.parts[0] != "sources" or rel.name != "source.json":
+            raise ObjectTransactionError("DATA.PUBLISH.SOURCE_REF_INVALID")
+        source = object_root / rel
+        if source.is_symlink() or any(p.is_symlink() for p in (source.parent, source.parent.parent)):
+            raise ObjectTransactionError("DATA.PUBLISH.SOURCE_EVIDENCE_INVALID")
+        document = _read_json(source)
+        assert_valid(document, "publish", "source")
+        for row in document["evidence"]:
+            path = source.parent / _safe_rel(row["path"], label="source.evidence.path")
+            if not path.is_file() or path.is_symlink():
+                raise ObjectTransactionError(f"DATA.PUBLISH.SOURCE_EVIDENCE_MISSING: {ref}")
+            if _digest_file(path) != row["sha256"] or path.stat().st_size != row["bytes"]:
+                raise ObjectTransactionError(f"DATA.PUBLISH.SOURCE_EVIDENCE_DRIFT: {ref}")
+        result.append({**document, "ref": ref})
+    for asset in manifest.get("assets") or []:
+        if not asset.get("sourceRefs") or not set(asset["sourceRefs"]).issubset(refs):
+            raise ObjectTransactionError("DATA.PUBLISH.ASSET_SOURCE_REF_INVALID")
+    return result
 
 
 __all__ = [

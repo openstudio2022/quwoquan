@@ -1,13 +1,33 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "description": "发布态实体对象 _entity.json（publish/entities/{domain}/{etype}/{name}/_entity.json 与批次对象树同构）。此前结构校验散落 verify 脚本（收债 10），本 schema 一次定义到位。entityRef 三段冻结（裁决 2）：目录路径即 ref，省市区维度不进目录、只走 geoTagRef/geoTagRefs 字段。geoTagRef 单值主归属（分片/推荐特征/geo_bucket 等单值消费方零改动），geoTagRefs 可选全量数组承载跨省次归属（约束 geoTagRef ∈ geoTagRefs，物化时全量并进 tagRefs → ObjectTagIndex 多值反查）。homepage 物化必填集 = build/homepage.py:_REQUIRED_ENTITY_FIELDS（含 geoTagRef；geoTagRefs 可选）。",
+  "description": "单 manifest 的实体结构化事实。entityRef 是冻结逻辑身份，不随地域、分类、名称或分区目录变更；显式 geographyMode 决定地域适用性，geoTagRef 仅使用已核实的真实行政区层级。执行态头部可引用本事实约束，但发布包不得再保留 _entity.json。",
   "type": "object",
   "properties": {
-    "label": { "type": "string", "description": "实体显示名（与目录第三段 name 一致）" },
-    "domain": { "type": "string", "description": "实体领域（目录第一段），如 地点" },
-    "type": { "type": "string", "description": "主类型单值（目录第二段）= Entity/{domain} 树一级节点名，按裁决 6 优先级表判定，如 景区" },
+    "schema": {"type": "string"},
+    "entityId": {"type": "string", "minLength": 1},
+    "version": {"type": "integer", "minimum": 1},
+    "finalContentRef": {"const": "page.md"},
+    "assets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["assetId", "path", "sha256", "bytes", "mimeType", "sourceRefs"],
+        "properties": {
+          "assetId": {"type": "string", "minLength": 1},
+          "path": {"type": "string", "pattern": "^media/(?!.*(?:^|/)\\.\\.(?:/|$))[^/]+$"},
+          "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+          "bytes": {"type": "integer", "minimum": 1},
+          "mimeType": {"type": "string", "minLength": 1},
+          "sourceRefs": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "pattern": "^sources/[A-Za-z0-9_-]+/source\\.json$"}}
+        }
+      }
+    },
+    "label": { "type": "string", "minLength": 1, "description": "实体显示名称快照，不是身份键" },
+    "domain": { "type": "string", "minLength": 1, "description": "已冻结实体领域，如 地点" },
+    "type": { "type": "string", "minLength": 1, "description": "taxonomy 既有主类型路径，不依赖目录固定段数" },
     "executionId": { "type": "string", "description": "生成该对象的 execution id" },
-    "entityRef": { "type": "string", "description": "全路径引用 /entity/{domain}/{type}/{name}（唯一归一键，与目录路径同构）" },
+    "entityRef": { "type": "string", "pattern": "^/entity/", "description": "不随物理目录变更的 opaque 逻辑身份" },
+    "geographyMode": {"enum": ["administrative", "none"]},
     "summary": { "type": "string", "description": "事实摘要（源自底稿，不编造）" },
     "aliases": {
       "type": "array",
@@ -21,7 +41,7 @@
     },
     "geoTagRef": {
       "type": "string",
-      "description": "区县级主归属行政区标签（单值），必须是 Topic/地理/行政区 下的叶子"
+      "description": "已核实的主归属行政区标签；只证实到省或市时保留真实层级，不补造区县"
     },
     "geoTagRefs": {
       "type": "array",
@@ -38,7 +58,7 @@
       },
       "description": "可选：WGS84 点坐标（与 schema/governance/master_list.schema.json coordinates 同形状，来自主清单 leaf 透传）。entity-service homepage importer 据此写入 Homepage.location（2dsphere），驱动搜索 filters.near 与「附近」；缺坐标的实体不参与附近召回，禁止按行政区中心点或城市坐标推断"
     },
-    "sourceRefs": { "type": "array", "items": { "type": "string" }, "description": "来源单元引用（证据链回查）" },
+    "sourceRefs": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string" }, "description": "发布态只引用包内 sources/<unit>/source.json；执行态仍是冻结 source unit ref" },
     "sourceUrls": {
       "type": "array",
       "minItems": 1,
@@ -187,9 +207,26 @@
     "executionId",
     "entityRef",
     "tagRefs",
-    "geoTagRef",
     "primarySource",
     "sourceUrls",
     "sourceAttribution"
+  ],
+  "allOf": [
+    {
+      "if": {"properties": {"schema": {"const": "quwoquan_data.entity_object"}}, "required": ["schema"]},
+      "then": {
+        "required": ["entityId", "version", "geographyMode", "sourceRefs", "assets", "finalContentRef"],
+        "properties": {"sourceRefs": {"items": {"type": "string", "pattern": "^sources/[A-Za-z0-9_-]+/source\\.json$"}}},
+        "not": {"anyOf": [{"required": ["sourceCatalogRef"]}, {"required": ["rightsRef"]}]}
+      }
+    },
+    {
+      "if": {"properties": {"geographyMode": {"const": "administrative"}}, "required": ["geographyMode"]},
+      "then": {"required": ["geoTagRef"], "properties": {"geoTagRef": {"pattern": "^Topic/地理/行政区/.+"}}}
+    },
+    {
+      "if": {"properties": {"geographyMode": {"const": "none"}}, "required": ["geographyMode"]},
+      "then": {"not": {"anyOf": [{"required": ["geoTagRef"]}, {"required": ["geoTagRefs"]}]}}
+    }
   ]
 }

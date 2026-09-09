@@ -7,8 +7,6 @@ stackctl 命名空间符号一律经函数内延迟导入 `_stackctl` 属性访�
 
 `otp-read` 是规格允许的唯一人工 OTP 读取面（provider-adapter-conformance-suite
 L3）：手机号与 OTP 只写当前 `/dev/tty`，不进入 argv、命令 JSON、日志或 receipt。
-`--research-identity` 复用同一读取面，只是把手机号来源从交互隐藏输入换成
-当前 target 的 Research 白名单身份绑定，开发者可先起命令再在 App 发码。
 """
 
 from __future__ import annotations
@@ -22,7 +20,6 @@ import urllib.error
 from typing import Any
 
 DEFAULT_WAIT_SECONDS = 3.0
-RESEARCH_IDENTITY_DEFAULT_WAIT_SECONDS = 60.0
 MAX_WAIT_SECONDS = 300.0
 _TRANSIENT_POLL_INTERVAL_SECONDS = 0.5
 
@@ -41,21 +38,11 @@ def register_parser(
         required=True,
     )
     provider_debug_parser.add_argument(
-        "--research-identity",
-        action="store_true",
-        help=(
-            "使用当前 target 的 Research 白名单身份手机号，不再交互输入；"
-            "手机号与 OTP 只在当前 TTY 展示"
-        ),
-    )
-    provider_debug_parser.add_argument(
         "--wait-seconds",
         type=float,
         default=None,
         help=(
-            f"等待 OTP 出现的最长秒数（默认 {DEFAULT_WAIT_SECONDS:g}；"
-            f"--research-identity 默认 {RESEARCH_IDENTITY_DEFAULT_WAIT_SECONDS:g}，"
-            "便于先起命令再在 App 发码）"
+            f"等待 OTP 出现的最长秒数（默认 {DEFAULT_WAIT_SECONDS:g}）"
         ),
     )
 
@@ -73,11 +60,9 @@ def command_provider_debug(args: argparse.Namespace) -> dict[str, Any]:
             "summary": "provider-debug is GATE_BLOCK",
             "details": ["unsupported provider-debug action"],
         }
-    research_identity = bool(getattr(args, "research_identity", False))
     try:
         wait_seconds = resolve_wait_seconds(
             getattr(args, "wait_seconds", None),
-            research_identity=research_identity,
         )
     except ValueError as exc:
         return {
@@ -93,17 +78,9 @@ def command_provider_debug(args: argparse.Namespace) -> dict[str, Any]:
         }
     try:
         with open("/dev/tty", "w", encoding="utf-8") as tty:
-            if research_identity:
-                phone = _research_identity_phone(environment, target_name)
-                tty.write(f"Research phone ({target_name}): {phone}\n")
-                tty.write(
-                    f"Waiting up to {wait_seconds:g}s for the OTP; "
-                    "request the code in the App now.\n"
-                )
-            else:
-                phone = _stackctl._normalize_debug_phone(
-                    getpass.getpass("Phone (input is hidden): ")
-                )
+            phone = _stackctl._normalize_debug_phone(
+                getpass.getpass("Phone (input is hidden): ")
+            )
             tty.flush()
             protected_otp = _read_protected_otp(
                 _stackctl,
@@ -125,11 +102,6 @@ def command_provider_debug(args: argparse.Namespace) -> dict[str, Any]:
         f"target={target_name}",
         "OTP was not written to argv, reports, logs, or command output",
     ]
-    if research_identity:
-        details.append(
-            "recipient=research_identity_binding "
-            "(phone was displayed only on the current TTY)"
-        )
     return {
         "exitCode": 0,
         "summary": "protected OTP was displayed on the current TTY",
@@ -142,18 +114,10 @@ def command_provider_debug(args: argparse.Namespace) -> dict[str, Any]:
     }
 
 
-def resolve_wait_seconds(
-    raw: object,
-    *,
-    research_identity: bool,
-) -> float:
-    """Bound the OTP wait budget; unset falls back to the mode default."""
+def resolve_wait_seconds(raw: object) -> float:
+    """Bound the OTP wait budget; unset uses the public debug default."""
     if raw is None:
-        return (
-            RESEARCH_IDENTITY_DEFAULT_WAIT_SECONDS
-            if research_identity
-            else DEFAULT_WAIT_SECONDS
-        )
+        return DEFAULT_WAIT_SECONDS
     if isinstance(raw, bool):
         raise ValueError("--wait-seconds must be a positive number of seconds")
     try:
@@ -165,17 +129,6 @@ def resolve_wait_seconds(
             f"--wait-seconds must be within (0, {MAX_WAIT_SECONDS:g}] seconds"
         )
     return value
-
-
-def _research_identity_phone(environment: str, target_name: str) -> str:
-    # 经包属性访问，保持 research_identity 模块声明的测试 patch 锚点语义。
-    import quwoquan_ops.cli.lib.local_environment_auth as _auth
-
-    binding = _auth.load_local_research_identity_binding(
-        environment=environment,
-        target_name=target_name,
-    )
-    return _normalize_debug_phone(str(binding["phone"]))
 
 
 def _read_protected_otp(

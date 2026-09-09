@@ -40,11 +40,14 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
 
     pool_query = commands.add_parser(
         "pool-query",
-        help="只读列出 canonical publish 池中可入 cohort 的对象与排除原因（不做选择）",
+        help="只读列出 canonical 身份占位、资格及依赖：objects 含缺失依赖，occupied 不含；counts 只计 eligible（不做选择）",
     )
+    pool_query.add_argument("--target-ref", action="append", default=None, help="只读点名 canonical posts/ 或 entities/ 引用，可重复")
+    pool_query.add_argument("--candidate-file", help="只读候选 JSON：{candidates:[{objectRef,manifest}]}，不选择或批准对象")
     pool_query.add_argument("--publish-root")
     pool_query.add_argument("--json", dest="json_output", help="把完整结果写到该路径；stdout 只打印计数")
-    pool_query.set_defaults(handler=owner.handle_pool_query)
+    pool_query.set_defaults(handler=_load_pool_query)
+    _register_pool_cutover(commands)
 
     acceptance_lease = commands.add_parser(
         "acceptance-lease",
@@ -151,6 +154,88 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
         "--env", required=True, help="已应用空基线的目标环境，逗号分隔"
     )
     reset_canonical.set_defaults(handler=_load_reset_canonical)
+
+
+def _register_pool_cutover(commands) -> None:
+    parser = commands.add_parser("pool-cutover", help="显式全池盘点/预验/原子切换；不转换或批准对象，不自动恢复")
+    actions = parser.add_subparsers(dest="cutover_action", required=True)
+    from content.release.canonical.pool_cutover_inventory import register_parser as register_inventory
+    register_inventory(actions)
+    snapshot = actions.add_parser("snapshot", help="只读全部占位身份和 exact tree 摘要，stdout 不授予资格")
+    snapshot.add_argument("--publish-root", required=True)
+    snapshot.set_defaults(handler=_load_pool_cutover)
+    for action in ("dry-run", "activate", "inspect", "cleanup"):
+        command = actions.add_parser(action)
+        command.add_argument("--plan", required=True)
+        command.add_argument("--plan-digest", required=True)
+        if action != "inspect":
+            command.add_argument("--authorization", required=True, help="宿主单独确认的精确授权文件；CLI 不生成授权")
+            command.add_argument("--authorization-digest", required=True)
+        if action == "dry-run":
+            command.add_argument("--evidence-output", required=True, help="全新证据文件的绝对路径；不覆盖")
+        elif action == "activate":
+            command.add_argument("--dry-run-evidence", required=True)
+            command.add_argument("--dry-run-digest", required=True)
+        else:
+            command.add_argument("--intent", required=True)
+            command.add_argument("--intent-digest", required=True)
+        command.set_defaults(handler=_load_pool_cutover)
+
+
+def _cutover_result(args: argparse.Namespace) -> dict:
+    from pathlib import Path
+    from content.release.canonical import pool_cutover
+    if args.cutover_action == "snapshot":
+        return pool_cutover.snapshot_pool(Path(args.publish_root))
+    common = {"plan_path": Path(args.plan), "expected_plan_digest": args.plan_digest}
+    if args.cutover_action != "inspect":
+        common["authorization"] = {"ref": args.authorization, "digest": args.authorization_digest}
+    if args.cutover_action == "dry-run":
+        return pool_cutover.dry_run_pool_cutover(**common, evidence_path=Path(args.evidence_output))
+    if args.cutover_action == "activate":
+        return pool_cutover.activate_pool_cutover(**common, dry_run_evidence={"ref": args.dry_run_evidence, "digest": args.dry_run_digest})
+    common["intent"] = {"ref": args.intent, "digest": args.intent_digest}
+    if args.cutover_action == "inspect":
+        return pool_cutover.inspect_pool_cutover(**common)
+    return pool_cutover.cleanup_pool_cutover(**common)
+
+
+def _load_pool_cutover(args: argparse.Namespace) -> None:
+    import json
+    from content.release.canonical.object_transaction_contract import ObjectTransactionError
+    try:
+        result = _cutover_result(args)
+    except (ObjectTransactionError, OSError, ValueError) as error:
+        # JSON/文件错误也给 exact 诊断；保留下层已有 typed code，不吞提交后须 inspect 的结果。
+        code = str(error).split(":", 1)[0]
+        if not code.startswith("DATA."):
+            code = "DATA.CUTOVER.INPUT_INVALID"
+        print(json.dumps({"status": "blocked", "code": code, "message": str(error)}, ensure_ascii=False))
+        raise SystemExit(1) from error
+    print(json.dumps(result, ensure_ascii=False, sort_keys=True))
+
+
+def _load_pool_query(args: argparse.Namespace) -> None:
+    import json
+    from pathlib import Path
+    from content.release.canonical.pool_query import query_pool
+    from core.paths import PUBLISH_ROOT
+
+    candidates = []
+    if args.candidate_file:
+        candidates = json.loads(Path(args.candidate_file).read_text(encoding="utf-8"))["candidates"]
+    result = query_pool(Path(args.publish_root or PUBLISH_ROOT), target_refs=args.target_ref, candidates=candidates)
+    payload = json.dumps(result, ensure_ascii=False, indent=1, sort_keys=True) + "\n"
+    if args.json_output:
+        target = Path(args.json_output).expanduser().resolve()
+        publish_root = Path(result["publishRoot"])
+        if target == publish_root or publish_root in target.parents:
+            raise ValueError("pool-query output must not mutate canonical publish")
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(payload, encoding="utf-8")
+        print(json.dumps({"schema": result["schema"], "counts": result["counts"], "excludedCount": len(result["excluded"]), "output": str(target)}, ensure_ascii=False))
+    else:
+        print(payload, end="")
 
 
 def _load_object_transaction_rollback(args: argparse.Namespace) -> None:

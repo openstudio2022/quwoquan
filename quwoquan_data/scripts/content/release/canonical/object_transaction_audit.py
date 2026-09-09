@@ -143,6 +143,10 @@ def _document_closure_issues(
     issues: list[dict[str, str]] = []
     referenced_media: set[str] = set()
     referenced_creators: set[str] = set()
+    if rel.startswith(("posts/", "entities/")) and rel.endswith("/manifest.json"):
+        for field in ("assetRefsRef", "creatorRefsRef", "tagRefsRef"):
+            if field in payload:
+                issues.append({"code": "retired_manifest_sidecar_pointer", "ref": f"{rel}:{field}"})
     for object_key in _collect_object_keys(payload):
         referenced_media.add(object_key)
         try:
@@ -203,8 +207,11 @@ def validate_publish_delta(
         # A body nested inside an object — `posts/<ref>/assets/cover.jpg` — has a
         # canonical root, so the root check alone would let it through. Judging
         # the whole path is what closes that gap.
-        if not is_canonical_document(relative):
-            issues.append({"code": "media_body_in_publish", "ref": relative.as_posix()})
+        from content.release.canonical.object_transaction_contract import canonical_destination
+        try:
+            canonical_destination(relative.as_posix(), label="delta.destination")
+        except ObjectTransactionError as exc:
+            issues.append({"code": "noncanonical_file", "ref": str(exc)})
             continue
         if raw.get("operation") == "delete":
             deleted.add(relative.as_posix())
@@ -224,7 +231,7 @@ def validate_publish_delta(
         return _media_holding_resolved(object_key)
 
     def creator_refs_of(rel: str) -> Any:
-        sibling = (Path(rel).parent / "creator.refs.json").as_posix()
+        sibling = (Path(rel).parent / "manifest.json").as_posix()
         blob = candidates.get(sibling)
         if blob is None and sibling not in deleted:
             path = publish_root / sibling
@@ -232,7 +239,7 @@ def validate_publish_delta(
         if blob is None:
             return None
         try:
-            return _read_json(blob).get("creatorRefs")
+            return [_read_json(blob).get("creatorProfileId")]
         except ObjectTransactionError:
             return None
 
@@ -293,31 +300,21 @@ def validate_publish_invariants(root: Path) -> dict[str, Any]:
     referenced_media: set[str] = set()
     referenced_creators: set[str] = set()
     referenced_tags: set[str] = set()
-    if root.is_dir():
-        for child in root.iterdir():
-            if child.name not in ALLOWED_CANONICAL_ROOTS:
-                issues.append({"code": "noncanonical_root", "ref": child.name})
-    for path in _files(root):
-        relative = path.relative_to(root)
-        if relative.parts[0] in ALLOWED_CANONICAL_ROOTS and not is_canonical_document(
-            relative
-        ):
-            issues.append(
-                {"code": "media_body_in_publish", "ref": relative.as_posix()}
-            )
+    from core.publish_repository import canonical_files
+    paths = canonical_files(root)
 
     def cas_resolved(object_key: str) -> bool:
         return _media_holding_resolved(object_key)
 
     def creator_refs_of(rel: str) -> Any:
         path = root / rel
-        creator_refs_path = path.parent / "creator.refs.json"
-        if not creator_refs_path.is_file():
+        manifest_path = path.parent / "manifest.json"
+        if not manifest_path.is_file():
             return None
-        return _read_json(creator_refs_path).get("creatorRefs")
+        return [_read_json(manifest_path).get("creatorProfileId")]
 
-    for path in _files(root):
-        if path.suffix != ".json":
+    for path in paths:
+        if path.suffix != ".json" or {"sources", "records"} & set(path.relative_to(root).parts):
             continue
         rel = path.relative_to(root).as_posix()
         try:

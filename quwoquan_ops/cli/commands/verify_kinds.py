@@ -11,7 +11,7 @@ distribution / content-delivery）。
   service-scoped profile 执行；
 - `_official_distribution_root` / `_inspect_distribution_for_target` /
   `_command_verify_distribution`：Web/PWA 与 Android 官方分发检查；
-- `_command_verify_content_delivery`：immutable Research 内容交付闭环；
+- `_command_verify_content_delivery`：immutable production 内容交付闭环；
 - `_service_verify_report_action`：service verify 的报告目录动作名。
 
 `_read_prometheus_slo` / `_SloSamplesInsufficient` / `_run_provider_readiness_preflight`
@@ -618,7 +618,7 @@ def _command_verify_distribution(args: argparse.Namespace) -> dict[str, Any]:
 
 
 def _command_verify_content_delivery(args: argparse.Namespace) -> dict[str, Any]:
-    """Verify only the immutable Research content delivery closure."""
+    """Verify only the immutable production content delivery closure."""
     import quwoquan_ops.cli.stackctl as _stackctl
 
     environment = str(getattr(args, "env", "") or "").strip()

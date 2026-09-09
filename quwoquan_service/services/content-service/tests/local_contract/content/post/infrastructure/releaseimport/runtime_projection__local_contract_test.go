@@ -21,6 +21,23 @@ import (
 	releaseimport "quwoquan_service/services/content-service/internal/content/post/infrastructure/releaseimport"
 )
 
+// spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-002
+func TestImportPoolCountsDoesNotPartitionByRightsRecord(t *testing.T) {
+	counts := releaseimport.ImportPoolCounts([]releaseimport.PostDoc{
+		{ContentType: "article", Admission: releaseimport.ContentAdmission{UsageScope: "research"}},
+		{ContentType: "image", Admission: releaseimport.ContentAdmission{UsageScope: "commercial"}},
+		{ContentType: "video", Admission: releaseimport.ContentAdmission{UsageScope: "production"}},
+	}, 2)
+	if counts["acceptedCount"] != 3 || counts["articleLoaded"] != 1 || counts["imageLoaded"] != 1 || counts["videoLoaded"] != 1 || counts["entitiesLoaded"] != 2 {
+		t.Fatalf("counts=%+v", counts)
+	}
+	for _, field := range []string{"productionLoaded", "researchLoaded", "commercialLoaded"} {
+		if _, exists := counts[field]; exists {
+			t.Fatalf("category count returned: %s", field)
+		}
+	}
+}
+
 func TestReplayRepairOptionsAreExplicitAndCountBound(t *testing.T) {
 	for _, tc := range []struct {
 		name          string
@@ -103,13 +120,13 @@ func TestReplayRepairRequiresContentIDDerivedPostBinding(
 		Admission: releaseimport.ContentAdmission{
 			ProcessResult: "completed",
 			QualityResult: "passed",
-			UsageScope:    "research",
+			UsageScope:    "production",
 		},
 	}
 	binding := releaseimport.ImportedPostBinding{
 		PostRef:   "article/体验/发布身份/1",
 		PostID:    releaseimport.RuntimePostID(post.ContentID),
-		ContentID: post.ContentID, ContentVersion: 1, UsageScope: "research",
+		ContentID: post.ContentID, ContentVersion: 1, UsageScope: "production",
 		ContentType: "article", AuthorID: post.AuthorID,
 	}
 	if err := releaseimport.ValidateImportedPostReplayBindings(
@@ -134,13 +151,13 @@ func TestReplaySourceImportReportIsStrictAndCountBound(t *testing.T) {
 		ContentVersion: 2, ContentType: "video", ContentIdentity: "work",
 		AuthorID: "builtin_video_author",
 		Admission: releaseimport.ContentAdmission{
-			ProcessResult: "completed", QualityResult: "passed", UsageScope: "research",
+			ProcessResult: "completed", QualityResult: "passed", UsageScope: "production",
 		},
 	}
 	binding := releaseimport.ImportedPostBinding{
 		PostRef:   "video/体验/prior-video/1",
 		PostID:    releaseimport.RuntimePostID(post.ContentID),
-		ContentID: post.ContentID, ContentVersion: 2, UsageScope: "research",
+		ContentID: post.ContentID, ContentVersion: 2, UsageScope: "production",
 		ContentType: "video", AuthorID: post.AuthorID,
 	}
 	digest := "sha256:" + strings.Repeat("a", 64)
@@ -197,7 +214,7 @@ func TestBuildImportedPostLifecycleEventsUsesOneDurablePostFactStream(t *testing
 		Admission: releaseimport.ContentAdmission{
 			ProcessResult: "completed",
 			QualityResult: "passed",
-			UsageScope:    "research",
+			UsageScope:    "production",
 		},
 		ContentType:     "video",
 		ContentIdentity: "work",
@@ -253,7 +270,7 @@ func TestBuildImportedPostLifecycleEventsUsesOneDurablePostFactStream(t *testing
 		t.Fatalf("published event lacks immutable release binding: %#v", payload)
 	}
 	if payload["contentId"] != "travel_video_candidate" ||
-		payload["contentVersion"] != float64(2) || payload["usageScope"] != "research" {
+		payload["contentVersion"] != float64(2) || payload["usageScope"] != "production" {
 		t.Fatalf("published event lacks content-pool binding: %#v", payload)
 	}
 	deleted := events[byType["PostDeleted"]]

@@ -134,13 +134,13 @@ def publish_object(execution_id: str, target_ref: str) -> dict[str, Any]:
         root = execution_root(execution_id)
         package_root = root / "evidence/object-transactions" / transaction_id
         with canonical_publish_lock(PUBLISH_ROOT):
-            build_entity_object_transaction_package(
+            package = build_entity_object_transaction_package(
                 execution_root=root,
                 object_ref=f"/entity/{canonical_ref}",
                 transaction_id=transaction_id,
                 package_root=package_root,
             )
-            canonical_object = PUBLISH_ROOT / "entities" / canonical_ref
+            canonical_object = PUBLISH_ROOT / package["target"]["objectPath"]
             if canonical_object.is_dir():
                 if tree_integrity_stats(canonical_object)["merkleRoot"] != tree_integrity_stats(package_root / "object")["merkleRoot"]:
                     raise ObjectTransactionError("completed transaction canonical object drift")
@@ -165,20 +165,21 @@ def publish_object(execution_id: str, target_ref: str) -> dict[str, Any]:
                 admission = "appended"
         result = {
             "transactionId": transaction_id,
-            "canonicalObjectRef": f"entities/{canonical_ref}",
+            "canonicalObjectRef": "entities/" + str(package["target"]["objectRef"]),
+            "canonicalObjectPath": str(package["target"]["objectPath"]),
             "canonicalObjectSha256": str(tree_integrity_stats(canonical_object)["merkleRoot"]),
             "objectClosureDigest": str(applied.get("objectClosureDigest") or ""),
             "admissionResult": admission,
         }
     canonical_object_ref = str(result["canonicalObjectRef"])
-    canonical_object = PUBLISH_ROOT / canonical_object_ref
+    canonical_object = PUBLISH_ROOT / str(result["canonicalObjectPath"])
     from content.release.canonical.content_pool_record import latest_pool_record
     pool_type = "homepage" if kind == "entity" else "content"
     record = latest_pool_record(canonical_object, pool_type)
     if not isinstance(record, dict):
         raise ObjectTransactionError("published object lacks canonical pool record")
     pool_record_ref = (
-        f"{canonical_object_ref}/_pool/versions/{int(record['recordSequence'])}.json"
+        f"{result['canonicalObjectPath']}/records/{int(record['recordSequence'])}.json"
     )
     result.update(
         packageRef=f"evidence/object-transactions/{result['transactionId']}/package.json",

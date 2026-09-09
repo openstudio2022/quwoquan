@@ -1,4 +1,4 @@
-"""The release policy selects one minimal capability slice, never all environments.
+"""发布策略按显式环境配置保留全量能力，验证只消费选中的目标环境。
 
 由 1000 行硬顶拆分：本文件保留 readiness policy 与 health/verify 探针拓扑组；
 readiness 命令探针组见 test_content_release_readiness__command_probes__reliability__local_contract_test.py；
@@ -187,13 +187,14 @@ def test_content_consumer_feed_health_uses_canonical_homepage_route__local_contr
     }
 
 
-def test_content_commercial_health_adds_product_ops_without_full_plane__local_contract() -> (
+def test_content_production_health_adds_product_ops_without_full_plane__local_contract() -> (
     None
 ):
     topology = stackctl.load_environment_topology()
     checks = stackctl._health_checks_for_target(
         topology,
         "alpha-local",
+        # workload 是部署能力切片，不是 Data releaseClass；沿用其 canonical 名称。
         "content-commercial",
         workload="content-commercial",
     )
@@ -214,7 +215,7 @@ def test_content_commercial_health_adds_product_ops_without_full_plane__local_co
     assert "integration-service" not in names
 
 
-def test_content_consumer_nonempty_feed_probe_skips_commercial_checks__local_contract(
+def test_content_consumer_nonempty_feed_probe_skips_production_checks__local_contract(
     monkeypatch,
     tmp_path: Path,
 ) -> None:
@@ -226,7 +227,6 @@ def test_content_consumer_nonempty_feed_probe_skips_commercial_checks__local_con
         report_dir,
         *,
         require_non_empty_content_feed=False,
-        research_anonymous_convergence=False,
         release_post_expectations=None,
         release_readiness_path=None,
         only_checks=(),
@@ -235,7 +235,6 @@ def test_content_consumer_nonempty_feed_probe_skips_commercial_checks__local_con
     ):
         captured["only_checks"] = only_checks
         captured["require_non_empty_content_feed"] = require_non_empty_content_feed
-        captured["research_anonymous_convergence"] = research_anonymous_convergence
         return (
             {"name": probe_name, "ok": True, "scope": "content-consumer"},
             "ok",
@@ -254,7 +253,6 @@ def test_content_consumer_nonempty_feed_probe_skips_commercial_checks__local_con
     assert findings == []
     assert statuses
     assert captured["require_non_empty_content_feed"] is True
-    assert captured["research_anonymous_convergence"] is False
     assert captured["only_checks"] == (
         "content_feed",
         "video_book_feed",

@@ -41,6 +41,8 @@ from content.release.canonical.object_transaction_lock import (
     canonical_publish_serialized,
 )
 from core.paths import canonical_publish_sidecar_root
+from core.publish_repository import canonical_files
+from core.publish_layout import ObjectPlacement, allocate_object_path, load_layout_policy, logical_object_ref
 
 INVENTORY_SCHEMA = "quwoquan_data.canonical_publish_inventory"
 INVENTORY_ALGORITHM = "sha256-path-blob-xor-accumulator-v2"
@@ -207,7 +209,7 @@ def _bootstrap_inventory(publish_root: Path, path: Path) -> dict[str, Any]:
             _digest_file(item),
             item.stat().st_size,
         )
-        for item in _files(publish_root)
+        for item in canonical_files(publish_root)
     ]
     accumulator = _EMPTY_ACCUMULATOR
     for row in rows:
@@ -494,6 +496,10 @@ def write_inventory(publish_root: Path, document: Mapping[str, Any]) -> None:
                         "bytes=excluded.bytes, leaf_hash=excluded.leaf_hash",
                         (row["path"], row["sha256"], row["bytes"], row["leafHash"]),
                     )
+            if connection.execute("SELECT name FROM sqlite_master WHERE name='object_placements'").fetchone():
+                roots = {str(mutation["path"]).removesuffix("/manifest.json") for mutation in mutations if str(mutation["path"]).endswith("/manifest.json") and str(mutation["path"]).startswith(("entities/", "posts/"))}
+                for relative in sorted(roots):
+                    _sync_placement(connection, publish_root, relative)
             sync_image_index_delta(
                 connection,
                 publish_root=publish_root,
@@ -580,6 +586,47 @@ def validate_delta_materialization(
 
 
 assert_canonical_video_unique = canonical_video_inventory.assert_canonical_video_unique
+
+
+def _placement_schema(connection: sqlite3.Connection) -> bool:
+    exists = connection.execute("SELECT name FROM sqlite_master WHERE name='object_placements'").fetchone()
+    connection.execute("CREATE TABLE IF NOT EXISTS object_placements (path TEXT PRIMARY KEY, kind TEXT NOT NULL, object_id TEXT NOT NULL, version INTEGER NOT NULL, logical_ref TEXT NOT NULL, logical_bytes INTEGER NOT NULL)")
+    connection.execute("CREATE UNIQUE INDEX IF NOT EXISTS placement_identity ON object_placements(kind, object_id, version)")
+    connection.execute("CREATE INDEX IF NOT EXISTS placement_ref ON object_placements(kind, logical_ref, version)")
+    return bool(exists)
+
+
+def _sync_placement(connection: sqlite3.Connection, publish_root: Path, relative: str) -> None:
+    from content.release.canonical.object_transaction_contract import _read_json
+    root = publish_root / relative
+    connection.execute("DELETE FROM object_placements WHERE path=?", (relative,))
+    manifest_path = root / "manifest.json"
+    if not manifest_path.is_file():
+        return
+    manifest = _read_json(manifest_path)
+    kind = Path(relative).parts[0]
+    identity = manifest.get("entityId" if kind == "entities" else "contentId")
+    if not identity or type(manifest.get("version")) is not int:
+        raise ObjectTransactionError("DATA.POOL.IDENTITY_INVALID")
+    ref = logical_object_ref(manifest, kind)
+    size = connection.execute("SELECT COALESCE(SUM(bytes),0) FROM entries WHERE substr(path,1,?)=?", (len(relative) + 1, relative + "/")).fetchone()[0]
+    connection.execute("INSERT INTO object_placements VALUES (?,?,?,?,?,?)", (relative, kind, identity, manifest["version"], ref, size))
+
+
+def object_placements(publish_root: Path, *, kind: str | None = None) -> tuple[ObjectPlacement, ...]:
+    """复用可重建 SQLite；只在首次建立 placement 表时扫描已索引 manifest。"""
+    load_or_bootstrap_inventory(publish_root)
+    with _connect(canonical_inventory_path(publish_root)) as connection:
+        if not _placement_schema(connection):
+            paths = connection.execute("SELECT path FROM entries WHERE path LIKE '%/manifest.json' AND (path LIKE 'entities/%' OR path LIKE 'posts/%')").fetchall()
+            for row in paths:
+                _sync_placement(connection, publish_root, str(row[0]).removesuffix("/manifest.json"))
+        rows = connection.execute("SELECT path, object_id, version, logical_ref, logical_bytes FROM object_placements" + (" WHERE kind=?" if kind else "") + " ORDER BY path", (kind,) if kind else ()).fetchall()
+    return tuple(ObjectPlacement(str(row[0]), str(row[1]), int(row[2]), str(row[3]), int(row[4])) for row in rows)
+
+
+def allocate_package_path(publish_root: Path, manifest: Mapping[str, Any], kind: str, object_root: Path) -> str:
+    return allocate_object_path(manifest, kind, object_placements(publish_root, kind=kind), load_layout_policy(), logical_bytes=sum(path.stat().st_size for path in _files(object_root)))
 
 
 __all__ = [

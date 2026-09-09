@@ -98,7 +98,6 @@ class LocalEnvironmentAuthBoundaryTest(unittest.TestCase):
                 local_environment_auth.load_local_environment_auth(
                     "alpha", "alpha-local", deployment_work_root=work_root,
                 )
-
     def test_read_only_loader_never_creates_missing_auth_material(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             secret_path = Path(directory) / "alpha-local/secrets/auth.env"

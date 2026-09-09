@@ -139,10 +139,7 @@ def build_transaction_delta(
     sources: dict[str, tuple[Path, bool]] = {}
     try:
         object_root = Path(package["objectRoot"])
-        object_prefix = (
-            Path(str(package["objectKind"]))
-            / _safe_rel(str(package["objectRef"]), label="objectRef")
-        )
+        object_prefix = _safe_rel(str(package["objectPath"]), label="objectPath")
         # This loop is where a transaction decides what canonical publish will
         # own. A package carries both the documents that describe the object and
         # the bodies those documents point at; only the former become canonical
@@ -152,9 +149,8 @@ def build_transaction_delta(
         # after this transaction's run root is reclaimed.
         for source in _files(object_root):
             relative = source.relative_to(object_root)
-            if not is_canonical_document(relative):
+            if relative.parts[0] == "media":
                 _own_media_body(source, sha256=file_sha256(source))
-                continue
             _register_source(
                 sources,
                 destination=object_prefix / relative,
@@ -396,6 +392,7 @@ def apply_forward_delta(
     run_root: Path,
     manifest: Mapping[str, Any],
 ) -> list[dict[str, Any]]:
+    _preflight_forward_manifests(publish_root=publish_root, run_root=run_root, manifest=manifest)
     applied: list[dict[str, Any]] = []
     try:
         for entry in _ordered_entries(manifest, reverse=False):
@@ -424,12 +421,38 @@ def apply_forward_delta(
             applied.append(entry)
         return applied
     except BaseException:
-        revert_applied_delta(
-            publish_root=publish_root,
-            run_root=run_root,
-            entries=applied,
-        )
+        revert_applied_delta(publish_root=publish_root, run_root=run_root, entries=applied)
         raise
+
+
+def _preflight_forward_manifests(*, publish_root: Path, run_root: Path, manifest: Mapping[str, Any]) -> None:
+    # 每次 apply/replay 在第一笔 canonical 写入前重验，不能依赖早先只读预检。
+    from content.release.canonical.pool_query import query_pool
+    from core.publish_layout import logical_object_ref
+
+    candidates = [
+        {"objectRef": str(entry["destination"]).split("/", 1)[0] + "/" + logical_object_ref(_read_json(run_root / _safe_rel(str(entry["blobRef"]), label="blobRef")), str(entry["destination"]).split("/", 1)[0]),
+         "manifest": _read_json(run_root / _safe_rel(str(entry["blobRef"]), label="blobRef"))}
+        for entry in manifest.get("entries") or []
+        if entry.get("operation") != "delete"
+        and str(entry.get("destination") or "").startswith(("posts/", "entities/"))
+        and str(entry.get("destination") or "").endswith("/manifest.json")
+        and "/_pool/" not in str(entry["destination"])
+    ]
+    if not candidates:
+        return
+    result = query_pool(publish_root, target_refs=(), candidates=candidates)
+    for candidate in result["preflight"]:
+        if candidate["imageConflicts"]:
+            first = candidate["imageConflicts"][0]
+            raise ObjectTransactionError(
+                f"{first['code']}: {first['detail']}: {first['objectRef']}: {first['dependencyRefs']}"
+            )
+        if candidate["dependencyIssues"]:
+            first = candidate["dependencyIssues"][0]
+            raise ObjectTransactionError(
+                f"DATA.POOL.REFERENCE_MISSING: {candidate['objectRef']}: {first['objectRef']}: {first['deepestCode']}"
+            )
 
 
 def _prune_empty_parents(path: Path, *, root: Path) -> None:

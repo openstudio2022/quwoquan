@@ -327,7 +327,7 @@ class VideoPlaybackCanaryContractTest(unittest.TestCase):
             post_tag_path = (
                 root
                 / f"data/releases/{release_id}/payload/objects/posts/"
-                "video/travel/canary/1/tag.refs.json"
+                "video/travel/canary/1/manifest.json"
             )
             import_path.parent.mkdir(parents=True)
             media_path.parent.mkdir(parents=True)
@@ -335,7 +335,7 @@ class VideoPlaybackCanaryContractTest(unittest.TestCase):
             post_tag_path.parent.mkdir(parents=True)
             import_report = {
                 "schema": "quwoquan.content_import_report",
-                "status": "imported",
+                "status": "staged",
                 "environment": "gamma",
                 "releaseId": release_id,
                 "sourceOwner": "qwq_data",
@@ -365,6 +365,10 @@ class VideoPlaybackCanaryContractTest(unittest.TestCase):
             post_tag_path.write_text(
                 json.dumps({"tagRefs": ["tag/travel"]}),
                 encoding="utf-8",
+            )
+            # 旧 sidecar 故意冲突，只有 manifest 内标签参与发布视频身份。
+            post_tag_path.with_name("tag.refs.json").write_text(
+                json.dumps({"tagRefs": ["tag/retired-sidecar"]}), encoding="utf-8"
             )
             media_manifest = {
                 "schema": "quwoquan_data.release_media_manifest",
@@ -432,6 +436,14 @@ class VideoPlaybackCanaryContractTest(unittest.TestCase):
                     receipt_path,
                     expected_environment="gamma",
                 )
+                post_tag_path.rename(post_tag_path.with_name("manifest.saved.json"))
+                with self.assertRaisesRegex(
+                    delivery_contract.ReleaseVideoDeliveryError, "release post tag refs"
+                ):
+                    delivery_contract.load_release_video_binding(
+                        receipt_path, expected_environment="gamma"
+                    )
+                post_tag_path.with_name("manifest.saved.json").rename(post_tag_path)
 
             import_report["status"] = "active"
             import_path.write_text(json.dumps(import_report), encoding="utf-8")

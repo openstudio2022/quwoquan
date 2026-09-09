@@ -1,4 +1,4 @@
-query ContentPostDetailBase($postId: ID!) {
+query ContentPostDetailBase($postId: ID!, $modificationsFirst: Int! = 4) {
   contentPostDetailBase(postId: $postId) {
     postId
     contentType
@@ -27,7 +27,9 @@ query ContentPostDetailBase($postId: ID!) {
       publicationAdmission
       authorizationProofUrl
       termsUrl
-      riskAcceptanceId
+      derivedModifications(first: $modificationsFirst)
+      watermarkKind
+      watermarkNote
       watermarkStatus
       audioRightsStatus
       modelReleaseStatus

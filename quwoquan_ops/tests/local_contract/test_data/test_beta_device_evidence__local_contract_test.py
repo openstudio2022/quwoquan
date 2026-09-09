@@ -264,6 +264,7 @@ def test_stack_bundle_rejects_source_built_or_destructively_repaired_runtime() -
         ("releaseInputClassification", "research_inputs"),
         ("releaseInputClassification", "commercial_inputs"),
         ("releaseInputClassification", "mixed_inputs"),
+        ("releaseInputClassification", ""),
         ("releaseClass", "production"),
         ("productLifecycleState", "production"),
     ],
@@ -282,7 +283,7 @@ def test_stack_bundle_rejects_retired_release_classification(
         reports[phase].write_text(json.dumps(evidence), encoding="utf-8")
         with patch(
             "quwoquan_ops.ci.render_beta_device_evidence.validate_historical_release_snapshot"
-        ), pytest.raises(ValueError):
+        ), pytest.raises(ValueError, match="retired release classification"):
             render_stack_bundle(
                 manifest=_manifest(),
                 host_digest=HOST_DIGEST,

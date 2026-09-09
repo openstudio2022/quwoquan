@@ -10,8 +10,7 @@
     "containsUnverifiedAssets",
     "rightsStatusCounts",
     "authorizationRequiredAssetIds",
-    "researchAcceptedCount",
-    "commercialAcceptedCount",
+    "acceptedCount",
     "canonicalMerkle",
     "executionIds",
     "sourceDigests"
@@ -91,11 +90,7 @@
         "minLength": 1
       }
     },
-    "researchAcceptedCount": {
-      "type": "integer",
-      "minimum": 0
-    },
-    "commercialAcceptedCount": {
+    "acceptedCount": {
       "type": "integer",
       "minimum": 0
     },

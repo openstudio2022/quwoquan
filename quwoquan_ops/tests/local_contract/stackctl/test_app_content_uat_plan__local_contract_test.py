@@ -68,7 +68,6 @@ def _readiness(
         }.get(query["name"], posts)
     return _with_checksum(readiness)
 
-
 def _contents() -> list[dict[str, object]]:
     return [
         {
@@ -379,6 +378,19 @@ def _write_release_fixture(output_root: Path, *, release_id: str) -> tuple[Path,
     return payload, header
 
 
+@pytest.mark.parametrize("release_class", ["research", "commercial"])
+def test_sample_derivation_rejects_retired_release_before_writing(tmp_path: Path, release_class: str) -> None:
+    """spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-044"""
+    payload, header = _write_release_fixture(tmp_path, release_id="release-retired")
+    header["releaseClass"] = release_class
+    header["productLifecycleState"] = release_class
+    original = (payload / "release.json").read_bytes()
+    with pytest.raises(ValueError, match="Additional properties are not allowed"):
+        load_release_uat_sample_plan(release_root=payload, release_header=header)
+    assert not (payload.parent / "uat").exists()
+    assert (payload / "release.json").read_bytes() == original
+
+
 def test_load_release_uat_sample_plan__derives_create_once_from_release_bytes__local_contract(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -484,3 +496,37 @@ def test_uat_plan__research_categories_are_rejected__local_contract(field: str) 
     readiness[field] = "research"
     with pytest.raises(ValueError, match="Additional properties are not allowed"):
         _build(readiness=_with_checksum(readiness))
+
+
+@pytest.mark.parametrize("mutation", ["missing", "duplicate", "empty_query"])
+def test_uat_plan__rejects_retired_premium_feed_fallback__local_contract(mutation: str) -> None:
+    """spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-044"""
+    readiness = _readiness()
+    queries = readiness["feedQueries"]
+    premium = next(row for row in queries if row["name"] == "premium_stream")
+    if mutation == "missing":
+        queries.remove(premium)
+    elif mutation == "duplicate":
+        queries.append(dict(premium))
+    else:
+        premium["query"] = ""
+    with pytest.raises(ValueError, match="schema|premium_stream exact"):
+        _build(readiness=readiness)
+
+
+def test_uat_plan__rejects_retired_source_identity_shape__local_contract() -> None:
+    """spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-044"""
+    readiness = _readiness()
+    header = _header()
+    for document in (readiness, header):
+        document.pop("sourceIdentities")
+        for field in ("sourceRevision", "sourceDigest", "entityCatalogDigest"):
+            document[field] = DIGESTS["source"]
+    with pytest.raises(ValueError, match="schema|source identity set drifted"):
+        build_app_content_uat_plan(
+            readiness,
+            release_header=header,
+            release_uat_sample_plan=_sample_plan(),
+            release_uat_sample_plan_digest=_canonical_digest(_sample_plan()),
+            release_payload_sha256=DIGESTS["manifest"],
+        )

@@ -205,11 +205,7 @@ def admit_library_bytes(
 
 
 def carried_media_entry(sha256: str) -> Path | None:
-    """The version-controlled body carried for one digest, whatever container it took.
-
-    Absent means no body is carried for that digest, which is a legitimate state a
-    caller decides about — not a failure of this lookup.
-    """
+    """查询仓外摘要备份的位置；此处不证明其字节完整，也不创建或修复文件。"""
 
     digest = normalize_library_digest(sha256)
     root = carried_media_root()
@@ -238,6 +234,8 @@ def carry_media_reference(source: Path, *, sha256: str, suffix: str = "") -> Pat
     digest = normalize_library_digest(sha256)
     carried = carried_media_entry(digest)
     if carried is not None:
+        if carried.is_symlink() or file_sha256(carried) != digest:
+            raise MediaHoldingError(f"carried media drift: {digest}")
         return carried
     extension = (suffix or Path(source).suffix or "").lstrip(".").lower() or "bin"
     entry = carried_media_root() / f"{digest}.{extension}"
@@ -250,7 +248,18 @@ def carry_media_reference(source: Path, *, sha256: str, suffix: str = "") -> Pat
             raise MediaHoldingError(
                 f"carried media drift: declared={digest} observed={observed}"
             )
-        staged.replace(entry)
+        with staged.open("rb") as handle:
+            os.fsync(handle.fileno())
+        try:
+            os.link(staged, entry)
+        except FileExistsError:
+            if entry.is_symlink() or file_sha256(entry) != digest:
+                raise MediaHoldingError(f"carried media drift: {digest}")
+        directory_fd = os.open(entry.parent, os.O_RDONLY | os.O_DIRECTORY)
+        try:
+            os.fsync(directory_fd)
+        finally:
+            os.close(directory_fd)
     finally:
         staged.unlink(missing_ok=True)
     return entry

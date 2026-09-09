@@ -1,5 +1,5 @@
 schema: quwoquan_data.professional_image_discovery_catalog
-catalogRevision: research-professional-image-v3
+catalogRevision: source-professional-image-v3
 providerOrder: [pinterest, tuchong, wikimedia_commons, openverse]
 supportedAxes: [entity, category, season, style, viewpoint, popularity]
 providers:

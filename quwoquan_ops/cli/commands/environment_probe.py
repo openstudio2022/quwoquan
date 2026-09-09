@@ -509,14 +509,10 @@ def _run_environment_integration_probe(
     report_dir: Path,
     *,
     require_non_empty_content_feed: bool = False,
-    research_anonymous_convergence: bool = False,
-    research_consumer_token: str = "",
-    research_consumer_attestation: str = "",
     release_post_expectations: dict[str, set[str]] | None = None,
     release_search_canaries: Sequence[Mapping[str, str]] = (),
     release_samples: Sequence[Mapping[str, Any]] = (),
     release_creator_profiles: Sequence[Mapping[str, str]] = (),
-    release_signed_media: Sequence[Mapping[str, Any]] = (),
     release_readiness_path: Path | None = None,
     video_page_size: int = 1,
     only_checks: tuple[str, ...] = (),
@@ -539,21 +535,8 @@ def _run_environment_integration_probe(
         "--report",
         str(report_file),
     ]
-    if bool(research_consumer_token) != bool(research_consumer_attestation):
-        raise ValueError(
-            "research consumer bearer and attestation must be supplied together"
-        )
-    if research_consumer_token and research_anonymous_convergence:
-        raise ValueError(
-            "research consumer and anonymous convergence identities conflict"
-        )
-    if require_non_empty_content_feed or research_consumer_token:
+    if require_non_empty_content_feed:
         argv.append("--require-non-empty-content-feed")
-    if research_anonymous_convergence:
-        argv.append("--research-anonymous-convergence")
-    if research_consumer_token:
-        # research consumer 凭证只经环境变量注入探针子进程，不落 argv。
-        argv.append("--research-consumer-readback")
     for check_name in only_checks:
         argv.extend(["--only-check", check_name])
     expectation_flags = {
@@ -605,18 +588,6 @@ def _run_environment_integration_probe(
                 ),
             ]
         )
-    for asset in release_signed_media:
-        argv.extend(
-            [
-                "--release-signed-media",
-                json.dumps(
-                    dict(asset),
-                    ensure_ascii=False,
-                    sort_keys=True,
-                    separators=(",", ":"),
-                ),
-            ]
-        )
     if video_page_size != 1:
         argv.extend(["--video-page-size", str(video_page_size)])
     if target_name == "prod-hosted":
@@ -652,7 +623,7 @@ def _run_environment_integration_probe(
                 media_image,
             ]
         )
-    token = research_consumer_token or _stackctl._resolve_test_auth_token(env_name)
+    token = _stackctl._resolve_test_auth_token(env_name)
     temporary_actor: Any | None = None
     temporary_actor_instance_id = ""
     public_release_checks = {
@@ -718,8 +689,6 @@ def _run_environment_integration_probe(
             probe_env["BETA_TEST_AUTH_TOKEN"] = token
         elif env_name == "prod":
             probe_env["PROD_TEST_AUTH_TOKEN"] = token
-    if research_consumer_attestation:
-        probe_env["RESEARCH_CONSUMER_ATTESTATION"] = research_consumer_attestation
     probe_result = _stackctl._run_script_probe(
         name=probe_name,
         scope="full",

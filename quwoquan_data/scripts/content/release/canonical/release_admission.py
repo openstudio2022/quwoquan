@@ -12,7 +12,6 @@ from content.release.canonical.object_transaction_contract import (
     _read_json,
 )
 from governance.coverage.distribution import (
-    DistributionDecision,
     RightsStatus,
     project_asset_admission,
 )
@@ -39,7 +38,8 @@ def _object_rows(
     rows: list[dict[str, Any]] = []
     for kind in ("entities", "posts"):
         for ref in desired[kind]:
-            root = objects_root / kind / ref
+            from content.release.canonical.aggregate_release_closure import object_root
+            root = object_root(objects_root, kind, ref)
             # manifest.json is the release-control document for both object
             # kinds. _entity.json is a consumer projection and must not be
             # required merely to classify the carrier.
@@ -53,11 +53,13 @@ def _object_rows(
                 raise ObjectTransactionError(
                     f"release object carrier is invalid: {kind}/{ref}:{carrier}"
                 )
-            rights_path = root / "rights.json"
-            rights = (
-                _read_json(rights_path) if rights_path.is_file() else {"assets": []}
-            )
-            raw_assets = rights.get("assets")
+            from content.release.canonical.post_transaction_sources import read_object_sources
+            sources = read_object_sources(root, manifest)
+            by_id = {}
+            for source in sources:
+                for row in source["assets"]:
+                    by_id.setdefault(str(row["assetId"]), row)
+            raw_assets = list(by_id.values())
             if not isinstance(raw_assets, list):
                 raise ObjectTransactionError(
                     f"release object rights assets must be an array: {kind}/{ref}"
@@ -70,7 +72,13 @@ def _object_rows(
                         f"release rights asset must be an object: {object_ref}"
                     )
                 try:
-                    projected = project_asset_admission(raw, object_ref=object_ref)
+                    media = next(asset for asset in manifest["assets"] if asset["assetId"] == raw["assetId"])
+                    if raw.get("sha256") != media["sha256"] or raw.get("bytes") != media["bytes"]:
+                        raise ValueError(f"{object_ref}: source/manifest media identity drift")
+                    # 物理交付事实来自唯一 manifest；不往原 source 文件补写派生旁车。
+                    projected = project_asset_admission({**raw, "asset": {
+                        "sha256": media["sha256"], "bytes": media["bytes"], "mimeType": media["mimeType"],
+                    }}, object_ref=object_ref)
                     assets.append(projected)
                 except (TypeError, ValueError) as exc:
                     raise ObjectTransactionError(str(exc)) from exc
@@ -119,7 +127,7 @@ def _article_media_mode(row: Mapping[str, Any]) -> str:
     if (
         len(covers) != 1
         or any(str(asset.get("kind") or "image").strip() != "image" for asset in assets)
-        or any(not str(asset.get("sourceRef") or "").strip() for asset in assets)
+        or any(not asset.get("sourceRefs") for asset in assets)
     ):
         raise ObjectTransactionError(
             f"{object_ref}: illustrated article must bind exactly one cover image with source refs"
@@ -265,13 +273,11 @@ def build_release_asset_admission(
             "generated image/video assets are disabled by current policy: "
             + ", ".join(generated[:10])
         )
-    # `distributionDecision=blocked`（restricted 权利）只进入下方 rejected/restricted 计数，
-    # 不阻断 release：权利是记录事实，公众可见性由下游运营运行时配置决定。
+    # 权利状态不决定成功；blocked 只表示取得或安全事实未满足。
     article_coverage = _article_media_coverage(objects)
     rights_counts = Counter(str(asset["rightsStatus"]) for asset in assets)
     carrier_counts: list[dict[str, Any]] = []
-    research_total = 0
-    commercial_total = 0
+    accepted_total = 0
     for carrier in _CARRIERS:
         carrier_objects = [row for row in objects if row["carrier"] == carrier]
         media_admission = {
@@ -288,36 +294,14 @@ def build_release_asset_admission(
                 f"{carrier} required media closure GATE_BLOCK: "
                 + ", ".join(missing_media[:10])
             )
-        research_accepted = sum(
-            media_admission[str(row["objectRef"])]
-            and all(
-                asset["distributionDecision"]
-                in {
-                    DistributionDecision.RESEARCH_ALLOWED.value,
-                    DistributionDecision.COMMERCIAL_ALLOWED.value,
-                }
-                for asset in row["assets"]
-            )
-            for row in carrier_objects
-        )
-        commercial_accepted = sum(
-            media_admission[str(row["objectRef"])]
-            and all(
-                asset["distributionDecision"]
-                == DistributionDecision.COMMERCIAL_ALLOWED.value
-                for asset in row["assets"]
-            )
-            for row in carrier_objects
-        )
-        research_total += research_accepted
-        commercial_total += commercial_accepted
+        accepted = sum(media_admission[str(row["objectRef"])] for row in carrier_objects)
+        accepted_total += accepted
         carrier_counts.append(
             {
                 "carrier": carrier,
                 "objectCount": len(carrier_objects),
                 "assetCount": sum(len(row["assets"]) for row in carrier_objects),
-                "researchAcceptedCount": research_accepted,
-                "commercialAcceptedCount": commercial_accepted,
+                "acceptedCount": accepted,
             }
         )
     by_provider: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
@@ -328,10 +312,7 @@ def build_release_asset_admission(
     source_counts: list[dict[str, Any]] = []
     for (display_name, provider), rows in sorted(by_provider.items()):
         provider_rights = Counter(str(row["rightsStatus"]) for row in rows)
-        accepted_count = sum(
-            row["distributionDecision"] != DistributionDecision.BLOCKED.value
-            for row in rows
-        )
+        accepted_count = sum(row["acquisitionStatus"] == "acquired" for row in rows)
         # These counts describe the immutable release closure. Discovery-stage
         # rejections remain in source-unit funnel receipts and are never guessed.
         source_counts.append(
@@ -349,9 +330,9 @@ def build_release_asset_admission(
                 "unknownAssetCount": provider_rights[RightsStatus.UNKNOWN.value],
             }
         )
-    authorization_required_ids = sorted(
+    authorization_required_ids = sorted({
         str(asset["assetId"]) for asset in assets if asset["authorizationRequired"]
-    )
+    })
     # 与 authorizationRequiredAssetIds 并列：运营发布后可按资产逐条审核水印可用性；只记录不阻断。
     watermarked_ids = sorted(
         str(asset["assetId"]) for asset in assets if str(asset.get("watermarkStatus") or "") == "present"
@@ -372,8 +353,7 @@ def build_release_asset_admission(
         "authorizationRequiredAssetIds": authorization_required_ids,
         "watermarkedAssetIds": watermarked_ids,
         "accessRestrictedAssetIds": access_restricted_ids,
-        "researchAcceptedCount": research_total,
-        "commercialAcceptedCount": commercial_total,
+        "acceptedCount": accepted_total,
         "carrierCounts": carrier_counts,
         "articleMediaCoverage": article_coverage,
         "sourceAssetCounts": source_counts,

@@ -119,7 +119,7 @@ def test_release_probe__receipt_contains_one_hundred_verified_sample_reads(
                 "environment": "alpha",
                 "releaseId": "release-m100",
                 "manifestDigest": "sha256:" + "9" * 64,
-                "status": "imported",
+                "status": "staged",
                 "postBindings": [
                     {
                         "contentId": f"{carrier}-{ordinal:03d}",

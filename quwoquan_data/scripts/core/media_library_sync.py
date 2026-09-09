@@ -1,9 +1,8 @@
 """Immutable release payload → 环境媒体根增量同步（sha256 校验）。
 
 source_root 是 immutable release payload 根，只读取 manifest 选中的交付 key：
-commercial release 交付 avatar/image/video public slice；research release 交付
-CAS objectKey（media/objects/sha256/...），字节只经短签 URL 服务，不产生公开
-slice。两种形态都以 release 冻结的 manifest 作为唯一同步入口。
+production release 只交付 avatar/image/video public slice，
+以 release 冻结的 manifest 作为唯一同步入口。
 
 同步语义（fail closed）：
 - public slice 源对象内容必须等于 manifest 中对应 MediaAsset.sha256；
@@ -14,11 +13,13 @@ slice。两种形态都以 release 冻结的 manifest 作为唯一同步入口�
 from __future__ import annotations
 
 import hashlib
+import os
 import re
+import shutil
+import tempfile
 from pathlib import Path
 from typing import Any, Mapping
 
-from core.content_library import MEDIA_KIND, link_from_library
 from core.paths import REPO_ROOT, now_iso
 
 MEDIA_SYNC_SCHEMA_VERSION = "quwoquan_data.media_library_sync"
@@ -27,9 +28,8 @@ _PUBLIC_SLICE_PREFIXES = (
     "media/image/s/",
     "media/video/s/",
 )
-# research release 的交付 key 复用 CAS objectKey（DEC-031）；环境上传媒体共用
-# 该前缀，因此 prune 永不触及 CAS 根，只回收 public slice。
-_DELIVERY_KEY_PREFIXES = _PUBLIC_SLICE_PREFIXES + ("media/objects/sha256/",)
+# 同步只接受 production 公共 slice；canonical CAS 根不属于交付路径。
+_DELIVERY_KEY_PREFIXES = _PUBLIC_SLICE_PREFIXES
 _SHA256_RE = re.compile(r"^sha256:([0-9a-f]{64})$")
 
 
@@ -42,14 +42,22 @@ def _file_sha256(path: Path) -> str:
 
 
 def _copy_verified(source: Path, target: Path, expected_hash: str) -> None:
-    """Expose one media body at ``target`` as a reference to its library entry.
-
-    The public slice a release ships is the same bytes as the private body it was
-    selected from, so the library owns them once and the slice is a reference.
-    Admission refuses a source that does not match ``expected_hash``, which is the
-    check the previous post-copy comparison performed.
-    """
-    link_from_library(source, target, kind=MEDIA_KIND, expected_sha256=expected_hash)
+    """从已校验 release 字节独立复制；环境目标损坏不得反向污染原包或采集库。"""
+    if any(path.is_symlink() for path in (source, *source.parents, target, *target.parents)):
+        raise ValueError("media synchronization forbids symlink components")
+    target.parent.mkdir(parents=True, exist_ok=True)
+    descriptor, name = tempfile.mkstemp(prefix=".media-sync-", dir=target.parent)
+    temporary = Path(name)
+    try:
+        with os.fdopen(descriptor, "wb") as output, source.open("rb") as source_bytes:
+            shutil.copyfileobj(source_bytes, output, length=1024 * 1024)
+            output.flush()
+            os.fsync(output.fileno())
+        if _file_sha256(temporary) != expected_hash:
+            raise ValueError("media synchronization copied digest drift")
+        temporary.replace(target)
+    finally:
+        temporary.unlink(missing_ok=True)
 
 
 def sync_media_library(

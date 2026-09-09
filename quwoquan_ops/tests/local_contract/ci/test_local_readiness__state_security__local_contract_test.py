@@ -25,6 +25,48 @@ from lib.local_readiness.core import (  # noqa: E402
 )
 
 
+# spec_ref: specs/feature-tree/runtime/development-workflow-governance/local-continuous-integration/spec.md#gwt-002
+@pytest.mark.parametrize("blob", [
+    b"AccessKeySecret: ossBinding.AccessKeySecret,",
+    b"APIKey: cfg.Telemetry.ProviderAPIKey,",
+])
+def test_secret_scan_allows_unquoted_field_references(blob: bytes) -> None:
+    from quwoquan_ops.cli import local_readiness as cli
+
+    assert not cli._has_secret_material(blob)
+
+
+# spec_ref: specs/feature-tree/runtime/development-workflow-governance/local-continuous-integration/spec.md#gwt-002
+def test_secret_scan_does_not_treat_operation_identifier_suffix_as_credential_label() -> None:
+    from quwoquan_ops.cli import local_readiness as cli
+
+    assert not cli._has_secret_material(b"static const String resolvePushEndpointSecret = 'user.resolve.push.endpoint.secret';")
+    for label in (b"AccessKeySecret", b"ACCESS_KEY_SECRET", b"API_KEY", b"SECRET", b"PASSWORD", b"ACCESS_TOKEN"):
+        assert cli._has_secret_material(label + b" = '" + b"aB9_" * 8 + b"'")
+
+
+# spec_ref: specs/feature-tree/runtime/development-workflow-governance/local-continuous-integration/spec.md#gwt-002
+@pytest.mark.parametrize("quote", [b"'", b'"', b"`"])
+@pytest.mark.parametrize("value", [b"A" * 32, b"aB9_" * 8, b"cfg.Telemetry.ProviderAPIKey"])
+def test_secret_scan_rejects_quoted_material_even_if_identifier_shaped(quote: bytes, value: bytes) -> None:
+    from quwoquan_ops.cli import local_readiness as cli
+
+    assert cli._has_secret_material(b"password: " + quote + value + quote)
+
+
+# spec_ref: specs/feature-tree/runtime/development-workflow-governance/local-continuous-integration/spec.md#gwt-002
+@pytest.mark.parametrize("blob", [
+    b"password: " + b"A" * 32,
+    b"password: " + b"aB9_" * 8,
+    b"AKIA" + b"A" * 16,
+    b"-----BEGIN " + b"PRIVATE KEY-----",
+])
+def test_secret_scan_preserves_unquoted_material_and_key_detection(blob: bytes) -> None:
+    from quwoquan_ops.cli import local_readiness as cli
+
+    assert cli._has_secret_material(blob)
+
+
 def _repo() -> tempfile.TemporaryDirectory[str]:
     return tempfile.TemporaryDirectory()
 

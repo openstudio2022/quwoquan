@@ -79,8 +79,7 @@ def environment_release_readiness_issues(
         "containsUnverifiedAssets",
         "rightsStatusCounts",
         "authorizationRequiredAssetIds",
-        "researchAcceptedCount",
-        "commercialAcceptedCount",
+        "acceptedCount",
         *identity_fields,
         *(("milestone",) if "milestone" in release_header else ()),
     )

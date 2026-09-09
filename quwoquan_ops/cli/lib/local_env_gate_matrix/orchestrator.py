@@ -40,7 +40,9 @@ from quwoquan_ops.cli.lib.local_env_gate_matrix.identity import (
     _repo_matrix_dir,
     _startup_attempt_matches_package_identity,
 )
-from quwoquan_ops.cli.lib.local_env_gate_matrix.input_validation import _resolve_matrix_inputs
+from quwoquan_ops.cli.lib.local_env_gate_matrix.input_validation import (
+    _resolve_matrix_inputs,
+)
 from quwoquan_ops.cli.lib.local_env_gate_matrix.preflight import _device_uat_bindings, _docker_daemon_ready
 from quwoquan_ops.cli.lib.local_env_gate_matrix.reporting import _write_matrix_result
 from quwoquan_ops.cli.lib.local_env_gate_timing import (
@@ -495,7 +497,6 @@ def _run_local_env_gate_matrix(
             replay_readiness = _data_readiness_path(
                 env_name, candidate_release["releaseId"], data_ids["replayVerify"],
             )
-
         if overall_exit == 0 and execution_class == "live":
             homepage_payload = _homepage_release_evidence(
                 readiness_path=replay_readiness,

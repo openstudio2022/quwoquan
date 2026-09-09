@@ -2,16 +2,14 @@ package composition
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
 	userports "quwoquan_service/services/user-service/internal/account/user_account/domain/user/ports"
 	creatormodel "quwoquan_service/services/user-service/internal/profile_projection/creator_runtime_profile/domain/model"
 )
 
-const (
-	mediaDeliveryAccessModePublic      = "public"
-	mediaDeliveryAccessModeSignedGrant = "signed_grant"
-)
+const mediaDeliveryAccessModePublic = "public"
 
 type CreatorRuntimeProfileReader interface {
 	FindByExactContentFence(context.Context, creatormodel.ReleaseIdentity, string) (*creatormodel.CreatorRuntimeProfile, bool, error)
@@ -30,6 +28,12 @@ func (a *CreatorRuntimeProfileAdapter) FindByExactContentFence(ctx context.Conte
 	profile, found, err := a.reader.FindByExactContentFence(ctx, creatormodel.ReleaseIdentity{Environment: fence.Environment, SourceOwner: fence.SourceOwner, ReleaseID: fence.ReleaseID, ManifestDigest: fence.ManifestDigest}, identity)
 	if err != nil || !found {
 		return nil, found, err
+	}
+	if profile == nil {
+		return nil, false, fmt.Errorf("creator release projection is missing")
+	}
+	if strings.TrimSpace(profile.AvatarAssetID) != "" && strings.TrimSpace(profile.AvatarPublicSliceKey) == "" {
+		return nil, false, fmt.Errorf("creator release avatar requires a public slice binding")
 	}
 	works := make([]userports.CreatorWorkView, 0, len(profile.Works))
 	for _, work := range profile.Works {
@@ -50,10 +54,7 @@ func creatorAvatarAccessMode(profile *creatormodel.CreatorRuntimeProfile) string
 	if strings.TrimSpace(profile.AvatarAssetID) == "" {
 		return ""
 	}
-	if strings.TrimSpace(profile.AvatarPublicSliceKey) != "" {
-		return mediaDeliveryAccessModePublic
-	}
-	return mediaDeliveryAccessModeSignedGrant
+	return mediaDeliveryAccessModePublic
 }
 
 func mapCreatorWork(work creatormodel.CreatorWorkRef) userports.CreatorWorkView {

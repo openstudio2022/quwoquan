@@ -3,8 +3,7 @@
 从 commands/app_preflight.py 逐字迁出(该模块保留三命令主干与 argparse 表面,
 本家族随内容证据职责聚合到本模块):
 
-- `_resolve_active_app_content_evidence`:active candidate 到 Research /
-  Commercial 精确证据的解析;
+- `_resolve_active_app_content_evidence`:active candidate 到 production 精确证据的解析;
 - `_resolve_test_live_app_content_evidence`:validated mutable binding 的
   test-live 证据解析(不询问 active candidate 状态);
 - `_app_content_uat_sample_plan`:immutable ReleaseUatSamplePlan 与 readiness
@@ -190,7 +189,7 @@ def _app_content_uat_sample_plan(
 def _resolve_active_app_content_evidence(
     target: str,
 ) -> tuple[dict[str, Any], dict[str, Any], Path, str]:
-    """Resolve an active candidate to exact Research or Commercial evidence."""
+    """Resolve an active candidate to exact production evidence."""
     import quwoquan_ops.cli.stackctl as _stackctl
 
     topology = _stackctl.load_environment_topology()
@@ -566,6 +565,7 @@ def _run_app_content_release_probe(
             # App 视频书页真实消费 premium_stream 频道；typed_video 绿不代表
             # 视频书绿，设备 UAT 前必须同时证明 premium 池非空。
             "premium_feed",
+            # feed 非空不等于媒体可显示：设备 UAT 前逐 slice 字节读回。
             "feed_media_slices",
             "global_search",
             "media_sample",

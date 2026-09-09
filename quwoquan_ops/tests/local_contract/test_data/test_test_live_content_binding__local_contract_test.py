@@ -208,7 +208,7 @@ class TestLiveContentBindingContract(unittest.TestCase):
             "containsUnverifiedAssets": False,
             "rightsStatusCounts": {"verified": 3, "unverified": 0, "restricted": 0, "unknown": 0},
             "authorizationRequiredAssetIds": [],
-            "researchAcceptedCount": 3, "commercialAcceptedCount": 3,
+            "acceptedCount": 3,
             "executionIds": ["execution-alpha-001"],
             "sourceDigests": [{"algorithm": "sha256", "digest": _B, "inputs": ["quwoquan_data"]}],
             "poolDigest": _E,

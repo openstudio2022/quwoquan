@@ -23,13 +23,16 @@ def classify_path(path: str, policy: dict[str, Any]) -> str:
         return "generated"
     if any(_matches_marker(lowered, marker) for marker in rules["test_markers"]):
         return "test"
-    if any(lowered.startswith(str(prefix).lower()) for prefix in rules["docs_prefixes"]):
-        return "docs"
-    if any(_matches_marker(lowered, marker) for marker in rules["contract_markers"]):
-        return "contract-metadata"
     suffix = PurePosixPath(lowered).suffix
-    if suffix in set(rules["config_extensions"]):
-        return "config-data"
+    # Skill 和 contracts 都可能携带实现；目录名不能掩盖手写代码。
+    if suffix == ".md":
+        return "docs"
     if suffix in set(rules["source_extensions"]):
         return "handwritten-production"
+    if any(_matches_marker(lowered, marker) for marker in rules["contract_markers"]):
+        return "contract-metadata"
+    if any(lowered.startswith(str(prefix).lower()) for prefix in rules["docs_prefixes"]):
+        return "docs"
+    if suffix in set(rules["config_extensions"]):
+        return "config-data"
     return "config-data"

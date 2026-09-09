@@ -12,8 +12,7 @@
     "containsUnverifiedAssets",
     "rightsStatusCounts",
     "authorizationRequiredAssetIds",
-    "researchAcceptedCount",
-    "commercialAcceptedCount",
+    "acceptedCount",
     "sourceOwner",
     "manifestDigest",
     "mediaManifestDigest",
@@ -99,11 +98,7 @@
         "minLength": 1
       }
     },
-    "researchAcceptedCount": {
-      "type": "integer",
-      "minimum": 0
-    },
-    "commercialAcceptedCount": {
+    "acceptedCount": {
       "type": "integer",
       "minimum": 0
     },

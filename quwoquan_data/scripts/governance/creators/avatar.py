@@ -100,16 +100,10 @@ def _source_asset(
     *,
     source_asset_id: str,
 ) -> tuple[dict[str, Any], Path, bytes, str]:
-    refs_paths = [
-        path
-        for path in (source_root / "asset.refs.json", source_root / "assets.refs.json")
-        if path.is_file()
-    ]
-    if len(refs_paths) != 1:
-        raise CreatorAvatarError(
-            "source object must own exactly one asset refs document"
-        )
-    assets = _read_json(refs_paths[0]).get("assets")
+    manifest_path = source_root / "manifest.json"
+    if not manifest_path.is_file():
+        raise CreatorAvatarError("source object manifest missing")
+    assets = _read_json(manifest_path).get("assets")
     matches = (
         [
             row

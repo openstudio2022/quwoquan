@@ -50,7 +50,7 @@ def validate_readiness_closure(
     )
     coverage = asset_admission.get("articleMediaCoverage")
     # Coverage is a truthful operating statistic. A text-only Article remains
-    # a valid Research object; only an Article declared illustrated must close
+    # a valid production object; only an Article declared illustrated must close
     # its own cover/body media references.
     if not isinstance(coverage, Mapping):
         raise ReleaseReadinessClosureError(

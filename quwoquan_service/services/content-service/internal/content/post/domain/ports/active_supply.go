@@ -13,11 +13,11 @@ var canonicalReleaseDigestPattern = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
 // Posts may serve a release-bound initial page. Recommendation candidate
 // readiness belongs to recommendation-service and is not duplicated here.
 type ActiveSupplySnapshot struct {
-	Environment     string
-	SourceOwner     string
-	Status          string
-	ActiveReleaseID string
-	ManifestDigest  string
+	Environment       string
+	SourceOwner       string
+	Status            string
+	ActiveReleaseID   string
+	ManifestDigest    string
 	ProjectionVersion int64
 	Revision          int64
 	ActivatedAt       time.Time

@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from core.schema import assert_valid
 from content.release.canonical.object_source_identity import source_identity_digest
 from content.release.canonical.object_transaction_contract import (
     ObjectTransactionError,
@@ -138,71 +139,15 @@ def _validated_pool_record(
             )
         if canonical_digest != record.get("payloadDigest"):
             raise ObjectTransactionError("DATA.POOL.CANONICAL_DIGEST_DRIFT")
+    try:
+        assert_valid(record, "release", "pool_object_record")
+    except ValueError as exc:
+        raise ObjectTransactionError(f"DATA.POOL.RECORD_SCHEMA_INVALID: {exc}") from exc
     return record
 
 
 def _record_error_code(exc: ObjectTransactionError) -> str:
     return str(exc).split(":", 1)[0]
-
-
-_PRE_RIGHTS_RECORD_FIELDS = frozenset(
-    {
-        "schema",
-        "objectType",
-        "objectId",
-        "objectRef",
-        "recordSequence",
-        "contentVersion",
-        "status",
-        "processResult",
-        "qualityResult",
-        "eligibilityResult",
-        "usageScope",
-        "evidenceRef",
-        "evidenceDigest",
-        "payloadDigest",
-        "canonicalObjectDigest",
-        "sourceIdentity",
-        "sourceAttribution",
-    }
-)
-
-
-def _is_pre_rights_pool_record(
-    raw: Mapping[str, Any],
-    *,
-    object_type: str | None = None,
-) -> bool:
-    """Recognize the exact valid contract that predates rights fields.
-
-    This classification is only for collision-identity reservation. It never
-    turns the historical record into admission or supplies rights from a
-    manifest.
-    """
-
-    actual_type = str(raw.get("objectType") or "").strip()
-    rights_fields = (
-        "rightsResult",
-        "rightsAuthorityRef",
-        "rightsAuthorityDigest",
-    )
-    if (
-        actual_type not in {"homepage", "content"}
-        or set(raw) != _PRE_RIGHTS_RECORD_FIELDS
-        or any(field in raw for field in rights_fields)
-    ):
-        return False
-    candidate = dict(raw)
-    candidate.update(
-        rightsResult="passed",
-        rightsAuthorityRef="historical-rights-contract-validation",
-        rightsAuthorityDigest="sha256:" + "0" * 64,
-    )
-    try:
-        _validated_pool_record(candidate, object_type=object_type)
-    except ObjectTransactionError:
-        return False
-    return True
 
 
 def _physical_record_sequence(path: Path) -> int:
@@ -219,65 +164,6 @@ def _physical_record_sequence(path: Path) -> int:
     return value
 
 
-def _is_explicit_retired_record(
-    raw: Mapping[str, Any],
-    *,
-    physical_sequence: int,
-    reason: str,
-) -> bool:
-    """Recognize only the retired, explicit ``version`` ledger contract."""
-
-    version = raw.get("version")
-    return bool(
-        reason == "DATA.POOL.RECORD_SEQUENCE_MISSING"
-        and "recordSequence" not in raw
-        and "contentVersion" not in raw
-        and isinstance(version, int)
-        and not isinstance(version, bool)
-        and version == physical_sequence
-    )
-
-
-def _validate_retired_supersession(
-    *,
-    raw: Mapping[str, Any],
-    successor: Mapping[str, Any],
-    physical_sequence: int,
-) -> None:
-    """Require a later record to be an exact field-contract repair."""
-
-    identity_fields = ("schema", "objectType", "objectId", "objectRef")
-    if any(raw.get(key) != successor.get(key) for key in identity_fields):
-        raise ObjectTransactionError(
-            "DATA.POOL.RECORD_IDENTITY_CONFLICT: "
-            f"retiredSequence={physical_sequence}"
-        )
-    if successor.get("contentVersion") != raw.get("version"):
-        raise ObjectTransactionError(
-            "DATA.POOL.RECORD_VERSION_CONFLICT: "
-            f"retiredSequence={physical_sequence}"
-        )
-    digest_fields = ("evidenceDigest", "payloadDigest")
-    if any(raw.get(key) != successor.get(key) for key in digest_fields):
-        raise ObjectTransactionError(
-            "DATA.POOL.RECORD_DIGEST_CONFLICT: "
-            f"retiredSequence={physical_sequence}"
-        )
-    retired_payload = {
-        key: value for key, value in raw.items() if key != "version"
-    }
-    successor_payload = {
-        key: value
-        for key, value in successor.items()
-        if key not in {"recordSequence", "contentVersion"}
-    }
-    if retired_payload != successor_payload:
-        raise ObjectTransactionError(
-            "DATA.POOL.RECORD_SUPERSESSION_CONFLICT: "
-            f"retiredSequence={physical_sequence}"
-        )
-
-
 def read_pool_record_history(
     object_root: Path,
     *,
@@ -285,13 +171,13 @@ def read_pool_record_history(
 ) -> PoolRecordHistory:
     """Read one ledger without allowing an invalid record to become admission.
 
-    The retired explicit ``version`` shape can be superseded only by an exact
-    metadata repair. A valid pre-rights contract is kept as a typed exclusion
-    for collision-only consumers, but remains blocking here and in direct
-    admission. Other malformed records and integrity conflicts also block.
+    旧类别、旧 version 形状与缺权利 authority 均阻断；不以新记录覆盖修复
+    旧记录来恢复准入。物理序号与内容版本仍保持独立严格校验。
     """
 
-    versions_root = object_root / "_pool" / "versions"
+    if (object_root / "_pool").exists():
+        raise ObjectTransactionError("DATA.POOL.RETIRED_RECORD_LAYOUT")
+    versions_root = object_root / "records"
     if not versions_root.is_dir():
         return PoolRecordHistory(records=(), exclusions=())
     paths = [
@@ -302,14 +188,14 @@ def read_pool_record_history(
         key=lambda item: item[0],
     )
     records: list[dict[str, Any]] = []
-    invalid: list[tuple[int, Path, dict[str, Any], str]] = []
+    invalid: list[tuple[int, Path, str]] = []
     for physical_sequence, path in indexed_paths:
         raw = _read_json(path)
         try:
             record = _validated_pool_record(raw, object_type=object_type)
         except ObjectTransactionError as exc:
             invalid.append(
-                (physical_sequence, path, raw, _record_error_code(exc))
+                (physical_sequence, path, _record_error_code(exc))
             )
             continue
         if int(record["recordSequence"]) != physical_sequence:
@@ -321,34 +207,13 @@ def read_pool_record_history(
         records.append(record)
     records.sort(key=lambda item: int(item["recordSequence"]))
     exclusions: list[PoolRecordExclusion] = []
-    for physical_sequence, path, raw, reason in invalid:
-        successor = next(
-            (
-                record
-                for record in records
-                if int(record["recordSequence"]) > physical_sequence
-            ),
-            None,
-        )
-        if successor is not None and _is_explicit_retired_record(
-            raw,
-            physical_sequence=physical_sequence,
-            reason=reason,
-        ):
-            _validate_retired_supersession(
-                raw=raw,
-                successor=successor,
-                physical_sequence=physical_sequence,
-            )
-            superseded_by: int | None = int(successor["recordSequence"])
-        else:
-            superseded_by = None
+    for physical_sequence, path, reason in invalid:
         exclusions.append(
             PoolRecordExclusion(
                 record_ref=path.relative_to(object_root).as_posix(),
                 record_sequence=physical_sequence,
                 reason=reason,
-                superseded_by=superseded_by,
+                superseded_by=None,
             )
         )
     return PoolRecordHistory(

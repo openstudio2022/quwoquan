@@ -219,7 +219,8 @@ func sourceAttributionSpec() objectSpec {
 		"originalAssetUrl": requiredString(), "attributionText": requiredString(),
 		"rightsBasis": requiredString(), "commercialAuthorizationStatus": requiredString(),
 		"publicationAdmission": requiredString(), "authorizationProofUrl": nullableString(),
-		"termsUrl": nullableString(), "riskAcceptanceId": nullableString(),
+		"termsUrl": nullableString(), "derivedModifications": requiredList(4, requiredString()),
+		"watermarkKind": nullableString(), "watermarkNote": nullableString(),
 		"watermarkStatus": requiredString(), "audioRightsStatus": requiredString(),
 		"modelReleaseStatus": requiredString(), "propertyReleaseStatus": requiredString(),
 		"collectedAt": requiredString(), "takedownPolicy": requiredString(),
@@ -253,7 +254,8 @@ func mediaItemSpec() objectSpec {
 		"url": requiredString(), "coverUrl": nullableString(), "durationMs": nullableInt(),
 		"width": nullableInt(), "height": nullableInt(), "previewTrackManifestUrl": nullableString(),
 		"previewTrackVersion": nullableInt(), "hlsCmafMasterManifestUrl": nullableString(),
-		"hlsCmafDescriptorVersion": nullableInt(), "title": nullableString(),
+		"hlsCmafDescriptorVersion": nullableInt(), "title": nullableString(), "caption": nullableString(),
+		"accessMode": nullableString(), "coverAssetId": nullableString(),
 	})
 }
 

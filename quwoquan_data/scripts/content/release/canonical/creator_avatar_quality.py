@@ -7,8 +7,9 @@ import re
 from collections.abc import Mapping
 from pathlib import Path
 
-from core.content_library import MediaHoldingError, resolve_media_holding
-from core.media_asset_url import is_cas_media_object_key, sha256_file
+from core.media_asset_url import sha256_file
+from content.release.canonical.post_transaction_sources import read_object_sources
+from content.release.canonical.object_transaction_contract import ObjectTransactionError, _safe_rel
 
 
 _SHA256_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
@@ -22,18 +23,14 @@ def _object(path: Path) -> Mapping[str, object] | None:
     return value if isinstance(value, Mapping) else None
 
 
-def _avatar_body_readable(sha256: str, byte_count: int) -> bool:
-    """Whether the library still holds the exact avatar body a creator publishes.
-
-    The projection records the avatar by digest; publish never carries the image
-    itself. Readability is therefore a question the content library answers.
-    """
-
+def _avatar_body_readable(root: Path, asset: Mapping[str, object]) -> bool:
+    """普通消费只读 creator 包的精确随体字节，不依赖采集库。"""
     try:
-        entry = resolve_media_holding(sha256, expected_bytes=byte_count)
-    except (MediaHoldingError, ValueError):
+        relative = _safe_rel(str(asset.get("path") or ""), label="avatar.path")
+        entry = root / relative
+        return relative.parts[0] == "media" and not entry.is_symlink() and entry.is_file() and entry.stat().st_size == asset.get("bytes") and sha256_file(entry) == asset.get("sha256")
+    except (ObjectTransactionError, OSError, ValueError):
         return False
-    return sha256_file(entry) == sha256
 
 
 def creator_avatar_quality_issues(
@@ -87,29 +84,25 @@ def creator_avatar_quality_issues(
                 {"code": "creator_avatar_asset_ref_missing", "ref": creator_ref}
             )
             continue
-        object_key = str(matches[0].get("objectKey") or "")
         byte_count = matches[0].get("bytes")
         mime_type = str(matches[0].get("mimeType") or "")
         if (
-            not is_cas_media_object_key(object_key)
-            or not isinstance(byte_count, int)
+            not isinstance(byte_count, int)
             or isinstance(byte_count, bool)
             or not mime_type.startswith("image/")
-            or not _avatar_body_readable(digest, byte_count)
+            or not _avatar_body_readable(root, matches[0])
         ):
             issues.append({"code": "creator_avatar_cas_invalid", "ref": creator_ref})
             continue
-        evidence_matches: list[Mapping[str, object]] = []
-        for path in sorted((root / "rights_snapshots").glob("*.json")):
-            evidence = _object(path)
-            manifest_asset = evidence.get("manifestAsset") if evidence else None
-            if (
-                isinstance(manifest_asset, Mapping)
-                and manifest_asset.get("assetId") == asset_id
-                and manifest_asset.get("sha256") == digest
-            ):
-                evidence_matches.append(evidence)
-        if len(evidence_matches) != 1:
+        try:
+            sources = read_object_sources(root, profile)
+            evidence_matches = [
+                row for source in sources if source["ref"] in matches[0].get("sourceRefs", [])
+                for row in source["assets"] if row.get("assetId") == asset_id and row.get("sha256") == digest
+            ]
+        except (ObjectTransactionError, OSError, ValueError):
+            evidence_matches = []
+        if not evidence_matches:
             issues.append(
                 {"code": "creator_avatar_quality_evidence_missing", "ref": creator_ref}
             )

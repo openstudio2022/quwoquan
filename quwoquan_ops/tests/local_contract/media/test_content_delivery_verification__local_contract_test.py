@@ -29,8 +29,8 @@ def _fixture(root: Path) -> Path:
     import_path = _write(
         evidence / "import.json",
         {
-            # content_import_report schema 的 status 闭集是 {dry-run, imported}
-            "status": "imported",
+            # stage-only 导入回执本身不代表 active release。
+            "status": "staged",
             "environment": environment,
             "releaseId": release_id,
             "manifestDigest": _DIGEST,

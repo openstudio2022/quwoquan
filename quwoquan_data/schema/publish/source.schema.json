@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/publish/source.schema.json",
+  "title": "作品采用来源及真实证据 binding",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "sourceId", "sourceUrl", "sourceUseMode", "fetchedAt", "metadata", "assets", "evidence"],
+  "properties": {
+    "schema": {"const": "quwoquan_data.publish_source"},
+    "sourceId": {"type": "string", "pattern": "^[A-Za-z0-9_-]+$"},
+    "sourceUrl": {"type": "string", "pattern": "^https://"},
+    "sourceUseMode": {"enum": ["licensed_adaptation", "factual_reference_only", "rights_audit_only"]},
+    "fetchedAt": {"type": "string", "minLength": 1},
+    "metadata": {"type": "object", "description": "取得时原始来源元数据；不补造作者、许可或访问状态。"},
+    "sourceAttribution": {"type": "object"},
+    "assets": {"type": "array", "items": {"type": "object"}, "description": "采用资产的原始权利、许可、访问限制与派生事实；不把生成副本作为第三方权利证明。"},
+    "evidence": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path", "sha256", "bytes", "kind"],
+        "properties": {
+          "path": {"type": "string", "pattern": "^evidence(?:-[1-9][0-9]*)?\\.[A-Za-z0-9]+$"},
+          "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+          "bytes": {"type": "integer", "minimum": 1},
+          "kind": {"enum": ["source_snapshot", "source_excerpt", "license_response", "acquisition_receipt"]}
+        }
+      }
+    }
+  }
+}

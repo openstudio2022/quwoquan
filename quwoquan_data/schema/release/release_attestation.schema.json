@@ -9,8 +9,7 @@
     "containsUnverifiedAssets",
     "rightsStatusCounts",
     "authorizationRequiredAssetIds",
-    "researchAcceptedCount",
-    "commercialAcceptedCount",
+    "acceptedCount",
     "executionIds",
     "carrierCounts",
     "entityCount",
@@ -79,11 +78,7 @@
         "minLength": 1
       }
     },
-    "researchAcceptedCount": {
-      "type": "integer",
-      "minimum": 0
-    },
-    "commercialAcceptedCount": {
+    "acceptedCount": {
       "type": "integer",
       "minimum": 0
     },
@@ -394,10 +389,7 @@
           "authorizationRequiredAssetIds": {
             "maxItems": 0
           },
-          "researchAcceptedCount": {
-            "const": 0
-          },
-          "commercialAcceptedCount": {
+          "acceptedCount": {
             "const": 0
           }
         }

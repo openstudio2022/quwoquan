@@ -38,10 +38,8 @@ type AssetManifestItem struct {
 	Kind    string `json:"kind,omitempty" bson:"kind,omitempty"`
 	// AccessMode 是媒体交付访问模式（DEC-033，契约 PostArticleAsset.accessMode，
 	// enum 唯一真相源 contracts/metadata/_shared/types.yaml
-	// MediaDeliveryAccessMode）。由已验证 release authority 写入公开交付，
-	// signed_grant 时 App 必须按 assetId 换取短签。新 immutable release 必须
-	// 显式 public|signed_grant；空串只属于具名 previous-version public migration 边界，
-	// 不得进入本 importer。
+	// MediaDeliveryAccessMode）。Data release 只允许显式 public；
+	// 空值与私有访问模式均不得进入本 importer。
 	AccessMode           string   `json:"accessMode,omitempty" bson:"accessMode,omitempty"`
 	ObjectKey            string   `json:"objectKey,omitempty" bson:"-"`
 	Version              int64    `json:"version,omitempty" bson:"version,omitempty"`
@@ -112,6 +110,7 @@ type PostDoc struct {
 	TagRefs              []string                        `json:"tagRefs" bson:"tagRefs"`
 	IntersectionHints    []IntersectionHintDoc           `json:"intersectionHints" bson:"intersectionHints"`
 	SemanticMentions     []postmodel.PostSemanticMention `json:"semanticMentions" bson:"semanticMentions"`
+	EntityMentions       []postmodel.PostEntityMention   `json:"entityMentions" bson:"entityMentions"`
 	AuthorID             string                          `json:"authorId" bson:"authorId"`
 	AuthorDisplayName    string                          `json:"authorDisplayNameSnapshot" bson:"authorDisplayNameSnapshot"`
 	AuthorAvatarURL      string                          `json:"authorAvatarUrlSnapshot" bson:"authorAvatarUrlSnapshot"`
@@ -140,7 +139,7 @@ type PostDoc struct {
 	PublishedAt           time.Time                          `json:"publishedAt" bson:"publishedAt"`
 }
 
-// EntityDoc 是灌入运行库的实体文档（与 publish entity _entity.json + page.md 对齐）。
+// EntityDoc 是灌入运行库的实体文档（与 publish entity manifest.json + page.md 对齐）。
 type EntityDoc struct {
 	EntityRef     string                  `json:"entityRef" bson:"entityRef"`
 	Domain        string                  `json:"domain" bson:"domain"`
@@ -151,7 +150,7 @@ type EntityDoc struct {
 	Page          string                  `json:"page" bson:"page"`
 	HasPage       bool                    `json:"hasPage" bson:"hasPage"`
 	AssetManifest *EntityAssetManifestDoc `json:"assetManifest" bson:"assetManifest"`
-	// ConditionProfile 条件画像（L3 实体级 {regions/seasons/altitudeMeters}），从 _entity.json 透传到运行库。
+	// ConditionProfile 条件画像（L3 实体级 {regions/seasons/altitudeMeters}），从 manifest.json 透传到运行库。
 	ConditionProfile map[string]any `json:"conditionProfile" bson:"conditionProfile"`
 }
 
@@ -558,10 +557,15 @@ func LoadPosts(publishRoot string, filter map[string]bool) ([]PostDoc, error) {
 		if rerr != nil {
 			return rerr
 		}
+		attribution, rerr := decodeReleaseSourceAttribution(raw, postRef)
+		if rerr != nil {
+			return rerr
+		}
 		var m postManifest
 		if jerr := json.Unmarshal(raw, &m); jerr != nil {
 			return jerr
 		}
+		m.SourceAttribution = attribution
 		if err := normalizeImportedContentPoolRecord(&m, postRef); err != nil {
 			return err
 		}
@@ -756,7 +760,7 @@ func LoadEntities(publishRoot string, filter map[string]bool) ([]EntityDoc, erro
 		if err != nil {
 			return err
 		}
-		if d.IsDir() || d.Name() != "_entity.json" {
+		if d.IsDir() || d.Name() != "manifest.json" {
 			return nil
 		}
 		rel, rerr := filepath.Rel(entRoot, filepath.Dir(path))
@@ -792,20 +796,15 @@ func LoadEntities(publishRoot string, filter map[string]bool) ([]EntityDoc, erro
 			page = string(p)
 			hasPage = true
 		}
-		assetManifest := (*EntityAssetManifestDoc)(nil)
-		assetRefsPath := filepath.Join(filepath.Dir(path), "asset.refs.json")
-		if rawManifest, merr := os.ReadFile(assetRefsPath); merr == nil {
-			var parsed EntityAssetManifestDoc
-			if jerr := json.Unmarshal(rawManifest, &parsed); jerr != nil {
-				return jerr
-			}
-			if err := validateEntityAssetManifest(&parsed, entityRef); err != nil {
-				return err
-			}
-			assetManifest = &parsed
-		} else if !os.IsNotExist(merr) {
-			return merr
+		// 实体身份与资产只消费同一份 manifest.json，禁止回读 _entity 或资产旁车。
+		var parsed EntityAssetManifestDoc
+		if err := json.Unmarshal(raw, &parsed); err != nil {
+			return err
 		}
+		if err := validateEntityAssetManifest(&parsed, entityRef); err != nil {
+			return err
+		}
+		assetManifest := &parsed
 		label := ef.Label
 		if label == "" {
 			label = name

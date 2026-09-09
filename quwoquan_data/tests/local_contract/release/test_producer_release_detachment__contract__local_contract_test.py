@@ -86,8 +86,7 @@ def test_m1000_header_and_result_need_no_sampling_authority_or_uat_plan() -> Non
             "containsUnverifiedAssets": False,
             "rightsStatusCounts": {"verified": 0, "unverified": 0, "restricted": 0, "unknown": 0},
             "authorizationRequiredAssetIds": [],
-            "researchAcceptedCount": 0,
-            "commercialAcceptedCount": 0,
+            "acceptedCount": 0,
         },
         canonical_merkle="sha256:" + "2" * 64,
         pool_digest="sha256:" + "3" * 64,
@@ -244,8 +243,7 @@ def test_milestone_build_writes_no_uat_artifact_or_consumer_fields(
                 "unknown": 0,
             },
             "authorizationRequiredAssetIds": [],
-            "researchAcceptedCount": 0,
-            "commercialAcceptedCount": 0,
+            "acceptedCount": 0,
         },
     )
     monkeypatch.setattr(builder, "assert_valid", lambda *_args, **_kwargs: None)
@@ -317,7 +315,7 @@ def test_release_asset_admission_allows_identical_asset_reuse_across_objects(
         "acquisitionStatus": "acquired",
         "rightsStatus": "verified",
         "authorizationRequired": False,
-        "distributionDecision": "commercial_allowed",
+        "distributionDecision": "research_allowed",
         "rightsIssues": [],
         "generated": False,
     }
@@ -334,6 +332,16 @@ def test_release_asset_admission_allows_identical_asset_reuse_across_objects(
     )
 
     assert len(document["assets"]) == 2
+    assert document["acceptedCount"] == 2
+    for row in objects:
+        row["assets"][0].update(rightsStatus="unverified", authorizationProof="", authorizationRequired=True, rightsIssues=["授权未核实"])
+    unverified = release_admission.build_release_asset_admission(
+        release_id="reuse-unverified-001", objects_root=tmp_path,
+        desired={"entities": ["fixture"], "posts": ["image/fixture/1"]},
+    )
+    assert unverified["acceptedCount"] == 2
+    assert unverified["rightsStatusCounts"]["unverified"] == 2
+    assert unverified["authorizationRequiredAssetIds"] == ["shared-cover"]
 
 
 def test_release_asset_admission_rejects_reused_id_with_identity_drift(
@@ -354,7 +362,7 @@ def test_release_asset_admission_rejects_reused_id_with_identity_drift(
         "acquisitionStatus": "acquired",
         "rightsStatus": "verified",
         "authorizationRequired": False,
-        "distributionDecision": "commercial_allowed",
+        "distributionDecision": "research_allowed",
         "rightsIssues": [],
         "generated": False,
     }

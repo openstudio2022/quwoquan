@@ -434,11 +434,26 @@ extension _VideoPlayerWidgetControllerRuntime on _VideoPlayerWidgetState {
     _reportPlaybackFailure(failure);
   }
 
-  void _reportPlaybackFailure(MediaPlaybackFailure failure) {
+  /// 缓存命中只更新局部呈现；网络失败、换签与 QoE 留在真实失败入口。
+  void _presentPlaybackFailure(MediaPlaybackFailure failure) {
     _finishInitializationWait();
     _playbackSession.markFailure();
+    _updateRuntimeState(() {
+      _isDeferredWaitingForSlot = false;
+      _hasError = true;
+      _isInitialized = false;
+      _isRetrying = false;
+      _playbackFailure = failure;
+      _showCompactProgress = false;
+      _isInitializationSlow = false;
+    });
+  }
+
+  void _reportPlaybackFailure(MediaPlaybackFailure failure) {
     final signedReSign = widget.signedDelivery?.onReSignRequested;
     if (signedReSign != null) {
+      _finishInitializationWait();
+      _playbackSession.markFailure();
       // 私有交付失败先当作签名过期处理：换签编排在协调器一侧，播放器只发起
       // 一次请求。判否与负缓存交给换签后的重试结果，避免把可恢复的 TTL 到期
       // 记成终态失败、把该资产在本次会话里永久钉死。
@@ -460,15 +475,7 @@ extension _VideoPlayerWidgetControllerRuntime on _VideoPlayerWidgetState {
         statusCode: failure.runtimeFailure.transportStatus,
       );
     }
-    _updateRuntimeState(() {
-      _isDeferredWaitingForSlot = false;
-      _hasError = true;
-      _isInitialized = false;
-      _isRetrying = false;
-      _playbackFailure = failure;
-      _showCompactProgress = false;
-      _isInitializationSlow = false;
-    });
+    _presentPlaybackFailure(failure);
     widget.onPlaybackFailed?.call(failure);
     if (_controller == null && !_qoeReportedForController) {
       _qoeReportedForController = true;

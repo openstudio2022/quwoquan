@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from typing import Any, Mapping
 
+from content.release.canonical.object_transaction_contract import ObjectTransactionError
+from content.release.canonical.post_transaction_sources import read_object_sources
 from content.release.canonical.release_consistency_report import blocking_issue as _issue
 from core.io import read_json
 from core.media_asset_url import (
@@ -47,19 +48,13 @@ def _object_root(root: Path, kind: str, ref: str) -> Path:
     return root / kind / ref.removeprefix(f"{kind}/")
 
 
-def _asset_rows(root: Path) -> list[dict[str, Any]]:
-    paths = [
-        path
-        for path in (root / "asset.refs.json", root / "assets.refs.json")
-        if path.is_file()
-    ]
-    if not paths:
-        return []
-    if len(paths) != 1:
-        raise ValueError(f"object must own exactly one asset refs document: {root}")
+def _asset_rows(root: Path, *, object_kind: str) -> list[dict[str, Any]]:
+    path = root / ("assets.refs.json" if object_kind == "creators" else "manifest.json")
+    if not path.is_file():
+        raise ValueError(f"object asset manifest missing: {path}")
     return [
         row
-        for row in read_json(paths[0]).get("assets") or []
+        for row in read_json(path).get("assets") or []
         if isinstance(row, dict)
     ]
 
@@ -79,30 +74,26 @@ def _canonical_media_owner_ref(ref: str) -> bool:
 
 
 def _release_rights_owner(ref: str) -> str:
-    prefix = "objects/"
-    marker = "/rights_snapshots/"
-    if not ref.startswith(prefix):
+    parts = Path(ref).parts
+    if (
+        len(parts) < 6
+        or parts[0] != "objects"
+        or parts[-3] != "sources"
+        or parts[-1] != "source.json"
+    ):
         return ""
-    value = ref.removeprefix(prefix)
-    index = value.find(marker)
-    return value[:index] if index > 0 else ""
+    return Path(*parts[1:-3]).as_posix()
 
 
 def _canonical_release_rights_ref(ref: str) -> bool:
     if not ref or "\\" in ref:
         return False
     candidate = Path(ref)
-    if candidate.is_absolute() or candidate.as_posix() != ref:
-        return False
-    owner = _release_rights_owner(ref)
-    if not _canonical_media_owner_ref(owner):
-        return False
-    suffix = ref.removeprefix(f"objects/{owner}/rights_snapshots/")
     return (
-        bool(suffix)
-        and "/" not in suffix
-        and suffix not in {".", ".."}
-        and suffix.endswith(".json")
+        not candidate.is_absolute()
+        and candidate.as_posix() == ref
+        and ".." not in candidate.parts
+        and _canonical_media_owner_ref(_release_rights_owner(ref))
     )
 
 
@@ -126,14 +117,14 @@ def release_media_issues(
         for ref in sorted(refs):
             root = _object_root(objects, kind, ref)
             owner_ref = f"{kind}/{ref.removeprefix(f'{kind}/')}"
-            for row in _asset_rows(root):
+            for row in _asset_rows(root, object_kind=kind):
                 asset_id = str(row.get("assetId") or "").strip()
                 sha256 = str(row.get("sha256") or "").strip()
                 if not asset_id or not sha256:
                     issues.append(
                         _issue(
                             "release_media_source_identity_invalid",
-                            "asset.refs 必须声明 assetId 与 sha256",
+                            "对象资产 manifest 必须声明 assetId 与 sha256",
                             f"{kind}/{ref}",
                         )
                     )
@@ -330,7 +321,7 @@ def release_media_issues(
                 issues.append(
                     _issue(
                         "release_media_rights_owner_mismatch",
-                        "rights snapshot 不属于 MediaAsset ownerRefs",
+                        "随体来源证据不属于 MediaAsset ownerRefs",
                         rights_ref,
                     )
                 )
@@ -340,42 +331,41 @@ def release_media_issues(
                 issues.append(
                     _issue(
                         "release_media_rights_snapshot_missing",
-                        "rights snapshot 在 immutable object closure 中不存在",
+                        "随体来源证据在 immutable object closure 中不存在",
                         rights_ref,
                     )
                 )
                 continue
             try:
-                rights = read_json(rights_path)
-            except (OSError, ValueError, json.JSONDecodeError) as exc:
+                owner_root = objects / owner
+                manifest_name = "profile.json" if owner.startswith("creators/") else "manifest.json"
+                manifest = read_json(owner_root / manifest_name)
+                sources = read_object_sources(owner_root, manifest)
+                source_ref = rights_ref.removeprefix(f"objects/{owner}/")
+                source = next(item for item in sources if item["ref"] == source_ref)
+            except (ObjectTransactionError, OSError, ValueError, StopIteration) as exc:
                 issues.append(
                     _issue(
                         "release_media_rights_snapshot_invalid",
-                        f"rights snapshot 无法读取: {exc}",
+                        f"随体来源证据无法验证: {exc}",
                         rights_ref,
                     )
                 )
                 continue
-            if not isinstance(rights, Mapping):
-                issues.append(
-                    _issue(
-                        "release_media_rights_snapshot_invalid",
-                        "rights snapshot 必须是 JSON object",
-                        rights_ref,
-                    )
-                )
-                continue
-            manifest_asset = rights.get("manifestAsset")
-            if (
-                str(rights.get("assetId") or "").strip() != asset_id
-                or not isinstance(manifest_asset, Mapping)
-                or str(manifest_asset.get("assetId") or "").strip() != asset_id
-                or str(manifest_asset.get("sha256") or "").strip() != sha256
-            ):
+            manifest_assets = [
+                asset for asset in manifest.get("assets") or []
+                if asset.get("assetId") == asset_id and asset.get("sha256") == sha256
+                and source_ref in (asset.get("sourceRefs") or [])
+            ]
+            source_assets = [
+                asset for asset in source["assets"]
+                if asset.get("assetId") == asset_id and asset.get("sha256") == sha256
+            ]
+            if len(manifest_assets) != 1 or not source_assets:
                 issues.append(
                     _issue(
                         "release_media_rights_identity_mismatch",
-                        "rights snapshot 未绑定同一 MediaAsset assetId/sha256",
+                        "随体来源证据未绑定同一 MediaAsset assetId/sha256",
                         rights_ref,
                     )
                 )
@@ -386,7 +376,7 @@ def release_media_issues(
                 issues.append(
                     _issue(
                         "release_media_owner_rights_missing",
-                        "每个 MediaAsset ownerRef 必须至少绑定一份 rights snapshot",
+                        "每个 MediaAsset ownerRef 必须至少绑定一份随体来源证据",
                         f"{asset_id}:{owner}",
                     )
                 )

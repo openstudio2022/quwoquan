@@ -8,8 +8,7 @@
     "containsUnverifiedAssets",
     "rightsStatusCounts",
     "authorizationRequiredAssetIds",
-    "researchAcceptedCount",
-    "commercialAcceptedCount",
+    "acceptedCount",
     "carrierCounts",
     "articleMediaCoverage",
     "sourceAssetCounts",
@@ -81,11 +80,7 @@
         "minLength": 1
       }
     },
-    "researchAcceptedCount": {
-      "type": "integer",
-      "minimum": 0
-    },
-    "commercialAcceptedCount": {
+    "acceptedCount": {
       "type": "integer",
       "minimum": 0
     },
@@ -99,8 +94,7 @@
           "carrier",
           "objectCount",
           "assetCount",
-          "researchAcceptedCount",
-          "commercialAcceptedCount"
+          "acceptedCount"
         ],
         "additionalProperties": false,
         "properties": {
@@ -120,11 +114,7 @@
             "type": "integer",
             "minimum": 0
           },
-          "researchAcceptedCount": {
-            "type": "integer",
-            "minimum": 0
-          },
-          "commercialAcceptedCount": {
+          "acceptedCount": {
             "type": "integer",
             "minimum": 0
           }

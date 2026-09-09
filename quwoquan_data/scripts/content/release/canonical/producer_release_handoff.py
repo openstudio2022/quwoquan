@@ -46,6 +46,8 @@ _PRODUCER_CONTRACT_ROOTS = (
     "quwoquan_data/schema/execution",
     "quwoquan_data/schema/source",
     "quwoquan_data/schema/content",
+    "quwoquan_data/schema/publish",
+    "quwoquan_data/control_plane/_shared/publish_layout.policy.json",
     "quwoquan_data/schema/release",
     "quwoquan_data/scripts/content/execution",
     "quwoquan_data/scripts/content/source",
@@ -205,45 +207,16 @@ def _sealed_review_source_assets(
 ) -> dict[str, dict[str, Any]]:
     if not required_asset_refs:
         return {}
-    snapshots_root = _assert_no_symlink(
-        sealed_object / "rights_snapshots",
-        label="canonical rights snapshots",
-        regular=False,
-    )
+    manifest, _ = _read_json_file(sealed_object / "manifest.json", label="canonical manifest")
+    from content.release.canonical.post_transaction_sources import read_object_sources
     source_assets: dict[str, dict[str, Any]] = {}
-    for snapshot_path in sorted(snapshots_root.glob("*.json")):
-        snapshot, _ = _read_json_file(
-            snapshot_path, label="canonical rights snapshot", canonical=False
-        )
-        manifest_asset = snapshot.get("manifestAsset")
-        if not isinstance(manifest_asset, Mapping):
-            raise ObjectTransactionError("canonical rights snapshot lacks manifestAsset")
-        refs = [str(manifest_asset.get("sourceAssetRef") or "").strip()]
-        raw_refs = manifest_asset.get("sourceAssetRefs")
-        if isinstance(raw_refs, list):
-            refs.extend(str(ref or "").strip() for ref in raw_refs)
-        refs = [ref for ref in refs if ref]
-        source_asset = snapshot.get("sourceAsset")
-        source_asset_rows = snapshot.get("sourceAssets")
-        if isinstance(source_asset, Mapping) and len(refs) == 1:
-            pairs = ((refs[0], source_asset),)
-        elif (
-            isinstance(source_asset_rows, list)
-            and all(isinstance(row, Mapping) for row in source_asset_rows)
-            and len(refs) == len(source_asset_rows)
-        ):
-            pairs = tuple(zip(refs, source_asset_rows, strict=True))
-        else:
-            raise ObjectTransactionError(
-                "canonical rights snapshot source binding drift"
-            )
-        for source_ref, raw_source in pairs:
-            source = dict(raw_source)
+    for document in read_object_sources(sealed_object, manifest):
+        for row in document["assets"]:
+            source_ref = str(row["sourceAssetRef"])
+            source = dict(row["sourceAsset"])
             existing = source_assets.get(source_ref)
             if existing is not None and existing != source:
-                raise ObjectTransactionError(
-                    f"canonical source rights facts conflict: {source_ref}"
-                )
+                raise ObjectTransactionError(f"canonical source rights facts conflict: {source_ref}")
             source_assets[source_ref] = source
     if set(source_assets) != set(required_asset_refs):
         raise ObjectTransactionError(
@@ -328,6 +301,7 @@ def _validate_query_against_sealed(
         or scope.get("usageScope") != pool_record.get("usageScope")
         or scope.get("usageScope") != manifest["admission"].get("usageScope")
         or scope.get("variantPurpose") != expected_variant
+        or (expected_type == "content" and identity.get("authorId") != manifest.get("creatorProfileId"))
     ):
         raise _error("DATA.RELEASE.HANDOFF_POOL_IDENTITY_DRIFT", object_ref)
     manifest_admission = manifest["admission"]
@@ -345,55 +319,46 @@ def _validate_query_against_sealed(
             raise _error("DATA.RELEASE.HANDOFF_POOL_RIGHTS_DRIFT", f"{object_ref} {field}")
 
     binding_ref = content_library.get("bindingRef")
-    if binding_ref is None:
-        expected_bindings: list[dict[str, object]] = []
-    else:
-        if binding_ref != f"{object_ref}/asset.refs.json":
-            raise _error("DATA.RELEASE.HANDOFF_POOL_BINDING_DRIFT", object_ref)
-        binding_document = _read_sealed_identity_file(
-            sealed_root,
-            binding_ref,
-            object_ref=object_ref,
-            label="queryDocument.contentLibrary.bindingRef",
-        )
-        raw_bindings = binding_document.get("assets")
-        if not isinstance(raw_bindings, list):
-            raise _error("DATA.RELEASE.HANDOFF_POOL_BINDING_DRIFT", object_ref)
-        # Sealed release objects intentionally remove private CAS objectKey.
-        # Rebind it before projecting the producer content-library identity: the
-        # CAS key is a pure function of sha256 plus the source file suffix (falling
-        # back to the MediaAsset contentType suffix), so it is reconstructed from
-        # the sealed row and the sealed MediaAsset authority without any private key.
-        media_manifest, _ = _read_json_file(
-            sealed_root.parent / "media_manifest.json",
-            label="release MediaAsset authority",
-            canonical=False,
-        )
-        media_by_id = {
-            str(asset.get("assetId") or ""): asset
-            for asset in media_manifest.get("assets") or []
-            if isinstance(asset, Mapping)
-        }
-        resolved_bindings = []
-        for raw in raw_bindings:
-            resolved = dict(raw) if isinstance(raw, Mapping) else raw
-            if isinstance(resolved, dict) and not resolved.get("objectKey"):
-                authority = media_by_id.get(str(resolved.get("assetId") or ""), {})
-                source_refs = resolved.get("sourceAssetRefs") or []
-                suffix = Path(str(source_refs[0])).suffix if source_refs else ""
-                if not suffix:
-                    content_type = str(authority.get("contentType") or "").split(";", 1)[0].strip().lower()
-                    suffix = SUFFIX_BY_CONTENT_TYPE.get(content_type, "")
-                if authority.get("sha256"):
-                    resolved["objectKey"] = content_addressed_media_object_key(str(authority["sha256"]), suffix=suffix)
-            resolved_bindings.append(resolved)
-        try:
-            expected_bindings = [
-                binding.as_document()
-                for binding in project_content_library_bindings(resolved_bindings)
-            ]
-        except ObjectTransactionError as exc:
-            raise _error("DATA.RELEASE.HANDOFF_POOL_BINDING_DRIFT", str(exc)) from exc
+    if binding_ref != refs.get("manifestRef") or binding_ref != f"{object_ref}/manifest.json":
+        raise _error("DATA.RELEASE.HANDOFF_POOL_BINDING_DRIFT", object_ref)
+    raw_bindings = manifest.get("assets")
+    if not isinstance(raw_bindings, list):
+        raise _error("DATA.RELEASE.HANDOFF_POOL_BINDING_DRIFT", object_ref)
+    # release 去除 CAS key；由同一资产行的发布扩展名与 sealed 媒体摘要重建存储身份。
+    media_manifest, _ = _read_json_file(
+        sealed_root.parent / "media_manifest.json",
+        label="release MediaAsset authority",
+        canonical=False,
+    )
+    media_by_id = {
+        str(asset.get("assetId") or ""): asset
+        for asset in media_manifest.get("assets") or []
+        if isinstance(asset, Mapping)
+    }
+    resolved_bindings = []
+    for raw in raw_bindings:
+        resolved = dict(raw) if isinstance(raw, Mapping) else raw
+        if isinstance(resolved, dict) and not resolved.get("objectKey"):
+            authority = media_by_id.get(str(resolved.get("assetId") or ""), {})
+            derivative = resolved.get("derivativeBinding")
+            suffix = (
+                str(derivative.get("derivedExtension") or "")
+                if isinstance(derivative, Mapping)
+                else Path(str(resolved.get("fileName") or "")).suffix
+            )
+            if not suffix:
+                content_type = str(authority.get("contentType") or "").split(";", 1)[0].strip().lower()
+                suffix = SUFFIX_BY_CONTENT_TYPE.get(content_type, "")
+            if authority.get("sha256"):
+                resolved["objectKey"] = content_addressed_media_object_key(str(authority["sha256"]), suffix=suffix)
+        resolved_bindings.append(resolved)
+    try:
+        expected_bindings = [
+            binding.as_document()
+            for binding in project_content_library_bindings(resolved_bindings)
+        ]
+    except ObjectTransactionError as exc:
+        raise _error("DATA.RELEASE.HANDOFF_POOL_BINDING_DRIFT", str(exc)) from exc
     if (
         content_library.get("bindings") != expected_bindings
         or content_library.get("bindingDigest") != canonical_digest(expected_bindings)
@@ -434,15 +399,12 @@ def _validate_query_against_sealed(
             ),
             require_approved=True,
         )
-        if scope.get("usageScope") == "commercial" and (
-            not content_review.get("assetRights")
-            or any(
-                review.get("usageScope") != "commercial"
-                for review in content_review.get("assetRights", [])
-                if isinstance(review, Mapping)
-            )
+        if scope.get("usageScope") not in {"research", "commercial"} or any(
+            review.get("usageScope") not in {"research", "commercial"}
+            for review in content_review.get("assetRights", [])
+            if isinstance(review, Mapping)
         ):
-            raise ObjectTransactionError("commercial content review usageScope drift")
+            raise ObjectTransactionError("production content review usageScope drift")
     except (OSError, TypeError, ValueError, ObjectTransactionError) as exc:
         raise _error("DATA.RELEASE.HANDOFF_POOL_RIGHTS_DRIFT", str(exc)) from exc
 

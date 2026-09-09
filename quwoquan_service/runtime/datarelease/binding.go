@@ -397,8 +397,8 @@ func decodeJSONObject(raw []byte, relativePath string) (map[string]json.RawMessa
 			return nil, &LoadError{Code: CodeInvalidJSON, Path: relativePath, Detail: "object field name is invalid"}
 		}
 		switch name {
-		case "releaseClass", "productLifecycleState", "readinessPhase":
-			return nil, &LoadError{Code: CodeInvalidField, Path: relativePath, Field: name, Detail: "retired category field is forbidden"}
+		case "releaseClass", "productLifecycleState", "readinessPhase", "class", "privateObjectKey":
+			return nil, &LoadError{Code: CodeInvalidField, Path: relativePath, Field: name, Detail: "retired release field is forbidden"}
 		}
 		if _, exists := object[name]; exists {
 			return nil, &LoadError{Code: CodeInvalidJSON, Path: relativePath, Field: name, Detail: "duplicate field"}

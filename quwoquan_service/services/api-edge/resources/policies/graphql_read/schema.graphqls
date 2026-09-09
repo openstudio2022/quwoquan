@@ -169,6 +169,8 @@ type PostMediaItem {
   kind: String!
   mediaAssetId: ID
   mediaAssetVersion: Int
+  accessMode: String
+  coverAssetId: ID
   url: String!
   coverUrl: String
   thumbnailUrl: String
@@ -180,6 +182,7 @@ type PostMediaItem {
   hlsCmafMasterManifestUrl: String
   hlsCmafDescriptorVersion: Int
   title: String
+  caption: String
   coverStrategy: String
   coverFrameTimeMs: Int
 }
@@ -198,7 +201,9 @@ type SourceAttribution {
   publicationAdmission: String!
   authorizationProofUrl: String
   termsUrl: String
-  riskAcceptanceId: ID
+  derivedModifications(first: Int = 4): [String!]! @listCost(argument: "first", defaultValue: 4, maximumValue: 4)
+  watermarkKind: String
+  watermarkNote: String
   watermarkStatus: String!
   audioRightsStatus: String!
   modelReleaseStatus: String!

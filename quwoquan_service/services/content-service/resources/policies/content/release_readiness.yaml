@@ -2,6 +2,7 @@ schema: content-release-readiness
 policyId: content-release
 # 只有一套内容就绪契约；环境能力由本配置显式声明，不从内容类别推断。
 # 准备、导入与激活是生命周期动作，不属于此策略的选择维度。
+# 每个能力显式声明 healthScope 或 doctor 探针；端口、URL、Secret 留在环境拓扑真相源。
 capabilityProbes:
   content_api:
     healthScope: edge

@@ -112,7 +112,6 @@ def _authorities(root: Path) -> dict[str, str]:
             "postRef": f"{carrier}/m1-{carrier}",
             "postId": f"post-runtime-{carrier}",
             "contentVersion": 1,
-            "usageScope": "research",
             "contentType": carrier,
             "authorId": "author-m1",
         }
@@ -120,7 +119,7 @@ def _authorities(root: Path) -> dict[str, str]:
     ]
     import_report = {
         "schema": "quwoquan.content_import_report",
-        "status": "imported",
+        "status": "staged",
         "environment": "alpha",
         "releaseId": RELEASE_ID,
         "sourceOwner": "qwq_data",
@@ -361,7 +360,6 @@ def test_retired_category_field_is_rejected(tmp_path, field):
     authority = _load_authority(ref, digest, label="Data readiness", root=root)
     with pytest.raises(subject.ContentApiConsumerError, match="schema"):
         _validate_data_readiness(authority, release_id=RELEASE_ID, import_run_id=IMPORT_RUN_ID, verify_run_id=VERIFY_RUN_ID, release_digest=RELEASE_DIGEST, manifest_digest=MANIFEST_DIGEST)
-
 
 def test_matrix_writes_sixteen_observations_and_canonical_raw_without_secret(
     tmp_path: Path,

@@ -141,7 +141,6 @@ def handle_governance(args: argparse.Namespace) -> None:
 def register_parser(subparsers: argparse._SubParsersAction) -> None:
     p = subparsers.add_parser("governance", help="Data governance candidate operations")
     sub = p.add_subparsers(dest="governance_command")
-
     from governance.taxonomy.handler import register_taxonomy_parser
 
     creators = sub.add_parser(
@@ -213,3 +212,6 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     review.add_argument("--kind")
 
     p.set_defaults(handler=handle_governance)
+    from governance.production_audit import register_audit_parser
+
+    register_audit_parser(sub)

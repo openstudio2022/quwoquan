@@ -208,6 +208,7 @@ type PostMediaItem struct {
 	HlsCmafMasterManifestUrl string `json:"hlsCmafMasterManifestUrl" bson:"hlsCmafMasterManifestUrl"`
 	HlsCmafDescriptorVersion int64  `json:"hlsCmafDescriptorVersion" bson:"hlsCmafDescriptorVersion"`
 	Title                    string `json:"title" bson:"title"`
+	Caption                  string `json:"caption" bson:"caption"`
 	CoverStrategy            string `json:"coverStrategy" bson:"coverStrategy"`
 	CoverFrameTimeMs         int64  `json:"coverFrameTimeMs" bson:"coverFrameTimeMs"`
 }
@@ -247,7 +248,9 @@ type SourceAttribution struct {
 	PublicationAdmission          string    `json:"publicationAdmission" bson:"publicationAdmission"`
 	AuthorizationProofUrl         string    `json:"authorizationProofUrl" bson:"authorizationProofUrl"`
 	TermsUrl                      string    `json:"termsUrl" bson:"termsUrl"`
-	RiskAcceptanceId              string    `json:"riskAcceptanceId" bson:"riskAcceptanceId"`
+	DerivedModifications          []string  `json:"derivedModifications" bson:"derivedModifications"`
+	WatermarkKind                 string    `json:"watermarkKind" bson:"watermarkKind"`
+	WatermarkNote                 string    `json:"watermarkNote" bson:"watermarkNote"`
 	WatermarkStatus               string    `json:"watermarkStatus" bson:"watermarkStatus"`
 	AudioRightsStatus             string    `json:"audioRightsStatus" bson:"audioRightsStatus"`
 	ModelReleaseStatus            string    `json:"modelReleaseStatus" bson:"modelReleaseStatus"`

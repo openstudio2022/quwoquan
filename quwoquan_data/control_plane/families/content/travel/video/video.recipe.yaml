@@ -21,5 +21,5 @@ execution:
   reviewModelFamily: gpt
   reviewModelParameters: []
 readiness:
-  mode: research
+  mode: production
   requireReviewed: true

@@ -207,26 +207,25 @@ def command_managed_pytest(args: argparse.Namespace) -> int:
 
 _SECRET_PATTERNS = (
     re.compile(rb"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----"),
-    re.compile(rb"(?i)(?:api[_-]?key|secret|password|access[_-]?token)\s*[:=]\s*['\"]?(?P<value>[A-Za-z0-9/+_.-]{24,})"),
+    re.compile(rb"(?i)(?<![A-Za-z0-9])(?:api[_-]?key|access[_-]?key[_-]?secret|secret|password|access[_-]?token)\s*[:=]\s*(?P<quote>['\"`]?)(?P<value>[A-Za-z0-9/+_.-]{24,})"),
     re.compile(rb"AKIA[0-9A-Z]{16}"),
 )
-# 凭证键右侧若只是环境变量名（`password: X_REDIS_PASSWORD`）或代码里的点号标识符
-# （`APIKey: cfg.Telemetry.APIKey`），是注入间接层而不是凭证本体，不算 secret material。
-_SECRET_INDIRECTION_VALUES = (
-    re.compile(rb"^[A-Z][A-Z0-9_]*$"),
-    re.compile(rb"^[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)+$"),
-)
+# 仅裸字段引用属于代码间接层；带引号的相同文本仍是字面量。
+# 不豁免裸大写字符串：仅靠大写形状无法区分环境变量与真实密钥。
+_SECRET_FIELD_REFERENCE = re.compile(rb"[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)+")
 
 
 def _has_secret_material(blob: bytes) -> bool:
     for pattern in _SECRET_PATTERNS:
         for match in pattern.finditer(blob):
             value = match.groupdict().get("value")
-            if value is None:
+            if value is None or match.group("quote"):
                 return True
-            if not any(shape.fullmatch(value) for shape in _SECRET_INDIRECTION_VALUES):
+            if not _SECRET_FIELD_REFERENCE.fullmatch(value):
                 return True
     return False
+
+
 _PII_PATTERNS = (
     # 手机号两侧排除十六进制字符：sha256/digest 里任意 11 位数字子串（如 "18916601719eac…"）
     # 不是号码；否则 contract_graph.json 这类生成物每次刷新都会被误判为直接 PII。

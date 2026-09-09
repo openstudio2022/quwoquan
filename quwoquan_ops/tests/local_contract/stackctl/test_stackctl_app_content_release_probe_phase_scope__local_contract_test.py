@@ -5,14 +5,16 @@ spec_ref: specs/feature-tree/platform-ops-governance/spec.md#dom-001
 
 from __future__ import annotations
 
+import importlib.util
+import io
 import json
 import tempfile
 import unittest
+from contextlib import redirect_stderr
 from pathlib import Path
 from unittest import mock
 
 from quwoquan_ops.cli import stackctl
-
 
 def _plan(*, include_search: bool) -> dict[str, object]:
     plan: dict[str, object] = {
@@ -62,6 +64,68 @@ def _readiness(tmp_path: Path) -> Path:
 
 
 class StackctlAppContentReleaseProbePhaseScopeTest(unittest.TestCase):
+    def test_retired_research_modules_are_physically_absent(self) -> None:
+        for module in (
+            "quwoquan_ops.cli.commands.research_consumer_credential",
+            "quwoquan_ops.cli.commands.research_isolation_probe",
+            "quwoquan_ops.cli.lib.research_consumer_credential",
+            "quwoquan_ops.cli.lib.research_content_isolation",
+            "quwoquan_ops.cli.lib.research_isolation_proof_document",
+            "quwoquan_ops.cli.lib.research_isolation_runtime_probe",
+            "quwoquan_ops.cli.lib.research_isolation_runtime_probe_media",
+            "quwoquan_ops.cli.lib.local_environment_auth.research_identity",
+        ):
+            with self.subTest(module=module):
+                self.assertIsNone(importlib.util.find_spec(module))
+
+    def test_retired_research_commands_are_not_registered(self) -> None:
+        parser = stackctl.build_parser()
+        for command in ("research-consumer-credential", "research-isolation-probe"):
+            with self.subTest(command=command), redirect_stderr(io.StringIO()):
+                with self.assertRaises(SystemExit) as error:
+                    parser.parse_args([command, "--help"])
+                self.assertEqual(error.exception.code, 2)
+
+    def test_all_environment_declarations_are_category_free(self) -> None:
+        environments = Path(stackctl.__file__).resolve().parents[1] / "environments"
+        for environment in ("alpha", "beta", "gamma", "prod"):
+            with self.subTest(environment=environment):
+                declaration = json.loads(
+                    (environments / environment / "runtime.yaml").read_text(encoding="utf-8")
+                )
+                self.assertNotIn("productLifecycleState", declaration)
+                self.assertNotIn("researchIsolationPolicy", declaration)
+                for target in declaration["targets"].values():
+                    self.assertNotIn("researchIdentity", target)
+
+    def test_release_schema_and_cli_reject_category_and_phase_selectors(self) -> None:
+        root = Path(stackctl.__file__).resolve().parents[2]
+        for name in ("release_attestation", "environment_release_readiness"):
+            schema = json.loads((root / f"quwoquan_data/schema/release/{name}.schema.json").read_text(encoding="utf-8"))
+            self.assertIs(schema["additionalProperties"], False)
+            for field in ("releaseClass", "productLifecycleState", "readinessPhase"):
+                self.assertNotIn(field, schema["properties"])
+        parser = stackctl.build_parser()
+        for environment in ("alpha", "beta", "gamma", "prod"):
+            args = parser.parse_args(["content-readiness", "--env", environment])
+            self.assertEqual(args.env, environment)
+            self.assertFalse(hasattr(args, "phase"))
+            for phase in ("import", "consumer", "production", "research", "commercial"):
+                with redirect_stderr(io.StringIO()), self.assertRaises(SystemExit) as error:
+                    parser.parse_args(["content-readiness", "--phase", phase, "--env", environment])
+                self.assertEqual(error.exception.code, 2)
+
+    def test_resource_group_remains_independent_of_release_lifecycle(self) -> None:
+        environments = Path(stackctl.__file__).resolve().parents[1] / "environments"
+        schema = json.loads((environments / "evidence/environment_execution_request.schema.json").read_text(encoding="utf-8"))
+        resource_group = schema["properties"]["resourceGroup"]["const"]
+        self.assertEqual(resource_group, "workstation-commercial-runtime")
+        for environment in ("alpha", "beta", "gamma", "prod"):
+            declaration = json.loads((environments / environment / "runtime.yaml").read_text(encoding="utf-8"))
+            for target in declaration["targets"].values():
+                if target["backend"] == "local":
+                    self.assertEqual(target["localResourceGroup"], resource_group)
+
     def test_default_release_requires_search_and_exact_page_media_checks(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -165,7 +229,6 @@ class StackctlAppContentReleaseProbePhaseScopeTest(unittest.TestCase):
                         app_uat_plan=plan, report_dir=root / "probe",
                     )
                 probe.assert_not_called()
-
 
 if __name__ == "__main__":
     unittest.main()

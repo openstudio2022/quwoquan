@@ -35,6 +35,14 @@ def test_release_closes_guest_media_avatar_and_prepared_apply(monkeypatch, tmp_p
     assert value["importRunId"] == "activate-001"
     assert "/apply-001/import.json" in value["contentImportReportRef"]
     assert value["counts"]["premiumPlayableVideos"] == 1
+    assert value["acceptedCount"] == 3
+    assert "researchAcceptedCount" not in value
+    assert "commercialAcceptedCount" not in value
+    assert stackctl._release_feed_post_expectations(value) == {
+        "content_feed": {"post-article", "post-image", "post-video"},
+        "video_book_feed": {"post-video"},
+        "premium_feed": {"post-video"},
+    }
 
 
 def test_unverified_rights_are_preserved_without_blocking_public_readiness(monkeypatch, tmp_path):

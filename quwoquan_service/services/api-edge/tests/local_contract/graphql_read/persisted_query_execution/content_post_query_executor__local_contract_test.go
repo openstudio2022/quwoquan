@@ -97,6 +97,49 @@ func TestContentPostExecutorForwardsOnlyAnExactGraphQLSelection(t *testing.T) {
 	}
 }
 
+// spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#req-016
+func TestContentPostExecutorPreservesSourceAttributionAndRejectsRetiredField(t *testing.T) {
+	attribution := map[string]any{
+		"isOriginal": false, "originalCreatorId": nil, "originalCreatorName": "摄影师甲",
+		"originalCreatorProfileUrl": nil, "platform": "Wikimedia Commons",
+		"sourcePostUrl": "https://example.com/source", "originalAssetUrl": "https://example.com/image.jpg",
+		"attributionText": "摄影师甲 / CC BY 4.0", "rightsBasis": "CC BY 4.0",
+		"commercialAuthorizationStatus": "unverified", "publicationAdmission": "production_release",
+		"authorizationProofUrl": nil, "termsUrl": nil, "derivedModifications": []any{"crop", "resize"},
+		"watermarkKind": "author_signature", "watermarkNote": "保留作者签名", "watermarkStatus": "present",
+		"audioRightsStatus": "no_audio", "modelReleaseStatus": "not_required", "propertyReleaseStatus": "not_required",
+		"collectedAt": "2026-09-09T00:00:00Z", "takedownPolicy": "notice_and_takedown",
+	}
+	payload := withField(baseOwnerPost("post-1", "title"), "sourceAttribution", attribution)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		writeOwnerPost(w, "contentPostDetailBase", payload)
+	}))
+	defer server.Close()
+	executor := newContentPostExecutor(t, server.URL, nil)
+	result, err := executor.Execute(context.Background(), contentPostBaseEntry(), map[string]any{"postId": "post-1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var data map[string]map[string]any
+	if err := json.Unmarshal(result.Data, &data); err != nil {
+		t.Fatal(err)
+	}
+	got, _ := json.Marshal(data["contentPostDetailBase"]["sourceAttribution"])
+	want, _ := json.Marshal(attribution)
+	if string(got) != string(want) {
+		t.Fatalf("GraphQL decoder changed source facts: got=%s want=%s", got, want)
+	}
+	for _, invalid := range []map[string]any{
+		withField(attribution, "riskAcceptanceId", nil),
+		withField(attribution, "derivedModifications", nil),
+	} {
+		payload["sourceAttribution"] = invalid
+		if _, err := executor.Execute(context.Background(), contentPostBaseEntry(), map[string]any{"postId": "post-1"}); err == nil {
+			t.Fatal("retired or missing required attribution must fail closed")
+		}
+	}
+}
+
 func TestValidateExecutableEntryRejectsSelectedFieldSetDrift(t *testing.T) {
 	missing := contentPostBaseEntry()
 	missing.AppClientBundle.SelectedFields = missing.AppClientBundle.SelectedFields[1:]
@@ -135,11 +178,17 @@ func TestContentPostExecutorExecutesEveryTypeAwareBundleSlice(t *testing.T) {
 		},
 		{
 			operation: "ContentPostDetailMedia",
-			hash:      "2251d9dca6cc14a77ff40eb630223df0b432095a98c7bd3f9f72d2e8d0752c18",
+			hash:      "9d8916aa9564bd99f990ab00b32d79d70dc860d05108a5e6f30f07df43b2a25f",
 			root:      "contentPostDetailMedia",
 			payload: map[string]any{
 				"postId": "post-1", "contentType": "video", "mediaAssetIds": []any{},
-				"mediaUrls": []any{}, "mediaItems": []any{}, "thumbnailUrl": nil,
+				"mediaUrls": []any{}, "mediaItems": []any{map[string]any{
+					"kind": "video", "url": "https://example.com/video.mp4", "mediaAssetId": "asset-1", "mediaAssetVersion": 1,
+					"accessMode": "public", "coverAssetId": "cover-1", "coverUrl": nil,
+					"durationMs": nil, "width": nil, "height": nil, "previewTrackManifestUrl": nil,
+					"previewTrackVersion": nil, "hlsCmafMasterManifestUrl": nil, "hlsCmafDescriptorVersion": nil,
+					"title": "标题不能覆盖说明", "caption": "逐资产说明",
+				}}, "thumbnailUrl": nil,
 				"videoUrl": nil, "width": nil, "height": nil, "durationMs": nil,
 				"coverStrategy": nil, "coverFrameTimeMs": nil,
 			},
@@ -186,6 +235,16 @@ func TestContentPostExecutorExecutesEveryTypeAwareBundleSlice(t *testing.T) {
 			}
 			if !strings.Contains(string(result.Data), `"`+testCase.root+`"`) {
 				t.Fatalf("response=%s", result.Data)
+			}
+			if testCase.operation == "ContentPostDetailMedia" {
+				var data map[string]map[string]any
+				if err := json.Unmarshal(result.Data, &data); err != nil {
+					t.Fatal(err)
+				}
+				item := data[testCase.root]["mediaItems"].([]any)[0].(map[string]any)
+				if item["caption"] != "逐资产说明" || item["title"] != "标题不能覆盖说明" || item["accessMode"] != "public" {
+					t.Fatalf("GraphQL decoder lost media facts: %v", item)
+				}
 			}
 		})
 	}
@@ -381,7 +440,7 @@ func assertInternalOwnerRequest(t *testing.T, request *http.Request) {
 
 func contentPostBaseEntry() domain.Entry {
 	entry := validRegistryEntry()
-	entry.SHA256Hash = "3a73f535735fcbb64f7de0db524e9dab2ca1f41d7f1fec91c68053dfde5bc80f"
+	entry.SHA256Hash = "7e03c295fb73f2aaed2e8f944d7133b19a02dabd6a3ccc297b7f9f0b16b588d7"
 	entry.OperationName = "ContentPostDetailBase"
 	entry.Cost.Depth = 3
 	entry.Cost.Complexity = 60

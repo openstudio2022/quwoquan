@@ -51,7 +51,7 @@ def release_header_fixture(
         "containsUnverifiedAssets": True,
         "rightsStatusCounts": {"verified": 0, "unverified": 1, "restricted": 0, "unknown": 0},
         "authorizationRequiredAssetIds": ["asset-1"],
-        "researchAcceptedCount": 1, "commercialAcceptedCount": 0,
+        "acceptedCount": 1,
         "sourceIdentities": sources,
         "sourceIdentitySetDigest": source_identity_set_digest or canonical_digest({
             "schema": "quwoquan_data.source_identity_set", "sourceIdentities": sources,
@@ -74,8 +74,8 @@ def release_attestation_fixture(
 
     fields = (
         "releaseId", "sourceOwner", "releaseKind", "containsUnverifiedAssets",
-        "rightsStatusCounts", "authorizationRequiredAssetIds", "researchAcceptedCount",
-        "commercialAcceptedCount", "executionIds", "sourceIdentities",
+        "rightsStatusCounts", "authorizationRequiredAssetIds", "acceptedCount",
+        "executionIds", "sourceIdentities",
         "sourceIdentitySetDigest", "canonicalMerkle", "sourceDigests",
     )
     attestation = {

@@ -13,6 +13,7 @@ from content.release.canonical.object_transaction_contract import (
     ObjectTransactionError,
     _safe_id,
     _safe_rel,
+    _digest_file,
 )
 from core.content_library import MediaHoldingError, resolve_media_holding
 from core.io import write_json
@@ -144,6 +145,41 @@ def _avatar_asset_projection(
     return profile_ref, asset_ref, evidence_source
 
 
+def _carry_avatar_source(*, target: Path, asset_ref: dict[str, object], evidence_source: Path, publish_root: Path | None) -> dict[str, object]:
+    """把现有头像字节及原权利证据随体转录，不生成许可或新审核。"""
+    from core.schema import assert_valid
+
+    key = str(asset_ref["objectKey"])
+    body = (publish_root / key) if publish_root is not None else resolve_media_holding(str(asset_ref["sha256"]))
+    relative = Path("media") / ("avatar" + Path(key).suffix)
+    destination = target / relative
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(body, destination)
+    if _digest_file(destination) != asset_ref["sha256"] or destination.stat().st_size != asset_ref["bytes"]:
+        raise ObjectTransactionError("DATA.PUBLISH.CARRIED_MEDIA_DRIFT: creator avatar")
+    original = json.loads(evidence_source.read_bytes())
+    rights = original.get("commercialRights")
+    if not isinstance(rights, Mapping):
+        raise ObjectTransactionError("DATA.PUBLISH.SOURCE_EVIDENCE_INVALID: creator avatar")
+    source_ref = "sources/avatar/source.json"
+    source_root = target / "sources/avatar"
+    source_root.mkdir(parents=True, exist_ok=True)
+    evidence = source_root / "evidence.json"
+    shutil.copy2(evidence_source, evidence)
+    source = {
+        "schema": "quwoquan_data.publish_source", "sourceId": "avatar",
+        "sourceUrl": str(rights.get("canonicalFilePage") or rights.get("source") or ""),
+        "sourceUseMode": str(rights.get("sourceUseMode") or ""),
+        "fetchedAt": str(rights.get("fetchedAt") or ""),
+        "metadata": dict(original),
+        "assets": [{**dict(rights), "assetId": asset_ref["assetId"], "sha256": asset_ref["sha256"], "bytes": asset_ref["bytes"]}],
+        "evidence": [{"path": "evidence.json", "sha256": _digest_file(evidence), "bytes": evidence.stat().st_size, "kind": "acquisition_receipt"}],
+    }
+    assert_valid(source, "publish", "source")
+    write_json(source_root / "source.json", source)
+    return {key: value for key, value in asset_ref.items() if key != "objectKey"} | {"path": relative.as_posix(), "sourceRefs": [source_ref]}
+
+
 def project_creator_object(
     creator_ref: str,
     target: Path,
@@ -233,15 +269,14 @@ def project_creator_object(
     asset_refs: list[dict[str, object]] = []
     if avatar_projection is not None:
         avatar_asset, asset_ref, evidence_source = avatar_projection
+        carried = _carry_avatar_source(
+            target=target, asset_ref=asset_ref, evidence_source=evidence_source,
+            publish_root=Path(publish_root) if publish_root is not None else None,
+        )
         profile["avatarAsset"] = avatar_asset
-        asset_refs.append(asset_ref)
-        rights_root = target / "rights_snapshots"
-        rights_root.mkdir(parents=True, exist_ok=True)
-        # Media closure keeps one owner-bound evidence file in its existing
-        # internal folder. Avatar eligibility is already decided by identity,
-        # readability and quality; this file is never interpreted as a
-        # Research/Commercial scope.
-        shutil.copy2(evidence_source, rights_root / evidence_source.name)
+        profile["sourceRefs"] = list(carried["sourceRefs"])
+        asset_refs.append(carried)
+    profile["assets"] = asset_refs
     write_json(target / "profile.json", profile)
     write_json(target / "assets.refs.json", {"assets": asset_refs})
     (target / "works.refs.ndjson").write_text("", encoding="utf-8")

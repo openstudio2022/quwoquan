@@ -156,7 +156,7 @@ def _descriptor_files(descriptor: Mapping[str, Any]) -> set[tuple[str, str]]:
     return bindings
 
 
-def _bound_commercial_release(
+def _bound_release(
     artifact_root: Path,
     manifest: Mapping[str, Any],
 ) -> dict[str, str]:
@@ -189,15 +189,15 @@ def _bound_commercial_release(
             payload = _read_object(path, label="bound release attestation")
         except (TypeError, ValueError):
             continue
+        if payload.get("schema") != "quwoquan_data.release_attestation":
+            continue
+        from quwoquan_ops.cli.commands.app_preflight_readiness import _validate_data_schema
+
+        _validate_data_schema(payload, "release_attestation")
         release_id = str(payload.get("releaseId") or "").strip()
         release_digest = str(payload.get("payloadSha256") or "").strip()
         if (
-            payload.get("schema") == "quwoquan_data.release_attestation"
-            and (release_id == "pilot-003" or release_id.endswith("--pilot-003"))
-            and payload.get("releaseClass") == "commercial"
-            and payload.get("productLifecycleState") == "commercial"
-            and payload.get("containsUnverifiedAssets") is False
-            and payload.get("authorizationRequiredAssetIds") == []
+            (release_id == "pilot-003" or release_id.endswith("--pilot-003"))
             and DIGEST_PATTERN.fullmatch(release_digest) is not None
         ):
             candidates.append(
@@ -212,7 +212,7 @@ def _bound_commercial_release(
     }
     if len(identities) != 1:
         raise ValueError(
-            "manifest must bind exactly one commercial pilot-003 release in all environments"
+            "manifest must bind exactly one pilot-003 content release in all environments"
         )
     return next(iter(identities.values()))
 
@@ -240,16 +240,16 @@ def _identity(
     }
     if actual != expected:
         raise ValueError("candidate, commit, or artifact binding differs from workflow input")
-    release = _bound_commercial_release(root, manifest)
+    release = _bound_release(root, manifest)
     return {**actual, **release}
 
 
 def _verify_release_binding(manifest_path: Path, release_attestation: Path) -> None:
     root, manifest = _manifest(manifest_path)
-    expected = _bound_commercial_release(root, manifest)
+    expected = _bound_release(root, manifest)
     supplied = _read_object(
         release_attestation,
-        label="runtime commercial release attestation",
+        label="runtime content release attestation",
     )
     actual = {
         "releaseId": str(supplied.get("releaseId") or "").strip(),
@@ -258,7 +258,7 @@ def _verify_release_binding(manifest_path: Path, release_attestation: Path) -> N
     }
     if supplied.get("schema") != "quwoquan_data.release_attestation" or actual != expected:
         raise ValueError(
-            "runtime commercial release bytes differ from manifest-bound pilot-003"
+            "runtime content release bytes differ from manifest-bound pilot-003"
         )
 
 

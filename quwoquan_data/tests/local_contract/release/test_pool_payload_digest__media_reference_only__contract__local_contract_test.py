@@ -31,13 +31,10 @@ def _asset_row(asset_id: str, payload: bytes) -> dict[str, object]:
 def _structured_object(root: Path, *, assets: list[dict[str, object]]) -> Path:
     root.mkdir(parents=True)
     (root / "manifest.json").write_text(
-        json.dumps({"contentId": "content-a", "version": 1}, ensure_ascii=False),
+        json.dumps({"contentId": "content-a", "version": 1, "assets": assets}, ensure_ascii=False),
         encoding="utf-8",
     )
     (root / "article.md").write_text("# body\n", encoding="utf-8")
-    (root / "asset.refs.json").write_text(
-        json.dumps({"assets": assets}, ensure_ascii=False), encoding="utf-8"
-    )
     return root
 
 
@@ -76,7 +73,7 @@ def test_media_reference_drift_still_changes_the_payload_digest(
         assets=[_asset_row("cover", COVER_BYTES)],
     )
     before = pool_payload_digest(canonical)
-    (canonical / "asset.refs.json").write_text(
+    (canonical / "manifest.json").write_text(
         json.dumps(
             {"assets": [_asset_row("cover", DETAIL_BYTES)]}, ensure_ascii=False
         ),

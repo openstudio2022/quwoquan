@@ -1,7 +1,11 @@
+// spec_ref: specs/feature-tree/runtime/runtime-data-engineering/geo-content-trinity/spec.md#gwt-001.t1
+// spec_ref: specs/feature-tree/runtime/runtime-data-engineering/geo-content-trinity/spec.md#gwt-001.t2
 package local_contract
 
 import (
+	"crypto/sha256"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -12,10 +16,12 @@ import (
 )
 
 const (
-	testCreatorID = "creator-a"
-	testAvatarID  = "avatar-a"
-	testAvatarSHA = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	testCreatorID   = "creator-a"
+	testAvatarID    = "avatar-a"
+	testAvatarBytes = "local creator avatar fixture"
 )
+
+var testAvatarSHA = fmt.Sprintf("sha256:%x", sha256.Sum256([]byte(testAvatarBytes)))
 
 func writeReleaseTestFile(t *testing.T, path string, content string) {
 	t.Helper()
@@ -44,7 +50,7 @@ func creatorReleaseFixture(t *testing.T) string {
 	writeReleaseTestFile(
 		t,
 		filepath.Join(creatorRoot, "profile.json"),
-		`{"schema":"quwoquan_data.creator_profile","creatorId":"creator-a","userId":"author-a","authorId":"author-a","personaId":"author-a","displayName":"Creator A","userHandle":"creator_a","avatarAsset":{"assetId":"avatar-a","kind":"avatar","sha256":"`+testAvatarSHA+`"},"headline":"headline","bio":"bio","creatorArchetype":"guide","publicProfileTagRefs":[]}`,
+		`{"schema":"quwoquan_data.creator_profile","creatorId":"creator-a","userId":"author-a","authorId":"author-a","personaId":"author-a","displayName":"Creator A","userHandle":"creator_a","avatarAsset":{"assetId":"avatar-a","kind":"avatar","sha256":"`+testAvatarSHA+`"},"assets":[{"assetId":"avatar-a","path":"assets/avatar.jpg","sha256":"`+testAvatarSHA+`","bytes":`+fmt.Sprint(len(testAvatarBytes))+`,"sourceRefs":["sources/avatar/source.json"]}],"headline":"headline","bio":"bio","creatorArchetype":"guide","publicProfileTagRefs":[]}`,
 	)
 	writeReleaseTestFile(t, filepath.Join(creatorRoot, "works.refs.ndjson"), "")
 	publicSlice := runtimemedia.BuildContentMediaPublicSliceKey(
@@ -56,22 +62,26 @@ func creatorReleaseFixture(t *testing.T) string {
 	writeReleaseTestFile(
 		t,
 		filepath.Join(root, "payload", "media_manifest.json"),
-		`{"schema":"quwoquan_data.release_media_manifest","releaseId":"release-a","sourceOwner":"qwq_data","assets":[{"assetId":"avatar-a","kind":"avatar","version":1,"contentType":"image/jpeg","publicSliceKey":"`+publicSlice+`","sha256":"`+testAvatarSHA+`","bytes":12,"ownerRefs":["creators/creator-a"],"rightsSnapshotRefs":["objects/creators/creator-a/rights_snapshots/avatar.json"]}],"issues":[],"counts":{"assets":1,"issues":0}}`,
+		`{"schema":"quwoquan_data.release_media_manifest","releaseId":"release-a","sourceOwner":"qwq_data","assets":[{"assetId":"avatar-a","kind":"avatar","version":1,"contentType":"image/jpeg","publicSliceKey":"`+publicSlice+`","sha256":"`+testAvatarSHA+`","bytes":`+fmt.Sprint(len(testAvatarBytes))+`,"ownerRefs":["creators/creator-a"],"rightsSnapshotRefs":["objects/creators/creator-a/sources/avatar/source.json"]}],"issues":[],"counts":{"assets":1,"issues":0}}`,
 	)
-	writeReleaseTestFile(
-		t,
-		filepath.Join(
-			root,
-			"payload",
-			"objects",
-			"creators",
-			testCreatorID,
-			"rights_snapshots",
-			"avatar.json",
-		),
-		`{"assetId":"avatar-a","manifestAsset":{"assetId":"avatar-a","sha256":"`+
-			testAvatarSHA+`"}}`,
-	)
+	writeReleaseTestFile(t, filepath.Join(creatorRoot, "assets/avatar.jpg"), testAvatarBytes)
+	evidence := "creator avatar acquisition evidence"
+	source := map[string]any{
+		"schema": "quwoquan_data.publish_source", "sourceId": "avatar",
+		"sourceUrl": "https://source.example.com/avatar", "sourceUseMode": "licensed_adaptation",
+		"fetchedAt": "2026-09-09T00:00:00Z", "metadata": map[string]any{"license": "fixture permission"},
+		"assets": []any{map[string]any{"assetId": "original-avatar", "rightsAuditStatus": "verified", "distributionDecision": "production_allowed"}},
+		"evidence": []any{map[string]any{
+			"path": "evidence.html", "sha256": fmt.Sprintf("sha256:%x", sha256.Sum256([]byte(evidence))),
+			"bytes": len(evidence), "kind": "source_snapshot",
+		}},
+	}
+	raw, err := json.Marshal(source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeReleaseTestFile(t, filepath.Join(creatorRoot, "sources/avatar/source.json"), string(raw))
+	writeReleaseTestFile(t, filepath.Join(creatorRoot, "sources/avatar/evidence.html"), evidence)
 	return root
 }
 
@@ -148,7 +158,7 @@ func TestLoadCreatorsRejectsRetiredAndInconsistentAvatarBindings(t *testing.T) {
 			name: "rights",
 			mutate: func(_ map[string]any, manifest map[string]any) {
 				manifest["assets"].([]any)[0].(map[string]any)["rightsSnapshotRefs"] =
-					[]any{"objects/creators/other/rights_snapshots/avatar.json"}
+					[]any{"objects/creators/other/sources/avatar/source.json"}
 			},
 			errorMarker: "rightsSnapshotRefs",
 		},

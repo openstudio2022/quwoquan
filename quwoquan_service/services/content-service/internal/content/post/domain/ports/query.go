@@ -266,7 +266,9 @@ type PostSourceAttributionSlice struct {
 	PublicationAdmission          string    `json:"publicationAdmission,omitempty" bson:"publicationAdmission,omitempty"`
 	AuthorizationProofURL         string    `json:"authorizationProofUrl,omitempty" bson:"authorizationProofUrl,omitempty"`
 	TermsURL                      string    `json:"termsUrl,omitempty" bson:"termsUrl,omitempty"`
-	RiskAcceptanceID              string    `json:"riskAcceptanceId,omitempty" bson:"riskAcceptanceId,omitempty"`
+	DerivedModifications          []string  `json:"derivedModifications" bson:"derivedModifications"`
+	WatermarkKind                 string    `json:"watermarkKind,omitempty" bson:"watermarkKind,omitempty"`
+	WatermarkNote                 string    `json:"watermarkNote,omitempty" bson:"watermarkNote,omitempty"`
 	WatermarkStatus               string    `json:"watermarkStatus,omitempty" bson:"watermarkStatus,omitempty"`
 	AudioRightsStatus             string    `json:"audioRightsStatus,omitempty" bson:"audioRightsStatus,omitempty"`
 	ModelReleaseStatus            string    `json:"modelReleaseStatus,omitempty" bson:"modelReleaseStatus,omitempty"`
@@ -311,6 +313,7 @@ type PostMediaItemSlice struct {
 	HLSCMAFMasterManifestURL string `json:"hlsCmafMasterManifestUrl,omitempty" bson:"hlsCmafMasterManifestUrl,omitempty"`
 	HLSCMAFDescriptorVersion int64  `json:"hlsCmafDescriptorVersion,omitempty" bson:"hlsCmafDescriptorVersion,omitempty"`
 	Title                    string `json:"title,omitempty" bson:"title,omitempty"`
+	Caption                  string `json:"caption,omitempty" bson:"caption,omitempty"`
 }
 
 // PostArticleAssetSlice 是文章 manifest 中可被客户端消费的资源信息。

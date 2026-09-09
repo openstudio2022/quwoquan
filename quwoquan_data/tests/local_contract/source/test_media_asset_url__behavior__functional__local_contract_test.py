@@ -48,7 +48,7 @@ def _seed_canonical() -> tuple[Path, str, str]:
     post_ref = "posts/article/攻略/毕棚沟攻略/1"
     post = root / post_ref
     write_json(
-        post / "asset.refs.json",
+        post / "manifest.json",
         {
             "assets": [
                 {
@@ -98,7 +98,7 @@ def test_materialize_release_media_reads_closed_cas_only() -> None:
         release_root / "release-a/payload" / asset["publicSliceKey"]
     ).read_bytes() == b"canonical-cas-asset"
     assert (canonical / object_key).read_bytes() == b"canonical-cas-asset"
-    assert not (canonical / post_ref / "manifest.json").exists()
+    assert (canonical / post_ref / "manifest.json").is_file()
 
 
 def test_release_media_manifest_is_create_once() -> None:
@@ -124,7 +124,7 @@ def test_release_media_manifest_is_create_once() -> None:
 def test_invalid_or_dangling_asset_ref_fails_closed() -> None:
     canonical, post_ref, _ = _seed_canonical()
     write_json(
-        canonical / post_ref / "asset.refs.json",
+        canonical / post_ref / "manifest.json",
         {"assets": [{"objectKey": "../escape.png", "sha256": "sha256:" + "0" * 64}]},
     )
     release_root = Path(tempfile.mkdtemp(prefix="release_media_bad_"))
@@ -210,7 +210,7 @@ def test_release_manifest_unifies_avatar_image_video_identity_and_rights() -> No
         admit_library_bytes(payload, kind=MEDIA_KIND)
         root = canonical / object_kind / object_ref
         write_json(
-            root / "asset.refs.json",
+            root / ("assets.refs.json" if object_kind == "creators" else "manifest.json"),
             {
                 "assets": [
                     {
@@ -297,7 +297,6 @@ def test_release_manifest_unifies_avatar_image_video_identity_and_rights() -> No
 def test_release_object_media_binding_removes_private_cas_and_environment_urls() -> None:
     objects = Path(tempfile.mkdtemp(prefix="release_object_media_")) / "objects"
     manifest_path = objects / "entities/地点/景区/示例/manifest.json"
-    asset_refs_path = objects / "entities/地点/景区/示例/asset.refs.json"
     rights_snapshot_path = (
         objects / "entities/地点/景区/示例/rights_snapshots/cover.json"
     )
@@ -310,17 +309,6 @@ def test_release_object_media_binding_removes_private_cas_and_environment_urls()
                     "role": "cover",
                     "objectKey": "media/objects/sha256/aa/bb/" + "a" * 64 + ".jpg",
                     "cdnUrl": "https://private.invalid/object",
-                }
-            ]
-        },
-    )
-    write_json(
-        asset_refs_path,
-        {
-            "assets": [
-                {
-                    "assetId": "cover",
-                    "objectKey": "media/objects/sha256/aa/bb/" + "a" * 64 + ".jpg",
                 }
             ]
         },
@@ -354,7 +342,7 @@ def test_release_object_media_binding_removes_private_cas_and_environment_urls()
         "kind": "image",
         "sha256": "sha256:" + "a" * 64,
     }
-    assert "objectKey" not in asset_refs_path.read_text(encoding="utf-8")
+    assert "objectKey" not in manifest_path.read_text(encoding="utf-8")
     assert "objectKey" not in rights_snapshot_path.read_text(encoding="utf-8")
 
 

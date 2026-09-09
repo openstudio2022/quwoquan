@@ -24,6 +24,7 @@ import 'package:quwoquan_app/design_system/spacing/immersive_media_wait_motion.d
 import 'package:quwoquan_app/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/runtime/shell/loading/app_request_wait_controller.dart';
 import 'package:quwoquan_app/runtime/transport/media/content_media_url.dart';
+import 'package:quwoquan_app/runtime/transport/media/media_load_failure_cache.dart';
 import 'package:quwoquan_app/design_system/media/app_cached_network_image.dart';
 
 typedef ImageBookImageLoader = ImageBookImageLoadOperation Function({
@@ -481,6 +482,12 @@ class _ImageBookCanvasState extends ConsumerState<ImageBookCanvas> {
             'image book load deadline exceeded',
             AppRequestWaitTimings.foregroundReadDeadline,
           );
+        if (candidatesTried > 0 && resource.loadIdentity != null) {
+          MediaLoadFailureCache.instance.recordFailure(
+            resource.loadIdentity!,
+            error: resource.error!,
+          );
+        }
         _textureRevision += 1;
         _syncPresentation(resource);
         widget.onMediaLoad?.call(
@@ -525,6 +532,28 @@ class _ImageBookCanvasState extends ConsumerState<ImageBookCanvas> {
     required Size pageSize,
     required DateTime startedAt,
   }) {
+    final identity = candidates.first;
+    resource.loadIdentity = identity;
+    final cachedFailure = MediaLoadFailureCache.instance.activeFailure(identity);
+    if (cachedFailure != null) {
+      // 命中只呈现既有失败，不创建 provider，也不延长冷却窗口。
+      resource
+        ..cancelWaitTimers()
+        ..loadInFlight = false
+        ..availability = _ImageBookPageAvailability.failed
+        ..error = cachedFailure;
+      _textureRevision += 1;
+      _syncPresentation(resource);
+      widget.onMediaLoad?.call(
+        ImageBookMediaLoadEvent(
+          result: 'failure',
+          error: cachedFailure,
+          durationMs: _now.difference(startedAt).inMilliseconds,
+          candidatesTried: 0,
+        ),
+      );
+      return;
+    }
     final operation =
         widget.imageLoader?.call(
           context: context,
@@ -659,6 +688,7 @@ class _ImageBookCanvasState extends ConsumerState<ImageBookCanvas> {
         return;
       }
       resource.activeLoad = null;
+      MediaLoadFailureCache.instance.clearIdentity(resource.loadIdentity!);
 
       void present() {
         resource
@@ -715,6 +745,10 @@ class _ImageBookCanvasState extends ConsumerState<ImageBookCanvas> {
         return;
       }
       resource.activeLoad = null;
+      MediaLoadFailureCache.instance.recordFailure(
+        resource.loadIdentity!,
+        error: error,
+      );
 
       void presentFailure() {
         if (!mounted ||
@@ -777,6 +811,10 @@ class _ImageBookCanvasState extends ConsumerState<ImageBookCanvas> {
     final resource = _resources[index];
     if (resource == null) {
       return;
+    }
+    final identity = resource.loadIdentity;
+    if (identity != null) {
+      MediaLoadFailureCache.instance.clearIdentity(identity);
     }
     resource
       ..cancelWaitTimers()
@@ -994,6 +1032,7 @@ class _ImageBookPageResource {
   /// 滞回最短展示窗口内暂存的已解码图（REQ-020）：指示保持满窗口后呈现。
   ui.Image? pendingReadyImage;
   ImageBookImageLoadOperation? activeLoad;
+  String? loadIdentity;
   Object? error;
   Object? presentedError;
   Timer? loadingTimer;

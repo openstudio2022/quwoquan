@@ -46,6 +46,24 @@ def test_l10n_and_native_test_directories_are_not_handwritten_production() -> No
     assert classify_path("quwoquan_app/ios/Runner/AppDelegate.swift", policy) == "handwritten-production"
 
 
+@pytest.mark.parametrize(("path", "category"), [
+    (".agents/skills/content-production/scripts/producer.py", "handwritten-production"),
+    (".agents/skills/content-production/carriers/image/adapter.py", "handwritten-production"),
+    (".agents/skills/content-production/schemas/input.schema.json", "contract-metadata"),
+    (".agents/skills/content-production/SKILL.md", "docs"),
+    (".agents/skills/content-production/carriers/image/sources.md", "docs"),
+    ("quwoquan_data/README.md", "docs"),
+    ("quwoquan_service/contracts/metadata/compiler.py", "handwritten-production"),
+    ("quwoquan_service/contracts/metadata/compiler.go", "handwritten-production"),
+    ("quwoquan_service/contracts/metadata/schema.json", "contract-metadata"),
+    ("quwoquan_service/contracts/README.md", "docs"),
+    ("quwoquan_service/contracts/tests/test_compiler.py", "test"),
+    ("quwoquan_service/contracts/generated/compiler.py", "generated"),
+])
+def test_source_type_wins_over_skill_and_contract_directory_names(path: str, category: str) -> None:
+    assert classify_path(path, load_policy(POLICY)) == category
+
+
 def test_brace_parser_ignores_control_flow_heads_and_string_braces() -> None:
     source = "\n".join([
         "package feed",

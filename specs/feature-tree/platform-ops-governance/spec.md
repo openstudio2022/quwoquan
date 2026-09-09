@@ -56,7 +56,7 @@
 - 契约设计不得依赖当前部署拓扑，避免后续拆 Pod 返工。
 - 可观测统一且可检索
 - Alpha、Beta、Gamma 的 mutable `test_live` runtime 必须由 `stackctl` 同轨完成启动与退出。
-- Alpha、Beta、Gamma 的 Research identity 必须在 runtime materialization 时从 `target + canonical acceptance subject` 生成 target-scoped、仓外、`0600`、create-once binding；User 启动只消费其精确 `accountId` allowlist，后续 OTP/login 必须使用同一 subject 并回读同一 account。缺 producer、空 allowlist、旧 session/数据库反查、硬编码 ID 或 binding 漂移一律在启动前 fail closed。
+- 内容 release 只消费 [`object-homepage-coverage-scaling` DEC-041](../discovery-content/object-homepage-coverage-scaling/design.md#dec-041) 的单一生产契约，不生成 Data 专属白名单身份或以登录解锁内容；公众可见性由运营运行时配置决定。普通登录、私有业务媒体授权与受保护 UAT Actor 的安全边界不因内容契约简化而放宽。
 - `dev-session` 只拥有 mutable runtime 生命周期，不创建或保留 UAT 业务数据。Alpha、Beta、Gamma 的受保护 UAT 必须由 `stackctl verify` 从选中 CaseResult 的强类型请求图创建独立 Actor 与交易事实，经目标 canonical HTTPS 和所属领域公开 operation 完成 provision、业务正文、readback 与 cleanup；候选、Provider、target 或请求依赖漂移必须在首个 mutation 前阻断。
 - mutable runtime 的内容证据绑定必须使用 receipt-bound `dev-session bind-content` 单轨，显式输入 current running `startupAttemptId`、release/verify/manifest/readiness digest；该动作只验证 exact runtime identity、create-once binding 与 launcher handoff，禁止 materialize、build、refresh 或启动 Compose。同值 replay 幂等，attempt、runtime、readiness 或已绑定值漂移必须 typed `GATE_BLOCK`。
 - mutable runtime 退出只能消费当前 target 的 canonical running receipt，并验证零 consumer lease、receipt 与 runRoot runtime plan 一致、Compose project/config/container labels 未漂移。

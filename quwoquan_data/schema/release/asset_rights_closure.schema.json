@@ -251,9 +251,16 @@
           "enum": [
             "not_required",
             "obtained",
-            "editorial_only"
+            "editorial_only",
+            "verified",
+            "unverified"
           ]
         },
+        "commercialAuthorizationStatus": {"enum": ["verified", "unverified"]},
+        "propertyReleaseStatus": {"type": "string", "minLength": 1},
+        "audioRightsStatus": {"enum": ["licensed", "original_authorized", "replaced_with_licensed_track", "no_audio", "unverified"]},
+        "derivedModifications": {"$ref": "../content/post_manifest.schema.json#/$defs/sourceAttribution/properties/derivedModifications"},
+        "watermarkNote": {"type": "string"},
         "watermarkStatus": {
           "description": "由看过像素的 AI 申报并经 ingest 转录；缺席只能记 unknown，不得假定 absent。",
           "enum": ["absent", "present", "unknown"]
@@ -310,12 +317,6 @@
               },
               "licenseShortName": {
                 "minLength": 1
-              },
-              "authorizationProof": {
-                "pattern": "^https://"
-              },
-              "rightsAuditIssues": {
-                "maxItems": 0
               }
             }
           },

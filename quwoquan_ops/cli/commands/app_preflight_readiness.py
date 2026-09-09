@@ -94,7 +94,6 @@ def _resolve_data_prepared_import(
     )
     return report.path, prepared_id
 
-
 def _load_test_data_release_readiness(
     *,
     environment: str,
@@ -197,15 +196,12 @@ def _load_data_release_readiness(
         )
     ):
         issues.append("Data readiness rightsStatusCounts is invalid")
-    identity_digest_keys = (
-        ("sourceIdentitySetDigest",)
-        if "sourceIdentities" in receipt or "sourceIdentitySetDigest" in receipt
-        else ("sourceRevision", "sourceDigest", "entityCatalogDigest")
-    )
+    if not isinstance(receipt.get("sourceIdentities"), list) or not receipt["sourceIdentities"]:
+        issues.append("Data readiness sourceIdentities is missing or invalid")
     for digest_key in (
         "manifestDigest",
         "mediaManifestDigest",
-        *identity_digest_keys,
+        "sourceIdentitySetDigest",
         "activationEnvelopeDigest",
     ):
         if _stackctl._DATA_READINESS_DIGEST_RE.fullmatch(str(receipt.get(digest_key) or "")) is None:
@@ -563,21 +559,8 @@ def _load_data_release_readiness(
             "sourceOwner": "qwq_data",
             "payloadSha256": manifest_digest,
         }
-        if "sourceIdentities" in receipt or "sourceIdentitySetDigest" in receipt:
-            expected_attestation["sourceIdentities"] = receipt.get(
-                "sourceIdentities"
-            )
-            expected_attestation["sourceIdentitySetDigest"] = receipt.get(
-                "sourceIdentitySetDigest"
-            )
-        else:
-            expected_attestation["sourceRevision"] = receipt.get(
-                "sourceRevision"
-            )
-            expected_attestation["sourceDigest"] = receipt.get("sourceDigest")
-            expected_attestation["entityCatalogDigest"] = receipt.get(
-                "entityCatalogDigest"
-            )
+        expected_attestation["sourceIdentities"] = receipt.get("sourceIdentities")
+        expected_attestation["sourceIdentitySetDigest"] = receipt.get("sourceIdentitySetDigest")
         if not isinstance(attestation, dict) or any(
             attestation.get(field) != expected
             for field, expected in expected_attestation.items()
@@ -597,7 +580,7 @@ def _load_data_release_lifecycle_exit(
     readiness: dict[str, Any],
     lifecycle_exit_ref: str,
 ) -> tuple[dict[str, Any], Path]:
-    """Load the 显式 rollback/replay proof and recompute its bindings."""
+    """Load the explicit rollback/replay proof and recompute its bindings."""
     import quwoquan_ops.cli.stackctl as _stackctl
 
     ref = str(lifecycle_exit_ref or "").strip()

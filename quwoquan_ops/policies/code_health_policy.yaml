@@ -16,7 +16,7 @@ classification:
   vendor_markers: [/vendor/, /Pods/, /node_modules/, /.dart_tool/]
   test_markers: [/test/, /tests/, /RunnerTests/, /androidTest/, _test.go, _test.dart, _test.py, __local_contract_test.py, __api_integration_test.py, __user_acceptance_test.py]
   contract_markers: [/contracts/, /schema/, /schemas/, /metadata/]
-  docs_prefixes: [docs/, specs/, .agents/]
+  docs_prefixes: [docs/, specs/]
   config_extensions: [.json, .yaml, .yml, .toml, .xml, .arb]
 # v2（2026-09-06）：file_lines 由 advisory 800 / block 1000 放宽为 1000 / 2000。
 # 旧口径实测值：手写生产文件 >1000 行 37 个（其中 >2000 行 4 个），20 个历史 merge 样本中

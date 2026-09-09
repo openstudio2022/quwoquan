@@ -75,7 +75,13 @@ def verify_package(
         str(target.get("objectRef") or ""),
         label="objectRef",
     ).as_posix()
-    target_root = canonical_root / object_kind / object_ref
+    from core.publish_layout import logical_object_ref
+    from core.publish_repository import require_publish_repository
+    require_publish_repository(canonical_root)
+    object_path = _safe_rel(str(target.get("objectPath") or ""), label="objectPath")
+    if object_path.parts[0] != object_kind:
+        raise ObjectTransactionError("DATA.PUBLISH.OBJECT_PATH_INVALID")
+    target_root = canonical_root / object_path
     if require_target_absent and target_root.exists():
         raise ObjectTransactionError(f"对象事务只能 create-once，目标已存在：{target_root}")
     object_package_ref = _safe_rel(
@@ -86,8 +92,9 @@ def verify_package(
     required_anchor = "_creator.json" if object_kind == "creators" else "manifest.json"
     if not (object_root / required_anchor).is_file():
         raise ObjectTransactionError(f"对象缺 {required_anchor}")
-    if object_kind == "entities" and not (object_root / "_entity.json").is_file():
-        raise ObjectTransactionError("entity 对象缺 _entity.json")
+    for retired in ("_entity.json", "source_catalog.json", "rights.json", "rights_snapshots", "_pool", "asset.refs.json", "creator.refs.json", "tag.refs.json"):
+        if (object_root / retired).exists():
+            raise ObjectTransactionError(f"DATA.PUBLISH.RETIRED_SIDECAR: {retired}")
     media_mode = str(package.get("publishMediaMode") or "")
     object_manifest = (
         _read_json(object_root / "manifest.json")
@@ -177,12 +184,12 @@ def verify_package(
     for tag_ref in tag_refs:
         if not _tag_exists(tag_ref):
             raise ObjectTransactionError(f"tag closure 不可解析：{tag_ref}")
-    local_refs: dict[str, Path] = {}
-    for key in ("sourceCatalogRef", "rightsRef"):
-        local_ref = _safe_rel(str(closure.get(key) or ""), label=key)
-        if not (object_root / local_ref).is_file():
-            raise ObjectTransactionError(f"对象 closure 缺 {key}: {local_ref}")
-        local_refs[key] = local_ref
+    if logical_object_ref(object_manifest, object_kind) != object_ref:
+        raise ObjectTransactionError("DATA.PUBLISH.LOGICAL_REF_DRIFT")
+    if closure.get("sourceRefs") != object_manifest.get("sourceRefs"):
+        raise ObjectTransactionError("DATA.PUBLISH.SOURCE_REF_DRIFT")
+    from content.release.canonical.post_transaction_sources import read_object_sources
+    sources = read_object_sources(object_root, object_manifest)
     cas_rows: list[dict[str, Any]] = []
     seen_keys: set[str] = set()
     for raw in closure.get("casRefs") or []:
@@ -220,13 +227,17 @@ def verify_package(
         raise ObjectTransactionError(
             "text_only 与空 CAS closure 必须逐项一致"
         )
-    rights = _rights_binding(
-        package_root=package_root,
-        object_root=object_root,
-        rights_ref=local_refs["rightsRef"],
-        cas_rows=cas_rows,
-        publish_media_mode=media_mode,
-    )
+    rights = {"assets": []}
+    for asset in object_manifest.get("assets") or []:
+        path = _safe_rel(str(asset.get("path") or ""), label="asset.path")
+        body = object_root / path
+        if path.parts[0] != "media" or body.is_symlink() or not body.is_file() or _digest_file(body) != asset.get("sha256") or body.stat().st_size != asset.get("bytes"):
+            raise ObjectTransactionError("DATA.PUBLISH.CARRIED_MEDIA_DRIFT")
+        matches = [row for row in cas_rows if row["sourceRef"] == (object_package_ref / path).as_posix() and row["sha256"] == asset["sha256"] and row["bytes"] == asset["bytes"]]
+        facts = [row for source in sources if source["ref"] in asset["sourceRefs"] for row in source["assets"] if row.get("assetId") == asset["assetId"]]
+        if len(matches) != 1 or not facts:
+            raise ObjectTransactionError("DATA.PUBLISH.ASSET_SOURCE_BINDING_MISSING")
+        rights["assets"].append({"assetId": asset["assetId"], "assetSha256": asset["sha256"], "assetBytes": asset["bytes"], "assetRef": matches[0]["sourceRef"]})
     if object_kind == "entities":
         try:
             verify_entity_manifest_asset_binding(
@@ -264,6 +275,7 @@ def verify_package(
         "sourcePolicyRevision": source_policy_revision,
         "objectKind": object_kind,
         "objectRef": object_ref,
+        "objectPath": object_path.as_posix(),
         "objectSchema": target_schema,
         "objectRoot": object_root,
         "objectClosureDigest": closure_digest,

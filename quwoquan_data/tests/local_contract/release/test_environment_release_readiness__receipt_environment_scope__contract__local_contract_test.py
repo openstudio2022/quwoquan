@@ -144,8 +144,7 @@ def _fixture(root: Path) -> dict[str, Path]:
                 "unknown": 0,
             },
             "authorizationRequiredAssetIds": [],
-            "researchAcceptedCount": 4,
-            "commercialAcceptedCount": 4,
+            "acceptedCount": 4,
             "canonicalMerkle": "sha256:" + "a" * 64,
             "executionIds": ["20260728--travel-content--test--pilot-002"],
             "sourceRevision": SOURCE_REVISION,
@@ -359,15 +358,13 @@ def _fixture(root: Path) -> dict[str, Path]:
                 "unknown": 0,
             },
             "authorizationRequiredAssetIds": [],
-            "researchAcceptedCount": 4,
-            "commercialAcceptedCount": 4,
+            "acceptedCount": 4,
             "carrierCounts": [
                 {
                     "carrier": carrier,
                     "objectCount": 1,
                     "assetCount": 1,
-                    "researchAcceptedCount": 1,
-                    "commercialAcceptedCount": 1,
+                    "acceptedCount": 1,
                 }
                 for carrier in ("homepage", "article", "image", "video")
             ],
@@ -402,8 +399,7 @@ def _fixture(root: Path) -> dict[str, Path]:
                 "unknown": 0,
             },
             "authorizationRequiredAssetIds": [],
-            "researchAcceptedCount": 4,
-            "commercialAcceptedCount": 4,
+            "acceptedCount": 4,
             "executionIds": ["20260728--travel-content--test--pilot-002"],
             "carrierCounts": {
                 "homepage": 1,
@@ -455,7 +451,7 @@ def _fixture(root: Path) -> dict[str, Path]:
                     "postId": post_id,
                     "contentId": f"content-{post_id}",
                     "contentVersion": 1,
-                    "usageScope": "commercial",
+                    "usageScope": "production",
                     "contentType": content_type,
                     "authorId": "author-a",
                 }

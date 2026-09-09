@@ -65,10 +65,20 @@ def _readiness() -> dict[str, object]:
         "feedQueries": [
             {"name": "typed_article", "matchedPostIds": article_ids},
             {"name": "typed_image", "matchedPostIds": image_ids},
-            {"name": "typed_video", "matchedPostIds": video_ids},
+            {
+                "name": "typed_video",
+                "query": "identity=work&type=video&limit=20",
+                "matchedPostIds": video_ids,
+            },
             {
                 "name": "homepage_recommend",
+                "query": "sort=recommend&channelId=recommend&limit=20",
                 "matchedPostIds": [*article_ids, *image_ids, *video_ids],
+            },
+            {
+                "name": "premium_stream",
+                "query": "sort=recommend&channelId=premium_stream&limit=20",
+                "matchedPostIds": video_ids,
             },
         ],
         "homepageApiVerificationRef": (
@@ -181,7 +191,7 @@ def _release_header(sample_plan_digest: str) -> dict[str, object]:
         "releaseKind": "content",
         "containsUnverifiedAssets": False,
         "rightsStatusCounts": {"verified": 210, "unverified": 0, "restricted": 0, "unknown": 0},
-        "authorizationRequiredAssetIds": [], "researchAcceptedCount": 210, "commercialAcceptedCount": 210,
+        "authorizationRequiredAssetIds": [], "acceptedCount": 210,
         "executionIds": ["execution-a"],
         "sourceDigests": [{"algorithm": "sha256", "digest": DIGESTS["source"], "inputs": ["quwoquan_data"]}],
         "milestone": "M100",
@@ -236,7 +246,7 @@ def _write_receipts(root: Path) -> tuple[Path, dict[str, object]]:
     import_report = {
         "schema": "quwoquan.content_import_report",
         "environment": "alpha",
-        "status": "imported",
+        "status": "staged",
         "releaseId": readiness["releaseId"],
         "manifestDigest": readiness["manifestDigest"],
         "postBindings": [
@@ -376,4 +386,19 @@ def test_release_samples__plan_without_read_evidence_cannot_pass__local_contract
             resolved=resolved,
             app_uat_plan_digest=document_digest(plan),
             readiness_receipt_digest="sha256:" + "1" * 64,
+        )
+
+
+
+@pytest.mark.parametrize("release_class", ["research", "commercial"])
+def test_retired_release_samples_are_rejected(tmp_path: Path, release_class: str) -> None:
+    """spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-044"""
+    readiness_path, plan = _write_receipts(tmp_path)
+    readiness = json.loads(readiness_path.read_text(encoding="utf-8"))
+    readiness["releaseClass"] = release_class
+    readiness["productLifecycleState"] = release_class
+    readiness_path.write_text(json.dumps(readiness), encoding="utf-8")
+    with pytest.raises(ValueError, match="Additional properties are not allowed"):
+        resolve_release_sample_requests(
+            readiness_path=readiness_path, app_uat_plan=plan, output_root=tmp_path
         )

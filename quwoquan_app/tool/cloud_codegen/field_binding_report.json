@@ -1,6 +1,6 @@
 {
   "generator": "app-only-emitter",
-  "contractGraphSha256": "d51f23fa64d8fdaf0600cff6da4866cf8dd452de6b5aaeebc49060daba26f82f",
+  "contractGraphSha256": "d23f516deb9db8100cf96242df28ebdee242ff73f07b2a712cadd0cdbc5d205a",
   "bindings": [
     {
       "generatedPath": "lib/service/assistant_service/assistant/assistant_run/domain/generated/aggregation_state.g.dart",
@@ -1878,6 +1878,28 @@
       "dartField": "status",
       "dartType": "ReportStatus",
       "enumRef": "ReportStatus",
+      "contractType": "enum",
+      "contractSource": "",
+      "clientDartType": "",
+      "typed": true
+    },
+    {
+      "generatedPath": "packages/quwoquan_cloud_contracts/lib/src/content/content_operation_contracts.g.dart",
+      "dartClass": "SourceAttribution",
+      "dartField": "derivedModifications",
+      "dartType": "List\u003cSourceDerivedModification\u003e",
+      "enumRef": "SourceDerivedModification",
+      "contractType": "[]enum",
+      "contractSource": "",
+      "clientDartType": "",
+      "typed": true
+    },
+    {
+      "generatedPath": "packages/quwoquan_cloud_contracts/lib/src/content/content_operation_contracts.g.dart",
+      "dartClass": "SourceAttribution",
+      "dartField": "watermarkKind",
+      "dartType": "SourceWatermarkKind?",
+      "enumRef": "SourceWatermarkKind",
       "contractType": "enum",
       "contractSource": "",
       "clientDartType": "",
