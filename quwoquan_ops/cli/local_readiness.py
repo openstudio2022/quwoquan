@@ -10,9 +10,12 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 sys.dont_write_bytecode = True
+
+import yaml
+
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "quwoquan_ops/cli"))
 sys.path.insert(0, str(ROOT))
@@ -215,12 +218,132 @@ _SECRET_PATTERNS = (
 _SECRET_FIELD_REFERENCE = re.compile(rb"[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)+")
 
 
-def _has_secret_material(blob: bytes) -> bool:
+class _SecretScanLoader(yaml.SafeLoader):
+    """拒绝覆盖、合并和别名，避免 YAML 解释丢失待扫描的值。"""
+
+    def compose_node(self, parent: Any, index: Any) -> Any:
+        event = self.peek_event()
+        if isinstance(event, yaml.AliasEvent) or getattr(event, "anchor", None):
+            raise ValueError("secret scan YAML must not contain anchors or aliases")
+        return super().compose_node(parent, index)
+
+    def construct_mapping(self, node: Any, deep: bool = False) -> dict[str, Any]:
+        result: dict[str, Any] = {}
+        for key_node, value_node in node.value:
+            key = self.construct_object(key_node, deep=deep)
+            if not isinstance(key, str) or key in result:
+                raise ValueError("secret scan YAML requires unique string mapping keys")
+            result[key] = self.construct_object(value_node, deep=deep)
+        return result
+
+
+def _secret_scan_yaml(blob: bytes) -> tuple[dict[str, Any], Any]:
+    loader = _SecretScanLoader(blob)
+    try:
+        node = loader.get_single_node()
+        if not isinstance(node, yaml.MappingNode):
+            raise ValueError("secret scan YAML requires a root mapping")
+        payload = loader.construct_document(node)
+        if not isinstance(payload, dict):
+            raise ValueError("secret scan YAML requires a mapping payload")
+        return payload, node
+    finally:
+        loader.dispose()
+
+
+def _secret_config_schema_path(path: str) -> str | None:
+    """路径仅定位配套 schema，绝不单凭路径豁免文件内容。"""
+    candidate = Path(path)
+    if candidate.is_absolute() or ".." in candidate.parts:
+        return None
+    if candidate.name != "config.yaml" or candidate.parent.name not in {"alpha", "beta", "gamma", "prod"}:
+        return None
+    if candidate.parent.parent.name != "environments":
+        return None
+    return (candidate.parent.parent.parent / "config/schema.yaml").as_posix()
+
+
+def _secret_config_definitions(blob: bytes) -> dict[str, dict[str, Any]]:
+    payload, _ = _secret_scan_yaml(blob)
+    entries = payload.get("configs")
+    if not isinstance(entries, list):
+        raise ValueError("secret scan schema requires configs list")
+    definitions: dict[str, dict[str, Any]] = {}
+    for entry in entries:
+        if not isinstance(entry, dict) or not isinstance(entry.get("key"), str):
+            raise ValueError("secret scan schema requires config keys")
+        key = entry["key"]
+        if key in definitions:
+            raise ValueError("secret scan schema contains duplicate config keys")
+        definitions[key] = entry
+    return definitions
+
+
+def _secret_ref_value_span(
+    text: str, value: Any, node: Any, definition: dict[str, Any],
+) -> tuple[int, int]:
+    from quwoquan_ops.cli.render_runtime_config import SECRET_REF_PATTERN
+
+    if definition.get("sensitive") is not True or definition.get("type") != "string":
+        raise ValueError("secretRef requires a declared sensitive string config")
+    if not isinstance(value, str) or not SECRET_REF_PATTERN.fullmatch(value):
+        raise ValueError("secretRef requires a canonical environment name")
+    # 仅裸的完整 scalar；引号、block scalar、tag、anchor 等不能扩展豁免语法。
+    start, end = node.start_mark.index, node.end_mark.index
+    if node.style is not None or text[start:end] != value:
+        raise ValueError("secretRef must be an unquoted canonical environment name")
+    return len(text[:start].encode("utf-8")), len(text[:end].encode("utf-8"))
+
+
+def _secret_ref_value_spans(
+    blob: bytes, schema_path: str, read_blob: Callable[[str], bytes | None] | None,
+) -> set[tuple[int, int]]:
+    # 对齐 render_runtime_config 与 verify_service_config_layout 的服务自治契约。
+    # env-name 的声明位置就是 secretRefs；schema 声明敏感配置键，不枚举 env 名。
+    payload, node = _secret_scan_yaml(blob)
+    if set(payload) - {"overrides", "secretRefs", "externalBindings"}:
+        raise ValueError("secret scan config contains unknown sections")
+    for section in ("overrides", "secretRefs", "externalBindings"):
+        if section in payload and not isinstance(payload[section], dict):
+            raise ValueError("secret scan config sections must be mappings")
+    refs = payload.get("secretRefs", {})
+    if not refs:
+        return set()
+    schema_blob = read_blob(schema_path) if read_blob else None
+    if schema_blob is None:
+        raise ValueError("secret scan requires schema from the same candidate")
+    definitions = _secret_config_definitions(schema_blob)
+    overrides = payload.get("overrides", {})
+    if set(overrides) & set(refs):
+        raise ValueError("secret scan config key cannot be both override and secretRef")
+    if (set(overrides) | set(refs)) - set(definitions):
+        raise ValueError("secret scan config contains undeclared keys")
+    refs_node = next(value for key, value in node.value if key.value == "secretRefs")
+    text = blob.decode("utf-8")
+    return {
+        _secret_ref_value_span(text, refs[key.value], value, definitions[key.value])
+        for key, value in refs_node.value
+    }
+
+
+def _has_secret_material(
+    blob: bytes, *, path: str = "", read_blob: Callable[[str], bytes | None] | None = None,
+) -> bool:
+    spans: set[tuple[int, int]] = set()
+    schema_path = _secret_config_schema_path(path)
+    if schema_path is not None:
+        try:
+            spans = _secret_ref_value_spans(blob, schema_path, read_blob)
+        except (ValueError, OSError, yaml.YAMLError, RecursionError):
+            # 结构或声明无法证明合法时阻断，不折成空文档后放行。
+            return True
     for pattern in _SECRET_PATTERNS:
         for match in pattern.finditer(blob):
             value = match.groupdict().get("value")
             if value is None or match.group("quote"):
                 return True
+            if match.span("value") in spans:
+                continue
             if not _SECRET_FIELD_REFERENCE.fullmatch(value):
                 return True
     return False
@@ -346,6 +469,11 @@ def _assert_no_staged_unstaged_overlap(paths: list[str]) -> None:
         )
 
 
+def _staged_blob(path: str) -> bytes | None:
+    blob = subprocess.run(["git", "show", f":{path}"], cwd=ROOT, capture_output=True, check=False)
+    return blob.stdout if blob.returncode == 0 else None
+
+
 def command_staged_boundary(_args: argparse.Namespace) -> int:
     paths = staged_paths(ROOT)
     if not paths:
@@ -367,15 +495,15 @@ def command_staged_boundary(_args: argparse.Namespace) -> int:
     if branch.returncode != 0:
         raise LocalReadinessError("staged branch policy failed")
     for path in paths:
-        blob = subprocess.run(["git", "show", f":{path}"], cwd=ROOT, capture_output=True, check=False)
-        if blob.returncode != 0:  # deleted/rename source has no index blob
+        blob = _staged_blob(path)
+        if blob is None:  # deleted/rename source has no index blob
             continue
-        if _has_secret_material(blob.stdout):
+        if _has_secret_material(blob, path=path, read_blob=_staged_blob):
             raise LocalReadinessError(f"staged secret material detected: {path}")
-        if b"\x00" in blob.stdout[:8192]:
+        if b"\x00" in blob[:8192]:
             # 二进制媒体（图片/视频/字体）里的数字与 @ 只是字节巧合，不是手机号或邮箱。
             continue
-        pii_matches = [match.group(0).decode("utf-8", errors="replace") for pattern in _PII_PATTERNS for match in pattern.finditer(blob.stdout)]
+        pii_matches = [match.group(0).decode("utf-8", errors="replace") for pattern in _PII_PATTERNS for match in pattern.finditer(blob)]
         pii_matches = [value for value in pii_matches if not value.lower().endswith(("@example.invalid", "@example.com", "@example.org"))]
         if pii_matches:
             raise LocalReadinessError(f"staged direct PII detected: {path}")

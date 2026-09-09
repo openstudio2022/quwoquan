@@ -67,6 +67,206 @@ def test_secret_scan_preserves_unquoted_material_and_key_detection(blob: bytes) 
     assert cli._has_secret_material(blob)
 
 
+# spec_ref: specs/feature-tree/runtime/development-workflow-governance/local-continuous-integration/spec.md#gwt-003
+@pytest.mark.parametrize("path", [
+    "quwoquan_ops/cli/local_readiness.py",
+    "quwoquan_ops/ci/verify_ci_changed_boundary.py",
+    "quwoquan_ops/tests/local_contract/ci/test_local_readiness__state_security__local_contract_test.py",
+    "quwoquan_ops/tests/local_contract/ci/test_local_readiness__core__local_contract_test.py",
+])
+def test_secret_scan_regression_sources_do_not_embed_credential_samples(path: str) -> None:
+    from quwoquan_ops.cli import local_readiness as cli
+
+    assert not cli._has_secret_material((ROOT / path).read_bytes())
+
+
+SECRET_CONFIG_PATH = "quwoquan_service/services/scanner-service/environments/alpha/config.yaml"
+SECRET_SCHEMA_PATH = "quwoquan_service/services/scanner-service/config/schema.yaml"
+SECRET_CONFIG_KEY = "sys.scanner-service.redis.password"
+SECRET_ENV_NAME = "SCANNER_REDIS_GENERAL_PASSWORD"
+SECRET_SCHEMA = (
+    f"configs:\n- key: {SECRET_CONFIG_KEY}\n  type: string\n  sensitive: true\n"
+).encode()
+
+
+def _secret_config(value: str = SECRET_ENV_NAME) -> bytes:
+    return f"secretRefs:\n  {SECRET_CONFIG_KEY}: {value}\n".encode()
+
+
+def _scan_config(blob: bytes, schema: bytes | None = SECRET_SCHEMA) -> bool:
+    from quwoquan_ops.cli import local_readiness as cli
+
+    return cli._has_secret_material(
+        blob, path=SECRET_CONFIG_PATH,
+        read_blob=lambda path: schema if path == SECRET_SCHEMA_PATH else None,
+    )
+
+
+# spec_ref: specs/feature-tree/runtime/development-workflow-governance/local-continuous-integration/spec.md#gwt-003
+@pytest.mark.parametrize("environment", ["alpha", "beta", "gamma", "prod"])
+def test_secret_scan_allows_real_schema_declared_environment_refs(environment: str) -> None:
+    from quwoquan_ops.cli import local_readiness as cli
+
+    path = f"quwoquan_service/services/content-service/environments/{environment}/config.yaml"
+    assert not cli._has_secret_material(
+        (ROOT / path).read_bytes(), path=path,
+        read_blob=lambda relative: (ROOT / relative).read_bytes(),
+    )
+    assert not _scan_config(_secret_config())
+
+
+# spec_ref: specs/feature-tree/runtime/development-workflow-governance/local-continuous-integration/spec.md#gwt-003
+@pytest.mark.parametrize("value", [
+    "aB9_" * 8,
+    "short-literal",
+    "A" * 24 + "/suffix",
+    "'" + "aB9_" * 8 + "'",
+    '"' + "aB9_" * 8 + '"',
+    "'" + SECRET_ENV_NAME + "'",
+    '"' + SECRET_ENV_NAME + '"',
+    "|\n    " + "aB9_" * 8,
+    ">-\n    " + SECRET_ENV_NAME,
+    "[" + SECRET_ENV_NAME + "]",
+    "{password: " + SECRET_ENV_NAME + "}",
+    "null",
+    "true",
+    "123456789012345678901234567890",
+    "!!str " + SECRET_ENV_NAME,
+    "&credential " + SECRET_ENV_NAME,
+])
+def test_secret_scan_rejects_noncanonical_secret_ref_values(value: str) -> None:
+    assert _scan_config(_secret_config(value))
+
+
+# spec_ref: specs/feature-tree/runtime/development-workflow-governance/local-continuous-integration/spec.md#gwt-003
+@pytest.mark.parametrize("schema", [
+    None,
+    b"configs: []\n",
+    SECRET_SCHEMA.replace(b"sensitive: true", b"sensitive: false"),
+    SECRET_SCHEMA.replace(b"sensitive: true", b"sensitive: 'true'"),
+    SECRET_SCHEMA.replace(b"type: string", b"type: map"),
+    SECRET_SCHEMA + SECRET_SCHEMA.removeprefix(b"configs:\n"),
+    SECRET_SCHEMA + b"  sensitive: false\n",
+])
+def test_secret_scan_rejects_undeclared_or_ambiguous_schema_refs(schema: bytes | None) -> None:
+    assert _scan_config(_secret_config(), schema)
+
+
+# spec_ref: specs/feature-tree/runtime/development-workflow-governance/local-continuous-integration/spec.md#gwt-003
+@pytest.mark.parametrize("extra", [
+    "  sys.scanner-service.unknown.password: " + SECRET_ENV_NAME + "\n",
+    "  nested:\n    password: " + SECRET_ENV_NAME + "\n",
+    "  " + SECRET_CONFIG_KEY + ": " + SECRET_ENV_NAME + "\n",
+    "secretRefs: {}\n",
+    "unknown:\n  secretRefs:\n    password: " + SECRET_ENV_NAME + "\n",
+    "overrides:\n  " + SECRET_CONFIG_KEY + ": " + SECRET_ENV_NAME + "\n",
+    "externalBindings:\n  unknown:\n    password: " + "A" * 32 + "\n",
+    "# password: " + "A" * 32 + "\n",
+    "---\nsecretRefs: {}\n",
+])
+def test_secret_scan_does_not_swallow_mixed_unknown_or_nested_values(extra: str) -> None:
+    assert _scan_config(_secret_config() + extra.encode())
+
+
+# spec_ref: specs/feature-tree/runtime/development-workflow-governance/local-continuous-integration/spec.md#gwt-003
+@pytest.mark.parametrize("blob", [
+    b"password: " + b"A" * 32,
+    b"password: '" + b"aB9_" * 8 + b"'",
+    b"AKIA" + b"A" * 16,
+    b"-----BEGIN " + b"PRIVATE KEY-----",
+    b"-----BEGIN RSA " + b"PRIVATE KEY-----",
+])
+def test_secret_scan_keeps_all_three_patterns_outside_valid_refs(blob: bytes) -> None:
+    assert _scan_config(_secret_config() + b"externalBindings:\n  " + blob + b"\n")
+
+
+# spec_ref: specs/feature-tree/runtime/development-workflow-governance/local-continuous-integration/spec.md#gwt-003
+def test_secret_scan_requires_structure_and_exact_snapshot_schema() -> None:
+    from quwoquan_ops.cli import local_readiness as cli
+
+    blob = _secret_config()
+    assert cli._has_secret_material(blob)
+    assert cli._has_secret_material(blob, path="unrelated.yaml", read_blob=lambda _: SECRET_SCHEMA)
+    assert _scan_config(blob.replace(b"secretRefs:", b"overrides:"))
+    assert _scan_config(blob.replace(b"secretRefs:", b"unknown:\n  secretRefs:"))
+    assert _scan_config(blob, None)
+    # UTF-8 注释改变字符与字节偏移；豁免必须精确落在 env-name，而非注释或相邻值。
+    assert not _scan_config("# 配置引用\n".encode() + blob)
+    assert _scan_config(_secret_config("AKIA" + "A" * 16))
+    assert _scan_config(b"!!set\nsecretRefs: null\n")
+    assert _scan_config(b"secretRefs: {" + SECRET_CONFIG_KEY.encode() + b": '" + b"aB9_" * 8 + b"'}\n")
+    assert _scan_config(b"secretRefs:\n  <<: {" + SECRET_CONFIG_KEY.encode() + b": " + SECRET_ENV_NAME.encode() + b"}\n")
+    assert _scan_config(blob + b"externalBindings:\n  unknown:\n    password: *missing\n")
+
+
+# spec_ref: specs/feature-tree/runtime/development-workflow-governance/local-continuous-integration/spec.md#gwt-003
+@pytest.mark.parametrize("boundary", ["staged", "ci"])
+@pytest.mark.parametrize("case", ["valid", "literal", "unknown", "missing_schema", "nonsensitive_schema"])
+def test_secret_scan_boundaries_consume_their_exact_snapshot(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, boundary: str, case: str,
+) -> None:
+    from quwoquan_ops.ci import verify_ci_changed_boundary as ci
+    from quwoquan_ops.ci.impact_planner_core import build_delivery_impact_plan
+    from quwoquan_ops.cli import local_readiness as cli
+
+    config = _secret_config("aB9_" * 8) if case == "literal" else _secret_config()
+    if case == "unknown":
+        config = config.replace(SECRET_CONFIG_KEY.encode(), b"sys.scanner-service.unknown.password")
+    schema = SECRET_SCHEMA.replace(b"sensitive: true", b"sensitive: false") if case == "nonsensitive_schema" else SECRET_SCHEMA
+    blobs = {SECRET_CONFIG_PATH: config, SECRET_SCHEMA_PATH: schema}
+    if case == "missing_schema":
+        del blobs[SECRET_SCHEMA_PATH]
+    # 工作树始终有合法声明；两个入口都不能用它覆盖快照的缺失/非敏感声明。
+    worktree_schema = tmp_path / SECRET_SCHEMA_PATH
+    worktree_schema.parent.mkdir(parents=True)
+    worktree_schema.write_bytes(SECRET_SCHEMA)
+    observed: list[str] = []
+    if boundary == "staged":
+        monkeypatch.setattr(cli, "ROOT", tmp_path)
+        monkeypatch.setattr(cli, "staged_paths", lambda _: [SECRET_CONFIG_PATH])
+        monkeypatch.setattr(cli, "_assert_no_staged_unstaged_overlap", lambda _: None)
+
+        def run(command: list[str], **kwargs: object) -> subprocess.CompletedProcess[bytes]:
+            assert kwargs["cwd"] == tmp_path
+            if "--local-commit" in command:
+                return subprocess.CompletedProcess(command, 0, b"", b"")
+            assert command[:2] == ["git", "show"]
+            assert command[2].startswith(":")
+            path = command[2][1:]
+            observed.append(path)
+            return subprocess.CompletedProcess(command, 0 if path in blobs else 1, blobs.get(path, b""), b"")
+
+        monkeypatch.setattr(cli.subprocess, "run", run)
+        invoke = lambda: cli.command_staged_boundary(None)
+    else:
+        source = "b" * 40
+        tree = "sha1:" + "c" * 40
+        plan = build_delivery_impact_plan(
+            [SECRET_CONFIG_PATH], source_sha=source, base_sha="a" * 40,
+            source_tree_digest=tree,
+        )
+        plan_path = tmp_path / "impact-plan.json"
+        plan_path.write_text(json.dumps(plan), encoding="utf-8")
+        monkeypatch.setattr(ci, "ROOT", tmp_path)
+
+        def candidate_blob(sha: str, path: str) -> bytes | None:
+            assert sha == source
+            observed.append(path)
+            return blobs.get(path)
+
+        monkeypatch.setattr(ci, "_candidate_blob", candidate_blob)
+        invoke = lambda: ci.verify(
+            plan_path, expected_source_sha=source, expected_tree_digest=tree,
+            expected_plan_digest=plan["plan_digest"],
+        )
+    if case == "valid":
+        invoke()
+    else:
+        with pytest.raises(cli.LocalReadinessError, match="secret material detected"):
+            invoke()
+    assert observed == [SECRET_CONFIG_PATH, SECRET_SCHEMA_PATH]
+
+
 def _repo() -> tempfile.TemporaryDirectory[str]:
     return tempfile.TemporaryDirectory()
 
