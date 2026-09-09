@@ -432,7 +432,7 @@ func validateAppManagedPreparationSchema(schema appLaunchSchemaContract) error {
 		return fmt.Errorf("app_managed_preparation.fields.contentBinding must be an empty-capable closed object")
 	}
 	expectedContentBindingFields := []string{
-		"releaseId", "verifyRunId", "manifestDigest", "readinessPhase",
+		"releaseId", "verifyRunId", "manifestDigest",
 		"readinessReceiptRef", "readinessReceiptDigest",
 	}
 	if err := requireExactStringSet(
@@ -453,14 +453,6 @@ func validateAppManagedPreparationSchema(schema appLaunchSchemaContract) error {
 		if field.Type != "string" || field.Format != "sha256_identity" {
 			return fmt.Errorf("app_managed_preparation.fields.contentBinding.fields.%s must use sha256_identity", fieldName)
 		}
-	}
-	readiness := contentBinding.Fields["readinessPhase"]
-	if err := requireExactOrderedStrings(
-		"app_managed_preparation.fields.contentBinding.fields.readinessPhase.allowed_values",
-		readiness.AllowedValues,
-		[]string{"research"},
-	); err != nil {
-		return err
 	}
 	if err := requireAppLaunchFieldRef(schema, "firstBlocker", "launch_blockers"); err != nil {
 		return err

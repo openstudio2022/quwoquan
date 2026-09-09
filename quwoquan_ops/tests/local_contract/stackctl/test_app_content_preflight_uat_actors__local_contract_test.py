@@ -1,4 +1,4 @@
-"""app content preflight: 三环境 UAT 绑定、actor 策略与 research 预检合约。
+"""app content preflight: 三环境 UAT 绑定、actor 策略与无类别预检合约。
 
 spec_ref: specs/feature-tree/runtime/runtime-config/environment-topology-and-packaging/spec.md#gwt-002
 """
@@ -16,6 +16,7 @@ from quwoquan_ops.tests.support.app_content_preflight_test_support import (
     subprocess,
     tempfile,
     unittest,
+    write_release_readiness,
 )
 
 
@@ -395,37 +396,22 @@ class AppContentPreflightUatActorsTest(unittest.TestCase):
                     self.assertNotIn("secret-late", str(invalid))
                     self.assertNotIn("unknown-late", str(invalid))
 
-    def test_research_preflight_uses_research_readiness_without_lifecycle_exit(
+    def test_default_preflight_uses_readiness_without_category_or_lifecycle_exit(
         self,
     ) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
             report_dir = Path(temporary_directory) / "research-report"
             readiness_path = Path(temporary_directory) / "release-readiness.json"
-            readiness = {
-                "releaseId": "release-research-a",
-                "releaseClass": "research",
-                "productLifecycleState": "research",
-                "readinessPhase": "research",
-                "verifyRunId": "verify-research-a",
-                "manifestDigest": "sha256:" + "3" * 64,
-                "postIds": ["article-a", "image-a", "video-a"],
-                "creatorIds": ["creator-a"],
-                "feedQueries": [
-                    {"name": "typed_article", "matchedPostIds": ["article-a"]},
-                    {"name": "typed_image", "matchedPostIds": ["image-a"]},
-                    {"name": "typed_video", "matchedPostIds": ["video-a"]},
-                    {
-                        "name": "homepage_recommend",
-                        "matchedPostIds": ["article-a", "image-a", "video-a"],
-                    },
-                    {"name": "premium_stream", "matchedPostIds": ["video-a"]},
-                ],
-            }
+            readiness_path, _ = write_release_readiness(
+                Path(temporary_directory), environment="alpha",
+                release_id="release-a", verify_run_id="verify-a",
+                manifest_digest="sha256:" + "3" * 64, unverified=True,
+            )
+            readiness = json.loads(readiness_path.read_text(encoding="utf-8"))
             captured: dict[str, object] = {}
             release_contract = {
                 "releaseHeader": {
-                    "releaseId": "release-research-a",
-                    "selectionScope": "milestone",
+                    "releaseId": "release-a",
                 },
                 "releaseHeaderRef": "/release/payload/release.json",
                 "releaseHeaderDigest": "sha256:" + "7" * 64,
@@ -434,7 +420,7 @@ class AppContentPreflightUatActorsTest(unittest.TestCase):
                 "releaseUatSamplePlanDigest": "sha256:" + "8" * 64,
             }
             projected_plan = {
-                "releaseId": "release-research-a",
+                "releaseId": "release-a",
                 "searchCanaries": [
                     {},
                     {"expectedObjectId": "homepage-a"},
@@ -443,7 +429,8 @@ class AppContentPreflightUatActorsTest(unittest.TestCase):
             }
 
             def content_readiness(args: object) -> dict[str, object]:
-                captured["phase"] = vars(args)["phase"]
+                self.assertNotIn("phase", vars(args))
+                self.assertNotIn("release_class", vars(args))
                 captured["lifecycleExitRef"] = vars(args)["lifecycle_exit_ref"]
                 return {"exitCode": 0, "details": ["passed"]}
 
@@ -457,7 +444,7 @@ class AppContentPreflightUatActorsTest(unittest.TestCase):
                             "sourceRevision": "revision-a",
                             "release": {
                                 "candidate": {
-                                    "releaseId": "release-research-a",
+                                    "releaseId": "release-a",
                                     "releaseDigest": readiness["manifestDigest"],
                                 }
                             },
@@ -491,7 +478,8 @@ class AppContentPreflightUatActorsTest(unittest.TestCase):
 
             self.assertEqual(result["exitCode"], 0)
             self.assertEqual(result["details"], [])
-            self.assertEqual(captured["phase"], "research")
+            self.assertNotIn("readinessPhase", result)
+            self.assertNotIn("releaseClass", result)
             self.assertEqual(captured["lifecycleExitRef"], "")
             self.assertEqual(result["lifecycleExitRef"], "")
             self.assertEqual(
@@ -634,7 +622,6 @@ class AppContentPreflightUatActorsTest(unittest.TestCase):
                     "releaseId": "release-a",
                     "verifyRunId": "verify-a",
                     "manifestDigest": manifest_digest,
-                    "readinessPhase": "research",
                 }
 
             def smoke_command(

@@ -57,7 +57,6 @@ _CONTENT_BINDING_FIELDS = frozenset(
         "releaseId",
         "verifyRunId",
         "manifestDigest",
-        "readinessPhase",
         "readinessReceiptRef",
         "readinessReceiptDigest",
     }
@@ -142,7 +141,6 @@ def _valid_content_binding(value: Any) -> bool:
         )
         and _MANAGED_DIGEST_RE.fullmatch(str(value.get("manifestDigest") or ""))
         is not None
-        and value.get("readinessPhase") == "research"
         and isinstance(value.get("readinessReceiptRef"), str)
         and bool(str(value["readinessReceiptRef"]).strip())
         and _MANAGED_DIGEST_RE.fullmatch(

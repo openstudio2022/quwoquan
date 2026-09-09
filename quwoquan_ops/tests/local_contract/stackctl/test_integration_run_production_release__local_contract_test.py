@@ -1,4 +1,5 @@
 # spec_ref: specs/feature-tree/runtime/development-workflow-governance/local-continuous-integration/spec.md#req-004
+# spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-002
 # spec_ref: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/daily-merge-release-strategy/spec.md#gwt-001.t6
 # spec_ref: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/daily-merge-release-strategy/spec.md#gwt-001.t7
 # spec_ref: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/daily-merge-release-strategy/spec.md#gwt-001.t8
@@ -6,10 +7,9 @@
 # spec_ref: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/daily-merge-release-strategy/spec.md#gwt-001.t10
 # spec_ref: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/daily-merge-release-strategy/spec.md#gwt-001.t11
 #
-# lane 验收（`--mode acceptance`）的 Data release 输入按 DEC-041 单一 production 类别：attestation
-# 只接受 releaseClass=productLifecycleState=production；进入环境只经现役 `qwq-data ship`
-# 的 handoff-ref 准入（apply → activate → verify --readiness-phase production），
-# 不再以 release id 隐式选择、也不接受 research/commercial。Beta 显式 opt-in；accepted 终态
+# lane 验收（`--mode acceptance`）按 DEC-041 消费无类别 Data attestation；
+# 进入环境只经现役 `qwq-data ship` 的 handoff-ref 准入（apply → activate → verify），
+# 不以 release id 隐式选择，也不保留类别字段或选择器。Beta 显式 opt-in；accepted 终态
 # 产出 acceptance bundle；integrate（integration 工作区）只消费 bundle 做 admit/publish（DEC-014）。
 
 from __future__ import annotations
@@ -30,22 +30,15 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from quwoquan_ops.cli import integration_run  # noqa: E402
-from quwoquan_ops.cli.lib.deployment_candidate_manifest import (  # noqa: E402
-    RELEASE_INPUT_CLASSIFICATIONS,
-    release_input_classification,
+from quwoquan_ops.tests.support.deployment_candidate_manifest_test_support import (  # noqa: E402
+    release_attestation_payload,
 )
 
 VALID_REF = "handoff-ref-v1:sha256:" + "a" * 64 + ":sha256:" + "b" * 64
 
 
-def _attestation(root: Path, release_id: str, release_class: str) -> Path:
-    payload = {
-        "schema": "quwoquan_data.release_attestation",
-        "releaseId": release_id,
-        "releaseClass": release_class,
-        "productLifecycleState": release_class,
-        "payloadSha256": "sha256:" + "c" * 64,
-    }
+def _attestation(root: Path, release_id: str) -> Path:
+    payload = release_attestation_payload(release_id, "sha256:" + "c" * 64)
     encoded = json.dumps(payload, ensure_ascii=False, sort_keys=True).encode("utf-8")
     local = root / "data/releases" / release_id / "attestations/release.json"
     local.parent.mkdir(parents=True, exist_ok=True)
@@ -64,14 +57,15 @@ class IntegrationRunProductionReleaseContractTest(unittest.TestCase):
         patcher.start()
         self.addCleanup(patcher.stop)
 
-    def test_release_id_accepts_only_production_attestations(self) -> None:
-        production = _attestation(self.root, "rel-production", "production")
-        self.assertEqual(integration_run._release_id(production), ("rel-production", "production"))
-        for retired in ("research", "commercial"):
-            with self.subTest(retired=retired), self.assertRaises(integration_run.IntegrationRunError) as blocked:
-                integration_run._release_id(_attestation(self.root, f"rel-{retired}", retired))
+    def test_release_id_accepts_no_category_and_rejects_retired_fields(self) -> None:
+        attestation = _attestation(self.root, "rel-candidate")
+        self.assertEqual(integration_run._release_id(attestation), "rel-candidate")
+        canonical = json.loads(attestation.read_text(encoding="utf-8"))
+        for field in ("releaseClass", "productLifecycleState", "releaseInputClassification", "unexpectedField"):
+            attestation.write_text(json.dumps({**canonical, field: "production"}), encoding="utf-8")
+            with self.subTest(field=field), self.assertRaises(integration_run.IntegrationRunError) as blocked:
+                integration_run._release_id(attestation)
             self.assertEqual(blocked.exception.code, "INTEGRATION_RUN.INPUT_INVALID")
-            self.assertIn("production", blocked.exception.detail)
 
     def test_handoff_ref_must_be_canonical_v1(self) -> None:
         self.assertEqual(integration_run._handoff_ref(VALID_REF, label="--release-handoff-ref"), VALID_REF)
@@ -81,7 +75,7 @@ class IntegrationRunProductionReleaseContractTest(unittest.TestCase):
             self.assertEqual(blocked.exception.code, "INTEGRATION_RUN.INPUT_INVALID")
 
     def test_apply_data_release_drives_current_ship_cli_with_handoff_ref(self) -> None:
-        attestation = _attestation(self.root, "rel-production", "production")
+        attestation = _attestation(self.root, "rel-production")
         calls: list[tuple[str, ...]] = []
 
         def fake_ship(*args: str, log_dir: Path, label: str) -> None:
@@ -114,14 +108,14 @@ class IntegrationRunProductionReleaseContractTest(unittest.TestCase):
         self.assertIn("--full-sync", calls[0])
         self.assertIn("--import", calls[0])
         verify = calls[2]
-        self.assertEqual(verify[verify.index("--readiness-phase") + 1], "production")
+        self.assertNotIn("--readiness-phase", verify)
         # verify 的前驱是 completed 的 activate run，而不是 prepared 的 apply run
         self.assertEqual(verify[verify.index("--import-run-id") + 1], "run-1-activate")
         activate = calls[1]
         self.assertEqual(activate[activate.index("--import-run-id") + 1], "run-1-import")
 
     def test_premium_pool_bootstrap_resolves_sample_video_to_environment_post_id(self) -> None:
-        attestation = _attestation(self.root, "rel-production", "production")
+        attestation = _attestation(self.root, "rel-production")
         report = self.root / "env/alpha/runs/data-release/rel-production/run-1-import/import.json"
         report.parent.mkdir(parents=True, exist_ok=True)
         report.write_text(json.dumps({
@@ -179,8 +173,8 @@ class IntegrationRunProductionReleaseContractTest(unittest.TestCase):
         self.assertIsNone(parsed.release_attestation)
         self.assertEqual(parsed.release_handoff_ref, "")
         self.assertFalse(hasattr(parsed, "rollback_handoff_ref"))
-        production = _attestation(self.root, "rel-candidate", "production")
-        rollback = _attestation(self.root, "rel-rollback", "production")
+        production = _attestation(self.root, "rel-candidate")
+        rollback = _attestation(self.root, "rel-rollback")
         with self._runtime_patches():
             for run_id, argv in (
                 ("acceptance-no-handoff", ["--mode", "acceptance", "--release-attestation", str(production),
@@ -237,8 +231,8 @@ class IntegrationRunProductionReleaseContractTest(unittest.TestCase):
     def test_integrate_consumes_bundle_only_and_rejects_acceptance_inputs(self) -> None:
         # integrate 不签发、不跑环境：必须给 --acceptance-bundle，任何 acceptance 专用输入都是 INPUT_INVALID；
         # acceptance 反之不得携带 bundle 或 --publish。
-        production = _attestation(self.root, "rel-candidate", "production")
-        rollback = _attestation(self.root, "rel-rollback", "production")
+        production = _attestation(self.root, "rel-candidate")
+        rollback = _attestation(self.root, "rel-rollback")
         acceptance = ["--mode", "acceptance", "--release-attestation", str(production),
                       "--rollback-release-attestation", str(rollback), "--release-handoff-ref", VALID_REF]
         with self._runtime_patches():
@@ -265,7 +259,7 @@ class IntegrationRunProductionReleaseContractTest(unittest.TestCase):
         # 从 main 执行实际分流；环境/签发是测试替身，不把本合同当成 runtime 验收。
         commit, tree, parent = "1" * 40, "2" * 40, "0" * 40
         store, refs = self._fake_store("policy-store", commit=commit, tree=tree, parent=parent)
-        release, rollback = _attestation(self.root, "rel-a", "production"), _attestation(self.root, "rel-b", "production")
+        release, rollback = _attestation(self.root, "rel-a"), _attestation(self.root, "rel-b")
         plan_path = self.root / "plan.json"
         plan_path.write_text("{}", encoding="utf-8")
         answers = {("status",): "", ("rev-parse", "HEAD^{commit}"): commit,
@@ -744,23 +738,13 @@ class IntegrationRunProductionReleaseContractTest(unittest.TestCase):
                 integration_run._readiness_local_ref(args=acceptance, commit=commit)
             self.assertEqual(blocked.exception.code, "INTEGRATION_RUN.LANE_IDENTITY_INVALID")
 
-    def test_production_pair_classifies_as_production_inputs(self) -> None:
-        def binding(release_class: str) -> dict[str, str]:
-            return {
-                "releaseId": f"rel-{release_class}", "releaseDigest": "sha256:" + "1" * 64,
-                "attestationRef": "x", "attestationDigest": "sha256:" + "2" * 64,
-                "releaseClass": release_class, "productLifecycleState": release_class,
-            }
-
-        self.assertIn("production_inputs", RELEASE_INPUT_CLASSIFICATIONS)
-        self.assertEqual(
-            release_input_classification({"candidate": binding("production"), "rollback": binding("production")}),
-            "production_inputs",
-        )
-        self.assertEqual(
-            release_input_classification({"candidate": binding("production"), "rollback": binding("research")}),
-            "mixed_inputs",
-        )
+    def test_attestation_exact_readback_is_required_without_category(self) -> None:
+        attestation = _attestation(self.root, "rel-candidate")
+        local = self.root / "data/releases/rel-candidate/attestations/release.json"
+        local.write_bytes(local.read_bytes() + b"\n")
+        with self.assertRaises(integration_run.IntegrationRunError) as blocked:
+            integration_run._release_id(attestation)
+        self.assertEqual(blocked.exception.code, "INTEGRATION_RUN.DATA_RELEASE_UNAVAILABLE")
 
 
 if __name__ == "__main__":

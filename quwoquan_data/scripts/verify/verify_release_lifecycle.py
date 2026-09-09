@@ -121,7 +121,7 @@ def environment_lifecycle_issues(
     run_kind = str(run.get("kind") or "")
     receipt_run = import_run
     receipt_result = result
-    if prod_mode == "activated" and run_kind == "activate":
+    if prod_mode == "activated" and run_kind in {"activate", "rollback"}:
         prepared_run_id = str(result.get("importRunId") or "")
         if not prepared_run_id:
             issues.append(
@@ -361,7 +361,7 @@ def environment_lifecycle_issues(
                         post_verification=post,
                         release=release,
                         output_root=outputs,
-                        import_run=import_run,
+                        import_run=receipt_run,
                         verify_run=verify_run,
                         attestation=attestation,
                         desired_refs=normalized_refs,

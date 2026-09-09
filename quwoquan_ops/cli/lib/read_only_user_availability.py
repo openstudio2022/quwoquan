@@ -559,9 +559,6 @@ def _content_report(
         "exactQueriesReady": generation_match and exact_queries_ready,
         "releaseId": release_id,
         "manifestDigest": manifest_digest,
-        "readinessPhase": str(
-            readiness.get("readinessPhase") or binding.get("readinessPhase") or ""
-        ),
         "readinessReceiptRef": (
             _stackctl.relpath(readiness_path) if readiness_path is not None else ""
         ),

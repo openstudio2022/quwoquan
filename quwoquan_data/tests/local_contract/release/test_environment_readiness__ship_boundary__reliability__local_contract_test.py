@@ -16,7 +16,7 @@ if str(SCRIPTS) not in sys.path:
 
 from content.release.environment import cli as ship_cli  # noqa: E402
 from content.release.environment import readiness as subject  # noqa: E402
-from content.release.environment.readiness import ShipReadinessPhase  # noqa: E402
+from content.release.environment.readiness import ShipReadinessAction  # noqa: E402
 from content.release.model import DeploymentEnvironment  # noqa: E402
 from core.io import read_json  # noqa: E402
 
@@ -41,7 +41,7 @@ def test_production_readiness__fails_closed_without_release_identity(
     with pytest.raises(SystemExit, match="releaseId, verifyRunId and manifestDigest"):
         subject.require_environment_readiness(
             environment=DeploymentEnvironment.GAMMA,
-            phase=ShipReadinessPhase.PRODUCTION,
+            action=ShipReadinessAction.VERIFY,
             run=tmp_path / "verify-001",
         )
 
@@ -59,7 +59,7 @@ def test_production_readiness__passes_exact_release_identity_to_stackctl(
             stdout=json.dumps(
                 {
                     "schema": "quwoquan_ops.ship_readiness_receipt",
-                    "phase": "production",
+                    "action": "verify",
                     "environment": "gamma",
                     "target": "gamma-local",
                     "outcome": "PASS",
@@ -73,7 +73,7 @@ def test_production_readiness__passes_exact_release_identity_to_stackctl(
 
     receipt = subject.require_environment_readiness(
         environment=DeploymentEnvironment.GAMMA,
-        phase=ShipReadinessPhase.PRODUCTION,
+        action=ShipReadinessAction.VERIFY,
         run=run_root,
         release_id="pilot-003",
         verify_run_id="verify-001",
@@ -87,7 +87,7 @@ def test_production_readiness__passes_exact_release_identity_to_stackctl(
     assert command[command.index("--manifest-digest") + 1] == "sha256:" + "a" * 64
     assert "--lifecycle-exit-ref" not in command
     evidence = read_json(run_root / "environment-readiness.json")
-    assert evidence["phase"] == "production"
+    assert evidence["action"] == "verify"
     assert evidence["outcome"] == "PASS"
     assert "lifecycleExitRef" not in evidence
 
@@ -105,7 +105,7 @@ def test_production_readiness__passes_lifecycle_exit_ref_to_stackctl(
             stdout=json.dumps(
                 {
                     "schema": "quwoquan_ops.ship_readiness_receipt",
-                    "phase": "production",
+                    "action": "verify",
                     "environment": "alpha",
                     "target": "alpha-local",
                     "outcome": "PASS",
@@ -118,7 +118,7 @@ def test_production_readiness__passes_lifecycle_exit_ref_to_stackctl(
     run_root = tmp_path / "verify-commercial"
     receipt = subject.require_environment_readiness(
         environment=DeploymentEnvironment.ALPHA,
-        phase=ShipReadinessPhase.PRODUCTION,
+        action=ShipReadinessAction.VERIFY,
         run=run_root,
         release_id="pilot-003",
         verify_run_id="verify-commercial",
@@ -126,9 +126,9 @@ def test_production_readiness__passes_lifecycle_exit_ref_to_stackctl(
         lifecycle_exit_ref=_LIFECYCLE_EXIT_REF,
     )
 
-    assert receipt is not None and receipt.phase is ShipReadinessPhase.PRODUCTION
+    assert receipt is not None and receipt.action is ShipReadinessAction.VERIFY
     command = observed[0]
-    assert command[command.index("--phase") + 1] == "production"
+    assert command[command.index("--action") + 1] == "verify"
     assert command[command.index("--lifecycle-exit-ref") + 1] == _LIFECYCLE_EXIT_REF
     evidence = read_json(run_root / "environment-readiness.json")
     assert evidence["lifecycleExitRef"] == _LIFECYCLE_EXIT_REF
@@ -150,14 +150,13 @@ def test_ship_verify_cli__registers_lifecycle_exit_ref_flag() -> None:
             "gamma",
             "--import-run-id",
             "apply-001",
-            "--readiness-phase", "production",
             "--lifecycle-exit-ref",
             _LIFECYCLE_EXIT_REF,
         ]
     )
 
     assert args.lifecycle_exit_ref == _LIFECYCLE_EXIT_REF
-    assert args.readiness_phase == "production"
+    assert not hasattr(args, "readiness_phase")
 
 
 def test_ship_verify_cli__exposes_production_phase_without_weakening_identity_gate() -> None:
@@ -175,11 +174,10 @@ def test_ship_verify_cli__exposes_production_phase_without_weakening_identity_ga
             "alpha",
             "--import-run-id",
             "apply-001",
-            "--readiness-phase", "production",
         ]
     )
 
-    assert args.readiness_phase == "production"
+    assert not hasattr(args, "readiness_phase")
     assert args.lifecycle_exit_ref == ""
 
 
@@ -198,7 +196,7 @@ def test_production_readiness_is_release_bound_in_every_environment(
             stdout=json.dumps(
                 {
                     "schema": "quwoquan_ops.ship_readiness_receipt",
-                    "phase": "production",
+                    "action": "verify",
                     "environment": environment.value,
                     "target": f"{environment.value}-research",
                     "outcome": "PASS",
@@ -213,7 +211,7 @@ def test_production_readiness_is_release_bound_in_every_environment(
     run_root = tmp_path / environment.value / "research-001"
     receipt = subject.require_environment_readiness(
         environment=environment,
-        phase=ShipReadinessPhase.PRODUCTION,
+        action=ShipReadinessAction.VERIFY,
         run=run_root,
         release_id="research-001",
         verify_run_id="verify-001",
@@ -222,9 +220,9 @@ def test_production_readiness_is_release_bound_in_every_environment(
 
     assert receipt is not None and receipt.passed
     command = observed[0]
-    assert command[command.index("--phase") + 1] == "production"
+    assert command[command.index("--action") + 1] == "verify"
     assert command[command.index("--env") + 1] == environment.value
     assert "--lifecycle-exit-ref" not in command
     evidence = read_json(run_root / "environment-readiness.json")
-    assert evidence["phase"] == "production"
+    assert evidence["action"] == "verify"
     assert evidence["environment"] == environment.value

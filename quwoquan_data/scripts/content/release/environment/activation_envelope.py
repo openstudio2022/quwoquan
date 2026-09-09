@@ -43,9 +43,6 @@ def build_environment_activation_envelope(
     source_revision: str | None,
     source_digest: str | None,
     entity_catalog_digest: str | None,
-    release_class: str,
-    product_lifecycle_state: str,
-    readiness_phase: str,
     import_run_id: str,
     verify_run_id: str,
     import_report_ref: str,
@@ -60,17 +57,14 @@ def build_environment_activation_envelope(
     The envelope deliberately contains no deployment endpoint or mutable active
     pointer.  It binds an immutable Data release to one environment import and
     one environment readback. It is a Data import/readback fact and carries no
-    target App UAT, device, runner, package, or promotion authority. The single
-    production phase carries no isolation binding (DEC-041).
+    target App UAT, device, runner, package, or promotion authority, and carries
+    no isolation binding (DEC-041).
     """
 
     text_fields = {
         "environment": environment,
         "releaseId": release_id,
         "manifestDigest": manifest_digest,
-        "releaseClass": release_class,
-        "productLifecycleState": product_lifecycle_state,
-        "readinessPhase": readiness_phase,
         "importRunId": import_run_id,
         "verifyRunId": verify_run_id,
         "importReportRef": import_report_ref,
@@ -110,14 +104,11 @@ def build_environment_activation_envelope(
     if milestone is not None:
         if (
             milestone not in {"M1", "M10", "M100", "M1000", "M10000"}
-            or readiness_phase != "production"
-            or release_class != "production"
-            or product_lifecycle_state != "production"
             or source_identities is None
             or not source_identity_set_digest
         ):
             raise EnvironmentActivationEnvelopeError(
-                "milestone activation must bind one production source identity set"
+                "milestone activation must bind one source identity set"
             )
         previous = {
             "alpha": None,
@@ -160,9 +151,6 @@ def build_release_activation_envelope(
     environment: str,
     release_id: str,
     manifest_digest: str,
-    release_class: str,
-    product_lifecycle_state: str,
-    readiness_phase: str,
     import_run_id: str,
     verify_run_id: str,
     import_report_ref: str,
@@ -186,9 +174,6 @@ def build_release_activation_envelope(
             if "entityCatalogDigest" in header
             else None
         ),
-        release_class=release_class,
-        product_lifecycle_state=product_lifecycle_state,
-        readiness_phase=readiness_phase,
         import_run_id=import_run_id,
         verify_run_id=verify_run_id,
         import_report_ref=import_report_ref,

@@ -94,7 +94,6 @@ class ContentAcceptanceDataProvider:
                     release_id=candidate.release_id,
                     release_digest=candidate.release_digest,
                     import_run_id=candidate.import_run_id,
-                    readiness_phase=candidate.readiness_phase,
                     readiness_receipt_digest=candidate.readiness_receipt_digest,
                     posts=candidate.release_posts,
                     creators=candidate.release_creators,
@@ -295,7 +294,6 @@ class ContentAcceptanceDataProvider:
                 passed=all(closure.values()),
                 details={
                     "releaseId": provisioned.value.release_id,
-                    "readinessPhase": provisioned.value.readiness_phase,
                     "releaseClosure": closure,
                 },
             )

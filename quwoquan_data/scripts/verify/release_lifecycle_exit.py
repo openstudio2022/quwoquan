@@ -183,7 +183,7 @@ def lifecycle_exit_issues(
             str(receipt["originalImportRunId"]),
             str(receipt["originalVerifyRunId"]),
             None,
-            "apply",
+            "activate",
         ),
         (
             rollback_to,
@@ -197,7 +197,7 @@ def lifecycle_exit_issues(
             str(receipt["replayImportRunId"]),
             str(receipt["replayVerifyRunId"]),
             None,
-            "apply",
+            "activate",
         ),
     )
     for release_id, import_run_id, verify_run_id, rollback_from, expected_kind in phases:

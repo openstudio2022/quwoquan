@@ -13,6 +13,7 @@ from core.release_media_binding import bind_release_object_media_assets
 from content.release.canonical.build_lookup_indexes import build_publish_lookup_indexes
 from content.release.environment.consistency import scan_release_contract
 from support.media_fixture import admit_media_body
+from quwoquan_data.tests.local_contract.release.test_release_header__typed_identity__contract__local_contract_test import _header
 
 
 def _write(path: Path, payload: dict | str | bytes) -> None:
@@ -114,7 +115,7 @@ def _fixture(tmp_path: Path) -> tuple[Path, Path]:
         },
     }
     for name, payload_doc in {
-        "release.json": {"schema": "quwoquan_data.release", "releaseId": "release-a", "sourceOwner": "qwq_data", "releaseKind": "content", "releaseClass": "production", "executionIds": ["20260715--travel-homepage-coverage--test-region-a--scale-001"]},
+        "release.json": _header(release_id="release-a"),
         "desired_state.json": desired,
         "sample_bundle.json": {"schema": "quwoquan_data.release_sample", "tags": ["Topic/旅行"]},
         "index/objects.json": {

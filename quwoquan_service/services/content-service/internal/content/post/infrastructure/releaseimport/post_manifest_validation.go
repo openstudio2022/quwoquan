@@ -123,48 +123,15 @@ func validateAssetItem(asset AssetManifestItem, ref string) error {
 	return nil
 }
 
-// validateReleaseMediaDeliveryContract 在 immutable release 导入边界锁定新投影的
-// typed 交付语义（REQ-016/GWT-032）。legacy public 兼容只能位于 App 的具名
-// migration adapter；新 release 不得以缺席 accessMode、URL 形态或路径后缀猜 public。
-func validateReleaseMediaDeliveryContract(
-	assets []AssetManifestItem,
-	releaseClass string,
-	ref string,
-) error {
-	expectedMode := MediaDeliveryAccessModeForReleaseClass(releaseClass)
-	if expectedMode == "" {
-		return fmt.Errorf("%s: releaseClass must explicitly select a media accessMode", ref)
-	}
+// validateReleaseMediaDeliveryContract 要求 release authority 已写入明确公开交付。
+// 不以字段缺席、URL 或环境推断 public；普通受权媒体不进入默认 release。
+func validateReleaseMediaDeliveryContract(assets []AssetManifestItem, ref string) error {
 	for _, asset := range assets {
-		assetID := strings.TrimSpace(asset.AssetID)
-		mode := strings.TrimSpace(asset.AccessMode)
-		if mode != MediaDeliveryAccessModePublic && mode != MediaDeliveryAccessModeSignedGrant {
-			return fmt.Errorf(
-				"%s: media asset %q accessMode must be public or signed_grant",
-				ref,
-				assetID,
-			)
+		if strings.TrimSpace(asset.AssetID) == "" {
+			return fmt.Errorf("%s: public media asset requires assetId", ref)
 		}
-		if mode != expectedMode {
-			return fmt.Errorf(
-				"%s: media asset %q accessMode %q differs from releaseClass %q",
-				ref,
-				assetID,
-				mode,
-				releaseClass,
-			)
-		}
-		if mode == MediaDeliveryAccessModeSignedGrant {
-			if assetID == "" {
-				return fmt.Errorf("%s: signed_grant media asset requires assetId", ref)
-			}
-			if isHLSMediaAsset(asset) {
-				return fmt.Errorf(
-					"%s: private HLS media asset %q is unsupported",
-					ref,
-					assetID,
-				)
-			}
+		if asset.AccessMode != MediaDeliveryAccessModePublic {
+			return fmt.Errorf("%s: media asset %q accessMode must be public", ref, asset.AssetID)
 		}
 	}
 	return nil
@@ -172,21 +139,17 @@ func validateReleaseMediaDeliveryContract(
 
 // ValidateImportedPostMediaBindings runs after release-authority binding and
 // before any Post/read-model write. It proves every projected media item and
-// article asset has the releaseClass-selected typed mode; raw authoring
-// manifests are not a legacy escape hatch.
-func ValidateImportedPostMediaBindings(posts []PostDoc, releaseClass string) error {
-	if MediaDeliveryAccessModeForReleaseClass(releaseClass) == "" {
-		return fmt.Errorf("releaseClass must be research, commercial or production")
-	}
+// article asset has explicit public delivery; raw authoring manifests are not
+// a legacy escape hatch.
+func ValidateImportedPostMediaBindings(posts []PostDoc) error {
 	for _, post := range posts {
 		assets := importedPostAssets(post)
-		if err := validateReleaseMediaDeliveryContract(assets, releaseClass, post.PostRef); err != nil {
+		if err := validateReleaseMediaDeliveryContract(assets, post.PostRef); err != nil {
 			return err
 		}
 		if post.ArticleAssetManifest != nil {
 			if err := validateReleaseMediaDeliveryContract(
 				post.ArticleAssetManifest.Assets,
-				releaseClass,
 				post.PostRef+" articleAssetManifest",
 			); err != nil {
 				return err
@@ -194,27 +157,6 @@ func ValidateImportedPostMediaBindings(posts []PostDoc, releaseClass string) err
 		}
 	}
 	return nil
-}
-
-func isHLSMediaAsset(asset AssetManifestItem) bool {
-	mimeType := strings.ToLower(strings.TrimSpace(asset.MimeType))
-	if mimeType == "application/vnd.apple.mpegurl" ||
-		mimeType == "application/x-mpegurl" ||
-		mimeType == "application/dash+xml" {
-		return true
-	}
-	for _, raw := range []string{
-		asset.CDNURL,
-		asset.PublicSliceKey,
-		asset.ThumbnailURL,
-		asset.CoverURL,
-	} {
-		path := strings.ToLower(strings.SplitN(strings.TrimSpace(raw), "?", 2)[0])
-		if strings.HasSuffix(path, ".m3u8") || strings.HasSuffix(path, ".mpd") {
-			return true
-		}
-	}
-	return false
 }
 
 func parseRightsAuditStatus(raw string) (RightsAuditStatus, error) {
@@ -227,16 +169,7 @@ func parseRightsAuditStatus(raw string) (RightsAuditStatus, error) {
 	}
 }
 
-func hasNonEmptyString(values []string) bool {
-	for _, value := range values {
-		if strings.TrimSpace(value) != "" {
-			return true
-		}
-	}
-	return false
-}
-
-func validateImageAssets(assets []AssetManifestItem, sourceCollectionID string, ref string, releaseClass string) error {
+func validateImageAssets(assets []AssetManifestItem, sourceCollectionID string, ref string) error {
 	if len(assets) == 0 || len(assets) > 20 {
 		return fmt.Errorf("%s: image manifest assets must contain 1..20 items", ref)
 	}
@@ -253,66 +186,30 @@ func validateImageAssets(assets []AssetManifestItem, sourceCollectionID string, 
 		if strings.TrimSpace(asset.Creator) == "" || strings.TrimSpace(asset.CollectionPageURL) == "" {
 			return fmt.Errorf("%s: image asset missing creator or collectionPageUrl", ref)
 		}
-		status, err := parseRightsAuditStatus(asset.RightsAuditStatus)
-		if err != nil {
+		if _, err := parseRightsAuditStatus(asset.RightsAuditStatus); err != nil {
 			return fmt.Errorf("%s: image asset %q %w", ref, asset.AssetID, err)
 		}
-		switch status {
-		case RightsAuditStatusVerified:
-			if strings.TrimSpace(asset.License) == "" ||
-				(strings.TrimSpace(asset.TermsURL) == "" && strings.TrimSpace(asset.AuthorizationProof) == "") {
-				return fmt.Errorf("%s: verified image asset %q missing license or proof", ref, asset.AssetID)
-			}
-			if hasNonEmptyString(asset.RightsAuditIssues) {
-				return fmt.Errorf("%s: verified image asset %q has audit issues", ref, asset.AssetID)
-			}
-		case RightsAuditStatusUnverified, RightsAuditStatusUnknown, RightsAuditStatusRestricted:
-			// research/production 类别接受未完成商用核验的资产（Data 侧权利只记录，
-			// DEC-041），但许可链字段必须完整在场；commercial 与未声明类别保持 fail closed。
-			if releaseClass != "research" && releaseClass != "production" {
-				return fmt.Errorf(
-					"%s: unverified image asset %q cannot enter an immutable release",
-					ref,
-					asset.AssetID,
-				)
-			}
-			if strings.TrimSpace(asset.License) == "" ||
-				(strings.TrimSpace(asset.TermsURL) == "" && strings.TrimSpace(asset.AuthorizationProof) == "") {
-				return fmt.Errorf(
-					"%s: research unverified image asset %q missing license or proof",
-					ref,
-					asset.AssetID,
-				)
-			}
+		// 权利状态与 issues 都是原始记录，不据此排除资产；来源许可链仍须完整。
+		if strings.TrimSpace(asset.License) == "" ||
+			(strings.TrimSpace(asset.TermsURL) == "" && strings.TrimSpace(asset.AuthorizationProof) == "") {
+			return fmt.Errorf("%s: image asset %q missing license or proof", ref, asset.AssetID)
 		}
 	}
 	return nil
 }
 
-func validateVideoAssets(assets []AssetManifestItem, ref string, releaseClass string) error {
+func validateVideoAssets(assets []AssetManifestItem, ref string) error {
 	byID := make(map[string]AssetManifestItem, len(assets))
 	for _, asset := range assets {
 		if err := validateAssetItem(asset, ref); err != nil {
 			return err
 		}
-		status, err := parseRightsAuditStatus(asset.RightsAuditStatus)
-		if err != nil {
+		if _, err := parseRightsAuditStatus(asset.RightsAuditStatus); err != nil {
 			return fmt.Errorf("%s: video asset %q %w", ref, asset.AssetID, err)
 		}
-		if status != RightsAuditStatusVerified || hasNonEmptyString(asset.RightsAuditIssues) {
-			// production 类别（DEC-041）接受未完成商用核验的视频资产作为记录事实，
-			// 但许可链字段必须在场；其它类别保持 fail closed。
-			if releaseClass != "production" {
-				return fmt.Errorf(
-					"%s: video asset %q must be commercially verified without issues",
-					ref,
-					asset.AssetID,
-				)
-			}
-			if strings.TrimSpace(asset.License) == "" ||
-				(strings.TrimSpace(asset.TermsURL) == "" && strings.TrimSpace(asset.AuthorizationProof) == "") {
-				return fmt.Errorf("%s: production unverified video asset %q missing license or proof", ref, asset.AssetID)
-			}
+		if strings.TrimSpace(asset.License) == "" ||
+			(strings.TrimSpace(asset.TermsURL) == "" && strings.TrimSpace(asset.AuthorizationProof) == "") {
+			return fmt.Errorf("%s: video asset %q missing license or proof", ref, asset.AssetID)
 		}
 		if _, exists := byID[asset.AssetID]; exists {
 			return fmt.Errorf("%s: duplicate assetId %q", ref, asset.AssetID)
@@ -386,15 +283,8 @@ func BindPostAssetURLs(
 			asset.Kind = kind
 			asset.Version = resolved.Version
 			asset.PublicSliceKey = resolved.PublicSliceKey
-			// release authority 的 delivery identity 已由 releaseClass 校验；绑定在
-			// 此处把它写成 projected typed accessMode，不由 URL/path 形态猜测。
-			if resolved.PrivateObjectKey != "" {
-				asset.AccessMode = MediaDeliveryAccessModeSignedGrant
-			} else {
-				asset.AccessMode = MediaDeliveryAccessModePublic
-			}
-			// DEC-031: research bindings carry the relative CAS key instead
-			// of an anonymous public URL.
+			// release authority 已校验 canonical public slice；明确写入公开访问方式。
+			asset.AccessMode = MediaDeliveryAccessModePublic
 			asset.CDNURL = resolved.DeliveryRef
 			asset.ObjectKey = ""
 			byID[asset.AssetID] = asset

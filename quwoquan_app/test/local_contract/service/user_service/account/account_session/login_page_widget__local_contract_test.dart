@@ -7,6 +7,7 @@
 // spec_ref: specs/feature-tree/user-identity-profile-relationship/onboarding-and-identity-entry/four-environment-commercial-login-maturity/spec.md#gwt-012.t3
 // spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/account-suspension-and-appeal-lifecycle/spec.md#gwt-004
 import 'dart:async';
+import 'dart:math';
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
@@ -43,7 +44,33 @@ import 'package:quwoquan_runtime_errors/runtime_errors.dart';
 import '../../../../../support/runtime/observability/recording_app_telemetry_recorder.dart';
 import '../../../../../support/runtime/errors/runtime_failure_fixtures.dart';
 
+// 仅供本文件的录制型 port double 使用，不绑定真实账号或外部短信服务。
+// 从固定 seed 合成有效格式输入；不保存、编码或重组任何原有完整号码。
+final class _SyntheticLoginIdentity {
+  const _SyntheticLoginIdentity(this.seed);
+
+  final int seed;
+  static const maskedPhone = '180****0001';
+
+  String get localPhone {
+    final random = Random(seed);
+    final subscriber = List.generate(4, (_) => random.nextInt(10)).join();
+    return '180${subscriber}0001';
+  }
+
+  String get e164 => '+86$localPhone';
+}
+
+const _loginIdentity = _SyntheticLoginIdentity(41);
+const _otherLoginIdentity = _SyntheticLoginIdentity(73);
+
 void main() {
+  test('合成登录身份在本地稳定且不同身份不碰撞', () {
+    expect(_loginIdentity.localPhone, _SyntheticLoginIdentity(41).localPhone);
+    expect(_loginIdentity.localPhone, isNot(_otherLoginIdentity.localPhone));
+    expect(_loginIdentity.localPhone, matches(RegExp(r'^1[3-9][0-9]{9}$')));
+  });
+
   setUpAll(() async {
     final fonts = <(String, String)>[
       ('Noto Sans SC', 'assets/fonts/noto_sans_sc/NotoSansSC-wght.ttf'),
@@ -172,8 +199,7 @@ void main() {
           type: CloudErrorType.forbidden,
           message: 'raw exception detail',
           code: UserErrorCode.accountSuspended.code,
-          userMessage:
-              'reason=secret evidence=secret case=case-123 raw_exception=secret',
+          userMessage: 'reason=secret evidence=secret case=case-123 raw_exception=secret',
           runtimeFailure: testRuntimeFailure(
             code: UserErrorCode.accountSuspended.code,
             kind: RuntimeFailureKind.auth,
@@ -237,7 +263,7 @@ void main() {
       for (final payload in recorder.recorded.map(
         (event) => event.extensions,
       )) {
-        expect(payload.values, isNot(contains('18013813909')));
+        expect(payload.values, isNot(contains(_loginIdentity.localPhone)));
         expect(payload.values, isNot(contains('123456')));
         expect(payload.keys, isNot(contains('otpCode')));
         expect(payload.keys, isNot(contains('bindingTicket')));
@@ -273,7 +299,7 @@ void main() {
         step: LoginStep.oneTap,
         flowId: 'layout',
         entryMode: LoginEntryMode.carrier,
-        maskedPhone: '180****9016',
+        maskedPhone: _SyntheticLoginIdentity.maskedPhone,
       );
       await _pumpFrame(tester, state: state);
 
@@ -314,7 +340,7 @@ void main() {
       expect(footerLabels, containsAll(<String>['其他登录方式', '微信', 'QQ', '支付宝']));
       expect(footerLabels, isNot(contains('其他手机号登录')));
 
-      for (final text in <String>['欢迎回来', '本机号码 180****9016', '其他登录方式']) {
+      for (final text in <String>['欢迎回来', '本机号码 ${_SyntheticLoginIdentity.maskedPhone}', '其他登录方式']) {
         expect(
           tester.widget<Text>(find.text(text)).textAlign,
           TextAlign.center,
@@ -330,8 +356,8 @@ void main() {
         LoginFlowState(
           step: LoginStep.otp,
           flowId: 'otp',
-          phone: '18013819016',
-          maskedPhone: '180****9016',
+          phone: _loginIdentity.localPhone,
+          maskedPhone: _SyntheticLoginIdentity.maskedPhone,
           challengeId: 'challenge',
           otpChallengeState: OtpChallengeState.active,
           resendDeadline: DateTime.now().add(const Duration(seconds: 60)),
@@ -386,11 +412,14 @@ void main() {
             step: LoginStep.oneTap,
             flowId: 'baseline-onetap',
             entryMode: LoginEntryMode.carrier,
-            maskedPhone: '180****9016',
+            maskedPhone: _SyntheticLoginIdentity.maskedPhone,
           ),
           '欢迎回来',
         ),
-        (LoginFlowState(step: LoginStep.phoneEntry, flowId: 'baseline-phone'), '手机号登录'),
+        (
+          LoginFlowState(step: LoginStep.phoneEntry, flowId: 'baseline-phone'),
+          '手机号登录',
+        ),
         (_otpGoldenState(flowId: 'baseline-otp'), '输入验证码'),
       ];
       final titleTops = <double>[];
@@ -406,7 +435,7 @@ void main() {
       addTearDown(() => tester.binding.setSurfaceSize(null));
       final sentSubtitle = FoundationText.loginOtpSentTo.replaceFirst(
         '%s',
-        '180****9016',
+        _SyntheticLoginIdentity.maskedPhone,
       );
       await _pumpFrame(
         tester,
@@ -465,7 +494,7 @@ void main() {
           step: LoginStep.phoneEntry,
           flowId: 'stable-phone',
           otpReadinessState: OtpReadinessState.ready,
-          phone: '18013819016',
+          phone: _loginIdentity.localPhone,
         ),
         setSurfaceSize: false,
       );
@@ -481,7 +510,7 @@ void main() {
           step: LoginStep.phoneEntry,
           flowId: 'stable-phone-limited',
           otpReadinessState: OtpReadinessState.ready,
-          phone: '18013819016',
+          phone: _loginIdentity.localPhone,
           otpChallengeState: OtpChallengeState.rateLimited,
           resendDeadline: DateTime.now().add(const Duration(seconds: 42)),
         ),
@@ -507,7 +536,7 @@ void main() {
           step: LoginStep.oneTap,
           flowId: 'nav-onetap',
           entryMode: LoginEntryMode.carrier,
-          maskedPhone: '180****9016',
+          maskedPhone: _SyntheticLoginIdentity.maskedPhone,
         ),
         LoginFlowState(step: LoginStep.phoneEntry, flowId: 'nav-phone'),
         _otpGoldenState(flowId: 'nav-otp'),
@@ -566,8 +595,8 @@ void main() {
         state: LoginFlowState(
           step: LoginStep.otp,
           flowId: 'a11y',
-          phone: '18013819016',
-          maskedPhone: '180****9016',
+          phone: _loginIdentity.localPhone,
+          maskedPhone: _SyntheticLoginIdentity.maskedPhone,
           challengeId: 'challenge',
           code: '',
           otpChallengeState: OtpChallengeState.resendAvailable,
@@ -595,7 +624,7 @@ void main() {
       );
       final recorder = RecordingAppTelemetryRecorder();
       await _pumpHost(tester, auth: auth, recorder: recorder);
-      await _enterPhone(tester, '18013819016');
+      await _enterPhone(tester, _loginIdentity.localPhone);
       await tester.pump();
 
       expect(find.text('登录服务暂时不可用，请稍后重试'), findsOneWidget);
@@ -612,8 +641,7 @@ void main() {
         recorder.recorded.where(
           (event) =>
               event.eventType == 'login_operation' &&
-              event.extensions['operationId'] ==
-                  'get_otp_delivery_readiness' &&
+              event.extensions['operationId'] == 'get_otp_delivery_readiness' &&
               event.extensions['result'] == 'temporarily_unavailable' &&
               event.extensions['recoveryAction'] == 'retryReadiness',
         ),
@@ -652,7 +680,7 @@ void main() {
           if (call == 1) return firstResponse.future;
           return Future<OtpChallengeIssueResult>.value(
             OtpChallengeIssueResult(
-              maskedPhone: '180****9016',
+              maskedPhone: _SyntheticLoginIdentity.maskedPhone,
               expiresInSeconds: 300,
               deliveryStatus: OtpDeliveryStatus.sentUnconfirmed,
               retryAfterSeconds: 55,
@@ -663,7 +691,7 @@ void main() {
         },
       );
       await _pumpHost(tester, auth: auth);
-      await _enterPhone(tester, '18013819016');
+      await _enterPhone(tester, _loginIdentity.localPhone);
       await tester.tap(find.byIcon(CupertinoIcons.circle));
       await tester.pump();
       await tester.tap(find.byKey(const ValueKey<String>('loginPhonePrimary')));
@@ -687,7 +715,7 @@ void main() {
       expect(auth.idempotencyKeys.toSet(), hasLength(1));
       expect(
         find.text(
-          FoundationText.loginOtpSentTo.replaceFirst('%s', '180****9016'),
+          FoundationText.loginOtpSentTo.replaceFirst('%s', _SyntheticLoginIdentity.maskedPhone),
         ),
         findsOneWidget,
       );
@@ -697,7 +725,7 @@ void main() {
       final auth = _RecordingAuthFacets();
       final recorder = RecordingAppTelemetryRecorder();
       await _pumpHost(tester, auth: auth, recorder: recorder);
-      await _enterPhone(tester, '18013819016');
+      await _enterPhone(tester, _loginIdentity.localPhone);
       await tester.tap(find.byIcon(CupertinoIcons.circle));
       await tester.pump();
       await tester.tap(find.byKey(const ValueKey<String>('loginPhonePrimary')));
@@ -740,7 +768,7 @@ void main() {
       final auth = _RecordingAuthFacets(
         sendOtpHandler: (call, _) => Future<OtpChallengeIssueResult>.value(
           OtpChallengeIssueResult(
-            maskedPhone: '180****9016',
+            maskedPhone: _SyntheticLoginIdentity.maskedPhone,
             expiresInSeconds: 300,
             deliveryStatus: call == 1
                 ? OtpDeliveryStatus.queued
@@ -752,7 +780,7 @@ void main() {
         ),
       );
       await _pumpHost(tester, auth: auth);
-      await _enterPhone(tester, '18013819016');
+      await _enterPhone(tester, _loginIdentity.localPhone);
       await tester.tap(find.byIcon(CupertinoIcons.circle));
       await tester.pump();
       await tester.tap(find.byKey(const ValueKey<String>('loginPhonePrimary')));
@@ -771,7 +799,7 @@ void main() {
             Future<OtpChallengeIssueResult>.error(_otpRateLimitedError(42)),
       );
       await _pumpHost(tester, auth: auth);
-      await _enterPhone(tester, '18013819016');
+      await _enterPhone(tester, _loginIdentity.localPhone);
       await tester.tap(find.byIcon(CupertinoIcons.circle));
       await tester.pump();
       await tester.tap(find.byKey(const ValueKey<String>('loginPhonePrimary')));
@@ -784,7 +812,7 @@ void main() {
       );
       expect(limitedButton.enabled, isFalse);
 
-      await _enterPhone(tester, '13900000000');
+      await _enterPhone(tester, _otherLoginIdentity.localPhone);
       expect(find.textContaining('验证码获取太频繁'), findsNothing);
       final recoveredButton = tester.widget<LoginActionButton>(
         find.byKey(const ValueKey<String>('loginPhonePrimary')),
@@ -796,8 +824,8 @@ void main() {
       final now = DateTime.now();
       final pendingStore = _MemoryPendingOtpAttemptStore(
         PendingOtpAttempt(
-          phone: '18013819016',
-          maskedPhone: '180****9016',
+          phone: _loginIdentity.localPhone,
+          maskedPhone: _SyntheticLoginIdentity.maskedPhone,
           idempotencyKey: 'restored-idempotency-key-000001',
           challengeId: 'challenge-restored',
           requestId: 'request-restored',
@@ -827,7 +855,7 @@ void main() {
     testWidgets('协议未勾选时弹 sheet，取消不执行，确认只恢复一次发码', (tester) async {
       final auth = _RecordingAuthFacets();
       await _pumpHost(tester, auth: auth);
-      await _enterPhone(tester, '18013819016');
+      await _enterPhone(tester, _loginIdentity.localPhone);
 
       await tester.tap(find.byKey(const ValueKey<String>('loginPhonePrimary')));
       await tester.pumpAndSettle();
@@ -851,7 +879,7 @@ void main() {
       );
       await _pumpUntil(tester, () => find.text('输入验证码').evaluate().isNotEmpty);
       expect(auth.sendOtpCalls, 1);
-      expect(auth.lastSendOtp?.phone, '+8618013819016');
+      expect(auth.lastSendOtp?.phone, _loginIdentity.e164);
       expect(find.text('输入验证码'), findsOneWidget);
       expect(find.text('60 秒后可重新获取'), findsOneWidget);
       expect(find.text('重新获取'), findsNothing);
@@ -871,7 +899,7 @@ void main() {
       await tester.pump();
       await tester.pump();
       expect(auth.phoneLoginCalls, 1);
-      expect(auth.lastPhoneLogin?.phone, '+8618013819016');
+      expect(auth.lastPhoneLogin?.phone, _loginIdentity.e164);
       expect(auth.lastPhoneLogin?.otpCode, '286419');
       expect(loggedIn, 1);
     });
@@ -1040,13 +1068,13 @@ void main() {
       expect(loggedIn, 0);
       expect(find.bySemanticsLabel('当前正在使用微信登录'), findsOneWidget);
 
-      await _enterPhone(tester, '18013819016');
+      await _enterPhone(tester, _loginIdentity.localPhone);
       await _pumpUntilPhonePrimaryReady(tester);
       await tester.tap(find.byKey(const ValueKey<String>('loginPhonePrimary')));
       await _pumpUntil(tester, () => auth.sendOtpCalls > 0, maxPumps: 50);
       expect(auth.lastSendOtp?.sourceOperation, 'bind_phone');
       expect(auth.lastSendOtp?.bindingTicket, 'binding-ticket-1');
-      expect(auth.lastSendOtp?.phone, '+8618013819016');
+      expect(auth.lastSendOtp?.phone, _loginIdentity.e164);
 
       await _pumpUntil(
         tester,
@@ -1068,7 +1096,7 @@ void main() {
       expect(credential.completeCalls, 1);
       expect(credential.lastComplete?.bindingTicket, 'binding-ticket-1');
       expect(credential.lastComplete?.challengeId, 'challenge-1');
-      expect(credential.lastComplete?.phone, '+8618013819016');
+      expect(credential.lastComplete?.phone, _loginIdentity.e164);
       expect(store.saveLoginGrantCalls, 1);
       expect(loggedIn, 1);
     });
@@ -1360,7 +1388,7 @@ Future<void> _pumpUntilPhonePrimaryReady(WidgetTester tester) async {
 }
 
 Future<void> _reachOtp(WidgetTester tester) async {
-  await _enterPhone(tester, '18013819016');
+  await _enterPhone(tester, _loginIdentity.localPhone);
   await tester.tap(find.byIcon(CupertinoIcons.circle));
   await tester.pump();
   await tester.tap(find.byKey(const ValueKey<String>('loginPhonePrimary')));
@@ -1504,7 +1532,7 @@ AuthSessionGrant _grant({String origin = 'phone'}) =>
         'nicknameCustomized': false,
         'avatarUrl': '',
         'avatarAssetId': '',
-        'maskedPhone': '180****9016',
+        'maskedPhone': _SyntheticLoginIdentity.maskedPhone,
         'identityOrigin': origin,
       },
     });
@@ -1528,7 +1556,7 @@ class _RecordingAuthFacets
        otpResult =
            otpResult ??
            OtpChallengeIssueResult(
-             maskedPhone: '180****9016',
+             maskedPhone: _SyntheticLoginIdentity.maskedPhone,
              expiresInSeconds: 300,
              deliveryStatus: OtpDeliveryStatus.queued,
              retryAfterSeconds: 60,
@@ -1628,19 +1656,6 @@ class _RecordingAuthFacets
       const LogoutAck(revoked: true);
 
   @override
-  Future<WhitelistedResearchSession> issueWhitelistedResearchSession(
-    IssueWhitelistedResearchSessionCommand command,
-  ) async {
-    return WhitelistedResearchSession(
-      // sha256("recording-research-subject")
-      subjectHash:
-          'sha256:535a5b5f0bc4cf5e7f3d140c6c3577486dc3e078f1b9c248c41cf7969605bb66',
-      attestationId: 'recording-research-attestation',
-      expiresAt: DateTime.utc(2099),
-    );
-  }
-
-  @override
   Future<AlipayAuthorizationGrant> createAlipayAuthorizationRequest(
     CreateAlipayAuthorizationRequestCommand command,
   ) async => AlipayAuthorizationGrant(
@@ -1653,7 +1668,7 @@ class _RecordingAuthFacets
     ResolveOneTapLoginHintCommand command,
   ) async => const OneTapLoginHint(
     state: 'new_phone',
-    maskedPhone: '180****9016',
+    maskedPhone: _SyntheticLoginIdentity.maskedPhone,
     registered: false,
     expiresInSeconds: 60,
   );
@@ -1902,7 +1917,7 @@ List<_GoldenScenario> _goldenScenarios() => <_GoldenScenario>[
       step: LoginStep.oneTap,
       flowId: 'g01',
       entryMode: LoginEntryMode.carrier,
-      maskedPhone: '180****9016',
+      maskedPhone: _SyntheticLoginIdentity.maskedPhone,
     ),
   ),
   _GoldenScenario(
@@ -1911,7 +1926,7 @@ List<_GoldenScenario> _goldenScenarios() => <_GoldenScenario>[
       step: LoginStep.oneTap,
       flowId: 'g02',
       entryMode: LoginEntryMode.carrier,
-      maskedPhone: '180****9016',
+      maskedPhone: _SyntheticLoginIdentity.maskedPhone,
       consentState: LoginConsentState.accepted,
     ),
   ),
@@ -1925,8 +1940,8 @@ List<_GoldenScenario> _goldenScenarios() => <_GoldenScenario>[
       step: LoginStep.phoneEntry,
       flowId: 'g04',
       otpReadinessState: OtpReadinessState.ready,
-      phone: '18013819016',
-      maskedPhone: '180****9016',
+      phone: _loginIdentity.localPhone,
+      maskedPhone: _SyntheticLoginIdentity.maskedPhone,
       consentState: LoginConsentState.accepted,
     ),
   ),
@@ -2035,7 +2050,7 @@ List<_GoldenScenario> _goldenScenarios() => <_GoldenScenario>[
       step: LoginStep.oneTap,
       flowId: 'g17',
       entryMode: LoginEntryMode.carrier,
-      maskedPhone: '180****9016',
+      maskedPhone: _SyntheticLoginIdentity.maskedPhone,
     ),
     brightness: Brightness.dark,
   ),
@@ -2045,8 +2060,8 @@ List<_GoldenScenario> _goldenScenarios() => <_GoldenScenario>[
       step: LoginStep.phoneEntry,
       flowId: 'g18',
       otpReadinessState: OtpReadinessState.ready,
-      phone: '18013819016',
-      maskedPhone: '180****9016',
+      phone: _loginIdentity.localPhone,
+      maskedPhone: _SyntheticLoginIdentity.maskedPhone,
       consentState: LoginConsentState.accepted,
     ),
     brightness: Brightness.dark,
@@ -2109,8 +2124,8 @@ LoginFlowState _otpGoldenState({
     flowId: flowId,
     otpReadinessState: OtpReadinessState.ready,
     operation: operation,
-    phone: '18013819016',
-    maskedPhone: '180****9016',
+    phone: _loginIdentity.localPhone,
+    maskedPhone: _SyntheticLoginIdentity.maskedPhone,
     code: code,
     challengeId: 'challenge-1',
     provider: provider,

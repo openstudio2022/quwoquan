@@ -1,4 +1,7 @@
-"""local_contract：三环境固定候选门禁矩阵。"""
+"""local_contract：三环境固定候选门禁矩阵。
+
+spec_ref: specs/feature-tree/runtime/runtime-config/environment-topology-and-packaging/spec.md#gwt-004
+"""
 
 from __future__ import annotations
 
@@ -60,6 +63,94 @@ def _package_payload(target: str) -> dict[str, object]:
         "candidateDir": snapshot["candidateDir"],
         "packageDigest": PACKAGE_DIGEST,
     }
+
+
+def _matrix_release_inputs(root: Path) -> dict[str, str]:
+    """复用 Data empty-baseline contract fixture，经真实 admission 解析。"""
+    from quwoquan_data.scripts import cli  # noqa: F401
+    from quwoquan_data.tests.local_contract.release.test_ship_handoff_admission__contract__local_contract_test import (
+        _empty_baseline_attestation, _sha,
+    )
+
+    result = {}
+    for prefix, release_id in (("release", "candidate-release"),
+                               ("rollback_release", "rollback-release")):
+        _, path, _ = _empty_baseline_attestation(root, release_id)
+        result[f"{prefix}_attestation"] = str(path)
+        result[f"{prefix}_system_attestation_ref"] = path.relative_to(root).as_posix()
+        result[f"{prefix}_system_attestation_digest"] = _sha(path)
+    return result
+
+
+def _matrix_data_runner(root: Path, calls: list, *, drift: str = ""):
+    """只在临时目录封装 canonical raw result；绝不调用环境 handler。"""
+    import hashlib
+    from quwoquan_ops.cli.lib.local_env_gate_matrix.data_phases import _parse_data_args
+    from content.release.environment.run_evidence import create_run, write_verification_result
+
+    active = {}
+    lease_binding = {}
+
+    def runner(**kwargs):
+        action = kwargs["action"]
+        calls.append(kwargs)
+        if action == "rollback-active-query":
+            document = dict(active)
+            if drift == "query-release":
+                document["releaseId"] = "wrong-release"
+            if drift == "query-digest":
+                document["manifestDigest"] = f"sha256:{'f' * 64}"
+            if drift == "query-revision":
+                document["revision"] += 1
+            return {"exitCode": 0, "payload": document, "summary": action}
+        args = _parse_data_args(kwargs["argv"][2:])
+        if args.command == "release":
+            if args.release_command == "acceptance-lease":
+                lease_action = "acquire" if action.endswith("acquire") else "revoke"
+                if lease_action == "acquire":
+                    lease_binding.update(importRunId=args.import_run_id, verifyRunId=args.verify_run_id)
+                return {"exitCode": 0, "payload": {
+                    "schema": "quwoquan_data.release_acceptance_lease_event",
+                    "action": lease_action, "environment": args.env,
+                    "releaseId": args.release_id, "leaseId": args.lease_id,
+                    **lease_binding,
+                    "eventRef": f"receipt:{args.env}:{lease_action}",
+                }}
+            return {"exitCode": 0, "summary": action}
+        if drift == action:
+            return {"exitCode": 17, "summary": "first blocker"}
+        attestation = json.loads((root / args.system_attestation_ref).read_text())
+        release_id = attestation["releaseId"]
+        digest = attestation["payloadSha256"]
+        run = create_run(output_root=root, environment=args.env, release_id=release_id,
+                         run_id=args.run_id, kind=args.ship_command,
+                         valid_environments=frozenset(TARGET_ENVIRONMENTS.values()))
+        result = {"schema": "quwoquan_data.environment_release_result", "environment": args.env,
+                  "releaseId": release_id, "runId": args.run_id, "manifestDigest": digest,
+                  "containsUnverifiedAssets": False,
+                  "admissionKind": "empty_baseline_attestation",
+                  "systemAttestationRef": args.system_attestation_ref,
+                  "systemAttestationDigest": args.system_attestation_digest,
+                  "status": "prepared" if args.ship_command == "apply" else "completed"}
+        if hasattr(args, "import_run_id"):
+            result["importRunId"] = args.import_run_id
+        if args.ship_command in {"activate", "rollback"}:
+            active.update(schema="quwoquan.content_release_active_receipt", status="found",
+                          environment=args.env, sourceOwner="qwq_data", releaseId=release_id,
+                          manifestDigest=digest, revision=active.get("revision", 0) + 1)
+            post_path = run / "content-active-post-receipt.json"
+            post_path.write_text(json.dumps(active))
+            result["contentPostActiveReceiptRef"] = post_path.relative_to(root).as_posix()
+            result["contentPostActiveReceiptDigest"] = "sha256:" + hashlib.sha256(post_path.read_bytes()).hexdigest()
+        if drift == "prepared-as-activated" and action == "candidate-activate":
+            result["status"] = "prepared"
+        if drift == "replay-digest" and action == "replay-activate":
+            result["manifestDigest"] = f"sha256:{'f' * 64}"
+        if drift == "rollback-predecessor" and action == "rollback-apply":
+            result["importRunId"] = "wrong-prepared-run"
+        write_verification_result(run / "result.json", result)
+        return {"exitCode": 0, "summary": action, "reportDir": str(run)}
+    return runner
 
 
 class LocalEnvGateMatrixContractTest(unittest.TestCase):
@@ -422,58 +513,17 @@ class LocalEnvGateMatrixContractTest(unittest.TestCase):
                 f"data:{kwargs['environment']}:{kwargs['action']}:"
                 f"{Path(kwargs['report_path']).name}"
             )
-            payload = {
-                "exitCode": 0,
-                "summary": f"{kwargs['action']} ok",
-                "details": [],
-                "reportDir": str(Path(kwargs["report_path"]).parent),
-            }
-            if kwargs["action"].startswith("acceptance-lease-"):
-                action = kwargs["action"].removeprefix("acceptance-lease-")
-                argv = kwargs["argv"]
-                payload["payload"] = {
-                    "schema": "quwoquan_data.release_acceptance_lease_event",
-                    "action": action,
-                    "environment": kwargs["environment"],
-                    "releaseId": argv[argv.index("--release-id") + 1],
-                    "leaseId": argv[argv.index("--lease-id") + 1],
-                    "eventRef": f"receipt:{kwargs['environment']}:{action}",
-                }
-            return payload
+            return data_runner(**kwargs)
 
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
-        temporary_root = Path(temporary.name)
-        candidate_attestation = temporary_root / "candidate.json"
-        rollback_attestation = temporary_root / "rollback.json"
-        candidate_attestation.write_text(
-            json.dumps(
-                {
-                    "schema": "quwoquan_data.release_attestation",
-                    "releaseId": "candidate-release",
-                    "payloadSha256": f"sha256:{'a' * 64}",
-                    "releaseClass": "commercial",
-                    "productLifecycleState": "commercial",
-                    "containsUnverifiedAssets": False,
-                }
-            ),
-            encoding="utf-8",
-        )
-        rollback_attestation.write_text(
-            json.dumps(
-                {
-                    "schema": "quwoquan_data.release_attestation",
-                    "releaseId": "rollback-release",
-                    "payloadSha256": f"sha256:{'b' * 64}",
-                    "releaseClass": "commercial",
-                    "productLifecycleState": "commercial",
-                    "containsUnverifiedAssets": False,
-                }
-            ),
-            encoding="utf-8",
-        )
+        temporary_root = Path(temporary.name).resolve()
+        inputs = _matrix_release_inputs(temporary_root)
+        data_calls = []
+        data_runner = _matrix_data_runner(temporary_root, data_calls)
 
         with (
+            mock.patch("quwoquan_ops.cli.lib.local_env_gate_matrix.output_root", return_value=temporary_root),
             mock.patch(
                 "quwoquan_ops.cli.lib.local_env_gate_matrix._run_commit_gate",
                 return_value={
@@ -517,12 +567,11 @@ class LocalEnvGateMatrixContractTest(unittest.TestCase):
                 filter_catalog_fn=_ok("filter-catalog"),
                 targets=("alpha-local", "beta-local", "gamma-local"),
                 include_l0=True,
-                release_attestation=str(candidate_attestation),
-                rollback_release_attestation=str(rollback_attestation),
+                **inputs,
                 data_fn=_data_ok,
                 execution_class="contract-simulation",
             )
-        self.assertEqual(payload["exitCode"], 0)
+        self.assertEqual(payload["exitCode"], 0, payload)
         self.assertEqual(payload["claim"], "CONTRACT_SIMULATION_PASSED")
         self.assertGreater(payload["executed"], 0)
         self.assertEqual(payload["skipped"], 0)
@@ -542,10 +591,14 @@ class LocalEnvGateMatrixContractTest(unittest.TestCase):
                 for _environment in ("alpha", "beta", "gamma")
                 for action in (
                     "candidate-apply",
+                    "candidate-activate",
                     "candidate-verify",
+                    "rollback-prepare",
+                    "rollback-active-query",
                     "rollback-apply",
                     "rollback-verify",
                     "replay-apply",
+                    "replay-activate",
                     "replay-verify",
                     "lifecycle-exit",
                     "acceptance-lease-acquire",
@@ -565,6 +618,17 @@ class LocalEnvGateMatrixContractTest(unittest.TestCase):
         self.assertEqual(matrix["schema"], "quwoquan.test.case-result")
         self.assertEqual(matrix["executionClass"], "contract-simulation")
         self.assertNotEqual(matrix["claim"], "ALPHA_BETA_GAMMA_LOCAL_GREEN")
+        self.assertTrue(matrix["nonPromotable"])
+        from quwoquan_ops.cli.lib.local_env_gate_matrix.data_phases import _parse_data_args
+        for environment in ("alpha", "beta", "gamma"):
+            commands = {call["action"]: _parse_data_args(call["argv"][2:])
+                        for call in data_calls if call["environment"] == environment and call["argv"]}
+            exit_args = commands["lifecycle-exit"]
+            self.assertEqual(exit_args.original_import_run_id, commands["candidate-activate"].run_id)
+            self.assertEqual(exit_args.rollback_run_id, commands["rollback-apply"].run_id)
+            self.assertEqual(exit_args.replay_import_run_id, commands["replay-activate"].run_id)
+            self.assertEqual(commands["acceptance-lease-acquire"].import_run_id,
+                             commands["replay-activate"].run_id)
         self.assertEqual(matrix["releaseTrainId"], RELEASE_TRAIN_ID)
         self.assertEqual(matrix["packageBaselines"], TARGET_BASELINES)
         self.assertNotIn("baselineId", matrix)
@@ -672,7 +736,6 @@ class LocalEnvGateMatrixContractTest(unittest.TestCase):
                     report_dir="runs/pkg",
                     include_services=True,
                     details=["ready"],
-                    release_input_classification="research_inputs",
                     contract_graph_digest=f"sha256:{'d' * 64}",
                     graphql_read_registry={
                         "schema": "stackctl-graphql-read-registry-package",
@@ -692,9 +755,6 @@ class LocalEnvGateMatrixContractTest(unittest.TestCase):
                                 "digest"
                             ],
                             "packageDigest": fingerprint["packageContent"]["digest"],
-                            "releaseInputClassification": fingerprint[
-                                "releaseInputClassification"
-                            ],
                             "contractGraphDigest": fingerprint["contractGraphDigest"],
                             "graphqlReadRegistry": fingerprint["graphqlReadRegistry"],
                         }
@@ -782,8 +842,6 @@ class LocalEnvGateMatrixContractTest(unittest.TestCase):
                         "schema": "quwoquan_data.release_attestation",
                         "releaseId": "candidate-release",
                         "payloadSha256": f"sha256:{'a' * 64}",
-                        "releaseClass": "commercial",
-                        "productLifecycleState": "commercial",
                         "containsUnverifiedAssets": False,
                     }
                 ),
@@ -795,8 +853,6 @@ class LocalEnvGateMatrixContractTest(unittest.TestCase):
                         "schema": "quwoquan_data.release_attestation",
                         "releaseId": "rollback-release",
                         "payloadSha256": f"sha256:{'b' * 64}",
-                        "releaseClass": "commercial",
-                        "productLifecycleState": "commercial",
                         "containsUnverifiedAssets": False,
                     }
                 ),

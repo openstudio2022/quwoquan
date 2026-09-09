@@ -51,7 +51,12 @@ def test_release_probe__receipt_contains_one_hundred_verified_sample_reads(
             )
         ],
         "videoPagination": {"pageSize": 20, "expectedWorkIds": ["video-001"]},
-        "mediaChecks": {"automatic": True},
+        "mediaChecks": {
+            "automatic": True,
+            "homepageRecommendation": {"expectedPostIds": ["runtime-video-001"]},
+            "typedVideo": {"expectedPostIds": [f"runtime-video-{i:03d}" for i in range(1, 11)]},
+            "premiumVideo": {"expectedPostIds": ["runtime-video-001"]},
+        },
         "releasePayloadSha256": "sha256:" + "9" * 64,
         "releaseUatSamplePlanRef": "uat/sample_plan.json",
         "releaseUatSamplePlanDigest": sample_plan_digest,
@@ -61,33 +66,33 @@ def test_release_probe__receipt_contains_one_hundred_verified_sample_reads(
         },
         "orderedSamples": samples,
     }
-    homepage_ref = "env/alpha/runs/data-release/release-m100/verify/homepage.json"
-    import_ref = "env/alpha/runs/data-release/release-m100/import/import.json"
-    readiness_path = tmp_path / (
-        "env/alpha/runs/data-release/release-m100/verify/release-readiness.json"
+    from quwoquan_ops.tests.support.app_content_preflight_test_support import write_release_readiness
+    from quwoquan_ops.tests.support.test_data_verification_test_support import _with_checksum
+    readiness_path, _ = write_release_readiness(
+        tmp_path, environment="alpha", release_id="release-m100",
+        verify_run_id="verify", manifest_digest="sha256:" + "9" * 64,
     )
-    readiness_path.parent.mkdir(parents=True)
-    readiness_path.write_text(
-        json.dumps(
-            {
-                "releaseId": "release-m100",
-                "manifestDigest": "sha256:" + "9" * 64,
-                "postIds": [
-                    f"runtime-{carrier}-{ordinal:03d}"
-                    for carrier, count in (("article", 25), ("image", 40), ("video", 10))
-                    for ordinal in range(1, count + 1)
-                ],
-                "homepageApiVerificationRef": homepage_ref,
-                "contentImportReportRef": import_ref,
-            }
-        ),
-        encoding="utf-8",
-    )
+    readiness = json.loads(readiness_path.read_text(encoding="utf-8"))
+    homepage_ref = readiness["homepageApiVerificationRef"]
+    import_ref = readiness["contentImportReportRef"]
+    readiness["postIds"] = [
+        f"runtime-{carrier}-{ordinal:03d}"
+        for carrier, count in (("article", 25), ("image", 40), ("video", 10))
+        for ordinal in range(1, count + 1)
+    ]
+    readiness["entityRefs"] = [f"homepage-{ordinal:03d}" for ordinal in range(1, 26)]
+    readiness["counts"].update(entities=25, posts=75, discoveryPosts=75, premiumPlayableVideos=10)
+    for query in readiness["feedQueries"]:
+        query["matchedPostIds"] = (
+            ["runtime-video-001"] if query["name"] in {"typed_video", "premium_stream", "homepage_recommend"}
+            else readiness["postIds"]
+        )
     homepage_path = tmp_path / homepage_ref
     homepage_path.write_text(
         json.dumps(
             {
                 "schema": "quwoquan_data.homepage_api_verification",
+                "environment": "alpha", "runId": "verify",
                 "releaseId": "release-m100",
                 "passed": True,
                 "issues": [],
@@ -106,11 +111,12 @@ def test_release_probe__receipt_contains_one_hundred_verified_sample_reads(
     )
 
     import_path = tmp_path / import_ref
-    import_path.parent.mkdir(parents=True)
+    import_path.parent.mkdir(parents=True, exist_ok=True)
     import_path.write_text(
         json.dumps(
             {
                 "schema": "quwoquan.content_import_report",
+                "environment": "alpha",
                 "releaseId": "release-m100",
                 "manifestDigest": "sha256:" + "9" * 64,
                 "status": "imported",
@@ -129,14 +135,23 @@ def test_release_probe__receipt_contains_one_hundred_verified_sample_reads(
         encoding="utf-8",
     )
 
+    readiness["activationEnvelope"]["importReportDigest"] = (
+        "sha256:" + hashlib.sha256(import_path.read_bytes()).hexdigest()
+    )
+    readiness["activationEnvelopeDigest"] = stackctl._canonical_document_checksum(readiness["activationEnvelope"])
+    readiness_path.write_text(json.dumps(_with_checksum(readiness)), encoding="utf-8")
+
     def fake_probe(*args, **kwargs):
         assert kwargs["only_checks"] == (
+            "content_feed",
+            "homepage_recommend",
             "video_book_feed",
             "premium_feed",
             "feed_media_slices",
             "global_search",
             "media_sample",
             "release_sample",
+            "author_posts_contract",
         )
         samples = kwargs["release_samples"]
         assert len(samples) == 100

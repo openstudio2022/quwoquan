@@ -959,8 +959,6 @@ def test_failed_receipt_retains_bounded_search_attempt_evidence() -> None:
         "schema": "quwoquan_data.environment_release_result",
         "environment": "alpha",
         "releaseId": "release-a",
-        "releaseClass": "production",
-        "productLifecycleState": "production",
         "containsUnverifiedAssets": False,
         "manifestDigest": "sha256:" + "a" * 64,
         "admissionKind": "producer_handoff",

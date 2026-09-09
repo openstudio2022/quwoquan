@@ -66,24 +66,82 @@ def _manifest() -> dict[str, object]:
     }
 
 
-def _readiness() -> dict[str, object]:
-    readiness: dict[str, object] = {
-        "passed": True,
-        "environment": "gamma",
-        "releaseId": "release-1",
-        "manifestDigest": "sha256:" + "4" * 64,
-        "importRunId": "import-1",
-        "sourceRevision": "a" * 40,
-        "readinessPhase": "research",
-        "releaseClass": "research",
-        "productLifecycleState": "research",
-        "postIds": ["post-1"],
-        "creatorIds": ["creator-1"],
-        "entityRefs": ["entity-1"],
-        "tagRefs": ["tag-1"],
-        "mediaAssetIds": ["media-1"],
+def _readiness(
+    *, environment: str = "gamma", release_id: str = "release-1",
+    manifest_digest: str = "sha256:" + "4" * 64,
+    post_ids: tuple[str, ...] = ("post-1",), entity_ref: str = "entity-1",
+    source_identities: list[dict[str, object]] | None = None,
+) -> dict[str, object]:
+    """直接构造并验证现役 Data schema；不填充已退役类别字段。"""
+    from quwoquan_ops.cli.commands.app_preflight_readiness import _validate_data_schema
+
+    source_identities = source_identities or [{
+        "sourceRevision": "sha256:" + "a" * 64,
+        "sourceDigest": "sha256:" + "b" * 64,
+        "entityCatalogDigest": "sha256:" + "c" * 64,
+        "executionIds": ["execution-1"],
+    }]
+    source = {
+        "sourceIdentities": source_identities,
+        "sourceIdentitySetDigest": canonical_digest({
+            "schema": "quwoquan_data.source_identity_set",
+            "sourceIdentities": source_identities,
+        }),
     }
-    return {**readiness, "verificationChecksum": canonical_digest(readiness)}
+    identity = {"environment": environment, "releaseId": release_id,
+                "manifestDigest": manifest_digest}
+    prefix = f"env/{environment}/runs/data-release/{release_id}"
+    def operation(path: str, page: str) -> dict[str, object]:
+        return {"path": path, "pageId": page, "status": 200,
+                "requestId": "DATA.fixture", "traceId": "TRACE.fixture",
+                "startedAt": "2026-09-09T00:00:00Z",
+                "endedAt": "2026-09-09T00:00:00.001Z", "durationMs": 1}
+    queries = (
+        ("discovery_work", "identity=work&limit=20"),
+        ("typed_article", "identity=work&type=article&limit=20"),
+        ("typed_image", "identity=work&type=image&limit=20"),
+        ("typed_video", "identity=work&type=video&limit=20"),
+        ("homepage_recommend", "sort=recommend&channelId=recommend&limit=20"),
+        ("premium_stream", "sort=recommend&channelId=premium_stream&limit=20"),
+    )
+    activation = {
+        "schema": "quwoquan_data.environment_activation_envelope", **identity, **source,
+        "importRunId": "import-1", "verifyRunId": "verify-1",
+        "importReportRef": f"{prefix}/apply-1/import.json",
+        "importReportDigest": "sha256:" + "6" * 64,
+    }
+    readiness = {
+        "schema": "quwoquan_data.environment_release_readiness", **identity, **source,
+        "sourceOwner": "qwq_data", "releaseKind": "content", "passed": True,
+        "containsUnverifiedAssets": True, "authorizationRequiredAssetIds": ["media-1"],
+        "rightsStatusCounts": {"verified": 0, "unverified": 1, "restricted": 0, "unknown": 0},
+        "researchAcceptedCount": 1, "commercialAcceptedCount": 0,
+        "importRunId": "import-1", "verifyRunId": "verify-1",
+        "postIds": list(post_ids), "creatorIds": ["creator-1"],
+        "entityRefs": [entity_ref], "tagRefs": ["tag-1"], "mediaAssetIds": ["media-1"],
+        "counts": {"entities": 1, "posts": len(post_ids), "creators": 1,
+                   "avatarAssets": 1, "imageAssets": 1, "tags": 1, "mediaAssets": 1,
+                   "discoveryPosts": len(post_ids), "premiumPlayableVideos": 1},
+        "guestActorHash": "sha256:" + "7" * 64,
+        "guestLogin": operation("/auth/login/anonymous", "user.login.anonymous"),
+        "feedQueries": [{"name": name, "path": "/content/feed", "query": query,
+                         "status": 200, "releaseBound": True,
+                         "matchedPostIds": [post_ids[-1]],
+                         "requests": [operation("/content/feed", "content.feed.list")]}
+                        for name, query in queries],
+        "contentImportReportRef": activation["importReportRef"],
+        "creatorAttributionRef": f"{prefix}/apply-1/creator-import.json",
+        "tagAttributionRef": f"{prefix}/verify-1/tag-attribution.json",
+        "homepageApiVerificationRef": f"{prefix}/verify-1/homepage-api-verification.json",
+        "postApiVerificationRef": f"{prefix}/verify-1/post-api-verification.json",
+        "mediaManifestRef": f"data/releases/{release_id}/payload/media_manifest.json",
+        "mediaManifestDigest": "sha256:" + "8" * 64,
+        "activationEnvelope": activation, "activationEnvelopeDigest": canonical_digest(activation),
+        "verifiedAt": "2026-09-09T00:00:00Z",
+    }
+    readiness["verificationChecksum"] = canonical_digest(readiness)
+    _validate_data_schema(readiness, "environment_release_readiness")
+    return readiness
 
 
 def _with_checksum(payload: dict[str, object]) -> dict[str, object]:

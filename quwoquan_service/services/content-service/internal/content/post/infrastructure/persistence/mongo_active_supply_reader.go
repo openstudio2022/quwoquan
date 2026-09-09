@@ -38,7 +38,7 @@ type activeSupplyReleaseState struct {
 	Status            string    `bson:"status"`
 	ActiveReleaseID   string    `bson:"activeReleaseId"`
 	ManifestDigest    string    `bson:"manifestDigest"`
-	ReleaseClass      string    `bson:"releaseClass"`
+	Extra             bson.M    `bson:",inline"`
 	ProjectionVersion int64     `bson:"projectionVersion"`
 	Revision          int64     `bson:"revision"`
 	ActivatedAt       time.Time `bson:"activatedAt"`
@@ -123,9 +123,7 @@ func (r *MongoActiveSupplyReader) ActiveSupplySnapshot(
 	}
 	releaseID := strings.TrimSpace(state.ActiveReleaseID)
 	manifestDigest := strings.TrimSpace(state.ManifestDigest)
-	releaseClass := strings.TrimSpace(state.ReleaseClass)
 	if releaseID == "" || !canonicalManifestDigestPattern.MatchString(manifestDigest) ||
-		!postports.IsKnownReleaseClass(releaseClass) ||
 		state.ProjectionVersion <= 0 || state.Revision <= 0 || state.ActivatedAt.IsZero() {
 		r.cache.Invalidate()
 		return empty, fmt.Errorf("active release binding is malformed")
@@ -134,7 +132,6 @@ func (r *MongoActiveSupplyReader) ActiveSupplySnapshot(
 		environment:       strings.TrimSpace(state.Environment),
 		releaseID:         releaseID,
 		manifestDigest:    manifestDigest,
-		releaseClass:      releaseClass,
 		projectionVersion: state.ProjectionVersion,
 		revision:          state.Revision,
 		activatedAt:       state.ActivatedAt,
@@ -151,7 +148,6 @@ func (r *MongoActiveSupplyReader) ActiveSupplySnapshot(
 		if readErr != nil {
 			return empty, readErr
 		}
-		snapshot.ReleaseClass = releaseClass
 		snapshot.ProjectionVersion = state.ProjectionVersion
 		snapshot.Revision = state.Revision
 		snapshot.ActivatedAt = state.ActivatedAt.UTC()
@@ -164,7 +160,6 @@ func (r *MongoActiveSupplyReader) ActiveSupplySnapshot(
 		}
 		if !currentFound || strings.TrimSpace(current.ActiveReleaseID) != releaseID ||
 			strings.TrimSpace(current.ManifestDigest) != manifestDigest ||
-			strings.TrimSpace(current.ReleaseClass) != releaseClass ||
 			current.ProjectionVersion != state.ProjectionVersion ||
 			current.Revision != state.Revision ||
 			!current.ActivatedAt.Equal(state.ActivatedAt) {
@@ -215,7 +210,6 @@ func (r *MongoActiveSupplyReader) ReadActiveReleaseFence(
 	result.ReleaseID = strings.TrimSpace(snapshot.ActiveReleaseID)
 	result.ManifestDigest = strings.TrimSpace(snapshot.ManifestDigest)
 	result.Revision = snapshot.Revision
-	result.ReleaseClass = strings.TrimSpace(snapshot.ReleaseClass)
 	result.ProjectionVersion = snapshot.ProjectionVersion
 	result.ActivatedAt = snapshot.ActivatedAt.UTC()
 	if err := contentpublic.ValidateActiveReleaseFence(query, result); err != nil {
@@ -239,7 +233,8 @@ func (r *MongoActiveSupplyReader) readActiveSupplyReleaseState(
 		},
 		options.FindOne().SetProjection(bson.M{
 			"kind": 1, "environment": 1, "sourceOwner": 1, "status": 1,
-			"activeReleaseId": 1, "manifestDigest": 1, "releaseClass": 1,
+			"activeReleaseId": 1, "manifestDigest": 1,
+			"releaseClass": 1, "productLifecycleState": 1, "readinessPhase": 1,
 			"projectionVersion": 1, "activatedAt": 1, "revision": 1,
 		}),
 	).Decode(&state)
@@ -248,6 +243,11 @@ func (r *MongoActiveSupplyReader) readActiveSupplyReleaseState(
 			return activeSupplyReleaseState{}, false, nil
 		}
 		return activeSupplyReleaseState{}, false, err
+	}
+	for _, field := range []string{"releaseClass", "productLifecycleState", "readinessPhase"} {
+		if _, exists := state.Extra[field]; exists {
+			return activeSupplyReleaseState{}, false, fmt.Errorf("active release pointer contains retired category field %s", field)
+		}
 	}
 	if state.Kind != "active_pointer" || state.Status != "active" ||
 		state.Environment != r.environment || state.SourceOwner != r.sourceOwner {

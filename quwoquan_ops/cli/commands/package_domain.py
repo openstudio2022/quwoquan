@@ -621,7 +621,6 @@ def command_package(args: argparse.Namespace) -> dict[str, Any]:
             require_full=True,
         )
         for field in (
-            "releaseInputClassification",
             "contractGraphDigest",
             "graphqlReadRegistry",
             "packageDigest",

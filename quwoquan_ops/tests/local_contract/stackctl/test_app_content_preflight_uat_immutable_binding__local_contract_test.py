@@ -16,7 +16,11 @@ from quwoquan_ops.cli import stackctl
 from quwoquan_ops.cli.lib.test_data.capabilities.user_service import (
     AUTHENTICATED_ACTORS,
 )
+from quwoquan_ops.tests.support.test_data_verification_test_support import (
+    _readiness as release_readiness,
+)
 from quwoquan_ops.tests.support.derivable_release_payload_test_support import (
+    release_header_fixture,
     derive_fixture_release_uat_sample_plan,
     release_payload_root,
     write_derivable_release_payload,
@@ -48,46 +52,33 @@ class AppContentPreflightUatImmutableBindingTest(unittest.TestCase):
             / "env/alpha/runs/data-release/release-a/verify-a/release-readiness.json"
         )
         readiness_path.parent.mkdir(parents=True)
-        readiness: dict[str, object] = {
-            "passed": True,
-            "environment": "alpha",
-            "releaseId": "release-a",
-            "verifyRunId": "verify-a",
-            "manifestDigest": MANIFEST_DIGEST,
-            "readinessPhase": "research",
-            "releaseClass": "research",
-            "productLifecycleState": "research",
-            "importRunId": "import-a",
-            "sourceIdentities": [{"executionId": "execution-a"}],
-            "sourceIdentitySetDigest": _digest("d"),
-            "postIds": ["article-a", "image-a", "video-a"],
-            "creatorIds": ["creator-a"],
-            "entityRefs": ["/entity/entity-a"],
-            "tagRefs": ["tag-a"],
-            "mediaAssetIds": ["media-a"],
-        }
+        readiness = release_readiness(
+            environment="alpha", release_id="release-a",
+            manifest_digest=MANIFEST_DIGEST,
+            post_ids=("article-a", "image-a", "video-a"),
+            entity_ref="/entity/entity-a",
+        )
+        readiness.update(verifyRunId="verify-a", importRunId="import-a")
+        readiness["activationEnvelope"].update(verifyRunId="verify-a", importRunId="import-a")
+        readiness["activationEnvelopeDigest"] = stackctl._canonical_document_checksum(
+            readiness["activationEnvelope"]
+        )
+        readiness.pop("verificationChecksum")
         unsigned = dict(readiness)
         readiness["verificationChecksum"] = stackctl._canonical_document_checksum(
             unsigned
         )
         readiness_path.write_text(json.dumps(readiness), encoding="utf-8")
-        release_header = {
-            "schema": "quwoquan_data.release",
-            "releaseId": "release-a",
-            "sourceOwner": "qwq_data",
-            "releaseKind": "content",
-            "releaseClass": "research",
-            "productLifecycleState": "research",
-            "poolDigest": _digest("1"),
-            "canonicalMerkle": _digest("2"),
-            "sourceIdentities": readiness["sourceIdentities"],
-            "sourceIdentitySetDigest": readiness["sourceIdentitySetDigest"],
-            "contents": [
+        release_header = release_header_fixture(
+            release_id="release-a",
+            source_identities=readiness["sourceIdentities"],
+            source_identity_set_digest=readiness["sourceIdentitySetDigest"],
+            contents=[
                 {"contentId": "article-a", "postRef": "article/work-a/1"},
                 {"contentId": "image-a", "postRef": "image/work-a/1"},
                 {"contentId": "video-a", "postRef": "video/work-a/1"},
             ],
-        }
+        )
         # 下游 sample plan 从真实 payload 派生，fixture 只写可派生的最小 payload。
         payload_root = release_payload_root(root, "release-a")
         release_header_path = write_derivable_release_payload(
@@ -397,7 +388,9 @@ class AppContentPreflightUatImmutableBindingTest(unittest.TestCase):
         )
         self.assertEqual(context.candidate.baseline_id, BASELINE)
         self.assertEqual(context.candidate.package_digest, PACKAGE_DIGEST)
-        self.assertEqual(context.candidate.readiness_phase, "research")
+        self.assertFalse(hasattr(context.candidate, "readiness_phase"))
+        self.assertNotIn("readinessPhase", binding)
+        self.assertNotIn("releaseClass", binding)
         self.assertEqual(
             tuple(item.object_id for item in context.candidate.release_posts),
             ("article-a", "image-a", "video-a"),

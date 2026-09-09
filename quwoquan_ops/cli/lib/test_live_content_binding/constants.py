@@ -24,7 +24,6 @@ _BINDING_FIELDS = frozenset(
         "releaseId",
         "verifyRunId",
         "manifestDigest",
-        "readinessPhase",
         "releaseAttestationRef",
         "releaseAttestationDigest",
         "readinessReceiptRef",

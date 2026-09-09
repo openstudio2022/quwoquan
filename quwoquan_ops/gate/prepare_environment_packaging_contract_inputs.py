@@ -21,6 +21,9 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from quwoquan_ops.cli.lib.openssl3_resolver import resolve_openssl3
+from quwoquan_ops.tests.support.deployment_candidate_manifest_test_support import (
+    release_attestation_payload,
+)
 
 
 KEY_ID = "packaging-contract"
@@ -36,13 +39,9 @@ def _write_release_attestation(
     release_id: str,
     digest_character: str,
 ) -> None:
-    payload = {
-        "schema": "quwoquan_data.release_attestation",
-        "releaseId": release_id,
-        "payloadSha256": "sha256:" + digest_character * 64,
-        "releaseClass": "commercial",
-        "productLifecycleState": "commercial",
-    }
+    payload = release_attestation_payload(
+        release_id, "sha256:" + digest_character * 64
+    )
     (workspace / filename).write_text(
         json.dumps(payload, ensure_ascii=True, separators=(",", ":")) + "\n",
         encoding="utf-8",

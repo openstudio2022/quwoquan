@@ -550,9 +550,7 @@ class ActiveContentReleaseOutboxRepairContractTest(unittest.TestCase):
             compose_files = [root / f"compose-{index}.yaml" for index in range(3)]
             for path in compose_files:
                 path.write_text("services: {}\n")
-            snapshot = {
-                "manifest": {"releaseInputClassification": "research_inputs"}
-            }
+            snapshot = {"manifest": {"release": {"candidate": {"releaseId": "release-1"}}}}
             args = argparse.Namespace(
                 confirm_active_content_release_outbox_repair=True,
                 expected_outbox_repair_count=4,

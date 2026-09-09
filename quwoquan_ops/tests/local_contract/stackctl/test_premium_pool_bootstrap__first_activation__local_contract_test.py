@@ -60,6 +60,16 @@ def _import_report(
                 "activationMode": "stage-only",
                 "releaseId": release_id,
                 "manifestDigest": manifest_digest,
+                "sourceOwner": "qwq_data",
+                "mode": "upsert", "deletePolicy": "none",
+                "counts": {"postsLoaded": 2, "entitiesLoaded": 1},
+                "auditEvents": [],
+                "stageResult": {
+                    "postsExpected": 2, "postsProjected": 2,
+                    "mediaExpected": 1, "mediaProjected": 1,
+                    "outboxExpected": 2, "outboxProjected": 2,
+                    "projectionVersion": 1, "replayed": False,
+                },
                 "postBindings": [
                     {
                         "postRef": "video/攻略/峨眉山/1",
@@ -67,12 +77,17 @@ def _import_report(
                         "contentId": VIDEO_CANONICAL_ID,
                         "contentType": "video",
                         "usageScope": "research",
+                        "contentVersion": 1,
+                        "authorId": "author-1",
                     },
                     {
                         "postRef": "article/攻略/峨眉山/1",
                         "postId": ARTICLE_ID,
+                        "contentId": "qwq_data_" + "2" * 24,
                         "contentType": "article",
                         "usageScope": "research",
+                        "contentVersion": 1,
+                        "authorId": "author-1",
                     },
                 ],
             }
@@ -154,7 +169,7 @@ class PremiumPoolBootstrapBindingLocalContractTest(unittest.TestCase):
         spec_ref: environment-topology-and-packaging GWT-004（Alpha 激活绑定 ReleaseUatSamplePlan）
         """
         with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
+            root = Path(temporary).resolve()
             binding = self._load(_import_report(root), root)
             self.assertEqual(binding.release_id, RELEASE_ID)
             self.assertEqual(binding.manifest_digest, MANIFEST_DIGEST)
@@ -170,7 +185,7 @@ class PremiumPoolBootstrapBindingLocalContractTest(unittest.TestCase):
         spec_ref: environment-topology-and-packaging GWT-004
         """
         with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
+            root = Path(temporary).resolve()
             with self.assertRaisesRegex(
                 premium_pool_release.PremiumPoolReleaseError,
                 "already has premium pool entries",
@@ -183,7 +198,7 @@ class PremiumPoolBootstrapBindingLocalContractTest(unittest.TestCase):
         spec_ref: environment-topology-and-packaging GWT-004
         """
         with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
+            root = Path(temporary).resolve()
             with self.assertRaisesRegex(
                 premium_pool_release.PremiumPoolReleaseError,
                 "ReleaseUatSamplePlan video sample",
@@ -198,7 +213,7 @@ class PremiumPoolBootstrapBindingLocalContractTest(unittest.TestCase):
         spec_ref: environment-topology-and-packaging GWT-004
         """
         with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
+            root = Path(temporary).resolve()
             with self.assertRaisesRegex(
                 premium_pool_release.PremiumPoolReleaseError,
                 "environment postId bound to the ReleaseUatSamplePlan video sample",
@@ -213,7 +228,7 @@ class PremiumPoolBootstrapBindingLocalContractTest(unittest.TestCase):
         spec_ref: environment-topology-and-packaging GWT-004
         """
         with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
+            root = Path(temporary).resolve()
             with self.assertRaisesRegex(
                 premium_pool_release.PremiumPoolReleaseError,
                 "ReleaseUatSamplePlan video sample",
@@ -226,7 +241,7 @@ class PremiumPoolBootstrapBindingLocalContractTest(unittest.TestCase):
         spec_ref: environment-topology-and-packaging GWT-004
         """
         with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
+            root = Path(temporary).resolve()
             report = _import_report(root, environment="beta")
             with self.assertRaisesRegex(
                 premium_pool_release.PremiumPoolReleaseError,
@@ -240,7 +255,7 @@ class PremiumPoolBootstrapBindingLocalContractTest(unittest.TestCase):
         spec_ref: environment-topology-and-packaging GWT-004
         """
         with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
+            root = Path(temporary).resolve()
             with self.assertRaisesRegex(
                 premium_pool_release.PremiumPoolReleaseError,
                 "does not match the active candidate release",
@@ -255,7 +270,7 @@ class PremiumPoolBootstrapBindingLocalContractTest(unittest.TestCase):
         spec_ref: environment-topology-and-packaging GWT-004
         """
         with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
+            root = Path(temporary).resolve()
             report = _import_report(root)
             payload = json.loads(report.read_text(encoding="utf-8"))
             payload["status"] = "failed"
@@ -277,7 +292,7 @@ class PremiumPoolBootstrapBindingLocalContractTest(unittest.TestCase):
             {"activationMode": "activate"},
         ):
             with tempfile.TemporaryDirectory() as temporary:
-                root = Path(temporary)
+                root = Path(temporary).resolve()
                 report = _import_report(root)
                 payload = json.loads(report.read_text(encoding="utf-8"))
                 payload.update(overrides)
@@ -294,7 +309,7 @@ class PremiumPoolBootstrapBindingLocalContractTest(unittest.TestCase):
         spec_ref: environment-topology-and-packaging GWT-004
         """
         with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
+            root = Path(temporary).resolve()
             binding = self._load(_import_report(root), root)
             recorded = premium_pool_release._premium_receipt_binding(binding)
             self.assertIn("releaseImportBinding", recorded)

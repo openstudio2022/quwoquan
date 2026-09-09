@@ -61,7 +61,7 @@ func (f *PostQueryFacade) GetPost(
 		return postports.PostDetailSlice{}, postQueryReaderUnavailable("GetPost detail reader is not configured")
 	}
 
-	binding, err := f.admitPublicReleaseRead(ctx, "GetPost", query.ResearchPrincipal())
+	binding, err := f.admitPublicReleaseRead(ctx, "GetPost")
 	if err != nil {
 		return postports.PostDetailSlice{}, err
 	}
@@ -130,7 +130,6 @@ func (f *PostQueryFacade) GetPost(
 func (f *PostQueryFacade) GetHelperRead(
 	ctx context.Context,
 	postID string,
-	researchPrincipal ...bool,
 ) (postports.HelperReadSlice, error) {
 	canonicalPostID := postports.PostID(strings.TrimSpace(postID))
 	if canonicalPostID == "" {
@@ -147,7 +146,6 @@ func (f *PostQueryFacade) GetHelperRead(
 	binding, err := f.admitPublicReleaseRead(
 		ctx,
 		"GetHelperRead",
-		len(researchPrincipal) > 0 && researchPrincipal[0],
 	)
 	if err != nil {
 		return postports.HelperReadSlice{}, err
@@ -203,7 +201,6 @@ func (f *PostQueryFacade) ListUserPosts(
 	binding, err := f.admitPublicReleaseRead(
 		ctx,
 		"ListUserPosts",
-		query.ResearchPrincipal(),
 	)
 	if err != nil {
 		return postports.AuthorPostPageSlice{}, err
@@ -318,7 +315,6 @@ func (f *PostQueryFacade) ListPostsByGathering(
 	binding, err := f.admitPublicReleaseRead(
 		ctx,
 		"ListPostsByGathering",
-		query.ResearchPrincipal(),
 	)
 	if err != nil {
 		return postports.GatheringPostPageSlice{}, err
@@ -391,7 +387,6 @@ func (f *PostQueryFacade) ListPublicPostIDs(
 	ctx context.Context,
 	lister PublicPostIDLister,
 	limit int,
-	researchPrincipal ...bool,
 ) ([]string, error) {
 	if lister == nil {
 		return nil, postQueryReaderUnavailable("sitemap post reader is not configured")
@@ -399,7 +394,6 @@ func (f *PostQueryFacade) ListPublicPostIDs(
 	binding, err := f.admitPublicReleaseRead(
 		ctx,
 		"ListPublicPostIDs",
-		len(researchPrincipal) > 0 && researchPrincipal[0],
 	)
 	if err != nil {
 		return nil, err
@@ -419,7 +413,6 @@ func (f *PostQueryFacade) ListPublicPostIDs(
 func (f *PostQueryFacade) admitPublicReleaseRead(
 	ctx context.Context,
 	operation string,
-	researchPrincipal bool,
 ) (postports.ActiveSupplySnapshot, error) {
 	if f == nil {
 		return postports.ActiveSupplySnapshot{}, postQueryReaderUnavailable(
@@ -439,11 +432,6 @@ func (f *PostQueryFacade) admitPublicReleaseRead(
 	if !snapshot.ReleaseBoundReadbackReady() {
 		return postports.ActiveSupplySnapshot{}, postQueryReaderUnavailable(
 			operation + " active release binding is inconsistent",
-		)
-	}
-	if snapshot.IsResearchRelease() && !researchPrincipal {
-		return postports.ActiveSupplySnapshot{}, contentgenerated.AppErrorFromPostNotFound(
-			operation + " target is missing or not visible to viewer",
 		)
 	}
 	return snapshot, nil

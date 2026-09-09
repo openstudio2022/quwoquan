@@ -12,6 +12,7 @@ import pytest
 from content.release.environment import importers
 from content.release.environment.handler import _sync_media
 from content.release.model import ImportMode
+from quwoquan_data.tests.local_contract.release.test_release_header__typed_identity__contract__local_contract_test import _header
 
 
 def test_importers_read_release_payload_without_publish_root(
@@ -130,7 +131,7 @@ def test_media_sync_reads_only_immutable_release_payload(tmp_path: Path) -> None
     source.write_bytes(content)
     header = release / "payload/release.json"
     header.write_text(
-        json.dumps({"releaseId": "release-a", "releaseClass": "production"}),
+        json.dumps(_header(release_id="release-a")),
         encoding="utf-8",
     )
     manifest = release / "payload/media_manifest.json"

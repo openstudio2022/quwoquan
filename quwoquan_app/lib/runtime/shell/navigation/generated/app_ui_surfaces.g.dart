@@ -661,8 +661,6 @@ class AppUiSurfaces {
     operationIds: <String>[
       'LoginAnonymous',
       'RefreshToken',
-      'IssueWhitelistedResearchSession',
-      'GetResearchReleaseReadback',
       'GetActivePersonaContext',
       'UpsertDevicePushEndpoint',
       'RemoveDevicePushEndpoint',

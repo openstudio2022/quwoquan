@@ -13,7 +13,6 @@ from content.release.canonical.object_transaction_contract import (
 from content.release.canonical.release_attestation import ReleaseAttestation
 from content.release.canonical.release_header import validate_release_header
 from content.release.model import DataSourceOwner, ReleaseKind
-from governance.coverage.distribution import ProductLifecycleState, ReleaseClass
 from core.release_layout import verify_release_holdings
 from core.schema import assert_valid
 from core.source_digest import SourceDefinitionSnapshot
@@ -63,8 +62,6 @@ def release_header_document(
     source_digest_documents: list[dict[str, object]],
     asset_admission: Mapping[str, Any],
     canonical_merkle: str,
-    release_class: str,
-    product_lifecycle_state: str,
     pool_digest: str | None = None,
     counts: Mapping[str, int] | None = None,
     contents: list[dict[str, object]] | None = None,
@@ -99,8 +96,6 @@ def release_header_document(
         "releaseId": release_id,
         "sourceOwner": DataSourceOwner.QWQ_DATA,
         "releaseKind": ReleaseKind.CONTENT,
-        "releaseClass": release_class,
-        "productLifecycleState": product_lifecycle_state,
         "containsUnverifiedAssets": asset_admission["containsUnverifiedAssets"],
         "rightsStatusCounts": asset_admission["rightsStatusCounts"],
         "authorizationRequiredAssetIds": asset_admission[
@@ -160,7 +155,6 @@ def release_attestation_document(
     tag_count: int,
     payload_sha256: str,
     recorded_at: str,
-    release_class: str,
     source_identities: tuple[dict[str, object], ...] = (),
     source_identity_set_digest: str | None = None,
 ) -> dict[str, object]:
@@ -168,8 +162,6 @@ def release_attestation_document(
         release_id=release_id,
         source_owner=DataSourceOwner.QWQ_DATA,
         release_kind=ReleaseKind.CONTENT,
-        release_class=ReleaseClass(release_class),
-        product_lifecycle_state=ProductLifecycleState(release_class),
         contains_unverified_assets=bool(
             asset_admission["containsUnverifiedAssets"]
         ),

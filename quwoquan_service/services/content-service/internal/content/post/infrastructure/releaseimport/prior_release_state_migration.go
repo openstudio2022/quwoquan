@@ -77,7 +77,6 @@ type PriorReleaseStateMigrationResult struct {
 	SourceOwner                 string
 	ReleaseID                   string
 	ManifestDigest              string
-	ReleaseClass                string
 	ProjectionVersion           int64
 	ActivatedAt                 time.Time
 	BeforeIndexSetDigest        string
@@ -259,8 +258,8 @@ func validatePriorReleaseStateMigrationExpectation(expectation PriorReleaseState
 		!sha256Pattern.MatchString(expectation.ManifestDigest) {
 		return PriorReleaseStateMigrationExpectation{}, fmt.Errorf("prior release-state expected current identity is incomplete or non-canonical")
 	}
-	if expectation.ReleaseClass != "research" && expectation.ReleaseClass != "commercial" && expectation.ReleaseClass != "production" {
-		return PriorReleaseStateMigrationExpectation{}, fmt.Errorf("prior release-state expected release class must be research, commercial or production")
+	if expectation.ReleaseClass != "" && expectation.ReleaseClass != "research" && expectation.ReleaseClass != "commercial" && expectation.ReleaseClass != "production" {
+		return PriorReleaseStateMigrationExpectation{}, fmt.Errorf("prior release-state historical release class is invalid")
 	}
 	if expectation.ProjectionVersion <= 0 || expectation.ActivatedAt.IsZero() {
 		return PriorReleaseStateMigrationExpectation{}, fmt.Errorf("prior release-state expected projection version and activatedAt are required")
@@ -430,8 +429,8 @@ func MigratePriorContentReleaseState(
 	return PriorReleaseStateMigrationResult{
 		Status: status, Environment: expectation.Environment, SourceOwner: expectation.SourceOwner,
 		ReleaseID: expectation.ReleaseID, ManifestDigest: expectation.ManifestDigest,
-		ReleaseClass: expectation.ReleaseClass, ProjectionVersion: expectation.ProjectionVersion,
-		ActivatedAt: expectation.ActivatedAt, BeforeIndexSetDigest: beforeStateDigest,
+		ProjectionVersion: expectation.ProjectionVersion,
+		ActivatedAt:       expectation.ActivatedAt, BeforeIndexSetDigest: beforeStateDigest,
 		AfterIndexSetDigest: releaseStateIndexSetDigest(finalStateIndexes.Definitions),
 		ReceiptCount:        int64(len(readbackReceipts)), BeforeReceiptIndexSetDigest: beforeReceiptDigest,
 		AfterReceiptIndexSetDigest: releaseStateIndexSetDigest(finalReceiptIndexes.Definitions),
@@ -661,14 +660,21 @@ func migratePriorReleaseControlDocuments(
 	defer session.EndSession(ctx)
 	_, err = session.WithTransaction(ctx, func(txCtx context.Context) (any, error) {
 		if !stateCurrent {
+			var historicalClass any = expectation.ReleaseClass
+			if expectation.ReleaseClass == "" {
+				historicalClass = bson.M{"$exists": false}
+			}
 			result, updateErr := state.UpdateOne(txCtx, bson.M{
 				"_id":         stateDocument.ID,
 				"environment": expectation.Environment, "sourceOwner": expectation.SourceOwner,
 				"releaseId": expectation.ReleaseID, "activeReleaseId": expectation.ReleaseID,
-				"manifestDigest": expectation.ManifestDigest, "releaseClass": expectation.ReleaseClass,
+				"manifestDigest": expectation.ManifestDigest, "releaseClass": historicalClass,
 				"projectionVersion": expectation.ProjectionVersion, "activatedAt": expectation.ActivatedAt,
 				"status": "active", "kind": bson.M{"$exists": false}, "revision": bson.M{"$exists": false},
-			}, bson.M{"$set": bson.M{"kind": releaseActivePointerKind, "revision": int64(1)}})
+			}, bson.M{
+				"$set":   bson.M{"kind": releaseActivePointerKind, "revision": int64(1)},
+				"$unset": bson.M{"releaseClass": ""},
+			})
 			if updateErr != nil {
 				return nil, fmt.Errorf("CAS prior Content release-state document: %w", updateErr)
 			}
@@ -871,7 +877,7 @@ func inspectOnlyPriorReleaseStateDocument(
 	}
 	if document.Environment != expectation.Environment || document.SourceOwner != expectation.SourceOwner ||
 		document.ReleaseID != expectation.ReleaseID || document.ActiveReleaseID != expectation.ReleaseID ||
-		document.ManifestDigest != expectation.ManifestDigest || document.ReleaseClass != expectation.ReleaseClass ||
+		document.ManifestDigest != expectation.ManifestDigest ||
 		document.ProjectionVersion != expectation.ProjectionVersion || !document.ActivatedAt.Equal(expectation.ActivatedAt) ||
 		document.Status != "active" {
 		return nil, priorReleaseStateDocument{}, false, fmt.Errorf("GATE_BLOCK: prior release-state differs from exact expected current binding")
@@ -879,9 +885,15 @@ func inspectOnlyPriorReleaseStateDocument(
 	hasKind := raw.Lookup("kind").Type != 0
 	hasRevision := raw.Lookup("revision").Type != 0
 	if !hasKind && !hasRevision {
+		if document.ReleaseClass != expectation.ReleaseClass {
+			return nil, priorReleaseStateDocument{}, false, fmt.Errorf("GATE_BLOCK: historical release class differs from exact expectation")
+		}
 		return raw, document, false, nil
 	}
 	if hasKind && hasRevision && document.Kind == releaseActivePointerKind && document.Revision == 1 {
+		if raw.Lookup("releaseClass").Type != 0 {
+			return nil, priorReleaseStateDocument{}, false, fmt.Errorf("GATE_BLOCK: current release pointer retains retired category")
+		}
 		return raw, document, true, nil
 	}
 	return nil, priorReleaseStateDocument{}, false, fmt.Errorf("GATE_BLOCK: release-state kind/revision shape is ambiguous or drifted")
@@ -1166,7 +1178,7 @@ func ParsePriorReleaseStateMigrationCommand(args []string) (PriorReleaseStateMig
 	set.StringVar(&command.Expected.SourceOwner, "source-owner", "", "exact source owner")
 	set.StringVar(&command.Expected.ReleaseID, "expected-release-id", "", "exact current release id")
 	set.StringVar(&command.Expected.ManifestDigest, "expected-manifest-digest", "", "exact current manifest digest")
-	set.StringVar(&command.Expected.ReleaseClass, "expected-release-class", "", "exact current release class")
+	set.StringVar(&command.Expected.ReleaseClass, "expected-release-class", "", "optional exact historical category; never written to current state")
 	set.Int64Var(&command.Expected.ProjectionVersion, "expected-projection-version", 0, "exact current projection version")
 	set.StringVar(&activatedAt, "expected-activated-at", "", "exact current activatedAt (RFC3339)")
 	set.StringVar(&command.Expected.PriorIndexSet, "expected-prior-index-set", "", "exact prior release-state index expectation")
@@ -1209,7 +1221,6 @@ type ContentPriorReleaseStateMigrationReceipt struct {
 	SourceOwner                 string    `json:"sourceOwner"`
 	ReleaseID                   string    `json:"releaseId"`
 	ManifestDigest              string    `json:"manifestDigest"`
-	ReleaseClass                string    `json:"releaseClass"`
 	ProjectionVersion           int64     `json:"projectionVersion"`
 	ActivatedAt                 time.Time `json:"activatedAt"`
 	Revision                    int64     `json:"revision"`
@@ -1264,8 +1275,8 @@ func RunPriorReleaseStateMigration(ctx context.Context, args []string) error {
 		Schema: ContentPriorReleaseStateMigrationReceiptSchema, Status: result.Status,
 		Database: command.Database, Environment: result.Environment, SourceOwner: result.SourceOwner,
 		ReleaseID: result.ReleaseID, ManifestDigest: result.ManifestDigest,
-		ReleaseClass: result.ReleaseClass, ProjectionVersion: result.ProjectionVersion,
-		ActivatedAt: result.ActivatedAt.UTC(), Revision: 1,
+		ProjectionVersion: result.ProjectionVersion,
+		ActivatedAt:       result.ActivatedAt.UTC(), Revision: 1,
 		MigrationMode:               QuiescedAtomicStorageMigrationMode,
 		PriorIndexSet:               command.Expected.PriorIndexSet,
 		PriorIndexSetDigest:         PriorReleaseStateExpectedIndexDigest(),

@@ -43,10 +43,7 @@ func InsertReleaseMediaAssetProjections(
 	projected := 0
 	for _, assetID := range assetIDs {
 		asset := assets[assetID]
-		objectKey := strings.TrimSpace(asset.PrivateObjectKey)
-		if objectKey == "" {
-			objectKey = strings.TrimSpace(asset.PublicSliceKey)
-		}
+		objectKey := strings.TrimSpace(asset.PublicSliceKey)
 		if objectKey == "" {
 			return projected, fmt.Errorf(
 				"media asset %s has no delivery key for projection",
@@ -94,10 +91,7 @@ func ValidateReleaseMediaAssetProjectionClosure(
 	createdAt time.Time,
 ) error {
 	for assetID, asset := range assets {
-		objectKey := strings.TrimSpace(asset.PrivateObjectKey)
-		if objectKey == "" {
-			objectKey = strings.TrimSpace(asset.PublicSliceKey)
-		}
+		objectKey := strings.TrimSpace(asset.PublicSliceKey)
 		expected := bson.M{
 			"_id":         candidateMediaAssetDocumentID(environment, ownerID, releaseID, manifestDigest, assetID),
 			"environment": environment, "sourceOwner": ownerID,

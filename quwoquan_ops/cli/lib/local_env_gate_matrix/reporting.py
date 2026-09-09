@@ -81,7 +81,7 @@ def _write_matrix_result(
             "matrixRunId": matrix_run_id,
             "executionClass": execution_class,
             "deviceProfile": device_profile,
-            "nonPromotable": device_profile == DEVICE_PROFILE_EMULATOR_ONLY,
+            "nonPromotable": not live_evidence or device_profile == DEVICE_PROFILE_EMULATOR_ONLY,
         },
     )
     payload = {
@@ -113,8 +113,8 @@ def _write_matrix_result(
         "phases": phases,
         "environments": environments,
     }
+    payload["nonPromotable"] = not live_evidence or device_profile == DEVICE_PROFILE_EMULATOR_ONLY
     if device_profile == DEVICE_PROFILE_EMULATOR_ONLY:
-        payload["nonPromotable"] = True
         payload["deviceCoverage"] = [
             "ios-simulator",
             "android-emulator",
@@ -168,6 +168,7 @@ def _write_matrix_result(
         "reportDir": _evidence_path(matrix_dir),
         "claim": claim,
         "status": status,
+        "nonPromotable": payload["nonPromotable"],
         "executed": executed,
         "skipped": skipped,
         "wallClockSeconds": round(wall_seconds, 3),

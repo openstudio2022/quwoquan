@@ -38,7 +38,7 @@ actor 契约：
 
 硬门只有五条：来源 `sourceUrl/directUrl` 为 `https://` 且申报 `sha1`（有则）与本地字节一致；bytes 与 sha256 精确；权利字段（`sourceUrl/license/licenseUrl/creator`）在场——license 只记录并派生 `rightsStatus`，不阻断；author 与 reviewer 是不同 session/runId；对象身份唯一且 create-once；显式 cohort 且四载体计数不低于里程碑目标。水印、文风、结构、长度、配图率、质量评分、热度、权利疑虑只写 advisory 或记录字段，不阻断。`002-4.draft` seal 逐对象校验产物，违规对象只以 typed issue 退轮，至少一个合规产物即 `pass`。
 
-producer 完成 = 三份 seal receipt 连续闭合 + 逐对象 publish 事务 + `release finalize` 产生的 immutable handoff（含 `producerBaselineRevision` 与 `producerContractDigest`，并把 `cohort.json`/`producer_release_handoff.json` 复制到受版本控制的 `quwoquan_data/reference/releases/<releaseId>/`）。release 只有一个类别 `production`，媒体公开交付；未授权内容是否对公众开放由下游运营运行时配置决定，不属于 producer。M1/M10/M100/M1000 按累计唯一 finalized 对象计数，凡已完成 canonical publish 且 review approved 的对象都可进入 cohort。
+producer 完成 = 三份 seal receipt 连续闭合 + 逐对象 publish 事务 + `release finalize` 产生的 immutable handoff（含 `producerBaselineRevision` 与 `producerContractDigest`，并把 `cohort.json`/`producer_release_handoff.json` 复制到受版本控制的 `quwoquan_data/reference/releases/<releaseId>/`）。release 不携带类别或命名就绪轨道，默认公开交付，保留真实权利记录；环境差异由下游显式环境配置表达，不属于 producer。M1/M10/M100/M1000 按累计唯一 finalized 对象计数，凡已完成 canonical publish 且 review approved 的对象都可进入 cohort。
 
 内容池耐久性与代码同等重要：每轮收官后按 `commit` Skill 提交 `quwoquan_data/publish/**` 与随体清单（用户已授常设授权的前提下），并把随体媒体根 rsync 到用户指定的备份路径；`.qwq_output/**` 随时可删，`quwoquan_data/publish/**`、`quwoquan_data/reference/releases/**`、content library 与随体根不可删。
 

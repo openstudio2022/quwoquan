@@ -2397,14 +2397,6 @@ _PLATFORM_CONFIG_JSON = r'''{
       "type": "bool"
     },
     {
-      "key": "sys.content-service.research_identity.attestation_key_base64",
-      "reload": "restart",
-      "rollout": "progressive",
-      "scope": "workload",
-      "sensitive": true,
-      "type": "string"
-    },
-    {
       "default": ":18080",
       "key": "sys.content-service.service.http.addr",
       "reload": "restart",
@@ -5443,40 +5435,6 @@ _PLATFORM_CONFIG_JSON = r'''{
       "scope": "workload",
       "sensitive": false,
       "type": "bool"
-    },
-    {
-      "key": "sys.user-service.research_identity.account_id_allowlist_json",
-      "reload": "restart",
-      "rollout": "progressive",
-      "scope": "workload",
-      "sensitive": true,
-      "type": "string"
-    },
-    {
-      "key": "sys.user-service.research_identity.attestation_key_base64",
-      "reload": "restart",
-      "rollout": "progressive",
-      "scope": "workload",
-      "sensitive": true,
-      "type": "string"
-    },
-    {
-      "default": false,
-      "key": "sys.user-service.research_identity.enabled",
-      "reload": "restart",
-      "rollout": "progressive",
-      "scope": "workload",
-      "sensitive": false,
-      "type": "bool"
-    },
-    {
-      "default": 300,
-      "key": "sys.user-service.research_identity.ttl_seconds",
-      "reload": "restart",
-      "rollout": "progressive",
-      "scope": "workload",
-      "sensitive": false,
-      "type": "int"
     },
     {
       "default": ":18081",

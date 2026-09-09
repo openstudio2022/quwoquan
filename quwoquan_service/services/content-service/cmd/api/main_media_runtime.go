@@ -51,31 +51,6 @@ type mediaRuntimeComposition struct {
 	mediaDeliveryAuthHandler http.Handler
 }
 
-// activeResearchReleaseSupplyAdapter 把 content post 的 ActiveSupplySnapshot
-// 缩窄成 grant 分流需要的单一事实（DEC-031）：只有 status=active 且
-// releaseClass=research 的 canonical release 参与 membership 判定。
-type activeResearchReleaseSupplyAdapter struct {
-	reader postports.ActiveSupplyReader
-}
-
-func (adapter activeResearchReleaseSupplyAdapter) ActiveResearchReleaseID(
-	ctx context.Context,
-) (string, bool, error) {
-	if adapter.reader == nil {
-		return "", false, fmt.Errorf("active supply reader is not configured")
-	}
-	snapshot, err := adapter.reader.ActiveSupplySnapshot(ctx)
-	if err != nil {
-		return "", false, err
-	}
-	if strings.TrimSpace(snapshot.Status) != "active" ||
-		strings.TrimSpace(snapshot.ReleaseClass) != "research" ||
-		strings.TrimSpace(snapshot.ActiveReleaseID) == "" {
-		return "", false, nil
-	}
-	return strings.TrimSpace(snapshot.ActiveReleaseID), true, nil
-}
-
 // buildMediaRuntime 装配 OSS、媒体对象 Facade、处理 worker 与评论属地依赖。
 func buildMediaRuntime(
 	ctx context.Context,
@@ -95,7 +70,6 @@ func buildMediaRuntime(
 	postMediaReader postports.MediaReferencedPostReader,
 	viewerBlockReader *accessinfra.PersonaBlockReader,
 	commentViewerRelationships *commentpersistence.CommentViewerRelationshipMongoProjection,
-	activeSupplyReader postports.ActiveSupplyReader,
 ) (mediaRuntimeComposition, func(), error) {
 	ossBinding, err := objectstorage.LoadBinding(appEnv, runtimeconfig.EnvRuntimeConfigProvider{})
 	if err != nil {
@@ -175,9 +149,6 @@ func buildMediaRuntime(
 		mediaStore,
 		postapp.NewMediaAssetVisibilityReader(postMediaReader, viewerBlockReader),
 		mediaObjectGateway,
-		originalaccessquotaapp.WithActiveResearchReleaseReader(
-			activeResearchReleaseSupplyAdapter{reader: activeSupplyReader},
-		),
 	)
 	originalAccessAuditQuery := originalaccessquotaapp.NewAuditQueryFacade(
 		originalaccessaudit.NewReader(

@@ -28,7 +28,7 @@ def _release_dir(tmp_path: Path) -> Path:
     release_dir = tmp_path / "output/data/releases" / RELEASE_ID
     release_dir.mkdir(parents=True)
     (release_dir / "cohort.json").write_bytes(_canonical({
-        "schema": "quwoquan_data.release_cohort", "milestone": "M1000", "releaseClass": "production",
+        "schema": "quwoquan_data.release_cohort", "milestone": "M1000",
         "objectRefs": ["entities/地点/景区/西湖"], "producerBaselineRevision": "a" * 40,
         "expectedCarrierCounts": {"homepage": 1, "article": 0, "image": 0, "video": 0},
     }))

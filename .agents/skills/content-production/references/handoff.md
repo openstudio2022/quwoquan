@@ -11,7 +11,7 @@
  "producerBaselineRevision":"<40-hex git commit>"}
 ```
 
-`releaseId` 由 CLI `--release-id` 给出，模板 `<date>--travel-production-<milestone>--<slug>-<nnn>`，不写进 cohort。`releaseClass` 缺省 `production`（唯一合法值）；`expectedCarrierCounts` 缺省由脚本按 `objectRefs` 派生；`objectRefs` 无需预先排序，脚本会规范化。
+`releaseId` 由 CLI `--release-id` 给出，模板 `<date>--travel-<milestone>--<slug>-<nnn>`，不写进 cohort。cohort 不写发布类别；`expectedCarrierCounts` 缺省由脚本按 `objectRefs` 派生；`objectRefs` 无需预先排序，脚本会规范化。
 
 cohort 由 AI 显式决定「全部 eligible 对象进入」并用 `jq` 从 `pool-query --json` 输出构造（不是脚本扫池隐式选择）：
 

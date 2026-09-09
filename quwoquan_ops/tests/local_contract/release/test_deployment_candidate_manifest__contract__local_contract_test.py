@@ -6,7 +6,9 @@ test_deployment_candidate_manifest_<facet>__contract__local_contract_test.py
 兄弟文件，共享 fixture 下沉到
 quwoquan_ops/tests/support/deployment_candidate_manifest_test_support.py。
 本文件保留 manifest 字段闭集、配置/OCI/运行时身份漂移与双 release
-attestation 绑定语义。测试逐字搬移。
+attestation 绑定语义。
+
+spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-002
 """
 
 from __future__ import annotations
@@ -68,18 +70,13 @@ class DeploymentCandidateManifestContractTest(
             "west-lake-canonical-20260729",
         )
         self.assertEqual(payload["release"]["rollback"]["releaseId"], "pilot-002")
-        self.assertEqual(
-            payload["release"]["candidate"]["releaseClass"],
-            "commercial",
-        )
-        self.assertEqual(
-            subject.release_input_classification(payload["release"]),
-            "commercial_inputs",
-        )
-        self.assertEqual(
-            payload["releaseInputClassification"],
-            "commercial_inputs",
-        )
+        self.assertNotIn("releaseInputClassification", payload)
+        self.assertFalse(hasattr(subject, "release_input_classification"))
+        for binding in payload["release"].values():
+            self.assertEqual(
+                set(binding),
+                {"releaseId", "releaseDigest", "attestationRef", "attestationDigest"},
+            )
         self.assertEqual(
             payload["contractGraphDigest"],
             self.contract_graph_digest,
@@ -248,7 +245,7 @@ class DeploymentCandidateManifestContractTest(
             rollback_release_attestation=str(self.rollback),
         )
         canonical = json.loads(path.read_text(encoding="utf-8"))
-        for field in ("releaseInputClassification", "contractGraphDigest"):
+        for field in ("contractGraphDigest",):
             with self.subTest(field=field):
                 malformed = dict(canonical)
                 malformed.pop(field)
@@ -266,7 +263,7 @@ class DeploymentCandidateManifestContractTest(
 
         classification_drift = dict(canonical)
         classification_drift["releaseInputClassification"] = "research_inputs"
-        with self.assertRaisesRegex(ValueError, "release input classification"):
+        with self.assertRaisesRegex(ValueError, "manifest fields mismatch"):
             subject.validate_candidate_manifest(
                 classification_drift,
                 expected_environment="alpha",
@@ -275,8 +272,8 @@ class DeploymentCandidateManifestContractTest(
                 candidate_root=self.candidate,
             )
 
-    def test_teardown_binds_sealed_classification_without_rederiving_policy(self) -> None:
-        # 历史候选按旧派生规则封存为 mixed_inputs；派生规则变化后 teardown 仍须能退出该运行时。
+    def test_teardown_rejects_retired_classification(self) -> None:
+        # 退出仍验证封存身份，不补默认类别或改写旧候选。
         path = subject.write_candidate_manifest(
             "alpha",
             "alpha-local",
@@ -286,7 +283,7 @@ class DeploymentCandidateManifestContractTest(
         )
         canonical = json.loads(path.read_text(encoding="utf-8"))
         sealed_by_previous_policy = {**canonical, "releaseInputClassification": "mixed_inputs"}
-        with self.assertRaisesRegex(ValueError, "release input classification drifted"):
+        with self.assertRaisesRegex(ValueError, "manifest fields mismatch"):
             subject.validate_candidate_manifest(
                 sealed_by_previous_policy,
                 expected_environment="alpha",
@@ -294,7 +291,7 @@ class DeploymentCandidateManifestContractTest(
                 require_full=True,
                 candidate_root=self.candidate,
             )
-        try:
+        with self.assertRaisesRegex(ValueError, "manifest fields mismatch"):
             subject.validate_candidate_manifest(
                 sealed_by_previous_policy,
                 expected_environment="alpha",
@@ -303,10 +300,8 @@ class DeploymentCandidateManifestContractTest(
                 candidate_root=self.candidate,
                 purpose="teardown",
             )
-        except ValueError as exc:
-            self.assertNotIn("release input classification", str(exc))
         unknown_classification = {**canonical, "releaseInputClassification": "legacy_inputs"}
-        with self.assertRaisesRegex(ValueError, "release input classification is invalid"):
+        with self.assertRaisesRegex(ValueError, "manifest fields mismatch"):
             subject.validate_candidate_manifest(
                 unknown_classification,
                 expected_environment="alpha",
@@ -516,72 +511,41 @@ class DeploymentCandidateManifestContractTest(
                 str(self.release),
             )
 
-    def test_release_input_classification_is_closed_over_both_bindings(self) -> None:
-        cases = {
-            ("research", "research"): "research_inputs",
-            ("commercial", "commercial"): "commercial_inputs",
-            ("research", "commercial"): "mixed_inputs",
-            ("commercial", "research"): "mixed_inputs",
-        }
-        for (candidate_class, rollback_class), expected in cases.items():
-            bindings: dict[str, dict[str, str]] = {}
-            for label, release_class in (
-                ("candidate", candidate_class),
-                ("rollback", rollback_class),
-            ):
-                bindings[label] = {
-                    "releaseId": label,
-                    "releaseDigest": "sha256:" + "1" * 64,
-                    "attestationRef": f"/{label}.json",
-                    "attestationDigest": "sha256:" + "2" * 64,
-                    "releaseClass": release_class,
-                    "productLifecycleState": release_class,
-                }
-            with self.subTest(
-                candidate=candidate_class,
-                rollback=rollback_class,
-            ):
-                self.assertEqual(
-                    subject.release_input_classification(bindings),
-                    expected,
-                )
+    def test_release_bindings_reject_retired_fields_for_every_validation_purpose(self) -> None:
+        path = subject.write_candidate_manifest(
+            "alpha", "alpha-local", package_snapshot=self.snapshot,
+            release_attestation=str(self.release), rollback_release_attestation=str(self.rollback),
+        )
+        canonical = json.loads(path.read_text(encoding="utf-8"))
+        for purpose in ("self_verify", "currentness", "teardown"):
+            for label in ("candidate", "rollback"):
+                for field in ("releaseClass", "productLifecycleState", "unexpectedField"):
+                    malformed = json.loads(json.dumps(canonical))
+                    malformed["release"][label][field] = "production"
+                    with self.subTest(purpose=purpose, label=label, field=field), self.assertRaisesRegex(
+                        ValueError, "release fields mismatch"
+                    ):
+                        subject.validate_candidate_manifest(
+                            malformed, expected_environment="alpha", expected_target="alpha-local",
+                            require_full=True, candidate_root=self.candidate, purpose=purpose,
+                        )
 
-    def test_release_binding_rejects_simplified_unknown_or_mismatched_lifecycle(
-        self,
-    ) -> None:
+    def test_release_attestation_rejects_old_fields_and_missing_source_identity(self) -> None:
+        canonical = json.loads(self.release.read_text(encoding="utf-8"))
         cases = {
-            "simplified": {},
-            "unknown": {
-                "releaseClass": "preview",
-                "productLifecycleState": "preview",
-            },
-            "mismatch": {
-                "releaseClass": "commercial",
-                "productLifecycleState": "research",
-            },
-        }
-        for label, lifecycle in cases.items():
-            path = self.root / f"{label}.json"
-            path.write_text(
-                json.dumps(
-                    {
-                        "schema": "quwoquan_data.release_attestation",
-                        "releaseId": label,
-                        "payloadSha256": "sha256:" + "9" * 64,
-                        **lifecycle,
-                    }
-                )
-                + "\n",
-                encoding="utf-8",
+            field: {**canonical, field: value}
+            for field, value in (
+                ("releaseClass", "production"), ("productLifecycleState", "production"),
+                ("releaseInputClassification", "production_inputs"), ("unexpectedField", "value"),
             )
-            with self.subTest(label=label), self.assertRaisesRegex(
-                ValueError,
-                "releaseClass|productLifecycleState|lifecycle",
-            ):
-                subject.validate_release_attestations(
-                    str(path),
-                    str(self.rollback),
-                )
+        }
+        cases["missing_source_identity"] = {k: v for k, v in canonical.items() if k != "sourceDigest"}
+        cases["wrong_source_owner"] = {**canonical, "sourceOwner": "other"}
+        for label, payload in cases.items():
+            path = self.root / f"{label}.json"
+            path.write_text(json.dumps(payload) + "\n", encoding="utf-8")
+            with self.subTest(label=label), self.assertRaisesRegex(ValueError, "attestation schema mismatch"):
+                subject.validate_release_attestations(str(path), str(self.rollback))
 
     def test_candidate_validation_rechecks_exact_attestation_bytes(self) -> None:
         path = subject.write_candidate_manifest(

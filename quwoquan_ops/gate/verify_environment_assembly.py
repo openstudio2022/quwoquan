@@ -227,7 +227,7 @@ def main() -> int:
             {
                 "policyId": content_readiness.policy_id,
                 "requirements": [
-                    f"{requirement.phase.value}/{requirement.environment}:{requirement.target}"
+                    f"{requirement.environment}:{requirement.target}"
                     for requirement in content_readiness.requirements
                 ],
             }

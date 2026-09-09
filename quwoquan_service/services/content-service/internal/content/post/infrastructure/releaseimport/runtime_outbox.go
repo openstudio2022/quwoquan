@@ -65,7 +65,6 @@ type ActiveReleaseBinding struct {
 	SourceOwner       string
 	ReleaseID         string
 	ManifestDigest    string
-	ReleaseClass      string
 	ProjectionVersion int64
 	Revision          int64
 	ActivatedAt       time.Time
@@ -180,7 +179,6 @@ type importedReleaseCandidateState struct {
 	SourceOwner        string                         `bson:"sourceOwner"`
 	ReleaseID          string                         `bson:"releaseId"`
 	ManifestDigest     string                         `bson:"manifestDigest"`
-	ReleaseClass       string                         `bson:"releaseClass"`
 	ReleaseKind        string                         `bson:"releaseKind"`
 	Mode               string                         `bson:"mode"`
 	DeletePolicy       string                         `bson:"deletePolicy"`
@@ -191,6 +189,7 @@ type importedReleaseCandidateState struct {
 	ProjectionVersion  int64                          `bson:"projectionVersion"`
 	VerifiedAt         time.Time                      `bson:"verifiedAt"`
 	Counts             importedReleaseCandidateCounts `bson:"counts"`
+	Extra              bson.M                         `bson:",inline"`
 }
 
 type importedReleasePointerDocument struct {
@@ -200,10 +199,10 @@ type importedReleasePointerDocument struct {
 	SourceOwner       string    `bson:"sourceOwner"`
 	ActiveReleaseID   string    `bson:"activeReleaseId"`
 	ManifestDigest    string    `bson:"manifestDigest"`
-	ReleaseClass      string    `bson:"releaseClass"`
 	ProjectionVersion int64     `bson:"projectionVersion"`
 	Revision          int64     `bson:"revision"`
 	ActivatedAt       time.Time `bson:"activatedAt"`
+	Extra             bson.M    `bson:",inline"`
 }
 
 type importedOutboxDocument struct {
@@ -779,7 +778,7 @@ func ActivateImportedPostRelease(
 		}
 		transitionOpts := ImportOptions{
 			ReleaseID: candidate.ReleaseID, ManifestDigest: candidate.ManifestDigest,
-			ReleaseClass: candidate.ReleaseClass, ReleaseKind: candidate.ReleaseKind,
+			ReleaseKind: candidate.ReleaseKind,
 			SourceOwner: candidate.SourceOwner, Mode: candidate.Mode,
 			DeletePolicy: candidate.DeletePolicy, ProjectionVersion: activationVersion,
 		}
@@ -807,7 +806,7 @@ func ActivateImportedPostRelease(
 			txCtx, liveOutbox, liveSequences, allEvents,
 			ImportOptions{
 				ReleaseID: candidate.ReleaseID, ManifestDigest: candidate.ManifestDigest,
-				ReleaseClass: candidate.ReleaseClass, SourceOwner: candidate.SourceOwner,
+				SourceOwner:       candidate.SourceOwner,
 				ProjectionVersion: activationVersion,
 			},
 			false, current.Revision+1,
@@ -825,7 +824,7 @@ func ActivateImportedPostRelease(
 		pointer := importedReleasePointerDocument{
 			Kind: releaseActivePointerKind, Status: "active", Environment: environment,
 			SourceOwner: candidate.SourceOwner, ActiveReleaseID: candidate.ReleaseID,
-			ManifestDigest: candidate.ManifestDigest, ReleaseClass: candidate.ReleaseClass,
+			ManifestDigest:    candidate.ManifestDigest,
 			ProjectionVersion: activationVersion, Revision: current.Revision + 1,
 			ActivatedAt: activatedAt,
 		}
@@ -1103,8 +1102,8 @@ func insertVerifiedCandidateState(
 		"_id":  candidateStateDocumentID(environment, opts.SourceOwner, opts.ReleaseID, opts.ManifestDigest),
 		"kind": releaseCandidateKind, "environment": environment,
 		"sourceOwner": opts.SourceOwner, "releaseId": opts.ReleaseID,
-		"manifestDigest": opts.ManifestDigest, "releaseClass": opts.ReleaseClass,
-		"releaseKind": opts.ReleaseKind, "mode": opts.Mode, "deletePolicy": opts.DeletePolicy,
+		"manifestDigest": opts.ManifestDigest,
+		"releaseKind":    opts.ReleaseKind, "mode": opts.Mode, "deletePolicy": opts.DeletePolicy,
 		"postClosureDigest": postClosureDigest, "factClosureDigest": factClosureDigest,
 		"mediaClosureDigest": mediaClosureDigest, "status": "verified", "projectionVersion": opts.ProjectionVersion,
 		"verifiedAt": verifiedAt, "counts": counts, "createdAt": verifiedAt,
@@ -1294,7 +1293,7 @@ func BuildImportedPostLifecycleEvents(
 		// 传映射值不影响既有 payload 字节（replay byte-for-byte 依赖）。
 		media := ImportedMediaFields(
 			importedPostAssets(post),
-			MediaDeliveryAccessModeForReleaseClass(opts.ReleaseClass),
+			MediaDeliveryAccessModePublic,
 		)
 		body := post.ArticleMarkdown
 		summary := ProjectImportedArticleSummary(post.ArticleMarkdown)

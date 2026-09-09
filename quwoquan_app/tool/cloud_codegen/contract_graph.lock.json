@@ -16450,96 +16450,6 @@
       "transport": "json"
     },
     {
-      "actorRequirement": "account",
-      "aggregateOwner": "",
-      "authMode": "required",
-      "canonicalOperationId": "content.post.GetResearchReleaseReadback",
-      "clientContract": {
-        "dartImport": "../content/content_operation_contracts.g.dart",
-        "responseDecoder": "decodeResearchReleaseReadbackView",
-        "responseType": "ResearchReleaseReadbackView"
-      },
-      "commercial": {
-        "blockReason": "research-only internal App readback is never a commercial content surface",
-        "explicit": true,
-        "gapId": "CONTENT_POST_RESEARCH_ONLY",
-        "status": "blocked",
-        "targetStory": "multi-carrier-release"
-      },
-      "concurrency": {},
-      "consistency": null,
-      "domain": "content",
-      "errorCodes": [
-        "CONTENT.USER.unauthorized",
-        "CONTENT.USER.research_identity_invalid",
-        "CONTENT.SYSTEM.research_release_state_unavailable",
-        "CONTENT.SYSTEM.required_dependency_unavailable",
-        "CONTENT.SYSTEM.internal_error"
-      ],
-      "facadeMethod": "getResearchReleaseReadback",
-      "facet": "ResearchReleaseReadbackQueryFacet",
-      "invariantTarget": "",
-      "kind": "query",
-      "localOperationId": "GetResearchReleaseReadback",
-      "method": "GET",
-      "mutationTarget": "",
-      "objectId": "content.post",
-      "ownershipPolicy": "authenticated_account_research_attestation",
-      "pagination": null,
-      "pathTemplate": "/content/research/readback",
-      "permissions": [],
-      "principal": "account",
-      "privacy": {
-        "logPolicy": "none",
-        "requestClassification": "SECRET",
-        "responseClassification": "INTERNAL"
-      },
-      "reliability": {
-        "cancellation": "supported",
-        "idempotency": "none",
-        "maxAttempts": 1,
-        "retryMode": "none",
-        "timeoutMilliseconds": 800
-      },
-      "requestBindings": {
-        "header": [
-          {
-            "field": "researchIdentityAttestation",
-            "name": "X-Research-Identity-Attestation",
-            "required": true
-          }
-        ]
-      },
-      "requestBodyKind": "none",
-      "requestConstants": null,
-      "requestEntity": "ResearchReleaseReadbackQuery",
-      "responseAdmission": null,
-      "responseBody": "ResearchReleaseReadbackView",
-      "responseBodyKind": "object",
-      "responseEntity": "ResearchReleaseReadbackView",
-      "scopes": [],
-      "slo": {
-        "availabilityPercent": 99.9,
-        "latencyP95Milliseconds": 500
-      },
-      "sourcePath": "content/content/post/operations.yaml",
-      "streaming": null,
-      "successStatus": null,
-      "surfaceIds": [
-        "appShell"
-      ],
-      "telemetry": {
-        "attributes": [
-          "environment",
-          "outcome",
-          "error_code"
-        ],
-        "metric": "content_research_release_readback",
-        "trace": true
-      },
-      "transport": "json"
-    },
-    {
       "actorRequirement": "persona",
       "aggregateOwner": "",
       "authMode": "required",
@@ -23662,94 +23572,6 @@
       "transport": "json"
     },
     {
-      "actorRequirement": "account",
-      "aggregateOwner": "AccountSession",
-      "authMode": "required",
-      "canonicalOperationId": "user.account_session.IssueWhitelistedResearchSession",
-      "clientContract": {
-        "dartImport": "../user/user_operation_contracts.g.dart",
-        "responseDecoder": "decodeWhitelistedResearchSession",
-        "responseType": "WhitelistedResearchSession"
-      },
-      "commercial": {
-        "blockReason": "research-only identity attestation is never a commercial session",
-        "explicit": true,
-        "gapId": "USER_ACCOUNT_SESSION_RESEARCH_ONLY",
-        "status": "blocked",
-        "targetStory": "multi-carrier-release"
-      },
-      "concurrency": {},
-      "consistency": null,
-      "domain": "user",
-      "errorCodes": [
-        "USER.USER.unauthorized",
-        "USER.USER.forbidden",
-        "USER.AUTH.account_security_unavailable",
-        "USER.SYSTEM.internal_error"
-      ],
-      "facadeMethod": "issueWhitelistedResearchSession",
-      "facet": "ResearchSessionCommandFacade",
-      "invariantTarget": "AccountSession",
-      "kind": "command",
-      "localOperationId": "IssueWhitelistedResearchSession",
-      "method": "POST",
-      "mutationTarget": "AccountSession",
-      "objectId": "user.account_session",
-      "ownershipPolicy": "authenticated_account_research_allowlist",
-      "pagination": null,
-      "pathTemplate": "/auth/research/session",
-      "permissions": [],
-      "principal": "account",
-      "privacy": {
-        "logPolicy": "none",
-        "requestClassification": "INTERNAL",
-        "responseClassification": "SECRET"
-      },
-      "reliability": {
-        "cancellation": "supported",
-        "idempotency": "none",
-        "maxAttempts": 1,
-        "retryMode": "none",
-        "timeoutMilliseconds": 800
-      },
-      "requestBindings": {
-        "injected": [
-          {
-            "field": "accountId",
-            "name": "authenticatedAccountId"
-          }
-        ]
-      },
-      "requestBodyKind": "none",
-      "requestConstants": null,
-      "requestEntity": "IssueWhitelistedResearchSessionCommand",
-      "responseAdmission": null,
-      "responseBody": "WhitelistedResearchSession",
-      "responseBodyKind": "object",
-      "responseEntity": "WhitelistedResearchSession",
-      "scopes": [],
-      "slo": {
-        "availabilityPercent": 99.9,
-        "latencyP95Milliseconds": 800
-      },
-      "sourcePath": "user/account/account_session/operations.yaml",
-      "streaming": null,
-      "successStatus": null,
-      "surfaceIds": [
-        "appShell"
-      ],
-      "telemetry": {
-        "attributes": [
-          "environment",
-          "outcome",
-          "error_code"
-        ],
-        "metric": "user_research_session_issue",
-        "trace": true
-      },
-      "transport": "json"
-    },
-    {
       "actorRequirement": "none",
       "aggregateOwner": "AccountSession",
       "authMode": "public",
@@ -30280,13 +30102,13 @@
   ],
   "breakingReport": {
     "path": "quwoquan_app/tool/cloud_codegen/contract_graph.breaking.json",
-    "sha256": "b338fc67b2bfcbd881fcd5453d3ef1820f6a1b8a7b1ae4becca7da7b14e3b631"
+    "sha256": "802ea53ff4e98850fa076807cc521e173eb0c2af5e8307fe8706364295b5e9f6"
   },
   "contractGraph": {
     "compilerHash": "sha256:00961c84edb8af2a126a096ba81cfc605747324f0e738365b2cca8276c2dbad9",
     "path": "quwoquan_service/generated/contract_graph.json",
-    "sha256": "c372ef683b626026c4e7e35cec06c4c495cdfaa414d0b610ce9943a07ed019fe",
-    "sourceDigestSetSha256": "0b503199842910db189d363b1aceb0a2b7a8db84c8f56c65078a806d5e19841a"
+    "sha256": "d51f23fa64d8fdaf0600cff6da4866cf8dd452de6b5aaeebc49060daba26f82f",
+    "sourceDigestSetSha256": "2eb7ed65f31cf36d8ebc2df0a695f10c65bf1b564eb23bcf62fe094a3bc2c995"
   },
   "generator": "app-cloud-handoff"
 }

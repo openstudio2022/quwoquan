@@ -93,11 +93,6 @@ type config struct {
 		MongoURI      string `yaml:"mongo_uri" envAbsolute:"CONTENT_MONGO_URI"`
 		MongoDatabase string `yaml:"mongo_database" envAbsolute:"CONTENT_MONGO_DATABASE"`
 	} `yaml:"content_service"`
-
-	ResearchIdentity struct {
-		Enabled    bool `yaml:"enabled"`
-		TTLSeconds int  `yaml:"ttl_seconds"`
-	} `yaml:"research_identity"`
 }
 
 // resolveRedisScenes 装配三个 codegen scene 名。配置 schema 只声明 redis.general

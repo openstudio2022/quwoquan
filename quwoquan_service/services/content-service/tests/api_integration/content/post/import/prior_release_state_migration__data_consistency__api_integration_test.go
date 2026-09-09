@@ -119,7 +119,7 @@ func seedPriorReleaseStageReceipts(t *testing.T, db *mongo.Database, expectation
 func setCurrentReleaseStateForReplay(t *testing.T, db *mongo.Database, expectation PriorReleaseStateMigrationExpectation) {
 	t.Helper()
 	ctx := context.Background()
-	if _, err := db.Collection("data_release_state").UpdateOne(ctx, bson.D{}, bson.M{"$set": bson.M{"kind": "active_pointer", "revision": int64(1)}}); err != nil {
+	if _, err := db.Collection("data_release_state").UpdateOne(ctx, bson.D{}, bson.M{"$set": bson.M{"kind": "active_pointer", "revision": int64(1)}, "$unset": bson.M{"releaseClass": ""}}); err != nil {
 		t.Fatal(err)
 	}
 	if err := db.Collection("data_release_state").Indexes().DropOne(ctx, "idx_data_release_state_active_pointer"); err != nil {
@@ -163,7 +163,7 @@ func TestMongoPriorReleaseStateMigrationPreservesFactsRebuildsIndexesAndReplays(
 	}
 	if current["kind"] != "active_pointer" || numericInt64(current["revision"]) != 1 ||
 		current["releaseId"] != prior["releaseId"] || current["activeReleaseId"] != prior["activeReleaseId"] ||
-		current["manifestDigest"] != prior["manifestDigest"] || current["releaseClass"] != prior["releaseClass"] ||
+		current["manifestDigest"] != prior["manifestDigest"] || current["releaseClass"] != nil ||
 		numericInt64(current["projectionVersion"]) != numericInt64(prior["projectionVersion"]) {
 		t.Fatalf("migrated release-state identity drifted: %#v", current)
 	}
@@ -176,6 +176,8 @@ func TestMongoPriorReleaseStateMigrationPreservesFactsRebuildsIndexesAndReplays(
 	assertReleaseStageReceiptMigration(t, db, priorReceipts, expectation, 15)
 
 	expectation.AllowReplay = true
+	// 现役 replay 不需要历史类别参数。
+	expectation.ReleaseClass = ""
 	replay, err := MigratePriorContentReleaseState(ctx, db, expectation)
 	if err != nil {
 		t.Fatalf("replay release-state migration: %v", err)
@@ -187,7 +189,7 @@ func TestMongoPriorReleaseStateMigrationPreservesFactsRebuildsIndexesAndReplays(
 	}
 	if _, err := MigratePriorContentReleaseState(ctx, db, PriorReleaseStateMigrationExpectation{
 		Environment: expectation.Environment, SourceOwner: expectation.SourceOwner, ReleaseID: expectation.ReleaseID,
-		ManifestDigest: expectation.ManifestDigest, ReleaseClass: expectation.ReleaseClass,
+		ManifestDigest:    expectation.ManifestDigest,
 		ProjectionVersion: expectation.ProjectionVersion, ActivatedAt: expectation.ActivatedAt,
 		PriorIndexSet: expectation.PriorIndexSet, PriorReceiptIndexSet: expectation.PriorReceiptIndexSet,
 		ExpectedReceiptCount: expectation.ExpectedReceiptCount,
@@ -228,6 +230,9 @@ func TestMongoPriorReleaseStateMigrationCommandWritesCreateOnceRedactedReceipt(t
 	}
 	if strings.Contains(string(raw), testMongoURI) || strings.Contains(string(raw), "mongo-uri") {
 		t.Fatalf("migration receipt leaked Mongo URI: %s", raw)
+	}
+	if strings.Contains(string(raw), `"releaseClass"`) {
+		t.Fatalf("migration receipt must describe category-free current state: %s", raw)
 	}
 	var receipt ContentPriorReleaseStateMigrationReceipt
 	if err := json.Unmarshal(raw, &receipt); err != nil {
@@ -361,7 +366,7 @@ func TestMongoPriorReleaseStateMigrationResumesAfterStateOnlyCrash(t *testing.T)
 	seedPriorReleaseState(t, db, expectation)
 	priorReceipts := seedPriorReleaseStageReceipts(t, db, expectation, 3)
 
-	if _, err := db.Collection("data_release_state").UpdateOne(ctx, bson.D{}, bson.M{"$set": bson.M{"kind": "active_pointer", "revision": int64(1)}}); err != nil {
+	if _, err := db.Collection("data_release_state").UpdateOne(ctx, bson.D{}, bson.M{"$set": bson.M{"kind": "active_pointer", "revision": int64(1)}, "$unset": bson.M{"releaseClass": ""}}); err != nil {
 		t.Fatal(err)
 	}
 	state := db.Collection("data_release_state")
@@ -500,7 +505,7 @@ func TestMongoPriorReleaseStateMigrationResumesReceiptDDL(t *testing.T) {
 	seedPriorReleaseState(t, db, expectation)
 	seedPriorReleaseStageReceipts(t, db, expectation, 1)
 
-	if _, err := db.Collection("data_release_state").UpdateOne(ctx, bson.D{}, bson.M{"$set": bson.M{"kind": "active_pointer", "revision": int64(1)}}); err != nil {
+	if _, err := db.Collection("data_release_state").UpdateOne(ctx, bson.D{}, bson.M{"$set": bson.M{"kind": "active_pointer", "revision": int64(1)}, "$unset": bson.M{"releaseClass": ""}}); err != nil {
 		t.Fatal(err)
 	}
 	state := db.Collection("data_release_state")
@@ -545,7 +550,7 @@ func TestMongoPriorReleaseStateMigrationResumesRecognizedDDLPhases(t *testing.T)
 	expectation := priorReleaseStateExpectation()
 	seedPriorReleaseState(t, db, expectation)
 	seedPriorReleaseStageReceipts(t, db, expectation, 1)
-	if _, err := db.Collection("data_release_state").UpdateOne(ctx, bson.D{}, bson.M{"$set": bson.M{"kind": "active_pointer", "revision": int64(1)}}); err != nil {
+	if _, err := db.Collection("data_release_state").UpdateOne(ctx, bson.D{}, bson.M{"$set": bson.M{"kind": "active_pointer", "revision": int64(1)}, "$unset": bson.M{"releaseClass": ""}}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := db.Collection("data_release_stage_receipts").UpdateOne(ctx, bson.D{}, bson.M{"$set": bson.M{"sourceOwner": expectation.SourceOwner}}); err != nil {

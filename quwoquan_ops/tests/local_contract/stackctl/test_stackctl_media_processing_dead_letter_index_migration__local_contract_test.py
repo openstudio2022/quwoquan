@@ -175,9 +175,7 @@ class MediaProcessingDeadLetterIndexMigrationContractTest(unittest.TestCase):
         (candidate_root / "manifest.json").write_text("{}\n")
         compose = candidate_root / "compose.yaml"
         compose.write_text("services: {}\n")
-        candidate_manifest = {
-            "releaseInputClassification": "research_inputs",
-        }
+        candidate_manifest = {"release": {"candidate": {"releaseId": "release-1"}}}
         snapshot = {"fixed": "snapshot"}
         commands: list[list[str]] = []
 

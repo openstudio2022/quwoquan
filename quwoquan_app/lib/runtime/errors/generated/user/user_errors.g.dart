@@ -222,16 +222,6 @@ enum UserErrorCode {
     0,
     '',
   ),
-  researchIdentityInvalid(
-    'USER.USER.research_identity_invalid',
-    '当前研究态身份无效或已过期',
-    'The research identity is invalid or expired',
-    403,
-    'surface',
-    'inlineCard',
-    0,
-    '',
-  ),
   accountSecurityUnavailable(
     'USER.AUTH.account_security_unavailable',
     '账号安全校验暂不可用，请稍后重试',

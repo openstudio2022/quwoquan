@@ -216,21 +216,16 @@ def _command_up_impl(args: argparse.Namespace) -> dict[str, Any]:
     # selection belongs to a separate App UAT command, never to server startup.
     if args.workload in {"content-release", "content-commercial"}:
         args.skip_app = True
-    release_input_classification = ""
     contract_graph_digest = ""
     if fixed_candidate_snapshot is not None:
         candidate_manifest = fixed_candidate_snapshot.get("manifest")
         if not isinstance(candidate_manifest, Mapping):
             raise ValueError("fixed deployment candidate manifest is missing")
-        derived_classification = _stackctl.classify_release_inputs(
-            candidate_manifest.get("release")
-        )
-        release_input_classification = str(
-            candidate_manifest.get("releaseInputClassification") or ""
-        )
-        if release_input_classification != derived_classification:
+        if {
+            "releaseInputClassification", "releaseClass", "productLifecycleState"
+        }.intersection(candidate_manifest):
             raise ValueError(
-                "fixed deployment candidate release input classification drifted"
+                "fixed deployment candidate contains retired release classification fields"
             )
         contract_graph_digest = str(
             candidate_manifest.get("contractGraphDigest") or ""
@@ -240,11 +235,8 @@ def _command_up_impl(args: argparse.Namespace) -> dict[str, Any]:
                 "fixed deployment candidate ContractGraph digest is invalid"
             )
     release_input_report = (
-        {
-            "releaseInputClassification": release_input_classification,
-            "contractGraphDigest": contract_graph_digest,
-        }
-        if release_input_classification
+        {"contractGraphDigest": contract_graph_digest}
+        if contract_graph_digest
         else {}
     )
 
@@ -281,7 +273,6 @@ def _command_up_impl(args: argparse.Namespace) -> dict[str, Any]:
                 report_target=report_target,
                 resolved_target=requested_target,
                 formal_release=False,
-                release_input_classification=release_input_classification,
                 contract_graph_digest=contract_graph_digest,
                 timing=timing,
             )

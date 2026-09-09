@@ -52,7 +52,6 @@ type VerifiedImportedPostReleaseCandidate struct {
 	SourceOwner       string
 	ReleaseID         string
 	ManifestDigest    string
-	ReleaseClass      string
 	ReleaseKind       string
 	Mode              string
 	DeletePolicy      string
@@ -130,8 +129,8 @@ func verifiedImportedPostReleaseCandidate(candidate importedReleaseCandidateStat
 	return VerifiedImportedPostReleaseCandidate{
 		Found: true, Environment: candidate.Environment,
 		SourceOwner: candidate.SourceOwner, ReleaseID: candidate.ReleaseID,
-		ManifestDigest: candidate.ManifestDigest, ReleaseClass: candidate.ReleaseClass,
-		ReleaseKind: candidate.ReleaseKind, Mode: candidate.Mode,
+		ManifestDigest: candidate.ManifestDigest,
+		ReleaseKind:    candidate.ReleaseKind, Mode: candidate.Mode,
 		DeletePolicy: candidate.DeletePolicy, ProjectionVersion: candidate.ProjectionVersion,
 		VerifiedAt: candidate.VerifiedAt,
 		ClosureDigests: ImportedReleaseCandidateClosureDigests{
@@ -157,6 +156,9 @@ func validateVerifiedCandidateState(
 	releaseID string,
 	manifestDigest string,
 ) error {
+	if err := rejectRetiredReleaseCategoryFields(candidate.Extra); err != nil {
+		return err
+	}
 	if candidate.Kind != releaseCandidateKind || candidate.Environment != environment ||
 		candidate.SourceOwner != sourceOwner || candidate.ReleaseID != releaseID ||
 		candidate.ManifestDigest != manifestDigest {
@@ -165,9 +167,6 @@ func validateVerifiedCandidateState(
 	if candidate.Status != "verified" || candidate.ProjectionVersion <= 0 ||
 		candidate.VerifiedAt.IsZero() {
 		return fmt.Errorf("GATE_BLOCK: candidate state is not completely verified")
-	}
-	if candidate.ReleaseClass != "research" && candidate.ReleaseClass != "commercial" && candidate.ReleaseClass != "production" {
-		return fmt.Errorf("GATE_BLOCK: verified candidate releaseClass is invalid")
 	}
 	if !sha256Pattern.MatchString(candidate.ManifestDigest) {
 		return fmt.Errorf("GATE_BLOCK: verified candidate manifestDigest is invalid")
@@ -201,16 +200,28 @@ func validateVerifiedCandidateState(
 	return nil
 }
 
+// 现役持久化状态不得静默接纳旧类别字段；历史字节只能经具名迁移处理。
+func rejectRetiredReleaseCategoryFields(fields bson.M) error {
+	for _, field := range []string{"releaseClass", "productLifecycleState", "readinessPhase"} {
+		if _, exists := fields[field]; exists {
+			return fmt.Errorf("GATE_BLOCK: retired release category field %s is forbidden", field)
+		}
+	}
+	return nil
+}
+
 func validateStoredActivePointer(
 	pointer importedReleasePointerDocument,
 	environment string,
 	sourceOwner string,
 ) error {
+	if err := rejectRetiredReleaseCategoryFields(pointer.Extra); err != nil {
+		return err
+	}
 	if pointer.Kind != releaseActivePointerKind || pointer.Status != "active" ||
 		pointer.Environment != environment || pointer.SourceOwner != sourceOwner ||
 		strings.TrimSpace(pointer.ActiveReleaseID) == "" ||
 		!sha256Pattern.MatchString(pointer.ManifestDigest) ||
-		(pointer.ReleaseClass != "research" && pointer.ReleaseClass != "commercial" && pointer.ReleaseClass != "production") ||
 		pointer.ProjectionVersion <= 0 || pointer.Revision <= 0 || pointer.ActivatedAt.IsZero() {
 		return fmt.Errorf("GATE_BLOCK: active Content release pointer is incomplete or invalid")
 	}
@@ -467,7 +478,6 @@ type ContentFencedReadbackReceipt struct {
 	Revision                   int64                                   `json:"revision"`
 	Reason                     string                                  `json:"reason,omitempty"`
 	ContentActivatedAt         *time.Time                              `json:"contentActivatedAt,omitempty"`
-	ReleaseClass               string                                  `json:"releaseClass,omitempty"`
 	ProjectionVersion          int64                                   `json:"projectionVersion,omitempty"`
 	CandidateProjectionVersion int64                                   `json:"candidateProjectionVersion,omitempty"`
 	VerifiedAt                 *time.Time                              `json:"verifiedAt,omitempty"`
@@ -499,8 +509,9 @@ func BuildContentFencedReadbackReceipt(
 		receipt.Reason = "Content active pointer differs from the requested fence"
 	case !candidate.Found:
 		receipt.Reason = "Content verified candidate is absent for the fence tuple"
-	case candidate.ReleaseClass != active.ReleaseClass:
-		receipt.Reason = "Content verified candidate releaseClass disagrees with the active pointer"
+	case candidate.Environment != command.Environment || candidate.SourceOwner != command.SourceOwner ||
+		candidate.ReleaseID != command.ReleaseID || candidate.ManifestDigest != command.ManifestDigest:
+		receipt.Reason = "Content verified candidate differs from the requested fence"
 	case candidate.ProjectionVersion <= 0 || active.ProjectionVersion <= 0:
 		receipt.Reason = "Content candidate or active pointer projection version is not positive"
 	default:
@@ -508,7 +519,6 @@ func BuildContentFencedReadbackReceipt(
 		closure, counts := candidate.ClosureDigests, candidate.Counts
 		receipt.Status = "passed"
 		receipt.ContentActivatedAt = &activatedAt
-		receipt.ReleaseClass = active.ReleaseClass
 		receipt.ProjectionVersion = active.ProjectionVersion
 		receipt.CandidateProjectionVersion = candidate.ProjectionVersion
 		receipt.VerifiedAt = &verifiedAt
@@ -526,7 +536,6 @@ type ContentReleaseCandidateReceipt struct {
 	ReleaseID         string                                  `json:"releaseId"`
 	ManifestDigest    string                                  `json:"manifestDigest"`
 	GeneratedAt       time.Time                               `json:"generatedAt"`
-	ReleaseClass      string                                  `json:"releaseClass,omitempty"`
 	ReleaseKind       string                                  `json:"releaseKind,omitempty"`
 	Mode              string                                  `json:"mode,omitempty"`
 	DeletePolicy      string                                  `json:"deletePolicy,omitempty"`
@@ -544,7 +553,6 @@ type ContentReleaseActiveReceipt struct {
 	GeneratedAt       time.Time  `json:"generatedAt"`
 	ReleaseID         string     `json:"releaseId,omitempty"`
 	ManifestDigest    string     `json:"manifestDigest,omitempty"`
-	ReleaseClass      string     `json:"releaseClass,omitempty"`
 	ProjectionVersion int64      `json:"projectionVersion,omitempty"`
 	Revision          int64      `json:"revision,omitempty"`
 	ActivatedAt       *time.Time `json:"activatedAt,omitempty"`
@@ -566,7 +574,6 @@ type ContentReleaseActivationTarget struct {
 type ContentReleaseActivationActive struct {
 	ReleaseID         string    `json:"releaseId"`
 	ManifestDigest    string    `json:"manifestDigest"`
-	ReleaseClass      string    `json:"releaseClass"`
 	ProjectionVersion int64     `json:"projectionVersion"`
 	Revision          int64     `json:"revision"`
 	ActivatedAt       time.Time `json:"activatedAt"`
@@ -618,8 +625,8 @@ func BuildContentReleaseCandidateReceipt(
 	state := importedReleaseCandidateState{
 		Kind: releaseCandidateKind, Environment: candidate.Environment,
 		SourceOwner: candidate.SourceOwner, ReleaseID: candidate.ReleaseID,
-		ManifestDigest: candidate.ManifestDigest, ReleaseClass: candidate.ReleaseClass,
-		ReleaseKind: candidate.ReleaseKind, Mode: candidate.Mode,
+		ManifestDigest: candidate.ManifestDigest,
+		ReleaseKind:    candidate.ReleaseKind, Mode: candidate.Mode,
 		DeletePolicy: candidate.DeletePolicy, Status: "verified",
 		ProjectionVersion: candidate.ProjectionVersion, VerifiedAt: candidate.VerifiedAt,
 		PostClosureDigest:  candidate.ClosureDigests.Posts,
@@ -644,7 +651,6 @@ func BuildContentReleaseCandidateReceipt(
 	digests := candidate.ClosureDigests
 	counts := candidate.Counts
 	receipt.Status = "found"
-	receipt.ReleaseClass = candidate.ReleaseClass
 	receipt.ReleaseKind = candidate.ReleaseKind
 	receipt.Mode = candidate.Mode
 	receipt.DeletePolicy = candidate.DeletePolicy
@@ -678,8 +684,8 @@ func BuildContentReleaseActiveReceipt(
 		Kind: releaseActivePointerKind, Status: "active",
 		Environment: binding.Environment, SourceOwner: binding.SourceOwner,
 		ActiveReleaseID: binding.ReleaseID, ManifestDigest: binding.ManifestDigest,
-		ReleaseClass: binding.ReleaseClass, ProjectionVersion: binding.ProjectionVersion,
-		Revision: binding.Revision, ActivatedAt: binding.ActivatedAt,
+		ProjectionVersion: binding.ProjectionVersion,
+		Revision:          binding.Revision, ActivatedAt: binding.ActivatedAt,
 	}
 	if err := validateStoredActivePointer(pointer, binding.Environment, binding.SourceOwner); err != nil {
 		return ContentReleaseActiveReceipt{}, err
@@ -688,7 +694,6 @@ func BuildContentReleaseActiveReceipt(
 	receipt.Status = "found"
 	receipt.ReleaseID = binding.ReleaseID
 	receipt.ManifestDigest = binding.ManifestDigest
-	receipt.ReleaseClass = binding.ReleaseClass
 	receipt.ProjectionVersion = binding.ProjectionVersion
 	receipt.Revision = binding.Revision
 	receipt.ActivatedAt = &activatedAt
@@ -727,8 +732,8 @@ func BuildContentReleaseActivationReceipt(
 		Kind: releaseActivePointerKind, Status: "active",
 		Environment: readback.Environment, SourceOwner: readback.SourceOwner,
 		ActiveReleaseID: readback.ReleaseID, ManifestDigest: readback.ManifestDigest,
-		ReleaseClass: readback.ReleaseClass, ProjectionVersion: readback.ProjectionVersion,
-		Revision: readback.Revision, ActivatedAt: readback.ActivatedAt,
+		ProjectionVersion: readback.ProjectionVersion,
+		Revision:          readback.Revision, ActivatedAt: readback.ActivatedAt,
 	}
 	if err := validateStoredActivePointer(pointer, environment, sourceOwner); err != nil {
 		return ContentReleaseActivationReceipt{}, err
@@ -759,8 +764,8 @@ func BuildContentReleaseActivationReceipt(
 		PreviousActive: expectedActive,
 		Active: ContentReleaseActivationActive{
 			ReleaseID: readback.ReleaseID, ManifestDigest: readback.ManifestDigest,
-			ReleaseClass: readback.ReleaseClass, ProjectionVersion: readback.ProjectionVersion,
-			Revision: readback.Revision, ActivatedAt: readback.ActivatedAt.UTC(),
+			ProjectionVersion: readback.ProjectionVersion,
+			Revision:          readback.Revision, ActivatedAt: readback.ActivatedAt.UTC(),
 		},
 		Counts: ContentReleaseActivationCounts{
 			PostsMaterialized:       result.PostsMaterialized,
@@ -804,7 +809,7 @@ func contentReleaseExpectedActive(expected ExpectedActiveRelease) ContentRelease
 func sameActiveReleaseBinding(left ActiveReleaseBinding, right ActiveReleaseBinding) bool {
 	return left.Found == right.Found && left.Environment == right.Environment &&
 		left.SourceOwner == right.SourceOwner && left.ReleaseID == right.ReleaseID &&
-		left.ManifestDigest == right.ManifestDigest && left.ReleaseClass == right.ReleaseClass &&
+		left.ManifestDigest == right.ManifestDigest &&
 		left.ProjectionVersion == right.ProjectionVersion && left.Revision == right.Revision &&
 		left.ActivatedAt.Equal(right.ActivatedAt)
 }

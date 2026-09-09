@@ -1,239 +1,144 @@
 // spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/design.md#dec-031
+// spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-002
 package runtimemedia
 
 import (
+	"bytes"
+	"encoding/json"
+	"os"
 	"path/filepath"
-	"strings"
 	"testing"
-	"time"
 )
 
-func privateCASKey(digestHex string, suffix string) string {
-	return "media/objects/sha256/" + digestHex[:2] + "/" + digestHex[2:4] + "/" +
-		digestHex + suffix
-}
-
-func releasePrivateDeliveryFixture(
-	t *testing.T,
-	mutate func(rows []map[string]any),
-) string {
+func mutateReleaseDeliveryManifest(t *testing.T, root string, mutate func(map[string]any)) {
 	t.Helper()
-	root := t.TempDir()
-	digests := map[string]string{
-		"entity-cover":   strings.Repeat("a", 64),
-		"article-inline": strings.Repeat("b", 64),
+	path := filepath.Join(root, "payload", "media_manifest.json")
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
 	}
-	owners := map[string]string{
-		"entity-cover":   "entities/地点/景区/实体甲",
-		"article-inline": "posts/article/攻略/实体甲/1",
+	var manifest map[string]any
+	if err := json.Unmarshal(raw, &manifest); err != nil {
+		t.Fatal(err)
 	}
-	rows := make([]map[string]any, 0, len(digests))
-	for _, assetID := range []string{"entity-cover", "article-inline"} {
-		digest := digests[assetID]
-		owner := owners[assetID]
-		rightsRef := "objects/" + owner + "/rights_snapshots/" + assetID + ".json"
-		writeReleaseMediaClosureJSON(
-			t,
-			filepath.Join(root, "payload", filepath.FromSlash(rightsRef)),
-			map[string]any{
-				"schema":  "quwoquan_data.asset_rights_snapshot",
-				"assetId": assetID,
-				"manifestAsset": map[string]any{
-					"assetId": assetID,
-					"sha256":  "sha256:" + digest,
-				},
-			},
-		)
-		rows = append(rows, map[string]any{
-			"assetId":            assetID,
-			"kind":               "image",
-			"version":            1,
-			"contentType":        "image/jpeg",
-			"privateObjectKey":   privateCASKey(digest, ".jpg"),
-			"sha256":             "sha256:" + digest,
-			"bytes":              1,
-			"ownerRefs":          []string{owner},
-			"rightsSnapshotRefs": []string{rightsRef},
-		})
-	}
-	if mutate != nil {
-		mutate(rows)
-	}
-	writeReleaseMediaClosureJSON(
-		t,
-		filepath.Join(root, "payload", "media_manifest.json"),
-		map[string]any{
-			"schema":      releaseMediaManifestSchema,
-			"releaseId":   "release-research-media",
-			"sourceOwner": releaseMediaSourceOwner,
-			"assets":      rows,
-			"issues":      []string{},
-			"counts": map[string]any{
-				"assets": len(rows),
-				"issues": 0,
-			},
-		},
-	)
-	return root
+	mutate(manifest)
+	writeReleaseMediaClosureJSON(t, path, manifest)
 }
 
-func TestResearchDeliveryResolvesRelativeCASKeyWithoutPublicURL(t *testing.T) {
-	root := releasePrivateDeliveryFixture(t, nil)
-	assets, err := LoadReleaseMediaAssets(root, "release-research-media", "research")
-	if err != nil {
-		t.Fatalf("load research media authority: %v", err)
-	}
-	resolved, err := ResolveReleaseMediaAsset(
-		assets,
-		MediaDeliveryBases{Image: "https://cdn.example.com"},
-		"entity-cover",
-		"image",
-		"sha256:"+strings.Repeat("a", 64),
-		"entities/地点/景区/实体甲",
-	)
-	if err != nil {
-		t.Fatalf("resolve research asset: %v", err)
-	}
-	if resolved.PublicURL != "" {
-		t.Fatalf("research delivery must not produce a public URL, got %q", resolved.PublicURL)
-	}
-	key := resolved.DeliveryRef
-	if key != privateCASKey(strings.Repeat("a", 64), ".jpg") {
-		t.Fatalf("research DeliveryRef must be the CAS key, got %q", key)
-	}
-	// Probe-negative form: no public slice segment, no absolute URL.
-	if strings.Contains(key, "/s/") ||
-		strings.HasPrefix(key, "http://") ||
-		strings.HasPrefix(key, "https://") {
-		t.Fatalf("research DeliveryRef has an anonymous delivery form: %q", key)
-	}
-}
-
-func TestResearchDeliveryRejectsPublicSliceAndDigestDrift(t *testing.T) {
-	tests := []struct {
+func TestReleaseDeliveryRejectsPrivateAndNonCanonicalIdentities(t *testing.T) {
+	for _, test := range []struct {
 		name   string
-		mutate func(rows []map[string]any)
+		mutate func(map[string]any)
 	}{
 		{
-			name: "public-slice-present",
-			mutate: func(rows []map[string]any) {
-				rows[0]["publicSliceKey"] = BuildContentMediaPublicSliceKey(
-					"image", "entity-cover", 1, "image/jpeg",
-				)
-				delete(rows[0], "privateObjectKey")
+			name: "private-object-key-only",
+			mutate: func(manifest map[string]any) {
+				asset := manifest["assets"].([]any)[0].(map[string]any)
+				delete(asset, "publicSliceKey")
+				asset["privateObjectKey"] = "media/objects/sha256/aa/bb/source.jpg"
 			},
 		},
 		{
-			name: "cas-key-digest-drift",
-			mutate: func(rows []map[string]any) {
-				rows[0]["privateObjectKey"] = privateCASKey(strings.Repeat("f", 64), ".jpg")
+			name: "private-object-key-alongside-public-slice",
+			mutate: func(manifest map[string]any) {
+				manifest["assets"].([]any)[0].(map[string]any)["privateObjectKey"] = "media/objects/sha256/aa/bb/source.jpg"
 			},
 		},
 		{
-			name: "cas-key-malformed",
-			mutate: func(rows []map[string]any) {
-				rows[0]["privateObjectKey"] = "media/image/p/asset/entity-cover/v1/source.jpg"
+			name: "private-key-as-public-slice",
+			mutate: func(manifest map[string]any) {
+				manifest["assets"].([]any)[0].(map[string]any)["publicSliceKey"] = "media/objects/sha256/aa/bb/source.jpg"
 			},
 		},
-	}
-	for _, test := range tests {
+		{
+			name: "missing-public-slice",
+			mutate: func(manifest map[string]any) {
+				delete(manifest["assets"].([]any)[0].(map[string]any), "publicSliceKey")
+			},
+		},
+		{
+			name: "public-slice-identity-drift",
+			mutate: func(manifest map[string]any) {
+				manifest["assets"].([]any)[0].(map[string]any)["publicSliceKey"] = BuildContentMediaPublicSliceKey("avatar", "other-avatar", 1, "image/webp")
+			},
+		},
+		{
+			name: "retired-release-class",
+			mutate: func(manifest map[string]any) {
+				manifest["releaseClass"] = "research"
+			},
+		},
+	} {
 		t.Run(test.name, func(t *testing.T) {
-			root := releasePrivateDeliveryFixture(t, test.mutate)
-			if _, err := LoadReleaseMediaAssets(
-				root,
-				"release-research-media",
-				"research",
-			); err == nil {
-				t.Fatal("invalid research delivery identity must fail closed")
+			root, _ := releaseMediaClosureFixture(t)
+			mutateReleaseDeliveryManifest(t, root, test.mutate)
+			if _, err := LoadReleaseMediaAssets(root, "release-geo-media"); err == nil {
+				t.Fatal("retired or non-canonical release delivery must fail closed")
 			}
 		})
 	}
 }
 
-func TestCommercialDeliveryRejectsPrivateObjectKey(t *testing.T) {
-	root, _ := releaseMediaClosureFixture(t)
-	if _, err := LoadReleaseMediaAssets(
-		root,
-		"release-geo-media",
-		"research",
-	); err == nil {
-		t.Fatal("public slice manifest must not load as research delivery")
-	}
-	if _, err := LoadReleaseMediaAssets(
-		root,
-		"release-geo-media",
-		"prod-gray",
-	); err == nil {
-		t.Fatal("unknown release class must fail closed")
-	}
-}
-
-func TestResearchDeliveryRefIsSignableByPrivateDeliverySigner(t *testing.T) {
-	root := releasePrivateDeliveryFixture(t, nil)
-	assets, err := LoadReleaseMediaAssets(root, "release-research-media", "research")
-	if err != nil {
-		t.Fatalf("load research media authority: %v", err)
-	}
-	resolved, err := ResolveReleaseMediaAsset(
-		assets,
-		MediaDeliveryBases{Image: "https://cdn.example.com"},
-		"entity-cover",
-		"image",
-		"sha256:"+strings.Repeat("a", 64),
-		"entities/地点/景区/实体甲",
-	)
-	if err != nil {
-		t.Fatalf("resolve research asset: %v", err)
-	}
-	// DEC-031: the CAS delivery ref must be consumable by the existing
-	// short-lived grant signer without any layout translation.
-	signed := SignCDNURLUntil(
-		"https://media.example.com",
-		resolved.DeliveryRef,
-		"test-sign-key",
-		time.Now().Add(300*time.Second),
-	)
-	if signed == "" {
-		t.Fatalf(
-			"private delivery signer rejected research DeliveryRef %q",
-			resolved.DeliveryRef,
-		)
-	}
-	if !strings.Contains(signed, "sign=") || !strings.Contains(signed, "&t=") {
-		t.Fatalf("signed URL lacks signature elements: %q", signed)
+func TestReleasePublicDeliveryPreservesUnverifiedRightsRecords(t *testing.T) {
+	for _, status := range []string{"unverified", "unknown", "restricted"} {
+		t.Run(status, func(t *testing.T) {
+			root, expected := releaseMediaClosureFixture(t)
+			asset := expected[0]
+			rightsPath := filepath.Join(root, "payload", "objects", filepath.FromSlash(asset.Owner), "rights_snapshots", asset.AssetID+".json")
+			writeReleaseMediaClosureJSON(t, rightsPath, map[string]any{
+				"assetId":       asset.AssetID,
+				"manifestAsset": map[string]any{"assetId": asset.AssetID, "sha256": asset.SHA256},
+				"rightsStatus":  status, "authorizationRequired": true,
+				"distributionDecision": "blocked", "usageScope": "research",
+			})
+			before, err := os.ReadFile(rightsPath)
+			if err != nil {
+				t.Fatal(err)
+			}
+			assets, err := LoadReleaseMediaAssets(root, "release-geo-media")
+			if err != nil {
+				t.Fatalf("rights records must not select a release delivery class: %v", err)
+			}
+			resolved, err := ResolveReleaseMediaAsset(assets, MediaDeliveryBases{Avatar: "https://avatar.example.com"}, asset.AssetID, asset.Kind, asset.SHA256, asset.Owner)
+			if err != nil {
+				t.Fatal(err)
+			}
+			wantURL := BuildPublicMediaURL("https://avatar.example.com", assets[asset.AssetID].PublicSliceKey, 1)
+			if wantURL == "" || resolved.PublicURL != wantURL || resolved.DeliveryRef != wantURL {
+				t.Fatalf("release asset must resolve to canonical public delivery: %+v", resolved)
+			}
+			after, err := os.ReadFile(rightsPath)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !bytes.Equal(before, after) {
+				t.Fatal("public delivery must not rewrite immutable rights records")
+			}
+		})
 	}
 }
 
-func TestResearchDeliveryAllowsContentAddressedSharing(t *testing.T) {
-	sharedDigest := strings.Repeat("a", 64)
-	root := releasePrivateDeliveryFixture(t, func(rows []map[string]any) {
-		rows[1]["privateObjectKey"] = privateCASKey(sharedDigest, ".jpg")
-		rows[1]["sha256"] = "sha256:" + sharedDigest
-		// Keep the rights snapshot binding consistent with the new digest.
+func TestReleasePublicDeliveryAllowsSharedDigestWithDistinctAssetSlices(t *testing.T) {
+	root, expected := releaseMediaClosureFixture(t)
+	sharedSHA := expected[1].SHA256
+	second := expected[3]
+	mutateReleaseDeliveryManifest(t, root, func(manifest map[string]any) {
+		manifest["assets"].([]any)[3].(map[string]any)["sha256"] = sharedSHA
 	})
-	// Rewrite the second asset's rights snapshot to bind the shared digest.
-	writeReleaseMediaClosureJSON(
-		t,
-		filepath.Join(
-			root,
-			"payload",
-			"objects", "posts", "article", "攻略", "实体甲", "1",
-			"rights_snapshots", "article-inline.json",
-		),
+	writeReleaseMediaClosureJSON(t,
+		filepath.Join(root, "payload", "objects", filepath.FromSlash(second.Owner), "rights_snapshots", second.AssetID+".json"),
 		map[string]any{
-			"schema":  "quwoquan_data.asset_rights_snapshot",
-			"assetId": "article-inline",
-			"manifestAsset": map[string]any{
-				"assetId": "article-inline",
-				"sha256":  "sha256:" + sharedDigest,
-			},
+			"assetId":       second.AssetID,
+			"manifestAsset": map[string]any{"assetId": second.AssetID, "sha256": sharedSHA},
 		},
 	)
-	assets, err := LoadReleaseMediaAssets(root, "release-research-media", "research")
+	assets, err := LoadReleaseMediaAssets(root, "release-geo-media")
 	if err != nil {
-		t.Fatalf("content-addressed sharing must stay valid for research delivery: %v", err)
+		t.Fatalf("shared content digest with distinct asset identities must remain valid: %v", err)
 	}
-	if len(assets) != 2 {
-		t.Fatalf("expected both shared-body assets, got %d", len(assets))
+	firstAsset, secondAsset := assets[expected[1].AssetID], assets[second.AssetID]
+	if len(assets) != len(expected) || firstAsset.SHA256 != secondAsset.SHA256 ||
+		firstAsset.PublicSliceKey == secondAsset.PublicSliceKey {
+		t.Fatalf("shared bytes must keep independent public asset identities: first=%+v second=%+v", firstAsset, secondAsset)
 	}
 }

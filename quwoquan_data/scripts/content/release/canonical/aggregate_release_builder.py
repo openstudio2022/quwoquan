@@ -52,7 +52,6 @@ from core.media_asset_url import (
     copy_release_media_objects,
 )
 from core.paths import CONTROL_PLANE_TAXONOMY_ROOT
-from governance.coverage.distribution import RELEASE_CLASSES
 from core.release_layout import (
     attestation_root,
     objects_merkle,
@@ -82,14 +81,10 @@ def _build_aggregate_release(
     publish_root: Path,
     release_root: Path,
     release_id: str,
-    release_class: str,
     cohort: dict[str, object],
 ) -> dict[str, Any]:
     """Create one immutable release from canonical objects bound to execution IDs."""
     release_id = _safe_id(release_id, label="releaseId")
-    normalized_release_class = str(release_class or "").strip()
-    if normalized_release_class not in RELEASE_CLASSES:
-        raise ObjectTransactionError(f"DATA.RELEASE.CLASS_INVALID: {normalized_release_class!r}")
     if not cohort:
         raise ObjectTransactionError(
             "DATA.RELEASE.COHORT_REQUIRED: pool release requires --cohort-file"
@@ -97,7 +92,6 @@ def _build_aggregate_release(
     pool_preparation = prepare_pool_release(
         publish_root=publish_root,
         cohort=cohort,
-        release_class=release_class,
     )
     pool_excluded = pool_preparation.excluded
     cohort_selection = pool_preparation.cohort_selection
@@ -149,7 +143,6 @@ def _build_aggregate_release(
             source_digest_documents=source_digest_documents,
             source_digests=source_digests,
             desired=desired,
-            release_class=normalized_release_class,
             cohort_selection=cohort_selection,
             release_contents=release_contents,
             release_authors=release_authors,
@@ -188,7 +181,6 @@ def _build_aggregate_release(
             entity_refs=desired["entities"],
             creator_refs=desired["creators"],
             publish_root=publish_root,
-            release_class=normalized_release_class,
         )
         if media_manifest["issues"]:
             raise ObjectTransactionError(
@@ -203,7 +195,6 @@ def _build_aggregate_release(
             release_id=release_id,
             objects_root=payload / "objects",
             desired=desired,
-            release_class=normalized_release_class,
         )
         assert_valid(
             asset_admission,
@@ -222,8 +213,6 @@ def _build_aggregate_release(
             source_digest_documents=source_digest_documents,
             asset_admission=asset_admission,
             canonical_merkle=selected_merkle,
-            release_class=normalized_release_class,
-            product_lifecycle_state=normalized_release_class,
             pool_digest=cohort_selection.pool_digest,
             counts=carrier_counts,
             contents=release_contents,
@@ -285,7 +274,6 @@ def _build_aggregate_release(
             tag_count=len(tag_refs),
             payload_sha256=payload_digest(staging),
             recorded_at=_now(),
-            release_class=normalized_release_class,
             source_identities=source_identities,
             source_identity_set_digest=(
                 source_identity_set_digest

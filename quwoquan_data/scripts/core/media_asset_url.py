@@ -13,7 +13,6 @@ import yaml
 
 from core.asset_identity import parse_post_asset_id
 from core.content_library import MediaHoldingError, reference_existing_file, resolve_media_holding
-from governance.coverage.distribution import RELEASE_CLASSES
 from core.paths import PUBLISH_ROOT, RELEASE_ROOT, REPO_ROOT
 from core.release_layout import payload_file
 from core.schema import assert_valid
@@ -337,19 +336,16 @@ def build_release_media_manifest(
     publish_root: Path | None = None,
     object_root: Path | None = None,
     source_owner: str = "qwq_data",
-    release_class: str = "production",
 ) -> dict[str, Any]:
     """Build the MediaAsset closure for one immutable release.
 
     A release is an object closure, not a snapshot of the whole canonical media
     library. Canonical objects name their bodies by digest and the content
-    library owns those bodies, so packaging resolves them there. The single
-    ``production`` release class delivers every asset through an anonymous
+    library owns those bodies, so packaging resolves them there. Every asset
+    is delivered through an anonymous
     ``publicSliceKey`` (DEC-041); public visibility of rights-flagged content is
     an operations runtime decision downstream, not a delivery-form fork here.
     """
-    if release_class not in RELEASE_CLASSES:
-        raise ValueError(f"invalid release class: {release_class!r}")
     canonical = publish_root or PUBLISH_ROOT
     objects = object_root or canonical
     assets: dict[str, dict[str, Any]] = {}
@@ -551,7 +547,6 @@ def materialize_release_media(
     publish_root: Path | None = None,
     release_root: Path | None = None,
     source_owner: str = "qwq_data",
-    release_class: str = "production",
 ) -> dict[str, Any]:
     """Freeze the exact canonical CAS closure into one release payload."""
     release = (release_root or RELEASE_ROOT) / release_id
@@ -562,7 +557,6 @@ def materialize_release_media(
         creator_refs=creator_refs,
         publish_root=publish_root,
         source_owner=source_owner,
-        release_class=release_class,
     )
     if manifest["issues"]:
         return manifest

@@ -1,5 +1,5 @@
 // Code generated from canonical domain contracts. DO NOT EDIT.
-// ContractGraph SHA256: c372ef683b626026c4e7e35cec06c4c495cdfaa414d0b610ce9943a07ed019fe
+// ContractGraph SHA256: d51f23fa64d8fdaf0600cff6da4866cf8dd452de6b5aaeebc49060daba26f82f
 
 library;
 
@@ -6322,128 +6322,6 @@ final class ReportCommandResult {
   };
 }
 
-final class ResearchReleaseReadbackView {
-  const ResearchReleaseReadbackView({
-    required this.releaseId,
-    required this.manifestDigest,
-    required this.subjectHash,
-    required this.attestationIdHash,
-    required this.signatureVerified,
-    required this.researchBadgeVisible,
-    required this.postIds,
-    required this.entityRefs,
-    required this.mediaAssetIds,
-    required this.publicCdnDetected,
-    required this.anonymousMediaUrlDetected,
-  });
-
-  final String releaseId;
-  final String manifestDigest;
-  final String subjectHash;
-  final String attestationIdHash;
-  final bool signatureVerified;
-  final bool researchBadgeVisible;
-  final List<String> postIds;
-  final List<String> entityRefs;
-  final List<String> mediaAssetIds;
-  final bool publicCdnDetected;
-  final bool anonymousMediaUrlDetected;
-
-  factory ResearchReleaseReadbackView.fromWire(
-    Map<String, Object?> map, [
-    String path = "ResearchReleaseReadbackView",
-  ]) {
-    _rejectUnknownFields(map, const <String>{
-      "releaseId",
-      "manifestDigest",
-      "subjectHash",
-      "attestationIdHash",
-      "signatureVerified",
-      "researchBadgeVisible",
-      "postIds",
-      "entityRefs",
-      "mediaAssetIds",
-      "publicCdnDetected",
-      "anonymousMediaUrlDetected",
-    }, path);
-    return ResearchReleaseReadbackView(
-      releaseId: _requiredNonBlankString(map["releaseId"], '$path.releaseId'),
-      manifestDigest: _requiredNonBlankString(
-        map["manifestDigest"],
-        '$path.manifestDigest',
-      ),
-      subjectHash: _requiredNonBlankString(
-        map["subjectHash"],
-        '$path.subjectHash',
-      ),
-      attestationIdHash: _requiredNonBlankString(
-        map["attestationIdHash"],
-        '$path.attestationIdHash',
-      ),
-      signatureVerified: _requiredBool(
-        map["signatureVerified"],
-        '$path.signatureVerified',
-      ),
-      researchBadgeVisible: _requiredBool(
-        map["researchBadgeVisible"],
-        '$path.researchBadgeVisible',
-      ),
-      postIds: List<String>.unmodifiable(
-        _requiredList(map["postIds"], '$path.postIds').asMap().entries.map(
-          (entry) =>
-              _requiredString(entry.value, '$path.postIds' + '[${entry.key}]'),
-        ),
-      ),
-      entityRefs: List<String>.unmodifiable(
-        _requiredList(
-          map["entityRefs"],
-          '$path.entityRefs',
-        ).asMap().entries.map(
-          (entry) => _requiredString(
-            entry.value,
-            '$path.entityRefs' + '[${entry.key}]',
-          ),
-        ),
-      ),
-      mediaAssetIds: List<String>.unmodifiable(
-        _requiredList(
-          map["mediaAssetIds"],
-          '$path.mediaAssetIds',
-        ).asMap().entries.map(
-          (entry) => _requiredString(
-            entry.value,
-            '$path.mediaAssetIds' + '[${entry.key}]',
-          ),
-        ),
-      ),
-      publicCdnDetected: _requiredBool(
-        map["publicCdnDetected"],
-        '$path.publicCdnDetected',
-      ),
-      anonymousMediaUrlDetected: _requiredBool(
-        map["anonymousMediaUrlDetected"],
-        '$path.anonymousMediaUrlDetected',
-      ),
-    );
-  }
-
-  Map<String, Object?> toWire() => <String, Object?>{
-    "releaseId": releaseId,
-    "manifestDigest": manifestDigest,
-    "subjectHash": subjectHash,
-    "attestationIdHash": attestationIdHash,
-    "signatureVerified": signatureVerified,
-    "researchBadgeVisible": researchBadgeVisible,
-    "postIds": postIds.map((value) => value).toList(growable: false),
-    "entityRefs": entityRefs.map((value) => value).toList(growable: false),
-    "mediaAssetIds": mediaAssetIds
-        .map((value) => value)
-        .toList(growable: false),
-    "publicCdnDetected": publicCdnDetected,
-    "anonymousMediaUrlDetected": anonymousMediaUrlDetected,
-  };
-}
-
 final class SourceAttribution {
   const SourceAttribution({
     required this.isOriginal,
@@ -6849,13 +6727,6 @@ ReportCommandResult decodeReportCommandResult(Object? response) =>
       _requiredObject(response, "ReportCommandResult"),
       "ReportCommandResult",
     );
-
-ResearchReleaseReadbackView decodeResearchReleaseReadbackView(
-  Object? response,
-) => ResearchReleaseReadbackView.fromWire(
-  _requiredObject(response, "ResearchReleaseReadbackView"),
-  "ResearchReleaseReadbackView",
-);
 
 Map<String, Object?> _requiredObject(Object? value, String path) {
   if (value is! Map<Object?, Object?>) {

@@ -39,7 +39,6 @@ void main() {
     String personaId = 'persona-a',
   }) => ContentCacheIsolationIdentity(
     environment: 'alpha',
-    audience: ContentReleaseAudience.research,
     accountId: accountId,
     personaId: personaId,
     sourceOwner: 'qwq_data',

@@ -245,7 +245,8 @@ func tombstoneMissingLivePosts(
 	candidate importedReleaseCandidateState,
 	activatedAt time.Time,
 ) ([]ImportedPostDeletionSnapshot, error) {
-	var targetIDs []string
+	// 空 release 仍需编码 BSON 数组，nil slice 会把 $nin 编码成 null。
+	targetIDs := make([]string, 0)
 	cursor, err := live.Find(ctx, bson.M{
 		"sourceOwner": candidate.SourceOwner, "releaseId": candidate.ReleaseID,
 		"manifestDigest": candidate.ManifestDigest, "lifecycleStatus": "active",
@@ -615,8 +616,8 @@ func activeReleaseBindingFromPointer(pointer importedReleasePointerDocument) Act
 	return ActiveReleaseBinding{
 		Environment: pointer.Environment, SourceOwner: pointer.SourceOwner,
 		ReleaseID: pointer.ActiveReleaseID, ManifestDigest: pointer.ManifestDigest,
-		ReleaseClass: pointer.ReleaseClass, ProjectionVersion: pointer.ProjectionVersion,
-		Revision: pointer.Revision, ActivatedAt: pointer.ActivatedAt, Found: true,
+		ProjectionVersion: pointer.ProjectionVersion,
+		Revision:          pointer.Revision, ActivatedAt: pointer.ActivatedAt, Found: true,
 	}
 }
 
@@ -641,8 +642,8 @@ func compareAndSwapActivePointer(
 	}
 	update := bson.M{"$set": bson.M{
 		"status": "active", "activeReleaseId": pointer.ActiveReleaseID, "manifestDigest": pointer.ManifestDigest,
-		"releaseClass": pointer.ReleaseClass, "projectionVersion": pointer.ProjectionVersion,
-		"revision": pointer.Revision, "activatedAt": pointer.ActivatedAt,
+		"projectionVersion": pointer.ProjectionVersion,
+		"revision":          pointer.Revision, "activatedAt": pointer.ActivatedAt,
 	}}
 	result, err := state.UpdateOne(ctx, bson.M{
 		"kind": releaseActivePointerKind, "environment": pointer.Environment,
@@ -695,10 +696,10 @@ func readVerifiedCandidateState(
 	if err != nil {
 		return importedReleaseCandidateState{}, false, fmt.Errorf("read release candidate state: %w", err)
 	}
-	if candidate.Status != "verified" || candidate.ProjectionVersion <= 0 {
-		return importedReleaseCandidateState{}, false, fmt.Errorf("GATE_BLOCK: candidate state is not verified")
+	if err := validateVerifiedCandidateState(candidate, environment, opts.SourceOwner, opts.ReleaseID, opts.ManifestDigest); err != nil {
+		return importedReleaseCandidateState{}, false, err
 	}
-	if candidate.ReleaseClass != opts.ReleaseClass || candidate.ReleaseKind != opts.ReleaseKind ||
+	if candidate.ReleaseKind != opts.ReleaseKind ||
 		candidate.Mode != opts.Mode || candidate.DeletePolicy != opts.DeletePolicy {
 		return importedReleaseCandidateState{}, false, fmt.Errorf("GATE_BLOCK: verified candidate policy binding differs")
 	}

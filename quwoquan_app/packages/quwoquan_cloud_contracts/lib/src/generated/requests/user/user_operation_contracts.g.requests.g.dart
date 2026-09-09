@@ -1,5 +1,5 @@
 // Code generated from the accepted ContractGraph. DO NOT EDIT.
-// ContractGraph SHA256: c372ef683b626026c4e7e35cec06c4c495cdfaa414d0b610ce9943a07ed019fe
+// ContractGraph SHA256: d51f23fa64d8fdaf0600cff6da4866cf8dd452de6b5aaeebc49060daba26f82f
 
 part of '../../../user/user_operation_contracts.g.dart';
 
@@ -1314,10 +1314,6 @@ final class InitiateContactDiscoveryCommand {
         .map((value) => value)
         .toList(growable: false),
   };
-}
-
-final class IssueWhitelistedResearchSessionCommand {
-  const IssueWhitelistedResearchSessionCommand();
 }
 
 final class ListBlockedUsersQuery {
@@ -3568,13 +3564,6 @@ final class UserSyncPullRequestWire {
     if (this.afterSeq != null) "afterSeq": this.afterSeq!,
     if (this.limit != null) "limit": this.limit!,
   };
-}
-
-CloudOperationRequestPayload
-encodeUserAccountSessionIssueWhitelistedResearchSessionGeneratedRequest(
-  IssueWhitelistedResearchSessionCommand request,
-) {
-  return CloudOperationRequestPayload();
 }
 
 CloudOperationRequestPayload

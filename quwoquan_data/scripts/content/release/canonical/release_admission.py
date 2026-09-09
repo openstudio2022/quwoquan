@@ -12,7 +12,6 @@ from content.release.canonical.object_transaction_contract import (
     _read_json,
 )
 from governance.coverage.distribution import (
-    RELEASE_CLASSES,
     DistributionDecision,
     RightsStatus,
     project_asset_admission,
@@ -232,16 +231,12 @@ def build_release_asset_admission(
     release_id: str,
     objects_root: Path,
     desired: Mapping[str, list[str]],
-    release_class: str,
     output_root: Path | None = None,
 ) -> dict[str, Any]:
     if output_root is None:
         from core import paths as core_paths
 
         output_root = core_paths.OUTPUT_ROOT
-    release_mode = str(release_class or "").strip()
-    if release_mode not in RELEASE_CLASSES:
-        raise ObjectTransactionError(f"DATA.RELEASE.CLASS_INVALID: {release_mode!r}")
     objects = _object_rows(objects_root, desired, output_root=output_root)
     assets = [asset for row in objects for asset in row["assets"]]
     asset_ids = [str(asset["assetId"]) for asset in assets]
@@ -370,8 +365,6 @@ def build_release_asset_admission(
     return {
         "schema": "quwoquan_data.release_asset_admission",
         "releaseId": release_id,
-        "releaseClass": release_mode,
-        "productLifecycleState": release_mode,
         "containsUnverifiedAssets": bool(authorization_required_ids),
         "rightsStatusCounts": {
             status.value: rights_counts[status.value] for status in RightsStatus

@@ -218,24 +218,18 @@ def _stackctl(*args: str, env: Mapping[str, str] | None = None, log_dir: Path) -
 DATA_CLI = ROOT / "quwoquan_data/scripts/cli.py"
 
 
-# DEC-041（object-homepage-coverage-scaling design）：producer 只有一个 release 类别 production，
-# releaseClass 与 productLifecycleState 同值。integrate 不再接受 research/commercial 输入。
-RELEASE_CLASS = "production"
+# DEC-041：release 不携带类别；acceptance 只消费显式 immutable 身份。
 HANDOFF_REF_RE = re.compile(r"^handoff-ref-v1:sha256:[0-9a-f]{64}:sha256:[0-9a-f]{64}$")
 
 
-def _release_id(attestation: Path) -> tuple[str, str]:
-    # DEC-041：Data producer 只产出单一 production release；research/commercial 已收敛，
-    # 与下游 `ship verify --readiness-phase production` 同一闭集，避免两端互斥。
-    payload = json.loads(attestation.read_text(encoding="utf-8"))
-    release_id, release_class = str(payload.get("releaseId") or ""), str(payload.get("releaseClass") or "")
-    lifecycle = str(payload.get("productLifecycleState") or "")
-    if not release_id or release_class != RELEASE_CLASS or lifecycle != RELEASE_CLASS:
-        raise IntegrationRunError(
-            "INTEGRATION_RUN.INPUT_INVALID",
-            f"{attestation} is not a canonical {RELEASE_CLASS} release attestation "
-            f"(releaseClass={release_class or '-'}, productLifecycleState={lifecycle or '-'})",
-        )
+def _release_id(attestation: Path) -> str:
+    from quwoquan_ops.cli.lib.deployment_candidate_manifest import _release_binding
+
+    try:
+        binding = _release_binding(str(attestation), label="acceptance")
+    except (OSError, TypeError, ValueError) as exc:
+        raise IntegrationRunError("INTEGRATION_RUN.INPUT_INVALID", str(exc)) from exc
+    release_id = binding["releaseId"]
     local = OUTPUT_ROOT / "data/releases" / release_id / "attestations/release.json"
     if not local.is_file() or local.read_bytes() != attestation.read_bytes():
         raise IntegrationRunError(
@@ -243,7 +237,7 @@ def _release_id(attestation: Path) -> tuple[str, str]:
             f"immutable release {release_id} is absent from {OUTPUT_ROOT / 'data/releases'} or its attestation differs; "
             "ship apply only executes releases present in this worktree's Data root",
         )
-    return release_id, release_class
+    return release_id
 
 
 def _handoff_ref(value: str, *, label: str) -> str:
@@ -277,13 +271,13 @@ def _data_ship(*args: str, log_dir: Path, label: str) -> None:
 
 def _apply_data_release(*, environment: str, run_id: str, args: argparse.Namespace, log_dir: Path,
                         previous_readiness: Path | None) -> Path:
-    """candidate release 进入环境：`ship apply --handoff-ref … --import --full-sync` → `ship activate` → `ship verify --readiness-phase production`。
+    """candidate release 进入环境：`ship apply --handoff-ref … --import --full-sync` → `ship activate` → `ship verify`。
 
     handoff-ref 是现役 Data CLI 唯一的 release 准入身份；attestation 只用于 stackctl package 的候选绑定，
     两者必须指向同一 releaseId（由 ship 侧对 handoff 做 exact 校验）。返回 release-readiness 回执路径。
     """
 
-    release_id, release_class = _release_id(args.release_attestation)
+    release_id = _release_id(args.release_attestation)
     handoff_ref = _handoff_ref(args.release_handoff_ref, label="--release-handoff-ref")
     import_run, activate_run, verify_run = f"{run_id}-import", f"{run_id}-activate", f"{run_id}-verify"
     _data_ship("apply", "--handoff-ref", handoff_ref, "--env", environment, "--run-id", import_run,
@@ -295,7 +289,7 @@ def _apply_data_release(*, environment: str, run_id: str, args: argparse.Namespa
     # ship verify 的 --import-run-id 指向 completed 的 activate run（其 result.importRunId 再指回 apply run）；
     # 传 apply run 会因 result status=prepared 被拒（"completed activation predecessor result status 不一致"）。
     verify_args = ["verify", "--handoff-ref", handoff_ref, "--env", environment, "--import-run-id", activate_run,
-                   "--run-id", verify_run, "--readiness-phase", release_class]
+                   "--run-id", verify_run]
     if previous_readiness is not None:
         verify_args.extend(["--previous-environment-readiness", _output_ref(previous_readiness)])
     _data_ship(*verify_args, log_dir=log_dir, label=f"{environment}-verify")
@@ -310,7 +304,7 @@ PREMIUM_POOL_BOOTSTRAP_TTL_DAYS = 30
 
 
 def _bootstrap_premium_pool(*, environment: str, release_id: str, import_run: str, attestation: Path, log_dir: Path) -> None:
-    """fresh 环境的精选池首次激活：`ship verify --readiness-phase production` 要求 premium_stream 读回 release 视频，
+    """fresh 环境的精选池首次激活：`ship verify` 要求 premium_stream 读回 release 视频，
     而精选池只能经 canonical `stackctl premium-pool --launch-policy release-import` 自举（OPEN-023）。
     样本来自派生 ReleaseUatSamplePlan 的 video objectId，经导入报告 contentId → postId 绑定；池非空时该路径按设计关闭，视为已激活。"""
 
@@ -1172,7 +1166,7 @@ def main(argv: list[str] | None = None) -> int:
             for label, path in (("release", args.release_attestation), ("rollback", args.rollback_release_attestation)):
                 if path is None or not path.is_file():
                     raise IntegrationRunError("INTEGRATION_RUN.INPUT_INVALID", f"{label} attestation is required in acceptance mode and must be a file: {path}")
-            release_ids = {_release_id(args.release_attestation)[0], _release_id(args.rollback_release_attestation)[0]}
+            release_ids = {_release_id(args.release_attestation), _release_id(args.rollback_release_attestation)}
             if len(release_ids) != 2:
                 raise IntegrationRunError("INTEGRATION_RUN.INPUT_INVALID", "release and rollback attestations must name two different releases")
             summary["dataReleases"] = sorted(release_ids)

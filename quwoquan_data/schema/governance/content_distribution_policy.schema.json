@@ -5,14 +5,12 @@
   "required": [
     "schema",
     "policyId",
-    "productLifecycleState",
-    "releaseClass",
     "mediaGeneration",
     "acquisition",
     "researchDiscovery",
     "articleMedia",
     "scaleMilestones",
-    "productionDistribution",
+    "distribution",
     "assetRecordDefaults"
   ],
   "additionalProperties": false,
@@ -23,16 +21,6 @@
     "policyId": {
       "type": "string",
       "minLength": 1
-    },
-    "productLifecycleState": {
-      "enum": [
-        "production"
-      ]
-    },
-    "releaseClass": {
-      "enum": [
-        "production"
-      ]
     },
     "mediaGeneration": {
       "type": "object",
@@ -240,7 +228,7 @@
         }
       }
     },
-    "productionDistribution": {
+    "distribution": {
       "type": "object",
       "required": [
         "recordedRightsStatuses",

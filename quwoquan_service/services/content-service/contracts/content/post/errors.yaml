@@ -86,7 +86,6 @@ errors:
   - surface: http
     operations:
     - GetFeed
-    - GetResearchReleaseReadback
     - SubmitPostPublication
     - DeletePost
     - UpdatePostSettings
@@ -156,33 +155,6 @@ errors:
   user_message:
     zh: 请先登录
     en: Please sign in to continue
-- code: CONTENT.USER.research_identity_invalid
-  reason: forbidden
-  http_status: 403
-  emitted_by:
-  - surface: http
-    operations: [GetResearchReleaseReadback]
-  recovery_action: surface
-  disruption_level: inlineCard
-  dart_const: researchIdentityInvalid
-  go_const: ErrResearchIdentityInvalid
-  user_message:
-    zh: 当前研究态身份无效或已过期
-    en: The research identity is invalid or expired
-- code: CONTENT.SYSTEM.research_release_state_unavailable
-  reason: research_release_state_unavailable
-  http_status: 503
-  emitted_by:
-  - surface: http
-    operations: [GetResearchReleaseReadback]
-  recovery_action: retry
-  disruption_level: snackbar
-  recovery_after_seconds: 5
-  dart_const: researchReleaseStateUnavailable
-  go_const: ErrResearchReleaseStateUnavailable
-  user_message:
-    zh: 研究回读所需内容状态暂不可用，请稍后重试
-    en: The content state required for research readback is temporarily unavailable
 - code: CONTENT.USER.invalid_argument
   reason: invalid_argument
   http_status: 400
@@ -494,7 +466,7 @@ errors:
   http_status: 503
   emitted_by:
   - surface: http
-    operations: [GetFeed, GetResearchReleaseReadback, SubmitPostPublication, GetHelperRead, content.content_behavior_fact.ReportBehaviors]
+    operations: [GetFeed, SubmitPostPublication, GetHelperRead, content.content_behavior_fact.ReportBehaviors]
   recovery_action: retry
   disruption_level: snackbar
   recovery_after_seconds: 5
@@ -508,7 +480,7 @@ errors:
   http_status: 500
   emitted_by:
   - surface: http
-    operations: [GetFeed, GetResearchReleaseReadback, SubmitPostPublication, ListUserPosts, ListPostsByGathering, GetGatheringSocialProof, GetPost, DeletePost, UpdatePostSettings, PromotePostToWork, GetAuthorImpact, ListAuthorImpactEvidence, GetAppConfig, GetCounters, GetMyFootprint, GetEntityWishlistState, GenerateArticleSummary, GetHelperRead, content.intersection_visit_state.GetMyIntersectionSummary, content.intersection_visit_state.ListMyIntersections, content.intersection_visit_state.GetObjectIntersections, content.content_account_closure_workflow.RecoverContentAccountClosureDeadLetter]
+    operations: [GetFeed, SubmitPostPublication, ListUserPosts, ListPostsByGathering, GetGatheringSocialProof, GetPost, DeletePost, UpdatePostSettings, PromotePostToWork, GetAuthorImpact, ListAuthorImpactEvidence, GetAppConfig, GetCounters, GetMyFootprint, GetEntityWishlistState, GenerateArticleSummary, GetHelperRead, content.intersection_visit_state.GetMyIntersectionSummary, content.intersection_visit_state.ListMyIntersections, content.intersection_visit_state.GetObjectIntersections, content.content_account_closure_workflow.RecoverContentAccountClosureDeadLetter]
   - surface: graphql
     operations: [GetPostSemantic, GetPostMedia, GetPostArticleRenderAssets, GetPostArticleEntities]
   recovery_action: surface

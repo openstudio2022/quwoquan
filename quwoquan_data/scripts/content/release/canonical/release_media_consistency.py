@@ -15,7 +15,7 @@ from core.media_asset_url import (
 )
 from core.release_layout import payload_file
 from core.schema import assert_valid
-from governance.coverage.distribution import RELEASE_CLASSES
+from content.release.canonical.release_header import validate_release_header
 
 
 def release_private_storage_issues(objects: Path) -> list[dict[str, str]]:
@@ -189,17 +189,10 @@ def release_media_issues(
         return issues
 
     header_path = payload_file(release_root, "release.json")
-    release_class = ""
-    if header_path.is_file():
-        release_class = str(read_json(header_path).get("releaseClass") or "").strip()
-    if release_class not in RELEASE_CLASSES:
-        issues.append(
-            _issue(
-                "release_media_delivery_class_invalid",
-                "release header 必须声明 production releaseClass",
-                release_id,
-            )
-        )
+    try:
+        validate_release_header(read_json(header_path))
+    except (OSError, TypeError, ValueError) as exc:
+        issues.append(_issue("release_media_header_invalid", str(exc), release_id))
         return issues
 
     actual_identity: dict[str, str] = {}
@@ -225,7 +218,7 @@ def release_media_issues(
             issues.append(
                 _issue(
                     "release_media_delivery_class_mismatch",
-                    "production release 不得携带已退役的私有交付 key",
+                    "release 不得携带已退役的私有交付 key",
                     asset_id,
                 )
             )

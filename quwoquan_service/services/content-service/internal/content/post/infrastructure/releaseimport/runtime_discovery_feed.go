@@ -38,28 +38,12 @@ type importedMediaSummary struct {
 	Height           int64
 }
 
-// MediaDeliveryAccessMode 契约 enum 值（_shared/types.yaml MediaDeliveryAccessMode）。
-// research release 的媒体交付引用是相对私有 CAS key，App 必须换短签消费；
-// commercial release 的交付引用是 canonical public slice。
+// MediaDeliveryAccessMode 来自通用媒体契约；默认 release 只物化公开 slice。
+// signed_grant 仍由普通受权媒体能力负责，不是 release 导入模式。
 const (
 	MediaDeliveryAccessModePublic      = "public"
 	MediaDeliveryAccessModeSignedGrant = "signed_grant"
 )
-
-// MediaDeliveryAccessModeForReleaseClass 把 release header 的 releaseClass 映射
-// 为逐媒体 accessMode（DEC-033/DEC-041）：research → signed_grant、commercial/production → public。
-// 其它/未声明类别返回空串作为 invalid sentinel；新 release importer 必须在写入前
-// fail closed。该空串不得进入投影，也不得被消费端当成 public。
-func MediaDeliveryAccessModeForReleaseClass(releaseClass string) string {
-	switch strings.TrimSpace(releaseClass) {
-	case "research":
-		return MediaDeliveryAccessModeSignedGrant
-	case "commercial", "production":
-		return MediaDeliveryAccessModePublic
-	default:
-		return ""
-	}
-}
 
 // ImportedMediaFields 把 release 资产投影为 App 可消费的逐媒体交付绑定。
 // mediaItems 逐项使用 canonical BSON 键（mediaAssetId/mediaAssetVersion，
@@ -273,7 +257,7 @@ func UpsertDiscoveryFeedWithOptions(ctx context.Context, coll *mongo.Collection,
 			"updatedAt":                 p.UpdatedAt,
 			"publishedAt":               p.PublishedAt,
 		}
-		accessMode := MediaDeliveryAccessModeForReleaseClass(opts.ReleaseClass)
+		accessMode := MediaDeliveryAccessModePublic
 		media := ImportedMediaFields(importedPostAssets(p), accessMode)
 		if len(media.MediaURLs) > 0 {
 			set["mediaUrls"] = media.MediaURLs
@@ -331,8 +315,7 @@ func ApplyImportedAuthorAvatarDeliveryFields(target bson.M, post PostDoc, access
 //
 // articleAssetManifest 与 mediaItems 是两条独立的 import 路径：后者已在
 // ImportedMediaFields 里写 accessMode，前者此前直接透传 release 文档，于是
-// 文章内嵌图在 research 相位没有任何交付声明，App 只能按公开 URL 取址而
-// 整片打不开。这里按同一个 releaseClass 单点映射补齐，不逐资产猜测。
+// 文章内嵌图曾缺少交付声明。默认 release 统一显式公开交付，不逐资产猜测。
 //
 // 返回 nil 表示该 Post 没有文章素材清单，调用方照原样写 null。
 func ImportedArticleAssetManifest(

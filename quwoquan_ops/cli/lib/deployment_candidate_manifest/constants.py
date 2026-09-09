@@ -32,21 +32,16 @@ SPEC_REFS = (
     "runtime/runtime-data-engineering/SIT-001",
 )
 _DIGEST = re.compile(r"sha256:[0-9a-f]{64}")
-_RELEASE_LIFECYCLE_CLASSES = frozenset({"research", "commercial", "production"})
+RELEASE_ATTESTATION_SCHEMA_PATH = (
+    ROOT / "quwoquan_data/schema/release/release_attestation.schema.json"
+)
 _RELEASE_BINDING_FIELDS = frozenset(
     {
         "releaseId",
         "releaseDigest",
         "attestationRef",
         "attestationDigest",
-        "releaseClass",
-        "productLifecycleState",
     }
-)
-# production_inputs 是 DEC-041 单一 production 类别下 candidate/rollback 同类的分类；
-# research_inputs/commercial_inputs 只为尚未删除的下游分叉保留（multi-carrier-release OPEN-024）。
-RELEASE_INPUT_CLASSIFICATIONS = frozenset(
-    {"research_inputs", "commercial_inputs", "production_inputs", "mixed_inputs"}
 )
 CANDIDATE_VALIDATION_PURPOSES = frozenset(
     {"self_verify", "currentness", "teardown"}

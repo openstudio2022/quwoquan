@@ -30,7 +30,6 @@ type ContentHandler struct {
 	feedService                  *feedapp.FeedService
 	postService                  *postapp.Facades
 	postQueryService             *postapp.PostQueryFacade
-	researchReleaseReadback      *postapp.ResearchReleaseReadbackQueryFacet
 	commentHandler               commentHTTPHandler
 	reactionHandler              contentReactionHTTPHandler
 	reportHandler                ReportHTTPHandler
@@ -325,14 +324,6 @@ func WithHealthChecker(c *rthealth.Checker) ContentHandlerOption {
 	return func(h *ContentHandler) { h.healthChecker = c }
 }
 
-func WithResearchReleaseReadback(
-	facet *postapp.ResearchReleaseReadbackQueryFacet,
-) ContentHandlerOption {
-	return func(handler *ContentHandler) {
-		handler.researchReleaseReadback = facet
-	}
-}
-
 func WithOutboundShareHandler(service outboundShareHTTPHandler) ContentHandlerOption {
 	return func(handler *ContentHandler) { handler.outboundShareHandler = service }
 }
@@ -532,19 +523,18 @@ func (h *ContentHandler) handleGetFeed(w http.ResponseWriter, r *http.Request) {
 	}
 	recommendationActorID := ResolveRecommendationActorID(r)
 	resp, err := h.feedService.ListFeed(r.Context(), feedapp.ListFeedRequest{
-		UserID:            recommendationActorID,
-		ViewerPersonaID:   ResolvePersonaID(r),
-		SessionID:         resolveSessionID(r),
-		Identity:          params.Identity,
-		Type:              params.Type,
-		Sort:              params.Sort,
-		ChannelID:         params.ChannelId,
-		SubCategory:       params.SubCategory,
-		Cursor:            params.Cursor,
-		Limit:             params.Limit,
-		FeedRequestID:     params.FeedRequestId,
-		BlockedKeywords:   ResolveBlockedKeywords(r),
-		ResearchPrincipal: requestHasResearchRole(r),
+		UserID:          recommendationActorID,
+		ViewerPersonaID: ResolvePersonaID(r),
+		SessionID:       resolveSessionID(r),
+		Identity:        params.Identity,
+		Type:            params.Type,
+		Sort:            params.Sort,
+		ChannelID:       params.ChannelId,
+		SubCategory:     params.SubCategory,
+		Cursor:          params.Cursor,
+		Limit:           params.Limit,
+		FeedRequestID:   params.FeedRequestId,
+		BlockedKeywords: ResolveBlockedKeywords(r),
 	})
 	if err != nil {
 		writeHTTPError(w, r, err)
@@ -569,7 +559,6 @@ func (h *ContentHandler) handleGetPost(w http.ResponseWriter, r *http.Request) {
 		postports.NewPostDetailQuery(
 			postports.NewPostID(postID),
 			postports.NewViewerContext(postports.NewPersonaID(viewerPersonaID)),
-			requestHasResearchRole(r),
 		),
 	)
 	if err != nil {
@@ -792,7 +781,6 @@ func (h *ContentHandler) handleGetHelperRead(w http.ResponseWriter, r *http.Requ
 	result, err := h.postQueryService.GetHelperRead(
 		r.Context(),
 		contentID,
-		requestHasResearchRole(r),
 	)
 	if err != nil {
 		writeHTTPError(w, r, err)
@@ -837,7 +825,6 @@ func (h *ContentHandler) handleListUserPosts(w http.ResponseWriter, r *http.Requ
 			postports.PostVisibility(visibility),
 			cursor,
 			limit,
-			requestHasResearchRole(r),
 		),
 	)
 	if err != nil {
@@ -901,7 +888,6 @@ func (h *ContentHandler) handleListPostsByGathering(
 			gatheringID,
 			cursor,
 			limit,
-			requestHasResearchRole(r),
 		),
 	)
 	if err != nil {

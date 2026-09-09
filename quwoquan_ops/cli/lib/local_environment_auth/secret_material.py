@@ -1,8 +1,7 @@
 """target 级 auth 秘密材料的创建、加载与 runtime 环境投影（逐字搬移）。
 
-``deployment_target_path`` / ``deployment_target_path_in_work_root`` 与
-``materialize_local_research_identity_binding`` /
-``load_local_research_identity_binding`` 是测试 patch 锚点或跨模块依赖，
+``deployment_target_path`` / ``deployment_target_path_in_work_root``
+是测试 patch 锚点或跨模块依赖，
 一律经 ``_pkg.`` 属性访问。
 """
 
@@ -35,20 +34,10 @@ def prepare_local_environment_auth(
         deployment_work_root=deployment_work_root,
     )
     values = _load_or_create_secrets(secret_path)
-    research_identity = (
-        _pkg.materialize_local_research_identity_binding(
-            environment=environment,
-            target_name=target_name,
-            deployment_work_root=deployment_work_root,
-        )
-        if environment in {"alpha", "beta", "gamma"}
-        else None
-    )
     return _local_environment_auth(
         environment,
         secret_path,
         values,
-        research_identity=research_identity,
     )
 
 
@@ -77,20 +66,10 @@ def load_local_environment_auth(
             "GATE_BLOCK: local environment auth secret file is incomplete: "
             + ", ".join(missing)
         )
-    research_identity = (
-        _pkg.load_local_research_identity_binding(
-            environment=environment,
-            target_name=target_name,
-            deployment_work_root=deployment_work_root,
-        )
-        if environment in {"alpha", "beta", "gamma"}
-        else None
-    )
     return _local_environment_auth(
         environment,
         secret_path,
         values,
-        research_identity=research_identity,
     )
 
 
@@ -115,8 +94,6 @@ def _local_environment_auth(
     environment: str,
     secret_path: Path,
     values: dict[str, str],
-    *,
-    research_identity: dict[str, str] | None,
 ) -> LocalEnvironmentAuth:
     key_version = f"local-{environment}-k1"
     runtime_environment = {
@@ -135,16 +112,6 @@ def _local_environment_auth(
             ),
             "QWQ_PUSH_TOKEN_ENCRYPTION_KEY": values[
                 "push_token_encryption_key_b64"
-            ],
-            # User signs and Content verifies the same short-lived Alpha
-            # Research identity attestation.  Keep the shared authority in
-            # the target-scoped external secret file; never derive it from
-            # source or materialize two independent keys.
-            "USER_RESEARCH_IDENTITY_ATTESTATION_KEY_BASE64": values[
-                "research_identity_attestation_key_b64"
-            ],
-            "CONTENT_RESEARCH_IDENTITY_ATTESTATION_KEY_BASE64": values[
-                "research_identity_attestation_key_b64"
             ],
             "CONTENT_ACCOUNT_CLOSURE_SUBJECT_HMAC_SECRET": values[
                 "account_closure_subject_hmac_secret"
@@ -165,24 +132,6 @@ def _local_environment_auth(
             "sms_substitute_capture_key_b64"
         ],
     }
-    if research_identity is not None:
-        runtime_environment.update(
-            {
-                "USER_RESEARCH_IDENTITY_ACCOUNT_ID_ALLOWLIST_JSON": json.dumps(
-                    [research_identity["accountId"]],
-                    separators=(",", ":"),
-                ),
-                "USER_MANAGED_ACCEPTANCE_IDENTITY_JSON": json.dumps(
-                    {
-                        "phone": research_identity["phone"],
-                        "accountId": research_identity["accountId"],
-                        "subjectHash": research_identity["subjectHash"],
-                    },
-                    separators=(",", ":"),
-                    sort_keys=True,
-                ),
-            }
-        )
     return LocalEnvironmentAuth(
         environment=runtime_environment,
         secret_path=secret_path,
@@ -199,7 +148,6 @@ def _load_or_create_secrets(path: Path) -> dict[str, str]:
         generated_keys = {
             "otp_code_ref_key_b64",
             "push_token_encryption_key_b64",
-            "research_identity_attestation_key_b64",
             "account_closure_subject_hmac_secret",
             "rtc_media_api_key",
             "rtc_media_api_secret",
@@ -239,9 +187,6 @@ def _load_or_create_secrets(path: Path) -> dict[str, str]:
         "device_ticket_secret": secrets.token_urlsafe(48),
         "otp_code_ref_key_b64": base64.b64encode(secrets.token_bytes(32)).decode("ascii"),
         "push_token_encryption_key_b64": base64.b64encode(
-            secrets.token_bytes(32)
-        ).decode("ascii"),
-        "research_identity_attestation_key_b64": base64.b64encode(
             secrets.token_bytes(32)
         ).decode("ascii"),
         "account_closure_subject_hmac_secret": secrets.token_urlsafe(48),

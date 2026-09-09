@@ -173,8 +173,6 @@ def _assert_attestation_projection(
         "releaseId",
         "sourceOwner",
         "releaseKind",
-        "releaseClass",
-        "productLifecycleState",
         "containsUnverifiedAssets",
         "rightsStatusCounts",
         "authorizationRequiredAssetIds",

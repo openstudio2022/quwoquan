@@ -146,8 +146,6 @@ def _release_binding(label: str) -> dict[str, str]:
         "releaseDigest": _sha256_digest(f"release/{label}"),
         "attestationRef": f"/candidate/attestations/{label}.json",
         "attestationDigest": _sha256_digest(f"attestation/{label}"),
-        "releaseClass": "commercial",
-        "productLifecycleState": "commercial",
     }
 
 
@@ -161,7 +159,6 @@ def _candidate_snapshot(target: str) -> dict[str, object]:
                 "candidate": _release_binding("candidate"),
                 "rollback": _release_binding("rollback"),
             },
-            "releaseInputClassification": "commercial_inputs",
             "contractGraphDigest": _sha256_digest(f"contract-graph/{target}"),
         },
     }

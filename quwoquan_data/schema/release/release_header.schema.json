@@ -7,8 +7,6 @@
     "releaseId",
     "sourceOwner",
     "releaseKind",
-    "releaseClass",
-    "productLifecycleState",
     "containsUnverifiedAssets",
     "rightsStatusCounts",
     "authorizationRequiredAssetIds",
@@ -34,16 +32,6 @@
       "enum": [
         "content",
         "empty_baseline"
-      ]
-    },
-    "releaseClass": {
-      "enum": [
-        "production"
-      ]
-    },
-    "productLifecycleState": {
-      "enum": [
-        "production"
       ]
     },
     "containsUnverifiedAssets": {

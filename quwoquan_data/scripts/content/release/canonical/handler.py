@@ -15,6 +15,7 @@ from content.release.canonical.producer_release_handoff import (
     write_producer_release_handoff,
 )
 from core.paths import OUTPUT_ROOT, PUBLISH_ROOT, REFERENCE_RELEASES_ROOT, REPO_ROOT
+from core.schema import assert_valid
 
 
 def handle_publish_object(args: argparse.Namespace) -> None:
@@ -33,7 +34,7 @@ _COHORT_CARRIER_PREFIXES = (
 
 
 def _normalize_cohort(raw: dict, *, milestone: str, release_root: Path, release_id: str) -> Path:
-    """AI 只声明 objectRefs/milestone/producerBaselineRevision；排序、releaseClass、
+    """AI 只声明 objectRefs/milestone/producerBaselineRevision；排序、
     expectedCarrierCounts 与 canonical 字节由这里补齐，并 create-once 写入 release 目录。"""
 
     refs = raw.get("objectRefs")
@@ -49,11 +50,11 @@ def _normalize_cohort(raw: dict, *, milestone: str, release_root: Path, release_
     cohort = {
         **raw,
         "schema": "quwoquan_data.release_cohort",
-        "releaseClass": str(raw.get("releaseClass") or "production"),
         "milestone": str(raw.get("milestone") or milestone),
         "objectRefs": object_refs,
         "expectedCarrierCounts": dict(raw.get("expectedCarrierCounts") or counts),
     }
+    assert_valid(cohort, "release", "release_cohort", label="explicit cohort")
     data = (json.dumps(cohort, ensure_ascii=False, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8")
     target = release_root / release_id / _CANONICAL_COHORT_NAME
     if target.exists() and target.read_bytes() != data:
@@ -104,14 +105,12 @@ def handle_release_finalize(args: argparse.Namespace) -> None:
             submitted, milestone=str(args.milestone), release_root=release_root, release_id=release_id
         )
         cohort = json.loads(cohort_file.read_bytes())
-        release_class = str(cohort["releaseClass"])
         if not (release_root / release_id / "payload/release.json").is_file():
             build_report = build_pool_release(
                 publish_root=publish_root,
                 release_root=release_root,
                 release_id=release_id,
                 cohort_file=cohort_file,
-                release_class=release_class,
             )
         else:
             build_report = {"status": "replayed", "releaseId": release_id}

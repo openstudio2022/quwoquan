@@ -153,26 +153,10 @@ class TestLiveContentBindingContract(unittest.TestCase):
             ),
         }
 
-    def _attestation(
-        self, *, release_id: str, manifest_digest: str, commercial: bool
-    ) -> dict[str, object]:
-        release_class = "commercial" if commercial else "research"
-        return {
-            "schema": "quwoquan_data.release_attestation",
-            "releaseId": release_id,
-            "sourceOwner": "qwq_data",
-            "releaseKind": "content",
-            "releaseClass": release_class,
-            "productLifecycleState": release_class,
-            **self._source_identity(),
-            "payloadSha256": manifest_digest,
-        }
-
     def _release_payload(
         self,
         *,
         release_id: str,
-        release_class: str,
     ) -> tuple[dict[str, object], bytes]:
         source_identity = self._source_identity()
         source_identities = source_identity["sourceIdentities"]
@@ -192,22 +176,25 @@ class TestLiveContentBindingContract(unittest.TestCase):
                 "contentId": "article-a",
                 "version": 1,
                 "postRef": "article/article-a/1",
-                "executionId": "execution-alpha-001",
-                "sourceIdentityDigest": content_source_identity_digest,
+                "selectionIdentityDigest": content_source_identity_digest,
+                "canonicalObjectDigest": _C,
+                "contentLibraryBindingDigest": _D,
             },
             {
                 "contentId": "image-a",
                 "version": 1,
                 "postRef": "image/image-a/1",
-                "executionId": "execution-alpha-001",
-                "sourceIdentityDigest": content_source_identity_digest,
+                "selectionIdentityDigest": content_source_identity_digest,
+                "canonicalObjectDigest": _C,
+                "contentLibraryBindingDigest": _D,
             },
             {
                 "contentId": "video-a",
                 "version": 1,
                 "postRef": "video/video-a/1",
-                "executionId": "execution-alpha-001",
-                "sourceIdentityDigest": content_source_identity_digest,
+                "selectionIdentityDigest": content_source_identity_digest,
+                "canonicalObjectDigest": _C,
+                "contentLibraryBindingDigest": _D,
             },
         ]
         # sample plan 由下游从 payload 派生（_write_release 写可派生 payload），
@@ -217,12 +204,13 @@ class TestLiveContentBindingContract(unittest.TestCase):
             "releaseId": release_id,
             "sourceOwner": "qwq_data",
             "releaseKind": "content",
-            "releaseClass": release_class,
-            "productLifecycleState": release_class,
             **source_identity,
-            "selectionScope": "target_environment",
-            "releaseMode": release_class,
-            "targetEnvironment": self.environment,
+            "containsUnverifiedAssets": False,
+            "rightsStatusCounts": {"verified": 3, "unverified": 0, "restricted": 0, "unknown": 0},
+            "authorizationRequiredAssetIds": [],
+            "researchAcceptedCount": 3, "commercialAcceptedCount": 3,
+            "executionIds": ["execution-alpha-001"],
+            "sourceDigests": [{"algorithm": "sha256", "digest": _B, "inputs": ["quwoquan_data"]}],
             "poolDigest": _E,
             "canonicalMerkle": _F,
             "counts": {"homepage": 1, "article": 1, "image": 1, "video": 1, "total": 4},
@@ -233,60 +221,24 @@ class TestLiveContentBindingContract(unittest.TestCase):
         return header
 
     def _readiness(
-        self,
-        *,
-        release_id: str,
-        verify_run_id: str,
-        manifest_digest: str,
-        phase: str,
-        environment: str | None = None,
-        import_run_id: str = "import-alpha-001",
+        self, *, release_id: str, verify_run_id: str, manifest_digest: str,
+        environment: str | None = None, import_run_id: str = "import-alpha-001",
     ) -> dict[str, object]:
-        release_class = "commercial" if phase == "commercial" else "research"
-        value: dict[str, object] = {
-            "schema": "quwoquan_data.environment_release_readiness",
-            "environment": environment or self.environment,
-            "releaseId": release_id,
-            "releaseKind": "content",
-            "sourceOwner": "qwq_data",
-            "releaseClass": release_class,
-            "productLifecycleState": release_class,
-            **self._source_identity(),
-            "readinessPhase": phase,
-            "manifestDigest": manifest_digest,
-            "importRunId": import_run_id,
-            "verifyRunId": verify_run_id,
-            "entityRefs": ["homepage-harbour"],
-            "postIds": ["article-a", "image-a", "video-a"],
-            "feedQueries": [
-                {"name": "typed_video", "matchedPostIds": ["video-a"]},
-                {
-                    "name": "homepage_recommend",
-                    "matchedPostIds": ["article-a", "image-a", "video-a"],
-                },
-            ],
-            "passed": True,
-        }
-        value["activationEnvelope"] = {
-            "schema": "quwoquan_data.environment_activation_envelope",
-            "environment": environment or self.environment,
-            "releaseId": release_id,
-            "manifestDigest": manifest_digest,
-            **self._source_identity(),
-            "releaseClass": release_class,
-            "productLifecycleState": release_class,
-            "readinessPhase": phase,
-            "importRunId": import_run_id,
-            "verifyRunId": verify_run_id,
-            "importReportRef": (
-                f"env/{environment or self.environment}/runs/data-release/"
-                f"{release_id}/{import_run_id}/import.json"
-            ),
-            "importReportDigest": _E,
-        }
-        value["activationEnvelopeDigest"] = _checksum(
-            value["activationEnvelope"]  # type: ignore[arg-type]
+        from quwoquan_ops.tests.support.app_content_preflight_test_support import write_release_readiness
+
+        path, _ = write_release_readiness(
+            self.root, environment=environment or self.environment,
+            release_id=release_id, verify_run_id=verify_run_id,
+            manifest_digest=manifest_digest, import_run_id=import_run_id,
+            source_identity=self._source_identity(),
         )
+        value = json.loads(path.read_text())
+        value["entityRefs"] = ["homepage-harbour"]
+        value["postIds"] = ["article-a", "image-a", "video-a"]
+        mapping = {"post-article": "article-a", "post-image": "image-a", "post-video": "video-a"}
+        for query in value["feedQueries"]:
+            query["matchedPostIds"] = [mapping[item] for item in query["matchedPostIds"]]
+        value.pop("verificationChecksum")
         value["verificationChecksum"] = _checksum(value)
         return value
 
@@ -296,30 +248,19 @@ class TestLiveContentBindingContract(unittest.TestCase):
         release_id: str | None = None,
         verify_run_id: str | None = None,
         manifest_digest: str | None = None,
-        phase: str = "consumer",
         readiness_environment: str | None = None,
         import_run_id: str = "import-alpha-001",
     ) -> tuple[Path, Path]:
         release_id = release_id or self.release_id
         verify_run_id = verify_run_id or self.verify_run_id
         manifest_digest = manifest_digest or self.manifest_digest
-        release_class = "commercial" if phase == "commercial" else "research"
         release_header = self._release_payload(
             release_id=release_id,
-            release_class=release_class,
         )
         release_root = self.root / f"data/releases/{release_id}"
         attestation_path = release_root / "attestations/release.json"
         readiness_path = self.runs_root / (
             f"data-release/{release_id}/{verify_run_id}/release-readiness.json"
-        )
-        _write_json(
-            attestation_path,
-            self._attestation(
-                release_id=release_id,
-                manifest_digest=manifest_digest,
-                commercial=phase == "commercial",
-            ),
         )
         write_derivable_release_payload(
             release_root / "payload",
@@ -335,7 +276,6 @@ class TestLiveContentBindingContract(unittest.TestCase):
                 release_id=release_id,
                 verify_run_id=verify_run_id,
                 manifest_digest=manifest_digest,
-                phase=phase,
                 environment=readiness_environment,
                 import_run_id=import_run_id,
             ),
@@ -414,7 +354,7 @@ class TestLiveContentBindingContract(unittest.TestCase):
         self.assertEqual(first["retentionClass"], "run_bound")
         self.assertEqual(first["contentBindingState"], "bound")
         self.assertEqual(first["startupAttemptId"], self.attempt_id)
-        self.assertEqual(first["readinessPhase"], "consumer")
+        self.assertNotIn("readinessPhase", first)
         self.assertEqual(
             first["dataSourceIdentity"],
             self._source_identity(),
@@ -480,7 +420,7 @@ class TestLiveContentBindingContract(unittest.TestCase):
                 readiness["verificationChecksum"] = _checksum(readiness)
                 _write_json(readiness_path, readiness)
 
-                with self.assertRaisesRegex(ValueError, "retired App UAT fields"):
+                with self.assertRaisesRegex(ValueError, "schema"):
                     self._create()
 
     def test_existing_binding_rejects_retired_unknown_fields(self) -> None:
@@ -523,19 +463,17 @@ class TestLiveContentBindingContract(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "representations must not be mixed"):
             self._create()
 
-    def test_research_binding_never_requires_commercial_lifecycle_exit(self) -> None:
-        self._write_release(phase="research")
+    def test_binding_does_not_force_lifecycle_exit(self) -> None:
+        self._write_release()
 
         result = self._create(lifecycle_exit_ref="")
 
-        self.assertEqual(result["readinessPhase"], "research")
+        self.assertNotIn("readinessPhase", result)
         self.assertEqual(result["lifecycleExitRef"], "")
         self.assertEqual(result["lifecycleExitDigest"], "")
 
-    def test_commercial_requires_complete_lifecycle_quartet(self) -> None:
-        self._write_release(phase="commercial")
-        with self.assertRaisesRegex(ValueError, "requires explicit lifecycleExitRef"):
-            self._create()
+    def test_explicit_exit_binds_complete_lifecycle_evidence(self) -> None:
+        self._write_release()
 
         ref = (
             f"env/alpha/runs/release-lifecycle-exit/{self.release_id}/"
@@ -551,7 +489,7 @@ class TestLiveContentBindingContract(unittest.TestCase):
             ),
         )
         result = self._create(lifecycle_exit_ref=ref)
-        self.assertEqual(result["readinessPhase"], "commercial")
+        self.assertNotIn("readinessPhase", result)
         self.assertEqual(result["lifecycleExitRef"], ref)
         self.assertRegex(str(result["lifecycleExitDigest"]), r"^sha256:[0-9a-f]{64}$")
 
@@ -645,7 +583,7 @@ class TestLiveContentBindingContract(unittest.TestCase):
         self.assertEqual(first["startupAttemptId"], self.attempt_id)
 
     def test_lifecycle_ref_is_environment_scoped_and_cannot_escape(self) -> None:
-        self._write_release(phase="commercial")
+        self._write_release()
         for ref in (
             "../lifecycle-exit.json",
             f"env/beta/runs/release-lifecycle-exit/{self.release_id}/exit/lifecycle-exit.json",

@@ -19,7 +19,7 @@ from content.release.environment.homepage_verification_cases import (
 from content.release.environment.importers import (
     assert_content_release_evidence_unchanged,
 )
-from content.release.environment.readiness import ShipReadinessPhase
+from content.release.environment.readiness import ShipReadinessAction
 from content.release.environment.run_evidence import (
     read_environment_result,
     validate_path_segment,
@@ -250,8 +250,6 @@ def _readback_all_owners(
 def _lifecycle_evidence(admission: object) -> dict[str, object]:
     header = read_json(payload_file(admission.release, "release.json"))
     return {
-        "releaseClass": str(header.get("releaseClass") or ""),
-        "productLifecycleState": str(header.get("productLifecycleState") or ""),
         "containsUnverifiedAssets": bool(header.get("containsUnverifiedAssets")),
         "manifestDigest": admission.manifest_digest,
     }
@@ -330,7 +328,7 @@ def apply_release(
             failed_stage = "environment_readiness"
             dependencies.require_environment_readiness(
                 environment=target.environment,
-                phase=ShipReadinessPhase.IMPORT,
+                action=ShipReadinessAction.IMPORT,
                 run=run,
                 release_id=release_id,
                 manifest_digest=admission.manifest_digest,
@@ -599,7 +597,6 @@ def activate_release(
             post.document.get("status") != "found"
             or post.document.get("releaseId") != release_id
             or post.document.get("manifestDigest") != admission.manifest_digest
-            or post.document.get("releaseClass") != active.get("releaseClass")
             or post.document.get("projectionVersion") != active.get("projectionVersion")
             or post.document.get("revision") != active.get("revision")
             or post.document.get("activatedAt") != active.get("activatedAt")
@@ -762,7 +759,7 @@ def rollback_release(
         failed_stage = "environment_readiness"
         dependencies.require_environment_readiness(
             environment=target.environment,
-            phase=ShipReadinessPhase.IMPORT,
+            action=ShipReadinessAction.IMPORT,
             run=run,
             release_id=target_id,
             manifest_digest=admission.manifest_digest,

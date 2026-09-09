@@ -31,7 +31,7 @@ func TestActiveReleaseFencePublicPortReturnsCompleteIdentity(t *testing.T) {
 	reader := &activeFenceReaderStub{fence: contentpublic.ActiveReleaseFence{
 		Found: true, Environment: "alpha", SourceOwner: "qwq_data",
 		ReleaseID: "release-42", ManifestDigest: fenceDigest,
-		Revision: 7, ReleaseClass: "research", ProjectionVersion: 91,
+		Revision: 7, ProjectionVersion: 91,
 		ActivatedAt: activatedAt,
 	}}
 	facade := contentpublic.NewActiveReleaseFenceQueryFacade(reader)
@@ -46,7 +46,7 @@ func TestActiveReleaseFencePublicPortReturnsCompleteIdentity(t *testing.T) {
 	}
 	if !got.Found || got.Environment != "alpha" || got.SourceOwner != "qwq_data" ||
 		got.ReleaseID != "release-42" || got.ManifestDigest != fenceDigest ||
-		got.Revision != 7 || got.ReleaseClass != "research" ||
+		got.Revision != 7 ||
 		got.ProjectionVersion != 91 || !got.ActivatedAt.Equal(activatedAt) {
 		t.Fatalf("active fence identity is incomplete: %+v", got)
 	}
@@ -71,7 +71,7 @@ func TestActiveReleaseFencePublicPortFailsClosedOnPriorAndDrift(t *testing.T) {
 	valid := contentpublic.ActiveReleaseFence{
 		Found: true, Environment: "alpha", SourceOwner: "qwq_data",
 		ReleaseID: "release-42", ManifestDigest: fenceDigest,
-		Revision: 7, ReleaseClass: "commercial", ProjectionVersion: 91,
+		Revision: 7, ProjectionVersion: 91,
 		ActivatedAt: now,
 	}
 	tests := map[string]contentpublic.ActiveReleaseFence{

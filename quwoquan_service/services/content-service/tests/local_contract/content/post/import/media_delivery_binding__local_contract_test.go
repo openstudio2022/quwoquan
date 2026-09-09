@@ -1,10 +1,6 @@
-// spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-016
-//
-// data release importer 的逐媒体交付绑定（DEC-033，OPEN-015 缺陷回归）：
-// mediaItems 必须用 canonical BSON 键（mediaAssetId/mediaAssetVersion）落库、
-// 按 releaseClass 写 accessMode、为 video poster 写配对 coverAssetId，且
-// posts.mediaAssetIds 覆盖含 poster 在内的全部媒体资产标识；作者头像的
-// avatarAssetId 绑定自 release creator profile，禁止以 authorId 冒充。
+// spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-002
+// spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-032
+// release 媒体显式公开交付，稳定资产身份、poster 绑定与缺席语义不因类别移除而丢失。
 package releaseimport_test
 
 import (
@@ -17,187 +13,97 @@ import (
 	. "quwoquan_service/services/content-service/internal/content/post/infrastructure/releaseimport"
 )
 
-func TestMediaDeliveryAccessModeForReleaseClass(t *testing.T) {
-	cases := []struct {
-		releaseClass string
-		want         string
-	}{
-		{releaseClass: "research", want: "signed_grant"},
-		{releaseClass: "commercial", want: "public"},
-		// 未声明/未知类别返回 invalid sentinel；新 release validator 必须拒绝。
-		{releaseClass: "", want: ""},
-		{releaseClass: "unknown_class", want: ""},
-	}
-	for _, testCase := range cases {
-		got := MediaDeliveryAccessModeForReleaseClass(testCase.releaseClass)
-		if got != testCase.want {
-			t.Fatalf(
-				"MediaDeliveryAccessModeForReleaseClass(%q) = %q, want %q",
-				testCase.releaseClass,
-				got,
-				testCase.want,
-			)
-		}
-	}
-}
-
 func videoWithPosterAssets() []AssetManifestItem {
 	return []AssetManifestItem{
 		{
-			AssetID:       "clip_main",
-			Kind:          "video",
-			Version:       3,
-			CDNURL:        "media/objects/sha256/aa/bb/clip.mp4",
-			CoverURL:      "media/objects/sha256/cc/dd/poster.webp",
-			ThumbnailURL:  "media/objects/sha256/cc/dd/poster.webp",
-			PosterAssetID: "poster_main",
-			DurationMs:    12000,
+			AssetID: "clip_main", Kind: "video", Version: 3,
+			CDNURL:        "https://video.example.test/media/video/s/asset/clip_main/v3/source.mp4",
+			CoverURL:      "https://image.example.test/media/image/s/asset/poster_main/v1/source.webp",
+			ThumbnailURL:  "https://image.example.test/media/image/s/asset/poster_main/v1/source.webp",
+			PosterAssetID: "poster_main", DurationMs: 12000, AccessMode: MediaDeliveryAccessModePublic,
 		},
 		{
-			AssetID: "poster_main",
-			Kind:    "image",
-			Version: 1,
-			Role:    "cover",
-			CDNURL:  "media/objects/sha256/cc/dd/poster.webp",
+			AssetID: "poster_main", Kind: "image", Version: 1, Role: "cover",
+			CDNURL:     "https://image.example.test/media/image/s/asset/poster_main/v1/source.webp",
+			AccessMode: MediaDeliveryAccessModePublic,
 		},
 	}
 }
 
-// mediaItems 落库后必须能被 canonical typed 模型逐项读出资产标识——这是
-// OPEN-015 记录的 BSON 键漂移（旧键 assetId/version 导致 typed 读取缺席）的回归。
+func TestReleaseMediaBindingRequiresNoCategory(t *testing.T) {
+	if err := ValidateImportedPostMediaBindings([]PostDoc{{PostRef: "posts/video/public/1", Assets: videoWithPosterAssets()}}); err != nil {
+		t.Fatalf("default public release must require no category: %v", err)
+	}
+}
+
 func TestImportedMediaFieldsWriteCanonicalPerMediaDeliveryBinding(t *testing.T) {
-	media := ImportedMediaFields(videoWithPosterAssets(), "signed_grant")
+	media := ImportedMediaFields(videoWithPosterAssets(), MediaDeliveryAccessModePublic)
 	if len(media.MediaItems) != 2 {
 		t.Fatalf("mediaItems = %#v, want video + poster", media.MediaItems)
 	}
-
 	raw, err := bson.Marshal(bson.M{"mediaItems": media.MediaItems})
 	if err != nil {
-		t.Fatalf("marshal imported mediaItems: %v", err)
+		t.Fatal(err)
 	}
 	var typed struct {
 		MediaItems []postmodel.PostMediaItem `bson:"mediaItems"`
 	}
 	if err := bson.Unmarshal(raw, &typed); err != nil {
-		t.Fatalf("typed decode imported mediaItems: %v", err)
+		t.Fatal(err)
 	}
-	video := typed.MediaItems[0]
-	if video.MediaAssetId != "clip_main" || video.MediaAssetVersion != 3 {
-		t.Fatalf("typed per-media identity is absent after import: %+v", video)
+	video, poster := typed.MediaItems[0], typed.MediaItems[1]
+	if video.MediaAssetId != "clip_main" || video.MediaAssetVersion != 3 || video.AccessMode != "public" || video.CoverAssetId != "poster_main" {
+		t.Fatalf("video delivery binding drifted: %+v", video)
 	}
-	if video.AccessMode != "signed_grant" {
-		t.Fatalf("video accessMode = %q, want signed_grant", video.AccessMode)
+	if poster.MediaAssetId != "poster_main" || poster.AccessMode != "public" || poster.CoverAssetId != "" {
+		t.Fatalf("poster delivery binding drifted: %+v", poster)
 	}
-	if video.CoverAssetId != "poster_main" {
-		t.Fatalf("video poster coverAssetId = %q, want poster_main", video.CoverAssetId)
-	}
-	poster := typed.MediaItems[1]
-	if poster.MediaAssetId != "poster_main" || poster.AccessMode != "signed_grant" {
-		t.Fatalf("poster delivery binding is absent: %+v", poster)
-	}
-	if poster.CoverAssetId != "" {
-		t.Fatalf("image item must not carry coverAssetId, got %q", poster.CoverAssetId)
-	}
-
-	// canonical 单轨：旧漂移键不得再出现在落库 item 中。
 	for index, item := range media.MediaItems {
 		for _, drifted := range []string{"assetId", "version", "publicSliceKey"} {
 			if _, exists := item[drifted]; exists {
-				t.Fatalf("mediaItems[%d] still writes drifted key %q: %#v", index, drifted, item)
+				t.Fatalf("mediaItems[%d] writes drifted key %q", index, drifted)
 			}
 		}
 	}
-
-	// grant 侧 release membership 判定输入：poster 的资产标识必须进 mediaAssetIds。
-	if len(media.MediaAssetIDs) != 2 ||
-		media.MediaAssetIDs[0] != "clip_main" || media.MediaAssetIDs[1] != "poster_main" {
-		t.Fatalf("mediaAssetIds = %#v, want [clip_main poster_main]", media.MediaAssetIDs)
+	if len(media.MediaAssetIDs) != 2 || media.MediaAssetIDs[0] != "clip_main" || media.MediaAssetIDs[1] != "poster_main" {
+		t.Fatalf("mediaAssetIds = %#v, want video and poster", media.MediaAssetIDs)
 	}
 }
 
 func TestValidateImportedPostMediaBindingsRejectsNullUnknownSignedAssetAndPrivateHLS(t *testing.T) {
-	base := PostDoc{
-		PostRef: "posts/video/research/private/1",
-		Assets: []AssetManifestItem{{
-			AssetID:    "clip_main",
-			Kind:       "video",
-			MimeType:   "video/mp4",
-			AccessMode: MediaDeliveryAccessModeSignedGrant,
-			CDNURL:     "media/objects/sha256/aa/bb/clip.mp4",
-		}},
-	}
-	if err := ValidateImportedPostMediaBindings([]PostDoc{base}, "research"); err != nil {
-		t.Fatalf("valid progressive private MP4 must pass: %v", err)
-	}
-
-	tests := []struct {
+	for _, test := range []struct {
 		name   string
-		mutate func(*PostDoc)
+		mutate func(*AssetManifestItem)
 		want   string
 	}{
-		{
-			name:   "null accessMode",
-			mutate: func(post *PostDoc) { post.Assets[0].AccessMode = "" },
-			want:   "accessMode must be public or signed_grant",
-		},
-		{
-			name:   "unknown accessMode",
-			mutate: func(post *PostDoc) { post.Assets[0].AccessMode = "private" },
-			want:   "accessMode must be public or signed_grant",
-		},
-		{
-			name:   "signed grant missing asset",
-			mutate: func(post *PostDoc) { post.Assets[0].AssetID = "" },
-			want:   "signed_grant media asset requires assetId",
-		},
-		{
-			name:   "private HLS m3u8",
-			mutate: func(post *PostDoc) { post.Assets[0].CDNURL = "media/objects/private/master.m3u8" },
-			want:   "private HLS media asset",
-		},
-		{
-			name:   "private DASH mime",
-			mutate: func(post *PostDoc) { post.Assets[0].MimeType = "application/dash+xml" },
-			want:   "private HLS media asset",
-		},
-	}
-	for _, test := range tests {
+		{"null accessMode", func(a *AssetManifestItem) { a.AccessMode = "" }, "accessMode must be public"},
+		{"unknown accessMode", func(a *AssetManifestItem) { a.AccessMode = "private" }, "accessMode must be public"},
+		{"missing asset identity", func(a *AssetManifestItem) { a.AssetID = "" }, "requires assetId"},
+		{"signed progressive MP4", func(a *AssetManifestItem) { a.AccessMode = "signed_grant" }, "accessMode must be public"},
+		{"private HLS m3u8", func(a *AssetManifestItem) {
+			a.AccessMode = "signed_grant"
+			a.CDNURL = "media/objects/private/master.m3u8"
+		}, "accessMode must be public"},
+		{"private DASH mime", func(a *AssetManifestItem) { a.AccessMode = "signed_grant"; a.MimeType = "application/dash+xml" }, "accessMode must be public"},
+	} {
 		t.Run(test.name, func(t *testing.T) {
-			post := base
-			post.Assets = append([]AssetManifestItem(nil), base.Assets...)
-			test.mutate(&post)
-			err := ValidateImportedPostMediaBindings([]PostDoc{post}, "research")
-			if err == nil || !strings.Contains(err.Error(), test.want) {
+			post := PostDoc{PostRef: "posts/video/public/1", Assets: videoWithPosterAssets()}
+			test.mutate(&post.Assets[0])
+			if err := ValidateImportedPostMediaBindings([]PostDoc{post}); err == nil || !strings.Contains(err.Error(), test.want) {
 				t.Fatalf("want %q rejection, got %v", test.want, err)
 			}
 		})
 	}
 }
 
-func TestValidateImportedPostMediaBindingsAcceptsExplicitPublicAndRejectsClassMismatch(t *testing.T) {
-	post := PostDoc{
-		PostRef: "posts/image/commercial/public/1",
-		Assets: []AssetManifestItem{{
-			AssetID:    "cover",
-			Kind:       "image",
-			MimeType:   "image/jpeg",
-			AccessMode: MediaDeliveryAccessModePublic,
-			CDNURL:     "https://cdn.example.test/media/image/s/asset/cover/v1/source.jpg",
-		}},
+func TestValidateImportedPostMediaBindingsChecksArticleAssetsIndependently(t *testing.T) {
+	post := PostDoc{PostRef: "posts/article/public/1", Assets: videoWithPosterAssets(), ArticleAssetManifest: &ArticleAssetManifestDoc{Assets: []AssetManifestItem{{AssetID: "article_cover", AccessMode: "signed_grant"}}}}
+	if err := ValidateImportedPostMediaBindings([]PostDoc{post}); err == nil {
+		t.Fatal("private article asset must not bypass release validation")
 	}
-	if err := ValidateImportedPostMediaBindings([]PostDoc{post}, "commercial"); err != nil {
-		t.Fatalf("explicit public commercial binding must pass: %v", err)
-	}
-	if err := ValidateImportedPostMediaBindings([]PostDoc{post}, "research"); err == nil ||
-		!strings.Contains(err.Error(), "differs from releaseClass") {
-		t.Fatalf("releaseClass/accessMode mismatch must fail closed, got %v", err)
-	}
-	if err := ValidateImportedPostMediaBindings([]PostDoc{post}, "production"); err != nil {
-		t.Fatalf("explicit public production binding must pass (DEC-041): %v", err)
-	}
-	if err := ValidateImportedPostMediaBindings([]PostDoc{post}, ""); err == nil ||
-		!strings.Contains(err.Error(), "releaseClass must be research, commercial or production") {
-		t.Fatalf("missing releaseClass must fail closed, got %v", err)
+	post.ArticleAssetManifest.Assets[0].AccessMode = MediaDeliveryAccessModePublic
+	if err := ValidateImportedPostMediaBindings([]PostDoc{post}); err != nil {
+		t.Fatal(err)
 	}
 }
 
@@ -207,59 +113,31 @@ func TestBindPostAuthorSnapshotsProjectsAvatarAssetIdentity(t *testing.T) {
 		{PostRef: "posts/article/体验/无头像/1", AuthorID: "builtin_without_avatar"},
 	}
 	err := BindPostAuthorSnapshots(posts, map[string]CreatorAuthorSnapshot{
-		"builtin_with_avatar": {
-			AuthorID:      "builtin_with_avatar",
-			DisplayName:   "旅行博主",
-			AvatarURL:     "media/objects/sha256/ee/ff/avatar.webp",
-			AvatarAssetID: "avatar_travel_blogger",
-		},
-		"builtin_without_avatar": {
-			AuthorID:    "builtin_without_avatar",
-			DisplayName: "无头像作者",
-		},
+		"builtin_with_avatar":    {AuthorID: "builtin_with_avatar", DisplayName: "旅行博主", AvatarURL: "https://avatar.example.test/media/avatar/s/asset/avatar_travel_blogger/v1/source.webp", AvatarAssetID: "avatar_travel_blogger"},
+		"builtin_without_avatar": {AuthorID: "builtin_without_avatar", DisplayName: "无头像作者"},
 	})
 	if err != nil {
-		t.Fatalf("bind post author snapshots: %v", err)
+		t.Fatal(err)
 	}
-	if posts[0].AuthorAvatarAssetID != "avatar_travel_blogger" {
-		t.Fatalf("authorAvatarAssetId = %q, want creator profile avatarAsset.assetId", posts[0].AuthorAvatarAssetID)
-	}
-	if posts[1].AuthorAvatarAssetID != "" {
-		t.Fatalf("author without avatar must keep avatarAssetId absent, got %q", posts[1].AuthorAvatarAssetID)
+	if posts[0].AuthorAvatarAssetID != "avatar_travel_blogger" || posts[1].AuthorAvatarAssetID != "" {
+		t.Fatalf("avatar identity drifted: %+v", posts)
 	}
 }
 
-// 头像交付字段的缺席语义：无头像或未声明 releaseClass 时写 BSON null（缺席），
-// 覆盖旧 release 残留值；在场时 assetId 与 accessMode 成对可读。
 func TestApplyImportedAuthorAvatarDeliveryFields(t *testing.T) {
 	withAvatar := bson.M{}
-	ApplyImportedAuthorAvatarDeliveryFields(
-		withAvatar,
-		PostDoc{AuthorAvatarAssetID: "avatar_travel_blogger"},
-		"signed_grant",
-	)
-	if withAvatar["authorAvatarAssetId"] != "avatar_travel_blogger" ||
-		withAvatar["authorAvatarAccessMode"] != "signed_grant" {
-		t.Fatalf("avatar delivery binding drifted: %#v", withAvatar)
+	ApplyImportedAuthorAvatarDeliveryFields(withAvatar, PostDoc{AuthorAvatarAssetID: "avatar_travel_blogger"}, MediaDeliveryAccessModePublic)
+	if withAvatar["authorAvatarAssetId"] != "avatar_travel_blogger" || withAvatar["authorAvatarAccessMode"] != "public" {
+		t.Fatalf("avatar binding drifted: %#v", withAvatar)
 	}
-
-	withoutAvatar := bson.M{
-		"authorAvatarAssetId":    "stale_asset",
-		"authorAvatarAccessMode": "signed_grant",
-	}
-	ApplyImportedAuthorAvatarDeliveryFields(withoutAvatar, PostDoc{}, "signed_grant")
+	withoutAvatar := bson.M{"authorAvatarAssetId": "stale_asset", "authorAvatarAccessMode": "signed_grant"}
+	ApplyImportedAuthorAvatarDeliveryFields(withoutAvatar, PostDoc{}, MediaDeliveryAccessModePublic)
 	if withoutAvatar["authorAvatarAssetId"] != nil || withoutAvatar["authorAvatarAccessMode"] != nil {
-		t.Fatalf("absent avatar must overwrite stale binding with null: %#v", withoutAvatar)
+		t.Fatalf("absent avatar retained stale fields: %#v", withoutAvatar)
 	}
-
-	undeclaredClass := bson.M{}
-	ApplyImportedAuthorAvatarDeliveryFields(
-		undeclaredClass,
-		PostDoc{AuthorAvatarAssetID: "avatar_travel_blogger"},
-		MediaDeliveryAccessModeForReleaseClass(""),
-	)
-	if undeclaredClass["authorAvatarAssetId"] != "avatar_travel_blogger" ||
-		undeclaredClass["authorAvatarAccessMode"] != nil {
-		t.Fatalf("undeclared releaseClass must keep accessMode absent: %#v", undeclaredClass)
+	missingMode := bson.M{}
+	ApplyImportedAuthorAvatarDeliveryFields(missingMode, PostDoc{AuthorAvatarAssetID: "avatar_travel_blogger"}, "")
+	if missingMode["authorAvatarAssetId"] != "avatar_travel_blogger" || missingMode["authorAvatarAccessMode"] != nil {
+		t.Fatalf("missing explicit mode must remain absent: %#v", missingMode)
 	}
 }

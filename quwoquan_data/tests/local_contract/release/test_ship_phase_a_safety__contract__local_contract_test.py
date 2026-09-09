@@ -31,6 +31,10 @@ from content.release.environment.run_evidence import (  # noqa: E402
 from content.release.model import DeploymentEnvironment  # noqa: E402
 from core.io import read_json, write_json  # noqa: E402
 from core.release_layout import payload_digest  # noqa: E402
+from core.source_digest import (  # noqa: E402
+    content_source_revision,
+    current_source_definition_snapshot,
+)
 
 _VALID_ENVS = frozenset({"alpha", "beta", "gamma", "prod"})
 _DIGEST_A = "sha256:" + "a" * 64
@@ -55,13 +59,29 @@ def _admission(release_id: str = "release-a") -> ReleaseAdmission:
 def _release(tmp_path: Path, release_id: str = "release-a") -> tuple[Path, dict]:
     release = tmp_path / "data" / "releases" / release_id
     contract = {"releaseId": release_id, "desiredRefs": {"entities": [], "posts": []}}
+    source = current_source_definition_snapshot()
     write_json(
         release / "payload/release.json",
         {
+            "schema": "quwoquan_data.release",
             "releaseId": release_id,
-            "releaseClass": "production",
-            "productLifecycleState": "production",
+            "sourceOwner": "qwq_data",
+            "releaseKind": "content",
             "containsUnverifiedAssets": False,
+            "rightsStatusCounts": {
+                "verified": 0, "unverified": 0, "restricted": 0, "unknown": 0,
+            },
+            "authorizationRequiredAssetIds": [],
+            "researchAcceptedCount": 0,
+            "commercialAcceptedCount": 0,
+            "canonicalMerkle": _DIGEST_A,
+            "executionIds": ["execution-a"],
+            "sourceDigests": [source.to_document()],
+            "sourceDigest": source.digest,
+            "entityCatalogDigest": _DIGEST_A,
+            "sourceRevision": content_source_revision(
+                source_digest=source.digest, entity_catalog_digest=_DIGEST_A,
+            ),
         },
     )
     write_json(release / "payload/desired_state.json", contract)
@@ -494,8 +514,6 @@ def test_environment_result_checksum_covers_timing_and_excludes_checksum(
             "schema": "quwoquan_data.environment_release_result",
             "environment": "gamma",
             "releaseId": "release-a",
-            "releaseClass": "production",
-            "productLifecycleState": "production",
             "containsUnverifiedAssets": False,
             "manifestDigest": _DIGEST_A,
             **_admission().result_envelope(),
@@ -543,8 +561,6 @@ def test_duplicate_run_and_result_never_overwrite_existing_bytes(
         "schema": "quwoquan_data.environment_release_result",
         "environment": "gamma",
         "releaseId": "release-a",
-        "releaseClass": "production",
-        "productLifecycleState": "production",
         "containsUnverifiedAssets": False,
         "manifestDigest": _DIGEST_A,
         **_admission().result_envelope(),
@@ -763,7 +779,6 @@ def _rollback_active_document(
         "sourceOwner": "qwq_data",
         "releaseId": release_id,
         "manifestDigest": manifest_digest,
-        "releaseClass": "production",
         "projectionVersion": 4,
         "revision": revision,
         "activatedAt": "2026-09-05T00:00:00Z",
@@ -937,7 +952,6 @@ def _superseded_rollback_passes_queried_revision_bearing_tuple_to_cas(
             "active": {
                 "releaseId": "release-a",
                 "manifestDigest": target_digest,
-                "releaseClass": "production",
                 "projectionVersion": 9,
                 "revision": 12,
                 "activatedAt": "2026-09-05T00:00:03Z",

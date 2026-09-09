@@ -873,11 +873,10 @@ def _command_package_unlocked(
         )
 
     try:
-        release_bindings = _stackctl.validate_release_attestations(
+        _stackctl.validate_release_attestations(
             str(getattr(args, "release_attestation", "") or ""),
             str(getattr(args, "rollback_release_attestation", "") or ""),
         )
-        release_classification = _stackctl.classify_release_inputs(release_bindings)
         contract_graph_digest = _stackctl.canonical_contract_graph_digest()
         fingerprint = _stackctl.write_package_fingerprint(
             env_name,
@@ -885,7 +884,6 @@ def _command_package_unlocked(
             report_dir=_stackctl.relpath(report_dir),
             include_services=True,
             details=details,
-            release_input_classification=release_classification,
             contract_graph_digest=contract_graph_digest,
             graphql_read_registry=graphql_read_registry_package or {},
             app_launch_bundle=(
@@ -960,7 +958,6 @@ def _command_package_unlocked(
         "baselineId": package_snapshot["baselineId"],
         "sourceRevision": package_snapshot["sourceRevision"],
         "workspaceStatusDigest": package_snapshot["workspaceStatusDigest"],
-        "releaseInputClassification": release_classification,
         "contractGraphDigest": contract_graph_digest,
         "graphqlReadRegistry": graphql_read_registry_package,
         "appLaunchBundle": (

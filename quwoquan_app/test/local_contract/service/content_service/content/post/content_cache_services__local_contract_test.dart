@@ -80,7 +80,6 @@ const _defaultDigest =
 ContentCacheIsolationIdentity _defaultCacheIdentity() {
   return ContentCacheIsolationIdentity(
     environment: 'alpha',
-    audience: ContentReleaseAudience.commercial,
     accountId: 'account-default',
     personaId: 'persona-default',
     sourceOwner: 'qwq_data',
@@ -218,7 +217,6 @@ void main() {
 
     ContentCacheIsolationIdentity cacheIdentity({
       String environment = 'alpha',
-      ContentReleaseAudience audience = ContentReleaseAudience.research,
       String accountId = 'account-a',
       String personaId = 'persona-a',
       String sourceOwner = 'qwq_data',
@@ -226,7 +224,6 @@ void main() {
     }) {
       return ContentCacheIsolationIdentity(
         environment: environment,
-        audience: audience,
         accountId: accountId,
         personaId: personaId,
         sourceOwner: sourceOwner,
@@ -262,35 +259,14 @@ void main() {
       expect(store.get(feedKey), isNull);
     });
 
-    test('未验签 JWT 只产生分区提示，未获 Remote tuple 前仍禁止回放', () {
-      final payload = base64Url
-          .encode(
-            utf8.encode(
-              jsonEncode(<String, Object?>{
-                'roles': <String>['research'],
-              }),
-            ),
-          )
-          .replaceAll('=', '');
-      final hint = contentReleaseAudiencePartitionHintFromAccessToken(
-        'unsigned.$payload.signature',
-      );
-      final identity = cacheIdentity(audience: hint);
-      final store = newStore();
-      store.adoptContentCacheIsolationIdentity(null);
-      putBoundSnapshot(store, identity);
-
-      expect(hint, ContentReleaseAudience.research);
-      expect(store.get(identity.isolateQueryKey(feedKey)), isNull);
-    });
-
     test(
-      '隔离 key 完整覆盖 environment、audience、account、persona、owner 与 release tuple',
+      '隔离 key 无类别且覆盖 environment、account、persona、owner 与 release tuple',
       () {
         final key = cacheIdentity().isolateQueryKey(feedKey);
 
         expect(key, contains('environment=alpha'));
-        expect(key, contains('audience=research'));
+        expect(key, isNot(contains('audience=')));
+        expect(key, isNot(contains('releaseClass=')));
         expect(key, contains('account=account-a'));
         expect(key, contains('persona=persona-a'));
         expect(key, contains('sourceOwner=qwq_data'));
@@ -313,7 +289,6 @@ void main() {
 
       for (final switched in <ContentCacheIsolationIdentity>[
         cacheIdentity(environment: 'beta'),
-        cacheIdentity(audience: ContentReleaseAudience.commercial),
         cacheIdentity(accountId: 'account-b'),
         cacheIdentity(personaId: 'persona-b'),
         cacheIdentity(sourceOwner: 'other_owner'),

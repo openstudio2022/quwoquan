@@ -72,6 +72,6 @@
 
 ## 6. release
 
-- AI：写显式 cohort（`objectRefs[]`、`milestone`、`producerBaselineRevision`；`releaseClass` 缺省 `production`，`expectedCarrierCounts` 缺省由脚本按 objectRefs 派生）。cohort 由 `jq` 从 `release pool-query --json` 输出显式构造（见 [handoff.md](handoff.md)）。
+- AI：写显式 cohort（`objectRefs[]`、`milestone`、`producerBaselineRevision`；不写发布类别，`expectedCarrierCounts` 缺省由脚本按 objectRefs 派生）。cohort 由 `jq` 从 `release pool-query --json` 输出显式构造（见 [handoff.md](handoff.md)）。
 - 脚本：`python3 quwoquan_data/scripts/cli.py release finalize --release-id <id> --cohort-file <cohort.json> --milestone <M1|M10|M100|M1000> --producer-baseline-revision <40-hex>` 自行排序 `objectRefs`、canonical 化 cohort，一次完成 pool-build、release-integrity 与 immutable handoff，并把 `cohort.json` 与 `producer_release_handoff.json` create-or-same 复制到 `quwoquan_data/reference/releases/<releaseId>/`（受版本控制的耐久副本；`handoff-verify` 仍只读 `.qwq_output/data/releases/`）。
 - 硬门：cohort 对象全部已 publish；四载体计数不低于里程碑目标；release merkle 与媒体持有闭包；handoff create-once；副本与输出根逐字节一致。

@@ -278,12 +278,6 @@ func (s *AuthService) issueAccessToken(
 		DeviceActorID: deriveDeviceActorID(deviceID),
 		AuthEpoch:     authEpoch,
 	}
-	// DEC-032：research 身份是服务端签发的 principal role。命中 allowlist 的
-	// 账号在登录与 refresh 两条签发路径都携带该 role，能力面收敛由 operation
-	// guard 单点执行，请求方无法通过省略请求头脱离收敛。
-	if _, isResearch := s.researchAccountIDs[strings.TrimSpace(ownerID)]; isResearch {
-		subject.Roles = append(subject.Roles, rtauth.RoleResearch)
-	}
 	return s.accessSigner.Sign(subject)
 }
 

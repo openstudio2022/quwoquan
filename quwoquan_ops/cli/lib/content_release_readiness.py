@@ -1,4 +1,4 @@
-"""Typed, phase-scoped readiness policy for content releases.
+"""无类别内容就绪策略：环境差异只由显式能力配置决定。
 
 The policy intentionally names logical capabilities and topology targets only.
 URLs, ports, credentials, legal facts and deployment configuration remain in
@@ -28,15 +28,6 @@ POLICY_PATH = (
 POLICY_SCHEMA = "content-release-readiness"
 
 
-class ReadinessPhase(StrEnum):
-    IMPORT = "import"
-    RESEARCH = "research"
-    CONSUMER = "consumer"
-    COMMERCIAL = "commercial"
-    # Data producer 单一 production 类别（DEC-041）的消费相位：guest 证据，无隔离探针。
-    PRODUCTION = "production"
-
-
 class VerificationProfile(StrEnum):
     """The only execution contracts for repository and environment verification."""
 
@@ -49,15 +40,6 @@ class VerificationProfile(StrEnum):
     def requires_environment(self) -> bool:
         return self is not VerificationProfile.BASELINE
 
-    @property
-    def readiness_phase(self) -> ReadinessPhase | None:
-        if self is VerificationProfile.INTEGRATION:
-            return ReadinessPhase.IMPORT
-        if self is VerificationProfile.RELEASE:
-            return ReadinessPhase.COMMERCIAL
-        return None
-
-
 class ReadinessCapability(StrEnum):
     CONTENT_API = "content_api"
     CONTENT_MEDIA = "content_media"
@@ -66,9 +48,6 @@ class ReadinessCapability(StrEnum):
     TELEMETRY_LOG_SINK = "telemetry_log_sink"
     TRACE_QUERY = "trace_query"
     SLO_QUERY = "slo_query"
-    LEGAL_APPROVAL = "legal_approval"
-    RESEARCH_ACCESS_ISOLATION = "research_access_isolation"
-
 
 class ProbeOutcome(StrEnum):
     PASS = "PASS"
@@ -80,9 +59,8 @@ class ProbeSource(StrEnum):
     """Where a capability's mandatory probe evidence comes from."""
 
     HEALTH_SCOPE = "healthScope"
-    COMMERCIAL_DOCTOR = "doctor"
+    ENVIRONMENT_DOCTOR = "doctor"
     LOG_SINK_CONTROL = "logSinkControl"
-    RESEARCH_ISOLATION = "researchIsolation"
 
 
 @dataclass(frozen=True, slots=True)
@@ -95,7 +73,6 @@ class CapabilityProbeBinding:
 
 @dataclass(frozen=True, slots=True)
 class ReadinessRequirement:
-    phase: ReadinessPhase
     environment: str
     target: str
     workload: str
@@ -112,14 +89,13 @@ class ContentReleaseReadinessPolicy:
     def requirement_for(
         self,
         *,
-        phase: ReadinessPhase,
         environment: str,
     ) -> ReadinessRequirement:
         for requirement in self.requirements:
-            if requirement.phase is phase and requirement.environment == environment:
+            if requirement.environment == environment:
                 return requirement
         raise ValueError(
-            f"content readiness policy does not define {phase.value} for {environment}"
+            f"content readiness policy does not define {environment}"
         )
 
     def probe_binding_for(self, capability: ReadinessCapability) -> CapabilityProbeBinding:
@@ -134,7 +110,6 @@ class ContentReleaseReadinessPolicy:
 @dataclass(frozen=True, slots=True)
 class ShipReadinessReceipt:
     policy_id: str
-    phase: ReadinessPhase
     environment: str
     target: str
     workload: str
@@ -173,7 +148,8 @@ def _parse_probe_bindings(
         health_scope = binding.get("healthScope")
         doctor = binding.get("doctor")
         control_action = binding.get("logSinkControl")
-        research_isolation = binding.get("researchIsolation")
+        if len(binding) != 1:
+            raise ValueError(f"capabilityProbes.{capability.value} must declare exactly one probe")
         if isinstance(health_scope, str) and health_scope.strip() and doctor is None:
             bindings[capability] = CapabilityProbeBinding(
                 capability=capability,
@@ -184,7 +160,7 @@ def _parse_probe_bindings(
         elif doctor is True and health_scope is None:
             bindings[capability] = CapabilityProbeBinding(
                 capability=capability,
-                source=ProbeSource.COMMERCIAL_DOCTOR,
+                source=ProbeSource.ENVIRONMENT_DOCTOR,
                 health_scope=None,
                 control_action=None,
             )
@@ -200,20 +176,10 @@ def _parse_probe_bindings(
                 health_scope=None,
                 control_action=control_action,
             )
-        elif research_isolation is True and all(
-            value is None for value in (health_scope, doctor, control_action)
-        ):
-            bindings[capability] = CapabilityProbeBinding(
-                capability=capability,
-                source=ProbeSource.RESEARCH_ISOLATION,
-                health_scope=None,
-                control_action=None,
-            )
         else:
             raise ValueError(
                 f"capabilityProbes.{capability.value} must declare exactly one of "
-                "healthScope: <scope>, doctor: true, logSinkControl: <action> "
-                "or researchIsolation: true"
+                "healthScope: <scope>, doctor: true or logSinkControl: <action>"
             )
     missing = [capability.value for capability in ReadinessCapability if capability not in bindings]
     if missing:
@@ -230,64 +196,44 @@ def load_content_release_readiness_policy(
         raise ValueError(f"content readiness policy schema must be {POLICY_SCHEMA}")
     policy_id = _text(payload.get("policyId"), label="content readiness policy policyId")
     probe_bindings = _parse_probe_bindings(payload)
-    raw_phases = _mapping(payload.get("phases"), label="content readiness policy phases")
+    if set(payload) != {"schema", "policyId", "capabilityProbes", "environments"}:
+        raise ValueError("content readiness policy fields must match the category-less contract")
+    environments = _mapping(payload.get("environments"), label="content readiness policy environments")
+    if set(environments) != set(ENVIRONMENTS):
+        raise ValueError("content readiness policy must cover all four environments")
     topology = load_environment_topology()
     requirements: list[ReadinessRequirement] = []
-    seen: set[tuple[ReadinessPhase, str]] = set()
-    for phase in ReadinessPhase:
-        raw_phase = _mapping(raw_phases.get(phase.value), label=f"phase {phase.value}")
-        for environment, raw_requirement in raw_phase.items():
-            if environment not in ENVIRONMENTS:
-                raise ValueError(f"phase {phase.value} has invalid environment {environment!r}")
-            requirement = _mapping(raw_requirement, label=f"phase {phase.value}/{environment}")
-            target_name = _text(requirement.get("target"), label=f"{phase.value}/{environment}.target")
-            target = get_target(topology, target_name)
-            if target.get("env") != environment:
-                raise ValueError(f"{phase.value}/{environment} target must belong to {environment}")
-            workload = _text(requirement.get("workload"), label=f"{phase.value}/{environment}.workload")
-            if workload not in {"content-release", "full"}:
-                raise ValueError(f"{phase.value}/{environment}.workload is invalid")
-            health_scope = _text(requirement.get("healthScope"), label=f"{phase.value}/{environment}.healthScope")
-            raw_capabilities = requirement.get("capabilities")
-            if not isinstance(raw_capabilities, list) or not raw_capabilities:
-                raise ValueError(f"{phase.value}/{environment}.capabilities must be non-empty")
-            try:
-                capabilities = tuple(ReadinessCapability(_text(item, label="capability")) for item in raw_capabilities)
-            except ValueError as exc:
-                raise ValueError(f"{phase.value}/{environment} has invalid capability") from exc
-            for capability in capabilities:
-                binding = probe_bindings[capability]
-                if (
-                    binding.source
-                    in {ProbeSource.COMMERCIAL_DOCTOR, ProbeSource.LOG_SINK_CONTROL}
-                    and phase is not ReadinessPhase.COMMERCIAL
-                ):
-                    raise ValueError(
-                        f"{phase.value}/{environment} requires {capability.value}, "
-                        "but commercial control capabilities are commercial-only"
-                    )
-                if (
-                    binding.source is ProbeSource.RESEARCH_ISOLATION
-                    and phase is not ReadinessPhase.RESEARCH
-                ):
-                    raise ValueError(
-                        f"{phase.value}/{environment} requires {capability.value}, "
-                        "but research isolation is research-only"
-                    )
-            key = (phase, environment)
-            if key in seen:
-                raise ValueError(f"duplicate content readiness requirement {phase.value}/{environment}")
-            seen.add(key)
-            requirements.append(
-                ReadinessRequirement(
-                    phase=phase,
-                    environment=environment,
-                    target=target_name,
-                    workload=workload,
-                    health_scope=health_scope,
-                    capabilities=capabilities,
-                )
-            )
+    for environment, raw_requirement in environments.items():
+        requirement = _mapping(raw_requirement, label=environment)
+        if set(requirement) != {"target", "workload", "healthScope", "capabilities"}:
+            raise ValueError(f"{environment} has unknown or missing requirement fields")
+        target_name = _text(requirement.get("target"), label=f"{environment}.target")
+        target = get_target(topology, target_name)
+        if target.get("env") != environment:
+            raise ValueError(f"{environment} target must belong to {environment}")
+        workload = _text(requirement.get("workload"), label=f"{environment}.workload")
+        if workload not in {"content-release", "full"}:
+            raise ValueError(f"{environment}.workload is invalid")
+        health_scope = _text(requirement.get("healthScope"), label=f"{environment}.healthScope")
+        raw_capabilities = requirement.get("capabilities")
+        if not isinstance(raw_capabilities, list) or not raw_capabilities:
+            raise ValueError(f"{environment}.capabilities must be non-empty")
+        try:
+            capabilities = tuple(ReadinessCapability(_text(item, label="capability")) for item in raw_capabilities)
+        except ValueError as exc:
+            raise ValueError(f"{environment} has invalid capability") from exc
+        if len(set(capabilities)) != len(capabilities):
+            raise ValueError(f"{environment} has duplicate capabilities")
+        required = {
+            ReadinessCapability.CONTENT_API, ReadinessCapability.CONTENT_MEDIA,
+            ReadinessCapability.CONTENT_SERVICES, ReadinessCapability.APP_CONSUMER,
+        }
+        if not required.issubset(capabilities):
+            raise ValueError(f"{environment} must retain all content verification probes")
+        requirements.append(ReadinessRequirement(
+            environment=environment, target=target_name, workload=workload,
+            health_scope=health_scope, capabilities=capabilities,
+        ))
     return ContentReleaseReadinessPolicy(
         policy_id=policy_id,
         requirements=tuple(requirements),
@@ -302,7 +248,6 @@ __all__ = [
     "ProbeOutcome",
     "ProbeSource",
     "ReadinessCapability",
-    "ReadinessPhase",
     "ReadinessRequirement",
     "ShipReadinessReceipt",
     "VerificationProfile",

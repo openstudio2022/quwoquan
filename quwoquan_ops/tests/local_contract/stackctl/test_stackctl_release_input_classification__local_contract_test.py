@@ -1,4 +1,5 @@
 # spec_ref: specs/feature-tree/platform-ops-governance/commercial-readiness-risk-closure/spec.md#sit-003
+# spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-002
 from __future__ import annotations
 
 import json
@@ -17,7 +18,7 @@ GRAPHQL_READ_REGISTRY = {
 }
 
 
-def test_full_nonformal_log_sink_gate_reports_research_inputs_without_claim() -> None:
+def test_full_nonformal_log_sink_gate_reports_identity_without_category() -> None:
     with tempfile.TemporaryDirectory() as temporary:
         report_dir = Path(temporary)
         result = stackctl._write_full_workload_log_sink_gate_block(
@@ -25,7 +26,6 @@ def test_full_nonformal_log_sink_gate_reports_research_inputs_without_claim() ->
             report_target="alpha",
             resolved_target="alpha-local",
             formal_release=False,
-            release_input_classification="research_inputs",
             contract_graph_digest=CONTRACT_GRAPH_DIGEST,
             timing={"startedAt": "2026-08-11T00:00:00Z"},
         )
@@ -33,9 +33,9 @@ def test_full_nonformal_log_sink_gate_reports_research_inputs_without_claim() ->
 
     assert report["workload"] == "full"
     assert report["formalRelease"] is False
-    assert report["releaseInputClassification"] == "research_inputs"
+    assert "releaseInputClassification" not in report
     assert report["contractGraphDigest"] == CONTRACT_GRAPH_DIGEST
-    assert result["releaseInputClassification"] == "research_inputs"
+    assert "releaseInputClassification" not in result
     assert result["contractGraphDigest"] == CONTRACT_GRAPH_DIGEST
     assert "commercialClaim" not in report
     assert "commercialClaim" not in result
@@ -80,7 +80,6 @@ def test_package_identity_readback_is_exact_and_has_no_formal_release_claim() ->
             for name in ("report", "fingerprint", "manifest")
         }
         identity = {
-            "releaseInputClassification": "commercial_inputs",
             "contractGraphDigest": CONTRACT_GRAPH_DIGEST,
             "graphqlReadRegistry": GRAPHQL_READ_REGISTRY,
             "appLaunchBundle": None,
@@ -95,7 +94,10 @@ def test_package_identity_readback_is_exact_and_has_no_formal_release_claim() ->
         ) == identity
 
         for _label, field, value in (
-            ("missing", "releaseInputClassification", None),
+            ("missing", "contractGraphDigest", None),
+            ("retired constant", "releaseInputClassification", "production_inputs"),
+            ("retired release class", "releaseClass", "production"),
+            ("retired lifecycle state", "productLifecycleState", "production"),
             ("unknown", "releaseInputClassification", "preview_inputs"),
             ("classification drift", "releaseInputClassification", "research_inputs"),
             ("Graph drift", "contractGraphDigest", "sha256:" + "7" * 64),
@@ -137,7 +139,6 @@ def test_runtime_package_outer_readback_resolves_report_directory(
         report_dir = root / report_ref
         report_dir.mkdir(parents=True)
         identity = {
-            "releaseInputClassification": "research_inputs",
             "contractGraphDigest": CONTRACT_GRAPH_DIGEST,
             "graphqlReadRegistry": GRAPHQL_READ_REGISTRY,
             "appLaunchBundle": None,

@@ -19,7 +19,7 @@ from content.release.environment.homepage_api_verification import (
 )
 from content.release.environment.importers import load_content_release_receipt
 from content.release.environment.post_api_verification import PostApiVerificationError
-from content.release.environment.readiness import ShipReadinessPhase
+from content.release.environment.readiness import ShipReadinessAction
 from content.release.environment.release_readiness import (
     EnvironmentReleaseReadinessError,
 )
@@ -32,8 +32,6 @@ from content.release.model import ReleaseKind
 from core.control_types import ReleaseRunKind, ReleaseRunStatus
 from core.io import read_json
 from core.release_layout import payload_file
-from verify.release_publishability import readiness_phase_issue
-
 _SENSITIVE_RECEIPT_ASSIGNMENT = re.compile(
     r"(?i)\b(authorization|access[_-]?token|refresh[_-]?token|token|password|"
     r"secret|body|query)\b\s*[:=]\s*(?:Bearer\s+)?(?:\{[^}]*\}|\[[^]]*\]|"
@@ -188,7 +186,6 @@ def _verify_release_consumers(
         or previous_active != pre_expected
         or activated.get("revision") != pre_expected["revision"] + 1
         or post_identity.get("revision") != activated.get("revision")
-        or post_identity.get("releaseClass") != activated.get("releaseClass")
         or post_identity.get("projectionVersion") != activated.get("projectionVersion")
         or post_identity.get("activatedAt") != activated.get("activatedAt")
     ):
@@ -197,8 +194,6 @@ def _verify_release_consumers(
         )
     header = read_json(payload_file(release, "release.json"))
     lifecycle_evidence = {
-        "releaseClass": str(header.get("releaseClass") or ""),
-        "productLifecycleState": str(header.get("productLifecycleState") or ""),
         "containsUnverifiedAssets": bool(header.get("containsUnverifiedAssets")),
         "manifestDigest": admission.manifest_digest,
     }
@@ -306,13 +301,6 @@ def _verify_release_consumers(
             )
             return
 
-        failed_stage = "readiness_phase"
-        readiness_phase = str(
-            getattr(args, "readiness_phase", "production") or "production"
-        ).strip()
-        phase_issue = readiness_phase_issue(readiness_phase)
-        if phase_issue is not None:
-            raise SystemExit(f"[ship] --readiness-phase: {phase_issue}")
         lifecycle_exit_ref = str(getattr(args, "lifecycle_exit_ref", "") or "").strip()
 
         post_report: Path | None = None
@@ -330,7 +318,6 @@ def _verify_release_consumers(
                     api_base_url=target.api_base_url,
                     media_delivery_base_url=target.media_delivery_base_url,
                     ssl_cafile=target.ssl_cafile,
-                    readiness_phase=readiness_phase,
                 )
             except PostApiVerificationError as exc:
                 raise SystemExit(
@@ -403,7 +390,6 @@ def _verify_release_consumers(
                     previous_environment_readiness_path=previous_readiness_path,
                     output_root=dependencies.output_root,
                     output_path=run / "release-readiness.json",
-                    readiness_phase=readiness_phase,
                 )
             except EnvironmentReleaseReadinessError as exc:
                 raise SystemExit(
@@ -413,7 +399,7 @@ def _verify_release_consumers(
             failed_stage = "environment_readiness"
             dependencies.require_environment_readiness(
                 environment=target.environment,
-                phase=ShipReadinessPhase(readiness_phase),
+                action=ShipReadinessAction.VERIFY,
                 run=run,
                 release_id=release_id,
                 verify_run_id=run_id,
@@ -424,7 +410,6 @@ def _verify_release_consumers(
         failed_stage = "terminal_result"
         result = {
             **base_result,
-            "readinessPhase": readiness_phase,
             "status": ReleaseRunStatus.COMPLETED,
             "tagConsumerVerificationRef": tag_report.relative_to(
                 dependencies.output_root

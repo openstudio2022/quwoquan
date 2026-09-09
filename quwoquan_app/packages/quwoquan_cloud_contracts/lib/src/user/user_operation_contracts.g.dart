@@ -1,5 +1,5 @@
 // Code generated from canonical domain contracts. DO NOT EDIT.
-// ContractGraph SHA256: c372ef683b626026c4e7e35cec06c4c495cdfaa414d0b610ce9943a07ed019fe
+// ContractGraph SHA256: d51f23fa64d8fdaf0600cff6da4866cf8dd452de6b5aaeebc49060daba26f82f
 
 library;
 
@@ -4823,46 +4823,6 @@ final class UserSyncPatch {
   };
 }
 
-final class WhitelistedResearchSession {
-  const WhitelistedResearchSession({
-    required this.subjectHash,
-    required this.attestationId,
-    required this.expiresAt,
-  });
-
-  final String subjectHash;
-  final String attestationId;
-  final DateTime expiresAt;
-
-  factory WhitelistedResearchSession.fromWire(
-    Map<String, Object?> map, [
-    String path = "WhitelistedResearchSession",
-  ]) {
-    _rejectUnknownFields(map, const <String>{
-      "subjectHash",
-      "attestationId",
-      "expiresAt",
-    }, path);
-    return WhitelistedResearchSession(
-      subjectHash: _requiredNonBlankString(
-        map["subjectHash"],
-        '$path.subjectHash',
-      ),
-      attestationId: _requiredNonBlankString(
-        map["attestationId"],
-        '$path.attestationId',
-      ),
-      expiresAt: _requiredTimestamp(map["expiresAt"], '$path.expiresAt'),
-    );
-  }
-
-  Map<String, Object?> toWire() => <String, Object?>{
-    "subjectHash": subjectHash,
-    "attestationId": attestationId,
-    "expiresAt": expiresAt.toUtc().toIso8601String(),
-  };
-}
-
 ActivePersonaContextView decodeActivePersonaContextView(Object? response) =>
     ActivePersonaContextView.fromWire(
       _requiredObject(response, "ActivePersonaContextView"),
@@ -5148,12 +5108,6 @@ UserSettingsCommandResult decodeUserSettingsCommandResult(Object? response) =>
     UserSettingsCommandResult.fromWire(
       _requiredObject(response, "UserSettingsCommandResult"),
       "UserSettingsCommandResult",
-    );
-
-WhitelistedResearchSession decodeWhitelistedResearchSession(Object? response) =>
-    WhitelistedResearchSession.fromWire(
-      _requiredObject(response, "WhitelistedResearchSession"),
-      "WhitelistedResearchSession",
     );
 
 Map<String, Object?> _requiredObject(Object? value, String path) {

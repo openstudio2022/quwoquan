@@ -31,7 +31,7 @@ def _document(owner: str) -> dict[str, object]:
     if owner == "content":
         common.pop("closureDigest")
         common.update(
-            releaseClass="production", releaseKind="content", mode="sync",
+releaseKind="content", mode="sync",
             deletePolicy="tombstone",
             closureDigests={"posts": DIGEST, "facts": DIGEST, "media": DIGEST},
             counts={

@@ -55,6 +55,10 @@ def _pilot_identity(
     if identical_identity:
         return None
     try:
+        from quwoquan_ops.cli.commands.app_preflight_readiness import _validate_data_schema
+
+        for receipt in (release, rollback):
+            _validate_data_schema(receipt.payload, "release_attestation")
         bindings = validate_release_attestations(str(release.path), str(rollback.path))
     except ValueError as exc:
         evaluation.block("SCHEMA_MISMATCH", "pilot", str(exc))
@@ -67,17 +71,6 @@ def _pilot_identity(
             "IDENTITY_MISMATCH",
             release.label,
             "candidate content release must be pilot-003",
-        )
-    if (
-        release.payload.get("releaseClass") != "commercial"
-        or release.payload.get("productLifecycleState") != "commercial"
-        or release.payload.get("containsUnverifiedAssets") is not False
-        or release.payload.get("authorizationRequiredAssetIds") != []
-    ):
-        evaluation.block(
-            "STATUS_NOT_PASSED",
-            release.label,
-            "pilot-003 is not a commercially admissible release attestation",
         )
     if release_id == previous["releaseId"] or candidate["releaseDigest"] == previous["releaseDigest"]:
         evaluation.block(
@@ -130,6 +123,13 @@ def _validate_content_lifecycle(
     ):
         return
     payload = receipt.payload
+    try:
+        from quwoquan_ops.cli.commands.app_preflight_readiness import _validate_data_schema
+
+        _validate_data_schema(payload, "environment_release_lifecycle_exit")
+    except ValueError as exc:
+        evaluation.block("SCHEMA_MISMATCH", receipt.label, str(exc))
+        return
     if payload.get("passed") is not True or payload.get("sourceOwner") != "qwq_data":
         evaluation.block(
             "STATUS_NOT_PASSED",

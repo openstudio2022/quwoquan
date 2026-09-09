@@ -57,10 +57,6 @@ from quwoquan_ops.cli.lib.readiness_case_result import (
     canonical_json_bytes,
     write_readiness_case_result,
 )
-from quwoquan_ops.cli.lib.research_consumer_credential import (
-    issue_research_consumer_credential,
-)
-
 
 class ContentApiConsumerError(ValueError):
     """An explicit authority is invalid or the runner cannot retain evidence."""
@@ -91,15 +87,11 @@ class HttpObservation:
 
 
 HttpRequest = Callable[..., HttpObservation]
-CredentialIssuer = Callable[..., dict[str, Any]]
-
 
 def _default_http_request(
     *,
     api_base: str,
     ca_file: Path,
-    bearer_token: str,
-    attestation_token: str,
     method: str,
     path: str,
     page_id: str,
@@ -133,9 +125,6 @@ def _default_http_request(
         "X-Request-Id": request_id,
         "X-Trace-Id": trace_id,
     }
-    if bearer_token:
-        headers["Authorization"] = f"Bearer {bearer_token}"
-        headers["X-Research-Identity-Attestation"] = attestation_token
     if encoded is not None:
         headers["Content-Type"] = "application/json"
     request = Request(url, data=encoded, headers=headers, method=method)
@@ -473,7 +462,6 @@ def run_content_api_consumer(
     report_dir: Path,
     output_root: Path,
     http_request: HttpRequest = _default_http_request,
-    credential_issuer: CredentialIssuer = issue_research_consumer_credential,
 ) -> dict[str, Any]:
     """Execute and retain exactly sixteen read-only API observations/results."""
 
@@ -578,47 +566,12 @@ def run_content_api_consumer(
         "ref": _report_ref(consumer_health_binding_path, output_root=authority_root),
         "digest": _digest_bytes(consumer_health_binding_raw),
     }
-    credential_error = ""
-    bearer_token = ""
-    attestation_token = ""
-    # 只有 research release 走白名单研究凭证；commercial/production 是公开 serving，
-    # 十六格观测以匿名读者身份进行，与 App 游客一致（DEC-041）。
-    if str(readiness.get("releaseClass") or "") == "research":
-        try:
-            credential = credential_issuer(
-                environment="alpha",
-                release_id=release_id,
-                verify_run_id=verify_run_id,
-            )
-            bearer_token = str(credential.get("bearerToken") or "").strip()
-            attestation_token = str(credential.get("attestationToken") or "").strip()
-            credential_base = str(credential.get("apiBaseUrl") or "").strip().rstrip("/")
-            credential_ca = Path(str(credential.get("sslCaFile") or "")).expanduser()
-            if (
-                not bearer_token
-                or not attestation_token
-                or credential_base != api_base
-                or credential_ca.resolve() != ca_file.resolve()
-            ):
-                raise ContentApiConsumerError(
-                    "research_consumer_credential topology/TLS identity drifted"
-                )
-        except (OSError, RuntimeError, TypeError, ValueError):
-            # The terminal is retained for every required cell; credential exception
-            # text is intentionally excluded because an upstream client might echo a
-            # secret while failing.
-            bearer_token = ""
-            attestation_token = ""
-            credential_error = "research_consumer_credential is unavailable"
-
     observations: list[dict[str, Any]] = []
     raw_results: list[dict[str, str]] = []
     statuses: list[str] = []
     common = {
         "api_base": api_base,
         "ca_file": ca_file,
-        "bearer_token": bearer_token,
-        "attestation_token": attestation_token,
         "release_id": release_id,
         "release_digest": release_digest,
         "manifest_digest": manifest_digest,
@@ -633,8 +586,6 @@ def run_content_api_consumer(
             status = "passed"
             reason_code = ""
             try:
-                if credential_error:
-                    raise ContentApiConsumerTransportError(credential_error)
                 observation, compact = _PROBES[entry](
                     sample,
                     request=http_request,

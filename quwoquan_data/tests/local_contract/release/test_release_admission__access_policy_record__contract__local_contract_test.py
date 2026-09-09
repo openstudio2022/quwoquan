@@ -77,7 +77,6 @@ def test_admission_and_header_list_access_restricted_assets_without_blocking(tmp
         release_id="access-policy-001",
         objects_root=tmp_path,
         desired={"entities": [], "posts": [row["objectRef"].removeprefix("posts/") for row in objects]},
-        release_class="production",
     )
 
     assert admission["accessRestrictedAssetIds"] == ["pin", "tuchong"]
@@ -96,8 +95,6 @@ def test_admission_and_header_list_access_restricted_assets_without_blocking(tmp
         source_digest_documents=[SourceDefinitionSnapshot("sha256:" + "1" * 64).to_document()],
         asset_admission=admission,
         canonical_merkle="sha256:" + "2" * 64,
-        release_class="production",
-        product_lifecycle_state="production",
     )
     assert header["accessRestrictedAssetIds"] == ["pin", "tuchong"]
     assert header["authorizationRequiredAssetIds"] == ["commons", "legacy", "pin", "tuchong"]

@@ -264,7 +264,6 @@ def _run_dev_session_target(
                 "details": [
                     f"releaseId={content_binding['releaseId']}",
                     f"verifyRunId={content_binding['verifyRunId']}",
-                    f"readinessPhase={content_binding['readinessPhase']}",
                 ],
                 "reportDir": _stackctl.relpath(report_dir),
             }

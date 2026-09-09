@@ -39,7 +39,6 @@ from .constants import (
     _RELEASE_BINDING_FIELDS,
     CANDIDATE_MANIFEST_SCHEMA,
     CANDIDATE_VALIDATION_PURPOSES,
-    RELEASE_INPUT_CLASSIFICATIONS,
     ROOT,
     RUNTIME_CANDIDATE_TYPE,
     SPEC_REFS,
@@ -60,7 +59,6 @@ from .provider_runtime_package import (
 from .release_binding import (
     _release_binding,
     canonical_contract_graph_digest,
-    release_input_classification,
     validate_release_attestations,
 )
 
@@ -692,10 +690,9 @@ def write_candidate_manifest(
         release_attestation,
         rollback_release_attestation,
     )
-    release_classification = release_input_classification(release)
     contract_graph_digest = canonical_contract_graph_digest()
     if (
-        fingerprint.get("releaseInputClassification") != release_classification
+        {"releaseInputClassification", "releaseClass", "productLifecycleState"}.intersection(fingerprint)
         or fingerprint.get("contractGraphDigest") != contract_graph_digest
     ):
         raise ValueError("package fingerprint release identity drifted")
@@ -757,7 +754,6 @@ def write_candidate_manifest(
         ),
         "providerRuntime": provider_runtime,
         "release": release,
-        "releaseInputClassification": release_classification,
         "contractGraphDigest": contract_graph_digest,
         "graphqlReadRegistry": graphql_read_registry,
         "appLaunchBundle": (
@@ -847,7 +843,6 @@ def validate_candidate_manifest(
         "observabilityLogSink",
         "providerRuntime",
         "release",
-        "releaseInputClassification",
         "contractGraphDigest",
         "graphqlReadRegistry",
         "appLaunchBundle",
@@ -974,17 +969,11 @@ def validate_candidate_manifest(
             current = _release_binding(attestation_ref, label=label)
             if current != binding:
                 raise ValueError(f"{label} release attestation bytes drifted")
-    sealed_classification = payload.get("releaseInputClassification")
-    if purpose == "teardown":
-        # teardown 只绑定封存候选身份（分类由 package fingerprint 覆盖的封存字节自证）；
-        # 若按当前策略重算，派生规则一变（如新增 production_inputs）历史运行时就再也拆不掉。
-        if sealed_classification not in RELEASE_INPUT_CLASSIFICATIONS:
-            raise ValueError("deployment candidate release input classification is invalid")
-        expected_classification = sealed_classification
-    else:
-        expected_classification = release_input_classification(release)
-        if sealed_classification != expected_classification:
-            raise ValueError("deployment candidate release input classification drifted")
+    if (
+        release["candidate"]["releaseId"] == release["rollback"]["releaseId"]
+        or release["candidate"]["releaseDigest"] == release["rollback"]["releaseDigest"]
+    ):
+        raise ValueError("candidate and rollback release identities must be distinct")
     if (
         purpose == "currentness"
         and payload.get("contractGraphDigest") != canonical_contract_graph_digest()
@@ -1013,7 +1002,7 @@ def validate_candidate_manifest(
         label="package fingerprint",
     )
     if (
-        fingerprint.get("releaseInputClassification") != expected_classification
+        {"releaseInputClassification", "releaseClass", "productLifecycleState"}.intersection(fingerprint)
         or fingerprint.get("contractGraphDigest") != payload.get("contractGraphDigest")
         or fingerprint.get("graphqlReadRegistry") != graphql_read_registry
         or fingerprint.get("appLaunchBundle") != payload.get("appLaunchBundle")

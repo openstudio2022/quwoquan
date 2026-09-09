@@ -9,18 +9,6 @@ import (
 
 var canonicalReleaseDigestPattern = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
 
-// IsKnownReleaseClass 是 feed/detail 读面接受的 release 级类别闭集：production 是
-// Data producer 的单一现役类别（DEC-041），research/commercial 是历史 release 的
-// 封存取值。未声明或未知类别一律视为 malformed，读面 fail closed。
-func IsKnownReleaseClass(releaseClass string) bool {
-	switch releaseClass {
-	case "research", "commercial", "production":
-		return true
-	default:
-		return false
-	}
-}
-
 // ActiveSupplySnapshot identifies the canonical data release whose materialized
 // Posts may serve a release-bound initial page. Recommendation candidate
 // readiness belongs to recommendation-service and is not duplicated here.
@@ -30,10 +18,6 @@ type ActiveSupplySnapshot struct {
 	Status          string
 	ActiveReleaseID string
 	ManifestDigest  string
-	// ReleaseClass 是激活 release 的 release 级类别（research|commercial|production），
-	// 由 importer 从 release.json 落到 data_release_state。research readback
-	// 用它判定 release 类别；per-post usageScope 只表达对象的最大许可范围。
-	ReleaseClass      string
 	ProjectionVersion int64
 	Revision          int64
 	ActivatedAt       time.Time
@@ -43,13 +27,11 @@ type ActiveSupplySnapshot struct {
 }
 
 func (snapshot ActiveSupplySnapshot) ReleaseBoundReadbackReady() bool {
-	releaseClass := strings.TrimSpace(snapshot.ReleaseClass)
 	return strings.TrimSpace(snapshot.Environment) != "" &&
 		strings.TrimSpace(snapshot.SourceOwner) == "qwq_data" &&
 		strings.TrimSpace(snapshot.Status) == "active" &&
 		strings.TrimSpace(snapshot.ActiveReleaseID) != "" &&
 		canonicalReleaseDigestPattern.MatchString(strings.TrimSpace(snapshot.ManifestDigest)) &&
-		IsKnownReleaseClass(releaseClass) &&
 		snapshot.ProjectionVersion > 0 &&
 		snapshot.Revision > 0 &&
 		!snapshot.ActivatedAt.IsZero() &&
@@ -65,21 +47,12 @@ func (snapshot ActiveSupplySnapshot) IsEmpty() bool {
 		strings.TrimSpace(snapshot.Status) == "" &&
 		strings.TrimSpace(snapshot.ActiveReleaseID) == "" &&
 		strings.TrimSpace(snapshot.ManifestDigest) == "" &&
-		strings.TrimSpace(snapshot.ReleaseClass) == "" &&
 		snapshot.ProjectionVersion == 0 &&
 		snapshot.Revision == 0 &&
 		snapshot.ActivatedAt.IsZero() &&
 		strings.TrimSpace(snapshot.ReadbackStatus) == "" &&
 		snapshot.Posts == 0 &&
 		snapshot.PlayableVideos == 0
-}
-
-// IsResearchRelease 只从 importer 落入 active release state 的 releaseClass
-// 判定研究态；feed application/query owner 不从 route、对象 usageScope 或媒体
-// 形态反推 release 类别。
-func (snapshot ActiveSupplySnapshot) IsResearchRelease() bool {
-	return snapshot.ReleaseBoundReadbackReady() &&
-		strings.TrimSpace(snapshot.ReleaseClass) == "research"
 }
 
 func (snapshot ActiveSupplySnapshot) ContentReady() bool {

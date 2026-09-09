@@ -70,7 +70,6 @@ class ImmutableReleaseHandle:
     release_id: str
     release_digest: str
     import_run_id: str
-    readiness_phase: str
     readiness_receipt_digest: str
     posts: tuple[BusinessObjectRef, ...]
     creators: tuple[BusinessObjectRef, ...]
@@ -84,8 +83,6 @@ class ImmutableReleaseHandle:
             raise ValueError("immutable release handle requires release and import identities")
         if not self.release_digest.startswith("sha256:") or len(self.release_digest) != 71:
             raise ValueError("immutable release handle requires a canonical release digest")
-        if self.readiness_phase not in {"research", "commercial", "production"}:
-            raise ValueError("immutable release handle has an invalid readiness phase")
         if (
             not self.readiness_receipt_digest.startswith("sha256:")
             or len(self.readiness_receipt_digest) != 71

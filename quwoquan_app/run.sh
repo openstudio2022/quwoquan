@@ -1341,7 +1341,7 @@ else:
     require_digest(trust_digest, "deviceTrustReceiptDigest", allow_empty=True)
 binding = receipt.get("contentBinding")
 binding_fields = {
-    "releaseId", "verifyRunId", "manifestDigest", "readinessPhase",
+    "releaseId", "verifyRunId", "manifestDigest",
     "readinessReceiptRef", "readinessReceiptDigest",
 }
 if not isinstance(binding, dict) or set(binding) != binding_fields:
@@ -1349,8 +1349,6 @@ if not isinstance(binding, dict) or set(binding) != binding_fields:
 for field in ("releaseId", "verifyRunId"):
     require_nonempty_string(binding.get(field), f"contentBinding.{field}")
 require_digest(binding.get("manifestDigest"), "contentBinding.manifestDigest")
-if binding.get("readinessPhase") != "research":
-    raise SystemExit("managed preparation content binding is not research readiness")
 readiness_ref = exact_regular_file(
     binding.get("readinessReceiptRef"), "content readiness receipt"
 )
@@ -1369,7 +1367,7 @@ if (
     or readiness_receipt.get("releaseId") != binding["releaseId"]
     or readiness_receipt.get("verifyRunId") != binding["verifyRunId"]
     or readiness_receipt.get("manifestDigest") != binding["manifestDigest"]
-    or readiness_receipt.get("readinessPhase") != "research"
+    or any(field in readiness_receipt for field in ("releaseClass", "productLifecycleState", "readinessPhase"))
     or readiness_receipt.get("passed") is not True
 ):
     raise SystemExit("managed content readiness receipt identity drifted")
@@ -1437,7 +1435,7 @@ if (
     or str(debug_binding.get("releaseId") or "") != binding["releaseId"]
     or str(debug_binding.get("verifyRunId") or "") != binding["verifyRunId"]
     or str(debug_binding.get("manifestDigest") or "") != binding["manifestDigest"]
-    or str(debug_binding.get("readinessPhase") or "") != "research"
+    or any(field in debug_binding for field in ("releaseClass", "productLifecycleState", "readinessPhase"))
     or normalized_readiness_ref(
         debug_binding.get("readinessReceiptRef"),
         "strict debug preflight contentBinding.readinessReceiptRef",

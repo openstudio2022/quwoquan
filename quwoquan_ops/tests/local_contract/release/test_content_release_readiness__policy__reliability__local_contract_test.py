@@ -14,7 +14,6 @@ from quwoquan_ops.cli import stackctl
 from quwoquan_ops.cli.lib.content_release_readiness import (
     ProbeSource,
     ReadinessCapability,
-    ReadinessPhase,
     VerificationProfile,
     load_content_release_readiness_policy,
 )
@@ -23,114 +22,51 @@ from quwoquan_ops.cli.lib.provider_runtime_composition import (
 )
 
 
-def test_content_release_readiness__maps_phase_to_environment_capabilities__local_contract() -> (
-    None
-):
+def test_content_release_readiness__uses_explicit_environment_configuration__local_contract():
+    # spec_ref: specs/feature-tree/runtime/runtime-config/environment-topology-and-packaging/spec.md#gwt-004
     policy = load_content_release_readiness_policy()
-
-    alpha_import = policy.requirement_for(
-        phase=ReadinessPhase.IMPORT,
-        environment="alpha",
-    )
-    beta_import = policy.requirement_for(
-        phase=ReadinessPhase.IMPORT,
-        environment="beta",
-    )
-    gamma_consumer = policy.requirement_for(
-        phase=ReadinessPhase.CONSUMER,
-        environment="gamma",
-    )
-    alpha_consumer = policy.requirement_for(
-        phase=ReadinessPhase.CONSUMER,
-        environment="alpha",
-    )
-    prod_consumer = policy.requirement_for(
-        phase=ReadinessPhase.CONSUMER,
-        environment="prod",
-    )
-    gamma_commercial = policy.requirement_for(
-        phase=ReadinessPhase.COMMERCIAL,
-        environment="gamma",
-    )
-    alpha_commercial = policy.requirement_for(
-        phase=ReadinessPhase.COMMERCIAL,
-        environment="alpha",
-    )
-    beta_commercial = policy.requirement_for(
-        phase=ReadinessPhase.COMMERCIAL,
-        environment="beta",
-    )
-
-    assert alpha_import.workload == "content-release"
-    assert beta_import.workload == "content-release"
-    assert alpha_consumer.target == "alpha-local"
-    assert gamma_consumer.health_scope == "content-consumer"
-    assert prod_consumer.target == "prod-hosted"
-    assert ReadinessCapability.TELEMETRY_LOG_SINK not in beta_import.capabilities
-    assert ReadinessCapability.TELEMETRY_LOG_SINK in gamma_commercial.capabilities
-    assert alpha_commercial.workload == "full"
-    assert beta_commercial.workload == "full"
+    for environment in ("alpha", "beta", "gamma", "prod"):
+        requirement = policy.requirement_for(environment=environment)
+        assert not hasattr(requirement, "phase")
+        assert requirement.workload == "full"
+        assert requirement.health_scope == "full"
+        assert set(requirement.capabilities) == set(ReadinessCapability)
+    assert not hasattr(VerificationProfile.RELEASE, "readiness_phase")
+    assert policy.requirement_for(environment="prod").target == "prod-hosted"
 
 
-def test_content_release_readiness__binds_probe_for_every_capability__local_contract() -> (
-    None
-):
+def test_content_release_readiness__binds_probe_for_every_capability__local_contract():
     policy = load_content_release_readiness_policy()
-
     for capability in ReadinessCapability:
         binding = policy.probe_binding_for(capability)
         if binding.source is ProbeSource.HEALTH_SCOPE:
             assert binding.health_scope
-        elif binding.source is ProbeSource.COMMERCIAL_DOCTOR:
-            assert binding.source is ProbeSource.COMMERCIAL_DOCTOR
+        elif binding.source is ProbeSource.ENVIRONMENT_DOCTOR:
             assert binding.health_scope is None
-        elif binding.source is ProbeSource.RESEARCH_ISOLATION:
-            assert capability is ReadinessCapability.RESEARCH_ACCESS_ISOLATION
-            assert binding.health_scope is None
-            assert binding.control_action is None
         else:
             assert binding.source is ProbeSource.LOG_SINK_CONTROL
             assert binding.control_action == "all"
 
-    assert (
-        policy.probe_binding_for(ReadinessCapability.CONTENT_SERVICES).health_scope
-        == "content-import"
-    )
-    assert (
-        policy.probe_binding_for(ReadinessCapability.TELEMETRY_LOG_SINK).source
-        is ProbeSource.LOG_SINK_CONTROL
-    )
+
+def test_content_release_readiness__rejects_category_policy__local_contract(tmp_path):
+    import json
+    import pytest
+    from quwoquan_ops.cli.lib.common import load_json_yaml
+    from quwoquan_ops.cli.lib.content_release_readiness import POLICY_PATH
+
+    payload = load_json_yaml(POLICY_PATH)
+    payload["phases"] = {"production": payload["environments"]}
+    path = tmp_path / "policy.json"
+    path.write_text(json.dumps(payload))
+    with pytest.raises(ValueError, match="category-less"):
+        load_content_release_readiness_policy(policy_path=path)
 
 
-def test_content_release_readiness__doctor_bound_capabilities_are_commercial_only__local_contract() -> (
-    None
-):
-    policy = load_content_release_readiness_policy()
+def test_content_release_readiness__rejects_undefined_environment__local_contract():
+    import pytest
 
-    for requirement in policy.requirements:
-        for capability in requirement.capabilities:
-            binding = policy.probe_binding_for(capability)
-            if requirement.phase is ReadinessPhase.COMMERCIAL:
-                continue
-            if requirement.phase is ReadinessPhase.RESEARCH:
-                assert binding.source in {
-                    ProbeSource.HEALTH_SCOPE,
-                    ProbeSource.RESEARCH_ISOLATION,
-                }
-            else:
-                assert binding.source is ProbeSource.HEALTH_SCOPE
-
-
-def test_content_release_readiness__rejects_undefined_phase_environment__local_contract() -> (
-    None
-):
-    policy = load_content_release_readiness_policy()
-    try:
-        policy.requirement_for(phase=ReadinessPhase.IMPORT, environment="prod")
-    except ValueError as exc:
-        assert "does not define" in str(exc)
-    else:
-        raise AssertionError("undefined phase/environment must be rejected")
+    with pytest.raises(ValueError, match="does not define"):
+        load_content_release_readiness_policy().requirement_for(environment="preview")
 
 
 def test_prod_hosted_content_service_has_a_real_import_scope_probe__local_contract() -> (

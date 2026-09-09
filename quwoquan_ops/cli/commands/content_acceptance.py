@@ -5,7 +5,7 @@
 - `register_content_readiness_parser` / `register_uat_parsers`：稳定再导出三个
   子命令的 argparse 表面；定义由同 package 的 `content_acceptance_parser`
   拥有，注册顺序保持不变；
-- `command_content_readiness`：按 phase 的最小 typed capability 评估；
+- `command_content_readiness`：按显式环境配置的 typed capability 评估；
 - `command_content_uat`：release-bound 首页 Patrol 真机验收（含 Data
   acceptance lease 的 acquire/revoke 闭环）；
 - `command_account_enforcement_uat`：Gamma 账号治理真机阶段与 CaseResult 聚合；
@@ -34,7 +34,6 @@ from typing import Any
 from quwoquan_ops.cli.lib.content_release_readiness import (
     ProbeOutcome,
     ProbeSource,
-    ReadinessPhase,
     ShipReadinessReceipt,
 )
 
@@ -128,30 +127,8 @@ def _run_release_video_delivery_probe(
     return evidence, report_path
 
 
-# consumer 起就要求 `premium_stream` 有 release-bound 读回，与 receipt 校验器同源
-# （environment-topology-and-packaging REQ-002）。实时探测一度只从 research 起校验，
-# 于是同一件事有两套判断；这里收敛成唯一闭集。
-_PREMIUM_BOUND_PHASES = frozenset(
-    {
-        ReadinessPhase.CONSUMER,
-        ReadinessPhase.RESEARCH,
-        ReadinessPhase.COMMERCIAL,
-        ReadinessPhase.PRODUCTION,
-    }
-)
-# 匿名公开 serving 的相位：health 要求匿名 feed 非空，并消费 Data readiness receipt。
-# research 是语义反转（匿名必须空页），import 是 bootstrap 前置，二者都不在此集。
-_PUBLIC_SERVING_PHASES = frozenset(
-    {ReadinessPhase.CONSUMER, ReadinessPhase.COMMERCIAL, ReadinessPhase.PRODUCTION}
-)
-# 媒体以公开 CDN slice 交付的相位（DEC-033/DEC-041）：匿名视频播放 canary 成立。
-_PUBLIC_MEDIA_PHASES = frozenset({ReadinessPhase.COMMERCIAL, ReadinessPhase.PRODUCTION})
-
-
 def _release_feed_post_expectations(
     receipt: dict[str, Any],
-    *,
-    readiness_phase: ReadinessPhase,
 ) -> dict[str, set[str]]:
     """Return the immutable-release post IDs each live exact query must expose."""
 
@@ -180,8 +157,7 @@ def _release_feed_post_expectations(
         "content_feed": discovery_ids,
         "video_book_feed": video_ids,
     }
-    if readiness_phase in _PREMIUM_BOUND_PHASES:
-        expectations["premium_feed"] = premium_video_ids
+    expectations["premium_feed"] = premium_video_ids
     empty = sorted(name for name, post_ids in expectations.items() if not post_ids)
     if empty:
         raise ValueError(
@@ -197,46 +173,26 @@ def _run_release_feed_readback_probe(
     receipt: dict[str, Any],
     readiness_path: Path,
     report_dir: Path,
-    readiness_phase: ReadinessPhase,
 ) -> tuple[dict[str, Any], Path]:
-    """Re-read live discovery/video/premium and bind results to receipt post IDs.
-
-    research 相位语义反转（DEC-032）：匿名 feed 必须收敛为 no_active_release
-    空页且不回显 release 身份——非空即隔离泄露。带凭证的 research 内容消费
-    证据由 Data post-api verification（research consumer credential）单点拥有，
-    本探针不重复。
-    """
+    """公开读回 discovery/video/premium，并绑定 receipt 的精确 post IDs。"""
     import quwoquan_ops.cli.stackctl as _stackctl
 
-    research = readiness_phase is ReadinessPhase.RESEARCH
     report_file = report_dir / "integration-probe.json"
     try:
         check, _output, findings = _stackctl._run_environment_integration_probe(
             _stackctl.load_environment_topology(),
             target,
             report_dir,
-            require_non_empty_content_feed=not research,
-            research_anonymous_convergence=research,
-            release_post_expectations=(
-                None
-                if research
-                else _stackctl._release_feed_post_expectations(
-                    receipt,
-                    readiness_phase=readiness_phase,
-                )
+            require_non_empty_content_feed=True,
+            release_post_expectations=_stackctl._release_feed_post_expectations(
+                receipt,
             ),
             release_readiness_path=readiness_path,
             only_checks=(
                 "content_feed",
                 "video_book_feed",
-                *(
-                    ("premium_feed",)
-                    if readiness_phase in _PREMIUM_BOUND_PHASES
-                    else ()
-                ),
-                # research 私有交付没有匿名可采样的公开图片 slice；私有媒体
-                # 的拒绝与短签取回由 Data research isolation 证据覆盖。
-                *(("media_sample",) if not research else ()),
+                "premium_feed",
+                "media_sample",
             ),
             probe_name="release-bound-feed-readback",
         )
@@ -281,22 +237,16 @@ def command_content_api_consumer(args: argparse.Namespace) -> dict[str, Any]:
 
 
 def command_content_readiness(args: argparse.Namespace) -> dict[str, Any]:
-    """Assess one release phase against its minimal, typed capability set.
-
-    This is deliberately not a global doctor and is never an execution-create
-    precondition.  It is called when an environment is actually about to import,
-    serve consumers, or claim commercial observability.
-    """
+    """验证显式环境能力和同一 release 的公开消费证据，不作导入准备前置。"""
     import quwoquan_ops.cli.stackctl as _stackctl
 
-    phase = ReadinessPhase(args.phase)
     policy = _stackctl.load_content_release_readiness_policy()
-    requirement = policy.requirement_for(phase=phase, environment=args.env)
+    requirement = policy.requirement_for(environment=args.env)
     report_dir = (
         Path(args.report_dir)
         if getattr(args, "report_dir", "")
         else _stackctl.repo_run_dir(
-            "content-readiness", target=f"{args.env}-{phase.value}"
+            "content-readiness", target=args.env
         )
     )
     started_monotonic, started_at = _stackctl._start_timing()
@@ -306,38 +256,12 @@ def command_content_readiness(args: argparse.Namespace) -> dict[str, Any]:
             target=requirement.target,
             scope=requirement.health_scope,
             workload=requirement.workload,
-            # research 相位的匿名 feed 正确形态是 no_active_release 空页
-            # （DEC-032 收敛）：health 的 content-consumer scope 在 research
-            # 下改跑匿名收敛断言，非空断言只对公开 serving 相位成立。
-            require_non_empty_content_feed=phase in _PUBLIC_SERVING_PHASES,
-            research_anonymous_convergence=(
-                phase is ReadinessPhase.RESEARCH
-                and bool(str(getattr(args, "verify_run_id", "") or "").strip())
-            ),
+            require_non_empty_content_feed=True,
             output_format="json",
             report_dir=str(report_dir / "health"),
         )
     )
     details = list(health.get("details", [])) if int(health["exitCode"]) != 0 else []
-    if phase is ReadinessPhase.IMPORT:
-        # import 门只消费 policy 声明能力（content_api/content_media/
-        # content_services）的探针结论。health 附带的 user availability 聚合
-        # 里 release_active 层描述的是「当前 serving release 的已验证证据」，
-        # 而首个 release 的导入正是为了创造这份证据（bootstrap），不得把
-        # 导入后才存在的 readiness receipt 倒置为导入前置。
-        details = [
-            item for item in details if not str(item).startswith("user availability/")
-        ]
-    if phase is ReadinessPhase.RESEARCH:
-        # research readiness 的消费主体是受保护内部研究身份（API 面），App
-        # 设备消费面显式 deferred（DEC-031 / OPEN-015）：device lease 与
-        # content-live 心跳不构成 research 准入，release binding 层保留。
-        details = [
-            item
-            for item in details
-            if not str(item).startswith("user availability/device")
-            and not str(item).startswith("user availability/content_live")
-        ]
     executed_checks = [
         item
         for item in _stackctl._read_json_object(
@@ -357,71 +281,53 @@ def command_content_readiness(args: argparse.Namespace) -> dict[str, Any]:
     video_delivery_path: Path | None = None
     lifecycle_exit_receipt: dict[str, Any] | None = None
     lifecycle_exit_path: Path | None = None
-    research_isolation: dict[str, Any] | None = None
-    has_research_verify_receipt = phase is ReadinessPhase.RESEARCH and bool(
-        str(getattr(args, "verify_run_id", "") or "").strip()
-    )
-    if phase in _PUBLIC_SERVING_PHASES or has_research_verify_receipt:
-        try:
-            data_readiness_receipt, data_readiness_path = (
-                _stackctl._load_data_release_readiness(
+    lifecycle_ref = str(getattr(args, "lifecycle_exit_ref", "") or "").strip()
+    require_lifecycle_exit = bool(getattr(args, "require_lifecycle_exit", False))
+    if require_lifecycle_exit and not lifecycle_ref:
+        details.append("full verification requires explicit lifecycleExitRef")
+    try:
+        data_readiness_receipt, data_readiness_path = _stackctl._load_data_release_readiness(
+            environment=args.env,
+            release_id=getattr(args, "release_id", ""),
+            verify_run_id=getattr(args, "verify_run_id", ""),
+            manifest_digest=getattr(args, "manifest_digest", ""),
+        )
+        probes.append("canonical-data-release-readiness")
+    except ValueError as exc:
+        details.append(str(exc))
+    if data_readiness_path is not None and data_readiness_receipt is not None:
+        if lifecycle_ref or require_lifecycle_exit:
+            try:
+                lifecycle_exit_receipt, lifecycle_exit_path = _stackctl._load_data_release_lifecycle_exit(
                     environment=args.env,
                     release_id=getattr(args, "release_id", ""),
-                    verify_run_id=getattr(args, "verify_run_id", ""),
                     manifest_digest=getattr(args, "manifest_digest", ""),
-                    readiness_phase=phase,
+                    readiness=data_readiness_receipt,
+                    lifecycle_exit_ref=lifecycle_ref,
                 )
+                probes.append("canonical-data-release-lifecycle-exit")
+            except ValueError as exc:
+                details.append(str(exc))
+        try:
+            feed_readback_evidence, feed_readback_path = _stackctl._run_release_feed_readback_probe(
+                target=requirement.target,
+                receipt=data_readiness_receipt,
+                readiness_path=data_readiness_path,
+                report_dir=report_dir / "release-feed-readback",
             )
-            probes.append("canonical-data-release-readiness")
+            probes.append("release-bound-feed-readback")
+        except ValueError as exc:
+            details.append(f"release-bound feed readback failed: {exc}")
+        # 公开视频必须证明字节、Range、时长及首帧。
+        try:
+            video_delivery_evidence, video_delivery_path = _stackctl._run_release_video_delivery_probe(
+                target=requirement.target,
+                readiness_path=data_readiness_path,
+                report_dir=report_dir / "release-video-delivery",
+            )
+            probes.append("release-video-delivery")
         except ValueError as exc:
             details.append(str(exc))
-        if data_readiness_path is not None and data_readiness_receipt is not None:
-            if phase is ReadinessPhase.COMMERCIAL:
-                try:
-                    lifecycle_exit_receipt, lifecycle_exit_path = (
-                        _stackctl._load_data_release_lifecycle_exit(
-                            environment=args.env,
-                            release_id=getattr(args, "release_id", ""),
-                            manifest_digest=getattr(args, "manifest_digest", ""),
-                            readiness=data_readiness_receipt,
-                            lifecycle_exit_ref=getattr(
-                                args,
-                                "lifecycle_exit_ref",
-                                "",
-                            ),
-                        )
-                    )
-                    probes.append("canonical-data-release-lifecycle-exit")
-                except ValueError as exc:
-                    details.append(str(exc))
-            try:
-                feed_readback_evidence, feed_readback_path = (
-                    _stackctl._run_release_feed_readback_probe(
-                        target=requirement.target,
-                        receipt=data_readiness_receipt,
-                        readiness_path=data_readiness_path,
-                        report_dir=report_dir / "release-feed-readback",
-                        readiness_phase=phase,
-                    )
-                )
-                probes.append("release-bound-feed-readback")
-            except ValueError as exc:
-                details.append(f"release-bound feed readback failed: {exc}")
-            if phase in _PUBLIC_MEDIA_PHASES:
-                # 匿名视频播放 canary 只对公开 CDN 交付（commercial/production）
-                # 成立；research 私有交付（DEC-031）的视频证据是 Data 侧
-                # researchMediaProbe 的匿名 401/403 拒绝 + isolation probe。
-                try:
-                    video_delivery_evidence, video_delivery_path = (
-                        _stackctl._run_release_video_delivery_probe(
-                            target=requirement.target,
-                            readiness_path=data_readiness_path,
-                            report_dir=report_dir / "release-video-delivery",
-                        )
-                    )
-                    probes.append("release-video-delivery")
-                except ValueError as exc:
-                    details.append(str(exc))
     for capability in requirement.capabilities:
         binding = policy.probe_binding_for(capability)
         if (
@@ -432,21 +338,6 @@ def command_content_readiness(args: argparse.Namespace) -> dict[str, Any]:
                 f"capability {capability.value} declares probe scope "
                 f"{binding.health_scope} but no probe executed for {requirement.target}"
             )
-        if binding.source is ProbeSource.RESEARCH_ISOLATION:
-            try:
-                research_isolation = _stackctl.verify_research_content_isolation(
-                    args.env,
-                    release_id=str(getattr(args, "release_id", "") or "").strip(),
-                    verify_run_id=str(getattr(args, "verify_run_id", "") or "").strip(),
-                    manifest_digest=str(
-                        getattr(args, "manifest_digest", "") or ""
-                    ).strip(),
-                    data_readiness=data_readiness_receipt,
-                    data_readiness_path=data_readiness_path,
-                )
-                probes.append("governed-research-content-isolation")
-            except ValueError as exc:
-                details.append(str(exc))
         if binding.source is ProbeSource.LOG_SINK_CONTROL:
             action = binding.control_action
             if not action:
@@ -469,13 +360,14 @@ def command_content_readiness(args: argparse.Namespace) -> dict[str, Any]:
                     f"capability {capability.value}: {item}"
                     for item in log_sink_result.get("details", [])
                 )
-    if phase is ReadinessPhase.COMMERCIAL:
+    if any(policy.probe_binding_for(capability).source is ProbeSource.ENVIRONMENT_DOCTOR
+           for capability in requirement.capabilities):
         doctor = _stackctl.command_doctor(
             argparse.Namespace(
                 command="doctor",
                 target=requirement.target,
                 output_format="json",
-                report_dir=str(report_dir / "commercial-prerequisites"),
+                report_dir=str(report_dir / "environment-prerequisites"),
             )
         )
         if int(doctor["exitCode"]) != 0:
@@ -484,7 +376,6 @@ def command_content_readiness(args: argparse.Namespace) -> dict[str, Any]:
     timing = _stackctl._finish_timing(started_monotonic, started_at)
     receipt = ShipReadinessReceipt(
         policy_id=policy.policy_id,
-        phase=phase,
         environment=requirement.environment,
         target=requirement.target,
         workload=requirement.workload,
@@ -496,7 +387,6 @@ def command_content_readiness(args: argparse.Namespace) -> dict[str, Any]:
     payload = {
         "schema": "quwoquan_ops.ship_readiness_receipt",
         "policyId": receipt.policy_id,
-        "phase": receipt.phase.value,
         "environment": receipt.environment,
         "target": receipt.target,
         "workload": receipt.workload,
@@ -527,7 +417,6 @@ def command_content_readiness(args: argparse.Namespace) -> dict[str, Any]:
             ),
             "videoDelivery": video_delivery_evidence,
         },
-        "researchContentIsolation": research_isolation,
         **timing,
     }
     _stackctl.write_json(report_dir / "report.json", payload)
@@ -538,14 +427,13 @@ def command_content_readiness(args: argparse.Namespace) -> dict[str, Any]:
         target=requirement.target,
         status="ok" if outcome is ProbeOutcome.PASS else "blocked",
         summary=(
-            f"content readiness {phase.value}/{args.env} passed"
+            f"content readiness {args.env} passed"
             if outcome is ProbeOutcome.PASS
-            else f"content readiness {phase.value}/{args.env} is GATE_BLOCK"
+            else f"content readiness {args.env} is GATE_BLOCK"
         ),
         details=details or ["all required capabilities are available"],
         extra={
             "policyId": policy.policy_id,
-            "phase": phase.value,
             "outcome": outcome.value,
             "dataRelease": payload["dataRelease"],
         },
@@ -555,9 +443,9 @@ def command_content_readiness(args: argparse.Namespace) -> dict[str, Any]:
         **payload,
         "exitCode": 0 if outcome is ProbeOutcome.PASS else 2,
         "summary": (
-            f"content readiness {phase.value}/{args.env} passed"
+            f"content readiness {args.env} passed"
             if outcome is ProbeOutcome.PASS
-            else f"content readiness {phase.value}/{args.env} is GATE_BLOCK"
+            else f"content readiness {args.env} is GATE_BLOCK"
         ),
         "details": details or ["all required capabilities are available"],
     }

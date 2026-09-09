@@ -309,6 +309,19 @@ func TestAppLaunchContractCodegenRejectsUnknownDuplicateMissingAndDrift(t *testi
 			want: "app_managed_preparation.fields.target.allowed_values",
 		},
 		{
+			name:       "managed content binding rejects named readiness track",
+			sourceName: "app_launch_manifest.yaml",
+			mutate: func(source string) string {
+				return strings.Replace(
+					source,
+					"          releaseId: { type: string, min_length: 1 }",
+					"          releaseId: { type: string, min_length: 1 }\n          readinessPhase: { type: string, allowed_values: [production] }",
+					1,
+				)
+			},
+			want: "app_managed_preparation.fields.contentBinding.fields",
+		},
+		{
 			name:       "managed runtime identity falls back to string",
 			sourceName: "app_launch_manifest.yaml",
 			mutate: func(source string) string {

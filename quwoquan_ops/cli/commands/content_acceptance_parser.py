@@ -5,17 +5,15 @@ from __future__ import annotations
 import argparse
 import os
 
-from quwoquan_ops.cli.lib.content_release_readiness import ReadinessPhase
-
 
 def register_content_api_consumer_parser(
     subparsers: argparse._SubParsersAction[argparse.ArgumentParser],
 ) -> None:
-    """Register the explicit-authority Alpha Research API consumer."""
+    """Register the explicit-authority Alpha API consumer."""
 
     parser = subparsers.add_parser(
         "content-api-consumer",
-        help="消费显式 Alpha Research release 权威并写 4×4 只读 API raw 结果",
+        help="消费显式 Alpha release 权威并写 4×4 只读 API raw 结果",
     )
     parser.add_argument("--target", choices=("alpha-local",), required=True)
     parser.add_argument("--release-id", required=True)
@@ -42,21 +40,16 @@ def register_content_readiness_parser(
 
     content_readiness_parser = subparsers.add_parser(
         "content-readiness",
-        help="验证指定内容发布 phase 的环境能力，不创建内容工作包",
+        help="验证指定内容发布 的环境能力，不创建内容工作包",
     )
     content_readiness_parser.add_argument("--report-dir", default=argparse.SUPPRESS)
-    content_readiness_parser.add_argument(
-        "--phase",
-        choices=[phase.value for phase in ReadinessPhase],
-        required=True,
-    )
     content_readiness_parser.add_argument(
         "--env", choices=_stackctl.ENVIRONMENTS, required=True
     )
     content_readiness_parser.add_argument(
         "--release-id",
         default="",
-        help="consumer/commercial readiness 绑定的 canonical Data releaseId",
+        help="内容就绪 绑定的 canonical Data releaseId",
     )
     content_readiness_parser.add_argument(
         "--verify-run-id",
@@ -71,7 +64,7 @@ def register_content_readiness_parser(
     content_readiness_parser.add_argument(
         "--lifecycle-exit-ref",
         default="",
-        help="commercial phase 必需的 canonical rollback/replay lifecycle Exit ref",
+        help="显式 rollback/replay lifecycle Exit 证据 ref；普通 managed/content_live 启动不要求",
     )
 
 

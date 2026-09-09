@@ -23,7 +23,6 @@ class CandidateBinding:
     release_id: str
     release_digest: str
     import_run_id: str
-    readiness_phase: str
     readiness_receipt_digest: str
     release_posts: tuple[BusinessObjectRef, ...]
     release_creators: tuple[BusinessObjectRef, ...]
@@ -52,10 +51,6 @@ class CandidateBinding:
                 raise ValueError(f"{name} must be sha256")
         if not self.release_id or not self.import_run_id:
             raise ValueError("release and import run identities are required")
-        if self.readiness_phase not in {"consumer", "research", "commercial", "production"}:
-            raise ValueError(
-                "test-data readiness phase must be consumer, research or commercial"
-            )
         for name, object_type in (
             ("release_posts", "Post"),
             ("release_creators", "Creator"),
@@ -92,7 +87,6 @@ class CandidateBinding:
                 "releaseId": self.release_id,
                 "releaseDigest": self.release_digest,
                 "importRunId": self.import_run_id,
-                "readinessPhase": self.readiness_phase,
                 "readinessReceiptDigest": self.readiness_receipt_digest,
                 "releaseClosure": {
                     "posts": _reference_document(self.release_posts),

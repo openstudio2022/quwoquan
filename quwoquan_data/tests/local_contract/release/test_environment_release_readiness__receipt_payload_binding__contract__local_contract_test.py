@@ -71,9 +71,6 @@ def test_environment_release_readiness__binds_full_payload_and_feed_ids__local_c
         "sourceRevision": SOURCE_REVISION,
         "sourceDigest": SOURCE_DIGEST.digest,
         "entityCatalogDigest": ENTITY_CATALOG_DIGEST,
-        "releaseClass": "production",
-        "productLifecycleState": "production",
-        "readinessPhase": "production",
         "importRunId": IMPORT_RUN_ID,
         "verifyRunId": VERIFY_RUN_ID,
         "importReportRef": (
@@ -132,10 +129,10 @@ def test_environment_release_readiness__production_keeps_data_readback_without_a
 ) -> None:
     _fixture(tmp_path)
 
-    report = _write(tmp_path, readiness_phase="production")
+    report = _write(tmp_path)
     receipt = json.loads(report.read_text(encoding="utf-8"))
 
-    assert receipt["readinessPhase"] == "production"
+    assert "readinessPhase" not in receipt
     assert receipt["counts"]["premiumPlayableVideos"] == 1
     assert {row["name"] for row in receipt["feedQueries"]} == {
         "discovery_work",

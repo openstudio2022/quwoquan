@@ -1,6 +1,6 @@
 {
   "schema": "qwq.app-launch-contract.generated",
-  "sourceDigest": "sha256:e886af2683ad9a21a5ac7dd6a2d27ce5b9c97b6976a45312c35067b70fee1dc3",
+  "sourceDigest": "sha256:2e996b2cfc7f4dac01831231fece51cb3f70cb57a881fa3771036e022e365938",
   "sources": [
     {
       "path": "quwoquan_service/contracts/metadata/_shared/app_artifact_manifest.yaml",
@@ -8,7 +8,7 @@
     },
     {
       "path": "quwoquan_service/contracts/metadata/_shared/app_launch_manifest.yaml",
-      "sha256": "sha256:5507644c87a15de04b77ae656f38693176596a419c97bf7d606785dfd11b2990"
+      "sha256": "sha256:7ef29f9b50cbc27adabcfd7386b81d7c66a1cc0e29a8ac33b4c2dd88731af884"
     }
   ],
   "environments": [
@@ -103,7 +103,7 @@
     "APP.LAUNCH.runtime_dependency_unavailable": "目标 runtime 的必需容器已退出或 unhealthy，编译安装前即阻断。",
     "APP.LAUNCH.workspace_entrypoint_inactive": "工作区投影存在性、当前终端命令解析或 IDE profile 尚未进入受支持状态。",
     "APP.LAUNCH.workspace_flutter_sdk_unavailable": "工作区激活时无法解析真实 Flutter SDK 或 SDK 版本与仓库锁定不符；激活必须在写入任何 workspace facade 投影前以本码阻断。",
-    "APP.PREPARATION.content_binding_unavailable": "无法从服务端 active release readback 解析出唯一 schema/digest 合法、passed=true 且 readinessPhase=research 的内容 readiness；零个或多个候选均阻断，禁止 latest 猜测。",
+    "APP.PREPARATION.content_binding_unavailable": "无法从服务端 active release readback 解析出唯一 schema/digest 合法且 passed=true 的内容 readiness；内容绑定不携带类别或命名轨道，零个或多个候选均阻断，禁止 latest 猜测。",
     "APP.PREPARATION.receipt_invalid": "managed preparation receipt 缺失、schema/digest 非法或与本次 launch 身份不一致，canonical launcher 不得复用。",
     "APP.PREPARATION.runtime_unavailable": "managed 准备无法复用 exact running full runtime，且不满足有界替换条件（非 target lock 内、存在其他 live consumer lease 或替换失败）。",
     "APP.PREPARATION.strict_preflight_failed": "managed 严格预检（TLS、api-edge、user-service、integration-service、SMS Provider/relay identity、真实 OTP journey 与 homepage/creator avatar/image/typed video/premium stream 媒体字节）任一失败，在 Flutter build 前阻断。",
@@ -489,7 +489,7 @@
       "APP.LAUNCH.runtime_dependency_unavailable": "目标 runtime 的必需容器已退出或 unhealthy，编译安装前即阻断。",
       "APP.LAUNCH.workspace_entrypoint_inactive": "工作区投影存在性、当前终端命令解析或 IDE profile 尚未进入受支持状态。",
       "APP.LAUNCH.workspace_flutter_sdk_unavailable": "工作区激活时无法解析真实 Flutter SDK 或 SDK 版本与仓库锁定不符；激活必须在写入任何 workspace facade 投影前以本码阻断。",
-      "APP.PREPARATION.content_binding_unavailable": "无法从服务端 active release readback 解析出唯一 schema/digest 合法、passed=true 且 readinessPhase=research 的内容 readiness；零个或多个候选均阻断，禁止 latest 猜测。",
+      "APP.PREPARATION.content_binding_unavailable": "无法从服务端 active release readback 解析出唯一 schema/digest 合法且 passed=true 的内容 readiness；内容绑定不携带类别或命名轨道，零个或多个候选均阻断，禁止 latest 猜测。",
       "APP.PREPARATION.receipt_invalid": "managed preparation receipt 缺失、schema/digest 非法或与本次 launch 身份不一致，canonical launcher 不得复用。",
       "APP.PREPARATION.runtime_unavailable": "managed 准备无法复用 exact running full runtime，且不满足有界替换条件（非 target lock 内、存在其他 live consumer lease 或替换失败）。",
       "APP.PREPARATION.strict_preflight_failed": "managed 严格预检（TLS、api-edge、user-service、integration-service、SMS Provider/relay identity、真实 OTP journey 与 homepage/creator avatar/image/typed video/premium stream 媒体字节）任一失败，在 Flutter build 前阻断。",
@@ -1143,10 +1143,10 @@
           "exact readback：runtimeIdentity（复用或有界替换后的 runtime attempt/compose identity）、consumerId、consumerLeaseId、Android reverse transport/所有权、device trust receipt、contentBinding、strict debug preflight receipt 与 strict content preflight receipt 的全部身份字段必须来自本次 preparation 的真实 readback，不得从 latest、缓存或历史 receipt 补猜。",
           "consumerId 是 dispatcher/run.sh 为本次前台启动预先确定的稳定 consumer identity；preparation 必须以该 consumer 获取 consumerLeaseId，保持该 lease active 并交给同一 run.sh 接管。run.sh exact readback 后不得重复 acquire，最终 cleanup 只释放同一 consumer；consumerLeaseId 必须是 canonical sha256 identity。",
           "androidReversePorts 是同一 lease 的完整 canonical same-port transport 集合，Android prepared receipt 必须非空，非 Android 必须为空；androidReverseOwnedPorts 只记录 preparation 在获取同一 consumer lease 前新建、且启动 cleanup 可以安全移除的 Android same-port reverse 集合；非 Android 或没有新建映射时为空，不得把既存映射声明为本次所有。",
-          "contentBinding 必须保留 create_test_live_content_binding 返回的完整 canonical binding，并向 prepared receipt 投影 releaseId、verifyRunId、manifestDigest、readinessPhase、readinessReceiptRef 与 readinessReceiptDigest；readinessReceiptRef 必须是 absolute regular no-symlink exact receipt，digest 必须是该文件 exact bytes 的 sha256，JSON 必须同一 releaseId/verifyRunId/manifestDigest/readinessPhase=research/passed=true。服务端 active release readback 的合法候选必须唯一；零个或多个候选一律以 APP.PREPARATION.content_binding_unavailable 阻断。",
+          "contentBinding 必须保留 create_test_live_content_binding 返回的完整 canonical binding，并向 prepared receipt 投影 releaseId、verifyRunId、manifestDigest、readinessReceiptRef 与 readinessReceiptDigest；readinessReceiptRef 必须是 absolute regular no-symlink exact receipt，digest 必须是该文件 exact bytes 的 sha256，JSON 必须同一 releaseId/verifyRunId/manifestDigest 且 passed=true 并通过现役 Data schema。绑定与 readiness 不携带类别或命名消费轨道，禁止补入默认标签；环境差异只由已验证环境配置表达。服务端 active release readback 的合法候选必须唯一；零个或多个候选一律以 APP.PREPARATION.content_binding_unavailable 阻断。",
           "deviceTrustReceiptRef/deviceTrustReceiptDigest 必须同时为空或同时非空；无需 local trust 的 physical device 允许两者为空，非空 digest 必须是 canonical sha256 identity。verify-first 只在已有 trust receipt 的 leases 包含当前 consumerLeaseId 时复用，否则必须以当前真实 lease install/bind 后再 verify。",
           "strictPreflightReceiptRef/strictPreflightReceiptDigest 继续绑定 write_app_debug_preflight_receipt 生成的 exact debug preflight envelope；strictContentPreflightReceiptRef/strictContentPreflightReceiptDigest 必须绑定本次 preparation 私有原子写入的 quwoquan_ops.app_content_preflight_exact.v1 envelope；envelope 顶层投影 absolute readiness 身份并在 payload 中原样保留 command_app_content_preflight 返回的 exact payload，禁止信任 command 自写的 mutable report path。两组 ref 必须是 absolute regular no-symlink，digest 均为文件 exact bytes sha256。",
-          "strict content payload 必须 schema=quwoquan_ops.app_content_preflight、target 与本次 target 一致、status=passed，并与 contentBinding 的 releaseId/manifestDigest/readinessReceiptRef/readinessReceiptDigest 完全一致；releaseProbe 必须 exitCode=0、executedSampleCount\u003e0 且 mediaChecks.automatic=true。readiness receipt 还必须同一 verifyRunId/readinessPhase=research/passed=true，确保 release/verify/manifest/research 身份单轨。",
+          "strict content payload 必须 schema=quwoquan_ops.app_content_preflight、target 与本次 target 一致、status=passed，并与 contentBinding 的 releaseId/manifestDigest/readinessReceiptRef/readinessReceiptDigest 完全一致；releaseProbe 必须 exitCode=0、executedSampleCount\u003e0 且 mediaChecks.automatic=true。readiness receipt 还必须同一 verifyRunId 且 passed=true，确保 release/verify/manifest 身份与 exact receipt 一致。",
           "status=blocked 时 firstBlocker 必须非空且取 launch_blockers 闭集，尚未完成的 target/environment/platform/deviceId/runtimeIdentity/consumer/transport/trust/content/preflight 字段允许按本 schema 取空值；不得伪造中间身份。status=prepared 时 firstBlocker 必须为空，target/environment/platform/deviceId/runtimeIdentity/consumerId/consumerLeaseId/contentBinding/strictPreflightReceiptRef/strictPreflightReceiptDigest/strictContentPreflightReceiptRef/strictContentPreflightReceiptDigest 必须全部非空且逐字段合法，trust ref/digest 必须满足成对约束。",
           "canonical run.sh 必须在 Flutter build 前独立严格验证 receipt、readiness exact receipt、strict debug preflight envelope 与 strict content preflight exact payload 的字段集、类型、闭集、byte sha256、consumer/runtime/content/trust 身份和本次 target/device/purpose；任何漂移以 APP.PREPARATION.receipt_invalid 阻断，并把 readinessReceiptDigest 交给 final consumer-lease bind。"
         ],
@@ -1174,12 +1174,6 @@
                 "format": "sha256_identity",
                 "type": "string"
               },
-              "readinessPhase": {
-                "allowed_values": [
-                  "research"
-                ],
-                "type": "string"
-              },
               "readinessReceiptDigest": {
                 "format": "sha256_identity",
                 "type": "string"
@@ -1201,7 +1195,6 @@
               "releaseId",
               "verifyRunId",
               "manifestDigest",
-              "readinessPhase",
               "readinessReceiptRef",
               "readinessReceiptDigest"
             ],

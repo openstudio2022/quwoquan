@@ -136,8 +136,6 @@ def _fixture(root: Path) -> dict[str, Path]:
             "releaseId": RELEASE_ID,
             "sourceOwner": "qwq_data",
             "releaseKind": "content",
-            "releaseClass": "production",
-            "productLifecycleState": "production",
             "containsUnverifiedAssets": False,
             "rightsStatusCounts": {
                 "verified": 7,
@@ -353,8 +351,6 @@ def _fixture(root: Path) -> dict[str, Path]:
         {
             "schema": "quwoquan_data.release_asset_admission",
             "releaseId": RELEASE_ID,
-            "releaseClass": "production",
-            "productLifecycleState": "production",
             "containsUnverifiedAssets": False,
             "rightsStatusCounts": {
                 "verified": 7,
@@ -398,8 +394,6 @@ def _fixture(root: Path) -> dict[str, Path]:
             "releaseId": RELEASE_ID,
             "sourceOwner": "qwq_data",
             "releaseKind": "content",
-            "releaseClass": "production",
-            "productLifecycleState": "production",
             "containsUnverifiedAssets": False,
             "rightsStatusCounts": {
                 "verified": 7,
@@ -571,7 +565,6 @@ def _fixture(root: Path) -> dict[str, Path]:
             "environment": ENVIRONMENT,
             "releaseId": RELEASE_ID,
             "runId": VERIFY_RUN_ID,
-            "readinessPhase": "production",
             "sourceImportReportRef": (
                 f"env/{ENVIRONMENT}/runs/data-release/{RELEASE_ID}/{IMPORT_RUN_ID}/import.json"
             ),
@@ -723,11 +716,7 @@ def _resign_release(paths: dict[str, Path]) -> None:
     write_json(import_path, import_report)
 
 
-def _write(
-    root: Path,
-    *,
-    readiness_phase: str = "production",
-) -> Path:
+def _write(root: Path) -> Path:
     paths = _paths(root)
     return write_environment_release_readiness(
         environment=ENVIRONMENT,
@@ -742,7 +731,6 @@ def _write(
         post_api_verification_path=paths["verify"] / "post-api-verification.json",
         output_root=root,
         output_path=paths["verify"] / "release-readiness.json",
-        readiness_phase=readiness_phase,
     )
 
 

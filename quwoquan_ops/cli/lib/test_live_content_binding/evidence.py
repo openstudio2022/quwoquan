@@ -30,7 +30,6 @@ class _Evidence:
     attestation_snapshot: _RegularJson
     readiness: dict[str, Any]
     readiness_snapshot: _RegularJson
-    readiness_phase: str
     source_identity: dict[str, Any]
     attestation_ref: str
     readiness_ref: str
@@ -167,7 +166,7 @@ def _validate_attestation(
     *,
     release_id: str,
     manifest_digest: str,
-) -> tuple[str, str, dict[str, Any]]:
+) -> dict[str, Any]:
     expected = {
         "schema": "quwoquan_data.release_attestation",
         "releaseId": release_id,
@@ -178,12 +177,11 @@ def _validate_attestation(
     for field, expected_value in expected.items():
         if value.get(field) != expected_value:
             raise ValueError(f"Data release attestation {field} mismatch")
-    release_class = str(value.get("releaseClass") or "")
-    lifecycle_state = str(value.get("productLifecycleState") or "")
-    if release_class not in {"research", "commercial", "production"} or lifecycle_state != release_class:
-        raise ValueError("Data release attestation lifecycle identity mismatch")
+    from quwoquan_ops.cli.commands.app_preflight_readiness import _validate_data_schema
+
     source_identity = _source_identity(value, label="attestation")
-    return release_class, lifecycle_state, source_identity
+    _validate_data_schema(value, "release_attestation")
+    return source_identity
 
 
 def _validate_readiness(
@@ -193,10 +191,8 @@ def _validate_readiness(
     release_id: str,
     verify_run_id: str,
     manifest_digest: str,
-    release_class: str,
-    lifecycle_state: str,
     source_identity: Mapping[str, Any],
-) -> str:
+) -> None:
     expected = {
         "schema": "quwoquan_data.environment_release_readiness",
         "environment": environment,
@@ -205,22 +201,14 @@ def _validate_readiness(
         "sourceOwner": "qwq_data",
         "manifestDigest": manifest_digest,
         "verifyRunId": verify_run_id,
-        "releaseClass": release_class,
-        "productLifecycleState": lifecycle_state,
         "passed": True,
     }
     for field, expected_value in expected.items():
         if value.get(field) != expected_value:
             raise ValueError(f"Data readiness {field} mismatch")
-    phase = str(value.get("readinessPhase") or "")
-    if phase not in {"consumer", "research", "commercial", "production"}:
-        raise ValueError(
-            "test-live content binding requires consumer, research, or commercial readiness"
-        )
-    if phase == "research" and release_class != "research":
-        raise ValueError("research readiness must bind a research release")
-    if phase == "commercial" and release_class != "commercial":
-        raise ValueError("commercial readiness must bind a commercial release")
+    from quwoquan_ops.cli.commands.app_preflight_readiness import _validate_data_schema
+
+    _validate_data_schema(value, "environment_release_readiness")
     if not str(value.get("importRunId") or "").strip():
         raise ValueError("Data readiness importRunId is missing")
     for field, expected_value in source_identity.items():
@@ -260,9 +248,6 @@ def _validate_readiness(
         "releaseId": release_id,
         "manifestDigest": manifest_digest,
         **source_identity,
-        "releaseClass": release_class,
-        "productLifecycleState": lifecycle_state,
-        "readinessPhase": phase,
         "importRunId": value["importRunId"],
         "verifyRunId": verify_run_id,
     }
@@ -279,8 +264,6 @@ def _validate_readiness(
             raise ValueError(f"Data readiness activationEnvelope {field} is missing")
     if value.get("activationEnvelopeDigest") != _document_checksum(activation):
         raise ValueError("Data readiness activationEnvelopeDigest mismatch")
-    return phase
-
 
 def _validate_lifecycle(
     value: Mapping[str, Any],
@@ -359,15 +342,11 @@ def _validate_lifecycle(
             raise ValueError(f"Data lifecycle Exit {field} is not canonical")
     readiness_import = str(readiness.get("importRunId") or "").strip()
     readiness_verify = str(readiness.get("verifyRunId") or "").strip()
-    commercial_on_replay = (
-        readiness.get("readinessPhase") == "commercial"
-        and readiness_import == value.get("replayImportRunId")
-    )
-    if not commercial_on_replay and (
-        value.get("originalImportRunId") != readiness_import
-        or value.get("originalVerifyRunId") != readiness_verify
-    ):
-        raise ValueError("Data lifecycle Exit does not bind the readiness run")
+    if not readiness_import or not readiness_verify or (readiness_import, readiness_verify) not in {
+        (value.get("originalImportRunId"), value.get("originalVerifyRunId")),
+        (value.get("replayImportRunId"), value.get("replayVerifyRunId")),
+    }:
+        raise ValueError("Data lifecycle Exit does not bind the exact readiness import/verify pair")
 
 
 def _lifecycle_path(
@@ -467,7 +446,7 @@ def _load_evidence(
         and release_header_snapshot is not None
         and readiness_snapshot is not None
     )
-    release_class, lifecycle_state, source_identity = _validate_attestation(
+    source_identity = _validate_attestation(
         attestation_snapshot.value,
         release_id=release,
         manifest_digest=digest,
@@ -478,8 +457,6 @@ def _load_evidence(
         "releaseId": release,
         "releaseKind": "content",
         "sourceOwner": "qwq_data",
-        "releaseClass": release_class,
-        "productLifecycleState": lifecycle_state,
     }
     if any(
         release_header.get(field) != expected_value
@@ -496,22 +473,18 @@ def _load_evidence(
         release_root=release_header_path.parent,
         release_header=release_header,
     )
-    phase = _validate_readiness(
+    _validate_readiness(
         readiness_snapshot.value,
         environment=environment,
         release_id=release,
         verify_run_id=verify,
         manifest_digest=digest,
-        release_class=release_class,
-        lifecycle_state=lifecycle_state,
         source_identity=source_identity,
     )
 
     lifecycle_ref = str(lifecycle_exit_ref or "").strip()
     lifecycle_snapshot: _RegularJson | None = None
     lifecycle: dict[str, Any] | None = None
-    if phase == "commercial" and not lifecycle_ref:
-        raise ValueError("commercial readiness requires explicit lifecycleExitRef")
     if lifecycle_ref:
         lifecycle_path, exit_run_id = _lifecycle_path(
             lifecycle_ref,
@@ -540,7 +513,6 @@ def _load_evidence(
         attestation_snapshot=attestation_snapshot,
         readiness=readiness_snapshot.value,
         readiness_snapshot=readiness_snapshot,
-        readiness_phase=phase,
         source_identity=_copy_source_identity(source_identity),
         attestation_ref=attestation_ref,
         readiness_ref=readiness_ref,

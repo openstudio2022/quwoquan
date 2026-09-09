@@ -1,4 +1,5 @@
 # spec_ref: specs/feature-tree/platform-ops-governance/commercial-readiness-risk-closure/spec.md#sit-004
+# spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-002
 from __future__ import annotations
 
 import json
@@ -64,7 +65,6 @@ def _stack_reports(root: Path) -> dict[str, Path]:
             "artifactDigest": ARTIFACT_DIGEST,
             "sourceGitSha": GIT_SHA,
             "sourceTreeDigest": TREE_DIGEST,
-            "releaseInputClassification": "commercial_inputs",
             "contractGraphDigest": CONTRACT_GRAPH_DIGEST,
             "endedAt": "2026-07-28T00:00:10Z",
         },
@@ -73,7 +73,6 @@ def _stack_reports(root: Path) -> dict[str, Path]:
             "target": "beta-local",
             "steps": [{"exitCode": 0}],
             "formalRelease": True,
-            "releaseInputClassification": "commercial_inputs",
             "contractGraphDigest": CONTRACT_GRAPH_DIGEST,
             "runtimeMode": "immutable-oci",
             "runtimeCandidateDigest": CANDIDATE,
@@ -259,21 +258,31 @@ def test_stack_bundle_rejects_source_built_or_destructively_repaired_runtime() -
 
 
 @pytest.mark.parametrize(
-    "classification",
-    ["research_inputs", "mixed_inputs"],
+    ("field", "value"),
+    [
+        ("releaseInputClassification", "production_inputs"),
+        ("releaseInputClassification", "research_inputs"),
+        ("releaseInputClassification", "commercial_inputs"),
+        ("releaseInputClassification", "mixed_inputs"),
+        ("releaseClass", "production"),
+        ("productLifecycleState", "production"),
+    ],
 )
-def test_stack_bundle_rejects_noncommercial_release_inputs(
-    classification: str,
+@pytest.mark.parametrize("phase", ["package", "up"])
+def test_stack_bundle_rejects_retired_release_classification(
+    field: str,
+    value: str,
+    phase: str,
 ) -> None:
     with tempfile.TemporaryDirectory() as temporary:
         root = Path(temporary)
         reports = _stack_reports(root / "source-stack")
-        up = json.loads(reports["up"].read_text(encoding="utf-8"))
-        up["releaseInputClassification"] = classification
-        reports["up"].write_text(json.dumps(up), encoding="utf-8")
+        evidence = json.loads(reports[phase].read_text(encoding="utf-8"))
+        evidence[field] = value
+        reports[phase].write_text(json.dumps(evidence), encoding="utf-8")
         with patch(
             "quwoquan_ops.ci.render_beta_device_evidence.validate_historical_release_snapshot"
-        ), pytest.raises(ValueError, match="commercial release inputs"):
+        ), pytest.raises(ValueError):
             render_stack_bundle(
                 manifest=_manifest(),
                 host_digest=HOST_DIGEST,

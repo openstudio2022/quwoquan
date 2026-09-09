@@ -56,7 +56,6 @@ def _readiness_payload() -> dict[str, Any]:
         "releaseId": "alpha-slice-003",
         "verifyRunId": "verify-20260830T1600Z",
         "manifestDigest": _DIGEST,
-        "readinessPhase": "research",
         "passed": True,
     }
 
@@ -66,7 +65,6 @@ def _binding(readiness_path: Path) -> dict[str, Any]:
         "releaseId": "alpha-slice-003",
         "verifyRunId": "verify-20260830T1600Z",
         "manifestDigest": _DIGEST,
-        "readinessPhase": "research",
         "readinessReceiptRef": str(readiness_path.absolute()),
         "readinessReceiptDigest": "sha256:"
         + hashlib.sha256(readiness_path.read_bytes()).hexdigest(),
@@ -312,7 +310,7 @@ class ManagedPreparationStateMachineTest(unittest.TestCase):
                 receipt["contentBinding"]["readinessReceiptDigest"],
                 _sha256_file(Path(receipt["contentBinding"]["readinessReceiptRef"])),
             )
-            self.assertEqual(receipt["contentBinding"]["readinessPhase"], "research")
+            self.assertNotIn("readinessPhase", receipt["contentBinding"])
             self.assertEqual(
                 receipt["runtimeIdentity"]["startupAttemptId"], "alpha-attempt-1"
             )
@@ -376,7 +374,6 @@ class ManagedPreparationStateMachineTest(unittest.TestCase):
                 "releaseId",
                 "verifyRunId",
                 "manifestDigest",
-                "readinessPhase",
                 "readinessReceiptDigest",
             ):
                 self.assertEqual(
@@ -452,8 +449,8 @@ class ManagedPreparationStateMachineTest(unittest.TestCase):
                             else None
                         ),
                     ),
-                    "_managed_research_readiness_candidates": mock.patch.object(
-                        stackctl, "_managed_research_readiness_candidates", return_value=candidates or [],
+                    "_managed_readiness_candidates": mock.patch.object(
+                        stackctl, "_managed_readiness_candidates", return_value=candidates or [],
                         side_effect=(
                             AssertionError("failed readback must stop candidate discovery")
                             if candidates is None

@@ -9,30 +9,26 @@ import (
 // 聚合区只回答「这次共同行动沉淀了哪些公开回顾」，因此没有 viewer 维度的
 // 私有分支：作者删除、转私密或未过审的内容一律不进入聚合区。
 type GatheringPostPageQuery struct {
-	gatheringID       string
-	cursor            string
-	limit             int
-	researchPrincipal bool
+	gatheringID string
+	cursor      string
+	limit       int
 }
 
 func NewGatheringPostPageQuery(
 	gatheringID string,
 	cursor string,
 	limit int,
-	researchPrincipal ...bool,
 ) GatheringPostPageQuery {
 	return GatheringPostPageQuery{
-		gatheringID:       strings.TrimSpace(gatheringID),
-		cursor:            strings.TrimSpace(cursor),
-		limit:             limit,
-		researchPrincipal: len(researchPrincipal) > 0 && researchPrincipal[0],
+		gatheringID: strings.TrimSpace(gatheringID),
+		cursor:      strings.TrimSpace(cursor),
+		limit:       limit,
 	}
 }
 
-func (q GatheringPostPageQuery) GatheringID() string     { return q.gatheringID }
-func (q GatheringPostPageQuery) Cursor() string          { return q.cursor }
-func (q GatheringPostPageQuery) Limit() int              { return q.limit }
-func (q GatheringPostPageQuery) ResearchPrincipal() bool { return q.researchPrincipal }
+func (q GatheringPostPageQuery) GatheringID() string { return q.gatheringID }
+func (q GatheringPostPageQuery) Cursor() string      { return q.cursor }
+func (q GatheringPostPageQuery) Limit() int          { return q.limit }
 
 // GatheringPostReadRequest 只承载 application 已验证的过滤值和 cursor。
 // 排序沿用公开读 keyset（publishedAt desc, _id desc），与作者公开列表一致。

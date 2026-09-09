@@ -6,8 +6,7 @@
 
 - `_DATA_READINESS_SCHEMA` / `_DATA_ACTIVATION_SCHEMA` /
   `_DATA_LIFECYCLE_EXIT_SCHEMA` / `_DATA_READINESS_DIGEST_RE` /
-  `_DATA_CONSUMER_READINESS_QUERY_NAMES` /
-  `_DATA_COMMERCIAL_READINESS_QUERY_NAMES`:canonical Data 回执 schema 与
+  `_DATA_READINESS_QUERY_NAMES`:canonical Data 回执 schema 与
   查询名集合;
 - `_data_readiness_segment` / `_data_release_readiness_path` /
   `_canonical_document_checksum` / `_validated_string_set`:路径段、
@@ -35,8 +34,6 @@ import re
 from pathlib import Path
 from typing import Any
 
-from quwoquan_ops.cli.lib.content_release_readiness import ReadinessPhase
-
 from quwoquan_ops.cli.commands.app_preflight_readiness import (
     _load_data_release_lifecycle_exit,
     _load_data_release_readiness,
@@ -48,10 +45,10 @@ _DATA_READINESS_SCHEMA = "quwoquan_data.environment_release_readiness"
 _DATA_ACTIVATION_SCHEMA = "quwoquan_data.environment_activation_envelope"
 _DATA_LIFECYCLE_EXIT_SCHEMA = "quwoquan_data.environment_release_lifecycle_exit"
 _DATA_READINESS_DIGEST_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
-# App 视频书唯一消费 premium_stream 池：consumer 与 commercial readiness 都
+# App 视频书唯一消费 premium_stream 池：所有就绪回执都
 # 必须证明 premium_stream release-bound 非空读回（对齐 environment-topology-
 # and-packaging spec；typed_video 绿不代表视频书绿）。
-_DATA_CONSUMER_READINESS_QUERY_NAMES = frozenset(
+_DATA_READINESS_QUERY_NAMES = frozenset(
     {
         "discovery_work",
         "typed_article",
@@ -61,10 +58,6 @@ _DATA_CONSUMER_READINESS_QUERY_NAMES = frozenset(
         "premium_stream",
     }
 )
-_DATA_COMMERCIAL_READINESS_QUERY_NAMES = frozenset(
-    {*_DATA_CONSUMER_READINESS_QUERY_NAMES}
-)
-
 
 def _data_readiness_segment(value: str, *, label: str) -> str:
     segment = str(value or "").strip()
@@ -142,9 +135,6 @@ def _validate_data_activation_envelope(
         "environment": receipt.get("environment"),
         "releaseId": receipt.get("releaseId"),
         "manifestDigest": receipt.get("manifestDigest"),
-        "releaseClass": receipt.get("releaseClass"),
-        "productLifecycleState": receipt.get("productLifecycleState"),
-        "readinessPhase": receipt.get("readinessPhase"),
         "importRunId": receipt.get("importRunId"),
         "verifyRunId": receipt.get("verifyRunId"),
         "importReportRef": import_ref,
@@ -162,36 +152,6 @@ def _validate_data_activation_envelope(
     for field in ("milestone", "previousEnvironmentActivation"):
         if field in receipt:
             expected[field] = receipt.get(field)
-    if receipt.get("readinessPhase") == ReadinessPhase.RESEARCH.value:
-        isolation_ref = str(
-            receipt.get("researchIsolationVerificationRef") or ""
-        ).strip()
-        isolation_digest = str(
-            receipt.get("researchIsolationVerificationDigest") or ""
-        ).strip()
-        isolation_path = (evidence_root / isolation_ref).resolve()
-        isolation: dict[str, Any] = {}
-        try:
-            isolation_path.relative_to(evidence_root)
-            isolation_bytes = isolation_path.read_bytes()
-            raw_isolation = json.loads(isolation_bytes)
-            if not isinstance(raw_isolation, dict):
-                raise ValueError("isolation receipt is not an object")
-            isolation = raw_isolation
-            if (
-                "sha256:" + hashlib.sha256(isolation_bytes).hexdigest()
-                != isolation_digest
-            ):
-                raise ValueError("isolation receipt digest drift")
-        except (OSError, ValueError, json.JSONDecodeError) as exc:
-            issues.append(f"Data activation research isolation is invalid: {exc}")
-        expected["researchIsolationPolicy"] = {
-            "policyRef": isolation.get("policyRef"),
-            "policyDigest": isolation.get("policySha256"),
-            "verificationRef": isolation_ref,
-            "verificationDigest": isolation_digest,
-            "subjectHash": isolation.get("subjectHash"),
-        }
     activation = receipt.get("activationEnvelope")
     if activation != expected:
         issues.append(

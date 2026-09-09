@@ -26,8 +26,6 @@ def _header(*, release_id: str, release_kind: str = "content") -> dict[str, obje
         "releaseId": release_id,
         "sourceOwner": "qwq_data",
         "releaseKind": release_kind,
-        "releaseClass": "production",
-        "productLifecycleState": "production",
         "containsUnverifiedAssets": False,
         "rightsStatusCounts": {
             "verified": 0,
@@ -177,16 +175,13 @@ def test_typed_header_rejects_scalar_and_set_identity_together() -> None:
         validate_release_header(document)
 
 
-def test_typed_header_accepts_commercial_explicit_cohort_identity_set() -> None:
+@pytest.mark.parametrize("field", ("releaseClass", "productLifecycleState", "readinessPhase"))
+def test_typed_header_rejects_removed_category_fields(field: str) -> None:
+    """spec_ref: multi-carrier-release/REQ-002 — 现役闭集不消费历史类别。"""
     document = _explicit_cohort_identity_set_header()
-    document.update(
-        {
-            "releaseClass": "production",
-            "productLifecycleState": "production",
-        }
-    )
-
-    assert validate_release_header(document) == document
+    document[field] = "production"
+    with pytest.raises(ReleaseHeaderError):
+        validate_release_header(document)
 
 
 def test_typed_header_rejects_identity_set_outside_pool_release() -> None:

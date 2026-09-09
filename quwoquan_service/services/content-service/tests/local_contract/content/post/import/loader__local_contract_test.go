@@ -45,7 +45,7 @@ func TestLoadPostsRejectsMissingCanonicalPoolAdmission(t *testing.T) {
 	}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := LoadPosts(root, nil, "research"); err == nil || !strings.Contains(err.Error(), "canonical content pool admission is incomplete") {
+	if _, err := LoadPosts(root, nil); err == nil || !strings.Contains(err.Error(), "canonical content pool admission is incomplete") {
 		t.Fatalf("missing contentId/version/admission must fail closed, got %v", err)
 	}
 }
@@ -74,7 +74,7 @@ func TestLoadPostsRejectsMissingContentIdentity(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, err := LoadPosts(root, nil, "")
+	_, err := LoadPosts(root, nil)
 	if err == nil || !strings.Contains(err.Error(), "contentIdentity is required") {
 		t.Fatalf("expected missing contentIdentity rejection, got %v", err)
 	}
@@ -124,7 +124,7 @@ func imageManifestWithRights(status, issuesJSON, license, termsURL string) strin
 
 func TestLoadPostsFull(t *testing.T) {
 	root := fixturePublish(t)
-	posts, err := LoadPosts(root, nil, "")
+	posts, err := LoadPosts(root, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -199,6 +199,8 @@ func TestLoadVideoPreservesSourceAttribution(t *testing.T) {
 					"assetId":"video-1",
 					"kind":"video",
 					"sha256":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+					"license":"CC BY-SA 4.0",
+					"termsUrl":"https://creativecommons.org/licenses/by-sa/4.0/",
 					"rightsAuditStatus":"verified",
 					"rightsAuditIssues":[],
 					"posterAssetId":"poster-1"
@@ -208,6 +210,8 @@ func TestLoadVideoPreservesSourceAttribution(t *testing.T) {
 					"kind":"image",
 					"role":"cover",
 					"sha256":"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+					"license":"CC BY-SA 4.0",
+					"termsUrl":"https://creativecommons.org/licenses/by-sa/4.0/",
 					"rightsAuditStatus":"verified",
 					"rightsAuditIssues":[]
 				}
@@ -224,7 +228,7 @@ func TestLoadVideoPreservesSourceAttribution(t *testing.T) {
 		}`,
 	)
 
-	posts, err := LoadPosts(root, nil, "")
+	posts, err := LoadPosts(root, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -239,7 +243,7 @@ func TestLoadVideoPreservesSourceAttribution(t *testing.T) {
 }
 
 func TestImportedPostBindingsAreCompleteAndDeterministic(t *testing.T) {
-	posts, err := LoadPosts(fixturePublish(t), nil, "")
+	posts, err := LoadPosts(fixturePublish(t), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -267,7 +271,7 @@ func TestImportedPostBindingsAreCompleteAndDeterministic(t *testing.T) {
 }
 
 func TestImportedPostBindingsRejectMissingAuthor(t *testing.T) {
-	posts, err := LoadPosts(fixturePublish(t), nil, "")
+	posts, err := LoadPosts(fixturePublish(t), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -291,7 +295,7 @@ func TestValidateArticleAssetManifestRejectsNonCanonicalSchema(t *testing.T) {
 func TestLoadPostsFilteredBySampleBundle(t *testing.T) {
 	root := fixturePublish(t)
 	filter := ToSet([]string{"article/攻略/色达攻略/1"})
-	posts, err := LoadPosts(root, filter, "")
+	posts, err := LoadPosts(root, filter)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -360,7 +364,7 @@ func TestLoadEntitiesFiltered(t *testing.T) {
 
 func TestEmptySampleBundleFiltersToZeroObjects(t *testing.T) {
 	root := fixturePublish(t)
-	posts, err := LoadPosts(root, ToSet(nil), "")
+	posts, err := LoadPosts(root, ToSet(nil))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -382,7 +386,7 @@ func TestDesiredStateLoadRejectsMissingCanonicalObjects(t *testing.T) {
 	_, err := LoadPosts(root, ToSet([]string{
 		"article/攻略/色达攻略/1",
 		"article/攻略/已隔离文章/1",
-	}), "")
+	}))
 	if err == nil || !strings.Contains(err.Error(), "article/攻略/已隔离文章/1") {
 		t.Fatalf("missing desired post must fail closed, got %v", err)
 	}
@@ -481,7 +485,7 @@ func TestLoadManifestOnlyImagePost(t *testing.T) {
 		}]
 	}`)
 
-	posts, err := LoadPosts(root, nil, "")
+	posts, err := LoadPosts(root, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -514,34 +518,42 @@ func TestLoadManifestOnlyImagePostRejectsUnverifiedRightsWithAuditIssue(t *testi
 		imageManifestWithRights("unverified", `["license evidence pending"]`, "", ""),
 	)
 
-	if _, err := LoadPosts(root, nil, ""); err == nil || !strings.Contains(
+	if _, err := LoadPosts(root, nil); err == nil || !strings.Contains(
 		err.Error(),
-		"cannot enter an immutable release",
+		"missing license or proof",
 	) {
 		t.Fatalf("unverified image must fail closed, got %v", err)
 	}
 }
 
-func TestLoadResearchReleaseAcceptsUnverifiedImageWithLicenseChain(t *testing.T) {
-	root := t.TempDir()
-	writeFile(
-		t,
-		filepath.Join(root, "posts/image/摄影/晨雾/1/manifest.json"),
-		imageManifestWithRights(
-			"unverified",
-			`["commercial authorization not established; research-only"]`,
-			"CC BY-SA 4.0",
-			"https://creativecommons.org/licenses/by-sa/4.0",
-		),
-	)
-
-	posts, err := LoadPosts(root, nil, "research")
-	if err != nil || len(posts) != 1 {
-		t.Fatalf("research release must accept unverified image with license chain, got %v", err)
+// spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-002
+func TestDefaultReleasePreservesAllRightsStatusesAndIssues(t *testing.T) {
+	for _, status := range []string{"verified", "unverified", "unknown", "restricted"} {
+		t.Run(status, func(t *testing.T) {
+			root := t.TempDir()
+			manifestPath := filepath.Join(root, "posts/image/摄影/晨雾/1/manifest.json")
+			writeFile(t, manifestPath, imageManifestWithRights(status, `["authorization not established"]`, "source license", "https://example.test/terms"))
+			before, err := os.ReadFile(manifestPath)
+			if err != nil {
+				t.Fatal(err)
+			}
+			posts, err := LoadPosts(root, nil)
+			if err != nil || len(posts) != 1 {
+				t.Fatalf("default release must preserve recorded rights: %v", err)
+			}
+			asset := posts[0].Assets[0]
+			if asset.RightsAuditStatus != status || len(asset.RightsAuditIssues) != 1 || asset.RightsAuditIssues[0] != "authorization not established" {
+				t.Fatalf("rights facts were rewritten: %+v", asset)
+			}
+			after, err := os.ReadFile(manifestPath)
+			if err != nil || string(before) != string(after) {
+				t.Fatalf("immutable manifest changed: %v", err)
+			}
+		})
 	}
 }
 
-func TestLoadResearchReleaseRejectsUnverifiedImageWithoutLicense(t *testing.T) {
+func TestDefaultReleaseRejectsUnverifiedImageWithoutLicense(t *testing.T) {
 	root := t.TempDir()
 	writeFile(
 		t,
@@ -549,11 +561,11 @@ func TestLoadResearchReleaseRejectsUnverifiedImageWithoutLicense(t *testing.T) {
 		imageManifestWithRights("unverified", `["license evidence pending"]`, "", ""),
 	)
 
-	if _, err := LoadPosts(root, nil, "research"); err == nil || !strings.Contains(
+	if _, err := LoadPosts(root, nil); err == nil || !strings.Contains(
 		err.Error(),
 		"missing license or proof",
 	) {
-		t.Fatalf("research unverified image without license must fail closed, got %v", err)
+		t.Fatalf("unverified image without license must fail closed, got %v", err)
 	}
 }
 
@@ -565,7 +577,7 @@ func TestLoadManifestOnlyImagePostRejectsUnverifiedRightsWithoutIssue(t *testing
 		imageManifestWithRights("unverified", `[]`, "", ""),
 	)
 
-	if _, err := LoadPosts(root, nil, ""); err == nil || !strings.Contains(err.Error(), "cannot enter an immutable release") {
+	if _, err := LoadPosts(root, nil); err == nil || !strings.Contains(err.Error(), "missing license or proof") {
 		t.Fatalf("unverified image without audit issue must fail, got %v", err)
 	}
 }
@@ -578,7 +590,7 @@ func TestLoadManifestOnlyImagePostRejectsVerifiedRightsWithoutProof(t *testing.T
 		imageManifestWithRights("verified", `[]`, "CC BY 4.0", ""),
 	)
 
-	if _, err := LoadPosts(root, nil, ""); err == nil || !strings.Contains(err.Error(), "missing license or proof") {
+	if _, err := LoadPosts(root, nil); err == nil || !strings.Contains(err.Error(), "missing license or proof") {
 		t.Fatalf("verified image without proof must fail, got %v", err)
 	}
 }
@@ -603,7 +615,7 @@ func TestLoadPostRejectsPrivateObjectKey(t *testing.T) {
 		manifest,
 	)
 
-	if _, err := LoadPosts(root, nil, ""); err == nil || !strings.Contains(
+	if _, err := LoadPosts(root, nil); err == nil || !strings.Contains(
 		err.Error(),
 		"must not expose private objectKey",
 	) {
@@ -627,6 +639,8 @@ func TestLoadManifestOnlyVideoPostAndCoverContract(t *testing.T) {
 			"assetId":"clip",
 			"kind":"video",
 			"sha256":"sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+			"license":"CC BY-SA 4.0",
+			"termsUrl":"https://creativecommons.org/licenses/by-sa/4.0/",
 			"rightsAuditStatus":"verified",
 			"rightsAuditIssues":[],
 			"mimeType":"video/mp4",
@@ -641,6 +655,8 @@ func TestLoadManifestOnlyVideoPostAndCoverContract(t *testing.T) {
 			"kind":"image",
 			"role":"cover",
 			"sha256":"sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+			"license":"CC BY-SA 4.0",
+			"termsUrl":"https://creativecommons.org/licenses/by-sa/4.0/",
 			"rightsAuditStatus":"verified",
 			"rightsAuditIssues":[],
 			"mimeType":"image/webp",
@@ -649,7 +665,7 @@ func TestLoadManifestOnlyVideoPostAndCoverContract(t *testing.T) {
 		}]
 	}`)
 
-	posts, err := LoadPosts(root, nil, "")
+	posts, err := LoadPosts(root, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -873,14 +889,14 @@ func TestLoadReleaseMediaAssetsRejectsPrivateCASAndAcceptsCanonicalPublicSlice(t
 		"counts":{"assets":1,"issues":0}
 	}`
 	writeFile(t, path, validDocument)
-	assets, err := LoadReleaseMediaAssets(releaseRoot, "release-a", "commercial")
+	assets, err := LoadReleaseMediaAssets(releaseRoot, "release-a")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(assets) != 1 || strings.Contains(assets["杭州西湖_cover_三潭印月石塔_28_36eb11bd"].PublicSliceKey, "objects/") {
 		t.Fatalf("release media authority not loaded: %+v", assets)
 	}
-	if _, err := LoadReleaseMediaAssets(releaseRoot, "release-b", "commercial"); err == nil {
+	if _, err := LoadReleaseMediaAssets(releaseRoot, "release-b"); err == nil {
 		t.Fatal("release media manifest with a mismatched releaseId must fail closed")
 	}
 
@@ -893,7 +909,7 @@ func TestLoadReleaseMediaAssetsRejectsPrivateCASAndAcceptsCanonicalPublicSlice(t
 	if err := os.WriteFile(path, privateDocument, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := LoadReleaseMediaAssets(releaseRoot, "release-a", "commercial"); err == nil {
+	if _, err := LoadReleaseMediaAssets(releaseRoot, "release-a"); err == nil {
 		t.Fatal("release media manifest exposing objectKey must fail closed")
 	}
 
@@ -916,7 +932,7 @@ func TestLoadReleaseMediaAssetsRejectsPrivateCASAndAcceptsCanonicalPublicSlice(t
 	if err := os.WriteFile(path, raw, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := LoadReleaseMediaAssets(releaseRoot, "release-a", "commercial"); err == nil {
+	if _, err := LoadReleaseMediaAssets(releaseRoot, "release-a"); err == nil {
 		t.Fatal("two assets sharing one public slice must fail closed")
 	}
 
@@ -924,7 +940,7 @@ func TestLoadReleaseMediaAssetsRejectsPrivateCASAndAcceptsCanonicalPublicSlice(t
 	if err := os.WriteFile(path, []byte(kindDrift), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := LoadReleaseMediaAssets(releaseRoot, "release-a", "commercial"); err == nil {
+	if _, err := LoadReleaseMediaAssets(releaseRoot, "release-a"); err == nil {
 		t.Fatal("MediaAsset kind/contentType drift must fail closed")
 	}
 }
@@ -1011,7 +1027,7 @@ func TestLoadPostsValidatesRawActiveRefsNotNormalizedAliases(t *testing.T) {
 	}`)
 	writeFile(t, filepath.Join(postDir, "article.md"), "# 黄山风景区攻略\n正文\n")
 
-	posts, err := LoadPosts(root, nil, "")
+	posts, err := LoadPosts(root, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1036,7 +1052,7 @@ func TestLoadPostsRejectsCandidateActiveRef(t *testing.T) {
 		"entityRefs":["candidate:entity:1"],
 		"publishedAt":"2026-06-13T02:00:00Z"
 	}`)
-	if _, err := LoadPosts(root, nil, ""); err == nil {
+	if _, err := LoadPosts(root, nil); err == nil {
 		t.Fatal("expected candidate active ref rejection")
 	}
 }
@@ -1056,7 +1072,7 @@ func TestLoadPostsRejectsDanglingIntersectionHint(t *testing.T) {
 		"publishSeq":1,
 		"publishedAt":"2026-06-13T02:00:00Z"
 	}`)
-	if _, err := LoadPosts(root, nil, ""); err == nil {
+	if _, err := LoadPosts(root, nil); err == nil {
 		t.Fatal("expected dangling intersection hint rejection")
 	}
 }
@@ -1074,7 +1090,7 @@ func TestLoadPostsRejectsSystemCreatorWithoutDisclosure(t *testing.T) {
 		"tagRefs":[],
 		"publishedAt":"2026-06-13T02:00:00Z"
 	}`)
-	if _, err := LoadPosts(root, nil, ""); err == nil {
+	if _, err := LoadPosts(root, nil); err == nil {
 		t.Fatal("expected missing creatorDisclosure rejection")
 	}
 }
@@ -1097,7 +1113,7 @@ func TestLoadPostsAcceptsCreatorProfileDigestAsVersionBinding(t *testing.T) {
 		"publishSeq":1,
 		"publishedAt":"2026-07-31T00:00:00Z"
 	}`)
-	docs, err := LoadPosts(root, nil, "")
+	docs, err := LoadPosts(root, nil)
 	if err != nil {
 		t.Fatalf("LoadPosts: %v", err)
 	}

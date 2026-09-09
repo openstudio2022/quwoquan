@@ -131,19 +131,6 @@ class TestAuthFacets
   }
 
   @override
-  Future<WhitelistedResearchSession> issueWhitelistedResearchSession(
-    IssueWhitelistedResearchSessionCommand command,
-  ) async {
-    return WhitelistedResearchSession(
-      // sha256("test-research-subject")
-      subjectHash:
-          'sha256:5f16cfd181c9de0e103333f577c519608414fd967b59760b46e0dc17ec2a801f',
-      attestationId: 'test-research-attestation',
-      expiresAt: DateTime.utc(2099),
-    );
-  }
-
-  @override
   Future<CredentialBindingCommandResult> bindPhoneCredential(
     BindPhoneCredentialCommand command,
   ) async {

@@ -19,7 +19,6 @@ def build_pool_release(
     release_root: Path,
     release_id: str,
     cohort_file: Path,
-    release_class: str,
 ) -> dict[str, Any]:
     """Build one immutable release from an exact caller-owned cohort file."""
     cohort_path = cohort_file.expanduser()
@@ -31,7 +30,6 @@ def build_pool_release(
         publish_root=publish_root,
         release_root=release_root,
         release_id=release_id,
-        release_class=release_class,
         cohort=cohort,
     )
 

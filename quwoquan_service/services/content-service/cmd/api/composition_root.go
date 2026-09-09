@@ -130,7 +130,6 @@ func assembleContentDomain(
 	var store *persistence.MongoPostStore
 	var postQueryReader *persistence.MongoPostQueryReader
 	var activeSupplyReader feedapp.ActiveSupplyReader
-	var researchReleaseReadback *postapp.ResearchReleaseReadbackQueryFacet
 	var reactionStore *reactionpersistence.MongoContentReactionStore
 	var reactionServiceCore *reactionapp.Service
 	var commentDataAdapter *commentpersistence.MongoCommentDataAdapter
@@ -234,13 +233,6 @@ func assembleContentDomain(
 		),
 	)
 	activeSupplyReader = mongoActiveSupplyReader
-	researchReleaseReadback, err = buildResearchReleaseReadback(
-		appEnv,
-		persistence.NewMongoResearchReleaseBindingReader(mongoActiveSupplyReader),
-	)
-	if err != nil {
-		return fmt.Errorf("research release readback composition failed: %w", err)
-	}
 	outboundShareSink := outboundshareinfra.NewMongoAppendSink(db)
 	if err := outboundShareSink.EnsureIndexes(ctx); err != nil {
 		return fmt.Errorf("OutboundShareFact indexes init failed: %w", err)
@@ -790,7 +782,6 @@ func assembleContentDomain(
 		postQueryReader,
 		viewerBlockReader,
 		commentViewerRelationships,
-		activeSupplyReader,
 	)
 	if err != nil {
 		return err
@@ -846,7 +837,6 @@ func assembleContentDomain(
 		postStore:                    store,
 		postQueryReader:              postQueryReader,
 		activeSupplyReader:           activeSupplyReader,
-		researchReleaseReadback:      researchReleaseReadback,
 		feedCursorCodec:              feedCursorCodec,
 		feedRuntimeConfig:            cfg.Feed,
 		rankedRecommendation:         rankedRecommendation,

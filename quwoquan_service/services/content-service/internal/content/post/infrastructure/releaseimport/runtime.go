@@ -172,7 +172,6 @@ func Run() {
 	releaseMediaAssets, err := LoadReleaseMediaAssets(
 		*releaseRoot,
 		desired.ReleaseID,
-		releaseBinding.ReleaseClass,
 	)
 	if err != nil {
 		log.Fatalf("load release media authority: %v", err)
@@ -196,7 +195,7 @@ func Run() {
 		}
 	}
 
-	posts, err := LoadPosts(objectRoot, postFilter, releaseBinding.ReleaseClass)
+	posts, err := LoadPosts(objectRoot, postFilter)
 	if err != nil {
 		log.Fatalf("load posts: %v", err)
 	}
@@ -217,7 +216,7 @@ func Run() {
 	); err != nil {
 		log.Fatalf("bind post asset URLs: %v", err)
 	}
-	if err := ValidateImportedPostMediaBindings(posts, releaseBinding.ReleaseClass); err != nil {
+	if err := ValidateImportedPostMediaBindings(posts); err != nil {
 		log.Fatalf("validate post media delivery bindings: %v", err)
 	}
 	postBindings, err := ImportedPostBindings(posts)
@@ -278,7 +277,6 @@ func Run() {
 	opts := NormalizeImportOptions(ImportOptions{
 		ReleaseID:                 desired.ReleaseID,
 		ManifestDigest:            releaseBinding.ManifestDigest,
-		ReleaseClass:              releaseBinding.ReleaseClass,
 		ReleaseKind:               releaseBinding.ReleaseKind,
 		ActivationMode:            *activationMode,
 		Mode:                      *mode,
@@ -518,10 +516,7 @@ type ImportOptions struct {
 	ManifestDigest string
 	// ActivationMode 由 CLI importer 显式选择 stage-only 或 activate；
 	// StageImportedPostRelease 只执行 stage，激活必须另调 CAS 命令。
-	ActivationMode string
-	// ReleaseClass 是 release.json 声明的 release 级类别（research|commercial），
-	// 随导入落进 data_release_state，供 research readback 判定 release 类别。
-	ReleaseClass              string
+	ActivationMode            string
 	ReleaseKind               string
 	Mode                      string
 	DeletePolicy              string
@@ -806,7 +801,7 @@ func BuildCanonicalImportedPostDocument(
 	if len(runtimeEntityRefs) == 0 {
 		runtimeEntityRefs = post.EntityRefs
 	}
-	accessMode := MediaDeliveryAccessModeForReleaseClass(opts.ReleaseClass)
+	accessMode := MediaDeliveryAccessModePublic
 	media := ImportedMediaFields(importedPostAssets(post), accessMode)
 	body := post.ArticleMarkdown
 	summary := ProjectImportedArticleSummary(post.ArticleMarkdown)
@@ -1082,7 +1077,7 @@ func ActiveReleaseBindingDocument(binding ActiveReleaseBinding) bson.M {
 	document := bson.M{
 		"found": binding.Found, "environment": binding.Environment,
 		"sourceOwner": binding.SourceOwner, "releaseId": binding.ReleaseID,
-		"manifestDigest": binding.ManifestDigest, "releaseClass": binding.ReleaseClass,
+		"manifestDigest":    binding.ManifestDigest,
 		"projectionVersion": binding.ProjectionVersion, "revision": binding.Revision,
 	}
 	if !binding.ActivatedAt.IsZero() {

@@ -30,7 +30,6 @@ _FINGERPRINT_FIELDS = frozenset(
         "workspaceStatusDigest",
         "deploymentInputs",
         "packageContent",
-        "releaseInputClassification",
         "contractGraphDigest",
         "graphqlReadRegistry",
         "appLaunchBundle",

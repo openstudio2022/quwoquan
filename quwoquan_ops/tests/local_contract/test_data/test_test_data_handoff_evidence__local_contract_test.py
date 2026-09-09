@@ -143,10 +143,11 @@ class TestDataHandoffEvidenceContractTest(unittest.TestCase):
         }
         evidence["evidenceDigest"] = canonical_digest(evidence)
         readiness = _readiness()
-        readiness.pop("sourceRevision")
+        readiness.pop("sourceIdentities")
+        readiness.pop("sourceIdentitySetDigest")
         readiness = _with_checksum(readiness)
 
-        with self.assertRaisesRegex(ValueError, "sourceRevision"):
+        with self.assertRaisesRegex(ValueError, "schema"):
             build_test_data_handoff(
                 candidate=candidate,
                 readiness=readiness,
@@ -158,11 +159,7 @@ class TestDataHandoffEvidenceContractTest(unittest.TestCase):
         """新 Data 溯源模型：readiness 以 sourceIdentities/
         sourceIdentitySetDigest 表达来源，顶层 sourceRevision 已退役。"""
         readiness = _readiness()
-        readiness.pop("sourceRevision")
-        readiness["sourceIdentities"] = [
-            {"owner": "content", "revision": "c" * 40}
-        ]
-        readiness["sourceIdentitySetDigest"] = "sha256:" + "5" * 64
+        self.assertNotIn("sourceRevision", readiness)
         readiness = _with_checksum(readiness)
 
         candidate = build_candidate_binding(
@@ -196,13 +193,10 @@ class TestDataHandoffEvidenceContractTest(unittest.TestCase):
         self,
     ) -> None:
         readiness = _readiness()
-        readiness.pop("sourceRevision")
-        readiness["sourceIdentities"] = [
-            {"owner": "content", "revision": "c" * 40}
-        ]
+        readiness.pop("sourceIdentitySetDigest")
         readiness = _with_checksum(readiness)
 
-        with self.assertRaisesRegex(ValueError, "sourceRevision"):
+        with self.assertRaisesRegex(ValueError, "schema"):
             build_candidate_binding(
                 environment="gamma",
                 target="gamma-local",
@@ -220,7 +214,7 @@ class TestDataHandoffEvidenceContractTest(unittest.TestCase):
             readiness=_readiness(),
         )
 
-        self.assertEqual(candidate.readiness_phase, "research")
+        self.assertFalse(hasattr(candidate, "readiness_phase"))
         self.assertEqual(candidate.readiness_receipt_digest, _readiness()["verificationChecksum"])
         self.assertEqual(
             tuple(item.object_id for item in candidate.release_posts),
@@ -231,6 +225,35 @@ class TestDataHandoffEvidenceContractTest(unittest.TestCase):
             ("EntityHomepage",),
         )
         self.assertNotEqual(candidate.digest, "sha256:" + "0" * 64)
+
+    def test_candidate_binding_rejects_all_category_fields(self) -> None:
+        # spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-002
+        for field in ("readinessPhase", "releaseClass", "productLifecycleState"):
+            for value in ("production", "default", "research", "commercial", "consumer", "import", "", None):
+                for nested in (False, True):
+                    readiness = _readiness()
+                    (readiness["activationEnvelope"] if nested else readiness)[field] = value
+                    readiness = _with_checksum(readiness)
+                    with self.subTest(field=field, value=value, nested=nested), self.assertRaisesRegex(ValueError, "schema"):
+                        build_candidate_binding(
+                            environment="gamma", target="gamma-local",
+                            manifest=_manifest(), readiness=readiness,
+                        )
+
+    def test_candidate_binding_preserves_unverified_rights_without_blocking(self) -> None:
+        # spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-002
+        readiness = _with_checksum({
+            **_readiness(), "containsUnverifiedAssets": True,
+            "authorizationRequiredAssetIds": ["media-1"],
+        })
+        candidate = build_candidate_binding(
+            environment="gamma", target="gamma-local",
+            manifest=_manifest(), readiness=readiness,
+        )
+        self.assertFalse(hasattr(candidate, "readiness_phase"))
+        self.assertEqual(candidate.readiness_receipt_digest, readiness["verificationChecksum"])
+        self.assertEqual(readiness["authorizationRequiredAssetIds"], ["media-1"])
+        self.assertIs(readiness["containsUnverifiedAssets"], True)
 
     def test_candidate_binding_rejects_lifecycle_checksum_and_closure_drift(
         self,
@@ -531,7 +554,7 @@ class TestDataHandoffEvidenceContractTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             receipt_path = Path(temporary) / "release-readiness.json"
             receipt_path.write_text(
-                json.dumps({"readinessPhase": "research"}),
+                json.dumps(_readiness()),
                 encoding="utf-8",
             )
             strict_loader = mock.Mock(return_value=(_readiness(), receipt_path))
@@ -556,10 +579,7 @@ class TestDataHandoffEvidenceContractTest(unittest.TestCase):
 
         self.assertEqual(loaded, _readiness())
         self.assertEqual(loaded_path, receipt_path)
-        self.assertIs(
-            strict_loader.call_args.kwargs["readiness_phase"],
-            stackctl.ReadinessPhase.RESEARCH,
-        )
+        self.assertNotIn("readiness_phase", strict_loader.call_args.kwargs)
 
     def test_parser_exposes_only_typed_test_data_handoff(self) -> None:
         args = stackctl.build_parser().parse_args(

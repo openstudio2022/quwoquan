@@ -27,7 +27,7 @@ final contentCacheLifecycleCoordinatorProvider =
       return coordinator;
     });
 
-/// 账号/Persona/audience/release tuple 变化时统一清理全部可重建内容状态。
+/// 账号/Persona/release tuple 变化时统一清理全部可重建内容状态。
 final class ContentCacheLifecycleCoordinator {
   ContentCacheLifecycleCoordinator({
     required PostObjectCacheService postCache,
@@ -90,8 +90,6 @@ final class ContentCacheLifecycleCoordinator {
       session.isAuthenticated ? 'authenticated' : 'guest',
       session.ownerId.trim(),
       session.activePersonaId.trim(),
-      contentReleaseAudiencePartitionHintFromAccessToken(session.accessToken)
-          .name,
     ].join('|');
   }
 }

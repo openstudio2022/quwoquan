@@ -173,7 +173,6 @@ class StackctlGammaOperationLockContractTestBase(unittest.TestCase):
                 "environment": environment,
                 "target": target,
                 "baselineId": baseline_id,
-                "releaseInputClassification": "commercial_inputs",
                 "contractGraphDigest": "sha256:" + "8" * 64,
                 "release": {
                     "candidate": {
@@ -181,16 +180,12 @@ class StackctlGammaOperationLockContractTestBase(unittest.TestCase):
                         "releaseDigest": "sha256:" + "4" * 64,
                         "attestationRef": "/candidate-commercial.json",
                         "attestationDigest": "sha256:" + "5" * 64,
-                        "releaseClass": "commercial",
-                        "productLifecycleState": "commercial",
                     },
                     "rollback": {
                         "releaseId": "rollback-commercial",
                         "releaseDigest": "sha256:" + "6" * 64,
                         "attestationRef": "/rollback-commercial.json",
                         "attestationDigest": "sha256:" + "7" * 64,
-                        "releaseClass": "commercial",
-                        "productLifecycleState": "commercial",
                     },
                 },
             },

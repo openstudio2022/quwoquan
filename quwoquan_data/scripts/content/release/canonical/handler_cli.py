@@ -73,16 +73,22 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
 
     lifecycle_exit = commands.add_parser(
         "lifecycle-exit",
-        help="从 exact apply/verify/rollback/replay 结果签发 canonical Exit",
+        help="从 exact activate/verify/rollback/replay 结果签发 canonical Exit",
     )
     lifecycle_exit.add_argument("--env", required=True)
     lifecycle_exit.add_argument("--original-release-id", required=True)
-    lifecycle_exit.add_argument("--original-import-run-id", required=True)
+    lifecycle_exit.add_argument(
+        "--original-import-run-id", required=True,
+        help="original 成功 activate run；由其 importRunId 重验 prepared apply",
+    )
     lifecycle_exit.add_argument("--original-verify-run-id", required=True)
     lifecycle_exit.add_argument("--rollback-to-release-id", required=True)
     lifecycle_exit.add_argument("--rollback-run-id", required=True)
     lifecycle_exit.add_argument("--rollback-verify-run-id", required=True)
-    lifecycle_exit.add_argument("--replay-import-run-id", required=True)
+    lifecycle_exit.add_argument(
+        "--replay-import-run-id", required=True,
+        help="same-digest replay 成功 activate run，不接受 prepared apply run",
+    )
     lifecycle_exit.add_argument("--replay-verify-run-id", required=True)
     lifecycle_exit.add_argument("--run-id", required=True)
     lifecycle_exit.set_defaults(handler=_load_lifecycle_exit)

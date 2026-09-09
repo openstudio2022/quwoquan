@@ -41,7 +41,7 @@ from content.release.canonical.object_transaction_contract import (
 )
 from core.paths import CONTROL_PLANE_TAXONOMY_ROOT
 from core.source_digest import SourceDefinitionSnapshot
-from governance.coverage.distribution import RELEASE_CLASSES, load_content_distribution_policy
+from governance.coverage.distribution import load_content_distribution_policy
 
 
 @dataclass(frozen=True)
@@ -223,14 +223,8 @@ def prepare_pool_release(
     *,
     publish_root: Path,
     cohort: dict[str, object],
-    release_class: str,
 ) -> PoolReleasePreparation:
     """Validate one exact caller-declared cohort without scanning for candidates."""
-    normalized_release_class = str(release_class or "").strip()
-    if normalized_release_class not in RELEASE_CLASSES:
-        raise ObjectTransactionError("DATA.RELEASE.CLASS_INVALID")
-    if cohort.get("releaseClass") != normalized_release_class:
-        raise ObjectTransactionError("DATA.RELEASE.COHORT_CLASS_DRIFT")
     object_refs = cohort.get("objectRefs")
     expected_counts = cohort.get("expectedCarrierCounts")
     if (
@@ -262,8 +256,7 @@ def prepare_pool_release(
     ] = {}
     for post_ref in sorted(post_refs):
         closure_cache[post_ref] = candidate_closure(
-            publish_root, post_ref=post_ref, release_class=normalized_release_class
-        )
+            publish_root, post_ref=post_ref        )
     entity_closure_cache: dict[str, tuple[list[str], list[str]]] = {}
     for entity_ref in sorted(entity_refs):
         root = object_root(publish_root, "entities", entity_ref)
@@ -279,8 +272,7 @@ def prepare_pool_release(
                 f"DATA.RELEASE.COHORT_ENTITY_NOT_PUBLISHABLE: {entity_ref}"
             )
         entity_closure_cache[entity_ref] = entity_candidate_closure(
-            publish_root, entity_ref=entity_ref, release_class=normalized_release_class
-        )
+            publish_root, entity_ref=entity_ref        )
     required_entities = {
         ref for post_ref in post_refs for ref in closure_cache[post_ref][0]
     }

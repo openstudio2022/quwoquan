@@ -44,15 +44,14 @@ def _passed_content_live_payload(
         "target": "alpha-local",
         "firstBlocker": "",
         "warnings": [],
-        "releaseId": "research-alpha",
+        "releaseId": "release-alpha",
         "manifestDigest": _MANIFEST_DIGEST,
         "readinessReceiptRef": readiness_ref,
         "readinessReceiptDigest": readiness_digest,
         "contentBinding": {
-            "releaseId": "research-alpha",
+            "releaseId": "release-alpha",
             "verifyRunId": "verify-alpha",
             "manifestDigest": _MANIFEST_DIGEST,
-            "readinessPhase": "research",
             "readinessReceiptRef": readiness_ref,
             "readinessReceiptDigest": readiness_digest,
         },
@@ -70,7 +69,7 @@ def _passed_content_preflight_payload(
         "status": "passed",
         "exitCode": 0,
         "details": [],
-        "releaseId": "research-alpha",
+        "releaseId": "release-alpha",
         "manifestDigest": _MANIFEST_DIGEST,
         "readinessReceiptRef": readiness_ref,
         "readinessReceiptDigest": readiness_digest,
@@ -282,10 +281,9 @@ class CanonicalLauncherManagedEntryContractTest(unittest.TestCase):
             json.dumps(
                 {
                     "schema": "quwoquan_data.release_readiness.v1",
-                    "releaseId": "research-alpha",
+                    "releaseId": "release-alpha",
                     "verifyRunId": "verify-alpha",
                     "manifestDigest": _MANIFEST_DIGEST,
-                    "readinessPhase": "research",
                     "passed": True,
                 },
                 ensure_ascii=False,
@@ -326,7 +324,7 @@ class CanonicalLauncherManagedEntryContractTest(unittest.TestCase):
                     "schema": "quwoquan_ops.app_content_preflight_exact.v1",
                     "target": "alpha-local",
                     "status": "passed",
-                    "releaseId": "research-alpha",
+                    "releaseId": "release-alpha",
                     "manifestDigest": _MANIFEST_DIGEST,
                     "readinessReceiptRef": str(readiness_ref),
                     "readinessReceiptDigest": readiness_digest,
@@ -365,10 +363,9 @@ class CanonicalLauncherManagedEntryContractTest(unittest.TestCase):
                     "deviceTrustReceiptRef": "",
                     "deviceTrustReceiptDigest": "",
                     "contentBinding": {
-                        "releaseId": "research-alpha",
+                        "releaseId": "release-alpha",
                         "verifyRunId": "verify-alpha",
                         "manifestDigest": _MANIFEST_DIGEST,
-                        "readinessPhase": "research",
                         "readinessReceiptRef": str(readiness_ref),
                         "readinessReceiptDigest": readiness_digest,
                     },
@@ -613,6 +610,34 @@ class CanonicalLauncherManagedEntryContractTest(unittest.TestCase):
         self._assert_prebuild_receipt_invalid(
             mutate=mutate,
             expected_detail="content readiness byte digest mismatch",
+        )
+
+    def test_named_content_tracks_are_rejected_before_build(self) -> None:
+        for field in ("readinessPhase", "releaseClass", "productLifecycleState"):
+            with self.subTest(field=field):
+                def mutate(receipt: dict[str, object]) -> None:
+                    binding = receipt["contentBinding"]
+                    assert isinstance(binding, dict)
+                    binding[field] = "production"
+
+                self._assert_prebuild_receipt_invalid(
+                    mutate=mutate,
+                    expected_detail="content binding field set drifted",
+                )
+
+    def test_named_readiness_track_with_matching_digest_is_rejected(self) -> None:
+        def mutate(receipt: dict[str, object]) -> None:
+            binding = receipt["contentBinding"]
+            assert isinstance(binding, dict)
+            ref = Path(str(binding["readinessReceiptRef"]))
+            readiness = json.loads(ref.read_text(encoding="utf-8"))
+            readiness["readinessPhase"] = "production"
+            ref.write_text(json.dumps(readiness) + "\n", encoding="utf-8")
+            binding["readinessReceiptDigest"] = _sha256_file(ref)
+
+        self._assert_prebuild_receipt_invalid(
+            mutate=mutate,
+            expected_detail="content readiness receipt identity drifted",
         )
 
     def test_strict_content_digest_drift_is_receipt_invalid_before_build(self) -> None:

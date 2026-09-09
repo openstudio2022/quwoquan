@@ -123,7 +123,6 @@ class StackctlCandidateSingleTrackTest(unittest.TestCase):
             report_dir.mkdir()
             report_path = report_dir / "report.json"
             identity = {
-                "releaseInputClassification": "commercial_inputs",
                 "contractGraphDigest": f"sha256:{'f' * 64}",
                 "graphqlReadRegistry": {
                     "schema": "stackctl-graphql-read-registry-package",
@@ -182,7 +181,6 @@ class StackctlCandidateSingleTrackTest(unittest.TestCase):
                     "load_candidate_manifest",
                     return_value={
                         "release": release_bindings,
-                        "releaseInputClassification": "commercial_inputs",
                         "contractGraphDigest": f"sha256:{'f' * 64}",
                         "packageDigest": f"sha256:{'1' * 64}",
                         "buildInputDigest": f"sha256:{'2' * 64}",
@@ -246,10 +244,7 @@ class StackctlCandidateSingleTrackTest(unittest.TestCase):
                 str(report_dir),
             )
             self.assertEqual(result["baselineId"], baseline_id)
-            self.assertEqual(
-                result["releaseInputClassification"],
-                "commercial_inputs",
-            )
+            self.assertNotIn("releaseInputClassification", result)
             self.assertEqual(
                 result["contractGraphDigest"],
                 f"sha256:{'f' * 64}",
@@ -269,7 +264,6 @@ class StackctlCandidateSingleTrackTest(unittest.TestCase):
             }
             manifest = {
                 "release": release_bindings,
-                "releaseInputClassification": "commercial_inputs",
                 "contractGraphDigest": f"sha256:{'f' * 64}",
                 "graphqlReadRegistry": {
                     "schema": "stackctl-graphql-read-registry-package",

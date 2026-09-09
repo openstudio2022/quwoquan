@@ -1,3 +1,4 @@
+# spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-002
 from __future__ import annotations
 
 import json
@@ -13,7 +14,6 @@ from quwoquan_ops.cli.lib import package_reuse
 
 
 class PackageReuseContractTest(unittest.TestCase):
-    release_input_classification = "commercial_inputs"
     contract_graph_digest = "sha256:" + "9" * 64
     graphql_read_registry = {
         "schema": "stackctl-graphql-read-registry-package",
@@ -178,7 +178,6 @@ class PackageReuseContractTest(unittest.TestCase):
             report_dir=".qwq_output/env/alpha/runs/package",
             include_services=True,
             details=["ready"],
-            release_input_classification=self.release_input_classification,
             contract_graph_digest=self.contract_graph_digest,
             graphql_read_registry=self.graphql_read_registry,
             service_packages=services
@@ -197,7 +196,6 @@ class PackageReuseContractTest(unittest.TestCase):
                     "workspaceStatusDigest": fingerprint["workspaceStatusDigest"],
                     "workspaceDigest": fingerprint["deploymentInputs"]["digest"],
                     "packageDigest": fingerprint["packageContent"]["digest"],
-                    "releaseInputClassification": self.release_input_classification,
                     "contractGraphDigest": self.contract_graph_digest,
                     "graphqlReadRegistry": self.graphql_read_registry,
                 }
@@ -543,21 +541,16 @@ class PackageReuseContractTest(unittest.TestCase):
     def test_release_and_contract_graph_identity_are_closed_and_cross_bound(self) -> None:
         path = self._write()
         canonical = json.loads(path.read_text(encoding="utf-8"))
-        self.assertEqual(
-            canonical["releaseInputClassification"],
-            self.release_input_classification,
-        )
+        self.assertNotIn("releaseInputClassification", canonical)
         self.assertEqual(
             canonical["contractGraphDigest"],
             self.contract_graph_digest,
         )
 
         cases = {
-            "missing classification": {
-                key: value
-                for key, value in canonical.items()
-                if key != "releaseInputClassification"
-            },
+            "retired classification": {**canonical, "releaseInputClassification": "production_inputs"},
+            "retired release class": {**canonical, "releaseClass": "production"},
+            "retired lifecycle state": {**canonical, "productLifecycleState": "production"},
             "unknown classification": {
                 **canonical,
                 "releaseInputClassification": "preview_inputs",
