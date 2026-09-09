@@ -365,16 +365,33 @@ def _validate_query_against_sealed(
     ):
         raise _error("DATA.RELEASE.HANDOFF_POOL_BINDING_DRIFT", object_ref)
 
-    expected_review_ref = f"{object_ref}/{CANONICAL_CONTENT_REVIEW_REF}"
+    sealed_review_ref = f"{object_ref}/{CANONICAL_CONTENT_REVIEW_REF}"
     try:
         content_review = _read_sealed_identity_file(
             sealed_root,
-            expected_review_ref,
+            sealed_review_ref,
             object_ref=object_ref,
             label="canonical content review",
         )
-        review_path = sealed_root / expected_review_ref
+        review_path = sealed_root / sealed_review_ref
         review_digest = _digest(review_path.read_bytes())
+        # sealed locator 只负责读取；审核原件的 owner 由冻结身份与 admission 摘要重验。
+        source_identity = manifest.get("sourceIdentity")
+        review_object_ref = _safe_ref(
+            source_identity.get("objectRef") or content_review.get("objectRef")
+            if isinstance(source_identity, Mapping) else content_review.get("objectRef"),
+            label="canonical content review owner",
+        )
+        if (
+            content_review.get("objectRef") != review_object_ref
+            or _carrier_for_ref(review_object_ref)[0] != expected_carrier
+            or (
+                isinstance(source_identity, Mapping)
+                and source_identity.get("executionId") != manifest.get("executionId")
+            )
+        ):
+            raise ObjectTransactionError("canonical content review owner binding drift")
+        expected_review_ref = f"{review_object_ref}/{CANONICAL_CONTENT_REVIEW_REF}"
         if (
             admission.get("rightsResult") != "passed"
             or admission.get("evidenceRef") != CANONICAL_CONTENT_REVIEW_REF
@@ -391,7 +408,7 @@ def _validate_query_against_sealed(
             content_review,
             execution_id=str(manifest.get("executionId") or ""),
             object_ref=object_ref,
-            object_aliases=(projected_ref, str(manifest.get("topicId") or "")),
+            object_aliases=(projected_ref, str(manifest.get("topicId") or ""), review_object_ref),
             required_asset_refs=required_asset_refs,
             source_assets=_sealed_review_source_assets(
                 sealed_root / object_ref,

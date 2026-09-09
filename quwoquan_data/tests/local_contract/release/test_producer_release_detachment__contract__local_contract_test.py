@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import ast
+import hashlib
+import json
 from types import SimpleNamespace
 from pathlib import Path
 
@@ -378,3 +380,215 @@ def test_release_asset_admission_rejects_reused_id_with_identity_drift(
             objects_root=tmp_path,
             desired={"entities": ["fixture"], "posts": ["image/fixture/1"]},
         )
+
+
+def _sealed_handoff_fixture(
+    root: Path, *, logical_ref: str, review_ref: str, source_identity: bool = False,
+) -> tuple[Path, dict, dict, dict, dict]:
+    from content.release.canonical.content_pool_handoff import ContentPoolHandoffQuery
+    from content.release.canonical.producer_release_handoff import canonical_digest
+
+    execution_id = "20260909--travel-homepage-binding--test--pilot-001"
+    digest = "sha256:" + "1" * 64
+    review = {
+        "schema": "quwoquan_data.content_review", "stage": "5.review",
+        "executionId": execution_id, "objectRef": review_ref, "decision": "approved",
+        "draft": {"ref": "4.draft/page.md", "digest": digest},
+        "dimensions": [{"name": "overall", "decision": "approved", "issues": []}],
+        "blockingIssues": [], "assetRights": [],
+    }
+    review_raw = json.dumps(review, ensure_ascii=False, sort_keys=True).encode()
+    review_digest = "sha256:" + hashlib.sha256(review_raw).hexdigest()
+    admission = {
+        "processResult": "completed", "qualityResult": "passed", "rightsResult": "passed",
+        "rightsAuthorityRef": f"{review_ref}/content_review.json",
+        "rightsAuthorityDigest": review_digest, "evidenceRef": "content_review.json",
+        "evidenceDigest": review_digest, "usageScope": "research",
+    }
+    manifest = {
+        "entityId": "entity-a", "version": 1, "executionId": execution_id,
+        "contentType": "homepage", "publishMediaMode": "text_only", "assets": [],
+        "admission": admission,
+        "sourceIdentity": {"executionId": execution_id},
+    }
+    if source_identity:
+        manifest["sourceIdentity"]["objectRef"] = review_ref
+    projected_ref = logical_ref.removeprefix("entities/")
+    record = {
+        **admission, "objectType": "homepage", "objectId": "entity-a",
+        "objectRef": projected_ref, "recordSequence": 1, "contentVersion": 1,
+        "canonicalObjectDigest": digest, "payloadDigest": digest,
+    }
+    query = ContentPoolHandoffQuery(
+        object_type="homepage", object_id="entity-a", object_ref=projected_ref,
+        carrier="homepage", content_version=1, record_sequence=1, author_id=None,
+        status="active", process_result="completed", quality_result="passed",
+        eligibility_result="passed", rights_result="passed",
+        rights_authority_ref=admission["rightsAuthorityRef"], rights_authority_digest=review_digest,
+        usage_scope="research", variant_purpose="not_applicable",
+        evidence_ref="content_review.json", evidence_digest=review_digest,
+        payload_digest=digest, canonical_object_digest=digest, selection_identity_digest=digest,
+        canonical_object_ref=logical_ref, manifest_ref=f"{logical_ref}/manifest.json",
+        pool_record_ref=f"{logical_ref}/records/1.json",
+        content_library_binding_ref=f"{logical_ref}/manifest.json",
+        content_library_binding_digest=canonical_digest([]), content_library_bindings=(),
+    ).as_document()
+    row = {"objectRef": logical_ref, "carrier": "homepage", "queryDocument": query,
+           "queryDigest": canonical_digest(query)}
+    sealed_root = root / "payload/objects"
+    object_root = sealed_root / logical_ref
+    object_root.mkdir(parents=True)
+    (object_root / "content_review.json").write_bytes(review_raw)
+    _write_handoff_fixture_documents(sealed_root, row, manifest, record)
+    return sealed_root, row, manifest, record, review
+
+
+def _write_handoff_fixture_documents(sealed_root: Path, row: dict, manifest: dict, record: dict) -> None:
+    from content.release.canonical.producer_release_handoff import canonical_digest
+
+    object_root = sealed_root / row["objectRef"]
+    for path, document in (
+        (object_root / "manifest.json", manifest),
+        (object_root / "records/1.json", record),
+        (sealed_root.parent / "media_manifest.json", {"assets": []}),
+    ):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(document, ensure_ascii=False), encoding="utf-8")
+    row["queryDigest"] = canonical_digest(row["queryDocument"])
+
+
+@pytest.mark.parametrize("source_identity", [False, True])
+@pytest.mark.parametrize("logical_ref", [
+    "entities/地点/景区/entity-a", "entities/travel/hubei/yichang/three-gorges-dam",
+])
+def test_handoff_separates_sealed_locator_from_frozen_review_owner(
+    tmp_path: Path, logical_ref: str, source_identity: bool,
+) -> None:
+    """spec_ref: multi-carrier-release/REQ-008 — 逻辑搬迁不改写原审核引用及摘要。"""
+    from content.release.canonical.producer_release_handoff import _validate_embedded_pool_rows
+
+    sealed, row, _manifest, _record, _review = _sealed_handoff_fixture(
+        tmp_path, logical_ref=logical_ref, review_ref="entities/地点/景区/entity-a",
+        source_identity=source_identity,
+    )
+    before = {path: path.read_bytes() for path in sealed.parent.rglob("*") if path.is_file()}
+    assert _validate_embedded_pool_rows(
+        rows=[row], sealed_root=sealed, object_refs=[logical_ref], header={},
+    ) == [row]
+    assert {path: path.read_bytes() for path in before} == before
+
+
+@pytest.mark.parametrize("mutation", [
+    "wrong_authority_owner", "logical_authority_owner", "authority_suffix", "evidence_ref",
+    "authority_digest", "evidence_digest", "review_owner", "review_execution",
+    "source_identity_owner", "source_identity_execution", "unapproved", "review_asset_set",
+])
+def test_handoff_rejects_drift_even_when_query_and_pool_agree(
+    tmp_path: Path, mutation: str,
+) -> None:
+    """spec_ref: multi-carrier-release/REQ-008 — 原 owner/ref/digest/资产覆盖仍精确绑定。"""
+    from content.release.canonical.producer_release_handoff import (
+        ProducerReleaseHandoffError, _validate_embedded_pool_rows,
+    )
+
+    logical_ref = "entities/travel/hubei/yichang/three-gorges-dam"
+    sealed, row, manifest, record, review = _sealed_handoff_fixture(
+        tmp_path, logical_ref=logical_ref, review_ref="entities/地点/景区/entity-a",
+        source_identity=True,
+    )
+    admission_mutations = {
+        "wrong_authority_owner": ("rightsAuthorityRef", "entities/地点/景区/other/content_review.json"),
+        "logical_authority_owner": ("rightsAuthorityRef", f"{logical_ref}/content_review.json"),
+        "authority_suffix": ("rightsAuthorityRef", "unrelated/content_review.json"),
+        "evidence_ref": ("evidenceRef", "other/content_review.json"),
+        "authority_digest": ("rightsAuthorityDigest", "sha256:" + "2" * 64),
+        "evidence_digest": ("evidenceDigest", "sha256:" + "2" * 64),
+    }
+    if mutation in admission_mutations:
+        field, value = admission_mutations[mutation]
+        for admission in (manifest["admission"], record, row["queryDocument"]["admission"]):
+            admission[field] = value
+    elif mutation.startswith("source_identity_"):
+        field = "objectRef" if mutation.endswith("owner") else "executionId"
+        manifest["sourceIdentity"][field] = "entities/地点/景区/other" if field == "objectRef" else "other-execution"
+    else:
+        if mutation == "review_owner":
+            review["objectRef"] = "entities/地点/景区/other"
+        elif mutation == "review_execution":
+            review["executionId"] = "other-execution"
+        elif mutation == "unapproved":
+            review["decision"] = "rejected"
+        else:
+            review["assetRights"] = [{
+                "assetRef": "sources/a/assets/cover.jpg", "sourceUrl": "https://example.test/cover.jpg",
+                "license": "CC BY 4.0", "termsUrl": "https://example.test/terms",
+                "authorizationProof": None, "usageScope": "research", "decision": "approved", "issues": [],
+            }]
+        review_raw = json.dumps(review, ensure_ascii=False, sort_keys=True).encode()
+        (sealed / logical_ref / "content_review.json").write_bytes(review_raw)
+        digest = "sha256:" + hashlib.sha256(review_raw).hexdigest()
+        for admission in (manifest["admission"], record, row["queryDocument"]["admission"]):
+            admission.update(rightsAuthorityDigest=digest, evidenceDigest=digest)
+    _write_handoff_fixture_documents(sealed, row, manifest, record)
+    with pytest.raises(ProducerReleaseHandoffError, match="DATA.RELEASE.HANDOFF_POOL_RIGHTS_DRIFT"):
+        _validate_embedded_pool_rows(rows=[row], sealed_root=sealed, object_refs=[logical_ref], header={})
+
+
+@pytest.mark.parametrize("mutation", [None, "source_rights", "source_evidence", "asset_digest"])
+def test_handoff_review_locator_keeps_source_and_asset_digest_bindings(
+    tmp_path: Path, mutation: str | None,
+) -> None:
+    """spec_ref: multi-carrier-release/REQ-008 — locator 分离不放宽来源事实及摘要。"""
+    from content.release.canonical.content_pool_handoff import project_content_library_bindings
+    from content.release.canonical.producer_release_handoff import (
+        ProducerReleaseHandoffError, _validate_embedded_pool_rows, canonical_digest,
+    )
+
+    logical_ref = "entities/travel/hubei/yichang/three-gorges-dam"
+    sealed, row, manifest, record, review = _sealed_handoff_fixture(
+        tmp_path, logical_ref=logical_ref, review_ref="entities/地点/景区/entity-a",
+    )
+    source_ref, asset_ref = "sources/s001/source.json", "sources/s001/assets/cover.jpg"
+    source_asset = {"sourceUrl": "https://example.test/cover.jpg", "license": "CC BY 4.0",
+                    "termsUrl": "https://example.test/terms", "authorizationProof": None}
+    asset = {
+        "assetId": "cover", "objectKey": f"media/objects/sha256/aa/aa/{'a' * 64}.jpg",
+        "sha256": "sha256:" + "a" * 64, "sourceAssetRefs": [asset_ref],
+        "acquisitionReceiptRefs": ["receipts/acquired.json"], "sourceRefs": [source_ref],
+    }
+    manifest.update(assets=[asset], sourceRefs=[source_ref], publishMediaMode="illustrated")
+    bindings = [binding.as_document() for binding in project_content_library_bindings([asset])]
+    row["queryDocument"]["contentLibrary"].update(bindings=bindings, bindingDigest=canonical_digest(bindings))
+    review["assetRights"] = [{**source_asset, "assetRef": asset_ref, "usageScope": "research",
+                              "decision": "approved", "issues": []}]
+    review_raw = json.dumps(review, ensure_ascii=False, sort_keys=True).encode()
+    (sealed / logical_ref / "content_review.json").write_bytes(review_raw)
+    digest = "sha256:" + hashlib.sha256(review_raw).hexdigest()
+    for admission in (manifest["admission"], record, row["queryDocument"]["admission"]):
+        admission.update(rightsAuthorityDigest=digest, evidenceDigest=digest)
+    source_root = sealed / logical_ref / "sources/s001"
+    source_root.mkdir(parents=True)
+    evidence = b"Frozen source rights evidence."
+    (source_root / "evidence.txt").write_bytes(evidence)
+    source = {
+        "schema": "quwoquan_data.publish_source", "sourceId": "s001",
+        "sourceUrl": "https://example.test/cover.jpg", "sourceUseMode": "licensed_adaptation",
+        "fetchedAt": "2026-09-09T00:00:00Z", "metadata": {},
+        "assets": [{"sourceAssetRef": asset_ref, "sourceAsset": source_asset}],
+        "evidence": [{"path": "evidence.txt", "sha256": "sha256:" + hashlib.sha256(evidence).hexdigest(),
+                      "bytes": len(evidence), "kind": "source_excerpt"}],
+    }
+    if mutation == "source_rights":
+        source_asset["license"] = "unknown"
+    elif mutation == "source_evidence":
+        (source_root / "evidence.txt").write_bytes(b"Tampered source evidence.")
+    elif mutation == "asset_digest":
+        asset["sha256"] = "sha256:" + "b" * 64
+    (source_root / "source.json").write_text(json.dumps(source), encoding="utf-8")
+    _write_handoff_fixture_documents(sealed, row, manifest, record)
+    if mutation is None:
+        assert _validate_embedded_pool_rows(rows=[row], sealed_root=sealed, object_refs=[logical_ref], header={}) == [row]
+    else:
+        code = "BINDING" if mutation == "asset_digest" else "RIGHTS"
+        with pytest.raises(ProducerReleaseHandoffError, match=f"DATA.RELEASE.HANDOFF_POOL_{code}_DRIFT"):
+            _validate_embedded_pool_rows(rows=[row], sealed_root=sealed, object_refs=[logical_ref], header={})
