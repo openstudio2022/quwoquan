@@ -64,10 +64,14 @@ system_backsync:
 # 六条固定 lane 是长期 writer 分支：最多六个不同 lane writer，同一 lane
 # 同一时刻至多一个 writer；integration/abort 后 worktree retained，并强制
 # fast-forward resync 到新的 dev1.0。共享 host mutation 仍保持单 writer。
+# resync_scope：回同步只对「无进行中 merge/rebase、工作树干净或脏文件与本次 ff 不重叠、
+# 且是新 dev1.0 祖先」的 lane 执行 ff-only；分叉或重叠脏树只产出 typed 结果，
+# 由该 lane 自己的会话以 sync-lane-from-dev Skill 解决，不在他人工作树里 merge。
 persistent_lane_admission:
   isolation: branch_per_writer
   promotion: declared_pull_request_edge_only
   resync: mandatory_fast_forward_after_integration_or_abort
+  resync_scope: clean_or_non_overlapping_ancestor_only
   worktree_lifecycle: retained
   concurrency_evidence: required
 

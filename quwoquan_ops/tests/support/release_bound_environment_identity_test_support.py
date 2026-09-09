@@ -56,8 +56,6 @@ RELEASE_DIGEST = "sha256:" + "e" * 64
 SOURCE_REVISION = "sha256:" + "3" * 64
 SOURCE_DIGEST = "sha256:" + "4" * 64
 ENTITY_CATALOG_DIGEST = "sha256:" + "5" * 64
-ISOLATION_DIGEST = "sha256:" + "6" * 64
-SUBJECT_HASH = "sha256:" + "7" * 64
 IMPACT_PLAN_DIGEST = "sha256:" + "8" * 64
 # 模块级临时 Ed25519 信任根（仓外 tmp），与生产同一编码；identity 必须是 keyring 声明的 canonical signer。
 TEST_SIGNING = create_temporary_signing(
@@ -137,48 +135,42 @@ def _checksum(payload: dict[str, Any]) -> dict[str, Any]:
     return result
 
 
-def _research_activation_fields(environment: str) -> dict[str, Any]:
-    verification_ref = (
-        f"env/{environment}/runs/data-release/{RELEASE_ID}/verify-001/"
-        "research-isolation-verification.json"
-    )
+def _activation_fields(environment: str) -> dict[str, Any]:
+    source_identity = {
+        "sourceRevision": SOURCE_REVISION,
+        "sourceDigest": SOURCE_DIGEST,
+        "entityCatalogDigest": ENTITY_CATALOG_DIGEST,
+    }
     activation = {
         "schema": "quwoquan_data.environment_activation_envelope",
         "environment": environment,
         "releaseId": RELEASE_ID,
         "manifestDigest": RELEASE_DIGEST,
-        "sourceRevision": SOURCE_REVISION,
-        "sourceDigest": SOURCE_DIGEST,
-        "entityCatalogDigest": ENTITY_CATALOG_DIGEST,
-        "releaseClass": "research",
-        "productLifecycleState": "research",
-        "readinessPhase": "research",
+        **source_identity,
         "importRunId": "import-001",
         "verifyRunId": "verify-001",
         "importReportRef": (
             f"env/{environment}/runs/data-release/{RELEASE_ID}/import-001/import.json"
         ),
         "importReportDigest": DIGEST_B,
-        "researchIsolationPolicy": {
-            "policyRef": f"quwoquan_ops/environments/{environment}/runtime.yaml",
-            "policyDigest": ISOLATION_DIGEST,
-            "verificationRef": verification_ref,
-            "verificationDigest": DIGEST_A,
-            "subjectHash": SUBJECT_HASH,
-        },
     }
     return {
-        "releaseClass": "research",
-        "productLifecycleState": "research",
-        "sourceRevision": SOURCE_REVISION,
-        "sourceDigest": SOURCE_DIGEST,
-        "entityCatalogDigest": ENTITY_CATALOG_DIGEST,
-        "readinessPhase": "research",
+        **source_identity,
         "activationEnvelope": activation,
         "activationEnvelopeDigest": _document_digest(activation),
-        "internalSubjectHash": SUBJECT_HASH,
-        "researchIsolationVerificationRef": verification_ref,
-        "researchIsolationVerificationDigest": DIGEST_A,
+    }
+
+
+def _operation_evidence(path: str, page_id: str, request_id: str) -> dict[str, Any]:
+    return {
+        "path": path,
+        "pageId": page_id,
+        "status": 200,
+        "requestId": request_id,
+        "traceId": f"trace-{request_id}",
+        "startedAt": "2026-07-28T21:14:00Z",
+        "endedAt": "2026-07-28T21:14:01Z",
+        "durationMs": 1000,
     }
 
 
@@ -544,7 +536,21 @@ class Fixture:
                     "releaseId": RELEASE_ID,
                     "releaseKind": "content",
                     "sourceOwner": "qwq_data",
-                    **_research_activation_fields(self.environment),
+                    **_activation_fields(self.environment),
+                    "containsUnverifiedAssets": False,
+                    "rightsStatusCounts": {
+                        "verified": 3,
+                        "unverified": 0,
+                        "restricted": 0,
+                        "unknown": 0,
+                    },
+                    "authorizationRequiredAssetIds": [],
+                    "researchAcceptedCount": 0,
+                    "commercialAcceptedCount": 3,
+                    "guestActorHash": DIGEST_A,
+                    "guestLogin": _operation_evidence(
+                        "/auth/login/anonymous", "user.login.anonymous", "guest-login"
+                    ),
                     "manifestDigest": RELEASE_DIGEST,
                     "mediaManifestDigest": DIGEST_A,
                     "importRunId": "import-001",
@@ -578,6 +584,11 @@ class Fixture:
                             "status": 200,
                             "releaseBound": True,
                             "matchedPostIds": [post_id],
+                            "requests": [
+                                _operation_evidence(
+                                    "/content/feed", "content.feed.list", name
+                                )
+                            ],
                         }
                         for name, query, post_id in (
                             ("discovery_work", "identity=work&limit=3", "post-article"),
@@ -598,7 +609,7 @@ class Fixture:
                             ),
                             (
                                 "homepage_recommend",
-                                "homepageRef=entity:west-lake&limit=3",
+                                "sort=recommend&channelId=recommend&limit=3",
                                 "post-image",
                             ),
                             (
@@ -646,7 +657,6 @@ class Fixture:
             "lifecycleExitRef": "",
             "postApiVerificationRef": "",
             "releaseReadinessRef": "",
-            "researchIsolationVerificationRef": "",
             "tagConsumerVerificationRef": "",
             "homepageApiVerificationRef": "",
             "baselineApiVerificationRef": "",
@@ -658,15 +668,14 @@ class Fixture:
                     "schema": "quwoquan_data.environment_release_result",
                     "environment": self.environment,
                     "releaseId": RELEASE_ID,
-                    "releaseClass": "research",
-                    "productLifecycleState": "research",
-                    "containsUnverifiedAssets": True,
+                    "containsUnverifiedAssets": False,
                     "manifestDigest": RELEASE_DIGEST,
                     "admissionKind": "producer_handoff",
-                    "admissionRef": (
+                    "handoffRef": f"handoff-ref-v1:{DIGEST_A}:{DIGEST_B}",
+                    "handoffArtifactRef": (
                         f"data/releases/{RELEASE_ID}/producer_release_handoff.json"
                     ),
-                    "admissionDigest": DIGEST_A,
+                    "handoffArtifactDigest": DIGEST_A,
                     "runId": "import-001",
                     "status": "completed",
                     "startedAt": "2026-07-28T21:10:00Z",
@@ -691,15 +700,14 @@ class Fixture:
                     "schema": "quwoquan_data.environment_release_result",
                     "environment": self.environment,
                     "releaseId": RELEASE_ID,
-                    "releaseClass": "research",
-                    "productLifecycleState": "research",
-                    "containsUnverifiedAssets": True,
+                    "containsUnverifiedAssets": False,
                     "manifestDigest": RELEASE_DIGEST,
                     "admissionKind": "producer_handoff",
-                    "admissionRef": (
+                    "handoffRef": f"handoff-ref-v1:{DIGEST_A}:{DIGEST_B}",
+                    "handoffArtifactRef": (
                         f"data/releases/{RELEASE_ID}/producer_release_handoff.json"
                     ),
-                    "admissionDigest": DIGEST_A,
+                    "handoffArtifactDigest": DIGEST_A,
                     "runId": "replay-001",
                     "status": "completed",
                     "startedAt": "2026-07-28T21:20:00Z",
@@ -953,8 +961,8 @@ class Fixture:
             self.root / "rollback.json", _checksum(rollback)
         )
         self.paths["media"] = _write(
-            self.root / "research-media-readback.json",
-            {"schema": "quwoquan_ops.research_content_isolation"},
+            self.root / "release-media-readback.json",
+            {"schema": "quwoquan_ops.release_video_delivery_evidence"},
         )
 
     def argv(self, output: Path) -> list[str]:

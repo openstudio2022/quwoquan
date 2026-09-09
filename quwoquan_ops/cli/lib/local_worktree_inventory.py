@@ -40,6 +40,7 @@ _WORKTREE_POLICY_FIELDS = frozenset(
         "authorization_env_var",
         "unmerged_reminder_after_days",
         "reminder_min_interval_hours",
+        "resync_reminder_behind_commits",
         "discovery_roots",
         "discovery_max_depth",
         "hooks_path",
@@ -104,6 +105,7 @@ class WorktreePolicy:
     authorization_env_var: str
     unmerged_reminder_after_days: int
     reminder_min_interval_hours: int
+    resync_reminder_behind_commits: int
     discovery_roots: tuple[str, ...]
     discovery_max_depth: int
     hooks_path: str
@@ -144,6 +146,8 @@ class WorkCopy:
     head: str = ""
     clean: bool = False
     behind: int = 0
+    # 相对主仓库本地 `dev1.0`（integration 工作区头）的落后数；origin 可能滞后，lane 同步以此为准。
+    behind_local: int = 0
     ownership_drift: tuple[str, ...] = ()
 
     @property
@@ -263,7 +267,11 @@ def load_lane_ownership(
 def ownership_owner(
     relative_path: str, rules: tuple[tuple[str, tuple[str, ...]], ...]
 ) -> str | None:
-    normalized = relative_path.replace("\\", "/").lstrip("./")
+    # 只去掉显式的 "./" 前缀；lstrip("./") 会把 ".agents/..." 剥成 "agents/..."，让 .agents/.cursor/.github 全部失去 owner。
+    normalized = relative_path.replace("\\", "/")
+    while normalized.startswith("./"):
+        normalized = normalized[2:]
+    normalized = normalized.lstrip("/")
     for owner, patterns in rules:
         if any(fnmatch.fnmatchcase(normalized, pattern) for pattern in patterns):
             return owner
@@ -383,6 +391,7 @@ def load_policy(
         authorization_env_var=_require_str(payload, "authorization_env_var"),
         unmerged_reminder_after_days=_require_int(payload, "unmerged_reminder_after_days"),
         reminder_min_interval_hours=_require_int(payload, "reminder_min_interval_hours"),
+        resync_reminder_behind_commits=_require_int(payload, "resync_reminder_behind_commits"),
         discovery_roots=normalized_roots,
         discovery_max_depth=_require_int(payload, "discovery_max_depth"),
         hooks_path=_require_str(payload, "hooks_path"),
@@ -578,6 +587,7 @@ def probe_work_copy(
             counts = _git(path, "rev-list", "--left-right", "--count", f"HEAD...{base_sha}")[1].split()
             if len(counts) == 2 and all(value.isdigit() for value in counts):
                 ahead, behind = (int(value) for value in counts)
+    behind_local = _behind_local_integration(path, root, policy)
 
     candidates = [*ahead_epochs, *stash_epochs]
     dirty_epoch = _oldest_dirty_mtime(path, status_lines)
@@ -596,8 +606,22 @@ def probe_work_copy(
         head=head,
         clean=not status_lines,
         behind=behind,
+        behind_local=behind_local,
         ownership_drift=ownership_drift,
     )
+
+
+def _behind_local_integration(path: Path, root: Path, policy: WorktreePolicy) -> int:
+    """副本 HEAD 落后主仓库本地集成分支的提交数；本地分支缺失或对象不可达时为 0（在场为空）。"""
+    if policy.integration_branch not in policy.allowed_local_branches:
+        return 0
+    code, local_sha = _git(root, "rev-parse", "--verify", "--quiet", f"refs/heads/{policy.integration_branch}")
+    if code != 0 or not local_sha:
+        return 0
+    if _git(path, "cat-file", "-e", f"{local_sha}^{{commit}}")[0] != 0:
+        return 0
+    code, count = _git(path, "rev-list", "--count", f"HEAD..{local_sha}")
+    return int(count) if code == 0 and count.isdigit() else 0
 
 def _resolve_roots(root: Path, policy: WorktreePolicy) -> list[Path]:
     resolved: list[Path] = []
@@ -903,6 +927,8 @@ def summarize(copies: list[WorkCopy], policy: WorktreePolicy, *, now: int | None
                 "branch": copy.branch,
                 "ahead": copy.ahead,
                 "behind": copy.behind,
+                "behindLocal": copy.behind_local,
+                "resyncSuggested": copy.behind_local > policy.resync_reminder_behind_commits,
                 "dirty": copy.dirty,
                 "ownershipDrift": list(copy.ownership_drift),
                 "probeError": copy.probe_error,

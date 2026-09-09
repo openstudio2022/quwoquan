@@ -1359,7 +1359,7 @@ config-slo-gate:
 	@python3 quwoquan_ops/cli/stackctl.py verify --kind config-slo --profile baseline --prometheus-url "$(PROMETHEUS_URL)"
 
 .PHONY: commit-gate gate-smoke gate-integration gate-release test-api-contract test-api-contract-chat
-.PHONY: install-hooks verify-local-worktree-lifecycle lane-bootstrap lane-preflight lane-resync
+.PHONY: install-hooks verify-local-worktree-lifecycle lane-bootstrap lane-preflight lane-resync lane-resync-execute
 
 # L0 本地入库门禁（pre-commit 同源）：并行静态 + 影响面测试，目标 ≤10m / 硬顶 15m。
 commit-gate:
@@ -1384,6 +1384,13 @@ lane-preflight:
 
 lane-resync:
 	@PYTHONDONTWRITEBYTECODE=1 python3 -B quwoquan_ops/cli/lane_worktree_commands.py resync
+
+# 回同步执行面（integrate-lane-to-dev Skill 第 5 步）：按 branch_policy resync_scope 三态判定，
+# 只对干净/非重叠脏树且为 dev1.0 祖先的 lane 做 ff-only 并推送同名远端；其余 lane 零写只报告。
+# NO_PUSH=1 只 ff 不推送。任一 lane 非 ff_done 时退出码 1，JSON 结果打印到 stdout。
+lane-resync-execute:
+	@PYTHONDONTWRITEBYTECODE=1 python3 -B quwoquan_ops/cli/lane_worktree_commands.py resync --execute \
+		$$( [ "$${NO_PUSH:-0}" = "1" ] && printf -- '--no-push' )
 .PHONY: prepare-test-python verify-test-no-fake verify-test-nonfunctional-coverage verify-test-directory-layout verify-test-coverage-map
 .PHONY: verify-execution-profiles
 .PHONY: test-local-contract test-app-python-local-contract test-runtime-local-contract test-api-integration test-runtime-api-integration test-runtime-api-integration-gamma test-user-acceptance verify-homepage-performance-evidence test-delivery-ci-local-contract
@@ -1790,18 +1797,17 @@ evidence-signing-bootstrap:
 
 # lane 工作树验收：对 exact candidate（默认 HEAD，必须是当前 lane 分支 head）做本地 readiness + Alpha 真实验证并签发
 # EnvironmentAcceptanceFact，终态 accepted 并产出 portable acceptance bundle；不 admit、不 publish。
-# Beta 只在 BETA=1 时真跑，否则以 typed not_required 闭合（reason 记录 ImpactPlan 无需 / 政策可选）。
-# Data release 的 ship --handoff-ref admission 用当前工作树重算 candidate evidence，因此验收只能在产出 handoff 的 lane 工作树完成。
-# 必填：RELEASE_ATTESTATION / ROLLBACK_RELEASE_ATTESTATION（两份不同的 immutable production Data release attestation，
-# stackctl package 候选绑定）、RELEASE_HANDOFF_REF（candidate release 的 authoritative handoff-ref-v1，DEC-041 单一 production）；
-# 签名私钥来自仓外 QWQ_EVIDENCE_SIGNING_KEY_ROOT（先 make evidence-signing-bootstrap）。
-# 可选：BASELINE=<sha>（ImpactPlan/readiness 的 exact parent，candidate 已等于远端 dev1.0 时必填）、BETA=1、
-# MERGED_LANES="lane/a lane/b"（用户显式合并的其他 lane head，都须是 candidate 祖先）、CANDIDATE、OWNER_IDENTITY、
+# Beta 只在 BETA=1 时真跑，否则以 typed not_required 闭合。
+# 验收在产出 Data handoff 的 lane 工作树完成，release 不携带类别或命名就绪轨道。
+# 必填：RELEASE_ATTESTATION / ROLLBACK_RELEASE_ATTESTATION（两份不同的 immutable Data release attestation）、
+# RELEASE_HANDOFF_REF（candidate release 的 authoritative handoff-ref-v1）；私钥来自仓外 QWQ_EVIDENCE_SIGNING_KEY_ROOT。
+# 可选：BASELINE=<sha>、BETA=1、MERGED_LANES="lane/a lane/b"、CANDIDATE、OWNER_IDENTITY、
 # READINESS_LEVEL=fast|scope、PROFILE=integration|smoke、INTEGRATE_ARGS 透传。
+# REUSE=1 仅复用同 commit/tree/parent/ImpactPlan/profile 且签名与引用有效的事实，不改变 Beta opt-in。
 .PHONY: accept
 accept:
 	@if [ -z "$(RELEASE_ATTESTATION)" ] || [ -z "$(ROLLBACK_RELEASE_ATTESTATION)" ]; then \
-		echo "[accept] GATE_BLOCK: RELEASE_ATTESTATION 与 ROLLBACK_RELEASE_ATTESTATION 必填（两份不同的 immutable production Data release attestation）" >&2; exit 2; fi
+		echo "[accept] GATE_BLOCK: RELEASE_ATTESTATION 与 ROLLBACK_RELEASE_ATTESTATION 必填（两份不同的 immutable Data release attestation）" >&2; exit 2; fi
 	@if [ -z "$(RELEASE_HANDOFF_REF)" ]; then \
 		echo "[accept] GATE_BLOCK: RELEASE_HANDOFF_REF 必填（candidate release 的 authoritative handoff-ref-v1）" >&2; exit 2; fi
 	@PYTHONDONTWRITEBYTECODE=1 python3 -B quwoquan_ops/cli/integration_run.py \
@@ -1816,6 +1822,7 @@ accept:
 		--readiness-level "$${READINESS_LEVEL:-fast}" \
 		--profile "$${PROFILE:-integration}" \
 		$$( [ -n "$(OWNER_IDENTITY)" ] && printf -- '--owner-identity %s' "$(OWNER_IDENTITY)" ) \
+		$$( [ "$${REUSE:-0}" = "1" ] && printf -- '--reuse' ) \
 		$(INTEGRATE_ARGS)
 
 # integration 工作区（分支 dev1.0，HEAD 已 ff 到 candidate）消费 lane 的 acceptance bundle：exact bytes 导入本工作树 store、

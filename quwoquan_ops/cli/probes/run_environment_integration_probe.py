@@ -28,7 +28,6 @@ from quwoquan_ops.cli.probes.environment_probe_check_builder import (  # noqa: E
     _release_probe_identity as _build_release_probe_identity,
     _release_samples,
     _release_search_canaries,
-    _release_signed_media,
     build_checks as _build_checks,
 )
 
@@ -47,12 +46,10 @@ from quwoquan_ops.cli.probes.environment_probe_semantics import (  # noqa: E402
     _expected_release_post_ids,
     _feed_media_slice_urls,
     _media_origin,
-    PRIVATE_FEED_CHECK_NAMES,
+    CONTENT_FEED_CHECK_NAMES,
     _release_creator_profile_semantic_result,
     _release_sample_semantic_result,
-    _research_anonymous_convergence_issue,
     _search_semantic_issue,
-    SIGNED_MEDIA_CHECK_NAME,
 )
 # HTTP 传输与重试裁决同样已分家到 environment_probe_transport；沿用同一 re-export
 # 约定，让 `probe.request` 一类读取面不因内部拆分而变化。
@@ -64,10 +61,9 @@ from quwoquan_ops.cli.probes.environment_probe_transport import (  # noqa: E402
     feed_url as _feed_url,
     json_headers as _json_headers,
     public_headers as _public_headers,
+    probe_public_media,
     request,
 )
-if str(REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(REPO_ROOT))
 
 from quwoquan_ops.cli.lib.release_video_delivery import (
     ReleaseVideoDeliveryError,
@@ -152,28 +148,6 @@ def parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument(
-        "--research-anonymous-convergence",
-        action="store_true",
-        help=(
-            "Research-isolation mode: require the anonymous discovery, video-book "
-            "and premium feed queries to converge to the empty page with "
-            "emptyReason=no_active_release and no release identity echo (DEC-032). "
-            "Authenticated research consumption evidence is owned by the Data "
-            "post-api verification; this probe proves anonymous isolation."
-        ),
-    )
-    parser.add_argument(
-        "--research-consumer-readback",
-        action="store_true",
-        help=(
-            "Research-consumer mode: run the feed checks with the authenticated "
-            "research consumer identity (bearer injected via the test auth token "
-            "environment variable) instead of the anonymous surface, so that "
-            "release-bound non-empty expectations hold for a research release "
-            "(DEC-032 capability surface)."
-        ),
-    )
-    parser.add_argument(
         "--expected-discovery-post-id",
         action="append",
         default=[],
@@ -237,45 +211,12 @@ def parse_args() -> argparse.Namespace:
         help="Canonical JSON exact creator/profile/avatar projection.",
     )
     parser.add_argument(
-        "--release-signed-media",
-        action="append",
-        default=[],
-        help="Canonical JSON release-bound private media classification.",
-    )
-    parser.add_argument(
         "--mode",
         choices=("readonly", "post-deploy"),
         default="readonly",
     )
     args = parser.parse_args()
-    if args.require_non_empty_content_feed and args.research_anonymous_convergence:
-        parser.error(
-            "--require-non-empty-content-feed and --research-anonymous-convergence "
-            "are mutually exclusive feed semantics"
-        )
-    if args.research_consumer_readback and args.research_anonymous_convergence:
-        parser.error(
-            "--research-consumer-readback and --research-anonymous-convergence "
-            "are mutually exclusive feed identities"
-        )
     args.test_auth_token = _resolve_test_auth_token(args.env, args.test_auth_token)
-    args.research_consumer_attestation = os.environ.get(
-        "RESEARCH_CONSUMER_ATTESTATION", ""
-    ).strip()
-    if args.research_consumer_readback and not args.test_auth_token:
-        parser.error(
-            "--research-consumer-readback requires the research consumer bearer "
-            "via the test auth token environment variable"
-        )
-    if args.research_consumer_readback and not args.research_consumer_attestation:
-        parser.error(
-            "--research-consumer-readback requires the research attestation "
-            "via RESEARCH_CONSUMER_ATTESTATION"
-        )
-    # research consumer 身份本身即 release-bound 非空语义；调用方无需再维护
-    # 第二个 boolean 真相源。exact expected IDs 仍在 run_checks 对选中 feed 逐项要求。
-    if args.research_consumer_readback:
-        args.require_non_empty_content_feed = True
     return args
 
 
@@ -322,7 +263,6 @@ def build_checks(
         release_search_canaries=_release_search_canaries,
         release_samples=_release_samples,
         release_creator_profiles=_release_creator_profiles,
-        release_signed_media=_release_signed_media,
     )
 
 
@@ -345,30 +285,6 @@ def run_checks(args: argparse.Namespace) -> dict[str, Any]:
     require_non_empty_content_feed = bool(
         getattr(args, "require_non_empty_content_feed", False)
     )
-    research_anonymous_convergence = bool(
-        getattr(args, "research_anonymous_convergence", False)
-    )
-    research_consumer_readback = bool(
-        getattr(args, "research_consumer_readback", False)
-    )
-    require_authenticated_feed = (
-        require_non_empty_content_feed or research_consumer_readback
-    )
-    research_consumer_attestation = str(
-        getattr(args, "research_consumer_attestation", "") or ""
-    ).strip()
-    if research_consumer_readback and not str(args.test_auth_token or "").strip():
-        findings.append(
-            "GATE_BLOCK: research consumer readback requires a bearer token"
-        )
-    if research_consumer_readback and not research_consumer_attestation:
-        findings.append(
-            "GATE_BLOCK: research consumer readback requires an attestation"
-        )
-    if research_consumer_readback and research_anonymous_convergence:
-        findings.append(
-            "GATE_BLOCK: research consumer and anonymous convergence identities conflict"
-        )
     if mode == "post-deploy" and not args.test_auth_token:
         findings.append(
             "GATE_BLOCK: post-deploy integration requires a valid environment test auth token"
@@ -407,59 +323,22 @@ def run_checks(args: argparse.Namespace) -> dict[str, Any]:
     feed_media_origin = _media_origin(media_image_base_url)
     for check in selected_checks:
         retry_trace: list[dict[str, Any]] = []
-        if check["name"] == SIGNED_MEDIA_CHECK_NAME:
-            if not getattr(args, "research_consumer_readback", False):
-                findings.append(
-                    f"{SIGNED_MEDIA_CHECK_NAME} failed: requires research consumer identity"
-                )
-                continue
-            from quwoquan_ops.cli.lib.local_environment_auth import LocalAcceptanceSession
-            from quwoquan_ops.cli.lib.research_isolation_runtime_probe import (
-                ResearchIsolationProbeError,
-                probe_release_bound_signed_media,
-            )
-
-            session = LocalAcceptanceSession(
-                owner_id="release-preflight",
-                persona_id="release-preflight",
-                access_token=args.test_auth_token,
-            )
-            evidence: list[dict[str, Any]] = []
-            try:
-                for asset in check["assets"]:
-                    evidence.append(
-                        probe_release_bound_signed_media(
-                            api_base_url=args.base_url.rstrip("/"),
-                            session=session,
-                            asset=asset,
-                            attestation_token=research_consumer_attestation,
-                            timeout_seconds=max(1, request_timeout_seconds),
-                        )
-                    )
-            except (ResearchIsolationProbeError, ValueError) as exc:
-                entry = {
-                    "name": SIGNED_MEDIA_CHECK_NAME,
-                    "method": "GET",
-                    "url": check["url"],
-                    "statusCode": 0,
-                    "ok": False,
-                    "bodyPreview": "",
-                    "semanticError": str(exc),
-                    "assets": evidence,
-                }
-                results.append(entry)
-                findings.append(f"{SIGNED_MEDIA_CHECK_NAME} failed: {exc}")
-                continue
+        if check["name"] == "media_sample":
             entry = {
-                "name": SIGNED_MEDIA_CHECK_NAME,
-                "method": "GET",
-                "url": check["url"],
-                "statusCode": 200,
-                "ok": True,
-                "bodyPreview": "",
-                "assets": evidence,
-                "executedAssetCount": len(evidence),
+                "name": "media_sample", "method": "GET", "url": check["url"],
+                "statusCode": 0, "ok": False, "bodyPreview": "",
             }
+            try:
+                entry["mediaReadback"] = probe_public_media(
+                    check["url"], kind="image", asset=check["asset"],
+                    timeout=max(1, request_timeout_seconds),
+                    retry_attempts=max(1, retry_attempts),
+                    retry_sleep_seconds=max(0.0, retry_sleep_seconds),
+                )
+                entry.update(ok=True, statusCode=200)
+            except (ValueError, OSError) as exc:
+                entry["semanticError"] = str(exc)
+                findings.append(f"media_sample failed: {exc}")
             results.append(entry)
             continue
         ok, status_code, payload = request(
@@ -489,8 +368,8 @@ def run_checks(args: argparse.Namespace) -> dict[str, Any]:
             entry["retriedAttempts"] = retry_trace
         if (
             matched
-            and require_authenticated_feed
-            and check["name"] in PRIVATE_FEED_CHECK_NAMES
+            and require_non_empty_content_feed
+            and check["name"] in CONTENT_FEED_CHECK_NAMES
         ):
             expected_post_ids = _expected_release_post_ids(args, check["name"])
             semantic_issue, item_count, returned_post_ids = (
@@ -499,13 +378,9 @@ def run_checks(args: argparse.Namespace) -> dict[str, Any]:
                     expected_post_ids=expected_post_ids,
                 )
             )
-            if (
-                research_consumer_readback
-                and not expected_post_ids
-                and semantic_issue is None
-            ):
+            if not expected_post_ids and semantic_issue is None:
                 semantic_issue = (
-                    "research consumer readback requires exact immutable release "
+                    "release readback requires exact immutable release "
                     f"post IDs for {check['name']}"
                 )
             if item_count is not None:
@@ -518,35 +393,14 @@ def run_checks(args: argparse.Namespace) -> dict[str, Any]:
                 entry["semanticError"] = semantic_issue
         if (
             matched
-            and research_anonymous_convergence
-            and not research_consumer_readback
-            and check["name"] in PRIVATE_FEED_CHECK_NAMES
-        ):
-            authorization = str((check.get("headers") or {}).get("Authorization") or "")
-            if authorization:
-                semantic_issue, item_count = (
-                    "research anonymous convergence carried a credential",
-                    None,
-                )
-            else:
-                semantic_issue, item_count = _research_anonymous_convergence_issue(
-                    payload
-                )
-            if item_count is not None:
-                entry["contentItemCount"] = item_count
-            if semantic_issue:
-                matched = False
-                entry["ok"] = False
-                entry["semanticError"] = semantic_issue
-        if (
-            matched
             and feed_media_origin
             and check["name"] in FEED_MEDIA_SOURCE_CHECK_NAMES
         ):
             for slice_url, slice_kind in _feed_media_slice_urls(
                 payload, feed_media_origin
             ).items():
-                feed_media_slices.setdefault(slice_url, slice_kind)
+                if slice_kind == "video" or slice_url not in feed_media_slices:
+                    feed_media_slices[slice_url] = slice_kind
         if matched and check["name"] == "global_search":
             semantic_issue, hit_count = _search_semantic_issue(
                 payload,
@@ -658,6 +512,8 @@ def run_checks(args: argparse.Namespace) -> dict[str, Any]:
                 matched = False
                 entry["ok"] = False
                 entry["semanticError"] = semantic_issue
+            elif feed_media_origin:
+                feed_media_slices.setdefault(f"{feed_media_origin}/{avatar_ref}", "image")
         results.append(entry)
         if not matched:
             detail = entry.get("semanticError")
@@ -734,28 +590,24 @@ def run_checks(args: argparse.Namespace) -> dict[str, Any]:
             )
         else:
             slice_failures: list[str] = []
+            slice_readbacks: list[dict[str, Any]] = []
+            assets_by_url = {
+                f"{feed_media_origin}/{asset['publicSliceKey']}": asset
+                for asset in (release_identity or {}).get("mediaAssets", [])
+            }
             checked = 0
             for slice_url in sorted(feed_media_slices):
                 slice_kind = feed_media_slices[slice_url]
-                slice_headers = dict(_common_headers(args.test_auth_token))
-                expected = [200]
-                if slice_kind == "video":
-                    # 视频以 Range 读首字节，验证 media-edge 支持分段拉流。
-                    slice_headers["Range"] = "bytes=0-1"
-                    expected = [200, 206]
-                ok, status_code, _payload = request(
-                    "GET",
-                    slice_url,
-                    headers=slice_headers,
-                    timeout=max(1, request_timeout_seconds),
-                    retry_attempts=max(1, retry_attempts),
-                    retry_sleep_seconds=max(0.0, retry_sleep_seconds),
-                )
                 checked += 1
-                if not ok or status_code not in expected:
-                    slice_failures.append(
-                        f"{status_code or 'ERR'} {slice_kind} {slice_url}"
-                    )
+                try:
+                    slice_readbacks.append(probe_public_media(
+                        slice_url, kind=slice_kind, asset=assets_by_url.get(slice_url),
+                        timeout=max(1, request_timeout_seconds),
+                        retry_attempts=max(1, retry_attempts),
+                        retry_sleep_seconds=max(0.0, retry_sleep_seconds),
+                    ))
+                except (ValueError, OSError) as exc:
+                    slice_failures.append(f"{slice_kind} {slice_url}: {exc}")
             entry = {
                 "name": FEED_MEDIA_SLICES_CHECK_NAME,
                 "method": "GET",
@@ -765,6 +617,7 @@ def run_checks(args: argparse.Namespace) -> dict[str, Any]:
                 "bodyPreview": "",
                 "sliceCount": checked,
                 "sliceFailures": slice_failures,
+                "sliceReadbacks": slice_readbacks,
             }
             results.append(entry)
             if slice_failures:
@@ -788,20 +641,11 @@ def run_checks(args: argparse.Namespace) -> dict[str, Any]:
         "retryAttempts": retry_attempts,
         "retrySleepSeconds": retry_sleep_seconds,
         "onlyChecks": sorted(only_checks),
-        "requireNonEmptyContentFeed": require_authenticated_feed,
-        "researchAnonymousConvergence": research_anonymous_convergence,
-        "researchConsumerReadback": research_consumer_readback,
-        "researchConsumerAttested": bool(research_consumer_attestation),
+        "requireNonEmptyContentFeed": require_non_empty_content_feed,
         "checks": results,
         "findings": findings,
     }
-    return _redact_sensitive_values(
-        report,
-        (
-            str(args.test_auth_token or ""),
-            research_consumer_attestation,
-        ),
-    )
+    return _redact_sensitive_values(report, (str(args.test_auth_token or ""),))
 
 
 def main() -> int:

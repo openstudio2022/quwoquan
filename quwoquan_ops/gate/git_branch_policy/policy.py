@@ -154,6 +154,7 @@ class PersistentLaneAdmission:
     isolation: str
     promotion: str
     resync: str
+    resync_scope: str
     worktree_lifecycle: str
     concurrency_evidence: str
 
@@ -431,13 +432,14 @@ def _persistent_lane_admission(
         "isolation": "branch_per_writer",
         "promotion": "declared_pull_request_edge_only",
         "resync": "mandatory_fast_forward_after_integration_or_abort",
+        "resync_scope": "clean_or_non_overlapping_ancestor_only",
         "worktree_lifecycle": "retained",
         "concurrency_evidence": "required",
     }
     if not isinstance(raw, Mapping) or set(raw) != set(expected):
         raise ValueError(
             "branch policy persistent_lane_admission must contain the exact "
-            "isolation/promotion/resync/worktree_lifecycle/concurrency_evidence lifecycle fields"
+            "isolation/promotion/resync/resync_scope/worktree_lifecycle/concurrency_evidence lifecycle fields"
         )
     values = {
         key: _strict_string(raw.get(key), f"persistent_lane_admission.{key}")

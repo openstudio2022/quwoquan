@@ -211,15 +211,15 @@ class LocalEnvironmentTestDataAuthContractTest(unittest.TestCase):
         ]
         self.assertEqual(idempotency_keys, expected)
 
-    def test_research_identity_login_uses_the_pre_runtime_subject_and_owner(self) -> None:
-        instance_scope = hashlib.sha256(b"research-runtime-proof").hexdigest()
+    def test_public_phone_login_uses_the_target_actor_identity(self) -> None:
+        instance_scope = hashlib.sha256(b"actor-runtime-proof").hexdigest()
         responses = [
-            {"challengeId": "challenge-research"},
+            {"challengeId": "challenge-actor"},
             {
-                "ownerId": "owner-research",
-                "activePersona": {"personaId": "persona-research"},
-                "accessToken": "access-research",
-                "refreshToken": "refresh-research",
+                "ownerId": "owner-actor",
+                "activePersona": {"personaId": "persona-actor"},
+                "accessToken": "access-actor",
+                "refreshToken": "refresh-actor",
                 "accountState": "active",
                 "identityOrigin": "phone",
             },
@@ -227,11 +227,8 @@ class LocalEnvironmentTestDataAuthContractTest(unittest.TestCase):
         with (
             mock.patch.object(
                 local_environment_auth,
-                "load_local_research_identity_binding",
-                return_value={
-                    "phone": "+999300000001999",
-                    "accountId": "owner-research",
-                },
+                "_test_data_actor_phone",
+                return_value="+999300000001999",
             ),
             mock.patch.object(local_environment_auth, "_clear_local_otp_send_throttle"),
             mock.patch.object(
@@ -242,7 +239,7 @@ class LocalEnvironmentTestDataAuthContractTest(unittest.TestCase):
             mock.patch.object(
                 local_environment_auth,
                 "request_local_environment_json",
-                return_value={"ownerId": "owner-research"},
+                return_value={"ownerId": "owner-actor"},
             ),
             mock.patch(
                 "quwoquan_ops.cli.lib.local_sms_provider_debug.read_latest_debug_otp",
@@ -254,54 +251,56 @@ class LocalEnvironmentTestDataAuthContractTest(unittest.TestCase):
                 environment="alpha",
                 target_name="alpha-local",
                 test_data_instance_id=instance_scope,
-                identity_set_id="research-identity",
+                identity_set_id="actor-identity",
                 actor_role="primary",
                 actor_index=0,
             )
 
-        self.assertEqual(actor.session.owner_id, "owner-research")
+        self.assertEqual(actor.session.owner_id, "owner-actor")
         self.assertEqual(
             public_request.call_args_list[0].kwargs["body"]["phone"],
             "+999300000001999",
         )
 
-    def test_research_identity_login_rejects_owner_readback_drift(self) -> None:
-        instance_scope = hashlib.sha256(b"research-runtime-proof").hexdigest()
+    def test_public_phone_login_rejects_owner_readback_drift(self) -> None:
+        instance_scope = hashlib.sha256(b"actor-runtime-proof").hexdigest()
         with (
             mock.patch.object(
                 local_environment_auth,
-                "load_local_research_identity_binding",
-                return_value={
-                    "phone": "+999300000001999",
-                    "accountId": "expected-owner",
-                },
+                "_test_data_actor_phone",
+                return_value="+999300000001999",
             ),
             mock.patch.object(local_environment_auth, "_clear_local_otp_send_throttle"),
             mock.patch.object(
                 local_environment_auth,
                 "request_local_environment_public_json",
                 side_effect=[
-                    {"challengeId": "challenge-research"},
+                    {"challengeId": "challenge-actor"},
                     {
                         "ownerId": "other-owner",
-                        "activePersona": {"personaId": "persona-research"},
-                        "accessToken": "access-research",
-                        "refreshToken": "refresh-research",
+                        "activePersona": {"personaId": "persona-actor"},
+                        "accessToken": "access-actor",
+                        "refreshToken": "refresh-actor",
                     },
                 ],
+            ),
+            mock.patch.object(
+                local_environment_auth,
+                "request_local_environment_json",
+                return_value={"ownerId": "expected-owner"},
             ),
             mock.patch(
                 "quwoquan_ops.cli.lib.local_sms_provider_debug.read_latest_debug_otp",
                 return_value=SimpleNamespace(code="123456"),
             ),
         ):
-            with self.assertRaisesRegex(RuntimeError, "managed acceptance identity"):
+            with self.assertRaisesRegex(RuntimeError, "/me owner does not match phone login"):
                 local_environment_auth.open_local_phone_acceptance_session(
                     "https://api.alpha.quwoquan.com",
                     environment="alpha",
                     target_name="alpha-local",
                     test_data_instance_id=instance_scope,
-                    identity_set_id="research-identity",
+                    identity_set_id="actor-identity",
                     actor_role="primary",
                     actor_index=0,
                 )

@@ -33,18 +33,18 @@ def fixture_repo(tmp_path: Path, *, skill_count: int = 12, command_count: int = 
     return root
 
 
-def test_real_inventory_has_twelve_skills_and_eight_cursor_entries() -> None:
+def test_real_inventory_has_fourteen_skills_and_ten_cursor_entries() -> None:
     # spec_ref: specs/feature-tree/runtime/development-workflow-governance/agent-skill-review-context-organization/spec.md#gwt-008.t1
     matrix = workflow_trace.capability_matrix(repo_root=ROOT, generated_at="2026-09-03T00:00:00Z")
     assert matrix["summary"] == {
-        "skill_count": 12,
-        "cursor_explicit_entry_count": 8,
+        "skill_count": 14,
+        "cursor_explicit_entry_count": 10,
         "codex_explicit_entry_count": 0,
         "verified_count": 0,
     }
-    assert len(matrix["skill_inventory"]) == 12
+    assert len(matrix["skill_inventory"]) == 14
     cursor = matrix["hosts"]["cursor"]
-    assert sum(row["explicit_entry_status"] == "declared" for row in cursor) == 8
+    assert sum(row["explicit_entry_status"] == "declared" for row in cursor) == 10
     assert sum(row["explicit_entry_status"] == "unsupported" for row in cursor) == 4
     assert all(row["skill_discovery_status"] == "declared" for row in cursor)
     codex = matrix["hosts"]["codex"]

@@ -1,11 +1,5 @@
 # spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-002.t2
-"""release bound environment identity 投影的本地契约。
-
-Python 1000 行硬顶治理：证据常量、digest/checksum helper 与 Fixture 已
-逐字下沉到
-quwoquan_ops/tests/support/release_bound_environment_identity_test_support.py。
-本文件保留全部投影 fail-closed 测试。测试逐字搬移。
-"""
+"""无类别 release identity、不可变 Data 绑定与普通媒体权限的本地契约。"""
 
 from __future__ import annotations
 
@@ -34,7 +28,6 @@ from quwoquan_ops.tests.support.release_bound_environment_identity_test_support 
     RELEASE_ID,
     SOURCE_DIGEST,
     SOURCE_REVISION,
-    SUBJECT_HASH,
     TEST_SIGNING_ENVIRONMENT,
     ENVIRONMENT_ACCEPTANCE_SCHEMA,
     Fixture,
@@ -58,16 +51,17 @@ class ReleaseBoundEnvironmentIdentityContractTest(unittest.TestCase):
             renderer,
             "validate_data_evidence",
             return_value={
-                "deliveryMode": "private_signed",
-                "releaseId": RELEASE_ID,
-                "manifestDigest": RELEASE_DIGEST,
-                "subjectHash": SUBJECT_HASH,
-                "receiptRef": "env/alpha/runs/data-release/research-isolation.json",
-                "receiptDigest": DIGEST_A,
-                "anonymousContentStatus": 403,
-                "anonymousMediaStatus": 403,
-                "signedMediaTtlSeconds": 300,
-                "mediaAuditEventId": "audit-media-001",
+                "deliveryMode": "public_immutable",
+                "assetId": "media-video",
+                "postId": "post-video",
+                "publicSliceKey": "release/video/media-video/v1/video.mp4",
+                "publicUrl": "https://media.example.test/release/video/media-video/v1/video.mp4",
+                "contentType": "video/mp4",
+                "bytes": 32,
+                "sha256": DIGEST_A,
+                "durationMs": 1000,
+                "firstFrameDecoded": True,
+                "rangeStatus": 206,
             },
         ).start()
         self.app_readback_patcher = mock.patch.object(
@@ -111,8 +105,9 @@ class ReleaseBoundEnvironmentIdentityContractTest(unittest.TestCase):
             self.assertEqual(payload["status"], "passed")
             self.assertEqual(payload["identity"]["baselineId"], BASELINE_ID)
             self.assertEqual(payload["identity"]["releaseId"], RELEASE_ID)
-            self.assertEqual(payload["identity"]["releaseClass"], "research")
-            self.assertEqual(payload["identity"]["productLifecycleState"], "research")
+            for field in ("releaseClass", "productLifecycleState", "readinessPhase"):
+                self.assertNotIn(field, payload["identity"])
+                self.assertNotIn(field, payload["identity"]["activationEnvelope"])
             self.assertEqual(
                 payload["identity"]["dataSourceIdentity"],
                 {
@@ -173,9 +168,12 @@ class ReleaseBoundEnvironmentIdentityContractTest(unittest.TestCase):
             self.assertEqual(payload["identity"]["mediaProbe"]["imageAssets"], 1)
             self.assertEqual(
                 payload["identity"]["mediaReadback"]["deliveryMode"],
-                "private_signed",
+                "public_immutable",
             )
-            self.assertNotIn("publicUrl", payload["identity"]["mediaReadback"])
+            self.assertEqual(
+                payload["identity"]["mediaReadback"]["publicUrl"],
+                self.data_evidence.return_value["publicUrl"],
+            )
             self.assertEqual(self.manifest_files.call_count, 2)
             self.assertNotIn(
                 "artifact_dir", self.manifest_files.call_args_list[0].kwargs
@@ -310,53 +308,184 @@ class ReleaseBoundEnvironmentIdentityContractTest(unittest.TestCase):
             self.manifest_files.assert_not_called()
             self.data_evidence.assert_not_called()
 
-    def test_research_media_validation_never_enters_public_video_path(self) -> None:
+    def test_unclassified_media_keeps_immutable_delivery_security_checks(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory).resolve()
             readiness_path = _write(root / "release-readiness.json", {"passed": True})
-            receipt_ref = "env/alpha/runs/data-release/research/isolation.json"
-            receipt_path = _write(root / receipt_ref, {"outcome": "PASS"})
-            summary = {
-                "releaseId": RELEASE_ID,
-                "manifestDigest": RELEASE_DIGEST,
-                "subjectHash": SUBJECT_HASH,
-                "receiptRef": receipt_ref,
-                "receiptDigest": DIGEST_A,
-                "anonymousContentStatus": 403,
-                "anonymousMediaStatus": 403,
-                "signedMediaTtlSeconds": 300,
-                "mediaAuditEventId": "audit-media-001",
+            content = {
+                "releaseId": RELEASE_ID, "sourceOwner": "qwq_data",
+                "manifestDigest": RELEASE_DIGEST, "mediaManifestDigest": DIGEST_A,
+                "importRunId": "import-001", "verifyRunId": "verify-001",
+                "readinessReceiptRef": "env/alpha/runs/data-release/readiness.json",
             }
+            binding = {
+                "workId": "work-video", "postId": "post-video", "postRef": "post:video",
+                "assetId": "media-video", "assetVersion": 1,
+                "publicSliceKey": "release/video/media-video/v1/video.mp4",
+                "expectedMimeType": "video/mp4", "expectedBytes": 32,
+                "expectedHash": DIGEST_A,
+            }
+            authority = "https://media.example.test"
+            public_url = data_validator.build_release_video_url({"mediaVideo": authority}, binding)
+            delivery = {
+                "tlsSystemTrust": True, "fullStatus": 200, "rangeStatus": 206,
+                "mimeType": "video/mp4", "rangeMimeType": "video/mp4",
+                "contentLength": 32, "observedBytes": 32, "observedHash": DIGEST_A,
+                "etag": "video-v1", "rangeEtag": "video-v1",
+                "contentRange": "bytes 0-31/32", "rangeBytes": 32, "rangeSha256": DIGEST_A,
+                "requestPath": "/" + binding["publicSliceKey"], "requestQuery": "",
+                "cacheControl": "public, max-age=31536000, immutable",
+                "rangeCacheControl": "public, max-age=31536000, immutable",
+                "corsAllowOrigin": "*", "rangeCorsAllowOrigin": "*",
+                "cacheKey": "/" + binding["publicSliceKey"],
+                "rangeCacheKey": "/" + binding["publicSliceKey"],
+                "signedQueryStatus": 403, "signedQueryCacheControl": "no-store",
+                "signedQueryCacheKey": "",
+            }
+            evidence = {
+                "schema": data_validator.DELIVERY_EVIDENCE_SCHEMA, "status": "passed",
+                "environment": "alpha", "target": "alpha-local", "rolloutStage": "local",
+                "release": content, "videoAuthority": authority,
+                "video": {**binding, "publicUrl": public_url}, "delivery": delivery,
+                "playback": {"durationMs": 1000, "firstFrameDecoded": True},
+                "publicSliceKey": binding["publicSliceKey"],
+                "rangeStatus": 206, "contentType": "video/mp4",
+            }
+            receipt_path = root / "media-readback.json"
             with (
                 mock.patch.object(data_validator, "output_root", return_value=root),
-                mock.patch.object(
-                    data_validator,
-                    "verify_research_content_isolation",
-                    return_value=summary,
-                ) as isolation,
-                mock.patch.object(
-                    data_validator,
-                    "load_release_content_identity",
-                    side_effect=AssertionError("public video path must not run"),
-                ),
+                mock.patch.object(data_validator, "load_release_content_identity", return_value=content),
+                mock.patch.object(data_validator, "load_release_video_binding", return_value=binding),
             ):
-                result = data_validator.validate_data_evidence(
-                    data_output_root=root,
-                    readiness_path=readiness_path,
-                    rollback_path=root / "unused-rollback.json",
-                    media_readback_path=receipt_path,
-                    environment="alpha",
-                    target="alpha-local",
-                    expected_release={
-                        "releaseId": RELEASE_ID,
-                        "releaseDigest": RELEASE_DIGEST,
-                        "verifyRunId": "verify-001",
-                        "releaseClass": "research",
-                    },
+                def validate() -> dict[str, object]:
+                    return data_validator.validate_data_evidence(
+                        data_output_root=root, readiness_path=readiness_path,
+                        rollback_path=root / "unused-rollback.json", media_readback_path=receipt_path,
+                        environment="alpha", target="alpha-local",
+                        expected_release={
+                            "releaseId": RELEASE_ID, "releaseDigest": RELEASE_DIGEST,
+                            "importRunId": "import-001", "verifyRunId": "verify-001",
+                            "mediaProbe": {"mediaManifestDigest": DIGEST_A},
+                        },
+                    )
+
+                _write(receipt_path, evidence)
+                self.assertEqual(validate()["deliveryMode"], "public_immutable")
+                mutations = (
+                    ("delivery", "tlsSystemTrust", False),
+                    ("delivery", "observedHash", DIGEST_B),
+                    ("delivery", "rangeStatus", 200),
+                    ("delivery", "signedQueryCacheControl", "public"),
+                    ("delivery", "signedQueryCacheKey", "/public/cache"),
+                    ("release", "manifestDigest", DIGEST_B),
+                    ("video", "assetVersion", "v2"),
+                    ("playback", "firstFrameDecoded", False),
                 )
-            isolation.assert_called_once()
-            self.assertEqual(result["deliveryMode"], "private_signed")
-            self.assertNotIn("publicUrl", result)
+                for section, field, replacement in mutations:
+                    with self.subTest(section=section, field=field):
+                        changed = json.loads(json.dumps(evidence))
+                        changed[section][field] = replacement
+                        _write(receipt_path, changed)
+                        with self.assertRaises(data_validator.DataEvidenceError):
+                            validate()
+
+    def test_current_data_schema_preserves_immutable_source_and_run_binding(self) -> None:
+        source = {
+            "sourceRevision": SOURCE_REVISION, "sourceDigest": SOURCE_DIGEST,
+            "entityCatalogDigest": ENTITY_CATALOG_DIGEST,
+        }
+        run_ref = f"env/alpha/runs/data-release/{RELEASE_ID}/import-001/import.json"
+        activation = {
+            "schema": "quwoquan_data.environment_activation_envelope",
+            "environment": "alpha", "releaseId": RELEASE_ID, "manifestDigest": RELEASE_DIGEST,
+            **source, "importRunId": "import-001", "verifyRunId": "verify-001",
+            "importReportRef": run_ref, "importReportDigest": DIGEST_B,
+        }
+        operation = {
+            "path": "/content/feed", "pageId": "content.feed.list", "status": 200,
+            "requestId": "request-001", "traceId": "trace-001",
+            "startedAt": "2026-09-09T08:00:00Z", "endedAt": "2026-09-09T08:00:01Z",
+            "durationMs": 1000,
+        }
+        readiness = {
+            "schema": "quwoquan_data.environment_release_readiness", "environment": "alpha",
+            "releaseId": RELEASE_ID, "releaseKind": "content", "sourceOwner": "qwq_data",
+            "containsUnverifiedAssets": False,
+            "rightsStatusCounts": {"verified": 3, "unverified": 0, "restricted": 0, "unknown": 0},
+            "authorizationRequiredAssetIds": [], "researchAcceptedCount": 0, "commercialAcceptedCount": 3,
+            "guestActorHash": DIGEST_A,
+            "guestLogin": {**operation, "path": "/auth/login/anonymous", "pageId": "user.login.anonymous"},
+            **source, "manifestDigest": RELEASE_DIGEST, "mediaManifestDigest": DIGEST_A,
+            "importRunId": "import-001", "verifyRunId": "verify-001",
+            "counts": {field: 1 for field in renderer._READINESS_COUNTS},
+            "entityRefs": ["entity:lake"], "postIds": ["post-video"], "creatorIds": ["creator-001"],
+            "tagRefs": ["Topic/travel"], "mediaAssetIds": ["media-video"],
+            "feedQueries": [
+                {"name": name, "path": "/content/feed", "query": query, "status": 200,
+                 "releaseBound": True, "matchedPostIds": ["post-video"], "requests": [operation]}
+                for name, query in (
+                    ("discovery_work", "identity=work&limit=1"),
+                    ("typed_article", "identity=work&type=article&limit=1"),
+                    ("typed_image", "identity=work&type=image&limit=1"),
+                    ("typed_video", "identity=work&type=video&limit=1"),
+                    ("homepage_recommend", "sort=recommend&channelId=recommend&limit=1"),
+                    ("premium_stream", "sort=recommend&channelId=premium_stream&limit=1"),
+                )
+            ],
+            "contentImportReportRef": run_ref, "creatorAttributionRef": run_ref,
+            "tagAttributionRef": run_ref, "homepageApiVerificationRef": run_ref,
+            "postApiVerificationRef": run_ref,
+            "mediaManifestRef": f"data/releases/{RELEASE_ID}/payload/media_manifest.json",
+            "activationEnvelope": activation, "activationEnvelopeDigest": _document_digest(activation),
+            "verifiedAt": "2026-09-09T08:00:01Z", "passed": True,
+        }
+        self.assertEqual(renderer._validate_readiness(_checksum(readiness), environment="alpha")["sourceIdentity"], source)
+        for field in ("releaseClass", "productLifecycleState", "readinessPhase", "researchIsolationPolicy"):
+            for document in ("readiness", "activation"):
+                with self.subTest(field=field, document=document):
+                    changed = json.loads(json.dumps(readiness))
+                    (changed if document == "readiness" else changed["activationEnvelope"])[field] = "retired"
+                    changed["activationEnvelopeDigest"] = _document_digest(changed["activationEnvelope"])
+                    with self.assertRaisesRegex(renderer.IdentityEvidenceError, "schema mismatch"):
+                        renderer._validate_readiness(_checksum(changed), environment="alpha")
+        rows = [{**source, "executionIds": ["execution-001"]}]
+        source_set = {"sourceIdentities": rows, "sourceIdentitySetDigest": _document_digest(
+            {"schema": "quwoquan_data.source_identity_set", "sourceIdentities": rows}
+        )}
+        for document in (readiness, activation):
+            for field in source:
+                document.pop(field)
+            document.update(source_set)
+        readiness["activationEnvelopeDigest"] = _document_digest(activation)
+        self.assertEqual(renderer._validate_readiness(_checksum(readiness), environment="alpha")["sourceIdentity"], source_set)
+        activation["sourceIdentitySetDigest"] = DIGEST_B
+        readiness["activationEnvelopeDigest"] = _document_digest(activation)
+        with self.assertRaisesRegex(renderer.IdentityEvidenceError, "activationEnvelope.sourceIdentitySetDigest drift"):
+            renderer._validate_readiness(_checksum(readiness), environment="alpha")
+        run = {
+            "schema": "quwoquan_data.environment_release_result", "environment": "alpha",
+            "releaseId": RELEASE_ID, "containsUnverifiedAssets": False, "manifestDigest": RELEASE_DIGEST,
+            "admissionKind": "producer_handoff", "handoffRef": f"handoff-ref-v1:{DIGEST_A}:{DIGEST_B}",
+            "handoffArtifactRef": f"data/releases/{RELEASE_ID}/producer_release_handoff.json",
+            "handoffArtifactDigest": DIGEST_A, "runId": "import-001", "status": "completed",
+            "startedAt": "2026-09-09T08:00:00Z", "endedAt": "2026-09-09T08:00:01Z", "durationMs": 1000,
+        }
+        for mutation in (None, "manifestDigest", "handoffArtifactDigest", "verificationChecksum"):
+            with self.subTest(run_mutation=mutation):
+                changed = _checksum(run)
+                if mutation == "manifestDigest":
+                    changed = _checksum({**run, "manifestDigest": DIGEST_B})
+                elif mutation == "handoffArtifactDigest":
+                    changed.pop(mutation)
+                elif mutation == "verificationChecksum":
+                    changed[mutation] = DIGEST_B
+                kwargs = {"label": "import-receipt", "environment": "alpha", "release_id": RELEASE_ID,
+                          "release_digest": RELEASE_DIGEST}
+                if mutation is None:
+                    self.assertEqual(renderer._validate_run(changed, **kwargs), "import-001")
+                else:
+                    with self.assertRaises(renderer.IdentityEvidenceError):
+                        renderer._validate_run(changed, **kwargs)
 
     def test_every_required_input_class_is_fail_closed_and_writes_nothing(self) -> None:
         missing = [
@@ -434,8 +563,8 @@ class ReleaseBoundEnvironmentIdentityContractTest(unittest.TestCase):
             self.assertEqual(renderer.main(fixture.argv(output)), 2)
             self.assertFalse(output.exists())
 
-    def test_source_identity_and_research_commercial_drift_are_gate_block(self) -> None:
-        for mutation in ("source", "lifecycle"):
+    def test_source_identity_and_immutable_release_drift_are_gate_block(self) -> None:
+        for mutation in ("source", "release"):
             with (
                 self.subTest(mutation=mutation),
                 tempfile.TemporaryDirectory() as directory,
@@ -449,7 +578,10 @@ class ReleaseBoundEnvironmentIdentityContractTest(unittest.TestCase):
                         readiness["activationEnvelope"]
                     )
                 else:
-                    readiness["productLifecycleState"] = "commercial"
+                    readiness["activationEnvelope"]["manifestDigest"] = DIGEST_B
+                    readiness["activationEnvelopeDigest"] = _document_digest(
+                        readiness["activationEnvelope"]
+                    )
                 _write(fixture.paths["readiness"], _checksum(readiness))
                 output = Path(directory) / "identity.json"
                 self.assertEqual(renderer.main(fixture.argv(output)), 2)

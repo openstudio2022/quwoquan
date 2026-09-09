@@ -1,0 +1,45 @@
+schema: agent-context-budget-ratchet
+governance:
+  owner: agent-skill-review-context-organization
+  reason: |
+    每层上下文（根 AGENTS、L1/更深子树 AGENTS、单个 Workflow Skill 文件、单条 description）
+    各有独立字节预算；没有单文件上限时任何一层都可以长到把同链其他层挤出 16 KiB 总预算，
+    而且根每多 1 字节所有 21 条链同时少 1 字节。
+  expires_when: entries 归零时删除本文件，并把分层预算改为全仓零容忍
+  measure: |
+    verify_agent_context_budget.py 对每个受管文件取实际字节（description 取字符数），
+    超过所属层预算的文件必须在此逐条登记且实际值不得超过 ceiling；回落到预算内的文件
+    必须同批删除条目，否则判否。ceiling 只允许下调。
+  note: |
+    逐条登记而不是登记总数：总数基线挡不住「删一条旧的、加一条新的」的漂移。
+    条目所属 lane 由 lane_ownership.yaml 决定，engineering 只登记、不代改其他 lane 的文件。
+
+layer_budgets:
+  root_agents_bytes: 6144
+  l1_agents_bytes: 5120
+  deep_agents_bytes: 2048
+  skill_file_bytes: 4096
+  skill_description_chars: 300
+
+entries:
+- path: quwoquan_app/AGENTS.md
+  kind: agents
+  ceiling: 5694
+- path: quwoquan_service/AGENTS.md
+  kind: agents
+  ceiling: 5149
+- path: quwoquan_data/AGENTS.md
+  kind: agents
+  ceiling: 8740
+- path: .agents/skills/content-production/SKILL.md
+  kind: skill_file
+  ceiling: 8224
+- path: .agents/skills/environment-ops/SKILL.md
+  kind: skill_file
+  ceiling: 4145
+- path: .agents/skills/environment-ops/SKILL.md
+  kind: skill_description
+  ceiling: 365
+- path: .agents/skills/incident-inspection/SKILL.md
+  kind: skill_description
+  ceiling: 380

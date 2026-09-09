@@ -99,37 +99,7 @@ _OBJECT_COUNTS = {
     "tagRefs": "tags",
     "mediaAssetIds": "mediaAssets",
 }
-_RUN_FIELDS = {
-    "schema",
-    "environment",
-    "releaseId",
-    "releaseClass",
-    "productLifecycleState",
-    "containsUnverifiedAssets",
-    "manifestDigest",
-    "admissionKind",
-    "admissionRef",
-    "admissionDigest",
-    "runId",
-    "status",
-    "startedAt",
-    "endedAt",
-    "durationMs",
-    "lifecycleExitRef",
-    "homepageVerificationCasesRef",
-    "tagImportReportRef",
-    "creatorImportReportRef",
-    "contentImportReportRef",
-    "homepageImportReportRef",
-    "coverageReceiptRef",
-    "postApiVerificationRef",
-    "releaseReadinessRef",
-    "researchIsolationVerificationRef",
-    "tagConsumerVerificationRef",
-    "homepageApiVerificationRef",
-    "baselineApiVerificationRef",
-    "verificationChecksum",
-}
+_DATA_SCHEMA_ROOT = Path(__file__).resolve().parents[2] / "quwoquan_data/schema/release"
 _ROLLBACK_FIELDS = {
     "schema",
     "environment",
@@ -273,24 +243,45 @@ def _validate_historical_release_snapshot(
     return candidate, git_sha, tree
 
 
+def _validate_data_schema(value: Mapping[str, Any], *, name: str) -> None:
+    # Data authoring schema 拥有字段闭集；不得投影掉未知字段后接受旧类别证据。
+    try:
+        from jsonschema import Draft202012Validator, FormatChecker
+    except ImportError as exc:
+        raise IdentityEvidenceError("Data schema validator is unavailable") from exc
+    schema = _read(_DATA_SCHEMA_ROOT / f"{name}.schema.json", label=name)
+    error = next(
+        Draft202012Validator(schema, format_checker=FormatChecker()).iter_errors(value),
+        None,
+    )
+    if error is not None:
+        raise IdentityEvidenceError(f"{name} schema mismatch: {error.message}")
+
+
+def _source_identity(readiness: Mapping[str, Any]) -> dict[str, Any]:
+    scalar_fields = ("sourceRevision", "sourceDigest", "entityCatalogDigest")
+    if "sourceIdentities" in readiness or "sourceIdentitySetDigest" in readiness:
+        if any(field in readiness for field in scalar_fields):
+            raise IdentityEvidenceError("release-readiness mixes source identity modes")
+        rows = readiness.get("sourceIdentities")
+        digest = _digest(
+            readiness.get("sourceIdentitySetDigest"),
+            label="release-readiness.sourceIdentitySetDigest",
+        )
+        if not isinstance(rows, list) or not rows or digest != _canonical_digest(
+            {"schema": "quwoquan_data.source_identity_set", "sourceIdentities": rows}
+        ):
+            raise IdentityEvidenceError("release-readiness.sourceIdentitySetDigest drift")
+        return {"sourceIdentities": rows, "sourceIdentitySetDigest": digest}
+    return {
+        field: _digest(readiness.get(field), label=f"release-readiness.{field}")
+        for field in scalar_fields
+    }
+
+
 def _validate_activation(
     readiness: Mapping[str, Any], *, environment: str
 ) -> dict[str, Any]:
-    release_class = str(readiness.get("releaseClass") or "")
-    lifecycle = str(readiness.get("productLifecycleState") or "")
-    phase = str(readiness.get("readinessPhase") or "")
-    # DEC-041：producer 现役只有 production；research/commercial 仅为尚未删除的
-    # 下游分叉保留（multi-carrier-release OPEN-024）。
-    if release_class not in {"research", "commercial", "production"} or lifecycle != release_class:
-        raise IdentityEvidenceError("release readiness lifecycle identity mismatch")
-    if phase not in {"research", "commercial", "production"} or phase != release_class:
-        raise IdentityEvidenceError(
-            "activation phase must match immutable release lifecycle"
-        )
-    source_identity = {
-        field: _digest(readiness.get(field), label=f"release-readiness.{field}")
-        for field in ("sourceRevision", "sourceDigest", "entityCatalogDigest")
-    }
     activation = readiness.get("activationEnvelope")
     if not isinstance(activation, Mapping):
         raise IdentityEvidenceError("release-readiness.activationEnvelope is missing")
@@ -299,13 +290,28 @@ def _validate_activation(
         "environment": environment,
         "releaseId": readiness.get("releaseId"),
         "manifestDigest": readiness.get("manifestDigest"),
-        **source_identity,
-        "releaseClass": release_class,
-        "productLifecycleState": lifecycle,
-        "readinessPhase": phase,
+        **_source_identity(readiness),
         "importRunId": readiness.get("importRunId"),
         "verifyRunId": readiness.get("verifyRunId"),
+        "importReportRef": readiness.get("contentImportReportRef"),
     }
+    if "milestone" in readiness:
+        expected["milestone"] = readiness["milestone"]
+        previous = activation.get("previousEnvironmentActivation")
+        previous_environment = {
+            "alpha": None, "beta": "alpha", "gamma": "beta", "prod": "gamma",
+        }[environment]
+        if previous_environment is None:
+            if previous is not None:
+                raise IdentityEvidenceError("alpha activation cannot bind a predecessor")
+        elif (
+            not isinstance(previous, Mapping)
+            or previous.get("environment") != previous_environment
+        ):
+            raise IdentityEvidenceError("activation predecessor environment drift")
+        expected["previousEnvironmentActivation"] = previous
+    if set(activation) != {*expected, "importReportDigest"}:
+        raise IdentityEvidenceError("activationEnvelope fields are not canonical")
     for field, expected_value in expected.items():
         if activation.get(field) != expected_value:
             raise IdentityEvidenceError(f"activationEnvelope.{field} drift")
@@ -314,34 +320,13 @@ def _validate_activation(
         activation.get("importReportDigest"),
         label="activationEnvelope.importReportDigest",
     )
-    isolation = activation.get("researchIsolationPolicy")
-    if release_class == "research":
-        if not isinstance(isolation, Mapping):
-            raise IdentityEvidenceError("research activation requires isolation policy")
-        for field in ("policyRef", "verificationRef", "subjectHash"):
-            _text(isolation.get(field), label=f"researchIsolationPolicy.{field}")
-        for field in ("policyDigest", "verificationDigest"):
-            _digest(isolation.get(field), label=f"researchIsolationPolicy.{field}")
-        if readiness.get("internalSubjectHash") != isolation.get("subjectHash"):
-            raise IdentityEvidenceError("research activation subjectHash drift")
-        if readiness.get("researchIsolationVerificationRef") != isolation.get(
-            "verificationRef"
-        ):
-            raise IdentityEvidenceError("research isolation verificationRef drift")
-        if readiness.get("researchIsolationVerificationDigest") != isolation.get(
-            "verificationDigest"
-        ):
-            raise IdentityEvidenceError("research isolation verificationDigest drift")
-    elif isolation is not None:
-        raise IdentityEvidenceError(
-            "commercial activation cannot carry research isolation"
-        )
     if readiness.get("activationEnvelopeDigest") != _canonical_digest(activation):
         raise IdentityEvidenceError("activationEnvelopeDigest drift")
     return dict(activation)
 
 
 def _validate_readiness(value: dict[str, Any], *, environment: str) -> dict[str, Any]:
+    _validate_data_schema(value, name="environment_release_readiness")
     if (
         value.get("schema") != "quwoquan_data.environment_release_readiness"
         or value.get("environment") != environment
@@ -407,12 +392,7 @@ def _validate_readiness(value: dict[str, Any], *, environment: str) -> dict[str,
         "verifyRunId": _text(
             value.get("verifyRunId"), label="release-readiness.verifyRunId"
         ),
-        "releaseClass": str(value["releaseClass"]),
-        "productLifecycleState": str(value["productLifecycleState"]),
-        "sourceIdentity": {
-            field: str(value[field])
-            for field in ("sourceRevision", "sourceDigest", "entityCatalogDigest")
-        },
+        "sourceIdentity": _source_identity(value),
         "activationEnvelope": activation,
         "activationEnvelopeDigest": str(value["activationEnvelopeDigest"]),
         "counts": dict(counts),
@@ -436,17 +416,22 @@ def _validate_readiness(value: dict[str, Any], *, environment: str) -> dict[str,
 
 
 def _validate_run(
-    value: dict[str, Any], *, label: str, environment: str, release_id: str
+    value: dict[str, Any],
+    *,
+    label: str,
+    environment: str,
+    release_id: str,
+    release_digest: str,
 ) -> str:
-    if set(value) != _RUN_FIELDS:
-        raise IdentityEvidenceError(f"{label} fields are not canonical")
+    _validate_data_schema(value, name="environment_release_result")
     if (
         value.get("schema") != "quwoquan_data.environment_release_result"
         or value.get("environment") != environment
         or value.get("releaseId") != release_id
+        or value.get("manifestDigest") != release_digest
         or value.get("status") != "completed"
     ):
-        raise IdentityEvidenceError(f"{label} is not a completed release result")
+        raise IdentityEvidenceError(f"{label} is not an exact completed release result")
     _verify_checksum(value, label=label)
     return _text(value.get("runId"), label=f"{label}.runId")
 
@@ -845,6 +830,7 @@ def render(args: argparse.Namespace) -> dict[str, Any]:
         label="import-receipt",
         environment=environment,
         release_id=release["releaseId"],
+        release_digest=release["releaseDigest"],
     )
     if import_run != release["importRunId"]:
         raise IdentityEvidenceError("import receipt runId drift")
@@ -853,6 +839,7 @@ def render(args: argparse.Namespace) -> dict[str, Any]:
         label="replay-receipt",
         environment=environment,
         release_id=release["releaseId"],
+        release_digest=release["releaseDigest"],
     )
     rollback_identity = _validate_rollback(
         rollback,
@@ -923,8 +910,6 @@ def render(args: argparse.Namespace) -> dict[str, Any]:
         "target": target,
         "releaseId": release["releaseId"],
         "releaseDigest": release["releaseDigest"],
-        "releaseClass": release["releaseClass"],
-        "productLifecycleState": release["productLifecycleState"],
         "dataSourceIdentity": release["sourceIdentity"],
         "activationEnvelope": release["activationEnvelope"],
         "activationEnvelopeDigest": release["activationEnvelopeDigest"],

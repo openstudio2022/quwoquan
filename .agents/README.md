@@ -46,9 +46,9 @@ frontmatter 只使用开放字段；目录名与 `name` 一致，`metadata.kind:
 
 `make verify-agent-context-budget` 检查：
 
-- 根加适用子树 `AGENTS.md` 合并不超过 16KiB。
+- 根加适用子树 `AGENTS.md` 合并不超过 16KiB；分层预算根 ≤ 6KiB、L1 子树 ≤ 5KiB、更深子树 ≤ 2KiB、单个 Skill 文件 ≤ 4KiB、description ≤ 300 字符，存量超限项只在 `quwoquan_ops/policies/gates/agent_context_budget_baseline.yaml` 登记且只减不增。
 - 默认 feature manifest 不超过 8KiB，单 Reviewer 规则/profile/checklist 上下文不超过 24KiB。
-- Workflow Skill 五段、Cursor command 薄壳、frontmatter 与引用有效性。
+- Workflow Skill 五段、Cursor command 薄壳、frontmatter 与引用有效性；Skill body 不复述 contract 已拥有的 binding、owner manifest 前置、零 Reviewer 形态与六类 handoff 触发。HOTL 运行矩阵的 Skill 行与 `.agents/skills` 发现闭集一一对应。
 - 无规范性 Cursor rule、无 role `references/`、无共享 completion/interaction 跳转。
 - checklist 的 MUST/MUST NOT 只绑定 `evidence: <id>` 或客观 `check:`，禁止内嵌 `gate:` 命令。
 - Review registry v2、中性 executor 与双 adapter 一致，无退役 harness 入口。

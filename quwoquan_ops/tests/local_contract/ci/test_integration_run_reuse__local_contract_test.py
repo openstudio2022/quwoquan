@@ -1,0 +1,369 @@
+# spec_ref: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/daily-merge-release-strategy/spec.md#gwt-005.t2
+"""lane `make accept REUSE=1` 的 candidate/Alpha/Beta 事实复用合同。
+
+复用只按 exact 身份（commit、tree、expectedParent、ImpactPlan digest、profile）精确匹配，并要求既有
+Alpha 事实通过 canonical 校验；任一漂移、校验失败或事实缺失都视为不存在，不按时间窗或分支名复用。
+"""
+
+from __future__ import annotations
+
+import importlib.util
+import json
+import sys
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+from types import SimpleNamespace
+from unittest import mock
+
+import pytest
+
+ROOT = Path(__file__).resolve().parents[4]
+MODULE_PATH = ROOT / "quwoquan_ops/cli/integration_run.py"
+SPEC = importlib.util.spec_from_file_location("integration_run_under_test", MODULE_PATH)
+assert SPEC and SPEC.loader
+integration_run = importlib.util.module_from_spec(SPEC)
+sys.modules[SPEC.name] = integration_run
+SPEC.loader.exec_module(integration_run)
+
+COMMIT = "c" * 40
+TREE = "t" * 40
+PARENT = "p" * 40
+IMPACT = "sha256:" + "1" * 64
+PROFILE = "integration"
+
+
+def _candidate(store: Path, *, candidate_id: str, created_at: str, **overrides: object) -> Path:
+    body: dict[str, object] = {
+        "schema": integration_run._CANDIDATE_SCHEMA,
+        "candidateId": candidate_id,
+        "commit": COMMIT,
+        "tree": TREE,
+        "expectedParent": PARENT,
+        "impactPlanDigest": IMPACT,
+        "claimRef": f"claims/{candidate_id.removeprefix('sha256:')}.json",
+        "createdAt": created_at,
+    }
+    body.update(overrides)
+    path = store / "candidates" / f"{candidate_id.removeprefix('sha256:')}.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(body, sort_keys=True) + "\n", encoding="utf-8")
+    return path
+
+
+def _acceptance(store: Path, *, candidate_id: str, environment: str, status: str = "passed", **overrides: object) -> Path:
+    body: dict[str, object] = {
+        "schema": integration_run._ACCEPTANCE_SCHEMA,
+        "environment": environment,
+        "profile": PROFILE,
+        "status": status,
+        "candidate": {"candidateId": candidate_id, "commit": COMMIT, "tree": TREE},
+        "impactPlanDigest": IMPACT,
+        "nonPromotable": False,
+        "predecessor": None,
+    }
+    if environment == "beta":
+        alpha = store / "environment-execution/acceptance" / candidate_id.removeprefix("sha256:") / "alpha.json"
+        body["predecessor"] = {"ref": alpha.relative_to(store).as_posix(), "digest": integration_run.exact_file_digest(alpha)}
+    if status == "not_required":
+        body["reasonCode"] = integration_run.BETA_OPTIONAL_BY_POLICY
+    body.update(overrides)
+    path = store / "environment-execution/acceptance" / candidate_id.removeprefix("sha256:") / f"{environment}.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(body, sort_keys=True) + "\n", encoding="utf-8")
+    return path
+
+
+@pytest.fixture
+def store(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    # 此 fixture 只隔离查找/政策分流；真实验签、过期与 evidence refs 另有下方真实签发合同。
+    def fake_validate(payload, *, store_root, verify_references, accepted_at, signature_verifier, expected_signer_identity):
+        assert verify_references is True and store_root == tmp_path
+        assert accepted_at.tzinfo is not None
+        if payload.get("__invalid"):
+            raise integration_run.EnvironmentSchedulerError("ENVIRONMENT_SCHEDULER.ACCEPTANCE_EXPIRED", "acceptance fact is expired")
+        return dict(payload)
+
+    monkeypatch.setattr(integration_run, "validate_environment_acceptance_fact", fake_validate)
+    return tmp_path
+
+
+def _lookup(store: Path, **overrides: object):
+    params: dict[str, object] = {"store": store, "commit": COMMIT, "tree": TREE, "parent": PARENT, "impact_plan_digest": IMPACT, "profile": PROFILE}
+    params.update(overrides)
+    return integration_run._find_reusable_candidate(**params)
+
+
+def test_exact_candidate_with_passed_alpha_is_reused_and_beta_optional(store: Path) -> None:
+    candidate_id = "sha256:" + "a" * 64
+    path = _candidate(store, candidate_id=candidate_id, created_at="2026-01-01T00:00:00Z")
+    alpha = _acceptance(store, candidate_id=candidate_id, environment="alpha")
+
+    found = _lookup(store)
+
+    assert found is not None
+    assert found["candidatePath"] == path and found["candidate"]["candidateId"] == candidate_id
+    assert found["candidateRef"]["ref"] == f"candidates/{'a' * 64}.json"
+    assert found["alpha"]["ref"] == alpha.relative_to(store).as_posix()
+    assert found["beta"] is None
+
+    _acceptance(store, candidate_id=candidate_id, environment="beta", status="not_required")
+    assert _lookup(store)["beta"]["ref"].endswith("/beta.json")
+
+
+def test_missing_alpha_or_no_candidates_means_no_reuse(store: Path) -> None:
+    assert _lookup(store) is None
+    _candidate(store, candidate_id="sha256:" + "a" * 64, created_at="2026-01-01T00:00:00Z")
+    assert _lookup(store) is None, "没有 Alpha 事实的 candidate 不构成复用"
+
+
+@pytest.mark.parametrize(
+    "candidate_override, acceptance_override, lookup_override",
+    [
+        ({"impactPlanDigest": "sha256:" + "2" * 64}, {}, {}),
+        ({"expectedParent": "q" * 40}, {}, {}),
+        ({"commit": "d" * 40}, {}, {}),
+        ({}, {"profile": "smoke"}, {}),
+        ({}, {"impactPlanDigest": "sha256:" + "2" * 64}, {}),
+        ({}, {"status": "failed"}, {}),
+        ({}, {"candidate": {"candidateId": "sha256:" + "f" * 64, "commit": COMMIT, "tree": TREE}}, {}),
+        ({}, {}, {"profile": "smoke"}),
+        ({}, {"__invalid": True}, {}),
+    ],
+)
+def test_any_identity_drift_or_validation_failure_disables_reuse(store: Path, candidate_override, acceptance_override, lookup_override) -> None:
+    candidate_id = "sha256:" + "a" * 64
+    _candidate(store, candidate_id=candidate_id, created_at="2026-01-01T00:00:00Z", **candidate_override)
+    _acceptance(store, candidate_id=candidate_id, environment="alpha", **acceptance_override)
+
+    assert _lookup(store, **lookup_override) is None
+
+
+def test_newest_matching_candidate_wins(store: Path) -> None:
+    older, newer = "sha256:" + "a" * 64, "sha256:" + "b" * 64
+    _candidate(store, candidate_id=older, created_at="2026-01-01T00:00:00Z")
+    _acceptance(store, candidate_id=older, environment="alpha")
+    _candidate(store, candidate_id=newer, created_at="2026-02-01T00:00:00Z")
+    _acceptance(store, candidate_id=newer, environment="alpha")
+
+    found = _lookup(store)
+
+    assert found is not None and found["candidate"]["candidateId"] == newer
+
+
+def test_reuse_flag_is_opt_in_and_summary_renders_reused_line() -> None:
+    parser = integration_run._parser()
+    args = parser.parse_args(["--release-attestation", "a.json", "--rollback-release-attestation", "b.json"])
+    assert args.reuse is False
+    assert parser.parse_args(["--release-attestation", "a.json", "--rollback-release-attestation", "b.json", "--reuse"]).reuse is True
+
+    rendered = integration_run._render_summary({
+        "runId": "r", "terminal": "admitted", "phases": [],
+        "reused": {"readiness": True, "candidate": True, "alpha": True, "beta": False},
+    })
+    assert "- reused: alpha=yes, beta=no, candidate=yes, readiness=yes" in rendered
+
+
+@pytest.mark.parametrize("opted_in", [False, True])
+@pytest.mark.parametrize("status, reason", [
+    ("passed", None),
+    ("not_required", integration_run.BETA_OPTIONAL_BY_POLICY),
+    ("not_required", integration_run.NO_LIVE),
+])
+def test_reuse_requires_current_beta_policy(store: Path, opted_in: bool, status: str, reason: str | None) -> None:
+    candidate_id = "sha256:" + "a" * 64
+    _candidate(store, candidate_id=candidate_id, created_at="2026-01-01T00:00:00Z")
+    _acceptance(store, candidate_id=candidate_id, environment="alpha")
+    _acceptance(store, candidate_id=candidate_id, environment="beta", status=status, reasonCode=reason)
+
+    found = _lookup(store, beta=opted_in)
+    matches = (status == "passed") if opted_in else (status == "not_required" and reason == integration_run.BETA_OPTIONAL_BY_POLICY)
+    if matches:
+        assert found is not None and found["beta"] is not None
+    elif opted_in:
+        assert found is not None and found["beta"] is None, "not_required 不能冒充真实 Beta"
+    else:
+        assert found is None, "旧 Beta slot 不能被改写为政策跳过，必须重建 candidate"
+
+
+def test_beta_reuse_requires_exact_alpha_predecessor(store: Path) -> None:
+    candidate_id = "sha256:" + "a" * 64
+    _candidate(store, candidate_id=candidate_id, created_at="2026-01-01T00:00:00Z")
+    _acceptance(store, candidate_id=candidate_id, environment="alpha")
+    _acceptance(store, candidate_id=candidate_id, environment="beta", predecessor={"ref": "other.json", "digest": IMPACT})
+    assert _lookup(store, beta=True)["beta"] is None
+
+
+def test_complete_beta_chain_wins_over_newer_alpha_only(store: Path) -> None:
+    older, newer = "sha256:" + "a" * 64, "sha256:" + "b" * 64
+    for candidate_id, created in ((older, "2026-01-01T00:00:00Z"), (newer, "2026-02-01T00:00:00Z")):
+        _candidate(store, candidate_id=candidate_id, created_at=created)
+        _acceptance(store, candidate_id=candidate_id, environment="alpha")
+    _acceptance(store, candidate_id=older, environment="beta")
+    assert _lookup(store, beta=True)["candidate"]["candidateId"] == older
+
+
+@pytest.mark.parametrize("damage", ["candidate-link", "acceptance-link", "non-promotable", "partial-beta"])
+def test_unsafe_or_unusable_candidate_is_not_reused(store: Path, damage: str) -> None:
+    candidate_id = "sha256:" + "a" * 64
+    candidate = _candidate(store, candidate_id=candidate_id, created_at="2026-01-01T00:00:00Z")
+    alpha = _acceptance(store, candidate_id=candidate_id, environment="alpha", nonPromotable=damage == "non-promotable")
+    if damage in {"candidate-link", "acceptance-link"}:
+        path = candidate if damage == "candidate-link" else alpha
+        target = path.with_suffix(".linked")
+        path.rename(target)
+        path.symlink_to(target)
+    elif damage == "partial-beta":
+        (store / "environment-evidence" / candidate_id.removeprefix("sha256:") / "beta").mkdir(parents=True)
+    assert _lookup(store) is None
+
+
+@pytest.fixture
+def acceptance_main(store: Path, monkeypatch: pytest.MonkeyPatch):
+    """仅驱动编排分流；环境、签发和发布由替身隔离，不作为 runtime 资格。"""
+    candidate_id = "sha256:" + "a" * 64
+    candidate_path = _candidate(store, candidate_id=candidate_id, created_at="2026-01-01T00:00:00Z")
+    _acceptance(store, candidate_id=candidate_id, environment="alpha")
+    new_candidate_path = store / "fresh-candidate.json"
+    new_candidate_path.write_text(json.dumps({**json.loads(candidate_path.read_bytes()), "candidateId": "sha256:" + "b" * 64}), encoding="utf-8")
+    plan_path = store / "plan.json"
+    plan_path.write_text("{}", encoding="utf-8")
+    release, rollback = store / "release.json", store / "rollback.json"
+    for path in (release, rollback):
+        path.write_text("{}", encoding="utf-8")
+    lane = "refs/heads/lane/product-mainline"
+    merged_lanes = [{"branch": lane, "commit": COMMIT}, {"branch": "refs/heads/lane/engineering", "commit": PARENT}]
+    git_answers = {
+        "status": "", "rev-parse": COMMIT, "ls-remote": f"{PARENT}\trefs/heads/dev1.0", "show": TREE,
+    }
+    monkeypatch.setattr(integration_run, "_git", lambda *args: git_answers[args[0]])
+    monkeypatch.setattr(integration_run.subprocess, "run", lambda *args, **kwargs: SimpleNamespace(returncode=0))
+    for name, value in {"OUTPUT_ROOT": store, "RUNS_ROOT": store / "runs"}.items():
+        monkeypatch.setattr(integration_run, name, value)
+    replacements = {
+        "_store": store, "load_keyring": {}, "ed25519_signer": object(),
+        "ed25519_environment_verifier": object(), "key_root": store,
+        "_readiness_local_ref": lane, "_merged_lanes": merged_lanes,
+        "_impact_plan": ({"integration_depth": "abg_release_sensitive", "plan_digest": IMPACT, "scopes": ["app", "data"]}, plan_path),
+        "_local_readiness": (store / "readiness.json", {"cache_hit": True}),
+        "build_head_candidate": new_candidate_path, "create_source_fact": store / "source.json", "release_claim": None,
+        "_not_required_beta": {}, "_issue": {"ref": "issued.json", "digest": IMPACT},
+    }
+    calls = {}
+    for name, value in replacements.items():
+        calls[name] = mock.Mock(return_value=value)
+        monkeypatch.setattr(integration_run, name, calls[name])
+    monkeypatch.setattr(integration_run, "_release_id", lambda path: path.stem)
+    monkeypatch.setattr(integration_run, "store_ref", lambda **kwargs: {"ref": kwargs["path"].relative_to(store).as_posix(), "digest": IMPACT})
+
+    def run_environment(**kwargs):
+        kwargs["summary"]["environments"][kwargs["environment"]] = {"executed": True}
+        return {"readiness": store / "alpha-release-readiness.json"}
+
+    def write_bundle(**kwargs):
+        path = kwargs["run_dir"] / "acceptance-bundle"
+        path.mkdir()
+        (path / "bundle.json").write_text(json.dumps({"bundleId": IMPACT, "storeFiles": []}), encoding="utf-8")
+        return path
+
+    for name, effect in {"_run_environment": run_environment, "_write_acceptance_bundle": write_bundle}.items():
+        calls[name] = mock.Mock(side_effect=effect)
+        monkeypatch.setattr(integration_run, name, calls[name])
+    for name in ("create_publish_admission", "local_git_cas_publish", "_stackctl", "_data_ship"):
+        calls[name] = mock.Mock(side_effect=AssertionError(f"unexpected {name}"))
+        monkeypatch.setattr(integration_run, name, calls[name])
+    argv = ["--mode", "acceptance", "--run-id", "policy-reuse", "--release-attestation", str(release),
+            "--rollback-release-attestation", str(rollback),
+            "--release-handoff-ref", "handoff-ref-v1:sha256:" + "a" * 64 + ":sha256:" + "b" * 64,
+            "--merged-lanes", "lane/engineering"]
+    return SimpleNamespace(store=store, candidate_id=candidate_id, argv=argv, calls=calls, merged_lanes=merged_lanes)
+
+
+@pytest.mark.parametrize("opted_in", [False, True])
+@pytest.mark.parametrize("existing_beta", ["missing", "passed", "policy", "no-live"])
+def test_acceptance_main_reuse_honors_beta_opt_in(acceptance_main, opted_in: bool, existing_beta: str) -> None:
+    setup = acceptance_main
+    if existing_beta != "missing":
+        _acceptance(setup.store, candidate_id=setup.candidate_id, environment="beta",
+                    status="passed" if existing_beta == "passed" else "not_required",
+                    reasonCode=None if existing_beta == "passed" else (
+                        integration_run.BETA_OPTIONAL_BY_POLICY if existing_beta == "policy" else integration_run.NO_LIVE))
+    code = integration_run.main([*setup.argv, "--reuse", *(["--beta"] if opted_in else [])])
+    summary = json.loads((setup.store / "runs/policy-reuse/summary.json").read_bytes())
+    blocked = opted_in and existing_beta != "passed"
+    assert code == (1 if blocked else 0)
+    assert summary["mergedLanes"] == setup.merged_lanes
+    if blocked:
+        assert summary["blocker"]["code"] == "INTEGRATION_RUN.BETA_REUSE_UNAVAILABLE"
+        setup.calls["_run_environment"].assert_not_called()
+        setup.calls["_issue"].assert_not_called()
+        setup.calls["_write_acceptance_bundle"].assert_not_called()
+    else:
+        assert summary["terminal"] == "accepted" and "admission" not in summary and "publish" not in summary
+        expected_status = "passed" if opted_in else "not_required"
+        expected_reason = None if opted_in else integration_run.BETA_OPTIONAL_BY_POLICY
+        assert (summary["acceptance"]["betaStatus"], summary["acceptance"]["betaReasonCode"]) == (expected_status, expected_reason)
+        bundle = setup.calls["_write_acceptance_bundle"].call_args.kwargs
+        assert (bundle["beta_status"], bundle["beta_reason"]) == (expected_status, expected_reason)
+        reused_beta = (opted_in and existing_beta == "passed") or (not opted_in and existing_beta == "policy")
+        assert summary["reused"]["beta"] is reused_beta
+        fresh = not opted_in and existing_beta in {"passed", "no-live"}
+        assert summary["reused"]["candidate"] is (not fresh)
+        assert summary["reused"]["alpha"] is (not fresh)
+        assert [call.kwargs["environment"] for call in setup.calls["_run_environment"].call_args_list] == (["alpha"] if fresh else [])
+        if fresh:
+            assert setup.calls["_run_environment"].call_args.kwargs["scopes"] == ("app", "data")
+        rendered = (setup.store / "runs/policy-reuse/summary.md").read_text(encoding="utf-8")
+        assert "- mergedLanes:" in rendered and "- reused:" in rendered
+    assert summary["reused"]["readiness"] is True
+    for name in ("create_publish_admission", "local_git_cas_publish", "_stackctl", "_data_ship"):
+        setup.calls[name].assert_not_called()
+
+
+def test_acceptance_without_reuse_runs_fresh_alpha_and_explicit_beta(acceptance_main) -> None:
+    setup = acceptance_main
+    _acceptance(setup.store, candidate_id=setup.candidate_id, environment="beta")
+    assert integration_run.main([*setup.argv, "--beta"]) == 0
+    calls = setup.calls["_run_environment"].call_args_list
+    assert [call.kwargs["environment"] for call in calls] == ["alpha", "beta"]
+    assert calls[1].kwargs["previous_readiness"] == setup.store / "alpha-release-readiness.json"
+    summary = json.loads((setup.store / "runs/policy-reuse/summary.json").read_bytes())
+    assert summary["reused"] == {"readiness": True, "candidate": False, "alpha": False, "beta": False}
+
+
+def test_integrate_rejects_acceptance_only_reuse(acceptance_main) -> None:
+    setup = acceptance_main
+    assert integration_run.main(["--mode", "integrate", "--acceptance-bundle", str(setup.store), "--reuse", "--run-id", "integrate-reuse"]) == 1
+    summary = json.loads((setup.store / "runs/integrate-reuse/summary.json").read_bytes())
+    assert summary["blocker"]["code"] == "INTEGRATION_RUN.INPUT_INVALID"
+    setup.calls["_run_environment"].assert_not_called()
+    setup.calls["_local_readiness"].assert_not_called()
+
+
+@pytest.mark.parametrize("damage", ["none", "expired", "wrong-key", "evidence-drift"])
+def test_reusable_acceptance_revalidates_real_signed_evidence(damage: str) -> None:
+    from quwoquan_ops.tests.local_contract.stackctl.test_integration_run_production_release__local_contract_test import (
+        IntegrationRunProductionReleaseContractTest,
+    )
+    from quwoquan_ops.tests.support.evidence_signing_test_support import create_temporary_signing
+
+    support = IntegrationRunProductionReleaseContractTest()
+    support.setUp()
+    try:
+        _bundle, refs, store, signing, args = support._signed_bundle()
+        fact = json.loads((store / refs["alphaFact"]["ref"]).read_bytes())
+        verifier = signing.environment_verifier()
+        if damage == "wrong-key":
+            verifier = create_temporary_signing(support.root / "other-reuse-key").environment_verifier()
+        elif damage == "evidence-drift":
+            (store / fact["runtimeIdentity"]["ref"]).write_bytes(b"{}")
+        with mock.patch.object(integration_run, "datetime") as clock:
+            clock.now.return_value = datetime.now(timezone.utc) + (timedelta(hours=2) if damage == "expired" else timedelta())
+            found = integration_run._reusable_acceptance(
+                store=store, candidate_id=fact["candidate"]["candidateId"], commit=fact["candidate"]["commit"],
+                tree=fact["candidate"]["tree"], environment="alpha", profile=args.profile,
+                impact_plan_digest=fact["impactPlanDigest"], allowed_status={"passed"},
+                signature_verifier=verifier, expected_signer_identity=args.signer_identity,
+            )
+        assert found == (refs["alphaFact"] if damage == "none" else None)
+    finally:
+        support.doCleanups()

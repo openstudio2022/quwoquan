@@ -310,6 +310,16 @@ workflows:
     deliverable: reviewed-increment
     automatic_review: false
 
+  sync-lane-from-dev:
+    segments: [PRE, POST]
+    deliverable: synced-lane
+    automatic_review: false
+
+  integrate-lane-to-dev:
+    segments: [PRE, POST]
+    deliverable: published-dev-head
+    automatic_review: false
+
   environment-ops:
     segments: [PRE, POST]
     baseline_evidence: review-baseline

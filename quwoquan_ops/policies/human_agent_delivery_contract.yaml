@@ -439,6 +439,10 @@ workflow_interaction_binding:
       - {phase: PRE, event_type: progress_update, delivery_stage: outcome_observation_acceptance, audience_role: environment_reliability_owner}
       - {phase: DURING, event_type: exception_escalation, delivery_stage: outcome_observation_acceptance, audience_role: $route}
       - {phase: POST, event_type: completion_report, delivery_stage: outcome_observation_acceptance, audience_role: $route}
+    integrate-lane-to-dev:
+      - {phase: PRE, event_type: decision_request, delivery_stage: integration_trusted_ci, audience_role: engineering_delivery_owner}
+      - {phase: DURING, event_type: exception_escalation, delivery_stage: integration_trusted_ci, audience_role: engineering_delivery_owner}
+      - {phase: POST, event_type: completion_report, delivery_stage: integration_trusted_ci, audience_role: engineering_delivery_owner}
     plan-next:
       - {phase: PRE, event_type: progress_update, delivery_stage: feedback_knowledge_distillation, audience_role: engineering_delivery_owner}
       - {phase: DURING, event_type: decision_request, delivery_stage: delivery_planning_authorization, audience_role: $route}
@@ -451,6 +455,10 @@ workflow_interaction_binding:
       - {phase: PRE, event_type: progress_update, delivery_stage: quality_business_uat, audience_role: quality_owner}
       - {phase: DURING, event_type: exception_escalation, delivery_stage: quality_business_uat, audience_role: $route}
       - {phase: POST, event_type: completion_report, delivery_stage: quality_business_uat, audience_role: quality_owner}
+    sync-lane-from-dev:
+      - {phase: PRE, event_type: progress_update, delivery_stage: agent_led_implementation, audience_role: engineering_delivery_owner}
+      - {phase: DURING, event_type: exception_escalation, delivery_stage: agent_led_implementation, audience_role: engineering_delivery_owner}
+      - {phase: POST, event_type: completion_report, delivery_stage: agent_led_implementation, audience_role: engineering_delivery_owner}
 
 production_policy:
   one_approval_per_frozen_campaign: true

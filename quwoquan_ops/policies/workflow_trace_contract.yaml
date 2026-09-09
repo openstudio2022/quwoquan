@@ -18,9 +18,11 @@ selected_skills:
   - environment-ops
   - explore
   - incident-inspection
+  - integrate-lane-to-dev
   - plan-next
   - prd
   - review
+  - sync-lane-from-dev
 verification_policy:
   verified_evidence_kinds: [cursor_command, skill_explicit, host_event]
   natural_language_may_be_verified: false

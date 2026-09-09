@@ -22,17 +22,13 @@ def _args() -> Namespace:
         release_readiness="",
         test_auth_token="",
         require_non_empty_content_feed=True,
-        research_anonymous_convergence=False,
-        research_consumer_readback=False,
-        research_consumer_attestation="",
-        expected_discovery_post_id=[],
+        expected_discovery_post_id=["post-image-a"],
         expected_homepage_recommend_post_id=[],
         expected_video_post_id=[],
         expected_premium_video_post_id=[],
         release_search_canary=[],
         release_sample=[],
         release_creator_profile=[],
-        release_signed_media=[],
         only_check=[],
     )
 
@@ -187,126 +183,22 @@ def test_release_content_probe__rejects_empty_feed_envelopes__local_contract() -
     assert issue == 'response payload has empty "items"'
 
 
-def test_research_convergence__accepts_no_active_release_empty_page__local_contract() -> (
-    None
-):
-    issue, count = probe._research_anonymous_convergence_issue(
-        json.dumps(
-            {
-                "items": [],
-                "objectCards": [],
-                "outcome": "empty",
-                "emptyReason": "no_active_release",
-                "feedRequestId": "frq_01",
-            }
-        )
-    )
-
-    assert issue is None
-    assert count == 0
-
-
-def test_research_convergence__rejects_no_eligible_content_even_without_identity__local_contract() -> None:
-    issue, count = probe._research_anonymous_convergence_issue(
-        json.dumps(
-            {
-                "items": [],
-                "objectCards": [],
-                "outcome": "empty",
-                "emptyReason": "no_eligible_content",
-            }
-        )
-    )
-
-    assert count == 0
-    assert issue == (
-        'research convergence expects emptyReason "no_active_release", '
-        'got "no_eligible_content"'
-    )
-
-
-def test_research_convergence__rejects_release_bound_no_eligible_content_identity__local_contract() -> None:
-    issue, count = probe._research_anonymous_convergence_issue(
-        json.dumps(
-            {
-                "items": [],
-                "objectCards": [],
-                "outcome": "empty",
-                "emptyReason": "no_eligible_content",
-                "releaseId": "research-release",
-                "manifestDigest": "sha256:" + "a" * 64,
-            }
-        )
-    )
-
-    assert count == 0
-    assert issue is not None and "no_active_release" in issue
-
-
-def test_research_convergence__rejects_leaked_items__local_contract() -> None:
-    issue, count = probe._research_anonymous_convergence_issue(
-        json.dumps(
-            {
-                "items": [{"postId": "research-post"}],
-                "objectCards": [],
-                "outcome": "content",
-            }
-        )
-    )
-
-    assert count == 1
-    assert issue is not None and "research isolation leak" in issue
-
-
-@pytest.mark.parametrize(
-    ("payload", "expected_fragment"),
-    [
-        (
-            {
-                "items": [],
-                "objectCards": [],
-                "outcome": "empty",
-                "emptyReason": "no_active_release",
-                "releaseId": "rel-research-001",
-            },
-            "echoes release identity",
-        ),
-        (
-            {"items": [], "objectCards": [], "outcome": "content"},
-            'expects outcome "empty"',
-        ),
-    ],
-)
-def test_research_convergence__rejects_wrong_empty_semantics__local_contract(
-    payload: dict[str, object],
-    expected_fragment: str,
+@pytest.mark.parametrize("empty_reason", ["no_active_release", "no_eligible_content"])
+def test_release_content_probe__empty_reason_never_waives_non_empty_contract__local_contract(
+    empty_reason: str,
 ) -> None:
-    issue, _count = probe._research_anonymous_convergence_issue(json.dumps(payload))
+    issue, count = probe._content_feed_semantic_issue(
+        json.dumps({"items": [], "objectCards": [], "outcome": "empty", "emptyReason": empty_reason})
+    )
+    assert issue == 'response payload has empty "items"'
+    assert count == 0
 
-    assert issue is not None and expected_fragment in issue
 
-
-def test_research_convergence__mode_builds_feed_checks_and_report_flag__local_contract() -> (
-    None
-):
+def test_release_content_probe__all_feeds_are_explicitly_anonymous__local_contract() -> None:
     args = _args()
-    args.require_non_empty_content_feed = False
-    args.research_anonymous_convergence = True
-
-    checks = {item["name"] for item in probe.build_checks(args)}
-
-    assert {"content_feed", "video_book_feed", "premium_feed"} <= checks
-
-
-def test_research_convergence__all_private_feeds_are_explicitly_anonymous__local_contract() -> None:
-    args = _args()
-    args.require_non_empty_content_feed = False
-    args.research_anonymous_convergence = True
-    args.test_auth_token = "ambient-non-research-token"
-
+    args.test_auth_token = "ordinary-login-token"
     checks = {row["name"]: row for row in probe.build_checks(args)}
-
-    for name in probe.PRIVATE_FEED_CHECK_NAMES:
+    for name in probe.CONTENT_FEED_CHECK_NAMES:
         assert "Authorization" not in checks[name]["headers"]
 
 
@@ -613,7 +505,7 @@ def test_feed_media_slices__collects_all_media_urls_from_feed_items__local_contr
     }
 
 
-def test_feed_media_slices__missing_object_fails_run__local_contract() -> None:
+def test_feed_media_slices__missing_object_fails_run__local_contract(monkeypatch: pytest.MonkeyPatch) -> None:
     # 回归首页真实事故：feed items 正常返回，但 media-edge 缺对象导致
     # 图片灰块/视频黑屏；items 非空绝不等于媒体可显示。
     args = _args()
@@ -654,6 +546,13 @@ def test_feed_media_slices__missing_object_fails_run__local_contract() -> None:
             return True, 404, "missing"
         raise AssertionError(f"unexpected probe request: {url}")
 
+    def fake_media(url, **kwargs):
+        ok, status, payload = _fake_request("GET", url)
+        if not ok or status not in {200, 206}:
+            raise ValueError(f"public media returned {status}")
+        return {"publicUrl": url, "status": status, "bytes": len(payload)}
+
+    monkeypatch.setattr(probe, "probe_public_media", fake_media)
     original_request = probe.request
     original_identity = probe._release_probe_identity
     probe.request = _fake_request
@@ -680,7 +579,7 @@ def test_feed_media_slices__missing_object_fails_run__local_contract() -> None:
     )
 
 
-def test_feed_media_slices__all_readable_passes__local_contract() -> None:
+def test_feed_media_slices__all_readable_passes__local_contract(monkeypatch: pytest.MonkeyPatch) -> None:
     args = _args()
     args.media_image_base_url = "https://cdn.gamma.quwoquan.com:19100/media/image"
     args.release_readiness = ""
@@ -709,6 +608,13 @@ def test_feed_media_slices__all_readable_passes__local_contract() -> None:
             return True, 200, "bytes"
         raise AssertionError(f"unexpected probe request: {url}")
 
+    def fake_media(url, **kwargs):
+        ok, status, payload = _fake_request("GET", url)
+        if not ok or status not in {200, 206}:
+            raise ValueError(f"public media returned {status}")
+        return {"publicUrl": url, "status": status, "bytes": len(payload)}
+
+    monkeypatch.setattr(probe, "probe_public_media", fake_media)
     original_request = probe.request
     original_identity = probe._release_probe_identity
     probe.request = _fake_request
