@@ -377,7 +377,7 @@ def _legacy_evidence(root: Path, execution: Path, ref: str) -> list[dict]:
         if not path.exists():
             continue
         document = _read_json(_absolute(path, kind="file"))
-        row = {**_evidence(path), "role": "legacy_audit_not_current_authority", "executionId": document.get("executionId")}
+        row = {**_evidence(path), "role": "historical_audit_not_current_authority", "executionId": document.get("executionId")}
         if name == "evidence_index.json":
             row["indexedEvidence"] = [{"expectedDigest": item.get("sha256"),
                                       **_optional_evidence(execution / ref / _relative(item["ref"]))}
@@ -403,7 +403,7 @@ def _recovery_row(row: dict, pool: Path, tasks: Path, executions: list[Path], ar
             "canonicalReview": review, "manifestReviewDigest": manifest.get("admission", {}).get("evidenceDigest"),
             "recordPayloadMatches": record.get("payloadDigest") == pool_payload_digest(root),
             "recordRightsResult": record.get("rightsResult"), "recordSequence": record["recordSequence"],
-            "legacyAudit": _legacy_evidence(root, execution, ref), "archiveReviewCopies": archives[ref],
+            "historicalAudit": _legacy_evidence(root, execution, ref), "archiveReviewCopies": archives[ref],
             "availableExecutionReviews": alternatives,
             "recoveryFact": "verified_review_available_requires_identity_and_source_adjudication" if verified
                             else "no_verified_chain_in_declared_search_scope",

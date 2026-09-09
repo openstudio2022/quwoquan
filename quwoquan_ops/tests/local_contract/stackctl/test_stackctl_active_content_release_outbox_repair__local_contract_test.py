@@ -38,7 +38,6 @@ def _legacy_post_bindings(count: int) -> list[dict[str, object]]:
                 "postId": post_id,
                 "contentId": f"qwq_data_{post_id}",
                 "contentVersion": 1,
-                "usageScope": "research",
                 "contentType": "article",
                 "authorId": "builtin_travel_blogger",
             }

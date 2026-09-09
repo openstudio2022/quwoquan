@@ -404,7 +404,11 @@ def command_health(args: argparse.Namespace) -> dict[str, Any]:
         statuses.extend(script_statuses)
         stdout_sections.extend(script_stdout_sections)
         findings.extend(script_findings)
-    if not any(not item.get("skipped") and item.get("type") not in {"candidate", "aggregate"} for item in statuses):
+    observed_probe_count = sum(
+        not item.get("skipped") and item.get("type") not in {"candidate", "aggregate"}
+        for item in statuses
+    )
+    if not observed_probe_count:
         findings.append("health probe evidence is empty: no non-skipped runtime probe was observed")
     probe_findings = list(findings)
     try:
@@ -566,10 +570,37 @@ def command_health(args: argparse.Namespace) -> dict[str, Any]:
     availability_failed = bool(blocked_required_availability)
     probe_failures = [item for item in statuses if not item.get("ok") and item.get("type") != "aggregate"]
     first_probe = probe_failures[0] if probe_failures else None
+    # 未观测到运行探针时，空证据不能覆盖阻止探针解析的原始 typed blocker。
+    availability_blocker_first = availability_failed and not observed_probe_count
     first_blocker_class = (
-        "health_probe" if probe_findings else user_availability["firstBlockerClass"]
+        user_availability["firstBlockerClass"]
+        if availability_blocker_first or not probe_findings
+        else "health_probe"
     )
-    first_blocker = findings[0] if findings else str(user_availability.get("firstBlocker") or "")
+    first_blocker = (
+        str(user_availability.get("firstBlocker") or "")
+        if availability_blocker_first or not findings
+        else findings[0]
+    )
+    availability_details = (
+        [
+            "user availability/"
+            + str(blocked_required_availability[0].get("name") or "unknown")
+            + " failed: "
+            + str(
+                (blocked_required_availability[0].get("issues") or [
+                    "required evidence is unavailable"
+                ])[0]
+            )
+        ]
+        if availability_failed
+        else []
+    )
+    details = (
+        availability_details + findings
+        if availability_blocker_first
+        else findings or availability_details
+    )
     runtime_diagnostics = {
         **{
             name: value for name, value in user_availability.get("evidence", {}).items()
@@ -578,7 +609,7 @@ def command_health(args: argparse.Namespace) -> dict[str, Any]:
         "httpProbes": {
             "status": "failed" if probe_findings else "ready",
             "issues": probe_findings,
-            "observedCount": sum(not item.get("skipped") and item.get("type") not in {"candidate", "aggregate"} for item in statuses),
+            "observedCount": observed_probe_count,
             "firstFailedCheck": str((first_probe or {}).get("name") or ""),
             "endpointBinding": "public-target-only" if hosted else "local-target",
         },
@@ -598,40 +629,15 @@ def command_health(args: argparse.Namespace) -> dict[str, Any]:
         target=args.target,
         status="ok" if not findings and not availability_failed else "failed",
         summary=f"stackctl health {args.target}: {ok_count}/{len(statuses)} healthy",
-        details=findings
-        or (
-            [
-                "user availability/"
-                + str(user_availability.get("firstBlockerClass") or "unknown")
-                + " failed: "
-                + str(user_availability.get("firstBlocker") or "required evidence is unavailable")
-            ]
-            if availability_failed
-            else [f"scope={args.scope}", f"healthy checks={ok_count}/{len(statuses)}"]
-        ),
+        details=details or [f"scope={args.scope}", f"healthy checks={ok_count}/{len(statuses)}"],
         extra={"scope": args.scope},
         timing=timing,
     )
     _stackctl._write_stdout_markdown(report_dir, stdout_sections)
-    availability_details = (
-        [
-            "user availability/"
-            + str(blocked_required_availability[0].get("name") or "unknown")
-            + " failed: "
-            + str(
-                (blocked_required_availability[0].get("issues") or [
-                    "required evidence is unavailable"
-                ])[0]
-            )
-        ]
-        if availability_failed
-        else []
-    )
     return {
         "exitCode": 0 if not findings and not availability_failed else 1,
         "summary": f"stackctl health {args.target}: {ok_count}/{len(statuses)} healthy",
-        "details": findings
-        or availability_details
+        "details": details
         or [
             "{name} -> {status} {target}".format(
                 name=item["name"],

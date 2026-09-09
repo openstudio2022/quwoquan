@@ -674,7 +674,7 @@
 - 类型：`capability_gap`
 - 优先级：`P0`
 - 准出影响：`block`
-- 影响或价值：publish 截面的实体 schema 门（[`GWT-036`](#gwt-036)）只拦新投影，门落地前已发布的 canonical 实体仍缺合规处置；历史曾定位 7 个不合规样本（不是当前全池无效对象总数）：`地点/景区/成都熊猫基地西门` 的 `primarySource` 为 `sourceKind: encyclopedia_primary`，缺少 `policyRevision/canonicalUrl/snapshotHash/entityName/extractor/title/sourceUseMode` 与 `geoTagRef`，它被 M10/M100 cohort 的 5 篇 posts 以 `entityRefs` 引用，导致这两级 release 在 Alpha `homepage_import` fail closed（typed 证据为该 apply run 的 `result.json`，`failedStage=homepage_import`）；另 6 个门前 legacy 实体 `乐山大佛`、`峨眉山`、`成都大熊猫繁育研究基地`、`泸沽湖`、`海螺沟`、`青城山` 的 `sourceAttribution` 缺少 `derivedModifications` 且多出 `riskAcceptanceId`，当前不在任何 cohort。
+- 影响或价值：publish 截面的实体 schema 门（[`GWT-036`](#gwt-036)）只拦新投影，门落地前已发布的 canonical 实体仍缺合规处置；既有样本曾缺百科来源身份、地理引用或派生修改字段，依赖这些对象的 cohort 在 `homepage_import` fail closed。具体对象、数量及 exact apply 结果属于运行盘点证据，不在通用规格冻结任务实例；历史样本不等于当前全池无效对象总数。
 - 尚缺实现与证据：按 [`canonical-content-identity-recovery`](../canonical-content-identity-recovery/spec.md) 对全部当前对象逐项冻结 before 身份、摘要、来源/review 与依赖，构造满足新契约的完整 staging；证据充分者迁移，不能证明者经精确授权连同无法修复的依赖退役删除。旧 excluded 只作历史诊断，取消“永不入 cohort 但保留活跃树”的终态。
 - 当前盘点口径：snapshot 只计物理占位（含作者）；pool-query 的 objects 还包含展开的缺失依赖，occupied/invalid 与 absent 必须分开。新包契约下旧计数不能用作当前 eligible，历史错误与本次错误分别保留；合法的原对象级权利词汇不因删除类别而成为错误，也不得因某项先触发的记录错误掩盖原 payload/rights 问题。迁移保留逻辑身份、原权利值与原 review，只对受治理包格式转换生成新版本/摘要。
 - 完成判定：全量当前对象迁移或授权退役均有终态，活跃实体全部满足 [`GWT-036.t3`](#gwt-036)，没有旧结构、悬空依赖或永久 excluded；媒体与旧 release/receipt 原字节不变。新 release 在授权 Alpha 的 `homepage_import` closure 属独立消费证据，不以 producer 测试替代；不得手改摘要补 passed、放宽 schema 或在导入器加 fallback。
