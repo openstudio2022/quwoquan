@@ -6,6 +6,7 @@ import base64
 import hashlib
 import json
 import os
+import re
 import secrets
 import subprocess
 from pathlib import Path
@@ -161,6 +162,9 @@ def _canonical_config_bytes(payload: dict[str, Any]) -> bytes:
 
 def _project_isolated_prevalidation_config(
     path: Path,
+    *,
+    selected: set[str] | None = None,
+    isolated_data: bool = True,
 ) -> dict[str, Any]:
     """Project prod config onto a single-node, empty Redis data plane.
 
@@ -171,7 +175,7 @@ def _project_isolated_prevalidation_config(
     payload = _load_yaml(path)
     changes: list[str] = []
     redis = payload.get("redis")
-    if isinstance(redis, dict):
+    if isolated_data and isinstance(redis, dict):
         for role, role_config in redis.items():
             if not isinstance(role_config, dict):
                 continue
@@ -187,6 +191,27 @@ def _project_isolated_prevalidation_config(
             if "addrs" in role_config:
                 role_config.pop("addrs")
                 changes.append(f"redis.{role}.addrs=removed")
+    if selected is not None:
+        from .data_plane_wiring import _prevalidation_host_port, _rewrite_prevalidation_urls
+
+        rewritten = _rewrite_prevalidation_urls(payload, selected)
+        if rewritten != payload:
+            changes.append("first-party origins=manifest-scoped")
+        payload = rewritten
+        if "redis" not in selected and isolated_data:
+            for role_config in (payload.get("redis") or {}).values():
+                if isinstance(role_config, dict):
+                    role_config["addr"] = (
+                        f"host.containers.internal:{_prevalidation_host_port('redis')}"
+                    )
+        if path.name == "api-edge.yaml":
+            # rehearsal 不得消费正式 gray upstream、allocation secret 或共享桶。
+            payload["candidate_upstreams"] = {}
+            rollout = payload.setdefault("rollout", {})
+            rollout.update({"enabled": False, "policy_file": "", "policy_sha256": "", "allocation_key": ""})
+            if isolated_data:
+                payload["redis"]["admission"]["password"] = ""
+            changes.append("api-edge.rollout=disabled-nonpromotable")
     config = payload.setdefault("config", {})
     if not isinstance(config, dict):
         raise SystemExit(f"FAIL: config section is not an object: {path}")
@@ -307,6 +332,39 @@ def _verified_package_config(
     ):
         raise SystemExit(f"FAIL: package release artifact manifest mismatch: {report_path}")
     return config_path
+
+
+def _validate_prevalidation_interpolation(payload: Any, environment: dict[str, str]) -> None:
+    """在传输前遍历整份 Compose，包括 image-only、volume、command 与 healthcheck。
+
+    不读取调用者 shell，避免本机隐式环境掩盖 user systemd 环境缺口。
+    Docker/Podman 的最终语法校验仍由 unit 的 config --quiet 负责。
+    """
+    missing: set[str] = set()
+    variable = re.compile(r"\$\$|\$\{([A-Za-z_][A-Za-z0-9_]*)(:?[-+?])?([^{}]*)\}|\$([A-Za-z_][A-Za-z0-9_]*)")
+
+    def visit(value: Any) -> None:
+        if isinstance(value, dict):
+            for item in value.values():
+                visit(item)
+        elif isinstance(value, list):
+            for item in value:
+                visit(item)
+        elif isinstance(value, str):
+            remainder = variable.sub("", value)
+            if "${" in remainder:
+                raise SystemExit("GATE_BLOCK: unsupported nested/malformed Compose interpolation")
+            for match in variable.finditer(value):
+                if match.group() == "$$":
+                    continue
+                key = match.group(1) or match.group(4)
+                operator = match.group(2) or ""
+                present = key in environment and (not operator.startswith(":") or bool(environment[key]))
+                if not present and operator not in {"-", ":-", "+", ":+"}:
+                    missing.add(key)
+    visit(payload)
+    if missing:
+        raise SystemExit("GATE_BLOCK: prevalidation Compose interpolation missing: " + ", ".join(sorted(missing)))
 
 
 def _git_revision() -> str:

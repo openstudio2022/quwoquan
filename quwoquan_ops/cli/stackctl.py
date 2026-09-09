@@ -407,6 +407,7 @@ from quwoquan_ops.cli.commands import loadtest as loadtest_commands
 from quwoquan_ops.cli.commands import package_domain as package_domain_commands
 from quwoquan_ops.cli.commands import premium_pool as premium_pool_commands
 from quwoquan_ops.cli.commands import prod_hosted_plan as prod_hosted_plan_commands
+from quwoquan_ops.cli.prod import setup_prod_plane_ssh_access as prod_bootstrap_commands
 from quwoquan_ops.cli.commands import (
     product_telemetry_log_sink as product_telemetry_log_sink_commands,
 )
@@ -783,6 +784,7 @@ def build_parser() -> argparse.ArgumentParser:
     doctor_commands.register_parser(subparsers)
 
     prod_hosted_plan_commands.register_parser(subparsers)
+    prod_bootstrap_commands.register_runtime_parser(subparsers)
 
     content_acceptance_commands.register_content_readiness_parser(subparsers)
     content_acceptance_commands.register_content_api_consumer_parser(subparsers)

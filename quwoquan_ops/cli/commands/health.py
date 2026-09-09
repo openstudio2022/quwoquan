@@ -48,6 +48,9 @@ def register_parser(
         # content-import）；显式 --scope full 仍可做完整探针。
         default=argparse.SUPPRESS,
     )
+    from quwoquan_ops.cli.commands.hosted_read_only import register_identity_arguments
+
+    register_identity_arguments(health_parser)
     health_parser.add_argument("--request-timeout-seconds", type=int, default=0)
     health_parser.add_argument("--retry-attempts", type=int, default=0)
     health_parser.add_argument("--retry-sleep-seconds", type=float, default=-1.0)
@@ -212,9 +215,10 @@ def command_health(args: argparse.Namespace) -> dict[str, Any]:
     env_name = str(target["env"])
     report_dir = _stackctl.resolve_report_dir(args, env_name, args.target)
     started_monotonic, started_at = _stackctl._start_timing()
+    hosted = args.target == "prod-hosted"
     if not hasattr(args, "scope"):
-        args.scope = _stackctl._current_runtime_health_scope(args.target)
-    workload = str(getattr(args, "workload", "") or "").strip() or None
+        args.scope = "full" if hosted else _stackctl._current_runtime_health_scope(args.target)
+    workload = str(getattr(args, "workload", "") or "").strip() or ("full" if hosted else None)
     check_resolution_issue: str | None = None
     try:
         checks = _stackctl._health_checks_for_target(
@@ -331,7 +335,7 @@ def command_health(args: argparse.Namespace) -> dict[str, Any]:
             max_workers=probe_concurrency,
             thread_name_prefix="stackctl-health",
         ) as executor:
-            statuses = list(executor.map(probe_http_check, checks))
+            statuses.extend(executor.map(probe_http_check, checks))
     for status in statuses:
         if not status["ok"]:
             detail = str(status.get("bodyPreview") or "").strip()
@@ -407,8 +411,15 @@ def command_health(args: argparse.Namespace) -> dict[str, Any]:
         statuses.extend(script_statuses)
         stdout_sections.extend(script_stdout_sections)
         findings.extend(script_findings)
+    if not any(not item.get("skipped") and item.get("type") not in {"candidate", "aggregate"} for item in statuses):
+        findings.append("health probe evidence is empty: no non-skipped runtime probe was observed")
+    probe_findings = list(findings)
     try:
-        user_availability = _stackctl._read_only_user_availability_report(args.target)
+        from quwoquan_ops.cli.commands.hosted_read_only import identity_arguments
+
+        user_availability = _stackctl._read_only_user_availability_report(
+            args.target, **(identity_arguments(args) if hosted else {}),
+        )
     except (
         AttributeError,
         OSError,
@@ -481,20 +492,28 @@ def command_health(args: argparse.Namespace) -> dict[str, Any]:
             }
         )
         findings.append(detail)
-    ok_count = sum(1 for item in statuses if item["ok"])
+    ok_count = sum(1 for item in statuses if item["ok"] and not item.get("skipped"))
     timing = _stackctl._finish_timing(started_monotonic, started_at)
     surfaces = _surface_health(statuses)
     candidate_snapshot: Mapping[str, Any] | None = None
     startup_receipt: Mapping[str, Any] | None = None
     generation_issues: list[str] = []
-    try:
-        candidate_snapshot = _stackctl.active_deployment_candidate_snapshot(args.target)
-    except (OSError, RuntimeError, TypeError, ValueError, json.JSONDecodeError) as error:
-        generation_issues.append(f"active candidate readback failed: {error}")
-    try:
-        startup_receipt = _stackctl.read_startup_attempt(args.target)
-    except (OSError, RuntimeError, TypeError, ValueError, json.JSONDecodeError) as error:
-        generation_issues.append(f"startup receipt readback failed: {error}")
+    if hosted:
+        candidate_evidence = user_availability.get("evidence", {}).get("candidate", {})
+        if candidate_evidence.get("status") == "validated":
+            candidate_snapshot = candidate_evidence
+        generation_issues.extend(
+            user_availability.get("evidence", {}).get("runtime", {}).get("identity", {}).get("issues", [])
+        )
+    else:
+        try:
+            candidate_snapshot = _stackctl.active_deployment_candidate_snapshot(args.target)
+        except (OSError, RuntimeError, TypeError, ValueError, json.JSONDecodeError) as error:
+            generation_issues.append(f"active candidate readback failed: {error}")
+        try:
+            startup_receipt = _stackctl.read_startup_attempt(args.target)
+        except (OSError, RuntimeError, TypeError, ValueError, json.JSONDecodeError) as error:
+            generation_issues.append(f"startup receipt readback failed: {error}")
     candidate_digest = str((candidate_snapshot or {}).get("baselineId") or "")
     startup_candidate = str((startup_receipt or {}).get("candidateDigest") or "")
     if candidate_digest and startup_candidate and candidate_digest != startup_candidate:
@@ -509,9 +528,11 @@ def command_health(args: argparse.Namespace) -> dict[str, Any]:
         candidate_snapshot=candidate_snapshot,
         startup_receipt=startup_receipt,
         startup_status=(
-            "executed" if isinstance(startup_receipt, Mapping) else "not_executed"
+            "not_applicable" if hosted else (
+                "executed" if isinstance(startup_receipt, Mapping) else "not_executed"
+            )
         ),
-        startup_reason="no startup receipt is available for health",
+        startup_reason="hosted uses SSH runtime identity, never local startup receipts" if hosted else "no startup receipt is available for health",
         upstream_status="not_applicable",
         upstream_reason="health probes the active runtime directly",
     )
@@ -550,6 +571,30 @@ def command_health(args: argparse.Namespace) -> dict[str, Any]:
         and layer.get("status") != "ready"
     ]
     availability_failed = bool(blocked_required_availability)
+    probe_failures = [item for item in statuses if not item.get("ok") and item.get("type") != "aggregate"]
+    first_probe = probe_failures[0] if probe_failures else None
+    first_blocker_class = (
+        "health_probe" if probe_findings else user_availability["firstBlockerClass"]
+    )
+    first_blocker = findings[0] if findings else str(user_availability.get("firstBlocker") or "")
+    runtime_diagnostics = {
+        **{
+            name: value for name, value in user_availability.get("evidence", {}).items()
+            if name in {"containerRuntime", "firstPartyReadiness", "providerReadiness", "contentUAT", "releaseEligibility", "rehearsal"}
+        },
+        "httpProbes": {
+            "status": "failed" if probe_findings else "ready",
+            "issues": probe_findings,
+            "observedCount": sum(not item.get("skipped") and item.get("type") not in {"candidate", "aggregate"} for item in statuses),
+            "firstFailedCheck": str((first_probe or {}).get("name") or ""),
+            "endpointBinding": "public-target-only" if hosted else "local-target",
+        },
+    }
+    payload.update({
+        "firstBlockerClass": first_blocker_class, "firstBlocker": first_blocker,
+        "availabilityFirstBlockerClass": user_availability["firstBlockerClass"],
+        "runtimeDiagnostics": runtime_diagnostics,
+    })
     payload["requiredUserAvailabilityLayers"] = list(required_availability_layers)
     _stackctl.write_json(report_dir / "report.json", payload)
     _stackctl.write_json(report_dir / "health.json", {"target": args.target, "scope": args.scope, "checks": statuses})
@@ -604,7 +649,11 @@ def command_health(args: argparse.Namespace) -> dict[str, Any]:
         ],
         "reportDir": _stackctl.relpath(report_dir),
         "userAvailability": user_availability["userAvailability"],
-        "firstBlockerClass": user_availability["firstBlockerClass"],
+        "firstBlockerClass": first_blocker_class,
+        "firstBlocker": first_blocker,
+        "availabilityFirstBlockerClass": user_availability["firstBlockerClass"],
+        "runtimeDiagnostics": runtime_diagnostics,
+        "userAvailabilityReport": user_availability,
         "evidenceEnvelope": evidence_envelope,
         **timing,
     }

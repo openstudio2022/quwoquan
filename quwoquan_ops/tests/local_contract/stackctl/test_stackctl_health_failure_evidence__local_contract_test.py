@@ -225,5 +225,50 @@ class StackctlHealthFailureEvidenceLocalContractTest(unittest.TestCase):
         )
 
 
+def test_hosted_health_does_not_read_local_identity_and_preserves_probe_failure(tmp_path):
+    from quwoquan_ops.cli.lib import read_only_user_availability as availability
+    blocked = {
+        "firstBlockerClass": "startup_identity", "firstBlocker": "candidate missing",
+        "userAvailability": [{"name": name, "status": "blocked", "issues": ["missing"]} for name in availability.LAYERS],
+        "metrics": [], "evidence": {},
+    }
+    with (
+        mock.patch.object(stackctl, "resolve_report_dir", return_value=tmp_path),
+        mock.patch.object(stackctl, "_current_runtime_health_scope", side_effect=AssertionError("local scope forbidden")),
+        mock.patch.object(stackctl, "read_startup_attempt", side_effect=AssertionError("local receipt forbidden")),
+        mock.patch.object(stackctl, "active_deployment_candidate_snapshot", side_effect=AssertionError("local candidate forbidden")),
+        mock.patch.object(stackctl, "_read_only_user_availability_report", return_value=blocked) as aggregate,
+        mock.patch.object(stackctl, "_health_checks_for_target", return_value=[{"name": "api-health", "scope": "edge", "url": "https://hosted.invalid/healthz"}]),
+        mock.patch.object(stackctl, "fetch_url", return_value=(False, 503, "runtime unavailable", "text/plain")) as fetch,
+    ):
+        result = stackctl.command_health(argparse.Namespace(target="prod-hosted", read_only=True, deployment_instance="prevalidate", candidate_digest="sha256:" + "a" * 64, host_id="selected", ssh_host="hosted.invalid"))
+    assert fetch.call_count == 1
+    assert aggregate.call_args.kwargs["deployment_instance"] == "prevalidate"
+    assert aggregate.call_args.kwargs["host_id"] == "selected"
+    assert result["firstBlockerClass"] == "health_probe"
+    assert "503" in result["firstBlocker"]
+    assert result["availabilityFirstBlockerClass"] == "startup_identity"
+    assert result["evidenceEnvelope"]["startupAttemptId"]["status"] == "not_applicable"
+    persisted = json.loads((tmp_path / "report.json").read_text())
+    assert persisted["checks"][0]["statusCode"] == 503
+
+
+def test_health_empty_or_entirely_skipped_probe_set_never_passes(tmp_path):
+    from quwoquan_ops.cli.lib import read_only_user_availability as availability
+    ready = {"firstBlockerClass": "none", "firstBlocker": "", "metrics": [], "evidence": {}, "userAvailability": [{"name": name, "status": "ready", "issues": []} for name in availability.LAYERS]}
+    for checks in ([], [{"name": "skip", "scope": "service", "url": "", "skip": True}]):
+        with (
+            mock.patch.object(stackctl, "resolve_report_dir", return_value=tmp_path),
+            mock.patch.object(stackctl, "_health_checks_for_target", return_value=checks),
+            mock.patch.object(stackctl, "_read_only_user_availability_report", return_value=ready),
+            mock.patch.object(stackctl, "active_deployment_candidate_snapshot", return_value=None),
+            mock.patch.object(stackctl, "read_startup_attempt", return_value=None),
+            mock.patch.object(stackctl, "fetch_url", side_effect=AssertionError("no real probe selected")),
+        ):
+            result = stackctl.command_health(argparse.Namespace(target="gamma-local", scope="service", read_only=True))
+        assert result["exitCode"] == 1
+        assert "probe evidence is empty" in result["firstBlocker"]
+
+
 if __name__ == "__main__":
     unittest.main()

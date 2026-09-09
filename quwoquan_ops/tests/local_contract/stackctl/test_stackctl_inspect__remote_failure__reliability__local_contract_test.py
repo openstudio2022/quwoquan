@@ -13,6 +13,9 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from quwoquan_ops.cli import stackctl
+from quwoquan_ops.cli.commands import hosted_read_only
+
+# spec_ref: specs/feature-tree/platform-ops-governance/spec.md#dom-003.t3
 
 
 class StackctlInspectRemoteFailureTest(unittest.TestCase):
@@ -67,7 +70,11 @@ class StackctlInspectRemoteFailureTest(unittest.TestCase):
             ), mock.patch.object(
                 stackctl,
                 "_candidate_workspace_report",
-                return_value={"status": "current", "drifted": False},
+                side_effect=AssertionError("hosted must not read local active candidate"),
+            ), mock.patch.object(
+                hosted_read_only, "_hosted_candidate", side_effect=ValueError("exact candidate absent"),
+            ), mock.patch.object(
+                hosted_read_only, "_hosted_material_readback", side_effect=ValueError("remote unavailable"),
             ):
                 result = stackctl.command_inspect(args)
 
@@ -77,14 +84,12 @@ class StackctlInspectRemoteFailureTest(unittest.TestCase):
             )
             summary = json.loads((report_dir / "summary.json").read_text(encoding="utf-8"))
 
-        expected_issues = [
-            "prod service plane rootless runtime inspect failed",
-            "prod edge plane rootless runtime inspect failed",
-        ]
         self.assertEqual(result["exitCode"], 1)
-        self.assertEqual(result["details"], expected_issues)
-        self.assertEqual(report["findings"], expected_issues)
-        self.assertEqual(findings["issues"], expected_issues)
+        self.assertTrue(any("/service/" in issue and "runtime readback failed" in issue for issue in result["details"]))
+        self.assertTrue(any("/edge/" in issue and "runtime readback failed" in issue for issue in result["details"]))
+        self.assertIn("exact candidate absent", result["details"])
+        self.assertEqual(report["findings"], result["details"])
+        self.assertEqual(findings["issues"], result["details"])
         self.assertEqual(summary["status"], "failed")
 
 

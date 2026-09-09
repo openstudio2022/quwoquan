@@ -215,9 +215,12 @@ resolve_ssh_mode() {
 resolve_ssh_mode "$secret_name" "$account"
 
 ssh_command=(
-  ssh
-  -o StrictHostKeyChecking=accept-new
+  ssh -F /dev/null
+  -o StrictHostKeyChecking=yes
   -o BatchMode=yes
+  -o ConnectTimeout=15
+  -o ServerAliveInterval=15
+  -o ServerAliveCountMax=2
 )
 if [[ "$RESOLVED_SSH_USE_AGENT" != "true" ]]; then
   ssh_command+=(-i "$RESOLVED_SSH_KEY_FILE")
@@ -264,7 +267,15 @@ fi
 echo "[sync] plane=$plane account=$account host=$host key=${RESOLVED_SSH_SOURCE}"
 
 if [[ -n "$source_dir" ]]; then
-  remote_cmd="mkdir -p '${compose_root}' && tar -xf - -C '${compose_root}'"
+  # 仅消费渲染 provenance 与同一 manifest，状态目录不随候选 tar 迁移/覆盖。
+  media_command="$(python3 -B - "$source_dir" "$plane" "$compose_root" <<'PY'
+import sys
+from pathlib import Path
+from quwoquan_ops.cli.prod.render_prod_plane_stack_lib.volume_layout import _persistent_media_sync_command
+print(_persistent_media_sync_command(Path(sys.argv[1]), sys.argv[2], sys.argv[3]))
+PY
+)"
+  remote_cmd="umask 077; mkdir -p '${compose_root}' && tar -xf - -C '${compose_root}' && ${media_command}"
   tar -C "$source_dir" -cf - . | "${ssh_command[@]}" "$remote_cmd"
   echo "[sync] pushed plane=$plane compose_root=$compose_root source=$source_dir"
 fi

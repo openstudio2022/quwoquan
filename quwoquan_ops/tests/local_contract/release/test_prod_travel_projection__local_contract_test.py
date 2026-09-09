@@ -36,7 +36,13 @@ class ProdTravelSunsetProjectionContractTest(unittest.TestCase):
     def test_travel_is_absent_from_every_service_plane_projection(self) -> None:
         prevalidation = self.access["prevalidation"]["planes"]["service"]
         self.assertNotIn("travel-service", prevalidation["startupServices"])
-        self.assertNotIn(39330, prevalidation["exposedPorts"])
+        self.assertNotIn("exposedPorts", prevalidation)
+        self.assertNotIn(
+            39330, [binding["published"] for binding in prevalidation["publishedPorts"]]
+        )
+        self.assertNotIn(
+            "travel-service", [binding["service"] for binding in prevalidation["publishedPorts"]]
+        )
         for field in (
             "governedWorkloads",
             "rootlessGovernedComposeServices",

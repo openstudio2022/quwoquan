@@ -71,6 +71,9 @@ def command_handlers(namespace: Mapping[str, Any]) -> dict[str, CommandHandler]:
     handlers["hosted-read-only"] = namespace[
         "hosted_read_only_commands"
     ].command_hosted_read_only
+    handlers["prod-hosted-bootstrap"] = namespace[
+        "prod_bootstrap_commands"
+    ].command_runtime_bootstrap
     handlers["migration"] = namespace[
         "travel_to_gathering_migration"
     ].command

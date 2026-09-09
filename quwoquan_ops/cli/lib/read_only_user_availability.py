@@ -37,7 +37,14 @@ FIRST_BLOCKER_CLASSES = frozenset(
 )
 
 
-def read_only_user_availability_report(target_name: str) -> dict[str, Any]:
+def read_only_user_availability_report(
+    target_name: str,
+    *,
+    deployment_instance: str = "prod",
+    ssh_host: str = "",
+    host_id: str = "",
+    candidate_digest: str = "",
+) -> dict[str, Any]:
     """读取既有证据并实时派生分层；不得创建、刷新或修复环境事实。"""
 
     import quwoquan_ops.cli.stackctl as _stackctl
@@ -45,6 +52,17 @@ def read_only_user_availability_report(target_name: str) -> dict[str, Any]:
     topology = _stackctl.load_environment_topology()
     target = _stackctl.get_target(topology, target_name)
     environment = str(target.get("env") or "")
+    if target_name == "prod-hosted" or target.get("backend") == "ssh-hosted":
+        from quwoquan_ops.cli.commands.hosted_read_only import hosted_availability_report
+
+        return validate_read_only_user_availability_report(hosted_availability_report(
+            target_name=target_name,
+            environment=environment,
+            deployment_instance=deployment_instance,
+            ssh_host=ssh_host,
+            host_id=host_id,
+            candidate_digest=candidate_digest,
+        ))
     observed_at = datetime.now(timezone.utc)
     issues: dict[str, list[str]] = {layer: [] for layer in LAYERS}
 

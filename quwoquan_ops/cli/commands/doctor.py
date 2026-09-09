@@ -27,6 +27,7 @@ def register_parser(
         help="SSH-only host for prod-hosted runtime diagnosis; never an App public base",
     )
     doctor_parser.add_argument("--host-id", default="")
+    doctor_parser.add_argument("--candidate-digest", default="")
     doctor_parser.add_argument(
         "--deployment-instance",
         choices=("prevalidate", "gray", "prod"),
@@ -51,22 +52,23 @@ def command_doctor(args: argparse.Namespace) -> dict[str, Any]:
         except (OSError, RuntimeError, TypeError, ValueError) as exc:
             deployment_prerequisite_failed = True
             findings.append(f"deployment prerequisite failed: {exc}")
+    legal_result = None
+    legal_payload: dict[str, Any] = {}
     if args.target in {"prod-sim", "prod-hosted"}:
-        legal_result, legal_payload = _stackctl._legal_static_command("validate", env_name)
-        if legal_result.returncode != 0:
-            deployment_prerequisite_failed = True
-            findings.append("deployment prerequisite failed: prod legal-static source is invalid")
-            legal_issues = legal_payload.get("issues")
-            if isinstance(legal_issues, list):
-                findings.extend(
-                    f"legal-static validation: {issue}"
-                    for issue in legal_issues
-                    if isinstance(issue, str) and issue.strip()
-                )
+        # 不继承环境中的 mark：正式诊断始终先取严格法务校验结果。
+        legal_result, legal_payload = _stackctl._legal_static_command(
+            "validate", env_name,
+            environment={"QWQ_LEGAL_STATIC_PLACEHOLDER_POLICY": "block"},
+        )
     capacity = _stackctl.local_runtime_capacity_evidence(target)
     findings.extend(capacity["issues"])
     advisories.extend(capacity["warnings"])
+    from quwoquan_ops.cli.commands.hosted_read_only import identity_arguments
+
+    hosted_identity = identity_arguments(args) if args.target == "prod-hosted" else {}
     health_args = argparse.Namespace(
+        **hosted_identity,
+        read_only=True,
         command="health",
         target=args.target,
         scope="full",
@@ -74,8 +76,46 @@ def command_doctor(args: argparse.Namespace) -> dict[str, Any]:
         report_dir=str(report_dir / "health"),
     )
     health = _stackctl.command_health(health_args)
-    if health["exitCode"] != 0:
+    diagnostics = dict(health.get("runtimeDiagnostics") or {})
+    rehearsal = diagnostics.get("rehearsal") or {}
+    release_eligibility = dict(diagnostics.get("releaseEligibility") or {"status": "GATE_BLOCK"})
+    rehearsal_verified = (
+        args.target == "prod-hosted"
+        and hosted_identity.get("deployment_instance") == "prevalidate"
+        and rehearsal.get("validated") is True
+        and rehearsal.get("nonPromotable") is True
+    )
+    if legal_result is not None and legal_result.returncode != 0:
+        from quwoquan_ops.cli.legal_static import PLACEHOLDER_ISSUE_SUFFIX
+
+        legal_issues = legal_payload.get("issues") or []
+        only_placeholders = bool(legal_issues) and all(
+            isinstance(issue, str) and issue.endswith(PLACEHOLDER_ISSUE_SUFFIX)
+            for issue in legal_issues
+        )
+        if rehearsal_verified and rehearsal.get("legalStaticPlaceholder") is True and only_placeholders:
+            release_eligibility.update({
+                "status": "GATE_BLOCK", "nonPromotable": True,
+                "legalStatic": {"status": "GATE_BLOCK", "issues": legal_issues},
+            })
+            advisories.append("rehearsal legal-static placeholders block release eligibility, not runtime diagnosis")
+        else:
+            deployment_prerequisite_failed = True
+            findings.append("deployment prerequisite failed: prod legal-static source is invalid")
+            findings.extend(f"legal-static validation: {issue}" for issue in legal_issues)
+    if rehearsal_verified:
+        for name in ("containerRuntime", "firstPartyReadiness"):
+            axis = diagnostics.get(name) or {}
+            if axis.get("status") != "ready":
+                findings.extend(axis.get("issues") or [f"{name} checks are failing"])
+        advisories.extend(
+            f"{name}: {(diagnostics.get(name) or {}).get('status', 'unavailable')}"
+            for name in ("providerReadiness", "contentUAT", "httpProbes")
+        )
+        advisories.append("public-target HTTP probes are not bound to the prevalidate instance; see health report for every probe result")
+    elif health["exitCode"] != 0:
         findings.append("health checks are failing")
+        findings.extend(health.get("details") or [])
     if target.get("portProfile"):
         try:
             network = _stackctl._network_report(args.target)
@@ -91,7 +131,7 @@ def command_doctor(args: argparse.Namespace) -> dict[str, Any]:
             findings.append("public api base url is missing")
         if not public_bases.get("productOps"):
             findings.append("product-ops base url is missing")
-        if args.target == "prod-hosted":
+        if args.target == "prod-hosted" and not rehearsal_verified:
             state = _stackctl._load_release_state(_stackctl.PROD_RELEASE_UNIT)
             if not state:
                 advisories.append(
@@ -108,23 +148,13 @@ def command_doctor(args: argparse.Namespace) -> dict[str, Any]:
                 findings.append(
                     "prod release-state missing canonical candidate authority metadata"
                 )
-            runtimes = _stackctl._prod_instance_runtime_reports(
-                report_dir,
-                instance=str(getattr(args, "deployment_instance", "prod") or "prod"),
-                host=str(getattr(args, "ssh_host", "") or ""),
-                host_id=str(getattr(args, "host_id", "") or ""),
-            )
-            for runtime in runtimes:
-                findings.extend(
-                    _stackctl._prod_plane_runtime_findings(
-                        runtime,
-                        plane=str(runtime.get("plane") or "unknown"),
-                    )
-                )
+            # 当前 hosted 容器与身份已由 health 的 SSH 聚合验证；不再混入另一 instance 读回。
+            runtime_issues = (diagnostics.get("containerRuntime") or {}).get("issues") or []
+            findings.extend(runtime_issues)
     try:
         packages = [
             _stackctl.app_deployment_package_dir(env_name, target=args.target) / "report.json"
-        ]
+        ] if args.target != "prod-hosted" else []
     except (OSError, RuntimeError, TypeError, ValueError) as error:
         packages = []
         deployment_prerequisite_failed = True
@@ -157,12 +187,21 @@ def command_doctor(args: argparse.Namespace) -> dict[str, Any]:
             repair_plan.append("run `stackctl repair --target <target> --fix rebuild-packages`")
         repair_plan.extend(capacity["reclaimCommands"])
     timing = _stackctl._finish_timing(started_monotonic, started_at)
+    summary = (
+        "stackctl doctor rehearsal runtime diagnosis ready; release eligibility GATE_BLOCK"
+        if rehearsal_verified and not findings
+        else "stackctl doctor found issues" if findings else "stackctl doctor found no issues"
+    )
     _stackctl.write_json(
         report_dir / "report.json",
         {
             "command": "doctor",
             "target": args.target,
             "capacity": capacity["evidence"],
+            "hostedIdentity": hosted_identity,
+            "runtimeDiagnostics": diagnostics,
+            "releaseEligibility": release_eligibility,
+            "nonPromotable": rehearsal_verified,
             "findings": findings,
             "advisories": advisories,
             "repairPlan": repair_plan,
@@ -180,14 +219,17 @@ def command_doctor(args: argparse.Namespace) -> dict[str, Any]:
         command="doctor",
         target=args.target,
         status="ok" if not findings else "failed",
-        summary="stackctl doctor found no issues" if not findings else "stackctl doctor found issues",
+        summary=summary,
         details=findings + advisories or ["no issues found"],
         timing=timing,
     )
     return {
         "exitCode": 0 if not findings else 1,
-        "summary": "stackctl doctor found no issues" if not findings else "stackctl doctor found issues",
+        "summary": summary,
         "details": findings + advisories or ["no issues found"],
         "reportDir": _stackctl.relpath(report_dir),
+        "runtimeDiagnostics": diagnostics,
+        "releaseEligibility": release_eligibility,
+        "nonPromotable": rehearsal_verified,
         **timing,
     }

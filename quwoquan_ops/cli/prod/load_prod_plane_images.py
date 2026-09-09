@@ -6,6 +6,8 @@ import os
 import re
 import subprocess
 import sys
+import tempfile
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -24,6 +26,22 @@ from quwoquan_ops.cli.lib.prod_management_access import prod_management_ssh_host
 ACCESS_MANIFEST = ROOT / "quwoquan_ops/environments/prod/access-isolation.yaml"
 DEFAULT_KEY_DIR = Path.home() / ".ssh/quwoquan-prod"
 OCI_DIGEST_PATTERN = re.compile(r"sha256:[0-9a-f]{64}")
+COMMAND_TIMEOUT_SECONDS = 120
+TRANSFER_TIMEOUT_SECONDS = 900
+
+
+def normalize_image_id(value: object) -> str:
+    """仅归一化完整的容器 image ID；tag、短 ID、其他算法均拒绝。"""
+    if not isinstance(value, str) or re.fullmatch(r"(?:sha256:)?[0-9a-f]{64}", value) is None:
+        raise ValueError("IMAGE_ID_INVALID: expected bare 64 lowercase hex or sha256 image ID")
+    return value if value.startswith("sha256:") else "sha256:" + value
+
+
+def _run_command(argv: list[str], *, timeout: float = COMMAND_TIMEOUT_SECONDS, **kwargs: Any) -> subprocess.CompletedProcess:
+    try:
+        return subprocess.run(argv, timeout=timeout, **kwargs)
+    except subprocess.TimeoutExpired as error:
+        raise SystemExit(f"FAIL: IMAGE_COMMAND_TIMEOUT: {argv[0]} exceeded {timeout:g}s") from error
 
 
 @dataclass(frozen=True)
@@ -72,7 +90,7 @@ def _compose_image_refs(
 
 
 def _local_image_architecture(image_ref: str) -> str | None:
-    result = subprocess.run(
+    result = _run_command(
         ["docker", "image", "inspect", "--format", "{{.Architecture}}", image_ref],
         stdout=subprocess.PIPE,
         stderr=subprocess.DEVNULL,
@@ -85,7 +103,7 @@ def _local_image_architecture(image_ref: str) -> str | None:
 
 
 def _local_image_digest(image_ref: str) -> str | None:
-    result = subprocess.run(
+    result = _run_command(
         ["docker", "image", "inspect", "--format", "{{.Id}}", image_ref],
         stdout=subprocess.PIPE,
         stderr=subprocess.DEVNULL,
@@ -95,7 +113,11 @@ def _local_image_digest(image_ref: str) -> str | None:
     if result.returncode != 0:
         return None
     digest = result.stdout.strip()
-    return digest if re.fullmatch(r"sha256:[0-9a-f]{64}", digest) else None
+    try:
+        return normalize_image_id(digest)
+    except ValueError:
+        # 本地查询保持 optional 契约；交付前将不可用 ID 硬阻断，绝不跨网传输。
+        return None
 
 
 def _service_factory_image_sources(
@@ -177,8 +199,9 @@ def _pull_and_tag_release_image(
 ) -> None:
     argv = ["docker", "pull", "--platform", platform, source_ref]
     pull = run_with_bounded_retry(
-        lambda: subprocess.run(
+        lambda: _run_command(
             argv,
+            timeout=TRANSFER_TIMEOUT_SECONDS,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
@@ -190,7 +213,7 @@ def _pull_and_tag_release_image(
             f"FAIL: docker pull failed after 3 bounded attempts for {source_ref}:\n"
             f"{pull.stdout}"
         )
-    tag = subprocess.run(
+    tag = _run_command(
         ["docker", "tag", source_ref, target_ref],
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
@@ -211,15 +234,19 @@ def _remote_image_digest(
     host: str,
     key_file: Path,
 ) -> str | None:
-    result = subprocess.run(
+    result = _run_command(
         [
             "ssh",
+            "-F", "/dev/null",
+            "-o", "ConnectTimeout=15",
+            "-o", "ServerAliveInterval=15",
+            "-o", "ServerAliveCountMax=2",
             "-i",
             str(key_file),
             "-o",
             "BatchMode=yes",
             "-o",
-            "StrictHostKeyChecking=no",
+            "StrictHostKeyChecking=yes",
             f"{account}@{host}",
             "podman",
             "image",
@@ -229,16 +256,16 @@ def _remote_image_digest(
             image_ref,
         ],
         stdout=subprocess.PIPE,
-        stderr=subprocess.DEVNULL,
+        stderr=subprocess.PIPE,
         text=True,
         check=False,
     )
+    if result.returncode == 255:
+        raise SystemExit(f"FAIL: IMAGE_INSPECTION_FAILED: SSH: {result.stderr.strip()}")
     if result.returncode != 0:
         return None
     digest = result.stdout.strip()
-    if re.fullmatch(r"[0-9a-f]{64}", digest):
-        digest = f"sha256:{digest}"
-    return digest if re.fullmatch(r"sha256:[0-9a-f]{64}", digest) else None
+    return normalize_image_id(digest)
 
 
 def _tag_remote_image(
@@ -248,15 +275,19 @@ def _tag_remote_image(
     host: str,
     key_file: Path,
 ) -> str:
-    result = subprocess.run(
+    result = _run_command(
         [
             "ssh",
+            "-F", "/dev/null",
+            "-o", "ConnectTimeout=15",
+            "-o", "ServerAliveInterval=15",
+            "-o", "ServerAliveCountMax=2",
             "-i",
             str(key_file),
             "-o",
             "BatchMode=yes",
             "-o",
-            "StrictHostKeyChecking=no",
+            "StrictHostKeyChecking=yes",
             f"{account}@{host}",
             "podman",
             "tag",
@@ -306,6 +337,7 @@ def _deliver_images(
             raise SystemExit(
                 f"FAIL: local image content digest unavailable: {image_ref}"
             )
+        local_digest = normalize_image_id(local_digest)
         if local_digest in delivered:
             remote_digest = _tag_remote_image(
                 delivered[local_digest], image_ref, account, host, key_file
@@ -332,45 +364,52 @@ def _deliver_images(
 
 
 def _stream_image(image_ref: str, account: str, host: str, key_file: Path) -> str:
-    save_proc = subprocess.Popen(
-        ["docker", "save", image_ref],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-    )
-    assert save_proc.stdout is not None
-    load_proc = subprocess.run(
-        [
-            "ssh",
-            "-i",
-            str(key_file),
-            "-o",
-            "BatchMode=yes",
-            "-o",
-            "StrictHostKeyChecking=no",
-            f"{account}@{host}",
-            "podman load",
-        ],
-        stdin=save_proc.stdout,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-        check=False,
-    )
-    save_proc.stdout.close()
-    save_stderr = save_proc.stderr.read().decode("utf-8", errors="replace") if save_proc.stderr else ""
-    save_rc = save_proc.wait()
-    if save_rc != 0:
-        raise SystemExit(f"FAIL: docker save failed for {image_ref}: {save_stderr.strip()}")
-    if load_proc.returncode != 0:
-        raise SystemExit(
-            "FAIL: remote podman load failed for "
-            f"{image_ref}: {(load_proc.stderr or '').strip()}"
+    deadline = time.monotonic() + TRANSFER_TIMEOUT_SECONDS
+    cache = ROOT / ".qwq_output/env/repo/local/prod-image-transfer/cache"
+    cache.mkdir(parents=True, exist_ok=True)
+    # stderr 不走 PIPE，避免 docker save 填满缓冲区后阻塞整个传输链。
+    with tempfile.TemporaryFile(dir=cache) as save_errors:
+        save_proc = subprocess.Popen(
+            ["docker", "save", image_ref], stdout=subprocess.PIPE, stderr=save_errors,
         )
+        assert save_proc.stdout is not None
+        try:
+            load_proc = subprocess.run(
+                ["ssh", "-F", "/dev/null", "-i", str(key_file), "-o", "BatchMode=yes",
+                 "-o", "StrictHostKeyChecking=yes", "-o", "ConnectTimeout=15",
+                 "-o", "ServerAliveInterval=15", "-o", "ServerAliveCountMax=2",
+                 f"{account}@{host}", f"timeout {TRANSFER_TIMEOUT_SECONDS}s podman load"],
+                stdin=save_proc.stdout, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                text=True, check=False, timeout=max(0.1, deadline - time.monotonic()),
+            )
+            save_proc.stdout.close()
+            # 先保留消费端首因，不能让随后的 BrokenPipe 覆盖远端 load 失败。
+            if load_proc.returncode != 0:
+                code = "IMAGE_TRANSFER_TIMEOUT" if load_proc.returncode == 124 else "IMAGE_LOAD_FAILED"
+                raise SystemExit(f"FAIL: {code}: {image_ref}: {load_proc.stderr.strip()}")
+            save_rc = save_proc.wait(timeout=max(0.1, deadline - time.monotonic()))
+            if save_rc != 0:
+                save_errors.seek(0)
+                detail = save_errors.read(8192).decode("utf-8", errors="replace").strip()
+                raise SystemExit(f"FAIL: IMAGE_SAVE_FAILED: {image_ref}: {detail}")
+        except subprocess.TimeoutExpired as error:
+            raise SystemExit(
+                f"FAIL: IMAGE_TRANSFER_TIMEOUT: {image_ref} exceeded {TRANSFER_TIMEOUT_SECONDS}s"
+            ) from error
+        finally:
+            save_proc.stdout.close()
+            # 仅收束本次创建的 save 子进程，不触碰容器、镜像或其他会话进程。
+            if save_proc.poll() is None:
+                save_proc.kill()
+            failed = sys.exc_info()[0] is not None
+            try:
+                save_proc.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                if not failed:
+                    raise SystemExit("FAIL: IMAGE_TRANSFER_CLEANUP_TIMEOUT: docker save did not exit")
     remote_digest = _remote_image_digest(image_ref, account, host, key_file)
     if remote_digest is None:
-        raise SystemExit(
-            f"FAIL: remote image content digest unavailable after load: {image_ref}"
-        )
+        raise SystemExit(f"FAIL: remote image content digest unavailable after load: {image_ref}")
     return remote_digest
 
 
@@ -450,7 +489,7 @@ def _local_rehearsal_image_sources(
 
 
 def _tag_local_image(source_ref: str, target_ref: str) -> None:
-    tag = subprocess.run(
+    tag = _run_command(
         ["docker", "tag", source_ref, target_ref],
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
@@ -568,10 +607,12 @@ def main() -> int:
         if service in governed
     }
     report["contentDigestVerified"] = all(
-        local_digests.get(service) == report["remoteImageContentDigests"].get(service)
+        local_digests.get(service) is not None
+        and local_digests.get(service) == report["remoteImageContentDigests"].get(service)
         for service in governed
-        if service in image_refs
     )
+    if report["contentDigestVerified"] is not True:
+        raise SystemExit("FAIL: IMAGE_DIGEST_MISMATCH: final remote image readback drifted")
     print(json.dumps(report, ensure_ascii=False))
     return 0
 
