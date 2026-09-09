@@ -240,6 +240,33 @@ def _release_id(attestation: Path) -> str:
     return release_id
 
 
+def _acceptance_release_inputs(args: argparse.Namespace) -> dict[str, Any]:
+    """只比较有角色的 exact 输入，不把路径、releaseId 集合或源码身份当作内容身份。"""
+    from quwoquan_ops.cli.lib.deployment_candidate_manifest import _release_binding
+
+    bindings = {}
+    for role, path in (("candidate", args.release_attestation), ("rollback", args.rollback_release_attestation)):
+        binding = _release_binding(str(path), label=role)
+        bindings[role] = {key: value for key, value in binding.items() if key != "attestationRef"}
+    return {"release": bindings, "handoffRef": _handoff_ref(args.release_handoff_ref, label="--release-handoff-ref"),
+            "workload": args.workload}
+
+
+def _acceptance_binds_inputs(*, store: Path, fact: Mapping[str, Any], inputs: Mapping[str, Any]) -> bool:
+    """绑定来自 EAF 签名覆盖的原始 named evidence；缺失的历史证据绝不从本次参数补造。"""
+    try:
+        runtime = _read_store_object(store, fact["runtimeIdentity"], "runtimeIdentity")
+        binding = runtime.get("source", {}).get("acceptanceBinding", {})
+        if binding.get("inputs") != inputs:
+            return False
+        # 原始 package 与 activation/readiness 必须仍是验收时的 exact bytes；不可用就正常重跑。
+        for field in ("packageManifest", "releaseReadiness"):
+            _bundle_bytes(OUTPUT_ROOT, binding[field])
+        return True
+    except (IntegrationRunError, OSError, ValueError, KeyError, TypeError, AttributeError):
+        return False
+
+
 def _handoff_ref(value: str, *, label: str) -> str:
     """现役 `qwq-data ship` 只接受 authoritative handoff-ref-v1 准入；release id 不再是隐式选择器。"""
 
@@ -625,6 +652,7 @@ def _run_environment(*, environment: str, profile: str, candidate: Mapping[str, 
     summary["environments"][environment] = env_summary
     started_up = False
     app_cases: list[dict[str, str]] = []
+    release_inputs = _acceptance_release_inputs(args)
     try:
         package = phases.run(f"{environment}.package", lambda: _package_with_dependency_recovery(
             environment=environment, args=args, log_dir=log_dir, phases=phases,
@@ -633,7 +661,13 @@ def _run_environment(*, environment: str, profile: str, candidate: Mapping[str, 
         active_path = Path(os.environ.get("QWQ_DEPLOY_WORK_ROOT", str(Path.home() / ".cache/quwoquan/deploy"))) / target / "active-runtime-candidate.json"
         active = json.loads(active_path.read_text(encoding="utf-8"))
         baseline = str(active.get("baselineId") or "")
-        manifest = json.loads((Path(str(active["candidateDir"])) / "manifest.json").read_text(encoding="utf-8"))
+        manifest_bytes = (Path(str(active["candidateDir"])) / "manifest.json").read_bytes()
+        manifest = json.loads(manifest_bytes)
+        if {role: {key: value for key, value in binding.items() if key != "attestationRef"}
+                for role, binding in manifest.get("release", {}).items()} != release_inputs["release"]:
+            raise IntegrationRunError("INTEGRATION_RUN.PACKAGE_IDENTITY_INVALID", "package release inputs differ from acceptance inputs")
+        package_snapshot = log_dir / "package-manifest.json"
+        _bundle_put(OUTPUT_ROOT, package_snapshot.relative_to(OUTPUT_ROOT).as_posix(), manifest_bytes)
         packaged_revision = str(manifest.get("sourceRevision") or "")
         _assert_package_identity(packaged_revision=packaged_revision, candidate_commit=candidate["commit"], package=package)
         env_summary["package"] = {"baselineId": baseline, "sourceRevision": packaged_revision, "packageDigest": manifest.get("packageDigest"), "imageDigest": manifest.get("imageDigest"),
@@ -680,10 +714,19 @@ def _run_environment(*, environment: str, profile: str, candidate: Mapping[str, 
     if not provider_ok:
         raise IntegrationRunError("INTEGRATION_RUN.PROVIDER_NOT_READY", f"{environment} provider composition is not ready in health evidence")
 
+    if _acceptance_release_inputs(args) != release_inputs:
+        raise IntegrationRunError("INTEGRATION_RUN.INPUT_INVALID", "release inputs changed during acceptance")
+    acceptance_binding = {
+        "inputs": release_inputs,
+        "packageManifest": {"ref": package_snapshot.relative_to(OUTPUT_ROOT).as_posix(), "digest": exact_file_digest(package_snapshot)},
+        "releaseReadiness": {"ref": readiness.relative_to(OUTPUT_ROOT).as_posix(), "digest": exact_file_digest(readiness)},
+    }
+
     def evidence(role: str, status: str, source: StackctlResult) -> dict[str, str]:
         return _write_canonical(evidence_dir / f"{role}.json", _evidence_object(
             role=role, status=status, environment=environment, profile=profile, candidate=candidate,
-            impact_plan_digest=impact_plan_digest, source=_report_source(source),
+            impact_plan_digest=impact_plan_digest,
+            source={**_report_source(source), **({"acceptanceBinding": acceptance_binding} if role == "runtime-identity" else {})},
         ))
 
     named = {
@@ -781,7 +824,8 @@ _ACCEPTANCE_SCHEMA = "quwoquan_ops.environment_acceptance_fact.v2"
 def _reusable_acceptance(*, store: Path, candidate_id: str, environment: str, profile: str,
                          commit: str, tree: str, impact_plan_digest: str, allowed_status: set[str],
                          expected_reason_code: str | None = None, predecessor: Mapping[str, str] | None = None,
-                         signature_verifier: Any = None, expected_signer_identity: str | None = None) -> dict[str, str] | None:
+                         signature_verifier: Any = None, expected_signer_identity: str | None = None,
+                         release_inputs: Mapping[str, Any] | None = None) -> dict[str, str] | None:
     """同一 exact candidate 的事实必须未过期、可晋级并通过引用/签名校验，Beta 还须匹配本次政策与前驱。"""
 
     if not re.fullmatch(r"sha256:[0-9a-f]{64}", candidate_id):
@@ -812,20 +856,23 @@ def _reusable_acceptance(*, store: Path, candidate_id: str, environment: str, pr
         or binding.get("tree") != tree
     ):
         return None
+    if release_inputs is not None and fact.get("status") == "passed" and not _acceptance_binds_inputs(store=store, fact=fact, inputs=release_inputs):
+        return None
     return {"ref": path.relative_to(store).as_posix(), "digest": _sha256_hex(raw)}
 
 
 def _find_reusable_candidate(*, store: Path, commit: str, tree: str, parent: str, impact_plan_digest: str,
                              profile: str, beta: bool = False, signature_verifier: Any = None,
-                             expected_signer_identity: str | None = None) -> dict[str, Any] | None:
-    """寻找同 commit/tree/parent/ImpactPlan/profile 且持有有效 passed Alpha 的既有 candidate。
+                             expected_signer_identity: str | None = None,
+                             release_inputs: Mapping[str, Any] | None = None) -> dict[str, Any] | None:
+    """寻找同源码及 exact release/rollback/handoff 输入、持有有效 passed Alpha 的 candidate。
 
     candidateId 含 claim 与创建时间，因此按 exact 身份字段匹配。Beta opt-in 只消费 passed；未 opt-in
     只消费政策 not_required。后者遇到占用的旧 Beta slot 必须新建 candidate，不改写 create-once 事实。
     """
 
     candidates_root = store / "candidates"
-    if not candidates_root.is_dir():
+    if not release_inputs or not candidates_root.is_dir():
         return None
     matches: list[dict[str, Any]] = []
     for path in sorted(candidates_root.glob("*.json")):
@@ -849,6 +896,7 @@ def _find_reusable_candidate(*, store: Path, commit: str, tree: str, parent: str
             store=store, candidate_id=candidate_id, environment="alpha", profile=profile,
             commit=commit, tree=tree, impact_plan_digest=impact_plan_digest, allowed_status={"passed"},
             signature_verifier=signature_verifier, expected_signer_identity=expected_signer_identity,
+            release_inputs=release_inputs,
         )
         if alpha is None:
             continue
@@ -858,6 +906,7 @@ def _find_reusable_candidate(*, store: Path, commit: str, tree: str, parent: str
             allowed_status={"passed"} if beta else {"not_required"},
             expected_reason_code=None if beta else BETA_OPTIONAL_BY_POLICY, predecessor=alpha,
             signature_verifier=signature_verifier, expected_signer_identity=expected_signer_identity,
+            release_inputs=release_inputs,
         )
         beta_slot = store / "environment-execution/acceptance" / candidate_id.removeprefix("sha256:") / "beta.json"
         beta_evidence = store / "environment-evidence" / candidate_id.removeprefix("sha256:") / "beta"
@@ -1017,6 +1066,15 @@ def _write_acceptance_bundle(*, run_dir: Path, candidate_ref: Mapping[str, str],
     exact digest，`bundleId` 是 manifest 自身的 canonical digest。integration 侧按同一 digest 逐字节复核。
     """
     store = _store()
+    if getattr(args, "release_attestation", None) is not None or (summary.get("reused") or {}).get("alpha"):
+        inputs = _acceptance_release_inputs(args)
+        if (summary.get("dataReleases") != sorted(binding["releaseId"] for binding in inputs["release"].values())
+                or summary.get("dataReleaseHandoffRef") != inputs["handoffRef"]):
+            raise IntegrationRunError("INTEGRATION_RUN.BUNDLE_CANDIDATE_MISMATCH", "reused release labels differ from exact inputs")
+        for fact_ref in (alpha_ref, beta_ref):
+            fact = _read_store_object(store, fact_ref, "reused acceptance")
+            if fact.get("status") == "passed" and not _acceptance_binds_inputs(store=store, fact=fact, inputs=inputs):
+                raise IntegrationRunError("INTEGRATION_RUN.BUNDLE_CANDIDATE_MISMATCH", "cannot relabel old acceptance with new release inputs")
     bundle_dir = run_dir / "acceptance-bundle"
     if bundle_dir.exists():
         raise IntegrationRunError("INTEGRATION_RUN.CREATE_CONFLICT", f"acceptance bundle already exists: {bundle_dir}")
@@ -1377,6 +1435,7 @@ def main(argv: list[str] | None = None) -> int:
                 impact_plan_digest=impact_digest, profile=args.profile, beta=args.beta,
                 signature_verifier=ed25519_environment_verifier(keyring, [args.signer_identity]),
                 expected_signer_identity=args.signer_identity,
+                release_inputs=_acceptance_release_inputs(args),
             ))
         if reusable is not None:
             # 复用既有 exact candidate：不再 build/claim；Alpha（及政策匹配的 Beta）事实进入 lane bundle。
