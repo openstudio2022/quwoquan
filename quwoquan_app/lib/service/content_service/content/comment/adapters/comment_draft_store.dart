@@ -14,21 +14,25 @@ class CommentDraft {
   const CommentDraft({
     required this.content,
     this.attachmentMediaIds = const <String>[],
+    this.attachmentLocalPaths = const <String>[],
     this.mentionSubjectIds = const <String>[],
   });
 
   final String content;
   final List<String> attachmentMediaIds;
+  final List<String> attachmentLocalPaths;
   final List<String> mentionSubjectIds;
 
   bool get isEmpty =>
       content.trim().isEmpty &&
       attachmentMediaIds.isEmpty &&
+      attachmentLocalPaths.isEmpty &&
       mentionSubjectIds.isEmpty;
 
   Map<String, dynamic> toJson() => <String, dynamic>{
     'content': content,
     'attachmentMediaIds': attachmentMediaIds,
+    'attachmentLocalPaths': attachmentLocalPaths,
     'mentionSubjectIds': mentionSubjectIds,
   };
 
@@ -39,6 +43,7 @@ class CommentDraft {
     return CommentDraft(
       content: (json['content'] ?? '').toString(),
       attachmentMediaIds: stringList(json['attachmentMediaIds']),
+      attachmentLocalPaths: stringList(json['attachmentLocalPaths']),
       mentionSubjectIds: stringList(json['mentionSubjectIds']),
     );
   }

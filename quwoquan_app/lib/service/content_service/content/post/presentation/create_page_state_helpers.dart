@@ -63,6 +63,10 @@ extension _CreatePageStateHelpers on _CreatePageState {
       _doClose();
       return;
     }
+    if (!AuthGate.isAuthenticated(ref)) {
+      await _showGuestExitConfirmation(state);
+      return;
+    }
     await showAppCupertinoDialog<void>(
       context: context,
       builder: (dialogContext) {
@@ -91,24 +95,54 @@ extension _CreatePageStateHelpers on _CreatePageState {
               isDefaultAction: true,
               onPressed: () async {
                 Navigator.of(dialogContext).pop();
-                try {
-                  await _saveDraft(flushReason: 'explicit');
-                  _doClose();
-                } catch (error, stackTrace) {
-                  // 保存失败时留在编辑器，顶栏显示失败状态；独立记录已处理异常。
-                  unawaited(
-                    ref
-                        .read(exceptionTelemetryPortProvider)
-                        .recordHandledException(
-                          source: 'content.create.save_and_exit',
-                          error: error,
-                          stackTrace: stackTrace,
-                          operationId: 'content.local_draft.save',
-                        ),
-                  );
-                }
+                await _saveDraftAndExit();
               },
               child: const Text(CreationText.saveDraft),
+            ),
+            CupertinoDialogAction(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text(FoundationText.cancel),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _showGuestExitConfirmation(CreateEditorState state) async {
+    await showAppCupertinoDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return CupertinoAlertDialog(
+          title: const Text(CreationText.createGuestExitConfirmTitle),
+          content: const Text(CreationText.createGuestExitConfirmDesc),
+          actions: <Widget>[
+            CupertinoDialogAction(
+              key: TestKeys.createGuestDiscardAndExitButton,
+              isDestructiveAction: true,
+              onPressed: () async {
+                Navigator.of(dialogContext).pop();
+                _draftSessionController.suppressAfterDiscard();
+                await _clearCurrentDraft();
+                await reportCreateEditorSurfaceEvent(
+                  ref,
+                  'draft_autosave_drop_on_guest_exit',
+                  createEditorSurfaceExtrasEditorKind(state.editorKind),
+                );
+                _doClose();
+              },
+              child: const Text(CreationText.createGuestDiscardAndExit),
+            ),
+            CupertinoDialogAction(
+              key: TestKeys.createLoginSaveAndExitButton,
+              isDefaultAction: true,
+              onPressed: () async {
+                Navigator.of(dialogContext).pop();
+                await _requireCreateActionLogin(
+                  CreateActionContinuationKind.saveDraftAndExit,
+                );
+              },
+              child: const Text(CreationText.createLoginAndSaveDraft),
             ),
             CupertinoDialogAction(
               onPressed: () => Navigator.of(dialogContext).pop(),
@@ -195,12 +229,6 @@ extension _CreatePageStateHelpers on _CreatePageState {
   Future<void> _pickImagesForCurrentEditor({
     bool closeWhenEmptyOnCancel = false,
   }) async {
-    if (!await _requireCreateActionLogin(
-      CreateActionContinuationKind.pickImages,
-      closeWhenEmptyOnCancel: closeWhenEmptyOnCancel,
-    )) {
-      return;
-    }
     if (!mounted) return;
     // 文本编辑器走 node 级插入
     final state = ref.read(createEditorProvider);
@@ -310,12 +338,6 @@ extension _CreatePageStateHelpers on _CreatePageState {
   }
 
   Future<void> _pickVideoForMedia({bool closeWhenEmptyOnCancel = false}) async {
-    if (!await _requireCreateActionLogin(
-      CreateActionContinuationKind.pickVideo,
-      closeWhenEmptyOnCancel: closeWhenEmptyOnCancel,
-    )) {
-      return;
-    }
     if (!mounted) return;
     final state = ref.read(createEditorProvider);
     if (state.imagePaths.isNotEmpty) {
@@ -590,12 +612,10 @@ extension _CreatePageStateHelpers on _CreatePageState {
         ? previousState.videoCoverTimeMs.clamp(previousStart, previousEnd) /
               previousDuration
         : startRatio;
-    final nextStart =
-        (nextDurationMs * startRatio).round().clamp(
-              0,
-              math.max(nextDurationMs - 100, 0),
-            )
-            as int;
+    final nextStart = (nextDurationMs * startRatio).round().clamp(
+      0,
+      math.max(nextDurationMs - 100, 0),
+    ) as int;
     final rawNextEnd = (nextDurationMs * endRatio).round();
     final nextEnd = rawNextEnd.clamp(nextStart + 100, nextDurationMs);
     final nextCover = (nextDurationMs * coverRatio).round().clamp(
@@ -808,8 +828,7 @@ extension _CreatePageStateHelpers on _CreatePageState {
                 key: const ValueKey<String>('create-body-length-counter'),
                 style: TextStyle(
                   color:
-                      currentLength * 10 >=
-                          _CreatePageState._kMaxBodyLength * 9
+                      currentLength * 10 >= _CreatePageState._kMaxBodyLength * 9
                       ? AppColors.warning
                       : CupertinoColors.secondaryLabel.resolveFrom(context),
                   fontSize: AppTypography.sm,

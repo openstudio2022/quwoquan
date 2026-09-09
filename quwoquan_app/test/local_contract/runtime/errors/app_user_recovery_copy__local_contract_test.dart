@@ -11,7 +11,7 @@ import 'package:quwoquan_app/runtime/errors/ui_error_models.dart';
 import 'package:quwoquan_runtime_errors/runtime_errors.dart';
 
 void main() {
-  test('首页服务访问失败文案共享标题但保留分因说明', () {
+  test('服务侧失败文案直白归因为系统问题且三组标题说明互不相同', () {
     final connection = AppUserRecoveryContract.copyFor(
       AppUserRecoveryGroup.connectionUnavailable,
     );
@@ -22,17 +22,28 @@ void main() {
       AppUserRecoveryGroup.serviceUnavailable,
     );
 
-    expect(connection.title, '暂时无法访问服务');
-    expect(timeout.title, connection.title);
-    expect(service.title, connection.title);
-    expect(connection.message, '本次内容请求未能到达服务。');
-    expect(timeout.message, '服务响应时间较长，这次请求已停止等待。');
-    expect(service.message, '服务暂时没有完成这次内容请求。');
+    expect(connection.title, '服务暂时连不上');
+    expect(timeout.title, '服务响应超时');
+    expect(service.title, '系统出了问题');
+    expect(connection.message, '这次请求没有到达我们的服务，通常是我们这边的问题，请稍后再试。');
+    expect(timeout.message, '我们的系统处理太慢，这次请求已停止等待。这是系统问题，不是你的操作导致的。');
+    expect(service.message, '我们的服务暂时没能处理这次请求。这是系统问题，不是你的网络或操作导致的，请稍后再试。');
+    expect({connection.title, timeout.title, service.title}, hasLength(3));
     expect({
       connection.message,
       timeout.message,
       service.message,
     }, hasLength(3));
+    // REQ-013：服务侧失败必须把责任归到我们的系统，不得用不归因的模糊表述。
+    for (final copy in <AppUserRecoveryCopy>[connection, timeout, service]) {
+      expect(
+        '${copy.title}${copy.message}',
+        anyOf(contains('系统问题'), contains('我们这边的问题')),
+      );
+      expect(copy.title, isNot('暂时无法访问服务'));
+      // 说明不得包含主动作完整文案。
+      expect(copy.message, isNot(contains(SearchText.reload)));
+    }
   });
 
   test('全部恢复组不重复标题说明动作且不泄露品牌或技术字段', () {
@@ -48,12 +59,17 @@ void main() {
       expect(
         visible,
         isNot(
-          anyOf(
+          anyOf(<Matcher>[
             contains('趣我圈'),
             contains('DNS'),
             contains('TLS'),
             contains('HTTP'),
-          ),
+            contains('上游'),
+            contains('连接拒绝'),
+            contains('契约'),
+            contains('端口'),
+            contains('证书'),
+          ]),
         ),
         reason: group.name,
       );

@@ -110551,7 +110551,7 @@
         "adapters": [
           {
             "path": "quwoquan_app/lib/service/content_service/content/comment/adapters/comment_draft_store.dart",
-            "sha256": "137c1e7796fa90d4e9a1404c725390cf3c2220ca6fe9d183610954f942c526f9"
+            "sha256": "f9bfaf5413cf88abf74cc4600ba4785dddd39575e6323c5da890398bdf813af0"
           },
           {
             "path": "quwoquan_app/lib/service/content_service/content/comment/adapters/comment_facets_remote.dart",
@@ -110574,7 +110574,7 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/content/comment/comment_input_overlay__local_contract_test.dart",
-            "sha256": "03416658ca01ca3315df13eb4fe8ac0eaa3361510c43bc2cf4588f9d01ce92ad"
+            "sha256": "150f334982c6237900cefcf3bb474e1b1d7a1357a2e1046d2501d6c72a452da3"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/content/comment/comment_item_actions__local_contract_test.dart",
@@ -114700,7 +114700,7 @@
           },
           {
             "path": "quwoquan_app/lib/service/content_service/content/post/application/create_draft_store_provider.dart",
-            "sha256": "160a0dd34302883ca911f5a9c33589e2159329f115fce062e52d5dad1e9e7b7f"
+            "sha256": "78919d77704605d779727509b51feb73dc7caa5a17208fd2e2682316fc4fc4f3"
           },
           {
             "path": "quwoquan_app/lib/service/content_service/content/post/application/create_editor_provider.dart",
@@ -114950,7 +114950,7 @@
           },
           {
             "path": "quwoquan_app/lib/service/content_service/content/post/adapters/create_draft_local_storage.dart",
-            "sha256": "e896b55ca8121d9e90fadabc82dcb0095ceef1eb05d8e661a2a3f0bc37c98f68"
+            "sha256": "e0463ca79295a87436e0ea944e1ef3fc1aa6053b0b4d2c968b1d990eba6c6faf"
           },
           {
             "path": "quwoquan_app/lib/service/content_service/content/post/adapters/create_draft_session_controller.dart",
@@ -115306,7 +115306,7 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/content/post/create_local_draft_repository__local_contract_test.dart",
-            "sha256": "509814779cdcf5d65ecffb575bf4c992682741db14bb88716dcc8ceb3f23ee59"
+            "sha256": "7ec17deee677f28b48dd991a393809f56a7151e5b9390bde891426916cbe6572"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/content/post/create_page_media_append__local_contract_test.dart",
@@ -115466,7 +115466,7 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/content/post/photo_create_page_surface__local_contract_test.dart",
-            "sha256": "35f4a5626c2f9fbc78a65dd97de0627340fba83e439cd4465ec72494473e4808"
+            "sha256": "636dbf0fe51dabbb744232487634f9a1fa4ccb3475eab74b644beea21564d9e7"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/content/post/photo_publish_payload_media_refs__local_contract_test.dart",
@@ -130197,7 +130197,7 @@
     },
     {
       "path": "_shared/page_object_contract.yaml",
-      "sha256": "a0eb9ae96132da39f8745f0bb4a7252583e8d9197a643b218089bef1e6d22a84"
+      "sha256": "3e1b705abf425d0f6055cc58f3bef9d04acca0ee4c27573b6b5ee95a38dcc326"
     },
     {
       "path": "_shared/realtime_event_catalog.yaml",
@@ -140353,7 +140353,7 @@
     },
     {
       "path": "_shared/page_object_contract.yaml",
-      "sha256": "a0eb9ae96132da39f8745f0bb4a7252583e8d9197a643b218089bef1e6d22a84",
+      "sha256": "3e1b705abf425d0f6055cc58f3bef9d04acca0ee4c27573b6b5ee95a38dcc326",
       "mediaType": "application/yaml",
       "content": {
         "contract_id": "app_page_object_contract",
@@ -140616,7 +140616,7 @@
             ]
           },
           {
-            "auth_requirement": "required",
+            "auth_requirement": "optional",
             "capability_requirements": {
               "all_of": [],
               "any_of": []
@@ -141927,7 +141927,7 @@
             "typed_presentation": "none"
           },
           {
-            "auth_requirement": "required",
+            "auth_requirement": "optional",
             "capability_requirements": {
               "all_of": [],
               "any_of": []
@@ -141981,7 +141981,7 @@
             ]
           },
           {
-            "auth_requirement": "required",
+            "auth_requirement": "optional",
             "capability_requirements": {
               "all_of": [],
               "any_of": []

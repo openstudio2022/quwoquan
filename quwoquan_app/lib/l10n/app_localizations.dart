@@ -3602,6 +3602,54 @@ abstract class AppLocalizations {
   /// **'选择照片、视频或文字开始创作。'**
   String get content_createEntryChooseContentSubtitle;
 
+  /// Title shown when a guest signs in to save a creation draft to an account
+  ///
+  /// In zh, this message translates to:
+  /// **'登录后保存草稿'**
+  String get content_authGateTitleSaveDraft;
+
+  /// Subtitle explaining account-scoped draft persistence after sign-in
+  ///
+  /// In zh, this message translates to:
+  /// **'登录后草稿会保存到你的账号，方便继续编辑。'**
+  String get content_authGateSubtitleSaveDraft;
+
+  /// Short prompt for the save-draft authentication gate
+  ///
+  /// In zh, this message translates to:
+  /// **'登录后即可保存草稿'**
+  String get content_authGatePromptSaveDraft;
+
+  /// Title of the guest creation exit confirmation dialog
+  ///
+  /// In zh, this message translates to:
+  /// **'登录后保存草稿？'**
+  String get content_createGuestExitConfirmTitle;
+
+  /// Description of guest draft loss and account save choices
+  ///
+  /// In zh, this message translates to:
+  /// **'登录后草稿会保存到你的账号；不登录直接退出，当前内容将会丢失。'**
+  String get content_createGuestExitConfirmDesc;
+
+  /// Guest creation exit action that signs in and saves the draft
+  ///
+  /// In zh, this message translates to:
+  /// **'登录并保存草稿'**
+  String get content_createLoginAndSaveDraft;
+
+  /// Guest creation exit action that discards the temporary draft
+  ///
+  /// In zh, this message translates to:
+  /// **'不保存直接退出'**
+  String get content_createGuestDiscardAndExit;
+
+  /// Toast shown after a guest draft is saved to the signed-in account
+  ///
+  /// In zh, this message translates to:
+  /// **'草稿已保存到账号'**
+  String get content_createDraftSavedToAccount;
+
   /// No description provided for @circle_createEntryStartGathering.
   ///
   /// In zh, this message translates to:

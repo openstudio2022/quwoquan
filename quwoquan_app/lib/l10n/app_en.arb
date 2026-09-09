@@ -732,6 +732,38 @@
   "content_createEntryPublishContent": "Post content",
   "content_createEntryChooseActionSubtitle": "Choose what you want to start.",
   "content_createEntryChooseContentSubtitle": "Start with photos, video, or text.",
+  "content_authGateTitleSaveDraft": "Sign in to save your draft",
+  "@content_authGateTitleSaveDraft": {
+    "description": "Title shown when a guest signs in to save a creation draft to an account"
+  },
+  "content_authGateSubtitleSaveDraft": "Your draft will be saved to your account so you can continue editing later.",
+  "@content_authGateSubtitleSaveDraft": {
+    "description": "Subtitle explaining account-scoped draft persistence after sign-in"
+  },
+  "content_authGatePromptSaveDraft": "Sign in to save this draft",
+  "@content_authGatePromptSaveDraft": {
+    "description": "Short prompt for the save-draft authentication gate"
+  },
+  "content_createGuestExitConfirmTitle": "Sign in to save your draft?",
+  "@content_createGuestExitConfirmTitle": {
+    "description": "Title of the guest creation exit confirmation dialog"
+  },
+  "content_createGuestExitConfirmDesc": "Sign in to save this draft to your account. If you exit without signing in, your current work will be lost.",
+  "@content_createGuestExitConfirmDesc": {
+    "description": "Description of guest draft loss and account save choices"
+  },
+  "content_createLoginAndSaveDraft": "Sign in and save draft",
+  "@content_createLoginAndSaveDraft": {
+    "description": "Guest creation exit action that signs in and saves the draft"
+  },
+  "content_createGuestDiscardAndExit": "Exit without saving",
+  "@content_createGuestDiscardAndExit": {
+    "description": "Guest creation exit action that discards the temporary draft"
+  },
+  "content_createDraftSavedToAccount": "Draft saved to your account",
+  "@content_createDraftSavedToAccount": {
+    "description": "Toast shown after a guest draft is saved to the signed-in account"
+  },
   "circle_createEntryStartGathering": "Start an activity",
   "chat_createEntryStartGroupChat": "Start a group chat",
   "circle_authGateTitleStartGathering": "Sign in to start an activity",

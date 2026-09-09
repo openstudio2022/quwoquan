@@ -1,3 +1,7 @@
+// spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/comment-thread/spec.md#gwt-003.t1
+// spec_ref: specs/feature-tree/discovery-content/content-type-framework/creation-mode-and-surface-ia-unification/spec.md#gwt-003.t2
+
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -32,6 +36,7 @@ void main() {
           content: '游客想说的话',
           replyToCommentId: 'c1',
           attachmentMediaIds: const <String>['media-1'],
+          attachmentLocalPaths: const <String>['/tmp/guest-image.jpg'],
           mentions: <CommentMention>[
             CommentMention(
               subjectType: 'assistant',
@@ -62,6 +67,9 @@ void main() {
       expect(taken!.content, '游客想说的话');
       expect(taken.replyToCommentId, 'c1');
       expect(taken.attachmentMediaIds, const <String>['media-1']);
+      expect(taken.attachmentLocalPaths, const <String>[
+        '/tmp/guest-image.jpg',
+      ]);
       expect(taken.mentions.single.subjectId, 'assistant_xiaoqu');
       // 取出后清空，二次 take 为空（杜绝重复续接）。
       expect(container.read(authContinuationProvider), isNull);
@@ -140,8 +148,7 @@ void main() {
         target: ContentShareContinuationTarget.groupChat,
       );
       const create = ResumeCreateActionContinuation(
-        action: CreateActionContinuationKind.pickImages,
-        closeWhenEmptyOnCancel: true,
+        action: CreateActionContinuationKind.saveDraftAndExit,
       );
       const moderation = ContentModerationContinuation(
         postId: 'post-block',
@@ -154,8 +161,7 @@ void main() {
       expect(report.reason, ReportReason.spam);
       expect(original.mediaId, 'media-original');
       expect(share.target, ContentShareContinuationTarget.groupChat);
-      expect(create.action, CreateActionContinuationKind.pickImages);
-      expect(create.closeWhenEmptyOnCancel, isTrue);
+      expect(create.action, CreateActionContinuationKind.saveDraftAndExit);
       expect(moderation.keyword, '重复营销');
     });
 
@@ -287,10 +293,28 @@ void main() {
             find.byKey(const ValueKey<String>('login-route-sentinel')),
           ),
         ).uri.queryParameters[loginGuestDismissPopQueryParam],
-        LoginDismissPolicy.safeFallback.name,
+        LoginDismissPolicy.popPrevious.name,
       );
 
-      // 模拟真实登录成功：会话先翻转，登录页再 pop，原浮层回到前台后续提。
+      // 取消登录：真实登录页会清除续接后 pop，原评论浮层和输入仍然保留。
+      container.read(authContinuationProvider.notifier).clear();
+      router.pop();
+      await tester.pumpAndSettle();
+      expect(find.byKey(TestKeys.commentInputOverlay), findsOneWidget);
+      expect(
+        tester
+            .widget<CupertinoTextField>(find.byKey(TestKeys.commentTextField))
+            .controller
+            ?.text,
+        '第一条评论',
+      );
+      expect(submitted, isEmpty);
+
+      // 再次提交并模拟真实登录成功：会话先翻转，登录页再 pop，原浮层回到前台后续提。
+      AuthGate.resetDebounce();
+      await tester.tap(find.byKey(TestKeys.submitCommentButton));
+      await tester.pumpAndSettle();
+      expect(find.text('LOGIN_PLACEHOLDER'), findsOneWidget);
       (container.read(
         authSessionControllerProvider.notifier,
       ) as _FlippableSession).loginNow();

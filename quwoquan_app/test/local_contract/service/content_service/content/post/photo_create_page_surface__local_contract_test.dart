@@ -13,12 +13,13 @@ import 'package:quwoquan_app/runtime/testing/test_keys.dart';
 import 'package:quwoquan_app/l10n/app_localizations.dart';
 import 'package:quwoquan_app/runtime/auth/auth_continuation.dart';
 import 'package:quwoquan_app/runtime/auth/auth_gate.dart'
-    show LoginDismissPolicy, loginGuestDismissPopQueryParam;
+    show AuthGate, LoginDismissPolicy, loginGuestDismissPopQueryParam;
 import 'package:quwoquan_app/runtime/auth/auth_session.dart';
 import 'package:quwoquan_app/service/content_service/content/post/domain/create_editor_models.dart';
 import 'package:quwoquan_app/service/content_service/content/post/presentation/create_page.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/create_editor_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
 import '../../../../../support/service/content_service/content/post/content_facet_overrides.dart';
 import '../../../../../support/service/content_service/content/post/content_post_typed_doubles.dart';
 import '../../../../../support/service/circle_service/circle_management/circle/circle_query_typed_double.dart';
@@ -130,7 +131,8 @@ void main() {
     ]);
   });
 
-  testWidgets('创作页会话失效后登录成功续接原图片选择动作', (tester) async {
+  // spec_ref: specs/feature-tree/discovery-content/content-type-framework/creation-mode-and-surface-ia-unification/spec.md#gwt-003.t1
+  testWidgets('游客可直接选图，退出选择登录保存后取消仍回到原编辑器', (tester) async {
     var pickerLaunches = 0;
     final router = GoRouter(
       initialLocation: '/create-test',
@@ -191,41 +193,145 @@ void main() {
     await tester.tap(find.byKey(TestKeys.createMediaAddButton).first);
     await tester.pumpAndSettle();
 
+    expect(pickerLaunches, 1);
     expect(
       find.byKey(const ValueKey<String>('create-login-sentinel')),
-      findsOneWidget,
+      findsNothing,
     );
-    expect(pickerLaunches, 0);
+    expect(container.read(authContinuationProvider), isNull);
+
+    container.read(createEditorProvider.notifier).updateMediaBody('游客仍在编辑的内容');
+    await tester.pump();
+    await tester.tap(find.byKey(TestKeys.createCloseButton));
+    await tester.pumpAndSettle();
+
+    expect(find.text('登录并保存草稿'), findsOneWidget);
+    expect(find.text('不保存直接退出'), findsOneWidget);
+    await tester.tap(find.byKey(TestKeys.createLoginSaveAndExitButton));
+    await tester.pumpAndSettle();
+
+    final loginSentinel = find.byKey(
+      const ValueKey<String>('create-login-sentinel'),
+    );
+    expect(loginSentinel, findsOneWidget);
     final pending = container.read(authContinuationProvider);
     expect(pending, isA<ResumeCreateActionContinuation>());
     expect(
       (pending! as ResumeCreateActionContinuation).action,
-      CreateActionContinuationKind.pickImages,
+      CreateActionContinuationKind.saveDraftAndExit,
     );
     expect(
-      GoRouterState.of(
-        tester.element(
-          find.byKey(const ValueKey<String>('create-login-sentinel')),
-        ),
-      ).uri.queryParameters[loginGuestDismissPopQueryParam],
-      LoginDismissPolicy.safeFallback.name,
+      GoRouterState.of(tester.element(loginSentinel))
+          .uri
+          .queryParameters[loginGuestDismissPopQueryParam],
+      LoginDismissPolicy.popPrevious.name,
     );
 
-    (container.read(authSessionControllerProvider.notifier)
-            as _FlippableCreateSession)
-        .loginNow();
+    container.read(authContinuationProvider.notifier).clear();
     router.pop();
     await tester.pumpAndSettle();
 
-    expect(pickerLaunches, 1);
-    expect(container.read(authContinuationProvider), isNull);
+    expect(find.byType(CreatePage), findsOneWidget);
+    expect(container.read(createEditorProvider).body, '游客仍在编辑的内容');
+    expect(find.text('登录并保存草稿'), findsNothing);
+  });
+
+  // spec_ref: specs/feature-tree/discovery-content/content-type-framework/creation-mode-and-surface-ia-unification/spec.md#gwt-003.t2
+  testWidgets('游客发布先完成确认，真正提交前才登录且取消后回原编辑器', (tester) async {
+    AuthGate.resetDebounce();
+    final router = GoRouter(
+      initialLocation: '/create-publish-test',
+      routes: <RouteBase>[
+        GoRoute(
+          path: '/create-publish-test',
+          builder: (context, state) => const CreatePage(initialTabKey: 'photo'),
+        ),
+        GoRoute(
+          path: AppRoutePaths.loginPathTemplate,
+          builder: (context, state) => const Scaffold(
+            body: SizedBox(key: ValueKey<String>('publish-login-sentinel')),
+          ),
+        ),
+      ],
+    );
+    addTearDown(router.dispose);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          ...mockContentFacetOverrides(store: InMemoryContentPostStore()),
+          circlesListQueryProvider.overrideWithValue(
+            InMemoryCircleQueryReader(),
+          ),
+          authSessionControllerProvider.overrideWith(
+            _FlippableCreateSession.new,
+          ),
+        ],
+        child: ScreenUtilInit(
+          designSize: const Size(390, 844),
+          builder: (context, _) => MaterialApp.router(
+            locale: const Locale('zh'),
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            routerConfig: router,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(CreatePage)),
+    );
+    container
+        .read(createEditorProvider.notifier)
+        .updateMediaBody('发布前确认仍可由游客完成');
+    await tester.pump();
+
+    await tester.tap(find.byKey(TestKeys.createPublishButton));
+    await tester.pumpAndSettle();
+    expect(find.byKey(TestKeys.createPublishConfirmSheet), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey<String>('publish-login-sentinel')),
+      findsNothing,
+    );
+
+    await tester.tap(find.byKey(TestKeys.createPublishConfirmButton));
+    await tester.pumpAndSettle();
+    final loginSentinel = find.byKey(
+      const ValueKey<String>('publish-login-sentinel'),
+    );
+    expect(loginSentinel, findsOneWidget);
+    final pending = container.read(authContinuationProvider);
+    expect(pending, isA<ResumeCreateActionContinuation>());
+    expect(
+      (pending! as ResumeCreateActionContinuation).action,
+      CreateActionContinuationKind.publish,
+    );
+    expect(
+      GoRouterState.of(tester.element(loginSentinel))
+          .uri
+          .queryParameters[loginGuestDismissPopQueryParam],
+      LoginDismissPolicy.popPrevious.name,
+    );
+
+    container.read(authContinuationProvider.notifier).clear();
+    router.pop();
+    await tester.pumpAndSettle();
+    expect(find.byType(CreatePage), findsOneWidget);
+    expect(container.read(createEditorProvider).body, '发布前确认仍可由游客完成');
+    expect(find.byKey(TestKeys.createPublishConfirmSheet), findsNothing);
   });
 }
 
 class _FlippableCreateSession extends AuthSessionController {
   @override
-  AuthSessionState build() =>
-      const AuthSessionState(status: AuthSessionStatus.guest);
+  AuthSessionState build() => const AuthSessionState(
+    status: AuthSessionStatus.guest,
+    ownerId: 'guest-owner',
+    activePersonaId: 'guest-persona',
+    accountState: 'anonymous',
+    installId: 'guest-install',
+  );
 
   void loginNow() {
     state = const AuthSessionState(

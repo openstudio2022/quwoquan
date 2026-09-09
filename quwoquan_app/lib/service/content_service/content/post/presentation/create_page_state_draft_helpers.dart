@@ -123,6 +123,35 @@ extension _CreatePageStateDraftHelpers on _CreatePageState {
     }
   }
 
+  Future<void> _saveDraftAndExit({bool showAccountSavedToast = false}) async {
+    if (!await _requireCreateActionLogin(
+      CreateActionContinuationKind.saveDraftAndExit,
+    )) {
+      return;
+    }
+    try {
+      await _saveDraft(silent: true, flushReason: 'explicit');
+      if (!mounted) {
+        return;
+      }
+      if (showAccountSavedToast) {
+        AppToast.show(context, CreationText.createDraftSavedToAccount);
+      }
+      _doClose();
+    } catch (error, stackTrace) {
+      unawaited(
+        ref
+            .read(exceptionTelemetryPortProvider)
+            .recordHandledException(
+              source: 'content.create.save_and_exit',
+              error: error,
+              stackTrace: stackTrace,
+              operationId: 'content.local_draft.save',
+            ),
+      );
+    }
+  }
+
   Future<void> _clearCurrentDraft() async {
     final currentDraftId = _activeDraftId;
     if (currentDraftId == null) {

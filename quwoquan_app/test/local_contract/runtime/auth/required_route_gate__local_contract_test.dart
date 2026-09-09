@@ -1,4 +1,5 @@
 // spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/account-suspension-and-appeal-lifecycle/spec.md#gwt-004
+// spec_ref: specs/feature-tree/discovery-content/content-type-framework/creation-mode-and-surface-ia-unification/spec.md#gwt-003.t1
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_route_paths.g.dart';
@@ -38,12 +39,13 @@ void main() {
       );
     });
 
-    test('添加面板入口不拦截，具体创作页需要登录', () {
+    test('添加面板、具体创作页与本地草稿页均允许游客进入', () {
       expect(requiredRouteGateForLocation(AppRoutePaths.createEntry), isNull);
       expect(
         requiredRouteGateForLocation(AppRoutePaths.createPathTemplate),
-        AuthGateReason.createPost,
+        isNull,
       );
+      expect(requiredRouteGateForLocation(AppRoutePaths.localDrafts), isNull);
     });
 
     test('发起活动是强登录入口，活动详情保持公开读取', () {
@@ -307,7 +309,7 @@ void main() {
       );
       expect(
         safeLoginDismissFallback(redirect: AppRoutePaths.createPathTemplate),
-        AppRoutePaths.home,
+        AppRoutePaths.createPathTemplate,
       );
       expect(
         safeLoginDismissFallback(redirect: '/following'),

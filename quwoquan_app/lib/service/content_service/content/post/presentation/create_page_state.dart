@@ -21,6 +21,7 @@ class _CreatePageState extends ConsumerState<CreatePage>
   ContentMediaUploadCancellationSignal? _publicationCancellationSignal;
   bool _isHydratingDraft = false;
   bool _authContinuationResumeScheduled = false;
+  String? _guestDraftSourceActorId;
   CreateDraftPublicationContinuationRef? _publicationContinuation;
   double _heroCollapseProgress = 0;
   String? _pressedMediaPath;
@@ -47,11 +48,37 @@ class _CreatePageState extends ConsumerState<CreatePage>
   }
 
   Future<bool> _requireCreateActionLogin(
-    CreateActionContinuationKind action, {
-    bool closeWhenEmptyOnCancel = false,
-  }) async {
-    if (AuthGate.isAuthenticated(ref)) {
+    CreateActionContinuationKind action,
+  ) async {
+    final session = ref.read(authSessionControllerProvider);
+    if (session.isAuthenticated) {
+      final sourceActorId = _guestDraftSourceActorId;
+      if (sourceActorId != null && sourceActorId.isNotEmpty) {
+        try {
+          await ref
+              .read(createDraftStoreProvider.notifier)
+              .adoptDraftsFromActor(sourceActorId);
+          _guestDraftSourceActorId = null;
+        } catch (error) {
+          if (mounted) {
+            await AppActionErrorFeedback.show(
+              context,
+              semantic: runtimeErrorSemantic(
+                context,
+                error: error,
+                category: UiErrorCategory.backgroundAction,
+                scope: UiErrorScope.global,
+                allowRetry: false,
+              ),
+            );
+          }
+          return false;
+        }
+      }
       return true;
+    }
+    if (session.isAnonymousSession && session.activePersonaId.isNotEmpty) {
+      _guestDraftSourceActorId ??= session.activePersonaId;
     }
     await _flushDraftIfDirty('reauth');
     if (!mounted) {
@@ -60,10 +87,7 @@ class _CreatePageState extends ConsumerState<CreatePage>
     final accepted = ref
         .read(authContinuationProvider.notifier)
         .set(
-          ResumeCreateActionContinuation(
-            action: action,
-            closeWhenEmptyOnCancel: closeWhenEmptyOnCancel,
-          ),
+          ResumeCreateActionContinuation(action: action),
           ownerToken: 'create:${action.name}',
         );
     if (!accepted) {
@@ -74,9 +98,8 @@ class _CreatePageState extends ConsumerState<CreatePage>
       context,
       action == CreateActionContinuationKind.publish
           ? AuthGateReason.createPost
-          : AuthGateReason.mediaUpload,
-      dismissFallback: AppRoutePaths.home,
-      dismissPolicy: LoginDismissPolicy.safeFallback,
+          : AuthGateReason.saveDraft,
+      dismissPolicy: LoginDismissPolicy.popPrevious,
     );
     return false;
   }
@@ -107,21 +130,10 @@ class _CreatePageState extends ConsumerState<CreatePage>
       }
       switch (pending.action) {
         case CreateActionContinuationKind.publish:
-          unawaited(_publish());
+          unawaited(_publish(resumeAfterLogin: true));
           return;
-        case CreateActionContinuationKind.pickImages:
-          unawaited(
-            _pickImagesForCurrentEditor(
-              closeWhenEmptyOnCancel: pending.closeWhenEmptyOnCancel,
-            ),
-          );
-          return;
-        case CreateActionContinuationKind.pickVideo:
-          unawaited(
-            _pickVideoForMedia(
-              closeWhenEmptyOnCancel: pending.closeWhenEmptyOnCancel,
-            ),
-          );
+        case CreateActionContinuationKind.saveDraftAndExit:
+          unawaited(_saveDraftAndExit(showAccountSavedToast: true));
           return;
       }
     });
@@ -763,9 +775,7 @@ class _CreatePageState extends ConsumerState<CreatePage>
           circleLoadUnavailable: circleLoadUnavailable,
           // 文字创作：系统建议形态进确认页固化，最终以用户确认为准（GWT-001）。
           suggestedTextContentType: state.editorKind == CreateEditorKind.text
-              ? (shouldPublishAsArticleForPayload(state)
-                    ? 'article'
-                    : 'micro')
+              ? (shouldPublishAsArticleForPayload(state) ? 'article' : 'micro')
               : null,
         ),
       ),

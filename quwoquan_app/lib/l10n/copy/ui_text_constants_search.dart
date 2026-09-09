@@ -3,12 +3,15 @@ part of 'ui_text_constants.dart';
 abstract final class SearchText {
   static const String recoveryConnectNetworkTitle = '没有网络连接';
   static const String recoveryConnectNetworkMessage = '连接 Wi‑Fi 或移动网络后即可继续浏览。';
-  static const String recoveryConnectionUnavailableTitle = '暂时无法访问服务';
-  static const String recoveryConnectionUnavailableMessage = '本次内容请求未能到达服务。';
-  static const String recoveryRequestTimedOutTitle = '暂时无法访问服务';
-  static const String recoveryRequestTimedOutMessage = '服务响应时间较长，这次请求已停止等待。';
-  static const String recoveryServiceUnavailableTitle = '暂时无法访问服务';
-  static const String recoveryServiceUnavailableMessage = '服务暂时没有完成这次内容请求。';
+  static const String recoveryConnectionUnavailableTitle = '服务暂时连不上';
+  static const String recoveryConnectionUnavailableMessage =
+      '这次请求没有到达我们的服务，通常是我们这边的问题，请稍后再试。';
+  static const String recoveryRequestTimedOutTitle = '服务响应超时';
+  static const String recoveryRequestTimedOutMessage =
+      '我们的系统处理太慢，这次请求已停止等待。这是系统问题，不是你的操作导致的。';
+  static const String recoveryServiceUnavailableTitle = '系统出了问题';
+  static const String recoveryServiceUnavailableMessage =
+      '我们的服务暂时没能处理这次请求。这是系统问题，不是你的网络或操作导致的，请稍后再试。';
   static const String recoveryInvalidContentTitle = '内容暂时无法显示';
   static const String recoveryInvalidContentMessage = '返回的内容不完整，暂时无法展示。';
   static const String recoveryGuestSessionUnavailableTitle = '暂时无法开始浏览';

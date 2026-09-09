@@ -189,6 +189,25 @@ class CreateDraftStoreController extends AsyncNotifier<CreateDraftStoreState> {
     state = await AsyncValue.guard(_repository.load);
   }
 
+  Future<CreateDraftStoreState> adoptDraftsFromActor(
+    String sourceActorId,
+  ) async {
+    final targetActorId = ref.read(currentUserIdProvider).trim();
+    if (targetActorId.isEmpty) {
+      throw StateError('draft adoption requires an authenticated target actor');
+    }
+    final nextSnapshot = await CreateDraftLocalStorage.adoptScopedDrafts(
+      sourceScopeKey: CreateDraftLocalStorage.scopeKeyForUser(sourceActorId),
+      targetScopeKey: CreateDraftLocalStorage.scopeKeyForUser(targetActorId),
+    );
+    final next = CreateDraftStoreState(
+      drafts: nextSnapshot.drafts,
+      currentDraftId: nextSnapshot.currentId,
+    );
+    state = AsyncData(next);
+    return next;
+  }
+
   Future<CreateDraftStoreState> saveDraft(
     CreateDraft draft, {
     String? currentDraftId,

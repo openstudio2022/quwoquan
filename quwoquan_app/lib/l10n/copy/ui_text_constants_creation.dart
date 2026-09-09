@@ -6,6 +6,12 @@ abstract final class CreationText {
   static const String drafts = '草稿箱';
   static const String createExitConfirmTitle = '保存草稿？';
   static const String createExitConfirmDesc = '如果不保存，当前编辑的内容将会丢失。';
+  static const String createGuestExitConfirmTitle = '登录后保存草稿？';
+  static const String createGuestExitConfirmDesc =
+      '登录后草稿会保存到你的账号；不登录直接退出，当前内容将会丢失。';
+  static const String createLoginAndSaveDraft = '登录并保存草稿';
+  static const String createGuestDiscardAndExit = '不保存直接退出';
+  static const String createDraftSavedToAccount = '草稿已保存到账号';
   static const String discard = '放弃';
   static const String saveDraft = '保存草稿';
   static const String createActionGallery = '从相册选择';
@@ -125,7 +131,8 @@ abstract final class CreationText {
   static const String contentTagsLabel = '内容标签';
   static const String contentTagsNone = '未添加';
   static const String contentTagsPickerTitle = '添加内容标签';
-  static const String contentTagsPickerHint = '选择最贴合这篇内容的标签，帮助感兴趣的人找到它，最多选 5 个。';
+  static const String contentTagsPickerHint =
+      '选择最贴合这篇内容的标签，帮助感兴趣的人找到它，最多选 5 个。';
   static const String contentTagsLimitReached = '最多选 5 个标签';
   static const String contentTagsAxisLoadFailed = '这组标签暂时加载失败';
   static const String contentTagsClear = '清空已选';

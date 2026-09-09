@@ -128,13 +128,21 @@ def main() -> int:
         errors,
     )
     require(
-        "loc == AppRoutePaths.createPathTemplate" in auth_gate
-        and "return AuthGateReason.createPost" in block_between(
-            auth_gate,
-            "loc == AppRoutePaths.createPathTemplate",
-            "if (loc == AppRoutePaths.chat",
-        ),
-        "/create 具体创作页必须仍由路由守卫保护",
+        "loc == AppRoutePaths.createPathTemplate" not in auth_gate,
+        "/create 编辑器必须允许游客进入，登录门仅保护发布与账号草稿保存",
+        errors,
+    )
+    create_state = read("quwoquan_app/lib/service/content_service/content/post/presentation/create_page_state.dart")
+    publish_state = read("quwoquan_app/lib/service/content_service/content/post/presentation/create_page_state_media_helpers.dart")
+    draft_state = read("quwoquan_app/lib/service/content_service/content/post/presentation/create_page_state_draft_helpers.dart")
+    require(
+        "_requireCreateActionLogin(" in publish_state
+        and "CreateActionContinuationKind.publish" in publish_state
+        and "_requireCreateActionLogin(" in draft_state
+        and "CreateActionContinuationKind.saveDraftAndExit" in draft_state
+        and "AuthGateReason.createPost" in create_state
+        and "AuthGateReason.saveDraft" in create_state,
+        "游客免登录编辑不得移除发布或账号保存的末端登录保护",
         errors,
     )
 
@@ -260,7 +268,7 @@ def main() -> int:
         "关注关闭不回环": "游客点击首页关注 tab 关闭登录页后回首页且不回环",
         "关注登录成功目标态": "游客点击首页关注 tab 登录成功后进入关注频道目标态",
         "createEntry 不提前拦截": "游客直达 createEntry 显示动作面板入口，不被创作路由门提前拦截",
-        "/create 仍拦截": "游客直达 /create 具体创作页仍被路由门拦截，关闭回首页",
+        "/create 游客可编辑": "游客直达 /create 进入编辑器且不自动触发登录",
         "Gathering Create 关闭不回环": "游客直达发起活动，关闭登录回安全首页且不回环",
         "Web create 不直接登录": "Web 宽屏未登录点创作主入口先进入创建工作台，不直接登录",
     }
@@ -318,12 +326,12 @@ def main() -> int:
     )
     require(
         re.search(
-            r"requiredRouteGateForLocation\(AppRoutePaths\.createPathTemplate\),\s*AuthGateReason\.createPost",
+            r"requiredRouteGateForLocation\(AppRoutePaths\.createPathTemplate\),\s*isNull",
             route_test,
             re.S,
         )
         is not None,
-        "required_route_gate_test 必须断言 /create 具体创作页仍需登录",
+        "required_route_gate_test 必须断言 /create 编辑器允许游客进入",
         errors,
     )
     require(

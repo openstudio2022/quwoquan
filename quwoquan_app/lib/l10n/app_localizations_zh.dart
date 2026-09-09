@@ -1797,6 +1797,31 @@ class AppLocalizationsZh extends AppLocalizations {
   String get content_createEntryChooseContentSubtitle => '选择照片、视频或文字开始创作。';
 
   @override
+  String get content_authGateTitleSaveDraft => '登录后保存草稿';
+
+  @override
+  String get content_authGateSubtitleSaveDraft => '登录后草稿会保存到你的账号，方便继续编辑。';
+
+  @override
+  String get content_authGatePromptSaveDraft => '登录后即可保存草稿';
+
+  @override
+  String get content_createGuestExitConfirmTitle => '登录后保存草稿？';
+
+  @override
+  String get content_createGuestExitConfirmDesc =>
+      '登录后草稿会保存到你的账号；不登录直接退出，当前内容将会丢失。';
+
+  @override
+  String get content_createLoginAndSaveDraft => '登录并保存草稿';
+
+  @override
+  String get content_createGuestDiscardAndExit => '不保存直接退出';
+
+  @override
+  String get content_createDraftSavedToAccount => '草稿已保存到账号';
+
+  @override
   String get circle_createEntryStartGathering => '发起活动';
 
   @override

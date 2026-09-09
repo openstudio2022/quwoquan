@@ -47,9 +47,12 @@
 - 图片、视频和文章在关闭评论 surface 后必须恢复原图片索引、播放进度或阅读位置。
 
 <a id="req-003"></a>
-### REQ-003 登录续接完整保留 typed 评论草稿
+### REQ-003 评论只在提交时登录并完整续接 typed 草稿
 
-- 登录续接必须保留正文、附件、mentions、宿主内容和回复目标；目标不一致时拒绝误提交。
+- 游客必须能进入评论或回复输入态并完成正文、emoji、mentions 与本地图片选择，只有点击提交时才触发登录。
+- 游客选择图片时只保留受控本地路径与预览，不得在登录前调用需要账号身份的媒体上传 operation；登录成功续接提交时才上传图片并转换为真实 `MediaAsset` identity。
+- 登录续接必须保留正文、已上传附件、待上传本地图片、mentions、宿主内容和回复目标；登录成功后在原 Comment surface 自动完成原提交，目标不一致时拒绝误提交。
+- 关闭登录必须 pop 回原评论输入态，保留全部输入并且不得再次自动弹出登录；用户可继续编辑或主动关闭输入态。
 
 <a id="req-004"></a>
 ### REQ-004 回复摘要与分页是服务端 typed 投影
@@ -127,11 +130,13 @@
 - THEN 图片索引、视频进度或文章页码保持。
 
 <a id="gwt-003"></a>
-### GWT-003 登录续接完整保留 typed 评论草稿
+### GWT-003 评论只在提交时登录并完整续接 typed 草稿
 
-- GIVEN 游客已输入正文、附件、mentions 和可选回复目标
-- WHEN 完成登录并回到原 Comment surface
-- THEN postId、replyToCommentId、正文、附件和 ContentCommentMention 原样恢复。
+- GIVEN 游客已打开评论或回复输入态，并输入正文、emoji、mentions、选择本地图片和可选回复目标。
+- WHEN 游客尚未点击提交，或在提交触发登录后关闭登录。
+- THEN 输入、选择本地图片与预览均不调用媒体上传 operation；关闭登录 pop 回原 Comment surface，postId、replyToCommentId、正文、本地图片、已上传附件和 ContentCommentMention 原样保留且不再次弹登录。
+- WHEN 游客点击提交并完成登录回到原 Comment surface。
+- THEN 待上传本地图片先转换为真实 MediaAsset identity，再与正文、已上传附件和 ContentCommentMention 自动完成一次原提交，用户无需重复点击。
 - THEN 宿主或回复目标不一致时拒绝误提交。
 
 <a id="gwt-004"></a>
@@ -283,7 +288,7 @@
 - GIVEN 用户在 compact/regular/expanded、light/dark、键盘和弱网场景打开评论
 - WHEN 切换排序、输入 @/emoji/图片、回复、复制、举报或删除
 - THEN @ 按钮打开 typed 关注候选选择器，不默认写入固定账号；已选 mention 可见、可移除并随草稿恢复。
-- THEN 删除先二次确认，复制/举报/删除按服务端 capability 显示，游客登录成功续接原动作且关闭登录回安全态。
+- THEN 删除先二次确认，复制/举报/删除按服务端 capability 显示，游客登录成功续接原动作；评论提交登录关闭时回到原 Comment 输入态并保留草稿，其他动作关闭登录回所属安全态。
 - THEN 排序与动作触控区域不小于 44pt，具有 button/selected 语义和清晰焦点顺序。
 - THEN 窄屏、动态字体下正文、属地和 badge 不裁切；失败保留已有内容或草稿并提供显式恢复动作。
 
@@ -328,7 +333,7 @@
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`track`
-- 影响或价值：尚缺实现或直接 `spec_ref`；目标：评论和回复均完成本地契约、真实 API 与设备续接
+- 影响或价值：尚缺实现或直接 `spec_ref`；目标：评论和回复均完成提交时登录、本地附件延迟上传、取消登录回原输入态、本地契约、真实 API 与设备续接
 - 完成判定：`GWT-003` 对应行为满足且真实测试 `spec_ref` 有效
 
 <a id="open-004"></a>
