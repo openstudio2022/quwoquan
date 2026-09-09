@@ -971,11 +971,29 @@ void main() {
             .isActive,
         isTrue,
       );
-      expect(find.byType(BottomNavigationWidget), findsOneWidget);
+      // 视频书 active 时是沉浸壳层：底栏不渲染、不预留底部遮挡。
+      expect(find.byType(BottomNavigationWidget), findsNothing);
+      expect(
+        tester
+            .widget<AppViewportObstructionScope>(
+              find.byType(AppViewportObstructionScope),
+            )
+            .obstruction
+            .bottom,
+        AppSpacing.zero,
+      );
 
       navigatorKey.currentContext!.go(AppRoutePaths.home);
       await _pumpRouteTransition(tester);
 
+      // 回到首页后底栏恢复可见并高亮首页。
+      expect(find.byType(BottomNavigationWidget), findsOneWidget);
+      expect(
+        tester
+            .widget<BottomNavigationWidget>(find.byType(BottomNavigationWidget))
+            .currentIndex,
+        0,
+      );
       expect(find.byKey(HomeFeaturedImmersivePage.pageKey), findsNothing);
       expect(
         find.byType(HomeFeaturedImmersivePage, skipOffstage: false),
@@ -1028,7 +1046,7 @@ void main() {
 
     testWidgets(
       // spec_ref: specs/feature-tree/discovery-content/feed-orchestration-recommendation/premium-stream-recommendation/spec.md#gwt-001.t3
-      '/video-book 冷启动首帧直接挂载视频书根页并高亮底栏第二项',
+      '/video-book 冷启动首帧直接挂载视频书根页并以沉浸壳层隐藏底栏',
       (tester) async {
         _suppressExpectedErrors();
         await tester.pumpWidget(_buildShell(AppRoutePaths.videoBook));
@@ -1060,26 +1078,33 @@ void main() {
           reason: '冷启动落在视频书时，首页页签延后到首次访问才构建。',
         );
 
-        final bottomNav = tester.widget<BottomNavigationWidget>(
+        // 视频书是沉浸式壳层：不渲染底栏、底部遮挡为零、chrome 强制深色，
+        // 内容区只保留沉浸 viewer 自身的底部交互栏。
+        expect(
           find.byType(BottomNavigationWidget),
+          findsNothing,
+          reason: '视频书 active 时主壳不得渲染底部导航栏。',
         );
-        expect(bottomNav.currentIndex, 1);
+        expect(find.byKey(TestKeys.mainTabVideoBook), findsNothing);
         expect(
-          find.descendant(
-            of: find.byKey(TestKeys.mainTabVideoBook),
-            matching: find.byIcon(CupertinoIcons.book_fill),
-          ),
-          findsOneWidget,
-          reason: '底栏第二项（视频书）必须以选中态实心图标高亮。',
+          tester
+              .widget<AppViewportObstructionScope>(
+                find.byType(AppViewportObstructionScope),
+              )
+              .obstruction
+              .bottom,
+          AppSpacing.zero,
+          reason: '隐藏底栏后不得再为其预留底部遮挡高度。',
         );
-        expect(
-          find.descendant(
-            of: find.byType(BottomNavigationWidget),
-            matching: find.byIcon(FluentIcons.home_24_regular),
-          ),
-          findsOneWidget,
-          reason: '首页项保持未选中态，不与视频书同时高亮。',
+        final shellSurface = tester.widget<ColoredBox>(
+          find
+              .descendant(
+                of: find.byType(MainAppShell),
+                matching: find.byType(ColoredBox),
+              )
+              .first,
         );
+        expect(shellSurface.color, AppColors.worksBackground);
       },
     );
 
@@ -1545,7 +1570,7 @@ void main() {
       expect(find.text('CREATE_ENTRY_PAGE'), findsOneWidget);
     });
 
-    testWidgets('游客直达 /create 具体创作页仍被路由门拦截，关闭回首页', (tester) async {
+    testWidgets('游客直达 /create 进入编辑器且不自动触发登录', (tester) async {
       AuthGate.resetDebounce();
       _suppressExpectedErrors();
       await tester.pumpWidget(
@@ -1556,17 +1581,12 @@ void main() {
       );
       await _pumpRouteTransition(tester);
 
-      expect(find.byType(LoginPage), findsOneWidget);
-      expect(find.text('CREATE_PAGE'), findsNothing);
-
-      // REQ-012：根步骤顶栏为返回箭头，箭头即执行宿主关闭策略。
-      await tester.tap(find.byIcon(CupertinoIcons.back));
-      await _pumpRouteTransition(tester);
-
       expect(find.byType(LoginPage), findsNothing);
-      expect(find.byType(MainAppShell), findsOneWidget);
+      expect(find.text('CREATE_PAGE'), findsOneWidget);
       expect(find.text('Page Not Found'), findsNothing);
       await tester.pump(const Duration(seconds: 3));
+      expect(find.byType(LoginPage), findsNothing);
+      expect(find.text('CREATE_PAGE'), findsOneWidget);
     });
 
     testWidgets('底部导航上下留白对称且使用统一语义 token', (tester) async {

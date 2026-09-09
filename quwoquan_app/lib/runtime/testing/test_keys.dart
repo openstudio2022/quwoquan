@@ -447,8 +447,14 @@ class TestKeys {
   static const createSaveAndExitButton = ValueKey<String>(
     'create_save_and_exit_button',
   );
+  static const createLoginSaveAndExitButton = ValueKey<String>(
+    'create_login_save_and_exit_button',
+  );
   static const createDiscardAndExitButton = ValueKey<String>(
     'create_discard_and_exit_button',
+  );
+  static const createGuestDiscardAndExitButton = ValueKey<String>(
+    'create_guest_discard_and_exit_button',
   );
   static const createMomentInput = ValueKey<String>('create_moment_input');
   static const createPhotoTitleInput = ValueKey<String>(

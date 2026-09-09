@@ -713,6 +713,38 @@
   "content_createEntryPublishContent": "发内容",
   "content_createEntryChooseActionSubtitle": "选择要发起的动作。",
   "content_createEntryChooseContentSubtitle": "选择照片、视频或文字开始创作。",
+  "content_authGateTitleSaveDraft": "登录后保存草稿",
+  "@content_authGateTitleSaveDraft": {
+    "description": "Title shown when a guest signs in to save a creation draft to an account"
+  },
+  "content_authGateSubtitleSaveDraft": "登录后草稿会保存到你的账号，方便继续编辑。",
+  "@content_authGateSubtitleSaveDraft": {
+    "description": "Subtitle explaining account-scoped draft persistence after sign-in"
+  },
+  "content_authGatePromptSaveDraft": "登录后即可保存草稿",
+  "@content_authGatePromptSaveDraft": {
+    "description": "Short prompt for the save-draft authentication gate"
+  },
+  "content_createGuestExitConfirmTitle": "登录后保存草稿？",
+  "@content_createGuestExitConfirmTitle": {
+    "description": "Title of the guest creation exit confirmation dialog"
+  },
+  "content_createGuestExitConfirmDesc": "登录后草稿会保存到你的账号；不登录直接退出，当前内容将会丢失。",
+  "@content_createGuestExitConfirmDesc": {
+    "description": "Description of guest draft loss and account save choices"
+  },
+  "content_createLoginAndSaveDraft": "登录并保存草稿",
+  "@content_createLoginAndSaveDraft": {
+    "description": "Guest creation exit action that signs in and saves the draft"
+  },
+  "content_createGuestDiscardAndExit": "不保存直接退出",
+  "@content_createGuestDiscardAndExit": {
+    "description": "Guest creation exit action that discards the temporary draft"
+  },
+  "content_createDraftSavedToAccount": "草稿已保存到账号",
+  "@content_createDraftSavedToAccount": {
+    "description": "Toast shown after a guest draft is saved to the signed-in account"
+  },
   "circle_createEntryStartGathering": "发起活动",
   "chat_createEntryStartGroupChat": "发起群聊",
   "circle_authGateTitleStartGathering": "登录后发起活动",

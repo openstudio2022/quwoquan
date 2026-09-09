@@ -4,8 +4,8 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart' show MaxLengthEnforcement;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_ui_surfaces.g.dart';
-import 'package:quwoquan_app/runtime/shell/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/generated/page_access_internal_routes.g.dart';
+import 'package:quwoquan_app/runtime/platform/local_image_provider.dart';
 import 'package:quwoquan_app/service/content_service/media/media_upload_session/application/public/content_media_upload_service.dart';
 import 'package:quwoquan_app/service/content_service/content/comment/application/public/comment_remote_config.dart';
 import 'package:quwoquan_app/service/content_service/media/media_upload_session/application/public/image_pick_source.dart';
@@ -122,6 +122,7 @@ class _CommentInputSheetState extends ConsumerState<_CommentInputSheet> {
   final FocusNode _focusNode = FocusNode();
   final List<CommentMention> _selectedMentions = <CommentMention>[];
   final List<String> _attachmentMediaIds = <String>[];
+  final List<String> _attachmentLocalPaths = <String>[];
 
   late CommentConfig _effectiveConfig;
   late List<CommentMention> _mentionCandidates;
@@ -173,7 +174,11 @@ class _CommentInputSheetState extends ConsumerState<_CommentInputSheet> {
       replyToCommentId: widget.replyTo?.id,
     );
     if (draft == null || !mounted) return;
-    if (_controller.text.isNotEmpty || _attachmentMediaIds.isNotEmpty) return;
+    if (_controller.text.isNotEmpty ||
+        _attachmentMediaIds.isNotEmpty ||
+        _attachmentLocalPaths.isNotEmpty) {
+      return;
+    }
     setState(() {
       _controller.text = draft.content;
       _controller.selection = TextSelection.collapsed(
@@ -182,6 +187,9 @@ class _CommentInputSheetState extends ConsumerState<_CommentInputSheet> {
       _attachmentMediaIds
         ..clear()
         ..addAll(draft.attachmentMediaIds);
+      _attachmentLocalPaths
+        ..clear()
+        ..addAll(draft.attachmentLocalPaths);
       for (final subjectId in draft.mentionSubjectIds) {
         final candidate = _mentionCandidates
             .where((c) => c.subjectId == subjectId)
@@ -210,6 +218,9 @@ class _CommentInputSheetState extends ConsumerState<_CommentInputSheet> {
         draft: CommentDraft(
           content: _controller.text,
           attachmentMediaIds: List<String>.unmodifiable(_attachmentMediaIds),
+          attachmentLocalPaths: List<String>.unmodifiable(
+            _attachmentLocalPaths,
+          ),
           mentionSubjectIds: _selectedMentions
               .map((m) => m.subjectId)
               .toList(growable: false),
@@ -382,8 +393,11 @@ class _CommentInputSheetState extends ConsumerState<_CommentInputSheet> {
     _focusNode.requestFocus();
   }
 
+  int get _attachmentCount =>
+      _attachmentMediaIds.length + _attachmentLocalPaths.length;
+
   Future<void> _addImageAttachment() async {
-    if (_attachmentMediaIds.length >= _effectiveConfig.maxImageAttachments) {
+    if (_attachmentCount >= _effectiveConfig.maxImageAttachments) {
       AppToast.show(
         context,
         ContentText.commentAttachmentLimitReachedTemplate.replaceFirst(
@@ -402,38 +416,69 @@ class _CommentInputSheetState extends ConsumerState<_CommentInputSheet> {
           galleryRouteName: PageAccessInternalRoutes.commentMediaPickerGallery,
         );
     if (!mounted || path == null || path.trim().isEmpty) return;
+
+    if (!ref.read(authSessionControllerProvider).isAuthenticated) {
+      setState(() => _attachmentLocalPaths.add(path));
+      _scheduleDraftSave();
+      _trackAttachmentAdded();
+      return;
+    }
+
     setState(() => _isUploadingAttachment = true);
     try {
-      final uploadService = ref.read(
-        widget.surfaceMode == 'immersive_split'
-            ? workBrowserContentMediaUploadServiceProvider
-            : homeFeedContentMediaUploadServiceProvider,
-      );
-      final source = await ref
-          .read(contentMediaSourceReaderProvider)
-          .prepare(path);
-      final uploaded = await uploadService.uploadPreparedSource(
-        source: source,
-        mediaType: MediaType.image,
-        mimeType: contentMediaMimeTypeForPath(path, MediaType.image),
-        uploadStream: ref.read(contentMediaStreamObjectUploadProvider),
-      );
+      final mediaId = await _uploadAttachmentPath(path);
       if (!mounted) return;
-      setState(() => _attachmentMediaIds.add(uploaded.assetId));
+      setState(() => _attachmentMediaIds.add(mediaId));
       _scheduleDraftSave();
-      ref
-          .read(commentObservabilityProvider)
-          .trackAction(
-            eventName: CommentEventNames.attachmentAdded,
-            postId: widget.postId,
-            attachmentCount: _attachmentMediaIds.length,
-          );
+      _trackAttachmentAdded();
     } catch (e) {
       if (!mounted) return;
       await _showActionError(e);
     } finally {
       if (mounted) setState(() => _isUploadingAttachment = false);
     }
+  }
+
+  Future<String> _uploadAttachmentPath(String path) async {
+    final uploadService = ref.read(
+      widget.surfaceMode == 'immersive_split'
+          ? workBrowserContentMediaUploadServiceProvider
+          : homeFeedContentMediaUploadServiceProvider,
+    );
+    final source = await ref
+        .read(contentMediaSourceReaderProvider)
+        .prepare(path);
+    final uploaded = await uploadService.uploadPreparedSource(
+      source: source,
+      mediaType: MediaType.image,
+      mimeType: contentMediaMimeTypeForPath(path, MediaType.image),
+      uploadStream: ref.read(contentMediaStreamObjectUploadProvider),
+    );
+    return uploaded.assetId;
+  }
+
+  Future<void> _uploadPendingLocalAttachments() async {
+    for (final path in List<String>.of(_attachmentLocalPaths)) {
+      final mediaId = await _uploadAttachmentPath(path);
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _attachmentLocalPaths.remove(path);
+        _attachmentMediaIds.add(mediaId);
+      });
+      _scheduleDraftSave();
+    }
+  }
+
+  void _trackAttachmentAdded() {
+    ref
+        .read(commentObservabilityProvider)
+        .trackAction(
+          eventName: CommentEventNames.attachmentAdded,
+          postId: widget.postId,
+          attachmentCount: _attachmentCount,
+        );
   }
 
   Future<void> _showActionError(Object error) async {
@@ -468,7 +513,7 @@ class _CommentInputSheetState extends ConsumerState<_CommentInputSheet> {
       AppToast.show(context, FoundationText.commentTooLong);
       return;
     }
-    if (_attachmentMediaIds.length > _effectiveConfig.maxImageAttachments) {
+    if (_attachmentCount > _effectiveConfig.maxImageAttachments) {
       AppToast.show(
         context,
         ContentText.commentAttachmentLimitReachedTemplate.replaceFirst(
@@ -492,6 +537,9 @@ class _CommentInputSheetState extends ConsumerState<_CommentInputSheet> {
               attachmentMediaIds: List<String>.unmodifiable(
                 _attachmentMediaIds,
               ),
+              attachmentLocalPaths: List<String>.unmodifiable(
+                _attachmentLocalPaths,
+              ),
               mentions: List<CommentMention>.unmodifiable(_selectedMentions),
             ),
           );
@@ -500,8 +548,7 @@ class _CommentInputSheetState extends ConsumerState<_CommentInputSheet> {
           ref,
           context,
           AuthGateReason.comment,
-          dismissFallback: AppRoutePaths.home,
-          dismissPolicy: LoginDismissPolicy.safeFallback,
+          dismissPolicy: LoginDismissPolicy.popPrevious,
         ),
       );
       return;
@@ -550,6 +597,9 @@ class _CommentInputSheetState extends ConsumerState<_CommentInputSheet> {
         _attachmentMediaIds
           ..clear()
           ..addAll(pending.attachmentMediaIds);
+        _attachmentLocalPaths
+          ..clear()
+          ..addAll(pending.attachmentLocalPaths);
         _selectedMentions
           ..clear()
           ..addAll(pending.mentions);
@@ -561,12 +611,14 @@ class _CommentInputSheetState extends ConsumerState<_CommentInputSheet> {
   Future<void> _performSubmit() async {
     if (_isSubmitting) return;
     setState(() => _isSubmitting = true);
-    final payload = _buildPayload();
     // 宿主自定义 onSubmit 路径绕过了 commentProvider.addComment 内置的提交埋点，
     // 故仅在该路径由浮层补提交成功/失败动作埋点；走 provider 时不重复打点。
     final usesCustomSubmit = widget.onSubmit != null;
     final observability = ref.read(commentObservabilityProvider);
     try {
+      await _uploadPendingLocalAttachments();
+      if (!mounted) return;
+      final payload = _buildPayload();
       if (usesCustomSubmit) {
         await Future<void>.sync(() => widget.onSubmit!(payload));
         observability.trackAction(
@@ -760,13 +812,23 @@ class _CommentInputSheetState extends ConsumerState<_CommentInputSheet> {
                 padding: EdgeInsets.zero,
               ),
             ),
-            if (_attachmentMediaIds.isNotEmpty) ...[
+            if (_attachmentCount > 0) ...[
               SizedBox(height: AppSpacing.sm),
               _AttachmentThumbnail(
-                mediaId: _attachmentMediaIds.first,
+                mediaId:
+                    _attachmentLocalPaths.isEmpty &&
+                        _attachmentMediaIds.isNotEmpty
+                    ? _attachmentMediaIds.first
+                    : null,
+                localPath: _attachmentLocalPaths.isNotEmpty
+                    ? _attachmentLocalPaths.first
+                    : null,
                 isDark: isDark,
                 onRemove: () {
-                  setState(_attachmentMediaIds.clear);
+                  setState(() {
+                    _attachmentMediaIds.clear();
+                    _attachmentLocalPaths.clear();
+                  });
                   _scheduleDraftSave();
                 },
               ),

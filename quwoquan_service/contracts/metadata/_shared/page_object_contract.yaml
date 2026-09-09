@@ -227,7 +227,7 @@ pages:
       - local.image_edit_session
       - content.filter_catalog_release.projection.filter_catalog_slice
     typed_presentation: [CreateMediaItem, FilterCatalogSlice]
-    auth_requirement: required
+    auth_requirement: optional
     capability_requirements: { all_of: [], any_of: [] }
     telemetry_descriptor: { event_namespace: page.media.image_editor, lifecycle: [enter, exit, submit, failure] }
     entry_widget: ImageEditorPage
@@ -860,7 +860,7 @@ pages:
       - entity.homepage
       - local.create_draft_store
     typed_presentation: [ContentPublishDraftComposite, ContentPostViewData, FilterCatalogSlice]
-    auth_requirement: required
+    auth_requirement: optional
     capability_requirements: { all_of: [], any_of: [] }
     telemetry_descriptor: { event_namespace: page.content.create, lifecycle: [enter, exit, publish, failure] }
     entry_widget: CreatePage
@@ -876,7 +876,7 @@ pages:
     object_ids: [content.post]
     query_slices: [local.create_draft_store]
     typed_presentation: [CreateDraftStoreState, CreateDraft]
-    auth_requirement: required
+    auth_requirement: optional
     capability_requirements: { all_of: [], any_of: [] }
     telemetry_descriptor: { event_namespace: page.content.local_drafts, lifecycle: [enter, exit, resume, delete, failure] }
     entry_widget: LocalDraftPage

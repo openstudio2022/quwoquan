@@ -167,6 +167,82 @@ class CreateDraftLocalStorage implements CreateDraftTerminalAccountPurger {
     );
   }
 
+  static Future<CreateDraftScopedSnapshot> adoptScopedDrafts({
+    required String sourceScopeKey,
+    required String targetScopeKey,
+  }) async {
+    final sourceKey = sourceScopeKey.trim();
+    final targetKey = targetScopeKey.trim();
+    if (sourceKey.isEmpty || targetKey.isEmpty) {
+      throw ArgumentError('draft adoption requires non-empty scopes');
+    }
+    if (sourceKey == targetKey) {
+      return loadScopedDraftsWithCurrentId(targetKey);
+    }
+
+    final source = await loadScopedDraftsWithCurrentId(sourceKey);
+    final target = await loadScopedDraftsWithCurrentId(targetKey);
+    if (source.drafts.isEmpty) {
+      return target;
+    }
+
+    final mergedById = <String, CreateDraft>{
+      for (final draft in target.drafts) draft.id: draft,
+    };
+    for (final sourceDraft in source.drafts) {
+      final targetDraft = mergedById[sourceDraft.id];
+      if (targetDraft == null ||
+          sourceDraft.updatedAtMs >= targetDraft.updatedAtMs) {
+        mergedById[sourceDraft.id] = sourceDraft;
+      }
+    }
+    final mergedDrafts = mergedById.values.toList(growable: false)
+      ..sort((a, b) => b.updatedAtMs.compareTo(a.updatedAtMs));
+    final sourceCurrentId = source.currentId;
+    final mergedCurrentId =
+        sourceCurrentId != null && mergedById.containsKey(sourceCurrentId)
+        ? sourceCurrentId
+        : target.currentId;
+
+    await persistScopedDrafts(
+      targetKey,
+      mergedDrafts,
+      currentId: mergedCurrentId,
+    );
+    final verified = await loadScopedDraftsWithCurrentId(targetKey);
+    final verifiedById = <String, CreateDraft>{
+      for (final draft in verified.drafts) draft.id: draft,
+    };
+    for (final expected in mergedDrafts) {
+      final actual = verifiedById[expected.id];
+      if (actual == null ||
+          jsonEncode(actual.toStorageMap()) !=
+              jsonEncode(expected.toStorageMap())) {
+        throw StateError(
+          'adopted draft is not readable in target scope: ${expected.id}',
+        );
+      }
+    }
+
+    await _clearScopedStorage(sourceKey);
+    return verified;
+  }
+
+  static Future<void> _clearScopedStorage(String scopeKey) async {
+    final prefs = await SharedPreferences.getInstance();
+    final scopedPrefix = '$_storagePrefix:$scopeKey:';
+    final keys = prefs
+        .getKeys()
+        .where((key) => key.startsWith(scopedPrefix))
+        .toList(growable: false);
+    for (final key in keys) {
+      await _requirePersisted(prefs.remove(key), key);
+    }
+    if (prefs.getKeys().any((key) => key.startsWith(scopedPrefix))) {
+      throw StateError('source draft scope cleanup verification failed');
+    }
+  }
+
   static Future<CreateDraft?> loadScopedDraft(
     String scopeKey,
     String draftId,

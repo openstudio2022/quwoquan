@@ -271,14 +271,19 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
       },
     );
     final themeDark = ref.watch(isDarkProvider);
+    // 视频书是沉浸式壳层：active 时不渲染底栏、不预留底部遮挡并强制深色 chrome，
+    // 只留沉浸 viewer 自身的底部交互栏（premium-stream-recommendation REQ-001）。
+    final isVideoBookActive =
+        _currentDestination == MainTabDestination.videoBook;
     final forceDark = ref.watch(videoForceDarkProvider).forceDark;
-    final effectiveForceDark = forceDark;
+    final effectiveForceDark = forceDark || isVideoBookActive;
     final isDark = themeDark || effectiveForceDark;
     final shellBackground = effectiveForceDark
         ? AppColors.worksBackground
         : SettingsSemanticConstants.conversationSheetCardSurface(isDark);
     final bottomNavHidden =
         ref.watch(bottomNavHiddenProvider).hidden ||
+        isVideoBookActive ||
         !_currentDestination.isBottomNavDestination ||
         widget.currentLocation == AppRoutePaths.createEntry ||
         widget.currentLocation.startsWith(AppRoutePaths.createPathTemplate);

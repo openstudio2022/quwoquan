@@ -159,18 +159,21 @@ class _SendButton extends StatelessWidget {
 /// 输入框底部的单张图片缩略图（右上角可删除），形态参考主流评论输入。
 class _AttachmentThumbnail extends StatelessWidget {
   const _AttachmentThumbnail({
-    required this.mediaId,
+    this.mediaId,
+    this.localPath,
     required this.isDark,
     required this.onRemove,
-  });
+  }) : assert(mediaId != null || localPath != null);
 
-  final String mediaId;
+  final String? mediaId;
+  final String? localPath;
   final bool isDark;
   final VoidCallback onRemove;
 
   @override
   Widget build(BuildContext context) {
-    final thumbnailUrl = 'media/comment/$mediaId/v1/comment.png';
+    final localImagePath = localPath?.trim() ?? '';
+    final thumbnailUrl = 'media/comment/${mediaId ?? ''}/v1/comment.png';
     return SizedBox(
       width: AppSpacing.commentAttachmentThumbnailSize,
       height: AppSpacing.commentAttachmentThumbnailSize,
@@ -187,21 +190,36 @@ class _AttachmentThumbnail extends StatelessWidget {
                 ColorType.backgroundPrimary,
               ),
               alignment: Alignment.center,
-              child: AppCachedNetworkImage(
-                imageUrl: thumbnailUrl,
-                fit: BoxFit.cover,
-                width: AppSpacing.commentAttachmentThumbnailSize,
-                height: AppSpacing.commentAttachmentThumbnailSize,
-                cdnPreset: CdnImagePreset.thumbnail,
-                errorWidget: Icon(
-                  CupertinoIcons.photo,
-                  size: AppSpacing.iconMedium,
-                  color: AppColorsFunctional.getColor(
-                    isDark,
-                    ColorType.foregroundTertiary,
-                  ),
-                ),
-              ),
+              child: localImagePath.isNotEmpty
+                  ? Image(
+                      image: localFileImageProvider(localImagePath),
+                      fit: BoxFit.cover,
+                      width: AppSpacing.commentAttachmentThumbnailSize,
+                      height: AppSpacing.commentAttachmentThumbnailSize,
+                      errorBuilder: (_, _, _) => Icon(
+                        CupertinoIcons.photo,
+                        size: AppSpacing.iconMedium,
+                        color: AppColorsFunctional.getColor(
+                          isDark,
+                          ColorType.foregroundTertiary,
+                        ),
+                      ),
+                    )
+                  : AppCachedNetworkImage(
+                      imageUrl: thumbnailUrl,
+                      fit: BoxFit.cover,
+                      width: AppSpacing.commentAttachmentThumbnailSize,
+                      height: AppSpacing.commentAttachmentThumbnailSize,
+                      cdnPreset: CdnImagePreset.thumbnail,
+                      errorWidget: Icon(
+                        CupertinoIcons.photo,
+                        size: AppSpacing.iconMedium,
+                        color: AppColorsFunctional.getColor(
+                          isDark,
+                          ColorType.foregroundTertiary,
+                        ),
+                      ),
+                    ),
             ),
           ),
           Positioned(

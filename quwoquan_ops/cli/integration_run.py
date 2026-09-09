@@ -194,10 +194,15 @@ def _stackctl(*args: str, env: Mapping[str, str] | None = None, log_dir: Path) -
 DATA_CLI = ROOT / "quwoquan_data/scripts/cli.py"
 
 
+RELEASE_CLASS = "production"
+
+
 def _release_id(attestation: Path) -> tuple[str, str]:
+    # DEC-041：Data producer 只产出单一 production release；research/commercial 已收敛，
+    # 与下游 `ship verify --readiness-phase production` 同一闭集，避免两端互斥。
     payload = json.loads(attestation.read_text(encoding="utf-8"))
     release_id, release_class = str(payload.get("releaseId") or ""), str(payload.get("releaseClass") or "")
-    if not release_id or release_class not in {"research", "commercial"}:
+    if not release_id or release_class != RELEASE_CLASS:
         raise IntegrationRunError("INTEGRATION_RUN.INPUT_INVALID", f"{attestation} is not a canonical release attestation")
     local = OUTPUT_ROOT / "data/releases" / release_id / "attestations/release.json"
     if not local.is_file() or local.read_bytes() != attestation.read_bytes():
@@ -227,7 +232,7 @@ def _data_ship(*args: str, log_dir: Path, label: str) -> None:
 
 def _apply_data_release(*, environment: str, run_id: str, args: argparse.Namespace, log_dir: Path,
                         previous_readiness: Path | None) -> Path:
-    """candidate release：apply --import --full-sync → verify（research/commercial 按 attestation）；返回 readiness 回执。"""
+    """candidate release：apply --import --full-sync → activate → verify（production）；返回 readiness 回执。"""
 
     release_id, _release_class = _release_id(args.release_attestation)
     handoff_ref = str(args.release_handoff_ref or "").strip()
@@ -243,7 +248,7 @@ def _apply_data_release(*, environment: str, run_id: str, args: argparse.Namespa
     _data_ship("activate", "--handoff-ref", handoff_ref, "--env", environment, "--import-run-id", import_run,
                "--run-id", activate_run, log_dir=log_dir, label=f"{environment}-activate")
     verify_args = ["verify", "--handoff-ref", handoff_ref, "--env", environment, "--import-run-id", import_run,
-                   "--run-id", verify_run, "--readiness-phase", "production"]
+                   "--run-id", verify_run, "--readiness-phase", RELEASE_CLASS]
     if previous_readiness is not None:
         verify_args.extend(["--previous-environment-readiness", _output_ref(previous_readiness)])
     _data_ship(*verify_args, log_dir=log_dir, label=f"{environment}-verify")

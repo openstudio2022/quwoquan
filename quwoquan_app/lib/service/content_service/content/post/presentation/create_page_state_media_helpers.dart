@@ -1,13 +1,7 @@
 part of 'create_page.dart';
 
 extension _CreatePageStateMediaHelpers on _CreatePageState {
-  Future<void> _publish() async {
-    // 防御性二次拦截：发布是需登录写动作。创作页已被路由守卫保护，这里再兜底一次。
-    if (!await _requireCreateActionLogin(
-      CreateActionContinuationKind.publish,
-    )) {
-      return;
-    }
+  Future<void> _publish({bool resumeAfterLogin = false}) async {
     if (!mounted) return;
     var state = ref.read(createEditorProvider);
     if (_isPublishing) {
@@ -17,29 +11,43 @@ extension _CreatePageStateMediaHelpers on _CreatePageState {
       AppToast.show(context, CreatePageText.writeSomethingFirst);
       return;
     }
-    if (_useImmersiveArticleExperience(state)) {
-      await _flushDraftIfDirty('subpage_push');
-      if (!mounted) {
-        return;
-      }
-      final proceed = await Navigator.of(context).push<bool>(
-        CupertinoPageRoute<bool>(
-          settings: const RouteSettings(
-            name: PageAccessInternalRoutes.createPageArticleTypography,
+    if (!resumeAfterLogin) {
+      if (_useImmersiveArticleExperience(state)) {
+        await _flushDraftIfDirty('subpage_push');
+        if (!mounted) {
+          return;
+        }
+        final proceed = await Navigator.of(context).push<bool>(
+          CupertinoPageRoute<bool>(
+            settings: const RouteSettings(
+              name: PageAccessInternalRoutes.createPageArticleTypography,
+            ),
+            fullscreenDialog: true,
+            builder: (_) => const ArticleTypographyPage(),
           ),
-          fullscreenDialog: true,
-          builder: (_) => const ArticleTypographyPage(),
-        ),
-      );
-      if (proceed != true) {
+        );
+        if (proceed != true) {
+          return;
+        }
+        state = ref.read(createEditorProvider);
+      }
+      final confirmed = await _showPublishConfirmationSheet(state);
+      if (confirmed == null) {
         return;
       }
-      state = ref.read(createEditorProvider);
+      ref.read(createEditorProvider.notifier).setSettings(confirmed);
     }
-    final confirmedSettings = await _showPublishConfirmationSheet(state);
-    if (confirmedSettings == null) {
+
+    // 编辑与发布确认均允许游客完成；账号门只在真正写入发布事实前触发。
+    // 登录续接时确认值已保存在编辑器状态中，不再要求用户重复确认。
+    if (!await _requireCreateActionLogin(
+      CreateActionContinuationKind.publish,
+    )) {
       return;
     }
+    if (!mounted) return;
+    state = ref.read(createEditorProvider);
+    final confirmedSettings = state.settings;
     // GWT-001 fail-closed：文字发布的最终形态必须来自确认页固化的确认值，
     // 提交阶段不得再次静默推导。确认页 initState 恒固化建议值，此处为
     // 合同防线而非可达分支。
@@ -63,7 +71,6 @@ extension _CreatePageStateMediaHelpers on _CreatePageState {
     LocalPostPublicationIntent? mediaPreparationIntent;
     String? publicationDraftId;
     var retryRequested = false;
-    ref.read(createEditorProvider.notifier).setSettings(confirmedSettings);
     _setMountedState(() {
       _isPublishing = true;
       _publishUploadProgress = hasMediaUpload ? 0 : null;
@@ -656,9 +663,8 @@ extension _CreatePageStateMediaHelpers on _CreatePageState {
         ? AppColors.black.withValues(alpha: 0.24)
         : AppColors.iosSecondaryFill(context).withValues(alpha: 0.82);
     final deleteIconColor = AppColors.iosLabel(context);
-    final deleteRingColor = AppColors.iosSeparator(
-      context,
-    ).withValues(alpha: 0.2);
+    final deleteRingColor = AppColors.iosSeparator(context)
+        .withValues(alpha: 0.2);
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTapDown: (_) {

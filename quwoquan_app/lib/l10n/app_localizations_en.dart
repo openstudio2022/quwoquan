@@ -1802,6 +1802,33 @@ class AppLocalizationsEn extends AppLocalizations {
       'Start with photos, video, or text.';
 
   @override
+  String get content_authGateTitleSaveDraft => 'Sign in to save your draft';
+
+  @override
+  String get content_authGateSubtitleSaveDraft =>
+      'Your draft will be saved to your account so you can continue editing later.';
+
+  @override
+  String get content_authGatePromptSaveDraft => 'Sign in to save this draft';
+
+  @override
+  String get content_createGuestExitConfirmTitle =>
+      'Sign in to save your draft?';
+
+  @override
+  String get content_createGuestExitConfirmDesc =>
+      'Sign in to save this draft to your account. If you exit without signing in, your current work will be lost.';
+
+  @override
+  String get content_createLoginAndSaveDraft => 'Sign in and save draft';
+
+  @override
+  String get content_createGuestDiscardAndExit => 'Exit without saving';
+
+  @override
+  String get content_createDraftSavedToAccount => 'Draft saved to your account';
+
+  @override
   String get circle_createEntryStartGathering => 'Start an activity';
 
   @override

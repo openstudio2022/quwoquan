@@ -1,3 +1,6 @@
+// spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/comment-thread/spec.md#gwt-003.t1
+// spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/comment-thread/spec.md#gwt-003.t2
+
 import 'dart:async';
 import 'dart:io';
 
@@ -6,7 +9,11 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
+import 'package:quwoquan_app/runtime/auth/auth_continuation.dart';
+import 'package:quwoquan_app/runtime/auth/auth_gate.dart';
 import 'package:quwoquan_app/runtime/observability/analytics.dart';
+import 'package:quwoquan_app/runtime/shell/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_ui_surfaces.g.dart';
 import 'package:quwoquan_app/service/content_service/media/media_upload_session/application/public/content_media_upload_service.dart';
 import 'package:quwoquan_app/runtime/auth/auth_session.dart';
@@ -29,11 +36,35 @@ import 'package:quwoquan_app/service/content_service/content/comment/application
 import 'package:quwoquan_app/l10n/app_localizations.dart';
 import 'package:quwoquan_runtime_errors/runtime_errors.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
 import '../../../../../support/service/content_service/content/post/content_facet_overrides.dart';
 import '../../../../../support/runtime/transport/recording_content_media_facet.dart';
 import '../../../../../support/service/content_service/content/comment/in_memory_content_comment_facet.dart';
 import '../../../../../support/service/content_service/content/post/content_post_typed_doubles.dart';
 import '../../../../../support/runtime/errors/runtime_failure_fixtures.dart';
+
+class _FlippableGuestSession extends AuthSessionController {
+  @override
+  AuthSessionState build() => const AuthSessionState(
+    status: AuthSessionStatus.guest,
+    ownerId: 'guest-owner',
+    activePersonaId: 'guest-persona',
+    accountState: 'anonymous',
+    installId: 'guest-install',
+  );
+
+  void loginNow() {
+    state = const AuthSessionState(
+      status: AuthSessionStatus.authenticated,
+      accessToken: 'guest-upgrade-token',
+      refreshToken: 'guest-upgrade-refresh',
+      ownerId: 'signed-in-owner',
+      activePersonaId: 'signed-in-persona',
+      accountState: 'active',
+      installId: 'guest-install',
+    );
+  }
+}
 
 class _AuthenticatedSession extends AuthSessionController {
   @override
@@ -100,6 +131,11 @@ void main() {
   testWidgets(
     'testCommentComposerMentionsAndAttachment: @、附件和 emoji 面板可协同提交',
     testCommentComposerMentionsAndAttachment,
+  );
+
+  testWidgets(
+    '游客选图不上传，提交登录后自动上传附件并续提评论',
+    testGuestCommentAttachmentDefersUploadUntilLogin,
   );
 
   test(
@@ -427,6 +463,134 @@ Future<void> testCommentComposerMentionsAndAttachment(
     payload.mentions.single.displayName,
     equals(AssistantText.assistantEntryXiaoqu),
   );
+}
+
+Future<void> testGuestCommentAttachmentDefersUploadUntilLogin(
+  WidgetTester tester,
+) async {
+  SharedPreferences.setMockInitialValues(const <String, Object>{});
+  AuthGate.resetDebounce();
+  const selectedPath = '/tmp/guest-comment-attachment.jpg';
+  final submittedPayloads = <CommentComposerPayload>[];
+  final media = RecordingContentMediaFacet();
+  final router = GoRouter(
+    initialLocation: '/home',
+    routes: <RouteBase>[
+      GoRoute(
+        path: '/home',
+        builder: (context, state) => CupertinoPageScaffold(
+          child: Builder(
+            builder: (context) => CupertinoButton(
+              onPressed: () => CommentInputOverlay.show(
+                context,
+                postId: 'guest-comment-post',
+                sourceSurface: AppUiSurfaces.homeFeed,
+                config: const CommentConfig(maxImageAttachments: 1),
+                onSubmit: submittedPayloads.add,
+              ),
+              child: const Text('open-guest-comment-input'),
+            ),
+          ),
+        ),
+      ),
+      GoRoute(
+        path: AppRoutePaths.loginPathTemplate,
+        builder: (context, state) => const CupertinoPageScaffold(
+          child: SizedBox(key: ValueKey<String>('comment-login-sentinel')),
+        ),
+      ),
+    ],
+  );
+  addTearDown(router.dispose);
+
+  await tester.pumpWidget(
+    ProviderScope(
+      overrides: [
+        ...mockContentFacetOverrides(store: InMemoryContentPostStore()),
+        analyticsProvider.overrideWithValue(AnalyticsService.forTesting()),
+        authSessionControllerProvider.overrideWith(_FlippableGuestSession.new),
+        imagePickGatewayProvider.overrideWithValue(
+          const _SelectedImagePickGateway(selectedPath),
+        ),
+        fileStorageGatewayProvider.overrideWithValue(
+          const _MemoryFileStorageGateway(<String, List<int>>{
+            selectedPath: <int>[1, 2, 3, 4],
+          }),
+        ),
+        contentMediaSourceReaderProvider.overrideWithValue(
+          const _MemoryContentMediaSourceReader(<String, List<int>>{
+            selectedPath: <int>[1, 2, 3, 4],
+          }),
+        ),
+        homeFeedContentMediaFacetProvider.overrideWithValue(media),
+        contentMediaStreamObjectUploadProvider.overrideWithValue(
+          (
+            _,
+            _, {
+            required contentLength,
+            required mimeType,
+            required expectedSha256,
+            abortTrigger,
+          }) async {},
+        ),
+        commentRemoteConfigProvider.overrideWithValue(
+          const CommentRemoteConfig(maxImageAttachments: 1),
+        ),
+      ],
+      child: CupertinoApp.router(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        routerConfig: router,
+      ),
+    ),
+  );
+  await tester.pumpAndSettle();
+  final container = ProviderScope.containerOf(
+    tester.element(find.text('open-guest-comment-input')),
+  );
+
+  await tester.tap(find.text('open-guest-comment-input'));
+  await tester.pumpAndSettle();
+  await tester.tap(find.byIcon(CupertinoIcons.photo).first);
+  await tester.pumpAndSettle();
+
+  expect(media.initCommands, isEmpty, reason: '游客选图阶段不得调用媒体上传 operation');
+  await tester.enterText(find.byKey(TestKeys.commentTextField), '游客带图评论');
+  await tester.pump();
+  await tester.tap(find.byKey(TestKeys.submitCommentButton));
+  await tester.pumpAndSettle();
+
+  final loginSentinel = find.byKey(
+    const ValueKey<String>('comment-login-sentinel'),
+  );
+  expect(loginSentinel, findsOneWidget);
+  final pending = container.read(authContinuationProvider);
+  expect(pending, isA<SubmitCommentContinuation>());
+  expect(
+    (pending! as SubmitCommentContinuation).attachmentLocalPaths,
+    const <String>[selectedPath],
+  );
+  expect(
+    GoRouterState.of(tester.element(loginSentinel))
+        .uri
+        .queryParameters[loginGuestDismissPopQueryParam],
+    LoginDismissPolicy.popPrevious.name,
+  );
+  expect(media.initCommands, isEmpty);
+
+  (container.read(
+    authSessionControllerProvider.notifier,
+  ) as _FlippableGuestSession).loginNow();
+  router.pop();
+  await tester.pumpAndSettle();
+
+  expect(media.initCommands, hasLength(1));
+  expect(media.completedSessions, const <String>['session_1']);
+  expect(submittedPayloads, hasLength(1));
+  expect(submittedPayloads.single.attachmentMediaIds, const <String>[
+    'image_asset_1',
+  ]);
+  expect(container.read(authContinuationProvider), isNull);
 }
 
 final class _SelectedImagePickGateway implements ImagePickGateway {

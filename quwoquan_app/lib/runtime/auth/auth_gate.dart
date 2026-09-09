@@ -22,6 +22,7 @@ const String loginGuestDismissPopQueryParam = 'guest_dismiss_pop';
 enum AuthGateReason {
   profileTab,
   createPost,
+  saveDraft,
   openChat,
   sendMessage,
   greet,
@@ -102,6 +103,13 @@ authGateMatrix = <AuthGateReason, AuthGateEntry>{
     requiredOperations: <String>[
       AppCloudOperationIds.contentPostSubmitPostPublication,
     ],
+  ),
+  AuthGateReason.saveDraft: AuthGateEntry(
+    reason: AuthGateReason.saveDraft,
+    title: FoundationText.authGateTitleSaveDraft,
+    subtitle: FoundationText.authGateSubtitleSaveDraft,
+    prompt: FoundationText.authGatePromptSaveDraft,
+    requiredOperations: <String>[],
   ),
   AuthGateReason.openChat: AuthGateEntry(
     reason: AuthGateReason.openChat,
@@ -358,12 +366,8 @@ AuthGateReason? requiredRouteGateForLocation(String loc) {
   if (loc.startsWith('${AppRoutePaths.profile}/')) {
     return AuthGateReason.personaManage;
   }
-  // createEntry 是「添加入口动作面板」，游客必须能先看到面板；真正的发布/
-  // 图片/视频编辑页仍在 /create 下由路由守卫保护，登录成功按 redirect 回目标态。
-  if (loc == AppRoutePaths.createPathTemplate ||
-      loc.startsWith('${AppRoutePaths.createPathTemplate}/')) {
-    return AuthGateReason.createPost;
-  }
+  // content.create 与 content.local_drafts 是游客可进入的本地创作表面；
+  // 账号身份只在发布提交或显式保存到账号的动作门校验，禁止整页路由拦截。
   if (loc == AppRoutePaths.gatheringCreate) {
     return AuthGateReason.startGathering;
   }

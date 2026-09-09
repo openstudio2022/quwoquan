@@ -1,3 +1,5 @@
+// spec_ref: specs/feature-tree/discovery-content/content-type-framework/creation-mode-and-surface-ia-unification/spec.md#gwt-002.t6
+
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -161,6 +163,85 @@ void main() {
       expect(snapshotA.drafts.single.id, 'draft_video');
       expect(snapshotB.drafts, isEmpty);
       expect(await userB.loadDraft('draft_video'), isNull);
+    });
+
+    test('匿名 actor 草稿安全并入账号 scope，冲突保留较新版本并清除源副本', () async {
+      final sourceScope = CreateDraftLocalStorage.scopeKeyForUser(
+        'anonymous_persona',
+      );
+      final targetScope = CreateDraftLocalStorage.scopeKeyForUser(
+        'authenticated_persona',
+      );
+      final sourceCurrent = _buildDraft(
+        id: 'draft_source_current',
+        updatedAtMs: 3000,
+        flowKind: CreateDraftFlowKind.article,
+        body: '游客当前草稿',
+      );
+      final sourceConflict = _buildDraft(
+        id: 'draft_shared',
+        updatedAtMs: 2000,
+        flowKind: CreateDraftFlowKind.image,
+        body: '游客较旧版本',
+      );
+      final targetConflict = _buildDraft(
+        id: 'draft_shared',
+        updatedAtMs: 5000,
+        flowKind: CreateDraftFlowKind.image,
+        body: '账号较新版本',
+      );
+      final targetOnly = _buildDraft(
+        id: 'draft_target_only',
+        updatedAtMs: 1000,
+        flowKind: CreateDraftFlowKind.video,
+        body: '账号原有草稿',
+        videoPath: '/tmp/account.mp4',
+      );
+      await CreateDraftLocalStorage.persistScopedDrafts(
+        sourceScope,
+        <CreateDraft>[sourceCurrent, sourceConflict],
+        currentId: sourceCurrent.id,
+      );
+      await CreateDraftLocalStorage.persistScopedDrafts(
+        targetScope,
+        <CreateDraft>[targetConflict, targetOnly],
+        currentId: targetOnly.id,
+      );
+
+      final adopted = await CreateDraftLocalStorage.adoptScopedDrafts(
+        sourceScopeKey: sourceScope,
+        targetScopeKey: targetScope,
+      );
+      final sourceAfter =
+          await CreateDraftLocalStorage.loadScopedDraftsWithCurrentId(
+            sourceScope,
+          );
+      final prefs = await SharedPreferences.getInstance();
+
+      expect(adopted.drafts, hasLength(3));
+      expect(adopted.currentId, sourceCurrent.id);
+      expect(
+        adopted.drafts
+            .singleWhere((draft) => draft.id == 'draft_shared')
+            .state
+            .body,
+        '账号较新版本',
+      );
+      expect(
+        adopted.drafts
+            .singleWhere((draft) => draft.id == sourceCurrent.id)
+            .state
+            .body,
+        '游客当前草稿',
+      );
+      expect(sourceAfter.drafts, isEmpty);
+      expect(sourceAfter.currentId, isNull);
+      expect(
+        prefs.getKeys().where(
+          (key) => key.startsWith('create_drafts:$sourceScope:'),
+        ),
+        isEmpty,
+      );
     });
 
     test('draft payload survives a missing or corrupt index write', () async {

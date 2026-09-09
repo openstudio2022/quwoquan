@@ -4,10 +4,12 @@
 from __future__ import annotations
 
 import ast
+import importlib.util
 import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 
@@ -90,6 +92,31 @@ class AppScriptCommonPathsContractTest(unittest.TestCase):
             )
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("登录入口无死循环契约一致", result.stdout)
+
+    # spec_ref: specs/feature-tree/discovery-content/content-type-framework/creation-mode-and-surface-ia-unification/spec.md#gwt-003
+    def test_login_loop_gate_rejects_early_gate_and_missing_terminal_auth(self) -> None:
+        spec = importlib.util.spec_from_file_location("login_loop_under_test", LOGIN_LOOP)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        original_read = module.read
+        cases = (
+            ("quwoquan_app/lib/runtime/auth/auth_gate.dart", None),
+            ("quwoquan_app/lib/service/content_service/content/post/presentation/create_page_state_media_helpers.dart", "_requireCreateActionLogin("),
+            ("quwoquan_app/lib/service/content_service/content/post/presentation/create_page_state_draft_helpers.dart", "_requireCreateActionLogin("),
+        )
+        for path, removed in cases:
+            with self.subTest(path=path):
+                def changed_read(rel: str) -> str:
+                    text = original_read(rel)
+                    if rel != path:
+                        return text
+                    if removed is None:
+                        return text + "\nloc == AppRoutePaths.createPathTemplate\n"
+                    self.assertIn(removed, text)
+                    return text.replace(removed, "removedLoginProtection(")
+
+                with mock.patch.object(module, "read", side_effect=changed_read):
+                    self.assertEqual(module.main(), 1)
 
     def test_deeply_nested_pageflip_gate_uses_common_repo_root(self) -> None:
         source = PAGEFLIP.read_text(encoding="utf-8")

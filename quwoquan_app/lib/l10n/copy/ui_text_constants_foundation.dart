@@ -161,6 +161,7 @@ abstract final class FoundationText {
   static const String loginFailed = loginServiceUnavailable;
   static const String authGateTitleProfile = '登录后查看我的主页';
   static const String authGateTitleCreate = '登录后发布内容';
+  static const String authGateTitleSaveDraft = '登录后保存草稿';
   static const String authGateTitleComment = '登录后继续评论';
   static const String authGateTitleLike = '登录后继续点赞';
   static const String authGateTitleWishlist = '登录后标记想去';
@@ -178,7 +179,8 @@ abstract final class FoundationText {
   static const String authGateTitleStartCall = '登录后发起通话';
   static const String authGateTitleGeneric = '登录后继续使用';
   static const String authGateSubtitleProfile = '同步你的作品、足迹、互动和分身资料。';
-  static const String authGateSubtitleCreate = '保存草稿、发布记录和后续互动通知。';
+  static const String authGateSubtitleCreate = '发布记录和后续互动通知会绑定账号。';
+  static const String authGateSubtitleSaveDraft = '登录后草稿会保存到你的账号，方便继续编辑。';
   static const String authGateSubtitleComment = '评论会沉淀到内容页，并跟随账号同步。';
   static const String authGateSubtitleLike = '登录后可跨设备同步点赞记录。';
   static const String authGateSubtitleWishlist = '想去状态会同步到账号，并用于发现共同目的地。';
@@ -197,6 +199,7 @@ abstract final class FoundationText {
   static const String authGateSubtitleGeneric = '登录后保存记录，并继续刚才的操作。';
   static const String authGatePromptProfile = '登录后查看我的主页';
   static const String authGatePromptCreate = '登录后即可发布内容';
+  static const String authGatePromptSaveDraft = '登录后即可保存草稿';
   static const String authGatePromptComment = '登录后即可评论，评论会按账号发布并沉淀到对象页';
   static const String authGatePromptLike = '登录后即可点赞';
   static const String authGatePromptWishlist = '登录后即可标记想去';

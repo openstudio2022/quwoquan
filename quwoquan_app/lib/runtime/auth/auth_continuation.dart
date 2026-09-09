@@ -21,6 +21,7 @@ class SubmitCommentContinuation extends AuthContinuation {
     this.postId,
     this.replyToCommentId,
     this.attachmentMediaIds = const <String>[],
+    this.attachmentLocalPaths = const <String>[],
     this.mentions = const <CommentMention>[],
   });
 
@@ -28,6 +29,7 @@ class SubmitCommentContinuation extends AuthContinuation {
   final String? postId;
   final String? replyToCommentId;
   final List<String> attachmentMediaIds;
+  final List<String> attachmentLocalPaths;
   final List<CommentMention> mentions;
 }
 
@@ -118,17 +120,13 @@ class ShareContentContinuation extends AuthContinuation {
   final String? recipientId;
 }
 
-/// 创作页重新鉴权后可恢复的原动作。
-enum CreateActionContinuationKind { publish, pickImages, pickVideo }
+/// 创作页登录后可恢复的末端动作。
+enum CreateActionContinuationKind { publish, saveDraftAndExit }
 
 class ResumeCreateActionContinuation extends AuthContinuation {
-  const ResumeCreateActionContinuation({
-    required this.action,
-    this.closeWhenEmptyOnCancel = false,
-  });
+  const ResumeCreateActionContinuation({required this.action});
 
   final CreateActionContinuationKind action;
-  final bool closeWhenEmptyOnCancel;
 }
 
 /// 需要登录后恢复的实体主页写动作。
