@@ -196,8 +196,13 @@ def project_object_sources(
             if original.is_symlink() or original.stat().st_size < 1:
                 raise ObjectTransactionError(f"DATA.PUBLISH.SOURCE_EVIDENCE_INVALID: {original}")
             digest = _digest_file(original)
-            expected = meta.get("cleanSha256" if original.name == "source.md" else "rawSha256")
-            if expected and digest != expected:
+            digest_field = "sourceMarkdownSha256" if original.name == "source.md" else "rawSha256"
+            expected = meta.get(digest_field)
+            if not expected:
+                raise ObjectTransactionError(
+                    f"DATA.PUBLISH.SOURCE_EVIDENCE_DIGEST_MISSING: {original}: {digest_field}"
+                )
+            if digest != expected:
                 raise ObjectTransactionError(f"DATA.PUBLISH.SOURCE_EVIDENCE_DRIFT: {original}")
             filename = f"evidence{'-' + str(index + 1) if index else ''}{original.suffix}"
             target.mkdir(parents=True, exist_ok=True)

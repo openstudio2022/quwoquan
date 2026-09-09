@@ -60,9 +60,21 @@ def _package(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     source = execution / "sources/commons"
     evidence = b"Original fixture source response; CC BY 4.0 attribution.\n"
     (source / "snapshot.html").write_bytes(evidence)
-    meta = json.loads((source / "meta.json").read_bytes())
-    meta.update(canonicalUrl=manifest["sourceUrls"][0], fetchedAt="2026-07-18T04:00:00Z",
-                rawSha256="sha256:" + hashlib.sha256(evidence).hexdigest())
+    excerpt = "# 测试来源\n\n原始来源摘录及 CC BY 4.0 署名。\n".encode("utf-8")
+    (source / "source.md").write_bytes(excerpt)
+    meta = {
+        "schema": "quwoquan_data.atomic_source_unit", "stage": "1.download",
+        "executionId": execution.name, "executionBinding": "frozen",
+        "sourceUnitId": "commons", "sourcePlanRef": "sources/plans/" + "a" * 64 + ".json",
+        "sourcePlanDigest": "sha256:" + "a" * 64, "chosenCandidateDigest": "sha256:" + "b" * 64,
+        "sourceId": "commons", "targetRef": "posts/" + POST_REF, "carrier": "image",
+        "title": "测试来源", "sourceClass": "image", "sourceUseMode": "licensed_adaptation",
+        "purpose": "测试随体来源证据", "rightsClue": "CC BY 4.0 attribution",
+        "canonicalUrl": manifest["sourceUrls"][0], "fetchedAt": "2026-07-18T04:00:00Z",
+        "rawSha256": "sha256:" + hashlib.sha256(evidence).hexdigest(),
+        "sourceMarkdownSha256": "sha256:" + hashlib.sha256(excerpt).hexdigest(),
+    }
+    assert_valid(meta, "source", "atomic_source_unit_meta")
     _write_json(source / "meta.json", meta)
     review = execution / "posts" / POST_REF / "5.review/content_review.json"
     return execution, package, publish, transaction_id, evidence, review.read_bytes()
@@ -70,6 +82,9 @@ def _package(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
 
 def test_real_post_builder_carries_single_manifest_sources_media_and_record(tmp_path, monkeypatch):
     execution, package, publish, transaction_id, evidence, review = _package(tmp_path, monkeypatch)
+    meta_path = execution / "sources/commons/meta.json"
+    original_meta = meta_path.read_bytes()
+    source_assets = json.loads((execution / "sources/commons/assets/index.json").read_bytes())["assets"]
     result = post_transaction.build_post_object_transaction_package(
         execution_root=execution, object_ref=POST_REF, transaction_id=transaction_id, package_root=package,
     )
@@ -85,8 +100,27 @@ def test_real_post_builder_carries_single_manifest_sources_media_and_record(tmp_
     source = json.loads((obj / manifest["sourceRefs"][0]).read_bytes())
     assert_valid(source, "publish", "source")
     assert (obj / manifest["sourceRefs"][0]).parent.joinpath(source["evidence"][0]["path"]).read_bytes() == evidence
+    assert meta_path.read_bytes() == original_meta
+    assert source["metadata"] == json.loads(original_meta)
+    assert {row["kind"] for row in source["evidence"]} == {"source_snapshot", "source_excerpt"}
+    for row in source["evidence"]:
+        original_name, digest_field = (
+            ("source.md", "sourceMarkdownSha256") if row["kind"] == "source_excerpt"
+            else ("snapshot.html", "rawSha256")
+        )
+        original_bytes = (execution / "sources/commons" / original_name).read_bytes()
+        assert (obj / manifest["sourceRefs"][0]).parent.joinpath(row["path"]).read_bytes() == original_bytes
+        assert row["sha256"] == source["metadata"][digest_field]
+        assert row["bytes"] == len(original_bytes)
     for asset in manifest["assets"]:
         fact = next(row for row in source["assets"] if row["assetId"] == asset["assetId"])
+        assert fact["sourceAsset"] in source_assets
+        assert fact["licenseName"] == fact["sourceAsset"]["license"]
+        assert fact["author"] == fact["sourceAsset"]["creator"]
+        assert fact["distributionDecision"] == fact["sourceAsset"]["distributionDecision"]
+        original_manifest = json.loads((execution / "posts" / POST_REF / "manifest.json").read_bytes())
+        original_asset = next(row for row in original_manifest["assets"] if row["assetId"] == asset["assetId"])
+        assert fact["rightsAuditStatus"] == original_asset["rightsAuditStatus"]
         assert (fact["sha256"], fact["bytes"]) == (asset["sha256"], asset["bytes"])
         body = obj / asset["path"]
         assert body.is_file() and not body.is_symlink()
@@ -156,8 +190,70 @@ def test_real_package_audit_apply_reads_logical_identity_and_carried_bytes(tmp_p
 def test_source_metadata_copy_is_not_substitute_for_real_evidence(tmp_path, monkeypatch):
     execution, package, publish, transaction_id, _, _ = _package(tmp_path, monkeypatch)
     (execution / "sources/commons/snapshot.html").unlink()
+    (execution / "sources/commons/source.md").unlink()
     with pytest.raises(ObjectTransactionError, match="DATA.PUBLISH.SOURCE_EVIDENCE_MISSING"):
         post_transaction.build_post_object_transaction_package(
             execution_root=execution, object_ref=POST_REF, transaction_id=transaction_id, package_root=package,
         )
     assert not package.exists()
+
+
+@pytest.mark.parametrize("filename", ["source.md", "snapshot.html"])
+def test_frozen_source_tampering_is_rejected_before_packaging(tmp_path, monkeypatch, filename):
+    """spec_ref: multi-carrier-release/GWT-041 — 冻结来源不可重算摘要后再签发。"""
+    execution, package, _, transaction_id, _, review = _package(tmp_path, monkeypatch)
+    meta_path = execution / "sources/commons/meta.json"
+    original_meta = meta_path.read_bytes()
+    assert_valid(json.loads(original_meta), "source", "atomic_source_unit_meta")
+    original = execution / "sources/commons" / filename
+    tampered = original.read_bytes() + b"Tampered after source freeze.\n"
+    original.write_bytes(tampered)
+
+    with pytest.raises(ObjectTransactionError, match=r"DATA\.PUBLISH\.SOURCE_EVIDENCE_DRIFT"):
+        post_transaction.build_post_object_transaction_package(
+            execution_root=execution, object_ref=POST_REF, transaction_id=transaction_id, package_root=package,
+        )
+    assert not package.exists()
+    assert meta_path.read_bytes() == original_meta
+    assert original.read_bytes() == tampered
+    assert (execution / "posts" / POST_REF / "5.review/content_review.json").read_bytes() == review
+
+
+@pytest.mark.parametrize("field", ["sourceMarkdownSha256", "rawSha256"])
+@pytest.mark.parametrize("missing_value", ["absent", None, ""])
+def test_missing_frozen_source_digest_is_rejected(tmp_path, monkeypatch, field, missing_value):
+    """spec_ref: multi-carrier-release/GWT-041 — 缺冻结摘要不得以当前字节补齐。"""
+    execution, package, _, transaction_id, _, review = _package(tmp_path, monkeypatch)
+    meta_path = execution / "sources/commons/meta.json"
+    meta = json.loads(meta_path.read_bytes())
+    if missing_value == "absent":
+        meta.pop(field)
+    else:
+        meta[field] = missing_value
+    _write_json(meta_path, meta)
+    original_meta = meta_path.read_bytes()
+
+    with pytest.raises(ObjectTransactionError, match=r"DATA\.PUBLISH\.SOURCE_EVIDENCE_DIGEST_MISSING"):
+        post_transaction.build_post_object_transaction_package(
+            execution_root=execution, object_ref=POST_REF, transaction_id=transaction_id, package_root=package,
+        )
+    assert not package.exists()
+    assert meta_path.read_bytes() == original_meta
+    assert (execution / "posts" / POST_REF / "5.review/content_review.json").read_bytes() == review
+
+
+def test_legacy_clean_digest_cannot_replace_frozen_source_digest(tmp_path, monkeypatch):
+    """spec_ref: multi-carrier-release/GWT-041 — 不双读旧 cleanSha256。"""
+    execution, package, _, transaction_id, _, _ = _package(tmp_path, monkeypatch)
+    meta_path = execution / "sources/commons/meta.json"
+    meta = json.loads(meta_path.read_bytes())
+    meta["cleanSha256"] = meta.pop("sourceMarkdownSha256")
+    _write_json(meta_path, meta)
+    original_meta = meta_path.read_bytes()
+
+    with pytest.raises(ObjectTransactionError, match=r"DATA\.PUBLISH\.SOURCE_EVIDENCE_DIGEST_MISSING"):
+        post_transaction.build_post_object_transaction_package(
+            execution_root=execution, object_ref=POST_REF, transaction_id=transaction_id, package_root=package,
+        )
+    assert not package.exists()
+    assert meta_path.read_bytes() == original_meta
