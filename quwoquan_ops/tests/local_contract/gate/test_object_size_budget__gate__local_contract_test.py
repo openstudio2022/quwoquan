@@ -12,7 +12,6 @@ MiB 级暂存媒体先用稀疏文件构造；publish fixture 携带真实媒体
 from __future__ import annotations
 
 import contextlib
-import functools
 import hashlib
 import importlib.util
 import io
@@ -67,9 +66,8 @@ def _load_module(sandbox: Path):
             else:
                 os.environ[key] = value
     module.PUBLISH_ROOT = sandbox / "publish"
-    module.resolve_media_holding = functools.partial(
-        module.resolve_media_holding, library_root=sandbox / "library"
-    )
+    import core.content_library  # fixture 暂存媒体使用库的唯一 CAS 布局。
+
     return module
 
 
@@ -102,6 +100,36 @@ def _admit_media(sandbox: Path, digest: str, *, size: int) -> Path:
     return entry
 
 
+def _manifest_identity(ref: str) -> dict:
+    kind, logical = ref.split("/", 1)
+    if kind == "creators":
+        return {"creatorProfileId": logical}
+    if kind == "entities":
+        domain, entity_type, name = logical.split("/", 2)
+        return {
+            "entityId": "entity_" + _digest(logical)[:16], "version": 1,
+            "entityRef": "/entity/" + logical, "domain": domain, "type": entity_type,
+            "label": name, "geographyMode": "administrative",
+            "geoTagRef": "Topic/地理/行政区/中国/四川省/乐山市",
+        }
+    carrier, angle, title, _sequence = logical.split("/")
+    return {
+        "contentId": "content_" + _digest(logical)[:16], "version": 1,
+        "objectRef": logical, "contentType": carrier,
+        "publishAngle": angle, "publishTitle": title,
+    }
+
+
+def _published_root(sandbox: Path, ref: str) -> Path:
+    from core.publish_layout import allocate_object_path, load_layout_policy
+
+    kind = ref.split("/", 1)[0]
+    relative = ref if kind == "creators" else allocate_object_path(
+        _manifest_identity(ref), kind, [], load_layout_policy()
+    )
+    return sandbox / "publish" / relative
+
+
 def _publish_object(
     sandbox: Path,
     ref: str,
@@ -111,7 +139,7 @@ def _publish_object(
     assets: list | None = None,
     refs_filename: str = "manifest.json",
 ) -> Path:
-    object_root = sandbox / "publish" / ref
+    object_root = _published_root(sandbox, ref)
     object_root.mkdir(parents=True, exist_ok=True)
     for name, body in (documents or {}).items():
         path = object_root / name
@@ -146,6 +174,7 @@ def _publish_object(
         carried_assets.append(carried)
     document = {
         "schema": "quwoquan_data.entity_object" if ref.startswith("entities/") else "quwoquan_data.post_object",
+        **_manifest_identity(ref),
         "assets": carried_assets,
     }
     (object_root / refs_filename).write_text(
@@ -165,13 +194,22 @@ class ObjectSizeBudgetGateLocalContractTest(unittest.TestCase):
     @contextlib.contextmanager
     def _sandbox(self):
         with tempfile.TemporaryDirectory() as tmp:
-            sandbox = Path(tmp)
+            # macOS 的 /var 本身是 symlink，fixture 根必须与真实仓同样严格。
+            sandbox = Path(tmp).resolve()
+            root = sandbox / "publish"
+            root.mkdir()
+            (root / ".git").mkdir()
+            (root / "repository.json").write_text(json.dumps({
+                "schema": "quwoquan_data.publish_repository.v2",
+                "repositoryId": "object-budget-test", "layoutVersion": 2,
+                "producerContractDigest": "sha256:" + "a" * 64,
+            }), encoding="utf-8")
             yield _load_module(sandbox), sandbox
 
     def _closure(self, module, sandbox: Path, ref: str, kind: str = "posts"):
         relative = ref.removeprefix(f"{kind}/")
         return module.object_closure(
-            sandbox / "publish" / ref,
+            _published_root(sandbox, ref),
             ref=ref,
             carrier=module.object_carrier(kind, relative),
         )
@@ -324,10 +362,10 @@ class ObjectSizeBudgetGateLocalContractTest(unittest.TestCase):
             _admit_media(sandbox, digest, size=100)
             ref = "creators/作者/1"
             root = _publish_object(
-                sandbox, ref, documents={"_creator.json": "{}", "manifest.json": "not JSON"},
-                assets=[_asset_row(digest)], refs_filename="assets.refs.json",
+                sandbox, ref, documents={"assets.refs.json": "not JSON"},
+                assets=[_asset_row(digest)], refs_filename="profile.json",
             )
-            self.assertEqual(module._asset_refs_path(root), root / "assets.refs.json")
+            self.assertEqual(module._asset_refs_path(root), root / "profile.json")
             closure, issues = self._closure(module, sandbox, ref, kind="creators")
             self.assertEqual(issues, [])
             self.assertEqual(closure.media_bytes, 100)
@@ -358,7 +396,7 @@ class ObjectSizeBudgetGateLocalContractTest(unittest.TestCase):
                 },
                 assets=[_asset_row(digest)],
             )
-            object_root = sandbox / "publish/posts/article/攻略/多文档/1"
+            object_root = _published_root(sandbox, "posts/article/攻略/多文档/1")
             expected_documents = sum(
                 path.stat().st_size for path in object_root.rglob("*")
                 if path.is_file() and path.relative_to(object_root).parts[0] != "media"
@@ -429,20 +467,37 @@ class ObjectSizeBudgetGateLocalContractTest(unittest.TestCase):
             self.assertEqual(closure.closure_bytes, 4600)
             self.assertEqual(closure.over_budget_bytes, 0)
 
-    def test_object_closures_walk_posts_and_entities_at_their_own_depth(self) -> None:
-        """post 与 entity 的目录身份深度不同；用同一深度扫会漏掉或误认对象。"""
+    # spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#req-019
+    def test_object_closures_use_manifest_identity_under_partitioned_geography(self) -> None:
+        """真实行政链与 p0001 是 locator；逻辑 ref、目录 seq 与版本彼此独立。"""
 
         with self._sandbox() as (module, sandbox):
-            _publish_object(sandbox, "posts/image/画报/标题/1", documents={"post.json": "{}"})
-            _publish_object(sandbox, "entities/地点/景区/峨眉山", documents={"entity.json": "{}"})
-            # 恰好差一层的中间目录不是对象，不能被当成对象计入预算。
-            (sandbox / "publish/entities/地点/景区/峨眉山/媒体").mkdir(parents=True)
+            digest = _digest("partitioned-media")
+            _admit_media(sandbox, digest, size=400)
+            post = _publish_object(sandbox, "posts/image/画报/标题/1", assets=[
+                _asset_row(digest, asset_id="cover"), _asset_row(digest, asset_id="inline"),
+            ])
+            entity = _publish_object(sandbox, "entities/地点/景区/峨眉山", documents={"page.md": "正文"})
+            self.assertIn("p0001", post.parts)
+            self.assertIn("中国/四川省/乐山市", entity.as_posix())
+            self.assertNotEqual(post.relative_to(sandbox / "publish").as_posix(), "posts/image/画报/标题/1")
+            # 所有未到条目层的空分区/同名组都不是对象。
+            (post.parent.parent / "空同名组").mkdir()
+            # 随体证据可能与对象 manifest 同名，不成为嵌套对象。
+            (post / "sources/s001").mkdir(parents=True)
+            (post / "sources/s001/manifest.json").write_text("{}", encoding="utf-8")
+            document = json.loads((entity / "manifest.json").read_text(encoding="utf-8"))
+            document["version"] = 7
+            (entity / "manifest.json").write_text(json.dumps(document), encoding="utf-8")
             closures, issues = module.object_closures(publish_root=sandbox / "publish")
             self.assertEqual(issues, [])
             self.assertEqual(
                 sorted(row.ref for row in closures),
                 ["entities/地点/景区/峨眉山", "posts/image/画报/标题/1"],
             )
+            measured = next(row for row in closures if row.carrier == "image")
+            self.assertEqual(measured.media_bytes, 400)
+            self.assertEqual(measured.closure_bytes, module._document_bytes(post) + 400)
             self.assertEqual(
                 {row.ref: row.carrier for row in closures},
                 {
@@ -450,6 +505,72 @@ class ObjectSizeBudgetGateLocalContractTest(unittest.TestCase):
                     "posts/image/画报/标题/1": "image",
                 },
             )
+
+    def test_non_entry_manifest_is_typed_and_not_counted(self) -> None:
+        for version in (None, 0, "1", True):
+            with self.subTest(version=version), self._sandbox() as (module, sandbox):
+                ref = "posts/image/画报/未到条目/1"
+                parent = _published_root(sandbox, ref).parent
+                parent.mkdir(parents=True)
+                document = {**_manifest_identity(ref), "assets": [], "version": version}
+                (parent / "manifest.json").write_text(json.dumps(document), encoding="utf-8")
+                closures, issues = module.object_closures()
+                self.assertEqual(closures, [])
+                self.assertIn("DATA.OBJECT.MANIFEST_INVALID", issues[0])
+                self.assertEqual(_run_main(module)[0], 1)
+        with self._sandbox() as (module, sandbox):
+            ref = "posts/image/画报/未到条目/1"
+            parent = _published_root(sandbox, ref).parent
+            parent.mkdir(parents=True)
+            (parent / "manifest.json").write_text(json.dumps({**_manifest_identity(ref), "assets": []}), encoding="utf-8")
+            closures, issues = module.object_closures()
+            self.assertEqual(closures, [])
+            self.assertIn("DATA.LAYOUT.COORDINATES_INVALID", issues[0])
+
+    def test_missing_manifest_is_typed_without_falling_back_to_physical_identity(self) -> None:
+        for ref in ("posts/image/画报/清单丢失/1", "entities/地点/景区/峨眉山"):
+            with self.subTest(ref=ref), self._sandbox() as (module, sandbox):
+                root = _publish_object(sandbox, ref, documents={"content_review.json": "{}"})
+                (root / "manifest.json").unlink()
+                closures, issues = module.object_closures()
+                self.assertEqual(closures, [])
+                self.assertIn("DATA.OBJECT.MANIFEST_MISSING", issues[0])
+                self.assertEqual(_run_main(module)[0], 1)
+
+    def test_non_object_roots_do_not_enter_budget_inventory(self) -> None:
+        with self._sandbox() as (module, sandbox):
+            for relative in ("creators/author/profile.json", "tags/topic/_definition.json",
+                             "releases/release/manifest.json", ".git/manifest.json"):
+                path = sandbox / "publish" / relative
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text("not JSON", encoding="utf-8")
+            self.assertEqual(module.object_closures(), ([], []))
+            self.assertEqual(_run_main(module)[0], 0)
+
+    def test_repository_identity_and_symlinks_remain_fail_closed(self) -> None:
+        for broken in ("missing-marker", "invalid-marker", "linked-worktree", "root-link", "media-link"):
+            with self.subTest(broken=broken), self._sandbox() as (module, sandbox):
+                root = sandbox / "publish"
+                if broken == "missing-marker":
+                    (root / "repository.json").unlink()
+                elif broken == "invalid-marker":
+                    (root / "repository.json").write_text("{}", encoding="utf-8")
+                elif broken == "linked-worktree":
+                    (root / ".git").rmdir()
+                    (root / ".git").write_text("gitdir: elsewhere", encoding="utf-8")
+                elif broken == "root-link":
+                    alias = sandbox / "alias"
+                    alias.symlink_to(root, target_is_directory=True)
+                    module.PUBLISH_ROOT = alias
+                else:
+                    object_root = _publish_object(sandbox, "posts/image/画报/禁止链接/1")
+                    (object_root / "media").symlink_to(sandbox / "library", target_is_directory=True)
+                closures, issues = module.object_closures()
+                self.assertEqual(closures, [])
+                self.assertIn("DATA.PUBLISH.REPOSITORY_INVALID", issues[0])
+                if broken.endswith("link"):
+                    self.assertIn("DATA.REPOSITORY.SYMLINK", issues[0])
+                self.assertEqual(_run_main(module)[0], 1)
 
     def test_video_may_hold_what_an_article_may_not(self) -> None:
         """同样体积在 video 下合法、在 article 下阻断，是载体分档的唯一可观测证据。"""
