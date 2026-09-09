@@ -38,6 +38,7 @@ from quwoquan_ops.ci.environment_scheduler import (
     exact_file_digest,
     issue_environment_acceptance_fact,
     request_exact_ref,
+    validate_environment_acceptance_fact,
 )
 from quwoquan_ops.ci.impact_planner_core import (
     build_delivery_impact_plan,
@@ -571,6 +572,86 @@ def _not_required_beta(*, candidate: Mapping[str, str], impact_plan_digest: str,
     return {"named": named, "cases": [{"ref": case_path.relative_to(store).as_posix(), "digest": exact_file_digest(case_path)}]}
 
 
+_CANDIDATE_SCHEMA = "quwoquan_ops.exact_integration_candidate.v1"
+_ACCEPTANCE_SCHEMA = "quwoquan_ops.environment_acceptance_fact.v2"
+
+
+def _reusable_acceptance(*, store: Path, candidate_id: str, environment: str, profile: str,
+                         commit: str, tree: str, impact_plan_digest: str, allowed_status: set[str]) -> dict[str, str] | None:
+    """同一 exact candidate（commit/tree/ImpactPlan/profile）已签发且未过期的事实才可复用；任一漂移即视为不存在。"""
+
+    path = store / "environment-execution/acceptance" / candidate_id.removeprefix("sha256:") / f"{environment}.json"
+    if not path.is_file() or path.is_symlink():
+        return None
+    try:
+        fact = validate_environment_acceptance_fact(json.loads(path.read_text(encoding="utf-8")), store_root=store, verify_references=True)
+    except (EnvironmentSchedulerError, OSError, ValueError):
+        return None
+    binding = fact.get("candidate") if isinstance(fact.get("candidate"), Mapping) else {}
+    if (
+        fact.get("schema") != _ACCEPTANCE_SCHEMA
+        or fact.get("environment") != environment
+        or fact.get("profile") != profile
+        or fact.get("status") not in allowed_status
+        or fact.get("impactPlanDigest") != impact_plan_digest
+        or binding.get("candidateId") != candidate_id
+        or binding.get("commit") != commit
+        or binding.get("tree") != tree
+    ):
+        return None
+    return {"ref": path.relative_to(store).as_posix(), "digest": exact_file_digest(path)}
+
+
+def _find_reusable_candidate(*, store: Path, commit: str, tree: str, parent: str, impact_plan_digest: str,
+                             profile: str) -> dict[str, Any] | None:
+    """在 candidate store 中寻找同 commit/tree/parent/ImpactPlan 且已持有 passed Alpha 事实的既有 candidate。
+
+    candidateId 含 claim 与创建时间，因此不能按 id 命中；这里按 exact 身份字段匹配，并要求 Alpha 事实
+    仍通过 canonical 校验且未过期。命中即跳过重新 build candidate 与 Alpha 环境执行，summary 标记 reused。
+    """
+
+    candidates_root = store / "candidates"
+    if not candidates_root.is_dir():
+        return None
+    matches: list[dict[str, Any]] = []
+    for path in sorted(candidates_root.glob("*.json")):
+        if path.is_symlink():
+            continue
+        try:
+            body = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        if (
+            not isinstance(body, Mapping)
+            or body.get("schema") != _CANDIDATE_SCHEMA
+            or body.get("commit") != commit
+            or body.get("tree") != tree
+            or body.get("expectedParent") != parent
+            or body.get("impactPlanDigest") != impact_plan_digest
+        ):
+            continue
+        candidate_id = str(body.get("candidateId") or "")
+        alpha = _reusable_acceptance(
+            store=store, candidate_id=candidate_id, environment="alpha", profile=profile,
+            commit=commit, tree=tree, impact_plan_digest=impact_plan_digest, allowed_status={"passed"},
+        )
+        if alpha is None:
+            continue
+        beta = _reusable_acceptance(
+            store=store, candidate_id=candidate_id, environment="beta", profile=profile,
+            commit=commit, tree=tree, impact_plan_digest=impact_plan_digest, allowed_status={"passed", "not_required"},
+        )
+        matches.append({
+            "candidatePath": path, "candidate": dict(body),
+            "candidateRef": {"ref": path.relative_to(store).as_posix(), "digest": exact_file_digest(path)},
+            "alpha": alpha, "beta": beta, "createdAt": str(body.get("createdAt") or ""),
+        })
+    if not matches:
+        return None
+    # 多个命中时取最新签发的一份；它们对同一 exact 身份作证，先后只影响 expiresAt。
+    return max(matches, key=lambda item: item["createdAt"])
+
+
 def _issue(*, environment: str, candidate_ref: Mapping[str, str], impact_plan_digest: str, evidence: Mapping[str, Any],
            status: str, predecessor: Mapping[str, str] | None, profile: str, args: argparse.Namespace, signer: Any) -> dict[str, str]:
     store = _store()
@@ -617,6 +698,8 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--fact-ttl-hours", type=int, default=72)
     parser.add_argument("--writer", default="integration")
     parser.add_argument("--publish", action="store_true", help="admit 后以 local-git CAS 发布到远端 dev1.0")
+    parser.add_argument("--reuse", action="store_true",
+                        help="同 commit/tree/parent/ImpactPlan/profile 的既有 candidate 已持有未过期 passed Alpha 事实时复用，不重跑环境；summary 标记 reused")
     parser.add_argument("--run-id", default="")
     return parser
 
@@ -675,19 +758,34 @@ def main(argv: list[str] | None = None) -> int:
         receipt_path, receipt = phases.run(f"readiness-{args.readiness_level}", lambda: _local_readiness(
             level=args.readiness_level, parent=identity["parent"], commit=identity["commit"], run_dir=run_dir, args=args,
         ))
-        summary["readiness"] = {"level": args.readiness_level, "receiptRef": _output_ref(receipt_path), "deferred": len(receipt.get("plan", {}).get("deferred", []))}
+        reused: dict[str, bool] = {"readiness": receipt.get("cache_hit") is True, "candidate": False, "alpha": False, "beta": False}
+        summary["reused"] = reused
+        summary["readiness"] = {"level": args.readiness_level, "receiptRef": _output_ref(receipt_path), "deferred": len(receipt.get("plan", {}).get("deferred", [])), "reused": reused["readiness"]}
 
         expires = (datetime.now(timezone.utc) + timedelta(hours=args.fact_ttl_hours)).isoformat().replace("+00:00", "Z")
-        candidate_path = phases.run("build-head", lambda: build_head_candidate(
-            repository=ROOT, policy_path=POLICY, commit=identity["commit"], expected_parent=identity["parent"],
-            owner_identity_ref=args.owner_identity or f"integration-run:{run_id}", impact_plan_digest=impact_digest,
-            writer_id=args.writer, expires_at=expires,
-        ))
-        candidate_ref = store_ref(repository=ROOT, policy_path=POLICY, path=candidate_path)
-        candidate = json.loads(candidate_path.read_text(encoding="utf-8"))
+        reusable = None
+        if args.reuse:
+            reusable = phases.run("reuse-lookup", lambda: _find_reusable_candidate(
+                store=_store(), commit=identity["commit"], tree=identity["tree"], parent=identity["parent"],
+                impact_plan_digest=impact_digest, profile=args.profile,
+            ))
+        if reusable is not None:
+            # 复用既有 exact candidate：不再 build/claim；Alpha（及可用的 Beta）事实直接进入 admission。
+            candidate_path = reusable["candidatePath"]
+            candidate_ref = reusable["candidateRef"]
+            candidate = reusable["candidate"]
+            reused["candidate"] = True
+        else:
+            candidate_path = phases.run("build-head", lambda: build_head_candidate(
+                repository=ROOT, policy_path=POLICY, commit=identity["commit"], expected_parent=identity["parent"],
+                owner_identity_ref=args.owner_identity or f"integration-run:{run_id}", impact_plan_digest=impact_digest,
+                writer_id=args.writer, expires_at=expires,
+            ))
+            candidate_ref = store_ref(repository=ROOT, policy_path=POLICY, path=candidate_path)
+            candidate = json.loads(candidate_path.read_text(encoding="utf-8"))
+            claim_path = _store() / candidate["claimRef"]
         candidate_identity = {"candidateId": candidate["candidateId"], "commit": candidate["commit"], "tree": candidate["tree"]}
-        claim_path = _store() / candidate["claimRef"]
-        summary["candidate"].update({"candidateId": candidate["candidateId"], "candidateRef": candidate_ref, "claimRef": candidate["claimRef"]})
+        summary["candidate"].update({"candidateId": candidate["candidateId"], "candidateRef": candidate_ref, "claimRef": candidate["claimRef"], "reused": reused["candidate"]})
 
         source_path = create_source_fact(
             repository=ROOT, policy_path=POLICY, candidate_ref=candidate_ref,
@@ -702,28 +800,46 @@ def main(argv: list[str] | None = None) -> int:
             _git("checkout", "--quiet", "--detach", identity["commit"])
             detached = True
 
-        alpha_evidence = _run_environment(environment="alpha", profile=args.profile, candidate=candidate_identity,
-                                          impact_plan_digest=impact_digest, args=args, run_dir=run_dir, phases=phases, summary=summary)
-        alpha_ref = phases.run("alpha.issue", lambda: _issue(
-            environment="alpha", candidate_ref=candidate_ref, impact_plan_digest=impact_digest, evidence=alpha_evidence,
-            status="passed", predecessor=None, profile=args.profile, args=args, signer=signer,
-        ))
-        summary["environments"]["alpha"]["acceptance"] = alpha_ref
-
-        if depth == "abg_release_sensitive":
-            beta_evidence = _run_environment(environment="beta", profile=args.profile, candidate=candidate_identity,
-                                             impact_plan_digest=impact_digest, args=args, run_dir=run_dir, phases=phases, summary=summary,
-                                             previous_readiness=alpha_evidence["readiness"])
-            beta_status = "passed"
+        alpha_evidence: dict[str, Any] | None = None
+        if reusable is not None:
+            alpha_ref = reusable["alpha"]
+            reused["alpha"] = True
+            summary["environments"]["alpha"] = {"environment": "alpha", "executed": False, "reused": True, "acceptance": alpha_ref}
+            phases.run("alpha.reuse", lambda: alpha_ref)
         else:
-            beta_evidence = _not_required_beta(candidate=candidate_identity, impact_plan_digest=impact_digest, impact_plan_path=plan_path, profile=args.profile)
-            beta_status = "not_required"
-            summary["environments"]["beta"] = {"environment": "beta", "executed": False, "reasonCode": NO_LIVE}
-        beta_ref = phases.run("beta.issue", lambda: _issue(
-            environment="beta", candidate_ref=candidate_ref, impact_plan_digest=impact_digest, evidence=beta_evidence,
-            status=beta_status, predecessor=alpha_ref, profile=args.profile, args=args, signer=signer,
-        ))
-        summary["environments"]["beta"]["acceptance"] = beta_ref
+            alpha_evidence = _run_environment(environment="alpha", profile=args.profile, candidate=candidate_identity,
+                                              impact_plan_digest=impact_digest, args=args, run_dir=run_dir, phases=phases, summary=summary)
+            alpha_ref = phases.run("alpha.issue", lambda: _issue(
+                environment="alpha", candidate_ref=candidate_ref, impact_plan_digest=impact_digest, evidence=alpha_evidence,
+                status="passed", predecessor=None, profile=args.profile, args=args, signer=signer,
+            ))
+            summary["environments"]["alpha"]["acceptance"] = alpha_ref
+
+        if reusable is not None and reusable["beta"] is not None:
+            beta_ref = reusable["beta"]
+            reused["beta"] = True
+            summary["environments"]["beta"] = {"environment": "beta", "executed": False, "reused": True, "acceptance": beta_ref}
+            phases.run("beta.reuse", lambda: beta_ref)
+        else:
+            if depth == "abg_release_sensitive":
+                if alpha_evidence is None:
+                    raise IntegrationRunError(
+                        "INTEGRATION_RUN.BETA_REUSE_UNAVAILABLE",
+                        "abg_release_sensitive 复用了 Alpha 事实但没有可复用的 Beta 事实；Beta 需要 Alpha 的 release readiness 回执，请不带 --reuse 重跑",
+                    )
+                beta_evidence = _run_environment(environment="beta", profile=args.profile, candidate=candidate_identity,
+                                                 impact_plan_digest=impact_digest, args=args, run_dir=run_dir, phases=phases, summary=summary,
+                                                 previous_readiness=alpha_evidence["readiness"])
+                beta_status = "passed"
+            else:
+                beta_evidence = _not_required_beta(candidate=candidate_identity, impact_plan_digest=impact_digest, impact_plan_path=plan_path, profile=args.profile)
+                beta_status = "not_required"
+                summary["environments"]["beta"] = {"environment": "beta", "executed": False, "reasonCode": NO_LIVE}
+            beta_ref = phases.run("beta.issue", lambda: _issue(
+                environment="beta", candidate_ref=candidate_ref, impact_plan_digest=impact_digest, evidence=beta_evidence,
+                status=beta_status, predecessor=alpha_ref, profile=args.profile, args=args, signer=signer,
+            ))
+            summary["environments"]["beta"]["acceptance"] = beta_ref
 
         if detached:
             _git("checkout", "--quiet", original_branch.removeprefix("refs/heads/"))
@@ -783,6 +899,9 @@ def _render_summary(summary: Mapping[str, Any]) -> str:
         lines.append(f"- integrationDepth: `{plan.get('integrationDepth')}` impactPlanDigest `{plan.get('digest')}`")
     if "readiness" in summary:
         lines.append(f"- readiness: level `{summary['readiness']['level']}` deferred {summary['readiness']['deferred']} receipt `{summary['readiness']['receiptRef']}`")
+    if "reused" in summary:
+        reused = summary["reused"]
+        lines.append("- reused: " + ", ".join(f"{name}={'yes' if flag else 'no'}" for name, flag in sorted(reused.items())))
     for name, env in (summary.get("environments") or {}).items():
         package = env.get("package") or {}
         lines.append(f"- {name}: executed={env.get('executed', True)} baseline `{package.get('baselineId', '-')}` sourceRevision `{package.get('sourceRevision', '-')}` acceptance `{(env.get('acceptance') or {}).get('ref', '-')}`")

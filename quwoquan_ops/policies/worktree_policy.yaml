@@ -12,6 +12,9 @@ lane_worktree_directory_rule: branch_suffix
 authorization_env_var: QWQ_WORKTREE_AUTHZ
 unmerged_reminder_after_days: 3
 reminder_min_interval_hours: 24
+# lane 相对本地 dev1.0 落后超过该提交数时，Skill PRE 与会话提醒建议先运行
+# sync-lane-from-dev；只提醒，不自动同步。
+resync_reminder_behind_commits: 20
 
 # 同源 clone 的发现根。{repo_parent} 是当前 worktree 的父目录；扫描会跳过 bare hub。
 discovery_roots:

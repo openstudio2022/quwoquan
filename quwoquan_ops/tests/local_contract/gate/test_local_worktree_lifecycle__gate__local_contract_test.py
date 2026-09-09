@@ -354,7 +354,33 @@ def test_gwt_002_t2_clean_copies_have_identity_but_no_unmerged_item(policy) -> N
     assert summary["items"] == []
     message = reminder.build_message(summary, hooks_ok=True, policy=policy)
     assert "identity=dev1.0" in message
-    assert "ahead=0 behind=0 dirty=0" in message
+    assert "ahead=0 behind=0 behindLocalDev=0 dirty=0" in message
+    assert "RESYNC_SUGGESTED" not in message
+
+
+def test_gwt_002_t2_lane_far_behind_local_dev_gets_resync_suggestion(policy) -> None:
+    """落后本地 dev1.0 超过策略阈值的 lane 只得到 sync-lane-from-dev 建议，不自动同步、不阻断。"""
+    threshold = policy.resync_reminder_behind_commits
+    behind = inventory.WorkCopy(
+        path="/tmp/lane", kind="linked", branch="lane/engineering", ahead=0, dirty=0, stashes=0,
+        oldest_unmerged_epoch=None, probe_error="", behind_local=threshold + 1,
+    )
+    at_threshold = inventory.WorkCopy(
+        path="/tmp/lane2", kind="linked", branch="lane/ops", ahead=0, dirty=0, stashes=0,
+        oldest_unmerged_epoch=None, probe_error="", behind_local=threshold,
+    )
+    summary = inventory.summarize([behind, at_threshold], policy, now=1_000_000_000)
+
+    identities = {row["branch"]: row for row in summary["identities"]}
+    assert identities["lane/engineering"]["behindLocal"] == threshold + 1
+    assert identities["lane/engineering"]["resyncSuggested"] is True
+    assert identities["lane/ops"]["resyncSuggested"] is False
+    assert summary["withUnmergedWork"] == 0, "落后不是未合入事实，不进入滞留 items"
+
+    message = reminder.build_message(summary, hooks_ok=True, policy=policy)
+    assert "RESYNC_SUGGESTED" in message and "lane/engineering" in message
+    assert "/sync-lane-from-dev" in message
+    assert "lane/ops（" not in message
 
 
 def test_gwt_002_t3_threshold_splits_soft_and_strong(policy) -> None:

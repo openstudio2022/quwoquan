@@ -9,7 +9,7 @@ metadata:
 
 ## 触发与输入
 
-用于环境打包、启动、URL/路由、health、inspect、doctor、repair、部署、灰度与回滚。输入是环境/target、服务、操作意图与所需授权；角色交互只引用 `quwoquan_ops/policies/human_agent_delivery_contract.yaml#workflow_interaction_binding.bindings.environment-ops`，可见输出由 canonical projector 生成。
+用于环境打包、启动、URL/路由、health、inspect、doctor、repair、部署、灰度与回滚。输入是环境/target、服务、操作意图与所需授权。
 
 本轮若将产生、更新或恢复 registry 声明的送审交付件 `release-evidence`，PRE 必须从 canonical environment owner fact 唯一反解环境：所选 runtime target 必须只属于一个 `quwoquan_ops/environments/<env>/runtime.yaml` 的 `dataReleaseTarget`/`targets`，并以该 runtime manifest 的 repository-relative exact path 作为 exact target；缺 target、多环境命中或 owner fact 不一致时返回 typed `GATE_BLOCK`。随后运行 `make feature-context TARGET=<exact-path>`，保存 stdout 指向的 content-addressed immutable owner manifest exact ref，PRE 后不得重写或替换该 ref。
 
@@ -31,4 +31,4 @@ metadata:
 
 ## 条件性交接
 
-源码/spec mutation 只交 Feature workflow；外部阻断、环境/发布、跨会话或证据复用满足 canonical 触发时生成 handoff。送审交付的 handoff 必须携带 PRE owner identity ref 与 POST candidate evidence predecessor；纯只读无送审交付不生成替代 manifest。
+源码/spec mutation 只交 Feature workflow。持久交接语义见 continue Skill；送审交付的 handoff 必须携带 PRE owner identity ref 与 POST candidate evidence predecessor，纯只读无送审交付不生成替代 manifest。

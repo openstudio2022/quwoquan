@@ -47,6 +47,8 @@
 - integration 工作区通道同样可以携带资格，且与 publisher 通道共用同一事实形态：把 integration 本地 HEAD 或某个 lane head 作为 exact candidate（scope 即相对当前远端 `dev1.0` 的全部 changed paths，claim 仍走同一 append-only generation），在远端 ref 尚未移动前由 ImpactPlan 派生集成深度、完成本地 readiness source fact 与 Alpha（`abg_release_sensitive` 时含 Beta，否则 Beta 以 typed `not_required` 事实闭合）`EnvironmentAcceptanceFact`，形成 publish admission；随后以 expected-old lease 的 non-force fast-forward push 更新远端并按 `before|after|other` 精确读回，只有读回 `after` 才写入 publish result。该 publish result 与 publisher CAS 的结果同 schema，可作为 current dev head Gamma 与 `IntegrationQualificationFact` 的前驱；缺 admission 的裸直推、读回 `before`（零写）或 `other`（他方先行）都不产生任何事实。lane→`dev1.0` 的 Pull Request 是评审与可见性载体，并承载 hosted 静态/合同复算 required check（`required_integration_checks`，只复算治理、影响面与 ops 本地合同，不启动任何环境）；合入本身由 integration 工作区按该通道执行——远端 `dev1.0` 一旦包含 lane head，PR 即由 hosted 侧标记为 merged，环境证据只来自该通道的 Alpha/Beta 事实。
 - `conditional_beta` 判定唯一由 `quwoquan_ops/ci/impact_planner_core.py` 的 `derive_integration_depth` 派生，不得人工降档：`data|topology` → `abg_release_sensitive`（Alpha 与 Beta 都真跑）；`app|service|portal` → `alpha_integration`（只真跑 Alpha，Beta 以 `not_required` + `IMPACT_PLAN.NO_LIVE_ENVIRONMENT_REQUIRED` 闭合）；五 scope 全空 → `no_live`（不启动环境）。`integrationEligibility` 是本地 readiness 正交维度（producer=`trusted_integration_publisher`，状态 `not_evaluated|eligible|blocked`），只在 exact candidate 的 publish admission 绑定 passed source fact 与 required Alpha/条件 Beta 事实之后由 publisher/integration FF 通道写成 `eligible`；裸直推、L0/L1/L2 source readiness 与 Environment Ops 的 `environmentReadiness` 都不得推导该维度。
 - Alpha/Beta/Gamma `EnvironmentAcceptanceFact` 与 `IntegrationQualificationFact` 的签名只接受 Ed25519（`ed25519:<base64>`），signer identity 与其 active 公钥的唯一真相源是仓内 `quwoquan_ops/policies/evidence_signing_keyring.yaml`；私钥只在本地仓外由 `make evidence-signing-bootstrap` 生成，hosted Delivery Gate 只用 PR head exact bytes 中的 keyring 验签、不持有任何 secret。两个 identity 的 active 公钥不得相同；retired key 不参与验签（见 [L2 DEC-010](../design.md#dec-010)）。
+- lane 与 `dev1.0` 之间只有两条本地同步通道，均由 Workflow Skill 显式执行、不由 hook 或 commit 隐式触发：`sync-lane-from-dev` 在当前 lane 工作树把本地 `dev1.0` 同步进本 lane（lane 已是 `dev1.0` 祖先时 `--ff-only`，否则普通 merge 并只在本 lane 解决冲突；工作树存在与本次变更重叠的脏文件、或已有进行中 merge/rebase 时零写阻断，禁止 reset/stash/clean）；`integrate-lane-to-dev` 只在唯一 integration 工作区把 lane head fast-forward 进 `dev1.0`，按本 REQ 的 publish admission 或裸 fast-forward 通道推送后，再对其余 lane 执行回同步。回同步只对「无进行中 merge、工作树干净或脏文件与本次 ff 不重叠、且是新 `dev1.0` 祖先」的 lane 执行 `--ff-only` 并推送同名远端；分叉或重叠脏树的 lane 只产出 typed 结果（`skipped_diverged` / `skipped_dirty_overlap`），由该 lane 自己的会话运行 `sync-lane-from-dev` 解决，任何通道都不得在他人工作树里自动 merge、覆盖或清理字节。
+- 同一 exact candidate 的 readiness receipt 与 Alpha/Beta `EnvironmentAcceptanceFact` 可被后续 `make integrate` 复用：复用只按 candidate commit/tree、ImpactPlan digest 与 receipt fingerprint 精确匹配，命中即跳过重跑并在 summary 标记 `reused`；任一输入漂移都必须重跑，不得按时间窗、分支名或「最近一次」复用。因 OPEN-006 类外部阻断未能签发 Alpha 事实时，integration 工作区仍可按裸 fast-forward 通道推送源码并保留首个 typed blocker，但不得写出 publish result 或任何资格事实。
 
 ## 4. 契约引用
 
@@ -90,6 +92,14 @@
 - THEN 资格工厂必须绑定 package acceptance、provider、UAT 与 supply-chain 四类事实及 Android keystore，缺任一类不得签发 `QualificationFact`，也不得创建 stable tag。
 - AND 晋级 ratchet 与 hosted CI 超时/缓存/soak 占用不得用假样本或放宽例外收紧；未达 `quwoquan_ops/policies/promotion_timing_ratchet.yaml` 声明的窗口与最低 eligible 次数前保持现行阈值。
 
+<a id="gwt-005"></a>
+### GWT-005 lane 回同步三态零写与 candidate 事实复用
+
+- GIVEN 新 `dev1.0` 头已就位，六条 lane 分别处于「干净且为祖先」「脏文件与 ff 不重叠且为祖先」「脏文件与 ff 重叠」「已分叉」四种状态。
+- WHEN 在 integration 工作区执行回同步。
+- THEN 前两种 lane 被 `--ff-only` 推进到新 `dev1.0` 并推送同名远端；后两种 lane 的 HEAD、index 与工作树字节零变化，结果分别为 `skipped_dirty_overlap` 与 `skipped_diverged`；渲染模式只输出命令不移动任何 ref。
+- AND 同一 exact candidate 的第二次 `make integrate` 复用 readiness receipt 与已签发 Alpha 事实并标记 `reused`；candidate commit、ImpactPlan digest 或 fingerprint 任一漂移都重跑，不复用。
+
 ## 6. 依赖
 
 - 前置要求：[`deliver-deploy-prod-pipeline`](../spec.md) 的范围、要求与 SIT。
@@ -123,8 +133,8 @@
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`track`
-- 影响或价值：六条固定 lane 已开放。尚缺 hosted readback、六条 lane canary、integration/abort 终态与 retained worktree mandatory fast-forward resync 证据；该观察证据不改变 lane→dev、main direct push、non-fast-forward、force/delete禁令，也不把integration direct fast-forward push升级为任何资格事实。
-- 完成判定：`GWT-001.t3`、`GWT-001.t4` 持续由 local contract 绑定；hosted readback 证明 canonical active，六条 lane 各至少完成一次 canary，integration 或 abort 后均证明 worktree retained、lane fast-forward 到新的 `dev1.0`。
+- 影响或价值：六条固定 lane 已开放。retained worktree 的 mandatory fast-forward resync 已有执行面（`make lane-resync-execute` 与 `integrate-lane-to-dev` Skill，三态零写由 `GWT-005.t1` 绑定），但尚缺 hosted readback、六条 lane canary 与 integration/abort 终态证据；该观察证据不改变 lane→dev、main direct push、non-fast-forward、force/delete禁令，也不把integration direct fast-forward push升级为任何资格事实。
+- 完成判定：`GWT-001.t3`、`GWT-001.t4`、`GWT-005.t1` 持续由 local contract 绑定；hosted readback 证明 canonical active，六条 lane 各至少完成一次 canary，integration 或 abort 后均证明 worktree retained、lane fast-forward 到新的 `dev1.0`。
 - 依赖：[`objective-execution` OPEN-002](../../development-workflow-governance/objective-execution/spec.md#open-002) 的六并发证据、[`local-worktree-lifecycle-governance`](../../system-architecture-and-engineering-guide/local-worktree-lifecycle-governance/spec.md) 的 worktree 授权提醒、Delivery Gate exact candidate evidence。
 
 <a id="open-004"></a>
@@ -167,3 +177,13 @@
 - 影响或价值：GitHub 只向对 ruleset 有 write 权限的调用者返回 `bypass_actors`；`03. Delivery Gate` 的 `promotion_verify` 以只读 `github.token` 运行 `promotion_hosted.py hosted-authority`，其 `ruleset_fact` 用 `list(ruleset.get("bypass_actors") or [])` 把缺席字段当作 `[]`，于是 `requiredCheckEnforced=true` 与 `bypassActors: []` 写出了并未观测到的值。`04. Lane Gate` 侧的 `verify_hosted_integration_ruleset.py` 已改为"可见且非空才阻断、不可见以 `bypassActorsObservable=false` 留痕、admin 侧以 `--require-bypass-observable` 承担为空的证明"；main ruleset 读回尚未对齐同一观测边界，`CI_CD_SECRETS.md` 对"无 bypass actor"的陈述也超出只读 token 能证明的范围。
 - 完成判定：`GWT-002.t1` 的 ruleset 事实由 `ruleset_fact` 以 `bypassActorsObservable` 显式区分"观测为空"与"不可见"，不可见时不输出 `bypassActors: []`，`requiredCheckEnforced` 只声明 required_status_checks 形状；main ruleset 的 bypass 为空由 admin 侧 `--require-bypass-observable` 读回或等价 write 权限读回签发，并在 `test_promotion_hosted` 以缺席/null/非空三态锁定；`GWT-002` 的 required context 在只读 token 下不再写出未观测到的值，并以只读 token 比对 `dev1.0` ruleset 当前 `updated_at` 与最近一次 admin 侧 `hosted-integration-ruleset-receipt` 的 `ruleset.updatedAt`，不一致即 typed 阻断（让「每次 promotion 前重跑 admin 读回」成为可审计的执行面而非文档声明）；`CI_CD_SECRETS.md` 同步措辞。
 - 依赖：`local-continuous-integration#gwt-005` 已定义的观测边界；`03. Delivery Gate` 下一次真实 hosted 执行用于回归。
+
+<a id="open-008"></a>
+### OPEN-008 exact candidate 的 readiness 范围随远端 `dev1.0` 落后线性膨胀
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：模式二把 candidate scope 定义为相对远端 `dev1.0` 的全部 changed paths，因此每当本地 `dev1.0` 领先远端而未发布，下一次 `make integrate` 的 `readiness-fast` 都要覆盖累计差异；连续多次 integrate 运行中 changed paths 从数十涨到数百、`readiness-fast` 墙钟从数分钟涨到十余分钟并以 `INTEGRATION_RUN.L1_FAILED` 终止，进一步阻止发布、形成恶性循环。readiness receipt 与 Alpha 事实按 candidate 复用只消除同一 candidate 的重跑，不缩小 scope 本身。尚缺：candidate scope 相对「上一次已发布或已签发事实的 exact parent」的增量派生实现，以及证明 `readiness-fast` 输入规模不随未发布提交数单调增长的 local contract 验收证据。
+- 完成判定：`GWT-005.t2` 持续绑定；candidate scope 可以按「相对上一次已发布/已签发事实的 exact parent」增量派生且仍绑定 100% changed paths 的 workspace digests，或 integration 工作区在每次成功 admission 后即刻发布使远端不再落后；两者之一落地并由 local contract 证明 `readiness-fast` 输入规模不再随未发布提交数单调增长。
+- 依赖：[`OPEN-006`](#open-006) 解除后的真实 Alpha 签发；`quwoquan_ops/ci/scoped_candidate/` 的 parent 语义。

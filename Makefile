@@ -1359,7 +1359,7 @@ config-slo-gate:
 	@python3 quwoquan_ops/cli/stackctl.py verify --kind config-slo --profile baseline --prometheus-url "$(PROMETHEUS_URL)"
 
 .PHONY: commit-gate gate-smoke gate-integration gate-release test-api-contract test-api-contract-chat
-.PHONY: install-hooks verify-local-worktree-lifecycle lane-bootstrap lane-preflight lane-resync
+.PHONY: install-hooks verify-local-worktree-lifecycle lane-bootstrap lane-preflight lane-resync lane-resync-execute
 
 # L0 本地入库门禁（pre-commit 同源）：并行静态 + 影响面测试，目标 ≤10m / 硬顶 15m。
 commit-gate:
@@ -1384,6 +1384,13 @@ lane-preflight:
 
 lane-resync:
 	@PYTHONDONTWRITEBYTECODE=1 python3 -B quwoquan_ops/cli/lane_worktree_commands.py resync
+
+# 回同步执行面（integrate-lane-to-dev Skill 第 5 步）：按 branch_policy resync_scope 三态判定，
+# 只对干净/非重叠脏树且为 dev1.0 祖先的 lane 做 ff-only 并推送同名远端；其余 lane 零写只报告。
+# NO_PUSH=1 只 ff 不推送。任一 lane 非 ff_done 时退出码 1，JSON 结果打印到 stdout。
+lane-resync-execute:
+	@PYTHONDONTWRITEBYTECODE=1 python3 -B quwoquan_ops/cli/lane_worktree_commands.py resync --execute \
+		$$( [ "$${NO_PUSH:-0}" = "1" ] && printf -- '--no-push' )
 .PHONY: prepare-test-python verify-test-no-fake verify-test-nonfunctional-coverage verify-test-directory-layout verify-test-coverage-map
 .PHONY: verify-execution-profiles
 .PHONY: test-local-contract test-app-python-local-contract test-runtime-local-contract test-api-integration test-runtime-api-integration test-runtime-api-integration-gamma test-user-acceptance verify-homepage-performance-evidence test-delivery-ci-local-contract
@@ -1794,6 +1801,7 @@ evidence-signing-bootstrap:
 # 签名私钥来自仓外 QWQ_EVIDENCE_SIGNING_KEY_ROOT（先 make evidence-signing-bootstrap）。RELEASE_HANDOFF_REF 是 candidate release
 # 的 authoritative handoff-ref-v1（content-release Review handoff 输出），Data ship apply/activate/verify 只接受它做 admission。
 # 可选：CANDIDATE=<sha>（默认 HEAD）、OWNER_IDENTITY=<ref>、READINESS_LEVEL=fast|scope、PROFILE=integration|smoke、INTEGRATE_ARGS 透传。
+# REUSE=1：同 commit/tree/parent/ImpactPlan/profile 的既有 candidate 已持有未过期 passed Alpha 事实时复用，不重跑环境（summary 标记 reused）。
 .PHONY: integrate
 integrate:
 	@if [ -z "$(RELEASE_ATTESTATION)" ] || [ -z "$(ROLLBACK_RELEASE_ATTESTATION)" ]; then \
@@ -1809,6 +1817,7 @@ integrate:
 		--profile "$${PROFILE:-integration}" \
 		$$( [ -n "$(OWNER_IDENTITY)" ] && printf -- '--owner-identity %s' "$(OWNER_IDENTITY)" ) \
 		$$( [ "$${PUBLISH:-0}" = "1" ] && printf -- '--publish' ) \
+		$$( [ "$${REUSE:-0}" = "1" ] && printf -- '--reuse' ) \
 		$(INTEGRATE_ARGS)
 
 # dev1.0 -> main 合入后的源码回同步（integration 工作区 FF 通道）：

@@ -10,13 +10,13 @@ metadata:
 
 ## 触发与输入
 
-用于非平凡变更的只读定位。输入是用户目标、已知路径、候选 diff 与共享 writer 状态；调用前不要求 owner manifest。角色交互只引用 `quwoquan_ops/policies/human_agent_delivery_contract.yaml#workflow_interaction_binding.bindings.explore`，可见输出由 canonical projector 生成。
+用于非平凡变更的只读定位。输入是用户目标、已知路径、候选 diff 与共享 writer 状态。
 
 ## 执行
 
-1. PRE 先从用户目标、当前 plan/diff 与已知路径确定一个 exact target；目标仍有歧义时只读收窄，不猜 owner。
-2. 已知目标路径时读取最近子树 `AGENTS.md`，再 best-effort 运行默认 compact `make feature-context TARGET=<exact-path>`；唯一 owner 解析成功时保存并按 stdout 返回的 immutable exact ref 消费 owner chain、canonical contexts、OPEN 与 applicable agents；无 owner、多 owner或解析失败时记录 typed owner 解析结果，并基于当前 Git 快照继续只读定位。
-3. 检查 HEAD/status、目标 diff 与 writer，明确 In/Out Scope、验收意图、依赖、共享写点和最早足以闭环的后继 Workflow Skill。全程不修改文件、不派 Reviewer。
+1. PRE 从用户目标、当前 plan/diff 与已知路径确定一个 exact target；目标仍有歧义时只读收窄，不猜 owner。
+2. 读取最近子树 `AGENTS.md`，best-effort 运行 `make feature-context TARGET=<exact-path>`：唯一 owner 时保存 immutable ref 并消费 owner chain、canonical contexts、OPEN 与 applicable agents；无 owner、多 owner 或解析失败时记录 typed 结果，基于当前 Git 快照继续只读。
+3. 检查 HEAD/status、目标 diff 与 writer，记录 lane 相对本地 `dev1.0` 的 ahead/behind（behind 超过 `worktree_policy.yaml#resync_reminder_behind_commits` 时把 `sync-lane-from-dev` 列为最早后继）；明确 In/Out Scope、验收意图、依赖、共享写点和最早足以闭环的后继 Skill。全程不修改文件、不派 Reviewer。
 
 ## 完成证据
 
@@ -28,4 +28,4 @@ metadata:
 
 ## 条件性交接
 
-确认需要写规格、设计或实现后，分别交接 prd、design 或 dev，并传递 exact target 与 immutable ref（若可用）；下游进入 mutation 前仍须取得唯一 owner/ref。只有跨会话未完成、多人并行、环境/发布、外部阻断、证据复用或用户显式要求时才生成 canonical handoff。
+确认需要写规格、设计或实现后，分别交接 prd、design 或 dev，并传递 exact target 与 immutable ref（若可用）；下游进入 mutation 前仍须取得唯一 owner/ref。持久交接语义见 continue Skill。

@@ -151,14 +151,15 @@ def build_message(summary: dict[str, object], *, hooks_ok: bool, policy) -> str:
 
     identities = summary.get("identities")
     identity_rows = identities if isinstance(identities, list) else []
+    resync_suggested: list[str] = []
     for identity in identity_rows:
         drift = identity.get("ownershipDrift")
         drift_rows = drift if isinstance(drift, list) else []
         lines.append(
             f"  - identity={identity.get('branch') or '<detached>'}  "
             f"path={identity.get('path')}  ahead={identity.get('ahead')} "
-            f"behind={identity.get('behind')} dirty={identity.get('dirty')} "
-            f"工程面漂移={len(drift_rows)}"
+            f"behind={identity.get('behind')} behindLocalDev={identity.get('behindLocal', 0)} "
+            f"dirty={identity.get('dirty')} 工程面漂移={len(drift_rows)}"
         )
         if drift_rows:
             lines.append(
@@ -166,6 +167,17 @@ def build_message(summary: dict[str, object], *, hooks_ok: bool, policy) -> str:
                 + ", ".join(str(item) for item in drift_rows[:5])
                 + (" ..." if len(drift_rows) > 5 else "")
             )
+        if identity.get("resyncSuggested") is True:
+            resync_suggested.append(
+                f"{identity.get('branch') or '<detached>'}（落后本地 {policy.integration_branch} "
+                f"{identity.get('behindLocal', 0)} 个提交）"
+            )
+    if resync_suggested:
+        lines.append(
+            "  ! RESYNC_SUGGESTED: "
+            + "、".join(resync_suggested)
+            + f"；超过阈值 {policy.resync_reminder_behind_commits}，建议在该 lane 会话先运行 /sync-lane-from-dev"
+        )
 
     items = summary.get("items")
     rows = items if isinstance(items, list) else []
@@ -184,7 +196,7 @@ def build_message(summary: dict[str, object], *, hooks_ok: bool, policy) -> str:
         return ""
     tail = (
         [
-            "  处置：长期 lane 在 integration/abort 后 fast-forward resync 到 canonical dev1.0，",
+            "  处置：长期 lane 在 integration/abort 后以 /sync-lane-from-dev fast-forward resync 到 canonical dev1.0，",
             "  并保留 worktree 供下轮复用；",
             "  clone 或额外废弃副本是否删除仍由人工决定。",
         ]

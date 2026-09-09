@@ -21,7 +21,7 @@ init -> acquire -> author -> review -> publish -> release
 - 载体由来源单一类型判定：可命名的地点/机构/景区/博物馆条目 → homepage（最优先）；非单一实体的主题、线路、事件、文化现象条目 → article；Commons 图片文件页 → image；Commons 视频文件页 → video。一个来源只产一个对象，不做数量推断、不做刻意剔重。
 - 澄清完成后由宿主自己产出 plan 与 todos 并调度到终止条件；本 Skill 不定义调度器、状态机或轮次台账。
 - 恢复：「已存在什么」只读 `release pool-query`；「在飞 execution 到哪一步」只读 `.qwq_output/data/tasks/<executionId>/_shared/receipts/` 的首个未闭合步骤；本会话在飞状态只活在宿主 todos。任一 receipt `blocked` 则以 `retryOf` 新建 execution，不在原 execution 回退；已有 receipt 或 reviewer 产物的工作单元不得再次派发。
-- 产生 `content-release` 时，PRE 运行 `make feature-context TARGET=<exact-path>` 保存 content-addressed immutable owner manifest exact ref；纯只读且无送审交付只允许 `report-only/no-review-deliverable`。Review 交互只引用 `quwoquan_ops/policies/human_agent_delivery_contract.yaml#workflow_interaction_binding.bindings.content-production`，可见输出由 canonical projector 生成。
+- 产生 `content-release` 时，PRE 运行 `make feature-context TARGET=<exact-path>` 保存 content-addressed immutable owner manifest exact ref；纯只读且无送审交付只允许 `report-only/no-review-deliverable`。
 
 ## 执行
 
