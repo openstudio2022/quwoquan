@@ -56,6 +56,38 @@ class PythonScriptGovernanceDerivationTest(unittest.TestCase):
         self.assertIn('data) python_script_scope="data"', gate)
         self.assertIn('--scope "$python_script_scope" --mode check', gate)
 
+    def test_skill_python_is_discovered_without_registration_and_syntax_checked(self) -> None:
+        from quwoquan_ops.gate.verify_python_syntax import DEFAULT_ROOTS, syntax_issues
+
+        self.assertIn(REPOSITORY_ROOT / ".agents/skills", DEFAULT_ROOTS)
+        self._write(".agents/skills/probe/SKILL.md", "# Probe\n")
+        source = ".agents/skills/probe/carriers/image/adapter.py"
+        path = self._write(source, "def broken(:\n")
+        orphan = ".agents/skills/unowned/scripts/helper.py"
+        self._write(orphan, "VALUE = 1\n")
+        report = derive_report(self.root, ("ops",))
+        boundaries = {item["path"]: item["boundary"] for item in report["pythonFiles"]}
+        self.assertEqual("production_module", boundaries[source])
+        self.assertEqual("unknown", boundaries[orphan])
+        self.assertTrue(syntax_issues((path,)))
+        self.assertIn("PYTHON.SYNTAX_INVALID", self._issue_codes(report))
+        self.assertIn("PYTHON.BOUNDARY_UNKNOWN", self._issue_codes(report))
+        self.assertNotIn(source, {item["path"] for item in derive_report(self.root, ("data",))["pythonFiles"]})
+        path.write_text("VALUE = 1\n", encoding="utf-8")
+        self.assertNotIn("PYTHON.SYNTAX_INVALID", self._issue_codes(derive_report(self.root, ("ops",))))
+
+    def test_real_skill_python_inventory_matches_physical_sources(self) -> None:
+        from quwoquan_ops.gate.python_script_governance.inventory import enumerate_python_files
+        from quwoquan_ops.gate.verify_python_syntax import _python_sources, DEFAULT_ROOTS
+
+        expected = {
+            path for path in (REPOSITORY_ROOT / ".agents/skills").rglob("*.py")
+            if "__pycache__" not in path.parts
+        }
+        self.assertTrue(expected, "真实 Skill Python 不得被空扫描替代")
+        self.assertLessEqual(expected, set(enumerate_python_files(REPOSITORY_ROOT, "ops")))
+        self.assertLessEqual(expected, set(_python_sources(DEFAULT_ROOTS)))
+
     def test_file_enumeration_falls_back_without_ripgrep(self) -> None:
         visible = self._write("quwoquan_app/scripts/runtime/visible.py")
         hidden = self._write("quwoquan_app/.hidden/visible.py")

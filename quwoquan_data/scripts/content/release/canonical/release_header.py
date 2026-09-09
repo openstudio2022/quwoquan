@@ -224,8 +224,7 @@ def validate_release_header(
             execution_ids
             or authorization_ids
             or contains_unverified
-            or int(document.get("researchAcceptedCount") or 0)
-            or int(document.get("commercialAcceptedCount") or 0)
+            or int(document.get("acceptedCount") or 0)
             or any(int(value or 0) for value in rights_counts.values())
         ):
             raise ReleaseHeaderError(

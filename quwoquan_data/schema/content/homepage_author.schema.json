@@ -1,0 +1,11 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "page.md frontmatter 的 author 元数据，不生成旁车文件。既有 title/tagRefs/creatorProfileId 语义不变；primarySourceRef 可选，显式声明时必须是本对象已取得的百科 sourceRef。",
+  "type": "object",
+  "properties": {
+    "title": {"type": "string", "minLength": 1},
+    "tagRefs": {"type": "array", "items": {"type": "string", "minLength": 1}},
+    "creatorProfileId": {"type": "string", "minLength": 1},
+    "primarySourceRef": {"type": "string", "minLength": 1, "pattern": "^sources/[^/]+/source\\.md$"}
+  }
+}

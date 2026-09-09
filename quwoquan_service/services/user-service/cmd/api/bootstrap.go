@@ -193,13 +193,6 @@ func assembleUserDomain(asm *servicekit.Assembly, cfg *config) error {
 	if err != nil {
 		return fmt.Errorf("research identity composition failed: %v", err)
 	}
-	researchSessionAttestationHandler, err := buildResearchSessionAttestationHandler(
-		appEnv,
-		*cfg,
-	)
-	if err != nil {
-		return fmt.Errorf("research identity readback composition failed: %v", err)
-	}
 	managedAcceptanceIdentity, err := loadManagedAcceptanceIdentity()
 	if err != nil && cfg.ResearchIdentity.Enabled {
 		return fmt.Errorf("managed acceptance identity composition failed: %v", err)
@@ -931,10 +924,6 @@ func assembleUserDomain(asm *servicekit.Assembly, cfg *config) error {
 	serviceMux := http.NewServeMux()
 	userHandler.RegisterRoutes(serviceMux)
 	accountsessionhttp.RegisterResearchSessionRoutes(serviceMux, researchSessionHandler)
-	accountsessionhttp.RegisterResearchSessionAttestationRoutes(
-		serviceMux,
-		researchSessionAttestationHandler,
-	)
 	personaHostAuthorityHandler.RegisterRoutes(serviceMux)
 	accountAppealHandler.RegisterRoutes(serviceMux)
 	federatedPhoneBindingHandler.RegisterRoutes(serviceMux)

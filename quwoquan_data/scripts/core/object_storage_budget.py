@@ -6,7 +6,7 @@
 的候选到 publish 才被拒」那类白跑整条链的成因。
 
 两跳都是查表，没有一步是从取值形态推出来的：
-`research lane（来源单元上的显式声明位）-> 发布载体 -> 预算`。
+`source carrier（来源单元上的显式声明位）-> 发布载体 -> 预算`。
 """
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ from core.media_processing_policy import (
     OBJECT_STORAGE_BUDGET_DEFAULT_CARRIER,
 )
 
-# research lane 决定该来源单元的资产最终落到哪个发布载体。载体名与
+# source carrier 决定该来源单元的资产最终落到哪个发布载体。载体名与
 # `verify_object_size_budget.object_carrier` 从对象身份派生出的载体名同域，
 # 两处必须指向同一张预算表里的同一档。
 _PUBLISH_CARRIER_BY_CONTENT_TYPE: dict[ContentType, str] = {
@@ -42,26 +42,26 @@ def object_storage_budget_bytes(carrier: str) -> int:
     return table[OBJECT_STORAGE_BUDGET_DEFAULT_CARRIER]
 
 
-def publish_carrier_for_research_lane(research_lane: str) -> str:
-    """来源单元声明的 research lane 所对应的发布载体。
+def publish_carrier_for_source_carrier(source_carrier: str) -> str:
+    """来源单元声明的 source carrier 所对应的发布载体。
 
     lane 缺席或落在闭集之外一律判否：拿不到载体就拿不到预算，下载截面因此回答不了
     「这个资产能不能发」，而替它选一个载体等于替它选一个预算。
     """
 
     try:
-        content_type = ContentType(str(research_lane))
+        content_type = ContentType(str(source_carrier))
     except ValueError as exc:
         raise ValueError(
-            "source unit declares no publishable research lane "
-            f"(researchLane={research_lane!r}); declare one of "
+            "source unit declares no publishable source carrier "
+            f"(carrier={source_carrier!r}); declare one of "
             f"{sorted(item.value for item in ContentType)} so the download "
             "cross-section can read that carrier's object storage budget"
         ) from exc
     return _PUBLISH_CARRIER_BY_CONTENT_TYPE[content_type]
 
 
-def source_unit_asset_budget_bytes(research_lane: str) -> int:
+def source_unit_asset_budget_bytes(source_carrier: str) -> int:
     """一张来源单元图片必须装进的字节预算。
 
     publish 侧把「单个资产自身即超过整个对象预算」判为对象级 blocked
@@ -70,12 +70,12 @@ def source_unit_asset_budget_bytes(research_lane: str) -> int:
     """
 
     return object_storage_budget_bytes(
-        publish_carrier_for_research_lane(research_lane)
+        publish_carrier_for_source_carrier(source_carrier)
     )
 
 
 __all__ = [
     "object_storage_budget_bytes",
-    "publish_carrier_for_research_lane",
+    "publish_carrier_for_source_carrier",
     "source_unit_asset_budget_bytes",
 ]

@@ -11,7 +11,6 @@ from __future__ import annotations
 import hashlib
 import json
 import shutil
-from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -19,7 +18,6 @@ from content.release.canonical.object_transaction_contract import canonical_tran
 from content.release.canonical.post_transaction import (
     build_post_object_transaction_package as _build_post_object_transaction_package,
 )
-from governance.coverage import distribution
 from PIL import Image
 
 from support.media_fixture import seed_system_creator_avatar_holding
@@ -110,7 +108,7 @@ def _source_attribution() -> dict[str, object]:
         "attributionText": "Fixture Photographer / CC BY 4.0",
         "rightsBasis": "CC BY 4.0",
         "commercialAuthorizationStatus": "unverified",
-        "publicationAdmission": "research_release",
+        "publicationAdmission": "production_release",
         "watermarkStatus": "absent",
         "audioRightsStatus": "no_audio",
         "modelReleaseStatus": "not_required",
@@ -133,20 +131,6 @@ def build_post_object_transaction_package(
         object_ref=object_ref,
         transaction_id=transaction_id,
         package_root=package_root,
-    )
-
-
-def _force_commercial_lifecycle(monkeypatch: pytest.MonkeyPatch) -> None:
-    research_policy = distribution.load_content_distribution_policy()
-    commercial_policy = replace(
-        research_policy,
-        product_lifecycle_state=distribution.ProductLifecycleState.PRODUCTION,
-        release_class=distribution.ReleaseClass.PRODUCTION,
-    )
-    monkeypatch.setattr(
-        distribution,
-        "load_content_distribution_policy",
-        lambda: commercial_policy,
     )
 
 
@@ -311,7 +295,7 @@ def _fixture(
                     "fetchedAt": "2026-07-18T04:00:00Z",
                     "usageScope": "app_publish",
                     "modelReleaseStatus": "not_required",
-                    "distributionDecision": "research_allowed",
+                    "distributionDecision": "production_allowed",
                 }
             ]
         },
@@ -320,7 +304,7 @@ def _fixture(
         execution / "sources/commons/meta.json",
         {
             "sourceUseMode": "licensed_adaptation",
-            "researchLane": "image",
+            "carrier": "image",
         },
     )
     _write_json(
@@ -357,7 +341,7 @@ def _fixture(
                     "modelReleaseStatus": "not_required",
                     "rightsAuditStatus": "verified",
                     "rightsAuditIssues": [],
-                    "distributionDecision": "research_allowed",
+                    "distributionDecision": "production_allowed",
                     "sha256": digest,
                 }
             ],
@@ -392,7 +376,7 @@ def _fixture(
                     "license": "CC BY 4.0",
                     "termsUrl": "https://creativecommons.org/licenses/by/4.0/",
                     "authorizationProof": "https://commons.wikimedia.org/wiki/File:Example.jpg",
-                    "usageScope": "commercial",
+                    "usageScope": "production",
                     "decision": "approved",
                     "issues": [],
                 }

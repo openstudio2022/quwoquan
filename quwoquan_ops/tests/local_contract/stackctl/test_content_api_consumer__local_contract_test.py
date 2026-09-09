@@ -44,7 +44,7 @@ def _write(root: Path, ref: str, value: Mapping[str, Any]) -> tuple[str, str]:
     return ref, subject._digest_bytes(path.read_bytes())
 
 
-def _authorities(root: Path, *, release_class: str = "research") -> dict[str, str]:
+def _authorities(root: Path, *, release_class: str = "production") -> dict[str, str]:
     samples = [
         {
             "sampleId": f"baseline-{carrier}-001",
@@ -113,7 +113,6 @@ def _authorities(root: Path, *, release_class: str = "research") -> dict[str, st
             "postRef": f"{carrier}/m1-{carrier}",
             "postId": f"post-runtime-{carrier}",
             "contentVersion": 1,
-            "usageScope": "research",
             "contentType": carrier,
             "authorId": "author-m1",
         }
@@ -121,7 +120,7 @@ def _authorities(root: Path, *, release_class: str = "research") -> dict[str, st
     ]
     import_report = {
         "schema": "quwoquan.content_import_report",
-        "status": "imported",
+        "status": "staged",
         "environment": "alpha",
         "releaseId": RELEASE_ID,
         "sourceOwner": "qwq_data",
@@ -240,17 +239,6 @@ def _authorities(root: Path, *, release_class: str = "research") -> dict[str, st
     }
 
 
-def _credential(ca: Path) -> dict[str, str]:
-    return {
-        "apiBaseUrl": "https://api.alpha.quwoquan.com",
-        "sslCaFile": str(ca),
-        "bearerToken": BEARER_FIXTURE,
-        "attestationToken": ATTESTATION,
-        "subjectHash": "sha256:" + "e" * 64,
-        "expiresAt": "2026-09-03T02:00:00Z",
-    }
-
-
 def _http(**kwargs: Any) -> subject.HttpObservation:
     path = "/" + str(kwargs["path"]).lstrip("/")
     body = kwargs.get("body") or {}
@@ -314,8 +302,7 @@ def _run(
     monkeypatch: pytest.MonkeyPatch,
     *,
     http: Any = _http,
-    release_class: str = "research",
-    credential_issuer: Any = None,
+    release_class: str = "production",
 ) -> tuple[dict[str, Any], Path, dict[str, str]]:
     root = tmp_path / "output"
     root.mkdir()
@@ -338,7 +325,6 @@ def _run(
         report_dir=report_dir,
         output_root=root,
         http_request=http,
-        credential_issuer=credential_issuer or (lambda **_kwargs: _credential(ca)),
         **refs,
     )
     return result, report_dir, refs
@@ -356,7 +342,8 @@ def test_production_release_consumes_anonymously_without_research_credential(
     seen_tokens: list[tuple[str, str]] = []
 
     def anonymous_http(**kwargs: Any) -> subject.HttpObservation:
-        seen_tokens.append((kwargs["bearer_token"], kwargs["attestation_token"]))
+        assert "bearer_token" not in kwargs and "attestation_token" not in kwargs
+        seen_tokens.append(("", ""))
         return _http(**kwargs)
 
     result, report_dir, _refs = _run(
@@ -364,9 +351,6 @@ def test_production_release_consumes_anonymously_without_research_credential(
         monkeypatch,
         http=anonymous_http,
         release_class="production",
-        credential_issuer=lambda **_kwargs: pytest.fail(
-            "production consumer must not issue a research credential"
-        ),
     )
 
     assert result["exitCode"] == 0
@@ -378,12 +362,14 @@ def test_production_release_consumes_anonymously_without_research_credential(
     assert len(raw) == 16 and {row["status"] for row in raw} == {"passed"}
 
 
-def test_readiness_release_class_triplet_must_be_lifecycle_bound(
+@pytest.mark.parametrize("release_class", ["research", "commercial", "preview"])
+def test_readiness_rejects_retired_release_classes(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    release_class: str,
 ) -> None:
     with pytest.raises(subject.ContentApiConsumerError, match="releaseClass"):
-        _run(tmp_path, monkeypatch, release_class="preview")
+        _run(tmp_path, monkeypatch, release_class=release_class)
 
 
 def test_matrix_writes_sixteen_observations_and_canonical_raw_without_secret(
@@ -462,49 +448,6 @@ def test_failed_http_assertion_still_retains_all_raw_results(
     assert failed["reasonCode"] == "SERVICE.CONTENT_API_CONSUMER.failed"
 
 
-def test_credential_failure_retains_sixteen_blocked_raw_without_exception_text(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    root = tmp_path / "output"
-    root.mkdir()
-    refs = _authorities(root)
-    ca = tmp_path / "root.crt"
-    ca.write_text("test CA", encoding="utf-8")
-    monkeypatch.setattr(
-        subject, "_topology_api_base", lambda _target: "https://api.alpha.quwoquan.com"
-    )
-    monkeypatch.setattr(subject, "_tls_ca_file", lambda _target: ca)
-    parent = root / "env/alpha/runs/content-api-consumer"
-    parent.mkdir(parents=True)
-    report_dir = parent / "blocked"
-
-    result = subject.run_content_api_consumer(
-        target="alpha-local",
-        release_id=RELEASE_ID,
-        import_run_id=IMPORT_RUN_ID,
-        verify_run_id=VERIFY_RUN_ID,
-        manifest_digest=MANIFEST_DIGEST,
-        report_dir=report_dir,
-        output_root=root,
-        http_request=lambda **_kwargs: pytest.fail("HTTP must not run"),
-        credential_issuer=lambda **_kwargs: (_ for _ in ()).throw(
-            RuntimeError("credential failed " + BEARER_FIXTURE)
-        ),
-        **refs,
-    )
-
-    assert result["exitCode"] == 2
-    raw = [
-        json.loads(path.read_text(encoding="utf-8"))
-        for path in (report_dir / "raw").glob("*/*.json")
-    ]
-    assert len(raw) == 16 and {row["status"] for row in raw} == {"blocked"}
-    assert BEARER_FIXTURE.encode() not in b"".join(
-        path.read_bytes() for path in report_dir.rglob("*.json")
-    )
-
-
 @pytest.mark.parametrize(
     ("mutation", "message"),
     [
@@ -551,7 +494,6 @@ def test_explicit_authority_digest_and_ref_drift_is_rejected_before_http(
             report_dir=parent / "rejected",
             output_root=root,
             http_request=lambda **_kwargs: pytest.fail("HTTP must not run"),
-            credential_issuer=lambda **_kwargs: _credential(ca),
             **refs,
         )
 
@@ -639,7 +581,6 @@ def test_nonrequired_health_layers_do_not_block_m1(
         report_dir=parent / "nonrequired-blocked",
         output_root=root,
         http_request=_http,
-        credential_issuer=lambda **_kwargs: _credential(ca),
         **refs,
     )
     assert result["exitCode"] == 0
@@ -669,7 +610,6 @@ def test_explicit_manifest_digest_must_match_data_readiness(
             report_dir=parent / "wrong-manifest",
             output_root=root,
             http_request=lambda **_kwargs: pytest.fail("HTTP must not run"),
-            credential_issuer=lambda **_kwargs: _credential(ca),
             **refs,
         )
 

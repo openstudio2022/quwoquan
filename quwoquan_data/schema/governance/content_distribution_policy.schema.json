@@ -9,7 +9,7 @@
     "releaseClass",
     "mediaGeneration",
     "acquisition",
-    "researchDiscovery",
+    "sourceDiscovery",
     "articleMedia",
     "scaleMilestones",
     "productionDistribution",
@@ -74,7 +74,7 @@
         }
       }
     },
-    "researchDiscovery": {
+    "sourceDiscovery": {
       "type": "object",
       "required": [
         "catalogRevision",
@@ -85,8 +85,7 @@
       "additionalProperties": false,
       "properties": {
         "catalogRevision": {
-          "type": "string",
-          "minLength": 1
+          "const": "source-media-discovery-v1"
         },
         "imageProviderPriority": {
           "type": "array",
@@ -109,7 +108,7 @@
         },
         "videoPopularity": {
           "type": "object",
-          "description": "Observed popularity details are optional statistics and never decide object admission or Research release eligibility.",
+          "description": "Observed popularity details are optional statistics and never decide object admission or production release eligibility.",
           "required": [
             "signals",
             "normalization",
@@ -156,7 +155,7 @@
           "const": "unverified"
         },
         "modelReleaseStatus": {
-          "enum": ["not_required", "obtained", "editorial_only"]
+          "enum": ["not_required", "obtained", "editorial_only", "unverified"]
         },
         "propertyReleaseStatus": {
           "type": "string",
@@ -197,7 +196,7 @@
     },
     "scaleMilestones": {
       "type": "object",
-      "description": "Cumulative unique admitted-object targets; predecessor identity and operational measurements are statistical and do not block Research publication.",
+      "description": "Cumulative unique admitted-object targets; predecessor identity and operational measurements are statistical and do not block production publication.",
       "required": [
         "m1Targets",
         "m10Targets",

@@ -70,7 +70,7 @@ func (r *terminalActiveSupplyReader) ActiveSupplySnapshot(context.Context) (Acti
 	}
 	releaseClass := r.releaseClass
 	if releaseClass == "" {
-		releaseClass = "commercial"
+		releaseClass = "production"
 	}
 	return ActiveSupplySnapshot{
 		Environment:       "local_contract",

@@ -128,10 +128,7 @@
             "pattern": "^https://"
           },
           "usageScope": {
-            "enum": [
-              "research",
-              "commercial"
-            ]
+            "const": "production"
           },
           "decision": {
             "enum": [

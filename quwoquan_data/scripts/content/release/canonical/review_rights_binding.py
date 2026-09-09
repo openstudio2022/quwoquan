@@ -162,16 +162,7 @@ def validate_review_authority(
         source_assets=source_assets,
         require_approved=require_approved,
     )
-    review_scopes = {
-        str(row.get("usageScope") or "").strip()
-        for row in content_review["assetRights"]
-        if isinstance(row, Mapping)
-    }
-    usage_scope = (
-        "commercial"
-        if review_scopes == {"commercial"} and bool(content_review["assetRights"])
-        else "research"
-    )
+    usage_scope = "production"
     normalized_object_ref = _normalized_object_ref(object_ref)
     if object_kind == "posts" and not normalized_object_ref.startswith("posts/"):
         normalized_object_ref = "posts/" + normalized_object_ref

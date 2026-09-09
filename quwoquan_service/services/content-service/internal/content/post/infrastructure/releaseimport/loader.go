@@ -38,10 +38,8 @@ type AssetManifestItem struct {
 	Kind    string `json:"kind,omitempty" bson:"kind,omitempty"`
 	// AccessMode 是媒体交付访问模式（DEC-033，契约 PostArticleAsset.accessMode，
 	// enum 唯一真相源 contracts/metadata/_shared/types.yaml
-	// MediaDeliveryAccessMode）。由 release header 的 releaseClass 单点映射写入，
-	// signed_grant 时 App 必须按 assetId 换取短签。新 immutable release 必须
-	// 显式 public|signed_grant；空串只属于具名 previous-version public migration 边界，
-	// 不得进入本 importer。
+	// MediaDeliveryAccessMode）。Data release 只允许显式 public；
+	// 空值与私有访问模式均不得进入本 importer。
 	AccessMode           string   `json:"accessMode,omitempty" bson:"accessMode,omitempty"`
 	ObjectKey            string   `json:"objectKey,omitempty" bson:"-"`
 	Version              int64    `json:"version,omitempty" bson:"version,omitempty"`
@@ -112,6 +110,7 @@ type PostDoc struct {
 	TagRefs              []string                        `json:"tagRefs" bson:"tagRefs"`
 	IntersectionHints    []IntersectionHintDoc           `json:"intersectionHints" bson:"intersectionHints"`
 	SemanticMentions     []postmodel.PostSemanticMention `json:"semanticMentions" bson:"semanticMentions"`
+	EntityMentions       []postmodel.PostEntityMention   `json:"entityMentions" bson:"entityMentions"`
 	AuthorID             string                          `json:"authorId" bson:"authorId"`
 	AuthorDisplayName    string                          `json:"authorDisplayNameSnapshot" bson:"authorDisplayNameSnapshot"`
 	AuthorAvatarURL      string                          `json:"authorAvatarUrlSnapshot" bson:"authorAvatarUrlSnapshot"`
@@ -528,10 +527,12 @@ func missingDesiredRefs(filter map[string]bool, loadedRefs []string) []string {
 
 // LoadPosts 从对象闭包的 posts/ 加载内容；filter 使用相对 posts/ 的对象引用。
 // LoadPosts 校验并装载 release 对象闭包内的 post 文档。releaseClass 是 release
-// header 声明的发布类别（"research"/"commercial"）；空值只保留给 pre-pool
-// fixture 的 rights 校验。新 release 的媒体交付判据在 Bind +
-// ValidateImportedPostMediaBindings 边界显式收敛。
+// header 声明的唯一类别 production；空值和退休类别一律拒绝。
+// 媒体公开身份在 Bind + ValidateImportedPostMediaBindings 边界显式校验。
 func LoadPosts(publishRoot string, filter map[string]bool, releaseClass string) ([]PostDoc, error) {
+	if releaseClass != "production" {
+		return nil, fmt.Errorf("releaseClass must be production")
+	}
 	postsRoot := filepath.Join(publishRoot, "posts")
 	var docs []PostDoc
 	var loadedObjectRefs []string
@@ -555,10 +556,15 @@ func LoadPosts(publishRoot string, filter map[string]bool, releaseClass string) 
 		if rerr != nil {
 			return rerr
 		}
+		attribution, rerr := decodeReleaseSourceAttribution(raw, postRef)
+		if rerr != nil {
+			return rerr
+		}
 		var m postManifest
 		if jerr := json.Unmarshal(raw, &m); jerr != nil {
 			return jerr
 		}
+		m.SourceAttribution = attribution
 		if err := normalizeImportedContentPoolRecord(&m, postRef); err != nil {
 			return err
 		}
@@ -790,8 +796,9 @@ func LoadEntities(publishRoot string, filter map[string]bool) ([]EntityDoc, erro
 			hasPage = true
 		}
 		assetManifest := (*EntityAssetManifestDoc)(nil)
-		assetRefsPath := filepath.Join(filepath.Dir(path), "asset.refs.json")
-		if rawManifest, merr := os.ReadFile(assetRefsPath); merr == nil {
+		// 资产事实仅从统一 manifest 读取，不再消费 CAS 闭包旁车。
+		manifestPath := filepath.Join(filepath.Dir(path), "manifest.json")
+		if rawManifest, merr := os.ReadFile(manifestPath); merr == nil {
 			var parsed EntityAssetManifestDoc
 			if jerr := json.Unmarshal(rawManifest, &parsed); jerr != nil {
 				return jerr

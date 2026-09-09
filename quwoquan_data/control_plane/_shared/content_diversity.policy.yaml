@@ -1,5 +1,5 @@
 schema: quwoquan.content_diversity_policy
-policyId: research-content-diversity
+policyId: source-content-diversity
 # 上限按「跨 execution 累计已产出对象数」计算，不是单批次内计数：同一实体在
 # 若干个 execution 里各产出一次，累计后仍受同一上限约束。
 entityConcentration:

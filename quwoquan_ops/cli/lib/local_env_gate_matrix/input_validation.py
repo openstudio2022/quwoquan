@@ -12,17 +12,13 @@ from quwoquan_ops.cli.lib.local_env_gate_matrix.identity import (
     ROOT,
     EnvRunner,
 )
-# Data producer 单一 production 类别（DEC-041）与历史 research/commercial 三值闭集。
-_RELEASE_CLASSES = frozenset({"research", "commercial", "production"})
+# candidate 和 rollback 都必须使用现役 production 契约。
+_RELEASE_CLASSES = frozenset({"production"})
 
 from quwoquan_ops.cli.lib.local_env_gate_matrix.preflight import (
     _device_binding_errors,
     _release_binding,
 )
-
-
-class ResearchLifecycleUnsupported(ValueError):
-    """Retained import name for callers; Research is now a supported branch."""
 
 
 @dataclass(frozen=True)
@@ -64,9 +60,7 @@ def _resolve_matrix_inputs(
     if candidate_release["releaseId"] == rollback_release["releaseId"]:
         raise ValueError("candidate and rollback release must be different")
 
-    # Research and commercial are explicit release metadata branches.  The
-    # matrix must not reject either class or infer it from an environment; the
-    # downstream lifecycle phases consume the two exact attestation identities.
+    # 类别来自 exact attestation；所有环境和 rollback 都拒绝退役类别。
     candidate_class = str(candidate_release["releaseClass"])
     rollback_class = str(rollback_release["releaseClass"])
     if candidate_class not in _RELEASE_CLASSES or rollback_class not in _RELEASE_CLASSES:

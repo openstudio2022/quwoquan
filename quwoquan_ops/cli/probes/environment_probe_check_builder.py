@@ -12,9 +12,7 @@ from typing import Any
 
 from quwoquan_ops.cli.lib.media_delivery_manifest import build_media_delivery_url
 from quwoquan_ops.cli.probes.environment_probe_semantics import (
-    CREATOR_PROFILE_CHECK_NAME,
     PRIVATE_FEED_CHECK_NAMES,
-    SIGNED_MEDIA_CHECK_NAME,
 )
 
 def _owner_matches_post(owner_ref: object, post_ref: str) -> bool:
@@ -39,17 +37,8 @@ def _release_probe_identity(
         resolve_readiness_path_fn(raw_receipt),
         expected_environment=args.env,
     )
-    if str(identity["receipt"].get("releaseClass") or "") == "research":
-        # research 私有交付（DEC-031）不存在匿名可采样图片，media_sample
-        # 语义不成立；identity 其余字段照常供 feed 绑定检查使用。
-        return {
-            "releaseId": identity["releaseId"],
-            "manifestDigest": identity["manifestDigest"],
-            "importRunId": identity["importRunId"],
-            "verifyRunId": identity["verifyRunId"],
-            "readinessReceiptRef": identity["readinessReceiptRef"],
-            "media": None,
-        }
+    if identity["receipt"].get("releaseClass") != "production":
+        raise release_video_delivery_error("release probe requires production release")
     image_posts = {
         str(binding["postRef"]).strip().strip("/")
         for binding in identity["postBindings"]
@@ -211,89 +200,6 @@ def _release_samples(args: argparse.Namespace) -> list[dict[str, Any]]:
     return samples
 
 
-def _release_creator_profiles(args: argparse.Namespace) -> list[dict[str, str]]:
-    profiles: list[dict[str, str]] = []
-    observed: set[str] = set()
-    expected_fields = {
-        "creatorRef", "authorId", "personaId", "displayName",
-        "avatarAssetId", "avatarDeliveryRef",
-    }
-    for index, raw in enumerate(getattr(args, "release_creator_profile", []) or []):
-        try:
-            value = json.loads(str(raw))
-        except json.JSONDecodeError as exc:
-            raise ValueError(
-                f"release creator profile {index} is not canonical JSON"
-            ) from exc
-        if not isinstance(value, dict) or set(value) != expected_fields:
-            raise ValueError(f"release creator profile {index} fields are invalid")
-        profile = {key: str(value.get(key) or "").strip() for key in value}
-        if (
-            not all(profile.values())
-            or profile["personaId"] in observed
-            or not profile["avatarDeliveryRef"].startswith("media/objects/sha256/")
-        ):
-            raise ValueError(f"release creator profile {index} identity is invalid")
-        observed.add(profile["personaId"])
-        profiles.append(profile)
-    return profiles
-
-
-def _release_signed_media(args: argparse.Namespace) -> list[dict[str, Any]]:
-    assets: list[dict[str, Any]] = []
-    observed_ids: set[str] = set()
-    observed_categories: set[str] = set()
-    expected_fields = {
-        "assetId", "kind", "expectedBytes", "expectedSha256",
-        "expectedMimeType", "privateDeliveryRef", "classifications",
-        "requireRange",
-    }
-    for index, raw in enumerate(getattr(args, "release_signed_media", []) or []):
-        try:
-            value = json.loads(str(raw))
-        except json.JSONDecodeError as exc:
-            raise ValueError(
-                f"release signed media {index} is not canonical JSON"
-            ) from exc
-        if not isinstance(value, dict) or set(value) != expected_fields:
-            raise ValueError(f"release signed media {index} fields are invalid")
-        asset_id = str(value.get("assetId") or "").strip()
-        kind = str(value.get("kind") or "").strip()
-        categories = value.get("classifications")
-        expected_bytes = value.get("expectedBytes")
-        require_range = value.get("requireRange")
-        if (
-            not asset_id
-            or asset_id in observed_ids
-            or kind not in {"avatar", "image", "video"}
-            or not isinstance(categories, list)
-            or not categories
-            or any(
-                str(category) not in {
-                    "avatar", "image", "typed_video", "premium_video"
-                }
-                for category in categories
-            )
-            or len(categories) != len(set(categories))
-            or not isinstance(expected_bytes, int)
-            or isinstance(expected_bytes, bool)
-            or expected_bytes <= 0
-            or require_range is not (kind == "video")
-            or not str(value.get("privateDeliveryRef") or "").startswith(
-                "media/objects/sha256/"
-            )
-        ):
-            raise ValueError(f"release signed media {index} identity is invalid")
-        observed_ids.add(asset_id)
-        observed_categories.update(str(category) for category in categories)
-        assets.append(dict(value))
-    if assets and observed_categories != {
-        "avatar", "image", "typed_video", "premium_video"
-    }:
-        raise ValueError("release signed media classifications are incomplete")
-    return assets
-
-
 def build_checks(
     args: argparse.Namespace,
     *,
@@ -306,8 +212,6 @@ def build_checks(
     public_headers,
     release_search_canaries,
     release_samples,
-    release_creator_profiles,
-    release_signed_media,
 ) -> list[dict[str, Any]]:
     DEFAULT_ENVIRONMENT_SEARCH_QUERY = default_environment_search_query
     _common_headers = common_headers
@@ -317,24 +221,12 @@ def build_checks(
     _public_headers = public_headers
     _release_search_canaries = release_search_canaries
     _release_samples = release_samples
-    _release_creator_profiles = release_creator_profiles
-    _release_signed_media = release_signed_media
     base = args.base_url.rstrip("/")
     require_non_empty_content_feed = bool(
         getattr(args, "require_non_empty_content_feed", False)
     )
-    research_anonymous_convergence = bool(
-        getattr(args, "research_anonymous_convergence", False)
-    )
-    research_consumer_readback = bool(
-        getattr(args, "research_consumer_readback", False)
-    )
-    # feed 检查默认走匿名面（发现面语义）；research consumer 模式下四个
-    # private feed 必须统一走同一 Bearer。匿名收敛即使进程存在环境凭证也显式
-    # 去掉 Authorization，避免把“非研究认证”误当匿名隔离证据。
-    feed_auth_token = args.test_auth_token if research_consumer_readback else ""
-    if research_consumer_readback and not str(feed_auth_token or "").strip():
-        raise ValueError("research consumer readback requires a bearer token")
+    # Data production feed 只验证公开面，不携带验收账号凭证。
+    feed_auth_token = ""
     media_image_base_url = str(
         getattr(
             args,
@@ -350,8 +242,6 @@ def build_checks(
     )
     search_canaries = _release_search_canaries(args)
     release_samples = _release_samples(args)
-    creator_profiles = _release_creator_profiles(args)
-    signed_media_assets = _release_signed_media(args)
     search_limit = 20 if search_canaries else 1
     homepage_query = next(
         (
@@ -459,34 +349,7 @@ def build_checks(
                 **sample,
             }
         )
-    for profile in creator_profiles:
-        persona_id = urllib.parse.quote(profile["personaId"], safe="")
-        checks.append(
-            {
-                "name": CREATOR_PROFILE_CHECK_NAME,
-                "method": "GET",
-                "url": f"{base}/user/{persona_id}",
-                "headers": _common_headers(args.test_auth_token),
-                "expected_statuses": [200],
-                **profile,
-            }
-        )
-    if signed_media_assets:
-        checks.append(
-            {
-                "name": SIGNED_MEDIA_CHECK_NAME,
-                "method": "INTERNAL",
-                "url": f"{base}/content/media",
-                "headers": {},
-                "expected_statuses": [200],
-                "assets": signed_media_assets,
-            }
-        )
-    if (
-        require_non_empty_content_feed
-        or research_anonymous_convergence
-        or research_consumer_readback
-    ):
+    if require_non_empty_content_feed:
         video_page_size = int(getattr(args, "video_page_size", 1) or 1)
         if not 1 <= video_page_size <= 100:
             raise ValueError("video page size must be between 1 and 100")

@@ -7,7 +7,7 @@
   校验器;
 - `_load_data_release_readiness`:单一 Data-owned 环境回执的 fail-closed
   装载与校验;
-- `_load_data_release_lifecycle_exit`:commercial-only rollback/replay 证明
+- `_load_data_release_lifecycle_exit`:production-only rollback/replay 证明
   的装载与绑定重算。
 
 schema 常量与 `_canonical_document_checksum` / `_validated_string_set` /
@@ -28,12 +28,8 @@ from typing import Any, Mapping
 
 from quwoquan_ops.cli.lib.content_release_readiness import ReadinessPhase
 
-# release 类别与 readiness 相位同值绑定的相位（consumer 相位跟随 header，不绑定）。
-# production 是 Data producer 单一现役类别（DEC-041），与 research/commercial 一样
-# 要求 `releaseClass == productLifecycleState == readinessPhase`，且 premium 非空。
-_LIFECYCLE_BOUND_PHASES = frozenset(
-    {ReadinessPhase.RESEARCH, ReadinessPhase.COMMERCIAL, ReadinessPhase.PRODUCTION}
-)
+# 发布生命周期只有 production；consumer 是验证步骤，不引入第二类别。
+_LIFECYCLE_BOUND_PHASES = frozenset({ReadinessPhase.PRODUCTION})
 
 
 def _load_test_data_release_readiness(
@@ -66,7 +62,7 @@ def _load_test_data_release_readiness(
     phase_value = str(raw.get("readinessPhase") or "").strip()
     if phase_value not in {phase.value for phase in _LIFECYCLE_BOUND_PHASES}:
         raise ValueError(
-            "test-data readiness must be an immutable research, commercial or production release"
+            "test-data readiness must be an immutable production release"
         )
     return _stackctl._load_data_release_readiness(
         environment=environment,
@@ -125,11 +121,7 @@ def _load_data_release_readiness(
             issues.append(
                 f"Data readiness {key}={receipt.get(key)!r}, expected {expected!r}"
             )
-    expected_release_class = (
-        readiness_phase.value
-        if readiness_phase in _LIFECYCLE_BOUND_PHASES
-        else str(receipt.get("releaseClass") or "")
-    )
+    expected_release_class = "production"
     if (
         receipt.get("releaseClass") != expected_release_class
         or receipt.get("productLifecycleState") != expected_release_class
@@ -157,19 +149,12 @@ def _load_data_release_readiness(
         )
     ):
         issues.append("Data readiness rightsStatusCounts is invalid")
-    if readiness_phase is ReadinessPhase.COMMERCIAL and (
-        contains_unverified is not False or authorization_required_ids != []
-    ):
-        issues.append("commercial readiness contains authorization-required assets")
-    identity_digest_keys = (
-        ("sourceIdentitySetDigest",)
-        if "sourceIdentities" in receipt or "sourceIdentitySetDigest" in receipt
-        else ("sourceRevision", "sourceDigest", "entityCatalogDigest")
-    )
+    if not isinstance(receipt.get("sourceIdentities"), list) or not receipt["sourceIdentities"]:
+        issues.append("Data readiness sourceIdentities is missing or invalid")
     for digest_key in (
         "manifestDigest",
         "mediaManifestDigest",
-        *identity_digest_keys,
+        "sourceIdentitySetDigest",
         "activationEnvelopeDigest",
     ):
         if _stackctl._DATA_READINESS_DIGEST_RE.fullmatch(str(receipt.get(digest_key) or "")) is None:
@@ -178,64 +163,22 @@ def _load_data_release_readiness(
         issues.append("Data readiness importRunId is missing")
     observed_request_ids: set[str] = set()
     observed_trace_ids: set[str] = set()
-    if readiness_phase is ReadinessPhase.RESEARCH:
-        if _stackctl._DATA_READINESS_DIGEST_RE.fullmatch(
-            str(receipt.get("internalSubjectHash") or "")
-        ) is None:
-            issues.append(
-                "Data readiness internalSubjectHash is not a canonical digest"
-            )
-        isolation_ref = str(
-            receipt.get("researchIsolationVerificationRef") or ""
-        ).strip()
-        expected_isolation_ref = (
-            Path("env")
-            / environment
-            / "runs/data-release"
-            / release_id
-            / verify_run_id
-            / "research-isolation-verification.json"
-        ).as_posix()
-        if isolation_ref != expected_isolation_ref or (
-            _stackctl._DATA_READINESS_DIGEST_RE.fullmatch(
-                str(receipt.get("researchIsolationVerificationDigest") or "")
-            )
-            is None
-        ):
-            issues.append(
-                "Data readiness research isolation ref/digest is not canonical"
-            )
-        if "guestActorHash" in receipt or "guestLogin" in receipt:
-            issues.append("research Data readiness must not retain guest identity")
-        # post 域 readback 口径字段：runtime proof 复核的权威预期集合。
-        # 字段必然存在由 Data schema 承担；此处只校验形态，避免对新字段
-        # 之前签发的历史 receipt（如 test-live binding 所指）溯及既往。
-        # 缺失时 research isolation 复核会对 None fail-closed。
-        for readback_key in (
-            "researchReadbackEntityRefs",
-            "researchReadbackMediaAssetIds",
-        ):
-            if readback_key in receipt:
-                _stackctl._validated_string_set(
-                    receipt.get(readback_key), label=readback_key, issues=issues
-                )
-    else:
-        if _stackctl._DATA_READINESS_DIGEST_RE.fullmatch(
-            str(receipt.get("guestActorHash") or "")
-        ) is None:
-            issues.append("Data readiness guestActorHash is not a canonical digest")
-        request_id, trace_id = _stackctl._validate_data_operation_evidence(
-            receipt.get("guestLogin"),
-            label="guestLogin",
-            expected_path="/auth/login/anonymous",
-            expected_page_id="user.login.anonymous",
-            expected_status=200,
-            issues=issues,
-        )
-        if request_id:
-            observed_request_ids.add(request_id)
-        if trace_id:
-            observed_trace_ids.add(trace_id)
+    if _stackctl._DATA_READINESS_DIGEST_RE.fullmatch(
+        str(receipt.get("guestActorHash") or "")
+    ) is None:
+        issues.append("Data readiness guestActorHash is not a canonical digest")
+    request_id, trace_id = _stackctl._validate_data_operation_evidence(
+        receipt.get("guestLogin"),
+        label="guestLogin",
+        expected_path="/auth/login/anonymous",
+        expected_page_id="user.login.anonymous",
+        expected_status=200,
+        issues=issues,
+    )
+    if request_id:
+        observed_request_ids.add(request_id)
+    if trace_id:
+        observed_trace_ids.add(trace_id)
 
     declared_checksum = str(receipt.get("verificationChecksum") or "")
     checksum_document = dict(receipt)
@@ -358,7 +301,7 @@ def _load_data_release_readiness(
         "homepage_recommend": (
             r"^sort=recommend&channelId=recommend&limit=[1-9][0-9]*$"
         ),
-        # 视频书唯一消费 premium_stream；consumer/commercial 都必须证明该池
+        # 视频书唯一消费 premium_stream；consumer/production 都必须证明该池
         # release-bound 非空读回（typed_video 绿不代表视频书绿）。
         "premium_stream": (
             r"^sort=recommend&channelId=premium_stream&limit=[1-9][0-9]*$"
@@ -449,15 +392,8 @@ def _load_data_release_readiness(
                 issues.append("Data readiness post API verification must be an object")
             elif (
                 post_verification.get("feedQueries") != receipt.get("feedQueries")
-                or (
-                    readiness_phase is not ReadinessPhase.RESEARCH
-                    and (
-                        post_verification.get("guestActorHash")
-                        != receipt.get("guestActorHash")
-                        or post_verification.get("guestLogin")
-                        != receipt.get("guestLogin")
-                    )
-                )
+                or post_verification.get("guestActorHash") != receipt.get("guestActorHash")
+                or post_verification.get("guestLogin") != receipt.get("guestLogin")
             ):
                 issues.append(
                     "Data readiness identity/feed operation evidence drifts from post verification"
@@ -486,40 +422,21 @@ def _load_data_release_readiness(
                     str(row.get("avatarAssetId") or "").strip()
                     for row in ready_creator_evidence
                 }
-                # DEC-031：research 私有交付不做匿名 avatar/图片取回探测。
-                # avatar 以相对 CAS key 形态闭合（probeCount=0）；图片以
-                # 匿名 401/403 拒绝探测闭合（releaseMediaProbe → researchMediaProbe）。
-                research_delivery = readiness_phase is ReadinessPhase.RESEARCH
-                if research_delivery:
-                    ready_avatar_drift = any(
-                        row.get("profileStatus") != 200
-                        or row.get("avatarProbeCount") != 0
-                        or row.get("avatarProbe") is not None
-                        or not str(row.get("avatarUrl") or "").startswith(
-                            "media/objects/sha256/"
-                        )
-                        for row in ready_creator_evidence
-                    )
-                else:
-                    ready_avatar_drift = any(
-                        row.get("profileStatus") != 200
-                        or row.get("avatarProbeCount") != 1
-                        or not isinstance(row.get("avatarProbe"), dict)
-                        or row["avatarProbe"].get("publicUrl")
-                        != row.get("avatarUrl")
-                        or row["avatarProbe"].get("status") != 200
-                        or not str(row["avatarProbe"].get("mimeType") or "").startswith(
-                            "image/"
-                        )
-                        or not isinstance(row["avatarProbe"].get("bytes"), int)
-                        or row["avatarProbe"].get("bytes", 0) <= 0
-                        or _stackctl._DATA_READINESS_DIGEST_RE.fullmatch(
-                            str(row["avatarProbe"].get("sha256") or "")
-                        )
-                        is None
-                        or row["avatarProbe"].get("hashVerified") is not True
-                        for row in ready_creator_evidence
-                    )
+                ready_avatar_drift = any(
+                    row.get("profileStatus") != 200
+                    or row.get("avatarProbeCount") != 1
+                    or not isinstance(row.get("avatarProbe"), dict)
+                    or row["avatarProbe"].get("publicUrl") != row.get("avatarUrl")
+                    or row["avatarProbe"].get("status") != 200
+                    or not str(row["avatarProbe"].get("mimeType") or "").startswith("image/")
+                    or not isinstance(row["avatarProbe"].get("bytes"), int)
+                    or row["avatarProbe"].get("bytes", 0) <= 0
+                    or _stackctl._DATA_READINESS_DIGEST_RE.fullmatch(
+                        str(row["avatarProbe"].get("sha256") or "")
+                    ) is None
+                    or row["avatarProbe"].get("hashVerified") is not True
+                    for row in ready_creator_evidence
+                )
                 if (
                     creator_refs != collections["creators"]
                     or len(avatar_asset_ids) != avatar_count
@@ -541,37 +458,19 @@ def _load_data_release_readiness(
                     issues.append(
                         "Data readiness creator avatar evidence is not release-bound"
                     )
-                if research_delivery:
-                    image_asset_ids = {
-                        str(probe.get("assetId") or "").strip()
-                        for row in post_verification.get("posts") or []
-                        if isinstance(row, dict)
-                        for probe in row.get("mediaProbes") or []
-                        if isinstance(probe, dict)
-                        and probe.get("kind") == "image"
-                        and str(probe.get("deliveryRef") or "").startswith(
-                            "media/objects/sha256/"
-                        )
-                        and probe.get("anonymousStatus") in {401, 403}
-                        and _stackctl._DATA_READINESS_DIGEST_RE.fullmatch(
-                            str(probe.get("expectedSha256") or "")
-                        )
-                        is not None
-                    }
-                else:
-                    image_asset_ids = {
-                        str(probe.get("assetId") or "").strip()
-                        for row in post_verification.get("posts") or []
-                        if isinstance(row, dict)
-                        for probe in row.get("mediaProbes") or []
-                        if isinstance(probe, dict)
-                        and probe.get("kind") == "image"
-                        and probe.get("status") == 200
-                        and str(probe.get("mimeType") or "").startswith("image/")
-                        and probe.get("bytes") == probe.get("expectedBytes")
-                        and probe.get("sha256") == probe.get("expectedSha256")
-                        and probe.get("hashVerified") is True
-                    }
+                image_asset_ids = {
+                    str(probe.get("assetId") or "").strip()
+                    for row in post_verification.get("posts") or []
+                    if isinstance(row, dict)
+                    for probe in row.get("mediaProbes") or []
+                    if isinstance(probe, dict)
+                    and probe.get("kind") == "image"
+                    and probe.get("status") == 200
+                    and str(probe.get("mimeType") or "").startswith("image/")
+                    and probe.get("bytes") == probe.get("expectedBytes")
+                    and probe.get("sha256") == probe.get("expectedSha256")
+                    and probe.get("hashVerified") is True
+                }
                 if (
                     "" in image_asset_ids
                     or len(image_asset_ids) != image_count
@@ -613,21 +512,8 @@ def _load_data_release_readiness(
             "releaseClass": receipt.get("releaseClass"),
             "productLifecycleState": receipt.get("productLifecycleState"),
         }
-        if "sourceIdentities" in receipt or "sourceIdentitySetDigest" in receipt:
-            expected_attestation["sourceIdentities"] = receipt.get(
-                "sourceIdentities"
-            )
-            expected_attestation["sourceIdentitySetDigest"] = receipt.get(
-                "sourceIdentitySetDigest"
-            )
-        else:
-            expected_attestation["sourceRevision"] = receipt.get(
-                "sourceRevision"
-            )
-            expected_attestation["sourceDigest"] = receipt.get("sourceDigest")
-            expected_attestation["entityCatalogDigest"] = receipt.get(
-                "entityCatalogDigest"
-            )
+        expected_attestation["sourceIdentities"] = receipt.get("sourceIdentities")
+        expected_attestation["sourceIdentitySetDigest"] = receipt.get("sourceIdentitySetDigest")
         if not isinstance(attestation, dict) or any(
             attestation.get(field) != expected
             for field, expected in expected_attestation.items()
@@ -647,13 +533,13 @@ def _load_data_release_lifecycle_exit(
     readiness: dict[str, Any],
     lifecycle_exit_ref: str,
 ) -> tuple[dict[str, Any], Path]:
-    """Load the commercial-only rollback/replay proof and recompute its bindings."""
+    """Load the production-only rollback/replay proof and recompute its bindings."""
     import quwoquan_ops.cli.stackctl as _stackctl
 
     ref = str(lifecycle_exit_ref or "").strip()
     if not ref:
         raise ValueError(
-            "commercial readiness requires canonical data lifecycleExitRef"
+            "production readiness requires canonical data lifecycleExitRef"
         )
     relative = Path(ref)
     if relative.is_absolute() or ".." in relative.parts:
@@ -721,17 +607,15 @@ def _load_data_release_lifecycle_exit(
     issues: list[str] = []
     if set(receipt) != expected_keys:
         issues.append("data lifecycle Exit receipt fields drift from canonical schema")
-    # Commercial verify may run on the post-lifecycle replayed import surface.
-    # In that sequencing, readiness.importRunId equals replayImportRunId while
-    # readiness.verifyRunId is the later commercial verify — not the lifecycle
-    # original consumer verify. Keep the classic original* equality for the
-    # pre-lifecycle commercial path.
+    # production 验证可绑定回放后的导入；此时 importRunId 绑定 replayImportRunId，
+    # verifyRunId 属于后续验证，不冒充生命周期原始 consumer 验证。
+    # 未回放的路径仍按 original* 精确绑定；两者都只消费 production release。
     readiness_import = str(readiness.get("importRunId") or "").strip()
     readiness_verify = str(readiness.get("verifyRunId") or "").strip()
     readiness_phase = str(readiness.get("readinessPhase") or "").strip()
     replay_import = str(receipt.get("replayImportRunId") or "").strip()
-    commercial_on_replay = (
-        readiness_phase == ReadinessPhase.COMMERCIAL.value
+    production_on_replay = (
+        readiness_phase == ReadinessPhase.PRODUCTION.value
         and readiness_import
         and readiness_import == replay_import
     )
@@ -745,10 +629,10 @@ def _load_data_release_lifecycle_exit(
         "replayManifestDigest": manifest_digest,
         "passed": True,
     }
-    if commercial_on_replay:
+    if production_on_replay:
         if not readiness_verify:
             issues.append(
-                "commercial readiness on replay import requires a non-empty verifyRunId"
+                "production readiness on replay import requires a non-empty verifyRunId"
             )
     else:
         expected_values["originalImportRunId"] = readiness_import

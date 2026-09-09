@@ -1,7 +1,10 @@
+// spec_ref: specs/feature-tree/shared-homepage-network/spec.md#dom-001
 package homepage_import_test
 
 import (
+	"crypto/sha256"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -25,15 +28,33 @@ func writeFile(t *testing.T, path string, content string) {
 
 const sourceFieldsJSON = `"primarySource":{"sourceKind":"wikipedia","sourceUrl":"https://zh.wikipedia.org/wiki/%E4%B9%9D%E5%AF%A8%E6%B2%9F","title":"九寨沟","fetchedAt":"2026-07-11T00:00:00Z","snapshotHash":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","policyRevision":"encyclopedia-primary","sourceUseMode":"licensed_adaptation"},"sourceUrls":["https://zh.wikipedia.org/wiki/%E4%B9%9D%E5%AF%A8%E6%B2%9F"]`
 
+func writeEntityManifest(t *testing.T, dir, ref, fields string) {
+	t.Helper()
+	var manifest map[string]any
+	if err := json.Unmarshal([]byte(fields), &manifest); err != nil {
+		t.Fatal(err)
+	}
+	manifest["schema"] = "quwoquan_data.entity_object"
+	manifest["contentType"] = "homepage"
+	manifest["entityRef"] = "/entity/" + ref
+	manifest["assets"] = []any{}
+	raw, err := json.Marshal(manifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, filepath.Join(dir, "manifest.json"), string(raw))
+}
+
 func seedPublishEntity(t *testing.T, root string, ref string, withMediaBinding bool) {
 	t.Helper()
 	dir := filepath.Join(root, "entities", filepath.FromSlash(ref))
-	writeFile(t, filepath.Join(dir, "_entity.json"),
-		`{"label":"九寨沟","domain":"地点","type":"景区","sourceTaskId":"旅行/试点",`+
+	title := filepath.Base(dir)
+	writeEntityManifest(t, dir, ref,
+		`{"label":"`+title+`","domain":"地点","type":"景区","sourceTaskId":"旅行/试点",`+
 			`"tagRefs":["Entity/地点/景区/5A景区","Topic/地理/行政区/中国/四川省/阿坝藏族羌族自治州/九寨沟县"],`+
 			`"geoTagRef":"Topic/地理/行政区/中国/四川省/阿坝藏族羌族自治州/九寨沟县",`+
 			sourceFieldsJSON+`}`)
-	writeSemanticHomepagePackage(t, dir, "九寨沟", withMediaBinding)
+	writeSemanticHomepagePackage(t, dir, title, withMediaBinding)
 }
 
 func writeSemanticHomepagePackage(t *testing.T, dir string, title string, withMediaBinding bool) {
@@ -41,18 +62,50 @@ func writeSemanticHomepagePackage(t *testing.T, dir string, title string, withMe
 	assetID := title + "_cover_树正寨_42_a1b2c3d4"
 	writeFile(t, filepath.Join(dir, "page.md"),
 		"---\ncoverImage: asset://"+assetID+"\n---\n\n# "+title+"\n\n## 概况\n\n真实正文。\n")
+	assetBytes := "本地 fixture 配图：" + assetID
+	assetPath := "assets/cover.jpg"
 	asset := map[string]any{
-		"assetId":   assetID,
-		"caption":   "树正寨",
-		"role":      "cover",
-		"sourceRef": "sources/九寨沟__encyclopedia__2489d9dc/source.md",
+		"assetId": assetID, "caption": "树正寨", "role": "cover",
+		"path": assetPath, "bytes": len(assetBytes),
+		"sourceRefs": []string{"sources/homepage-cover/source.json"},
 	}
 	if withMediaBinding {
 		asset["kind"] = "image"
-		asset["sha256"] = "sha256:" + strings.Repeat("a", 64)
+		asset["sha256"] = fmt.Sprintf("sha256:%x", sha256.Sum256([]byte(assetBytes)))
 	}
-	manifest, _ := json.Marshal(map[string]any{"executionId": "20260715--travel-homepage-coverage--cn-sichuan--m1-001", "assets": []any{asset}})
-	writeFile(t, filepath.Join(dir, "manifest.json"), string(manifest))
+	writeFile(t, filepath.Join(dir, assetPath), assetBytes)
+	evidence := "fixture 取得时原始来源记录"
+	source := map[string]any{
+		"schema": "quwoquan_data.publish_source", "sourceId": "homepage-cover",
+		"sourceUrl": "https://source.example.com/homepage-cover", "sourceUseMode": "licensed_adaptation",
+		"fetchedAt": "2026-09-09T00:00:00Z", "metadata": map[string]any{"license": "fixture permission"},
+		"assets": []any{map[string]any{"assetId": assetID, "rightsAuditStatus": "verified", "distributionDecision": "production_allowed"}},
+		"evidence": []any{map[string]any{
+			"path": "evidence.html", "sha256": fmt.Sprintf("sha256:%x", sha256.Sum256([]byte(evidence))),
+			"bytes": len(evidence), "kind": "source_snapshot",
+		}},
+	}
+	sourceRaw, err := json.Marshal(source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, filepath.Join(dir, "sources/homepage-cover/source.json"), string(sourceRaw))
+	writeFile(t, filepath.Join(dir, "sources/homepage-cover/evidence.html"), evidence)
+	raw, err := os.ReadFile(filepath.Join(dir, "manifest.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var manifest map[string]any
+	if err := json.Unmarshal(raw, &manifest); err != nil {
+		t.Fatal(err)
+	}
+	manifest["executionId"] = "20260715--travel-homepage-coverage--cn-sichuan--m1-001"
+	manifest["assets"] = []any{asset}
+	raw, err = json.Marshal(manifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, filepath.Join(dir, "manifest.json"), string(raw))
 	// CAS closure is intentionally non-semantic. The importer must never use it
 	// to decide asset roles or captions.
 	assetRef := map[string]any{"assetId": assetID}
@@ -62,7 +115,14 @@ func writeSemanticHomepagePackage(t *testing.T, dir string, title string, withMe
 
 func releaseMediaAuthority(t *testing.T, root string) map[string]runtimemedia.ReleaseMediaAsset {
 	t.Helper()
-	assets := map[string]runtimemedia.ReleaseMediaAsset{}
+	assets := []runtimemedia.ReleaseMediaAsset{}
+	releaseRoot := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(releaseRoot, "payload"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.CopyFS(filepath.Join(releaseRoot, "payload", "objects"), os.DirFS(root)); err != nil {
+		t.Fatal(err)
+	}
 	err := filepath.WalkDir(filepath.Join(root, "entities"), func(path string, entry os.DirEntry, err error) error {
 		if err != nil || entry.IsDir() || entry.Name() != "manifest.json" {
 			return err
@@ -76,6 +136,7 @@ func releaseMediaAuthority(t *testing.T, root string) map[string]runtimemedia.Re
 				AssetID string `json:"assetId"`
 				Kind    string `json:"kind"`
 				SHA256  string `json:"sha256"`
+				Bytes   int64  `json:"bytes"`
 			} `json:"assets"`
 		}
 		if err := json.Unmarshal(raw, &manifest); err != nil {
@@ -90,7 +151,7 @@ func releaseMediaAuthority(t *testing.T, root string) map[string]runtimemedia.Re
 			if asset.AssetID == "" || asset.Kind == "" || asset.SHA256 == "" {
 				continue
 			}
-			assets[asset.AssetID] = runtimemedia.ReleaseMediaAsset{
+			assets = append(assets, runtimemedia.ReleaseMediaAsset{
 				AssetID:     asset.AssetID,
 				Kind:        asset.Kind,
 				Version:     1,
@@ -99,19 +160,31 @@ func releaseMediaAuthority(t *testing.T, root string) map[string]runtimemedia.Re
 					asset.Kind, asset.AssetID, 1, "image/jpeg",
 				),
 				SHA256:    asset.SHA256,
-				Bytes:     1,
+				Bytes:     asset.Bytes,
 				OwnerRefs: []string{"entities/" + filepath.ToSlash(entityRef)},
 				RightsSnapshotRefs: []string{
-					"objects/entities/" + filepath.ToSlash(entityRef) + "/rights_snapshots/asset.json",
+					"objects/entities/" + filepath.ToSlash(entityRef) + "/sources/homepage-cover/source.json",
 				},
-			}
+			})
 		}
 		return nil
 	})
 	if err != nil {
 		t.Fatalf("build release media authority: %v", err)
 	}
-	return assets
+	raw, err := json.Marshal(map[string]any{
+		"schema": "quwoquan_data.release_media_manifest", "releaseId": "homepage-fixture", "sourceOwner": "qwq_data",
+		"assets": assets, "issues": []string{}, "counts": map[string]int{"assets": len(assets), "issues": 0},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, filepath.Join(releaseRoot, "payload", "media_manifest.json"), string(raw))
+	authority, err := runtimemedia.LoadReleaseMediaAssets(releaseRoot, "homepage-fixture", "production")
+	if err != nil {
+		t.Fatalf("load real source-bound release media authority: %v", err)
+	}
+	return authority
 }
 
 func loadHomepageProjections(
@@ -121,13 +194,13 @@ func loadHomepageProjections(
 	imageBase string,
 ) ([]application.ImportedHomepageInput, []string, error) {
 	t.Helper()
-	// 既有用例断言 canonical public slice URL，对应 commercial release class。
+	// 既有用例断言 production release 的 canonical public slice URL。
 	return homepageimport.LoadHomepageProjections(
 		root,
 		filter,
 		releaseMediaAuthority(t, root),
 		runtimemedia.MediaDeliveryBases{Image: imageBase},
-		"commercial",
+		"production",
 	)
 }
 
@@ -163,11 +236,11 @@ func TestLoadHomepageProjectionsMapsPageAndAssets(t *testing.T) {
 	if asset.Role != "cover" || asset.Caption != "树正寨" {
 		t.Fatalf("asset role/caption mismatch: %+v", asset)
 	}
-	// WP3 统一打标：_entity.json.tagRefs 必须透传为 categoryTags 投影输入。
+	// WP3 统一打标：manifest.json.tagRefs 必须透传为 categoryTags 投影输入。
 	if len(got.CategoryTags) != 2 ||
 		got.CategoryTags[0] != "Entity/地点/景区/5A景区" ||
 		got.CategoryTags[1] != "Topic/地理/行政区/中国/四川省/阿坝藏族羌族自治州/九寨沟县" {
-		t.Fatalf("categoryTags must carry _entity.json tagRefs, got %+v", got.CategoryTags)
+		t.Fatalf("categoryTags must carry manifest.json tagRefs, got %+v", got.CategoryTags)
 	}
 	if got.PrimarySource == nil || got.PrimarySource.SourceKind != "wikipedia" ||
 		len(got.SourceURLs) != 1 || got.SourceURLs[0] != got.PrimarySource.SourceURL {
@@ -200,7 +273,7 @@ func TestLoadHomepageProjectionsIgnoresExecutionIdentity(t *testing.T) {
 func TestLoadHomepageProjectionsRejectsUnsafePublicSourceURL(t *testing.T) {
 	root := t.TempDir()
 	dir := filepath.Join(root, "entities", "地点", "景区", "危险来源")
-	writeFile(t, filepath.Join(dir, "_entity.json"),
+	writeEntityManifest(t, dir, "地点/景区/危险来源",
 		`{"label":"危险来源","domain":"地点","type":"景区","primarySource":`+
 			`{"sourceKind":"wikipedia","sourceUrl":"http://127.0.0.1/source","policyRevision":"encyclopedia-primary"},`+
 			`"sourceUrls":["http://127.0.0.1/source"]}`)
@@ -231,7 +304,7 @@ func TestLoadHomepageProjectionsMapsPilotScopePlaceTypes(t *testing.T) {
 	}
 	for etype := range expected {
 		dir := filepath.Join(root, "entities", "地点", etype, "样例"+etype)
-		writeFile(t, filepath.Join(dir, "_entity.json"),
+		writeEntityManifest(t, dir, "地点/"+etype+"/样例"+etype,
 			`{"label":"样例`+etype+`","domain":"地点","type":"`+etype+`",`+sourceFieldsJSON+`}`)
 		writeSemanticHomepagePackage(t, dir, "样例"+etype, true)
 	}
@@ -257,7 +330,7 @@ func TestLoadHomepageProjectionsMapsPilotScopePlaceTypes(t *testing.T) {
 func TestLoadHomepageProjectionsKeepsSchoolDistinctFromUniversity(t *testing.T) {
 	root := t.TempDir()
 	dir := filepath.Join(root, "entities", "机构", "学校", "新东方学校")
-	writeFile(t, filepath.Join(dir, "_entity.json"),
+	writeEntityManifest(t, dir, "机构/学校/新东方学校",
 		`{"label":"新东方学校","domain":"机构","type":"学校",`+sourceFieldsJSON+`}`)
 	writeSemanticHomepagePackage(t, dir, "新东方学校", true)
 
@@ -324,7 +397,7 @@ func TestLoadHomepageProjectionsRejectsObjectKeyAndIdentityDrift(t *testing.T) {
 			mutate: func(raw string) string {
 				return strings.Replace(
 					raw,
-					`"sha256":"sha256:`+strings.Repeat("a", 64)+`"`,
+					`"sha256":"`+fmt.Sprintf("sha256:%x", sha256.Sum256([]byte("本地 fixture 配图：九寨沟_cover_树正寨_42_a1b2c3d4")))+`"`,
 					`"sha256":"sha256:`+strings.Repeat("b", 64)+`"`,
 					1,
 				)
@@ -354,7 +427,7 @@ func TestLoadHomepageProjectionsRejectsObjectKeyAndIdentityDrift(t *testing.T) {
 				nil,
 				authority,
 				runtimemedia.MediaDeliveryBases{Image: "https://image.example.com"},
-				"commercial",
+				"production",
 			)
 			if err == nil || !strings.Contains(err.Error(), test.errorMarker) {
 				t.Fatalf("%s drift must fail closed, err=%v", test.name, err)
@@ -380,7 +453,7 @@ func TestLoadHomepageProjectionsRejectsOwnerAndRightsDrift(t *testing.T) {
 			name: "rights",
 			mutate: func(asset *runtimemedia.ReleaseMediaAsset) {
 				asset.RightsSnapshotRefs =
-					[]string{"objects/entities/地点/景区/其他/rights_snapshots/asset.json"}
+					[]string{"objects/entities/地点/景区/其他/sources/homepage-cover/source.json"}
 			},
 			errorMarker: "rightsSnapshotRefs",
 		},
@@ -398,7 +471,7 @@ func TestLoadHomepageProjectionsRejectsOwnerAndRightsDrift(t *testing.T) {
 				nil,
 				authority,
 				runtimemedia.MediaDeliveryBases{Image: "https://image.example.com"},
-				"commercial",
+				"production",
 			)
 			if err == nil || !strings.Contains(err.Error(), test.errorMarker) {
 				t.Fatalf("%s drift must fail closed, err=%v", test.name, err)
@@ -448,10 +521,10 @@ func TestLoadHomepageProjectionsAcceptsProducerDetailRoleWithoutCoverFrontmatter
 func TestLoadHomepageProjectionsAcceptsPrimarySourceAnywhereInSourceURLs(t *testing.T) {
 	root := t.TempDir()
 	seedPublishEntity(t, root, "地点/景区/九寨沟", true)
-	entityPath := filepath.Join(root, "entities", "地点", "景区", "九寨沟", "_entity.json")
+	entityPath := filepath.Join(root, "entities", "地点", "景区", "九寨沟", "manifest.json")
 	raw, err := os.ReadFile(entityPath)
 	if err != nil {
-		t.Fatalf("read _entity.json: %v", err)
+		t.Fatalf("read manifest.json: %v", err)
 	}
 	reordered := strings.Replace(
 		string(raw),
@@ -477,7 +550,7 @@ func TestLoadHomepageProjectionsAcceptsTextOnlyHomepage(t *testing.T) {
 	root := t.TempDir()
 	seedPublishEntity(t, root, "地点/景区/九寨沟", false)
 	dir := filepath.Join(root, "entities", "地点", "景区", "九寨沟")
-	writeFile(t, filepath.Join(dir, "manifest.json"), `{"executionId":"20260906--travel-homepage--text-only-001","assets":[],"publishMediaMode":"text_only"}`)
+	writeEntityManifest(t, dir, "地点/景区/九寨沟", `{"label":"九寨沟","domain":"地点","type":"景区","executionId":"20260906--travel-homepage--text-only-001","publishMediaMode":"text_only",`+sourceFieldsJSON+`}`)
 	writeFile(t, filepath.Join(dir, "asset.refs.json"), `{"assets":[]}`)
 	writeFile(t, filepath.Join(dir, "page.md"), "# 九寨沟\n\n九寨沟位于四川阿坝。\n\n## 主要看点\n\n真实正文。\n")
 	inputs, _, err := loadHomepageProjections(t, root, nil, "https://media.example.com")
@@ -519,7 +592,7 @@ func TestLoadHomepageProjectionsHonorsSampleBundleFilter(t *testing.T) {
 func TestLoadHomepageProjectionsSkipsUnknownEntityType(t *testing.T) {
 	root := t.TempDir()
 	dir := filepath.Join(root, "entities", "食物", "小吃", "钟水饺")
-	writeFile(t, filepath.Join(dir, "_entity.json"), `{"label":"钟水饺","domain":"食物","type":"小吃",`+sourceFieldsJSON+`}`)
+	writeEntityManifest(t, dir, "食物/小吃/钟水饺", `{"label":"钟水饺","domain":"食物","type":"小吃",`+sourceFieldsJSON+`}`)
 	writeFile(t, filepath.Join(dir, "page.md"), "# 钟水饺\n")
 	inputs, issues, err := loadHomepageProjections(t, root, nil, "")
 	if err != nil {

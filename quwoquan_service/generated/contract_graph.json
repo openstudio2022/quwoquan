@@ -23102,92 +23102,6 @@
       }
     },
     {
-      "id": "content.post.GetResearchReleaseReadback",
-      "localId": "GetResearchReleaseReadback",
-      "domain": "content",
-      "objectId": "content.post",
-      "method": "GET",
-      "pathTemplate": "/content/research/readback",
-      "kind": "query",
-      "kindExplicit": true,
-      "facet": "ResearchReleaseReadbackQueryFacet",
-      "facadeMethod": "getResearchReleaseReadback",
-      "reader": "ActiveSupplyReader",
-      "slice": "ResearchReleaseReadbackView",
-      "actorRequirement": "account",
-      "requestEntity": "ResearchReleaseReadbackQuery",
-      "requestBodyKind": "none",
-      "transport": "json",
-      "requestBindings": {
-        "header": [
-          {
-            "name": "X-Research-Identity-Attestation",
-            "field": "researchIdentityAttestation",
-            "required": true
-          }
-        ]
-      },
-      "responseEntity": "ResearchReleaseReadbackView",
-      "responseBody": "ResearchReleaseReadbackView",
-      "responseBodyKind": "object",
-      "sourcePath": "content/content/post/operations.yaml",
-      "security": {
-        "anonymous_policy": "deny",
-        "auth_mode": "required",
-        "principal": "owner",
-        "token_transport": "bearer",
-        "visibility": "private"
-      },
-      "authMode": "required",
-      "principal": "account",
-      "ownershipPolicy": "authenticated_account_research_attestation",
-      "commercial": {
-        "status": "blocked",
-        "explicit": true,
-        "blockReason": "research-only internal App readback is never a commercial content surface",
-        "gapId": "CONTENT_POST_RESEARCH_ONLY",
-        "targetStory": "multi-carrier-release"
-      },
-      "reliability": {
-        "timeoutMilliseconds": 800,
-        "cancellation": "supported",
-        "retryMode": "none",
-        "maxAttempts": 1,
-        "idempotency": "none"
-      },
-      "concurrency": {},
-      "errorCodes": [
-        "CONTENT.USER.unauthorized",
-        "CONTENT.USER.research_identity_invalid",
-        "CONTENT.SYSTEM.research_release_state_unavailable",
-        "CONTENT.SYSTEM.required_dependency_unavailable",
-        "CONTENT.SYSTEM.internal_error"
-      ],
-      "privacy": {
-        "requestClassification": "SECRET",
-        "responseClassification": "INTERNAL",
-        "logPolicy": "none"
-      },
-      "telemetry": {
-        "metric": "content_research_release_readback",
-        "trace": true,
-        "attributes": [
-          "environment",
-          "outcome",
-          "error_code"
-        ]
-      },
-      "slo": {
-        "latencyP95Milliseconds": 500,
-        "availabilityPercent": 99.9
-      },
-      "clientContract": {
-        "dartImport": "../content/content_operation_contracts.g.dart",
-        "responseType": "ResearchReleaseReadbackView",
-        "responseDecoder": "decodeResearchReleaseReadbackView"
-      }
-    },
-    {
       "id": "content.post.ListAuthorImpactEvidence",
       "localId": "ListAuthorImpactEvidence",
       "domain": "content",
@@ -40638,86 +40552,6 @@
       },
       "slo": {
         "latencyP95Milliseconds": 500,
-        "availabilityPercent": 99.9
-      }
-    },
-    {
-      "id": "user.account_session.GetResearchSessionAttestation",
-      "localId": "GetResearchSessionAttestation",
-      "domain": "user",
-      "objectId": "user.account_session",
-      "method": "GET",
-      "pathTemplate": "/auth/research/session/attestation",
-      "kind": "query",
-      "kindExplicit": true,
-      "facet": "ResearchSessionQueryFacade",
-      "facadeMethod": "getResearchSessionAttestation",
-      "reader": "ResearchSessionAttestationReader",
-      "slice": "ResearchSessionAttestationView",
-      "actorRequirement": "account",
-      "requestEntity": "ResearchSessionAttestationQuery",
-      "requestBodyKind": "none",
-      "transport": "json",
-      "requestBindings": {
-        "header": [
-          {
-            "name": "X-Research-Identity-Attestation",
-            "field": "researchIdentityAttestation",
-            "required": true
-          }
-        ]
-      },
-      "responseEntity": "ResearchSessionAttestationView",
-      "responseBody": "ResearchSessionAttestationView",
-      "responseBodyKind": "object",
-      "sourcePath": "user/account/account_session/operations.yaml",
-      "security": {
-        "anonymous_policy": "deny",
-        "auth_mode": "required",
-        "principal": "owner",
-        "token_transport": "bearer",
-        "visibility": "private"
-      },
-      "authMode": "required",
-      "principal": "account",
-      "ownershipPolicy": "authenticated_account_research_attestation",
-      "commercial": {
-        "status": "blocked",
-        "explicit": true,
-        "blockReason": "research-only identity attestation readback is never a commercial session surface",
-        "gapId": "USER_ACCOUNT_SESSION_RESEARCH_ONLY",
-        "targetStory": "multi-carrier-release"
-      },
-      "reliability": {
-        "timeoutMilliseconds": 800,
-        "cancellation": "supported",
-        "retryMode": "none",
-        "maxAttempts": 1,
-        "idempotency": "none"
-      },
-      "concurrency": {},
-      "errorCodes": [
-        "USER.USER.unauthorized",
-        "USER.USER.research_identity_invalid",
-        "USER.AUTH.account_security_unavailable",
-        "USER.SYSTEM.internal_error"
-      ],
-      "privacy": {
-        "requestClassification": "SECRET",
-        "responseClassification": "SECRET",
-        "logPolicy": "none"
-      },
-      "telemetry": {
-        "metric": "user_research_session_attestation_readback",
-        "trace": true,
-        "attributes": [
-          "environment",
-          "outcome",
-          "error_code"
-        ]
-      },
-      "slo": {
-        "latencyP95Milliseconds": 800,
         "availabilityPercent": 99.9
       }
     },
@@ -79059,50 +78893,6 @@
     },
     {
       "objectId": "content.post",
-      "specRef": "specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-002",
-      "caseId": "get-research-release-readback-app-local",
-      "producer": "app",
-      "layer": "local_contract",
-      "target": {
-        "kind": "operation",
-        "id": "content.post.GetResearchReleaseReadback"
-      },
-      "runnerSourcePath": "quwoquan_app/test/local_contract/service/content_service/content/post/research_release_readback__security__local_contract_test.dart",
-      "executions": [
-        {
-          "environment": "alpha",
-          "platform": "app",
-          "deviceClass": "runner",
-          "provider": "none",
-          "digestBinding": "candidate"
-        }
-      ],
-      "sourcePath": "content/content/post/operations.yaml"
-    },
-    {
-      "objectId": "content.post",
-      "specRef": "specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-002",
-      "caseId": "get-research-release-readback-local",
-      "producer": "service",
-      "layer": "local_contract",
-      "target": {
-        "kind": "operation",
-        "id": "content.post.GetResearchReleaseReadback"
-      },
-      "runnerSourcePath": "quwoquan_service/services/content-service/tests/local_contract/content/post/application/research_release_readback__security__local_contract_test.go",
-      "executions": [
-        {
-          "environment": "alpha",
-          "platform": "service",
-          "deviceClass": "runner",
-          "provider": "none",
-          "digestBinding": "candidate"
-        }
-      ],
-      "sourcePath": "content/content/post/operations.yaml"
-    },
-    {
-      "objectId": "content.post",
       "specRef": "specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/spec.md#sit-005",
       "caseId": "list-author-impact-evidence-api",
       "producer": "service",
@@ -93979,28 +93769,6 @@
           "platform": "ios",
           "deviceClass": "physical",
           "provider": "first-party-https",
-          "digestBinding": "candidate"
-        }
-      ],
-      "sourcePath": "user/account/account_session/operations.yaml"
-    },
-    {
-      "objectId": "user.account_session",
-      "specRef": "specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-002",
-      "caseId": "get-research-session-attestation-local",
-      "producer": "service",
-      "layer": "local_contract",
-      "target": {
-        "kind": "operation",
-        "id": "user.account_session.GetResearchSessionAttestation"
-      },
-      "runnerSourcePath": "quwoquan_service/services/user-service/tests/local_contract/account/account_session/research_session_attestation__security__local_contract_test.go",
-      "executions": [
-        {
-          "environment": "alpha",
-          "platform": "service",
-          "deviceClass": "runner",
-          "provider": "none",
           "digestBinding": "candidate"
         }
       ],
@@ -111519,7 +111287,7 @@
           },
           {
             "path": "quwoquan_service/services/content-service/internal/media/media_asset/domain/ports/original_access_reader.go",
-            "sha256": "e98197d4d7e327a461345e0d1030995c682ba7261dbf7fc3cf87bf2ef9aaedb5"
+            "sha256": "5d0464ee777635dd541472b49d03fdc62c0c46db47c97d41b2391232574dc85b"
           }
         ],
         "store": [
@@ -111577,7 +111345,7 @@
           },
           {
             "path": "quwoquan_service/services/content-service/internal/media/media_asset/infrastructure/persistence/mongo_asset.go",
-            "sha256": "b948dec00916b7ee958615950c856ef8bab68f1a8be0fefeb35fd204adc30d5d"
+            "sha256": "22e302d3e2202829288c2d1b2d3aa6119ddc2812e5bf0088c9348d581678acdc"
           },
           {
             "path": "quwoquan_service/services/content-service/internal/media/media_asset/infrastructure/persistence/mongo_asset_outbox_delivery.go",
@@ -111722,7 +111490,7 @@
           },
           {
             "path": "quwoquan_app/lib/service/content_service/media/media_asset/domain/work_browser_view_data.dart",
-            "sha256": "5b831ebeacdf9ef79efc501b0160ba86259accc8e336fcec830cf69252729c8b"
+            "sha256": "43aeb2820576eeef9a7f1aa27ea14e28989c4f9f9bfe89c197f7660ac25ab18a"
           },
           {
             "path": "quwoquan_app/lib/service/content_service/media/media_asset/domain/works_viewer_state_budget.dart",
@@ -111826,7 +111594,7 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/media/media_asset/image_book_canvas_widget__local_contract_test.dart",
-            "sha256": "152e5b58f8a9f96863d3ce78b1f009a6c92255fae660a1aad69e5208550a23e5"
+            "sha256": "73dde5388215794bbdecca14021daf5edf412b0963ac1f7e184fca8c1a3bbd2e"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/media/media_asset/immersive_engagement_bar_widget__local_contract_test.dart",
@@ -111922,7 +111690,7 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/media/media_asset/video_player_widget__failure_experience__local_contract_test.dart",
-            "sha256": "b58a9c66b8c3aa9293a15e9111c57d39bf9b5cd4b374ab46c90487d4880a1c8b"
+            "sha256": "d8a4deaf3b8367c6a1751f9bc792d4d6db066b1c60b01660efd308faccb21306"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/media/media_asset/video_preview_track_remote__local_contract_test.dart",
@@ -111934,7 +111702,7 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/media/media_asset/work_browser_view_data__local_contract_test.dart",
-            "sha256": "2e1561791aa691cb734a076ba8b5d1a5412913fa1fdf8627b287ae1f6d9eae49"
+            "sha256": "c78e023818a24024dd3961efe1ee4d1e42e8daa61a24a7b2f20d193ef8ceb785"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/media/media_asset/works_immersive_video_playback_journey__local_contract_test.dart",
@@ -111946,7 +111714,7 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/media/media_asset/works_immersive_viewer_widget__local_contract_test.dart",
-            "sha256": "229900f3651d5a1eac2af09851ed236107e470e43bfec33089c94268cbc12288"
+            "sha256": "8f237b610b2b27b3ee5809bfdc28eb6e8c6f878acae20b6e606f927f11d34244"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/media/media_asset/works_immersive_viewer_wishlist__local_contract_test.dart",
@@ -112101,7 +111869,7 @@
         "domain": [
           {
             "path": "quwoquan_service/services/content-service/internal/media/media_original_access_fact/domain/model/fact.go",
-            "sha256": "effbba54a0d8133fc263d61b0b11d806f228896038ea6f0ef1d4d2f32d7b387d"
+            "sha256": "96df6711d1008287246da10c3baeb713f1348b55bb49061109cb74ffe68c810e"
           },
           {
             "path": "quwoquan_service/services/content-service/internal/media/media_original_access_fact/domain/ports/store.go",
@@ -112593,13 +112361,13 @@
           },
           {
             "path": "quwoquan_service/services/content-service/internal/media/original_access_quota/application/service.go",
-            "sha256": "b808cb10bc3f4060df046e5cffc59b5f53fb30b363c3950d3f7d366b592c5554"
+            "sha256": "1fa592c2b9fd88acdc74276c6470b4481b848136828757816a2b10a5b7fc2597"
           }
         ],
         "transport": [
           {
             "path": "quwoquan_service/services/content-service/internal/media/original_access_quota/adapters/inbound/http/handler.go",
-            "sha256": "1d9ea851f97f02a3cbe7674abd5072cfbf69ccb61662b5c1bfa2665b5782c563"
+            "sha256": "87b952a3c0dc853a70cb1e06f4c3b8c47486bb3ecb0f53c4b92a9221c13e1e21"
           }
         ],
         "localContract": [
@@ -112609,7 +112377,7 @@
           },
           {
             "path": "quwoquan_service/services/content-service/tests/local_contract/media/original_access_quota/application/research_reserve__local_contract_test.go",
-            "sha256": "4e6e0d55a45e0a09d5eee44f73944e65731d8d14d370dde518bcf0ba706e5ace"
+            "sha256": "963905eb3a2c68288fc56ff24efcbaff2fbdab6ac0d8c2b48e4b443978dbae12"
           },
           {
             "path": "quwoquan_service/services/content-service/tests/local_contract/media/original_access_quota/application/service__local_contract_test.go",
@@ -112837,7 +112605,6 @@
         "content.post.GetPostArticleRenderAssets",
         "content.post.GetPostMedia",
         "content.post.GetPostSemantic",
-        "content.post.GetResearchReleaseReadback",
         "content.post.ListAuthorImpactEvidence",
         "content.post.ListPostsByGathering",
         "content.post.ListUserPosts",
@@ -112849,7 +112616,7 @@
         "domain": [
           {
             "path": "quwoquan_service/services/content-service/internal/content/post/domain/ports/active_supply.go",
-            "sha256": "0a407e8992bfb467af0a2b69c2b328f4f641095a4bdf67826353b09b8764e65a"
+            "sha256": "568fa8a23d68b5a4f8bc6ca73b14f08fecfb550eeb65e2a7394756aa5cd441dd"
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/post/domain/ports/aggregate_store.go",
@@ -112857,7 +112624,7 @@
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/post/domain/ports/gathering_query.go",
-            "sha256": "c81e5271c73c0b13fc886fe0d1b2a0935f82d1aa3aa07cd5e0f33ed50ad66c22"
+            "sha256": "d1e02fdcb51e323283fc7287ae5a5daa854f328d60814a96c6fc65e62c8c3456"
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/post/domain/ports/gathering_reference.go",
@@ -112869,7 +112636,7 @@
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/post/domain/ports/query.go",
-            "sha256": "0dea9c255f60e650639a21ea2c98e11ebbf96b9a0f49ee6f6f74635ad9fc21bc"
+            "sha256": "7300c3a93a269b542f8279f6dff6f80c2714d9b83acd12313a598193506ce8a3"
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/post/domain/semantic/mentions.go",
@@ -112943,7 +112710,7 @@
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/post/infrastructure/persistence/active_supply_snapshot_cache.go",
-            "sha256": "97dfcd56a4420c28eb12cebf61749338e3904a154ae1a281da767453ce759815"
+            "sha256": "95e4f7258071c36cd9160d913adb33078cdd0dc391db8718e41e5fe1eb5ba9c7"
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/post/infrastructure/persistence/mongo_active_supply_reader.go",
@@ -112960,10 +112727,6 @@
           {
             "path": "quwoquan_service/services/content-service/internal/content/post/infrastructure/persistence/mongo_post_store.go",
             "sha256": "67b5c39f0ab0c170ab657a525c8ba23c132cae0a31c5d20820e950d6bf8db5d8"
-          },
-          {
-            "path": "quwoquan_service/services/content-service/internal/content/post/infrastructure/persistence/mongo_research_release_reader.go",
-            "sha256": "d166d86c0835eca8cb210a1a4d0392b22e0807e4e2490ff2439424c06b81d453"
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/post/infrastructure/persistence/post_store.go",
@@ -113046,20 +112809,28 @@
             "sha256": "788fe871c82ecaeec8d1c80d6d37a48d447b1d170d3aaec91e929ca63004e2ec"
           },
           {
+            "path": "quwoquan_service/services/content-service/internal/content/post/infrastructure/releaseimport/entity_mentions.go",
+            "sha256": "b47747fb7881444f9691fbfa3c7251fd2ba0f4e70beaeee0786364ff492137e2"
+          },
+          {
+            "path": "quwoquan_service/services/content-service/internal/content/post/infrastructure/releaseimport/entity_mentions_receipt.go",
+            "sha256": "a92d01abc37a41b1f3e59e7acd59211091aacb1bc909fa3d1b1fde82ea199a06"
+          },
+          {
             "path": "quwoquan_service/services/content-service/internal/content/post/infrastructure/releaseimport/legacy_release_state_migration.go",
             "sha256": "165bdde736c39095fed60dcf9b5315f64d60ae54b959e9b639c04f4f5b02e191"
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/post/infrastructure/releaseimport/loader.go",
-            "sha256": "ee934902bce13afbb247f4f0dae7e0061c3acc2b13ddb1f1111f2964601349e7"
+            "sha256": "5eae1d5f29e671c41a96fbf774ce059e7a6300ebf8c53b51b651acd495e30290"
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/post/infrastructure/releaseimport/post_manifest_validation.go",
-            "sha256": "0fcabbf06e9f0e856e7d5733589c829b026bfe74ded9eb3ce470e3d09e7d4258"
+            "sha256": "a6976f25a9629c1ba61ece986e19eaae3f05c94e7e533fcaeb8588f19f4e41cf"
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/post/infrastructure/releaseimport/release_control.go",
-            "sha256": "4c947f756f9e45df916d375223bb878f689124a9810bd17ab31bc016d5338941"
+            "sha256": "fa9e3293d4b9ef8e072c03a707978916e52dae4389be5c56c043b3abf5070e74"
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/post/infrastructure/releaseimport/release_stage_receipts.go",
@@ -113067,15 +112838,15 @@
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/post/infrastructure/releaseimport/runtime.go",
-            "sha256": "e96b58954b30fc8141fa4d0959256e2974bebd8ef93a92c9a5c2cc91087be9c5"
+            "sha256": "45152c93a472a4b4114111e8f7b7970256278a2767cbb93313f808c2340e472b"
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/post/infrastructure/releaseimport/runtime_discovery_feed.go",
-            "sha256": "3c4a94095ae1e5bb7d23fe981da8613615bdabadaf6e2bce1ef5a7be35da6eb2"
+            "sha256": "e7a199b2bebd2c8c18eb6062ca1f1aca2a7a0017f35921067dff6a2d4332e9b5"
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/post/infrastructure/releaseimport/runtime_media_assets.go",
-            "sha256": "e53d5a320a6312724c82bd1ff955c0069786cb5a5084bc10e6e62bc5699c28ff"
+            "sha256": "490406a2dcb76efcc32006ad4995e527eb30e4bc19cb32bdbc04276ea933abcf"
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/post/infrastructure/releaseimport/runtime_outbox.go",
@@ -113182,7 +112953,7 @@
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/post/application/feed/feed_service.go",
-            "sha256": "77306637f623e9b1086074836696b0eeaef89437e87f6077ae5fd4d72a9657c4"
+            "sha256": "f03ae50d578c4c3575acee0e76b8bbfcf83f8cf4b106083de751491abe007ea8"
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/post/application/feed/ranked_recommendation_support.go",
@@ -113278,7 +113049,7 @@
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/post/application/post_value_objects.go",
-            "sha256": "ad9f068f10b6dc76a4ecd51a2e4ba42822cadc60df77f9edeecd6bebc6a2fbf2"
+            "sha256": "efa63bb6b9e2daf3dc065cadd5ce94eb8f4a8fc0da6fb9aafc4532703584d084"
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/post/application/public/active_release_fence.go",
@@ -113286,11 +113057,7 @@
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/post/application/query_facade.go",
-            "sha256": "69b5f239fb4c22cada2ff5898f16ea1662f7efc18b8cfea11eaa6f95834eaf22"
-          },
-          {
-            "path": "quwoquan_service/services/content-service/internal/content/post/application/research_release_readback.go",
-            "sha256": "79d8ddcf0847fc346189be990b1385405872f9797d7011827d5ac6d9608f46ac"
+            "sha256": "547e2d975a98fd81b6a10935b67346f2db9651a051c78fe4d1df3d7d6c731066"
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/post/application/searchprojection/place_search_projection.go",
@@ -113304,15 +113071,15 @@
         "transport": [
           {
             "path": "quwoquan_service/services/content-service/internal/content/post/adapters/inbound/graphql/internal_persisted_handler.go",
-            "sha256": "46c32ed696135f6e411f9f6e7eba6ea9e24659cb17d01372669e1f90ab47f3d2"
+            "sha256": "bc4ef08e6036eecc882af9b0899fc75b33d1f88ab4ddee26684da97e110dd802"
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/post/adapters/inbound/graphql/internal_persisted_projection.go",
-            "sha256": "f511214c8d7b4f1cd6055c6ca5b25ff0936e2071804cdb93b9f9a7d9359a7b7c"
+            "sha256": "25b528e3c959592a2416889d6e08e60f11e1113093b427d230d5483b8a3661cb"
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/post/adapters/inbound/http/content_handler.go",
-            "sha256": "b257f4cb0ac568d966a7ef8a5fecc06104b91b6e3c80960db9f9cc7c48ab3b6c"
+            "sha256": "00d3bdefc24e7b1ce14c208ff511a4e2c4f4c753f52dbbdbf35dd34b6bdd5b6b"
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/post/adapters/inbound/http/content_handler_article_summary.go",
@@ -113335,16 +113102,12 @@
             "sha256": "dcfcda50190cebd349223ac54899bb5349718b369557128afc97e390ac46d69a"
           },
           {
-            "path": "quwoquan_service/services/content-service/internal/content/post/adapters/inbound/http/content_handler_research_readback.go",
-            "sha256": "69bcb9209a4d8a140d83dee1de44735e01ddeb11b543a352cde3871f3fd22308"
-          },
-          {
             "path": "quwoquan_service/services/content-service/internal/content/post/adapters/inbound/http/feed_admission_rejection.go",
             "sha256": "1314b41f1207abd4174e8a3ebe4a38acaf6f279437d683502156e9a8925ed451"
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/post/adapters/inbound/http/routes.go",
-            "sha256": "bbefce3bd43eed678f30bc871e8b8811bd555103eefe3612318873e3e9487734"
+            "sha256": "27cbc1c506240764c3f57ebefe7264f35178337caba52881bff7c76f28725cb3"
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/post/adapters/inbound/http/sensitive_operation_guard.go",
@@ -113366,7 +113129,7 @@
           },
           {
             "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/adapters/inbound/graphql/internal_persisted_get_post__local_contract_test.go",
-            "sha256": "db04430563c0e154f861a4e57bd008c22bd325d709d7eae8d070fd7dd2d1df5a"
+            "sha256": "10cecab76eba621758eaa4058078828e6d8eb2e84eb2839e08121d63545963b8"
           },
           {
             "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/adapters/inbound/graphql/internal_persisted_get_post_contract__local_contract_test.go",
@@ -113374,7 +113137,7 @@
           },
           {
             "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/adapters/inbound/http/content_handler__local_contract_test.go",
-            "sha256": "21abbe8c1f67d17e1ef3afac5f50c735d15ca1eaaaa5ff58970c6299ce6548a4"
+            "sha256": "523df66be266e905c9458e9c0293e0fa9123a6a5f8a7bc6b8bf480fb7d9e6664"
           },
           {
             "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/adapters/inbound/http/content_handler_helpers__security__local_contract_test.go",
@@ -113390,15 +113153,11 @@
           },
           {
             "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/adapters/inbound/http/feed_research_principal_wiring__security__local_contract_test.go",
-            "sha256": "741ca7ac5d6a85932ed06353619a72b187f96f3e08538899d60a6d507ef9c050"
+            "sha256": "49232f5777583d32cd26e45e333d997a1ea06af8dc69a145aafa3503441ca3a9"
           },
           {
             "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/adapters/inbound/http/get_post_source_attribution_projection__contract__local_contract_test.go",
-            "sha256": "051cebd63127fa6c7a7c3d2e510c1452fcbb66c6898658fc62a7f4a4d593fd77"
-          },
-          {
-            "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/adapters/inbound/http/research_release_readback_error_mapping__security__local_contract_test.go",
-            "sha256": "30e3beece16b6403891a6bd81d7854a3dc4a5af45c0961b83e2a4014ec015ad6"
+            "sha256": "83183769a72dcc7744a48135d36cdc313cb0ad08f8c05a8a9ef388c78bceb172"
           },
           {
             "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/adapters/inbound/http/retired_bulk_import_route__single_track__local_contract_test.go",
@@ -113474,7 +113233,7 @@
           },
           {
             "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/application/feed/feed_research_anonymous_convergence__local_contract_test.go",
-            "sha256": "73be4bcb0e4982b8227fec8ae874228a412c954aa94f79266cc5c03531d32730"
+            "sha256": "ef0652b4f396af25de629150df7c442f7753d6e6ad01c99d596eed3b5642a2fa"
           },
           {
             "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/application/feed/feed_service_read_path__local_contract_test.go",
@@ -113482,7 +113241,7 @@
           },
           {
             "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/application/feed/feed_terminal__local_contract_test.go",
-            "sha256": "a1139dcd6910faeccc557a85150eff91cbc5f0cfc06d1c48fc992e5eeb037ca5"
+            "sha256": "f83bc02119f7159399cac4b50521e90e51f2f4e3fcc1f37d02aa2e21f1f0ea36"
           },
           {
             "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/application/feed/feed_viewer_liked_attach__local_contract_test.go",
@@ -113550,11 +113309,7 @@
           },
           {
             "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/application/public/active_release_fence__contract__local_contract_test.go",
-            "sha256": "818c88c3bc0c901d536ab587ae90df416f4a4a2e9da9f3299029d9f13a52b086"
-          },
-          {
-            "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/application/research_release_readback__security__local_contract_test.go",
-            "sha256": "fa52dcb94ae33a52a6693fd9baf449b4e311184fdf3a03738a0ef3b3a1f0a0eb"
+            "sha256": "2abee8d2757c1603ccc0ff5b939ccb662352511adf44562bf459e65ad09b2b12"
           },
           {
             "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/application/searchprojection/place_search_projection__local_contract_test.go",
@@ -113602,7 +113357,7 @@
           },
           {
             "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/domain/active_supply_snapshot__contract__local_contract_test.go",
-            "sha256": "26692ac59161b4e0a35f840a21102cd5a888507c09b01d5e0fcc856377d3068f"
+            "sha256": "c6d1cdd93ac1a0860c966e624277a1d14c381be43ae93e991e25cd3680793b2c"
           },
           {
             "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/domain/media/model/media_capture_metadata__local_contract_test.go",
@@ -113642,15 +113397,19 @@
           },
           {
             "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/import/creator_snapshot_projection__local_contract_test.go",
-            "sha256": "bcb6315d71f63828498b255008169191a2476719d2315f08911dc29a8055765c"
+            "sha256": "cb099b19cc792b37bba7916f965b0d971a0e746e3e83eab72a177ea126229969"
+          },
+          {
+            "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/import/entity_mentions__local_contract_test.go",
+            "sha256": "ea360befd357fefcd6e92d6b04349bb5e8a37c38268964c7d74cea41446fba8e"
           },
           {
             "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/import/loader__local_contract_test.go",
-            "sha256": "d45586d8560160741401b43143646f84b41fca0df3b1a89c38d937783fde0276"
+            "sha256": "410357fbbfc08b4aef2b0668677f69a2e808c9c1a0c547d848bdd8d00f9d5a0a"
           },
           {
             "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/import/media_delivery_binding__local_contract_test.go",
-            "sha256": "fe83a0575ef96e46058cb8653f4f1c13d55464341881c93599010b4ccca58131"
+            "sha256": "178d71ef3bcc7883647c4b77c41b3b08b17257c10ba40a645b6d9a00e9931cb8"
           },
           {
             "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/import/runtime_content_identity__local_contract_test.go",
@@ -113658,7 +113417,7 @@
           },
           {
             "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/import/source_attribution_projection__contract__local_contract_test.go",
-            "sha256": "85a8534ca93fac38f53f6659c3cec2108e2f6f9139b1f90d5a89e8153c39d0a5"
+            "sha256": "dce29414b65163688ffe580c0907723f15adeb6e2c53e306a17dfde5f507d99d"
           },
           {
             "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/infrastructure/accesscontrol/persona_access_projection__stream_replay__local_contract_test.go",
@@ -113782,7 +113541,7 @@
           },
           {
             "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/infrastructure/releaseimport/release_activation_contract__local_contract_test.go",
-            "sha256": "67fa76fd3618bc435eb1fc2556c6173d7f04ccc3271283d3beb99e0873949685"
+            "sha256": "3aadbb3bd44585f4985a2668d07aaf9db3283e688de26b16e9bedcd211ff5f95"
           },
           {
             "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/infrastructure/releaseimport/release_binding__contract__local_contract_test.go",
@@ -113790,11 +113549,11 @@
           },
           {
             "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/infrastructure/releaseimport/release_control__contract__local_contract_test.go",
-            "sha256": "3bcf312c251726f4333e57739bee2786396a60d0bcf5f4e0c149bb0224737f14"
+            "sha256": "4cd95ff766e757b6294b0e3a98fc27172c94b2cffe08a4a737f95dd46ab3f7a1"
           },
           {
             "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/infrastructure/releaseimport/runtime_projection__local_contract_test.go",
-            "sha256": "fb1a8bbb88834f5f017bdf1cfdddb6fe9bf0d676086488a9ed7dee269997e9c2"
+            "sha256": "5d0f76bf0eed7d530ca73c63d8eb87bf4b2e1363eec3b4acc08d2400c89864fc"
           },
           {
             "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/infrastructure/searchindex/backfill__local_contract_test.go",
@@ -113862,7 +113621,7 @@
           },
           {
             "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/post_query_facet__local_contract_test.go",
-            "sha256": "6d91e94504117ed47f945c9ee68f8b5d3a2bc9c3519b14f9bb492a83799a4202"
+            "sha256": "1324a63e2e5b280586a9d33103acf3568207df5e411753958010678e9371ca00"
           },
           {
             "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/runtime/recommendation/collaborative_recall__local_contract_test.go",
@@ -113904,7 +113663,7 @@
         "apiIntegration": [
           {
             "path": "quwoquan_service/services/content-service/tests/api_integration/content/post/active_supply_reader__data_consistency__api_integration_test.go",
-            "sha256": "85574ca87f27a0294e23b2b2b45f08a9667186c49f4440bfdc8cb39a51fbc73e"
+            "sha256": "39c56b555512fd2854130a075aa6143ff740799a8cbba745d9a482317d4a6158"
           },
           {
             "path": "quwoquan_service/services/content-service/tests/api_integration/content/post/app_config__api_integration_test.go",
@@ -113976,7 +113735,7 @@
           },
           {
             "path": "quwoquan_service/services/content-service/tests/api_integration/content/post/import/release_activation_cas__data_consistency__api_integration_test.go",
-            "sha256": "13b128cc13cb4a32f377647e9b4f8a49da97a2cb25c4eacf995e96f7b9c5d206"
+            "sha256": "4564d1e66a8106e6c20e604ce9c31207682720588e45ee9613c40a3c33668aa7"
           },
           {
             "path": "quwoquan_service/services/content-service/tests/api_integration/content/post/import/runtime_content_identity_migration__data_consistency__api_integration_test.go",
@@ -113988,7 +113747,7 @@
           },
           {
             "path": "quwoquan_service/services/content-service/tests/api_integration/content/post/internal_graphql/get_post_internal_graphql__api_integration_test.go",
-            "sha256": "9f7413040018703a7f75b7ed13bfa9564c17ebe0098d7a74fa711e4240bbf6b5"
+            "sha256": "0475e59be154019ad56576b84cf0464cea2ce9f565bf920694dd46aa8cc5f0ca"
           },
           {
             "path": "quwoquan_service/services/content-service/tests/api_integration/content/post/intersection_watermark_store_contract__api_integration_test.go",
@@ -114128,7 +113887,7 @@
           },
           {
             "path": "quwoquan_service/services/content-service/tests/api_integration/content/post/testmain__support__api_integration_test.go",
-            "sha256": "d712a71a0b1575a8cd9b8063085c7b1f305dc49f54bcd36f08e1c81c3e62e254"
+            "sha256": "ed82ab13d77862d0302c96bdb607db74d83ebc1e84d86e06e3307a2f2e72d7c3"
           },
           {
             "path": "quwoquan_service/services/content-service/tests/api_integration/content/post/user_account_closed_cleanup__data_consistency__api_integration_test.go",
@@ -114386,7 +114145,7 @@
           },
           {
             "path": "quwoquan_app/lib/service/content_service/content/post/application/public/content_post_detail_payload.dart",
-            "sha256": "b30b16d36eca2bccf9dfd990e712eac118cbcd7d491af52b2e7faccb4499ffe4"
+            "sha256": "988d508e35fc40666652ee9b85670a8a98428c0efaf0cb155f6846a5441dc496"
           },
           {
             "path": "quwoquan_app/lib/service/content_service/content/post/application/public/content_post_projection_codec.dart",
@@ -114447,10 +114206,6 @@
           {
             "path": "quwoquan_app/lib/service/content_service/content/post/application/public/realtime_feed_patch_delivery.dart",
             "sha256": "5f3bc32321d9bd1992f0576bc631a5e983cac6ccc042916ac61870b0519c5be9"
-          },
-          {
-            "path": "quwoquan_app/lib/service/content_service/content/post/application/public/research_release_readback.dart",
-            "sha256": "667155b63ac882b6f3f354ac2bb07d34ba495ce3b4b51648d76cdf327901cf56"
           },
           {
             "path": "quwoquan_app/lib/service/content_service/content/post/application/public/works_article_events.dart",
@@ -114565,10 +114320,6 @@
           {
             "path": "quwoquan_app/lib/service/content_service/content/post/adapters/publish_draft_projection_bridge.dart",
             "sha256": "a45dcb768f3ab8057e74cb115694ae732231398df2a6f11af5cda56c4e43c132"
-          },
-          {
-            "path": "quwoquan_app/lib/service/content_service/content/post/adapters/research_release_readback_remote.dart",
-            "sha256": "41e687635b034f2f22661282b734f9ab8ba4c496d74997016507d357f9e5d9e9"
           },
           {
             "path": "quwoquan_app/lib/service/content_service/content/post/adapters/secure_interest_onboarding_draft_store.dart",
@@ -114760,7 +114511,7 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/content/post/content_post_errors__local_contract_test.dart",
-            "sha256": "65706769a689c5a231a87f735bae2c24d58783bcfd4567b90b4b4eeba5ed4377"
+            "sha256": "c634279db61768c06267cdac1bdd8b4d2968ae11c67d854e4af5521be31e6396"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/content/post/content_post_facet_composition__contract__local_contract_test.dart",
@@ -115145,10 +114896,6 @@
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/content/post/qwq_markdown_parser__local_contract_test.dart",
             "sha256": "cc6bb43abc43cb2bece804d19e579b1543afb6aa3edcfb122503d6095eb4f472"
-          },
-          {
-            "path": "quwoquan_app/test/local_contract/service/content_service/content/post/research_release_readback__security__local_contract_test.dart",
-            "sha256": "6280eadd5f6cbf347f1eb1e7b93b986847f982ba7ced6ce651077b5e8bfedfd9"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/content/post/share_template_by_identity_widget__local_contract_test.dart",
@@ -115963,7 +115710,7 @@
           },
           {
             "path": "quwoquan_service/services/entity-service/internal/entity_homepage/homepage/infrastructure/homepageimport/loader.go",
-            "sha256": "3a470f3034b0fe04576f2c2ed41098dfde3de308572e1461d0830ca4d0cebd44"
+            "sha256": "d16b254e6adb79d310d09c0b2522e696531e2f89c6048ac4e72aa657daf37234"
           },
           {
             "path": "quwoquan_service/services/entity-service/internal/entity_homepage/homepage/infrastructure/homepageimport/metrics.go",
@@ -116110,15 +115857,15 @@
           },
           {
             "path": "quwoquan_service/services/entity-service/tests/local_contract/entity_homepage/homepage/cmd/homepage-import/loader__local_contract_test.go",
-            "sha256": "b8f01847e5cd4800f867e77d3381619718b5f8d04dcd774552a04fc19ee5efd9"
+            "sha256": "9a23ae070adf7c11f409e84b9fcf94b6d52c5a1fb185c77553158c44c2aeb39d"
           },
           {
             "path": "quwoquan_service/services/entity-service/tests/local_contract/entity_homepage/homepage/cmd/homepage-import/loader_coordinates__local_contract_test.go",
-            "sha256": "ee23c3911edbd0d2d98b80b6c9bd8fc8851d8127f6755fe2ec55fde3ec3ca0c5"
+            "sha256": "420ac78c3d547cff9faff8a01ed39e8d369f05f03a706c93b0fa9b72a21d6bf6"
           },
           {
             "path": "quwoquan_service/services/entity-service/tests/local_contract/entity_homepage/homepage/cmd/homepage-import/loader_media_access_mode__local_contract_test.go",
-            "sha256": "af87a879de8d3468da9eb23884bb43e705cb587982f90cbff99d5ed61ff9aaae"
+            "sha256": "dbd1ae9065fd169f04b3fe04c2b014e922f05c4deaeed88cbb45a335360bbb7d"
           },
           {
             "path": "quwoquan_service/services/entity-service/tests/local_contract/entity_homepage/homepage/cmd/homepage-import/metrics__local_contract_test.go",
@@ -117059,11 +116806,11 @@
         "store": [
           {
             "path": "quwoquan_service/services/api-edge/internal/graphql_read/persisted_query_execution/infrastructure/owner/content_post_query_executor.go",
-            "sha256": "a567c5935be75263f1e6162414f55399c485c371c04f9727fe19bcb545461965"
+            "sha256": "7d5b266b0038f73938356c0aa5d67aa3208a2418cd8f5383ab8446c6f1363560"
           },
           {
             "path": "quwoquan_service/services/api-edge/internal/graphql_read/persisted_query_execution/infrastructure/owner/content_post_query_response_schema.go",
-            "sha256": "f3f6567290ec917b35b57ce0dd91a0c6d2be967097ebce15e469924e63c2cd0a"
+            "sha256": "d01b53b37b1c0a747c9492fc87660c789166e71c30f65ed38a17e7c3e4658c84"
           },
           {
             "path": "quwoquan_service/services/api-edge/internal/graphql_read/persisted_query_execution/infrastructure/owner/query_executor_router.go",
@@ -117106,7 +116853,7 @@
         "localContract": [
           {
             "path": "quwoquan_service/services/api-edge/tests/local_contract/graphql_read/persisted_query_execution/content_post_query_executor__local_contract_test.go",
-            "sha256": "45a378da817074ee4a1cf400636858aec37d7d8e95df110692b7867f070a24da"
+            "sha256": "f139c4cb071a9419ecc6a79922e2dcaa5034100b094704774872ddeb587d5a57"
           },
           {
             "path": "quwoquan_service/services/api-edge/tests/local_contract/graphql_read/persisted_query_execution/ed25519_signature_verifier__local_contract_test.go",
@@ -117152,7 +116899,7 @@
         "apiIntegration": [
           {
             "path": "quwoquan_service/services/api-edge/tests/api_integration/graphql_read/persisted_query_execution/content_post_query_executor__api_integration_test.go",
-            "sha256": "02f1f61f01ee86220376c17af77914a8f212b5999fc1bc5f6a947504f88562ab"
+            "sha256": "2fc1e99e8842e568924fad9c2a42a54635d36fc2c99c329adf1d3e442f25ca89"
           },
           {
             "path": "quwoquan_service/services/api-edge/tests/api_integration/graphql_read/persisted_query_execution/persisted_query_execution__api_integration_test.go",
@@ -124501,7 +124248,6 @@
     {
       "objectId": "user.account_session",
       "operationIds": [
-        "user.account_session.GetResearchSessionAttestation",
         "user.account_session.IssueWhitelistedResearchSession",
         "user.account_session.LoginAnonymous",
         "user.account_session.LoginOneTap",
@@ -124558,20 +124304,12 @@
           {
             "path": "quwoquan_service/services/user-service/internal/account/account_session/application/research_session.go",
             "sha256": "63c713a44f812c7ddbbdf98fd0a42509316872d0a20189ce0f9851f83b8e8fcc"
-          },
-          {
-            "path": "quwoquan_service/services/user-service/internal/account/account_session/application/research_session_attestation.go",
-            "sha256": "d49e33a1fa31eed0e19fe76f46e1dea0fa5ff421554c1ba99ac30b9c39f4ac0f"
           }
         ],
         "transport": [
           {
             "path": "quwoquan_service/services/user-service/internal/account/account_session/adapters/inbound/application/handler.go",
             "sha256": "bcb2d74ada089cb4c6386dc016c163c7d5bf3074c0c062df8ac4cabe1f9b9bc4"
-          },
-          {
-            "path": "quwoquan_service/services/user-service/internal/account/account_session/adapters/inbound/http/research_session_attestation_handler.go",
-            "sha256": "3043c967d8cb655e3abd1169c43b215a2d8ec6f9a53616d164938f829c115b0d"
           },
           {
             "path": "quwoquan_service/services/user-service/internal/account/account_session/adapters/inbound/http/research_session_handler.go",
@@ -124606,10 +124344,6 @@
           {
             "path": "quwoquan_service/services/user-service/tests/local_contract/account/account_session/research_session__security__local_contract_test.go",
             "sha256": "22cc861b1a5fb80aad76483fa8f789ca89b35f3fa081c173434f15731f6f7fe7"
-          },
-          {
-            "path": "quwoquan_service/services/user-service/tests/local_contract/account/account_session/research_session_attestation__security__local_contract_test.go",
-            "sha256": "e31c56d53c9bdfe0d76ae374471bb60ce463727fc83c7999264b3609254c3bdb"
           },
           {
             "path": "quwoquan_service/services/user-service/tests/local_contract/account/account_session/session_operations__local_contract_test.go",
@@ -124654,7 +124388,7 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/user_service/account/account_session/account_session_errors__local_contract_test.dart",
-            "sha256": "a9c501ba5a06ab42aeae705f57b1407870ed4c05fe707cb46d74c0a01b640a86"
+            "sha256": "f3c5419e2d5d7bac0dd342e10f16aac7f3e88ddeb907f7bfa048ff436713e243"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/user_service/account/account_session/auth_test_double_identity__local_contract_test.dart",
@@ -125042,7 +124776,7 @@
           },
           {
             "path": "quwoquan_service/services/user-service/internal/profile_projection/creator_runtime_profile/infrastructure/releaseimport/runtime.go",
-            "sha256": "c88e7c74182eec07648c091d5d57b9d457203072d8e8dc667cc1003a365a27a4"
+            "sha256": "dd95aa28ee99aedb3502bd5f0b1bdfcf51acd5a129f95cac2937e22a3381dad6"
           }
         ],
         "outbox": [],
@@ -125077,11 +124811,11 @@
           },
           {
             "path": "quwoquan_service/services/user-service/tests/local_contract/profile_projection/creator_runtime_profile/release_import__media_authority__local_contract_test.go",
-            "sha256": "716b3e2bb2cc23b2985c7e5266ec360df3d7d389b4ae2a30421429546ebe9eec"
+            "sha256": "142044cf561a0d2dfe791feffdc44345120a1574e81de130da1641d385d83a2a"
           },
           {
             "path": "quwoquan_service/services/user-service/tests/local_contract/profile_projection/creator_runtime_profile/release_import__research_media_binding__local_contract_test.go",
-            "sha256": "531c8ce5620ca090d6def3bc1deb3f2af2c8b1e4f36dc72e5b60d8d361b394ec"
+            "sha256": "ccc9c7df67e6cdeab01af020816f154849f13a58036ea95985e72a0c39960a20"
           },
           {
             "path": "quwoquan_service/services/user-service/tests/local_contract/profile_projection/creator_runtime_profile/release_import_stage_only__contract__local_contract_test.go",
@@ -128766,7 +128500,6 @@
       "implemented": true,
       "commercialReady": false,
       "missing": [
-        "commercial.operation.GetResearchReleaseReadback",
         "commercial.result_bundle"
       ]
     },
@@ -129433,7 +129166,6 @@
       "implemented": true,
       "commercialReady": false,
       "missing": [
-        "commercial.operation.GetResearchSessionAttestation",
         "commercial.operation.IssueWhitelistedResearchSession",
         "commercial.operation.LoginOneTap",
         "commercial.operation.LoginWithAlipay",
@@ -129724,7 +129456,7 @@
     },
     {
       "path": "_shared/app_launch_manifest.yaml",
-      "sha256": "68d7c43820d427203d4d0c7ebf97b238dda50d308762c4909fadd80046f0b77f"
+      "sha256": "289cd4593b51a0a8f4dd9679f6074f4ea407fe75ca68217c7073a63f5f936e3f"
     },
     {
       "path": "_shared/app_pages.yaml",
@@ -129832,7 +129564,7 @@
     },
     {
       "path": "_shared/ui_surfaces.yaml",
-      "sha256": "5d1cd5515ce9aae29716dae0b4e0fa9d7ade5bbba3e81f62e3290dc9edf38e30"
+      "sha256": "bb0ed434b7221884ea908ee4e3fc7ce8fa913f14d6515bb25447b8de4982a86e"
     },
     {
       "path": "_shared/workflow.yaml",
@@ -131164,7 +130896,7 @@
     },
     {
       "path": "content/content/post/errors.yaml",
-      "sha256": "2d5e201f93ea730df5afdbee898a58a68a34f6a653e35dcadb9061230a54b570"
+      "sha256": "9210be3c6bf6ed83f9e3747c6eef8b1e59d213b8e2b21a55698127dd28275ec4"
     },
     {
       "path": "content/content/post/events.yaml",
@@ -131172,7 +130904,7 @@
     },
     {
       "path": "content/content/post/fields.yaml",
-      "sha256": "9e4dbf6208df175daf73379a04afaa7f116697c14383640438cbf780c3a13344"
+      "sha256": "72c94ec9daea9c57b98cd241607398bfe31746669895c64fe4766a8c8678a4bb"
     },
     {
       "path": "content/content/post/markdown_block_sequence_cases.json",
@@ -131184,11 +130916,11 @@
     },
     {
       "path": "content/content/post/operations.yaml",
-      "sha256": "42e8507018a9ab3e46aaa10365680468422ecad585f04b6c92cb25df4546820f"
+      "sha256": "98be706927354dfea78c52f3fcf5721b0c7f2b14dac6e8ea30f146769921b8aa"
     },
     {
       "path": "content/content/post/persisted_queries/content_post_detail.yaml",
-      "sha256": "e80bdbef2de3add2292bcfb6ec04819c2499d15000134ab7082432a124f6f808"
+      "sha256": "6fce474142c4875d2920f7cc1cd39e082661a43bc354b1ca274d05d6c900c184"
     },
     {
       "path": "content/content/post/persisted_queries/content_post_detail_article_entities.yaml",
@@ -131200,7 +130932,7 @@
     },
     {
       "path": "content/content/post/persisted_queries/content_post_detail_media.yaml",
-      "sha256": "cabfaf7845b41bf19ec653621fcdb40ee1d14c1aace59e5e61f0e8ab7ab128fd"
+      "sha256": "23505f2bdb28cc343548d1062b6ab60145cbb4f828727557e13b62826285dc2a"
     },
     {
       "path": "content/content/post/persisted_queries/content_post_detail_semantic.yaml",
@@ -131548,7 +131280,7 @@
     },
     {
       "path": "content/media/original_access_quota/operations.yaml",
-      "sha256": "9f428f72274e5ad18631ec84f14626678fe4f2b548b9727b6457fd43bc937ea9"
+      "sha256": "d43c8bffd5a2608c237565fc703a3adf669a03b18b2a43a143425d1509e65671"
     },
     {
       "path": "content/media/original_access_quota/original_access_policy.yaml",
@@ -131560,7 +131292,7 @@
     },
     {
       "path": "content/openapi.yaml",
-      "sha256": "4ef4ec4ef5d2ce279aa1479c9d275862920a75fe733bfd99ed3be08cafb2b1fc"
+      "sha256": "a48d741ec893946dd58016d577124866600956fc6a57c1038778e0278546b970"
     },
     {
       "path": "content/trust_safety/context.yaml",
@@ -133152,7 +132884,7 @@
     },
     {
       "path": "user/account/account_session/errors.yaml",
-      "sha256": "6712d602230525838fe8ff2f0a4a0c45ea604ed9b6f50105a4aab22ebc360f6b"
+      "sha256": "939593e8fc57271fb7755a822af8a32cac47fc10897475a17ac63292f4d5551b"
     },
     {
       "path": "user/account/account_session/events.yaml",
@@ -133160,7 +132892,7 @@
     },
     {
       "path": "user/account/account_session/fields.yaml",
-      "sha256": "fdbcf1376914a4c7889222eb9209c02544642d44d4698f19f8989649c4b8559c"
+      "sha256": "9e8b3863299a49d802b8b1713d5d3c7d5bd7e37c8f16a3bd835eb9f58a36e555"
     },
     {
       "path": "user/account/account_session/object.yaml",
@@ -133168,7 +132900,7 @@
     },
     {
       "path": "user/account/account_session/operations.yaml",
-      "sha256": "0a7c02e10d26360898b4fbb97d1672efb17de9d905d38f06e08050805395b13f"
+      "sha256": "08dc3c4a9aec08385f5910e3978ef15ee36e87299618abdbcd40478d04eb0a26"
     },
     {
       "path": "user/account/account_session/storage.yaml",
@@ -133276,7 +133008,7 @@
     },
     {
       "path": "user/account/user_account/errors.yaml",
-      "sha256": "f3f60054ddd64993d8d7f02bfb08b15114344e3b5b1d0fe6b84b19b292b20537"
+      "sha256": "6b9647a6f67c5100ba25765148e85de4937d226734d1f106a539b5bd4674e320"
     },
     {
       "path": "user/account/user_account/events.yaml",
@@ -133380,7 +133112,7 @@
     },
     {
       "path": "user/openapi.yaml",
-      "sha256": "1d226aeb56b48e1e42db2b1d1757aed98674e4eca04c5767ff98dd5467bd5b00"
+      "sha256": "0fda29cb7f131073dd5d588430a76983570b8e665b0b65d26654515953c6f564"
     },
     {
       "path": "user/persona_management/context.yaml",
@@ -135781,7 +135513,7 @@
     },
     {
       "path": "_shared/app_launch_manifest.yaml",
-      "sha256": "68d7c43820d427203d4d0c7ebf97b238dda50d308762c4909fadd80046f0b77f",
+      "sha256": "289cd4593b51a0a8f4dd9679f6074f4ea407fe75ca68217c7073a63f5f936e3f",
       "mediaType": "application/yaml",
       "content": {
         "app_launch_attempt_forward_states": [
@@ -135858,7 +135590,7 @@
           "APP.LAUNCH.runtime_dependency_unavailable": "目标 runtime 的必需容器已退出或 unhealthy，编译安装前即阻断。",
           "APP.LAUNCH.workspace_entrypoint_inactive": "工作区投影存在性、当前终端命令解析或 IDE profile 尚未进入受支持状态。",
           "APP.LAUNCH.workspace_flutter_sdk_unavailable": "工作区激活时无法解析真实 Flutter SDK 或 SDK 版本与仓库锁定不符；激活必须在写入任何 workspace facade 投影前以本码阻断。",
-          "APP.PREPARATION.content_binding_unavailable": "无法从服务端 active release readback 解析出唯一 schema/digest 合法、passed=true 且 readinessPhase=research 的内容 readiness；零个或多个候选均阻断，禁止 latest 猜测。",
+          "APP.PREPARATION.content_binding_unavailable": "无法从服务端 active release readback 解析出唯一 schema/digest 合法、passed=true 且 readinessPhase=production 的内容 readiness；零个或多个候选均阻断，禁止 latest 猜测。",
           "APP.PREPARATION.receipt_invalid": "managed preparation receipt 缺失、schema/digest 非法或与本次 launch 身份不一致，canonical launcher 不得复用。",
           "APP.PREPARATION.runtime_unavailable": "managed 准备无法复用 exact running full runtime，且不满足有界替换条件（非 target lock 内、存在其他 live consumer lease 或替换失败）。",
           "APP.PREPARATION.strict_preflight_failed": "managed 严格预检（TLS、api-edge、user-service、integration-service、SMS Provider/relay identity、真实 OTP journey 与 homepage/creator avatar/image/typed video/premium stream 媒体字节）任一失败，在 Flutter build 前阻断。",
@@ -136511,10 +136243,10 @@
               "exact readback：runtimeIdentity（复用或有界替换后的 runtime attempt/compose identity）、consumerId、consumerLeaseId、Android reverse transport/所有权、device trust receipt、contentBinding、strict debug preflight receipt 与 strict content preflight receipt 的全部身份字段必须来自本次 preparation 的真实 readback，不得从 latest、缓存或历史 receipt 补猜。",
               "consumerId 是 dispatcher/run.sh 为本次前台启动预先确定的稳定 consumer identity；preparation 必须以该 consumer 获取 consumerLeaseId，保持该 lease active 并交给同一 run.sh 接管。run.sh exact readback 后不得重复 acquire，最终 cleanup 只释放同一 consumer；consumerLeaseId 必须是 canonical sha256 identity。",
               "androidReversePorts 是同一 lease 的完整 canonical same-port transport 集合，Android prepared receipt 必须非空，非 Android 必须为空；androidReverseOwnedPorts 只记录 preparation 在获取同一 consumer lease 前新建、且启动 cleanup 可以安全移除的 Android same-port reverse 集合；非 Android 或没有新建映射时为空，不得把既存映射声明为本次所有。",
-              "contentBinding 必须保留 create_test_live_content_binding 返回的完整 canonical binding，并向 prepared receipt 投影 releaseId、verifyRunId、manifestDigest、readinessPhase、readinessReceiptRef 与 readinessReceiptDigest；readinessReceiptRef 必须是 absolute regular no-symlink exact receipt，digest 必须是该文件 exact bytes 的 sha256，JSON 必须同一 releaseId/verifyRunId/manifestDigest/readinessPhase=research/passed=true。服务端 active release readback 的合法候选必须唯一；零个或多个候选一律以 APP.PREPARATION.content_binding_unavailable 阻断。",
+              "contentBinding 必须保留 create_test_live_content_binding 返回的完整 canonical binding，并向 prepared receipt 投影 releaseId、verifyRunId、manifestDigest、readinessPhase、readinessReceiptRef 与 readinessReceiptDigest；readinessReceiptRef 必须是 absolute regular no-symlink exact receipt，digest 必须是该文件 exact bytes 的 sha256，JSON 必须同一 releaseId/verifyRunId/manifestDigest/readinessPhase=production/passed=true。服务端 active release readback 的合法候选必须唯一；零个或多个候选一律以 APP.PREPARATION.content_binding_unavailable 阻断。",
               "deviceTrustReceiptRef/deviceTrustReceiptDigest 必须同时为空或同时非空；无需 local trust 的 physical device 允许两者为空，非空 digest 必须是 canonical sha256 identity。verify-first 只在已有 trust receipt 的 leases 包含当前 consumerLeaseId 时复用，否则必须以当前真实 lease install/bind 后再 verify。",
               "strictPreflightReceiptRef/strictPreflightReceiptDigest 继续绑定 write_app_debug_preflight_receipt 生成的 exact debug preflight envelope；strictContentPreflightReceiptRef/strictContentPreflightReceiptDigest 必须绑定本次 preparation 私有原子写入的 quwoquan_ops.app_content_preflight_exact.v1 envelope；envelope 顶层投影 absolute readiness 身份并在 payload 中原样保留 command_app_content_preflight 返回的 exact payload，禁止信任 command 自写的 mutable report path。两组 ref 必须是 absolute regular no-symlink，digest 均为文件 exact bytes sha256。",
-              "strict content payload 必须 schema=quwoquan_ops.app_content_preflight、target 与本次 target 一致、status=passed，并与 contentBinding 的 releaseId/manifestDigest/readinessReceiptRef/readinessReceiptDigest 完全一致；releaseProbe 必须 exitCode=0、executedSampleCount\u003e0 且 mediaChecks.automatic=true。readiness receipt 还必须同一 verifyRunId/readinessPhase=research/passed=true，确保 release/verify/manifest/research 身份单轨。",
+              "strict content payload 必须 schema=quwoquan_ops.app_content_preflight、target 与本次 target 一致、status=passed，并与 contentBinding 的 releaseId/manifestDigest/readinessReceiptRef/readinessReceiptDigest 完全一致；releaseProbe 必须 exitCode=0、executedSampleCount\u003e0 且 mediaChecks.automatic=true。readiness receipt 还必须同一 verifyRunId/readinessPhase=production/passed=true，确保 release/verify/manifest/production 身份单轨。",
               "status=blocked 时 firstBlocker 必须非空且取 launch_blockers 闭集，尚未完成的 target/environment/platform/deviceId/runtimeIdentity/consumer/transport/trust/content/preflight 字段允许按本 schema 取空值；不得伪造中间身份。status=prepared 时 firstBlocker 必须为空，target/environment/platform/deviceId/runtimeIdentity/consumerId/consumerLeaseId/contentBinding/strictPreflightReceiptRef/strictPreflightReceiptDigest/strictContentPreflightReceiptRef/strictContentPreflightReceiptDigest 必须全部非空且逐字段合法，trust ref/digest 必须满足成对约束。",
               "canonical run.sh 必须在 Flutter build 前独立严格验证 receipt、readiness exact receipt、strict debug preflight envelope 与 strict content preflight exact payload 的字段集、类型、闭集、byte sha256、consumer/runtime/content/trust 身份和本次 target/device/purpose；任何漂移以 APP.PREPARATION.receipt_invalid 阻断，并把 readinessReceiptDigest 交给 final consumer-lease bind。"
             ],
@@ -136544,7 +136276,7 @@
                   },
                   "readinessPhase": {
                     "allowed_values": [
-                      "research"
+                      "production"
                     ],
                     "type": "string"
                   },
@@ -149109,7 +148841,7 @@
     },
     {
       "path": "_shared/ui_surfaces.yaml",
-      "sha256": "5d1cd5515ce9aae29716dae0b4e0fa9d7ade5bbba3e81f62e3290dc9edf38e30",
+      "sha256": "bb0ed434b7221884ea908ee4e3fc7ce8fa913f14d6515bb25447b8de4982a86e",
       "mediaType": "application/yaml",
       "content": {
         "surfaces": [
@@ -149709,7 +149441,6 @@
               "LoginAnonymous",
               "RefreshToken",
               "IssueWhitelistedResearchSession",
-              "GetResearchReleaseReadback",
               "GetActivePersonaContext",
               "UpsertDevicePushEndpoint",
               "RemoveDevicePushEndpoint",
@@ -259076,7 +258807,7 @@
     },
     {
       "path": "content/content/post/errors.yaml",
-      "sha256": "2d5e201f93ea730df5afdbee898a58a68a34f6a653e35dcadb9061230a54b570",
+      "sha256": "9210be3c6bf6ed83f9e3747c6eef8b1e59d213b8e2b21a55698127dd28275ec4",
       "mediaType": "application/yaml",
       "content": {
         "description": "Post 对象与 content 域共享的结构化错误码声明。格式：MODULE.KIND.REASON。\n对象专属错误码位于各对象目录（comment、media_asset、original_access_quota、\nreport、post_moderation_case 的 errors.yaml）；codegen 与端云 parity 门禁按\ncontent 域固定文件列表合并生成 Dart ContentErrorCode enum + Go errors.go，\n合并时 code 必须全域唯一。CloudErrorMapper 解析 response body \"code\" 字段。\n",
@@ -259220,7 +258951,6 @@
               {
                 "operations": [
                   "GetFeed",
-                  "GetResearchReleaseReadback",
                   "SubmitPostPublication",
                   "DeletePost",
                   "UpdatePostSettings",
@@ -259294,49 +259024,6 @@
             "user_message": {
               "en": "Please sign in to continue",
               "zh": "请先登录"
-            }
-          },
-          {
-            "code": "CONTENT.USER.research_identity_invalid",
-            "dart_const": "researchIdentityInvalid",
-            "disruption_level": "inlineCard",
-            "emitted_by": [
-              {
-                "operations": [
-                  "GetResearchReleaseReadback"
-                ],
-                "surface": "http"
-              }
-            ],
-            "go_const": "ErrResearchIdentityInvalid",
-            "http_status": 403,
-            "reason": "forbidden",
-            "recovery_action": "surface",
-            "user_message": {
-              "en": "The research identity is invalid or expired",
-              "zh": "当前研究态身份无效或已过期"
-            }
-          },
-          {
-            "code": "CONTENT.SYSTEM.research_release_state_unavailable",
-            "dart_const": "researchReleaseStateUnavailable",
-            "disruption_level": "snackbar",
-            "emitted_by": [
-              {
-                "operations": [
-                  "GetResearchReleaseReadback"
-                ],
-                "surface": "http"
-              }
-            ],
-            "go_const": "ErrResearchReleaseStateUnavailable",
-            "http_status": 503,
-            "reason": "research_release_state_unavailable",
-            "recovery_action": "retry",
-            "recovery_after_seconds": 5,
-            "user_message": {
-              "en": "The content state required for research readback is temporarily unavailable",
-              "zh": "研究回读所需内容状态暂不可用，请稍后重试"
             }
           },
           {
@@ -259743,7 +259430,6 @@
               {
                 "operations": [
                   "GetFeed",
-                  "GetResearchReleaseReadback",
                   "SubmitPostPublication",
                   "GetHelperRead",
                   "content.content_behavior_fact.ReportBehaviors"
@@ -259769,7 +259455,6 @@
               {
                 "operations": [
                   "GetFeed",
-                  "GetResearchReleaseReadback",
                   "SubmitPostPublication",
                   "ListUserPosts",
                   "ListPostsByGathering",
@@ -260128,7 +259813,7 @@
     },
     {
       "path": "content/content/post/fields.yaml",
-      "sha256": "9e4dbf6208df175daf73379a04afaa7f116697c14383640438cbf780c3a13344",
+      "sha256": "72c94ec9daea9c57b98cd241607398bfe31746669895c64fe4766a8c8678a4bb",
       "mediaType": "application/yaml",
       "content": {
         "description": "内容主体（聚合根）",
@@ -260171,6 +259856,29 @@
               "new_candidate_hint",
               "negative_feedback_removal",
               "refresh_suggestion"
+            ]
+          },
+          "SourceDerivedModification": {
+            "values": [
+              "video_frame_extraction",
+              "crop",
+              "resize",
+              "format_conversion"
+            ]
+          },
+          "SourcePublicationAdmission": {
+            "values": [
+              "production_release"
+            ]
+          },
+          "SourceWatermarkKind": {
+            "values": [
+              "none",
+              "author_signature",
+              "platform_logo",
+              "stock_agency",
+              "other",
+              "unknown"
             ]
           }
         },
@@ -262642,100 +262350,6 @@
               }
             ]
           },
-          "ResearchReleaseReadbackQuery": {
-            "fields": [
-              {
-                "client_dart_type": "String",
-                "client_wire_name": "X-Research-Identity-Attestation",
-                "constraints": [
-                  "NOT_BLANK"
-                ],
-                "name": "researchIdentityAttestation",
-                "type": "string"
-              }
-            ]
-          },
-          "ResearchReleaseReadbackView": {
-            "fields": [
-              {
-                "constraints": [
-                  "NOT_BLANK"
-                ],
-                "name": "releaseId",
-                "type": "string"
-              },
-              {
-                "constraints": [
-                  "NOT_BLANK"
-                ],
-                "name": "manifestDigest",
-                "type": "string"
-              },
-              {
-                "constraints": [
-                  "NOT_BLANK"
-                ],
-                "name": "subjectHash",
-                "type": "string"
-              },
-              {
-                "constraints": [
-                  "NOT_BLANK"
-                ],
-                "name": "attestationIdHash",
-                "type": "string"
-              },
-              {
-                "constraints": [
-                  "NOT_NULL"
-                ],
-                "name": "signatureVerified",
-                "type": "boolean"
-              },
-              {
-                "constraints": [
-                  "NOT_NULL"
-                ],
-                "name": "researchBadgeVisible",
-                "type": "boolean"
-              },
-              {
-                "constraints": [
-                  "NOT_NULL"
-                ],
-                "name": "postIds",
-                "type": "[]string"
-              },
-              {
-                "constraints": [
-                  "NOT_NULL"
-                ],
-                "name": "entityRefs",
-                "type": "[]string"
-              },
-              {
-                "constraints": [
-                  "NOT_NULL"
-                ],
-                "name": "mediaAssetIds",
-                "type": "[]string"
-              },
-              {
-                "constraints": [
-                  "NOT_NULL"
-                ],
-                "name": "publicCdnDetected",
-                "type": "boolean"
-              },
-              {
-                "constraints": [
-                  "NOT_NULL"
-                ],
-                "name": "anonymousMediaUrlDetected",
-                "type": "boolean"
-              }
-            ]
-          },
           "SubmitContentPostPublicationCommand": {
             "fields": [
               {
@@ -263732,6 +263346,14 @@
                 "constraints": [
                   "NULLABLE"
                 ],
+                "description": "对应这一资产的逐图说明；缺席不生成说明，也不得以 title 代替。",
+                "name": "caption",
+                "type": "string"
+              },
+              {
+                "constraints": [
+                  "NULLABLE"
+                ],
                 "name": "coverStrategy",
                 "type": "string"
               },
@@ -264004,8 +263626,9 @@
                 "constraints": [
                   "NOT_NULL"
                 ],
+                "enum_ref": "SourcePublicationAdmission",
                 "name": "publicationAdmission",
-                "type": "string"
+                "type": "enum"
               },
               {
                 "constraints": [
@@ -264023,9 +263646,26 @@
               },
               {
                 "constraints": [
+                  "NOT_NULL"
+                ],
+                "description": "发布字节相对原始素材的修改事实；显式空数组表示无修改，缺席非法。",
+                "enum_ref": "SourceDerivedModification",
+                "name": "derivedModifications",
+                "type": "[]enum"
+              },
+              {
+                "constraints": [
                   "NULLABLE"
                 ],
-                "name": "riskAcceptanceId",
+                "enum_ref": "SourceWatermarkKind",
+                "name": "watermarkKind",
+                "type": "enum"
+              },
+              {
+                "constraints": [
+                  "NULLABLE"
+                ],
+                "name": "watermarkNote",
                 "type": "string"
               },
               {
@@ -264394,87 +264034,10 @@
     },
     {
       "path": "content/content/post/operations.yaml",
-      "sha256": "42e8507018a9ab3e46aaa10365680468422ecad585f04b6c92cb25df4546820f",
+      "sha256": "98be706927354dfea78c52f3fcf5721b0c7f2b14dac6e8ea30f146769921b8aa",
       "mediaType": "application/yaml",
       "content": {
         "api_routes": [
-          {
-            "actor": "account",
-            "application": {
-              "facet": "ResearchReleaseReadbackQueryFacet",
-              "kind": "query",
-              "method": "getResearchReleaseReadback",
-              "reader": "ActiveSupplyReader",
-              "slice": "ResearchReleaseReadbackView"
-            },
-            "authorization": {
-              "ownership_policy": "authenticated_account_research_attestation",
-              "principal": "account"
-            },
-            "commercial": {
-              "block_reason": "research-only internal App readback is never a commercial content surface",
-              "gap_id": "CONTENT_POST_RESEARCH_ONLY",
-              "status": "blocked",
-              "target_story": "multi-carrier-release"
-            },
-            "description": "已认证且持有短期白名单研究态签名的内部 App 读取当前 Research release 精确绑定；匿名、过期、签名漂移或非 Research active release 一律 fail closed",
-            "error_codes": [
-              "CONTENT.USER.unauthorized",
-              "CONTENT.USER.research_identity_invalid",
-              "CONTENT.SYSTEM.research_release_state_unavailable",
-              "CONTENT.SYSTEM.required_dependency_unavailable",
-              "CONTENT.SYSTEM.internal_error"
-            ],
-            "method": "GET",
-            "operation": "GetResearchReleaseReadback",
-            "path": "/content/research/readback",
-            "privacy": {
-              "log_policy": "none",
-              "request_classification": "SECRET",
-              "response_classification": "INTERNAL"
-            },
-            "reliability": {
-              "cancellation": "supported",
-              "idempotency": "none",
-              "max_attempts": 1,
-              "retry_mode": "none",
-              "timeout_ms": 800
-            },
-            "request_bindings": {
-              "header": [
-                {
-                  "field": "researchIdentityAttestation",
-                  "name": "X-Research-Identity-Attestation",
-                  "required": true
-                }
-              ]
-            },
-            "request_body_kind": "none",
-            "request_entity": "ResearchReleaseReadbackQuery",
-            "response_body": "ResearchReleaseReadbackView",
-            "response_body_kind": "object",
-            "response_entity": "ResearchReleaseReadbackView",
-            "security": {
-              "anonymous_policy": "deny",
-              "auth_mode": "required",
-              "principal": "owner",
-              "token_transport": "bearer",
-              "visibility": "private"
-            },
-            "slo": {
-              "availability_percent": 99.9,
-              "latency_p95_ms": 500
-            },
-            "telemetry": {
-              "attributes": [
-                "environment",
-                "outcome",
-                "error_code"
-              ],
-              "metric": "content_research_release_readback",
-              "trace": true
-            }
-          },
           {
             "actor": "none",
             "application": {
@@ -266202,46 +265765,6 @@
         ],
         "readiness_cases": [
           {
-            "case_id": "get-research-release-readback-local",
-            "executions": [
-              {
-                "device": "runner",
-                "digest_binding": "candidate",
-                "env": "alpha",
-                "platform": "service",
-                "provider": "none"
-              }
-            ],
-            "layer": "local_contract",
-            "producer": "service",
-            "runner_source_path": "quwoquan_service/services/content-service/tests/local_contract/content/post/application/research_release_readback__security__local_contract_test.go",
-            "spec_ref": "specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-002",
-            "target": {
-              "id": "GetResearchReleaseReadback",
-              "kind": "operation"
-            }
-          },
-          {
-            "case_id": "get-research-release-readback-app-local",
-            "executions": [
-              {
-                "device": "runner",
-                "digest_binding": "candidate",
-                "env": "alpha",
-                "platform": "app",
-                "provider": "none"
-              }
-            ],
-            "layer": "local_contract",
-            "producer": "app",
-            "runner_source_path": "quwoquan_app/test/local_contract/service/content_service/content/post/research_release_readback__security__local_contract_test.dart",
-            "spec_ref": "specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-002",
-            "target": {
-              "id": "GetResearchReleaseReadback",
-              "kind": "operation"
-            }
-          },
-          {
             "case_id": "apply-post-lifecycle-events-local",
             "executions": [
               {
@@ -267254,7 +266777,7 @@
     },
     {
       "path": "content/content/post/persisted_queries/content_post_detail.yaml",
-      "sha256": "e80bdbef2de3add2292bcfb6ec04819c2499d15000134ab7082432a124f6f808",
+      "sha256": "6fce474142c4875d2920f7cc1cd39e082661a43bc354b1ca274d05d6c900c184",
       "mediaType": "application/yaml",
       "content": {
         "appClientBundle": {
@@ -267290,9 +266813,12 @@
           }
         },
         "schema": "qwq.object-owned-internal-persisted-graphql",
-        "sha256Hash": "3a73f535735fcbb64f7de0db524e9dab2ca1f41d7f1fec91c68053dfde5bc80f",
+        "sha256Hash": "7e03c295fb73f2aaed2e8f944d7133b19a02dabd6a3ccc297b7f9f0b16b588d7",
         "variables": {
           "additionalProperties": false,
+          "generatedDefaults": {
+            "modificationsFirst": 4
+          },
           "required": [
             "postId"
           ]
@@ -267421,7 +266947,7 @@
     },
     {
       "path": "content/content/post/persisted_queries/content_post_detail_media.yaml",
-      "sha256": "cabfaf7845b41bf19ec653621fcdb40ee1d14c1aace59e5e61f0e8ab7ab128fd",
+      "sha256": "23505f2bdb28cc343548d1062b6ab60145cbb4f828727557e13b62826285dc2a",
       "mediaType": "application/yaml",
       "content": {
         "appClientBundle": {
@@ -267455,7 +266981,7 @@
           }
         },
         "schema": "qwq.object-owned-internal-persisted-graphql",
-        "sha256Hash": "2251d9dca6cc14a77ff40eb630223df0b432095a98c7bd3f9f72d2e8d0752c18",
+        "sha256Hash": "9d8916aa9564bd99f990ab00b32d79d70dc860d05108a5e6f30f07df43b2a25f",
         "variables": {
           "additionalProperties": false,
           "generatedDefaults": {
@@ -283662,7 +283188,7 @@
     },
     {
       "path": "content/media/original_access_quota/operations.yaml",
-      "sha256": "9f428f72274e5ad18631ec84f14626678fe4f2b548b9727b6457fd43bc937ea9",
+      "sha256": "d43c8bffd5a2608c237565fc703a3adf669a03b18b2a43a143425d1509e65671",
       "mediaType": "application/yaml",
       "content": {
         "api_routes": [
@@ -283683,7 +283209,7 @@
             "commercial": {
               "status": "ready"
             },
-            "description": "校验 MediaAsset named Reader 与资产策略后，在 viewer/media/purpose 窗口内原子预留一次额度并签发短时访问授权。准入按已验签 principal 分流（DEC-031）：普通会话保持 ready image、引用 Post named visibility reader 与 view|save；research principal 只允许 purpose=view，可为当前 active Research release 闭包内 ready 的 avatar|image|video 资产签发，release membership 缺失即拒绝。",
+            "description": "校验 MediaAsset named Reader 与资产策略后，在 viewer/media/purpose 窗口内原子预留一次额度并签发短时访问授权。准入统一要求 ready image、资产 owner-only 策略与引用 Post named visibility reader，支持 view|save；非 Data 私有媒体共享短签能力保留，不以 Data release membership 或研究身份绕过可见性判定。",
             "error_codes": [
               "CONTENT.USER.unauthorized",
               "CONTENT.USER.media_not_found",
@@ -283992,7 +283518,7 @@
     },
     {
       "path": "content/openapi.yaml",
-      "sha256": "4ef4ec4ef5d2ce279aa1479c9d275862920a75fe733bfd99ed3be08cafb2b1fc",
+      "sha256": "a48d741ec893946dd58016d577124866600956fc6a57c1038778e0278546b970",
       "mediaType": "application/yaml",
       "content": {
         "components": {
@@ -284463,12 +283989,6 @@
               "description": "字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。",
               "type": "object",
               "x-contract-entity": "RequestContentMediaOriginalAccessCommand",
-              "x-contract-placeholder": true
-            },
-            "ResearchReleaseReadbackView": {
-              "description": "字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。",
-              "type": "object",
-              "x-contract-entity": "ResearchReleaseReadbackView",
               "x-contract-placeholder": true
             },
             "ResolveReportRequest": {
@@ -288138,58 +287658,6 @@
               },
               "x-contract-operation-id": "content.report.RevokeGatheringSafetyTermination",
               "x-object-id": "content.report"
-            }
-          },
-          "/content/research/readback": {
-            "get": {
-              "operationId": "GetResearchReleaseReadback",
-              "parameters": [
-                {
-                  "in": "header",
-                  "name": "X-Research-Identity-Attestation",
-                  "required": true,
-                  "schema": {
-                    "type": "string"
-                  }
-                }
-              ],
-              "responses": {
-                "200": {
-                  "content": {
-                    "application/json": {
-                      "schema": {
-                        "$ref": "#/components/schemas/ResearchReleaseReadbackView"
-                      }
-                    }
-                  },
-                  "description": "OK"
-                },
-                "default": {
-                  "content": {
-                    "application/json": {
-                      "schema": {
-                        "$ref": "../_shared/openapi_common.yaml#/components/schemas/ErrorResponse"
-                      }
-                    }
-                  },
-                  "description": "Runtime failure"
-                }
-              },
-              "security": [
-                {
-                  "bearerAuth": []
-                }
-              ],
-              "x-actor": "account",
-              "x-application": {
-                "facet": "ResearchReleaseReadbackQueryFacet",
-                "kind": "query",
-                "method": "getResearchReleaseReadback",
-                "reader": "ActiveSupplyReader",
-                "slice": "ResearchReleaseReadbackView"
-              },
-              "x-contract-operation-id": "content.post.GetResearchReleaseReadback",
-              "x-object-id": "content.post"
             }
           },
           "/content/social-proof/{anchorKind}/{objectId}": {
@@ -397550,7 +397018,7 @@
     },
     {
       "path": "user/account/account_session/errors.yaml",
-      "sha256": "6712d602230525838fe8ff2f0a4a0c45ea604ed9b6f50105a4aab22ebc360f6b",
+      "sha256": "939593e8fc57271fb7755a822af8a32cac47fc10897475a17ac63292f4d5551b",
       "mediaType": "application/yaml",
       "content": {
         "description": "AccountSession 对象专属错误码。格式：MODULE.KIND.REASON。\n覆盖六路登录、token 生命周期、账号态与运营商/第三方登录链路；\ncodegen 与 user 域其余对象 errors.yaml 聚合生成端云错误契约。\n",
@@ -398062,34 +397530,12 @@
             }
           },
           {
-            "code": "USER.USER.research_identity_invalid",
-            "dart_const": "researchIdentityInvalid",
-            "disruption_level": "inlineCard",
-            "emitted_by": [
-              {
-                "operations": [
-                  "GetResearchSessionAttestation"
-                ],
-                "surface": "http"
-              }
-            ],
-            "go_const": "ErrResearchIdentityInvalid",
-            "http_status": 403,
-            "reason": "forbidden",
-            "recovery_action": "surface",
-            "user_message": {
-              "en": "The research identity is invalid or expired",
-              "zh": "当前研究态身份无效或已过期"
-            }
-          },
-          {
             "code": "USER.AUTH.account_security_unavailable",
             "dart_const": "accountSecurityUnavailable",
             "disruption_level": "inlineCard",
             "emitted_by": [
               {
                 "operations": [
-                  "GetResearchSessionAttestation",
                   "IssueWhitelistedResearchSession",
                   "Logout",
                   "user.contact_discovery_record.DismissContactDiscovery",
@@ -398246,7 +397692,7 @@
     },
     {
       "path": "user/account/account_session/fields.yaml",
-      "sha256": "fdbcf1376914a4c7889222eb9209c02544642d44d4698f19f8989649c4b8559c",
+      "sha256": "9e8b3863299a49d802b8b1713d5d3c7d5bd7e37c8f16a3bd835eb9f58a36e555",
       "mediaType": "application/yaml",
       "content": {
         "description": "登录会话、刷新轮换与吊销的独立生命周期根",
@@ -398917,44 +398363,6 @@
               }
             ]
           },
-          "ResearchSessionAttestationQuery": {
-            "fields": [
-              {
-                "client_dart_type": "String",
-                "client_wire_name": "X-Research-Identity-Attestation",
-                "constraints": [
-                  "NOT_BLANK"
-                ],
-                "name": "researchIdentityAttestation",
-                "type": "string"
-              }
-            ]
-          },
-          "ResearchSessionAttestationView": {
-            "fields": [
-              {
-                "constraints": [
-                  "NOT_BLANK"
-                ],
-                "name": "subjectHash",
-                "type": "string"
-              },
-              {
-                "constraints": [
-                  "NOT_BLANK"
-                ],
-                "name": "attestationId",
-                "type": "string"
-              },
-              {
-                "constraints": [
-                  "NOT_NULL"
-                ],
-                "name": "expiresAt",
-                "type": "timestamp"
-              }
-            ]
-          },
           "TokenRefreshGrant": {
             "fields": [
               {
@@ -399086,7 +398494,7 @@
     },
     {
       "path": "user/account/account_session/operations.yaml",
-      "sha256": "0a7c02e10d26360898b4fbb97d1672efb17de9d905d38f06e08050805395b13f",
+      "sha256": "08dc3c4a9aec08385f5910e3978ef15ee36e87299618abdbcd40478d04eb0a26",
       "mediaType": "application/yaml",
       "content": {
         "api_routes": [
@@ -399661,87 +399069,6 @@
             }
           },
           {
-            "actor": "account",
-            "application": {
-              "facet": "ResearchSessionQueryFacade",
-              "kind": "query",
-              "method": "getResearchSessionAttestation",
-              "reader": "ResearchSessionAttestationReader",
-              "slice": "ResearchSessionAttestationView"
-            },
-            "authorization": {
-              "ownership_policy": "authenticated_account_research_attestation",
-              "principal": "account"
-            },
-            "commercial": {
-              "block_reason": "research-only identity attestation readback is never a commercial session surface",
-              "gap_id": "USER_ACCOUNT_SESSION_RESEARCH_ONLY",
-              "status": "blocked",
-              "target_story": "multi-carrier-release"
-            },
-            "description": "已认证账号回读自身短期研究态签名证明；attestation 缺失、签名漂移、过期或与账号不符一律 fail closed",
-            "error_codes": [
-              "USER.USER.unauthorized",
-              "USER.USER.research_identity_invalid",
-              "USER.AUTH.account_security_unavailable",
-              "USER.SYSTEM.internal_error"
-            ],
-            "method": "GET",
-            "operation": "GetResearchSessionAttestation",
-            "path": "/auth/research/session/attestation",
-            "privacy": {
-              "log_policy": "none",
-              "request_classification": "SECRET",
-              "response_classification": "SECRET"
-            },
-            "reliability": {
-              "cancellation": "supported",
-              "idempotency": "none",
-              "max_attempts": 1,
-              "retry_mode": "none",
-              "timeout_ms": 800
-            },
-            "request_bindings": {
-              "header": [
-                {
-                  "field": "researchIdentityAttestation",
-                  "name": "X-Research-Identity-Attestation",
-                  "required": true
-                }
-              ]
-            },
-            "request_body_kind": "none",
-            "request_entity": "ResearchSessionAttestationQuery",
-            "response_body": "ResearchSessionAttestationView",
-            "response_body_kind": "object",
-            "response_entity": "ResearchSessionAttestationView",
-            "response_fields": [
-              "subjectHash",
-              "attestationId",
-              "expiresAt"
-            ],
-            "security": {
-              "anonymous_policy": "deny",
-              "auth_mode": "required",
-              "principal": "owner",
-              "token_transport": "bearer",
-              "visibility": "private"
-            },
-            "slo": {
-              "availability_percent": 99.9,
-              "latency_p95_ms": 800
-            },
-            "telemetry": {
-              "attributes": [
-                "environment",
-                "outcome",
-                "error_code"
-              ],
-              "metric": "user_research_session_attestation_readback",
-              "trace": true
-            }
-          },
-          {
             "actor": "none",
             "application": {
               "aggregate_owner": "AccountSession",
@@ -399923,26 +399250,6 @@
             "spec_ref": "specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-002",
             "target": {
               "id": "IssueWhitelistedResearchSession",
-              "kind": "operation"
-            }
-          },
-          {
-            "case_id": "get-research-session-attestation-local",
-            "executions": [
-              {
-                "device": "runner",
-                "digest_binding": "candidate",
-                "env": "alpha",
-                "platform": "service",
-                "provider": "none"
-              }
-            ],
-            "layer": "local_contract",
-            "producer": "service",
-            "runner_source_path": "quwoquan_service/services/user-service/tests/local_contract/account/account_session/research_session_attestation__security__local_contract_test.go",
-            "spec_ref": "specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-002",
-            "target": {
-              "id": "GetResearchSessionAttestation",
               "kind": "operation"
             }
           },
@@ -406635,7 +405942,7 @@
     },
     {
       "path": "user/account/user_account/errors.yaml",
-      "sha256": "f3f60054ddd64993d8d7f02bfb08b15114344e3b5b1d0fe6b84b19b292b20537",
+      "sha256": "6b9647a6f67c5100ba25765148e85de4937d226734d1f106a539b5bd4674e320",
       "mediaType": "application/yaml",
       "content": {
         "description": "UserProfile 对象与 user 域共享的通用错误码。格式：MODULE.KIND.REASON。\n认证挑战/登录会话/凭证绑定/设置/分身错误码已按归属对象拆分至\naccount_session、authentication_challenge、credential_binding、\nuser_settings、persona 各自 errors.yaml；codegen 按 user/**/errors.yaml\n聚合生成 Dart UserErrorCode enum + UserErrorMessages 与 Go errors.go。\n",
@@ -406691,7 +405998,6 @@
                   "SearchSocialRelations",
                   "SuspendAccount",
                   "user.account_appeal_intake.ClaimAccountAppealIntake",
-                  "user.account_session.GetResearchSessionAttestation",
                   "user.account_session.IssueWhitelistedResearchSession",
                   "user.account_session.Logout",
                   "user.contact_discovery_record.DismissContactDiscovery",
@@ -406937,7 +406243,6 @@
                   "user.account_appeal_intake.ClaimAccountAppealIntake",
                   "user.account_appeal_intake.IssueAccountAppealCredential",
                   "user.account_appeal_intake.SubmitAccountAppealIntake",
-                  "user.account_session.GetResearchSessionAttestation",
                   "user.account_session.IssueWhitelistedResearchSession",
                   "user.account_session.LoginAnonymous",
                   "user.account_session.LoginOneTap",
@@ -419018,7 +418323,7 @@
     },
     {
       "path": "user/openapi.yaml",
-      "sha256": "1d226aeb56b48e1e42db2b1d1757aed98674e4eca04c5767ff98dd5467bd5b00",
+      "sha256": "0fda29cb7f131073dd5d588430a76983570b8e665b0b65d26654515953c6f564",
       "mediaType": "application/yaml",
       "content": {
         "components": {
@@ -419519,12 +418824,6 @@
               "description": "字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。",
               "type": "object",
               "x-contract-entity": "RelationshipView",
-              "x-contract-placeholder": true
-            },
-            "ResearchSessionAttestationView": {
-              "description": "字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。",
-              "type": "object",
-              "x-contract-entity": "ResearchSessionAttestationView",
               "x-contract-placeholder": true
             },
             "ResolveOneTapLoginHintCommand": {
@@ -420365,58 +419664,6 @@
                 "method": "issueWhitelistedResearchSession"
               },
               "x-contract-operation-id": "user.account_session.IssueWhitelistedResearchSession",
-              "x-object-id": "user.account_session"
-            }
-          },
-          "/auth/research/session/attestation": {
-            "get": {
-              "operationId": "GetResearchSessionAttestation",
-              "parameters": [
-                {
-                  "in": "header",
-                  "name": "X-Research-Identity-Attestation",
-                  "required": true,
-                  "schema": {
-                    "type": "string"
-                  }
-                }
-              ],
-              "responses": {
-                "200": {
-                  "content": {
-                    "application/json": {
-                      "schema": {
-                        "$ref": "#/components/schemas/ResearchSessionAttestationView"
-                      }
-                    }
-                  },
-                  "description": "OK"
-                },
-                "default": {
-                  "content": {
-                    "application/json": {
-                      "schema": {
-                        "$ref": "../_shared/openapi_common.yaml#/components/schemas/ErrorResponse"
-                      }
-                    }
-                  },
-                  "description": "Runtime failure"
-                }
-              },
-              "security": [
-                {
-                  "bearerAuth": []
-                }
-              ],
-              "x-actor": "account",
-              "x-application": {
-                "facet": "ResearchSessionQueryFacade",
-                "kind": "query",
-                "method": "getResearchSessionAttestation",
-                "reader": "ResearchSessionAttestationReader",
-                "slice": "ResearchSessionAttestationView"
-              },
-              "x-contract-operation-id": "user.account_session.GetResearchSessionAttestation",
               "x-object-id": "user.account_session"
             }
           },

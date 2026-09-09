@@ -10,7 +10,7 @@
       "type": "string",
       "pattern": "^sha256:[0-9a-f]{64}$"
     },
-    "usageScope": {"enum": ["research", "commercial"]},
+    "usageScope": {"const": "production"},
     "evidence": {
       "type": "object",
       "additionalProperties": false,

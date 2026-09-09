@@ -210,9 +210,9 @@ def render_stack_bundle(
                 raise ValueError("package artifactDigest is not bound to the manifest")
             if "formalRelease" in evidence:
                 raise ValueError("package evidence must not claim formalRelease")
-            if evidence.get("releaseInputClassification") != "commercial_inputs":
+            if evidence.get("releaseInputClassification") != "production_inputs":
                 raise ValueError(
-                    "package evidence requires commercial release inputs"
+                    "package evidence requires production release inputs"
                 )
             if evidence.get("contractGraphDigest") != manifest.get(
                 "contractGraphDigest"
@@ -248,14 +248,14 @@ def render_stack_bundle(
                 or evidence.get("runtimeCandidateDigest") != candidate
                 or evidence.get("formalRelease") is not True
                 or evidence.get("releaseInputClassification")
-                != "commercial_inputs"
+                != "production_inputs"
                 or not runtime_images_valid
                 or evidence.get("destructiveRepairPerformed") is not False
                 or evidence.get("destructiveActions") != []
             ):
                 raise ValueError(
                     "Beta up evidence is not an immutable candidate runtime "
-                    "with commercial release inputs and without destructive repair"
+                    "with production release inputs and without destructive repair"
                 )
             if evidence.get("contractGraphDigest") != manifest.get(
                 "contractGraphDigest"

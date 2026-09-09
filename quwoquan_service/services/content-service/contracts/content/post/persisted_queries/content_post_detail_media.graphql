@@ -8,6 +8,8 @@ query ContentPostDetailMedia($postId: ID!, $mediaFirst: Int! = 20) {
       kind
       mediaAssetId
       mediaAssetVersion
+      accessMode
+      coverAssetId
       url
       coverUrl
       durationMs
@@ -18,6 +20,7 @@ query ContentPostDetailMedia($postId: ID!, $mediaFirst: Int! = 20) {
       hlsCmafMasterManifestUrl
       hlsCmafDescriptorVersion
       title
+      caption
     }
     thumbnailUrl
     videoUrl

@@ -100,7 +100,7 @@
         }
       }
     },
-    "usageScope": {"enum": ["research", "commercial", null]},
+    "usageScope": {"enum": ["production", null]},
     "holder": {"const": "content_library"}
   },
   "$defs": {

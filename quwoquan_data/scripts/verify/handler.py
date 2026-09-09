@@ -17,13 +17,18 @@ _STATIC_GATES = {
     "python-symbols": "verify_python_symbols",
     "no-flat-roots": "verify_no_flat_roots",
     "tag-tree": "verify_tag_tree",
+    "output-root-isolation": "verify_output_root_isolation",
+}
+# 历史 execution 与独立内容仓是运行输入，不属于源码提交的静态判据。
+# 完整 verify all 及点名检查仍严格校验，不改写原件或按旧 schema 放行。
+_RUNTIME_GATES = {
     "source-digest": "verify_source_digest",
     "content-execution-layout": "verify_content_execution_layout",
     "runtime-input-ownership": "verify_runtime_input_ownership",
-    "output-root-isolation": "verify_output_root_isolation",
     "object-size-budget": "verify_object_size_budget",
     "publish-closure": "verify_publish_closure",
 }
+_GATES = {**_STATIC_GATES, **_RUNTIME_GATES}
 _EXECUTION_GATES = {
     "task-init-contract": "verify_task_init_contract",
 }
@@ -36,7 +41,7 @@ _ARGV_STATIC_GATES = {
 
 
 def _run(name: str, argv: list[str] | None = None) -> int:
-    module = import_module(f"verify.{_STATIC_GATES[name]}")
+    module = import_module(f"verify.{_GATES[name]}")
     main: Callable[..., int | None] = getattr(module, "main")
     try:
         result = main(argv) if argv is not None else main()
@@ -45,34 +50,26 @@ def _run(name: str, argv: list[str] | None = None) -> int:
     return int(result or 0)
 
 
-def _admit_carried_media_holdings() -> int:
-    from content.release.canonical.rehydrate_media_holdings import main as rehydrate_main
-
-    return int(rehydrate_main() or 0)
-
-
-def handle_all() -> list[str]:
-    # Closure gates resolve media through the repository-external content library.
-    # A clean checkout starts with an empty library, so first admit the exact,
-    # hash-verified bodies carried in the out-of-repo carried media root.
-    if _admit_carried_media_holdings() != 0:
-        raise SystemExit(1)
-
+def handle_all(*, scope: str = "all") -> list[str]:
+    # 校验不承担恢复；源码提交不依赖未选中的历史 execution 或外部内容仓。
+    if scope not in {"all", "source"}:
+        raise ValueError(f"invalid verification scope: {scope}")
+    gates = _STATIC_GATES if scope == "source" else _GATES
     failed = [
         name
-        for name in _STATIC_GATES
+        for name in gates
         if _run(name, [] if name in _ARGV_STATIC_GATES else None)
     ]
     if failed:
-        raise SystemExit(f"[verify all] FAIL: {', '.join(failed)}")
-    print("[verify all] OK")
-    return list(_STATIC_GATES)
+        raise SystemExit(f"[verify all scope={scope}] FAIL: {', '.join(failed)}")
+    print(f"[verify all scope={scope}] OK")
+    return list(gates)
 
 
 def handle_verify(args: argparse.Namespace) -> None:
     command = str(args.verify_command)
     if command == "all":
-        handle_all()
+        handle_all(scope=args.scope)
         return
     if command in _EXECUTION_GATES:
         module = import_module(f"verify.{_EXECUTION_GATES[command]}")
@@ -107,8 +104,9 @@ def handle_verify(args: argparse.Namespace) -> None:
 def register_parser(subparsers: argparse._SubParsersAction) -> None:
     parser = subparsers.add_parser("verify", help="机械 schema、引用闭包与发布完整性校验")
     commands = parser.add_subparsers(dest="verify_command", required=True)
-    commands.add_parser("all", help="运行仓内全部目标态静态门")
-    for name in _STATIC_GATES:
+    aggregate = commands.add_parser("all", help="运行全部校验，或仅源码提交静态校验")
+    aggregate.add_argument("--scope", choices=("all", "source"), default="all")
+    for name in _GATES:
         command = commands.add_parser(name)
         if name == "content-execution-layout":
             command.add_argument("--execution-id")

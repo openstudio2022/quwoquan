@@ -1017,6 +1017,10 @@ value_objects:
       - name: title
         type: string
         constraints: [NULLABLE]
+      - name: caption
+        type: string
+        constraints: [NULLABLE]
+        description: 对应这一资产的逐图说明；缺席不生成说明，也不得以 title 代替。
       - name: coverStrategy
         type: string
         constraints: [NULLABLE]
@@ -1308,7 +1312,8 @@ value_objects:
         constraints:
           - NOT_NULL
       - name: publicationAdmission
-        type: string
+        type: enum
+        enum_ref: SourcePublicationAdmission
         constraints:
           - NOT_NULL
       - name: authorizationProofUrl
@@ -1319,10 +1324,18 @@ value_objects:
         type: string
         constraints:
           - NULLABLE
-      - name: riskAcceptanceId
+      - name: derivedModifications
+        type: '[]enum'
+        enum_ref: SourceDerivedModification
+        constraints: [NOT_NULL]
+        description: 发布字节相对原始素材的修改事实；显式空数组表示无修改，缺席非法。
+      - name: watermarkKind
+        type: enum
+        enum_ref: SourceWatermarkKind
+        constraints: [NULLABLE]
+      - name: watermarkNote
         type: string
-        constraints:
-          - NULLABLE
+        constraints: [NULLABLE]
       - name: watermarkStatus
         type: string
         constraints:
@@ -1415,6 +1428,12 @@ value_objects:
         api_exposure: none
         ops_exposure: read
 enums:
+  SourcePublicationAdmission:
+    values: [production_release]
+  SourceDerivedModification:
+    values: [video_frame_extraction, crop, resize, format_conversion]
+  SourceWatermarkKind:
+    values: [none, author_signature, platform_logo, stock_agency, other, unknown]
   ContentFeedOutcome:
     values: [content, empty]
   ContentFeedEmptyReason:
@@ -1485,48 +1504,6 @@ types:
       - name: postId
         type: string
         client_dart_type: String
-  ResearchReleaseReadbackQuery:
-    fields:
-      - name: researchIdentityAttestation
-        type: string
-        constraints: [NOT_BLANK]
-        client_dart_type: String
-        client_wire_name: X-Research-Identity-Attestation
-  ResearchReleaseReadbackView:
-    fields:
-      - name: releaseId
-        type: string
-        constraints: [NOT_BLANK]
-      - name: manifestDigest
-        type: string
-        constraints: [NOT_BLANK]
-      - name: subjectHash
-        type: string
-        constraints: [NOT_BLANK]
-      - name: attestationIdHash
-        type: string
-        constraints: [NOT_BLANK]
-      - name: signatureVerified
-        type: boolean
-        constraints: [NOT_NULL]
-      - name: researchBadgeVisible
-        type: boolean
-        constraints: [NOT_NULL]
-      - name: postIds
-        type: '[]string'
-        constraints: [NOT_NULL]
-      - name: entityRefs
-        type: '[]string'
-        constraints: [NOT_NULL]
-      - name: mediaAssetIds
-        type: '[]string'
-        constraints: [NOT_NULL]
-      - name: publicCdnDetected
-        type: boolean
-        constraints: [NOT_NULL]
-      - name: anonymousMediaUrlDetected
-        type: boolean
-        constraints: [NOT_NULL]
   ContentAuthorPostsQuery:
     fields:
       - name: personaId

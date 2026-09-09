@@ -76,10 +76,7 @@ void main() {
         UserErrorCode.accountSecurityUnavailable,
       );
       expect(UserErrorCode.accountSecurityUnavailable.httpStatus, 503);
-      expect(
-        UserErrorCode.accountSecurityUnavailable.recoveryAction,
-        'retry',
-      );
+      expect(UserErrorCode.accountSecurityUnavailable.recoveryAction, 'retry');
       expect(
         UserErrorCode.accountSecurityUnavailable.recoveryAfterSeconds,
         greaterThan(0),
@@ -87,13 +84,11 @@ void main() {
       expect(UserErrorCode.accountSecurityUnavailable.recoveryAfterSeconds, 3);
     });
 
-    test('研究态身份无效:403 surface', () {
+    test('退役研究身份错误不再属于当前枚举', () {
       expect(
         UserErrorCode.fromCode('USER.USER.research_identity_invalid'),
-        UserErrorCode.researchIdentityInvalid,
+        isNull,
       );
-      expect(UserErrorCode.researchIdentityInvalid.httpStatus, 403);
-      expect(UserErrorCode.researchIdentityInvalid.recoveryAction, 'surface');
     });
   });
 
@@ -123,32 +118,6 @@ void main() {
       final recovery = exception.runtimeFailure.recovery;
       expect(recovery.isPresent, isTrue);
       expect(recovery.action, 'surface');
-    });
-
-    test('research_identity_invalid 响应解析为 typed user 域错误', () {
-      final exception = CloudErrorMapper.fromStatusCode(
-        UserErrorCode.researchIdentityInvalid.httpStatus,
-        body: canonicalRuntimeErrorBody(
-          code: UserErrorCode.researchIdentityInvalid.code,
-          origin: 'user',
-          kind: 'permission',
-          nature: 'requiresUserAction',
-          businessObject: 'account_session',
-          functionModule: 'user',
-          userMessage: UserErrorCode.researchIdentityInvalid.defaultMessageZh,
-          recoveryAction: UserErrorCode.researchIdentityInvalid.recoveryAction,
-          disruptionLevel:
-              UserErrorCode.researchIdentityInvalid.disruptionLevel,
-        ),
-        requestPath: '/user/auth/research-identity',
-      );
-
-      expect(exception.domainErrorCode?.domain, 'user');
-      expect(
-        exception.domainErrorCode?.code,
-        UserErrorCode.researchIdentityInvalid.code,
-      );
-      expect(exception.runtimeFailure.recovery.action, 'surface');
     });
   });
 }

@@ -8,7 +8,7 @@ import java.util.List;
 import java.util.Map;
 
 public final class AppLaunchContract {
-  public static final String SOURCE_DIGEST = "sha256:b38964bc4c020536fc1f6bd31b35746f416128faa63bbed34b3e2676f6a4460d";
+  public static final String SOURCE_DIGEST = "sha256:a28f282cdd886f4062af16fe1bc4b2ef3d84c1392ab3dd61e8fa2524ee1c0c28";
   public static final List<String> ENVIRONMENTS = Collections.unmodifiableList(Arrays.asList(
       "alpha",
       "beta",
@@ -94,7 +94,7 @@ public final class AppLaunchContract {
       {"APP.LAUNCH.runtime_dependency_unavailable", "目标 runtime 的必需容器已退出或 unhealthy，编译安装前即阻断。"},
       {"APP.LAUNCH.workspace_entrypoint_inactive", "工作区投影存在性、当前终端命令解析或 IDE profile 尚未进入受支持状态。"},
       {"APP.LAUNCH.workspace_flutter_sdk_unavailable", "工作区激活时无法解析真实 Flutter SDK 或 SDK 版本与仓库锁定不符；激活必须在写入任何 workspace facade 投影前以本码阻断。"},
-      {"APP.PREPARATION.content_binding_unavailable", "无法从服务端 active release readback 解析出唯一 schema/digest 合法、passed=true 且 readinessPhase=research 的内容 readiness；零个或多个候选均阻断，禁止 latest 猜测。"},
+      {"APP.PREPARATION.content_binding_unavailable", "无法从服务端 active release readback 解析出唯一 schema/digest 合法、passed=true 且 readinessPhase=production 的内容 readiness；零个或多个候选均阻断，禁止 latest 猜测。"},
       {"APP.PREPARATION.receipt_invalid", "managed preparation receipt 缺失、schema/digest 非法或与本次 launch 身份不一致，canonical launcher 不得复用。"},
       {"APP.PREPARATION.runtime_unavailable", "managed 准备无法复用 exact running full runtime，且不满足有界替换条件（非 target lock 内、存在其他 live consumer lease 或替换失败）。"},
       {"APP.PREPARATION.strict_preflight_failed", "managed 严格预检（TLS、api-edge、user-service、integration-service、SMS Provider/relay identity、真实 OTP journey 与 homepage/creator avatar/image/typed video/premium stream 媒体字节）任一失败，在 Flutter build 前阻断。"},

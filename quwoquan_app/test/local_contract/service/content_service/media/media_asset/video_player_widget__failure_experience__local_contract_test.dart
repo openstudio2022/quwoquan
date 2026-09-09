@@ -1,3 +1,4 @@
+// spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-042
 // spec_ref: specs/feature-tree/discovery-content/dual-rail-discovery-redesign/works-immersive-viewer/spec.md#gwt-012
 // spec_ref: specs/feature-tree/discovery-content/dual-rail-discovery-redesign/works-immersive-viewer/spec.md#gwt-012.t1
 import 'package:flutter/cupertino.dart';
@@ -14,8 +15,18 @@ import 'package:quwoquan_app/runtime/transport/media/media_candidate_failure.dar
 import 'package:quwoquan_app/runtime/transport/media/media_delivery_reference.dart';
 import 'package:quwoquan_app/service/content_service/media/media_asset/application/media_playback_failure.dart';
 import 'package:quwoquan_app/design_system/media/app_cached_network_image.dart';
+import 'package:quwoquan_app/runtime/di/ops_event_dependencies.dart';
+import 'package:quwoquan_app/runtime/di/runtime_observability_dependencies.dart';
+import 'package:quwoquan_app/runtime/observability/runtime_log_ports.dart';
+import 'package:quwoquan_app/runtime/observability/runtime_log_record.dart';
+import 'package:quwoquan_app/runtime/observability/runtime_logger.dart';
+import 'package:quwoquan_app/runtime/transport/media/media_load_failure_cache.dart';
+import 'package:quwoquan_app/service/content_service/media/media_asset/presentation/video_player_widget.dart';
+import 'package:video_player_platform_interface/video_player_platform_interface.dart';
 
 import '../../../../../support/runtime/cloud_boundary_test_scope.dart';
+import '../../../../../support/runtime/observability/recording_app_telemetry_recorder.dart';
+import '../../../../../support/runtime/platform/media/fake_video_player_platform.dart';
 
 import 'package:quwoquan_app/service/content_service/media/original_access_quota/presentation/media_delivery_image.dart';
 
@@ -24,6 +35,108 @@ List<Override> _boundaryOverrides() {
 }
 
 void main() {
+  setUp(MediaLoadFailureCache.instance.clear);
+  tearDown(MediaLoadFailureCache.instance.clear);
+  tearDown(VideoPlayerWidget.debugResetControllerSlots);
+
+  for (final signed in <bool>[false, true]) {
+    testWidgets('视频负缓存命中不刷新 TTL、不换签或重复 QoE（signed=$signed）', (tester) async {
+      final cache = MediaLoadFailureCache.instance;
+      final delivery = MediaDeliveryResolver(
+        MediaEndpointConfig(
+          avatarBaseUrl: 'https://media.example.test',
+          imageBaseUrl: 'https://media.example.test',
+          videoBaseUrl: 'https://media.example.test',
+          attachmentBaseUrl: 'https://media.example.test',
+        ),
+      ).resolve(
+        'media/video/s/fixture/v1/missing.mp4',
+        kind: MediaDeliveryKind.video,
+      );
+      final identity = delivery.cacheIdentity;
+      cache.recordTerminalFailure(
+        identity,
+        kind: MediaCandidateFailureKind.http404,
+        statusCode: 404,
+        cooldown: const Duration(seconds: 7),
+      );
+      final original = cache.activeFailure(identity)!;
+      final telemetry = RecordingAppTelemetryRecorder();
+      final logger = RuntimeLogger(
+        resource: const RuntimeLogResource(
+          sourceType: 'app',
+          environment: 'alpha',
+          service: 'quwoquan_app',
+          appVersion: 'test',
+        ),
+        buffer: InMemoryRuntimeLogBuffer(),
+      );
+      addTearDown(logger.dispose);
+      final fakePlatform = FakeVideoPlayerPlatform();
+      final previousPlatform = VideoPlayerPlatform.instance;
+      VideoPlayerPlatform.instance = fakePlatform;
+      addTearDown(() => VideoPlayerPlatform.instance = previousPlatform);
+      var reSignCount = 0;
+      final failures = <MediaPlaybackFailure>[];
+      Widget player(int instance) => ProviderScope(
+        overrides: <Override>[
+          ..._boundaryOverrides(),
+          appTelemetryReporterProvider.overrideWithValue(telemetry),
+          runtimeLoggerProvider.overrideWithValue(logger),
+        ],
+        child: ScreenUtilInit(
+          designSize: const Size(390, 844),
+          builder: (_, _) => CupertinoApp(
+            home: SizedBox(
+              width: 390,
+              height: 220,
+              child: VideoPlayerWidget(
+                key: ValueKey<int>(instance),
+                deliveryReference: signed ? null : delivery,
+                signedDelivery: signed
+                    ? SignedVideoDelivery(
+                        deliveryUri: Uri.parse(
+                          '${delivery.url}?sign=fixture&t=1893456300',
+                        ),
+                        cacheIdentity: identity,
+                        assetId: 'fixture-video',
+                        onReSignRequested: () => reSignCount += 1,
+                      )
+                    : null,
+                onPlaybackFailed: failures.add,
+              ),
+            ),
+          ),
+        ),
+      );
+      for (var instance = 0; instance < 3; instance += 1) {
+        await tester.pumpWidget(player(instance));
+        await tester.pump();
+        expect(
+          find.byKey(const ValueKey<String>('video-player-error')),
+          findsOneWidget,
+        );
+        expect(cache.activeFailure(identity), same(original));
+        expect(
+          cache.activeFailure(identity)!.cooldown,
+          const Duration(seconds: 7),
+        );
+      }
+      expect(fakePlatform.createdDataSources, isEmpty);
+      expect(VideoPlayerWidget.debugActiveControllerCount, 0);
+      expect(reSignCount, 0);
+      expect(failures, isEmpty);
+      expect(
+        telemetry.recorded.where(
+          (event) => event.eventType == 'video_playback_qoe',
+        ),
+        isEmpty,
+      );
+      await tester.pumpWidget(const SizedBox.shrink());
+      expect(tester.takeException(), isNull);
+    });
+  }
+
   final thumbnail =
       MediaDeliveryResolver(
         MediaEndpointConfig(

@@ -65,6 +65,8 @@ def test_importers_read_release_payload_without_publish_root(
         media_video_base_url="https://cdn.example.invalid",
         dry_run=True,
         creator_candidate_receipt=run / "creator-import.json",
+        homepage_import_report=run / "homepage-import.json",
+        homepage_candidate_receipt=None,
     )
     importers.run_creator_importer(
         release=release,
@@ -88,6 +90,8 @@ def test_importers_read_release_payload_without_publish_root(
 
     assert len(commands) == 4
     assert "--creator-receipt" in commands[1]
+    assert commands[1][commands[1].index("--homepage-report") + 1] == str(run / "homepage-import.json")
+    assert "--homepage-candidate-receipt" not in commands[1]
     assert commands[1].count("--activation-mode") == 1
     assert commands[1][commands[1].index("--activation-mode") + 1] == "stage-only"
     assert not any(flag.startswith("--expected-active-") for flag in commands[1])
@@ -173,4 +177,6 @@ def _content_importer_kwargs(tmp_path: Path) -> dict[str, object]:
         "media_video_base_url": "https://cdn.example.invalid",
         "dry_run": True,
         "creator_candidate_receipt": tmp_path / "runs/apply-a/creator-candidate-receipt.json",
+        "homepage_import_report": tmp_path / "runs/apply-a/homepage-import.json",
+        "homepage_candidate_receipt": None,
     }

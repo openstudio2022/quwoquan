@@ -174,8 +174,7 @@ def write_environment_release_readiness(
         "containsUnverifiedAssets",
         "rightsStatusCounts",
         "authorizationRequiredAssetIds",
-        "researchAcceptedCount",
-        "commercialAcceptedCount",
+        "acceptedCount",
     )
     source_identity_fields = _release_source_identity_fields(header)
     if any(
@@ -406,10 +405,7 @@ def write_environment_release_readiness(
         "authorizationRequiredAssetIds": list(
             header.get("authorizationRequiredAssetIds") or []
         ),
-        "researchAcceptedCount": int(header.get("researchAcceptedCount") or 0),
-        "commercialAcceptedCount": int(
-            header.get("commercialAcceptedCount") or 0
-        ),
+        "acceptedCount": int(header["acceptedCount"]),
         "readinessPhase": readiness_phase,
         "manifestDigest": actual_payload_digest,
         "mediaManifestDigest": media_manifest_digest,

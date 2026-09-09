@@ -10,6 +10,7 @@ from pathlib import Path, PurePosixPath
 from typing import Any
 
 from content.execution.identity import parse_execution_id, validate_execution_id
+from content.execution.task_init import TaskInitError, execution_target_ref
 from core import paths
 from core.io import read_json
 from core.schema import assert_valid
@@ -100,27 +101,6 @@ def _bound_document(
     return value
 
 
-def _target_ref(target: Mapping[str, Any], *, carrier: str) -> str | None:
-    name = str(target.get("name") or "").strip()
-    entity_type = str(target.get("entityType") or "").strip().strip("/")
-    if not name or len(entity_type.split("/")) != 2:
-        return None
-    if carrier == "homepage":
-        return f"entities/{entity_type}/{name}"
-    angle = str(target.get("publishAngle") or "").strip()
-    title = str(target.get("publishTitle") or "").strip()
-    sequence = target.get("publishSeq")
-    if (
-        not angle
-        or not title
-        or isinstance(sequence, bool)
-        or not isinstance(sequence, int)
-        or sequence < 1
-    ):
-        return None
-    return f"posts/{carrier}/{angle}/{title}/{sequence}"
-
-
 def _retry_execution_id(value: object, *, failures: list[str]) -> str | None:
     if value is None:
         return None
@@ -154,8 +134,9 @@ def _candidate_projection(
         if carrier != "homepage":
             target["publishAngle"] = str(target.get("publishAngle") or "").strip()
             target["publishTitle"] = str(target.get("publishTitle") or "").strip()
-        ref = _target_ref(target, carrier=carrier)
-        if ref is None:
+        try:
+            ref = execution_target_ref(target, carrier=carrier)
+        except TaskInitError:
             return None
         pairs.append((ref, target))
     pairs.sort(key=lambda pair: pair[0])
@@ -267,11 +248,8 @@ def issues(execution_id: str) -> list[str]:
         failures.append("task-init targets are invalid")
         targets = []
         target_refs = []
-    derived_refs = [
-        _target_ref(target, carrier=carrier) if isinstance(target, Mapping) else None
-        for target in targets
-    ]
-    if any(ref is None for ref in derived_refs) or target_refs != derived_refs:
+    target_projection = _candidate_projection(targets, carrier=carrier)
+    if target_projection is None or target_projection != (targets, target_refs):
         failures.append("task-init targetRefs drift")
     if target_set.get("targetCount") != len(targets) or len(target_refs) != len(targets):
         failures.append("task-init target count drift")

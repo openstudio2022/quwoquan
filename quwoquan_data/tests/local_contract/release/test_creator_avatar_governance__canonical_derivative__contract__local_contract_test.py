@@ -93,7 +93,7 @@ def _fixture(
     admit_media_body(source)
     source_asset_id = "source-landscape"
     _write_json(
-        source_root / "asset.refs.json",
+        source_root / "manifest.json",
         {
             "assets": [
                 {

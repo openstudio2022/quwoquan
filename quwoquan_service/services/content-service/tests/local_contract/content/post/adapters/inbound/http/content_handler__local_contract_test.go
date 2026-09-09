@@ -157,7 +157,7 @@ func (reader readyFeedActiveSupplyReader) ActiveSupplySnapshot(
 ) (feedapp.ActiveSupplySnapshot, error) {
 	releaseClass := strings.TrimSpace(reader.releaseClass)
 	if releaseClass == "" {
-		releaseClass = "commercial"
+		releaseClass = "production"
 	}
 	return feedapp.ActiveSupplySnapshot{
 		Environment:       "local_contract",
@@ -347,7 +347,7 @@ func TestHealthz(t *testing.T) {
 }
 
 // spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/design.md#dec-032
-func TestAnonymousIdentityWorkFeedConvergesResearchReleaseOnWire(t *testing.T) {
+func TestAnonymousIdentityWorkFeedRejectsRetiredReleaseOnWire(t *testing.T) {
 	handler, _ := newTestHandlerWithActiveSupply(
 		readyFeedActiveSupplyReader{releaseClass: "research"},
 	)
@@ -360,19 +360,15 @@ func TestAnonymousIdentityWorkFeedConvergesResearchReleaseOnWire(t *testing.T) {
 
 	handler.ServeHTTP(recorder, request)
 
-	if recorder.Code != http.StatusOK {
-		t.Fatalf("anonymous research feed status=%d: %s", recorder.Code, recorder.Body.String())
+	if recorder.Code != http.StatusServiceUnavailable {
+		t.Fatalf("anonymous retired feed status=%d: %s", recorder.Code, recorder.Body.String())
 	}
 	var envelope map[string]any
 	if err := json.Unmarshal(recorder.Body.Bytes(), &envelope); err != nil {
 		t.Fatalf("decode anonymous research feed: %v", err)
 	}
-	if envelope["outcome"] != "empty" || envelope["emptyReason"] != "no_active_release" {
-		t.Fatalf("anonymous research feed must converge to no_active_release: %#v", envelope)
-	}
-	items, itemsPresent := envelope["items"].([]any)
-	if !itemsPresent || len(items) != 0 {
-		t.Fatalf("anonymous research feed items=%#v, want required empty list", envelope["items"])
+	if _, exists := envelope["items"]; exists {
+		t.Fatalf("retired release must not emit feed items: %#v", envelope)
 	}
 	for _, forbidden := range []string{"releaseId", "manifestDigest"} {
 		if _, has := envelope[forbidden]; has {

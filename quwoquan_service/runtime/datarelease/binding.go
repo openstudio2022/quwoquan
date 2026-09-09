@@ -46,17 +46,14 @@ const (
 	ReleaseKindContent       ReleaseKind = "content"
 	ReleaseKindEmptyBaseline ReleaseKind = "empty_baseline"
 
-	ReleaseClassResearch   ReleaseClass = "research"
-	ReleaseClassCommercial ReleaseClass = "commercial"
-	// ReleaseClassProduction 是 Data producer 单一 production 类别（DEC-041）；
-	// research/commercial 为历史 release 的封存取值，下游按 OPEN-024 退役。
+	// ReleaseClassProduction 是当前 Data 发布唯一合法类别。
 	ReleaseClassProduction ReleaseClass = "production"
 )
 
 // IsKnownReleaseClass 是四域 importer 与 release-control 共用的 releaseClass 闭集。
 func IsKnownReleaseClass(class ReleaseClass) bool {
 	switch class {
-	case ReleaseClassResearch, ReleaseClassCommercial, ReleaseClassProduction:
+	case ReleaseClassProduction:
 		return true
 	default:
 		return false
@@ -435,6 +432,9 @@ func decodeJSONObject(raw []byte, relativePath string) (map[string]json.RawMessa
 		var value json.RawMessage
 		if err := decoder.Decode(&value); err != nil {
 			return nil, &LoadError{Code: CodeInvalidJSON, Path: relativePath, Field: name, Detail: "decode field", Err: err}
+		}
+		if name == "class" || name == "privateObjectKey" {
+			return nil, &LoadError{Code: CodeInvalidField, Path: relativePath, Field: name, Detail: "retired release field is forbidden"}
 		}
 		object[name] = value
 	}

@@ -99,7 +99,8 @@ func decodePostMediaItems(raw any) ([]postmodel.PostMediaItem, error) {
 			"kind", "mediaAssetId", "mediaAssetVersion", "url", "coverUrl",
 			"thumbnailUrl", "durationMs", "width", "height",
 			"previewTrackManifestUrl", "previewTrackVersion",
-			"hlsCmafMasterManifestUrl", "hlsCmafDescriptorVersion", "title",
+			"hlsCmafMasterManifestUrl", "hlsCmafDescriptorVersion", "title", "caption",
+			"accessMode", "coverAssetId",
 			"coverStrategy", "coverFrameTimeMs",
 		)); err != nil {
 			return nil, fmt.Errorf("mediaItems[%d]: %w", index, err)
@@ -119,6 +120,9 @@ func decodePostMediaItems(raw any) ([]postmodel.PostMediaItem, error) {
 			HlsCmafMasterManifestUrl: strings.TrimSpace(asString(row["hlsCmafMasterManifestUrl"])),
 			HlsCmafDescriptorVersion: asInt64Flexible(row["hlsCmafDescriptorVersion"]),
 			Title:                    strings.TrimSpace(asString(row["title"])),
+			Caption:                  asString(row["caption"]),
+			AccessMode:               strings.TrimSpace(asString(row["accessMode"])),
+			CoverAssetId:             strings.TrimSpace(asString(row["coverAssetId"])),
 			CoverStrategy:            strings.TrimSpace(asString(row["coverStrategy"])),
 			CoverFrameTimeMs:         asInt64Flexible(row["coverFrameTimeMs"]),
 		})

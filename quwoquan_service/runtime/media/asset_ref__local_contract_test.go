@@ -87,7 +87,7 @@ func TestResolveReleaseMediaAssetUsesSameHTTPSBaseValidationAsURLBuilder(t *test
 			PublicSliceKey:     publicSliceKey,
 			SHA256:             digest,
 			OwnerRefs:          []string{ownerRef},
-			RightsSnapshotRefs: []string{"objects/" + ownerRef + "/rights_snapshots/r1.json"},
+			RightsSnapshotRefs: []string{"objects/" + ownerRef + "/sources/r1/source.json"},
 		},
 	}
 
@@ -138,6 +138,29 @@ func TestResolveReleaseMediaAssetUsesSameHTTPSBaseValidationAsURLBuilder(t *test
 		1,
 	); got != "" {
 		t.Fatalf("cross-kind role base must fail closed, got %q", got)
+	}
+}
+
+func TestReleaseSourceRefsAuthorizeOnlyExactCanonicalOwner(t *testing.T) {
+	const owner = "posts/image/sources/实体甲/1"
+	valid := "objects/" + owner + "/sources/unit-1/source.json"
+	if !canonicalReleaseRightsRef(valid) || releaseRightsOwner(valid) != owner ||
+		!rightsAuthorizeReleaseOwner([]string{valid}, owner) {
+		t.Fatal("owner path containing sources must bind the terminal source document")
+	}
+	for _, ref := range []string{
+		"objects/" + owner + "/rights_snapshots/unit-1.json",
+		"objects/" + owner + "/sources/unit-1/other.json",
+		"objects/" + owner + "/sources/../unit-1/source.json",
+		"objects/" + owner + "/sources/unit%2F1/source.json",
+		"objects/" + owner + "/sources/unit-1/source.json/extra",
+		"objects/" + owner + "/sources/unit-1/source.json?token=value",
+		"objects/" + owner + "/nested/sources/unit-1/source.json",
+		"/objects/" + owner + "/sources/unit-1/source.json",
+	} {
+		if rightsAuthorizeReleaseOwner([]string{ref}, owner) {
+			t.Fatalf("non-canonical or different-owner source must not authorize %q", ref)
+		}
 	}
 }
 

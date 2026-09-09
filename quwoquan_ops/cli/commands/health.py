@@ -113,14 +113,11 @@ def _script_probes_for_target(
     report_dir: Path,
     *,
     require_non_empty_content_feed: bool = False,
-    research_anonymous_convergence: bool = False,
     deadline_epoch: int = 0,
 ) -> tuple[list[dict[str, Any]], list[tuple[str, str]], list[str]]:
     import quwoquan_ops.cli.stackctl as _stackctl
 
-    feed_semantics_selected = (
-        require_non_empty_content_feed or research_anonymous_convergence
-    )
+    feed_semantics_selected = require_non_empty_content_feed
     if scope != "full" and not feed_semantics_selected:
         return [], [], []
     statuses: list[dict[str, Any]] = []
@@ -146,7 +143,6 @@ def _script_probes_for_target(
             target_name,
             report_dir,
             require_non_empty_content_feed=require_non_empty_content_feed,
-            research_anonymous_convergence=research_anonymous_convergence,
             only_checks=only_checks,
             timeout_seconds=probe_timeout,
         )
@@ -382,9 +378,6 @@ def command_health(args: argparse.Namespace) -> dict[str, Any]:
                 report_dir,
                 require_non_empty_content_feed=bool(
                     getattr(args, "require_non_empty_content_feed", False)
-                ),
-                research_anonymous_convergence=bool(
-                    getattr(args, "research_anonymous_convergence", False)
                 ),
                 deadline_epoch=deadline_epoch,
             )

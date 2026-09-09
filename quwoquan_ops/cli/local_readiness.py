@@ -207,9 +207,25 @@ def command_managed_pytest(args: argparse.Namespace) -> int:
 
 _SECRET_PATTERNS = (
     re.compile(rb"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----"),
-    re.compile(rb"(?i)(?:api[_-]?key|secret|password|access[_-]?token)\s*[:=]\s*['\"]?[A-Za-z0-9/+_.-]{24,}"),
+    re.compile(rb"(?i)(?<![A-Za-z0-9])(?:api[_-]?key|access[_-]?key[_-]?secret|secret|password|access[_-]?token)\s*[:=]\s*(?P<quote>['\"`]?)(?P<value>[A-Za-z0-9/+_.-]{24,})"),
     re.compile(rb"AKIA[0-9A-Z]{16}"),
 )
+# 仅裸字段引用属于代码间接层；带引号的相同文本仍是字面量。
+# 不豁免裸大写字符串：仅靠大写形状无法区分环境变量与真实密钥。
+_SECRET_FIELD_REFERENCE = re.compile(rb"[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)+")
+
+
+def _has_secret_material(blob: bytes) -> bool:
+    for pattern in _SECRET_PATTERNS:
+        for match in pattern.finditer(blob):
+            value = match.groupdict().get("value")
+            if value is None or match.group("quote"):
+                return True
+            if not _SECRET_FIELD_REFERENCE.fullmatch(value):
+                return True
+    return False
+
+
 _PII_PATTERNS = (
     # 手机号两侧排除十六进制字符：sha256/digest 里任意 11 位数字子串（如 "18916601719eac…"）
     # 不是号码；否则 contract_graph.json 这类生成物每次刷新都会被误判为直接 PII。
@@ -354,7 +370,7 @@ def command_staged_boundary(_args: argparse.Namespace) -> int:
         blob = subprocess.run(["git", "show", f":{path}"], cwd=ROOT, capture_output=True, check=False)
         if blob.returncode != 0:  # deleted/rename source has no index blob
             continue
-        if any(pattern.search(blob.stdout) for pattern in _SECRET_PATTERNS):
+        if _has_secret_material(blob.stdout):
             raise LocalReadinessError(f"staged secret material detected: {path}")
         if b"\x00" in blob.stdout[:8192]:
             # 二进制媒体（图片/视频/字体）里的数字与 @ 只是字节巧合，不是手机号或邮箱。

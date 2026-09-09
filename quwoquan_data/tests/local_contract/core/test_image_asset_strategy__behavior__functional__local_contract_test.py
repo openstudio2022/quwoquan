@@ -19,7 +19,7 @@ from core.image_asset_strategy import (  # noqa: E402
 
 
 def test_default_strategy_is_open_license_publish():
-    spec = {"content": {"research": {"allowAiImages": False}}}
+    spec = {"content": {"sourceDiscovery": {"allowAiImages": False}}}
 
     assert image_asset_strategy(spec) == "open_license_publish"
     assert validate_image_asset_strategy(spec) == []
@@ -28,7 +28,7 @@ def test_default_strategy_is_open_license_publish():
 def test_ai_generated_strategy_requires_ai_flag_and_provider():
     spec = {
         "content": {
-            "research": {
+            "sourceDiscovery": {
                 "imageAssetStrategy": "ai_generated_original",
                 "allowAiImages": False,
             }
@@ -44,7 +44,7 @@ def test_ai_generated_strategy_requires_ai_flag_and_provider():
 def test_reference_only_strategy_is_not_release_allowed():
     spec = {
         "content": {
-            "research": {
+            "sourceDiscovery": {
                 "imageAssetStrategy": "reference_only_no_image_release",
                 "allowAiImages": False,
             }
@@ -66,7 +66,7 @@ def test_attribution_audited_strategy_allows_scale_without_license_pool_gate():
         },
         "content": {
             "quotas": {"imageWorksPerTarget": 1},
-            "research": {
+            "sourceDiscovery": {
                 "imageAssetStrategy": "attribution_audited_publish",
                 "imageCountPolicy": "hard_quota",
                 "allowAiImages": False,
@@ -89,7 +89,7 @@ def test_open_license_scale_requires_prescreened_pool_or_publish_strategy():
         },
         "content": {
             "quotas": {"imageWorksPerTarget": 2},
-            "research": {
+            "sourceDiscovery": {
                 "imageAssetStrategy": "open_license_publish",
                 "allowAiImages": False,
             },
@@ -115,7 +115,7 @@ def test_one_image_per_target_cannot_bypass_commercial_scale_proof():
         },
         "content": {
             "quotas": {"imageWorksPerTarget": 1},
-            "research": {
+            "sourceDiscovery": {
                 "imageAssetStrategy": "open_license_publish",
                 "imageCountPolicy": "score_bonus",
                 "allowAiImages": False,
@@ -140,7 +140,7 @@ def test_homepage_scale_requires_one_publishable_image_per_target():
         },
         "content": {
             "quotas": {"imageWorksPerTarget": 0},
-            "research": {
+            "sourceDiscovery": {
                 "imageAssetStrategy": "open_license_publish",
                 "imageCountPolicy": "hard_quota",
                 "minimumPublishableImagesPerTarget": 1,
@@ -167,7 +167,7 @@ def test_hard_quota_open_license_scale_requires_publishable_asset_count():
         },
         "content": {
             "quotas": {"imageWorksPerTarget": 2},
-            "research": {
+            "sourceDiscovery": {
                 "imageAssetStrategy": "open_license_publish",
                 "imageCountPolicy": "hard_quota",
                 "allowAiImages": False,
@@ -198,7 +198,7 @@ def test_open_license_scale_passes_with_prescreened_pool_proof():
         },
         "content": {
             "quotas": {"imageWorksPerTarget": 2},
-            "research": {
+            "sourceDiscovery": {
                 "imageAssetStrategy": "open_license_publish",
                 "allowAiImages": False,
             },
@@ -225,7 +225,7 @@ def test_licensed_provider_scale_requires_asset_pool_proof():
         },
         "content": {
             "quotas": {"imageWorksPerTarget": 2},
-            "research": {
+            "sourceDiscovery": {
                 "imageAssetStrategy": "licensed_provider_publish",
                 "allowAiImages": False,
                 "licensedImageProvider": "commercial-photo-provider",
@@ -251,7 +251,7 @@ def test_ai_generated_scale_requires_synthetic_pool_proof():
         },
         "content": {
             "quotas": {"imageWorksPerTarget": 2},
-            "research": {
+            "sourceDiscovery": {
                 "imageAssetStrategy": "ai_generated_original",
                 "allowAiImages": True,
                 "syntheticAssetProvider": "approved-image-generator",

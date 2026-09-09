@@ -276,10 +276,19 @@ func loadReleaseClass(releaseRoot string) (string, error) {
 	if err := json.Unmarshal(raw, &header); err != nil {
 		return "", fmt.Errorf("decode release header: %w", err)
 	}
-	if strings.TrimSpace(header.ReleaseClass) == "" {
-		return "", fmt.Errorf("release header releaseClass is required")
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &fields); err != nil {
+		return "", fmt.Errorf("decode release header fields: %w", err)
 	}
-	return strings.TrimSpace(header.ReleaseClass), nil
+	for _, retired := range []string{"class", "privateObjectKey"} {
+		if _, exists := fields[retired]; exists {
+			return "", fmt.Errorf("release header contains retired field %s", retired)
+		}
+	}
+	if header.ReleaseClass != "production" {
+		return "", fmt.Errorf("release header requires releaseClass=production, got %q", header.ReleaseClass)
+	}
+	return header.ReleaseClass, nil
 }
 
 func safeRef(ref string) error {

@@ -96,8 +96,7 @@ def _release(
                 "unknown": 0,
             },
             "authorizationRequiredAssetIds": (["research-asset-a"] if research else []),
-            "researchAcceptedCount": 1 if research else 0,
-            "commercialAcceptedCount": 0,
+            "acceptedCount": 1 if research else 0,
             "canonicalMerkle": "sha256:" + "a" * 64,
             "executionIds": [
                 "20260804--travel-commercial-rights-closure--china--pilot-003"

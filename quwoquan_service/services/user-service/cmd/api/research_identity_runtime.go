@@ -67,27 +67,3 @@ func buildResearchSessionHandler(
 	}
 	return researchhttp.NewResearchSessionHandler(facade)
 }
-
-func buildResearchSessionAttestationHandler(
-	appEnv string,
-	cfg config,
-) (*researchhttp.ResearchSessionAttestationHandler, error) {
-	authority, err := researchapp.ResolveResearchIdentityAuthority(
-		appEnv,
-		cfg.ResearchIdentity.Enabled,
-		cfg.ResearchIdentity.TTLSeconds,
-	)
-	if err != nil {
-		return nil, err
-	}
-	if !authority.Enabled {
-		return researchhttp.NewResearchSessionAttestationHandler(
-			researchapp.NewUnavailableResearchSessionQueryFacade(),
-		)
-	}
-	facade, err := researchapp.NewResearchSessionQueryFacade(authority.Key)
-	if err != nil {
-		return nil, fmt.Errorf("research identity query composition: %w", err)
-	}
-	return researchhttp.NewResearchSessionAttestationHandler(facade)
-}

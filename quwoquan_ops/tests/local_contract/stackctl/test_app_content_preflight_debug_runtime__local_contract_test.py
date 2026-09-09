@@ -51,7 +51,7 @@ class AppContentPreflightDebugRuntimeTest(unittest.TestCase):
     ) -> None:
         readiness = {
             "releaseId": "release-a",
-            "readinessPhase": "commercial",
+            "readinessPhase": "production",
             "appUatEnvelope": {
                 "releaseId": "release-other",
                 "videoWorkId": "legacy-video",
@@ -553,7 +553,7 @@ class AppContentPreflightDebugRuntimeTest(unittest.TestCase):
                 "immutable_candidate",
             )
 
-    def test_active_candidate_resolves_only_commercial_release_and_lifecycle(self) -> None:
+    def test_active_candidate_resolves_only_production_release_and_lifecycle(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory, patch.dict(
             os.environ,
             {"QWQ_OUTPUT_ROOT": temporary_directory},
@@ -565,8 +565,8 @@ class AppContentPreflightDebugRuntimeTest(unittest.TestCase):
             attestation.write_text(
                 json.dumps(
                     {
-                        "releaseClass": "commercial",
-                        "productLifecycleState": "commercial",
+                        "releaseClass": "production",
+                        "productLifecycleState": "production",
                     }
                 )
                 + "\n",
@@ -606,9 +606,9 @@ class AppContentPreflightDebugRuntimeTest(unittest.TestCase):
             lifecycle_path.write_text("{}\n", encoding="utf-8")
             readiness = {
                 "releaseId": "release-a",
-                "releaseClass": "commercial",
-                "productLifecycleState": "commercial",
-                "readinessPhase": "commercial",
+                "releaseClass": "production",
+                "productLifecycleState": "production",
+                "readinessPhase": "production",
                 "verifyRunId": "verify-a",
                 "manifestDigest": manifest_digest,
                 "counts": {"posts": 3, "creators": 1},
@@ -646,6 +646,20 @@ class AppContentPreflightDebugRuntimeTest(unittest.TestCase):
                 resolved = stackctl._resolve_active_app_content_evidence(
                     "alpha-local"
                 )
+                # 更新 exact digest 后仍必须拒绝旧类别，不能因文件完整而重开旧轨。
+                for retired in ("research", "commercial"):
+                    with self.subTest(retired=retired):
+                        attestation.write_text(json.dumps({
+                            "releaseClass": retired, "productLifecycleState": retired,
+                        }), encoding="utf-8")
+                        manifest["release"]["candidate"]["attestationDigest"] = (
+                            "sha256:" + hashlib.sha256(attestation.read_bytes()).hexdigest()
+                        )
+                        (candidate_dir / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+                        with self.assertRaisesRegex(ValueError, "release lifecycle is invalid"):
+                            stackctl._resolve_active_app_content_evidence("alpha-local")
+                self.assertEqual(load_readiness.call_count, 1)
+                self.assertEqual(load_lifecycle.call_count, 1)
 
             self.assertEqual(resolved[0]["baselineId"], manifest["baselineId"])
             self.assertEqual(resolved[1], readiness)
@@ -657,7 +671,7 @@ class AppContentPreflightDebugRuntimeTest(unittest.TestCase):
             )
             self.assertEqual(
                 load_readiness.call_args.kwargs["readiness_phase"],
-                stackctl.ReadinessPhase.COMMERCIAL,
+                stackctl.ReadinessPhase.PRODUCTION,
             )
             self.assertEqual(
                 load_lifecycle.call_args.kwargs["lifecycle_exit_ref"],
@@ -765,8 +779,8 @@ class AppContentPreflightDebugRuntimeTest(unittest.TestCase):
                 "releaseId": release_id,
                 "sourceOwner": "qwq_data",
                 "releaseKind": "content",
-                "releaseClass": "commercial",
-                "productLifecycleState": "commercial",
+                "releaseClass": "production",
+                "productLifecycleState": "production",
                 "milestone": "M100",
                 "poolDigest": "sha256:" + "2" * 64,
                 "canonicalMerkle": "sha256:" + "6" * 64,
@@ -815,8 +829,8 @@ class AppContentPreflightDebugRuntimeTest(unittest.TestCase):
             attestation = {
                 "schema": "quwoquan_data.release_attestation",
                 "releaseId": release_id,
-                "releaseClass": "commercial",
-                "productLifecycleState": "commercial",
+                "releaseClass": "production",
+                "productLifecycleState": "production",
                 "canonicalMerkle": header["canonicalMerkle"],
                 "payloadSha256": manifest_digest,
             }
@@ -835,9 +849,9 @@ class AppContentPreflightDebugRuntimeTest(unittest.TestCase):
             }), encoding="utf-8")
             readiness = {
                 "releaseId": release_id,
-                "releaseClass": "commercial",
-                "productLifecycleState": "commercial",
-                "readinessPhase": "commercial",
+                "releaseClass": "production",
+                "productLifecycleState": "production",
+                "readinessPhase": "production",
                 "verifyRunId": "verify-a",
                 "manifestDigest": manifest_digest,
                 "homepageApiVerificationRef": str(homepage_report_path),

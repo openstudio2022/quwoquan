@@ -18,6 +18,7 @@ final class WorkBrowserMediaViewData {
     this.width,
     this.height,
     this.title,
+    this.caption,
   });
 
   factory WorkBrowserMediaViewData.fromWire(PostMediaItem wire) =>
@@ -35,6 +36,7 @@ final class WorkBrowserMediaViewData {
         width: wire.width,
         height: wire.height,
         title: wire.title,
+        caption: wire.caption,
       );
 
   final String kind;
@@ -56,6 +58,9 @@ final class WorkBrowserMediaViewData {
   final int? width;
   final int? height;
   final String? title;
+
+  /// 逐资产说明，与作品或资产 title 分离；缺席不补造。
+  final String? caption;
 }
 
 final class WorkBrowserEntityMentionViewData {
@@ -127,6 +132,7 @@ final class WorkBrowserViewData {
                   width: (map['width'] as num?)?.toInt(),
                   height: (map['height'] as num?)?.toInt(),
                   title: map['title']?.toString(),
+                  caption: map['caption']?.toString(),
                 );
               })
               .toList(growable: false)
@@ -159,13 +165,13 @@ final class WorkBrowserViewData {
       mediaAssetVersion: post.mediaAssetVersion,
       previewTrackManifestUrl: null,
       previewTrackVersion: null,
-      mediaItems: localMediaItems.isNotEmpty
-          ? List<WorkBrowserMediaViewData>.unmodifiable(localMediaItems)
-          : List<WorkBrowserMediaViewData>.unmodifiable(
+      mediaItems: (detail?.mediaItems ?? post.mediaItems).isNotEmpty
+          ? List<WorkBrowserMediaViewData>.unmodifiable(
               (detail?.mediaItems ?? post.mediaItems).map(
                 WorkBrowserMediaViewData.fromWire,
               ),
-            ),
+            )
+          : List<WorkBrowserMediaViewData>.unmodifiable(localMediaItems),
       articleRenderProfile: articleRenderProfile,
       paperTexture: supplemental?['paperTexture']?.toString(),
       entityMentions: List<WorkBrowserEntityMentionViewData>.unmodifiable(
@@ -219,6 +225,15 @@ final class WorkBrowserViewData {
         mediaAssetVersion: mediaAssetVersion,
       ),
     ];
+  }
+
+  String? imageCaptionAt(int index) {
+    final images = mediaItems
+        .where((item) => item.kind == 'image' && item.url.isNotEmpty)
+        .toList(growable: false);
+    if (index < 0 || index >= images.length) return null;
+    final caption = images[index].caption?.trim();
+    return caption == null || caption.isEmpty ? null : caption;
   }
 
   List<String> get effectiveImageUrls {

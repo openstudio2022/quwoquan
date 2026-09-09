@@ -524,7 +524,6 @@ surfaces:
       - LoginAnonymous
       - RefreshToken
       - IssueWhitelistedResearchSession
-      - GetResearchReleaseReadback
       - GetActivePersonaContext
       - UpsertDevicePushEndpoint
       - RemoveDevicePushEndpoint

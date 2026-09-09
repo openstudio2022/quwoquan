@@ -1,12 +1,19 @@
+// spec_ref: specs/feature-tree/shared-homepage-network/spec.md#dom-001
 package homepage_import_test
 
 import (
+	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
+
+	runtimemedia "quwoquan_service/runtime/media"
+	homepagemodel "quwoquan_service/services/entity-service/internal/entity_homepage/homepage/domain/model"
+	"quwoquan_service/services/entity-service/internal/entity_homepage/homepage/infrastructure/homepageimport"
 )
 
-// seedPublishEntityWithCoordinates 复用主线 fixture，但把 _entity.json 的
+// seedPublishEntityWithCoordinates 复用主线 fixture，但把 manifest.json 的
 // coordinates 换成给定原文，用于覆盖发布态坐标 → Homepage.location 的映射。
 func seedPublishEntityWithCoordinates(t *testing.T, root, ref, coordinatesJSON string) {
 	t.Helper()
@@ -15,13 +22,118 @@ func seedPublishEntityWithCoordinates(t *testing.T, root, ref, coordinatesJSON s
 	if strings.TrimSpace(coordinatesJSON) != "" {
 		coordinates = `"coordinates":` + coordinatesJSON + `,`
 	}
-	writeFile(t, filepath.Join(dir, "_entity.json"),
+	writeEntityManifest(t, dir, ref,
 		`{"label":"九寨沟","domain":"地点","type":"景区",`+
 			coordinates+
 			`"tagRefs":["Entity/地点/景区/5A景区","Topic/地理/行政区/中国/四川省/阿坝藏族羌族自治州/九寨沟县"],`+
 			`"geoTagRef":"Topic/地理/行政区/中国/四川省/阿坝藏族羌族自治州/九寨沟县",`+
 			sourceFieldsJSON+`}`)
 	writeSemanticHomepagePackage(t, dir, "九寨沟", true)
+}
+
+// 地理目录只定位媒体 owner；同名实体靠 manifest 的逻辑 binding 区分。
+func TestLoadHomepageProjectionsKeepsLogicalIdentityAcrossGeographyMove(t *testing.T) {
+	root := t.TempDir()
+	refs := []string{"地点/景区/东山-甲", "地点/景区/东山-乙"}
+	paths := []string{"中国/甲省/甲市/景区/东山", "中国/乙省/乙市/景区/东山"}
+	for i, objectPath := range paths {
+		dir := filepath.Join(root, "entities", filepath.FromSlash(objectPath))
+		writeEntityManifest(t, dir, refs[i], `{"label":"东山","domain":"地点","type":"景区",`+sourceFieldsJSON+`}`)
+		writeSemanticHomepagePackage(t, dir, strings.ReplaceAll(refs[i], "/", "_"), true)
+	}
+	before, issues, err := loadHomepageProjections(t, root, nil, "https://media.example.com")
+	if err != nil || len(issues) != 0 || len(before) != 2 {
+		t.Fatalf("geographic packages: inputs=%+v issues=%v err=%v", before, issues, err)
+	}
+	byRef := map[string]string{}
+	for _, input := range before {
+		if input.Title != "东山" || input.HomepageType != "sight" {
+			t.Fatalf("directory must not supply display identity: %+v", input)
+		}
+		byRef[input.EntityRef] = homepagemodel.StableID("", "qwq_data", input.EntityRef, input.HomepageType, input.Title)
+	}
+	if len(byRef) != 2 || byRef[refs[0]] == "" || byRef[refs[1]] == "" || byRef[refs[0]] == byRef[refs[1]] {
+		t.Fatalf("same-name entities must keep distinct logical refs and hp IDs: %v", byRef)
+	}
+
+	oldDir := filepath.Join(root, "entities", filepath.FromSlash(paths[0]))
+	newDir := filepath.Join(root, "entities", "中国/丙省/丙市/其他分类/改名目录")
+	if err := os.MkdirAll(filepath.Dir(newDir), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Rename(oldDir, newDir); err != nil {
+		t.Fatal(err)
+	}
+	after, issues, err := loadHomepageProjections(t, root, map[string]bool{refs[0]: true}, "https://media.example.com")
+	if err != nil || len(issues) != 0 || len(after) != 1 || after[0].EntityRef != refs[0] {
+		t.Fatalf("moved object must still match logical filter: inputs=%+v issues=%v err=%v", after, issues, err)
+	}
+	for _, input := range before {
+		if input.EntityRef == refs[0] && !reflect.DeepEqual(input, after[0]) {
+			t.Fatalf("moving storage must preserve the entire projection: before=%+v after=%+v", input, after[0])
+		}
+	}
+	if got := homepagemodel.StableID("", "qwq_data", after[0].EntityRef, after[0].HomepageType, after[0].Title); got != byRef[refs[0]] {
+		t.Fatalf("hp stable-ID input changed after storage move: %q != %q", got, byRef[refs[0]])
+	}
+	physical, _, err := loadHomepageProjections(t, root, map[string]bool{"中国/丙省/丙市/其他分类/改名目录": true}, "https://media.example.com")
+	if err != nil || len(physical) != 0 {
+		t.Fatalf("physical directory must not match logical filter: inputs=%+v err=%v", physical, err)
+	}
+
+	authority := releaseMediaAuthority(t, root)
+	for id, asset := range authority {
+		asset.OwnerRefs = []string{"entities/" + refs[0]}
+		asset.RightsSnapshotRefs = []string{"objects/entities/" + refs[0] + "/sources/homepage-cover/source.json"}
+		authority[id] = asset
+	}
+	_, _, err = homepageimport.LoadHomepageProjections(root, map[string]bool{refs[0]: true}, authority,
+		runtimemedia.MediaDeliveryBases{Image: "https://media.example.com"}, "production")
+	if err == nil || !strings.Contains(err.Error(), "ownerRefs") {
+		t.Fatalf("logical identity cannot authorize physical storage owner: %v", err)
+	}
+}
+
+func TestLoadHomepageProjectionsRejectsInvalidManifestWithoutDirectoryFallback(t *testing.T) {
+	for _, raw := range []string{
+		`{`, `null`, `[]`,
+		`{"schema":"wrong","contentType":"homepage","entityRef":"/entity/logical","domain":"地点","type":"景区","label":"名字"}`,
+		`{"schema":"quwoquan_data.entity_object","contentType":"article","entityRef":"/entity/logical","domain":"地点","type":"景区","label":"名字"}`,
+		`{"schema":"quwoquan_data.entity_object","contentType":"homepage","entityRef":"logical","domain":"地点","type":"景区","label":"名字"}`,
+		`{"schema":"quwoquan_data.entity_object","contentType":"homepage","entityRef":"/entity/","domain":"地点","type":"景区","label":"名字"}`,
+		`{"schema":"quwoquan_data.entity_object","contentType":"homepage","entityRef":"/entity/logical","type":"景区","label":"名字"}`,
+		`{"schema":"quwoquan_data.entity_object","contentType":"homepage","entityRef":"/entity/logical","domain":"地点","label":"名字"}`,
+		`{"schema":"quwoquan_data.entity_object","contentType":"homepage","entityRef":"/entity/logical","domain":"地点","type":"景区"}`,
+	} {
+		t.Run(raw, func(t *testing.T) {
+			root := t.TempDir()
+			dir := filepath.Join(root, "entities", "地点/景区/旧名称")
+			writeFile(t, filepath.Join(dir, "manifest.json"), raw)
+			writeFile(t, filepath.Join(dir, "page.md"), "# 正文\n")
+			// 即使旧 anchor 合法也不得挽救坏 manifest。
+			writeFile(t, filepath.Join(dir, "_entity.json"), `{"label":"旧名称","domain":"地点","type":"景区",`+sourceFieldsJSON+`}`)
+			inputs, _, err := homepageimport.LoadHomepageProjections(root, nil, nil, runtimemedia.MediaDeliveryBases{}, "production")
+			if err == nil || len(inputs) != 0 || !strings.Contains(err.Error(), "manifest.json") {
+				t.Fatalf("invalid manifest must fail, not use anchor/directory defaults: inputs=%+v err=%v", inputs, err)
+			}
+		})
+	}
+}
+
+func TestLoadHomepageProjectionsNeverReadsRetiredAnchor(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, "entities", "中国/甲省/景区/旧目录名")
+	writeFile(t, filepath.Join(dir, "_entity.json"), `{not-json`)
+	writeFile(t, filepath.Join(dir, "page.md"), "# 正文\n")
+	inputs, _, err := homepageimport.LoadHomepageProjections(root, nil, nil, runtimemedia.MediaDeliveryBases{}, "production")
+	if err != nil || len(inputs) != 0 {
+		t.Fatalf("anchor-only directory must not be read: inputs=%+v err=%v", inputs, err)
+	}
+	writeEntityManifest(t, dir, "地点/景区/冻结名字", `{"label":"显示名字","domain":"地点","type":"景区",`+sourceFieldsJSON+`}`)
+	inputs, issues, err := loadHomepageProjections(t, root, nil, "")
+	if err != nil || len(issues) != 0 || len(inputs) != 1 || inputs[0].EntityRef != "地点/景区/冻结名字" || inputs[0].Title != "显示名字" {
+		t.Fatalf("valid manifest must ignore malformed retired anchor: inputs=%+v issues=%v err=%v", inputs, issues, err)
+	}
 }
 
 // 发布态 coordinates{lat,lon} 必须映射成 Homepage location（latitude/longitude），

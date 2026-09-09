@@ -35,7 +35,9 @@
 <a id="req-002"></a>
 ### REQ-002 image identity and visible copy are unique and attributable
 
-- 同一视觉资产不能通过改 URL、尺寸或文件名成为第二对象。
+- 资产引用与作品发布分开判定：正文、封面及主页可引用同一稳定资产，前提是资产身份、字节摘要及来源绑定完全一致；同 ID 不同字节或来源在 canonical publish 写前拒绝。
+- 相同来源作品不能通过改标题、URL、尺寸、文件名或 assetId 生成第二个 image Post；同作品多图必须保持为一个有序作品。相同逻辑作品的显式新版本不构成重复作品。
+- 不同资产身份的相同 SHA 或近似 pHash 仍拒绝，不能用稳定 ID 豁免掩盖身份漂移。同一 image Post 内重复引用也拒绝；跨 execution 与同 execution 使用同一判据。
 
 <a id="req-004"></a>
 ### REQ-004 image Post 交付 generator 只有 `agent`
@@ -65,8 +67,9 @@
 
 - GIVEN 资产已通过 rights admission，模型绑定已冻结。
 - WHEN 图片完成下载、安全检测、Agent 配文、独立 review 和对象事务。
-- THEN hash、perceptual similarity 和 source identity 阻止重复发布。
-- THEN 归因和用户可见 copy 与 canonical 对象一致。
+- THEN 不同资产身份的相同 hash、近似 pHash 或同来源作品阻止重复 image Post 发布，包括跨 execution；同稳定 ID 也不允许发布第二作品或变更字节/来源绑定。
+- THEN 正文、封面及主页复用完全相同的稳定资产绑定可通过；同一逻辑作品的显式版本更新不误判为重复，作品内重复引用拒绝。
+- THEN 归因、资产顺序与逐图说明从 canonical manifest 到消费者保持一致；只读预检不改池，publish 在写前重验同一唯一性判据。
 
 <a id="gwt-004"></a>
 ### GWT-004 image Post generator 与 authoring evidence 单轨

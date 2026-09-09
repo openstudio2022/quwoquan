@@ -154,9 +154,9 @@ class TestLiveContentBindingContract(unittest.TestCase):
         }
 
     def _attestation(
-        self, *, release_id: str, manifest_digest: str, commercial: bool
+        self, *, release_id: str, manifest_digest: str
     ) -> dict[str, object]:
-        release_class = "commercial" if commercial else "research"
+        release_class = "production"
         return {
             "schema": "quwoquan_data.release_attestation",
             "releaseId": release_id,
@@ -242,7 +242,7 @@ class TestLiveContentBindingContract(unittest.TestCase):
         environment: str | None = None,
         import_run_id: str = "import-alpha-001",
     ) -> dict[str, object]:
-        release_class = "commercial" if phase == "commercial" else "research"
+        release_class = "production"
         value: dict[str, object] = {
             "schema": "quwoquan_data.environment_release_readiness",
             "environment": environment or self.environment,
@@ -259,10 +259,18 @@ class TestLiveContentBindingContract(unittest.TestCase):
             "entityRefs": ["homepage-harbour"],
             "postIds": ["article-a", "image-a", "video-a"],
             "feedQueries": [
-                {"name": "typed_video", "matchedPostIds": ["video-a"]},
+                {
+                    "name": "typed_video", "matchedPostIds": ["video-a"],
+                    "query": "identity=work&type=video&limit=10",
+                },
                 {
                     "name": "homepage_recommend",
+                    "query": "sort=recommend&channelId=recommend&limit=10",
                     "matchedPostIds": ["article-a", "image-a", "video-a"],
+                },
+                {
+                    "name": "premium_stream", "matchedPostIds": ["video-a"],
+                    "query": "sort=recommend&channelId=premium_stream&limit=10",
                 },
             ],
             "passed": True,
@@ -303,7 +311,7 @@ class TestLiveContentBindingContract(unittest.TestCase):
         release_id = release_id or self.release_id
         verify_run_id = verify_run_id or self.verify_run_id
         manifest_digest = manifest_digest or self.manifest_digest
-        release_class = "commercial" if phase == "commercial" else "research"
+        release_class = "production"
         release_header = self._release_payload(
             release_id=release_id,
             release_class=release_class,
@@ -318,7 +326,6 @@ class TestLiveContentBindingContract(unittest.TestCase):
             self._attestation(
                 release_id=release_id,
                 manifest_digest=manifest_digest,
-                commercial=phase == "commercial",
             ),
         )
         write_derivable_release_payload(
@@ -523,17 +530,15 @@ class TestLiveContentBindingContract(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "representations must not be mixed"):
             self._create()
 
-    def test_research_binding_never_requires_commercial_lifecycle_exit(self) -> None:
-        self._write_release(phase="research")
+    def test_retired_readiness_phases_are_rejected(self) -> None:
+        for phase in ("research", "commercial"):
+            with self.subTest(phase=phase):
+                self._write_release(phase=phase)
+                with self.assertRaisesRegex(ValueError, "requires production release readiness"):
+                    self._create(lifecycle_exit_ref="")
 
-        result = self._create(lifecycle_exit_ref="")
-
-        self.assertEqual(result["readinessPhase"], "research")
-        self.assertEqual(result["lifecycleExitRef"], "")
-        self.assertEqual(result["lifecycleExitDigest"], "")
-
-    def test_commercial_requires_complete_lifecycle_quartet(self) -> None:
-        self._write_release(phase="commercial")
+    def test_production_requires_complete_lifecycle_quartet(self) -> None:
+        self._write_release(phase="production")
         with self.assertRaisesRegex(ValueError, "requires explicit lifecycleExitRef"):
             self._create()
 
@@ -551,7 +556,7 @@ class TestLiveContentBindingContract(unittest.TestCase):
             ),
         )
         result = self._create(lifecycle_exit_ref=ref)
-        self.assertEqual(result["readinessPhase"], "commercial")
+        self.assertEqual(result["readinessPhase"], "production")
         self.assertEqual(result["lifecycleExitRef"], ref)
         self.assertRegex(str(result["lifecycleExitDigest"]), r"^sha256:[0-9a-f]{64}$")
 
@@ -645,7 +650,7 @@ class TestLiveContentBindingContract(unittest.TestCase):
         self.assertEqual(first["startupAttemptId"], self.attempt_id)
 
     def test_lifecycle_ref_is_environment_scoped_and_cannot_escape(self) -> None:
-        self._write_release(phase="commercial")
+        self._write_release(phase="production")
         for ref in (
             "../lifecycle-exit.json",
             f"env/beta/runs/release-lifecycle-exit/{self.release_id}/exit/lifecycle-exit.json",

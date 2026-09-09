@@ -19,7 +19,7 @@ _IMPORT_SCOPE_CHECKS = [
 ]
 
 
-def test_content_release_readiness__import_ignores_commercial_doctor__local_contract(
+def test_content_release_readiness__import_ignores_production_doctor__local_contract(
     monkeypatch,
     tmp_path: Path,
 ) -> None:
@@ -73,7 +73,7 @@ def test_content_release_readiness__import_ignores_user_availability_blocker(
             "exitCode": 1,
             "details": [
                 "user availability/release failed: content release evidence is "
-                "unavailable: active release has no valid research readiness "
+                "unavailable: active release has no valid production readiness "
                 "receipt: no receipt exists"
             ],
             "reportDir": "health",
@@ -169,7 +169,7 @@ def test_content_release_readiness__missing_declared_probe_is_gate_block__local_
     assert any("content_services" in item for item in result["details"])
 
 
-def test_content_release_readiness__commercial_missing_capability_is_gate_block(
+def test_content_release_readiness__production_missing_capability_is_gate_block(
     monkeypatch,
     tmp_path: Path,
 ) -> None:
@@ -202,7 +202,7 @@ def test_content_release_readiness__commercial_missing_capability_is_gate_block(
 
     result = stackctl.command_content_readiness(
         argparse.Namespace(
-            phase="commercial",
+            phase="production",
             env="gamma",
             report_dir=str(tmp_path),
             output_format="json",
@@ -293,7 +293,7 @@ def test_content_release_readiness__gamma_controls_elasticsearch_log_sink(
 
     result = stackctl.command_content_readiness(
         argparse.Namespace(
-            phase="commercial",
+            phase="production",
             env="gamma",
             report_dir=str(tmp_path),
             output_format="json",
@@ -317,7 +317,7 @@ def test_content_release_readiness__gamma_controls_elasticsearch_log_sink(
     ]
 
 
-def test_content_release_readiness__consumer_skips_commercial_video_delivery(
+def test_content_release_readiness__consumer_skips_production_video_delivery(
     monkeypatch,
     tmp_path: Path,
 ) -> None:
@@ -363,14 +363,14 @@ def test_content_release_readiness__consumer_skips_commercial_video_delivery(
         stackctl,
         "_run_release_video_delivery_probe",
         lambda **_kwargs: (_ for _ in ()).throw(
-            AssertionError("consumer must not require commercial video delivery")
+            AssertionError("consumer must not require production video delivery")
         ),
     )
     monkeypatch.setattr(
         stackctl,
         "command_doctor",
         lambda _args: (_ for _ in ()).throw(
-            AssertionError("consumer must not call commercial doctor")
+            AssertionError("consumer must not call production doctor")
         ),
     )
 

@@ -72,6 +72,31 @@ func TestAppLaunchContractCodegenProjectsCanonicalContractToEveryRuntime(t *test
 			t.Fatalf("normalized appLaunchManifest misses %q", key)
 		}
 	}
+	// production 只替换退役类别，不削弱 managed preparation 的 exact receipt 约束。
+	schemas := launchManifest["schemas"].(map[string]any)
+	preparation := schemas["app_managed_preparation"].(map[string]any)
+	fields := preparation["fields"].(map[string]any)
+	binding := fields["contentBinding"].(map[string]any)
+	bindingFields := binding["fields"].(map[string]any)
+	readinessPhase := bindingFields["readinessPhase"].(map[string]any)
+	allowedPhases := readinessPhase["allowed_values"].([]any)
+	if len(allowedPhases) != 1 || allowedPhases[0] != "production" {
+		t.Fatalf("managed preparation readinessPhase = %#v, want production only", allowedPhases)
+	}
+	for _, key := range []string{"manifestDigest", "readinessReceiptRef", "readinessReceiptDigest", "verifyRunId"} {
+		if _, exists := bindingFields[key]; !exists {
+			t.Fatalf("managed preparation lost exact content binding %q", key)
+		}
+	}
+	constraints, err := json.Marshal(preparation["constraints"])
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, invariant := range []string{"readinessPhase=production/passed=true", "absolute regular no-symlink", "文件 exact bytes sha256", "release/verify/manifest/production"} {
+		if !strings.Contains(string(constraints), invariant) {
+			t.Fatalf("managed preparation lost exact invariant %q", invariant)
+		}
+	}
 	artifactContract, ok := document["appArtifactContract"].(map[string]any)
 	if !ok {
 		t.Fatalf("neutral projection misses appArtifactContract: %#v", document)
@@ -307,6 +332,14 @@ func TestAppLaunchContractCodegenRejectsUnknownDuplicateMissingAndDrift(t *testi
 				)
 			},
 			want: "app_managed_preparation.fields.target.allowed_values",
+		},
+		{
+			name:       "managed content binding rejects retired readiness phase",
+			sourceName: "app_launch_manifest.yaml",
+			mutate: func(source string) string {
+				return strings.Replace(source, "allowed_values: [production]", "allowed_values: [research]", 1)
+			},
+			want: "app_managed_preparation.fields.contentBinding.fields.readinessPhase.allowed_values",
 		},
 		{
 			name:       "managed runtime identity falls back to string",

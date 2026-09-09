@@ -383,8 +383,8 @@ def _admit_empty_baseline_attestation(
     identity_fields = (
         "releaseId", "sourceOwner", "releaseKind", "releaseClass",
         "productLifecycleState", "containsUnverifiedAssets", "rightsStatusCounts",
-        "authorizationRequiredAssetIds", "researchAcceptedCount",
-        "commercialAcceptedCount", "canonicalMerkle", "executionIds", "sourceDigests",
+        "authorizationRequiredAssetIds", "acceptedCount",
+        "canonicalMerkle", "executionIds", "sourceDigests",
     )
     if any(header.get(field) != attestation.get(field) for field in identity_fields):
         raise ValueError(

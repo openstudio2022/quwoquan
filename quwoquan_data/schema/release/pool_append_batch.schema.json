@@ -39,7 +39,7 @@
               "processResult": {"enum": ["completed", "failed"]},
               "qualityResult": {"enum": ["passed", "failed"]},
               "eligibilityResult": {"enum": ["passed", "pending", "failed"]},
-              "usageScope": {"type": ["string", "null"], "enum": ["research", "commercial", null]},
+              "usageScope": {"type": ["string", "null"], "enum": ["production", null]},
               "evidenceRef": {"type": "string", "minLength": 1},
               "evidenceDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
               "payloadDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},

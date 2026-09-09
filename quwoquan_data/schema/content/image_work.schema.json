@@ -16,6 +16,11 @@
       "items": {"type": "string", "minLength": 1}
     },
     "caption": {"type": "string", "minLength": 1},
+    "assetCaptions": {
+      "description": "可选逐图说明：键按 assetRefs 的同一引用规则解析，必须指向已选资产，未知引用或别名重复在 author seal 拒绝；缺席沿用总 caption，assetRefs 顺序不变。",
+      "type": "object",
+      "additionalProperties": {"type": "string", "minLength": 1, "pattern": "\\S"}
+    },
     "creatorProfileId": {"type": "string", "minLength": 1},
     "tagRefs": {"type": "array", "items": {"type": "string", "minLength": 1}}
   }

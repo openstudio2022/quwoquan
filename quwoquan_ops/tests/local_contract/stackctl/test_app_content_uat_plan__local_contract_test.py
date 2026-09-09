@@ -45,8 +45,8 @@ def _readiness(
     video_ids = [f"video-{index:03d}" for index in range(1, 11)]
     return {
         "releaseId": release_id,
-        "releaseClass": "research",
-        "productLifecycleState": "research",
+        "releaseClass": "production",
+        "productLifecycleState": "production",
         "manifestDigest": DIGESTS["manifest"],
         "sourceIdentities": [{"executionId": "execution-a"}],
         "sourceIdentitySetDigest": DIGESTS["source"],
@@ -55,10 +55,20 @@ def _readiness(
         "feedQueries": [
             {"name": "typed_article", "matchedPostIds": article_ids},
             {"name": "typed_image", "matchedPostIds": image_ids},
-            {"name": "typed_video", "matchedPostIds": video_ids},
+            {
+                "name": "typed_video",
+                "query": "identity=work&type=video&limit=20",
+                "matchedPostIds": video_ids,
+            },
             {
                 "name": "homepage_recommend",
+                "query": "sort=recommend&channelId=recommend&limit=20",
                 "matchedPostIds": [*article_ids, *image_ids, *video_ids],
+            },
+            {
+                "name": "premium_stream",
+                "query": "sort=recommend&channelId=premium_stream&limit=20",
+                "matchedPostIds": video_ids,
             },
         ],
     }
@@ -191,8 +201,8 @@ def _header() -> dict[str, object]:
         "releaseId": "release-m100-a",
         "sourceOwner": "qwq_data",
         "releaseKind": "content",
-        "releaseClass": "research",
-        "productLifecycleState": "research",
+        "releaseClass": "production",
+        "productLifecycleState": "production",
         "milestone": "M100",
         "milestoneTargets": {
             "homepage": 100,
@@ -281,9 +291,7 @@ def test_uat_plan__projects_canonical_samples_and_required_cells__local_contract
     assert plan["mediaChecks"]["typedVideo"]["expectedPostIds"] == [
         f"video-{index:03d}" for index in range(1, 11)
     ]
-    # Legacy fixture has no premium_stream row; plan preserves the old typed-video
-    # fallback only for that historical shape. Current readiness carries an exact
-    # premium_stream row and strict Research tests exercise it directly.
+    # premium_stream 必须使用自己的明确消费证据，不借用 typed_video。
     assert plan["mediaChecks"]["premiumVideo"]["expectedPostIds"] == [
         f"video-{index:03d}" for index in range(1, 11)
     ]
@@ -394,6 +402,19 @@ def _write_release_fixture(output_root: Path, *, release_id: str) -> tuple[Path,
     return payload, header
 
 
+@pytest.mark.parametrize("release_class", ["research", "commercial"])
+def test_sample_derivation_rejects_retired_release_before_writing(tmp_path: Path, release_class: str) -> None:
+    """spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-033"""
+    payload, header = _write_release_fixture(tmp_path, release_id="release-retired")
+    header["releaseClass"] = release_class
+    header["productLifecycleState"] = release_class
+    original = (payload / "release.json").read_bytes()
+    with pytest.raises(ValueError, match="requires production release"):
+        load_release_uat_sample_plan(release_root=payload, release_header=header)
+    assert not (payload.parent / "uat").exists()
+    assert (payload / "release.json").read_bytes() == original
+
+
 def test_load_release_uat_sample_plan__derives_create_once_from_release_bytes__local_contract(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -435,8 +456,16 @@ def test_load_release_uat_sample_plan__derives_create_once_from_release_bytes__l
         "entityRefs": ["/entity/地点/景区/塘栖古镇"],
         "postIds": ["content-article", "content-image", "content-video"],
         "feedQueries": [
-            {"name": "typed_video", "matchedPostIds": ["content-video"]},
-            {"name": "homepage_recommend", "matchedPostIds": ["content-article"]},
+            {
+                "name": "typed_video",
+                "query": "identity=work&type=video&limit=20",
+                "matchedPostIds": ["content-video"],
+            },
+            {
+                "name": "homepage_recommend",
+                "query": "sort=recommend&channelId=recommend&limit=20",
+                "matchedPostIds": ["content-article"],
+            },
             {
                 "name": "premium_stream",
                 "query": "sort=recommend&channelId=premium_stream&limit=20",
@@ -486,25 +515,47 @@ def test_load_release_uat_sample_plan__rejects_cross_release_receipt_and_noncano
 
 
 
-def test_uat_plan__research_feed_projection_rejects_missing_or_nonrelease_ids__local_contract() -> None:
+def test_uat_plan__production_feed_projection_rejects_missing_or_nonrelease_ids__local_contract() -> None:
     readiness = _readiness()
-    readiness["feedQueries"].append(
-        {
-            "name": "premium_stream",
-            "query": "sort=recommend&channelId=premium_stream&limit=10",
-            "matchedPostIds": ["video-001"],
-        }
-    )
+    premium = next(row for row in readiness["feedQueries"] if row["name"] == "premium_stream")
+    premium["matchedPostIds"] = ["video-001"]
     plan = _build(readiness=readiness)
     assert plan["mediaChecks"]["premiumVideo"]["expectedPostIds"] == ["video-001"]
 
-    drifted = _readiness()
-    drifted["feedQueries"].append(
-        {
-            "name": "premium_stream",
-            "query": "sort=recommend&channelId=premium_stream&limit=10",
-            "matchedPostIds": ["other-release-video"],
-        }
-    )
+    premium["matchedPostIds"] = ["other-release-video"]
     with pytest.raises(ValueError, match="not release-bound"):
-        _build(readiness=drifted)
+        _build(readiness=readiness)
+
+
+@pytest.mark.parametrize("mutation", ["missing", "duplicate", "empty_query"])
+def test_uat_plan__rejects_retired_premium_feed_fallback__local_contract(mutation: str) -> None:
+    """spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-033"""
+    readiness = _readiness()
+    queries = readiness["feedQueries"]
+    premium = next(row for row in queries if row["name"] == "premium_stream")
+    if mutation == "missing":
+        queries.remove(premium)
+    elif mutation == "duplicate":
+        queries.append(dict(premium))
+    else:
+        premium["query"] = ""
+    with pytest.raises(ValueError, match="premium_stream exact"):
+        _build(readiness=readiness)
+
+
+def test_uat_plan__rejects_retired_source_identity_shape__local_contract() -> None:
+    """spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-033"""
+    readiness = _readiness()
+    header = _header()
+    for document in (readiness, header):
+        document.pop("sourceIdentities")
+        for field in ("sourceRevision", "sourceDigest", "entityCatalogDigest"):
+            document[field] = DIGESTS["source"]
+    with pytest.raises(ValueError, match="source identity set drifted"):
+        build_app_content_uat_plan(
+            readiness,
+            release_header=header,
+            release_uat_sample_plan=_sample_plan(),
+            release_uat_sample_plan_digest=_canonical_digest(_sample_plan()),
+            release_payload_sha256=DIGESTS["manifest"],
+        )

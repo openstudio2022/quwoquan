@@ -277,35 +277,25 @@ def _release_identity(
         raise ValueError("App content UAT ReleaseUatSamplePlan releaseId mismatch")
     for field in ("releaseClass", "productLifecycleState"):
         expected = _required_text(readiness.get(field), label=f"readiness {field}")
-        if release_header.get(field) != expected:
+        if expected != "production" or release_header.get(field) != expected:
             raise ValueError(f"App content UAT release header {field} mismatch")
     header_source_set = release_header.get("sourceIdentities")
     readiness_source_set = readiness.get("sourceIdentities")
-    if header_source_set is not None or readiness_source_set is not None:
-        if (
-            not isinstance(header_source_set, list)
-            or not header_source_set
-            or readiness_source_set != header_source_set
-            or release_header.get("sourceIdentitySetDigest")
-            != readiness.get("sourceIdentitySetDigest")
-        ):
-            raise ValueError("App content UAT release source identity set drifted")
-        source_identity: dict[str, Any] = {
-            "sourceIdentities": copy.deepcopy(header_source_set),
-            "sourceIdentitySetDigest": _required_digest(
-                release_header.get("sourceIdentitySetDigest"),
-                label="release header sourceIdentitySetDigest",
-            ),
-        }
-    else:
-        source_identity = {}
-        for field in ("sourceRevision", "sourceDigest", "entityCatalogDigest"):
-            value = _required_digest(
-                release_header.get(field), label=f"release header {field}"
-            )
-            if readiness.get(field) != value:
-                raise ValueError(f"App content UAT release {field} drifted")
-            source_identity[field] = value
+    if (
+        not isinstance(header_source_set, list)
+        or not header_source_set
+        or readiness_source_set != header_source_set
+        or release_header.get("sourceIdentitySetDigest")
+        != readiness.get("sourceIdentitySetDigest")
+    ):
+        raise ValueError("App content UAT release source identity set drifted")
+    source_identity: dict[str, Any] = {
+        "sourceIdentities": copy.deepcopy(header_source_set),
+        "sourceIdentitySetDigest": _required_digest(
+            release_header.get("sourceIdentitySetDigest"),
+            label="release header sourceIdentitySetDigest",
+        ),
+    }
     selection_evidence = _required_mapping(
         release_uat_sample_plan.get("selectionEvidence"),
         label="ReleaseUatSamplePlan selectionEvidence",
@@ -486,6 +476,11 @@ def load_release_uat_sample_plan(
     与漂移 fail closed 见 `release_uat_sample_plan_derivation`。
     """
 
+    if any(
+        release_header.get(field) != "production"
+        for field in ("releaseClass", "productLifecycleState")
+    ):
+        raise ValueError("App content UAT ReleaseUatSamplePlan requires production release")
     try:
         return load_or_derive_release_uat_sample_plan(
             payload_root=release_root,
@@ -521,23 +516,10 @@ def _release_feed_binding(
         if isinstance(row, Mapping) and row.get("name") == name
     ]
     if len(matches) != 1:
-        if name == "premium_stream":
-            typed = [
-                row
-                for row in raw_queries
-                if isinstance(row, Mapping) and row.get("name") == "typed_video"
-            ]
-            if len(typed) == 1:
-                matches = [{**dict(typed[0]), "query": ""}]
-            else:
-                raise ValueError(
-                    f"App content UAT {name} exact feed binding is missing"
-                )
-        else:
-            raise ValueError(f"App content UAT {name} exact feed binding is missing")
+        raise ValueError(f"App content UAT {name} exact feed binding is missing")
     row = matches[0]
     query = str(row.get("query") or "").strip()
-    if query and re.fullmatch(query_pattern, query) is None:
+    if re.fullmatch(query_pattern, query) is None:
         raise ValueError(f"App content UAT {name} exact query is not canonical")
     raw_ids = row.get("matchedPostIds")
     if not isinstance(raw_ids, list):

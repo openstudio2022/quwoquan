@@ -24,7 +24,7 @@ import (
 
 func releaseCASOptions(releaseID, digest string, version int64) ImportOptions {
 	return ImportOptions{
-		ReleaseID: releaseID, ManifestDigest: digest, ReleaseClass: "research", ReleaseKind: "content",
+		ReleaseID: releaseID, ManifestDigest: digest, ReleaseClass: "production", ReleaseKind: "content",
 		ActivationMode: "stage-only", Mode: "sync", DeletePolicy: "tombstone",
 		SourceOwner: "qwq_data", ProjectionVersion: version,
 	}
@@ -37,7 +37,7 @@ func releaseCASPost(contentID, postRef string, now time.Time) PostDoc {
 		ContentType: "article", ContentIdentity: "work", Title: contentID,
 		AuthorID: "builtin_travel_blogger", ArticleMarkdown: "# " + contentID,
 		Admission: ContentAdmission{
-			ProcessResult: "completed", QualityResult: "passed", UsageScope: "research",
+			ProcessResult: "completed", QualityResult: "passed", UsageScope: "production",
 			EvidenceRef: "audit/attestation.json", EvidenceDigest: "sha256:" + strings.Repeat("a", 64),
 		},
 		CreatedAt: now.Add(-time.Hour), UpdatedAt: now, PublishedAt: now,
@@ -46,12 +46,11 @@ func releaseCASPost(contentID, postRef string, now time.Time) PostDoc {
 
 func releaseCASMedia(assetID, _ string) map[string]ReleaseMediaAsset {
 	assetDigest := "sha256:" + strings.Repeat("9", 64)
-	plain := strings.TrimPrefix(assetDigest, "sha256:")
 	return map[string]ReleaseMediaAsset{
 		assetID: {
 			AssetID: assetID, Kind: "image", Version: 1, ContentType: "image/jpeg",
-			PrivateObjectKey: "media/objects/sha256/" + plain[:2] + "/" + plain[2:4] + "/" + plain + ".jpg",
-			SHA256:           assetDigest, Bytes: 128,
+			PublicSliceKey: "media/image/s/asset/" + assetID + "/v1/source.jpg",
+			SHA256:         assetDigest, Bytes: 128,
 		},
 	}
 }

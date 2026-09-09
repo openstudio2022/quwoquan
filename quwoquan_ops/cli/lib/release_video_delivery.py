@@ -172,6 +172,8 @@ def load_release_content_identity(
         "environment": expected_environment,
         "releaseKind": "content",
         "sourceOwner": "qwq_data",
+        "releaseClass": "production",
+        "productLifecycleState": "production",
         "passed": True,
     }
     for field, expected in required_values.items():
@@ -179,6 +181,8 @@ def load_release_content_identity(
             raise ReleaseVideoDeliveryError(
                 f"Data readiness {field}={receipt.get(field)!r}, expected {expected!r}"
             )
+    if receipt.get("readinessPhase") not in {"consumer", "production"}:
+        raise ReleaseVideoDeliveryError("Data readiness phase must be consumer or production")
     if not release_id or not import_run_id or not verify_run_id:
         raise ReleaseVideoDeliveryError(
             "Data readiness release/import/verify identity is incomplete"
@@ -211,6 +215,8 @@ def load_release_content_identity(
             attestation.get("releaseId") != release_id,
             attestation.get("releaseKind") != "content",
             attestation.get("sourceOwner") != "qwq_data",
+            attestation.get("releaseClass") != "production",
+            attestation.get("productLifecycleState") != "production",
             attestation.get("payloadSha256") != receipt.get("manifestDigest"),
         )
     ):
@@ -224,7 +230,7 @@ def load_release_content_identity(
     if any(
         (
             import_report.get("schema") != "quwoquan.content_import_report",
-            import_report.get("status") != "imported",
+            import_report.get("status") != "staged",
             import_report.get("environment") != expected_environment,
             import_report.get("releaseId") != release_id,
             import_report.get("sourceOwner") != "qwq_data",
@@ -322,7 +328,7 @@ def load_release_content_identity(
     payload_root = media_path.parent.resolve()
     for binding in post_bindings:
         post_ref = str(binding["postRef"]).strip().strip("/")
-        tag_path = (payload_root / "objects" / "posts" / post_ref / "tag.refs.json").resolve()
+        tag_path = (payload_root / "objects" / "posts" / post_ref / "manifest.json").resolve()
         try:
             tag_path.relative_to(payload_root)
         except ValueError as exc:

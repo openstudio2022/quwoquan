@@ -23,14 +23,14 @@ def _write(path: Path, value: object) -> Path:
 
 
 def _fixture(root: Path) -> Path:
-    release_id = "research-m100-first"
+    release_id = "production-m100-first"
     environment = "alpha"
     evidence = root / "env/alpha/runs/data-release" / release_id / "verify-001"
     import_path = _write(
         evidence / "import.json",
         {
-            # content_import_report schema 的 status 闭集是 {dry-run, imported}
-            "status": "imported",
+            # stage-only 导入回执本身不代表 active release。
+            "status": "staged",
             "environment": environment,
             "releaseId": release_id,
             "manifestDigest": _DIGEST,
@@ -98,7 +98,9 @@ def _fixture(root: Path) -> Path:
         {
             "schema": "quwoquan_data.environment_release_readiness",
             "passed": True,
-            "readinessPhase": "research",
+            "readinessPhase": "production",
+            "releaseClass": "production",
+            "productLifecycleState": "production",
             "environment": environment,
             "releaseId": release_id,
             "manifestDigest": _DIGEST,
@@ -121,7 +123,7 @@ def test_content_delivery_verifies_only_the_runtime_content_closure(
         output_root=tmp_path,
         readiness_path=readiness,
         environment="alpha",
-        release_id="research-m100-first",
+        release_id="production-m100-first",
         manifest_digest=_DIGEST,
     )
     assert report["result"] == "ready"
@@ -154,7 +156,7 @@ def test_content_delivery_accepts_consumer_receipt_before_live_search_probe(
         output_root=tmp_path,
         readiness_path=readiness,
         environment="alpha",
-        release_id="research-m100-first",
+        release_id="production-m100-first",
         manifest_digest=_DIGEST,
     )
 
@@ -175,7 +177,7 @@ def test_content_delivery_rejects_non_imported_status(tmp_path: Path) -> None:
         output_root=tmp_path,
         readiness_path=readiness,
         environment="alpha",
-        release_id="research-m100-first",
+        release_id="production-m100-first",
         manifest_digest=_DIGEST,
     )
     assert report["result"] == "blocked"
@@ -197,7 +199,7 @@ def test_content_delivery_blocks_count_drift_without_unrelated_gates(
         output_root=tmp_path,
         readiness_path=readiness,
         environment="alpha",
-        release_id="research-m100-first",
+        release_id="production-m100-first",
         manifest_digest=_DIGEST,
     )
     assert report["result"] == "blocked"
@@ -223,7 +225,7 @@ def test_stackctl_content_delivery_is_an_integration_only_readback(
             env="alpha",
             target="",
             report_dir=str(tmp_path / "report"),
-            data_release_id="research-m100-first",
+            data_release_id="production-m100-first",
             data_verify_run_id="verify-001",
             data_manifest_digest=_DIGEST,
         )

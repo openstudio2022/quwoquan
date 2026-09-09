@@ -129,23 +129,20 @@ def _run_release_video_delivery_probe(
 
 
 # consumer 起就要求 `premium_stream` 有 release-bound 读回，与 receipt 校验器同源
-# （environment-topology-and-packaging REQ-002）。实时探测一度只从 research 起校验，
-# 于是同一件事有两套判断；这里收敛成唯一闭集。
+# （environment-topology-and-packaging REQ-002）。验证步骤不改变发布类别。
 _PREMIUM_BOUND_PHASES = frozenset(
     {
         ReadinessPhase.CONSUMER,
-        ReadinessPhase.RESEARCH,
-        ReadinessPhase.COMMERCIAL,
         ReadinessPhase.PRODUCTION,
     }
 )
 # 匿名公开 serving 的相位：health 要求匿名 feed 非空，并消费 Data readiness receipt。
-# research 是语义反转（匿名必须空页），import 是 bootstrap 前置，二者都不在此集。
+# import 是 bootstrap 前置，不要求已有可消费 release。
 _PUBLIC_SERVING_PHASES = frozenset(
-    {ReadinessPhase.CONSUMER, ReadinessPhase.COMMERCIAL, ReadinessPhase.PRODUCTION}
+    {ReadinessPhase.CONSUMER, ReadinessPhase.PRODUCTION}
 )
 # 媒体以公开 CDN slice 交付的相位（DEC-033/DEC-041）：匿名视频播放 canary 成立。
-_PUBLIC_MEDIA_PHASES = frozenset({ReadinessPhase.COMMERCIAL, ReadinessPhase.PRODUCTION})
+_PUBLIC_MEDIA_PHASES = frozenset({ReadinessPhase.PRODUCTION, ReadinessPhase.PRODUCTION})
 
 
 def _release_feed_post_expectations(
@@ -199,31 +196,19 @@ def _run_release_feed_readback_probe(
     report_dir: Path,
     readiness_phase: ReadinessPhase,
 ) -> tuple[dict[str, Any], Path]:
-    """Re-read live discovery/video/premium and bind results to receipt post IDs.
-
-    research 相位语义反转（DEC-032）：匿名 feed 必须收敛为 no_active_release
-    空页且不回显 release 身份——非空即隔离泄露。带凭证的 research 内容消费
-    证据由 Data post-api verification（research consumer credential）单点拥有，
-    本探针不重复。
-    """
+    """匿名读回 production discovery/video/premium 并绑定 exact Post IDs。"""
     import quwoquan_ops.cli.stackctl as _stackctl
 
-    research = readiness_phase is ReadinessPhase.RESEARCH
     report_file = report_dir / "integration-probe.json"
     try:
         check, _output, findings = _stackctl._run_environment_integration_probe(
             _stackctl.load_environment_topology(),
             target,
             report_dir,
-            require_non_empty_content_feed=not research,
-            research_anonymous_convergence=research,
-            release_post_expectations=(
-                None
-                if research
-                else _stackctl._release_feed_post_expectations(
-                    receipt,
-                    readiness_phase=readiness_phase,
-                )
+            require_non_empty_content_feed=True,
+            release_post_expectations=_stackctl._release_feed_post_expectations(
+                receipt,
+                readiness_phase=readiness_phase,
             ),
             release_readiness_path=readiness_path,
             only_checks=(
@@ -234,9 +219,7 @@ def _run_release_feed_readback_probe(
                     if readiness_phase in _PREMIUM_BOUND_PHASES
                     else ()
                 ),
-                # research 私有交付没有匿名可采样的公开图片 slice；私有媒体
-                # 的拒绝与短签取回由 Data research isolation 证据覆盖。
-                *(("media_sample",) if not research else ()),
+                "media_sample",
             ),
             probe_name="release-bound-feed-readback",
         )
@@ -306,14 +289,7 @@ def command_content_readiness(args: argparse.Namespace) -> dict[str, Any]:
             target=requirement.target,
             scope=requirement.health_scope,
             workload=requirement.workload,
-            # research 相位的匿名 feed 正确形态是 no_active_release 空页
-            # （DEC-032 收敛）：health 的 content-consumer scope 在 research
-            # 下改跑匿名收敛断言，非空断言只对公开 serving 相位成立。
             require_non_empty_content_feed=phase in _PUBLIC_SERVING_PHASES,
-            research_anonymous_convergence=(
-                phase is ReadinessPhase.RESEARCH
-                and bool(str(getattr(args, "verify_run_id", "") or "").strip())
-            ),
             output_format="json",
             report_dir=str(report_dir / "health"),
         )
@@ -327,16 +303,6 @@ def command_content_readiness(args: argparse.Namespace) -> dict[str, Any]:
         # 导入后才存在的 readiness receipt 倒置为导入前置。
         details = [
             item for item in details if not str(item).startswith("user availability/")
-        ]
-    if phase is ReadinessPhase.RESEARCH:
-        # research readiness 的消费主体是受保护内部研究身份（API 面），App
-        # 设备消费面显式 deferred（DEC-031 / OPEN-015）：device lease 与
-        # content-live 心跳不构成 research 准入，release binding 层保留。
-        details = [
-            item
-            for item in details
-            if not str(item).startswith("user availability/device")
-            and not str(item).startswith("user availability/content_live")
         ]
     executed_checks = [
         item
@@ -357,11 +323,7 @@ def command_content_readiness(args: argparse.Namespace) -> dict[str, Any]:
     video_delivery_path: Path | None = None
     lifecycle_exit_receipt: dict[str, Any] | None = None
     lifecycle_exit_path: Path | None = None
-    research_isolation: dict[str, Any] | None = None
-    has_research_verify_receipt = phase is ReadinessPhase.RESEARCH and bool(
-        str(getattr(args, "verify_run_id", "") or "").strip()
-    )
-    if phase in _PUBLIC_SERVING_PHASES or has_research_verify_receipt:
+    if phase in _PUBLIC_SERVING_PHASES:
         try:
             data_readiness_receipt, data_readiness_path = (
                 _stackctl._load_data_release_readiness(
@@ -376,7 +338,7 @@ def command_content_readiness(args: argparse.Namespace) -> dict[str, Any]:
         except ValueError as exc:
             details.append(str(exc))
         if data_readiness_path is not None and data_readiness_receipt is not None:
-            if phase is ReadinessPhase.COMMERCIAL:
+            if phase is ReadinessPhase.PRODUCTION:
                 try:
                     lifecycle_exit_receipt, lifecycle_exit_path = (
                         _stackctl._load_data_release_lifecycle_exit(
@@ -408,9 +370,7 @@ def command_content_readiness(args: argparse.Namespace) -> dict[str, Any]:
             except ValueError as exc:
                 details.append(f"release-bound feed readback failed: {exc}")
             if phase in _PUBLIC_MEDIA_PHASES:
-                # 匿名视频播放 canary 只对公开 CDN 交付（commercial/production）
-                # 成立；research 私有交付（DEC-031）的视频证据是 Data 侧
-                # researchMediaProbe 的匿名 401/403 拒绝 + isolation probe。
+                # production 视频以公开 CDN 交付，验证真实字节与播放。
                 try:
                     video_delivery_evidence, video_delivery_path = (
                         _stackctl._run_release_video_delivery_probe(
@@ -432,21 +392,6 @@ def command_content_readiness(args: argparse.Namespace) -> dict[str, Any]:
                 f"capability {capability.value} declares probe scope "
                 f"{binding.health_scope} but no probe executed for {requirement.target}"
             )
-        if binding.source is ProbeSource.RESEARCH_ISOLATION:
-            try:
-                research_isolation = _stackctl.verify_research_content_isolation(
-                    args.env,
-                    release_id=str(getattr(args, "release_id", "") or "").strip(),
-                    verify_run_id=str(getattr(args, "verify_run_id", "") or "").strip(),
-                    manifest_digest=str(
-                        getattr(args, "manifest_digest", "") or ""
-                    ).strip(),
-                    data_readiness=data_readiness_receipt,
-                    data_readiness_path=data_readiness_path,
-                )
-                probes.append("governed-research-content-isolation")
-            except ValueError as exc:
-                details.append(str(exc))
         if binding.source is ProbeSource.LOG_SINK_CONTROL:
             action = binding.control_action
             if not action:
@@ -469,13 +414,13 @@ def command_content_readiness(args: argparse.Namespace) -> dict[str, Any]:
                     f"capability {capability.value}: {item}"
                     for item in log_sink_result.get("details", [])
                 )
-    if phase is ReadinessPhase.COMMERCIAL:
+    if phase is ReadinessPhase.PRODUCTION:
         doctor = _stackctl.command_doctor(
             argparse.Namespace(
                 command="doctor",
                 target=requirement.target,
                 output_format="json",
-                report_dir=str(report_dir / "commercial-prerequisites"),
+                report_dir=str(report_dir / "production-prerequisites"),
             )
         )
         if int(doctor["exitCode"]) != 0:
@@ -527,7 +472,6 @@ def command_content_readiness(args: argparse.Namespace) -> dict[str, Any]:
             ),
             "videoDelivery": video_delivery_evidence,
         },
-        "researchContentIsolation": research_isolation,
         **timing,
     }
     _stackctl.write_json(report_dir / "report.json", payload)

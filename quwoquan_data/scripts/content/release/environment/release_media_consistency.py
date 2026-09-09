@@ -47,19 +47,13 @@ def _object_root(root: Path, kind: str, ref: str) -> Path:
     return root / kind / ref.removeprefix(f"{kind}/")
 
 
-def _asset_rows(root: Path) -> list[dict[str, Any]]:
-    paths = [
-        path
-        for path in (root / "asset.refs.json", root / "assets.refs.json")
-        if path.is_file()
-    ]
-    if not paths:
-        return []
-    if len(paths) != 1:
-        raise ValueError(f"object must own exactly one asset refs document: {root}")
+def _asset_rows(root: Path, *, object_kind: str) -> list[dict[str, Any]]:
+    path = root / ("assets.refs.json" if object_kind == "creators" else "manifest.json")
+    if not path.is_file():
+        raise ValueError(f"object asset manifest missing: {path}")
     return [
         row
-        for row in read_json(paths[0]).get("assets") or []
+        for row in read_json(path).get("assets") or []
         if isinstance(row, dict)
     ]
 
@@ -126,14 +120,14 @@ def release_media_issues(
         for ref in sorted(refs):
             root = _object_root(objects, kind, ref)
             owner_ref = f"{kind}/{ref.removeprefix(f'{kind}/')}"
-            for row in _asset_rows(root):
+            for row in _asset_rows(root, object_kind=kind):
                 asset_id = str(row.get("assetId") or "").strip()
                 sha256 = str(row.get("sha256") or "").strip()
                 if not asset_id or not sha256:
                     issues.append(
                         _issue(
                             "release_media_source_identity_invalid",
-                            "asset.refs 必须声明 assetId 与 sha256",
+                            "对象资产 manifest 必须声明 assetId 与 sha256",
                             f"{kind}/{ref}",
                         )
                     )

@@ -32,7 +32,7 @@ def _release_attestation(
     *,
     release_id: str,
     digest_char: str,
-    release_class: str = "commercial",
+    release_class: str = "production",
     release_kind: str = "standard",
     contains_unverified_assets: bool = False,
 ) -> dict[str, object]:
@@ -364,13 +364,13 @@ def test_matrix_receipt_rejects_incomplete_target_baseline_map(
 def test_release_binding_validates_and_returns_lifecycle_identity(
     tmp_path: Path,
 ) -> None:
-    attestation = tmp_path / "research.json"
+    attestation = tmp_path / "production.json"
     attestation.write_text(
         json.dumps(
             _release_attestation(
-                release_id="research-release",
+                release_id="production-release",
                 digest_char="3",
-                release_class="research",
+                release_class="production",
                 contains_unverified_assets=True,
             )
         ),
@@ -379,8 +379,8 @@ def test_release_binding_validates_and_returns_lifecycle_identity(
 
     binding = matrix_mod._release_binding(str(attestation), label="candidate")
 
-    assert binding["releaseClass"] == "research"
-    assert binding["productLifecycleState"] == "research"
+    assert binding["releaseClass"] == "production"
+    assert binding["productLifecycleState"] == "production"
     assert binding["containsUnverifiedAssets"] is True
 
 
@@ -408,10 +408,10 @@ def test_release_binding_rejects_invalid_lifecycle_identity(
 
 @pytest.mark.parametrize(
     ("candidate_class", "rollback_class"),
-    (("research", "research"), ("research", "commercial"),
-     ("commercial", "research"), ("commercial", "commercial")),
+    (("research", "production"), ("production", "research"),
+     ("commercial", "production"), ("production", "commercial")),
 )
-def test_research_and_commercial_branches_are_explicit_and_supported(
+def test_retired_candidate_and_rollback_lifecycles_are_rejected(
     tmp_path: Path, candidate_class: str, rollback_class: str,
 ) -> None:
     candidate = tmp_path / f"{candidate_class}-candidate.json"
@@ -424,15 +424,14 @@ def test_research_and_commercial_branches_are_explicit_and_supported(
         release_id=f"{rollback_class}-rollback", digest_char="2", release_class=rollback_class,
         contains_unverified_assets=rollback_class == "research",
     )), encoding="utf-8")
-    bindings = matrix_mod._resolve_matrix_inputs(
-        release_attestation=str(candidate), rollback_release_attestation=str(rollback),
-        test_data_request=None, test_data_evidence=None, test_data_handoff=None,
-        telemetry_fn=None, provider_fn=None, app_uat_fn=None,
-        ios_simulator_device="", android_emulator_device="", android_physical_device="", ios_physical_device="",
-        device_profile=matrix_mod.DEVICE_PROFILE_EMULATOR_ONLY, execution_class="contract-simulation",
-    )
-    assert bindings.candidate_release["releaseClass"] == candidate_class
-    assert bindings.rollback_release["releaseClass"] == rollback_class
+    with pytest.raises(ValueError, match="lifecycle identity is invalid"):
+        matrix_mod._resolve_matrix_inputs(
+            release_attestation=str(candidate), rollback_release_attestation=str(rollback),
+            test_data_request=None, test_data_evidence=None, test_data_handoff=None,
+            telemetry_fn=None, provider_fn=None, app_uat_fn=None,
+            ios_simulator_device="", android_emulator_device="", android_physical_device="", ios_physical_device="",
+            device_profile=matrix_mod.DEVICE_PROFILE_EMULATOR_ONLY, execution_class="contract-simulation",
+        )
 
 
 def test_promotion_device_profile_requires_android_and_ios_physical_bindings(monkeypatch) -> None:

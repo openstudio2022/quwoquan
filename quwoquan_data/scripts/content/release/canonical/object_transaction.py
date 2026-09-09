@@ -50,7 +50,10 @@ from content.release.canonical.pool_source_attribution import (
     source_attribution_complete,
 )
 from content.release.canonical.review_rights_binding import validate_review_authority
-from core.content_library import reference_existing_file
+from content.release.canonical.canonical_inventory import allocate_package_path
+from content.release.canonical.post_transaction_sources import project_object_sources
+from core.paths import PUBLISH_ROOT
+from core.publish_layout import logical_object_ref
 from core.source_attribution import canonical_source_attribution
 from governance.coverage.license import (
     RightsAuditStatus,
@@ -92,6 +95,8 @@ def build_entity_object_transaction_package(
                 f"execution entity 缺 {required}: {object_source}"
             )
     source_manifest = _read_json(object_source / "manifest.json")
+    if any(field in source_manifest for field in ("assetRefsRef", "creatorRefsRef", "tagRefsRef")):
+        raise ObjectTransactionError("entity manifest contains retired sidecar pointers")
     entity = _read_json(object_source / "_entity.json")
     try:
         source_attribution = canonical_source_attribution(
@@ -108,9 +113,9 @@ def build_entity_object_transaction_package(
         raise ObjectTransactionError(
             "entity sourceAttribution is incomplete or drifts from manifest"
         )
-    canonical_ref = rel.as_posix()
-    if str(entity.get("entityRef") or "").removeprefix("/entity/") != canonical_ref:
-        raise ObjectTransactionError("entityRef 与对象路径不一致")
+    canonical_ref = logical_object_ref(entity, "entities")
+    if not str(entity.get("entityId") or ""):
+        raise ObjectTransactionError("DATA.POOL.IDENTITY_INVALID: entityId must be frozen by init")
     content_review_source = object_source / "5.review/content_review.json"
     source_assets = _source_assets_by_ref(execution_root)
     review_authority = validate_review_authority(
@@ -125,7 +130,7 @@ def build_entity_object_transaction_package(
     expected_transaction_id = canonical_transaction_id(
         execution_id=execution_id,
         object_kind="entities",
-        object_ref=canonical_ref,
+        object_ref=rel.as_posix(),
     )
     transaction_id = _safe_id(transaction_id, label="transactionId")
     if transaction_id != expected_transaction_id:
@@ -148,21 +153,14 @@ def build_entity_object_transaction_package(
     )
     try:
         object_root = staging / "object"
-        (object_root / "rights_snapshots").mkdir(parents=True, exist_ok=True)
-        shutil.copy2(object_source / "_entity.json", object_root / "_entity.json")
+        object_root.mkdir(parents=True, exist_ok=True)
         shutil.copy2(object_source / "page.md", object_root / "page.md")
-        source_catalog_ref = Path("source_catalog.json")
-        source_catalog_source = object_source / "evidence/source_catalog.json"
-        if not source_catalog_source.is_file():
-            raise ObjectTransactionError("entity 缺 source catalog")
-        shutil.copy2(source_catalog_source, object_root / source_catalog_ref)
         shutil.copy2(
             content_review_source,
             object_root / CANONICAL_CONTENT_REVIEW_REF,
         )
 
         cas_rows: list[dict[str, Any]] = []
-        asset_refs: list[dict[str, Any]] = []
         rights_rows: list[dict[str, Any]] = []
         canonical_assets: list[dict[str, Any]] = []
         vertical = str(source_manifest.get("vertical") or "").strip()
@@ -181,15 +179,23 @@ def build_entity_object_transaction_package(
             hex_digest = digest.removeprefix("sha256:")
             suffix = asset_source.suffix.lower().lstrip(".") or "bin"
             object_key = f"media/objects/sha256/{hex_digest[:2]}/{hex_digest[2:4]}/{hex_digest}.{suffix}"
-            cas_ref = Path("cas") / f"{hex_digest}.{suffix}"
+            media_ref = Path("media") / f"{len(canonical_assets) + 1:02d}.{suffix}"
+            cas_ref = Path("object") / media_ref
             cas_target = staging / cas_ref
-            reference_existing_file(asset_source, cas_target)
+            cas_target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(asset_source, cas_target)
             width, height, mime = _image_dimensions(asset_source)
             asset_id = str(raw.get("assetId") or "").strip()
             source_asset_ref, source_asset = _source_asset_for_manifest_asset(
                 raw,
                 source_assets,
             )
+            source_asset_refs = list(dict.fromkeys([
+                *(raw.get("sourceAssetRefs") or []), source_asset_ref,
+            ]))
+            if any(ref not in source_assets for ref in source_asset_refs):
+                raise ObjectTransactionError(f"asset {asset_id} sourceAssetRefs 未指向来源资产")
+            related_sources = [source_assets[ref] for ref in source_asset_refs]
             # 来源页优先于许可证页；authorizationProof 只在无任何来源字段时兜底。
             canonical_file_page = str(
                 raw.get("collectionPageUrl")
@@ -213,19 +219,6 @@ def build_entity_object_transaction_package(
                 license_url = "https://" + license_url.removeprefix("http://")
             if not canonical_file_page.startswith("https://"):
                 raise ObjectTransactionError(f"asset {asset_id} 缺 HTTPS 来源证明")
-            snapshot_payload = {
-                "schema": "quwoquan_data.asset_rights_snapshot",
-                "executionId": execution_id,
-                "assetId": asset_id,
-                "sourceAssetRef": source_asset_ref,
-                "sourceAsset": source_asset,
-                "manifestAsset": raw,
-            }
-            snapshot_ref = (
-                Path("object/rights_snapshots") / f"{_safe_asset_id(asset_id)}.json"
-            )
-            _write_json(staging / snapshot_ref, snapshot_payload)
-            snapshot_path = staging / snapshot_ref
             fetched_at = str(
                 source_asset.get("fetchedAt")
                 or (entity.get("primarySource") or {}).get("fetchedAt")
@@ -255,13 +248,6 @@ def build_entity_object_transaction_package(
                 for issue in (raw.get("rightsAuditIssues") or [])
                 if str(issue).strip()
             ]
-            if (
-                rights_audit_status is RightsAuditStatus.VERIFIED
-                and not authorization_proof
-            ):
-                raise ObjectTransactionError(
-                    f"asset {asset_id} verified rights lack authorizationProof"
-                )
             if (
                 rights_audit_status is not RightsAuditStatus.VERIFIED
                 and not rights_audit_issues
@@ -294,6 +280,8 @@ def build_entity_object_transaction_package(
                 "not_required",
                 "obtained",
                 "editorial_only",
+                "verified",
+                "unverified",
             }:
                 raise ObjectTransactionError(
                     f"asset {asset_id} 缺 canonical modelReleaseStatus"
@@ -304,23 +292,11 @@ def build_entity_object_transaction_package(
                 or ""
             ).strip()
             if distribution_decision not in {
-                "research_allowed",
-                "commercial_allowed",
+                "production_allowed",
                 "blocked",
             }:
                 raise ObjectTransactionError(
                     f"asset {asset_id} 缺 canonical distributionDecision"
-                )
-            if distribution_decision == "commercial_allowed" and (
-                rights_audit_status is not RightsAuditStatus.VERIFIED
-                or rights_audit_issues
-                or not authorization_proof.startswith("https://")
-                or not license_url.startswith("https://")
-                or not author
-                or not license_name
-            ):
-                raise ObjectTransactionError(
-                    f"asset {asset_id} commercial rights proof is incomplete"
                 )
             # 权利状态只作记录事实写入 rights.json：非 verified、有审计问题或缺 https 证明
             # 都不拒绝对象，公众可见性由下游运营运行时配置按这些事实决定。
@@ -336,7 +312,6 @@ def build_entity_object_transaction_package(
                 ),
                 "canonicalFilePage": canonical_file_page,
                 "snapshotUrl": canonical_file_page,
-                "pageRevision": _digest_file(snapshot_path),
                 "originalAssetUrl": str(
                     raw.get("originalAssetUrl")
                     or source_asset.get("url")
@@ -355,11 +330,6 @@ def build_entity_object_transaction_package(
                 "captionSource": "captured source asset metadata",
                 "modifications": "homepage materialization resize/crop when applicable",
                 "fetchedAt": fetched_at,
-                "snapshot": {
-                    "ref": snapshot_ref.as_posix(),
-                    "sha256": _digest_file(snapshot_path),
-                    "bytes": snapshot_path.stat().st_size,
-                },
                 "asset": {
                     "ref": cas_ref.as_posix(),
                     "sha256": digest,
@@ -373,6 +343,11 @@ def build_entity_object_transaction_package(
                 "rightsAuditStatus": rights_audit_status.value,
                 "rightsAuditIssues": rights_audit_issues,
                 "modelReleaseStatus": model_release_status,
+                **{
+                    key: raw[key] if key in raw else source_asset[key]
+                    for key in ("commercialAuthorizationStatus", "propertyReleaseStatus", "audioRightsStatus", "derivedModifications", "watermarkNote")
+                    if key in raw or key in source_asset
+                },
                 # 水印判定来自看过像素的 AI 申报（经 ingest 转录到资产行）；缺席只能记 unknown。
                 "watermarkStatus": str(raw.get("watermarkStatus") or "unknown"),
                 "watermarkKind": str(raw.get("watermarkKind") or "unknown"),
@@ -388,10 +363,8 @@ def build_entity_object_transaction_package(
                     "bytes": asset_source.stat().st_size,
                 }
             )
-            acquisition_receipt_ref = str(
-                source_asset.get("acquisitionReceiptRef") or ""
-            ).strip()
-            if not acquisition_receipt_ref:
+            receipt_refs = [str(row.get("acquisitionReceiptRef") or "").strip() for row in related_sources]
+            if any(not ref for ref in receipt_refs):
                 raise ObjectTransactionError(
                     f"asset {asset_id} lacks acquisitionReceiptRef"
                 )
@@ -400,10 +373,8 @@ def build_entity_object_transaction_package(
                 "objectKey": object_key,
                 "sha256": digest,
                 "bytes": asset_source.stat().st_size,
-                "sourceAssetRefs": [source_asset_ref],
-                "acquisitionReceiptRefs": (
-                    [acquisition_receipt_ref] if acquisition_receipt_ref else []
-                ),
+                "sourceAssetRefs": source_asset_refs,
+                "acquisitionReceiptRefs": list(dict.fromkeys(receipt_refs)),
             }
             derivative_binding = source_asset.get("derivativeBinding")
             if isinstance(derivative_binding, Mapping):
@@ -417,15 +388,15 @@ def build_entity_object_transaction_package(
                         f"asset {asset_id} source derivativeBinding 与发布字节不一致"
                     )
                 asset_binding["derivativeBinding"] = dict(derivative_binding)
-            asset_refs.append(asset_binding)
-            canonical_assets.append(
-                {
-                    **raw,
-                    "objectKey": object_key,
-                    "sha256": digest,
-                    "bytes": asset_source.stat().st_size,
-                }
-            )
+            canonical_assets.append({
+                **{key: value for key, value in raw.items() if key != "sourceAssetRef"},
+                **asset_binding,
+                "path": media_ref.as_posix(),
+                "fileName": media_ref.as_posix(),
+                "mimeType": mime,
+                "width": width,
+                "height": height,
+            })
 
         if not cas_rows and not (
             str(source_manifest.get("contentType") or "") in {"article", "homepage"}
@@ -439,31 +410,18 @@ def build_entity_object_transaction_package(
             entity=entity,
             staging=staging,
         )
-        _write_json(object_root / "creator.refs.json", {"creatorRefs": creator_refs})
-        _write_json(object_root / "tag.refs.json", {"tagRefs": tag_refs})
-        _write_json(object_root / "asset.refs.json", {"assets": asset_refs})
-        rights_ref = Path("rights.json")
-        _write_json(
-            object_root / rights_ref,
-            {
-                "schema": "quwoquan_data.asset_rights_closure",
-                "publishMediaMode": (
-                    "text_only"
-                    if str(source_manifest.get("publishMediaMode") or "") == "text_only"
-                    else "not_applicable"
-                ),
-                "assets": rights_rows,
-            },
+        if len(creator_refs) != 1:
+            raise ObjectTransactionError("entity manifest 缺唯一 creatorProfileId")
+        source_refs = project_object_sources(
+            execution_root=execution_root, source_object=object_source, object_root=object_root,
+            manifest=source_manifest, source_assets=source_assets,
+            canonical_assets=canonical_assets, rights_rows=rights_rows,
         )
-        entity_id = "entity:" + ":".join(
-            (
-                rel.parts[1].strip().replace(" ", "_"),
-                "/".join(rel.parts[2:]).strip().replace(" ", "_"),
-            )
-        )
+        entity_id = str(entity["entityId"])
         _write_json(
             object_root / "manifest.json",
             {
+                **entity,
                 "schema": "quwoquan_data.entity_object",
                 "entityId": entity_id,
                 "entityRef": str(entity.get("entityRef") or ""),
@@ -471,30 +429,18 @@ def build_entity_object_transaction_package(
                 "executionId": execution_id,
                 "sourceIdentity": source_identity,
                 "finalContentRef": "page.md",
-                "sourceCatalogRef": source_catalog_ref.as_posix(),
+                "sourceRefs": source_refs,
                 "sourceAttribution": source_attribution,
-                "rightsRef": rights_ref.as_posix(),
-                "creatorRefsRef": "creator.refs.json",
-                "tagRefsRef": "tag.refs.json",
-                "assetRefsRef": "asset.refs.json",
+                "creatorProfileId": creator_refs[0],
+                "tagRefs": tag_refs,
                 "assets": canonical_assets,
-                "contentType": (
-                    "article"
-                    if str(source_manifest.get("publishMediaMode") or "") == "text_only"
-                    else "homepage"
-                ),
+                "contentType": "homepage",
                 "publishMediaMode": str(source_manifest.get("publishMediaMode") or "not_applicable"),
                 "admission": {
                     "processResult": "completed",
                     "qualityResult": "passed",
-                    "usageScope": (
-                        "commercial"
-                        if pool_usage_scope(
-                            {"sourceAttribution": source_attribution},
-                            rights_rows,
-                        ) == "commercial"
-                        and review_authority["usageScope"] == "commercial"
-                        else "research"
+                    "usageScope": pool_usage_scope(
+                        {"sourceAttribution": source_attribution}, rights_rows,
                     ),
                     "rightsResult": "passed",
                     "rightsAuthorityRef": review_authority["ref"],
@@ -517,8 +463,7 @@ def build_entity_object_transaction_package(
             "creatorRefs": creator_refs,
             "creatorObjects": creator_objects,
             "tagRefs": tag_refs,
-            "sourceCatalogRef": source_catalog_ref.as_posix(),
-            "rightsRef": rights_ref.as_posix(),
+            "sourceRefs": source_refs,
             "casRefs": cas_rows,
         }
         review = {"contentReviewRef": CANONICAL_CONTENT_REVIEW_REF}
@@ -547,6 +492,7 @@ def build_entity_object_transaction_package(
                 "layoutSchema": LAYOUT_SCHEMA,
                 "objectKind": "entities",
                 "objectRef": canonical_ref,
+                "objectPath": allocate_package_path(PUBLISH_ROOT, _read_json(object_root / "manifest.json"), "entities", object_root),
                 "objectSchema": "quwoquan_data.entity_object",
                 "packageObjectRef": "object",
             },

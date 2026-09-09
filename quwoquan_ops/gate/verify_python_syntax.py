@@ -8,6 +8,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_ROOTS = (
+    ROOT / ".agents" / "skills",
     ROOT / "quwoquan_data" / "scripts",
     ROOT / "quwoquan_ops" / "cli",
     ROOT / "quwoquan_ops" / "gate",

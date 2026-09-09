@@ -18,6 +18,17 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
+from content.execution.author_bindings import (
+    AuthorBindingError,
+    bind_image_collision,
+    homepage_catalog_primary,
+    homepage_primary_source,
+    homepage_source_kind as _homepage_source_kind,
+    image_asset_bindings,
+    image_collision_destinations,
+    parse_frontmatter as _parse_frontmatter,
+    resolve_asset_ref,
+)
 from content.release.canonical.entity_transaction_sources import source_assets_by_ref
 from content.release.canonical.object_transaction_contract import (
     ObjectTransactionError,
@@ -26,11 +37,12 @@ from content.release.canonical.object_transaction_contract import (
     _safe_rel,
 )
 from content.release.canonical.media_rights_projection import (
+    asset_license_fields,
     asset_rights_fields,
-    object_rights_rollup,
+    media_attribution,
 )
 from content.release.canonical.post_transaction_assets import source_assets
-from content.source.research.homepage_article_source_attribution import (
+from content.source.homepage_article_source_attribution import (
     encyclopedia_source_attribution,
 )
 from core.content_library import reference_existing_file
@@ -44,40 +56,16 @@ _DEFAULT_CREATOR = {
     "image": "qwq_creator_landscape_photographer_001",
     "video": "qwq_creator_travel_blogger_001",
 }
-_FRONTMATTER_RE = re.compile(r"\A---\n(.*?)\n---\n", re.S)
 _MARKDOWN_IMAGE_RE = re.compile(r"!\[[^\]]*\]\(([^)\s]+)(?:\s+\"[^\"]*\")?\)")
-
-
-def _parse_frontmatter(text: str) -> dict[str, Any]:
-    """读取 Markdown 顶部 YAML frontmatter；只支持 key: scalar 与 key: [a, b] 两种形态。"""
-
-    match = _FRONTMATTER_RE.match(text)
-    if not match:
-        return {}
-    result: dict[str, Any] = {}
-    for line in match.group(1).splitlines():
-        if ":" not in line or line.startswith((" ", "\t", "#")):
-            continue
-        key, _sep, raw = line.partition(":")
-        value = raw.strip()
-        if value.startswith("[") and value.endswith("]"):
-            result[key.strip()] = [item.strip().strip("'\"") for item in value[1:-1].split(",") if item.strip()]
-        else:
-            result[key.strip()] = value.strip("'\"")
-    return result
 
 
 def _resolve_asset_ref(raw: str, index: Mapping[str, Mapping[str, Any]], *, label: str) -> str:
     """接受 fileName / assets/<fileName> / 完整 sources 路径，归一为 execution 相对资产路径。"""
 
-    value = str(raw or "").strip().strip("/")
-    if value in index:
-        return value
-    tail = value.removeprefix("assets/")
-    matches = [ref for ref in index if ref.endswith(f"/assets/{tail}")]
-    if len(matches) != 1:
-        raise ObjectTransactionError(f"{label} asset ref 无法唯一解析：{raw!r}")
-    return matches[0]
+    try:
+        return resolve_asset_ref(raw, index, label=label)
+    except AuthorBindingError as exc:
+        raise ObjectTransactionError(str(exc)) from exc
 
 
 def _author_intent(
@@ -104,34 +92,52 @@ def _author_intent(
         intent["tagRefs"] = [str(value) for value in document.get("tagRefs") or []]
         intent["creatorProfileRef"] = str(document.get("creatorProfileId") or _DEFAULT_CREATOR[carrier])
         if carrier == "image":
-            refs = [_resolve_asset_ref(str(value), asset_index, label="image_work.assetRefs") for value in document.get("assetRefs") or []]
-            intent["assets"] = [{"assetRef": ref, "caption": intent["caption"]} for ref in refs]
+            try:
+                intent["assets"] = image_asset_bindings(document, asset_index)
+            except AuthorBindingError as exc:
+                raise ObjectTransactionError(str(exc)) from exc
         else:
-            explicit = str(document.get("sourceVideoAssetRef") or "").strip()
-            videos = [ref for ref, row in asset_index.items() if str(row.get("assetRole") or "") == "video"]
-            video_ref = _resolve_asset_ref(explicit, asset_index, label="video_script.sourceVideoAssetRef") if explicit else (videos[0] if len(videos) == 1 else "")
-            if not video_ref:
-                raise ObjectTransactionError("video author artifact must select exactly one source video")
-            intent["sourceVideo"] = {"assetRef": video_ref}
+            intent["sourceVideo"] = {"assetRef": _video_author_ref(document, asset_index)}
         intent["draft"] = document
         return intent
     text = draft_path.read_text(encoding="utf-8")
     frontmatter = _parse_frontmatter(text)
+    if carrier == "homepage":
+        try:
+            primary = homepage_primary_source(frontmatter, source_rows)
+        except ValueError as exc:
+            raise ObjectTransactionError(str(exc)) from exc
+        if primary is not None:
+            intent["primarySourceRef"] = primary["sourceRef"]
     heading = next((line.lstrip("# ").strip() for line in text.splitlines() if line.startswith("# ")), "")
     intent["title"] = str(frontmatter.get("title") or heading or target.get("publishTitle") or target.get("name") or "")
     tag_refs = frontmatter.get("tagRefs")
     intent["tagRefs"] = [str(value) for value in tag_refs] if isinstance(tag_refs, list) else []
     intent["creatorProfileRef"] = str(frontmatter.get("creatorProfileId") or _DEFAULT_CREATOR[carrier])
-    seen: list[str] = []
+    intent["assets"] = _markdown_asset_bindings(text, carrier, asset_index)
+    intent["draft"] = {"title": intent["title"]}
+    return intent
+
+
+def _video_author_ref(document: Mapping[str, Any], asset_index: Mapping[str, Mapping[str, Any]]) -> str:
+    explicit = str(document.get("sourceVideoAssetRef") or "").strip()
+    if explicit:
+        return _resolve_asset_ref(explicit, asset_index, label="video_script.sourceVideoAssetRef")
+    videos = [ref for ref, row in asset_index.items() if row.get("assetRole") == "video"]
+    if len(videos) != 1:
+        raise ObjectTransactionError("video author artifact must select exactly one source video")
+    return videos[0]
+
+
+def _markdown_asset_bindings(text: str, carrier: str, asset_index: Mapping[str, Mapping[str, Any]]) -> list[dict[str, str]]:
+    refs: list[str] = []
     for raw in _MARKDOWN_IMAGE_RE.findall(text):
         if raw.startswith(("http://", "https://")):
             raise ObjectTransactionError("正文只允许引用本对象 assets/ 内的已取得图片，不得外链")
         ref = _resolve_asset_ref(raw, asset_index, label=f"{carrier} 正文图片")
-        if ref not in seen:
-            seen.append(ref)
-    intent["assets"] = [{"assetRef": ref, "caption": ""} for ref in seen]
-    intent["draft"] = {"title": intent["title"]}
-    return intent
+        if ref not in refs:
+            refs.append(ref)
+    return [{"assetRef": ref, "caption": ""} for ref in refs]
 
 
 def _json_bytes(value: object) -> bytes:
@@ -194,28 +200,8 @@ def _source_rows(execution_root: Path, object_dir: Path) -> list[dict[str, Any]]
     return rows
 
 
-def _homepage_source_kind(raw: Mapping[str, Any]) -> tuple[str, str, str]:
-    identity = " ".join(
-        (
-            str(raw.get("sourceId") or ""),
-            str(raw.get("sourceKind") or ""),
-            str((raw.get("meta") or {}).get("sourceClass") or ""),
-        )
-    ).lower()
-    if "wikipedia" in identity:
-        return "wikipedia", "wikipedia_api", "encyclopedia-primary"
-    if "baidu" in identity:
-        return "baidu_baike", "baidu_baike_html", "encyclopedia-primary"
-    if "toutiao" in identity:
-        return "toutiao_baike", "toutiao_baike_html", "encyclopedia-primary"
-    if any(marker in identity for marker in ("media", "image", "commons")):
-        return "image_collection", "image_collection_download", "image-collection-attribution"
-    # 非百科的公开网页也可作事实参考；catalog 以 web_page 登记，不阻断。
-    return "web_page", "html_text", ""
-
-
 def _source_catalog(
-    rows: Sequence[Mapping[str, Any]], *, entity_name: str
+    rows: Sequence[Mapping[str, Any]], *, entity_name: str, primary_source_ref: str = ""
 ) -> dict[str, Any]:
     sources: list[dict[str, Any]] = []
     for raw in rows:
@@ -248,14 +234,15 @@ def _source_catalog(
             "evidenceRef": f"evidence/sources/{unit_id}/meta.json",
         }
         sources.append(row)
-    primaries = [
-        row for row in sources if row["policyRevision"] == "encyclopedia-primary"
-    ] or [row for row in sources if row["sourceKind"] not in {"image_collection"}] or sources
+    try:
+        primary = homepage_catalog_primary(rows, sources, primary_source_ref)
+    except AuthorBindingError as exc:
+        raise ObjectTransactionError(str(exc)) from exc
     catalog = {
         "schema": "quwoquan_data.object_source_catalog",
-        "policyRevision": "encyclopedia-primary" if primaries[0]["policyRevision"] == "encyclopedia-primary" else "factual-reference",
-        "primaryEvidenceRef": primaries[0]["evidenceRef"],
-        "primarySource": primaries[0],
+        "policyRevision": "encyclopedia-primary" if primary["policyRevision"] == "encyclopedia-primary" else "factual-reference",
+        "primaryEvidenceRef": primary["evidenceRef"],
+        "primarySource": primary,
         "sources": sources,
     }
     assert_valid(catalog, "publish", "source_catalog", label="homepage source catalog")
@@ -325,7 +312,7 @@ def _text_attribution(
         "attributionText": "原创表达；事实来源见 source catalog。",
         "rightsBasis": "original_expression_with_factual_reference_only",
         "commercialAuthorizationStatus": "unverified",
-        "publicationAdmission": "research_release",
+        "publicationAdmission": "production_release",
         "authorizationProofUrl": None,
         "termsUrl": None,
         "watermarkStatus": "absent",
@@ -338,59 +325,12 @@ def _text_attribution(
     }
 
 
-def _media_attribution(
-    assets: Sequence[Mapping[str, Any]], *, carrier: str, collected_at: str
-) -> dict[str, Any]:
-    if not assets:
-        raise ObjectTransactionError(f"{carrier} attribution requires selected assets")
-    first = assets[0]
-    creator = str(first.get("creator") or "").strip()
-    source_url = str(first.get("collectionPageUrl") or "").strip()
-    terms_url = str(first.get("termsUrl") or "").strip()
-    proof = str(first.get("authorizationProof") or "").strip()
-    license_name = str(first.get("license") or "").strip()
-    if not all((creator, source_url.startswith("https://"), license_name)):
-        raise ObjectTransactionError(
-            f"{carrier} selected assets lack attribution hard facts"
-        )
-    all_commercial = carrier != "video" and all(
-        raw.get("distributionDecision") == "commercial_allowed"
-        and raw.get("rightsAuditStatus") == "verified"
-        and str(raw.get("authorizationProof") or "").startswith("https://")
-        and str(raw.get("termsUrl") or "").startswith("https://")
-        for raw in assets
-    )
-    platform = str(first.get("platform") or "").strip() or urlparse(source_url).netloc
-    rights = object_rights_rollup(assets, carrier)
-    return {
-        "isOriginal": False,
-        "originalCreatorId": None,
-        "originalCreatorName": creator,
-        "originalCreatorProfileUrl": None,
-        "platform": platform,
-        "sourcePostUrl": source_url,
-        "originalAssetUrl": str(first.get("originalAssetUrl") or source_url),
-        "attributionText": f"{creator} · {platform} · {license_name}",
-        "rightsBasis": license_name,
-        "commercialAuthorizationStatus": "verified" if all_commercial else "unverified",
-        "publicationAdmission": "research_release",
-        "authorizationProofUrl": proof or None,
-        "termsUrl": terms_url or None,
-        **{k: rights[k] for k in ("watermarkStatus", "watermarkKind", "audioRightsStatus")},
-        "modelReleaseStatus": str(first.get("modelReleaseStatus") or "not_required"),
-        "propertyReleaseStatus": str(first.get("propertyReleaseStatus") or "unverified"),
-        "collectedAt": collected_at,
-        "takedownPolicy": "quwoquan_standard_notice_and_takedown",
-        "derivedModifications": rights["derivedModifications"],
-    }
-
-
 def _target_entity_ref(target: Mapping[str, Any]) -> str:
-    entity_type = str(target.get("entityType") or "").strip().strip("/")
-    name = str(target.get("name") or "").strip()
-    if len(entity_type.split("/")) != 2 or not name:
-        raise ObjectTransactionError("target entity identity is incomplete")
-    return f"/entity/{entity_type}/{name}"
+    ref = str(target.get("entityRef") or "")
+    if not ref.startswith("/entity/") or not target.get("entityId"):
+        raise ObjectTransactionError("DATA.POOL.IDENTITY_INVALID: target lacks frozen entityRef/entityId")
+    _safe_rel(ref.removeprefix("/entity/"), label="target.entityRef")
+    return ref
 
 
 def _target_tag_refs(target: Mapping[str, Any]) -> list[str]:
@@ -445,7 +385,7 @@ def _post_manifest(
     attribution = (
         _text_attribution(source_rows, creator)
         if carrier == "article"
-        else _media_attribution(assets, carrier=carrier, collected_at=created_at)
+        else media_attribution(assets, carrier=carrier, collected_at=created_at)
     )
     manifest: dict[str, Any] = {
         "schema": "quwoquan_data.post_manifest",
@@ -453,6 +393,7 @@ def _post_manifest(
         "version": 1,
         "vertical": str(compose.get("vertical") or "travel"),
         "topicId": target_ref.removeprefix("posts/"),
+        "objectRef": target_ref.removeprefix("posts/"),
         "contentType": carrier,
         "contentIdentity": "work",
         "title": str(draft.get("title") or compose.get("title") or target.get("publishTitle") or ""),
@@ -501,9 +442,8 @@ def _post_manifest(
             sourceCollectionId=str(first.get("sourceCollectionId") or ""),
             creator=str(first.get("creator") or ""),
             collectionPageUrl=str(first.get("collectionPageUrl") or ""),
-            license=str(first.get("license") or ""),
-            termsUrl=str(first.get("termsUrl") or ""),
-            authorizationProof=str(first.get("authorizationProof") or ""),
+            license=first["license"],
+            **{key: first[key] for key in ("termsUrl", "authorizationProof") if first.get(key)},
             rightsAuditStatus=str(first.get("rightsAuditStatus") or ""),
             rightsAuditIssues=sorted(
                 {
@@ -683,9 +623,6 @@ def _asset_projection(
         raise ObjectTransactionError(
             f"selected source asset lacks creator/source/license hard facts: {source_ref}"
         )
-    rights_status = str(
-        source.get("rightsStatus") or source.get("rightsAuditStatus") or ""
-    ).strip()
     digest = _digest_file(source_path)
     digest_hex = digest.removeprefix("sha256:")
     suffix = source_path.suffix.lower().lstrip(".") or "bin"
@@ -708,17 +645,7 @@ def _asset_projection(
         or urlparse(source_url).netloc,
         "collectionPageUrl": source_url,
         "originalAssetUrl": str(source.get("originalAssetUrl") or source_url),
-        "license": license_name,
-        "termsUrl": str(source.get("termsUrl") or ""),
-        "authorizationProof": str(source.get("authorizationProof") or ""),
-        "usageScope": str(source.get("usageScope") or "app_publish"),
-        "modelReleaseStatus": str(source.get("modelReleaseStatus") or "not_required"),
-        "propertyReleaseStatus": str(source.get("propertyReleaseStatus") or "unverified"),
-        "distributionDecision": str(source.get("distributionDecision") or ""),
-        "rightsAuditStatus": rights_status,
-        "rightsAuditIssues": [
-            str(value) for value in source.get("rightsIssues") or source.get("rightsAuditIssues") or [] if str(value)
-        ],
+        **asset_license_fields(source),
         "sha256": digest,
         "objectKey": (
             f"media/objects/sha256/{digest_hex[:2]}/{digest_hex[2:4]}/"
@@ -773,6 +700,25 @@ def _bind_video_surface(
     )
 
 
+def _validate_selected_assets(refs: Sequence[str], index: Mapping[str, Mapping[str, Any]], carrier: str) -> None:
+    if not refs or any(not ref for ref in refs) or len(refs) != len(set(refs)):
+        raise ObjectTransactionError(f"{carrier} final projection requires unique selected assets")
+    missing = [ref for ref in refs if ref not in index]
+    if missing:
+        raise ObjectTransactionError("selected source assets are missing: " + ", ".join(missing))
+    if carrier == "video" and sorted(str(index[ref].get("assetRole") or "") for ref in refs) != ["poster", "video"]:
+        raise ObjectTransactionError("video final projection requires exact video+poster assets")
+
+
+def _asset_captions(compose: Mapping[str, Any]) -> dict[str, str]:
+    captions = {}
+    for raw in compose.get("assets") or []:
+        if isinstance(raw, Mapping):
+            ref = str(raw.get("sourceAssetRef") or raw.get("assetRef") or "").strip()
+            captions[ref] = str(raw.get("caption") or raw.get("captionIntent") or "").strip()
+    return captions
+
+
 def _project_assets(
     *,
     execution_root: Path,
@@ -791,31 +737,12 @@ def _project_assets(
     )
     if carrier == "article" and not refs:
         return [], {}
-    if not refs or any(not ref for ref in refs) or len(refs) != len(set(refs)):
-        raise ObjectTransactionError(
-            f"{carrier} final projection requires unique selected assets"
-        )
-    missing = [ref for ref in refs if ref not in index]
-    if missing:
-        raise ObjectTransactionError(
-            "selected source assets are missing: " + ", ".join(missing)
-        )
-    if carrier == "video":
-        roles = sorted(str(index[ref].get("assetRole") or "") for ref in refs)
-        if roles != ["poster", "video"]:
-            raise ObjectTransactionError(
-                "video final projection requires exact video+poster assets"
-            )
-    binding_captions = {
-        str(raw.get("sourceAssetRef") or raw.get("assetRef") or "").strip(): str(
-            raw.get("caption") or raw.get("captionIntent") or ""
-        ).strip()
-        for raw in compose.get("assets") or []
-        if isinstance(raw, Mapping)
-    }
+    _validate_selected_assets(refs, index, carrier)
+    binding_captions = _asset_captions(compose)
     caption = str(draft.get("caption") or compose.get("title") or "")
     assets: list[dict[str, Any]] = []
     files: dict[Path, bytes | Path] = {}
+    collision_destinations = image_collision_destinations(refs) if carrier == "image" else {}
     for ref in refs:
         row, destination, source_path = _asset_projection(
             execution_root=execution_root,
@@ -823,6 +750,7 @@ def _project_assets(
             source=index[ref],
             caption=binding_captions.get(ref) or caption,
         )
+        destination = bind_image_collision(row, destination, collision_destinations.get(ref))
         if destination in files and files[destination] != source_path:
             raise ObjectTransactionError(
                 f"selected assets collide at {destination.as_posix()}"
@@ -840,6 +768,21 @@ def _project_assets(
             row["role"] = "detail"
     return assets, files
 
+def _homepage_media(
+    execution_root: Path, object_dir: Path, compose: Mapping[str, Any], name: str,
+) -> tuple[list[dict[str, Any]], dict[Path, bytes | Path]]:
+    selected = list(compose.get("assets") or [])
+    if not selected:
+        return [], {}
+    assets, media = _project_assets(
+        execution_root=execution_root, object_dir=object_dir, carrier="homepage",
+        compose={"assets": selected, "title": name}, draft={},
+    )
+    for asset in assets:
+        asset["fileName"] = Path(str(asset["fileName"])).name
+    return assets, media
+
+
 def _homepage_surface(
     *,
     execution_root: Path,
@@ -851,26 +794,21 @@ def _homepage_surface(
 ) -> dict[Path, bytes | Path]:
     page_path = _regular(object_dir / "4.draft/page.md", label="homepage draft")
     creator = _creator_fields(compose, carrier="homepage")
-    attribution = _text_attribution(source_rows, creator)
+    try:
+        primary = homepage_primary_source(compose, source_rows)
+    except ValueError as exc:
+        raise ObjectTransactionError(str(exc)) from exc
+    attribution = _text_attribution([primary] if primary is not None else source_rows, creator)
     name = str(target.get("name") or "")
-    homepage_compose = {"assets": list(compose.get("assets") or []), "title": name}
-    assets, media = _project_assets(
-        execution_root=execution_root,
-        object_dir=object_dir,
-        carrier="homepage",
-        compose=homepage_compose,
-        draft={},
-    ) if homepage_compose["assets"] else ([], {})
-    for asset in assets:
-        asset["fileName"] = Path(str(asset["fileName"])).name
-    entity_ref = "/entity/" + target_ref.removeprefix("entities/")
+    assets, media = _homepage_media(execution_root, object_dir, compose, name)
+    entity_ref = _target_entity_ref(target)
     domain, type_name = str(target.get("entityType") or "").split("/", 1)
     region = str(target.get("region") or "").strip("/")
     if not region:
         # geoTagRef 是 publish/entity schema 的必填单值主归属；缺 region 的目标不得投影成实体。
         raise ObjectTransactionError(f"homepage target {target_ref} lacks region for geoTagRef")
     geo_tag_ref = f"Topic/地理/行政区/{region}"
-    catalog = _source_catalog(source_rows, entity_name=name)
+    catalog = _source_catalog(source_rows, entity_name=name, primary_source_ref=str(primary["sourceRef"]) if primary is not None else "")
     hidden = {"schema", "sourceUnitId", "evidenceRef"}
     entity = {
         "label": name,
@@ -878,6 +816,8 @@ def _homepage_surface(
         "type": type_name,
         "executionId": execution_root.name,
         "entityRef": entity_ref,
+        "entityId": target["entityId"],
+        "geographyMode": "administrative",
         "sourceRefs": [str(row["sourceRef"]) for row in source_rows],
         "sourceUrls": [str(row["sourceUrl"]) for row in source_rows],
         "primarySource": {k: v for k, v in catalog["primarySource"].items() if k not in hidden},

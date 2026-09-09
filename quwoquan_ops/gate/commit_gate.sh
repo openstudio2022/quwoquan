@@ -186,7 +186,7 @@ run_static_check() {
     commercial_contract) make verify-commercial-contract-generation ;;
     pageflip_backward_mainline) make verify-app-pageflip-back-mainline ;;
     app_uat_widget_key_references) make verify-app-uat-widget-key-references ;;
-    data_verify) python3 quwoquan_data/scripts/cli.py verify all ;;
+    data_verify) python3 quwoquan_data/scripts/cli.py verify all --scope source ;;
     workflow_actionlint) bash quwoquan_ops/gate/verify_workflow_actionlint.sh ;;
     *)
       log "FAIL: unknown static check: $check"

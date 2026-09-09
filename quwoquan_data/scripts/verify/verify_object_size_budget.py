@@ -32,8 +32,6 @@ from core.object_storage_budget import object_storage_budget_bytes
 from core.paths import PUBLISH_ROOT
 
 MEBIBYTE = 1024 * 1024
-_ASSET_REFS_FILENAMES = ("asset.refs.json", "assets.refs.json")
-
 
 @dataclass(frozen=True, slots=True)
 class ObjectClosure:
@@ -80,18 +78,10 @@ def object_carrier(object_kind: str, object_ref: str) -> str:
     return head
 
 
-def _asset_refs_path(object_root: Path) -> Path | None:
-    """Return the object's single asset refs document, or None when it owns no media."""
-    present = [
-        object_root / name
-        for name in _ASSET_REFS_FILENAMES
-        if (object_root / name).is_file()
-    ]
-    if not present:
-        return None
-    if len(present) != 1:
-        raise ValueError(f"object must own exactly one asset refs document: {object_root}")
-    return present[0]
+def _asset_refs_path(object_root: Path) -> Path:
+    """按对象类型选择唯一资产契约；creator 保留独立头像文档。"""
+    name = "assets.refs.json" if (object_root / "_creator.json").is_file() else "manifest.json"
+    return object_root / name
 
 
 def _referenced_media_bytes(object_root: Path) -> tuple[int, int, list[str]]:
@@ -104,26 +94,36 @@ def _referenced_media_bytes(object_root: Path) -> tuple[int, int, list[str]]:
     hand the operator two different next steps.
     """
     refs_path = _asset_refs_path(object_root)
-    if refs_path is None:
-        return 0, 0, []
-    document = json.loads(refs_path.read_text(encoding="utf-8"))
+    if refs_path.is_symlink() or not refs_path.is_file():
+        return 0, 0, [f"asset contract is missing or unsafe: {refs_path}"]
+    try:
+        document = json.loads(refs_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        return 0, 0, [f"asset contract is unreadable: {refs_path}"]
     if not isinstance(document, dict):
-        raise TypeError(f"asset refs document must be an object: {refs_path}")
+        return 0, 0, [f"asset contract must be an object: {refs_path}"]
+    rows = document.get("assets")
+    if not isinstance(rows, list):
+        return 0, 0, [f"asset contract assets must be an array: {refs_path}"]
     issues: list[str] = []
     distinct: dict[str, int] = {}
-    for row in document.get("assets") or []:
+    for row in rows:
         if not isinstance(row, dict):
             issues.append(f"asset refs row is not an object: {refs_path}")
             continue
         object_key = str(row.get("objectKey") or "")
         sha256 = str(row.get("sha256") or "")
-        if not is_cas_media_object_key(object_key) or not sha256:
+        if not sha256:
             issues.append(f"asset refs row has no content-addressed identity: {object_key}")
             continue
+        from content.release.canonical.object_transaction_contract import _safe_rel, _digest_file
         try:
-            entry = resolve_media_holding(sha256)
-        except (MediaHoldingError, ValueError):
-            issues.append(f"referenced media entry is missing: {object_key}")
+            relative = _safe_rel(str(row.get("path") or ""), label="asset.path")
+            entry = object_root / relative
+            if relative.parts[0] != "media" or entry.is_symlink() or not entry.is_file() or _digest_file(entry) != sha256 or entry.stat().st_size != row.get("bytes"):
+                raise ValueError("carried bytes mismatch")
+        except (OSError, ValueError, RuntimeError):
+            issues.append(f"referenced carried media entry is missing or corrupt: {object_key}")
             continue
         distinct[sha256] = entry.stat().st_size
     return sum(distinct.values()), max(distinct.values(), default=0), issues
@@ -136,7 +136,7 @@ def _document_bytes(object_root: Path) -> int:
         # transaction package temporarily carries those bytes under assets/ so
         # they can enter the content library, but they are not canonical publish
         # documents and must not be counted a second time here.
-        if path.is_file() and path.suffix.lower() in {".json", ".md", ".ndjson", ".vtt"}:
+        if path.is_file() and path.relative_to(object_root).parts[0] != "media":
             total += path.stat().st_size
     return total
 

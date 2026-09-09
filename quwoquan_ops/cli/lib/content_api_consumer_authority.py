@@ -488,8 +488,7 @@ def _validate_data_readiness(
         raise _consumer_error(
             "Data readiness manifestDigest drifted from explicit authority"
         )
-    declared = str(readiness.get("releaseClass") or "")  # DEC-041: production 为现役单一类别
-    release_class = declared if declared in {"research", "commercial", "production"} else "<lifecycle-bound>"
+    release_class = "production"
     expected = {
         "schema": "quwoquan_data.environment_release_readiness",
         "environment": "alpha",
@@ -724,7 +723,7 @@ def _load_import_mappings(
         or import_report.get("schema") != "quwoquan.content_import_report"
         or import_report.get("environment") != "alpha"
         or import_report.get("releaseId") != release_id
-        or import_report.get("status") != "imported"
+        or import_report.get("status") != "staged"
         or import_report.get("manifestDigest") != manifest_digest
     ):
         raise _consumer_error(

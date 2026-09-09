@@ -20,7 +20,7 @@ import (
 
 const (
 	testContractGraphDigest = "72046cb9d49a8a0e05e57b9c75261d8f5e153f2fed51b6afd1a43f28ee9d62dc"
-	testPersistedQueryHash  = "3a73f535735fcbb64f7de0db524e9dab2ca1f41d7f1fec91c68053dfde5bc80f"
+	testPersistedQueryHash  = "7e03c295fb73f2aaed2e8f944d7133b19a02dabd6a3ccc297b7f9f0b16b588d7"
 
 	testArticleMarkdownDigest = "sha256:bc18f7068971a44e264848ecd54b72b02d38216abb8ce3c3d2148e37e8a12398" // sha256("markdown")
 	testArticleDocumentDigest = "sha256:43cc23fa52b87b4cc1d02b5b114154151d6adddb17c9fddc06b027fa99e24008" // sha256("document")
@@ -45,6 +45,16 @@ func TestInternalPersistedGetPostExecutesExactOwnerReadSlice(t *testing.T) {
 		ModerationStatus:       "approved",
 		CreatedAt:              time.Date(2026, 8, 11, 0, 0, 0, 0, time.UTC),
 		UpdatedAt:              time.Date(2026, 8, 11, 0, 1, 0, 0, time.UTC),
+		SourceAttribution: &postports.PostSourceAttributionSlice{
+			OriginalCreatorName: "摄影师甲", Platform: "Wikimedia Commons",
+			SourcePostURL: "https://example.com/source", OriginalAssetURL: "https://example.com/image.jpg",
+			AttributionText: "摄影师甲 / CC BY 4.0", RightsBasis: "CC BY 4.0",
+			CommercialAuthorizationStatus: "unverified", PublicationAdmission: "production_release",
+			DerivedModifications: []string{"crop", "resize"}, WatermarkKind: "author_signature",
+			WatermarkNote: "保留作者签名", WatermarkStatus: "present", AudioRightsStatus: "no_audio",
+			ModelReleaseStatus: "not_required", PropertyReleaseStatus: "not_required",
+			CollectedAt: time.Date(2026, 8, 11, 0, 0, 0, 0, time.UTC), TakedownPolicy: "notice_and_takedown",
+		},
 	}}
 	handler := newInternalGraphQLHandler(t, reader)
 	request := trustedInternalGraphQLRequest(t, validInternalGraphQLPayload())
@@ -83,6 +93,16 @@ func TestInternalPersistedGetPostExecutesExactOwnerReadSlice(t *testing.T) {
 	}
 	if liked, exists := detail["viewerLiked"]; !exists || liked != nil {
 		t.Fatalf("internal persisted read must carry viewerLiked=null, got %v", detail["viewerLiked"])
+	}
+	attribution := detail["sourceAttribution"].(map[string]any)
+	modifications := attribution["derivedModifications"].([]any)
+	if len(modifications) != 2 || modifications[0] != "crop" || modifications[1] != "resize" ||
+		attribution["watermarkKind"] != "author_signature" || attribution["watermarkNote"] != "保留作者签名" ||
+		attribution["commercialAuthorizationStatus"] != "unverified" || attribution["publicationAdmission"] != "production_release" {
+		t.Fatalf("GraphQL source attribution facts drifted: %v", attribution)
+	}
+	if _, exists := attribution["riskAcceptanceId"]; exists {
+		t.Fatal("retired source attribution field leaked")
 	}
 	if strings.Contains(response.Body.String(), "moderationStatus") {
 		t.Fatalf("owner-only field leaked: %s", response.Body.String())
@@ -164,7 +184,7 @@ func TestInternalPersistedGetPostExecutesEveryTypeAwareBundleSlice(t *testing.T)
 		},
 		{
 			name: "media", operationName: "ContentPostDetailMedia",
-			hash:        "2251d9dca6cc14a77ff40eb630223df0b432095a98c7bd3f9f72d2e8d0752c18",
+			hash:        "9d8916aa9564bd99f990ab00b32d79d70dc860d05108a5e6f30f07df43b2a25f",
 			root:        "contentPostDetailMedia",
 			operationID: "content.post.GetPostMedia",
 			detail: postports.PostDetailSlice{
@@ -172,12 +192,16 @@ func TestInternalPersistedGetPostExecutesEveryTypeAwareBundleSlice(t *testing.T)
 				MediaURLs: []string{"https://media.example/video.mp4"},
 				MediaItems: []postports.PostMediaItemSlice{{
 					Kind: "video", MediaAssetID: "asset-1", URL: "https://media.example/video.mp4",
-					MediaAssetVersion: 2, DurationMS: 1000,
+					MediaAssetVersion: 2, DurationMS: 1000, Caption: "逐资产说明", AccessMode: "public", CoverAssetID: "cover-1",
 				}}, VideoURL: "https://media.example/video.mp4", Width: 1920, Height: 1080,
 			},
 			assert: func(t *testing.T, data map[string]any) {
 				if len(data["mediaItems"].([]any)) != 1 || data["width"] != float64(1920) {
 					t.Fatalf("media data=%v", data)
+				}
+				item := data["mediaItems"].([]any)[0].(map[string]any)
+				if item["caption"] != "逐资产说明" || item["accessMode"] != "public" || item["coverAssetId"] != "cover-1" {
+					t.Fatalf("media fields lost in GraphQL projection: %v", item)
 				}
 			},
 		},
@@ -260,7 +284,7 @@ func TestInternalPersistedGetPostRejectsOversizedOwnerListsWithoutTruncation(t *
 	}{
 		{name: "semantic", operationName: "ContentPostDetailSemantic", hash: "b425b396c13494d91b0e970d0e9c2328d07d549c492bd76537dace26ea74aa04",
 			detail: postports.PostDetailSlice{PostID: "post-1", ContentType: "micro", TagRefs: make([]string, 31)}},
-		{name: "media", operationName: "ContentPostDetailMedia", hash: "2251d9dca6cc14a77ff40eb630223df0b432095a98c7bd3f9f72d2e8d0752c18",
+		{name: "media", operationName: "ContentPostDetailMedia", hash: "9d8916aa9564bd99f990ab00b32d79d70dc860d05108a5e6f30f07df43b2a25f",
 			detail: postports.PostDetailSlice{PostID: "post-1", ContentType: "image", MediaAssetIDs: make([]string, 21)}},
 		{name: "article assets", operationName: "ContentPostDetailArticleRenderAssets", hash: "119359eb546ba50284ad676377ca69138129ca01d605688310292ca156848b38",
 			detail: postports.PostDetailSlice{PostID: "post-1", ContentType: "article", ArticleAssetManifest: &postports.PostArticleAssetManifestSlice{Assets: make([]postports.PostArticleAssetSlice, 21)}}},
@@ -423,7 +447,7 @@ func (internalGraphQLResearchActiveSupplyReader) ActiveSupplySnapshot(
 	}, nil
 }
 
-func TestInternalPersistedGetPostFailsClosedWithoutDelegatedResearchPrincipal(t *testing.T) {
+func TestInternalPersistedGetPostRejectsRetiredResearchRelease(t *testing.T) {
 	reader := &recordingPostDetailReader{detail: visibleDetail(postports.PostDetailSlice{PostID: "post-1"})}
 	facade := postapp.NewPostQueryFacade(postapp.PostQueryDependencies{
 		Detail: reader, ActiveSupply: internalGraphQLResearchActiveSupplyReader{},
@@ -435,8 +459,8 @@ func TestInternalPersistedGetPostFailsClosedWithoutDelegatedResearchPrincipal(t 
 	request := trustedInternalGraphQLRequest(t, validInternalGraphQLPayload())
 	recorder := httptest.NewRecorder()
 	handler.ServeHTTP(recorder, request)
-	if recorder.Code != http.StatusNotFound {
-		t.Fatalf("service-only principal status=%d body=%s", recorder.Code, recorder.Body.String())
+	if recorder.Code != http.StatusServiceUnavailable {
+		t.Fatalf("retired release status=%d body=%s", recorder.Code, recorder.Body.String())
 	}
 	if reader.calls != 0 {
 		t.Fatalf("service-only principal reached research detail reader: calls=%d", reader.calls)

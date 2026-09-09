@@ -662,7 +662,6 @@ class AppUiSurfaces {
       'LoginAnonymous',
       'RefreshToken',
       'IssueWhitelistedResearchSession',
-      'GetResearchReleaseReadback',
       'GetActivePersonaContext',
       'UpsertDevicePushEndpoint',
       'RemoveDevicePushEndpoint',

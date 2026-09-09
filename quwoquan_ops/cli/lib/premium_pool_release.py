@@ -69,6 +69,8 @@ def _load_release_sample_plan_documents_from_attestation(
         or attestation.get("schema") != "quwoquan_data.release_attestation"
         or attestation.get("sourceOwner") != "qwq_data"
         or attestation.get("releaseKind") != "content"
+        or attestation.get("releaseClass") != "production"
+        or attestation.get("productLifecycleState") != "production"
         or attestation.get("releaseId") != release_id
         or attestation.get("payloadSha256") != manifest_digest
         or path.name != "release.json"
@@ -255,7 +257,9 @@ def load_premium_pool_candidate_binding(
         or readiness.get("schema") != "quwoquan_data.environment_release_readiness"
         or readiness.get("environment") != environment
         or readiness.get("passed") is not True
-        or readiness.get("readinessPhase") not in {"consumer", "commercial", "production"}
+        or readiness.get("readinessPhase") not in {"consumer", "production"}
+        or readiness.get("releaseClass") != "production"
+        or readiness.get("productLifecycleState") != "production"
     ):
         raise PremiumPoolReleaseError(
             "readiness receipt is not a passed canonical consumer receipt"
@@ -544,12 +548,14 @@ def load_premium_pool_test_live_binding(
         "schema": "quwoquan_data.environment_release_readiness",
         "environment": environment,
         "releaseId": content_binding.get("releaseId"),
+        "releaseClass": "production",
+        "productLifecycleState": "production",
         "verifyRunId": content_binding.get("verifyRunId"),
         "manifestDigest": content_binding.get("manifestDigest"),
         "passed": True,
     }
     if (
-        readiness_phase not in {"consumer", "commercial", "production"}
+        readiness_phase not in {"consumer", "production"}
         or any(readiness.get(field) != value for field, value in expected_readiness.items())
     ):
         raise PremiumPoolReleaseError(

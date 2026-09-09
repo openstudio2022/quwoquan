@@ -2,9 +2,9 @@
 
 Acquisition and distribution are deliberately separate: a locally acquired
 file never proves that commercial redistribution is authorized. The
-`DistributionDecision` values (`research_allowed|commercial_allowed|blocked`) are
-per-asset recorded rights facts frozen into canonical bytes; they do not select a
-release class. The only release class is `production`.
+`DistributionDecision` values (`production_allowed|blocked`) record acquisition
+admission, never authorization. Actual rights and usage constraints remain
+separate facts. The only release class is `production`.
 """
 from __future__ import annotations
 
@@ -48,8 +48,7 @@ class RightsStatus(StrEnum):
 
 
 class DistributionDecision(StrEnum):
-    RESEARCH_ALLOWED = "research_allowed"
-    COMMERCIAL_ALLOWED = "commercial_allowed"
+    PRODUCTION_ALLOWED = "production_allowed"
     BLOCKED = "blocked"
 
 
@@ -82,7 +81,7 @@ class ContentDistributionPolicy:
         if self.release_class.value != self.product_lifecycle_state.value:
             raise ValueError("releaseClass must equal productLifecycleState")
         if not self.image_provider_priority or self.image_provider_priority[0] != "pinterest":
-            raise ValueError("research image provider priority must start with pinterest")
+            raise ValueError("source image provider priority must start with pinterest")
         if self.image_generation_allowed or self.video_generation_allowed:
             raise ValueError("governed image/video generation must remain disabled")
         if (
@@ -162,10 +161,10 @@ def load_content_distribution_policy(
     lifecycle = ProductLifecycleState(str(raw["productLifecycleState"]))
     release_class = ReleaseClass(str(raw["releaseClass"]))
     media_generation = raw["mediaGeneration"]
-    research_discovery = raw["researchDiscovery"]
+    source_discovery = raw["sourceDiscovery"]
     article_media = raw["articleMedia"]
     scale_milestones = raw["scaleMilestones"]
-    video_popularity = research_discovery["videoPopularity"]
+    video_popularity = source_discovery["videoPopularity"]
     return ContentDistributionPolicy(
         policy_id=str(raw["policyId"]),
         product_lifecycle_state=lifecycle,
@@ -204,7 +203,7 @@ def load_content_distribution_policy(
             scale_milestones["milestoneAttainmentRequired"]
         ),
         attainment_counting_mode=str(scale_milestones["attainmentCountingMode"]),
-        image_provider_priority=tuple(research_discovery["imageProviderPriority"]),
+        image_provider_priority=tuple(source_discovery["imageProviderPriority"]),
         video_popularity_signals=tuple(video_popularity["signals"]),
         video_popularity_statistical=bool(video_popularity["statistical"]),
         video_popularity_non_blocking=bool(video_popularity["nonBlocking"]),
@@ -222,11 +221,8 @@ def distribution_decision(
 ) -> DistributionDecision:
     if acquisition_status is not AcquisitionStatus.ACQUIRED:
         return DistributionDecision.BLOCKED
-    if rights_status is RightsStatus.RESTRICTED:
-        return DistributionDecision.BLOCKED
-    if rights_status is RightsStatus.VERIFIED and authorization_proof.strip():
-        return DistributionDecision.COMMERCIAL_ALLOWED
-    return DistributionDecision.RESEARCH_ALLOWED
+    # 权利与证明只记录，不由取得成功推断授权，也不按权利类别拒绝。
+    return DistributionDecision.PRODUCTION_ALLOWED
 
 
 def image_distribution_decision(
@@ -237,7 +233,7 @@ def image_distribution_decision(
     usage_scope: str,
     model_release_status: str,
 ) -> DistributionDecision:
-    """Cap image distribution at the exact frozen usage and model-release scope."""
+    """校验实际使用范围字段；合法限制不改变 production 入池类别。"""
 
     base = distribution_decision(
         acquisition_status=acquisition_status,
@@ -250,10 +246,8 @@ def image_distribution_decision(
     normalized_release = model_release_status.strip()
     if normalized_scope not in {"internal_reference", "app_publish", "editorial"}:
         return DistributionDecision.BLOCKED
-    if normalized_release not in {"not_required", "obtained", "editorial_only"}:
+    if normalized_release not in {"not_required", "obtained", "editorial_only", "verified", "unverified"}:
         return DistributionDecision.BLOCKED
-    if normalized_scope != "app_publish" or normalized_release == "editorial_only":
-        return DistributionDecision.RESEARCH_ALLOWED
     return base
 
 
@@ -275,10 +269,7 @@ def asset_contract_missing_fields(asset: Mapping[str, Any]) -> list[str]:
         missing.append("acquisitionStatus")
     if rights_status not in {status.value for status in RightsStatus}:
         missing.append("rightsStatus")
-    if decision not in {
-        DistributionDecision.RESEARCH_ALLOWED.value,
-        DistributionDecision.COMMERCIAL_ALLOWED.value,
-    }:
+    if decision != DistributionDecision.PRODUCTION_ALLOWED.value:
         missing.append("distributionDecision")
     if not str(asset.get("sourceUrl") or "").startswith("https://"):
         missing.append("sourceUrl")
@@ -310,6 +301,10 @@ def project_asset_admission(
     *,
     object_ref: str,
 ) -> dict[str, Any]:
+    if "distributionDecision" in asset:
+        declared = str(asset["distributionDecision"])
+        if declared not in {item.value for item in DistributionDecision}:
+            raise ValueError(f"{object_ref}: invalid distributionDecision: {declared!r}")
     raw_rights_status = str(
         asset.get("rightsStatus") or asset.get("rightsAuditStatus") or "unknown"
     ).strip()
@@ -347,6 +342,8 @@ def project_asset_admission(
             authorization_proof=authorization_proof,
         )
     )
+    if asset.get("distributionDecision") == DistributionDecision.BLOCKED.value:
+        decision = DistributionDecision.BLOCKED
     source_url = str(
         asset.get("sourceUrl")
         or asset.get("originalAssetUrl")

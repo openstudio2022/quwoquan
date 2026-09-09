@@ -7,12 +7,14 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import Sequence
 
+from quwoquan_ops.gate.verify_python_syntax import syntax_issues
+
 from .bootstrap import DEFAULT_ROOT
 from .bytecode_guard import bytecode_guard_issues
 from .constants import SCOPES
 from .hygiene import naming_issues, source_hygiene_issues, tool_owner_issues
 from .inventory import enumerate_scripts, python_file_records
-from .models import Issue, Warning
+from .models import Issue, PythonFileRecord, Warning
 from .references import import_references, path_references
 from .roles import role_records
 from .structure import (
@@ -22,6 +24,16 @@ from .structure import (
     service_structure_issues,
     service_verify_single_owner_warnings,
 )
+
+
+def _skill_syntax_issues(root: Path, records: Sequence[PythonFileRecord]) -> list[Issue]:
+    # 物理树枚举的 Skill 文件复用既有内存编译，不另建注册表。
+    return [
+        Issue(code="PYTHON.SYNTAX_INVALID", path=record.path, message=message)
+        for record in records
+        if record.path.startswith(".agents/skills/")
+        for message in syntax_issues((root / record.path,))
+    ]
 
 
 def derive_report(root: Path, scopes: Sequence[str]) -> dict[str, object]:
@@ -51,6 +63,7 @@ def derive_report(root: Path, scopes: Sequence[str]) -> dict[str, object]:
     )
 
     issues: list[Issue] = source_hygiene_issues(normalized_root, scopes)
+    issues.extend(_skill_syntax_issues(normalized_root, file_records))
     issues.extend(bytecode_guard_issues(normalized_root, scopes))
     warnings: list[Warning] = []
     for scope, scripts in scripts_by_scope.items():

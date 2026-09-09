@@ -23,9 +23,6 @@ def execution_root_entry(execution_id: str, name: str) -> Path:
 def execution_manifest_path(execution_id: str) -> Path:
     return execution_root(execution_id) / "execution_manifest.json"
 
-def publish_data() -> DataRoot:
-    return DataRoot(_paths.PUBLISH_ROOT)
-
 def release_ref(release_id: str) -> str:
     return f"data/releases/{release_id}"
 

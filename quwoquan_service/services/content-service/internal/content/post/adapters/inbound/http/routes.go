@@ -17,8 +17,8 @@ import (
 	filtercatalogtransport "quwoquan_service/services/content-service/generated/media/filter_catalog_release/transport"
 	mediaassettransport "quwoquan_service/services/content-service/generated/media/media_asset/transport"
 	mediareprocesstransport "quwoquan_service/services/content-service/generated/media/media_image_reprocess_run/transport"
-	originalaccessquotatransport "quwoquan_service/services/content-service/generated/media/original_access_quota/transport"
 	mediauploadtransport "quwoquan_service/services/content-service/generated/media/media_upload_session/transport"
+	originalaccessquotatransport "quwoquan_service/services/content-service/generated/media/original_access_quota/transport"
 	moderationtransport "quwoquan_service/services/content-service/generated/trust_safety/post_moderation_case/transport"
 	reporttransport "quwoquan_service/services/content-service/generated/trust_safety/report/transport"
 )
@@ -140,8 +140,6 @@ func dispatchGeneratedOperation(h *ContentHandler, operation string, w http.Resp
 		h.handleGetActiveFilterCatalog(w, r)
 	case "GetFeed":
 		h.handleGetFeed(w, r)
-	case "GetResearchReleaseReadback":
-		h.handleGetResearchReleaseReadback(w, r)
 	case "GetHelperRead":
 		h.handleGetHelperRead(w, r)
 	case "GetMediaAsset":

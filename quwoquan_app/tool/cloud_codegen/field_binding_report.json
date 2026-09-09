@@ -1,6 +1,6 @@
 {
   "generator": "app-only-emitter",
-  "contractGraphSha256": "faa882898fe771b862dd9ceac905bae941a1a55e446ba086e97baf269ad0d9f7",
+  "contractGraphSha256": "a8564e9dd2e8881dbb32f1a06681ce805a29e9f396ad3c1037ff0c9828bcab70",
   "bindings": [
     {
       "generatedPath": "lib/service/assistant_service/assistant/assistant_run/domain/generated/aggregation_state.g.dart",
@@ -1878,6 +1878,39 @@
       "dartField": "status",
       "dartType": "ReportStatus",
       "enumRef": "ReportStatus",
+      "contractType": "enum",
+      "contractSource": "",
+      "clientDartType": "",
+      "typed": true
+    },
+    {
+      "generatedPath": "packages/quwoquan_cloud_contracts/lib/src/content/content_operation_contracts.g.dart",
+      "dartClass": "SourceAttribution",
+      "dartField": "derivedModifications",
+      "dartType": "List\u003cSourceDerivedModification\u003e",
+      "enumRef": "SourceDerivedModification",
+      "contractType": "[]enum",
+      "contractSource": "",
+      "clientDartType": "",
+      "typed": true
+    },
+    {
+      "generatedPath": "packages/quwoquan_cloud_contracts/lib/src/content/content_operation_contracts.g.dart",
+      "dartClass": "SourceAttribution",
+      "dartField": "publicationAdmission",
+      "dartType": "SourcePublicationAdmission",
+      "enumRef": "SourcePublicationAdmission",
+      "contractType": "enum",
+      "contractSource": "",
+      "clientDartType": "",
+      "typed": true
+    },
+    {
+      "generatedPath": "packages/quwoquan_cloud_contracts/lib/src/content/content_operation_contracts.g.dart",
+      "dartClass": "SourceAttribution",
+      "dartField": "watermarkKind",
+      "dartType": "SourceWatermarkKind?",
+      "enumRef": "SourceWatermarkKind",
       "contractType": "enum",
       "contractSource": "",
       "clientDartType": "",

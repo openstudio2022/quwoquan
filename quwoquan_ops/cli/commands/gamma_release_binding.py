@@ -437,13 +437,6 @@ def _bind_gamma_down_parse_environment(
             ),
             "QWQ_PUSH_TOKEN_ENCRYPTION_KEY": "down-not-used",
             "CONTENT_ACCOUNT_CLOSURE_SUBJECT_HMAC_SECRET": "down-not-used",
-            # Build/down only need deterministic Compose interpolation.  A
-            # running local environment receives the real shared User/Content
-            # key from prepare_local_environment_auth's target-scoped 0600
-            # secret file.
-            "CONTENT_RESEARCH_IDENTITY_ATTESTATION_KEY_BASE64": (
-                "ZG93bi1ub3QtdXNlZC1yZXNlYXJjaC1pZGVudGl0eS1rZXk="
-            ),
             "RTC_MEDIA_API_KEY": "down-not-used",
             "RTC_MEDIA_API_SECRET": "down-not-used",
             "INTEGRATION_SERVICE_MTLS_CA_FILE": "/tmp/down-not-used",

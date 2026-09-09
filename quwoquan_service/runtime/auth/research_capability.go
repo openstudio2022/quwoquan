@@ -17,8 +17,6 @@ const ResearchAttestationHeader = "X-Research-Identity-Attestation"
 // 单一持有。
 var researchNamedOperationAllowlist = map[string]struct{}{
 	"user.account_session.IssueWhitelistedResearchSession":          {},
-	"user.account_session.GetResearchSessionAttestation":            {},
-	"content.post.GetResearchReleaseReadback":                       {},
 	"content.original_access_quota.ReserveOriginalImageAccessGrant": {},
 	"content.original_access_quota.GetOriginalImageAccessAudit":     {},
 }

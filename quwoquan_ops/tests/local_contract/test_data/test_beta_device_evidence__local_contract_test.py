@@ -64,7 +64,7 @@ def _stack_reports(root: Path) -> dict[str, Path]:
             "artifactDigest": ARTIFACT_DIGEST,
             "sourceGitSha": GIT_SHA,
             "sourceTreeDigest": TREE_DIGEST,
-            "releaseInputClassification": "commercial_inputs",
+            "releaseInputClassification": "production_inputs",
             "contractGraphDigest": CONTRACT_GRAPH_DIGEST,
             "endedAt": "2026-07-28T00:00:10Z",
         },
@@ -73,7 +73,7 @@ def _stack_reports(root: Path) -> dict[str, Path]:
             "target": "beta-local",
             "steps": [{"exitCode": 0}],
             "formalRelease": True,
-            "releaseInputClassification": "commercial_inputs",
+            "releaseInputClassification": "production_inputs",
             "contractGraphDigest": CONTRACT_GRAPH_DIGEST,
             "runtimeMode": "immutable-oci",
             "runtimeCandidateDigest": CANDIDATE,
@@ -258,22 +258,23 @@ def test_stack_bundle_rejects_source_built_or_destructively_repaired_runtime() -
             )
 
 
+@pytest.mark.parametrize("label", ["package", "up"])
 @pytest.mark.parametrize(
     "classification",
-    ["research_inputs", "mixed_inputs"],
+    ["research_inputs", "commercial_inputs", "mixed_inputs", ""],
 )
-def test_stack_bundle_rejects_noncommercial_release_inputs(
-    classification: str,
+def test_stack_bundle_rejects_nonproduction_release_inputs(
+    classification: str, label: str,
 ) -> None:
     with tempfile.TemporaryDirectory() as temporary:
         root = Path(temporary)
         reports = _stack_reports(root / "source-stack")
-        up = json.loads(reports["up"].read_text(encoding="utf-8"))
-        up["releaseInputClassification"] = classification
-        reports["up"].write_text(json.dumps(up), encoding="utf-8")
+        report = json.loads(reports[label].read_text(encoding="utf-8"))
+        report["releaseInputClassification"] = classification
+        reports[label].write_text(json.dumps(report), encoding="utf-8")
         with patch(
             "quwoquan_ops.ci.render_beta_device_evidence.validate_historical_release_snapshot"
-        ), pytest.raises(ValueError, match="commercial release inputs"):
+        ), pytest.raises(ValueError, match="production release inputs"):
             render_stack_bundle(
                 manifest=_manifest(),
                 host_digest=HOST_DIGEST,

@@ -138,10 +138,7 @@
       ],
       "properties": {
         "usageScope": {
-          "enum": [
-            "research",
-            "commercial"
-          ]
+          "const": "production"
         },
         "variantPurpose": {
           "enum": [
@@ -200,6 +197,7 @@
       "additionalProperties": false,
       "required": [
         "holder",
+        "bindingRef",
         "bindingDigest",
         "bindings"
       ],

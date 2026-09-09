@@ -55,11 +55,11 @@ def test_content_source_registry_is_valid_and_covers_all_lanes():
     assert any(row["platform"] == "Pinterest" for row in image)
     assert any(row["platform"] == "图虫" for row in image)
     professional = {row["sourceId"]: row for row in image}
-    assert professional["pinterest"]["researchAcquisitionPaths"] == [
+    assert professional["pinterest"]["acquisitionPaths"] == [
         "supported_api",
         "manual_file",
     ]
-    assert professional["tuchong"]["researchAcquisitionPaths"] == [
+    assert professional["tuchong"]["acquisitionPaths"] == [
         "public_direct",
         "supported_api",
         "manual_file",
@@ -73,7 +73,7 @@ def test_registry_rejects_pinterest_public_direct_acquisition_drift():
     pinterest = next(
         row for row in data["common"]["image"] if row["sourceId"] == "pinterest"
     )
-    pinterest["researchAcquisitionPaths"] = [
+    pinterest["acquisitionPaths"] = [
         "public_direct",
         "supported_api",
         "manual_file",
@@ -82,7 +82,7 @@ def test_registry_rejects_pinterest_public_direct_acquisition_drift():
     issues = verify_content_source_registry(data)
 
     assert any(
-        "common.image.pinterest: professional research acquisition paths must equal"
+        "common.image.pinterest: professional acquisition paths must equal"
         in issue
         for issue in issues
     )
@@ -194,7 +194,7 @@ def test_reference_only_video_sources_separate_research_bytes_from_release_defau
     data = load_content_source_registry()
     matrix = {
         row["sourceId"]: row
-        for row in data["lanePolicies"]["video"]["commercialAdmissionMatrix"]
+        for row in data["lanePolicies"]["video"]["publicationAdmissionMatrix"]
     }
     video_sources = {
         row["sourceId"]: row
@@ -204,8 +204,8 @@ def test_reference_only_video_sources_separate_research_bytes_from_release_defau
         source = video_sources[source_id]
         assert source["defaultRole"] == "reference_only"
         assert source["fetchMode"] == "platform_reference"
-        assert source["researchAcquisitionPaths"] == ["manual_file"]
-        assert matrix[source_id]["publicationAdmissions"] == []
+        assert source["acquisitionPaths"] == ["manual_file"]
+        assert matrix[source_id]["publicationAdmissions"] == ["production_release"]
         assert_video_acquisition_path_allowed(
             data,
             source_id=source_id,
@@ -220,12 +220,10 @@ def test_reference_only_video_sources_separate_research_bytes_from_release_defau
                 acquisition_path="public_direct",
             )
         assert_video_distribution_use_allowed(
-            data,
-            source_id=source_id,
-            source_kind="tourism_video_site",
-            publication_admission="research_release",
+            data, source_id=source_id, source_kind="tourism_video_site",
+            publication_admission="production_release",
         )
-        for publication in ("commercial_release",):
+        for publication in ("research_release", "commercial_release"):
             with pytest.raises(ValueError, match=f"{publication} is not allowed"):
                 assert_video_distribution_use_allowed(
                     data,
@@ -244,13 +242,13 @@ def test_cctv_public_video_is_research_only_and_never_commercial():
     )
     matrix = next(
         row
-        for row in data["lanePolicies"]["video"]["commercialAdmissionMatrix"]
+        for row in data["lanePolicies"]["video"]["publicationAdmissionMatrix"]
         if row["sourceId"] == "cctv_video"
     )
 
     assert source["platform"] == "央视网"
-    assert source["researchAcquisitionPaths"] == ["public_direct", "manual_file"]
-    assert matrix["publicationAdmissions"] == ["research_release"]
+    assert source["acquisitionPaths"] == ["public_direct", "manual_file"]
+    assert matrix["publicationAdmissions"] == ["production_release"]
     assert_video_acquisition_path_allowed(
         data,
         source_id="cctv_video",
@@ -261,7 +259,7 @@ def test_cctv_public_video_is_research_only_and_never_commercial():
         data,
         source_id="cctv_video",
         source_kind="tourism_video_site",
-        publication_admission="research_release",
+        publication_admission="production_release",
     )
     with pytest.raises(ValueError, match="commercial_release is not allowed"):
         assert_video_distribution_use_allowed(
@@ -274,25 +272,31 @@ def test_cctv_public_video_is_research_only_and_never_commercial():
 
 def test_registry_typed_gate_blocks_reference_only_video_configuration_conflicts():
     data = load_content_source_registry()
-    matrix = data["lanePolicies"]["video"]["commercialAdmissionMatrix"]
+    matrix = data["lanePolicies"]["video"]["publicationAdmissionMatrix"]
     next(row for row in matrix if row["sourceId"] == "bilibili")[
         "publicationAdmissions"
     ] = ["research_release", "commercial_release"]
     bilibili = next(
         row for row in data["common"]["video"] if row["sourceId"] == "bilibili"
     )
-    bilibili["researchAcquisitionPaths"] = ["public_direct"]
+    bilibili["acquisitionPaths"] = ["public_direct"]
 
     issues = verify_content_source_registry(data)
 
     assert (
-        "video source bilibili: research acquisition paths must equal "
+        "video source bilibili: acquisition paths must equal "
         "['manual_file']"
     ) in issues
-    assert (
-        "GATE_BLOCK DATA.CONTRACT.INVALID: video matrix bilibili is "
-        "reference_only/platform_reference but declares release admissions"
-    ) in issues
+    assert "video matrix bilibili: invalid publicationAdmissions" in issues
+
+
+def test_registry_rejects_retired_keys_even_beside_active_contract():
+    data = load_content_source_registry()
+    data["allowedValues"]["researchAcquisitionPaths"] = ["manual_file"]
+    data["lanePolicies"]["video"]["commercialAdmissionMatrix"] = []
+    issues = verify_content_source_registry(data)
+    assert any("retired contract field researchAcquisitionPaths" in issue for issue in issues)
+    assert any("retired contract field commercialAdmissionMatrix" in issue for issue in issues)
 
 
 def test_lane_prompt_is_rendered_from_registry_policy():

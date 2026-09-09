@@ -11,11 +11,11 @@ from quwoquan_ops.cli.lib.content_release_readiness import ReadinessPhase
 def register_content_api_consumer_parser(
     subparsers: argparse._SubParsersAction[argparse.ArgumentParser],
 ) -> None:
-    """Register the explicit-authority Alpha Research API consumer."""
+    """Register the explicit-authority Alpha production API consumer."""
 
     parser = subparsers.add_parser(
         "content-api-consumer",
-        help="消费显式 Alpha Research release 权威并写 4×4 只读 API raw 结果",
+        help="消费显式 Alpha production release 权威并写 4×4 只读 API raw 结果",
     )
     parser.add_argument("--target", choices=("alpha-local",), required=True)
     parser.add_argument("--release-id", required=True)
@@ -56,7 +56,7 @@ def register_content_readiness_parser(
     content_readiness_parser.add_argument(
         "--release-id",
         default="",
-        help="consumer/commercial readiness 绑定的 canonical Data releaseId",
+        help="consumer/production readiness 绑定的 canonical Data releaseId",
     )
     content_readiness_parser.add_argument(
         "--verify-run-id",
@@ -71,7 +71,7 @@ def register_content_readiness_parser(
     content_readiness_parser.add_argument(
         "--lifecycle-exit-ref",
         default="",
-        help="commercial phase 必需的 canonical rollback/replay lifecycle Exit ref",
+        help="production phase 必需的 canonical rollback/replay lifecycle Exit ref",
     )
 
 

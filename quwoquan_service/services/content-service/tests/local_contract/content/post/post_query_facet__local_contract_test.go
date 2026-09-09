@@ -508,26 +508,26 @@ func TestPublicPostQueriesDenyNonResearchBeforeReaderForResearchRelease(t *testi
 	for name, invoke := range map[string]func() error{
 		"GetPost": func() error {
 			_, err := facade.GetPost(context.Background(), postports.NewPostDetailQuery(
-				postports.NewPostID("research-post"), queryViewer("persona-member"), false,
+				postports.NewPostID("research-post"), queryViewer("persona-member"),
 			))
 			return err
 		},
 		"ListUserPosts": func() error {
 			_, err := facade.ListUserPosts(context.Background(), postports.NewAuthorPostPageQuery(
 				postports.NewPersonaID("research-author"), queryViewer("persona-member"),
-				"", "", "", "", 20, false,
+				"", "", "", "", 20,
 			))
 			return err
 		},
 		"ListPostsByGathering": func() error {
 			_, err := facade.ListPostsByGathering(context.Background(),
-				postports.NewGatheringPostPageQuery("gathering-research", "", 20, false),
+				postports.NewGatheringPostPageQuery("gathering-research", "", 20),
 			)
 			return err
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			assertPostQueryErrorCode(t, invoke(), contentgenerated.AppErrorFromPostNotFound(""))
+			assertPostQueryErrorCode(t, invoke(), contentgenerated.AppErrorFromRequiredDependencyUnavailable(""))
 		})
 	}
 	if detail.calls != 0 || author.calls != 0 || gathering.calls != 0 {
@@ -549,8 +549,8 @@ func (r *fakeGatheringPostReaderForQueryFence) ListGatheringPosts(
 	return postports.GatheringPostPageSlice{Items: []postports.AuthorPostItemSlice{}}, nil
 }
 
-func TestResearchPrincipalQueriesUseExactActiveReleaseFence(t *testing.T) {
-	active := &fakeQueryActiveSupplyReader{snapshot: readyQueryActiveSupply("research")}
+func TestProductionQueriesUseExactActiveReleaseFence(t *testing.T) {
+	active := &fakeQueryActiveSupplyReader{snapshot: readyQueryActiveSupply("production")}
 	detail := &fakePostDetailReader{found: true, detail: postports.PostDetailSlice{
 		PostID: "research-post", AuthorPersonaID: "research-author",
 		Status: "published", Visibility: "public", ModerationStatus: "approved",
@@ -562,17 +562,17 @@ func TestResearchPrincipalQueriesUseExactActiveReleaseFence(t *testing.T) {
 	})
 
 	if _, err := facade.GetPost(context.Background(), postports.NewPostDetailQuery(
-		"research-post", queryViewer("persona-research"), true,
+		"research-post", queryViewer("persona-research"),
 	)); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := facade.ListUserPosts(context.Background(), postports.NewAuthorPostPageQuery(
-		"research-author", queryViewer("persona-research"), "", "", "", "", 20, true,
+		"research-author", queryViewer("persona-research"), "", "", "", "", 20,
 	)); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := facade.ListPostsByGathering(context.Background(),
-		postports.NewGatheringPostPageQuery("gathering-research", "", 20, true),
+		postports.NewGatheringPostPageQuery("gathering-research", "", 20),
 	); err != nil {
 		t.Fatal(err)
 	}
@@ -596,7 +596,7 @@ func TestPublicPostQueriesFailClosedOnMalformedActiveRelease(t *testing.T) {
 		Detail: detail, ActiveSupply: active,
 	})
 	_, err := facade.GetPost(context.Background(), postports.NewPostDetailQuery(
-		"research-post", queryViewer("persona-research"), true,
+		"research-post", queryViewer("persona-research"),
 	))
 	assertPostQueryErrorCode(t, err, contentgenerated.AppErrorFromRequiredDependencyUnavailable(""))
 	if detail.calls != 0 {
@@ -611,7 +611,7 @@ func TestPublicPostQueryActiveSupplyReadFailureFailsBeforeContentReader(t *testi
 		Detail: detail, ActiveSupply: active,
 	})
 	_, err := facade.GetPost(context.Background(), postports.NewPostDetailQuery(
-		"research-post", queryViewer("persona-research"), true,
+		"research-post", queryViewer("persona-research"),
 	))
 	assertPostQueryErrorCode(t, err, contentgenerated.AppErrorFromStorageReadFailed(""))
 	if detail.calls != 0 {
@@ -640,18 +640,19 @@ func (lister *fakePublicPostIDLister) ListPublicPostIDs(
 	return []string{"post-active"}, nil
 }
 
-func TestSitemapReleaseGateDeniesAnonymousResearchAndBindsExplicitResearch(t *testing.T) {
+func TestSitemapReleaseGateRejectsRetiredClassAndBindsProduction(t *testing.T) {
 	active := &fakeQueryActiveSupplyReader{snapshot: readyQueryActiveSupply("research")}
 	lister := &fakePublicPostIDLister{}
 	facade := postapp.NewPostQueryFacade(postapp.PostQueryDependencies{ActiveSupply: active})
 
-	_, err := facade.ListPublicPostIDs(context.Background(), lister, 500, false)
-	assertPostQueryErrorCode(t, err, contentgenerated.AppErrorFromPostNotFound(""))
+	_, err := facade.ListPublicPostIDs(context.Background(), lister, 500)
+	assertPostQueryErrorCode(t, err, contentgenerated.AppErrorFromRequiredDependencyUnavailable(""))
 	if lister.calls != 0 {
 		t.Fatalf("anonymous research sitemap reached lister: calls=%d", lister.calls)
 	}
 
-	ids, err := facade.ListPublicPostIDs(context.Background(), lister, 500, true)
+	active.snapshot.ReleaseClass = "production"
+	ids, err := facade.ListPublicPostIDs(context.Background(), lister, 500)
 	if err != nil {
 		t.Fatal(err)
 	}

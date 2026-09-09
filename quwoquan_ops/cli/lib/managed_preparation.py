@@ -3,7 +3,7 @@
 一键托管 `flutter run`（launcher dispatcher -> `QWQ_MANAGED_FLUTTER_ENTRY=1 run.sh`）
 在 Flutter build 前必须先证明整条链路：exact device -> 启动/复用 alpha full
 mutable runtime -> 真实 consumer lease/transport -> 以同一 lease 安装并验证
-device trust -> 服务端 active release readback -> exact Research readiness 绑定 ->
+device trust -> 服务端 active release readback -> exact production readiness 绑定 ->
 严格 preflight（readiness 发现从 warning 升级为 typed blocker）-> private
 managed preparation receipt（receipt-first，含 sha256）。
 
@@ -48,75 +48,24 @@ from quwoquan_ops.cli.lib.managed_preparation_support import (  # noqa: F401
     _write_managed_preparation_receipt,
 )
 
-_MANAGED_RESEARCH_READBACK_FIELDS = frozenset(
-    {
-        "releaseId",
-        "manifestDigest",
-        "subjectHash",
-        "attestationIdHash",
-        "signatureVerified",
-        "researchBadgeVisible",
-        "postIds",
-        "entityRefs",
-        "mediaAssetIds",
-        "publicCdnDetected",
-        "anonymousMediaUrlDetected",
-    }
-)
-
-
-def _managed_readback_closure(payload: Mapping[str, Any], field: str) -> list[str]:
-    value = payload.get(field)
-    if not isinstance(value, list) or any(not isinstance(item, str) for item in value):
-        raise ValueError(f"active release readback {field} must be an array of strings")
-    items = [item.strip() for item in value]
-    if not items or any(not item for item in items) or len(items) != len(set(items)):
-        raise ValueError(
-            f"active release readback {field} must contain unique non-empty strings"
-        )
-    return items
-
-
 def _managed_active_release_readback(
     *,
     environment: str,
     startup_attempt_id: str,
 ) -> dict[str, Any]:
-    """服务端 active release readback：精确校验 Research DTO，不猜目录 latest。
-
-    Research 内容保持匿名隔离：凭证是白名单研究账号的内存态 session，只用于
-    readback，不注入业务账号也不绕过登录。
-    """
+    """从公开 feed 读取 active identity；不签发身份，也不猜目录 latest。"""
     import quwoquan_ops.cli.stackctl as _stackctl
 
-    credential = _stackctl.issue_research_consumer_credential(
-        environment=environment,
-        release_id="managed-preparation",
-        verify_run_id=str(startup_attempt_id or "managed-preparation"),
+    target = _stackctl.get_target(
+        _stackctl.load_environment_topology(), f"{environment}-local"
     )
-    session = _stackctl.LocalAcceptanceSession(
-        owner_id="managed-preparation-readback",
-        persona_id="research-consumer",
-        access_token=str(credential["bearerToken"]),
-    )
-    payload = _stackctl.request_local_environment_json(
-        str(credential["apiBaseUrl"]),
-        path="/content/research/readback",
-        session=session,
+    payload = _stackctl.request_local_environment_public_json(
+        str(target["publicBases"]["api"]),
+        path="/content/feed?identity=work&type=video&limit=1",
         method="GET",
-        headers={
-            "X-Research-Identity-Attestation": str(credential["attestationToken"]),
-        },
     )
-    if not isinstance(payload, Mapping) or set(payload) != _MANAGED_RESEARCH_READBACK_FIELDS:
-        observed = (
-            sorted(str(field) for field in payload)
-            if isinstance(payload, Mapping)
-            else []
-        )
-        raise ValueError(
-            "active release readback field set drifted; observed=" + ",".join(observed)
-        )
+    if not isinstance(payload, Mapping):
+        raise ValueError("active release public feed is not an object")
     release_id = str(payload.get("releaseId") or "").strip()
     manifest_digest = str(payload.get("manifestDigest") or "").strip()
     if payload.get("releaseId") != release_id:
@@ -125,56 +74,21 @@ def _managed_active_release_readback(
     if (
         payload.get("manifestDigest") != manifest_digest
         or _MANAGED_DIGEST_RE.fullmatch(manifest_digest) is None
+        or payload.get("outcome") != "content"
+        or not isinstance(payload.get("items"), list)
+        or not payload["items"]
     ):
-        raise ValueError("active release readback manifestDigest is not canonical")
-    subject_hash = str(credential.get("subjectHash") or "").strip()
-    attestation_token = str(credential.get("attestationToken") or "").strip()
-    if (
-        credential.get("subjectHash") != subject_hash
-        or credential.get("attestationToken") != attestation_token
-        or _MANAGED_DIGEST_RE.fullmatch(subject_hash) is None
-        or not attestation_token
-    ):
-        raise ValueError("research consumer credential identity is not canonical")
-    attestation_id_hash = "sha256:" + hashlib.sha256(
-        attestation_token.encode("utf-8")
-    ).hexdigest()
-    if payload.get("subjectHash") != subject_hash:
-        raise ValueError("active release readback subjectHash drifts from credential")
-    if payload.get("attestationIdHash") != attestation_id_hash:
-        raise ValueError(
-            "active release readback attestationIdHash drifts from credential"
-        )
-    for field, expected in (
-        ("signatureVerified", True),
-        ("researchBadgeVisible", True),
-        ("publicCdnDetected", False),
-        ("anonymousMediaUrlDetected", False),
-    ):
-        if payload.get(field) is not expected:
-            raise ValueError(f"active release readback {field} must be {expected!r}")
-    return {
-        "releaseId": release_id,
-        "manifestDigest": manifest_digest,
-        "subjectHash": subject_hash,
-        "attestationIdHash": attestation_id_hash,
-        "signatureVerified": True,
-        "researchBadgeVisible": True,
-        "postIds": _managed_readback_closure(payload, "postIds"),
-        "entityRefs": _managed_readback_closure(payload, "entityRefs"),
-        "mediaAssetIds": _managed_readback_closure(payload, "mediaAssetIds"),
-        "publicCdnDetected": False,
-        "anonymousMediaUrlDetected": False,
-    }
+        raise ValueError("active release public feed identity is unavailable")
+    return {"releaseId": release_id, "manifestDigest": manifest_digest}
 
 
-def _managed_research_readiness_candidates(
+def _managed_production_readiness_candidates(
     *,
     environment: str,
     release_id: str,
     manifest_digest: str,
 ) -> list[dict[str, Any]]:
-    """遍历本机 readiness 记录，只收集严格校验通过的 research readiness。"""
+    """遍历本机 readiness 记录，只收集严格校验通过的 production readiness。"""
     import quwoquan_ops.cli.stackctl as _stackctl
 
     release_root = (
@@ -195,7 +109,7 @@ def _managed_research_readiness_candidates(
                 release_id=release_id,
                 verify_run_id=verify_run_id,
                 manifest_digest=manifest_digest,
-                readiness_phase=_stackctl.ReadinessPhase.RESEARCH,
+                readiness_phase=_stackctl.ReadinessPhase.PRODUCTION,
             )
         except (OSError, TypeError, ValueError):
             continue
@@ -228,14 +142,13 @@ def _managed_content_binding(
         RuntimeError,
         TypeError,
         ValueError,
-        _stackctl.ResearchConsumerCredentialError,
         _stackctl.LocalEnvironmentHTTPError,
     ) as exc:
         raise ManagedPreparationBlocked(
             MANAGED_CONTENT_BINDING_UNAVAILABLE,
             [f"active release readback failed: {exc}"],
         ) from exc
-    candidates = _stackctl._managed_research_readiness_candidates(
+    candidates = _stackctl._managed_production_readiness_candidates(
         environment=environment,
         release_id=readback["releaseId"],
         manifest_digest=readback["manifestDigest"],
@@ -244,7 +157,7 @@ def _managed_content_binding(
         raise ManagedPreparationBlocked(
             MANAGED_CONTENT_BINDING_UNAVAILABLE,
             [
-                "exactly one valid research readiness is required for "
+                "exactly one valid production readiness is required for "
                 f"releaseId={readback['releaseId']} "
                 f"manifestDigest={readback['manifestDigest']}; "
                 f"found {len(candidates)} candidates: "
@@ -258,32 +171,8 @@ def _managed_content_binding(
     if not isinstance(readiness, Mapping):
         raise ManagedPreparationBlocked(
             MANAGED_CONTENT_BINDING_UNAVAILABLE,
-            ["research readiness candidate has no validated readiness projection"],
+            ["production readiness candidate has no validated readiness projection"],
         )
-    drift: list[str] = []
-    if readiness.get("internalSubjectHash") != readback["subjectHash"]:
-        drift.append("internalSubjectHash drifts from fresh research readback")
-    for readiness_field, readback_field in (
-        ("postIds", "postIds"),
-        ("researchReadbackEntityRefs", "entityRefs"),
-        ("researchReadbackMediaAssetIds", "mediaAssetIds"),
-    ):
-        expected = readiness.get(readiness_field)
-        normalized = (
-            [item.strip() for item in expected]
-            if isinstance(expected, list)
-            and all(isinstance(item, str) for item in expected)
-            else []
-        )
-        if (
-            not normalized
-            or any(not item for item in normalized)
-            or len(normalized) != len(set(normalized))
-            or set(normalized) != set(readback[readback_field])
-        ):
-            drift.append(f"{readiness_field} drifts from fresh research readback")
-    if drift:
-        raise ManagedPreparationBlocked(MANAGED_CONTENT_BINDING_UNAVAILABLE, drift)
     verify_run_id = str(candidate["verifyRunId"])
     try:
         binding = _stackctl.create_test_live_content_binding(
@@ -299,11 +188,11 @@ def _managed_content_binding(
             MANAGED_CONTENT_BINDING_UNAVAILABLE,
             [f"test-live content binding failed: {exc}"],
         ) from exc
-    if binding.get("readinessPhase") != _stackctl.ReadinessPhase.RESEARCH.value:
+    if binding.get("readinessPhase") != _stackctl.ReadinessPhase.PRODUCTION.value:
         raise ManagedPreparationBlocked(
             MANAGED_CONTENT_BINDING_UNAVAILABLE,
             [
-                "managed preparation only binds research readiness; got "
+                "managed preparation only binds production readiness; got "
                 + str(binding.get("readinessPhase") or "<missing>")
             ],
         )
@@ -315,7 +204,7 @@ def _managed_content_binding_projection(
     *,
     output_root: Path,
 ) -> dict[str, str]:
-    """Project and independently read back the exact research readiness receipt."""
+    """Project and independently read back the exact production readiness receipt."""
 
     projection = {
         field: str(binding.get(field) or "") for field in _CONTENT_BINDING_FIELDS
@@ -350,7 +239,7 @@ def _managed_content_binding_projection(
         "releaseId": projection["releaseId"],
         "verifyRunId": projection["verifyRunId"],
         "manifestDigest": projection["manifestDigest"],
-        "readinessPhase": "research",
+        "readinessPhase": "production",
         "passed": True,
     }
     if not isinstance(readiness, Mapping) or any(
@@ -600,7 +489,7 @@ def _managed_strict_preflight(
         != str(content_binding.get("readinessReceiptDigest") or "")
         or str(debug_binding.get("verifyRunId") or "")
         != str(content_binding.get("verifyRunId") or "")
-        or str(debug_binding.get("readinessPhase") or "") != "research"
+        or str(debug_binding.get("readinessPhase") or "") != "production"
     ):
         raise ManagedPreparationBlocked(
             MANAGED_STRICT_PREFLIGHT_FAILED,
@@ -893,7 +782,7 @@ def run_managed_preparation(
         receipt["deviceTrustReceiptDigest"] = trust["deviceTrustReceiptDigest"]
         trust_bound = bool(trust["deviceTrustReceiptRef"])
 
-        # 5-6. 服务端 active release readback + exact Research readiness 绑定。
+        # 5-6. 服务端 active release readback + exact production readiness 绑定。
         binding = _stackctl._managed_content_binding(
             environment=environment,
             target=target,

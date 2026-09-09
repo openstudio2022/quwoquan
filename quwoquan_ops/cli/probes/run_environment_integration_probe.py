@@ -24,11 +24,9 @@ if str(REPO_ROOT) not in sys.path:
 
 from quwoquan_ops.cli.probes.environment_probe_check_builder import (  # noqa: E402
     _owner_matches_post,
-    _release_creator_profiles,
     _release_probe_identity as _build_release_probe_identity,
     _release_samples,
     _release_search_canaries,
-    _release_signed_media,
     build_checks as _build_checks,
 )
 
@@ -37,7 +35,6 @@ from quwoquan_ops.cli.probes.environment_probe_check_builder import (  # noqa: E
 from quwoquan_ops.cli.probes.environment_probe_semantics import (  # noqa: E402
     AUTHOR_POSTS_CHECK_NAME,
     CONTENT_POST_PROJECTION_PATH,
-    CREATOR_PROFILE_CHECK_NAME,
     FEED_MEDIA_SLICES_CHECK_NAME,
     FEED_MEDIA_SOURCE_CHECK_NAMES,
     _author_posts_semantic_result,
@@ -48,11 +45,8 @@ from quwoquan_ops.cli.probes.environment_probe_semantics import (  # noqa: E402
     _feed_media_slice_urls,
     _media_origin,
     PRIVATE_FEED_CHECK_NAMES,
-    _release_creator_profile_semantic_result,
     _release_sample_semantic_result,
-    _research_anonymous_convergence_issue,
     _search_semantic_issue,
-    SIGNED_MEDIA_CHECK_NAME,
 )
 # HTTP 传输与重试裁决同样已分家到 environment_probe_transport；沿用同一 re-export
 # 约定，让 `probe.request` 一类读取面不因内部拆分而变化。
@@ -152,28 +146,6 @@ def parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument(
-        "--research-anonymous-convergence",
-        action="store_true",
-        help=(
-            "Research-isolation mode: require the anonymous discovery, video-book "
-            "and premium feed queries to converge to the empty page with "
-            "emptyReason=no_active_release and no release identity echo (DEC-032). "
-            "Authenticated research consumption evidence is owned by the Data "
-            "post-api verification; this probe proves anonymous isolation."
-        ),
-    )
-    parser.add_argument(
-        "--research-consumer-readback",
-        action="store_true",
-        help=(
-            "Research-consumer mode: run the feed checks with the authenticated "
-            "research consumer identity (bearer injected via the test auth token "
-            "environment variable) instead of the anonymous surface, so that "
-            "release-bound non-empty expectations hold for a research release "
-            "(DEC-032 capability surface)."
-        ),
-    )
-    parser.add_argument(
         "--expected-discovery-post-id",
         action="append",
         default=[],
@@ -231,51 +203,12 @@ def parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument(
-        "--release-creator-profile",
-        action="append",
-        default=[],
-        help="Canonical JSON exact creator/profile/avatar projection.",
-    )
-    parser.add_argument(
-        "--release-signed-media",
-        action="append",
-        default=[],
-        help="Canonical JSON release-bound private media classification.",
-    )
-    parser.add_argument(
         "--mode",
         choices=("readonly", "post-deploy"),
         default="readonly",
     )
     args = parser.parse_args()
-    if args.require_non_empty_content_feed and args.research_anonymous_convergence:
-        parser.error(
-            "--require-non-empty-content-feed and --research-anonymous-convergence "
-            "are mutually exclusive feed semantics"
-        )
-    if args.research_consumer_readback and args.research_anonymous_convergence:
-        parser.error(
-            "--research-consumer-readback and --research-anonymous-convergence "
-            "are mutually exclusive feed identities"
-        )
     args.test_auth_token = _resolve_test_auth_token(args.env, args.test_auth_token)
-    args.research_consumer_attestation = os.environ.get(
-        "RESEARCH_CONSUMER_ATTESTATION", ""
-    ).strip()
-    if args.research_consumer_readback and not args.test_auth_token:
-        parser.error(
-            "--research-consumer-readback requires the research consumer bearer "
-            "via the test auth token environment variable"
-        )
-    if args.research_consumer_readback and not args.research_consumer_attestation:
-        parser.error(
-            "--research-consumer-readback requires the research attestation "
-            "via RESEARCH_CONSUMER_ATTESTATION"
-        )
-    # research consumer 身份本身即 release-bound 非空语义；调用方无需再维护
-    # 第二个 boolean 真相源。exact expected IDs 仍在 run_checks 对选中 feed 逐项要求。
-    if args.research_consumer_readback:
-        args.require_non_empty_content_feed = True
     return args
 
 
@@ -321,8 +254,6 @@ def build_checks(
         public_headers=_public_headers,
         release_search_canaries=_release_search_canaries,
         release_samples=_release_samples,
-        release_creator_profiles=_release_creator_profiles,
-        release_signed_media=_release_signed_media,
     )
 
 
@@ -345,30 +276,7 @@ def run_checks(args: argparse.Namespace) -> dict[str, Any]:
     require_non_empty_content_feed = bool(
         getattr(args, "require_non_empty_content_feed", False)
     )
-    research_anonymous_convergence = bool(
-        getattr(args, "research_anonymous_convergence", False)
-    )
-    research_consumer_readback = bool(
-        getattr(args, "research_consumer_readback", False)
-    )
-    require_authenticated_feed = (
-        require_non_empty_content_feed or research_consumer_readback
-    )
-    research_consumer_attestation = str(
-        getattr(args, "research_consumer_attestation", "") or ""
-    ).strip()
-    if research_consumer_readback and not str(args.test_auth_token or "").strip():
-        findings.append(
-            "GATE_BLOCK: research consumer readback requires a bearer token"
-        )
-    if research_consumer_readback and not research_consumer_attestation:
-        findings.append(
-            "GATE_BLOCK: research consumer readback requires an attestation"
-        )
-    if research_consumer_readback and research_anonymous_convergence:
-        findings.append(
-            "GATE_BLOCK: research consumer and anonymous convergence identities conflict"
-        )
+    require_authenticated_feed = require_non_empty_content_feed
     if mode == "post-deploy" and not args.test_auth_token:
         findings.append(
             "GATE_BLOCK: post-deploy integration requires a valid environment test auth token"
@@ -407,61 +315,6 @@ def run_checks(args: argparse.Namespace) -> dict[str, Any]:
     feed_media_origin = _media_origin(media_image_base_url)
     for check in selected_checks:
         retry_trace: list[dict[str, Any]] = []
-        if check["name"] == SIGNED_MEDIA_CHECK_NAME:
-            if not getattr(args, "research_consumer_readback", False):
-                findings.append(
-                    f"{SIGNED_MEDIA_CHECK_NAME} failed: requires research consumer identity"
-                )
-                continue
-            from quwoquan_ops.cli.lib.local_environment_auth import LocalAcceptanceSession
-            from quwoquan_ops.cli.lib.research_isolation_runtime_probe import (
-                ResearchIsolationProbeError,
-                probe_release_bound_signed_media,
-            )
-
-            session = LocalAcceptanceSession(
-                owner_id="release-preflight",
-                persona_id="release-preflight",
-                access_token=args.test_auth_token,
-            )
-            evidence: list[dict[str, Any]] = []
-            try:
-                for asset in check["assets"]:
-                    evidence.append(
-                        probe_release_bound_signed_media(
-                            api_base_url=args.base_url.rstrip("/"),
-                            session=session,
-                            asset=asset,
-                            attestation_token=research_consumer_attestation,
-                            timeout_seconds=max(1, request_timeout_seconds),
-                        )
-                    )
-            except (ResearchIsolationProbeError, ValueError) as exc:
-                entry = {
-                    "name": SIGNED_MEDIA_CHECK_NAME,
-                    "method": "GET",
-                    "url": check["url"],
-                    "statusCode": 0,
-                    "ok": False,
-                    "bodyPreview": "",
-                    "semanticError": str(exc),
-                    "assets": evidence,
-                }
-                results.append(entry)
-                findings.append(f"{SIGNED_MEDIA_CHECK_NAME} failed: {exc}")
-                continue
-            entry = {
-                "name": SIGNED_MEDIA_CHECK_NAME,
-                "method": "GET",
-                "url": check["url"],
-                "statusCode": 200,
-                "ok": True,
-                "bodyPreview": "",
-                "assets": evidence,
-                "executedAssetCount": len(evidence),
-            }
-            results.append(entry)
-            continue
         ok, status_code, payload = request(
             check["method"],
             check["url"],
@@ -499,41 +352,10 @@ def run_checks(args: argparse.Namespace) -> dict[str, Any]:
                     expected_post_ids=expected_post_ids,
                 )
             )
-            if (
-                research_consumer_readback
-                and not expected_post_ids
-                and semantic_issue is None
-            ):
-                semantic_issue = (
-                    "research consumer readback requires exact immutable release "
-                    f"post IDs for {check['name']}"
-                )
             if item_count is not None:
                 entry["contentItemCount"] = item_count
             if returned_post_ids:
                 entry["returnedPostIds"] = sorted(returned_post_ids)
-            if semantic_issue:
-                matched = False
-                entry["ok"] = False
-                entry["semanticError"] = semantic_issue
-        if (
-            matched
-            and research_anonymous_convergence
-            and not research_consumer_readback
-            and check["name"] in PRIVATE_FEED_CHECK_NAMES
-        ):
-            authorization = str((check.get("headers") or {}).get("Authorization") or "")
-            if authorization:
-                semantic_issue, item_count = (
-                    "research anonymous convergence carried a credential",
-                    None,
-                )
-            else:
-                semantic_issue, item_count = _research_anonymous_convergence_issue(
-                    payload
-                )
-            if item_count is not None:
-                entry["contentItemCount"] = item_count
             if semantic_issue:
                 matched = False
                 entry["ok"] = False
@@ -624,40 +446,6 @@ def run_checks(args: argparse.Namespace) -> dict[str, Any]:
                     author_persona_id = str(
                         decoded_sample.get("authorId") or ""
                     ).strip()
-        if matched and check["name"] == CREATOR_PROFILE_CHECK_NAME:
-            semantic_issue, persona_id, avatar_ref = (
-                _release_creator_profile_semantic_result(
-                    payload,
-                    expected_persona_id=str(check.get("personaId") or ""),
-                    expected_display_name=str(check.get("displayName") or ""),
-                    expected_avatar_delivery_ref=str(
-                        check.get("avatarDeliveryRef") or ""
-                    ),
-                )
-            )
-            entry.update(
-                {
-                    key: check.get(key)
-                    for key in (
-                        "creatorRef",
-                        "authorId",
-                        "personaId",
-                        "displayName",
-                        "avatarAssetId",
-                        "avatarDeliveryRef",
-                    )
-                }
-            )
-            entry["returnedPersonaId"] = persona_id
-            entry["returnedAvatarDeliveryRef"] = avatar_ref
-            entry["responseDigest"] = "sha256:" + hashlib.sha256(
-                payload.encode("utf-8")
-            ).hexdigest()
-            entry["responseBytes"] = len(payload.encode("utf-8"))
-            if semantic_issue:
-                matched = False
-                entry["ok"] = False
-                entry["semanticError"] = semantic_issue
         results.append(entry)
         if not matched:
             detail = entry.get("semanticError")
@@ -789,9 +577,6 @@ def run_checks(args: argparse.Namespace) -> dict[str, Any]:
         "retrySleepSeconds": retry_sleep_seconds,
         "onlyChecks": sorted(only_checks),
         "requireNonEmptyContentFeed": require_authenticated_feed,
-        "researchAnonymousConvergence": research_anonymous_convergence,
-        "researchConsumerReadback": research_consumer_readback,
-        "researchConsumerAttested": bool(research_consumer_attestation),
         "checks": results,
         "findings": findings,
     }
@@ -799,7 +584,6 @@ def run_checks(args: argparse.Namespace) -> dict[str, Any]:
         report,
         (
             str(args.test_auth_token or ""),
-            research_consumer_attestation,
         ),
     )
 

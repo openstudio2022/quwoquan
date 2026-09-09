@@ -13,6 +13,12 @@
         { "type": "object", "minProperties": 1 }
       ]
     },
+    "optionalRightsFact": {
+      "oneOf": [
+        {"type": ["string", "null"]},
+        {"type": "object", "minProperties": 1}
+      ]
+    },
     "semanticMention": {
       "type": "object",
       "description": "语义指称。仅 location=body 的指称落在正文字符流上，因此只有它必须携带 rangeStart/rangeEnd；manifest 指称由 entityRefs/tagRefs 派生，没有可指的正文区间。",
@@ -66,7 +72,7 @@
         "rightsBasis": { "type": "string", "minLength": 1 },
         "commercialAuthorizationStatus": { "enum": ["verified", "unverified"] },
         "publicationAdmission": {
-          "enum": ["research_release", "commercial_release"]
+          "const": "production_release"
         },
         "authorizationProofUrl": { "type": ["string", "null"] },
         "termsUrl": { "type": ["string", "null"] },
@@ -101,29 +107,6 @@
           }
         }
       },
-      "allOf": [
-        {
-          "if": {
-            "required": ["audioRightsStatus"],
-            "properties": {"audioRightsStatus": {"const": "unverified"}}
-          },
-          "then": {"properties": {"publicationAdmission": {"const": "research_release"}}}
-        },
-        {
-          "if": {
-            "required": ["publicationAdmission"],
-            "properties": {"publicationAdmission": {"const": "commercial_release"}}
-          },
-          "then": {
-            "required": ["authorizationProofUrl", "termsUrl"],
-            "properties": {
-              "commercialAuthorizationStatus": {"const": "verified"},
-              "authorizationProofUrl": {"type": "string", "pattern": "^https://"},
-              "termsUrl": {"type": "string", "pattern": "^https://"}
-            }
-          }
-        }
-      ],
       "additionalProperties": false
     }
   },
@@ -164,7 +147,10 @@
       "items": { "$ref": "#/$defs/semanticMention" }
     },
     "authorId": { "type": "string" },
-    "creatorProfileId": { "type": "string" },
+    "creatorProfileId": { "type": "string", "minLength": 1 },
+    "assetRefsRef": {"not": {}},
+    "creatorRefsRef": {"not": {}},
+    "tagRefsRef": {"not": {}},
     "creatorArchetype": { "type": "string" },
     "creatorProfileDigest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
     "creatorDisclosure": {
@@ -220,13 +206,22 @@
           "posterSha256": { "type": "string" },
           "subtitlesSha256": { "type": "string" },
           "provenanceRef": { "type": "string" },
-          "sourceAssetRefs": { "type": "array", "items": { "type": "string" } },
+          "bytes": { "type": "integer", "minimum": 1 },
+          "sourceAssetRefs": { "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 1 } },
+          "acquisitionReceiptRefs": { "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 1 } },
+          "derivativeBinding": { "$ref": "../source/atomic_source_unit_meta.schema.json#/properties/acquisition/properties/derivativeBinding" },
           "rightsRefs": { "type": "array", "items": { "type": "string" } },
           "creator": { "$ref": "#/$defs/sourceFact" },
           "collectionPageUrl": { "$ref": "#/$defs/sourceFact" },
           "license": { "$ref": "#/$defs/sourceFact" },
-          "termsUrl": { "$ref": "#/$defs/sourceFact" },
-          "authorizationProof": { "$ref": "#/$defs/sourceFact" },
+          "termsUrl": { "$ref": "#/$defs/optionalRightsFact" },
+          "authorizationProof": { "$ref": "#/$defs/optionalRightsFact" },
+          "distributionDecision": {"enum": ["production_allowed", "blocked"]},
+          "usageScope": {"enum": ["internal_reference", "app_publish", "editorial"]},
+          "commercialAuthorizationStatus": {"enum": ["verified", "unverified"]},
+          "modelReleaseStatus": {"enum": ["not_required", "obtained", "editorial_only", "verified", "unverified"]},
+          "propertyReleaseStatus": {"type": "string", "minLength": 1},
+          "audioRightsStatus": {"enum": ["licensed", "original_authorized", "replaced_with_licensed_track", "no_audio", "unverified"]},
           "rightsAuditStatus": { "enum": ["verified", "unverified", "restricted", "unknown"] },
           "rightsAuditIssues": { "type": "array", "items": { "type": "string" } },
           "imageLayout": { "type": "string", "enum": ["fullWidth", "wrapLeft", "wrapRight", "gallery"] }
@@ -238,8 +233,8 @@
     "creator": { "$ref": "#/$defs/sourceFact" },
     "collectionPageUrl": { "$ref": "#/$defs/sourceFact" },
     "license": { "$ref": "#/$defs/sourceFact" },
-    "termsUrl": { "$ref": "#/$defs/sourceFact" },
-    "authorizationProof": { "$ref": "#/$defs/sourceFact" },
+    "termsUrl": { "$ref": "#/$defs/optionalRightsFact" },
+    "authorizationProof": { "$ref": "#/$defs/optionalRightsFact" },
     "rightsAuditStatus": { "enum": ["verified", "unverified", "restricted", "unknown"] },
     "rightsAuditIssues": { "type": "array", "items": { "type": "string" } },
     "template": { "type": "string", "description": "使用的模板名称" },
@@ -301,8 +296,17 @@
         "properties": {"schema": {"const": "quwoquan_data.post_object"}}
       },
       "then": {
-        "required": ["contentId", "version", "sourceType", "sourceIdentity", "payloadDigest", "variantPurpose", "admission", "status"],
+        "required": ["contentId", "version", "sourceType", "sourceIdentity", "payloadDigest", "variantPurpose", "admission", "status", "creatorProfileId", "assets"],
         "properties": {
+          "assets": {
+            "items": {
+              "required": ["objectKey", "sha256", "bytes", "sourceAssetRefs", "acquisitionReceiptRefs"],
+              "properties": {
+                "sourceAssetRefs": {"minItems": 1},
+                "acquisitionReceiptRefs": {"minItems": 1}
+              }
+            }
+          },
           "sourceType": {"const": "data"},
           "status": {"const": "active"}
         }

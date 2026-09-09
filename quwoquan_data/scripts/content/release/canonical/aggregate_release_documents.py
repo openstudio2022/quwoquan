@@ -108,8 +108,7 @@ def release_header_document(
         ],
         "watermarkedAssetIds": list(asset_admission.get("watermarkedAssetIds") or []),
         "accessRestrictedAssetIds": list(asset_admission.get("accessRestrictedAssetIds") or []),
-        "researchAcceptedCount": asset_admission["researchAcceptedCount"],
-        "commercialAcceptedCount": asset_admission["commercialAcceptedCount"],
+        "acceptedCount": asset_admission["acceptedCount"],
         "canonicalMerkle": canonical_merkle,
         "executionIds": execution_ids,
         "sourceDigests": source_digest_documents,
@@ -177,8 +176,7 @@ def release_attestation_document(
         authorization_required_asset_ids=tuple(
             asset_admission["authorizationRequiredAssetIds"]
         ),
-        research_accepted_count=int(asset_admission["researchAcceptedCount"]),
-        commercial_accepted_count=int(asset_admission["commercialAcceptedCount"]),
+        accepted_count=int(asset_admission["acceptedCount"]),
         execution_ids=tuple(execution_ids),
         carrier_counts=dict(carrier_counts),
         entity_count=entity_count,

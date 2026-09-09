@@ -3,8 +3,7 @@
 从 commands/app_preflight.py 逐字迁出(该模块保留三命令主干与 argparse 表面,
 本家族随内容证据职责聚合到本模块):
 
-- `_resolve_active_app_content_evidence`:active candidate 到 Research /
-  Commercial 精确证据的解析;
+- `_resolve_active_app_content_evidence`:active candidate 到 production 精确证据的解析;
 - `_resolve_test_live_app_content_evidence`:validated mutable binding 的
   test-live 证据解析(不询问 active candidate 状态);
 - `_app_content_uat_sample_plan`:immutable ReleaseUatSamplePlan 与 readiness
@@ -195,7 +194,7 @@ def _app_content_uat_sample_plan(
 def _resolve_active_app_content_evidence(
     target: str,
 ) -> tuple[dict[str, Any], dict[str, Any], Path, str]:
-    """Resolve an active candidate to exact Research or Commercial evidence."""
+    """Resolve an active candidate to exact production evidence."""
     import quwoquan_ops.cli.stackctl as _stackctl
 
     topology = _stackctl.load_environment_topology()
@@ -233,8 +232,6 @@ def _resolve_active_app_content_evidence(
         attestation.get("productLifecycleState") or ""
     ).strip()
     if release_class != lifecycle_state or release_class not in {
-        ReadinessPhase.RESEARCH.value,
-        ReadinessPhase.COMMERCIAL.value,
         ReadinessPhase.PRODUCTION.value,
     }:
         raise ValueError("active candidate Data release lifecycle is invalid")
@@ -271,13 +268,8 @@ def _resolve_active_app_content_evidence(
             + detail
         )
 
-    if readiness_phase is ReadinessPhase.RESEARCH:
-        selected_readiness, selected_readiness_path = readiness_receipts[0]
-        return manifest, selected_readiness, selected_readiness_path, ""
-
-    # Prefer any commercial readiness that binds a lifecycle Exit. Post-lifecycle
-    # commercial verifies sit on the replay import; lexicographic "latest" alone
-    # can otherwise pick a pre-lifecycle sibling commercial receipt first.
+    # 优先绑定 lifecycle Exit 的 production readiness；回放后的核验绑定 replay import，
+    # 仅按目录字典序会误选生命周期前的同级 receipt。
     for selected_readiness, selected_readiness_path in readiness_receipts:
         for lifecycle_path in sorted(
             lifecycle_root.glob("*/lifecycle-exit.json"), reverse=True
@@ -332,8 +324,6 @@ def _resolve_test_live_app_content_evidence(
     readiness_phase = str(binding.get("readinessPhase") or "").strip()
     if readiness_phase not in {
         ReadinessPhase.CONSUMER.value,
-        ReadinessPhase.RESEARCH.value,
-        ReadinessPhase.COMMERCIAL.value,
         ReadinessPhase.PRODUCTION.value,
     }:
         raise ValueError("test_live content binding readinessPhase is invalid")
@@ -440,7 +430,9 @@ def _run_app_content_release_probe(
 
     readiness = _stackctl._read_json_object(str(readiness_path))
     readiness_phase = str(readiness.get("readinessPhase") or "").strip()
-    search_canaries_required = readiness_phase != ReadinessPhase.CONSUMER.value
+    if readiness_phase not in {ReadinessPhase.CONSUMER.value, ReadinessPhase.PRODUCTION.value}:
+        raise ValueError("App content UAT requires consumer or production readiness")
+    search_canaries_required = readiness_phase == ReadinessPhase.PRODUCTION.value
     raw_search = app_uat_plan.get("searchCanaries")
     raw_pagination = app_uat_plan.get("videoPagination")
     raw_media = app_uat_plan.get("mediaChecks")
@@ -460,7 +452,7 @@ def _run_app_content_release_probe(
         or not isinstance(raw_media, Mapping)
         or raw_media.get("automatic") is not True
         or (
-            readiness_phase == ReadinessPhase.RESEARCH.value
+            readiness_phase == ReadinessPhase.PRODUCTION.value
             and (
                 not isinstance(raw_media.get("homepageRecommendation"), Mapping)
                 or not isinstance(raw_media.get("typedVideo"), Mapping)
@@ -556,7 +548,7 @@ def _run_app_content_release_probe(
             raise ValueError(f"App content UAT {label} expected IDs are invalid")
         return values
 
-    strict_feed_bindings = readiness_phase == ReadinessPhase.RESEARCH.value
+    strict_feed_bindings = readiness_phase == ReadinessPhase.PRODUCTION.value
     discovery_ids = (
         _readiness_feed_ids("discovery_work", label="discovery feed")
         if strict_feed_bindings
@@ -595,41 +587,11 @@ def _run_app_content_release_probe(
         **sample_resolution,
         "samples": list(sample_resolution.get("samples") or []),
     }
-    research = readiness_phase == ReadinessPhase.RESEARCH.value
-    research_consumer_token = ""
-    research_consumer_attestation = ""
-    if research:
-        # research 相位匿名内容面已按 DEC-032 收敛为 no_active_release 空页，
-        # release-bound 非空读回必须以 research consumer 凭证消费（凭证只在
-        # 进程内存传递）。私有媒体没有匿名可采样的公开 slice，media_sample
-        # 与 feed_media_slices 的公开 URL 读回不适用：媒体可显示证据由
-        # isolation probe signedMedia 段与 App 端短签消费 CaseResult 承载。
-        from quwoquan_ops.cli.lib.research_consumer_credential import (
-            issue_research_consumer_credential,
-        )
-
-        environment = target.removesuffix("-local")
-        credential = issue_research_consumer_credential(
-            environment=environment,
-            release_id=str(readiness.get("releaseId") or ""),
-            verify_run_id=str(readiness.get("verifyRunId") or ""),
-        )
-        research_consumer_token = str(credential.get("bearerToken") or "")
-        research_consumer_attestation = str(
-            credential.get("attestationToken") or ""
-        )
-        if not research_consumer_token or not research_consumer_attestation:
-            raise ValueError(
-                "research consumer credential issuance returned an incomplete "
-                "Bearer/attestation chain"
-            )
     check, _output, findings = _stackctl._run_environment_integration_probe(
         _stackctl.load_environment_topology(),
         target,
         report_dir,
         require_non_empty_content_feed=True,
-        research_consumer_token=research_consumer_token,
-        research_consumer_attestation=research_consumer_attestation,
         release_post_expectations={
             **(
                 {
@@ -652,16 +614,6 @@ def _run_app_content_release_probe(
             for item in sample_resolution.get("samples") or []
             if isinstance(item, Mapping)
         ],
-        release_creator_profiles=[
-            dict(item)
-            for item in sample_resolution.get("creatorProfiles") or []
-            if isinstance(item, Mapping)
-        ],
-        release_signed_media=[
-            dict(item)
-            for item in sample_resolution.get("strictMediaChecks") or []
-            if isinstance(item, Mapping)
-        ],
         release_readiness_path=readiness_path,
         video_page_size=20,
         only_checks=(
@@ -674,21 +626,11 @@ def _run_app_content_release_probe(
             # App 视频书页真实消费 premium_stream 频道；typed_video 绿不代表
             # 视频书绿，设备 UAT 前必须同时证明 premium 池非空。
             "premium_feed",
-            # feed items 非空不等于媒体可显示：设备 UAT 前逐 slice 字节读回
-            # （research 私有交付无公开 slice，由短签消费证据承载）。
-            *(("feed_media_slices",) if not research else ()),
+            # feed 非空不等于媒体可显示：设备 UAT 前逐 slice 字节读回。
+            "feed_media_slices",
             *(("global_search",) if search_canaries_required else ()),
-            *(("media_sample",) if not research else ()),
-            *(
-                ("release_creator_profile", "release_signed_media")
-                if research
-                else ()
-            ),
-            *(
-                ("release_sample", "author_posts_contract")
-                if research and sample_resolution
-                else (("release_sample",) if sample_resolution else ())
-            ),
+            "media_sample",
+            *(("release_sample",) if sample_resolution else ()),
         ),
         probe_name="app-content-release-bound-search-and-video-page",
     )
@@ -696,12 +638,6 @@ def _run_app_content_release_probe(
         raise ValueError(
             "; ".join(str(item) for item in findings)
             or "release-bound Search/video/media probe did not pass"
-        )
-    strict_execution: dict[str, Any] = {}
-    if research and sample_resolution:
-        strict_execution = _stackctl.validate_release_strict_probe(
-            report=_stackctl._read_json_object(str(report_dir / "integration-probe.json")),
-            resolved=sample_resolution,
         )
     sample_execution: dict[str, Any] = {}
     if sample_resolution:
@@ -721,7 +657,6 @@ def _run_app_content_release_probe(
         "searchCanaries": search_canaries,
         "videoPagination": dict(raw_pagination),
         "mediaChecks": dict(raw_media),
-        "strictExecution": strict_execution,
         "sampleExecution": sample_execution,
         "executedSampleCount": int(
             sample_execution.get("executedSampleCount") or 0

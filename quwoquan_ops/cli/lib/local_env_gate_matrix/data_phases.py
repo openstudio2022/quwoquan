@@ -120,7 +120,7 @@ def _homepage_release_evidence(
         payload.get("schema") == "quwoquan_data.environment_release_readiness"
         and payload.get("environment") == environment
         and payload.get("releaseId") == release_id
-        and payload.get("readinessPhase") in {"consumer", "commercial"}
+        and payload.get("readinessPhase") in {"consumer", "production"}
         and isinstance(homepage, dict)
         and homepage.get("status") == 200
         and homepage.get("releaseBound") is True

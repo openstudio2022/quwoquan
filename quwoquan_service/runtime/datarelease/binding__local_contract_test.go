@@ -15,6 +15,20 @@ import (
 	"quwoquan_service/runtime/datarelease"
 )
 
+func TestLoadRejectsRetiredFieldsEvenAlongsideProduction(t *testing.T) {
+	for _, field := range []string{"class", "privateObjectKey"} {
+		for _, file := range []string{datarelease.HeaderPath, datarelease.AttestationPath} {
+			t.Run(file+"/"+field, func(t *testing.T) {
+				root, _ := writeReleaseFixture(t)
+				mutateJSONDocument(t, filepath.Join(root, file), func(document map[string]any) { document[field] = nil })
+				if _, err := datarelease.Load(root); !datarelease.HasCode(err, datarelease.CodeInvalidField) {
+					t.Fatalf("retired field must fail typed validation: %v", err)
+				}
+			})
+		}
+	}
+}
+
 func TestLoadReturnsVerifiedImmutableReleaseTuple(t *testing.T) {
 	root, digest := writeReleaseFixture(t)
 
@@ -25,7 +39,7 @@ func TestLoadReturnsVerifiedImmutableReleaseTuple(t *testing.T) {
 	if tuple.ReleaseID != "release-20260906-001" ||
 		tuple.SourceOwner != datarelease.SourceOwnerQWQData ||
 		tuple.ReleaseKind != datarelease.ReleaseKindContent ||
-		tuple.ReleaseClass != datarelease.ReleaseClassResearch ||
+		tuple.ReleaseClass != datarelease.ReleaseClassProduction ||
 		tuple.PayloadSHA256 != datarelease.Digest(digest) {
 		t.Fatalf("unexpected tuple: %+v", tuple)
 	}
@@ -33,7 +47,8 @@ func TestLoadReturnsVerifiedImmutableReleaseTuple(t *testing.T) {
 
 func TestLoadMatchesProducerPathBlobMerkleVector(t *testing.T) {
 	root, digest := writeReleaseFixture(t)
-	const producerVector = "sha256:4f16e774570b1ce55931d251c731308e2d92e263c19d5ab7842486ab48a03245"
+	// 使用 Data tree_integrity.holdings_merkle 对 production header 原字节独立计算。
+	const producerVector = "sha256:008537d06d5f87f478bdb6965ef95fb56143170ab22bb55bdc1b7fabb1c92c8a"
 	if digest != producerVector {
 		t.Fatalf("payload digest differs from producer tree_integrity vector: got %s want %s", digest, producerVector)
 	}
@@ -64,7 +79,7 @@ func TestLoadRejectsHeaderAttestationIdentityDrift(t *testing.T) {
 		{name: "release id", field: "releaseId", value: "other-release", code: datarelease.CodeIdentityDrift},
 		{name: "source owner", field: "sourceOwner", value: "other-owner", code: datarelease.CodeInvalidField},
 		{name: "release kind", field: "releaseKind", value: "empty_baseline", code: datarelease.CodeIdentityDrift},
-		{name: "release class", field: "releaseClass", value: "commercial", code: datarelease.CodeIdentityDrift},
+		{name: "retired release class", field: "releaseClass", value: "commercial", code: datarelease.CodeInvalidField},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -191,17 +206,13 @@ func TestLoadAcceptsProductionReleaseClassAndRejectsUnknown(t *testing.T) {
 		assertLoadError(t, err, datarelease.CodeInvalidField, "releaseClass")
 	})
 
-	for _, class := range []datarelease.ReleaseClass{
-		datarelease.ReleaseClassResearch,
-		datarelease.ReleaseClassCommercial,
-		datarelease.ReleaseClassProduction,
-	} {
-		if !datarelease.IsKnownReleaseClass(class) {
-			t.Fatalf("%s must be a known release class", class)
-		}
+	if !datarelease.IsKnownReleaseClass(datarelease.ReleaseClassProduction) {
+		t.Fatal("production must be the only known release class")
 	}
-	if datarelease.IsKnownReleaseClass("") || datarelease.IsKnownReleaseClass("preview") {
-		t.Fatal("empty or unknown release class must not be known")
+	for _, class := range []datarelease.ReleaseClass{"", "preview", "research", "commercial"} {
+		if datarelease.IsKnownReleaseClass(class) {
+			t.Fatalf("retired or unknown release class %q must fail closed", class)
+		}
 	}
 }
 
@@ -250,7 +261,7 @@ func writeReleaseFixture(t *testing.T) (string, string) {
 		"releaseId":    "release-20260906-001",
 		"sourceOwner":  string(datarelease.SourceOwnerQWQData),
 		"releaseKind":  string(datarelease.ReleaseKindContent),
-		"releaseClass": string(datarelease.ReleaseClassResearch),
+		"releaseClass": string(datarelease.ReleaseClassProduction),
 	}
 	writeJSONDocument(t, filepath.Join(root, "payload", "release.json"), header)
 	writeFile(t, filepath.Join(root, "payload", "objects", "entity.json"), []byte(`{"entityRef":"地点/景区/测试"}`))
@@ -260,7 +271,7 @@ func writeReleaseFixture(t *testing.T) (string, string) {
 		"releaseId":     "release-20260906-001",
 		"sourceOwner":   string(datarelease.SourceOwnerQWQData),
 		"releaseKind":   string(datarelease.ReleaseKindContent),
-		"releaseClass":  string(datarelease.ReleaseClassResearch),
+		"releaseClass":  string(datarelease.ReleaseClassProduction),
 		"payloadSha256": digest,
 	}
 	writeJSONDocument(t, filepath.Join(root, "attestations", "release.json"), attestation)

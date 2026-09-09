@@ -180,7 +180,7 @@ def _validate_attestation(
             raise ValueError(f"Data release attestation {field} mismatch")
     release_class = str(value.get("releaseClass") or "")
     lifecycle_state = str(value.get("productLifecycleState") or "")
-    if release_class not in {"research", "commercial", "production"} or lifecycle_state != release_class:
+    if release_class != "production" or lifecycle_state != release_class:
         raise ValueError("Data release attestation lifecycle identity mismatch")
     source_identity = _source_identity(value, label="attestation")
     return release_class, lifecycle_state, source_identity
@@ -213,14 +213,8 @@ def _validate_readiness(
         if value.get(field) != expected_value:
             raise ValueError(f"Data readiness {field} mismatch")
     phase = str(value.get("readinessPhase") or "")
-    if phase not in {"consumer", "research", "commercial", "production"}:
-        raise ValueError(
-            "test-live content binding requires consumer, research, or commercial readiness"
-        )
-    if phase == "research" and release_class != "research":
-        raise ValueError("research readiness must bind a research release")
-    if phase == "commercial" and release_class != "commercial":
-        raise ValueError("commercial readiness must bind a commercial release")
+    if phase not in {"consumer", "production"} or release_class != "production":
+        raise ValueError("test-live content binding requires production release readiness")
     if not str(value.get("importRunId") or "").strip():
         raise ValueError("Data readiness importRunId is missing")
     for field, expected_value in source_identity.items():
@@ -359,11 +353,11 @@ def _validate_lifecycle(
             raise ValueError(f"Data lifecycle Exit {field} is not canonical")
     readiness_import = str(readiness.get("importRunId") or "").strip()
     readiness_verify = str(readiness.get("verifyRunId") or "").strip()
-    commercial_on_replay = (
-        readiness.get("readinessPhase") == "commercial"
+    production_on_replay = (
+        readiness.get("readinessPhase") == "production"
         and readiness_import == value.get("replayImportRunId")
     )
-    if not commercial_on_replay and (
+    if not production_on_replay and (
         value.get("originalImportRunId") != readiness_import
         or value.get("originalVerifyRunId") != readiness_verify
     ):
@@ -510,8 +504,8 @@ def _load_evidence(
     lifecycle_ref = str(lifecycle_exit_ref or "").strip()
     lifecycle_snapshot: _RegularJson | None = None
     lifecycle: dict[str, Any] | None = None
-    if phase == "commercial" and not lifecycle_ref:
-        raise ValueError("commercial readiness requires explicit lifecycleExitRef")
+    if phase == "production" and not lifecycle_ref:
+        raise ValueError("production readiness requires explicit lifecycleExitRef")
     if lifecycle_ref:
         lifecycle_path, exit_run_id = _lifecycle_path(
             lifecycle_ref,

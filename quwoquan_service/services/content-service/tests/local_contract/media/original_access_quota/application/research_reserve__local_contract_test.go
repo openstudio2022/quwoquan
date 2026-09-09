@@ -1,9 +1,5 @@
 // spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-016
-//
-// DEC-031 grant 研究分流：research principal 只允许 purpose=view，可为当前
-// active research release 闭包内 ready 的 avatar|image|video 资产签发短签；
-// release membership 缺失、无 active research release 或 reader 未接线均
-// fail closed。普通会话保持 ready image + Post 可见性 + view|save，不受影响。
+// Data 专属 membership 放行已退役；共享原图签发必须经过普通可见性链。
 package application
 
 import (
@@ -19,39 +15,18 @@ import (
 	quotaports "quwoquan_service/services/content-service/internal/media/original_access_quota/domain/ports"
 )
 
-type fakeQuotaStore struct{}
+type fakeQuotaStore struct{ calls int }
 
-func (fakeQuotaStore) Reserve(
-	_ context.Context,
-	reservation quotamodel.Reservation,
-	_ quotamodel.Policy,
-) (quotaports.ReserveResult, error) {
+func (store *fakeQuotaStore) Reserve(_ context.Context, reservation quotamodel.Reservation, _ quotamodel.Policy) (quotaports.ReserveResult, error) {
+	store.calls++
 	return quotaports.ReserveResult{Reservation: reservation}, nil
 }
 
-type recordingAuditAppender struct {
-	decisions []quotaports.AuditDecision
-}
+type recordingAuditAppender struct{ decisions []quotaports.AuditDecision }
 
-func (appender *recordingAuditAppender) AppendOriginalAccessAudit(
-	_ context.Context,
-	decision quotaports.AuditDecision,
-) (quotaports.AuditRecord, error) {
+func (appender *recordingAuditAppender) AppendOriginalAccessAudit(_ context.Context, decision quotaports.AuditDecision) (quotaports.AuditRecord, error) {
 	appender.decisions = append(appender.decisions, decision)
-	expiresAt := decision.GrantExpiresAt
-	return quotaports.AuditRecord{
-		AuditID:   fmt.Sprintf("audit-%d", len(appender.decisions)),
-		Outcome:   decision.Outcome,
-		ExpiresAt: expiresAt,
-	}, nil
-}
-
-func (appender *recordingAuditAppender) lastReason(t *testing.T) string {
-	t.Helper()
-	if len(appender.decisions) == 0 {
-		t.Fatal("expected an audit decision to be appended")
-	}
-	return appender.decisions[len(appender.decisions)-1].Reason
+	return quotaports.AuditRecord{AuditID: fmt.Sprintf("audit-%d", len(appender.decisions)), Outcome: decision.Outcome, ExpiresAt: decision.GrantExpiresAt}, nil
 }
 
 type fakeAssetReader struct {
@@ -59,10 +34,7 @@ type fakeAssetReader struct {
 	found bool
 }
 
-func (reader fakeAssetReader) FindOriginalAccessAsset(
-	context.Context,
-	string,
-) (mediaassetports.OriginalAccessSlice, bool, error) {
+func (reader fakeAssetReader) FindOriginalAccessAsset(context.Context, string) (mediaassetports.OriginalAccessSlice, bool, error) {
 	return reader.asset, reader.found, nil
 }
 
@@ -71,210 +43,53 @@ type fakeVisibilityReader struct {
 	calls   int
 }
 
-func (reader *fakeVisibilityReader) CanViewerAccessPublishedMedia(
-	context.Context,
-	string,
-	string,
-) (bool, error) {
+func (reader *fakeVisibilityReader) CanViewerAccessPublishedMedia(context.Context, string, string) (bool, error) {
 	reader.calls++
 	return reader.visible, nil
 }
 
-type fakeURLSigner struct{}
+type fakeURLSigner struct{ calls int }
 
-func (fakeURLSigner) DeliveryURLUntil(
-	_ context.Context,
-	objectKey string,
-	expiresAt time.Time,
-) (string, error) {
-	return "https://media.local/" + objectKey +
-		"?sign=test&t=" + fmt.Sprint(expiresAt.Unix()), nil
+func (signer *fakeURLSigner) DeliveryURLUntil(_ context.Context, objectKey string, expiresAt time.Time) (string, error) {
+	signer.calls++
+	return "https://media.example/" + objectKey + "?sign=test&t=" + fmt.Sprint(expiresAt.Unix()), nil
 }
 
-type fakeActiveResearchRelease struct {
-	releaseID string
-	found     bool
-}
-
-func (reader fakeActiveResearchRelease) ActiveResearchReleaseID(
-	context.Context,
-) (string, bool, error) {
-	return reader.releaseID, reader.found, nil
-}
-
-func releaseAsset(mediaType string, sourceReleaseID string) mediaassetports.OriginalAccessSlice {
-	return mediaassetports.OriginalAccessSlice{
-		AssetID:          "asset-research-1",
-		OwnerID:          "data-release-owner",
-		ObjectKey:        "media/objects/sha256/aa/asset-research-1",
-		MediaType:        mediaType,
-		MimeType:         "image/webp",
-		FileSize:         1024,
-		ProcessingStatus: "ready",
-		AccessPolicy:     "referenced_post",
-		SourceReleaseID:  sourceReleaseID,
-	}
-}
-
-func newResearchQuotaService(
-	t *testing.T,
-	asset mediaassetports.OriginalAccessSlice,
-	visibility *fakeVisibilityReader,
-	audits *recordingAuditAppender,
-	options ...quotaapp.Option,
-) *quotaapp.Service {
-	t.Helper()
-	return quotaapp.NewService(
-		fakeQuotaStore{},
-		audits,
-		fakeAssetReader{asset: asset, found: true},
-		visibility,
-		fakeURLSigner{},
-		options...,
-	)
-}
-
-func reserveContext() context.Context {
-	return commandmeta.WithIdempotencyKey(
-		context.Background(),
-		"research-reserve-key",
-	)
-}
-
-func TestResearchPrincipalReservesActiveReleaseAssetsForView(t *testing.T) {
-	for _, mediaType := range []string{"avatar", "image", "video"} {
-		t.Run(mediaType, func(t *testing.T) {
-			audits := &recordingAuditAppender{}
-			visibility := &fakeVisibilityReader{visible: false}
-			service := newResearchQuotaService(
-				t,
-				releaseAsset(mediaType, "release-research-1"),
-				visibility,
-				audits,
-				quotaapp.WithActiveResearchReleaseReader(
-					fakeActiveResearchRelease{releaseID: "release-research-1", found: true},
-				),
-			)
-
-			result, err := service.Reserve(reserveContext(), quotaapp.Command{
-				AssetID:           "asset-research-1",
-				ViewerID:          "viewer-research",
-				Purpose:           "view",
-				ResearchPrincipal: true,
-			})
-			if err != nil {
-				t.Fatalf("research view reserve failed: %v", err)
-			}
-			if result.Status != "granted" || result.OriginalURL == "" {
-				t.Fatalf("research reserve result = %+v, want granted with URL", result)
-			}
-			// research 链不得回退到 Post 可见性判定：头像与主页资产无引用 Post。
-			if visibility.calls != 0 {
-				t.Fatalf("research reserve consulted post visibility %d times", visibility.calls)
-			}
-		})
-	}
-}
-
-func TestResearchPrincipalDenialsFailClosed(t *testing.T) {
-	activeRelease := quotaapp.WithActiveResearchReleaseReader(
-		fakeActiveResearchRelease{releaseID: "release-research-1", found: true},
-	)
-	for _, testCase := range []struct {
-		name       string
-		asset      mediaassetports.OriginalAccessSlice
-		purpose    string
-		options    []quotaapp.Option
-		wantReason string
+func TestSharedOriginalAccessKeepsVisibilityPolicyAndSignedGrant(t *testing.T) {
+	for _, test := range []struct {
+		name, kind, status, policy, purpose string
+		visible, owner                      bool
+		wantReason                          string
 	}{
-		{
-			name:       "save purpose is denied",
-			asset:      releaseAsset("image", "release-research-1"),
-			purpose:    "save",
-			options:    []quotaapp.Option{activeRelease},
-			wantReason: "research_purpose",
-		},
-		{
-			name:       "unsupported media type is denied",
-			asset:      releaseAsset("document", "release-research-1"),
-			purpose:    "view",
-			options:    []quotaapp.Option{activeRelease},
-			wantReason: "unsupported_media_type",
-		},
-		{
-			name:       "foreign release membership is denied",
-			asset:      releaseAsset("image", "release-other"),
-			purpose:    "view",
-			options:    []quotaapp.Option{activeRelease},
-			wantReason: "research_release_membership",
-		},
-		{
-			name:    "missing active research release is denied",
-			asset:   releaseAsset("image", "release-research-1"),
-			purpose: "view",
-			options: []quotaapp.Option{
-				quotaapp.WithActiveResearchReleaseReader(
-					fakeActiveResearchRelease{found: false},
-				),
-			},
-			wantReason: "research_release_membership",
-		},
-		{
-			name:       "missing reader wiring is denied",
-			asset:      releaseAsset("image", "release-research-1"),
-			purpose:    "view",
-			options:    nil,
-			wantReason: "research_release_membership",
-		},
+		{"view", "image", "ready", "referenced_post", "view", true, false, "authorized"},
+		{"save", "image", "ready", "referenced_post", "save", true, false, "authorized"},
+		{"owner image", "image", "ready", "owner_only", "save", true, true, "authorized"},
+		{"not visible", "image", "ready", "referenced_post", "view", false, false, "post_visibility"},
+		{"foreign owner", "image", "ready", "owner_only", "view", true, false, "asset_policy"},
+		{"not ready", "image", "pending", "referenced_post", "view", true, false, "asset_not_ready"},
+		{"retired avatar bypass", "avatar", "ready", "referenced_post", "view", true, false, "asset_not_ready"},
+		{"retired video bypass", "video", "ready", "referenced_post", "view", true, false, "asset_not_ready"},
 	} {
-		t.Run(testCase.name, func(t *testing.T) {
-			audits := &recordingAuditAppender{}
-			service := newResearchQuotaService(
-				t,
-				testCase.asset,
-				&fakeVisibilityReader{visible: true},
-				audits,
-				testCase.options...,
-			)
-
-			_, err := service.Reserve(reserveContext(), quotaapp.Command{
-				AssetID:           testCase.asset.AssetID,
-				ViewerID:          "viewer-research",
-				Purpose:           testCase.purpose,
-				ResearchPrincipal: true,
-			})
-			if err == nil {
-				t.Fatal("research reserve must fail closed")
+		t.Run(test.name, func(t *testing.T) {
+			now := time.Date(2026, 9, 9, 0, 0, 0, 0, time.UTC)
+			asset := mediaassetports.OriginalAccessSlice{AssetID: "private-image", OwnerID: "owner", ObjectKey: "private/image", MediaType: test.kind, MimeType: "image/webp", FileSize: 1024, ProcessingStatus: test.status, AccessPolicy: test.policy}
+			viewer := "viewer"
+			if test.owner {
+				viewer = "owner"
 			}
-			if reason := audits.lastReason(t); reason != testCase.wantReason {
-				t.Fatalf("denial reason = %q, want %q", reason, testCase.wantReason)
+			quota, audits, visibility, signer := &fakeQuotaStore{}, &recordingAuditAppender{}, &fakeVisibilityReader{visible: test.visible}, &fakeURLSigner{}
+			service := quotaapp.NewService(quota, audits, fakeAssetReader{asset, true}, visibility, signer, quotaapp.WithClock(func() time.Time { return now }))
+			result, err := service.Reserve(commandmeta.WithIdempotencyKey(context.Background(), "reserve-key"), quotaapp.Command{AssetID: asset.AssetID, ViewerID: viewer, Purpose: test.purpose})
+			if len(audits.decisions) != 1 || audits.decisions[0].Reason != test.wantReason {
+				t.Fatalf("audit=%+v err=%v", audits.decisions, err)
+			}
+			if test.wantReason == "authorized" {
+				if err != nil || result.Status != "granted" || result.OriginalURL == "" || result.AuditID == "" || !result.ExpiresAt.After(now) || signer.calls != 1 || quota.calls != 1 || visibility.calls != 1 {
+					t.Fatalf("shared grant lost policy/quota/audit/TTL: result=%+v err=%v", result, err)
+				}
+			} else if err == nil || signer.calls != 0 || quota.calls != 0 {
+				t.Fatalf("denied asset reached quota/signer: err=%v quota=%d signer=%d", err, quota.calls, signer.calls)
 			}
 		})
-	}
-}
-
-func TestNormalPrincipalKeepsPostVisibilityChain(t *testing.T) {
-	audits := &recordingAuditAppender{}
-	visibility := &fakeVisibilityReader{visible: true}
-	asset := releaseAsset("image", "")
-	service := newResearchQuotaService(t, asset, visibility, audits)
-
-	result, err := service.Reserve(reserveContext(), quotaaapCommandNormal(asset.AssetID))
-	if err != nil {
-		t.Fatalf("normal reserve failed: %v", err)
-	}
-	if result.Status != "granted" {
-		t.Fatalf("normal reserve result = %+v, want granted", result)
-	}
-	if visibility.calls != 1 {
-		t.Fatalf("normal reserve must consult post visibility once, got %d", visibility.calls)
-	}
-}
-
-func quotaaapCommandNormal(assetID string) quotaapp.Command {
-	return quotaapp.Command{
-		AssetID:  assetID,
-		ViewerID: "viewer-normal",
-		Purpose:  "save",
 	}
 }

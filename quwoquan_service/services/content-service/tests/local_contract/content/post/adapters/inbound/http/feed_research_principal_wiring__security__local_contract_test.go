@@ -93,7 +93,7 @@ func researchFeedHTTPHandler() http.Handler {
 	).Routes()
 }
 
-func TestGetFeedDerivesResearchPrincipalOnlyFromVerifiedPrincipal(t *testing.T) {
+func TestGetFeedRejectsRetiredReleaseForEveryPrincipal(t *testing.T) {
 	handler := researchFeedHTTPHandler()
 	for name, principal := range map[string]*rtauth.Principal{
 		"anonymous": nil,
@@ -116,18 +116,15 @@ func TestGetFeedDerivesResearchPrincipalOnlyFromVerifiedPrincipal(t *testing.T) 
 
 			handler.ServeHTTP(recorder, request)
 
-			if recorder.Code != http.StatusOK {
+			if recorder.Code != http.StatusServiceUnavailable {
 				t.Fatalf("GetFeed status=%d body=%s", recorder.Code, recorder.Body.String())
 			}
 			var response map[string]any
 			if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
 				t.Fatalf("decode GetFeed response: %v", err)
 			}
-			if response["outcome"] != "empty" || response["emptyReason"] != "no_active_release" {
-				t.Fatalf("non-research principal must converge to no_active_release: %#v", response)
-			}
-			if items, ok := response["items"].([]any); !ok || len(items) != 0 {
-				t.Fatalf("converged response must have an empty items array: %#v", response)
+			if _, exists := response["items"]; exists {
+				t.Fatalf("retired release must not expose feed items: %#v", response)
 			}
 			for _, forbidden := range []string{"releaseId", "manifestDigest"} {
 				if _, exists := response[forbidden]; exists {
@@ -150,7 +147,7 @@ func TestGetFeedDerivesResearchPrincipalOnlyFromVerifiedPrincipal(t *testing.T) 
 
 	handler.ServeHTTP(recorder, request)
 
-	if recorder.Code != http.StatusOK {
+	if recorder.Code != http.StatusServiceUnavailable {
 		t.Fatalf("research GetFeed status=%d body=%s", recorder.Code, recorder.Body.String())
 	}
 	var response struct {
@@ -162,9 +159,8 @@ func TestGetFeedDerivesResearchPrincipalOnlyFromVerifiedPrincipal(t *testing.T) 
 	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
 		t.Fatalf("decode research GetFeed response: %v", err)
 	}
-	if response.Outcome != "content" || len(response.Items) != 1 ||
-		response.Items[0].PostID != "post-research-http-boundary" {
-		t.Fatalf("verified research principal must reach release content: %+v", response)
+	if response.Outcome != "" || len(response.Items) != 0 {
+		t.Fatalf("verified research role must not revive a retired release: %+v", response)
 	}
 }
 
@@ -208,7 +204,7 @@ func researchQueryHTTPHandler(reader *researchQueryDetailReader) http.Handler {
 	).Routes()
 }
 
-func TestGetPostDerivesResearchRoleOnlyFromVerifiedPrincipal(t *testing.T) {
+func TestGetPostRejectsRetiredReleaseRegardlessOfVerifiedRole(t *testing.T) {
 	reader := &researchQueryDetailReader{}
 	handler := researchQueryHTTPHandler(reader)
 
@@ -228,7 +224,7 @@ func TestGetPostDerivesResearchRoleOnlyFromVerifiedPrincipal(t *testing.T) {
 	} {
 		recorder := httptest.NewRecorder()
 		handler.ServeHTTP(recorder, request)
-		if recorder.Code != http.StatusNotFound {
+		if recorder.Code != http.StatusServiceUnavailable {
 			t.Fatalf("non-research GetPost status=%d body=%s", recorder.Code, recorder.Body.String())
 		}
 	}
@@ -242,11 +238,10 @@ func TestGetPostDerivesResearchRoleOnlyFromVerifiedPrincipal(t *testing.T) {
 	}))
 	recorder := httptest.NewRecorder()
 	handler.ServeHTTP(recorder, request)
-	if recorder.Code != http.StatusOK {
+	if recorder.Code != http.StatusServiceUnavailable {
 		t.Fatalf("research GetPost status=%d body=%s", recorder.Code, recorder.Body.String())
 	}
-	if reader.calls != 1 || reader.request.ActiveReleaseID() != "rel_research_local_contract" ||
-		reader.request.ManifestDigest() != researchFeedManifestDigest {
-		t.Fatalf("research detail request not exact-release-bound: calls=%d request=%+v", reader.calls, reader.request)
+	if reader.calls != 0 {
+		t.Fatalf("verified role revived retired release: calls=%d", reader.calls)
 	}
 }

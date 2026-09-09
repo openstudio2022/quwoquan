@@ -88,11 +88,7 @@
           "type": "integer",
           "minimum": 0
         },
-        "researchLoaded": {
-          "type": "integer",
-          "minimum": 0
-        },
-        "commercialLoaded": {
+        "productionLoaded": {
           "type": "integer",
           "minimum": 0
         },
@@ -101,7 +97,7 @@
           "minimum": 0
         },
         "mediaAssetsProjected": {
-          "description": "本次导入投影进 media_assets 的 release 媒体资产数；原图短签授权（DEC-031 research 消费面）依赖该投影存在。",
+          "description": "本次导入投影进 media_assets 的 release 媒体资产数；媒体读取依赖该投影存在。",
           "type": "integer",
           "minimum": 0
         },
@@ -170,8 +166,7 @@
           },
           "usageScope": {
             "enum": [
-              "research",
-              "commercial"
+              "production"
             ]
           },
           "contentType": {

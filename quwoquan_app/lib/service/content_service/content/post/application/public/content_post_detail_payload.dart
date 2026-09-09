@@ -23,6 +23,7 @@ final class ContentPostDetailPayload {
           articleTemplate: wire.articleTemplate,
           articleFontPreset: wire.articleFontPreset,
           mediaUrls: wire.mediaUrls,
+          mediaItems: wire.mediaItems,
           videoUrl: wire.videoUrl,
           thumbnailUrl: wire.thumbnailUrl,
           width: wire.width,

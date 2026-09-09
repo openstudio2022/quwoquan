@@ -67,6 +67,18 @@ func researchAccountCapabilityDescriptor(
 	return descriptor
 }
 
+// spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#req-016
+func TestRetiredReadbacksAreNotNamedResearchCapabilities(t *testing.T) {
+	for _, operationID := range []string{
+		"content.post.GetResearchReleaseReadback",
+		"user.account_session.GetResearchSessionAttestation",
+	} {
+		if researchRoleAllowsNamedOperation(researchPrincipal(), true, OperationSecurityDescriptor{CanonicalOperationID: operationID}) {
+			t.Fatalf("retired operation %s must not remain in the capability allowlist", operationID)
+		}
+	}
+}
+
 func TestPublicBoundaryAllowsNamedBlockedOperationsForResearchPrincipal(t *testing.T) {
 	t.Parallel()
 
@@ -83,13 +95,6 @@ func TestPublicBoundaryAllowsNamedBlockedOperationsForResearchPrincipal(t *testi
 			template:    "/auth/research/session",
 			path:        "/auth/research/session",
 			kind:        "command",
-		},
-		{
-			operationID: "user.account_session.GetResearchSessionAttestation",
-			method:      http.MethodGet,
-			template:    "/auth/research/session/attestation",
-			path:        "/auth/research/session/attestation",
-			kind:        "query",
 		},
 	} {
 		t.Run(testCase.operationID, func(t *testing.T) {
@@ -303,22 +308,6 @@ func TestResearchRoleAllowsCapabilitySurfaceOperations(t *testing.T) {
 			path:             "/entity/homepages/h1/introduction",
 			kind:             "query",
 			commercialStatus: "ready",
-		},
-		{
-			operationID:      "user.account_session.GetResearchSessionAttestation",
-			method:           http.MethodGet,
-			template:         "/auth/research/session/attestation",
-			path:             "/auth/research/session/attestation",
-			kind:             "query",
-			commercialStatus: "blocked",
-		},
-		{
-			operationID:      "content.post.GetResearchReleaseReadback",
-			method:           http.MethodGet,
-			template:         "/content/research/readback",
-			path:             "/content/research/readback",
-			kind:             "query",
-			commercialStatus: "blocked",
 		},
 		{
 			operationID:      "content.original_access_quota.ReserveOriginalImageAccessGrant",

@@ -1,10 +1,10 @@
-"""Canonical object-path helper for Data work packages and publish roots."""
+"""冻结 execution 工作包的路径工具；发布位置只由 publish_layout 定义。"""
 from __future__ import annotations
 
 from pathlib import Path
 
 class DataRoot:
-    """runtime task 或 publish version 下的统一数据根。"""
+    """仅拥有 execution 旧证据路径，不承载 canonical 发布分区。"""
 
     def __init__(self, root: Path):
         self.root = root

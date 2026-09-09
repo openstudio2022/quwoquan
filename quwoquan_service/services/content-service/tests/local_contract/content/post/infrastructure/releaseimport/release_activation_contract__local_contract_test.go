@@ -110,7 +110,7 @@ func TestBuildActivationEventsBindsRevisionTargetAndPredecessor(t *testing.T) {
 		[]releaseimport.PostDoc{post}, nil,
 		releaseimport.ImportOptions{
 			ReleaseID: "release-b", ManifestDigest: "sha256:" + strings.Repeat("b", 64),
-			ReleaseClass: "research", ReleaseKind: "content", SourceOwner: "qwq_data",
+			ReleaseClass: "production", ReleaseKind: "content", SourceOwner: "qwq_data",
 			ProjectionVersion: 17,
 		}, now,
 		releaseimport.ActiveReleaseBinding{

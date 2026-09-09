@@ -116,7 +116,7 @@ func contentPostEntry() domain.Entry {
 		panic(err)
 	}
 	return domain.Entry{
-		SHA256Hash:           "3a73f535735fcbb64f7de0db524e9dab2ca1f41d7f1fec91c68053dfde5bc80f",
+		SHA256Hash:           "7e03c295fb73f2aaed2e8f944d7133b19a02dabd6a3ccc297b7f9f0b16b588d7",
 		OperationName:        "ContentPostDetailBase",
 		OperationType:        domain.OperationTypeQuery,
 		CanonicalOperationID: "content.post.GetPost",
@@ -218,6 +218,18 @@ func assertGraphQLOwnerResponse(t *testing.T, response *http.Response, wantTitle
 	if wire.Data.ContentPostDetailBase["title"] != wantTitle {
 		t.Fatalf("owner title=%v want=%q body=%s", wire.Data.ContentPostDetailBase["title"], wantTitle, body)
 	}
+	facts, ok := wire.Data.ContentPostDetailBase["sourceAttribution"].(map[string]any)
+	if !ok || facts["commercialAuthorizationStatus"] != "unverified" || facts["publicationAdmission"] != "production_release" ||
+		facts["watermarkKind"] != "author_signature" || facts["watermarkNote"] != "保留作者签名" {
+		t.Fatalf("API Edge HTTP decoder lost source facts: %s", body)
+	}
+	modifications, _ := json.Marshal(facts["derivedModifications"])
+	if string(modifications) != `["crop","resize"]` {
+		t.Fatalf("API Edge HTTP decoder lost modification order: %s", body)
+	}
+	if _, retired := facts["riskAcceptanceId"]; retired {
+		t.Fatalf("retired source fact leaked: %s", body)
+	}
 	if _, leaked := wire.Data.ContentPostDetailBase["ownerPrivateField"]; leaked {
 		t.Fatalf("private owner field leaked: %s", body)
 	}
@@ -229,7 +241,15 @@ func apiBaseOwnerPost(title string) map[string]any {
 		"assistantUsePolicy": nil, "authorId": nil, "authorDisplayName": nil,
 		"authorAvatarUrl": nil, "authorAvatarAssetId": nil, "authorAvatarAccessMode": nil,
 		"title": title, "body": nil, "summary": nil,
-		"coverUrl": nil, "sourceAttribution": nil, "location": nil,
+		"coverUrl": nil, "sourceAttribution": map[string]any{
+			"isOriginal": false, "originalCreatorId": nil, "originalCreatorName": "摄影师", "originalCreatorProfileUrl": nil,
+			"platform": "Commons", "sourcePostUrl": "https://example.com/source", "originalAssetUrl": "https://example.com/image.jpg",
+			"attributionText": "摄影师 / CC BY 4.0", "rightsBasis": "CC BY 4.0", "commercialAuthorizationStatus": "unverified",
+			"publicationAdmission": "production_release", "authorizationProofUrl": nil, "termsUrl": nil,
+			"derivedModifications": []string{"crop", "resize"}, "watermarkKind": "author_signature", "watermarkNote": "保留作者签名",
+			"watermarkStatus": "present", "audioRightsStatus": "no_audio", "modelReleaseStatus": "not_required", "propertyReleaseStatus": "not_required",
+			"collectedAt": "2026-09-09T00:00:00Z", "takedownPolicy": "notice_and_takedown",
+		}, "location": nil,
 		"locationName": nil, "geoTagRef": nil, "visitedAt": nil,
 		"primaryHomepageId": nil, "canonicalEntityId": nil, "primaryHomepageType": nil,
 		"primaryHomepageSnapshot": nil, "status": "published", "visibility": "public", "gatheringRef": nil,

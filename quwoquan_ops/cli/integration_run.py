@@ -197,7 +197,7 @@ DATA_CLI = ROOT / "quwoquan_data/scripts/cli.py"
 def _release_id(attestation: Path) -> tuple[str, str]:
     payload = json.loads(attestation.read_text(encoding="utf-8"))
     release_id, release_class = str(payload.get("releaseId") or ""), str(payload.get("releaseClass") or "")
-    if not release_id or release_class not in {"research", "commercial"}:
+    if not release_id or release_class != "production":
         raise IntegrationRunError("INTEGRATION_RUN.INPUT_INVALID", f"{attestation} is not a canonical release attestation")
     local = OUTPUT_ROOT / "data/releases" / release_id / "attestations/release.json"
     if not local.is_file() or local.read_bytes() != attestation.read_bytes():
@@ -227,7 +227,7 @@ def _data_ship(*args: str, log_dir: Path, label: str) -> None:
 
 def _apply_data_release(*, environment: str, run_id: str, args: argparse.Namespace, log_dir: Path,
                         previous_readiness: Path | None) -> Path:
-    """candidate release：apply --import --full-sync → verify（research/commercial 按 attestation）；返回 readiness 回执。"""
+    """candidate release：apply --import --full-sync → verify（仅 production attestation）；返回 readiness 回执。"""
 
     release_id, release_class = _release_id(args.release_attestation)
     import_run, verify_run = f"{run_id}-import", f"{run_id}-verify"

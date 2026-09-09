@@ -86,7 +86,7 @@ func TestReleaseControlReportMappingsAreExact(t *testing.T) {
 		releaseimport.VerifiedImportedPostReleaseCandidate{
 			Found: true, Environment: "alpha", SourceOwner: "qwq_data",
 			ReleaseID: "release-a", ManifestDigest: digest,
-			ReleaseClass: "research", ReleaseKind: "content", Mode: "sync",
+			ReleaseClass: "production", ReleaseKind: "content", Mode: "sync",
 			DeletePolicy: "tombstone", ProjectionVersion: 7, VerifiedAt: verifiedAt,
 			ClosureDigests: releaseimport.ImportedReleaseCandidateClosureDigests{
 				Posts: closure, Facts: closure, Media: closure,
@@ -105,7 +105,7 @@ func TestReleaseControlReportMappingsAreExact(t *testing.T) {
 
 	active := releaseimport.ActiveReleaseBinding{
 		Found: true, Environment: "alpha", SourceOwner: "qwq_data",
-		ReleaseID: "release-a", ManifestDigest: digest, ReleaseClass: "research",
+		ReleaseID: "release-a", ManifestDigest: digest, ReleaseClass: "production",
 		ProjectionVersion: 9, Revision: 1, ActivatedAt: verifiedAt,
 	}
 	activeReceipt, err := releaseimport.BuildContentReleaseActiveReceipt(active, generatedAt)
@@ -200,7 +200,7 @@ func TestContentFencedReadbackAcceptsActivationVersionDistinctFromCandidate(t *t
 	candidate := releaseimport.VerifiedImportedPostReleaseCandidate{
 		Found: true, Environment: "alpha", SourceOwner: "qwq_data",
 		ReleaseID: "release-a", ManifestDigest: digest,
-		ReleaseClass: "research", ReleaseKind: "content", Mode: "sync",
+		ReleaseClass: "production", ReleaseKind: "content", Mode: "sync",
 		DeletePolicy: "tombstone", ProjectionVersion: 2, VerifiedAt: verifiedAt,
 		ClosureDigests: releaseimport.ImportedReleaseCandidateClosureDigests{
 			Posts: closure, Facts: closure, Media: closure,
@@ -212,7 +212,7 @@ func TestContentFencedReadbackAcceptsActivationVersionDistinctFromCandidate(t *t
 	}
 	active := releaseimport.ActiveReleaseBinding{
 		Found: true, Environment: "alpha", SourceOwner: "qwq_data",
-		ReleaseID: "release-a", ManifestDigest: digest, ReleaseClass: "research",
+		ReleaseID: "release-a", ManifestDigest: digest, ReleaseClass: "production",
 		ProjectionVersion: 3, Revision: 1, ActivatedAt: activatedAt,
 	}
 
@@ -222,7 +222,7 @@ func TestContentFencedReadbackAcceptsActivationVersionDistinctFromCandidate(t *t
 	}
 	if receipt.Status != "passed" || receipt.Reason != "" || receipt.Owner != "content" ||
 		receipt.Revision != 1 || receipt.ProjectionVersion != 3 ||
-		receipt.CandidateProjectionVersion != 2 || receipt.ReleaseClass != "research" ||
+		receipt.CandidateProjectionVersion != 2 || receipt.ReleaseClass != "production" ||
 		receipt.Counts == nil || receipt.Counts.PostsProjected != 3 ||
 		receipt.ClosureDigests == nil || receipt.VerifiedAt == nil || receipt.ContentActivatedAt == nil {
 		t.Fatalf("fenced readback receipt=%+v", receipt)
@@ -318,7 +318,7 @@ func TestReleaseControlReplayReportUsesExpectedPredecessor(t *testing.T) {
 	now := time.Date(2026, 9, 5, 9, 0, 0, 0, time.UTC)
 	active := releaseimport.ActiveReleaseBinding{
 		Found: true, Environment: "alpha", SourceOwner: "qwq_data",
-		ReleaseID: "release-b", ManifestDigest: digestB, ReleaseClass: "research",
+		ReleaseID: "release-b", ManifestDigest: digestB, ReleaseClass: "production",
 		ProjectionVersion: 11, Revision: 4, ActivatedAt: now,
 	}
 	expected := releaseimport.ExpectedActiveRelease{

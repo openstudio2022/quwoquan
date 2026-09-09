@@ -1,5 +1,5 @@
 // Code generated from the accepted ContractGraph. DO NOT EDIT.
-// ContractGraph SHA256: faa882898fe771b862dd9ceac905bae941a1a55e446ba086e97baf269ad0d9f7
+// ContractGraph SHA256: a8564e9dd2e8881dbb32f1a06681ce805a29e9f396ad3c1037ff0c9828bcab70
 
 part of '../../../content/content_operation_contracts.g.dart';
 
@@ -2903,40 +2903,6 @@ final class RequestContentMediaOriginalAccessCommand {
   };
 }
 
-final class ResearchReleaseReadbackQuery {
-  ResearchReleaseReadbackQuery({required String researchIdentityAttestation})
-    : researchIdentityAttestation = researchIdentityAttestation {
-    if (this.researchIdentityAttestation.isEmpty) {
-      throw ArgumentError.value(
-        this.researchIdentityAttestation,
-        "researchIdentityAttestation",
-        'must not be blank',
-      );
-    }
-  }
-
-  final String researchIdentityAttestation;
-
-  factory ResearchReleaseReadbackQuery.fromWire(
-    Map<String, Object?> map, [
-    String path = "ResearchReleaseReadbackQuery",
-  ]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{
-      "X-Research-Identity-Attestation",
-    }, path);
-    return ResearchReleaseReadbackQuery(
-      researchIdentityAttestation: _generatedRequestString(
-        map["X-Research-Identity-Attestation"],
-        '$path.X-Research-Identity-Attestation',
-      ),
-    );
-  }
-
-  Map<String, Object?> toWire() => <String, Object?>{
-    "X-Research-Identity-Attestation": this.researchIdentityAttestation,
-  };
-}
-
 final class SelectAutoContentMediaCoverCommand {
   SelectAutoContentMediaCoverCommand({required String mediaId})
     : mediaId = mediaId.trim() {
@@ -3925,17 +3891,6 @@ CloudOperationRequestPayload encodeContentPostGetPostGeneratedRequest(
 ) {
   return CloudOperationRequestPayload(
     pathParameters: <String, String>{"postId": request.postId},
-  );
-}
-
-CloudOperationRequestPayload
-encodeContentPostGetResearchReleaseReadbackGeneratedRequest(
-  ResearchReleaseReadbackQuery request,
-) {
-  return CloudOperationRequestPayload(
-    headers: <String, String>{
-      "X-Research-Identity-Attestation": request.researchIdentityAttestation,
-    },
   );
 }
 

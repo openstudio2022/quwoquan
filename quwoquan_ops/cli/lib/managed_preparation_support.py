@@ -142,7 +142,7 @@ def _valid_content_binding(value: Any) -> bool:
         )
         and _MANAGED_DIGEST_RE.fullmatch(str(value.get("manifestDigest") or ""))
         is not None
-        and value.get("readinessPhase") == "research"
+        and value.get("readinessPhase") == "production"
         and isinstance(value.get("readinessReceiptRef"), str)
         and bool(str(value["readinessReceiptRef"]).strip())
         and _MANAGED_DIGEST_RE.fullmatch(

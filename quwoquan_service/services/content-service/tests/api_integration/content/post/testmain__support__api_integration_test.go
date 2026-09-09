@@ -460,7 +460,7 @@ func TestMain(m *testing.M) {
 			"environment": integrationEnvironment, "sourceOwner": "qwq_data",
 			"kind": "active_pointer", "status": "active",
 			"activeReleaseId": integrationReleaseID,
-			"manifestDigest":  integrationManifestDigest, "releaseClass": "commercial",
+			"manifestDigest":  integrationManifestDigest, "releaseClass": "production",
 			"projectionVersion": int64(1), "revision": int64(1),
 			"activatedAt": time.Now().UTC().Truncate(time.Millisecond),
 		}},

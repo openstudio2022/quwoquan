@@ -52,26 +52,28 @@ type contentPostDetailBase struct {
 }
 
 type sourceAttribution struct {
-	IsOriginal                    bool    `json:"isOriginal"`
-	OriginalCreatorID             *string `json:"originalCreatorId"`
-	OriginalCreatorName           string  `json:"originalCreatorName"`
-	OriginalCreatorProfileURL     *string `json:"originalCreatorProfileUrl"`
-	Platform                      string  `json:"platform"`
-	SourcePostURL                 string  `json:"sourcePostUrl"`
-	OriginalAssetURL              string  `json:"originalAssetUrl"`
-	AttributionText               string  `json:"attributionText"`
-	RightsBasis                   string  `json:"rightsBasis"`
-	CommercialAuthorizationStatus string  `json:"commercialAuthorizationStatus"`
-	PublicationAdmission          string  `json:"publicationAdmission"`
-	AuthorizationProofURL         *string `json:"authorizationProofUrl"`
-	TermsURL                      *string `json:"termsUrl"`
-	RiskAcceptanceID              *string `json:"riskAcceptanceId"`
-	WatermarkStatus               string  `json:"watermarkStatus"`
-	AudioRightsStatus             string  `json:"audioRightsStatus"`
-	ModelReleaseStatus            string  `json:"modelReleaseStatus"`
-	PropertyReleaseStatus         string  `json:"propertyReleaseStatus"`
-	CollectedAt                   string  `json:"collectedAt"`
-	TakedownPolicy                string  `json:"takedownPolicy"`
+	IsOriginal                    bool     `json:"isOriginal"`
+	OriginalCreatorID             *string  `json:"originalCreatorId"`
+	OriginalCreatorName           string   `json:"originalCreatorName"`
+	OriginalCreatorProfileURL     *string  `json:"originalCreatorProfileUrl"`
+	Platform                      string   `json:"platform"`
+	SourcePostURL                 string   `json:"sourcePostUrl"`
+	OriginalAssetURL              string   `json:"originalAssetUrl"`
+	AttributionText               string   `json:"attributionText"`
+	RightsBasis                   string   `json:"rightsBasis"`
+	CommercialAuthorizationStatus string   `json:"commercialAuthorizationStatus"`
+	PublicationAdmission          string   `json:"publicationAdmission"`
+	AuthorizationProofURL         *string  `json:"authorizationProofUrl"`
+	TermsURL                      *string  `json:"termsUrl"`
+	DerivedModifications          []string `json:"derivedModifications"`
+	WatermarkKind                 *string  `json:"watermarkKind"`
+	WatermarkNote                 *string  `json:"watermarkNote"`
+	WatermarkStatus               string   `json:"watermarkStatus"`
+	AudioRightsStatus             string   `json:"audioRightsStatus"`
+	ModelReleaseStatus            string   `json:"modelReleaseStatus"`
+	PropertyReleaseStatus         string   `json:"propertyReleaseStatus"`
+	CollectedAt                   string   `json:"collectedAt"`
+	TakedownPolicy                string   `json:"takedownPolicy"`
 }
 
 type geoPoint struct {
@@ -162,6 +164,9 @@ func projectAttribution(value *postports.PostSourceAttributionSlice) (*sourceAtt
 			return nil, err
 		}
 	}
+	if value.PublicationAdmission != "production_release" || value.DerivedModifications == nil {
+		return nil, errors.New("sourceAttribution requires production_release and explicit derivedModifications")
+	}
 	if value.CollectedAt.IsZero() {
 		return nil, errors.New("sourceAttribution.collectedAt is required")
 	}
@@ -173,7 +178,8 @@ func projectAttribution(value *postports.PostSourceAttributionSlice) (*sourceAtt
 		AttributionText: value.AttributionText, RightsBasis: value.RightsBasis,
 		CommercialAuthorizationStatus: value.CommercialAuthorizationStatus,
 		PublicationAdmission:          value.PublicationAdmission, AuthorizationProofURL: nullable(value.AuthorizationProofURL),
-		TermsURL: nullable(value.TermsURL), RiskAcceptanceID: nullable(value.RiskAcceptanceID),
+		TermsURL: nullable(value.TermsURL), DerivedModifications: append([]string{}, value.DerivedModifications...),
+		WatermarkKind: nullable(value.WatermarkKind), WatermarkNote: nullable(value.WatermarkNote),
 		WatermarkStatus: value.WatermarkStatus, AudioRightsStatus: value.AudioRightsStatus,
 		ModelReleaseStatus: value.ModelReleaseStatus, PropertyReleaseStatus: value.PropertyReleaseStatus,
 		CollectedAt: formatTime(value.CollectedAt), TakedownPolicy: value.TakedownPolicy,
@@ -272,6 +278,9 @@ type mediaItem struct {
 	HLSCMAFMasterManifestURL *string `json:"hlsCmafMasterManifestUrl"`
 	HLSCMAFDescriptorVersion *int64  `json:"hlsCmafDescriptorVersion"`
 	Title                    *string `json:"title"`
+	Caption                  *string `json:"caption"`
+	AccessMode               *string `json:"accessMode"`
+	CoverAssetID             *string `json:"coverAssetId"`
 }
 
 func projectContentPostDetailMedia(detail postports.PostDetailSlice) (any, error) {
@@ -300,7 +309,8 @@ func projectContentPostDetailMedia(detail postports.PostDetailSlice) (any, error
 			DurationMS: positiveInt64(row.DurationMS), Width: positiveInt64(row.Width), Height: positiveInt64(row.Height),
 			PreviewTrackManifestURL: nullable(row.PreviewTrackManifestURL), PreviewTrackVersion: positiveInt64(row.PreviewTrackVersion),
 			HLSCMAFMasterManifestURL: nullable(row.HLSCMAFMasterManifestURL), HLSCMAFDescriptorVersion: positiveInt64(row.HLSCMAFDescriptorVersion),
-			Title: nullable(row.Title)}
+			Title: nullable(row.Title), Caption: nullable(row.Caption),
+			AccessMode: nullable(row.AccessMode), CoverAssetID: nullable(row.CoverAssetID)}
 	}
 	return contentPostDetailMedia{PostID: postID, ContentType: contentType,
 		MediaAssetIDs: cloneStrings(detail.MediaAssetIDs), MediaURLs: cloneStrings(detail.MediaURLs), MediaItems: items,

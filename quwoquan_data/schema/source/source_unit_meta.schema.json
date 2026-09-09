@@ -148,13 +148,13 @@
     "sourceDiscoveryProfileDigest": {
       "type": "string", "pattern": "^sha256:[0-9a-f]{64}$"
     },
-    "articleCommercialAdmission": {"const": "commercial_release"},
+    "articlePublicationAdmission": {"const": "production_release"},
     "publishMediaMode": {
       "enum": ["illustrated", "text_only", "attributed_external_video"]
     },
     "sourceRole": {"type": "string", "minLength": 1},
     "imageEvidenceMode": {"type": "string"},
-    "researchLane": {"enum": ["homepage", "article", "image", "video"]},
+    "carrier": {"enum": ["homepage", "article", "image", "video"]},
     "hasVideo": {"type": "boolean"},
     "articleCategory": {"const": "photography"},
     "writingIntent": {"const": "planning_consultation"},
@@ -169,14 +169,20 @@
       "const": "quwoquan_data.source_unit"
     }
   },
+  "not": {
+    "anyOf": [
+      {"required": ["researchLane"]},
+      {"required": ["articleCommercialAdmission"]}
+    ]
+  },
   "oneOf": [
     {
       "required": [
-        "researchLane", "articleSiteId", "sourceDiscoveryProfileDigest",
-        "articleCommercialAdmission", "publishMediaMode", "sourceRole"
+        "carrier", "articleSiteId", "sourceDiscoveryProfileDigest",
+        "articlePublicationAdmission", "publishMediaMode", "sourceRole"
       ],
       "properties": {
-        "researchLane": {"const": "article"},
+        "carrier": {"const": "article"},
         "sourceKind": {"enum": ["travelogue", "encyclopedia"]},
         "extractor": {
           "enum": ["qunar_html", "ctrip_sight_html", "wikipedia_api"]
@@ -184,7 +190,7 @@
         "policyRevision": {"const": "article-source-registry-v1"},
         "sourceUseMode": {"const": "factual_reference_only"},
         "rightsMode": {"const": "factual_reference_only"},
-        "articleCommercialAdmission": {"const": "commercial_release"},
+        "articlePublicationAdmission": {"const": "production_release"},
         "publishMediaMode": {"enum": ["illustrated", "text_only"]}
       }
     },
@@ -229,7 +235,7 @@
     },
     {
       "required": [
-        "researchLane",
+        "carrier",
         "hasVideo"
       ],
       "properties": {
@@ -254,7 +260,7 @@
         "rightsMode": {
           "enum": ["attribution_no_watermark", "rights_audit_only"]
         },
-        "researchLane": {
+        "carrier": {
           "const": "video"
         },
         "hasVideo": {
@@ -264,7 +270,7 @@
     },
     {
       "required": [
-        "researchLane",
+        "carrier",
         "hasVideo"
       ],
       "properties": {
@@ -283,7 +289,7 @@
         "rightsMode": {
           "const": "licensed_adaptation"
         },
-        "researchLane": {
+        "carrier": {
           "const": "video"
         },
         "hasVideo": {
@@ -293,7 +299,7 @@
     },
     {
       "required": [
-        "researchLane",
+        "carrier",
         "hasVideo"
       ],
       "properties": {
@@ -312,7 +318,7 @@
         "rightsMode": {
           "enum": ["licensed_adaptation", "rights_audit_only"]
         },
-        "researchLane": {
+        "carrier": {
           "const": "image"
         },
         "hasVideo": {

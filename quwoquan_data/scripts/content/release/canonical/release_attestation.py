@@ -64,8 +64,7 @@ class ReleaseAttestation:
     contains_unverified_assets: bool
     rights_status_counts: dict[str, int]
     authorization_required_asset_ids: tuple[str, ...]
-    research_accepted_count: int
-    commercial_accepted_count: int
+    accepted_count: int
     execution_ids: tuple[str, ...]
     carrier_counts: dict[str, int]
     entity_count: int
@@ -109,16 +108,12 @@ class ReleaseAttestation:
             raise ReleaseAttestationError(
                 "containsUnverifiedAssets must match authorizationRequiredAssetIds"
             )
-        if any(
-            not isinstance(value, int) or isinstance(value, bool) or value < 0
-            for value in (
-                self.research_accepted_count,
-                self.commercial_accepted_count,
-            )
+        if (
+            not isinstance(self.accepted_count, int)
+            or isinstance(self.accepted_count, bool)
+            or self.accepted_count < 0
         ):
-            raise ReleaseAttestationError(
-                "research/commercial accepted counts must be non-negative"
-            )
+            raise ReleaseAttestationError("acceptedCount must be non-negative")
         if not self.canonical_merkle.startswith("sha256:"):
             raise ReleaseAttestationError("canonicalMerkle must be a sha256 digest")
         if not self.payload_sha256.startswith("sha256:"):
@@ -218,8 +213,7 @@ class ReleaseAttestation:
             if (
                 self.execution_ids
                 or any(self.counts)
-                or self.research_accepted_count
-                or self.commercial_accepted_count
+                or self.accepted_count
                 or self.authorization_required_asset_ids
                 or any(
                     value is not None
@@ -255,8 +249,7 @@ class ReleaseAttestation:
             "authorizationRequiredAssetIds": list(
                 self.authorization_required_asset_ids
             ),
-            "researchAcceptedCount": self.research_accepted_count,
-            "commercialAcceptedCount": self.commercial_accepted_count,
+            "acceptedCount": self.accepted_count,
             "executionIds": list(self.execution_ids),
             "carrierCounts": dict(self.carrier_counts),
             "entityCount": self.entity_count,
@@ -302,7 +295,7 @@ class ReleaseAttestation:
                 SourceDefinitionSnapshot.from_document(item.to_document())
                 for item in document.object_sequence("sourceDigests")
             ]
-            return cls(
+            parsed = cls(
                 release_id=document.string("releaseId"),
                 source_owner=DataSourceOwner(document.string("sourceOwner")),
                 release_kind=ReleaseKind(document.string("releaseKind")),
@@ -322,10 +315,7 @@ class ReleaseAttestation:
                 authorization_required_asset_ids=document.string_sequence(
                     "authorizationRequiredAssetIds"
                 ),
-                research_accepted_count=document.integer("researchAcceptedCount"),
-                commercial_accepted_count=document.integer(
-                    "commercialAcceptedCount"
-                ),
+                accepted_count=document.integer("acceptedCount"),
                 execution_ids=document.string_sequence("executionIds"),
                 carrier_counts={key: int(value) for key, value in document.object("carrierCounts").to_document().items()},
                 entity_count=document.integer("entityCount"),
@@ -346,6 +336,9 @@ class ReleaseAttestation:
                     "sourceIdentitySetDigest"
                 ),
             )
+            from core.schema import assert_valid
+            assert_valid(plain, "release", "release_attestation")
+            return parsed
         except (JsonObjectDecodeError, SourceDigestError, ValueError) as exc:
             raise ReleaseAttestationError(str(exc)) from exc
 

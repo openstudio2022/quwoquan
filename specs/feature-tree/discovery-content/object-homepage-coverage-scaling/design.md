@@ -30,12 +30,15 @@
 <a id="dec-001"></a>
 ### DEC-001 四载体共享实体目录并由宿主 AI 执行唯一六步 Skill
 - 决策：homepage、article、image、video 从同一 canonical entity catalog 形成彼此独立的 immutable execution；唯一 producer 流程是宿主 AI 直接执行 `.agents/skills/content-production/SKILL.md` 的六步，并在 `release finalize -> END`。已退役编排与兼容读写必须在生产源码、schema、control plane、正向测试与 active specs 中物理归零，具体 token 只由反向门禁维护。
-- 边界：producer 代码仅做 `task init`、`task acquire`（按 AI 点名的 URL 机械取得字节/license/作者/probe/poster）、`task seal`（自行校验硬事实并 create-once 写三份 receipt，review seal 补齐 content_review 机械字段）、单对象 publish 与 `release finalize`。来源是否切题、选材、创作、review 判断、verdict、typed issues、approved 对象、cohort/milestone、文章结构与作者人设均由宿主 AI 显式决定；后继只来自 Skill 固定顺序。既有 ship I/O 属下游环境 owner，不是 producer stage。
+- 边界：producer 代码仅做 `task init`、`task acquire`（零网络 ingest 宿主已取得的字节与申报来源，派生摘要/probe/poster）、`task seal`（自行校验硬事实并 create-once 写三份 receipt，review seal 补齐 content_review 机械字段）、单对象 publish 与 `release finalize`。来源是否切题、选材、创作、review 判断、verdict、typed issues、approved 对象、cohort/milestone、文章结构与作者人设均由宿主 AI 显式决定；后继只来自 Skill 固定顺序。既有 ship I/O 属下游环境 owner，不是 producer stage。
 - 失败恢复：按 receipt 找首个未闭合步骤继续；receipt blocked 后新建 execution，不在原 execution rewind 或迁移旧状态。
 - 可测试面：local_contract 锁定零旧 import/CLI/schema/reference、seal receipt create-once、AI 显式结果与单对象原子 IO；api_integration 证明四载体可由宿主直接执行。
-- 关联要求：`REQ-001`
+- Skill 工具边界：按 `carriers/<carrier>/` 聚合来源、选择 schema、加工规则与普通函数 adapter；共享入口只加载点名载体，来源网络限于 Skill，Data ingest/seal 保持零来源网络。工具只展开显式输入，不封装阶段推进或恢复；工作区按 shard/round/carrier 隔离，任务 execution/receipts 的既有根不迁移；canonical 内容仓独立定位按 `DEC-042`。
+- 多源投影：image 以有序原生作品资产为单位，逐图 caption 只写入既有资产字段；重名目标文件按来源身份确定性消歧。homepage 的显式主源属于 author 输入，seal 校验本对象百科成员关系，catalog、实体头与归属共用选择，不依赖 source unit 排序。未声明的新可选字段不改变旧已发布对象读取含义。
+- 回滚与观测：失败以当前阶段 typed 结果报告，宿主决定后继；不回写旧 receipt/pool，回退源码不迁移既有对象。来源失败与预览绑定通过离线 fixture 观察，运行审计在 execution 存续期间可回查，不建立新的 handoff actor authority。
+- 关联要求：`REQ-001`、`REQ-003`、`REQ-017`
 - 影响 Story：[`multi-carrier-release`](./multi-carrier-release/spec.md)
-- 关联验收：`GWT-020`
+- 关联验收：`GWT-020`、`GWT-039`
 
 <a id="dec-022"></a>
 ### DEC-022 candidate 只冻结对象身份，source 与 review 在 execution 内单轨形成
@@ -52,17 +55,16 @@
 - 关联验收：[`on-demand-content-pool-admission`](./on-demand-content-pool-admission/spec.md) 的 `GWT-004`
 
 <a id="dec-023"></a>
-### DEC-023 invalid canonical 由唯一 repair process manager 按三个证据谓词收敛
+### DEC-023 canonical 显式清单迁移或退役，完整校验后原子硬切
 
-- 对象边界：canonical Homepage/Content 与 append-only pool ledger 继续拥有 payload 和版本。`CanonicalIdentityRepair` 是独立 process manager，只拥有 invalid identity 的诊断快照、immutable evidence binding、resolution 与进度，不复制 canonical payload。terminal 是 append-only identity fact，不伪造新 content version。
-- 唯一 Query：`CanonicalIdentityStateQuery` 返回互斥的 `absent|admitted_current|invalid_record_repairable|invalid_payload_rebuildable|invalid_unrepairable|terminated`，并携带最深层 error、唯一治理 action 与 optimistic snapshot token。release/publish readback 必须读取同一 query，不得把 `DATA.POOL.PAYLOAD_DIGEST_DRIFT` 改写为 generic not-admitted。
-- 三个确定谓词：fresh evidence 证明 current bytes 仍是同一逻辑版本时只能进入 `invalid_record_repairable`。fresh immutable author/review/rights evidence 证明 current bytes 是新 payload 时只能进入 `invalid_payload_rebuildable`。两类 evidence 均不成立时只能进入 `invalid_unrepairable`。缺 evidence 或两类同时成立均 typed blocked，不由调用方猜测。
-- 唯一 Command：`ResolveInvalidCanonicalIdentityCommand` 按 query token 只接受对应的 `record_repair|payload_rebuild|terminate`。release/publish query 均无 canonical 写权限。`record_repair` 保持 `contentVersion`、追加 `recordSequence + 1`。`payload_rebuild` 原子写入 `contentVersion + 1` 与 `recordSequence + 1`。`terminate` 保持 `contentVersion`、推进 `recordSequence` 并冻结 terminal reason。
-- 消费语义：只有 `admitted_current` 可进入 release cohort。三个 invalid 状态不得因 manifest 存在而静默过滤，也不得进入 semantic dispatch；必须返回唯一治理 action。`terminated` 保持可读治理终态，后续新供给使用新 stable identity；不得建立 scheduler/backlog/自动 recovery 状态。
-- 失败恢复与回滚：resolution 只在隔离 staging 构建，payload、ledger append 与 effective-current 切换全有或全无。任一摘要、identity、sequence、query token 或写入冲突保持原 invalid 状态且零半可见版本。完成后的 record/payload/terminal fact 都不倒写，后续纠正只能以新 evidence 启动新 case；terminated identity 不复活，后续供给必须选择新 stable identity。
-- 可观察面与 SLO：`actionless_invalid_identity_total` 与 `invalid_identity_semantic_dispatch_total` 必须恒为 0，同 identity effective-current 数只能是 0 或 1，三个读取面的 state/error/action 逐项相等。每个 repair case 全量记录 resolution、duration、evidence digest 与 terminal reason，保留期跟随 canonical 引用保护。
-- 可测试面：local_contract 覆盖完整状态转移、三谓词互斥、optimistic conflict、两个版本号规则、terminal 零新版本与三 reader 同源。api_integration 必须先通过真实 canonical application command 创建有效状态，再经 canonical storage adapter 暴露的 test-only fault-injection port 在存储边界制造 payload digest drift；禁止直接写 manifest、ledger 或 fixture seed。随后注入三种互斥 evidence，断言首轮保留原 error 与唯一 command，repair/rebuild 后只有一个 current，terminal 分支零新内容版本且退出 backlog。reliability 在 staging、ledger append、current switch 三个故障点注入失败并断言旧状态不变。
-- 被否决方案：manifest-only 判已消费。折叠深层错误。放宽 payload digest。原地覆盖 payload/record。repair/terminate 两套 CLI。用空 backlog或删除文件表达 termination。
+- 对象边界：canonical 对象与 pool record 拥有身份、版本和 payload；现有身份 query、有限 record supersession 与对象事务原语继续复用。不建立 repair process manager、长期 case 队列或九阶段 recovery，也不宣称已有完整 Homepage 修复 CLI。
+- 只读判定：`CanonicalIdentityStateQuery` 与 pool query 区分身份不存在、当前有效及存在但无效，保留最深层 typed error、exact objectRef、依赖与当前摘要；不得把 invalid 静默当作已完成或可重新创建。
+- 一次性输入：受治理 cutover 只接受覆盖全部活跃对象的精确清单，绑定 before identity/digest、依赖 refs、证据、迁移或删除动作与 after 预期。缺证据、重复身份、漏对象、依赖未决或同时选择互斥动作均阻断；清单不是新生产队列。
+- 迁移：证据充分才保留逻辑身份及资产顺序，受测契约转换产生新版本与新摘要；原始作者、许可、来源及 review 事实不被补造。payload drift 与权利记录无效须分别验证实际证据，不能只刷新摘要或填写 passed。普通 publisher 不接受旧 schema 或特殊覆盖参数。
+- 退役：不能证明有效的对象及无法修复的依赖经精确删除授权后退出活跃树；终态写入受保护迁移证据，不靠 excluded 或 OPEN 永久保留旧运行对象。删除对象不意味着删除被任一新池、保留 release 或审计引用的媒体。
+- 原子性：在既有 staging/delta/锁/校验边界构造并验证完整新池，再以 expected-before 摘要 CAS 激活。阶段失败或并发写入保持旧状态，禁止部分可见树、整池 reset 和旁路 legacy 池；切换完成后旧树退出活跃路径并按精确保护集清理。
+- 历史与运行隔离：旧 Git、receipt、release、rollback 与环境绑定保护集保持原字节；新 reader 不接受旧 release 作为激活输入。历史复核按原提交或制品离线运行，迁移专用旧解析器不进入普通 reader，完成后撤下；不保留在线双读双写。
+- 验收：真实对象事务构造输入，经存储边界 fault injection 制造 drift，验证全对象清单闭包、证据不足拒绝、版本/身份/媒体保护、并发 CAS 和 staging/current-switch 故障恢复。输出逐对象结果与 before/after 摘要，不以改计数或重算旧证据冒充成功。
 - 关联要求：[`canonical-content-identity-recovery`](./canonical-content-identity-recovery/spec.md) 的 `REQ-001` 与 [`multi-carrier-release`](./multi-carrier-release/spec.md) 的 `REQ-001`
 - 影响 Story：[`canonical-content-identity-recovery`](./canonical-content-identity-recovery/spec.md) 的 canonical 显式治理与 release/publish readback
 - 关联验收：[`canonical-content-identity-recovery`](./canonical-content-identity-recovery/spec.md) 的 `GWT-001`
@@ -100,7 +102,7 @@
 
 <a id="dec-029"></a>
 ### DEC-029 规模里程碑累计复用 canonical 对象与原始 producer proof
-- 决策：M1、M10、M100、M1000 按 `cumulative_unique_finalized_objects` 计数。达到更高级别时可复用已 finalized 的 canonical 对象，以及该对象首次产出时的原 execution、publish transaction 与九阶段 receipt proof；不得为复用对象伪造新 execution 或新九阶段 receipts。
+- 决策：M1、M10、M100、M1000 按 `cumulative_unique_finalized_objects` 计数。达到更高级别时可复用已 finalized 的 canonical 对象，以及该对象首次产出时的原 execution、publish transaction 与三份 seal receipt proof；不得为复用对象伪造新 execution 或新 receipts。
 - 每级交付：每个里程碑仍必须形成自己的完整、显式、create-once cohort、immutable release 与 producer handoff，并逐对象绑定原始 producer proof。新级别至少新增足量唯一 finalized 对象使累计值达标，cohort 不得靠重复 identity padding。达标判据是四载体计数不低于该级目标，release header 分别冻结实际 `counts` 与 `milestoneTargets`；`objectRefs` 排序、canonical 字节化与 `expectedCarrierCounts` 派生由 finalize 机械完成，AI 只声明对象集合与 milestone。
 - 边界：handoff 只冻结 production producer facts；不携带 UAT sample authority、import/activate/readback、App/API UAT、EAF、environment promotion 或 rollback facts。
 - 可测试面：同一对象跨相邻里程碑的 canonical identity、原 execution/publish proof refs/digests 保持不变；各级 cohort/release/handoff identity 不同且完整；重复对象不增加累计值。
@@ -112,57 +114,40 @@
 ### DEC-041 单一 production 类别、权利只记录、可见性由运行时配置
 
 - 决策：producer 只有一个 release 类别 `production`；`releaseClass` 与 `productLifecycleState` 同值冻结在 release header/attestation/handoff。research/commercial 双类别及其分叉（私有 CAS 交付、隔离 readiness 相位、commercial 权利闸）在 Data 侧物理删除，下游消费面的同名分叉由 [`multi-carrier-release` OPEN-024](./multi-carrier-release/spec.md#open-024) 跟踪删除。
-- 权利边界：acquire 机械派生逐资产 `rightsStatus`（白名单 license → verified；其它可读 license → unverified 并写 `rightsIssues`；不可读 → unknown）并保留权利六字段；publish 事务与 release build 只把这些取值当作记录事实写入 `rights.json`、pool record 与 header 计数，不据此拒绝对象。对象级词汇（`distributionDecision: research_allowed|commercial_allowed|blocked`、`publicationAdmission`、pool `usageScope`）保持现有取值——它们是已冻结在 canonical 字节中的权利事实，改名等于重写 372 个对象的 `payloadDigest`。
-- 媒体交付：production release 只产 `publicSliceKey`，导入投影写 `accessMode=public`；下游对未授权内容的公众可见性由运营运行时配置决定，输入是 release header 的权利计数与 `authorizationRequiredAssetIds`，该配置不回写 producer。
-- 门禁精简：AI 手写面只保留语义字段——init 的 executionId/carrier/familyRef 与逐 target 身份、acquire 的来源申报（`sourceUrl/directUrl/license/licenseUrl/creator/relevance`、水印三字段，可选 `sha1` 与只记录的 `discoverySignals`）、author 的唯一 carrier 产物、review 的 `decision/blockingIssues/advisories`（可选只记录的 `qualityScores/qualityNotes`）、finalize 的 `objectRefs/milestone`。`entityCatalogDigest/candidateCount/status/quota`、canonical 字节化、`assetRights` 逐资产转录、`dimensions`、`objectRefs` 排序与 `expectedCarrierCounts` 全由脚本派生。region、creatorProfileId、homepage 百科主源在 init/author seal 逐对象校验，不留到 publish；author seal 对违规对象只记 typed issue 退轮而不阻断整个 execution，review 覆盖集合以 author seal 的 resultRefs 为准。评分与热度信号只透传不判否（[`multi-carrier-release` REQ-018](./multi-carrier-release/spec.md#req-018)）；里程碑 `cohort.json`/`producer_release_handoff.json` 由 finalize 同步复制到受版本控制的 `quwoquan_data/reference/releases/<releaseId>/`，输出根仍是 `handoff-verify` 的唯一读取位置。
-- 输出边界：媒体字节在 execution、object-transaction 包与 release payload 中一律以 content library 硬链接引用，不再产生独立拷贝；图片/视频来源不再落 `snapshot.bin`（摘要已在 `meta.rawSha256`）；随体媒体根（`QWQ_CARRIED_MEDIA_ROOT`，默认仓外 XDG 数据目录 `quwoquan/golden_media`）与 content library 是两处独立的仓外 durable 副本、互为备份、都不进版本库；library 可由 `rehydrate_media_holdings` 从随体根重建，`verify publish-closure` 对 canonical 引用的每个媒体摘要检查两处至少一处可达并在缺失时附 `sourceUrl`。
-- 被否决方案：新增 `production` 作为第三个类别值并保留 research/commercial 分支——dual path；把 `research` 改名为 `production` 但保留私有交付——违背公开可见目标；重写对象级 `research_allowed` 词汇——需重发 372 个 canonical 对象。
-- 可测试面：local_contract 覆盖 header/cohort/attestation 只接受 `production`、media_manifest 只产 `publicSliceKey`、非 verified 资产可 publish 且 header 计数正确、cohort 计数 ≥ 目标通过而 < 目标 fail closed、seal 机械补齐 assetRights 与 author seal 的三项前移校验、execution 与 release 中媒体 link count > 1。
+- 权利边界：acquire 机械派生逐资产 `rightsStatus`（白名单 license → verified；其它可读 license → unverified 并写 `rightsIssues`；不可读 → unknown），保留真实作者、许可、授权范围及证据；publish 与 release 把它们作为记录而非类别门。对象 record/admission 和来源 attribution 的新闭集由 canonical schema 拥有，旧双类别词汇不再输出或读取。当前池转换必须走 [`DEC-023`](#dec-023) 新版本及新摘要，旧审计不改；字段转换不等于取得授权或独立 review。
+- 记录收敛：有独立消费用途的 pool/admission 使用范围保留为单一 production 值，来源发布声明使用中性的 production release 值；资产分发声明只表达本次生产处置，不冒充版权授权，具体值与必填性由 schema 唯一声明。采集失败仍阻断，真实权利状态与授权范围保留，音轨未核实不再强制旧发布类别。发现与来源预算只使用 carrier 语义，不绑定旧生命周期。
+- 媒体交付：production release 只产 `publicSliceKey`，导入投影写 `accessMode=public`；Data 专属 research feed、readback、身份隔离与短签分支物理删除。共享 signed_grant 的其它业务使用者继续保留，不因 Data 硬切误删安全能力。下游对未授权内容的公众可见性由运营运行时配置决定，输入是 release header 的权利计数与 `authorizationRequiredAssetIds`，该配置不回写 producer。
+- 门禁精简：AI 手写面只保留语义字段——init 的 executionId/carrier/familyRef 与逐 target 身份、acquire 的来源申报（`sourceUrl/directUrl/license/licenseUrl/creator/relevance`、水印三字段，可选 `sha1` 与只记录的 `discoverySignals`）、author 的唯一 carrier 产物、review 的 `decision/blockingIssues/advisories`（可选只记录的 `qualityScores/qualityNotes`）、finalize 的 `objectRefs/milestone`。`entityCatalogDigest/candidateCount/status/quota`、canonical 字节化、`assetRights` 逐资产转录、`dimensions`、`objectRefs` 排序与 `expectedCarrierCounts` 全由脚本派生。region、creatorProfileId、homepage 百科主源在 init/author seal 逐对象校验，不留到 publish；author seal 对违规对象只记 typed issue 退轮而不阻断整个 execution，review 覆盖集合以 author seal 的 resultRefs 为准。评分与热度信号只透传不判否（[`multi-carrier-release` REQ-018](./multi-carrier-release/spec.md#req-018)）；里程碑两份 terminal 事实由 finalize 保存到独立内容仓，绑定实际快照且只读验证，遵循 `DEC-042`，历史副本保持原字节。
+- 输出边界：content library 用于 acquisition 复用；最终对象包持有实际交付媒体，完整复制不依赖 library，独立 golden media 保护副本继续保留。硬链接不证明独立备份，同卷完整副本不证明抗卷损坏；缺异卷/远端恢复证据时如实未建立。来源只携带真实必要证据，生成式 snapshot 不冒充第三方证明；verify/consumer 均只读，恢复必须显式执行，不隐式回填库。包与耐久性分别遵循 `DEC-031` 和 L2 `REQ-003`。
+- 被否决方案：把 production 作为第三个类别并保留旧分支或私有 Data 交付；原地批量改词、重算摘要却不验证原始证据；把活跃旧对象永久 excluded。统一词汇必须覆盖全部当前对象，按显式清单迁移或经授权精确删除，不能用旧对象数量拒绝硬切。
+- 可测试面：local_contract 覆盖 header/cohort/attestation 只接受 `production`、media_manifest 只产 `publicSliceKey`、非 verified 资产可 publish 且 header 计数正确、cohort 计数 ≥ 目标通过而 < 目标 fail closed、seal 机械补齐 assetRights 与 author seal 的三项前移校验、完整包脱离 execution/library 可校验、媒体/来源缺失与摘要漂移分别拒绝；hardlink 优化不作为耐久性判据。
 - 关联要求：[`multi-carrier-release`](./multi-carrier-release/spec.md) 的 `REQ-002`、`REQ-008`、`REQ-018`
 - 影响 Story：[`multi-carrier-release`](./multi-carrier-release/spec.md)
 - 关联验收：[`multi-carrier-release`](./multi-carrier-release/spec.md) 的 `GWT-002`、`GWT-020`、`GWT-034`、`GWT-038`
 
 <a id="dec-031"></a>
-### DEC-031 research release 媒体以 CAS objectKey 私有交付并走短签消费，commercial 保留公开切片
+### DEC-031 Data 媒体交付只读取单一 manifest
 
-> 状态：research 分支已由 [`DEC-041`](#dec-041) 在 Data 侧退役，production release 只走本条 commercial 分支描述的公开切片形态；下游消费面的 research 分支删除由 [`multi-carrier-release` OPEN-024](./multi-carrier-release/spec.md#open-024) 跟踪。以下保留为下游现状记录。
-
-- 决策：媒体交付形态由 `releaseClass` 在 release 构建期分流，只改 research 分支——
-  - release 构建期：`releaseClass=research` 时 `media_manifest.json` 的 assets 条目产 `privateObjectKey`（即 canonical CAS 形态 `media/objects/sha256/{aa}/{bb}/{hex64}{suffix}`），不产 `publicSliceKey`。payload 内媒体字节按该 key 布局。`commercial` 分支的 `publicSliceKey` 形态与既有链路完全不动。
-  - 导入投影：环境导入按 `releaseClass` 分流。research 媒体字节按 `privateObjectKey` 同步到环境 media 根，post 文档的媒体引用字段存该相对 key（非绝对 URL、不含 `media/{kind}/s/` 路径段），使 content-service `DetectPublicCDNMediaBinding` 与 `DetectAnonymousMediaURL` 对 research 对象闭包均返回 `false`。
-  - 消费期：复用 `ReserveOriginalImageAccessGrant` 这一条既有 grant operation，不新增 research 专用 operation 或续签 operation。普通会话保持 ready image、Post 可见性与 `view|save` 原图语义；研究会话只允许 `purpose=view`，可为当前 active Research release 闭包内的 ready `avatar|image|video` 资产签发短时 URL。两种准入在 OriginalAccessQuota application owner 内按已验签 principal 分流，不由 HTTP adapter、App 页面或路径形态猜测。契约现行 `grant_ttl_seconds=300` 与「viewer×asset×purpose×窗口」每资产独立额度保持不变；App 对同一资产单飞并复用未过期 grant，因此浏览负载不需要第二套配额池。
-  - 授权链前提由导入落齐：三个 importer 的 App 可见投影为每条媒体引用显式携带 release authority 的 `assetId` 与共享 `MediaDeliveryAccessMode`；content importer 把全部 release 媒体（含 creator avatar 与 entity homepage introduction assets）幂等投影进 `media_assets` 并绑定 source release identity。普通原图准入继续读取 Post named visibility reader；研究态准入读取 active Research release membership。任一资产身份、release binding、处理终态或访问模式缺失均 fail closed，不从相对路径或 URL 反推。
-- 理由：research activation 判据要求「无公开 CDN 与匿名 URL」「媒体短期签名 URL」「访问审计」三项同时成立，而身份链与短签契约已可用，缺的只是私有引用形态与投影分流。CAS objectKey 已经是 service 侧契约事实——Mongo `media_assets.objectKey` 存的就是它，signer 按它签发——所以复用它不引入新布局，签发链路零改动。canonical 对象本就以 `objectKey`+`sha256` 命名字节，release 只是保留而非派生。
-- 网络层边缘守卫：私有媒体 URL 的签名真伪与绝对到期时间必须在字节交付边缘复算，签发方只生成签名、不能替交付方证明请求有效。验证算法与私有交付前缀由 `quwoquan_service/runtime/media` 的共享私有交付协议单点拥有，gamma Caddy 与 `local_media_origin` 只作为该 verifier 的 adapter，消费同一 secret reference，不复制算法或路径闭集。签名缺失、格式错误、摘要不匹配或 `t` 到期均 403，公开 slice 仍匿名。secret 或 verifier 缺失时私有路径整体 fail closed，不能退回“参数在场即放行”。性能预算：验签为 HMAC-SHA256 纯 CPU 复算、无外部 IO，单请求附加延迟预算 p99 ≤ 1ms；视频 Range 每段复算一次，不缓存放行判定。
-- 边界裁决：App 私有媒体获取、过期重取、稳定缓存身份与各 surface 接入由 [`DEC-033`](#dec-033) 统一约束。现行每资产独立额度结合 App 单飞和未过期 grant 复用足以承载浏览，不新增批量 operation 或浏览级配额池；真实 UAT 若在 grant cache 正常命中时仍出现 429，才通过原 policy owner 的新 calibration 调整数值，不以第二套 rate limit 先行过度设计。
-- 被否决方案：发明与 public 同构的 `media/{kind}/p/asset/...` 私有布局——signer 不认该前缀（需要扩签发契约），静态服务挂整根时该路径照样匿名可达，且与 `media_assets.objectKey` 既有私有引用形成第二套私有布局真相源。统一为 `sliceKey`+`sliceVisibility` 两字段并让 commercial 一起迁移——动了无关轨道，commercial 契约的删改属另一 Story。由环境名、CAS 前缀或 URL query 推断交付形态——环境不决定数据形态，路径识别会把各语言字面量变成新的真相源。新增专用 research 签发 operation、续签 operation、批量 operation 或配额池——既有 grant command 与每资产独立额度已覆盖签发、审计与浏览单飞，新增即第二真相源。只检查 `sign+t` 在场——攻击者可自行拼 query，无法证明请求由签发方授权。
-- 可测试面：按证据层拆分——
-  - local_contract 覆盖交付分流：`releaseClass=research` 的 manifest 产 `privateObjectKey` 且无 `publicSliceKey`，`commercial` 反之，两键同现或同缺即 schema 拒绝。
-  - local_contract 覆盖私有 key 形态：不含 `media/{kind}/s/` 段且非绝对 URL（探针两项判定负例），并通过共享私有交付协议与 release schema 的同源断言。
-  - local_contract 覆盖导入同步器：对 research manifest 按 `privateObjectKey` 同步、对 commercial 按 `publicSliceKey` 同步，形态与 header `releaseClass` 不符即 fail closed。
-  - local_contract 覆盖 grant 准入：research principal 的 `save`、非 active release 资产、无 release membership 与非 ready 资产均拒绝；同资产同幂等键重放不续期，同一未过期 grant 在 App 只换取一次。
-  - verifier 纯函数的签名与到期判定归 local_contract；边缘 adapter 的真实 HTTP 行为（缺签名、伪签名、篡改路径、篡改到期时间与过期签名均 403，合法未过期签名 GET/HEAD/Range 保留 200/206）归 research-isolation-probe 与 api_integration 层锚定，与 [`multi-carrier-release` OPEN-015](./multi-carrier-release/spec.md#open-015) 完成判定对齐。
-- 影响 Story：[`multi-carrier-release`](./multi-carrier-release/spec.md) 的 research readiness 下游消费面
-- 关联验收：[`multi-carrier-release`](./multi-carrier-release/spec.md) 的 `GWT-020.t3`
+- 决策：按 [`DEC-041`](#dec-041) 仅交付 production 的 public slice；importer、媒体同步和 query 读取统一 manifest 的稳定资产身份、摘要、顺序与 caption，不读冗余资产旁车或旧私有交付字段。
+- 对象包：manifest 单写对象身份、版本、标题/caption、实体事实、正文引用、creator/tag/entity 依赖及有序媒体，实体头并入 manifest。homepage/article 只另存最终正文，image/video 无伪正文/脚本草稿；final media 的相对引用与 exact 字节随体，完整复制不依赖 execution/library，不跨包 symlink。creator 仍是共享业务主体，独立 profile/avatar 不强行同构。
+- 来源与审计：采用来源的事实与必要证据在包内 sources 局部拥有，不建全球 resolver；跨作品允许少量来源元数据复制。删除 `asset.refs.json`、`creator.refs.json`、`tag.refs.json`、`source_catalog.json`、`rights.json` 与生成式 `rights_snapshots` 的重复投影，真正的第三方原件进入 sources 并保持可追溯，生成 manifest 副本不算授权证据。公共 attribution 从唯一 manifest/source 派生。
+- review/record：独立 reviewer 原结论与原审核对象摘要保持原件，迁移追加 binding 而非伪造重审；现有追加式入池/退役事实收敛到 records，只绑定包/review 摘要而不复制完整 manifest/source。审核与入池是不同事实，不能删其一。旧字节转换只经 `DEC-023`，普通 reader 不接受旧旁车兜底。
+- 理由与被否决方案：减少的是重复 authority 而不是真实证据；否决继续三旁车之外再留一套 source/rights 镜像、无媒体的不可独立包、按文件数删除 review/record、由 consumer 缓存回写 canonical。
+- 失败恢复与观测：原子包事务报告 exact 引用的来源缺失、媒体缺失、摘要漂移或越界；失败不产生部分成功包，不改已通过 review/历史 release。显式恢复在隔离目标从独立副本验摘要，verify 不产生写入；实际恢复/备份证据与源码测试分层。
+- 边界：Data 不再绑定专用身份、短签或隔离探针；共享媒体签名、到期及 Range 验签仍由原 owner 维护，不因删除 Data 路径放宽无关业务权限。旧 release 仅作隔离历史审计，不接受在线兼容激活。
+- 可测试面：现有单对象事务/闭包测试完整复制四载体包到无原 execution/library 的目录，验证媒体、来源、review binding 与 records；Service importer/Ops materialize 验单源与 exact 摘要，旧交付反例和共享授权负例仍拒绝。普通 publish 只对本包重验，不为每次发布全池重算媒体摘要。
+- 关联要求：[`multi-carrier-release`](./multi-carrier-release/spec.md) 的 `REQ-009`、`REQ-020`
+- 影响 Story：[`multi-carrier-release`](./multi-carrier-release/spec.md)
+- 关联验收：`GWT-022`、`GWT-032`、`GWT-033`、`GWT-041`；未完成由 `OPEN-025` 跟踪
 
 <a id="dec-032"></a>
-### DEC-032 研究态身份是服务端签发的 principal role，能力面由 operation guard 按 role 闭集收敛
+### DEC-032 内容可见性不依赖专用研究身份
 
-- 决策：研究身份由服务端事实承载，不由客户端自选请求头声明——
-  - 身份签发：user-service 登录与 refresh 的 access token 签发单点在账号命中 research allowlist 时向 token `roles` 附加 `research`。allowlist 与 token 签发均为既有机制，不新增 operation。
-  - 能力面收敛：operation guard 对已验签 principal 含 `research` role 的请求只放行研究能力闭集——ready 读操作（feed、detail、对象主页、公开 profile 及其同类只读投影）、`content.original_access_quota.ReserveOriginalImageAccessGrant`、`content.original_access_quota.GetOriginalImageAccessAudit`、`content.post.GetResearchReleaseReadback`、`user.account_session.IssueWhitelistedResearchSession`、`user.account_session.GetResearchSessionAttestation`；写操作、站外分享、导出与其余操作一律 403 fail closed。闭集常量归 `quwoquan_service/runtime/auth` 单一持有，收敛点在 `authorizeGeneratedOperation` 的边界判定之前，对 public 与 runtime 两种 operation 边界一致生效。
-  - attestation 定位：`X-Research-Identity-Attestation` 只用于 readback 链路把请求精确绑定到已签发 research session，不再作为能力面判定依据；缺失该头不使任何请求脱离 role 收敛。
-  - 匿名与非研究内容面：active release 为 research 时，release 承载内容的读面只对 research principal 在场；匿名与不含 `research` role 的认证请求在内容 query owner 单点收敛为 `no_active_release` 语义的缺席结果，不逐 handler 分散判定。
-  - 正式 runtime 边界：research session 与 readback 操作维持 `CommercialStatus=blocked`，research 验收固定 target-bound mutable test-live；release class 只从 Data-owned `ReleaseUatSamplePlan` 绑定的 immutable release identity 读取，raw CaseResult 将 release/runtime/package/config/platform/device/runner observation 与同一 exact integration candidate 对齐，不由环境名推断。正式 candidate 可承载 immutable research release 的数据面，但不得为研究验收整体切换到 runtime operation 边界。Alpha/Beta/Gamma EAF 另由 Environment Ops scheduler 以完整 v2 closure 签发，Prod 不使用 EAF；正式 activation 残量归 [`multi-carrier-release` OPEN-006](./multi-carrier-release/spec.md#open-006)。
-- 理由：header 由客户端自选携带时，研究账号省略该头即可回到普通能力面，隔离证据是自限性的而非强制；role 进 access token 后能力面判定与请求方意愿无关。runtime operation 边界（mutable test-live）按设计放行 `CommercialStatus=blocked` 的操作，研究态 deny 必须与部署边界无关。研究浏览验收需要 feed、detail、主页等真实读面，四操作白名单撑不起消费闭环，闭集必须显式扩到浏览读面。
-- 被否决方案：保留客户端 header 作为能力面判定——可绕过，隔离不成立。在各业务 handler 内逐个拒绝——能力面散布多服务形成第二真相源且必然漏项。给 `OperationSecurityDescriptor` 增加 research 维度并走 contracts codegen——描述符矩阵为单一身份面扩列，成本与收益不匹配。为研究浏览新增专用读 operation——既有 ready 读操作已覆盖，全部读面复制一遍即第二真相源。
-- 可测试面：local_contract 按身份链覆盖——
-  - allowlist 命中账号登录后 token 含 `research` role。
-  - research principal 访问闭集外操作 403，闭集内读操作与 grant 放行，无 role 请求不受收敛影响。
-  - active research release 下匿名与非研究认证请求的 feed 与 detail 均为 `no_active_release` 缺席语义。
-  - attestation 缺失不使 readback 之外的请求改变能力面。
-- 影响 Story：[`multi-carrier-release`](./multi-carrier-release/spec.md) 的 research readiness 面
-- 关联验收：[`multi-carrier-release`](./multi-carrier-release/spec.md) 的 `GWT-020.t3`
+- 决策：删除 Data 专属 session、role、allowlist、attestation 与 readback 的 authoring source、生成物和正向调用；统一使用现有 feed/detail 与普通身份权限边界。
+- 可见性：匿名是否看到未授权内容由运营运行时配置在消费 owner 单点决定，依据 release 权利事实，不回写 producer 或按环境名猜测；普通账号、原图与其它业务权限不变。
+- 可测试面：旧 operation 不注册；production 内容按同一可见性规则消费，普通认证、签名、配额负例保持 fail closed。
+- 影响 Story：[`multi-carrier-release`](./multi-carrier-release/spec.md)
+- 关联验收：`GWT-033`；当前准出证据由 `OPEN-024` 承接。
 
 <a id="dec-033"></a>
 ### DEC-033 App 私有媒体消费收敛为 typed 交付绑定加单一异步 grant 协调器
@@ -187,31 +172,50 @@
 - 关联验收：[`multi-carrier-release`](./multi-carrier-release/spec.md) 的 `GWT-016`、`GWT-020.t3`
 
 <a id="dec-034"></a>
-### DEC-034 isolation runtime proof 的效度域是 release 加策略快照加时效，不绑 verify run
+### DEC-034 旧隔离证明退出当前环境输入
 
-> 状态：research 隔离证明已随 [`DEC-041`](#dec-041) 在 Data 侧退役（`research_isolation_*` 模块、schema 与 `GWT-026` 已删除）；本条只保留为下游 Ops 隔离探针的历史设计记录，其删除由 [`multi-carrier-release` OPEN-024](./multi-carrier-release/spec.md#open-024) 跟踪。
-
-- 决策：ship verify 的 research isolation runtime proof 效度域为 `releaseId + manifestDigest + runtime 策略快照（policyRef + policySha256）+ 24 小时时效上限`，不绑 `verifyRunId`。同一 release 的后续 verify run 复用最近一次未超龄 PASS proof：复用前全量重验（release 身份、digest、策略快照与 PASS 内容闭包），重绑当前 run-id、重算 checksum，并把复用来源 run 标识以 `reusedFromVerifyRunId` 写入证据本体——复用产物与本 run 实测在证据形态上单义可区分。原 proof 文件保持 create-once 字节不变，复用不级联（后续 run 仍锚定原始实测 proof）。
-- 理由：proof 证明的是「该 release 在该环境策略下的隔离行为」，效度随 release 与策略走、不随 verify 编号走；绑 run-id 使每次 verify 重试都作废有效证据，实测一轮收敛耗 9 个 verify run、每次被迫重跑完整 probe，是发布链路重试成本最大的一处。时效上限承接环境运行栈重建的新鲜度风险：策略快照覆盖不了栈重建（down/up 后 runtime.yaml 字节可能不变），24 小时上限保证复用只发生在同一工作窗内，跨日重入强制重新实测。
-- 被否决方案：保持绑 verifyRunId——重试成本结构性不可行（本条起因）。无时效无限复用——栈重建后旧 proof 冒充新观测，新鲜度失守。绑 startup attempt 或 compose digest 世代——需要 probe 侧扩运行时身份字段并动 proof schema 的采集面，成本高于时效上限且世代字段在 prod-hosted 形态下没有稳定对应物；若未来边缘配置纳入受版本控制策略面，应同批进入 proof 绑定。
-- 约束与影响：复用判定失败的候选跳过不修复，全部候选失效时收敛为既有 `DATA.RESEARCH.RUNTIME_PROOF_INCOMPLETE` typed 阻断；发现路径把被跳过候选计数写入阻断诊断。下游环境 owner 的重试 SOP 与本效度域同源，不另设 producer 阶段或第二套复用条件。
-- 可测试面：local_contract 覆盖复用正例（重绑 run-id、provenance 在场、原 proof 字节不变）、manifest 漂移拒绝、策略快照漂移拒绝、超龄拒绝与无候选 GATE_BLOCK 回退。
-- 影响 Story：[`multi-carrier-release`](./multi-carrier-release/spec.md) 的 下游环境终态面
-- 关联验收：无（原 `GWT-026` 已随 research 隔离退役删除；见 [`multi-carrier-release` OPEN-024](./multi-carrier-release/spec.md#open-024)）
+- 决策：随 [`DEC-041`](#dec-041) 删除 Data 专属隔离证明的生成、复用与探针入口；旧证明只保留原字节历史审计，不重绑为当前成功，也不进入新 release/readiness 的依赖。
+- 边界：环境验收仍由 Ops owner 按当前 candidate、release 与 runtime 取得命名证据，生产端不补造环境成功。
+- 影响 Story：[`multi-carrier-release`](./multi-carrier-release/spec.md)；删除及新消费验证由 `OPEN-024` 准出。
 
 <a id="dec-040"></a>
-### DEC-040 Research 私有视频以 progressive MP4 单签续播，private HLS 保持 unsupported
+### DEC-040 production 视频与图集以真实消费证据验收
 
-- 交付契约：当前 Research projection 每条媒体引用的 `accessMode` 与稳定资产标识必填；只有明确 previous-version public contract version 可把 null/absent 解释为 public。当前 Research/private 缺字段直接 typed blocked，不从 URL、CAS key、环境名或缺席推断。
-- progressive MP4：App 私有视频原子只接收已校验短签交付引用，原生播放器发起 Range。edge verifier 对每个 Range 请求重新验签。首次 401/403 使当前 grant 失效，协调器强制换签最多一次，并以播放器已确认 position 恢复。二次失败进入 canonical typed terminal，禁止循环或 public fallback。
-- private HLS：当前 contract 明确返回 unsupported typed terminal，manifest/segment/key 不进入 progressive MP4 fallback。HLS 的分片授权、key authority、TTL 恢复与播放器状态属于独立能力，由 [`multi-carrier-release` OPEN-017](./multi-carrier-release/spec.md#open-017) 关闭；它不阻断 progressive MP4 的 fresh UAT，也不能靠放宽 `accessMode` 绕过。
-- 失败恢复与观测：Range 验签失败、换签次数、恢复前后 position 与 terminal code 由现有 grant/audit 和播放器 raw `ReadinessCaseResult` 派生，不新增播放 ledger。位置恢复允许播放器容器的受治理 seek tolerance，但 identity、asset、release 与换签上限必须精确；tolerance 数值归播放器 runtime contract owner，不在本设计复制。
-- 理由：progressive MP4 是单媒体 URL 加 Range 的授权模型，现有 grant 与 edge verifier足够闭合；HLS 需要 manifest、segment、key 多资源授权，复用单 URL 假设会在分片处 fail open。把已实现 MP4 与未设计 HLS 放在同一个 OPEN 会错误地把 fresh UAT 缺口表述为实现缺口。
-- 被否决方案：401/403 无限换签、换签后从零播放、回退 public URL、缺 `accessMode` 默认 public、private HLS 降级 progressive MP4、为每个 Range 向 App 暴露独立 grant command。
-- 可测试面：`local_contract`（`spec_ref=GWT-032`）覆盖 contract-version 条件、单次换签和 HLS unsupported。`api_integration` 对真实 edge 执行 Range 与 401/403 恢复。`user_acceptance` 以 progressive private MP4 产生 fresh raw `ReadinessCaseResult` 并证明位置保持。
+- 决策：Data 视频只消费显式 public 绑定，旧版本缺字段适配与专属私有视频路径退役。稳定资产身份、poster、顺序与逐图 caption 从唯一 manifest 到 App 保持同义；caption 不取代作品 title。
+- 证据：本地 decoder/importer 测试只证明字段映射；Range 播放、图集切换与逐图说明由授权环境和真实 App 另行验证，不拿 poster 或源端 PASS 替代。
+- 边界：共享私有媒体的签名、单次失败恢复与 unsupported HLS 不因 Data 退役而削弱；不在本能力承诺新增私有 HLS。
 - 关联要求：[`multi-carrier-release`](./multi-carrier-release/spec.md) 的 `REQ-016`
-- 影响 Story：[`multi-carrier-release`](./multi-carrier-release/spec.md) 的 Research 私有视频消费面
-- 关联验收：[`multi-carrier-release`](./multi-carrier-release/spec.md) 的 `GWT-032`，开放项为 [`OPEN-015`](./multi-carrier-release/spec.md#open-015) 与 [`OPEN-017`](./multi-carrier-release/spec.md#open-017)
+- 关联验收：`GWT-032`、`GWT-033`；fresh App 消费缺口由 `OPEN-015` 承接。
+
+<a id="dec-042"></a>
+### DEC-042 独立内容仓拥有物理定位，身份与包摘要不随目录变化
+
+- 决策与 owner：canonical 内容在源码工作树平级独立 Git 仓，由仓身份/布局版本/实际工程契约摘要绑定；仓不是源码 worktree、submodule 或 symlink。Data owns 包/locator/记录，Service 只从 manifest 读取稳定身份，Ops 只物化 exact release。源码 worktree discovery 按 repository 身份区分，不使用目录名忽略规则。
+- 目录：地域实体在自身领域下依已核实行政链、已有主类型、分区、名称、组内条目管理；posts 按 carrier、主分类、分区、名称、组内条目管理。具体路径语法与容量阈值唯一归 Data schema/policy。行政链可缺区县、可为直辖市/省直管县/境外真实层级；主归属只有一个，其他地域保留 ref。地域适用性显式，当前不实现非地点 producer。
+- 分配：非空类始终从首分区开始，只用条目数与随体逻辑字节两个指标。已有同名组原地追加、不拆组；新组在容量允许者中取最低归一化负载，平分按编号，无合适者才开新分区。超大组只报告例外，无跨地域均衡、后台重分区、第三种统计阈值或 per-partition authority；inventory 可重建。
+- 身份：逻辑 entityRef/实体 ID/作品 ID 在 init 冻结，目录末级数字只表示组内条目、允许空洞且不复用，不猜版本。名称/地域/类型整理属于显式 locator 变更；包内摘要不含外层 locator，release 定位清单包含 locator。同物新版本沿用身份并递增内容版本，新包字节不可借纯移动刷新旧审核证据。
+- 并发与原子性：共同内容根的锁定位不依赖各源码 OUTPUT_ROOT；单对象临时包验证后原子可见，publish、整组整理与内容 Git ref 更新共享串行边界。缺根、错仓、名称/路径冲突 typed 阻断；只枚举声明对象根，Git、repository metadata 与 releases 不计入 inventory。execution/receipts 物理根不随 publish 重构变化。
+- handoff：继续仅有 cohort/handoff 两份 terminal 事实，create-or-same 保存到内容仓，绑定工程 baseline/契约摘要与所选 ID/版本/包摘要/定位的 exact 内容快照。内容 commit 只有与字节匹配才记录；不增加必须先后提交两次的仪式。重建须保存固定时间和 exact build 输入，历史 bundle 不清理为试验对象。
+- 理由与被否决方案：地域便于人工管理，但存储位置不应决定业务身份。否决路径哈希/按名取首项、日期轮次树、跨包媒体借用、分区 mapping authority、自动 rebalance、错误根 fallback、源码提交冒充内容快照。
+- 失败恢复/回滚：沿用 `DEC-023` 的全量 before、独立备份、保护集与 expected-before staging；不交换包含 Git 的仓根。准备不授予搬迁/删除/init/clone/commit/push/环境激活权限，各动作分别确认；失败保持原对象与审计，不声称一个 lane 配置已切全局。
+- 观测与可测试面：现有 DataRoot/inventory/object-transaction 短 local_contract 验真实行政链/Unicode/分区边界与跨 worktree 共锁；身份与 importer 测试验 ref/ID/主页 ID 守恒。仅输出该事务容量例外、首个 typed blocker、before/after 摘要，无新健康服务或全池日常重哈希。
+- 关联要求：L2 `REQ-004`；[`multi-carrier-release`](./multi-carrier-release/spec.md) 的 `REQ-008`、`REQ-019`；[`canonical-content-identity-recovery`](./canonical-content-identity-recovery/spec.md) 的 `REQ-002`
+- 影响 Story：[`multi-carrier-release`](./multi-carrier-release/spec.md)、[`canonical-content-identity-recovery`](./canonical-content-identity-recovery/spec.md)
+- 关联验收：前者 `GWT-040`、`GWT-041`，后者 `GWT-002`、`GWT-003`；准出缺口由各 Story OPEN 承接。
+
+<a id="dec-043"></a>
+### DEC-043 发布闭包严格，运行实体引用与媒体失败局部降级
+
+- 决策与 owner：producer 在 exact release 构建检查显式内部 ref，运行正文使用名称快照，用户点击才调用既有目标详情 API。Entity owns 可见性/权限，Content importer 复用既有 exact 主页映射，App 复用错误展示与媒体缓存；不扩展 runtime 的 active pointer fence 或添加跨服务强一致协议。
+- 实体引用：文章 mention 从同一 Entity 映射生成而不是新增 hp 哈希公式，映射缺失呈普通文字；同名异地不得串跳。非文章保持可读 label/结构化关联，不新增通用富文本、引用卡片或 article-only GraphQL 扩展。内部语法不得泄露物理路径；没有系统实体的外部名称不捏造 ref。
+- 运行一致性：普通实体下线不级联下线作品、删原文、借用媒体或改历史 release；已知不可用可隐藏链接，不知道时不为去链接额外 query。点击后服从原 403/404/410 或 Data 历史 offline View 的公开契约并允许返回，弱一致不绕过权限。严重治理删除仍走原命令，不成为地点下线副作用。
+- 媒体：包内资产相对引用在 release 物化为摘要交付键，环境 URL 经既有 endpoint/resolver 生成；实际上传摘要及 Range/MIME/readback 先于激活。正文/封面坏图局部占位，图集保留坏页位置仍可滑动，视频有界失败保留 poster/caption，poster/字幕失败不阻断可用视频，源站失效不影响随体成品。
+- 缓存与恢复：只修既有图集实际 provider 接负缓存、视频 cache hit 不续 TTL/不重复启动恢复；网络新失败、成功与用户显式重试仍按原 owner 处理。已知永久缺失不自动重试。无逐实体请求、逐媒体 HEAD、引用状态 TTL、缓存广播、后台修复或周期巡检。
+- 理由与被否决方案：关联是导航增强而非正文可用性依赖，媒体故障不应清空作品；否决实体下线反向遍历全池/级联重写、补充健康注册表、用无效链接伪装可导航、以 importer 单测冒充真实 UAT。
+- 可测试面与观测：真实 Entity→Content importer→typed query 证明 mention 映射；App 现有错误/图集/视频短 local_contract 验单图失败可翻页、缓存跨实例复用及原 TTL 不延长。每屏请求数不随引用数线性增加，重试受原预算限制；授权环境再验证实体下线返回和视频 Range。失败只报原 typed 局部结果，不新增 SLO/报警体系。
+- 关联要求：[`multi-carrier-release`](./multi-carrier-release/spec.md) 的 `REQ-021`、L2 `REQ-004`
+- 影响 Story：[`multi-carrier-release`](./multi-carrier-release/spec.md)，Runtime/Service/App 消费边界只引用原 owner contracts。
+- 关联验收：`GWT-042`，缺口保留在 `OPEN-028`，不进入 producer END。
 
 ## 5. 失败与恢复
 

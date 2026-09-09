@@ -122,8 +122,7 @@ def _release(
             "unknown": 0,
         },
         "authorizationRequiredAssetIds": [],
-        "researchAcceptedCount": 0,
-        "commercialAcceptedCount": 0,
+        "acceptedCount": 0,
         "canonicalMerkle": "sha256:" + "a" * 64,
         "executionIds": (
             []
@@ -514,22 +513,62 @@ def test_apply_dry_run_import_enforces_release_desired_state(
     assert calls[0]["kind"] == "tag"
     assert calls[1]["kind"] == "creator"
     assert calls[1]["postgres_dsn"] == "postgres://topology.test/quwoquan"
-    assert calls[2]["kind"] == "content"
+    assert calls[2]["kind"] == "homepage"
     assert calls[2]["mode"] == "sync"
-    assert calls[2]["delete_policy"] == "tombstone"
-    assert "activation_mode" not in calls[2]
-    assert calls[2]["creator_candidate_receipt"] == calls[1]["run"] / "creator-import.json"
-    assert calls[3]["kind"] == "homepage"
+    assert calls[3]["kind"] == "content"
     assert calls[3]["mode"] == "sync"
+    assert calls[3]["delete_policy"] == "tombstone"
+    assert "activation_mode" not in calls[3]
+    assert calls[3]["creator_candidate_receipt"] == calls[1]["run"] / "creator-import.json"
+    assert calls[3]["homepage_import_report"] == calls[2]["run"] / "homepage-import.json"
+    assert calls[3]["homepage_candidate_receipt"] is None
     assert calls[0]["mongo_uri"] == "mongodb://topology.test"
     target = _target(tmp_path)
     assert calls[1]["media_avatar_base_url"] == target.media_delivery_base_url
-    assert calls[2]["media_avatar_base_url"] == target.media_delivery_base_url
-    assert calls[2]["media_video_base_url"] == target.media_delivery_base_url
-    assert calls[3]["media_image_base_url"] == target.media_delivery_base_url
+    assert calls[3]["media_avatar_base_url"] == target.media_delivery_base_url
+    assert calls[3]["media_video_base_url"] == target.media_delivery_base_url
+    assert calls[2]["media_image_base_url"] == target.media_delivery_base_url
     run = tmp_path / "env/gamma/runs/data-release/release-a/apply-sync"
     assert read_json(run / "result.json")["status"] == "dry_run"
     assert not (run / "applied_ref.json").exists()
+
+
+# spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-042
+@pytest.mark.parametrize("homepage_found", [True, False])
+def test_apply_stages_homepage_and_queries_exact_candidate_before_content(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, homepage_found: bool) -> None:
+    from types import SimpleNamespace
+
+    release = _release(tmp_path)
+    admission = _fixture_admission(release)
+    _patch_roots(monkeypatch, tmp_path)
+    calls: list[str] = []
+    for owner in ("tag", "creator", "homepage"):
+        def stage(*, _owner=owner, **kwargs):
+            calls.append(_owner + "-stage")
+            return dict(HOMEPAGE_IMPORTER_REPORT) if _owner == "homepage" else kwargs["run"] / (_owner + "-import.json")
+        monkeypatch.setattr(handler, "_run_" + owner + "_importer", stage)
+    for owner in ("creator", "homepage"):
+        def query(*, _owner=owner, **kwargs):
+            calls.append(_owner + "-query")
+            assert kwargs["release_id"] == release.name
+            assert kwargs["manifest_digest"] == admission.manifest_digest
+            if _owner == "homepage" and not homepage_found:
+                raise RuntimeError("homepage exact candidate unavailable")
+            return SimpleNamespace(path=kwargs["report_path"])
+        monkeypatch.setattr(handler, "_query_" + owner + "_release_candidate", query)
+    def content(**kwargs):
+        calls.append("content-stage")
+        assert kwargs["homepage_import_report"] == kwargs["run"] / "homepage-import.json"
+        assert kwargs["homepage_candidate_receipt"] == kwargs["run"] / "homepage-candidate-receipt.json"
+        raise RuntimeError("stop after verified Content invocation")
+    monkeypatch.setattr(handler, "_run_content_importer", content)
+    with pytest.raises((RuntimeError, SystemExit), match="homepage exact candidate unavailable|stop after verified Content invocation"):
+        handler._apply_release(argparse.Namespace(
+            env="gamma", run_id="apply-order", import_to_db=True, full_sync=True,
+            dry_run=False, confirm_prod_apply=False, release_admission=admission,
+        ))
+    expected = ["tag-stage", "creator-stage", "creator-query", "homepage-stage", "homepage-query"]
+    assert calls == expected + (["content-stage"] if homepage_found else [])
 
 
 def _superseded_research_apply_blocks_before_readiness_or_import(

@@ -1,7 +1,10 @@
 package releaseimport
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -56,6 +59,97 @@ type postManifest struct {
 	PublishedAt           string                             `json:"publishedAt"`
 }
 
+// decodeReleaseSourceAttribution 不让 encoding/json 静默丢弃退休字段或新修改事实。
+func decodeReleaseSourceAttribution(raw []byte, ref string) (postmodel.SourceAttribution, error) {
+	var envelope struct {
+		SourceAttribution json.RawMessage `json:"sourceAttribution"`
+	}
+	if err := json.Unmarshal(raw, &envelope); err != nil {
+		return postmodel.SourceAttribution{}, err
+	}
+	var attribution postmodel.SourceAttribution
+	if len(envelope.SourceAttribution) == 0 {
+		return attribution, nil
+	}
+	if err := validateReleaseSourceFacts(envelope.SourceAttribution); err != nil {
+		return attribution, fmt.Errorf("%s: sourceAttribution: %w", ref, err)
+	}
+	decoder := json.NewDecoder(bytes.NewReader(envelope.SourceAttribution))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&attribution); err != nil {
+		return attribution, fmt.Errorf("%s: sourceAttribution: %w", ref, err)
+	}
+	if attribution.PublicationAdmission != "production_release" || attribution.DerivedModifications == nil {
+		return attribution, fmt.Errorf("%s: sourceAttribution requires production_release and explicit derivedModifications", ref)
+	}
+	seen := make(map[string]bool)
+	for _, modification := range attribution.DerivedModifications {
+		switch modification {
+		case "video_frame_extraction", "crop", "resize", "format_conversion":
+		default:
+			return attribution, fmt.Errorf("%s: sourceAttribution derivedModifications is invalid", ref)
+		}
+		if seen[modification] {
+			return attribution, fmt.Errorf("%s: sourceAttribution derivedModifications contains duplicates", ref)
+		}
+		seen[modification] = true
+	}
+	switch attribution.WatermarkKind {
+	case "", "none", "author_signature", "platform_logo", "stock_agency", "other", "unknown":
+	default:
+		return attribution, fmt.Errorf("%s: sourceAttribution watermarkKind is invalid", ref)
+	}
+	return attribution, nil
+}
+
+// validateReleaseSourceFacts 对齐 Data post_manifest.schema.json 的 sourceAttribution：
+// Go 零值不能替代必填事实；可选水印事实允许缺席，但显式 null 不合法。
+func validateReleaseSourceFacts(raw []byte) error {
+	var facts map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &facts); err != nil {
+		return err
+	}
+	for _, name := range []string{
+		"isOriginal", "originalCreatorName", "platform", "sourcePostUrl", "originalAssetUrl",
+		"attributionText", "rightsBasis", "commercialAuthorizationStatus", "publicationAdmission",
+		"watermarkStatus", "audioRightsStatus", "modelReleaseStatus", "propertyReleaseStatus",
+		"collectedAt", "takedownPolicy", "derivedModifications",
+	} {
+		value, exists := facts[name]
+		if !exists || bytes.Equal(bytes.TrimSpace(value), []byte("null")) {
+			return fmt.Errorf("%s is required and must not be null", name)
+		}
+		if name == "isOriginal" || name == "derivedModifications" {
+			continue
+		}
+		var text string
+		if err := json.Unmarshal(value, &text); err != nil || text == "" {
+			return fmt.Errorf("%s must be a non-empty string", name)
+		}
+	}
+	for _, name := range []string{"watermarkKind", "watermarkNote"} {
+		if value, exists := facts[name]; exists && bytes.Equal(bytes.TrimSpace(value), []byte("null")) {
+			return fmt.Errorf("%s must not be null when present", name)
+		}
+	}
+	for name, allowed := range map[string][]string{
+		"commercialAuthorizationStatus": {"verified", "unverified"},
+		"watermarkStatus":               {"absent", "present", "unknown"},
+		"audioRightsStatus":             {"licensed", "original_authorized", "replaced_with_licensed_track", "no_audio", "unverified"},
+		"watermarkKind":                 {"none", "author_signature", "platform_logo", "stock_agency", "other", "unknown"},
+	} {
+		rawValue, exists := facts[name]
+		if !exists {
+			continue
+		}
+		var value string
+		if err := json.Unmarshal(rawValue, &value); err != nil || !slices.Contains(allowed, value) {
+			return fmt.Errorf("%s is outside the Data source fact enum", name)
+		}
+	}
+	return nil
+}
+
 type ContentAdmission struct {
 	ProcessResult  string `json:"processResult" bson:"processResult"`
 	QualityResult  string `json:"qualityResult" bson:"qualityResult"`
@@ -75,11 +169,8 @@ func normalizeImportedContentPoolRecord(m *postManifest, postRef string) error {
 	if m.VariantPurpose != "original" && m.VariantPurpose != "commercial_variant" {
 		return fmt.Errorf("%s: canonical content variantPurpose is invalid", postRef)
 	}
-	if m.Admission.UsageScope != "research" && m.Admission.UsageScope != "commercial" {
-		return fmt.Errorf("%s: canonical content usageScope is invalid", postRef)
-	}
-	if m.VariantPurpose == "commercial_variant" && m.Admission.UsageScope != "commercial" {
-		return fmt.Errorf("%s: commercial content variant is not commercially admitted", postRef)
+	if m.Admission.UsageScope != "production" {
+		return fmt.Errorf("%s: canonical content usageScope must be production", postRef)
 	}
 	return nil
 }
@@ -138,12 +229,8 @@ func validateReleaseMediaDeliveryContract(
 	for _, asset := range assets {
 		assetID := strings.TrimSpace(asset.AssetID)
 		mode := strings.TrimSpace(asset.AccessMode)
-		if mode != MediaDeliveryAccessModePublic && mode != MediaDeliveryAccessModeSignedGrant {
-			return fmt.Errorf(
-				"%s: media asset %q accessMode must be public or signed_grant",
-				ref,
-				assetID,
-			)
+		if assetID == "" || mode != MediaDeliveryAccessModePublic {
+			return fmt.Errorf("%s: media asset %q requires assetId and accessMode must be public", ref, assetID)
 		}
 		if mode != expectedMode {
 			return fmt.Errorf(
@@ -153,18 +240,6 @@ func validateReleaseMediaDeliveryContract(
 				mode,
 				releaseClass,
 			)
-		}
-		if mode == MediaDeliveryAccessModeSignedGrant {
-			if assetID == "" {
-				return fmt.Errorf("%s: signed_grant media asset requires assetId", ref)
-			}
-			if isHLSMediaAsset(asset) {
-				return fmt.Errorf(
-					"%s: private HLS media asset %q is unsupported",
-					ref,
-					assetID,
-				)
-			}
 		}
 	}
 	return nil
@@ -176,7 +251,7 @@ func validateReleaseMediaDeliveryContract(
 // manifests are not a legacy escape hatch.
 func ValidateImportedPostMediaBindings(posts []PostDoc, releaseClass string) error {
 	if MediaDeliveryAccessModeForReleaseClass(releaseClass) == "" {
-		return fmt.Errorf("releaseClass must be research, commercial or production")
+		return fmt.Errorf("releaseClass must be production")
 	}
 	for _, post := range posts {
 		assets := importedPostAssets(post)
@@ -194,27 +269,6 @@ func ValidateImportedPostMediaBindings(posts []PostDoc, releaseClass string) err
 		}
 	}
 	return nil
-}
-
-func isHLSMediaAsset(asset AssetManifestItem) bool {
-	mimeType := strings.ToLower(strings.TrimSpace(asset.MimeType))
-	if mimeType == "application/vnd.apple.mpegurl" ||
-		mimeType == "application/x-mpegurl" ||
-		mimeType == "application/dash+xml" {
-		return true
-	}
-	for _, raw := range []string{
-		asset.CDNURL,
-		asset.PublicSliceKey,
-		asset.ThumbnailURL,
-		asset.CoverURL,
-	} {
-		path := strings.ToLower(strings.SplitN(strings.TrimSpace(raw), "?", 2)[0])
-		if strings.HasSuffix(path, ".m3u8") || strings.HasSuffix(path, ".mpd") {
-			return true
-		}
-	}
-	return false
 }
 
 func parseRightsAuditStatus(raw string) (RightsAuditStatus, error) {
@@ -267,9 +321,8 @@ func validateImageAssets(assets []AssetManifestItem, sourceCollectionID string, 
 				return fmt.Errorf("%s: verified image asset %q has audit issues", ref, asset.AssetID)
 			}
 		case RightsAuditStatusUnverified, RightsAuditStatusUnknown, RightsAuditStatusRestricted:
-			// research/production 类别接受未完成商用核验的资产（Data 侧权利只记录，
-			// DEC-041），但许可链字段必须完整在场；commercial 与未声明类别保持 fail closed。
-			if releaseClass != "research" && releaseClass != "production" {
+			// 授权核验状态仍是事实；production 不将未核验改写为已授权。
+			if releaseClass != "production" {
 				return fmt.Errorf(
 					"%s: unverified image asset %q cannot enter an immutable release",
 					ref,
@@ -279,7 +332,7 @@ func validateImageAssets(assets []AssetManifestItem, sourceCollectionID string, 
 			if strings.TrimSpace(asset.License) == "" ||
 				(strings.TrimSpace(asset.TermsURL) == "" && strings.TrimSpace(asset.AuthorizationProof) == "") {
 				return fmt.Errorf(
-					"%s: research unverified image asset %q missing license or proof",
+					"%s: unverified image asset %q missing license or proof",
 					ref,
 					asset.AssetID,
 				)
@@ -386,15 +439,8 @@ func BindPostAssetURLs(
 			asset.Kind = kind
 			asset.Version = resolved.Version
 			asset.PublicSliceKey = resolved.PublicSliceKey
-			// release authority 的 delivery identity 已由 releaseClass 校验；绑定在
-			// 此处把它写成 projected typed accessMode，不由 URL/path 形态猜测。
-			if resolved.PrivateObjectKey != "" {
-				asset.AccessMode = MediaDeliveryAccessModeSignedGrant
-			} else {
-				asset.AccessMode = MediaDeliveryAccessModePublic
-			}
-			// DEC-031: research bindings carry the relative CAS key instead
-			// of an anonymous public URL.
+			// Data release authority 只接受 production public slice。
+			asset.AccessMode = MediaDeliveryAccessModePublic
 			asset.CDNURL = resolved.DeliveryRef
 			asset.ObjectKey = ""
 			byID[asset.AssetID] = asset

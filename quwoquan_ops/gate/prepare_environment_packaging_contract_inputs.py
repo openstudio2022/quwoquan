@@ -40,8 +40,8 @@ def _write_release_attestation(
         "schema": "quwoquan_data.release_attestation",
         "releaseId": release_id,
         "payloadSha256": "sha256:" + digest_character * 64,
-        "releaseClass": "commercial",
-        "productLifecycleState": "commercial",
+        "releaseClass": "production",
+        "productLifecycleState": "production",
     }
     (workspace / filename).write_text(
         json.dumps(payload, ensure_ascii=True, separators=(",", ":")) + "\n",

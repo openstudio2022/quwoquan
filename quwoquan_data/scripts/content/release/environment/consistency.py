@@ -200,50 +200,30 @@ def scan_release_contract(
             for evidence_ref in (
                 "sourceCatalogRef",
                 "rightsRef",
-                "creatorRefsRef",
-                "tagRefsRef",
-                "assetRefsRef",
             ):
                 rel = str(manifest.get(evidence_ref) or "")
                 if not rel or Path(rel).is_absolute() or ".." in Path(rel).parts or not (object_root / rel).is_file():
                     issues.append(_issue("object_evidence_missing", f"{evidence_ref} 不可解析", ref))
-            creator_refs_path = object_root / str(manifest.get("creatorRefsRef") or "")
-            if creator_refs_path.is_file():
-                creator_refs = read_json(creator_refs_path).get("creatorRefs") or []
-                for creator_ref in creator_refs:
-                    required_creators.add(str(creator_ref))
-                    if not _creator_exists(objects, str(creator_ref)):
-                        issues.append(_issue("dangling_creator_ref", str(creator_ref), ref))
-                if kind == "entities":
-                    entity_header = object_root / "_entity.json"
-                    if entity_header.is_file():
-                        profile_id = str(
-                            read_json(entity_header).get("creatorProfileId") or ""
-                        ).strip()
-                        if profile_id:
-                            required_creators.add(profile_id)
-                            if profile_id not in creator_refs:
-                                issues.append(
-                                    _issue(
-                                        "entity_creator_closure_missing",
-                                        "entity creatorProfileId 必须进入 creator.refs.json",
-                                        ref,
-                                    )
-                                )
-                            if not _creator_exists(objects, profile_id):
-                                issues.append(
-                                    _issue("dangling_creator_ref", profile_id, ref)
-                                )
-            tag_refs_path = object_root / str(manifest.get("tagRefsRef") or "")
-            if tag_refs_path.is_file():
-                for tag_ref in read_json(tag_refs_path).get("tagRefs") or []:
+            creator_ref = str(manifest.get("creatorProfileId") or "").strip()
+            if not creator_ref:
+                issues.append(_issue("object_creator_missing", "manifest 缺 creatorProfileId", ref))
+            else:
+                required_creators.add(creator_ref)
+                if not _creator_exists(objects, creator_ref):
+                    issues.append(_issue("dangling_creator_ref", creator_ref, ref))
+            tag_refs = manifest.get("tagRefs")
+            if not isinstance(tag_refs, list):
+                issues.append(_issue("object_tags_missing", "manifest 缺 tagRefs", ref))
+            else:
+                for tag_ref in tag_refs:
                     tag_ref = str(tag_ref)
                     required_tags.add(tag_ref)
                     if not _tag_exists(objects, tag_ref):
                         issues.append(_issue("dangling_tag_ref", tag_ref, ref))
-            asset_refs_path = object_root / str(manifest.get("assetRefsRef") or "")
-            if asset_refs_path.is_file() and release_root is None:
-                issues.extend(_cas_issues(read_json(asset_refs_path), ref))
+            if not isinstance(manifest.get("assets"), list):
+                issues.append(_issue("object_assets_missing", "manifest 缺 assets", ref))
+            elif release_root is None:
+                issues.extend(_cas_issues(manifest, ref))
             action = actions.get((kind[:-1], ref)) or actions.get((kind, ref))
             if action is not None and not action.get("sourceHash"):
                 issues.append(_issue("missing_source_hash", "release action 缺少 sourceHash", ref))

@@ -1,3 +1,8 @@
+"""Creator 投影与 canonical scanner 的身份闭包契约。
+
+spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#req-001
+"""
+
 from __future__ import annotations
 
 import hashlib
@@ -18,7 +23,7 @@ from content.release.canonical.object_transaction import (
     _project_entity_creator_closure,
 )
 from content.release.canonical.object_transaction_contract import ObjectTransactionError
-from content.release.environment.consistency import scan_release_contract
+from content.release.canonical.release_consistency import scan_release_contract
 from support.media_fixture import (
     admit_media_body,
     seed_system_creator_avatar_holding,
@@ -103,23 +108,38 @@ def test_release_preflight_rejects_entity_creator_profile_outside_refs(
         entity / "manifest.json",
         {
             "schema": "quwoquan_data.entity_object",
+            "entityRef": "/entity/地点/景区/测试实体",
+            "version": 1,
             "finalContentRef": "page.md",
-            "sourceCatalogRef": "source.json",
-            "rightsRef": "rights.json",
-            "creatorRefsRef": "creator.refs.json",
-            "tagRefsRef": "tag.refs.json",
-            "assetRefsRef": "asset.refs.json",
+            "sourceRefs": ["sources/s001/source.json"],
+            "tagRefs": [],
+            "assets": [],
         },
     )
     _write_json(
         entity / "_entity.json",
         {"creatorProfileId": "qwq_creator_geo_editor_001"},
     )
-    _write_json(entity / "creator.refs.json", {"creatorRefs": []})
-    _write_json(entity / "tag.refs.json", {"tagRefs": []})
-    _write_json(entity / "asset.refs.json", {"assets": []})
-    _write_json(entity / "source.json", {"sources": []})
-    _write_json(entity / "rights.json", {"assets": []})
+    evidence = "测试实体来源摘录\n".encode("utf-8")
+    _write_json(
+        entity / "sources/s001/source.json",
+        {
+            "schema": "quwoquan_data.publish_source",
+            "sourceId": "s001",
+            "sourceUrl": "https://zh.wikipedia.org/wiki/测试实体",
+            "sourceUseMode": "factual_reference_only",
+            "fetchedAt": "2026-09-09T00:00:00Z",
+            "metadata": {},
+            "assets": [],
+            "evidence": [{
+                "path": "evidence.txt",
+                "sha256": "sha256:" + hashlib.sha256(evidence).hexdigest(),
+                "bytes": len(evidence),
+                "kind": "source_excerpt",
+            }],
+        },
+    )
+    (entity / "sources/s001/evidence.txt").write_bytes(evidence)
     (entity / "page.md").write_text("# 测试实体\n", encoding="utf-8")
 
     report = scan_release_contract(
@@ -136,7 +156,7 @@ def test_release_preflight_rejects_entity_creator_profile_outside_refs(
         publish_root=tmp_path,
     )
 
-    assert "entity_creator_closure_missing" in {issue["code"] for issue in report["blockingIssues"]}
+    assert "object_creator_missing" in {issue["code"] for issue in report["blockingIssues"]}
 
 
 def test_creator_avatar_projects_only_from_traceable_cas(

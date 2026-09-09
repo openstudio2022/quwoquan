@@ -29,7 +29,6 @@ type ContentHandler struct {
 	feedService                  *feedapp.FeedService
 	postService                  *postapp.Facades
 	postQueryService             *postapp.PostQueryFacade
-	researchReleaseReadback      *postapp.ResearchReleaseReadbackQueryFacet
 	commentHandler               commentHTTPHandler
 	reactionHandler              contentReactionHTTPHandler
 	reportHandler                ReportHTTPHandler
@@ -98,13 +97,13 @@ type postDetailClientWire struct {
 	PrimaryHomepageType     string                                   `json:"primaryHomepageType,omitempty"`
 	PrimaryHomepageSnapshot *postports.PostHomepageSnapshotSlice     `json:"primaryHomepageSnapshot,omitempty"`
 	// GatheringRef 共同经历回流引用：详情态溯源标锚点。
-	GatheringRef string               `json:"gatheringRef,omitempty"`
-	Status       postports.PostStatus `json:"status"`
-	Visibility              postports.PostVisibility                 `json:"visibility"`
-	LikeCount               int64                                    `json:"likeCount"`
-	CommentCount            int64                                    `json:"commentCount"`
-	ShareCount              int64                                    `json:"shareCount"`
-	ViewCount               int64                                    `json:"viewCount"`
+	GatheringRef string                   `json:"gatheringRef,omitempty"`
+	Status       postports.PostStatus     `json:"status"`
+	Visibility   postports.PostVisibility `json:"visibility"`
+	LikeCount    int64                    `json:"likeCount"`
+	CommentCount int64                    `json:"commentCount"`
+	ShareCount   int64                    `json:"shareCount"`
+	ViewCount    int64                    `json:"viewCount"`
 	// ViewerLiked viewer 维度点赞态：nil（wire 省略）表示未附着（匿名请求
 	// 或附着降级），端侧不得据此回滚本地状态。
 	ViewerLiked *bool     `json:"viewerLiked,omitempty"`
@@ -322,14 +321,6 @@ func WithHealthChecker(c *rthealth.Checker) ContentHandlerOption {
 	return func(h *ContentHandler) { h.healthChecker = c }
 }
 
-func WithResearchReleaseReadback(
-	facet *postapp.ResearchReleaseReadbackQueryFacet,
-) ContentHandlerOption {
-	return func(handler *ContentHandler) {
-		handler.researchReleaseReadback = facet
-	}
-}
-
 func WithOutboundShareHandler(service outboundShareHTTPHandler) ContentHandlerOption {
 	return func(handler *ContentHandler) { handler.outboundShareHandler = service }
 }
@@ -532,9 +523,8 @@ func (h *ContentHandler) handleGetFeed(w http.ResponseWriter, r *http.Request) {
 		SubCategory:     params.SubCategory,
 		Cursor:          params.Cursor,
 		Limit:           params.Limit,
-		FeedRequestID:     params.FeedRequestId,
-		BlockedKeywords:   ResolveBlockedKeywords(r),
-		ResearchPrincipal: requestHasResearchRole(r),
+		FeedRequestID:   params.FeedRequestId,
+		BlockedKeywords: ResolveBlockedKeywords(r),
 	})
 	if err != nil {
 		writeHTTPError(w, r, err)
@@ -559,7 +549,6 @@ func (h *ContentHandler) handleGetPost(w http.ResponseWriter, r *http.Request) {
 		postports.NewPostDetailQuery(
 			postports.NewPostID(postID),
 			postports.NewViewerContext(postports.NewPersonaID(viewerPersonaID)),
-			requestHasResearchRole(r),
 		),
 	)
 	if err != nil {
@@ -764,7 +753,6 @@ func (h *ContentHandler) handleGetHelperRead(w http.ResponseWriter, r *http.Requ
 	result, err := h.postQueryService.GetHelperRead(
 		r.Context(),
 		contentID,
-		requestHasResearchRole(r),
 	)
 	if err != nil {
 		writeHTTPError(w, r, err)
@@ -809,7 +797,6 @@ func (h *ContentHandler) handleListUserPosts(w http.ResponseWriter, r *http.Requ
 			postports.PostVisibility(visibility),
 			cursor,
 			limit,
-			requestHasResearchRole(r),
 		),
 	)
 	if err != nil {
@@ -873,7 +860,6 @@ func (h *ContentHandler) handleListPostsByGathering(
 			gatheringID,
 			cursor,
 			limit,
-			requestHasResearchRole(r),
 		),
 	)
 	if err != nil {

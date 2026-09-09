@@ -16,7 +16,6 @@ from quwoquan_ops.cli.lib.app_content_uat_release_samples import (
     document_digest,
     resolve_release_sample_requests,
     validate_release_sample_probe,
-    validate_release_strict_probe,
 )
 
 CARRIERS = ("homepage", "article", "image", "video")
@@ -57,8 +56,8 @@ def _readiness() -> dict[str, object]:
     entity_refs = [f"/entity/place-{index:03d}" for index in range(1, 101)]
     return {
         "releaseId": "release-m100-samples",
-        "releaseClass": "commercial",
-        "productLifecycleState": "commercial",
+        "releaseClass": "production",
+        "productLifecycleState": "production",
         "manifestDigest": DIGESTS["manifest"],
         "sourceIdentities": [{"executionId": "execution-a"}],
         "sourceIdentitySetDigest": DIGESTS["source"],
@@ -67,10 +66,20 @@ def _readiness() -> dict[str, object]:
         "feedQueries": [
             {"name": "typed_article", "matchedPostIds": article_ids},
             {"name": "typed_image", "matchedPostIds": image_ids},
-            {"name": "typed_video", "matchedPostIds": video_ids},
+            {
+                "name": "typed_video",
+                "query": "identity=work&type=video&limit=20",
+                "matchedPostIds": video_ids,
+            },
             {
                 "name": "homepage_recommend",
+                "query": "sort=recommend&channelId=recommend&limit=20",
                 "matchedPostIds": [*article_ids, *image_ids, *video_ids],
+            },
+            {
+                "name": "premium_stream",
+                "query": "sort=recommend&channelId=premium_stream&limit=20",
+                "matchedPostIds": video_ids,
             },
         ],
         "homepageApiVerificationRef": (
@@ -181,8 +190,8 @@ def _release_header(sample_plan_digest: str) -> dict[str, object]:
         "releaseId": "release-m100-samples",
         "sourceOwner": "qwq_data",
         "releaseKind": "content",
-        "releaseClass": "commercial",
-        "productLifecycleState": "commercial",
+        "releaseClass": "production",
+        "productLifecycleState": "production",
         "selectionScope": "milestone",
         "milestone": "M100",
         "milestoneTargets": {
@@ -223,7 +232,7 @@ def _write_receipts(root: Path) -> tuple[Path, dict[str, object]]:
     import_ref = str(readiness["contentImportReportRef"])
     import_report = {
         "schema": "quwoquan.content_import_report",
-        "status": "imported",
+        "status": "staged",
         "releaseId": readiness["releaseId"],
         "manifestDigest": readiness["manifestDigest"],
         "postBindings": [
@@ -362,128 +371,15 @@ def test_release_samples__plan_without_read_evidence_cannot_pass__local_contract
 
 
 
-def _strict_resolved() -> dict[str, object]:
-    digest = "sha256:" + hashlib.sha256(b"avatar").hexdigest()
-    return {
-        "creatorProfiles": [
-            {
-                "personaId": "persona-001",
-                "avatarDeliveryRef": "media/objects/sha256/avatar",
-            }
-        ],
-        "strictMediaChecks": [
-            {
-                "assetId": "avatar-001",
-                "kind": "avatar",
-                "expectedBytes": 6,
-                "expectedSha256": digest,
-                "expectedMimeType": "image/png",
-                "classifications": ["avatar"],
-                "requireRange": False,
-            },
-            {
-                "assetId": "image-001",
-                "kind": "image",
-                "expectedBytes": 5,
-                "expectedSha256": "sha256:" + hashlib.sha256(b"image").hexdigest(),
-                "expectedMimeType": "image/jpeg",
-                "classifications": ["image"],
-                "requireRange": False,
-            },
-            {
-                "assetId": "video-001",
-                "kind": "video",
-                "expectedBytes": 5,
-                "expectedSha256": "sha256:" + hashlib.sha256(b"video").hexdigest(),
-                "expectedMimeType": "video/mp4",
-                "classifications": ["typed_video", "premium_video"],
-                "requireRange": True,
-            },
-        ],
-    }
-
-
-def _strict_report(resolved: dict[str, object]) -> dict[str, object]:
-    profile = resolved["creatorProfiles"][0]  # type: ignore[index]
-    assets = []
-    for expected in resolved["strictMediaChecks"]:  # type: ignore[index]
-        row = {
-            "assetId": expected["assetId"],
-            "kind": expected["kind"],
-            "bytes": expected["expectedBytes"],
-            "sha256": expected["expectedSha256"],
-            "mimeType": expected["expectedMimeType"],
-            "hashVerified": True,
-            "statusCode": 200,
-            "classifications": expected["classifications"],
-            "rangeRequested": bool(expected["requireRange"]),
-        }
-        if expected["requireRange"]:
-            row.update(
-                {
-                    "rangeStatusCode": 206,
-                    "rangeBytes": 5,
-                    "contentRange": "bytes 0-4/5",
-                }
-            )
-        assets.append(row)
-    return {
-        "status": "passed",
-        "checks": [
-            {
-                "name": "release_creator_profile",
-                "ok": True,
-                "statusCode": 200,
-                "personaId": profile["personaId"],
-                "returnedPersonaId": profile["personaId"],
-                "returnedAvatarDeliveryRef": profile["avatarDeliveryRef"],
-                "responseDigest": "sha256:" + "1" * 64,
-                "responseBytes": 100,
-            },
-            {"name": "release_signed_media", "ok": True, "assets": assets},
-        ],
-    }
-
-
-def test_release_strict_probe__accepts_complete_creator_and_media_evidence__local_contract() -> None:
-    resolved = _strict_resolved()
-    evidence = validate_release_strict_probe(
-        report=_strict_report(resolved),
-        resolved=resolved,
-    )
-    assert evidence == {
-        "creatorProfileCount": 1,
-        "signedMediaAssetCount": 3,
-        "classifications": ["avatar", "image", "premium_video", "typed_video"],
-    }
-
-
-@pytest.mark.parametrize(
-    ("mutate", "expected"),
-    [
-        (
-            lambda report: report["checks"][0].__setitem__(
-                "returnedAvatarDeliveryRef", "media/objects/sha256/drift"
-            ),
-            "creator/profile/avatar evidence drifted",
-        ),
-        (
-            lambda report: report["checks"][1]["assets"][1].__setitem__(
-                "hashVerified", False
-            ),
-            "signed media image-001 evidence drifted",
-        ),
-        (
-            lambda report: report["checks"][1]["assets"][2].__setitem__(
-                "rangeStatusCode", 200
-            ),
-            "signed media video-001 evidence drifted",
-        ),
-    ],
-)
-def test_release_strict_probe__drift_gate_blocks__local_contract(mutate, expected: str) -> None:
-    resolved = _strict_resolved()
-    report = _strict_report(resolved)
-    mutate(report)
-    with pytest.raises(ValueError, match=expected):
-        validate_release_strict_probe(report=report, resolved=resolved)
+@pytest.mark.parametrize("release_class", ["research", "commercial"])
+def test_retired_release_samples_are_rejected(tmp_path: Path, release_class: str) -> None:
+    """spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-033"""
+    readiness_path, plan = _write_receipts(tmp_path)
+    readiness = json.loads(readiness_path.read_text(encoding="utf-8"))
+    readiness["releaseClass"] = release_class
+    readiness["productLifecycleState"] = release_class
+    readiness_path.write_text(json.dumps(readiness), encoding="utf-8")
+    with pytest.raises(ValueError, match="production"):
+        resolve_release_sample_requests(
+            readiness_path=readiness_path, app_uat_plan=plan, output_root=tmp_path
+        )

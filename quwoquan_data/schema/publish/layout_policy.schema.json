@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "maxEntries", "maxBytes", "videoMaxBytes"],
+  "properties": {
+    "schema": {"const": "quwoquan_data.publish_layout_policy.v2"},
+    "maxEntries": {"type": "integer", "minimum": 1},
+    "maxBytes": {"type": "integer", "minimum": 1},
+    "videoMaxBytes": {"type": "integer", "minimum": 1}
+  }
+}

@@ -17,10 +17,6 @@ from quwoquan_ops.cli.lib.release_video_delivery import (
     load_release_video_binding,
     validate_delivery,
 )
-from quwoquan_ops.cli.lib.research_content_isolation import (
-    verify_research_content_isolation,
-)
-
 
 class DataEvidenceError(ValueError):
     """Canonical Data media/lifecycle evidence is unavailable or inconsistent."""
@@ -65,37 +61,12 @@ def validate_data_evidence(
             f"data output root must equal canonical QWQ_OUTPUT_ROOT: {root}"
         )
     readiness = _read_readiness(readiness_path)
-    if expected_release.get("releaseClass") == "research":
-        try:
-            result = verify_research_content_isolation(
-                environment,
-                release_id=str(expected_release["releaseId"]),
-                verify_run_id=str(expected_release["verifyRunId"]),
-                manifest_digest=str(expected_release["releaseDigest"]),
-                data_readiness=readiness,
-                data_readiness_path=readiness_path,
-            )
-        except ValueError as exc:
-            raise DataEvidenceError(str(exc)) from exc
-        receipt_path = (root / str(result["receiptRef"])).resolve()
-        if media_readback_path.expanduser().resolve() != receipt_path:
-            raise DataEvidenceError(
-                "research media readback must be the canonical isolation receipt"
-            )
-        return {
-            "deliveryMode": "private_signed",
-            "releaseId": result["releaseId"],
-            "manifestDigest": result["manifestDigest"],
-            "subjectHash": result["subjectHash"],
-            "receiptRef": result["receiptRef"],
-            "receiptDigest": result["receiptDigest"],
-            "anonymousContentStatus": result["anonymousContentStatus"],
-            "anonymousMediaStatus": result["anonymousMediaStatus"],
-            "signedMediaTtlSeconds": result["signedMediaTtlSeconds"],
-            "mediaAuditEventId": result["mediaAuditEventId"],
-        }
-    if expected_release.get("releaseClass") != "commercial":
-        raise DataEvidenceError("releaseClass must be research or commercial")
+    if (
+        expected_release.get("releaseClass") != "production"
+        or readiness.get("releaseClass") != "production"
+        or readiness.get("productLifecycleState") != "production"
+    ):
+        raise DataEvidenceError("releaseClass must be production")
     try:
         content = load_release_content_identity(
             readiness_path,

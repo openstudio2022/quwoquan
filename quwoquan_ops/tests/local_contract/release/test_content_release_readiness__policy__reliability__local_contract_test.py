@@ -48,16 +48,16 @@ def test_content_release_readiness__maps_phase_to_environment_capabilities__loca
         phase=ReadinessPhase.CONSUMER,
         environment="prod",
     )
-    gamma_commercial = policy.requirement_for(
-        phase=ReadinessPhase.COMMERCIAL,
+    gamma_production = policy.requirement_for(
+        phase=ReadinessPhase.PRODUCTION,
         environment="gamma",
     )
-    alpha_commercial = policy.requirement_for(
-        phase=ReadinessPhase.COMMERCIAL,
+    alpha_production = policy.requirement_for(
+        phase=ReadinessPhase.PRODUCTION,
         environment="alpha",
     )
-    beta_commercial = policy.requirement_for(
-        phase=ReadinessPhase.COMMERCIAL,
+    beta_production = policy.requirement_for(
+        phase=ReadinessPhase.PRODUCTION,
         environment="beta",
     )
 
@@ -67,9 +67,9 @@ def test_content_release_readiness__maps_phase_to_environment_capabilities__loca
     assert gamma_consumer.health_scope == "content-consumer"
     assert prod_consumer.target == "prod-hosted"
     assert ReadinessCapability.TELEMETRY_LOG_SINK not in beta_import.capabilities
-    assert ReadinessCapability.TELEMETRY_LOG_SINK in gamma_commercial.capabilities
-    assert alpha_commercial.workload == "full"
-    assert beta_commercial.workload == "full"
+    assert ReadinessCapability.TELEMETRY_LOG_SINK in gamma_production.capabilities
+    assert alpha_production.workload == "full"
+    assert beta_production.workload == "full"
 
 
 def test_content_release_readiness__binds_probe_for_every_capability__local_contract() -> (
@@ -81,13 +81,9 @@ def test_content_release_readiness__binds_probe_for_every_capability__local_cont
         binding = policy.probe_binding_for(capability)
         if binding.source is ProbeSource.HEALTH_SCOPE:
             assert binding.health_scope
-        elif binding.source is ProbeSource.COMMERCIAL_DOCTOR:
-            assert binding.source is ProbeSource.COMMERCIAL_DOCTOR
+        elif binding.source is ProbeSource.PRODUCTION_DOCTOR:
+            assert binding.source is ProbeSource.PRODUCTION_DOCTOR
             assert binding.health_scope is None
-        elif binding.source is ProbeSource.RESEARCH_ISOLATION:
-            assert capability is ReadinessCapability.RESEARCH_ACCESS_ISOLATION
-            assert binding.health_scope is None
-            assert binding.control_action is None
         else:
             assert binding.source is ProbeSource.LOG_SINK_CONTROL
             assert binding.control_action == "all"
@@ -102,7 +98,7 @@ def test_content_release_readiness__binds_probe_for_every_capability__local_cont
     )
 
 
-def test_content_release_readiness__doctor_bound_capabilities_are_commercial_only__local_contract() -> (
+def test_content_release_readiness__doctor_bound_capabilities_are_production_only__local_contract() -> (
     None
 ):
     policy = load_content_release_readiness_policy()
@@ -110,15 +106,9 @@ def test_content_release_readiness__doctor_bound_capabilities_are_commercial_onl
     for requirement in policy.requirements:
         for capability in requirement.capabilities:
             binding = policy.probe_binding_for(capability)
-            if requirement.phase is ReadinessPhase.COMMERCIAL:
+            if requirement.phase is ReadinessPhase.PRODUCTION:
                 continue
-            if requirement.phase is ReadinessPhase.RESEARCH:
-                assert binding.source in {
-                    ProbeSource.HEALTH_SCOPE,
-                    ProbeSource.RESEARCH_ISOLATION,
-                }
-            else:
-                assert binding.source is ProbeSource.HEALTH_SCOPE
+            assert binding.source is ProbeSource.HEALTH_SCOPE
 
 
 def test_content_release_readiness__rejects_undefined_phase_environment__local_contract() -> (
@@ -251,13 +241,14 @@ def test_content_consumer_feed_health_uses_canonical_homepage_route__local_contr
     }
 
 
-def test_content_commercial_health_adds_product_ops_without_full_plane__local_contract() -> (
+def test_content_production_health_adds_product_ops_without_full_plane__local_contract() -> (
     None
 ):
     topology = stackctl.load_environment_topology()
     checks = stackctl._health_checks_for_target(
         topology,
         "alpha-local",
+        # workload 是部署能力切片，不是 Data releaseClass；沿用其 canonical 名称。
         "content-commercial",
         workload="content-commercial",
     )
@@ -278,7 +269,7 @@ def test_content_commercial_health_adds_product_ops_without_full_plane__local_co
     assert "integration-service" not in names
 
 
-def test_content_consumer_nonempty_feed_probe_skips_commercial_checks__local_contract(
+def test_content_consumer_nonempty_feed_probe_skips_production_checks__local_contract(
     monkeypatch,
     tmp_path: Path,
 ) -> None:
@@ -290,7 +281,6 @@ def test_content_consumer_nonempty_feed_probe_skips_commercial_checks__local_con
         report_dir,
         *,
         require_non_empty_content_feed=False,
-        research_anonymous_convergence=False,
         release_post_expectations=None,
         release_readiness_path=None,
         only_checks=(),
@@ -299,7 +289,6 @@ def test_content_consumer_nonempty_feed_probe_skips_commercial_checks__local_con
     ):
         captured["only_checks"] = only_checks
         captured["require_non_empty_content_feed"] = require_non_empty_content_feed
-        captured["research_anonymous_convergence"] = research_anonymous_convergence
         return (
             {"name": probe_name, "ok": True, "scope": "content-consumer"},
             "ok",
@@ -318,7 +307,6 @@ def test_content_consumer_nonempty_feed_probe_skips_commercial_checks__local_con
     assert findings == []
     assert statuses
     assert captured["require_non_empty_content_feed"] is True
-    assert captured["research_anonymous_convergence"] is False
     assert captured["only_checks"] == (
         "content_feed",
         "video_book_feed",

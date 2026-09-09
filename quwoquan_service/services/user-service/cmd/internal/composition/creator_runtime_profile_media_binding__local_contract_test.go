@@ -1,10 +1,7 @@
 // spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-016
 //
-// creator 头像的媒体交付绑定读面派生（DEC-033）：composition 层是
-// avatarAccessMode 的唯一派生点，只依据 release-import 按 release authority
-// 断言写入的存储事实 avatarPublicSliceKey——commercial 交付必有派生 public
-// slice（→ public），research 交付必为空（→ signed_grant）；无资产标识时
-// 两字段一并缺席，禁止从 URL 形态反推交付形态（DEC-031）。
+// creator release 头像只使用 public slice；存在资产身份但缺少公开绑定时拒绝，
+// 不把旧私有交付或缺席值解释为 public。
 package composition
 
 import (
@@ -47,23 +44,25 @@ func findCreatorView(
 	return view.AvatarAssetID, view.AvatarAccessMode
 }
 
-func TestCreatorViewDerivesSignedGrantForResearchAvatarBinding(t *testing.T) {
-	assetID, accessMode := findCreatorView(t, &creatormodel.CreatorRuntimeProfile{
-		CreatorID: "creator-a", PersonaID: "author-a",
-		// research 导入：avatarUrl 落相对 CAS key，publicSliceKey 为空。
-		AvatarURL:     "media/objects/sha256/aa/aa/" + repeatHex64() + ".jpg",
-		AvatarAssetID: "avatar-a",
+func TestCreatorViewRejectsRetiredPrivateAvatarBinding(t *testing.T) {
+	adapter := NewCreatorRuntimeProfileAdapter(&stubCreatorRuntimeProfileReader{
+		profile: &creatormodel.CreatorRuntimeProfile{
+			CreatorID: "creator-a", PersonaID: "author-a",
+			AvatarURL:     "media/objects/sha256/aa/aa/" + repeatHex64() + ".jpg",
+			AvatarAssetID: "avatar-a",
+		},
 	})
-	if assetID != "avatar-a" || accessMode != mediaDeliveryAccessModeSignedGrant {
-		t.Fatalf(
-			"research avatar binding must expose assetId with signed_grant, got assetId=%q accessMode=%q",
-			assetID,
-			accessMode,
-		)
+	view, found, err := adapter.FindByExactContentFence(
+		context.Background(),
+		userports.ContentReleaseFence{Environment: "alpha", SourceOwner: "qwq_data", ReleaseID: "release-a", ManifestDigest: "sha256:" + repeatHex64()},
+		"author-a",
+	)
+	if err == nil || found || view != nil {
+		t.Fatalf("missing public binding must fail closed: view=%v found=%v err=%v", view, found, err)
 	}
 }
 
-func TestCreatorViewDerivesPublicForCommercialAvatarBinding(t *testing.T) {
+func TestCreatorViewDerivesPublicForProductionAvatarBinding(t *testing.T) {
 	assetID, accessMode := findCreatorView(t, &creatormodel.CreatorRuntimeProfile{
 		CreatorID: "creator-a", PersonaID: "author-a",
 		AvatarURL:            "https://avatar.example.com/media/avatar/s/asset/avatar-a/v1/source.jpg",
@@ -72,7 +71,7 @@ func TestCreatorViewDerivesPublicForCommercialAvatarBinding(t *testing.T) {
 	})
 	if assetID != "avatar-a" || accessMode != mediaDeliveryAccessModePublic {
 		t.Fatalf(
-			"commercial avatar binding must expose assetId with public, got assetId=%q accessMode=%q",
+			"production avatar binding must expose assetId with public, got assetId=%q accessMode=%q",
 			assetID,
 			accessMode,
 		)

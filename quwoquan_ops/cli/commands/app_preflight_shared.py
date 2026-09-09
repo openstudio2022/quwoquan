@@ -48,7 +48,7 @@ _DATA_READINESS_SCHEMA = "quwoquan_data.environment_release_readiness"
 _DATA_ACTIVATION_SCHEMA = "quwoquan_data.environment_activation_envelope"
 _DATA_LIFECYCLE_EXIT_SCHEMA = "quwoquan_data.environment_release_lifecycle_exit"
 _DATA_READINESS_DIGEST_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
-# App 视频书唯一消费 premium_stream 池：consumer 与 commercial readiness 都
+# App 视频书唯一消费 premium_stream 池：consumer 与 production readiness 都
 # 必须证明 premium_stream release-bound 非空读回（对齐 environment-topology-
 # and-packaging spec；typed_video 绿不代表视频书绿）。
 _DATA_CONSUMER_READINESS_QUERY_NAMES = frozenset(
@@ -150,48 +150,11 @@ def _validate_data_activation_envelope(
         "importReportRef": import_ref,
         "importReportDigest": import_digest,
     }
-    if "sourceIdentities" in receipt or "sourceIdentitySetDigest" in receipt:
-        expected["sourceIdentities"] = receipt.get("sourceIdentities")
-        expected["sourceIdentitySetDigest"] = receipt.get(
-            "sourceIdentitySetDigest"
-        )
-    else:
-        expected["sourceRevision"] = receipt.get("sourceRevision")
-        expected["sourceDigest"] = receipt.get("sourceDigest")
-        expected["entityCatalogDigest"] = receipt.get("entityCatalogDigest")
+    expected["sourceIdentities"] = receipt.get("sourceIdentities")
+    expected["sourceIdentitySetDigest"] = receipt.get("sourceIdentitySetDigest")
     for field in ("milestone", "previousEnvironmentActivation"):
         if field in receipt:
             expected[field] = receipt.get(field)
-    if receipt.get("readinessPhase") == ReadinessPhase.RESEARCH.value:
-        isolation_ref = str(
-            receipt.get("researchIsolationVerificationRef") or ""
-        ).strip()
-        isolation_digest = str(
-            receipt.get("researchIsolationVerificationDigest") or ""
-        ).strip()
-        isolation_path = (evidence_root / isolation_ref).resolve()
-        isolation: dict[str, Any] = {}
-        try:
-            isolation_path.relative_to(evidence_root)
-            isolation_bytes = isolation_path.read_bytes()
-            raw_isolation = json.loads(isolation_bytes)
-            if not isinstance(raw_isolation, dict):
-                raise ValueError("isolation receipt is not an object")
-            isolation = raw_isolation
-            if (
-                "sha256:" + hashlib.sha256(isolation_bytes).hexdigest()
-                != isolation_digest
-            ):
-                raise ValueError("isolation receipt digest drift")
-        except (OSError, ValueError, json.JSONDecodeError) as exc:
-            issues.append(f"Data activation research isolation is invalid: {exc}")
-        expected["researchIsolationPolicy"] = {
-            "policyRef": isolation.get("policyRef"),
-            "policyDigest": isolation.get("policySha256"),
-            "verificationRef": isolation_ref,
-            "verificationDigest": isolation_digest,
-            "subjectHash": isolation.get("subjectHash"),
-        }
     activation = receipt.get("activationEnvelope")
     if activation != expected:
         issues.append(

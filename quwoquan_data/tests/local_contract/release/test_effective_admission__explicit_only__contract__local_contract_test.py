@@ -37,7 +37,7 @@ def _attribution() -> dict[str, object]:
         "attributionText": "历史作者 / Wikimedia Commons",
         "rightsBasis": "CC BY-SA 4.0",
         "commercialAuthorizationStatus": "verified",
-        "publicationAdmission": "commercial_release",
+        "publicationAdmission": "production_release",
         "watermarkStatus": "absent",
         "audioRightsStatus": "no_audio",
         "modelReleaseStatus": "not_required",
@@ -105,7 +105,7 @@ def _write_post(
         "rightsResult": "passed",
         "rightsAuthorityRef": "posts/article/history/1/content_review.json",
         "rightsAuthorityDigest": content_review_sha,
-        "usageScope": "research",
+        "usageScope": "production",
         "evidenceRef": "content_review.json",
         "evidenceDigest": content_review_sha,
         "payloadDigest": payload_digest,
@@ -156,7 +156,7 @@ def test_explicit_record_is_the_only_admission_truth(tmp_path: Path) -> None:
     assert effective.source == "explicit"
     assert effective.record is not None
     assert is_pool_record_admitted(effective.record)
-    assert effective.record["usageScope"] == "research"
+    assert effective.record["usageScope"] == "production"
 
 
 def test_missing_record_yields_no_inferred_admission(tmp_path: Path) -> None:
@@ -177,11 +177,11 @@ def test_missing_record_yields_no_inferred_admission(tmp_path: Path) -> None:
 
 def test_attribution_gate_requires_complete_attribution() -> None:
     complete = EffectiveAdmission(
-        record={"usageScope": "research", "sourceAttribution": _attribution()},
+        record={"usageScope": "production", "sourceAttribution": _attribution()},
         source="explicit",
     )
     incomplete = EffectiveAdmission(
-        record={"usageScope": "research", "sourceAttribution": {}},
+        record={"usageScope": "production", "sourceAttribution": {}},
         source="explicit",
     )
 

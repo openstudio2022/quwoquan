@@ -57,7 +57,7 @@ def _readiness_payload() -> dict[str, Any]:
         "releaseId": "alpha-slice-003",
         "verifyRunId": "verify-20260830T1600Z",
         "manifestDigest": _DIGEST,
-        "readinessPhase": "research",
+        "readinessPhase": "production",
         "passed": True,
     }
 
@@ -67,7 +67,7 @@ def _binding(readiness_path: Path) -> dict[str, Any]:
         "releaseId": "alpha-slice-003",
         "verifyRunId": "verify-20260830T1600Z",
         "manifestDigest": _DIGEST,
-        "readinessPhase": "research",
+        "readinessPhase": "production",
         "readinessReceiptRef": str(readiness_path.absolute()),
         "readinessReceiptDigest": "sha256:"
         + hashlib.sha256(readiness_path.read_bytes()).hexdigest(),
@@ -430,6 +430,53 @@ class ManagedRuntimeReadyTest(unittest.TestCase):
                 for detail in raised.exception.details
             )
         )
+
+
+class ManagedProductionReadbackTest(unittest.TestCase):
+    """spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-033"""
+
+    def test_active_identity_is_read_anonymously_from_public_feed(self) -> None:
+        with (
+            mock.patch.object(stackctl, "load_environment_topology", return_value={}),
+            mock.patch.object(stackctl, "get_target", return_value={"publicBases": {"api": "https://api.alpha.quwoquan.com"}}),
+            mock.patch.object(stackctl, "request_local_environment_public_json", return_value={
+                "releaseId": "production-a", "manifestDigest": _DIGEST,
+                "outcome": "content", "items": [{"postId": "post-a"}],
+            }) as request,
+        ):
+            result = stackctl._managed_active_release_readback(
+                environment="alpha", startup_attempt_id="attempt-a"
+            )
+        self.assertEqual(result, {"releaseId": "production-a", "manifestDigest": _DIGEST})
+        self.assertEqual(request.call_args.kwargs, {"path": "/content/feed?identity=work&type=video&limit=1", "method": "GET"})
+
+    def test_empty_or_missing_public_identity_is_a_typed_blocker(self) -> None:
+        with (
+            mock.patch.object(stackctl, "load_environment_topology", return_value={}),
+            mock.patch.object(stackctl, "get_target", return_value={"publicBases": {"api": "https://api.alpha.quwoquan.com"}}),
+            mock.patch.object(stackctl, "request_local_environment_public_json", return_value={
+                "releaseId": "production-a", "manifestDigest": _DIGEST,
+                "outcome": "empty", "items": [], "emptyReason": "no_active_release",
+            }),
+        ):
+            with self.assertRaises(stackctl.ManagedPreparationBlocked) as raised:
+                stackctl._managed_content_binding(
+                    environment="alpha", target="alpha-local", startup_attempt_id="attempt-a"
+                )
+        self.assertIn("public feed identity is unavailable", " ".join(raised.exception.details))
+
+    def test_multiple_readiness_candidates_never_select_latest(self) -> None:
+        with (
+            mock.patch.object(stackctl, "_managed_active_release_readback", return_value={"releaseId": "production-a", "manifestDigest": _DIGEST}),
+            mock.patch.object(stackctl, "_managed_production_readiness_candidates", return_value=[{"verifyRunId": "verify-a"}, {"verifyRunId": "verify-z"}]),
+            mock.patch.object(stackctl, "create_test_live_content_binding") as create,
+        ):
+            with self.assertRaises(stackctl.ManagedPreparationBlocked) as raised:
+                stackctl._managed_content_binding(
+                    environment="alpha", target="alpha-local", startup_attempt_id="attempt-a"
+                )
+        self.assertIn("found 2 candidates", " ".join(raised.exception.details))
+        create.assert_not_called()
 
 
 if __name__ == "__main__":

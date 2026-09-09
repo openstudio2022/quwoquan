@@ -1,4 +1,4 @@
-"""Minimal Research content delivery verification from immutable receipts."""
+"""Minimal production content delivery verification from immutable receipts."""
 
 from __future__ import annotations
 
@@ -69,7 +69,7 @@ def verify_content_delivery(
 
     Quality and authorization are upstream pool facts. Provider, chat, share,
     device UAT and commercial rollout evidence are deliberately outside this
-    Research delivery check.
+    production delivery check.
     """
 
     issues: list[str] = []
@@ -89,11 +89,13 @@ def verify_content_delivery(
             or readiness.get("passed") is not True
             or readiness.get("environment") != environment
             or readiness.get("releaseId") != release_id
+            or readiness.get("releaseClass") != "production"
+            or readiness.get("productLifecycleState") != "production"
             or readiness.get("manifestDigest") != manifest_digest
         ):
             raise ValueError("release readiness identity or result is invalid")
         readiness_phase = str(readiness.get("readinessPhase") or "").strip()
-        if readiness_phase not in {"consumer", "research", "commercial", "production"}:
+        if readiness_phase not in {"consumer", "production"}:
             raise ValueError("release readiness phase is invalid")
         consumer_readiness = readiness_phase == "consumer"
 
@@ -115,11 +117,10 @@ def verify_content_delivery(
             ),
             label="content import",
         )
-        # content_import_report schema 的 status 闭集是 {dry-run, imported}；
-        # 「active」只属于 creator import report。release 是否 active 由
+        # Content 导入只能 staged；release 是否 active 由随后 CAS 的
         # active-release 指针与 readiness 身份共同证明，不由 import 回执表达。
         if (
-            import_report.get("status") != "imported"
+            import_report.get("status") != "staged"
             or import_report.get("environment") != environment
             or import_report.get("releaseId") != release_id
             or import_report.get("manifestDigest") != manifest_digest

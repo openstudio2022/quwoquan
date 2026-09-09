@@ -47,7 +47,7 @@ def test_travel_unverified_asset_is_rejected_without_downgrade(
     manifest_path = execution / "posts" / POST_REF / "manifest.json"
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     asset = manifest["assets"][0]
-    asset["distributionDecision"] = "commercial_allowed"
+    asset["distributionDecision"] = "production_allowed"
     asset["creator"] = ""
     asset["license"] = ""
     asset["termsUrl"] = ""
@@ -61,7 +61,7 @@ def test_travel_unverified_asset_is_rejected_without_downgrade(
     source_index_path = execution / "sources/commons/assets/index.json"
     source_index = json.loads(source_index_path.read_text(encoding="utf-8"))
     source_asset = source_index["assets"][0]
-    source_asset["distributionDecision"] = "commercial_allowed"
+    source_asset["distributionDecision"] = "production_allowed"
     source_asset["authorizationProof"] = ""
     source_asset["termsUrl"] = ""
     source_asset["creator"] = ""
@@ -90,14 +90,14 @@ def test_unverified_asset_publishes_with_rights_recorded_not_enforced(
     asset = manifest["assets"][0]
     asset["rightsAuditStatus"] = "unverified"
     asset["rightsAuditIssues"] = list(issues)
-    asset["distributionDecision"] = "research_allowed"
+    asset["distributionDecision"] = "production_allowed"
     _write_json(manifest_path, manifest)
     source_index_path = execution / "sources/commons/assets/index.json"
     source_index = json.loads(source_index_path.read_text(encoding="utf-8"))
     source_asset = source_index["assets"][0]
     source_asset["rightsAuditStatus"] = "unverified"
     source_asset["rightsAuditIssues"] = list(issues)
-    source_asset["distributionDecision"] = "research_allowed"
+    source_asset["distributionDecision"] = "production_allowed"
     _write_json(source_index_path, source_index)
 
     build_post_object_transaction_package(
@@ -111,8 +111,30 @@ def test_unverified_asset_publishes_with_rights_recorded_not_enforced(
     recorded = rights["assets"][0]
     assert recorded["rightsAuditStatus"] == "unverified"
     assert recorded["rightsAuditIssues"] == issues
-    assert recorded["distributionDecision"] == "research_allowed"
+    assert recorded["distributionDecision"] == "production_allowed"
     assert_valid(rights, "release", "asset_rights_closure")
+
+
+def test_verified_license_without_separate_proof_remains_record_only(tmp_path: Path) -> None:
+    execution, package, _publish, transaction_id = _fixture(tmp_path)
+    rights = {"authorizationProof": "", "modelReleaseStatus": "unverified",
+        "propertyReleaseStatus": "unverified", "commercialAuthorizationStatus": "unverified",
+        "audioRightsStatus": "unverified", "derivedModifications": ["resize"], "watermarkNote": "右下签名"}
+    for relative in (f"posts/{POST_REF}/manifest.json", "sources/commons/assets/index.json"):
+        path = execution / relative
+        document = json.loads(path.read_bytes())
+        document["assets"][0].update(rights)
+        _write_json(path, document)
+    review_path = execution / "posts" / POST_REF / "5.review/content_review.json"
+    review = json.loads(review_path.read_bytes())
+    review["assetRights"][0]["authorizationProof"] = None
+    _write_json(review_path, review)
+    build_post_object_transaction_package(execution_root=execution, object_ref=POST_REF, transaction_id=transaction_id, package_root=package)
+    document = json.loads((package / "object/rights.json").read_bytes())
+    assert_valid(document, "release", "asset_rights_closure")
+    assert document["assets"][0]["rightsAuditStatus"] == "verified"
+    for key, value in rights.items():
+        assert document["assets"][0][key] == value
 
 
 def test_rights_source_fields_prefer_source_page_over_license_page(
@@ -170,7 +192,7 @@ def test_unverified_collection_page_is_rejected_without_downgrade(
     manifest["sourceUrls"] = ["https://content.example.test/article/landscape"]
     asset = manifest["assets"][0]
     asset.pop("sourceAssetId", None)
-    asset["distributionDecision"] = "commercial_allowed"
+    asset["distributionDecision"] = "production_allowed"
     asset["collectionPageUrl"] = "https://travel.example.test/article/landscape"
     asset["creator"] = ""
     asset["license"] = ""
@@ -193,7 +215,7 @@ def test_unverified_collection_page_is_rejected_without_downgrade(
             "authorizationProof": "",
             "termsUrl": "",
             "creator": "",
-            "distributionDecision": "commercial_allowed",
+            "distributionDecision": "production_allowed",
             "license": "",
             "rightsAuditStatus": "unverified",
             "rightsAuditIssues": ["imageRights: source terms not yet verified"],
@@ -218,7 +240,7 @@ def test_canonical_source_catalog_preserves_factual_reference_only_truth(
         execution / "sources/commons/meta.json",
         {
             "sourceUseMode": "factual_reference_only",
-            "researchLane": "image",
+            "carrier": "image",
         },
     )
 
@@ -242,7 +264,7 @@ def test_canonical_source_catalog_preserves_factual_reference_only_truth(
         (package / "object/rights.json").read_text(encoding="utf-8")
     )
     assert rights["assets"][0]["sourceUseMode"] == "factual_reference_only"
-    assert rights["assets"][0]["distributionDecision"] == "research_allowed"
+    assert rights["assets"][0]["distributionDecision"] == "production_allowed"
     assert_valid(rights, "release", "asset_rights_closure")
     assert validate_result(rights, "release", "asset_rights_closure") == []
 
@@ -256,7 +278,7 @@ def test_internal_reference_asset_is_rejected_without_scope_upgrade(
         {
             "sourceUseMode": "rights_audit_only",
             "rightsMode": "rights_audit_only",
-            "researchLane": "video",
+            "carrier": "video",
         },
     )
     index_path = execution / "sources/commons/assets/index.json"
@@ -268,12 +290,10 @@ def test_internal_reference_asset_is_rejected_without_scope_upgrade(
     manifest["assets"][0]["usageScope"] = "internal_reference"
     _write_json(manifest_path, manifest)
 
-    with pytest.raises(ObjectTransactionError, match="sourceUseMode|internal_reference"):
+    with pytest.raises(ObjectTransactionError, match="internal_reference"):
         build_post_object_transaction_package(
-            execution_root=execution,
-            object_ref=POST_REF,
-            transaction_id=transaction_id,
-            package_root=package,
+            execution_root=execution, object_ref=POST_REF,
+            transaction_id=transaction_id, package_root=package,
         )
 
 
@@ -286,7 +306,7 @@ def test_research_asset_without_authorization_proof_is_rejected(
         {
             "sourceUseMode": "rights_audit_only",
             "rightsMode": "rights_audit_only",
-            "researchLane": "video",
+            "carrier": "video",
         },
     )
     index_path = execution / "sources/commons/assets/index.json"
@@ -315,7 +335,7 @@ def test_canonical_transaction_rejects_source_use_mode_upgrade(
         execution / "sources/commons/meta.json",
         {
             "sourceUseMode": "factual_reference_only",
-            "researchLane": "image",
+            "carrier": "image",
         },
     )
     manifest_path = execution / "posts" / POST_REF / "manifest.json"
@@ -344,7 +364,7 @@ def test_canonical_transaction_rejects_rights_policy_as_source_use_mode(
         {
             "sourceUseMode": "attribution_no_watermark",
             "rightsMode": "attribution_no_watermark",
-            "researchLane": "video",
+            "carrier": "video",
         },
     )
 

@@ -9,16 +9,10 @@ import (
 
 var canonicalReleaseDigestPattern = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
 
-// IsKnownReleaseClass 是 feed/detail 读面接受的 release 级类别闭集：production 是
-// Data producer 的单一现役类别（DEC-041），research/commercial 是历史 release 的
-// 封存取值。未声明或未知类别一律视为 malformed，读面 fail closed。
+// IsKnownReleaseClass 只接受 Data producer 的单一现役类别 production。
+// 历史封存类别不得进入 active pointer 或在线读面。
 func IsKnownReleaseClass(releaseClass string) bool {
-	switch releaseClass {
-	case "research", "commercial", "production":
-		return true
-	default:
-		return false
-	}
+	return releaseClass == "production"
 }
 
 // ActiveSupplySnapshot identifies the canonical data release whose materialized
@@ -30,9 +24,8 @@ type ActiveSupplySnapshot struct {
 	Status          string
 	ActiveReleaseID string
 	ManifestDigest  string
-	// ReleaseClass 是激活 release 的 release 级类别（research|commercial|production），
-	// 由 importer 从 release.json 落到 data_release_state。research readback
-	// 用它判定 release 类别；per-post usageScope 只表达对象的最大许可范围。
+	// ReleaseClass 由 importer 从 release.json 落到 data_release_state；
+	// 活跃类别只允许 production，历史类别不能作为在线供给。
 	ReleaseClass      string
 	ProjectionVersion int64
 	Revision          int64
@@ -72,14 +65,6 @@ func (snapshot ActiveSupplySnapshot) IsEmpty() bool {
 		strings.TrimSpace(snapshot.ReadbackStatus) == "" &&
 		snapshot.Posts == 0 &&
 		snapshot.PlayableVideos == 0
-}
-
-// IsResearchRelease 只从 importer 落入 active release state 的 releaseClass
-// 判定研究态；feed application/query owner 不从 route、对象 usageScope 或媒体
-// 形态反推 release 类别。
-func (snapshot ActiveSupplySnapshot) IsResearchRelease() bool {
-	return snapshot.ReleaseBoundReadbackReady() &&
-		strings.TrimSpace(snapshot.ReleaseClass) == "research"
 }
 
 func (snapshot ActiveSupplySnapshot) ContentReady() bool {

@@ -30,10 +30,8 @@ POLICY_SCHEMA = "content-release-readiness"
 
 class ReadinessPhase(StrEnum):
     IMPORT = "import"
-    RESEARCH = "research"
     CONSUMER = "consumer"
-    COMMERCIAL = "commercial"
-    # Data producer 单一 production 类别（DEC-041）的消费相位：guest 证据，无隔离探针。
+    # Data release 只有 production 类别；import/consumer 仍是验证步骤。
     PRODUCTION = "production"
 
 
@@ -54,7 +52,7 @@ class VerificationProfile(StrEnum):
         if self is VerificationProfile.INTEGRATION:
             return ReadinessPhase.IMPORT
         if self is VerificationProfile.RELEASE:
-            return ReadinessPhase.COMMERCIAL
+            return ReadinessPhase.PRODUCTION
         return None
 
 
@@ -67,8 +65,6 @@ class ReadinessCapability(StrEnum):
     TRACE_QUERY = "trace_query"
     SLO_QUERY = "slo_query"
     LEGAL_APPROVAL = "legal_approval"
-    RESEARCH_ACCESS_ISOLATION = "research_access_isolation"
-
 
 class ProbeOutcome(StrEnum):
     PASS = "PASS"
@@ -80,10 +76,8 @@ class ProbeSource(StrEnum):
     """Where a capability's mandatory probe evidence comes from."""
 
     HEALTH_SCOPE = "healthScope"
-    COMMERCIAL_DOCTOR = "doctor"
+    PRODUCTION_DOCTOR = "doctor"
     LOG_SINK_CONTROL = "logSinkControl"
-    RESEARCH_ISOLATION = "researchIsolation"
-
 
 @dataclass(frozen=True, slots=True)
 class CapabilityProbeBinding:
@@ -173,7 +167,8 @@ def _parse_probe_bindings(
         health_scope = binding.get("healthScope")
         doctor = binding.get("doctor")
         control_action = binding.get("logSinkControl")
-        research_isolation = binding.get("researchIsolation")
+        if set(binding) - {"healthScope", "doctor", "logSinkControl"}:
+            raise ValueError(f"capabilityProbes.{capability.value} has retired or unknown fields")
         if isinstance(health_scope, str) and health_scope.strip() and doctor is None:
             bindings[capability] = CapabilityProbeBinding(
                 capability=capability,
@@ -184,7 +179,7 @@ def _parse_probe_bindings(
         elif doctor is True and health_scope is None:
             bindings[capability] = CapabilityProbeBinding(
                 capability=capability,
-                source=ProbeSource.COMMERCIAL_DOCTOR,
+                source=ProbeSource.PRODUCTION_DOCTOR,
                 health_scope=None,
                 control_action=None,
             )
@@ -200,20 +195,10 @@ def _parse_probe_bindings(
                 health_scope=None,
                 control_action=control_action,
             )
-        elif research_isolation is True and all(
-            value is None for value in (health_scope, doctor, control_action)
-        ):
-            bindings[capability] = CapabilityProbeBinding(
-                capability=capability,
-                source=ProbeSource.RESEARCH_ISOLATION,
-                health_scope=None,
-                control_action=None,
-            )
         else:
             raise ValueError(
                 f"capabilityProbes.{capability.value} must declare exactly one of "
-                "healthScope: <scope>, doctor: true, logSinkControl: <action> "
-                "or researchIsolation: true"
+                "healthScope: <scope>, doctor: true or logSinkControl: <action>"
             )
     missing = [capability.value for capability in ReadinessCapability if capability not in bindings]
     if missing:
@@ -231,6 +216,8 @@ def load_content_release_readiness_policy(
     policy_id = _text(payload.get("policyId"), label="content readiness policy policyId")
     probe_bindings = _parse_probe_bindings(payload)
     raw_phases = _mapping(payload.get("phases"), label="content readiness policy phases")
+    if set(raw_phases) != {phase.value for phase in ReadinessPhase}:
+        raise ValueError("content readiness phases must be import, consumer and production")
     topology = load_environment_topology()
     requirements: list[ReadinessRequirement] = []
     seen: set[tuple[ReadinessPhase, str]] = set()
@@ -259,20 +246,12 @@ def load_content_release_readiness_policy(
                 binding = probe_bindings[capability]
                 if (
                     binding.source
-                    in {ProbeSource.COMMERCIAL_DOCTOR, ProbeSource.LOG_SINK_CONTROL}
-                    and phase is not ReadinessPhase.COMMERCIAL
+                    in {ProbeSource.PRODUCTION_DOCTOR, ProbeSource.LOG_SINK_CONTROL}
+                    and phase is not ReadinessPhase.PRODUCTION
                 ):
                     raise ValueError(
                         f"{phase.value}/{environment} requires {capability.value}, "
-                        "but commercial control capabilities are commercial-only"
-                    )
-                if (
-                    binding.source is ProbeSource.RESEARCH_ISOLATION
-                    and phase is not ReadinessPhase.RESEARCH
-                ):
-                    raise ValueError(
-                        f"{phase.value}/{environment} requires {capability.value}, "
-                        "but research isolation is research-only"
+                        "but production control capabilities are production-only"
                     )
             key = (phase, environment)
             if key in seen:

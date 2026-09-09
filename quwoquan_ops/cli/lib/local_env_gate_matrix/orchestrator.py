@@ -40,7 +40,7 @@ from quwoquan_ops.cli.lib.local_env_gate_matrix.identity import (
     _startup_attempt_matches_package_identity,
 )
 from quwoquan_ops.cli.lib.local_env_gate_matrix.input_validation import (
-    ResearchLifecycleUnsupported, _resolve_matrix_inputs,
+    _resolve_matrix_inputs,
 )
 from quwoquan_ops.cli.lib.local_env_gate_matrix.preflight import _device_uat_bindings, _docker_daemon_ready
 from quwoquan_ops.cli.lib.local_env_gate_matrix.reporting import _write_matrix_result
@@ -113,17 +113,6 @@ def _run_local_env_gate_matrix(
             device_profile=device_profile,
             execution_class=execution_class,
         )
-    except ResearchLifecycleUnsupported as exc:
-        return {
-            "exitCode": 2,
-            "summary": "stackctl matrix release lifecycle is GATE_BLOCK",
-            "details": [str(exc)],
-            "failureCategory": "research_lifecycle_unsupported",
-            "claim": "GATE_BLOCK",
-            "status": "gate_block",
-            "executed": 0,
-            "skipped": 0,
-        }
     except ValueError as exc:
         return {
             "exitCode": 2,
@@ -672,7 +661,7 @@ def _run_local_env_gate_matrix(
                     "--run-id",
                     data_ids["replayVerify"],
                     "--readiness-phase",
-                    "commercial",
+                    "production",
                 ],
                 report_path=replay_readiness,
                 data_fn=data_fn,

@@ -10,8 +10,8 @@ acquisition:
   bypassPaywall: false
   bypassCaptcha: false
   bypassAccessControl: false
-researchDiscovery:
-  catalogRevision: research-media-discovery-v1
+sourceDiscovery:
+  catalogRevision: source-media-discovery-v1
   imageProviderPriority:
     - pinterest
     - tuchong
@@ -46,8 +46,8 @@ productionDistribution:
 # 采集与投影只搬运，不得逐资产另写一份。
 assetRecordDefaults:
   commercialAuthorizationStatus: unverified
-  modelReleaseStatus: not_required
-  propertyReleaseStatus: not_required
+  modelReleaseStatus: unverified
+  propertyReleaseStatus: unverified
   takedownPolicy: remove_on_rights_holder_request
 articleMedia:
   illustratedRateTarget: 0.9

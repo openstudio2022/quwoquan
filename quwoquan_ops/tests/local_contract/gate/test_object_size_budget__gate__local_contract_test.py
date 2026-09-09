@@ -86,7 +86,7 @@ def _asset_row(digest: str, *, asset_id: str = "", suffix: str = ".jpg") -> dict
         "assetId": asset_id or f"asset_{digest[:8]}",
         "sha256": f"sha256:{digest}",
         "objectKey": _object_key(digest, suffix),
-        "kind": "image",
+        "kind": "video" if suffix == ".mp4" else "image",
     }
 
 
@@ -109,7 +109,7 @@ def _publish_object(
     documents: dict[str, str] | None = None,
     document_sizes: dict[str, int] | None = None,
     assets: list | None = None,
-    refs_filename: str = "asset.refs.json",
+    refs_filename: str = "manifest.json",
 ) -> Path:
     object_root = sandbox / "publish" / ref
     object_root.mkdir(parents=True, exist_ok=True)
@@ -122,10 +122,13 @@ def _publish_object(
         path.parent.mkdir(parents=True, exist_ok=True)
         with path.open("wb") as handle:
             handle.truncate(size)
-    if assets is not None:
-        (object_root / refs_filename).write_text(
-            json.dumps({"assets": assets}, ensure_ascii=False), encoding="utf-8"
-        )
+    document = {
+        "schema": "quwoquan_data.entity_object" if ref.startswith("entities/") else "quwoquan_data.post_object",
+        "assets": [] if assets is None else assets,
+    }
+    (object_root / refs_filename).write_text(
+        json.dumps(document, ensure_ascii=False), encoding="utf-8"
+    )
     return object_root
 
 
@@ -262,31 +265,53 @@ class ObjectSizeBudgetGateLocalContractTest(unittest.TestCase):
             self.assertEqual(len(issues), 1)
             self.assertIn("asset refs row is not an object", issues[0])
 
-    def test_asset_refs_document_must_be_an_object(self) -> None:
-        with self._sandbox() as (module, sandbox):
-            object_root = _publish_object(sandbox, "posts/image/画报/顶层数组/1")
-            (object_root / "asset.refs.json").write_text("[]", encoding="utf-8")
-            with self.assertRaises(TypeError):
-                self._closure(module, sandbox, "posts/image/画报/顶层数组/1")
+    def test_invalid_manifest_is_an_unresolved_closure(self) -> None:
+        for raw in ("[]", "{", "{}", '{"assets": null}', '{"assets": {}}'):
+            with self.subTest(raw=raw), self._sandbox() as (module, sandbox):
+                object_root = _publish_object(sandbox, "posts/image/画报/坏清单/1")
+                (object_root / "manifest.json").write_text(raw, encoding="utf-8")
+                closure, issues = self._closure(module, sandbox, "posts/image/画报/坏清单/1")
+                self.assertEqual(closure.media_bytes, 0)
+                self.assertEqual(len(issues), 1)
+                code, output = _run_main(module)
+                self.assertEqual(code, 1)
+                self.assertIn("closure_unresolved", output)
 
-    def test_object_owns_exactly_one_asset_refs_document(self) -> None:
-        """两份 refs 文档意味着两个真相源；先选一个再谈体积，而不是各算一半。"""
+    def test_homepage_and_post_assets_have_only_manifest_authority(self) -> None:
+        for ref, kind in (("posts/image/画报/唯一清单/1", "posts"), ("entities/地点/景区/峨眉山", "entities")):
+            with self.subTest(kind=kind), self._sandbox() as (module, sandbox):
+                digest = _digest("manifest-body")
+                _admit_media(sandbox, digest, size=10)
+                object_root = _publish_object(sandbox, ref, assets=[_asset_row(digest)])
+                for retired in ("asset.refs.json", "assets.refs.json"):
+                    (object_root / retired).write_text("not JSON", encoding="utf-8")
+                closure, issues = self._closure(module, sandbox, ref, kind=kind)
+                self.assertEqual(issues, [])
+                self.assertEqual(closure.media_bytes, 10)
 
+    def test_sidecar_without_manifest_never_passes_as_zero_media(self) -> None:
+        for ref, kind in (("posts/image/画报/旧资产/1", "posts"), ("entities/地点/景区/峨眉山", "entities")):
+            with self.subTest(kind=kind), self._sandbox() as (module, sandbox):
+                _publish_object(sandbox, ref, assets=[], refs_filename="asset.refs.json")
+                closure, issues = self._closure(module, sandbox, ref, kind=kind)
+                self.assertEqual(closure.media_bytes, 0)
+                self.assertEqual(len(issues), 1)
+                self.assertIn("manifest.json", issues[0])
+                self.assertEqual(_run_main(module)[0], 1)
+
+    def test_creator_keeps_independent_avatar_asset_contract(self) -> None:
         with self._sandbox() as (module, sandbox):
-            self.assertEqual(
-                module._ASSET_REFS_FILENAMES, ("asset.refs.json", "assets.refs.json")
+            digest = _digest("creator-avatar")
+            _admit_media(sandbox, digest, size=100)
+            ref = "creators/作者/1"
+            root = _publish_object(
+                sandbox, ref, documents={"_creator.json": "{}", "manifest.json": "not JSON"},
+                assets=[_asset_row(digest)], refs_filename="assets.refs.json",
             )
-            digest = _digest("body")
-            _admit_media(sandbox, digest, size=10)
-            _publish_object(sandbox, "posts/image/画报/双份/1", assets=[_asset_row(digest)])
-            _publish_object(
-                sandbox,
-                "posts/image/画报/双份/1",
-                assets=[_asset_row(digest)],
-                refs_filename="assets.refs.json",
-            )
-            with self.assertRaises(ValueError):
-                self._closure(module, sandbox, "posts/image/画报/双份/1")
+            self.assertEqual(module._asset_refs_path(root), root / "assets.refs.json")
+            closure, issues = self._closure(module, sandbox, ref, kind="creators")
+            self.assertEqual(issues, [])
+            self.assertEqual(closure.media_bytes, 100)
 
     def test_object_without_media_has_no_media_bytes(self) -> None:
         with self._sandbox() as (module, sandbox):
@@ -410,15 +435,17 @@ class ObjectSizeBudgetGateLocalContractTest(unittest.TestCase):
         """同样体积在 video 下合法、在 article 下阻断，是载体分档的唯一可观测证据。"""
 
         with self._sandbox() as (module, sandbox):
+            digest = _digest("same-sized-media")
+            _admit_media(sandbox, digest, size=12 * MEBIBYTE)
             _publish_object(
                 sandbox,
                 "posts/video/体验/大视频/1",
-                document_sizes={"source.mp4": 12 * MEBIBYTE},
+                assets=[_asset_row(digest, suffix=".mp4")],
             )
             _publish_object(
                 sandbox,
                 "posts/article/攻略/大图文/1",
-                document_sizes={"inline.bin": 12 * MEBIBYTE},
+                assets=[_asset_row(digest)],
             )
             closures, issues = module.object_closures(publish_root=sandbox / "publish")
             self.assertEqual(issues, [])
@@ -432,7 +459,7 @@ class ObjectSizeBudgetGateLocalContractTest(unittest.TestCase):
             _publish_object(
                 sandbox,
                 "posts/article/攻略/超预算/1",
-                document_sizes={"inline.bin": 11 * MEBIBYTE},
+                document_sizes={"draft.article.md": 11 * MEBIBYTE},
             )
             code, out = _run_main(module)
             self.assertEqual(code, 1)

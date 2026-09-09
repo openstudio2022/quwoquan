@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from governance.coverage.distribution import (
     AcquisitionStatus,
     DistributionDecision,
@@ -96,7 +98,7 @@ def test_scale_target_supports_every_governed_milestone() -> None:
     assert policy.scale_target("M10000", "video") == 1000
 
 
-def test_research_admission_accepts_acquired_non_restricted_rights() -> None:
+def test_production_admission_is_independent_of_recorded_rights() -> None:
     for rights_status in (
         RightsStatus.VERIFIED,
         RightsStatus.UNVERIFIED,
@@ -106,7 +108,7 @@ def test_research_admission_accepts_acquired_non_restricted_rights() -> None:
             acquisition_status=AcquisitionStatus.ACQUIRED,
             rights_status=rights_status,
             authorization_proof="",
-        ) is DistributionDecision.RESEARCH_ALLOWED
+        ) is DistributionDecision.PRODUCTION_ALLOWED
 
 
 def test_acquisition_and_distribution_rights_are_independent() -> None:
@@ -114,12 +116,12 @@ def test_acquisition_and_distribution_rights_are_independent() -> None:
         acquisition_status=AcquisitionStatus.ACQUIRED,
         rights_status=RightsStatus.VERIFIED,
         authorization_proof="https://rights.example/proof",
-    ) is DistributionDecision.COMMERCIAL_ALLOWED
+    ) is DistributionDecision.PRODUCTION_ALLOWED
     assert distribution_decision(
         acquisition_status=AcquisitionStatus.ACQUIRED,
         rights_status=RightsStatus.RESTRICTED,
         authorization_proof="",
-    ) is DistributionDecision.BLOCKED
+    ) is DistributionDecision.PRODUCTION_ALLOWED
     for acquisition_status in (AcquisitionStatus.FAILED, AcquisitionStatus.BLOCKED):
         assert distribution_decision(
             acquisition_status=acquisition_status,
@@ -134,7 +136,7 @@ def test_missing_asset_contract_fields_fail_admission_validation() -> None:
             "assetId": "asset-incomplete",
             "acquisitionStatus": "acquired",
             "rightsStatus": "unknown",
-            "distributionDecision": "research_allowed",
+            "distributionDecision": "production_allowed",
         }
     )
 
@@ -174,22 +176,28 @@ def test_image_commercial_admission_cannot_exceed_frozen_usage_or_model_release_
         **common,
         usage_scope="internal_reference",
         model_release_status="not_required",
-    ) is DistributionDecision.RESEARCH_ALLOWED
+    ) is DistributionDecision.PRODUCTION_ALLOWED
     assert image_distribution_decision(
         **common,
         usage_scope="app_publish",
         model_release_status="editorial_only",
-    ) is DistributionDecision.RESEARCH_ALLOWED
+    ) is DistributionDecision.PRODUCTION_ALLOWED
     assert image_distribution_decision(
         **common,
         usage_scope="app_publish",
         model_release_status="obtained",
-    ) is DistributionDecision.COMMERCIAL_ALLOWED
+    ) is DistributionDecision.PRODUCTION_ALLOWED
     assert distribution_decision(
         acquisition_status=AcquisitionStatus.BLOCKED,
         rights_status=RightsStatus.VERIFIED,
         authorization_proof="https://rights.example/proof",
     ) is DistributionDecision.BLOCKED
+
+
+@pytest.mark.parametrize("decision", ["research_allowed", "commercial_allowed"])
+def test_projection_rejects_retired_distribution_instead_of_rewriting(decision: str) -> None:
+    with pytest.raises(ValueError, match="distributionDecision"):
+        project_asset_admission({**_asset(rights_status="unverified"), "distributionDecision": decision}, object_ref="posts/p1")
 
 
 def test_projected_unverified_asset_keeps_exact_rights_gap() -> None:
@@ -198,5 +206,5 @@ def test_projected_unverified_asset_keeps_exact_rights_gap() -> None:
     assert projected["acquisitionStatus"] == "acquired"
     assert projected["rightsStatus"] == "unverified"
     assert projected["authorizationRequired"] is True
-    assert projected["distributionDecision"] == "research_allowed"
+    assert projected["distributionDecision"] == "production_allowed"
     assert projected["rightsIssues"] == ["commercial authorization missing"]

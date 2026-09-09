@@ -61,68 +61,6 @@ extension _WorksImmersiveViewerPresentation on _WorksImmersiveViewerState {
     return _buildInternalFeedAggregate().posts;
   }
 
-  _WorksInternalFeedAggregate _buildInternalFeedAggregate() {
-    final channelIds = _trackedFeedTabIds;
-    final feedStates = <String, AsyncValue<WorksViewerFeedSnapshot>>{
-      for (final channelId in channelIds)
-        channelId: ref.watch(worksViewerFeedProvider(channelId)),
-    };
-    final snapshots = <String, WorksViewerFeedSnapshot>{
-      for (final entry in feedStates.entries) entry.key: ?entry.value.value,
-    };
-    final posts = _buildInternalFeedPosts(snapshots);
-    if (posts.isNotEmpty) {
-      return _WorksInternalFeedAggregate(
-        terminal: _WorksInternalFeedTerminal.content,
-        posts: posts,
-      );
-    }
-
-    for (final entry in feedStates.entries) {
-      final state = entry.value;
-      final error = state.hasError ? state.error : state.value?.blockingError;
-      if (error != null) {
-        return _WorksInternalFeedAggregate(
-          terminal: _WorksInternalFeedTerminal.blockingError,
-          posts: posts,
-          blockingError: error,
-        );
-      }
-    }
-
-    if (feedStates.values.any(
-      (state) => state.isLoading || (state.value?.isLoading ?? false),
-    )) {
-      return _WorksInternalFeedAggregate(
-        terminal: _WorksInternalFeedTerminal.loading,
-        posts: posts,
-      );
-    }
-
-    final emptyReasons = <ContentFeedEmptyReason>[
-      for (final channelId in channelIds) ?snapshots[channelId]?.emptyReason,
-    ];
-    if (channelIds.isNotEmpty && emptyReasons.length == channelIds.length) {
-      final reason =
-          emptyReasons.contains(ContentFeedEmptyReason.noActiveRelease)
-          ? ContentFeedEmptyReason.noActiveRelease
-          : emptyReasons.first;
-      return _WorksInternalFeedAggregate(
-        terminal: _WorksInternalFeedTerminal.canonicalEmpty,
-        posts: posts,
-        emptyReason: reason,
-      );
-    }
-
-    return _WorksInternalFeedAggregate(
-      terminal: _WorksInternalFeedTerminal.blockingError,
-      posts: posts,
-      blockingError: StateError(
-        'Works feed completed without content or a canonical empty reason.',
-      ),
-    );
-  }
-
   List<ContentPostViewData> _buildInternalFeedPosts(
     Map<String, WorksViewerFeedSnapshot> snapshots,
   ) {
@@ -243,9 +181,93 @@ extension _WorksImmersiveViewerPresentation on _WorksImmersiveViewerState {
       postArticleDetailProjectorProvider,
     );
     // _rawArticleDataFor 每次返回新建 map，无需再做防御拷贝。
-    return projector.project(
+    final article = projector.project(
       _rawArticleDataFor(post),
       fallbackArticleId: post.id,
+    );
+    final resolvedSubjects = _workItemFor(post).entityMentions
+        .where((mention) => mention.homepageId.trim().isNotEmpty)
+        .map((mention) => mention.subjectId.trim())
+        .toSet();
+    bool isUnresolved(ArticleInlineSpan span) =>
+        span.isEntity &&
+        span.targetType?.trim() == 'entity' &&
+        !resolvedSubjects.contains(span.targetId?.trim());
+    if (!article.document.nodes.any((node) => node.spans.any(isUnresolved))) {
+      return article;
+    }
+    List<ArticleInlineSpan> displaySpans(List<ArticleInlineSpan> spans) => [
+      for (final span in spans)
+        if (isUnresolved(span))
+          ArticleInlineSpan(
+            start: span.start,
+            end: span.end,
+            bold: span.bold,
+            italic: span.italic,
+            underline: span.underline,
+            strikethrough: span.strikethrough,
+            displayText: span.displayText,
+          )
+        else
+          span,
+    ];
+    // 只移除缺映射实体的交互语义，不改作者文档、字符、range 或显式样式。
+    // 每次以当前映射派生新文档/分页；既有 hydration 会失效 _workItemCache，
+    // 分页器消费此文档，新 pages identity 同时失效阅读器的页面表面缓存。
+    final document = article.document.copyWith(
+      nodes: [
+        for (final node in article.document.nodes)
+          if (node.spans.any(isUnresolved))
+            node.copyWith(spans: displaySpans(node.spans))
+          else
+            node,
+      ],
+    );
+    ArticleDocumentBlock displayBlock(ArticleDocumentBlock block) =>
+        block.spans.any(isUnresolved)
+        ? ArticleDocumentBlock(
+            id: block.id,
+            type: block.type,
+            offset: block.offset,
+            text: block.text,
+            assetId: block.assetId,
+            accessMode: block.accessMode,
+            imageUrl: block.imageUrl,
+            imageLayout: block.imageLayout,
+            caption: block.caption,
+            imageWidth: block.imageWidth,
+            imageHeight: block.imageHeight,
+            orderedIndex: block.orderedIndex,
+            textAlign: block.textAlign,
+            listDepth: block.listDepth,
+            codeLanguage: block.codeLanguage,
+            spans: displaySpans(block.spans),
+          )
+        : block;
+    return ContentArticleRender(
+      contentHtml: article.contentHtml,
+      layoutMode: article.layoutMode,
+      images: article.images,
+      contentBlocks: article.contentBlocks,
+      document: document,
+      pages: [
+        for (final page in article.pages)
+          page.copyWith(
+            contentBlocks: page.contentBlocks.map(displayBlock).toList(),
+            fragments: [
+              for (final fragment in page.fragments)
+                if (fragment.block case final block?)
+                  fragment.copyWith(block: displayBlock(block))
+                else
+                  fragment,
+            ],
+          ),
+      ],
+      template: article.template,
+      fontPreset: article.fontPreset,
+      documentSource: article.documentSource,
+      isOfficial: article.isOfficial,
+      badge: article.badge,
     );
   }
 
@@ -758,6 +780,15 @@ extension _WorksImmersiveViewerPresentation on _WorksImmersiveViewerState {
   String _overlayBodyForPost(ContentPostViewData post) {
     if (_isArticleLikePost(post) || _isTextOnlyMomentPost(post)) {
       return '';
+    }
+    if (_isImageLikePost(post)) {
+      final item = _workItemFor(post);
+      final total = item.effectiveImageUrls.length;
+      if (total == 0) return '';
+      final index = (_photoInnerIndex[post.id] ?? _defaultImageIndexFor(post))
+          .clamp(0, total - 1);
+      // 图集只显示当前资产真实 caption，不拿作品 title/body 充当逐图说明。
+      return item.imageCaptionAt(index) ?? '';
     }
     return _bodyForPost(post);
   }

@@ -31,7 +31,7 @@ def test_tag_snapshot_closure__publish_release__contract__local_contract(
     taxonomy = tmp_path / "taxonomy"
     canonical = tmp_path / "publish"
     _write(taxonomy / TAG_REF / "_definition.json", _definition("旅行"))
-    _write(canonical / "entities/地点/景区/甲/tag.refs.json", {"tagRefs": [TAG_REF]})
+    _write(canonical / "entities/地点/景区/甲/manifest.json", {"tagRefs": [TAG_REF]})
     monkeypatch.setenv("QWQ_TAGS_ROOT", str(taxonomy))
 
     assert refresh_canonical_tag_snapshots(canonical) == [TAG_REF]
@@ -52,7 +52,7 @@ def test_tag_snapshot_closure_rejects_unmaterialized_consumer_ref(
     tmp_path: Path,
 ) -> None:
     canonical = tmp_path / "publish"
-    _write(canonical / "entities/地点/景区/甲/tag.refs.json", {"tagRefs": [TAG_REF]})
+    _write(canonical / "entities/地点/景区/甲/manifest.json", {"tagRefs": [TAG_REF]})
 
     report = validate_publish_invariants(canonical)
 
@@ -66,7 +66,7 @@ def test_entity_creator_profile_must_belong_to_creator_reference_closure(
     canonical = tmp_path / "publish"
     entity = canonical / "entities/地点/景区/甲"
     _write(entity / "_entity.json", {"creatorProfileId": "creator_a"})
-    _write(entity / "creator.refs.json", {"creatorRefs": []})
+    _write(entity / "manifest.json", {"tagRefs": [], "assets": []})
     _write(
         canonical / "creators/creator_a/_creator.json",
         {"creatorId": "creator_a"},
@@ -80,5 +80,5 @@ def test_entity_creator_profile_must_belong_to_creator_reference_closure(
         for issue in report["issues"]
     )
 
-    _write(entity / "creator.refs.json", {"creatorRefs": ["creator_a"]})
+    _write(entity / "manifest.json", {"creatorProfileId": "creator_a", "tagRefs": [], "assets": []})
     assert validate_publish_invariants(canonical)["status"] == "passed"

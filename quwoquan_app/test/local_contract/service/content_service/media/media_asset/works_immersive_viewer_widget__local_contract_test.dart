@@ -40,6 +40,8 @@ import 'package:quwoquan_app/service/content_service/trust_safety/report/applica
 import 'package:quwoquan_app/service/content_service/content/content_behavior_fact/application/public/content_behavior_repository.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/public/content_post_detail_payload.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/public/post_article_detail_projector.dart';
+import 'package:quwoquan_app/service/content_service/content/post/application/public/article_document_models.dart';
+import 'package:quwoquan_app/service/content_service/content/post/presentation/works_viewer_article.dart';
 import 'package:quwoquan_app/service/content_service/content/post/adapters/post_view_projection.dart';
 import 'package:quwoquan_app/service/content_service/content/feed_delivery_page/application/public/discovery_feed_query.dart'
     show ContentDiscoveryFeedQuery, kFeedSortRecommend;
@@ -159,16 +161,20 @@ final MediaEndpointConfig _testMediaEndpointConfig = MediaEndpointConfig(
 
 final class _EndpointBoundPostArticleDetailProjector
     implements PostArticleDetailProjector {
-  const _EndpointBoundPostArticleDetailProjector(this.endpointConfig);
+  const _EndpointBoundPostArticleDetailProjector(
+    this.endpointConfig, {
+    this.fixedArticle,
+  });
 
   final MediaEndpointConfig endpointConfig;
+  final ContentArticleRender? fixedArticle;
 
   @override
   ContentArticleRender project(
     Map<String, dynamic> raw, {
     required String fallbackArticleId,
   }) {
-    return projectArticleDetailView(
+    return fixedArticle ?? projectArticleDetailView(
       raw,
       fallbackArticleId: fallbackArticleId,
       mediaResolver: MediaDeliveryResolver(endpointConfig),
@@ -573,9 +579,11 @@ class _FakeAnalyticsService extends AnalyticsService {
 class _ConfigurableContentDetailReader implements ContentPostDetailReader {
   _ConfigurableContentDetailReader({
     this.detailById = const <String, Map<String, dynamic>>{},
+    this.beforeReturn,
   });
 
   final Map<String, Map<String, dynamic>> detailById;
+  final Future<void>? beforeReturn;
   int getPostCallCount = 0;
 
   @override
@@ -585,6 +593,9 @@ class _ConfigurableContentDetailReader implements ContentPostDetailReader {
     DateTime? deadlineAt,
   }) async {
     getPostCallCount += 1;
+    if (beforeReturn case final pending?) {
+      await pending;
+    }
     final detail = detailById[postId];
     if (detail != null) {
       return ContentPostDetailPayload.fromWire(
@@ -823,6 +834,8 @@ ContentPostViewData _photoPost({
   String id = 'photo-1',
   List<String> imageUrls = const ['media/image/s/fixture/photo.jpg'],
   String body = 'dto body',
+  List<String?> captions = const <String?>[],
+  List<PostMediaItem>? mediaItems,
   String coverUrl = 'media/image/s/fixture/photo.jpg',
   String avatarUrl = 'https://example.com/avatar.jpg',
   int? width,
@@ -844,14 +857,17 @@ ContentPostViewData _photoPost({
       body: body,
       coverUrl: coverUrl,
       mediaUrls: imageUrls,
-      mediaItems: <PostMediaItem>[
-        for (final url in imageUrls)
-          PostMediaItem(
-            kind: 'image',
-            url: url,
-            accessMode: MediaDeliveryAccessMode.public,
-          ),
-      ],
+      mediaItems:
+          mediaItems ??
+          <PostMediaItem>[
+            for (var index = 0; index < imageUrls.length; index++)
+              PostMediaItem(
+                kind: 'image',
+                url: imageUrls[index],
+                caption: index < captions.length ? captions[index] : null,
+                accessMode: MediaDeliveryAccessMode.public,
+              ),
+          ],
       width: width,
       height: height,
       likeCount: 0,
@@ -867,6 +883,7 @@ ContentPostViewData _videoPost({
   int? width,
   int? height,
   String body = 'video body',
+  List<PostMediaItem>? mediaItems,
   String videoUrl =
       'media/video/s/video-primary-0001/post/video-content-0001/v1/source.mp4',
   String coverUrl =
@@ -893,15 +910,17 @@ ContentPostViewData _videoPost({
       width: width,
       height: height,
       durationMs: 125000,
-      mediaItems: <PostMediaItem>[
-        PostMediaItem(
-          kind: 'video',
-          url: videoUrl,
-          accessMode: MediaDeliveryAccessMode.public,
-          coverUrl: coverUrl.isEmpty ? null : coverUrl,
-          durationMs: 125000,
-        ),
-      ],
+      mediaItems:
+          mediaItems ??
+          <PostMediaItem>[
+            PostMediaItem(
+              kind: 'video',
+              url: videoUrl,
+              accessMode: MediaDeliveryAccessMode.public,
+              coverUrl: coverUrl.isEmpty ? null : coverUrl,
+              durationMs: 125000,
+            ),
+          ],
       likeCount: 0,
       commentCount: 0,
       shareCount: 0,
@@ -1936,8 +1955,9 @@ void main() {
     container.dispose();
   });
 
-  testWidgets('photo post 在 unified viewer 中展示 raw title/body', (tester) async {
+  testWidgets('photo post 展示逐图 caption 而不以 raw title body 覆盖', (tester) async {
     final post = _photoPost(
+      captions: const <String?>['第一张真实说明', '第二张独立说明'],
       imageUrls: const [
         'media/image/s/fixture/photo.jpg',
         'media/image/s/fixture/photo-2.jpg',
@@ -1978,7 +1998,8 @@ void main() {
     await _pumpImmersiveViewerFirstFrames(tester);
 
     expect(find.text('封面标题'), findsOneWidget);
-    expect(find.textContaining('封面正文'), findsOneWidget);
+    expect(find.textContaining('封面正文'), findsNothing);
+    expect(find.textContaining('第一张真实说明'), findsOneWidget);
     // 禁止顶部页码；多图导航使用点指示器（内容下方、标题上方）。
     expect(
       find.byKey(const ValueKey<String>('works-top-progress-label')),
@@ -2002,6 +2023,20 @@ void main() {
     expect(find.text('测试圈子A'), findsNothing);
     expect(find.text('测试圈子B'), findsNothing);
     expect(find.byType(MediaBlurCaptionOverlay), findsNothing);
+    final viewerRect = tester.getRect(find.byType(WorksImmersiveViewer));
+    await tester.dragFrom(viewerRect.center, const Offset(-320, 0));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 600));
+    _consumeImageLoadExceptions(tester);
+    expect(find.textContaining('第一张真实说明'), findsNothing);
+    expect(find.textContaining('第二张独立说明'), findsOneWidget);
+    expect(find.textContaining('封面正文'), findsNothing);
+    await tester.dragFrom(viewerRect.center, const Offset(-320, 0));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 600));
+    _consumeImageLoadExceptions(tester);
+    expect(find.textContaining('第二张独立说明'), findsNothing);
+    expect(find.textContaining('封面正文'), findsNothing);
   });
 
   testWidgets('首页进入视频书沉浸浏览器后上下滑动切换推荐流且不弹旧禁用提示', (tester) async {
@@ -2012,6 +2047,7 @@ void main() {
       id: 'photo-2',
       imageUrls: const ['media/image/s/fixture/home-second.jpg'],
       body: 'second body',
+      captions: const ['second image caption'],
     );
 
     await tester.pumpWidget(
@@ -2045,7 +2081,8 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
 
     _consumeImageLoadExceptions(tester);
-    expect(find.text('second body'), findsOneWidget);
+    expect(find.text('second image caption'), findsOneWidget);
+    expect(find.text('second body'), findsNothing);
     expect(find.text('dto body'), findsNothing);
     expect(find.textContaining('不支持上下切换'), findsNothing);
   });
@@ -2242,7 +2279,8 @@ void main() {
         attributionText: attributionText,
         rightsBasis: 'risk_accepted_attribution_only',
         commercialAuthorizationStatus: 'not_verified',
-        publicationAdmission: 'risk_accepted_attribution_only',
+        publicationAdmission: SourcePublicationAdmission.productionRelease,
+        derivedModifications: const <SourceDerivedModification>[],
         watermarkStatus: 'absent',
         audioRightsStatus: 'replaced_with_licensed_track',
         modelReleaseStatus: 'not_required',
@@ -2734,27 +2772,22 @@ void main() {
 
   testWidgets('视频书只预热唯一 N+1 且方向变化与内存压力会释放', (tester) async {
     final fakePlatform = _installImmersiveVideoTestPlatform();
-    final post = _videoPost(width: 1920, height: 1080, coverUrl: '');
-    final raw = _viewerRawByPostId({
-      post.id: <String, dynamic>{
-        ..._canonicalPostWire(post),
-        'workId': post.id,
-        'workType': 'video',
-        'workIdentity': 'work',
-        'caption': post.body,
-        'mediaItems': <Map<String, dynamic>>[
-          for (var episode = 1; episode <= 3; episode += 1)
-            <String, dynamic>{
-              'kind': 'video',
-              'url':
-                  'media/video/s/video-series-001/post/video-1/'
-                  'v1/episode-$episode.mp4',
-              'accessMode': 'public',
-              'durationMs': 125000,
-            },
-        ],
-      },
-    });
+    final post = _videoPost(
+      width: 1920,
+      height: 1080,
+      coverUrl: '',
+      mediaItems: [
+        for (var episode = 1; episode <= 3; episode++)
+          PostMediaItem(
+            kind: 'video',
+            url:
+                'media/video/s/video-series-001/post/video-1/v1/episode-$episode.mp4',
+            accessMode: MediaDeliveryAccessMode.public,
+            durationMs: 125000,
+          ),
+      ],
+    );
+    final raw = _viewerRawByPostId({post.id: _canonicalPostWire(post)});
 
     await tester.pumpWidget(
       _wrap(
@@ -2913,32 +2946,23 @@ void main() {
 
   testWidgets('重复公开交付引用仍为每个分集分配唯一 stage 与 session', (tester) async {
     _installImmersiveVideoTestPlatform();
-    final post = _videoPost(width: 1920, height: 1080, coverUrl: '');
     final duplicateUrl =
         'media/video/s/video-series-duplicate/post/video-1/v1/shared.mp4';
-    final raw = _viewerRawByPostId({
-      post.id: <String, dynamic>{
-        ..._canonicalPostWire(post),
-        'workId': post.id,
-        'workType': 'video',
-        'workIdentity': 'work',
-        'caption': post.body,
-        'mediaItems': <Map<String, dynamic>>[
-          <String, dynamic>{
-            'kind': 'video',
-            'url': duplicateUrl,
-            'accessMode': 'public',
-            'durationMs': 125000,
-          },
-          <String, dynamic>{
-            'kind': 'video',
-            'url': duplicateUrl,
-            'accessMode': 'public',
-            'durationMs': 125000,
-          },
-        ],
-      },
-    });
+    final post = _videoPost(
+      width: 1920,
+      height: 1080,
+      coverUrl: '',
+      mediaItems: [
+        for (var episode = 0; episode < 2; episode++)
+          PostMediaItem(
+            kind: 'video',
+            url: duplicateUrl,
+            accessMode: MediaDeliveryAccessMode.public,
+            durationMs: 125000,
+          ),
+      ],
+    );
+    final raw = _viewerRawByPostId({post.id: _canonicalPostWire(post)});
 
     await tester.pumpWidget(
       _wrap(
@@ -2992,32 +3016,22 @@ void main() {
 
   testWidgets('切集为每个分集重新开启一次五秒窗口', (tester) async {
     _installImmersiveVideoTestPlatform();
-    final post = _videoPost(width: 1920, height: 1080, coverUrl: '');
-    final raw = _viewerRawByPostId({
-      post.id: <String, dynamic>{
-        ..._canonicalPostWire(post),
-        'workId': post.id,
-        'workType': 'video',
-        'workIdentity': 'work',
-        'caption': post.body,
-        'mediaItems': <Map<String, dynamic>>[
-          <String, dynamic>{
-            'kind': 'video',
-            'url':
-                'media/video/s/video-series-001/post/video-1/v1/episode-1.mp4',
-            'accessMode': 'public',
-            'durationMs': 125000,
-          },
-          <String, dynamic>{
-            'kind': 'video',
-            'url':
-                'media/video/s/video-series-001/post/video-1/v1/episode-2.mp4',
-            'accessMode': 'public',
-            'durationMs': 125000,
-          },
-        ],
-      },
-    });
+    final post = _videoPost(
+      width: 1920,
+      height: 1080,
+      coverUrl: '',
+      mediaItems: [
+        for (var episode = 1; episode <= 2; episode++)
+          PostMediaItem(
+            kind: 'video',
+            url:
+                'media/video/s/video-series-001/post/video-1/v1/episode-$episode.mp4',
+            accessMode: MediaDeliveryAccessMode.public,
+            durationMs: 125000,
+          ),
+      ],
+    );
+    final raw = _viewerRawByPostId({post.id: _canonicalPostWire(post)});
 
     await tester.pumpWidget(
       _wrap(
@@ -3126,33 +3140,23 @@ void main() {
     _installImmersiveVideoTestPlatform();
     final reordered = ValueNotifier<bool>(false);
     addTearDown(reordered.dispose);
-    final post = _videoPost(width: 1920, height: 1080, coverUrl: '');
-
-    Map<String, MediaViewerPostWireRow> rawFor(bool reverse) {
-      final episodes = <Map<String, dynamic>>[
-        <String, dynamic>{
-          'kind': 'video',
-          'url': 'media/video/s/video-series-001/post/video-1/v1/episode-1.mp4',
-          'accessMode': 'public',
-          'durationMs': 125000,
-        },
-        <String, dynamic>{
-          'kind': 'video',
-          'url': 'media/video/s/video-series-001/post/video-1/v1/episode-2.mp4',
-          'accessMode': 'public',
-          'durationMs': 125000,
-        },
+    ContentPostViewData postFor(bool reverse) {
+      final episodes = [
+        for (var episode = 1; episode <= 2; episode++)
+          PostMediaItem(
+            kind: 'video',
+            url:
+                'media/video/s/video-series-001/post/video-1/v1/episode-$episode.mp4',
+            accessMode: MediaDeliveryAccessMode.public,
+            durationMs: 125000,
+          ),
       ];
-      return _viewerRawByPostId({
-        post.id: <String, dynamic>{
-          ..._canonicalPostWire(post),
-          'workId': post.id,
-          'workType': 'video',
-          'workIdentity': 'work',
-          'caption': post.body,
-          'mediaItems': reverse ? episodes.reversed.toList() : episodes,
-        },
-      });
+      return _videoPost(
+        width: 1920,
+        height: 1080,
+        coverUrl: '',
+        mediaItems: reverse ? episodes.reversed.toList() : episodes,
+      );
     }
 
     await tester.pumpWidget(
@@ -3162,9 +3166,10 @@ void main() {
           WorksImmersiveViewer(
             showWorksToolbar: true,
             showTopNavigation: false,
-            externalPosts: [post],
-            externalPostViews: [ContentSurfaceViewMapper.fromDto(post)],
-            rawPostsById: rawFor(reverse),
+            externalPosts: [postFor(reverse)],
+            externalPostViews: [
+              ContentSurfaceViewMapper.fromDto(postFor(reverse)),
+            ],
             onUserTap: (_, {avatarUrl, displayName, backgroundUrl}) {},
             onAssistantTap: () {},
           ),
@@ -3954,7 +3959,17 @@ void main() {
   });
 
   testWidgets('canonical viewer 经 typed media facet 加载当前原图', (tester) async {
-    final post = _photoPost();
+    final post = _photoPost(
+      mediaItems: [
+        PostMediaItem(
+          kind: 'image',
+          url: 'media/image/s/fixture/photo.jpg',
+          mediaAssetId: 'asset-photo-1',
+          mediaAssetVersion: 1,
+          accessMode: MediaDeliveryAccessMode.signedGrant,
+        ),
+      ],
+    );
     // 原图换签已收敛到 SignedMediaDeliveryCoordinator，短签校验（https +
     // sign + t）随之生效，夹具必须给出真实签名形态的交付地址。
     final originalUrl = Uri.parse(
@@ -6308,7 +6323,8 @@ void main() {
     expect(find.text('homepage:homepage_sight_west_lake'), findsOneWidget);
   });
 
-  testWidgets('文章未知实体标签不会把原始 entity id 推进主页错误页', (tester) async {
+  // spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-042.t1
+  testWidgets('文章未知实体标签呈普通文字且不会把原始 entity id 推进主页错误页', (tester) async {
     final post = _articlePost();
 
     await tester.pumpWidget(
@@ -6354,8 +6370,45 @@ void main() {
     final entityText = find.byKey(
       const ValueKey<String>('article-entity-rich-text'),
     );
-    expect(entityText, findsWidgets);
-    await _tapRichTextSubstring(tester, entityText.hitTestable().first, '未知地点');
+    expect(entityText, findsNothing);
+    final plainText = find.byWidgetPredicate(
+      (widget) => widget is RichText && widget.text.toPlainText() == '未知地点',
+    );
+    expect(plainText, findsWidgets);
+    final richText = tester.widget<RichText>(plainText.hitTestable().first);
+    expect(richText.text.toPlainText(), '未知地点');
+    richText.text.visitChildren((span) {
+      if (span is TextSpan) {
+        expect(span.recognizer, isNull);
+        expect(span.style?.color, isNot(AppColors.worksAccent));
+        expect(span.style?.decoration?.contains(TextDecoration.underline) ?? false, isFalse);
+      }
+      return true;
+    });
+    final article = tester.widget<PostWorksViewerArticle>(
+      find.byType(PostWorksViewerArticle),
+    ).article;
+    expect(article.document.body, '未知地点');
+    final span = article.document.nodes
+        .expand((node) => node.spans)
+        .single;
+    expect(span.kind, 'text');
+    expect(span.start, 0);
+    expect(span.end, '未知地点'.length);
+    expect(span.targetId, isNull);
+    expect(
+      article.pages.expand((page) => page.contentBlocks)
+          .expand((block) => block.spans)
+          .every((span) => !span.isEntity),
+      isTrue,
+    );
+    expect(
+      article.pages.expand((page) => page.fragments)
+          .expand((fragment) => fragment.block?.spans ?? <ArticleInlineSpan>[])
+          .every((span) => !span.isEntity),
+      isTrue,
+    );
+    await _tapRichTextSubstring(tester, plainText.hitTestable().first, '未知地点');
     await _pumpSettledFrames(tester);
 
     expect(
@@ -6363,6 +6416,149 @@ void main() {
       findsNothing,
     );
     expect(find.textContaining('homepage:entity'), findsNothing);
+  });
+
+  // spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-042.t1
+  testWidgets('文章实体映射水合后更新同一阅读器，保留原文样式及其他合法链接', (tester) async {
+    final post = _articlePost();
+    const subjectId = 'entity:photo_spot:unknown';
+    final detail = _articleMarkdownRaw(
+      post,
+      '# 映射水合\n\n'
+      '路过🙂@[未知地点](entity:photo_spot:unknown)，'
+      '再看@[主页](entity:homepage_direct)、'
+      '@[散步](tag:topic:walk)与[资料](https://example.com/source)。\n',
+      extra: const <String, dynamic>{
+        'entityMentions': <Map<String, dynamic>>[
+          {
+            'subjectType': 'entity',
+            'subjectId': subjectId,
+            'homepageId': 'homepage_hydrated_exact',
+            'displayName': '未知地点',
+            'rangeStart': 4,
+            'rangeEnd': 8,
+          },
+        ],
+      },
+    );
+    final parsed = _EndpointBoundPostArticleDetailProjector(
+      _testMediaEndpointConfig,
+    ).project(detail, fallbackArticleId: post.id);
+    final source = ContentArticleRender(
+      document: parsed.document.copyWith(nodes: [
+        for (final node in parsed.document.nodes)
+          node.copyWith(spans: [
+            for (final span in node.spans)
+              if (span.targetId == subjectId)
+                ArticleInlineSpan(
+                  start: span.start,
+                  end: span.end,
+                  kind: span.kind,
+                  targetType: span.targetType,
+                  targetId: span.targetId,
+                  displayText: span.displayText,
+                  bold: true,
+                  italic: true,
+                  underline: true,
+                  strikethrough: true,
+                )
+              else if (span.targetId == 'entity:homepage_direct')
+                ArticleInlineSpan(
+                  start: span.start,
+                  end: span.end,
+                  kind: 'entity',
+                  targetType: 'homepage',
+                  targetId: 'homepage_direct',
+                  displayText: span.displayText,
+                )
+              else
+                span,
+          ]),
+      ]),
+      pages: parsed.pages,
+      documentSource: parsed.documentSource,
+    );
+    final sourceSnapshot = source.document.toMap();
+    final pending = Completer<void>();
+    final repository = _ConfigurableContentDetailReader(
+      detailById: {post.id: detail},
+      beforeReturn: pending.future,
+    );
+    await tester.pumpWidget(
+      _wrapWithRouter(
+        WorksImmersiveViewer(
+          showWorksToolbar: true,
+          showTopNavigation: false,
+          externalPosts: [post],
+          externalPostViews: [ContentSurfaceViewMapper.fromDto(post)],
+          // 只读投影固定同一作者文档，详情仅补入映射，避免正文变化掩盖缓存失效。
+          rawPostsById: _viewerRawByPostId({
+            post.id: {'postId': post.id, 'contentType': 'article'},
+          }),
+          onUserTap: (_, {avatarUrl, displayName, backgroundUrl}) {},
+          onAssistantTap: () {},
+        ),
+        detailReader: repository,
+        overrides: [
+          postArticleDetailProjectorProvider.overrideWithValue(
+            _EndpointBoundPostArticleDetailProjector(
+              _testMediaEndpointConfig,
+              fixedArticle: source,
+            ),
+          ),
+        ],
+      ),
+    );
+    await tester.pump();
+    _consumeImageLoadExceptions(tester);
+    await _pumpSettledFrames(tester);
+
+    final reader = find.byType(PostWorksViewerArticle);
+    final before = tester.widget<PostWorksViewerArticle>(reader).article;
+    final beforeSpans = before.document.nodes.expand((node) => node.spans).toList();
+    final unknown = beforeSpans.first;
+    expect(unknown.kind, 'text');
+    expect(unknown.start, 4, reason: 'emoji 的 UTF-16 range 不得改写');
+    expect(unknown.end, 8);
+    expect(unknown.bold && unknown.italic && unknown.underline && unknown.strikethrough, isTrue);
+    expect(before.document.body, source.document.body);
+    for (var index = 1; index < beforeSpans.length; index++) {
+      expect(beforeSpans[index], same(source.document.nodes.expand((node) => node.spans).elementAt(index)));
+    }
+    final entityText = find.byKey(const ValueKey<String>('article-entity-rich-text'));
+    final beforeText = tester.widget<RichText>(entityText.hitTestable().first);
+    final beforeChildren = (beforeText.text as TextSpan).children!.cast<TextSpan>();
+    final unknownText = beforeChildren.singleWhere((span) => span.text == '未知地点');
+    expect(unknownText.recognizer, isNull);
+    expect(unknownText.style?.color, isNot(AppColors.worksAccent));
+    expect(unknownText.style?.fontWeight, FontWeight.bold);
+    expect(unknownText.style?.fontStyle, FontStyle.italic);
+    expect(unknownText.style?.decoration?.contains(TextDecoration.underline), isTrue);
+    expect(unknownText.style?.decoration?.contains(TextDecoration.lineThrough), isTrue);
+    for (final label in ['主页', '散步', '资料']) {
+      expect(beforeChildren.singleWhere((span) => span.text == label).recognizer, isNotNull);
+    }
+    final deckState = tester.state(find.byType(ArticleReadOnlyBookDeck));
+    final beforePages = tester.widget<ArticleReadOnlyBookDeck>(find.byType(ArticleReadOnlyBookDeck)).pages;
+    expect(repository.getPostCallCount, 1);
+
+    pending.complete();
+    await tester.pump();
+    await _pumpSettledFrames(tester);
+    final after = tester.widget<PostWorksViewerArticle>(reader).article;
+    expect(after, same(source));
+    expect(after.document.body, before.document.body);
+    expect(source.document.toMap(), sourceSnapshot, reason: '显示降级不能污染作者源');
+    expect(tester.state(find.byType(ArticleReadOnlyBookDeck)), same(deckState));
+    expect(tester.widget<ArticleReadOnlyBookDeck>(find.byType(ArticleReadOnlyBookDeck)).pages, isNot(same(beforePages)));
+    final afterText = tester.widget<RichText>(entityText.hitTestable().first);
+    final restored = (afterText.text as TextSpan).children!.cast<TextSpan>().singleWhere((span) => span.text == '未知地点');
+    expect(restored.recognizer, isNotNull);
+    expect(restored.style?.color, AppColors.worksAccent);
+    expect(repository.getPostCallCount, 1, reason: '不按 mention 探活或额外读取');
+    await _tapRichTextSubstring(tester, entityText.hitTestable().first, '未知地点');
+    await _pumpSettledFrames(tester);
+    expect(find.text('homepage:homepage_hydrated_exact'), findsOneWidget);
   });
 
   testWidgets('文章标签内联点击进入按 tagRef 搜索的 metadata 路由', (tester) async {

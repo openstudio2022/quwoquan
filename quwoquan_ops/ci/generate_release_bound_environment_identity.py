@@ -124,7 +124,6 @@ _RUN_FIELDS = {
     "coverageReceiptRef",
     "postApiVerificationRef",
     "releaseReadinessRef",
-    "researchIsolationVerificationRef",
     "tagConsumerVerificationRef",
     "homepageApiVerificationRef",
     "baselineApiVerificationRef",
@@ -279,9 +278,9 @@ def _validate_activation(
     release_class = str(readiness.get("releaseClass") or "")
     lifecycle = str(readiness.get("productLifecycleState") or "")
     phase = str(readiness.get("readinessPhase") or "")
-    if release_class not in {"research", "commercial"} or lifecycle != release_class:
+    if release_class != "production" or lifecycle != release_class:
         raise IdentityEvidenceError("release readiness lifecycle identity mismatch")
-    if phase not in {"research", "commercial"} or phase != release_class:
+    if phase != "production" or phase != release_class:
         raise IdentityEvidenceError(
             "activation phase must match immutable release lifecycle"
         )
@@ -312,28 +311,8 @@ def _validate_activation(
         activation.get("importReportDigest"),
         label="activationEnvelope.importReportDigest",
     )
-    isolation = activation.get("researchIsolationPolicy")
-    if release_class == "research":
-        if not isinstance(isolation, Mapping):
-            raise IdentityEvidenceError("research activation requires isolation policy")
-        for field in ("policyRef", "verificationRef", "subjectHash"):
-            _text(isolation.get(field), label=f"researchIsolationPolicy.{field}")
-        for field in ("policyDigest", "verificationDigest"):
-            _digest(isolation.get(field), label=f"researchIsolationPolicy.{field}")
-        if readiness.get("internalSubjectHash") != isolation.get("subjectHash"):
-            raise IdentityEvidenceError("research activation subjectHash drift")
-        if readiness.get("researchIsolationVerificationRef") != isolation.get(
-            "verificationRef"
-        ):
-            raise IdentityEvidenceError("research isolation verificationRef drift")
-        if readiness.get("researchIsolationVerificationDigest") != isolation.get(
-            "verificationDigest"
-        ):
-            raise IdentityEvidenceError("research isolation verificationDigest drift")
-    elif isolation is not None:
-        raise IdentityEvidenceError(
-            "commercial activation cannot carry research isolation"
-        )
+    if "researchIsolationPolicy" in activation:
+        raise IdentityEvidenceError("activation contains retired isolation policy")
     if readiness.get("activationEnvelopeDigest") != _canonical_digest(activation):
         raise IdentityEvidenceError("activationEnvelopeDigest drift")
     return dict(activation)

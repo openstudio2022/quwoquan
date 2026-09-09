@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import re
 
-# 旧任务的默认实体图数量；新 separated research 按任务配额动态计算。
+# 旧任务的默认实体图数量；新分载体任务 按任务配额动态计算。
 MIN_ENTITY_IMAGES = 2
 
 # 最小像素尺寸门：长边 >= 800，且宽高均 >= 设定下限，避免缩略糊图进内容页。

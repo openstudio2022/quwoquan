@@ -43,7 +43,25 @@ def normalized_refs(value: object, *, label: str) -> tuple[str, ...]:
 
 
 def object_root(publish_root: Path, kind: str, ref: str) -> Path:
-    return publish_root / kind / _safe_rel(ref, label=f"{kind}Ref")
+    logical = _safe_rel(ref, label=f"{kind}Ref").as_posix()
+    if kind in {"creators", "tags"}:
+        return publish_root / kind / logical
+    from core.publish_layout import logical_object_ref
+    matches = []
+    # release payload 没有 repository marker，仍按相同 manifest 身份读取，不双读旧布局。
+    for path in (publish_root / kind).rglob("manifest.json"):
+        if "sources" in path.relative_to(publish_root / kind).parts or "records" in path.relative_to(publish_root / kind).parts:
+            continue
+        document = _read_json(path)
+        if logical_object_ref(document, kind) == logical:
+            matches.append((int(document["version"]), path.parent))
+    if not matches:
+        return publish_root / kind / logical
+    latest = max(version for version, _ in matches)
+    roots = [path for version, path in matches if version == latest]
+    if len(roots) != 1:
+        raise ObjectTransactionError("DATA.POOL.IDENTITY_CONFLICT: duplicate logical version")
+    return roots[0]
 
 
 def execution_publish_closure(
@@ -63,10 +81,8 @@ def execution_publish_closure(
             manifest = _read_json(manifest_path)
             if str(manifest.get("executionId") or "") != execution_id:
                 continue
-            ref = _safe_rel(
-                manifest_path.parent.relative_to(objects_root).as_posix(),
-                label=f"{kind}Ref",
-            ).as_posix()
+            from core.publish_layout import logical_object_ref
+            ref = logical_object_ref(manifest, kind)
             source_identity = validate_object_source_identity(manifest)
             source_digest = SourceDefinitionSnapshot(
                 digest=source_identity["sourceDigest"]
@@ -192,21 +208,15 @@ def reference_closure(
             root = object_root(publish_root, kind, ref)
             if not (root / "manifest.json").is_file():
                 raise ObjectTransactionError(f"canonical {kind} object missing: {ref}")
-            creator_refs.update(
-                _object_refs_document(
-                    publish_root,
-                    kind=kind,
-                    ref=ref,
-                    filename="creator.refs.json",
-                    field="creatorRefs",
-                )
-            )
+            manifest = _read_json(root / "manifest.json")
+            creator_ref = manifest.get("creatorProfileId")
+            creator_refs.add(_safe_rel(str(creator_ref or ""), label="creatorProfileId").as_posix())
             tag_refs.update(
                 _object_refs_document(
                     publish_root,
                     kind=kind,
                     ref=ref,
-                    filename="tag.refs.json",
+                    filename="manifest.json",
                     field="tagRefs",
                 )
             )

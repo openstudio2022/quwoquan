@@ -131,6 +131,9 @@ def test_ingest_derives_hard_facts_from_local_bytes_without_network(execution: P
     assert asset["watermarkStatus"] == "absent" and asset["watermarkKind"] == "none"
     assert asset["derivedModifications"] == []
     assert asset["sourceAttribution"]["watermarkStatus"] == "absent"
+    assert asset["sourceAttribution"]["modelReleaseStatus"] == "unverified"
+    assert asset["sourceAttribution"]["authorizationProofUrl"] is None
+    assert asset["authorizationProof"] == "" and asset["authorizationRequired"] is True
     linked = unit / "assets" / asset["fileName"]
     library = tmp_path / "content_library"
     assert linked.read_bytes() == body
@@ -179,18 +182,36 @@ def test_missing_rights_fields_are_schema_rejected_not_defaulted(execution: Path
     assert not (execution / TARGET_A / "1.download").exists()
 
 
-def test_rights_status_is_derived_and_cannot_be_declared(execution: Path, tmp_path: Path) -> None:
+@pytest.mark.parametrize("rights_status", ["verified", "unverified", "restricted", "unknown"])
+def test_declared_rights_are_preserved_without_authorization_upgrade(execution: Path, tmp_path: Path, rights_status: str) -> None:
     body = _png((9, 9, 9))
     image = _write(tmp_path / "downloads/x.png", body)
-    declared = _media_source(image, body, rightsStatus="verified")
+    declared = _media_source(
+        image, body, rightsStatus=rights_status, rightsIssues=["授权范围待核实"],
+        license="CC BY-NC 4.0", licenseUrl="https://creativecommons.org/licenses/by-nc/4.0",
+        usageScope="internal_reference", modelReleaseStatus="editorial_only",
+        propertyReleaseStatus="unverified", audioRightsStatus="unverified",
+        authorizationProof=None, commercialAuthorizationStatus="unverified",
+    )
     manifest = _manifest(tmp_path / "declared.json", [{"targetRef": TARGET_A, "sources": [declared]}])
-    with pytest.raises(ValueError):
-        acquire_module.acquire(execution_id=EXECUTION_ID, request_path=manifest)
-
-    restrictive = _media_source(image, body, license="CC BY-NC 4.0", licenseUrl="https://creativecommons.org/licenses/by-nc/4.0")
-    manifest = _manifest(tmp_path / "nc.json", [{"targetRef": TARGET_A, "sources": [restrictive]}])
     result = acquire_module.acquire(execution_id=EXECUTION_ID, request_path=manifest)
-    assert result["targets"][0]["sources"][0]["rightsStatus"] == "unverified"
+    assert result["ingested"] == 1 and result["failed"] == 0
+    refs = json.loads((execution / TARGET_A / "1.download/source_refs.json").read_bytes())
+    unit = execution / refs["sources"][0]["metaRef"].rsplit("/", 1)[0]
+    asset = json.loads((unit / "assets/index.json").read_bytes())["assets"][0]
+    assert asset["rightsStatus"] == rights_status
+    assert asset["rightsIssues"] == ["授权范围待核实"]
+    assert asset["usageScope"] == "internal_reference"
+    assert asset["license"] == "CC BY-NC 4.0"
+    assert asset["distributionDecision"] == "production_allowed"
+    assert asset["authorizationProof"] == "" and asset["authorizationRequired"] is True
+    attribution = asset["sourceAttribution"]
+    assert attribution["publicationAdmission"] == "production_release"
+    assert attribution["authorizationProofUrl"] is None
+    assert attribution["commercialAuthorizationStatus"] == "unverified"
+    assert attribution["audioRightsStatus"] == "unverified"
+    assert attribution["modelReleaseStatus"] == "editorial_only"
+    assert attribution["propertyReleaseStatus"] == "unverified"
 
 
 def test_watermark_fields_are_transcribed_and_present_requires_kind_and_note(execution: Path, tmp_path: Path) -> None:

@@ -245,7 +245,6 @@ def _validated_post_bindings(value: Any) -> tuple[list[dict[str, Any]], str]:
         "postId",
         "contentId",
         "contentVersion",
-        "usageScope",
         "contentType",
         "authorId",
     }
@@ -263,7 +262,6 @@ def _validated_post_bindings(value: Any) -> tuple[list[dict[str, Any]], str]:
         content_id = str(binding.get("contentId") or "").strip()
         author_id = str(binding.get("authorId") or "").strip()
         content_version = binding.get("contentVersion")
-        usage_scope = binding.get("usageScope")
         content_type = binding.get("contentType")
         if (
             POST_REF_PATTERN.fullmatch(post_ref) is None
@@ -273,7 +271,6 @@ def _validated_post_bindings(value: Any) -> tuple[list[dict[str, Any]], str]:
             or isinstance(content_version, bool)
             or not isinstance(content_version, int)
             or content_version < 1
-            or usage_scope not in {"research", "commercial"}
             or content_type not in {"article", "image", "video"}
             or post_ref in seen_refs
             or post_id in seen_ids
@@ -397,6 +394,8 @@ def validate_candidate_release_binding(
         or attestation.get("releaseId") != release_id
         or attestation.get("payloadSha256") != release_digest
         or attestation.get("sourceOwner") != "qwq_data"
+        or attestation.get("releaseClass") != "production"
+        or attestation.get("productLifecycleState") != "production"
     ):
         raise ActiveContentReleaseOutboxRepairError(
             "candidate release attestation identity mismatch"

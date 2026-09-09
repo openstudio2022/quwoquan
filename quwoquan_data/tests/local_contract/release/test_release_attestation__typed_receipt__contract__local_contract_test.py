@@ -48,8 +48,7 @@ def _receipt() -> ReleaseAttestation:
             "unknown": 0,
         },
         authorization_required_asset_ids=("asset-unverified",),
-        research_accepted_count=12,
-        commercial_accepted_count=0,
+        accepted_count=12,
         execution_ids=(
             "20260718--travel-homepage-coverage--test-region-a--pilot-001",
             "20260718--travel-homepage-coverage--test-region-b--pilot-001",
@@ -76,6 +75,14 @@ def test_release_attestation__typed_receipt__contract__local_contract() -> None:
     document = _receipt().to_document()
 
     assert ReleaseAttestation.from_document(document) == _receipt()
+
+
+@pytest.mark.parametrize("field", ["researchAcceptedCount", "commercialAcceptedCount"])
+def test_typed_receipt_rejects_retired_count_even_beside_new_count(field: str) -> None:
+    document = _receipt().to_document()
+    document[field] = 0
+    with pytest.raises(ReleaseAttestationError):
+        ReleaseAttestation.from_document(document)
 
 
 def test_release_attestation__allows_post_only_lane_release__contract__local_contract() -> None:

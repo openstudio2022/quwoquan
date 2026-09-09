@@ -34,7 +34,6 @@ from quwoquan_ops.tests.support.release_bound_environment_identity_test_support 
     RELEASE_ID,
     SOURCE_DIGEST,
     SOURCE_REVISION,
-    SUBJECT_HASH,
     TEST_SIGNING_ENVIRONMENT,
     ENVIRONMENT_ACCEPTANCE_SCHEMA,
     Fixture,
@@ -58,16 +57,11 @@ class ReleaseBoundEnvironmentIdentityContractTest(unittest.TestCase):
             renderer,
             "validate_data_evidence",
             return_value={
-                "deliveryMode": "private_signed",
+                "deliveryMode": "public_immutable",
                 "releaseId": RELEASE_ID,
                 "manifestDigest": RELEASE_DIGEST,
-                "subjectHash": SUBJECT_HASH,
-                "receiptRef": "env/alpha/runs/data-release/research-isolation.json",
+                "receiptRef": "env/alpha/runs/data-release/video-delivery.json",
                 "receiptDigest": DIGEST_A,
-                "anonymousContentStatus": 403,
-                "anonymousMediaStatus": 403,
-                "signedMediaTtlSeconds": 300,
-                "mediaAuditEventId": "audit-media-001",
             },
         ).start()
         self.app_readback_patcher = mock.patch.object(
@@ -111,8 +105,8 @@ class ReleaseBoundEnvironmentIdentityContractTest(unittest.TestCase):
             self.assertEqual(payload["status"], "passed")
             self.assertEqual(payload["identity"]["baselineId"], BASELINE_ID)
             self.assertEqual(payload["identity"]["releaseId"], RELEASE_ID)
-            self.assertEqual(payload["identity"]["releaseClass"], "research")
-            self.assertEqual(payload["identity"]["productLifecycleState"], "research")
+            self.assertEqual(payload["identity"]["releaseClass"], "production")
+            self.assertEqual(payload["identity"]["productLifecycleState"], "production")
             self.assertEqual(
                 payload["identity"]["dataSourceIdentity"],
                 {
@@ -173,7 +167,7 @@ class ReleaseBoundEnvironmentIdentityContractTest(unittest.TestCase):
             self.assertEqual(payload["identity"]["mediaProbe"]["imageAssets"], 1)
             self.assertEqual(
                 payload["identity"]["mediaReadback"]["deliveryMode"],
-                "private_signed",
+                "public_immutable",
             )
             self.assertNotIn("publicUrl", payload["identity"]["mediaReadback"])
             self.assertEqual(self.manifest_files.call_count, 2)
@@ -310,53 +304,28 @@ class ReleaseBoundEnvironmentIdentityContractTest(unittest.TestCase):
             self.manifest_files.assert_not_called()
             self.data_evidence.assert_not_called()
 
-    def test_research_media_validation_never_enters_public_video_path(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory).resolve()
-            readiness_path = _write(root / "release-readiness.json", {"passed": True})
-            receipt_ref = "env/alpha/runs/data-release/research/isolation.json"
-            receipt_path = _write(root / receipt_ref, {"outcome": "PASS"})
-            summary = {
-                "releaseId": RELEASE_ID,
-                "manifestDigest": RELEASE_DIGEST,
-                "subjectHash": SUBJECT_HASH,
-                "receiptRef": receipt_ref,
-                "receiptDigest": DIGEST_A,
-                "anonymousContentStatus": 403,
-                "anonymousMediaStatus": 403,
-                "signedMediaTtlSeconds": 300,
-                "mediaAuditEventId": "audit-media-001",
-            }
-            with (
-                mock.patch.object(data_validator, "output_root", return_value=root),
-                mock.patch.object(
-                    data_validator,
-                    "verify_research_content_isolation",
-                    return_value=summary,
-                ) as isolation,
-                mock.patch.object(
-                    data_validator,
-                    "load_release_content_identity",
-                    side_effect=AssertionError("public video path must not run"),
-                ),
-            ):
-                result = data_validator.validate_data_evidence(
-                    data_output_root=root,
-                    readiness_path=readiness_path,
-                    rollback_path=root / "unused-rollback.json",
-                    media_readback_path=receipt_path,
-                    environment="alpha",
-                    target="alpha-local",
-                    expected_release={
-                        "releaseId": RELEASE_ID,
-                        "releaseDigest": RELEASE_DIGEST,
-                        "verifyRunId": "verify-001",
-                        "releaseClass": "research",
-                    },
-                )
-            isolation.assert_called_once()
-            self.assertEqual(result["deliveryMode"], "private_signed")
-            self.assertNotIn("publicUrl", result)
+    def test_retired_release_classes_are_rejected_before_public_media_validation(self) -> None:
+        for release_class in ("research", "commercial"):
+            with self.subTest(release_class=release_class), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory).resolve()
+                readiness_path = _write(root / "release-readiness.json", {
+                    "passed": True, "releaseClass": release_class,
+                    "productLifecycleState": release_class,
+                })
+                with (
+                    mock.patch.object(data_validator, "output_root", return_value=root),
+                    mock.patch.object(data_validator, "load_release_content_identity") as public_media,
+                    self.assertRaisesRegex(data_validator.DataEvidenceError, "releaseClass must be production"),
+                ):
+                    data_validator.validate_data_evidence(
+                        data_output_root=root,
+                        readiness_path=readiness_path,
+                        rollback_path=root / "unused-rollback.json",
+                        media_readback_path=root / "unused-media.json",
+                        environment="alpha", target="alpha-local",
+                        expected_release={"releaseClass": release_class},
+                    )
+                public_media.assert_not_called()
 
     def test_every_required_input_class_is_fail_closed_and_writes_nothing(self) -> None:
         missing = [

@@ -70,57 +70,6 @@ def _content_feed_semantic_issue(payload: str) -> tuple[str | None, int | None]:
     return issue, count
 
 
-def _research_anonymous_convergence_issue(
-    payload: str,
-) -> tuple[str | None, int | None]:
-    """Assert the anonymous feed converges to the research-isolation empty page.
-
-    research release 的匿名读回必须是 DEC-032 收敛结果：items 为空、
-    outcome=empty、emptyReason=no_active_release，且不回显 releaseId/
-    manifestDigest。任何一条内容或任何 release 身份在场即隔离泄露。
-    """
-    body = payload.strip()
-    if not body:
-        return "response body is empty", 0
-    try:
-        decoded = json.loads(body)
-    except json.JSONDecodeError as exc:
-        return f"response body is not valid JSON: {exc.msg}", None
-    if not isinstance(decoded, dict):
-        return "response payload must be a JSON object", None
-    items = decoded.get("items")
-    if not isinstance(items, list):
-        return 'response payload is missing array "items"', None
-    if items:
-        return (
-            "research isolation leak: anonymous feed returned "
-            f"{len(items)} item(s) instead of the no_active_release empty page",
-            len(items),
-        )
-    outcome = str(decoded.get("outcome") or "")
-    if outcome != "empty":
-        return f'research convergence expects outcome "empty", got "{outcome}"', 0
-    empty_reason = str(decoded.get("emptyReason") or "")
-    if empty_reason != "no_active_release":
-        return (
-            'research convergence expects emptyReason "no_active_release", '
-            f'got "{empty_reason}"',
-            0,
-        )
-    leaked_identity = sorted(
-        key
-        for key in ("releaseId", "manifestDigest")
-        if str(decoded.get(key) or "").strip()
-    )
-    if leaked_identity:
-        return (
-            "research isolation leak: anonymous empty page echoes release "
-            "identity field(s): " + ", ".join(leaked_identity),
-            0,
-        )
-    return None, 0
-
-
 def _content_feed_semantic_result(
     payload: str,
     *,
@@ -196,9 +145,7 @@ def _expected_release_post_ids(args: argparse.Namespace, check_name: str) -> set
 
 
 AUTHOR_POSTS_CHECK_NAME = "author_posts_contract"
-CREATOR_PROFILE_CHECK_NAME = "release_creator_profile"
 FEED_MEDIA_SLICES_CHECK_NAME = "feed_media_slices"
-SIGNED_MEDIA_CHECK_NAME = "release_signed_media"
 PRIVATE_FEED_CHECK_NAMES = frozenset(
     {"content_feed", "homepage_recommend", "video_book_feed", "premium_feed"}
 )
@@ -391,27 +338,3 @@ def _release_sample_semantic_result(
             returned_type,
         )
     return None, returned_id, returned_type
-
-
-def _release_creator_profile_semantic_result(
-    payload: str,
-    *,
-    expected_persona_id: str,
-    expected_display_name: str,
-    expected_avatar_delivery_ref: str,
-) -> tuple[str | None, str, str]:
-    try:
-        decoded = json.loads(payload)
-    except json.JSONDecodeError as exc:
-        return f"response body is not valid JSON: {exc.msg}", "", ""
-    if not isinstance(decoded, dict):
-        return "response payload must be a JSON object", "", ""
-    persona_id = str(decoded.get("personaId") or "").strip()
-    avatar_ref = _media_delivery_identity(decoded.get("avatarUrl"))
-    if persona_id != expected_persona_id:
-        return "response personaId is not the exact release creator", persona_id, avatar_ref
-    if str(decoded.get("displayName") or "").strip() != expected_display_name:
-        return "response displayName is not the exact release creator", persona_id, avatar_ref
-    if avatar_ref != _media_delivery_identity(expected_avatar_delivery_ref):
-        return "response avatarUrl is not the exact release avatar asset", persona_id, avatar_ref
-    return None, persona_id, avatar_ref

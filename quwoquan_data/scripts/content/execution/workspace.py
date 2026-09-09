@@ -115,16 +115,6 @@ def load_execution_manifest(execution_id: str) -> dict[str, Any]:
     return load_frozen_execution_manifest(execution_id)
 
 
-def frozen_target_by_name(execution_id: str, name: str) -> dict[str, Any] | None:
-    expected = str(name or "").strip()
-    if not expected:
-        return None
-    for target in load_frozen_target_set(execution_id).get("targets", []):
-        if isinstance(target, Mapping) and str(target.get("name") or "").strip() == expected:
-            return dict(target)
-    return None
-
-
 def entity_catalog_digest(source_ref: str) -> str:
     ref = PurePosixPath(str(source_ref or "").strip())
     if not ref.as_posix() or ref.is_absolute() or any(part in {"", ".", ".."} for part in ref.parts):
@@ -200,7 +190,6 @@ __all__ = [
     "execution_request_path",
     "execution_root",
     "execution_target_set_path",
-    "frozen_target_by_name",
     "load_execution_manifest",
     "load_frozen_execution_manifest",
     "load_frozen_target_set",

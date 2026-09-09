@@ -81,7 +81,7 @@ def _content_review() -> dict:
             "license": "CC BY-SA 4.0",
             "termsUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
             "authorizationProof": "https://commons.wikimedia.org/wiki/File:Example.jpg",
-            "usageScope": "commercial",
+            "usageScope": "production",
             "decision": "approved",
             "issues": [],
         }],
@@ -140,9 +140,8 @@ def build_package(
             "finalContentRef": "page.md",
             "sourceCatalogRef": "evidence/source_catalog.json",
             "rightsRef": "evidence/rights.json",
-            "creatorRefsRef": "creator.refs.json",
-            "tagRefsRef": "tag.refs.json",
-            "assetRefsRef": "asset.refs.json",
+            "creatorProfileId": CREATOR_ID,
+            "tagRefs": [TAG_REF],
             "assets": [
                 {
                     "assetId": "cover",
@@ -225,27 +224,12 @@ def build_package(
                         "https://commons.wikimedia.org/w/index.php?"
                         "title=File:Example.jpg&oldid=1"
                     ),
-                    "distributionDecision": "commercial_allowed",
+                    "distributionDecision": "production_allowed",
                     "modelReleaseStatus": "not_required",
                     "rightsAuditStatus": "verified",
                     "rightsAuditIssues": [],
                 }
             ],
-        },
-    )
-    write_json(object_root / "creator.refs.json", {"creatorRefs": [CREATOR_ID]})
-    write_json(object_root / "tag.refs.json", {"tagRefs": [TAG_REF]})
-    write_json(
-        object_root / "asset.refs.json",
-        {
-            "assets": [
-                {
-                    "assetId": "cover",
-                    "objectKey": object_key,
-                    "sha256": digest,
-                    "bytes": image.stat().st_size,
-                }
-            ]
         },
     )
     write_json(object_root / "content_review.json", _content_review())

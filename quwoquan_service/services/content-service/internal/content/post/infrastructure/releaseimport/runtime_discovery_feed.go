@@ -39,22 +39,16 @@ type importedMediaSummary struct {
 }
 
 // MediaDeliveryAccessMode 契约 enum 值（_shared/types.yaml MediaDeliveryAccessMode）。
-// research release 的媒体交付引用是相对私有 CAS key，App 必须换短签消费；
-// commercial release 的交付引用是 canonical public slice。
-const (
-	MediaDeliveryAccessModePublic      = "public"
-	MediaDeliveryAccessModeSignedGrant = "signed_grant"
-)
+// Data release 仅使用 canonical public slice；普通私有媒体授权另属共享安全能力。
+const MediaDeliveryAccessModePublic = "public"
 
 // MediaDeliveryAccessModeForReleaseClass 把 release header 的 releaseClass 映射
-// 为逐媒体 accessMode（DEC-033/DEC-041）：research → signed_grant、commercial/production → public。
+// 为逐媒体 accessMode（DEC-033/DEC-041）：仅 production → public。
 // 其它/未声明类别返回空串作为 invalid sentinel；新 release importer 必须在写入前
 // fail closed。该空串不得进入投影，也不得被消费端当成 public。
 func MediaDeliveryAccessModeForReleaseClass(releaseClass string) string {
 	switch strings.TrimSpace(releaseClass) {
-	case "research":
-		return MediaDeliveryAccessModeSignedGrant
-	case "commercial", "production":
+	case "production":
 		return MediaDeliveryAccessModePublic
 	default:
 		return ""

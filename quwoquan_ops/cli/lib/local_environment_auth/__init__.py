@@ -7,7 +7,6 @@
 - ``models``：``LocalEnvironmentAuth`` 等对外 dataclass。
 - ``guards``：环境/target/角色输入校验与 ``_require_mode`` 小工具。
 - ``secret_material``：target 级 auth 秘密文件的创建、加载与 runtime 投影。
-- ``research_identity``：Research 身份绑定的物化/加载与确定性账号推导。
 - ``service_credentials``：本地 FilterCatalog / Product Ops 短时 JWT 铸造。
 - ``http_transport``：本地环境 JSON HTTP（bearer/公开）传输层。
 - ``identity_sets``：受保护 test-data 电话身份集的物化与读取。
@@ -34,11 +33,8 @@ from ..local_target_handoff import target_for_hostname  # noqa: F401
 from ..public_domain_tls import root_certificate_path  # noqa: F401
 
 from .constants import (  # noqa: F401
-    _CROCKFORD_LOWER,
     _LOCAL_TARGETS,
     _REPO_ROOT,
-    _RESEARCH_IDENTITY_BINDING_NAME,
-    _RESEARCH_IDENTITY_BINDING_SCHEMA,
     _SECRET_KEYS,
     _TEST_DATA_IDENTITY_SET_LOCK_NAME,
     _TEST_DATA_IDENTITY_SET_NAME,
@@ -68,12 +64,6 @@ from .secret_material import (  # noqa: F401
     _read_secret_file,
     load_local_environment_auth,
     prepare_local_environment_auth,
-)
-from .research_identity import (  # noqa: F401
-    _deterministic_phone_owner_id,
-    _xxh64,
-    load_local_research_identity_binding,
-    materialize_local_research_identity_binding,
 )
 from .service_credentials import (  # noqa: F401
     _decode_local_jwt_claims,

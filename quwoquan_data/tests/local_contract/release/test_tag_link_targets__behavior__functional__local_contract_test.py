@@ -22,7 +22,8 @@ TAXONOMY_ROOT = _TMP / "control_plane" / "governance" / "taxonomy"
 sys.path.insert(0, str(SCRIPTS_ROOT))
 
 from core.io import read_json, read_ndjson, write_json  # noqa: E402
-from core.paths import PUBLISH_ROOT, RELEASE_ROOT  # noqa: E402
+PUBLISH_ROOT = _TMP / "publish"
+RELEASE_ROOT = _TMP / "releases"
 from core.release_layout import payload_file  # noqa: E402
 from content.release.canonical.build_lookup_indexes import build_publish_lookup_indexes  # noqa: E402
 
@@ -62,9 +63,10 @@ def _seed_publish() -> None:
         "geoTagRef": "Topic/地理/行政区/中国/四川省/阿坝藏族羌族自治州/九寨沟县",
         "tagRefs": ["Entity/地点/景区/5A景区"],
     })
-    # 与 test_coverage_index.py 的同名实体 seed 保持逐字段一致（进程内合跑幂等）。
+    # 标签唯一事实来自 manifest；本模块使用独立临时池，不依赖覆盖率测试顺序。
     write_json(entity_dir / "manifest.json", {
         "assets": [],
+        "tagRefs": ["Entity/地点/景区/5A景区"],
         "quality": {"promotedAt": "2026-07-07T09:00:00+00:00"},
     })
     write_json(
@@ -103,7 +105,8 @@ def _seed_publish() -> None:
 def test_tag_link_targets_are_derived_not_tag_fields():
     _seed_publish()
     counts = build_publish_lookup_indexes(
-        release_id="tag-link-targets", taxonomy_root=TAXONOMY_ROOT
+        release_id="tag-link-targets", canonical_root=PUBLISH_ROOT,
+        release_root=RELEASE_ROOT, taxonomy_root=TAXONOMY_ROOT
     )
     assert counts["tagLinkTargets"] == 4
     rows = read_ndjson(
@@ -123,7 +126,8 @@ def test_unique_place_tag_binds_homepage_route():
     """WP4-2：标签唯一命中一个已发布主页实体时，routePath 绑定实体主页路由。"""
     _seed_publish()
     build_publish_lookup_indexes(
-        release_id="tag-link-targets", taxonomy_root=TAXONOMY_ROOT
+        release_id="tag-link-targets", canonical_root=PUBLISH_ROOT,
+        release_root=RELEASE_ROOT, taxonomy_root=TAXONOMY_ROOT
     )
     rows = read_ndjson(
         payload_file(RELEASE_ROOT / "tag-link-targets", "index/lookups/tag_link_targets.ndjson")

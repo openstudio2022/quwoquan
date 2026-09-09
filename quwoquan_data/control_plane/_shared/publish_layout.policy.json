@@ -1,0 +1,6 @@
+{
+  "schema": "quwoquan_data.publish_layout_policy.v2",
+  "maxEntries": 256,
+  "maxBytes": 1073741824,
+  "videoMaxBytes": 4294967296
+}

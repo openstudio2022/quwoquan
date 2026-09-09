@@ -79,11 +79,7 @@ def release_input_classification(release: object) -> str:
                 "releaseClass equal to productLifecycleState"
             )
         classes.append(release_class)
-    if classes == ["research", "research"]:
-        return "research_inputs"
-    if classes == ["commercial", "commercial"]:
-        return "commercial_inputs"
-    return "mixed_inputs"
+    return "production_inputs"
 
 
 def canonical_contract_graph_digest() -> str:

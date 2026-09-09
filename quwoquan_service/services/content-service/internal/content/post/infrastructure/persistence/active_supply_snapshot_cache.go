@@ -19,8 +19,7 @@ type activeSupplyCacheKey struct {
 	environment    string
 	releaseID      string
 	manifestDigest string
-	// releaseClass 参与缓存身份。若同一 release identity 的状态被修复为
-	// research，旧 commercial snapshot 不得在 TTL 内继续放行匿名 feed。
+	// releaseClass 参与缓存身份，类别漂移不得在 TTL 内继续复用旧快照。
 	releaseClass      string
 	projectionVersion int64
 	revision          int64

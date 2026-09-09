@@ -43,6 +43,13 @@ def _write_data_readiness_fixture(
     source_revision = "sha256:" + "a" * 64
     source_digest = "sha256:" + "b" * 64
     entity_catalog_digest = "sha256:" + "c" * 64
+    source_identities = [{
+        "sourceRevision": source_revision,
+        "sourceDigest": source_digest,
+        "entityCatalogDigest": entity_catalog_digest,
+        "executionIds": ["execution-001"],
+    }]
+    source_identity_set_digest = stackctl._canonical_document_checksum(source_identities)
     attestation_path = release_root / "attestations" / "release.json"
     attestation_path.parent.mkdir(parents=True)
     attestation_path.write_text(
@@ -51,11 +58,10 @@ def _write_data_readiness_fixture(
                 "releaseId": release_id,
                 "sourceOwner": "qwq_data",
                 "payloadSha256": manifest_digest,
-                "releaseClass": "commercial",
-                "productLifecycleState": "commercial",
-                "sourceRevision": source_revision,
-                "sourceDigest": source_digest,
-                "entityCatalogDigest": entity_catalog_digest,
+                "releaseClass": "production",
+                "productLifecycleState": "production",
+                "sourceIdentities": source_identities,
+                "sourceIdentitySetDigest": source_identity_set_digest,
             }
         ),
         encoding="utf-8",
@@ -190,8 +196,8 @@ def _write_data_readiness_fixture(
         "releaseId": release_id,
         "releaseKind": "content",
         "sourceOwner": "qwq_data",
-        "releaseClass": "commercial",
-        "productLifecycleState": "commercial",
+        "releaseClass": "production",
+        "productLifecycleState": "production",
         "containsUnverifiedAssets": False,
         "rightsStatusCounts": {
             "verified": 3,
@@ -200,12 +206,9 @@ def _write_data_readiness_fixture(
             "unknown": 0,
         },
         "authorizationRequiredAssetIds": [],
-        "researchAcceptedCount": 3,
-        "commercialAcceptedCount": 3,
-        "sourceRevision": source_revision,
-        "sourceDigest": source_digest,
-        "entityCatalogDigest": entity_catalog_digest,
-        "readinessPhase": "commercial",
+        "sourceIdentities": source_identities,
+        "sourceIdentitySetDigest": source_identity_set_digest,
+        "readinessPhase": "production",
         "manifestDigest": manifest_digest,
         "mediaManifestDigest": "sha256:"
         + hashlib.sha256(media_path.read_bytes()).hexdigest(),
@@ -241,12 +244,11 @@ def _write_data_readiness_fixture(
         "environment": environment,
         "releaseId": release_id,
         "manifestDigest": manifest_digest,
-        "sourceRevision": source_revision,
-        "sourceDigest": source_digest,
-        "entityCatalogDigest": entity_catalog_digest,
-        "releaseClass": "commercial",
-        "productLifecycleState": "commercial",
-        "readinessPhase": "commercial",
+        "sourceIdentities": source_identities,
+        "sourceIdentitySetDigest": source_identity_set_digest,
+        "releaseClass": "production",
+        "productLifecycleState": "production",
+        "readinessPhase": "production",
         "importRunId": "import-001",
         "verifyRunId": verify_run_id,
         "importReportRef": import_ref,
@@ -265,98 +267,6 @@ def _write_data_readiness_fixture(
     return receipt_path, manifest_digest
 
 
-def _convert_data_readiness_fixture_to_research(
-    *,
-    output_root: Path,
-    receipt_path: Path,
-) -> None:
-    receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
-    receipt["releaseClass"] = "research"
-    receipt["productLifecycleState"] = "research"
-    receipt["readinessPhase"] = "research"
-    receipt["internalSubjectHash"] = "sha256:" + "7" * 64
-    receipt.pop("guestActorHash", None)
-    receipt.pop("guestLogin", None)
-    attestation_path = (
-        output_root
-        / "data/releases"
-        / receipt["releaseId"]
-        / "attestations/release.json"
-    )
-    attestation = json.loads(attestation_path.read_text(encoding="utf-8"))
-    attestation["releaseClass"] = "research"
-    attestation["productLifecycleState"] = "research"
-    attestation_path.write_text(json.dumps(attestation), encoding="utf-8")
-    post_path = output_root / receipt["postApiVerificationRef"]
-    post = json.loads(post_path.read_text(encoding="utf-8"))
-    post["internalSubjectHash"] = receipt["internalSubjectHash"]
-    post.pop("guestActorHash", None)
-    post.pop("guestLogin", None)
-    # DEC-031：research 私有交付下 avatar 以相对 CAS key 闭合（probeCount=0），
-    # 图片以匿名 401/403 拒绝探测 + expectedSha256 闭合。
-    for row in post.get("creators") or []:
-        if row.get("avatarMediaReady") is True:
-            row["avatarProbeCount"] = 0
-            row["avatarProbe"] = None
-            row["avatarUrl"] = (
-                "media/objects/sha256/aa/aa/" + "a" * 64 + ".jpg"
-            )
-    for post_row in post.get("posts") or []:
-        for probe in post_row.get("mediaProbes") or []:
-            if probe.get("kind") == "image":
-                probe["deliveryRef"] = (
-                    "media/objects/sha256/88/88/" + "8" * 64 + ".jpg"
-                )
-                probe["anonymousStatus"] = 403
-    post_path.write_text(json.dumps(post), encoding="utf-8")
-    isolation_ref = (
-        Path("env")
-        / receipt["environment"]
-        / "runs/data-release"
-        / receipt["releaseId"]
-        / receipt["verifyRunId"]
-        / "research-isolation-verification.json"
-    ).as_posix()
-    isolation_path = output_root / isolation_ref
-    isolation = {
-        "policyRef": (
-            f"quwoquan_ops/environments/{receipt['environment']}/runtime.yaml"
-        ),
-        "policySha256": "sha256:" + "8" * 64,
-        "subjectHash": receipt["internalSubjectHash"],
-    }
-    isolation_path.write_text(json.dumps(isolation), encoding="utf-8")
-    isolation_digest = "sha256:" + hashlib.sha256(
-        isolation_path.read_bytes()
-    ).hexdigest()
-    receipt["researchIsolationVerificationRef"] = isolation_ref
-    receipt["researchIsolationVerificationDigest"] = isolation_digest
-    activation = receipt["activationEnvelope"]
-    activation.update(
-        {
-            "releaseClass": "research",
-            "productLifecycleState": "research",
-            "readinessPhase": "research",
-            "researchIsolationPolicy": {
-                "policyRef": isolation["policyRef"],
-                "policyDigest": isolation["policySha256"],
-                "verificationRef": isolation_ref,
-                "verificationDigest": isolation_digest,
-                "subjectHash": receipt["internalSubjectHash"],
-            },
-        }
-    )
-    receipt["activationEnvelopeDigest"] = stackctl._canonical_document_checksum(
-        activation
-    )
-    unsigned = dict(receipt)
-    unsigned.pop("verificationChecksum")
-    receipt["verificationChecksum"] = stackctl._canonical_document_checksum(
-        unsigned
-    )
-    receipt_path.write_text(json.dumps(receipt), encoding="utf-8")
-
-
 def test_data_release_readiness__binds_digest_exact_queries_and_evidence__local_contract(
     monkeypatch,
     tmp_path: Path,
@@ -369,7 +279,7 @@ def test_data_release_readiness__binds_digest_exact_queries_and_evidence__local_
         release_id="pilot-002",
         verify_run_id="verify-001",
         manifest_digest=manifest_digest,
-        readiness_phase=stackctl.ReadinessPhase.COMMERCIAL,
+        readiness_phase=stackctl.ReadinessPhase.PRODUCTION,
     )
 
     assert loaded_path == receipt_path
@@ -395,9 +305,6 @@ def test_data_release_readiness__accepts_typed_source_identity_set__local_contra
         }
     ]
     identity_set_digest = "sha256:" + "9" * 64
-    for key in ("sourceRevision", "sourceDigest", "entityCatalogDigest"):
-        receipt.pop(key)
-        receipt["activationEnvelope"].pop(key)
     receipt["sourceIdentities"] = identities
     receipt["sourceIdentitySetDigest"] = identity_set_digest
     receipt["activationEnvelope"]["sourceIdentities"] = identities
@@ -410,8 +317,6 @@ def test_data_release_readiness__accepts_typed_source_identity_set__local_contra
         / "data/releases/pilot-002/attestations/release.json"
     )
     attestation = json.loads(attestation_path.read_text(encoding="utf-8"))
-    for key in ("sourceRevision", "sourceDigest", "entityCatalogDigest"):
-        attestation.pop(key)
     attestation["sourceIdentities"] = identities
     attestation["sourceIdentitySetDigest"] = identity_set_digest
     attestation_path.write_text(json.dumps(attestation), encoding="utf-8")
@@ -427,7 +332,7 @@ def test_data_release_readiness__accepts_typed_source_identity_set__local_contra
         release_id="pilot-002",
         verify_run_id="verify-001",
         manifest_digest=manifest_digest,
-        readiness_phase=stackctl.ReadinessPhase.COMMERCIAL,
+        readiness_phase=stackctl.ReadinessPhase.PRODUCTION,
     )
 
     assert loaded["sourceIdentities"] == identities
@@ -469,38 +374,10 @@ def test_data_release_readiness__accepts_explicit_platform_default_avatar__local
         release_id="pilot-002",
         verify_run_id="verify-001",
         manifest_digest=manifest_digest,
-        readiness_phase=stackctl.ReadinessPhase.COMMERCIAL,
+        readiness_phase=stackctl.ReadinessPhase.PRODUCTION,
     )
 
     assert loaded["counts"]["avatarAssets"] == 3
-
-
-def test_data_release_readiness__research_binds_activation_isolation_policy(
-    monkeypatch,
-    tmp_path: Path,
-) -> None:
-    monkeypatch.setenv("QWQ_OUTPUT_ROOT", str(tmp_path))
-    receipt_path, manifest_digest = _write_data_readiness_fixture(
-        output_root=tmp_path
-    )
-    _convert_data_readiness_fixture_to_research(
-        output_root=tmp_path,
-        receipt_path=receipt_path,
-    )
-
-    receipt, _ = stackctl._load_data_release_readiness(
-        environment="gamma",
-        release_id="pilot-002",
-        verify_run_id="verify-001",
-        manifest_digest=manifest_digest,
-        readiness_phase=stackctl.ReadinessPhase.RESEARCH,
-    )
-
-    isolation = receipt["activationEnvelope"]["researchIsolationPolicy"]
-    assert isolation["policyRef"] == "quwoquan_ops/environments/gamma/runtime.yaml"
-    assert isolation["verificationRef"] == receipt[
-        "researchIsolationVerificationRef"
-    ]
 
 
 def test_data_release_readiness__rejects_tampered_receipt__local_contract(
@@ -519,7 +396,7 @@ def test_data_release_readiness__rejects_tampered_receipt__local_contract(
             release_id="pilot-002",
             verify_run_id="verify-001",
             manifest_digest=manifest_digest,
-            readiness_phase=stackctl.ReadinessPhase.COMMERCIAL,
+            readiness_phase=stackctl.ReadinessPhase.PRODUCTION,
         )
     except ValueError as exc:
         assert "verificationChecksum" in str(exc)
@@ -554,7 +431,7 @@ def test_data_release_readiness__rejects_resigned_activation_identity_drift(
             release_id="pilot-002",
             verify_run_id="verify-001",
             manifest_digest=manifest_digest,
-            readiness_phase=stackctl.ReadinessPhase.COMMERCIAL,
+            readiness_phase=stackctl.ReadinessPhase.PRODUCTION,
         )
     except ValueError as exc:
         assert "activationEnvelope drifts" in str(exc)
@@ -573,12 +450,12 @@ def test_data_release_readiness__projects_live_exact_query_expectations__local_c
         release_id="pilot-002",
         verify_run_id="verify-001",
         manifest_digest=manifest_digest,
-        readiness_phase=stackctl.ReadinessPhase.COMMERCIAL,
+        readiness_phase=stackctl.ReadinessPhase.PRODUCTION,
     )
 
     assert stackctl._release_feed_post_expectations(
         receipt,
-        readiness_phase=stackctl.ReadinessPhase.COMMERCIAL,
+        readiness_phase=stackctl.ReadinessPhase.PRODUCTION,
     ) == {
         "content_feed": {"post-article", "post-image", "post-video"},
         "video_book_feed": {"post-video"},
@@ -653,7 +530,7 @@ def test_data_release_readiness__consumer_requires_premium_supply(
     monkeypatch,
     tmp_path: Path,
 ) -> None:
-    # environment-topology-and-packaging REQ-002：四环境内容 consumer/commercial
+    # environment-topology-and-packaging REQ-002：四环境内容 consumer/production
     # readiness 都必须校验 premium_stream 的 release-bound 非空读回，任一 exact
     # query 为空不得产生通过回执。视频书唯一消费该池，typed_video 绿不代表其绿。
     monkeypatch.setenv("QWQ_OUTPUT_ROOT", str(tmp_path))
@@ -802,7 +679,7 @@ def test_data_lifecycle_exit__binds_original_readiness_and_same_digest_replay(
         release_id="pilot-002",
         verify_run_id="verify-001",
         manifest_digest=manifest_digest,
-        readiness_phase=stackctl.ReadinessPhase.COMMERCIAL,
+        readiness_phase=stackctl.ReadinessPhase.PRODUCTION,
     )
     ref = _write_lifecycle_exit_fixture(
         output_root=tmp_path,
@@ -823,7 +700,7 @@ def test_data_lifecycle_exit__binds_original_readiness_and_same_digest_replay(
 
 
 
-def test_data_lifecycle_exit__allows_commercial_readiness_on_replay_import(
+def test_data_lifecycle_exit__allows_production_readiness_on_replay_import(
     monkeypatch,
     tmp_path: Path,
 ) -> None:
@@ -837,22 +714,22 @@ def test_data_lifecycle_exit__allows_commercial_readiness_on_replay_import(
         release_id="pilot-002",
         verify_run_id="verify-001",
         manifest_digest=manifest_digest,
-        readiness_phase=stackctl.ReadinessPhase.COMMERCIAL,
+        readiness_phase=stackctl.ReadinessPhase.PRODUCTION,
     )
     ref = _write_lifecycle_exit_fixture(
         output_root=tmp_path,
         readiness=readiness,
     )
-    # Simulate post-lifecycle commercial verify on the replayed import.
+    # Simulate post-lifecycle production verify on the replayed import.
     readiness = dict(readiness)
     readiness["importRunId"] = "replay-001"
-    readiness["verifyRunId"] = "commercial-verify-001"
-    commercial_result = (
+    readiness["verifyRunId"] = "production-verify-001"
+    production_result = (
         tmp_path
-        / "env/gamma/runs/data-release/pilot-002/commercial-verify-001/result.json"
+        / "env/gamma/runs/data-release/pilot-002/production-verify-001/result.json"
     )
-    commercial_result.parent.mkdir(parents=True, exist_ok=True)
-    commercial_result.write_text("{}\n", encoding="utf-8")
+    production_result.parent.mkdir(parents=True, exist_ok=True)
+    production_result.write_text("{}\n", encoding="utf-8")
 
     receipt, path = stackctl._load_data_release_lifecycle_exit(
         environment="gamma",
@@ -880,7 +757,7 @@ def test_data_lifecycle_exit__rejects_replay_digest_drift(
         release_id="pilot-002",
         verify_run_id="verify-001",
         manifest_digest=manifest_digest,
-        readiness_phase=stackctl.ReadinessPhase.COMMERCIAL,
+        readiness_phase=stackctl.ReadinessPhase.PRODUCTION,
     )
     ref = _write_lifecycle_exit_fixture(
         output_root=tmp_path,

@@ -56,8 +56,6 @@ RELEASE_DIGEST = "sha256:" + "e" * 64
 SOURCE_REVISION = "sha256:" + "3" * 64
 SOURCE_DIGEST = "sha256:" + "4" * 64
 ENTITY_CATALOG_DIGEST = "sha256:" + "5" * 64
-ISOLATION_DIGEST = "sha256:" + "6" * 64
-SUBJECT_HASH = "sha256:" + "7" * 64
 IMPACT_PLAN_DIGEST = "sha256:" + "8" * 64
 # 模块级临时 Ed25519 信任根（仓外 tmp），与生产同一编码；identity 必须是 keyring 声明的 canonical signer。
 TEST_SIGNING = create_temporary_signing(
@@ -137,11 +135,7 @@ def _checksum(payload: dict[str, Any]) -> dict[str, Any]:
     return result
 
 
-def _research_activation_fields(environment: str) -> dict[str, Any]:
-    verification_ref = (
-        f"env/{environment}/runs/data-release/{RELEASE_ID}/verify-001/"
-        "research-isolation-verification.json"
-    )
+def _production_activation_fields(environment: str) -> dict[str, Any]:
     activation = {
         "schema": "quwoquan_data.environment_activation_envelope",
         "environment": environment,
@@ -150,35 +144,25 @@ def _research_activation_fields(environment: str) -> dict[str, Any]:
         "sourceRevision": SOURCE_REVISION,
         "sourceDigest": SOURCE_DIGEST,
         "entityCatalogDigest": ENTITY_CATALOG_DIGEST,
-        "releaseClass": "research",
-        "productLifecycleState": "research",
-        "readinessPhase": "research",
+        "releaseClass": "production",
+        "productLifecycleState": "production",
+        "readinessPhase": "production",
         "importRunId": "import-001",
         "verifyRunId": "verify-001",
         "importReportRef": (
             f"env/{environment}/runs/data-release/{RELEASE_ID}/import-001/import.json"
         ),
         "importReportDigest": DIGEST_B,
-        "researchIsolationPolicy": {
-            "policyRef": f"quwoquan_ops/environments/{environment}/runtime.yaml",
-            "policyDigest": ISOLATION_DIGEST,
-            "verificationRef": verification_ref,
-            "verificationDigest": DIGEST_A,
-            "subjectHash": SUBJECT_HASH,
-        },
     }
     return {
-        "releaseClass": "research",
-        "productLifecycleState": "research",
+        "releaseClass": "production",
+        "productLifecycleState": "production",
         "sourceRevision": SOURCE_REVISION,
         "sourceDigest": SOURCE_DIGEST,
         "entityCatalogDigest": ENTITY_CATALOG_DIGEST,
-        "readinessPhase": "research",
+        "readinessPhase": "production",
         "activationEnvelope": activation,
         "activationEnvelopeDigest": _document_digest(activation),
-        "internalSubjectHash": SUBJECT_HASH,
-        "researchIsolationVerificationRef": verification_ref,
-        "researchIsolationVerificationDigest": DIGEST_A,
     }
 
 
@@ -544,7 +528,7 @@ class Fixture:
                     "releaseId": RELEASE_ID,
                     "releaseKind": "content",
                     "sourceOwner": "qwq_data",
-                    **_research_activation_fields(self.environment),
+                    **_production_activation_fields(self.environment),
                     "manifestDigest": RELEASE_DIGEST,
                     "mediaManifestDigest": DIGEST_A,
                     "importRunId": "import-001",
@@ -646,7 +630,6 @@ class Fixture:
             "lifecycleExitRef": "",
             "postApiVerificationRef": "",
             "releaseReadinessRef": "",
-            "researchIsolationVerificationRef": "",
             "tagConsumerVerificationRef": "",
             "homepageApiVerificationRef": "",
             "baselineApiVerificationRef": "",
@@ -658,8 +641,8 @@ class Fixture:
                     "schema": "quwoquan_data.environment_release_result",
                     "environment": self.environment,
                     "releaseId": RELEASE_ID,
-                    "releaseClass": "research",
-                    "productLifecycleState": "research",
+                    "releaseClass": "production",
+                    "productLifecycleState": "production",
                     "containsUnverifiedAssets": True,
                     "manifestDigest": RELEASE_DIGEST,
                     "admissionKind": "producer_handoff",
@@ -691,8 +674,8 @@ class Fixture:
                     "schema": "quwoquan_data.environment_release_result",
                     "environment": self.environment,
                     "releaseId": RELEASE_ID,
-                    "releaseClass": "research",
-                    "productLifecycleState": "research",
+                    "releaseClass": "production",
+                    "productLifecycleState": "production",
                     "containsUnverifiedAssets": True,
                     "manifestDigest": RELEASE_DIGEST,
                     "admissionKind": "producer_handoff",
@@ -953,8 +936,8 @@ class Fixture:
             self.root / "rollback.json", _checksum(rollback)
         )
         self.paths["media"] = _write(
-            self.root / "research-media-readback.json",
-            {"schema": "quwoquan_ops.research_content_isolation"},
+            self.root / "production-media-readback.json",
+            {"schema": "quwoquan_ops.release_video_delivery_evidence"},
         )
 
     def argv(self, output: Path) -> list[str]:

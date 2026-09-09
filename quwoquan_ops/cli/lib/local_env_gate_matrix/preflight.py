@@ -218,13 +218,9 @@ def _release_binding(attestation: str, *, label: str) -> dict[str, Any]:
     lifecycle_state = payload.get("productLifecycleState")
     contains_unverified_assets = payload.get("containsUnverifiedAssets")
     if (
-        release_class not in {"research", "commercial", "production"}
+        release_class != "production"
         or lifecycle_state != release_class
         or not isinstance(contains_unverified_assets, bool)
-        or (
-            release_class == "commercial"
-            and contains_unverified_assets is not False
-        )
     ):
         raise ValueError(
             f"{label} release attestation lifecycle identity is invalid"

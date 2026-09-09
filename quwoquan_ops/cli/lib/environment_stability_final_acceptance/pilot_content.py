@@ -69,15 +69,13 @@ def _pilot_identity(
             "candidate content release must be pilot-003",
         )
     if (
-        release.payload.get("releaseClass") != "commercial"
-        or release.payload.get("productLifecycleState") != "commercial"
-        or release.payload.get("containsUnverifiedAssets") is not False
-        or release.payload.get("authorizationRequiredAssetIds") != []
+        release.payload.get("releaseClass") != "production"
+        or release.payload.get("productLifecycleState") != "production"
     ):
         evaluation.block(
             "STATUS_NOT_PASSED",
             release.label,
-            "pilot-003 is not a commercially admissible release attestation",
+            "pilot-003 is not a production release attestation",
         )
     if release_id == previous["releaseId"] or candidate["releaseDigest"] == previous["releaseDigest"]:
         evaluation.block(

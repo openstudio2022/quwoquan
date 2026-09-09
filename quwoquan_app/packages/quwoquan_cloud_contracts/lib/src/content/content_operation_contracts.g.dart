@@ -1,5 +1,5 @@
 // Code generated from canonical domain contracts. DO NOT EDIT.
-// ContractGraph SHA256: faa882898fe771b862dd9ceac905bae941a1a55e446ba086e97baf269ad0d9f7
+// ContractGraph SHA256: a8564e9dd2e8881dbb32f1a06681ce805a29e9f396ad3c1037ff0c9828bcab70
 
 library;
 
@@ -528,6 +528,68 @@ enum ReportTargetType {
       "circle" => ReportTargetType.circle,
       "gathering" => ReportTargetType.gathering,
       "message" => ReportTargetType.message,
+      _ => throw FormatException('$path has an invalid enum value'),
+    };
+  }
+}
+
+enum SourceDerivedModification {
+  videoFrameExtraction("video_frame_extraction"),
+  crop("crop"),
+  resize("resize"),
+  formatConversion("format_conversion");
+
+  const SourceDerivedModification(this.wireName);
+
+  final String wireName;
+
+  static SourceDerivedModification fromWire(Object? value, String path) {
+    return switch (value) {
+      "video_frame_extraction" =>
+        SourceDerivedModification.videoFrameExtraction,
+      "crop" => SourceDerivedModification.crop,
+      "resize" => SourceDerivedModification.resize,
+      "format_conversion" => SourceDerivedModification.formatConversion,
+      _ => throw FormatException('$path has an invalid enum value'),
+    };
+  }
+}
+
+enum SourcePublicationAdmission {
+  productionRelease("production_release");
+
+  const SourcePublicationAdmission(this.wireName);
+
+  final String wireName;
+
+  static SourcePublicationAdmission fromWire(Object? value, String path) {
+    return switch (value) {
+      "production_release" => SourcePublicationAdmission.productionRelease,
+      _ => throw FormatException('$path has an invalid enum value'),
+    };
+  }
+}
+
+enum SourceWatermarkKind {
+  none("none"),
+  authorSignature("author_signature"),
+  platformLogo("platform_logo"),
+  stockAgency("stock_agency"),
+  other("other"),
+  unknown("unknown");
+
+  const SourceWatermarkKind(this.wireName);
+
+  final String wireName;
+
+  static SourceWatermarkKind fromWire(Object? value, String path) {
+    return switch (value) {
+      "none" => SourceWatermarkKind.none,
+      "author_signature" => SourceWatermarkKind.authorSignature,
+      "platform_logo" => SourceWatermarkKind.platformLogo,
+      "stock_agency" => SourceWatermarkKind.stockAgency,
+      "other" => SourceWatermarkKind.other,
+      "unknown" => SourceWatermarkKind.unknown,
       _ => throw FormatException('$path has an invalid enum value'),
     };
   }
@@ -5397,6 +5459,7 @@ final class PostMediaItem {
     this.hlsCmafMasterManifestUrl,
     this.hlsCmafDescriptorVersion,
     this.title,
+    this.caption,
     this.coverStrategy,
     this.coverFrameTimeMs,
   });
@@ -5417,6 +5480,7 @@ final class PostMediaItem {
   final String? hlsCmafMasterManifestUrl;
   final int? hlsCmafDescriptorVersion;
   final String? title;
+  final String? caption;
   final String? coverStrategy;
   final int? coverFrameTimeMs;
 
@@ -5441,6 +5505,7 @@ final class PostMediaItem {
       "hlsCmafMasterManifestUrl",
       "hlsCmafDescriptorVersion",
       "title",
+      "caption",
       "coverStrategy",
       "coverFrameTimeMs",
     }, path);
@@ -5504,6 +5569,9 @@ final class PostMediaItem {
       title: map["title"] == null
           ? null
           : _requiredString(map["title"], '$path.title'),
+      caption: map["caption"] == null
+          ? null
+          : _requiredString(map["caption"], '$path.caption'),
       coverStrategy: map["coverStrategy"] == null
           ? null
           : _requiredString(map["coverStrategy"], '$path.coverStrategy'),
@@ -5534,6 +5602,7 @@ final class PostMediaItem {
     if (hlsCmafDescriptorVersion != null)
       "hlsCmafDescriptorVersion": hlsCmafDescriptorVersion!,
     if (title != null) "title": title!,
+    if (caption != null) "caption": caption!,
     if (coverStrategy != null) "coverStrategy": coverStrategy!,
     if (coverFrameTimeMs != null) "coverFrameTimeMs": coverFrameTimeMs!,
   };
@@ -6299,128 +6368,6 @@ final class ReportCommandResult {
   };
 }
 
-final class ResearchReleaseReadbackView {
-  const ResearchReleaseReadbackView({
-    required this.releaseId,
-    required this.manifestDigest,
-    required this.subjectHash,
-    required this.attestationIdHash,
-    required this.signatureVerified,
-    required this.researchBadgeVisible,
-    required this.postIds,
-    required this.entityRefs,
-    required this.mediaAssetIds,
-    required this.publicCdnDetected,
-    required this.anonymousMediaUrlDetected,
-  });
-
-  final String releaseId;
-  final String manifestDigest;
-  final String subjectHash;
-  final String attestationIdHash;
-  final bool signatureVerified;
-  final bool researchBadgeVisible;
-  final List<String> postIds;
-  final List<String> entityRefs;
-  final List<String> mediaAssetIds;
-  final bool publicCdnDetected;
-  final bool anonymousMediaUrlDetected;
-
-  factory ResearchReleaseReadbackView.fromWire(
-    Map<String, Object?> map, [
-    String path = "ResearchReleaseReadbackView",
-  ]) {
-    _rejectUnknownFields(map, const <String>{
-      "releaseId",
-      "manifestDigest",
-      "subjectHash",
-      "attestationIdHash",
-      "signatureVerified",
-      "researchBadgeVisible",
-      "postIds",
-      "entityRefs",
-      "mediaAssetIds",
-      "publicCdnDetected",
-      "anonymousMediaUrlDetected",
-    }, path);
-    return ResearchReleaseReadbackView(
-      releaseId: _requiredNonBlankString(map["releaseId"], '$path.releaseId'),
-      manifestDigest: _requiredNonBlankString(
-        map["manifestDigest"],
-        '$path.manifestDigest',
-      ),
-      subjectHash: _requiredNonBlankString(
-        map["subjectHash"],
-        '$path.subjectHash',
-      ),
-      attestationIdHash: _requiredNonBlankString(
-        map["attestationIdHash"],
-        '$path.attestationIdHash',
-      ),
-      signatureVerified: _requiredBool(
-        map["signatureVerified"],
-        '$path.signatureVerified',
-      ),
-      researchBadgeVisible: _requiredBool(
-        map["researchBadgeVisible"],
-        '$path.researchBadgeVisible',
-      ),
-      postIds: List<String>.unmodifiable(
-        _requiredList(map["postIds"], '$path.postIds').asMap().entries.map(
-          (entry) =>
-              _requiredString(entry.value, '$path.postIds' + '[${entry.key}]'),
-        ),
-      ),
-      entityRefs: List<String>.unmodifiable(
-        _requiredList(
-          map["entityRefs"],
-          '$path.entityRefs',
-        ).asMap().entries.map(
-          (entry) => _requiredString(
-            entry.value,
-            '$path.entityRefs' + '[${entry.key}]',
-          ),
-        ),
-      ),
-      mediaAssetIds: List<String>.unmodifiable(
-        _requiredList(
-          map["mediaAssetIds"],
-          '$path.mediaAssetIds',
-        ).asMap().entries.map(
-          (entry) => _requiredString(
-            entry.value,
-            '$path.mediaAssetIds' + '[${entry.key}]',
-          ),
-        ),
-      ),
-      publicCdnDetected: _requiredBool(
-        map["publicCdnDetected"],
-        '$path.publicCdnDetected',
-      ),
-      anonymousMediaUrlDetected: _requiredBool(
-        map["anonymousMediaUrlDetected"],
-        '$path.anonymousMediaUrlDetected',
-      ),
-    );
-  }
-
-  Map<String, Object?> toWire() => <String, Object?>{
-    "releaseId": releaseId,
-    "manifestDigest": manifestDigest,
-    "subjectHash": subjectHash,
-    "attestationIdHash": attestationIdHash,
-    "signatureVerified": signatureVerified,
-    "researchBadgeVisible": researchBadgeVisible,
-    "postIds": postIds.map((value) => value).toList(growable: false),
-    "entityRefs": entityRefs.map((value) => value).toList(growable: false),
-    "mediaAssetIds": mediaAssetIds
-        .map((value) => value)
-        .toList(growable: false),
-    "publicCdnDetected": publicCdnDetected,
-    "anonymousMediaUrlDetected": anonymousMediaUrlDetected,
-  };
-}
-
 final class SourceAttribution {
   const SourceAttribution({
     required this.isOriginal,
@@ -6436,7 +6383,9 @@ final class SourceAttribution {
     required this.publicationAdmission,
     this.authorizationProofUrl,
     this.termsUrl,
-    this.riskAcceptanceId,
+    required this.derivedModifications,
+    this.watermarkKind,
+    this.watermarkNote,
     required this.watermarkStatus,
     required this.audioRightsStatus,
     required this.modelReleaseStatus,
@@ -6455,10 +6404,12 @@ final class SourceAttribution {
   final String attributionText;
   final String rightsBasis;
   final String commercialAuthorizationStatus;
-  final String publicationAdmission;
+  final SourcePublicationAdmission publicationAdmission;
   final String? authorizationProofUrl;
   final String? termsUrl;
-  final String? riskAcceptanceId;
+  final List<SourceDerivedModification> derivedModifications;
+  final SourceWatermarkKind? watermarkKind;
+  final String? watermarkNote;
   final String watermarkStatus;
   final String audioRightsStatus;
   final String modelReleaseStatus;
@@ -6484,7 +6435,9 @@ final class SourceAttribution {
       "publicationAdmission",
       "authorizationProofUrl",
       "termsUrl",
-      "riskAcceptanceId",
+      "derivedModifications",
+      "watermarkKind",
+      "watermarkNote",
       "watermarkStatus",
       "audioRightsStatus",
       "modelReleaseStatus",
@@ -6528,7 +6481,7 @@ final class SourceAttribution {
         map["commercialAuthorizationStatus"],
         '$path.commercialAuthorizationStatus',
       ),
-      publicationAdmission: _requiredString(
+      publicationAdmission: SourcePublicationAdmission.fromWire(
         map["publicationAdmission"],
         '$path.publicationAdmission',
       ),
@@ -6541,9 +6494,26 @@ final class SourceAttribution {
       termsUrl: map["termsUrl"] == null
           ? null
           : _requiredString(map["termsUrl"], '$path.termsUrl'),
-      riskAcceptanceId: map["riskAcceptanceId"] == null
+      derivedModifications: List<SourceDerivedModification>.unmodifiable(
+        _requiredList(
+          map["derivedModifications"],
+          '$path.derivedModifications',
+        ).asMap().entries.map(
+          (entry) => SourceDerivedModification.fromWire(
+            entry.value,
+            '$path.derivedModifications' + '[${entry.key}]',
+          ),
+        ),
+      ),
+      watermarkKind: map["watermarkKind"] == null
           ? null
-          : _requiredString(map["riskAcceptanceId"], '$path.riskAcceptanceId'),
+          : SourceWatermarkKind.fromWire(
+              map["watermarkKind"],
+              '$path.watermarkKind',
+            ),
+      watermarkNote: map["watermarkNote"] == null
+          ? null
+          : _requiredString(map["watermarkNote"], '$path.watermarkNote'),
       watermarkStatus: _requiredString(
         map["watermarkStatus"],
         '$path.watermarkStatus',
@@ -6580,11 +6550,15 @@ final class SourceAttribution {
     "attributionText": attributionText,
     "rightsBasis": rightsBasis,
     "commercialAuthorizationStatus": commercialAuthorizationStatus,
-    "publicationAdmission": publicationAdmission,
+    "publicationAdmission": publicationAdmission.wireName,
     if (authorizationProofUrl != null)
       "authorizationProofUrl": authorizationProofUrl!,
     if (termsUrl != null) "termsUrl": termsUrl!,
-    if (riskAcceptanceId != null) "riskAcceptanceId": riskAcceptanceId!,
+    "derivedModifications": derivedModifications
+        .map((value) => value.wireName)
+        .toList(growable: false),
+    if (watermarkKind != null) "watermarkKind": watermarkKind!.wireName,
+    if (watermarkNote != null) "watermarkNote": watermarkNote!,
     "watermarkStatus": watermarkStatus,
     "audioRightsStatus": audioRightsStatus,
     "modelReleaseStatus": modelReleaseStatus,
@@ -6826,13 +6800,6 @@ ReportCommandResult decodeReportCommandResult(Object? response) =>
       _requiredObject(response, "ReportCommandResult"),
       "ReportCommandResult",
     );
-
-ResearchReleaseReadbackView decodeResearchReleaseReadbackView(
-  Object? response,
-) => ResearchReleaseReadbackView.fromWire(
-  _requiredObject(response, "ResearchReleaseReadbackView"),
-  "ResearchReleaseReadbackView",
-);
 
 Map<String, Object?> _requiredObject(Object? value, String path) {
   if (value is! Map<Object?, Object?>) {

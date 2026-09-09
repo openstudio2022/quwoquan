@@ -458,7 +458,7 @@ func validateAppManagedPreparationSchema(schema appLaunchSchemaContract) error {
 	if err := requireExactOrderedStrings(
 		"app_managed_preparation.fields.contentBinding.fields.readinessPhase.allowed_values",
 		readiness.AllowedValues,
-		[]string{"research"},
+		[]string{"production"},
 	); err != nil {
 		return err
 	}

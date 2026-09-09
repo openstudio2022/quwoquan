@@ -2,20 +2,19 @@
 
 from __future__ import annotations
 
-import json
 import shutil
 import tempfile
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
+from content.release.canonical.canonical_inventory import allocate_package_path
 from content.release.canonical.content_pool_record import (
     append_pool_record,
     build_canonical_pool_record,
     build_content_pool_fields,
 )
 from content.release.canonical.creator_projection import project_creator_object
-from content.release.canonical.image_identity import canonical_asset_manifest_row
 from content.release.canonical.object_source_identity import (
     freeze_execution_source_identity,
 )
@@ -42,6 +41,8 @@ from content.release.canonical.post_asset_identity import (
 from content.release.canonical.review_rights_binding import validate_review_authority
 from content.release.canonical.post_transaction_assets import (
     asset_sources as _asset_sources,
+    canonical_post_asset_row,
+    source_binding_refs,
 )
 from content.release.canonical.post_transaction_assets import (
     source_assets as _source_assets,
@@ -97,6 +98,8 @@ def build_post_object_transaction_package(
     ).as_posix()
     source = execution_root / "posts" / canonical_ref
     source_manifest = _read_json(source / "manifest.json")
+    if any(field in source_manifest for field in ("assetRefsRef", "creatorRefsRef", "tagRefsRef")):
+        raise ObjectTransactionError("post manifest contains retired sidecar pointers")
     # Pool delivery freezes the reviewed object with the repository-wide Merkle
     # contract.  The transaction must consume that exact digest instead of
     # deriving a second, transaction-private tree identity.
@@ -160,11 +163,9 @@ def build_post_object_transaction_package(
             content_review_source,
             object_root / CANONICAL_CONTENT_REVIEW_REF,
         )
-        source_catalog = _source_catalog(execution_root, source, source_manifest)
-        _write_json(object_root / "source_catalog.json", source_catalog)
+        _source_catalog(execution_root, source, source_manifest)
 
         cas_rows: list[dict[str, Any]] = []
-        asset_refs: list[dict[str, Any]] = []
         rights_rows: list[dict[str, Any]] = []
         canonical_assets: list[dict[str, Any]] = []
         vertical = str(effective_source_manifest.get("vertical") or "").strip()
@@ -182,14 +183,16 @@ def build_post_object_transaction_package(
                 f"media/objects/sha256/{digest_hex[:2]}/{digest_hex[2:4]}/"
                 f"{digest_hex}.{suffix}"
             )
-            cas_ref = Path("cas") / f"{digest_hex}.{suffix}"
+            media_ref = Path("media") / f"{index + 1:02d}.{suffix}"
+            cas_ref = Path("object") / media_ref
             cas_target = staging / cas_ref
             cas_target.parent.mkdir(parents=True, exist_ok=True)
-            link_from_library(
-                asset_source, cas_target, kind="media", expected_sha256=digest_hex
-            )
+            shutil.copy2(asset_source, cas_target)
             width, height, mime = _media_dimensions(asset_source, raw)
-            related_sources = _asset_sources(raw, source_assets)
+            source_asset_refs = source_binding_refs(raw)
+            related_sources = _asset_sources(
+                {"sourceAssetRefs": source_asset_refs}, source_assets
+            )
             primary_source = related_sources[0] if related_sources else {}
             asset_id = str(raw.get("assetId") or f"asset-{index + 1}").strip()
             # 来源页优先于许可证页：authorizationProof 只证明授权依据，不是资产来源；
@@ -242,13 +245,6 @@ def build_post_object_transaction_package(
                 for issue in (raw.get("rightsAuditIssues") or [])
                 if str(issue).strip()
             ]
-            if (
-                rights_audit_status is RightsAuditStatus.VERIFIED
-                and not authorization_proof
-            ):
-                raise ObjectTransactionError(
-                    f"post asset verified rights lack authorizationProof：{asset_id}"
-                )
             if not all((source_url, fetched_at)):
                 raise ObjectTransactionError(
                     f"post asset 权利审计字段不完整：{asset_id}"
@@ -261,16 +257,6 @@ def build_post_object_transaction_package(
                 raise ObjectTransactionError(
                     f"post asset 非 verified 权利状态缺审计问题：{asset_id}"
                 )
-            snapshot_payload = {
-                "schema": "quwoquan_data.asset_rights_snapshot",
-                "executionId": execution_id,
-                "assetId": asset_id,
-                "sourceAssets": list(related_sources),
-                "manifestAsset": raw,
-            }
-            snapshot_ref = Path("object/rights_snapshots") / f"{digest_hex[:20]}.json"
-            _write_json(staging / snapshot_ref, snapshot_payload)
-            snapshot_path = staging / snapshot_ref
             usage_scope = str(
                 raw.get("usageScope") or primary_source.get("usageScope") or ""
             ).strip()
@@ -303,28 +289,13 @@ def build_post_object_transaction_package(
                 or ""
             ).strip()
             if distribution_decision not in {
-                "research_allowed",
-                "commercial_allowed",
+                "production_allowed",
                 "blocked",
             }:
                 raise ObjectTransactionError(
                     f"post asset 缺 canonical distributionDecision：{asset_id}"
                 )
-            if distribution_decision == "commercial_allowed" and (
-                rights_audit_status is not RightsAuditStatus.VERIFIED
-                or rights_audit_issues
-                or not authorization_proof.startswith("https://")
-                or not license_url.startswith("https://")
-                or not author
-                or not license_name
-            ):
-                raise ObjectTransactionError(
-                    f"asset {asset_id} commercial rights proof is incomplete"
-                )
-            if source_use_mode == "rights_audit_only":
-                raise ObjectTransactionError(
-                    f"post asset unresolved sourceUseMode is not publishable：{asset_id}"
-                )
+            # 未知权利不映射成旧类别；显式 internal_reference 仍是实际发布约束。
             if usage_scope == "internal_reference":
                 raise ObjectTransactionError(
                     f"post asset internal_reference scope is not publishable：{asset_id}"
@@ -337,7 +308,6 @@ def build_post_object_transaction_package(
                 "sourceUseMode": source_use_mode,
                 "canonicalFilePage": source_url,
                 "snapshotUrl": source_url,
-                "pageRevision": _digest_file(snapshot_path),
                 "originalAssetUrl": _https(
                     raw.get("originalAssetUrl"), primary_source.get("url"), source_url
                 ),
@@ -363,11 +333,6 @@ def build_post_object_transaction_package(
                 "captionSource": "captured source asset metadata",
                 "modifications": "post composition and delivery encoding when applicable",
                 "fetchedAt": fetched_at,
-                "snapshot": {
-                    "ref": snapshot_ref.as_posix(),
-                    "sha256": _digest_file(snapshot_path),
-                    "bytes": snapshot_path.stat().st_size,
-                },
                 "asset": {
                     "ref": cas_ref.as_posix(),
                     "sha256": digest,
@@ -381,6 +346,11 @@ def build_post_object_transaction_package(
                 "rightsAuditStatus": rights_audit_status.value,
                 "rightsAuditIssues": rights_audit_issues,
                 "modelReleaseStatus": model_release_status,
+                **{
+                    key: raw[key] if key in raw else primary_source[key]
+                    for key in ("commercialAuthorizationStatus", "propertyReleaseStatus", "audioRightsStatus", "derivedModifications", "watermarkNote")
+                    if key in raw or key in primary_source
+                },
                 # 水印判定来自看过像素的 AI 申报（经 ingest 转录到资产行）；缺席只能记 unknown。
                 "watermarkStatus": str(raw.get("watermarkStatus") or "unknown"),
                 "watermarkKind": str(raw.get("watermarkKind") or "unknown"),
@@ -396,67 +366,12 @@ def build_post_object_transaction_package(
                     "bytes": asset_source.stat().st_size,
                 }
             )
-            source_asset_refs = sorted(
-                {
-                    str(raw.get("sourceAssetRef") or "").strip(),
-                    *(
-                        str(ref or "").strip()
-                        for ref in raw.get("sourceAssetRefs") or []
-                    ),
-                }
-                - {""}
+            asset = canonical_post_asset_row(
+                {**raw, "assetId": asset_id}, asset_source=asset_source, mime_type=mime,
+                object_key=object_key, source_assets_by_ref=source_assets,
             )
-            related_receipt_refs = [
-                str(source.get("acquisitionReceiptRef") or "").strip()
-                for source in related_sources
-            ]
-            if any(not ref for ref in related_receipt_refs):
-                raise ObjectTransactionError(
-                    f"post asset source lacks acquisitionReceiptRef：{asset_id}"
-                )
-            acquisition_receipt_refs = sorted(set(related_receipt_refs))
-            derivative_bindings = {
-                json.dumps(source["derivativeBinding"], ensure_ascii=False, sort_keys=True, separators=(",", ":"))
-                for source in related_sources
-                if isinstance(source.get("derivativeBinding"), Mapping)
-            }
-            if len(derivative_bindings) > 1:
-                raise ObjectTransactionError(
-                    f"post asset source derivativeBinding 不唯一：{asset_id}"
-                )
-            derivative_binding = (
-                json.loads(next(iter(derivative_bindings)))
-                if derivative_bindings
-                else None
-            )
-            if derivative_binding is not None and (
-                derivative_binding.get("derivedSha256") != digest
-                or derivative_binding.get("derivedBytes") != asset_source.stat().st_size
-                or derivative_binding.get("derivedMimeType") != mime
-                or derivative_binding.get("derivedExtension") != asset_source.suffix.lower()
-            ):
-                raise ObjectTransactionError(
-                    f"post asset source derivativeBinding 与发布字节不一致：{asset_id}"
-                )
-            asset_binding = {
-                "assetId": asset_id,
-                "objectKey": object_key,
-                "sha256": digest,
-                "bytes": asset_source.stat().st_size,
-                "sourceAssetRefs": source_asset_refs,
-                "acquisitionReceiptRefs": acquisition_receipt_refs,
-            }
-            if derivative_binding is not None:
-                asset_binding["derivativeBinding"] = derivative_binding
-            asset_refs.append(asset_binding)
-            canonical_assets.append(
-                canonical_asset_manifest_row(
-                    raw,
-                    asset_source=asset_source,
-                    mime_type=mime,
-                    object_key=object_key,
-                )
-            )
+            asset.update(path=media_ref.as_posix(), fileName=media_ref.as_posix())
+            canonical_assets.append(asset)
         freeze_canonical_video_poster_identities(canonical_assets)
         publish_media_mode = str(
             effective_source_manifest.get("publishMediaMode") or ""
@@ -487,20 +402,11 @@ def build_post_object_transaction_package(
                 if str(item).strip()
             }
         )
-        _write_json(object_root / "creator.refs.json", {"creatorRefs": [creator_ref]})
-        _write_json(object_root / "tag.refs.json", {"tagRefs": tag_refs})
-        _write_json(object_root / "asset.refs.json", {"assets": asset_refs})
-        _write_json(
-            object_root / "rights.json",
-            {
-                "schema": "quwoquan_data.asset_rights_closure",
-                "publishMediaMode": (
-                    "text_only"
-                    if publish_media_mode == "text_only"
-                    else "embedded_media"
-                ),
-                "assets": rights_rows,
-            },
+        from content.release.canonical.post_transaction_sources import project_object_sources
+        source_refs = project_object_sources(
+            execution_root=execution_root, source_object=source, object_root=object_root,
+            manifest=source_manifest, source_assets=source_assets,
+            canonical_assets=canonical_assets, rights_rows=rights_rows,
         )
         pool_fields = build_content_pool_fields(
             source_manifest=effective_source_manifest,
@@ -526,13 +432,14 @@ def build_post_object_transaction_package(
             or now_iso(),
             "sourceIdentity": source_identity,
             "finalContentRef": final_content_ref,
-            "sourceCatalogRef": "source_catalog.json",
-            "rightsRef": "rights.json",
-            "creatorRefsRef": "creator.refs.json",
-            "tagRefsRef": "tag.refs.json",
-            "assetRefsRef": "asset.refs.json",
+            "sourceRefs": source_refs,
+            "creatorProfileId": creator_ref,
+            "tagRefs": tag_refs,
             "assets": canonical_assets,
         }
+        canonical_manifest["objectRef"] = canonical_ref
+        for field in ("sourceCatalogRef", "rightsRef"):
+            canonical_manifest.pop(field, None)
         _write_json(object_root / "manifest.json", canonical_manifest)
         append_pool_record(
             object_root=object_root,
@@ -546,8 +453,7 @@ def build_post_object_transaction_package(
             "creatorRefs": [creator_ref],
             "creatorObjects": [creator_object],
             "tagRefs": tag_refs,
-            "sourceCatalogRef": "source_catalog.json",
-            "rightsRef": "rights.json",
+            "sourceRefs": source_refs,
             "casRefs": cas_rows,
         }
         review = {"contentReviewRef": CANONICAL_CONTENT_REVIEW_REF}
@@ -576,6 +482,7 @@ def build_post_object_transaction_package(
                 "layoutSchema": LAYOUT_SCHEMA,
                 "objectKind": "posts",
                 "objectRef": canonical_ref,
+                "objectPath": allocate_package_path(PUBLISH_ROOT, canonical_manifest, "posts", object_root),
                 "objectSchema": EXPECTED_OBJECT_SCHEMAS["posts"],
                 "packageObjectRef": "object",
             },

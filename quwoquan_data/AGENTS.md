@@ -4,39 +4,32 @@
 
 ## Data 内容生产边界
 
-`.agents/skills/content-production/SKILL.md` 是 Data producer 六步（init → acquire → author → review → publish → release）的唯一流程真相源；本文件只约束工程边界，不复制步骤正文。producer 从主题到 `release finalize` 的 immutable handoff 即结束。import/activate/readback/health、API/App UAT、EAF、sampling authority、promotion、rollback 与 replay 全部 out of scope，不进入 handoff、恢复或完成条件；下游 owner 是 Environment Ops scheduler（EAF v2 profile 闭集 `smoke|integration|release`），Data 不写 EAF。
+[content-production Skill](../.agents/skills/content-production/SKILL.md) 是 producer 唯一流程真相源。本文件只声明工程不变量；阶段输入与命令由 Skill `references/pipeline.md` 拥有，派发由 `references/dispatch.md` 拥有，预算、恢复、工作区布局与收官由 `references/session.md` 拥有，载体模板与来源入口按当前 `CARRIER.md` / `sources.md` 渐进加载，不在 Data 复制步骤正文。
 
-宿主 Cursor/Codex Agent 是唯一语义主体，用自己的原生能力与通用工具（检索、读页、`curl`/`yt-dlp`/`html2text`/`jq`、终端、看图、子 Agent、规划）判定来源类型与载体、按 Skill 的来源矩阵与合规闭集出网检索取证下载、看图申报水印、申报热度信号、创作唯一 carrier 产物、以另一个真实会话独立评审并申报只记录的质量评分，并显式给出 approved 对象、explicit cohort 与 milestone。职责边界只按可伪造性划分：同样字节换任何执行者结果相同且不可伪造的归代码；需要理解语义或看见内容的归 AI。代码不得出网、不得决定来源、相关性、内容、review、verdict、评分、typed issue、approved、cohort、milestone、后继或恢复。`quwoquan_data/scripts/content/source/**`、`content/execution/**` 与 `core/**` 不得存在任何 HTTP/socket 出网点（由 local_contract 静态门锁定）；环境回读的 `content/release/environment/public_api_client.py` 验证的是自家服务而非来源站点，不在此限。
-
-代码允许边界只有六条命令，且每条都是单阶段、无状态、无恢复的展开：
-
-- `task init --round`：从一份 round spec 为该轮每个 carrier 原子创建 `execution_manifest.json`、`0.plan/request.json`、`0.plan/target_set.json`；
-- `task acquire --input <ingest.json>`：零网络 ingest——从 AI 已下载的本地字节算 sha256、按申报 sha1（有则）交叉校验、探测 mime/尺寸/时长、按预算降采样/转码/抽 poster、按申报 license 派生 `rightsStatus`、转录水印三字段与真实 `derivedModifications`、原样透传可选 `discoverySignals`，zh.wikipedia 与头条百科（`www.baike.com`）登记为百科来源，写 source unit 与 `1.download/source_refs.json`，媒体字节入 content library；逐 target 独立报告；
-- `task seal`：校验当前步骤硬事实并 create-once 写 `001-1.download` / `002-4.draft` / `003-5.review` receipt；`4.draft` 逐对象校验产物，违规对象只以 `DATA.SEAL.DRAFT_INVALID` typed issue 退轮，至少一个合规产物即 `pass`；`5.review` 的覆盖集合是 `002-4.draft` resultRefs，从 execution 级 `reviews` 扇出逐对象 `content_review.json` 并补齐机械字段（schema/stage/executionId/objectRef/draft 与 assetRights 权利转录），原样透传只记录的 `qualityScores/qualityNotes`（维度须属该载体闭集）；
-- `release publish-object`：对 approved 对象执行唯一一次原子 canonical 事务；
-- `release finalize`：pool-build + release-integrity + create-once handoff（含 `producerBaselineRevision` 与 `producerContractDigest`），并把 `cohort.json`/`producer_release_handoff.json` create-or-same 复制到受版本控制的 `quwoquan_data/reference/releases/<releaseId>/`；
-- `release handoff-verify`：只读重放，只读输出根。
-
-actor 契约：主会话拥有与用户澄清、全部机械命令、子 Agent 派发、每轮提交与镜像、收官；acquire 的出网取证与 ingest 清单可由主会话或该 execution 的 author 完成；一个 execution 恰有一个 author actor（可为主会话或宿主派发的独立子 Agent 会话）拥有 `4.draft`；`5.review` 由另一个真实 reviewer 会话完成，与本 execution author 不同 session/runId，同一 execution 同时至多一个 reviewer 调用，不同 execution 可并行。禁止 stage-open、宿主 verifierFacts、resolver/projector/runner/controller/queue/registry/SDK、actor projection、stage-gate、自动恢复、execution-state reducer 或轮次台账。凡跨阶段推进、读 receipt 决定下一步、重试或恢复都属被禁的 runner。任何旧轨引用、import、CLI、schema、fixture、test 与文档在物理删除增量中归零，不得用 shim 或 dual-read 保留。
-
-新能力优先进入 `python3 quwoquan_data/scripts/cli.py <command>` 的现有边界，不新增可直接运行的业务脚本，也不在 `.qwq_output/` 留不可从版本控制真相源重建的助手脚本。authoring source 先行。脚本不得拼正文、image caption、video script、`content_review.json` 的判断字段、typed issue 或 verdict。
+- 宿主 Cursor/Codex Agent 是唯一语义主体。机械代码不得决定来源、实体相关性、正文/caption/video script、review、verdict、评分、typed issue、approved、cohort、milestone、后继或恢复；不以脚本代替看媒体、创作和独立评审。
+- Data CLI 的 `task acquire` 是零网络 ingest：`quwoquan_data/scripts/content/source/**`、`content/execution/**` 与 `core/**` 不得有 HTTP/socket 出网点，由 local_contract 静态门锁定。`content/release/environment/public_api_client.py` 只验证自家服务，不是来源网络入口。
+- 来源侧机械能力归版本控制的 Skill `scripts/` 与点名载体模块；其中 `source/download/preview` 可按宿主显式输入出网，`build-inputs/lint` 只做本地构造与 advisory。未实现来源由宿主通用工具取得，不宣称自动化；不复制 Data probe/derive/CAS/seal，不包装 seal/publish。
+- Data 机械能力优先进入 `python3 quwoquan_data/scripts/cli.py <command>` 现有单阶段边界。禁止 stage-open、宿主 verifierFacts、resolver/projector/runner/controller/queue/registry/SDK、actor projection、stage-gate、execution-state reducer、自动恢复或第二轮次台账；不得用 shim/dual-read 留第二轨。
+- 一个 execution 一个真实 author，reviewer 必须是不同 session/runId 的独立会话。reviewer 只写 execution 级 `seal.review.json`，CLI 唯一扇出逐对象 `content_review.json` 并补齐机械权利转录；不建 `actors.json` 或第二身份 authority。
+- producer 以 `release finalize` 的 immutable handoff 为终点。import/activate/readback/health、API/App UAT、EAF、sampling authority、promotion、rollback 与 replay 由下游 Environment Ops scheduler 独立拥有，不进入 producer handoff、恢复或完成条件，Data 不写 EAF。外部 consumer 结果不得回写 producer receipt 或改变 cohort/release bytes。
 
 ## 内容与证据
 
-- 实体口径与配比：实体是用户愿意去的一切地方（景区、秘境、网红打卡地、古镇、露营地、温泉…），类型只取 `Entity/地点/*` 现有叶子；一个实体默认产 1 homepage + 1 article（换角度）+ 1–2 image [+ video]。homepage 主源必须是百科闭集（zh.wikipedia / 头条百科）；article 以实体条目换角度或主题条目为主源，携程游记等只作 `factual_reference_only` 事实参考；image/video 的主源是文件页/作品页。来源矩阵 v2 与 `accessPolicy` 闭集见 Skill `references/sourcing.md`：robots/ToS 限制只记录为 `accessPolicy`（`open|robots_disallowed|tos_restricted`）不阻断入池，版权保留/权利未知来源按 `unverified`/`unknown` + `authorizationRequired` 入池，公众可见性由运营策略决定；只有技术性规避（登录墙/付费墙/验证码/DRM/反爬挑战）仍禁止。
-- 硬门只有五条：来源 `sourceUrl/directUrl` 为 `https://` 且申报 sha1（有则）与本地字节一致；bytes 与 sha256 精确；权利字段（`sourceUrl/license/licenseUrl/creator`）在场（license 只记录并派生 `rightsStatus`：白名单 CC0/CC BY/CC BY-SA/PD → verified，其它可读 → unverified 并写 `rightsIssues`，不可读 → unknown；任何取值不阻断）；author 与 reviewer 是不同 session/runId；对象身份唯一且 create-once；显式 cohort 且四载体计数不低于里程碑目标。水印（`watermarkStatus/watermarkKind/watermarkNote` 由看过像素的 AI 申报，缺席只能记 unknown，`present` 汇总进 release header `watermarkedAssetIds`）、文风、结构、长度、配图率、质量评分（`qualityScores` 四载体各六维 1–5，只记录）、热度信号（`discoverySignals`）、权利疑虑等只作记录或 advisory。文章配图张数不设下限。
-- 放弃而不阻塞：候选级失败（含热点/质量筛选不合格、站点需技术性规避、429/503）换候选；对象级失败（含 4.draft 产物违规）该对象退轮、execution 继续、receipt 仍 `pass`；execution 级身份/完整性失败该 execution `blocked`，以 `retryOf` 新建补齐；四载体计数不达标是账不是失败。每轮收官六段报告（目标 vs `pool-query` 计数、新增/复用、放弃清单、blocked 与首个 typed blocker、缺口、下一轮入口）附评分分布，计数只从 `pool-query` 读；每轮收官后按 `commit` Skill 提交 `publish/**` 并 rsync 随体根到备份路径。
-- `4.draft` 每对象只留一个 carrier 主产物（`page.md|draft.article.md|image_work.json|video_script.json`），标题/tagRefs/creatorProfileId 由产物自身声明，`tagRefs`/`creatorProfileId`/homepage 百科主源在 author seal 校验；`5.review` 每对象只留一份 `content_review.json`，AI 只写 `decision/blockingIssues/advisories`，`assetRights`/`dimensions` 由 seal 机械补齐。
-- release 只有一个类别 `production`，媒体按公开 slice 交付；对象级权利词汇（`distributionDecision`、`publicationAdmission`、pool `usageScope`）是已冻结在 canonical 字节中的记录事实，保持现有取值。商用级权利字段（modelRelease/propertyRelease/audioRights/commercialAuthorization）只记录不要求。
-- approved 对象由 AI 逐个调用单对象事务；release cohort 与 milestone 必须显式，禁止 all-publishable；`objectRefs` 排序、canonical 化与 `expectedCarrierCounts` 派生由 finalize 完成。
-- 媒体字节唯一 canonical holder 是仓外 content library（`~/.local/share/quwoquan/content_library`，可用 `QWQ_LIBRARY_ROOT` 覆盖），execution/object-transaction 包/release payload 一律硬链接引用、不产生独立拷贝；publish 事务把已发布对象引用的媒体另拷一份到仓外随体根（默认 `~/.local/share/quwoquan/golden_media`，`QWQ_CARRIED_MEDIA_ROOT` 可指向已备份卷），两处互为备份、都不进 git。任何 gc/hygiene/清理路径不得触碰这两个根；`verify publish-closure` 保证缺失可检测（`DATA.PUBLISH.CARRIED_MEDIA_MISSING` 附 `sourceUrl`）。library 丢失时先运行 `python3 quwoquan_data/scripts/cli.py verify all`，它在跑门禁前会从随体根回填 library。
+- 实体类型只取 taxonomy `Entity/地点/*` 现有叶子。homepage 主源保持百科闭集（zh.wikipedia / 头条百科 `www.baike.com`），第三方文章只作 `factual_reference_only`；image/video 绑定真实作品来源。
+- 来源访问与权利原则只由 Skill `references/sourcing.md` 拥有：访问策略、版权保留、未知权利与需授权事实只记录，不因类别阻断入池；公众可见性归运营策略。禁止技术性规避登录墙、付费墙、验证码、DRM 或反爬挑战。
+- 硬事实为 HTTPS 来源、申报 sha1（有则）与本地字节一致、bytes/sha256 精确、必填权利字段在场、独立 author/reviewer、schema/ref 与 create-once 对象身份闭包，以及显式 cohort 达到里程碑计数。权利取值、真实派生修改、水印、热度与质量评分如实记录，不伪造事实或增设质量准入门；字段与枚举只以 `schema/content/` 单一说明为准。
+- 每对象只留一个 carrier 主产物（`page.md|draft.article.md|image_work.json|video_script.json`），标题/tagRefs/creatorProfileId 由产物自身声明。author seal 校验引用与 homepage 百科主源；每对象只保留一份 seal 生成的 `content_review.json`，不允许脚本生成语义判断。
+- 单对象违规保留 typed issue，不伪造整 execution 成功或覆盖 blocked receipt。approved 对象必须由宿主逐个点名调用单对象原子 canonical 事务；release cohort 与 milestone 必须显式，禁止 all-publishable；排序、canonical 化与 `expectedCarrierCounts` 派生由 finalize 完成。
+- release 只有 `production` 类别，媒体按公开 slice 交付。商用级权利字段只记录不要求；文章配图张数不设下限。里程碑计数与完成证据只按 Skill，本文不维护第二完成台账。
 
-## Producer 完成与下游 handoff
+## 持久性与工程卫生
 
-producer 完成 = 三份 seal receipt 连续闭合 + 逐对象 publish 事务 + `release finalize` 的 immutable handoff。M1/M10/M100/M1000 按 `cumulative_unique_finalized_objects` 计数，每级形成自己的 full explicit cohort/release/handoff；凡已完成 canonical publish 且 review approved 的对象都可复用进入 cohort，handoff 以 canonical publish proof 为凭，不内嵌 execution receipt 链。HANDOFF 只含 release/cohort/milestone/counts/content-pool identity/baseline/contract digest 等 producer facts。
-
-HANDOFF 不含 UAT/sample authority/import/activate/readback、App/API UAT、EAF、environment promotion 或 rollback。任何外部 consumer 结果都不能回写 producer receipt、改变 cohort/release bytes，或成为“内容生产完成”的门槛。
-
-## 工程卫生
-
-`.qwq_output/` 仅放可删除重建的运行产物、证据与缓存；`data/local/` 下只允许 `cache/`、`runs/`、`workspace/`，本次 run 的输入与规划放 `data/local/workspace/<run>/`。控制面真相源不得写入 output。Python bytecode、pytest cache 与工具缓存按仓库既有隔离规则落盘；禁止在仓库根创建临时脚本。不要运行长门禁，按改动范围执行短静态检查或文档引用检查。
+- canonical 内容仓为与源码工作树平级的 `/Users/zhaoyuxi/Projects/quwoquan/publish` 独立 Git 仓，通过 `QWQ_PUBLISH_ROOT` 显式绑定仓身份；不是源码 worktree、submodule 或 symlink。缺根/错仓必须阻断，不回退 `quwoquan_data/publish`。本规则冻结目标契约，不表示实际迁仓已完成，当前差距见 [发布仓 OPEN-027](../specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#open-027)。
+- 地域实体按 `entities/<domain>/<真实行政链>/<type>/p0001/<name>/<seq>/` 管理，非地域结构仅预留 `entities/<domain>/<已有主类型路径>/p0001/<name>/<seq>/`；posts 按 `posts/<carrier>/<angle>/p0001/<name>/<seq>/`。行政链来自真实主 geoTagRef，不虚构缺层；地域适用性显式，当前不扩展非地点 producer。名称/分区/条目只作 locator，稳定 ID/ref 不变，seq 不等于版本。
+- 对象包的 `manifest.json` 单写身份、结构化实体事实、正文引用与有序媒体/依赖；正文只保留最终 `page.md`/`article.md`，image/video 无伪正文。采用来源及必要真实证据进入包内 `sources/`，最终媒体进入 `media/`；不把禁止 raw 草稿误解为禁止采用来源证据，不跨包 symlink。审核原件与追加式 `records/` 各自保留，不伪造重审或复制第二套 manifest/source authority。
+- content library（`QWQ_LIBRARY_ROOT`）用于采集复用，完整作品/release 不依赖它消费；独立 golden media（`QWQ_CARRIED_MEDIA_ROOT`）保护副本继续保留。普通 Git 不跟踪媒体，`.gitignore`/硬链接不算备份，同卷拷贝不证明抗卷损坏；异卷/远端恢复未验证就如实未建立，任何 gc/hygiene 不触碰现有保护根或任一保留作品/release 所引用媒体。
+- verify 与普通消费必须只读、缺失/损坏/来源证据不足 typed 阻断，不隐式下载、回填库或修复包；恢复是显式操作并逐摘要验证独立副本，不承诺来源直链能复原派生字节。当前实现/证据差距见 [对象包 OPEN-025](../specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#open-025) 与 [耐久性 OPEN-002](../specs/feature-tree/discovery-content/object-homepage-coverage-scaling/spec.md#open-002)，未改为只读前不得把旧 `verify all` 当纯检查。
+- finalize 只保存现有 `cohort.json` / `producer_release_handoff.json` 到内容仓 `releases/<releaseId>/`，绑定工程 baseline/契约摘要与内容仓身份/exact 内容快照；有匹配内容 commit 才记录，不强制双提交。旧 `reference/releases`、release bundle 与 receipts 原件保留；本规则不授权移动、删除或初始化仓库。
+- 共同 publish 根的写锁不依赖各源码 OUTPUT_ROOT，publish/显式整理/Git ref 更新串行；只枚举声明对象根，`.git`、仓元数据与 releases 不进入对象 inventory。分区仅用条目数与随体逻辑字节，同名组不拆、不自动搬家，不建分区 authority 或后台健康框架。
+- `.qwq_output/` 仅放可删除重建的运行产物、证据与缓存，不得承载控制面真相源或助手脚本。`data/local/` 只允许 `cache/`、`runs/`、`workspace/`；具体生产布局归 Skill，execution `tasks/` 与 receipts 原物理布局不迁移。删除运行证据会失去该次执行审计，在飞工作区不得自动清理。
+- authoring source 先行；提交、发布和镜像必须满足用户授权。Python bytecode、pytest cache 与工具缓存按根规则隔离，禁止仓库根临时脚本。不要运行长门禁，只按实际改动执行短静态检查、回归或文档引用检查。

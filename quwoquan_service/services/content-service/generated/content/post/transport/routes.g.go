@@ -28,7 +28,6 @@ var generatedRouteTable = []generatedRouteDef{
 	{method: "PATCH", pathTemplate: "/content/posts/{postId}/settings", operation: "UpdatePostSettings"},
 	{method: "POST", pathTemplate: "/content/posts/{postId}:promoteToWork", operation: "PromotePostToWork"},
 	{method: "POST", pathTemplate: "/content/posts:publish", operation: "SubmitPostPublication"},
-	{method: "GET", pathTemplate: "/content/research/readback", operation: "GetResearchReleaseReadback"},
 	{method: "GET", pathTemplate: "/content/social-proof/{anchorKind}/{objectId}", operation: "GetGatheringSocialProof"},
 }
 

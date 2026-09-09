@@ -1,6 +1,6 @@
 // Command homepage-import 的纯加载层（无 mongo 依赖，可单测）。
 //
-// 消费 quwoquan_data publish 主线的 entities 目录树（page.md 三件套），构建
+// 消费 quwoquan_data publish 主线的 entities 目录树（manifest.json + page.md），构建
 // application.ImportedHomepageInput 投影：introductionMarkdown 承载 page.md 全文，
 // introductionAssets 只通过 release MediaAsset authority 解析 public slice URL，
 // role 归一为 metadata 闭集 cover/inline/related
@@ -58,29 +58,8 @@ var assetRoleToIntroductionRole = map[string]string{
 	"related": "related",
 }
 
-// MediaDeliveryAccessMode 契约 enum 值（唯一真相源
-// contracts/metadata/_shared/types.yaml MediaDeliveryAccessMode）。
-// research release 的媒体交付引用是相对私有 CAS key，App 必须换短签消费；
-// commercial release 的交付引用是 canonical public slice。
-const (
-	mediaDeliveryAccessModePublic      = "public"
-	mediaDeliveryAccessModeSignedGrant = "signed_grant"
-)
-
-// mediaDeliveryAccessModeForReleaseClass 把 release header 的 releaseClass 映射
-// 为逐资产 accessMode（DEC-033/DEC-041）：research → signed_grant、
-// commercial/production → public。其它/未声明类别返回空串表示缺席——契约
-// accessMode 为 NULLABLE，缺席时端按存量 public 交付消费，不得由 importer 造值。
-func mediaDeliveryAccessModeForReleaseClass(releaseClass string) string {
-	switch strings.TrimSpace(releaseClass) {
-	case "research":
-		return mediaDeliveryAccessModeSignedGrant
-	case "commercial", "production":
-		return mediaDeliveryAccessModePublic
-	default:
-		return ""
-	}
-}
+// Data release 只接受 production public slice；普通私有媒体授权不由 importer 拥有。
+const mediaDeliveryAccessModePublic = "public"
 
 type entityHeader struct {
 	Label           string                       `json:"label"`
@@ -178,24 +157,36 @@ type entityManifestAsset struct {
 }
 
 type entityHomepageManifest struct {
-	Assets []entityManifestAsset `json:"assets"`
+	entityHeader
+	Schema      string                `json:"schema"`
+	ContentType string                `json:"contentType"`
+	EntityRef   string                `json:"entityRef"`
+	Assets      []entityManifestAsset `json:"assets"`
+}
+
+func (manifest entityHomepageManifest) logicalEntityRef() (string, error) {
+	if manifest.Schema != "quwoquan_data.entity_object" || manifest.ContentType != "homepage" {
+		return "", fmt.Errorf("requires schema=quwoquan_data.entity_object and contentType=homepage")
+	}
+	// 保留既有 hp 稳定 ID 输入：只移除协议前缀，不解析、清理或重建逻辑身份。
+	ref := strings.TrimPrefix(manifest.EntityRef, "/entity/")
+	if ref == manifest.EntityRef || strings.TrimSpace(ref) == "" || strings.TrimSpace(ref) != ref {
+		return "", fmt.Errorf("entityRef must be a non-empty /entity/ logical binding")
+	}
+	if strings.TrimSpace(manifest.Domain) == "" || strings.TrimSpace(manifest.Type) == "" || strings.TrimSpace(manifest.Label) == "" {
+		return "", fmt.Errorf("root domain, type and label are required")
+	}
+	return ref, nil
 }
 
 func loadIntroductionAssets(
 	entityRef string,
-	entityDir string,
+	ownerRef string,
+	manifest entityHomepageManifest,
 	releaseAssets map[string]runtimemedia.ReleaseMediaAsset,
 	mediaBases runtimemedia.MediaDeliveryBases,
 	accessMode string,
 ) ([]application.HomepageIntroductionAsset, error) {
-	rawManifest, err := os.ReadFile(filepath.Join(entityDir, "manifest.json"))
-	if err != nil {
-		return nil, fmt.Errorf("%s: read semantic manifest.json: %w", entityRef, err)
-	}
-	var manifest entityHomepageManifest
-	if err := json.Unmarshal(rawManifest, &manifest); err != nil {
-		return nil, fmt.Errorf("%s: invalid semantic manifest.json: %w", entityRef, err)
-	}
 	// publishMediaMode=text_only 的主页没有配图，introduction 只投影正文。
 	if len(manifest.Assets) == 0 {
 		return nil, nil
@@ -225,7 +216,7 @@ func loadIntroductionAssets(
 			assetID,
 			asset.Kind,
 			asset.SHA256,
-			"entities/"+entityRef,
+			ownerRef,
 		)
 		if resolveErr != nil {
 			return nil, fmt.Errorf(
@@ -296,33 +287,39 @@ func LoadHomepageProjections(
 	mediaBases runtimemedia.MediaDeliveryBases,
 	releaseClass string,
 ) ([]application.ImportedHomepageInput, []string, error) {
-	accessMode := mediaDeliveryAccessModeForReleaseClass(releaseClass)
+	if releaseClass != "production" {
+		return nil, nil, fmt.Errorf("homepage import requires releaseClass=production, got %q", releaseClass)
+	}
+	accessMode := mediaDeliveryAccessModePublic
 	entRoot := filepath.Join(publishRoot, "entities")
 	var inputs []application.ImportedHomepageInput
 	var issues []string
 	err := filepath.WalkDir(entRoot, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
+			if path == entRoot && os.IsNotExist(err) {
+				return nil
+			}
 			return err
 		}
-		if d.IsDir() || d.Name() != "_entity.json" {
-			return nil
-		}
-		rel, rerr := filepath.Rel(entRoot, filepath.Dir(path))
-		if rerr != nil {
-			return rerr
-		}
-		entityRef := filepath.ToSlash(rel)
-		if filter != nil && !filter[entityRef] {
+		if d.IsDir() || d.Name() != "manifest.json" {
 			return nil
 		}
 		raw, rerr := os.ReadFile(path)
 		if rerr != nil {
-			return rerr
+			return fmt.Errorf("%s: read manifest.json: %w", path, rerr)
 		}
-		var header entityHeader
-		if jerr := json.Unmarshal(raw, &header); jerr != nil {
-			return fmt.Errorf("%s: invalid _entity.json: %w", entityRef, jerr)
+		var manifest entityHomepageManifest
+		if jerr := json.Unmarshal(raw, &manifest); jerr != nil {
+			return fmt.Errorf("%s: invalid manifest.json: %w", path, jerr)
 		}
+		entityRef, identityErr := manifest.logicalEntityRef()
+		if identityErr != nil {
+			return fmt.Errorf("%s: invalid manifest.json: %w", path, identityErr)
+		}
+		if filter != nil && !filter[entityRef] {
+			return nil
+		}
+		header := manifest.entityHeader
 		if sourceErr := validatePublicHomepageSources(header); sourceErr != nil {
 			issues = append(issues, fmt.Sprintf("%s: %v，跳过", entityRef, sourceErr))
 			return nil
@@ -333,24 +330,22 @@ func LoadHomepageProjections(
 			// collection 导入仍由 content importer 覆盖）。
 			return nil
 		}
-		segs := strings.Split(entityRef, "/")
 		etype := strings.TrimSpace(header.Type)
-		if etype == "" && len(segs) >= 2 {
-			etype = segs[1]
-		}
 		homepageType, ok := entityTypeToHomepageType[etype]
 		if !ok {
 			issues = append(issues, fmt.Sprintf("%s: 实体类型 %q 未登记主页类型映射，跳过", entityRef, etype))
 			return nil
 		}
 		title := strings.TrimSpace(header.Label)
-		if title == "" {
-			title = segs[len(segs)-1]
+		// 物理 objectPath 只提供 release 媒体 storage owner，不进入身份或 read filter。
+		objectPath, pathErr := filepath.Rel(entRoot, filepath.Dir(path))
+		if pathErr != nil {
+			return pathErr
 		}
-
 		assets, assetErr := loadIntroductionAssets(
 			entityRef,
-			filepath.Dir(path),
+			"entities/"+filepath.ToSlash(objectPath),
+			manifest,
 			releaseAssets,
 			mediaBases,
 			accessMode,
@@ -374,7 +369,7 @@ func LoadHomepageProjections(
 				return fmt.Errorf("%s: page.md coverImage %q does not match semantic cover asset", entityRef, coverID)
 			}
 		}
-		// WP3 统一打标：_entity.json.tagRefs → categoryTags 投影，
+		// WP3 统一打标：manifest.json.tagRefs → categoryTags 投影，
 		// 与 content-service import 导 entities.tagRefs 同源（消除双轨不一致）。
 		categoryTags := make([]string, 0, len(header.TagRefs))
 		for _, ref := range header.TagRefs {
@@ -407,7 +402,7 @@ func LoadHomepageProjections(
 		})
 		return nil
 	})
-	if err != nil && !os.IsNotExist(err) {
+	if err != nil {
 		return inputs, issues, err
 	}
 	return inputs, issues, nil

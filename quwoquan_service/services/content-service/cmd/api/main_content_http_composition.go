@@ -75,7 +75,6 @@ type contentHTTPHandlerInput struct {
 	postStore                    *persistence.MongoPostStore
 	postQueryReader              *persistence.MongoPostQueryReader
 	activeSupplyReader           feedapp.ActiveSupplyReader
-	researchReleaseReadback      *postapp.ResearchReleaseReadbackQueryFacet
 	feedCursorCodec              *feedapp.FeedCursorCodec
 	feedRuntimeConfig            feedRuntimeConfig
 	rankedRecommendation         deliveryapp.RankedRecommendationGateway
@@ -293,12 +292,6 @@ func buildContentHTTPHandler(input contentHTTPHandlerInput) (contentHTTPHandlers
 
 	var handlerOpts []httpadapter.ContentHandlerOption
 	handlerOpts = append(handlerOpts, httpadapter.WithHealthChecker(healthChecker))
-	if input.researchReleaseReadback != nil {
-		handlerOpts = append(
-			handlerOpts,
-			httpadapter.WithResearchReleaseReadback(input.researchReleaseReadback),
-		)
-	}
 	if intersectionService == nil {
 		return contentHTTPHandlers{}, fmt.Errorf("content-service IntersectionVisitState object composition is not configured")
 	}
@@ -448,7 +441,7 @@ func (lister publicWebSitemapLister) ListPublicPostIDs(
 	ctx context.Context,
 	limit int,
 ) ([]string, error) {
-	return lister.facade.ListPublicPostIDs(ctx, lister.reader, limit, false)
+	return lister.facade.ListPublicPostIDs(ctx, lister.reader, limit)
 }
 
 // viewerPostReactionReader 把 content_reaction 聚合的批量点赞读适配为 post

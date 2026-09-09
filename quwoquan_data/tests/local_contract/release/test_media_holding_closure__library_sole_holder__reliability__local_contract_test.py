@@ -64,7 +64,7 @@ def _tree(root: Path, records: list[dict]) -> Path:
 
     root.mkdir(parents=True, exist_ok=True)
     (root / "entities" / "地点" / "景区" / "样例").mkdir(parents=True, exist_ok=True)
-    (root / "entities" / "地点" / "景区" / "样例" / "asset.refs.json").write_text(
+    (root / "entities" / "地点" / "景区" / "样例" / "manifest.json").write_text(
         json.dumps({"assets": records}, ensure_ascii=False),
         encoding="utf-8",
     )
@@ -143,7 +143,7 @@ def test_an_absent_holding_fails_closed_and_points_back_at_the_one_reference(
     absent = report.unhonoured
     assert [outcome.state for outcome in absent] == [MediaHoldingState.ABSENT]
     assert absent[0].reference.digest == missing
-    assert "asset.refs.json#$.assets[1]" in absent[0].reference.reference_ref
+    assert "manifest.json#$.assets[1]" in absent[0].reference.reference_ref
     assert absent[0].recovery is MediaHoldingRecoveryAction.ADMIT_CARRIED_BYTES
 
     gone = next(reference for reference in references if reference.digest == missing)
@@ -325,7 +325,7 @@ def test_reclaimed_source_originals_are_not_part_of_the_media_closure(
     reclaimed = _digest(b"a 267MB source original that was reclaimed")
     tree = tmp_path / "publish"
     (tree / "entities" / "样例").mkdir(parents=True)
-    (tree / "entities" / "样例" / "asset.refs.json").write_text(
+    (tree / "entities" / "样例" / "manifest.json").write_text(
         json.dumps(
             {
                 "assets": [
@@ -684,7 +684,7 @@ def test_a_holding_absent_from_a_reachable_library_names_the_carried_bytes_route
     reference = MediaReference(
         digest=digest,
         declared_bytes=len(_BODY),
-        document_ref="entities/样例/asset.refs.json",
+        document_ref="entities/样例/manifest.json",
         record_path="$.assets[0]",
     )
     empty = tmp_path / "lib"

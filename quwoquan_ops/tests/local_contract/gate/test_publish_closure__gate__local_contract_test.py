@@ -266,6 +266,7 @@ class PublishClosureGateTest(unittest.TestCase):
         manifest = _read_json(self.post_manifest)
         manifest["assets"] = [
             {
+                "sha256": f"sha256:{digest_hex}",
                 "assetId": "cover",
                 "kind": "image",
                 "role": "cover",

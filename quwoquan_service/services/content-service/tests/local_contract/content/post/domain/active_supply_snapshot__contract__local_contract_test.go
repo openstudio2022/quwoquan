@@ -15,7 +15,7 @@ func TestActiveSupplySnapshotRequiresReleaseBoundPlayableReadback(t *testing.T) 
 		Status:            "active",
 		ActiveReleaseID:   "rel_pilot_002",
 		ManifestDigest:    "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-		ReleaseClass:      "commercial",
+		ReleaseClass:      "production",
 		ProjectionVersion: 11,
 		Revision:          3,
 		ActivatedAt:       time.Unix(1_800_000_000, 0).UTC(),
@@ -29,20 +29,12 @@ func TestActiveSupplySnapshotRequiresReleaseBoundPlayableReadback(t *testing.T) 
 	if !ready.ReleaseBoundReadbackReady() || !ready.ContentReady() || !ready.PlayableVideoReady() {
 		t.Fatalf("complete snapshot must satisfy every release-bound view: %+v", ready)
 	}
-	if ready.IsResearchRelease() {
-		t.Fatalf("commercial snapshot must not be research: %+v", ready)
-	}
-	research := ready
-	research.ReleaseClass = "research"
-	if !research.IsResearchRelease() {
-		t.Fatalf("research releaseClass must be authoritative: %+v", research)
-	}
-	// DEC-041：production 是 Data producer 单一现役类别，读面必须把它当作
-	// release-bound 且非 research，否则首页/视频书对 production release 永远空页。
-	production := ready
-	production.ReleaseClass = "production"
-	if !production.Ready() || !production.ReleaseBoundReadbackReady() || production.IsResearchRelease() {
-		t.Fatalf("production snapshot must be release-bound, ready and non-research: %+v", production)
+	for _, retired := range []string{"research", "commercial"} {
+		value := ready
+		value.ReleaseClass = retired
+		if value.ReleaseBoundReadbackReady() || value.Ready() {
+			t.Fatalf("retired release class must fail closed: %+v", value)
+		}
 	}
 	if !(postports.ActiveSupplySnapshot{}).IsEmpty() {
 		t.Fatal("zero snapshot must be the sole no-active-release sentinel")

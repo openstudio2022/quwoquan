@@ -84,7 +84,7 @@ class ImmutableReleaseHandle:
             raise ValueError("immutable release handle requires release and import identities")
         if not self.release_digest.startswith("sha256:") or len(self.release_digest) != 71:
             raise ValueError("immutable release handle requires a canonical release digest")
-        if self.readiness_phase not in {"research", "commercial", "production"}:
+        if self.readiness_phase not in {"production"}:
             raise ValueError("immutable release handle has an invalid readiness phase")
         if (
             not self.readiness_receipt_digest.startswith("sha256:")
