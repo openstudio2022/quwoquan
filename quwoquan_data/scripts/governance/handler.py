@@ -138,17 +138,38 @@ def handle_governance(args: argparse.Namespace) -> None:
     raise SystemExit(f"unknown governance command: {cmd}")
 
 
+def _handle_creator_materialize(args: argparse.Namespace) -> None:
+    from governance.creators.materialize import (
+        CreatorMaterializationError,
+        materialize_creator,
+    )
+
+    try:
+        result = materialize_creator(creator_ref=args.creator_ref)
+    except CreatorMaterializationError as exc:
+        raise SystemExit(
+            f"[governance creators materialize] GATE_BLOCK: {exc}"
+        ) from exc
+    print(json.dumps(result, ensure_ascii=False, indent=2))
+
+
 def register_parser(subparsers: argparse._SubParsersAction) -> None:
     p = subparsers.add_parser("governance", help="Data governance candidate operations")
     sub = p.add_subparsers(dest="governance_command")
     from governance.taxonomy.handler import register_taxonomy_parser
 
     creators = sub.add_parser(
-        "creators", help="Validate or list repository-owned creator profiles"
+        "creators", help="Validate, list or explicitly materialize admitted creator profiles"
     )
     creators_sub = creators.add_subparsers(dest="creators_command", required=True)
     creators_sub.add_parser("validate")
     creators_sub.add_parser("list")
+    creator_materialize = creators_sub.add_parser(
+        "materialize",
+        help="Create-or-same one admitted registry creator and original evidence; no review or network",
+    )
+    creator_materialize.add_argument("--creator-ref", required=True)
+    creator_materialize.set_defaults(handler=_handle_creator_materialize)
     creator_avatar = creators_sub.add_parser(
         "avatar",
         help="Materialize one creator avatar from canonical publish rights evidence",
