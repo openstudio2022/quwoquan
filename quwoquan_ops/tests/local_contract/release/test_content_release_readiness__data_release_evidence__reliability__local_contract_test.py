@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 
 from quwoquan_ops.cli import stackctl
+from quwoquan_ops.cli.lib import output_paths
 from quwoquan_ops.cli.commands.app_preflight_readiness import _validate_data_schema
 from quwoquan_ops.tests.support.app_content_preflight_test_support import write_release_readiness
 
@@ -43,6 +44,49 @@ def test_release_closes_guest_media_avatar_and_prepared_apply(monkeypatch, tmp_p
         "video_book_feed": {"post-video"},
         "premium_feed": {"post-video"},
     }
+
+
+@pytest.mark.parametrize("explicit_root", [False, True])
+def test_data_readiness_uses_writer_root_not_host_runtime(monkeypatch, tmp_path, explicit_root):
+    # spec_ref: specs/feature-tree/platform-ops-governance/spec.md#dom-001
+    data_root, host_root = tmp_path / "repo/.qwq_output", tmp_path / "host-runtime"
+    monkeypatch.setattr(output_paths, "DEFAULT_OUTPUT_ROOT", data_root)
+    monkeypatch.setattr(output_paths, "DEFAULT_LOCAL_RUNTIME_OUTPUT_ROOT", host_root)
+    monkeypatch.delenv("QWQ_OUTPUT_ROOT", raising=False)
+    if explicit_root:
+        data_root = tmp_path / "explicit-output"
+        monkeypatch.setenv("QWQ_OUTPUT_ROOT", str(data_root))
+    path, digest = _write_data_readiness_fixture(output_root=data_root, environment="alpha")
+    original = path.read_bytes()
+    assert _load(path, digest)[1] == path
+    assert stackctl.env_runs_root("alpha") == (data_root if explicit_root else host_root) / "env/alpha/runs"
+    # host 上的同名副本永远不能替代 writer 原件。
+    shadow = host_root / path.relative_to(data_root)
+    shadow.parent.mkdir(parents=True)
+    shadow.write_bytes(original)
+    path.unlink()
+    with pytest.raises(ValueError, match="missing"):
+        stackctl._load_data_release_readiness(environment="alpha", release_id="pilot-002", verify_run_id="verify-001", manifest_digest=digest)
+
+
+@pytest.mark.parametrize("mutation", ["environment", "release", "run", "escape", "symlink_file", "symlink_parent"])
+def test_data_readiness_path_and_identity_fail_closed(monkeypatch, tmp_path, mutation):
+    monkeypatch.setenv("QWQ_OUTPUT_ROOT", str(tmp_path))
+    path, digest = _write_data_readiness_fixture(output_root=tmp_path, environment="alpha")
+    params = dict(environment="alpha", release_id="pilot-002", verify_run_id="verify-001", manifest_digest=digest)
+    if mutation in {"symlink_file", "symlink_parent"}:
+        selected = path if mutation == "symlink_file" else path.parent
+        saved = selected.with_name("original")
+        selected.rename(saved)
+        selected.symlink_to(saved, target_is_directory=mutation == "symlink_parent")
+    elif mutation == "escape":
+        params["release_id"] = "../pilot-002"
+    else:
+        value = json.loads(path.read_bytes())
+        value[{"environment": "environment", "release": "releaseId", "run": "verifyRunId"}[mutation]] = "other"
+        _resign(path, value)
+    with pytest.raises(ValueError):
+        stackctl._load_data_release_readiness(**params)
 
 
 def test_unverified_rights_are_preserved_without_blocking_public_readiness(monkeypatch, tmp_path):

@@ -11,8 +11,13 @@ Usage:
 
 from __future__ import annotations
 
+import argparse
 import fcntl
+import hashlib
+import json
 import os
+import re
+import stat
 import selectors
 import subprocess
 import sys
@@ -375,7 +380,85 @@ def _prewarm_sqlite3() -> None:
       pass
 
 
+def _diagnostic_png(relative: str) -> tuple[Path, bytes, tuple[int, int, int, int]]:
+  prefix = "quwoquan_app/test/local_contract/design_system/feedback/error_states/failures/"
+  if not relative.startswith(prefix) or re.fullmatch(
+    r"app_page_error_state_(?:light|dark)_(?:masterImage|testImage|isolatedDiff|maskedDiff)\.png",
+    relative.removeprefix(prefix),
+  ) is None:
+    raise ValueError("TEST.DIAGNOSTIC_SCOPE_INVALID: " + relative)
+  source = REPOSITORY_ROOT / relative
+  if any(part.is_symlink() for part in (source, *source.parents)):
+    raise ValueError("TEST.DIAGNOSTIC_SYMLINK: " + relative)
+  info = source.stat()
+  if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
+    raise ValueError("TEST.DIAGNOSTIC_NOT_REGULAR: " + relative)
+  raw = source.read_bytes()
+  identity = (info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns)
+  if not raw.startswith(b"\x89PNG\r\n\x1a\n") or len(raw) != info.st_size:
+    raise ValueError("TEST.DIAGNOSTIC_INVALID: " + relative)
+  return source, raw, identity
+
+
+def _assert_diagnostics_unused(paths: list[str], captured: list[tuple]) -> None:
+  tracked = subprocess.run(["git", "ls-files", "--", *paths], cwd=REPOSITORY_ROOT,
+                           capture_output=True, text=True, check=True)
+  if tracked.stdout.strip():
+    raise ValueError("TEST.DIAGNOSTIC_TRACKED_SOURCE_FORBIDDEN")
+  opened = subprocess.run(["lsof", "-t", "--", *(str(row[1]) for row in captured)],
+                          capture_output=True, text=True, check=False)
+  if opened.returncode != 1 or opened.stdout.strip() or opened.stderr.strip():
+    raise ValueError("TEST.DIAGNOSTIC_IN_USE_OR_UNKNOWN")
+
+
+def _archive_failure_diagnostics(paths: list[str], *, provenance: str) -> Path:
+  from quwoquan_ops.cli.lib.output_paths import repo_run_dir
+  from quwoquan_ops.cli.lib.readiness_case_result import write_create_once_json
+
+  if not paths or len(paths) != len(set(paths)) or not provenance.strip():
+    raise ValueError("TEST.DIAGNOSTIC_INPUT_INVALID")
+  captured = [(relative, *_diagnostic_png(relative)) for relative in paths]
+  _assert_diagnostics_unused(paths, captured)
+  destination = repo_run_dir("golden-failure-diagnostics", target="small-fix")
+  destination.mkdir(parents=True, exist_ok=False)
+  rows = []
+  for relative, source, raw, identity in captured:
+    target = destination / source.name
+    with target.open("xb") as output:
+      output.write(raw)
+      output.flush()
+      os.fsync(output.fileno())
+    if target.read_bytes() != raw:
+      raise ValueError("TEST.DIAGNOSTIC_ARCHIVE_DRIFT")
+    rows.append({"source": relative, "archive": target.relative_to(REPOSITORY_ROOT).as_posix(),
+                 "sha256": "sha256:" + hashlib.sha256(raw).hexdigest(), "bytes": len(raw)})
+  # 全部副本及计划先持久化；任一源漂移时保留源，不覆盖或删除其他成果。
+  write_create_once_json(destination / "archive-plan.json", {
+    "operation": "archive-golden-failure-diagnostics", "provenance": provenance,
+    "sourceRevision": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=REPOSITORY_ROOT, text=True).strip(),
+    "files": rows,
+  })
+  for relative, source, raw, identity in captured:
+    _, current, current_identity = _diagnostic_png(relative)
+    if current != raw or current_identity != identity:
+      raise ValueError("TEST.DIAGNOSTIC_SOURCE_DRIFT: " + relative)
+  for _, source, _, _ in captured:
+    source.unlink()
+  write_create_once_json(destination / "result.json", {"status": "archived", "files": rows})
+  return destination
+
+
 def main(argv: list[str]) -> int:
+  if argv and argv[0] == "--archive-failure-diagnostics":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--provenance", required=True)
+    parser.add_argument("paths", nargs="+")
+    archive = parser.parse_args(argv[1:])
+    LOCK_FILE.parent.mkdir(parents=True, exist_ok=True)
+    with LOCK_FILE.open("a+") as lock_handle:
+      fcntl.flock(lock_handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+      print(_archive_failure_diagnostics(archive.paths, provenance=archive.provenance))
+    return 0
   args = [arg for arg in argv if arg != "--"]
   if not args:
     print(

@@ -116,7 +116,7 @@ def _revalidate_directory_chain(
         raise _UnsafeActiveCandidatePath(f"{label} parent changed during access")
 
 
-def _read_secure_json_object(path: Path, *, label: str) -> dict[str, Any] | None:
+def _read_secure_bytes(path: Path, *, label: str) -> bytes | None:
     try:
         parent_descriptor, parent_identities = _open_directory_chain(
             path.parent,
@@ -168,7 +168,12 @@ def _read_secure_json_object(path: Path, *, label: str) -> dict[str, Any] | None
             dir_fd=parent_descriptor,
             follow_symlinks=False,
         )
-        if not stat.S_ISREG(after.st_mode) or (after.st_dev, after.st_ino) != identity:
+        if (
+            not stat.S_ISREG(after.st_mode)
+            or (after.st_dev, after.st_ino) != identity
+            or (after.st_size, after.st_mtime_ns, after.st_ctime_ns)
+            != (opened.st_size, opened.st_mtime_ns, opened.st_ctime_ns)
+        ):
             raise _UnsafeActiveCandidatePath(f"{label} changed during access")
     except FileNotFoundError as exc:
         raise _UnsafeActiveCandidatePath(f"{label} changed during access") from exc
@@ -176,6 +181,13 @@ def _read_secure_json_object(path: Path, *, label: str) -> dict[str, Any] | None
         if descriptor >= 0:
             os.close(descriptor)
         os.close(parent_descriptor)
+    return encoded
+
+
+def _read_secure_json_object(path: Path, *, label: str) -> dict[str, Any] | None:
+    encoded = _read_secure_bytes(path, label=label)
+    if encoded is None:
+        return None
     try:
         payload = json.loads(encoded.decode("utf-8"))
     except (UnicodeError, json.JSONDecodeError) as exc:
@@ -529,6 +541,18 @@ def env_local_root(env_name: str) -> Path:
 
 def target_local_dir(target: str) -> Path:
     return env_local_root(env_for_target(target)) / safe_segment(target, fallback="local")
+
+
+def legacy_worktree_startup_paths(target: str) -> tuple[Path, Path, Path]:
+    """仅供显式 Alpha reconciliation 使用；不改变普通 process guard。"""
+    if target != "alpha-local" or os.environ.get("QWQ_OUTPUT_ROOT"):
+        raise ValueError("worktree startup reconciliation requires alpha-local without QWQ_OUTPUT_ROOT")
+    process = ROOT / ".qwq_output/env/alpha/local/alpha-local/process"
+    return (
+        process / "startup_attempt.json",
+        process / "workloads/full/startup_attempt.json",
+        process / "local_run.json",
+    )
 
 
 def target_process_dir(target: str) -> Path:

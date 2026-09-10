@@ -52,121 +52,6 @@ enum StartupSafeTerminalSurface: Equatable {
   }
 }
 
-enum NativeRecoveryUpdateState: String, Equatable {
-  case none
-  case available
-  case required
-}
-
-struct NativeRecoveryVersionResponse: Equatable {
-  private static let canonicalFields: Set<String> = [
-    "platform",
-    "latestVersion",
-    "latestBuild",
-    "minimumSupportedVersion",
-    "minimumSupportedBuild",
-    "updateState",
-    "updateUrl",
-    "recoveryUrl",
-  ]
-
-  let platform: String
-  let latestVersion: String
-  let latestBuild: Int
-  let minimumSupportedVersion: String
-  let minimumSupportedBuild: Int
-  let updateState: NativeRecoveryUpdateState
-  let updateURL: String?
-  let recoveryURL: String
-
-  var hasNewerVersion: Bool { updateState != .none }
-
-  // 公众 iOS wire 明确没有原生更新通道；即使服务端判定 available/required，
-  // 原生恢复页也只能进入 Web/PWA。
-  var offersNativeUpdate: Bool {
-    platform == "android" && hasNewerVersion && updateURL != nil
-  }
-
-  static func parse(
-    payload: [String: Any],
-    expectedPlatform: String,
-    currentBuild: Int,
-    isTrustedURL: (URL?) -> Bool
-  ) -> NativeRecoveryVersionResponse? {
-    guard Set(payload.keys) == canonicalFields,
-          currentBuild > 0,
-          payload["platform"] as? String == expectedPlatform,
-          let latestVersion = nonBlankString(payload["latestVersion"]),
-          let latestBuild = positiveDecimal(payload["latestBuild"]),
-          let minimumSupportedVersion = nonBlankString(
-            payload["minimumSupportedVersion"]
-          ),
-          let minimumSupportedBuild = positiveDecimal(
-            payload["minimumSupportedBuild"]
-          ),
-          minimumSupportedBuild <= latestBuild,
-          let updateStateRaw = payload["updateState"] as? String,
-          let updateState = NativeRecoveryUpdateState(rawValue: updateStateRaw),
-          let recoveryURL = nonBlankString(payload["recoveryUrl"]),
-          isTrustedURL(URL(string: recoveryURL))
-    else {
-      return nil
-    }
-    let expectedUpdateState: NativeRecoveryUpdateState
-    if currentBuild < minimumSupportedBuild {
-      expectedUpdateState = .required
-    } else if currentBuild < latestBuild {
-      expectedUpdateState = .available
-    } else {
-      expectedUpdateState = .none
-    }
-    guard updateState == expectedUpdateState else { return nil }
-
-    let updateURL: String?
-    switch expectedPlatform {
-    case "ios":
-      guard payload["updateUrl"] is NSNull else { return nil }
-      updateURL = nil
-    case "android":
-      guard let rawUpdateURL = nonBlankString(payload["updateUrl"]),
-            isTrustedURL(URL(string: rawUpdateURL))
-      else {
-        return nil
-      }
-      updateURL = rawUpdateURL
-    default:
-      return nil
-    }
-    return NativeRecoveryVersionResponse(
-      platform: expectedPlatform,
-      latestVersion: latestVersion,
-      latestBuild: latestBuild,
-      minimumSupportedVersion: minimumSupportedVersion,
-      minimumSupportedBuild: minimumSupportedBuild,
-      updateState: updateState,
-      updateURL: updateURL,
-      recoveryURL: recoveryURL
-    )
-  }
-
-  private static func nonBlankString(_ value: Any?) -> String? {
-    guard let value = value as? String else { return nil }
-    let normalized = value.trimmingCharacters(in: .whitespacesAndNewlines)
-    return normalized.isEmpty ? nil : normalized
-  }
-
-  private static func positiveDecimal(_ value: Any?) -> Int? {
-    guard let raw = value as? String,
-          raw.range(of: "^[1-9][0-9]*$", options: .regularExpression) != nil,
-          let parsed = Int(raw),
-          parsed > 0
-    else {
-      return nil
-    }
-    return parsed
-  }
-}
-
 /// 仅持久化已脱敏的原生未捕获异常类别，供下次 Dart 启动产出一条标准诊断事实。
 /// 原生异常消息与堆栈绝不能写入 UserDefaults 或运行时日志管道。
 private let nativeCrashMarkerKindKey = "qwq.runtime.previous_native_crash_kind"
@@ -677,6 +562,11 @@ private final class RecoveryFailureEncryptedStore {
       let selfSupply = NativeRuntimeConfigActivationCoordinator.consumeBundledSelfSupplyRequest()
       if selfSupply.requested {
         NSLog("QWQStartup ios_runtime_config_self_supply activated=%@ code=%@ issues=%@", selfSupply.activated ? "true" : "false", selfSupply.errorCode, selfSupply.validationIssues.joined(separator: ","))
+        if !selfSupply.activated {
+          nativeActivationFailureCode = selfSupply.errorCode
+          nativeActivationValidationIssues = selfSupply.validationIssues
+          return true
+        }
       }
     #endif
     confirmedPreviousBuildFatal = NativeCrashMarkerStore.shouldRecoverCurrentBuild()
@@ -1826,7 +1716,7 @@ private final class RecoveryFailureEncryptedStore {
       stack.leadingAnchor.constraint(greaterThanOrEqualTo: recovery.leadingAnchor, constant: 24),
       stack.trailingAnchor.constraint(lessThanOrEqualTo: recovery.trailingAnchor, constant: -24),
       title.heightAnchor.constraint(equalToConstant: 44),
-      message.heightAnchor.constraint(equalToConstant: 52),
+      message.heightAnchor.constraint(greaterThanOrEqualToConstant: 52),
       primary.heightAnchor.constraint(equalToConstant: 48),
       web.heightAnchor.constraint(equalToConstant: 48),
     ])
@@ -1939,9 +1829,38 @@ private final class RecoveryFailureEncryptedStore {
     primaryButton: RecoveryActionButton,
     webButton: RecoveryActionButton
   ) {
-    guard !recoveryVersionCheckInFlight, NativeRuntimeConfigStore.networkAccessAllowed else { return }
+    guard !recoveryVersionCheckInFlight else { return }
+    let context = NativeRuntimeConfigActivationCoordinator.readRecoveryRuntimeContext()
+    let configValid: Bool
+    let networkAllowed: Bool
+    switch context {
+    case .present(let manifest):
+      configValid = true
+      networkAllowed = manifest["contentSource"] as? String != "bundled_snapshot"
+    case .absent, .failure:
+      configValid = false
+      networkAllowed = false
+    }
+    let access = NativeRecoveryAccess.resolve(
+      activationFailed: !nativeActivationFailureCode.isEmpty,
+      configValid: configValid,
+      networkAllowed: networkAllowed
+    )
+    guard access.allowsWeb else {
+      applyNativeLocalRecovery(access, titleLabel: titleLabel, messageLabel: messageLabel,
+                               primaryButton: primaryButton, webButton: webButton)
+      return
+    }
     recoveryVersionCheckInFlight = true
-    guard var components = URLComponents(string: recoveryBaseURLString) else {
+    // 可见 deadline 独立于 URLSession 回调；完成后取消，不参与 fatal 判定。
+    let deadline = DispatchWorkItem { [weak self] in
+      self?.applyNativeVersionUnavailable(titleLabel: titleLabel, messageLabel: messageLabel,
+                                          primaryButton: primaryButton, webButton: webButton)
+    }
+    DispatchQueue.main.asyncAfter(deadline: .now() + 1.5, execute: deadline)
+    guard !recoveryBaseURLString.isEmpty,
+          var components = URLComponents(string: recoveryBaseURLString) else {
+      deadline.cancel()
       recoveryVersionCheckInFlight = false
       applyNativeVersionUnavailable(
         titleLabel: titleLabel,
@@ -1962,7 +1881,10 @@ private final class RecoveryFailureEncryptedStore {
       URLQueryItem(name: "buildNumber", value: buildNumber),
     ]
     guard let url = components.url else {
+      deadline.cancel()
       recoveryVersionCheckInFlight = false
+      applyNativeVersionUnavailable(titleLabel: titleLabel, messageLabel: messageLabel,
+                                    primaryButton: primaryButton, webButton: webButton)
       return
     }
     var request = URLRequest(url: url)
@@ -1971,9 +1893,11 @@ private final class RecoveryFailureEncryptedStore {
     request.setValue("application/json", forHTTPHeaderField: "Accept")
     let configuration = URLSessionConfiguration.ephemeral
     configuration.timeoutIntervalForRequest = 1.5
+    configuration.timeoutIntervalForResource = 3
     URLSession(configuration: configuration).dataTask(with: request) { [weak self] data, response, _ in
       defer {
         DispatchQueue.main.async { [weak self] in
+          deadline.cancel()
           self?.recoveryVersionCheckInFlight = false
         }
       }
@@ -2029,12 +1953,40 @@ private final class RecoveryFailureEncryptedStore {
     }.resume()
   }
 
+  private func applyNativeLocalRecovery(
+    _ access: NativeRecoveryAccess,
+    titleLabel: UILabel,
+    messageLabel: UILabel,
+    primaryButton: RecoveryActionButton,
+    webButton: RecoveryActionButton
+  ) {
+    let configuration = access == .configuration
+    startupRecoveryView?.accessibilityIdentifier = configuration
+      ? "qwq.native.configuration.error" : "qwq.native.startup.recovery"
+    titleLabel.text = configuration ? "应用配置不可用" : "应用暂时无法启动"
+    messageLabel.text = configuration
+      ? "配置项：runtimeConfigPackage / activationReceipt；请重新安装或重新构建"
+      : "离线版本无法在线恢复，请重新安装或重新构建"
+    configureRecoveryButton(primaryButton, title: "查看恢复指引", filled: true, enabled: true)
+    primaryButton.recoveryAction = { [weak self] in
+      self?.showRecoveryToast("请重新安装有效制品，或通过 run.sh 重新构建并激活配置")
+    }
+    webButton.isHidden = true
+    webButton.isEnabled = false
+    webButton.recoveryAction = nil
+  }
+
   private func applyNativeVersionUnavailable(
     titleLabel: UILabel,
     messageLabel: UILabel,
     primaryButton: RecoveryActionButton,
     webButton: RecoveryActionButton
   ) {
+    guard NativeRuntimeConfigStore.networkAccessAllowed, !publicWebURLString.isEmpty else {
+      applyNativeLocalRecovery(.configuration, titleLabel: titleLabel, messageLabel: messageLabel,
+                               primaryButton: primaryButton, webButton: webButton)
+      return
+    }
     titleLabel.text = "应用暂时无法启动"
     messageLabel.text = "请使用网页版继续"
     configureRecoveryButton(primaryButton, title: "使用网页版", filled: true, enabled: true)

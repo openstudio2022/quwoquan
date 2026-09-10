@@ -899,6 +899,17 @@ def register_parser(subparsers: "argparse._SubParsersAction") -> None:
         ),
     )
     repair_parser.add_argument(
+        "--worktree-startup-reconciliation",
+        choices=("plan", "apply"),
+        default="",
+        help="Explicit Alpha-only archive of exact legacy worktree startup receipts; never tears down resources.",
+    )
+    repair_parser.add_argument(
+        "--worktree-startup-plan-ref",
+        default="",
+        help="Exact PATH=sha256:DIGEST returned by worktree startup reconciliation planning.",
+    )
+    repair_parser.add_argument(
         "--confirm-undownable-startup-receipt-reclaim",
         action="store_true",
         help=(

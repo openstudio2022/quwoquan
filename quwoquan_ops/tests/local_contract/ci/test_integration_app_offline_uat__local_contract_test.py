@@ -363,3 +363,170 @@ def test_missing_offline_matrix_blocks_before_any_service_mutation(tmp_path, mon
             impact_plan_digest=_DIGEST, args=Namespace(), run_dir=tmp_path, phases=subject.Phases(),
             summary={"environments": {}}, scopes=("app",))
     stackctl.assert_not_called()
+
+
+# spec_ref: specs/feature-tree/platform-ops-governance/config-and-reliability-governance/spec.md#sit-001
+@pytest.fixture
+def environment_inspection(tmp_path, monkeypatch):
+    """仅隔离设备/网络边界，保留环境编排、CLI 解析与 inspect/distribution 实现。"""
+    from argparse import Namespace
+    from unittest.mock import Mock
+    from quwoquan_ops.cli import integration_run as subject, stackctl
+
+    root = tmp_path.resolve()
+    deploy = root / "deploy/alpha-local"
+    deploy.mkdir(parents=True)
+    (deploy / "manifest.json").write_text(json.dumps({"release": {}, "sourceRevision": _CANDIDATE["commit"]}))
+    (deploy / "active-runtime-candidate.json").write_text(json.dumps({"candidateDir": str(deploy), "baselineId": "baseline"}))
+    output = root / "repo-output"
+    output.mkdir()
+    host = root / "host-output"
+    readiness = output / "readiness.json"
+    readiness.write_text("{}")
+    monkeypatch.setenv("QWQ_DEPLOY_WORK_ROOT", str(root / "deploy"))
+    monkeypatch.setattr(subject, "OUTPUT_ROOT", output)
+    monkeypatch.setattr(subject, "env_runs_root", lambda env: host / "env" / env / "runs")
+    monkeypatch.setattr(subject, "_store", lambda: root / "store")
+    monkeypatch.setattr(subject, "_acceptance_release_inputs", lambda args: {"release": {}})
+    monkeypatch.setattr(subject, "_assert_package_identity", lambda **kwargs: None)
+    monkeypatch.setattr(subject, "_package_with_dependency_recovery", lambda **kwargs: subject.StackctlResult("package", {}, ""))
+    monkeypatch.setattr(subject, "_apply_data_release", lambda **kwargs: readiness)
+    monkeypatch.setattr(subject, "_health_runtime", lambda **kwargs: {})
+    monkeypatch.setattr(subject, "_alpha_content_readback_cases", lambda **kwargs: [])
+    monkeypatch.setattr(subject, "_case_results_from_verify", lambda **kwargs: [])
+    monkeypatch.setattr(stackctl, "resolve_report_dir", lambda args, *rest: Path(args.report_dir))
+    probes = {}
+    for name, value in {
+        "_candidate_workspace_report": {"issues": []},
+        "_local_log_report": {"paths": []},
+        "_network_report": {"issues": []},
+        "_data_report": {"issues": []},
+        "_metrics_report": {"issues": []},
+        "_security_report": {"issues": []},
+        "verify_certificate": {"status": "ok"},
+        "_read_only_user_availability_report": {"status": "ready", "firstBlockerClass": "", "evidence": {}},
+    }.items():
+        probes[name] = Mock(return_value=value)
+        monkeypatch.setattr(stackctl, name, probes[name])
+    distribution = Mock(wraps=stackctl._inspect_distribution_for_target)
+    monkeypatch.setattr(stackctl, "_inspect_distribution_for_target", distribution)
+    commands = []
+    failures = set()
+    parser = stackctl.build_parser()
+
+    def inspect(scope, option="--scope"):
+        args = parser.parse_args(["inspect", "--target", "alpha-local", option, scope,
+            "--distribution-root", str(root / "missing-distribution"), "--report-dir", str(host / "env/alpha/runs/inspect")])
+        return stackctl.command_inspect(args)
+
+    def dispatch(*argv, **kwargs):
+        commands.append(argv)
+        if argv[0] == "inspect":
+            return subject.StackctlResult("inspect", inspect(argv[argv.index("--scope") + 1]), "")
+        directory = host / "env/alpha/runs" / argv[0]
+        directory.mkdir(parents=True, exist_ok=True)
+        (directory / "report.json").write_text(json.dumps({
+            "userAvailabilityReport": {"evidence": {"providerComposition": {"status": "ready"}}},
+        }))
+        return subject.StackctlResult(argv[0], {"exitCode": int(argv[0] in failures), "reportDir": str(directory),
+            "runtimeCreated": True, "instanceGeneration": "owned-generation", "localRuntimeLocks": []}, "")
+
+    monkeypatch.setattr(subject, "_stackctl", dispatch)
+    return Namespace(root=root, output=output, host=host, failures=failures, probes=probes, distribution=distribution, commands=commands, inspect=inspect,
+                     parser=parser, subject=subject, stackctl=stackctl)
+
+
+@pytest.mark.parametrize("profile", ["smoke", "integration", "release"])
+@pytest.mark.parametrize("damage", ["none", "network", "data", "metrics", "config", "content_identity", "runtime_health"])
+def test_environment_reaches_real_inspect_without_formal_distribution(environment_inspection, profile, damage):
+    setup = environment_inspection
+    from argparse import Namespace
+
+    if damage in {"network", "data", "metrics"}:
+        setup.probes[f"_{damage}_report"].side_effect = RuntimeError(f"{damage} unavailable")
+    elif damage == "config":
+        setup.probes["_candidate_workspace_report"].return_value = {"issues": ["candidate identity drifted"]}
+        setup.probes["_data_report"].side_effect = lambda target, candidate_workspace: {"issues": candidate_workspace["issues"]}
+    elif damage in {"content_identity", "runtime_health"}:
+        setup.probes["_read_only_user_availability_report"].return_value = {
+            "status": "failed", "firstBlockerClass": damage, "firstBlocker": f"{damage} drifted", "evidence": {},
+        }
+    summary = {"runId": "runtime-scope", "environments": {}}
+
+    def run():
+        return setup.subject._run_environment(environment="alpha", profile=profile, candidate=_CANDIDATE,
+            impact_plan_digest=_DIGEST, args=Namespace(workload="full"), run_dir=setup.output / "run",
+            phases=setup.subject.Phases(), summary=summary)
+
+    if damage != "none" or profile == "release":
+        with pytest.raises(setup.subject.IntegrationRunError) as blocked:
+            run()
+        assert blocked.value.code == "INTEGRATION_RUN.INSPECT_FAILED"
+    else:
+        result = run()
+        assert "inspect_evidence" in result["named"]
+        assert "doctor" in summary["environments"]["alpha"]["reports"]
+        assert [command[0] for command in setup.commands][-4:] == ["inspect", "doctor", "down", "status"]
+        for role in ("inspect_evidence", "doctor_evidence", "cleanup_evidence"):
+            named = json.loads((setup.root / "store" / result["named"][role]["ref"]).read_bytes())
+            source = named["source"]
+            assert source["reportRoot"] == "store"
+            command_name = {"inspect_evidence": "inspect", "doctor_evidence": "doctor", "cleanup_evidence": "down"}[role]
+            original = setup.host / "env/alpha/runs" / command_name / "report.json"
+            assert (setup.root / "store" / source["reportRef"]).read_bytes() == original.read_bytes()
+    assert not (setup.output / "env/alpha").exists(), "宿主报告不得回写成 repo live 事实"
+    command = next(command for command in setup.commands if command[0] == "inspect")
+    assert command[command.index("--scope") + 1] == ("all" if profile == "release" else "runtime")
+    report = json.loads((setup.host / "env/alpha/runs/inspect/report.json").read_text())
+    required = {"logs", "network", "data", "metrics", "config", "security", "userAvailability"}
+    assert set(report["inspection"]) == (required | {"release"} if profile == "release" else required)
+    assert setup.distribution.call_count == (1 if profile == "release" else 0)
+    assert all(probe.called for probe in setup.probes.values())
+    down = next(command for command in setup.commands if command[0] == "down")
+    assert down[down.index("--expected-generation") + 1] == "owned-generation"
+
+
+@pytest.mark.parametrize("failed_commands,code", [
+    ({"doctor"}, "INTEGRATION_RUN.DOCTOR_FAILED"),
+    ({"down"}, "INTEGRATION_RUN.DOWN_FAILED"),
+    ({"doctor", "down"}, "INTEGRATION_RUN.DOCTOR_FAILED"),
+])
+def test_environment_doctor_cleanup_preserve_first_blocker(environment_inspection, failed_commands, code):
+    # spec_ref: specs/feature-tree/platform-ops-governance/config-and-reliability-governance/spec.md#sit-001
+    from argparse import Namespace
+
+    setup = environment_inspection
+    setup.failures.update(failed_commands)
+    summary = {"runId": "cleanup", "environments": {}}
+    with pytest.raises(setup.subject.IntegrationRunError) as blocked:
+        setup.subject._run_environment(environment="alpha", profile="smoke", candidate=_CANDIDATE,
+            impact_plan_digest=_DIGEST, args=Namespace(workload="full"), run_dir=setup.output / "run",
+            phases=setup.subject.Phases(), summary=summary)
+    assert blocked.value.code == code
+    assert [command[0] for command in setup.commands][-3:] == ["inspect", "doctor", "down"]
+    if failed_commands == {"doctor", "down"}:
+        assert "INTEGRATION_RUN.DOWN_FAILED" in summary["environments"]["alpha"]["cleanupBlocker"]
+
+
+@pytest.mark.parametrize("scope", ["all", "release", "distribution"])
+def test_explicit_distribution_scopes_still_fail_on_missing_materials(environment_inspection, scope):
+    setup = environment_inspection
+    if scope == "distribution":
+        args = setup.parser.parse_args(["verify", "--env", "alpha", "--target", "alpha-local",
+            "--kind", scope, "--distribution-root", str(setup.root / "missing-distribution"),
+            "--report-dir", str(setup.root / "distribution")])
+        result = setup.stackctl.command_verify(args)
+    else:
+        result = setup.inspect(scope)
+    assert result["exitCode"] != 0
+    assert any("Web distribution current pointer is missing" in detail for detail in result["details"])
+    assert any("Android latest manifest is missing" in detail for detail in result["details"])
+    setup.distribution.assert_called_once()
+
+
+def test_runtime_scope_alias_keeps_the_full_inspection_set(environment_inspection):
+    setup = environment_inspection
+    assert setup.inspect("runtime", "--kind")["exitCode"] == 0
+    report = json.loads((setup.host / "env/alpha/runs/inspect/report.json").read_text())
+    assert set(report["inspection"]) == {"logs", "network", "data", "metrics", "config", "security", "userAvailability"}
+    setup.distribution.assert_not_called()

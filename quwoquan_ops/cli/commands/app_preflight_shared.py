@@ -74,6 +74,14 @@ def _data_readiness_segment(value: str, *, label: str) -> str:
     return segment
 
 
+def _data_release_runs_root(environment: str) -> Path:
+    """Data 原件沿用 writer 的 OUTPUT_ROOT，不随 host runtime 根迁移。"""
+    import quwoquan_ops.cli.stackctl as _stackctl
+    from quwoquan_ops.cli.lib.output_paths import normalize_env
+
+    return _stackctl.output_root() / "env" / normalize_env(environment) / "runs"
+
+
 def _data_release_readiness_path(
     *,
     environment: str,
@@ -84,13 +92,16 @@ def _data_release_readiness_path(
 
     release_segment = _stackctl._data_readiness_segment(release_id, label="releaseId")
     verify_segment = _stackctl._data_readiness_segment(verify_run_id, label="verifyRunId")
-    return (
-        _stackctl.env_runs_root(environment)
+    path = (
+        _data_release_runs_root(environment)
         / "data-release"
         / release_segment
         / verify_segment
         / "release-readiness.json"
-    )
+    ).expanduser()
+    if ".." in path.parts or any(part.is_symlink() for part in (path, *path.parents)):
+        raise ValueError("canonical Data readiness receipt path must be non-symlink without traversal")
+    return path
 
 
 def _canonical_document_checksum(document: dict[str, Any]) -> str:

@@ -44,6 +44,77 @@ def _runtime_values() -> dict[str, str]:
 _RUNTIME_VALUES = _runtime_values()
 
 
+class FlutterDiagnosticArchiveContractTest(unittest.TestCase):
+    # spec_ref: specs/feature-tree/runtime/runtime-test-pyramid/spec.md#sit-002
+    def test_exact_diagnostic_bytes_are_archived_before_source_removal(self):
+        import hashlib
+        import json
+        import subprocess
+        from quwoquan_ops.cli.lib import output_paths
+        subject = _load_subject()
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            relative = "quwoquan_app/test/local_contract/design_system/feedback/error_states/failures/app_page_error_state_light_testImage.png"
+            source = root / relative
+            source.parent.mkdir(parents=True)
+            raw = b"\x89PNG\r\n\x1a\narchive-test-bytes"
+            source.write_bytes(raw)
+            archive = root / ".qwq_output/env/repo/runs/archive"
+            with mock.patch.object(subject, "REPOSITORY_ROOT", root), mock.patch.object(
+                output_paths, "repo_run_dir", return_value=archive
+            ), mock.patch.object(subject.subprocess, "run", side_effect=[
+                subprocess.CompletedProcess([], 0, "", ""),
+                subprocess.CompletedProcess([], 1, "", ""),
+            ]), mock.patch.object(subject.subprocess, "check_output", return_value="a" * 40):
+                result = subject._archive_failure_diagnostics([relative], provenance="historical test run; exact invocation unknown")
+            self.assertEqual(result, archive)
+            self.assertEqual((archive / source.name).read_bytes(), raw)
+            self.assertFalse(source.exists())
+            receipt = json.loads((archive / "result.json").read_bytes())
+            self.assertEqual(receipt["files"][0]["sha256"], "sha256:" + hashlib.sha256(raw).hexdigest())
+            self.assertTrue((archive / "archive-plan.json").is_file())
+
+    def test_unknown_path_and_symlink_are_not_archived(self):
+        subject = _load_subject()
+        with self.assertRaisesRegex(ValueError, "SCOPE_INVALID"):
+            subject._archive_failure_diagnostics(["quwoquan_app/lib/main.dart"], provenance="not diagnostic")
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            relative = "quwoquan_app/test/local_contract/design_system/feedback/error_states/failures/app_page_error_state_dark_testImage.png"
+            source = root / relative
+            source.parent.mkdir(parents=True)
+            original = root / "original.png"
+            original.write_bytes(b"\x89PNG\r\n\x1a\nkept")
+            source.symlink_to(original)
+            with mock.patch.object(subject, "REPOSITORY_ROOT", root):
+                with self.assertRaisesRegex(ValueError, "SYMLINK"):
+                    subject._archive_failure_diagnostics([relative], provenance="test")
+            self.assertTrue(original.exists())
+            self.assertTrue(source.is_symlink())
+
+    def test_busy_or_tracked_diagnostics_remain_untouched(self):
+        import subprocess
+        from quwoquan_ops.cli.lib import output_paths
+        subject = _load_subject()
+        for tracked in (True, False):
+            with self.subTest(tracked=tracked), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary).resolve()
+                relative = "quwoquan_app/test/local_contract/design_system/feedback/error_states/failures/app_page_error_state_dark_testImage.png"
+                source = root / relative
+                source.parent.mkdir(parents=True)
+                source.write_bytes(b"\x89PNG\r\n\x1a\nkept")
+                with mock.patch.object(subject, "REPOSITORY_ROOT", root), mock.patch.object(
+                    output_paths, "repo_run_dir"
+                ) as allocate, mock.patch.object(subject.subprocess, "run", side_effect=[
+                    subprocess.CompletedProcess([], 0, relative if tracked else "", ""),
+                    subprocess.CompletedProcess([], 0, "123\n", ""),
+                ]):
+                    with self.assertRaisesRegex(ValueError, "TRACKED_SOURCE|IN_USE_OR_UNKNOWN"):
+                        subject._archive_failure_diagnostics([relative], provenance="test")
+                    allocate.assert_not_called()
+                self.assertTrue(source.exists())
+
+
 class FlutterTestGuardRuntimeEnvironmentContractTest(unittest.TestCase):
     def test_default_host_tests_use_remote_beta_not_offline_alpha(self) -> None:
         subject = _load_subject()

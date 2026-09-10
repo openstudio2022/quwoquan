@@ -82,11 +82,13 @@ from quwoquan_ops.cli.lib.evidence_signing import (
 from quwoquan_ops.cli.lib.readiness_case_result import (
     validate_readiness_case_result,
 )
+from quwoquan_ops.cli.lib.output_paths import env_runs_root, output_root as _output_root
+from quwoquan_ops.cli.lib.descriptor_safe_io import read_repo_relative_regular_single_link
 
 POLICY = ROOT / "quwoquan_ops/policies/scoped_candidate_policy.yaml"
 STACKCTL = ROOT / "quwoquan_ops/cli/stackctl.py"
 LOCAL_READINESS = ROOT / "quwoquan_ops/cli/local_readiness.py"
-OUTPUT_ROOT = ROOT / ".qwq_output"
+OUTPUT_ROOT = _output_root()
 RUNS_ROOT = OUTPUT_ROOT / "env/repo/runs/integrate"
 DEV_REF = "refs/heads/dev1.0"
 NO_LIVE = NO_LIVE_ENVIRONMENT_REQUIRED
@@ -139,7 +141,22 @@ def _store() -> Path:
 
 
 def _output_ref(path: Path) -> str:
-    return path.resolve().relative_to(OUTPUT_ROOT.resolve()).as_posix()
+    ref = path.absolute().relative_to(OUTPUT_ROOT.absolute()).as_posix()
+    _bundle_path(OUTPUT_ROOT, ref)
+    return ref
+
+
+def _evidence_location(path: Path) -> tuple[Path, str]:
+    """宿主输入只接纳 canonical env/runs；不把 live 根导回 worktree。"""
+    absolute = path.absolute()
+    roots = [(OUTPUT_ROOT, OUTPUT_ROOT)]
+    roots.extend((env_runs_root(env), env_runs_root(env).parents[2]) for env in ("alpha", "beta", "gamma"))
+    for boundary, root in roots:
+        if absolute.is_relative_to(boundary.absolute()):
+            ref = absolute.relative_to(root.absolute()).as_posix()
+            _bundle_path(root, ref)
+            return root, ref
+    raise IntegrationRunError("INTEGRATION_RUN.BUNDLE_INVALID", "evidence is outside canonical output/runs roots")
 
 
 class Phases:
@@ -167,6 +184,7 @@ class StackctlResult:
         self.command = command
         self.payload = dict(payload)
         self.stderr = stderr
+        self._report_bytes: bytes | None = None
 
     @property
     def exit_code(self) -> int:
@@ -186,9 +204,16 @@ class StackctlResult:
         if report_dir is None:
             return None
         report = report_dir / "report.json"
-        if not report.is_file():
+        root, ref = _evidence_location(report)
+        if not _bundle_path(root, ref).is_file():
+            if self._report_bytes is not None:
+                raise IntegrationRunError("INTEGRATION_RUN.BUNDLE_DRIFT", "report disappeared during acceptance")
             return None
-        return report, json.loads(report.read_text(encoding="utf-8"))
+        raw = read_repo_relative_regular_single_link(root, ref, require_current_name=True)
+        if self._report_bytes is not None and self._report_bytes != raw:
+            raise IntegrationRunError("INTEGRATION_RUN.BUNDLE_DRIFT", "report changed during acceptance")
+        self._report_bytes = raw
+        return report, json.loads(raw)
 
 
 def _stackctl(*args: str, env: Mapping[str, str] | None = None, log_dir: Path) -> StackctlResult:
@@ -457,7 +482,16 @@ def _report_source(result: StackctlResult) -> dict[str, Any]:
     if report is None:
         return {"command": result.command, "exitCode": result.exit_code}
     path, _ = report
-    return {"command": result.command, "exitCode": result.exit_code, "reportRef": _output_ref(path), "reportDigest": exact_file_digest(path)}
+    root, ref = _evidence_location(path)
+    assert result._report_bytes is not None
+    digest = _sha256_hex(result._report_bytes)
+    raw = _bundle_bytes(root, {"ref": ref, "digest": digest})
+    # 只复制被消费的整份报告，不改其内嵌路径；store 相对 ref 随 acceptance bundle 携带。
+    stored_ref = f"runtime-reports/{digest.removeprefix('sha256:')}/{ref}"
+    _bundle_put(_store(), stored_ref, raw)
+    _bundle_bytes(root, {"ref": ref, "digest": digest})
+    return {"command": result.command, "exitCode": result.exit_code, "reportRoot": "store",
+            "reportRef": stored_ref, "reportDigest": digest}
 
 
 def _case_results_from_verify(*, verify: StackctlResult, environment: str, profile: str, candidate: Mapping[str, str],
@@ -465,11 +499,12 @@ def _case_results_from_verify(*, verify: StackctlResult, environment: str, profi
     report = verify.report_json()
     if report is None:
         raise IntegrationRunError("INTEGRATION_RUN.VERIFY_REPORT_MISSING", "stackctl verify produced no report.json")
-    path, payload = report
+    _, payload = report
     checks = payload.get("checks")
     if not isinstance(checks, list) or not checks:
         raise IntegrationRunError("INTEGRATION_RUN.VERIFY_REPORT_MISSING", "stackctl verify report has no checks")
-    report_sha = hashlib.sha256(path.read_bytes()).hexdigest()
+    source = _report_source(verify)
+    report_sha = source["reportDigest"].removeprefix("sha256:")
     started = str(payload.get("startedAt") or _now())
     completed = str(payload.get("endedAt") or _now())
     refs: list[dict[str, str]] = []
@@ -503,7 +538,7 @@ def _case_results_from_verify(*, verify: StackctlResult, environment: str, profi
             "completedAt": completed,
             "runnerIdentity": "integration-run",
             "artifactSha256": report_sha,
-            "receiptRef": _output_ref(path),
+            "receiptRef": source["reportRef"],
         }
         case_path = evidence_dir / "cases" / f"{index:03d}.json"
         case_path.parent.mkdir(parents=True, exist_ok=True)
@@ -583,6 +618,7 @@ def _alpha_offline_pages(*, candidate: Mapping[str, Any], candidate_ref: Mapping
     if not all(devices.values()) or len(set(devices.values())) != 2:
         raise IntegrationRunError("INTEGRATION_RUN.APP_LAUNCH_DEVICE_UNAVAILABLE", "explicit distinct --android-device-id and --ios-device-id are required")
     receipts = {}
+    evidence_root = None
     for platform, device in devices.items():
         result = phases.run(f"alpha.offline-{platform}", lambda: _require_ok(_stackctl(
             "app-content-uat", "--targets", "alpha-local", "--platform", "android" if platform == "android" else "ios-simulator",
@@ -592,15 +628,23 @@ def _alpha_offline_pages(*, candidate: Mapping[str, Any], candidate_ref: Mapping
         if result.report_dir is None:
             raise IntegrationRunError("INTEGRATION_RUN.APP_LAUNCH_FAILED", "offline receipt directory is absent")
         path = result.report_dir / "receipt.json"
-        receipts[platform] = {"ref": _output_ref(path), "digest": exact_file_digest(path)}
+        root, ref = _evidence_location(path)
+        if evidence_root is not None and root != evidence_root:
+            raise IntegrationRunError("INTEGRATION_RUN.APP_LAUNCH_FAILED", "offline platforms use different evidence roots")
+        evidence_root = root
+        receipts[platform] = {"ref": ref, "digest": exact_file_digest(path)}
     try:
-        evidence = offline_receipt_evidence(root=OUTPUT_ROOT, receipts=receipts, candidate=candidate, devices=devices)
+        evidence = offline_receipt_evidence(root=evidence_root, receipts=receipts, candidate=candidate, devices=devices)
     except (KeyError, OSError, RuntimeError, TypeError, ValueError) as exc:
         raise IntegrationRunError("INTEGRATION_RUN.APP_LAUNCH_FAILED", str(exc)) from exc
     # 将原始闭包 exact 复制到 store；不改 raw 路径、摘要或 nonPromotable。
     prefix = f"offline-page-evidence/{candidate['candidateId'].removeprefix('sha256:')}"
-    for exact in evidence["files"]:
-        _bundle_put(_store() / prefix, exact["ref"], _bundle_bytes(OUTPUT_ROOT, exact))
+    files = [(exact, _bundle_bytes(evidence_root, exact)) for exact in evidence["files"]]
+    for exact, raw in files:
+        _bundle_put(_store() / prefix, exact["ref"], raw)
+    # 完整复制后再验源闭包；漂移不可返回可签发的 axis，也不回写/重签任何源 receipt。
+    for exact, _ in files:
+        _bundle_bytes(evidence_root, exact)
     return {"root": prefix, "receipts": receipts, "devices": devices, "files": evidence["files"],
             "cases": [{"ref": prefix + "/" + exact["ref"], "digest": exact["digest"]} for exact in evidence["cases"]],
             "required": True, "nonPromotable": True, "caseCount": len(evidence["cases"])}
@@ -703,7 +747,8 @@ def _run_environment(*, environment: str, profile: str, candidate: Mapping[str, 
             ))
         verify = phases.run(f"{environment}.verify", lambda: _require_ok(_stackctl("verify", "--env", environment, "--target", target, "--kind", "all", "--profile", profile, log_dir=log_dir), "INTEGRATION_RUN.VERIFY_FAILED"))
         env_summary["reports"]["verify"] = _report_source(verify)
-        inspect = phases.run(f"{environment}.inspect", lambda: _require_ok(_stackctl("inspect", "--target", target, "--scope", "all", log_dir=log_dir), "INTEGRATION_RUN.INSPECT_FAILED"))
+        inspect_scope = "runtime" if profile in {"smoke", "integration"} else "all"
+        inspect = phases.run(f"{environment}.inspect", lambda: _require_ok(_stackctl("inspect", "--target", target, "--scope", inspect_scope, log_dir=log_dir), "INTEGRATION_RUN.INSPECT_FAILED"))
         env_summary["reports"]["inspect"] = _report_source(inspect)
         doctor = phases.run(f"{environment}.doctor", lambda: _require_ok(_stackctl("doctor", "--target", target, log_dir=log_dir), "INTEGRATION_RUN.DOCTOR_FAILED"))
         env_summary["reports"]["doctor"] = _report_source(doctor)
@@ -860,7 +905,8 @@ def _reusable_acceptance(*, store: Path, candidate_id: str, environment: str, pr
             json.loads(raw), store_root=store, verify_references=True, accepted_at=datetime.now(timezone.utc),
             signature_verifier=signature_verifier, expected_signer_identity=expected_signer_identity,
         )
-    except (IntegrationRunError, EnvironmentSchedulerError, OSError, ValueError):
+        _report_fact_refs(store=store, fact=fact)
+    except (IntegrationRunError, EnvironmentSchedulerError, OSError, ValueError, KeyError, TypeError):
         return None
     binding = fact.get("candidate") if isinstance(fact.get("candidate"), Mapping) else {}
     if (
@@ -1048,7 +1094,7 @@ def _bundle_bytes(root: Path, exact: Mapping[str, str]) -> bytes:
     path = _bundle_path(root, exact["ref"])
     if not path.is_file():
         raise IntegrationRunError("INTEGRATION_RUN.BUNDLE_INCOMPLETE", f"bundle file is absent: {exact['ref']}")
-    raw = path.read_bytes()
+    raw = read_repo_relative_regular_single_link(root, exact["ref"], require_current_name=True)
     if _sha256_hex(raw) != exact["digest"]:
         raise IntegrationRunError("INTEGRATION_RUN.BUNDLE_DRIFT", f"bundle exact bytes drifted: {exact['ref']}")
     return raw
@@ -1103,6 +1149,25 @@ def _fact_evidence_refs(fact: Mapping[str, Any]) -> list[dict[str, str]]:
         if not isinstance(value, Mapping):
             raise IntegrationRunError("INTEGRATION_RUN.BUNDLE_INVALID", f"acceptance fact lacks {field}")
         refs.append(dict(value))
+    return refs
+
+
+def _report_fact_refs(*, store: Path, fact: Mapping[str, Any]) -> list[dict[str, str]]:
+    """只遍历签名 named evidence 的显式报告引用，不扫描宿主目录或猜测 JSON 字段。"""
+    refs = []
+    for field in _EAF_NAMED_FIELDS:
+        if field not in fact:
+            continue  # required named fields 仍由 canonical EAF validator 校验。
+        source = _read_store_object(store, fact[field], field).get("source", {})
+        if "reportRoot" not in source:
+            continue
+        if source["reportRoot"] != "store":
+            raise IntegrationRunError("INTEGRATION_RUN.BUNDLE_INVALID", "unsupported report root")
+        exact = {"ref": source["reportRef"], "digest": source["reportDigest"]}
+        if not exact["ref"].startswith("runtime-reports/" + exact["digest"].removeprefix("sha256:") + "/"):
+            raise IntegrationRunError("INTEGRATION_RUN.BUNDLE_INVALID", "report slot differs from exact digest")
+        _bundle_bytes(store, exact)
+        refs.append(exact)
     return refs
 
 
@@ -1180,7 +1245,8 @@ def _write_acceptance_bundle(*, run_dir: Path, candidate_ref: Mapping[str, str],
     for environment, fact_ref in (("alpha", alpha_ref), ("beta", beta_ref)):
         add(fact_ref, f"{environment}Fact")
         fact = _read_store_object(store, fact_ref, f"{environment}Fact")
-        for exact in [*_fact_evidence_refs(fact), *_offline_fact_refs(store=store, fact=fact, candidate=candidate)]:
+        for exact in [*_fact_evidence_refs(fact), *_report_fact_refs(store=store, fact=fact),
+                      *_offline_fact_refs(store=store, fact=fact, candidate=candidate)]:
             add(exact, f"{environment} evidence")
     plan_bytes = plan_path.read_bytes()
     _bundle_put(bundle_dir, "impact-plan.json", plan_bytes)
@@ -1290,6 +1356,7 @@ def _import_acceptance_bundle(*, bundle_dir: Path, commit: str, tree: str, paren
             signature_verifier=verifier, expected_signer_identity=signer_identity,
         )
         required.extend(_fact_evidence_refs(validated))
+        required.extend(_report_fact_refs(store=store, fact=validated))
         required.extend(_offline_fact_refs(store=store, fact=validated, candidate=candidate))
         if (validated.get("profile") != manifest["profile"] or validated.get("nonPromotable") is not False
                 or validated.get("impactPlanDigest") != manifest["impactPlan"].get("digest")
@@ -1360,6 +1427,7 @@ def _parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
+    started_monotonic = time.monotonic()
     args = _parser().parse_args(argv)
     run_id = args.run_id or datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     run_dir = RUNS_ROOT / run_id
@@ -1645,7 +1713,7 @@ def main(argv: list[str] | None = None) -> int:
             except ScopedCandidateError as exc:
                 summary.setdefault("warnings", []).append(f"claim release failed: {exc}")
         summary["endedAt"] = _now()
-        summary["wallClockSeconds"] = round(sum(item["durationSeconds"] for item in phases.items), 3)
+        summary["wallClockSeconds"] = round(time.monotonic() - started_monotonic, 3)
         (run_dir / "summary.json").write_text(json.dumps(summary, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
         (run_dir / "summary.md").write_text(_render_summary(summary), encoding="utf-8")
         bundle = (summary.get("acceptance") or {}).get("bundle") or {}

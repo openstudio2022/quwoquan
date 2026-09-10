@@ -48,6 +48,8 @@
 - 高风险配置必须具备灰度、回滚、审计与危险动作确认能力。
 - 各领域接入时必须声明最低 `platform-control-plane` 对象集合。
 - 本地 runtime 生命周期必须消费 `config-source-governance` 输出的唯一资源所有权结果，只收敛目标 runtime 自有资源并保持独立控制面在场；所有权无法唯一裁定或目标自有资源未收敛时不得产生成功终态。
+- `stackctl inspect --scope runtime` 是完整运行态巡检，覆盖 logs、network、data、metrics、config、security 与既有只读用户可用性聚合；candidate、active content/release identity、依赖与运行态失败仍严格阻断。它不要求正式分发 Web/current 或 Android/latest 材料，也不表达 release 准出。
+- `make accept` 的 smoke/integration 环境巡检使用 runtime；release profile、显式 `inspect --scope all|release` 与 distribution 验证继续严格要求正式分发材料及其身份。不得通过缩为单一 logs/config、跳过 inspect、伪造 distribution 成功或放宽 content identity 消除阻断。
 
 <a id="req-003"></a>
 ### REQ-003 Hosted Human Authority 必须独立认证、持久化并可精确消费
@@ -71,6 +73,7 @@
 - WHEN 参与者发起“config and reliability governance 能力”对应动作。
 - THEN 直属 Story 共同交付“承接 `platform-ops` 的平台运维控制面规格，负责把“配置治理 + 服务治理 + 发布灰度 + 环境依赖”沉淀为可设计、可实现、可验收的统一平台能力”，失败终态可区分且不产生伪成功事实。
 - AND 本地 runtime 生命周期只收敛目标自有资源并保持独立控制面在场；所有权无法唯一裁定或目标自有资源未收敛时不得产生成功终态。
+- AND smoke/integration 从实际环境编排进入 runtime inspect，完整运行态及内容身份健康而正式 Web/current、Android/latest 缺席时不因分发阻断；任一运行态或内容身份失败仍使环境验收失败，显式 all/release/distribution 对缺材料仍失败。
 
 <a id="sit-002"></a>
 ### SIT-002 单文件 stdin pipe 契约脚本的规模治理单轨归 Code Health Delta

@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import inspect
+import json
 import os
 import stat
 import sys
@@ -15,6 +16,9 @@ import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
+from types import SimpleNamespace
+
+import pytest
 
 ROOT = Path(__file__).resolve().parents[4]
 if str(ROOT) not in sys.path:
@@ -256,6 +260,82 @@ class IntegrationAppLaunchContractTest(unittest.TestCase):
         self.assertLess(source.index('phases.run(f"{environment}.content-readback"'), source.index('phases.run(f"{environment}.verify"'))
         for code in ("INTEGRATION_RUN.APP_LAUNCH_FAILED", "INTEGRATION_RUN.CONTENT_READBACK_FAILED"):
             self.assertIn(code, source)
+
+
+@pytest.fixture
+def host_offline(tmp_path, monkeypatch):
+    from quwoquan_ops.tests.local_contract.ci.test_integration_app_offline_uat__local_contract_test import (
+        _CANDIDATE, _receipt_matrix,
+    )
+    root = tmp_path.resolve()
+    host, store = root / "host", root / "store"
+    evidence_root = host
+    receipts, _ = _receipt_matrix(evidence_root)
+    for platform, exact in receipts.items():
+        path = host / "env/alpha/runs" / platform / "receipt.json"
+        path.parent.mkdir(parents=True)
+        (host / exact["ref"]).rename(path)
+        exact["ref"] = path.relative_to(host).as_posix()
+    monkeypatch.setattr(integration_run, "OUTPUT_ROOT", root / "repo-output")
+    monkeypatch.setattr(integration_run, "env_runs_root", lambda env: host / "env" / env / "runs")
+    monkeypatch.setattr(integration_run, "_store", lambda: store)
+    def stackctl(*args, **kwargs):
+        platform = "android" if args[args.index("--platform") + 1] == "android" else "ios"
+        return integration_run.StackctlResult("app-content-uat", {"exitCode": 0, "reportDir": str((evidence_root / receipts[platform]["ref"]).parent)}, "")
+    monkeypatch.setattr(integration_run, "_stackctl", stackctl)
+    params = {"candidate": _CANDIDATE, "candidate_ref": {"ref": "candidate.json", "digest": _CANDIDATE["candidateId"]},
+              "args": SimpleNamespace(android_device_id="android-device", ios_device_id="ios-device"),
+              "run_dir": root / "run", "phases": integration_run.Phases()}
+    return SimpleNamespace(root=evidence_root, store=store, receipts=receipts, params=params)
+
+
+def test_host_offline_exact_closure_is_portable_without_resigning(host_offline):
+    setup = host_offline
+    axis = integration_run._alpha_offline_pages(**setup.params)
+    assert axis["nonPromotable"] is True and axis["caseCount"] == 26
+    for exact in axis["files"]:
+        assert (setup.store / axis["root"] / exact["ref"]).read_bytes() == (setup.root / exact["ref"]).read_bytes()
+    # 删除宿主可用性之后，验收只消费 store 内完整闭包。
+    setup.root.rename(setup.root.with_name("unavailable"))
+    refs = integration_run._validate_offline_axis(store=setup.store, axis=axis, candidate=setup.params["candidate"])
+    assert len(refs) == len(axis["files"])
+
+
+@pytest.mark.parametrize("damage", ["escape", "link", "missing", "drift", "copy-drift"])
+def test_host_offline_rejects_invalid_closure_without_success_axis(host_offline, monkeypatch, damage):
+    setup = host_offline
+    path = setup.root / "snapshot.json"
+    if damage == "escape":
+        receipt_path = setup.root / setup.receipts["android"]["ref"]
+        receipt = json.loads(receipt_path.read_bytes())
+        receipt["pageResultRefs"][0]["evidence"]["ref"] = "../outside.json"
+        receipt_path.write_text(json.dumps(receipt))
+    elif damage == "link":
+        original = path.with_suffix(".original")
+        path.rename(original)
+        path.symlink_to(original)
+    elif damage == "missing":
+        path.unlink()
+    elif damage == "drift":
+        path.write_bytes(b"{}")
+    else:
+        put = integration_run._bundle_put
+        def drifting_put(*args):
+            result = put(*args)
+            path.write_bytes(b"{}")
+            return result
+        monkeypatch.setattr(integration_run, "_bundle_put", drifting_put)
+    with pytest.raises((integration_run.IntegrationRunError, OSError, ValueError)):
+        integration_run._alpha_offline_pages(**setup.params)
+    if damage != "copy-drift":
+        assert not setup.store.exists()
+
+
+@pytest.mark.parametrize("ref", ["../secret", "/outside", "env/alpha/../beta/report", "./report", "env//report", "env\\\\report"])
+def test_offline_path_escape_is_rejected_before_any_read(tmp_path, ref):
+    with mock.patch.object(launch, "read_repo_relative_regular_single_link", side_effect=AssertionError("must not read")):
+        with pytest.raises(ValueError):
+            launch._read_offline_evidence_bytes(tmp_path.resolve(), {"ref": ref, "digest": "sha256:" + "a" * 64})
 
 
 if __name__ == "__main__":

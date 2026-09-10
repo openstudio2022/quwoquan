@@ -12,7 +12,9 @@ from __future__ import annotations
 
 import argparse
 import contextlib
+import hashlib
 import json
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -221,3 +223,260 @@ def test_production_targets_remain_outside_local_orphan_recovery(
 
     assert result["exitCode"] == 2
     assert any("only available for" in item for item in result["details"])
+
+
+# spec_ref: specs/feature-tree/platform-ops-governance/spec.md#dom-001
+@pytest.fixture
+def legacy_reconciliation(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
+    from quwoquan_ops.cli.commands import repair_undownable_startup_receipt as repair
+    from quwoquan_ops.cli.lib import output_paths
+    from quwoquan_ops.tests.support.startup_attempt_receipt_test_support import _composition
+
+    root = tmp_path.resolve() / "repo"
+    root.mkdir()
+    monkeypatch.delenv("QWQ_OUTPUT_ROOT", raising=False)
+    monkeypatch.setattr(output_paths, "ROOT", root)
+    monkeypatch.setattr(output_paths, "DEFAULT_OUTPUT_ROOT", root / ".qwq_output")
+    monkeypatch.setattr(output_paths, "DEFAULT_LOCAL_RUNTIME_OUTPUT_ROOT", tmp_path.resolve() / "host")
+    monkeypatch.setattr(output_paths, "DEFAULT_DEPLOY_WORK_ROOT", tmp_path.resolve() / "deploy")
+    monkeypatch.setattr(repair, "local_runtime_operation_lock_path", lambda target="": tmp_path.resolve() / "locks" / f"{target or 'host'}.lock")
+    monkeypatch.setattr(repair, "list_consumer_leases", lambda _target: [])
+    monkeypatch.setattr(stackctl, "_local_stack_operation_lock", lambda _target: contextlib.nullcontext())
+    monkeypatch.setattr(stackctl, "_write_summary_bundle", lambda *a, **k: None)
+    monkeypatch.setattr(stackctl, "relpath", str)
+    calls = []
+
+    def docker_readback(argv, **kwargs):
+        calls.append(argv)
+        assert argv[0] == "docker"
+        assert argv[1:3] in (["ps", "-aq"], ["network", "ls"], ["volume", "ls"])
+        return subprocess.CompletedProcess(argv, 0, "kept-volume\n" if argv[1] == "volume" else "", "")
+
+    monkeypatch.setattr(stackctl, "run", docker_readback)
+    monkeypatch.setattr(stackctl, "_published_endpoint_is_occupied", lambda endpoint: False)
+    paths = output_paths.legacy_worktree_startup_paths("alpha-local")
+    run_id = "legacy-full-alpha-attempt"
+    env_root = root / ".qwq_output/env/alpha"
+    run_root = env_root / "runs" / run_id
+    obs_root = env_root / "observability" / run_id
+    run_root.mkdir(parents=True)
+    obs_root.mkdir(parents=True)
+    composition = _composition()
+    startup = {
+        "schema": "stackctl-local-startup-attempt", "attemptId": run_id,
+        "env": "alpha", "target": "alpha-local", "status": "stopped", "workload": "full",
+        "composeProject": PROJECT, "candidateDigest": "sha256:" + "a" * 64,
+        "configurationDigest": composition["configurationDigest"],
+        "providerRuntimeDigest": "sha256:" + "b" * 64,
+        "observabilityLogSinkDigest": "sha256:" + "c" * 64,
+        "imageTransportTag": composition["imageVersion"], "imageComposition": composition,
+        "runRoot": str(run_root), "startedAt": "2026-09-08T00:00:00Z",
+        "updatedAt": "2026-09-08T01:00:00Z", "failure": None, "cleanupFailure": None,
+    }
+    local_run = {"env": "alpha", "target": "alpha-local", "runId": run_id,
+                 "runRoot": str(run_root), "observabilityRoot": str(obs_root)}
+    for path, payload in zip(paths, (startup, startup, local_run), strict=True):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(payload) + "\n", encoding="utf-8")
+    report = output_paths.env_runs_root("alpha") / "receipt-reconciliation-test"
+    report.mkdir(parents=True)
+    args = _args(confirm=False)
+    args.worktree_startup_reconciliation = "plan"
+    args.worktree_startup_plan_ref = ""
+    return repair, output_paths, args, report, paths, calls
+
+
+def _legacy_result(fixture):
+    repair, _, args, report, _, _ = fixture
+    return repair.repair_undownable_startup_receipt(args, environment="alpha", report_dir=report)
+
+
+def _legacy_apply(fixture):
+    result = _legacy_result(fixture)
+    assert result["exitCode"] == 0, result
+    fixture[2].worktree_startup_reconciliation = "apply"
+    fixture[2].worktree_startup_plan_ref = result["planRef"]
+    fixture[2].confirm_undownable_startup_receipt_reclaim = True
+    return result
+
+
+def test_legacy_plan_reads_exact_bytes_without_weakening_guard(legacy_reconciliation):
+    repair, output_paths, _, _, paths, calls = legacy_reconciliation
+    before = [path.read_bytes() for path in paths]
+    result = _legacy_result(legacy_reconciliation)
+    assert result["exitCode"] == 0, result
+    assert result["status"] == "planned"
+    assert [path.read_bytes() for path in paths] == before
+    with pytest.raises(ValueError, match="OPS.RUNTIME.reconcile_required"):
+        output_paths.target_process_dir("alpha-local")
+    path, digest = result["planRef"].rsplit("=", 1)
+    assert digest == "sha256:" + hashlib.sha256(Path(path).read_bytes()).hexdigest()
+    plan = json.loads(Path(path).read_text())
+    assert {a["source"] for a in plan["actions"]} == {str(p) for p in paths}
+    assert plan["actions"][-1]["source"] == str(paths[0])
+    assert all(a["digest"] == repair._digest(Path(a["source"]).read_bytes()) for a in plan["actions"])
+    assert plan["readback"]["preservedVolumes"] == ["kept-volume"]
+    assert all(not Path(a["destination"]).exists() for a in plan["actions"])
+    assert len(calls) == 3
+
+
+def test_legacy_confirmed_apply_moves_original_inodes_and_preserves_bytes(legacy_reconciliation):
+    _, output_paths, _, _, paths, _ = legacy_reconciliation
+    original = {str(path): (path.stat().st_ino, path.read_bytes()) for path in paths}
+    planned = _legacy_apply(legacy_reconciliation)
+    plan = json.loads(Path(planned["planRef"].rsplit("=", 1)[0]).read_text())
+    result = _legacy_result(legacy_reconciliation)
+    assert result["exitCode"] == 0, result
+    assert result["status"] == "applied"
+    for item in plan["actions"]:
+        destination = Path(item["destination"])
+        assert (destination.stat().st_ino, destination.read_bytes()) == original[item["source"]]
+        assert not Path(item["source"]).exists()
+    assert output_paths.target_process_dir("alpha-local").is_relative_to(output_paths.DEFAULT_LOCAL_RUNTIME_OUTPUT_ROOT)
+    assert _legacy_result(legacy_reconciliation)["exitCode"] == 2
+
+
+@pytest.mark.parametrize("resource", ["containers", "networks", "ports", "unknown", "lease", "fence", "slot"])
+def test_legacy_active_and_unknown_readbacks_refuse_before_plan(legacy_reconciliation, monkeypatch, resource):
+    repair, output_paths, _, report, paths, _ = legacy_reconciliation
+    if resource == "containers":
+        monkeypatch.setattr(stackctl, "_mutable_test_live_container_ids", lambda p: ["active-container"])
+    elif resource == "networks":
+        monkeypatch.setattr(stackctl, "_mutable_test_live_resource_names", lambda r, **k: ["remaining-network"])
+    elif resource == "ports":
+        monkeypatch.setattr(stackctl, "_published_endpoint_is_occupied", lambda p: True)
+    elif resource == "unknown":
+        monkeypatch.setattr(stackctl, "run", lambda argv, **k: subprocess.CompletedProcess(argv, 1, "", "daemon unavailable"))
+    elif resource == "lease":
+        monkeypatch.setattr(repair, "list_consumer_leases", lambda t: [{"target": t, "state": "stale"}])
+    else:
+        exclusion = (repair.local_runtime_operation_lock_path("alpha-local").with_suffix(".executor.json")
+                     if resource == "fence" else output_paths.deployment_target_path("alpha-local", "process", "environment-execution", "execution-slot.json"))
+        exclusion.parent.mkdir(parents=True)
+        exclusion.write_text("{}")
+    before = [p.read_bytes() for p in paths]
+    result = _legacy_result(legacy_reconciliation)
+    assert result["exitCode"] == 2, result
+    assert [p.read_bytes() for p in paths] == before
+    assert not (report / "worktree-startup-reconciliation-plan.json").exists()
+
+
+@pytest.mark.parametrize("drift", ["source", "copies", "status", "binding", "plan", "destination", "live"])
+def test_legacy_changed_input_or_resource_refuses_apply(legacy_reconciliation, monkeypatch, drift):
+    _, _, _, report, paths, _ = legacy_reconciliation
+    planned = _legacy_apply(legacy_reconciliation)
+    plan_path = Path(planned["planRef"].rsplit("=", 1)[0])
+    if drift in {"source", "copies"}:
+        paths[0].write_bytes(paths[0].read_bytes() + b" ")
+        if drift == "source":
+            paths[1].write_bytes(paths[0].read_bytes())
+    elif drift == "status":
+        for path in paths[:2]:
+            data = json.loads(path.read_text())
+            data["status"] = "running"
+            path.write_text(json.dumps(data))
+    elif drift == "binding":
+        paths[2].write_text("{}")
+    elif drift == "plan":
+        plan_path.write_bytes(plan_path.read_bytes() + b" ")
+    elif drift == "destination":
+        (report / "archive").mkdir()
+    else:
+        monkeypatch.setattr(stackctl, "_mutable_test_live_container_ids", lambda p: ["late-container"])
+    before = [p.read_bytes() for p in paths]
+    result = _legacy_result(legacy_reconciliation)
+    assert result["exitCode"] == 2, result
+    assert [p.read_bytes() for p in paths] == before
+    assert not list((report / "archive").glob("*.json"))
+
+
+@pytest.mark.parametrize("surface", ["source", "source-parent", "plan", "destination", "run-root"])
+def test_legacy_symlink_refuses_without_moving_any_original(legacy_reconciliation, surface):
+    _, _, _, report, paths, _ = legacy_reconciliation
+    planned = _legacy_apply(legacy_reconciliation)
+    if surface == "source":
+        link = paths[1]
+    elif surface == "source-parent":
+        link = paths[1].parent
+    elif surface == "plan":
+        link = Path(planned["planRef"].rsplit("=", 1)[0])
+    elif surface == "run-root":
+        link = Path(json.loads(paths[0].read_text())["runRoot"])
+    else:
+        external = report.parent / "outside"
+        external.mkdir()
+        (report / "archive").symlink_to(external, target_is_directory=True)
+        link = None
+    if link is not None:
+        original = link.with_name(link.name + "-original")
+        link.rename(original)
+        link.symlink_to(original, target_is_directory=original.is_dir())
+    result = _legacy_result(legacy_reconciliation)
+    assert result["exitCode"] == 2, result
+    assert all(p.exists() for p in paths)
+    assert not list((report / "archive").glob("*.json"))
+
+
+@pytest.mark.parametrize("missing", ["confirm", "plan-ref"])
+def test_legacy_apply_requires_exact_plan_and_explicit_confirmation(legacy_reconciliation, missing):
+    _legacy_apply(legacy_reconciliation)
+    args = legacy_reconciliation[2]
+    if missing == "confirm":
+        args.confirm_undownable_startup_receipt_reclaim = False
+    else:
+        args.worktree_startup_plan_ref = ""
+    result = _legacy_result(legacy_reconciliation)
+    assert result["exitCode"] == 2
+    assert all(path.exists() for path in legacy_reconciliation[4])
+
+
+def test_legacy_partial_move_preserves_originals_and_keeps_primary_guard(legacy_reconciliation, monkeypatch):
+    repair, output_paths, _, report, paths, _ = legacy_reconciliation
+    _legacy_apply(legacy_reconciliation)
+    original_rename = repair.os.rename
+    count = 0
+
+    def fail_second_move(*args, **kwargs):
+        nonlocal count
+        count += 1
+        if count == 2:
+            raise OSError("injected archive failure")
+        return original_rename(*args, **kwargs)
+
+    monkeypatch.setattr(repair.os, "rename", fail_second_move)
+    expected = paths[1].read_bytes()
+    result = _legacy_result(legacy_reconciliation)
+    assert result["exitCode"] == 2
+    assert (report / "archive/full-startup_attempt.json").read_bytes() == expected
+    assert paths[0].exists() and paths[2].exists()
+    with pytest.raises(ValueError, match="reconcile_required"):
+        output_paths.target_process_dir("alpha-local")
+    assert _legacy_result(legacy_reconciliation)["exitCode"] == 2
+
+
+def test_legacy_readback_drift_before_plan_preserves_all_sources(legacy_reconciliation, monkeypatch):
+    _, _, _, report, paths, _ = legacy_reconciliation
+
+    def drift_during_probe(project):
+        for path in paths[:2]:
+            path.write_bytes(path.read_bytes() + b" ")
+        return []
+
+    monkeypatch.setattr(stackctl, "_mutable_test_live_container_ids", drift_during_probe)
+    result = _legacy_result(legacy_reconciliation)
+    assert result["exitCode"] == 2
+    assert "changed during" in result["details"][0]
+    assert all(path.exists() for path in paths)
+    assert not (report / "worktree-startup-reconciliation-plan.json").exists()
+
+
+def test_legacy_reconciliation_cli_is_explicit_and_alpha_only(legacy_reconciliation):
+    args = stackctl.build_parser().parse_args([
+        "repair", "--target", "alpha-local", "--fix", "reclaim-undownable-startup-receipt",
+        "--worktree-startup-reconciliation", "plan",
+    ])
+    assert args.worktree_startup_reconciliation == "plan"
+    legacy_reconciliation[2].target = "beta-local"
+    result = _legacy_result(legacy_reconciliation)
+    assert result["exitCode"] == 2
+    assert "alpha-local" in result["details"][0]

@@ -6,6 +6,7 @@ import argparse
 import base64
 import hashlib
 import json
+import os
 import subprocess
 import tempfile
 import unittest
@@ -16,6 +17,7 @@ from unittest import mock
 from quwoquan_ops.cli import stackctl
 from quwoquan_ops.cli.lib import (
     local_environment_auth,
+    output_paths,
     premium_pool_release,
     public_domain_tls,
 )
@@ -370,7 +372,7 @@ class PremiumPoolReleaseStackctlSecurityLocalContractTest(unittest.TestCase):
                 ),
                 mock.patch.object(
                     premium_pool_release,
-                    "env_runs_root",
+                    "_data_release_runs_root",
                     return_value=root,
                 ),
             ):
@@ -441,8 +443,13 @@ class PremiumPoolReleaseStackctlSecurityLocalContractTest(unittest.TestCase):
             path = root / "data-release/release-1/apply-1/import.json"
             path.parent.mkdir(parents=True)
             path.write_text(json.dumps(report), encoding="utf-8")
+            (path.parent / "run.json").write_text(json.dumps({
+                "schema": "quwoquan_data.environment_release_run",
+                "environment": "alpha", "releaseId": "release-1", "runId": "apply-1",
+                "kind": "apply", "startedAt": "2026-09-10T00:00:00Z",
+            }), encoding="utf-8")
             with (
-                mock.patch.object(premium_pool_release, "env_runs_root", return_value=root),
+                mock.patch.object(premium_pool_release, "_data_release_runs_root", return_value=root),
                 mock.patch.object(premium_pool_release, "active_deployment_candidate", return_value={"baselineId": "sha256:" + "b" * 64}),
                 mock.patch.object(premium_pool_release, "load_candidate_manifest", return_value={
                     "packageDigest": "sha256:" + "c" * 64, "sourceRevision": "a" * 40,
@@ -464,6 +471,90 @@ class PremiumPoolReleaseStackctlSecurityLocalContractTest(unittest.TestCase):
                             environment="alpha", target="alpha-local", import_report=path,
                             content_id="post-video-1", pool_is_empty=True,
                         )
+
+    def test_candidate_data_root_and_evidence_identity_are_fail_closed(self) -> None:
+        # spec_ref: specs/feature-tree/platform-ops-governance/spec.md#dom-001
+        for explicit_root in (False, True):
+            with self.subTest(explicit_root=explicit_root), tempfile.TemporaryDirectory() as temporary:
+                base = Path(temporary).resolve()
+                data_root, host_root = base / "repo/.qwq_output", base / "host-runtime"
+                with (
+                    mock.patch.dict(os.environ),
+                    mock.patch.object(output_paths, "DEFAULT_OUTPUT_ROOT", data_root),
+                    mock.patch.object(output_paths, "DEFAULT_LOCAL_RUNTIME_OUTPUT_ROOT", host_root),
+                ):
+                    os.environ.pop("QWQ_OUTPUT_ROOT", None)
+                    if explicit_root:
+                        data_root = base / "explicit-output"
+                        os.environ["QWQ_OUTPUT_ROOT"] = str(data_root)
+                    digest = "sha256:" + "a" * 64
+                    attestation, attestation_digest = _write_candidate_release_fixture(data_root, release_id="release-1", manifest_digest=digest)
+                    receipt, _ = _test_live_readiness_fixture(data_root)
+                    readiness = json.loads(receipt.read_bytes())
+                    readiness["sourceIdentities"] = json.loads(attestation.read_bytes())["sourceIdentities"]
+                    readiness["sourceIdentitySetDigest"] = json.loads(attestation.read_bytes())["sourceIdentitySetDigest"]
+                    original = json.dumps(_with_checksum(readiness)).encode()
+                    receipt.write_bytes(original)
+                    candidate = {"releaseId": "release-1", "releaseDigest": digest, "attestationRef": str(attestation), "attestationDigest": attestation_digest}
+                    active = {"baselineId": "sha256:" + "b" * 64}
+                    manifest = {**active, "packageDigest": "sha256:" + "c" * 64, "sourceRevision": "a" * 40, "release": {"candidate": candidate}}
+                    with (
+                        mock.patch.object(premium_pool_release, "active_deployment_candidate", return_value=active) as read_active,
+                        mock.patch.object(premium_pool_release, "load_candidate_manifest", return_value=manifest),
+                    ):
+                        def load(path=receipt):
+                            return premium_pool_release.load_premium_pool_candidate_binding(environment="alpha", target="alpha-local", readiness_receipt=path, content_id="video-1")
+
+                        self.assertEqual(load().readiness_receipt_ref, "data-release/release-1/verify-1/release-readiness.json")
+                        self.assertEqual(output_paths.env_runs_root("alpha"), (data_root if explicit_root else host_root) / "env/alpha/runs")
+                        for wrong in (
+                            host_root / receipt.relative_to(data_root),
+                            data_root / "env/beta/runs/data-release/release-1/verify-1/release-readiness.json",
+                            receipt.parent.with_name("wrong-run") / receipt.name,
+                            base / "outside/release-readiness.json",
+                        ):
+                            wrong.parent.mkdir(parents=True, exist_ok=True)
+                            wrong.write_bytes(original)
+                            with self.subTest(wrong=wrong), self.assertRaises(premium_pool_release.PremiumPoolReleaseError):
+                                load(wrong)
+                        with self.assertRaisesRegex(premium_pool_release.PremiumPoolReleaseError, "traversal"):
+                            load(receipt.parent / ".." / receipt.parent.name / receipt.name)
+                        for field, value in (("environment", "beta"), ("releaseId", "release-other"), ("verifyRunId", "wrong-run"), ("manifestDigest", "sha256:" + "f" * 64)):
+                            receipt.write_text(json.dumps(_with_checksum({**readiness, field: value})), encoding="utf-8")
+                            with self.subTest(field=field), self.assertRaises(premium_pool_release.PremiumPoolReleaseError):
+                                load()
+                        receipt.write_text(json.dumps({**readiness, "verificationChecksum": "sha256:" + "0" * 64}), encoding="utf-8")
+                        with self.assertRaisesRegex(premium_pool_release.PremiumPoolReleaseError, "checksum drifted"):
+                            load()
+                        receipt.write_bytes(original)
+                        attestation_raw = attestation.read_bytes()
+                        attestation.write_bytes(attestation_raw + b" ")
+                        with self.assertRaisesRegex(premium_pool_release.PremiumPoolReleaseError, "attestation digest drifted"):
+                            load()
+                        attestation.write_bytes(attestation_raw)
+                        for field, value in (("releaseId", "other"), ("payloadSha256", "sha256:" + "e" * 64)):
+                            raw = json.dumps({**json.loads(attestation_raw), field: value}).encode()
+                            attestation.write_bytes(raw)
+                            candidate["attestationDigest"] = "sha256:" + hashlib.sha256(raw).hexdigest()
+                            with self.subTest(attestation_field=field), self.assertRaisesRegex(premium_pool_release.PremiumPoolReleaseError, "attestation identity drifted"):
+                                load()
+                        attestation.write_bytes(attestation_raw)
+                        candidate["attestationDigest"] = attestation_digest
+                        for selected in (receipt, receipt.parent, attestation):
+                            saved = selected.with_name("original")
+                            selected.rename(saved)
+                            selected.symlink_to(saved, target_is_directory=saved.is_dir())
+                            with self.subTest(symlink=selected), self.assertRaisesRegex(premium_pool_release.PremiumPoolReleaseError, "non-symlink|unsafe"):
+                                load()
+                            selected.unlink()
+                            saved.rename(selected)
+                        candidate["releaseId"] = "other"
+                        with self.assertRaisesRegex(premium_pool_release.PremiumPoolReleaseError, "active candidate release"):
+                            load()
+                        candidate["releaseId"] = "release-1"
+                        read_active.side_effect = [active, {"baselineId": "sha256:" + "d" * 64}]
+                        with self.assertRaisesRegex(premium_pool_release.PremiumPoolReleaseError, "active candidate changed"):
+                            load()
 
     def test_test_live_rejects_unknown_schema_and_symlink_receipt_ancestors(self) -> None:
         # spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-002

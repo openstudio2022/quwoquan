@@ -16,7 +16,8 @@ from .local_environment_auth import (
     LocalAcceptanceSession,
     mint_local_product_ops_operator_token,
 )
-from .output_paths import active_deployment_candidate, env_runs_root, output_root
+from .output_paths import active_deployment_candidate, output_root
+from quwoquan_ops.cli.commands.app_preflight_shared import _data_release_runs_root
 from .app_content_uat_plan import build_app_content_uat_plan, load_release_uat_sample_plan
 from .test_live_content_binding import load_test_live_content_binding
 from quwoquan_ops.cli.commands.app_preflight_readiness import _validate_data_schema
@@ -38,6 +39,8 @@ def _validate_release_document(value: Mapping[str, Any], name: str) -> None:
 
 
 def _regular_path(source: Path, *, label: str) -> Path:
+    if ".." in source.parts:
+        raise PremiumPoolReleaseError(f"{label} must not contain parent traversal")
     if any(path.is_symlink() for path in (source, *source.parents)):
         raise PremiumPoolReleaseError(f"{label} must be a regular non-symlink file")
     return source.resolve()
@@ -262,7 +265,7 @@ def load_premium_pool_candidate_binding(
         require_full=True,
     )
     receipt_path = _regular_path(Path(readiness_receipt).expanduser(), label="readiness receipt")
-    receipt_root = env_runs_root(environment).resolve()
+    receipt_root = _data_release_runs_root(environment).resolve()
     try:
         receipt_ref = str(receipt_path.relative_to(receipt_root))
     except ValueError as exc:
@@ -321,6 +324,8 @@ def load_premium_pool_candidate_binding(
         raise PremiumPoolReleaseError(
             "readiness receipt lacks importRunId or verifyRunId"
         )
+    if active_deployment_candidate(target) != active:
+        raise PremiumPoolReleaseError("active candidate changed during Data evidence binding")
     return PremiumPoolCandidateBinding(
         environment=environment,
         target=target,
@@ -369,7 +374,7 @@ def load_premium_pool_bootstrap_binding(
         require_full=True,
     )
     report_path = _regular_path(Path(import_report).expanduser(), label="import report")
-    report_root = env_runs_root(environment).resolve()
+    report_root = _data_release_runs_root(environment).resolve()
     try:
         report_ref = str(report_path.relative_to(report_root))
     except ValueError as exc:
@@ -397,6 +402,19 @@ def load_premium_pool_bootstrap_binding(
     expected_ref = f"data-release/{report['releaseId']}/{report_path.parent.name}/import.json"
     if report_ref != expected_ref:
         raise PremiumPoolReleaseError("import report path is not bound to its exact release/apply run")
+    # import.json 本身没有 runId；必须消费同目录 Data writer 的 append-only run 身份，
+    # 不能以目录名自证一次任意搬运的 apply。
+    run_path = _regular_path(report_path.parent / "run.json", label="Data apply run")
+    try:
+        run = json.loads(run_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise PremiumPoolReleaseError("Data apply run is unreadable") from exc
+    _validate_release_document(run, "environment_release_run")
+    if any(run.get(key) != value for key, value in {
+        "environment": environment, "releaseId": report["releaseId"],
+        "runId": report_path.parent.name, "kind": "apply",
+    }.items()):
+        raise PremiumPoolReleaseError("import report does not match its exact Data apply run identity")
     release_binding = manifest.get("release")
     candidate_release = (
         release_binding.get("candidate") if isinstance(release_binding, dict) else None
@@ -443,6 +461,8 @@ def load_premium_pool_bootstrap_binding(
         raise PremiumPoolReleaseError(
             "contentId must be the environment postId bound to the ReleaseUatSamplePlan video sample"
         )
+    if active_deployment_candidate(target) != active:
+        raise PremiumPoolReleaseError("active candidate changed during Data evidence binding")
     return PremiumPoolBootstrapBinding(
         environment=environment,
         target=target,

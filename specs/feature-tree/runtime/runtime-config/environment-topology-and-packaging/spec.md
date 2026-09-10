@@ -443,6 +443,7 @@
 - 尚缺实现：各入口统一 Alpha canonical 离线供给与完整性判定、在线严格 preflight、设备/安全 lease 独占、私有构建投影和有界依赖 stale 恢复；PATH wrapper 只薄透传，不能使 raw SDK 默认走另一 source。direct 不提升证据，managed 只清理 owned mapping，UAT retry 复用预冻结工具链。
 - 尚缺验收证据：local_contract 证明入口薄适配、Alpha 离线完整性、在线 handoff 负例、依赖有界恢复、设备/租约并发；api_integration 证明真实制品安装/online activation 与一致工具链；user_acceptance 在 Android/iOS 的 raw SDK、受管字面命令、IDE 与 run.sh 无后端首装验证首页/premium/媒体及同包切环境。非法在线选择器失败，raw SDK 默认 Alpha 不应失败；自动化结果不替代 required human surfaces。
 - 完成判定：[`GWT-002`](#gwt-002)、[`GWT-007`](#gwt-007) 在 raw SDK、受管字面命令、IDE 与 run.sh 默认 Alpha 上读取同一完整快照，断网/无后端首装与再次冷启动成立；设备选择、双端并行、同设备安全切换与依赖 stale 有界恢复有 fresh 证据。非法在线 handoff/选择器仍阻断，direct 安全 lease 不提升 managed/UAT authority；未测 surface 保持 OPEN。
+- 验收边界：系统级网络故障施加、隔离验证与恢复演练挂起，未执行不得记为通过；本 OPEN 与 REQ-008 的首装断网证明保持未闭合。Alpha `integration` 的双端包内快照页面与独立服务/API required 集合继续执行，页面通过不等于系统断网实验通过；不得删减所选 profile 的 required evidence 或提升 rehearsal authority。
 - 依赖：本节点启动设计、`app_artifact_manifest.yaml` / `app_launch_manifest.yaml` 与平台 build gate。
 
 <a id="open-011"></a>

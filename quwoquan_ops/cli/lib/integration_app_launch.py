@@ -26,6 +26,7 @@ ROOT = Path(__file__).resolve().parents[3]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from quwoquan_ops.cli.lib.descriptor_safe_io import read_repo_relative_regular_single_link  # noqa: E402
 from quwoquan_ops.cli.lib.content_api_consumer import (  # noqa: E402
     ContentApiConsumerError,
     _default_http_request,
@@ -357,6 +358,9 @@ def _offline_evidence_path(root: Path, exact: Mapping[str, str]) -> Path:
     """先验证 exact ref 形状与词法边界，再允许读取文件或查询 symlink。"""
     if not isinstance(exact, Mapping) or set(exact) != {"ref", "digest"}:
         raise ValueError("offline evidence requires exact ref/digest")
+    if (not isinstance(exact["ref"], str) or not isinstance(exact["digest"], str)
+            or re.fullmatch(r"sha256:[0-9a-f]{64}", exact["digest"]) is None):
+        raise ValueError("offline evidence requires canonical ref/digest")
     relative = Path(exact["ref"])
     if (relative.is_absolute() or any(part in {".", ".."} for part in relative.parts) or not relative.parts
             or relative.as_posix() != exact["ref"] or any(char in exact["ref"] for char in "\x00\n\r\\")):
@@ -367,9 +371,9 @@ def _offline_evidence_path(root: Path, exact: Mapping[str, str]) -> Path:
 def _read_offline_evidence_bytes(root: Path, exact: Mapping[str, str]) -> tuple[bytes, str]:
     path = _offline_evidence_path(root, exact)
     relative = path.relative_to(root)
-    if any((root / Path(*relative.parts[:index])).is_symlink() for index in range(1, len(relative.parts) + 1)):
+    if any(part.is_symlink() for part in (path, *path.parents)):
         raise ValueError("offline evidence symlink is forbidden")
-    encoded = path.read_bytes()
+    encoded = read_repo_relative_regular_single_link(root, relative.as_posix(), require_current_name=True)
     digest = "sha256:" + hashlib.sha256(encoded).hexdigest()
     if digest != exact["digest"]:
         raise ValueError("offline evidence exact bytes drifted: " + exact["ref"])

@@ -58,6 +58,7 @@ def register_parser(
             "metrics",
             "config",
             "security",
+            "runtime",
             "release",
             "content",
             "all",
@@ -74,6 +75,7 @@ def register_parser(
             "metrics",
             "config",
             "security",
+            "runtime",
             "release",
             "content",
             "all",
@@ -144,11 +146,11 @@ def command_inspect(args: argparse.Namespace) -> dict[str, Any]:
     env_name = str(target["env"])
     report_dir = _stackctl.resolve_report_dir(args, env_name, args.target)
     started_monotonic, started_at = _stackctl._start_timing()
-    scopes = (
-        ["logs", "network", "data", "metrics", "config", "security", "release"]
-        if args.scope == "all"
-        else [args.scope]
-    )
+    runtime_scopes = ["logs", "network", "data", "metrics", "config", "security"]
+    scopes = {
+        "runtime": runtime_scopes,
+        "all": [*runtime_scopes, "release"],
+    }.get(args.scope, [args.scope])
     inspection: dict[str, Any] = {}
     findings: list[str] = []
     candidate_workspace = (

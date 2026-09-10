@@ -10,8 +10,12 @@
 
 from __future__ import annotations
 
+import base64
+import hashlib
 import json
 import os
+import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -28,6 +32,7 @@ IOS_PREPARE_SCRIPT = APP_DIR / "scripts/ios/build_prepare_dart_defines.sh"
 IOS_EMBED_SCRIPT = APP_DIR / "scripts/ios/build_embed_runtime_config_trust.py"
 IOS_APP_DELEGATE = APP_DIR / "ios/Runner/AppDelegate.swift"
 IOS_RUNTIME_CONFIG_SUPPLY = APP_DIR / "ios/Runner/NativeRuntimeConfigSupply.swift"
+IOS_CANONICAL_JSON = APP_DIR / "ios/Runner/NativeRuntimeCanonicalJSON.swift"
 ANDROID_STARTUP_GATE = (
     APP_DIR / "android/app/src/main/java/com/quwoquan/quwoquan_app/StartupGateActivity.java"
 )
@@ -279,6 +284,134 @@ class BuildTimeSelfSupplyContractTest(unittest.TestCase):
             startup.index("runtimeConfigActivationCoordinator.consumePendingRequest(getIntent(), isTaskRoot())"),
             startup.index("consumeBundledSelfSupplyRequest();"),
         )
+
+
+class NativeCanonicalJSONContractTest(unittest.TestCase):
+    """只运行 host Foundation；提取生产函数而非在测试中重写规范 encoder。"""
+
+    # spec_ref: specs/feature-tree/runtime/runtime-config/environment-topology-and-packaging/spec.md#req-003
+    @staticmethod
+    def _vectors() -> dict[str, dict]:
+        return {
+            "mixed_case_trust_keys": {
+                "trustedPublicKeys": {"key10": "ten", "key2": "two", "Key": "upper"},
+                "trustEnvelopeDigest": "sha256:test-vector",
+            },
+            "nested_array_and_escaping": {
+                "z": [True, False, None, 0, 1, -7, 1.25, 9007199254740991],
+                "a": [{"trustedPublicKeys": {}, "trustEnvelopeDigest": "摘要/\\\"\n"}],
+            },
+        }
+
+    def test_python_canonical_vector_preserves_case_sensitive_key_order(self) -> None:
+        # 即使 Linux 没有 Swift，该纯契约断言仍运行，不把平台 skip 当原生通过。
+        encoded = json.dumps(
+            self._vectors()["mixed_case_trust_keys"],
+            ensure_ascii=False, separators=(",", ":"), sort_keys=True,
+        ).encode("utf-8")
+        self.assertEqual(
+            encoded,
+            b'{"trustEnvelopeDigest":"sha256:test-vector",'
+            b'"trustedPublicKeys":{"Key":"upper","key10":"ten","key2":"two"}}',
+        )
+
+    def test_production_and_test_host_compile_the_shared_canonicalizer(self) -> None:
+        supply = IOS_RUNTIME_CONFIG_SUPPLY.read_text(encoding="utf-8")
+        self.assertEqual(supply.count("return try NativeRuntimeCanonicalJSON.data(document)"), 2)
+        self.assertNotIn(".sortedKeys", supply)
+        for project in (
+            APP_DIR / "ios/Runner.xcodeproj/project.pbxproj",
+            APP_DIR / "test_host/patrol/ios/Runner.xcodeproj/project.pbxproj",
+        ):
+            with self.subTest(project=str(project)):
+                source = project.read_text(encoding="utf-8")
+                self.assertEqual(source.count("/* NativeRuntimeCanonicalJSON.swift in Sources */"), 2)
+                self.assertIn("path = " + (
+                    "../../../../ios/Runner/" if "test_host" in project.parts else ""
+                ) + "NativeRuntimeCanonicalJSON.swift;", source)
+
+    def test_generated_supply_matches_both_production_swift_canonicalizers(self) -> None:
+        swift = shutil.which("swift")
+        if swift is None:
+            self.skipTest(
+                f"HOST_SWIFT_UNAVAILABLE platform={sys.platform}: "
+                "原生 Foundation 字节一致性未执行；纯 Python 契约仍独立运行"
+            )
+        source = IOS_RUNTIME_CONFIG_SUPPLY.read_text(encoding="utf-8")
+        # 保留生产函数体全部字节，只移除访问限制以便独立调用；缺失/迁移必须显式更新抽取边界。
+        functions = re.findall(
+            r"^  private static func canonicalJSONData\([^\n]+\{\n.*?^  \}",
+            source, flags=re.MULTILINE | re.DOTALL,
+        )
+        self.assertEqual(len(functions), 2, "必须覆盖 store 与 activation coordinator 两条生产路径")
+        wrappers = "\n".join(
+            f"enum ProductionCanonical{index} {{\n"
+            + function.replace("private static func", "static func", 1)
+            + "\n}"
+            for index, function in enumerate(functions)
+        )
+        program = (
+            IOS_CANONICAL_JSON.read_text(encoding="utf-8") + "\n"
+            "enum NativeRuntimeConfigReadError: Error {\n"
+            "  case packageMalformed, activationRequestMalformed\n}\n"
+            + wrappers
+            + "\nlet input = FileHandle.standardInput.readDataToEndOfFile()\n"
+            "let vectors = try JSONSerialization.jsonObject(with: input) as! [[String: Any]]\n"
+            "for document in vectors {\n"
+            "  print(try ProductionCanonical0.canonicalJSONData(document).base64EncodedString())\n"
+            "  print(try ProductionCanonical1.canonicalJSONData(document).base64EncodedString())\n"
+            "}\n"
+        )
+        with tempfile.TemporaryDirectory(prefix="qwq-native-canonical-") as raw_root:
+            root = Path(raw_root)
+            request_output = root / SELF_SUPPLY_REQUEST_FILE_NAME
+            trust_output = root / "runtime-config-trust.json"
+            generated = subprocess.run(
+                [sys.executable, str(SELF_SUPPLY_BUILDER),
+                 "--trust-output", str(trust_output), "--request-output", str(request_output)],
+                cwd=REPO_ROOT,
+                env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1", "PYTHONPATH": str(REPO_ROOT)},
+                capture_output=True, text=True, check=False, timeout=90,
+            )
+            self.assertEqual(generated.returncode, 0, generated.stderr)
+            request_bytes = request_output.read_bytes()
+            request = json.loads(request_bytes)
+            vectors = {
+                **self._vectors(),
+                "generated_request": request,
+                "generated_package": request["package"],
+                "generated_manifest": request["effectiveLaunchManifest"],
+                "generated_trust": json.loads(trust_output.read_bytes()),
+            }
+            expected = {
+                name: json.dumps(value, ensure_ascii=False, separators=(",", ":"), sort_keys=True).encode("utf-8")
+                for name, value in vectors.items()
+            }
+            self.assertEqual(expected["generated_request"], request_bytes)
+            self.assertEqual(
+                "sha256:" + hashlib.sha256(expected["generated_package"]).hexdigest(),
+                request["packageDigest"],
+            )
+            probe = root / "canonical.swift"
+            probe.write_text(program, encoding="utf-8")
+            native = subprocess.run(
+                [swift, "-module-cache-path", str(root / "module-cache"), str(probe)],
+                input=json.dumps(list(vectors.values()), ensure_ascii=False).encode("utf-8"),
+                capture_output=True, check=False, timeout=90,
+            )
+            self.assertEqual(native.returncode, 0, native.stderr.decode("utf-8", errors="replace"))
+            lines = native.stdout.splitlines()
+            self.assertEqual(len(lines), len(vectors) * 2)
+            for index, (name, python_bytes) in enumerate(expected.items()):
+                for canonicalizer in range(2):
+                    with self.subTest(vector=name, production_canonicalizer=canonicalizer):
+                        swift_bytes = base64.b64decode(lines[index * 2 + canonicalizer], validate=True)
+                        self.assertEqual(
+                            swift_bytes, python_bytes,
+                            f"{name} production[{canonicalizer}] canonical bytes differ: "
+                            f"python=sha256:{hashlib.sha256(python_bytes).hexdigest()} "
+                            f"swift=sha256:{hashlib.sha256(swift_bytes).hexdigest()}",
+                        )
 
 
 if __name__ == "__main__":

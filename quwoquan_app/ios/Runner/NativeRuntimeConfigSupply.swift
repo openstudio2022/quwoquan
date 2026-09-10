@@ -651,10 +651,7 @@ enum NativeRuntimeConfigStore {
       throw NativeRuntimeConfigReadError.packageMalformed
     }
     do {
-      return try JSONSerialization.data(
-        withJSONObject: document,
-        options: [.sortedKeys, .withoutEscapingSlashes]
-      )
+      return try NativeRuntimeCanonicalJSON.data(document)
     } catch {
       throw NativeRuntimeConfigReadError.packageMalformed
     }
@@ -1786,10 +1783,7 @@ enum NativeRuntimeConfigActivationCoordinator {
       throw NativeRuntimeConfigReadError.activationRequestMalformed
     }
     do {
-      return try JSONSerialization.data(
-        withJSONObject: document,
-        options: [.sortedKeys, .withoutEscapingSlashes]
-      )
+      return try NativeRuntimeCanonicalJSON.data(document)
     } catch {
       throw NativeRuntimeConfigReadError.activationRequestMalformed
     }

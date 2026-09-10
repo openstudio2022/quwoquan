@@ -35,6 +35,18 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.function.Predicate;
 
+enum NativeRecoveryAccess {
+  CONFIGURATION, OFFLINE, REMOTE;
+
+  static NativeRecoveryAccess resolve(
+      boolean activationFailed, boolean configValid, boolean networkAllowed) {
+    if (activationFailed || !configValid) return CONFIGURATION;
+    return networkAllowed ? REMOTE : OFFLINE;
+  }
+
+  boolean allowsWeb() { return this == REMOTE; }
+}
+
 final class NativeRecoveryVersionResponse {
   private static final Set<String> CANONICAL_FIELDS =
       Set.of(
@@ -208,6 +220,7 @@ public final class StartupGateActivity extends Activity {
             return thread;
           });
   private volatile boolean recoveryVersionCheckInFlight;
+  private boolean nativeConfigurationFailed;
   private boolean recoveryVersionRefreshPending;
   private boolean recoveryExternalOpenInFlight;
   private RuntimeConfigPackageStore runtimeConfigPackageStore;
@@ -251,6 +264,7 @@ public final class StartupGateActivity extends Activity {
               + activation.errorCode
               + " issues="
               + String.join(",", activation.validationIssues));
+      nativeConfigurationFailed = true;
       showNativeStartupRecovery();
       return;
     }
@@ -264,8 +278,12 @@ public final class StartupGateActivity extends Activity {
     if (BuildConfig.DEBUG) {
       // Debug-nonprod 构建期自供给（REQ-003 build_time_self_supply）：无外部 activation
       // extra 时消费 assets 内嵌的激活请求；Release 制品不含该 asset 也不进入此分支。
-      // 失败只记账，随后由既有 typed trust/config 阻断在 Flutter 侧呈现，不得静默回退。
+      // 失败进入原生配置阻断，不创建 Flutter engine，也不得静默回退。
       consumeBundledSelfSupplyRequest();
+      if (nativeConfigurationFailed) {
+        showNativeStartupRecovery();
+        return;
+      }
     }
     StartupHealthStore.promoteConfirmedPlatformStartupCrash(this);
     if (!StartupHealthStore.shouldRecoverConfirmedStartupFatal(this)) {
@@ -354,8 +372,11 @@ public final class StartupGateActivity extends Activity {
       return;
     } catch (java.io.IOException error) {
       Log.w(STARTUP_TAG, "android_runtime_config_self_supply asset_unreadable", error);
+      nativeConfigurationFailed = true;
       return;
     }
+    nativeConfigurationFailed =
+        selfSupply.kind == RuntimeConfigActivationCoordinator.ConsumeKind.FAILED;
     if (selfSupply.kind == RuntimeConfigActivationCoordinator.ConsumeKind.NOT_REQUESTED) {
       Log.i(STARTUP_TAG, "android_runtime_config_self_supply_skipped reason=external_active");
       return;
@@ -521,7 +542,9 @@ public final class StartupGateActivity extends Activity {
     message.setTextSize(17);
     message.setGravity(Gravity.CENTER);
     LinearLayout.LayoutParams messageLayout =
-        new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(52));
+        new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+    message.setMinHeight(dp(52));
     messageLayout.topMargin = dp(16);
     content.addView(message, messageLayout);
 
@@ -589,10 +612,27 @@ public final class StartupGateActivity extends Activity {
 
   private void checkNativeRecoveryVersion(
       TextView title, TextView message, Button primary, Button web) {
-    if (recoveryVersionCheckInFlight || !runtimeConfigPackageStore.networkAccessAllowed()) {
+    if (recoveryVersionCheckInFlight) return;
+    boolean configValid;
+    try {
+      runtimeConfigActivationCoordinator.readVerifiedFlutterEnvelope();
+      configValid = true;
+    } catch (RuntimeConfigPackageStore.RuntimeConfigException error) {
+      Log.w(STARTUP_TAG, "android_recovery_config_failed code=" + error.code);
+      configValid = false;
+    }
+    NativeRecoveryAccess access = NativeRecoveryAccess.resolve(
+        nativeConfigurationFailed, configValid, runtimeConfigPackageStore.networkAccessAllowed());
+    if (!access.allowsWeb()) {
+      applyNativeLocalRecovery(access, title, message, primary, web);
       return;
     }
     recoveryVersionCheckInFlight = true;
+    // UI 截止时间独立于网络线程，慢响应不允许永久停留 checking。
+    Runnable deadline = () -> {
+      if (canUpdateRecoveryUi()) applyNativeVersionUnavailable(title, message, primary, web);
+    };
+    mainHandler.postDelayed(deadline, 1500L);
     versionExecutor.execute(
         () -> {
           HttpURLConnection connection = null;
@@ -632,6 +672,7 @@ public final class StartupGateActivity extends Activity {
                   if (!canUpdateRecoveryUi()) {
                     return;
                   }
+                  mainHandler.removeCallbacks(deadline);
                   if (version.offersNativeUpdate()) {
                     title.setText("当前版本需要更新");
                     message.setText("更新后即可正常启动");
@@ -663,16 +704,8 @@ public final class StartupGateActivity extends Activity {
                   if (!canUpdateRecoveryUi()) {
                     return;
                   }
-                  title.setText("应用暂时无法启动");
-                  message.setText("请使用网页版继续");
-                  configureRecoveryButton(primary, "使用网页版", true, true);
-                  primary.setOnClickListener(
-                      view ->
-                          openRecoveryTarget(
-                              recoveryRuntimeValue("publicWebBaseUrl"),
-                              "",
-                              "网页暂时无法打开，请稍后再试"));
-                  web.setVisibility(View.GONE);
+                  mainHandler.removeCallbacks(deadline);
+                  applyNativeVersionUnavailable(title, message, primary, web);
                 });
           } finally {
             recoveryVersionCheckInFlight = false;
@@ -681,6 +714,39 @@ public final class StartupGateActivity extends Activity {
             }
           }
         });
+  }
+
+  private void applyNativeLocalRecovery(
+      NativeRecoveryAccess access, TextView title, TextView message, Button primary, Button web) {
+    boolean configuration = access == NativeRecoveryAccess.CONFIGURATION;
+    title.setText(configuration ? "应用配置不可用" : "应用暂时无法启动");
+    title.setContentDescription(configuration
+        ? "qwq.native.configuration.error" : "qwq.native.startup.recovery");
+    message.setText(configuration
+        ? "配置项：runtimeConfigPackage / activationReceipt；请重新安装或重新构建"
+        : "离线版本无法在线恢复，请重新安装或重新构建");
+    configureRecoveryButton(primary, "查看恢复指引", true, true);
+    primary.setOnClickListener(ignored -> Toast.makeText(this,
+        "请重新安装有效制品，或通过 run.sh 重新构建并激活配置", Toast.LENGTH_LONG).show());
+    web.setVisibility(View.GONE);
+    web.setEnabled(false);
+    web.setOnClickListener(null);
+  }
+
+  private void applyNativeVersionUnavailable(
+      TextView title, TextView message, Button primary, Button web) {
+    String publicWeb = recoveryRuntimeValue("publicWebBaseUrl");
+    if (!runtimeConfigPackageStore.networkAccessAllowed()
+        || !TrustedRecoveryUrls.isTrusted(publicWeb, recoveryRuntimeValues())) {
+      applyNativeLocalRecovery(NativeRecoveryAccess.CONFIGURATION, title, message, primary, web);
+      return;
+    }
+    title.setText("应用暂时无法启动");
+    message.setText("请使用网页版继续");
+    configureRecoveryButton(primary, "使用网页版", true, true);
+    primary.setOnClickListener(ignored -> openRecoveryTarget(
+        publicWeb, "", "网页暂时无法打开，请稍后再试"));
+    web.setVisibility(View.GONE);
   }
 
   private boolean canUpdateRecoveryUi() {

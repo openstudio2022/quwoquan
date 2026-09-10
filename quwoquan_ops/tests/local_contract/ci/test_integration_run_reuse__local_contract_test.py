@@ -385,6 +385,39 @@ def test_acceptance_without_reuse_runs_fresh_alpha_and_explicit_beta(acceptance_
     assert summary["reused"] == {"readiness": True, "candidate": False, "alpha": False, "beta": False}
 
 
+@pytest.mark.parametrize("failed", [False, True])
+def test_wall_clock_counts_nested_phases_once_and_includes_cleanup(acceptance_main, monkeypatch, failed):
+    # spec_ref: specs/feature-tree/runtime/development-workflow-governance/local-continuous-integration/spec.md#req-004
+    setup = acceptance_main
+    clock = [100.0]
+    monkeypatch.setattr(integration_run.time, "monotonic", lambda: clock[0])
+
+    def elapsed(seconds):
+        clock[0] += seconds
+
+    def environment(**kwargs):
+        kwargs["summary"]["environments"]["alpha"] = {"executed": True}
+
+        def nested():
+            kwargs["phases"].run("alpha.nested-probe", lambda: elapsed(4))
+            elapsed(2)
+            if failed:
+                raise integration_run.IntegrationRunError("INTEGRATION_RUN.INSPECT_FAILED", "probe failed")
+
+        kwargs["phases"].run("alpha.outer-probe", nested)
+        return {"readiness": setup.store / "alpha-release-readiness.json"}
+
+    setup.calls["_run_environment"].side_effect = environment
+    setup.calls["release_claim"].side_effect = lambda **kwargs: elapsed(5)
+    assert integration_run.main(setup.argv) == (1 if failed else 0)
+    summary = json.loads((setup.store / "runs/policy-reuse/summary.json").read_bytes())
+    assert summary["wallClockSeconds"] == 11.0
+    assert sum(phase["durationSeconds"] for phase in summary["phases"]) == 10.0
+    setup.calls["release_claim"].assert_called_once()
+    if failed:
+        assert summary["blocker"]["code"] == "INTEGRATION_RUN.INSPECT_FAILED"
+
+
 def test_integrate_rejects_acceptance_only_reuse(acceptance_main) -> None:
     setup = acceptance_main
     assert integration_run.main(["--mode", "integrate", "--acceptance-bundle", str(setup.store), "--reuse", "--run-id", "integrate-reuse"]) == 1
@@ -408,7 +441,13 @@ def signed_release_case(monkeypatch: pytest.MonkeyPatch):
         exact = kwargs["runtime_identity"]
         path = kwargs["store_root"] / exact["ref"]
         payload = json.loads(path.read_bytes())
-        payload["source"] = {"acceptanceBinding": _binding(support.root)}
+        report = support.root / "reports" / payload["environment"] / "report.json"
+        report.parent.mkdir(parents=True, exist_ok=True)
+        report.write_bytes(b'{ "report": "original signed input" }\n')
+        result = integration_run.StackctlResult("health", {"exitCode": 0, "reportDir": str(report.parent)}, "")
+        with mock.patch.object(integration_run, "_store", return_value=kwargs["store_root"]):
+            source = integration_run._report_source(result)
+        payload["source"] = {**source, "acceptanceBinding": _binding(support.root)}
         path.write_bytes(json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False).encode("utf-8") + b"\n")
         kwargs["runtime_identity"] = {"ref": exact["ref"], "digest": integration_run.exact_file_digest(path)}
         return issue(**kwargs)
@@ -422,7 +461,8 @@ def signed_release_case(monkeypatch: pytest.MonkeyPatch):
                   "profile": args.profile, "signature_verifier": signing.environment_verifier(),
                   "expected_signer_identity": args.signer_identity}
         release_args = _release_args(support.root)
-        yield SimpleNamespace(root=support.root, bundle=bundle, refs=refs, store=store, lookup=lookup, args=release_args)
+        yield SimpleNamespace(root=support.root, bundle=bundle, refs=refs, store=store, lookup=lookup, args=release_args,
+                              signing=signing, import_args=args, candidate=candidate)
     finally:
         support.doCleanups()
 
@@ -458,6 +498,35 @@ def test_real_signed_reuse_requires_exact_release_inputs(signed_release_case, da
     assert (found is not None) is (damage == "none")
     if found is not None:
         assert found["alpha"] == setup.refs["alphaFact"] and found["beta"] == setup.refs["betaFact"]
+
+
+@pytest.mark.parametrize("damage", ["none", "omitted", "drift", "escape"])
+def test_signed_bundle_carries_exact_report_closure(signed_release_case, monkeypatch, damage):
+    setup = signed_release_case
+    manifest_path = setup.bundle / "bundle.json"
+    manifest = json.loads(manifest_path.read_bytes())
+    report = next(exact for exact in manifest["storeFiles"] if exact["ref"].startswith("runtime-reports/"))
+    if damage == "omitted":
+        manifest["storeFiles"].remove(report)
+    elif damage == "drift":
+        (setup.bundle / "store" / report["ref"]).write_bytes(b"{}")
+    elif damage == "escape":
+        report["ref"] = "../outside.json"
+    if damage in {"omitted", "escape"}:
+        manifest["bundleId"] = integration_run._sha256_hex(integration_run._canonical_bytes({k: v for k, v in manifest.items() if k != "bundleId"}))
+        manifest_path.write_bytes(integration_run._canonical_bytes(manifest) + b"\n")
+    target = setup.root / "destination-store"
+    monkeypatch.setattr(integration_run, "_store", lambda: target)
+    params = {"bundle_dir": setup.bundle, "commit": setup.candidate["commit"], "tree": setup.candidate["tree"],
+              "parent": setup.candidate["expectedParent"], "args": setup.import_args, "keyring": setup.signing.keyring()}
+    if damage == "none":
+        imported = integration_run._import_acceptance_bundle(**params)
+        assert imported["importedFiles"] == len(manifest["storeFiles"])
+        assert (target / report["ref"]).read_bytes() == (setup.bundle / "store" / report["ref"]).read_bytes()
+    else:
+        with pytest.raises(integration_run.IntegrationRunError):
+            integration_run._import_acceptance_bundle(**params)
+        assert not target.exists(), "源 store 残留不得补齐不完整 bundle"
 
 
 def test_bundle_cannot_relabel_signed_old_acceptance(signed_release_case, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -522,3 +591,77 @@ def test_reusable_acceptance_revalidates_real_signed_evidence(damage: str) -> No
         assert found == (refs["alphaFact"] if damage == "none" else None)
     finally:
         support.doCleanups()
+
+
+@pytest.fixture
+def host_reports(tmp_path, monkeypatch):
+    root = tmp_path.resolve()
+    host, output, store = root / "host", root / "repo-output", root / "store"
+    monkeypatch.setattr(integration_run, "OUTPUT_ROOT", output)
+    monkeypatch.setattr(integration_run, "env_runs_root", lambda env: host / "env" / env / "runs")
+    monkeypatch.setattr(integration_run, "_store", lambda: store)
+    path = host / "env/alpha/runs/health-exact/report.json"
+    path.parent.mkdir(parents=True)
+    raw = b'{ "checks": [], "original": "exact bytes" }\n'
+    path.write_bytes(raw)
+    result = integration_run.StackctlResult("health --target alpha-local", {"exitCode": 0, "reportDir": str(path.parent)}, "")
+    return SimpleNamespace(host=host, output=output, store=store, path=path, raw=raw, result=result)
+
+
+def test_host_report_import_is_exact_read_only_and_store_relative(host_reports):
+    setup = host_reports
+    source = integration_run._report_source(setup.result)
+    assert source["reportRoot"] == "store"
+    exact = {"ref": source["reportRef"], "digest": source["reportDigest"]}
+    assert integration_run._bundle_bytes(setup.store, exact) == setup.raw
+    assert setup.path.read_bytes() == setup.raw
+    assert not setup.output.exists(), "不得在 repo/env/alpha 中制造 live 事实副本"
+    assert str(setup.host) not in json.dumps(source)
+    named = integration_run._write_canonical(setup.store / "named.json", {"source": source})
+    assert integration_run._report_fact_refs(store=setup.store, fact={"runtimeIdentity": named}) == [exact]
+    (setup.store / exact["ref"]).write_bytes(b"drift")
+    with pytest.raises(integration_run.IntegrationRunError, match="exact bytes drifted"):
+        integration_run._report_fact_refs(store=setup.store, fact={"runtimeIdentity": named})
+
+
+@pytest.mark.parametrize("damage", ["outside", "traversal", "file-link", "parent-link"])
+def test_host_report_rejects_noncanonical_paths_before_import(host_reports, damage):
+    setup = host_reports
+    path = setup.path
+    if damage == "outside":
+        path = setup.host / "private/report.json"
+        path.parent.mkdir()
+        path.write_bytes(setup.raw)
+    elif damage == "traversal":
+        path = path.parent / ".." / path.parent.name / path.name
+    elif damage == "file-link":
+        original = path.with_suffix(".original")
+        path.rename(original)
+        path.symlink_to(original)
+    else:
+        original = path.parent.with_name("original")
+        path.parent.rename(original)
+        path.parent.symlink_to(original, target_is_directory=True)
+    result = integration_run.StackctlResult("health", {"exitCode": 0, "reportDir": str(path.parent)}, "")
+    with pytest.raises(integration_run.IntegrationRunError):
+        integration_run._report_source(result)
+    assert not setup.store.exists()
+
+
+@pytest.mark.parametrize("when", ["after-read", "during-copy", "removed"])
+def test_host_report_source_drift_never_returns_authoritative_ref(host_reports, monkeypatch, when):
+    setup = host_reports
+    setup.result.report_json()
+    if when == "after-read":
+        setup.path.write_bytes(b"{}")
+    elif when == "removed":
+        setup.path.unlink()
+    else:
+        put = integration_run._bundle_put
+        def drifting_put(*args):
+            result = put(*args)
+            setup.path.write_bytes(b"{}")
+            return result
+        monkeypatch.setattr(integration_run, "_bundle_put", drifting_put)
+    with pytest.raises(integration_run.IntegrationRunError, match="drifted|changed|disappeared"):
+        integration_run._report_source(setup.result)
