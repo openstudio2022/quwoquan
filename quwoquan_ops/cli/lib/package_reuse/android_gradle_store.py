@@ -29,6 +29,7 @@ from .dependency_fs import (
     read_regular_nofollow,
     write_fresh_relative_file,
 )
+from .native_dependency_inputs import ANDROID_GRADLE_REPOSITORY_INIT
 from .dependency_network_command import (
     retry_event,
     run_managed_subprocess,
@@ -519,6 +520,10 @@ def seal_android_gradle_home(
     )
     _write_generated(target / "home/gradle.properties", _CONTROL_PROPERTIES)
     _write_generated(target / "home/init.d/qwq-offline.gradle", _OFFLINE_INIT)
+    _write_generated(
+        target / "home/init.d/qwq-plugin-repositories.gradle",
+        ANDROID_GRADLE_REPOSITORY_INIT,
+    )
     _write_closure_metadata(target)
     _assert_wrapper_archives(
         project_root=project_root,
@@ -766,6 +771,8 @@ def synchronize_android_gradle_dependencies(
     """Network sync once, seal it, then replay the same closure offline."""
 
     network_home = _fresh_directory(online_home, label="online sync home")
+    policy_path = network_home / "init.d/qwq-plugin-repositories.gradle"
+    _write_generated(policy_path, ANDROID_GRADLE_REPOSITORY_INIT)
     online = run_gradle_invocations(
         project_root=project_root,
         gradle_user_home=network_home,
@@ -773,6 +780,9 @@ def synchronize_android_gradle_dependencies(
         offline=False,
         environment=environment,
     )
+    policy, _mode = _read_regular_nofollow(policy_path, label="plugin repository policy")
+    if policy != ANDROID_GRADLE_REPOSITORY_INIT:
+        raise ValueError("Android Gradle plugin repository policy drifted")
     snapshot = seal_android_gradle_home(
         project_root=project_root,
         gradle_user_home=network_home,

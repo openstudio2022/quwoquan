@@ -13,6 +13,20 @@ from .pub_cache_store import pub_resolution_input_paths
 
 NATIVE_RESOLUTION_INPUT_SCHEMA = "stackctl-native-resolution-inputs.v1"
 
+# 同一规则用于在线解析、封存与离线回放，且摘要参与 native input identity。
+ANDROID_GRADLE_REPOSITORY_INIT = b"""// Flutter included build does not inherit the host plugin repositories.
+gradle.beforeSettings { settings ->
+    if (settings.settingsDir.toPath().endsWith('packages/flutter_tools/gradle')) {
+        settings.pluginManagement.repositories {
+            mavenCentral {
+                content { includeGroup('org.jetbrains.kotlin') }
+            }
+            gradlePluginPortal()
+        }
+    }
+}
+"""
+
 _EXCLUDED_SEGMENTS = frozenset(
     {
         ".dart_tool",
@@ -121,6 +135,13 @@ def native_resolution_input_identity(repo_root: Path) -> dict[str, Any]:
         )
     if not entries:
         raise ValueError("App native dependency resolution input set is empty")
+    entries.append(
+        {
+            "path": "@managed/android-gradle/qwq-plugin-repositories.gradle",
+            "size": len(ANDROID_GRADLE_REPOSITORY_INIT),
+            "sha256": _digest_bytes(ANDROID_GRADLE_REPOSITORY_INIT),
+        }
+    )
     payload = {"schema": NATIVE_RESOLUTION_INPUT_SCHEMA, "entries": entries}
     return {
         "nativeResolutionInputDigest": _digest_bytes(_canonical_bytes(payload)),
